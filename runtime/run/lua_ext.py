@@ -35,7 +35,8 @@ tick, and they were written once per tier down to the guard comments. See
 
 Canonical here in runtime/ like every other shared console module; the boards
 and the web runner stage it by name. Pure source and closures: it imports
-nothing, so it costs a frozen module and no runtime dependency.
+nothing at load (the UI tree layer's frozen texts only when a cart declares
+it), so it costs a frozen module and no runtime dependency.
 """
 
 # SPEC.md 4: the cart's scripts as the (src, chunkname) pairs both Lua tiers
@@ -72,12 +73,18 @@ _uitree_src = {}
 
 
 def uitree_source(name=UITREE_FILE):
-    """One of the layer's Lua files, read once from beside this module."""
+    """One of the layer's Lua files: a board image's frozen text (`uitree_lua`,
+    tools/uitree_lua_freeze.py), else the file beside this module, read once."""
     src = _uitree_src.get(name)
     if src is None:
-        here = __file__.rpartition("/")[0] or "."
-        with open(here + "/" + name) as f:
-            src = _uitree_src[name] = f.read()
+        try:
+            import uitree_lua
+            src = uitree_lua.SRC[name]
+        except ImportError:
+            here = __file__.rpartition("/")[0] or "."
+            with open(here + "/" + name) as f:
+                src = f.read()
+        _uitree_src[name] = src
     return src
 
 

@@ -64,6 +64,7 @@ keep  = [
   "fonts_data.py",   # tools/make_font.py, the tier's font set
   "_ota_build.py",   # the OTA channel/version/label/board stamp (#53)
   "uitree_pages.py", # the C engine's pages compiled ahead of time (tools/uitree_compile.py --staged)
+  "uitree_lua.py",   # the UI tree API's Lua layer, frozen as text (tools/uitree_lua_freeze.py)
 ]
 
 [modules.shared]

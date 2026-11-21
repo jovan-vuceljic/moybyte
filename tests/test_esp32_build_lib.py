@@ -184,6 +184,34 @@ def test_a_board_without_moy_uitree_carries_no_pages(pages_build):
     assert not (mods / "uitree_pages.py").exists()
 
 
+# -- the UI tree's Lua layer ----------------------------------------------------
+
+
+def test_a_board_with_moycore_and_moy_uitree_freezes_the_lua_layer(tmp_path):
+    """The layer reaches an image as uitree_lua.py, the texts lua_ext reads;
+    a board without both natives carries none."""
+    board, mods = tmp_path / "board", tmp_path / "modules"
+    for m in ("moy_uitree", "moycore"):
+        (board / "native" / m).mkdir(parents=True)
+    mods.mkdir()
+    py = tmp_path / "py"
+    py.write_text('#!/bin/bash\ncase "$1" in\n  *board_config.py) echo native ;;\n'
+                  '  *) exec "%s" "$@" ;;\nesac\n' % sys.executable, encoding="utf-8")
+    py.chmod(0o755)
+
+    def run():
+        r = sh("moybyte_stage_uitree_lua", REPO_ROOT=str(ROOT), SCRIPT_DIR=str(board),
+               MODULES_DIR=str(mods), BUILD_PYTHON=str(py))
+        assert r.returncode == 0, r.stderr
+    run()
+    ns = {}
+    exec((mods / "uitree_lua.py").read_text(encoding="utf-8"), ns)
+    assert sorted(ns["SRC"]) == ["uitree.lua", "uitree_engine.lua"]
+    (board / "native" / "moycore").rmdir()
+    run()
+    assert not (mods / "uitree_lua.py").exists()
+
+
 # -- the IDF component list -----------------------------------------------------
 
 
