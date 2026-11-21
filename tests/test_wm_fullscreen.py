@@ -350,3 +350,27 @@ def test_a_window_bound_app_cart_shown_again_goes_on_with_no_pause_menu(tmp_path
     wm.minimize(win, False)
     _frames(ws)
     assert not ws.pause.open and not ws.run.player.pace.paused and win.full()
+
+
+@pytest.mark.parametrize("kind", ["settings", "tasks"])
+def test_a_page_whose_strip_is_its_title_starts_under_the_full_screen_row(tmp_path, kind):
+    """Settings and the task manager lend a desk window's bar no zone: their
+    title strip is the bar. Full screen that strip is the row, so the page
+    starts under it, the row lying on the band's ground, as a window whose
+    content draws no band does."""
+    ws = _desk(tmp_path)
+    ws.open_settings() if kind == "settings" else ws.open_tasks()
+    _frames(ws)
+    win = ws.wm.windows[kind]
+    ws.wm.toggle_max(win)
+    _frames(ws, 4)
+    row = ws.wm._row_h()
+    layer = ws.settings_layer if kind == "settings" else ws.tasks_layer
+    _x, cy, _w, _h = win.content_rect()
+    assert win.full() and cy + layer._content()[1] >= row, (win.content_rect(), row)
+    sc = ws.wm.root_canvas
+    under = {_px(sc, x, y) for y in range(row - 8, row - 2) for x in range(0, sc.w, 4)}
+    assert len(under) == 1, "the page's pixels reach into the row"
+    ws.wm.toggle_max(win)
+    _frames(ws)
+    assert win.content_rect()[1] == win.y + 1 + win.title_h and layer._content()[1] == 0

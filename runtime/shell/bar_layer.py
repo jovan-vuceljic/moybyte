@@ -660,9 +660,16 @@ class BarLayer:
             if got is None or getattr(got, "glass", False) or ws.wm.desk_open():
                 return
             where = "app"
-        elif layer in (ws.tasks_layer, ws.settings_layer) and ws.windowed_chrome:
-            return                        # in a desk window its title strip is the bar
+        elif self.strip_is_title(layer):
+            return
         self.draw_status_strip(where)
+
+    def strip_is_title(self, layer):
+        """Whether content `layer`'s bar is its desk window's title strip,
+        windowed or full screen: the task manager and Settings lend the bar
+        no zone there, so they draw no band."""
+        ws = self.ws
+        return ws.windowed_chrome and layer in (ws.tasks_layer, ws.settings_layer)
 
     def draw_status_strip(self, where):
         """The strip `where` names ("home" / "settings" / "menu" / "tool" /
@@ -979,7 +986,8 @@ class BarLayer:
     def lends_band(self, where):
         """Whether `where`'s content draws the band a window's layouts take:
         a full-screen window's row is then that band (`WindowedWM._band_is_row`)."""
-        return where != "home" and self._zone_owner(where) is not None
+        return (where != "home" and self._zone_owner(where) is not None
+                and not self.strip_is_title(self.ws.layer_of(where)))
 
     def paint_band(self, cv, rect):
         """A window's band ground at `rect` on `cv`, its line under it: what a
