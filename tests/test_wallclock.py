@@ -256,7 +256,7 @@ def test_tls_reads_the_floor_before_ntp_and_a_clock_set_past_it_as_set():
     later = floor + 30 * DAY                       # a clock set past the floor
     assert lib.moy_clock_cert_time(later, floor, 0) == later
     assert lib.moy_clock_future_counts(later, floor, 0) == 1
-
+    assert floor % DAY == 0 and floor <= time.time() < floor + 3 * DAY + LEAP
 
 def test_an_ntp_answer_is_trusted_only_from_the_floor_to_the_leap_past_it():
     from runtime.host import net_binding
