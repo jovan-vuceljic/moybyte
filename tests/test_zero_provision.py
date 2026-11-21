@@ -106,6 +106,18 @@ def test_the_browser_console_rides_this_boards_image():
     assert "/moy/web" not in SCRIPT, "provisioning re-grew a storage bundle"
 
 
+def test_provisioning_resets_the_board_once_at_its_end():
+    """2026-11-21: the add-on's install reset the board and the carts' REPL
+    probe opened the port while it booted, which wedged its USB-Serial/JTAG
+    until a replug. Every install leaves the board at its REPL, and the one
+    reset is the script's last word to the board."""
+    calls = re.findall(r'board_flash\.py" (\w+) (.*)', SCRIPT)
+    assert sorted(v for v, _ in calls) == ["addon", "carts"]
+    assert all("--no-reset" in rest for _, rest in calls), calls
+    after = SCRIPT[SCRIPT.index("\nrun reset"):].splitlines()[2:]
+    assert not [ln for ln in after if re.match(r"\s*run ", ln)], after
+
+
 def test_provisioning_sets_the_password_as_a_hash_and_keeps_one_already_there():
     """`--password` asks twice, never echoed, and writes the HASH where the
     sign-in reads it (the system folder's `password`, as `passwd` writes it);
@@ -139,3 +151,12 @@ def test_provisioning_says_how_to_pair_and_says_so_when_it_cannot():
     tail = SCRIPT[SCRIPT.index("== reboot into the host"):]
     assert "http://${NAME}.local/" in tail
     assert "WARNING" in tail and "no browser can pair" in tail
+
+
+def test_provisioning_reads_a_password_as_the_board_does():
+    """2026-11-21: the record became `$moy2$` and the script still looked for
+    `$moy1$`, so it warned "no password" over a board that had one."""
+    host = (ROOT / "device" / "zero_host.py").read_text()
+    board = re.search(r'f\.read\(6\) == "(\$moy\d\$)"', host).group(1)
+    script = re.search(r"f\.read\(6\) == '(.*?)'", SCRIPT).group(1).replace("\\", "")
+    assert script == board

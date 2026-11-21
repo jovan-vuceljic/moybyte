@@ -552,6 +552,17 @@ def test_a_zero_s_cable_flash_installs_the_add_on_that_fits_into_its_store(
     assert _verbs(fake.calls)[-1] == "write_flash"
 
 
+@pytest.mark.parametrize("verb", ["addon", "carts"])
+@pytest.mark.parametrize("flag,reset", [([], True), (["--no-reset"], False)])
+def test_an_install_verb_resets_unless_told_not_to(monkeypatch, verb, flag, reset):
+    got = []
+    monkeypatch.setattr(board_flash, "install_" + verb,
+                        lambda d, p, reset=True: got.append(reset) or 0)
+    assert board_flash.main(["board_flash.py", verb, str(C3_ZERO),
+                             "--port", "/dev/fake"] + flag) == 0
+    assert got == [reset]
+
+
 def test_a_failed_write_installs_no_add_on(monkeypatch, tmp_path):
     got = []
     monkeypatch.setattr(board_flash, "install_addon",

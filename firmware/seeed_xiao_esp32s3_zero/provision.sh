@@ -167,14 +167,17 @@ for d in /moy /moy/carts /moy/update; do
 done
 
 
+# The installs leave the board at its REPL (--no-reset) and the script resets
+# it once, at its end: a port opened while a reset Zero boots wedges its
+# USB-Serial/JTAG until a replug (tools/board_flash.py's _let_boot).
 if [ "${PUSH_CONSOLE}" = "1" ]; then
   echo "== the browser console add-on (the cart that fits dist/zero's image)"
-  "${PY}" "${REPO}/tools/board_flash.py" addon "${HERE}" --port "${PORT}"
+  "${PY}" "${REPO}/tools/board_flash.py" addon "${HERE}" --port "${PORT}" --no-reset
 fi
 
 if [ "${PUSH_CARTS}" = "1" ]; then
   echo "== the official carts (every older one the image does not carry)"
-  "${PY}" "${REPO}/tools/board_flash.py" carts "${HERE}" --port "${PORT}"
+  "${PY}" "${REPO}/tools/board_flash.py" carts "${HERE}" --port "${PORT}" --no-reset
 fi
 
 if [ -n "${WIFI}" ]; then
@@ -213,7 +216,7 @@ assert open('/moy/system/password').read() == '${HASH}\n'"
 fi
 echo "== pairing"
 PW_STATE="$(run exec "try:
-    with open('/moy/system/password') as f: print('ZEROPW', 'set' if f.read(6) == '\$moy1\$' else 'none')
+    with open('/moy/system/password') as f: print('ZEROPW', 'set' if f.read(6) == '\$moy2\$' else 'none')
 except OSError: print('ZEROPW none')" | tr -d '\r' | grep '^ZEROPW ' | cut -d' ' -f2 || true)"
 NAME="$(run exec "import json
 try:
