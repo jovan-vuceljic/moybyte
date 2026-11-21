@@ -168,6 +168,7 @@ class Pair:
             root._comp.last = shot
             root._buf[:] = (self.held[-self.bufs] if len(self.held) > self.bufs
                             else self.held[0])
+        del self.held[:-self.bufs]
 
     def both(self, verb, *args):
         getattr(self.da, verb)(*args)

@@ -241,6 +241,7 @@ class Pair:
             root = a.sys_canvas
             root._comp.last = shot
             root._buf[:] = self.held[-self.bufs] if len(self.held) > self.bufs else self.held[0]
+        del self.held[:-self.bufs]
 
     def _drive(self, ws, drv):
         """One loop pass of `ws` with the toolkit's per-console state its

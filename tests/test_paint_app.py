@@ -842,6 +842,7 @@ def _stroke_glass(tmp_path, monkeypatch, desk, stroke_frames, tool, shape=1, buf
             held.append(bytes(root._buf))
             root._comp.last = held[-1]
             root._buf[:] = held[-bufs] if len(held) >= bufs else held[0]
+            del held[:-bufs]
     # chosen: frames enough that every buffer holds the page
     for _ in range(3 + (bufs if chosen else 0)):
         ws.mark_dirty()
