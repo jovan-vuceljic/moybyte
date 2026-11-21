@@ -540,6 +540,16 @@ def test_a_frame_that_never_ends_is_ended(board, stuck_carts, runtime):
     on_glass.a_stuck_run_is_ended(board, runtime)
 
 
+# A Lua app on the UI tree: the image's frozen layer over the C engine.
+@pytest.fixture(scope="module")
+def tree_form(board):
+    on_glass.tree_form_push(board, WASM_BOARD_DIR)
+
+
+def test_a_lua_tree_app_runs_on_the_engine(board, tree_form):
+    on_glass.a_lua_tree_app_runs_on_the_engine(board)
+
+
 def test_idle_screen_blank_and_wake(board):
     on_glass.idle_blank_and_wake(board)
     on_glass.idle_timeout_restored(board)
