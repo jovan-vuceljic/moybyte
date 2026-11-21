@@ -116,6 +116,11 @@ def front(tmp_path):
     _cart(tmp_path, "Front Quit", quit_at=4)
     _cart(tmp_path, "Front Palette", palette=True)
     ws = build_ws(tmp_path)
+    # An overlay an earlier run in this process armed on the real clock is
+    # still up at these frames' made-up times, and settles them into the canvas.
+    mp.chrome_notice("", "", True, 0)
+    mp.chrome_toast_arm("", "", "", False, 0)
+    mp.chrome_note("", "", "", 0)
     buf = (ctypes.c_uint16 * (W * H))()
     presents, frames = [], []
     ws.front_bind = lambda: mp.front_ops(buf, W, H, presents, frames)
