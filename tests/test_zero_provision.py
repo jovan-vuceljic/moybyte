@@ -151,3 +151,12 @@ def test_provisioning_says_how_to_pair_and_says_so_when_it_cannot():
     tail = SCRIPT[SCRIPT.index("== reboot into the host"):]
     assert "http://${NAME}.local/" in tail
     assert "WARNING" in tail and "no browser can pair" in tail
+
+
+def test_provisioning_reads_a_password_as_the_board_does():
+    """2026-11-21: the record became `$moy2$` and the script still looked for
+    `$moy1$`, so it warned "no password" over a board that had one."""
+    host = (ROOT / "device" / "zero_host.py").read_text()
+    board = re.search(r'f\.read\(6\) == "(\$moy\d\$)"', host).group(1)
+    script = re.search(r"f\.read\(6\) == '(.*?)'", SCRIPT).group(1).replace("\\", "")
+    assert script == board

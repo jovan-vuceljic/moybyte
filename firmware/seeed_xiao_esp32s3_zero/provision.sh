@@ -216,7 +216,7 @@ assert open('/moy/system/password').read() == '${HASH}\n'"
 fi
 echo "== pairing"
 PW_STATE="$(run exec "try:
-    with open('/moy/system/password') as f: print('ZEROPW', 'set' if f.read(6) == '\$moy1\$' else 'none')
+    with open('/moy/system/password') as f: print('ZEROPW', 'set' if f.read(6) == '\$moy2\$' else 'none')
 except OSError: print('ZEROPW none')" | tr -d '\r' | grep '^ZEROPW ' | cut -d' ' -f2 || true)"
 NAME="$(run exec "import json
 try:
