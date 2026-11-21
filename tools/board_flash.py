@@ -15,6 +15,11 @@ lines.
     tools/board_flash.py addon   <board_dir> --port /dev/ttyACM0   (a REPL board)
     tools/board_flash.py carts   <board_dir> --port /dev/ttyACM0   (a REPL board)
 
+`addon` and `carts` reset the board after the install; `--no-reset` leaves it
+at its REPL, for a caller that installs more over the same port and resets it
+once at its end (provision.sh): a port opened while the reset board boots
+wedges a Zero's USB-Serial/JTAG (`_let_boot`).
+
 The flash ORDER is fixed here, once: erase otadata FIRST (with --after
 no_reset), then write the merged image, so the board leaves the flash running
 the slot just written. A board that has taken an OTA is on ota_1, and skipping
@@ -630,13 +635,15 @@ def main(argv):
     ap.add_argument("--port", required=True)
     ap.add_argument("--no-verify", action="store_true",
                     help="skip the pre-flash identity check")
+    ap.add_argument("--no-reset", action="store_true",
+                    help="addon/carts: leave the board at its REPL after the install")
     a = ap.parse_args(argv[1:])
     if a.verb == "flash":
         return flash(a.board_dir, a.port, verify=not a.no_verify)
     if a.verb == "addon":
-        return install_addon(a.board_dir, a.port)
+        return install_addon(a.board_dir, a.port, reset=not a.no_reset)
     if a.verb == "carts":
-        return install_carts(a.board_dir, a.port)
+        return install_carts(a.board_dir, a.port, reset=not a.no_reset)
     return monitor(a.board_dir, a.port)
 
 
