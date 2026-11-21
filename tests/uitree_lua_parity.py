@@ -1,8 +1,9 @@
 """Old against port: a hand-written Lua screen and its UI tree port, staged
 side by side on the host console and driven by one input script, a shot at
-each named step, the port on the Lua replay back end (runtime/run/uitree_replay.lua:
-the ports use a record state and props the C engine does not draw yet). tests/test_uitree_lua.py holds the two to the same pixels;
-run it by hand to keep the shots:
+each named step, the port on the Lua replay back end
+(runtime/run/uitree_replay.lua: the ports use what the C engine does not draw
+yet). tests/test_uitree_lua.py holds the two to the same pixels; run it by
+hand to keep the shots:
 
     .venv/bin/python tests/uitree_lua_parity.py OUT_DIR [pair ...]
 """

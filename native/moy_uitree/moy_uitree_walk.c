@@ -2347,7 +2347,11 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         break;
     case UIT_SCROLL: {
         const char *key = uit_str(e, N->key);
-        moy_ui_api_scroll(c, s, span_of(key, strlen(key)), NULL);
+        int32_t one = 1;
+        moy_ui_over_none(&o);
+        if (N->lit)
+            moy_ui_over_put(&o, MOY_UI_OV_FOLLOW, &one);
+        moy_ui_api_scroll(c, s, span_of(key, strlen(key)), &o);
         walk(e, c, s, k, model, row);
         moy_ui_api_scroll(c, s, span_of("", 0), NULL);
         break;

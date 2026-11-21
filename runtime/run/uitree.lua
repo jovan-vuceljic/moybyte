@@ -8,8 +8,8 @@
 -- into the C engine (native/moy_uitree), which lays it out, draws it, moves
 -- focus and hands back what the user did; uitree_replay.lua replays the tree
 -- into today's `ui` verbs every frame instead, for what Moy Mesh's ports use
--- that the C engine does not hold or draw yet (a record state, a field's
--- when=, a popover's wash=, a scroll's follow=): their parity check alone.
+-- that the C engine does not hold or draw yet (a label table over a
+-- model's enum field, a field's when=, a popover's wash=): their parity check alone.
 --
 -- The Player loads this chunk, then one back end, ahead of a cart that
 -- declares the extension "moybyte.uitree" (runtime/run/lua_ext.py); it takes

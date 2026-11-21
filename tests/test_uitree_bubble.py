@@ -155,3 +155,44 @@ def test_an_info_and_a_link_draw_their_signal_tag_and_tone_on_the_c_engine(tmp_p
         shots[name] = bytes(drv.rgb888())
         ws.spine.exit_to_caller()
     assert all(shots[n] != shots["Plain"] for n in ("Signal", "Toned", "Tagged"))
+
+
+REC = '''ui.app("Rec", { icon = "calc" })
+local s = ui.state {
+  t = ui.record { kind = ui.enum("dm", "ch", { init = "dm" }), name = "Ana" },
+  pick = ui.opt(ui.record { who = "" }),
+  msgs = ui.model { key = "n", n = 0, bars = ui.opt(0), text = "" },
+}
+ui.action("choose", "Choose", function() s.pick = { who = "Bo" } end)
+ui.hook("opened", function() s.msgs:set({ { n = 1, text = "hi" }, { n = 2, bars = 3, text = "yo" } }) end)
+ui.page("p", function()
+  ui.switch("t.kind", { dm = function() ui.label("To {t.name}") end, ch = function() ui.label("Channel") end })
+  ui.label("Picked {pick.who}", { shown = "pick" })
+  ui.button("choose")
+  ui.scroll("thread", { follow = true }, function()
+    ui.rows("msgs", function() ui.info("{.text}", { value = "", signal = "{.bars}" }) end)
+  end)
+end)
+'''
+
+
+def test_a_lua_apps_records_and_optional_fields_reach_the_c_engine(tmp_path):
+    """A record's fields are slots of their own ("t.name"), a switch takes
+    one, an optional record's presence is its condition, an optional model
+    field is absent text, and a scroll follows: the page draws, and the
+    button's write shows the picked record's line."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    L._cart(carts, "Rec", REC)
+    ws, drv, frame, open_cart = L._console(carts)
+    open_cart(ws, "Rec")
+    for _ in range(4):
+        frame()
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    before = bytes(drv.rgb888())
+    drv.press("a")
+    for _ in range(3):
+        frame()
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    assert bytes(drv.rgb888()) != before

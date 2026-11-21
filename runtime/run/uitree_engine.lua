@@ -77,11 +77,22 @@ local function declare()
   local names = sorted(DECL)
   for _, name in ipairs(names) do
     local ty = DECL[name]
-    local base = BASE[ty.t]
-    if not base then fail("E00", "load", "the C engine does not hold the state " .. q(name) .. " (" .. ty.t .. ") yet", nil, nil, FIX) end
-    local vals = ty.t == "enum" and table.concat(ty.values, "\0") or nil
-    local s = check(X:state(name, base, vals), "the state " .. q(name), "load")
-    SLOT[name], NAMES[s], TYPES[s] = s, name, ty
+    if ty.t == "record" then    -- a slot its presence (a bool), a slot each field, named "NAME.FIELD"
+      local s = check(X:state(name, BOOL, nil), "the state " .. q(name), "load")
+      SLOT[name], NAMES[s], TYPES[s] = s, name, ty
+      for _, f in ipairs(ty.order) do
+        local ft, fname = ty.fields[f], name .. "." .. f
+        local fs = check(X:state(fname, BASE[ft.t], ft.t == "enum" and table.concat(ft.values, "\0") or nil),
+                         "the state " .. q(fname), "load")
+        SLOT[fname], NAMES[fs], TYPES[fs] = fs, fname, ft
+      end
+    elseif not BASE[ty.t] then
+      fail("E00", "load", "the C engine does not hold the state " .. q(name) .. " (" .. ty.t .. ") yet", nil, nil, FIX)
+    else
+      local vals = ty.t == "enum" and table.concat(ty.values, "\0") or nil
+      local s = check(X:state(name, BASE[ty.t], vals), "the state " .. q(name), "load")
+      SLOT[name], NAMES[s], TYPES[s] = s, name, ty
+    end
   end
   for _, name in ipairs(names) do
     local ty = DECL[name]
@@ -89,7 +100,7 @@ local function declare()
       local types, key = {}, 0
       for i, f in ipairs(ty.order) do
         local ft = FIELD[ty.fields[f].t]
-        if not ft or ty.fields[f].opt then
+        if not ft then
           fail("E00", "load", "the C engine does not hold the field " .. q(f) .. " of " .. q(name) .. " yet", nil, nil, FIX)
         end
         types[i] = string.char(ft)
@@ -126,12 +137,22 @@ end
 -- -- state across the line ----------------------------------------------------------
 
 local function cell(ft, v)
+  if v == nil then return "" end             -- an optional field's absence: nothing in a template
   if ft == "bool" then return v and "1" or "0" end
   if ft == "number" then
     local s = tostring(v + 0.0)
     return s
   end
   return tostring(v)
+end
+
+-- a plain value into slot `s` of type name `t`; nil leaves it absent
+local function put(s, t, v)
+  if v == nil then X:set_absent(s)
+  elseif t == "bool" then X:set_int(s, v and 1 or 0)
+  elseif t == "int" then X:set_int(s, v)
+  elseif t == "number" then X:set_num(s, v)
+  else X:set_text(s, tostring(v)) end
 end
 
 local function push(name)
@@ -152,11 +173,11 @@ local function push(name)
     end
     local raw = #out > 0 and table.concat(out, "\0") .. "\0" or ""
     check(X:set_model(s, #v.rows, raw), "the model " .. q(name), "frame")
-  elseif v == nil and ty.opt then X:set_absent(s)
-  elseif t == "bool" then X:set_int(s, v and 1 or 0)
-  elseif t == "int" then X:set_int(s, v)
-  elseif t == "number" then X:set_num(s, v)
-  else X:set_text(s, v == nil and "" or tostring(v)) end
+  elseif t == "record" then
+    X:set_int(s, v ~= nil and 1 or 0)
+    for _, f in ipairs(ty.order) do put(SLOT[name .. "." .. f], ty.fields[f].t, v and v[f]) end
+  elseif v == nil and not ty.opt then put(s, t, "")
+  else put(s, t, v) end
 end
 
 -- each state whose writes moved since it was pushed, pushed; each derive whose value moved
@@ -348,7 +369,8 @@ local function lower_node(n, parent, path)
     end
   end
   if n.built then
-    local ty = DECL[n.a[1]]
+    local rec, f = n.a[1]:match("^(.-)%.(.+)$")
+    local ty = rec and DECL[rec] and DECL[rec].t == "record" and DECL[rec].fields[f] or DECL[n.a[1]]
     for _, v in ipairs(ty.t == "enum" and ty.values or { "true", "false" }) do
       local c = n.built[v]
       local cv = v == "true" and "True" or v == "false" and "False" or v

@@ -156,7 +156,13 @@ static int ref_parse(uit_t *e, const char *s, size_t n, int model, ref_t *r)
     }
     const char *dot = memchr(s, '.', n);
     size_t bn = dot ? (size_t)(dot - s) : n;
-    int slot = uit_slot_find(e, s, bn);
+    int slot = dot ? uit_slot_find(e, s, n) : -1;
+    if (slot >= 0) {
+        // a slot named with its dot: a record's field as a front holds it ("NAME.FIELD")
+        *r = (ref_t){RK_SLOT, e->slots[slot].type, (int16_t)slot, -1};
+        return 0;
+    }
+    slot = uit_slot_find(e, s, bn);
     if (slot < 0)
         return uit_check_fail(e, "T02", UIT_MSG("{%.*s}: no state %.*s", "{%.*s} %.*s"), (int)n, s, (int)bn, s);
     const uit_slot_t *S = &e->slots[slot];

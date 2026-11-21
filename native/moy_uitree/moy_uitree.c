@@ -1407,6 +1407,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->lit = (uint8_t)!strcmp(src, "share");
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
+    if (!strcmp(name, "follow") && kind == UIT_SCROLL) {
+        // follow=True: its first frame at its foot, a row that comes moving the view (lit 1)
+        N->lit = (uint8_t)!strcmp(src, "True");
+        return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
+    }
     if (!strcmp(name, "buttons") && kind == UIT_DIALOG)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     return uit_fail(e, UIT_E_KIND, UIT_MSG("%s=: a prop this engine does not draw on this kind (%d)", "%s= %d"), name, kind);
