@@ -1,7 +1,7 @@
 {
  "surface": "achievements",
  "config": "p4_1024x600_fs2_windowed",
- "commit": "d46d59298",
+ "commit": "af15544f7",
  "script": [
   "k:right",
   "k:a",
@@ -23,7 +23,7 @@
   ],
   [
    "k:a",
-   "f6415e88bfe012a2a4cdc2b9b20c2de73fef4769548cf27f9dcb95050181c0f7"
+   "21065ef22006de9957d66a77603a1db969a2d9527c64d192b7cc8aa9cabdf4ff"
   ],
   [
    "back",
@@ -43,7 +43,7 @@
   ],
   [
    "k:a",
-   "c9d6e6e6512d5fa145fde81552db8ae1420b31942db7027cb15adab108f8423f"
+   "26335783845b8cadaf3850c3fd3463643d0283202db007a95880de645a9e8315"
   ],
   [
    "back",

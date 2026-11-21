@@ -1,7 +1,7 @@
 {
  "surface": "achievements",
  "config": "tdeck_320x240_fs1_dark",
- "commit": "d46d59298",
+ "commit": "af15544f7",
  "script": [
   "k:right",
   "k:a",
@@ -23,7 +23,7 @@
   ],
   [
    "k:a",
-   "b48360d020bd6665a6b47b0c92c781293baf91260ce9f2525002876e0955e44c"
+   "300a28c31c54d3185a92072851e478753ecdb2fbf1d2077042aeb0730343ded7"
   ],
   [
    "back",
@@ -39,7 +39,7 @@
   ],
   [
    "k:a",
-   "0abfe7b55b13058edd5768523ef72159472e8d70876ef98d7b19d420a08f3b28"
+   "31097b7d1f0a506f0749c1504017586a8d4c517c3fb136a565f66f001869e2fc"
   ],
   [
    "back",
