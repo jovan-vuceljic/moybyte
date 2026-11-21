@@ -3329,8 +3329,9 @@ int moy_ui_field(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t label, mo
     pd_t d;
     open_pd(s, &d, fs, desk);
     int sc = tscale(s);
-    int pad = (card || desk ? gm(MOY_UI_M_GROUP_PAD, fs)
-                            : metric(MOY_UI_K_ROW, MOY_UI_M_ROW_PAD) * d.fs);
+    int pad = (flags & MOY_UI_F_FILL) ? 0
+              : (card || desk ? gm(MOY_UI_M_GROUP_PAD, fs)
+                              : metric(MOY_UI_K_ROW, MOY_UI_M_ROW_PAD) * d.fs);
     int gap = pm(&d, MOY_UI_M_VALUE_ROW_GAP, 1);
     pf_t fl = font_of(&d, MOY_UI_FONT_UI);
     int on_card = card && !desk;

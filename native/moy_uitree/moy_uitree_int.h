@@ -351,6 +351,7 @@ struct uit {
     uint8_t in_cell;            // drawing a split's column: a button takes its natural width
     uint8_t tv_stop, tv_stop_now;   // a text view that runs on drew last frame / this frame (the band's PgUp PgDn)
     uint8_t in_pop;             // drawing a popover's body: a split there lays out as its cells (`_pop_split`)
+    uint8_t in_foot;            // drawing a stacked foot: its fields bare, on the hints' lead (`draw_foot`)
     int16_t foot;               // the page's shown foot this frame, or -1
     int32_t page_gen;           // the gen the last frame's page carried, or -1 (none)
     int32_t foot_r[4];          // its rect

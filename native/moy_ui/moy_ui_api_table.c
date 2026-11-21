@@ -1061,7 +1061,9 @@ int32_t moy_ui_api_field(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
         }
         int edge = o->border >= MOY_UI_O_ROLE ? moy_ui_token(s->look, o->border - MOY_UI_O_ROLE)
                                               : -1;
-        moy_ui_field(s, fb, lb, t, o->hint, f | (disabled ? MOY_UI_F_DISABLED : 0), c->fs,
+        // bare, placed in a rect outside a group, the box fills it as a button does
+        int fill = (o->flags2 & MOY_UI_O2_BARE) && !stacked && !c->grp_open && !caph ? MOY_UI_F_FILL : 0;
+        moy_ui_field(s, fb, lb, t, o->hint, f | fill | (disabled ? MOY_UI_F_DISABLED : 0), c->fs,
                      c->cls, c->grp_open, c->grp_open && c->grp_first, edge);
         mua_clip_out(&k);
     }

@@ -544,7 +544,7 @@ enum {
     MOY_UI_F_ON = 1, MOY_UI_F_HOT = 2, MOY_UI_F_DISABLED = 4, MOY_UI_F_EDGE = 8,
     MOY_UI_F_BAND = 16, MOY_UI_F_EDGE_LAST = 32, MOY_UI_F_LABEL = 64, MOY_UI_F_ICON = 128,
     MOY_UI_F_GLYPH = 256, MOY_UI_F_FOCUS = 512, MOY_UI_F_LEAD = 1024, MOY_UI_F_WRAP = 2048,
-    MOY_UI_F_PART = 4096, MOY_UI_F_BAR = 8192, MOY_UI_F_PRESSED = 16384,
+    MOY_UI_F_PART = 4096, MOY_UI_F_BAR = 8192, MOY_UI_F_PRESSED = 16384, MOY_UI_F_FILL = 32768,
 };
 // A widget whose caller draws an icon image (or its own glyph) between the
 // frame and the content draws in two calls, FRAME then CONTENT; every other
@@ -1139,8 +1139,10 @@ int moy_ui_month(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t title,
 // the row from the label to its right. Focused, the row wears the focus mark
 // a value row does (`first`: the card's first row) and the field the focus
 // colour's ring. An empty field shows `hint` (n 0: none) in the disabled ink.
-// Outside a group the box fills the row, its ring's room kept; its text
-// stands 8 pixels at the scale inside it. `edge`, a colour index or -1, is
+// Outside a group the box fills the row, its ring's room kept, in from
+// its sides by the row's pad, or with F_FILL (a bare field placed in a
+// rect, moy_ui_api_field) to them, as a button's are; its text stands 8
+// pixels at the scale inside it. `edge`, a colour index or -1, is
 // the box's border in place of its own (a field in error: the danger ink).
 int moy_ui_field(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t label, moy_ui_span_t text,
                  moy_ui_span_t hint, int flags, int fs, int desk, int card, int first, int edge);

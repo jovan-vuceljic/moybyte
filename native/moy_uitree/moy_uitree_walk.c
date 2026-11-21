@@ -978,6 +978,10 @@ static void draw_field(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
     char id[UIT_ID_MAX + 1];
     uint32_t hn = 0, ha = 0, ln, la;
     over_for(e, k, model, row, c, &o, id);
+    if (e->in_foot) {
+        int32_t one = 1;
+        moy_ui_over_put(&o, MOY_UI_OV_BARE, &one);      // its box on the foot's lead
+    }
     if (N->t_aux >= 0)
         ha = text_t(e, k, N->t_aux, model, row, &hn);
     la = text(e, k, 0, model, row, &ln);
@@ -1944,23 +1948,24 @@ static int foot_of(uit_t *e)
 
 static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
 
-// The page's docked foot, look="share" (`_r_foot`): its buttons share its
-// width, its label a line of its own over them. On a handheld it lies
-// outside the page on its own ground under a rule; on the desk it is the
-// page's (`ui.dock`), on the page's ground.
+// The page's docked foot (`ui.dock`, on the page's ground), look="share"
+// (`_r_foot`): its buttons share its width, its label a line of its own over
+// them; on a handheld under a rule. A stacked foot's children lead in as
+// the keys band's hints do.
 static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     int desk = (e->flags & UIT_F_DESK) != 0, fs = e->fs;
     int32_t x = e->foot_r[0], y = e->foot_r[1], w = e->foot_r[2], h = e->foot_r[3];
     int fh = desk ? 30 : 20 * fs, pad = desk ? 7 : fs, m = desk ? 16 : 4 * fs;
     int by = y + h - fh - pad;
-    if (!desk) {
-        fill_token(s, x, y, w, h, MOY_UI_T_PANEL);
+    if (!desk)
         fill_token(s, x + m, y, w - 2 * m, 1, MOY_UI_T_BORDER);
-    }
     if (foot_stacked(e, k)) {
-        int32_t r[4] = {x + m, y + pad, w - 2 * m, h - 2 * pad};
+        int lead = desk ? m : MOY_UI_HINT_LEAD(0) * fs;
+        int32_t r[4] = {x + lead, y + pad, w - 2 * lead, h - 2 * pad};
+        e->in_foot = 1;
         stack(e, c, s, k, model, row, r);
+        e->in_foot = 0;
         return;
     }
     int16_t btn[16];
@@ -4521,21 +4526,7 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         moy_ui_over_put(&o, MOY_UI_OV_GEN, &gen);
         e->page_gen = gen;
     }
-    // a handheld's foot lies outside the page, the keys band (the content's last line) under it
     e->foot = (int16_t)foot_of(e);
-    int32_t kband[4];
-    int has_kband = 0;
-    if (e->foot >= 0 && !(flags & UIT_F_DESK)) {
-        int32_t rest[4] = {x, y, w, h}, body[4], tmp[4];
-        if (moy_ui_api_hints_w(c, s, (const uint8_t *)"back\0Back", 9) > 0) {
-            moy_ui_cut(rest, MOY_UI_CUT_BOTTOM, 20 * fs, kband, tmp);
-            memcpy(rest, tmp, sizeof tmp);
-            has_kband = 1;
-        }
-        int32_t fh = foot_stacked(e, e->foot);
-        moy_ui_cut(rest, MOY_UI_CUT_BOTTOM, fh ? fh + 2 * fs : 22 * fs + foot_line(e, e->foot), e->foot_r, body);
-        moy_ui_api_at(c, body[0], body[1], body[2], body[3]);
-    }
     int ground = e->placed && e->ground[2] > 0;
     if (ground)
         moy_ui_api_at(c, e->ground[0], e->ground[1], e->ground[2], e->ground[3]);
@@ -4607,29 +4598,26 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
             placed = 1;
         if (!placed) {
             moy_ui_api_hints(c, s, hp, hn, NULL);
-        } else if (has_kband) {
-            // under the foot, outside the page's ground
-            fill_token(s, kband[0], kband[1], kband[2], kband[3], MOY_UI_T_PANEL);
-            moy_ui_api_at(c, kband[0], kband[1], kband[2], kband[3]);
-            moy_ui_api_hints(c, s, hp, hn, NULL);
         } else if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {
-            // a placed page's band: a handheld's its room's last line, the desk's at the page's foot
+            // a placed page's band: a handheld's its room's last line, the desk's and a foot's
+            // at the page's foot
             int32_t band[4], rest[4];
             int mn, hh = 20 * fs;
             if (flags & UIT_F_DESK)
                 hh = moy_ui_metrics(MOY_UI_K_VALUE_ROW, &mn)[17] * fs;
             moy_ui_cut(e->rect, 1, hh, band, rest);
-            if (!(flags & UIT_F_DESK))
+            if (!(flags & UIT_F_DESK) && e->foot < 0)
                 moy_ui_api_at(c, band[0], band[1], band[2], band[3]);
             moy_ui_api_hints(c, s, hp, hn, NULL);
             memcpy(e->rect, rest, sizeof rest);
         }
     }
-    if (e->foot >= 0 && (flags & UIT_F_DESK)) {
-        // the desk's foot: docked above the band, on the page's ground
+    if (e->foot >= 0) {
+        // the foot: docked above the band, on the page's ground
         int32_t got[4];
-        int32_t fh = foot_stacked(e, e->foot);
-        if (moy_ui_api_dock(c, fh ? fh + 14 : 44 + foot_line(e, e->foot), got)) {
+        int32_t fh = foot_stacked(e, e->foot), desk = (flags & UIT_F_DESK) != 0;
+        int32_t dh = fh ? fh + (desk ? 14 : 2 * fs) : (desk ? 44 : 22 * fs) + foot_line(e, e->foot);
+        if (moy_ui_api_dock(c, dh, got)) {
             memcpy(e->foot_r, got, sizeof got);
             e->rect[3] = got[1] - e->rect[1] > 0 ? got[1] - e->rect[1] : 0;
         }
