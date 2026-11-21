@@ -150,3 +150,22 @@ def test_a_badge_opens_centred_across_the_page_over_what_it_covers_alone(tmp_pat
     xs = [x for x in range(cv.w) if top[o + 2 * x:o + 2 * x + 2] != opened[o + 2 * x:o + 2 * x + 2]]
     left, right = xs[0] - cx, cx + cw - (xs[-1] + 1)
     assert left > 8 and abs(left - right) <= 2, ((xs[0], xs[-1] + 1), (cx, cw))
+
+
+def test_a_badge_s_card_stands_its_body_in_by_its_band_and_the_small_gap(tmp_path):
+    """The card round a badge is light: its body (the picture's cell, 56
+    and its 8, as tall as the words beside it on the handheld) stands in
+    by the popover's band and the split's small gap ("s", 6) at each side,
+    the medium one ("m") left to splits on the page."""
+    ws, drv, sl, pg = _page(tmp_path)
+    cv = ws.glass_canvas
+    shut = bytes(cv._buf)
+    _keys(drv, "a")
+    assert pg.popover() is not None
+    opened = bytes(cv._buf)
+    x = cv.w // 2
+    ys = [y for y in range(cv.h - 24)
+          if shut[2 * (y * cv.w + x):2 * (y * cv.w + x) + 2]
+          != opened[2 * (y * cv.w + x):2 * (y * cv.w + x) + 2]]
+    band, drop = 10, 2                    # value_row inset; the card's hard drop
+    assert ys[-1] + 1 - ys[0] <= 2 * band + (56 + 8) + 2 * 6 + drop, (ys[0], ys[-1])
