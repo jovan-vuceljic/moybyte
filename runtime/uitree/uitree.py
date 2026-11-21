@@ -1932,6 +1932,8 @@ SCHEMA = {
                   lines="lit", align="lit"),
     "rule": dict(_C),
     "note": dict(_C, icon="text", lines="texts"),
+    "bubble": dict(_C, text="text", side="text", head="text", status="text", signal="int", tone="text",
+                   max="lit", lines="lit", on="action1", cut="action1"),
     "info": dict(_C, label="text", value="text", icon="text", signal="int"),
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond"),
     "button": dict(_C, kind="lit", label="text", icon="text", alone="lit", span="lit", arg="lit",
@@ -1943,7 +1945,7 @@ SCHEMA = {
                   changed="action0", hint="text", commit="lit"),
     "seg": dict(_C, label="text", on="action0", focus="cond", look="lit", labels="lit", text="text"),
     "rows": dict(_C, cur="lit", current="lit", empty="text", filter="lit", changed="action1", group="lit",
-                 dir="lit"),
+                 dir="lit", by="lit"),
     "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
@@ -2437,8 +2439,64 @@ def col(text, **p):
     return _node("col", None, dict(p, text=text), _caller())
 
 
-def rows(model_name, **p):
-    return _list("rows", model_name, p, _caller())
+def rows(model_name, cases=None, **p):
+    """Rows of a model: with `with`, one body every row draws; with by=, an
+    enum field of the rows and `cases`, a function a value ("_" the rest),
+    each row drawing its value's (§10.4)."""
+    where = _caller()
+    by = p.get("by")
+    if by is None:
+        if cases is not None:
+            raise UIError("N01", "ui.rows(%r) has cases and no by=" % model_name, where=where,
+                          fix='by="FIELD", the enum field whose value picks a row\'s case')
+        return _list("rows", model_name, p, where)
+    _state_name(model_name, (Model,), "ui.rows", where)
+    mt = _st()._t[model_name]
+    ft = mt.fields.get(by)
+    if type(ft) is not Enum:
+        raise UIError("T03", "ui.rows(%r) picks kinds by %r" % (model_name, by), where=where,
+                      expected="an enum field of the rows", found=str(ft) if ft else "no such field",
+                      fix="by= names a field declared ui.enum(...)")
+    if not isinstance(cases, dict) or not cases:
+        raise UIError("N01", "ui.rows(%r, by=%r) has no cases" % (model_name, by), where=where,
+                      found=repr(cases), fix='{"VALUE": lambda: ui.label("{.text}"), ...}')
+    for v, body in cases.items():
+        if v != "_" and v not in ft.values:
+            raise UIError("T02", "ui.rows(%r) has a case %r that %s cannot be" % (model_name, v, by),
+                          where=where, expected="one of " + ", ".join(ft.values), found=repr(v),
+                          fix='a case a value of %s, or "_" for the rest' % by)
+        if not callable(body):
+            raise UIError("N01", "the case %r of ui.rows(%r) is %r" % (v, model_name, body), where=where,
+                          fix="a function that builds the row: lambda: ui.label(...)")
+    miss = [v for v in ft.values if v not in cases and "_" not in cases]
+    if miss:
+        raise UIError("T04", "ui.rows(%r) has no case for %s = %s" % (model_name, by, ", ".join(miss)),
+                      where=where, expected='a case for every value, or "_"', found="none",
+                      fix="add %r" % miss[0])
+    n = _list("rows", model_name, p, where)
+    b = _NOW.app
+    b.stack.append(n)
+    try:
+        for v in ft.values:             # a case a value: the row's value picks it
+            c = _node("case", "case:%s" % v, {}, where)
+            c.l["v"] = v
+            b.stack.append(c)
+            try:
+                cases.get(v, cases.get("_"))()
+            finally:
+                b.stack.pop()
+    finally:
+        b.stack.pop()
+        b.ctx = Ctx()
+    return n
+
+
+def bubble(text, **p):
+    """A chat's bubble, a stop: `side` "in" or "out", `head`, `status`,
+    `signal` (0-4 bars), `tone="failed"`, `max` the share of the width its
+    text may take (1 the whole), `lines` at most that many; a press fires
+    on=, or cut= where its text was cut."""
+    return _node("bubble", None, dict(p, text=text), _caller())
 
 
 def cards(model_name, **p):
@@ -3224,7 +3282,7 @@ def _collecting(fn, returns_node):
 NODE_CALLS = ("page", "group", "label", "info", "link", "button", "item", "card", "toggle", "slider",
               "field", "seg", "table", "col", "rows", "cards", "picture", "progress", "empty", "dialog",
               "popover", "menu", "split", "grid", "panel", "canvas", "foot", "scroll", "rule", "note",
-              "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
+              "bubble", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
               "legacy")
 DECL_CALLS = ("action", "hook", "labels", "work", "derive", "app")
 COMMAND_CALLS = ("push", "pop", "focus", "after", "post")

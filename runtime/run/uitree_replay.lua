@@ -1,8 +1,9 @@
 -- The UI tree layer's replay back end (runtime/run/uitree.lua is the layer):
 -- each frame it replays the built page into today's `ui` verbs, laying it out,
 -- drawing it and moving focus in Lua. It draws what the C engine's back end
--- (uitree_engine.lua) does not yet: bubble and rows by=, which Moy Mesh's
--- ports use; only their parity check (tests/uitree_lua_parity.py) loads it
+-- (uitree_engine.lua) does not yet and Moy Mesh's ports use (a record state,
+-- a field's when=, a popover's wash=, a scroll's follow=); only their parity
+-- check (tests/uitree_lua_parity.py) loads it
 -- (lua_ext.UITREE_REPLAY).
 
 local I = ui._in

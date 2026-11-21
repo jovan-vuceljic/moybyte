@@ -29,7 +29,8 @@ local E_CHECK = -6
 local KINDS = { page = 1, group = 2, label = 3, info = 4, link = 5, button = 6, toggle = 7, rows = 8, dialog = 9,
                 seg = 10, slider = 11, field = 12, empty = 13, progress = 14, text_view = 15, scroll = 16, menu = 17,
                 item = 18, split = 19, switch = 22, case = 23, table = 24, col = 25, foot = 26, popover = 30,
-                canvas = 20, tabs = 21, cards = 27, card = 28, row = 32, panel = 39, rule = 41, note = 42, grid = 43 }
+                canvas = 20, tabs = 21, cards = 27, card = 28, row = 32, panel = 39, rule = 41, note = 42, grid = 43,
+                bubble = 44 }
 local BASE = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = ENUM, rowof = ROWOF, model = MODEL }
 local FIELD = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = TEXT }
 -- a prop whose value is a literal the dump prints as one (its Python repr)
@@ -258,7 +259,8 @@ local SHAPE = {
              last = function(n) return { pair("label", n.a[1]), pair("lo", n.o.lo), pair("hi", n.o.hi) } end },
   field = { bind = true, takes = { "label", "max", "commit" },
             last = function(n) return { pair("label", n.a[1]), pair("max", n.o.max or 32), pair("commit", n.o.commit or nil) } end },
-  rows = { model = true, takes = { "by" } },
+  rows = { model = true },
+  bubble = { last = function(n) return { pair("text", n.a[1]) } end },
   empty = { last = function(n) return { pair("title", n.a[1]) } end },
   note = { takes = { "lines", "icon" }, last = function(n) return { pair("lines", n.o.lines), pair("icon", n.o.icon or "") } end },
   dialog = { takes = { "buttons" }, last = function(n) return { pair("title", n.a[1]) } end },
@@ -282,7 +284,6 @@ local JOINED = { sizes = 1 }
 local function lower_node(n, parent, path)
   local kind = KINDS[n.kind]
   if not kind then fail("E00", n.at, "the C engine does not draw ui." .. n.kind .. " yet", nil, nil, FIX) end
-  if n.kind == "rows" and n.o.by ~= nil then fail("E00", n.at, "the C engine does not draw ui.rows by= yet", nil, nil, FIX) end
   local key = c_key(n)
   KEYS[key] = true
   local me = check(X:node(kind, key, parent), "ui." .. n.kind .. " " .. q(key), n.at)
@@ -340,6 +341,12 @@ local function lower_node(n, parent, path)
   end
   local kids = n.body and n.body.kids or n.kids
   for _, k in ipairs(kids) do lower_node(k, me, path .. "/" .. key) end
+  if n.cases then              -- rows by=: a case child a value, the row's value picking it
+    for _, v in ipairs(DECL[n.a[1]].fields[n.o.by].values) do
+      local cm = check(X:node(KINDS.case, "case:" .. v, me), "ui.rows case " .. q(v), n.at)
+      for _, k in ipairs(n.cases[v].kids) do lower_node(k, cm, path .. "/" .. v) end
+    end
+  end
   if n.built then
     local ty = DECL[n.a[1]]
     for _, v in ipairs(ty.t == "enum" and ty.values or { "true", "false" }) do

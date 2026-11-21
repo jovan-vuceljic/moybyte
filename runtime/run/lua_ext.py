@@ -65,9 +65,10 @@ def cart_chunks(ns, src):
 # the extension "moybyte.uitree" gets the layer and one back end as its first
 # scripts, so its own scripts find the tree's `ui` over the engine's: the back
 # end, uitree_engine.lua, lowers each page into the C engine. uitree_replay.lua
-# replays a page into today's verbs instead: what draws the kinds the C engine
-# does not draw yet (bubble, rows by=), which Moy Mesh's ports use; only their
-# parity check (tests/uitree_lua_parity.py) swaps it in.
+# replays a page into today's verbs instead: what draws what the C engine does
+# not hold or draw yet and Moy Mesh's ports use (a record state, a field's
+# when=, a popover's wash=, a scroll's follow=); only their parity check
+# (tests/uitree_lua_parity.py) swaps it in.
 UITREE_EXT = "moybyte.uitree"
 UITREE_FILE = "uitree.lua"
 UITREE_BACK = "uitree_engine.lua"

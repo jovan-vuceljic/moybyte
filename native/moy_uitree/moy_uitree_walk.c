@@ -67,14 +67,12 @@ static int is_stop(int kind)
 {
     return kind == UIT_LINK || kind == UIT_BUTTON || kind == UIT_TOGGLE || kind == UIT_SEG ||
            kind == UIT_SLIDER || kind == UIT_FIELD || kind == UIT_ITEM || kind == UIT_TABS ||
-           kind == UIT_CARD;
+           kind == UIT_CARD || kind == UIT_BUBBLE;
 }
 
-int uit_case_of(uit_t *e, int k)
+// The case child of `k` ("case:VALUE") whose value is v, else its "case:_", else -1.
+static int case_for(uit_t *e, int k, const char *v, size_t vn)
 {
-    const uit_slot_t *S = &e->slots[NODE(k)->slot];
-    const char *v = S->type == UIT_BOOL ? (S->i ? "True" : "False") : S->s ? S->s : "";
-    size_t vn = S->type == UIT_BOOL ? strlen(v) : S->sn;
     int other = -1;
     KIDS(k, c) {
         const char *cv = uit_str(e, NODE(c)->key) + 5;     // "case:VALUE"
@@ -84,6 +82,22 @@ int uit_case_of(uit_t *e, int k)
             other = c;
     }
     return other;
+}
+
+int uit_case_of(uit_t *e, int k)
+{
+    const uit_slot_t *S = &e->slots[NODE(k)->slot];
+    const char *v = S->type == UIT_BOOL ? (S->i ? "True" : "False") : S->s ? S->s : "";
+    return case_for(e, k, v, S->type == UIT_BOOL ? strlen(v) : S->sn);
+}
+
+int uit_row_body(uit_t *e, int k, int row)
+{
+    const uit_node_t *N = NODE(k);
+    if (N->kind != UIT_ROWS || !N->nbtn)
+        return k;
+    const char *v = uit_cell(e, N->slot, row, N->nbtn - 1);
+    return case_for(e, k, v, strlen(v));
 }
 
 static const char *row_key(uit_t *e, int model, int row)
@@ -638,8 +652,9 @@ static void stops_of(uit_t *e, int k, int model, int row, stops_t *out)
         if (!uit_shown(e, c, model, row))
             continue;
         if (N->kind == UIT_ROWS || N->kind == UIT_CARDS) {
-            for (int r = 0; r < e->slots[N->slot].nrows; r++)
-                stops_of(e, c, N->slot, r, out);
+            for (int r = 0, b; r < e->slots[N->slot].nrows; r++)
+                if ((b = uit_row_body(e, c, r)) >= 0)
+                    stops_of(e, b, N->slot, r, out);
         } else if (N->kind == UIT_TABLE) {
             if (e->slots[N->slot].nrows)
                 stop_put(out, c, 0);        // one stop, as its first row
@@ -669,10 +684,10 @@ static int drawn_id(uit_t *e, int k, const char *rowkey, size_t rn, const char *
         if (N->kind == UIT_ROWS || N->kind == UIT_CARDS) {
             if (!rn)
                 continue;
-            int r = uit_row_find(e, N->slot, rowkey, rn);
-            if (r < 0)
+            int r = uit_row_find(e, N->slot, rowkey, rn), b = r < 0 ? -1 : uit_row_body(e, c, r);
+            if (b < 0)
                 continue;
-            KIDS(c, g) {
+            KIDS(b, g) {
                 if (!strcmp(uit_str(e, NODE(g)->key), nodekey) && uit_shown(e, g, N->slot, r) &&
                     (NODE(g)->act < 0 || uit_act_can(e, NODE(g)->act, N->slot, r))) {
                     snprintf(out, UIT_ID_MAX + 1, "%.*s/%s", (int)rn, rowkey, nodekey);
@@ -1509,9 +1524,10 @@ static int32_t row_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, i
     KIDS(k, g) {
         const uit_node_t *N = NODE(g);
         if (N->kind == UIT_ROWS) {
-            for (int r = 0; r < e->slots[N->slot].nrows; r++)
-                KIDS(g, kk)
-                if (NODE(kk)->kind == UIT_LINK && (x = link_w(e, c, s, kk, N->slot, r)) > w)
+            for (int r = 0, b; r < e->slots[N->slot].nrows; r++)
+                if ((b = uit_row_body(e, g, r)) >= 0)
+                    KIDS(b, kk)
+                    if (NODE(kk)->kind == UIT_LINK && (x = link_w(e, c, s, kk, N->slot, r)) > w)
                     w = x;
         } else if (N->kind == UIT_LINK) {
             if ((x = link_w(e, c, s, g, model, row)) > w)
@@ -1663,8 +1679,9 @@ static void draw_menu(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     KIDS(k, c2) {
         const uit_node_t *N = NODE(c2);
         if (N->kind == UIT_ROWS) {
-            for (int r = 0; r < e->slots[N->slot].nrows; r++)
-                KIDS(c2, g) {
+            for (int r = 0, b; r < e->slots[N->slot].nrows; r++)
+                if ((b = uit_row_body(e, c2, r)) >= 0)
+                    KIDS(b, g) {
                     if (uit_shown(e, g, N->slot, r) && uit_act_can(e, NODE(g)->act, N->slot, r))
                         item_add(&its, g, N->slot, r);
                 }
@@ -1999,6 +2016,14 @@ static uit_vrows_t *vrows_of(uit_t *e, int k, int n, int w, int fs)
 
 static void walk(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
 
+// Row `r` of rows node `k`: its body walked (by=: the case its row names).
+static void walk_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int r)
+{
+    int b = uit_row_body(e, k, r);
+    if (b >= 0)
+        walk(e, c, s, b, NODE(k)->slot, r);
+}
+
 // v: ui.view's answer. 0 where it could not keep its heights (the whole list walks instead).
 static int draw_vrows(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, const int32_t *v)
 {
@@ -2011,7 +2036,7 @@ static int draw_vrows(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     int next = 0;
     if (V->unit < 0) {
         int y0 = c->y;
-        walk(e, c, s, k, N->slot, 0);
+        walk_row(e, c, s, k, 0);
         h[0] = (int16_t)(c->y - y0);
         V->unit = h[0] > 0 ? h[0] : 1;
         next = 1;
@@ -2056,11 +2081,87 @@ static int draw_vrows(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         moy_ui_api_space(c, skip);
         skip = 0;
         int y0 = c->y;
-        walk(e, c, s, k, N->slot, r);
+        walk_row(e, c, s, k, r);
         h[r] = (int16_t)(c->y - y0);
     }
     moy_ui_api_space(c, skip);
     return 1;
+}
+
+int uit_tmpl_prop(const uit_t *e, int k, const char *name)
+{
+    for (int p = NODE(k)->props; p != (int)UIT_NONE; p = e->props[p].next)
+        if (e->props[p].kind == PK_TMPL && !strcmp(uit_str(e, e->props[p].name), name))
+            return e->props[p].idx;
+    return -1;
+}
+
+// A template prop of `k` rendered into the scratch (n 0 where it has none): its offset.
+static uint32_t prop_text(uit_t *e, int k, const char *name, int model, int row, uint32_t *n)
+{
+    int t = uit_tmpl_prop(e, k, name);
+    *n = 0;
+    return t < 0 ? 0 : uit_tmpl_render(e, t, model, row, n);
+}
+
+// Whether a shown popover hangs from node `k` on `row`: its anchor= the row's key, or the node's.
+static int hung_from(uit_t *e, int k, int model, int row)
+{
+    const char *want = row >= 0 ? row_key(e, model, row) : uit_str(e, NODE(k)->key);
+    size_t wn = strlen(want);
+    for (int p = 0; p < e->nnodes; p++) {
+        if (NODE(p)->kind != UIT_POPOVER || NODE(p)->t_value < 0 || !uit_shown(e, p, -1, -1))
+            continue;
+        uint32_t n, mark = e->scratch.n, a = uit_tmpl_render(e, NODE(p)->t_value, -1, -1, &n);
+        int hit = n == wn && !memcmp(e->scratch.p + a, want, n);
+        e->scratch.n = mark;
+        if (hit)
+            return 1;
+    }
+    return 0;
+}
+
+// A chat's bubble: its text, head= and status= drawn by the toolkit's bubble, side=, tone=, signal=,
+// max= and lines= its words; a press fires on=, or cut= where its text was cut.
+static void draw_bubble(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+{
+    const uit_node_t *N = NODE(k);
+    uint32_t ns, nt, ng, mark = e->scratch.n, as = prop_text(e, k, "side", model, row, &ns);
+    uint32_t at = prop_text(e, k, "tone", model, row, &nt), ag = prop_text(e, k, "signal", model, row, &ng);
+    const char *sc = e->scratch.p;
+    int32_t opt[MOY_UI_BBO_WORDS] = {ns == 3 && !memcmp(sc + as, "out", 3),
+                                     ng ? (int32_t)strtol(sc + ag, NULL, 10) : -1,
+                                     nt == 6 && !memcmp(sc + at, "failed", 6) ? MOY_UI_BUBBLE_FAILED : 0,
+                                     N->btn, N->nbtn, hung_from(e, k, model, row)};
+    e->scratch.n = mark;
+    uint32_t n1, nh, a1 = text(e, k, 0, model, row, &n1);
+    uint32_t ah = text_t(e, k, N->t_value, model, row, &nh);
+    as = text_t(e, k, N->t_aux, model, row, &ns);
+    moy_ui_over_t o;
+    char id[UIT_ID_MAX + 1];
+    over_for(e, k, model, row, c, &o, id);
+    int32_t out[5];
+    moy_ui_api_bubble(c, s, sspan(e, a1, n1), sspan(e, ah, nh), sspan(e, as, ns), opt, MOY_UI_BBO_WORDS, &o, out);
+    if (out[4] & 2) {
+        int cut = (out[4] & MOY_UI_ST_CUT) && N->changed >= 0, a = cut ? N->changed : N->on;
+        if (a >= 0 && uit_act_can(e, a, model, row))
+            fire(e, a, k, model, row, cut ? "bubble (cut)" : NULL);
+    }
+}
+
+// An info's or a link's tag=, tone= (its ink: a theme role) and signal= (0-4 bars) on `o`; the
+// tag's text stays in the scratch for the draw.
+static void value_over(uit_t *e, int k, int model, int row, moy_ui_over_t *o)
+{
+    uint32_t ng, nt, nk, ag = prop_text(e, k, "signal", model, row, &ng);
+    uint32_t ak = prop_text(e, k, "tone", model, row, &nk), at = prop_text(e, k, "tag", model, row, &nt);
+    int32_t sig = ng ? (int32_t)strtol(e->scratch.p + ag, NULL, 10) : -1, ink = nk ? button_ink(e->scratch.p + ak, nk) : -1;
+    if (ng)
+        moy_ui_over_put(o, MOY_UI_OV_SIGNAL, &sig);
+    if (ink >= 0)
+        moy_ui_over_put(o, MOY_UI_OV_INK, &ink);
+    if (nt)
+        moy_ui_over_text(o, MOY_UI_OV_TAG, sspan(e, at, nt));
 }
 
 static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
@@ -2084,6 +2185,7 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         a1 = text(e, k, 0, model, row, &n1);
         a2 = text(e, k, 1, model, row, &n2);
         over_for(e, k, model, row, c, &o, id);
+        value_over(e, k, model, row, &o);
         if (moy_ui_api_value(c, s, N->kind == UIT_INFO ? MOY_UI_V_INFO : MOY_UI_V_LINK, sspan(e, a1, n1),
                              sspan(e, a2, n2), &o) &&
             N->kind == UIT_LINK && uit_act_can(e, N->act, model, row))
@@ -2189,7 +2291,7 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
                     cap_at = at, cap_n = n, capped = 1;
                 }
             }
-            walk(e, c, s, k, N->slot, r);
+            walk_row(e, c, s, k, r);
         }
         if (capped)
             moy_ui_api_group(c, s, span_of("", 0), NULL);
@@ -2273,6 +2375,9 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
     }
     case UIT_RULE:
         moy_ui_api_rule(c, s);
+        break;
+    case UIT_BUBBLE:
+        draw_bubble(e, c, s, k, model, row);
         break;
     case UIT_NOTE: {
         // its icon ("info" where it has none) and each line's paragraph, empty ones kept
@@ -2400,7 +2505,8 @@ static int row_stop_id(uit_t *e, int lst, const char *key, size_t n, char out[UI
         snprintf(out, UIT_ID_MAX + 1, "%s", uit_str(e, NODE(lst)->key));     // one stop, its key the id
         return 1;
     }
-    KIDS(lst, g)
+    int b = uit_row_body(e, lst, r);
+    KIDS(b < 0 ? lst : b, g)
     if (is_stop(NODE(g)->kind) && NODE(g)->kind != UIT_SEG) {
         snprintf(out, UIT_ID_MAX + 1, "%.*s/%s", (int)n, key, uit_str(e, NODE(g)->key));
         return 1;
@@ -2841,9 +2947,10 @@ static int row_kids(uit_t *e, int k, int model, int row, int16_t *kids, int16_t 
             continue;
         if (kind == UIT_ROWS) {
             int m = NODE(g)->slot;
-            for (int r = 0; r < e->slots[m].nrows; r++)
-                KIDS(g, b)
-                if (n < PLACE_KIDS && placed_shown(e, b, m, r))
+            for (int r = 0, y; r < e->slots[m].nrows; r++)
+                if ((y = uit_row_body(e, g, r)) >= 0)
+                    KIDS(y, b)
+                    if (n < PLACE_KIDS && placed_shown(e, b, m, r))
                     kids[n] = (int16_t)b, km[n] = (int16_t)m, kr[n++] = (int16_t)r;
             continue;
         }

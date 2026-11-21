@@ -1491,51 +1491,41 @@
    "props": {
     "side": {
      "type": "tpl",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "head": {
      "type": "tpl",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "status": {
      "type": "tpl",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "signal": {
      "type": "int",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "tone": {
      "type": "tpl",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "max": {
      "type": "int",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "lines": {
      "type": "int",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "on": {
      "type": "action",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "cut": {
      "type": "action",
-     "level": 1,
-     "designed": true
+     "level": 1
     }
-   },
-   "designed": true
+   }
   },
   "toast": {
    "head": "tpl",
@@ -2033,8 +2023,7 @@
     },
     "by": {
      "type": "name",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "filter": {
      "type": "name",

@@ -53,6 +53,7 @@ enum {
     UT_PANEL, UT_LENT,
     UT_RULE, UT_NOTE,
     UT_GRID,
+    UT_BUBBLE,
 };
 
 // An action's flags and how its nodes look while it is off (uitree_action).

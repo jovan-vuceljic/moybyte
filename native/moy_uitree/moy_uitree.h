@@ -46,6 +46,7 @@ enum {
     UIT_PANEL, UIT_LENT,
     UIT_RULE, UIT_NOTE,     // level 1: a divider, a note (no stop either)
     UIT_GRID,               // the page's room in cols x rows cells, a button a cell (or `span` of them)
+    UIT_BUBBLE,             // level 1: a chat's bubble, a stop
     UIT_KINDS
 };
 

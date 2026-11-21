@@ -396,6 +396,10 @@ int32_t uit_cell_gen(uit_t *e, int k);
 uint32_t uit_tmpl_key(const uit_t *e, int t, int *engine);
 // The case of switch node `k` its state's value names, else its "_", else -1.
 int uit_case_of(uit_t *e, int k);
+// The node whose kids row `row` of list `k` draws: `k`, or with by= the case the row's value names (-1 none).
+int uit_row_body(uit_t *e, int k, int row);
+// The template of node `k`'s prop `name` (one the draw finds by name), else -1.
+int uit_tmpl_prop(const uit_t *e, int k, const char *name);
 
 // Each kind's name, as the trace and the dump spell it.
 extern const char *const uit_kind_names[UIT_KINDS];

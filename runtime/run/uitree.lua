@@ -7,8 +7,9 @@
 -- found. A back end draws the pages: uitree_engine.lua lowers each built page
 -- into the C engine (native/moy_uitree), which lays it out, draws it, moves
 -- focus and hands back what the user did; uitree_replay.lua replays the tree
--- into today's `ui` verbs every frame instead, for the kinds the C engine does
--- not draw yet (bubble, rows by=: Moy Mesh's ports, their parity check alone).
+-- into today's `ui` verbs every frame instead, for what Moy Mesh's ports use
+-- that the C engine does not hold or draw yet (a record state, a field's
+-- when=, a popover's wash=, a scroll's follow=): their parity check alone.
 --
 -- The Player loads this chunk, then one back end, ahead of a cart that
 -- declares the extension "moybyte.uitree" (runtime/run/lua_ext.py); it takes
@@ -1471,9 +1472,9 @@ if CHECK == nil then
 end
 -- where this layer differs from the table: what the table only designs and the layer builds
 -- (true; a kind's every prop), and what the table has that the layer does not build yet (false)
-local OWN = { bubble = true, ["dialog.default"] = true, ["field.grow"] = true, ["field.input"] = true,
+local OWN = { ["dialog.default"] = true, ["field.grow"] = true, ["field.input"] = true,
               ["field.when"] = true, ["field.off"] = true, ["info.tag"] = true, ["info.tone"] = true,
-              ["link.tag"] = true, ["link.tone"] = true, ["popover.wash"] = true, ["rows.by"] = true,
+              ["link.tag"] = true, ["link.tone"] = true, ["popover.wash"] = true,
               ["rows.check"] = true, ["scroll.new"] = true, ["scroll.follow"] = true, ["slider.when"] = true,
               ["slider.off"] = true, ["toggle.when"] = true, ["toggle.off"] = true, ["card.image"] = false }
 -- a parent's prop the table lets every child carry: the one kind the layer builds it on

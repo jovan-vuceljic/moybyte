@@ -4,7 +4,8 @@
 - Old against port: Moy Mesh's hand-written thread and Radio pages and their
   ports draw the same pixels through one input script, on the handheld and
   in a desk window (tests/uitree_lua_parity.py), on the Lua replay back end
-  (runtime/run/uitree_replay.lua): the ports use bubbles and rows by kind.
+  (runtime/run/uitree_replay.lua): the ports use a record state and props
+  the C engine does not draw yet.
 - Every other test runs on the C engine.
 - The checker (tools/uitree_lua_check.py): one failing case per error code a
   Lua app can raise, each reported at its file and line.

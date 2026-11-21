@@ -792,6 +792,8 @@ int uit_node(uit_t *e, int kind, const char *key, int parent)
         N.btn = 32;
     if (kind == UIT_SPLIT)
         N.btn = N.nbtn = GAP_M, N.lit = 1;          // pad="m", gap="m", align="center"
+    if (kind == UIT_BUBBLE)
+        N.btn = 75, N.nbtn = 4;                     // max=0.75, lines=4
     if (kind == UIT_GRID)
         N.btn = GAP_0, N.nbtn = GAP_S, N.lit = 0x11;  // no pad, gap="s", 1 x 1
     if (kind == UIT_PANES)
@@ -840,7 +842,7 @@ const char *const uit_kind_names[UIT_KINDS] = {"", "page", "group", "label", "in
                                                "table", "col", "foot", "cards", "card", "picture",
                                                "popover", "tools", "row", "status", "text_editor",
                                                "panes", "pane", "legacy", "slot", "panel", "lent",
-                                               "rule", "note", "grid"};
+                                               "rule", "note", "grid", "bubble"};
 
 static const char *const TONES[] = {"ink", "dim", "value", "danger"};
 static const char *const BKINDS[] = {"normal", "primary", "tonal", "danger", "toggle", "bar"};   // moy_ui's, then its bar item
@@ -1040,8 +1042,24 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     } else if (!strcmp(name, "title") || !strcmp(name, "caption") || !strcmp(name, "text") ||
                !strcmp(name, "label"))
         tslot = &N->t_main;
-    else if (!strcmp(name, "value") || (!strcmp(name, "lo") && kind == UIT_SLIDER))
+    else if (!strcmp(name, "value") || (!strcmp(name, "lo") && kind == UIT_SLIDER) ||
+             (!strcmp(name, "head") && kind == UIT_BUBBLE))
         tslot = &N->t_value;
+    else if (!strcmp(name, "status") && kind == UIT_BUBBLE)
+        tslot = &N->t_aux;
+    else if ((kind == UIT_BUBBLE && (!strcmp(name, "side") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
+             ((kind == UIT_INFO || kind == UIT_LINK) &&
+              (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal")))) {
+        // templates the draw finds among its props by name (uit_tmpl_prop); signal= an int
+        int t = uit_tmpl_compile(e, src, model);
+        if (t < 0)
+            return t;
+        int ty = e->tmpls[t].type, want_int = !strcmp(name, "signal");
+        if (want_int ? ty != UIT_INT && !e->tmpls[t].lit : ty == UIT_BOOL || ty == UIT_MODEL)
+            return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not %s", "%s %s %s %s %s"), uit_kind_names[kind],
+                                  name, src, uit_type_name(ty), want_int ? "an int" : "a text");
+        return add_prop(e, node, name, src, repr, PK_TMPL, t);
+    }
     else if (!strcmp(name, "max") && kind == UIT_PROGRESS)
         tslot = &N->t_aux;
     else if (kind == UIT_SPLIT && (!strcmp(name, "dir") || !strcmp(name, "sizes"))) {
@@ -1191,6 +1209,25 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->nbtn = (uint16_t)v;
         return add_prop(e, node, name, src, repr, PK_LIT, (int)v);
     }
+    if (kind == UIT_BUBBLE && (!strcmp(name, "max") || !strcmp(name, "lines"))) {
+        // max= the share of the room its text may take (1 the whole, in hundredths in btn); lines= at
+        // most N lines of text (nbtn, 0 none), its last cut
+        double v = strtod(src, NULL);
+        if (name[0] == 'm')
+            N->btn = (uint16_t)(v > 0 && v <= 1 ? v * 100 + 0.5 : 75);
+        else
+            N->nbtn = (uint16_t)(v < 0 ? 0 : v);
+        return add_prop(e, node, name, src, repr, PK_LIT, (int)v);
+    }
+    if (kind == UIT_ROWS && !strcmp(name, "by")) {
+        // by= a text field (an enum's values are texts in the store): each row draws the case
+        // child ("case:VALUE") its value names; nbtn holds the field + 1
+        int f = uit_field_find(e, N->slot, src, strlen(src));
+        if (f < 0 || e->slots[N->slot].mf->ftype[f] != UIT_TEXT)
+            return uit_check_fail(e, "T03", UIT_MSG("rows by=%s: no text or enum field of its rows", "rows by=%s"), src);
+        N->nbtn = (uint16_t)(f + 1);
+        return add_prop(e, node, name, src, repr, PK_LIT, f);
+    }
     if (kind == UIT_ROWS && !strcmp(name, "dir")) {
         // dir="row": a row from a model, its cells along the placed row it stands in (row_kids)
         if (strcmp(src, "row") && strcmp(src, "col"))
@@ -1302,8 +1339,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
     if ((!strcmp(name, "on") && (kind == UIT_TOGGLE || kind == UIT_SEG || kind == UIT_SLIDER ||
-                                 kind == UIT_FIELD || kind == UIT_TABLE || kind == UIT_TABS)) ||
-        (!strcmp(name, "changed") && kind == UIT_FIELD) ||
+                                 kind == UIT_FIELD || kind == UIT_TABLE || kind == UIT_TABS || kind == UIT_BUBBLE)) ||
+        (!strcmp(name, "changed") && kind == UIT_FIELD) || (!strcmp(name, "cut") && kind == UIT_BUBBLE) ||
         (!strcmp(name, "close") && (kind == UIT_POPOVER || kind == UIT_ROW || kind == UIT_GROUP))) {
         for (int a = 0; a < e->nacts; a++)
             if (!strcmp(uit_str(e, e->acts[a].name), src)) {
@@ -1787,7 +1824,8 @@ static void dump_node(uit_t *e, uit_buf_t *b, int k, int depth, int model, int r
             const char *rk = uit_cell(e, N->slot, r, M->key);
             uit_buf_repr(b, rk, strlen(rk));
             uit_buf_printf(b, "\n");
-            for (int c = N->kid; c != (int)UIT_NONE; c = e->nodes[c].next)
+            int body = uit_row_body(e, k, r);
+            for (int c = body < 0 ? (int)UIT_NONE : e->nodes[body].kid; c != (int)UIT_NONE; c = e->nodes[c].next)
                 dump_node(e, b, c, depth + 2, N->slot, r);
         }
         return;
