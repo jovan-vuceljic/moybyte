@@ -60,6 +60,8 @@ int uit_letter(uit_t *e, int ch)
 int uit_shown(uit_t *e, int node, int model, int row)
 {
     const uit_node_t *N = NODE(node);
+    if (N->kind == UIT_FIELD && (N->lit & NL_HIDE) && N->mark >= 0 && !uit_cond_eval(e, N->mark, model, row))
+        return 0;
     return N->shown < 0 || uit_cond_eval(e, N->shown, model, row);
 }
 
@@ -250,11 +252,16 @@ static void over_for(uit_t *e, int k, int model, int row, moy_ui_ctx_t *c, moy_u
     if (row >= 0) {
         int list = uit_list_of(e, k);
         if (list >= 0 && NODE(list)->current >= 0) {
-            int32_t on = uit_row_current(e, list, model, row);
+            int32_t on = uit_row_current(e, list, model, row), one = 1;
             moy_ui_over_put(o, MOY_UI_OV_CURRENT, &on);
+            if (NODE(list)->kind == UIT_ROWS && NODE(list)->lit)
+                moy_ui_over_put(o, MOY_UI_OV_CHECK, &one);
         }
     }
-    if (N->mark >= 0) {
+    if (N->mark >= 0 && N->kind == UIT_FIELD && !uit_cond_eval(e, N->mark, model, row)) {
+        int32_t one = 1;
+        moy_ui_over_put(o, MOY_UI_OV_DISABLED, &one);
+    } else if (N->mark >= 0 && N->kind == UIT_BUTTON) {
         int32_t on = uit_cond_eval(e, N->mark, model, row) != 0;
         moy_ui_over_put(o, MOY_UI_OV_CURRENT, &on);
     }
@@ -870,6 +877,8 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
     if (e->has_focused) {
         const uit_id_t *F = &e->focused;
         int a = F->act;
+        if (a < 0 && F->kind == UIT_BUBBLE && F->gen == e->gen)
+            a = NODE(F->node)->on;      // a bubble's press is its on=
         int on = a >= 0 && uit_act_can(e, a, -1, -1);
         if (F->kind == UIT_FIELD && F->gen == e->gen && (NODE(F->node)->lit & NL_COMMIT)) {
             static const char DONE[] = "confirm\0Done\0cancel\0Cancel";
@@ -1452,6 +1461,17 @@ static void pop_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
 // frame it is dismissed.
 static void placed_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k);
 
+// A popover's override: its wash= (lit: the toolkit's wash + 1, 0 none given)
+static const moy_ui_over_t *pop_over(const uit_node_t *N, moy_ui_over_t *o)
+{
+    int32_t w = N->lit - 1;
+    if (!N->lit)
+        return NULL;
+    moy_ui_over_none(o);
+    moy_ui_over_put(o, MOY_UI_OV_WASH, &w);
+    return o;
+}
+
 static void draw_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     if (e->placed) {
@@ -1487,7 +1507,8 @@ static void draw_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         }
         e->scratch.n = mark;
     }
-    if (!moy_ui_api_popover(c, s, span_of(key, strlen(key)), w, NULL) && N->on >= 0)
+    moy_ui_over_t o;
+    if (!moy_ui_api_popover(c, s, span_of(key, strlen(key)), w, pop_over(N, &o)) && N->on >= 0)
         fire(e, N->on, k, -1, -1, NULL);
     e->in_pop = 1;
     walk(e, c, s, k, model, row);
@@ -1871,6 +1892,26 @@ static int foot_label(uit_t *e, int k)
     return -1;
 }
 
+static int32_t fixed_h(uit_t *e, int k);
+static int placed_shown(uit_t *e, int k, int model, int row);
+static void stack(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
+                  const int32_t r[4]);
+
+// A foot of the end look holding more than labels (a button, a row, a field, a note): its
+// children stacked by the placed rule, its height theirs.
+static int32_t foot_stacked(uit_t *e, int k)
+{
+    int32_t h = 0, any = 0;
+    if (NODE(k)->lit)
+        return 0;
+    KIDS(k, g) {
+        any |= NODE(g)->kind != UIT_LABEL;
+        if (placed_shown(e, g, -1, -1))
+            h += fixed_h(e, g);
+    }
+    return any ? h : 0;
+}
+
 // The foot's line over its buttons (`_foot_line`): its label's line, else 0.
 static int foot_line(uit_t *e, int k)
 {
@@ -1916,6 +1957,11 @@ static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     if (!desk) {
         fill_token(s, x, y, w, h, MOY_UI_T_PANEL);
         fill_token(s, x + m, y, w - 2 * m, 1, MOY_UI_T_BORDER);
+    }
+    if (foot_stacked(e, k)) {
+        int32_t r[4] = {x + m, y + pad, w - 2 * m, h - 2 * pad};
+        stack(e, c, s, k, model, row, r);
+        return;
     }
     int16_t btn[16];
     int nb = 0;
@@ -2425,6 +2471,7 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         moy_ui_api_empty(c, s, ni ? sspan(e, ai, ni) : span_of("warn", 4), sspan(e, a1, n1),
                          (const uint8_t *)(lines.p ? lines.p : ""), lines.n);
         uit_buf_free(&lines);
+        walk(e, c, s, k, model, row);       // its controls, under what it says
         break;
     }
     case UIT_DIALOG: {
@@ -4242,7 +4289,8 @@ static void placed_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
         }
         e->scratch.n = mark;
     }
-    if (!moy_ui_api_popover(c, s, span_of(key, strlen(key)), w, NULL) && N->on >= 0)
+    moy_ui_over_t o;
+    if (!moy_ui_api_popover(c, s, span_of(key, strlen(key)), w, pop_over(N, &o)) && N->on >= 0)
         fire(e, N->on, k, -1, -1, NULL);
     KIDS(k, g) {
         if (!uit_shown(e, g, -1, -1))
@@ -4484,7 +4532,8 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
             memcpy(rest, tmp, sizeof tmp);
             has_kband = 1;
         }
-        moy_ui_cut(rest, MOY_UI_CUT_BOTTOM, 22 * fs + foot_line(e, e->foot), e->foot_r, body);
+        int32_t fh = foot_stacked(e, e->foot);
+        moy_ui_cut(rest, MOY_UI_CUT_BOTTOM, fh ? fh + 2 * fs : 22 * fs + foot_line(e, e->foot), e->foot_r, body);
         moy_ui_api_at(c, body[0], body[1], body[2], body[3]);
     }
     int ground = e->placed && e->ground[2] > 0;
@@ -4563,7 +4612,6 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
             fill_token(s, kband[0], kband[1], kband[2], kband[3], MOY_UI_T_PANEL);
             moy_ui_api_at(c, kband[0], kband[1], kband[2], kband[3]);
             moy_ui_api_hints(c, s, hp, hn, NULL);
-            moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3]);
         } else if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {
             // a placed page's band: a handheld's its room's last line, the desk's at the page's foot
             int32_t band[4], rest[4];
@@ -4580,7 +4628,8 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
     if (e->foot >= 0 && (flags & UIT_F_DESK)) {
         // the desk's foot: docked above the band, on the page's ground
         int32_t got[4];
-        if (moy_ui_api_dock(c, 44 + foot_line(e, e->foot), got)) {
+        int32_t fh = foot_stacked(e, e->foot);
+        if (moy_ui_api_dock(c, fh ? fh + 14 : 44 + foot_line(e, e->foot), got)) {
             memcpy(e->foot_r, got, sizeof got);
             e->rect[3] = got[1] - e->rect[1] > 0 ? got[1] - e->rect[1] : 0;
         }

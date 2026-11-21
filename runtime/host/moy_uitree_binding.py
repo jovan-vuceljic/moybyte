@@ -27,6 +27,7 @@ _SIGS = (
     ("uit_error_code", [_P], _S),
     ("uit_state", [_P, _S, _I, _S, _Z], _I),
     ("uit_model", [_P, _I, _S, _Z, _S, _I, _I], _I),
+    ("uit_field_enum", [_P, _I, _I, _S, _Z], _I),
     ("uit_row_of", [_P, _I, _I], _I),
     ("uit_action_row", [_P, _I, _I], _I),
     ("uit_action", [_P, _S, _S, _S, _S, _I, _I, _S, _S], _I),
@@ -203,6 +204,9 @@ class Engine:
 
     def model(self, slot, names, types, key):
         return self._L.uit_model(self._e, slot, names, len(names), types, len(types), key)
+
+    def field_enum(self, slot, f, values):
+        return self._L.uit_field_enum(self._e, slot, f, values, len(values))
 
     def row_of(self, slot, model):
         return self._L.uit_row_of(self._e, slot, model)

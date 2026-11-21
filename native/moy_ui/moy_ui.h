@@ -895,6 +895,8 @@ typedef struct {
     moy_ui_span_t tag;              // info, link: a tag (a pill) at the value's right
     int16_t signal;                 // info, link: the signal glyph before the value, its
                                     // lit bars + 1 (0: none)
+    int16_t check;                  // link: a pick, no chevron: 1 its place blank, 2 a check
+                                    // there (the current pick)
 } moy_ui_vrow_t;
 enum { MOY_UI_VROW_PLAIN = 0, MOY_UI_VROW_DANGER = 1 };
 int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,

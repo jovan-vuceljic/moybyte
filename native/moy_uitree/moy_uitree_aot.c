@@ -28,7 +28,8 @@ static const uit_fld_t f_slot[] = {
     FLD(uit_slot_t, name), FLD(uit_slot_t, type), FLD(uit_slot_t, nf), FLD(uit_slot_t, key),
     FLD(uit_slot_t, model), FLD(uit_slot_t, vals), FLD(uit_slot_t, nvals),
 };
-static const uit_fld_t f_fields[] = {FLD(uit_fields_t, ftype), FLD(uit_fields_t, fname)};
+static const uit_fld_t f_fields[] = {FLD(uit_fields_t, ftype), FLD(uit_fields_t, fname), FLD(uit_fields_t, fvals),
+                                     FLD(uit_fields_t, fnvals)};
 static const uit_fld_t f_act[] = {
     FLD(uit_act_t, name), FLD(uit_act_t, label), FLD(uit_act_t, hint), FLD(uit_act_t, when),
     FLD(uit_act_t, off), FLD(uit_act_t, flags), FLD(uit_act_t, letter), FLD(uit_act_t, letters),
@@ -188,10 +189,12 @@ static int save(uit_t *e, uit_buf_t *b, const char *variant, uint32_t source, co
     for (int i = 0; i < e->nslots; i++) {
         const uit_slot_t *S = &e->slots[i];
         uint8_t has = S->mf != NULL;
-        uit_fields_t mf = {{0}, {0}};   // the fields past nf are not the model's: written as 0
+        uit_fields_t mf = {{0}, {0}, {0}, {0}};   // the fields past nf are not the model's: written as 0
         for (int f = 0; has && f < S->nf; f++) {
             mf.ftype[f] = S->mf->ftype[f];
             mf.fname[f] = S->mf->fname[f];
+            mf.fvals[f] = S->mf->fvals[f];
+            mf.fnvals[f] = S->mf->fnvals[f];
         }
         if (rec(b, S, f_slot, NFLD(f_slot)) || raw(b, &has, 1) || (has && rec(b, &mf, f_fields, NFLD(f_fields))))
             return -1;

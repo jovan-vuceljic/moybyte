@@ -126,6 +126,15 @@ static int l_uit_model(lua_State *L)
     return 1;
 }
 
+static int l_uit_field_enum(lua_State *L)
+{
+    uit_t *e = moycore_uit(L);
+    size_t vn = 0;
+    const char *v = moycore_uit_str(L, 4, &vn);
+    lua_pushinteger(L, uit_field_enum(e, moycore_uit_int(L, 2), moycore_uit_int(L, 3), v, vn));
+    return 1;
+}
+
 static int l_uit_row_of(lua_State *L)
 {
     uit_t *e = moycore_uit(L);
@@ -472,7 +481,8 @@ static int l_uit_error_code(lua_State *L)
 static void moycore_uitree_open(lua_State *L)
 {
     static const luaL_Reg methods[] = {
-        {"state", l_uit_state}, {"model", l_uit_model}, {"row_of", l_uit_row_of},
+        {"state", l_uit_state}, {"model", l_uit_model}, {"field_enum", l_uit_field_enum},
+        {"row_of", l_uit_row_of},
         {"labels", l_uit_labels}, {"action", l_uit_action}, {"action_row", l_uit_action_row},
         {"set_int", l_uit_set_int}, {"set_num", l_uit_set_num}, {"set_text", l_uit_set_text},
         {"set_absent", l_uit_set_absent}, {"set_model", l_uit_set_model},

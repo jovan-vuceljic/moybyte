@@ -833,7 +833,17 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
         case MOY_UI_V_LINK:
         case MOY_UI_V_CYCLE: {
             int x = right;
-            if (kind != MOY_UI_V_INFO) {
+            if (r->check && kind == MOY_UI_V_LINK) {
+                int cs = (d.desk ? 14 : 12) * d.fs;
+                x -= cs;
+                if (r->check == 2) {
+                    moy_ui_box_t cb = {(int16_t)x, (int16_t)(b.y + (b.h - cs) / 2), (int16_t)cs, (int16_t)cs};
+                    moy_ui_icon_in(s, moy_ui_icon_slot((const uint8_t *)"check", 5),
+                                   moy_ui_icon_glyph((const uint8_t *)"check", 5), cb,
+                                   tok(&d, MOY_UI_T_VALUE, MOY_UI_T_ACCENT), d.fs);
+                }
+                x -= gap;
+            } else if (kind != MOY_UI_V_INFO) {
                 x -= chev;
                 chevron(&d, x, cy, chev, 1, cdim);
                 x -= kind == MOY_UI_V_CYCLE ? gap + d.fs : gap;

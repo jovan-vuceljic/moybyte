@@ -41,10 +41,13 @@ int uit_buf_printf(uit_buf_t *b, const char *fmt, ...);         // appended, no 
 void uit_buf_repr(uit_buf_t *b, const char *s, size_t n);       // Python's repr of a text
 void uit_buf_free(uit_buf_t *b);
 
-// A model's fields: each one's name (pool) and type.
+// A model's fields: each one's name (pool) and type, and an enum field's
+// values (NUL-separated in the pool; fnvals 0 for any other field).
 typedef struct {
     uint8_t ftype[UIT_FIELDS];
     uint16_t fname[UIT_FIELDS];
+    uint16_t fvals[UIT_FIELDS];
+    uint8_t fnvals[UIT_FIELDS];
 } uit_fields_t;
 
 // A state slot.
@@ -128,7 +131,7 @@ typedef struct {
 } uit_prop_t;
 
 // Node flags (`lit` of a two-way control).
-enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_FIELD = 4 };
+enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_FIELD = 4, NL_HIDE = 8 };
 // A label's text options (`nbtn`): wrap= in bits 0-1 (LT_WORD, LT_CHAR), its face's
 // role + 1 in bits 2-4, the toolkit's `centre` for align= in bits 5-7, lines= given.
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.
@@ -144,7 +147,7 @@ enum { LT_WORD = 1, LT_CHAR = 2, LT_WRAP = 3, LT_FACE_SHIFT = 2, LT_ALIGN_SHIFT 
 
 typedef struct {
     uint8_t kind, lit;          // a label's tone, a button's kind; a seg's cycle look, a slider's
-                                // steps, a field's commit and secret (NL_*)
+                                // steps, a field's commit, secret and off="hide" (NL_*)
     uint16_t parent, kid, last, next;
     uint16_t key;               // pool
     int16_t act;
@@ -163,7 +166,8 @@ typedef struct {
                                 // lines= in btn and its text options in nbtn (LT_*); a button's
                                 // alone= in btn (BT_ALONE) and span= in nbtn; a grid's pad and
                                 // gap (GAP_*) in btn and nbtn, its cols and rows in lit's nibbles
-    int16_t mark;               // a button's marked= cond: drawn current while it holds
+    int16_t mark;               // a button's marked= cond: drawn current while it holds; a
+                                // field's when= cond: greyed (NL_HIDE: not shown) while it fails
 } uit_node_t;
 
 // The panes (`ui.panes`, `ui.pane`): a split's children are the layout rule's cells along its

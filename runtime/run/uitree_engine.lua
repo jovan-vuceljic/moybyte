@@ -45,7 +45,9 @@ local AIDX, ACTS = {}, {}       -- an action's index by name; the action by inde
 local LETTERS = {}              -- the letter keys the actions declare, as key codes
 local PUSHED = {}               -- each state's write count (a derive's value) as last pushed
 local LOWERED = nil             -- the page whose tree the store holds
-local KEYS = {}                 -- the keys of the lowered page's nodes
+local KEYS = {}                 -- the keys of the lowered page's nodes: a row's node its model's name, a
+                                -- field "field", any other true
+local ROW_ACT = {}              -- a row's node's key -> the action it fires
 local DRAWS = {}                -- a canvas's node -> its draw
 local ROWS = false              -- the lowered page lists rows (whose keys are data)
 local POINTERS = {}             -- each canvas of the lowered page a pointer is routed to: { node, key, its pointer= action }
@@ -107,6 +109,12 @@ local function declare()
         if f == ty.key then key = i - 1 end
       end
       check(X:model(SLOT[name], table.concat(ty.order, "\0"), table.concat(types), key), "the model " .. q(name), "load")
+      for i, f in ipairs(ty.order) do
+        local ft = ty.fields[f]
+        if ft.t == "enum" then
+          check(X:field_enum(SLOT[name], i - 1, table.concat(ft.values, "\0")), "the field " .. q(f) .. " of " .. q(name), "load")
+        end
+      end
     elseif ty.t == "rowof" then
       check(X:row_of(SLOT[name], SLOT[ty.model]), "the row_of " .. q(name), "load")
     end
@@ -127,7 +135,9 @@ local function declare()
       elseif k:match("^%l$") then letters[#letters + 1] = k; LETTERS[#LETTERS + 1] = string.byte(k) end
     end
     local off = a.off == "hide" and 1 or a.off == "grey" and 2 or 0
-    local i = check(X:action(name, a.label or "", a.hint or "", a.when, off, flags, table.concat(letters), a.icon or ""),
+    -- its hint, where it names none, its label (the Python layer's Action)
+    local hint = a.hint == nil and (a.label or "") or a.hint
+    local i = check(X:action(name, a.label or "", hint, a.when, off, flags, table.concat(letters), a.icon or ""),
                     "the action " .. q(name), a.at)
     AIDX[name], ACTS[i] = i, a
     if a.row then check(X:action_row(i, SLOT[a.row]), "the action " .. q(name) .. "'s row", a.at) end
@@ -302,11 +312,12 @@ local SHAPE = {
 -- a prop given as a list that is one prop: its values joined, as the Python layer joins a tuple
 local JOINED = { sizes = 1 }
 
-local function lower_node(n, parent, path)
+local function lower_node(n, parent, path, model)
   local kind = KINDS[n.kind]
   if not kind then fail("E00", n.at, "the C engine does not draw ui." .. n.kind .. " yet", nil, nil, FIX) end
   local key = c_key(n)
-  KEYS[key] = true
+  KEYS[key] = model or n.kind == "field" and "field" or true
+  if model then ROW_ACT[key] = n.action or n.o.on end
   local me = check(X:node(kind, key, parent), "ui." .. n.kind .. " " .. q(key), n.at)
   local function prop(k, v)
     if v == nil then return end
@@ -361,11 +372,12 @@ local function lower_node(n, parent, path)
     n.anchor_key = n.o.anchor
   end
   local kids = n.body and n.body.kids or n.kids
-  for _, k in ipairs(kids) do lower_node(k, me, path .. "/" .. key) end
+  model = shape.model and n.a[1] or model
+  for _, k in ipairs(kids) do lower_node(k, me, path .. "/" .. key, model) end
   if n.cases then              -- rows by=: a case child a value, the row's value picking it
     for _, v in ipairs(DECL[n.a[1]].fields[n.o.by].values) do
       local cm = check(X:node(KINDS.case, "case:" .. v, me), "ui.rows case " .. q(v), n.at)
-      for _, k in ipairs(n.cases[v].kids) do lower_node(k, cm, path .. "/" .. v) end
+      for _, k in ipairs(n.cases[v].kids) do lower_node(k, cm, path .. "/" .. v, model) end
     end
   end
   if n.built then
@@ -375,7 +387,7 @@ local function lower_node(n, parent, path)
       local c = n.built[v]
       local cv = v == "true" and "True" or v == "false" and "False" or v
       local cm = check(X:node(KINDS.case, "case:" .. cv, me), "ui.switch case " .. q(v), n.at)
-      for _, k in ipairs(c.kids) do lower_node(k, cm, path .. "/" .. v) end
+      for _, k in ipairs(c.kids) do lower_node(k, cm, path .. "/" .. v, model) end
     end
   end
 end
@@ -390,7 +402,7 @@ local function anchors(n)
 end
 
 local function lower(p)
-  KEYS, ROWS, DRAWS, POINTERS, HELD, DRAWN = {}, false, {}, {}, nil, {}
+  KEYS, ROW_ACT, ROWS, DRAWS, POINTERS, HELD, DRAWN = {}, {}, false, {}, {}, nil, {}
   X:build_begin(string.format("%d %s", #stack, p.def.name):sub(1, 31))
   lower_node(p.root, -1, p.def.name)
   check(X:build_end(), "the page " .. q(p.def.name), p.def.at)
@@ -514,9 +526,24 @@ I.BACK.frame = function(p)
   if r < 0 then fail("X01", "frame", "the C engine's frame found no run open", "a run", "none") end
   drain()
   R.focused = X:focused()
+  -- a role key: a row's action on the focused row that fires it, any other on the page; none
+  -- while a field types
+  local f = R.focused or ""
   for role, pressed in pairs(ROLE_KEYS) do
     local name = KEYMAP["role:" .. role]
-    if name and pressed() and X:can(AIDX[name], -1) then fire(name, "key " .. role .. " on " .. q(p.def.name)) end
+    if name and KEYS[f] ~= "field" and pressed() then
+      local rk, nk = f:match("^(.*)/([^/]*)$")
+      local m = ACTIONS[name].takes == "row" and nk and ROW_ACT[nk] == name and V[KEYS[nk]]
+      if m then
+        for _, r in ipairs(m.rows) do
+          if tostring(r[m.key]) == rk then
+            fire(name, "key " .. role .. " on " .. q(f), frozen(r, "row " .. q(r[m.key]) .. " of " .. q(m.name), m.ty))
+          end
+        end
+      elseif ACTIONS[name].takes ~= "row" and X:can(AIDX[name], -1) then
+        fire(name, "key " .. role .. " on " .. q(p.def.name))
+      end
+    end
   end
 end
 

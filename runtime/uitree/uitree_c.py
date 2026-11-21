@@ -279,6 +279,10 @@ class CEngine(Engine):
                 types = bytes([self._ftype(t.fields[f], name) for f in fields])
                 self._ck(x.model(self._slot[name], "\0".join(fields).encode("utf-8"), types,
                                  fields.index(t.key)), "model " + name)
+                for i, f in enumerate(fields):
+                    if type(t.fields[f]) is S.Enum:
+                        self._ck(x.field_enum(self._slot[name], i, "\0".join(t.fields[f].values).encode("utf-8")),
+                                 "model %s field %s" % (name, f))
             elif isinstance(t, S.RowOf):
                 x.row_of(self._slot[name], self._slot[t.model])
             elif type(t) is S.Doc:
@@ -531,11 +535,12 @@ class CEngine(Engine):
         stand = self._pn = {}           # node -> a panes or pane's stand-in (`_pane_node`)
         legacies = self._legacy = {}    # node -> a legacy node's stand-in: its functions
         srcs = []
+        feet = set()                    # a flowing page's foot stacks its rows by the placed rule
 
         def node(n, parent):
             nk, l = n.kind, n.l
             kind = kinds.get(nk)
-            if kind is None or (nk in placed_kinds and not placed):
+            if kind is None or (nk in placed_kinds and not placed and not (nk == "row" and parent in feet)):
                 raise EngineGap("a %s node" % nk + ("" if placed or nk not in placed_kinds else
                                                      " outside a placed page"))
             field = l.get("field") if l and nk != "text_view" else None
@@ -544,6 +549,8 @@ class CEngine(Engine):
             me = cnode(kind, n.key, parent)
             if me < 0:
                 fail(me, "node %s" % n.key, n.where)
+            if nk == "foot":
+                feet.add(me)
             if field:
                 r = cprop(me, "field", field, None)
                 if r >= 0 and "on" in l:

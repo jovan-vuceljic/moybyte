@@ -3565,6 +3565,7 @@ int moy_ui_api_value(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui_s
     r.value = value;
     r.signal = o->signal;
     r.tag = o->tag;
+    r.check = (int16_t)(o->check == 1 && kind == MOY_UI_V_LINK ? 1 + (o->current == 1) : 0);
     mua_vrow_draw(c, s, b, stacked, kind, st, o, &r);
     return (st & MOY_UI_ST_ACTIVATED) != 0;
 }

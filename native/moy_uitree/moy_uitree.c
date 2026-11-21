@@ -489,8 +489,25 @@ int uit_model(uit_t *e, int slot, const char *names, size_t nlen, const uint8_t 
             return UIT_E_NOMEM;
         S->mf->fname[f] = (uint16_t)o;
         S->mf->ftype[f] = types[f];
+        S->mf->fnvals[f] = 0;
         at += n + 1;
     }
+    return 0;
+}
+
+int uit_field_enum(uit_t *e, int slot, int f, const char *values, size_t vlen)
+{
+    if (slot < 0 || slot >= e->nslots || !e->slots[slot].mf || f < 0 || f >= e->slots[slot].nf ||
+        e->slots[slot].mf->ftype[f] != UIT_TEXT)
+        return uit_fail(e, UIT_E_ARG, UIT_MSG("field_enum: bad slot %d or field %d", "field_enum %d %d"), slot, f);
+    uit_fields_t *M = e->slots[slot].mf;
+    int v = pool_put(e, values, vlen);
+    if (v < 0)
+        return UIT_E_NOMEM;
+    M->fvals[f] = (uint16_t)v;
+    M->fnvals[f] = 1;
+    for (size_t i = 0; i < vlen; i++)
+        M->fnvals[f] += values[i] == 0;
     return 0;
 }
 
@@ -1254,6 +1271,20 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->btn |= BT_GROW;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
+    if (kind == UIT_FIELD && (!strcmp(name, "when") || !strcmp(name, "off") || !strcmp(name, "grow"))) {
+        // when=: greyed while it fails (`mark`), not shown where off="hide"; grow=: what a
+        // field in a row does already
+        if (name[0] == 'w') {
+            int c = uit_cond_compile(e, src, model);
+            if (c < 0)
+                return c;
+            N->mark = (int16_t)c;
+            return add_prop(e, node, name, src, repr, PK_COND, c);
+        }
+        if (name[0] == 'o' && !strcmp(src, "hide"))
+            N->lit |= NL_HIDE;
+        return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    }
     if (!strcmp(name, "marked") && kind == UIT_BUTTON) {
         int c = uit_cond_compile(e, src, model);
         if (c < 0)
@@ -1382,6 +1413,21 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             return uit_fail(e, UIT_E_NAME, UIT_MSG("rows current=%s: no text, int or row_of of that name", "rows current=%s"), src);
         N->current = (int16_t)s;
         return add_prop(e, node, name, src, repr, PK_LIT, s);
+    }
+    if (!strcmp(name, "wash") && kind == UIT_POPOVER) {
+        // what it washes under it: the page, the view its anchor lies in, nothing (lit: the
+        // toolkit's wash + 1)
+        static const char *const WASHES[] = {"none", "page", "view"};
+        int i = lit_index(src, WASHES, 3);
+        if (i < 0)
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("popover wash=%s", "wash=%s"), src);
+        N->lit = (uint8_t)(i + 1);
+        return add_prop(e, node, name, src, repr, PK_LIT, i);
+    }
+    if (!strcmp(name, "check") && kind == UIT_ROWS) {
+        // check=True: each row's link a pick, the current one's checked (lit 1)
+        N->lit = (uint8_t)!strcmp(src, "True");
+        return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
     if (!strcmp(name, "cur") && UIT_IS_LIST(kind)) {
         int s = uit_slot_find(e, src, strlen(src));
@@ -1626,11 +1672,6 @@ int uit_build_end(uit_t *e)
         if (e->nodes[k].kind == UIT_PANES || e->nodes[k].kind == UIT_LEGACY)
             e->has_panes = 1;
         const uit_node_t *N = &e->nodes[k];
-        if (N->kind == UIT_FOOT && !N->lit)
-            for (int g = N->kid; g != (int)UIT_NONE; g = e->nodes[g].next)
-                if (e->nodes[g].kind == UIT_BUTTON)
-                    return uit_fail(e, UIT_E_KIND, UIT_MSG("foot look=end with a button: only its label is drawn yet",
-                                                           "foot end button"));
         if (N->kind == UIT_SPLIT)       // a popover's split lays out pictures, labels, progress, groups of them
             for (int p = N->parent; p != (int)UIT_NONE; p = e->nodes[p].parent)
                 if (e->nodes[p].kind == UIT_POPOVER)

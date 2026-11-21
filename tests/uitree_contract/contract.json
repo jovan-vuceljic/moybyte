@@ -1854,13 +1854,11 @@
     },
     "when": {
      "type": "cond",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "off": {
      "type": "word:hide,grey",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "label": {
      "type": "tpl",
@@ -1880,8 +1878,7 @@
     },
     "grow": {
      "type": "bool",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "commit": {
      "type": "bool",
@@ -2014,8 +2011,7 @@
     },
     "check": {
      "type": "bool",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "empty": {
      "type": "tpl",
@@ -2199,8 +2195,7 @@
     },
     "wash": {
      "type": "word:page,view,none",
-     "level": 2,
-     "designed": true
+     "level": 2
     },
     "at": {
      "type": "name",

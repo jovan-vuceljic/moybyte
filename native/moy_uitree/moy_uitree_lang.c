@@ -101,6 +101,12 @@ typedef struct {
     int16_t ref, f;
 } ref_t;
 
+// A model field's type as a template reads it: an enum field's (uit_field_enum) is the enum.
+static int field_type(const uit_t *e, int model, int f)
+{
+    return e->slots[model].mf->fnvals[f] ? UIT_ENUM : e->slots[model].mf->ftype[f];
+}
+
 static const char *const SYS_NAMES[] = {"", "desk", "handheld", "wide", "tall", "touch"};
 // every system value the spec names, and the retired ones (N04)
 static const char *const SYS_ALL[] = {"desk", "handheld", "wide", "tall", "current", "focus", "touch", "input"};
@@ -151,7 +157,7 @@ static int ref_parse(uit_t *e, const char *s, size_t n, int model, ref_t *r)
         int f = uit_field_find(e, model, s + 1, n - 1);
         if (f < 0)
             return uit_check_fail(e, "T02", UIT_MSG("rows have no field %.*s", "%.*s"), (int)(n - 1), s + 1);
-        *r = (ref_t){RK_FIELD, e->slots[model].mf->ftype[f], -1, (int16_t)f};
+        *r = (ref_t){RK_FIELD, field_type(e, model, f), (int16_t)model, (int16_t)f};
         return 0;
     }
     const char *dot = memchr(s, '.', n);
@@ -177,13 +183,21 @@ static int ref_parse(uit_t *e, const char *s, size_t n, int model, ref_t *r)
     if (f < 0)
         return uit_check_fail(e, "T02", UIT_MSG("rows of %s have no field %.*s", "%s %.*s"), uit_str(e, e->slots[S->model].name),
                               (int)(n - bn - 1), dot + 1);
-    *r = (ref_t){RK_ROWOF, e->slots[S->model].mf->ftype[f], (int16_t)slot, (int16_t)f};
+    *r = (ref_t){RK_ROWOF, field_type(e, S->model, f), (int16_t)slot, (int16_t)f};
     return 0;
 }
 
-// An enum reference's values: the slot's, or @input's.
+// An enum reference's values: the slot's, a field's, or @input's.
+// a field reference's model: a row's (RK_FIELD holds it), a row_of's
+static const uit_fields_t *ref_fields(const uit_t *e, const ref_t *r)
+{
+    return e->slots[r->rk == RK_ROWOF ? e->slots[r->ref].model : r->ref].mf;
+}
+
 static int enum_n(const uit_t *e, const ref_t *r)
 {
+    if (r->rk == RK_FIELD || r->rk == RK_ROWOF)
+        return ref_fields(e, r)->fnvals[r->f];
     return r->rk == RK_INPUT ? 4 : e->slots[r->ref].nvals;
 }
 
@@ -191,7 +205,8 @@ static const char *enum_at(const uit_t *e, const ref_t *r, int i)
 {
     if (r->rk == RK_INPUT)
         return INPUT_NAMES[i];
-    const char *v = uit_str(e, e->slots[r->ref].vals);
+    const char *v = uit_str(e, r->rk == RK_FIELD || r->rk == RK_ROWOF ? ref_fields(e, r)->fvals[r->f]
+                                                                     : e->slots[r->ref].vals);
     while (i--)
         v += strlen(v) + 1;
     return v;

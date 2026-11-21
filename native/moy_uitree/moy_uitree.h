@@ -99,6 +99,9 @@ int uit_state(uit_t *e, const char *name, int type, const char *values, size_t v
 // key field's index, into slot `slot` (declared UIT_MODEL).
 int uit_model(uit_t *e, int slot, const char *names, size_t nlen, const uint8_t *types, int nf,
               int key);
+// Model `slot`'s text field `f` holds an enum's values (NUL-separated): its
+// templates map and compare it as that enum.
+int uit_field_enum(uit_t *e, int slot, int f, const char *values, size_t vlen);
 // A row_of slot's model.
 int uit_row_of(uit_t *e, int slot, int model_slot);
 // A label table (`ui.labels`): its index. `keys` and `words` NUL-separated,

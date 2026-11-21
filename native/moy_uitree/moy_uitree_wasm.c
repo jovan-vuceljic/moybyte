@@ -252,7 +252,8 @@ int32_t moy_uitree_wasm_action(void *x, const uint8_t *name, uint32_t name_n, co
     (void)x;
     APP(a);
     TEXTS_BEGIN(a);
-    int n = put(a, name, name_n), l = put(a, label, label_n), h = put(a, hint, hint_n);
+    // no hint: its label, as every front's action (uit_action)
+    int n = put(a, name, name_n), l = put(a, label, label_n), h = hint_n ? put(a, hint, hint_n) : -1;
     int w = when_n ? put(a, when, when_n) : -1, k = put(a, letters, letters_n), i = put(a, icon, icon_n);
     int r = uit_action(a->e, at(a, n), at(a, l), at(a, h), at(a, w), (int)off, (int)flags, at(a, k), at(a, i));
     if (r < 0) {

@@ -110,6 +110,15 @@ static mp_obj_t eng_model(size_t n, const mp_obj_t *a)
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_model_obj, 5, 5, eng_model);
 
+static mp_obj_t eng_field_enum(size_t n, const mp_obj_t *a)
+{
+    (void)n;
+    size_t vn;
+    const char *v = str_or_null(a[3], &vn);
+    return MP_OBJ_NEW_SMALL_INT(uit_field_enum(eng(a[0]), mp_obj_get_int(a[1]), mp_obj_get_int(a[2]), v, vn));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_field_enum_obj, 4, 4, eng_field_enum);
+
 static mp_obj_t eng_row_of(mp_obj_t self, mp_obj_t slot, mp_obj_t model)
 {
     return MP_OBJ_NEW_SMALL_INT(uit_row_of(eng(self), mp_obj_get_int(slot), mp_obj_get_int(model)));
@@ -729,6 +738,7 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_error_code), MP_ROM_PTR(&eng_error_code_obj) },
     { MP_ROM_QSTR(MP_QSTR_state), MP_ROM_PTR(&eng_state_obj) },
     { MP_ROM_QSTR(MP_QSTR_model), MP_ROM_PTR(&eng_model_obj) },
+    { MP_ROM_QSTR(MP_QSTR_field_enum), MP_ROM_PTR(&eng_field_enum_obj) },
     { MP_ROM_QSTR(MP_QSTR_row_of), MP_ROM_PTR(&eng_row_of_obj) },
     { MP_ROM_QSTR(MP_QSTR_action_row), MP_ROM_PTR(&eng_action_row_obj) },
     { MP_ROM_QSTR(MP_QSTR_action), MP_ROM_PTR(&eng_action_obj) },
