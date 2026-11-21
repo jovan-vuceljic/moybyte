@@ -36,7 +36,7 @@ PY_FILES = [str(runtime_file(f)) for f in
              "uitree_doc.py", "uitree_pics.py")] + \
            [os.path.join(ROOT, "tools", "uitree_check.py")]
 LUA_FILES = [str(runtime_file("lua_ext.py").parent / f)
-             for f in ("uitree.lua", "uitree_replay.lua", "uitree_engine.lua", "uitree_check.lua")] + \
+             for f in ("uitree.lua", "uitree_engine.lua", "uitree_check.lua")] + \
             [os.path.join(ROOT, "tools", "uitree_lua_check.py")]
 CODE = re.compile(r'"([A-Z][0-9]{2})"')
 

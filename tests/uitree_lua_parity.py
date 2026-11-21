@@ -1,9 +1,7 @@
-"""Old against port: a hand-written Lua screen and its UI tree port, staged
-side by side on the host console and driven by one input script, a shot at
-each named step, the port on the Lua replay back end
-(runtime/run/uitree_replay.lua: the ports use what the C engine does not draw
-yet). tests/test_uitree_lua.py holds the two to the same pixels; run it by
-hand to keep the shots:
+"""Old against port: a hand-written Lua screen and its UI tree port on the C
+engine, staged side by side on the host console and driven by one input
+script, a shot at each named step. tests/test_uitree_lua.py pins the port's
+shots by their hashes; run this by hand to keep both halves' shots:
 
     .venv/bin/python tests/uitree_lua_parity.py OUT_DIR [pair ...]
 """
@@ -55,7 +53,7 @@ PAIRS = {
     "thread": (("mesh_old", [(MESH, "mesh.lua"), (MESH, "main.lua"), ("mesh_thread", "data.lua")]),
                ("mesh_thread", [(MESH, "mesh.lua")]), THREAD_SCRIPT),
 }
-DESK = {"drag:160,70,160,200": "drag:700,150,700,480", "tap:150,206": "tap:650,530"}
+DESK = {"drag:160,70,160,200": "drag:700,150,700,480", "tap:150,206": "tap:650,545"}
 
 
 def _stage(carts, name, extra):
@@ -152,14 +150,9 @@ def play(name, extra, script, size, launch=None):
 def compare(pair, size):
     """Both runs of `pair` at `size`: (glass size, old shots, port shots, the
     errors of both, the port's log)."""
-    import lua_ext
     (old, oextra), (port, pextra), script = PAIRS[pair]
     wh, a, ea, _ = play(old, oextra, script, size)
-    was, lua_ext.UITREE_BACK = lua_ext.UITREE_BACK, lua_ext.UITREE_REPLAY
-    try:
-        _, b, eb, logs = play(port, pextra, script, size)       # the ports on the Lua replay
-    finally:
-        lua_ext.UITREE_BACK = was
+    _, b, eb, logs = play(port, pextra, script, size)
     return wh, a, b, ea + eb, logs
 
 

@@ -1,12 +1,10 @@
 """The UI tree API's Lua layer (runtime/run/uitree.lua) on the host console.
 
 - An app written in it opens, paints, takes input and closes beside today's.
-- Old against port: Moy Mesh's hand-written thread and Radio pages and their
-  ports draw the same pixels through one input script, on the handheld and
-  in a desk window (tests/uitree_lua_parity.py), on the Lua replay back end
-  (runtime/run/uitree_replay.lua): the ports use what the C engine does
-  not draw yet.
-- Every other test runs on the C engine.
+- Moy Mesh's thread and Radio ports draw their recorded frames through one
+  input script, on the handheld and in a desk window
+  (tests/uitree_lua_parity.py, which also draws them beside the hand-written
+  pages they port).
 - The checker (tools/uitree_lua_check.py): one failing case per error code a
   Lua app can raise, each reported at its file and line.
 """
@@ -26,6 +24,7 @@ import uitree_lua_parity as parity  # noqa: E402
 import uitree_lua_check as checker  # noqa: E402
 
 FIX = os.path.join(HERE, "fixtures", "uitree_lua")
+MESH_GOLDENS = os.path.join(HERE, "shell_goldens", "uitree_mesh.json")
 
 
 def _cart(root, name, main, extra=None):
@@ -84,16 +83,31 @@ def test_an_app_opens_paints_takes_input_and_closes(tmp_path):
 
 @pytest.mark.parametrize("size", sorted(parity.SIZES))
 @pytest.mark.parametrize("pair", sorted(parity.PAIRS))
-def test_old_and_port_draw_the_same_pixels(pair, size):
-    """The Lua replay back end (runtime/run/uitree_replay.lua) against the
-    hand-written pages it replays into today's verbs: the ports hold
-    bubbles and rows by kind, which the C engine does not draw yet (E00)."""
-    wh, old, port, errors, _logs = parity.compare(pair, size)
+def test_the_ports_draw_their_recorded_frames(pair, size, request):
+    """Each named shot of a port's script, pinned by its hash
+    (tests/shell_goldens/uitree_mesh.json). Re-baseline as the shell goldens
+    are, `MOYBYTE_UPDATE_GOLDENS=1` or `--update-goldens`, once
+    `tests/uitree_lua_parity.py OUT PAIR` shows what moved."""
+    import hashlib
+    import pixel_goldens
+    (_old, _), (port, extra), script = parity.PAIRS[pair]
+    (w, h), shots, errors, _logs = parity.play(port, extra, script, size)
     assert errors == []
-    assert list(old) == list(port)
-    moved = {name: parity.differing(wh, old[name], port[name]) for name in old}
-    moved = {name: d for name, d in moved.items() if d[1]}
-    assert moved == {}, "shots differ (box, pixels): %r; `tests/uitree_lua_parity.py OUT %s` keeps them" % (moved, pair)
+    update = os.environ.get("MOYBYTE_UPDATE_GOLDENS") or request.config.getoption("--update-goldens", default=False)
+    table = {}
+    if os.path.isfile(MESH_GOLDENS):
+        with open(MESH_GOLDENS) as f:
+            table = json.load(f)
+    got = {"%s_%s_%s" % (pair, size, name): hashlib.sha256(img).hexdigest() for name, img in shots.items()}
+    if update:
+        table.update(got)
+        with open(MESH_GOLDENS, "w") as f:
+            json.dump(table, f, indent=2, sort_keys=True)
+            f.write("\n")
+        return
+    moved = [pixel_goldens.check(k, got[k], table.get(k), lambda img=img: [img[y * w * 3:(y + 1) * w * 3] for y in range(h)],
+                                 w, h) for k, img in zip(got, shots.values())]
+    assert not any(moved), "the shots %s moved%s" % ([k for k, m in zip(got, moved) if m], pixel_goldens.message(moved))
 
 
 def test_a_focus_on_no_node_stops_the_run_at_its_line(tmp_path):

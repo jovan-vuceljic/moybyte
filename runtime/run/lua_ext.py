@@ -62,17 +62,12 @@ def cart_chunks(ns, src):
 
 
 # The UI tree API for Lua apps (runtime/run/uitree.lua): a cart that declares
-# the extension "moybyte.uitree" gets the layer and one back end as its first
+# the extension "moybyte.uitree" gets the layer and its back end as its first
 # scripts, so its own scripts find the tree's `ui` over the engine's: the back
-# end, uitree_engine.lua, lowers each page into the C engine. uitree_replay.lua
-# replays a page into today's verbs instead: what draws what the C engine does
-# not hold or draw yet and Moy Mesh's ports use (a label table over a
-# model's enum field, a field's when=, a popover's wash=); only their parity check
-# (tests/uitree_lua_parity.py) swaps it in.
+# end, uitree_engine.lua, lowers each page into the C engine.
 UITREE_EXT = "moybyte.uitree"
 UITREE_FILE = "uitree.lua"
 UITREE_BACK = "uitree_engine.lua"
-UITREE_REPLAY = "uitree_replay.lua"
 _uitree_src = {}
 
 
@@ -92,8 +87,7 @@ def uitree_chunks(cart, pre):
     `pre` itself otherwise."""
     if UITREE_EXT not in (cart.get("extensions") or ()):
         return pre
-    back = UITREE_BACK
-    return [(UITREE_FILE, uitree_source()), (back, uitree_source(back))] + list(pre or ())
+    return [(UITREE_FILE, uitree_source()), (UITREE_BACK, uitree_source(UITREE_BACK))] + list(pre or ())
 
 
 _LAYOUT_DEFS = ("function _layout(", "_layout = function", "_layout=function")

@@ -196,7 +196,7 @@ ui.action("ask", "Ask for their key", function() s.asked = true; radio_ask(key) 
 ui.action("accept", "Accept", function() nodes[key].key_new = nil; reload() end)
 ui.action("notnow", "Not now", function() ui.pop() end)
 ui.action("channel", "Channel", function() end)
-ui.action("message_sender", "Message {pick.name}", function() end, { hint = "Message" })
+ui.action("message_sender", "Message", function() end)
 
 -- -- pages ---------------------------------------------------------------------
 
@@ -256,7 +256,7 @@ local function thread()
       ["in"] = function()
         ui.info("From", { value = "{pick.who}" })
         ui.info("Signal", { value = "{pick.rssi} dBm \u{b7} SNR {pick.snr|fmt %.1f} dB", signal = "{pick.bars}" })
-        ui.button("message_sender", { kind = "primary" })
+        ui.button("message_sender", { kind = "primary", label = "Message {pick.name}" })
       end,
       out = function()
         ui.info("{t.kind=dm?To:Channel}", { value = "{t.name}" })

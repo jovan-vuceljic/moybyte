@@ -4,14 +4,11 @@
 -- describes nodes and reads no state. Templates and conditions are compiled
 -- and type-checked at the call that holds them; every mistake is an error
 -- with a code, the app's file and line, the fix, and what was expected and
--- found. A back end draws the pages: uitree_engine.lua lowers each built page
--- into the C engine (native/moy_uitree), which lays it out, draws it, moves
--- focus and hands back what the user did; uitree_replay.lua replays the tree
--- into today's `ui` verbs every frame instead, for what Moy Mesh's ports use
--- that the C engine does not hold or draw yet (a label table over a
--- model's enum field, a field's when=, a popover's wash=): their parity check alone.
+-- found. Its back end, uitree_engine.lua, lowers each built page into the C
+-- engine (native/moy_uitree), which lays it out, draws it, moves focus and
+-- hands back what the user did.
 --
--- The Player loads this chunk, then one back end, ahead of a cart that
+-- The Player loads this chunk, then the back end, ahead of a cart that
 -- declares the extension "moybyte.uitree" (runtime/run/lua_ext.py); it takes
 -- the engine's `ui` as E and installs its own. tools/uitree_lua_check.py runs
 -- it alone over a stub engine in a host Lua with `debug`, where `ui._check`
@@ -30,8 +27,8 @@ local stack, queue, timers, posted = {}, {}, {}, {}
 local building, parent, in_handler, ROWCTX = nil, nil, nil, nil
 local frame_no, GEN, sealed = 0, 0, false
 -- what the back end and the commands share: the id focus is on after the
--- last frame, the replay's ids drawn, a focus a handler asked for
-local R = { focused = nil, ids = {}, pending_focus = nil }
+-- last frame, a focus a handler asked for
+local R = { focused = nil, pending_focus = nil }
 local VER = {}              -- a state's writes, counted: the C back end pushes what moved
 local USES = {}
 local STATE_AT = {}
@@ -2371,8 +2368,7 @@ function T.push(name, row)
          "arg = \"A_ROW_OF\" on ui.page")
   end
   local top = stack[#stack]
-  local by = R.ids[R.focused or ""]
-  local name = by and by.name or R.focused
+  local name = R.focused
   if name == "" then name = nil end
   if top then top.refocus, top.refocus_name = R.focused, name end
   stack[#stack + 1] = { def = p, fresh = 1 }
@@ -2546,7 +2542,7 @@ end
 function _layout(w, h, fs) SYS.fs = fs or 1 end
 SYS.fs = 1
 
--- the back end (uitree_replay.lua or uitree_engine.lua): { frame = function(p) },
+-- the back end (uitree_engine.lua): { frame = function(p) },
 -- which builds page p where it holds no tree, draws it and queues what the user did
 local BACK = { frame = nil }
 
