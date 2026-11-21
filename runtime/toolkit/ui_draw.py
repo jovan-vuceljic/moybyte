@@ -1348,7 +1348,7 @@ def paint(cv, th, rect, part, state=REST):
 # chooses (docs/theme_and_shell_2026-11.md §3.5): the styles are C, a theme only picks
 # one, its title alignment and its button order.
 
-FRAME_MIN, FRAME_BACK, FRAME_MATTE = 1, 2, 8     # MOY_UI_FRAME_*
+FRAME_MIN, FRAME_BACK, FRAME_MATTE, FRAME_WASH = 1, 2, 8, 32     # MOY_UI_FRAME_*
 
 
 def frame(cv, th, rect, title_h, title, active, btns, fs):
@@ -1356,9 +1356,22 @@ def frame(cv, th, rect, title_h, title, active, btns, fs):
     classic stripe in a colour of `title`'s), its drop shadow; what lies on
     the strip is the window manager's strip page (runtime/wm/wm_strip_ui.py).
     `btns`: FRAME_MATTE for a content rect standing in from the sides by the
-    foot, whose columns the depth's body then paints too (FRAME_MIN and
-    FRAME_BACK ride the same word as the window manager's, unread here)."""
+    foot, whose columns the depth's body then paints too, FRAME_WASH for a
+    content dimmed under a modal (`dims`): the depth's body round it washed
+    in the look's scrim too (FRAME_MIN and FRAME_BACK ride the same word as
+    the window manager's, unread here)."""
     _C.frame(cv, _LOOK if th is _TH else _look(th), rect, title_h, title, active, int(btns), fs)
+
+
+DIMS_BEGUN, DIMS_DIMMED = 1, 2   # MOY_UI_DIMS_*
+
+
+def dims(reset=False):
+    """Whether a frame of the verbs began since the bits were last reset
+    (DIMS_BEGUN), and whether one drew what dims its whole surface under
+    it to its foot, no hint band left lit there (DIMS_DIMMED): a dialog, a
+    menu that washes, `ui.wash`. `reset` zeroes them after reading."""
+    return _C.api_dims(1 if reset else 0)
 
 
 # --- depth: the theme's radii, shadow and edges (docs/history/look_2026-10.md step 6) ---

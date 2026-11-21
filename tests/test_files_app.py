@@ -609,6 +609,45 @@ def test_the_desk_shows_the_places_beside_the_files(tmp_path):
     assert app._focused == "Places", "a place opens beside the list, focus stays"
 
 
+def test_a_dialog_dims_the_window_s_foot_with_its_content(tmp_path):
+    """Everything under a dialog dims (D-01): in a desk window the rows of
+    the window's body under its content, its rounded foot, dim with the
+    content, and come back when the dialog closes; the strip stays."""
+    carts = str(tmp_path / "carts")
+    _seed_drawing(carts, "dragon")
+    ws = host_app.build_workstation(carts, sys_size=(1024, 600), panel_diagonal_in=7.0,
+                                    font_scale=1, windowed=True)
+    ws.home.open_desk()
+    ws.spine.open_app(ws.app("files"))
+    drv = host_app.ConsoleDriver(ws)
+    _frames(drv, 4)
+    app = ws.app("files")
+    app.open_place(files_app.PICTURES)
+    win = ws.wm.windows["files"]
+    assert win.foot > 2
+    cx, cy, cw, ch = win.content_rect()
+    cv = ws.wm.root_canvas
+
+    def px(x, y):
+        i = 2 * (y * cv.w + x)
+        return cv._buf[i] << 8 | cv._buf[i + 1]
+
+    foot = [(x, cy + ch + win.foot // 2) for x in range(cx + 16, cx + cw - 16, 24)]
+    strip = (cx + cw // 2, win.y + 2)
+    lit = [px(*p) for p in foot]
+    lit_strip = px(*strip)
+    app._act("NAME", "dragon")
+    _frames(drv, 4)
+    assert app.dialog == "rename"
+    dim = [px(*p) for p in foot]
+    assert all(a != b for a, b in zip(lit, dim)), "the foot stays lit under the dialog"
+    assert len(set(dim)) == 1 and px(*strip) == lit_strip
+    _press(drv, "b")
+    assert app.dialog is None
+    _frames(drv, 2)
+    assert [px(*p) for p in foot] == lit
+
+
 def test_the_list_meets_the_verbs_and_peeks_half_a_row(tmp_path):
     """The list runs down to the verbs' rule, and its rows' view ends well
     inside a row at every size (a quarter row clear of each edge), so where

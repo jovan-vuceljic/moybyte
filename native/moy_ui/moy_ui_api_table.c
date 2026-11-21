@@ -1080,12 +1080,20 @@ moy_ui_box_t moy_ui_api_wash_box(const moy_ui_ctx_t *c) {
     return sf;
 }
 
+void mua_dims(const moy_ui_ctx_t *c) {
+    moy_ui_box_t b = moy_ui_api_wash_box(c);
+    if (b.y + b.h >= c->surface.y + c->surface.h) {
+        c->inst->dims |= MOY_UI_DIMS_DIMMED;
+    }
+}
+
 void mua_wash(const moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     moy_ui_scrim(s, moy_ui_api_wash_box(c));
 }
 
 void moy_ui_api_wash(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     c->fl.dirty = 1;                    // over the page: the next frame draws it whole
+    mua_dims(c);
     mua_wash(c, s);
 }
 
@@ -1211,8 +1219,9 @@ int32_t moy_ui_api_dialog(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
             c->owe = 1;
         }
     }
+    mua_dims(c);                            // everything under a dialog dims (D-01)
     if (o->wash != 0 && !c->fl.mute) {
-        mua_wash(c, s);                     // everything under a dialog dims (D-01)
+        mua_wash(c, s);                     // ...here, or held washed (ui_host.Hold)
     }
     if (lent) {
         mua_lend_keep(c, s);

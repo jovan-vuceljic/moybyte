@@ -389,6 +389,7 @@ struct moy_ui_inst {               // moy_ui_inst_t (moy_ui_text.h)
     struct mua_edit *edits;
     uint32_t edit_seq;
     uint32_t owed;                  // moy_ui_api_owed's count
+    uint8_t dims;                   // moy_ui_api_dims' bits
     // A popover's or a dialog's first frame drawn tall over what it
     // covers, kept until its body closes (moy_ui_api_pop.c), for the one
     // context drawing it.
@@ -1350,6 +1351,15 @@ uint32_t moy_ui_api_fades(moy_ui_inst_t *I, int reset);
 // first frame where the canvas cannot lend it the room to draw at once:
 // laid out, drawn the next), likewise.
 uint32_t moy_ui_api_owed(moy_ui_inst_t *I, int reset);
+// Whether a frame began in a context of instance I (NULL: the main one)
+// since the bits were last reset (MOY_UI_DIMS_BEGUN), and whether one drew
+// what dims its whole surface under it to its foot, no hint band left lit
+// there (MOY_UI_DIMS_DIMMED): a dialog, a menu that washes (`wash` 1) or
+// ui.wash; `reset` zeroes them after reading. A window's frame dims its
+// body under the surface with it (WindowChrome._win_chrome).
+#define MOY_UI_DIMS_BEGUN 1
+#define MOY_UI_DIMS_DIMMED 2
+uint32_t moy_ui_api_dims(moy_ui_inst_t *I, int reset);
 // out: x, y, w, h, state.
 void moy_ui_api_part(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, int w, int h,
                      const moy_ui_over_t *o, int32_t out[5]);

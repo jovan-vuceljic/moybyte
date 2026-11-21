@@ -488,8 +488,11 @@ static int header_paint(const dd_t *d, int active, moy_shape_paint_t *p) {
 // `bar` header's value bar across its top rows), the sides and foot with the
 // bottom ones (the content's rect left alone: in from each side by the foot
 // under `matte`), the ring and the rule.
+static void tint(const dd_t *d, int x, int y, int w, int h, int r, uint16_t c, int alpha,
+                 const moy_shape_hole_t *hole);
+
 static void frame_body(const dd_t *d, moy_ui_box_t w, int th, int active, int mask,
-                       int matte) {
+                       int matte, int wash) {
     const moy_ui_depth_t *dp = &s_depth;
     int g[MOY_UI_GEOM];
     moy_ui_frame_geom(w.w, w.h, th, active, MOY_UI_UNDER_FULL, g);
@@ -528,6 +531,15 @@ static void frame_body(const dd_t *d, moy_ui_box_t w, int th, int active, int ma
                                     w.h - 2 - th - foot, 0};
         rrect(d, w.x, w.y + th + 1, w.w, w.h - th - 1, r, cn & (MOY_SHAPE_BL | MOY_SHAPE_BR), st,
               mask, &body, 0, 0, -1, &content);
+        if (wash) {
+            // the scrim over the body as over the content: its rect run on
+            // above the body's rows by the radius, cut back to them, so only
+            // its foot's corners round, as the body's do
+            dd_t k = rows_of(d, w.y + th + 1, w.y + w.h);
+            int wr = (cn & (MOY_SHAPE_BL | MOY_SHAPE_BR)) ? r : 0;
+            uint16_t sc = is_set(s_scrim_c) ? val(d, s_scrim_c) : moy_shape_wire(0);
+            tint(&k, w.x, w.y + th + 1 - wr, w.w, w.h - th - 1 + wr, wr, sc, s_scrim_a, &content);
+        }
     }
     if (line > 0) {
         rrect(d, w.x, w.y, w.w, w.h, r, cn, st, mask, NULL, line, hi, dp->edges == 1 ? lo : -1,
@@ -541,10 +553,11 @@ static void frame_body(const dd_t *d, moy_ui_box_t w, int th, int active, int ma
     }
 }
 
-void moy_ui_depth_frame(const moy_ui_sink_t *s, moy_ui_box_t w, int th, int active, int matte) {
+void moy_ui_depth_frame(const moy_ui_sink_t *s, moy_ui_box_t w, int th, int active, int matte,
+                        int wash) {
     dd_t d;
     open_dd(s, &d, 0);
-    frame_body(&d, w, th, active, MOY_SHAPE_INNER, matte);
+    frame_body(&d, w, th, active, MOY_SHAPE_INNER, matte, wash);
 }
 
 // `src`: a fill the shadow lays as it draws (moy_shape_shadow_fill), laid
@@ -562,7 +575,7 @@ static void under(const dd_t *d, moy_ui_box_t w, int th, int active, int mode,
         moy_shape_shadow_fill(src, outer, inner);
     }
     moy_shape_shadow_fill_end(&d->t);
-    frame_body(d, w, th, active, MOY_SHAPE_FRINGE, 0);
+    frame_body(d, w, th, active, MOY_SHAPE_FRINGE, 0, 0);
 }
 
 int moy_ui_frame_under(const moy_ui_sink_t *s, moy_ui_box_t w, int th, int active, int mode) {

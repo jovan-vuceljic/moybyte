@@ -346,6 +346,11 @@ static mp_obj_t ui_api_owed(mp_obj_t a0) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_owed_obj, ui_api_owed);
 
+static mp_obj_t ui_api_dims(mp_obj_t a0) {
+    return mp_obj_new_int_from_uint(moy_ui_api_dims(NULL, mp_obj_is_true(a0)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_dims_obj, ui_api_dims);
+
 static mp_obj_t ui_api_end(mp_obj_t a0, mp_obj_t a1, mp_obj_t a2) {
     moy_ui_ctx_t *c = ctx_of(a0);
     moy_ui_sink_t s;
@@ -872,6 +877,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_lost_obj, ui_api_lost);
     { MP_ROM_QSTR(MP_QSTR_api_offset), MP_ROM_PTR(&ui_api_offset_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_fades), MP_ROM_PTR(&ui_api_fades_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_owed), MP_ROM_PTR(&ui_api_owed_obj) }, \
+    { MP_ROM_QSTR(MP_QSTR_api_dims), MP_ROM_PTR(&ui_api_dims_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_end), MP_ROM_PTR(&ui_api_end_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_table_dist), MP_ROM_PTR(&ui_api_table_dist_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_table_pics), MP_ROM_PTR(&ui_api_table_pics_obj) }, \

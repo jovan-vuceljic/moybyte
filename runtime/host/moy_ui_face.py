@@ -380,6 +380,7 @@ SIGS = (
     ("moy_ui_api_offset", [c.c_void_p, c.c_int, c.c_int], c.c_int32),
     ("moy_ui_api_fades", [c.c_void_p, c.c_int], c.c_uint32),
     ("moy_ui_api_owed", [c.c_void_p, c.c_int], c.c_uint32),
+    ("moy_ui_api_dims", [c.c_void_p, c.c_int], c.c_uint32),
     ("moy_ui_api_end", [c.c_void_p, c.POINTER(moy_ui_sink_t)], None),
     ("moy_ui_api_table_dist", [c.c_void_p], c.c_int32),
     ("moy_ui_api_table_pics", [c.c_void_p, c.POINTER(moy_ui_sink_t)], None),
@@ -667,6 +668,9 @@ def install(m, lib, ctx_, sink, span0, over, box_of):
     def api_owed(reset):
         return int(lib.moy_ui_api_owed(None, 1 if reset else 0))
     m.api_owed = api_owed
+    def api_dims(reset):
+        return int(lib.moy_ui_api_dims(None, 1 if reset else 0))
+    m.api_dims = api_dims
     def api_end(ctx, cv, look):
         p_, k_ = ctx_(ctx)
         lib.moy_ui_api_end(p_, c.byref(sink(cv, look)))

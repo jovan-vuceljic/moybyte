@@ -221,6 +221,7 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         self._foot_gen = None         # the look the windows' feet were sized under
         self._root_marks = None       # ui.marks' active before a window's install
         self._installed = None        # the window whose layouts are installed
+        self._drawn = None            # ...when its content draws under them
         self._drag_armed = None       # (kind, ox, oy, wx, wy) press-in-strip origin
         self._resize = None           # in flight: (kind, press x, press y, start w,
                                       # start h, rubber w, rubber h, edges (RZ_*),
@@ -478,6 +479,18 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         # drew -- off while the console holds them under a menu -- so what
         # the root draws after them marks only where it may.
         self._installed = win
+        drawn = self._drawn
+        if drawn is not None:
+            # what the content's frames drew while it was installed: a frame
+            # begun says whether its surface dims under a modal, so its
+            # frame's body dims with it (`_win_chrome`); none begun, as it was
+            self._drawn = None
+            got = _ui_draw.dims(True)
+            if got & _ui_draw.DIMS_BEGUN:
+                drawn.dimmed = bool(got & _ui_draw.DIMS_DIMMED)
+        if win is not None and draws:
+            self._drawn = win
+            _ui_draw.dims(True)
         if win is None:
             ctx.install(self.ws)
             if self._root_marks is not None:

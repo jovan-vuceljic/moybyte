@@ -452,6 +452,9 @@ int moy_ui_api_popover(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id
         }
     }
     static const uint8_t none[1] = {0};
+    if (o->wash == 1) {
+        mua_dims(c);
+    }
     if (c->pop.hide) {
     } else if (o->wash == 1) {
         mua_wash(c, s);                     // a row's or a card's menu (DESIGN, Menus and washes)

@@ -1137,6 +1137,7 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
         in = none;
     }
     moy_ui_inst_sync(c->inst);
+    c->inst->dims |= MOY_UI_DIMS_BEGUN;
     int was_held = (c->last_ptr & MOY_UI_P_LIVE) && (c->last_ptr & MOY_UI_P_HELD);
     memcpy(c->in, in, sizeof(c->in));
     for (int i = 0; i < MOY_UI_API_KEEP; i++) {
@@ -4718,6 +4719,17 @@ uint32_t moy_ui_api_owed(moy_ui_inst_t *I, int reset) {
     uint32_t n = I->owed;
     if (reset) {
         I->owed = 0;
+    }
+    return n;
+}
+
+uint32_t moy_ui_api_dims(moy_ui_inst_t *I, int reset) {
+    if (I == NULL) {
+        I = &s_main;
+    }
+    uint32_t n = I->dims;
+    if (reset) {
+        I->dims = 0;
     }
     return n;
 }

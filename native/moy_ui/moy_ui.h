@@ -405,7 +405,8 @@ void moy_ui_frame_geom(int w, int h, int th, int active, int mode, int out[MOY_U
 // The frame's own pixels under the depth (moy_ui_frame draws it): the strip,
 // the sides and the foot inside the rounded outline, the ring, the rule; with
 // `matte`, the columns as wide as the foot inside each side as well.
-void moy_ui_depth_frame(const moy_ui_sink_t *s, moy_ui_box_t w, int th, int active, int matte);
+void moy_ui_depth_frame(const moy_ui_sink_t *s, moy_ui_box_t w, int th, int active, int matte,
+                        int wash);
 // What a window leaves to the layer under it: its shadow at `mode`'s size and
 // its outline's partly covered pixels, blended over what that layer just
 // painted (runtime/wm/wm_desk.py draws it, clipped to what it repainted).
@@ -704,10 +705,14 @@ int moy_ui_part(const char *name, size_t n);
 // read; MOY_UI_FRAME_MATTE rides the same word: the window's content stands
 // in from its sides by the foot (the game window's matte,
 // WindowChrome._win_edge), so the body paints those columns too, as it
-// paints the foot.
+// paints the foot. MOY_UI_FRAME_WASH is no button either: the content's
+// surface is dimmed under a modal (moy_ui_api_dims), so the depth's body
+// round it, its foot and matte, is washed in the look's scrim with it; the
+// ring and the strip stay.
 #define MOY_UI_FRAME_MIN 1
 #define MOY_UI_FRAME_BACK 2
 #define MOY_UI_FRAME_MATTE 8
+#define MOY_UI_FRAME_WASH 32
 int moy_ui_frame(const moy_ui_sink_t *s, moy_ui_box_t win, int title_h, moy_ui_span_t title,
                  int active, int btns, int fs);
 // The bar's band in the frame's style (`bar`'s surface where the theme names

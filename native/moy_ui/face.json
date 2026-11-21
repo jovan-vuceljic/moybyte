@@ -51,6 +51,7 @@
       {"api": "offset"},
       {"api": "fades", "flag": ["reset"]},
       {"api": "owed", "flag": ["reset"]},
+      {"api": "dims", "flag": ["reset"]},
       {"api": "end"},
       {"api": "table_rows", "hand": true},
       {"api": "table_dist", "run": "query:0", "doc": "The part answered last's distance from its view's centre, in 256ths of a row (moy_ui_api_table_dist)."},

@@ -108,6 +108,8 @@ class _Win:
                                       # Play in a window: never docked, and
                                       # no Editor's playtest (it outlives one)
         self.corner = 0               # full screen: where its controls start
+        self.dimmed = False           # its content's surface dims under a modal
+                                      # (`WindowedWM.install_window`)
         self.row = 0                  # full screen: the rows the WM's row takes
                                       # above the content (0 where the app's
                                       # own band is the row)

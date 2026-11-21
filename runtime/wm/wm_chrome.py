@@ -109,6 +109,8 @@ class WindowChrome:
             self._full_chrome(win, focused, quiet)
             return
         btns = self._win_btns(win)
+        if win.dimmed:
+            btns |= _ui_draw.FRAME_WASH
         title = self._win_title(win)
         look = self.ws.look.look_gen
         fs = self._fs()
