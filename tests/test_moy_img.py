@@ -45,9 +45,8 @@ def _blob(w, h, pix, wbits=12, level=9, meta=None):
 
 
 def test_every_shipped_image_decodes_as_the_reference_does():
-    files = sorted(set(glob.glob(os.path.join(ROOT, "**", "*.moyimg"), recursive=True))
-                   - set(glob.glob(os.path.join(ROOT, ".build", "**"), recursive=True)))
-    files = [f for f in files if "/firmware/" not in f or "/.build/" not in f]
+    # `**` skips hidden directories, so no build tree (.build) is searched
+    files = sorted(glob.glob(os.path.join(ROOT, "**", "*.moyimg"), recursive=True))
     assert files
     for f in files:
         with open(f) as fh:
