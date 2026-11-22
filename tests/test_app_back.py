@@ -209,12 +209,12 @@ def test_the_window_chrome_repaints_when_its_back_comes_and_goes(tmp_path):
 @pytest.mark.parametrize("key", ["b", "stop"])
 def test_esc_and_b_in_a_focused_window_are_its_back(tmp_path, key):
     ws, drv, app, win = _desk_app(tmp_path, "files")
-    app.layout.two = False
-    app.level = "files"
+    app._act("NAME", app.names_shown()[0])
+    _frames(drv)
     assert ws.app_has_page("files")
     _press(ws, key)
     _frames(drv)
-    assert app.level == "places" and "files" in ws.wm.windows
+    assert app.dialog is None and "files" in ws.wm.windows
     assert not ws.app_has_page("files")
     _press(ws, "stop")
     _frames(drv)
@@ -257,7 +257,7 @@ def test_the_hosts_esc_steps_a_desk_windows_page(tmp_path):
 
 @pytest.mark.parametrize("app_id,page", [
     ("appearance", lambda a: setattr(a, "view", "walls")),
-    ("files", lambda a: setattr(a, "dialog", object())),
+    ("files", lambda a: setattr(a, "dialog", "rename")),
     ("getcarts", lambda a: setattr(a, "phase", "cart")),
     ("storybook", lambda a: setattr(a, "page", "view")),
     ("artwork", lambda a: setattr(a, "page", "show")),

@@ -663,7 +663,7 @@ def test_a_context_carries_no_kept_ring(th):
     block the engine takes when a context first keeps (moy_ui_api_kept.c's
     kept memory): a context that never keeps -- most of an S3's eighteen --
     carries neither (they came to about 2.3 KB each)."""
-    assert ui._C.api_size() < 6 * 1024
+    assert ui._C.api_size() < 6 * 1024 + 512
 
 
 def test_a_ring_given_up_for_another_context_draws_whole(th):

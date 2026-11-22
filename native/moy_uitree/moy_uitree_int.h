@@ -352,6 +352,8 @@ struct uit {
     const char *tvl_s;
     uit_draw_fn draw_fn;        // a canvas's draw, the front end's
     void *draw_ud;
+    uit_pic_fn pic_fn;          // a card's or a picture's image, the front end's
+    void *pic_ud;
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
     uint8_t in_cell;            // drawing a split's column: a button takes its natural width
     uint8_t tv_stop, tv_stop_now;   // a text view that runs on drew last frame / this frame (the band's PgUp PgDn)
@@ -403,7 +405,7 @@ enum { GV_FOCUS = 1, GV_INPUT = 2 };
 #define UIT_IS_LIST(kind) ((kind) == UIT_ROWS || (kind) == UIT_TABLE || (kind) == UIT_CARDS)
 // The states a page's gen can count (more: it carries none).
 #define UIT_GEN_SLOTS 128
-// A cards list's region's gen (`_cell_gens`): the builds and edits, and the versions of what its
+// A region's gen (a cards list's, a scroll region's, a split group's) (`_cell_gens`): the builds and edits, and the versions of what its
 // rows read; -1 past UIT_GEN_SLOTS.
 int32_t uit_cell_gen(uit_t *e, int k);
 // What template `t` reads, as a key: the versions of the states it reads summed; `*engine` set

@@ -4804,6 +4804,28 @@ void mua_edge_fades(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_box_t v, int
     }
 }
 
+// The thumb page or placed table `k` draws in view `v` (rows `rows` high, at
+// `scroll`): kept as its last frame drew it, and on a shift frame its track
+// joins the floor where the view moves or the thumb is not the last frame's
+// (a line added below a text view, a scroll a rows frame took), so the thumb
+// is drawn again along it. The thumb fills its whole track, so nothing under
+// it draws there again but the rows the floor already held.
+void mua_thumb_track(moy_ui_ctx_t *c, moy_ui_keep_t *k, moy_ui_box_t v, int rows, int scroll) {
+    if (k == NULL) {
+        return;
+    }
+    int32_t g[6] = {v.x, v.y, v.w, v.h, rows, scroll};
+    uint32_t was = k->thumb, now = rows > v.h ? mua_hash((const uint8_t *)g, sizeof g, 1) | 1u : 0;
+    k->thumb = now;
+    if (!now || !mua_armed(c) || c->fl.stage != 1) {
+        return;
+    }
+    int moved = (k->id == c->sh.id && c->sh.dy) || (k->id == c->sh.in_id && c->sh.in_dy);
+    if (moved || now != was) {
+        mua_floor_add(c, mua_rc_of(moy_ui_thumb_track(v, c->fs)), 0);
+    }
+}
+
 void mua_thumb(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_box_t v, int rows,
                int scroll) {
     if (rows <= v.h) {
@@ -4855,10 +4877,9 @@ int mua_nest_close(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind) {
     mua_group_close(c, s);
     if (kind == 1) {
         mua_foot_fade(c, s);
-        // a thumb where the region never shifts: one under the app's gen
-        // shifts its rows on a shift frame, and the thumb is no row
         moy_ui_keep_t *kk = mua_page_keep(c);
-        if (kk != NULL && !c->no_foot && !(kk->kd & MOY_UI_KD_GEN)) {
+        if (kk != NULL && !c->no_foot) {
+            mua_thumb_track(c, kk, c->page, kk->rows, c->scroll);
             mua_thumb(c, s, c->page, kk->rows, c->scroll);
         }
     } else if (kind == 3 && mua_page_keep(c) != NULL && !c->pop.hide) {

@@ -282,10 +282,10 @@ renders the owner chose from):
    the box, and take a caller's border in place of their own (`o.border`,
    the danger ink for a field in error).
 5. **Scrolled views** carry a 2 px thumb in the dim ink on a track in the
-   border's. The thumb is the engine's on a scroll region or
-   placed table the app gives no gen (the control center's): a view under a
-   gen moves its pixels on a shift frame (`docs/surface_model_v1.md` §14.7),
-   and a thumb moving along it is no row the move carries.
+   border's. The thumb is the engine's on every scroll region, text view and
+   placed table, under a gen or not: on a shift or rows frame that moves the
+   view or its thumb (`docs/surface_model_v1.md` §14.7) its track joins the
+   floor and the thumb is drawn along it again.
 6. **Apps put status items in the bar** (`moybyte.status`,
    `runtime/system/status_items.py`): one preallocated record an item, swept
    with its process, its section's rows read and pressed as that process. On the desk an
@@ -2623,7 +2623,7 @@ drawings the Files app owns.
 | door | path | what opens |
 |---|---|---|
 | make a game | home → Make → a project → the Editor's tabs | the Code tab is one of the cart's scripts — its main file unless another is picked (#89): highlight by runtime, parse gate on the debounce, hard exits always write (SYNTAX badge), PLAY, crash-to-code |
-| write | Launcher → Notes | the vault as a list (New note first, then each file's kind icon and its name: a note's bare, another file's with its extension), New note → a name in a dialog, one file open with Undo, Redo, Select, Copy, Cut, Paste and Open link at its foot (and Run on a `.py` or `.lua`) beside its mode, or why its last save was refused; on the desk the vault beside the open file |
+| write | Launcher → Notes | the vault as a list (New note first, then each file's kind icon and its name: a note's bare, another file's with its extension), New note → a name in a dialog, one file open under its name and its kind in the title, with Undo, Redo, Select, Copy, Cut, Paste and Open link at its foot (and Run on a `.py` or `.lua`) and, beside them, why its last save was refused; on the desk the vault beside the open file |
 | any file | Launcher → Files → a root | routed by what it is (below) |
 
 **The Files router**, in order: a `.moy` folder opens the project Editor, never a

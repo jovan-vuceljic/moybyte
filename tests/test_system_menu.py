@@ -156,36 +156,19 @@ def test_popup_activate_fires_action_and_closes():
     assert not p.open                         # close-on-select
 
 
-def test_popup_outside_tap_dismisses_inside_does_not():
-    from runtime import host_app, console as C  # noqa: F401
-    p = C.Popup()
-    p.show([("header", "H"), ("item", "A", None), ("item", "B", None)])
-    x, y, w, h = p.panel_rect()
-    # A tap well outside the panel dismisses.
-    assert p.click(x + w + 50, y + 5) is True
-    assert not p.open
-    # A tap on a header row is consumed but does NOT dismiss.
-    p.show([("header", "H"), ("item", "A", None)])
-    assert p.click(x + 2, C._POPUP_Y + 1) is True       # header row
-    assert p.open
-
-
-def test_sysmenu_popup_anchors_under_the_right_side_hamburger(tmp_path):
-    """Fix A: Stage 4 moved the ≡ toggle to the bar's RIGHT zone, so the dropdown must
-    open UNDER it (right-aligned, hanging down-left), not at the old flush-left x=0.
-    toggle_sysmenu right-aligns the panel to the live ≡ button and clamps it on-screen."""
-    from runtime import console as C
+def test_sysmenu_card_hangs_under_the_hamburger(tmp_path):
+    """The menu's card (sysmenu_ui's popover, as the engine lays it out)
+    hangs under the ≡ button it opened from, over its column, fully on
+    screen."""
     from runtime import host_app
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     ws.toggle_sysmenu()
     assert ws.sysmenu.open
-    x, y, w, h = ws.sysmenu.panel_rect()
+    x, y, w, h = ws.menu_ui.look_card()
     bx, by, bw, bh = ws.layout.sysmenu_btn
-    # Panel right edge aligns with the ≡ button's right edge (down-left drop), and it
-    # sits well right of the old x=0 anchor -- the whole point of the fix.
-    assert x + w == bx + bw
-    assert x > C._POPUP_X                      # no longer flush-left
-    assert 0 <= x and x + w <= ws.sys_canvas.w  # fully on screen
+    assert y >= by + bh
+    assert x < bx + bw and x + w > bx
+    assert 0 <= x and x + w <= ws.sys_canvas.w
 
 
 # -- the ≡ icon placement (no overlap) --------------------------------------

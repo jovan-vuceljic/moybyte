@@ -505,6 +505,9 @@ WIFI_RING_IN_VIEW = ("the old popover drew its menu with no page, so focus on it
                      "again, left the ring's reach under the card's foot; the port's page keeps "
                      "it in view, the rows 2 px higher. " + WIFI_OWN_HINT)
 
+THUMB_UNDER_GEN = ("the old page's scroll ran under a gen and drew no thumb; every scrolled view "
+                   "draws its thumb now, gen or not, its track redrawn on a shift frame")
+
 # (record name, surface, golden configuration, script[, {step: cause}])
 RUNS = (
     ("settings_permissions-tdeck", "settings_permissions", "tdeck_320x240_fs1_dark",
@@ -559,7 +562,7 @@ RUNS = (
     ("settings_rows_full-tdeck", "settings_rows_full", "tdeck_320x240_fs1_dark",
      ["k:down"] * 24 + ["k:right", "k:up", "k:up"]),
     ("settings_rows_full-desk", "settings_rows_full", "p4_1024x600_fs2_windowed",
-     ["k:down"] * 22 + ["k:a", "k:down", "k:right"]),
+     ["k:down"] * 22 + ["k:a", "k:down", "k:right"], dict.fromkeys(range(23, 26), THUMB_UNDER_GEN)),
     # the ring at its foot, scrolled up and down again, and closed
     ("settings_log-tdeck", "settings_log", "tdeck_320x240_fs1_dark",
      ["f:2", "k:up", "k:up", "k:up", "k:down", "back"], dict.fromkeys(range(6), LOG_BACK_BAND)),
@@ -599,15 +602,17 @@ RUNS = (
     # stepped down their groups (a wrapping title, a locked badge), and a
     # goal's popover with its count
     ("achievements-tdeck", "achievements", "tdeck_320x240_fs1_dark",
-     ["k:right", "k:a", "back", "k:down", "k:down", "k:a", "back", "f:2"]),
+     ["k:right", "k:a", "back", "k:down", "k:down", "k:a", "back", "f:2"],
+     dict.fromkeys(range(9), THUMB_UNDER_GEN)),
     ("achievements-desk", "achievements", "p4_1024x600_fs2_windowed",
-     ["k:right", "k:a", "back", "k:down", "k:down", "k:down", "k:a", "back"]),
+     ["k:right", "k:a", "back", "k:down", "k:down", "k:down", "k:a", "back"],
+     dict.fromkeys(range(9), THUMB_UNDER_GEN)),
     # The P4 as it ships (font scale 1 on the desk's unit of 2), the window
     # a board opens a page in. Licences and the web console with no address
     # are recorded from their ports (K5): the list column fits its names, the
     # empty state stands where the code would
     ("settings_licences-p4", "settings_licences", "p4_1024x600_cs2_fs1_windowed",
-     ["k:down", "k:down", "k:down", "k:a", "k:down"]),
+     ["k:down", "k:down", "k:down", "k:a", "k:down"], dict.fromkeys(range(6), THUMB_UNDER_GEN)),
     ("web_console_none-tdeck", "web_console_none", "tdeck_320x240_fs1_dark", ["f:2"]),
     ("web_console_none-p4", "web_console_none", "p4_1024x600_cs2_fs1_windowed", ["f:2", "k:down"]),
     ("web_console-p4", "web_console", "p4_1024x600_cs2_fs1_windowed", ["f:2", "k:down"]),
@@ -623,7 +628,7 @@ RUNS = (
     ("settings_rows_swipe-tdeck", "settings_rows", "tdeck_320x240_fs1_dark",
      ["swipe:-100", "f:20", "swipe:-60", "swipe:80", "f:10"]),
     ("achievements_swipe-p4", "achievements", "p4_1024x600_cs2_fs1_windowed",
-     ["swipe:-80", "f:20", "swipe:-40", "swipe:60"]),
+     ["swipe:-80", "f:20", "swipe:-40", "swipe:60"], dict.fromkeys(range(5), THUMB_UNDER_GEN)),
     # the seed carts a board holds, whose ids are longer than the fixtures'
     ("settings_permissions_seed-tdeck", "settings_permissions_seed", "tdeck_320x240_fs1_dark",
      ["k:down", "k:down", "k:down"]),

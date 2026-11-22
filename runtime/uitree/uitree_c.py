@@ -49,6 +49,10 @@ F_PAGES_SHIFT = 8
 OWE = 1 << 16
 A_HOOK, A_ROLE_CONFIRM, A_ROLE_BACK, A_SHIFT_ENTER, A_ARROWS_V, A_ARROWS_H, A_APP_BACK = 1, 2, 4, 16, 64, 128, 256
 INPUTS = ("keys", "tdeck", "pad", "touch")
+# the size classes a handler and a derive read (`uitree._ref`'s @desk...), by their bits: 4 the
+# desk, 2 wide (as C's: the content 4:3 or wider), 1 touch
+_CLASSES = tuple(("desk" if b & 4 else "handheld", "wide" if b & 2 else "tall") + (("touch",) if b & 1 else ())
+                 for b in range(8))
 _KINDS = {"page": 1, "group": 2, "label": 3, "info": 4, "link": 5, "button": 6, "toggle": 7,
           "rows": 8, "dialog": 9, "seg": 10, "slider": 11, "field": 12, "empty": 13,
           "progress": 14, "text_view": 15,
@@ -184,6 +188,8 @@ class CEngine(Engine):
             self._slot, self._names, self._types, self._pushed = {}, [], [], {}
             self._docs = {}
             self._drawing = False
+            self._classes_b = -1     # the size classes' bits `classes` holds (`paint`)
+            self._pic_of, self._pic_wh = {}, {}     # an image's text -> its Pic; a node -> its tile's size
             self._bind()            # the module's state holds this engine's values before any is pushed
             if not self._load(x):
                 self._declare()
@@ -263,8 +269,8 @@ class CEngine(Engine):
                 ty = INT
             elif t is S.NUM:
                 ty = NUM
-            elif t is S.TEXT:
-                ty = TEXT
+            elif t is S.TEXT or t is S.IMAGE:
+                ty = TEXT       # an image: its repr ("own:KEY"), which a card's image= hands the front (`_pic`)
             elif isinstance(t, S.Model):
                 ty = MODEL
             elif isinstance(t, S.RowOf):
@@ -328,7 +334,7 @@ class CEngine(Engine):
 
     @staticmethod
     def _ftype(t, model):
-        for k, v in ((S.BOOL, BOOL), (S.INT, INT), (S.NUM, NUM), (S.TEXT, TEXT)):
+        for k, v in ((S.BOOL, BOOL), (S.INT, INT), (S.NUM, NUM), (S.TEXT, TEXT), (S.IMAGE, TEXT)):
             if t is k:
                 return v
         if type(t) is S.Enum:
@@ -371,8 +377,8 @@ class CEngine(Engine):
                         add(c)
                     elif k == 2:
                         add("1" if c else "0")
-                    elif k == 3:
-                        add(repr(c))
+                    elif k == 3 or k == 5:
+                        add(repr(c) if c is not None else "")
                     else:
                         add(str(c))
             raw = ("\0".join(cells) + "\0").encode("utf-8") if cells else b""
@@ -554,6 +560,7 @@ class CEngine(Engine):
         self._canvas_keys = {}
         if not self._drawing:
             x.on_draw(self._draw)
+            x.on_pic(self._pic)
             self._drawing = True
         cnode, cprop, cact, aidx, fail = x.node, x.prop, x.node_action, self._aidx, self._fail
         kinds, bound, heads, lits_only, action = _KINDS, _BOUND, _HEAD, _LIT_ONLY, S.Action
@@ -801,6 +808,27 @@ class CEngine(Engine):
             return self.th
         return Engine.query(self, name, *a)
 
+    def _pic(self, node, pic, r):
+        """A card's or a picture's image (`uit_on_pic`): with no tile, whether
+        the picture is decoded at the size the node's unfocused tile last
+        had; with one, drawn there clipped, or owed to the idle step."""
+        p = self._pic_of.get(pic)
+        if p is None:
+            kind, _c, key = pic.partition(":")
+            p = self._pic_of[pic] = S.Pic(kind, key)
+        wh = self._pic_wh.get(node)
+        if r is None:
+            return wh is not None and self.pics.state(p, wh[0], wh[1]) == "shown"
+        if not r[8] and (wh is None or wh[0] != r[2] or wh[1] != r[3]):
+            wh = self._pic_wh[node] = (r[2], r[3])
+        got = self.pics.peek(p, wh[0], wh[1]) if wh is not None else self.pics.peek(p, r[2], r[3])
+        if got is not None:
+            cv = self.cv
+            cv.clip(r[4], r[5], r[6], r[7])
+            self.pics.draw(cv, got, r[0], r[1], r[2], r[3])
+            cv.clip()
+        return got is not None
+
     # -- the frame -------------------------------------------------------------------
 
     def paint(self, dt, cv, th, content, desk):
@@ -815,6 +843,11 @@ class CEngine(Engine):
         if self._shut:
             self._resume()
         self._ready()
+        if self.pics is None:
+            import uitree_pics
+            self.pics = uitree_pics.PicEngine(self, self.files, getattr(cv, "swapped565", False),
+                                              uitree_pics.budget_for(cv.w, cv.h))
+        self.pics.begin_frame()
         x = self._x
         if self.want_focus is not None:
             w, at, self.want_focus, self.focus_at = self.want_focus, self.focus_at, None, None
@@ -823,6 +856,15 @@ class CEngine(Engine):
         self._live_units()
         kind = _v.input_kind()
         self.input = kind if kind in S.INPUTS else "keys"
+        cb = (4 if desk else 0) | (2 if content[2] * 3 > content[3] * 4 else 0) | (1 if self.input == "touch" else 0)
+        if cb != self._classes_b:
+            self._classes_b, self.classes = cb, _CLASSES[cb]
+            was, S._NOW.app = S._NOW.app, self
+            try:
+                for name in self.s._derive:     # a derive over a system value (@desk) reads them
+                    self._push(name)
+            finally:
+                S._NOW.app = was
         t = _D.UI_TARGET
         x.set_unit(self.unit)
         r = x.frame(t[0], cv, t[2], content[0], content[1], content[2], content[3], self._flags(desk), fs,
@@ -983,7 +1025,7 @@ class CEngine(Engine):
 
     def gens(self):
         """The gens the page's regions drew under (the page's, then each
-        cards list's and split group's), or None where the page carries none: the engine's."""
+        cards list's, scroll region's and split group's), or None where the page carries none: the engine's."""
         return (self._x.gens() or None) if self._visiting() else None
 
     def hints(self):

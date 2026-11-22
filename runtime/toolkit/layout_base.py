@@ -300,6 +300,21 @@ def content_of(w, h, rows, of=None):
     return (x0, y0, x1 - x0, y1 - y0)
 
 
+def ground_round(cv, rect, col):
+    """`cv` outside its content `rect` filled with `col`: the bars' band,
+    which the frame draws its bars over, shows the surface's ground where
+    no bar draws."""
+    x, y, w, h = rect
+    if y > 0:
+        cv.rect(0, 0, cv.w, y, col)
+    if y + h < cv.h:
+        cv.rect(0, y + h, cv.w, cv.h - y - h, col)
+    if x > 0:
+        cv.rect(0, y, x, h, col)
+    if x + w < cv.w:
+        cv.rect(x + w, y, cv.w - x - w, h, col)
+
+
 class LayoutBase:
     """The common `__init__` head. Constructed at init and relayout only,
     never per frame."""

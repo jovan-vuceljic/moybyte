@@ -2434,6 +2434,10 @@ int moy_ui_page_ground(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t tit
     return MOY_UI_OK;
 }
 
+moy_ui_box_t moy_ui_thumb_track(moy_ui_box_t v, int fs) {
+    return (moy_ui_box_t){(int16_t)(v.x + v.w - 3 * fs), v.y, (int16_t)(2 * fs), v.h};
+}
+
 int moy_ui_thumb(const moy_ui_sink_t *s, moy_ui_box_t v, int rows, int scroll, int fs,
                  int desk) {
     if (rows <= v.h || v.h <= 0) {
@@ -2441,8 +2445,8 @@ int moy_ui_thumb(const moy_ui_sink_t *s, moy_ui_box_t v, int rows, int scroll, i
     }
     pd_t d;
     open_pd(s, &d, fs, desk);
-    int w = 2 * fs;
-    int x = v.x + v.w - w - fs;
+    moy_ui_box_t t = moy_ui_thumb_track(v, fs);
+    int w = t.w, x = t.x;
     int th = (int)((int32_t)v.h * v.h / rows);
     if (th < 8 * fs) {
         th = 8 * fs;

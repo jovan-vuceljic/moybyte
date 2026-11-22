@@ -191,6 +191,31 @@ def conf(loop):
         eng = mod = None
         gc.collect()
     S.TRACING = False
+    mod = _load("conf_pics_c", PICS_SRC)        # pictures: owed by a frame, decoded by an idle step
+    eng, host = _engine(flow, mod)
+    eng.open()
+    _frame(eng, host, cv, th, box)
+    first = _digest(cv._buf)
+    for _ in range(5):
+        eng.idle_step()
+        _frame(eng, host, cv, th, box)
+    out["pics"] = [eng.pics.stats["decoded"], first != _digest(cv._buf)]
+    eng = mod = None
+    gc.collect()
+    with open(ROOT + "/fakes/conf_opened.py", "w") as f:
+        f.write(OPENED_SRC)                     # a module a handler imports declares into its own
+    mod = _load("conf_opener", OPENER_SRC)
+    eng, host = _engine(flow, mod)
+    eng.open()
+    try:
+        eng.run_action(S.decl_of("conf_opener").actions["open_it"], (), "test")
+        got = S.decl_of("conf_opened")
+        out["imported"] = [sorted(got.actions), sorted(got.state._derive),
+                           sorted(S.decl_of("conf_opener").actions)]
+    except Exception as e:
+        out["imported"] = repr(e)
+    eng = mod = None
+    gc.collect()
     for name, src in (("long", LONG_SRC), ("counter", FIXTURES[0][1])):
         for tag in ("c", "c_checked"):
             cls = uitree_c.CEngine
@@ -417,6 +442,7 @@ def result(tmp_path_factory):
     bar_look = (Path(__file__).resolve().parent / "uitree_fixtures" / "uitree_bar_look.py").read_text()
     grid = (Path(__file__).resolve().parent / "uitree_fixtures" / "uitree_grid.py").read_text()
     mrow = (Path(__file__).resolve().parent / "uitree_fixtures" / "uitree_model_row.py").read_text()
+    pics = (Path(__file__).resolve().parent / "uitree_fixtures" / "uitree_cards_pics.py").read_text()
     more = (DRIVER.replace("@FIXTURES@", repr(_fixtures())) + "\nLONG_SRC = %r\n" % LONG
             + "PLACED_SRC = %r\nPLACED_SCRIPT = %r\nBAR_SRC = %r\n" % (placed, PLACED_SCRIPT, bar_row)
             + "TE_SRC = %r\nTE_SCRIPT = %r\n" % (te, TE_SCRIPT)
@@ -425,10 +451,59 @@ def result(tmp_path_factory):
             + "BAR_LOOK_SRC = %r\nBAR_LOOK_SCRIPT = %r\n" % (bar_look, BAR_LOOK_SCRIPT)
             + "GRID_SRC = %r\nGRID_SCRIPT = %r\n" % (grid, GRID_SCRIPT)
             + "MROW_SRC = %r\nMROW_SCRIPT = %r\n" % (mrow, MROW_SCRIPT)
+            + "PICS_SRC = %r\nOPENER_SRC = %r\nOPENED_SRC = %r\n" % (pics, OPENER, OPENED)
             + "SETTINGS_KEYS = %r\nSETTINGS_RUNS = %r\n" % (SETTINGS_KEYS, SETTINGS_RUNS))
     info, text = FA._run(tmp_path_factory.mktemp("uitree_c"), entry="conf", more=more,
                          why="the C engine runs on the boards' MicroPython: this is its check there")
     return info, text
+
+
+OPENER = """
+import uitree as ui
+s = ui.state(n=0)
+
+def cancel():
+    pass
+
+def open_it():
+    import conf_opened
+
+ui.action("cancel", "Cancel", cancel)
+ui.action("open_it", "Open", open_it)
+
+def build():
+    with ui.page("opener"):
+        ui.button("open_it")
+"""
+
+OPENED = """
+import uitree as ui
+s = ui.state(editing=False)
+ui.derive("busy", cond="editing")
+
+def cancel():
+    pass
+
+ui.action("cancel", "Cancel", cancel)
+
+def build():
+    with ui.page("opened"):
+        ui.button("cancel")
+"""
+
+
+def test_a_module_a_handler_imports_declares_into_its_own_on_the_boards_micropython(result):
+    """A board has no frames to name the declaring module: the module a
+    handler imports declares into the declaration its ui.state made, not
+    the running app's."""
+    info, _text = result
+    assert info["imported"] == [["cancel"], ["busy"], ["cancel", "open_it"]], info["imported"]
+
+
+def test_a_cards_page_draws_its_pictures_on_the_boards_micropython(result):
+    info, _text = result
+    decoded, drawn = info["pics"]
+    assert decoded == 4 and drawn, info["pics"]     # three cards' and the picture's, on glass
 
 
 def test_the_c_engine_on_the_boards_micropython_draws_as_the_reference_did(result):

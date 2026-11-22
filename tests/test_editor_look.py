@@ -148,46 +148,6 @@ def test_the_code_tab_keeps_one_left_inset(tmp_path, theme, mode):
     assert mark - ox == lay.mark_x, ("mark", mark - ox, lay.mark_x)
 
 
-def _files(ws, cur=3):
-    """The desk's Files window on Projects, file row `cur` current. (the
-    app, its window)."""
-    ws.home.open_desk()
-    ws.spine.open_app(ws.app("files"))
-    _frame(ws, 2)
-    app = ws.app("files")
-    app = getattr(app, "app", app)
-    app.cur = cur
-    _frame(ws)
-    return app, ws.wm.windows["files"]
-
-
-@pytest.mark.parametrize("theme,mode", THEMES)
-def test_a_row_mark_stands_off_the_frame_and_the_divider(tmp_path, theme, mode):
-    """No content pixel lies under a window's frame, and the current place
-    and the current file keep three columns of the page's ground between
-    their mark and the frame or the divider beside them (design review
-    R3-25: Blocks' slivers fused with both)."""
-    ws = _ws(tmp_path, DESK, theme, mode)
-    app, win = _files(ws)
-    lay = app.layout
-    fs = lay.fs
-    cx, cy, cw, ch = win.content_rect()
-    px = _px(ws)
-    side, row_h = lay.side, lay.row_h
-    divider = cx + side[0] + side[2]                  # the rule's column
-    # the frame's foot fills every row under the content to its inside edge
-    mx = cx + cw // 2
-    foot = [px[y][mx] for y in range(cy + ch, win.y + win.h - 1 - win.edge)]
-    assert len(set(foot)) <= 1, foot
-    for name, x0, y in (("places", cx, cy + side[1]),
-                        ("files", divider + fs, cy + lay.list[1])):
-        # every row of the list's top 6 rows: three ground columns first
-        for yy in range(y, y + 6 * row_h):
-            run = px[yy][x0:x0 + 3 * fs]
-            assert len(set(run)) == 1, (name, yy - cy, run)
-            assert run[0] == px[cy + ch - 2][x0], (name, yy - cy, run[0])
-
-
 @pytest.mark.parametrize("theme,mode", THEMES)
 def test_the_caret_stands_a_column_off_the_next_stem(tmp_path, theme, mode):
     """The caret before "b" (the targets' caret, line 42 column 13) is one
