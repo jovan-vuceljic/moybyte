@@ -564,6 +564,9 @@ def _fill_editor(lay):
             _set(lay, "pics", [{"id": name, "title": E._shown(name), "sub": "%d %s %d" % (w, x, h),
                                 "pic": ui.image.own("draw:" + name)} for name, w, h in ed.pics])
             _set(lay, "pics_none", not ed.pics)
+            if ed.pics:                 # the first drawing chosen, as the page opens
+                s.pcur = ed.pics[0][0]
+                ui.focus(ed.pics[0][0] + "/place_pic")
         name = s.pcur or None
         _set(lay, "pic_status", ed.pics_status(name))
         _set(lay, "picked_pic", name is not None)
@@ -1067,13 +1070,13 @@ def _deck():
             ui.button("dup_slide", icon="dup")
             ui.button("del_slide", "danger", icon="trash")
             ui.rule()
-            ui.button("undo", icon="undo", alone=True)
-            ui.button("redo", icon="redo", alone=True)
+            ui.button("undo", icon="undo", alone=True, kind="bar")
+            ui.button("redo", icon="redo", alone=True, kind="bar")
             ui.label("")
             ui.button("present_ed", "primary", icon="play")
         with ui.cards("slides", cur="dcur", changed="deck_moved", w=256, h=150, pad=24):
-            ui.card("edit_slide", label="{.num}", badge="{.trans}", icon="{.icon}", tone="{.tone}",
-                    image=".pic")
+            ui.card("edit_slide", label="{.num}", label_icon="{.trans}", icon="{.icon}",
+                    tone="{.tone}", image=".pic")
 
 
 def _words():
@@ -1091,28 +1094,31 @@ def _head():
 
 def _panel_slide():
     _head()
-    with ui.row("bg_row", gap=4):
-        ui.seg("Background", "bg_cur", text="{.rgb}", look="swatches", on="bg_moved")
-        ui.button("all_colours", icon="forward", alone=True)
-    ui.link("bg_picture", "{bg_pic}")
+    with ui.group("", look="rules"):
+        with ui.row("bg_row", gap=0):
+            ui.seg("Background", "bg_cur", text="{.rgb}", look="swatches", on="bg_moved")
+            ui.button("all_colours", icon="forward", alone=True, kind="bar")
+        ui.link("bg_picture", "{bg_pic}")
     ui.label("Transition", face="caption", tone="dim")
     ui.seg("", "trans", labels="TRANS", on="trans_moved")
 
 
 def _panel_text():
     _head()
-    _words()
-    ui.seg("Strip behind", "strip", labels="STRIPS", look="cycle", on="strip_moved")
-    ui.seg("Appears", "appears", labels="APPEARS", on="appears_moved")
+    with ui.group("", look="rules"):
+        _words()
+        ui.seg("Strip behind", "strip", labels="STRIPS", look="cycle", on="strip_moved")
+        ui.seg("Appears", "appears", labels="APPEARS", on="appears_moved")
 
 
 def _panel_shape():
     _head()
-    ui.seg("Shape", "shape", labels="SHAPES", look="cycle", on="shape_moved")
-    ui.link("pick_fill", "{fill_name}", swatch="{fill_chip}", shown="!lines")
-    ui.link("pick_line", "{line_name}", swatch="{line_chip}")
-    ui.seg("Width", "width", labels="WIDTHS", on="width_moved")
-    ui.seg("Points", "points", labels="POINTS", look="cycle", on="points_moved", shown="lines")
+    with ui.group("", look="rules"):
+        ui.seg("Shape", "shape", labels="SHAPES", look="cycle", on="shape_moved")
+        ui.link("pick_fill", "{fill_name}", swatch="{fill_chip}", shown="!lines")
+        ui.link("pick_line", "{line_name}", swatch="{line_chip}")
+        ui.seg("Width", "width", labels="WIDTHS", on="width_moved")
+        ui.seg("Points", "points", labels="POINTS", look="cycle", on="points_moved", shown="lines")
     with ui.group("Text", shown="!lines"):
         _words()
     ui.seg("Appears", "appears", labels="APPEARS", on="appears_moved")
@@ -1120,9 +1126,10 @@ def _panel_shape():
 
 def _panel_picture():
     _head()
-    ui.seg("Size", "scale", labels="SCALES", on="scale_moved")
-    ui.toggle("Clear background", "clear", on="clear_moved")
-    ui.seg("Appears", "appears", labels="APPEARS", on="appears_moved")
+    with ui.group("", look="rules"):
+        ui.seg("Size", "scale", labels="SCALES", on="scale_moved")
+        ui.toggle("Clear background", "clear", on="clear_moved")
+        ui.seg("Appears", "appears", labels="APPEARS", on="appears_moved")
 
 
 def _panel_place():
@@ -1143,15 +1150,15 @@ def _slide():
             ui.button("copy", icon="copy")
             ui.button("paste", icon="paste")
             ui.rule()
-            ui.button("undo", icon="undo", alone=True)
-            ui.button("redo", icon="redo", alone=True)
+            ui.button("undo", icon="undo", alone=True, kind="bar")
+            ui.button("redo", icon="redo", alone=True, kind="bar")
             ui.label("{count_word}", align="end")
-            ui.button("prev_slide", icon="back", alone=True)
-            ui.button("next_slide", icon="forward", alone=True)
+            ui.button("prev_slide", icon="back", alone=True, kind="bar")
+            ui.button("next_slide", icon="forward", alone=True, kind="bar")
             ui.button("present_ed", "primary", icon="play")
         with ui.split("row", sizes=(88, "1*", 244), gap="s", pad="0", rule=True):
             with ui.cards("thumbs", current="here", w=72, h=42):
-                ui.card("goto_slide", label="{.num}", badge="{.trans}", image=".pic")
+                ui.card("goto_slide", label="{.num}", label_icon="{.trans}", image=".pic")
             ui.canvas("board", draw_board, pointer="board_at", keys=board_keys, reads=["board"],
                       ground="panel", mark=False)
             with ui.group(""):
