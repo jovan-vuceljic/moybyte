@@ -2017,7 +2017,8 @@ SCHEMA = {
     "seg": dict(_C, label="text", on="action0", focus="cond", look="lit", labels="lit", text="text"),
     "rows": dict(_C, cur="lit", current="lit", empty="text", filter="lit", changed="action1", group="lit",
                  dir="lit", by="lit", check="lit"),
-    "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond"),
+    "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond",
+                  row="lit"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
                   changed="action1", group="lit", pad="int"),
@@ -2033,7 +2034,7 @@ SCHEMA = {
     "menu": dict(_C, caption="text"),
     "item": dict(_C, label="text", icon="text", mkind="lit"),
     "split": dict(_C, dir="choice", sizes="ints", pad="lit", gap="lit", align="lit", rule="lit"),
-    "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit"),
+    "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit", w="int", h="int"),
     "panel": dict(_C),
     "canvas": dict(_C, draw="fn", h="int", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit",
                    keys="fn", mark="lit"),
@@ -2282,7 +2283,8 @@ def group(caption="", **p):
 
 def label(text, **p):
     """A row of text (§7.2): `face=` a type role, `size="fit"` shrinks it to
-    its width, `wrap="word"` breaks it at word breaks (at most `lines=`
+    its width, `size="text"` makes its cell in a placed row its text's
+    width, `wrap="word"` breaks it at word breaks (at most `lines=`
     lines, then an ellipsis), `align=`, `tone=`, `icon=` before it."""
     where = _caller()
     if "lines" in p and (type(p["lines"]) is not int or p["lines"] < 1):
@@ -2439,7 +2441,9 @@ def seg(label, name, labels=None, text=None, look="seg", **p):
     enum, each value's word from label table `labels=` (every value named);
     over a `row_of`, its model's rows in order, each word the row template
     `text=`. `look="cycle"` shows the one value between chevrons and
-    activation steps it; `look="seg"` shows every value."""
+    activation steps it; `look="seg"` shows every value; `look="swatches"`
+    shows every value as a colour dot, each word a colour (0xRRGGBB, a
+    number in any base)."""
     where = _caller()
     _checked("seg", "look", look, where)
     _state_name(name, (Enum, RowOf), "ui.seg", where)
@@ -2505,7 +2509,9 @@ def _list(kind, model_name, p, where):
 
 
 def table(model_name, **p):
-    """Rows as a table: a header of cols=, one `col` child per column."""
+    """Rows as a table: a header of cols=, one `col` child per column; or,
+    with `row=` (a row's height) and one `canvas` child, each row drawn by
+    that canvas, `draw(cv, x, y, w, h, row)` handed its row."""
     return _list("table", model_name, p, _caller())
 
 

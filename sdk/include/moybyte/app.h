@@ -412,6 +412,8 @@ int32_t uitree_action_chars(int32_t a, const char *chars,
                             uint32_t chars_n) MOYBYTE_APP_IMPORT(uitree_action_chars);
 // uitree.arg
 int32_t uitree_arg(void *out, uint32_t out_cap) MOYBYTE_APP_IMPORT(uitree_arg);
+// uitree.draw_row
+int32_t uitree_draw_row(void) MOYBYTE_APP_IMPORT(uitree_draw_row);
 
 #ifdef __cplusplus
 }

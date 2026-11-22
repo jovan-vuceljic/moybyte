@@ -799,7 +799,7 @@ def test_a_reference_pick_inserts_its_call_at_the_caret(desk):
     assert ws.editor.text().startswith("spr(6, x, y)")
 
 
-# -- the Sound pane (on the verbs over the MusicEditor core) ------------------------
+# -- the Sound pane (its uitree page over the MusicEditor core) ----------------------
 
 def _sound(desk):
     ws, drv = desk
@@ -809,28 +809,40 @@ def _sound(desk):
     d.focus_pane(1)                              # the Sound pane
     ws.mark_dirty()
     drv.frame(DT)
-    from runtime import editor_sound as S
-    return ws, drv, d, me, S
+    return ws, drv, d, me, ws.music_ui.sound
 
 
-def test_the_sound_pane_is_drawn_on_the_verbs_not_the_music_tab(desk, monkeypatch):
-    ws, drv, d, me, S = _sound(desk)
+def _in_sound(d, rect):
+    """A rect of the Sound pane's page (its body's coordinates) on the canvas."""
+    pane = next((p, r) for p, r, _p in d.panes() if "music" in p)
+    bx, by, _bw, _bh = d._body(pane[1], d._unit(), pane[0])
+    return (bx + rect[0], by + rect[1], rect[2], rect[3])
+
+
+def _press_sound(drv, d, snd, id):
+    bx, by, bw, bh = _in_sound(d, snd._host.box(id))
+    _click(drv, bx + bw // 2, by + bh // 2)
+
+
+def test_the_sound_pane_is_its_page_not_the_music_tab(desk, monkeypatch):
+    ws, drv, d, me, snd = _sound(desk)
     drew = []
     monkeypatch.setattr(ws.layer_of("music"), "draw", lambda dt: drew.append(dt))
     ws.mark_dirty()
     drv.frame(DT)
     assert drew == []
     assert ws.editor_app.tab == "music"
-    assert d._host.box("wave brush") is not None
-    assert d._host.box("sound add") is not None
+    assert all(snd.page.rect_of(k) is not None for k in ("brush", "graph", "add", "oct_up"))
 
 
 def test_a_tap_on_the_graph_picks_the_step_and_sets_its_note(desk):
-    ws, drv, d, me, S = _sound(desk)
-    body = d._body(_pane(d, "music"), 1)
-    g = S.geometry(body, 1)
+    from runtime.music_editor_ui import geometry
+    from runtime import editor_sound as S
+    ws, drv, d, me, snd = _sound(desk)
+    x, y, w, h = _in_sound(d, snd.page.rect_of("graph"))
+    g = geometry(x, y, w, h, 1)
     gx, gy, gw, gh = g["graph"]
-    lo = S.low(d, me)
+    lo = snd.low(me)
     _click(drv, gx + g["cw"] + 4, gy + gh - 3 * g["semi"] - 2)
     assert me.step == 1
     assert me.cur_step()[0] == lo + 3
@@ -841,8 +853,26 @@ def test_a_tap_on_the_graph_picks_the_step_and_sets_its_note(desk):
     assert me.cur_step()[2] != S.LEVELS
 
 
+def test_a_swatch_sets_the_brush_and_the_steps_wave_and_an_op_acts(desk):
+    from runtime import editor_sound as S
+    ws, drv, d, me, snd = _sound(desk)
+    me.select_cursor(0)
+    w = me.cur_step()[1]
+    x, y, bw, bh = _in_sound(d, snd.page.rect_of("brush"))
+    pick = S.WAVES[(S.WAVES.index(w) + 1) % 8]
+    # the swatches stand at the row's end, the last one nearest it
+    for k in range(40):
+        _click(drv, x + bw - 16 - k * 6, y + bh // 2)
+        if me.cur_step()[1] == pick:
+            break
+    assert me.cur_step()[1] == pick and snd.brush == pick
+    n = me.step_count()
+    _press_sound(drv, d, snd, "add")
+    assert me.step_count() == n + 1
+
+
 def test_the_sound_panes_keys_move_the_step_and_its_note(desk):
-    ws, drv, d, me, S = _sound(desk)
+    ws, drv, d, me, snd = _sound(desk)
     me.select_cursor(0)
     p = me.cur_step()[0]
     drv.press("right")
@@ -863,7 +893,7 @@ def test_a_held_arrow_in_the_sound_pane_steps_at_the_repeat_rate(desk):
     repeat rate, as a held arrow does on every surface; the desk's own
     verbs never see its repeats (their focus stays where it was)."""
     from runtime import moy_input as mi
-    ws, drv, d, me, S = _sound(desk)
+    ws, drv, d, me, snd = _sound(desk)
     me.select_cursor(0)
     p = me.cur_step()[0]
     focus = _desk_focus(d)
@@ -882,17 +912,18 @@ def _desk_focus(d):
 
 
 def test_a_sound_is_renamed_and_its_name_saved_with_the_bank(desk):
-    ws, drv, d, me, S = _sound(desk)
+    from runtime import editor_sound as S
+    ws, drv, d, me, snd = _sound(desk)
     _tap(drv, 0x101 + 1)                         # F2
-    assert d.part_state.get("rename") == ""
+    assert snd.s.asking == "name" and snd.s.f_name == ""
     drv.frame(DT)
     for ch in "boom":
         _tap(drv, ord(ch))
     _tap(drv, 13)
     assert me.bank.sfx[0].name == "boom"
     assert me.bank.to_dict()["sfx"][0]["name"] == "boom"
-    assert d.part_state.get("rename") is None
-    assert S.title(d) == "Sound 0 · boom"
+    assert snd.s.asking == "none"
+    assert snd.title() == "Sound 0 · boom"
     assert S.row_label(me, 0) == "0  boom"
     me.undo()
     assert me.bank.sfx[0].name is None
@@ -904,7 +935,7 @@ def test_a_sound_is_renamed_and_its_name_saved_with_the_bank(desk):
 
 
 def test_the_sounds_list_adds_a_sound_and_plays_one(desk):
-    ws, drv, d, me, S = _sound(desk)
+    ws, drv, d, me, snd = _sound(desk)
     n = len(me.bank.sfx)
     bx, by, bw, bh = d._host.box("pane 0 new sound")
     _click(drv, bx + bw // 2, by + bh // 2)
@@ -917,7 +948,7 @@ def test_the_song_pane_edits_the_songs_slots_and_plays_it(desk):
     (EDITOR_LAYOUT.md's Sound workspace): its slots, a tap on one edits the
     song there, its sound steps back and forward, a slot is added and
     deleted, and the song plays and stops."""
-    ws, drv, d, me, S = _sound(desk)
+    ws, drv, d, me, snd = _sound(desk)
     pat = me.cur_track().pattern
     n = len(pat)
 
@@ -948,8 +979,8 @@ def test_the_song_pane_edits_the_songs_slots_and_plays_it(desk):
 
 
 def test_a_settled_sound_pane_paints_nothing_with_its_name_popover_open(desk):
-    ws, drv, d, me, S = _sound(desk)
-    S.open_rename(d)
+    ws, drv, d, me, snd = _sound(desk)
+    snd.open_rename(d)
     ws.pointer.visible = False
     settle_badges(ws)
     ws.toast_until = 0
@@ -1332,22 +1363,22 @@ def test_at_800_the_sound_panes_menu_picks_a_sound(tmp_path):
     _tap(drv, ord("5"), 1)
     d = ws.editor_desk
     me = ws.music_ui.musicedit
+    snd = ws.music_ui.sound
     _press(drv, d, "pane 0 sound menu")
     drv.frame(DT)
-    _press(drv, d, "1")
-    assert me.sfx_idx == 1 and not d.part_state["menu"]
+    assert snd.s.asking == "menu"
+    _press_sound(drv, d, snd, "1")
+    assert me.sfx_idx == 1 and snd.s.asking == "none"
 
 
 def test_the_waves_swatches_are_their_moy64_inks():
     from runtime import editor_sound as S
     from runtime.gfx_binding import moy64
     MOY64 = moy64()
-    for light, inks, rgbs in ((True, S.WAVE_INK_DAY, S._WAVE_RGB_DAY),
-                              (False, S.WAVE_INK_NIGHT, S._WAVE_RGB_NIGHT)):
+    for inks, rgbs in ((S.WAVE_INK_DAY, S.WAVE_RGB_DAY), (S.WAVE_INK_NIGHT, S.WAVE_RGB_NIGHT)):
         for wv in range(8):
             r, g, b = MOY64[inks[wv]]
             assert rgbs[wv] == (r << 16) | (g << 8) | b
-            assert S.wave_rgb({"surface_light": light}, wv) == rgbs[wv]
 
 
 # -- E-02: the playtest's own map and scenes ------------------------------------------

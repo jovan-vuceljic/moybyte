@@ -2482,10 +2482,12 @@ default.
 | the fields | one row in the verbs engine | -- | -- |
 | the Map's camera, the sprite pickers | `ScrollRegion` on two axes | as today | `step` |
 
-The Blocks outline and Music's steps are tables of parts
+The Blocks outline is a table of parts
 (`docs/ui_api_2026-10.md` §2, A table of parts): the engine's region, drag, fling and
-reveal, their rows carried in C, and the page holding each table the
-region R its frames move the table inside. Config's cards, its
+reveal, its rows carried in C, and the page holding the table the
+region R its frames move the table inside. Music's steps are the same
+table on a `uitree` page (`runtime/editors/editor_music.py`), its canvas
+drawing each row. Config's cards, its
 broken-manifest page and its file list are `uitree` pages
 (`runtime/editors/editor_settings.py`) the UI tree engine scrolls. Carts are out: a
 cart's `btn`/`btnp` and its own scrolling are the cart's (surface-model L9); Notes is a

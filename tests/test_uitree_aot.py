@@ -308,15 +308,15 @@ def test_staging_compiles_the_staged_pages_and_names_a_stale_one(compiled, tmp_p
 
 def test_a_board_with_no_desk_stages_no_desk_page(compiled, tmp_path, capsys):
     """A handheld's image carries no page only a desk opens (each SYSTEM
-    module's `DESK_PAGES`: the Editor's workspaces, the Licences page's
-    desk build); which boards have a desk is the shell's metric class of each
+    module's `DESK_PAGES`: the Editor's workspaces and its Sound pane, the
+    Licences page's desk build); which boards have a desk is the shell's metric class of each
     board's glass."""
     desk = dict((d.name, UC.has_desk(d)) for d in (ROOT / "firmware").iterdir()
                 if (d / "board.toml").exists())
     assert desk["lilygo_t_deck_plus_mainline"] is False and desk["guition_jc3248w535"] is False
     assert desk["esp32_p4_wifi6_touch_lcd_7b"] is True and desk["guition_jc8012p4a1c"] is True
     gone = UC.desk_pages()
-    assert gone == set(["about_ui.desk_page"] + ["editor_ui.%s_space" % k for k in
+    assert gone == set(["about_ui.desk_page", "editor_sound.sound_page"] + ["editor_ui.%s_space" % k for k in
                                                   ("settings", "code", "art", "world", "sound", "theme")])
     assert gone <= set(compiled.pages)
     mods = _staged(tmp_path)

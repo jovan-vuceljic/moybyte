@@ -1183,6 +1183,10 @@
   "fade": {
    "level": 2,
    "returns": "nothing: the toolkit's edge fade drawn over a rect, at its top or its foot"
+  },
+  "canvas_row": {
+   "level": 2,
+   "returns": "in a canvas's draw, the model row whose cell it draws (a table's row its canvas child draws), from 0; -1 for a canvas of its own"
   }
  },
  "action_props": {
@@ -1395,7 +1399,7 @@
      "level": 1
     },
     "size": {
-     "type": "word:fit",
+     "type": "word:fit,text",
      "level": 1
     },
     "wrap": {
@@ -1908,7 +1912,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:seg,cycle",
+     "type": "word:seg,cycle,swatches",
      "level": 2
     },
     "text": {
@@ -2140,6 +2144,10 @@
     "hint": {
      "type": "tpl",
      "level": 2
+    },
+    "row": {
+     "type": "int",
+     "level": 2
     }
    }
   },
@@ -2277,6 +2285,14 @@
     },
     "pad": {
      "type": "int|word:s,m,l,0",
+     "level": 2
+    },
+    "w": {
+     "type": "int",
+     "level": 2
+    },
+    "h": {
+     "type": "int",
      "level": 2
     }
    }

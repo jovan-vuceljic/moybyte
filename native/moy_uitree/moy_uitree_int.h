@@ -133,7 +133,7 @@ typedef struct {
 } uit_prop_t;
 
 // Node flags (`lit` of a two-way control).
-enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_FIELD = 4, NL_HIDE = 8 };
+enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_SWATCH = 2, NL_FIELD = 4, NL_HIDE = 8 };
 // A label's text options (`nbtn`): wrap= in bits 0-1 (LT_WORD, LT_CHAR), its face's
 // role + 1 in bits 2-4, the toolkit's `centre` for align= in bits 5-7, lines= given.
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.
@@ -147,7 +147,8 @@ enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4 };  // a canvas's lit: a fill alo
                                                   // keys are its keys='s; such a stop with no ring (mark=False)
 enum { SP_ALIGN = 3, SP_RULE = 16 };   // a split's lit: its align= index; rule=True
 enum { LT_WORD = 1, LT_CHAR = 2, LT_WRAP = 3, LT_FACE_SHIFT = 2, LT_ALIGN_SHIFT = 5, LT_LINES = 256,
-       LT_FIT = 512 };     // size="fit": its face only where its text fits the page's width
+       LT_FIT = 512,       // size="fit": its face only where its text fits the page's width
+       LT_TEXT = 1024 };   // size="text": in a placed row, as wide as its text
 
 typedef struct {
     uint8_t kind, lit;          // a label's tone, a button's kind; a seg's cycle look, a slider's

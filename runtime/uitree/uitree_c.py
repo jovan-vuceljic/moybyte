@@ -1373,8 +1373,9 @@ class CEditorEngine(CEngine, _ed.Engine):
 
     def point(self, px, py, click):
         """A canvas with pointer= is handed down, drag and up in its own
-        coordinates, at the rect the last frame placed it; the press that
-        starts on it holds it until release (`uitree_editor.Engine.point`).
+        coordinates, at the rect the last frame placed it, while no popover
+        shows; the press that starts on it holds it until release
+        (`uitree_editor.Engine.point`).
         A legacy body with pointer= is handed the press (its stop takes
         focus) and what follows until the release, in its own coordinates."""
         down = self.pointer_down()
@@ -1401,6 +1402,9 @@ class CEditorEngine(CEngine, _ed.Engine):
                         self.held_legacy = (n, r)
                     self._damage.all()
                     return True
+        if click and self._held is None and self.popover_shown():
+            # a canvas under a shown popover takes no press: the popover holds the pointer
+            return Engine.point(self, px, py, click)
         return CEngine.point(self, px, py, click)
 
     def step_rows(self, d):

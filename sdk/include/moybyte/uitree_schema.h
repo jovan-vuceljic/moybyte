@@ -56,6 +56,7 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_STEPS "steps"
 #define UT_LOOK_SEG "seg"
 #define UT_LOOK_CYCLE "cycle"
+#define UT_LOOK_SWATCHES "swatches"
 #define UT_MKIND_DANGER "danger"
 #define UT_NAV_OFF "off"
 #define UT_PAD_S "s"
@@ -63,6 +64,7 @@ static const char *const ut_kind_names_[] = {
 #define UT_PAD_L "l"
 #define UT_PAD_0 "0"
 #define UT_SIZE_FIT "fit"
+#define UT_SIZE_TEXT "text"
 #define UT_SYNTAX_PLAIN "plain"
 #define UT_SYNTAX_SGR "sgr"
 #define UT_SYNTAX_PYTHON "python"
@@ -152,6 +154,7 @@ static inline int32_t ut_p_pad(const char *v) { return ut_prop_("pad", v); }
 static inline int32_t ut_p_pointer(const char *v) { return ut_prop_("pointer", v); }
 static inline int32_t ut_p_prev(const char *v) { return ut_prop_("prev", v); }
 static inline int32_t ut_p_reads(const char *v) { return ut_prop_("reads", v); }
+static inline int32_t ut_p_row(int32_t v) { return ut_prop_int_("row", v); }
 static inline int32_t ut_p_rows(int32_t v) { return ut_prop_int_("rows", v); }
 static inline int32_t ut_p_rule(int v) { return ut_prop_("rule", v ? "True" : "False"); }
 static inline int32_t ut_p_secret(int v) { return ut_prop_("secret", v ? "True" : "False"); }

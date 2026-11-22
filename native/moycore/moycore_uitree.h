@@ -18,7 +18,7 @@
  *   e:node_action(node, a) e:build_end()
  *   e:open() e:close() e:want_focus(key)
  *   e:frame(flags)              -> uit_run_frame over the run's canvas
- *   e:on_draw(fn)               a canvas's draw, fn(node, x, y, w, h), called
+ *   e:on_draw(fn)               a canvas's draw, fn(node, x, y, w, h, row), called
  *                               inside the frame; what it raises the frame raises
  *   e:next()                    -> kind, a, b, c, text; nil where none waits
  *   e:trace_next()              -> "KIND\1NAME\1TEXT", nil where none waits
