@@ -866,7 +866,7 @@ MAIN = {FAILED: ("retry", "Try again"), PAUSED_: ("play", "Play"), PLAYING: ("pa
 VERB = {PLAYING: "Pause", PAUSED_: "Play", FAILED: "Play", OPENING: "Play", "lead": "Open"}
 ADD = "add"                 # the Radio list's first row, Add a station: no station's id
 
-_ROW = dict(key="id", id="", name="", right="", kind="", st="", icon="", tone="")
+_ROW = dict(key="id", id="", name="", right="", sort="", st="", icon="", tone="")
 s = ui.state(
     audio=True,             # a media service to play through
     online=True,            # ...and a network for the radio
@@ -900,8 +900,8 @@ def _lay():
     return uitree_app.env()
 
 
-def _row(id, name, right, st, icon="music", kind=""):
-    return {"id": id, "name": name, "right": right, "kind": kind, "st": st or "",
+def _row(id, name, right, st, icon="music", sort=""):
+    return {"id": id, "name": name, "right": right, "sort": sort, "st": st or "",
             "icon": LEAD.get(st, icon), "tone": "value" if st else ""}
 
 
@@ -1188,7 +1188,7 @@ ui.action("home", "Back to home", home)
 def _list(model, cur, shown):
     with ui.scroll(model + "_view", shown=shown):
         with ui.rows(model, cur=cur, changed="row_moved"):
-            ui.link("pick", "{.right}", label="{.name}", icon="{.icon}", tone="{.tone}", tag="{.kind}")
+            ui.link("pick", "{.right}", label="{.name}", icon="{.icon}", tone="{.tone}", tag="{.sort}")
 
 
 def _radio():
