@@ -192,6 +192,13 @@ static void view_aim(moy_ui_ctx_t *c, moy_ui_keep_t *k, const moy_ui_keep_t *k0,
         k->scroll = aim;
         moy_ui_scroll_land(&k->sc, &k->scroll);
         c->scroll = *scroll = aim;
+        // the frame draws it at `aim`: the next frame's move starts there, and
+        // a move this frame planned from the scroll it held is no longer its
+        k->drawn = aim;
+        k->kd &= (uint8_t)~MOY_UI_KD_HELD;
+        if (mua_armed(c) && (c->sh.in_id == k->id || c->sh.id == k->id)) {
+            moy_ui_api_shift_break(c);
+        }
     } else {
         moy_ui_scroll_glide_to(&k->sc, *scroll, aim, 0, content, h);
     }
