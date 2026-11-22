@@ -1011,8 +1011,8 @@ static void shift_plan(moy_ui_ctx_t *c, int owed, int over, int flags) {
         pics = rp->b.h - rows;      // a picture on every row
     }
     for (int i = r->s0; i < r->s0 + r->sn; i++) {
-        if (!(v[i].flags & STOP_PIC)) {
-            continue;
+        if ((v[i].flags & (STOP_PIC | STOP_GEN)) != (STOP_PIC | STOP_GEN)) {
+            continue;               // (a picture with no gen draws again)
         }
         int y0 = v[i].b.y + dy, y1 = y0 + v[i].b.h;
         y0 = y0 < top ? top : y0;
@@ -3071,7 +3071,10 @@ static void open_page(moy_ui_ctx_t *c, uint32_t id, moy_ui_box_t ct, int flags,
 
 // The open page is done (its nest closes, ui.end, the next page): what it
 // holds, for the next frame's plan -- the stops drawn in it and whether any
-// is one no shift may move: a stop ui.at placed, a picture with no gen. R
+// is one no shift may move: a stop ui.at placed, a table's or a part's
+// picture with no gen (a card's with none draws again on every shift
+// frame, mua_pic_note, and one out of view draws nothing to go stale; the
+// page then holds no claim that it draws as it did, MOY_UI_KD_HELD). R
 // closing on a shift frame: the ground under the stops its tail lost, the
 // ground its floor still wants, and under the audit its stops' records
 // against the last frame's.
@@ -3081,12 +3084,13 @@ void mua_page_close(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
         return;
     }
     int s0 = c->page_stop + 1, sn = c->n_cur - s0;
-    int bad = 0, at = 0;
+    int bad = 0, at = 0, owed = 0;
     for (int i = s0; i < c->n_cur; i++) {
         uint16_t f = c->cur[i].flags;
         at |= (f & STOP_AT) != 0;
         if ((f & STOP_PIC) && !(f & STOP_GEN)) {
-            bad = 1;
+            bad |= !(f & STOP_GRID);
+            owed = 1;
         }
     }
     if (mua_armed(c) && c->fl.stage == 1 && k->id == c->sh.id) {
@@ -3129,6 +3133,9 @@ void mua_page_close(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     k->s0 = (uint8_t)s0;
     k->sn = (uint8_t)(sn > 0 ? sn : 0);
     k->kd |= MOY_UI_KD_DRAWN | (bad ? MOY_UI_KD_BAD : 0) | (at ? MOY_UI_KD_AT : 0);
+    if (owed) {
+        k->kd &= (uint8_t)~MOY_UI_KD_HELD;
+    }
 }
 
 void moy_ui_api_page(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t title,

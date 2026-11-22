@@ -1562,7 +1562,7 @@ int moy_ui_api_pop_box(const moy_ui_ctx_t *c, int32_t out[4]);
 // differs from the last frame's draws from its top to R's foot (but for one
 // ui.at placed both frames that moved where the floor holds both its
 // boxes, which moves nothing else), a picture
-// whose gen moved draws its own box, a stop gone from R's tail leaves the
+// whose gen moved, or a card's with none, draws its own box, a stop gone from R's tail leaves the
 // ground. What a stop outside R draws into it (a box reaching in, a mark's
 // reach) is floor where R moved or its marks changed, and where such a stop
 // draws before R opens the floor is the pass's from its start.
