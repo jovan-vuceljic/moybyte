@@ -12,6 +12,7 @@ focus steps off it (native/moy_ui's `api_cancel`, `AppFace.cancel`);
 with no edit, Mic stays the console's key."""
 
 import json
+from pathlib import Path
 
 from runtime import host_app, ui_draw
 from runtime.moy_input import InputTable
@@ -390,3 +391,36 @@ def test_notes_holds_text_mode_only_while_its_field_does(tmp_path):
     assert ns["asking"] is None or ns["typed"] == "", "Mic gives back the empty draft"
     assert not ws.input.text_mode, "off the field the keyboard is the page's again"
     assert not ws.sysmenu.open, "a cancel is not the console's key"
+
+
+# -- a uitree app -------------------------------------------------------------------
+#
+# A uitree App's page draws through its engine's host, which it answers as its
+# `page_host()` (runtime/shell/layers.py): the input policy reads its focused
+# field there, as it reads an AppHost app's, while Back stays the engine's.
+
+def test_a_uitree_apps_field_holds_text_mode_and_mic_cancels_its_edit(tmp_path):
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "uitree_fixtures"))
+    import uitree_counter as C
+    import uitree_parity as P
+    ws = host_app.build_workstation(str(tmp_path / "carts"))
+    drv = host_app.ConsoleDriver(ws)
+    app = P.host(ws, C.layer())
+    for _ in range(3):
+        drv.frame(DT)
+    policy = ws.input_policy
+    assert not policy.typing() and not ws.input.text_mode, "the page's first stop is no field"
+    for _ in range(6):
+        if policy.typing():
+            break
+        _step(drv, "down")
+    assert policy.typing() and ws.input.text_mode, "a focused field types: W A S D are letters there"
+    assert app.engine.has_page() is False
+    _type(drv, "xy")
+    assert C.s.name == "xy", app.engine.trace_text()
+    _mic(ws, drv)
+    assert C.s.name == "", "Mic gives the field back the text the edit began from"
+    assert not policy.typing() and not ws.input.text_mode, "and focus steps off it"
+    assert not ws.sysmenu.open, "a cancel is not the console's key"
+    assert ws.wm.top_kind() == app.id, "and the app stays"
