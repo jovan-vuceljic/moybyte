@@ -308,25 +308,28 @@ class SettingsPages:
              "usb": (usb_page, None, usb_poll)}
 
     def __init__(self, sl, host, damage, close):
-        self.sl = sl
-        self.pages = {}
-        for name, (build, _hook, _poll) in self.PAGES.items():
-            self.pages[name] = uitree_app.hosted_page(build, host, damage, close=self._closer(close, name),
-                                                      env=sl.ws)
+        self.sl, self._host, self._damage, self._close = sl, host, damage, close
+        self.pages = {}         # name -> its engine, made at its first open: a page never opened holds none
 
-    @staticmethod
-    def _closer(close, name):
-        return lambda: close(name)
+    def _page(self, name):
+        page = self.pages.get(name)
+        if page is None:
+            close = self._close
+            page = self.pages[name] = uitree_app.hosted_page(
+                self.PAGES[name][0], self._host, self._damage, close=lambda: close(name), env=self.sl.ws)
+        return page
 
     def open(self, name):
         hook = self.PAGES[name][1]
-        self.pages[name].open(hook=hook or "opened")
+        self._page(name).open(hook=hook or "opened")
 
     def close(self, name):
-        self.pages[name].close()
+        page = self.pages.get(name)
+        if page is not None:
+            page.close()
 
     def draw(self, name, cv, th, rect, desk, dt):
-        page, poll = self.pages[name], self.PAGES[name][2]
+        page, poll = self._page(name), self.PAGES[name][2]
         if poll is not None:
             page.run(poll, self.sl, action=poll.__name__)
             ui.commit(page)
