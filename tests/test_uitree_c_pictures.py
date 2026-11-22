@@ -75,3 +75,4 @@ def test_a_flowing_pages_pictures_end_over_its_hints_band():
         return {bytes(f.buf[i:i + 2]) for i in range((f.h - 20) * w * 2, f.h * w * 2, 2)}
     assert seen["app"].engine.pics.stats["decoded"] >= 6
     assert band(frames[-1]) == band(frames[0])
+

@@ -1345,7 +1345,8 @@ static void pic_draw(uit_t *e, moy_ui_ctx_t *c, int k, uint32_t a, uint32_t n, c
 {
     if (!n || out[2] <= 0)
         return;
-    int32_t r[9] = {out[0], out[1], out[2], out[3], e->rect[0], e->rect[1], e->rect[2], e->rect[3],
+    int32_t room = e->rect[3] > e->band_h ? e->rect[3] - e->band_h : 0;
+    int32_t r[9] = {out[0], out[1], out[2], out[3], e->rect[0], e->rect[1], e->rect[2], room,
                     (out[4] & MOY_UI_ST_FOCUS) != 0};
     moy_ui_api_card_clip(c, r + 4);
     if (r[6] > 0 && r[7] > 0)
@@ -2219,6 +2220,8 @@ static void empty_line(uit_t *e, const moy_ui_sink_t *s, uit_buf_t *b, const cha
 // (`_r_foot`): its buttons share its width, its label a line of its own over
 // them; on a handheld under a rule. A stacked foot's children lead in as
 // the keys band's hints do.
+static int flow_shown(uit_t *e, int g, int model, int row);
+
 static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     int desk = (e->flags & UIT_F_DESK) != 0, fs = e->fs;
@@ -2248,9 +2251,8 @@ static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     int nb = 0;
     KIDS(k, g) {
         const uit_node_t *G = NODE(g);
-        if (G->kind == UIT_BUTTON && nb < 16 && uit_shown(e, g, model, row) &&
-            (G->act < 0 || uit_act_can(e, G->act, model, row)))
-            btn[nb++] = (int16_t)g;
+        if (G->kind == UIT_BUTTON && nb < 16 && flow_shown(e, g, model, row))
+            btn[nb++] = (int16_t)g;     // a grey one too: it stays, dimmed
     }
     if (!NODE(k)->lit) {
         // the end look: its buttons at their natural widths at its end, its labels before them;
@@ -5215,6 +5217,7 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
     if (ground)
         e->rect[0] = x, e->rect[1] = y, e->rect[2] = w, e->rect[3] = h;
     uit_buf_t hb = {0};
+    e->band_h = 0;
     if (e->placed) {
         if (flags & UIT_F_BAND)
             placed_band(e, c, s, &hb, pages ? pages : 1);
@@ -5284,8 +5287,7 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
             // a flowing page's band docks at its foot: the room its pictures may draw in ends over it
             if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {
                 int mn;
-                int32_t hh = (flags & UIT_F_DESK) ? moy_ui_metrics(MOY_UI_K_VALUE_ROW, &mn)[17] * fs : 20 * fs;
-                e->rect[3] = e->rect[3] > hh ? e->rect[3] - hh : 0;
+                e->band_h = (flags & UIT_F_DESK) ? moy_ui_metrics(MOY_UI_K_VALUE_ROW, &mn)[17] * fs : 20 * fs;
             }
             moy_ui_api_hints(c, s, hp, hn, NULL);
         } else if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {

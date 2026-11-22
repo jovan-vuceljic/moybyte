@@ -355,6 +355,7 @@ struct uit {
     uit_pic_fn pic_fn;          // a card's or a picture's image, the front end's
     void *pic_ud;
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
+    int32_t band_h;             // a flowing page's hints band, docked at its foot: its pictures end over it
     uint8_t in_cell;            // drawing a split's column: a button takes its natural width
     uint8_t tv_stop, tv_stop_now;   // a text view that runs on drew last frame / this frame (the band's PgUp PgDn)
     int16_t page_tabs, page_tabs_now;   // the tabs node the band names (hint=) drawn last frame / this frame, else -1
