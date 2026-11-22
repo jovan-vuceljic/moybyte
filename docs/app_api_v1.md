@@ -262,7 +262,10 @@ as `ev.row`; a compiled app's draw asks `ut_canvas_row()` for the row's
 index), `ui.colors()` answers the theme's colours there, its `hint=` is the
 band's confirm word while it holds focus, and its `pointer=` is handed a
 press and its drag and release in its own
-coordinates on any page. A foot of `look="band"` lies edge to edge on the
+coordinates on any page. Its `reads=` names the states its draw reads (a
+read of another is R01): the page's gen then counts them, so the page keeps
+its shift frames where a canvas that names none draws the frame after it
+whole. A foot of `look="band"` lies edge to edge on the
 alternate surface under a rule, its rows as tall as their tallest canvas
 (Music's strip). `runtime/apps/music_app.py` draws what plays this way.
 `system_carts/moybyte.notes.moy` is the example, and
@@ -272,20 +275,33 @@ one trace and one picture.
 **A flowing page's layout.** The engine stacks a page's nodes; `ui.row`
 sets its children side by side on one row of the stack (a button at its
 natural width unless `grow=True`, a picture beside a `ui.group` column of
-labels, a label after the row's filler at its end; children all at their
-own widths are centred). `ui.foot()` (the end look) sets its buttons at
+labels, a `ui.rule()` a line down the row between its neighbours, a label
+after the row's filler at its end; children all at their own widths are
+centred). `ui.foot()` (the end look) sets its buttons at
 their natural widths at its end with a status label before them;
 `look="share"` shares its width among them. `ui.toast(text, icon=)` is a
 pill over the page above its foot; `ui.group("", look="card")` lays its
-rows on a card (as a split's cell, the cell is the card); `ui.text_view(..., look="well")` lays its prose on a
-well; `ui.cards(..., pad=)` sets the gap its columns are counted at; a
-card's `badge=` marks its picture; a button's `kind=` may be a template;
+rows on a card (as a split's cell, the cell is the card), and
+`look="rules"` parts its rows with a rule as a captioned group's are (a
+`ui.row` among them one of its rows); `ui.text_view(..., look="well")` lays its prose on a
+well; `ui.cards(..., pad=)` sets the gap its columns are counted at, and its
+`current=` marks the card whose key a state holds; a link's
+`swatch="#RRGGBB"` (a template, empty for none) draws a chip of that colour
+before its value; a
+card's `badge=` marks its picture and its `label_icon=` stands an icon
+before its label; a button's `kind=` may be a template, and `kind="bar"`
+alone is a flat icon, narrower than a button's; on the desk a popover
+anchored at a button or a link hangs under it; a swatches row whose label
+its dots would cut moves them into its right pad where that makes it whole;
 `ui.split(..., rule=True)` draws a rule between its cells;
 `ui.seg(label, ".FIELD", text=...)` in a rows' body binds an int field of
 the row, the index of its item, its items the lines `text=` renders over
 the row; `ui.dialog(..., look="keys")` draws no buttons on the T-Deck, whose
 band's Enter and Esc are its buttons, and a dialog of more than one field
-names the arrows that move between them
+names the arrows that move between them;
+`ui.page(title, status=)` leads the hints band with its words (a page
+laid out in a split, its own or one in a switch's shown case, has the band
+cut from its room)
 (`tests/uitree_contract/contract.json` holds every kind and prop).
 
 **The bar is the host's.** The console draws the bar (its back chevron,

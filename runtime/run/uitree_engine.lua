@@ -19,6 +19,7 @@ local LABELS, KEYMAP, DERIVED, stack, R = I.LABELS, I.KEYMAP, I.DERIVED, I.stack
 local fail, q, trace, frozen, fire, fire_fn = I.fail, I.q, I.trace, I.frozen, I.fire, I.fire_fn
 local fire_placed, event = I.fire_placed, I.event
 local build_page, touched, T = I.build_page, I.touched, I.T
+local reading = I.reading
 
 -- the engine's numbers (native/moy_uitree/moy_uitree.h)
 local BOOL, INT, NUM, TEXT, ENUM, ROWOF, MODEL = 1, 2, 3, 4, 5, 6, 7
@@ -51,6 +52,7 @@ local ROW_ACT = {}              -- a row's node's key -> the action it fires
 local DRAWS = {}                -- a canvas's node -> its draw
 local ROWS = false              -- the lowered page lists rows (whose keys are data)
 local POINTERS = {}             -- each canvas of the lowered page a pointer is routed to: { node, key, its pointer= action }
+local READS_OF = {}             -- a canvas's node -> the states its draw may read (reads=), a set
 local DRAWN = {}                -- a canvas's node -> { x, y, w, h, the frame that drew it there }
 local FRAMES = 0                -- the frames run
 local HELD = nil                -- the canvas a press started on, held until its release
@@ -370,6 +372,11 @@ local function lower_node(n, parent, path, model)
   end
   if n.kind == "canvas" then
     DRAWS[me] = n.o.draw
+    if n.o.reads then
+      local r = {}
+      for _, name in ipairs(n.o.reads) do r[name] = true end
+      READS_OF[me] = r
+    end
     if n.o.pointer then POINTERS[#POINTERS + 1] = { me, key, n.o.pointer } end
   end
   if n.action then check(X:node_action(me, AIDX[n.action]), "ui." .. n.kind .. " " .. q(key) .. "'s action", n.at) end
@@ -410,7 +417,7 @@ local function anchors(n)
 end
 
 local function lower(p)
-  KEYS, ROW_ACT, ROWS, DRAWS, POINTERS, HELD, DRAWN = {}, {}, false, {}, {}, nil, {}
+  KEYS, ROW_ACT, ROWS, DRAWS, POINTERS, HELD, DRAWN, READS_OF = {}, {}, false, {}, {}, nil, {}, {}
   X:build_begin(string.format("%d %s", #stack, p.def.name):sub(1, 31))
   lower_node(p.root, -1, p.def.name)
   check(X:build_end(), "the page " .. q(p.def.name), p.def.at)
@@ -427,13 +434,17 @@ local function made()
     if f then
       local r = DRAWN[node]
       if r then r[1], r[2], r[3], r[4], r[5] = x, y, w, h, FRAMES else DRAWN[node] = { x, y, w, h, FRAMES } end
+      local ok, err
+      reading(READS_OF[node])
       if m >= 0 and ri >= 0 then             -- a canvas in a rows' body: handed its row
         local model = V[NAMES[m]]
         local row = model.rows[ri + 1]
-        f(x, y, w, h, frozen(row, "row " .. q(row[model.key]) .. " of " .. q(model.name), model.ty))
+        ok, err = pcall(f, x, y, w, h, frozen(row, "row " .. q(row[model.key]) .. " of " .. q(model.name), model.ty))
       else
-        f(x, y, w, h)
+        ok, err = pcall(f, x, y, w, h)
       end
+      reading(nil)
+      if not ok then error(err, 0) end
     end
   end)
   declare()

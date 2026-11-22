@@ -1265,6 +1265,10 @@
      "type": "word:off",
      "level": 2,
      "designed": true
+    },
+    "status": {
+     "type": "tpl",
+     "level": 2
     }
    },
    "heads": "Python: a page is a function opening `with ui.page(TITLE):`, pushed as `ui.push(FUNCTION)` (L2); Lua and C: a named page, `ui.page(NAME, BUILD, { title = ... })`, pushed by its name"
@@ -1279,7 +1283,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:card",
+     "type": "word:card,rules",
      "level": 2
     }
    }
@@ -1708,6 +1712,10 @@
      "type": "tpl",
      "level": 1
     },
+    "swatch": {
+     "type": "tpl",
+     "level": 2
+    },
     "focus": {
      "type": "cond",
      "level": 1
@@ -2094,6 +2102,10 @@
      "type": "tpl",
      "level": 2
     },
+    "label_icon": {
+     "type": "tpl",
+     "level": 2
+    },
     "image": {
      "type": "name",
      "level": 2
@@ -2437,8 +2449,7 @@
     },
     "reads": {
      "type": "list",
-     "level": 2,
-     "designed": true
+     "level": 2
     },
     "size": {
      "type": "list",

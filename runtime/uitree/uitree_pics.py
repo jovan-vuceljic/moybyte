@@ -1,16 +1,19 @@
 """G9's engine half on the host layer: an `image` value found, decoded,
 cached under a byte budget and drawn, the app running no code for it.
 
-A card or picture asks `peek(pic, w, h)` while it draws: a decoded picture,
-or None, and then the pair is owed. The console's idle branch (a frame with
-nothing to paint) calls the layer's `idle_step`, which decodes one owed
-picture. A picture that does not decode is failed for the session, traced
+A drawing stands whole in its tile, letterboxed at its own aspect (a
+cover PNG and a picture the app draws fill it). A card or picture asks
+`peek(pic, w, h)` while it draws: a decoded picture,
+or None, and then the pair is owed. Each console frame, before it paints,
+calls the layer's `idle_step` while it owes one (`view_owed`), which
+decodes one owed picture and damages the page: the page is not quiet until
+it shows every picture it holds. A picture that does not decode is failed for the session, traced
 once. The cache keeps decoded pixels under `budget` bytes, the least
 recently drawn let go first ("redraw on exposure": it is owed again the
 next time a card shows it).
 
 What this host layer cannot show: a decode off the frame's thread (here it
-is the idle frame's own time), a cache shared across apps, and a budget the
+is the frame's own time), a cache shared across apps, and a budget the
 engine sets per board.
 """
 import collections
@@ -30,6 +33,12 @@ def _tr(app, text):
         S._trace("image", "", text)
     finally:
         S._NOW.app = was
+
+
+def _let_go(got):
+    """A picture the cache let go: a layer an app's drawer made goes back."""
+    if got[0] == "layer":
+        got[1].release()
 
 
 class PicEngine:
@@ -55,7 +64,7 @@ class PicEngine:
         if got is not None:
             self.cache[k] = self.cache.pop(k)       # the most recent last
             return got
-        if (pic, self._gen(pic)) not in self.failed and k not in self.owed:
+        if (pic, self.gen_of(pic)) not in self.failed and k not in self.owed:
             self.owed.append(k)
         return None
 
@@ -65,7 +74,7 @@ class PicEngine:
             return "none"
         if (pic, w, h) in self.cache:
             return "shown"
-        if (pic, self._gen(pic)) in self.failed:
+        if (pic, self.gen_of(pic)) in self.failed:
             return "failed"
         return "loading"
 
@@ -74,8 +83,10 @@ class PicEngine:
         if kind == "cover":
             side = pix[0]
             cv.cover(pix[1], side, 0, 0, side, side, x, y, w, h, 0, False)
-        else:
-            cv.picture(pix, x, y, w, h)
+        elif kind == "layer":
+            cv.blit565_resize(pix._buf, pix.w, pix.h, x, y, w, h)
+        else:                   # a drawing: centred in its tile at its own aspect
+            cv.picture(pix, x + (w - pix.w) // 2, y + (h - pix.h) // 2, pix.w, pix.h)
 
     # -- the idle side -----------------------------------------------------------------
 
@@ -103,7 +114,7 @@ class PicEngine:
         except MemoryError:
             got = None
         if isinstance(got, str):
-            self.failed[(pic, self._gen(pic))] = got
+            self.failed[(pic, self.gen_of(pic))] = got
             self.stats["failed"] += 1
             _tr(self.app, "%r %dx%d failed: %s" % (pic, w, h, got))
             return True
@@ -133,16 +144,25 @@ class PicEngine:
                 return False
             old = self.cache.pop(k)
             self.used -= old[2]
+            _let_go(old)
             self.stats["evicted"] += 1
             _tr(self.app, "%r %dx%d evicted (least recently drawn, out of view), %d bytes back" % (
                 k[0], k[1], k[2], old[2]))
         return True
 
     def forget_own(self, key):
+        """The app put own picture `key` again: its decoded pixels let go.
+        Answers whether any were held (a card showing them changes)."""
+        held = False
         for k in [k for k in self.cache if k[0].kind == "own" and k[0].key == key]:
-            self.used -= self.cache.pop(k)[2]
+            old = self.cache.pop(k)
+            self.used -= old[2]
+            _let_go(old)
+            held = True
+        return held
 
-    def _gen(self, pic):
+    def gen_of(self, pic):
+        """What moves with the picture's pixels: an app's own picture's puts."""
         return S.pictures.gen.get(pic.key, 0) if pic.kind == "own" else 0
 
     # -- decoders ----------------------------------------------------------------------
@@ -163,6 +183,12 @@ class PicEngine:
         return src[1], None
 
     def _decode(self, pic, w, h):
+        src = S.pictures.src.get(pic.key) if pic.kind == "own" else None
+        if src is not None and src[0] == "render":
+            lay = src[1](w, h)
+            if lay is None or lay.w != w or lay.h != h:
+                return "not drawn at %dx%d" % (w, h)
+            return ("layer", lay, w * h * 2)
         blob, why = self._bytes(pic)
         if blob is None:
             return why
@@ -176,8 +202,15 @@ class PicEngine:
             if pix is None:
                 return "not a cover PNG"
             return ("cover", (side, pix), side * side * 2)
-        from artwork import read_cover
+        from artwork import picture_size, read_cover
         from file_widgets import Bitmap
+        # a drawing stands whole in its tile, letterboxed: its edges are the drawer's
+        size = picture_size(raw)
+        if size is not None:
+            fw, fh = w, size[1] * w // size[0]
+            if fh > h:
+                fw, fh = size[0] * h // size[1], h
+            w, h = max(1, fw), max(1, fh)
         pix = bytearray(w * h)
         if read_cover(raw, pix, w, h) is None:
             return "not a picture"

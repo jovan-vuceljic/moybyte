@@ -2118,9 +2118,9 @@ def test_a_settings_drag_shifts_and_allocates_nothing(result):
     assert over[len(over) // 2] < SETTINGS_FRAME, ("a shift frame's median", over)
 
 
-# Get Carts is an app_layer page, whose drag frame (the engine's, no card
-# counted through ui.card) is not held to this budget.
-@pytest.mark.parametrize("app", ("appearance", "storybook", "myart"))
+# Get Carts and Storybook are app_layer pages, whose drag frame (the
+# engine's, no card counted through ui.card) is not held to this budget.
+@pytest.mark.parametrize("app", ("appearance", "myart"))
 def test_an_app_drag_frame_allocates_only_its_moved_answers(result, app):
     """A drag frame of the app's content, its pictures met once before: the
     frames drew, and each allocated no more than one answer a card it drew

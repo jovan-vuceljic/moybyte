@@ -628,10 +628,11 @@ typedef struct {
     uint32_t mid_page;              // the page a middle-button drag scrolls
     int16_t mid_y;
     int16_t tap_x, tap_y;           // where the activating tap was released
-    moy_ui_box_t pa_box;            // the part answered last (w 0: none this frame)...
+    moy_ui_box_t pa_box;            // the part answered last, where it stands (w 0: none)...
     moy_ui_box_t sp_hit[MOY_UI_API_DIVS];   // the dividers this frame's splits drew: what a press takes
     uint8_t sp_n;
-    uint8_t pa_st;                  // ...and its state bits (moy_ui_api_part_at)
+    uint8_t pa_st;                  // ...its state bits (moy_ui_api_part_at)...
+    uint8_t pa_none;                // ...and whether this pass leaves it undrawn (its out 0s)
     // The panes the last pass's splits cut (moy_ui_api_split_frame): a pane
     // a later split cut again (`sp_cut`, a bit a pane) is no pane of its own;
     // `sp_cur` the one a split's focus names (-1 none), `sp_held` whether a
@@ -742,7 +743,7 @@ typedef struct {
     // The next card's badge and tone (moy_ui_api_card_mark), the next
     // grid's spread (moy_ui_api_grid_spread) and the next label's text
     // options (moy_ui_api_text): each cleared once used and by begin.
-    int16_t card_slot, card_glyph, card_blank, card_blank_glyph;
+    int16_t card_slot, card_glyph, card_blank, card_blank_glyph, card_lead, card_lead_glyph;
     int8_t card_tone;
     uint8_t grid_wrap;
     moy_ui_spread_t spread;
@@ -1005,8 +1006,9 @@ int32_t moy_ui_api_choice(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy
                           const uint8_t *opts, size_t len, int32_t cur, const moy_ui_over_t *o);
 // Keycap hints (`items` NUL-separated pairs of an action or keys and what it
 // does, moy_ui_hints) in a band at the page's foot, which its rows then stack
-// above; ui.at places them instead. Under the input touch there is no band
-// and a ui.at before it is spent.
+// above; ui.at places them instead; `hint` the status words it leads with
+// (moy_ui_hints_status). Under the input touch there is no band and a ui.at
+// before it is spent.
 void moy_ui_api_hints(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const uint8_t *items, size_t len,
                       const moy_ui_over_t *o);
 // The width those hints take with the input in use, their margin at either
@@ -1099,11 +1101,21 @@ void moy_ui_api_menu_danger(moy_ui_ctx_t *c, uint32_t rows);
 void moy_ui_api_text(moy_ui_ctx_t *c, int lines, int centre, int tone, int role);
 void moy_ui_api_card_mark(moy_ui_ctx_t *c, moy_ui_span_t badge, int tone,
                           moy_ui_span_t blank);
+// The next card's title's icon (`icon`, empty none): drawn before its title,
+// the two centred under its picture as one.
+void moy_ui_api_card_lead(moy_ui_ctx_t *c, moy_ui_span_t icon);
 void moy_ui_api_grid_spread(moy_ui_ctx_t *c, int cols, int foot, int top, int margin,
                             int wrap);
 // A group with no caption (ui.group's `card`): its rows on its card, from
 // the page's next row, until a group call ends it.
 void moy_ui_api_group_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
+// A group with no caption whose rows a rule parts, as a captioned group's
+// (ui.group's `rules`): from the page's next row, until a group call ends it.
+void moy_ui_api_group_rules(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
+// Where a group is open, the page's next `h` pixels a row of it the caller
+// draws placed: the page's cursor under it and its rule (on the handheld its
+// card's band) drawn. 0 where none is open, and nothing done.
+int moy_ui_api_group_row(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int h);
 // A card's plate at ui.at's rect, the rows it holds placed on it by the caller
 // (a split's cell of ui.group's `card`): rounded and filled, on the desk a ring.
 void moy_ui_api_card_at(moy_ui_ctx_t *c, const moy_ui_sink_t *s);

@@ -1219,6 +1219,7 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     c->grid_open = 0;
     c->fin_on = 0;
     c->card_slot = c->card_glyph = c->card_blank = c->card_blank_glyph = -1;
+    c->card_lead = c->card_lead_glyph = -1;
     c->card_tone = 0;
     c->spread.cols = 0;
     c->spread.foot = c->spread.top = c->spread.margin = 0;
@@ -1235,6 +1236,7 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     mua_lent_drop(c);                   // a first frame's card its pass never closed
     c->pa_box.w = 0;
     c->pa_st = 0;
+    c->pa_none = 0;
     c->sp_n = 0;
     c->sp_pn = 0;
     c->sp_cut = 0;
@@ -2036,6 +2038,21 @@ moy_ui_box_t mua_floor_of(const moy_ui_ctx_t *c, moy_ui_box_t b) {
         return mua_box_of(q);           // a picture drawn again: all of it, in pieces
     }
     return met;
+}
+
+moy_ui_box_t mua_pic_clip(const moy_ui_ctx_t *c, moy_ui_box_t b) {
+    moy_ui_box_t f = mua_armed(c) && c->fl.stage == 1 ? mua_floor_of(c, b) : c->page;
+    if (f.w <= 0 && f.h < 0) {
+        return f;                       // a shift frame's floor holds none of it
+    }
+    if (f.w <= 0) {
+        return c->page;                 // nothing of the floor's says: all it shows of the page
+    }
+    rc_t q = mua_rc_of(f);
+    if (!mua_rc_cut(&q, mua_rc_of(c->page))) {
+        return (moy_ui_box_t){0, 0, 0, -1};
+    }
+    return mua_box_of(q);
 }
 
 // A picture in box b this frame's pass leaves as the move left it: inside R
@@ -3530,6 +3547,30 @@ void moy_ui_api_group_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     c->grp_top = c->y;
 }
 
+void moy_ui_api_group_rules(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
+    mua_grid_end(c, s);
+    mua_group_close(c, s);
+    c->has_at = 0;
+    c->grp_open = 1;
+    c->grp_n = 0;
+    c->grp_top = c->y;
+}
+
+int moy_ui_api_group_row(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int h) {
+    if (!c->grp_open) {
+        return 0;
+    }
+    c->has_at = 0;                  // (a measure's rect: the row is the page's next)
+    int stacked;
+    clip_t k;
+    moy_ui_box_t b = mua_place(c, h, &stacked);
+    EACH_ROW(c, k, s, b, stacked, c->page) {
+        mua_band(c, s, b, stacked);
+        mua_clip_out(&k);
+    }
+    return 1;
+}
+
 void moy_ui_api_group(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t caption,
                       const moy_ui_over_t *o) {
     if (said && caption.n) {
@@ -3599,6 +3640,14 @@ int moy_ui_api_value(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui_s
     r.signal = o->signal;
     r.tag = o->tag;
     r.check = (int16_t)(o->check == 1 && kind == MOY_UI_V_LINK ? 1 + (o->current == 1) : 0);
+    uint8_t chip[4];
+    if (kind == MOY_UI_V_LINK && o->fill >= 0 && o->fill < MOY_UI_O_ROLE) {
+        // a raw fill: the colour the link names, a chip before its value
+        chip[0] = (uint8_t)o->fill, chip[1] = (uint8_t)(o->fill >> 8);
+        chip[2] = (uint8_t)(o->fill >> 16), chip[3] = 0;
+        r.colours = chip;
+        r.n = 1;
+    }
     mua_vrow_draw(c, s, b, stacked, kind, st, o, &r);
     return (st & MOY_UI_ST_ACTIVATED) != 0;
 }
@@ -3700,7 +3749,6 @@ void moy_ui_api_hints(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const uint8_t *it
     if (said) {
         said(MOY_UI_SAID_HINTS, items, len, NULL, 0, -1);
     }
-    (void)o;
     moy_ui_box_t b;
     if (moy_ui_hint_input() == MOY_UI_INPUT_TOUCH) {
         // touch alone shows no keys: no band, and the rows take its height
@@ -3740,9 +3788,13 @@ void moy_ui_api_hints(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const uint8_t *it
     if (c->n_nest == 0) {
         c->hint_band = b;
     }
+    moy_ui_span_t st = o != NULL ? o->hint : (moy_ui_span_t){NULL, 0};
+    int lead = moy_ui_hints_status(s, b, st, c->fs, mua_ground_of(c), 0);
+    moy_ui_box_t h = {(int16_t)(b.x + lead), b.y, (int16_t)(b.w - lead), b.h};
     clip_t k;
     EACH_PIECE(c, k, s, b) {
-        moy_ui_hints(s, b, items, len, c->fs, mua_ground_of(c));
+        moy_ui_hints_status(s, b, st, c->fs, mua_ground_of(c), 1);
+        moy_ui_hints(s, h, items, len, c->fs, mua_ground_of(c));
     }
 }
 
@@ -4040,7 +4092,7 @@ void moy_ui_api_part(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, 
         }
     }
     int none = mua_outside_floor(c, b);
-    c->pic_clip = mua_floor_of(c, b);
+    c->pic_clip = mua_pic_clip(c, b);
     c->pic_tbl = 0;
     out[0] = none ? 0 : b.x;
     out[1] = none ? 0 : b.y;
@@ -4048,9 +4100,7 @@ void moy_ui_api_part(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, 
     out[3] = none ? 0 : b.h;
     out[4] = st;
     c->pa_box = b;
-    if (none) {
-        c->pa_box.w = 0;
-    }
+    c->pa_none = (uint8_t)none;
     c->pa_st = (uint8_t)st;
 }
 
@@ -4066,7 +4116,7 @@ int moy_ui_api_part_at(const moy_ui_ctx_t *c, int32_t out[2]) {
     } else {
         return 0;
     }
-    if (b.w <= 0 || b.h <= 0 || !mua_inside(b, x, y)) {
+    if (c->pa_none || b.w <= 0 || b.h <= 0 || !mua_inside(b, x, y)) {
         return 0;
     }
     out[0] = x - b.x;

@@ -47,6 +47,7 @@ static const char *const ut_kind_names_[] = {
 #define UT_KIND_TONAL "tonal"
 #define UT_KIND_BAR "bar"
 #define UT_LOOK_CARD "card"
+#define UT_LOOK_RULES "rules"
 #define UT_LOOK_END "end"
 #define UT_LOOK_SHARE "share"
 #define UT_LOOK_BAND "band"
@@ -132,6 +133,7 @@ static inline int32_t ut_p_input(const char *v) { return ut_prop_("input", v); }
 static inline int32_t ut_p_keys(const char *v) { return ut_prop_("keys", v); }
 static inline int32_t ut_p_kind(const char *v) { return ut_prop_("kind", v); }
 static inline int32_t ut_p_label(const char *v) { return ut_prop_("label", v); }
+static inline int32_t ut_p_label_icon(const char *v) { return ut_prop_("label_icon", v); }
 static inline int32_t ut_p_labels(const char *v) { return ut_prop_("labels", v); }
 static inline int32_t ut_p_lend(const char *v) { return ut_prop_("lend", v); }
 static inline int32_t ut_p_lines(const char *v) { return ut_prop_("lines", v); }
@@ -171,6 +173,7 @@ static inline int32_t ut_p_span(int32_t v) { return ut_prop_int_("span", v); }
 static inline int32_t ut_p_start(const char *v) { return ut_prop_("start", v); }
 static inline int32_t ut_p_status(const char *v) { return ut_prop_("status", v); }
 static inline int32_t ut_p_sub(const char *v) { return ut_prop_("sub", v); }
+static inline int32_t ut_p_swatch(const char *v) { return ut_prop_("swatch", v); }
 static inline int32_t ut_p_syntax(const char *v) { return ut_prop_("syntax", v); }
 static inline int32_t ut_p_tabs(const char *v) { return ut_prop_("tabs", v); }
 static inline int32_t ut_p_tag(const char *v) { return ut_prop_("tag", v); }

@@ -10,7 +10,8 @@ from pathlib import Path
 from runtime import host_app, moy_carts
 from runtime import story_doc as D
 from runtime import story_render as R
-from runtime.storybook_app import StorybookAppLayer, StorybookLayout, zoom_fit
+from runtime.storybook_app import StorybookAppLayer, is_app, zoom_fit
+from runtime.story_edit import card_id
 
 ROOT = Path(__file__).resolve().parent.parent
 _DT = 1 / 30
@@ -111,9 +112,9 @@ def test_storybook_cart_is_versioned_system_app():
 def test_storybook_identity_rejects_copies_and_impostors():
     real = {"title": "Storybook", "permissions": ["storybook"],
             "path": "/x/moybyte.storybook.moy"}
-    assert StorybookAppLayer.is_app(real)
-    assert not StorybookAppLayer.is_app(dict(real, path="/x/storybook_2.moy"))
-    assert not StorybookAppLayer.is_app(dict(real, permissions=[]))
+    assert is_app(real)
+    assert not is_app(dict(real, path="/x/storybook_2.moy"))
+    assert not is_app(dict(real, permissions=[]))
 
 
 def test_only_stories_that_read_are_listed(tmp_path):
@@ -148,9 +149,11 @@ def test_a_handheld_views_a_story_and_does_not_edit_it(tmp_path):
     before = moy_carts.load_file("stories", "brave/story.json", ws.carts_root)
     _key(ws, app, 0, "left")
     assert app.cur == 0
+    r = app.engine._x.rect("view")
     app.close()
     assert moy_carts.load_file("stories", "brave/story.json", ws.carts_root) == before
-    assert app.layout.view[2:] == (256, 150), "the story's slide at a quarter"
+    assert r[2] >= 256 and r[3] >= 150 and R.size(1, 4) == (256, 150), \
+        "the story's slide at a quarter"
 
 
 def test_present_takes_the_glass_and_steps_through_taps(tmp_path):
@@ -268,13 +271,38 @@ def test_tab_chooses_in_z_order_and_front_and_back_move_it(tmp_path):
     assert not ed.on_slide, "Esc with nothing chosen: the keys go to the parts"
 
 
+def _handle_px(ws, app, ed, k):
+    """The middle pixel of the chosen object's handle `k`, on the glass."""
+    bx, by, _bw, _bh = app.engine._x.rect("board")
+    cx, cy, _cw, _ch = ws.wm.windows["storybook"].content_rect()
+    hx, hy = ed._handles(ed._to_screen(ed._bounds(ed._obj())))[k]
+    cv = ws.sys_canvas
+    i = 2 * ((cy + by + hy) * cv.w + cx + bx + hx)
+    return cv._buf[i] << 8 | cv._buf[i + 1]
+
+
+def test_the_chosen_objects_handles_stand_under_the_panels_colours(tmp_path):
+    """A press on the panel's Colour row opens the colours over the slide:
+    the chosen object keeps its handles, as it does until Esc or Y sends the
+    keys to the parts."""
+    from device_canvas import PAL565
+    ws, app, ed = _edit(tmp_path)
+    _key(ws, app, 9)
+    _frames(ws)
+    assert ed.chosen == 0 and _handle_px(ws, app, ed, 0) == PAL565[7]
+    _tap_part(ws, app, "pick_colour")
+    assert ed.menu == "colours"
+    _frames(ws)
+    assert _handle_px(ws, app, ed, 0) == PAL565[7], "the handles under the colours"
+
+
 def test_a_drag_moves_and_snaps_to_the_slides_middle(tmp_path):
     ws, app, ed = _edit(tmp_path)
     st = app.story
     o = st.slides[1]["objects"][1]              # the bubble at 608, 64, 352 wide
     ed.chosen = 1
-    sx, sy = app.layout.slide[0], app.layout.slide[1]
-    n, d = app.layout.edit_zoom
+    sx, sy = ed.slide[0], ed.slide[1]
+    n, d = ed.zoom
     px, py = sx + 700 * n // d, sy + 100 * n // d
     assert ed.handle_pointer(px, py, True, True)
     # left to two screen pixels short of the bubble's left edge on the middle
@@ -293,7 +321,7 @@ def test_the_sorter_adds_moves_and_deletes_slides(tmp_path):
     app.ed.opened()
     _frames(ws)
     st = app.story
-    app._focus = "Slide 1"
+    app._focus = card_id(1)
     _frames(ws)
     _key(ws, app, ord("n"))
     assert len(st.slides) == 4 and app.cur == 2
@@ -337,14 +365,15 @@ def test_a_picture_from_my_art_is_copied_in_and_fills_its_frame(tmp_path):
     assert _stored(ws, st.name)["slides"][j]["objects"][0]["image"] == "dragon"
 
 
-def test_the_full_screen_window_edits_at_five_eighths(tmp_path):
-    host_app.build_workstation(str(tmp_path / "carts"), sys_size=(1024, 600),
-                               panel_diagonal_in=7.0, windowed=True)
-    lay = StorybookLayout(1024, 600, 1, True)
-    assert lay.full and lay.edit_zoom == (5, 8) and lay.slide[2:] == (640, 375)
-    lay = StorybookLayout(900, 492, 1, True)
-    assert not lay.full and lay.edit_zoom == (1, 2) and lay.slide[2:] == (512, 300)
-    assert R.size(5, 64) == (80, 47)
+def test_the_slide_takes_the_largest_zoom_its_pasteboard_holds(tmp_path):
+    """5/8 where the window fills the glass, 1/2 in the desk's window, less
+    on a smaller pasteboard; the slide centred on it."""
+    ws, app, ed = _edit(tmp_path)
+    assert ed.zoom == (1, 2) and ed.slide[2:] == (512, 300)
+    for w, h, zoom in ((660, 400, (5, 8)), (528, 384, (1, 2)), (400, 260, (3, 8))):
+        ed.fit(w, h)
+        sw, sh = R.size(*zoom)
+        assert ed.zoom == zoom and ed.slide == ((w - sw) // 2, (h - sh) // 2, sw, sh)
 
 
 def test_a_drawing_put_in_a_story_is_its_new_last_slide_and_undo_takes_it_back(tmp_path):
@@ -401,7 +430,7 @@ def test_the_sorters_new_slide_card_opens_the_layouts(tmp_path):
     app._open_story(app.stories[0], "deck")
     app.ed.opened()
     _frames(ws)
-    _tap_part(ws, app, "Add slide")
+    _tap_part(ws, app, "add/edit_slide")
     assert app.ed.menu == "layouts"
 
 
@@ -411,8 +440,36 @@ def test_deleting_the_last_slide_from_the_sorters_button(tmp_path):
     app.ed.opened()
     _frames(ws)
     n = len(app.story.slides)
-    app._focus = "Slide %d" % (n - 1)
+    app._focus = card_id(n - 1)
     _frames(ws)
-    _tap_part(ws, app, "Delete")
+    _tap_part(ws, app, "del_slide")
     assert len(app.story.slides) == n - 1
     _frames(ws)
+
+
+def test_a_press_and_drag_on_the_pasteboard_reach_the_slide(tmp_path):
+    """The board canvas hands the slide its pointer: a press on the bubble
+    chooses it and gives the slide the keys, a drag moves it, the release
+    ends the move as one undo step."""
+    ws, app, ed = _edit(tmp_path)
+    st = app.story
+    bx, by, _bw, _bh = app.engine._x.rect("board")
+    n, d = ed.zoom
+    cx, cy, _cw, _ch = ws.wm.windows["storybook"].content_rect()
+    px = cx + bx + ed.slide[0] + 700 * n // d
+    py = cy + by + ed.slide[1] + 100 * n // d
+    ws.pointer.place(px, py)
+    ws.pointer.down = True
+    ws.pointer.click = True
+    ws.router.handle_pointer()
+    _frames(ws, 1)
+    assert ed.chosen == 1 and ed.on_slide
+    ws.pointer.click = False
+    ws.pointer.place(px + 20, py)
+    ws.router.handle_pointer()
+    _frames(ws, 1)
+    ws.pointer.down = False
+    ws.router.handle_pointer()
+    _frames(ws, 1)
+    assert st.slides[1]["objects"][1]["x"] == 608 + 20 * d // n
+    assert len(st.hist._undo) == 1
