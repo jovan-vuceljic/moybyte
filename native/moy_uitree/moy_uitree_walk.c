@@ -442,14 +442,16 @@ static void wrote(uit_t *e, int k, const char *was, const char *now, const char 
         fire(e, then, k, -1, -1, NULL);
 }
 
-// A toggle bound to its row's bool field written (`_row_write`): the cell in
-// place, the model's version, its trace line `KEY: FIELD old -> new   (from
+// A toggle or a slider bound to its row's field written (`_row_write`): the
+// cell, the model's version, its trace line `KEY: FIELD old -> new   (from
 // toggle .FIELD)`, the cell's event, then its on= handed the row.
-static void row_wrote(uit_t *e, int k, int model, int row, int now)
+static void row_wrote(uit_t *e, int k, int model, int row, const char *cell, const char *was,
+                      const char *now)
 {
     const uit_node_t *N = NODE(k);
     uit_slot_t *M = &e->slots[model];
-    M->cells[M->at[row * M->nf + N->cur]] = now ? '1' : '0';
+    if (uit_cell_put(e, model, row, N->cur, cell))
+        return;
     M->ver++;
     if (e->flags & UIT_F_TRACE) {
         uit_buf_t key = {0};
@@ -459,7 +461,7 @@ static void row_wrote(uit_t *e, int k, int model, int row, int now)
         else
             uit_buf_printf(&key, "%s", kv);
         uit_trace(e, "state", uit_str(e, M->name), "%s: %s %s -> %s   (from %s .%s)", key.p, f,
-                  now ? "False" : "True", now ? "True" : "False", uit_kind_names[N->kind], f);
+                  was, now, uit_kind_names[N->kind], f);
         uit_buf_free(&key);
     }
     uit_event(e, UIT_EV_CELL, model, row, N->cur, NULL, 0);
@@ -2262,7 +2264,7 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         over_for(e, k, model, row, c, &o, id);
         int got = moy_ui_api_toggle(c, s, sspan(e, a1, n1), cur, &o) != 0;
         if (got != cur && field) {
-            row_wrote(e, k, model, row, got);
+            row_wrote(e, k, model, row, got ? "1" : "0", cur ? "True" : "False", got ? "True" : "False");
         } else if (got != cur) {
             uit_set_int(e, N->slot, got);
             uit_buf_t b = {0};
@@ -2298,9 +2300,15 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
             int32_t one = 1;
             moy_ui_over_put(&o, MOY_UI_OV_STEPS, &one);
         }
-        int32_t cur = e->slots[N->slot].i;
+        int field = (N->lit & NL_FIELD) != 0;
+        int32_t cur = field ? (int32_t)strtol(uit_cell(e, model, row, N->cur), NULL, 10) : e->slots[N->slot].i;
         int32_t got = moy_ui_api_slider(c, s, sspan(e, a1, n1), cur, lo, hi, &o);
-        if (got != cur) {
+        if (got != cur && field) {
+            char was[16], now[16];
+            snprintf(was, sizeof was, "%ld", (long)cur);
+            snprintf(now, sizeof now, "%ld", (long)got);
+            row_wrote(e, k, model, row, now, was, now);
+        } else if (got != cur) {
             uit_set_int(e, N->slot, got);
             char was[16], now[16];
             snprintf(was, sizeof was, "%ld", (long)cur);

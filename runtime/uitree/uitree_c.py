@@ -435,7 +435,7 @@ class CEngine(Engine):
         self._pushed[name] = st._ver[name]
 
     def _pull_cell(self, slot, ri, fi):
-        """A row's field the engine wrote (a toggle bound to `.field`): the
+        """A row's field the engine wrote (a toggle or a slider bound to `.field`): the
         row made again with it, as `_row_write` makes it."""
         st = self.s
         name, t = self._names[slot], self._types[slot]
@@ -544,7 +544,7 @@ class CEngine(Engine):
                 raise EngineGap("a %s node" % nk + ("" if placed or nk not in placed_kinds else
                                                      " outside a placed page"))
             field = l.get("field") if l and nk != "text_view" else None
-            if field and nk != "toggle":
+            if field and nk not in ("toggle", "slider"):
                 raise EngineGap("a %s bound to a row's field" % nk)
             me = cnode(kind, n.key, parent)
             if me < 0:

@@ -435,6 +435,26 @@ const char *uit_get_cell(const uit_t *e, int slot, int row, int f)
     return uit_cell(e, slot, row, f);
 }
 
+int uit_cell_put(uit_t *e, int slot, int row, int f, const char *v)
+{
+    uit_slot_t *S = &e->slots[slot];
+    int i = row * S->nf + f;
+    uint32_t at = S->at[i], was = (uint32_t)strlen(S->cells + at), now = (uint32_t)strlen(v);
+    if (now != was) {
+        uint32_t n = S->cells_n - was + now;
+        char *c = UIT_REALLOC(S->cells, (size_t)n + 1);
+        if (!c)
+            return UIT_E_NOMEM;
+        memmove(c + at + now, c + at + was, S->cells_n + 1 - at - was);
+        S->cells = c;
+        S->cells_n = n;
+        for (int j = i + 1; j < S->nrows * S->nf; j++)
+            S->at[j] = S->at[j] + now - was;
+    }
+    memcpy(S->cells + at, v, now);
+    return 0;
+}
+
 const char *uit_error_code(const uit_t *e)
 {
     return e->code;
@@ -1320,6 +1340,17 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->lit |= NL_FIELD;
         return 0;
     }
+    if (!strcmp(name, "field") && kind == UIT_SLIDER) {
+        // a slider bound to an int field of its list's row: the row's cell is its value
+        int m = uit_model_of(e, node);
+        int f = uit_field_find(e, m, src, strlen(src));
+        if (f < 0 || e->slots[m].mf->ftype[f] != UIT_INT)
+            return uit_fail(e, UIT_E_NAME, UIT_MSG("slider .%s: no int field of its rows", "slider .%s"), src);
+        N->slot = (int16_t)m;
+        N->cur = (int16_t)f;
+        N->lit |= NL_FIELD;
+        return 0;
+    }
     if (!strcmp(name, "bind")) {
         int s = uit_slot_find(e, src, strlen(src));
         int t = s < 0 ? 0 : e->slots[s].type;
@@ -1576,7 +1607,7 @@ static void mark_node(const uit_t *e, int k, uint8_t *m, int cur, int hint_only)
     }
     if (hint_only)
         return;
-    if (N->slot >= 0 && !(N->kind == UIT_TOGGLE && (N->lit & NL_FIELD)))
+    if (N->slot >= 0 && !((N->kind == UIT_TOGGLE || N->kind == UIT_SLIDER) && (N->lit & NL_FIELD)))
         m[N->slot] = 1;         // its bound state, its model, its switch's
     if (cur && UIT_IS_LIST(N->kind) && N->cur >= 0)
         m[N->cur] = 1;

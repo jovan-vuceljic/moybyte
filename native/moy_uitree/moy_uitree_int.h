@@ -427,6 +427,7 @@ uint32_t uit_tmpl_render(uit_t *e, int t, int model, int row, uint32_t *n);
 int uit_cond_eval(uit_t *e, int c, int model, int row);
 int uit_slot_find(const uit_t *e, const char *name, size_t n);
 const char *uit_cell(const uit_t *e, int model, int row, int f);
+int uit_cell_put(uit_t *e, int slot, int row, int f, const char *v);   // a row's cell written, its text grown or shrunk
 int uit_field_find(const uit_t *e, int model, const char *name, size_t n);
 int uit_row_find(const uit_t *e, int model, const char *key, size_t n);
 const char *uit_type_name(int type);
