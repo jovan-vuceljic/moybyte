@@ -294,6 +294,11 @@ alone is a flat icon, narrower than a button's; on the desk a popover
 anchored at a button or a link hangs under it; a swatches row whose label
 its dots would cut moves them into its right pad where that makes it whole;
 `ui.split(..., rule=True)` draws a rule between its cells;
+`ui.stepper(value, prev, next)` is "‹ value ›", the bar's chevrons firing
+the two actions and greyed while either is off (its `when=`), one stop whose
+left and right step it, at its own width (centred where it is stacked) or
+with `grow=True` a fill whose chevrons stand at its ends, `tone="dim"` its
+value dim;
 `ui.seg(label, ".FIELD", text=...)` in a rows' body binds an int field of
 the row, the index of its item, its items the lines `text=` renders over
 the row; `ui.dialog(..., look="keys")` draws no buttons on the T-Deck, whose

@@ -832,7 +832,7 @@ def test_the_sound_pane_is_its_page_not_the_music_tab(desk, monkeypatch):
     drv.frame(DT)
     assert drew == []
     assert ws.editor_app.tab == "music"
-    assert all(snd.page.rect_of(k) is not None for k in ("brush", "graph", "add", "oct_up"))
+    assert all(snd.page.rect_of(k) is not None for k in ("brush", "graph", "add", "oct_step"))
 
 
 def test_a_tap_on_the_graph_picks_the_step_and_sets_its_note(desk):

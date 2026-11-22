@@ -650,6 +650,14 @@ int moy_ui_button_x(moy_ui_box_t b, int flags, moy_ui_span_t label, int fs);
 // icon's ink and its label whole (a row's natural width for the item).
 int moy_ui_bar_item(const moy_ui_sink_t *s, moy_ui_box_t b, int flags, const moy_ui_button_t *k);
 int moy_ui_bar_item_w(int slot, int glyph, moy_ui_span_t label, int h, int fs);
+// A stepper (ui.stepper): the bar's back and forward icons as bar items at
+// the box's ends, each in the dim chrome ink where `can` lacks its bit (1
+// back, 2 forward), and `value` centred between them in colour index `ink`;
+// F_FOCUS the bar's pill round the whole box. stepper_w: its natural width
+// in a box `h` high, the chevrons' ink and the value 12 units from each.
+int moy_ui_stepper(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t value, int flags, int can,
+                   int ink, int fs);
+int moy_ui_stepper_w(moy_ui_span_t value, int h, int fs);
 // A chip: a glyph, when it has one, REPLACES its label.
 int moy_ui_chip(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags, int interact,
                 const moy_ui_button_t *k, int phase);

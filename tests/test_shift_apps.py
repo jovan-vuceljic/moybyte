@@ -601,7 +601,6 @@ def test_a_storys_view_draws_its_slide_once_and_takes_its_steppers_press(tmp_pat
     press on its stepper still lands on it (its rect is where it stands,
     not the 0s of a pass that left it undrawn): every frame holds to a
     whole repaint's bytes, and the press turns the page on both."""
-    from runtime import story_render as R
     p = Pair(tmp_path, "storybook", bufs)
     for ws in (p.a, p.b):
         sb = _app(ws, "storybook")
@@ -613,8 +612,8 @@ def test_a_storys_view_draws_its_slide_once_and_takes_its_steppers_press(tmp_pat
     sb = _app(p.a, "storybook")
     x, y, w, h = sb.engine._x.rect("view")
     assert w > 0 and h > 0, "the view's rect after its undrawn frames: %r" % ((x, y, w, h),)
-    fs = sb.layout.fs
-    p.both("touch", x + w * 3 // 4, y + 8 * fs + R.size(fs, 4)[1] + 8 * fs)
+    x, y, w, h = sb.engine._x.rect("stepper#1")
+    p.both("touch", x + w * 3 // 4, y + h // 2)
     p.frame()
     p.both("touch_up")
     for _ in range(4):

@@ -1,6 +1,6 @@
 """Conformance fixture `kinds` (level 2), the Python half: the kinds the C
 engine draws beyond level 1 -- a seg over an enum worded by a label table, a
-progress bar, a menu and its item, a table with its columns, a lines view --
+progress bar, a stepper, a menu and its item, a table with its columns, a lines view --
 and an action a table's row fires. Its Lua half is kinds.moy/main.lua."""
 import uitree as ui
 
@@ -21,15 +21,21 @@ def bump():
     s.done += 1
 
 
+def less():
+    s.done -= 1
+
+
 ui.hook("opened", opened)
 ui.action("pick", "Pick", pick, takes="row")
 ui.action("bump", "More", bump)
+ui.action("less", "Less", less, when="done!=0", off="grey")
 
 
 def build():
     with ui.page("Kinds"):
         ui.seg("Mode", "mode", labels="MODES")
         ui.progress("done", max=5, label="Done")
+        ui.stepper("{done} done", "less", "bump")
         with ui.menu("Do"):
             ui.item("bump")
         with ui.table("items", cur="sel", cols=["Name", "Size"], on="pick"):

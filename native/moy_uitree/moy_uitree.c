@@ -896,7 +896,8 @@ const char *const uit_kind_names[UIT_KINDS] = {"", "page", "group", "label", "in
                                                "table", "col", "foot", "cards", "card", "picture",
                                                "popover", "tools", "row", "status", "text_editor",
                                                "panes", "pane", "legacy", "slot", "panel", "lent",
-                                               "rule", "note", "grid", "bubble", "month", "toast"};
+                                               "rule", "note", "grid", "bubble", "month", "toast",
+                                               "stepper"};
 
 static const char *const TONES[] = {"ink", "dim", "value", "danger"};
 static const char *const BKINDS[] = {"normal", "primary", "tonal", "danger", "toggle", "bar"};   // moy_ui's, then its bar item
@@ -1387,6 +1388,19 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->btn |= BT_ALONE;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
+    if (kind == UIT_STEPPER && (!strcmp(name, "grow") || !strcmp(name, "tone"))) {
+        // a fill along a row (BT_GROW); its value's ink, ink or dim (`lit`)
+        if (name[0] == 'g') {
+            if (!strcmp(src, "True"))
+                N->btn |= BT_GROW;
+            return add_prop(e, node, name, src, repr, PK_LIT, 0);
+        }
+        int i = lit_index(src, TONES, 2);
+        if (i < 0)
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("stepper tone=%s: ink or dim", "stepper tone=%s"), src);
+        N->lit = (uint8_t)i;
+        return add_prop(e, node, name, src, repr, PK_LIT, i);
+    }
     if (!strcmp(name, "grow") && kind == UIT_BUTTON) {
         // a fill along a row (BT_GROW): a bar item's label cut at its cell's end
         if (!strcmp(src, "True"))
@@ -1531,7 +1545,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
                                  kind == UIT_FIELD || kind == UIT_TABLE || kind == UIT_TABS || kind == UIT_BUBBLE)) ||
         (!strcmp(name, "changed") && kind == UIT_FIELD) || (!strcmp(name, "cut") && kind == UIT_BUBBLE) ||
         (!strcmp(name, "close") && (kind == UIT_POPOVER || kind == UIT_ROW || kind == UIT_GROUP)) ||
-        (kind == UIT_MONTH && (!strcmp(name, "prev") || !strcmp(name, "next")))) {
+        ((kind == UIT_MONTH || kind == UIT_STEPPER) && (!strcmp(name, "prev") || !strcmp(name, "next")))) {
         // on= (and close=, a month's prev=) in `on`; changed= (cut=, next=) in `changed`
         for (int a = 0; a < e->nacts; a++)
             if (!strcmp(uit_str(e, e->acts[a].name), src)) {

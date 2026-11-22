@@ -2023,6 +2023,7 @@ SCHEMA = {
                    max="lit", lines="lit", on="action1", cut="action1"),
     "month": dict(_C, year="int", month="int", today="int", prev="action0", next="action0"),
     "toast": dict(_C, text="text", icon="text"),
+    "stepper": dict(_C, value="text", prev="action0", next="action0", tone="lit", grow="lit", focus="cond"),
     "info": dict(_C, label="text", value="text", icon="text", signal="int", tag="text", tone="text"),
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond", tag="text",
                  tone="text", swatch="text"),
@@ -2622,6 +2623,17 @@ def month(**p):
     the day marked (0 none); on the desk and under touch its head's
     chevrons fire `prev` and `next`. Not a stop."""
     return _node("month", None, p, _caller())
+
+
+def stepper(value, prev, next, **p):
+    """A value between two chevrons (§7.3), "‹ 2 / 5 ›": `value` a
+    template, the back chevron firing action `prev` and the forward one
+    `next`, each greyed while its action is off (its when=). Focused, left
+    and right step it and activation steps forward; a tap steps the half it
+    lands in. `tone="dim"` draws the value dim. Stacked on a page or in a
+    row it is as wide as its chevrons and value, `grow=True` a fill whose
+    chevrons stand at its ends."""
+    return _node("stepper", None, dict(p, value=value, prev=prev, next=next), _caller())
 
 
 def cards(model_name, **p):
@@ -3429,7 +3441,7 @@ def _collecting(fn, returns_node):
 NODE_CALLS = ("page", "group", "label", "info", "link", "button", "item", "card", "toggle", "slider",
               "field", "seg", "table", "col", "rows", "cards", "picture", "progress", "empty", "dialog",
               "popover", "menu", "split", "grid", "panel", "canvas", "foot", "scroll", "rule", "note",
-              "bubble", "month", "toast", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
+              "bubble", "month", "toast", "stepper", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
               "legacy")
 DECL_CALLS = ("action", "hook", "labels", "work", "derive", "app")
 COMMAND_CALLS = ("push", "pop", "focus", "after", "post")

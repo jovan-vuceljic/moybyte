@@ -985,6 +985,15 @@ int moy_ui_api_toggle(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
                       const moy_ui_over_t *o);
 int32_t moy_ui_api_slider(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label,
                           int32_t v, int32_t lo, int32_t hi, const moy_ui_over_t *o);
+// A stepper (moy_ui_stepper): `value` between a back and a forward chevron,
+// each greyed where `can` lacks its bit (1 back, 2 forward), its words `ink`
+// (MOY_UI_TONE_INK or MOY_UI_TONE_DIM). Stacked on a page it stands its
+// natural width centred on its row; ui.at's rect is its own, the chevrons at
+// its ends. Left and right are its own while focused, activation steps
+// forward and a tap steps the half it lands in. Answers -1 or 1 the frame it
+// steps a way `can` allows, else 0; its box (x, y, w, h) in `box`.
+int moy_ui_api_stepper(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t value, int can,
+                       int tone, const moy_ui_over_t *o, int32_t box[4]);
 // `items` NUL-separated in `len` bytes; `cur` from 0, -1 none. Answers the new cur.
 int32_t moy_ui_api_list(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label,
                         const uint8_t *items, size_t len, int32_t cur, const moy_ui_over_t *o);

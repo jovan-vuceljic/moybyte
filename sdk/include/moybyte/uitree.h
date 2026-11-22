@@ -565,6 +565,17 @@ static inline int32_t ut_toast(const char *text) {
     return n;
 }
 
+// A stepper: `value` (a template) between two chevrons, the back one firing
+// action `prev` and the forward one `next`, each greyed while its action is
+// off; left and right step it while focused.
+static inline int32_t ut_stepper(const char *value, const char *prev, const char *next) {
+    int32_t n = ut_node(UT_STEPPER, NULL);
+    ut_prop_("value", value);
+    ut_prop_("prev", prev);
+    ut_prop_("next", next);
+    return n;
+}
+
 // A view of text state `state`'s lines.
 static inline int32_t ut_text_view(const char *state) {
     int32_t n = ut_node(UT_TEXT_VIEW, state);

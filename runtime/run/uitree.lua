@@ -1717,6 +1717,18 @@ function T.toast(text, o)
   return n
 end
 
+-- a value between two chevrons: the back one fires prev=, the forward one next=, each greyed
+-- while its action is off; tone= "dim", grow= a fill along a row
+function T.stepper(value, o)
+  local at = where()
+  local n = node("stepper", at)
+  n.a[1] = head_text("stepper", value, at, "value")
+  n.o = check_opts("stepper", o, at)
+  if n.o.prev then use_action(n.o.prev, "none", at, "ui.stepper's prev", true) end
+  if n.o.next then use_action(n.o.next, "none", at, "ui.stepper's next", true) end
+  return n
+end
+
 local function row_hands() return ROWCTX and "row" or "none" end
 
 function T.bubble(text, o)

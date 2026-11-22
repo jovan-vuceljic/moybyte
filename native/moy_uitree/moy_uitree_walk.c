@@ -88,7 +88,7 @@ static int is_stop(int kind)
 {
     return kind == UIT_LINK || kind == UIT_BUTTON || kind == UIT_TOGGLE || kind == UIT_SEG ||
            kind == UIT_SLIDER || kind == UIT_FIELD || kind == UIT_ITEM || kind == UIT_TABS ||
-           kind == UIT_CARD || kind == UIT_BUBBLE;
+           kind == UIT_CARD || kind == UIT_BUBBLE || kind == UIT_STEPPER;
 }
 
 // The case child of `k` ("case:VALUE") whose value is v, else its "case:_", else -1.
@@ -2498,6 +2498,10 @@ static int32_t flow_h(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, 
         moy_ui_api_at(c, x, y, w, 0x3fff);
         label_rows_m(e, c, s, g, model, row, &h, 3);
         return h;
+    case UIT_STEPPER:                   // a bar item's height, as its chevrons are
+        moy_ui_api_at(c, x, y, w, 0);
+        moy_ui_api_measure(c, s, MOY_UI_MEASURE_BUTTON, span_of("", 0), NULL, out);
+        return out[3] > 0 ? out[3] : ((e->flags & UIT_F_DESK) ? 30 : 20 * e->fs);
     case UIT_BUTTON:
         a = text(e, g, 0, model, row, &n);
         moy_ui_api_at(c, x, y, w, 0);
@@ -2577,12 +2581,12 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
     x += pad, room -= 2 * pad;
     for (int i = 0; i < n; i++) {
         const uit_node_t *G = NODE(kids[i]);
-        if (G->kind == UIT_BUTTON && (G->btn & BT_GROW))
+        if ((G->kind == UIT_BUTTON || G->kind == UIT_STEPPER) && (G->btn & BT_GROW))
             fill = i;
     }
     for (int i = 0; i < n && fill < 0; i++)
         if (NODE(kids[i])->kind != UIT_BUTTON && NODE(kids[i])->kind != UIT_PICTURE &&
-            NODE(kids[i])->kind != UIT_RULE)
+            NODE(kids[i])->kind != UIT_RULE && NODE(kids[i])->kind != UIT_STEPPER)
             fill = i;
     for (int i = 0; i < n; i++) {
         int g = kids[i], kind = NODE(g)->kind;
@@ -2595,6 +2599,8 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
             ws[i] = pic_side(e, g, model, row) + pic_margin(e);
         } else if (kind == UIT_RULE) {
             ws[i] = desk ? 1 : e->fs;
+        } else if (kind == UIT_STEPPER) {
+            ws[i] = natural(e, g, model, row, h_row(e));
         } else if (kind == UIT_LABEL) {
             int32_t lw = 0;
             moy_ui_api_at(c, x, y, room, 0x3fff);
@@ -3023,6 +3029,21 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
             wrote(e, k, was, now, b.p, N->on);
             uit_buf_free(&b);
         }
+        break;
+    }
+    case UIT_STEPPER: {
+        // value= between the chevrons, each greyed while its action (prev= in `on`, next= in
+        // `changed`) is off; a step fires it
+        a1 = text(e, k, 1, model, row, &n1);
+        int can = (N->on >= 0 && uit_act_can(e, N->on, model, row) ? 1 : 0) |
+                  (N->changed >= 0 && uit_act_can(e, N->changed, model, row) ? 2 : 0);
+        over_for(e, k, model, row, c, &o, id);
+        int32_t box[4];
+        int step = moy_ui_api_stepper(c, s, sspan(e, a1, n1), can, N->lit ? MOY_UI_TONE_DIM : MOY_UI_TONE_INK, &o,
+                                      box);
+        put_rect(e, k, box);            // where a press on it lands (`uit_rect`)
+        if (step)
+            fire(e, step < 0 ? N->on : N->changed, k, model, row, NULL);
         break;
     }
     case UIT_FIELD:
@@ -3906,6 +3927,12 @@ static int32_t natural(uit_t *e, int k, int model, int row, int32_t h)
         int mn, pad = moy_ui_metrics(MOY_UI_K_STATUS, &mn)[1] * e->fs;
         return text_px(role_font(MOY_UI_FONT_UI, &fi), p, n, e->fs) + 2 * pad + 2;
     }
+    if (N->kind == UIT_STEPPER) {
+        if (N->btn & BT_GROW)
+            return -1;                  // a growing stepper: a fill
+        at = text(e, k, 1, model, row, &n);
+        return moy_ui_stepper_w(sspan(e, at, n), h, e->fs);
+    }
     if (N->kind == UIT_GRID && N->t_value >= 0)
         return len_of(e, N->t_value, model, row, 0);     // a grid's w=
     if (N->kind == UIT_LABEL && (N->nbtn & LT_TEXT)) {
@@ -4085,8 +4112,8 @@ static void row_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         int32_t cell[4] = {x, r[1] + 2, kw, r[3] - 4};
         int gk = NODE(g)->kind;
         if (gk == UIT_STATUS || gk == UIT_CASE || gk == UIT_SWITCH || gk == UIT_PANEL || gk == UIT_CANVAS ||
-            gk == UIT_ROW || (gk == UIT_BUTTON && NODE(g)->lit == MOY_UI_BUTTON_BAR))
-            cell[1] = r[1], cell[3] = r[3];     // a band, a region, a bar item: the row's height
+            gk == UIT_ROW || gk == UIT_STEPPER || (gk == UIT_BUTTON && NODE(g)->lit == MOY_UI_BUTTON_BAR))
+            cell[1] = r[1], cell[3] = r[3];     // a band, a region, a bar item, a stepper: the row's height
         else if (gk == UIT_BUTTON && (NODE(g)->btn & BT_ALONE) && NODE(g)->t_value >= 0 && kw < cell[3])
             cell[1] += (cell[3] - kw) / 2, cell[3] = kw;    // an icon of its own w=: square, centred down
         if (km[i] != model)
@@ -5021,7 +5048,7 @@ static int pop_note(uit_t *e, int p)
     KIDS(p, g) {
         int kind = NODE(g)->kind;
         if (kind == UIT_FIELD || kind == UIT_ROWS || kind == UIT_LINK || kind == UIT_BUTTON || kind == UIT_MENU ||
-            kind == UIT_SLIDER || kind == UIT_TOGGLE || kind == UIT_SEG)
+            kind == UIT_SLIDER || kind == UIT_TOGGLE || kind == UIT_SEG || kind == UIT_STEPPER)
             return 0;
     }
     return 1;

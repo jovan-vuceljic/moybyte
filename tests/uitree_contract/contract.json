@@ -1544,6 +1544,33 @@
     }
    }
   },
+  "stepper": {
+   "head": "tpl",
+   "level": 2,
+   "section": "7.3",
+   "props": {
+    "value": {
+     "type": "tpl",
+     "level": 2
+    },
+    "prev": {
+     "type": "action",
+     "level": 2
+    },
+    "next": {
+     "type": "action",
+     "level": 2
+    },
+    "tone": {
+     "type": "word:ink,dim",
+     "level": 2
+    },
+    "focus": {
+     "type": "cond",
+     "level": 2
+    }
+   }
+  },
   "picture": {
    "head": "state",
    "level": 2,

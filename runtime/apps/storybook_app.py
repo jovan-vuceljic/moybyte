@@ -384,6 +384,11 @@ def fill(lay):
         _set(lay, "band", "View only" if page == "view" and not lay.desk else "")
     st = lay.story
     _set(lay, "view", "%s %d %d" % (st.name, st.gen, lay.cur) if page == "view" and st is not None else "")
+    if page == "view" and st is not None:
+        n = len(st.slides)
+        _set(lay, "can_prev", lay.cur > 0)
+        _set(lay, "can_next", lay.cur < n - 1)
+        _set(lay, "count_word", "%d / %d" % (lay.cur + 1, n))
     _set(lay, "menu", lay.menu == "story")
     _set(lay, "menu_title", title)
     _set(lay, "deleting", lay.asking == "delete")
@@ -681,9 +686,9 @@ ui.hook("moved", moved, takes="row")
 ui.hook("deck_moved", deck_moved, takes="row")
 ui.action("open", "Open", open_card, takes="row")
 ui.action("prev", "Previous slide", prev, keys=("role:left",), hint="Slides",
-          when="page=view", off="hide")
+          when="page=view && can_prev", off="hide")
 ui.action("next", "Next slide", next_, keys=("role:right",), hint="Slides",
-          when="page=view", off="hide")
+          when="page=view && can_next", off="hide")
 ui.action("present", "Present", present, keys=("p",), when="picked || page=view", off="grey")
 ui.action("open_story", "Open", open_story, when="picked", off="grey")
 ui.action("close_menu", "Close", close_menu)
@@ -696,51 +701,20 @@ ui.action("rename", "Rename", rename)
 
 
 def draw_view(cv, x, y, w, h):
-    """A story's view: its slide at a quarter on its shadow in an edge, the
-    slide's number between the arrows that step it (dim at either end), and
-    where stories are edited."""
+    """A story's view: its slide at a quarter on its shadow in an edge."""
     lay = _LAYER[0]
     st = lay.story if lay is not None else None
-    _VIEW_W[0] = w
     if st is None:
         return
     fs = max(1, int(getattr(cv, "font_scale", 1)))
     th = ui.colors()
     sw, sh = R.size(fs, 4)
-    sx, sy = x + (w - sw) // 2, y + 4 * fs
+    sx, sy = x + (w - sw) // 2, y + fs
     cv.shadow(sx, sy, sw, sh, 0, 1, 40, 6 * fs, 0, 2 * fs, (sx, sy, sw, sh, 0))
     lay.frames.place(cv, ("view", st.gen, lay.cur, sw, sh), st.slides[lay.cur], sx, sy, sw, sh)
     cv.rectb(sx - 1, sy - 1, sw + 2, sh + 2, th["edge"])
-    n = len(st.slides)
-    word = "%d / %d" % (lay.cur + 1, n)
-    ty = sy + sh + 4 * fs
-    tw = _v.text_size(word)[0]
-    mid = x + w // 2
-    for k, ax in ((0, mid - tw // 2 - 36 * fs), (1, mid + tw // 2 + 12 * fs)):
-        _v.at(ax, ty, 24 * fs, 16 * fs)
-        _v.icon("back" if k == 0 else "forward")
-        _v.label("", _DIM if (k == 0 and lay.cur == 0) or (k == 1 and lay.cur >= n - 1) else None)
-    _v.at(mid - tw // 2 - 4 * fs, ty, tw + 8 * fs, 16 * fs)
-    _v.label(word, _CENTRE)
-    _v.at(x, ty + 16 * fs, w, 14 * fs)
-    _v.label(NOTE, _DIM_CENTRE)
 
 
-def view_at(ev):
-    """A press on the stepper's line: the half it lands in steps."""
-    lay = _lay()
-    fs = lay.layout.fs
-    top = 4 * fs + R.size(fs, 4)[1] + 4 * fs
-    if ev.kind == "down" and top <= ev.y < top + 16 * fs and lay.story is not None:
-        lay._step_view(-1 if ev.x < _VIEW_W[0] // 2 else 1)
-
-
-_DIM = {"tone": "dim"}
-_CENTRE = {"align": "center"}
-_DIM_CENTRE = {"tone": "dim", "align": "center"}
-NOTE = "Edit stories on a desk board or the web"
-_VIEW_W = [0]                   # the view canvas's width, as last drawn
-ui.hook("view_at", view_at, takes="pointer")
 _LAYER = [None]                 # the layer whose story the view's canvas draws
 
 
@@ -759,7 +733,9 @@ def _stories():
 
 
 def _view():
-    ui.canvas("view", draw_view, h=190, pointer="view_at", ground="panel", reads=["view"])
+    ui.canvas("view", draw_view, h=152, ground="panel", reads=["view"])
+    ui.stepper("{count_word}", "prev", "next")
+    ui.label("Edit stories on a desk board or the web", tone="dim", align="center")
 
 
 # -- the desk's editor (runtime/apps/story_edit.py holds its state and verbs) ---------
@@ -1152,9 +1128,8 @@ def _slide():
             ui.rule()
             ui.button("undo", icon="undo", alone=True, kind="bar")
             ui.button("redo", icon="redo", alone=True, kind="bar")
-            ui.label("{count_word}", align="end")
-            ui.button("prev_slide", icon="back", alone=True, kind="bar")
-            ui.button("next_slide", icon="forward", alone=True, kind="bar")
+            ui.label("")
+            ui.stepper("{count_word}", "prev_slide", "next_slide")
             ui.button("present_ed", "primary", icon="play")
         with ui.split("row", sizes=(88, "1*", 244), gap="s", pad="0", rule=True):
             with ui.cards("thumbs", current="here", w=72, h=42):

@@ -3535,6 +3535,44 @@ int32_t moy_ui_api_slider(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
     return v;
 }
 
+int moy_ui_api_stepper(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t value, int can,
+                       int tone, const moy_ui_over_t *o, int32_t box[4]) {
+    o = mua_over(o);
+    int stacked, at = c->has_at;
+    moy_ui_box_t rb = mua_place(c, mua_row_h(c), &stacked), b = rb;
+    int w = moy_ui_stepper_w(value, b.h, c->fs);
+    if (!at && w < b.w) {
+        b.x = (int16_t)(b.x + (b.w - w) / 2);
+        b.w = (int16_t)w;
+    }
+    box[0] = b.x, box[1] = b.y, box[2] = b.w, box[3] = b.h;
+    if (o->disabled == 1) {
+        can = 0;
+    }
+    int st = can ? mua_stop(c, mua_id_of(c, o, value), b, STOP_KEEP_LR, mua_name_of(o, value)) : 0;
+    if (st < 0) {
+        st = 0;
+    }
+    int step = 0;
+    if ((st & MOY_UI_ST_FOCUS) && c->step_x) {
+        step = c->step_x > 0 ? 1 : -1;
+    } else if (st & MOY_UI_ST_ACTIVATED) {
+        step = c->tap_x != INT16_MIN && c->tap_x < b.x + b.w / 2 ? -1 : 1;
+    }
+    if (!(can & (step < 0 ? 1 : 2))) {
+        step = 0;
+    }
+    int ink = moy_ui_token(s->look, tone == MOY_UI_TONE_DIM ? MOY_UI_T_INK_DIM : MOY_UI_T_INK);
+    clip_t k;
+    mua_band_mark(c, rb, stacked, mua_mark_flags(st, o));
+    EACH_ROW(c, k, s, rb, stacked, c->page) {
+        mua_band(c, s, rb, stacked);
+        moy_ui_stepper(s, b, value, mua_mark_flags(st, o), can, ink, c->fs);
+        mua_clip_out(&k);
+    }
+    return step;
+}
+
 void moy_ui_api_group_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     mua_grid_end(c, s);
     mua_group_close(c, s);
