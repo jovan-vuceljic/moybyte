@@ -1207,6 +1207,10 @@ void moy_ui_api_tile_cast(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t
 // mark's box and out[9] 1 where it drew one: moy_ui_api_tile_end's.
 void moy_ui_api_tile(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4],
                      const int32_t clip[4], int card, int mark, int32_t out[10]);
+// The corner radius of a carousel tile `side` px across in a row whose tiles rest at `card`
+// px (moy_ui_api_tile's out[4] for a tile that wears no mark): the depth's card radius on
+// a tile larger than `card`, 7/10 of it on the others.
+int moy_ui_api_tile_radius(int side, int card);
 // A tile with no picture of its own: icon `icon` on a tinted tile in its picture's box
 // (moy_ui_card_blank; empty: the tile alone).
 void moy_ui_api_tile_blank(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t tile[10],
@@ -1215,13 +1219,13 @@ void moy_ui_api_tile_blank(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_
 void moy_ui_api_tile_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t tile[10],
                          const int32_t clip[4]);
 // The caption under a carousel's tiles (geometry `g`, moy_ui_api_carousel_geom's, band
-// `band`): `title` in the hero face at its scale, cut to the band less 8 px a side at the
-// font scale and centred; `sub`'s items (apart by tabs) in the ui face, centred, a dot
+// `band`), drawn inside `clip`: `title` in the hero face at its scale, cut to the band less
+// 8 px a side at the font scale and centred; `sub`'s items (apart by tabs) in the ui face, centred, a dot
 // between each two. In the theme's ink and dim ink, or both in colour index `ink` (-1: the
 // theme's), each over its shadow in colour index `shadow` a pixel right and down (-1: none).
 void moy_ui_api_carousel_caption(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t band[4],
-                                 const int32_t g[10], moy_ui_span_t title, moy_ui_span_t sub,
-                                 int ink, int shadow);
+                                 const int32_t clip[4], const int32_t g[10], moy_ui_span_t title,
+                                 moy_ui_span_t sub, int ink, int shadow);
 // The table drawn last, where it keeps its parts (o->keep): the next rect
 // of its view the frame draws (its floor) into out[0..3], 1, for an app
 // that puts its own ground back there before its parts draw; the parts

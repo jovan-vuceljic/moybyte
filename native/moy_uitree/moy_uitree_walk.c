@@ -1544,22 +1544,70 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     moy_ui_api_scroll(c, s, span_of("", 0), NULL);
 }
 
+// The ground a driven carousel's floor rect `q` takes back (`Carousel._fill_around_cards`): every
+// tile paints its square opaque, so the ground goes back only around them, and in the rows its
+// rounded corners span (the centre's as far as its focus mark reaches past them); the floor
+// rect whole with `all`. Tiles `P`, `np` of them, in the order of their left edges.
+typedef struct { int32_t i, r[4]; } carousel_part_t;
+static void carousel_ground(uit_t *e, int k, const int32_t q[4], const carousel_part_t *P, const int *by_x,
+                            int np, int near, int card, int all)
+{
+    uit_ground_fn put = e->ground_fn;
+    void *ud = e->ground_ud;
+    int32_t x0 = q[0], y0 = q[1], x1 = q[0] + q[2], y1 = q[1] + q[3], x = x0;
+    if (all) {
+        put(ud, k, UIT_GROUND_PUT, q[0], q[1], q[2], q[3]);
+        return;
+    }
+    int reach = moy_ui_mark_reach(MOY_UI_ITEM_CARD) + 1;
+    for (int j = 0; j < np; j++) {
+        const carousel_part_t *t = &P[by_x[j]];
+        int32_t cx0 = t->r[0] > x ? t->r[0] : x;
+        int32_t cx1 = t->r[0] + t->r[2] < x1 ? t->r[0] + t->r[2] : x1;
+        if (cx1 <= cx0)
+            continue;
+        if (cx0 > x)
+            put(ud, k, UIT_GROUND_PUT, x, y0, cx0 - x, y1 - y0);
+        int32_t ct = t->r[1] > y0 ? t->r[1] : y0, cb = t->r[1] + t->r[3] < y1 ? t->r[1] + t->r[3] : y1;
+        int32_t kr = moy_ui_api_tile_radius(t->r[2], card);
+        if (kr && t->i == near)
+            kr += reach;
+        int32_t half = (cb - ct) >> 1;
+        kr = kr < half ? kr : half;
+        if (kr > 0) {
+            ct += kr;
+            cb -= kr;
+        }
+        if (ct > y0)
+            put(ud, k, UIT_GROUND_PUT, cx0, y0, cx1 - cx0, (ct < y1 ? ct : y1) - y0);
+        if (cb < y1)
+            put(ud, k, UIT_GROUND_PUT, cx0, cb > y0 ? cb : y0, cx1 - cx0, y1 - (cb > y0 ? cb : y0));
+        x = cx1;
+    }
+    if (x < x1)
+        put(ud, k, UIT_GROUND_PUT, x, y0, x1 - x, y1 - y0);
+}
+
 // A cards list of the carousel look (`look="carousel"`, the handheld home's band,
 // runtime/home/home_carousel.py): from where the page's stack stands to its foot, across its
 // room, one row of tiles as a table of parts side by side that snaps (the toolkit's: the
 // keys, a drag and a fling, the glide, the settle); a tile's size a function of its distance
 // from the centre alone, the centre card's twice the others' (`Carousel._side`), each other
-// pushed out by its share of what the centre grew (`_rect_of`); every tile's shadow, then
-// the tiles smallest first, the centre's last and, at rest with the focus, lifted by the
-// theme's mark (`_paint_hh`); the centre card's label and sub line under them
-// (`_draw_caption`). Opening the centre card fires its card's action; cur= follows the row
-// the band steps to.
-enum { CAROUSEL_PARTS = 24 };
+// pushed out by its share of what the centre grew (`_rect_of`); in each rect of the floor the
+// frame draws, every tile's shadow, then the tiles smallest first, the centre's last and, at
+// rest with the focus, lifted by the theme's mark (`_paint_hh`), and the centre card's label
+// and sub line under them (`_draw_caption`). Opening the centre card fires its card's action;
+// cur= follows the row the band steps to. A host that drives the band (uit_drive) moves it
+// itself and keeps its tiles: the floor is what the buffer this frame paints lacks, its ground
+// the host's (uit_on_ground).
+enum { CAROUSEL_PARTS = 24, CAROUSEL_FLOOR = 8 };
 static void draw_carousel(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
 {
     const uit_node_t *N = NODE(k);
     int m = N->slot, n = e->slots[m].nrows, cd = carousel_card(e, k);
     const char *key = uit_str(e, N->key);
+    const int32_t *dw = e->drive;
+    int drv = e->driven, keep = drv && dw[2] >= 0, fl = drv ? dw[8] : 0;
     uit_after_removal(e, k);
     int32_t at[5];
     moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, at);
@@ -1576,6 +1624,12 @@ static void draw_carousel(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
         int r = uit_row_find(e, m, C->s ? C->s : "", C->sn);
         if (r >= 0)
             cur = r;
+    }
+    if (drv && n) {
+        // the host's scroll: the row nearest the centre is current
+        int32_t off = dw[0] < (n - 1) * pitch ? dw[0] : (n - 1) * pitch;
+        cur = pitch > 0 ? (int)((off + pitch / 2) / pitch) : 0;
+        cur = cur < 0 ? 0 : cur > n - 1 ? n - 1 : cur;
     }
     id_put(e, k, m, n ? cur : -1, key);
     // its rows' cells, each its row's key: made again only where its model moved
@@ -1600,19 +1654,53 @@ static void draw_carousel(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
     moy_ui_over_put(&o, MOY_UI_OV_SPILL, &spill);
     moy_ui_over_put(&o, MOY_UI_OV_MARK, &zero);         // the tiles wear the focus mark
     moy_ui_over_put(&o, MOY_UI_OV_CURRENT, &zero);
+    if (drv) {
+        int32_t whole = dw[3] == 1, over[4] = {dw[4], dw[5], dw[6], dw[7]};
+        moy_ui_over_put(&o, MOY_UI_OV_OFFSET, &dw[0]);
+        moy_ui_over_put(&o, MOY_UI_OV_KEEP, &dw[2]);
+        moy_ui_over_put(&o, MOY_UI_OV_WHOLE, &whole);
+        if (over[2] > 0)
+            moy_ui_over_put(&o, MOY_UI_OV_OVER, over);
+    }
     moy_ui_api_at(c, band[0], band[1], band[2], band[3]);
     int32_t out[2] = {cur, 0};
     moy_ui_api_table(c, s, span_of("", 0), (const uint8_t *)"", 1, (const uint8_t *)B->p, n ? B->n : 0, cur,
                      &o, out);
     int32_t ts[3];
     moy_ui_api_table_state(c, ts);
-    int focused = ts[0], moving = ts[2];
+    int focused = drv ? (fl & UIT_DRIVE_MARK) != 0 : ts[0], moving = drv ? dw[1] != 0 : ts[2];
     // the card nearest the centre at this scroll
     int32_t off = ts[1] < (n - 1) * pitch ? ts[1] : (n - 1) * pitch;
     int near = n ? (int)((off + pitch / 2) / pitch) : 0;
     near = near < 0 ? 0 : near > n - 1 ? n - 1 : near;
-    // the tiles the frame draws, each its row, its rect and its clip, smallest first
-    struct { int32_t i, r[4], q[4]; } P[CAROUSEL_PARTS];
+    // the floor: the rects the frame draws (where the buffers hold the band kept under the
+    // host's key, what this frame's lacks, first copied out of the last frame's where it holds
+    // them); a band that keeps nothing, its view whole
+    int32_t F[CAROUSEL_FLOOR][4], q[4];
+    int nf = 0;
+    uit_ground_fn gf = e->ground_fn;
+    if (keep && gf && !(fl & UIT_DRIVE_NOTE)) {
+        while (moy_ui_api_table_copy(c, q, 0) > 0) {
+            if (!gf(e->ground_ud, k, UIT_GROUND_COPY, q[0], q[1], q[2], q[3])) {
+                moy_ui_api_table_copy(c, q, 1);
+                break;
+            }
+        }
+    }
+    int32_t end;
+    while ((end = moy_ui_api_table_floor(c, q)) > 0) {
+        if (nf < CAROUSEL_FLOOR)
+            memcpy(F[nf++], q, sizeof q);
+        if (drv && gf)
+            gf(e->ground_ud, k, UIT_GROUND_FLOOR, q[0], q[1], q[2], q[3]);
+    }
+    if (drv && gf)
+        gf(e->ground_ud, k, UIT_GROUND_END, end, 0, 0, 0);
+    if (fl & UIT_DRIVE_NOTE)
+        nf = 0;
+    // the tiles the floor meets, each its row and its rect, smallest first
+    carousel_part_t P[CAROUSEL_PARTS];
+    int by_x[CAROUSEL_PARTS];
     int np = 0;
     int32_t pr[8], i, mid = band[0] + band[2] / 2;
     while ((i = moy_ui_api_table_part(c, s, pr)) >= 0) {
@@ -1636,37 +1724,53 @@ static void draw_carousel(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
         P[at_].r[1] = cy - t / 2;
         P[at_].r[2] = t;
         P[at_].r[3] = t;
-        memcpy(P[at_].q, pr + 4, sizeof P[at_].q);
         np++;
     }
-    for (int j = 0; j < np; j++)
-        moy_ui_api_tile_cast(c, s, P[j].r, P[j].q, P[j].i == near);
-    for (int j = 0; j < np; j++) {
-        int r = P[j].i, centre = r == near, rest = centre && !moving;
-        int32_t tile[10];
-        moy_ui_api_tile(c, s, P[j].r, P[j].q, card, rest && focused, tile);
-        uint32_t pa = 0, pn = 0, mark = e->scratch.n;
-        int held = cd >= 0 && pic_held(e, cd, m, r, &pa, &pn);
-        if (!held) {
-            uint32_t in = 0, ia = cd >= 0 && NODE(cd)->t_icon >= 0 ? uit_tmpl_render(e, NODE(cd)->t_icon, m, r, &in) : 0;
-            moy_ui_api_tile_blank(c, s, tile, P[j].q, sspan(e, ia, in));
+    if ((fl & UIT_DRIVE_GROUND) && gf) {
+        for (int j = 0; j < np; j++) {
+            int a = j;
+            while (a > 0 && P[by_x[a - 1]].r[0] > P[j].r[0]) {
+                by_x[a] = by_x[a - 1];
+                a--;
+            }
+            by_x[a] = j;
         }
-        if (pn) {
-            // the front end's picture, drawn where it holds it, else owed: its tile, its clip,
-            // what it is (2 a carousel's, 4 the centre's, 8 at rest, 1 lifted), its corners
-            // and the size it decodes at
-            int32_t pq[12] = {tile[0], tile[1], tile[2], tile[3], P[j].q[0], P[j].q[1], P[j].q[2], P[j].q[3],
-                              2 | (centre ? 4 : 0) | (rest ? 8 : 0) | tile[9], tile[4], big, big};
-            e->pic_fn(e->pic_ud, cd, e->scratch.p + pa, pn, pq);
-        }
-        e->scratch.n = mark;
-        moy_ui_api_tile_end(c, s, tile, P[j].q);
     }
-    if (n && cd >= 0 && np > 0) {            // (a frame that draws the band draws its centre)
-        uint32_t mark = e->scratch.n, n1, n2;
-        uint32_t a1 = text(e, cd, 0, m, near, &n1), a2 = text(e, cd, 1, m, near, &n2);
-        moy_ui_api_carousel_caption(c, s, band, g, sspan(e, a1, n1), sspan(e, a2, n2), -1, -1);
-        e->scratch.n = mark;
+    for (int f = 0; f < nf; f++) {
+        // each rect of the floor: its ground, the tiles' shadows, the tiles, the caption
+        int32_t *Q = F[f];
+        if ((fl & UIT_DRIVE_GROUND) && gf)
+            carousel_ground(e, k, Q, P, by_x, np, near, card, (fl & UIT_DRIVE_ALL) != 0);
+        for (int j = 0; j < np; j++)
+            moy_ui_api_tile_cast(c, s, P[j].r, Q, P[j].i == near);
+        for (int j = 0; j < np; j++) {
+            int r = P[j].i, centre = r == near, rest = centre && !moving;
+            int32_t tile[10];
+            moy_ui_api_tile(c, s, P[j].r, Q, card, rest && focused, tile);
+            uint32_t pa = 0, pn = 0, mark = e->scratch.n;
+            int held = cd >= 0 && pic_held(e, cd, m, r, &pa, &pn);
+            if (!held) {
+                uint32_t in = 0, ia = cd >= 0 && NODE(cd)->t_icon >= 0 ? uit_tmpl_render(e, NODE(cd)->t_icon, m, r, &in) : 0;
+                moy_ui_api_tile_blank(c, s, tile, Q, sspan(e, ia, in));
+            }
+            if (pn) {
+                // the front end's picture, drawn where it holds it, else owed: its tile, its clip,
+                // what it is (2 a carousel's, 4 the centre's, 8 at rest, 1 lifted), its corners
+                // and the size it decodes at
+                int32_t pq[12] = {tile[0], tile[1], tile[2], tile[3], Q[0], Q[1], Q[2], Q[3],
+                                  2 | (centre ? 4 : 0) | (rest ? 8 : 0) | tile[9], tile[4], big, big};
+                e->pic_fn(e->pic_ud, cd, e->scratch.p + pa, pn, pq);
+            }
+            e->scratch.n = mark;
+            moy_ui_api_tile_end(c, s, tile, Q);
+        }
+        if (n && cd >= 0) {
+            uint32_t mark = e->scratch.n, n1, n2;
+            uint32_t a1 = text(e, cd, 0, m, near, &n1), a2 = text(e, cd, 1, m, near, &n2);
+            moy_ui_api_carousel_caption(c, s, band, Q, g, sspan(e, a1, n1), sspan(e, a2, n2),
+                                        drv ? dw[9] : -1, drv ? dw[10] : -1);
+            e->scratch.n = mark;
+        }
     }
     int got = out[0];
     if (got < 0 || got >= n)

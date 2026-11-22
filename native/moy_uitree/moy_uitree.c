@@ -1900,6 +1900,19 @@ void uit_pics_moved(uit_t *e)
     e->edits++;
 }
 
+void uit_drive(uit_t *e, const int32_t *w, int n)
+{
+    e->driven = n > 0;
+    for (int i = 0; i < UIT_DRIVE_WORDS; i++)
+        e->drive[i] = i < n ? w[i] : -1;
+}
+
+void uit_on_ground(uit_t *e, uit_ground_fn fn, void *ud)
+{
+    e->ground_fn = fn;
+    e->ground_ud = ud;
+}
+
 void uit_open(uit_t *e)
 {
     e->still_ok = 0;

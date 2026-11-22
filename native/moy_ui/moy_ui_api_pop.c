@@ -1374,6 +1374,10 @@ static int tile_r(int side, int card) {
     return side > card ? r : r * 7 / 10;
 }
 
+int moy_ui_api_tile_radius(int side, int card) {
+    return tile_r(side, card);
+}
+
 void moy_ui_api_tile_cast(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4],
                           const int32_t clip[4], int centre) {
     (void)c;
@@ -1475,11 +1479,11 @@ static void carousel_caption(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int bx, in
                              moy_ui_span_t title, moy_ui_span_t sub, int ink, int shadow, int fs);
 
 void moy_ui_api_carousel_caption(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t band[4],
-                                 const int32_t g[10], moy_ui_span_t title, moy_ui_span_t sub,
-                                 int ink, int shadow) {
+                                 const int32_t clip[4], const int32_t g[10], moy_ui_span_t title,
+                                 moy_ui_span_t sub, int ink, int shadow) {
     int fs = c->fs, bx = band[0], bw = band[2];
     clip_t k;
-    moy_ui_box_t bb = {(int16_t)band[0], (int16_t)band[1], (int16_t)band[2], (int16_t)band[3]};
+    moy_ui_box_t bb = {(int16_t)clip[0], (int16_t)clip[1], (int16_t)clip[2], (int16_t)clip[3]};
     if (mua_clip_in(&k, s, bb)) {
         carousel_caption(c, s, bx, bw, g, title, sub, ink, shadow, fs);
     }

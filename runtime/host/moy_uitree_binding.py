@@ -53,6 +53,8 @@ _SIGS = (
     ("uit_on_draw", [_P, _P, _P], None),
     ("uit_on_pic", [_P, _P, _P], None),
     ("uit_pics_moved", [_P], None),
+    ("uit_drive", [_P, _P, _I], None),
+    ("uit_on_ground", [_P, _P, _P], None),
     ("uit_build_end", [_P], _I),
     ("uit_open", [_P], None),
     ("uit_close", [_P], None),
@@ -167,6 +169,7 @@ def peak_reset():
 
 _DRAW = c.CFUNCTYPE(None, c.c_void_p, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int)
 _PIC = c.CFUNCTYPE(c.c_int, c.c_void_p, c.c_int, c.POINTER(c.c_char), c.c_size_t, c.POINTER(c.c_int32))
+_GROUND = c.CFUNCTYPE(c.c_int, c.c_void_p, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int)
 
 
 class Engine:
@@ -190,6 +193,7 @@ class Engine:
         self._pn = None
         self._draw = self._cb = self._raised = None
         self._pic = self._pcb = None
+        self._ground = self._gcb = None
 
     def __del__(self):
         e, self._e = getattr(self, "_e", None), None
@@ -411,6 +415,33 @@ class Engine:
 
     def pics_moved(self):
         self._L.uit_pics_moved(self._e)
+
+    def drive(self, words):
+        """The words the carousels are drawn under (uit_drive): an
+        array('i'), copied; None, each carousel its own."""
+        if words is None:
+            self._L.uit_drive(self._e, None, 0)
+            return
+        buf = (c.c_int32 * len(words)).from_buffer(words)
+        self._L.uit_drive(self._e, c.addressof(buf), len(words))
+        del buf
+
+    def on_ground(self, fn):
+        """The ground under a driven carousel, `fn(node, kind, x, y, w, h)`
+        (uit_on_ground), its answer truthy where a copy was made; what it
+        raises is raised by the frame's call."""
+        self._ground = fn
+        self._gcb = None if fn is None else _GROUND(self._ground_tramp)
+        self._L.uit_on_ground(self._e, self._gcb, None)
+
+    def _ground_tramp(self, _ud, node, kind, x, y, w, h):
+        if self._raised is not None:
+            return 0
+        try:
+            return 1 if self._ground(node, kind, x, y, w, h) else 0
+        except BaseException as e:      # noqa: B036 -- ctypes would print and drop it
+            self._raised = e
+            return 0
 
     def next(self):
         """The next event: (kind, a, b, c, text), or None."""

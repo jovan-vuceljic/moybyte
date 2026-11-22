@@ -314,6 +314,29 @@ void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud);
 typedef int (*uit_pic_fn)(void *ud, int node, const char *pic, size_t n, const int32_t *r);
 void uit_on_pic(uit_t *e, uit_pic_fn fn, void *ud);
 void uit_pics_moved(uit_t *e);
+// A host that drives a carousel's band itself (the console's home, runtime/home/home_carousel.py)
+// hands the words the next frames' carousels are drawn under, until it hands others (n 0: none,
+// each carousel its own): w[0] the band's scroll in px (its own motion, its keys and its pointer
+// the host's), w[1] 1 while it moves (no tile rests), w[2] the key its tiles are kept under
+// besides their rows (the table's o.keep: the buffers that hold the band under it draw only the
+// floor they lack; -1 nothing kept), w[3] 1 to draw it whole, w[4..7] the rect drawn over it
+// after its pass (o.over; w 0 none), w[8] the UIT_DRIVE_* flags, w[9] the caption's ink and
+// w[10] its shadow's (colour indices; -1 the theme's ink, no shadow).
+enum { UIT_DRIVE_WORDS = 11 };
+#define UIT_DRIVE_MARK 1            // the centre tile at rest wears the focus mark
+#define UIT_DRIVE_NOTE 2            // the band lies there by other means: recorded, nothing drawn
+#define UIT_DRIVE_GROUND 4          // each floor rect's ground goes back around the tiles (uit_on_ground)
+#define UIT_DRIVE_ALL 8             // ...over the floor rect whole, the tiles' squares too
+void uit_drive(uit_t *e, const int32_t *w, int n);
+// The ground under a driven carousel (uit_drive), the front end's: fn(ud, node, kind, x, y, w,
+// h) with kind UIT_GROUND_FLOOR a rect of the floor the frame draws (moy_ui_api_table_floor's),
+// UIT_GROUND_PUT a rect the ground goes back in before the tiles draw (w[8]'s GROUND),
+// UIT_GROUND_COPY a rect to copy out of the buffer the last frame painted, answering 1 where it
+// did (moy_ui_api_table_copy's: the floor then passes it by), and UIT_GROUND_END the floor's
+// end in x (0, -1 or -2, moy_ui_api_table_floor's) after its last rect.
+enum { UIT_GROUND_FLOOR = 0, UIT_GROUND_PUT, UIT_GROUND_COPY, UIT_GROUND_END };
+typedef int (*uit_ground_fn)(void *ud, int node, int kind, int x, int y, int w, int h);
+void uit_on_ground(uit_t *e, uit_ground_fn fn, void *ud);
 // The next event: its kind; its words into ev[0..2], its text (the source)
 // into buf.
 int uit_next(uit_t *e, int32_t ev[3], char *buf, size_t cap);

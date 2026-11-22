@@ -22,6 +22,7 @@ typedef struct {
     uit_t *e;
     mp_obj_t draw;              // on_draw's function: (node, x, y, w, h)
     mp_obj_t pic;               // on_pic's function: (node, pic, rect or None)
+    mp_obj_t ground;            // on_ground's function: (node, kind, x, y, w, h)
     mp_obj_t raised;            // what it raised inside a frame, raised again after it
     // what on_pic is handed, made once: the tile's tuple, written in place each call, and
     // the picture names handed last, most recent first (a name again is the same str), so
@@ -68,7 +69,7 @@ static mp_obj_t eng_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_
     (void)args;
     eng_obj_t *o = mp_obj_malloc_with_finaliser(eng_obj_t, type);
     o->e = uit_new();
-    o->draw = o->pic = o->raised = o->pic_r = MP_OBJ_NULL;
+    o->draw = o->pic = o->ground = o->raised = o->pic_r = MP_OBJ_NULL;
     for (int i = 0; i < PIC_NAMES; i++)
         o->pic_s[i] = MP_OBJ_NULL;
     if (o->e == NULL)
@@ -81,7 +82,7 @@ static mp_obj_t eng_del(mp_obj_t self)
     eng_obj_t *o = MP_OBJ_TO_PTR(self);
     uit_free(o->e);
     o->e = NULL;
-    o->draw = o->pic = o->raised = o->pic_r = MP_OBJ_NULL;
+    o->draw = o->pic = o->ground = o->raised = o->pic_r = MP_OBJ_NULL;
     for (int i = 0; i < PIC_NAMES; i++)
         o->pic_s[i] = MP_OBJ_NULL;
     return mp_const_none;
@@ -628,6 +629,52 @@ static mp_obj_t eng_pics_moved(mp_obj_t self)
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_pics_moved_obj, eng_pics_moved);
+
+// drive(words) (uit_drive): an array of int32 words, or None (the carousels their own). The words
+// are copied: a frame reads them, never the array.
+static mp_obj_t eng_drive(mp_obj_t self, mp_obj_t words)
+{
+    if (words == mp_const_none) {
+        uit_drive(eng(self), NULL, 0);
+        return mp_const_none;
+    }
+    mp_buffer_info_t bi;
+    mp_get_buffer_raise(words, &bi, MP_BUFFER_READ);
+    if (bi.typecode != 'i' && bi.typecode != 'l')
+        mp_raise_TypeError(MP_ERROR_TEXT("moy_uitree: drive takes array('i')"));
+    uit_drive(eng(self), bi.buf, (int)(bi.len / sizeof(int32_t)));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_drive_obj, eng_drive);
+
+// The ground under a driven carousel (uit_on_ground): fn(node, kind, x, y, w, h), its answer
+// truthy where a copy was made; what it raises is kept as a canvas's draw's is.
+static int ground_tramp(void *ud, int node, int kind, int x, int y, int w, int h)
+{
+    eng_obj_t *o = ud;
+    if (o->ground == MP_OBJ_NULL || o->raised != MP_OBJ_NULL)
+        return 0;
+    mp_obj_t args[6] = {MP_OBJ_NEW_SMALL_INT(node), MP_OBJ_NEW_SMALL_INT(kind), MP_OBJ_NEW_SMALL_INT(x),
+                        MP_OBJ_NEW_SMALL_INT(y), MP_OBJ_NEW_SMALL_INT(w), MP_OBJ_NEW_SMALL_INT(h)};
+    int r = 0;
+    nlr_buf_t nlr;
+    if (nlr_push(&nlr) == 0) {
+        r = mp_obj_is_true(mp_call_function_n_kw(o->ground, 6, 0, args));
+        nlr_pop();
+    } else {
+        o->raised = MP_OBJ_FROM_PTR(nlr.ret_val);
+    }
+    return r;
+}
+
+static mp_obj_t eng_on_ground(mp_obj_t self, mp_obj_t fn)
+{
+    eng_obj_t *o = MP_OBJ_TO_PTR(self);
+    o->ground = fn == mp_const_none ? MP_OBJ_NULL : fn;
+    uit_on_ground(eng(self), o->ground == MP_OBJ_NULL ? NULL : ground_tramp, o);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_on_ground_obj, eng_on_ground);
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_frame_obj, 11, 11, eng_frame);
 
 // still(ctx, x, y, w, h, flags, fs, input) -> whether the frame drawn last is what a frame now draws
@@ -879,6 +926,8 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_on_draw), MP_ROM_PTR(&eng_on_draw_obj) },
     { MP_ROM_QSTR(MP_QSTR_on_pic), MP_ROM_PTR(&eng_on_pic_obj) },
     { MP_ROM_QSTR(MP_QSTR_pics_moved), MP_ROM_PTR(&eng_pics_moved_obj) },
+    { MP_ROM_QSTR(MP_QSTR_drive), MP_ROM_PTR(&eng_drive_obj) },
+    { MP_ROM_QSTR(MP_QSTR_on_ground), MP_ROM_PTR(&eng_on_ground_obj) },
     { MP_ROM_QSTR(MP_QSTR_build_end), MP_ROM_PTR(&eng_build_end_obj) },
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&eng_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&eng_close_obj) },

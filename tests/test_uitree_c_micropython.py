@@ -182,10 +182,38 @@ def carousel(flow, cv, th, box):
         else:
             rest.append(a)
     ui_draw.frame_dt(0)
-    got = [moving, rest, eng.s.pick]
+    got = [moving, rest, eng.s.pick, driven(eng, host, cv, th, box)]
     eng = mod = None
     gc.collect()
     return got
+
+
+def driven(eng, host, cv, th, box):
+    """The carousel driven by its host (moy_uitree.h's uit_drive): its
+    ground's calls, by kind, on a frame that draws it whole, and what the
+    next frame allocates. (What a kept band leaves undrawn is the host's
+    check, tests/test_uitree_carousel.py: this harness presents no frame.)"""
+    import gc
+    from array import array
+    kinds = []
+
+    def ground(node, kind, x, y, w, h):
+        kinds.append(kind)
+        return False
+    eng._x.on_ground(ground)
+    w = array("i", [0, 0, 7, 1, 0, 0, 0, 0, 1 | 4, -1, -1])
+    eng.drive(w)
+    _frame(eng, host, cv, th, box)
+    first = sorted(set(kinds))
+    del kinds[:]
+    w[3] = 0
+    eng.drive(w)
+    gc.collect()
+    a0 = gc.mem_alloc()
+    _frame(eng, host, cv, th, box)
+    a = gc.mem_alloc() - a0
+    eng.drive(None)
+    return [first, a]
 
 
 def conf(loop):
@@ -550,9 +578,14 @@ def test_a_carousel_glides_and_rests_on_the_boards_micropython(result):
     harness paints every one. Each frame's allocation is printed for the
     record (`-s`)."""
     info, _text = result
-    moving, rest, pick = info["carousel"]
-    print("carousel moving", json.dumps(moving), "rest", json.dumps(rest[-10:]))
+    moving, rest, pick, (whole, next_alloc) = info["carousel"]
+    print("carousel moving", json.dumps(moving), "rest", json.dumps(rest[-10:]),
+          "driven", json.dumps(next_alloc))
     assert pick == "game 1", pick
+    # driven by its host: a whole frame notes its floor, puts the ground back and
+    # ends it, and the next allocates no more than a frame at rest
+    assert whole == [0, 1, 3], whole
+    assert next_alloc <= max(rest), (next_alloc, rest)
     assert len(moving) >= 3 and rest, (moving, rest)
     assert max(moving + rest) <= FA.HOME_BAND_FRAME, (moving, rest)
 

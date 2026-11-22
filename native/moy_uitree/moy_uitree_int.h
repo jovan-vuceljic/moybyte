@@ -361,6 +361,10 @@ struct uit {
     void *draw_ud;
     uit_pic_fn pic_fn;          // a card's or a picture's image, the front end's
     void *pic_ud;
+    uit_ground_fn ground_fn;    // a driven carousel's ground, the front end's
+    void *ground_ud;
+    int32_t drive[UIT_DRIVE_WORDS];     // the words a host drives its carousels by (uit_drive)
+    uint8_t driven;
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
     uint8_t in_cell;            // drawing a split's column: a button takes its natural width
     uint8_t tv_stop, tv_stop_now;   // a text view that runs on drew last frame / this frame (the band's PgUp PgDn)

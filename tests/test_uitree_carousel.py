@@ -138,3 +138,48 @@ def test_enter_plays_the_centre_card(live):
     drv.press("a")
     frames(3)
     assert e.s.played == "game 1", e.s.played
+
+
+def test_a_driven_band_is_drawn_at_its_hosts_scroll_over_its_hosts_ground(live):
+    """A host that drives the band (moy_uitree.h's uit_drive) moves it
+    itself: the tiles stand at its scroll, the floor's rects and its end are
+    handed to its ground (uit_on_ground) with the ground around the tiles,
+    and a frame whose buffer holds the band under the same key draws
+    nothing of it."""
+    from array import array
+    ws, drv, e, host, tiles, frames = live
+    _settle(live)
+    calls = []
+
+    def ground(node, kind, x, y, w, h):
+        calls.append((kind, x, y, w, h))
+        return False
+    e._x.on_ground(ground)
+    w = array("i", [0, 0, 7, 1, 0, 0, 0, 0, 1 | 4, -1, -1])
+    e.drive(w)
+    ws.mark_dirty()
+    frames(1)
+    sizes = _sizes(tiles)
+    centre = [x for c, x, _s in sizes if c]
+    assert centre and not [x for c, x, _s in sizes if not c and x < centre[0]], sizes
+    kinds = [k for k, *_ in calls]
+    assert kinds[:2] == [0, 3] and kinds[2:] and set(kinds[2:]) == {1}, kinds
+    big = [s_ for c, _x, s_ in sizes if c][0]
+    nx, card = [(x, s_) for c, x, s_ in sizes if not c][0]
+    pitch = nx - centre[0] - (big - card)          # the neighbour sits a pitch and the growth out
+    floor = [c[1:] for c in calls if c[0] == 0][0]
+    put = sum(c[3] * c[4] for c in calls if c[0] == 1)
+    assert 0 < put < floor[2] * floor[3], (put, floor)       # around the tiles, not under them
+    w[0] = 6 * pitch                                         # the last of the seven cards
+    w[3] = 0
+    e.drive(w)
+    ws.mark_dirty()
+    frames(1)
+    sizes = _sizes(tiles)
+    centre = [x for c, x, _s in sizes if c]
+    assert centre and not [x for c, x, _s in sizes if not c and x > centre[0]], sizes
+    del calls[:]
+    ws.mark_dirty()
+    frames(1)
+    assert [k for k, *_ in calls] == [3] and not tiles, (calls, tiles)
+    e.drive(None)
