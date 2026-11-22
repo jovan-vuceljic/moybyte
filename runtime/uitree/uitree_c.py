@@ -49,6 +49,10 @@ F_PAGES_SHIFT = 8
 OWE = 1 << 16
 A_HOOK, A_ROLE_CONFIRM, A_ROLE_BACK, A_SHIFT_ENTER = 1, 2, 4, 16
 INPUTS = ("keys", "tdeck", "pad", "touch")
+# the size classes a handler and a derive read (`uitree._ref`'s @desk...), by their bits: 4 the
+# desk, 2 wide (as C's: the content 4:3 or wider), 1 touch
+_CLASSES = tuple(("desk" if b & 4 else "handheld", "wide" if b & 2 else "tall") + (("touch",) if b & 1 else ())
+                 for b in range(8))
 _KINDS = {"page": 1, "group": 2, "label": 3, "info": 4, "link": 5, "button": 6, "toggle": 7,
           "rows": 8, "dialog": 9, "seg": 10, "slider": 11, "field": 12, "empty": 13,
           "progress": 14, "text_view": 15,
@@ -182,6 +186,7 @@ class CEngine(Engine):
             self._slot, self._names, self._types, self._pushed = {}, [], [], {}
             self._docs = {}
             self._drawing = False
+            self._classes_b = -1     # the size classes' bits `classes` holds (`paint`)
             self._pic_of, self._pic_wh = {}, {}     # an image's text -> its Pic; a node -> its tile's size
             self._bind()            # the module's state holds this engine's values before any is pushed
             if not self._load(x):
@@ -828,6 +833,15 @@ class CEngine(Engine):
         self._live_units()
         kind = _v.input_kind()
         self.input = kind if kind in S.INPUTS else "keys"
+        cb = (4 if desk else 0) | (2 if content[2] * 3 > content[3] * 4 else 0) | (1 if self.input == "touch" else 0)
+        if cb != self._classes_b:
+            self._classes_b, self.classes = cb, _CLASSES[cb]
+            was, S._NOW.app = S._NOW.app, self
+            try:
+                for name in self.s._derive:     # a derive over a system value (@desk) reads them
+                    self._push(name)
+            finally:
+                S._NOW.app = was
         t = _D.UI_TARGET
         x.set_unit(self.unit)
         r = x.frame(t[0], cv, t[2], content[0], content[1], content[2], content[3], self._flags(desk), fs,

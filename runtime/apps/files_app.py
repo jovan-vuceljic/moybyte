@@ -161,7 +161,7 @@ s = ui.state(
     in_trash=False,                 # the place is the Trash
     caption="",                     # the place's name over a handheld's list
     none_line="",                   # what an empty place says
-    view=ui.enum("places", "files", init="places"),     # what a handheld shows (the desk: both, "files")
+    view=ui.enum("places", "files", init="places"),     # what a handheld shows (the desk shows both)
     status="",                      # what the last verb did, at the foot's start
     asking=ui.enum("none", "rename", "empty", "game", "used", init="none"),
     typed="",                       # the rename dialog's name
@@ -172,6 +172,7 @@ s = ui.state(
     use=ui.row_of("uses"),
 )
 ui.app("Files", icon="folder_open", back="back")
+ui.derive("files_shown", cond="@desk || view=files")   # a place's files show, and their verbs
 
 
 def _f():
@@ -249,7 +250,7 @@ for _v, _field in VERBS:
     ui.action(_field, _LABELS[_v], _verb(_v), takes="row", row="cur", when="cur." + _field, off="hide")
 ui.action("empty", "Empty", empty_trash, when="in_trash && trashed", off="hide")
 ui.action("del_key", "Delete", del_key, takes="char", chars="\b\x7f",
-          when="view=files && cur.v_del && asking=none", off="hide")
+          when="files_shown && cur.v_del && asking=none", off="hide")
 ui.action("cancel", "Cancel", cancel)
 ui.action("rename_it", "Rename", rename_it)
 ui.action("empty_it", "Empty", empty_it)
@@ -290,7 +291,7 @@ def files_page():
             with ui.group(""):
                 _list()
         ui.switch("view", {"places": _places, "files": _hand_list}, shown="!@desk")
-        with ui.foot(look="share", shown="view=files"):
+        with ui.foot(look="share", shown="files_shown"):
             ui.label("{status}", tone="dim")
             for v, field in VERBS:
                 if v == "OPEN":
@@ -527,7 +528,7 @@ class FilesAppLayer(uitree_app.app_layer("files", "Files", files_page, is_app, n
 
     def _opened(self):
         s.asking = "none"
-        s.view = "files" if metric_desk() else "places"
+        s.view = "places"
         s.status = ""
         self._refresh_counts()
         self.open_place(self.place)
