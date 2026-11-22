@@ -59,20 +59,20 @@ def _music(hh):
     mu = ws.music_ui
     if mu.musicedit is None:
         pytest.skip("no sound bank on this build")
-    return ws, drv, mu, mu.page()
+    return ws, drv, mu, mu.page
 
 
 def test_the_music_pad_edits_the_step_under_the_cursor(hh):
     ws, drv, mu, page = _music(hh)
     me = mu.musicedit
     before = me.cur_step()[0]
-    _tap(drv, page.host.box("Pad pitch+"))
+    _tap(drv, page.rect_of("higher"))
     assert me.cur_step()[0] == before + 1
     n = me.step_count()
-    _tap(drv, page.host.box("Pad add"))
+    _tap(drv, page.rect_of("add"))
     assert me.step_count() == n + 1
-    from runtime.editor_music import ROW
-    x, y, w, _h = page.host.box("Steps")
+    from runtime.music_editor_ui import ROW
+    x, y, w, _h = page.rect_of("steps")
     _tap(drv, (x, y, w, ROW), dx=16)   # the steps' first row, as they show at the top
     assert me.step == 0
 
@@ -80,20 +80,22 @@ def test_the_music_pad_edits_the_step_under_the_cursor(hh):
 def test_the_music_tabs_chevrons_and_hear(hh):
     ws, drv, mu, page = _music(hh)
     me = mu.musicedit
-    _tap(drv, page.host.box("Next"))
+    _tap(drv, page.rect_of("next"))
     assert me.sfx_idx == 1
-    x, y, w, h = page.host.box("View")
-    _tap(drv, (x, y, w, h), dx=w * 3 // 4)
+    x, y, w, h = page.rect_of("view")
+    _tap(drv, (x, y, w, h), dx=70)               # Song, the strip's second tab
     assert me.view == me.SONG_VIEW
-    assert page.host.box("Pad slot+") is not None
-    _tap(drv, page.host.box("Hear"))
+    was = me.cur_track().pattern[me.slot]
+    _tap(drv, page.rect_of("higher"))            # the song's first pad row steps the slot's sound
+    assert me.cur_track().pattern[me.slot] != was
+    _tap(drv, page.rect_of("hear"))
     assert mu.music_preview is not None
-    _tap(drv, page.host.box("Hear"))
+    _tap(drv, page.rect_of("hear"))
     assert mu.music_preview is None
 
 
 def test_a_sound_with_a_name_is_named_and_one_without_is_numbered(hh):
-    from runtime.editor_music import sound_name
+    from runtime.music_editor_ui import sound_name
     ws, drv, mu, page = _music(hh)
     bank = mu.musicedit.bank
     bank.sfx[0].name = "tune"
@@ -105,8 +107,8 @@ def test_a_sound_with_a_name_is_named_and_one_without_is_numbered(hh):
 def test_the_speed_popover_sets_the_speed_and_b_closes_it(hh):
     ws, drv, mu, page = _music(hh)
     me = mu.musicedit
-    _tap(drv, page.host.box("Speed"))
-    assert page.pop == "speed"
+    _tap(drv, page.rect_of("speed_open"))
+    assert mu.popped()
     was = me.cur_sfx().speed
     drv.press("right")                 # the focused slider takes the arrows
     for _ in range(2):
@@ -114,14 +116,27 @@ def test_the_speed_popover_sets_the_speed_and_b_closes_it(hh):
     assert me.cur_sfx().speed == was + 1
     drv.press("b")
     drv.frame(DT)
-    assert page.pop is None
+    assert not mu.popped()
     assert ws.menu_view == "music"
+
+
+def test_the_keys_move_the_cursor_and_its_note(hh):
+    ws, drv, mu, page = _music(hh)
+    me = mu.musicedit
+    me.select_cursor(0)
+    drv.press("down")
+    drv.frame(DT)
+    assert me.step == 1
+    p = me.cur_step()[0]
+    drv.press("right")
+    drv.frame(DT)
+    assert me.cur_step()[0] == p + 1
 
 
 def test_a_settled_music_tab_paints_nothing(hh):
     ws, drv, mu, page = _music(hh)
     assert _settles(ws, drv)
-    _tap(drv, page.host.box("Pad pitch+"))
+    _tap(drv, page.rect_of("higher"))
     assert _settles(ws, drv)
 
 

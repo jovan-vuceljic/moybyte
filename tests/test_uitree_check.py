@@ -38,6 +38,7 @@ PORTED = (
     "uitree_editor_app",
     "code_ui",
     "editor_settings",
+    "editor_music",
     "uitree_placed_table",
     "editor_ui",
     "uitree_bar_row",

@@ -904,18 +904,18 @@ def test_music_editor_opens_edits_previews_and_saves_on_console(tmp_path):
     assert probe.drew_something(ws.run.canvas)
 
     # The pad's Note up -> the current step's pitch rises + bank goes dirty.
-    page = ws.music_ui.page()
+    mu = ws.music_ui
     p0 = me.cur_step()[0]
-    page.act("pitch+")
+    mu.act("higher")
     assert me.cur_step()[0] == p0 + 1 and me.dirty
 
     # Hear starts a preview on the cart's session; again STOPS it (toggle).
-    page.act("hear")
+    mu.act("hear")
     assert ws.music_ui.music_preview is not None
     rendered0 = ws.audio_out.rendered
     ws.frame(1 / 30)                          # a frame pulls the mix (renders PCM)
     assert ws.audio_out.rendered > rendered0
-    page.act("hear")
+    mu.act("hear")
     assert ws.music_ui.music_preview is None           # toggled off while still sounding
 
     # SAVE persists to sounds.json; reload proves it stuck. SAVE moved to the unified
@@ -928,7 +928,7 @@ def test_music_editor_opens_edits_previews_and_saves_on_console(tmp_path):
     assert audio.AudioBank.from_dict(reloaded["sounds"]).to_dict() == me.bank.to_dict()
 
     # Leaving the editor stops any preview and returns to the cart.
-    page.act("hear")                          # start a preview again
+    mu.act("hear")                          # start a preview again
     ws.text.leave_menu()
     assert ws.music_ui.music_preview is None and ws.screen == "desktop"
 
@@ -940,20 +940,20 @@ def test_music_editor_view_toggle_and_song_path_on_console(tmp_path):
     ws.open()
     ws.text.open_music()
     me = ws.music_ui.musicedit
-    page = ws.music_ui.page()
+    mu = ws.music_ui
     # The Song tab; a frame draws it.
-    page._view()
+    mu.set_view(True)
     assert me.view == me.SONG_VIEW
     ws.frame(1 / 30)
     assert probe.drew_something(ws.run.canvas)
     # The song pad's Sfx up bumps the slot's SFX id.
     v0 = me.cur_slot_value()
-    page.act("slot+")
+    mu.act("higher")
     assert me.cur_slot_value() == min(v0 + 1, len(me.bank.sfx) - 1)
     # The foot's Hear plays the song, and stops it.
-    page.act("hear")
+    mu.act("hear")
     assert ws.music_ui.music_preview == ("song", me.track_idx)
-    page.act("hear")
+    mu.act("hear")
     assert ws.music_ui.music_preview is None
 
 
@@ -966,17 +966,17 @@ def test_music_editor_ui_copy_paste_and_move_pad_buttons_sfx_view(tmp_path):
     ws.open()
     ws.text.open_music()
     me = ws.music_ui.musicedit
-    page = ws.music_ui.page()
+    mu = ws.music_ui
 
     # Copy the current step, edit a second step, then Paste the clipboard
     # back over it.
     me.select_cursor(0)
     me.set_pitch(66)
-    page.act("copy")
+    mu.act("copy")
     me.add_step()
     me.nudge_pitch(1)
     assert me.cur_step()[0] != 66
-    page.act("paste")
+    mu.act("paste")
     assert me.cur_step()[0] == 66 and me.dirty
 
     # Up / Down swap the cursor step with its neighbor.
@@ -984,12 +984,12 @@ def test_music_editor_ui_copy_paste_and_move_pad_buttons_sfx_view(tmp_path):
     for i, st in enumerate(s.steps):
         st[0] = i
     me.select_cursor(0)
-    page.act("down")
+    mu.act("down")
     assert me.step == 1 and s.steps[0][0] == 1
 
     # Dup clones the WHOLE current SFX into a new bank-end slot.
     n = len(me.bank.sfx)
-    page.act("dup")
+    mu.act("dup")
     assert len(me.bank.sfx) == n + 1 and me.sfx_idx == n
 
     # A frame still draws cleanly.
@@ -1004,8 +1004,8 @@ def test_music_editor_ui_dup_and_move_pad_buttons_song_view(tmp_path):
     ws.open()
     ws.text.open_music()
     me = ws.music_ui.musicedit
-    page = ws.music_ui.page()
-    page._view()
+    mu = ws.music_ui
+    mu.set_view(True)
     assert me.view == me.SONG_VIEW
 
     me.add_slot()
@@ -1014,11 +1014,11 @@ def test_music_editor_ui_dup_and_move_pad_buttons_song_view(tmp_path):
     for i in range(len(t.pattern)):
         t.pattern[i] = min(i, hi)
     me.select_cursor(0)
-    page.act("down")
+    mu.act("down")
     assert me.slot == 1 and t.pattern[0] == min(1, hi)
 
     n = len(me.bank.music)
-    page.act("dup")
+    mu.act("dup")
     assert len(me.bank.music) == n + 1 and me.track_idx == n
 
     ws.frame(1 / 30)
