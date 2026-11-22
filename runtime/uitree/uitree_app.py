@@ -18,7 +18,7 @@ drawn with today's verbs. Both are made on the C engine."""
 
 import ui as _v
 from layers import AppLayer
-from layout_base import bar_rows, content_of, metric_class, DESK
+from layout_base import bar_rows, content_of, ground_round, metric_class, DESK
 
 import uitree as S
 from uitree import _NOW
@@ -422,6 +422,7 @@ class App(AppLayer):
         fs = max(1, getattr(cv, "font_scale", 1))
         cs = max(fs, self._surf.chrome_scale() or fs)
         content = content_of(cv.w, cv.h, 0 if win else bar_rows(cs))
+        ground_round(cv, content, th["panel"])
         self.engine.hosted(dt, cv, th, content, desk)
         self.engine._ui.begin(cv, th, content, desk, win)
         self.engine.paint(dt, cv, th, content, desk)

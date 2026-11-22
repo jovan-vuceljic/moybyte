@@ -230,7 +230,7 @@ SURFACES = {
     "menu": lambda ws: (ws.open_in_editor(next(
         c for c in ws.carts.all if c.get("title") == "Star Catcher")),
         ws.text.set_menu_view("code")),
-    "app": lambda ws: ws.spine.open_app(ws.app("storybook")),
+    "app": lambda ws: ws.spine.open_app(ws.app("calc")),
 }
 
 
