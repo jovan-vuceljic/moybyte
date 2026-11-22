@@ -50,6 +50,10 @@ def _desk(path, cart, key, tab, ships, window=False):
     ws.open_in_editor(shelf_cart(ws, cart))
     drv = host_app.ConsoleDriver(ws)
     for _ in range(3):
+        # each frame drawn: the ring's other buffers hold the desk as it was
+        # before the switch below, its full-screen row among it, which a pane's
+        # frame must not paint over itself (wm_paint's buffer path)
+        ws.mark_dirty()
         drv.frame(DT)
     if window:
         # a window short of the glass: the WM asks HELD in the root's layout,
