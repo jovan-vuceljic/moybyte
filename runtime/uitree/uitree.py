@@ -966,17 +966,24 @@ _DECLARING = [None]     # the Decl the last ui.state(...) made: a board's only w
 _NAMED = [None]         # the module name a declaration made with no frames to read is made under
 
 
-def _caller_module():
-    """The module whose code made the call (the first frame outside this
-    layer); None where there are no frames (a board)."""
+def _caller_frame():
+    """The first frame outside this layer; None where there are no frames
+    (a board)."""
     if _frame is None:
         return None
-    f = _frame(1)
+    f = _frame(2)
     while f is not None:
         if _base(f.f_code.co_filename) not in _SKIP and "contextlib" not in f.f_code.co_filename:
-            return f.f_globals.get("__name__")
+            return f
         f = f.f_back
     return None
+
+
+def _caller_module():
+    """The module whose code made the call; None where there are no frames
+    (a board)."""
+    f = _caller_frame()
+    return f.f_globals.get("__name__") if f is not None else None
 
 
 def decl_of(module):
@@ -999,7 +1006,11 @@ def _d():
     """The declaration in force: the app running, else the calling module's
     (on a board, the one declared last)."""
     if _NOW.app is not None:
-        return _NOW.app.decl
+        # a module's top level declares into its own, even when a handler of
+        # another app imports it
+        f = _caller_frame()
+        d = _DECLS.get(f.f_globals.get("__name__")) if f is not None and f.f_code.co_name == "<module>" else None
+        return d or _NOW.app.decl
     if _frame is None:
         d = _DECLARING[0]
         name = "this module"
