@@ -29,11 +29,34 @@ def wants(cart):
             and EXT in (cart.get("extensions") or ()))
 
 
+class UI:
+    """The UI tree API as a cart is handed it: the module's public names
+    but the modules it imports, so the cart's `ui` names no way into the
+    console (`sys.modules`)."""
+
+
+_UI = [None]
+
+
+def _ui():
+    if _UI[0] is None:
+        import uitree
+        api = UI()
+        mod = type(uitree)
+        for k in dir(uitree):
+            if k[:1] != "_":
+                v = getattr(uitree, k)
+                if type(v) is not mod:
+                    setattr(api, k, v)
+        _UI[0] = api
+    return _UI[0]
+
+
 def namespace(ns, cart):
     """Give the cart's namespace the UI tree API as its `ui`, and the module
     name its declarations are made under."""
     import uitree
-    ns["ui"] = uitree
+    ns["ui"] = _ui()
     ns["__name__"] = name = "cart:" + str(cart.get("id") or cart.get("title") or "")
     uitree.named(name)          # a board's frames name no module: its declarations, made under it
 
