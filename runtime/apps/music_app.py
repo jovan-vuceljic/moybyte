@@ -630,7 +630,7 @@ s = ui.state(
     playing=False,          # what plays: the card's
     title="",
     meta="",
-    failed=False,
+    tone="dim",             # ...its line's: danger where it failed
     mark="music",
     main_icon="pause",
     main_word="Pause",
@@ -670,7 +670,7 @@ def fill(lay):
         title, meta = lines(c)
         state = FAILED if c["state"] == FAILED else PAUSED_ if c["paused"] else PLAYING
         s.title, s.meta = title, meta
-        s.failed = state == FAILED
+        s.tone = "danger" if state == FAILED else "dim"
         s.mark = MARK[OPENING] if c["state"] == OPENING else MARK[state]
         s.main_icon, s.main_word = MAIN[state]
         s.vol = (c["volume"] + 5) // 10
@@ -887,8 +887,7 @@ def _files():
 
 def _now():
     ui.label("{title}", face="title")
-    ui.label("{meta}", tone="dim", shown="!failed")
-    ui.label("{meta}", tone="danger", shown="failed")
+    ui.label("{meta}", tone="{tone}")
     ui.label("LIVE", icon="equalizer", tone="value", shown="live")
     ui.slider("{clock}", "pos", 0, "{steps}", look="bar", on="seek", shown="seekable")
     ui.slider("Volume", "vol", 0, 10, look="steps", icon="volume", on="volume")

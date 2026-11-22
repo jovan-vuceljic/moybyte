@@ -1178,6 +1178,16 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     if (kind == UIT_LEGACY && (!strcmp(name, "draw") || !strcmp(name, "pointer") || !strcmp(name, "keys") ||
                                !strcmp(name, "hints") || !strcmp(name, "gen")))
         return add_prop(e, node, name, src, repr, PK_LIT, 0);     // the front end's functions
+    if (!strcmp(name, "tone") && kind == UIT_LABEL && strchr(src, '{')) {
+        // a templated tone: its word drawn each frame (ink, dim, value, danger; another is ink)
+        int t = uit_tmpl_compile(e, src, model);
+        if (t < 0)
+            return t;
+        if (e->tmpls[t].type == UIT_BOOL || e->tmpls[t].type == UIT_MODEL)
+            return uit_check_fail(e, "T03", UIT_MSG("label tone=%s is a %s, not a text", "%s %s"), src,
+                                  uit_type_name(e->tmpls[t].type));
+        return add_prop(e, node, name, src, repr, PK_TMPL, t);
+    }
     if (!strcmp(name, "tone") && kind == UIT_LABEL) {
         int i = lit_index(src, TONES, 4);
         if (i <= 0)

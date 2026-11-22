@@ -1103,6 +1103,8 @@ static void draw_text_view(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
 // A label's rows as the toolkit's labels, drawn; or with `h`, measured (their steps added to *h).
 // A label's rows drawn, or with `h` measured: each row's `part` of the measure (3 its height,
 // 4 how far the stack moves past it) added to *h.
+static uint32_t prop_text(uit_t *e, int k, const char *name, int model, int row, uint32_t *n);
+
 static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row, int32_t *h,
                          int part)
 {
@@ -1114,8 +1116,18 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         if (n)
             moy_ui_api_icon(c, sspan(e, at, n));
     }
+    // tone=: a literal's index, or a template's word (dim, value, danger; another is ink)
+    int tone = N->lit;
+    if (!tone) {
+        uint32_t nt, mark = e->scratch.n, at = prop_text(e, k, "tone", model, row, &nt);
+        static const char *const TONES[] = {"dim", "value", "danger"};
+        for (int i = 0; i < 3 && !tone; i++)
+            if (nt == strlen(TONES[i]) && !memcmp(e->scratch.p + at, TONES[i], nt))
+                tone = i + 1;
+        e->scratch.n = mark;
+    }
     a1 = text(e, k, 0, model, row, &n1);
-    int t = N->nbtn, opts = N->lit || (t & ~LT_CHAR);
+    int t = N->nbtn, opts = tone || (t & ~LT_CHAR);
     int lines = (t & LT_WRAP) == LT_WORD || (t & LT_LINES) ? (N->btn ? N->btn : 16) : 0;
     // wrap="char": lines of what fits the page's width, cut anywhere, each a label
     uint32_t per = 0;
@@ -1141,7 +1153,7 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
             face = -1;
         } else {
             int32_t out[5];
-            moy_ui_api_text(c, lines, (t >> LT_ALIGN_SHIFT) & 7, N->lit, face);
+            moy_ui_api_text(c, lines, (t >> LT_ALIGN_SHIFT) & 7, tone, face);
             moy_ui_over_none(&o);
             moy_ui_api_measure(c, s, MOY_UI_MEASURE_LABEL, sspan(e, a1, n1), &o, out);
             if (out[2] > e->pw - 32)
@@ -1161,7 +1173,7 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         if ((t & LT_WRAP) != LT_CHAR)
             m = n1;
         if (opts)
-            moy_ui_api_text(c, lines, (t >> LT_ALIGN_SHIFT) & 7, N->lit, face);
+            moy_ui_api_text(c, lines, (t >> LT_ALIGN_SHIFT) & 7, tone, face);
         moy_ui_over_none(&o);
         if (h) {
             int32_t out[5];

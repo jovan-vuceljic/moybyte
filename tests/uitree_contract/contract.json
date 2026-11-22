@@ -1438,13 +1438,11 @@
     },
     "tag": {
      "type": "tpl",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "tone": {
      "type": "tpl",
-     "level": 1,
-     "designed": true
+     "level": 1
     }
    }
   },
@@ -1703,13 +1701,11 @@
     },
     "tag": {
      "type": "tpl",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "tone": {
      "type": "tpl",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "focus": {
      "type": "cond",
