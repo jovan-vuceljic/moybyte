@@ -271,19 +271,35 @@ def test_an_empty_vault_is_an_empty_page_whose_verb_makes_a_note(tmp_path):
 # a note open
 # ---------------------------------------------------------------------------
 
-def test_the_tools_undo_and_redo_and_the_status_names_the_note(tmp_path):
+def test_the_tools_undo_and_redo_and_the_title_names_the_note_and_its_kind(tmp_path):
     ws = build_ws(tmp_path)
     moy_carts.save_file("docs", "u", "start", ws.carts_root)
     ns, drv = _open(ws)
     _act(ws, drv, "open_name", "u")
     ed = ns["ed"]
-    assert _s(ws)["title"] == "U" and _s(ws)["status"] == "Markdown"
+    assert _s(ws)["title"] == "U · Markdown" and _s(ws)["status"] == "", "the kind beside the name"
     _type(drv, "ab")
     assert ed.text() == "abstart"
     _tap(drv, _box(ws, "undo"))
     assert ed.text() == "start"
     _tap(drv, _box(ws, "redo"))
     assert ed.text() == "abstart"
+
+
+def test_the_tools_row_ends_at_its_last_tool_while_nothing_is_refused(tmp_path):
+    """The note's kind is the title's; the tools' status cell, which says a
+    refusal, draws nothing while there is none (a row's status with no words),
+    so the row past the last tool is the page's ground."""
+    ws = build_ws(tmp_path)
+    moy_carts.save_file("docs", "hi.py", "print(1)\n", ws.carts_root)
+    ns, drv = _open(ws)
+    _act(ws, drv, "open_name", "hi.py")
+    assert _s(ws)["title"] == "hi.py · Program" and _s(ws)["status"] == ""
+    x, y, w, h = _box(ws, "run")
+    cv = ws.sys_canvas
+    line = bytes(cv._buf)[(y + h // 2) * cv.w * 2:(y + h // 2 + 1) * cv.w * 2]
+    past = {line[i:i + 2] for i in range(2 * (x + w + 2), 2 * cv.w, 2)}
+    assert len(past) == 1, "nothing drawn past the last tool"
 
 
 def test_the_hosts_back_on_the_list_leaves_notes_and_writes_the_note(tmp_path):

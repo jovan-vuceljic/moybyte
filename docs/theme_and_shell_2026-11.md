@@ -2617,7 +2617,7 @@ drawings the Files app owns.
 | door | path | what opens |
 |---|---|---|
 | make a game | home → Make → a project → the Editor's tabs | the Code tab is one of the cart's scripts — its main file unless another is picked (#89): highlight by runtime, parse gate on the debounce, hard exits always write (SYNTAX badge), PLAY, crash-to-code |
-| write | Launcher → Notes | the vault as a list (New note first, then each file's kind icon and its name: a note's bare, another file's with its extension), New note → a name in a dialog, one file open with Undo, Redo, Select, Copy, Cut, Paste and Open link at its foot (and Run on a `.py` or `.lua`) beside its mode, or why its last save was refused; on the desk the vault beside the open file |
+| write | Launcher → Notes | the vault as a list (New note first, then each file's kind icon and its name: a note's bare, another file's with its extension), New note → a name in a dialog, one file open under its name and its kind in the title, with Undo, Redo, Select, Copy, Cut, Paste and Open link at its foot (and Run on a `.py` or `.lua`) and, beside them, why its last save was refused; on the desk the vault beside the open file |
 | any file | Launcher → Files → a root | routed by what it is (below) |
 
 **The Files router**, in order: a `.moy` folder opens the project Editor, never a

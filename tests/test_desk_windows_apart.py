@@ -58,7 +58,7 @@ def test_each_window_strip_shows_its_own_title_icon_and_back(tmp_path):
     ws, drv, _term = _desk(tmp_path)
     wm = ws.wm
     notes, term = wm.windows["desktop"], wm.windows["terminal"]
-    assert wm._win_title(notes) == "Notes · Story ideas"
+    assert wm._win_title(notes) == "Notes · Story ideas · Markdown"
     assert wm._win_title(term) == "Terminal"
     assert wm._icon_slot(notes) == "notes"
     assert ws.cart.get("title") == "Notes"      # the running app's project is its own
