@@ -306,9 +306,11 @@ void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud);
 // A card's or a picture's image (`image=`, its template's text `pic`, n bytes; never empty): the
 // front end finds, decodes and draws it. With `r` NULL it answers whether it holds the picture
 // (the card then draws no icon tile); else r is the card's tile, r[0..3], its clip, r[4..7] (the
-// scroll's floor), and r[8] 1 where the card is focused (its tile lifted): the front end draws the
-// picture there where it holds it, else owes it. uit_pics_moved: a picture it holds came or went,
-// and every gen moves (a frame draws it).
+// scroll's floor), r[8] bit 1 where the card is focused (its tile lifted), and on a carousel's
+// tile (bit 2) bit 4 where it is the centre's and bit 8 where the band is at rest; r[9] its
+// corners' radius (0 on a grid's card, which cuts its own), r[10..11] the size the front end
+// decodes it at (0: the tile's): the front end draws the picture there where it holds it, else
+// owes it. uit_pics_moved: a picture it holds came or went, and every gen moves (a frame draws it).
 typedef int (*uit_pic_fn)(void *ud, int node, const char *pic, size_t n, const int32_t *r);
 void uit_on_pic(uit_t *e, uit_pic_fn fn, void *ud);
 void uit_pics_moved(uit_t *e);

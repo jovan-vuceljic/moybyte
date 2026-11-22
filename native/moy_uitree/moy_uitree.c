@@ -1638,6 +1638,13 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->lit = (uint8_t)((N->lit & ~DL_DANGER) | (!strcmp(src, "danger") ? DL_DANGER : 0));
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & DL_DANGER) != 0);
     }
+    if (!strcmp(name, "look") && kind == UIT_CARDS) {
+        // "carousel": one row of tiles that snaps, its centre card's words under it (CD_CAROUSEL)
+        if (strcmp(src, "carousel"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("cards look=%s: \"carousel\"", "cards look=%s"), src);
+        N->lit |= CD_CAROUSEL;
+        return add_prop(e, node, name, src, repr, PK_LIT, 1);
+    }
     if (!strcmp(name, "look") && kind == UIT_DIALOG) {
         // "keys": on the T-Deck its buttons are the band's Enter and Esc, no row of them (DL_KEYS)
         if (strcmp(src, "keys"))

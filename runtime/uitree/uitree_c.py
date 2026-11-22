@@ -857,7 +857,9 @@ class CEngine(Engine):
     def _pic(self, node, pic, r):
         """A card's or a picture's image (`uit_on_pic`): with no tile, whether
         the picture is decoded at the size the node's unfocused tile last
-        had; with one, drawn there clipped, or owed to the idle step."""
+        had (a carousel's tile: the size it names, its centre's); with one,
+        drawn there clipped, its corners rounded where it names a radius, or
+        owed to the idle step."""
         p = self._pic_of.get(pic)
         if p is None:
             kind, _c, key = pic.partition(":")
@@ -871,13 +873,16 @@ class CEngine(Engine):
             cv = self.cv
             pics = self.pics = uitree_pics.PicEngine(self, self.files, getattr(cv, "swapped565", False),
                                                      uitree_pics.budget_for(cv.w, cv.h))
-        if not r[8] and (wh is None or wh[0] != r[2] or wh[1] != r[3]):
+        if r[8] & 2:
+            if wh is None or wh[0] != r[10] or wh[1] != r[11]:
+                wh = self._pic_wh[node] = (r[10], r[11])
+        elif not r[8] and (wh is None or wh[0] != r[2] or wh[1] != r[3]):
             wh = self._pic_wh[node] = (r[2], r[3])
         got = pics.peek(p, wh[0], wh[1]) if wh is not None else pics.peek(p, r[2], r[3])
         if got is not None:
             cv = self.cv
             cv.clip(r[4], r[5], r[6], r[7])
-            self.pics.draw(cv, got, r[0], r[1], r[2], r[3])
+            self.pics.draw(cv, got, r[0], r[1], r[2], r[3], r[9])
             cv.clip()
         return got is not None
 

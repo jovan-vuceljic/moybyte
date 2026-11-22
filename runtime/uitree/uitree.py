@@ -2035,7 +2035,7 @@ SCHEMA = {
                   row="lit"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
-                  changed="action1", group="lit", pad="int"),
+                  changed="action1", group="lit", pad="int", look="lit"),
     "card": dict(_C, label="text", sub="text", badge="text", image="image", icon="text", tone="text"),
     # G9, G13: a picture of its own (an image state, its fallback icon), a
     # progress bar (max= is required), a page that says why there is nothing

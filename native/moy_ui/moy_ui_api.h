@@ -1181,6 +1181,47 @@ int32_t moy_ui_api_table_part(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int32_t o
 // from its view's centre along the rows' axis, in 256ths of a row, negative
 // before it (above, or on the left); 0 where none was answered.
 int32_t moy_ui_api_table_dist(const moy_ui_ctx_t *c);
+// The table drawn last, its parts not yet all answered: out[0] 1 where it holds the focus
+// (the keys this surface's), out[1] its scroll along its rows' axis, out[2] 1 while its view
+// moves (a drag, a fling or a glide).
+void moy_ui_api_table_state(moy_ui_ctx_t *c, int32_t out[3]);
+// A carousel (ui.cards look "carousel", the handheld home's band): its geometry in band `b`
+// (x, y, w, h) for tiles at most `side` px a side, the pitch 14 px more at the scale. out[0]
+// the side a tile rests at off the centre (the largest that shows a whole cover at a clean
+// scale, moy_ui_api_clean_side, and leaves the caption its room), [1] the pitch, [2] the
+// tiles' centre line, [3] the title's top, [4] its line, [5] its scale (16 px at the font
+// scale, at least that scale), [6] the sub line's top, [7] its line, [8] the centre tile's
+// side at rest (twice [0]), [9] the room kept over the centre tile for its focus mark.
+void moy_ui_api_carousel_geom(const moy_ui_ctx_t *c, const int32_t b[4], int side, int32_t out[10]);
+// The largest side at most `limit` that shows a whole 128 px cover at a clean scale: a whole
+// multiple of it, else its half, quarter or eighth.
+int moy_ui_api_clean_side(int limit);
+// A carousel tile's shadow: box `t` (x, y, w, h) under clip `clip` (what of its part shows,
+// moy_ui_api_table_part's), the theme's card shadow, the smaller one off the `centre`.
+void moy_ui_api_tile_cast(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4],
+                          const int32_t clip[4], int centre);
+// A carousel tile in a row whose tiles rest at `card` px: where `mark`, its focus mark (its
+// box first shrunk by as much as the theme's mark grows a card, so a lifted card keeps its
+// side, raised). out[0..3] the box its picture takes, out[4] that box's corner radius (the
+// depth's card radius on a tile larger than `card`, 7/10 of it on the others), out[5..8] the
+// mark's box and out[9] 1 where it drew one: moy_ui_api_tile_end's.
+void moy_ui_api_tile(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4],
+                     const int32_t clip[4], int card, int mark, int32_t out[10]);
+// A tile with no picture of its own: icon `icon` on a tinted tile in its picture's box
+// (moy_ui_card_blank; empty: the tile alone).
+void moy_ui_api_tile_blank(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t tile[10],
+                           const int32_t clip[4], moy_ui_span_t icon);
+// After the picture: the lifted tile's rim, where moy_ui_api_tile drew a mark.
+void moy_ui_api_tile_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t tile[10],
+                         const int32_t clip[4]);
+// The caption under a carousel's tiles (geometry `g`, moy_ui_api_carousel_geom's, band
+// `band`): `title` in the hero face at its scale, cut to the band less 8 px a side at the
+// font scale and centred; `sub`'s items (apart by tabs) in the ui face, centred, a dot
+// between each two. In the theme's ink and dim ink, or both in colour index `ink` (-1: the
+// theme's), each over its shadow in colour index `shadow` a pixel right and down (-1: none).
+void moy_ui_api_carousel_caption(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t band[4],
+                                 const int32_t g[10], moy_ui_span_t title, moy_ui_span_t sub,
+                                 int ink, int shadow);
 // The table drawn last, where it keeps its parts (o->keep): the next rect
 // of its view the frame draws (its floor) into out[0..3], 1, for an app
 // that puts its own ground back there before its parts draw; the parts

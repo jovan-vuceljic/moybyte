@@ -15,6 +15,7 @@ engine sets per board.
 """
 import collections
 
+import ui_draw as _ui_draw
 import uitree as S
 
 def budget_for(w, h):
@@ -69,11 +70,14 @@ class PicEngine:
             return "failed"
         return "loading"
 
-    def draw(self, cv, got, x, y, w, h):
+    def draw(self, cv, got, x, y, w, h, r=0):
+        """A picture held (`peek`'s) over (x, y, w, h); a cover's corners
+        rounded to `r` (the theme's stepped corners where it steps them)."""
         kind, pix, _n = got
         if kind == "cover":
             side = pix[0]
-            cv.cover(pix[1], side, 0, 0, side, side, x, y, w, h, 0, False)
+            cv.cover(pix[1], side, 0, 0, side, side, x, y, w, h, r,
+                     bool(r) and bool(_ui_draw.depth()[4]))
         else:
             cv.picture(pix, x, y, w, h)
 

@@ -398,8 +398,8 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
                 to = (cur + 1) * rh - ext;
             }
             if (to != was && c->in[MOY_UI_IN_DT] > 0 && !moved) {
-                int32_t off = offset;   // the glide's first step is this frame's
-                moy_ui_scroll_glide_to(&kp->sc, offset, to, 0, kp->rows, ext);
+                int32_t off = offset;   // the glide's first step is this frame's (a slide, snapping)
+                moy_ui_scroll_glide_to(&kp->sc, offset, to, snap, kp->rows, ext);
                 moy_ui_scroll_tick(&kp->sc, (float)c->in[MOY_UI_IN_DT], &off, kp->rows, ext);
                 offset = off;
             } else if (to != was) {
@@ -855,6 +855,13 @@ int32_t moy_ui_api_table_part(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int32_t o
 
 int32_t moy_ui_api_table_dist(const moy_ui_ctx_t *c) {
     return c->tp.open ? c->tp.dist : 0;
+}
+
+void moy_ui_api_table_state(moy_ui_ctx_t *c, int32_t out[3]) {
+    const moy_ui_keep_t *k = c->tp.id ? mua_keep_of(c, c->tp.id) : NULL;
+    out[0] = c->tp.id != 0 && c->focus == c->tp.id && !c->elsewhere;
+    out[1] = c->tp.off;
+    out[2] = k != NULL && (k->sc.flags & (MOY_UI_SCROLL_DRAG | MOY_UI_SCROLL_FLING | MOY_UI_SCROLL_GLIDE)) != 0;
 }
 
 // -- a field's edit ------------------------------------------------------------------

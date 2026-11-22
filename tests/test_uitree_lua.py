@@ -681,3 +681,38 @@ def test_the_fixtures_check_clean(cart, tmp_path):
         if not os.path.exists(os.path.join(d, f)):
             shutil.copy(src, d)
     assert checker.check(d) == []
+
+
+def test_a_carousel_steps_and_plays_its_centre_card_on_the_c_engine(tmp_path):
+    """A Lua app's `ui.cards(look="carousel")` lowers and draws on the C
+    engine, right glides it a card (cur= follows) and the confirm role plays
+    the centre card, as for a Python app (tests/test_uitree_carousel.py)."""
+    from runtime import host_app
+    from runtime.host import moy_log
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Row", 'ui.app("Row", { icon = "calc" })\n'
+          'local s = ui.state { items = ui.model { key = "id", id = "", kind = "" }, at = ui.row_of("items") }\n'
+          'ui.action("pick", "Pick", function(row) end, { takes = "row" })\n'
+          'ui.hook("opened", function() s.items:set({ { id = "one", kind = "x" }, { id = "two", kind = "y" },\n'
+          '  { id = "three", kind = "z" } }) end)\n'
+          'ui.page("p", function()\n'
+          '  ui.cards("items", { look = "carousel", cur = "at", w = 32 }, function()\n'
+          '    ui.card("pick", { label = "{.id}", sub = "{.kind}", icon = "star" }) end)\n'
+          'end)\n')
+    ws, drv, frame, open_cart = _console(carts)
+    seq = moy_log.next()
+    open_cart(ws, "Row")
+    for _ in range(6):
+        frame()
+    drv.press("right")
+    for _ in range(30):
+        frame()
+    drv.press("a")
+    frame()
+    frame()
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    lines = [r[4].split("[trace] ", 1)[1] for r in moy_log.read(seq, 4000) if "[trace] " in r[4]]
+    assert any("'one' -> 'two'" in l and "(carousel)" in l for l in lines), lines
+    acts = [l for l in lines if l.split()[1:3] == ["action", "pick"]]
+    assert len(acts) == 1 and "'two/pick'" in acts[0], lines

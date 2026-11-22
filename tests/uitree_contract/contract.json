@@ -2094,6 +2094,10 @@
     "group": {
      "type": "tpl",
      "level": 2
+    },
+    "look": {
+     "type": "word:carousel",
+     "level": 2
     }
    }
   },

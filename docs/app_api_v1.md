@@ -278,7 +278,17 @@ their natural widths at its end with a status label before them;
 `look="share"` shares its width among them. `ui.toast(text, icon=)` is a
 pill over the page above its foot; `ui.group("", look="card")` lays its
 rows on a card (as a split's cell, the cell is the card); `ui.text_view(..., look="well")` lays its prose on a
-well; `ui.cards(..., pad=)` sets the gap its columns are counted at; a
+well; `ui.cards(..., pad=)` sets the gap its columns are counted at;
+`ui.cards(..., look="carousel", cur=)` is the handheld home's band: from
+where the stack stands to the page's foot, one row of tiles at most `w=`
+a side (the largest that shows a whole cover at a clean scale and leaves
+its words their room), the centre card twice that and each tile's size a
+function of its distance from the centre alone, left and right gliding
+it a card and a drag or a fling settling on one (the toolkit's table of
+parts), the centre card lifted by the focus mark at rest, its `label=` in
+the hero face and its `sub=`'s tab-separated items, a dot between each
+two, under the row; Enter or a tap on the centre card fires its card's
+action, and `cur=` follows the card the row steps to; a
 card's `badge=` marks its picture; a button's `kind=` may be a template;
 `ui.split(..., rule=True)` draws a rule between its cells;
 `ui.row(..., wrap=True)` packs its children from its start at their

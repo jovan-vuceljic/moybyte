@@ -59,6 +59,7 @@ PORTED = (
     "uitree_grid",
     "uitree_model_row",
     "uitree_cards_pics",
+    "uitree_carousel",
     "uitree_derive_sys",
     "calc_app",
     "getcarts_app",
