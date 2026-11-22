@@ -51,6 +51,7 @@ _SIGS = (
     ("uit_prop", [_P, _I, _S, _S, _S], _I),
     ("uit_node_action", [_P, _I, _I], _I),
     ("uit_on_draw", [_P, _P, _P], None),
+    ("uit_draw_row", [_P], _I),
     ("uit_build_end", [_P], _I),
     ("uit_open", [_P], None),
     ("uit_close", [_P], None),
@@ -377,6 +378,10 @@ class Engine:
         self._draw = fn
         self._cb = None if fn is None else _DRAW(self._tramp)
         self._L.uit_on_draw(self._e, self._cb, None)
+
+    def draw_row(self):
+        """Inside a canvas's draw: the model row it draws, -1 none."""
+        return self._L.uit_draw_row(self._e)
 
     def _tramp(self, _ud, node, x, y, w, h):
         if self._raised is None:

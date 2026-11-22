@@ -6,7 +6,7 @@
 // says (run(), moy_app_wasm.c); a toolkit row is native/moy_ui's own,
 // weak here, so an image without the toolkit answers NULL for it.
 
-#define MOY_APP_WASM_N 143
+#define MOY_APP_WASM_N 144
 
 int32_t moy_ui_wasm_page(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t, uint8_t *,
                          uint32_t) UI_WEAK;
@@ -117,6 +117,7 @@ int32_t moy_uitree_wasm_error(void *, uint8_t *, uint32_t) UI_WEAK;
 int32_t moy_uitree_wasm_dump(void *, uint8_t *, uint32_t) UI_WEAK;
 int32_t moy_uitree_wasm_action_chars(void *, int32_t, const uint8_t *, uint32_t) UI_WEAK;
 int32_t moy_uitree_wasm_arg(void *, uint8_t *, uint32_t) UI_WEAK;
+int32_t moy_uitree_wasm_draw_row(void *) UI_WEAK;
 
 static int32_t w_theme_token(void *e, int32_t role) {
     uint8_t q_role[4];
@@ -577,6 +578,7 @@ static const moy_app_native_t NATIVES[MOY_APP_WASM_N] = {
     { "uitree_arg", FN(moy_uitree_wasm_arg), "(*~)i", NULL },
     { "uitree_build", FN(moy_uitree_wasm_build), "(*~)i", NULL },
     { "uitree_build_end", FN(moy_uitree_wasm_build_end), "()i", NULL },
+    { "uitree_draw_row", FN(moy_uitree_wasm_draw_row), "()i", NULL },
     { "uitree_dump", FN(moy_uitree_wasm_dump), "(*~)i", NULL },
     { "uitree_error", FN(moy_uitree_wasm_error), "(*~)i", NULL },
     { "uitree_field_enum", FN(moy_uitree_wasm_field_enum), "(ii*~)i", NULL },
@@ -631,10 +633,10 @@ static const int16_t NATIVE_ROWS[MOY_APP_WASM_N] = {
     MOY_T_UI_TABLE_FLOOR, MOY_T_UI_TABLE_PART, MOY_T_UI_TABS, MOY_T_UI_TEXT_VIEW,
     MOY_T_UI_TOGGLE, MOY_T_UI_TOOL, MOY_T_UITREE_ACTION, MOY_T_UITREE_ACTION_CHARS,
     MOY_T_UITREE_ACTION_ROW, MOY_T_UITREE_ARG, MOY_T_UITREE_BUILD, MOY_T_UITREE_BUILD_END,
-    MOY_T_UITREE_DUMP, MOY_T_UITREE_ERROR, MOY_T_UITREE_FIELD_ENUM, MOY_T_UITREE_FOCUS,
-    MOY_T_UITREE_FRAME, MOY_T_UITREE_GET_CELL, MOY_T_UITREE_GET_INT, MOY_T_UITREE_GET_TEXT,
-    MOY_T_UITREE_LABELS, MOY_T_UITREE_MODEL, MOY_T_UITREE_NEXT, MOY_T_UITREE_NODE,
-    MOY_T_UITREE_NODE_ACTION, MOY_T_UITREE_OPEN, MOY_T_UITREE_PROP, MOY_T_UITREE_ROW_OF,
-    MOY_T_UITREE_SET_ABSENT, MOY_T_UITREE_SET_INT, MOY_T_UITREE_SET_MODEL,
+    MOY_T_UITREE_DRAW_ROW, MOY_T_UITREE_DUMP, MOY_T_UITREE_ERROR, MOY_T_UITREE_FIELD_ENUM,
+    MOY_T_UITREE_FOCUS, MOY_T_UITREE_FRAME, MOY_T_UITREE_GET_CELL, MOY_T_UITREE_GET_INT,
+    MOY_T_UITREE_GET_TEXT, MOY_T_UITREE_LABELS, MOY_T_UITREE_MODEL, MOY_T_UITREE_NEXT,
+    MOY_T_UITREE_NODE, MOY_T_UITREE_NODE_ACTION, MOY_T_UITREE_OPEN, MOY_T_UITREE_PROP,
+    MOY_T_UITREE_ROW_OF, MOY_T_UITREE_SET_ABSENT, MOY_T_UITREE_SET_INT, MOY_T_UITREE_SET_MODEL,
     MOY_T_UITREE_SET_TEXT, MOY_T_UITREE_STATE,
 };

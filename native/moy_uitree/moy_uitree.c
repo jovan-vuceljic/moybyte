@@ -1135,10 +1135,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         tslot = &N->t_value;
     else if ((kind == UIT_CARDS && !strcmp(name, "w")) || (kind == UIT_CARD && !strcmp(name, "sub")) ||
              (kind == UIT_CANVAS && !strcmp(name, "w")) || (kind == UIT_ROW && !strcmp(name, "gap")) ||
-             (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_PICTURE && !strcmp(name, "side")) || (kind == UIT_POPOVER && !strcmp(name, "anchor")))
+             (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_PICTURE && !strcmp(name, "side")) || (kind == UIT_POPOVER && !strcmp(name, "anchor")) ||
+             (kind == UIT_GRID && !strcmp(name, "w")))
         tslot = &N->t_value;
     else if ((kind == UIT_CARDS && !strcmp(name, "h")) || (kind == UIT_POPOVER && !strcmp(name, "w")) ||
-             (kind == UIT_ROW && !strcmp(name, "pad")) ||
+             (kind == UIT_ROW && !strcmp(name, "pad")) || (kind == UIT_GRID && !strcmp(name, "h")) ||
              ((kind == UIT_CARD || kind == UIT_PICTURE || kind == UIT_BUTTON) && !strcmp(name, "tone")))
         tslot = &N->t_aux;
     else if ((!strcmp(name, "empty") && UIT_IS_LIST(kind)) ||
@@ -1154,7 +1155,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             (kind == UIT_PROGRESS && (!strcmp(name, "value") || !strcmp(name, "max"))) ||
             (kind == UIT_CARDS && name[1] == 0) || (kind == UIT_PICTURE && !strcmp(name, "side")) ||
             (kind == UIT_POPOVER && !strcmp(name, "w")) || (kind == UIT_CANVAS && !strcmp(name, "w")) ||
-            (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_ROW && (!strcmp(name, "gap") || !strcmp(name, "pad")))) {
+            (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_ROW && (!strcmp(name, "gap") || !strcmp(name, "pad"))) ||
+            (kind == UIT_GRID && name[1] == 0)) {
             // an int prop: an int template, or the int literal a number lowers to
             const char *d = src + (src[0] == '-');
             int lit_int = T->lit && *d;
@@ -1216,9 +1218,9 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, i);
     }
     if (kind == UIT_LABEL && !strcmp(name, "size")) {
-        if (strcmp(src, "fit"))
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("label size=%s: only \"fit\"", "label size=%s"), src);
-        N->nbtn |= LT_FIT;
+        if (strcmp(src, "fit") && strcmp(src, "text"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("label size=%s: \"fit\" or \"text\"", "label size=%s"), src);
+        N->nbtn |= src[0] == 'f' ? LT_FIT : LT_TEXT;
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (kind == UIT_CANVAS && (!strcmp(name, "draw") || !strcmp(name, "h"))) {
@@ -1226,6 +1228,14 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         if (name[0] == 'h')
             N->btn = (uint16_t)strtol(src, NULL, 10);
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    }
+    if (kind == UIT_TABLE && !strcmp(name, "row")) {
+        // row=: a row's height in the page's unit where a canvas child draws its rows
+        long v = strtol(src, NULL, 10);
+        if (v < 1 || v > 255)
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("table row=%s: 1 to 255", "row=%s"), src);
+        N->btn = (uint16_t)v;
+        return add_prop(e, node, name, src, repr, PK_LIT, (int)v);
     }
     if (kind == UIT_CANVAS && !strcmp(name, "grow")) {
         // a fill along a row, its w= the basis its share is over (CV_GROW)
@@ -1798,6 +1808,11 @@ void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud)
 {
     e->draw_fn = fn;
     e->draw_ud = ud;
+}
+
+int uit_draw_row(const uit_t *e)
+{
+    return e->draw_row1 - 1;
 }
 
 void uit_open(uit_t *e)

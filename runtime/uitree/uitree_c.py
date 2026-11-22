@@ -765,6 +765,11 @@ class CEngine(Engine):
             m.aux = node
             (lg if kind == "legacy" else pn)[node] = m
 
+    def query(self, name, *a):
+        if name == "canvas_row":
+            return self._x.draw_row()
+        return Engine.query(self, name, *a)
+
     def _draw(self, node, x, y, w, h):
         """A canvas's draw, called by the walk inside the frame at its rect."""
         now = S._NOW

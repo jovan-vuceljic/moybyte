@@ -130,6 +130,7 @@ WASM_APP = {
     'uitree_arg': (),
     'uitree_build': (),
     'uitree_build_end': (),
+    'uitree_draw_row': (),
     'uitree_dump': (),
     'uitree_error': (),
     'uitree_field_enum': (),

@@ -1057,6 +1057,12 @@ int32_t moy_uitree_wasm_arg(void *x, uint8_t *out, uint32_t out_cap) {
     return copy_out(p, strlen(p), out, out_cap);
 }
 
+int32_t moy_uitree_wasm_draw_row(void *x) {
+    (void)x;
+    APP(a);
+    return uit_draw_row(a->e);
+}
+
 int32_t moy_uitree_wasm_dump(void *x, uint8_t *out, uint32_t out_cap) {
     (void)x;
     APP(a);

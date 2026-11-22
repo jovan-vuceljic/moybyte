@@ -1994,7 +1994,8 @@ SCHEMA = {
     "seg": dict(_C, label="text", on="action0", focus="cond", look="lit", labels="lit", text="text"),
     "rows": dict(_C, cur="lit", current="lit", empty="text", filter="lit", changed="action1", group="lit",
                  dir="lit", by="lit", check="lit"),
-    "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond"),
+    "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond",
+                  row="lit"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
                   changed="action1", group="lit", pad="int"),
@@ -2010,7 +2011,7 @@ SCHEMA = {
     "menu": dict(_C, caption="text"),
     "item": dict(_C, label="text", icon="text", mkind="lit"),
     "split": dict(_C, dir="choice", sizes="ints", pad="lit", gap="lit", align="lit", rule="lit"),
-    "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit"),
+    "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit", w="int", h="int"),
     "panel": dict(_C),
     "canvas": dict(_C, draw="fn", h="lit", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit"),
     "foot": dict(_C, look="lit"),
@@ -2258,7 +2259,8 @@ def group(caption="", **p):
 
 def label(text, **p):
     """A row of text (§7.2): `face=` a type role, `size="fit"` shrinks it to
-    its width, `wrap="word"` breaks it at word breaks (at most `lines=`
+    its width, `size="text"` makes its cell in a placed row its text's
+    width, `wrap="word"` breaks it at word breaks (at most `lines=`
     lines, then an ellipsis), `align=`, `tone=`, `icon=` before it."""
     where = _caller()
     if "lines" in p and (type(p["lines"]) is not int or p["lines"] < 1):
@@ -2975,6 +2977,13 @@ def text_size(t, scale=1):
     return _q("text_size", t, scale)
 
 
+def canvas_row():
+    """In a canvas's draw: the model row whose cell it draws (a table's row
+    its canvas child draws, a row of a rows list's body), from 0; -1 for a
+    canvas of its own."""
+    return _q("canvas_row")
+
+
 def colors():
     return _q("colors")
 
@@ -3027,7 +3036,8 @@ class Builder:
     # engine that compiles it (the C engine's board build mode)
     direct = False
     QUERIES = {"text_size": lambda t, sc=1: (6 * sc * len(t), 8 * sc),
-               "colors": lambda: _AnyColour(), "fade": lambda r, top: None}
+               "colors": lambda: _AnyColour(), "fade": lambda r, top: None,
+               "canvas_row": lambda: -1}
 
     def query(self, name, *a):
         return self.QUERIES[name](*a)

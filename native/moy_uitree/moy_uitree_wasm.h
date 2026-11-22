@@ -72,6 +72,9 @@
 //                 arg= of the button or link that fired it (an int's
 //                 digits), or the typed key that owed it; the length 0 where
 //                 it was handed none or no handler runs.
+//   draw_row()    in a canvas's draw: the model row whose cell it draws (a
+//                 table's row its canvas child draws), from 0; -1 elsewhere
+//                 (uit_draw_row).
 //   set_text, get_text  a number state's value crosses as text: set_text
 //                 takes a number's digits (strtod's, all of the text), and
 //                 get_text answers them as the trace spells the value.

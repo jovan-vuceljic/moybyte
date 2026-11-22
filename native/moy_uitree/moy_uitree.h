@@ -296,6 +296,9 @@ int uit_still(uit_t *e, const moy_ui_ctx_t *c, int x, int y, int w, int h, int f
 // each node draws (a Python function, a Lua one, C).
 typedef void (*uit_draw_fn)(void *ud, int node, int x, int y, int w, int h);
 void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud);
+// Inside a canvas's draw: the model row whose cell it draws (a table's row a
+// canvas child draws, a row of a rows list's body), from 0; -1 elsewhere.
+int uit_draw_row(const uit_t *e);
 // The next event: its kind; its words into ev[0..2], its text (the source)
 // into buf.
 int uit_next(uit_t *e, int32_t ev[3], char *buf, size_t cap);

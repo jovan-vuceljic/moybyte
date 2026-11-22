@@ -145,7 +145,8 @@ enum { RW_MID = 1, RW_GROW = 2 };   // a row's lit: centred on the row it is a c
 enum { CV_GROW = 1 };
 enum { SP_ALIGN = 3, SP_RULE = 16 };   // a split's lit: its align= index; rule=True           // a canvas's lit: a fill along a row, its w= a basis
 enum { LT_WORD = 1, LT_CHAR = 2, LT_WRAP = 3, LT_FACE_SHIFT = 2, LT_ALIGN_SHIFT = 5, LT_LINES = 256,
-       LT_FIT = 512 };     // size="fit": its face only where its text fits the page's width
+       LT_FIT = 512,       // size="fit": its face only where its text fits the page's width
+       LT_TEXT = 1024 };   // size="text": in a placed row, as wide as its text
 
 typedef struct {
     uint8_t kind, lit;          // a label's tone, a button's kind; a seg's cycle look, a slider's
@@ -350,6 +351,7 @@ struct uit {
     const char *tvl_s;
     uit_draw_fn draw_fn;        // a canvas's draw, the front end's
     void *draw_ud;
+    int32_t draw_row1;          // the model row (from 1) whose cell the canvas being drawn draws; 0 none
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
     uint8_t in_cell;            // drawing a split's column: a button takes its natural width
     uint8_t tv_stop, tv_stop_now;   // a text view that runs on drew last frame / this frame (the band's PgUp PgDn)

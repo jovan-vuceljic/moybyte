@@ -263,6 +263,12 @@ static mp_obj_t eng_close(mp_obj_t self)
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_close_obj, eng_close);
 
+static mp_obj_t eng_draw_row(mp_obj_t self)
+{
+    return mp_obj_new_int(uit_draw_row(eng(self)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(eng_draw_row_obj, eng_draw_row);
+
 static mp_obj_t eng_want_focus(mp_obj_t self, mp_obj_t key)
 {
     return MP_OBJ_NEW_SMALL_INT(uit_want_focus(eng(self), CSTR(key)));
@@ -792,6 +798,7 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&eng_close_obj) },
     { MP_ROM_QSTR(MP_QSTR_free), MP_ROM_PTR(&eng_del_obj) },
     { MP_ROM_QSTR(MP_QSTR_want_focus), MP_ROM_PTR(&eng_want_focus_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_row), MP_ROM_PTR(&eng_draw_row_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_placed), MP_ROM_PTR(&eng_set_placed_obj) },
     { MP_ROM_QSTR(MP_QSTR_ground), MP_ROM_PTR(&eng_ground_obj) },
     { MP_ROM_QSTR(MP_QSTR_legacy_hints), MP_ROM_PTR(&eng_legacy_hints_obj) },

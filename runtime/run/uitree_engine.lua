@@ -422,12 +422,12 @@ end
 local function made()
   if X then return X end
   X = NEW()
-  X:on_draw(function(node, x, y, w, h)
+  X:on_draw(function(node, x, y, w, h, row)
     local f = DRAWS[node]
     if f then
       local r = DRAWN[node]
       if r then r[1], r[2], r[3], r[4], r[5] = x, y, w, h, FRAMES else DRAWN[node] = { x, y, w, h, FRAMES } end
-      f(x, y, w, h)
+      f(x, y, w, h, row)
     end
   end)
   declare()

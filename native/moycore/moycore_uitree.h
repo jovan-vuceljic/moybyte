@@ -18,7 +18,7 @@
  *   e:node_action(node, a) e:build_end()
  *   e:open() e:close() e:want_focus(key)
  *   e:frame(flags)              -> uit_run_frame over the run's canvas
- *   e:on_draw(fn)               a canvas's draw, fn(node, x, y, w, h), called
+ *   e:on_draw(fn)               a canvas's draw, fn(node, x, y, w, h, row), called
  *                               inside the frame; what it raises the frame raises
  *   e:next()                    -> kind, a, b, c, text; nil where none waits
  *   e:trace_next()              -> "KIND\1NAME\1TEXT", nil where none waits
@@ -317,7 +317,9 @@ static void moycore_uit_draw(void *ud, int node, int x, int y, int w, int h)
     lua_pushinteger(L, y);
     lua_pushinteger(L, w);
     lua_pushinteger(L, h);
-    if (lua_pcall(L, 5, 0, 0) != LUA_OK) u->raised = luaL_ref(L, LUA_REGISTRYINDEX);
+    int row = uit_draw_row(u->e);
+    if (row >= 0) lua_pushinteger(L, row + 1); else lua_pushnil(L);
+    if (lua_pcall(L, 6, 0, 0) != LUA_OK) u->raised = luaL_ref(L, LUA_REGISTRYINDEX);
 }
 
 static int l_uit_on_draw(lua_State *L)

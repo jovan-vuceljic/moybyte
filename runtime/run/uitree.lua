@@ -2230,8 +2230,10 @@ function T.panel(key, body)
   return n
 end
 
--- a rect the app draws itself: draw(x, y, w, h) is called inside each frame,
--- with the cart's own verbs, and writes no state
+-- a rect the app draws itself: draw(x, y, w, h, row) is called inside each
+-- frame, with the cart's own verbs, and writes no state; `row` is the model
+-- row (from 1) whose cell it draws where it is a table's child (its rows'
+-- draw, the table's row= tall), nil for a canvas of its own
 function T.canvas(key, o)
   local at = where()
   local n = node("canvas", at)
