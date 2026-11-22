@@ -2009,9 +2009,9 @@ class Node:
 _C = {"shown": "cond"}
 SCHEMA = {
     "page": {"title": "text"},
-    "group": dict(_C, caption="text", close="action0", look="lit"),
+    "group": dict(_C, caption="text", close="action0", look="lit", gap="int"),
     "label": dict(_C, text="text", tone="text", wrap="lit", face="lit", size="lit", icon="text",
-                  lines="lit", align="lit"),
+                  lines="lit", align="lit", scale="int", w="int"),
     "rule": dict(_C),
     "note": dict(_C, icon="text", lines="texts"),
     "bubble": dict(_C, text="text", side="text", head="text", status="text", signal="int", tone="text",
@@ -2022,7 +2022,7 @@ SCHEMA = {
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond", tag="text",
                  tone="text"),
     "button": dict(_C, kind="lit", label="text", icon="text", alone="lit", span="lit", arg="lit",
-                   focus="cond", grow="lit", marked="cond", w="int", tone="text"),
+                   focus="cond", grow="lit", marked="cond", w="int", tone="text", look="lit"),
     "toggle": dict(_C, label="text", on="action0", focus="cond", hint="text"),
     "slider": dict(_C, label="text", lo="int", hi="int", on="action0", focus="cond", look="lit",
                    icon="text"),
@@ -2299,7 +2299,9 @@ def label(text, **p):
     """A row of text (§7.2): `face=` a type role, `size="fit"` shrinks it to
     its width, `size="text"` makes its cell in a placed row its text's
     width, `wrap="word"` breaks it at word breaks (at most `lines=`
-    lines, then an ellipsis), `align=`, `tone=`, `icon=` before it."""
+    lines, then an ellipsis), `align=`, `tone=`, `icon=` before it;
+    `scale=` draws its face at that whole scale (a display line), `w=`
+    keeps its text that wide at most (a measure of prose)."""
     where = _caller()
     if "lines" in p and (type(p["lines"]) is not int or p["lines"] < 1):
         raise UIError("N01", "ui.label lines=%r" % (p["lines"],), where=where,

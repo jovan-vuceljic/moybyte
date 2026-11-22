@@ -52,6 +52,7 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_BAND "band"
 #define UT_LOOK_COUNT "count"
 #define UT_LOOK_WELL "well"
+#define UT_LOOK_LARGE "large"
 #define UT_LOOK_BAR "bar"
 #define UT_LOOK_STEPS "steps"
 #define UT_LOOK_SEG "seg"
@@ -158,6 +159,7 @@ static inline int32_t ut_p_reads(const char *v) { return ut_prop_("reads", v); }
 static inline int32_t ut_p_row(int32_t v) { return ut_prop_int_("row", v); }
 static inline int32_t ut_p_rows(int32_t v) { return ut_prop_int_("rows", v); }
 static inline int32_t ut_p_rule(int v) { return ut_prop_("rule", v ? "True" : "False"); }
+static inline int32_t ut_p_scale(int32_t v) { return ut_prop_int_("scale", v); }
 static inline int32_t ut_p_secret(int v) { return ut_prop_("secret", v ? "True" : "False"); }
 static inline int32_t ut_p_shown(const char *v) { return ut_prop_("shown", v); }
 static inline int32_t ut_p_side(const char *v) { return ut_prop_("side", v); }

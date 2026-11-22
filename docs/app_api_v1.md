@@ -283,7 +283,14 @@ card's `badge=` marks its picture; a button's `kind=` may be a template;
 `ui.split(..., rule=True)` draws a rule between its cells;
 `ui.row(..., wrap=True)` packs its children from its start at their
 natural widths (a group as wide as its widest child), one that does not
-fit starting a line under them (the desk home's buttons);
+fit starting a line under them (the desk home's buttons), a row in a
+group's column at its cell; `ui.row(key, grow=True)` on a flowing page
+fills its stack, so the rows after it stand at the page's foot;
+`ui.group("", gap=)` sets its column's children that far apart;
+`ui.label(..., scale=)` draws its face at that whole scale (a display
+line, never under the page's), `w=` keeps its text that wide at most (a
+measure of prose); `ui.button(..., look="large")` is half again a row's
+height with twice the pads, on a flowing page;
 `ui.seg(label, ".FIELD", text=...)` in a rows' body binds an int field of
 the row, the index of its item, its items the lines `text=` renders over
 the row; `ui.dialog(..., look="keys")` draws no buttons on the T-Deck, whose

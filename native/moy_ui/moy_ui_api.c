@@ -1222,7 +1222,8 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     c->card_tone = 0;
     c->spread.cols = 0;
     c->spread.foot = c->spread.top = c->spread.margin = 0;
-    c->txt.lines = c->txt.centre = c->txt.tone = 0;
+    c->txt.lines = c->txt.centre = c->txt.tone = c->txt.scale = 0;
+    c->txt.w = 0;
     c->txt.role = -1;
     c->dlg.pick = -1;
     c->typed = 0;
@@ -3184,17 +3185,25 @@ void moy_ui_api_page(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t titl
     }
 }
 
-// A label's text options (moy_ui_api_text), taken from the context: where
-// its text lies across the row (`m`'s x and w), the sunk well's (`well`).
+// A label's text options (moy_ui_api_text, moy_ui_api_text_size), taken
+// from the context: where its text lies across the row (`m`'s x and w), the
+// sunk well's (`well`), the sink its text draws through (`ts`: the scale's).
 typedef struct {
     int lines, align, tone, role, sunk, card;
     moy_ui_box_t m, well;
+    moy_ui_sink_t ts;
 } txt_plan_t;
 
-static int txt_take(moy_ui_ctx_t *c, txt_plan_t *p) {
-    if (!(c->txt.lines || c->txt.centre || c->txt.tone || c->txt.role >= 0)) {
+static int txt_take(moy_ui_ctx_t *c, const moy_ui_sink_t *s, txt_plan_t *p) {
+    if (!(c->txt.lines || c->txt.centre || c->txt.tone || c->txt.role >= 0 || c->txt.scale ||
+          c->txt.w)) {
         return 0;
     }
+    p->ts = *s;
+    if (c->txt.scale) {
+        p->ts.fs = c->txt.scale;
+    }
+    int cap = c->txt.w;
     p->lines = c->txt.lines;
     p->align = c->txt.centre == 1 ? 1 : c->txt.centre == 4 ? 2 : 0;
     p->tone = c->txt.tone;
@@ -3204,7 +3213,8 @@ static int txt_take(moy_ui_ctx_t *c, txt_plan_t *p) {
                   ? (mua_kmetric(MOY_UI_K_GROUP, MOY_UI_M_GROUP_INSET)
                      + mua_kmetric(MOY_UI_K_GROUP, MOY_UI_M_GROUP_PAD)) * c->fs
                   : mua_kmetric(MOY_UI_K_ROW, MOY_UI_M_ROW_PAD) * c->fs;
-    c->txt.lines = c->txt.centre = c->txt.tone = 0;
+    c->txt.lines = c->txt.centre = c->txt.tone = c->txt.scale = 0;
+    c->txt.w = 0;
     c->txt.role = -1;
     p->card = !c->has_at && c->grp_open;
     moy_ui_box_t m = c->has_at ? c->at : c->page;
@@ -3223,6 +3233,9 @@ static int txt_take(moy_ui_ctx_t *c, txt_plan_t *p) {
         // the inset across the row, its text `sunk` pixels inside it
         m.x = (int16_t)(m.x + p->sunk);
         m.w = (int16_t)(m.w - 2 * p->sunk);
+    }
+    if (cap > 0 && m.w > cap) {
+        m.w = (int16_t)cap;
     }
     p->m = m;
     return 1;
@@ -3274,11 +3287,11 @@ void moy_ui_api_label(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t tex
     o = mua_over(o);
     int stacked;
     txt_plan_t p;
-    if (txt_take(c, &p)) {
+    if (txt_take(c, s, &p)) {
         // the Python face's text options: lines wrapped, aligned, a tone, a role
         int gnd = txt_ground(c, &p);
         moy_ui_box_t m = p.m, well = p.well;
-        int h = moy_ui_text_block(s, m, text, p.role, p.tone, p.lines, p.align, c->icon_slot,
+        int h = moy_ui_text_block(&p.ts, m, text, p.role, p.tone, p.lines, p.align, c->icon_slot,
                                   c->icon_glyph, c->fs, gnd, 0);
         int rh = txt_row_h(c, &p, h);
         moy_ui_box_t rb = mua_place(c, rh, &stacked);
@@ -3293,7 +3306,7 @@ void moy_ui_api_label(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t tex
                             mua_ground_of(c));
                 m.y = (int16_t)(rb.y + p.sunk - (c->cls ? 0 : c->fs));
                 m.h = (int16_t)h;
-                moy_ui_text_block(s, m, text, p.role, p.tone, p.lines, p.align, c->row_slot,
+                moy_ui_text_block(&p.ts, m, text, p.role, p.tone, p.lines, p.align, c->row_slot,
                                   c->row_glyph, c->fs, gnd, 1);
                 mua_clip_out(&k);
             }
@@ -3308,7 +3321,7 @@ void moy_ui_api_label(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t tex
         }
         EACH_ROW(c, k, s, p.card ? rb : b, stacked, c->page) {
             mua_band(c, s, rb, stacked);
-            moy_ui_text_block(s, b, text, p.role, p.tone, p.lines, p.align, c->row_slot,
+            moy_ui_text_block(&p.ts, b, text, p.role, p.tone, p.lines, p.align, c->row_slot,
                               c->row_glyph, c->fs, gnd, 1);
             mua_clip_out(&k);
         }
@@ -4082,12 +4095,12 @@ int moy_ui_api_measure(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui
     int w, h;
     if (kind == MOY_UI_MEASURE_LABEL) {
         txt_plan_t p;
-        if (txt_take(c, &p)) {
-            int th = moy_ui_text_block(s, p.m, text, p.role, p.tone, p.lines, p.align,
+        if (txt_take(c, s, &p)) {
+            int th = moy_ui_text_block(&p.ts, p.m, text, p.role, p.tone, p.lines, p.align,
                                        c->icon_slot, c->icon_glyph, c->fs, txt_ground(c, &p), 0);
             h = txt_row_h(c, &p, th);
             // the text, an icon before it, its inset from the row's either edge
-            w = moy_ui_role_w(s, p.role, text) + 2 * (p.m.x - r.x);
+            w = moy_ui_role_w(&p.ts, p.role, text) + 2 * (p.m.x - r.x);
             if (c->icon_slot >= 0 || c->icon_glyph >= 0) {
                 w += (16 + (c->cls ? 6 : 4)) * c->fs;
             }

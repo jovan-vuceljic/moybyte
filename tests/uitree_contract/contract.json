@@ -1281,6 +1281,10 @@
     "look": {
      "type": "word:card",
      "level": 2
+    },
+    "gap": {
+     "type": "int",
+     "level": 2
     }
    }
   },
@@ -1413,6 +1417,14 @@
     "align": {
      "type": "word:start,center,end",
      "level": 1
+    },
+    "scale": {
+     "type": "int",
+     "level": 2
+    },
+    "w": {
+     "type": "int",
+     "level": 2
     }
    }
   },
@@ -1679,6 +1691,10 @@
     },
     "tone": {
      "type": "tpl",
+     "level": 2
+    },
+    "look": {
+     "type": "word:large",
      "level": 2
     }
    }

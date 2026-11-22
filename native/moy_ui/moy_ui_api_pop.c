@@ -596,6 +596,11 @@ void moy_ui_api_text(moy_ui_ctx_t *c, int lines, int centre, int tone, int role)
     c->txt.role = (int8_t)(role < 0 || role > MOY_UI_FONT_RESULT ? -1 : role);
 }
 
+void moy_ui_api_text_size(moy_ui_ctx_t *c, int scale, int w) {
+    c->txt.scale = (uint8_t)(scale < 0 ? 0 : scale > 16 ? 16 : scale);
+    c->txt.w = (int16_t)(w < 0 ? 0 : w > 0x3fff ? 0x3fff : w);
+}
+
 void moy_ui_api_card_mark(moy_ui_ctx_t *c, moy_ui_span_t badge, int tone,
                           moy_ui_span_t blank) {
     c->card_slot = (int16_t)(badge.n ? moy_ui_icon_slot(badge.p, badge.n) : -1);

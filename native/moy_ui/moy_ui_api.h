@@ -551,6 +551,8 @@ typedef struct {
 // The next label's text options: moy_ui_ctx_t's `txt`, owned by moy_ui_api_pop.c.
 typedef struct {
     int8_t lines, centre, tone, role;
+    uint8_t scale;                  // moy_ui_api_text_size's
+    int16_t w;
 } moy_ui_txt_t;
 
 // A shift frame: moy_ui_ctx_t's `sh`, owned by moy_ui_api_host.c.
@@ -1097,6 +1099,10 @@ void moy_ui_api_menu_danger(moy_ui_ctx_t *c, uint32_t rows);
 // `cols` 0 keeps the columns the grid fits, its `foot` and `top` still
 // taken; `foot` below 0 is none).
 void moy_ui_api_text(moy_ui_ctx_t *c, int lines, int centre, int tone, int role);
+// The next label's size, with its text options: its text at the whole scale
+// `scale` (0: the sink's) and at most `w` pixels wide from where it starts
+// (0: its row's width), a measure of prose or a display line.
+void moy_ui_api_text_size(moy_ui_ctx_t *c, int scale, int w);
 void moy_ui_api_card_mark(moy_ui_ctx_t *c, moy_ui_span_t badge, int tone,
                           moy_ui_span_t blank);
 void moy_ui_api_grid_spread(moy_ui_ctx_t *c, int cols, int foot, int top, int margin,

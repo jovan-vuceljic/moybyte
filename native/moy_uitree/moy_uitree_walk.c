@@ -1236,6 +1236,9 @@ static void draw_text_view(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
 // 4 how far the stack moves past it) added to *h.
 static uint32_t prop_text(uit_t *e, int k, const char *name, int model, int row, uint32_t *n);
 
+static int32_t len_of(uit_t *e, int t, int model, int row, int32_t dflt);
+static int32_t int_of(uit_t *e, int t, int model, int row, int32_t dflt);
+
 static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row, int32_t *h,
                          int part)
 {
@@ -1258,7 +1261,10 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         e->scratch.n = mark;
     }
     a1 = text(e, k, 0, model, row, &n1);
-    int t = N->nbtn, opts = tone || (t & ~LT_CHAR);
+    // scale=: its face at that whole scale, never under the page's; w=: its text at most that wide
+    int32_t sc = int_of(e, N->t_value, model, row, 0), cap = len_of(e, N->t_aux, model, row, 0);
+    sc = sc > e->fs ? sc : 0;
+    int t = N->nbtn, opts = tone || (t & ~LT_CHAR) || sc || cap > 0;
     int lines = (t & LT_WRAP) == LT_WORD || (t & LT_LINES) ? (N->btn ? N->btn : 16) : 0;
     // wrap="char": lines of what fits the page's width, cut anywhere, each a label
     uint32_t per = 0;
@@ -1303,8 +1309,10 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         }
         if ((t & LT_WRAP) != LT_CHAR)
             m = n1;
-        if (opts)
+        if (opts) {
             moy_ui_api_text(c, lines, (t >> LT_ALIGN_SHIFT) & 7, tone, face);
+            moy_ui_api_text_size(c, sc, cap);
+        }
         moy_ui_over_none(&o);
         if (h) {
             int32_t out[5];
@@ -2297,9 +2305,23 @@ static int32_t button_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
     int32_t out[5];
     moy_ui_api_measure(c, s, MOY_UI_MEASURE_BUTTON, sspan(e, a, n), NULL, out);
     e->scratch.n = mark;
+    int desk = (e->flags & UIT_F_DESK) != 0;
     if (icon && (N->btn & BT_ALONE))
-        return (e->flags & UIT_F_DESK) ? 36 : 26 * e->fs;
-    return out[2] + (icon ? ((e->flags & UIT_F_DESK) ? 20 : 14 * e->fs) : 0);
+        return desk ? 36 : 26 * e->fs;
+    int32_t w = out[2] + (icon ? (desk ? 20 : 14 * e->fs) : 0);
+    if (N->btn & BT_LARGE) {
+        // look="large": twice the pads, a least width half again the toolkit's
+        int32_t least = desk ? 112 : 84 * e->fs;
+        w += desk ? 32 : 24 * e->fs;
+        w = w > least ? w : least;
+    }
+    return w;
+}
+
+// A button's height on a flowing page: the toolkit's, half again for look="large".
+static int32_t button_h(uit_t *e, int k, int32_t h)
+{
+    return (NODE(k)->btn & BT_LARGE) ? h * 3 / 2 : h;
 }
 
 // An empty page's line onto `b`, broken at word breaks into lines of its column (the page's
@@ -2433,9 +2455,12 @@ static int flow_shown(uit_t *e, int g, int model, int row)
            (G->act < 0 || uit_act_can(e, G->act, model, row) || e->acts[G->act].off == 2);
 }
 
-static int32_t col_gap(uit_t *e)
+static int32_t len_of(uit_t *e, int t, int model, int row, int32_t dflt);
+
+// The gap between a column's children: its group's gap=, else a small one.
+static int32_t col_gap(uit_t *e, int k, int model, int row)
 {
-    return (e->flags & UIT_F_DESK) ? 4 : 2 * e->fs;
+    return len_of(e, NODE(k)->t_value, model, row, (e->flags & UIT_F_DESK) ? 4 : 2 * e->fs);
 }
 
 static int32_t flow_h(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, int model, int row,
@@ -2449,9 +2474,11 @@ static int32_t col_h_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
     int n = 0;
     KIDS(k, g)
     if (flow_shown(e, g, model, row))
-        h += flow_h(e, c, s, g, model, row, x, y, w) + (n++ ? col_gap(e) : 0);
+        h += flow_h(e, c, s, g, model, row, x, y, w) + (n++ ? col_gap(e, k, model, row) : 0);
     return h;
 }
+
+static int32_t flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row, int dry);
 
 // Child `g`'s height in a cell `w` wide at (x, y).
 static int32_t flow_h(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, int model, int row,
@@ -2470,7 +2497,7 @@ static int32_t flow_h(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, 
         moy_ui_api_at(c, x, y, w, 0);
         moy_ui_api_measure(c, s, MOY_UI_MEASURE_BUTTON, sspan(e, a, n), NULL, out);
         e->scratch.n = mark;
-        return out[3] > 0 ? out[3] : ((e->flags & UIT_F_DESK) ? 30 : 20 * e->fs);
+        return button_h(e, g, out[3] > 0 ? out[3] : ((e->flags & UIT_F_DESK) ? 30 : 20 * e->fs));
     case UIT_PICTURE:
         return pic_side(e, g, model, row) + ((e->flags & UIT_F_DESK) ? 6 : 4 * e->fs);
     case UIT_PROGRESS:
@@ -2479,6 +2506,9 @@ static int32_t flow_h(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, 
         return out[3];
     case UIT_GROUP:
         return col_h_at(e, c, s, g, model, row, x, y, w);
+    case UIT_ROW:                       // a row in a column: its cells' height in the cell
+        moy_ui_api_at(c, x, y, w, 0);
+        return flow_row(e, c, s, g, model, row, 1);
     }
     return h_row(e);
 }
@@ -2500,7 +2530,7 @@ static void col_draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, i
             cell[2] = bw < r[2] ? bw : r[2];    // a button its natural width (a grow= one across)
         }
         flow_draw(e, c, s, g, model, row, cell);
-        y += h + col_gap(e);
+        y += h + col_gap(e, k, model, row);
     }
 }
 
@@ -2553,9 +2583,9 @@ static int32_t wrap_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, 
 
 // A wrap= row (`ui.row(wrap=True)`): its children at their natural widths from its start, gap=
 // apart; a child that does not fit after another starts a line under them, the lines gap= apart.
-static void draw_wrap_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int model, int row,
-                          const int16_t *kids, int n, int32_t x, int32_t y, int32_t room, int32_t gap,
-                          int32_t step_gap)
+static int32_t draw_wrap_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int model, int row,
+                             const int16_t *kids, int n, int32_t x, int32_t y, int32_t room, int32_t gap,
+                             int32_t step_gap, int dry)
 {
     int32_t ws[FLOW_KIDS], hs[FLOW_KIDS], top = y;
     for (int i = 0; i < n; i++) {
@@ -2575,7 +2605,7 @@ static void draw_wrap_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
             cx += ws[i] + gap;
         }
         cx = x;
-        for (int i = a; i < b; i++) {
+        for (int i = a; i < b && !dry; i++) {
             int kind = NODE(kids[i])->kind;
             int32_t px = kind == UIT_PICTURE ? pic_margin(e) : 0;
             int32_t ty = kind == UIT_GROUP || kind == UIT_PICTURE ? top : top + (rh - hs[i]) / 2;
@@ -2586,10 +2616,14 @@ static void draw_wrap_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
         top += rh + (b < n ? gap : 0);
         a = b;
     }
-    moy_ui_api_space(c, top - y + step_gap);
+    if (!dry && !e->in_flow)
+        moy_ui_api_space(c, top - y + step_gap);   // in a column's cell its column moves on
+    return top - y + step_gap;
 }
 
-static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+// A row of a flowing page: its cells across, drawn, or with `dry` only measured. Answers the
+// height it moves the page's rows down by, its gap under it taken.
+static int32_t flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row, int dry)
 {
     int16_t kids[FLOW_KIDS];
     int32_t ws[FLOW_KIDS], hs[FLOW_KIDS], out[5];
@@ -2598,16 +2632,14 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
     if (n < FLOW_KIDS && flow_shown(e, g, model, row))
         kids[n++] = (int16_t)g;
     if (!n)
-        return;
+        return 0;
     moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, out);
     int32_t x = out[0], y = out[1], room = out[2], gap = len_of(e, NODE(k)->t_value, model, row, desk ? 12 : 6 * e->fs);
     int32_t step_gap = out[4] - out[3] > 0 ? out[4] - out[3] : 0, used = 0;
     int32_t pad = len_of(e, NODE(k)->t_aux, model, row, 0);     // pad=: in from either side
     x += pad, room -= 2 * pad;
-    if (NODE(k)->lit & RW_WRAP) {
-        draw_wrap_row(e, c, s, model, row, kids, n, x, y, room, gap, step_gap);
-        return;
-    }
+    if (NODE(k)->lit & RW_WRAP)
+        return draw_wrap_row(e, c, s, model, row, kids, n, x, y, room, gap, step_gap, dry);
     for (int i = 0; i < n; i++) {
         const uit_node_t *G = NODE(kids[i]);
         if (G->kind == UIT_BUTTON && (G->btn & BT_GROW))
@@ -2648,6 +2680,8 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
         rh = hs[i] > rh ? hs[i] : rh;
         cx += cw + gap;
     }
+    if (dry)
+        return rh + step_gap;
     cx = at;
     for (int i = 0; i < n; i++) {
         int kind = NODE(kids[i])->kind;
@@ -2657,7 +2691,56 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
         flow_draw(e, c, s, kids[i], model, row, cell);
         cx += ws[i] + gap;
     }
-    moy_ui_api_space(c, rh + step_gap);
+    if (!e->in_flow)
+        moy_ui_api_space(c, rh + step_gap);
+    return rh + step_gap;
+}
+
+// What the nodes after `k` on a flowing page move its rows down by, measured: -1 where one is a
+// kind with no measure here (a row, a label and a button have one).
+static int32_t flow_rest(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+{
+    int32_t sum = 0, out[5];
+    for (int g = NODE(k)->next; g != (int)UIT_NONE; g = NODE(g)->next) {
+        const uit_node_t *G = NODE(g);
+        if (!uit_shown(e, g, model, row) || (G->act >= 0 && !uit_act_can(e, G->act, model, row) &&
+                                             e->acts[G->act].off != 2) ||
+            G->kind == UIT_DIALOG || G->kind == UIT_POPOVER)
+            continue;                   // not drawn, or over the page
+        c->has_at = 0;                  // the last measure's ui.at rect: no row draws in it
+        if (G->kind == UIT_ROW && !(G->lit & RW_GROW)) {
+            sum += flow_row(e, c, s, g, model, row, 1);
+        } else if (G->kind == UIT_LABEL) {
+            label_rows(e, c, s, g, model, row, &sum);
+        } else if (G->kind == UIT_BUTTON) {
+            uint32_t n, mark = e->scratch.n, a = text(e, g, 0, model, row, &n);
+            moy_ui_api_measure(c, s, MOY_UI_MEASURE_BUTTON, sspan(e, a, n), NULL, out);
+            e->scratch.n = mark;
+            sum += button_h(e, g, out[3]) + out[4] - out[3];
+        } else {
+            sum = -1;
+            break;
+        }
+    }
+    c->has_at = 0;
+    return sum;
+}
+
+// A row of a flowing page. A grow= one fills its stack: under its cells, the room its page
+// leaves below what follows it, so the rows after it stand at the page's foot.
+static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+{
+    int32_t out[5];
+    flow_row(e, c, s, k, model, row, 0);
+    if (!(NODE(k)->lit & RW_GROW) || c->page.h <= 0)
+        return;
+    int32_t rest = flow_rest(e, c, s, k, model, row);
+    if (rest < 0)
+        return;
+    moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, out);
+    int32_t step_gap = out[4] - out[3] > 0 ? out[4] - out[3] : 0;
+    int32_t room = c->page.y + c->page.h - out[1] - (rest > 0 ? rest - step_gap : 0);
+    moy_ui_api_space(c, room > 0 ? room : 0);
 }
 
 // -- a long rows list: the rows in view ------------------------------------------------------
@@ -2951,7 +3034,16 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         n2 = n1;
         if ((N->btn & BT_ALONE) && (N->t_icon >= 0 || (N->act >= 0 && uit_str(e, e->acts[N->act].icon)[0])))
             n1 = 0;                 // its icon alone, its word its tooltip
+        int32_t big[5] = {0};
+        if ((N->btn & BT_LARGE) && !e->in_flow && !e->in_cell && !e->in_foot && !e->placed &&
+            moy_ui_api_measure(c, s, MOY_UI_MEASURE_BUTTON, sspan(e, a1, n1), NULL, big)) {
+            // a large button stacked on the page: its own width at the row's start, half again as tall
+            big[2] = button_w(e, c, s, k, model, row);
+            moy_ui_api_at(c, big[0], big[1], big[2], button_h(e, k, big[3]));
+        }
         a2 = moy_ui_api_button(c, s, sspan(e, a1, n1), button_kind(e, k, model, row), &o);
+        if (big[2])
+            moy_ui_api_space(c, button_h(e, k, big[3]) + big[4] - big[3]);
         if (n1 != n2)
             moy_ui_api_tip(c, &o, sspan(e, a1, n2));
         if (a2 && uit_act_can(e, N->act, model, row))
