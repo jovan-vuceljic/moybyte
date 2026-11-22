@@ -1958,7 +1958,7 @@ SCHEMA = {
     "progress": dict(_C, label="text", value="int", max="int", look="lit"),
     "empty": dict(_C, icon="text", title="text", lines="texts"),
     "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit"),
-    "dialog": dict(_C, title="text", buttons="lit"),
+    "dialog": dict(_C, title="text", buttons="lit", kind="lit"),
     "popover": dict(_C, anchor="text", w="int", close="action0", wash="lit"),
     "menu": dict(_C, caption="text"),
     "item": dict(_C, label="text", icon="text", mkind="lit"),

@@ -483,7 +483,7 @@
     "popover_wifi": "32cf70f5b3b78b3f1ebe580ea3bdad4a6a69b1f6ef7fe7cd1c33a87547aa1bb9"
   },
   "p4_1024x600_cs2_fs1_procs": {
-    "desk_close_refusal": "cdf9449299f467d953148f97069a8a18a0f71283f6be1cd116dc97e0450a1965",
+    "desk_close_refusal": "e3d1a27afe37f4bf8ffa503df789ff57eedd546586055e518a090346baaf21d9",
     "desk_two_games": "cdc53459e6673b5c3472af3a4007d8c96b3275a0ae4406795a353baf6257223e"
   },
   "p4_1024x600_cs2_fs1_status": {
@@ -1103,7 +1103,7 @@
     "status_cc_panel": "a2ccc0ddaab7be5a0b29af2fc3ae65a2801bbd04ed063afabe65ceceea625aae",
     "status_cc_scrolled": "82c5556bd0283837c796533901f30c8d7ccb2d50edb1af09a9db78de2f5afcc2",
     "status_paused_bar": "0e95a635b24c8288114c44acf7badaa9e4fcc0251ace17a3f86730ea1fec2b66",
-    "status_vmstop": "50755b2fba866d6165457464732d4df264c1e9d747b4d9e7aede198d635e98fe"
+    "status_vmstop": "eb3d203094437c93edefff17e18dde3a2b813c00bf8e606e0e1d3fc530e92795"
   },
   "tdeck_320x240_fs1_tasks": {
     "note_banner": "10606f0dda83bc1a383c82c9c05752c4e09864ad064756b21f6d74f1a9cd8e63",

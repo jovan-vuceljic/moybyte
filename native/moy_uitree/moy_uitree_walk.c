@@ -2497,7 +2497,9 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
             uit_buf_printf(&b, "%s", l);
         }
         // the labels joined by NULs: b.n counts them (uit_buf_printf of "%c", 0 adds one byte)
-        int pick = moy_ui_api_dialog(c, s, sspan(e, a1, n1), (const uint8_t *)(b.p ? b.p : ""), b.n, 1, NULL);
+        // the verb's kind, the toolkit's: primary (1), or with kind="danger" danger (3)
+        int pick = moy_ui_api_dialog(c, s, sspan(e, a1, n1), (const uint8_t *)(b.p ? b.p : ""), b.n,
+                                     N->lit ? 3 : 1, NULL);
         uit_buf_free(&b);
         walk(e, c, s, k, model, row);
         moy_ui_api_dialog(c, s, span_of("", 0), (const uint8_t *)"", 0, 0, NULL);

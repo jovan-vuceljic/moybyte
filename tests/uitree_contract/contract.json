@@ -2164,6 +2164,10 @@
      "type": "list:action",
      "level": 1
     },
+    "kind": {
+     "type": "word:primary,danger",
+     "level": 1
+    },
     "default": {
      "type": "action",
      "level": 1,

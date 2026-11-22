@@ -4,7 +4,7 @@ buttons the answers.
 
 - A verb's question (`verb` delete, close, stop_play or receive): its line
   under the title, wrapped, the card growing to fit; Cancel (No for a
-  receive) and the verb.
+  receive) and the verb, in the danger look where it loses something.
 - The first run of a cart that arrived as files (`open`): the install
   prompt's lines (`app_perms.rows`), No and Open.
 - The intents' "open with" (`choose`): a menu under the line, a row each
@@ -59,14 +59,16 @@ ui.action("receive", "Receive", _yes)
 ui.action("open", "Open", _yes)
 ui.action("pick", "Choose", _pick, takes="row")
 
-# A verb's question: its buttons, Cancel or No first.
-_ASKS = (("delete", "cancel"), ("close", "cancel"), ("stop_play", "cancel"), ("receive", "no"))
+# A verb's question: its buttons, Cancel or No first, and whether the verb
+# loses something (the danger look).
+_ASKS = (("delete", "cancel", True), ("close", "cancel", True), ("stop_play", "cancel", True),
+         ("receive", "no", False))
 
 
 def page():
     with ui.page(""):
-        for verb, no in _ASKS:
-            with ui.dialog("{title}", [no, verb], shown="verb=" + verb):
+        for verb, no, danger in _ASKS:
+            with ui.dialog("{title}", [no, verb], shown="verb=" + verb, kind="danger" if danger else "primary"):
                 ui.label("{line}", wrap="word", lines=3)
         with ui.dialog("{title}", ["no", "open"], shown="verb=open"):
             with ui.rows("lines"):
