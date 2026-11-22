@@ -950,7 +950,7 @@ def _playing_row(rows):
     for r in rows:
         if r["st"]:
             return r["id"]
-    return rows[1]["id"] if len(rows) > 1 and rows[0]["id"] == ADD else rows[0]["id"] if rows else ""
+    return rows[0]["id"] if rows else ""
 
 
 def _focus_list():

@@ -474,8 +474,9 @@ def test_the_keys_move_the_current_station(tmp_path, face, desk):
     ws.spine.open_app(app)
     drv = make_drv(ws)
     _settle(ws)
+    assert app.state().scur == M.ADD, "nothing plays: the list opens on Add a station"
     n = len(M.STREAM.stations)
-    for _ in range(n - 1):
+    for _ in range(n):
         drv.press("down")
         _frames(drv, 12)                    # the glide's frames
     assert app.state().scur == "r%d" % (n - 1)
