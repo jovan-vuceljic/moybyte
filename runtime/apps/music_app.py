@@ -920,7 +920,8 @@ class MusicAppLayer(AppLayer):
         s = STREAM
         s.on_change = self._moved
         if s.section is None:
-            s.section = MusicSection(s, ctx.nav)
+            s.section = MusicSection(s)
+        s.section.nav = ctx.nav     # the console's: the next one's takes its place
         self.stream = s
         if s.what is None:
             s.follow()
