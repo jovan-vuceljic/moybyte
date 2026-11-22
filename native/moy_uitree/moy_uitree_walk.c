@@ -2418,7 +2418,8 @@ static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
 //
 // A `ui.row` on a page the toolkit stacks (not a placed one): its children side by side on one
 // row of the stack, as tall as its tallest. A button takes its natural width (unless grow=), a
-// picture its side and its margin, a label after the row's filler its text's width; the filler
+// picture its side and its margin, a rule a line down the row between its neighbours, a label
+// after the row's filler its text's width; the filler
 // (a grow= button, else the first other child) takes the width left. A row whose children all
 // take their own widths centres them; pad= sets it in from either side. A group in it is a
 // column, its children one under the next from its cell's top (a button its natural width);
@@ -2491,6 +2492,8 @@ static int32_t flow_h(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, 
         return out[3];
     case UIT_GROUP:
         return col_h_at(e, c, s, g, model, row, x, y, w);
+    case UIT_RULE:
+        return 0;                       // a row's rule: as tall as the row it divides
     }
     return h_row(e);
 }
@@ -2558,7 +2561,8 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
             fill = i;
     }
     for (int i = 0; i < n && fill < 0; i++)
-        if (NODE(kids[i])->kind != UIT_BUTTON && NODE(kids[i])->kind != UIT_PICTURE)
+        if (NODE(kids[i])->kind != UIT_BUTTON && NODE(kids[i])->kind != UIT_PICTURE &&
+            NODE(kids[i])->kind != UIT_RULE)
             fill = i;
     for (int i = 0; i < n; i++) {
         int g = kids[i], kind = NODE(g)->kind;
@@ -2569,6 +2573,8 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
             ws[i] = button_w(e, c, s, g, model, row);
         } else if (kind == UIT_PICTURE) {
             ws[i] = pic_side(e, g, model, row) + pic_margin(e);
+        } else if (kind == UIT_RULE) {
+            ws[i] = desk ? 1 : e->fs;
         } else if (kind == UIT_LABEL) {
             int32_t lw = 0;
             moy_ui_api_at(c, x, y, room, 0x3fff);
@@ -2598,7 +2604,10 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
         int32_t px = kind == UIT_PICTURE ? pic_margin(e) : 0;
         int32_t top = kind == UIT_GROUP || kind == UIT_PICTURE ? y : y + (rh - hs[i]) / 2;
         int32_t cell[4] = {cx + px, top, ws[i] - px, hs[i]};
-        flow_draw(e, c, s, kids[i], model, row, cell);
+        if (kind == UIT_RULE)
+            fill_token(s, cx, y, ws[i], rh, MOY_UI_T_BORDER);   // a rule between its neighbours
+        else
+            flow_draw(e, c, s, kids[i], model, row, cell);
         cx += ws[i] + gap;
     }
     moy_ui_api_space(c, rh + step_gap);
@@ -2851,6 +2860,10 @@ static void value_over(uit_t *e, int k, int model, int row, moy_ui_over_t *o)
         moy_ui_over_put(o, MOY_UI_OV_INK, &ink);
     if (nt)
         moy_ui_over_text(o, MOY_UI_OV_TAG, sspan(e, at, nt));
+    uint32_t nw, aw = prop_text(e, k, "swatch", model, row, &nw);
+    int32_t chip = nw ? button_ink(e->scratch.p + aw, nw) : -1;     // a link's colour chip: "#RRGGBB"
+    if (chip >= 0 && chip < MOY_UI_O_ROLE)
+        moy_ui_over_put(o, MOY_UI_OV_FILL, &chip);
 }
 
 static void put_cell(uit_t *e, int k, int model, int row, const int32_t r[4]);
@@ -5358,6 +5371,23 @@ int uit_still(uit_t *e, const moy_ui_ctx_t *c, int x, int y, int w, int h, int f
     return !moy_ui_api_moved(c) && !moy_ui_api_moving(c) && !moy_ui_api_owes(c);
 }
 
+// Whether node `k` is shown and a split or a grid, or a switch whose shown case holds one: the
+// page is then laid out in cells, and its band cut from its room.
+static int in_cells(uit_t *e, int k)
+{
+    int kind = NODE(k)->kind;
+    if (!uit_shown(e, k, -1, -1))
+        return 0;
+    if (kind == UIT_SPLIT || kind == UIT_GRID)
+        return 1;
+    int cs = kind == UIT_SWITCH ? uit_case_of(e, k) : -1;
+    if (cs >= 0)
+        KIDS(cs, g)
+        if (in_cells(e, g))
+            return 1;
+    return 0;
+}
+
 int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, int w, int h,
               int flags, int fs, int input)
 {
@@ -5483,7 +5513,7 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         size_t hn = (flags & UIT_F_ON_BAR) ? sizeof BAR - 1 : hb.n - 1;
         int placed = e->foot >= 0;
         KIDS(0, k)
-        if ((NODE(k)->kind == UIT_SPLIT || NODE(k)->kind == UIT_GRID) && uit_shown(e, k, -1, -1))
+        if (in_cells(e, k))
             placed = 1;
         int card = 0;           // a bare page's shown popover is the page: the band in its body
         if (flags & UIT_F_BARE)

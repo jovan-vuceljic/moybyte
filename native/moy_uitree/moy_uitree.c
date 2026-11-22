@@ -1112,6 +1112,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     else if ((kind == UIT_BUBBLE && (!strcmp(name, "side") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              ((kind == UIT_INFO || kind == UIT_LINK) &&
               (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
+             (kind == UIT_LINK && !strcmp(name, "swatch")) ||
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
              (kind == UIT_CARD && !strcmp(name, "badge")) || (kind == UIT_CARDS && !strcmp(name, "pad"))) {
         // templates the draw finds among its props by name (uit_tmpl_prop); signal=, a month's
@@ -1570,7 +1571,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         }
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
-    if (!strcmp(name, "current") && kind == UIT_ROWS) {
+    if (!strcmp(name, "current") && (kind == UIT_ROWS || kind == UIT_CARDS)) {
         int s = uit_slot_find(e, src, strlen(src));
         int t = s < 0 ? 0 : e->slots[s].type;
         if (t != UIT_TEXT && t != UIT_ROWOF && t != UIT_INT)

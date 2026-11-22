@@ -906,6 +906,14 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                     text_cut(&d, &fl, r->value, x, b.y, b.h, vroom, vc, sc);
                 }
             }
+            if (kind == MOY_UI_V_LINK && r->colours != NULL && r->n == 1) {
+                // a link's colour (its fill): a chip a gap before its value
+                int cs = (d.desk ? 14 : 8) * d.fs;
+                x -= gap + cs;
+                rrect(&d, x, b.y + (b.h - cs) / 2, cs, cs, 2 * d.fs, 1,
+                      swatch(&d, colour_at(r->colours, 0)), d.fs,
+                      pal(&d, tok(&d, MOY_UI_T_BORDER, MOY_UI_T_INK_DIM)));
+            }
             if (r->signal > 0 && kind != MOY_UI_V_CYCLE) {
                 // the glyph a gap before the value, its foot a unit over the
                 // value's baseline

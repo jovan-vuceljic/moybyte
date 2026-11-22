@@ -2011,7 +2011,7 @@ SCHEMA = {
     "toast": dict(_C, text="text", icon="text"),
     "info": dict(_C, label="text", value="text", icon="text", signal="int", tag="text", tone="text"),
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond", tag="text",
-                 tone="text"),
+                 tone="text", swatch="text"),
     "button": dict(_C, kind="lit", label="text", icon="text", alone="lit", span="lit", arg="lit",
                    focus="cond", grow="lit", marked="cond", w="int", tone="text"),
     "toggle": dict(_C, label="text", on="action0", focus="cond", hint="text"),

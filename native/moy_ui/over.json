@@ -15,7 +15,7 @@
     "that probe draws no pixel of. A key with `doc` shares that key's row of the doc."
   ],
   "keys": [
-    {"key": "fill", "kind": "colour", "where": "head", "value": "a role name, or a colour `0xRRGGBB`", "does": "replaces the kind's colour: a role (`\"danger\"`, `\"value\"`) still follows the theme and its mode; a raw colour is the app's own, and the readability check does not vouch for it", "probe": "button", "example": 2113632},
+    {"key": "fill", "kind": "colour", "where": "head", "value": "a role name, or a colour `0xRRGGBB`", "does": "replaces the kind's colour: a role (`\"danger\"`, `\"value\"`) still follows the theme and its mode; a raw colour is the app's own, and the readability check does not vouch for it; a link's raw `fill` is a chip of that colour before its value", "probe": "button", "example": 2113632},
     {"key": "ink", "kind": "colour", "where": "head", "doc": "fill", "probe": "label", "example": "danger"},
     {"key": "border", "kind": "colour", "where": "head", "doc": "fill", "probe": "button", "example": 65280},
     {"key": "id", "kind": "text", "where": "head", "value": "text", "does": "the id, where the label is not unique", "probe": "button", "example": "row", "unseen": true},
