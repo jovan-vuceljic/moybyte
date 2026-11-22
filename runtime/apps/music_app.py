@@ -1,7 +1,7 @@
 # Map (grep -n a name to jump there):
 #   Stream              what plays: the media face, the status item, the poll
 #   card_of             the media card's answers from the face's
-#   MusicSection        the status item's section (the desk menu, the control center)
+#   MusicSection        the status item's section, a page (music_card: the desk menu, the control center)
 #   _scan               the music folder's songs and playlists
 #   draw_now            what plays as the canvases draw it: art, equalizer, pulse, bar, meter
 #   build               the app's page: the library, Now playing, Add a station
@@ -476,47 +476,25 @@ def lines(c):
 # -- the status item's section ---------------------------------------------------
 
 class MusicSection:
-    """The status item's section (runtime/system/status_items.py): the
-    title, which opens the app, the second line, the transport and the
-    volume as rows."""
+    """The status item's section (runtime/system/status_items.py): a page,
+    the compact card (`music_card`), on the desk with the volume under it.
+    Its head opens the app."""
 
     def __init__(self, stream, nav=None):
         self.stream = stream
         self.nav = nav
 
-    def panel(self):
-        c = self.stream.card
-        if c is None:
-            return ""
-        title, meta = lines(c)
-        main = "Try again" if c["state"] == FAILED else "Play" if c["paused"] else "Pause"
-        return ("button open %s\ntext %s\nbutton main %s\nbutton prev Previous\n"
-                "button next Next\nbutton stop Stop\nslider volume Volume 0 10 %d"
-                % (_one_line(title), _one_line(meta), main, (c["volume"] + 5) // 10))
+    @property
+    def page(self):
+        return music_card.page
 
-    def press(self, rid, v):
-        st = self.stream
-        if rid == "open":
-            if self.nav is not None:
-                self.nav.open_app("jukebox")
-        elif rid == "main":
-            st.toggle()
-        elif rid == "prev":
-            st.step(-1)
-        elif rid == "next":
-            st.step(1)
-        elif rid == "stop":
-            st.stop()
-        elif rid == "volume":
-            st.volume(v * 10)
+    def height(self, desk):
+        return music_card.H_DESK if desk else music_card.H
 
+    def open(self):
+        if self.nav is not None:
+            self.nav.open_app("jukebox")
 
-def _one_line(t):
-    """`t` as a row's label: one line, never empty."""
-    return " ".join(str(t).split()) or "-"
-
-
-# -- the music folder -------------------------------------------------------------
 
 def _list_count(path):
     """How many songs playlist `path` names."""
@@ -838,11 +816,16 @@ def _bar_w(tw, fs):
 def draw_volume(cv, x, y, w, h):
     """The volume's meter, ten steps (the speaker is the page's icon
     before it), a tap or a drag the step it lands on."""
+    draw_meter(cv, x, y, w, h, _DRAWN["volume"])
+
+
+def draw_meter(cv, x, y, w, h, d):
+    """The meter in (x, y, w, h), its rect and scale kept in `d`."""
     c = STREAM.card
     if c is None:
         return
     th, fs = ui.colors(), _fs(cv)
-    _drawn("volume", x, y, w, h, fs)
+    d[0], d[1], d[2], d[3], d[4] = x, y, w, h, fs
     sx, seg, gap = _steps(x, w, fs)
     level = (c["volume"] + 5) // 10
     sh = 8 * fs
@@ -1119,10 +1102,14 @@ def strip_at(ev):
 
 def volume_at(ev):
     """A tap or a drag on the meter: the step it lands on."""
-    c = STREAM.card
-    if c is None or ev.kind == "up":
+    if ev.kind != "up":
+        meter_at(ev, _DRAWN["volume"])
+
+
+def meter_at(ev, d):
+    """A press at `ev` on the meter drawn where `d` keeps: its step."""
+    if STREAM.card is None:
         return
-    d = _DRAWN["volume"]
     sx, seg, gap = _steps(0, d[2], d[4])
     STREAM.volume(10 * max(0, min(10, (ev.x - sx + seg) // (seg + gap))))
 
@@ -1430,3 +1417,6 @@ class MusicAppLayer(uitree_app.app_layer("jukebox", "Music", build, is_app,
             self.do(fill, self)
         else:
             self.gen = -1               # the next draw fills
+
+
+import music_card  # noqa: E402 -- the section's page, which reads this module: declared at import, as every page

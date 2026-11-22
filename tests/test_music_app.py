@@ -204,9 +204,11 @@ def test_a_station_that_fails_shows_the_danger_state_and_tries_again(tmp_path, f
     assert face.played == ["http://x/y", "http://x/y"]
 
 
-def test_the_section_s_rows_list_in_the_control_center_and_act(tmp_path, face):
-    """Music's section is rows (its title, the transport, the volume) the
-    control center lists under it, and its main row plays or pauses."""
+def test_the_section_is_music_s_card_in_the_control_center_and_acts(tmp_path, face):
+    """Music's section is a page, its compact card (music_card): the control
+    center gives it a slot under Music's name, in the first view, and its
+    main button plays or pauses; the head opens the app."""
+    import music_card
     ws = build_ws(tmp_path)
     M.STREAM.play("radio", GROOVE[0], GROOVE[2])
     ws.home.go_home()
@@ -215,12 +217,11 @@ def test_the_section_s_rows_list_in_the_control_center_and_act(tmp_path, face):
     assert ws.sysmenu.open and ws.sysmenu.widget == "battery"
     _settle(ws, 2)
     it = M.STREAM.item
-    p = ITEMS.panels[it.k]
-    assert p.rid[:p.n] == ["open", "", "main", "prev", "next", "stop", "volume"]
-    host = ws.sysmenu.comp.host
-    x, y, w, h = host.box("%d.2/press" % it.k)
+    assert ITEMS.page(it) is music_card.page and ITEMS.panels[it.k].n == 0
+    sc = next(s for s in ws.sysmenu.comp.secs if s is not None)
+    x, y, w, h = sc.host.box("main")
     px, py, pw, ph = ws.sysmenu.panel_rect()
-    assert py <= y and y + h <= py + ph, "the transport's first row in the first view"
+    assert py <= y and y + h <= py + ph, "the transport in the first view"
     stopped = []
     M.STREAM.toggle = lambda: stopped.append(1)
     try:
@@ -231,6 +232,13 @@ def test_the_section_s_rows_list_in_the_control_center_and_act(tmp_path, face):
     finally:
         del M.STREAM.toggle
     assert stopped == [1]
+    opened = []
+    M.STREAM.section.nav = type("Nav", (), {"open_app": lambda self, n: opened.append(n)})()
+    hx, hy, hw, hh = sc.engine.slot_rect("head")
+    drv.click(hx + hw // 2, hy + hh // 2)
+    for _ in range(2):
+        drv.frame(1 / 30)
+    assert opened == ["jukebox"]
 
 
 def test_add_a_station_refuses_https_and_keeps_an_http_one(tmp_path, face):

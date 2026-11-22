@@ -679,6 +679,8 @@ static void stops_of(uit_t *e, int k, int model, int row, stops_t *out)
                 stops_of(e, cs, model, row, out);
         } else if (N->kind == UIT_DIALOG || N->kind == UIT_POPOVER || (N->kind == UIT_TOOLS && (N->lit & TL_LEND))) {
             continue;               // drawn over the page, or at the site it is lent to
+        } else if (N->kind == UIT_CANVAS && (N->lit & CV_KEYS)) {
+            stop_put(out, c, row);  // a canvas that takes the keys while it holds focus
         } else if (N->kind == UIT_TABS && N->t_aux >= 0) {
             continue;               // tabs the band names (hint=): the tabs keys or a tap switch them
         } else if (is_stop(N->kind)) {
@@ -1700,6 +1702,13 @@ static void fit_spans(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, const i
 
 static void put_rect(uit_t *e, int k, const int32_t r[4]);
 
+// A canvas's h=: its number, or its int template's value.
+static int32_t canvas_h(uit_t *e, int k)
+{
+    const uit_node_t *N = NODE(k);
+    return N->t_aux >= 0 ? int_of(e, N->t_aux, -1, -1, 0) : N->btn;
+}
+
 static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     const uit_node_t *N = NODE(k);
@@ -1726,6 +1735,12 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
         int32_t cell[4] = {across ? r[0] + at : r[0], across ? r[1] : r[1] + at, across ? sz : r[2],
                            across ? r[3] : sz};
         at += sz + gap;
+        if (NODE(g)->kind == UIT_CANVAS && (NODE(g)->lit & CV_KEYS)) {
+            moy_ui_api_at(c, cell[0], cell[1], cell[2], cell[3]);  // a stop: drawn placed in its cell
+            draw(e, c, s, g, model, row);
+            moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3]);
+            continue;
+        }
         if (NODE(g)->kind == UIT_CANVAS) {
             put_rect(e, g, cell);       // where a press on it lands (`uit_rect`)
             if (e->draw_fn)             // a cell of its own that only draws: drawn into the cell
@@ -2542,13 +2557,21 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         draw_grid(e, c, s, k, model, row);
         break;
     case UIT_CANVAS: {
-        // a row of the page that only draws: no stop, no ring
+        // a row of the page that only draws, no stop; with keys= a stop, its ring unless mark=False
         const char *key = uit_str(e, N->key);
         int32_t one = 1, r[5];
         moy_ui_over_none(&o);
         moy_ui_over_text(&o, MOY_UI_OV_ID, span_of(key, strlen(key)));
-        moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &one);
-        moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, N->btn, &o, r);
+        if ((e->flags & UIT_F_BARE) || e->in_foot)
+            moy_ui_over_put(&o, MOY_UI_OV_BARE, &one);       // a bare page's canvases sink no well
+        if (N->lit & CV_KEYS) {
+            if (N->lit & CV_NOMARK)
+                moy_ui_over_put(&o, MOY_UI_OV_MARK, &(int32_t){0});
+            id_put(e, k, model, row, key);
+        } else {
+            moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &one);
+        }
+        moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, canvas_h(e, k), &o, r);
         put_rect(e, k, r);              // where a press on it lands (`uit_rect`)
         if (e->draw_fn)
             e->draw_fn(e->draw_ud, k, model, row, r[0], r[1], r[2], r[3]);
@@ -3025,7 +3048,7 @@ static int32_t fixed_h(uit_t *e, int k)
     const uit_node_t *N = NODE(k);
     switch (N->kind) {
     case UIT_CANVAS:
-        return N->btn ? N->btn * ((e->flags & UIT_F_DESK) ? 1 : e->fs) : -1;
+        return canvas_h(e, k) ? canvas_h(e, k) * ((e->flags & UIT_F_DESK) ? 1 : e->fs) : -1;
     case UIT_SWITCH:
     case UIT_CASE:
     case UIT_PANES:

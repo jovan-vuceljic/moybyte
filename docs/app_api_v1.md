@@ -785,11 +785,17 @@ manager's Notifications tab) brings your app to the front and calls
 **A status item.** `moybyte.status(icon, section, order=0)` puts an item in
 the bar for your process, its section's rows listed in the item's menu on the
 desk and in the control centre on a handheld; your process's end takes it out
-(`runtime/system/status_items.py`). A section describes its rows in the text
-a Lua or a compiled program gives (§10, a status item) from `panel()`, read
-again on each `item.changed()`, and hears a row's press as `press(id, value)`,
-run as your process. An item with no section, or no rows, has no menu: a tap
-on it opens your app.
+(`runtime/system/status_items.py`). A section is a page or rows. A page is a
+small `uitree` page you build with your usual API, a canvas included: the
+section's `page` is its build function and `height(desk)` the pixels it
+asks at font scale 1 (at most `SECTION_H_MAX`); the shell gives it a slot,
+drawn by its own engine and clipped to it, its taps and keys run as your
+process, and its module's `changed` hook runs on each `item.changed()`.
+Rows are described in the text a Lua or a compiled program gives (§10, a
+status item) from `panel()`, read again on each `item.changed()`, and a
+row's press is heard as `press(id, value)`, run as your process; a Lua or a
+compiled program's section is always rows. An item with no section, or no
+rows and no page, has no menu: a tap on it opens your app.
 
 ## 7. Services: background work and the one wait
 

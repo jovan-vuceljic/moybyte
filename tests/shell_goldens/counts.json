@@ -473,7 +473,7 @@
     "music_desk": [2, 12],
     "music_desk_failed": [2, 16],
     "music_desk_files": [42, 55],
-    "music_desk_menu": [15, 23]
+    "music_desk_menu": [33, 23]
   },
   "p4_1024x600_cs2_fs1_popovers": {
     "desk_window_calc": [2, 10],
@@ -644,7 +644,7 @@
     "web_console": [297, 8]
   },
   "p4_1024x600_fs2_desk_popovers": {
-    "music_desk_menu": [15, 23],
+    "music_desk_menu": [33, 23],
     "popover_battery": [45, 31],
     "popover_clock": [6, 53],
     "popover_clock_six": [4, 47],
@@ -1075,7 +1075,7 @@
     "music_add": [10, 10],
     "music_add_https": [10, 11],
     "music_bar_paused": [0, 0],
-    "music_cc": [63, 29],
+    "music_cc": [69, 29],
     "music_files": [30, 34],
     "music_files_empty": [5, 11],
     "music_files_nosd": [5, 11],

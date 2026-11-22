@@ -1221,11 +1221,34 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->nbtn |= LT_FIT;
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
-    if (kind == UIT_CANVAS && (!strcmp(name, "draw") || !strcmp(name, "h"))) {
-        // draw= names the front end's function (uit_on_draw); h= its height in a stack
-        if (name[0] == 'h')
-            N->btn = (uint16_t)strtol(src, NULL, 10);
+    if (kind == UIT_CANVAS && (!strcmp(name, "draw") || !strcmp(name, "h") || !strcmp(name, "keys"))) {
+        // draw= names the front end's function (uit_on_draw); h= its height in a stack, a number
+        // or an int template (t_aux); keys= the front end's function the keys go to while it
+        // holds focus (CV_KEYS: a stop)
+        if (name[0] == 'h') {
+            char *end;
+            long v = strtol(src, &end, 10);
+            if (*src && !*end) {
+                N->btn = (uint16_t)v;
+            } else {
+                int t = uit_tmpl_compile(e, src, model);
+                if (t < 0)
+                    return t;
+                if (e->tmpls[t].type != UIT_INT)
+                    return uit_check_fail(e, "T03", UIT_MSG("canvas h=%s is a %s, not an int", "canvas h=%s %s"), src,
+                                          uit_type_name(e->tmpls[t].type));
+                N->t_aux = (int16_t)t;
+            }
+        }
+        if (name[0] == 'k')
+            N->lit |= CV_KEYS;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    }
+    if (kind == UIT_CANVAS && !strcmp(name, "mark")) {
+        // mark=False: a keys= canvas draws no ring while it holds focus (what it hosts marks it)
+        if (src[0] == 'F' || src[0] == '0')
+            N->lit |= CV_NOMARK;
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & CV_NOMARK) == 0);
     }
     if (kind == UIT_CANVAS && !strcmp(name, "grow")) {
         // a fill along a row, its w= the basis its share is over (CV_GROW)

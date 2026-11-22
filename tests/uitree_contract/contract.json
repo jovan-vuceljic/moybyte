@@ -2435,9 +2435,8 @@
      "level": 2
     },
     "keys": {
-     "type": "hook",
-     "level": 2,
-     "designed": true
+     "type": "fn",
+     "level": 2
     },
     "capture": {
      "type": "cond",
@@ -2446,8 +2445,7 @@
     },
     "mark": {
      "type": "lit",
-     "level": 2,
-     "designed": true
+     "level": 2
     },
     "hint": {
      "type": "tpl",

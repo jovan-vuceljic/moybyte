@@ -156,6 +156,7 @@ class CEngine(Engine):
         self._slot, self._names, self._types, self._pushed = {}, [], [], {}
         self.direct = BUILD == "direct"
         self._draws, self._drawing = {}, False
+        self._canvas_keys = {}          # a canvas's key -> its keys= function
         self._grounds = {}      # a canvas's ground= role, by its node
         self._docs = {}         # a document's state -> what it was pushed at (`_push_doc`)
         self._doc_reads = {}    # ...and the fields of it the lowered page reads
@@ -550,6 +551,7 @@ class CEngine(Engine):
         x = self._x
         x.build_begin(self._page_id())
         draws = self._draws = {}
+        self._canvas_keys = {}
         if not self._drawing:
             x.on_draw(self._draw)
             self._drawing = True
@@ -638,6 +640,12 @@ class CEngine(Engine):
                         r = cprop(me, k, "%d %d" % (wh[0], wh[1]), v)
                         if r < 0:
                             fail(r, "ui.pane min=%r" % (src,), n.where)
+                    continue
+                if k == "keys" and nk == "canvas":         # the front end's function: the keys while it holds focus
+                    self._canvas_keys[n.key] = src
+                    r = cprop(me, "keys", getattr(src, "__name__", "keys"), None)
+                    if r < 0:
+                        fail(r, "canvas %s keys=" % n.key, n.where)
                     continue
                 if k == "draw" and nk == "canvas":         # the front end's function: called inside the frame
                     draws[me] = src
@@ -957,6 +965,14 @@ class CEngine(Engine):
     def draft(self, key):
         return self._x.draft(key) if self._visiting() else None
 
+    def focused_id(self):
+        """The id of the stop focus is on after the last frame, or None: the engine's."""
+        return (self._x.focused() or None) if self._visiting() else None
+
+    def slot_rect(self, key):
+        """(x, y, w, h) where canvas `key` drew in the last frame, or None: the engine's."""
+        return self._x.rect(key) if self._visiting() else None
+
     def stop_kinds(self):
         out, i = {}, 0
         if not self._visiting():
@@ -980,6 +996,19 @@ class CEngine(Engine):
         t = self._x.hints()
         return tuple(t.split("\0")[:-1]) if t else ()
 
+    def _canvas_took(self, i):
+        """The keys to the focused canvas's keys= function, run as a handler:
+        whether it took them (False: they move focus off it)."""
+        f = self._x.focused()
+        fn = self._canvas_keys.get(f) if f else None
+        if fn is None:
+            return False
+        was, S._NOW.app = S._NOW.app, self
+        try:
+            return bool(fn(i))
+        finally:
+            S._NOW.app = was
+
     def leave(self):
         """Every way out of the page: each drawn commit field's draft is
         written, in C; its writes pulled and its changed= run here."""
@@ -999,6 +1028,8 @@ class CEngine(Engine):
         if self._shut:
             self._resume()
         self._bind()
+        if self._canvas_keys and self._canvas_took(i):
+            return True
         ch = getattr(i, "typed", 0)
         a = self._x.letter(ch) if ch else -1
         if a >= 0:
