@@ -1061,6 +1061,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         // a caption drawn where its value changes from the row before: over the rows
         model = N->slot;
         tslot = &N->t_main;
+    } else if (kind == UIT_POPOVER && !strcmp(name, "at")) {
+        // the rect it hangs from, "X Y W H" on the host's surface (`draw_popover`)
+        int t = uit_tmpl_compile(e, src, model);
+        if (t < 0)
+            return t;
+        return add_prop(e, node, name, src, repr, PK_TMPL, t);
     } else if ((kind == UIT_EMPTY || kind == UIT_NOTE) && !strcmp(name, "lines")) {
         // one prop a line, each a template, drawn in order (an empty one left out)
         int t = uit_tmpl_compile(e, src, model);

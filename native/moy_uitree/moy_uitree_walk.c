@@ -1513,6 +1513,28 @@ static void draw_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         }
         e->scratch.n = mark;
     }
+    for (int p = N->props; p != (int)UIT_NONE; p = e->props[p].next) {
+        // at=: hung from the rect its host hands in, "X Y W H" (none while it renders empty)
+        const uit_prop_t *P = &e->props[p];
+        if (P->kind != PK_TMPL || strcmp(uit_str(e, P->name), "at"))
+            continue;
+        uint32_t n, mark = e->scratch.n, a = uit_tmpl_render(e, P->idx, model, row, &n);
+        char t[64];
+        size_t m = n < sizeof t - 1 ? n : sizeof t - 1;
+        memcpy(t, e->scratch.p + a, m);
+        t[m] = 0;
+        e->scratch.n = mark;
+        long r[4];
+        char *q = t;
+        int got = 0;
+        for (char *end; got < 4; got++, q = end) {
+            r[got] = strtol(q, &end, 10);
+            if (end == q)
+                break;
+        }
+        if (got == 4)
+            moy_ui_api_at(c, (int32_t)r[0], (int32_t)r[1], (int32_t)r[2], (int32_t)r[3]);
+    }
     moy_ui_over_t o;
     if (!moy_ui_api_popover(c, s, span_of(key, strlen(key)), w, pop_over(N, &o)) && N->on >= 0)
         fire(e, N->on, k, -1, -1, NULL);
@@ -4308,6 +4330,28 @@ static void placed_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
             moy_ui_api_at(c, a[0], a[1], a[2], a[3]);
         }
         e->scratch.n = mark;
+    }
+    for (int p = N->props; p != (int)UIT_NONE; p = e->props[p].next) {
+        // at=: hung from the rect its host hands in, "X Y W H" (none while it renders empty)
+        const uit_prop_t *P = &e->props[p];
+        if (P->kind != PK_TMPL || strcmp(uit_str(e, P->name), "at"))
+            continue;
+        uint32_t n, mark = e->scratch.n, a = uit_tmpl_render(e, P->idx, -1, -1, &n);
+        char t[64];
+        size_t m = n < sizeof t - 1 ? n : sizeof t - 1;
+        memcpy(t, e->scratch.p + a, m);
+        t[m] = 0;
+        e->scratch.n = mark;
+        long r[4];
+        char *q = t;
+        int got = 0;
+        for (char *end; got < 4; got++, q = end) {
+            r[got] = strtol(q, &end, 10);
+            if (end == q)
+                break;
+        }
+        if (got == 4)
+            moy_ui_api_at(c, (int32_t)r[0], (int32_t)r[1], (int32_t)r[2], (int32_t)r[3]);
     }
     moy_ui_over_t o;
     if (!moy_ui_api_popover(c, s, span_of(key, strlen(key)), w, pop_over(N, &o)) && N->on >= 0)
