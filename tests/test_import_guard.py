@@ -61,14 +61,12 @@ def test_every_board_staging_tree_is_guarded():
         os.path.join(fw, "lilygo_t_deck_plus_mainline", "modules")) in dirs
     assert os.path.realpath(
         os.path.join(fw, "web_runner", ".build", "stage", "modules")) in dirs
-    assert "_ota_build.py" in dirs[os.path.realpath(
-        os.path.join(fw, "lilygo_t_deck_plus_mainline", "modules"))]
 
 
 @pytest.fixture
 def staged_tree(tmp_path, monkeypatch):
-    """A git-tracked staging tree on sys.path: one authored file, one kept
-    build product, one stale copy of a source that no longer exists."""
+    """A git-tracked staging tree on sys.path: one authored file, one build
+    product, one stale copy of a source that no longer exists."""
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     for name in ("guard_probe_authored", "guard_probe_kept",
                  "guard_probe_stale"):
@@ -76,16 +74,38 @@ def staged_tree(tmp_path, monkeypatch):
     subprocess.run(["git", "add", "guard_probe_authored.py"], cwd=tmp_path,
                    check=True)
     monkeypatch.syspath_prepend(str(tmp_path))
-    return import_guard.StagedCopyRefusal(
-        {os.path.realpath(str(tmp_path)): {"guard_probe_kept.py"}})
+    return import_guard.StagedCopyRefusal({os.path.realpath(str(tmp_path))})
 
 
 def test_a_stale_staged_copy_is_refused(staged_tree):
-    with pytest.raises(ImportError, match="build-staged copy"):
-        staged_tree.find_spec("guard_probe_stale")
+    for name in ("guard_probe_stale", "guard_probe_kept"):
+        with pytest.raises(ImportError, match="build-staged copy"):
+            staged_tree.find_spec(name)
     assert staged_tree.find_spec("guard_probe_authored") is None
-    assert staged_tree.find_spec("guard_probe_kept") is None
     assert staged_tree.find_spec("guard_probe_absent") is None
+
+
+def test_a_staged_lua_layer_never_stands_in_for_the_source(tmp_path,
+                                                         monkeypatch):
+    """A board build freezes the UI tree's Lua layer into its staging tree
+    (uitree_lua, a `keep`); a suite that puts that tree on sys.path must not
+    hand the rest of its worker's Lua carts the last build's layer."""
+    from runtime import lua_ext
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "uitree_lua.py").write_text(
+        "SRC = {'uitree.lua': 'stale', 'uitree_engine.lua': 'stale'}\n")
+    guard = next(f for f in sys.meta_path
+                 if isinstance(f, import_guard.StagedCopyRefusal))
+    monkeypatch.setattr(guard, "_dirs",
+                        guard._dirs | {os.path.realpath(str(tmp_path))})
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "uitree_lua", raising=False)
+    monkeypatch.setattr(lua_ext, "_uitree_src", {})
+    here = os.path.dirname(os.path.abspath(lua_ext.__file__))
+    for name in (lua_ext.UITREE_FILE, lua_ext.UITREE_BACK):
+        with open(os.path.join(here, name)) as f:
+            assert lua_ext.uitree_source(name) == f.read(), name
+    assert "uitree_lua" not in sys.modules
 
 
 def test_a_staging_tree_off_the_path_is_not_consulted(staged_tree,

@@ -168,15 +168,7 @@ def _console(tmp_path, app, ships, desk=False, chip=False, big=False):
         app_ = ws.app(app)
         assert ws.spine.open_app(app_) is not False
         if app == "files":
-            # the list of projects, every cover made: which rows a frame's
-            # floor reaches decides which covers are asked for first
-            f = getattr(app_, "_inst", app_)
-            f.level = "files"
-            f._focus = "files"
-            for _ in range(500):
-                ws.covers.begin_frame()
-                if all(f._nav.cover(r[4]) is not False for r in f.rows):
-                    break
+            app_.level = "files"            # the list of projects
     return ws
 
 
@@ -533,17 +525,6 @@ def _app(ws, app):
     return getattr(a, "_inst", a)
 
 
-def _renamed(ws):
-    """Files: the list's last row renamed (the drag left the list's end in
-    view), a row no mark moves."""
-    f = _app(ws, "files")
-    keep = f.rows[f.cur][0] if f.cur >= 0 else None
-    name, kind = f.rows[-1][0], f.rows[-1][1]
-    res = f._store.rename(kind, name, name + " b")
-    assert res[1] is None
-    f._refresh(keep=keep)
-
-
 def _shown_story(sb):
     """The story whose card shows most and holds no mark: the frames after
     a change to it move its pixels unless its gen moves."""
@@ -580,7 +561,7 @@ def _story_turned(ws):
         sb.cards.drop(e["name"])
 
 
-CHANGES = {"file renamed": ("files", _renamed), "story renamed": ("storybook", _story_renamed),
+CHANGES = {"story renamed": ("storybook", _story_renamed),
            "story page turned": ("storybook", _story_turned)}
 
 
@@ -592,18 +573,6 @@ def test_a_change_the_page_shows_moves_its_gen(tmp_path, change, bufs):
     moved."""
     app, fn = CHANGES[change]
     p = Pair(tmp_path, app, bufs)
-    if app == "files":
-        from runtime import files_app
-        for ws in (p.a, p.b):
-            for i in range(20):
-                moy_carts.save_file("drawings", "Drawing %02d" % i,
-                                    moy_carts.encode_moyimg(32, 24, bytes([8 + i % 8]) * 768),
-                                    ws.carts_root)
-            _settle_mtimes(os.path.dirname(str(ws.carts_root).rstrip("/")))
-            f = _app(ws, "files")
-            f._refresh_counts()
-            f.open_place(files_app.PICTURES)
-        p.settle()
     lay = p.a.layout
     p.drag(lay.cx + lay.cw // 2, lay.cy + lay.ch * 3 // 4, -lay.ch, steps=3)
     p.settle()

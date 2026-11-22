@@ -36,9 +36,9 @@ s = ui.state(
     store=True,                     # a card to keep notes on
     editing=False,                  # a note is open
     routed=False,                   # ...the console asked for it (Files): Back goes back there
-    title="Notes",                  # ...its shown name (the page's title)
+    title="Notes",                  # ...its name and its kind (the page's title)
+    status="",                      # ...why its last save was refused
     note=ui.doc("", "markdown"),    # ...its text, the handle's (adopt)
-    status="",                      # ...its mode, or why its last save was refused
     md=False,                       # ...it is Markdown: Open link
     can_run=False,                  # ...it is a program: Run
     selecting=False,                # ...Select is on
@@ -93,7 +93,6 @@ def _show(handle, routed=False):
     s.note.adopt(ed)
     s.editing = True
     s.routed = routed
-    s.title = shown(ed.name())
     s.md = ed.mode() == "md"
     s.can_run = ed.can_run()
     s.selecting = False
@@ -121,7 +120,8 @@ def _open_name(name):
 
 
 def _status():
-    s.status = ed.badge() or MODES.get(ed.mode(), ed.mode())
+    s.title = "%s · %s" % (shown(ed.name()), MODES.get(ed.mode(), ed.mode()))
+    s.status = ed.badge()
 
 
 # -- the actions ---------------------------------------------------------------
@@ -295,7 +295,7 @@ def _note():
         ui.button("paste", icon="paste", alone=True)
         ui.button("follow", icon="forward", alone=True)
         ui.button("run", icon="run", alone=True)
-        ui.status("{status}")
+        ui.status("{status}", shown="status")
 
 
 def _no_store():

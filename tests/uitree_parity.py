@@ -124,6 +124,9 @@ def _step(ws, driver, step):
         for _ in range(int(arg)):
             ws.mark_dirty()
             driver.frame(DT)
+    elif op == "idle":
+        for _ in range(int(arg)):       # frames nothing marks: the console's idle work runs
+            driver.frame(DT)
     elif op == "zone":
         _zone_tap(ws, driver, int(arg))
     elif op == "cell":
@@ -138,7 +141,7 @@ def _step(ws, driver, step):
     elif op == "swipe":
         _swipe(ws, driver, int(arg))
     else:
-        raise ValueError("parity step %r: one of k:NAME t:TEXT enter del back f:N zone:N cell:NAME "
+        raise ValueError("parity step %r: one of k:NAME t:TEXT enter del back f:N idle:N zone:N cell:NAME "
                          "key:SPEC div:N:D pane:N swipe:D" % step)
 
 
@@ -439,15 +442,16 @@ def compare(old, new, out_dir=None, name="parity"):
                 "  old | new | difference: %s" % (i, o.step, count, box[0], box[1], box[2], box[3], png))
 
 
-def host(ws, layer_cls, min_size=(160, 120)):
+def host(ws, layer_cls, min_size=(160, 120), cart=False):
     """Register and open an app no cart carries (a test's), the way the
-    console registers a system app (`Spine._declared_apps`)."""
+    console registers a system app (`Spine._declared_apps`); `cart`: as an
+    app a cart is (the console's idle work walks those)."""
     from runtime.ui_draw import AppHost
     ctx = ws.app_context(layer_cls.id, layer_cls.NEEDS)
     ctx.ui = AppHost(layer_cls.id, ctx.surface)
     ws._app_hosts[layer_cls.id] = ctx.ui
     app = layer_cls(ctx)
-    ws.spine.register_app(app, min_size=min_size, cart=False)
+    ws.spine.register_app(app, min_size=min_size, cart=cart)
     app.open()
     ws.wm.activate(app.id)
     return app

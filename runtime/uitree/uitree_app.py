@@ -18,7 +18,7 @@ drawn with today's verbs. Both are made on the C engine."""
 
 import ui as _v
 from layers import AppLayer
-from layout_base import bar_rows, content_of, metric_class, DESK
+from layout_base import bar_rows, content_of, ground_round, metric_class, DESK
 
 import uitree as S
 from uitree import _NOW
@@ -128,8 +128,9 @@ class Engine(S.Builder):
 
     def idle_step(self):
         """A frame with nothing to paint: one owed picture decoded, the card
-        showing it from the next frame."""
+        showing it from the next frame (every gen moves)."""
         if self.pics is not None and self.pics.idle_step():
+            self._x.pics_moved()
             self._damage.all()
 
     def _posts(self):
@@ -403,8 +404,9 @@ class App(AppLayer):
         eng = self.ENGINE[0] if self.ENGINE else _engine_class(False)
         if eng.__module__.rpartition(".")[2] == "uitree_editor":     # the Editor's kinds (runtime.uitree_editor on the host)
             eng = _engine_class(False, True)
+        # a flowing page's scrolls take shift frames; a placed one's band loses its key caps under a gen
         self.engine = eng(S.decl_of(S.module_of(build)), build, ctx.ui, ctx.surface, ctx.damage,
-                          getattr(ctx, "files", None), env=ctx)
+                          getattr(ctx, "files", None), gen=not eng.PLACED, env=ctx)
 
     def is_app(self, cart):
         return bool(self.IS_APP and self.IS_APP[0](cart))
@@ -427,6 +429,7 @@ class App(AppLayer):
         fs = max(1, getattr(cv, "font_scale", 1))
         cs = max(fs, self._surf.chrome_scale() or fs)
         content = content_of(cv.w, cv.h, 0 if win else bar_rows(cs))
+        ground_round(cv, content, th["panel"])
         self.engine.hosted(dt, cv, th, content, desk)
         self.engine._ui.begin(cv, th, content, desk, win)
         self.engine.paint(dt, cv, th, content, desk)

@@ -1003,9 +1003,22 @@ void moy_ui_api_table_pics(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     mua_edge_fades(c, s, pic, c->tbl.n * c->tbl.rh, v.y - c->tbl.y0, MOY_UI_DEFAULT, 1, c->tbl.rh);
 }
 
+// The tooltip a resting pointer earned this frame (tip_set), over everything.
+static void tip_draw(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
+    if (c->tip_at.w > 0 && c->tip[0]) {
+        moy_ui_span_t t = {(const uint8_t *)c->tip, (uint16_t)strlen(c->tip)};
+        c->fl.dirty = 1;                // over the page, whole
+        c->fl.top = 1;
+        moy_ui_tip_draw(s, c->tip_at, t, c->surface, c->fs, mua_ground_of(c));
+        c->tip_at.w = 0;
+        c->tip_shown = 1;
+    }
+}
+
 void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     if (c->n_nest == 0) {
         mua_page_close(c, s);
+        tip_draw(c, s);
     }
 }
 
@@ -1015,14 +1028,7 @@ void moy_ui_api_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
         mua_group_close(c, s);
         mua_foot_fade(c, s);
         mua_page_close(c, s);
-    }
-    if (c->tip_at.w > 0 && c->tip[0]) {
-        moy_ui_span_t t = {(const uint8_t *)c->tip, (uint16_t)strlen(c->tip)};
-        c->fl.dirty = 1;                // over the page, whole
-        c->fl.top = 1;
-        moy_ui_tip_draw(s, c->tip_at, t, c->surface, c->fs, mua_ground_of(c));
-        c->tip_at.w = 0;
-        c->tip_shown = 1;
+        tip_draw(c, s);
     }
 }
 
@@ -1039,6 +1045,25 @@ static moy_ui_span_t tool_word(moy_ui_span_t label) {
         }
     }
     return w;
+}
+
+// A resting pointer's tooltip over box b, on the desk, where stop state st
+// holds the hover: the label, its tab as two spaces before its key.
+static void tip_set(moy_ui_ctx_t *c, moy_ui_box_t b, int st, moy_ui_span_t label) {
+    if (!c->cls || !(st & MOY_UI_ST_HOVER) || moy_ui_input() == MOY_UI_INPUT_TOUCH) {
+        return;
+    }
+    size_t n = 0;
+    for (uint16_t i = 0; i < label.n && n < MOY_UI_API_TIP - 2; i++) {
+        if (label.p[i] == '\t') {
+            c->tip[n++] = ' ';
+            c->tip[n++] = ' ';
+        } else {
+            c->tip[n++] = (char)label.p[i];
+        }
+    }
+    c->tip[n] = 0;
+    c->tip_at = b;
 }
 
 int moy_ui_api_tool(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t icon,
@@ -1059,21 +1084,19 @@ int moy_ui_api_tool(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t icon,
         moy_ui_tool_draw(s, b, slot, glyph, word, fl, mua_interact(st), c->fs, mua_ground_of(c));
         mua_clip_out(&k);
     }
-    // a resting pointer's tooltip, on the desk: the label and its key
-    if (c->cls && (st & MOY_UI_ST_HOVER) && moy_ui_input() != MOY_UI_INPUT_TOUCH) {
-        size_t n = 0;
-        for (uint16_t i = 0; i < label.n && n < MOY_UI_API_TIP - 2; i++) {
-            if (label.p[i] == '\t') {
-                c->tip[n++] = ' ';
-                c->tip[n++] = ' ';
-            } else {
-                c->tip[n++] = (char)label.p[i];
-            }
-        }
-        c->tip[n] = 0;
-        c->tip_at = b;
-    }
+    tip_set(c, b, st, label);
     return (st & MOY_UI_ST_ACTIVATED) != 0;
+}
+
+void moy_ui_api_tip(moy_ui_ctx_t *c, const moy_ui_over_t *o, moy_ui_span_t label) {
+    o = mua_over(o);
+    if (o->id.p == NULL || c->n_cur == 0 || label.n == 0) {
+        return;
+    }
+    const moy_ui_stop_t *t = &c->cur[c->n_cur - 1];
+    if (t->id == mua_id_of(c, o, label) && !(t->flags & STOP_PAGE)) {
+        tip_set(c, t->b, t->st, label);
+    }
 }
 
 int32_t moy_ui_api_bar(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t title,
@@ -1111,6 +1134,13 @@ int32_t moy_ui_api_bar(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t ti
         got = -1;
     }
     return got;
+}
+
+void moy_ui_api_status_band(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_box_t b) {
+    clip_t k;
+    EACH_PIECE(c, k, s, b) {
+        moy_ui_status(s, b, (const uint8_t *)"", 0, 0, c->fs);
+    }
 }
 
 void moy_ui_api_rule(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {

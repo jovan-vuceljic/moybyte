@@ -308,7 +308,7 @@ class Pair:
 
 APPS = ("settings", "licences", "achievements", "myart", "getcarts", "files",
         "storybook", "appearance", "calc")
-SHIFTS = ("settings", "licences", "achievements", "myart", "files",
+SHIFTS = ("settings", "licences", "achievements", "myart", "getcarts", "files", "calc",
           "storybook", "appearance")
 
 
@@ -349,19 +349,12 @@ def _inst(ws, cls):
 
 
 def _files_list(p):
-    """Files' list of projects open on both desks (on a column of its own
-    the places come first) with every cover made: which rows a frame's
-    floor reaches decides which covers are asked for first, so the desks
-    would otherwise show a cover landing on different frames."""
+    """Files' list of projects open on both desks, the focus on its rows."""
+    from runtime import uitree as ui
     for ws in (p.a, p.b):
         f = _inst(ws, "FilesAppLayer")
-        if f.level != "files":
-            f.level = "files"
-            f._focus = "files"
-        for _ in range(500):
-            ws.covers.begin_frame()
-            if all(f._nav.cover(r[4]) is not False for r in f.rows):
-                break
+        f.level = "files"
+        f._in(ui.focus, "r0/open")
         ws.mark_dirty()
     p.settle()
 
@@ -379,7 +372,6 @@ def test_the_p4_desk_shifts_its_apps_pages_byte_for_byte(tmp_path, app, bufs):
     kind = p.a.wm.focus_key
     if app == "files":
         _files_list(p)
-        assert _inst(p.a, "FilesAppLayer").layout.two
     _, _, _, ch = p.win(kind).content_rect()
     del p.kinds[:]
     p.drag(kind, -ch // 2)
@@ -414,14 +406,14 @@ def _drawings(ws, n=20):
 
 
 def _art(p):
-    """Files' Art place on both desks, its drawings listed."""
-    from runtime import files_app
+    """Files' Pictures place on both desks, its drawings listed, the focus
+    on its rows."""
+    from runtime import files_app, uitree as ui
     for ws in (p.a, p.b):
         _drawings(ws)
         f = _inst(ws, "FilesAppLayer")
-        f._refresh_counts()
-        f.open_place(files_app.PICTURES)
-        f._focus = "files"
+        f._in(f._refresh_counts)
+        f._in(lambda: (f.open_place(files_app.PICTURES), ui.focus("r0/open")))
     p.settle()
 
 
@@ -544,7 +536,7 @@ _CLS = {"files": "FilesAppLayer", "storybook": "StorybookAppLayer",
 
 def _gen(ws, app):
     if app == "files":
-        return _inst(ws, "FilesAppLayer")._files_o["gen"]
+        return _inst(ws, "FilesAppLayer").engine.gens()
     if app == "storybook":
         return _inst(ws, "StorybookAppLayer")._stories_o["gen"]
     return _inst(ws, "AppearanceAppLayer")._page_o["gen"]

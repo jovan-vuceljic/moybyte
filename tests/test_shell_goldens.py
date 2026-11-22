@@ -1006,7 +1006,7 @@ def _files_document(ws):
     ws.spine.open_app(ws.app("files"))
     app = ws.app("files")
     app._refresh_counts()
-    app.open_place(files_app.DOCUMENTS, keep="todo")
+    app.open_place(files_app.DOCUMENTS, keep="todo", show=True)
     app.level = "files"
 
 
@@ -1577,7 +1577,9 @@ def _music(ws, now, what, page="list", tab=0, cur=None, files=None, put=None):
         M.s.tab = ("radio", "files")[tab]
         M.tab_moved()
         if cur is not None:
+            # the cur's row focused, over the playing row opened() asked for this frame
             setattr(M.s, ("scur", "fcur")[tab], app.rows[tab][cur]["id"])
+            M._focus_list()
         if page == "now":
             M.now()
         elif page == "add":

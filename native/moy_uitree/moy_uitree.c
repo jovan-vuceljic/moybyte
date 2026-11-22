@@ -1132,6 +1132,15 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     }
     else if (!strcmp(name, "icon"))
         tslot = &N->t_icon;
+    else if (!strcmp(name, "image") && (kind == UIT_CARD || kind == UIT_PICTURE)) {
+        // the image state or row field it names, as text (the front end's: uit_on_pic)
+        char tpl[UIT_ID_MAX + 3];
+        snprintf(tpl, sizeof tpl, "{%s}", src);
+        int t = uit_tmpl_compile(e, tpl, model);
+        if (t < 0)
+            return t;
+        return add_prop(e, node, name, src, repr, PK_TMPL, t);
+    }
     else if (!strcmp(name, "hint") && kind == UIT_TABLE)
         tslot = &N->t_value;
     else if ((kind == UIT_CARDS && !strcmp(name, "w")) || (kind == UIT_CARD && !strcmp(name, "sub")) ||
@@ -1823,6 +1832,17 @@ void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud)
 {
     e->draw_fn = fn;
     e->draw_ud = ud;
+}
+
+void uit_on_pic(uit_t *e, uit_pic_fn fn, void *ud)
+{
+    e->pic_fn = fn;
+    e->pic_ud = ud;
+}
+
+void uit_pics_moved(uit_t *e)
+{
+    e->edits++;
 }
 
 void uit_open(uit_t *e)

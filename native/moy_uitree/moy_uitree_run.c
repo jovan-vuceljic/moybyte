@@ -14,7 +14,7 @@ typedef struct {
 static int frame_on_run(void *ud, moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_box_t surf, int32_t face)
 {
     const run_frame_t *a = (const run_frame_t *)ud;
-    int flags = a->flags & ~UIT_F_DESK;
+    int flags = (a->flags & ~UIT_F_DESK) | UIT_F_GEN;     // its regions carry gens, as a Python app's do
     if (face & MOYCORE_UI_FACE_DESK)
         flags |= UIT_F_DESK;
     int input = moy_ui_input();

@@ -51,6 +51,8 @@ _SIGS = (
     ("uit_prop", [_P, _I, _S, _S, _S], _I),
     ("uit_node_action", [_P, _I, _I], _I),
     ("uit_on_draw", [_P, _P, _P], None),
+    ("uit_on_pic", [_P, _P, _P], None),
+    ("uit_pics_moved", [_P], None),
     ("uit_build_end", [_P], _I),
     ("uit_open", [_P], None),
     ("uit_close", [_P], None),
@@ -163,6 +165,7 @@ def peak_reset():
 
 
 _DRAW = c.CFUNCTYPE(None, c.c_void_p, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int)
+_PIC = c.CFUNCTYPE(c.c_int, c.c_void_p, c.c_int, c.POINTER(c.c_char), c.c_size_t, c.POINTER(c.c_int32))
 
 
 class Engine:
@@ -185,6 +188,7 @@ class Engine:
         self._node = None
         self._pn = None
         self._draw = self._cb = self._raised = None
+        self._pic = self._pcb = None
 
     def __del__(self):
         e, self._e = getattr(self, "_e", None), None
@@ -385,6 +389,27 @@ class Engine:
                 self._draw(node, model, row, x, y, w, h)
             except BaseException as e:      # noqa: B036 -- ctypes would print and drop it
                 self._raised = e
+
+    def on_pic(self, fn):
+        """A card's or a picture's image, `fn(node, pic, r)` (uit_on_pic):
+        r None asks whether it holds the picture, else r is the card's tile,
+        its clip and whether it is focused (moy_uitree.h); what it raises is
+        raised by the frame's call."""
+        self._pic = fn
+        self._pcb = None if fn is None else _PIC(self._pic_tramp)
+        self._L.uit_on_pic(self._e, self._pcb, None)
+
+    def _pic_tramp(self, _ud, node, pic, n, r):
+        if self._raised is not None:
+            return 0
+        try:
+            return 1 if self._pic(node, c.string_at(pic, n).decode("utf-8"), r if r else None) else 0
+        except BaseException as e:      # noqa: B036 -- ctypes would print and drop it
+            self._raised = e
+            return 0
+
+    def pics_moved(self):
+        self._L.uit_pics_moved(self._e)
 
     def next(self):
         """The next event: (kind, a, b, c, text), or None."""

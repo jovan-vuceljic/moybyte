@@ -300,6 +300,15 @@ int uit_still(uit_t *e, const moy_ui_ctx_t *c, int x, int y, int w, int h, int f
 // one, C).
 typedef void (*uit_draw_fn)(void *ud, int node, int model, int row, int x, int y, int w, int h);
 void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud);
+// A card's or a picture's image (`image=`, its template's text `pic`, n bytes; never empty): the
+// front end finds, decodes and draws it. With `r` NULL it answers whether it holds the picture
+// (the card then draws no icon tile); else r is the card's tile, r[0..3], its clip, r[4..7] (the
+// scroll's floor), and r[8] 1 where the card is focused (its tile lifted): the front end draws the
+// picture there where it holds it, else owes it. uit_pics_moved: a picture it holds came or went,
+// and every gen moves (a frame draws it).
+typedef int (*uit_pic_fn)(void *ud, int node, const char *pic, size_t n, const int32_t *r);
+void uit_on_pic(uit_t *e, uit_pic_fn fn, void *ud);
+void uit_pics_moved(uit_t *e);
 // The next event: its kind; its words into ev[0..2], its text (the source)
 // into buf.
 int uit_next(uit_t *e, int32_t ev[3], char *buf, size_t cap);
@@ -337,7 +346,7 @@ int uit_row_stop(uit_t *e, const char *cur, const char *rowkey, char *buf, size_
 // whether a foot was shown.
 int uit_page_rects(const uit_t *e, int32_t out[8]);
 // The gens a gen-carrying page's regions draw under: the last frame's page's, then each cards
-// list's and split group's now, in node order, into out (at most cap): their count, 0 where the page carries none.
+// list's, scroll region's and split group's now, in node order, into out (at most cap): their count, 0 where the page carries none.
 int uit_gens(uit_t *e, int32_t *out, int cap);
 // The band's items as the last frame's state names them, NUL-separated
 // (the last NUL included): their length; written only where it fits cap.

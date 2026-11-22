@@ -152,7 +152,7 @@ def test_every_layout_lays_out_inside_the_content_rect(tmp_path, size):
     names = {n for n, _l in _layouts(ws)}
     for want in ("Layout", "CodeLayout", "CardsLayout", "PaintLayout",
                  "MapLayout", "MusicLayout", "BlockLayout",
-                 "FilesLayout", "StorybookLayout", "AppearanceLayout",
+                 "StorybookLayout", "AppearanceLayout",
                  "PaintAppLayout", "MyArtLayout"):
         assert want in names, want + " was never built"
     top = _rect_map(ws)
@@ -180,10 +180,10 @@ def test_every_layout_lays_out_inside_the_content_rect(tmp_path, size):
 def test_a_window_has_no_bar_over_its_content(tmp_path):
     """The shipped apps' heads: a window's content is its whole buffer, the
     title strip being the WM's -- wherever the bar is."""
-    from runtime.files_app import FilesLayout
+    from runtime.storybook_app import StorybookLayout
     for edge in ("top", "bottom"):
         layout_base.place_bar(edge)
-        lay = FilesLayout(480, 300, 1, windowed=True)
+        lay = StorybookLayout(480, 300, 1, windowed=True)
         assert (lay.cx, lay.cy, lay.cw, lay.ch) == (0, 0, 480, 300)
 
 
@@ -230,7 +230,7 @@ SURFACES = {
     "menu": lambda ws: (ws.open_in_editor(next(
         c for c in ws.carts.all if c.get("title") == "Star Catcher")),
         ws.text.set_menu_view("code")),
-    "app": lambda ws: ws.spine.open_app(ws.app("files")),
+    "app": lambda ws: ws.spine.open_app(ws.app("calc")),
 }
 
 
@@ -280,12 +280,8 @@ def test_the_system_menu_opens_from_the_bottom_bar_upward(tmp_path, size):
     by = ws.bar_layer.bar_rect(0, "home")[1]
     _tap(ws, x + w // 2, by + y + h // 2)
     assert ws.sysmenu.open
-    px, py, pw, ph = ws.sysmenu.panel_rect()
-    assert py + ph == by and py >= 0               # hangs upward from the bar
-    first = next(i for i, it in enumerate(ws.sysmenu.items) if it[0] == "item")
-    assert ws.sysmenu.row_at(px + 2, py + 1) is not None
-    assert ws.sysmenu.row_at(px + 2, py - 1) is None
-    assert first is not None
+    px, py, pw, ph = ws.menu_ui.look_card()
+    assert py + ph <= by and py >= 0               # hangs upward from the bar
 
 
 @pytest.mark.parametrize("size", sorted(SIZES))

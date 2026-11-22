@@ -39,13 +39,14 @@ class PicEngine:
         self.used = 0
         self.failed = {}                           # (pic, gen) -> why
         self.owed = []
+        self.seen = set()                          # (pic, w, h) the frame drew
         self.stats = dict.fromkeys(("decoded", "failed", "refused", "evicted"), 0)
 
     # -- the frame's side ------------------------------------------------------------
 
     def begin_frame(self):
-        del self.owed[:]
-        self.seen = set()
+        self.owed.clear()
+        self.seen.clear()
 
     def peek(self, pic, w, h):
         k = (pic, w, h)
@@ -80,10 +81,16 @@ class PicEngine:
 
     @property
     def idle_owed(self):
-        return any(k not in getattr(self, "refused", ()) for k in self.owed)
+        # a loop, not any() over a generator: one naming self makes self a cell
+        # on every call, and the console asks every idle frame
+        refused = getattr(self, "refused", ())
+        for k in self.owed:
+            if k not in refused:
+                return True
+        return False
 
     def idle_step(self):
-        view = frozenset(getattr(self, "seen", ()))
+        view = frozenset(self.seen)
         if view != getattr(self, "_refused_view", None):
             self.refused, self._refused_view = set(), view     # the view moved: ask again
         owed = [k for k in self.owed if k not in self.refused]
@@ -119,7 +126,7 @@ class PicEngine:
         """Room for n bytes: the least recently drawn picture out of view let
         go first; a picture in view is never let go, so a budget the view
         overfills keeps the rest veiled (loading) rather than thrash."""
-        seen = getattr(self, "seen", set())
+        seen = self.seen
         while self.used + n > self.budget:
             k = next((k for k in self.cache if k not in seen), None)
             if k is None:

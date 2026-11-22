@@ -1319,17 +1319,7 @@ class SettingsLayer(Layer):
         band, wherever the bar sits); the frame draws the bar over them."""
         ws = self.ws
         self._dt = dt
-        cv = ws.sys_canvas
-        g = ws.theme_colors["panel"]
-        x, y, w, h = self._content()
-        if y > 0:
-            cv.rect(0, 0, cv.w, y, g)
-        if y + h < cv.h:
-            cv.rect(0, y + h, cv.w, cv.h - y - h, g)
-        if x > 0:
-            cv.rect(0, y, x, h, g)
-        if x + w < cv.w:
-            cv.rect(x + w, y, cv.w - x - w, h, g)
+        _lb.ground_round(ws.sys_canvas, self._content(), ws.theme_colors["panel"])
         self._draw_page()
 
     def _content(self):

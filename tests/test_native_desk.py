@@ -18,7 +18,6 @@ import pytest
 
 from runtime import host_app, layout_base, ui_draw
 from runtime.chrome import text_scale_floor
-from runtime.files_app import FilesLayout
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONTS = os.path.join(ROOT, "native", "moy_ui", "fonts")
@@ -106,16 +105,6 @@ def test_the_desk_windows_take_its_title_strip_and_content_sizes(tmp_path):
         win = ws.wm.windows[app_id]
         assert win.title_h == 44
         assert (win.w, win.h) == size, app_id
-
-
-def test_the_desk_lists_take_its_rows_and_places(tmp_path):
-    layout_base.place_class(layout_base.DESK)
-    lay = FilesLayout(548, 490, 1, True, 2)
-    assert lay.row_h == 28
-    assert lay.two and lay.side[2] == FilesLayout.SIDE      # the places beside
-    layout_base.place_class(layout_base.HANDHELD)
-    lay = FilesLayout(320, 240, 1, False, 1)
-    assert lay.row_h == 20 and not lay.two
 
 
 def test_the_desk_icon_column_is_the_targets(tmp_path):

@@ -19,6 +19,7 @@ typedef struct {
     mp_obj_base_t base;
     uit_t *e;
     mp_obj_t draw;              // on_draw's function: (node, x, y, w, h)
+    mp_obj_t pic;               // on_pic's function: (node, pic, rect or None)
     mp_obj_t raised;            // what it raised inside a frame, raised again after it
 } eng_obj_t;
 
@@ -60,7 +61,7 @@ static mp_obj_t eng_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_
     (void)args;
     eng_obj_t *o = mp_obj_malloc_with_finaliser(eng_obj_t, type);
     o->e = uit_new();
-    o->draw = o->raised = MP_OBJ_NULL;
+    o->draw = o->pic = o->raised = MP_OBJ_NULL;
     if (o->e == NULL)
         mp_raise_type(&mp_type_MemoryError);
     return MP_OBJ_FROM_PTR(o);
@@ -71,7 +72,7 @@ static mp_obj_t eng_del(mp_obj_t self)
     eng_obj_t *o = MP_OBJ_TO_PTR(self);
     uit_free(o->e);
     o->e = NULL;
-    o->draw = o->raised = MP_OBJ_NULL;
+    o->draw = o->pic = o->raised = MP_OBJ_NULL;
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_del_obj, eng_del);
@@ -539,6 +540,47 @@ static mp_obj_t eng_on_draw(mp_obj_t self, mp_obj_t fn)
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eng_on_draw_obj, eng_on_draw);
+
+// A card's or a picture's image (uit_on_pic): fn(node, pic, None) whether it holds it, fn(node, pic,
+// (x, y, w, h, cx, cy, cw, ch, focused)) its tile; what it raises is kept as a canvas's draw's is.
+static int pic_tramp(void *ud, int node, const char *pic, size_t n, const int32_t *r)
+{
+    eng_obj_t *o = ud;
+    if (o->pic == MP_OBJ_NULL || o->raised != MP_OBJ_NULL)
+        return 0;
+    mp_obj_t args[3] = {MP_OBJ_NEW_SMALL_INT(node), mp_obj_new_str(pic, n), mp_const_none};
+    if (r) {
+        mp_obj_t t[9];
+        for (int i = 0; i < 9; i++)
+            t[i] = MP_OBJ_NEW_SMALL_INT(r[i]);
+        args[2] = mp_obj_new_tuple(9, t);
+    }
+    int held = 0;
+    nlr_buf_t nlr;
+    if (nlr_push(&nlr) == 0) {
+        held = mp_obj_is_true(mp_call_function_n_kw(o->pic, 3, 0, args));
+        nlr_pop();
+    } else {
+        o->raised = MP_OBJ_FROM_PTR(nlr.ret_val);
+    }
+    return held;
+}
+
+static mp_obj_t eng_on_pic(mp_obj_t self, mp_obj_t fn)
+{
+    eng_obj_t *o = MP_OBJ_TO_PTR(self);
+    o->pic = fn == mp_const_none ? MP_OBJ_NULL : fn;
+    uit_on_pic(eng(self), o->pic == MP_OBJ_NULL ? NULL : pic_tramp, o);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_on_pic_obj, eng_on_pic);
+
+static mp_obj_t eng_pics_moved(mp_obj_t self)
+{
+    uit_pics_moved(eng(self));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(eng_pics_moved_obj, eng_pics_moved);
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_frame_obj, 11, 11, eng_frame);
 
 // still(ctx, x, y, w, h, flags, fs, input) -> whether the frame drawn last is what a frame now draws
@@ -788,6 +830,8 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_prop), MP_ROM_PTR(&eng_prop_obj) },
     { MP_ROM_QSTR(MP_QSTR_node_action), MP_ROM_PTR(&eng_node_action_obj) },
     { MP_ROM_QSTR(MP_QSTR_on_draw), MP_ROM_PTR(&eng_on_draw_obj) },
+    { MP_ROM_QSTR(MP_QSTR_on_pic), MP_ROM_PTR(&eng_on_pic_obj) },
+    { MP_ROM_QSTR(MP_QSTR_pics_moved), MP_ROM_PTR(&eng_pics_moved_obj) },
     { MP_ROM_QSTR(MP_QSTR_build_end), MP_ROM_PTR(&eng_build_end_obj) },
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&eng_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&eng_close_obj) },

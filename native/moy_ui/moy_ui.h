@@ -1210,10 +1210,14 @@ int moy_ui_fade(const moy_ui_sink_t *s, moy_ui_box_t b, int ci, int up, int fs, 
 // A scrolled view's thumb (owner, 2026-11-05): where rows `rows` high
 // overflow view `v`, a 2-pixel thumb in the dim ink on a track in the
 // border's, inside v's right edge, at `scroll` along it. The engine draws
-// one on a scroll region or a placed table the app gives no gen: a view
-// under a gen shifts its pixels on a shift frame, and a thumb is no row.
+// one on every scroll region, text view and placed table; on a shift or rows
+// frame that moves the view or its thumb, the track joins the floor and the
+// thumb is drawn along it again.
 int moy_ui_thumb(const moy_ui_sink_t *s, moy_ui_box_t v, int rows, int scroll, int fs,
                  int desk);
+// The track a thumb fills in view `v`: its whole height, 2 pixels of the
+// scale wide, a pixel in from the right edge.
+moy_ui_box_t moy_ui_thumb_track(moy_ui_box_t v, int fs);
 // A group's caption in band `b`.
 int moy_ui_caption(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t t, int fs, int desk);
 // A rule across band `b` (inside the group pad), one unit thick, centred in
