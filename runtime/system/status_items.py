@@ -12,24 +12,15 @@ in the bar with `moybyte.status`, the menu-extra model.
                     draw it again
   item.remove()     out of the bar, its menu closed
 
-A SECTION is the app's part of the shell's surfaces, drawn with the public
-UI verbs (`docs/ui_api_2026-10.md`) inside a frame the shell began:
+A SECTION is the app's part of the shell's surfaces: rows the shell draws
+(on the desk the menu's card, on a handheld its card in the control center,
+`runtime/system/cc_ui.py`), the same rows on every tier. A Python program's
+section is an object of two methods:
 
-  section.height(w, desk, fs)  the height its rows take at width `w`,
-                    pixels, its frame drawing at font scale `fs`
-  section.draw(desk)       its rows, stacked in the flow the shell opened
-                    (on the desk the menu's card, on a handheld its card in
-                    the control center); a button it answers True for acts
-                    there and then. The control center lays every app's
-                    section in one page, so a row's id is its app's own
-                    (`o.id`, prefixed with the app's name), never a bare
-                    label another app's section may share
-
-On the desk the item is a cell in the bar's right zone and its section the
-menu the cell opens (a popover hung from it); on a handheld the items' icons
-join the status cluster, and their sections are cards in the control center
-under their app's name. Both run the section AS ITS PROCESS (`Items.draw`), so
-what its buttons do is the app's, under the app's grants.
+  section.panel()          its description (below), read when the item is
+                    added and on each `item.changed()`
+  section.press(id, value) a row acted: a button's value 1, a toggle's 0 or
+                    1, a slider's step; run as the item's process
 
 THE TABLE is the kernel's (native/moy_kernel/moy_status.h, through the
 module `moy_evq`): each slot's process, icon, state, order and whether it
@@ -47,12 +38,12 @@ the cell's tap, on a handheld its card's one Open row).
 
 A COMPILED program (a wasm app, a WASI program, an ELF module) and a LUA
 program (native/moy_app/moy_app_lua.c) never run Python in the shell, so
-their item's section is the shell's: a `Panel` of the rows the program
-describes (`moybyte.status_panel`, the one status row the VM serves:
-`moybyte.panel_of`, through runtime/shell/shell_servers.py's ConsoleCalls
-for a compiled program and the console call for a Lua one), drawn with the same
-verbs. Its handle is the slot's number from 1. A description is lines of
-text, one row each, at most ROWS_MAX:
+they describe their panel through `moybyte.status_panel`, the one status row
+the VM serves (`moybyte.panel_of`, through runtime/shell/shell_servers.py's
+ConsoleCalls for a compiled program and the console call for a Lua one), and
+hear a press as a message. Its handle is the slot's number from 1. A
+description, a Python section's too, is lines of text, one row each, at
+most ROWS_MAX:
 
   text <label>[TAB<value>]               a row that shows, no stop
   button <id> <label>                    a row that acts
@@ -62,9 +53,10 @@ text, one row each, at most ROWS_MAX:
 An id is the program's own word (at most ID_MAX bytes); a label runs to
 the numbers that end its line (at most LABEL_MAX characters). A press, a
 toggle's change or a slider's step posts the item's process the system's
-message STATUS, [item, id, value] (a button's value 1), and the row keeps
-the value it moved to until the program describes the panel again. An
-empty description is no panel: the item opens its app.
+message STATUS, [item, id, value] (a button's value 1) -- a Python section
+hears it as `press` -- and the row keeps the value it moved to until the
+program describes the panel again. An empty description is no panel: the
+item opens its app.
 """
 
 try:
@@ -72,11 +64,6 @@ try:
 except ImportError:
     _L = None
 import moy_evq as _E
-try:
-    import ui as _ui
-    import ui_draw as _ui_draw
-except ImportError:  # pragma: no cover - a headless image: nothing draws
-    _ui = _ui_draw = None
 
 ON, PAUSED, ERROR = 0, 1, 2      # moy_status.h's MOY_STATUS_*
 STATES = (ON, PAUSED, ERROR)
@@ -116,17 +103,12 @@ class Item:
 
     def changed(self):
         if self.pid:
+            self._owner.describe(self)
             self._owner._moved(False)
 
     def remove(self):
         if self.pid:
             self._owner._free(self)
-
-
-def _row_h(desk, fs):
-    """A stacked row's height and the gap after it, at font scale `fs`."""
-    m = _ui_draw.metrics("row")
-    return (m[6 if desk else 5] + m[7]) * fs
 
 
 def parse(text):
@@ -187,9 +169,9 @@ def parse(text):
 
 
 class Panel:
-    """A compiled program's item's section: the rows it described, drawn
-    with the public UI verbs as its process. One a slot, its rows' records
-    preallocated: a draw allocates nothing, a press its message."""
+    """An item's rows, as its program described them (`cc_ui` draws them).
+    One a slot, its rows' records preallocated: a draw allocates nothing, a
+    press its message or its section's `press`."""
 
     def __init__(self, owner, k):
         self._owner = owner
@@ -203,7 +185,6 @@ class Panel:
         self.lo = [0] * ROWS_MAX
         self.hi = [0] * ROWS_MAX
         # each row's options: an id no other section's row shares
-        self.o = [{"id": "status%d.%d" % (k, r)} for r in range(ROWS_MAX)]
 
     def set(self, rows):
         n = len(rows)
@@ -214,36 +195,20 @@ class Panel:
             self.rid[r] = self.label[r] = self.value[r] = ""
         self.n = n
 
-    def height(self, w, desk, fs):
-        return self.n * _row_h(desk, fs)
-
-    def draw(self, desk):
-        kind = self.kind
-        for r in range(self.n):
-            k = kind[r]
-            if k == TEXT:
-                _ui.info(self.label[r], self.value[r])
-            elif k == BUTTON:
-                if _ui.link(self.label[r], "", self.o[r]):
-                    self._press(r, 1)
-            elif k == TOGGLE:
-                cur = self.v[r]
-                got = 1 if _ui.toggle(self.label[r], cur == 1, self.o[r]) else 0
-                if got != cur:
-                    self._press(r, got)
-            else:
-                cur = self.v[r]
-                got = _ui.slider(self.label[r], cur, self.lo[r], self.hi[r], self.o[r])
-                if got != cur:
-                    self._press(r, got)
-
     def _press(self, r, v):
-        """Row `r` moved to `v`: the item's process hears it."""
+        """Row `r` moved to `v`: the item's process hears it, a Python
+        section as its `press`, run as the process."""
         self.v[r] = v
-        it = self._owner.slots[self.k]
-        post = self._owner.post
-        if post is not None and it.pid:
-            post(it.pid, STATUS, (self.k + 1, self.rid[r], v))
+        o = self._owner
+        it = o.slots[self.k]
+        if not it.pid:
+            return
+        sec = it.section
+        if sec is not self:
+            o.run_as(it, sec.press, self.rid[r], v)
+            return
+        if o.post is not None:
+            o.post(it.pid, STATUS, (self.k + 1, self.rid[r], v))
 
 
 class Items:
@@ -253,9 +218,7 @@ class Items:
     def __init__(self):
         self.slots = [Item(self, k) for k in range(CAP)]
         self.panels = [Panel(self, k) for k in range(CAP)]
-        self._open = [{"id": "status%d.open" % k} for k in range(CAP)]
         self._section = [None] * CAP    # a Python item's section, by slot
-        self.opening = None         # the item whose Open row was pressed
         # fn(pid, name, args) the moybyte module sets: a message posted to a
         # process from the system (moybyte.WAKES.post)
         self.post = None
@@ -310,12 +273,9 @@ class Items:
             pid, icon, state, order, age, shown, compiled = rec
             if it.pid == 0:
                 it.pid, it.icon, it.order, it.age = pid, icon, order, age
-                if compiled:
-                    sec = self.panels[it.k]
-                    sec.set(())
-                else:
-                    sec = self._section[it.k]
-                it.section = sec
+                it.section = self.panels[it.k] if compiled else self._section[it.k]
+                self.panels[it.k].set(())
+                self.describe(it)
                 t = self.title_of
                 it.app = (t(pid) if t is not None else "") or ""
                 it.state, it.visible = ON, False
@@ -369,43 +329,33 @@ class Items:
         return sh[i] if 0 <= i < len(sh) else None
 
     def bare(self, it):
-        """Whether item `it` has no menu: a section-less item, or a compiled
-        program's with no panel described. Its tap opens its app."""
-        sec = it.section
-        return sec is None or (type(sec) is Panel and sec.n == 0)
+        """Whether item `it` has no menu: no rows described. Its tap opens
+        its app."""
+        return self.panels[it.k].n == 0
 
-    def height(self, it, w, desk, fs):
-        """The height item `it`'s section takes at width `w`, its menu's
-        frame drawing at font scale `fs`."""
-        if self.bare(it):
-            return 0 if desk else _row_h(False, fs)
-        sec = it.section
-        if _L is None or not it.pid:
-            return int(sec.height(w, desk, fs) or 0)
+    def rows(self, it):
+        """How many rows item `it`'s card lists: a bare item's one, Open."""
+        return self.panels[it.k].n or 1
+
+    def run_as(self, it, fn, *a):
+        """`fn(*a)` as item `it`'s process."""
+        if _L is None:
+            return fn(*a)
         was = _L.current()
         _L.current(it.pid)
         try:
-            return int(sec.height(w, desk, fs) or 0)
+            return fn(*a)
         finally:
             _L.current(was)
 
-    def draw(self, it, desk):
-        """Item `it`'s section, as its process; a bare item's one row, Open
-        (`opening` names it the frame it is pressed)."""
-        if self.bare(it):
-            if _ui.link("Open", "", self._open[it.k]):
-                self.opening = it
-            return
+    def describe(self, it):
+        """A Python item's rows read again from its section's `panel()`; a
+        description that does not parse lists none."""
         sec = it.section
-        if _L is None or not it.pid:
-            sec.draw(desk)
+        if sec is None or type(sec) is Panel:
             return
-        was = _L.current()
-        _L.current(it.pid)
-        try:
-            sec.draw(desk)
-        finally:
-            _L.current(was)
+        rows = parse(self.run_as(it, sec.panel) or "")
+        self.panels[it.k].set(rows or ())
 
     # -- a compiled program's items (moy_app.c's status rows) ----------------
 

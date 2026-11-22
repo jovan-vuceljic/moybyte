@@ -195,31 +195,33 @@ def test_a_station_that_fails_shows_the_danger_state_and_tries_again(tmp_path, f
     assert face.played == ["http://x/y", "http://x/y"]
 
 
-def test_the_section_draws_the_card_with_the_apps_own_ids(tmp_path, face):
-    """The control center lays every app's section in one page: each of
-    Music's stops is `music.*`."""
+def test_the_section_s_rows_list_in_the_control_center_and_act(tmp_path, face):
+    """Music's section is rows (its title, the transport, the volume) the
+    control center lists under it, and its main row plays or pauses."""
     ws = build_ws(tmp_path)
     M.STREAM.play("radio", GROOVE[0], GROOVE[2])
     ws.home.go_home()
     _settle(ws)
     ws.widget_tap("battery")
     assert ws.sysmenu.open and ws.sysmenu.widget == "battery"
-    seen = []
-    real = ui_draw.UI_TARGET
-    from runtime import ui
-    orig = ui.button
-
-    def spy(label, kind="normal", o=None):
-        seen.append((o or {}).get("id"))
-        return orig(label, kind, o)
-    ui.button = spy
+    _settle(ws, 2)
+    it = M.STREAM.item
+    p = ITEMS.panels[it.k]
+    assert p.rid[:p.n] == ["open", "", "main", "prev", "next", "stop", "volume"]
+    host = ws.sysmenu.comp.host
+    x, y, w, h = host.box("%d.2/press" % it.k)
+    px, py, pw, ph = ws.sysmenu.panel_rect()
+    assert py <= y and y + h <= py + ph, "the transport's first row in the first view"
+    stopped = []
+    M.STREAM.toggle = lambda: stopped.append(1)
     try:
-        _settle(ws, 2)
+        drv = make_drv(ws)
+        drv.click(x + w // 2, y + h // 2)
+        for _ in range(2):
+            drv.frame(1 / 30)
     finally:
-        ui.button = orig
-    assert real is ui_draw.UI_TARGET
-    ids = [i for i in seen if i and i.startswith("music.")]
-    assert {"music.prev", "music.main", "music.next", "music.stop"} <= set(ids)
+        del M.STREAM.toggle
+    assert stopped == [1]
 
 
 def test_add_a_station_refuses_https_and_keeps_an_http_one(tmp_path, face):

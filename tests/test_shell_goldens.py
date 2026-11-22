@@ -1362,23 +1362,17 @@ _PANEL = ("text Now playing\tGroove Salad\n"
 
 
 class _StatusSection:
-    """A status item's section as an app draws one (`moybyte.status`): what
-    plays, then two verbs, its rows the public UI verbs', their ids its
-    app's own (`ns`)."""
+    """A status item's section as an app writes one (`moybyte.status`): what
+    plays, then two verbs."""
 
     def __init__(self, ns="music"):
-        self.ids = ({"id": ns + ".pause"}, {"id": ns + ".stop"})
+        pass
 
-    def height(self, w, desk, fs):
-        from runtime import ui_draw
-        row = ui_draw.metrics("row")
-        return 3 * (row[6 if desk else 5] + row[7]) * fs
+    def panel(self):
+        return "text Dayvan Cowboy\tGroove Salad\nbutton pause Pause\nbutton stop Stop"
 
-    def draw(self, desk):
-        from runtime import ui
-        ui.info("Dayvan Cowboy", "Groove Salad")
-        ui.link("Pause", "", self.ids[0])
-        ui.link("Stop", "", self.ids[1])
+    def press(self, rid, v):
+        pass
 
 
 def _status_item(ws, state=0):

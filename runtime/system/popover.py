@@ -8,8 +8,10 @@ its content on the public UI API's verbs.
   `battery`  PowerRows   on the desk: the battery's line, then Volume and
                          Brightness
              ControlCenter  on a handheld, opened by the status cluster:
-                         the console's card, then each app's status section
-  `status`   StatusMenu  on the desk: an app's status item's menu, its section
+                         the console's group, then each app's status rows
+                         (`cc_ui`'s page)
+  `status`   StatusMenu  on the desk: an app's status item's menu, its rows
+                         (the same page)
 
 The system menu is the popover's ROWS, not a component (`widgets.Popup`).
 
@@ -70,7 +72,6 @@ _MONTH_KEYS_DESK = ("change", "Month", "back", "Close")
 _POWER_KEYS = ("change", "Change", "scroll", "Row", "back", "Close")
 _WIFI_KEYS = ("confirm", "Join", "back", "Close")
 _MENU_KEYS = ("change", "Button", "back", "Close")
-_MENU_POINTER = ("back", "Close")
 
 
 class MonthView:
@@ -310,52 +311,134 @@ class PowerRows:
         self.host.reset()
 
 
-class ControlCenter:
-    """A handheld's control center, the `battery` widget's component there,
-    which the bar's status cluster opens (docs/theme_and_shell_2026-11.md
-    §8.6): one column in a scroll region, the console's card first (Volume,
-    Brightness, Wi-Fi), then each app's status section as a card under its
-    app's name, in the bar's order. Its first view ends FIRST_FOOT under the
-    first app's card; the region scrolls the rest, its thumb and fades
-    saying so. The battery has no row: the bar's glyph shows it low and
-    charging, and Settings keeps its exact level."""
+class _Rows:
+    """The status items' rows (`cc_ui`'s page) in a popover's card, over
+    its own UI context: the base of the control center and an item's desk
+    menu. The page's handlers reach the host through `level`, `wifi` and
+    `press`; `poll` writes what it shows."""
 
-    KEYS = ("volume", "brightness")
-    _LABELS = ("Volume", "Brightness")
-    W = 232                     # at the font scale
-    FIRST_FOOT = 6
-    SCRIM = 128                 # the page beside it dims by half, in both themes
+    CC = False
 
     def __init__(self, ws):
         self.ws = ws
         self.rect = None
         self.host = _ui_draw.AppHost()
-        self.gen = _ITEMS.gen
+        self.page = None
+        self.gen = -1                 # the items' gen the groups were written at
 
-    def _metrics(self):
-        """(fs, a stacked row's height, a caption's, the gap after a card)."""
-        fs = self.ws.layout.fs
-        row = _ui_draw.metrics("row")
-        grp = _ui_draw.metrics("group")
-        return fs, (row[5] + row[7]) * fs, grp[3] * fs, grp[5] * fs
+    def items(self):
+        """The items whose rows the page lists, in order."""
+        return ()
 
-    def _inset(self):
-        """How far the console's card stands in from the panel's edges, the
-        top and the foot as the sides: the group's inset."""
-        return _ui_draw.metrics("group")[0] * self.ws.layout.fs
+    def all(self):
+        """The page's damage: the popover draws another frame."""
+        self.ws.popover_touch()
+
+    def keys(self):
+        return _POWER_KEYS
+
+    def _engine(self):
+        e = self.page
+        if e is None:
+            import uitree_app
+            import cc_ui
+            e = self.page = uitree_app.hosted_page(cc_ui.page, self.host, self, env=self)
+            e.bare = True               # the popover's card is its ground
+            e.open()
+        return e
+
+    def poll(self, s):
+        s.cc = self.CC
+        g = _ITEMS.gen
+        if g != self.gen:
+            import cc_ui
+            self.gen = g
+            cc_ui.put_items(self.items(), self.CC)
+
+    def draw(self, cv, rect):
+        import cc_ui
+        ws = self.ws
+        self.rect = rect
+        g = self.gen
+        e = self._engine()
+        e.band = _desk()          # a handheld's popover strip says its keys
+        e.run(cc_ui.poll, self, action="cc_poll")
+        if g != self.gen and g != -1:
+            _fit(ws, self)
+        cc_ui.ui.commit(e)        # (cc_ui's uitree)
+        inner = _inner(ws, rect)
+        desk = _desk()
+        self.host.begin(cv, ws.theme_colors, inner, desk, "panel")
+        e.paint(0.0, cv, ws.theme_colors, inner, desk)
+        if self.host.due() or self.host.tap == 2:
+            ws.popover_touch()
+
+    def press(self, row):
+        import cc_ui
+        k, r, v = cc_ui.pressed(row)
+        it = _ITEMS.slots[k]
+        if not it.pid:
+            return
+        if r < 0:
+            self.ws.notices.open_status_app(it)
+        else:
+            _ITEMS.panels[k]._press(r, v)
+        self.ws.mark_dirty()
+
+    def handle_input(self, i):
+        e = self._engine()
+        e.keys(i, damage=False)
+        return "local" if i.any_pressed() or i.last_key else None
+
+    def click(self, px, py, rect):
+        self._engine().point(px, py, True)
+        return "local"
+
+    def typing(self):
+        return False
+
+    def closed(self):
+        if self.page is not None:
+            self.page.close()
+            self.page = None
+        self.gen = -1
+        self.host.reset()
+
+
+def _rows_h(n, fs, desk=False):
+    """`n` stacked rows' height at font scale `fs`."""
+    row = _ui_draw.metrics("row")
+    return n * (row[6 if desk else 5] + row[7]) * fs
+
+
+class ControlCenter(_Rows):
+    """A handheld's control center, the `battery` widget's component there,
+    which the bar's status cluster opens (docs/theme_and_shell_2026-11.md
+    §8.6): `cc_ui`'s page, the console's group first (Volume, Brightness,
+    Wi-Fi), then each app's rows under its app's name, in the bar's order.
+    Its first view ends FIRST_FOOT under the first app's group; the page
+    scrolls the rest. The battery has no row: the bar's glyph shows it low
+    and charging, and Settings keeps its exact level."""
+
+    CC = True
+    W = 232                     # at the font scale
+    FIRST_FOOT = 6
+    SCRIM = 128                 # the page beside it dims by half, in both themes
+
+    def items(self):
+        return _ITEMS.shown
 
     def column(self):
         """(the first view's height, the column's), from the panel's top."""
-        fs, rh, cap, gap = self._metrics()
-        i = self._inset()
-        w = (self.W - 2 * 12) * fs
-        y = fs + i + 3 * rh             # the panel's frame, the inset, the card
+        fs = self.ws.layout.fs
+        grp = _ui_draw.metrics("group")
+        cap, gap = grp[3] * fs, grp[5] * fs
+        y = 2 * _pad(self.ws) + _rows_h(3, fs)
         first = None
         for it in _ITEMS.shown:
-            y += gap + cap + _ITEMS.height(it, w, False, fs)
+            y += gap + cap + _rows_h(_ITEMS.rows(it), fs)
             if first is None:
                 first = y + self.FIRST_FOOT * fs
-        y += i + fs
         return (y if first is None else min(first, y)), y
 
     def size(self):
@@ -368,50 +451,25 @@ class ControlCenter:
             room = strip[1] - lay.cy           # above the hint strip
         return (self.W * lay.fs, min(first, room - 4 * lay.fs))
 
-    def keys(self):
-        return _POWER_KEYS
-
-    def draw(self, cv, rect):
+    def poll(self, s):
         ws = self.ws
-        self.rect = rect
         sl = ws.settings_layer
-        fs = ws.layout.fs
-        x, y, w, h = rect
-        i = self._inset()
-        self.host.begin(cv, ws.theme_colors, (x + fs, y + fs, w - 2 * fs, h - 2 * fs), False,
-                        "panel")
-        _ui.at(x + fs, y + fs + i, w - 2 * fs, h - 2 * fs - i)
-        _ui.scroll("cc")
-        _ui.group("", {"card": True})
-        for k in range(len(self.KEYS)):
-            key = self.KEYS[k]
-            cur, lo, hi = sl.level(key)
-            _ui.icon("mute" if key == "volume" and cur == lo
-                     else "volume" if key == "volume" else "spark")
-            got = _ui.slider(self._LABELS[k], cur, lo, hi, {"steps": True})
-            if got != cur:
-                sl.set_level(key, got)
-                ws.mark_dirty()
-        _ui.icon("wifi" if ws.wifi_icon_kind() == "wifi" else "wifi_off")
-        if _ui.link("Wi-Fi", self._network()):
-            ws.close_popover()
-            ws.toggle_popover("wifi")
-            return
-        for it in _ITEMS.shown:
-            _ui.group(it.app or "")
-            _ITEMS.draw(it, False)
-            it = _ITEMS.opening
-            if it is not None:
-                _ITEMS.opening = None
-                ws.notices.open_status_app(it)
-                return
-        _ui.group()
-        _ui.scroll()
-        if self.gen != _ITEMS.gen:
-            self.gen = _ITEMS.gen
-            _fit(ws, self)
-        if self.host.due() or self.host.tap == 2:
-            ws.popover_touch()
+        cur, lo, hi = sl.level("volume")
+        s.vol, s.vlo, s.vhi = cur, lo, hi
+        s.vicon = "mute" if cur == lo else "volume"
+        s.bri, s.blo, s.bhi = sl.level("brightness")
+        s.wicon = "wifi" if ws.wifi_icon_kind() == "wifi" else "wifi_off"
+        s.net = self._network()
+        _Rows.poll(self, s)
+
+    def level(self, key, v):
+        self.ws.settings_layer.set_level(key, v)
+        self.ws.mark_dirty()
+
+    def wifi(self):
+        ws = self.ws
+        ws.close_popover()
+        ws.toggle_popover("wifi")
 
     def _network(self):
         """The Wi-Fi row's value: the network joined, else Off."""
@@ -422,82 +480,30 @@ class ControlCenter:
             st = None
         return st[1] if st and st[0] and st[1] else "Off"
 
-    def handle_input(self, i):
-        if self.host.keys(i):
-            return "local"
-        return None
 
-    def click(self, px, py, rect):
-        self.host.point(px, py, True)
-        return "local"
-
-    def typing(self):
-        return False
-
-    def closed(self):
-        self.host.reset()
-
-
-class StatusMenu:
+class StatusMenu(_Rows):
     """An app's status item's menu on the desk, hung from its cell in the
-    bar's right zone: the app's section in the popover's card, its keys'
-    hints under it. No wash: the desk's menus take none."""
+    bar's right zone: its rows in the popover's card, the page's keys' band
+    under them. No wash: the desk's menus take none."""
 
     def __init__(self, ws, item):
-        self.ws = ws
+        _Rows.__init__(self, ws)
         self.item = item
-        self.rect = None
-        self.host = _ui_draw.AppHost()
-        self.gen = _ITEMS.gen
-        self.need = 0                 # the card's height its section takes
+
+    def items(self):
+        it = self.item
+        return (it,) if it is not None and it.pid else ()
 
     def size(self):
         fs = self.ws.layout.fs
-        w = 404 * fs
         # under touch alone there are no hints, and no room kept for them
         foot = 0 if _ui.input_kind() == "touch" else _foot(fs)
         it = self.item
-        h = _ITEMS.height(it, w - 2 * _pad(self.ws), True, fs) if it is not None else 0
-        self.need = 2 * _pad(self.ws) + h + foot
-        return (w, self.need)
+        n = _ITEMS.rows(it) if it is not None else 0
+        return (404 * fs, 2 * _pad(self.ws) + _rows_h(n, fs, True) + foot)
 
     def keys(self):
         return _MENU_KEYS
-
-    def draw(self, cv, rect):
-        ws = self.ws
-        self.rect = rect
-        it = self.item
-        self.host.begin(cv, ws.theme_colors, _inner(ws, rect), True, "panel")
-        _ui.hints(_MENU_POINTER if _ui.input_kind() == "touch" else _MENU_KEYS)
-        if it is not None and it.pid:
-            # a card shorter than its section (the glass's room): it scrolls
-            scroll = rect[3] < self.need
-            if scroll:
-                _ui.scroll("status.menu")
-            _ITEMS.draw(it, True)
-            if scroll:
-                _ui.scroll()
-        if self.gen != _ITEMS.gen:
-            self.gen = _ITEMS.gen
-            _fit(ws, self)
-        if self.host.due() or self.host.tap == 2:
-            ws.popover_touch()
-
-    def handle_input(self, i):
-        if self.host.keys(i):
-            return "local"
-        return None
-
-    def click(self, px, py, rect):
-        self.host.point(px, py, True)
-        return "local"
-
-    def typing(self):
-        return False
-
-    def closed(self):
-        self.host.reset()
 
 
 def component_for(ws, widget):

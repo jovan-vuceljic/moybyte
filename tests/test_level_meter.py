@@ -61,7 +61,7 @@ def test_the_control_centers_brightness_meter_fills_four_of_seven(theme, mode):
         held.append(ws)
     img, _ok, _r = L.render(L._goldens(),
                             L.HANDHELD, theme, mode, setup, False, "touch")
-    box = held[-1].sysmenu.comp.host.box("Brightness")
+    box = held[-1].sysmenu.comp.host.box("bri")
     assert box is not None
     _holds(img.convert("RGB"), box, "%s-%s control center" % (theme, mode))
 

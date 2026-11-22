@@ -758,11 +758,13 @@ manager's Notifications tab) brings your app to the front and calls
 `moy_action(id, key)`. `docs/os_2026-11/processes.md` §7 has the rules.
 
 **A status item.** `moybyte.status(icon, section, order=0)` puts an item in
-the bar for your process, its section drawn in the item's menu on the desk
-and in the control centre on a handheld; your process's end takes it out
-(`runtime/system/status_items.py`). An item with no section has no menu:
-a tap on it opens your app. A Lua or a compiled program describes its rows
-instead (§10, a status item).
+the bar for your process, its section's rows listed in the item's menu on the
+desk and in the control centre on a handheld; your process's end takes it out
+(`runtime/system/status_items.py`). A section describes its rows in the text
+a Lua or a compiled program gives (§10, a status item) from `panel()`, read
+again on each `item.changed()`, and hears a row's press as `press(id, value)`,
+run as your process. An item with no section, or no rows, has no menu: a tap
+on it opens your app.
 
 ## 7. Services: background work and the one wait
 

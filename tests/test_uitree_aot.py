@@ -222,13 +222,15 @@ def _pool(blob):
 def test_a_pages_pool_keeps_each_text_once(compiled):
     """A page's texts repeat (its props' names, their sources, its labels'
     words): the store keeps each once (`uit_pool_put`), but for the lists
-    (an enum's values, a label table's keys and words), which are kept as
-    they come."""
+    (an enum's values, a model's enum field's, a label table's keys and
+    words), which are kept as they come."""
     import uitree as S
     for page, blob in compiled.pages.items():
         decl = S.decl_of(__import__(page.partition(".")[0]))
         pool = _pool(blob)
         lists = ["\0".join(t.values) for t in decl.state._t.values() if type(t) is S.Enum]
+        lists += ["\0".join(f.values) for t in decl.state._t.values() if type(t) is S.Model
+                  for f in t.fields.values() if type(f) is S.Enum]        # a model's enum field, a model each
         for tab in decl.labels.values():
             lists += ["\0".join(str(k) for k in tab), "\0".join(str(tab[k]) for k in tab)]
         for text in lists:

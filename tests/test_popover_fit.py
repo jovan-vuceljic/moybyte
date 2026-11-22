@@ -20,15 +20,13 @@ _BOTTOM = "fit-bottom-bar"
 
 
 class _Tall:
-    """An app's section taller than any glass."""
+    """An app's section of as many rows as a section lists."""
 
-    def height(self, w, desk, fs):
-        return 2000 * fs
+    def panel(self):
+        return "\n".join("button t%d Row %d" % (k, k) for k in range(ROWS_MAX))
 
-    def draw(self, desk):
-        from runtime import ui
-        for k in range(40):
-            ui.link("Row %d" % k, "", {"id": "tall.%d" % k})
+    def press(self, rid, v):
+        pass
 
 
 @pytest.fixture(autouse=True)

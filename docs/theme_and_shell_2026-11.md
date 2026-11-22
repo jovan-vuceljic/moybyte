@@ -288,7 +288,7 @@ renders the owner chose from):
    and a thumb moving along it is no row the move carries.
 6. **Apps put status items in the bar** (`moybyte.status`,
    `runtime/system/status_items.py`): one preallocated record an item, swept
-   with its process, its section drawn as that process. On the desk an
+   with its process, its section's rows read and pressed as that process. On the desk an
    item is a cell in the bar's right zone, its icon in its state's ink (the
    accent, the `paused` content role, the danger ink), which opens its
    menu, a popover hung from it, and wears the selected fill while that is
@@ -298,8 +298,10 @@ renders the owner chose from):
    compiled program's item (owner, 2026-11-09, on #246) is an icon in a
    state and an optional panel of rows it describes -- text, buttons, a
    toggle, a slider (`moybyte.status_show` to `status_remove`,
-   `docs/app_api_v1.md` §10) -- which the shell draws in the same menu
-   and card (`status_items.Panel`); the items themselves, a Python
+   `docs/app_api_v1.md` §10) -- and a Python program's section describes
+   the same rows: the shell lists them in the same menu and card
+   (`status_items.Panel`, drawn by `runtime/system/cc_ui.py`'s page on the
+   UI engine); the items themselves, a Python
    program's too, are the kernel's table (`native/moy_kernel/
    moy_status.h`), which a compiled program writes on its own task, VM or
    no VM, and the bar reads; a press reaches the program as the
@@ -308,10 +310,10 @@ renders the owner chose from):
    a Python item with no section) has no menu, and a tap on it opens its
    app, on a handheld its card's one Open row.
 7. **The handheld control center** grew from the battery's component
-   (`popover.ControlCenter`): the console's card (Volume, Brightness,
-   Wi-Fi), then each app's section as a card under its app's name, in one
-   scroll region with a thumb, its first view ending 6 px under the first
-   app's card, over a 50% scrim. The battery has no row: the bar's glyph
+   (`popover.ControlCenter`): `cc_ui`'s page, the console's group (Volume,
+   Brightness, Wi-Fi), then each app's rows in a group under its app's
+   name, the page scrolling, its first view ending 6 px under the first
+   app's group, over a 50% scrim. The battery has no row: the bar's glyph
    shows it low (the danger ink under 15%) and charging (a bolt), and
    Settings keeps its exact level.
 8. **A paused game shows the bar** on a handheld, so the cluster and the
@@ -1898,9 +1900,8 @@ calendar is `ui.month`, and the battery's level reads None on every board
 today (no board measures one), its line then reading Battery. An app that
 asks for the Wi-Fi page (`Workstation.open_wifi_panel`) still gets Settings'
 page in console mode. An app's status item's menu (`popover.StatusMenu`)
-and its card in the handheld's control center draw the app's section as
-its process, a compiled program's being the shell's drawer of the rows it
-described (§1.5).
+and its group in the handheld's control center are one page of the rows its
+section or its program described (`cc_ui`, §1.5).
 
 **The keys reach the bar** (owner call 2026-10-26), in console mode on every
 board and the browser. Up past the top of the surface under a bar (on

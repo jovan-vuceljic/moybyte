@@ -15,22 +15,20 @@ from ws_helpers import build_desktop_ws, build_ws, make_drv
 
 
 class Section:
-    def __init__(self, ns="music"):
+    """A Python section: its rows, and who it ran as when described and
+    pressed."""
+
+    def __init__(self):
         self.drawn = []
-        self.ids = ({"id": ns + ".pause"}, {"id": ns + ".stop"})
         self.stops = 0
 
-    def height(self, w, desk, fs):
-        from runtime import ui_draw
-        row = ui_draw.metrics("row")
-        return 3 * (row[6 if desk else 5] + row[7]) * fs
-
-    def draw(self, desk):
-        from runtime import ui
+    def panel(self):
         self.drawn.append(moy_log.current())
-        ui.info("Song", "Station")
-        ui.link("Pause", "", self.ids[0])
-        if ui.link("Stop", "", self.ids[1]):
+        return "text Song\tStation\nbutton pause Pause\nbutton stop Stop"
+
+    def press(self, rid, v):
+        self.drawn.append(moy_log.current())
+        if rid == "stop":
             self.stops += 1
 
 
@@ -56,7 +54,7 @@ def _as(pid, fn, *a):
 
 def test_items_are_ordered_capped_and_swept_with_their_process():
     a = _as(7, moybyte.status, "music", Section(), 5)
-    b = _as(8, moybyte.status, "pulse", Section("b"), 1)
+    b = _as(8, moybyte.status, "pulse", Section(), 1)
     assert a.pid == 7 and b.pid == 8
     assert ITEMS.count() == 0, "an item shows only once it says so"
     a.show()
@@ -93,7 +91,9 @@ def test_the_section_draws_as_its_process(tmp_path):
     ws.widget_tap("battery")
     assert ws.sysmenu.open and type(ws.sysmenu.comp).__name__ == "ControlCenter"
     ws.frame(1 / 30)
-    assert sec.drawn and set(sec.drawn) == {42}
+    drv = make_drv(ws)
+    _tap_row(ws, drv, "0.2/press")
+    assert sec.stops == 1 and sec.drawn and set(sec.drawn) == {42}, "described and pressed as its process"
     assert moy_log.current() != 42, "the shell's again after"
 
 
@@ -128,7 +128,7 @@ def test_the_desk_item_is_a_cell_that_opens_its_menu(tmp_path):
     assert ws.sysmenu.open and ws.sysmenu.widget == "status"
     assert ws.status_open is it
     ws.frame(1 / 30)
-    assert sec.drawn and set(sec.drawn) == {42}
+    assert ws.sysmenu.comp.host.box("%d.2/press" % it.k) is not None, "its rows in the menu"
     it.remove()
     assert not ws.sysmenu.open, "the item's menu closes with it"
 
@@ -158,7 +158,7 @@ def test_a_tap_on_a_desk_menu_row_acts_on_it(tmp_path, fs):
     ws.notices.open_status_menu(it)
     drv = make_drv(ws)
     drv.frame(1 / 30)
-    _tap_row(ws, drv, "music.stop")
+    _tap_row(ws, drv, "%d.2/press" % it.k)
     assert sec.stops == 1, "the app's button heard its tap"
 
 
@@ -168,7 +168,7 @@ def test_a_tap_on_a_compiled_panel_row_acts_on_it(tmp_path, fs):
     from runtime.status_items import parse
     h = ITEMS.show_compiled(42, "music", PAUSED, 3)
     it = ITEMS.slots[h - 1]
-    it.section.set(parse(PANEL))
+    ITEMS.panels[it.k].set(parse(PANEL))
     heard = []
     was = ITEMS.post
     ITEMS.post = lambda pid, name, args: heard.append(args)
@@ -178,15 +178,15 @@ def test_a_tap_on_a_compiled_panel_row_acts_on_it(tmp_path, fs):
         drv = make_drv(ws)
         drv.frame(1 / 30)
         k = it.k
-        _tap_row(ws, drv, "status%d.1" % k)
-        _tap_row(ws, drv, "status%d.2" % k)
-        _tap_row(ws, drv, "status%d.3" % k)
+        _tap_row(ws, drv, "%d.1/press" % k)
+        _tap_row(ws, drv, "%d.2/flag" % k)
+        _tap_row(ws, drv, "%d.3/v" % k)
     finally:
         ITEMS.post = was
     assert heard[:2] == [(h, "skip", 1), (h, "shuffle", 0)], heard
-    assert it.section.v[2] == 0, "the toggle flipped"
+    assert ITEMS.panels[it.k].v[2] == 0, "the toggle flipped"
     assert len(heard) == 3 and heard[2][1] == "vol" and heard[2][2] != 6, heard
-    assert it.section.v[3] == heard[2][2], "the slider moved where it was tapped"
+    assert ITEMS.panels[it.k].v[3] == heard[2][2], "the slider moved where it was tapped"
 
 
 def test_stop_and_play_stops_the_stream_then_opens_the_game(tmp_path, monkeypatch):
@@ -271,12 +271,8 @@ def test_a_compiled_item_is_a_slot_its_panel_drawn_by_the_shell(tmp_path):
     it = ITEMS.slots[h - 1]
     assert ITEMS.of(42, h) is it and ITEMS.of(43, h) is None and ITEMS.of(42, h + 1) is None
     assert it.visible and it.state == PAUSED and ITEMS.bare(it), "no panel: a bare item"
-    it.section.set(parse(PANEL))
-    assert not ITEMS.bare(it)
-    from runtime import ui_draw
-    m = ui_draw.metrics("row")
-    assert ITEMS.height(it, 380, True, 1) == 4 * (m[6] + m[7])
-    assert ITEMS.height(it, 380, True, 2) == 8 * (m[6] + m[7]), "at the font scale"
+    ITEMS.panels[it.k].set(parse(PANEL))
+    assert not ITEMS.bare(it) and ITEMS.rows(it) == 4
     heard = []
     was = ITEMS.post
     ITEMS.post = lambda pid, name, args: heard.append((pid, name, args))
@@ -294,7 +290,7 @@ def test_a_compiled_item_is_a_slot_its_panel_drawn_by_the_shell(tmp_path):
     assert heard == [(42, "moybyte.status", (h, "skip", 1)),
                      (42, "moybyte.status", (h, "shuffle", 0)),
                      (42, "moybyte.status", (h, "vol", 7))], heard
-    assert it.section.v[2:4] == [0, 7], "a row keeps the value it moved to"
+    assert ITEMS.panels[it.k].v[2:4] == [0, 7], "a row keeps the value it moved to"
     moybyte.WAKES.end(42)
     assert it.pid == 0 and not ws.sysmenu.open, "the end sweeps it, its menu closed"
 
@@ -321,9 +317,5 @@ def test_a_bare_item_s_card_is_one_open_row_on_a_handheld(tmp_path, monkeypatch)
     assert ws.sysmenu.open and type(ws.sysmenu.comp).__name__ == "ControlCenter"
     drv = make_drv(ws)
     drv.frame(1 / 30)
-    ws.sysmenu.comp.host.focus("status%d.open" % it.k)
-    drv.frame(1 / 30)
-    drv.press("a")
-    for _ in range(3):
-        drv.frame(1 / 30)
+    _tap_row(ws, drv, "%d./press" % it.k)
     assert opened == [it]

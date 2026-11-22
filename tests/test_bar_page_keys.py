@@ -13,12 +13,11 @@ from ws_helpers import build_desktop_ws, make_drv
 
 
 class _Section:
-    def height(self, w, desk, fs):
-        return 40 * fs
+    def panel(self):
+        return "text Song\tStation"
 
-    def draw(self, desk):
-        from runtime import ui
-        ui.info("Song", "Station")
+    def press(self, rid, v):
+        pass
 
 
 @pytest.fixture(autouse=True)

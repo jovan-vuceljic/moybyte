@@ -1,7 +1,7 @@
 # Map (grep -n a name to jump there):
 #   Stream              what plays: the media face, the status item, the poll
 #   card_of             the media card's answers from the face's
-#   Card                the media card at its densities (strip, compact, wide, full)
+#   Card                the media card at its densities (strip, wide, full)
 #   MusicSection        the status item's section (the desk menu, the control center)
 #   MusicAppLayer       the app's pages
 #   _scan               the music folder's songs and playlists
@@ -25,7 +25,8 @@ docs/media/music_2026-11/README.md.
 What plays is the media service's stream, the system's (the app is one of
 its clients): leaving the app keeps it playing, and Back on the desk
 minimises the window. While the service runs the app's status item is in
-the bar (`moybyte.status`); its section, the compact card, is where it is
+the bar (`moybyte.status`); its section, rows of the title and the
+transport, is where it is
 paused and stopped from anywhere (the desk's menu, a handheld's control
 center). What another client plays, and what a VM stop left playing, the
 card shows as well (`Stream.follow`, from the label each play() names).
@@ -502,10 +503,6 @@ def _fit(meta, w, c):
 
 # -- drawing ---------------------------------------------------------------------
 
-def _canvas():
-    return _ui_draw.UI_TARGET[1]
-
-
 def paused_ink(th):
     """The paused state's ink: the theme's `paused` content role (MOY64 50
     in Moy Night), the dim ink where the theme names none."""
@@ -563,11 +560,9 @@ def art(cv, rect, name, fs, r=8):
 
 class Card:
     """What plays, one component at its densities, the same lines, state
-    and transport in each: `strip` (a band over a list's foot), `compact`
-    (a card: the head over the transport), `wide` (compact in one row, the
-    desk window's foot) and `full` (Now playing). Its stops' ids are the
-    app's own (`music.*`): the control center lays every app's section in
-    one page."""
+    and transport in each: `strip` (a band over a list's foot), `wide` (the
+    head, the transport and the volume in one row, the desk window's foot)
+    and `full` (Now playing). Its stops' ids are the app's own (`music.*`)."""
 
     def __init__(self, cv, th, fs, desk):
         self.cv, self.th, self.fs, self.desk = cv, th, fs, desk
@@ -640,24 +635,6 @@ class Card:
         if chev:
             chevron(self.cv, x + w - cw, y, a, self.th["ink_dim"], fs, self.desk)
 
-    def compact_h(self):
-        fs = self.fs
-        return 8 * fs + 36 * fs + 6 * fs + 26 * fs + 8 * fs
-
-    def compact(self, x, y, w, head_id="music.open"):
-        """The compact card's contents in (x, y, w), its card drawn by the
-        caller: the head (one stop that opens the app) over the transport."""
-        fs = self.fs
-        p = 8 * fs
-        a = 36 * fs
-        bh = 26 * fs
-        ui.at(x + 2 * fs, y + 4 * fs, w - 4 * fs, a + 8 * fs)
-        st = ui.part(head_id, 0, 0, _HEAD)[4]
-        if st & 2:
-            self.acted = head_id
-        self.head(x + p, y + p, w - 2 * p, a)
-        self.transport(x + p, y + p + a + 6 * fs, w - 2 * p, bh, 6 * fs)
-
     def strip(self, x, y, w, h):
         """The strip: a band over the page's foot, the head (a stop that
         opens Now playing) and the main button."""
@@ -684,7 +661,7 @@ class Card:
                      "tonal", self._main()[0])
 
     def wide(self, x, y, w, h, vol=True):
-        """The compact card in one row (the desk window's foot): the head,
+        """The card in one row (the desk window's foot): the head,
         the transport, then the volume."""
         trans = 5 * 40 + 4 * 8
         vol_w = 200 if vol else 0
@@ -782,7 +759,6 @@ _VALUE = {"tone": "value"}
 _DANGER = {"tone": "danger"}
 _FACE_UI = {"face": "ui"}
 _FACE_TITLE = {"face": "title"}
-_HEAD = {"fill": "surface", "border": "surface", "id": "music.open"}
 _STRIP_HEAD = {"fill": "surface_alt", "border": "surface_alt"}
 _METER = {"fill": "surface", "border": "surface"}
 _METER_PANEL = {"fill": "panel", "border": "panel"}
@@ -819,59 +795,43 @@ def act(card, stream):
 
 class MusicSection:
     """The status item's section (runtime/system/status_items.py): the
-    compact card, on the desk with the volume under it. Its head opens the
-    app; its buttons act there and then."""
+    title, which opens the app, the second line, the transport and the
+    volume as rows."""
 
     def __init__(self, stream, nav=None):
         self.stream = stream
         self.nav = nav
 
-    def height(self, w, desk, fs):
-        h = 8 * fs + 36 * fs + 6 * fs + 26 * fs + 8 * fs
-        if desk:
-            h += (8 + 1 + 8 + 30) * fs
-        return h
+    def panel(self):
+        c = self.stream.card
+        if c is None:
+            return ""
+        title, meta = lines(c)
+        main = "Try again" if c["state"] == FAILED else "Play" if c["paused"] else "Pause"
+        return ("button open %s\ntext %s\nbutton main %s\nbutton prev Previous\n"
+                "button next Next\nbutton stop Stop\nslider volume Volume 0 10 %d"
+                % (_one_line(title), _one_line(meta), main, (c["volume"] + 5) // 10))
 
-    def draw(self, desk):
+    def press(self, rid, v):
         s = self.stream
-        if s.card is None:
-            return
-        cv = _canvas()
-        fs = _fs()
-        x, y, w, h, _st = ui.part("music.card", 0, self.height(0, desk, fs), _CARD_ROW)
-        k = Card(cv, _theme(), fs, desk)
-        k.c = s.card
-        if desk:
-            cv.rrect(x, y, w, k.compact_h(), 8 * fs, k.th["surface"], ring=k.th["border"],
-                     line=fs)
-        k.compact(x, y, w)
-        if desk:
-            p = 8 * fs
-            ry = y + k.compact_h() + p
-            cv.rect(x + p, ry, w - 2 * p, fs, k.th["border"])
-            k.volume_row(x + p, ry + p, w - 2 * p, 30 * fs)
-        if k.acted == "music.open":
+        if rid == "open":
             if self.nav is not None:
                 self.nav.open_app("jukebox")
-            return
-        act(k, s)
+        elif rid == "main":
+            s.toggle()
+        elif rid == "prev":
+            s.step(-1)
+        elif rid == "next":
+            s.step(1)
+        elif rid == "stop":
+            s.stop()
+        elif rid == "volume":
+            s.volume(v * 10)
 
 
-_CARD_ROW = {"disabled": True, "fill": "surface", "border": "surface", "id": "music.card"}
-
-
-def _fs():
-    return max(1, int(getattr(_canvas(), "font_scale", 1)))
-
-
-_THEME = [None]
-
-
-def _theme():
-    """The live token table: the app's context's, which the section
-    borrows (the shell draws the section as the app)."""
-    th = _THEME[0]
-    return th.colors() if th is not None else {}
+def _one_line(t):
+    """`t` as a row's label: one line, never empty."""
+    return " ".join(str(t).split()) or "-"
 
 
 # -- the music folder -------------------------------------------------------------
@@ -957,7 +917,6 @@ class MusicAppLayer(AppLayer):
         self._install = ctx.install
         self._nav = ctx.nav
         self._ui = ctx.ui
-        _THEME[0] = ctx.theme
         s = STREAM
         s.on_change = self._moved
         if s.section is None:
