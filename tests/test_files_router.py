@@ -379,9 +379,10 @@ def test_the_keys_reach_every_row_and_the_view_follows(tmp_path):
     for _ in range(n - 1):
         _key(ws, app, "down")
     assert app.cur == n - 1
+    _frames(_drv(ws), 30)                   # the glide lands
     vx, vy, vw, vh = app.page_host().box("list")
     x, y, w, h = app.page_host().box(files_app.row_id(n - 1) + "/open")
-    assert vy <= y and y + h // 2 <= vy + vh, "the view followed the current row"
+    assert vy <= y and y + h <= vy + vh, "the view followed the current row"
     _key(ws, app, "down")
     assert app.engine.focus_key.startswith("v_"), "past the last row, down reaches the verbs"
 
