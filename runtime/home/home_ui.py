@@ -1,7 +1,8 @@
 """The desk home's details pane, a `uitree` page the home layers host
 beside the hero (`home_details.HomeDetails`): the selected card's title,
 its metadata line, its description, its facts (how often and when it was
-played, who made it) and its verb buttons, the tab's tap verb first.
+played, who made it) and its verb buttons, the tab's tap verb first, the
+facts and the buttons at the hero's foot (a `grow=True` row over them).
 
 The host writes what the card shows (`put`, run when the card, the tab or
 the verbs move). Its buttons are places, the card's verbs in order (`b0`,
@@ -24,7 +25,7 @@ ARGS = tuple(str(k) for k in range(BUTTONS))
 FACT_KEYS = tuple("fk%d" % k for k in range(FACTS))   # each fact's caption
 FACT_VALUES = tuple("fv%d" % k for k in range(FACTS))  # ...and its value
 
-_decl = dict(title="", title_h=0, meta="", desc="", meta_on=True, facts_on=True)
+_decl = dict(title="", title_scale=1, meta="", desc="", desc_w=0, meta_on=True, facts_on=True)
 for _k in range(BUTTONS):
     _decl[SHOWN[_k]] = False
     _decl[LABELS[_k]] = ""
@@ -45,30 +46,29 @@ def _press(arg):
     uitree_app.env().details_press(int(arg))
 
 
-def _title(cv, x, y, w, h):
-    uitree_app.env().draw_title(cv, x, y, w, h)
-
-
 ui.hook("put", put)
 ui.action("press", "Choose", _press, takes="arg")
 
 
 def page():
     with ui.page(""):
-        ui.canvas("title", _title, h="{title_h}", mark=False)
         with ui.row("words", wrap=True):
-            with ui.group(""):
+            with ui.group("", gap=12):
+                ui.label("{title}", face="title", scale="{title_scale}")
                 ui.label("{meta}", tone="dim", face="ui", shown="meta_on && meta")
-                ui.label("{desc}", tone="dim", face="ui", wrap="word", lines=3, shown="desc")
-        with ui.row("facts", wrap=True, gap=48, shown="facts_on && fk0"):
-            for k in range(FACTS):
-                with ui.group("", shown=FACT_KEYS[k]):
-                    ui.label("{%s}" % FACT_KEYS[k], tone="dim", face="caption")
-                    ui.label("{%s}" % FACT_VALUES[k], face="ui")
-        with ui.row("verbs", wrap=True, gap=14):
-            for k in range(BUTTONS):
-                ui.button("press", "{%s}" % KINDS[k], arg=ARGS[k], label="{%s}" % LABELS[k],
-                          icon="{%s}" % ICONS[k], shown=SHOWN[k])
+                ui.label("{desc}", tone="dim", face="ui", wrap="word", lines=2, w="{desc_w}", shown="desc")
+        ui.row("fill", grow=True)                   # the facts and the buttons at the hero's foot
+        with ui.row("foot", wrap=True):
+            with ui.group("", gap=16):
+                with ui.row("facts", wrap=True, gap=48, shown="facts_on && fk0"):
+                    for k in range(FACTS):
+                        with ui.group("", gap=6, shown=FACT_KEYS[k]):
+                            ui.label("{%s}" % FACT_KEYS[k], tone="dim", face="ui")
+                            ui.label("{%s}" % FACT_VALUES[k], face="ui")
+                with ui.row("verbs", wrap=True, gap=14):
+                    for k in range(BUTTONS):
+                        ui.button("press", "{%s}" % KINDS[k], arg=ARGS[k], label="{%s}" % LABELS[k],
+                                  icon="{%s}" % ICONS[k], shown=SHOWN[k], look="large")
 
 
 DESK_PAGES = (page,)    # a handheld's home has no details pane: its image carries none

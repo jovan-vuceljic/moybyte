@@ -27,7 +27,7 @@ _PLAYS = ("play", "open", "window")             # a button that wears the Play g
 _BUTTON_IDS = ("press/0", "press/1", "press/2", "press/3")   # home_ui's buttons' stops
 _NO_RECT = (0, 0, 0, 0)     # a button the page has not drawn yet
 _META_SEP = "  \u00b7  "    # between the metadata's parts
-_TITLE_AIR = 8              # glass pixels under the title, over the metadata
+DESC_EMS = 48               # the description's measure, this many n's: about 60 characters
 
 
 def times_words(n):
@@ -173,16 +173,16 @@ class HomeDetails:
         g = self.grid
         pseudo = it.get("type") in PSEUDO_TILE_TYPES
         s.title = "New" if it.get("type") == NEW_TILE_TYPE else str(it.get("title") or "")
-        s.title_h = _ui_draw.font("title")[2] * dk[5][0] + _TITLE_AIR // dk[5][6]
+        ts, ms, _ks, _vs, bh, pane, _u = dk[5]
+        s.title_scale = ts
         facts_on, meta_on = dk[7]
         facts_on = facts_on and not pseudo
         # what the pane's height holds at the text's scale, each a line and
-        # half one apart, the facts and the buttons two: the title and the
-        # buttons always, the facts, then the metadata, then two lines of
-        # the description where there is room for them
+        # half one apart: the title and the buttons' rows always, the facts (two
+        # lines), then the metadata, then two lines of the description
         lh = _ui_draw.font()[2] * self.ws.layout.fs
         step = 3 * lh // 2
-        room = dk[5][5] - s.title_h - 2 * step
+        room = pane - _ui_draw.font("title")[2] * ts - bh - dk[8] - lh
         facts_on = facts_on and room >= 2 * step
         room -= 2 * step if facts_on else 0
         meta_on = meta_on and room >= step
@@ -190,6 +190,7 @@ class HomeDetails:
         s.meta_on, s.facts_on = meta_on, facts_on
         s.meta = _META_SEP.join(g._meta(it, played=False)) if meta_on else ""
         s.desc = "" if pseudo or room < 2 * lh else str(it.get("description") or "")
+        s.desc_w = _ui_draw.print_width("n" * DESC_EMS, ms)
         facts = () if pseudo or not facts_on else self._facts(it)
         for k in range(home_ui.FACTS):
             setattr(s, home_ui.FACT_KEYS[k], facts[k][0] if k < len(facts) else "")
@@ -207,16 +208,6 @@ class HomeDetails:
         verbs = self._desk_verbs()
         if k < len(verbs):
             self._do_verb(verbs[k])
-
-    def draw_title(self, cv, x, y, w, h):
-        """The details' title (the page's canvas): the `title` face at the
-        pane's scale, cut with an ellipsis to the pane."""
-        ts = self.grid._geom()[9][5][0]
-        name = self._dpage.s.title
-        was = _ui_draw.print_font(_ui_draw.font("title")[0])
-        cv.print_scaled(_ui_draw.print_ellipsis(name, w, ts), x, y, self.ws.theme_colors["ink"], ts)
-        if was is not None:
-            _ui_draw.print_font(was)
 
     def _facts(self, it):
         """The details pane's facts of a cart: (caption, value) pairs."""
