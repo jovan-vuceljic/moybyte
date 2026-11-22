@@ -3,7 +3,8 @@
 with no module (a run's own pages are tests/test_uitree_conformance.py's
 compiled halves).
 
-  * the numbers sdk/include/moybyte/uitree.h gives an app are the engine's;
+  * the numbers sdk/include/moybyte/uitree.h (and its generated
+    uitree_schema.h) give an app are the engine's;
   * a refusal is latched for the run, and its line names its code, its row
     and where on the page;
   * a prop is held to the contract's table at the row that names it, with
@@ -96,7 +97,7 @@ def test_the_sdk_headers_numbers_are_the_engines():
     """Each of the SDK's enums is one of the engine's, whole: the types, every
     kind, the action flags and the refusals (the off values are uit_action's)."""
     engine = _enums("native/moy_uitree/moy_uitree.h", "UIT_")
-    for sdk in _enums("sdk/include/moybyte/uitree.h", "UT_"):
+    for sdk in _enums("sdk/include/moybyte/uitree.h", "UT_") + _enums("sdk/include/moybyte/uitree_schema.h", "UT_"):
         if "OFF_NONE" in sdk:
             assert sdk == {"OFF_NONE": 0, "OFF_HIDE": 1, "OFF_GREY": 2}
             continue
