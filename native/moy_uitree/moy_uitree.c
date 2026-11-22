@@ -1749,8 +1749,11 @@ void uit_open(uit_t *e)
     }
 }
 
-void uit_want_focus(uit_t *e, const char *key)
+int uit_want_focus(uit_t *e, const char *key)
 {
+    for (int i = 0; key && i < e->nids; i++)
+        if (e->ids[i].dup && !strcmp(e->ids[i].id, key))
+            return uit_check_fail(e, "N08", UIT_MSG("two shown nodes are keyed %s", "%s"), key);
     UIT_FREE(e->want);
     e->want = NULL;
     if (key) {
@@ -1759,6 +1762,7 @@ void uit_want_focus(uit_t *e, const char *key)
         if (e->want)
             memcpy(e->want, key, n + 1);
     }
+    return 0;
 }
 
 // -- events and the trace ---------------------------------------------------------

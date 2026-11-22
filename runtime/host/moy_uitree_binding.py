@@ -53,7 +53,7 @@ _SIGS = (
     ("uit_build_end", [_P], _I),
     ("uit_open", [_P], None),
     ("uit_close", [_P], None),
-    ("uit_want_focus", [_P, _S], None),
+    ("uit_want_focus", [_P, _S], _I),
     ("uit_set_placed", [_P, _I], None),
     ("uit_set_ground", [_P, _I, _I, _I, _I], None),
     ("uit_set_legacy_hints", [_P, _S, _Z], None),
@@ -64,6 +64,7 @@ _SIGS = (
     ("uit_take_focused", [_P], _I),
     ("uit_back_closer", [_P, c.c_char_p, _Z], _I),
     ("uit_lent", [_P, _S, _I32, _I, c.c_char_p, _Z], _I),
+    ("uit_live", [_P, c.c_char_p, _I, c.POINTER(_I)], _I),
     ("uit_lent_place", [_I32, _I, _I, _I, _I, _I, _I, _I32, c.POINTER(_I), _I32], _I),
     ("uit_frame", [_P, _P, _P, _I, _I, _I, _I, _I, _I, _I], _I),
     ("uit_panes_set", [_P, _I, _S, _I, c.c_uint32], None),
@@ -180,6 +181,7 @@ class Engine:
         self._ev = (c.c_int32 * 3)()
         self._buf = c.create_string_buffer(512)
         self._lent = None
+        self._node = None
         self._pn = None
         self._draw = self._cb = self._raised = None
 
@@ -288,7 +290,16 @@ class Engine:
         self._L.uit_open(self._e)
 
     def want_focus(self, key):
-        self._L.uit_want_focus(self._e, b(key) if key is not None else None)
+        return self._L.uit_want_focus(self._e, b(key) if key is not None else None)
+
+    def live(self, units):
+        """The units shown (uit_live): `units` the int16 nodes bound to
+        them; a refusal is (answer, node)."""
+        if self._node is None:
+            self._node = c.c_int(-1)
+            self._node_at = c.byref(self._node)     # made once: a frame allocates nothing
+        r = self._L.uit_live(self._e, units, len(units) // 2, self._node_at)
+        return r if r >= 0 else (r, self._node.value)
 
     def frame(self, ctx, cv, look, x, y, w, h, flags, fs, inp):
         L = self._L

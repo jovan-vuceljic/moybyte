@@ -28,7 +28,7 @@ enum {
     UIT_E_KIND = -3,        // a kind or prop this engine does not draw
     UIT_E_NOMEM = -4,
     UIT_E_ARG = -5,         // a handle out of range, a value of the wrong type
-    UIT_E_CHECK = -6,       // a mistake the spec names (T01-T05, C01-C02, N04): `uit_error_code`
+    UIT_E_CHECK = -6,       // a mistake the spec names, its code `uit_error_code`
     UIT_E_BLOB = -7,        // a compiled page this engine does not read (`uit_load`)
 };
 
@@ -149,8 +149,9 @@ int uit_build_end(uit_t *e);
 // over; a page the store keeps from the last visit draws as a fresh build.
 void uit_open(uit_t *e);
 // Focus goes to node `key` (or ROWKEY/KEY) in the next frame (a push's
-// return, ui.focus); NULL clears it.
-void uit_want_focus(uit_t *e, const char *key);
+// return, ui.focus); NULL clears it. UIT_E_CHECK (N08), nothing kept, where
+// two nodes the last frame drew are keyed `key`.
+int uit_want_focus(uit_t *e, const char *key);
 
 // -- the placed layout ----------------------------------------------------------
 // The page is placed (1) or flows (0, the default). A placed page's children
@@ -199,6 +200,11 @@ enum { UIT_LC_TAB = 0, UIT_LC_BUTTON, UIT_LC_TEXT };
 enum { UIT_LC_ALONE = 1, UIT_LC_CUR = 2, UIT_LC_ON = 4, UIT_LC_MARKED = 8, UIT_LC_PRIMARY = 16 };
 #define UIT_LC_INTS 5
 int uit_lent(uit_t *e, const char *site, int32_t *cells, int max, char *text, size_t cap);
+// One walk of what shows, a frame's: bit i of the answer set where node
+// `units[i]` shows (a unit's case: its actions are live), at most 31 of them;
+// UIT_E_CHECK (L03) where two shown rows lend to one site, `*node` the second.
+#define UIT_LIVE_LENDERS 8
+int uit_live(uit_t *e, const int16_t *units, int n, int *node);
 // The lent row's layout in a zone `x0` wide `w` at cell height `h` and scale
 // `fs`, the host's widths handed in: UIT_LP_INTS ints a cell, in (its kind,
 // UIT_LC_* flags, its width named: a tab's or a button's with its label, 0

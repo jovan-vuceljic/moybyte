@@ -517,7 +517,7 @@ I.BACK.frame = function(p)
     if not KEYS[pf.key] and not (ROWS and pf.key:find("/", 1, true)) then
       fail("N08", pf.at, "ui.focus(" .. q(pf.key) .. ") names no node on the page", "a node's key", q(pf.key))
     end
-    X:want_focus(pf.key)
+    check(X:want_focus(pf.key), "ui.focus(" .. q(pf.key) .. ")", pf.at)
   end
   -- the bar's title is the app's (its window's): the page's title is the page's to draw
   if E.bar("", {}, {}, wants_back()) == -1 then back() end

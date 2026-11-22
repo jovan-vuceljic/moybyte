@@ -241,6 +241,7 @@ typedef struct {
     char id[UIT_ID_MAX + 1];
     int16_t node, row, act;
     uint8_t kind;
+    uint8_t dup;                // another node drew under this id too (ui.focus on it: N08)
     uint16_t gen;               // the build it was drawn under
 } uit_id_t;
 
@@ -322,7 +323,6 @@ struct uit {
     uit_id_t focused;
     int has_focused;
     char focus_key[UIT_ID_MAX + 1];
-    int dup;
     // events and trace
     uit_ev_t *evs;
     int nevs, cevs, evat;
