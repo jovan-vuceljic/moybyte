@@ -28,9 +28,9 @@ def _frames(ws, n=3):
 
 
 def _idle(ws, n=40):
-    """Frames with nothing marked: the console's idle branch, where My Art
-    makes the pictures its cards owe (an unlock banner on a wall clock
-    would hold the frames painting)."""
+    """Frames with nothing marked: each makes a picture a card in view
+    owes, and the idle branch reads a drawing against its picture (an
+    unlock banner on a wall clock would hold the frames painting)."""
     settle_badges(ws)
     ws.toast_until = 0
     for _ in range(n):
@@ -122,7 +122,7 @@ def test_a_reopen_decodes_only_the_drawings_that_changed(tmp_path, monkeypatch):
     assert _pic(app, "garden").pix[0] == 8
 
 
-def test_the_pictures_are_made_on_idle_frames_one_a_frame_never_in_a_draw(
+def test_the_pictures_in_view_are_made_one_a_frame_before_it_paints_never_in_a_draw(
         tmp_path, monkeypatch):
     ws = _ws(tmp_path)
     for i, c in enumerate((1, 2, 3)):
@@ -146,12 +146,10 @@ def test_the_pictures_are_made_on_idle_frames_one_a_frame_never_in_a_draw(
     monkeypatch.setattr(artwork, "read_cover", read_cover)
     monkeypatch.setattr(app, "draw", drawing)
     assert ws.spine.open_app(app)
-    _frames(ws)
-    assert made == [] and app.idle_owed, "the cards drew without their pictures"
-    _idle(ws)
-    assert len(made) == 3 and not app.idle_owed
+    _frames(ws, 6)
+    assert len(made) == 3 and not app.view_owed
     assert len(set(made)) == 3, "one picture a frame, each shown by a paint of its own"
-    _frames(ws)
+    _idle(ws)
     assert len(made) == 3 and not app.idle_owed, "every card drew its picture"
 
 

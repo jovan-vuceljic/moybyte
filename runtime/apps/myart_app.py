@@ -10,8 +10,8 @@ docs/media/look_2026-10/APPS_RESTYLE.md, My Art).
 
 The drawings are cards, New drawing the first, each its drawing at 4:3 and
 its name. A card's picture is the engine's (`image.store`): read from its
-file and made at the card's size on a frame the console has nothing to
-paint, the card showing it from the frame after. A drawing another app
+file and made whole inside the card's tile, at its own aspect, one a frame
+before the frame paints (`uitree_pics`). A drawing another app
 wrote since its picture was made is read again on an idle frame and made
 again where its bytes moved (`ui.pictures.changed`). The drawing that is
 the wallpaper wears the `wallpaper` badge, and the caption says it. Enter
