@@ -1574,7 +1574,8 @@ def _music(ws, now, what, page="list", tab=0, cur=None, files=None, put=None):
 
     def show():
         M.fill(app)
-        M.s.tab = M.s.view = ("radio", "files")[tab]
+        M.s.tab = ("radio", "files")[tab]
+        M.tab_moved()
         if cur is not None:
             setattr(M.s, ("scur", "fcur")[tab], app.rows[tab][cur]["id"])
         if page == "now":

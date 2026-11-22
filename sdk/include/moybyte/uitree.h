@@ -51,7 +51,8 @@ extern "C" {
 enum { UT_BOOL = 1, UT_INT, UT_NUM, UT_TEXT, UT_ENUM, UT_ROWOF, UT_MODEL };
 
 // An action's flags and how its nodes look while it is off (uitree_action).
-enum { UT_A_HOOK = 1, UT_A_ROLE_CONFIRM = 2, UT_A_ROLE_BACK = 4, UT_A_ROW = 8, UT_A_SHIFT_ENTER = 16, UT_A_ROLE_MORE = 32 };
+enum { UT_A_HOOK = 1, UT_A_ROLE_CONFIRM = 2, UT_A_ROLE_BACK = 4, UT_A_ROW = 8, UT_A_SHIFT_ENTER = 16, UT_A_ROLE_MORE = 32,
+       UT_A_ARROWS_V = 64, UT_A_ARROWS_H = 128, UT_A_APP_BACK = 256 };
 enum { UT_OFF_NONE = 0, UT_OFF_HIDE = 1, UT_OFF_GREY = 2 };
 
 // The refusals every uitree_* call may answer (uitree_error says which and where).

@@ -1794,7 +1794,10 @@ def _declare(name, label, fn, takes, where, what):
 def action(name, label, fn, *, takes="none", when=None, off=None, hint=None, row=None,
            chars=None, keys=(), icon=None, unit=None, push=None):
     """An action a person sees: its label names it on every node and in the
-    hints band. `takes=` is what every site hands its handler; `when=` makes
+    hints band, by its first letter or its arrow role; two declared one after
+    the other whose hints read the same share one item (two letters, or the
+    up and down arrows as the scroll keys, left and right as the change
+    keys). `takes=` is what every site hands its handler; `when=` makes
     it unavailable, and `off=` (required with `when=` or `row=`) says how its
     nodes look then."""
     where = _caller()
@@ -2012,13 +2015,14 @@ SCHEMA = {
     "split": dict(_C, dir="choice", sizes="ints", pad="lit", gap="lit", align="lit", rule="lit"),
     "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit"),
     "panel": dict(_C),
-    "canvas": dict(_C, draw="fn", h="lit", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit"),
+    "canvas": dict(_C, draw="fn", h="int", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit",
+                   keys="fn", mark="lit"),
     "foot": dict(_C, look="lit"),
     "scroll": dict(_C),
     "switch": dict(_C),
     "case": {},
     # EXT-4. The Editor's kinds (see the calls below)
-    "tabs": dict(_C, labels="lit", icons="lit", focus="cond", on="action0", offered="conds"),
+    "tabs": dict(_C, labels="lit", icons="lit", focus="cond", on="action0", offered="conds", hint="text"),
     "panes": dict(_C, dir="choice", gap="lit", size="lit", start="lit", min="lit", grow="lit",
                   focused="lit", grown="lit"),
     "pane": dict(_C, title="text", icon="text", size="lit", start="lit", min="lit", grow="lit",
@@ -2589,6 +2593,9 @@ def progress(value, **p):
 
 
 def empty(title, **p):
+    """A page that says why there is nothing: its icon, title and lines,
+    and the controls built inside it under them, centred, each its natural
+    width (a button's w=)."""
     return _node("empty", None, dict(p, title=title), _caller())
 
 
@@ -2700,7 +2707,9 @@ ANCHORS = {"text_editor": ("caret", "word"), "tabs": None, "pane": ("head",), "r
 def tabs(name, labels, **p):
     """A tab strip bound two-way to an enum: one tab per value, labelled by a
     label table that must cover every value. The body is a ui.switch on the
-    same name, whose cases are built once and kept."""
+    same name, whose cases are built once and kept. `hint=` puts the tabs
+    keys in the band with its words (a template), and the strip is then no
+    stop: those keys or a tap switch it."""
     where = _caller()
     _state_name(name, (Enum,), "ui.tabs", where)
     t = _st()._t[name]

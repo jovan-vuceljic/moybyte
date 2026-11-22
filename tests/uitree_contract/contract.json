@@ -1342,7 +1342,7 @@
    "section": "7.1",
    "props": {
     "look": {
-     "type": "word:end,share",
+     "type": "word:end,share,band",
      "level": 1
     }
    }
@@ -1941,6 +1941,10 @@
     "offered": {
      "type": "conds",
      "level": 2
+    },
+    "hint": {
+     "type": "tpl",
+     "level": 2
     }
    }
   },
@@ -2435,9 +2439,8 @@
      "level": 2
     },
     "keys": {
-     "type": "hook",
-     "level": 2,
-     "designed": true
+     "type": "fn",
+     "level": 2
     },
     "capture": {
      "type": "cond",
@@ -2446,8 +2449,7 @@
     },
     "mark": {
      "type": "lit",
-     "level": 2,
-     "designed": true
+     "level": 2
     },
     "hint": {
      "type": "tpl",

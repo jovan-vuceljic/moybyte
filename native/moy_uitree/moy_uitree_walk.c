@@ -679,6 +679,10 @@ static void stops_of(uit_t *e, int k, int model, int row, stops_t *out)
                 stops_of(e, cs, model, row, out);
         } else if (N->kind == UIT_DIALOG || N->kind == UIT_POPOVER || (N->kind == UIT_TOOLS && (N->lit & TL_LEND))) {
             continue;               // drawn over the page, or at the site it is lent to
+        } else if (N->kind == UIT_CANVAS && (N->lit & CV_KEYS)) {
+            stop_put(out, c, row);  // a canvas that takes the keys while it holds focus
+        } else if (N->kind == UIT_TABS && N->t_aux >= 0) {
+            continue;               // tabs the band names (hint=): the tabs keys or a tap switch them
         } else if (is_stop(N->kind)) {
             if (N->act < 0 || uit_act_can(e, N->act, model, row))
                 stop_put(out, c, row);
@@ -844,6 +848,54 @@ static int role_action(uit_t *e, int flag)
     return -1;
 }
 
+// A page's tabs in the band where they say what the tabs keys do (hint=).
+static void hint_tabs(uit_t *e, uit_buf_t *b, int k)
+{
+    if (NODE(k)->t_aux < 0)
+        return;
+    uint32_t n, at = uit_tmpl_render(e, NODE(k)->t_aux, -1, -1, &n);
+    if (n) {
+        hint_add(b, "tabs", 4);
+        hint_add(b, e->scratch.p + at, n);
+    }
+}
+
+// Whether action a goes in the band by its keys: an arrow role or a letter, and available.
+static int band_key(uit_t *e, int a)
+{
+    return (e->acts[a].letter || (e->acts[a].flags & (UIT_A_ARROWS_V | UIT_A_ARROWS_H))) &&
+           uit_act_can(e, a, -1, -1);
+}
+
+// Action a's keys in the band, and the next action's with it where that one says the same:
+// two on the up and down arrows are the scroll keys, two on left and right the change keys,
+// two letters both letters. Answers the last action it took.
+static int hint_keys(uit_t *e, uit_buf_t *b, int a)
+{
+    int ax = e->acts[a].flags & (UIT_A_ARROWS_V | UIT_A_ARROWS_H);
+    uint32_t n, at = uit_tmpl_render(e, e->acts[a].hint, -1, -1, &n);
+    int two = 0;
+    if (a + 1 < e->nacts && band_key(e, a + 1) &&
+        (e->acts[a + 1].flags & (UIT_A_ARROWS_V | UIT_A_ARROWS_H)) == ax) {
+        uint32_t n2, at2 = uit_tmpl_render(e, e->acts[a + 1].hint, -1, -1, &n2);
+        two = n2 == n && !memcmp(e->scratch.p + at, e->scratch.p + at2, n);
+    }
+    char keys[4];
+    if (ax & UIT_A_ARROWS_V) {
+        hint_add(b, two ? "scroll" : "up down", two ? 6 : 7);
+    } else if (ax) {
+        hint_add(b, two ? "change" : "left right", two ? 6 : 10);
+    } else {
+        int l = e->acts[a].letter, l2 = two ? e->acts[a + 1].letter : 0;
+        keys[0] = (char)(l >= 'a' && l <= 'z' ? l - 32 : l);
+        keys[1] = ' ';
+        keys[2] = (char)(l2 >= 'a' && l2 <= 'z' ? l2 - 32 : l2);
+        hint_add(b, keys, two ? 3 : 1);
+    }
+    hint_add(b, e->scratch.p + at, n);
+    return two ? a + 1 : a;
+}
+
 // The band's items, NUL-separated into b (its length b->n, the last NUL
 // included).
 static void hints(uit_t *e, uit_buf_t *b, int pages)
@@ -886,8 +938,8 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
     if (e->has_focused) {
         const uit_id_t *F = &e->focused;
         int a = F->act;
-        if (a < 0 && F->kind == UIT_BUBBLE && F->gen == e->gen)
-            a = NODE(F->node)->on;      // a bubble's press is its on=
+        if (a < 0 && (F->kind == UIT_BUBBLE || F->kind == UIT_FIELD) && F->gen == e->gen)
+            a = NODE(F->node)->on;      // a bubble's press is its on=, Enter in a field its on=
         int on = a >= 0 && uit_act_can(e, a, -1, -1);
         if (F->kind == UIT_FIELD && F->gen == e->gen && (NODE(F->node)->lit & NL_COMMIT)) {
             static const char DONE[] = "confirm\0Done\0cancel\0Cancel";
@@ -936,18 +988,25 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
             }
         }
     }
+    if (e->page_tabs >= 0 && e->page_tabs_gen == e->gen && uit_shown(e, e->page_tabs, -1, -1))
+        hint_tabs(e, b, e->page_tabs);
     if ((e->flags & UIT_F_DESK) && e->tv_stop && !(e->has_focused && e->focused.kind == UIT_TEXT_VIEW)) {
         hint_add(b, "PgUp PgDn", 9);        // the page's text runs on: PgUp and PgDn page it
         hint_add(b, "Scroll", 6);
     }
     for (int a = 0; a < e->nacts; a++)
-        if (e->acts[a].letter && uit_act_can(e, a, -1, -1)) {
-            char up = (char)(e->acts[a].letter >= 'a' && e->acts[a].letter <= 'z'
-                             ? e->acts[a].letter - 32 : e->acts[a].letter);
-            hint_add(b, &up, 1);
-            hint_act(e, b, a);
-        }
+        if (band_key(e, a))
+            a = hint_keys(e, b, a);
     int a = pages == 1 ? role_action(e, UIT_A_ROLE_BACK) : -1;
+    int app = pages == 1 && a < 0 ? role_action(e, UIT_A_APP_BACK) : -1;
+    if (app >= 0 && uit_act_can(e, app, -1, -1)) {
+        // the app's back: its words; in a field the keys that never type
+        uint32_t n, at = uit_tmpl_render(e, e->acts[app].hint, -1, -1, &n);
+        int field = e->has_focused && e->focused.kind == UIT_FIELD;
+        hint_add(b, field ? "cancel" : "back", field ? 6 : 4);
+        hint_add(b, e->scratch.p + at, n);
+        return;
+    }
     if (a < 0) {
         hint_add(b, "back", 4);
         hint_add(b, "Back", 4);
@@ -1660,6 +1719,14 @@ static void fit_spans(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, const i
 }
 
 static void fill_token(const moy_ui_sink_t *s, int32_t x, int32_t y, int32_t w, int32_t h, int token);
+static void put_rect(uit_t *e, int k, const int32_t r[4]);
+
+// A canvas's h=: its number, or its int template's value.
+static int32_t canvas_h(uit_t *e, int k)
+{
+    const uit_node_t *N = NODE(k);
+    return N->t_aux >= 0 ? int_of(e, N->t_aux, -1, -1, 0) : N->btn;
+}
 
 static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
@@ -1694,12 +1761,19 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
         int32_t cell[4] = {across ? r[0] + at : r[0], across ? r[1] : r[1] + at, across ? sz : r[2],
                            across ? r[3] : sz};
         at += sz + gap;
-        if (NODE(g)->kind == UIT_CANVAS) {
-            if (e->draw_fn)             // a cell of its own that only draws: drawn into the cell
-                e->draw_fn(e->draw_ud, g, cell[0], cell[1], cell[2], cell[3]);
+        if (NODE(g)->kind == UIT_CANVAS && (NODE(g)->lit & CV_KEYS)) {
+            moy_ui_api_at(c, cell[0], cell[1], cell[2], cell[3]);  // a stop: drawn placed in its cell
+            draw(e, c, s, g, model, row);
+            moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3]);
             continue;
         }
-        if (NODE(g)->kind == UIT_GRID) {    // a grid's room is its cell
+        if (NODE(g)->kind == UIT_CANVAS) {
+            put_rect(e, g, cell);       // where a press on it lands (`uit_rect`)
+            if (e->draw_fn)             // a cell of its own that only draws: drawn into the cell
+                e->draw_fn(e->draw_ud, g, model, row, cell[0], cell[1], cell[2], cell[3]);
+            continue;
+        }
+        if (NODE(g)->kind == UIT_GRID || NODE(g)->kind == UIT_SPLIT) {     // a grid's or a split's room is its cell
             int32_t was[4];
             memcpy(was, e->rect, sizeof was);
             memcpy(e->rect, cell, sizeof cell);
@@ -1707,8 +1781,10 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
             memcpy(e->rect, was, sizeof was);
             continue;
         }
-        if (NODE(g)->kind != UIT_GROUP) {
+        if (NODE(g)->kind != UIT_GROUP) {   // any other node drawn placed in its cell
+            moy_ui_api_at(c, cell[0], cell[1], cell[2], cell[3]);
             draw(e, c, s, g, model, row);
+            moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3]);
             continue;
         }
         char sid[UIT_ID_MAX + 1];
@@ -1866,6 +1942,11 @@ static void tabs_in(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, co
     moy_ui_over_t o;
     char id[UIT_ID_MAX + 1];
     over_for(e, k, -1, -1, c, &o, id);
+    if (N->t_aux >= 0) {
+        int32_t zero = 0;
+        moy_ui_over_put(&o, MOY_UI_OV_MARK, &zero);     // tabs the band names: no stop, so no mark
+        e->page_tabs_now = (int16_t)k;
+    }
     int got = moy_ui_api_choice(c, s, 9, span_of("", 0), (const uint8_t *)e->scratch.p + items, len, at, &o);
     if (got >= 0 && got < count && got != at) {
         const char *v = seg_key(e, N, got);
@@ -1994,7 +2075,7 @@ static void stack(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int 
 static int32_t foot_stacked(uit_t *e, int k)
 {
     int32_t h = 0, any = 0;
-    if (NODE(k)->lit)
+    if (NODE(k)->lit == 1)
         return 0;
     KIDS(k, g) {
         any |= NODE(g)->kind != UIT_LABEL && NODE(g)->kind != UIT_BUTTON;
@@ -2035,6 +2116,10 @@ static int foot_of(uit_t *e)
 }
 
 static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
+static void empty_controls(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
+                           int32_t x, int32_t w, int32_t y);
+static int32_t natural(uit_t *e, int k, int model, int row, int32_t h);
+static int32_t row_gap(const uit_t *e);
 
 // A button's kind, the toolkit's: its literal's, or its template's word this frame (normal,
 // primary, tonal, danger; another word normal).
@@ -2103,6 +2188,15 @@ static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     int32_t x = e->foot_r[0], y = e->foot_r[1], w = e->foot_r[2], h = e->foot_r[3];
     int fh = desk ? 30 : 20 * fs, pad = desk ? 7 : fs, m = desk ? 16 : 4 * fs;
     int by = y + h - fh - pad;
+    if (NODE(k)->lit == 2) {            // a band: its rows edge to edge on the alternate surface
+        int32_t r[4] = {x, y, w, h};
+        fill_token(s, x, y, w, h, MOY_UI_T_SURFACE_ALT);
+        fill_token(s, x, y, w, fs, MOY_UI_T_BORDER);
+        e->in_foot = 1;
+        stack(e, c, s, k, model, row, r);
+        e->in_foot = 0;
+        return;
+    }
     if (!desk)
         fill_token(s, x + m, y, w - 2 * m, 1, MOY_UI_T_BORDER);
     if (foot_stacked(e, k)) {
@@ -2758,15 +2852,24 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         draw_grid(e, c, s, k, model, row);
         break;
     case UIT_CANVAS: {
-        // a row of the page that only draws: no stop, no ring
+        // a row of the page that only draws, no stop; with keys= a stop, its ring unless mark=False
         const char *key = uit_str(e, N->key);
         int32_t one = 1, r[5];
         moy_ui_over_none(&o);
         moy_ui_over_text(&o, MOY_UI_OV_ID, span_of(key, strlen(key)));
-        moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &one);
-        moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, N->btn, &o, r);
+        if ((e->flags & UIT_F_BARE) || e->in_foot)
+            moy_ui_over_put(&o, MOY_UI_OV_BARE, &one);       // a bare page's canvases sink no well
+        if (N->lit & CV_KEYS) {
+            if (N->lit & CV_NOMARK)
+                moy_ui_over_put(&o, MOY_UI_OV_MARK, &(int32_t){0});
+            id_put(e, k, model, row, key);
+        } else {
+            moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &one);
+        }
+        moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, canvas_h(e, k), &o, r);
+        put_rect(e, k, r);              // where a press on it lands (`uit_rect`)
         if (e->draw_fn)
-            e->draw_fn(e->draw_ud, k, r[0], r[1], r[2], r[3]);
+            e->draw_fn(e->draw_ud, k, model, row, r[0], r[1], r[2], r[3]);
         break;
     }
     case UIT_TABS:
@@ -2903,14 +3006,15 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
                 uit_buf_printf(&lines, "%c", 0);
             empty_line(e, s, &lines, e->scratch.p + at, n);
         }
+        int32_t m[4] = {c->has_at ? c->at.x : c->page.x, 0, c->has_at ? c->at.w : c->page.w, 0};
         // on the desk a sixth of the page down, as its column of words
         int32_t ev[5];
         if ((e->flags & UIT_F_DESK) && moy_ui_api_view(c, ev) && ev[0] == 0)
             moy_ui_api_space(c, e->rect[3] / 6);
-        moy_ui_api_empty(c, s, ni ? sspan(e, ai, ni) : span_of("warn", 4), sspan(e, a1, n1),
-                         (const uint8_t *)(lines.p ? lines.p : ""), lines.n);
+        int32_t y = moy_ui_api_empty(c, s, ni ? sspan(e, ai, ni) : span_of("warn", 4), sspan(e, a1, n1),
+                                     (const uint8_t *)(lines.p ? lines.p : ""), lines.n);
         uit_buf_free(&lines);
-        walk(e, c, s, k, model, row);       // its controls, under what it says
+        empty_controls(e, c, s, k, model, row, m[0], m[2], y);
         break;
     }
     case UIT_DIALOG: {
@@ -2943,6 +3047,29 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         }
         break;
     }
+    }
+}
+
+// An empty's controls under what it says (from y), each its natural width and a value row
+// and 4 px tall, centred across x..x+w, one under the next.
+static void empty_controls(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
+                           int32_t x, int32_t w, int32_t y)
+{
+    int desk = (e->flags & UIT_F_DESK) != 0, mn;
+    int32_t hh = (moy_ui_metrics(MOY_UI_K_VALUE_ROW, &mn)[desk ? 17 : 16] + 4) * e->fs;
+    KIDS(k, c2) {
+        const uit_node_t *N = NODE(c2);
+        if (!uit_shown(e, c2, model, row))
+            continue;
+        if (N->act >= 0 && !uit_act_can(e, N->act, model, row) && e->acts[N->act].off != 2)
+            continue;
+        int32_t bw = natural(e, c2, model, row, hh);
+        bw = bw < 0 || bw > w ? w : bw;
+        int32_t r[4] = {x + (w - bw) / 2, y, bw, hh};
+        put_rect(e, c2, r);
+        moy_ui_api_at(c, r[0], r[1], r[2], r[3]);
+        draw(e, c, s, c2, model, row);
+        y += hh + row_gap(e) * e->fs;
     }
 }
 
@@ -3012,6 +3139,19 @@ static void focus_to(moy_ui_ctx_t *c, const char *id)
 }
 
 // `_land_focus`: (whether focus moved, a node foreseen into ahead).
+// Whether node k draws this frame: it and each node over it shown, each case its switch's pick.
+static int drawn_now(uit_t *e, int k)
+{
+    for (; k > 0 && k != (int)UIT_NONE; k = NODE(k)->parent) {
+        if (!uit_shown(e, k, -1, -1))
+            return 0;
+        int p = NODE(k)->parent;
+        if (p != (int)UIT_NONE && NODE(p)->kind == UIT_SWITCH && uit_case_of(e, p) != k)
+            return 0;
+    }
+    return 1;
+}
+
 static int land_focus(uit_t *e, moy_ui_ctx_t *c, char ahead[UIT_ID_MAX + 1])
 {
     int moved = 0;
@@ -3057,8 +3197,8 @@ static int land_focus(uit_t *e, moy_ui_ctx_t *c, char ahead[UIT_ID_MAX + 1])
     }
     for (int k = 0; k < e->nnodes; k++) {
         const uit_node_t *L = NODE(k);
-        if (!UIT_IS_LIST(L->kind) || L->cur < 0)
-            continue;
+        if (!UIT_IS_LIST(L->kind) || L->cur < 0 || !drawn_now(e, k))
+            continue;               // (a list this frame hides moves focus when it shows)
         uit_slot_t *S = &e->slots[L->cur];
         const char *v = S->s ? S->s : "";
         if (S->sync_set && S->sync && !strcmp(S->sync, v))
@@ -3237,7 +3377,7 @@ static int32_t fixed_h(uit_t *e, int k)
     const uit_node_t *N = NODE(k);
     switch (N->kind) {
     case UIT_CANVAS:
-        return N->btn ? N->btn * ((e->flags & UIT_F_DESK) ? 1 : e->fs) : -1;
+        return canvas_h(e, k) ? canvas_h(e, k) * ((e->flags & UIT_F_DESK) ? 1 : e->fs) : -1;
     case UIT_SWITCH:
     case UIT_CASE:
     case UIT_PANES:
@@ -3275,7 +3415,11 @@ static int32_t fixed_h(uit_t *e, int k)
         }
         if (st && !field)
             return status_h(e);         // a status line's
-        break;
+        int32_t hh = h_row(e);
+        KIDS(k, g)                      // a row as tall as its tallest canvas of a fixed h=
+        if (NODE(g)->kind == UIT_CANVAS && fixed_h(e, g) > hh)
+            hh = fixed_h(e, g);
+        return hh;
     }
     }
     return h_row(e);
@@ -3539,6 +3683,11 @@ static int32_t natural(uit_t *e, int k, int model, int row, int32_t h)
         return sum + len_of(e, N->t_value, model, row, row_gap(e)) * (nk > 1 ? nk - 1 : 0) +
                2 * len_of(e, N->t_aux, model, row, 0);
     }
+    if (N->kind == UIT_LABEL && N->t_icon >= 0) {
+        text(e, k, 0, model, row, &n);
+        if (!n)
+            return 22 * ((e->flags & UIT_F_DESK) ? 1 : e->fs);   // an icon alone: its box and a gap
+    }
     return -1;
 }
 
@@ -3601,6 +3750,15 @@ static void row_share(const int32_t *nat, const int32_t *base, int32_t *ws, int 
 
 // A row's cells across it: each its natural width, the growing ones sharing the rest, inside
 // its pad= and gap= apart; a mid= row centred on it, each side's fills sharing that side's room.
+// Whether row `k` holds a canvas of a fixed h= taller than a line (its height `fixed_h`'s).
+static int canvas_tall(uit_t *e, int k)
+{
+    KIDS(k, g)
+    if (NODE(g)->kind == UIT_CANVAS && fixed_h(e, g) > h_row(e))
+        return 1;
+    return 0;
+}
+
 static void row_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
                       const int32_t r[4])
 {
@@ -3679,6 +3837,11 @@ static void row_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         if (e->placing || gk == UIT_ROW)
             place_at(e, c, s, g, km[i], kr[i], cell);   // a placement records the cells, drawing none
         else if (gk == UIT_BUTTON) {
+            int32_t hh = h_row(e);      // a line tall, centred in a row a canvas made taller
+            if (cell[3] > hh && canvas_tall(e, k)) {
+                cell[1] += (cell[3] - hh) / 2;
+                cell[3] = hh;
+            }
             put_rect(e, g, cell);
             moy_ui_api_at(c, cell[0], cell[1], cell[2], cell[3]);
             draw(e, c, s, g, km[i], kr[i]);
@@ -3761,14 +3924,14 @@ static void draw_canvas_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
     int32_t got[5];
     moy_ui_over_none(&o);
     moy_ui_over_text(&o, MOY_UI_OV_ID, span_of(key, strlen(key)));
-    if (e->flags & UIT_F_BARE) {
+    if ((e->flags & UIT_F_BARE) || e->in_foot) {
         int32_t one = 1;
-        moy_ui_over_put(&o, MOY_UI_OV_BARE, &one);       // a bare page's canvases sink no well
+        moy_ui_over_put(&o, MOY_UI_OV_BARE, &one);       // a bare page's canvases, and a foot's, sink no well
     }
     id_put(e, k, model, row, key);
     moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, 0, &o, got);
     if (e->draw_fn)
-        e->draw_fn(e->draw_ud, k, got[0], got[1], got[2], got[3]);
+        e->draw_fn(e->draw_ud, k, model, row, got[0], got[1], got[2], got[3]);
 }
 
 // Node `k` in its rect: the rect recorded, the node drawn there (in a placement, only the
@@ -3833,7 +3996,7 @@ static void place_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, i
         const char *key = uit_str(e, N->key);
         id_put(e, k, model, row, key);
         if (e->draw_fn)
-            e->draw_fn(e->draw_ud, k, r[0], r[1], r[2], r[3]);
+            e->draw_fn(e->draw_ud, k, model, row, r[0], r[1], r[2], r[3]);
         return;
     }
     }
@@ -5082,7 +5245,8 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         // the foot: docked above the band, on the page's ground
         int32_t got[4];
         int32_t fh = foot_stacked(e, e->foot), desk = (flags & UIT_F_DESK) != 0;
-        int32_t dh = fh ? fh + (desk ? 14 : 2 * fs) : (desk ? 44 : 22 * fs) + foot_line(e, e->foot);
+        int32_t dh = fh ? fh + (NODE(e->foot)->lit == 2 ? 0 : desk ? 14 : 2 * fs)
+                        : (desk ? 44 : 22 * fs) + foot_line(e, e->foot);
         if (moy_ui_api_dock(c, dh, got)) {
             memcpy(e->foot_r, got, sizeof got);
             e->rect[3] = got[1] - e->rect[1] > 0 ? got[1] - e->rect[1] : 0;
@@ -5101,13 +5265,16 @@ ids:;
     char ahead[UIT_ID_MAX + 1];
     int moved = land_focus(e, c, ahead);
     e->tv_stop_now = 0;
+    e->page_tabs_now = -1;
     if (e->placed)
         placed_walk(e, c, s);
-    else
+    else if (rects_ready(e))            // a flowing page's rects: where its canvases drew
         walk(e, c, s, 0, -1, -1);
     moy_ui_api_page_done(c, s);         // the next frame's plan reads what this one drew
     e->pop_hints_n = 0;         // (its buffer goes with this frame)
     e->tv_stop = e->tv_stop_now;
+    e->page_tabs = e->page_tabs_now;
+    e->page_tabs_gen = e->gen;
     // after: what holds focus, and whether the band named another node's verbs
     int had = e->has_focused;
     uit_id_t was = e->focused;

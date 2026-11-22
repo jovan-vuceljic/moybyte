@@ -47,7 +47,7 @@ EV_NONE, EV_ACTION, EV_WRITE, EV_CELL = 0, 1, 2, 3
 F_DESK, F_ON_BAR, F_BAND, F_BARE, F_TRACE, F_UP, F_DOWN, F_GEN = 1, 2, 4, 8, 16, 32, 64, 128
 F_PAGES_SHIFT = 8
 OWE = 1 << 16
-A_HOOK, A_ROLE_CONFIRM, A_ROLE_BACK, A_SHIFT_ENTER = 1, 2, 4, 16
+A_HOOK, A_ROLE_CONFIRM, A_ROLE_BACK, A_SHIFT_ENTER, A_ARROWS_V, A_ARROWS_H, A_APP_BACK = 1, 2, 4, 16, 64, 128, 256
 INPUTS = ("keys", "tdeck", "pad", "touch")
 _KINDS = {"page": 1, "group": 2, "label": 3, "info": 4, "link": 5, "button": 6, "toggle": 7,
           "rows": 8, "dialog": 9, "seg": 10, "slider": 11, "field": 12, "empty": 13,
@@ -139,6 +139,7 @@ class CEngine(Engine):
     handlers stay Python's (`uitree.Builder`, `uitree_app.Engine`)."""
 
     PLACED = False          # the page is stacked by the engine's layout (uit_set_placed)
+    th = None               # the theme's colours the last frame drew in
     unit = 0                # a placed page's unit, the host's (0: the engine's own)
 
     def __init__(self, *a, **k):
@@ -155,6 +156,7 @@ class CEngine(Engine):
         self._slot, self._names, self._types, self._pushed = {}, [], [], {}
         self.direct = BUILD == "direct"
         self._draws, self._drawing = {}, False
+        self._canvas_keys = {}          # a canvas's key -> its keys= function
         self._grounds = {}      # a canvas's ground= role, by its node
         self._docs = {}         # a document's state -> what it was pushed at (`_push_doc`)
         self._doc_reads = {}    # ...and the fields of it the lowered page reads
@@ -309,7 +311,10 @@ class CEngine(Engine):
         self._aidx = {}
         for a in self._acts:
             flags = (A_HOOK if a.hook else 0) | (A_ROLE_CONFIRM if "role:confirm" in a.keys else 0) | (
-                A_ROLE_BACK if "role:back" in a.keys else 0) | (A_SHIFT_ENTER if S.SHIFT_ENTER in a.keys else 0)
+                A_ROLE_BACK if "role:back" in a.keys else 0) | (A_SHIFT_ENTER if S.SHIFT_ENTER in a.keys else 0) | (
+                A_ARROWS_V if {"role:up", "role:down"} & set(a.keys) else 0) | (
+                A_ARROWS_H if {"role:left", "role:right"} & set(a.keys) else 0) | (
+                A_APP_BACK if self.decl.app is not None and self.decl.app.back == a.name else 0)
             off = {"hide": 1, "grey": 2}.get(getattr(a, "off", None), 0)
             self._aidx[a.name] = self._ck(x.action(
                 a.name, a.label or "", a.hint if isinstance(a.hint, str) else "", a.when_src, off, flags,
@@ -546,6 +551,7 @@ class CEngine(Engine):
         x = self._x
         x.build_begin(self._page_id())
         draws = self._draws = {}
+        self._canvas_keys = {}
         if not self._drawing:
             x.on_draw(self._draw)
             self._drawing = True
@@ -631,6 +637,12 @@ class CEngine(Engine):
                         r = cprop(me, k, "%d %d" % (wh[0], wh[1]), v)
                         if r < 0:
                             fail(r, "ui.pane min=%r" % (src,), n.where)
+                    continue
+                if k == "keys" and nk == "canvas":         # the front end's function: the keys while it holds focus
+                    self._canvas_keys[n.key] = src
+                    r = cprop(me, "keys", getattr(src, "__name__", "keys"), None)
+                    if r < 0:
+                        fail(r, "canvas %s keys=" % n.key, n.where)
                     continue
                 if k == "draw" and nk == "canvas":         # the front end's function: called inside the frame
                     draws[me] = src
@@ -765,15 +777,29 @@ class CEngine(Engine):
             m.aux = node
             (lg if kind == "legacy" else pn)[node] = m
 
-    def _draw(self, node, x, y, w, h):
-        """A canvas's draw, called by the walk inside the frame at its rect."""
+    def _draw(self, node, model, row, x, y, w, h):
+        """A canvas's draw, called by the walk inside the frame at its rect;
+        a canvas in a rows' body is handed its row as well."""
         now = S._NOW
         app, frame = now.app, now.frame       # two names, not a tuple: a frame allocates nothing
         now.app, now.frame = self, True
         try:
-            self._draws[node](self.cv, x, y, w, h)
+            g = self._grounds.get(node)
+            if g:
+                self.cv.rect(x, y, w, h, self.th[g])
+            if model >= 0 and row >= 0:
+                self._draws[node](self.cv, x, y, w, h, self.s._v[self._names[model]][row])
+            else:
+                self._draws[node](self.cv, x, y, w, h)
         finally:
             now.app, now.frame = app, frame
+
+    def query(self, name, *a):
+        """What a handler or a canvas's draw asks: the theme's colours, the
+        last frame's; the rest the Builder's."""
+        if name == "colors" and self.th is not None:
+            return self.th
+        return Engine.query(self, name, *a)
 
     # -- the frame -------------------------------------------------------------------
 
@@ -872,6 +898,35 @@ class CEngine(Engine):
     def _visiting(self):
         return self._x is not None and not self._shut and self.root is not None
 
+    def point(self, px, py, click):
+        """A canvas with pointer= is handed down, drag and up in its own
+        coordinates, at the rect the last frame placed it; the press that
+        starts on it holds it until release, outside its rect too. Every
+        other press is the page's."""
+        held = self._held
+        if held is not None:
+            down = self.pointer_down()
+            key, act, r = held
+            ev = S.Ev("drag" if down else "up", px - r[0], py - r[1], "touch")
+            self.q.append((act, (ev,), "pointer %s on canvas %r" % (ev.kind, key)))
+            if not down:
+                self._held = None
+            self._damage.all()
+            return True
+        if click and self._pointers and self._visiting():
+            for key, act in self._pointers:
+                r = self._x.rect(key)
+                if r is not None and r[0] <= px < r[0] + r[2] and r[1] <= py < r[1] + r[3]:
+                    ev = S.Ev("down", px - r[0], py - r[1], "touch")
+                    self.q.append((act, (ev,), "pointer down on canvas %r" % key))
+                    if self.pointer_down():
+                        self._held = (key, act, r)
+                    else:
+                        self.q.append((act, (S.Ev("up", ev.x, ev.y, "touch"),), "pointer up on canvas %r" % key))
+                    self._damage.all()
+                    return True
+        return Engine.point(self, px, py, click)
+
     def dialog_shown(self):
         return self._visiting() and self._x.dialog() >= 0
 
@@ -907,6 +962,14 @@ class CEngine(Engine):
     def draft(self, key):
         return self._x.draft(key) if self._visiting() else None
 
+    def focused_id(self):
+        """The id of the stop focus is on after the last frame, or None: the engine's."""
+        return (self._x.focused() or None) if self._visiting() else None
+
+    def slot_rect(self, key):
+        """(x, y, w, h) where canvas `key` drew in the last frame, or None: the engine's."""
+        return self._x.rect(key) if self._visiting() else None
+
     def stop_kinds(self):
         out, i = {}, 0
         if not self._visiting():
@@ -930,6 +993,19 @@ class CEngine(Engine):
         t = self._x.hints()
         return tuple(t.split("\0")[:-1]) if t else ()
 
+    def _canvas_took(self, i):
+        """The keys to the focused canvas's keys= function, run as a handler:
+        whether it took them (False: they move focus off it)."""
+        f = self._x.focused()
+        fn = self._canvas_keys.get(f) if f else None
+        if fn is None:
+            return False
+        was, S._NOW.app = S._NOW.app, self
+        try:
+            return bool(fn(i))
+        finally:
+            S._NOW.app = was
+
     def leave(self):
         """Every way out of the page: each drawn commit field's draft is
         written, in C; its writes pulled and its changed= run here."""
@@ -949,6 +1025,8 @@ class CEngine(Engine):
         if self._shut:
             self._resume()
         self._bind()
+        if self._canvas_keys and self._canvas_took(i):
+            return True
         ch = getattr(i, "typed", 0)
         a = self._x.letter(ch) if ch else -1
         if a >= 0:
@@ -1279,27 +1357,6 @@ class CEditorEngine(CEngine, _ed.Engine):
                     self._legacy_call(n, "pointer", px - r[0], py - r[1], click)
                     if down:
                         self.held_legacy = (n, r)
-                    self._damage.all()
-                    return True
-        held = self._held
-        if held is not None:
-            key, act, r = held
-            ev = S.Ev("drag" if down else "up", px - r[0], py - r[1], "touch")
-            self.q.append((act, (ev,), "pointer %s on canvas %r" % (ev.kind, key)))
-            if not down:
-                self._held = None
-            self._damage.all()
-            return True
-        if click and self._visiting():
-            for key, act in self._pointers:
-                r = self._x.rect(key)
-                if r is not None and r[0] <= px < r[0] + r[2] and r[1] <= py < r[1] + r[3]:
-                    ev = S.Ev("down", px - r[0], py - r[1], "touch")
-                    self.q.append((act, (ev,), "pointer down on canvas %r" % key))
-                    if down:
-                        self._held = (key, act, r)
-                    else:
-                        self.q.append((act, (S.Ev("up", ev.x, ev.y, "touch"),), "pointer up on canvas %r" % key))
                     self._damage.all()
                     return True
         return CEngine.point(self, px, py, click)
@@ -1647,7 +1704,7 @@ class CEditorEngine(CEngine, _ed.Engine):
         """The lent row's rule in C (`uit_lent_place`)."""
         return self._made().lent_place(cells, x0, w, h, fs, pad)
 
-    def _draw(self, node, x, y, w, h):
+    def _draw(self, node, model, row, x, y, w, h):
         """A canvas's draw in its rect, clipped to it, over its ground; a
         text editor's rows, its document's (`_r_text_editor`)."""
         te = self._editors.get(node)
@@ -1675,10 +1732,7 @@ class CEditorEngine(CEngine, _ed.Engine):
         if not _ed._clip_in(cv, x, y, w, h, self.clip_to):
             return
         try:
-            g = self._grounds.get(node)
-            if g:
-                cv.rect(x, y, w, h, self.th[g])
-            CEngine._draw(self, node, x, y, w, h)
+            CEngine._draw(self, node, model, row, x, y, w, h)
         finally:
             _ed._clip_back(cv, self.clip_to)
 

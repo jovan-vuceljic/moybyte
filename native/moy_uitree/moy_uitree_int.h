@@ -114,7 +114,8 @@ typedef struct {
     uint16_t name, label;       // pool
     int16_t hint;               // a template
     int16_t when;               // a cond or -1
-    uint8_t off, flags;
+    uint8_t off;
+    uint16_t flags;
     uint8_t letter;             // its first letter, the band's
     uint16_t letters;           // pool: every letter it answers
     uint16_t chars;             // pool: every character it is handed (chars=)
@@ -142,8 +143,9 @@ enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8 };
 // A tools row lent to a site (`lit`); a button drawn as its icon alone (`btn`).
 enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2 };
 enum { RW_MID = 1, RW_GROW = 2 };   // a row's lit: centred on the row it is a cell of; a fill of its stack
-enum { CV_GROW = 1 };
-enum { SP_ALIGN = 3, SP_RULE = 16 };   // a split's lit: its align= index; rule=True           // a canvas's lit: a fill along a row, its w= a basis
+enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4 };  // a canvas's lit: a fill along a row, its w= a basis; a stop whose
+                                                  // keys are its keys='s; such a stop with no ring (mark=False)
+enum { SP_ALIGN = 3, SP_RULE = 16 };   // a split's lit: its align= index; rule=True
 enum { LT_WORD = 1, LT_CHAR = 2, LT_WRAP = 3, LT_FACE_SHIFT = 2, LT_ALIGN_SHIFT = 5, LT_LINES = 256,
        LT_FIT = 512 };     // size="fit": its face only where its text fits the page's width
 
@@ -353,6 +355,8 @@ struct uit {
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
     uint8_t in_cell;            // drawing a split's column: a button takes its natural width
     uint8_t tv_stop, tv_stop_now;   // a text view that runs on drew last frame / this frame (the band's PgUp PgDn)
+    int16_t page_tabs, page_tabs_now;   // the tabs node the band names (hint=) drawn last frame / this frame, else -1
+    uint16_t page_tabs_gen;
     uint8_t in_pop;             // drawing a popover's body: a split there lays out as its cells (`_pop_split`)
     const uint8_t *pop_hints;   // a bare page's band, drawn in its shown popover's body (`draw_popover`)...
     size_t pop_hints_n;         // ...its bytes, 0 none

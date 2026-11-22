@@ -383,6 +383,36 @@ def test_a_canvas_draws_with_the_carts_verbs_inside_the_frame(tmp_path):
     ws.spine.exit_to_caller()
 
 
+def test_a_canvas_in_a_rows_body_is_handed_its_row(tmp_path):
+    """A canvas in a rows' body draws each row, handed the row it stands in
+    after its rect (read-only, as an action's row is)."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    head = ('ui.app("%s", { icon = "calc" })\n'
+            'local s = ui.state { items = ui.model { key = "id", id = "" } }\n'
+            'ui.hook("opened", function() s.items:set({ { id = "one" }, { id = "two" } }) end)\n'
+            'ui.page("p", function()\n%s\nend)\n')
+    pages = {
+        "Nobody": '  ui.rows("items", {}, function() ui.canvas("lead", { h = 12, draw = function(x, y, w, h, row)\n'
+                  '    if row.id == "none" then rect(x, y, w, h, 8) end end }) end)',
+        "Two": '  ui.rows("items", {}, function() ui.canvas("lead", { h = 12, draw = function(x, y, w, h, row)\n'
+               '    if row.id == "two" then rect(x, y, w, h, 8) end end }) end)',
+    }
+    for name, page in pages.items():
+        _cart(carts, name, head % (name, page))
+    ws, drv, frame, open_cart = _console(carts)
+    shots = {}
+    for name in ("Nobody", "Two"):
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        assert ws.run.player.cart_error is None, (name, ws.run.player.cart_error)
+        shots[name] = bytes(drv.rgb888())
+        ws.spine.exit_to_caller()
+    assert shots["Two"] != shots["Nobody"]
+
+
 def test_a_canvas_pointer_hands_down_drag_and_up_in_its_own_coordinates(tmp_path):
     """A canvas with pointer= on the C engine: a press on it hands its action
     a read-only event (kind, x, y, source) at the canvas's own coordinates,

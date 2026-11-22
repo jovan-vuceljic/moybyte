@@ -286,6 +286,7 @@ uit_t *uit_new(void)
     uit_buf_put(&e->pool, "", 0);       // offset 0 is the empty text
     e->ccur = -1;
     e->pane_cur = -1;
+    e->page_tabs = e->page_tabs_now = -1;
     return e;
 }
 
@@ -604,7 +605,7 @@ int uit_action(uit_t *e, const char *name, const char *label, const char *hint, 
         A.when = (int16_t)c;
     }
     A.off = (uint8_t)off;
-    A.flags = (uint8_t)flags;
+    A.flags = (uint16_t)flags;
     int ls = pool_puts(e, letters ? letters : "");
     if (ls < 0)
         return UIT_E_NOMEM;
@@ -1142,7 +1143,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
              ((kind == UIT_CARD || kind == UIT_PICTURE || kind == UIT_BUTTON) && !strcmp(name, "tone")))
         tslot = &N->t_aux;
     else if ((!strcmp(name, "empty") && UIT_IS_LIST(kind)) ||
-             (!strcmp(name, "hint") && (kind == UIT_TOGGLE || kind == UIT_FIELD)) ||
+             (!strcmp(name, "hint") && (kind == UIT_TOGGLE || kind == UIT_FIELD || kind == UIT_TABS)) ||
              (!strcmp(name, "hi") && kind == UIT_SLIDER))
         tslot = &N->t_aux;
     if (tslot) {
@@ -1221,11 +1222,34 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->nbtn |= LT_FIT;
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
-    if (kind == UIT_CANVAS && (!strcmp(name, "draw") || !strcmp(name, "h"))) {
-        // draw= names the front end's function (uit_on_draw); h= its height in a stack
-        if (name[0] == 'h')
-            N->btn = (uint16_t)strtol(src, NULL, 10);
+    if (kind == UIT_CANVAS && (!strcmp(name, "draw") || !strcmp(name, "h") || !strcmp(name, "keys"))) {
+        // draw= names the front end's function (uit_on_draw); h= its height in a stack, a number
+        // or an int template (t_aux); keys= the front end's function the keys go to while it
+        // holds focus (CV_KEYS: a stop)
+        if (name[0] == 'h') {
+            char *end;
+            long v = strtol(src, &end, 10);
+            if (*src && !*end) {
+                N->btn = (uint16_t)v;
+            } else {
+                int t = uit_tmpl_compile(e, src, model);
+                if (t < 0)
+                    return t;
+                if (e->tmpls[t].type != UIT_INT)
+                    return uit_check_fail(e, "T03", UIT_MSG("canvas h=%s is a %s, not an int", "canvas h=%s %s"), src,
+                                          uit_type_name(e->tmpls[t].type));
+                N->t_aux = (int16_t)t;
+            }
+        }
+        if (name[0] == 'k')
+            N->lit |= CV_KEYS;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    }
+    if (kind == UIT_CANVAS && !strcmp(name, "mark")) {
+        // mark=False: a keys= canvas draws no ring while it holds focus (what it hosts marks it)
+        if (src[0] == 'F' || src[0] == '0')
+            N->lit |= CV_NOMARK;
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & CV_NOMARK) == 0);
     }
     if (kind == UIT_CANVAS && !strcmp(name, "grow")) {
         // a fill along a row, its w= the basis its share is over (CV_GROW)
@@ -1548,8 +1572,9 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
     if (!strcmp(name, "look") && kind == UIT_FOOT) {
-        // "share": its buttons share its width (lit 1); "end" (0): at its end
-        N->lit = (uint8_t)!strcmp(src, "share");
+        // "share": its buttons share its width (lit 1); "band" (2): its rows edge to edge on
+        // the alternate surface under a rule; "end" (0): at its end
+        N->lit = (uint8_t)(!strcmp(src, "share") ? 1 : !strcmp(src, "band") ? 2 : 0);
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
     if (!strcmp(name, "follow") && kind == UIT_SCROLL) {

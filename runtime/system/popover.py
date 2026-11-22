@@ -30,7 +30,7 @@ True while typed keys are its own (B and ESC are then the text field's);
 import ui as _ui
 import ui_draw as _ui_draw
 import layout_base as _lb
-from status_items import ITEMS as _ITEMS
+from status_items import ITEMS as _ITEMS, CAP as _CAP
 
 
 def _desk():
@@ -267,11 +267,77 @@ class WifiPanel:
             self.page.close()
 
 
+def _cut(r, c):
+    """Rect `r` cut to rect `c`, None where nothing of it is left."""
+    x0, y0 = max(r[0], c[0]), max(r[1], c[1])
+    x1, y1 = min(r[0] + r[2], c[0] + c[2]), min(r[1] + r[3], c[1] + c[3])
+    return (x0, y0, x1 - x0, y1 - y0) if x1 > x0 and y1 > y0 else None
+
+
+class _Section:
+    """A page section in its slot (`status_items`, SECTION): the item's own
+    engine over its own UI context, its runs as the item's process."""
+
+    def __init__(self, ws, it):
+        import uitree_app
+        self.ws = ws
+        self.it = it
+        self.sec = it.section
+        self.host = _ui_draw.AppHost()
+        self.rect = None                # where it painted last, clipped to the card
+        self.gen = _ITEMS.gen
+        self.engine = uitree_app.hosted_page(self.sec.page, self.host, self, env=self.sec)
+        self.engine.bare = True         # the card is its ground
+        self.engine.band = False
+        _ITEMS.run_as(it, self.engine.open)
+
+    def all(self):
+        self.ws.popover_touch()
+
+    def changed(self):
+        """The item said its section moved: the page's `changed` hook."""
+        self.gen = _ITEMS.gen
+        h = self.engine.actions.get("changed")
+        if h is not None and h.hook:
+            import uitree
+            _ITEMS.run_as(self.it, self.engine.run, h.fn, action="changed")
+            uitree.commit(self.engine)
+
+    def end_stop(self, top):
+        """The id of its topmost (`top`) or bottommost stop, None for none."""
+        best = None
+        for sid in self.engine.stop_kinds():
+            b = self.host.box(sid)
+            if b is not None:
+                k = b[1] if top else -(b[1] + b[3])
+                if best is None or k < best[0]:
+                    best = (k, sid)
+        return best[1] if best else None
+
+    def at_edge(self, dy):
+        """Whether its focus has no stop past it along `dy` (-1 up, 1 down):
+        the key leaves the slot."""
+        f = self.engine.focused_id()
+        b = self.host.box(f) if f else None
+        if b is None:
+            return False
+        for sid in self.engine.stop_kinds():
+            o = self.host.box(sid)
+            if o is not None and (o[1] + o[3] <= b[1] if dy < 0 else o[1] >= b[1] + b[3]):
+                return False
+        return True
+
+    def close(self):
+        self.engine.close()
+        self.host.reset()
+
+
 class _Rows:
     """The status items' rows (`cc_ui`'s page) in a popover's card, over
     its own UI context: the base of the control center and an item's desk
-    menu. The page's handlers reach the host through `level`, `wifi` and
-    `press`; `poll` writes what it shows."""
+    menu. The page's handlers reach the host through `level`, `wifi`,
+    `press` and `slot_keys`; `poll` writes what it shows. A page section
+    paints in its group's slot after the page (`_Section`)."""
 
     CC = False                  # the console's group with Wi-Fi
     POWER = False               # ... with the battery's line
@@ -282,6 +348,8 @@ class _Rows:
         self.host = _ui_draw.AppHost()
         self.page = None
         self.gen = -1                 # the items' gen the groups were written at
+        self.secs = [None] * _CAP     # each group's page section, made as it shows
+        self.held = None              # the stop the page's focus was on last frame
 
     def items(self):
         """The items whose rows the page lists, in order."""
@@ -311,7 +379,7 @@ class _Rows:
         if g != self.gen:
             import cc_ui
             self.gen = g
-            cc_ui.put_items(self.items(), self.CC)
+            cc_ui.put_items(self.items(), self.CC, _desk())
 
     def draw(self, cv, rect):
         import cc_ui
@@ -330,6 +398,66 @@ class _Rows:
         e.paint(0.0, cv, ws.theme_colors, inner, desk)
         if self.host.due() or self.host.tap == 2:
             ws.popover_touch()
+        self._sections(cv, inner, desk)
+
+    def _sections(self, cv, inner, desk):
+        """Each page section painted in its slot, clipped to the card; focus
+        landing on a slot goes to the section's stop nearest where it came
+        from."""
+        import cc_ui
+        ws, e = self.ws, self.page
+        if e is None:
+            return                          # its paint closed the popover
+        th = ws.theme_colors
+        items = self.items()
+        f = e.focused_id()
+        any_ = False
+        for g in range(_CAP):
+            it = items[g] if g < len(items) else None
+            sc = self.secs[g]
+            if it is None or _ITEMS.page(it) is None:
+                if sc is not None:
+                    sc.close()
+                    self.secs[g] = None
+                continue
+            if sc is None or sc.sec is not it.section:
+                if sc is not None:
+                    sc.close()
+                sc = self.secs[g] = _Section(ws, it)
+            r = e.slot_rect(cc_ui.SLOTS[g])
+            sc.rect = _cut(r, inner) if r is not None else None
+            if sc.rect is None:
+                continue
+            if sc.gen != _ITEMS.gen:
+                sc.changed()
+            held = f == cc_ui.SLOTS[g]
+            if held and (self.held != f or not sc.engine.focused_id()):
+                was = self.host.box(self.held) if self.held and self.held != f else None
+                sc.engine.want_focus = sc.end_stop(was is None or was[1] < r[1])
+            sc.host.begin(cv, th, sc.rect, desk, "panel", elsewhere=not held)
+            _ITEMS.run_as(it, sc.engine.paint, 0.0, cv, th, sc.rect, desk)
+            if sc.host.due() or sc.host.tap == 2:
+                ws.popover_touch()
+            any_ = True
+        self.held = f
+        if any_:
+            self.host.resume(cv, th)        # the page's context is the verbs' again
+
+    def slot_keys(self, g, i):
+        """The keys while group `g`'s slot holds the page's focus: the
+        section's, but up past its top stop or down past its bottom one,
+        which leave the slot (False)."""
+        sc = self.secs[g]
+        if sc is None:
+            return False
+        dy = -1 if i.pressed("up") else 1 if i.pressed("down") else 0
+        if not sc.engine.focused_id():
+            sc.engine.want_focus = sc.end_stop(dy >= 0)
+            return True
+        if dy and sc.at_edge(dy):
+            return False
+        _ITEMS.run_as(sc.it, sc.engine.keys, i, False)
+        return True
 
     def press(self, row):
         import cc_ui
@@ -349,6 +477,11 @@ class _Rows:
         return "local" if i.any_pressed() or i.last_key else None
 
     def click(self, px, py, rect):
+        for sc in self.secs:
+            r = sc.rect if sc is not None else None
+            if r is not None and r[0] <= px < r[0] + r[2] and r[1] <= py < r[1] + r[3]:
+                _ITEMS.run_as(sc.it, sc.engine.point, px, py, True)
+                return "local"
         self._engine().point(px, py, True)
         return "local"
 
@@ -359,6 +492,11 @@ class _Rows:
         if self.page is not None:
             self.page.close()
             self.page = None
+        for g in range(_CAP):
+            if self.secs[g] is not None:
+                self.secs[g].close()
+                self.secs[g] = None
+        self.held = None
         self.gen = -1
         self.host.reset()
 
@@ -367,6 +505,14 @@ def _rows_h(n, fs, desk=False):
     """`n` stacked rows' height at font scale `fs`."""
     row = _ui_draw.metrics("row")
     return n * (row[6 if desk else 5] + row[7]) * fs
+
+
+def _item_h(it, fs, desk=False):
+    """Item `it`'s part of the page at font scale `fs`: its section's slot,
+    or its rows."""
+    if _ITEMS.page(it) is not None:
+        return _ITEMS.height(it, desk) * fs + _ui_draw.metrics("row")[7] * fs
+    return _rows_h(_ITEMS.rows(it), fs, desk)
 
 
 class _Console(_Rows):
@@ -428,7 +574,7 @@ class ControlCenter(_Console):
         y = 2 * _pad(self.ws) + _rows_h(3, fs)
         first = None
         for it in _ITEMS.shown:
-            y += gap + cap + _rows_h(_ITEMS.rows(it), fs)
+            y += gap + cap + _item_h(it, fs)
             if first is None:
                 first = y + self.FIRST_FOOT * fs
         return (y if first is None else min(first, y)), y
@@ -485,8 +631,8 @@ class StatusMenu(_Rows):
         # under touch alone there are no hints, and no room kept for them
         foot = 0 if _ui.input_kind() == "touch" else _foot(fs)
         it = self.item
-        n = _ITEMS.rows(it) if it is not None else 0
-        return (404 * fs, 2 * _pad(self.ws) + _rows_h(n, fs, True) + foot)
+        h = _item_h(it, fs, True) if it is not None and it.pid else 0
+        return (404 * fs, 2 * _pad(self.ws) + h + foot)
 
     def keys(self):
         return _MENU_KEYS

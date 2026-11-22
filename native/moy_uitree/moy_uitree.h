@@ -76,7 +76,9 @@ enum { UIT_IN_KEYS = 0, UIT_IN_TDECK, UIT_IN_PAD, UIT_IN_TOUCH };
 
 // Action flags.
 enum { UIT_A_HOOK = 1, UIT_A_ROLE_CONFIRM = 2, UIT_A_ROLE_BACK = 4, UIT_A_ROW = 8, UIT_A_SHIFT_ENTER = 16,
-       UIT_A_ROLE_MORE = 32 };   // the more role: a front end owes it the `m` key
+       UIT_A_ROLE_MORE = 32,     // the more role: a front end owes it the `m` key
+       UIT_A_ARROWS_V = 64, UIT_A_ARROWS_H = 128,   // it answers role:up or down / left or right
+       UIT_A_APP_BACK = 256 };   // the app's back= (Back on its first page, the band's way back)
 
 typedef struct uit uit_t;
 
@@ -292,9 +294,11 @@ int uit_run_frame(uit_t *e, void *target, int flags);
 // frame and after an open, a build or a close.
 int uit_still(uit_t *e, const moy_ui_ctx_t *c, int x, int y, int w, int h, int flags, int fs, int input);
 // A canvas's draw: the walk calls it inside the frame, in the page's order,
-// with the canvas's node and the rect it draws in; the front end binds what
-// each node draws (a Python function, a Lua one, C).
-typedef void (*uit_draw_fn)(void *ud, int node, int x, int y, int w, int h);
+// with the canvas's node, the model and row it stands in (a canvas in a
+// rows' body: the row it draws; -1 and -1 elsewhere) and the rect it draws
+// in; the front end binds what each node draws (a Python function, a Lua
+// one, C).
+typedef void (*uit_draw_fn)(void *ud, int node, int model, int row, int x, int y, int w, int h);
 void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud);
 // The next event: its kind; its words into ev[0..2], its text (the source)
 // into buf.

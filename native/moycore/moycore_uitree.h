@@ -306,7 +306,7 @@ static int l_uit_want_focus(lua_State *L)
 /* A canvas's draw, called by the walk inside the frame: on_draw's function
  * with the node and its rect. What it raises is kept, the frame's other draws
  * skipped, and raised once the frame is over (never through the walk). */
-static void moycore_uit_draw(void *ud, int node, int x, int y, int w, int h)
+static void moycore_uit_draw(void *ud, int node, int model, int row, int x, int y, int w, int h)
 {
     moycore_uit_t *u = (moycore_uit_t *)ud;
     lua_State *L = u->L;
@@ -317,7 +317,9 @@ static void moycore_uit_draw(void *ud, int node, int x, int y, int w, int h)
     lua_pushinteger(L, y);
     lua_pushinteger(L, w);
     lua_pushinteger(L, h);
-    if (lua_pcall(L, 5, 0, 0) != LUA_OK) u->raised = luaL_ref(L, LUA_REGISTRYINDEX);
+    lua_pushinteger(L, model);
+    lua_pushinteger(L, row);
+    if (lua_pcall(L, 7, 0, 0) != LUA_OK) u->raised = luaL_ref(L, LUA_REGISTRYINDEX);
 }
 
 static int l_uit_on_draw(lua_State *L)

@@ -422,12 +422,18 @@ end
 local function made()
   if X then return X end
   X = NEW()
-  X:on_draw(function(node, x, y, w, h)
+  X:on_draw(function(node, x, y, w, h, m, ri)
     local f = DRAWS[node]
     if f then
       local r = DRAWN[node]
       if r then r[1], r[2], r[3], r[4], r[5] = x, y, w, h, FRAMES else DRAWN[node] = { x, y, w, h, FRAMES } end
-      f(x, y, w, h)
+      if m >= 0 and ri >= 0 then             -- a canvas in a rows' body: handed its row
+        local model = V[NAMES[m]]
+        local row = model.rows[ri + 1]
+        f(x, y, w, h, frozen(row, "row " .. q(row[model.key]) .. " of " .. q(model.name), model.ty))
+      else
+        f(x, y, w, h)
+      end
     end
   end)
   declare()

@@ -298,10 +298,16 @@ renders the owner chose from):
    compiled program's item (owner, 2026-11-09, on #246) is an icon in a
    state and an optional panel of rows it describes -- text, buttons, a
    toggle, a slider (`moybyte.status_show` to `status_remove`,
-   `docs/app_api_v1.md` §10) -- and a Python program's section describes
-   the same rows: the shell lists them in the same menu and card
-   (`status_items.Panel`, drawn by `runtime/system/cc_ui.py`'s page on the
-   UI engine); the items themselves, a Python
+   `docs/app_api_v1.md` §10), which the shell lists in the menu and the
+   card (`status_items.Panel`, drawn by `runtime/system/cc_ui.py`'s page on
+   the UI engine). A Python program's section is either the same rows or a
+   small `uitree` page it builds with its usual API, a canvas included:
+   the menu and the card give it a slot of the height it asks, at most
+   `SECTION_H_MAX`, painted by the section's own engine and clipped to the
+   slot, whose taps and keys reach that engine as the item's process; the
+   menu's focus enters the slot and leaves it past its top or bottom stop,
+   never held there (`popover._Rows`). Music's is its compact card
+   (`runtime/apps/music_card.py`). The items themselves, a Python
    program's too, are the kernel's table (`native/moy_kernel/
    moy_status.h`), which a compiled program writes on its own task, VM or
    no VM, and the bar reads; a press reaches the program as the
@@ -1905,7 +1911,8 @@ today (no board measures one), its line then reading Battery. An app that
 asks for the Wi-Fi page (`Workstation.open_wifi_panel`) still gets Settings'
 page in console mode. An app's status item's menu (`popover.StatusMenu`)
 and its group in the handheld's control center are one page of the rows its
-section or its program described (`cc_ui`, §1.5).
+section or its program described, or of the slot its page section paints
+in (`cc_ui`, §1.5).
 
 **The keys reach the bar** (owner call 2026-10-26), in console mode on every
 board and the browser. Up past the top of the surface under a bar (on

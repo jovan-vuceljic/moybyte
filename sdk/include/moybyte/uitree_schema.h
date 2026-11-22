@@ -49,6 +49,7 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_CARD "card"
 #define UT_LOOK_END "end"
 #define UT_LOOK_SHARE "share"
+#define UT_LOOK_BAND "band"
 #define UT_LOOK_COUNT "count"
 #define UT_LOOK_WELL "well"
 #define UT_LOOK_BAR "bar"

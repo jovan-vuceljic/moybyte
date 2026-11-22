@@ -440,6 +440,7 @@ def measure(loop):
     panes(loop, info)
     row_of_parts(loop, info)
     status_panel(loop, info)
+    status_page(loop, info)
     popovers(loop, info)
     print("RESULT " + json.dumps(info))
 
@@ -1094,6 +1095,41 @@ def panes(loop, info):
     info["split_sizes"] = list(sizes)
     info["split_focus"] = o["focus"]
     info["part_at"] = at
+    ws.mark_dirty()
+    for _ in range(10):
+        loop.step()
+
+
+def status_page(loop, info):
+    """A Python item's section that is a page (Music's compact card,
+    music_card) in its slot of the handheld's control center, redrawn every
+    frame: what each frame allocates, its first frame and then eight more."""
+    from gc import mem_alloc
+    from status_items import ITEMS
+    import music_app as M
+    ws = loop.ws
+    st = M.STREAM
+    st.card = M.card_of({"state": "playing", "title": "Boards of Canada - Dayvan Cowboy",
+                         "volume": 60}, ("radio", "Groove Salad", "http://x/"))
+    it = ITEMS.add(78, "music", M.MusicSection(st), 0)
+    it.show()
+    ws.toggle_popover("battery")
+    for _ in range(10):
+        loop.step()
+    drawn = []
+    gc.collect()
+    gc.disable()
+    for k in range(9):
+        ws.popover_touch()
+        m = mem_alloc()
+        loop.step()
+        drawn.append(mem_alloc() - m)
+    gc.enable()
+    info["status_page_slot"] = ws.sysmenu.open and ws.sysmenu.comp.secs[0] is not None
+    ws.close_popover()
+    it.remove()
+    st.card = None
+    info["status_page"] = drawn
     ws.mark_dirty()
     for _ in range(10):
         loop.step()
@@ -2217,6 +2253,9 @@ def test_a_row_of_parts_allocates_nothing(result):
 # What a frame that draws the control center's page again may allocate: the
 # page's run of its poll hook, its commit and its paint.
 STATUS_REDRAW = 512
+# ...and with a page section in it: that page's paint too, over its own
+# context, and the slot's rect and focus read back from the engine.
+STATUS_PAGE_REDRAW = 1536
 
 
 def test_a_compiled_status_panel_draws_within_its_ceiling(result):
@@ -2228,6 +2267,16 @@ def test_a_compiled_status_panel_draws_within_its_ceiling(result):
     drawn = info.get("status_panel")
     assert drawn and len(drawn) == 9 and info["status_panel_kind"] == "ControlCenter", text[-3000:]
     assert max(drawn[1:]) <= STATUS_REDRAW, drawn
+
+
+def test_a_page_status_section_draws_within_its_ceiling(result):
+    """A Python item's page section (Music's card) in the handheld's
+    control center: past its first frame, a frame that draws the page and
+    the section's own page again allocates no more than STATUS_PAGE_REDRAW."""
+    info, text = result
+    drawn = info.get("status_page")
+    assert drawn and len(drawn) == 9 and info["status_page_slot"], text[-3000:]
+    assert max(drawn[1:]) <= STATUS_PAGE_REDRAW, drawn
 
 
 def test_a_splits_divider_drag_allocates_nothing(result):

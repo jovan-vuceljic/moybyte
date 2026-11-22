@@ -204,9 +204,11 @@ def test_a_station_that_fails_shows_the_danger_state_and_tries_again(tmp_path, f
     assert face.played == ["http://x/y", "http://x/y"]
 
 
-def test_the_section_s_rows_list_in_the_control_center_and_act(tmp_path, face):
-    """Music's section is rows (its title, the transport, the volume) the
-    control center lists under it, and its main row plays or pauses."""
+def test_the_section_is_music_s_card_in_the_control_center_and_acts(tmp_path, face):
+    """Music's section is a page, its compact card (music_card): the control
+    center gives it a slot under Music's name, in the first view, and its
+    main button plays or pauses; the head opens the app."""
+    import music_card
     ws = build_ws(tmp_path)
     M.STREAM.play("radio", GROOVE[0], GROOVE[2])
     ws.home.go_home()
@@ -215,12 +217,11 @@ def test_the_section_s_rows_list_in_the_control_center_and_act(tmp_path, face):
     assert ws.sysmenu.open and ws.sysmenu.widget == "battery"
     _settle(ws, 2)
     it = M.STREAM.item
-    p = ITEMS.panels[it.k]
-    assert p.rid[:p.n] == ["open", "", "main", "prev", "next", "stop", "volume"]
-    host = ws.sysmenu.comp.host
-    x, y, w, h = host.box("%d.2/press" % it.k)
+    assert ITEMS.page(it) is music_card.page and ITEMS.panels[it.k].n == 0
+    sc = next(s for s in ws.sysmenu.comp.secs if s is not None)
+    x, y, w, h = sc.host.box("main")
     px, py, pw, ph = ws.sysmenu.panel_rect()
-    assert py <= y and y + h <= py + ph, "the transport's first row in the first view"
+    assert py <= y and y + h <= py + ph, "the transport in the first view"
     stopped = []
     M.STREAM.toggle = lambda: stopped.append(1)
     try:
@@ -231,6 +232,13 @@ def test_the_section_s_rows_list_in_the_control_center_and_act(tmp_path, face):
     finally:
         del M.STREAM.toggle
     assert stopped == [1]
+    opened = []
+    M.STREAM.section.nav = type("Nav", (), {"open_app": lambda self, n: opened.append(n)})()
+    hx, hy, hw, hh = sc.engine.slot_rect("head")
+    drv.click(hx + hw // 2, hy + hh // 2)
+    for _ in range(2):
+        drv.frame(1 / 30)
+    assert opened == ["jukebox"]
 
 
 def test_add_a_station_refuses_https_and_keeps_an_http_one(tmp_path, face):
@@ -367,8 +375,9 @@ def test_a_files_place_reaches_the_card():
 
 
 def test_left_and_right_seek_a_file_and_a_tap_on_its_bar_seeks_along_it(tmp_path, face):
-    """Now playing opens on a file's place, a slider SEEK_STEP seconds a
-    step: right and left seek, and a tap at its end seeks near the end."""
+    """Now playing's keys seek a file SEEK_STEP seconds a press, right
+    and left, and a tap at the end of the bar in its head seeks near the
+    end; a station has no place to seek."""
     ws = build_ws(tmp_path)
     app = _app(ws)
     ws.spine.open_app(app)
@@ -385,8 +394,9 @@ def test_left_and_right_seek_a_file_and_a_tap_on_its_bar_seeks_along_it(tmp_path
     drv.press("left")
     _frames(drv)
     assert face.seeks == [60 + M.SEEK_STEP, 60]
-    x, y, w, h = app.page_host().box("pos")
-    drv.touch(x + w - 2, y + h // 2)
+    x, y, w, h, fs = M._DRAWN["head"]
+    tx = h + 12 * fs
+    drv.touch(x + tx + M._bar_w(w - tx, fs) - 2, y + 64 * fs)
     drv.frame(1 / 30)
     drv.touch_up()
     _frames(drv, 2)
@@ -452,7 +462,7 @@ def test_a_stream_that_starts_during_the_desks_draw_waits_for_the_next_frame(tmp
     _settle(ws, 1)
     assert started and M.STREAM.card is not None
     _settle(ws)
-    assert app.state().playing and app.state().title
+    assert app.state().playing and app.state().main_word == "Pause"
 
 
 @pytest.mark.parametrize("desk", (False, True))
@@ -521,3 +531,45 @@ def test_music_follows_what_another_client_or_a_vm_stop_left_playing(tmp_path, f
     face.end = None
     s._end()
     assert M.follow(nav_of) is False and ITEMS.at(0) is None
+
+
+def test_now_playing_takes_its_own_keys_and_the_strip_opens_it(tmp_path, face):
+    """A tap on the strip's head opens Now playing (#110's design, K18),
+    whose keys are the page's: W and S (and up and down) the volume, A and
+    D seek a file, M goes back to the list; a tap on the meter sets the
+    volume at the step it lands on."""
+    ws = build_ws(tmp_path)
+    app = _app(ws)
+    ws.spine.open_app(app)
+    M.STREAM.play("song", "Tone", str(TONE))
+    face.n.update(at=60, len=200, volume=50)
+    M.STREAM.poll()
+    drv = make_drv(ws)
+    _settle(ws)
+    x, y, w, h = app.engine._x.rect("strip")
+    drv.touch(x + 20, y + h // 2)
+    drv.frame(1 / 30)
+    drv.touch_up()
+    _settle(ws)
+    assert app.state().view == "now"
+    for ch, want in (("w", 60), ("s", 50)):
+        drv.type_char(ord(ch))
+        _frames(drv)
+        assert face.n["volume"] == want
+    drv.press("up")
+    _frames(drv)
+    assert face.n["volume"] == 60
+    drv.type_char(ord("d"))
+    _frames(drv)
+    drv.type_char(ord("a"))
+    _frames(drv)
+    assert face.seeks == [60 + M.SEEK_STEP, 60]
+    vx, vy, vw, vh, fs = M._DRAWN["volume"]
+    drv.touch(vx + vw - 2, vy + vh // 2)
+    drv.frame(1 / 30)
+    drv.touch_up()
+    _frames(drv, 2)
+    assert face.n["volume"] == 100
+    drv.type_char(ord("m"))
+    _frames(drv)
+    assert app.state().view == "radio"

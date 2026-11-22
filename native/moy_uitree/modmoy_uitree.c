@@ -514,16 +514,17 @@ static MP_DEFINE_CONST_FUN_OBJ_2(eng_absent_obj, eng_absent);
 
 // A canvas's draw, called inside the frame: what it raises is kept and raised once the frame
 // is out of the engine's C.
-static void draw_tramp(void *ud, int node, int x, int y, int w, int h)
+static void draw_tramp(void *ud, int node, int model, int row, int x, int y, int w, int h)
 {
     eng_obj_t *o = ud;
     if (o->draw == MP_OBJ_NULL || o->raised != MP_OBJ_NULL)
         return;
-    mp_obj_t args[5] = {MP_OBJ_NEW_SMALL_INT(node), MP_OBJ_NEW_SMALL_INT(x), MP_OBJ_NEW_SMALL_INT(y),
-                        MP_OBJ_NEW_SMALL_INT(w), MP_OBJ_NEW_SMALL_INT(h)};
+    mp_obj_t args[7] = {MP_OBJ_NEW_SMALL_INT(node), MP_OBJ_NEW_SMALL_INT(model), MP_OBJ_NEW_SMALL_INT(row),
+                        MP_OBJ_NEW_SMALL_INT(x), MP_OBJ_NEW_SMALL_INT(y), MP_OBJ_NEW_SMALL_INT(w),
+                        MP_OBJ_NEW_SMALL_INT(h)};
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
-        mp_call_function_n_kw(o->draw, 5, 0, args);
+        mp_call_function_n_kw(o->draw, 7, 0, args);
         nlr_pop();
     } else {
         o->raised = MP_OBJ_FROM_PTR(nlr.ret_val);

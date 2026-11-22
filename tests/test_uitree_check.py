@@ -56,6 +56,7 @@ PORTED = (
     "calc_app",
     "getcarts_app",
     "music_app",
+    "music_card",
     "terminal_app",
     "text_console",
 )

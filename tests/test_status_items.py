@@ -319,3 +319,86 @@ def test_a_bare_item_s_card_is_one_open_row_on_a_handheld(tmp_path, monkeypatch)
     drv.frame(1 / 30)
     _tap_row(ws, drv, "%d./press" % it.k)
     assert opened == [it]
+
+
+def _page_item():
+    import status_page_app as P
+    del P.RAN[:], P.DRAWN[:]
+    it = _as(42, moybyte.status, "music", P.PageSection(), 0)
+    it.show()
+    return P, it
+
+
+def _slot(ws):
+    return next(sc for sc in ws.sysmenu.comp.secs if sc is not None)
+
+
+def test_a_page_section_draws_in_its_slot_and_its_taps_run_as_its_process(tmp_path):
+    """A Python section that is a page (a canvas and a button) is drawn by
+    its own engine in its slot of the control center, inside the card, and a
+    tap on either runs as the item's process."""
+    P, it = _page_item()
+    ws = build_ws(tmp_path)
+    ws.widget_tap("battery")
+    for _ in range(2):
+        ws.frame(1 / 30)
+    assert ITEMS.page(it) is P.page and not ITEMS.bare(it)
+    sc = _slot(ws)
+    px, py, pw, ph = ws.sysmenu.panel_rect()
+    x, y, w, h = P.DRAWN[-1]
+    assert px <= x and x + w <= px + pw and py <= y and y + h <= py + ph, "drawn inside the card"
+    drv = make_drv(ws)
+    drv.click(x + 4, y + 4)
+    for _ in range(2):
+        drv.frame(1 / 30)
+    bx, by, bw, bh = sc.host.box("ping")
+    drv.click(bx + bw // 2, by + bh // 2)
+    for _ in range(2):
+        drv.frame(1 / 30)
+    assert P.RAN == [("dot", 42), ("ping", 42)]
+    assert moy_log.current() != 42, "the shell's again after"
+
+
+def test_the_control_center_s_focus_enters_a_page_section_and_leaves_it(tmp_path):
+    """Down from Wi-Fi lands on the section's top stop, Enter acts there as
+    its process, and up from its top stop goes back to Wi-Fi: the slot never
+    holds the focus."""
+    P, it = _page_item()
+    ws = build_ws(tmp_path)
+    ws.widget_tap("battery")
+    drv = make_drv(ws)
+    drv.frame(1 / 30)
+    cc = ws.sysmenu.comp
+    seen = []
+    for _ in range(6):
+        drv.press("down")
+        for _ in range(2):
+            drv.frame(1 / 30)
+        seen.append(cc.page.focused_id())
+        if seen[-1] == "sec0":
+            break
+    sc = _slot(ws)
+    assert seen[-2:] == ["wifi", "sec0"] and sc.engine.focused_id() == "ping", seen
+    drv.press("a")
+    for _ in range(2):
+        drv.frame(1 / 30)
+    assert P.RAN == [("ping", 42)]
+    drv.press("up")
+    for _ in range(2):
+        drv.frame(1 / 30)
+    assert cc.page.focused_id() != "sec0", "up from its top stop leaves the slot"
+
+
+def test_a_desk_menu_hosts_a_page_section(tmp_path):
+    P, it = _page_item()
+    ws = build_desktop_ws(tmp_path, panel_diagonal_in=7.0)
+    ws.home.open_desk()
+    ws.notices.open_status_menu(it)
+    drv = make_drv(ws)
+    for _ in range(2):
+        drv.frame(1 / 30)
+    bx, by, bw, bh = _slot(ws).host.box("ping")
+    drv.click(bx + bw // 2, by + bh // 2)
+    for _ in range(2):
+        drv.frame(1 / 30)
+    assert P.RAN == [("ping", 42)]

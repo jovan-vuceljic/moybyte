@@ -12,10 +12,23 @@ in the bar with `moybyte.status`, the menu-extra model.
                     draw it again
   item.remove()     out of the bar, its menu closed
 
-A SECTION is the app's part of the shell's surfaces: rows the shell draws
-(on the desk the menu's card, on a handheld its card in the control center,
-`runtime/system/cc_ui.py`), the same rows on every tier. A Python program's
-section is an object of two methods:
+A SECTION is the app's part of the shell's surfaces (on the desk the
+menu's card, on a handheld its card in the control center,
+`runtime/system/cc_ui.py`). A Python program's section is either a page or
+rows. A PAGE is a small `uitree` page the app builds with its usual API, a
+canvas included:
+
+  section.page             the page's build function; its module's state
+                    and handlers are the section's own
+  section.height(desk)     its height in pixels at font scale 1, at most
+                    SECTION_H_MAX: the slot the shell gives it
+
+The shell gives it a slot in the control center or the desk menu, drawn by
+the section's own engine and clipped to the slot; taps and keys inside the
+slot reach that engine, run as the item's process, and the menu's focus
+enters and leaves the slot but is never held by it. Its module's `changed`
+hook, where it declares one, runs on each `item.changed()`. ROWS are an
+object of two methods:
 
   section.panel()          its description (below), read when the item is
                     added and on each `item.changed()`
@@ -77,6 +90,7 @@ _NUMS = (0, 0, 1, 3)            # the numbers that end a kind's line
 ROWS_MAX = 8
 ID_MAX = 16
 LABEL_MAX = 40
+SECTION_H_MAX = 160             # a page section's slot, at most, at font scale 1
 ICON_MAX = 24                   # MOY_STATUS_ICON
 
 
@@ -329,9 +343,18 @@ class Items:
         return sh[i] if 0 <= i < len(sh) else None
 
     def bare(self, it):
-        """Whether item `it` has no menu: no rows described. Its tap opens
-        its app."""
-        return self.panels[it.k].n == 0
+        """Whether item `it` has no menu: no rows described and no page. Its
+        tap opens its app."""
+        return self.panels[it.k].n == 0 and self.page(it) is None
+
+    def page(self, it):
+        """Item `it`'s section page's build function, None for rows."""
+        sec = it.section
+        return getattr(sec, "page", None) if sec is not None and type(sec) is not Panel else None
+
+    def height(self, it, desk):
+        """Item `it`'s page section's slot height at font scale 1."""
+        return min(SECTION_H_MAX, max(0, int(self.run_as(it, it.section.height, desk))))
 
     def rows(self, it):
         """How many rows item `it`'s card lists: a bare item's one, Open."""
@@ -353,6 +376,9 @@ class Items:
         description that does not parse lists none."""
         sec = it.section
         if sec is None or type(sec) is Panel:
+            return
+        if getattr(sec, "page", None) is not None:
+            self.panels[it.k].set(())
             return
         rows = parse(self.run_as(it, sec.panel) or "")
         self.panels[it.k].set(rows or ())
