@@ -4723,6 +4723,15 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
     }
     if (e->gen_vals & GV_INPUT)
         e->gv += (uint32_t)(input + 1) * 40503u;
+    if (e->placed && (flags & UIT_F_BAND)) {
+        // a placed page's hints band takes the page's foot only while its focus has hints (a
+        // focus the last frame landed on): the page's layout moves with it, so its gen does
+        uit_buf_t band = {0};
+        placed_hints(e, &band, pages ? pages : 1);
+        if (band.n)
+            e->gv += 2654435761u;
+        uit_buf_free(&band);
+    }
     e->page_gen = -1;
     if ((flags & UIT_F_GEN) && e->gen_safe) {
         uint32_t g = (uint32_t)e->gen + e->edits + e->gv;

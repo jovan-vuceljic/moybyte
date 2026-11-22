@@ -45,3 +45,13 @@ def test_a_rows_frame_leaves_the_tools_row_under_a_hidden_status(tmp_path, desk)
     assert "rows" in p.kinds, "the session drew rows frames: %r" % p.kinds
     assert _tools_row_drawn(p), "the tools row is on the glass after the rows frames"
 
+
+@pytest.mark.parametrize("desk,look", ((False, {}), (True, {}), (True, {"font_scale": 1, "panel_diagonal_in": 7.0})))
+def test_a_hints_band_that_goes_leaves_no_pixel_behind(tmp_path, desk, look):
+    """A placed page's hints band takes its foot only while the focus has
+    hints, and the page's rows move with it: Notes' vault row says New note,
+    Rename and Move to Trash, the open note's text editor says nothing. The
+    page's gen counts the band, so the frame the band goes draws whole and the
+    keys it showed are not left under the tools that moved down."""
+    p = Pair(tmp_path, 1, desk=desk, **look)
+    assert bytes(p.a.sys_canvas._buf) == bytes(p.b.sys_canvas._buf), "the open note, drawn as it ships"

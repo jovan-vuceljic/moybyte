@@ -71,9 +71,9 @@ def audit():
     assert failed == 0, "%d rows frames drew stops unlike the last frame's outside the floor" % failed
 
 
-def _console(tmp_path, name, ships, desk):
+def _console(tmp_path, name, ships, desk, **look):
     root = tmp_path / name
-    kw = {"sys_size": (1024, 600), "font_scale": 2, "windowed": True} if desk else {}
+    kw = dict({"sys_size": (1024, 600), "font_scale": 2, "windowed": True}, **look) if desk else {}
     ws = host_app.build_workstation(str(root / "carts"), **kw)
     ws.bar_layer.clock_text = lambda: "10:30"
     ws.show_fps = False
@@ -100,9 +100,9 @@ class Pair:
     """The session on both consoles, frame by frame; the first's buffers
     presented in turn, `bufs` of them (the full-screen console's glass)."""
 
-    def __init__(self, tmp_path, bufs, desk=False):
-        self.a = _console(tmp_path, "ships", True, desk)
-        self.b = _console(tmp_path, "whole", False, desk)
+    def __init__(self, tmp_path, bufs, desk=False, **look):
+        self.a = _console(tmp_path, "ships", True, desk, **look)
+        self.b = _console(tmp_path, "whole", False, desk, **look)
         self.da = host_app.ConsoleDriver(self.a)
         self.db = host_app.ConsoleDriver(self.b)
         self.bufs = bufs
