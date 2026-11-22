@@ -145,3 +145,34 @@ def build():
     assert fs[0].buf != fs[1].buf and fs[1].buf != fs[3].buf
     assert fs[0].state == fs[1].state == fs[2].state, [f.state for f in fs]
     assert app.engine.focus_key == "flip"
+
+
+def test_an_end_foot_sets_its_buttons_at_their_natural_widths_at_its_end(tmp_path):
+    """look="end" with a status label and two buttons: one line, the
+    buttons side by side at their natural widths, the last at the foot's
+    end, the label before them; a templated kind= draws its word."""
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        ui.label("{text}")
+        with ui.foot():
+            ui.label("Doom · on your shelf", tone="dim")
+            ui.button("tap2", icon="rotate")
+            ui.button("flip", "{kind}")
+
+
+def tap2():
+    s.kind = "primary" if s.kind == "normal" else "normal"
+
+
+ui.action("tap2", "Check", tap2)
+'''
+    for config in (TDECK, DESK):
+        fs, app = run(tmp_path, build, ["k:a"], config=config, boxes=["tap2", "flip"],
+                      name="foot_" + config[:4])
+        (ax, ay, aw, ah), (bx, by, bw, bh) = fs[0].state
+        w = fs[0].w
+        assert ay == by and ah == bh, fs[0].state
+        assert ax + aw < bx and aw < w // 3 and bw < w // 3, fs[0].state
+        assert config == DESK or bx + bw > w * 3 // 4, fs[0].state
+        assert app.engine.s._v["kind"] == "primary" and fs[0].buf != fs[1].buf

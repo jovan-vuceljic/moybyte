@@ -1974,7 +1974,7 @@ static int placed_shown(uit_t *e, int k, int model, int row);
 static void stack(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
                   const int32_t r[4]);
 
-// A foot of the end look holding more than labels (a button, a row, a field, a note): its
+// A foot of the end look holding more than labels and buttons (a row, a field, a note): its
 // children stacked by the placed rule, its height theirs.
 static int32_t foot_stacked(uit_t *e, int k)
 {
@@ -1982,7 +1982,7 @@ static int32_t foot_stacked(uit_t *e, int k)
     if (NODE(k)->lit)
         return 0;
     KIDS(k, g) {
-        any |= NODE(g)->kind != UIT_LABEL;
+        any |= NODE(g)->kind != UIT_LABEL && NODE(g)->kind != UIT_BUTTON;
         if (placed_shown(e, g, -1, -1))
             h += fixed_h(e, g);
     }
@@ -2021,6 +2021,42 @@ static int foot_of(uit_t *e)
 
 static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
 
+// A button's kind, the toolkit's: its literal's, or its template's word this frame (normal,
+// primary, tonal, danger; another word normal).
+static int button_kind(uit_t *e, int k, int model, int row)
+{
+    static const char *const KINDS[] = {"normal", "primary", "tonal", "danger"};
+    if (NODE(k)->lit)
+        return NODE(k)->lit;
+    uint32_t n, mark = e->scratch.n, at = prop_text(e, k, "kind", model, row, &n);
+    int kind = 0;
+    for (int i = 1; i < 4 && n; i++)
+        if (n == strlen(KINDS[i]) && !memcmp(e->scratch.p + at, KINDS[i], n))
+            kind = i;
+    e->scratch.n = mark;
+    return kind;
+}
+
+// A button's natural width: its label's with the toolkit's pads (its minimum taken), and its
+// icon's room where it has one beside its label.
+static int32_t button_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+{
+    const uit_node_t *N = NODE(k);
+    uint32_t n, mark = e->scratch.n, a = text(e, k, 0, model, row, &n);
+    int icon = N->t_icon >= 0 || (N->act >= 0 && uit_str(e, e->acts[N->act].icon)[0]);
+    if (N->t_icon >= 0) {
+        uint32_t ni;
+        uit_tmpl_render(e, N->t_icon, model, row, &ni);
+        icon = ni != 0;
+    }
+    int32_t out[5];
+    moy_ui_api_measure(c, s, MOY_UI_MEASURE_BUTTON, sspan(e, a, n), NULL, out);
+    e->scratch.n = mark;
+    if (icon && (N->btn & BT_ALONE))
+        return (e->flags & UIT_F_DESK) ? 36 : 26 * e->fs;
+    return out[2] + (icon ? ((e->flags & UIT_F_DESK) ? 20 : 14 * e->fs) : 0);
+}
+
 // The page's docked foot (`ui.dock`, on the page's ground), look="share"
 // (`_r_foot`): its buttons share its width, its label a line of its own over
 // them; on a handheld under a rule. A stacked foot's children lead in as
@@ -2050,12 +2086,26 @@ static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
             btn[nb++] = (int16_t)g;
     }
     if (!NODE(k)->lit) {
-        // the end look: its labels before its end
-        int32_t bx = x + w - m;
+        // the end look: its buttons at their natural widths at its end, its labels before them;
+        // on the desk under a rule where it holds buttons
+        int gap = desk ? 8 : 4 * fs;
+        int32_t bw[16], bx = x + w - m;
+        for (int i = 0; i < nb; i++) {
+            bw[i] = button_w(e, c, s, btn[i], model, row);
+            bx -= bw[i] + (i ? gap : 0);
+        }
+        if (nb && desk)
+            fill_token(s, x + m, y, w - 2 * m, 1, MOY_UI_T_BORDER);
+        int32_t lw = bx - (nb ? gap : 0) - x - 26;
         KIDS(k, g)
         if (NODE(g)->kind == UIT_LABEL && uit_shown(e, g, model, row)) {
-            moy_ui_api_at(c, x + 26, by, bx - x - 26 > 0 ? bx - x - 26 : 0, fh);
+            moy_ui_api_at(c, x + 26, by, lw > 0 ? lw : 0, fh);
             label_rows(e, c, s, g, model, row, NULL);
+        }
+        for (int i = 0; i < nb; i++) {
+            moy_ui_api_at(c, bx, by, bw[i], fh);
+            draw(e, c, s, btn[i], model, row);
+            bx += bw[i] + gap;
         }
         return;
     }
@@ -2365,7 +2415,8 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         }
         if ((N->btn & BT_ALONE) && (N->t_icon >= 0 || (N->act >= 0 && uit_str(e, e->acts[N->act].icon)[0])))
             n1 = 0;                 // its icon alone
-        if (moy_ui_api_button(c, s, sspan(e, a1, n1), N->lit, &o) && uit_act_can(e, N->act, model, row))
+        if (moy_ui_api_button(c, s, sspan(e, a1, n1), button_kind(e, k, model, row), &o) &&
+            uit_act_can(e, N->act, model, row))
             fire(e, N->act, k, model, row, NULL);
         break;
     case UIT_TOGGLE: {
