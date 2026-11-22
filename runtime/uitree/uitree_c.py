@@ -63,6 +63,18 @@ def _list_model(n):
     return None
 
 
+def _stirs(i):
+    """Whether the frame's input holds anything a canvas's keys= could take:
+    a key typed, a button held or pressed. A quiet frame asks the engine for
+    nothing (its focused key is a new string each time)."""
+    if getattr(i, "typed", 0):
+        return True
+    try:
+        return i.any_held() or i.any_pressed()
+    except AttributeError:
+        return True
+
+
 class EngineGap(S.UIError):
     """What the C engine does not draw yet, by name: never drawn wrong."""
 
@@ -1157,7 +1169,7 @@ class CEngine(Engine):
         if self._shut:
             self._resume()
         self._bind()
-        if self._canvas_keys and self._canvas_took(i):
+        if self._canvas_keys and _stirs(i) and self._canvas_took(i):
             return True
         ch = getattr(i, "typed", 0)
         a = self._x.letter(ch) if ch else -1
