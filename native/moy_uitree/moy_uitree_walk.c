@@ -2173,6 +2173,7 @@ static void draw_table(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     if (cv >= 0) {
         int32_t pr[8];
         int32_t i;
+        e->canvas_now = 1;              // its rows are a canvas's: the next frame carries no gen
         while ((i = moy_ui_api_table_part(c, s, pr)) >= 0)
             if (e->draw_fn && i < M->nrows)
                 e->draw_fn(e->draw_ud, cv, m, i, pr[0], pr[1], pr[2], pr[3]);
@@ -3078,7 +3079,7 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
     case UIT_SCROLL: {
         // a region of its own: its gen counts what it reads, so its scroll takes shift frames
         const char *key = uit_str(e, N->key);
-        int32_t one = 1, gen = (e->flags & UIT_F_GEN) && e->gen_safe ? uit_cell_gen(e, k) : -1;
+        int32_t one = 1, gen = (e->flags & UIT_F_GEN) && gen_ok(e) ? uit_cell_gen(e, k) : -1;
         moy_ui_over_none(&o);
         if (N->lit)
             moy_ui_over_put(&o, MOY_UI_OV_FOLLOW, &one);
