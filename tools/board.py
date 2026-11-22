@@ -49,7 +49,7 @@
                                                 the last fresh run
                                                 (tools/perf_pass.py)
 
-The board is its `[board] ota` id (p4, tdeck, guition_s3, guition_p4,
+The board is its `[board] ota` id (p4, tdeck, guition_s3, guition_p4, elecrow_p4,
 xiao_zero), the same name `--board` takes everywhere else. Everything goes
 through `tools/p4_autotest.py`'s `P4Board`, which opens each port with the
 line state its board.toml `[serial]` block declares.
