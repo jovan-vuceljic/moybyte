@@ -335,7 +335,7 @@ def _storybook_rename(ws):
 def _myart_rename(ws):
     app = ws.app("myart")
     app._verb("rename", "kite")
-    return lambda: app.renaming[1]
+    return lambda: app.engine.s._v["name"]
 
 
 SHELL_FIELDS = {"files": _files_rename, "appearance": _appearance_name,
