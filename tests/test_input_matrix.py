@@ -214,7 +214,7 @@ def c_app(row):
 
 class MatrixShellPage(AppLayer):
     """A system app drawing the row's page through its AppContext's toolkit
-    host, as Calc does (runtime/apps/calc_app.py)."""
+    host, as Files does (runtime/apps/files_app.py)."""
 
     id = "matrix"
     domain = "system"

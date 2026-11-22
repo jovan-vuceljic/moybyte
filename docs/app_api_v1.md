@@ -1525,7 +1525,9 @@ Everything above is a USER app: a cart, editable on Make. A SHIPPED app
 (Settings, Files, Paint, Calc) is a Layer class
 in `runtime/`, frozen into the firmware and registered from a manifest; only
 the console's own apps take this path. **Calc** (`runtime/apps/calc_app.py`,
-`system_carts/moybyte.calc.moy`) is the reference.
+`system_carts/moybyte.calc.moy`) is the reference: its screen is one
+`uitree` page, and `uitree_app.app_layer(id, title, build, is_app)` makes
+the Layer class below from it, which its manifest's `entry` names.
 
 **The two files.** An identity cart, `system_carts/moybyte.<slug>.moy`,
 gives the app its tile, title and re-seed, and its manifest declares the

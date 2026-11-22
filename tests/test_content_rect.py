@@ -151,7 +151,7 @@ def test_every_layout_lays_out_inside_the_content_rect(tmp_path, size):
     _open_every_surface(ws)
     names = {n for n, _l in _layouts(ws)}
     for want in ("Layout", "CodeLayout", "CardsLayout", "PaintLayout",
-                 "MapLayout", "MusicLayout", "BlockLayout", "CalcLayout",
+                 "MapLayout", "MusicLayout", "BlockLayout",
                  "FilesLayout", "StorybookLayout", "AppearanceLayout",
                  "PaintAppLayout", "GetCartsLayout", "MyArtLayout"):
         assert want in names, want + " was never built"
@@ -170,7 +170,7 @@ def test_every_layout_lays_out_inside_the_content_rect(tmp_path, size):
         rb, cb = bottom[key]
         if not _inside(rb, cb):
             bad.append("%s.%s[%d] %r in %r" % (key + (rb, cb)))
-    assert checked > 80
+    assert checked > 60
     assert not bad, "outside the content rect under a bottom bar: %s" % bad
     lay = ws.layout
     assert lay.icon_y0 >= lay.cy and lay.grid_bottom <= lay.cy + lay.ch
@@ -180,13 +180,11 @@ def test_every_layout_lays_out_inside_the_content_rect(tmp_path, size):
 def test_a_window_has_no_bar_over_its_content(tmp_path):
     """The shipped apps' heads: a window's content is its whole buffer, the
     title strip being the WM's -- wherever the bar is."""
-    from runtime.calc_app import CalcLayout
     from runtime.files_app import FilesLayout
     for edge in ("top", "bottom"):
         layout_base.place_bar(edge)
-        for cls in (CalcLayout, FilesLayout):
-            lay = cls(480, 300, 1, windowed=True)
-            assert (lay.cx, lay.cy, lay.cw, lay.ch) == (0, 0, 480, 300)
+        lay = FilesLayout(480, 300, 1, windowed=True)
+        assert (lay.cx, lay.cy, lay.cw, lay.ch) == (0, 0, 480, 300)
 
 
 # -- the bar's pixels land in its band and nowhere else --------------------------

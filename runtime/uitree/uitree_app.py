@@ -384,6 +384,7 @@ class App(AppLayer):
 
     def __init__(self, ctx, names=None):
         self._surf, self._theme, self._damage = ctx.surface, ctx.theme, ctx.damage
+        self.ctx = ctx
         build = self.BUILD[0]
         eng = self.ENGINE[0] if self.ENGINE else _engine_class(False)
         if eng.__module__.rpartition(".")[2] == "uitree_editor":     # the Editor's kinds (runtime.uitree_editor on the host)

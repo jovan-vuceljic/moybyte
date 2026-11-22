@@ -1626,6 +1626,14 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
                 e->draw_fn(e->draw_ud, g, cell[0], cell[1], cell[2], cell[3]);
             continue;
         }
+        if (NODE(g)->kind == UIT_GRID) {    // a grid's room is its cell
+            int32_t was[4];
+            memcpy(was, e->rect, sizeof was);
+            memcpy(e->rect, cell, sizeof cell);
+            draw(e, c, s, g, model, row);
+            memcpy(e->rect, was, sizeof was);
+            continue;
+        }
         if (NODE(g)->kind != UIT_GROUP) {
             draw(e, c, s, g, model, row);
             continue;
@@ -1654,9 +1662,10 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
     }
 }
 
-// A grid (`_r_grid`): the page's room in by its pad, cut into rows then cols with its gap
-// between; each child takes the next cell (a button's span= cells along its row), drawn placed
-// there where it is shown: a hidden one leaves its cells empty, so no key moves.
+// A grid (`_r_grid`): its room (the page's, or its cell of a split) in by its pad, cut into rows
+// then cols with its gap between; each child takes the next cell (a button's span= cells along
+// its row), drawn placed there where it is shown: a hidden one leaves its cells empty, so no key
+// moves.
 static void draw_grid(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     const uit_node_t *N = NODE(k);

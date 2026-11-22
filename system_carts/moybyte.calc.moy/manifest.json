@@ -1,6 +1,6 @@
 {
   "format": "moy-1",
-  "version": 6,
+  "version": 7,
   "title": "Calc",
   "id": "moybyte.calc",
   "runtime": "python",
@@ -13,7 +13,8 @@
     "app": {
       "id": "calc",
       "entry": "calc_app:CalcAppLayer",
-      "order": 70
+      "order": 70,
+      "min_size": [170, 190]
     },
     "permissions": [
       "graphics",

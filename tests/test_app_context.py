@@ -113,6 +113,17 @@ def _roles_named(cls_node, seen=None):
     return found
 
 
+def _used(mod_name, cls_name):
+    """The roles the class reaches, with those of `uitree_app.App` for an app
+    whose screen is a `uitree` page (the class `app_layer` made is its base)."""
+    used = _roles_named(_class_node(mod_name, cls_name))
+    mod = __import__("runtime." + mod_name, None, None, (cls_name,))
+    from runtime import uitree_app
+    if issubclass(getattr(mod, cls_name), uitree_app.App):
+        used |= _roles_named(_class_node("uitree_app", "App"))
+    return used
+
+
 def _declared(mod_name, cls_name):
     mod = __import__("runtime." + mod_name, None, None, (cls_name,))
     return tuple(getattr(getattr(mod, cls_name), "NEEDS", ()))
@@ -134,7 +145,7 @@ def test_an_app_touches_only_what_it_declares(mod, cls):
     """The forward direction. An undeclared role is an AttributeError the moment
     that line runs -- which may be a code path no test drives -- so this catches
     it statically, on every line of the class."""
-    used = _roles_named(_class_node(mod, cls))
+    used = _used(mod, cls)
     undeclared = used - set(_declared(mod, cls))
     assert not undeclared, "%s reaches undeclared role(s) %s" % (
         cls, sorted(undeclared))
@@ -146,7 +157,7 @@ def test_an_app_declares_nothing_it_does_not_use(mod, cls):
     a capability granted for nothing. Phase 7 keys `make_system_api` on exactly
     these tuples, so a stale entry becomes a real over-privilege."""
     declared = set(_declared(mod, cls))
-    unused = declared - _roles_named(_class_node(mod, cls))
+    unused = declared - _used(mod, cls)
     assert not unused, "%s declares unused role(s) %s" % (cls, sorted(unused))
 
 

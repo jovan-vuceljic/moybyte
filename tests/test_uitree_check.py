@@ -47,6 +47,7 @@ PORTED = (
     "uitree_text_editor",
     "uitree_grid",
     "uitree_model_row",
+    "calc_app",
 )
 
 

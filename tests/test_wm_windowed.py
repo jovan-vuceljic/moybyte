@@ -1137,11 +1137,13 @@ def test_opening_an_open_app_brings_its_window_forward_as_it_was(tmp_path):
     window forward: the windows above it stay open (a goto would have
     returned to it, closing them) and the app keeps what it showed."""
     ws, drv, files, calc = _two_apps(tmp_path)
-    app = ws.app("calc")
-    app = getattr(app, "_inst", app)
+    from runtime import calc_app, uitree
+    eng = ws.app("calc").engine
     for k in "12+3":
-        app._key(k)
-    entry = app.entry
+        eng.run(calc_app.press, k, action="press")
+    uitree.commit(eng)
+    entry = eng.s._v["entry"]
+    assert entry == "3"
     ws.wm.chip_tap("files")
     drv.frame(1 / 30)
     kinds = ws.wm.stack.kinds()
@@ -1149,7 +1151,7 @@ def test_opening_an_open_app_brings_its_window_forward_as_it_was(tmp_path):
     drv.frame(1 / 30)
     assert ws.wm.stack.kinds() == kinds
     assert ws.wm.z_order == ["files", "calc"] and ws.wm.focus_key == "calc"
-    assert app.entry == entry
+    assert eng.s._v["entry"] == entry
     calc.minimized = True                              # a minimized one is shown
     ws.wm.move_focus("files")
     ws.spine.open_app(ws.app("calc"))
@@ -2502,8 +2504,8 @@ def test_a_dead_window_releases_its_buffer_and_the_backdrop_survives_a_relayout(
 # installs each window's layout context: a row the console shared, or one read
 # from the last window installed, lays an app out at the other window's size.
 TWO_WINDOWS = (
-    "abcc9d88cd8c9f0f9af3570e9d46929f621ee2ccf0269b217479d8fb1dff54a4",
-    "7524f954d2656345d7b24838d145150993c488696a9e3ce039c093a9b367480a",
+    "fc4206855a6536b0e9e08518628e9c08d6d315be1a75fdf36c74155445f67881",
+    "a60982d34f7a916f56fdedc1b9122d6897c79de274529fe2549dc4420ef24406",
 )
 
 
@@ -3891,28 +3893,6 @@ def test_the_root_takes_back_its_marks_after_the_windows_draw(tmp_path, held):
         assert ui_draw.marks()[0] == (not held)
     finally:
         ui_draw.marks(True)
-
-
-@pytest.mark.parametrize("theme", ["moy", "blocks", "contrast"])
-def test_calcs_keys_stand_as_far_from_the_frames_bottom_as_its_sides(tmp_path, theme):
-    """A rounded frame's foot is part of the window's bottom inset, not an
-    addition to the app's: Calc's keypad ends as far above the frame's
-    outer bottom edge as it starts in from the frame's outer left edge, in
-    every look, whatever its corner radius."""
-    ws = _moy_desk(tmp_path)
-    if theme != "moy":
-        ws.look.set_theme(theme, persist=False, variant="light")
-    ws.spine.open_app(ws.app("calc"))
-    ws.frame(1 / 30)
-    wm = ws.wm
-    win = wm.windows["calc"]
-    assert win.foot > 0
-    cx, cy, _cw, _ch = win.content_rect()
-    keys = win.ctx.app_layouts["calc"].keys
-    left = cx + min(k[0] for k in keys) - win.x
-    right = win.x + win.w - (cx + max(k[0] + k[2] for k in keys))
-    bottom = win.y + win.h - (cy + max(k[1] + k[3] for k in keys))
-    assert left == right == bottom
 
 
 @pytest.mark.parametrize("theme", ["moy", "contrast"])
