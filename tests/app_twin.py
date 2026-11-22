@@ -85,7 +85,7 @@ _ROWS = ("damage.all", "damage.again",
          "uitree.build_end", "uitree.open", "uitree.focus", "uitree.frame", "uitree.next",
          "uitree.set_int", "uitree.set_text", "uitree.set_absent", "uitree.set_model",
          "uitree.get_int", "uitree.get_text", "uitree.get_cell", "uitree.error", "uitree.dump",
-         "uitree.action_chars", "uitree.arg")
+         "uitree.action_chars", "uitree.arg", "uitree.draw_row")
 _TOKENS = ("panel", "edge", "title", "title_ink", "accent", "hilite", "dim",
            "desktop", "desktop_pattern", "surface", "surface_alt", "ink",
            "ink_dim", "border", "selection", "selection_ink", "focus", "play",
