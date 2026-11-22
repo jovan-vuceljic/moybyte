@@ -350,6 +350,9 @@ int32_t uitree_state(const char *name, uint32_t name_n, int32_t type, const char
 // uitree.model
 int32_t uitree_model(int32_t slot, const char *names, uint32_t names_n, const void *types,
                      uint32_t types_n, int32_t key) MOYBYTE_APP_IMPORT(uitree_model);
+// uitree.field_enum
+int32_t uitree_field_enum(int32_t slot, int32_t f, const char *values,
+                          uint32_t values_n) MOYBYTE_APP_IMPORT(uitree_field_enum);
 // uitree.row_of
 int32_t uitree_row_of(int32_t slot, int32_t model) MOYBYTE_APP_IMPORT(uitree_row_of);
 // uitree.labels

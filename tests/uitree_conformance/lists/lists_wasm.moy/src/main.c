@@ -40,6 +40,7 @@ static void page(void) {
 
 EXPORT(_init) void _init(void) {
     s_items = ut_model("items", "id\0kind\0name", F_ID, UT_TEXT, UT_TEXT, UT_TEXT);
+    ut_field_enum(s_items, F_KIND, "fruit\0bread");
     s_picked = ut_text("picked", "");
     ut_row_of("sel", s_items);
     ut_enum("tab", "all\0few", "all");

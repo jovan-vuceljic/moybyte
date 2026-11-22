@@ -191,6 +191,10 @@ static inline int32_t ut_model_(const char *name, const char *fields, uint32_t f
     return s;
 }
 
+// A model's text field (its index f in the model's field order) made an enum
+// of the NUL-separated `values`: ut_field_enum(m, 1, "fruit\0bread").
+#define ut_field_enum(model, f, values) uitree_field_enum((model), (f), (values), sizeof(values) - 1)
+
 // A cursor over the model at slot `model`: its slot.
 static inline int32_t ut_row_of(const char *name, int32_t model) {
     int32_t s = ut_state(name, UT_ROWOF);

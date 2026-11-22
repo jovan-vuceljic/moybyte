@@ -80,7 +80,7 @@ _ROWS = ("damage.all", "damage.again",
          "moybyte.clock",
          # the UI engine's rows: a compiled app's, served by native/moy_uitree
          # and counted by nothing here
-         "uitree.state", "uitree.model", "uitree.row_of", "uitree.labels", "uitree.action",
+         "uitree.state", "uitree.model", "uitree.field_enum", "uitree.row_of", "uitree.labels", "uitree.action",
          "uitree.action_row", "uitree.build", "uitree.node", "uitree.prop", "uitree.node_action",
          "uitree.build_end", "uitree.open", "uitree.focus", "uitree.frame", "uitree.next",
          "uitree.set_int", "uitree.set_text", "uitree.set_absent", "uitree.set_model",

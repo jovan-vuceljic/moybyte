@@ -9,12 +9,13 @@
 
 #include <stdint.h>
 
-#define MOY_UITREE_WASM_ROWS 24
+#define MOY_UITREE_WASM_ROWS 25
 
 int32_t moy_uitree_wasm_state(void *, const uint8_t *, uint32_t, int32_t, const uint8_t *,
                               uint32_t);
 int32_t moy_uitree_wasm_model(void *, int32_t, const uint8_t *, uint32_t, const uint8_t *,
                               uint32_t, int32_t);
+int32_t moy_uitree_wasm_field_enum(void *, int32_t, int32_t, const uint8_t *, uint32_t);
 int32_t moy_uitree_wasm_row_of(void *, int32_t, int32_t);
 int32_t moy_uitree_wasm_labels(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
                                const uint8_t *, uint32_t);

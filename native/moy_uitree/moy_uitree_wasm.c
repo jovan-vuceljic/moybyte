@@ -275,6 +275,14 @@ int32_t moy_uitree_wasm_model(void *x, int32_t slot, const uint8_t *names, uint3
                  "model", where);
 }
 
+int32_t moy_uitree_wasm_field_enum(void *x, int32_t slot, int32_t f, const uint8_t *values, uint32_t values_n) {
+    (void)x;
+    APP(a);
+    char where[32];
+    snprintf(where, sizeof where, "slot %d, field %d", (int)slot, (int)f);
+    return check(a, uit_field_enum(a->e, (int)slot, (int)f, (const char *)values, values_n), "field_enum", where);
+}
+
 int32_t moy_uitree_wasm_row_of(void *x, int32_t slot, int32_t model) {
     (void)x;
     APP(a);

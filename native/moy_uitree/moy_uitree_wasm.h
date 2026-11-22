@@ -42,6 +42,9 @@
 //                 `flags` is 0 (no flag is defined yet). The engine's trace
 //                 lines go to the OS log as "[trace] " lines, the Python and
 //                 Lua layers' format.
+//   field_enum(slot, f, values)  a model's text field f made an enum of the
+//                 NUL-separated values (uit_field_enum), as a Python
+//                 ui.enum field or a Lua one is.
 //   open()        the visit opens (uit_open): the values set before it are
 //                 the app's start and are not traced, every write after is.
 //                 An action declared as the hook `opened` (UIT_A_HOOK) is
