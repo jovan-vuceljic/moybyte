@@ -255,3 +255,17 @@ def test_more_role_runs_on_the_m_key():
     trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "t:m"], cart=os.path.join(fx, "uitree_morerow_wasm.moy"))
     assert [l for l in trace if l.startswith("action open from")] == [
         "action open from key more on 'b/open' on 'Shelf'"]
+
+
+def test_build_refuses_an_app_the_engine_refused_in_init(tmp_path):
+    """tools/wasm_cart.build runs a UI tree app's `_init` on the host's WAMR and
+    fails with the engine's refusal, naming its code; a good app builds."""
+    import pytest
+    from runtime import wasm_host
+    from tools import wasm_cart
+    if not wasm_host.available():
+        pytest.skip("no host wasm binding")
+    fx = os.path.join(ROOT, "tests", "fixtures")
+    wasm_cart.build(os.path.join(fx, "uitree_more_wasm.moy"), str(tmp_path / "good.moy"))
+    with pytest.raises(ValueError, match=r"T02 .*no state nothing"):
+        wasm_cart.build(os.path.join(fx, "uitree_bad_wasm.moy"), str(tmp_path / "bad.moy"))
