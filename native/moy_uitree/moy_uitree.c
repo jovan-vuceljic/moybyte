@@ -1105,7 +1105,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     else if (!strcmp(name, "value") || (!strcmp(name, "lo") && kind == UIT_SLIDER) ||
              (!strcmp(name, "head") && kind == UIT_BUBBLE))
         tslot = &N->t_value;
-    else if (!strcmp(name, "status") && kind == UIT_BUBBLE)
+    else if (!strcmp(name, "status") && (kind == UIT_BUBBLE || kind == UIT_PAGE))
         tslot = &N->t_aux;
     else if ((kind == UIT_BUBBLE && (!strcmp(name, "side") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              ((kind == UIT_INFO || kind == UIT_LINK) &&

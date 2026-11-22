@@ -276,7 +276,8 @@ pill over the page above its foot; `ui.group("", look="card")` lays its
 rows on a card (as a split's cell, the cell is the card); `ui.text_view(..., look="well")` lays its prose on a
 well; `ui.cards(..., pad=)` sets the gap its columns are counted at; a
 card's `badge=` marks its picture; a button's `kind=` may be a template;
-`ui.split(..., rule=True)` draws a rule between its cells
+`ui.split(..., rule=True)` draws a rule between its cells;
+`ui.page(title, status=)` leads the hints band with its words
 (`tests/uitree_contract/contract.json` holds every kind and prop).
 
 **The bar is the host's.** The console draws the bar (its back chevron,

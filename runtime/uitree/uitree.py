@@ -1994,7 +1994,7 @@ class Node:
 # contract's (`_check_prop`); this table only routes what that check let through.
 _C = {"shown": "cond"}
 SCHEMA = {
-    "page": {"title": "text"},
+    "page": {"title": "text", "status": "text"},
     "group": dict(_C, caption="text", close="action0", look="lit"),
     "label": dict(_C, text="text", tone="text", wrap="lit", face="lit", size="lit", icon="text",
                   lines="lit", align="lit"),

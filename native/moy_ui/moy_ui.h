@@ -1276,6 +1276,11 @@ int moy_ui_hints(const moy_ui_sink_t *s, moy_ui_box_t b, const uint8_t *items, s
 // nothing spans nothing (x0 == x1). Answers the pairs: 0 under touch.
 int moy_ui_hints_at(const moy_ui_sink_t *s, moy_ui_box_t b, const uint8_t *items, size_t len,
                     int fs, int desk, int draw, int16_t *spans, int cap);
+// A band's status words (`t`, its caption face, its ink) at its start, where its hints
+// begin: drawn when `draw`. Answers how far the hints after them move right: 0 under
+// touch, which shows no band, or for no words.
+int moy_ui_hints_status(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t t, int fs,
+                        int desk, int draw);
 // Text in font `font` (a run's: petme128) at (x, y), its line's top, in
 // colour `col` (the buffer's word), inside a part's crossing: `table` text
 // is the string table's (moy_str.h), else a caller's. Answers its width.

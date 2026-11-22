@@ -5281,6 +5281,13 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
             KIDS(0, k)
             if (NODE(k)->kind == UIT_POPOVER && uit_shown(e, k, -1, -1))
                 card = 1;
+        moy_ui_over_t so;           // the page's status= words, which the band leads with
+        moy_ui_over_none(&so);
+        if (NODE(0)->t_aux >= 0 && !(flags & UIT_F_ON_BAR)) {
+            uint32_t sn, sa = uit_tmpl_render(e, NODE(0)->t_aux, -1, -1, &sn);
+            if (sn)
+                moy_ui_over_text(&so, MOY_UI_OV_HINT, span_of(e->scratch.p + sa, sn));
+        }
         if (card) {
             e->pop_hints = hp, e->pop_hints_n = hn;
         } else if (!placed) {
@@ -5289,7 +5296,7 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
                 int mn;
                 e->band_h = (flags & UIT_F_DESK) ? moy_ui_metrics(MOY_UI_K_VALUE_ROW, &mn)[17] * fs : 20 * fs;
             }
-            moy_ui_api_hints(c, s, hp, hn, NULL);
+            moy_ui_api_hints(c, s, hp, hn, &so);
         } else if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {
             // a placed page's band: a handheld's its room's last line, the desk's and a foot's
             // at the page's foot
@@ -5300,7 +5307,7 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
             moy_ui_cut(e->rect, 1, hh, band, rest);
             if (!(flags & UIT_F_DESK) && e->foot < 0)
                 moy_ui_api_at(c, band[0], band[1], band[2], band[3]);
-            moy_ui_api_hints(c, s, hp, hn, NULL);
+            moy_ui_api_hints(c, s, hp, hn, &so);
             memcpy(e->rect, rest, sizeof rest);
         }
     }

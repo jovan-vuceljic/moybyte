@@ -265,6 +265,7 @@ s = ui.state(
     toasting=False,
     toast="",
     toast_icon="check",
+    band="",                    # the hints band's status words: a handheld's story view is View only
 )
 ui.app("Storybook", icon="storybook")
 
@@ -337,6 +338,7 @@ def fill(lay):
         _set(lay, "status", "")
     page = "view" if lay.page == "view" else "editor" if lay.page in EDITOR else "stories"
     _set(lay, "page", page)
+    _set(lay, "band", "View only" if page == "view" and not lay.desk else "")
     _set(lay, "menu", lay.menu == "story")
     _set(lay, "menu_title", title)
     _set(lay, "deleting", lay.asking == "delete")
@@ -452,12 +454,12 @@ def rename():
 ui.hook("opened", opened)
 ui.hook("moved", moved, takes="row")
 ui.action("open", "Open", open_card, takes="row")
-ui.action("present", "Present", present, keys=("p",), when="picked || page=view", off="grey")
-ui.action("open_story", "Open", open_story, when="picked", off="grey")
 ui.action("prev", "Previous slide", prev, keys=("role:left",), hint="Slides",
           when="page=view", off="hide")
 ui.action("next", "Next slide", next_, keys=("role:right",), hint="Slides",
           when="page=view", off="hide")
+ui.action("present", "Present", present, keys=("p",), when="picked || page=view", off="grey")
+ui.action("open_story", "Open", open_story, when="picked", off="grey")
 ui.action("close_menu", "Close", close_menu)
 ui.action("rename_ask", "Rename…", rename_ask)
 ui.action("duplicate", "Duplicate\tCtrl+D", duplicate)
@@ -539,7 +541,7 @@ def _editor():
 
 
 def build():
-    with ui.page(""):
+    with ui.page("", status="{band}"):
         ui.switch("page", {"stories": _stories, "view": _view, "editor": _editor})
         with ui.popover("story_menu", anchor="stories.cur", shown="menu", close="close_menu",
                         w="{@desk?260:180}", wash="page"):

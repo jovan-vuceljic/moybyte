@@ -24,3 +24,26 @@ def test_a_foots_grey_button_stays_in_it_dimmed():
     cols = {bytes(f.buf[(yy * f.w + xx) * 2:(yy * f.w + xx) * 2 + 2])
             for yy in range(y + h - 40, y + h) for xx in range(x + w - 160, x + w)}
     assert len(cols) > 3, "no button at the foot's end"
+
+
+def test_a_pages_status_leads_its_hints_band():
+    """status=: the page's words at the band's start, its keys after them."""
+    import uitree_c
+    import uitree_band_status as F
+    seen = {}
+
+    def opened(ws):
+        seen["ws"] = ws
+        seen["app"] = P.host(ws, F.layer(uitree_c.CEngine))
+
+    def band(f):
+        y0 = f.h - 20
+        return [bytes(f.buf[(y * f.w + x) * 2:(y * f.w + x) * 2 + 2])
+                for y in range(y0, f.h) for x in range(0, 64)]
+    with_words = band(P.frames("tdeck_320x240_fs1_dark", P.Surface(opened), ["idle:4"])[-1])
+    F.s._init["word"] = ""
+    try:
+        bare = band(P.frames("tdeck_320x240_fs1_dark", P.Surface(opened), ["idle:4"])[-1])
+    finally:
+        F.s._init["word"] = "View only"
+    assert with_words != bare, "the status words drew nothing at the band's start"

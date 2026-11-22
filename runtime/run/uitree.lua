@@ -1412,7 +1412,7 @@ function T.app(title, o)
   APP = { title = title, o = o, at = at }
 end
 
-local PAGE_OPTS = { title = 1, arg = 1 }
+local PAGE_OPTS = { title = 1, arg = 1, status = 1 }
 function T.page(name, build, o)
   local at = where()
   no_build("ui.page", at)
@@ -1429,7 +1429,8 @@ function T.page(name, build, o)
     if not PAGE_OPTS[k] then fail("N01", at, "ui.page takes no option " .. q(k), "title, arg", q(k)) end
   end
   if o.title ~= nil and type(o.title) ~= "string" then fail("N01", at, "the page " .. q(name) .. "'s title is " .. describe(o.title), "a template", describe(o.title)) end
-  PAGES[name] = { name = name, fn = build, title = o.title or "", arg = o.arg, at = at }
+  if o.status ~= nil and type(o.status) ~= "string" then fail("N01", at, "the page " .. q(name) .. "'s status is " .. describe(o.status), "a template", describe(o.status)) end
+  PAGES[name] = { name = name, fn = build, title = o.title or "", status = o.status, arg = o.arg, at = at }
   PAGE_ORDER[#PAGE_ORDER + 1] = name
 end
 
@@ -1441,6 +1442,7 @@ local function seal()
   for _, name in ipairs(PAGE_ORDER) do
     local p = PAGES[name]
     compile_tpl(p.title, false, p.at)
+    if p.status ~= nil then compile_tpl(p.status, false, p.at) end
     if p.arg ~= nil then
       local ty = DECL[p.arg]
       if type(p.arg) ~= "string" or not ty or ty.t ~= "rowof" then
@@ -2320,7 +2322,7 @@ end
 -- -- pages, the commit and the commands --------------------------------------------------
 
 local function build_page(p)
-  local root = setmetatable({ kind = "page", a = { p.def.title }, o = {}, kids = {}, at = p.def.at }, NodeMT)
+  local root = setmetatable({ kind = "page", a = { p.def.title }, o = { status = p.def.status }, kids = {}, at = p.def.at }, NodeMT)
   building = p.def.name
   local ok, err = pcall(run_body, root, p.def.fn)
   building = nil

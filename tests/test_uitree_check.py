@@ -56,6 +56,7 @@ PORTED = (
     "uitree_cards_pics",
     "uitree_cards_drawn",
     "uitree_foot_grey",
+    "uitree_band_status",
     "uitree_derive_sys",
     "calc_app",
     "getcarts_app",

@@ -2875,6 +2875,22 @@ int moy_ui_hints(const moy_ui_sink_t *s, moy_ui_box_t b, const uint8_t *items, s
 static int hints_in(const moy_ui_sink_t *s, moy_ui_box_t b, const uint8_t *items, size_t len,
                     int fs, int desk, int draw, int16_t *spans, int cap, int *end);
 
+int moy_ui_hints_status(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t t, int fs,
+                        int desk, int draw) {
+    if (s_keys == MOY_UI_INPUT_TOUCH || t.n == 0) {
+        return 0;
+    }
+    pd_t d;
+    open_pd(s, &d, fs, desk);
+    pf_t f = font_of(&d, MOY_UI_FONT_CAPTION);
+    int sc = tscale(s);
+    int x = b.x + MOY_UI_HINT_LEAD(d.desk) * d.fs;
+    int w = draw ? text(&d, &f, t.p, t.n, x, b.y, b.h,
+                        pal(&d, tok(&d, MOY_UI_T_CHROME_INK, MOY_UI_T_INK)), sc)
+                 : tw(&f, t.p, t.n, sc);
+    return w + pm(&d, MOY_UI_M_VALUE_ROW_HINT_GAP, 1);
+}
+
 // The pairs of a strip that fits `b`, its lead off both edges: `items` as
 // they are where they fit, else with the pair before the last dropped, then
 // the one before that, until they do (a copy on the stack, HINTS_MAX bytes).
