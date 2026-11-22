@@ -61,7 +61,7 @@ class PicEngine:
         if got is not None:
             self.cache[k] = self.cache.pop(k)       # the most recent last
             return got
-        if (pic, self._gen(pic)) not in self.failed and k not in self.owed:
+        if (pic, self.gen_of(pic)) not in self.failed and k not in self.owed:
             self.owed.append(k)
         return None
 
@@ -71,7 +71,7 @@ class PicEngine:
             return "none"
         if (pic, w, h) in self.cache:
             return "shown"
-        if (pic, self._gen(pic)) in self.failed:
+        if (pic, self.gen_of(pic)) in self.failed:
             return "failed"
         return "loading"
 
@@ -111,7 +111,7 @@ class PicEngine:
         except MemoryError:
             got = None
         if isinstance(got, str):
-            self.failed[(pic, self._gen(pic))] = got
+            self.failed[(pic, self.gen_of(pic))] = got
             self.stats["failed"] += 1
             _tr(self.app, "%r %dx%d failed: %s" % (pic, w, h, got))
             return True
@@ -148,12 +148,18 @@ class PicEngine:
         return True
 
     def forget_own(self, key):
+        """The app put own picture `key` again: its decoded pixels let go.
+        Answers whether any were held (a card showing them changes)."""
+        held = False
         for k in [k for k in self.cache if k[0].kind == "own" and k[0].key == key]:
             old = self.cache.pop(k)
             self.used -= old[2]
             _let_go(old)
+            held = True
+        return held
 
-    def _gen(self, pic):
+    def gen_of(self, pic):
+        """What moves with the picture's pixels: an app's own picture's puts."""
         return S.pictures.gen.get(pic.key, 0) if pic.kind == "own" else 0
 
     # -- decoders ----------------------------------------------------------------------

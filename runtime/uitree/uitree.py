@@ -189,6 +189,7 @@ class _Now:
     importing = None        # the Decl a module imported by the running handler is making (a board)
     load_move = False       # a LoadView moving its load's state
     collect = None          # the checker's list: a refused call is recorded and the run goes on
+    reads = None            # the states a canvas's draw may read (its reads=), while it draws
 
 
 _NOW = _Now()
@@ -747,6 +748,10 @@ class State:
                 raise e
             _NOW.collect.append(e)      # the checker's run goes on with the declared value
             return self._v[k]
+        r = _NOW.reads
+        if r is not None and k not in r:
+            raise UIError("R01", "a canvas draw reads s.%s, which its reads= does not list" % k,
+                          expected="reads=%r" % (list(r) + [k],), fix="add %r to the canvas's reads=" % k)
         if k in self._derive:
             return self._derive[k]()
         t = self._t[k]
@@ -2037,7 +2042,7 @@ SCHEMA = {
     "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit", w="int", h="int"),
     "panel": dict(_C),
     "canvas": dict(_C, draw="fn", h="int", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit",
-                   keys="fn", mark="lit", hint="text"),
+                   keys="fn", mark="lit", hint="text", reads="lit"),
     "foot": dict(_C, look="lit"),
     "scroll": dict(_C),
     "switch": dict(_C),
@@ -3338,8 +3343,8 @@ class Pictures:
             self.src[key] = ("bytes", bytes(data))
         self.gen[key] = self.gen.get(key, 0) + 1
         a = _NOW.app
-        if a is not None and getattr(a, "pics", None) is not None:
-            a.pics.forget_own(key)
+        if a is not None and getattr(a, "pics", None) is not None and a.pics.forget_own(key):
+            a.pics_let_go()
 
     def drop(self, key):
         self.src.pop(key, None)

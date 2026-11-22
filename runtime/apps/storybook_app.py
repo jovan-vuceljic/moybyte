@@ -266,6 +266,7 @@ s = ui.state(
     toast="",
     toast_icon="check",
     band="",                    # the hints band's status words: a handheld's story view is View only
+    view="",                    # what the view's canvas shows: the story, its edit, the slide
 )
 ui.app("Storybook", icon="storybook")
 
@@ -339,6 +340,8 @@ def fill(lay):
     page = "view" if lay.page == "view" else "editor" if lay.page in EDITOR else "stories"
     _set(lay, "page", page)
     _set(lay, "band", "View only" if page == "view" and not lay.desk else "")
+    st = lay.story
+    _set(lay, "view", "%s %d %d" % (st.name, st.gen, lay.cur) if page == "view" and st is not None else "")
     _set(lay, "menu", lay.menu == "story")
     _set(lay, "menu_title", title)
     _set(lay, "deleting", lay.asking == "delete")
@@ -533,7 +536,7 @@ def _stories():
 
 
 def _view():
-    ui.canvas("view", draw_view, h=190, pointer="view_at", ground="panel")
+    ui.canvas("view", draw_view, h=190, pointer="view_at", ground="panel", reads=["view"])
 
 
 def _editor():

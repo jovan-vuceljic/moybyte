@@ -468,10 +468,15 @@ local function no_read_in_build(what, at)
   end
 end
 
+local READS = nil               -- while a canvas draws: the states its reads= names, by name
 local function getv(k, at)
   local ty = DECL[k]
   if not ty then undeclared(k, at) end
   no_read_in_build(q(k), at)
+  if READS and not READS[k] then
+    fail("R01", at, "a canvas draw reads s." .. k .. ", which its reads does not list",
+         "reads = { ..., " .. q(k) .. " }", q(k), "add " .. q(k) .. " to the canvas's reads")
+  end
   if ty.derived then return DERIVED[k]() end
   local v = V[k]
   if ty.t == "record" then return v and frozen(v, k, ty) or nil end
@@ -2671,6 +2676,7 @@ T._in = {
   fail = fail, q = q, show = show, trace = trace, lookup = lookup, render = render, cond = cond, truthy = truthy,
   frozen = frozen, event = event, setv = setv, fire = fire, fire_placed = fire_placed, fire_fn = fire_fn, build_page = build_page, page_title = page_title,
   model_of = model_of, touched = touched, bump = function() GEN = GEN + 1 end,
+  reading = function(r) READS = r end,
 }
 
 ui = T

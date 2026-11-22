@@ -2038,6 +2038,21 @@ moy_ui_box_t mua_floor_of(const moy_ui_ctx_t *c, moy_ui_box_t b) {
     return met;
 }
 
+moy_ui_box_t mua_pic_clip(const moy_ui_ctx_t *c, moy_ui_box_t b) {
+    moy_ui_box_t f = mua_armed(c) && c->fl.stage == 1 ? mua_floor_of(c, b) : c->page;
+    if (f.w <= 0 && f.h < 0) {
+        return f;                       // a shift frame's floor holds none of it
+    }
+    if (f.w <= 0) {
+        return c->page;                 // nothing of the floor's says: all it shows of the page
+    }
+    rc_t q = mua_rc_of(f);
+    if (!mua_rc_cut(&q, mua_rc_of(c->page))) {
+        return (moy_ui_box_t){0, 0, 0, -1};
+    }
+    return mua_box_of(q);
+}
+
 // A picture in box b this frame's pass leaves as the move left it: inside R
 // on a shift frame, and no rect of the floor reaches it.
 int mua_outside_floor(const moy_ui_ctx_t *c, moy_ui_box_t b) {
@@ -4043,7 +4058,7 @@ void moy_ui_api_part(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, 
         }
     }
     int none = mua_outside_floor(c, b);
-    c->pic_clip = mua_floor_of(c, b);
+    c->pic_clip = mua_pic_clip(c, b);
     c->pic_tbl = 0;
     out[0] = none ? 0 : b.x;
     out[1] = none ? 0 : b.y;

@@ -1138,12 +1138,12 @@ grep. Pinned by `tests/test_shift_frames.py` (the engine: drags, flings,
 glides, every move size, the clamps, a gen moving mid-fling, a cover landing,
 overlays, a theme change, a gap, a deferred copy landing at the fence),
 `tests/test_shift_apps.py` (Settings and its pages, My Art, Get Carts,
-Files and Appearance on the full-screen console, a declared copy
+Files, Storybook and Appearance on the full-screen console, a declared copy
 cost, and a change to what a page shows made with no mark of the app's),
 `tests/test_wm_records.py` (every app on the verbs in a desk window, the
 Waveshare P4's desk, windows overlapping, a focus change and a move
 mid-coast, a popover and the system menu's scrim over a glide, and each
-change Files and Appearance must move their gens for),
+change Files, Storybook and Appearance must move their gens for),
 `tests/test_home_band.py` (the home's band: grid, icons and carousel,
 handheld and desk, on plain, backdrop and picture themes) and
 `tests/test_dialog_rows.py` (the Editor's dialogs typed into and moved

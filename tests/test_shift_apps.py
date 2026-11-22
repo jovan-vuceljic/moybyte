@@ -163,6 +163,8 @@ def _console(tmp_path, app, ships, desk=False, chip=False, big=False):
         app_._inst = _SameFree(app_._inst)
         assert ws.spine.open_app(app_) is not False
     else:
+        if app == "storybook":
+            seed_stories(ws)
         app_ = ws.app(app)
         assert ws.spine.open_app(app_) is not False
         if app == "files":
@@ -295,9 +297,8 @@ class Pair:
 
 # Get Carts (`getcarts`, set up in Pair above) is an app_layer page, which
 # draws no shift frames yet: it rejoins when the engine gives them one.
-# Storybook's page holds a canvas (a story's view), which takes the page's
-# gen: it rejoins when a canvas can name the states it draws.
-APPS = ("settings", "licences", "achievements", "log", "myart", "files", "appearance")
+APPS = ("settings", "licences", "achievements", "log", "myart", "files", "storybook",
+        "appearance")
 
 
 @pytest.mark.parametrize("bufs", (1, 2, 3))
@@ -522,6 +523,73 @@ class _NoMark:
 def _app(ws, app):
     a = ws.app(app)
     return getattr(a, "_inst", a)
+
+
+def _shown_story(sb):
+    """The story whose card shows most and holds no focus: the frames after
+    a change to it move its pixels unless its gen moves."""
+    x, y, w, h = sb._surf.content_rect()
+    cur = sb.state().cur
+    best, most = None, 0
+    for e in sb.stories:
+        b = sb._ui.box(e["name"] + "/open")
+        if b is None or e["name"] == cur:
+            continue
+        shows = min(b[1] + b[3], y + h) - max(b[1], y)
+        if shows > most:
+            best, most = e, shows
+    assert best is not None, "no story's card shows"
+    return best
+
+
+def _story_renamed(ws):
+    sb = _app(ws, "storybook")
+    sb._menu_story = _shown_story(sb)
+    sb.typed = "Renamed"
+    sb._rename_done()
+
+
+def _story_turned(ws):
+    """Storybook: a shown story's first page turned over, another slide
+    first; the app's next frame fills its page."""
+    from runtime import story_doc as D
+    sb = _app(ws, "storybook")
+    e = _shown_story(sb)
+    doc = D.copy(e["doc"])
+    doc["slides"].insert(0, D.layout_slide("blank", 9))
+    e["doc"] = doc
+    sb.fill_owed = True
+
+
+CHANGES = {"story renamed": ("storybook", _story_renamed),
+           "story page turned": ("storybook", _story_turned)}
+
+
+@pytest.mark.parametrize("bufs", (1, 2, 3))
+@pytest.mark.parametrize("change", sorted(CHANGES))
+def test_a_change_the_page_shows_moves_its_gen(tmp_path, change, bufs):
+    """What a page shows changed with no mark of the app's: the page's gen
+    moves, so the frames after it draw it again, not the last frame's pixels
+    moved."""
+    app, fn = CHANGES[change]
+    p = Pair(tmp_path, app, bufs)
+    lay = p.a.layout
+    p.drag(lay.cx + lay.cw // 2, lay.cy + lay.ch * 3 // 4, -lay.ch, steps=3)
+    p.settle()
+    for ws in (p.a, p.b):
+        a = _app(ws, app)
+        d = a._damage
+        a._damage = _NoMark(d)
+        try:
+            fn(ws)
+        finally:
+            a._damage = d
+    for _ in range(3):
+        p.frame()
+    p.settle()
+    p.keys("down", 2)
+    p.keys("up", 1)
+    p.settle()
 
 
 # The Editor's tabs on the verbs (docs/history/scroll_and_text_2026-10.md §15 P5).

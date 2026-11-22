@@ -327,10 +327,8 @@ class Pair:
 
 APPS = ("settings", "licences", "achievements", "myart", "getcarts", "files",
         "storybook", "appearance", "calc")
-# Storybook's page holds a canvas (a story's view), which takes the page's
-# gen: its frames are whole repaints until a canvas can name the states it draws.
 SHIFTS = ("settings", "licences", "achievements", "myart", "getcarts", "files", "calc",
-          "appearance")
+          "storybook", "appearance")
 
 
 @pytest.mark.parametrize("bufs", (1, 2, 3))
@@ -383,7 +381,7 @@ def _files_list(p):
 # The Waveshare P4's desk: what each app's pages show on it, every frame's
 # change byte for byte against whole repaints. Licences' list is the desk's
 # scroll region beside the text (the handheld's is a page of its own).
-P4_APPS = ("licences", "files", "appearance")
+P4_APPS = ("licences", "files", "storybook", "appearance")
 
 
 @pytest.mark.parametrize("bufs", (1, 2, 3))
@@ -467,6 +465,53 @@ def _file_deleted(ws):
     f._act("DEL")
 
 
+def _shown_story(sb):
+    """The story whose card shows most and holds no focus: the frames after
+    a change to it move its pixels unless its gen moves."""
+    x, y, w, h = sb._surf.content_rect()
+    cur = sb.state().cur
+    best, most = None, 0
+    for e in sb.stories:
+        b = sb._ui.box(e["name"] + "/open")
+        if b is None or e["name"] == cur:
+            continue
+        shows = min(b[1] + b[3], y + h) - max(b[1], y)
+        if shows > most:
+            best, most = e, shows
+    assert best is not None, "no story's card shows"
+    return best
+
+
+def _story(ws):
+    return _shown_story(_inst(ws, "StorybookAppLayer"))
+
+
+def _story_added(ws):
+    from runtime import story_doc as D, moy_carts
+    sb = _inst(ws, "StorybookAppLayer")
+    doc = D.new_doc("A new story")
+    moy_carts.save_file("stories", "zz/story.json", D.write(doc), ws.carts_root)
+    sb._scan()
+
+
+def _story_renamed(ws):
+    sb = _inst(ws, "StorybookAppLayer")
+    sb._menu_story = _story(ws)
+    sb.typed = "Renamed"
+    sb._rename_done()
+
+
+def _story_turned(ws):
+    """The focused story's first page turned over: another slide first."""
+    from runtime import story_doc as D
+    sb = _inst(ws, "StorybookAppLayer")
+    e = _story(ws)
+    doc = D.copy(e["doc"])
+    doc["slides"].insert(0, D.layout_slide("blank", 9))
+    e["doc"] = doc
+    sb.fill_owed = True
+
+
 def _theme_changed(ws):
     a = _inst(ws, "AppearanceAppLayer")
     a._theme.set("machine" if a._ch["theme"] != "machine" else "moy")
@@ -479,7 +524,9 @@ def _accent_changed(ws):
 
 
 CHANGES = {"file added": ("files", _file_added), "file renamed": ("files", _file_renamed),
-           "file deleted": ("files", _file_deleted),
+           "file deleted": ("files", _file_deleted), "story added": ("storybook", _story_added),
+           "story renamed": ("storybook", _story_renamed),
+           "story page turned": ("storybook", _story_turned),
            "theme changed": ("appearance", _theme_changed),
            "accent changed": ("appearance", _accent_changed)}
 
@@ -502,12 +549,15 @@ class _NoMark:
         pass
 
 
-_CLS = {"files": "FilesAppLayer", "appearance": "AppearanceAppLayer"}
+_CLS = {"files": "FilesAppLayer", "storybook": "StorybookAppLayer",
+        "appearance": "AppearanceAppLayer"}
 
 
 def _gen(ws, app):
     if app == "files":
         return _inst(ws, "FilesAppLayer").engine.gens()
+    if app == "storybook":
+        return _inst(ws, "StorybookAppLayer").engine.gens()
     return _inst(ws, "AppearanceAppLayer")._page_o["gen"]
 
 

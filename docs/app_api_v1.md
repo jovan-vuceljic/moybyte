@@ -262,7 +262,10 @@ as `ev.row`; a compiled app's draw asks `ut_canvas_row()` for the row's
 index), `ui.colors()` answers the theme's colours there, its `hint=` is the
 band's confirm word while it holds focus, and its `pointer=` is handed a
 press and its drag and release in its own
-coordinates on any page. A foot of `look="band"` lies edge to edge on the
+coordinates on any page. Its `reads=` names the states its draw reads (a
+read of another is R01): the page's gen then counts them, so the page keeps
+its shift frames where a canvas that names none draws the frame after it
+whole. A foot of `look="band"` lies edge to edge on the
 alternate surface under a rule, its rows as tall as their tallest canvas
 (Music's strip). `runtime/apps/music_app.py` draws what plays this way.
 `system_carts/moybyte.notes.moy` is the example, and

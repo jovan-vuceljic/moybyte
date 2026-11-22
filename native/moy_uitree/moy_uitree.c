@@ -1260,6 +1260,15 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= CV_KEYS;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
+    if (kind == UIT_CANVAS && !strcmp(name, "reads")) {
+        // a state its draw reads, one prop each: what it draws is a function of these (CV_READS),
+        // so the page's gen counts them and a frame after it drew may carry one
+        int sl = uit_slot_find(e, src, strlen(src));
+        if (sl < 0)
+            return uit_fail(e, UIT_E_NAME, UIT_MSG("canvas reads=%s: no state of that name", "canvas reads=%s"), src);
+        N->lit |= CV_READS;
+        return add_prop(e, node, name, src, repr, PK_LIT, sl);
+    }
     if (kind == UIT_CANVAS && !strcmp(name, "mark")) {
         // mark=False: a keys= canvas draws no ring while it holds focus (what it hosts marks it)
         if (src[0] == 'F' || src[0] == '0')
@@ -1744,7 +1753,7 @@ static void mark_node(const uit_t *e, int k, uint8_t *m, int cur, int hint_only)
             mark_tmpl(e, P->idx, m);
         else if (P->kind == PK_COND)
             mark_cond(e, P->idx, m);
-        else if (P->kind == PK_LIT && !strcmp(name, "current") && P->idx >= 0)
+        else if (P->kind == PK_LIT && (!strcmp(name, "current") || !strcmp(name, "reads")) && P->idx >= 0)
             m[P->idx] = 1;
     }
     if (hint_only)
@@ -1809,8 +1818,8 @@ int32_t uit_cell_gen(uit_t *e, int k)
 // `uit_cell_gen`; a lines view's rows are its view record's, moy_ui_api_text_view) and
 // those only a list's
 // cur= names (focus, which the toolkit draws); and whether it may carry one: no text of the build
-// names an engine value and no legacy node draws what no state says (a canvas does too: a frame
-// after one drew carries none, `gen_ok`).
+// names an engine value and no legacy node draws what no state says (a canvas does too, but for
+// one that names its states, reads=: a frame after one drew carries none, `gen_ok`).
 static void gen_of_build(uit_t *e)
 {
     e->gen_safe = e->nslots <= UIT_GEN_SLOTS;

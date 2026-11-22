@@ -191,6 +191,7 @@ class CEngine(Engine):
         self._slot, self._names, self._types, self._pushed = {}, [], [], {}
         self.direct = BUILD == "direct"
         self._draws, self._drawing = {}, False
+        self._reads = {}                # a canvas's node -> the states its draw may read (reads=)
         self._canvas_keys = {}          # a canvas's key -> (its keys= function, the model of the list it stands in or None)
         self._grounds = {}      # a canvas's ground= role, by its node
         self._docs = {}         # a document's state -> what it was pushed at (`_push_doc`)
@@ -598,6 +599,7 @@ class CEngine(Engine):
         x.build_begin(self._page_id())
         draws = self._draws = {}
         self._canvas_keys = {}
+        self._reads = {}
         if not self._drawing:
             x.on_draw(self._draw)
             x.on_pic(self._pic)
@@ -690,6 +692,16 @@ class CEngine(Engine):
                     r = cprop(me, "keys", getattr(src, "__name__", "keys"), None)
                     if r < 0:
                         fail(r, "canvas %s keys=" % n.key, n.where)
+                    continue
+                if k == "reads" and nk == "canvas":        # one prop a state its draw reads
+                    if isinstance(src, str) or not isinstance(src, (list, tuple)):
+                        raise S.UIError("N01", "ui.canvas %s reads= is a list of state names" % n.key,
+                                        where=n.where, found=repr(src), fix="reads=[%r]" % (src,))
+                    for name in src:
+                        r = cprop(me, "reads", name, None)
+                        if r < 0:
+                            fail(r, "canvas %s reads=%r" % (n.key, name), n.where)
+                    self._reads[me] = tuple(src)
                     continue
                 if k == "draw" and nk == "canvas":         # the front end's function: called inside the frame
                     draws[me] = src
@@ -804,7 +816,7 @@ class CEngine(Engine):
                 tuple((node, te.key, tuple(te.l.items()), te.conds) for node, te in self._editors.items()),
                 tuple((node, m.kind, m.key, m.parent.aux if m.parent is not None else -1, tuple(m.where),
                        lits(m.src), lits(m.l)) for node, m in stand),
-                tuple(keys))
+                tuple(keys), tuple(self._reads.items()))
 
     def unfront(self, f):
         """`front`'s literals made again into what lowering leaves the front end."""
@@ -814,6 +826,7 @@ class CEngine(Engine):
             return v if d == 0 else dict(v) if d == 1 else getattr(mod, v)
         self._pointers = [(k, acts[a], m) for k, a, m in f[0]]
         self._canvas_keys = dict((k, (_fn_at(mod, n), m)) for k, n, m in f[6])
+        self._reads = dict(f[7])
         self._pop_lists = dict((k, (m, c)) for k, m, c in f[1])
         self._pop_fields = dict(f[2])
         self._doc_reads = dict(f[3])
@@ -836,6 +849,7 @@ class CEngine(Engine):
         now = S._NOW
         app, frame = now.app, now.frame       # two names, not a tuple: a frame allocates nothing
         now.app, now.frame = self, True
+        now.reads = self._reads.get(node)
         try:
             g = self._grounds.get(node)
             if g:
@@ -846,6 +860,7 @@ class CEngine(Engine):
                 self._draws[node](self.cv, x, y, w, h)
         finally:
             now.app, now.frame = app, frame
+            now.reads = None
 
     def query(self, name, *a):
         """What a handler or a canvas's draw asks: the theme's colours, the
@@ -855,16 +870,17 @@ class CEngine(Engine):
         return Engine.query(self, name, *a)
 
     def _pic(self, node, pic, r):
-        """A card's or a picture's image (`uit_on_pic`): with no tile, whether
-        the picture is decoded at the size the node's unfocused tile last
-        had; with one, drawn there clipped, or owed to the idle step."""
+        """A card's or a picture's image (`uit_on_pic`): with no tile, 0 where
+        the picture is not decoded at the size the node's unfocused tile last
+        had, else its gen (which moves with its pixels, a put's); with one,
+        drawn there clipped, or owed to the idle step."""
         p = self._pic_of.get(pic)
         if p is None:
             kind, _c, key = pic.partition(":")
             p = self._pic_of[pic] = S.Pic(kind, key)
         wh = self._pic_wh.get(node)
         if r is None:
-            return wh is not None and self.pics.state(p, wh[0], wh[1]) == "shown"
+            return self.pics.gen_of(p) + 1 if wh is not None and self.pics.state(p, wh[0], wh[1]) == "shown" else 0
         if not r[8] and (wh is None or wh[0] != r[2] or wh[1] != r[3]):
             wh = self._pic_wh[node] = (r[2], r[3])
         got = self.pics.peek(p, wh[0], wh[1]) if wh is not None else self.pics.peek(p, r[2], r[3])

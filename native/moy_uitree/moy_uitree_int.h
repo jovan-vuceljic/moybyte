@@ -145,8 +145,9 @@ enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8 };
 // A tools row lent to a site (`lit`); a button drawn as its icon alone (`btn`).
 enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2 };
 enum { RW_MID = 1, RW_GROW = 2 };   // a row's lit: centred on the row it is a cell of; a fill of its stack
-enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4 };  // a canvas's lit: a fill along a row, its w= a basis; a stop whose
-                                                  // keys are its keys='s; such a stop with no ring (mark=False)
+enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4, CV_READS = 8 };  // a canvas's lit: a fill along a row, its w= a
+                                                  // basis; a stop whose keys are its keys='s; such a stop with no
+                                                  // ring (mark=False); one that names the states it draws (reads=)
 enum { SP_ALIGN = 3, SP_RULE = 16 };   // a split's lit: its align= index; rule=True
 enum { LT_WORD = 1, LT_CHAR = 2, LT_WRAP = 3, LT_FACE_SHIFT = 2, LT_ALIGN_SHIFT = 5, LT_LINES = 256,
        LT_FIT = 512,       // size="fit": its face only where its text fits the page's width
