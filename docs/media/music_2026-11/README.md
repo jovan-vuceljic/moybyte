@@ -227,9 +227,10 @@ is a `uitree` page the C engine lays out in its one look (owner, 2026-11-21:
 of two looks the one needing less code wins), so it differs from the renders
 in these places:
 - Its process kind is `jukebox`: `music` is the Editor's Music tab.
-- Radio and My music are tables (Station and Style, Name and Length). The
-  row that plays says Playing, Paused, Connecting... or Not answering in its
-  right column; there is no equalizer, pulse or art in a row.
+- Radio and My music are rows in a scroll, each its name and, on the
+  right, its style or length. The row that plays says Playing, Paused,
+  Connecting... or Not answering there; there is no equalizer, pulse or art
+  in a row.
 - What plays is a foot under either list: the main button and a button with
   the state glyph and the title, which opens Now playing. A page with
   nothing playing shows an empty foot.

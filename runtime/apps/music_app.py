@@ -710,7 +710,9 @@ def _playing_row(rows):
 
 
 def _focus_list():
-    ui.focus("songs" if s.tab == "files" else "stations")
+    cur = s.fcur if s.tab == "files" else s.scur
+    if cur:
+        ui.focus(cur + "/pick")
 
 
 def opened():
@@ -861,19 +863,21 @@ def _strip(wifi=False):
         ui.button("now", icon="{mark}", label="{title}")
 
 
+def _list(model, cur, shown):
+    with ui.scroll(model + "_view", shown=shown):
+        with ui.rows(model, cur=cur):
+            ui.link("pick", "{.right}", label="{.name}")
+
+
 def _radio():
-    with ui.table("stations", cols=("Station", "Style"), cur="scur", on="pick", hint="Play", shown="online"):
-        ui.col("{.name}")
-        ui.col("{.right}")
+    _list("stations", "scur", "online")
     ui.empty("Radio needs Wi-Fi", icon="wifi_off", shown="!online",
              lines=["Turn on Wi-Fi to listen to stations.", "Your own music plays without it."])
     _strip(wifi=True)
 
 
 def _files():
-    with ui.table("songs", cols=("Name", "Length"), cur="fcur", on="pick", hint="Play", shown="folder=some"):
-        ui.col("{.name}")
-        ui.col("{.right}")
+    _list("songs", "fcur", "folder=some")
     ui.empty("No SD card", icon="folder", shown="folder=nosd",
              lines=["Put in an SD card with your songs on it.", "Radio plays without one."])
     ui.empty("No music yet", icon="music", shown="folder=empty",

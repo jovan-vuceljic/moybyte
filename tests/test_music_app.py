@@ -274,7 +274,7 @@ def test_enter_on_add_a_station_types_into_its_address(tmp_path, face, desk):
     drv = make_drv(ws)
     _settle(ws)
     _put(app, scur=M.ADD)                           # the Add a station row
-    app.page_host().focus("stations")
+    app.page_host().focus(M.ADD + "/pick")
     for code in (13, "http://a.example/live", 13, "Test FM", 13):
         if code == 13:
             drv.key_down(13)
