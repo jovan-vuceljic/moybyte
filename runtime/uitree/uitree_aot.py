@@ -11,8 +11,9 @@ function of its module's code alone, and the variant key is empty (`VARIANT`).
 `BLOBS` maps a page ("module.function") to its blob: the image's frozen
 `uitree_pages` module where one was staged, else none, and a page with no
 blob builds on the device as before. The frozen module holds each blob with
-its front already read (`entry`): a frozen tuple of names is ROM on a
-board, where reading the blob's front would allocate a string a name.
+its front already read (`entry`), every part of it a constant: a frozen
+constant is ROM on a board, where reading the blob's front would allocate
+a string a name, and the dicts a load binds by are made by the load.
 """
 
 import sys
@@ -60,12 +61,21 @@ DOC = "#doc"        # a document's hidden model: its state's name and this (uitr
 
 def entry(blob):
     """A page's entry as the frozen module holds it: (blob, state names,
-    their type codes, action names, {node: draw}, {node: ground}, the rest
-    of the front end's literals (`CEngine.front`), the slots' orders
-    (`orders`), then `tables`' four), every part made on the host, the
-    dicts once when the image imports it."""
+    their type codes, action names, (node, draw) pairs, (node, ground)
+    pairs, the rest of the front end's literals (`CEngine.front`), the
+    slots' orders (`orders`)), every part a constant made on the host, so
+    an image keeps it in flash (`constant`)."""
     f = front_of(blob)
-    return (bare(blob), tuple(f["S"]), f["T"], tuple(f["A"]), f["D"], f["G"], f["X"], f["O"]) + tables(f)
+    return (bare(blob), tuple(f["S"]), f["T"], tuple(f["A"]), tuple(sorted(f["D"].items())),
+            tuple(sorted(f["G"].items())), f["X"], f["O"])
+
+
+def constant(v):
+    """Whether `v` is what a frozen module holds as a constant: a tuple of
+    constants, text, bytes, a number, a bool or None."""
+    if type(v) is tuple:
+        return all(constant(x) for x in v)
+    return v is None or type(v) in (str, bytes, int, float, bool)
 
 
 def _put32(b, at, v):
@@ -189,13 +199,12 @@ def load(eng, x, blob):
     loaded) where the blob is not this page's, this engine's or this
     module's."""
     if type(blob) is tuple:
-        f = {"S": blob[1], "T": blob[2], "A": blob[3], "D": blob[4], "G": blob[5], "X": blob[6], "O": blob[7]}
-        tb = blob[8:]
+        f = {"S": blob[1], "T": blob[2], "A": blob[3], "D": dict(blob[4]), "G": dict(blob[5]),
+             "X": blob[6], "O": blob[7]}
         blob = blob[0]
     else:
         f = front_of(blob)
-        tb = tables(f)
-    _load(eng, x, blob, f, tb)
+    _load(eng, x, blob, f, tables(f))
 
 
 # a scalar's store type, by the type object (`ctype` for the rest)
@@ -241,7 +250,7 @@ def _load(eng, x, blob, f, tb):
     r = x.load(blob, eng._page_id(), VARIANT)
     if r < 0:
         raise Refused(x.error())
-    eng._slot, eng._aidx = slot, aidx         # read only: the entry's, made once
+    eng._slot, eng._aidx = slot, aidx
     eng._names = list(names)
     eng._types = types
     eng._docs = dict((d, [-1] * 8) for d in docs)

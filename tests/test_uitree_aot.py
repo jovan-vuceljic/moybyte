@@ -297,6 +297,8 @@ def test_staging_compiles_the_staged_pages_and_names_a_stale_one(compiled, tmp_p
     exec((mods / "uitree_pages.py").read_text(), ns)
     blobs = dict((k, v[0]) for k, v in ns["PAGES"].items())
     assert set(blobs) == set(UC.compile_modules(MODULES).pages)
+    # every entry a constant, so a board keeps it in flash and its heap only the dict of them
+    assert [k for k, v in ns["PAGES"].items() if not uitree_aot.constant(v)] == []
     paths = dict((m, str(mods / (m + ".py"))) for m in MODULES)
     assert UC.stale(blobs, paths) == []
     with open(mods / "tasks_ui.py", "a") as f:
