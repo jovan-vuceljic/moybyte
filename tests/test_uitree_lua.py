@@ -125,6 +125,26 @@ def test_a_focus_on_no_node_stops_the_run_at_its_line(tmp_path):
     assert err and "error[N08] main.lua:2:" in err, err
 
 
+def test_a_focus_on_a_key_two_shown_nodes_have_stops_the_run_at_its_line(tmp_path):
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Twice", 'ui.app("Twice", { icon = "calc" })\n'
+                          'ui.action("go", "Go", function() end)\n'
+                          'ui.action("jump", "Jump", function() ui.focus("go") end)\n'
+                          'ui.hook("opened", function() ui.after(100, "jump") end)\n'
+                          'ui.page("p", function()\n'
+                          '  ui.group("A", function() ui.link("go") end)\n'
+                          '  ui.group("B", function() ui.link("go") end)\n'
+                          'end)\n')
+    ws, drv, frame, open_cart = _console(carts)
+    open_cart(ws, "Twice")
+    for _ in range(20):
+        frame()
+    err = ws.run.player.cart_error
+    assert err and "error[N08] main.lua:3:" in err and "two shown nodes are keyed go" in err, err
+
+
 def test_an_anchor_on_no_node_stops_the_run_at_the_popover(tmp_path):
     from runtime import host_app
     carts = str(tmp_path / "carts")

@@ -198,13 +198,13 @@ static void id_put(uit_t *e, int k, int model, int row, const char *id)
 {
     uit_id_t *I = id_find(e->ids, e->nids, id);
     if (I) {
-        if (I->node != k)
-            e->dup = 1;
+        I->dup |= I->node != k;
     } else {
         if (uit_grow((void **)&e->ids, &e->cids, e->nids + 1, sizeof *e->ids))
             return;
         I = &e->ids[e->nids++];
         strcpy(I->id, id);
+        I->dup = 0;
     }
     I->node = (int16_t)k;
     I->row = (int16_t)row;
@@ -4632,7 +4632,6 @@ ids:;
     e->ids = t;
     e->cids = tc;
     e->nids = 0;
-    e->dup = 0;
     char ahead[UIT_ID_MAX + 1];
     int moved = land_focus(e, c, ahead);
     e->tv_stop_now = 0;

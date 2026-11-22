@@ -75,8 +75,8 @@ NO_PAIR = {
            "tests/test_uitree_codes.py (Python) and tests/test_uitree_lua.py (Lua)",
     "N06": "Lua raises it in a frame, for a popover's anchor no drawn node has (cased on the console in "
            "tests/test_uitree_lua.py); Python's anchor is checked at its own stage: no checker run reaches both",
-    "N08": "Lua raises it in a frame (cased on the console in tests/test_uitree_lua.py), Python at run for "
-           "two shown nodes of one key: no checker run reaches either",
+    "N08": "raised at a frame after a handler's ui.focus, which no checker run fires; cased in "
+           "tests/test_uitree_c_run_codes.py (Python) and tests/test_uitree_lua.py (Lua)",
     "D04": "Lua's checker raises it for a cart with no app declaration; Python's at hosting "
            "(uitree_app.app_layer with no title), which its checker never reaches: a Python module "
            "is not an app until something hosts it",

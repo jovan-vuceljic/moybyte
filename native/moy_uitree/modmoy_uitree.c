@@ -259,8 +259,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(eng_close_obj, eng_close);
 
 static mp_obj_t eng_want_focus(mp_obj_t self, mp_obj_t key)
 {
-    uit_want_focus(eng(self), CSTR(key));
-    return mp_const_none;
+    return MP_OBJ_NEW_SMALL_INT(uit_want_focus(eng(self), CSTR(key)));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eng_want_focus_obj, eng_want_focus);
 

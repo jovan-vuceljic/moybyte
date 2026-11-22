@@ -1894,7 +1894,8 @@ def focus(key=None):
     if key is None:
         raise UIError("N04", "ui.focus() reads nothing back",
                       fix="@focus in a template, or a list's cur= state")
-    _command("focus").want_focus = key
+    a = _command("focus")
+    a.want_focus, a.focus_at = key, _caller()
 
 
 # -- the tree -----------------------------------------------------------------
@@ -2979,6 +2980,7 @@ class Builder:
         self.input = "keys"             # @input: the engine's replay sets it each frame
         self.focus_key = ""
         self.want_focus = None
+        self.focus_at = None            # where the handler's ui.focus stands (N08 names it)
         self.trace = collections.deque((), 200)
 
     def _build(self):

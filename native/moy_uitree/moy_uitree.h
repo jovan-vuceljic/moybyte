@@ -28,7 +28,7 @@ enum {
     UIT_E_KIND = -3,        // a kind or prop this engine does not draw
     UIT_E_NOMEM = -4,
     UIT_E_ARG = -5,         // a handle out of range, a value of the wrong type
-    UIT_E_CHECK = -6,       // a mistake the spec names (T01-T05, C01-C02, N04): `uit_error_code`
+    UIT_E_CHECK = -6,       // a mistake the spec names, its code `uit_error_code`
     UIT_E_BLOB = -7,        // a compiled page this engine does not read (`uit_load`)
 };
 
@@ -149,8 +149,9 @@ int uit_build_end(uit_t *e);
 // over; a page the store keeps from the last visit draws as a fresh build.
 void uit_open(uit_t *e);
 // Focus goes to node `key` (or ROWKEY/KEY) in the next frame (a push's
-// return, ui.focus); NULL clears it.
-void uit_want_focus(uit_t *e, const char *key);
+// return, ui.focus); NULL clears it. UIT_E_CHECK (N08), nothing kept, where
+// two nodes the last frame drew are keyed `key`.
+int uit_want_focus(uit_t *e, const char *key);
 
 // -- the placed layout ----------------------------------------------------------
 // The page is placed (1) or flows (0, the default). A placed page's children

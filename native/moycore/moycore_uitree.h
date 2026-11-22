@@ -292,8 +292,8 @@ static int l_uit_close(lua_State *L)
 static int l_uit_want_focus(lua_State *L)
 {
     uit_t *e = moycore_uit(L);
-    uit_want_focus(e, moycore_uit_opt(L, 2));
-    return 0;
+    lua_pushinteger(L, uit_want_focus(e, moycore_uit_opt(L, 2)));
+    return 1;
 }
 
 /* A canvas's draw, called by the walk inside the frame: on_draw's function

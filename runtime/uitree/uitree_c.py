@@ -78,7 +78,7 @@ E_GAP = -3                  # UIT_E_KIND: what this engine does not draw yet
 # "checked": `uitree.Builder` compiles and checks them first, as the
 # host's checker does.
 BUILD = "direct"
-# each code C's compiler raises, with the fix the contract gives it
+# each code C raises (its compiler, `uit_want_focus`), with its fix
 FIXES = {"T01": "the template's syntax: {name}, {name|fmt %d}, {cond?a:b}; '{{' for a brace, '\\:' for a colon "
                 "in a branch",
          "T02": "name a declared state, a field of the rows, a system value or a label table",
@@ -88,7 +88,8 @@ FIXES = {"T01": "the template's syntax: {name}, {name|fmt %d}, {cond?a:b}; '{{' 
          "C01": 'a bare condition: shown="on", "!busy", "mode=edit", "a && !b"; and is &&, or is ||',
          "C02": "a condition needing && and || is a derive, named here",
          "C03": "a condition with brackets is a derive, named here",
-         "N04": "a size class: @wide, @desk, @tall, @handheld"}
+         "N04": "a size class: @wide, @desk, @tall, @handheld",
+         "N08": "a key one shown node has: key the two apart, or show one at a time"}
 
 
 class _TextEditor:
@@ -753,8 +754,9 @@ class CEngine(Engine):
         self._ready()
         x = self._x
         if self.want_focus is not None:
-            x.want_focus(self.want_focus)
-            self.want_focus = None
+            w, at, self.want_focus, self.focus_at = self.want_focus, self.focus_at, None, None
+            if x.want_focus(w) < 0:
+                self._fail(E_CHECK, "ui.focus(%r)" % w, at)
         kind = _v.input_kind()
         self.input = kind if kind in S.INPUTS else "keys"
         t = _D.UI_TARGET

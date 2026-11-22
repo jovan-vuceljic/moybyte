@@ -53,7 +53,7 @@ _SIGS = (
     ("uit_build_end", [_P], _I),
     ("uit_open", [_P], None),
     ("uit_close", [_P], None),
-    ("uit_want_focus", [_P, _S], None),
+    ("uit_want_focus", [_P, _S], _I),
     ("uit_set_placed", [_P, _I], None),
     ("uit_set_ground", [_P, _I, _I, _I, _I], None),
     ("uit_set_legacy_hints", [_P, _S, _Z], None),
@@ -288,7 +288,7 @@ class Engine:
         self._L.uit_open(self._e)
 
     def want_focus(self, key):
-        self._L.uit_want_focus(self._e, b(key) if key is not None else None)
+        return self._L.uit_want_focus(self._e, b(key) if key is not None else None)
 
     def frame(self, ctx, cv, look, x, y, w, h, flags, fs, inp):
         L = self._L
