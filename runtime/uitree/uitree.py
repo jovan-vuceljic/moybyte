@@ -186,6 +186,7 @@ class _Now:
     frame = False           # a replay is running (canvas draws read, never write)
     app = None              # the app building, replaying or running a handler
     action = None           # the action whose handler runs
+    importing = None        # the Decl a module imported by the running handler is making (a board)
     load_move = False       # a LoadView moving its load's state
     collect = None          # the checker's list: a refused call is recorded and the run goes on
 
@@ -1000,15 +1001,20 @@ def decl_of(module):
         raise UIError("S01", "module %s declares no state" % name, where=(name, 0),
                       expected="an app module calls s = ui.state(...) once, before its actions",
                       fix="s = ui.state(...) at the top of %s" % name)
+    if _NOW.importing is d:
+        _NOW.importing = None   # hosted: the handler's own calls are its app's again
     return d
 
 
 def _d():
-    """The declaration in force: the app running, else the calling module's
+    """The declaration in force: the app running (a module its handler
+    imports declares into its own), else the calling module's
     (on a board, the one declared last)."""
     if _NOW.app is not None:
         # a module's top level declares into its own, even when a handler of
         # another app imports it
+        if _frame is None:
+            return _NOW.importing or _NOW.app.decl
         f = _caller_frame()
         d = _DECLS.get(f.f_globals.get("__name__")) if f is not None and f.f_code.co_name == "<module>" else None
         return d or _NOW.app.decl
@@ -1056,6 +1062,8 @@ def state(**decl):
     d = Decl(name, State(decl))
     _DECLS[name if name is not None else id(d)] = d
     _DECLARING[0] = d
+    if _NOW.app is not None:
+        _NOW.importing = d      # a handler imports the module: it declares into its own till then
     return d.state
 
 
@@ -3073,12 +3081,12 @@ class Builder:
             _NOW.app = was
 
     def run(self, fn, *args, action=None):
-        was, was_act = _NOW.app, _NOW.action
-        _NOW.app, _NOW.action = self, action
+        was, was_act, was_imp = _NOW.app, _NOW.action, _NOW.importing
+        _NOW.app, _NOW.action, _NOW.importing = self, action, None
         try:
             return fn(*args)
         finally:
-            _NOW.app, _NOW.action = was, was_act
+            _NOW.app, _NOW.action, _NOW.importing = was, was_act, was_imp
 
     def run_action(self, act, args, source):
         if TRACING:                     # a board keeps no trace: no line made for it
