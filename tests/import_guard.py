@@ -18,11 +18,16 @@ both: every local suite and preflight passed, CI failed at `make setup`.
    into the board's gitignored `modules/` tree, and suites put that tree on
    `sys.path` for its authored device files. A source deleted since the last
    build keeps its staged copy there until the next build prunes it, so a bare
-   `import palette` finds yesterday's file. `StagedCopyRefusal` turns a bare
-   import that would land on an untracked file in a staging tree, one the
-   board file does not `keep`, into an ImportError naming the copy. Current
-   runtime/ and device/ names never reach it: the conftest resolves those
-   from their sources first.
+   `import palette` finds yesterday's file. The build's own products there
+   (the names a board file `keep`s: uitree_lua, uitree_pages, fonts_data,
+   carts_data, _ota_build) are the last build's too, and a module that
+   imports one where it exists (lua_ext.uitree_source, uitree_aot, fontset)
+   would run the host on yesterday's Lua layer or pages for the rest of the
+   worker. `StagedCopyRefusal` turns a bare import that would land on an
+   untracked file in a staging tree into an ImportError naming the copy, so
+   the host takes its source fallback, as CI does with no staged tree.
+   Current runtime/ and device/ names never reach it: the conftest resolves
+   those from their sources first.
 """
 
 import importlib.abc
@@ -63,21 +68,20 @@ def drop_foreign_editable_finders(root, meta_path=None):
 
 
 def staging_dirs(root):
-    """{staging dir: names the board file `keep`s there} for every board."""
+    """Every board's staging dir, resolved."""
     sys.path.insert(0, os.path.join(root, "tools"))
     try:
         import board_config
     finally:
         sys.path.pop(0)
-    out = {}
+    out = set()
     fw = os.path.join(root, "firmware")
     for name in sorted(os.listdir(fw)):
         board = os.path.join(fw, name)
         if not os.path.isfile(os.path.join(board, "board.toml")):
             continue
         mods = board_config.load(board).get("modules", {})
-        dest = os.path.realpath(os.path.join(board, mods.get("dest", "modules")))
-        out[dest] = set(mods.get("keep", []))
+        out.add(os.path.realpath(os.path.join(board, mods.get("dest", "modules"))))
     return out
 
 
@@ -95,8 +99,8 @@ class StagedCopyRefusal(importlib.abc.MetaPathFinder):
     """Refuse a bare import that resolves to a stale build-staged copy."""
 
     def __init__(self, dirs):
-        self._dirs = dict(dirs)          # realpath -> kept names
-        self._authored = {}              # realpath -> tracked | kept names
+        self._dirs = set(dirs)           # realpaths
+        self._authored = {}              # realpath -> tracked names
         self._seen_path = None
         self._on_path = False
 
@@ -110,9 +114,8 @@ class StagedCopyRefusal(importlib.abc.MetaPathFinder):
 
     def _allowed(self, directory):
         if directory not in self._authored:
-            tracked = _tracked(directory) if os.path.isdir(directory) else set()
             self._authored[directory] = (
-                None if tracked is None else tracked | self._dirs[directory])
+                _tracked(directory) if os.path.isdir(directory) else set())
         return self._authored[directory]
 
     def find_spec(self, fullname, path=None, target=None):
@@ -129,7 +132,7 @@ class StagedCopyRefusal(importlib.abc.MetaPathFinder):
         if allowed is None or os.path.basename(origin) in allowed:
             return None
         raise ImportError(
-            "%s: only a build-staged copy exists (%s); no runtime/ or device/ "
-            "source by that name, so CI, which has no staged tree, cannot "
-            "import it. A fresh board build prunes the copy."
+            "%s: only a build-staged copy exists (%s), a build's copy or "
+            "product that CI, which has no staged tree, never imports; the "
+            "host takes its source"
             % (fullname, origin), name=fullname, path=origin)
