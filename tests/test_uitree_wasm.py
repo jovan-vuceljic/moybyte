@@ -37,7 +37,7 @@ _SIGS = (
     ("moy_uitree_wasm_set_model", [_P, _I, _I, _B, _U], _I),
     ("moy_uitree_wasm_error", [_P, _P, _U], _I),
 )
-TEXT, MODEL = 4, 7
+NUM, TEXT, MODEL = 3, 4, 7
 PAGE, GROUP, LABEL = 1, 2, 3
 E_KIND, E_ARG, E_CHECK = -3, -5, -6
 
@@ -168,6 +168,22 @@ def test_a_read_answers_the_whole_length():
         s = r.state("note", TEXT, b"")
         r.set_text(s, "a longer text than the buffer")
         assert r.read("get_text", s, cap=6) == (29, "a long")
+    finally:
+        r.close()
+
+
+def test_a_number_crosses_as_its_digits():
+    """A number state is set and read as text, spelled as the trace spells
+    it; text that is no number is refused."""
+    r = Rows()
+    try:
+        n = r.state("level", NUM, b"")
+        assert r.set_text(n, "2.5") == 0
+        assert r.read("get_text", n) == (3, "2.5")
+        r.set_text(n, "-1e3")
+        assert r.read("get_text", n) == (5, "-1000")
+        assert r.set_text(n, "2.5kg") == E_ARG
+        assert r.read("error", cap=200)[1].startswith("ARG uitree_set_text(level): a number state takes")
     finally:
         r.close()
 

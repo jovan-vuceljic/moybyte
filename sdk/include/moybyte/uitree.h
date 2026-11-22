@@ -125,6 +125,14 @@ static inline int32_t ut_text(const char *name, const char *v) {
     return s;
 }
 
+// A number state holding `v`, given as its digits ("2.5"): its slot. A number
+// crosses as text both ways: uitree_set_text writes it, uitree_get_text reads it.
+static inline int32_t ut_num(const char *name, const char *v) {
+    int32_t s = ut_state(name, UT_NUM);
+    uitree_set_text(s, v, ut_len_(v));
+    return s;
+}
+
 // An enum state: its values NUL-separated, holding `v`: its slot.
 #define ut_enum(name, values, v) ut_enum_((name), (values), sizeof(values) - 1, (v))
 

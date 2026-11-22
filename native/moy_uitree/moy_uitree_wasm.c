@@ -3,6 +3,7 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "moy_uitree.h"
@@ -644,7 +645,21 @@ int32_t moy_uitree_wasm_set_text(void *x, int32_t slot, const uint8_t *s, uint32
     SLOT(a, slot, "set_text");
     uit_buf_t was = {0};
     was_of(a, (int)slot, &was);
-    int r = uit_set_text(a->e, (int)slot, (const char *)s, s_n);
+    int r;
+    if (a->e->slots[slot].type == UIT_NUM) {        // a number crosses as its digits
+        TEXTS_BEGIN(a);
+        int t = put(a, s, s_n);
+        char *end = NULL;
+        double v = t >= 0 ? strtod(at(a, t), &end) : 0.0;
+        if (t < 0 || end == at(a, t) || *end != 0) {
+            uit_buf_free(&was);
+            return refuse(a, UIT_E_ARG, "set_text", uit_str(a->e, a->e->slots[slot].name),
+                          "a number state takes a number's digits (\"2.5\", \"-3\", \"1e3\")");
+        }
+        r = uit_set_num(a->e, (int)slot, v);
+    } else {
+        r = uit_set_text(a->e, (int)slot, (const char *)s, s_n);
+    }
     if (r >= 0) {
         traced_write(a, (int)slot, was.p);
     }
@@ -812,10 +827,17 @@ int32_t moy_uitree_wasm_get_text(void *x, int32_t slot, uint8_t *out, uint32_t o
     APP(a);
     SLOT(a, slot, "get_text");
     size_t n = 0;
+    if (a->e->slots[slot].type == UIT_NUM) {        // a number: its digits, as the trace spells it
+        uit_buf_t b = {0};
+        uit_slot_repr(a->e, &b, (int)slot);
+        int32_t r = b.p != NULL ? copy_out(b.p, b.n, out, out_cap) : refuse(a, UIT_E_NOMEM, "get_text", "", NULL);
+        uit_buf_free(&b);
+        return r;
+    }
     const char *p = uit_get_text(a->e, (int)slot, &n);
     if (p == NULL) {
         return refuse(a, UIT_E_ARG, "get_text", uit_str(a->e, a->e->slots[slot].name),
-                      "not a text, enum or row_of state: read it with uitree_get_int");
+                      "not a text, enum, number or row_of state: read it with uitree_get_int");
     }
     return copy_out(p, n, out, out_cap);
 }

@@ -49,6 +49,9 @@
 //                 next `next` or `frame` is traced as the action's write
 //                 (a model's as the layers trace a set: rows added, gone,
 //                 changed and moved).
+//   set_text, get_text  a number state's value crosses as text: set_text
+//                 takes a number's digits (strtod's, all of the text), and
+//                 get_text answers them as the trace spells the value.
 //   error(out)    the first refusal of the run as one line,
 //                 "CODE uitree_<row>(<where>): <message>". A refusal is
 //                 latched: every later row of the run answers it again,
