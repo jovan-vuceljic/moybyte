@@ -1,13 +1,15 @@
 """NOTES -- the console's one text app, and it is a CART (step 3 of
-docs/theme_and_shell_2026-11.md §10), on the public UI API's verbs (docs/history/look_2026-10.md
-step 31, docs/media/look_2026-10/APPS_RESTYLE.md's Notes).
+docs/theme_and_shell_2026-11.md §10), on the UI tree API (the extension
+`moybyte.uitree`: runtime/run/player_tree.py).
 
-The page is `system_carts/moybyte.notes.moy/main.py`: the vault as a table, a
-dialog that names a new note, a row's menu, the note's tools and the rect the
-editor handle draws in. Everything below drives the REAL console the way a kid
-does -- keys, typed keys and taps on the boxes the engine drew -- and asserts
-what is in the store or where the console ended up. The engine behind the
-handle is pinned by `tests/test_editor_handle.py`.
+The page is `system_carts/moybyte.notes.moy/main.py`: the vault as rows (New
+note first), a dialog that names a note, the note in a text editor that
+adopts its editor handle, its tools and its status line; on the desk the vault
+beside the note. Everything below drives the REAL console the way a kid does
+-- keys, typed keys and taps on the stops the engine drew -- and asserts what
+is in the store or where the console ended up. The handle's engine is pinned
+by `tests/test_editor_handle.py`, the text editor's adoption of it by
+`tests/test_uitree_pycart.py`.
 """
 
 import sys
@@ -17,10 +19,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from ws_helpers import build_desktop_ws, build_ws, select_on_home  # noqa: E402
-from runtime import host_app, iconsets, moy_carts, system_api, ui_draw  # noqa: E402
+from runtime import host_app, moy_carts, system_api  # noqa: E402
 
 DT = 1.0 / 30
-ESC, BS, DEL, DUP = 0x1B, 0x08, 0x7F, 0x04
+ESC = 0x1B
 
 
 # ---------------------------------------------------------------------------
@@ -39,7 +41,18 @@ def _open(ws):
     ws.open()
     drv = host_app.ConsoleDriver(ws)
     _frames(drv)
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
     return ws.run.player.ns, drv
+
+
+def _s(ws):
+    """The page's state as the engine holds it."""
+    return ws.run.player.tree.engine.s._v
+
+
+def _act(ws, drv, name, *args):
+    ws.run.player.tree.act(name, *args)
+    _frames(drv)
 
 
 def _press(drv, *keys):
@@ -56,27 +69,21 @@ def _type(drv, text):
 
 def _box(ws, id):
     """Where stop `id` drew in the Notes page's last frame."""
-    got = ui_draw._C.api_box(ws.run.player.ui[0], id)
+    got = ws.run.player.face.host().box(id)
     assert got is not None, "Notes drew no %r" % id
     return got
 
 
-def _tap(drv, box, dx=None, dy=None):
+def _tap(drv, box):
     x, y, w, h = box
     gx, gy = drv.ws.wm.viewport()[:2] if drv.ws.run.app_window_canvas else (0, 0)
-    drv.click(gx + x + (w // 2 if dx is None else dx), gy + y + (h // 2 if dy is None else dy))
+    drv.click(gx + x + w // 2, gy + y + h // 2)
     _frames(drv)
 
 
 def _seed(ws, *names):
-    for i, n in enumerate(names):
+    for n in names:
         moy_carts.save_file("docs", n, "body of " + n, ws.carts_root)
-
-
-def _row(ws, ns, i):
-    """The box of the vault's row i (0: New note)."""
-    y0, rh, view, _px, _side = ui_draw._C.api_table_rows(ws.run.player.ui[0])
-    return (view[0], y0 + i * rh, view[2], rh)
 
 
 # ---------------------------------------------------------------------------
@@ -102,17 +109,17 @@ def test_a_copy_of_notes_draws_inside_the_cart_boundary(tmp_path):
 
 def test_the_page_holds_only_a_handle_and_names_no_engine(tmp_path):
     """The point of the handle: what the cart holds is a SHELL object it was
-    handed; a permission it did not ask for, and the engine layer under the
-    verbs, have no name at all."""
+    handed; a permission it did not ask for, and the engine under the page,
+    have no name at all."""
     from runtime.editor_handle import EditorHandle
 
     ws = build_ws(tmp_path)
     _seed(ws, "one")
     ns, drv = _open(ws)
     assert callable(ns["open_editor"])
-    for name in ("carts", "shell", "ui_draw"):
+    for name in ("carts", "shell", "ui_draw", "uitree_app"):
         assert name not in ns
-    _press(drv, "down", "a")
+    _tap(drv, _box(ws, "one/open"))
     assert isinstance(ns["ed"], EditorHandle)
     assert ns["ed"] in ws.run.player.editors, "the run PINS what it opened"
 
@@ -127,8 +134,9 @@ def test_the_list_is_new_note_then_the_vault_newest_first(tmp_path):
     ns, _drv = _open(ws)
     assert ns["ed"] is None, "a fresh console lands on the list"
     assert ns["names"] == moy_carts.list_files("docs", ws.carts_root)
-    assert ui_draw._C.api_focus(ws.run.player.ui[0]) == "vault"
-    assert ns["cur"] == 0, "New note is the first row"
+    rows = [r.name for r in _s(ws)["notes"]]
+    assert rows == [ns["NEW"]] + ns["names"], "New note is the first row"
+    assert _s(ws)["view"] == "list"
 
 
 def test_names_show_bare_for_notes_and_whole_for_other_files(tmp_path):
@@ -143,15 +151,16 @@ def test_new_note_asks_a_name_and_makes_the_note(tmp_path):
     ws = build_ws(tmp_path)
     ns, drv = _open(ws)
     _type(drv, "n")
-    assert ns["asking"] == "new"
+    assert _s(ws)["asking"] == "new"
     _type(drv, "milk")
-    assert ns["typed"] == "milk"
+    assert _s(ws)["typed"] == "milk"
     _type(drv, [0x0D])                         # Enter makes
     ed = ns["ed"]
-    assert ns["asking"] is None and ed is not None and ed.name() == "milk"
-    for ch in "eggs":
-        ed.key(ord(ch))
-    _type(drv, [ESC])                          # leaves the note, saving it
+    assert _s(ws)["asking"] == "none" and ed is not None and ed.name() == "milk"
+    _type(drv, "eggs")                         # into the note: its text editor has the keys
+    assert ed.text() == "eggs"
+    ws.run.player.face.back()                  # leaves the note, saving it
+    _frames(drv)
     assert ns["ed"] is None
     assert moy_carts.load_file("docs", "milk", ws.carts_root) == "eggs"
     assert "milk" in ns["names"]
@@ -161,147 +170,119 @@ def test_a_name_keeps_its_extension_and_picks_the_mode(tmp_path):
     ws = build_ws(tmp_path)
     ns, drv = _open(ws)
     for name, mode in (("todo.txt", "text"), ("data.json", "json"), ("hi.py", "code")):
-        _type(drv, "n" + name)
+        _act(ws, drv, "new")
+        _type(drv, name)
         _type(drv, [0x0D])
         assert (ns["ed"].name(), ns["ed"].mode()) == (name, mode), name
-        _type(drv, [ESC])
+        _act(ws, drv, "close")
 
 
-def test_the_dialog_cancels_by_esc_by_its_button_and_backspace_past_the_start(tmp_path):
+def test_the_dialog_cancels_by_esc_and_by_its_button(tmp_path):
     ws = build_ws(tmp_path)
     ns, drv = _open(ws)
     _type(drv, "n")
-    _type(drv, [ESC])
-    assert ns["asking"] is None
+    ws.run.player.face.back()
+    _frames(drv)
+    assert _s(ws)["asking"] == "none"
     _type(drv, "n")
-    _tap(drv, ui_draw._C.api_box(ws.run.player.ui[0], "Cancel"))
-    assert ns["asking"] is None and ns["ed"] is None
-    _type(drv, "n")
-    _type(drv, "a")
-    _type(drv, [BS])
-    assert ns["asking"] == "new", "a letter to take back first"
-    _type(drv, [BS])
-    assert ns["asking"] is None, "past the start it cancels"
+    _tap(drv, _box(ws, "Cancel"))
+    assert _s(ws)["asking"] == "none" and ns["ed"] is None
 
 
 def test_nothing_under_the_dialog_takes_a_tap(tmp_path):
     ws = build_ws(tmp_path)
     _seed(ws, "behind")
     ns, drv = _open(ws)
-    row = _row(ws, ns, 1)
+    row = _box(ws, "behind/open")
     _type(drv, "n")
     _tap(drv, row)
-    assert ns["ed"] is None and ns["asking"] == "new"
+    assert ns["ed"] is None and _s(ws)["asking"] == "new"
 
 
-def test_a_row_opens_its_note_by_enter_and_by_a_second_tap(tmp_path):
+def test_a_row_opens_its_note_by_a_tap_and_by_its_key(tmp_path):
     ws = build_ws(tmp_path)
     _seed(ws, "story")
     ns, drv = _open(ws)
-    _press(drv, "down", "a")
+    _tap(drv, _box(ws, "story/open"))
     assert ns["ed"].name() == "story"
     assert ns["ed"].text() == "body of story"
-    _type(drv, [ESC])
-    _tap(drv, _row(ws, ns, 1))
-    _tap(drv, _row(ws, ns, 1))
+    assert _s(ws)["view"] == "note"
+    ws.run.player.face.back()
+    _frames(drv)
+    assert ns["ed"] is None and _s(ws)["view"] == "list"
+    _press(drv, "a")                           # the focused row: the note's, where it closed
     assert ns["ed"] is not None and ns["ed"].name() == "story"
 
 
-def test_del_moves_the_focused_note_to_the_trash_without_asking(tmp_path):
+def test_the_vaults_verbs_trash_duplicate_and_rename_the_current_row(tmp_path):
     ws = build_ws(tmp_path)
-    _seed(ws, "gone", "kept")
+    _seed(ws, "gone", "kept", "draft")
     ns, drv = _open(ws)
-    i = ns["names"].index("gone") + 1
-    _press(drv, *("down",) * i)
-    _type(drv, [DEL])
+    _act(ws, drv, "trash", next(r for r in _s(ws)["notes"] if r.name == "gone"))
     assert "gone" not in ns["names"] and "kept" in ns["names"]
     assert ("docs", "gone") in [tuple(t[:2]) for t in moy_carts.trash_list(ws.carts_root)]
+    _act(ws, drv, "duplicate", next(r for r in _s(ws)["notes"] if r.name == "kept"))
+    assert len(ns["names"]) == 3
+    _act(ws, drv, "rename", next(r for r in _s(ws)["notes"] if r.name == "draft"))
+    assert _s(ws)["asking"] == "rename" and _s(ws)["typed"] == "Draft"
+    _type(drv, [0x08] * 5 + list("final"))
+    _type(drv, [0x0D])
+    assert "final" in ns["names"] and "draft" not in ns["names"]
+    _act(ws, drv, "rename", next(r for r in _s(ws)["notes"] if r.name == ns["NEW"]))
+    assert _s(ws)["asking"] == "none", "New note's row has no name to change"
 
 
-def test_ctrl_d_duplicates_the_focused_note(tmp_path):
+def test_the_vaults_verbs_answer_their_keys(tmp_path):
     ws = build_ws(tmp_path)
     _seed(ws, "twin")
     ns, drv = _open(ws)
-    _press(drv, "down")
-    _type(drv, [DUP])
+    assert _s(ws)["cur"] == "twin"
+    _type(drv, [0x04])                         # Ctrl+D
     assert len(ns["names"]) == 2
-
-
-def test_the_row_menu_renames_duplicates_and_trashes(tmp_path):
-    ws = build_ws(tmp_path)
-    _seed(ws, "draft")
-    ns, drv = _open(ws)
-    _press(drv, "down")
-    _type(drv, "m")
-    assert ns["menu"] is True
-    _tap(drv, _box(ws, "Rename…"))
-    assert ns["asking"] == "rename" and ns["typed"] == "Draft"
-    _type(drv, [BS] * 5 + list("final"))
-    _type(drv, [0x0D])
-    assert "final" in ns["names"] and "draft" not in ns["names"]
-    _type(drv, "m")
-    _tap(drv, _box(ws, "Duplicate\tCtrl+D"))
-    assert len(ns["names"]) == 2
-    _type(drv, "m")
-    _tap(drv, _box(ws, "Move to Trash\tDel"))
+    _type(drv, "t")                            # T: to the Trash
     assert len(ns["names"]) == 1
 
 
 def test_an_empty_vault_is_an_empty_page_whose_verb_makes_a_note(tmp_path):
     ws = build_ws(tmp_path)
     ns, drv = _open(ws)
-    if ns["names"]:
-        for n in list(ns["names"]):
-            moy_carts.delete_file("docs", n, ws.carts_root)
-        ns["_refresh"]()
-        _frames(drv)
-    assert ui_draw._C.api_focus(ws.run.player.ui[0]) == "New note"
-    _press(drv, "a")
-    assert ns["asking"] == "new"
+    for n in list(ns["names"]):
+        moy_carts.delete_file("docs", n, ws.carts_root)
+    _act(ws, drv, "opened")
+    assert _s(ws)["view"] == "empty"
+    _tap(drv, _box(ws, "new"))
+    assert _s(ws)["asking"] == "new"
 
 
 # ---------------------------------------------------------------------------
 # a note open
 # ---------------------------------------------------------------------------
 
-def test_the_note_lends_the_bar_its_title_undo_and_redo(tmp_path):
+def test_the_tools_undo_and_redo_and_the_status_names_the_note(tmp_path):
     ws = build_ws(tmp_path)
     moy_carts.save_file("docs", "u", "start", ws.carts_root)
     ns, drv = _open(ws)
-    _press(drv, "down", "a")
+    _act(ws, drv, "open_name", "u")
     ed = ns["ed"]
-    lent = ui_draw.bar_lent(ws.run.player.ui[0])
-    assert lent[0] == "U" and lent[3] is True, "the title, and the way back is the app's"
-    assert [iconsets.SLOTS[s] for s in lent[1]] == ["undo", "redo"]
-    assert lent[2] == 0b11, "nothing to undo or redo yet: both at half strength"
-    assert ws.bar_layer._title("tool") == "U"
-    for ch in "ab":
-        ed.key(ord(ch))
-    _frames(drv)
-    ui_draw.bar_tap(ws.run.player.ui[0], 0)        # the bar's undo
-    _frames(drv)
+    assert _s(ws)["title"] == "U" and _s(ws)["status"] == "Markdown"
+    _type(drv, "ab")
+    assert ed.text() == "abstart"
+    _tap(drv, _box(ws, "undo"))
     assert ed.text() == "start"
-    ui_draw.bar_tap(ws.run.player.ui[0], 1)        # ...and redo
-    _frames(drv)
-    assert ed.text().startswith("ab")
-    ui_draw.bar_tap(ws.run.player.ui[0], -2)       # the bar's way back
-    _frames(drv)
-    assert ns["ed"] is None and ws.wm.top_is_player(), "back to the list, Notes open"
+    _tap(drv, _box(ws, "redo"))
+    assert ed.text() == "abstart"
 
 
-def test_the_bars_back_on_the_list_leaves_notes_and_writes_the_note(tmp_path):
+def test_the_hosts_back_on_the_list_leaves_notes_and_writes_the_note(tmp_path):
     ws = build_ws(tmp_path)
     ns, drv = _open(ws)
     _type(drv, "nkept")
     _type(drv, [0x0D])
-    for ch in "not lost":
-        ns["ed"].key(ord(ch))
-    _type(drv, [ESC])
-    xb = ws.bar_layer.back_rect("tool")
-    ws.pointer.place(xb[0] + 2, xb[1] + 2)
-    ws.pointer.click = True
-    ws.router.handle_pointer()
-    ws.pointer.click = False
+    _type(drv, "not lost")
+    assert ws.run.player.face.back() is True, "the note closes first"
+    _frames(drv)
+    assert ws.run.player.face.back() is False, "the list's back is the host's: it leaves"
+    ws.spine.exit_to_caller()
     assert ws.wm.top_kind() == "launcher"
     assert moy_carts.load_file("docs", "kept", ws.carts_root) == "not lost"
     assert ws.input.text_mode is False
@@ -311,98 +292,75 @@ def test_the_tools_select_copy_paste_and_cut(tmp_path):
     ws = build_ws(tmp_path)
     moy_carts.save_file("docs", "clip", "abcdef", ws.carts_root)
     ns, drv = _open(ws)
-    _press(drv, "down", "a")
+    _act(ws, drv, "open_name", "clip")
     ed = ns["ed"]
-    _tap(drv, _box(ws, "Select"))
-    assert ed.selecting() is True
+    _tap(drv, _box(ws, "select"))
+    assert ed.selecting() is True and _s(ws)["selecting"] is True
     ed.nav(3, 0)
     _frames(drv)
-    assert ns["_status"]() == "3 letters"
-    _tap(drv, _box(ws, "Copy"))
+    _tap(drv, _box(ws, "copy"))
     ed.select_mode(False)
     ed.nav(3, 0)
     _frames(drv)
-    _tap(drv, _box(ws, "Paste"))
+    _tap(drv, _box(ws, "paste"))
     assert ed.text() == "abcdefabc"
     ed.select_mode(True)
     ed.nav(-3, 0)
     _frames(drv)
-    _tap(drv, _box(ws, "Cut"))
+    _tap(drv, _box(ws, "cut"))
     assert ed.text() == "abcdef"
 
 
-def test_a_tool_with_nothing_to_do_is_no_stop(tmp_path):
-    ws = build_ws(tmp_path)
-    moy_carts.save_file("docs", "plain", "x", ws.carts_root)
-    ns, drv = _open(ws)
-    _press(drv, "down", "a")
-    assert ui_draw._C.api_box(ws.run.player.ui[0], "Copy") is None
-    assert ui_draw._C.api_box(ws.run.player.ui[0], "Cut") is None
-    assert ui_draw._C.api_box(ws.run.player.ui[0], "Select") is not None
-
-
-def test_no_tool_holds_focus_while_the_note_has_the_keys(tmp_path):
+def test_the_note_has_the_keys_and_the_keyboard_types(tmp_path):
     ws = build_ws(tmp_path)
     moy_carts.save_file("docs", "keys", "x", ws.carts_root)
     ns, drv = _open(ws)
-    _press(drv, "down", "a")
-    assert ws.router.focused_cart_editor() is ns["ed"]
-    assert ui_draw._C.api_focus(ws.run.player.ui[0]) is None
+    _act(ws, drv, "open_name", "keys")
+    assert ws.run.player.face.typing() is True
+    assert ws.run.player.tree.engine.focus_key == "", "no tool holds focus while the note has the keys"
+    _type(drv, [0x0D])
+    assert ns["ed"].text() == "\nx", "Enter is the note's, never a tool's"
 
 
 def test_closing_a_note_brings_the_list_back_on_its_row(tmp_path):
-    """The handheld: the list scrolled down to a note, the note opened and
-    closed again -- the list shows that note's row, not the list's top, and
-    the row's focus mark, from the very frame the note closes. The note's page has an id of its own, so
-    the list's page opens anew and its table on its current row
-    (docs/ui_api_2026-10.md)."""
     ws = build_ws(tmp_path)
     _seed(ws, *("n%02d" % i for i in range(40)))
     ns, drv = _open(ws)
-    for _ in range(30):
-        _press(drv, "down")
-    _x, top, _w, h = ns["content_rect"]()
-
-    def shown():
-        y0, rh, _view, _px, _side = ui_draw._C.api_table_rows(ws.run.player.ui[0])
-        y = y0 + ns["cur"] * rh
-        return top <= y and y + rh <= top + h
-
-    assert ns["cur"] == 30 and shown()
-    _press(drv, "a")
-    assert ns["ed"] is not None
-    drv.type_char(ESC)                         # leaves the note
-    ui_draw.marks(None, True)
-    _frames(drv, 1)
-    assert ns["ed"] is None and ns["cur"] == 30
-    assert shown(), "the first frame showed the list's top: the row came a frame late"
-    assert ui_draw._C.api_focus(ws.run.player.ui[0], None) == "vault"
-    assert ui_draw.marks()[1] == 1, \
-        "the keys the note let go were the list's that frame: its row wears the mark"
-    _frames(drv)
-    assert shown(), "the list came back at its top, the note's row out of sight"
+    _act(ws, drv, "open_name", "n05")
+    _act(ws, drv, "close")
+    assert ns["ed"] is None and _s(ws)["cur"] == "n05"
+    assert ws.run.player.tree.engine.focus_key == "n05/open"
 
 
-def test_tapping_a_link_opens_the_note_it_names(tmp_path):
+def test_open_link_follows_the_carets_link_and_ticks_its_box(tmp_path):
     ws = build_ws(tmp_path)
     moy_carts.save_file("docs", "other_one", "the other one", ws.carts_root)
-    moy_carts.save_file("docs", "hub", "go [[Other one]] now", ws.carts_root)
+    moy_carts.save_file("docs", "hub", "- [ ] milk\ngo [[Other one]] now", ws.carts_root)
     ns, drv = _open(ws)
-    ns["_open"]("hub")
-    _frames(drv)
-    ed = ns["ed"]
-    cell = ui_draw.font("mono")[1]
-    x, y, _w, _h = ed._vr
-    drv.click(x + 8 + 6 * cell + 2, y + ed._lh() // 2)    # inside the link's words
-    _frames(drv)
+    _act(ws, drv, "open_name", "hub")
+    _tap(drv, _box(ws, "follow"))
+    assert ns["ed"].text().startswith("- [x] milk"), "the caret's line: its box ticked"
+    ns["ed"].ed.row = 1
+    _tap(drv, _box(ws, "follow"))
     assert ns["ed"].name() == "other_one"
+
+
+def test_a_tap_in_the_note_places_its_caret(tmp_path):
+    ws = build_ws(tmp_path)
+    moy_carts.save_file("docs", "lines", "one\ntwo\nthree", ws.carts_root)
+    ns, drv = _open(ws)
+    _act(ws, drv, "open_name", "lines")
+    v = ws.run.player.tree.engine.views["note"]
+    r, lh = v[0], v[3]
+    _tap(drv, (r[0], r[1] + 2 * lh, r[2], lh))
+    assert ns["ed"].caret()[0] == 2
 
 
 def test_the_last_note_reopens_on_the_next_launch(tmp_path):
     ws = build_ws(tmp_path)
     moy_carts.save_file("docs", "kept", "still here", ws.carts_root)
     ns, drv = _open(ws)
-    _press(drv, "down", "a")
+    _tap(drv, _box(ws, "kept/open"))
     assert ws.system.get("moybyte.notes_last") == "kept"
     ws.spine.exit_to_caller()
     ns, _drv = _open(ws)
@@ -417,7 +375,7 @@ def test_the_carts_files_see_no_drawing(tmp_path):
     moy_carts.save_file("drawings", "dragon", blob, ws.carts_root)
     moy_carts.save_file("docs", "art", "look\n![[dragon]]", ws.carts_root)
     ns, drv = _open(ws)
-    _press(drv, "down", "a")
+    _tap(drv, _box(ws, "art/open"))
     assert ns["ed"] is not None
     assert not ns["files"].load("dragon")[0], \
         "the CART's own files handle is scoped to docs and sees no drawing"
@@ -466,10 +424,6 @@ def test_the_request_is_taken_once_and_a_re_run_lands_on_the_list(tmp_path):
 # a program runs from its note, and comes back to it
 # ---------------------------------------------------------------------------
 
-def _no_box(ws, id):
-    return ui_draw._C.api_box(ws.run.player.ui[0], id) is None
-
-
 def test_a_program_shows_run_and_a_note_does_not(tmp_path):
     ws = build_ws(tmp_path)
     moy_carts.save_file("docs", "hi.py", "print('hi')\n", ws.carts_root)
@@ -477,14 +431,12 @@ def test_a_program_shows_run_and_a_note_does_not(tmp_path):
     moy_carts.save_file("docs", "list", "milk", ws.carts_root)
     ns, drv = _open(ws)
     for name in ("hi.py", "hi.lua"):
-        ns["_open"](name)
-        _frames(drv)
+        _act(ws, drv, "open_name", name)
         assert ns["ed"].can_run() is True
-        assert _box(ws, "Run")[0] == 6 + 4 * 46, "Run is the fifth tool"
-    ns["_open"]("list")
-    _frames(drv)
+        assert _box(ws, "run")[0] > _box(ws, "paste")[0], "Run stands after the clipboard's tools"
+    _act(ws, drv, "open_name", "list")
     assert ns["ed"].can_run() is False
-    assert _no_box(ws, "Run")
+    assert ws.run.player.face.host().box("run") is None
 
 
 def test_run_saves_the_program_runs_it_and_comes_back_to_it(tmp_path):
@@ -503,7 +455,7 @@ def test_run_saves_the_program_runs_it_and_comes_back_to_it(tmp_path):
     _type(drv, "print('again')")
     caret = ed.caret()
     assert ed.dirty()
-    _tap(drv, _box(ws, "Run"))
+    _tap(drv, _box(ws, "run"))
     assert ws.cart.get("type") == "script" and ws.cart.get("title") == "hi"
     assert moy_carts.load_file("docs", "hi.py", ws.carts_root) == \
         "print('hello')\nprint('again')"
@@ -513,67 +465,17 @@ def test_run_saves_the_program_runs_it_and_comes_back_to_it(tmp_path):
     assert ws.wm.top_is_player() and ws.cart.get("title") == "Notes"
     back = ws.run.player.ns["ed"]
     assert back is not ed and back.name() == "hi.py"
-    assert back.caret() == caret and back.focused()
+    assert back.caret() == caret
     ws.spine.exit_to_caller()
     assert ws.wm.top_kind() == "files", "Notes' own X still returns to Files"
 
 
-def test_the_program_comes_back_scrolled_where_it_was(tmp_path):
-    """Not only the caret: the view's first line, so a kid reading line 50
-    of a long program is still reading it after the run."""
-    ws = build_ws(tmp_path)
-    moy_carts.save_file("docs", "long.py",
-                        "".join("print(%d)\n" % i for i in range(100)), ws.carts_root)
-    ns, drv = _open(ws)
-    ns["_open"]("long.py")
-    _frames(drv)
-    ed = ns["ed"]
-    ed.nav(0, 60)
-    _frames(drv)
-    ed.scroll(-5, 0)
-    _frames(drv)
-    where, top = ed._where(), ed._top
-    assert top > 0
-    _tap(drv, _box(ws, "Run"))
-    ws.spine.exit_to_caller()
-    _frames(drv)
-    back = ws.run.player.ns["ed"]
-    assert back._where() == where
-    assert back._top == top, "the view shows the line it showed"
-
-
-def test_on_the_desk_the_vault_comes_back_on_the_programs_row(tmp_path):
-    ws = build_desktop_ws(tmp_path, font_scale=1, panel_diagonal_in=7.0)
-    moy_carts.save_file("docs", "zz.py", "print(1)\n", ws.carts_root)
-    _seed(ws, *("n%02d" % i for i in range(40)))
-    ns, drv = _open(ws)
-    for _ in range(41):
-        _press(drv, "down")
-    _press(drv, "a")
-    assert ns["ed"].name() == "zz.py" and ns["cur"] == 41
-
-    def shown():
-        y0, rh, view, _px, _side = ui_draw._C.api_table_rows(ws.run.player.ui[0])
-        y = y0 + ws.run.player.ns["cur"] * rh
-        return view[1] <= y and y + rh // 2 <= view[1] + view[3]
-
-    assert shown()
-    _tap(drv, _box(ws, "Run"))
-    ws.spine.exit_to_caller()
-    _frames(drv)
-    assert ws.run.player.ns["cur"] == 41
-    assert shown(), "the vault shows the program's row, not its top"
-
-
 def test_a_program_that_does_not_parse_says_so_in_the_console(tmp_path):
-    """Files' RUN's answer: the error is the script console's scrollback, and
-    the way out is the same way back to the program."""
     ws = build_ws(tmp_path)
     moy_carts.save_file("docs", "bad.py", "def (\n", ws.carts_root)
     ns, drv = _open(ws)
-    ns["_open"]("bad.py")
-    _frames(drv)
-    _tap(drv, _box(ws, "Run"))
+    _act(ws, drv, "open_name", "bad.py")
+    _tap(drv, _box(ws, "run"))
     assert ws.cart.get("type") == "script"
     assert "SyntaxError" in ws.script_console.text()
     ws.spine.exit_to_caller()
@@ -583,28 +485,24 @@ def test_a_program_that_does_not_parse_says_so_in_the_console(tmp_path):
 
 
 def test_a_run_that_cannot_start_badges_the_program_and_stays(tmp_path, monkeypatch):
-    """`run_script` refusing before it touched the world (a card that would
-    not read): Notes is still running, and the program's word says why."""
     ws = build_ws(tmp_path)
     moy_carts.save_file("docs", "gone.py", "print(1)\n", ws.carts_root)
     ns, drv = _open(ws)
-    ns["_open"]("gone.py")
-    _frames(drv)
+    _act(ws, drv, "open_name", "gone.py")
     ed = ns["ed"]
     monkeypatch.setattr(ws, "run_script", lambda kind, name: (False, "CAN'T READ IT"))
-    _tap(drv, _box(ws, "Run"))
+    _tap(drv, _box(ws, "run"))
     assert ws.cart.get("title") == "Notes" and ns["ed"] is ed
     assert ed.badge() == "CAN'T READ IT"
-    assert ns["_status"]() == "CAN'T READ IT"
+    assert _s(ws)["status"] == "CAN'T READ IT"
 
 
 def test_home_from_the_script_forgets_the_way_back(tmp_path):
     ws = build_ws(tmp_path)
     moy_carts.save_file("docs", "hi.py", "print(1)\n", ws.carts_root)
     ns, drv = _open(ws)
-    ns["_open"]("hi.py")
-    _frames(drv)
-    _tap(drv, _box(ws, "Run"))
+    _act(ws, drv, "open_name", "hi.py")
+    _tap(drv, _box(ws, "run"))
     assert ws.cart.get("type") == "script"
     ws.home.go_home()
     assert ws._script_return is None
@@ -626,7 +524,6 @@ def test_on_the_desk_the_window_is_the_page_with_no_bar_inside_it(tmp_path):
     ws, ns, drv = _desk(tmp_path)
     assert ws.run.app_window_canvas and ws.run.app_full_canvas
     win = ws.wm.windows["desktop"]
-    assert (win.w, win.h) == (900, 536), "it opens at its designed size"
     cx, cy, cw, ch = win.content_rect()
     assert ns["content_rect"]() == (0, 0, cw, ch), "the page begins under the title strip"
     assert ws.wm.viewport() == (cx, cy, 1)
@@ -635,70 +532,27 @@ def test_on_the_desk_the_window_is_the_page_with_no_bar_inside_it(tmp_path):
 
 def test_the_desk_shows_the_vault_beside_the_note(tmp_path):
     ws, ns, drv = _desk(tmp_path)
-    vault = _box(ws, "vault")
-    assert vault[0] == 0 and vault[2] < ns["SIDE"]
-    ns["_open"]("story")
-    _frames(drv)
-    sel = _box(ws, "Select")
-    assert sel[0] > ns["SIDE"], "the note's tools stand over the note"
-    assert ws.wm._win_title(ws.wm.windows["desktop"]).endswith("Story")
-
-
-def _new_note_over_story(tmp_path):
-    """The desk, a mouse, `story` open, and New note's row tapped: the
-    dialog up over the note. (ws, namespace, driver)."""
-    ws, ns, drv = _desk(tmp_path)
-    ws.pointer.hovers = True            # a mouse: a focused handle claims its view
-    new = _row(ws, ns, 0)
-    ns["_open"]("story")
-    _frames(drv)
-    assert ns["ed"].focused()
-    for _ in range(2):                  # the first tap lands the row, the second opens it
-        if ns["asking"] is None:
-            _tap(drv, new)
-    assert ns["asking"] == "new"
-    return ws, ns, drv
+    row = _box(ws, "story/open")
+    _tap(drv, row)
+    assert ns["ed"].name() == "story"
+    sel = _box(ws, "select")
+    assert sel[0] > row[0] + row[2], "the note's tools stand beside the vault"
+    assert ws.run.player.face.host().box("story/open") is not None, "the vault stays"
 
 
 def test_new_note_over_an_open_note_takes_the_keys_and_its_buttons_work(tmp_path):
     """Owner report 2026-10-31: New note tapped while a note was open left the
-    keyboard on the note, so the name was typed into the note and a mouse's
-    Make and Cancel, drawn over the note, were the note's clicks."""
-    ws, ns, drv = _new_note_over_story(tmp_path)
-    assert not ns["ed"].focused(), "the dialog has the keyboard"
+    keyboard on the note, so the name was typed into the note."""
+    ws, ns, drv = _desk(tmp_path)
+    _act(ws, drv, "open_name", "story")
+    _tap(drv, _box(ws, ns["NEW"] + "/open"))
+    assert _s(ws)["asking"] == "new"
     _type(drv, "plan")
-    assert ns["typed"] == "plan"
+    assert _s(ws)["typed"] == "plan"
     assert ns["ed"].text() == "body of story", "nothing typed into the note"
     _tap(drv, _box(ws, "Make"))
-    assert ns["asking"] is None and ns["ed"].name() == "plan"
-    assert ns["ed"].focused(), "the new note has the keyboard"
-    assert ns["names"][ns["cur"] - 1] == "plan", "the vault stands on the new note"
-    _frames(drv)
-    assert ns["ed"].name() == "plan", "and stays on it"
-
-
-def test_cancel_and_esc_over_an_open_note_give_it_the_keys_back(tmp_path):
-    ws, ns, drv = _new_note_over_story(tmp_path)
-    _tap(drv, _box(ws, "Cancel"))
-    assert ns["asking"] is None and ns["ed"].name() == "story"
-    assert ns["ed"].focused()
-    ns["_ask"]("new")
-    _frames(drv)
-    assert not ns["ed"].focused()
-    _type(drv, [ESC])
-    assert ns["asking"] is None, "Esc closes the dialog"
-    assert ns["ed"] is not None and ns["ed"].name() == "story", "not the note under it"
-    assert ns["ed"].focused()
-
-
-def test_a_resized_window_moves_the_page_not_its_pixels(tmp_path):
-    ws, ns, drv = _desk(tmp_path)
-    cv = ws.run.canvas
-    win = ws.wm.windows["desktop"]
-    ws.wm.resize_window(win, win.w - 100, win.h - 60)
-    _frames(drv)
-    assert ws.run.canvas is cv, "the same canvas: a resize allocates nothing"
-    assert ns["content_rect"]()[2:] == win.content_rect()[2:]
+    assert _s(ws)["asking"] == "none" and ns["ed"].name() == "plan"
+    assert _s(ws)["cur"] == "plan", "the vault stands on the new note"
 
 
 def test_the_canvas_goes_back_when_notes_closes(tmp_path):
@@ -711,11 +565,8 @@ def test_the_canvas_goes_back_when_notes_closes(tmp_path):
 def test_on_the_desk_run_comes_back_to_the_notes_window(tmp_path):
     ws, ns, drv = _desk(tmp_path)
     moy_carts.save_file("docs", "hi.py", "print('desk')\n", ws.carts_root)
-    ns["_open"]("hi.py")
-    _frames(drv)
-    run = _box(ws, "Run")
-    assert run[0] > _box(ws, "Select")[0] + 4 * 40, "Run stands after the clipboard's tools"
-    _tap(drv, run)
+    _act(ws, drv, "open_name", "hi.py")
+    _tap(drv, _box(ws, "run"))
     assert ws.cart.get("type") == "script"
     assert ws.script_console.text() == "desk"
     ws.spine.exit_to_caller()

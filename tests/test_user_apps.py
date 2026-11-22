@@ -40,16 +40,17 @@ DT = 1.0 / 30
 # The shipped demo app, whose source both halves of the permission test share.
 NOTES_DIR = ROOT / "system_carts" / "moybyte.notes.moy"
 NOTES_SRC = (NOTES_DIR / "main.py").read_text(encoding="utf-8")
+NOTES_EXT = json.loads((NOTES_DIR / "manifest.json").read_text(encoding="utf-8"))["extensions"]
 
 
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
 
-def _write_cart(carts_dir, name, src, perms=(), type="app", canvas="320x240"):
+def _write_cart(carts_dir, name, src, perms=(), type="app", canvas="320x240", extensions=()):
     d = Path(carts_dir) / (name + ".moy")
     d.mkdir(parents=True, exist_ok=True)
-    man = {"title": name, "canvas": canvas,
+    man = {"title": name, "canvas": canvas, "extensions": list(extensions),
            "moybyte": {"type": type, "permissions": list(perms)}}
     (d / "manifest.json").write_text(json.dumps(man))
     (d / "main.py").write_text(src)
@@ -242,9 +243,9 @@ def test_the_demo_app_saves_a_document_the_rest_of_the_console_can_read(tmp_path
     _open(ws, "Notes")
     _frames(ws)
     ns = ws.run.player.ns
-    ns["_ask"]("new")                          # New note asks a name...
+    ws.run.player.tree.act("new")              # New note asks a name...
     _frames(ws)
-    ns["_answer"]()                            # ...and Make takes the auto-name
+    ws.run.player.tree.act("make")             # ...and Make takes the auto-name
     _frames(ws)
     ed = ns["ed"]
     assert ed is not None and ws.run.player.cart_error is None, ws.run.player.cart_error
@@ -309,7 +310,8 @@ def test_without_the_permission_the_files_name_is_ABSENT(tmp_path):
     themselves have (those are a speed bump, not a sandbox; see
     `test_the_scope_is_a_speed_bump_not_a_sandbox` and system_api's docstring)."""
     carts = str(tmp_path / "carts")
-    _write_cart(carts, "Sneaky", NOTES_SRC, perms=["graphics", "input", "prefs"])
+    _write_cart(carts, "Sneaky", NOTES_SRC, perms=["graphics", "input", "prefs"],
+                extensions=NOTES_EXT)
     ws = build_ws(tmp_path)
     cart = next(c for c in ws.carts.all if c["title"] == "Sneaky")
     ws.open_workspace(cart)
@@ -342,7 +344,7 @@ def test_with_the_permission_the_same_source_runs(tmp_path):
     """The control arm: identical bytes, one manifest line back."""
     carts = str(tmp_path / "carts")
     _write_cart(carts, "Sneaky", NOTES_SRC,
-                perms=["graphics", "input", "files:documents", "prefs"])
+                perms=["graphics", "input", "files:documents", "prefs"], extensions=NOTES_EXT)
     ws = build_ws(tmp_path)
     _open(ws, "Sneaky")
     _frames(ws)

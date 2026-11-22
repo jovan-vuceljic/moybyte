@@ -2852,6 +2852,7 @@ static int32_t fixed_h(uit_t *e, int k)
     case UIT_SLOT:
     case UIT_PANEL:
     case UIT_LEGACY:
+    case UIT_SCROLL:                    // a scroll region: what its stack leaves, its rows scrolled in it
         return -1;
     case UIT_STATUS:
         return status_h(e);

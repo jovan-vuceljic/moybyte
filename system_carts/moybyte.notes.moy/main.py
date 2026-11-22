@@ -10,107 +10,48 @@
 #                                      ask for has no NAME here at all: writing
 #                                      `carts` in this file is a NameError, not
 #                                      a locked door. That is the whole sandbox.
+#     "extensions": ["moybyte.uitree"] -> its `ui` is the UI tree API: the page
+#                                      is declared once (state, actions, the
+#                                      build below) and the console's engine
+#                                      draws it and moves focus, keys and taps
 #
 # The one that matters here is `files:documents`, which brings BOTH the storage verbs
 # (`files.list()`, `files.new_name()`, `files.rename()`, `files.duplicate()`,
 # `files.delete()`, `files.badge()`) and `open_editor(name)` -- a handle onto
-# one note, over the console's own editor. The editor is not in this file: the
-# text, the caret, wrap, undo, the clipboard, Select, the Markdown taps
-# (a `[ ]` box toggles, a `[[link]]` opens its note) and running a program
-# (`ed.run()` on a `.py` or `.lua`, and back here when it ends) all live in the shell and
-# are drawn through the handle, the way `make_layer` hands a cart the layer engine. This
-# file is the page: the list, the tools and where the note goes, drawn with the
-# public UI API (`ui`), which moves focus, keys and taps for it.
-#
-# The handle owns the keyboard while a note is open, so there is no typing code
-# here for the NOTE. Taps on the note are the cart's to forward: only the cart
-# knows where it drew it.
+# one note, over the console's own editor. The editor is not in this file:
+# the text, the caret, wrap, undo, the clipboard, saving and running a program
+# (`ed.run()` on a `.py` or `.lua`, and back here when it ends) all live in the
+# shell. The page's text editor adopts the handle (`s.note.adopt(ed)`), so it
+# types into the note and draws it; Open link asks the handle what the caret's
+# line holds (`ed.follow()`: a `[ ]` box ticks, a `[[link]]` opens its note).
 
 NAME_MAX = 24          # characters a name takes
-DESK_W = 600           # a page this wide shows the vault beside the note
-SIDE = 268             # the vault's column on the desk, from the window's content
-FOOT = 31              # the desk window's foot
 ICON = {"MD": "notes", "TXT": "doc", "JSON": "doc", "PY": "code", "LUA": "code"}
-# The note's tools: Select toggles a selection that a drag or a roll grows.
-# A program's add Run, which saves it and runs it, and comes back here after.
-TOOLS = (("select", "Select"), ("copy", "Copy\tCtrl+C"), ("cut", "Cut\tCtrl+X"),
-         ("paste", "Paste\tCtrl+V"))
-RUN_TOOLS = TOOLS + (("run", "Run"),)
-KEY_DEL, KEY_BS, KEY_ESC, KEY_DUP, KEY_CR, KEY_LF = 0x7F, 0x08, 0x1B, 0x04, 0x0D, 0x0A
-
-NO_STORE = ("Notes keep to a card;", "put one in to start.")
-FS = 1                 # the font scale the page lays out at (_layout)
 MODES = {"md": "Markdown", "code": "Program", "json": "Data", "text": "Text"}
+NEW = "+new"           # the list's first row, New note: no note's name
 
-# The page is drawn again on every change, so what it hands the verbs is
-# made once: the override tables here, the vault's rows and caption in
-# _refresh, a note's shown name in _title.
-TOOL_O = (({"current": False, "disabled": False}, {"current": False, "disabled": True}),
-          ({"current": True, "disabled": False}, {"current": True, "disabled": True}))
-UNDO_O = ({"disabled": False}, {"disabled": True})
-OFF = ((False, False), (True, False), (False, True), (True, True))
-STATUS_O = {"id": "status"}
-MODE_O = {"id": "mode"}
-VAULT_O = {"id": "vault", "lead": True, "gen": 0}   # gen: moved with the rows
-DIM_O = {"tone": "dim"}
-FIELD_O = {"id": "Name", "hint": "my note"}
-WRAP_O = {"wrap": True, "tone": "dim"}
-WASH_O = {"wash": True}
-# The note's page: its own id, so the list's page keeps none of its scroll
-# (closing a note opens the list's page anew, on the current row), and its
-# gen, bumped when what the page shows beside the note changes, so a frame
-# that changes the note alone draws its rows alone.
-PAGE_O = {"id": "note", "gen": 0}
-_shows = [None] * 11   # what the page showed beside the note last frame
+s = ui.state(
+    notes=ui.model(key="name", name="", shown="", icon=""),   # New note, then the vault
+    cur=ui.row_of("notes"),
+    store=True,                     # a card to keep notes on
+    editing=False,                  # a note is open
+    routed=False,                   # ...the console asked for it (Files): Back goes back there
+    title="Notes",                  # ...its shown name (the page's title)
+    note=ui.doc("", "markdown"),    # ...its text, the handle's (adopt)
+    status="",                      # ...its mode, or why its last save was refused
+    md=False,                       # ...it is Markdown: Open link
+    can_run=False,                  # ...it is a program: Run
+    selecting=False,                # ...Select is on
+    view=ui.enum("nostore", "empty", "list", "note", init="list"),   # what a handheld shows
+    side=ui.opt(0),                 # the desk's vault column, as its divider left it
+    asking=ui.enum("none", "new", "rename", init="none"),
+    typed="",                       # the name the dialog holds
+)
+ui.derive("listed", cond="@desk || !editing")     # the vault shows: its verbs are on offer
+ui.app("Notes", icon="notes", back="close")
 
-ed = None              # the open note's editor handle (None: the list)
-tools = TOOLS          # the open note's tools: RUN_TOOLS on a program
-names = None           # the vault, newest first (None: no storage)
-rows = None            # the vault's table rows: New note, then a note each
-caption = ""           # "8 notes"
-cur = 0                # the list's current row: 0 is New note, then a note each
-asking = None          # None | "new" | "rename": the dialog that is up
-typed = ""             # what has been typed into it
-menu = False           # the current row's menu is up
-paging = False         # a drag that began on the note belongs to the note
-
-
-def _layout(w, h, fs):
-    # The page reflows: it lays out in content_rect() every frame, so the
-    # surface it is given is the whole one (the window's on the desk).
-    global FS
-    FS = max(1, fs)
-
-
-def _init():
-    _refresh()
-    # A note the console was already asked to open -- Files routed a `.md`, a
-    # `.json` or a `.txt` here. `open_editor()` with no name is that request,
-    # and None when there was none.
-    asked = open_editor()
-    if asked is not None:
-        _show(asked)
-    else:
-        last = prefs.get("last")
-        if names and last in names:
-            _open(last)
-
-
-# -- the vault ---------------------------------------------------------------
-
-
-def _refresh(keep=None):
-    global names, cur, rows, caption
-    got, err = files.list()
-    names = None if err is not None else list(got)
-    n = len(names) if names else 0
-    rows = [("new", "New note")] + [(ICON.get(files.badge(m), "doc"), shown(m))
-                                    for m in names or ()]
-    caption = "%d note%s" % (n, "" if n == 1 else "s")
-    VAULT_O["gen"] += 1
-    if keep is not None and names and keep in names:
-        cur = names.index(keep) + 1
-    cur = max(0, min(cur, n))
+ed = None              # the open note's editor handle (None: none open)
+names = []             # the vault, newest first
 
 
 def shown(name):
@@ -122,457 +63,268 @@ def shown(name):
     return words[:1].upper() + words[1:]
 
 
-_titled = [None, "", ""]   # the name _title last saw, its shown name, and "... · saved"
-
-
-def _title(name, saved=False):
-    """`shown(name)`, made once a name (`ed.name()` is one object a note)."""
-    t = _titled
-    if t[0] is not name:
-        t[0] = name
-        t[1] = shown(name)
-        t[2] = t[1] + " · saved"
-    return t[2] if saved else t[1]
-
-
-def _row():
-    """The note the current row names, or None (New note)."""
-    if not names or cur < 1 or cur > len(names):
-        return None
-    return names[cur - 1]
+def _refresh(keep=None):
+    global names
+    got, err = files.list()
+    s.store = err is None
+    names = list(got) if err is None else []
+    s.notes = [{"name": NEW, "shown": "New note", "icon": "new"}] + [
+        {"name": n, "shown": shown(n), "icon": ICON.get(files.badge(n), "doc")} for n in names]
+    s.view = "nostore" if err is not None else "note" if s.editing else "list" if names else "empty"
+    if keep is not None and keep in names:
+        s.cur = keep
+    elif s.cur not in names:
+        s.cur = names[0] if names else NEW
 
 
 def _find(target):
     """The note a `[[link]]` names: by its name, or as the list shows it."""
     t = target.strip().lower()
-    for n in names or ():
+    for n in names:
         if n.lower() == t or shown(n).lower() == t:
             return n
     return target
 
 
-def _open(name):
+def _show(handle, routed=False):
+    global ed
+    _shut()
+    ed = handle
+    s.note.adopt(ed)
+    s.editing = True
+    s.routed = routed
+    s.title = shown(ed.name())
+    s.md = ed.mode() == "md"
+    s.can_run = ed.can_run()
+    s.selecting = False
+    _status()
+    prefs.set("last", ed.name())
+    _refresh(ed.name())
+
+
+def _shut():
+    """The open note saved and let go (no Save button: leaving saves)."""
+    global ed
+    if ed is not None:
+        name = ed.name()
+        ed.close()
+        ed = None
+        s.editing = False
+        s.title = "Notes"
+        _refresh(name)
+
+
+def _open_name(name):
     got = open_editor(name)
     if got is not None:
         _show(got)
 
 
-def _show(handle):
-    global ed, tools
-    _close()
-    ed = handle
-    tools = RUN_TOOLS if ed.can_run() else TOOLS
-    ed.focus()                          # the handle takes the keyboard
-    prefs.set("last", ed.name())
-    _refresh(ed.name())
+def _status():
+    s.status = ed.badge() or MODES.get(ed.mode(), ed.mode())
 
 
-def _close():
-    global ed
-    if ed is not None:
-        name = ed.name()
-        ed.close()                      # saves on the way out: no Save button
-        ed = None
-        _refresh(name)
+# -- the actions ---------------------------------------------------------------
 
 
-# -- the verbs on a row: Rename, Duplicate, Move to Trash ---------------------
+def opened():
+    """A note the console was asked to open (Files routed a `.md`, a `.json`
+    or a `.txt` here) is shown; else the last one opened, where it is kept."""
+    _refresh()
+    asked = open_editor()
+    if asked is not None:
+        _show(asked, True)
+        return
+    last = prefs.get("last")
+    if last in names:
+        _open_name(last)
 
 
-def _ask(what):
-    global asking, typed, menu
-    menu = False
-    asking = what
-    typed = shown(_row())[:NAME_MAX] if what == "rename" else ""
+def open_row(row):
+    if row.name == NEW:
+        new()
+    else:
+        _open_name(row.name)
 
 
-def _answer():
-    """The dialog's verb: make the new note, or rename the row's."""
-    global asking
-    what, asking = asking, None
-    name = typed.strip()
+def close():
+    _shut()
+    ui.focus(s.cur + "/open")       # the list again, on the note's row
+
+
+def new():
+    s.typed = ""
+    s.asking = "new"
+    ui.focus("typed")
+
+
+def rename(row):
+    if row.name == NEW:
+        return
+    s.cur = row.name
+    s.typed = shown(row.name)[:NAME_MAX]
+    s.asking = "rename"
+    ui.focus("typed")
+
+
+def duplicate(row):
+    if row.name == NEW:
+        return
+    got, err = files.duplicate(row.name)
+    _refresh(got if err is None else row.name)
+
+
+def trash(row):
+    if row.name == NEW:
+        return
+    if ed is not None and ed.name() == row.name:
+        _shut()
+    files.delete(row.name)          # to the Trash, which restores: nothing to ask
+    _refresh()
+
+
+def make():
+    """The dialog's verb: make the new note and open it, or rename the
+    row's."""
+    what, name = s.asking, s.typed.strip()
+    s.asking = "none"
     if what == "new":
-        # Made is written: the vault lists the note and stands on its row,
-        # so the desk's column never reopens the note that was open before.
         got, err = files.new_name(name or None)
         if err is None:
             got, err = files.save_text(got, "")
         if err is None:
-            _open(got)
-    elif what == "rename" and name and _row() is not None:
-        got, err = files.rename(_row(), name)
-        _refresh(got if err is None else None)
+            _refresh(got)
+            _open_name(got)
+    elif name and s.cur:
+        was = s.cur
+        if ed is not None and ed.name() == was:
+            _shut()
+        got, err = files.rename(was, name)
+        _refresh(got if err is None else was)
 
 
-def _duplicate():
-    name = _row()
-    if name is not None:
-        got, err = files.duplicate(name)
-        _refresh(got if err is None else name)
+def cancel():
+    s.asking = "none"
 
 
-def _trash():
-    name = _row()
-    if name is not None:
-        files.delete(name)              # to the Trash, which restores: nothing to ask
-        _refresh()
+def undo():
+    s.note.undo()
 
 
-# -- frame ---------------------------------------------------------------------
+def redo():
+    s.note.redo()
 
 
-def _update(dt):
-    global asking
-    k = keyp()
-    if not k:
-        return
-    if asking is not None:
-        if k == KEY_ESC:
-            asking = None
-        elif k in (KEY_CR, KEY_LF):
-            _answer()                   # Enter makes
-        elif k == KEY_BS and not typed:
-            asking = None               # backspacing off the start backs out
-        _hand_keys()
-        return
-    if menu:
-        return
+def select():
+    ed.select_mode()
+    s.selecting = ed.selecting()
+
+
+def copy():
+    s.note.copy()
+
+
+def cut():
+    s.note.cut()
+
+
+def paste():
+    s.note.paste()
+
+
+def run():
+    if ed.run():
+        ui.after(0, "restatus")     # a run the console could not start badges the note
+    else:
+        _status()
+
+
+def restatus():
     if ed is not None:
-        if k == KEY_ESC or btnp("b"):
-            _close()
-        return
-    if k in (KEY_DEL, KEY_BS):
-        _trash()
-    elif k == KEY_DUP:
-        _duplicate()
-    elif k in (ord("n"), ord("N")):
-        _ask("new")
-    elif k in (ord("m"), ord("M")) and _row() is not None:
-        _open_menu()
-    elif k == KEY_ESC:
-        quit()
+        _status()
 
 
-def _open_menu():
-    global menu
-    menu = True
+def follow():
+    got = ed.follow()
+    if got is not None and got[0] == "link":
+        _open_name(_find(got[1]))
+    elif got is not None:
+        s.note.go(got[1] + 1, ed.caret()[1] + 1)    # the tick moves the version
 
 
-def _draw():
-    x, y, w, h = content_rect()
-    if w >= DESK_W:
-        _desk(x, y, w, h)
-    elif ed is not None:
-        _note_page(x, y, w, h)
-    else:
-        _list_page(x, y, w, h)
-    _tapping()
-    _hand_keys()
+ui.hook("opened", opened)
+ui.hook("open_name", _open_name, takes="arg")
+ui.hook("restatus", restatus)
+ui.action("open", "Open", open_row, takes="row", hint="")
+ui.action("close", "Close", close, when="editing && !routed", off="hide")
+ui.action("new", "New note", new, keys=("n",), when="store && listed", off="hide")
+ui.action("rename", "Rename", rename, takes="row", row="cur", keys=("m",), when="listed", off="hide")
+ui.action("duplicate", "Duplicate", duplicate, takes="row", row="cur", keys=("ctrl+d",), when="listed",
+          off="hide")
+ui.action("trash", "Move to Trash", trash, takes="row", row="cur", keys=("t",), when="listed", off="hide")
+ui.action("make", "Make", make)
+ui.action("rename_it", "Rename", make)
+ui.action("cancel", "Cancel", cancel)
+ui.action("undo", "Undo", undo, hint="")
+ui.action("redo", "Redo", redo, hint="")
+ui.action("select", "Select", select, hint="")
+ui.action("copy", "Copy", copy, keys=("ctrl+c",), hint="")
+ui.action("cut", "Cut", cut, keys=("ctrl+x",), hint="")
+ui.action("paste", "Paste", paste, keys=("ctrl+v",), hint="")
+ui.action("run", "Run", run, when="can_run", off="hide", hint="")
+ui.action("follow", "Open link", follow, keys=("ctrl+o",), when="md", off="hide", hint="")
 
 
-def _hand_keys():
-    """The open note holds the keyboard unless a dialog or a row's menu is
-    up over it: those take the keys, and a mouse's click on their buttons,
-    which a focused handle would claim over its note."""
-    if ed is not None:
-        want = asking is None and not menu
-        if ed.focused() != want:
-            ed.focus(want)
+# -- the page ------------------------------------------------------------------
 
 
-# -- the handheld's pages -------------------------------------------------------
+def _vault():
+    with ui.scroll("vault"):
+        with ui.rows("notes", cur="cur"):
+            ui.link("open", icon="{.icon}", label="{.shown}")
 
 
-def _list_page(x, y, w, h):
-    global cur
-    ui.bar("Notes")
-    ui.page("")
-    if names is None:
-        _blank(x, y, w, h, "No storage", NO_STORE)
-        return
-    if not names:
-        _empty(x, y, w, h)
-        _dialog()
-        return
-    _hints()
-    _list(False)
-    ui.end()
-    _row_menu()
-    _dialog()
+def _note():
+    ui.text_editor("note", focus=True)
+    with ui.row("tools"):
+        ui.button("undo", icon="undo", alone=True)
+        ui.button("redo", icon="redo", alone=True)
+        ui.button("select", icon="select", alone=True, marked="selecting")
+        ui.button("copy", icon="copy", alone=True)
+        ui.button("cut", icon="cut", alone=True)
+        ui.button("paste", icon="paste", alone=True)
+        ui.button("follow", icon="forward", alone=True)
+        ui.button("run", icon="run", alone=True)
+        ui.status("{status}")
 
 
-def _hints():
-    if asking is not None:
-        ui.hints(("confirm", "Make" if asking == "new" else "Rename", "cancel", "Cancel"))
-    elif menu:
-        ui.hints(("confirm", "Choose", "cancel", "Close"))
-    else:
-        ui.hints(("confirm", "Open", "N", "New", "M", "Menu", "Del", "Trash"))
+def _no_store():
+    ui.empty("No storage", icon="notes", lines=["Notes keep to a card;", "put one in to start."])
 
 
-def _empty(x, y, w, h):
-    if asking is None:
-        ui.hints(("confirm", "New note", "back", "Back"))
-    else:
-        _hints()
-    _blank(x, y, w, h, "No notes yet",
-           ("A note can be a list, a story,", "a plan or a little program."), True)
+def _no_notes():
+    ui.link("new", icon="new")
+    ui.empty("No notes yet", icon="notes", lines=["A note can be a list, a story,", "a plan or a little program."])
 
 
-def _blank(x, y, w, h, title, lines, verb=False):
-    """An empty page: Notes' icon, what is missing and, with `verb`, New
-    note under it -- a gap under the page's top on the handheld, a sixth of
-    the way down on the desk."""
-    desk = w >= DESK_W
-    top = y + (h // 6 if desk else 12 * FS)
-    ui.at(x, top, w, y + h - top)
-    at = ui.empty("notes", title, lines)
-    if verb:
-        bw, bh = (180, 40) if desk else (124 * FS, 26 * FS)
-        ui.at(x + (w - bw) // 2, at + (6 if desk else 3 * FS), bw, bh)
-        ui.icon("new")
-        if ui.button("New note", "primary"):
-            _ask("new")
+def _pick():
+    ui.empty("Pick a note", icon="notes", lines=["Or make a new one."])
 
 
-def _list(desk, x=0, y=0, w=0, h=0):
-    """The vault as a table: New note first, then a row a note -- on the
-    desk in its column (x, y, w, h), the rows on the window's ground."""
-    global cur
-    if desk:
-        ui.at(x, y, w, h)
-        cur, opened = ui.table(caption, ("", ""), rows, cur, VAULT_O)
-    else:
-        ui.group(caption)
-        cur, opened = ui.table("", ("", ""), rows, cur, VAULT_O)
-        ui.group()
-    if opened or (desk and ed is not None and _row() is not None
-                  and _row() != ed.name()):
-        if cur == 0:
-            _ask("new")
-        elif _row() is not None:
-            _open(_row())
-
-
-def _row_menu():
-    global menu
-    if not menu:
-        return
-    got = ui.table_rows()
-    if got is not None:
-        y0, rh, view, _px, _side = got
-        ui.at(view[0], y0 + cur * rh, view[2], rh)
-    menu = ui.popover("row", 0, WASH_O)
-    a = ui.menu("", ["Rename…", "Duplicate\tCtrl+D"], ["pencil", "dup"])
-    b = ui.menu("", ["Move to Trash\tDel"], ["trash"], kinds=("danger",))
-    ui.popover()
-    if a == 0:
-        _ask("rename")
-    elif a == 1:
-        menu = False
-        _duplicate()
-    elif b == 0:
-        menu = False
-        _trash()
-
-
-def _dialog():
-    global typed, asking
-    if asking is None:
-        return
-    p = ui.dialog("New note" if asking == "new" else "Rename",
-                  ("Cancel", "Make" if asking == "new" else "Rename"))
-    typed, done = ui.field("", typed, NAME_MAX, FIELD_O)
-    if asking == "new":
-        ui.label("End the name with .py or .lua to make a program you can Run.", WRAP_O)
-    ui.dialog()
-    if p == 1 or done:
-        _answer()
-    elif p == 0:
-        asking = None
-
-
-def _note_page(x, y, w, h):
-    """A note open: undo and redo lent to the bar, the note, the tools at the foot."""
-    t = ui.bar(_title(ed.name()), ("undo", "redo"),
-               OFF[(not ed.can_undo()) + 2 * (not ed.can_redo())], True)
-    if t == 0:
-        ed.undo()
-    elif t == 1:
-        ed.redo()
-    elif t == -2:
-        _close()
-        return
-    ui.page("", _page_o(False))
-    foot = 34
-    _sheet(x + 6, y + 3, w - 12, h - foot - 5, 8 * FS)
-    fy = y + h - foot + 1
-    for i in range(len(tools)):
-        ui.at(x + 6 + i * 46, fy, 42, 32)
-        _tool(i)
-    sx = max(x + w - 120, x + 6 + len(tools) * 46)
-    ui.at(sx, fy + 5, x + w - 6 - sx, 22)
-    ui.info("", _status(), STATUS_O)
-    ui.end()
-
-
-def _page_o(desk):
-    """The note's page's overrides: its gen, moved when what the page shows
-    beside the note does -- the tools' states, the foot's word and, on the
-    desk, the vault's rows and the undo and redo tools."""
-    moved = (_seen(0, ed.name()) | _seen(1, ed.selecting()) | _seen(2, ed.has_selection())
-             | _seen(3, ed.can_paste()) | _seen(4, _status()) | _seen(5, FS) | _seen(6, desk))
-    if desk:
-        moved |= (_seen(7, rows) | _seen(8, cur) | _seen(9, ed.can_undo())
-                  | _seen(10, ed.can_redo()))
-    if moved:
-        PAGE_O["gen"] += 1
-    return PAGE_O
-
-
-def _seen(i, v):
-    """1 where `v` is not what slot `i` of the page held last frame."""
-    if _shows[i] is v or _shows[i] == v:
-        return 0
-    _shows[i] = v
-    return 1
-
-
-def _tool(i):
-    icon, label = tools[i]
-    off = (icon in ("copy", "cut") and not ed.has_selection()) or \
-        (icon == "paste" and not ed.can_paste())
-    if ui.tool(icon, label, TOOL_O[1 if icon == "select" and ed.selecting() else 0][1 if off else 0]):
-        if icon == "select":
-            ed.select_mode()
-        elif icon == "copy":
-            ed.copy()
-        elif icon == "cut":
-            ed.cut()
-        elif icon == "run":
-            ed.run()
-        else:
-            ed.paste()
-
-
-_counted = [-1, ""]    # the selection's size _status last said, and its words
-
-
-def _status():
-    """The foot's word: a refusal, else what a selection holds, else the mode."""
-    if ed.badge():
-        return ed.badge()
-    if ed.selecting():
-        n = ed.selected_count()
-        if n != _counted[0]:
-            _counted[0] = n
-            _counted[1] = "%d letter%s" % (n, "" if n == 1 else "s")
-        return _counted[1]
-    return _mode()
-
-
-def _mode():
-    m = ed.mode()
-    return MODES.get(m, m)
-
-
-def _sheet(x, y, w, h, r=0):
-    """Where the note draws on its paper (corners `r`), and the rect a tap
-    is forwarded through."""
-    sheet[0] = x
-    sheet[1] = y
-    sheet[2] = w
-    sheet[3] = h
-    ed.draw(x, y, w, h, 1, r)
-
-
-sheet = [0, 0, 0, 0]   # the note's rect as last drawn (w 0: never)
-
-
-# -- the desk: the vault beside the note --------------------------------------
-
-
-def _desk(x, y, w, h):
-    """The vault as a column beside the note (Files' split), the note's tools
-    over it, a foot under both: its rule, the note's state, the clipboard's
-    keys."""
-    ui.bar(_title(ed.name()) if ed is not None else "")
-    ui.page("", _page_o(True) if ed is not None and names is not None else None)
-    if names is None:
-        _blank(x, y, w, h, "No storage", NO_STORE)
-        return
-    side = min(SIDE, w // 3)
-    fy = y + h - FOOT
-    ui.at(x + side, y, 1, h)
-    ui.rule()
-    ui.at(x + 4, fy, w - 8, 1)
-    ui.rule()
-    _list(True, x, y + 12, side - 4, fy - y - 12)
-    px = x + side + 1
-    if ed is not None:
-        tx = px + 11
-        for i, (icon, label) in enumerate((("undo", "Undo\tCtrl+Z"), ("redo", "Redo\tCtrl+Y"))):
-            ui.at(tx + 40 * i, y + 8, 36, 36)
-            off = not (ed.can_undo() if i == 0 else ed.can_redo())
-            if ui.tool(icon, label, UNDO_O[off]):
-                if i == 0:
-                    ed.undo()
-                else:
-                    ed.redo()
-        ui.at(tx + 86, y + 14, 1, 24)
-        ui.rule()
-        for i in range(len(TOOLS)):
-            ui.at(tx + 96 + 40 * i, y + 8, 36, 36)
-            _tool(i)
-        if len(tools) > len(TOOLS):
-            ui.at(tx + 262, y + 14, 1, 24)
-            ui.rule()
-            ui.at(tx + 272, y + 8, 36, 36)
-            _tool(len(TOOLS))
-        ui.at(px, y + 8, x + w - px - 2, 36)
-        ui.info("", ed.badge() or _mode(), MODE_O)
-        ui.at(px, y + 52, x + w - px, 1)
-        ui.rule()
-        _sheet(px, y + 53, x + w - px, fy - y - 61)
-        keys = ("Ctrl C", "Copy", "Ctrl X", "Cut", "Ctrl V", "Paste")
-        hw = ui.hints_width(keys)
-        ui.at(x + w - 4 - hw, fy + 5, hw, FOOT - 1)
-        ui.hints(keys)
-        ui.at(x + 4, fy + 9, side, FOOT - 1)
-        ui.label(_title(ed.name(), True), DIM_O)
-    else:
-        _blank(px, y, x + w - px, fy - y, "Pick a note", ("Or make a new one.",))
-    ui.end()
-    _row_menu()
-    _dialog()
-
-
-# -- taps on the note: the draw pass is the hit map ---------------------------
-
-
-def _tapping():
-    global paging
-    if ed is None or asking is not None or menu or not sheet[2]:
-        return
-    t = touch()
-    if t is None:
-        return
-    px, py, click, down = t
-    sx, sy, sw, sh = sheet
-    inside = sx <= px < sx + sw and sy <= py < sy + sh
-    # A PRESS on the note asks the handle what the tap meant -- a tapped
-    # [[link]] is another note, the one thing the page acts on; the checkbox
-    # and the caret it handles itself. What follows the press is a DRAG, a
-    # pan or, while selecting, a growing selection.
-    if click and inside:
-        got = ed.tap(px, py, True)
-        paging = True
-        if got is not None and got[0] == "link":
-            paging = False
-            _open(_find(got[1]))
-    elif not down:
-        if paging:
-            ed.drag(px, py, False)
-        paging = False
-    elif paging:
-        ed.drag(px, py, True)
+def build():
+    with ui.page("{title}"):
+        # the desk: the vault beside the note
+        with ui.panes("row", "desk", shown="@desk"):
+            with ui.pane("vault", size="side", start=280, head=False):
+                ui.switch("view", {"nostore": _no_store, "empty": _no_notes, "_": _vault})
+            with ui.pane("doc", grow=True, head=False):
+                ui.switch("editing", {True: _note, False: _pick})
+        # a handheld: one at a time
+        ui.switch("view", {"nostore": _no_store, "empty": _no_notes, "list": _vault, "note": _note},
+                  shown="!@desk")
+        with ui.dialog("New note", ["cancel", "make"], shown="asking=new"):
+            ui.field("", "typed", NAME_MAX, on="make", hint="my note")
+            ui.label("End the name with .py or .lua to make a program you can Run.", wrap="word",
+                     tone="dim")
+        with ui.dialog("Rename", ["cancel", "rename_it"], shown="asking=rename"):
+            ui.field("", "typed", NAME_MAX, on="rename_it", hint="my note")

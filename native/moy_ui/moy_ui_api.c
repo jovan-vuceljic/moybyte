@@ -1599,9 +1599,11 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
             int h = stop_at(v, n, x, y);
             if (h >= 0 && v[h].id == c->press) {
                 c->act = c->press;
-                c->focus = c->press;
-                c->focus_box = v[h].b;
-                c->focus_name[0] = 0;
+                if (!c->elsewhere) {        // keys another surface's: the tap acts, focus stays off
+                    c->focus = c->press;
+                    c->focus_box = v[h].b;
+                    c->focus_name[0] = 0;
+                }
                 c->tap_x = (int16_t)x;
                 c->tap_y = (int16_t)y;
             }

@@ -840,10 +840,10 @@ def _surface_plan(ws, cfg):
         if surface == "notes":
             # Notes with a note open: its page of tools, the note in the look
             plan.append(("app_notes_note",
-                         lambda: ws.run.player.ns["_open"](NOTES_VAULT[0][0])))
+                         lambda: ws.run.player.tree.act("open_name", NOTES_VAULT[0][0])))
             # ...and a program open: the same tools and Run
             plan.append(("app_notes_script",
-                         lambda: ws.run.player.ns["_open"](NOTES_VAULT[1][0])))
+                         lambda: ws.run.player.tree.act("open_name", NOTES_VAULT[1][0])))
 
     def park():
         if ws.webhost is None:
@@ -916,7 +916,7 @@ def _two_windows(ws):
         ws.home.go_home()                     # the desk's windows close
         ws.home.open_desk()
         open_cart(ws, "Notes")
-        ws.run.player.ns["_open"](NOTES_VAULT[0][0])
+        ws.run.player.tree.act("open_name", NOTES_VAULT[0][0])
         app = ws.app("terminal")
         ws.spine.open_app(app)
         f = app.face

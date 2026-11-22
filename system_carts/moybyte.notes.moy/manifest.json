@@ -1,11 +1,14 @@
 {
   "format": "moy-1",
-  "version": 15,
+  "version": 16,
   "title": "Notes",
   "id": "moybyte.notes",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "extensions": [
+    "moybyte.uitree"
+  ],
   "moybyte": {
     "type": "app",
     "system": true,

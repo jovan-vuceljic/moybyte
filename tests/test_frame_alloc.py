@@ -623,7 +623,7 @@ def _typing(loop, ms, least=0):
     over `ms` and at least `least` frames."""
     from gc import mem_alloc
     keys = b"the quick brown fox jumps over the lazy dog "
-    fed = loop.ws.run.player.focus_editor
+    fed = loop.ws.run.player.ns["ed"]
     out = []
     n = 0
     t0 = time.ticks_ms()
@@ -649,15 +649,15 @@ def notes(loop, info):
         loop.step()
     ns = ws.run.player.ns
     got, err = ns["files"].new_name("probe")
-    ns["_open"](got)
+    ws.run.player.tree.act("open_name", got)
     for _ in range(60):
         loop.step()
     info["notes_error"] = str(ws.cart_error)
-    info["notes_focused"] = ws.run.player.focus_editor is not None
+    info["notes_focused"] = ns["ed"] is not None and ws.run.player.tree.typing()
     _typing(loop, 1500)                  # the first keys' edges, settled
     # ...and the idle save they owe (EditorHandle.AUTOSAVE_MS), an event of
     # its own: idle is what comes after it.
-    fed = ws.run.player.focus_editor
+    fed = ns["ed"]
     t0 = time.ticks_ms()
     while fed.dirty() and time.ticks_diff(time.ticks_ms(), t0) < 15000:
         loop.step()
@@ -669,11 +669,11 @@ def notes(loop, info):
     d0 = ws.frame_state.frames_drawn
     info["notes_idle"] = _frames(loop, @WINDOW_MS@, False, @MIN_FRAMES@)
     d1 = ws.frame_state.frames_drawn
-    info["notes_text0"] = len(ws.run.player.focus_editor.text())
+    info["notes_text0"] = len(fed.text())
     info["notes_typing"] = _typing(loop, @WINDOW_MS@, @MIN_FRAMES@)
     info["notes_idle_drawn"] = d1 - d0
     info["notes_typing_drawn"] = ws.frame_state.frames_drawn - d1
-    info["notes_text"] = len(ws.run.player.focus_editor.text())
+    info["notes_text"] = len(fed.text())
     gc.enable()
     notes_swiped(loop, info)
 
@@ -685,13 +685,13 @@ def notes_swiped(loop, info):
     import moy_loop
     from gc import mem_alloc
     ws = loop.ws
-    fed = ws.run.player.focus_editor
+    fed = ws.run.player.ns["ed"]
     fed.set_text("\n".join("Line %d of a long note, with words enough to wrap past the "
                            "edge of the paper" % i for i in range(120)))
     fed.save()
     for _ in range(60):
         loop.step()
-    x, y, w, h = ws.run.player.ns["sheet"]
+    x, y, w, h = ws.run.player.tree.engine.views["note"][0]
     out = []
     for rep in range(4):
         y0, y1 = (y + h * 3 // 4, y + h // 4) if rep % 2 == 0 else (y + h // 4, y + h * 3 // 4)

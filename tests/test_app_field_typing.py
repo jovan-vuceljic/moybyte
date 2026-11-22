@@ -378,15 +378,15 @@ def test_notes_holds_text_mode_only_while_its_field_does(tmp_path):
     ws.open()
     for _ in range(3):
         drv.frame(DT)
-    ns = ws.run.player.ns
-    assert ns["ed"] is None and ws.screen == "desktop"
+    st = ws.run.player.tree.engine.s._v      # the page's state
+    assert ws.run.player.ns["ed"] is None and ws.screen == "desktop"
     assert not ws.input.text_mode, "the list steps with the move keys"
     _type(drv, "n")
-    assert ns["asking"] == "new", "N opens the new-note dialog"
+    assert st["asking"] == "new", "N opens the new-note dialog"
     assert ws.input.text_mode, "its field types"
     _type(drv, "ab")
-    assert ns["typed"] == "ab"
+    assert st["typed"] == "ab"
     _mic(ws, drv)
-    assert ns["asking"] is None or ns["typed"] == "", "Mic gives back the empty draft"
+    assert st["asking"] == "none" or st["typed"] == "", "Mic gives back the empty draft"
     assert not ws.input.text_mode, "off the field the keyboard is the page's again"
     assert not ws.sysmenu.open, "a cancel is not the console's key"

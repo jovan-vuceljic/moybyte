@@ -160,6 +160,7 @@ class CEngine(Engine):
         self._editors = {}      # a text editor's node -> its stand-in (`_TextEditor`)
         self._legacy = {}       # a legacy node -> its stand-in (`_pane_node`), its functions in .l
         self._pn = {}           # a panes or pane node -> its stand-in (`_pane_node`)
+        self._pn_roots = None   # ...the outermost panes' nodes, found at the first frame
         self._pointers = []     # (key, its pointer= action) of each canvas a pointer is routed to
         self._held = None       # (key, action, rect): the canvas a press holds until its release
         self._pop_lists = {}    # a popover's key -> (model, cur) of the list the arrows walk in it
@@ -549,6 +550,7 @@ class CEngine(Engine):
         pop_lists = self._pop_lists = {}
         pop_fields = self._pop_fields = {}
         stand = self._pn = {}           # node -> a panes or pane's stand-in (`_pane_node`)
+        self._pn_roots = None
         legacies = self._legacy = {}    # node -> a legacy node's stand-in: its functions
         srcs = []
         units, lend_at = [], {}
@@ -747,6 +749,7 @@ class CEngine(Engine):
         self._doc_reads = dict(f[3])
         self._editors = dict((node, _TextEditor(self, node, key, dict(l), conds)) for node, key, l, conds in f[4])
         pn, lg = self._pn, self._legacy = {}, {}
+        self._pn_roots = None
         for node, kind, key, parent, where, src, l in f[5]:
             m = _PaneNode(kind, key, where)
             m.src = dict((k, made(v, d)) for k, v, d in src)
@@ -1040,6 +1043,7 @@ class CEditorEngine(CEngine, _ed.Engine):
         _ed.Engine.__init__(self, *a, **k)
         self._c_init()
         self._te_rect = [0, 0, 0, 0]
+        self._te_drawn = {}         # each text editor's key -> the frame that drew it last
         self._framed = False        # the last frame drew the page's panes itself (no host placed them)
 
     def paint(self, dt, cv, th, content, desk):
@@ -1054,7 +1058,17 @@ class CEditorEngine(CEngine, _ed.Engine):
             n = self._legacy_focused() or next((m for m in self._legacy.values() if "hints" in m.l), None)
             h = self._legacy_call(n, "hints") if n is not None and "hints" in n.l else ()
             x.legacy_hints("".join(t + "\0" for t in h))
-        framed = self._framed = bool(self._pn)
+        framed = False
+        if self._pn:
+            roots = self._pn_roots
+            if roots is None:
+                roots = self._pn_roots = tuple(k for k, m in self._pn.items()
+                                               if m.parent is None and m.kind != "legacy")
+            for i in range(len(roots)):
+                if self._x.pane_ask(roots[i], 0, 0) == 1:
+                    framed = True       # a shown panes: its arrangement is the frame's to read
+                    break
+        self._framed = framed
         if framed:
             self._pane_sync()
         CEngine.paint(self, dt, cv, th, content, desk)
@@ -1590,6 +1604,11 @@ class CEditorEngine(CEngine, _ed.Engine):
                 self.flash = (pane, "%s stops at its minimum, %d %s" % (
                     self._pane_name(pane), out[6], "wide" if axis == 0 else "tall"))
 
+    def te_drawn(self, key):
+        """Whether text editor `key` drew in the last frame painted (a
+        frame's question: it builds nothing)."""
+        return self._te_drawn.get(key, -1) == self.frame_no
+
     def rect_of(self, key):
         """Where node `key` was placed by the last frame or placement, else None."""
         return self._x.rect(key) if self._x is not None else None
@@ -1637,6 +1656,7 @@ class CEditorEngine(CEngine, _ed.Engine):
                 r[2] = w
                 r[3] = h
                 self._r_text_editor(te, None, r)
+                self._te_drawn[te.key] = self.frame_no
                 if self._x.back_popover() != -2:
                     for part in te.parts:      # where a popover may hang from: its caret, its word
                         a = self._part_anchor(part)
@@ -1661,8 +1681,9 @@ class CEditorPage(CEditorEngine, _ed.Page):
     """`uitree_editor.Page` (a page on the Editor's kinds a surface hosts)
     on `CEditorEngine`."""
 
-    def __init__(self, build, host, damage, files=None, close=None):
-        _ed.Page.__init__(self, build, host, damage, files, close)
+    def __init__(self, build, host, damage, files=None, close=None, gen=False):
+        _ed.Page.__init__(self, build, host, damage, files, close, gen)
         self._c_init()
         self._te_rect = [0, 0, 0, 0]
+        self._te_drawn = {}
         self._framed = False

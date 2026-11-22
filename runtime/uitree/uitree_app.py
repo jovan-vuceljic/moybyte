@@ -107,6 +107,17 @@ class Engine(S.Builder):
             self.calls += 1
         return S.Builder.run(self, fn, *args, action=action)
 
+    def args_for(self, act, row=None, arg=None):
+        """An action's arguments; a row= action's current row read as this
+        app's state, wherever it is asked (a key between frames)."""
+        if act.row is None or row is not None:
+            return S.Builder.args_for(self, act, row, arg)
+        was, _NOW.app = _NOW.app, self
+        try:
+            return S.Builder.args_for(self, act, row, arg)
+        finally:
+            _NOW.app = was
+
     @property
     def idle_owed(self):
         return (self.pics is not None and self.pics.idle_owed) or self.legacy_moved()

@@ -145,7 +145,7 @@ def _console(tmp_path, app, ships, desk=False, chip=False):
         drv = host_app.ConsoleDriver(ws)
         for _ in range(4):
             drv.frame(_DT)
-        ws.run.player.ns["_open"]("alpha")
+        ws.run.player.tree.act("open_name", "alpha")
     elif app == "myart":
         for i in range(18):
             moy_carts.save_file("drawings", "Drawing %02d" % i,
@@ -422,14 +422,14 @@ _NOTE = "\n".join(["# Plans", "", "- [ ] buy milk"]
 @pytest.mark.parametrize("desk", (False, True))
 @pytest.mark.parametrize("bufs", (1, 2, 3))
 def test_a_notes_fling_coasts_on_painted_frames_and_a_key_draws_rows(tmp_path, bufs, desk):
-    """Notes' note is a text view in the app's pass (`EditorHandle.draw`): a
+    """Notes' note is a text editor on its page (`ui.text_editor`): a
     fling of it coasts on frames the console paints with no input, each a
     shift frame, and a key typed into it draws the rows it changed, never
     the page whole -- every frame a whole repaint's bytes. (The first key
     brings the caret, left at the top, back into view: a jump past the
     view's height, which draws whole.)"""
     p = Pair(tmp_path, "notes", bufs, desk)
-    sx, sy, sw, sh = p.a.run.player.ns["sheet"]
+    sx, sy, sw, sh = p.a.run.player.tree.engine.views["note"][0]
     if desk:
         ox, oy, _w, _h = p.a.wm.windows["desktop"].content_rect()
         sx += ox
@@ -470,7 +470,9 @@ def test_a_note_whose_view_costs_more_to_copy_than_draw_draws_its_rows(tmp_path,
     if cost is None:
         assert moved.count("shift") >= 20, p.kinds
     else:
-        assert set(moved) == {"rows"}, p.kinds
+        # a step's key lands before its frame begins, so the frame it owes
+        # after has nothing to draw: painted, it runs no pass (None)
+        assert set(moved) - {None} == {"rows"}, p.kinds
 
 
 def test_an_overlay_over_the_console_log_moves_none_of_it(tmp_path):

@@ -39,7 +39,7 @@ def _desk(tmp_path):
     open_cart(ws, "Notes")
     for _ in range(3):
         _frame(drv)
-    ws.run.player.ns["_open"](NOTE[0])
+    ws.run.player.tree.act("open_name", NOTE[0])
     for _ in range(3):
         _frame(drv)
     term = ws.app("terminal")
@@ -51,7 +51,7 @@ def _desk(tmp_path):
 
 
 def _note_text(ws):
-    return ws.run.player.focus_editor.text()
+    return ws.run.player.ns["ed"].text()
 
 
 def test_each_window_strip_shows_its_own_title_icon_and_back(tmp_path):

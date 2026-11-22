@@ -1259,12 +1259,10 @@ def _notes(g, ws, state, window):
         _place(ws, "desktop", 112, 52, 900, 536)
         _settle(g, ws, 3)
     ns = ws.run.player.ns
-    if state == "list":
-        ns["cur"] = 2
-    elif state == "new":
-        ns["_ask"]("new")
+    if state == "new":
+        ws.run.player.tree.act("new")
     elif state == "edit":
-        ns["_open"]("story_ideas")
+        ws.run.player.tree.act("open_name", "story_ideas")
         _settle(g, ws, 2)
         h = ns["ed"]
         # what the targets show: an edit to undo (a box ticked and unticked)

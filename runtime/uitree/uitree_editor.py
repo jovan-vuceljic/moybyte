@@ -416,7 +416,10 @@ class Engine(uitree_app.Engine):
             o[k + 3] = b[3]
         o[_v.TXO_FIND_CI] = 1 if q and doc.find_ci else 0
         o[_v.TXO_LEFT] = ed.left
-        o[_v.TXO_TOP] = ed.top if v[1] != ed.top else -1
+        o[_v.TXO_GEN] = ed.edits + 1    # names the lines' content: a wrapped view counts its rows once a gen
+        # the editor's top line, where it moved it; a wrapped view's rows are
+        # its own (the editor counts lines), which its host reveals the caret in
+        o[_v.TXO_TOP] = ed.top if v[1] != ed.top and not doc.wrap else -1
         _v.at(x, y, w, h)
         _v.text_view(key, ed.lines, o, err, q or None, into)
         ed.top = into[0]
@@ -578,8 +581,8 @@ class Page(Engine):
     verbs (`uitree_app.Page`'s bridge): the host begins the frame, routes
     the keys and the pointer, and `paint` draws the page into its rect."""
 
-    def __init__(self, build, host, damage, files=None, close=None):
-        Engine.__init__(self, S.decl_of(S.module_of(build)), build, host, None, damage, files)
+    def __init__(self, build, host, damage, files=None, close=None, gen=False):
+        Engine.__init__(self, S.decl_of(S.module_of(build)), build, host, None, damage, files, gen)
         self.close_root = close
 
 

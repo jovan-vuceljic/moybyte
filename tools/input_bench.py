@@ -1685,7 +1685,7 @@ _ib_own('Notes')
 
 _NOTES = [(NOTES_OWN, 1.0), ("_ib_desk()", 1.0), ("@run Notes", 4.0),
           ("ws._ib_last = ws.run.player.ns['prefs'].get('last')\n"
-           "ws.run.player.ns['_open'](ws._ib_note)\nws.mark_dirty()", 2.0)]
+           "ws.run.player.tree.act('open_name', ws._ib_note)\nws.mark_dirty()", 2.0)]
 _NOTES_OUT = ("_p = ws.run.player.ns['prefs']\n"
               "(_p.set('last', ws._ib_last) if ws._ib_last is not None else _p.clear('last'))")
 
@@ -1785,7 +1785,7 @@ def surfaces():
     s.append(Surface("Map", _ed(SCRATCH, "map", "art"), rect=RIGHT_PANE,
                      inputs=("key_steps", "key_held", "key_20", "drag", "ball_slow")))
     s.append(Surface("Notes", _NOTES, "(lambda h: h.ed.top * 100000 + h.ed.row * 1000 + "
-                     "h.ed.col if h else -1)(ws.run.player.focus_editor)",
+                     "h.ed.col if h else -1)(ws.run.player.ns.get('ed'))",
                      inputs=("fling", "drag", "key_steps", "key_held", "type", "type_fast",
                              "type_line", "ball_slow"),
                      rect=(0.4, 0.2, 0.55, 0.6), teardown=_NOTES_OUT + "\nws.spine.exit()"))

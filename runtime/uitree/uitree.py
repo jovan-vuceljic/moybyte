@@ -963,6 +963,7 @@ class Decl:
 
 _DECLS = {}             # module name -> its Decl, made by its ui.state(...)
 _DECLARING = [None]     # the Decl the last ui.state(...) made: a board's only way to the declaring module
+_NAMED = [None]         # the module name a declaration made with no frames to read is made under
 
 
 def _caller_module():
@@ -1012,10 +1013,34 @@ def _d():
     return d
 
 
+def named(name):
+    """Make the declarations that follow under module name `name` where
+    no frame names the declaring module (a board): a cart's namespace, run
+    as no module (`player_tree`). None: the frames' name alone."""
+    _NAMED[0] = name
+
+
+def forget(d):
+    """Let declaration `d` go, and the templates compiled over its state:
+    a cart's, when its run ends or the cart declares again (a module's
+    lasts the process)."""
+    for k in [k for k in _DECLS if _DECLS[k] is d]:
+        del _DECLS[k]
+    if _DECLARING[0] is d:
+        _DECLARING[0] = None
+    st = d.state
+    for k in [k for k in _TMPLS if k[1] is st]:
+        del _TMPLS[k]
+
+
 def state(**decl):
     """Declare the module's state (once): the start of an app's declaration."""
     _declaring("state")
     name = _caller_module()
+    if name is None:
+        name = _NAMED[0]
+    if name is not None and name in _DECLS:
+        forget(_DECLS[name])        # declared again (a cart run anew): the last one's let go
     d = Decl(name, State(decl))
     _DECLS[name if name is not None else id(d)] = d
     _DECLARING[0] = d

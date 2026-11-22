@@ -262,11 +262,19 @@ class AppFace:
         # an app on the whole surface (a desk's window, or its glass) lays out
         # on the desk's rows there; the fixed raster is the handheld's
         desk = pl.run.app_full_canvas and _layout_base.metric_class() == _layout_base.DESK
-        ed = self._note() if render and not self._bg_on else None
-        if ed is None or (self._over[2] and ed.meets(self._over)):
-            host.whole()                # nothing vouches for the page's pixels
+        tree = pl.tree
+        if tree is not None:
+            tree.input()
+            if render and not self._bg_on:
+                tree.aim(host, self._over)  # the engine plans its page's frame
+            else:
+                host.whole()
         else:
-            ed.aim(host)                # a caret's step lands as this frame's shift
+            ed = self._note() if render and not self._bg_on else None
+            if ed is None or (self._over[2] and ed.meets(self._over)):
+                host.whole()            # nothing vouches for the page's pixels
+            else:
+                ed.aim(host)            # a caret's step lands as this frame's shift
         self._over[2] = 0
         _ui_draw.say_lost(ctx)
         # On a desk the run's canvas is its window's own, which only the run
@@ -274,9 +282,10 @@ class AppFace:
         own = self.holds(cv)
         if own:
             _ui_draw.window_frame(2)
+        away = fed is not None or (tree is not None and tree.typing())
         try:
             settled = host.run(cv, ws.theme_colors, self.ui_room(), a, desk, ws.windowed_chrome,
-                               fed is not None, deaf=deaf)
+                               away, deaf=deaf)
         finally:
             if own:
                 _ui_draw.window_frame(0)
