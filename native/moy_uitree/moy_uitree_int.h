@@ -132,7 +132,7 @@ typedef struct {
 } uit_prop_t;
 
 // Node flags (`lit` of a two-way control).
-enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_FIELD = 4, NL_HIDE = 8 };
+enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_SWATCH = 2, NL_FIELD = 4, NL_HIDE = 8 };
 // A label's text options (`nbtn`): wrap= in bits 0-1 (LT_WORD, LT_CHAR), its face's
 // role + 1 in bits 2-4, the toolkit's `centre` for align= in bits 5-7, lines= given.
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.

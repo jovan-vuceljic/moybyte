@@ -55,6 +55,7 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_STEPS "steps"
 #define UT_LOOK_SEG "seg"
 #define UT_LOOK_CYCLE "cycle"
+#define UT_LOOK_SWATCHES "swatches"
 #define UT_MKIND_DANGER "danger"
 #define UT_NAV_OFF "off"
 #define UT_PAD_S "s"

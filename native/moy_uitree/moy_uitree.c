@@ -1457,6 +1457,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     if (!strcmp(name, "look") && (kind == UIT_SEG || kind == UIT_SLIDER || kind == UIT_PROGRESS)) {
         if (!strcmp(src, kind == UIT_SEG ? "cycle" : kind == UIT_SLIDER ? "steps" : "count"))
             N->lit |= kind == UIT_SEG ? NL_CYCLE : NL_STEPS;
+        else if (kind == UIT_SEG && !strcmp(src, "swatches"))
+            N->lit |= NL_SWATCH;
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
     if (kind == UIT_FIELD && (!strcmp(name, "max") || !strcmp(name, "commit") || !strcmp(name, "secret"))) {

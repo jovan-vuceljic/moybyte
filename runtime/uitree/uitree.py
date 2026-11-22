@@ -2417,7 +2417,9 @@ def seg(label, name, labels=None, text=None, look="seg", **p):
     enum, each value's word from label table `labels=` (every value named);
     over a `row_of`, its model's rows in order, each word the row template
     `text=`. `look="cycle"` shows the one value between chevrons and
-    activation steps it; `look="seg"` shows every value."""
+    activation steps it; `look="seg"` shows every value; `look="swatches"`
+    shows every value as a colour dot, each word a colour (0xRRGGBB, a
+    number in any base)."""
     where = _caller()
     _checked("seg", "look", look, where)
     _state_name(name, (Enum, RowOf), "ui.seg", where)

@@ -627,6 +627,23 @@ static uint32_t seg_items(uit_t *e, const uit_node_t *N, uint32_t *len, int *cou
     return start;
 }
 
+// A swatches seg's `count` words (NUL-separated at scratch offset `at`) as colours: four bytes a
+// word, little-endian, appended to the scratch; their offset, their length in *len.
+static uint32_t swatch_words(uit_t *e, uint32_t at, int count, uint32_t *len)
+{
+    uint32_t start = e->scratch.n;
+    for (int i = 0; i < count; i++) {
+        const char *w = e->scratch.p + at;
+        uint32_t v = (uint32_t)strtol(w, NULL, 0) & 0xffffff;
+        at += (uint32_t)strlen(w) + 1;
+        uint8_t b[4] = {(uint8_t)v, (uint8_t)(v >> 8), (uint8_t)(v >> 16), 0};
+        if (uit_buf_put(&e->scratch, (const char *)b, 4) >= 0)
+            e->scratch.n--;             // uit_buf_put keeps a NUL past what it wrote
+    }
+    *len = e->scratch.n - start;
+    return start;
+}
+
 // The value seg `N`'s item `i` stands for (an enum's value, a row's key).
 static const char *seg_key(uit_t *e, const uit_node_t *N, int i)
 {
@@ -2708,8 +2725,15 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         a1 = text(e, k, 0, model, row, &n1);
         int count, at;
         uint32_t len, items = seg_items(e, N, &len, &count, &at);
+        int look = (N->lit & NL_CYCLE) ? MOY_UI_V_CYCLE : MOY_UI_V_SEG;
+        if (N->lit & NL_SWATCH) {
+            // the swatches look: each word a colour (0xRRGGBB, any base strtol reads), packed as
+            // the swatch row's little-endian words
+            look = MOY_UI_V_SWATCH;
+            items = swatch_words(e, items, count, &len);
+        }
         over_for(e, k, model, row, c, &o, id);
-        int got = moy_ui_api_choice(c, s, (N->lit & NL_CYCLE) ? 3 : 4, sspan(e, a1, n1),
+        int got = moy_ui_api_choice(c, s, look, sspan(e, a1, n1),
                                     (const uint8_t *)e->scratch.p + items, len, at, &o);
         if (got >= 0 && got < count && got != at) {
             const char *v = seg_key(e, N, got);
@@ -3726,6 +3750,8 @@ static void row_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         if (gk == UIT_STATUS || gk == UIT_CASE || gk == UIT_SWITCH || gk == UIT_PANEL || gk == UIT_CANVAS ||
             gk == UIT_ROW || (gk == UIT_BUTTON && NODE(g)->lit == MOY_UI_BUTTON_BAR))
             cell[1] = r[1], cell[3] = r[3];     // a band, a region, a bar item: the row's height
+        else if (gk == UIT_BUTTON && (NODE(g)->btn & BT_ALONE) && NODE(g)->t_value >= 0 && kw < cell[3])
+            cell[1] += (cell[3] - kw) / 2, cell[3] = kw;    // an icon of its own w=: square, centred down
         if (km[i] != model)
             put_cell(e, g, km[i], kr[i], cell);
         if (e->placing || gk == UIT_ROW)
@@ -4762,20 +4788,31 @@ static void menu_rows(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
         }
         return;
     }
-    uit_buf_t labels = {0};
+    uit_buf_t labels = {0}, icons = {0};
+    int ti = NODE(link)->t_icon;
     for (int r = 0; r < nr; r++) {
-        if (r)
+        if (r) {
             uit_buf_printf(&labels, "%c", 0);
+            if (ti >= 0)
+                uit_buf_printf(&icons, "%c", 0);
+        }
         char id[UIT_ID_MAX + 1];
         menu_row_id(e, link, m, r, id);
         uit_buf_printf(&labels, "%s", id);
         id_put(e, link, m, r, id);
+        if (ti >= 0) {
+            // the link's icon= on its row: the menu row's icon
+            uint32_t n, mark = e->scratch.n, at = uit_tmpl_render(e, ti, m, r, &n);
+            uit_buf_printf(&icons, "%.*s", (int)n, e->scratch.p + at);
+            e->scratch.n = mark;
+        }
     }
     int got = moy_ui_api_menu(c, s, span_of("", 0), (const uint8_t *)labels.p, labels.n,
-                              (const uint8_t *)"", 0, NULL);
+                              (const uint8_t *)(icons.p ? icons.p : ""), icons.n, NULL);
     if (got >= 0 && got < nr && uit_act_can(e, NODE(link)->act, m, got))
         fire(e, NODE(link)->act, link, m, got, NULL);
     uit_buf_free(&labels);
+    uit_buf_free(&icons);
 }
 
 // A popover on a placed page (`uitree_editor.Engine._r_popover`): hung from its anchor= (a

@@ -1912,7 +1912,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:seg,cycle",
+     "type": "word:seg,cycle,swatches",
      "level": 2
     },
     "text": {
