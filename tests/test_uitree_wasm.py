@@ -226,3 +226,17 @@ def test_a_canvas_is_drawn_by_the_app_and_hands_its_pointer_to_an_action():
     up = next(re.search(r"-> 'up (\d+),(\d+) drawn' \(in poke\)$", l) for l in trace if "-> 'up " in l)
     assert up.group(1) == down.group(1) and int(up.group(2)) - int(down.group(2)) == 20
 
+
+
+def test_a_page_takes_a_row_and_the_app_moves_the_focus():
+    """ut_focus puts the focus on a row's part; that row's action pushes a
+    page that takes the row (its cursor set first), and Back puts the focus
+    back on it."""
+    import uitree_conf as C
+    cart = os.path.join(ROOT, "tests", "fixtures", "uitree_rowpage_wasm.moy")
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "k:a", "back"], cart=cart)
+    assert trace[trace.index("action open from link 'b/open' on 'Shelf'"):] == [
+        "action open from link 'b/open' on 'Shelf'",
+        "state sel '' -> 'b' (in open)",
+        "page push page 2, opened from 'b/open'",
+        "page back page 1, focus back to 'b/open'"]

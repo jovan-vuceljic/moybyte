@@ -368,6 +368,20 @@ static inline void ut_push(ut_page_fn page) {
     }
 }
 
+// ...a page that takes a row: the cursor `cursor` (a row_of over the model
+// at slot `model`, whose key is field `key`) set to row `row` first.
+static inline void ut_push_row(ut_page_fn page, int32_t cursor, int32_t model, int32_t key, int32_t row) {
+    char k[64];
+    ut_get_cell(model, row, key, k, sizeof k);
+    ut_set_text(cursor, k);
+    ut_push(page);
+}
+
+// The focus put on the node keyed `key` (a row's part: "ROWKEY/KEY") at the next frame.
+static inline int32_t ut_focus(const char *key) {
+    return uitree_focus(key, ut_len_(key));
+}
+
 // The page under this one built again, the focus back where it was.
 static inline void ut_pop(void) {
     if (ut_.npages > 1) {
