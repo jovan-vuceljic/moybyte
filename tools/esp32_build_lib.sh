@@ -836,7 +836,7 @@ moybyte_stage_uitree_pages() {
 }
 
 # The UI tree API's Lua layer (runtime/run/uitree.lua and its C back end's
-# half, uitree_engine.lua) frozen as text into MODULES_DIR/uitree_lua.py
+# half, uitree_engine.lua) frozen deflated into MODULES_DIR/uitree_lua.py
 # (tools/uitree_lua_freeze.py), which lua_ext.uitree_source reads on a board.
 # A board that takes moycore and moy_uitree carries it, the two whose Lua face
 # (native/moycore/moycore_uitree.h) the layer lowers its pages into; any

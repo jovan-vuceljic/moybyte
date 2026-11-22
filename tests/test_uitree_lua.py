@@ -13,6 +13,7 @@ import os
 import shutil
 import sys
 import tempfile
+import zlib
 
 import pytest
 
@@ -107,8 +108,8 @@ def _form_run(carts):
 
 def test_a_board_runs_the_frozen_layer_as_the_host_runs_the_files(tmp_path, monkeypatch):
     """A board reads the layer from uitree_lua (tools/uitree_lua_freeze.py):
-    each text keeps its file's lines, and Tree Form draws the same frames and
-    keeps the same count on it as on the files."""
+    each text keeps its file's lines, deflated, and Tree Form draws the same
+    frames and keeps the same count on it as on the files."""
     import lua_ext
     import uitree_lua_freeze as freeze
     for name in freeze.FILES:
@@ -125,10 +126,21 @@ def test_a_board_runs_the_frozen_layer_as_the_host_runs_the_files(tmp_path, monk
     monkeypatch.delitem(sys.modules, "uitree_lua", raising=False)
     try:
         with open(os.path.join(ROOT, "runtime", "run", "uitree.lua")) as f:
-            assert lua_ext.uitree_source() == freeze.strip(f.read())
+            assert zlib.decompress(lua_ext.uitree_source(), -freeze.WBITS) == freeze.strip(f.read()).encode()
         assert _form_run(str(tmp_path / "b")) == files
     finally:
         sys.modules.pop("uitree_lua", None)
+
+
+def test_a_deflated_chunk_has_one_window_on_every_tier():
+    """The window the freeze deflates in is the ring a board's moycore
+    inflates through and the widest the host's binding takes."""
+    import re
+    import uitree_lua_freeze as freeze
+    from runtime import lua_binding
+    with open(os.path.join(ROOT, "native", "moycore", "modmoycore.c")) as f:
+        ring = int(re.search(r"#define MOYCORE_Z_WINDOW (\d+)", f.read()).group(1))
+    assert ring == 1 << freeze.WBITS == 1 << lua_binding.Z_WBITS
 
 
 @pytest.mark.parametrize("size", sorted(parity.SIZES))

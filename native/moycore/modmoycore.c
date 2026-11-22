@@ -558,13 +558,66 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_run_begin_obj, 15, 15, mod_run_be
 // that opens with ESC, as every binary one does, fails with Lua's own load
 // error (moycore_lua_exec). runtime/host/moyhost_lua.c's hl_exec is the host's
 // twin of this call.
+//
+// A `bytes` src is that text raw-deflated, with a window of at most
+// MOYCORE_Z_WINDOW bytes (tools/uitree_lua_freeze.py's): Lua's parser takes
+// it as it inflates, a piece at a time, so the text is never whole in RAM and
+// is held to the same "t" as any other. runtime/host/lua_binding.py's
+// _chunk_text is the host's twin.
+#if MICROPY_PY_DEFLATE
+#include "lib/uzlib/uzlib.h"
+#define MOYCORE_Z_WINDOW 4096
+typedef struct {
+    uzlib_uncomp_t d;
+    int st;
+    unsigned char piece[512];
+    unsigned char window[MOYCORE_Z_WINDOW];
+} zchunk_t;
+
+static const char *zchunk_read(lua_State *L, void *ud, size_t *size)
+{
+    zchunk_t *z = ud;
+    *size = 0;
+    while (*size == 0 && z->st == UZLIB_OK) {
+        z->d.dest_start = z->d.dest = z->piece;
+        z->d.dest_limit = z->piece + sizeof z->piece;
+        z->st = uzlib_uncompress(&z->d);
+        if (z->st < 0 || z->d.eof) {
+            luaL_error(L, "a deflated chunk that does not inflate");
+        }
+        *size = (size_t)(z->d.dest - z->piece);
+    }
+    return *size ? (const char *)z->piece : NULL;
+}
+#endif
+
 static mp_obj_t run_chunk(mp_obj_t src_obj, mp_obj_t name_obj)
 {
     size_t srclen = 0;
     const char *src = mp_obj_str_get_data(src_obj, &srclen);
     const char *name = mp_obj_str_get_str(name_obj);
     char err[192];
-    if (moycore_lua_exec(src, srclen, name, err, sizeof(err)) != 0) {
+    int rc;
+    if (mp_obj_is_type(src_obj, &mp_type_bytes)) {
+        #if MICROPY_PY_DEFLATE
+        zchunk_t *z = m_new_maybe(zchunk_t, 1);
+        if (z == NULL) {
+            return mp_obj_new_str("moycore: no memory to inflate a chunk", 37);
+        }
+        uzlib_uncompress_init(&z->d, z->window, sizeof z->window);
+        z->d.source = (const unsigned char *)src;
+        z->d.source_limit = (const unsigned char *)src + srclen;
+        z->d.source_read_cb = NULL;
+        z->st = UZLIB_OK;
+        rc = moycore_lua_exec_from(zchunk_read, z, name, err, sizeof(err));
+        m_del(zchunk_t, z, 1);
+        #else
+        return mp_obj_new_str("moycore: no inflater", 20);
+        #endif
+    } else {
+        rc = moycore_lua_exec(src, srclen, name, err, sizeof(err));
+    }
+    if (rc != 0) {
         return mp_obj_new_str(err, strlen(err));
     }
     return mp_const_none;
