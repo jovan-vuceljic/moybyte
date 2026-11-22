@@ -282,8 +282,7 @@ def test_the_text_console_marks_the_answer_and_says_when_the_script_ended(tmp_pa
     con.start("first")
     con.write("Hello\n")
     con.ask("Name? ")
-    con.ed.set_text("Ada")
-    con.submit()
+    con.submit("Ada")
     assert con.text().splitlines()[-1] == "Name? Ada"      # read without its mark
     raw = con._buf[(con._start + con.count() - 1) % con._cap]
     assert raw == "Name? " + text_console._ANSWER + "Ada"

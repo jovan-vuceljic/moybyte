@@ -82,7 +82,7 @@ def test_input_round_trips_through_the_console_on_the_device_input_state(tmp_pat
                "        quit()\n")
     assert con.reading() and con._prompt == "who? "
     _type(ws, kbd, "ana")
-    assert con.ed.text() == "ana"
+    assert con.line() == "ana"
     kbd.last_key = 0x0D                       # enter
     _frame(ws)
     kbd.last_key = 0
@@ -101,27 +101,8 @@ def test_backspace_edits_the_prompt_line_and_never_exits(tmp_path):
     _frame(ws)
     kbd.last_key = 0
     _frame(ws)
-    assert con.ed.text() == "ab"
+    assert con.line() == "ab"
     assert ws.wm.top_is_player(), "backspace is a text key here, not the exit"
-
-
-def test_the_symbol_palette_types_the_keys_the_keyboard_lacks(tmp_path):
-    """The T-Deck has no `=`/`[`/`{`/`<`/`%` keys, so the Code tab shows a
-    tappable palette -- and under touch the prompt shows the same one, because
-    it is the same keyboard (with keys, the console's band and hint strip
-    are the mockup's, no palette)."""
-    from runtime import ui_draw
-    ws = _ws(tmp_path)
-    con = _run(ws, "ask.py", "def _update(dt):\n    input('> ')\n")
-    ui_draw.input_kind("touch")
-    try:
-        _frame(ws)
-    finally:
-        ui_draw.input_kind("keys")
-    assert con._sym_rects, "the palette is drawn while the console reads"
-    r = con._sym_rects[0]
-    con._pointer(r[0] + 1, r[1] + 1, True, True)
-    assert con.ed.text() == con._symbols()[0]
 
 
 def test_the_log_is_a_text_view_that_scrolls_back_and_coasts(tmp_path):
@@ -163,7 +144,7 @@ def test_the_windowed_log_coasts_on_frames_its_gate_paints(tmp_path, monkeypatch
     dragged down its log through the WM's pointer scrolls it back, and the
     release coasts on frames no input brings, each painted by the gate."""
     import sys
-    from runtime import host_app
+    from runtime import host_app, ui_draw
     from ws_helpers import build_desktop_ws
     now = [100000]
     for mod in list(sys.modules.values()):
@@ -184,7 +165,12 @@ def test_the_windowed_log_coasts_on_frames_its_gate_paints(tmp_path, monkeypatch
     for _ in range(6):
         frame()
     win = ws.wm.windows[ws.wm.z_order[-1]]
-    foot = con.top
+    cx, top, _cw, _ch = con._surface.content_rect()
+
+    def first():
+        return ui_draw.text_at(con._host, "log", cx + 40, top + 24)[0]
+
+    foot = first()
     assert foot > 30, "the log does not start at its foot"
     x, y = win.x + win.w // 2, win.y + win.title_h + 60
     drv.touch(x, y)
@@ -194,10 +180,10 @@ def test_the_windowed_log_coasts_on_frames_its_gate_paints(tmp_path, monkeypatch
         frame()
     drv.touch_up()
     frame()
-    let_go = con.top
+    let_go = first()
     assert let_go < foot, "the drag did not scroll the log back"
     painted = [frame() for _ in range(4)]
-    assert con.top < let_go, "the release did not coast"
+    assert first() < let_go, "the release did not coast"
     assert all(painted), painted
 
 

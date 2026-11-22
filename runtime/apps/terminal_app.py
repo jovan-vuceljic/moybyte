@@ -7,13 +7,14 @@ completion, the key rows and their input, drawn through the UI engine. The
 kernel's recovery console opens the same face with no VM. This layer hands
 it the frame: the host's context and canvas, the content rect under the
 bar, and the frame's keys; the face answers what the host owes after it.
+A console with no C shell shows one line, a `uitree` page (`none_page`).
 """
 
 import sys as _sys
-from array import array as _array
 
-import ui as _ui
 import ui_draw as _ui_draw
+import uitree as ui
+import uitree_app
 from layers import AppLayer
 import layout_base as _lb
 from moy_store_base import session_root as _session_root
@@ -35,7 +36,14 @@ _HIT, _KEYS = 1, 2                      # the face's input answer
 _AGAIN, _DAMAGE = 1, 2                  # its draw answer
 _ROWS = (None, "tdeck", "pad", "touch")
 _BAR = "\0".join(_ui_draw.BAR_KEYS).encode()
-_NONE = ["No shell on this console."]
+NONE = "No shell on this console."
+
+ui.state()
+
+
+def none_page():
+    with ui.page(""):
+        ui.label(NONE, tone="dim", wrap="word")
 
 
 class TerminalLayout:
@@ -71,8 +79,7 @@ class TerminalAppLayer(AppLayer):
         self._install = ctx.install
         self._ui = ctx.ui
         self.face = None            # made at the first open
-        self._log = _ui.text_options({"follow": True})
-        self._into = _array("i", [0, 0])
+        self._none = None           # the page a console with no shell shows
         sc = self._surf.canvas()
         self.layout = TerminalLayout(sc.w, sc.h, getattr(sc, "font_scale", 1),
                                      self._surf.windowed(), self._surf.chrome_scale())
@@ -186,11 +193,12 @@ class TerminalAppLayer(AppLayer):
         self._ui.begin(cv, self._theme.colors(), (0, 0, cv.w, cv.h), lay.desk, lay.windowed,
                        f is None or f.elsewhere(lay.desk))
         if f is None:
-            _ui.page("")
-            _ui.at(lay.cx, lay.cy, lay.cw, lay.ch)
-            _ui.text_view("log", _NONE, self._log, None, None, self._into)
+            if self._none is None:
+                self._none = uitree_app.hosted_page(none_page, self._ui, self._damage)
+                self._none.open()
+            self._none.paint(dt, cv, self._theme.colors(), (lay.cx, lay.cy, lay.cw, lay.ch), lay.desk)
             return
-        t = _ui._T
+        t = _ui_draw.UI_TARGET
         r = f.draw(t[0], t[1], t[2], lay.cx, lay.cy, lay.cw, lay.ch, lay.fs, lay.desk,
                    _BAR if _ui_draw.on_bar() else None)
         if r & _AGAIN:

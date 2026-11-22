@@ -1791,8 +1791,9 @@ def surfaces():
                      rect=(0.4, 0.2, 0.55, 0.6), teardown=_NOTES_OUT + "\nws.spine.exit()"))
     s.append(Surface("Text console", [("_ib_desk()", 1.0),
                                       ("ws.run_script('docs', ws._ib_script)", 4.0)],
-                     "ws.script_console.top", inputs=("fling", "drag", "type", "type_fast",
-                                                       "ball_slow"),
+                     "(lambda c, r: __import__('ui_draw').text_at(c._host, 'log', r[0] + 8, r[1] + 8)[0])"
+                     "(ws.script_console, ws.script_console._surface.content_rect())",
+                     inputs=("fling", "drag", "type", "type_fast", "ball_slow"),
                      teardown="ws.spine.exit()"))
     return s
 

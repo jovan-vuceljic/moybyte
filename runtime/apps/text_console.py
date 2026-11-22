@@ -1,10 +1,9 @@
 """The TEXT CONSOLE -- a script's screen (step 6 of docs/theme_and_shell_2026-11.md §10).
 
 A script is a cart with no folder, and this is the surface it runs on: a
-bounded scrollback that `print()` appends to, and a prompt line the shared
-`CodeEditor` edits so typing here is the typing the Code tab already teaches --
-the T-Deck keyboard, and the same tappable symbol palette on a board whose
-keyboard has no `= [ ] { } < > %`.
+bounded scrollback that `print()` appends to, and a prompt line under it. Both
+are one `uitree` page (`console_page`): the scrollback a lines view, the prompt
+a field in the page's foot, whose Enter enters the line.
 
 The shell owns the pixels, not the cart. A script never gets a `_draw`: the
 Player takes `TextConsole.draw` as the run's draw hook (`Workstation.run_script`),
@@ -42,7 +41,7 @@ Nothing grows: the oldest row is overwritten, and a resize does not reflow rows
 that are already in the ring (a terminal does not either) -- new writes take
 the new width.
 
-The log draws through `ui.text_view` (docs/history/scroll_and_text_2026-10.md §5): a
+The log is the page's `ui.text_view` (docs/history/scroll_and_text_2026-10.md §5): a
 drag scrolls it by pixels and its release coasts, and while it shows its foot
 new rows glide it down to the new foot; scrolled up, it stays where it is.
 
@@ -53,26 +52,63 @@ handler instead of an `input()` call.
 
 The Terminal app (`terminal_app.py`) is the C shell's screen face. It keeps
 none of this ring: its scrollback is the shell's cell grid in C
-(`moy_sh.Screen`), and what it shares with the script console is the typing
-(the `CodeEditor` prompt) and the drawing (`ui.text_view`).
+(`moy_sh.Screen`), drawn by the C face through the same text view.
 """
 
-from array import array as _array
-
-from editors_code import CodeEditor
 import os_log as _os_log
-from code_layer import symbols_for, draw_symbol_keys
-import ui as _ui
 import ui_draw as _ui_draw
+import uitree as ui
+import uitree_app
+import layout_base as _lb
 
 # Where an echoed line's answer starts in its row: what was typed draws in
 # `value` (`draw`), and the row as read has no mark.
 _ANSWER = "\x01"
 _ENDED = "The script ended."
-_KEYS_READING = ("confirm", "Send", "cancel", "Stop")
-_KEYS_ENDED = ("confirm", "Run again", "back", "Back")
-_LOG = _ui.text_options({"follow": True})   # the log's text view: it follows its foot
-_INTO = _array("i", [0, 0])         # ...and its answer, written in place
+LINE_MAX = 200          # the prompt line's characters
+
+s = ui.state(log=ui.model(key="n", n=0, line=""), reading=False, ended=False, ask="", line="")
+
+
+def sync(con):
+    """The page's states from the console: the log's rows, and whether a
+    line is read (its prompt) or the script ended."""
+    if con._shown_gen != con._gen:
+        s.log = con._rows()
+    reading = con.reading()
+    if reading and not s.reading:
+        s.line = ""
+        ui.focus("line")
+    elif con.ended and not s.ended:
+        ui.focus("again")
+    s.reading, s.ended = reading, con.ended and not reading
+    if reading:
+        s.ask = con._prompt
+
+
+def send():
+    """Enter in the prompt: the line entered."""
+    line = s.line
+    s.line = ""
+    uitree_app.env().submit(line)
+
+
+def again():
+    uitree_app.env()._restart()
+
+
+ui.hook("sync", sync, takes="arg")
+ui.action("send", "Send", send)
+ui.action("again", "Run again", again)
+
+
+def console_page():
+    with ui.page(""):
+        ui.text_view("log", follow=True, syntax="sgr")
+        with ui.foot():
+            ui.field("{ask}", "line", max=LINE_MAX, on="send", shown="!ended", when="reading", off="grey")
+            ui.label(_ENDED, tone="dim", shown="ended")
+            ui.button("again", shown="ended")
 
 
 # Lua has no `input` of its own and libmoy owns `print` (the DRAW verb), so a
@@ -132,23 +168,22 @@ class TextConsole:
         self._buf = [""] * self._cap
         self._start = 0
         self._n = 0
+        self._dropped = 0         # the rows the ring wrote over: its first row's running number
         self._open = False        # the newest row is unterminated (print(end=""))
         self._gen = 0             # moves with every write: the view's rows are made again
         self._shown = []          # ...the rows as the log's text view takes them
         self._shown_gen = -1
-        self.top = 0              # the first row the log shows, as its view last drew
-        self.ed = CodeEditor("", cols=self.cols, rows=1)
         self._armed = False       # a script is waiting on a line
         self._prompt = ""
         self._answer = None       # the entered line, until the script takes it
         self.on_line = None       # #115: a REPL takes every line instead
         self.title = ""
-        self._lang = "python"
-        self._sym_rects = ()      # built by draw(), read by the tick's pointer
         self.ended = False        # the script's run is over (its prompt band says so)
         # the page's UI context: the log's text view (a drag scrolls it and
         # its release coasts, new rows glide it to its foot) and the hints
         self._host = _ui_draw.AppHost()
+        self.page = uitree_app.hosted_page(console_page, self._host, self._damage, gen=True, env=self)
+        self._seen = None         # (rows, reading, ended) the page was last given
 
     # -- the ring -------------------------------------------------------------
 
@@ -157,6 +192,7 @@ class TextConsole:
             self._buf[i] = ""
         self._start = 0
         self._n = 0
+        self._dropped = 0
         self._open = False
         self._gen += 1
 
@@ -181,6 +217,7 @@ class TextConsole:
             return
         self._buf[self._start] = row
         self._start = (self._start + 1) % self._cap
+        self._dropped += 1
 
     def _last(self):
         return self._buf[(self._start + self._n - 1) % self._cap]
@@ -192,15 +229,15 @@ class TextConsole:
     def _rows(self):
         """The log as its text view takes it, made again after a write: an
         echoed line's prompt in the dim ink and its answer in `value` (SGR
-        2 and 36, `ui.text_view`'s)."""
+        2 and 36, `ui.text_view`'s), each row keyed by its running number."""
         if self._shown_gen != self._gen:
             out = []
             for i in range(self._n):
                 raw = self._buf[(self._start + i) % self._cap]
                 cut = raw.find(_ANSWER)
                 if cut >= 0:
-                    raw = "\x1b[2m" + raw[:cut] + "\x1b[36m" + raw[cut + 1:]
-                out.append(raw)
+                    raw = "\x1b[2m" + raw[:cut] + "\x1b[0;36m" + raw[cut + 1:] + "\x1b[0m"
+                out.append({"n": self._dropped + i, "line": raw})
             self._shown = out
             self._shown_gen = self._gen
         return self._shown
@@ -252,15 +289,12 @@ class TextConsole:
         if not self._armed:
             self._armed = True
             self._prompt = str(prompt)
-            self.ed.set_text("")
             self._dirty()
         return None
 
-    def submit(self):
-        """Enter: echo the line, then hand it to `on_line` or to `input()`."""
-        line = self.ed.text()
+    def submit(self, line):
+        """Enter: echo `line`, then hand it to `on_line` or to `input()`."""
         self.write(self._prompt + _ANSWER + line + "\n")
-        self.ed.set_text("")
         if self.on_line is not None:
             self._armed = False
             self._prompt = ""
@@ -269,35 +303,23 @@ class TextConsole:
             self._answer = line
         return line
 
-    def key(self, code):
-        """One keyboard byte. Enter submits; everything else edits the line.
-        After the script ended, Enter runs it again."""
-        if code in (0x0D, 0x0A) and self.ended and not self.reading():
-            self._restart()
-            return True
-        if not code or not self.reading():
-            return False
-        if code in (0x0D, 0x0A):
-            self.submit()
-            return True
-        if self.ed.key(code):
-            self._dirty()
-            return True
-        return False
+    def line(self):
+        """The prompt line as typed so far."""
+        return self.page.s._v["line"]
 
     # -- the run --------------------------------------------------------------
 
     def start(self, title, lang="python"):
         """A fresh run: empty scrollback, no pending line, no REPL handler."""
         self.clear()
-        self.ed.set_text("")
         self._armed = False
         self._prompt = ""
         self._answer = None
         self.on_line = None
         self.title = str(title)
-        self._lang = lang
         self._host.reset()                # the log's view starts afresh, at its foot
+        self.page.open()
+        self._seen = None
         self.ended = False
 
     def api(self):
@@ -385,146 +407,69 @@ class TextConsole:
     # -- input pump (the tick's, not a Layer's) -------------------------------
 
     def pump(self):
-        """Take this frame's keyboard byte and pointer. Called from the tick the
+        """Take this frame's keys and pointer. Called from the tick the
         Player runs, because that is what a script IS -- the console is not a
         content Layer of its own, it is the running cart's surface."""
         inp = self._inp()
-        code = inp.typed
-        if code:
-            self.key(code)
-        n = getattr(inp, "key_repeats", 0)     # a held key types again, and
-        if n:                                  # Enter, which enters, does not
-            r = inp.repeat_key
-            if r in (8, 9, 127) or 32 <= r < 127:
-                for _ in range(n):
-                    self.key(r)
+        self._sync()
+        self.page.keys(inp)
         gp = getattr(inp, "game_pointer", None)
         if gp is not None:
-            self._pointer(gp[0], gp[1], bool(gp[2]),
-                          bool(gp[3]) if len(gp) > 3 else False)
+            self._pointer(gp[0], gp[1], bool(gp[2]), bool(gp[3]) if len(gp) > 3 else False)
         if not self._host.still():
             self._dirty()                       # the log coasts or glides
 
     def _pointer(self, px, py, click, down):
-        if click:
-            for i, r in enumerate(self._sym_rects):
-                if (r[0] <= px < r[0] + r[2]) and (r[1] <= py < r[1] + r[3]):
-                    self.key(ord(self._symbols()[i]))
-                    return
-        if self._host.point(px, py, click, down):   # a drag scrolls the log
+        if self._host.point(px, py, click, down):   # a drag scrolls the log, a tap takes a stop
             self._dirty()
-
-    def _symbols(self):
-        return symbols_for(self._lang)
 
     # -- the surface ----------------------------------------------------------
 
     def _dirty(self):
         self._damage.all()
 
-    def _fs(self):
-        return max(1, int(getattr(self._served().canvas, "font_scale", 1) or 1))
+    def _sync(self):
+        """The page told what moved since it was last told: the rows, the
+        prompt, the run's end."""
+        seen = (self._gen, self.reading(), self.ended, self._prompt)
+        if seen != self._seen:
+            self._seen = seen
+            pg = self.page
+            pg.run(sync, self, action="sync")
+            ui.commit(pg)
 
     def draw(self):
-        """The run's draw hook: the whole console, on whatever surface the
-        Player bound for this script (docs/history/look_2026-10.md step 33): the code
-        surface, the scrollback in the code face, what was typed in `value`,
-        the prompt line on a band at the foot with the caret in `accent` --
-        or, after the script ended, that it did -- and the hint strip under
-        it. Takes no arguments -- it is called exactly where a cart's `_draw`
-        would be."""
-        # the shell's pixels, not the script's: its fonts and its colours,
-        # whatever the app-cart boundary is at
+        """The run's draw hook: the page, on whatever surface the Player
+        bound for this script (docs/history/look_2026-10.md step 33), in the
+        content rect under the host's strip, the rows wrapped at the view's
+        columns. Takes no arguments -- it is called exactly where a cart's
+        `_draw` would be. The shell's pixels, not the script's: its fonts
+        and its colours, whatever the app-cart boundary is at."""
+        cv = self._served().canvas
+        fs = max(1, int(getattr(cv, "font_scale", 1) or 1))
+        rect = self._surface.content_rect()
+        self.cols = max(self.MIN_COLS, (rect[2] - 16 * fs) // (_ui_draw.font("mono")[1] * fs))
+        moved = self._shown_gen != self._gen
+        self._sync()
+        if moved:
+            # rows came: a log at its foot moves to the new foot, the frame's shift
+            _ui_draw.text_aim(self._host, "log", -1, self._n)
+        # On a desk the run's canvas is its window's own, which the run alone
+        # draws (`AppFace.holds`): it holds the page as the last frame left it.
+        pl = self._served().player
+        own = pl is not None and pl.face.holds(cv)
         was = _ui_draw.cart_text(False)
-        # On a desk the run's canvas is its window's own, which the run
-        # alone draws (`AppFace.holds`): it holds the page as the last frame
-        # left it, but for the FPS chip, which names where it drew
-        # (`overdrew`), so the log's view may move or keep its rows there.
-        run = self._served()
-        pl = run.player
-        own = pl is not None and pl.face.holds(run.canvas)
         if own:
             _ui_draw.window_frame(2)
         try:
-            self._draw()
+            th = self._theme.colors()
+            desk = _lb.metric_class() == _lb.DESK
+            self._host.begin(cv, th, rect, desk)
+            self.page.paint(0, cv, th, rect, desk)
         finally:
             if own:
                 _ui_draw.window_frame(0)
             _ui_draw.cart_text(was)
-
-    def _draw(self):
-        cv = self._served().canvas
-        th = self._theme.colors()
-        fs = self._fs()
-        fid, cell, line, _asc = _ui_draw.font("mono")
-        fw = cell * fs
-        lh = line * fs + 4 * fs
-        dim, value, accent = th["ink_dim"], th["value"], th["accent"]
-        cx, top, cw, ch = self._surface.content_rect()   # under the host's strip
-        host = self._host
-        moved = False
-        if self._shown_gen != self._gen:
-            # rows came: a log at its foot moves to the new foot
-            moved = _ui_draw.text_aim(host, "log", -1, len(self._rows()))
-        host.begin(cv, th, (cx, top, cw, ch))
-        touch = _ui.input_kind() == "touch"
-        foot = 0
-        if _ui_draw.hint_kind() != "touch":
-            keys = _KEYS_READING if self.reading() else _KEYS_ENDED if self.ended else ()
-            if keys:
-                foot = _ui_draw.metrics("value_row")[16] * fs
-                cv.rect(cx, top + ch - foot, cw, foot, th["panel"])
-                _ui.at(cx, top + ch - foot, cw, foot)
-                _ui.hints(keys)
-        bottom = top + ch - foot
-        pad = 8 * fs
-        sym_h = 12 * fs + 2 * 3 * fs if touch else 0
-        band = lh + 2 * pad
-        by = bottom - band - sym_h
-        self.cols = max(self.MIN_COLS, (cw - 2 * pad) // fw)
-        self.ed.set_view_size(self.cols, 1)
-        self.ed._scroll()                # the one-line prompt follows its caret
-        # The log: a text view from under the pad above it to the prompt's
-        # band, which follows its foot as rows come.
-        cv.rect(cx, top, cw, pad, th["surface"])
-        if sym_h:
-            cv.rect(cx, bottom - sym_h, cw, sym_h, th["surface"])
-        _ui.at(cx, top + pad, cw, max(0, by - top - pad))
-        self.top = _ui.text_view("log", self._rows(), _LOG, None, None, _INTO)[0]
-        was = _ui_draw.print_font(fid)
-        try:
-            self._sym_rects = ()
-            cv.rect(cx, by, cw, band, th["surface_alt"])
-            cv.rect(cx, by, cw, fs, th["border"])
-            ty = by + pad
-            if self.reading():
-                typed = self.ed.text()
-                ask = self._prompt[-self.cols:]
-                room = max(0, self.cols - len(ask))
-                typed = typed[-room:] if room and len(typed) > room else typed[:room]
-                cv.print(ask, cx + pad, ty, dim, 1)
-                x = cx + pad + len(ask) * fw
-                cv.print(typed, x, ty, value, 1)
-                cv.rect(x + len(typed) * fw + fs, ty, fs, line * fs, accent)
-                if touch:
-                    self._draw_symbols(cv, bottom - sym_h, sym_h, fs)
-            elif self.ended:
-                _ui_draw.print_font(_ui_draw.font("ui")[0])
-                cv.print(_ENDED, cx + pad, ty, dim, 1)
-        finally:
-            _ui_draw.print_font(was)
-
-    def _draw_symbols(self, cv, y, h, fs):
-        """The Code tab's tappable symbol palette, under the prompt: the same
-        characters through the same renderer and tone map, because it is the
-        same keyboard that cannot type them. The keys share the width; the
-        symbol is re-centred in a key shorter than the Code tab's."""
-        syms = self._symbols()
-        cell = max(8 * fs + 2, cv.w // len(syms))
-        syms = syms[:max(1, cv.w // cell)]
-        rects = []
-        draw_symbol_keys(cv, self._theme.colors(), syms, 0, y, cell, h, fs, rects)
-        self._sym_rects = tuple(rects)
 
 
 def _err_text(exc):

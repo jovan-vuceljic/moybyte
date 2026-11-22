@@ -4,8 +4,8 @@ step 6, Part A).
 A script is a cart with NO FOLDER -- a bare `.py`/`.lua` file beside the notes --
 and this is the half that is true before anything runs it: the vault lists it
 under its whole name, and `runtime/apps/text_console.py` is the surface it will get
-(a bounded scrollback ring, wrapped as it is written, and a prompt line over the
-shared `CodeEditor`). The RUNNER and its `input()` round trip are
+(a bounded scrollback ring, wrapped as it is written, and a prompt line: one
+`uitree` page). The RUNNER and its `input()` round trip are
 `tests/test_scripts.py`.
 """
 

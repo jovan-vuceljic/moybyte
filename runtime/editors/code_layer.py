@@ -155,10 +155,9 @@ def symbols_for(lang):
 
 
 def draw_symbol_keys(cv, th, syms, x0, y, cell, h, fs, rects=None, w=None):
-    """The symbol palette renderer, ONE body for the Code tab and the script
-    console: each key a normal button of theme `th` in a cell `cell` apart
-    from `x0`, inset by fs (2*fs apart, fs off the strip's edges), its
-    picture the symbol itself. `w` (the strip's width) shares it out whole
+    """The symbol palette renderer (the Code tab's): each key a normal
+    button of theme `th` in a cell `cell` apart from `x0`, inset by fs (2*fs
+    apart, fs off the strip's edges), its picture the symbol itself. `w` (the strip's width) shares it out whole
     instead, cell i starting at x0 + i * w // n. Appends each key's rect to
     `rects` when a list is given."""
     n = len(syms)
