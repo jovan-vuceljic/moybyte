@@ -10,6 +10,30 @@ compositor) runs unchanged. What is this board's is `board.toml`,
 Build: `make firmware-build-elecrow-p4` (`dist/elecrow_p4/`). Flash:
 `tools/board.py elecrow_p4 flash` or `make firmware-flash-elecrow-p4 PORT=...`.
 
+## On glass
+
+`tests/test_elecrow_p4_on_glass.py` (gated on `MOYBYTE_ELECROW_P4_PORT`) is the
+board's suite over the shared `tests/on_glass.py`, and `tools/board.py pass
+elecrow_p4` builds, flashes and runs it with the perf stage. The CH340K bridge
+survives a reset, so the suite resets the board at open (its `[serial]` block
+declares no `attach_only`) and leaves it freshly booted on the desk.
+
+What this board's store changes. The internal store is the tail of the 16 MB
+flash after the two 6.5 MB app slots, a third of the size of the Waveshare's,
+and the seed carts take about half of it:
+
+- the suite gives the store back before a test when little of it is free, and
+  scopes its compiled-cart fixtures to the test (`on_glass.store_room`); it
+  carries no doom-sized upload;
+- the browser console add-on (the pack in `dist/elecrow_p4/`) is larger than
+  what is free, so with no card in the TF slot it cannot be installed, and the
+  add-on step retries at every boot while a network is saved, which keeps the
+  WiFi radio up after boot. The suite's idle-SRAM guard refuses to compare a
+  desk that has had WiFi (a skip, with its reason), and `pkg` and clock-sync
+  checks skip while the board's release names no cart shelf;
+- the idle-SRAM baseline in that guard is the Waveshare's (same silicon, kernel
+  and patch ladder) and has not been measured on this board.
+
 ## The board
 
 Elecrow's own name is "CrowPanel Advanced 10.1inch ESP32-P4 HMI AI Display
