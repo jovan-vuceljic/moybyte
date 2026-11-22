@@ -256,7 +256,7 @@ API_LEVEL = 1
 # The API is frozen from the first public release; until then the level stays
 # and the fingerprint is re-pinned freely.
 API_FROZEN = False
-# API fingerprint: level 1 sha256 1bc2470725712ebb0c5eb1956084c680c5a4a7342bf09af6ac3890949aa7d1c3
+# API fingerprint: level 1 sha256 e924794ae8282836f924f9d959df581cd6be9fd94b0a3c7384ba5c0b2aac6e6a
 API_LOWEST = 1
 
 

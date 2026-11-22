@@ -52,6 +52,11 @@ static inline moy_ui_span_t moy_ui_span_of(const uint8_t *p, size_t n) {
 // an image, runtime/host/moyhost_wasm.c on the host): a libmoy moy_canvas, or NULL
 // while no compiled run is open.
 void *moycore_ui_target(void);
+// A compiled app's canvas draw, from that module: its exported
+// `_uitree_draw(node, x, y, w, h)` called inside the frame (native/moy_uitree's
+// face calls it for each canvas the walk draws). 1 drawn, 0 the module exports
+// none, -1 it trapped.
+int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t h);
 
 // The run's snapshot (native/moycore/moycore_run.h: SNAP_LEN words, NULL
 // with no run), the tick it is of and the run's serial: moycore_run.c's.

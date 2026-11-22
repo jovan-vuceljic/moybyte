@@ -546,6 +546,19 @@ export function installCartEngine(M) {
                 return String(e.message || e);
             }
         },
+        // A compiled app's canvas draw, its `_uitree_draw` (the C face's
+        // moycore_ui_draw_call): 1 drawn, 0 it exports none, -1 it threw.
+        draw(node, x, y, w, h) {
+            const fn = instance && instance.exports._uitree_draw;
+            if (!fn) return 0;
+            try {
+                fn(node, x, y, w, h);
+                return 1;
+            } catch (e) {
+                if (!(e instanceof Error)) throw e;
+                return -1;
+            }
+        },
         close() {
             instance = memory = null;
             w = 0;

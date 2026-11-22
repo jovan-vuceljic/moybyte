@@ -46,6 +46,10 @@ raises is thrown back through the cart as an exception, and whatever the cart
 throws (an `unreachable`, an access outside its memory) is the trap's
 message on the console's error panel. Only an `Error` is the cart's: anything
 else passing through a hook is the VM's own unwinding, and is rethrown.
+A compiled app's canvas draw (`moycore_ui_draw_call`, which the UI tree
+engine's face calls inside the frame, `native/moy_uitree/moy_uitree_wasm.c`)
+is the worker's `draw`, which calls the module's `_uitree_draw` on the same
+terms.
 
 A frame reaches the canvas as every non-board frame does: `blit` and
 `blit565` write moycore's canvas, which the worker ships to the page. A

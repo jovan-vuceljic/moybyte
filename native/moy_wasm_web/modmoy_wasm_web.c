@@ -121,6 +121,20 @@ EM_JS(int, web_hook, (int hook, float dt, char *err, int errlen), {
     return 1;
 });
 
+// A compiled app's canvas draw (native/moy_uitree/moy_uitree_wasm.c): its
+// exported `_uitree_draw(node, x, y, w, h)`, called inside the frame the
+// module's own uitree_frame runs. 1 drawn, 0 the module exports none, -1 it
+// threw. moycore_wasm.c's is the boards' twin.
+EM_JS(int, web_uitree_draw, (int32_t node, int32_t x, int32_t y, int32_t w, int32_t h), {
+    return Module.moyEngine ? Module.moyEngine.draw(node, x, y, w, h) : 0;
+});
+
+int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t h);
+int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    return web_uitree_draw(node, x, y, w, h);
+}
+
 EM_JS(void, web_close, (void), {
     if (Module.moyEngine) Module.moyEngine.close();
 });

@@ -108,15 +108,15 @@ def wasm_fixture(name):
     return cart if os.path.isdir(cart) else None
 
 
-def run_wasm(name, config, script):
-    """(trace lines, frames) of the compiled half: the cart built from its C
-    (tools/wasm_cart.py) into the run's store and opened by its title; the
-    trace is the engine face's log lines."""
+def run_wasm(name, config, script, cart=None):
+    """(trace lines, frames) of the compiled half (or of the compiled app at
+    `cart`): the cart built from its C (tools/wasm_cart.py) into the run's
+    store and opened by its title; the trace is the engine face's log lines."""
     import uitree_parity as P
     from runtime.host import moy_log
     from tools import wasm_cart
     from ws_helpers import open_cart
-    cart = wasm_fixture(name)
+    cart = cart or wasm_fixture(name)
     seq = {}
 
     def prepare(carts_dir):

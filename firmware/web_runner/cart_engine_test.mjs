@@ -50,12 +50,24 @@ const MODULE_BYTES = new Uint8Array([
     0x07, 0x05, 0x01, 0x01, 0x6d, 0x02, 0x00,              // export section: "m" -> memory 0
 ]);
 
-function freshEngine() {
+// ...and one exporting `_uitree_draw(i32 x5)`, whose body traps: a compiled
+// app's canvas draw, which draw() must reach and whose trap it must answer.
+const DRAW_BYTES = new Uint8Array([
+    0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+    0x01, 0x09, 0x01, 0x60, 0x05, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x00,   // type: (i32 x5) -> ()
+    0x03, 0x02, 0x01, 0x00,                                            // function 0 of that type
+    0x05, 0x03, 0x01, 0x00, 0x01,                                      // memory, min 1
+    0x07, 0x14, 0x02, 0x01, 0x6d, 0x02, 0x00,                          // exports: "m" -> memory 0,
+    0x0c, ...new TextEncoder().encode("_uitree_draw"), 0x00, 0x00,     // "_uitree_draw" -> function 0
+    0x0a, 0x05, 0x01, 0x03, 0x00, 0x00, 0x0b,                          // its body: unreachable
+]);
+
+function freshEngine(module = MODULE_BYTES) {
     // One page of VM memory, the module bytes written in around the middle --
     // like web_open's malloc'd file buffer, somewhere past address 0.
     const M = { HEAPU8: new Uint8Array(new ArrayBuffer(65536)) };
-    M.HEAPU8.set(MODULE_BYTES, 256);
-    const bytes = M.HEAPU8.subarray(256, 256 + MODULE_BYTES.length);   // web_open's view
+    M.HEAPU8.set(module, 256);
+    const bytes = M.HEAPU8.subarray(256, 256 + module.length);   // web_open's view
     installCartEngine(M);
 
     let grown = false;
@@ -96,6 +108,14 @@ function freshEngine() {
        err === "", "err=" + JSON.stringify(err));
     ok("the success path ran all the way through (moyCart bound)",
        M.moyCart != null, "err=" + JSON.stringify(err));
+    ok("a module with no _uitree_draw draws no canvas", M.moyEngine.draw(1, 0, 0, 8, 8) === 0);
+}
+
+{
+    const { M, bytes, vm } = freshEngine(DRAW_BYTES);
+    const err = M.moyEngine.open(bytes, vm);
+    ok("a module exporting _uitree_draw opens", err === "", "err=" + JSON.stringify(err));
+    ok("draw() calls its _uitree_draw and answers its trap", M.moyEngine.draw(1, 0, 0, 8, 8) === -1);
 }
 
 console.log("\n" + (fail ? fail + " FAILED" : "all cart engine checks passed"));

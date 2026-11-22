@@ -3,7 +3,8 @@
 with no module (a run's own pages are tests/test_uitree_conformance.py's
 compiled halves).
 
-  * the numbers sdk/include/moybyte/uitree.h gives an app are the engine's;
+  * the numbers sdk/include/moybyte/uitree.h (and its generated
+    uitree_schema.h) give an app are the engine's;
   * a refusal is latched for the run, and its line names its code, its row
     and where on the page;
   * a prop is held to the contract's table at the row that names it, with
@@ -36,7 +37,7 @@ _SIGS = (
     ("moy_uitree_wasm_set_model", [_P, _I, _I, _B, _U], _I),
     ("moy_uitree_wasm_error", [_P, _P, _U], _I),
 )
-TEXT, MODEL = 4, 7
+NUM, TEXT, MODEL = 3, 4, 7
 PAGE, GROUP, LABEL = 1, 2, 3
 E_KIND, E_ARG, E_CHECK = -3, -5, -6
 
@@ -96,7 +97,7 @@ def test_the_sdk_headers_numbers_are_the_engines():
     """Each of the SDK's enums is one of the engine's, whole: the types, every
     kind, the action flags and the refusals (the off values are uit_action's)."""
     engine = _enums("native/moy_uitree/moy_uitree.h", "UIT_")
-    for sdk in _enums("sdk/include/moybyte/uitree.h", "UT_"):
+    for sdk in _enums("sdk/include/moybyte/uitree.h", "UT_") + _enums("sdk/include/moybyte/uitree_schema.h", "UT_"):
         if "OFF_NONE" in sdk:
             assert sdk == {"OFF_NONE": 0, "OFF_HIDE": 1, "OFF_GREY": 2}
             continue
@@ -171,6 +172,22 @@ def test_a_read_answers_the_whole_length():
         r.close()
 
 
+def test_a_number_crosses_as_its_digits():
+    """A number state is set and read as text, spelled as the trace spells
+    it; text that is no number is refused."""
+    r = Rows()
+    try:
+        n = r.state("level", NUM, b"")
+        assert r.set_text(n, "2.5") == 0
+        assert r.read("get_text", n) == (3, "2.5")
+        r.set_text(n, "-1e3")
+        assert r.read("get_text", n) == (5, "-1000")
+        assert r.set_text(n, "2.5kg") == E_ARG
+        assert r.read("error", cap=200)[1].startswith("ARG uitree_set_text(level): a number state takes")
+    finally:
+        r.close()
+
+
 def test_a_model_write_is_traced_as_the_layers_trace_a_set():
     r = Rows()
     try:
@@ -192,3 +209,63 @@ def test_a_model_write_is_traced_as_the_layers_trace_a_set():
         ]
     finally:
         r.close()
+
+
+def test_a_canvas_is_drawn_by_the_app_and_hands_its_pointer_to_an_action():
+    """A canvas's draw is the module's own, called inside the frame; a press
+    on it, its drag and its release reach the pointer= action as down, drag
+    and up in the canvas's coordinates, the press holding the canvas."""
+    import uitree_conf as C
+    cart = os.path.join(ROOT, "tests", "fixtures", "uitree_canvas_wasm.moy")
+    trace, frames = C.run_wasm(None, C.CONFIGS[0], ["swipe:20"], cart=cart)
+    acts = [l for l in trace if l.startswith("action poke")]
+    assert acts[0] == "action poke from pointer down on canvas 'pad'"
+    assert acts[-1] == "action poke from pointer up on canvas 'pad'"
+    assert "action poke from pointer drag on canvas 'pad'" in acts
+    down = next(re.search(r"-> 'down (\d+),(\d+) drawn' \(in poke\)$", l) for l in trace if "-> 'down " in l)
+    up = next(re.search(r"-> 'up (\d+),(\d+) drawn' \(in poke\)$", l) for l in trace if "-> 'up " in l)
+    assert up.group(1) == down.group(1) and int(up.group(2)) - int(down.group(2)) == 20
+
+
+
+def test_a_page_takes_a_row_and_the_app_moves_the_focus():
+    """ut_focus puts the focus on a row's part; that row's action pushes a
+    page that takes the row (its cursor set first), and Back puts the focus
+    back on it."""
+    import uitree_conf as C
+    cart = os.path.join(ROOT, "tests", "fixtures", "uitree_rowpage_wasm.moy")
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "k:a", "back"], cart=cart)
+    assert trace[trace.index("action open from link 'b/open' on 'Shelf'"):] == [
+        "action open from link 'b/open' on 'Shelf'",
+        "state sel '' -> 'b' (in open)",
+        "page push page 2, opened from 'b/open'",
+        "page back page 1, focus back to 'b/open'"]
+
+
+def test_more_role_runs_on_the_m_key():
+    """The more role's key (m) runs the page's action where no field is
+    focused and the focused row's action where it hangs from a row; a field
+    that holds focus takes the letter."""
+    import uitree_conf as C
+    fx = os.path.join(ROOT, "tests", "fixtures")
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "t:m", "f:1", "k:down", "t:m"],
+                          cart=os.path.join(fx, "uitree_more_wasm.moy"))
+    assert [l for l in trace if l.startswith("action more")] == [
+        "action more from key more on 'tools' on 'Tools'"]
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "t:m"], cart=os.path.join(fx, "uitree_morerow_wasm.moy"))
+    assert [l for l in trace if l.startswith("action open from")] == [
+        "action open from key more on 'b/open' on 'Shelf'"]
+
+
+def test_build_refuses_an_app_the_engine_refused_in_init(tmp_path):
+    """tools/wasm_cart.build runs a UI tree app's `_init` on the host's WAMR and
+    fails with the engine's refusal, naming its code; a good app builds."""
+    import pytest
+    from runtime import wasm_host
+    from tools import wasm_cart
+    if not wasm_host.available():
+        pytest.skip("no host wasm binding")
+    fx = os.path.join(ROOT, "tests", "fixtures")
+    wasm_cart.build(os.path.join(fx, "uitree_more_wasm.moy"), str(tmp_path / "good.moy"))
+    with pytest.raises(ValueError, match=r"T02 .*no state nothing"):
+        wasm_cart.build(os.path.join(fx, "uitree_bad_wasm.moy"), str(tmp_path / "bad.moy"))
