@@ -1,16 +1,19 @@
 """G9's engine half on the host layer: an `image` value found, decoded,
 cached under a byte budget and drawn, the app running no code for it.
 
-A card or picture asks `peek(pic, w, h)` while it draws: a decoded picture,
-or None, and then the pair is owed. The console's idle branch (a frame with
-nothing to paint) calls the layer's `idle_step`, which decodes one owed
-picture. A picture that does not decode is failed for the session, traced
+A drawing stands whole in its tile, letterboxed at its own aspect (a
+cover PNG and a picture the app draws fill it). A card or picture asks
+`peek(pic, w, h)` while it draws: a decoded picture,
+or None, and then the pair is owed. Each console frame, before it paints,
+calls the layer's `idle_step` while it owes one (`view_owed`), which
+decodes one owed picture and damages the page: the page is not quiet until
+it shows every picture it holds. A picture that does not decode is failed for the session, traced
 once. The cache keeps decoded pixels under `budget` bytes, the least
 recently drawn let go first ("redraw on exposure": it is owed again the
 next time a card shows it).
 
 What this host layer cannot show: a decode off the frame's thread (here it
-is the idle frame's own time), a cache shared across apps, and a budget the
+is the frame's own time), a cache shared across apps, and a budget the
 engine sets per board.
 """
 import collections
@@ -82,8 +85,8 @@ class PicEngine:
             cv.cover(pix[1], side, 0, 0, side, side, x, y, w, h, 0, False)
         elif kind == "layer":
             cv.blit565_resize(pix._buf, pix.w, pix.h, x, y, w, h)
-        else:
-            cv.picture(pix, x, y, w, h)
+        else:                   # a drawing: centred in its tile at its own aspect
+            cv.picture(pix, x + (w - pix.w) // 2, y + (h - pix.h) // 2, pix.w, pix.h)
 
     # -- the idle side -----------------------------------------------------------------
 
@@ -199,8 +202,15 @@ class PicEngine:
             if pix is None:
                 return "not a cover PNG"
             return ("cover", (side, pix), side * side * 2)
-        from artwork import read_cover
+        from artwork import picture_size, read_cover
         from file_widgets import Bitmap
+        # a drawing stands whole in its tile, letterboxed: its edges are the drawer's
+        size = picture_size(raw)
+        if size is not None:
+            fw, fh = w, size[1] * w // size[0]
+            if fh > h:
+                fw, fh = size[0] * h // size[1], h
+            w, h = max(1, fw), max(1, fh)
         pix = bytearray(w * h)
         if read_cover(raw, pix, w, h) is None:
             return "not a picture"
