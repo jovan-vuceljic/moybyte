@@ -1006,7 +1006,7 @@ def _files_document(ws):
     ws.spine.open_app(ws.app("files"))
     app = ws.app("files")
     app._refresh_counts()
-    app.open_place(files_app.DOCUMENTS, keep="todo")
+    app.open_place(files_app.DOCUMENTS, keep="todo", show=True)
     app.level = "files"
 
 

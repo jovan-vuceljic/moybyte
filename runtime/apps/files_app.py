@@ -556,7 +556,7 @@ class FilesAppLayer(uitree_app.app_layer("files", "Files", files_page, is_app, n
             if p[0] == key:
                 s.caption = p[1]
         first = row_id(0) if self.rows else ""
-        if not pick and s.cur != first:     # a write moves the focus onto the row
+        if not pick:
             s.cur = first
         elif pick and self.index(s.cur) >= len(self.rows):
             s.cur = ""                      # a place picked on the desk keeps the focus on the places

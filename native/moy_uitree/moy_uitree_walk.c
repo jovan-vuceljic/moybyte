@@ -2719,6 +2719,7 @@ static int land_focus(uit_t *e, moy_ui_ctx_t *c, char ahead[UIT_ID_MAX + 1])
             e->fresh = 0;
         }
     }
+    int asked = 0;                      // ui.focus found its node: the app's word on where focus goes
     if (e->want) {
         const char *key = e->want;
         if (id_find(e->prev, e->nprev, key))
@@ -2731,7 +2732,7 @@ static int land_focus(uit_t *e, moy_ui_ctx_t *c, char ahead[UIT_ID_MAX + 1])
         }
         if (fid[0]) {
             focus_to(c, fid);
-            moved = 1;
+            moved = asked = 1;
             uit_want_focus(e, NULL);
         }
     }
@@ -2754,12 +2755,13 @@ static int land_focus(uit_t *e, moy_ui_ctx_t *c, char ahead[UIT_ID_MAX + 1])
         const char *v = S->s ? S->s : "";
         if (S->sync_set && S->sync && !strcmp(S->sync, v))
             continue;
-        if (!id_in(e, v, fid)) {
-            if (!(*v && row_stop_id(e, k, v, S->sn, fid)))
+        // a written cur moves the focus onto its row, but where the app asked for a focus of its own
+        if (!asked) {
+            if (!id_in(e, v, fid) && !(*v && row_stop_id(e, k, v, S->sn, fid)))
                 continue;
+            focus_to(c, fid);
+            moved = 1;
         }
-        focus_to(c, fid);
-        moved = 1;
         UIT_FREE(S->sync);
         S->sync = UIT_MALLOC(S->sn + 1);
         if (S->sync)

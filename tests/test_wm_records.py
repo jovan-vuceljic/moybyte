@@ -414,11 +414,7 @@ def _art(p):
         _drawings(ws)
         f = _inst(ws, "FilesAppLayer")
         f._in(f._refresh_counts)
-        f._in(f.open_place, files_app.PICTURES)
-    p.settle()
-    for ws in (p.a, p.b):
-        f = _inst(ws, "FilesAppLayer")
-        f._in(ui.focus, "r0/open")
+        f._in(lambda: (f.open_place(files_app.PICTURES), ui.focus("r0/open")))
     p.settle()
 
 
