@@ -1236,6 +1236,7 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     mua_lent_drop(c);                   // a first frame's card its pass never closed
     c->pa_box.w = 0;
     c->pa_st = 0;
+    c->pa_none = 0;
     c->sp_n = 0;
     c->sp_pn = 0;
     c->sp_cut = 0;
@@ -4099,9 +4100,7 @@ void moy_ui_api_part(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, 
     out[3] = none ? 0 : b.h;
     out[4] = st;
     c->pa_box = b;
-    if (none) {
-        c->pa_box.w = 0;
-    }
+    c->pa_none = (uint8_t)none;
     c->pa_st = (uint8_t)st;
 }
 
@@ -4117,7 +4116,7 @@ int moy_ui_api_part_at(const moy_ui_ctx_t *c, int32_t out[2]) {
     } else {
         return 0;
     }
-    if (b.w <= 0 || b.h <= 0 || !mua_inside(b, x, y)) {
+    if (c->pa_none || b.w <= 0 || b.h <= 0 || !mua_inside(b, x, y)) {
         return 0;
     }
     out[0] = x - b.x;

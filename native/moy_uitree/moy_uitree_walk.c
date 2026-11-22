@@ -3089,11 +3089,13 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
             moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &one);
         }
         moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, canvas_h(e, k), &o, r);
-        put_rect(e, k, r);              // where a press on it lands (`uit_rect`)
+        // where it stands, drawn this pass or left as the shift frame's move left it (r's 0s)
+        int32_t at[4] = {c->pa_box.x, c->pa_box.y, c->pa_box.w, c->pa_box.h};
+        put_rect(e, k, at);             // where a press on it lands (`uit_rect`)
         if (model >= 0)
-            put_cell(e, k, model, row, r);  // in a list's body: its row's (`uit_rect`'s ROWKEY/KEY)
+            put_cell(e, k, model, row, at); // in a list's body: its row's (`uit_rect`'s ROWKEY/KEY)
         canvas_drew(e, k);
-        if (e->draw_fn)
+        if (e->draw_fn && !c->pa_none)
             e->draw_fn(e->draw_ud, k, model, row, r[0], r[1], r[2], r[3]);
         break;
     }

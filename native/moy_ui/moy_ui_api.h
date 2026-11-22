@@ -628,10 +628,11 @@ typedef struct {
     uint32_t mid_page;              // the page a middle-button drag scrolls
     int16_t mid_y;
     int16_t tap_x, tap_y;           // where the activating tap was released
-    moy_ui_box_t pa_box;            // the part answered last (w 0: none this frame)...
+    moy_ui_box_t pa_box;            // the part answered last, where it stands (w 0: none)...
     moy_ui_box_t sp_hit[MOY_UI_API_DIVS];   // the dividers this frame's splits drew: what a press takes
     uint8_t sp_n;
-    uint8_t pa_st;                  // ...and its state bits (moy_ui_api_part_at)
+    uint8_t pa_st;                  // ...its state bits (moy_ui_api_part_at)...
+    uint8_t pa_none;                // ...and whether this pass leaves it undrawn (its out 0s)
     // The panes the last pass's splits cut (moy_ui_api_split_frame): a pane
     // a later split cut again (`sp_cut`, a bit a pane) is no pane of its own;
     // `sp_cur` the one a split's focus names (-1 none), `sp_held` whether a
