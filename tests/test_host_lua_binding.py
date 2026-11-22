@@ -108,22 +108,27 @@ def test_a_cart_is_lua_text_never_precompiled_bytecode():
     already bans load/loadstring/dofile for that reason; the cart's own source
     is the one door they do not cover. ESC opens every binary chunk
     (LUA_SIGNATURE), and text mode refuses on that byte with Lua's own message
-    -- where binary mode would read on and fail on the junk instead."""
-    for chunks in ([(b"\x1bLua\x54\x00 not a real chunk", "@cart")],
-                   [("function _update(dt) end", "@shim"),
-                    (b"\x1bLua\x54\x00 not a real chunk", "@cart")]):
+    -- where binary mode would read on and fail on the junk instead. A chunk
+    handed over deflated (bytes) is held to the same once inflated."""
+    import zlib
+    binary = b"\x1bLua\x54\x00 not a real chunk"
+    z = zlib.compressobj(9, zlib.DEFLATED, -lb.Z_WBITS)
+    deflated = z.compress(binary) + z.flush()
+    for src in (binary.decode("latin-1"), deflated):
+        for chunks in ([(src, "@cart")],
+                       [("function _update(dt) end", "@shim"), (src, "@cart")]):
+            r = lb.HostLuaRun(bytearray(32 * 32 * 2), 32, 32)
+            try:
+                err = r.load(chunks)
+                assert err is not None and "attempt to load a binary chunk" in err, err
+            finally:
+                r.close()
         r = lb.HostLuaRun(bytearray(32 * 32 * 2), 32, 32)
         try:
-            err = r.load(chunks)
-            assert err is not None and "attempt to load a binary chunk" in err, err
+            assert r.exec(src) is not None
+            assert r.load([("function _update(dt) X = 1 end", "@cart")]) is None
         finally:
             r.close()
-    r = lb.HostLuaRun(bytearray(32 * 32 * 2), 32, 32)
-    try:
-        assert r.exec(b"\x1bLua\x54\x00 not a real chunk") is not None
-        assert r.load([("function _update(dt) X = 1 end", "@cart")]) is None
-    finally:
-        r.close()
 
 
 TOUCH_CART = """

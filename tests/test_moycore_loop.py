@@ -37,6 +37,7 @@ pointing at a cause.
 
 import os
 import subprocess
+import zlib
 
 from unix_mp import require_unix_mp, runtime_tree
 
@@ -554,7 +555,10 @@ moycore.close()
 # nothing stands between a crafted binary chunk and the firmware's memory, so
 # run_chunk loads in text mode: ESC, the first byte of every binary chunk, is
 # refused with Lua's own message -- binary mode would read on and fail on the
-# junk with a different one. exec() and load() both go through run_chunk.
+# junk with a different one. exec() and load() both go through run_chunk,
+# and so does a chunk handed over deflated (bytes), which Lua's parser takes
+# as it inflates: held to text mode once inflated, run whole however many
+# pieces and windows it spans, and refused where it does not inflate.
 TEXT_ONLY_DRIVER = r'''
 import moycore
 from array import array
@@ -574,7 +578,26 @@ moycore.close()
 moycore.run_begin(fb, W, H, None, None, None, 0, 0, snap, aq, None, None, None, True, None)
 print("TEXTLOAD", moycore.load((("function _update(dt) end", "@cart"),)))
 moycore.close()
+for key, src in (("ZBINLOAD", ZBIN), ("ZTEXTLOAD", ZTEXT), ("ZBADLOAD", ZTEXT[:len(ZTEXT) // 2])):
+    moycore.run_begin(fb, W, H, None, None, None, 0, 0, snap, aq, None, None, None, True, None)
+    print(key, moycore.load(((src, "@cart"),)))
+    moycore.close()
 '''
+
+
+def _deflated(text):
+    from runtime import lua_binding
+    z = zlib.compressobj(9, zlib.DEFLATED, -lua_binding.Z_WBITS)
+    return z.compress(text.encode("latin-1")) + z.flush()
+
+
+# Lines unlike each other, so the text spans many of the reader's pieces and
+# its back references reach across the whole window.
+_ZTEXT = ("T = {}\n" + "".join("T[%d] = %d\n" % (i, i * 7919 % 10007) for i in range(4000))
+          + "function _init()\n  local s = 0\n"
+          + "  for i = 0, 3999 do s = s + T[i] end\n"
+          + "  if s ~= %d then error('sum ' .. s) end\nend\n"
+          % sum(i * 7919 % 10007 for i in range(4000)))
 
 
 def test_a_cart_is_lua_text_never_precompiled_bytecode():
@@ -582,13 +605,17 @@ def test_a_cart_is_lua_text_never_precompiled_bytecode():
         "moycore",
         why="Without it nothing checks that a board refuses a Lua cart made "
             "of precompiled bytecode, which Lua does not verify.")
-    p = subprocess.run([exe, "-c", TEXT_ONLY_DRIVER], capture_output=True,
+    drv = ("ZBIN = %r\nZTEXT = %r\n" % (_deflated("\x1bLua\x54\x00 not a real chunk"),
+                                       _deflated(_ZTEXT))) + TEXT_ONLY_DRIVER
+    p = subprocess.run([exe, "-c", drv], capture_output=True,
                        text=True, timeout=60)
     assert p.returncode == 0, p.stdout + p.stderr
     by = {l.split()[0]: l for l in p.stdout.splitlines() if l}
-    for key in ("BINLOAD", "BINEXEC"):
+    for key in ("BINLOAD", "BINEXEC", "ZBINLOAD"):
         assert "attempt to load a binary chunk" in by[key], p.stdout
-    assert by["TEXTLOAD"].split()[1] == "None", p.stdout
+    for key in ("TEXTLOAD", "ZTEXTLOAD"):
+        assert by[key].split()[1] == "None", p.stdout
+    assert "does not inflate" in by["ZBADLOAD"], p.stdout
 
 
 def _run():
