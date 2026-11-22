@@ -476,9 +476,8 @@ class SceneWorld:
 # The ONE popover: a panel anchored to a bar widget's cell, opening into the
 # content side of its bar, drawn ON TOP of whatever screen is up, with its OWN
 # open/selected state. Its contents are either ROWS -- the system menu, its
-# first content -- or a COMPONENT (popover.py: the calendar, the wifi panel,
-# the power rows), one at a time. Index-only drawing (the existing verbs --
-# host == device, no new native primitive).
+# first content, drawn as sysmenu_ui's card -- or a COMPONENT (popover.py:
+# the calendar, the wifi panel, the power rows), one at a time.
 #
 # Rows are tuples; the first element is a kind:
 #   ("header", text)               -- a dim section title; NOT cursor-selectable
@@ -489,9 +488,6 @@ class SceneWorld:
 _POPUP_X = 0                  # panel left edge (flush to the screen left, x = 0)
 _POPUP_Y = 18                 # the hang edge with no anchor: under an 18px top bar
 _POPUP_W = 128                # panel width (~120-140px band; 128 keeps it clear of clock)
-_POPUP_ROW_H = 12             # per-row height (selectable + header rows alike)
-_POPUP_PAD_X = 4              # text inset from the panel left
-_POPUP_SEP_H = 1              # separator line height
 # A row whose icon (its 4th element) is this destroys: it draws in the danger
 # rows' ink, and the cursor never OPENS on it, so one press of the key that
 # opened the menu cannot delete.
@@ -628,58 +624,11 @@ class Popup:
 
     # -- geometry + hit-testing ----------------------------------------------
     def panel_rect(self):
-        """(x, y, w, h) of the whole panel -- height grows with the row count. The
-        left edge is `anchor_x` (set under the ≡ button by toggle_sysmenu, Stage 4);
-        defaults to _POPUP_X (flush left). Rows and the drop under the bar scale by
-        `cs`, the text-sized width by `fs`; equal is the byte-identical baseline."""
-        fs, cs = self.fs, self.cs
-        if self.comp is not None:
-            w, h = self.size
-        else:
-            w = self.w or _POPUP_W * fs
-            h = 0
-            for it in self.items:
-                h += _POPUP_SEP_H * cs if it[0] == "sep" else _POPUP_ROW_H * cs
-        y = _bar_rows(cs) if self.anchor_y is None else self.anchor_y
+        """(x, y, w, h) of the open component's panel. The left edge is
+        `anchor_x` (set under the bar widget by `_place_popover`); the drop
+        under the bar scales by `cs`."""
+        w, h = self.size if self.comp is not None else (self.w, 0)
+        y = _bar_rows(self.cs) if self.anchor_y is None else self.anchor_y
         if self.up:
             y -= h
         return (self.anchor_x, y, w, h)
-
-    def row_at(self, px, py):
-        """Index of the row under (px, py), or None when outside the panel."""
-        if not self.open:
-            return None
-        x, y, w, h = self.panel_rect()
-        if not _in(px, py, (x, y, w, h)):
-            return None
-        cs = self.cs
-        cy = y
-        for i in range(len(self.items)):
-            rh = _POPUP_SEP_H * cs if self.items[i][0] == "sep" else _POPUP_ROW_H * cs
-            if cy <= py < cy + rh:
-                return i
-            cy += rh
-        return None
-
-    def click(self, px, py):
-        """Apply a tap: outside the panel -> dismiss; on a selectable row -> move the
-        cursor there AND activate (tap = move+select in one gesture, #52); on a
-        header/separator -> swallow (taps inside the panel never dismiss). Returns
-        True when the tap was consumed (so the caller stops dispatching it)."""
-        if not self.open:
-            return False
-        if self.comp is not None:
-            r = self.panel_rect()
-            if _in(px, py, r):
-                self.comp.click(px, py, r)
-            else:
-                self.close()          # tap OUTSIDE dismisses
-            return True
-        i = self.row_at(px, py)
-        if i is None:
-            self.close()              # tap OUTSIDE dismisses
-            return True
-        if self.items[i][0] == "item":
-            self.sel = i
-            self.activate()
-        return True                    # tap inside is always consumed

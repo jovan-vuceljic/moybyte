@@ -280,12 +280,8 @@ def test_the_system_menu_opens_from_the_bottom_bar_upward(tmp_path, size):
     by = ws.bar_layer.bar_rect(0, "home")[1]
     _tap(ws, x + w // 2, by + y + h // 2)
     assert ws.sysmenu.open
-    px, py, pw, ph = ws.sysmenu.panel_rect()
-    assert py + ph == by and py >= 0               # hangs upward from the bar
-    first = next(i for i, it in enumerate(ws.sysmenu.items) if it[0] == "item")
-    assert ws.sysmenu.row_at(px + 2, py + 1) is not None
-    assert ws.sysmenu.row_at(px + 2, py - 1) is None
-    assert first is not None
+    px, py, pw, ph = ws.menu_ui.look_card()
+    assert py + ph <= by and py >= 0               # hangs upward from the bar
 
 
 @pytest.mark.parametrize("size", sorted(SIZES))

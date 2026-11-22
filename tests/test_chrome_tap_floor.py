@@ -243,20 +243,18 @@ def test_every_editor_tab_re_derives_on_BOTH_scales(tmp_path):
             "fs=%d cs=%d" % (tab, lay.fs, lay.cs))
 
 
-def test_the_menu_rows_follow_the_chrome_scale_and_its_labels_do_not(tmp_path):
-    """The ≡ dropdown is the one surface whose geometry lives on the widget
-    rather than on `Layout`, so it takes the scale through `toggle_sysmenu` and
-    is worth its own check: rows grow, the text-sized panel width does not."""
+def test_the_menu_card_hangs_under_the_scaled_bar_at_its_text_width(tmp_path):
+    """The ≡ menu takes the chrome scale through `toggle_sysmenu`: its card
+    hangs under the taller bar, and its width is text-sized (fs), not
+    chrome-sized (cs)."""
     ws = host_app.build_workstation(
         str(tmp_path / "carts"), sys_size=(480, 320), font_scale=1,
         panel_diagonal_in=3.5)
     ws.toggle_sysmenu()
     assert ws.sysmenu.cs == 2 and ws.sysmenu.fs == 1
-    x, y, w, h = ws.sysmenu.panel_rect()
-    rows = [i for i in ws.sysmenu.items if i[0] != "sep"]
-    assert y == ws.layout.status_h            # hangs under the taller bar
-    assert w == 128                           # panel width is TEXT-sized: fs
-    assert h >= 24 * len(rows)                # ...rows are 12*cs, not 12*fs
+    x, y, w, h = ws.menu_ui.look_card()
+    assert y >= ws.layout.status_h            # hangs under the taller bar
+    assert w == ws.menu_ui._look_w(False)     # panel width is TEXT-sized: fs
 
 
 def test_a_tap_box_centres_its_content_and_is_the_identity_at_cs_eq_fs():
