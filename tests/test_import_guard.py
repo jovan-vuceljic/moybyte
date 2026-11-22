@@ -101,8 +101,9 @@ def test_a_staged_lua_layer_never_stands_in_for_the_source(tmp_path,
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.delitem(sys.modules, "uitree_lua", raising=False)
     monkeypatch.setattr(lua_ext, "_uitree_src", {})
+    here = os.path.dirname(os.path.abspath(lua_ext.__file__))
     for name in (lua_ext.UITREE_FILE, lua_ext.UITREE_BACK):
-        with open(os.path.join(ROOT, "runtime", "run", name)) as f:
+        with open(os.path.join(here, name)) as f:
             assert lua_ext.uitree_source(name) == f.read(), name
     assert "uitree_lua" not in sys.modules
 
