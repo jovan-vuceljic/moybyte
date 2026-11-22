@@ -10,7 +10,9 @@ and the text editor node feeds it typed keys and draws it.
 A host that already owns a buffer and an undo journal (the Editor's Code
 tab: the console's `CodeEditor` and its per-tab history) hands both in with
 `adopt`; the document is then a view over them, and its bursts, undo and
-edits go to the host's journal.
+edits go to the host's journal. A cart's editor handle (`open_editor`) is
+one: a handler's `s.NAME.adopt(ed)` (`uitree.DocView.adopt`) hands in its
+buffer, its journal (`EditorHandle.journal`), its syntax and its wrap.
 
 Lines and columns cross the boundary from 1; `CodeEditor` counts from 0."""
 from editors_code import CodeEditor
@@ -48,6 +50,7 @@ class Journal:
 class DocBuf:
     def __init__(self, text, lang):
         self.lang = lang
+        self.wrap = False         # the text editor wraps its lines (prose) rather than pans them
         self.ed = CodeEditor(text, 80, 40)
         self.history = History(self.ed, TextEditCodec())
         self.journal = None       # the host's, when adopted
@@ -58,11 +61,12 @@ class DocBuf:
         self.marks = ()           # (line from 1, kind, words), the node's marks= model
         self.gen = 0              # moves on every change the view draws
 
-    def adopt(self, ed, journal, lang=None):
+    def adopt(self, ed, journal, lang=None, wrap=None):
         """Show and edit the host's buffer `ed` (a CodeEditor), its bursts and
-        undo the host's `journal` (a Journal). Called again when the host's
-        buffer is replaced (another script opened)."""
-        if ed is self.ed and journal is self.journal and (lang is None or lang == self.lang):
+        undo the host's `journal` (a Journal), wrapped where `wrap`. Called
+        again when the host's buffer is replaced (another script opened)."""
+        if (ed is self.ed and journal is self.journal and (lang is None or lang == self.lang)
+                and (wrap is None or wrap == self.wrap)):
             return
         self.ed = ed
         self.journal = journal
@@ -70,6 +74,8 @@ class DocBuf:
         self._burst = None
         if lang is not None:
             self.lang = lang
+        if wrap is not None:
+            self.wrap = wrap
         self.gen += 1
 
     # -- what templates read ------------------------------------------------

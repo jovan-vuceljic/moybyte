@@ -18,6 +18,7 @@ cart's start, never at the Player's.
 """
 
 import layout_base as _lb
+import ui_draw as _ui_draw
 
 EXT = "moybyte.uitree"
 
@@ -67,10 +68,13 @@ class CartTree:
                 editor = True
         self.pl = pl
         face = pl.face
-        self.engine = eng = _app._engine_class(True, editor)(build, face.host(), _Damage(pl))
+        self._host = face.host()
+        self.engine = eng = _app._engine_class(True, editor)(build, self._host, _Damage(pl))
+        self.editor = editor
         if editor:
             eng.pointer_down = self._down
         self.dt = 0.0
+        self._held = None           # the text editor a press placed the caret in, until its release
         eng.open()
 
     def _down(self):
@@ -78,20 +82,74 @@ class CartTree:
 
     def update(self, dt):
         """The frame's input into the engine: a declared action's key, a
-        role's, the text editor's typing. A deaf run's keys are another
-        window's."""
+        role's, the text editor's typing, and a press in a text editor,
+        which places its caret (a drag after it extends the selection in
+        select mode; the view's own drag scrolls it). A deaf run's keys are
+        another window's."""
         self.dt = dt
         pl = self.pl
-        if not (pl.deaf or pl.detached):
-            self.engine.keys(pl.ws.input, False)
+        if pl.deaf or pl.detached:
+            return
+        eng = self.engine
+        eng.keys(pl.ws.input, False)
+        if self.editor:
+            gp = pl.ws.input.game_pointer
+            if gp is not None and (gp[2] or self._held is not None):
+                self._text_pointer(gp[0], gp[1], gp[2], gp[3])
+
+    def _text_pointer(self, px, py, click, down):
+        eng = self.engine
+        if click:
+            self._held = None
+            if eng.popover_shown() or eng.dialog_shown():
+                return
+            for key in eng.views:
+                got = _ui_draw.text_at(self._host, key, px, py)
+                if got is not None:
+                    self._held = key
+                    self._place(key, got, False)
+                    return
+            return
+        key = self._held
+        if not down:
+            self._held = None
+            return
+        doc = eng.s._v[key]
+        if doc.ed.select_sticky:
+            got = _ui_draw.text_at(self._host, key, px, py)
+            if got is not None:
+                self._place(key, got, True)
+
+    def _place(self, key, cell, select):
+        eng = self.engine
+        doc = eng.s._v[key]
+        ed = doc.ed
+        if cell[0] >= len(ed.lines):
+            return
+        if not select and ed.select_sticky:
+            doc.place(cell[0] + 1, cell[1] + 1)
+            ed.begin_select()       # select mode: a fresh press anchors a fresh range
+        else:
+            doc.place(cell[0] + 1, cell[1] + 1, select)
+        eng.s._ver[key] += 1
+        self.pl.face.owe()
 
     def draw(self):
         """The page, painted into the app's content rect in the pass the
-        run's frame began."""
+        run's frame began; an editor handle a text editor adopted gets its
+        frame (`EditorHandle.tick`: its idle save)."""
         pl = self.pl
         cv = pl.run.canvas
         desk = pl.run.app_full_canvas and _lb.metric_class() == _lb.DESK
         self.engine.paint(self.dt, cv, pl.ws.theme_colors, pl.face.ui_room(), desk)
+        eds = pl.editors
+        for i in range(len(eds)):
+            if eds[i].live:
+                eds[i].tick()
+
+    def typing(self):
+        """Whether a text editor holds the keys: the run takes typed bytes."""
+        return self.editor and self.engine.editor_keys() is not None
 
     def back(self, take):
         """The host's back into the app (`take`): a dialog, a popover or a

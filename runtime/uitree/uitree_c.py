@@ -408,7 +408,16 @@ class CEngine(Engine):
             ed = d.ed
             if (sig[0] != ed.edits or sig[1] != ed.row or sig[2] != ed.col or sig[3] != len(ed.lines)
                     or sig[4] != d.find_q or sig[5] != d.find_ci or sig[6] is not ed.sel):
-                self._push_doc(name, d)
+                if self._doc_reads.get(name):
+                    self._push_doc(name, d)
+                else:                       # no template reads it: nothing to push (a typed key makes no row)
+                    sig[0] = ed.edits
+                    sig[1] = ed.row
+                    sig[2] = ed.col
+                    sig[3] = len(ed.lines)
+                    sig[4] = d.find_q
+                    sig[5] = d.find_ci
+                    sig[6] = ed.sel
 
     def committed(self):
         """The end of a commit: each slot whose version moved, pushed."""

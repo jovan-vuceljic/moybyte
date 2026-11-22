@@ -674,8 +674,23 @@ class DocView:
                  "matches", "match", "can_undo", "can_redo", "edits", "count"):
             return getattr(b, k)
         raise UIError("S04", "a document has no %r" % k,
-                      expected="verbs " + ", ".join(self.VERBS) +
+                      expected="verbs adopt, " + ", ".join(self.VERBS) +
                       "; reads text, lines, word, defs, completions, line, col, sel, edits", fix='call one of its verbs, or read one of its fields')
+
+    def adopt(self, handle):
+        """Show and edit an editor handle's document (a cart's `open_editor`):
+        the text editor types into its buffer and draws it in the handle's
+        syntax and wrap; the handle keeps its undo, its saving and the rest
+        of its verbs (uitree_doc.DocBuf.adopt). A write in the trace."""
+        if _NOW.building or _NOW.frame:
+            raise UIError("B02" if _NOW.building else "S06", "s.%s.adopt() inside a %s" % (
+                self._n, "build" if _NOW.building else "draw"),
+                fix="call it in a handler; name the handler as an action")
+        b = self._s._v[self._n]
+        b.adopt(handle.ed, handle.journal, handle.syntax, handle.wraps())
+        self._s._ver[self._n] += 1
+        _trace("state", self._n, "adopt(%r) -> %s%s" % (handle.name(), b.summary(),
+                                                      "   (in %s)" % _NOW.action if _NOW.action else ""))
 
     def __setattr__(self, k, v):
         raise UIError("S03", "a write into a document (s.%s.%s = ...)" % (self._n, k),

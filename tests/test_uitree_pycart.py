@@ -37,26 +37,52 @@ def second():
 '''
 
 
-def _cart(root, title, main, ext=("moybyte.uitree",)):
+NOTE = """s = ui.state(note=ui.doc("", "markdown"), said="")
+ui.app("Tree Note", icon="notes")
+ed = [None]
+
+
+def opened():
+    files.save_text("probe", "- [ ] milk\\nsee [[other]]\\n")
+    ed[0] = open_editor("probe")
+    s.note.adopt(ed[0])
+
+
+def follow():
+    s.said = repr(ed[0].follow())
+
+
+ui.hook("opened", opened)
+ui.action("follow", "Open link", follow, keys=("ctrl+o",))
+
+
+def build():
+    with ui.page("Note"):
+        ui.text_editor("note", focus=True)
+        ui.label("{said}")
+"""
+
+
+def _cart(root, title, main, ext=("moybyte.uitree",), perms=()):
     d = os.path.join(root, title.replace(" ", "_").lower() + ".moy")
     os.makedirs(d)
     with open(os.path.join(d, "main.py"), "w") as f:
         f.write(main)
     with open(os.path.join(d, "manifest.json"), "w") as f:
         json.dump({"format": "moy-1", "title": title, "runtime": "python", "main": "main.py",
-                   "extensions": list(ext), "moybyte": {"type": "app", "permissions": []}}, f)
+                   "extensions": list(ext), "moybyte": {"type": "app", "permissions": list(perms)}}, f)
 
 
-def _run(tmp_path, title, main, ext=("moybyte.uitree",)):
+def _run(tmp_path, title, main, ext=("moybyte.uitree",), perms=()):
     from runtime import app_perms, host_app
     from ws_helpers import open_cart, quiesce
     carts = str(tmp_path / "carts")
     host_app.moy_carts.ensure_dirs(carts)
-    _cart(carts, title, main, ext)
+    _cart(carts, title, main, ext, perms)
     ws = host_app.build_workstation(carts, **parity.SIZES["320"])
     drv = host_app.ConsoleDriver(ws)
     cart = next(c for c in ws.carts.all if c["title"] == title)
-    ws.consent.record(app_perms.app_id(cart), [])
+    ws.consent.record(app_perms.app_id(cart), list(perms))
     open_cart(ws, title)
 
     def frame():
@@ -104,3 +130,38 @@ def test_a_cart_without_the_extension_keeps_the_toolkit(tmp_path):
     pl = ws.run.player
     assert pl.cart_error is None, pl.cart_error
     assert pl.tree is None and pl.ns["ui"].__name__.rpartition(".")[2] == "ui"
+
+
+def test_a_text_editor_that_adopts_an_editor_handle_edits_its_document(tmp_path):
+    """`s.note.adopt(ed)`: the text editor types into the handle's buffer,
+    its undo is the handle's, a tap places its caret, the run takes typed
+    bytes while it holds the keys, and the handle's idle save writes it."""
+    from runtime import editor_handle
+    ws, drv, frame = _run(tmp_path, "Tree Note", NOTE, perms=("files:documents",))
+    pl = ws.run.player
+    assert pl.cart_error is None, pl.cart_error
+    ed = pl.editors[0]
+    assert pl.face.typing() is True
+    for ch in b"oat ":
+        drv.type_char(ch)
+        frame()
+    assert ed.text().startswith("oat - [ ] milk"), ed.text()
+    assert ed.dirty() and ed.can_undo()
+    ed.undo()
+    frame()
+    assert ed.text().startswith("- [ ] milk"), ed.text()
+    # a press on the second line puts the caret there
+    eng = pl.tree.engine
+    r = eng.views["note"][0]
+    lh = eng.views["note"][3]
+    drv.touch(r[0] + r[2] // 2, r[1] + lh + lh // 2)
+    frame()
+    drv.touch_up()
+    frame()
+    assert ed.caret()[0] == 1, ed.caret()
+    assert ed.follow() == ("link", "other")
+    ed.ed.row = 0
+    assert ed.follow() == ("check", 0) and ed.text().startswith("- [x] milk")
+    ed._edit_ms -= editor_handle.AUTOSAVE_MS + 1
+    frame()
+    assert not ed.dirty(), "the idle save never came"

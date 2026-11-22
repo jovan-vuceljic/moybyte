@@ -199,6 +199,9 @@ class AppFace:
         lua = pl.lua
         if lua is not None:
             return lua.ui_typing() if getattr(lua, "own_ui", False) else _ui_draw.run_typing()
+        tree = pl.tree
+        if tree is not None and tree.typing():
+            return True
         ui = pl.ui
         return ui is not None and _ui_draw.app_typing(ui[0])
 

@@ -103,6 +103,42 @@ def _link_at(text, col):
         i = e + 2
 
 
+class _Journal:
+    """The handle as a `ui.doc`'s journal (uitree_doc.Journal), where a UI
+    tree cart's text editor adopts it (`s.NAME.adopt(ed)`): a burst opens on
+    the text as it was and closes as one undo step, undo and redo are the
+    handle's, and an edit marks it unsaved, its idle save due."""
+
+    def __init__(self, h):
+        self.h = h
+
+    def open(self):
+        h = self.h
+        if h._burst is None:
+            h._burst = h.ed.text()
+
+    def close(self):
+        self.h._close_burst()
+
+    def undo(self):
+        return self.h.undo()
+
+    def redo(self):
+        return self.h.redo()
+
+    def can_undo(self):
+        return self.h.can_undo()
+
+    def can_redo(self):
+        return self.h.can_redo()
+
+    def edited(self):
+        h = self.h
+        h._gen += 1
+        h.ed.dirty = True
+        h._mark()
+
+
 class EditorHandle:
     """The cart-facing editor over ONE document, identified by `(kind, name)`.
 
@@ -160,6 +196,8 @@ class EditorHandle:
             syn = "markdown"
         elif self._m.lang:
             syn = _modes.lang_for(self._name) or self._m.lang
+        self.syntax = syn            # the view's syntax, which a ui.doc that adopts the handle takes
+        self.journal = _Journal(self)   # ...and its journal (uitree_doc.Journal)
         self._opt = _ui.text_options({"wrap": self._m.wrap, "syntax": syn})
         self._into = _array("i", [0, 0])
         self._fm = [None, 0, 8, 10]  # look_gen, the view's font (0: mono's), its cell, line
@@ -509,6 +547,37 @@ class EditorHandle:
         if self.dirty():
             self.save()
         self._held = False
+
+    def follow(self):
+        """What a tap on the caret's place does, for a page that draws the
+        document in a UI tree text editor (`s.NAME.adopt`), which places the
+        caret and acts on no mark: on a Markdown note's line, a `- [ ]` box
+        is ticked or cleared, `("check", row)`, or the `[[link]]` at the
+        caret (else the line's first) answered, `("link", name)`; None where
+        the line has neither."""
+        if self._mode != _modes.MD:
+            return None
+        ed = self.ed
+        line = ed.lines[ed.row]
+        box = _check_box(line)
+        if box >= 0:
+            self._gen += 1
+            self._toggle_check(ed.row, box + 1)
+            return ("check", ed.row)
+        target = _link_at(line, ed.col)
+        if target is None:
+            at = line.find("[[")
+            target = _link_at(line, at + 2) if at >= 0 else None
+        return ("link", target) if target is not None else None
+
+    def tick(self):
+        """A frame of a page whose UI tree text editor adopted the handle
+        (`s.NAME.adopt`), which draws it in the handle's stead: its idle save,
+        and nothing owed for a draw the handle no longer makes (`owes`)."""
+        self._drawn = self._gen
+        self._caret_at = self.ed.row
+        self._caret_col = self.ed.col
+        self._autosave()
 
     # -- drawing --------------------------------------------------------------
 

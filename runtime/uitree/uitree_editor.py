@@ -356,13 +356,18 @@ class Engine(uitree_app.Engine):
             self.cv.rect(x, y + lines * lh, w, h - lines * lh, self.th["surface"])
             h = lines * lh
         tv = self._tv.get(key)
-        if tv is None:
-            o = _v.text_options({"syntax": _SYN[doc.lang], "mark": True})
-            tv = self._tv[key] = (o, array("i", [0, 0]), (n, None))
-            v = self.views[key] = [[x, y, w, h], -1, cell, lh, 0, 1]
+        if tv is None or tv[3] is not doc.lang or tv[4] != doc.wrap:
+            # made again where the document was adopted in another syntax or wrap
+            o = _v.text_options({"syntax": _SYN[doc.lang], "mark": True, "wrap": doc.wrap})
+            tv = self._tv[key] = (o, array("i", [0, 0]), (n, None), doc.lang, doc.wrap)
+            v = self.views.get(key)
+            if v is None:
+                v = self.views[key] = [[x, y, w, h], -1, cell, lh, 0, 1]
         else:
             v = self.views[key]
-        o, into, pair = tv
+        o = tv[0]
+        into = tv[1]
+        pair = tv[2]
         r = v[0]                        # one assignment a word: an unpacking of four builds a tuple
         r[0] = x
         r[1] = y
@@ -377,7 +382,11 @@ class Engine(uitree_app.Engine):
                 k //= 10
                 gcols += 1
         x0 = x + _TEXT_PAD * fs + gcols * cell
-        ed.set_view_size(max(1, (w - (x0 - x)) // cell), lines)
+        if doc.wrap:
+            ed.left = 0                 # wrapped lines never pan sideways
+            ed.set_view_size(max(1, (w - 2 * (x0 - x)) // cell), lines)
+        else:
+            ed.set_view_size(max(1, (w - (x0 - x)) // cell), lines)
         q = ""
         if "find" in n.l and ("find_on" not in n.p or n.p["find_on"](row)):
             q = self.s._v[n.l["find"]]
