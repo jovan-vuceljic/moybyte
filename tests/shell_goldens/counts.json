@@ -420,8 +420,8 @@
     "web_console": [299, 8]
   },
   "p4_1024x600_cs2_fs1_moy_menus": {
-    "pause": [7, 14],
-    "pause_options": [19, 6],
+    "pause": [10, 15],
+    "pause_options": [13, 6],
     "sysmenu": [3, 12]
   },
   "p4_1024x600_cs2_fs1_moy_night": {
@@ -477,8 +477,8 @@
   },
   "p4_1024x600_cs2_fs1_popovers": {
     "desk_window_calc": [2, 10],
-    "popover_battery": [37, 34],
-    "popover_clock": [31, 67],
+    "popover_battery": [44, 32],
+    "popover_clock": [27, 66],
     "popover_menu": [5, 24],
     "popover_wifi": [28, 39]
   },
@@ -645,16 +645,16 @@
   },
   "p4_1024x600_fs2_desk_popovers": {
     "music_desk_menu": [15, 23],
-    "popover_battery": [38, 33],
-    "popover_clock": [10, 54],
-    "popover_clock_six": [8, 48],
+    "popover_battery": [45, 31],
+    "popover_clock": [6, 53],
+    "popover_clock_six": [4, 47],
     "popover_wifi": [29, 38],
     "popover_wifi_many": [32, 40],
     "status_desk_panel": [13, 22],
     "status_desk_panel_full": [17, 26]
   },
   "p4_1024x600_fs2_windowed": {
-    "about": [9, 6],
+    "about": [7, 5],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -744,7 +744,7 @@
     "web_console": [299, 10]
   },
   "p4_1024x600_render2_moy_day": {
-    "about": [11, 5],
+    "about": [11, 6],
     "app_appearance": [8, 5],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -1026,8 +1026,8 @@
     "web_console": [295, 8]
   },
   "tdeck_320x240_fs1_moy_menus": {
-    "pause": [7, 14],
-    "pause_options": [19, 6],
+    "pause": [10, 15],
+    "pause_options": [13, 6],
     "sysmenu": [3, 12]
   },
   "tdeck_320x240_fs1_moy_night": {
@@ -1102,7 +1102,7 @@
     "status_cc": [39, 17],
     "status_cc_panel": [45, 19],
     "status_cc_scrolled": [36, 16],
-    "status_paused_bar": [6, 14],
+    "status_paused_bar": [8, 15],
     "status_vmstop": [4, 5]
   },
   "tdeck_320x240_fs1_tasks": {

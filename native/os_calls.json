@@ -333,6 +333,7 @@
     {"name": "install.unlock", "server": "shell"},
     {"name": "uitree.state", "server": "c", "in": ["name:str", "type:int", "values:str?"], "ret": "int", "how": "direct", "wasm": true},
     {"name": "uitree.model", "server": "c", "in": ["slot:int", "names:str", "types:bytes", "key:int"], "ret": "int", "how": "direct", "wasm": true},
+    {"name": "uitree.field_enum", "server": "c", "in": ["slot:int", "f:int", "values:str"], "ret": "int", "how": "direct", "wasm": true},
     {"name": "uitree.row_of", "server": "c", "in": ["slot:int", "model:int"], "ret": "int", "how": "direct", "wasm": true},
     {"name": "uitree.labels", "server": "c", "in": ["name:str", "keys:str", "words:str"], "ret": "int", "how": "direct", "wasm": true},
     {"name": "uitree.action", "server": "c", "in": ["name:str", "label:str", "hint:str?", "when:str?", "off:int", "flags:int", "letters:str?", "icon:str?"], "ret": "int", "how": "direct", "wasm": true},

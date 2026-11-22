@@ -709,6 +709,10 @@ int moy_ui_api_month(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t titl
         int pad = mua_kmetric(MOY_UI_K_ROW, MOY_UI_M_ROW_PAD) * c->fs;
         b.x = (int16_t)(b.x + pad);
         b.w = (int16_t)(b.w - 2 * pad);
+        // stacked past the page's foot (a popover's card shorter than its weeks): they tighten into it
+        int room = c->page.y + c->page.h - b.y;
+        if (room > 0 && room < b.h)
+            b.h = (int16_t)room;
     }
     int chevrons = c->cls || moy_ui_input() == MOY_UI_INPUT_TOUCH;
     moy_ui_box_t ch[2] = {{0, 0, 0, 0}, {0, 0, 0, 0}};

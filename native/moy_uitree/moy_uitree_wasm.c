@@ -3,6 +3,7 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "moy_uitree.h"
@@ -23,6 +24,18 @@ enum { LOG_ERR = 3, LOG_INFO = 6 };
 // The module that drives a compiled run (none in a library with no compiled run).
 #pragma weak moycore_ui_target
 #pragma weak moycore_ui_snap
+#pragma weak moycore_ui_draw_call
+
+#define DEPTH 8                 // the pages a stack remembers a focus for
+#define CANVASES 8              // the canvases of a page a pointer is routed to
+#define BACK_EV 0x10000         // `next`'s answer for the bar's back with a page to pop (UT_BACK)
+
+// An action owed to the app, handed out by `next` in the order the frame took it.
+typedef struct {
+    int act;                    // its index; -1: the bar's back pops the page
+    int32_t ev[5];              // its model slot, row, and a pointer's kind, x, y
+    uint32_t src;               // where it came from, in `qtext`
+} owed_t;
 
 // What a run's app keeps beside its store.
 typedef struct {
@@ -40,11 +53,43 @@ typedef struct {
     uint32_t *when_at;
     int nwhen, cwhen;
     uit_buf_t tmp;              // the call's texts, NUL-terminated
+    int depth;                  // the page stack's depth: the leading number of the page's id
+    char refocus[DEPTH][48];    // the key focused on each page as the next was pushed
+    int refocus_due;            // build_end puts the focus back on this depth's key (-1 none)
+    char pname[48];             // the page's name (its id after the depth), for a role key's trace
+    char title[64];             // the page's title, for a trace's "on 'TITLE'"
+    struct {                    // each canvas of the page a pointer is routed to: its pointer= action,
+        int node, act;          // the rect the last frame drew it at and that frame
+        int32_t r[4];
+        uint32_t frame;
+        char key[32];
+    } ptr[CANVASES];
+    int nptr;
+    int held;                   // the canvas a press started on (its `ptr`), held until release; -1 none
+    int32_t hx, hy;             // ...the press's last point
+    int trapped;                // the app's draw trapped in this frame
+    owed_t *q;                  // the actions owed, [qat, qn)
+    int qn, qat, qcap;
+    uit_buf_t qtext;
 } app_t;
 
 // Made by a compiled run's first row through the engine's allocator (PSRAM on
 // a board) and freed as the run ends, so an image costs no internal SRAM for it.
 static app_t *s_app;
+
+// A canvas's draw: its rect kept for the pointer, and the app's draw called.
+static void drawn(void *ud, int node, int x, int y, int w, int h) {
+    app_t *a = ud;
+    for (int i = 0; i < a->nptr; i++) {
+        if (a->ptr[i].node == node) {
+            a->ptr[i].r[0] = x, a->ptr[i].r[1] = y, a->ptr[i].r[2] = w, a->ptr[i].r[3] = h;
+            a->ptr[i].frame = a->frames;
+        }
+    }
+    if (moycore_ui_draw_call != NULL && !a->trapped && moycore_ui_draw_call(node, x, y, w, h) < 0) {
+        a->trapped = 1;
+    }
+}
 
 static void app_drop(app_t *a) {
     if (a->e != NULL) {
@@ -52,7 +97,9 @@ static void app_drop(app_t *a) {
     }
     uit_buf_free(&a->when);
     uit_buf_free(&a->tmp);
+    uit_buf_free(&a->qtext);
     UIT_FREE(a->when_at);
+    UIT_FREE(a->q);
     memset(a, 0, sizeof *a);
 }
 
@@ -91,6 +138,9 @@ static app_t *app(void) {
         a->handler = -1;
         a->hook_open = -1;
         a->page = -1;
+        a->refocus_due = -1;
+        a->held = -1;
+        uit_on_draw(a->e, drawn, a);
     }
     return a;
 }
@@ -239,6 +289,14 @@ int32_t moy_uitree_wasm_model(void *x, int32_t slot, const uint8_t *names, uint3
                  "model", where);
 }
 
+int32_t moy_uitree_wasm_field_enum(void *x, int32_t slot, int32_t f, const uint8_t *values, uint32_t values_n) {
+    (void)x;
+    APP(a);
+    char where[32];
+    snprintf(where, sizeof where, "slot %d, field %d", (int)slot, (int)f);
+    return check(a, uit_field_enum(a->e, (int)slot, (int)f, (const char *)values, values_n), "field_enum", where);
+}
+
 int32_t moy_uitree_wasm_row_of(void *x, int32_t slot, int32_t model) {
     (void)x;
     APP(a);
@@ -313,8 +371,32 @@ int32_t moy_uitree_wasm_build(void *x, const uint8_t *page, uint32_t page_n) {
     if (p < 0) {
         return refuse(a, UIT_E_NOMEM, "build", "", "no memory for the page's id");
     }
+    int depth = 0;
+    for (const char *d = at(a, p); *d >= '0' && *d <= '9'; d++) {
+        depth = depth * 10 + (*d - '0');
+    }
+    if (a->opened && depth > a->depth && depth <= DEPTH) {
+        char *f = a->refocus[depth - 2 < 0 ? 0 : depth - 2];
+        if (uit_focused(a->e, f, sizeof a->refocus[0]) < 0) {
+            f[0] = 0;
+        }
+        trace(a, "page", "push", "page %d%s%s%s", depth, f[0] ? ", opened from '" : "", f, f[0] ? "'" : "");
+    } else if (a->opened && depth < a->depth && depth >= 1) {
+        const char *f = a->refocus[depth - 1];
+        trace(a, "page", "back", "page %d%s%s%s", depth, f[0] ? ", focus back to '" : "", f, f[0] ? "'" : "");
+        a->refocus_due = depth - 1;
+    }
+    a->depth = depth;
+    const char *nm = at(a, p);
+    while (*nm >= '0' && *nm <= '9') {
+        nm++;
+    }
+    snprintf(a->pname, sizeof a->pname, "%s", nm + (*nm == ' '));
     uit_build_begin(a->e, at(a, p));
     a->page = -1;
+    a->title[0] = 0;
+    a->nptr = 0;
+    a->held = -1;
     return 0;
 }
 
@@ -344,6 +426,19 @@ int32_t moy_uitree_wasm_prop(void *x, int32_t node, const uint8_t *name, uint32_
     TEXTS_BEGIN(a);
     int n = put(a, name, name_n), s = put(a, src, src_n);
     int r = uit_prop(a->e, (int)node, at(a, n), at(a, s), NULL);
+    if (r >= 0 && node == a->page && strcmp(at(a, n), "title") == 0) {
+        snprintf(a->title, sizeof a->title, "%s", at(a, s));
+    }
+    if (r >= 0 && a->e->nodes[node].kind == UIT_CANVAS && strcmp(at(a, n), "pointer") == 0 && a->nptr < CANVASES) {
+        for (int k = 0; k < a->e->nacts; k++) {
+            if (strcmp(uit_str(a->e, a->e->acts[k].name), at(a, s)) == 0) {
+                a->ptr[a->nptr].node = (int)node;
+                a->ptr[a->nptr].act = k;
+                a->ptr[a->nptr].frame = 0;
+                snprintf(a->ptr[a->nptr++].key, sizeof a->ptr[0].key, "%s", uit_str(a->e, a->e->nodes[node].key));
+            }
+        }
+    }
     if (r < 0) {
         char where[200];
         key_path(a, (int)node, where, sizeof where);
@@ -371,7 +466,14 @@ int32_t moy_uitree_wasm_node_action(void *x, int32_t node, int32_t act) {
 int32_t moy_uitree_wasm_build_end(void *x) {
     (void)x;
     APP(a);
-    return check(a, uit_build_end(a->e), "build_end", "");
+    int r = check(a, uit_build_end(a->e), "build_end", "");
+    if (r >= 0 && a->refocus_due >= 0) {
+        if (a->refocus[a->refocus_due][0]) {
+            uit_want_focus(a->e, a->refocus[a->refocus_due]);
+        }
+        a->refocus_due = -1;
+    }
+    return r;
 }
 
 // -- visit and frame --------------------------------------------------------------
@@ -399,6 +501,160 @@ int32_t moy_uitree_wasm_focus(void *x, const uint8_t *key, uint32_t key_n) {
     return 0;
 }
 
+// An action owed to the app from `src`; a non-placed one names the page it
+// is on, as the layers' queue does (" on 'TITLE'", not for a dialog's).
+static void owe(app_t *a, int act, int m, int row, const int32_t *pev, const char *src, int placed) {
+    if (a->qn >= a->qcap) {
+        int c = a->qcap ? a->qcap * 2 : 8;
+        owed_t *q = UIT_REALLOC(a->q, (size_t)c * sizeof *q);
+        if (q == NULL) {
+            return;
+        }
+        a->q = q;
+        a->qcap = c;
+    }
+    int off = (int)a->qtext.n;
+    int w = placed || strstr(src, " dialog ") != NULL || strncmp(src, "the ", 4) == 0
+                ? uit_buf_puts(&a->qtext, src) : uit_buf_printf(&a->qtext, "%s on '%s'", src, a->title);
+    if (w < 0 || uit_buf_put(&a->qtext, "", 0) < 0) {
+        return;
+    }
+    owed_t *o = &a->q[a->qn++];
+    o->act = act;
+    o->ev[0] = m;
+    o->ev[1] = row;
+    o->ev[2] = pev ? pev[0] : 0;
+    o->ev[3] = pev ? pev[1] : 0;
+    o->ev[4] = pev ? pev[2] : 0;
+    o->src = (uint32_t)off;
+}
+
+static int with_flag(const app_t *a, int flag) {
+    for (int k = 0; k < a->e->nacts; k++) {
+        if (a->e->acts[k].flags & flag) {
+            return k;
+        }
+    }
+    return -1;
+}
+
+static void pointed(app_t *a, int i, int kind, int32_t x, int32_t y) {
+    static const char *const what[] = {"", "down", "drag", "up"};
+    char src[80];
+    int32_t pev[3] = {kind, x - a->ptr[i].r[0], y - a->ptr[i].r[1]};
+    snprintf(src, sizeof src, "pointer %s on canvas '%s'", what[kind], a->ptr[i].key);
+    owe(a, a->ptr[i].act, -1, -1, pev, src, 1);
+}
+
+// The pointer before the keys: a canvas with pointer= is handed down, drag
+// and up in its own coordinates, at the rect the last frame drew it at; the
+// press that starts on it holds it until release.
+static void pointers(app_t *a, const int32_t *snap) {
+    int st = snap[MOYCORE_UI_SNAP_PTR];
+    int32_t tx = snap[MOYCORE_UI_SNAP_X], ty = snap[MOYCORE_UI_SNAP_Y];
+    if (a->held >= 0) {
+        int i = a->held;
+        if (st && (st & 2)) {
+            if (tx != a->hx || ty != a->hy) {
+                a->hx = tx, a->hy = ty;
+                pointed(a, i, 2, tx, ty);
+            }
+            return;
+        }
+        a->held = -1;
+        pointed(a, i, 3, st ? tx : a->hx, st ? ty : a->hy);
+        return;
+    }
+    if (!(st & 4)) {
+        return;
+    }
+    for (int i = 0; i < a->nptr; i++) {
+        const int32_t *r = a->ptr[i].r;
+        if (a->ptr[i].frame == a->frames && tx >= r[0] && tx < r[0] + r[2] && ty >= r[1] && ty < r[1] + r[3]) {
+            pointed(a, i, 1, tx, ty);
+            if (st & 2) {
+                a->held = i, a->hx = tx, a->hy = ty;
+            } else {
+                pointed(a, i, 3, tx, ty);
+            }
+            return;
+        }
+    }
+}
+
+// The keys before the page: a letter an action declares, where the engine
+// gives it to that action (not into a focused field), and the confirm role's
+// key (A, Enter) where nothing is focused and no dialog shows.
+static void keys(app_t *a, const int32_t *snap) {
+    char src[16];
+    int k = snap[MOYCORE_UI_SNAP_KEY], act;
+    if (k >= 'a' && k <= 'z' && (act = uit_letter(a->e, k)) >= 0) {
+        snprintf(src, sizeof src, "key '%c'", k);
+        owe(a, act, -1, -1, NULL, src, 1);
+    }
+    act = with_flag(a, UIT_A_ROLE_CONFIRM);
+    if (act >= 0 && (((snap[MOYCORE_UI_SNAP_BTNP] >> 4) & 1) || k == 13) && uit_unfocused(a->e) &&
+        uit_dialog(a->e) < 0) {
+        owe(a, act, -1, -1, NULL, "role confirm", 1);
+    }
+}
+
+// The more role's key (`m`), after the frame, where no field is focused: the
+// focused row's action when it is the role's, else the page's. An action that
+// hangs from a rows list's node takes a row and acts on no other.
+static void more(app_t *a, const int32_t *snap) {
+    int act = with_flag(a, UIT_A_ROLE_MORE);
+    if (act < 0 || snap[MOYCORE_UI_SNAP_KEY] != 'm') {
+        return;
+    }
+    const uit_id_t *F = &a->e->focused;
+    int has = a->e->has_focused && F->gen == a->e->gen;
+    char src[160], id[UIT_ID_MAX * 2 + 2];
+    if (has && F->kind == UIT_FIELD) {
+        return;
+    }
+    int row = 0;
+    for (int k = 0; k < a->e->nnodes && !row; k++) {
+        row = a->e->nodes[k].act == act && uit_model_of(a->e, k) >= 0;
+    }
+    if (row) {
+        if (has && F->row >= 0 && F->act == act) {
+            uit_focused(a->e, id, sizeof id);
+            snprintf(src, sizeof src, "key more on '%s'", id);
+            owe(a, act, uit_model_of(a->e, F->node), F->row, NULL, src, 0);
+        }
+    } else if (uit_can(a->e, act, -1)) {
+        snprintf(src, sizeof src, "key more on '%s'", a->pname);
+        owe(a, act, -1, -1, NULL, src, 0);
+    }
+}
+
+// Back on the bar: a shown dialog's first button, a shown popover's close=,
+// the page under this one, else the app's back role.
+static void back(app_t *a) {
+    char key[64], src[96];
+    int act;
+    if (uit_dialog(a->e) >= 0) {
+        if ((act = uit_back_dialog(a->e, key, sizeof key)) >= 0) {
+            snprintf(src, sizeof src, "back on dialog '%s'", key);
+            owe(a, act, -1, -1, NULL, src, 0);
+        }
+        return;
+    }
+    if ((act = uit_back_popover(a->e, key, sizeof key)) != -2) {
+        if (act >= 0) {
+            snprintf(src, sizeof src, "back on popover '%s'", key);
+            owe(a, act, -1, -1, NULL, src, 0);
+        }
+        return;
+    }
+    if (a->depth > 1) {
+        owe(a, -1, -1, -1, NULL, "the bar's back", 1);
+    } else if ((act = with_flag(a, UIT_A_ROLE_BACK)) >= 0 && uit_can(a->e, act, -1)) {
+        owe(a, act, -1, -1, NULL, "role back", 0);
+    }
+}
+
 int32_t moy_uitree_wasm_frame(void *x, int32_t flags) {
     (void)x;
     APP(a);
@@ -410,11 +666,35 @@ int32_t moy_uitree_wasm_frame(void *x, int32_t flags) {
                       "then uitree_open, before the first frame");
     }
     void *target = moycore_ui_target != NULL ? moycore_ui_target() : NULL;
+    uint32_t tick, serial;
+    const int32_t *snap = moycore_ui_snap != NULL ? moycore_ui_snap(&tick, &serial) : NULL;
+    if (a->qat >= a->qn) {
+        a->qn = a->qat = 0;
+        a->qtext.n = 0;
+    }
+    if (snap != NULL) {
+        pointers(a, snap);
+        keys(a, snap);
+    }
+    // the bar's title is the app's (its window's): the page's title is the page's to draw
+    int32_t got = -1;
+    char pk[48];
+    int wants = a->depth > 1 || uit_dialog(a->e) >= 0 || uit_popover(a->e, pk, sizeof pk) > 0 ||
+                with_flag(a, UIT_A_ROLE_BACK) >= 0;
+    if (target != NULL && moy_ui_run_bar(target, moy_ui_span_of((const uint8_t *)"", 0), NULL, 0, wants ? MOY_UI_BAR_BACK : 0u,
+                                         &got) == 0 && got == MOY_UI_BAR_UP) {
+        back(a);
+    }
     a->handler = -1;
     a->frames++;
-    int r = uit_run_frame(a->e, target, UIT_F_BAND | UIT_F_TRACE);
+    a->trapped = 0;
+    int depth = a->depth < 1 ? 1 : a->depth > 255 ? 255 : a->depth;
+    int r = uit_run_frame(a->e, target, UIT_F_BAND | UIT_F_TRACE | depth << UIT_F_PAGES_SHIFT);
     if (r < 0) {
         return refuse(a, r, "frame", "", "no compiled run is open");
+    }
+    if (a->trapped) {
+        return refuse(a, UIT_E_ARG, "frame", "", "the app's _uitree_draw trapped");
     }
     char line[600];
     while (uit_trace_next(a->e, line, sizeof line) >= 0) {
@@ -426,6 +706,22 @@ int32_t moy_uitree_wasm_frame(void *x, int32_t flags) {
         *name++ = 0;
         *text++ = 0;
         trace(a, line, name, "%s", text);
+    }
+    // the engine's events after the keys and the bar, each an action placed on the page
+    char src[200];
+    int32_t w[3];
+    int k;
+    while ((k = uit_next(a->e, w, src, sizeof src)) != UIT_EV_NONE) {
+        if (k == UIT_EV_ACTION) {
+            char *cut = strchr(src, '\x02');
+            if (cut != NULL) {
+                *cut = 0;
+            }
+            owe(a, w[0], w[1], w[2], NULL, src, 1);
+        }                           // a control's write: the slot holds it
+    }
+    if (snap != NULL) {
+        more(a, snap);
     }
     return r;
 }
@@ -444,21 +740,17 @@ int32_t moy_uitree_wasm_next(void *x, uint8_t *ev, uint32_t ev_cap) {
         memset(ev, 0xFF, 8);        // -1, -1: no model, no row
         return a->handler;
     }
-    char src[200];
-    int32_t w[3];
-    int k;
-    while ((k = uit_next(a->e, w, src, sizeof src)) != UIT_EV_NONE) {
-        if (k != UIT_EV_ACTION) {
-            continue;               // a control's write: the slot holds it
+    while (a->qat < a->qn) {
+        const owed_t *o = &a->q[a->qat++];
+        const char *src = a->qtext.p + o->src;
+        if (o->act < 0) {
+            memset(ev, 0xFF, 8);
+            return BACK_EV;         // the app pops its page (a build of the page under it)
         }
-        char *cut = strchr(src, '\x02');
-        if (cut != NULL) {
-            *cut = 0;
-        }
-        const char *name = uit_str(a->e, a->e->acts[w[0]].name);
-        if (!uit_can(a->e, w[0], w[2])) {
-            const char *cond = w[0] < a->nwhen ? a->when.p + a->when_at[w[0]] : "";
-            int16_t row = a->e->acts[w[0]].row;
+        const char *name = uit_str(a->e, a->e->acts[o->act].name);
+        if (!uit_can(a->e, o->act, o->ev[1])) {
+            const char *cond = o->act < a->nwhen ? a->when.p + a->when_at[o->act] : "";
+            int16_t row = a->e->acts[o->act].row;
             if (cond[0]) {
                 trace(a, "skip", name, "from %s (when %s is false)", src, cond);
             } else if (row >= 0) {
@@ -467,9 +759,9 @@ int32_t moy_uitree_wasm_next(void *x, uint8_t *ev, uint32_t ev_cap) {
             continue;
         }
         trace(a, "action", name, "from %s", src);
-        a->handler = w[0];
-        memcpy(ev, &w[1], 8);       // the app's buffer need not be aligned
-        return w[0];
+        a->handler = o->act;
+        memcpy(ev, o->ev, ev_cap < sizeof o->ev ? 8u : sizeof o->ev);   // the app's buffer need not be aligned
+        return o->act;
     }
     return -1;
 }
@@ -503,7 +795,21 @@ int32_t moy_uitree_wasm_set_text(void *x, int32_t slot, const uint8_t *s, uint32
     SLOT(a, slot, "set_text");
     uit_buf_t was = {0};
     was_of(a, (int)slot, &was);
-    int r = uit_set_text(a->e, (int)slot, (const char *)s, s_n);
+    int r;
+    if (a->e->slots[slot].type == UIT_NUM) {        // a number crosses as its digits
+        TEXTS_BEGIN(a);
+        int t = put(a, s, s_n);
+        char *end = NULL;
+        double v = t >= 0 ? strtod(at(a, t), &end) : 0.0;
+        if (t < 0 || end == at(a, t) || *end != 0) {
+            uit_buf_free(&was);
+            return refuse(a, UIT_E_ARG, "set_text", uit_str(a->e, a->e->slots[slot].name),
+                          "a number state takes a number's digits (\"2.5\", \"-3\", \"1e3\")");
+        }
+        r = uit_set_num(a->e, (int)slot, v);
+    } else {
+        r = uit_set_text(a->e, (int)slot, (const char *)s, s_n);
+    }
     if (r >= 0) {
         traced_write(a, (int)slot, was.p);
     }
@@ -671,10 +977,17 @@ int32_t moy_uitree_wasm_get_text(void *x, int32_t slot, uint8_t *out, uint32_t o
     APP(a);
     SLOT(a, slot, "get_text");
     size_t n = 0;
+    if (a->e->slots[slot].type == UIT_NUM) {        // a number: its digits, as the trace spells it
+        uit_buf_t b = {0};
+        uit_slot_repr(a->e, &b, (int)slot);
+        int32_t r = b.p != NULL ? copy_out(b.p, b.n, out, out_cap) : refuse(a, UIT_E_NOMEM, "get_text", "", NULL);
+        uit_buf_free(&b);
+        return r;
+    }
     const char *p = uit_get_text(a->e, (int)slot, &n);
     if (p == NULL) {
         return refuse(a, UIT_E_ARG, "get_text", uit_str(a->e, a->e->slots[slot].name),
-                      "not a text, enum or row_of state: read it with uitree_get_int");
+                      "not a text, enum, number or row_of state: read it with uitree_get_int");
     }
     return copy_out(p, n, out, out_cap);
 }

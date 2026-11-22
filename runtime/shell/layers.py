@@ -653,28 +653,27 @@ class _SysMenuLayer(Layer):
 
 
 class _AboutLayer(Layer):
-    """About's card (shell_cards.AboutCard) over the washed content: its rows
-    take the keys and taps; Esc, B or a tap outside closes it. Modal --
-    always consumes + clears the game pointer's tap."""
+    """About's card (shell_cards.AboutCard, about_ui's page) over the washed
+    content: its rows take the keys and taps; Esc, B or a press outside
+    closes it. Modal -- always consumes + clears the game pointer's tap."""
 
     id = "about"
     domain = "system"
 
     def draw(self, dt):
         self.ws.menu_ui.scrim()
-        self.ws.menu_ui._draw_about()
+        self.ws.menu_ui.about.draw()
 
     def handle_input(self, i):
         card = self.ws.menu_ui.about
         if i.pressed("b") or i.pressed("stop"):
             card.close()
-        elif card.host.keys(i):
-            self.ws.mark_dirty()
+        else:
+            card.keys(i)
         return True
 
     def handle_pointer(self, px, py, click):
         ws = self.ws
-        if ws.menu_ui.about.host.point(px, py, click, bool(getattr(ws.pointer, "down", False))):
-            ws.mark_dirty()
+        ws.menu_ui.about.point(px, py, click)
         _strip_tap(ws)
         return True

@@ -1125,7 +1125,8 @@ enum { MOY_UI_BBO_SIDE, MOY_UI_BBO_SIGNAL, MOY_UI_BBO_TONE, MOY_UI_BBO_MAX, MOY_
 void moy_ui_api_bubble(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t text,
                        moy_ui_span_t head, moy_ui_span_t status, const int32_t *opt, int n,
                        const moy_ui_over_t *o, int32_t out[5]);
-// A month (ui.month) at `at`'s rect, else stacked on the page: `title`,
+// A month (ui.month) at `at`'s rect, else stacked on the page (its weeks
+// tightening into what the page shows under its head): `title`,
 // the weekdays' initials `days`, `n` days from column `first` (0 Monday),
 // `today` marked (0 none); on the desk and under touch its head carries the
 // two chevrons. -1 or 1 the frame a press lands on one, else 0.

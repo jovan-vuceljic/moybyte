@@ -1067,6 +1067,24 @@ static mp_obj_t mod_frame_settle(void)
 }
 MP_DEFINE_CONST_FUN_OBJ_0(moycore_frame_settle_obj, mod_frame_settle);
 
+#if MOYCORE_WASM && MOY_WASM
+// A compiled app's canvas draw (native/moy_uitree/moy_uitree_wasm.c): its
+// exported `_uitree_draw(node, x, y, w, h)`, called inside the frame the
+// module's own uitree_frame runs. 1 drawn, 0 the module exports none, -1 it
+// trapped: the trap stays on the module, so the call that ran the frame ends
+// in it. runtime/host/moyhost_wasm.c's is the host's twin.
+int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t h);
+int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    if (!RUN.wasm || !WR || WR->w.items) return 0;
+    wasm_module_inst_t inst = WR->w.inst;
+    wasm_function_inst_t fn = wasm_runtime_lookup_function(inst, "_uitree_draw");
+    if (!fn || wasm_func_get_param_count(fn, inst) != 5 || wasm_func_get_result_count(fn, inst) != 0) return 0;
+    uint32_t argv[5] = {(uint32_t)node, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h};
+    return wasm_runtime_call_wasm(WR->w.env, fn, 5, argv) ? 1 : -1;
+}
+#endif
+
 // The canvas a compiled app's ui rows draw on (native/moy_ui/moy_ui_wasm.h):
 // the run's draw target, an owed or kept frame on the screen written in
 // first, as libmoy's own verbs settle it before they draw. NULL with no

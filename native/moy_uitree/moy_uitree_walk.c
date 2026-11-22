@@ -1520,12 +1520,39 @@ static void draw_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         }
         e->scratch.n = mark;
     }
+    for (int p = N->props; p != (int)UIT_NONE; p = e->props[p].next) {
+        // at=: hung from the rect its host hands in, "X Y W H" (none while it renders empty)
+        const uit_prop_t *P = &e->props[p];
+        if (P->kind != PK_TMPL || strcmp(uit_str(e, P->name), "at"))
+            continue;
+        uint32_t n, mark = e->scratch.n, a = uit_tmpl_render(e, P->idx, model, row, &n);
+        char t[64];
+        size_t m = n < sizeof t - 1 ? n : sizeof t - 1;
+        memcpy(t, e->scratch.p + a, m);
+        t[m] = 0;
+        e->scratch.n = mark;
+        long r[4];
+        char *q = t;
+        int got = 0;
+        for (char *end; got < 4; got++, q = end) {
+            r[got] = strtol(q, &end, 10);
+            if (end == q)
+                break;
+        }
+        if (got == 4)
+            moy_ui_api_at(c, (int32_t)r[0], (int32_t)r[1], (int32_t)r[2], (int32_t)r[3]);
+    }
     moy_ui_over_t o;
     if (!moy_ui_api_popover(c, s, span_of(key, strlen(key)), w, pop_over(N, &o)) && N->on >= 0)
         fire(e, N->on, k, -1, -1, NULL);
     e->in_pop = 1;
     walk(e, c, s, k, model, row);
     e->in_pop = 0;
+    if (e->pop_hints_n) {
+        // the bare page's band: the toolkit draws it in the card, under a rule
+        moy_ui_api_hints(c, s, e->pop_hints, e->pop_hints_n, NULL);
+        e->pop_hints_n = 0;
+    }
     moy_ui_api_popover(c, s, span_of("", 0), 0, NULL);
 }
 
@@ -2218,6 +2245,37 @@ static void draw_bubble(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
     }
 }
 
+// A template int prop of `k` (0 where it has none).
+static int32_t prop_int(uit_t *e, int k, const char *name, int model, int row)
+{
+    uint32_t n, mark = e->scratch.n, at = prop_text(e, k, name, model, row, &n);
+    int32_t v = n ? (int32_t)strtol(e->scratch.p + at, NULL, 10) : 0;
+    e->scratch.n = mark;
+    return v;
+}
+
+// A month's calendar: year= and month= (1-12) in the toolkit's month, today= marked (0 none);
+// a press on its head's previous or next chevron fires prev= or next=.
+static void draw_month(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+{
+    static const char *const NAMES[12] = {"January", "February", "March", "April", "May", "June", "July",
+                                          "August", "September", "October", "November", "December"};
+    static const uint8_t DAYS[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    static const uint8_t DOW[12] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+    int32_t y = prop_int(e, k, "year", model, row), m = prop_int(e, k, "month", model, row);
+    if (m < 1 || m > 12)
+        return;
+    int leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0), yy = m < 3 ? y - 1 : y;
+    int first = (yy + yy / 4 - yy / 100 + yy / 400 + DOW[m - 1] + 1 + 6) % 7;     // 0 Monday (Sakamoto)
+    char title[24];
+    int tn = snprintf(title, sizeof title, "%s %ld", NAMES[m - 1], (long)y);
+    int step = moy_ui_api_month(c, s, span_of(title, (size_t)tn), span_of("MTWTFSS", 7), first,
+                                DAYS[m - 1] + (m == 2 && leap), prop_int(e, k, "today", model, row));
+    int a = step < 0 ? NODE(k)->on : step > 0 ? NODE(k)->changed : -1;
+    if (a >= 0 && uit_act_can(e, a, model, row))
+        fire(e, a, k, model, row, NULL);
+}
+
 // An info's or a link's tag=, tone= (its ink: a theme role) and signal= (0-4 bars) on `o`; the
 // tag's text stays in the scratch for the draw.
 static void value_over(uit_t *e, int k, int model, int row, moy_ui_over_t *o)
@@ -2458,6 +2516,9 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
     case UIT_BUBBLE:
         draw_bubble(e, c, s, k, model, row);
         break;
+    case UIT_MONTH:
+        draw_month(e, c, s, k, model, row);
+        break;
     case UIT_NOTE: {
         // its icon ("info" where it has none) and each line's paragraph, empty ones kept
         uint32_t ni, ai = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &ni) : 0;
@@ -2513,7 +2574,9 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
             uit_buf_printf(&b, "%s", l);
         }
         // the labels joined by NULs: b.n counts them (uit_buf_printf of "%c", 0 adds one byte)
-        int pick = moy_ui_api_dialog(c, s, sspan(e, a1, n1), (const uint8_t *)(b.p ? b.p : ""), b.n, 1, NULL);
+        // the verb's kind, the toolkit's: primary (1), or with kind="danger" danger (3)
+        int pick = moy_ui_api_dialog(c, s, sspan(e, a1, n1), (const uint8_t *)(b.p ? b.p : ""), b.n,
+                                     N->lit ? 3 : 1, NULL);
         uit_buf_free(&b);
         walk(e, c, s, k, model, row);
         moy_ui_api_dialog(c, s, span_of("", 0), (const uint8_t *)"", 0, 0, NULL);
@@ -4318,6 +4381,28 @@ static void placed_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
         }
         e->scratch.n = mark;
     }
+    for (int p = N->props; p != (int)UIT_NONE; p = e->props[p].next) {
+        // at=: hung from the rect its host hands in, "X Y W H" (none while it renders empty)
+        const uit_prop_t *P = &e->props[p];
+        if (P->kind != PK_TMPL || strcmp(uit_str(e, P->name), "at"))
+            continue;
+        uint32_t n, mark = e->scratch.n, a = uit_tmpl_render(e, P->idx, -1, -1, &n);
+        char t[64];
+        size_t m = n < sizeof t - 1 ? n : sizeof t - 1;
+        memcpy(t, e->scratch.p + a, m);
+        t[m] = 0;
+        e->scratch.n = mark;
+        long r[4];
+        char *q = t;
+        int got = 0;
+        for (char *end; got < 4; got++, q = end) {
+            r[got] = strtol(q, &end, 10);
+            if (end == q)
+                break;
+        }
+        if (got == 4)
+            moy_ui_api_at(c, (int32_t)r[0], (int32_t)r[1], (int32_t)r[2], (int32_t)r[3]);
+    }
     moy_ui_over_t o;
     if (!moy_ui_api_popover(c, s, span_of(key, strlen(key)), w, pop_over(N, &o)) && N->on >= 0)
         fire(e, N->on, k, -1, -1, NULL);
@@ -4620,7 +4705,14 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         KIDS(0, k)
         if ((NODE(k)->kind == UIT_SPLIT || NODE(k)->kind == UIT_GRID) && uit_shown(e, k, -1, -1))
             placed = 1;
-        if (!placed) {
+        int card = 0;           // a bare page's shown popover is the page: the band in its body
+        if (flags & UIT_F_BARE)
+            KIDS(0, k)
+            if (NODE(k)->kind == UIT_POPOVER && uit_shown(e, k, -1, -1))
+                card = 1;
+        if (card) {
+            e->pop_hints = hp, e->pop_hints_n = hn;
+        } else if (!placed) {
             moy_ui_api_hints(c, s, hp, hn, NULL);
         } else if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {
             // a placed page's band: a handheld's its room's last line, the desk's and a foot's
@@ -4664,6 +4756,7 @@ ids:;
     else
         walk(e, c, s, 0, -1, -1);
     moy_ui_api_page_done(c, s);         // the next frame's plan reads what this one drew
+    e->pop_hints_n = 0;         // (its buffer goes with this frame)
     e->tv_stop = e->tv_stop_now;
     // after: what holds focus, and whether the band named another node's verbs
     int had = e->has_focused;

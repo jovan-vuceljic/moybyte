@@ -1824,7 +1824,9 @@ A change that stays inside the panel -- it opened, a row moved, it closed --
 does not mark the frame dirty: the WM owes the popover's rect to each of the
 root's real buffers (`RETAINED_FRAMES`; one on a persistent root, so the
 Guition P4 pays one frame), and such a frame draws the popover's layers
-alone over the retained one, its rect the frame's damage. Before the
+alone over the retained one, its rect the frame's damage: a component's
+card with the rows its drop reaches below it at the font scale
+(`WindowOverlays._pop_rect`, `ui_draw.modal_drop`). Before the
 panel's first paint the pixels under it are snapshotted; a close puts them
 back into each buffer. Two snapshot slots, because a popover may open while
 the last one's restore is still owed. A frame that does repaint (a dirty
@@ -1884,19 +1886,20 @@ the container's business, not the component's.
 | `menu` | the system menu's rows | rows |
 | `clock` | the month calendar, today marked; left/right page months | a 7-column grid; the day cursor is display only |
 | `wifi` | the Settings WIFI panel's rows, the one implementation (owner, 2026-10-13: the `moybyte.wifi.moy` tool cart goes, `docs/history/shell_layout_2026-10.md` §13 step 6) — its radio lease is released whenever the container closes, a tap outside included | rows; picking one runs the password step in the same container |
-| `battery` | Settings' level, VOLUME and BRIGHTNESS rows, drawn by Settings — one implementation, the popover a container for it | rows |
+| `battery` | the control center's console group (`cc_ui`): VOLUME and BRIGHTNESS as Settings' levels, under the battery's line on the desk — one implementation, the popover a container for it | rows |
 
 **One container.** A component draws in a popover hung from its widget, in
 both modes (docs/history/look_2026-10.md step 33: the calendar's, power's and
 Wi-Fi's cards over the console-mode home too, the hint strip of a handheld
 home saying their keys). No component is docked in a bar (L13). No
 component is a registered app or a desk icon. The components are
-`runtime/system/popover.py`'s, each on the public UI API's verbs in the system's
+`runtime/system/popover.py`'s, each a `uitree` page in the system's
 flat card: the wifi panel is Settings' Wi-Fi page
 (`SettingsLayer.wifi_page`, its popover form the joined network and the
 networks as a menu) over the component's own UI context, the power rows are
-the battery's line over Settings' Volume and Brightness sliders, the
-calendar is `ui.month`, and the battery's level reads None on every board
+the control center's console group with the battery's line in place of
+Wi-Fi (`cc_ui`), the
+calendar is `month_ui`'s page (the engine's `ui.month`), and the battery's level reads None on every board
 today (no board measures one), its line then reading Battery. An app that
 asks for the Wi-Fi page (`Workstation.open_wifi_panel`) still gets Settings'
 page in console mode. An app's status item's menu (`popover.StatusMenu`)

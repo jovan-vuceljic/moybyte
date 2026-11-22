@@ -151,9 +151,9 @@ def test_a_first_keyboard_is_picked_by_touch_alone(tmp_path):
 
     tap(sl._host, "bluetooth")
     assert sl.showing("bt") and sl.bt_msg == "Scan, then pick a keyboard."
-    tap(sl._sub, "Scan")
+    tap(sl._sub, "bt_scan")
     assert svc.calls[-1] == ("scan",)
     svc.rows, svc.state = found, "choose"       # the picker's scan heard two
-    tap(sl._sub, "bt1")
+    tap(sl._sub, "bt1/bt_use")
     assert svc.calls[-1] == ("connect", found[1][0])
     assert sl.bt_msg == "Connecting and saving..."

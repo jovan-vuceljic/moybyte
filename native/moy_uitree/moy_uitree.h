@@ -47,6 +47,7 @@ enum {
     UIT_RULE, UIT_NOTE,     // level 1: a divider, a note (no stop either)
     UIT_GRID,               // the page's room in cols x rows cells, a button a cell (or `span` of them)
     UIT_BUBBLE,             // level 1: a chat's bubble, a stop
+    UIT_MONTH,              // level 2: a month's calendar, no stop; its chevrons fire prev= and next=
     UIT_KINDS
 };
 
@@ -73,7 +74,8 @@ enum {
 enum { UIT_IN_KEYS = 0, UIT_IN_TDECK, UIT_IN_PAD, UIT_IN_TOUCH };
 
 // Action flags.
-enum { UIT_A_HOOK = 1, UIT_A_ROLE_CONFIRM = 2, UIT_A_ROLE_BACK = 4, UIT_A_ROW = 8, UIT_A_SHIFT_ENTER = 16 };
+enum { UIT_A_HOOK = 1, UIT_A_ROLE_CONFIRM = 2, UIT_A_ROLE_BACK = 4, UIT_A_ROW = 8, UIT_A_SHIFT_ENTER = 16,
+       UIT_A_ROLE_MORE = 32 };   // the more role: a front end owes it the `m` key
 
 typedef struct uit uit_t;
 

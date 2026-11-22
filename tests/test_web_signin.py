@@ -841,7 +841,7 @@ def test_settings_lists_the_paired_browsers_and_forgets_one(tmp_path, monkeypatc
         .startswith("SHA256:"), said
     kid = page.keys[page.board][0]
     import settings_ui
-    hosted = sl.pages.pages["paired"][0]
+    hosted = sl.pages.pages["paired"]
     hosted.run_action(hosted.actions["forget"], (settings_ui.s.browsers.get(kid),), "test")
     assert [k[0] for k in nb.web_keys()] == [other.keys[other.board][0]]
     sl.back()

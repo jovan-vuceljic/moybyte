@@ -178,6 +178,7 @@ _DRAW_SIGS = (
     ("moy_ui_rec", [c.POINTER(_Sink), _I, _I, _I, _I, c.POINTER(_Box)], _I),
     ("moy_ui_month_h", [_I, _I, _I], _I),
     ("moy_ui_modal_band", [_I, _I], _I),
+    ("moy_ui_modal_drop", [_I], _I),
     ("moy_ui_modal", [c.POINTER(_Sink), _Box, _Span, _I, _I, _I], _I),
     ("moy_ui_perf", [c.POINTER(_Sink), _I, _I, _I, c.POINTER(c.c_int16), _I, _I, _Span, _I,
                      _I, _I, c.POINTER(_Box)], _I),

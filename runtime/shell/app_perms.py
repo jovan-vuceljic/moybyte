@@ -615,24 +615,34 @@ def made_here(ws, cart):
         consent.made(app_id(cart))
 
 
-def show(ui, lines):
-    """The install prompt's body, drawn into the dialog the public UI API
-    `ui` has open: the publisher (FROM) dim, "It can:" over the prompt's
-    permission lines, TRUSTED and UNREVIEWED in the danger tone. Get Carts'
-    install prompt and the shell's first-run one
-    (`shell_cards.DeleteConfirm`) both draw it."""
+def rows(lines):
+    """The install prompt's body as (line, tone) rows: the publisher (FROM)
+    dim, "It can:" dim over the prompt's permission lines, TRUSTED and
+    UNREVIEWED in the danger tone. Get Carts' install prompt (`show`) and
+    the shell's first-run one (runtime/shell/confirm_ui.py) both say it."""
     head = FROM.split("%")[0]
-    said = False
+    out, said = [], False
     for ln in lines:
         if ln.startswith(head):
-            ui.label(ln, {"tone": "dim"})
+            out.append((ln, "dim"))
             continue
         danger = ln == TRUSTED or ln in UNREVIEWED
         if not danger and not said:
-            ui.label("It can:", {"tone": "dim"})
+            out.append(("It can:", "dim"))
             said = True
-        ui.label(ln, {"wrap": True, "lines": 3, "tone": "danger"}
-                 if danger else {"wrap": True, "lines": 2})
+        out.append((ln, "danger" if danger else "plain"))
+    return out
+
+
+def show(ui, lines):
+    """The install prompt's body (`rows`), drawn into the dialog the public
+    UI API `ui` has open."""
+    for ln, tone in rows(lines):
+        ui.label(ln, _SHOW[tone])
+
+
+_SHOW = {"dim": {"tone": "dim"}, "danger": {"wrap": True, "lines": 3, "tone": "danger"},
+         "plain": {"wrap": True, "lines": 2}}
 
 
 def _has_service(cart):

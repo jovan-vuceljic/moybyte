@@ -1485,6 +1485,12 @@ def modal(cv, th, rect, desk=False):
     _C.modal(cv, _LOOK if th is _TH else _look(th), rect, _fs(cv), _DESK if desk else 0)
 
 
+def modal_drop(cv):
+    """How far `modal`'s drop reaches below its rect on `cv`: the rows a
+    popover's rect holds under its card (moy_ui_modal_drop)."""
+    return _C.modal_drop(_fs(cv))
+
+
 # perf's argument slots in its array('h') of sixteen
 PERF_RIGHT, PERF_BOTTOM, PERF_FPS, PERF_FRAME, PERF_DETAIL, PERF_FS, PERF_DESK, PERF_DRAW = range(8)
 PERF_PARTS = 8

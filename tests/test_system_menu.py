@@ -465,7 +465,7 @@ def test_about_action_opens_dismissible_modal(tmp_path):
     _tap(drv, *_row_center(ws, "ABOUT"))
     assert ws.about and not ws.sysmenu.open
     drv.frame(1 / 30)
-    card = ws.menu_ui.about.host.box("About")
+    card = ws.menu_ui.about.host.box("about")
     assert card is not None
     _tap(drv, card[0] + card[2] // 2, card[1] + 10)     # inside: it stays
     assert ws.about
@@ -480,7 +480,7 @@ def test_about_action_opens_dismissible_modal(tmp_path):
     ws.menu_ui._menu_about()
     drv.frame(1 / 30)
     drv.frame(1 / 30)                     # the card's first frame lays its body out
-    x, y, w, h = ws.menu_ui.about.host.box("Licences")
+    x, y, w, h = ws.menu_ui.about.host.box("licences")
     _tap(drv, x + w // 2, y + h // 2)
     assert not ws.about
     assert ws.settings_layer.page == "licences"

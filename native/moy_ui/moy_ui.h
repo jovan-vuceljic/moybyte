@@ -1161,6 +1161,9 @@ int moy_ui_field_h(const moy_ui_sink_t *s, int fs, int desk);
 int moy_ui_modal(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t title, int fs, int desk,
                  int title_h);
 int moy_ui_modal_band(int fs, int desk);
+// How far a modal card's drop reaches below its box at the scale: the rows a
+// host that restores what the card covered adds to its rect.
+int moy_ui_modal_drop(int fs);
 // The radius of a modal card's corners at the scale: the rows it leaves at
 // the card's top and foot are the ones its rounding blends over what is under.
 int moy_ui_modal_round(int fs, int desk);

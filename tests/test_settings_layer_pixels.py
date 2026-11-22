@@ -280,7 +280,7 @@ def capture(cfg, carts_dir):
 
     sl.open_page("bt")
     for sel in range(2):
-        out["bt_%d" % sel] = page(sl._sub, "bt%d" % sel)
+        out["bt_%d" % sel] = page(sl._sub, "bt%d/bt_use" % sel)
     sl.close_page()
 
     ws.toggles.set_time_zone("CET-1CEST,M3.5.0,M10.5.0/3", persist=False)
@@ -300,13 +300,13 @@ def capture(cfg, carts_dir):
     sl._draw_page()
     out["row_usb_drive"] = page(focus="usb_drive")
     sl.open_page("usb")
-    out["usb_off"] = page(sl._sub, "Turn on")
+    out["usb_off"] = page(sl._sub, "turn_on")
     drive.why = _usb.NO_CARD
-    out["usb_refused"] = page(sl._sub, "Turn on")
+    out["usb_refused"] = page(sl._sub, "turn_on")
     drive.turn_on(ws)
     for st in (_usb.WAITING, _usb.MOUNTED, _usb.EJECTED):
         drive.lever.st = st
-        out["usb_on_%d" % st] = page(sl._sub, "Turn off")
+        out["usb_on_%d" % st] = page(sl._sub, "turn_off")
     drive.turn_off(ws)
     sl.close_page()
     ws.usb_drive = None
@@ -325,8 +325,8 @@ def capture(cfg, carts_dir):
     ws.sysmenu.open = False
     ws.menu_ui._menu_about()
     for _ in range(2):              # its first frame lays its body out
-        ws.menu_ui._draw_about()
-    out["about"] = _shot(ws, lambda: ws.menu_ui._draw_about())
+        ws.menu_ui.about.draw()
+    out["about"] = _shot(ws, lambda: ws.menu_ui.about.draw())
     ws.about = False
 
     # The Achievements page (locked AND found cards, the console's and a

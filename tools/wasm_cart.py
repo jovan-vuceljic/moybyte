@@ -43,6 +43,13 @@ docs/app_api_v1.md section 7) is a WASI command built the same way from
 `src/<stem>.wat`, `.c` or `.rs` into `<stem>.wasm`, with its per-chip modules
 `aot_name(<stem>.wasm, chip)` beside it, signed alike; the cart's own `main`
 may be a Python or Lua script, which is copied as it is.
+
+A compiled app that imports the UI tree's rows (`uitree_*`) runs its `_init`
+once on the host's WAMR as it is built (`check_uitree`), and the build fails
+with the engine's first refusal when the module's pages or states were
+refused: an app is shown what its declarations got wrong at build time, not
+on its first frame. Where the host wasm binding is unavailable the check is
+skipped.
 """
 
 import argparse
@@ -226,6 +233,40 @@ def rust_wasip1():
     return got.returncode == 0 and os.path.isdir(got.stdout.strip())
 
 
+def check_uitree(blob, man, dst):
+    """Run a compiled app's `_init` on the host's WAMR when it imports the UI
+    tree's rows, in a copy of the cart at `dst`, and raise ValueError with the
+    engine's refusal when the face latched one. Skipped (None) where the host
+    binding is unavailable or the module is no UI tree app."""
+    if b"uitree_" not in blob:
+        return
+    try:
+        import ctypes
+        import moy_app
+        from runtime.wasm_binding import HostWasmRun
+    except ImportError:                              # pragma: no cover
+        return
+    if not HostWasmRun.available():
+        return
+    app = moy_app.App(None)
+    g = app.grant("wasm_cart.check", (), ns="wasm_cart.check", run=True)
+    buf = bytearray(320 * 240 * 2)
+    try:
+        run = HostWasmRun(buf, 320, 240, dst, man.get("main", "main.wasm"), man.get("memory", 1),
+                          app=app.run(g, ()))
+    except RuntimeError:                             # a load the host refuses is not this check's
+        return
+    try:
+        trap = run.init()
+        err = ctypes.create_string_buffer(512)
+        run._d.moy_uitree_wasm_error(None, err, len(err))
+    finally:
+        run.close()
+        app.end(g)
+    if trap or err.value:
+        raise ValueError("%s: _init %s" % (dst, trap or "the UI engine refused: " + err.value.decode("utf-8", "replace")))
+
+
 def build(src, dst, chips=(), signed=True):
     """Copy the cart at `src` to `dst`, assemble its source into its `main`
     and its service entry's, and compile a module of each per chip, signed
@@ -250,6 +291,8 @@ def build(src, dst, chips=(), signed=True):
         out[key] = os.path.join(dst, name)
         with open(out[key], "wb") as f:
             f.write(blob)
+        if key == "main":
+            check_uitree(blob, man, dst)
         if chips:
             from tools import wasm_module
             for chip in chips:
