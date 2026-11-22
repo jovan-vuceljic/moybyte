@@ -1062,8 +1062,8 @@ Ruled 2026-10-13 by step 3 (Tiny5 lands), each the pick that builds least:
     run's page on the RUN face draws as a cart's, petme128, unless its
     snapshot's face names the look (`moy_ui_run.h`).
     A built-in app cart (`system_carts/`, `system_api.draws_in_look`:
-    Notes) runs outside it: its page is the verbs' and its note the editor
-    handle's, both in the look's colours and faces; a copy of it is a
+    Notes) runs outside it: its page is the UI tree engine's and its note
+    the editor handle's document, both in the look's colours and faces; a copy of it is a
     kid's cart, inside the boundary.
   - **The floor is the smallest text the owner kept at 1x**: `MIN_TEXT_MM`
     is Tiny5's six rows on the 7" 1024×600 Waveshare P4 (0.89mm; that panel
@@ -2470,7 +2470,7 @@ default.
 | verbs-engine pages, `ui.scroll`, `ui.table` rows (Settings and its pages, Config's cards and its file list, Files, Get Carts, Storybook, My Art, Calc, Appearance) | the nest's `moy_ui_scroll_t` | the engine's drag-tap; the fling | focus moves a stop; the reveal is `glide_to` (`docs/history/scroll_and_text_2026-10.md` §7) |
 | the home's carousel, grid and icons; the PROJECTS window | `ScrollRegion` (`Launcher._scroll_region`) | as today | the selection moves; `glide_to` the card |
 | the Code tab, theme Config text, the desk's made code, the text console's log | `ui.text_view` (`docs/history/scroll_and_text_2026-10.md` §5): the nest's `moy_ui_scroll_t`, in visual rows | the engine's drag-tap; the fling | the editor's `top`, moved to keep its caret in view, lands the view there in that frame (`ui_draw.text_aim`); a fling and the wheel glide |
-| Notes | `ui.text_view` (`docs/history/scroll_and_text_2026-10.md` §5), placed in its page with `ui.at` | the engine's drag-tap; the fling | the caret's row lands in view in that frame (`ui_draw.text_reveal`) |
+| Notes | its page's `ui.text_editor`, a `ui.text_view` the UI tree engine draws (`docs/history/scroll_and_text_2026-10.md` §5) | the engine's drag-tap; the fling | the caret's row lands in view in that frame (`ui_draw.text_reveal`, `player_tree.CartTree.aim`) |
 | the fields | one row in the verbs engine | -- | -- |
 | the Map's camera, the sprite pickers | `ScrollRegion` on two axes | as today | `step` |
 
@@ -2482,8 +2482,9 @@ page (`editor_settings.SettingsPage`) whose gen makes a key step the
 engine's rows frame; its broken-manifest page (`ui.empty`) and its file
 list (a placed `ui.table`) are verbs pages too. Carts are out: a
 cart's `btn`/`btnp` and its own scrolling are the cart's (surface-model L9); Notes is a
-system cart on the verbs engine whose note is a text view drawn by the
-shell's `EditorHandle`, and `docs/history/scroll_and_text_2026-10.md` §5 says what it gets.
+system cart on the UI tree engine (`runtime/run/player_tree.py`) whose note
+is its page's text editor over the shell's `EditorHandle`, and
+`docs/history/scroll_and_text_2026-10.md` §5 says what its view gets.
 
 ### 9.5 The browser
 
@@ -2615,7 +2616,7 @@ drawings the Files app owns.
 | door | path | what opens |
 |---|---|---|
 | make a game | home → Make → a project → the Editor's tabs | the Code tab is one of the cart's scripts — its main file unless another is picked (#89): highlight by runtime, parse gate on the debounce, hard exits always write (SYNTAX badge), PLAY, crash-to-code |
-| write | Launcher → Notes | the vault as a table (New note first, then each file's kind icon and its name: a note's bare, another file's with its extension), New note → a name in a dialog, one file open with Select, Copy, Cut and Paste at its foot (and Run on a `.py` or `.lua`) and undo and redo in the bar (docs/media/look_2026-10/APPS_RESTYLE.md's Notes) |
+| write | Launcher → Notes | the vault as a list (New note first, then each file's kind icon and its name: a note's bare, another file's with its extension), New note → a name in a dialog, one file open with Undo, Redo, Select, Copy, Cut, Paste and Open link at its foot (and Run on a `.py` or `.lua`) beside its mode, or why its last save was refused; on the desk the vault beside the open file |
 | any file | Launcher → Files → a root | routed by what it is (below) |
 
 **The Files router**, in order: a `.moy` folder opens the project Editor, never a
@@ -2683,8 +2684,8 @@ it in the handle's kind down the path Files' RUN takes. Its exit comes back
 INTO the cart that ran it -- that cart started again on the same document,
 the caret and the view's first line put back, and the cart's own caller
 restored, so Notes opened from Files still returns to the shelf. Notes' vault
-comes back on the program's row: a placed table opens on its current row. Notes shows it as a fifth tool, Run, at the
-foot and after a rule on the desk; any cart holding a handle gets the same verb.
+comes back on the program's row. Notes shows it as a tool, Run, at the
+foot; any cart holding a handle gets the same verb.
 
 ### 10.5 The board split
 

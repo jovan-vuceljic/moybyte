@@ -241,6 +241,23 @@ app never keeps a scroll offset or a frame path of its own (owner,
 2026-10-29: the surfaces that did were folded back). A long document is a
 `ui.text_view`; a long list is one `ui.list` or `ui.table`.
 
+**Pages declared once: the UI tree (`moybyte.uitree`).** A Python or Lua app
+whose manifest lists the extension `moybyte.uitree` describes its pages
+instead of drawing them each frame: its `ui` is the UI tree API (typed
+state, named actions, pages built once, conditions and templates, errors
+with a code), and the console's own engine (`native/moy_uitree`, the one
+its shipped apps run on) lays the page out, draws it, moves focus, routes
+keys and taps to the actions and answers the host's back. A Python cart
+declares `s = ui.state(...)`, then `ui.app("Title", icon=...)` and its
+actions at the top level, and names its root page `build`; it defines no
+`_update` or `_draw` (`runtime/run/player_tree.py`). A state that holds a
+`ui.doc` gives its page the Editor's kinds, among them `ui.text_editor`,
+and `s.NAME.adopt(ed)` hands that document an editor handle (below), so the
+text editor types into the handle's document and draws it.
+`system_carts/moybyte.notes.moy` is the example, and
+`tests/uitree_conformance/counter/` holds one app in both languages to
+one trace and one picture.
+
 **The bar is the host's.** The console draws the bar (its back chevron,
 your title, the status) over your app and routes its taps; your app draws
 none. Lay out inside `content_rect()` (`x, y, w, h`), wherever the bar sits;
@@ -334,13 +351,14 @@ still just draw it. Everything else is on the handle:
 | `ed.can_run()` / `ed.run()` | run a `.py`/`.lua` document on the console's script screen, saved first; your cart opens again on it after, `open_editor()` handing it back |
 | `ed.text()` / `ed.set_text(s)` / `ed.caret()` / `ed.scroll(rows, cols)` | the whole text, the caret's `(row, col)`, a pan without moving the caret |
 | `ed.name()` / `ed.mode()` / `ed.close()` | the document's name, its mode (`md`, `code`, `json`, `text`), save and let it go |
+| `ed.follow()` | what the caret's line holds in a note: a `- [ ]` box it ticked, `("check", row)`; else the `[[link]]` at the caret or the line's first, `("link", name)`; `None` |
 
 A note is Markdown, rendered by the handle: `#` headings, `- [ ]` checkboxes
 ticked by a tap, `[[note]]` links and `![[a drawing]]`, one of Paint's
 pictures inline by name. Prose wraps; code and JSON pan. In Lua the handle
 is a table with the same verbs as methods (`ed:draw(...)`), `ed:tap`
 answering two values rather than a pair. `system_carts/moybyte.notes.moy`
-is built on it.
+is built on it, its page's text editor adopting the handle.
 
 ## 4. Input
 
