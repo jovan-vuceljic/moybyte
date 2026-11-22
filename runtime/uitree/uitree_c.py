@@ -33,6 +33,36 @@ except ImportError:         # pragma: no cover - a tier with no engine
     _New = None
 
 
+def _fn_ref(mod, fn, what):
+    """Function `fn` of module `mod` as a compiled page names it: its name,
+    or "NAME[i]" where it stands in a tuple the module names."""
+    name = getattr(fn, "__name__", "")
+    if getattr(mod, name, None) is fn:
+        return name
+    for k, v in sorted(vars(mod).items()):
+        if type(v) is tuple and fn in v:
+            return "%s[%d]" % (k, v.index(fn))
+    raise _aot.Refused("%s%r is not a function of its module" % (what, fn))
+
+
+def _fn_at(mod, ref):
+    """The function `_fn_ref` named."""
+    if ref.endswith("]"):
+        name, _, i = ref[:-1].partition("[")
+        return getattr(mod, name)[int(i)]
+    return getattr(mod, ref)
+
+
+def _list_model(n):
+    """The model of the list node `n` stands in the body of, else None."""
+    p = n.parent
+    while p is not None:
+        if p.kind == "rows":
+            return p.l["model"]
+        p = p.parent
+    return None
+
+
 class EngineGap(S.UIError):
     """What the C engine does not draw yet, by name: never drawn wrong."""
 
@@ -143,6 +173,7 @@ class CEngine(Engine):
     handlers stay Python's (`uitree.Builder`, `uitree_app.Engine`)."""
 
     PLACED = False          # the page is stacked by the engine's layout (uit_set_placed)
+    _band_extra = ""        # the items its host adds to the band before Back, NUL-separated
     th = None               # the theme's colours the last frame drew in
     unit = 0                # a placed page's unit, the host's (0: the engine's own)
 
@@ -160,7 +191,7 @@ class CEngine(Engine):
         self._slot, self._names, self._types, self._pushed = {}, [], [], {}
         self.direct = BUILD == "direct"
         self._draws, self._drawing = {}, False
-        self._canvas_keys = {}          # a canvas's key -> its keys= function
+        self._canvas_keys = {}          # a canvas's key -> (its keys= function, the model of the list it stands in or None)
         self._grounds = {}      # a canvas's ground= role, by its node
         self._docs = {}         # a document's state -> what it was pushed at (`_push_doc`)
         self._doc_reads = {}    # ...and the fields of it the lowered page reads
@@ -168,8 +199,8 @@ class CEngine(Engine):
         self._legacy = {}       # a legacy node -> its stand-in (`_pane_node`), its functions in .l
         self._pn = {}           # a panes or pane node -> its stand-in (`_pane_node`)
         self._pn_roots = None   # ...the outermost panes' nodes, found at the first frame
-        self._pointers = []     # (key, its pointer= action) of each canvas a pointer is routed to
-        self._held = None       # (key, action, rect): the canvas a press holds until its release
+        self._pointers = []     # (key, its pointer= action, the model of the list it stands in or None) of each canvas a pointer is routed to
+        self._held = None       # (key, action, rect, row): the canvas a press holds until its release
         self._pop_lists = {}    # a popover's key -> (model, cur) of the list the arrows walk in it
         self._pop_fields = {}   # a popover's key -> whether a field of its own takes typed keys
         self._loaded = False    # the store came from a compiled page whose build is not yet counted
@@ -178,6 +209,13 @@ class CEngine(Engine):
         self._lend_at = {}      # a lent row's node -> its line (L03 names the second)
         self._live = None       # the units mask uitree.LIVE was made from; None: never made here
 
+    def band_extra(self, items):
+        """The band's items its host adds before its way back, (verb, text, ...):
+        a desk pane's ("F6", "Next pane")."""
+        self._band_extra = "".join([t + "\0" for t in items])
+        if self._x is not None:
+            self._x.band_extra(self._band_extra)
+
     def _made(self):
         """The store, made and declared at the first way in that needs it."""
         x = self._x
@@ -185,6 +223,8 @@ class CEngine(Engine):
             self._x = x = _New()
             if self.PLACED:
                 x.set_placed(1)
+            if self._band_extra:
+                x.band_extra(self._band_extra)
             self._slot, self._names, self._types, self._pushed = {}, [], [], {}
             self._docs = {}
             self._drawing = False
@@ -584,7 +624,7 @@ class CEngine(Engine):
                 raise EngineGap("a %s node" % nk + ("" if placed or nk not in placed_kinds else
                                                      " outside a placed page"))
             field = l.get("field") if l and nk != "text_view" else None
-            if field and nk not in ("toggle", "slider"):
+            if field and nk not in ("toggle", "slider", "seg"):
                 raise EngineGap("a %s bound to a row's field" % nk)
             me = cnode(kind, n.key, parent)
             if me < 0:
@@ -616,7 +656,7 @@ class CEngine(Engine):
                         pop_lists[n.key] = (k.l["model"], k.src["cur"])
                         break
             if nk == "canvas" and l and l.get("pointer") is not None:
-                pointers.append((n.key, l["pointer"]))
+                pointers.append((n.key, l["pointer"], _list_model(n)))
             if nk == "canvas" and l and l.get("ground"):
                 grounds[me] = l["ground"]
             elif nk == "text_editor":
@@ -646,7 +686,7 @@ class CEngine(Engine):
                             fail(r, "ui.pane min=%r" % (src,), n.where)
                     continue
                 if k == "keys" and nk == "canvas":         # the front end's function: the keys while it holds focus
-                    self._canvas_keys[n.key] = src
+                    self._canvas_keys[n.key] = (src, _list_model(n))
                     r = cprop(me, "keys", getattr(src, "__name__", "keys"), None)
                     if r < 0:
                         fail(r, "canvas %s keys=" % n.key, n.where)
@@ -726,7 +766,8 @@ class CEngine(Engine):
     def front(self):
         """What the front end keeps beside the store once a page is lowered,
         as literals a compiled page carries (`uitree_aot.front`): each
-        canvas's pointer action, each popover's list and whether a field of
+        canvas's pointer action and keys= function (with the list it stands
+        in), each popover's list and whether a field of
         its own takes keys, the document fields the page reads, each text
         editor, each pane, panes and legacy stand-in. A prop's value is kept
         as itself (0), a dict as its items (1), a function as its name in
@@ -753,13 +794,17 @@ class CEngine(Engine):
             return tuple(out)
         stand = list(self._pn.items()) + list(self._legacy.items())
         stand.sort(key=lambda kv: kv[0])
-        return (tuple((k, a.name) for k, a in self._pointers),
+        keys = []
+        for k, (fn, m) in self._canvas_keys.items():
+            keys.append((k, _fn_ref(mod, fn, "canvas %s keys=" % k), m))
+        return (tuple((k, a.name, m) for k, a, m in self._pointers),
                 tuple((k, m, c) for k, (m, c) in self._pop_lists.items()),
                 tuple(self._pop_fields.items()),
                 tuple(self._doc_reads.items()),
                 tuple((node, te.key, tuple(te.l.items()), te.conds) for node, te in self._editors.items()),
                 tuple((node, m.kind, m.key, m.parent.aux if m.parent is not None else -1, tuple(m.where),
-                       lits(m.src), lits(m.l)) for node, m in stand))
+                       lits(m.src), lits(m.l)) for node, m in stand),
+                tuple(keys))
 
     def unfront(self, f):
         """`front`'s literals made again into what lowering leaves the front end."""
@@ -767,7 +812,8 @@ class CEngine(Engine):
 
         def made(v, d):
             return v if d == 0 else dict(v) if d == 1 else getattr(mod, v)
-        self._pointers = [(k, acts[a]) for k, a in f[0]]
+        self._pointers = [(k, acts[a], m) for k, a, m in f[0]]
+        self._canvas_keys = dict((k, (_fn_at(mod, n), m)) for k, n, m in f[6])
         self._pop_lists = dict((k, (m, c)) for k, m, c in f[1])
         self._pop_fields = dict(f[2])
         self._doc_reads = dict(f[3])
@@ -948,23 +994,23 @@ class CEngine(Engine):
         held = self._held
         if held is not None:
             down = self.pointer_down()
-            key, act, r = held
-            ev = S.Ev("drag" if down else "up", px - r[0], py - r[1], "touch")
+            key, act, r, row = held
+            ev = S.Ev("drag" if down else "up", px - r[0], py - r[1], "touch", row)
             self.q.append((act, (ev,), "pointer %s on canvas %r" % (ev.kind, key)))
             if not down:
                 self._held = None
             self._damage.all()
             return True
         if click and self._pointers and self._visiting():
-            for key, act in self._pointers:
-                r = self._x.rect(key)
-                if r is not None and r[0] <= px < r[0] + r[2] and r[1] <= py < r[1] + r[3]:
-                    ev = S.Ev("down", px - r[0], py - r[1], "touch")
+            for key, act, model in self._pointers:
+                r, row = self._canvas_at(key, model, px, py)
+                if r is not None:
+                    ev = S.Ev("down", px - r[0], py - r[1], "touch", row)
                     self.q.append((act, (ev,), "pointer down on canvas %r" % key))
                     if self.pointer_down():
-                        self._held = (key, act, r)
+                        self._held = (key, act, r, row)
                     else:
-                        self.q.append((act, (S.Ev("up", ev.x, ev.y, "touch"),), "pointer up on canvas %r" % key))
+                        self.q.append((act, (S.Ev("up", ev.x, ev.y, "touch", row),), "pointer up on canvas %r" % key))
                     self._damage.all()
                     return True
         return Engine.point(self, px, py, click)
@@ -1035,16 +1081,44 @@ class CEngine(Engine):
         t = self._x.hints()
         return tuple(t.split("\0")[:-1]) if t else ()
 
+    def _canvas_at(self, key, model, px, py):
+        """(rect, row) of canvas `key` the last frame drew under (px, py),
+        its row where it stands in a list of `model`, else (None, None)."""
+        if model is None:
+            r = self._x.rect(key)
+            return (r, None) if r is not None and r[0] <= px < r[0] + r[2] and r[1] <= py < r[1] + r[3] \
+                else (None, None)
+        kf = self.s._t[model].key
+        for row in self.s._v[model]:
+            r = self._x.rect("%s/%s" % (getattr(row, kf), key))
+            if r is not None and r[0] <= px < r[0] + r[2] and r[1] <= py < r[1] + r[3]:
+                return r, row
+        return None, None
+
     def _canvas_took(self, i):
-        """The keys to the focused canvas's keys= function, run as a handler:
-        whether it took them (False: they move focus off it)."""
+        """The keys to the focused canvas's keys= function, run as a handler
+        (handed its row as well where it stands in a list): whether it took
+        them (False: they move focus off it)."""
         f = self._x.focused()
-        fn = self._canvas_keys.get(f) if f else None
-        if fn is None:
+        if not f:
             return False
+        got = self._canvas_keys.get(f)       # a canvas of the page: nothing made
+        rk = None
+        if got is None and "/" in f:        # in a list's body: ROWKEY/KEY
+            rk, _, key = f.rpartition("/")
+            got = self._canvas_keys.get(key)
+        if got is None:
+            return False
+        fn, model = got
         was, S._NOW.app = S._NOW.app, self
         try:
-            return bool(fn(i))
+            if model is None:
+                return bool(fn(i))
+            kf = self.s._t[model].key
+            for row in self.s._v[model]:
+                if str(getattr(row, kf)) == rk:
+                    return bool(fn(i, row))
+            return False
         finally:
             S._NOW.app = was
 

@@ -175,6 +175,9 @@ void uit_set_ground(uit_t *e, int x, int y, int w, int h);
 // The band's hints while a legacy stop holds focus (its host's `hints()`),
 // NUL-separated, the last NUL in `n`; cut at 128 bytes.
 void uit_set_legacy_hints(uit_t *e, const char *s, size_t n);
+// The items its host adds to the page's band before its way back (a desk
+// pane's "F6 Next pane"), NUL-separated, the last NUL in `n`; cut at 48 bytes.
+void uit_set_band_extra(uit_t *e, const char *s, size_t n);
 // The layout alone, nothing drawn, over `x, y, w, h` (a host's placement
 // before its frame): each placed region's rect, as uit_rect reads them.
 int uit_place(uit_t *e, int x, int y, int w, int h, int flags, int fs);

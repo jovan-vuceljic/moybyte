@@ -31,6 +31,7 @@ import editor_settings      # declared at import, never inside another page's ha
 from layers import Layer
 import layout_base as _layout_base
 import text_modes as _modes
+from bar_layer import glyph as _bar_glyph
 from layout_base import LayoutBase
 
 # The project's files (step 5 of docs/theme_and_shell_2026-11.md §10) are reached from
@@ -87,13 +88,15 @@ class CardsLayer(Layer):
     domain = "system"
 
     # A card field MAY carry an optional `display` hint -- "gauge" | "count" |
-    # "choice-icons" | "sprite-tiles" | "bg-thumbs" (a choice-icons choice
-    # shows its icon; the others are the cart's own words for its value).
+    # "choice-icons" | "sprite-tiles" | "bg-thumbs" (a choice-icons choice of
+    # two is a toggle and of more a picker of its icons, a sprite-tiles or
+    # bg-thumbs one a picker of its sprites or backgrounds).
     _DISPLAYS = ("gauge", "count", "choice-icons", "sprite-tiles", "bg-thumbs")
     _CELL_DISPLAYS = ("choice-icons", "sprite-tiles", "bg-thumbs")
 
-    def __init__(self, ws, err_text):
+    def __init__(self, ws, names, err_text):
         self.ws = ws
+        self._NAMES = names
         self._err_text = err_text
         self._ui_mod = editor_settings
         self._host = _ui_draw.AppHost()
@@ -101,6 +104,7 @@ class CardsLayer(Layer):
         self._opened = False
         self._shown = None            # what `_sync` wrote last
         self._count = (None, 0)       # (the cart's path, its files)
+        self._band = None             # whether the page's band names F6 (a desk pane's)
         sc = ws.sys_canvas
         self.layout = CardsLayout(sc.w, sc.h, getattr(sc, "font_scale", 1))
 
@@ -153,21 +157,22 @@ class CardsLayer(Layer):
         ws.run.project.record_config(f["key"], old, v)
         ws.mark_dirty()
 
-    def _field(self, key):
+    def field(self, key):
         for f in self._fields():
             if f["key"] == key:
                 return f
         return None
 
     def _rows(self):
-        """The cards' rows: an `int` a slider, a two-way choice a toggle,
-        any other choice a step through its names."""
+        """The cards' rows: an `int` a slider, a two-way choice a toggle, a
+        picture choice a picker (its row as tall as its tiles), any other
+        choice a cycle through its names, one a line."""
         label = self._ui_mod.card_label
         rows = []
         for f in self._fields():
             cur = self._get(f)
             row = {"id": f["key"], "label": label(f), "shape": "int", "v": 0, "lo": 0, "hi": 0,
-                   "on": False, "value": "", "icon": ""}
+                   "on": False, "k": 0, "names": ""}
             if f["type"] == "int":
                 lo, hi = f.get("min", 0), f.get("max", 100)
                 try:
@@ -178,19 +183,16 @@ class CardsLayer(Layer):
             else:
                 ch = f["choices"]
                 idx = ch.index(cur) if cur in ch else 0
-                if len(ch) == 2 and not f.get("names") and f.get("display") not in ("sprite-tiles", "bg-thumbs"):
+                disp = f.get("display")
+                two = len(ch) == 2 and not f.get("names")
+                if disp in ("sprite-tiles", "bg-thumbs") or (disp == "choice-icons" and not two):
+                    row.update(shape="pics", k=idx)
+                elif two:
                     row.update(shape="two", on=idx == 1)
                 else:
-                    names = f.get("names") or ()
-                    icons = f.get("icons") or () if f.get("display") == "choice-icons" else ()
-                    if idx < len(names):
-                        value = str(names[idx])
-                    elif isinstance(ch[idx], int):
-                        value = "%d of %d" % (idx + 1, len(ch))   # a tile id says nothing
-                    else:
-                        value = str(ch[idx])
-                    row.update(shape="cycle", value=value,
-                               icon=str(icons[idx]) if idx < len(icons) else "")
+                    names = f.get("names") or ch
+                    row.update(shape="cycle", k=idx, names="\n".join(
+                        [str(names[i] if i < len(names) else c) for i, c in enumerate(ch)]))
             rows.append(row)
         return rows
 
@@ -204,11 +206,11 @@ class CardsLayer(Layer):
             rows = () if why else self._rows()
             vals = (rows, "" if why else (ws.editor_app.missing_note() or ""), why,
                     "The manifest didn't read" if why else "", bool(why),
-                    str(cart.get("title") or ""), str(self._file_count()))
+                    str(cart.get("title") or ""), str(self._file_count()), self._pick_h())
         except Exception as exc:  # noqa: BLE001 -- a card the checks missed must not take the frame
             ws.cart_error = self._err_text(exc)
             print("Moybyte cards error:", exc)
-            vals = ((), "", ws.cart_error, "This page didn't draw", False, "", "")
+            vals = ((), "", ws.cart_error, "This page didn't draw", False, "", "", 0)
         if vals != self._shown:
             self._shown = vals
             self.run("sync", vals)
@@ -233,7 +235,7 @@ class CardsLayer(Layer):
     def set_int(self, key, v):
         """A slider moved: a key's or a nudge's step is the card's step, a
         drag lands on the nearest step."""
-        f = self._field(key)
+        f = self.field(key)
         if f is None:
             return
         lo, hi = f.get("min", 0), f.get("max", 100)
@@ -250,16 +252,104 @@ class CardsLayer(Layer):
         self._set(f, max(lo, min(hi, v)))
 
     def set_choice(self, key, k):
-        f = self._field(key)
+        f = self.field(key)
         if f is not None:
             self._set(f, f["choices"][k])
 
-    def step_choice(self, key):
-        f = self._field(key)
-        if f is not None:
-            ch = f["choices"]
-            cur = self._get(f)
-            self._set(f, ch[((ch.index(cur) if cur in ch else 0) + 1) % len(ch)])
+    # -- a picker's pictures ----------------------------------------------------------
+
+    def _pick_h(self):
+        """A picker row's height: its tiles and their margin."""
+        desk = _layout_base.metric_class() == _layout_base.DESK
+        fs = self.layout.fs
+        return 64 if desk else 44 * fs
+
+    def tiles(self, n, w, h):
+        """A picker's `n` tiles in its row of w x h: each (x, y, side) from
+        the row's corner, at its right."""
+        desk = _layout_base.metric_class() == _layout_base.DESK
+        fs = self.layout.fs
+        side, gap, pad = (48, 12, 16) if desk else (32 * fs, 8 * fs, 10 * fs)
+        x = w - pad - n * side - (n - 1) * gap
+        return [(x + k * (side + gap), (h - side) // 2, side) for k in range(n)]
+
+    def draw_picker(self, cv, th, x, y, w, h, key, label, cur):
+        """Picker card `key`'s row in (x, y, w, h): its label, cut where its
+        tiles start, then each choice's picture in a tile, the current one
+        (`cur`) on the selection plate."""
+        f = self.field(key)
+        if f is None:
+            return
+        fs = self.layout.fs
+        tiles = self.tiles(len(f["choices"]), w, h)
+        r = self._label
+        r[0], r[1], r[2], r[3] = x + 10 * fs, y, max(1, (tiles[0][0] if tiles else w) - 18 * fs), h
+        _ui_draw.label(cv, r, label, th["ink"])
+        for k, t in enumerate(tiles):
+            tx, ty, side = x + t[0], y + t[1], t[2]
+            cv.rrect(tx, ty, side, side, 4 * fs, th["selection"] if k == cur else th["surface_alt"])
+            self.draw_choice(cv, f, k, (tx, ty, side, side))
+
+    _label = [0, 0, 0, 0]
+
+    def _resolve_tiles(self, f):
+        """For a `sprite-tiles` field, the list of sprite tile ids its choices map
+        to. `choices` may be ints (tile ids directly) or names paired with a
+        parallel `tiles` list. Returns ints; non-resolvable entries become 0."""
+        out = []
+        for c in f.get("tiles") or f.get("choices", []):
+            try:                               # a non-numeric entry must not escape the draw (#15)
+                out.append(int(c))
+            except (TypeError, ValueError):
+                out.append(0)
+        return out
+
+    def draw_choice(self, cv, f, k, rect):
+        """Choice `k`'s picture of a picker card `f` in `rect` on `cv`: its
+        sprite at the largest whole zoom the rect holds, its glyph, or its
+        background's preview."""
+        x, y, w, h = rect
+        disp = f.get("display")
+        if disp == "sprite-tiles":
+            tiles = self._resolve_tiles(f)
+            sheet = self.ws.run.project.sheet
+            if sheet is None:
+                return
+            img = sheet.tile_image(tiles[k] if k < len(tiles) else 0, 0)
+            z = max(1, min(w, h) * 3 // 4 // 8)
+            cv.spr(img, x + (w - 8 * z) // 2, y + (h - 8 * z) // 2, z)
+        elif disp == "bg-thumbs":
+            ch = f.get("choices") or []
+            m = max(2, min(w, h) // 8)
+            self._draw_bg_thumb(cv, str(ch[k]) if k < len(ch) else "", (x + m, y + m, w - 2 * m, h - 2 * m))
+        else:
+            icons = f.get("icons") or []
+            side = max(12, min(w, h) // 2)
+            _bar_glyph(icons[k] if k < len(icons) else "dot",
+                       (x + (w - side) // 2, y + (h - side) // 2, side, side), self.ws.theme_colors["ink"], cv)
+
+    # Each bg-thumbs choice is drawn as a tiny "what the screen will look like"
+    # preview. A cart reads the chosen name in cfg("bg") and paints to match.
+    # "night"/"stripes" get a patterned thumbnail; any other name renders as a
+    # solid swatch via NAMES.get, so arbitrary palette colors (e.g. "indigo")
+    # just work -- no preset list to keep in sync.
+
+    def _draw_bg_thumb(self, cv, name, rect):
+        """Paint a small preview of background preset `name` inside `rect`."""
+        NAMES = self._NAMES
+        fs = self.layout.fs
+        x, y, w, h = rect
+        if name == "night":                              # starfield
+            cv.rect(x, y, w, h, NAMES["black"])
+            for sx, sy in ((4, 4), (14, 9), (24, 5), (30, 15), (9, 17), (20, 12)):
+                cv.rect(x + sx * fs, y + sy * fs, fs, fs, NAMES["white"])
+        elif name == "stripes":
+            for i in range(0, w, 6 * fs):
+                cv.rect(x + i, y, min(3 * fs, w - i), h, NAMES["indigo"])
+                if i + 3 * fs < w:
+                    cv.rect(x + i + 3 * fs, y, min(3 * fs, w - i - 3 * fs), h, NAMES["dark_blue"])
+        else:                                            # a solid color swatch
+            cv.rect(x, y, w, h, NAMES.get(name, NAMES["black"]))
 
     def meta(self):
         cart = self.ws.run.project.cart or {}
@@ -320,6 +410,9 @@ class CardsLayer(Layer):
         lay = self.layout
         r = (lay.cx, lay.cy, lay.cw, lay.ch)
         desk = _layout_base.metric_class() == _layout_base.DESK
+        if desk != self._band:          # a desk pane's band names the key to the next pane
+            self._band = desk
+            self.page.band_extra(("F6", "Next pane") if desk else ())
         cv = ws.sys_canvas
         self._host.begin(cv, ws.theme_colors, r, desk)
         self.page.paint(dt, cv, ws.theme_colors, r, desk)
@@ -328,9 +421,9 @@ class CardsLayer(Layer):
             ws.request_frame()
 
     def _on_link(self):
-        """Whether the focus is on a link (a door or a step), which A takes."""
+        """Whether the focus is on a stop A takes (a door, a cycle, a picker)."""
         kind = self.page.stop_kinds().get(self.page.focus_key)
-        return kind in ("link", "button", "field")
+        return kind in ("link", "button", "field", "cycle", "canvas")
 
     def handle_input(self, i):
         ws = self.ws
