@@ -679,6 +679,8 @@ static void stops_of(uit_t *e, int k, int model, int row, stops_t *out)
                 stops_of(e, cs, model, row, out);
         } else if (N->kind == UIT_DIALOG || N->kind == UIT_POPOVER || (N->kind == UIT_TOOLS && (N->lit & TL_LEND))) {
             continue;               // drawn over the page, or at the site it is lent to
+        } else if (N->kind == UIT_TABS && N->t_aux >= 0) {
+            continue;               // tabs the band names (hint=): the tabs keys or a tap switch them
         } else if (is_stop(N->kind)) {
             if (N->act < 0 || uit_act_can(e, N->act, model, row))
                 stop_put(out, c, row);
@@ -844,6 +846,54 @@ static int role_action(uit_t *e, int flag)
     return -1;
 }
 
+// A page's tabs in the band where they say what the tabs keys do (hint=).
+static void hint_tabs(uit_t *e, uit_buf_t *b, int k)
+{
+    if (NODE(k)->t_aux < 0)
+        return;
+    uint32_t n, at = uit_tmpl_render(e, NODE(k)->t_aux, -1, -1, &n);
+    if (n) {
+        hint_add(b, "tabs", 4);
+        hint_add(b, e->scratch.p + at, n);
+    }
+}
+
+// Whether action a goes in the band by its keys: an arrow role or a letter, and available.
+static int band_key(uit_t *e, int a)
+{
+    return (e->acts[a].letter || (e->acts[a].flags & (UIT_A_ARROWS_V | UIT_A_ARROWS_H))) &&
+           uit_act_can(e, a, -1, -1);
+}
+
+// Action a's keys in the band, and the next action's with it where that one says the same:
+// two on the up and down arrows are the scroll keys, two on left and right the change keys,
+// two letters both letters. Answers the last action it took.
+static int hint_keys(uit_t *e, uit_buf_t *b, int a)
+{
+    int ax = e->acts[a].flags & (UIT_A_ARROWS_V | UIT_A_ARROWS_H);
+    uint32_t n, at = uit_tmpl_render(e, e->acts[a].hint, -1, -1, &n);
+    int two = 0;
+    if (a + 1 < e->nacts && band_key(e, a + 1) &&
+        (e->acts[a + 1].flags & (UIT_A_ARROWS_V | UIT_A_ARROWS_H)) == ax) {
+        uint32_t n2, at2 = uit_tmpl_render(e, e->acts[a + 1].hint, -1, -1, &n2);
+        two = n2 == n && !memcmp(e->scratch.p + at, e->scratch.p + at2, n);
+    }
+    char keys[4];
+    if (ax & UIT_A_ARROWS_V) {
+        hint_add(b, two ? "scroll" : "up down", two ? 6 : 7);
+    } else if (ax) {
+        hint_add(b, two ? "change" : "left right", two ? 6 : 10);
+    } else {
+        int l = e->acts[a].letter, l2 = two ? e->acts[a + 1].letter : 0;
+        keys[0] = (char)(l >= 'a' && l <= 'z' ? l - 32 : l);
+        keys[1] = ' ';
+        keys[2] = (char)(l2 >= 'a' && l2 <= 'z' ? l2 - 32 : l2);
+        hint_add(b, keys, two ? 3 : 1);
+    }
+    hint_add(b, e->scratch.p + at, n);
+    return two ? a + 1 : a;
+}
+
 // The band's items, NUL-separated into b (its length b->n, the last NUL
 // included).
 static void hints(uit_t *e, uit_buf_t *b, int pages)
@@ -886,8 +936,8 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
     if (e->has_focused) {
         const uit_id_t *F = &e->focused;
         int a = F->act;
-        if (a < 0 && F->kind == UIT_BUBBLE && F->gen == e->gen)
-            a = NODE(F->node)->on;      // a bubble's press is its on=
+        if (a < 0 && (F->kind == UIT_BUBBLE || F->kind == UIT_FIELD) && F->gen == e->gen)
+            a = NODE(F->node)->on;      // a bubble's press is its on=, Enter in a field its on=
         int on = a >= 0 && uit_act_can(e, a, -1, -1);
         if (F->kind == UIT_FIELD && F->gen == e->gen && (NODE(F->node)->lit & NL_COMMIT)) {
             static const char DONE[] = "confirm\0Done\0cancel\0Cancel";
@@ -936,18 +986,25 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
             }
         }
     }
+    if (e->page_tabs >= 0 && e->page_tabs_gen == e->gen && uit_shown(e, e->page_tabs, -1, -1))
+        hint_tabs(e, b, e->page_tabs);
     if ((e->flags & UIT_F_DESK) && e->tv_stop && !(e->has_focused && e->focused.kind == UIT_TEXT_VIEW)) {
         hint_add(b, "PgUp PgDn", 9);        // the page's text runs on: PgUp and PgDn page it
         hint_add(b, "Scroll", 6);
     }
     for (int a = 0; a < e->nacts; a++)
-        if (e->acts[a].letter && uit_act_can(e, a, -1, -1)) {
-            char up = (char)(e->acts[a].letter >= 'a' && e->acts[a].letter <= 'z'
-                             ? e->acts[a].letter - 32 : e->acts[a].letter);
-            hint_add(b, &up, 1);
-            hint_act(e, b, a);
-        }
+        if (band_key(e, a))
+            a = hint_keys(e, b, a);
     int a = pages == 1 ? role_action(e, UIT_A_ROLE_BACK) : -1;
+    int app = pages == 1 && a < 0 ? role_action(e, UIT_A_APP_BACK) : -1;
+    if (app >= 0 && uit_act_can(e, app, -1, -1)) {
+        // the app's back: its words; in a field the keys that never type
+        uint32_t n, at = uit_tmpl_render(e, e->acts[app].hint, -1, -1, &n);
+        int field = e->has_focused && e->focused.kind == UIT_FIELD;
+        hint_add(b, field ? "cancel" : "back", field ? 6 : 4);
+        hint_add(b, e->scratch.p + at, n);
+        return;
+    }
     if (a < 0) {
         hint_add(b, "back", 4);
         hint_add(b, "Back", 4);
@@ -1840,6 +1897,11 @@ static void tabs_in(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, co
     moy_ui_over_t o;
     char id[UIT_ID_MAX + 1];
     over_for(e, k, -1, -1, c, &o, id);
+    if (N->t_aux >= 0) {
+        int32_t zero = 0;
+        moy_ui_over_put(&o, MOY_UI_OV_MARK, &zero);     // tabs the band names: no stop, so no mark
+        e->page_tabs_now = (int16_t)k;
+    }
     int got = moy_ui_api_choice(c, s, 9, span_of("", 0), (const uint8_t *)e->scratch.p + items, len, at, &o);
     if (got >= 0 && got < count && got != at) {
         const char *v = seg_key(e, N, got);
@@ -2009,6 +2071,10 @@ static int foot_of(uit_t *e)
 }
 
 static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
+static void empty_controls(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
+                           int32_t x, int32_t w, int32_t y);
+static int32_t natural(uit_t *e, int k, int model, int row, int32_t h);
+static int32_t row_gap(const uit_t *e);
 
 // The page's docked foot (`ui.dock`, on the page's ground), look="share"
 // (`_r_foot`): its buttons share its width, its label a line of its own over
@@ -2592,10 +2658,11 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
                 uit_buf_printf(&lines, "%c", 0);
             uit_buf_printf(&lines, "%.*s", (int)n, e->scratch.p + at);
         }
-        moy_ui_api_empty(c, s, ni ? sspan(e, ai, ni) : span_of("warn", 4), sspan(e, a1, n1),
-                         (const uint8_t *)(lines.p ? lines.p : ""), lines.n);
+        int32_t m[4] = {c->has_at ? c->at.x : c->page.x, 0, c->has_at ? c->at.w : c->page.w, 0};
+        int32_t y = moy_ui_api_empty(c, s, ni ? sspan(e, ai, ni) : span_of("warn", 4), sspan(e, a1, n1),
+                                     (const uint8_t *)(lines.p ? lines.p : ""), lines.n);
         uit_buf_free(&lines);
-        walk(e, c, s, k, model, row);       // its controls, under what it says
+        empty_controls(e, c, s, k, model, row, m[0], m[2], y);
         break;
     }
     case UIT_DIALOG: {
@@ -2628,6 +2695,29 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         }
         break;
     }
+    }
+}
+
+// An empty's controls under what it says (from y), each its natural width and a value row
+// and 4 px tall, centred across x..x+w, one under the next.
+static void empty_controls(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
+                           int32_t x, int32_t w, int32_t y)
+{
+    int desk = (e->flags & UIT_F_DESK) != 0, mn;
+    int32_t hh = (moy_ui_metrics(MOY_UI_K_VALUE_ROW, &mn)[desk ? 17 : 16] + 4) * e->fs;
+    KIDS(k, c2) {
+        const uit_node_t *N = NODE(c2);
+        if (!uit_shown(e, c2, model, row))
+            continue;
+        if (N->act >= 0 && !uit_act_can(e, N->act, model, row) && e->acts[N->act].off != 2)
+            continue;
+        int32_t bw = natural(e, c2, model, row, hh);
+        bw = bw < 0 || bw > w ? w : bw;
+        int32_t r[4] = {x + (w - bw) / 2, y, bw, hh};
+        put_rect(e, c2, r);
+        moy_ui_api_at(c, r[0], r[1], r[2], r[3]);
+        draw(e, c, s, c2, model, row);
+        y += hh + row_gap(e) * e->fs;
     }
 }
 
@@ -2697,6 +2787,19 @@ static void focus_to(moy_ui_ctx_t *c, const char *id)
 }
 
 // `_land_focus`: (whether focus moved, a node foreseen into ahead).
+// Whether node k draws this frame: it and each node over it shown, each case its switch's pick.
+static int drawn_now(uit_t *e, int k)
+{
+    for (; k > 0 && k != (int)UIT_NONE; k = NODE(k)->parent) {
+        if (!uit_shown(e, k, -1, -1))
+            return 0;
+        int p = NODE(k)->parent;
+        if (p != (int)UIT_NONE && NODE(p)->kind == UIT_SWITCH && uit_case_of(e, p) != k)
+            return 0;
+    }
+    return 1;
+}
+
 static int land_focus(uit_t *e, moy_ui_ctx_t *c, char ahead[UIT_ID_MAX + 1])
 {
     int moved = 0;
@@ -2742,8 +2845,8 @@ static int land_focus(uit_t *e, moy_ui_ctx_t *c, char ahead[UIT_ID_MAX + 1])
     }
     for (int k = 0; k < e->nnodes; k++) {
         const uit_node_t *L = NODE(k);
-        if (!UIT_IS_LIST(L->kind) || L->cur < 0)
-            continue;
+        if (!UIT_IS_LIST(L->kind) || L->cur < 0 || !drawn_now(e, k))
+            continue;               // (a list this frame hides moves focus when it shows)
         uit_slot_t *S = &e->slots[L->cur];
         const char *v = S->s ? S->s : "";
         if (S->sync_set && S->sync && !strcmp(S->sync, v))
@@ -4810,6 +4913,7 @@ ids:;
     char ahead[UIT_ID_MAX + 1];
     int moved = land_focus(e, c, ahead);
     e->tv_stop_now = 0;
+    e->page_tabs_now = -1;
     if (e->placed)
         placed_walk(e, c, s);
     else if (rects_ready(e))            // a flowing page's rects: where its canvases drew
@@ -4817,6 +4921,8 @@ ids:;
     moy_ui_api_page_done(c, s);         // the next frame's plan reads what this one drew
     e->pop_hints_n = 0;         // (its buffer goes with this frame)
     e->tv_stop = e->tv_stop_now;
+    e->page_tabs = e->page_tabs_now;
+    e->page_tabs_gen = e->gen;
     // after: what holds focus, and whether the band named another node's verbs
     int had = e->has_focused;
     uit_id_t was = e->focused;

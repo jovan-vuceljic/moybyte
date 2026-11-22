@@ -1940,6 +1940,10 @@
     "offered": {
      "type": "conds",
      "level": 2
+    },
+    "hint": {
+     "type": "tpl",
+     "level": 2
     }
    }
   },

@@ -286,6 +286,7 @@ uit_t *uit_new(void)
     uit_buf_put(&e->pool, "", 0);       // offset 0 is the empty text
     e->ccur = -1;
     e->pane_cur = -1;
+    e->page_tabs = e->page_tabs_now = -1;
     return e;
 }
 
@@ -604,7 +605,7 @@ int uit_action(uit_t *e, const char *name, const char *label, const char *hint, 
         A.when = (int16_t)c;
     }
     A.off = (uint8_t)off;
-    A.flags = (uint8_t)flags;
+    A.flags = (uint16_t)flags;
     int ls = pool_puts(e, letters ? letters : "");
     if (ls < 0)
         return UIT_E_NOMEM;
@@ -1141,7 +1142,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
              ((kind == UIT_CARD || kind == UIT_PICTURE || kind == UIT_BUTTON) && !strcmp(name, "tone")))
         tslot = &N->t_aux;
     else if ((!strcmp(name, "empty") && UIT_IS_LIST(kind)) ||
-             (!strcmp(name, "hint") && (kind == UIT_TOGGLE || kind == UIT_FIELD)) ||
+             (!strcmp(name, "hint") && (kind == UIT_TOGGLE || kind == UIT_FIELD || kind == UIT_TABS)) ||
              (!strcmp(name, "hi") && kind == UIT_SLIDER))
         tslot = &N->t_aux;
     if (tslot) {

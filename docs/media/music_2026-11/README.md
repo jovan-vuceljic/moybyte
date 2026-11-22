@@ -109,8 +109,8 @@ the tool draws whatever the toolkit does not do yet.
     pointer has no focus to show, so its strip is "Esc Close".
   - While a text field holds the keys, no hint names a letter key. Enter is
     "Next", and the last field's Enter does the page's verb.
-- **A page whose keys are its own** (Now playing) shows no focus mark. Its
-  hints are the whole contract:
+- **A page whose keys are its own** (Now playing) opens with focus on its
+  main button, and its hints are the whole contract:
   - Enter plays, pauses or tries again.
   - Q E (L R on a pad) step the station or the song.
   - W S (up and down) set the volume.

@@ -114,7 +114,8 @@ typedef struct {
     uint16_t name, label;       // pool
     int16_t hint;               // a template
     int16_t when;               // a cond or -1
-    uint8_t off, flags;
+    uint8_t off;
+    uint16_t flags;
     uint8_t letter;             // its first letter, the band's
     uint16_t letters;           // pool: every letter it answers
     uint16_t chars;             // pool: every character it is handed (chars=)
@@ -352,6 +353,8 @@ struct uit {
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
     uint8_t in_cell;            // drawing a split's column: a button takes its natural width
     uint8_t tv_stop, tv_stop_now;   // a text view that runs on drew last frame / this frame (the band's PgUp PgDn)
+    int16_t page_tabs, page_tabs_now;   // the tabs node the band names (hint=) drawn last frame / this frame, else -1
+    uint16_t page_tabs_gen;
     uint8_t in_pop;             // drawing a popover's body: a split there lays out as its cells (`_pop_split`)
     const uint8_t *pop_hints;   // a bare page's band, drawn in its shown popover's body (`draw_popover`)...
     size_t pop_hints_n;         // ...its bytes, 0 none

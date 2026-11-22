@@ -1152,36 +1152,36 @@ ui.hook("opened", opened)
 ui.hook("tab_moved", tab_moved)
 ui.hook("row_moved", row_moved, takes="row")
 ui.hook("url_moved", url_moved)
-ui.hook("to_name", to_name)
 ui.hook("strip_at", strip_at, takes="pointer")
 ui.hook("volume_at", volume_at, takes="pointer")
 ui.hook("seek_at", seek_at, takes="pointer")
 ui.action("pick", "Play", pick, takes="row", hint="{verb}")
 ui.action("place", "Open", place, takes="row")
-ui.action("player", "{view=now?List:Player}", player, keys=("m",), when="playing",
-          off="hide")
-ui.action("back", "Back", back, when="paged", off="hide")
+ui.action("back", "{view=add?Cancel:Back}", back, when="paged", off="hide")
 ui.action("cancel", "Cancel", back)
+ui.action("to_name", "Next", to_name)
 ui.action("add", "Add", submit, when="!err", off="grey")
 ui.action("main", "{main_word}", main, when="playing", off="hide")
 ui.action("toggle", "{main_word}", main, when="playing", off="hide")     # Now playing's, focused
-ui.action("prev", "Previous", prev, keys=("q",), when="playing && view=now", off="hide",
-          hint="{radio?Station:Song}")
-ui.action("next", "Next", next_, keys=("e",), when="playing && view=now", off="hide",
-          hint="{radio?Station:Song}")
 ui.action("stop", "Stop", stop, when="playing", off="hide")
-ui.action("louder", "Volume", louder, keys=("role:up", "w"), when="playing && view=now", off="hide")
-ui.action("quieter", "Volume", quieter, keys=("role:down", "s"), when="playing && view=now",
-          off="hide")
 ui.action("rewind", "Seek", back_seek, keys=("role:left", "a"), when="seekable && view=now",
           off="hide")
 ui.action("ahead", "Seek", ahead, keys=("role:right", "d"), when="seekable && view=now",
           off="hide")
+ui.action("louder", "Volume", louder, keys=("role:up", "w"), when="playing && view=now", off="hide")
+ui.action("quieter", "Volume", quieter, keys=("role:down", "s"), when="playing && view=now",
+          off="hide")
+ui.action("player", "{view=now?List:Player}", player, keys=("m",), when="playing",
+          off="hide")
+ui.action("prev", "Previous", prev, keys=("q",), when="playing && view=now", off="hide",
+          hint="{radio?Station:Song}")
+ui.action("next", "Next", next_, keys=("e",), when="playing && view=now", off="hide",
+          hint="{radio?Station:Song}")
 ui.action("back_one", "Previous", prev, when="playing", off="hide")    # the desk card's, keyless
 ui.action("on_one", "Next", next_, when="playing", off="hide")
 ui.action("softer", "Quieter", quieter, when="playing", off="hide")
 ui.action("harder", "Louder", louder, when="playing", off="hide")
-ui.action("wifi", "Wi-Fi settings", wifi)
+ui.action("wifi", "Wi-Fi settings", wifi, hint="Open")
 ui.action("home", "Back to home", home)
 
 
@@ -1193,9 +1193,9 @@ def _list(model, cur, shown):
 
 def _radio():
     _list("stations", "scur", "online")
-    ui.empty("Radio needs Wi-Fi", icon="wifi_off", shown="!online",
-             lines=["Turn on Wi-Fi to listen to stations.", "Your own music plays without it."])
-    ui.button("wifi", "primary", icon="wifi", shown="!online")
+    with ui.empty("Radio needs Wi-Fi", icon="wifi_off", shown="!online",
+                  lines=["Turn on Wi-Fi to listen to stations.", "Your own music plays without it."]):
+        ui.button("wifi", "primary", icon="wifi", w=150, focus=True)
 
 
 def _files():
@@ -1243,24 +1243,31 @@ def _now():
             ui.button("toggle", "primary", icon="{main_icon}", label="", span=2, focus=True)
             ui.button("next", icon="next", label="")
             ui.button("stop", icon="stop", label="")
-        with ui.split("row", sizes=(32, 22, "1*", 32), gap="s", pad="0"):
+        with ui.split("row", sizes=(32, 38, "1*", 12, 32), gap="0", pad="0"):
             ui.button("quieter", icon="minus", label="")
             ui.label("", icon="volume")
             ui.canvas("volume", draw_volume, pointer="volume_at")
+            ui.label("")
             ui.button("louder", icon="plus", label="")
         with ui.group(""):
             pass
 
 
 def _add():
-    ui.field("Address", "url", URL_MAX, hint="http://", on="to_name", changed="url_moved")
-    ui.label("{err}", tone="danger", wrap="word", lines=2, shown="err")
-    ui.label(HELP_ADDRESS, tone="dim", shown="!err")
-    ui.field("Name", "name", NAME_MAX, hint="Optional", on="add")
-    with ui.foot():
-        with ui.row("acts"):
-            ui.row("")
+    """Add a station on the 12 px gutter: each field's label over it, its
+    line under it, Cancel and Add at the foot."""
+    with ui.split("col", sizes=("1*", 28), gap="m", pad="m"):
+        with ui.group(""):
+            ui.label("Address", face="caption", tone="dim")
+            ui.field("", "url", URL_MAX, hint="http://", on="to_name", changed="url_moved")
+            ui.label("{err}", tone="danger", wrap="word", lines=2, shown="err")
+            ui.label(HELP_ADDRESS, tone="dim", shown="!err")
+            ui.label("Name", face="caption", tone="dim")
+            ui.field("", "name", NAME_MAX, hint="Optional", on="add")
+        with ui.split("row", sizes=("1*", 88, 8, 88), gap="0", pad="0"):
+            ui.label("")
             ui.button("cancel")
+            ui.label("")
             ui.button("add", "primary")
 
 
@@ -1273,7 +1280,8 @@ def _no_audio():
 
 def build():
     with ui.page(""):
-        ui.tabs("tab", labels="TABS", on="tab_moved", shown="listing && !@desk")
+        ui.tabs("tab", labels="TABS", on="tab_moved", shown="listing && !@desk",
+                hint="{tab=radio?My music:Radio}")
         ui.switch("view", {"radio": _listing, "files": _listing, "now": _now, "add": _add,
                            "noaudio": _no_audio})
         with ui.foot(look="band", shown="playing && listing && !@desk"):

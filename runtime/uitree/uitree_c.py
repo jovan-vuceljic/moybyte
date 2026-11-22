@@ -47,7 +47,7 @@ EV_NONE, EV_ACTION, EV_WRITE, EV_CELL = 0, 1, 2, 3
 F_DESK, F_ON_BAR, F_BAND, F_BARE, F_TRACE, F_UP, F_DOWN, F_GEN = 1, 2, 4, 8, 16, 32, 64, 128
 F_PAGES_SHIFT = 8
 OWE = 1 << 16
-A_HOOK, A_ROLE_CONFIRM, A_ROLE_BACK, A_SHIFT_ENTER = 1, 2, 4, 16
+A_HOOK, A_ROLE_CONFIRM, A_ROLE_BACK, A_SHIFT_ENTER, A_ARROWS_V, A_ARROWS_H, A_APP_BACK = 1, 2, 4, 16, 64, 128, 256
 INPUTS = ("keys", "tdeck", "pad", "touch")
 _KINDS = {"page": 1, "group": 2, "label": 3, "info": 4, "link": 5, "button": 6, "toggle": 7,
           "rows": 8, "dialog": 9, "seg": 10, "slider": 11, "field": 12, "empty": 13,
@@ -310,7 +310,10 @@ class CEngine(Engine):
         self._aidx = {}
         for a in self._acts:
             flags = (A_HOOK if a.hook else 0) | (A_ROLE_CONFIRM if "role:confirm" in a.keys else 0) | (
-                A_ROLE_BACK if "role:back" in a.keys else 0) | (A_SHIFT_ENTER if S.SHIFT_ENTER in a.keys else 0)
+                A_ROLE_BACK if "role:back" in a.keys else 0) | (A_SHIFT_ENTER if S.SHIFT_ENTER in a.keys else 0) | (
+                A_ARROWS_V if {"role:up", "role:down"} & set(a.keys) else 0) | (
+                A_ARROWS_H if {"role:left", "role:right"} & set(a.keys) else 0) | (
+                A_APP_BACK if self.decl.app is not None and self.decl.app.back == a.name else 0)
             off = {"hide": 1, "grey": 2}.get(getattr(a, "off", None), 0)
             self._aidx[a.name] = self._ck(x.action(
                 a.name, a.label or "", a.hint if isinstance(a.hint, str) else "", a.when_src, off, flags,

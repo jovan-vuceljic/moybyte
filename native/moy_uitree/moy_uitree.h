@@ -75,7 +75,9 @@ enum { UIT_IN_KEYS = 0, UIT_IN_TDECK, UIT_IN_PAD, UIT_IN_TOUCH };
 
 // Action flags.
 enum { UIT_A_HOOK = 1, UIT_A_ROLE_CONFIRM = 2, UIT_A_ROLE_BACK = 4, UIT_A_ROW = 8, UIT_A_SHIFT_ENTER = 16,
-       UIT_A_ROLE_MORE = 32 };   // the more role: a front end owes it the `m` key
+       UIT_A_ROLE_MORE = 32,     // the more role: a front end owes it the `m` key
+       UIT_A_ARROWS_V = 64, UIT_A_ARROWS_H = 128,   // it answers role:up or down / left or right
+       UIT_A_APP_BACK = 256 };   // the app's back= (Back on its first page, the band's way back)
 
 typedef struct uit uit_t;
 
