@@ -420,3 +420,31 @@ def test_deleting_the_last_slide_from_the_sorters_button(tmp_path):
     _tap_part(ws, app, "del_slide")
     assert len(app.story.slides) == n - 1
     _frames(ws)
+
+
+def test_a_press_and_drag_on_the_pasteboard_reach_the_slide(tmp_path):
+    """The board canvas hands the slide its pointer: a press on the bubble
+    chooses it and gives the slide the keys, a drag moves it, the release
+    ends the move as one undo step."""
+    ws, app, ed = _edit(tmp_path)
+    st = app.story
+    bx, by, _bw, _bh = app.engine._x.rect("board")
+    n, d = ed.zoom
+    cx, cy, _cw, _ch = ws.wm.windows["storybook"].content_rect()
+    px = cx + bx + ed.slide[0] + 700 * n // d
+    py = cy + by + ed.slide[1] + 100 * n // d
+    ws.pointer.place(px, py)
+    ws.pointer.down = True
+    ws.pointer.click = True
+    ws.router.handle_pointer()
+    _frames(ws, 1)
+    assert ed.chosen == 1 and ed.on_slide
+    ws.pointer.click = False
+    ws.pointer.place(px + 20, py)
+    ws.router.handle_pointer()
+    _frames(ws, 1)
+    ws.pointer.down = False
+    ws.router.handle_pointer()
+    _frames(ws, 1)
+    assert st.slides[1]["objects"][1]["x"] == 608 + 20 * d // n
+    assert len(st.hist._undo) == 1
