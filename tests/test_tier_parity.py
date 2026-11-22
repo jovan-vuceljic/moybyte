@@ -220,9 +220,7 @@ def test_a_native_carts_config_tab_has_no_make_it_mine_cards_and_says_why(tmp_pa
     cart["edit"] = [{"key": "speed", "type": "int", "min": 1, "max": 9, "default": 3}]
     ws.open_in_editor(cart)
     ws.text.set_menu_view("cards")
-    from runtime import editor_settings
-    page = editor_settings.SettingsPage(ws, None, (None, None))
-    assert page._fields() == []
+    assert ws.cards_layer._fields() == []
     assert ws.editor_app.missing_note() == ui_draw.s("editor.no_assets")
     ws.open_in_editor(_cart(ws, "Wasm Bits"))
     assert ws.editor_app.missing_note() == ui_draw.s("editor.no_scenes")

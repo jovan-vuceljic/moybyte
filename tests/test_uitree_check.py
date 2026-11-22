@@ -37,6 +37,7 @@ PORTED = (
     "wifi_ui",
     "uitree_editor_app",
     "code_ui",
+    "editor_settings",
     "editor_ui",
     "uitree_bar_row",
     "uitree_legacy_app",

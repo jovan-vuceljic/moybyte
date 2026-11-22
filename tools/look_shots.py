@@ -530,13 +530,7 @@ def _cards_prompt(which):
     def setup(g, ws):
         _tab("cards")(g, ws)
         _settle(g, ws, 2)
-        cl = ws.cards_layer
-        if which == "meta":
-            cl._open_meta()
-        elif which == "newf":
-            cl._open_newf()
-        else:
-            cl._open_files()
+        ws.cards_layer.run({"meta": "cart_info", "newf": "new_script"}.get(which, "files"))
     return setup
 
 

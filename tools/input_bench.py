@@ -1756,15 +1756,15 @@ def surfaces():
                                                     "type_fast": ("klmnopqrst", 20)},
         teardown="ws.block_ui.blk_kbd and ws.block_ui._blk_kbd_cancel()\nws.mark_dirty()"))
     s.append(Surface("Cart info", _ed(SCRATCH + " Blocks", "cards", "settings") + [
-        ("ws.cards_layer._open_meta()\nws.mark_dirty()", 2.0)],
+        ("ws.cards_layer.run('cart_info')", 2.0)],
         inputs=("type", "type_fast", "key_steps"), text={"type": ("Hello world", 10),
                                                          "type_fast": ("Hello again", 20)},
-        teardown="ws.cards_layer.prompt and ws.cards_layer._close_prompt()"))
+        teardown="ws.cards_layer.run('cancel')"))
     s.append(Surface("New script", _ed(SCRATCH + " Blocks", "cards", "settings") + [
-        ("ws.cards_layer._open_newf()\nws.mark_dirty()", 2.0)],
+        ("ws.cards_layer.run('new_script')", 2.0)],
         inputs=("type", "type_fast"), text={"type": ("helpers", 10),
                                             "type_fast": ("more_helpers", 20)},
-        teardown="ws.cards_layer.prompt and ws.cards_layer._close_prompt()"))
+        teardown="ws.cards_layer.run('cancel')"))
     s.append(Surface("Pause card", [("_ib_desk()", 1.0), ("@run Star Catcher", 4.0),
                                     ("ws.pause.show()\nws.mark_dirty()", 1.5)],
                      "ws.pause.focused()", inputs=("key_steps", "key_20"),

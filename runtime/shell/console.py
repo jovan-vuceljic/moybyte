@@ -1203,7 +1203,7 @@ class Workstation:
             self, id, domain, draw=draw, kbd=kbd, ptr=ptr)
         # The cards ("Make it mine") surface is its own Layer now (#3/#15), owning its
         # selection/scroll state (msel/mtop) + draw + taps; cart config/apply stay on ws.
-        self.cards_layer = CardsLayer(self, NAMES, _err_text)
+        self.cards_layer = CardsLayer(self, _err_text)
         # The PAINT editor surface (#4/#30) over the cart sheet ("paint"). It reads
         # ws.paint / ws.sheet + dispatches SAVE/GET/PUT/CLOSE to ws. The theme mode's
         # tabs ("theme_config", "theme_sprites") are runtime/editors/theme_editor.py's.

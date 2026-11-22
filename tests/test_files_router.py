@@ -550,8 +550,9 @@ def test_the_deep_chain_still_finds_its_way_back_to_files(tmp_path):
 
     name = _cart_image(cart)
     ws.carts.reload(cart)
-    ws.cards_layer._open_files()
-    ws.cards_layer._files_open(name)
+    ws.cards_layer.run("files")
+    ws.cards_layer.run("open_name", name)
+    host_app.ConsoleDriver(ws).frame(1 / 30)        # it opens at the frame's tail
     assert ws.wm.top_kind() == "artwork"
 
     _tap_x(ws)

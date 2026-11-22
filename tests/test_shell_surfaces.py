@@ -41,7 +41,7 @@ def test_the_strip_is_drawn_by_the_frame_but_where_strip_self_says_why():
             if p.name != "bar_layer.py" and call.search(p.read_text()):
                 callers.add(p.name)
     assert callers == set(bar_layer.STRIP_SELF)
-    assert not set(bar_layer.STRIP_OF) & {"cards", "blocks", "code"}
+    assert not set(bar_layer.STRIP_OF) & {"blocks", "code"}
 
 
 def test_settings_strip_is_the_frames_and_drawn_once(tmp_path):
