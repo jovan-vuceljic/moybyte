@@ -1824,9 +1824,9 @@ A change that stays inside the panel -- it opened, a row moved, it closed --
 does not mark the frame dirty: the WM owes the popover's rect to each of the
 root's real buffers (`RETAINED_FRAMES`; one on a persistent root, so the
 Guition P4 pays one frame), and such a frame draws the popover's layers
-alone over the retained one, its rect the frame's damage: a component's
-card with the rows its drop reaches below it at the font scale
-(`WindowOverlays._pop_rect`, `ui_draw.modal_drop`). Before the
+alone over the retained one, its rect the frame's damage: the panel's
+rect, which holds a component's card and the rows its drop reaches below
+it at the font scale (`WindowOverlays._pop_rect`, `ui_draw.modal_drop`). Before the
 panel's first paint the pixels under it are snapshotted; a close puts them
 back into each buffer. Two snapshot slots, because a popover may open while
 the last one's restore is still owed. A frame that does repaint (a dirty
@@ -1845,10 +1845,11 @@ sizes itself again -- the Wi-Fi card to the networks a scan found -- asks
 for a frame that repaints whole at its new rect. The snapshots and the face are
 released by the fit check (§8.1) once no popover is live. A change outside the panel (a connect, a stepped
 setting, a row's action) marks the frame dirty as before. The system menu
-takes the same path; it is the look's card
-(docs/history/look_2026-10.md step 25a), whose rect -- the card and its shadow's
-reach, known before it draws (`SystemMenuUI.panel_rect`) -- a riding paint
-first restores from the snapshot, since the card's shadow blends. Its
+takes the same path; it is a `uitree` page's popover
+(`runtime/shell/sysmenu_ui.py`), whose rect -- the card the engine drew and
+its shadow's reach, before its first draw the glass it can take
+(`SystemMenuUI.panel_rect`), the card sizing itself again once drawn -- a
+riding paint first restores from the snapshot, since the card's shadow blends. Its
 scrim rides with it over a still desk with no playtest (`_pop_wash`): the
 frame it opens on snapshots what the scrim covers, renders the focused
 window as it shows once the menu holds the keys (no focus mark, ui.marks),

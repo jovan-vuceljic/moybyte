@@ -37,10 +37,10 @@ class _Confirm:
         self.line = ""
         self.asked = []
 
-    def ask_close(self, title, line, then, buttons=None, kind="danger", no=None):
+    def ask_close(self, title, line, then, verb="close", no=None):
         self.open, self.title, self.line = True, title, line
         self._yes, self._no = then, no
-        self.asked.append((title, line, buttons, kind))
+        self.asked.append((title, line, verb))
 
     def yes(self):
         self.open = False
@@ -239,7 +239,7 @@ def test_a_cart_crosses_a_lossy_link_and_installs_byte_identical(tmp_path):
     # anything is written to the store; the waiting notice goes first.
     assert wsb.confirm.title == "Receive Pong?"
     assert wsb.confirm.line.startswith("From Ada, ") and "shelf" in wsb.confirm.line
-    assert wsb.confirm.asked[-1][2:] == (("No", "Receive"), "primary")
+    assert wsb.confirm.asked[-1][2] == "receive"
     assert ("<withdrawn>", "Receiving", "ok") in wsb.notices.said
     assert _shelf(wsb) == before and _stage(wsb) == []
     wsb.confirm.yes()
@@ -1234,7 +1234,9 @@ def _row_center(ws, label):
     for it in ws.sysmenu.items:
         if it[0] == "item" and it[1] == label:
             box = ws.menu_ui._host.box(it[4])
-            return box[0] + box[2] // 2, box[1] + box[3] // 2
+            card = ws.menu_ui.look_card()         # what shows of it over the card's cut
+            assert box[1] < card[1] + card[3], "%r lies under the card's cut" % label
+            return box[0] + box[2] // 2, (box[1] + min(box[1] + box[3], card[1] + card[3])) // 2
     raise AssertionError("no row %r in %r" % (label, ws.sysmenu.items))
 
 
@@ -1258,6 +1260,9 @@ def test_the_shell_receives_through_its_menu_and_its_one_dialog(tmp_path):
         labels = [it[1] for it in ws.sysmenu.items if it[0] == "item"]
         assert "RECEIVE NEARBY" in labels
         assert labels.index("RECEIVE NEARBY") == labels.index("SETTINGS") - 1
+        ws.sysmenu.sel = next(i for i, it in enumerate(ws.sysmenu.items)
+                              if len(it) > 1 and it[1] == "RECEIVE NEARBY")   # the keys on it scroll it in
+        drv.frame(1 / 30)
         x, y = _row_center(ws, "RECEIVE NEARBY")
         drv.click(x, y)
         drv.frame(1 / 30)

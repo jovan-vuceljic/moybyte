@@ -892,7 +892,7 @@ def test_a_cart_that_arrived_as_files_is_asked_before_its_first_run(tmp_path):
     aid = app_perms.app_id(cart)
     ws.open()
     assert ws.confirm.open and ws.confirm.title == "Open Copied?"
-    assert ws.confirm.buttons == ("No", "Open")
+    assert ws.confirm.verb == "open"
     assert ws.confirm.lines == ["Keep its own settings", app_perms.TRUSTED]
     assert (ws.cart or {}).get("title") != "Copied"
     assert ws.consent.get(aid) is None

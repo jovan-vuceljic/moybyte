@@ -407,6 +407,11 @@ int32_t uitree_get_cell(int32_t slot, int32_t row, int32_t f, void *out,
 int32_t uitree_error(void *out, uint32_t out_cap) MOYBYTE_APP_IMPORT(uitree_error);
 // uitree.dump
 int32_t uitree_dump(void *out, uint32_t out_cap) MOYBYTE_APP_IMPORT(uitree_dump);
+// uitree.action_chars
+int32_t uitree_action_chars(int32_t a, const char *chars,
+                            uint32_t chars_n) MOYBYTE_APP_IMPORT(uitree_action_chars);
+// uitree.arg
+int32_t uitree_arg(void *out, uint32_t out_cap) MOYBYTE_APP_IMPORT(uitree_arg);
 
 #ifdef __cplusplus
 }

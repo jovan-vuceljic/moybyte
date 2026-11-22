@@ -103,16 +103,29 @@ class Layer:
         """The AppHost the surface's page draws through, or None."""
         return None
 
+    def page_host(self):
+        """The AppHost whose frame holds the surface's page: what its bar is
+        lent (`lent_ctx`) and the field it types into (`typing`, `cancel`).
+        Its `ui_host()` by default; a uitree App answers its engine's, whose
+        Back stays the engine's own (`ui_host` is what the input policy's
+        Back steps the toolkit of)."""
+        return self.ui_host()
+
+    def lent_ctx(self):
+        """The ui context whose `ui.bar` lends the surface's bar, or None."""
+        h = self.page_host()
+        return None if h is None else h.ctx
+
     def typing(self):
         """Whether the surface takes typed bytes: by default, a field focused
         on its page (`ui_draw.app_typing`)."""
-        h = self.ui_host()
+        h = self.page_host()
         return h is not None and _ui_draw.app_typing(h.ctx)
 
     def cancel(self):
         """The host's cancel (the T-Deck's Mic) inside the surface: True where
         it took it. By default a focused field's edit gives its draft back."""
-        h = self.ui_host()
+        h = self.page_host()
         if h is not None and _ui_draw.app_cancel(h.ctx, True):
             h.owed = True
             return True
@@ -635,41 +648,33 @@ class _SysMenuLayer(Layer):
                     if c[0] <= px < c[0] + c[2] and c[1] <= py < c[1] + c[3]:
                         ws.ach_ui._tap_clock()    # the clock's egg counts the tap that closes it
             else:
-                hit = ws.menu_ui.look_hit(px, py)
-                if hit is None:
-                    m.close()             # outside dismisses
-                elif hit >= 0:
-                    m.sel = hit           # a row: move+select
-                    m.activate()
-                    ws.mark_dirty()
-                ws.popover_touch()
+                ws.menu_ui.point(px, py, click)   # a row runs, outside dismisses
         _strip_tap(ws)
         return True
 
 
 class _AboutLayer(Layer):
-    """About's card (shell_cards.AboutCard) over the washed content: its rows
-    take the keys and taps; Esc, B or a tap outside closes it. Modal --
-    always consumes + clears the game pointer's tap."""
+    """About's card (shell_cards.AboutCard, about_ui's page) over the washed
+    content: its rows take the keys and taps; Esc, B or a press outside
+    closes it. Modal -- always consumes + clears the game pointer's tap."""
 
     id = "about"
     domain = "system"
 
     def draw(self, dt):
         self.ws.menu_ui.scrim()
-        self.ws.menu_ui._draw_about()
+        self.ws.menu_ui.about.draw()
 
     def handle_input(self, i):
         card = self.ws.menu_ui.about
         if i.pressed("b") or i.pressed("stop"):
             card.close()
-        elif card.host.keys(i):
-            self.ws.mark_dirty()
+        else:
+            card.keys(i)
         return True
 
     def handle_pointer(self, px, py, click):
         ws = self.ws
-        if ws.menu_ui.about.host.point(px, py, click, bool(getattr(ws.pointer, "down", False))):
-            ws.mark_dirty()
+        ws.menu_ui.about.point(px, py, click)
         _strip_tap(ws)
         return True

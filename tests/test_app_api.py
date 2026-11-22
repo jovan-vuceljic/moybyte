@@ -44,7 +44,7 @@ def test_builtin_apps_are_registered(tmp_path):
     for kind in kinds:
         assert ws._content_layers[kind] is not None       # router wired
     assert ws.spine.app_min_size("artwork") == (310, 230)       # registered minimum
-    assert ws.spine.app_min_size("calc") == (170, 190)          # inferred from CalcLayout
+    assert ws.spine.app_min_size("calc") == (170, 190)          # its manifest's min_size
 
 
 def test_register_app_dispatches_a_custom_app(tmp_path):
@@ -154,8 +154,8 @@ class _Key:
         return n == self.name
 
 
-def _calc(tmp_path):
-    ws = _ws(tmp_path)
+def _calc(tmp_path, **kw):
+    ws = _ws(tmp_path, **kw)
     _select(ws, "Calc")
     ws.home.launch_selected()
     calc = ws._content_layers["calc"]
@@ -169,38 +169,44 @@ def _settle_calc(ws, calc, n=3):
         ws.frame(1 / 30)
 
 
+def _st(calc, name):
+    return calc.engine.s._v[name]
+
+
+def _key_rect(calc, key):
+    return calc.engine._ui.box("dot" if key == "." else "key/" + key)
+
+
 def _tap(ws, calc, key):
     """A tap on `key`: the press frame, then the release that activates it."""
-    lay = calc.layout
-    x, y, w, h = lay.keys[lay.labels.index(key)]
+    x, y, w, h = _key_rect(calc, key)
     calc.handle_pointer(x + w // 2, y + h // 2, True)
     ws.frame(1 / 30)
     _settle_calc(ws, calc)
 
 
 def test_calc_math_via_taps(tmp_path):
-    """7 x 8 = 56 through taps on the keys the verbs drew: the engine
+    """7 x 8 = 56 through taps on the keys the page drew: the engine
     resolves the tap to the stop it went down on."""
     ws, calc = _calc(tmp_path)
     for k in ("7", "*", "8", "="):
         _tap(ws, calc, k)
-    assert calc.entry == "56"
+    assert _st(calc, "entry") == "56"
     _tap(ws, calc, "C")
-    assert calc.entry == "0" and calc.op is None
+    assert _st(calc, "entry") == "0" and _st(calc, "op") == ""
     # Division by zero stays kid-friendly.
     for k in ("9", "/", "0", "="):
         _tap(ws, calc, k)
-    assert calc.entry == "OOPS"
+    assert _st(calc, "entry") == "OOPS"
     # % is the remainder, the backspace key drops the last digit.
     for k in ("C", "1", "7", "%", "5", "="):
         _tap(ws, calc, k)
-    assert calc.entry == "2"
+    assert _st(calc, "entry") == "2"
     for k in ("1", "2", "3", "<"):
         _tap(ws, calc, k)
-    assert calc.entry == "12"                  # a digit after a sum starts afresh
-    # Calc counts in whole numbers: the point key never activates.
-    _tap(ws, calc, ".")
-    assert calc.entry == "12"
+    assert _st(calc, "entry") == "12"                  # a digit after a sum starts afresh
+    # Calc counts in whole numbers: the point key is drawn and is no stop.
+    assert _key_rect(calc, ".") is None
 
 
 def test_calc_arrows_move_focus_and_enter_presses(tmp_path):
@@ -211,11 +217,14 @@ def test_calc_arrows_move_focus_and_enter_presses(tmp_path):
         calc.handle_input(_Key(name))
         ws.frame(1 / 30)
         _settle_calc(ws, calc, 1)
-    assert calc.entry == "563"
+    assert _st(calc, "entry") == "563"
     for ch in "*2=":
         calc.handle_input(_Key(typed=ord(ch)))
         ws.frame(1 / 30)
-    assert calc.entry == "1126"
+    assert _st(calc, "entry") == "1126"
+    calc.handle_input(_Key(typed=8))
+    ws.frame(1 / 30)
+    assert _st(calc, "entry") == "112"
     # A tap owes its release and rest frames, and then Calc paints nothing.
     _quiesce_frame(ws)
     _tap(ws, calc, "4")
@@ -225,142 +234,63 @@ def test_calc_arrows_move_focus_and_enter_presses(tmp_path):
 
 
 def test_calc_keeps_a_tape(tmp_path):
-    """Each sum lands on the tape (operands, operator, result), the newest
-    shown over the result, the rest drawn above it on the display."""
+    """Each sum lands on the tape, its newest at the foot; the operand
+    banked shows over the result; a fresh open starts it empty."""
     ws, calc = _calc(tmp_path)
-    blank = None
     for expr in ("48+72=", "120-36=", "84/7=", "12*7="):
         for ch in expr:
             calc.handle_input(_Key(typed=ord(ch)))
-        if blank is None:
             ws.frame(1 / 30)
-            blank = _region(ws, calc)
-    ws.mark_dirty()
-    ws.frame(1 / 30)
-    assert calc.tape == [(48, "+", 72, "120"), (120, "-", 36, "84"),
-                         (84, "/", 7, "12"), (12, "*", 7, "84")]
-    assert calc.entry == "84" and calc._expr(None) == "12 * 7 ="
-    assert _region(ws, calc) != blank, "the sums above the result are drawn"
-    calc.handle_input(_Key(typed=ord("5")))
-    assert calc._expr(None) == "" and len(calc.tape) == 4
+    assert [r._f["line"] for r in _st(calc, "tape")] == [
+        "48 + 72 = 120", "120 - 36 = 84", "84 / 7 = 12", "12 * 7 = 84"]
+    assert _st(calc, "result") == "84" and _st(calc, "expr") == ""
+    for ch in "5-":
+        calc.handle_input(_Key(typed=ord(ch)))
+        ws.frame(1 / 30)
+    assert _st(calc, "expr") == "5 −" and len(_st(calc, "tape")) == 4
+    for _ in range(6):
+        for ch in "1+1=":
+            calc.handle_input(_Key(typed=ord(ch)))
+            ws.frame(1 / 30)
+    assert len(_st(calc, "tape")) == 8                   # the tape keeps its last eight
     calc.open()
-    assert calc.tape == [] and calc.entry == "0"
+    ws.frame(1 / 30)
+    assert len(_st(calc, "tape")) == 0 and _st(calc, "entry") == "0"
 
 
-def _region(ws, calc):
-    """The rows of the display's top half, where the tape's earlier sums draw."""
-    x, y, w, h = calc.layout.display
-    cv = ws.sys_canvas
-    row = cv.w * 2
-    return bytes(cv._buf)[y * row:(y + h // 2) * row]
-
-
-def test_calc_tags_its_keys_by_kind(tmp_path, monkeypatch):
+def test_calc_tags_its_keys_by_kind():
     """Calc's one per-key decision (DESIGN.md, "Button kinds"): = the one
     primary, C danger, the operators tonal, the rest normal."""
-    from runtime import calc_app
+    from runtime.calc_app import KEYS, kind_of
+    kinds = dict((k, kind_of(k)) for k in KEYS)
+    assert kinds["="] == "primary" and kinds["C"] == "danger"
+    assert {kinds[k] for k in "+-*/%"} == {"tonal"}
+    assert {kinds[k] for k in "0123456789.<"} == {"normal"}
+
+
+def test_calc_reflows_and_declares_minimum(tmp_path):
+    """The keys beside the display on a wide page, under it in a tall
+    window; they grow with the page and stay inside it, the 0 two keys
+    wide."""
     ws, calc = _calc(tmp_path)
-    drawn = {}
-    real = calc_app.ui.button
-
-    def button(label, kind="normal", o=None):
-        drawn[label or (o or {}).get("id")] = kind
-        return real(label, kind, o)
-
-    monkeypatch.setattr(calc_app.ui, "button", button)
-    ws.mark_dirty()
-    ws.frame(1 / 30)
-    assert drawn["="] == "primary"
-    assert drawn["C"] == "danger"
-    assert {drawn[k] for k in "+-*/%"} == {"tonal"}
-    assert {drawn[k] for k in "0123456789.<"} == {"normal"}
-    assert [k for k, v in drawn.items() if v == "primary"] == ["="]
-
-
-@pytest.mark.parametrize("theme", ["moy", "blocks", "contrast"])
-def test_calc_backspace_is_the_icon_sets_key_in_every_theme(tmp_path, monkeypatch, theme):
-    """The backspace key is the icon set's `backspace` (the target's) with no
-    label, never an arrow or "<" that reads as less-than."""
-    from runtime import calc_app
-    ws, calc = _calc(tmp_path)
-    ws.look.set_theme(theme, persist=False, variant="light")
-    seen = []
-    real_icon, real_button = calc_app.ui.icon, calc_app.ui.button
-
-    def icon(name, o=None):
-        seen.append(name)
-        return real_icon(name, o)
-
-    def button(label, kind="normal", o=None):
-        if seen and seen[-1] == "backspace":
-            seen.append((label, (o or {}).get("id")))
-        return real_button(label, kind, o)
-
-    monkeypatch.setattr(calc_app.ui, "icon", icon)
-    monkeypatch.setattr(calc_app.ui, "button", button)
-    ws.mark_dirty()
-    ws.frame(1 / 30)
-    assert ("", "<") in seen, seen
-
-
-@pytest.mark.parametrize("variant", ["dark", "light"])
-def test_calc_draws_in_the_faces_its_theme_names(tmp_path, monkeypatch, variant):
-    """Calc's keys take its theme's `app_buttons.calc` (its host passes its
-    id), and its result is the theme's `result` face where one is installed
-    (Moy's Night: Inter, its Day: Day Sans), else the ui face at the
-    largest whole scale that fits."""
-    from runtime import calc_app, ui_draw
-    ws, calc = _calc(tmp_path)
-    ws.look.set_theme("moy", persist=False, variant=variant)
-    assert calc._ui.app == "calc" and ui_draw._app_row("calc") >= 0
-    faces = []
-    real = calc_app.ui.face
-
-    def face(name=None, text=None):
-        got = real(name, text)
-        if name is not None:
-            faces.append((name, text, got))
-        return got
-
-    monkeypatch.setattr(calc_app.ui, "face", face)
-    for ch in "12*7=":
-        calc.handle_input(_Key(typed=ord(ch)))
-    ws.mark_dirty()
-    ws.frame(1 / 30)
-    assert faces[-1] == ("result", "84", True)
-    assert ui_draw.print_font() == ui_draw.font("ui")[0], "the ui face is put back"
-    calc.entry = "OOPS"
-    ws.mark_dirty()
-    ws.frame(1 / 30)
-    assert faces[-1] == ("result", "OOPS", False), "the result face has digits alone"
-
-
-def test_calc_layout_reflows_and_declares_minimum(tmp_path):
-    from runtime.calc_app import CalcLayout
-    assert CalcLayout.MIN_W > 0 and CalcLayout.MIN_H > 0
-    small = CalcLayout(320, 240, 1)
-    big = CalcLayout(1024, 600, 1)
-    assert small.side and big.side                         # the tape beside the keys
-    assert not CalcLayout(344, 444, 1, windowed=True).side  # a window stacks them
-    assert big.keys[-1][2] > small.keys[-1][2]             # keys grow with the window
-    assert len(big.keys) == 19 and big.labels[-3] == "0"
-    # Every key stays inside the canvas, and the 0 is two keys wide.
-    for x, y, w, h in big.keys:
+    assert ws.spine.app_min_size("calc") == (170, 190)
+    zero, equals, five = (_key_rect(calc, k) for k in "0=5")
+    assert zero[2] > equals[2] * 2
+    assert five[0] > ws.sys_canvas.w // 3                # beside the display
+    ws2, calc2 = _calc(tmp_path / "desk", sys_size=(1024, 600))
+    big = _key_rect(calc2, "5")
+    assert big[2] > five[2]
+    for k in "C<%/789*456-123+0=":
+        x, y, w, h = _key_rect(calc2, k)
         assert x >= 0 and y >= 0 and x + w <= 1024 and y + h <= 600
-    zero, dot = big.keys[big.labels.index("0")], big.keys[big.labels.index(".")]
-    assert zero[2] > dot[2] * 2
 
 
-def test_calc_is_app_rejects_lookalikes(tmp_path):
-    from runtime.calc_app import CalcAppLayer
-    assert not CalcAppLayer.is_app(None)
-    assert not CalcAppLayer.is_app({"title": "Calc", "permissions": ("graphics",),
-                                    "path": "/x/moybyte.calc.moy"})
-    assert not CalcAppLayer.is_app({"title": "My Calc", "permissions": ("calc",),
-                                    "path": "/x/moybyte.calc.moy"})
-    assert CalcAppLayer.is_app({"title": "Calc", "permissions": ("calc",),
-                                "path": "/carts/moybyte.calc.moy"})
-
+def test_calc_is_app_rejects_lookalikes():
+    from runtime.calc_app import is_app
+    assert not is_app(None)
+    assert not is_app({"title": "Calc", "permissions": ("graphics",), "path": "/x/moybyte.calc.moy"})
+    assert not is_app({"title": "My Calc", "permissions": ("calc",), "path": "/x/moybyte.calc.moy"})
+    assert is_app({"title": "Calc", "permissions": ("calc",), "path": "/carts/moybyte.calc.moy"})
 
 # -- the bar contract is a HOST GUARANTEE (ui_refactor_2026-08 Phase 2) --------
 #
@@ -456,7 +386,7 @@ def _settle(ws):
     # (a verbs page's next frame would move those pixels, docs/surface_model_v1.md
     # §14.7): its next frame draws whole
     for app in ws.app_layers:
-        host = getattr(getattr(app, "_inst", app), "_ui", None)
+        host = getattr(getattr(app, "_inst", app), "_ui", None) or getattr(getattr(app, "engine", None), "_ui", None)
         if host is not None and hasattr(host, "whole"):
             host.whole()
     prev = None

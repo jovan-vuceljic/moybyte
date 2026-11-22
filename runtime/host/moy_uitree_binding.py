@@ -30,6 +30,7 @@ _SIGS = (
     ("uit_field_enum", [_P, _I, _I, _S, _Z], _I),
     ("uit_row_of", [_P, _I, _I], _I),
     ("uit_action_row", [_P, _I, _I], _I),
+    ("uit_action_chars", [_P, _I, _S], _I),
     ("uit_action", [_P, _S, _S, _S, _S, _I, _I, _S, _S], _I),
     ("uit_letter", [_P, _I], _I),
     ("uit_labels", [_P, _S, _S, _Z, _S, _Z], _I),
@@ -215,6 +216,9 @@ class Engine:
 
     def action_row(self, a, slot):
         return self._L.uit_action_row(self._e, a, slot)
+
+    def action_chars(self, a, chars):
+        return self._L.uit_action_chars(self._e, a, b(chars))
 
     def action(self, name, label, hint, when, off, flags, letters, icon):
         return self._L.uit_action(self._e, b(name), b(label), b(hint), b(when) if when else None,

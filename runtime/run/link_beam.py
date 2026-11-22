@@ -99,7 +99,6 @@ DEPTH = 6                         # folders under a cart's, as the store's packe
 ARRIVALS = "Downloads"            # where a received file lands, under files/
 NAME_MAX = 64
 ROW = "Receive nearby"            # the system menu's row (shell_cards._BEAM_ROW)
-_ANSWERS = ("No", "Receive")
 
 # What a failed beam says, by its why: (title, line) for the sender and the
 # receiver, {t} the item's title and {p} the other console, each cut short
@@ -771,7 +770,7 @@ class Beam:
                    "first runs." % (peer, size_text(size))
         else:
             line = "From %s, %s. It goes in %s." % (peer, size_text(size), ARRIVALS)
-        confirm.ask_close(self.asked, line, self._yes, _ANSWERS, kind="primary", no=self._no)
+        confirm.ask_close(self.asked, line, self._yes, "receive", no=self._no)
 
     def _yes(self):
         self.answer = True

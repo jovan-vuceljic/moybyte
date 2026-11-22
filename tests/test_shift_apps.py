@@ -106,7 +106,17 @@ _LOG_SCRIPT = ("for i in range(40):\n    print('row %d of the log, a little long
                "        print('you said', s)\n")
 
 
-def _console(tmp_path, app, ships, desk=False, chip=False):
+def _log_ring(n):
+    """The OS log's ring, `n` records of the shell's."""
+    import moy_log
+    moy_log.init(16384)
+    for i in range(n):
+        moy_log.pin_clock(1000000 + 250000 * i)
+        moy_log.write(6, moy_log.SHELL, "record %d of the ring, a line the page cuts" % i)
+    moy_log.pin_clock(0)
+
+
+def _console(tmp_path, app, ships, desk=False, chip=False, big=False):
     import json
     from runtime import cart_index as ci
     root = tmp_path / ("ships" if ships else "whole")
@@ -114,6 +124,8 @@ def _console(tmp_path, app, ships, desk=False, chip=False):
         # a desk: what the console runs presents in its window
         ws = host_app.build_workstation(str(root / "carts"), sys_size=(1024, 600),
                                         windowed=True)
+    elif big:
+        ws = host_app.build_workstation(str(root / "carts"), sys_size=(800, 480), font_scale=3)
     else:
         ws = host_app.build_workstation(str(root / "carts"))
     ws.bar_layer.clock_text = lambda: "10:30"
@@ -130,6 +142,10 @@ def _console(tmp_path, app, ships, desk=False, chip=False):
         _e, tab, title = app.split(" ", 2)
         ws.open_in_editor(shelf_cart(ws, title))
         ws.editor_app.set_tab(tab)
+    elif app == "log":
+        _log_ring(60)                       # the System log, its ring screens of records
+        ws.open_settings()
+        ws.settings_layer.open_page("log")
     elif app in ("settings", "licences", "achievements"):
         ws.open_settings()
         if app != "settings":
@@ -190,9 +206,9 @@ class Pair:
     """The session on both consoles, frame by frame; the first's buffers
     presented in turn, `bufs` of them."""
 
-    def __init__(self, tmp_path, app, bufs, desk=False, chip=False):
-        self.a = _console(tmp_path, app, True, desk, chip)
-        self.b = _console(tmp_path, app, False, desk, chip)
+    def __init__(self, tmp_path, app, bufs, desk=False, chip=False, big=False):
+        self.a = _console(tmp_path, app, True, desk, chip, big)
+        self.b = _console(tmp_path, app, False, desk, chip, big)
         self.da = host_app.ConsoleDriver(self.a)
         self.db = host_app.ConsoleDriver(self.b)
         self.bufs = bufs
@@ -301,7 +317,7 @@ class Pair:
         return len(moved) / max(1, len(self.kinds))
 
 
-APPS = ("settings", "licences", "achievements", "myart", "getcarts", "files", "storybook",
+APPS = ("settings", "licences", "achievements", "log", "myart", "getcarts", "files", "storybook",
         "appearance", "jukebox")
 
 
@@ -326,6 +342,21 @@ def test_drags_flings_and_key_steps_shift_byte_for_byte(tmp_path, app, bufs, req
     p.settle()
     assert p.share() > 0.5, "%s shifted or drew rows on %.2f of its painted frames: %r" % (
         app, p.share(), p.kinds)
+
+
+@pytest.mark.parametrize("bufs", (1, 2))
+@pytest.mark.parametrize("big, n", ((False, 20), (True, 12)))
+def test_a_log_that_opens_at_its_foot_moves_from_the_scroll_it_drew(tmp_path, bufs, big, n):
+    """The System log's view follows its foot, so its first frame lands its
+    scroll there before it draws: the next frame's move starts from that
+    scroll, not from the top the page opened at. A ring a few rows past the
+    view (a move shorter than the view, which a shift would take)."""
+    p = Pair(tmp_path, "settings", bufs, big=big)
+    _log_ring(n)
+    p.a.settings_layer.open_page("log")
+    p.b.settings_layer.open_page("log")
+    for _ in range(5):
+        p.frame()
 
 
 def _settings_session(p):
@@ -394,11 +425,12 @@ def _console_session(p):
 @pytest.mark.parametrize("desk", (False, True))
 @pytest.mark.parametrize("bufs", (1, 2, 3))
 def test_the_text_console_draws_its_prompt_alone(tmp_path, bufs, desk):
-    """The text console under the FPS chip (`overdrew`), whose log the
-    chip misses: a typed prompt's frames draw its rows alone -- on two and
-    three buffers moving nothing where the buffer the frame paints holds the
-    log (`moy_ui_api_lag`), the frames after a move of it too -- the entered
-    line's move of the log and a drag of it are shift frames (on a desk the
+    """The text console's page under the FPS chip (`overdrew`), whose log
+    the chip misses: a typed prompt's frames draw its rows alone -- on two
+    and three buffers moving nothing where the buffer the frame paints holds
+    the log (`moy_ui_api_lag`), the frames after a move of it too -- the
+    entered line's move of the log (on the frame after Enter, where the
+    page's action has run) and a drag of it are shift frames (on a desk the
     drag's finger lies outside the log, so its frames draw rows), and every
     frame is a whole repaint's bytes. On a desk the run's canvas is its
     window's own (`AppFace.holds`), which holds the log whatever the glass's
@@ -409,8 +441,8 @@ def test_the_text_console_draws_its_prompt_alone(tmp_path, bufs, desk):
         assert p.a.run.player.face.holds(p.a.run.canvas)
     _console_session(p)
     k = p.kinds
-    assert k[:10] + k[12:16] == ["rows"] * 14, k
-    assert k[10] == "shift", k
+    assert k[:11] + k[12:16] == ["rows"] * 15, k
+    assert k[11] == "shift", k
     assert set(k[17:]) == {"rows" if desk else "shift"}, k
 
 

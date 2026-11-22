@@ -1767,7 +1767,7 @@ def surfaces():
         teardown="ws.cards_layer.prompt and ws.cards_layer._close_prompt()"))
     s.append(Surface("Pause card", [("_ib_desk()", 1.0), ("@run Star Catcher", 4.0),
                                     ("ws.pause.show()\nws.mark_dirty()", 1.5)],
-                     "ws.pause.sel", inputs=("key_steps", "key_20"),
+                     "ws.pause.focused()", inputs=("key_steps", "key_20"),
                      teardown="ws.pause.open and ws.pause.close()\nws.spine.exit()"))
     s.append(Surface("Music steps", _ed(SCRATCH, "music", "sound"), axis="h",
                      keys=("right", "left"), rect=LEFT_PANE,
@@ -1791,8 +1791,9 @@ def surfaces():
                      rect=(0.4, 0.2, 0.55, 0.6), teardown=_NOTES_OUT + "\nws.spine.exit()"))
     s.append(Surface("Text console", [("_ib_desk()", 1.0),
                                       ("ws.run_script('docs', ws._ib_script)", 4.0)],
-                     "ws.script_console.top", inputs=("fling", "drag", "type", "type_fast",
-                                                       "ball_slow"),
+                     "(lambda c, r: __import__('ui_draw').text_at(c._host, 'log', r[0] + 8, r[1] + 8)[0])"
+                     "(ws.script_console, ws.script_console._surface.content_rect())",
+                     inputs=("fling", "drag", "type", "type_fast", "ball_slow"),
                      teardown="ws.spine.exit()"))
     return s
 

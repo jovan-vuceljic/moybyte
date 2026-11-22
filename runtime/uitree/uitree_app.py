@@ -392,6 +392,7 @@ class App(AppLayer):
 
     def __init__(self, ctx, names=None):
         self._surf, self._theme, self._damage = ctx.surface, ctx.theme, ctx.damage
+        self.ctx = ctx
         build = self.BUILD[0]
         eng = self.ENGINE[0] if self.ENGINE else _engine_class(False)
         if eng.__module__.rpartition(".")[2] == "uitree_editor":     # the Editor's kinds (runtime.uitree_editor on the host)
@@ -429,6 +430,14 @@ class App(AppLayer):
 
     def handle_pointer(self, px, py, click):
         return self.engine.point(px, py, click)
+
+    def page_host(self):
+        return self.engine._ui
+
+    def moved(self):
+        """The page owes a frame (its band drawn before its focus landed): a
+        window behind draws it again too."""
+        return self.engine.owes
 
     def has_page(self):
         return bool(self.engine.has_page())

@@ -113,6 +113,20 @@ def _roles_named(cls_node, seen=None):
     return found
 
 
+def _used(mod_name, cls_name):
+    """The roles the class reaches, with those of `uitree_app.App` for an app
+    whose screen is a `uitree` page (the class `app_layer` made, or its
+    subclass)."""
+    mod = __import__("runtime." + mod_name, None, None, (cls_name,))
+    from runtime import uitree_app
+    if issubclass(getattr(mod, cls_name), uitree_app.App):
+        tree = ast.parse(runtime_file(mod_name + ".py").read_text(encoding="utf-8"))
+        own = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == cls_name]
+        used = _roles_named(own[0]) if own else set()
+        return used | _roles_named(_class_node("uitree_app", "App"))
+    return _roles_named(_class_node(mod_name, cls_name))
+
+
 def _declared(mod_name, cls_name):
     mod = __import__("runtime." + mod_name, None, None, (cls_name,))
     return tuple(getattr(getattr(mod, cls_name), "NEEDS", ()))
@@ -134,7 +148,7 @@ def test_an_app_touches_only_what_it_declares(mod, cls):
     """The forward direction. An undeclared role is an AttributeError the moment
     that line runs -- which may be a code path no test drives -- so this catches
     it statically, on every line of the class."""
-    used = _roles_named(_class_node(mod, cls))
+    used = _used(mod, cls)
     undeclared = used - set(_declared(mod, cls))
     assert not undeclared, "%s reaches undeclared role(s) %s" % (
         cls, sorted(undeclared))
@@ -146,7 +160,7 @@ def test_an_app_declares_nothing_it_does_not_use(mod, cls):
     a capability granted for nothing. Phase 7 keys `make_system_api` on exactly
     these tuples, so a stale entry becomes a real over-privilege."""
     declared = set(_declared(mod, cls))
-    unused = declared - _roles_named(_class_node(mod, cls))
+    unused = declared - _used(mod, cls)
     assert not unused, "%s declares unused role(s) %s" % (cls, sorted(unused))
 
 
@@ -155,8 +169,9 @@ def test_an_app_declares_nothing_it_does_not_use(mod, cls):
 def test_the_context_carries_only_the_declared_roles(tmp_path):
     ws = _ws(tmp_path)
     for _mod, cls in APP_TARGETS:
+        kind = getattr(__import__("runtime." + _mod, None, None, (cls,)), cls)
         app = next(a for a in list(ws.app_layers) + [ws.settings_layer]
-                   if type(a).__name__ == cls)
+                   if type(a) is kind)
         ctx = app.ctx
         declared = set(_declared(_mod, cls))
         for role in _ac.ROLES:

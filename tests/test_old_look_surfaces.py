@@ -282,8 +282,7 @@ def test_the_text_console_marks_the_answer_and_says_when_the_script_ended(tmp_pa
     con.start("first")
     con.write("Hello\n")
     con.ask("Name? ")
-    con.ed.set_text("Ada")
-    con.submit()
+    con.submit("Ada")
     assert con.text().splitlines()[-1] == "Name? Ada"      # read without its mark
     raw = con._buf[(con._start + con.count() - 1) % con._cap]
     assert raw == "Name? " + text_console._ANSWER + "Ada"
@@ -302,7 +301,7 @@ def test_the_dialog_caps_say_real_tdeck_keys():
     from tools.board_config import runtime_file
     for name in ("cards_layer.py", "block_editor_ui.py", "popover.py", "text_console.py",
                  "web_console_ui.py", "code_layer.py", "console_notices.py",
-                 "shell_cards.py"):
+                 "shell_cards.py", "pause_ui.py", "confirm_ui.py", "sysmenu_ui.py"):
         src = runtime_file(name).read_text()
         for word in ('"Tab"', '"Esc"', '"Ctrl', '"Mic"', '"K"'):
             assert word not in src, "%s spells %s: name the action" % (name, word)

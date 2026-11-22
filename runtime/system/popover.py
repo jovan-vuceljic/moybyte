@@ -56,7 +56,7 @@ def _fit(ws, comp):
     with it, so it asks for that frame)."""
     m = ws.sysmenu
     w, h = comp.size()
-    h = min(h + (2 if _desk() else 2 * ws.layout.fs), ws.popover_room())
+    h = min(h + _ui_draw.modal_drop(ws.sys_canvas), ws.popover_room())
     if m.comp is comp and m.size[1] != h:
         m.size = (m.size[0], h)
         ws.request_frame()

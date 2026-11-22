@@ -70,7 +70,7 @@ enum {
     MOY_ROW_UITREE_NEXT, MOY_ROW_UITREE_SET_INT, MOY_ROW_UITREE_SET_TEXT,
     MOY_ROW_UITREE_SET_ABSENT, MOY_ROW_UITREE_SET_MODEL, MOY_ROW_UITREE_GET_INT,
     MOY_ROW_UITREE_GET_TEXT, MOY_ROW_UITREE_GET_CELL, MOY_ROW_UITREE_ERROR,
-    MOY_ROW_UITREE_DUMP, MOY_ROW_N,
+    MOY_ROW_UITREE_DUMP, MOY_ROW_UITREE_ACTION_CHARS, MOY_ROW_UITREE_ARG, MOY_ROW_N,
 };
 #define MOY_ROW_NAMES { \
     "damage.all", "damage.again", "surface.canvas", "surface.size", "surface.font_scale", \
@@ -107,7 +107,7 @@ enum {
     "uitree.node_action", "uitree.build_end", "uitree.open", "uitree.focus", \
     "uitree.frame", "uitree.next", "uitree.set_int", "uitree.set_text", \
     "uitree.set_absent", "uitree.set_model", "uitree.get_int", "uitree.get_text", \
-    "uitree.get_cell", "uitree.error", "uitree.dump", \
+    "uitree.get_cell", "uitree.error", "uitree.dump", "uitree.action_chars", "uitree.arg", \
 }
 
 // The role table, row for row: what the ROLE door names by index.
@@ -175,9 +175,9 @@ enum {
     MOY_T_UITREE_BUILD_END, MOY_T_UITREE_OPEN, MOY_T_UITREE_FOCUS, MOY_T_UITREE_FRAME,
     MOY_T_UITREE_NEXT, MOY_T_UITREE_SET_INT, MOY_T_UITREE_SET_TEXT, MOY_T_UITREE_SET_ABSENT,
     MOY_T_UITREE_SET_MODEL, MOY_T_UITREE_GET_INT, MOY_T_UITREE_GET_TEXT, MOY_T_UITREE_GET_CELL,
-    MOY_T_UITREE_ERROR, MOY_T_UITREE_DUMP,
+    MOY_T_UITREE_ERROR, MOY_T_UITREE_DUMP, MOY_T_UITREE_ACTION_CHARS, MOY_T_UITREE_ARG,
 };
-#define MOY_APP_TABLE_N 247u
+#define MOY_APP_TABLE_N 249u
 // Each row's "role.verb", its role and its C row (-1: the Python console
 // serves it).
 #define MOY_APP_TABLE_ROWS { \
@@ -428,6 +428,8 @@ enum {
     { "uitree.get_cell", MOY_ROLE_UITREE, MOY_ROW_UITREE_GET_CELL }, \
     { "uitree.error", MOY_ROLE_UITREE, MOY_ROW_UITREE_ERROR }, \
     { "uitree.dump", MOY_ROLE_UITREE, MOY_ROW_UITREE_DUMP }, \
+    { "uitree.action_chars", MOY_ROLE_UITREE, MOY_ROW_UITREE_ACTION_CHARS }, \
+    { "uitree.arg", MOY_ROLE_UITREE, MOY_ROW_UITREE_ARG }, \
 }
 
 // The C rows the ROLE door serves (moy_app.c's door_c), each X(row, its

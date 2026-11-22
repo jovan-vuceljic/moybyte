@@ -28,6 +28,10 @@ PORTED = (
     "log_ui",
     "web_console_ui",
     "about_ui",
+    "confirm_ui",
+    "pause_ui",
+    "sysmenu_ui",
+    "uitree_popover_at",
     "tasks_ui",
     "achievements_ui",
     "wifi_ui",
@@ -48,6 +52,9 @@ PORTED = (
     "uitree_text_editor",
     "uitree_grid",
     "uitree_model_row",
+    "calc_app",
+    "terminal_app",
+    "text_console",
 )
 
 

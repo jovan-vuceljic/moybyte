@@ -191,7 +191,7 @@ def test_the_fifth_run_is_refused_naming_the_oldest(tmp_path):
     open_cart(ws, "Pin Light")
     assert ws.cart["title"] == "Letter Blitz" and len(ws.procs.list) == 3
     assert ws.confirm.open and ws.confirm.title == "Close Star Catcher?"
-    assert ws.confirm.buttons == ("Cancel", "Close")
+    assert ws.confirm.verb == "close"
     # Close closes it and opens the one refused
     act = ws.confirm._act
     ws.confirm.cancel()

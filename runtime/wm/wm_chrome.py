@@ -553,9 +553,9 @@ class WindowChrome:
             if base is None:
                 base = win.kind.upper()
         app = ws.app(win.kind)
-        host = getattr(app, "_ui", None) if getattr(app, "UI", False) else None
-        if host is not None:
-            lent = _ui_draw.bar_lent(host.ctx)
+        ctx = app.lent_ctx() if getattr(app, "UI", False) else None
+        if ctx is not None:
+            lent = _ui_draw.bar_lent(ctx)
             if lent is not None and lent[0] and lent[0] != base:
                 return base + _title_sep() + lent[0]   # the document it lent ("Paint · Garden")
         doc = self._theme_doc(win)

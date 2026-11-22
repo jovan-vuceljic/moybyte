@@ -675,7 +675,7 @@ def test_a_popover_and_the_menu_scrim_over_a_glide(tmp_path, bufs, widget):
 # pass drew (`all` is spent with the frame, so it paints nothing it means
 # to; `again` owes a whole frame where the engine owes a frame of rows).
 VERBS_APPS = ("files_app", "getcarts_app", "storybook_app", "appearance_app",
-              "myart_app", "calc_app")
+              "myart_app")
 
 
 def test_no_verbs_app_marks_its_page_after_the_pass():

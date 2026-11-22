@@ -509,6 +509,7 @@ int uit_model(uit_t *e, int slot, const char *names, size_t nlen, const uint8_t 
             return UIT_E_NOMEM;
         S->mf->fname[f] = (uint16_t)o;
         S->mf->ftype[f] = types[f];
+        S->mf->fvals[f] = 0;     // an enum's values (`uit_field_enum`); a blob writes it whatever the type
         S->mf->fnvals[f] = 0;
         at += n + 1;
     }
@@ -612,6 +613,10 @@ int uit_action(uit_t *e, const char *name, const char *label, const char *hint, 
     if (ic < 0)
         return UIT_E_NOMEM;
     A.icon = (uint16_t)ic;
+    int cs = pool_puts(e, "");
+    if (cs < 0)
+        return UIT_E_NOMEM;
+    A.chars = (uint16_t)cs;
     A.letter = (uint8_t)(letters ? letters[0] : 0);
     A.row = -1;
     e->acts[e->nacts] = A;
@@ -623,6 +628,17 @@ int uit_action_row(uit_t *e, int a, int slot)
     if (a < 0 || a >= e->nacts || slot < 0 || slot >= e->nslots || e->slots[slot].type != UIT_ROWOF)
         return uit_fail(e, UIT_E_ARG, UIT_MSG("action %d row=%d: no row_of", "%d %d"), a, slot);
     e->acts[a].row = (int16_t)slot;
+    return 0;
+}
+
+int uit_action_chars(uit_t *e, int a, const char *chars)
+{
+    if (a < 0 || a >= e->nacts)
+        return uit_fail(e, UIT_E_ARG, UIT_MSG("action %d chars=: no action", "%d"), a);
+    int c = pool_puts(e, chars);
+    if (c < 0)
+        return UIT_E_NOMEM;
+    e->acts[a].chars = (uint16_t)c;
     return 0;
 }
 
@@ -1061,6 +1077,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         // a caption drawn where its value changes from the row before: over the rows
         model = N->slot;
         tslot = &N->t_main;
+    } else if (kind == UIT_POPOVER && !strcmp(name, "at")) {
+        // the rect it hangs from, "X Y W H" on the host's surface (`draw_popover`)
+        int t = uit_tmpl_compile(e, src, model);
+        if (t < 0)
+            return t;
+        return add_prop(e, node, name, src, repr, PK_TMPL, t);
     } else if ((kind == UIT_EMPTY || kind == UIT_NOTE) && !strcmp(name, "lines")) {
         // one prop a line, each a template, drawn in order (an empty one left out)
         int t = uit_tmpl_compile(e, src, model);
@@ -1282,6 +1304,10 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->lit |= TL_LEND;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
+    if (!strcmp(name, "arg") && (kind == UIT_BUTTON || kind == UIT_LINK)) {
+        // what the site hands its action (takes="arg"): a literal text, or an int (its repr its text)
+        return add_prop(e, node, name, src, repr, PK_LIT, repr != NULL && !strcmp(repr, src));
+    }
     if (!strcmp(name, "alone") && kind == UIT_BUTTON) {
         if (!strcmp(src, "True"))
             N->btn |= BT_ALONE;
@@ -1495,6 +1521,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     }
     if (!strcmp(name, "buttons") && kind == UIT_DIALOG)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    if (!strcmp(name, "kind") && kind == UIT_DIALOG) {
+        // its verb (the last button) in the danger look; 0 the primary
+        N->lit = (uint8_t)!strcmp(src, "danger");
+        return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
+    }
     return uit_fail(e, UIT_E_KIND, UIT_MSG("%s=: a prop this engine does not draw on this kind (%d)", "%s= %d"), name, kind);
 }
 
@@ -1632,6 +1663,8 @@ static void mark_rest(const uit_t *e, int k, uint8_t *m)
         mark_tree(e, k, m, 0, 1);
         return;
     }
+    if (e->nodes[k].kind == UIT_TEXT_VIEW)
+        return;                         // a lines view is a region: its rows are its own record's
     mark_node(e, k, m, 0, 0);
     for (int g = e->nodes[k].kid; g != (int)UIT_NONE; g = e->nodes[g].next)
         if (e->nodes[k].kind != UIT_SPLIT || e->nodes[g].kind != UIT_GROUP)
@@ -1640,7 +1673,7 @@ static void mark_rest(const uit_t *e, int k, uint8_t *m)
 
 static void mark_cells(const uit_t *e, int k, uint8_t *m)
 {
-    if (e->nodes[k].kind == UIT_CARDS) {
+    if (e->nodes[k].kind == UIT_CARDS || e->nodes[k].kind == UIT_TEXT_VIEW) {
         mark_tree(e, k, m, 0, 0);
         return;
     }
@@ -1665,7 +1698,8 @@ int32_t uit_cell_gen(uit_t *e, int k)
 }
 
 // What the page's gen counts (`_cell_gens`, `_gen_safe`): every state but those only a cards
-// list's rows or a split's group read (each region carries a gen of its own, `uit_cell_gen`) and
+// list's rows, a split's group or a lines view read (each region carries a gen of its own,
+// `uit_cell_gen`; a lines view's rows are its view record's, moy_ui_api_text_view) and
 // those only a list's
 // cur= names (focus, which the toolkit draws); and whether it may carry one: no text of the build
 // names an engine value, and no canvas draws what no state says.

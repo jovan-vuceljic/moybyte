@@ -35,6 +35,7 @@ typedef struct {
     int act;                    // its index; -1: the bar's back pops the page
     int32_t ev[5];              // its model slot, row, and a pointer's kind, x, y
     uint32_t src;               // where it came from, in `qtext`
+    int32_t arg;                // what it hands its handler (a node's arg=, a typed key), in `qtext`; -1 none
 } owed_t;
 
 // What a run's app keeps beside its store.
@@ -45,6 +46,7 @@ typedef struct {
     int err;                    // the run's first refusal (0 none), latched
     char errline[320];
     int handler;                // the action whose handler runs (handed out by next), -1 none
+    int32_t arg;                // ...what it was handed, in `qtext` (`uitree_arg`); -1 none
     int opened;                 // the visit is open: a write is traced from here on
     int hook_open;              // the `opened` hook, owed to the next `next` (-1 none)
     uint32_t frames;
@@ -361,6 +363,16 @@ int32_t moy_uitree_wasm_action_row(void *x, int32_t act, int32_t slot) {
     return check(a, uit_action_row(a->e, (int)act, (int)slot), "action_row", where);
 }
 
+int32_t moy_uitree_wasm_action_chars(void *x, int32_t act, const uint8_t *chars, uint32_t chars_n) {
+    (void)x;
+    APP(a);
+    char where[24];
+    snprintf(where, sizeof where, "action %d", (int)act);
+    TEXTS_BEGIN(a);
+    int c = put(a, chars, chars_n);
+    return check(a, uit_action_chars(a->e, (int)act, at(a, c)), "action_chars", where);
+}
+
 // -- build ---------------------------------------------------------------------
 
 int32_t moy_uitree_wasm_build(void *x, const uint8_t *page, uint32_t page_n) {
@@ -503,12 +515,12 @@ int32_t moy_uitree_wasm_focus(void *x, const uint8_t *key, uint32_t key_n) {
 
 // An action owed to the app from `src`; a non-placed one names the page it
 // is on, as the layers' queue does (" on 'TITLE'", not for a dialog's).
-static void owe(app_t *a, int act, int m, int row, const int32_t *pev, const char *src, int placed) {
+static owed_t *owe(app_t *a, int act, int m, int row, const int32_t *pev, const char *src, int placed) {
     if (a->qn >= a->qcap) {
         int c = a->qcap ? a->qcap * 2 : 8;
         owed_t *q = UIT_REALLOC(a->q, (size_t)c * sizeof *q);
         if (q == NULL) {
-            return;
+            return NULL;
         }
         a->q = q;
         a->qcap = c;
@@ -517,7 +529,7 @@ static void owe(app_t *a, int act, int m, int row, const int32_t *pev, const cha
     int w = placed || strstr(src, " dialog ") != NULL || strncmp(src, "the ", 4) == 0
                 ? uit_buf_puts(&a->qtext, src) : uit_buf_printf(&a->qtext, "%s on '%s'", src, a->title);
     if (w < 0 || uit_buf_put(&a->qtext, "", 0) < 0) {
-        return;
+        return NULL;
     }
     owed_t *o = &a->q[a->qn++];
     o->act = act;
@@ -527,6 +539,16 @@ static void owe(app_t *a, int act, int m, int row, const int32_t *pev, const cha
     o->ev[3] = pev ? pev[1] : 0;
     o->ev[4] = pev ? pev[2] : 0;
     o->src = (uint32_t)off;
+    o->arg = -1;
+    return o;
+}
+
+// What owed action `o` hands its handler: `n` bytes of `p`.
+static void owe_arg(app_t *a, owed_t *o, const char *p, size_t n) {
+    int off = (int)a->qtext.n;
+    if (o != NULL && uit_buf_put(&a->qtext, p, n) >= 0 && uit_buf_put(&a->qtext, "", 1) >= 0) {
+        o->arg = off;
+    }
 }
 
 static int with_flag(const app_t *a, int flag) {
@@ -582,15 +604,17 @@ static void pointers(app_t *a, const int32_t *snap) {
     }
 }
 
-// The keys before the page: a letter an action declares, where the engine
-// gives it to that action (not into a focused field), and the confirm role's
-// key (A, Enter) where nothing is focused and no dialog shows.
+// The keys before the page: a typed key an action's chars= holds or a letter
+// it declares, where the engine gives it to that action (not into a focused
+// field), the key handed to it; and the confirm role's key (A, Enter) where
+// nothing is focused and no dialog shows.
 static void keys(app_t *a, const int32_t *snap) {
     char src[16];
     int k = snap[MOYCORE_UI_SNAP_KEY], act;
-    if (k >= 'a' && k <= 'z' && (act = uit_letter(a->e, k)) >= 0) {
-        snprintf(src, sizeof src, "key '%c'", k);
-        owe(a, act, -1, -1, NULL, src, 1);
+    if (k > 0 && k < 0x80 && (act = uit_letter(a->e, k)) >= 0) {
+        char ch = (char)k;
+        snprintf(src, sizeof src, k >= ' ' && k < 0x7f ? "key '%c'" : "key '\\x%02x'", k);     // as Python's repr
+        owe_arg(a, owe(a, act, -1, -1, NULL, src, 1), &ch, 1);
     }
     act = with_flag(a, UIT_A_ROLE_CONFIRM);
     if (act >= 0 && (((snap[MOYCORE_UI_SNAP_BTNP] >> 4) & 1) || k == 13) && uit_unfocused(a->e) &&
@@ -713,11 +737,15 @@ int32_t moy_uitree_wasm_frame(void *x, int32_t flags) {
     int k;
     while ((k = uit_next(a->e, w, src, sizeof src)) != UIT_EV_NONE) {
         if (k == UIT_EV_ACTION) {
-            char *cut = strchr(src, '\x02');
+            char *cut = strchr(src, '\x02'), *arg = NULL;
             if (cut != NULL) {
                 *cut = 0;
+                arg = strpbrk(cut + 1, "\x03\x04");     // the node's arg=, a text or an int's digits
             }
-            owe(a, w[0], w[1], w[2], NULL, src, 1);
+            owed_t *o = owe(a, w[0], w[1], w[2], NULL, src, 1);
+            if (arg != NULL) {
+                owe_arg(a, o, arg + 1, strlen(arg + 1));
+            }
         }                           // a control's write: the slot holds it
     }
     if (snap != NULL) {
@@ -733,6 +761,7 @@ int32_t moy_uitree_wasm_next(void *x, uint8_t *ev, uint32_t ev_cap) {
         return refuse(a, UIT_E_ARG, "next", "ev", "ev holds two words (8 bytes): the model slot and the row");
     }
     a->handler = -1;
+    a->arg = -1;
     if (a->hook_open >= 0) {
         a->handler = a->hook_open;
         a->hook_open = -1;
@@ -760,6 +789,7 @@ int32_t moy_uitree_wasm_next(void *x, uint8_t *ev, uint32_t ev_cap) {
         }
         trace(a, "action", name, "from %s", src);
         a->handler = o->act;
+        a->arg = o->arg;
         memcpy(ev, o->ev, ev_cap < sizeof o->ev ? 8u : sizeof o->ev);   // the app's buffer need not be aligned
         return o->act;
     }
@@ -1015,6 +1045,16 @@ int32_t moy_uitree_wasm_error(void *x, uint8_t *out, uint32_t out_cap) {
         return 0;
     }
     return copy_out(a->errline, strlen(a->errline), out, out_cap);
+}
+
+int32_t moy_uitree_wasm_arg(void *x, uint8_t *out, uint32_t out_cap) {
+    (void)x;
+    APP(a);
+    if (a->handler < 0 || a->arg < 0) {
+        return 0;
+    }
+    const char *p = a->qtext.p + a->arg;
+    return copy_out(p, strlen(p), out, out_cap);
 }
 
 int32_t moy_uitree_wasm_dump(void *x, uint8_t *out, uint32_t out_cap) {

@@ -47,10 +47,13 @@ int uit_can(uit_t *e, int a, int row)
 
 int uit_letter(uit_t *e, int ch)
 {
-    if (ch >= 'A' && ch <= 'Z')
-        ch += 32;
     if (ch <= 0 || ch > 127 || uit_dialog(e) >= 0)
         return -1;
+    for (int a = 0; a < e->nacts; a++)
+        if (strchr(uit_str(e, e->acts[a].chars), ch) && uit_act_can(e, a, -1, -1))
+            return a;
+    if (ch >= 'A' && ch <= 'Z')
+        ch += 32;
     for (int a = 0; a < e->nacts; a++)
         if (strchr(uit_str(e, e->acts[a].letters), ch) && uit_act_can(e, a, -1, -1))
             return a;
@@ -297,6 +300,9 @@ static void fire(uit_t *e, int a, int k, int model, int row, const char *how)
     uint32_t n, at = uit_tmpl_render(e, NODE(0)->t_main, -1, -1, &n);
     uit_buf_repr(&b, e->scratch.p + at, n);
     uit_buf_printf(&b, "\x02%s", id);           // the node that fired it (ui.push's opener)
+    for (int p = NODE(k)->props; p != (int)UIT_NONE; p = e->props[p].next)
+        if (e->props[p].kind == PK_LIT && !strcmp(uit_str(e, e->props[p].name), "arg"))
+            uit_buf_printf(&b, "%c%s", e->props[p].idx ? 4 : 3, uit_str(e, e->props[p].src));
     uit_event(e, UIT_EV_ACTION, a, model, row, b.p, b.n);
     uit_buf_free(&b);
 }
@@ -733,10 +739,11 @@ static int drawn_id(uit_t *e, int k, const char *rowkey, size_t rn, const char *
 
 static int drawn_key(uit_t *e, const char *key, char out[UIT_ID_MAX + 1])
 {
+    // a key with a slash: a node's (a button's arg=, "NAME/ARG"), else a row's and its node's
     const char *slash = strrchr(key, '/');
-    if (!slash)
-        return drawn_id(e, 0, "", 0, key, out);
-    return drawn_id(e, 0, key, (size_t)(slash - key), slash + 1, out);
+    if (drawn_id(e, 0, "", 0, key, out))
+        return 1;
+    return slash && drawn_id(e, 0, key, (size_t)(slash - key), slash + 1, out);
 }
 
 // The key of the first node a fresh page's first frame draws whose focus= holds.
@@ -1513,12 +1520,39 @@ static void draw_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         }
         e->scratch.n = mark;
     }
+    for (int p = N->props; p != (int)UIT_NONE; p = e->props[p].next) {
+        // at=: hung from the rect its host hands in, "X Y W H" (none while it renders empty)
+        const uit_prop_t *P = &e->props[p];
+        if (P->kind != PK_TMPL || strcmp(uit_str(e, P->name), "at"))
+            continue;
+        uint32_t n, mark = e->scratch.n, a = uit_tmpl_render(e, P->idx, model, row, &n);
+        char t[64];
+        size_t m = n < sizeof t - 1 ? n : sizeof t - 1;
+        memcpy(t, e->scratch.p + a, m);
+        t[m] = 0;
+        e->scratch.n = mark;
+        long r[4];
+        char *q = t;
+        int got = 0;
+        for (char *end; got < 4; got++, q = end) {
+            r[got] = strtol(q, &end, 10);
+            if (end == q)
+                break;
+        }
+        if (got == 4)
+            moy_ui_api_at(c, (int32_t)r[0], (int32_t)r[1], (int32_t)r[2], (int32_t)r[3]);
+    }
     moy_ui_over_t o;
     if (!moy_ui_api_popover(c, s, span_of(key, strlen(key)), w, pop_over(N, &o)) && N->on >= 0)
         fire(e, N->on, k, -1, -1, NULL);
     e->in_pop = 1;
     walk(e, c, s, k, model, row);
     e->in_pop = 0;
+    if (e->pop_hints_n) {
+        // the bare page's band: the toolkit draws it in the card, under a rule
+        moy_ui_api_hints(c, s, e->pop_hints, e->pop_hints_n, NULL);
+        e->pop_hints_n = 0;
+    }
     moy_ui_api_popover(c, s, span_of("", 0), 0, NULL);
 }
 
@@ -1626,6 +1660,14 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
                 e->draw_fn(e->draw_ud, g, cell[0], cell[1], cell[2], cell[3]);
             continue;
         }
+        if (NODE(g)->kind == UIT_GRID) {    // a grid's room is its cell
+            int32_t was[4];
+            memcpy(was, e->rect, sizeof was);
+            memcpy(e->rect, cell, sizeof cell);
+            draw(e, c, s, g, model, row);
+            memcpy(e->rect, was, sizeof was);
+            continue;
+        }
         if (NODE(g)->kind != UIT_GROUP) {
             draw(e, c, s, g, model, row);
             continue;
@@ -1654,9 +1696,10 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
     }
 }
 
-// A grid (`_r_grid`): the page's room in by its pad, cut into rows then cols with its gap
-// between; each child takes the next cell (a button's span= cells along its row), drawn placed
-// there where it is shown: a hidden one leaves its cells empty, so no key moves.
+// A grid (`_r_grid`): its room (the page's, or its cell of a split) in by its pad, cut into rows
+// then cols with its gap between; each child takes the next cell (a button's span= cells along
+// its row), drawn placed there where it is shown: a hidden one leaves its cells empty, so no key
+// moves.
 static void draw_grid(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     const uit_node_t *N = NODE(k);
@@ -2533,7 +2576,9 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
             uit_buf_printf(&b, "%s", l);
         }
         // the labels joined by NULs: b.n counts them (uit_buf_printf of "%c", 0 adds one byte)
-        int pick = moy_ui_api_dialog(c, s, sspan(e, a1, n1), (const uint8_t *)(b.p ? b.p : ""), b.n, 1, NULL);
+        // the verb's kind, the toolkit's: primary (1), or with kind="danger" danger (3)
+        int pick = moy_ui_api_dialog(c, s, sspan(e, a1, n1), (const uint8_t *)(b.p ? b.p : ""), b.n,
+                                     N->lit ? 3 : 1, NULL);
         uit_buf_free(&b);
         walk(e, c, s, k, model, row);
         moy_ui_api_dialog(c, s, span_of("", 0), (const uint8_t *)"", 0, 0, NULL);
@@ -4339,6 +4384,28 @@ static void placed_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
         }
         e->scratch.n = mark;
     }
+    for (int p = N->props; p != (int)UIT_NONE; p = e->props[p].next) {
+        // at=: hung from the rect its host hands in, "X Y W H" (none while it renders empty)
+        const uit_prop_t *P = &e->props[p];
+        if (P->kind != PK_TMPL || strcmp(uit_str(e, P->name), "at"))
+            continue;
+        uint32_t n, mark = e->scratch.n, a = uit_tmpl_render(e, P->idx, -1, -1, &n);
+        char t[64];
+        size_t m = n < sizeof t - 1 ? n : sizeof t - 1;
+        memcpy(t, e->scratch.p + a, m);
+        t[m] = 0;
+        e->scratch.n = mark;
+        long r[4];
+        char *q = t;
+        int got = 0;
+        for (char *end; got < 4; got++, q = end) {
+            r[got] = strtol(q, &end, 10);
+            if (end == q)
+                break;
+        }
+        if (got == 4)
+            moy_ui_api_at(c, (int32_t)r[0], (int32_t)r[1], (int32_t)r[2], (int32_t)r[3]);
+    }
     moy_ui_over_t o;
     if (!moy_ui_api_popover(c, s, span_of(key, strlen(key)), w, pop_over(N, &o)) && N->on >= 0)
         fire(e, N->on, k, -1, -1, NULL);
@@ -4641,7 +4708,14 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         KIDS(0, k)
         if ((NODE(k)->kind == UIT_SPLIT || NODE(k)->kind == UIT_GRID) && uit_shown(e, k, -1, -1))
             placed = 1;
-        if (!placed) {
+        int card = 0;           // a bare page's shown popover is the page: the band in its body
+        if (flags & UIT_F_BARE)
+            KIDS(0, k)
+            if (NODE(k)->kind == UIT_POPOVER && uit_shown(e, k, -1, -1))
+                card = 1;
+        if (card) {
+            e->pop_hints = hp, e->pop_hints_n = hn;
+        } else if (!placed) {
             moy_ui_api_hints(c, s, hp, hn, NULL);
         } else if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {
             // a placed page's band: a handheld's its room's last line, the desk's and a foot's
@@ -4684,6 +4758,8 @@ ids:;
         placed_walk(e, c, s);
     else
         walk(e, c, s, 0, -1, -1);
+    moy_ui_api_page_done(c, s);         // the next frame's plan reads what this one drew
+    e->pop_hints_n = 0;         // (its buffer goes with this frame)
     e->tv_stop = e->tv_stop_now;
     // after: what holds focus, and whether the band named another node's verbs
     int had = e->has_focused;

@@ -47,6 +47,7 @@ enum {
     STOP_PIC = 8192,        // the app draws a picture in it (a card, a part)
     STOP_GEN = 16384,       // ...whose gen it gave
     STOP_GRID = 32768,      // a card of a grid
+    STOP_QUIET = 65536,     // mua_stop's: a press or a hover draws no mark on it (its quiet)
 };
 
 // A rect by its edges: the floor's (moy_ui_api.c's floor section).

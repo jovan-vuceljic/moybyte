@@ -478,6 +478,12 @@ static int stop_at(const moy_ui_stop_t *v, int n, int x, int y) {
     return -1;
 }
 
+// The stop at x, y a press or a hover marks, else -1.
+static int mark_at(const moy_ui_stop_t *v, int n, int x, int y) {
+    int i = stop_at(v, n, x, y);
+    return i >= 0 && !v[i].quiet ? i : -1;
+}
+
 int mua_page_at(const moy_ui_stop_t *v, int n, int x, int y) {
     for (int i = n - 1; i >= 0; i--) {
         if ((v[i].flags & STOP_PAGE) && mua_inside(v[i].b, x, y)) {
@@ -828,8 +834,10 @@ static void shift_plan(moy_ui_ctx_t *c, int owed, int over, int flags) {
     // A press that went down on no stop and rests over none (`hover_off`:
     // a finger on a text view's rows, placing its caret) marks nothing
     // while held or let go: the rows the input changes are the floor's.
+    // Enter in a field activates it, and its row is the floor's (typed_box).
     int bare = c->hover_off;
-    if (!same || owed || over || c->modal || c->pop.prev.w > 0 || c->pop.gone || c->act
+    int act = c->act && !(c->typed_box.w > 0 && c->act == c->focus);
+    if (!same || owed || over || c->modal || c->pop.prev.w > 0 || c->pop.gone || act
         || c->step_x || c->tab_step || ((p & MOY_UI_P_EDGE) && !bare) || (live && !held && !bare)
         || (held && c->gesture != 2 && !bare) || (p & MOY_UI_P_MIDDLE)) {
         return;
@@ -913,8 +921,8 @@ static void shift_plan(moy_ui_ctx_t *c, int owed, int over, int flags) {
         return;
     }
     if (live && !held && dy
-        && stop_at(v, n, c->in[MOY_UI_IN_X], c->in[MOY_UI_IN_Y] - dy) >= 0) {
-        return;                         // the move slides a stop under the pointer: its hover mark
+        && mark_at(v, n, c->in[MOY_UI_IN_X], c->in[MOY_UI_IN_Y] - dy) >= 0) {
+        return;                         // the move slides a marked stop under the pointer: its hover mark
     }
     const moy_ui_stop_t *ip = NULL;
     int idy = 0;
@@ -925,7 +933,7 @@ static void shift_plan(moy_ui_ctx_t *c, int owed, int over, int flags) {
             return;
         }
         if (live && !held && idy && mua_inside(ip->b, c->in[MOY_UI_IN_X], c->in[MOY_UI_IN_Y])
-            && stop_at(v, n, c->in[MOY_UI_IN_X], c->in[MOY_UI_IN_Y] - idy) >= 0) {
+            && mark_at(v, n, c->in[MOY_UI_IN_X], c->in[MOY_UI_IN_Y] - idy) >= 0) {
             return;                     // the move slides a stop under the pointer
         }
         c->sh.in_id = in->id;
@@ -1510,7 +1518,7 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
         }
         int h = stop_at(v, n, x, y);
         c->press = h >= 0 ? v[h].id : 0;
-        c->press_bare = (uint8_t)(h < 0);
+        c->press_bare = (uint8_t)(mark_at(v, n, x, y) < 0);
         int pg = mua_page_at(v, n, x, y);
         moy_ui_keep_t *pk = pg >= 0 ? mua_keep_of(c, v[pg].id) : NULL;
         if (pk != NULL && (pk->sc.flags & MOY_UI_SCROLL_FLING)) {
@@ -1656,8 +1664,8 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     // a hover over no stop, then or now, draws nothing (a host's rows
     // frame), nor does a press held, or let go, that went down on none
     c->hover_off = (uint8_t)((c->press_bare || (!held && !was_held))
-                             && (!live || stop_at(v, n, x, y) < 0)
-                             && (!was_live || stop_at(v, n, c->last_x, c->last_y) < 0));
+                             && (!live || mark_at(v, n, x, y) < 0)
+                             && (!was_live || mark_at(v, n, c->last_x, c->last_y) < 0));
     if (!held && !was_held) {
         c->press_bare = 0;
     }
@@ -2504,7 +2512,7 @@ int mua_stop(moy_ui_ctx_t *c, uint32_t id, moy_ui_box_t b, int flags, moy_ui_spa
     moy_ui_stop_t *s = &c->cur[c->n_cur++];
     s->id = id;
     s->b = b;
-    s->flags = (uint16_t)(flags | (dlg ? STOP_MODAL : 0) | (c->at_last ? STOP_AT : 0));
+    s->flags = (uint16_t)((flags & 0xFFFF) | (dlg ? STOP_MODAL : 0) | (c->at_last ? STOP_AT : 0));
     s->page = c->page_stop;
     s->part = 0;
     s->row = -1;
@@ -2514,8 +2522,12 @@ int mua_stop(moy_ui_ctx_t *c, uint32_t id, moy_ui_box_t b, int flags, moy_ui_spa
         s->top = INT16_MIN;
     }
     s->st = 0;
+    s->quiet = (flags & STOP_QUIET) != 0;
     s->gen = 0;
-    s->sig = c->inst->audit_on ? mua_hash(name.p, name.n, (uint32_t)s->flags) : 0;
+    // (where its keys stop, STOP_AT_TOP and STOP_AT_END, draws nothing)
+    s->sig = c->inst->audit_on
+                 ? mua_hash(name.p, name.n, (uint32_t)(s->flags & ~(STOP_AT_TOP | STOP_AT_END)))
+                 : 0;
     if (c->modal && !dlg) {
         reach_check(c, c->n_cur - 1);
         floor_check(c, c->n_cur - 1);
@@ -2551,6 +2563,9 @@ int mua_stop(moy_ui_ctx_t *c, uint32_t id, moy_ui_box_t b, int flags, moy_ui_spa
         } else {
             st |= MOY_UI_ST_HOVER;
         }
+    }
+    if (s->quiet) {
+        st &= MOY_UI_ST_FOCUS;
     }
     s->st = (uint8_t)st;
     mua_sig_int(c, st);

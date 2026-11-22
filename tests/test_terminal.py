@@ -779,3 +779,17 @@ def test_wait_reads_a_background_command_s_exit_code(term, tmp_path):
     ws.carts.synced()
     run(app, "exits & wait $!; echo status $?")
     assert "status 5" in plain(app)
+
+
+def test_a_console_with_no_shell_says_so(tmp_path, monkeypatch):
+    """With no C shell (the desktop MicroPython) the Terminal opens on its
+    one line, a page of its own, and draws without a face."""
+    from runtime import terminal_app
+    from runtime.host_app import build_workstation
+    monkeypatch.setattr(terminal_app, "_sh", None)
+    ws = build_workstation(str(tmp_path / "carts"))
+    app = ws.app("terminal")
+    assert ws.spine.open_app(app)
+    ws.frame(1 / 30)
+    assert app.face is None and app._none is not None
+    assert app._none.root is not None

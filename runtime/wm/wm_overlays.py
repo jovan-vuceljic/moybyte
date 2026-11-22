@@ -92,13 +92,9 @@ class WindowOverlays:
 
     def _pop_rect(self):
         """The rect the open popover paints and its close puts back: the
-        menu's card with its shadow's reach (`panel_rect`), or a component's
-        card with the rows its drop reaches below it at the font scale."""
-        ws = self.ws
-        x, y, w, h = ws.menu_ui.panel_rect()
-        if ws.sysmenu.comp is not None:
-            h = min(h + _ui_draw.modal_drop(ws.sys_canvas), ws.sys_canvas.h - y)
-        return (x, y, w, h)
+        menu's card with its shadow's reach, or a component's card, its
+        drop inside it (`panel_rect`)."""
+        return self.ws.menu_ui.panel_rect()
 
     def popover_owed(self):
         """True while a retained buffer is owed the popover's rect."""

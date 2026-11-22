@@ -66,13 +66,16 @@ def _labels(ws):
 
 
 def _row_center(ws, label):
-    """Pointer center of the named selectable row in the open menu's card,
-    as the look's card laid it out (`SystemMenuUI.look_hit`'s boxes)."""
+    """Pointer center of what shows of the named selectable row in the open
+    menu's card, as the engine laid it out (a row the card's cut leaves
+    under its fade shows its top)."""
     for it in ws.sysmenu.items:
         if it[0] == "item" and it[1] == label:
             box = ws.menu_ui._host.box(it[4])
             assert box is not None, "the card has not drawn %r" % label
-            return (box[0] + box[2] // 2, box[1] + box[3] // 2)
+            card = ws.menu_ui.look_card()
+            assert box[1] < card[1] + card[3], "%r lies under the card's cut" % label
+            return (box[0] + box[2] // 2, (box[1] + min(box[1] + box[3], card[1] + card[3])) // 2)
     raise AssertionError("no row %r" % label)
 
 
@@ -219,6 +222,9 @@ def test_sleep_is_offered_where_the_board_has_an_idle_ladder(tmp_path):
     assert ws.sysmenu.items[-2][3] == "sleep"
     blanked = []
     ws.idle_ladder.loop = type("Loop", (), {"power": staticmethod(blanked.append)})
+    ws.sysmenu.sel = len(ws.sysmenu.items) - 2      # the keys on it scroll it into the card
+    drv.frame(1 / 30)
+    drv.frame(1 / 30)
     _tap(drv, *_row_center(ws, "SLEEP"))
     assert not ws.sysmenu.open
     assert blanked == [False]
@@ -465,7 +471,7 @@ def test_about_action_opens_dismissible_modal(tmp_path):
     _tap(drv, *_row_center(ws, "ABOUT"))
     assert ws.about and not ws.sysmenu.open
     drv.frame(1 / 30)
-    card = ws.menu_ui.about.host.box("About")
+    card = ws.menu_ui.about.host.box("about")
     assert card is not None
     _tap(drv, card[0] + card[2] // 2, card[1] + 10)     # inside: it stays
     assert ws.about
@@ -480,7 +486,7 @@ def test_about_action_opens_dismissible_modal(tmp_path):
     ws.menu_ui._menu_about()
     drv.frame(1 / 30)
     drv.frame(1 / 30)                     # the card's first frame lays its body out
-    x, y, w, h = ws.menu_ui.about.host.box("Licences")
+    x, y, w, h = ws.menu_ui.about.host.box("licences")
     _tap(drv, x + w // 2, y + h // 2)
     assert not ws.about
     assert ws.settings_layer.page == "licences"

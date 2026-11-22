@@ -26,8 +26,9 @@
 //   frame(flags)  the frame as the Lua layer's back end runs it: a press on
 //                 a canvas with pointer= owes its action down, each drag and
 //                 up (in the canvas's coordinates, at the rect the last frame
-//                 drew it at; the press holds the canvas), a letter
-//                 key an action declares (uit_letter) and the confirm role's
+//                 drew it at; the press holds the canvas), a typed key an
+//                 action's chars= holds or a letter it declares (uit_letter,
+//                 the key its arg) and the confirm role's
 //                 key (A, Enter, with nothing focused and no dialog) owe
 //                 their actions; the host's bar is lent with no title, its
 //                 way back shown where a dialog or popover shows, a page is
@@ -64,6 +65,13 @@
 //                 next `next` or `frame` is traced as the action's write
 //                 (a model's as the layers trace a set: rows added, gone,
 //                 changed and moved).
+//   action_chars(a, chars)  action `a` is handed each typed key `chars` holds
+//                 (uit_action_chars): `frame` owes it for such a key, as it
+//                 owes a declared letter's action.
+//   arg(out)      what the handler `next` handed out last was handed: the
+//                 arg= of the button or link that fired it (an int's
+//                 digits), or the typed key that owed it; the length 0 where
+//                 it was handed none or no handler runs.
 //   set_text, get_text  a number state's value crosses as text: set_text
 //                 takes a number's digits (strtod's, all of the text), and
 //                 get_text answers them as the trace spells the value.

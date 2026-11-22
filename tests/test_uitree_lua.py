@@ -450,6 +450,40 @@ def test_a_letter_key_and_the_confirm_role_fire_on_the_c_engine(tmp_path):
     assert acts == ["action save from key 's'", "action go from role confirm"], lines
 
 
+def test_a_typed_char_and_a_buttons_arg_reach_their_actions_on_the_c_engine(tmp_path):
+    """An action's chars= is handed the character typed, as typed, and a
+    button's arg= is handed to its action on a press, as uitree_c.py hands
+    them to a Python app."""
+    from runtime import host_app
+    from runtime.host import moy_log
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Chars", 'ui.app("Chars", { icon = "calc" })\n'
+          'local s = ui.state { got = "" }\n'
+          'ui.action("put", "Put", function(c) s.got = s.got .. c end, { takes = "char", chars = "+7C" })\n'
+          'ui.action("key", "Key", function(a) s.got = s.got .. "[" .. tostring(a) .. "]" end, { takes = "arg" })\n'
+          'ui.page("p", function()\n'
+          '  ui.label("{got}")\n'
+          '  ui.button("key", { arg = 5, label = "five" })\n'
+          'end)\n')
+    ws, drv, frame, open_cart = _console(carts)
+    seq = moy_log.next()
+    open_cart(ws, "Chars")
+    for _ in range(4):
+        frame()
+    for ch in "7+C":
+        drv.type_char(ord(ch))
+        frame()
+        frame()
+    drv.press("a")
+    frame()
+    frame()
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    lines = [r[4].split("[trace] ", 1)[1] for r in moy_log.read(seq, 4000) if "[trace] " in r[4]]
+    got = [l.split('-> ')[1].split()[0] for l in lines if l.split()[1:3] == ["state", "got"]]
+    assert got == ['"7"', '"7+"', '"7+C"', '"7+C[5]"'], lines
+
+
 def test_a_cancelled_timer_runs_nothing(tmp_path):
     from runtime import host_app
     from runtime.host import moy_log

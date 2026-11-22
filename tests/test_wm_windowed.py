@@ -19,6 +19,7 @@ presentation's contracts:
 """
 
 import os
+import weakref
 
 import pytest
 import sys
@@ -1137,11 +1138,13 @@ def test_opening_an_open_app_brings_its_window_forward_as_it_was(tmp_path):
     window forward: the windows above it stay open (a goto would have
     returned to it, closing them) and the app keeps what it showed."""
     ws, drv, files, calc = _two_apps(tmp_path)
-    app = ws.app("calc")
-    app = getattr(app, "_inst", app)
+    from runtime import calc_app, uitree
+    eng = ws.app("calc").engine
     for k in "12+3":
-        app._key(k)
-    entry = app.entry
+        eng.run(calc_app.press, k, action="press")
+    uitree.commit(eng)
+    entry = eng.s._v["entry"]
+    assert entry == "3"
     ws.wm.chip_tap("files")
     drv.frame(1 / 30)
     kinds = ws.wm.stack.kinds()
@@ -1149,7 +1152,7 @@ def test_opening_an_open_app_brings_its_window_forward_as_it_was(tmp_path):
     drv.frame(1 / 30)
     assert ws.wm.stack.kinds() == kinds
     assert ws.wm.z_order == ["files", "calc"] and ws.wm.focus_key == "calc"
-    assert app.entry == entry
+    assert eng.s._v["entry"] == entry
     calc.minimized = True                              # a minimized one is shown
     ws.wm.move_focus("files")
     ws.spine.open_app(ws.app("calc"))
@@ -2502,8 +2505,8 @@ def test_a_dead_window_releases_its_buffer_and_the_backdrop_survives_a_relayout(
 # installs each window's layout context: a row the console shared, or one read
 # from the last window installed, lays an app out at the other window's size.
 TWO_WINDOWS = (
-    "abcc9d88cd8c9f0f9af3570e9d46929f621ee2ccf0269b217479d8fb1dff54a4",
-    "7524f954d2656345d7b24838d145150993c488696a9e3ce039c093a9b367480a",
+    "58cb80cf86fafe267cfdd8b349f67451665dd3f81aeb1c228563d3d898c1478e",
+    "cf4bc814d7e627176d7768bacd158e09feb5d7072d09a79d03d1d772b3200760",
 )
 
 
@@ -3895,28 +3898,6 @@ def test_the_root_takes_back_its_marks_after_the_windows_draw(tmp_path, held):
         ui_draw.marks(True)
 
 
-@pytest.mark.parametrize("theme", ["moy", "blocks", "contrast"])
-def test_calcs_keys_stand_as_far_from_the_frames_bottom_as_its_sides(tmp_path, theme):
-    """A rounded frame's foot is part of the window's bottom inset, not an
-    addition to the app's: Calc's keypad ends as far above the frame's
-    outer bottom edge as it starts in from the frame's outer left edge, in
-    every look, whatever its corner radius."""
-    ws = _moy_desk(tmp_path)
-    if theme != "moy":
-        ws.look.set_theme(theme, persist=False, variant="light")
-    ws.spine.open_app(ws.app("calc"))
-    ws.frame(1 / 30)
-    wm = ws.wm
-    win = wm.windows["calc"]
-    assert win.foot > 0
-    cx, cy, _cw, _ch = win.content_rect()
-    keys = win.ctx.app_layouts["calc"].keys
-    left = cx + min(k[0] for k in keys) - win.x
-    right = win.x + win.w - (cx + max(k[0] + k[2] for k in keys))
-    bottom = win.y + win.h - (cy + max(k[1] + k[3] for k in keys))
-    assert left == right == bottom
-
-
 @pytest.mark.parametrize("theme", ["moy", "contrast"])
 def test_the_focused_chip_prints_in_the_current_ink(tmp_path, theme):
     """The focused window's chip is current content: its icon and title take
@@ -4599,15 +4580,17 @@ def _pause_desk(tmp_path, ride=True, window=True):
         ws.mark_dirty()
         ring.frame(drv)
     ring.settle(drv, 4)
+    _PAUSE_DRV[id(ws)] = drv
     return ws, drv, ring
 
 
+_PAUSE_DRV = weakref.WeakValueDictionary()     # each desk's driver, by its console
+
+
 def _pause_key(ws, name):
-    """A key handed to the pause menu as the router does: the frame is
-    marked only where the menu does not paint its own change."""
-    ws.pause_layer.handle_input(_Key(name))
-    if not ws.wm.popover_takes_keys():
-        ws.mark_dirty()
+    """A key pressed for the next frame, whose input the router hands the
+    pause menu's page."""
+    _PAUSE_DRV[id(ws)].press(name)
 
 
 @pytest.mark.parametrize("window", [True, False])
