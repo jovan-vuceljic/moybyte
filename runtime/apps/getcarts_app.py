@@ -268,7 +268,25 @@ ui.app("Get Carts", icon="getcarts")
 
 
 def _lay():
-    return uitree_app.env()
+    """The app's Layer, which a handler's run owes a fill."""
+    lay = uitree_app.env()
+    lay.fill_owed = True
+    return lay
+
+
+class _Owed:
+    """The app's damage: what owes a frame owes the page a fill too."""
+
+    def __init__(self, damage, lay):
+        self._d, self._lay = damage, lay
+
+    def all(self):
+        self._lay.fill_owed = True
+        self._d.all()
+
+    def again(self):
+        self._lay.fill_owed = True
+        self._d.again()
 
 
 def _set(lay, name, rows):
@@ -406,9 +424,9 @@ def open_card(row):
 
 def follow(row):
     """On the desk the pane shows the card focus moved to."""
-    lay = _lay()
-    if lay.desk and lay.phase in ("list", "cart", "done"):
-        lay._pane_follows(row.id)
+    lay = uitree_app.env()
+    if lay.desk and lay.phase in ("list", "cart", "done") and lay._pane_follows(row.id):
+        lay.fill_owed = True
 
 
 def _verb(verb):
@@ -610,6 +628,8 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build, is_a
         self.desk = metric_class() == DESK
         self.models = {}              # each model's rows as last written
         self.owed = False             # the last frame's press moved the page
+        self.fill_owed = True         # the page's states owe a fill (`_Owed`, a handler's `_lay`)
+        self._damage = _Owed(self._damage, self)
         self.phase = "list"
         self.carts = []               # every index's carts, this session
         self.rows = []                # [{"cart", "plan", "state", "had", "runs", "fit"}]
@@ -1661,14 +1681,15 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build, is_a
         if self.toast is not None:
             if _ticks_diff(_ticks_ms(), self.toast[2]) >= 0:
                 self.toast = None
+                self.fill_owed = True
             else:
                 self._damage.again()
-        self.engine.run(fill, self, action="fill")
-        ui.commit(self.engine)
-        was = (self.phase, self.cur, self.asking, self.toast)
+        if self.fill_owed:
+            self.fill_owed = False
+            self.engine.run(fill, self, action="fill")
+            ui.commit(self.engine)
         super().draw(dt)
-        # a press in the frame moved the page: the next frame shows it
-        self.owed = (self.phase, self.cur, self.asking, self.toast) != was
+        self.owed = self.fill_owed        # a press in the frame moved the page: the next frame shows it
 
     def moved(self):
         return self.owed or super().moved()

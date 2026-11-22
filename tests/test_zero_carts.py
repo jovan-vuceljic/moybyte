@@ -434,7 +434,7 @@ def test_get_carts_on_a_zero_s_page_lists_the_board_s_release(page, monkeypatch)
     assert "carts" not in ws.leases.holders(), "the page's radio is not the board's"
     _frames(ws, worker, lambda: not app._covers)
     files, = [r for r in app.rows if r["cart"]["folder"] == "moybyte.files.moy"]
-    assert app._pic(files) is not None, "a cart the board holds shows its cover"
+    assert app.thumbs.get(files["cart"]["cover"]["sha256"]), "a cart the board holds shows its cover"
 
 
 def test_get_on_a_zero_s_page_asks_the_board_and_brings_its_copy_over(page, zero):
