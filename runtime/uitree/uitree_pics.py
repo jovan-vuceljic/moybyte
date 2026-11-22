@@ -81,7 +81,13 @@ class PicEngine:
 
     @property
     def idle_owed(self):
-        return any(k not in getattr(self, "refused", ()) for k in self.owed)
+        # a loop, not any() over a generator: one naming self makes self a cell
+        # on every call, and the console asks every idle frame
+        refused = getattr(self, "refused", ())
+        for k in self.owed:
+            if k not in refused:
+                return True
+        return False
 
     def idle_step(self):
         view = frozenset(self.seen)
