@@ -58,8 +58,7 @@ class Pair:
         def ok(rows, plan):
             return False if rows.ws_of is b else real(rows, plan)
         for ws in (self.a, self.b):
-            for layer in (ws.block_ui, ws.cards_layer):
-                layer._hold.ws_of = ws
+            ws.block_ui._hold.ws_of = ws
         monkeypatch.setattr(ui_draw.Hold, "ok", ok)
         self.da = host_app.ConsoleDriver(self.a)
         self.db = host_app.ConsoleDriver(self.b)
@@ -179,39 +178,6 @@ def _blocks_session(p):
     p.frame(4)
 
 
-def _cards_session(p):
-    """Cart info opened by its door over its page, typed into, its fields moved between, its title emptied and Enter (the line
-    under the fields says why it stayed open; the next key clears it),
-    then saved; New script typed into and cancelled."""
-    _editor(p, "Coin Quest", "cards")
-    page = p.a.cards_layer.page()
-    for _ in range(16):
-        if page._focus == "Cart info":
-            break
-        p.both("press", "down")
-        p.frame(3)
-    assert page._focus == "Cart info"
-    p.both("press", "a")                # its door: the dialog over the page
-    p.frame(4)
-    assert p.a.cards_layer.prompt is not None
-    p.type(" two")
-    p.key(moy_input.KEY_DOWN)
-    p.type("Ana")
-    p.key(moy_input.KEY_UP)
-    p.held_key(_BS, 40)
-    p.key(_ENTER)
-    assert p.a.cards_layer.prompt.msg is not None
-    p.type("Coins")
-    p.key(_ENTER)
-    assert p.a.cards_layer.prompt is None
-    p.frame(3)
-    p.run("ws.cards_layer._open_newf()")
-    p.frame(4)
-    p.type("helpers")
-    p.key(_ESC)
-    p.frame(4)
-
-
 @pytest.mark.parametrize("bufs", (1, 2, 3))
 @pytest.mark.parametrize("windowed", (False, True))
 def test_the_blocks_prompts_draw_their_rows_alone(tmp_path, monkeypatch, bufs, windowed):
@@ -220,17 +186,6 @@ def test_the_blocks_prompts_draw_their_rows_alone(tmp_path, monkeypatch, bufs, w
     a, b = p.a.block_ui.blocks_ed, p.b.block_ui.blocks_ed
     assert a.program == b.program
     assert p.rows() >= 30, "the prompts drew their rows alone on %d frames: %r" % (
-        p.rows(), p.kinds)
-
-
-@pytest.mark.parametrize("bufs", (1, 2, 3))
-@pytest.mark.parametrize("windowed", (False, True))
-def test_cart_info_and_new_script_draw_their_rows_alone(tmp_path, monkeypatch, bufs, windowed):
-    p = Pair(tmp_path, monkeypatch, bufs, windowed)
-    _cards_session(p)
-    assert p.a.run.project.cart.get("title") == p.b.run.project.cart.get("title") == "Coins"
-    assert p.a.run.project.cart.get("author") == "Ana"
-    assert p.rows() >= 25, "the dialogs drew their rows alone on %d frames: %r" % (
         p.rows(), p.kinds)
 
 

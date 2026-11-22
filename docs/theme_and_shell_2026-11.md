@@ -2478,10 +2478,9 @@ default.
 The Blocks outline and Music's steps are tables of parts
 (`docs/ui_api_2026-10.md` §2, A table of parts): the engine's region, drag, fling and
 reveal, their rows carried in C, and the page holding each table the
-region R its frames move the table inside. Config's cards are a verbs
-page (`editor_settings.SettingsPage`) whose gen makes a key step the
-engine's rows frame; its broken-manifest page (`ui.empty`) and its file
-list (a placed `ui.table`) are verbs pages too. Carts are out: a
+region R its frames move the table inside. Config's cards, its
+broken-manifest page and its file list are `uitree` pages
+(`runtime/editors/editor_settings.py`) the UI tree engine scrolls. Carts are out: a
 cart's `btn`/`btnp` and its own scrolling are the cart's (surface-model L9); Notes is a
 system cart on the UI tree engine (`runtime/run/player_tree.py`) whose note
 is its page's text editor over the shell's `EditorHandle`, and

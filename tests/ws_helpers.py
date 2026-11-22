@@ -400,21 +400,26 @@ def settings_back(ws, drv):
     drv.click(bar[1][0] + x + w // 2, bar[1][1] + y + h // 2)
 
 
-def settings_tile(ws, key, k):
-    """The middle of choice `k`'s tile on the Editor's Settings page (look
-    step 30: the cards on the verbs), where a frame draws it."""
+def settings_box(ws, key):
+    """The Config page's stop `key` (a door: "cart_info", "files"; a card:
+    its field's key and its field, "speed/v") as its last frame drew it."""
     ws.input.begin_frame()
     ws.frame(1 / 30)
-    (x, y, w, h), _k = ws.cards_layer.page()._tiles[key][k]
-    return x + w // 2, y + h // 2
+    return ws.cards_layer.page._ui.box(key)
 
 
-def settings_box(ws, label):
-    """The Settings page's row `label` (a door: Cart info, Files) as its last
-    frame drew it."""
-    ws.input.begin_frame()
-    ws.frame(1 / 30)
-    return ws.cards_layer.page().host.box(label)
+def tap_box(ws, box):
+    """A tap in the middle of `box` on the Config page, its release, and
+    the frames after."""
+    cx, cy = box[0] + box[2] // 2, box[1] + box[3] // 2
+    cl = ws.cards_layer
+    ws.pointer.down = True
+    cl.handle_pointer(cx, cy, True)
+    for _ in range(3):
+        ws.pointer.down = False
+        cl.handle_pointer(cx, cy, False)
+        ws.input.begin_frame()
+        ws.frame(1 / 30)
 
 
 def step_card(ws, d):

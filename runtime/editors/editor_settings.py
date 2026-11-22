@@ -1,26 +1,31 @@
-# Map (grep -n a name to jump there):
-#   SettingsPage          the Editor's Settings tab on the verbs
-#   SettingsPage.draw     the cards as one group, then This project
-#   SettingsPage.keys     a frame's keys: the engine's, then a picker's left and right
-#   SettingsPage.point    a pointer sample, and a tap on a picker's tile
-"""The Editor's Settings tab (E-06; docs/media/look_2026-10/EDITOR_LAYOUT.md's
-`config` pictures): the cart's `edit` cards drawn on the public UI API, the
-handheld's tab and the desk Editor's Settings pane alike. A cart whose run
-reads no `config.json`, or none of the files some tab edits
-(`EditorApp._offers`), has a note over the cards saying so instead.
+"""The Editor's Config tab ("Make it mine", #3/#15) as `uitree` pages, the
+handheld's tab and the desk Editor's Settings pane alike.
 
-The cards are one group: an `int` card a slider whose value stands at its
-right, a two-way `choice` a toggle (a `choice-icons` one too: its two
-icons are off and on), a `sprite-tiles` or `bg-thumbs` choice and a
-`choice-icons` one of three or more a row of the pictures to pick from (a
-part: left and right step it, a tap takes a tile), any other choice a
-cycle. Then This project: Cart info and Files, the doors
-the tab already had (`CardsLayer`'s dialog and its file list). A card's
-label is its `card` text up to its value, as a kid reads it ("Run at").
-A change is the config's and the undo history's, as a stepper's was
-(`Project.record_config`)."""
+The cards page: a note where the cart's run reads none of some tabs' files
+(`EditorApp._offers`), the cart's `edit` cards as one group (an `int` a
+slider stepping by the card's step, a two-way `choice` a toggle, any other
+choice a link whose activation steps it to the next, its icon the choice's
+where it has one), then This project: Cart info and Files. A cart whose
+manifest did not parse (`moy_carts.load` keeps it with its reason in
+`cart["broken"]`) shows the reason and Files instead. Files is a page pushed
+over it: the project's own files, each the tab it opens in. Cart info and
+New script are dialogs.
 
-import ui
+`CardsLayer` (cards_layer.py) is the host: it writes the cart's values into
+the state (`sync`), and the handlers reach it through `uitree_app.env()`
+for what touches the cart (a card's value, the file routing, the commits)."""
+import uitree as ui
+import uitree_app
+
+s = ui.state(
+    cards=ui.model(key="id", id="", shape=ui.enum("int", "two", "cycle", init="int"), label="",
+                   v=0, lo=0, hi=100, on=False, value="", icon=""),
+    missing="", broken="", broken_title="", fixable=False, title="", nfiles="",
+    file_rows=ui.model(key="name", name="", label="", word="", icon=""),
+    files_msg="",
+    asking=ui.enum("none", "meta", "newf", init="none"),
+    f_title="", f_author="", f_name="", new_sub="", ask_msg="",
+)
 
 
 def card_label(f):
@@ -39,205 +44,138 @@ def card_label(f):
     return text[:1].upper() + text[1:].lower()
 
 
-class SettingsPage:
-    """One Settings page over a workstation's open cart. `host` is the
-    frame's `AppHost`; `doors` is (open the cart's info, open its files)."""
+def sync(vals):
+    """The host's values: (the cards' rows, the missing tabs' note, why
+    the page shows no cards and its title, whether Files fixes that, the
+    cart's title, its files' count)."""
+    rows, s.missing, s.broken, s.broken_title, s.fixable, s.title, s.nfiles = vals
+    if s.cards != rows:
+        s.cards = rows
 
-    def __init__(self, ws, host, doors):
-        self.ws = ws
-        self.host = host
-        self._doors = doors
-        self._tiles = {}                # a picker's key -> [(rect, choice index)]
-        self._focus = None
-        self._count = (None, 0)         # (the cart's path, its files)
-        # the page's override table: its gen moves with what the page shows
-        # (docs/history/scroll_and_text_2026-10.md §3.3), so a frame that only moves
-        # the focus or the scroll draws the rows it changed
-        self._o = {"gen": 0}
-        self._shows = None
 
-    # -- the data ---------------------------------------------------------------
+def opened():
+    """A visit: the cards page with no dialog up."""
+    s.asking = "none"
 
-    def _fields(self):
-        ws = self.ws
-        if not ws.editor_app._offers("mine"):
-            return []               # its run reads no config.json
-        valid = ws.cards_layer._validate_field
-        return [f for f in (ws.cart.get("edit") or []) if not valid(f)]
 
-    def _get(self, f):
-        return self.ws.run.project.config.get(f["key"], f.get("default"))
+def set_int(row):
+    uitree_app.env().set_int(row.id, row.v)
 
-    def _set(self, f, v):
-        ws = self.ws
-        old = self._get(f)
-        if v == old:
-            return
-        ws.run.project.config[f["key"]] = v
-        ws.run.project.record_config(f["key"], old, v)
-        ws.mark_dirty()
 
-    # -- drawing -----------------------------------------------------------------
+def set_two(row):
+    uitree_app.env().set_choice(row.id, 1 if row.on else 0)
 
-    def draw(self, cv, th, rect, desk):
-        """The page in `rect` of `cv`, under theme `th`."""
-        host = self.host
-        host.begin(cv, th, rect, desk, False)
-        fields = self._fields()
-        cart = self.ws.cart
-        shows = (id(cart), str(cart.get("title") or ""), self._file_count(),
-                 tuple(self._get(f) for f in fields), len(fields))
-        if shows != self._shows:
-            self._shows = shows
-            self._o["gen"] += 1
-        ui.at(*rect)
-        ui.page("", self._o)
-        note = self.ws.editor_app.missing_note()
-        if note is not None:
-            ui.note("info", (note,))
-        ui.group("", {"card": True})
-        tap = None
-        for f in fields:
-            self._card(cv, th, f, desk, tap)
-        ui.group()
-        ui.group("This project")
-        if ui.link("Cart info", str(cart.get("title") or "")):
-            self._doors[0]()
-        if ui.link("Files", str(self._file_count())):
-            self._doors[1]()
-        ui.group()
-        if desk:
-            ui.hints(("change", "Change", "F6", "Next pane"))
-        else:
-            ui.hints(("change", "Change"))
-        ui.end()
-        self._focus = ui.focus()
 
-    def _file_count(self):
-        """The project's files, counted once a cart (the list reads the
-        store) and again after the list closes (`recount`)."""
-        ws = self.ws
-        path = ws.cart.get("path")
-        if self._count[0] != path:
-            n = 0
-            try:
-                kind = ws.carts_store.project_kind(path)
-                n = len(ws.with_sd(lambda: ws.carts_store.list_files(kind, ws.carts_root)))
-            except Exception:  # noqa: BLE001 -- an unreadable folder counts none
-                pass
-            self._count = (path, n)
-        return self._count[1]
+def step(row):
+    uitree_app.env().step_choice(row.id)
 
-    def recount(self):
-        self._count = (None, 0)
 
-    def _card(self, cv, th, f, desk, tap):
-        label = card_label(f)
-        key = f["key"]
-        cur = self._get(f)
-        if f["type"] == "int":
-            lo, hi = f.get("min", 0), f.get("max", 100)
-            try:
-                v = int(cur)
-            except (TypeError, ValueError):
-                v = lo
-            got = ui.slider(label, v, lo, hi, {"id": key})
-            step = max(1, int(f.get("step", 1)))
-            if got != v:
-                d = got - v
-                if abs(d) < step:               # a key's or a nudge's step: the card's
-                    got = v + (step if d > 0 else -step)
-                else:
-                    got = lo + ((got - lo + step // 2) // step) * step
-                self._set(f, max(lo, min(hi, got)))
-            return
-        ch = f["choices"]
-        idx = ch.index(cur) if cur in ch else 0
-        disp = f.get("display")
-        two = len(ch) == 2 and not f.get("names")
-        if disp in ("sprite-tiles", "bg-thumbs") or (disp == "choice-icons" and not two):
-            self._tiles_row(cv, th, f, label, idx, desk, tap)
-            return
-        if two:
-            on = ui.toggle(label, idx == 1, {"id": key})
-            if on != (idx == 1):
-                self._set(f, ch[1 if on else 0])
-            return
-        names = [str(f.get("names", ch)[k]) if k < len(f.get("names", ch)) else str(c)
-                 for k, c in enumerate(ch)]
-        got = ui.cycle(label, names, idx, {"id": key})
-        if got != idx:
-            self._set(f, ch[got])
+def files():
+    s.file_rows, s.files_msg = uitree_app.env().listing()
+    ui.push(files_page)
 
-    def _tiles_row(self, cv, th, f, label, idx, desk, tap):
-        """A picker of pictures (a sprite, a glyph, a background): the label,
-        then each choice in a tile at the row's right, the current one on the
-        current plate."""
-        s = 2 if desk else 1
-        side = 32 * s
-        x, y, w, h, _st = ui.part(f["key"], 0, side + 12 * s)
-        ui.at(x + 10 * s, y, w // 2, h)
-        ui.label(label)
-        n = len(f["choices"])
-        gap = 8 * s
-        tx = x + w - 10 * s - n * side - (n - 1) * gap
-        rects = []
-        for k in range(n):
-            r = (tx + k * (side + gap), y + (h - side) // 2, side, side)
-            rects.append((r, k))
-            cv.rrect(r[0], r[1], side, side, 4 * s,
-                     th["selection"] if k == idx else th["surface_alt"])
-            self.ws.cards_layer.draw_choice(f, k, r)
-        self._tiles[f["key"]] = rects
-        if tap is not None:
-            for r, k in rects:
-                if r[0] <= tap[0] < r[0] + r[2] and r[1] <= tap[1] < r[1] + r[3]:
-                    self._set(f, f["choices"][k])
 
-    # -- input ---------------------------------------------------------------------
+def open_file(row):
+    uitree_app.env().open_file(row.name)
 
-    def keys(self, i):
-        """A frame's keys: the engine moves focus and steps the slider,
-        toggle and cycle; left and right step a focused sprite picker.
-        Whether the page owes a frame."""
-        owed = self.host.keys(i)
-        foc = self._focus
-        if foc in self._tiles:
-            d = i.steps("right") - i.steps("left")
-            if d:
-                for f in self._fields():
-                    if f["key"] == foc:
-                        ch = f["choices"]
-                        cur = self._get(f)
-                        k = ch.index(cur) if cur in ch else 0
-                        self._set(f, ch[(k + d) % len(ch)])
-                owed = True
-        return owed
 
-    def on_door(self):
-        """Whether the focus is on Cart info or Files, which A opens."""
-        return self._focus in ("Cart info", "Files")
+def open_name(name):
+    """A project file opened by its name (New script's, a host's)."""
+    uitree_app.env().open_file(name)
 
-    def open_door(self, i):
-        """A on Cart info or Files with no move among this frame's keys:
-        open it, as its link does, the page left as it was drawn. Whether
-        it did."""
-        if not (i.pressed("a") and self.on_door()):
-            return False
-        for n in ("up", "down", "left", "right", "b", "run"):
-            if i.pressed(n):
-                return False
-        self._doors[0 if self._focus == "Cart info" else 1]()
-        return True
 
-    def point(self, px, py, click, down):
-        """A pointer sample in the page's surface; a click on a picker's tile
-        takes it."""
-        if click:
-            for key, rects in self._tiles.items():
-                for r, k in rects:
-                    if r[0] <= px < r[0] + r[2] and r[1] <= py < r[1] + r[3]:
-                        for f in self._fields():
-                            if f["key"] == key:
-                                self._set(f, f["choices"][k])
-        return self.host.point(px, py, click, down)
+def cart_info():
+    host = uitree_app.env()
+    s.f_title, s.f_author = host.meta()
+    s.ask_msg = ""
+    s.asking = "meta"
+    ui.focus("f_title")
+
+
+def new_script():
+    s.new_sub = uitree_app.env().new_sub()
+    s.f_name, s.ask_msg = "", ""
+    s.asking = "newf"
+    ui.focus("f_name")
+
+
+def save():
+    s.ask_msg = uitree_app.env().commit_meta(s.f_title, s.f_author)
+    if not s.ask_msg:
+        s.asking = "none"
+
+
+def add():
+    s.ask_msg = uitree_app.env().commit_newf(s.f_name)
+    if not s.ask_msg:
+        s.asking = "none"
+
+
+def cancel():
+    s.asking = "none"
+
+
+def typed():
+    s.ask_msg = ""
+
+
+def say(why):
+    """Why a file did not open, under the list."""
+    s.files_msg = why
+
+
+ui.hook("opened", opened)
+ui.hook("sync", sync, takes="arg")
+ui.hook("set_int", set_int, takes="row")
+ui.hook("set_two", set_two, takes="row")
+ui.hook("typed", typed)
+ui.hook("open_name", open_name, takes="arg")
+ui.hook("say", say, takes="arg")
+ui.action("step", "Change", step, takes="row")
+ui.action("files", "Files", files)
+ui.action("open_file", "Open", open_file, takes="row")
+ui.action("cart_info", "Cart info", cart_info)
+ui.action("new_script", "New script", new_script)
+ui.action("save", "Save", save)
+ui.action("add", "Add", add)
+ui.action("cancel", "Cancel", cancel)
+
+
+def _meta():
+    with ui.dialog("Cart info", ["cancel", "save"], shown="asking=meta"):
+        ui.field("Title", "f_title", max=24, on="save", changed="typed")
+        ui.field("Made by", "f_author", max=24, on="save", changed="typed",
+                 hint="Your name (you can leave it)")
+        ui.label("{ask_msg}", tone="danger", wrap="word", lines=2, shown="ask_msg")
+
+
+def _newf():
+    with ui.dialog("New script", ["cancel", "add"], shown="asking=newf"):
+        ui.label("{new_sub}", tone="dim", wrap="word", lines=2)
+        ui.field("Name", "f_name", max=24, on="add", changed="typed", hint="helpers")
+        ui.label("{ask_msg}", tone="danger", wrap="word", lines=2, shown="ask_msg")
+
+
+def cards_page():
+    with ui.page(""):
+        ui.empty("{broken_title}", icon="warn", lines=["{broken}"], shown="broken")
+        ui.button("files", kind="primary", shown="fixable")
+        ui.note(["{missing}"], icon="info", shown="missing && !broken")
+        ui.rows("cards", by="shape", shown="!broken", cases={
+            "int": lambda: ui.slider("{.label}", ".v", "{.lo}", "{.hi}", on="set_int"),
+            "two": lambda: ui.toggle("{.label}", ".on", on="set_two"),
+            "cycle": lambda: ui.link("step", "{.value}", label="{.label}", icon="{.icon}")})
+        with ui.group("This project", shown="!broken"):
+            ui.link("cart_info", "{title}")
+            ui.link("files", "{nfiles}")
+        _meta()
+        _newf()
+
+
+def files_page():
+    with ui.page("Files"):
+        ui.empty("No files", icon="doc", lines=["{files_msg}"], shown="!file_rows")
+        ui.label("{files_msg}", tone="danger", shown="files_msg && file_rows")
+        with ui.rows("file_rows"):
+            ui.link("open_file", "{.word}", label="{.label}", icon="{.icon}")
+        _newf()

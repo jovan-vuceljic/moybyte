@@ -1,5 +1,5 @@
 """The page held under a dialog (`ui_host.Hold`, docs/surface_model_v1.md
-§14.5): while the Editor's Cart info dialog or a Blocks entry prompt is up,
+§14.5): while a Blocks entry prompt is up,
 or the pause or stop card stands over a run, a frame puts the page under it
 back washed instead of drawing the page and its wash.
 
@@ -127,8 +127,7 @@ def _console(tmp_path, monkeypatch, bufs, ref, windowed, force=True):
 
 
 def _dialogs(ws, frame):
-    """The Blocks number and name prompts typed into, then Cart info typed
-    into and its fields moved, every presented frame."""
+    """The Blocks number and name prompts typed into, every presented frame."""
     ws.open_in_editor(_cart(ws, "Star Catcher"))
     ws.text.set_menu_view("blocks")
     frame(4)
@@ -144,25 +143,11 @@ def _dialogs(ws, frame):
             frame(2)
         bu._blk_kbd_cancel()
         frame(3)
-    ws.text.set_menu_view("cards")
-    frame(4)
-    cl = ws.cards_layer
-    cl._open_meta()
-    frame(3)
-    for ch in "Hi there":
-        cl._prompt_key(ord(ch))
-        frame(2)
-    for n in ("down", "up", "down"):
-        cl._prompt_input(_Key(n))
-        frame(2)
-    cl._close_prompt()
-    frame(3)
 
 
 def _keyed(ws, frame):
     """The dialogs as the keys open them: A on each Blocks slot down a
-    script, a prompt typed into and cancelled, a menu backed out of; then
-    Cart info, A on its door, typed into and cancelled."""
+    script, a prompt typed into and cancelled, a menu backed out of."""
     drv = frame.drv
     ws.open_in_editor(_cart(ws, "Tap Only Red"))
     ws.text.set_menu_view("blocks")
@@ -238,28 +223,6 @@ def _keyed(ws, frame):
         frame(3)
         bu._blk_kbd_cancel()
         frame(3)
-    ws.pointer.visible = False
-    ws.mark_dirty()
-    frame(2)
-    ws.spine.exit()
-    ws.open_in_editor(_cart(ws, "Star Catcher"))
-    ws.text.set_menu_view("cards")
-    frame(4)
-    page = ws.cards_layer.page()
-    for _ in range(12):
-        if page._focus == "Cart info":
-            break
-        drv.press("down")
-        frame(3)
-    assert page._focus == "Cart info"
-    drv.press("a")
-    frame(3)
-    assert ws.cards_layer.prompt is not None
-    for ch in "ab":
-        drv.type_char(ord(ch))
-        frame(2)
-    ws.cards_layer._close_prompt()
-    frame(3)
 
 
 def _cards(ws, frame):
@@ -306,7 +269,7 @@ def test_a_held_page_under_a_dialog_is_the_page_drawn(tmp_path, monkeypatch, buf
         # buffer, which the hold does not copy from
         assert puts == 0
     else:
-        assert puts >= 3, "the hold put the page back on %d frames" % puts
+        assert puts >= 2, "the hold put the page back on %d frames" % puts
         assert rows >= 16, "the dialogs drew their rows alone on %d frames" % rows
 
 
@@ -346,12 +309,12 @@ def test_the_fit_check_releases_the_held_page_and_a_dialog_mints_it_again(tmp_pa
                                                                           monkeypatch):
     ws, frame, shots, puts = _console(tmp_path, monkeypatch, 1, False, False)
     ws.open_in_editor(_cart(ws, "Star Catcher"))
-    ws.text.set_menu_view("cards")
+    ws.text.set_menu_view("blocks")
     frame(3)
-    ws.cards_layer._open_meta()
+    ws.block_ui._blk_open_kbd("var", var="score", slot_target=None)
     frame(3)
     assert ws.held_pages[0] is not None and puts[0] > 0
-    ws.cards_layer._close_prompt()
+    ws.block_ui._blk_kbd_cancel()
     frame(1)
     open_cart(ws, "Stripes")
     frame(3)
@@ -365,9 +328,9 @@ def test_the_fit_check_releases_the_held_page_and_a_dialog_mints_it_again(tmp_pa
     assert ws.held_pages[0] is None and ws.held_pages[2] is None
     ws.spine.exit()
     ws.open_in_editor(_cart(ws, "Star Catcher"))
-    ws.text.set_menu_view("cards")
+    ws.text.set_menu_view("blocks")
     frame(2)
-    ws.cards_layer._open_meta()
+    ws.block_ui._blk_open_kbd("var", var="score", slot_target=None)
     n = puts[0]
     frame(1)                            # the page drawn, and held again
     frame(2)

@@ -1,9 +1,8 @@
 """Tests for #94's host-side gaps in the Config ("Make it mine" cards) tab:
 
   1. a cart manifest/metadata editing surface -- title + author, through
-     moy_carts.save_manifest_meta / Project.commit_manifest / the CardsLayer
-     "CART INFO" dialog (cards_layer.py's _open_meta over the shared `_Prompt`
-     state machine, which NEW SCRIPT (#89) opens too -- covered at the end).
+     moy_carts.save_manifest_meta / Project.commit_manifest / the Config
+     page's Cart info dialog (editor_settings.py).
   2. validation feedback for a bad/out-of-range `edit` field definition --
      covered in test_preliterate_ux.py alongside the existing malformed-card
      tests, not here.
@@ -14,7 +13,7 @@ this only covers the unambiguous title/author half of the gap.
 """
 
 from pathlib import Path
-from ws_helpers import shelf, select_on_home  # noqa: E402
+from ws_helpers import settings_box, shelf, select_on_home, tap_box  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -144,13 +143,27 @@ def test_project_commit_manifest_noop_without_a_real_cart():
 
 
 # ----------------------------------------------------------------------------
-# Layer 3: the CardsLayer "CART INFO" modal (open/type/commit/cancel)
+# Layer 3: the Config page's Cart info dialog (open/type/commit/cancel)
 # ----------------------------------------------------------------------------
 
 def _open_cards_for(ws, title):
     select_on_home(ws, title)
     ws.open_in_editor()
     assert ws.menu_view == "cards"
+    drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)
+    return drv
+
+
+def _frames(drv, n=2):
+    for _ in range(n):
+        drv.frame(1 / 30)
+
+
+def _type(drv, text):
+    for ch in text:
+        drv.type_char(ord(ch))
+        _frames(drv)
 
 
 def test_info_button_tap_opens_the_modal(tmp_path):
@@ -160,27 +173,11 @@ def test_info_button_tap_opens_the_modal(tmp_path):
     ws = host_app.build_workstation(root)
     ws.launcher.set_items(shelf(root))
     _open_cards_for(ws, "Tune Me")
-    ws.input.begin_frame()
-    ws.frame(1 / 30)                                    # draw once (lays out layout)
-    assert ws.cards_layer.prompt is None
-
-    # Cart info, the Settings page's door (look step 30), taps open the dialog
-    rect = ws.cards_layer.page().host.box("Cart info")
-    cx, cy = rect[0] + rect[2] // 2, rect[1] + rect[3] // 2
-    assert ws.cards_layer.handle_pointer(cx, cy, True) is True
-    for _ in range(3):
-        ws.pointer.down = False
-        ws.cards_layer.handle_pointer(cx, cy, False)
-        ws.input.begin_frame()
-        ws.frame(1 / 30)
-    assert ws.cards_layer.prompt is not None
+    assert ws.cards_layer.s.asking == "none"
+    tap_box(ws, settings_box(ws, "cart_info"))       # the page's door
+    assert ws.cards_layer.s.asking == "meta"
     ws.input_policy.sync()                              # the frame's look at the mode
     assert ws.input.text_mode is True                   # typing mode armed
-
-
-def _type(cards, text):
-    for ch in text:
-        cards._prompt_key(ord(ch))
 
 
 def test_meta_modal_edits_title_and_author_and_commits(tmp_path):
@@ -189,23 +186,21 @@ def test_meta_modal_edits_title_and_author_and_commits(tmp_path):
     cart = _cart_with_edit_schema(root)
     ws = host_app.build_workstation(root)
     ws.launcher.set_items(shelf(root))
-    _open_cards_for(ws, "Tune Me")
+    drv = _open_cards_for(ws, "Tune Me")
 
     cl = ws.cards_layer
-    cl._open_meta()
-    assert cl.prompt.field == 0                          # starts on TITLE
-    assert cl.prompt.texts[0] == "Tune Me"           # pre-filled from the cart
-    # clear the pre-filled title, type a new one
-    for _ in range(len("Tune Me")):
-        cl._prompt_key(8)
-    _type(cl, "Star Racer")
-    cl._prompt_key(9)                                     # Tab -> AUTHOR
-    assert cl.prompt.field == 1
-    _type(cl, "Ada")
-    cl._prompt_key(13)                                     # Enter -> commit
+    cl.run("cart_info")
+    _frames(drv)
+    assert cl.page.focus_key == "f_title"               # starts on the title
+    assert cl.s.f_title == "Tune Me"                    # pre-filled from the cart
+    _type(drv, "\b" * len("Tune Me") + "Star Racer")
+    _type(drv, "\t")                                   # Tab: Made by
+    assert cl.page.focus_key == "f_author"
+    _type(drv, "Ada\r")                                # Enter saves
 
-    assert cl.prompt is None                               # dialog closed
-    assert ws.input.text_mode is False                     # keyboard restored
+    assert cl.s.asking == "none"                        # dialog closed
+    ws.input_policy.sync()
+    assert ws.input.text_mode is False                  # keyboard restored
     assert ws.run.project.cart["title"] == "Star Racer"
     assert ws.run.project.cart["author"] == "Ada"
     reloaded = moy_carts.load(cart["path"])
@@ -219,18 +214,20 @@ def test_meta_modal_blank_title_stays_open_with_message(tmp_path):
     _cart_with_edit_schema(root)
     ws = host_app.build_workstation(root)
     ws.launcher.set_items(shelf(root))
-    _open_cards_for(ws, "Tune Me")
+    drv = _open_cards_for(ws, "Tune Me")
 
     cl = ws.cards_layer
-    cl._open_meta()
-    for _ in range(len(cl.prompt.texts[0])):
-        cl._prompt_key(8)                                   # backspace to empty
-    assert cl.prompt.texts[0] == ""
-    cl._prompt_key(13)                                      # Enter -> try to commit
+    cl.run("cart_info")
+    _frames(drv)
+    _type(drv, "\b" * len("Tune Me"))                  # backspace to empty
+    assert cl.s.f_title == ""
+    _type(drv, "\r")                                   # Enter: try to commit
 
-    assert cl.prompt is not None                            # stayed open
-    assert cl.prompt.msg == "Give it a title."
-    assert ws.run.project.cart["title"] == "Tune Me"             # unchanged
+    assert cl.s.asking == "meta"                        # stayed open
+    assert cl.s.ask_msg == "Give it a title."
+    assert ws.run.project.cart["title"] == "Tune Me"    # unchanged
+    _type(drv, "X")
+    assert cl.s.ask_msg == ""                           # the next key clears the line
 
 
 def test_meta_modal_cancel_discards_edits(tmp_path):
@@ -239,16 +236,17 @@ def test_meta_modal_cancel_discards_edits(tmp_path):
     cart = _cart_with_edit_schema(root)
     ws = host_app.build_workstation(root)
     ws.launcher.set_items(shelf(root))
-    _open_cards_for(ws, "Tune Me")
+    drv = _open_cards_for(ws, "Tune Me")
 
     cl = ws.cards_layer
-    cl._open_meta()
-    _type(cl, "XXXXX")
-    cl._prompt_key(27)                                      # Esc -> cancel
+    cl.run("cart_info")
+    _frames(drv)
+    _type(drv, "XXXXX\x1b")                            # Esc cancels
 
-    assert cl.prompt is None
+    assert cl.s.asking == "none"
+    ws.input_policy.sync()
     assert ws.input.text_mode is False
-    assert ws.run.project.cart["title"] == "Tune Me"             # discarded
+    assert ws.run.project.cart["title"] == "Tune Me"    # discarded
     reloaded = moy_carts.load(cart["path"])
     assert reloaded["title"] == "Tune Me"
 
@@ -259,15 +257,15 @@ def test_meta_modal_draws_without_crashing_and_reset_closes_it(tmp_path):
     _cart_with_edit_schema(root)
     ws = host_app.build_workstation(root)
     ws.launcher.set_items(shelf(root))
-    _open_cards_for(ws, "Tune Me")
+    drv = _open_cards_for(ws, "Tune Me")
 
-    ws.cards_layer._open_meta()
-    ws.input.begin_frame()
-    ws.frame(1 / 30)                                        # draws the modal, must not raise
+    ws.cards_layer.run("cart_info")
+    _frames(drv)                                        # draws the dialog, must not raise
     assert ws.cart_error is None
     assert probe.drew_something(ws.run.canvas)
 
-    ws.cards_layer.reset()                                  # switching cart must not leak it
-    assert ws.cards_layer.prompt is None
-    ws.input_policy.sync()                                  # the next frame's look
+    ws.cards_layer.reset()                              # switching cart must not leak it
+    _frames(drv)
+    assert ws.cards_layer.s.asking == "none"
+    ws.input_policy.sync()                              # the next frame's look
     assert ws.input.text_mode is False

@@ -601,16 +601,9 @@ class Run:
             b.drain(1.0)
         self.ex("ws.editor_app.set_tab('cards')\nws.mark_dirty()")
         b.drain(2.5)
-        shut = "ws.cards_layer.prompt and ws.cards_layer._close_prompt()"
+        shut = "ws.cards_layer.run('cancel')"
         self.pooled("Cart info dialog open", lambda: self.ex(shut),
-                    lambda: self.ex("ws.cards_layer._open_meta()"))
-        self.typed("Cart info dialog typing", "ws.cards_layer._prompt_key(%d)", "Hello world")
-        def fields():
-            for n in ("down", "up") * 6:
-                self.b.cmd("py ws.cards_layer._prompt_input(ws._SBK(%r)) and "
-                           "ws.mark_dirty() or 1" % n, wait_for="PY")
-                self.b.drain(0.3)
-        self.frames("Cart info dialog moving fields", fields, 0.5)
+                    lambda: self.ex("ws.cards_layer.run('cart_info')"))
         self.ex(shut)
         self.home()
 

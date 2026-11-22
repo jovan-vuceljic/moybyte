@@ -13,7 +13,7 @@ Three layers, because the seam runs through all three:
     `add_source`) -- the load order and which file a write lands in;
   * the CONSOLE (`ws.code_file`, `open_code_file`, the crash router) -- which
     file the tab holds and what a switch costs;
-  * the SURFACES (code_layer's chip + popup, cards_layer's NEW SCRIPT) driven
+  * the SURFACES (code_layer's chip + popup, the Config page's New script) driven
     through the same shared console the boards run.
 
 A ONE-FILE cart is the control in nearly every test here: the chip does not
@@ -357,6 +357,29 @@ def test_add_source_refuses_a_name_the_folder_already_holds(tmp_path):
     assert (d / "extra.lua").read_text(encoding="utf-8") == "-- a tab\n"
 
 
+def _files(ws):
+    """Make it mine's Files opened: the names it lists."""
+    cl = ws.cards_layer
+    cl.run("files")
+    host_app.ConsoleDriver(ws).frame(1 / 30)
+    return [r.name for r in cl.s.file_rows]
+
+
+def _new_script(ws, name):
+    """Files' New script row opened and `name` typed and entered."""
+    cl = ws.cards_layer
+    drv = host_app.ConsoleDriver(ws)
+    _files(ws)
+    cl.run("open_name", "New script")
+    drv.frame(1 / 30)
+    assert cl.s.asking == "newf"
+    for ch in name + "\r":
+        drv.type_char(ord(ch))
+        drv.frame(1 / 30)
+        drv.frame(1 / 30)
+    return cl
+
+
 def test_the_new_script_door_is_offered_only_where_it_would_run(tmp_path):
     """The console's PYTHON tier runs `main` and nothing else, so a second
     script listed on a python cart is a file that silently never runs -- worse
@@ -368,25 +391,16 @@ def test_the_new_script_door_is_offered_only_where_it_would_run(tmp_path):
     assert moy_carts.multi_script(moy_carts.load(str(lua)))
     assert not moy_carts.multi_script(moy_carts.load(str(py)))
 
-    cl = ws.cards_layer
-    cl._open_files()
-    assert "New script" in cl.files["rows"]
+    assert "New script" in _files(ws)
     ws.open_in_editor(moy_carts.load(str(py)))
-    cl._open_files()
-    assert "New script" not in cl.files["rows"]
+    assert "New script" not in _files(ws)
 
 
 def test_new_script_names_the_file_and_opens_it_in_the_code_tab(tmp_path):
     ws = _ws_with(tmp_path, _multi(tmp_path))
     ws.text.set_menu_view("cards")
-    cl = ws.cards_layer
-    cl._open_files()
-    cl._files_open("New script")
-    assert cl.prompt is not None and cl.prompt.kind == "newf"
-    cl.prompt.texts[0] = "Enemy Helpers!"
-    cl._commit_prompt()
-
-    assert cl.prompt is None and cl.files is None
+    cl = _new_script(ws, "Enemy Helpers!")
+    assert cl.s.asking == "none" and not cl.page.has_page()
     assert ws.menu_view == "code"
     assert ws.text.code_file_name() == "enemy_helpers.lua", \
         "a typed name is slugged under the cart's own runtime extension"
@@ -398,15 +412,14 @@ def test_new_script_refuses_a_taken_name_and_an_unusable_one(tmp_path):
     make -- the CART INFO modal's rule for a blank title."""
     ws = _ws_with(tmp_path, _multi(tmp_path))
     ws.text.set_menu_view("cards")
-    cl = ws.cards_layer
-    cl._open_files()
-    cl._files_open("New script")
-    cl.prompt.texts[0] = "extra"
-    cl._commit_prompt()
-    assert cl.prompt is not None and cl.prompt.msg == "There's a file with that name."
-    cl.prompt.texts[0] = "!!!"
-    cl._commit_prompt()
-    assert cl.prompt is not None and cl.prompt.msg == "Start its name with a letter."
+    cl = _new_script(ws, "extra")
+    assert cl.s.asking == "newf" and cl.s.ask_msg == "There's a file with that name."
+    drv = host_app.ConsoleDriver(ws)
+    for ch in "\b" * 5 + "!!!\r":
+        drv.type_char(ord(ch))
+        drv.frame(1 / 30)
+        drv.frame(1 / 30)
+    assert cl.s.asking == "newf" and cl.s.ask_msg == "Start its name with a letter."
 
 
 def test_a_projects_own_script_routes_to_the_code_tab_not_the_text_handle(
@@ -416,9 +429,8 @@ def test_a_projects_own_script_routes_to_the_code_tab_not_the_text_handle(
     Code tab now -- that is where PLAY, the journal and crash-to-code are."""
     ws = _ws_with(tmp_path, _multi(tmp_path))
     ws.text.set_menu_view("cards")
-    cl = ws.cards_layer
-    cl._open_files()
-    cl._files_open("lib.lua")
+    _files(ws)
+    ws.cards_layer.run("open_name", "lib.lua")
     assert ws.menu_view == "code"
     assert ws.text.code_file_name() == "lib.lua"
 
@@ -435,11 +447,7 @@ def test_a_script_added_here_actually_runs(tmp_path):
                     "seen = 0\nfunction _draw() cls(0) end\n")
     ws = _ws_with(tmp_path, d)
     ws.text.set_menu_view("cards")
-    cl = ws.cards_layer
-    cl._open_files()
-    cl._files_open("New script")
-    cl.prompt.texts[0] = "helpers"
-    cl._commit_prompt()
+    _new_script(ws, "helpers")
     assert ws.text.code_file_name() == "helpers.lua"
     ws.editor.set_text("function bump() seen = seen + 1 end\n")
     assert ws.saves.save_code(force=True)
@@ -473,4 +481,4 @@ def test_new_script_last_in_the_scripts_menu_opens_make_it_mines_dialog(tmp_path
     drv.frame(DT)
     drv.key_up(13, 0)
     drv.frame(DT)
-    assert ws.editor_app.tab == "cards" and ws.cards_layer.prompt is not None
+    assert ws.editor_app.tab == "cards" and ws.cards_layer.s.asking == "newf"

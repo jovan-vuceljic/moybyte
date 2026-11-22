@@ -67,9 +67,7 @@ def _in(px, py, rect):
 def arm_prompt(ws):
     """Neutralise the input edge that opened a modal prompt, so the prompt's
     first frame cannot carry the still-latched A/Enter/tap straight into
-    commit or cancel (#29). ONE body for every prompt that opens on a key or
-    a tap (Blocks' prompts, the Config tab's Cart info and New script
-    dialogs); the prompt's own UI context then takes the byte held as it
+    commit or cancel (#29): Blocks' prompts open through it; the prompt's own UI context then takes the byte held as it
     opened as typing nothing (its host's key), and the keyboard goes to text
     mode as its surface answers `typing` (runtime/shell/input_policy.py)."""
     # EVERYBODY let go: the shared object's meaning (every source), not a

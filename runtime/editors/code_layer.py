@@ -374,7 +374,7 @@ class CodeLayer(Layer):
         """New script, the scripts menu's last row: Make it mine's dialog."""
         ws = self.ws
         ws.editor_app.set_tab("cards")
-        ws.cards_layer._open_newf()
+        ws.cards_layer.new_script()
 
     def symbol_at(self, x):
         """The symbol key at x across the strip (`draw_symbols`'s cells), or -1."""

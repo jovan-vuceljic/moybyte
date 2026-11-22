@@ -740,8 +740,8 @@ class EditorDesk(Layer):
 
     # -- a prompt's rows (docs/history/scroll_and_text_2026-10.md §5) -----------------------
     #
-    # While a pane's tab has a prompt up (the Blocks entry prompts, Cart info,
-    # New script) the desk under it does not change but by input that reaches
+    # While a pane's tab has a prompt up (the Blocks entry prompts) the desk
+    # under it does not change but by input that reaches
     # it, and the window's content speaks the shown protocol: a frame whose
     # input only typed into the prompt's field or moved its focus, into a
     # buffer that holds the desk as the last draw left it, draws the prompt's
@@ -759,7 +759,7 @@ class EditorDesk(Layer):
                     continue
                 r = self._area()
             tab = P.CONTENTS[self.tab_of(pane)][2]
-            layer = ws.block_ui if tab == "blocks" else ws.cards_layer if tab == "cards" else None
+            layer = ws.block_ui if tab == "blocks" else None
             if layer is not None and layer.prompt_host() is not None:
                 return tab, layer, pane, r
         return None

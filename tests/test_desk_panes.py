@@ -183,8 +183,8 @@ def test_a_drag_in_a_pane_draws_as_a_whole_draw_does(tmp_path, surface, bufs):
 @pytest.mark.parametrize("window", (False, True), ids=("full", "window"))
 @pytest.mark.parametrize("bufs", (1, 2, 3))
 def test_a_cards_value_shows_its_undo_step_in_the_frame_that_sets_it(tmp_path, bufs, window):
-    """A card's value is set by the Settings page's own draw, an undo step
-    the Editor's strip shows: the frame the pane draws alone shows the
+    """A card's value is set as the Config page draws, an undo step the
+    Editor's strip shows: the frame the pane draws alone shows the
     strip's Undo as a whole draw does, and every value after it too."""
     p = Pair(tmp_path, "cards values", bufs, window)
     hist = p.a.run.project.config_hist
@@ -194,7 +194,7 @@ def test_a_cards_value_shows_its_undo_step_in_the_frame_that_sets_it(tmp_path, b
     p.key(mi.KEY_DOWN)
     p.key(mi.KEY_LEFT, 2)                       # the fall speed
     p.key(mi.KEY_DOWN)
-    p.key(mi.KEY_RIGHT)                         # the catcher's picture
+    p.key(13)                                   # the catcher's picture, stepped
     assert p.a.run.project.config == p.b.run.project.config
     assert p.a.run.project.config["basket"] == 1
     assert sum(p.own) >= len(p.own) // 2, p.own
