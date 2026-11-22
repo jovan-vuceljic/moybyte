@@ -2202,6 +2202,37 @@ static void draw_bubble(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
     }
 }
 
+// A template int prop of `k` (0 where it has none).
+static int32_t prop_int(uit_t *e, int k, const char *name, int model, int row)
+{
+    uint32_t n, mark = e->scratch.n, at = prop_text(e, k, name, model, row, &n);
+    int32_t v = n ? (int32_t)strtol(e->scratch.p + at, NULL, 10) : 0;
+    e->scratch.n = mark;
+    return v;
+}
+
+// A month's calendar: year= and month= (1-12) in the toolkit's month, today= marked (0 none);
+// a press on its head's previous or next chevron fires prev= or next=.
+static void draw_month(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+{
+    static const char *const NAMES[12] = {"January", "February", "March", "April", "May", "June", "July",
+                                          "August", "September", "October", "November", "December"};
+    static const uint8_t DAYS[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    static const uint8_t DOW[12] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+    int32_t y = prop_int(e, k, "year", model, row), m = prop_int(e, k, "month", model, row);
+    if (m < 1 || m > 12)
+        return;
+    int leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0), yy = m < 3 ? y - 1 : y;
+    int first = (yy + yy / 4 - yy / 100 + yy / 400 + DOW[m - 1] + 1 + 6) % 7;     // 0 Monday (Sakamoto)
+    char title[24];
+    int tn = snprintf(title, sizeof title, "%s %ld", NAMES[m - 1], (long)y);
+    int step = moy_ui_api_month(c, s, span_of(title, (size_t)tn), span_of("MTWTFSS", 7), first,
+                                DAYS[m - 1] + (m == 2 && leap), prop_int(e, k, "today", model, row));
+    int a = step < 0 ? NODE(k)->on : step > 0 ? NODE(k)->changed : -1;
+    if (a >= 0 && uit_act_can(e, a, model, row))
+        fire(e, a, k, model, row, NULL);
+}
+
 // An info's or a link's tag=, tone= (its ink: a theme role) and signal= (0-4 bars) on `o`; the
 // tag's text stays in the scratch for the draw.
 static void value_over(uit_t *e, int k, int model, int row, moy_ui_over_t *o)
@@ -2441,6 +2472,9 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         break;
     case UIT_BUBBLE:
         draw_bubble(e, c, s, k, model, row);
+        break;
+    case UIT_MONTH:
+        draw_month(e, c, s, k, model, row);
         break;
     case UIT_NOTE: {
         // its icon ("info" where it has none) and each line's paragraph, empty ones kept

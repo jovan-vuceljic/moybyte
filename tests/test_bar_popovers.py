@@ -9,8 +9,13 @@ test_status_items.py's."""
 
 import pytest
 
-from runtime.popover import shift_month
 from ws_helpers import build_desktop_ws, build_ws, make_drv
+
+
+def shift_month(y, m, n):
+    """(year, month) `n` months after month `m` of year `y`."""
+    k = y * 12 + (m - 1) + n
+    return k // 12, k % 12 + 1
 
 
 def _desk(tmp_path):

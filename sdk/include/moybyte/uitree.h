@@ -54,6 +54,7 @@ enum {
     UT_RULE, UT_NOTE,
     UT_GRID,
     UT_BUBBLE,
+    UT_MONTH,
 };
 
 // An action's flags and how its nodes look while it is off (uitree_action).

@@ -1657,6 +1657,16 @@ function T.rule(o)
   return n
 end
 
+-- a month's calendar: year=, month= (1-12) and today= ints; its head's chevrons fire prev= and next=
+function T.month(o)
+  local at = where()
+  local n = node("month", at)
+  n.o = check_opts("month", o, at)
+  if n.o.prev then use_action(n.o.prev, "none", at, "ui.month's prev", true) end
+  if n.o.next then use_action(n.o.next, "none", at, "ui.month's next", true) end
+  return n
+end
+
 local function leaf(kind)
   return function(text, o, extra)
     local at = where()

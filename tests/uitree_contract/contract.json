@@ -1612,32 +1612,26 @@
    "section": "7.2",
    "props": {
     "year": {
-     "type": "name",
-     "level": 2,
-     "designed": true
+     "type": "int",
+     "level": 2
     },
     "month": {
-     "type": "name",
-     "level": 2,
-     "designed": true
+     "type": "int",
+     "level": 2
     },
     "today": {
-     "type": "name",
-     "level": 2,
-     "designed": true
+     "type": "int",
+     "level": 2
     },
     "prev": {
      "type": "action",
-     "level": 2,
-     "designed": true
+     "level": 2
     },
     "next": {
      "type": "action",
-     "level": 2,
-     "designed": true
+     "level": 2
     }
-   },
-   "designed": true
+   }
   },
   "button": {
    "head": "action",

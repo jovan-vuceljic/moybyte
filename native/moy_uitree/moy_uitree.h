@@ -47,6 +47,7 @@ enum {
     UIT_RULE, UIT_NOTE,     // level 1: a divider, a note (no stop either)
     UIT_GRID,               // the page's room in cols x rows cells, a button a cell (or `span` of them)
     UIT_BUBBLE,             // level 1: a chat's bubble, a stop
+    UIT_MONTH,              // level 2: a month's calendar, no stop; its chevrons fire prev= and next=
     UIT_KINDS
 };
 

@@ -3,7 +3,7 @@ step 33): each a component the popover (`widgets.Popup`) holds, hung from
 its widget on every glass in the system's flat card with no wash (D-01),
 its content on the public UI API's verbs.
 
-  `clock`    MonthView   the month (`ui.month`), today marked; left/right page
+  `clock`    MonthView   the month (`month_ui`'s page), today marked; left/right page
   `wifi`     WifiPanel   Settings' Wi-Fi page, the one implementation
   `battery`  PowerRows   on the desk: the battery's line, then Volume and
                          Brightness (`cc_ui`'s page)
@@ -31,11 +31,6 @@ import ui as _ui
 import ui_draw as _ui_draw
 import layout_base as _lb
 from status_items import ITEMS as _ITEMS
-
-
-def shift_month(y, m, n):
-    k = y * 12 + (m - 1) + n
-    return k // 12, k % 12 + 1
 
 
 def _desk():
@@ -68,67 +63,91 @@ def _fit(ws, comp):
 
 
 _MONTH_KEYS = ("change", "Month", "back", "Close")
-_MONTH_KEYS_DESK = ("change", "Month", "back", "Close")
 _POWER_KEYS = ("change", "Change", "scroll", "Row", "back", "Close")
 _WIFI_KEYS = ("confirm", "Join", "back", "Close")
 _MENU_KEYS = ("change", "Button", "back", "Close")
 
 
 class MonthView:
-    """The `clock` widget's component: the month, today marked; the arrows
-    (left/right, or a chevron on the desk and under touch) page months."""
+    """The `clock` widget's component: `month_ui`'s page, the month, today
+    marked; the arrows (left/right, or a chevron on the desk and under
+    touch) page months. The card keeps the height it opened at: a month
+    paged to with more weeks tightens them into it."""
 
     def __init__(self, ws):
         self.ws = ws
         self.off = 0
         self.host = _ui_draw.AppHost()
+        self.engine = None
+        self.y = self.m = self.d = 0    # the month shown and its day marked (0 none)
+        self._t = None                  # the date and paging they were made at
+        self._off = 0
+        self._wt = None                 # ... and the page was written at
+        self._woff = 0
+
+    def _sync(self):
+        """The month paged to, made again where the date or the paging
+        moved."""
+        t = self.ws.bar_layer.today()
+        if t is self._t and self.off == self._off:
+            return
+        self._t, self._off = t, self.off
+        y, m, d = t
+        if y and self.off:
+            k = y * 12 + m - 1 + self.off
+            y, m, d = k // 12, k % 12 + 1, 0
+        self.y, self.m, self.d = y, m, d
 
     def size(self):
         ws = self.ws
         desk = _desk()
         fs = ws.layout.fs
-        y, m, _d = self.month()
-        p = _pad(ws)
-        h = _ui.month_h(y or 2026, m or 1, fs, desk) if y else 6 * 21 * fs
-        if desk:
-            return (264 * fs, p + h + _foot(fs) + p // 2)
-        return (200 * fs, (6 + 3) * fs + h)
+        self._sync()
+        h = _ui.month_h(self.y, self.m, fs, desk) if self.y else 6 * 21 * fs
+        return ((264 if desk else 200) * fs, 2 * _pad(ws) + h + (_foot(fs) if desk else 0))
 
     def month(self):
-        y, m, d = self.ws.bar_layer.today()
-        if not y:
-            return 0, 0, 0
-        yy, mm = shift_month(y, m, self.off)
-        return yy, mm, (d if self.off == 0 else 0)
+        """(year, month, the day marked), (0, 0, 0) with no wall clock."""
+        self._sync()
+        return self.y, self.m, self.d
 
     def keys(self):
         return _MONTH_KEYS
 
+    def _engine(self):
+        e = self.engine
+        if e is None:
+            import uitree_app
+            import month_ui
+            e = self.engine = uitree_app.hosted_page(month_ui.page, self.host, self, env=self)
+            e.bare = True               # the popover's card is its ground
+            e.open()
+        return e
+
+    def all(self):
+        """The page's damage, which asks for no frame: its state moves only
+        where the paging does (`page`), and that asks for its frame."""
+
     def draw(self, cv, rect):
+        import month_ui
         ws = self.ws
         desk = _desk()
-        y, m, today = self.month()
-        p = _pad(ws)
-        top = p if desk else 6 * ws.layout.fs
-        x0, y0, w0, h0 = rect
-        self.host.begin(cv, ws.theme_colors, (x0 + p, y0 + top, w0 - 2 * p, h0 - top), desk,
-                        "panel")
-        if y:
-            # the card keeps the height it opened at, within the glass's room:
-            # a month with more weeks than it holds (paged to, or past the
-            # room) tightens its weeks into it
-            foot = _foot(ws.layout.fs) + p // 2 if desk else 3 * ws.layout.fs
-            _ui.at(x0 + p, y0 + top, w0 - 2 * p,
-                   min(_ui.month_h(y, m, ws.layout.fs, desk), h0 - top - foot))
-            step = _ui.month(y, m, today)
-            if step:
-                self.off += step
-                ws.popover_touch()
-        if desk:
-            _ui.hints(_MONTH_KEYS_DESK)
+        e = self._engine()
+        e.band = desk
+        self._sync()
+        if self._wt is not self._t or self._woff != self.off:
+            self._wt, self._woff = self._t, self.off
+            e.run(month_ui.poll, self, action="month_poll")
+            month_ui.ui.commit(e)       # (month_ui's uitree)
+        inner = _inner(ws, rect)
+        self.host.begin(cv, ws.theme_colors, inner, desk, "panel")
+        e.paint(0.0, cv, ws.theme_colors, inner, desk)
+        if self.host.due() or self.host.tap == 2:
+            ws.popover_touch()
 
     def page(self, n):
         self.off += n
+        self.ws.popover_touch()
         return "local"
 
     def handle_input(self, i):
@@ -139,7 +158,7 @@ class MonthView:
         return None
 
     def click(self, px, py, rect):
-        self.host.point(px, py, True)
+        self._engine().point(px, py, True)
         return "local"
 
     def typing(self):
@@ -147,6 +166,11 @@ class MonthView:
 
     def closed(self):
         self.off = 0
+        self._t = self._wt = None
+        if self.engine is not None:
+            self.engine.close()
+            self.engine = None
+        self.host.reset()
 
 
 # value_row's slot of the desk's hint band (MOY_UI_M_VALUE_ROW_HINTS_DESK)
