@@ -1685,21 +1685,33 @@ def _isint(x):
 # -- actions ------------------------------------------------------------------
 
 class Action:
+    """A declared action or hook. What most of them leave as it is lives on
+    the class, and an instance holds only what its declaration set: a
+    board's image declares hundreds, and each attribute an instance holds
+    costs its dict a slot."""
+    when = when_src = None
+    row = None              # a row_of name: the handler gets that row
+    arity = None            # set by the first site that names it
+    unit = None             # the unit it belongs to: live only while a node bound to it is shown
+    takes = "none"
+    hook = False
+    hint_g = None           # a hint that is a template over the state
+    push = None
+    chars = letters = icon = ""
+    keys = ()
+    off = "hide"
+
     def __repr__(self):
         return "<action %s>" % self.name
 
     def __init__(self, name, label, fn, when, hint, row, where):
         self.name, self.label, self.fn = name, label, fn
-        self.letters = self.icon = ""
         self.hint = label if hint is None else hint
-        self.when_src, self.where = when, where
-        self.when = cond(when, Ctx(), where) if when is not None else None
-        self.row = row          # a row_of name: the handler gets that row
-        self.arity = None       # set by the first site that names it
-        self.unit = None        # the unit it belongs to: live only while a node bound to it is shown
-        self.takes = "none"
-        self.hook = False
-        self.hint_g = None      # a hint that is a template over the state
+        self.where = where
+        if when is not None:
+            self.when_src, self.when = when, cond(when, Ctx(), where)
+        if row is not None:
+            self.row = row
 
     def cur_row(self):
         st = _st()
@@ -1870,20 +1882,22 @@ def action(name, label, fn, *, takes="none", when=None, off=None, hint=None, row
     a = Action(name, label, fn, when, hint, row, where)
     if "{" in a.hint:
         a.hint_g = tmpl(a.hint, Ctx(), where, "hint").g
-    a.takes = takes
-    a.unit = unit
-    a.push = push
-    a.chars = chars or ""
-    a.keys = tuple(keys)
-    a.letters = "".join(k.lower() for k in keys if _letter(k))
-    a.icon = icon or ""
-    a.off = off or "hide"
+    _own(a, takes=takes, unit=unit, push=push, chars=chars or "", icon=icon or "", off=off or "hide")
     if keys:
+        a.keys = tuple(keys)
+        _own(a, letters="".join(k.lower() for k in keys if _letter(k)))
         _arity(a, "row" if row else "none", "its keys %r" % (keys,), where)
     if chars:
         _arity(a, "char", "its chars %r" % chars, where)
     d.actions[name] = a
     return name
+
+
+def _own(a, **values):
+    """Each value `a`'s class does not already hold, set on `a` (`Action`)."""
+    for k, v in values.items():
+        if getattr(Action, k) != v:
+            setattr(a, k, v)
 
 
 def hook(name, fn, *, takes="none", unit=None):
@@ -1892,7 +1906,7 @@ def hook(name, fn, *, takes="none", unit=None):
     where = _caller()
     d = _declare(name, "", fn, takes, where, "hook")
     a = Action(name, "", fn, None, "", None, where)
-    a.takes, a.unit, a.push, a.chars, a.keys, a.letters, a.icon, a.off = takes, unit, None, "", (), "", "", "hide"
+    _own(a, takes=takes, unit=unit)
     a.hook = True
     d.actions[name] = a
     return name
