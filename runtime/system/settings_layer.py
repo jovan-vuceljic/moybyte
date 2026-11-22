@@ -46,7 +46,7 @@ pointer this layer is routed.
 
 import ui as _ui
 import layout_base as _lb
-from crash_guard import core_dump, crash_available, last_crash
+from crash_guard import clear_core_dump, core_dump, crash_available, crash_lines, last_crash
 from achievements_ui import AchievementsPage
 from about_ui import LicencesPage, version_words, board_words
 from log_ui import LogPage
@@ -299,6 +299,7 @@ class SettingsLayer(Layer):
         self._view = None             # the page drawn last
         self._want = None             # the row key focus moves to next frame
         self._focused = None          # the focused row's key after the last frame
+        self._sub_focused = None      # ... and the open panel page's focused id
         self._about = ()              # About's facts, read at each visit
         # The WIFI panel (#38, spec §10): scan list -> pick -> (password) ->
         # connect/forget over the station its wifi role hands it.
@@ -831,6 +832,15 @@ class SettingsLayer(Layer):
         ws = self.ws
         self.wifi.draw(ws.sys_canvas, ws.theme_colors, self._content(),
                        _lb.metric_class() == _lb.DESK, self._dt)
+
+    def crash_record(self):
+        """The Last crash page's lines (the kernel's record, the core dump's
+        size) and whether a core dump is in flash."""
+        dump = core_dump()
+        return crash_lines(last_crash(), dump), bool(dump)
+
+    def clear_dump(self):
+        clear_core_dump()
 
     def _crash_open(self, _pid=None):
         self.pages.open("crash")
@@ -1370,6 +1380,7 @@ class SettingsLayer(Layer):
         else:
             self.commit_name()
             _PAGES[view][3](self)
+            self._sub_focused = _ui.focus()
         _ui.end()                     # the fade where the rows run on below
         if ws.frame_state.dirty or self.page != view or host.owed or host.owes() or host.tap == 2:
             ws.request_frame()        # an answer changed what the page shows

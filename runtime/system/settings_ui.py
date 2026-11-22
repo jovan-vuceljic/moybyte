@@ -26,7 +26,6 @@ import uitree as ui
 import uitree_app
 import wallclock as _wc
 import ssh_service as _ssh
-from crash_guard import clear_core_dump, core_dump, crash_lines, last_crash
 
 NONE_PAIRED = "None. Scan the code on Web console to pair one."
 NO_HOST_KEY = "Made at SSH's first start (set a password: passwd)"
@@ -214,13 +213,13 @@ def bt_page():
 # -- Last crash -----------------------------------------------------------------
 
 def crash_opened():
-    dump = core_dump()
-    s.crash = [{"id": str(k), "text": line} for k, line in enumerate(crash_lines(last_crash(), dump))]
-    s.dump = bool(dump)
+    lines, dump = _sl().crash_record()
+    s.crash = [{"id": str(k), "text": line} for k, line in enumerate(lines)]
+    s.dump = dump
 
 
 def clear_dump():
-    clear_core_dump()
+    _sl().clear_dump()
     crash_opened()
 
 

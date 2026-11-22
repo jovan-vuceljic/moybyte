@@ -15,17 +15,13 @@ REC = {"kind": "task_wdt", "task": "mp_task", "id": "kernel-test", "role": "app"
 
 
 def _kernel(monkeypatch, rec):
-    import settings_ui
     monkeypatch.setattr(settings_layer, "crash_available", lambda: True)
     monkeypatch.setattr(settings_layer, "last_crash", lambda: rec)
-    monkeypatch.setattr(settings_ui, "last_crash", lambda: rec)
 
 
 def _dump(monkeypatch, size, clear):
-    import settings_ui
     monkeypatch.setattr(settings_layer, "core_dump", size)
-    monkeypatch.setattr(settings_ui, "core_dump", size)
-    monkeypatch.setattr(settings_ui, "clear_core_dump", clear)
+    monkeypatch.setattr(settings_layer, "clear_core_dump", clear)
 
 
 def _said(drv):
