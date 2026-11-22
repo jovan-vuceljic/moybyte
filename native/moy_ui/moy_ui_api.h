@@ -706,6 +706,7 @@ typedef struct {
     uint8_t edge, enter;
     moy_ui_dlg_t dlg;
     uint32_t modal_from;            // the focus a dialog took
+    uint32_t away;                  // the focus the page held when the keys went elsewhere
     int32_t typed;                  // the key a focused field takes this frame, 0 none
     int32_t typed_n;                // ...and how many times (a held key's repeats)
     // Q (-1) or E (1) pressed this frame outside a field: the tab row drawn
@@ -1565,6 +1566,11 @@ void moy_ui_api_at(moy_ui_ctx_t *c, int x, int y, int w, int h);
 // or the view of the scroll region `id`: its box into out, 1; 0 where it
 // drew no such stop, popover, dialog or region.
 int moy_ui_api_box(const moy_ui_ctx_t *c, moy_ui_span_t id, int32_t out[4]);
+// The part of stop `id`'s box the last frame drew that a press takes: its
+// box inside its page's view (a dialog's inside its body; all of a
+// popover's over a page), 0 wide where none of it shows; or the view of the scroll region
+// or text view `id`. 1, or 0 where it drew no such stop or view.
+int moy_ui_api_hit_box(const moy_ui_ctx_t *c, moy_ui_span_t id, int32_t out[4]);
 // A duplicate id drawn this frame, its text, once per id (NULL none).
 const char *moy_ui_api_dup(moy_ui_ctx_t *c);
 // The stops the frame drew past the MOY_UI_API_STOPS it records (each drawn,

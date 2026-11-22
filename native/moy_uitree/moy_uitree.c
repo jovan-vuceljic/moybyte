@@ -374,6 +374,7 @@ void uit_close(uit_t *e)
     uit_buf_free(&e->evtext);
     uit_buf_free(&e->trace);
     uit_buf_free(&e->cells);
+    uit_buf_free(&e->fits);
     e->trace_at = 0;
     // what stays, cut to what it holds: the declarations and the lowered page
     UIT_SHRINK(e, slots, nslots, cslots);
@@ -420,6 +421,7 @@ void uit_free(uit_t *e)
     UIT_FREE(e->labels); UIT_FREE(e->tvl); UIT_FREE(e->rects); UIT_FREE(e->arr);
     uit_buf_free(&e->pool); uit_buf_free(&e->scratch); uit_buf_free(&e->evtext); uit_buf_free(&e->cells);
     uit_buf_free(&e->trace);
+    uit_buf_free(&e->fits);
     UIT_FREE(e);
 }
 

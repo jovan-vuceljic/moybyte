@@ -1310,6 +1310,23 @@ int moy_ui_hints_status(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t t,
 // is the string table's (moy_str.h), else a caller's. Answers its width.
 int moy_ui_text_in(const moy_ui_sink_t *s, uint32_t font, int table, moy_ui_span_t t, int x,
                    int y, uint16_t col);
+// The bytes of `t` a primitive draws in `maxw` pixels at `scale` in `font`:
+// with `ell` NULL the longest prefix that fits (moy_text_fit_px), else the
+// prefix an ellipsis follows where the whole does not fit (moy_text_cut_px,
+// *ell 1). Under the fit tap the cut is what the next text drawn from those
+// bytes reports.
+size_t moy_ui_fit(uint32_t font, moy_ui_span_t t, int maxw, int scale, int *ell);
+// The fit tap: each text a primitive draws, as the bytes it was given (a cut
+// text's whole), their width in the font and at the scale that draw it, the
+// room the primitive fitted it to (-1: it fitted it to none), where it drew
+// (x, y, the line's top left; 0, 0 for a text cut to nothing, which draws
+// none) and how (MOY_UI_FIT_*). Text from the string table and each copy a
+// text effect draws under its text report nothing. NULL, the default and a
+// board's only value, taps nothing; a host's checks set it around a frame.
+enum { MOY_UI_FIT_WHOLE = 0, MOY_UI_FIT_ELLIPSIS = 1, MOY_UI_FIT_CUT = 2 };
+typedef void (*moy_ui_fit_fn)(void *ud, const uint8_t *p, size_t n, int x, int y, int w, int room,
+                              int how);
+void moy_ui_fit_tap(moy_ui_fit_fn fn, void *ud);
 // The look's `keycap` fields (moy_ui_depth_use reads them): look colours,
 // MOY_THEME_NONE where silent; alpha 0..255.
 typedef struct {

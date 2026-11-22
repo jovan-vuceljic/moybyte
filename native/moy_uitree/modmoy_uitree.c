@@ -750,6 +750,26 @@ static mp_obj_t eng_page_rects(mp_obj_t self)
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_page_rects_obj, eng_page_rects);
 
+// band(): the hints band the last frame drew, (x, y, w, h), or None (uit_band)
+static mp_obj_t eng_band(mp_obj_t self)
+{
+    int32_t r[4];
+    if (!uit_band(eng(self), r))
+        return mp_const_none;
+    mp_obj_t o[4];
+    for (int i = 0; i < 4; i++)
+        o[i] = MP_OBJ_NEW_SMALL_INT(r[i]);
+    return mp_obj_new_tuple(4, o);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(eng_band_obj, eng_band);
+
+// stop_over(i): whether stop i lies in a dialog or a popover (uit_stop_over)
+static mp_obj_t eng_stop_over(mp_obj_t self, mp_obj_t i)
+{
+    return mp_obj_new_bool(uit_stop_over(eng(self), mp_obj_get_int(i)) == 1);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_stop_over_obj, eng_stop_over);
+
 static mp_obj_t eng_gens(mp_obj_t self)
 {
     int32_t g[16];
@@ -782,6 +802,25 @@ static mp_obj_t eng_dump(mp_obj_t self)
     return mp_obj_new_str_from_vstr(&v);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_dump_obj, eng_dump);
+
+// fits_on(on): the fit report armed (uit_fits_on); fits(): the last frame's records (uit_fits)
+static mp_obj_t eng_fits_on(mp_obj_t self, mp_obj_t on)
+{
+    uit_fits_on(eng(self), mp_obj_is_true(on));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_fits_on_obj, eng_fits_on);
+
+static mp_obj_t eng_fits(mp_obj_t self)
+{
+    uit_t *e = eng(self);
+    int n = uit_fits(e, NULL, 0);
+    vstr_t v;
+    vstr_init_len(&v, (size_t)n);
+    uit_fits(e, v.buf, (size_t)n);
+    return mp_obj_new_str_from_vstr(&v);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(eng_fits_obj, eng_fits);
 
 static mp_obj_t eng_stats(mp_obj_t self)
 {
@@ -822,6 +861,8 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_hints), MP_ROM_PTR(&eng_hints_obj) },
     { MP_ROM_QSTR(MP_QSTR_gens), MP_ROM_PTR(&eng_gens_obj) },
     { MP_ROM_QSTR(MP_QSTR_page_rects), MP_ROM_PTR(&eng_page_rects_obj) },
+    { MP_ROM_QSTR(MP_QSTR_band), MP_ROM_PTR(&eng_band_obj) },
+    { MP_ROM_QSTR(MP_QSTR_stop_over), MP_ROM_PTR(&eng_stop_over_obj) },
     { MP_ROM_QSTR(MP_QSTR_row_stop), MP_ROM_PTR(&eng_row_stop_obj) },
     { MP_ROM_QSTR(MP_QSTR_popover), MP_ROM_PTR(&eng_popover_obj) },
     { MP_ROM_QSTR(MP_QSTR_stop), MP_ROM_PTR(&eng_stop_obj) },
@@ -877,6 +918,8 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_dialog), MP_ROM_PTR(&eng_dialog_obj) },
     { MP_ROM_QSTR(MP_QSTR_unfocused), MP_ROM_PTR(&eng_unfocused_obj) },
     { MP_ROM_QSTR(MP_QSTR_dump), MP_ROM_PTR(&eng_dump_obj) },
+    { MP_ROM_QSTR(MP_QSTR_fits_on), MP_ROM_PTR(&eng_fits_on_obj) },
+    { MP_ROM_QSTR(MP_QSTR_fits), MP_ROM_PTR(&eng_fits_obj) },
     { MP_ROM_QSTR(MP_QSTR_stats), MP_ROM_PTR(&eng_stats_obj) },
 };
 static MP_DEFINE_CONST_DICT(eng_locals, eng_locals_table);

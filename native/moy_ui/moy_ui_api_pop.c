@@ -69,9 +69,19 @@ static int pop_edge(const moy_ui_ctx_t *c) {
     return c->pop.placed ? (c->cls ? 12 : 8) * c->fs : moy_ui_modal_band(c->fs, c->cls);
 }
 
+// The room a popover's card lies in: the surface above the hints band
+// where one stands at its foot, which the card leaves showing.
+static moy_ui_box_t pop_room(const moy_ui_ctx_t *c) {
+    moy_ui_box_t sf = c->surface, hb = c->hint_band;
+    if (hb.h > 0 && hb.y > sf.y && hb.y < sf.y + sf.h) {
+        sf.h = (int16_t)(hb.y - sf.y);
+    }
+    return sf;
+}
+
 static moy_ui_box_t pop_place(moy_ui_ctx_t *c, const moy_ui_keep_t *kb, int body, int w,
                               int *bh_out) {
-    moy_ui_box_t a = c->pop.at, sf = c->surface;
+    moy_ui_box_t a = c->pop.at, sf = pop_room(c);
     int fs = c->fs, rh = mua_row_h(c), pad = moy_ui_modal_band(fs, c->cls);
     int gap = 4 * fs;
     int x0 = sf.x + gap, x1 = sf.x + sf.w - gap;
@@ -396,7 +406,7 @@ int moy_ui_api_popover(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id
         c->owe = 1;                     // its first frame: focus opens in it on the next
     }
     int pad = moy_ui_modal_band(fs, c->cls);
-    moy_ui_box_t sf = c->surface;
+    moy_ui_box_t sf = pop_room(c);
     // a card hung from ui.at's rect may span the surface but for the
     // page's gutters (8 px at the scale, 12 on the desk); any other keeps
     // the modal band each side
@@ -1022,10 +1032,19 @@ static void tip_draw(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     }
 }
 
+// A frame that closed a dialog owes the next, whose begin hands its focus back to the stop the
+// dialog took it from.
+static void dialog_gone(moy_ui_ctx_t *c) {
+    if (c->modal_from && c->dw.id != 0 && c->dlg.id == 0) {
+        c->owe = 1;
+    }
+}
+
 void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     if (c->n_nest == 0) {
         mua_page_close(c, s);
         tip_draw(c, s);
+        dialog_gone(c);
     }
 }
 
@@ -1036,6 +1055,7 @@ void moy_ui_api_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
         mua_foot_fade(c, s);
         mua_page_close(c, s);
         tip_draw(c, s);
+        dialog_gone(c);
     }
 }
 
