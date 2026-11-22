@@ -96,7 +96,7 @@ def test_a_saved_choice_wins_over_the_scheme(tmp_path, base):
         {"note": "Settings from the system menu, Appearance, Mode: Day"},
         {"click": [16, 14]}, {"wait": 600},
         {"click": [77, 134]}, {"wait": 1200},
-        {"click": [443, 273]}, {"wait": 1500},
+        {"click": [443, 233]}, {"wait": 1500},
         {"click": [923, 330]}, {"wait": 6000}])
     assert got["variant"] == "light", "the Day pick did not take"
     again, out = _load(tmp_path, base, profile, "", "dark", "after_pick")
