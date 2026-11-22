@@ -10,7 +10,7 @@
  *   e:state(name, type, values) e:model(slot, names, types, key)
  *   e:row_of(slot, model)       e:labels(name, keys, words)
  *   e:action(name, label, hint, when, off, flags, letters, icon)
- *   e:action_row(a, slot)
+ *   e:action_row(a, slot) e:action_chars(a, chars)
  *   e:set_int(slot, v) e:set_num(slot, v) e:set_text(slot, s)
  *   e:set_absent(slot) e:set_model(slot, n, cells)
  *   e:get_int(slot) e:get_text(slot) e:get_cell(slot, row, f) e:absent(slot)
@@ -166,6 +166,13 @@ static int l_uit_action_row(lua_State *L)
 {
     uit_t *e = moycore_uit(L);
     lua_pushinteger(L, uit_action_row(e, moycore_uit_int(L, 2), moycore_uit_int(L, 3)));
+    return 1;
+}
+
+static int l_uit_action_chars(lua_State *L)
+{
+    uit_t *e = moycore_uit(L);
+    lua_pushinteger(L, uit_action_chars(e, moycore_uit_int(L, 2), moycore_uit_str(L, 3, NULL)));
     return 1;
 }
 
@@ -484,6 +491,7 @@ static void moycore_uitree_open(lua_State *L)
         {"state", l_uit_state}, {"model", l_uit_model}, {"field_enum", l_uit_field_enum},
         {"row_of", l_uit_row_of},
         {"labels", l_uit_labels}, {"action", l_uit_action}, {"action_row", l_uit_action_row},
+        {"action_chars", l_uit_action_chars},
         {"set_int", l_uit_set_int}, {"set_num", l_uit_set_num}, {"set_text", l_uit_set_text},
         {"set_absent", l_uit_set_absent}, {"set_model", l_uit_set_model},
         {"get_int", l_uit_get_int}, {"get_text", l_uit_get_text}, {"get_cell", l_uit_get_cell},

@@ -109,35 +109,27 @@ def press(key):
     _show()
 
 
+def typed(c):
+    """A key the keyboard typed: its key, backspace the delete key."""
+    press("<" if c in "\b\x7f" else c)
+
+
 def opened():
     s.entry, s.acc, s.op, s.shown, s.tape, s.taped = "0", 0, "", False, [], False
     _show()
-    ui.focus("d5")
+    ui.focus("key/5")
 
 
 def _dot():
     pass
 
 
-# A key's action: its name, and the handler that presses it.
-NAMES = {"C": "clear", "<": "back", "%": "mod", "/": "div", "*": "mul", "-": "sub", "+": "add",
-         "=": "equals", ".": "dot"}
-
-
-def _key(key):
-    def handler():
-        press(key)
-    return handler
-
-
 ui.app("Calc", icon="calc")
 ui.hook("opened", opened)
-for _k in KEYS:
-    if _k == ".":
-        # Calc counts in whole numbers, so its point key is there and never activates.
-        ui.action("dot", ".", _dot, when="!whole", off="grey")
-    else:
-        ui.action(NAMES.get(_k, "d" + _k), "Delete" if _k == "<" else _sign(_k), _key(_k))
+ui.action("key", "Press", press, takes="arg")
+ui.action("typed", "Type", typed, takes="char", chars="0123456789+-*/%=\b\x7f")
+# Calc counts in whole numbers, so its point key is there and never activates.
+ui.action("dot", ".", _dot, when="!whole", off="grey")
 
 
 def calc_page():
@@ -150,9 +142,11 @@ def calc_page():
             with ui.grid(4, 5, gap="s"):
                 for key in KEYS:
                     if key == "<":
-                        ui.button("back", icon="backspace", label="")
+                        ui.button("key", arg=key, icon="backspace", label="")
+                    elif key == ".":
+                        ui.button("dot", kind_of(key))
                     else:
-                        ui.button(NAMES.get(key, "d" + key), kind_of(key), span=2 if key == "0" else 1)
+                        ui.button("key", kind_of(key), arg=key, label=_sign(key), span=2 if key == "0" else 1)
 
 
 def is_app(cart):
@@ -168,22 +162,9 @@ def is_app(cart):
 
 
 class CalcAppLayer(uitree_app.app_layer("calc", "Calc", calc_page, is_app)):
-    """The page as the app the manifest names; a typed digit or operator
-    presses its key. A desk's window shows no hints band: a keyboard types
-    every key."""
+    """The page as the app the manifest names. A desk's window shows no
+    hints band: a keyboard types every key."""
 
     def draw(self, dt):
         self.engine.band = metric_class() != DESK
         super().draw(dt)
-
-    def handle_input(self, i):
-        ch = getattr(i, "typed", 0)
-        c = chr(ch) if ch else ""
-        if c in ("\b", "\x7f"):
-            c = "<"
-        if c and (c.isdigit() or c in "+-*/=%<"):
-            e = self.engine
-            e.run(press, c, action=NAMES.get(c, "d" + c))
-            ui.commit(e)
-            self._damage.all()
-        return self.engine.keys(i)

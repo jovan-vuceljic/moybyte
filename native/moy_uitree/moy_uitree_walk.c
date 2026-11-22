@@ -47,10 +47,13 @@ int uit_can(uit_t *e, int a, int row)
 
 int uit_letter(uit_t *e, int ch)
 {
-    if (ch >= 'A' && ch <= 'Z')
-        ch += 32;
     if (ch <= 0 || ch > 127 || uit_dialog(e) >= 0)
         return -1;
+    for (int a = 0; a < e->nacts; a++)
+        if (strchr(uit_str(e, e->acts[a].chars), ch) && uit_act_can(e, a, -1, -1))
+            return a;
+    if (ch >= 'A' && ch <= 'Z')
+        ch += 32;
     for (int a = 0; a < e->nacts; a++)
         if (strchr(uit_str(e, e->acts[a].letters), ch) && uit_act_can(e, a, -1, -1))
             return a;
@@ -297,6 +300,9 @@ static void fire(uit_t *e, int a, int k, int model, int row, const char *how)
     uint32_t n, at = uit_tmpl_render(e, NODE(0)->t_main, -1, -1, &n);
     uit_buf_repr(&b, e->scratch.p + at, n);
     uit_buf_printf(&b, "\x02%s", id);           // the node that fired it (ui.push's opener)
+    for (int p = NODE(k)->props; p != (int)UIT_NONE; p = e->props[p].next)
+        if (e->props[p].kind == PK_LIT && !strcmp(uit_str(e, e->props[p].name), "arg"))
+            uit_buf_printf(&b, "%c%s", e->props[p].idx ? 4 : 3, uit_str(e, e->props[p].src));
     uit_event(e, UIT_EV_ACTION, a, model, row, b.p, b.n);
     uit_buf_free(&b);
 }
@@ -733,10 +739,11 @@ static int drawn_id(uit_t *e, int k, const char *rowkey, size_t rn, const char *
 
 static int drawn_key(uit_t *e, const char *key, char out[UIT_ID_MAX + 1])
 {
+    // a key with a slash: a node's (a button's arg=, "NAME/ARG"), else a row's and its node's
     const char *slash = strrchr(key, '/');
-    if (!slash)
-        return drawn_id(e, 0, "", 0, key, out);
-    return drawn_id(e, 0, key, (size_t)(slash - key), slash + 1, out);
+    if (drawn_id(e, 0, "", 0, key, out))
+        return 1;
+    return slash && drawn_id(e, 0, key, (size_t)(slash - key), slash + 1, out);
 }
 
 // The key of the first node a fresh page's first frame draws whose focus= holds.

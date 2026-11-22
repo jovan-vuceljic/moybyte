@@ -33,7 +33,7 @@ static const uit_fld_t f_fields[] = {FLD(uit_fields_t, ftype), FLD(uit_fields_t,
 static const uit_fld_t f_act[] = {
     FLD(uit_act_t, name), FLD(uit_act_t, label), FLD(uit_act_t, hint), FLD(uit_act_t, when),
     FLD(uit_act_t, off), FLD(uit_act_t, flags), FLD(uit_act_t, letter), FLD(uit_act_t, letters),
-    FLD(uit_act_t, icon), FLD(uit_act_t, row),
+    FLD(uit_act_t, chars), FLD(uit_act_t, icon), FLD(uit_act_t, row),
 };
 static const uit_fld_t f_labels[] = {
     FLD(uit_labels_t, name), FLD(uit_labels_t, keys), FLD(uit_labels_t, words), FLD(uit_labels_t, n),

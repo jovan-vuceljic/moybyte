@@ -117,6 +117,7 @@ typedef struct {
     uint8_t off, flags;
     uint8_t letter;             // its first letter, the band's
     uint16_t letters;           // pool: every letter it answers
+    uint16_t chars;             // pool: every character it is handed (chars=)
     uint16_t icon;              // pool: its icon ("" none)
     int16_t row;                // row=: the row_of slot whose current row it acts on, or -1
 } uit_act_t;

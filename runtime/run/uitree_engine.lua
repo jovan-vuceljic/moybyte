@@ -127,7 +127,6 @@ local function declare()
   end
   for _, name in ipairs(ACTION_ORDER) do
     local a = ACTIONS[name]
-    if a.chars then fail("E00", a.at, "the C engine does not take the action " .. q(name) .. "'s chars yet", nil, nil, FIX) end
     local flags, letters = a.hook and A_HOOK or 0, {}
     for _, k in ipairs(a.keys or {}) do
       if k == "role:confirm" then flags = flags | A_ROLE_CONFIRM
@@ -141,6 +140,10 @@ local function declare()
                     "the action " .. q(name), a.at)
     AIDX[name], ACTS[i] = i, a
     if a.row then check(X:action_row(i, SLOT[a.row]), "the action " .. q(name) .. "'s row", a.at) end
+    if a.chars then
+      check(X:action_chars(i, a.chars), "the action " .. q(name) .. "'s chars", a.at)
+      for c in a.chars:gmatch(".") do LETTERS[#LETTERS + 1] = string.byte(c) end
+    end
   end
 end
 
@@ -243,7 +246,11 @@ local function drain()
     elseif k == EV_ACTION then
       local act = ACTS[a]
       local src = text:match("^([^\2]*)")
-      if m >= 0 and r >= 0 then
+      local tag, arg = text:match("([\3\4])(.*)$")      -- the node's arg=: 0x03 a text, 0x04 an int
+      if tag == "\4" then arg = math.tointeger(tonumber(arg)) end
+      if arg ~= nil then
+        fire_placed(act.name, src, arg)
+      elseif m >= 0 and r >= 0 then
         local model = V[NAMES[m]]
         local row = model.rows[r + 1]
         fire_placed(act.name, src, frozen(row, "row " .. q(row[model.key]) .. " of " .. q(model.name), model.ty))
@@ -489,7 +496,11 @@ local function letters()
   for _, code in ipairs(LETTERS) do
     if keyp(code) then
       local a = X:letter(code)
-      if a >= 0 then fire_placed(ACTS[a].name, "key " .. q(string.char(code))) end
+      if a >= 0 then
+        local c = string.char(code)
+        if ACTS[a].takes == "char" then fire_placed(ACTS[a].name, "key " .. q(c), c)
+        else fire_placed(ACTS[a].name, "key " .. q(c)) end
+      end
     end
   end
   local name = KEYMAP["role:confirm"]

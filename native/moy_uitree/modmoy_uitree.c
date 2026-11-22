@@ -131,6 +131,12 @@ static mp_obj_t eng_action_row(mp_obj_t self, mp_obj_t a, mp_obj_t slot)
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(eng_action_row_obj, eng_action_row);
 
+static mp_obj_t eng_action_chars(mp_obj_t self, mp_obj_t a, mp_obj_t chars)
+{
+    return MP_OBJ_NEW_SMALL_INT(uit_action_chars(eng(self), mp_obj_get_int(a), CSTR(chars)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(eng_action_chars_obj, eng_action_chars);
+
 static mp_obj_t eng_labels(size_t n, const mp_obj_t *a)
 {
     (void)n;
@@ -754,6 +760,7 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_field_enum), MP_ROM_PTR(&eng_field_enum_obj) },
     { MP_ROM_QSTR(MP_QSTR_row_of), MP_ROM_PTR(&eng_row_of_obj) },
     { MP_ROM_QSTR(MP_QSTR_action_row), MP_ROM_PTR(&eng_action_row_obj) },
+    { MP_ROM_QSTR(MP_QSTR_action_chars), MP_ROM_PTR(&eng_action_chars_obj) },
     { MP_ROM_QSTR(MP_QSTR_action), MP_ROM_PTR(&eng_action_obj) },
     { MP_ROM_QSTR(MP_QSTR_labels), MP_ROM_PTR(&eng_labels_obj) },
     { MP_ROM_QSTR(MP_QSTR_focused), MP_ROM_PTR(&eng_focused_obj) },

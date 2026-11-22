@@ -306,8 +306,6 @@ class CEngine(Engine):
         self._acts = list(self.actions.values())
         self._aidx = {}
         for a in self._acts:
-            if a.chars:
-                raise EngineGap("action %s's chars=" % a.name)
             flags = (A_HOOK if a.hook else 0) | (A_ROLE_CONFIRM if "role:confirm" in a.keys else 0) | (
                 A_ROLE_BACK if "role:back" in a.keys else 0) | (A_SHIFT_ENTER if S.SHIFT_ENTER in a.keys else 0)
             off = {"hide": 1, "grey": 2}.get(getattr(a, "off", None), 0)
@@ -316,6 +314,8 @@ class CEngine(Engine):
                 a.letters, a.icon or ""), "action " + a.name)
             if a.row is not None:
                 self._ck(x.action_row(self._aidx[a.name], self._slot[a.row]), "action %s row=" % a.name)
+            if a.chars:
+                self._ck(x.action_chars(self._aidx[a.name], a.chars), "action %s chars=" % a.name)
         for name in self._names:
             self._push(name)
 
@@ -489,6 +489,13 @@ class CEngine(Engine):
                 act = self._acts[a]
                 row = self.s._v[self._names[m]][r] if m >= 0 and r >= 0 else None
                 src, _, fid = text.partition("\x02")
+                arg, j = None, fid.find("\x03")       # the node's arg=: 0x03 a text, 0x04 an int
+                if j >= 0:
+                    fid, arg = fid[:j], fid[j + 1:]
+                else:
+                    j = fid.find("\x04")
+                    if j >= 0:
+                        fid, arg = fid[:j], int(fid[j + 1:])
                 if fid:
                     self.fired_id = fid
                 if row is None and act.row is not None:     # row=: the row its row_of names (the app's state)
@@ -498,7 +505,7 @@ class CEngine(Engine):
                     finally:
                         S._NOW.app = was
                 else:
-                    args = self.args_for(act, row)
+                    args = self.args_for(act, row, arg)
                 self.q.append((act, args, src))
 
     # -- the build ----------------------------------------------------------------
@@ -935,7 +942,7 @@ class CEngine(Engine):
         a = self._x.letter(ch) if ch else -1
         if a >= 0:
             act = self._acts[a]
-            self.q.append((act, self.args_for(act), "key %r" % chr(ch)))
+            self.q.append((act, (chr(ch),) if act.takes == "char" else self.args_for(act), "key %r" % chr(ch)))
         took = self._ui.keys(i)
         if not self.dialog_shown() and hasattr(self._ui, "inp"):
             took = self._arrow_roles(i) or took

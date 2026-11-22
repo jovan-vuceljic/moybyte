@@ -612,6 +612,10 @@ int uit_action(uit_t *e, const char *name, const char *label, const char *hint, 
     if (ic < 0)
         return UIT_E_NOMEM;
     A.icon = (uint16_t)ic;
+    int cs = pool_puts(e, "");
+    if (cs < 0)
+        return UIT_E_NOMEM;
+    A.chars = (uint16_t)cs;
     A.letter = (uint8_t)(letters ? letters[0] : 0);
     A.row = -1;
     e->acts[e->nacts] = A;
@@ -623,6 +627,17 @@ int uit_action_row(uit_t *e, int a, int slot)
     if (a < 0 || a >= e->nacts || slot < 0 || slot >= e->nslots || e->slots[slot].type != UIT_ROWOF)
         return uit_fail(e, UIT_E_ARG, UIT_MSG("action %d row=%d: no row_of", "%d %d"), a, slot);
     e->acts[a].row = (int16_t)slot;
+    return 0;
+}
+
+int uit_action_chars(uit_t *e, int a, const char *chars)
+{
+    if (a < 0 || a >= e->nacts)
+        return uit_fail(e, UIT_E_ARG, UIT_MSG("action %d chars=: no action", "%d"), a);
+    int c = pool_puts(e, chars);
+    if (c < 0)
+        return UIT_E_NOMEM;
+    e->acts[a].chars = (uint16_t)c;
     return 0;
 }
 
@@ -1279,6 +1294,10 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         // lent to a site ("bar"): drawn there by its host, nothing on the page
         N->lit |= TL_LEND;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    }
+    if (!strcmp(name, "arg") && (kind == UIT_BUTTON || kind == UIT_LINK)) {
+        // what the site hands its action (takes="arg"): a literal text, or an int (its repr its text)
+        return add_prop(e, node, name, src, repr, PK_LIT, repr != NULL && !strcmp(repr, src));
     }
     if (!strcmp(name, "alone") && kind == UIT_BUTTON) {
         if (!strcmp(src, "True"))

@@ -3446,7 +3446,7 @@ def _calc_pairs(ws, img):
         ys = [yy for yy in range(r[1], r[1] + r[3])
               if any(_diff(px[xx, yy], plate) > 96 for xx in range(r[0], r[0] + r[2]))]
         return (max(ys) - min(ys) + 1) if ys else None
-    back, digit = ink_h("back"), ink_h("d7")
+    back, digit = ink_h("key/<"), ink_h("key/7")
     if back is None or digit is None:
         return []
     return [_measure("desk backspace ink height vs digit cap", back, digit - 1,

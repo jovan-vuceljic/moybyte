@@ -54,7 +54,8 @@ enum {
 enum {
     UIT_EV_NONE = 0,
     UIT_EV_ACTION = 1,      // a = action, b = model slot or -1, c = row index or -1; text: the source,
-                            // then 0x02 and the id of the node that fired it where a node did
+                            // then 0x02 and the id of the node that fired it where a node did, then
+                            // the node's arg= where it has one: 0x03 and a text, or 0x04 and an int
     UIT_EV_WRITE = 2,       // a = the slot the engine wrote
     UIT_EV_CELL = 3,        // a = the model slot, b = the row, c = the field the engine wrote (`uit_get_cell`)
 };
@@ -116,6 +117,9 @@ int uit_action(uit_t *e, const char *name, const char *label, const char *hint, 
 // Action `a` acts on the current row of row_of slot `slot` (row=): it is off
 // while that row_of names no row, and a node outside a list hands it that row.
 int uit_action_row(uit_t *e, int a, int slot);
+// Action `a` is handed each typed character of `chars` (chars=, takes="char"),
+// as it types (`uit_letter`).
+int uit_action_chars(uit_t *e, int a, const char *chars);
 
 // -- state, written by the front end (a handler's commit) ------------------
 int uit_set_int(uit_t *e, int slot, int32_t v);
@@ -298,8 +302,9 @@ int uit_trace_next(uit_t *e, char *buf, size_t cap);
 // -- asked between frames --------------------------------------------------
 // Whether action `a` is on now, for row `row` of its model (-1 none).
 int uit_can(uit_t *e, int a, int row);
-// The action a typed letter `ch` fires (its letters hold it, lower-cased, and
-// it is on; none while a dialog is shown), -1 none.
+// The action a typed key `ch` fires (its chars hold it as typed, else its
+// letters hold it lower-cased, and it is on; none while a dialog is shown),
+// -1 none.
 int uit_letter(uit_t *e, int ch);
 // The shown dialog's node, -1 none.
 int uit_dialog(uit_t *e);

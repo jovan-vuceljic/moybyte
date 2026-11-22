@@ -174,8 +174,7 @@ def _st(calc, name):
 
 
 def _key_rect(calc, key):
-    from runtime import calc_app
-    return calc.engine._ui.box(calc_app.NAMES.get(key, "d" + key))
+    return calc.engine._ui.box("dot" if key == "." else "key/" + key)
 
 
 def _tap(ws, calc, key):
@@ -224,6 +223,7 @@ def test_calc_arrows_move_focus_and_enter_presses(tmp_path):
         ws.frame(1 / 30)
     assert _st(calc, "entry") == "1126"
     calc.handle_input(_Key(typed=8))
+    ws.frame(1 / 30)
     assert _st(calc, "entry") == "112"
     # A tap owes its release and rest frames, and then Calc paints nothing.
     _quiesce_frame(ws)
@@ -240,16 +240,18 @@ def test_calc_keeps_a_tape(tmp_path):
     for expr in ("48+72=", "120-36=", "84/7=", "12*7="):
         for ch in expr:
             calc.handle_input(_Key(typed=ord(ch)))
-    ws.frame(1 / 30)
+            ws.frame(1 / 30)
     assert [r._f["line"] for r in _st(calc, "tape")] == [
         "48 + 72 = 120", "120 - 36 = 84", "84 / 7 = 12", "12 * 7 = 84"]
     assert _st(calc, "result") == "84" and _st(calc, "expr") == ""
     for ch in "5-":
         calc.handle_input(_Key(typed=ord(ch)))
+        ws.frame(1 / 30)
     assert _st(calc, "expr") == "5 −" and len(_st(calc, "tape")) == 4
     for _ in range(6):
         for ch in "1+1=":
             calc.handle_input(_Key(typed=ord(ch)))
+            ws.frame(1 / 30)
     assert len(_st(calc, "tape")) == 8                   # the tape keeps its last eight
     calc.open()
     ws.frame(1 / 30)
