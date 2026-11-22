@@ -7,18 +7,23 @@
 //
 //     static int32_t s_count;
 //     static void add(int32_t row) { uitree_set_int(s_count, uitree_get_int(s_count) + 1); }
-//     EXPORT(_init) void _init(void) {
-//         s_count = ut_int("count", 0);
-//         ut_action("add", "Add one", add);
+//     static void page(void) {
 //         ut_page("counter", "Counter") {
 //             ut_group("Count") {
 //                 ut_info("Count", "{count}");
 //                 ut_link("add", NULL);
 //             }
 //         }
-//         uitree_open();
+//     }
+//     EXPORT(_init) void _init(void) {
+//         s_count = ut_int("count", 0);
+//         ut_action("add", "Add one", add);
+//         ut_open(page);
 //     }
 //     EXPORT(_draw) void _draw(void) { ut_frame(); }
+//
+// A page is a function: ut_push(fn) from a handler builds it over this one,
+// and the bar's Back (or ut_pop) builds the one under it again.
 //
 // A node goes under the open container (ut_page, ut_group, ut_rows, ut_in);
 // one with no key of its own is keyed by its kind and its place among its
@@ -57,9 +62,13 @@ enum {
 
 #define UT_DEPTH 16             // containers open at once (a node deeper is refused)
 #define UT_ACTIONS 64           // actions with a handler
+#define UT_PAGES 8              // pages on the stack
+#define UT_BACK 0x10000         // uitree_next's answer for the bar's back: pop the page
 
 // A handler: `row` is the row of the model the action came from, else -1.
 typedef void (*ut_fn)(int32_t row);
+// A page: its build, a ut_page block.
+typedef void (*ut_page_fn)(void);
 
 // The build's place and the handlers: one copy for every unit that includes this.
 struct ut_ {
@@ -67,6 +76,9 @@ struct ut_ {
     int32_t depth, last;                    // ...how many; the node made last
     const char *names[UT_ACTIONS];          // each action's name and handler, by its index
     ut_fn fns[UT_ACTIONS];
+    ut_page_fn pages[UT_PAGES];             // the page stack, its top last
+    int32_t npages;
+    int32_t ev[5];                          // the running action's model slot, row, and a pointer's kind, x, y
 };
 __attribute__((weak)) struct ut_ ut_;
 
@@ -103,6 +115,22 @@ static inline int32_t ut_state(const char *name, int32_t type) {
 static inline int32_t ut_int(const char *name, int32_t v) {
     int32_t s = ut_state(name, UT_INT);
     uitree_set_int(s, v);
+    return s;
+}
+
+// A text state holding `v`: its slot.
+static inline int32_t ut_text(const char *name, const char *v) {
+    int32_t s = ut_state(name, UT_TEXT);
+    uitree_set_text(s, v, ut_len_(v));
+    return s;
+}
+
+// An enum state: its values NUL-separated, holding `v`: its slot.
+#define ut_enum(name, values, v) ut_enum_((name), (values), sizeof(values) - 1, (v))
+
+static inline int32_t ut_enum_(const char *name, const char *values, uint32_t values_n, const char *v) {
+    int32_t s = uitree_state(name, ut_len_(name), UT_ENUM, values, values_n);
+    uitree_set_text(s, v, ut_len_(v));
     return s;
 }
 
@@ -188,20 +216,22 @@ static inline int32_t ut_action_of_(const char *name) {
     return -1;
 }
 
-// Each action the engine hands out, its handler run.
+static inline void ut_pop(void);
+
+// Each action the engine hands out, its handler run; the bar's back pops the page.
 static inline void ut_run(void) {
-    int32_t ev[2];
-    for (int32_t a; (a = uitree_next(ev, sizeof ev)) >= 0;) {
-        if (a < UT_ACTIONS && ut_.fns[a] != NULL) {
-            ut_.fns[a](ev[1]);
+    for (int32_t a; (a = uitree_next(ut_.ev, sizeof ut_.ev)) >= 0;) {
+        if (a == UT_BACK) {
+            ut_pop();
+        } else if (a < UT_ACTIONS && ut_.fns[a] != NULL) {
+            ut_.fns[a](ut_.ev[1]);
         }
     }
 }
 
-// The frame: the handlers, the bar, the page, and the handlers of what it took.
+// The frame: the handlers, the bar and the page (uitree_frame), and the handlers of what it took.
 static inline int32_t ut_frame(void) {
     ut_run();
-    ui_bar("", 0, "", 0, 0);
     int32_t r = uitree_frame(0);
     ut_run();
     return r;
@@ -260,10 +290,12 @@ static inline int ut_close_(void) {
 #define ut_in(node) for (int ut_o_ = ut_open_(node); ut_o_; ut_o_ = ut_close_())
 
 static inline int ut_page_(const char *id, const char *title) {
-    char b[32] = "1 ";
-    size_t n = strlen(id) < sizeof b - 3 ? strlen(id) : sizeof b - 3;
-    memcpy(b + 2, id, n);
-    uitree_build(b, (uint32_t)(n + 2));
+    char b[32];
+    char *e = ut_digits_(b, ut_.npages > 1 ? ut_.npages : 1);
+    size_t n = strlen(id) < (size_t)(b + sizeof b - 2 - e) ? strlen(id) : (size_t)(b + sizeof b - 2 - e);
+    *e++ = ' ';
+    memcpy(e, id, n);
+    uitree_build(b, (uint32_t)(e + n - b));
     ut_.depth = 0;
     ut_node(UT_PAGE, "page");
     if (title != NULL) {
@@ -278,8 +310,33 @@ static inline int ut_page_end_(void) {
     return 0;
 }
 
-// The page `id`, titled `title` (or NULL), built by the body that follows.
+// The page `id`, titled `title` (or NULL), built by the body that follows
+// (the build of a page function: a page's id is its place on the stack and `id`).
 #define ut_page(id, title) for (int ut_o_ = ut_page_(id, title); ut_o_; ut_o_ = ut_page_end_())
+
+// The app's first page, built by `page`, and the visit opened.
+static inline int32_t ut_open(ut_page_fn page) {
+    ut_.pages[0] = page;
+    ut_.npages = 1;
+    page();
+    return uitree_open();
+}
+
+// From a handler: the page `page` pushed (built) over this one, which Back pops.
+static inline void ut_push(ut_page_fn page) {
+    if (ut_.npages < UT_PAGES) {
+        ut_.pages[ut_.npages++] = page;
+        page();
+    }
+}
+
+// The page under this one built again, the focus back where it was.
+static inline void ut_pop(void) {
+    if (ut_.npages > 1) {
+        ut_.npages--;
+        ut_.pages[ut_.npages - 1]();
+    }
+}
 
 static inline int32_t ut_group_(const char *caption) {
     int32_t n = ut_node(UT_GROUP, NULL);
@@ -289,6 +346,22 @@ static inline int32_t ut_group_(const char *caption) {
 
 // A group captioned `caption`, holding the body that follows.
 #define ut_group(caption) ut_in(ut_group_(caption))
+
+static inline int32_t ut_dialog_(const char *title, const char *shown, const char *const *buttons) {
+    int32_t n = ut_node(UT_DIALOG, NULL);
+    if (shown != NULL) {
+        ut_prop_("shown", shown);
+    }
+    ut_prop_("title", title);
+    for (; *buttons != NULL; buttons++) {
+        uitree_node_action(n, ut_action_of_(*buttons));
+    }
+    return n;
+}
+
+// A dialog titled `title`, shown while the condition `shown` holds (NULL:
+// always), its buttons the actions named after it, holding the body that follows.
+#define ut_dialog(title, shown, ...) ut_in(ut_dialog_(title, shown, (const char *const[]){__VA_ARGS__, NULL}))
 
 static inline int32_t ut_rows_(const char *model, const char *cur) {
     int32_t n = ut_node(UT_ROWS, model);
@@ -347,6 +420,107 @@ static inline int32_t ut_field(const char *state, const char *label) {
     ut_prop_("bind", state);
     ut_prop_("label", label);
     ut_prop_("max", "32");
+    return n;
+}
+
+// A seg bound to enum state `state`, labelled `label`, its values worded by the labels table `labels` (or NULL).
+static inline int32_t ut_seg(const char *state, const char *label, const char *labels) {
+    int32_t n = ut_node(UT_SEG, state);
+    ut_prop_("bind", state);
+    if (labels != NULL) {
+        ut_prop_("labels", labels);
+    }
+    ut_prop_("label", label);
+    ut_prop_("look", UT_LOOK_SEG);
+    return n;
+}
+
+// Tabs bound to enum state `state`, worded by the labels table `labels`.
+static inline int32_t ut_tabs(const char *state, const char *labels) {
+    int32_t n = ut_node(UT_TABS, state);
+    ut_prop_("bind", state);
+    ut_prop_("labels", labels);
+    return n;
+}
+
+// A progress bar showing `value` (a template) of `max`, labelled `label`.
+static inline int32_t ut_progress(const char *value, const char *label, int32_t max) {
+    int32_t n = ut_node(UT_PROGRESS, NULL);
+    ut_prop_("label", label);
+    ut_prop_int_("max", max);
+    ut_prop_("value", value);
+    return n;
+}
+
+// A view of text state `state`'s lines.
+static inline int32_t ut_text_view(const char *state) {
+    int32_t n = ut_node(UT_TEXT_VIEW, state);
+    ut_prop_("bind", state);
+    return n;
+}
+
+static inline int32_t ut_menu_(const char *caption) {
+    int32_t n = ut_node(UT_MENU, NULL);
+    ut_prop_("caption", caption);
+    return n;
+}
+
+// A menu captioned `caption`, its items (ut_item) the body that follows.
+#define ut_menu(caption) ut_in(ut_menu_(caption))
+
+static inline int32_t ut_item(const char *action) {
+    int32_t n = ut_node(UT_ITEM, action);
+    uitree_node_action(n, ut_action_of_(action));
+    return n;
+}
+
+static inline int32_t ut_table_(const char *model, const char *cur, const char *on, const char *const *cols) {
+    int32_t n = ut_node(UT_TABLE, model);
+    ut_prop_("bind", model);
+    for (; *cols != NULL; cols++) {
+        ut_prop_("cols", *cols);
+    }
+    if (cur != NULL) {
+        ut_prop_("cur", cur);
+    }
+    if (on != NULL) {
+        ut_prop_("on", on);
+    }
+    return n;
+}
+
+// A table of model `model`, its cursor `cur`, its row's action `on` (each NULL
+// for none), headed by the columns named after them; its cells (ut_col) the body.
+#define ut_table(model, cur, on, ...) ut_in(ut_table_(model, cur, on, (const char *const[]){__VA_ARGS__, NULL}))
+
+static inline int32_t ut_col(const char *text) {
+    int32_t n = ut_node(UT_COL, NULL);
+    ut_prop_("text", text);
+    return n;
+}
+
+static inline int32_t ut_cards_(const char *model, const char *cur, int32_t w, int32_t h) {
+    int32_t n = ut_node(UT_CARDS, model);
+    ut_prop_("bind", model);
+    if (cur != NULL) {
+        ut_prop_("cur", cur);
+    }
+    ut_prop_int_("w", w);
+    ut_prop_int_("h", h);
+    return n;
+}
+
+// Cards of model `model`, `w` x `h` each, its cursor `cur` (or NULL), each card (ut_card) the body.
+#define ut_cards(model, cur, w, h) ut_in(ut_cards_(model, cur, w, h))
+
+// A card that runs action `action`, labelled `label`, `sub` under it (or NULL).
+static inline int32_t ut_card(const char *action, const char *label, const char *sub) {
+    int32_t n = ut_node(UT_CARD, action);
+    ut_prop_("label", label);
+    if (sub != NULL) {
+        ut_prop_("sub", sub);
+    }
+    uitree_node_action(n, ut_action_of_(action));
     return n;
 }
 

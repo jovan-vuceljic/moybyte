@@ -17,15 +17,31 @@
 // buffer the app hands with its capacity and answers the whole length.
 //
 // The rows, beyond the uit_* call each makes:
-//   frame(flags)  uit_run_frame on the run's canvas with the hints band and
-//                 the trace on; `flags` is 0 (no flag is defined yet). The
-//                 engine's trace lines go to the OS log as "[trace] " lines,
-//                 the Python and Lua layers' format.
+//   build(page)   the page's id is "N NAME", N its depth on the app's page
+//                 stack (the SDK keeps the stack: a push or a pop is a build
+//                 of the page now on top). A deeper build after `open` is
+//                 traced as a push and remembers the focused key; a
+//                 shallower one is traced as Back and puts the focus back on
+//                 the key its page had, as the layers trace and focus them.
+//   frame(flags)  the frame as the Lua layer's back end runs it: a letter
+//                 key an action declares (uit_letter) and the confirm role's
+//                 key (A, Enter, with nothing focused and no dialog) owe
+//                 their actions; the host's bar is lent with no title, its
+//                 way back shown where a dialog or popover shows, a page is
+//                 pushed or an action holds the back role, and its Back owes
+//                 the dialog's first button, the popover's close=, a pop of
+//                 the page, or the back role's action; then uit_run_frame on
+//                 the run's canvas with the hints band, the trace and the
+//                 page depth, and the engine's actions owed after those.
+//                 `flags` is 0 (no flag is defined yet). The engine's trace
+//                 lines go to the OS log as "[trace] " lines, the Python and
+//                 Lua layers' format.
 //   open()        the visit opens (uit_open): the values set before it are
 //                 the app's start and are not traced, every write after is.
 //                 An action declared as the hook `opened` (UIT_A_HOOK) is
 //                 the first one `next` hands out after it.
-//   next(ev)      the next action to run, its index (-1: none): ev[0] its
+//   next(ev)      the next action owed, its index (-1: none; 0x10000: the
+//                 bar's Back pops the page, which the app builds): ev[0] its
 //                 model slot, ev[1] its row (-1 each where it acts on none).
 //                 An action that is off now is traced as skipped and not
 //                 handed out; a control's write is not an event here (the

@@ -24,6 +24,16 @@ enum { LOG_ERR = 3, LOG_INFO = 6 };
 #pragma weak moycore_ui_target
 #pragma weak moycore_ui_snap
 
+#define DEPTH 8                 // the pages a stack remembers a focus for
+#define BACK_EV 0x10000         // `next`'s answer for the bar's back with a page to pop (UT_BACK)
+
+// An action owed to the app, handed out by `next` in the order the frame took it.
+typedef struct {
+    int act;                    // its index; -1: the bar's back pops the page
+    int32_t ev[5];              // its model slot, row, and a pointer's kind, x, y
+    uint32_t src;               // where it came from, in `qtext`
+} owed_t;
+
 // What a run's app keeps beside its store.
 typedef struct {
     uit_t *e;
@@ -40,6 +50,13 @@ typedef struct {
     uint32_t *when_at;
     int nwhen, cwhen;
     uit_buf_t tmp;              // the call's texts, NUL-terminated
+    int depth;                  // the page stack's depth: the leading number of the page's id
+    char refocus[DEPTH][48];    // the key focused on each page as the next was pushed
+    int refocus_due;            // build_end puts the focus back on this depth's key (-1 none)
+    char title[64];             // the page's title, for a trace's "on 'TITLE'"
+    owed_t *q;                  // the actions owed, [qat, qn)
+    int qn, qat, qcap;
+    uit_buf_t qtext;
 } app_t;
 
 static app_t s_app;
@@ -50,7 +67,9 @@ static void app_drop(app_t *a) {
     }
     uit_buf_free(&a->when);
     uit_buf_free(&a->tmp);
+    uit_buf_free(&a->qtext);
     UIT_FREE(a->when_at);
+    UIT_FREE(a->q);
     memset(a, 0, sizeof *a);
 }
 
@@ -78,6 +97,7 @@ static app_t *app(void) {
         a->handler = -1;
         a->hook_open = -1;
         a->page = -1;
+        a->refocus_due = -1;
     }
     return a;
 }
@@ -300,8 +320,25 @@ int32_t moy_uitree_wasm_build(void *x, const uint8_t *page, uint32_t page_n) {
     if (p < 0) {
         return refuse(a, UIT_E_NOMEM, "build", "", "no memory for the page's id");
     }
+    int depth = 0;
+    for (const char *d = at(a, p); *d >= '0' && *d <= '9'; d++) {
+        depth = depth * 10 + (*d - '0');
+    }
+    if (a->opened && depth > a->depth && depth <= DEPTH) {
+        char *f = a->refocus[depth - 2 < 0 ? 0 : depth - 2];
+        if (uit_focused(a->e, f, sizeof a->refocus[0]) < 0) {
+            f[0] = 0;
+        }
+        trace(a, "page", "push", "page %d%s%s%s", depth, f[0] ? ", opened from '" : "", f, f[0] ? "'" : "");
+    } else if (a->opened && depth < a->depth && depth >= 1) {
+        const char *f = a->refocus[depth - 1];
+        trace(a, "page", "back", "page %d%s%s%s", depth, f[0] ? ", focus back to '" : "", f, f[0] ? "'" : "");
+        a->refocus_due = depth - 1;
+    }
+    a->depth = depth;
     uit_build_begin(a->e, at(a, p));
     a->page = -1;
+    a->title[0] = 0;
     return 0;
 }
 
@@ -331,6 +368,9 @@ int32_t moy_uitree_wasm_prop(void *x, int32_t node, const uint8_t *name, uint32_
     TEXTS_BEGIN(a);
     int n = put(a, name, name_n), s = put(a, src, src_n);
     int r = uit_prop(a->e, (int)node, at(a, n), at(a, s), NULL);
+    if (r >= 0 && node == a->page && strcmp(at(a, n), "title") == 0) {
+        snprintf(a->title, sizeof a->title, "%s", at(a, s));
+    }
     if (r < 0) {
         char where[200];
         key_path(a, (int)node, where, sizeof where);
@@ -358,7 +398,14 @@ int32_t moy_uitree_wasm_node_action(void *x, int32_t node, int32_t act) {
 int32_t moy_uitree_wasm_build_end(void *x) {
     (void)x;
     APP(a);
-    return check(a, uit_build_end(a->e), "build_end", "");
+    int r = check(a, uit_build_end(a->e), "build_end", "");
+    if (r >= 0 && a->refocus_due >= 0) {
+        if (a->refocus[a->refocus_due][0]) {
+            uit_want_focus(a->e, a->refocus[a->refocus_due]);
+        }
+        a->refocus_due = -1;
+    }
+    return r;
 }
 
 // -- visit and frame --------------------------------------------------------------
@@ -386,6 +433,85 @@ int32_t moy_uitree_wasm_focus(void *x, const uint8_t *key, uint32_t key_n) {
     return 0;
 }
 
+// An action owed to the app from `src`; a non-placed one names the page it
+// is on, as the layers' queue does (" on 'TITLE'", not for a dialog's).
+static void owe(app_t *a, int act, int m, int row, const int32_t *pev, const char *src, int placed) {
+    if (a->qn >= a->qcap) {
+        int c = a->qcap ? a->qcap * 2 : 8;
+        owed_t *q = UIT_REALLOC(a->q, (size_t)c * sizeof *q);
+        if (q == NULL) {
+            return;
+        }
+        a->q = q;
+        a->qcap = c;
+    }
+    int off = placed || strstr(src, " dialog ") != NULL || strncmp(src, "the ", 4) == 0
+                  ? uit_buf_puts(&a->qtext, src) : uit_buf_printf(&a->qtext, "%s on '%s'", src, a->title);
+    if (off < 0 || uit_buf_put(&a->qtext, "", 0) < 0) {
+        return;
+    }
+    owed_t *o = &a->q[a->qn++];
+    o->act = act;
+    o->ev[0] = m;
+    o->ev[1] = row;
+    o->ev[2] = pev ? pev[0] : 0;
+    o->ev[3] = pev ? pev[1] : 0;
+    o->ev[4] = pev ? pev[2] : 0;
+    o->src = (uint32_t)off;
+}
+
+static int with_flag(const app_t *a, int flag) {
+    for (int k = 0; k < a->e->nacts; k++) {
+        if (a->e->acts[k].flags & flag) {
+            return k;
+        }
+    }
+    return -1;
+}
+
+// The keys before the page: a letter an action declares, where the engine
+// gives it to that action (not into a focused field), and the confirm role's
+// key (A, Enter) where nothing is focused and no dialog shows.
+static void keys(app_t *a, const int32_t *snap) {
+    char src[16];
+    int k = snap[MOYCORE_UI_SNAP_KEY], act;
+    if (k >= 'a' && k <= 'z' && (act = uit_letter(a->e, k)) >= 0) {
+        snprintf(src, sizeof src, "key '%c'", k);
+        owe(a, act, -1, -1, NULL, src, 1);
+    }
+    act = with_flag(a, UIT_A_ROLE_CONFIRM);
+    if (act >= 0 && (((snap[MOYCORE_UI_SNAP_BTNP] >> 4) & 1) || k == 13) && uit_unfocused(a->e) &&
+        uit_dialog(a->e) < 0) {
+        owe(a, act, -1, -1, NULL, "role confirm", 1);
+    }
+}
+
+// Back on the bar: a shown dialog's first button, a shown popover's close=,
+// the page under this one, else the app's back role.
+static void back(app_t *a) {
+    char key[64], src[96];
+    int act;
+    if (uit_dialog(a->e) >= 0) {
+        if ((act = uit_back_dialog(a->e, key, sizeof key)) >= 0) {
+            snprintf(src, sizeof src, "back on dialog '%s'", key);
+            owe(a, act, -1, -1, NULL, src, 0);
+        }
+        return;
+    }
+    if ((act = uit_back_popover(a->e, key, sizeof key)) != -2) {
+        if (act >= 0) {
+            snprintf(src, sizeof src, "back on popover '%s'", key);
+            owe(a, act, -1, -1, NULL, src, 0);
+        }
+        return;
+    }
+    if (a->depth > 1) {
+        owe(a, -1, -1, -1, NULL, "the bar's back", 1);
+    } else if ((act = with_flag(a, UIT_A_ROLE_BACK)) >= 0 && uit_can(a->e, act, -1)) {
+        owe(a, act, -1, -1, NULL, "role back", 0);
+    }
+}
+
 int32_t moy_uitree_wasm_frame(void *x, int32_t flags) {
     (void)x;
     APP(a);
@@ -397,9 +523,28 @@ int32_t moy_uitree_wasm_frame(void *x, int32_t flags) {
                       "then uitree_open, before the first frame");
     }
     void *target = moycore_ui_target != NULL ? moycore_ui_target() : NULL;
+    uint32_t tick, serial;
+    const int32_t *snap = moycore_ui_snap != NULL ? moycore_ui_snap(&tick, &serial) : NULL;
+    if (a->qat >= a->qn) {
+        a->qn = a->qat = 0;
+        a->qtext.n = 0;
+    }
+    if (snap != NULL) {
+        keys(a, snap);
+    }
+    // the bar's title is the app's (its window's): the page's title is the page's to draw
+    int32_t got = -1;
+    char pk[48];
+    int wants = a->depth > 1 || uit_dialog(a->e) >= 0 || uit_popover(a->e, pk, sizeof pk) > 0 ||
+                with_flag(a, UIT_A_ROLE_BACK) >= 0;
+    if (target != NULL && moy_ui_run_bar(target, moy_ui_span_of((const uint8_t *)"", 0), NULL, 0, wants ? MOY_UI_BAR_BACK : 0u,
+                                         &got) == 0 && got == MOY_UI_BAR_UP) {
+        back(a);
+    }
     a->handler = -1;
     a->frames++;
-    int r = uit_run_frame(a->e, target, UIT_F_BAND | UIT_F_TRACE);
+    int depth = a->depth < 1 ? 1 : a->depth > 255 ? 255 : a->depth;
+    int r = uit_run_frame(a->e, target, UIT_F_BAND | UIT_F_TRACE | depth << UIT_F_PAGES_SHIFT);
     if (r < 0) {
         return refuse(a, r, "frame", "", "no compiled run is open");
     }
@@ -413,6 +558,19 @@ int32_t moy_uitree_wasm_frame(void *x, int32_t flags) {
         *name++ = 0;
         *text++ = 0;
         trace(a, line, name, "%s", text);
+    }
+    // the engine's events after the keys and the bar, each an action placed on the page
+    char src[200];
+    int32_t w[3];
+    int k;
+    while ((k = uit_next(a->e, w, src, sizeof src)) != UIT_EV_NONE) {
+        if (k == UIT_EV_ACTION) {
+            char *cut = strchr(src, '\x02');
+            if (cut != NULL) {
+                *cut = 0;
+            }
+            owe(a, w[0], w[1], w[2], NULL, src, 1);
+        }                           // a control's write: the slot holds it
     }
     return r;
 }
@@ -431,21 +589,17 @@ int32_t moy_uitree_wasm_next(void *x, uint8_t *ev, uint32_t ev_cap) {
         memset(ev, 0xFF, 8);        // -1, -1: no model, no row
         return a->handler;
     }
-    char src[200];
-    int32_t w[3];
-    int k;
-    while ((k = uit_next(a->e, w, src, sizeof src)) != UIT_EV_NONE) {
-        if (k != UIT_EV_ACTION) {
-            continue;               // a control's write: the slot holds it
+    while (a->qat < a->qn) {
+        const owed_t *o = &a->q[a->qat++];
+        const char *src = a->qtext.p + o->src;
+        if (o->act < 0) {
+            memset(ev, 0xFF, 8);
+            return BACK_EV;         // the app pops its page (a build of the page under it)
         }
-        char *cut = strchr(src, '\x02');
-        if (cut != NULL) {
-            *cut = 0;
-        }
-        const char *name = uit_str(a->e, a->e->acts[w[0]].name);
-        if (!uit_can(a->e, w[0], w[2])) {
-            const char *cond = w[0] < a->nwhen ? a->when.p + a->when_at[w[0]] : "";
-            int16_t row = a->e->acts[w[0]].row;
+        const char *name = uit_str(a->e, a->e->acts[o->act].name);
+        if (!uit_can(a->e, o->act, o->ev[1])) {
+            const char *cond = o->act < a->nwhen ? a->when.p + a->when_at[o->act] : "";
+            int16_t row = a->e->acts[o->act].row;
             if (cond[0]) {
                 trace(a, "skip", name, "from %s (when %s is false)", src, cond);
             } else if (row >= 0) {
@@ -454,9 +608,9 @@ int32_t moy_uitree_wasm_next(void *x, uint8_t *ev, uint32_t ev_cap) {
             continue;
         }
         trace(a, "action", name, "from %s", src);
-        a->handler = w[0];
-        memcpy(ev, &w[1], 8);       // the app's buffer need not be aligned
-        return w[0];
+        a->handler = o->act;
+        memcpy(ev, o->ev, ev_cap < sizeof o->ev ? 8u : sizeof o->ev);   // the app's buffer need not be aligned
+        return o->act;
     }
     return -1;
 }
