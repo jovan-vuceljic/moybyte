@@ -1532,6 +1532,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= kind == UIT_SEG ? NL_CYCLE : NL_STEPS;
         else if (kind == UIT_SEG && !strcmp(src, "swatches"))
             N->lit |= NL_SWATCH;
+        else if (kind == UIT_SEG && !strcmp(src, "pictures"))
+            N->lit |= NL_PICS;
         else if (kind == UIT_SLIDER && !strcmp(src, "blocks"))
             N->lit |= NL_BLOCKS;
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);

@@ -527,16 +527,24 @@ static inline int32_t ut_field(const char *state, const char *label) {
     return n;
 }
 
-// A seg bound to enum state `state`, labelled `label`, its values worded by the labels table `labels` (or NULL).
-static inline int32_t ut_seg(const char *state, const char *label, const char *labels) {
+// A seg bound to enum state `state`, labelled `label`, its values worded by the labels table
+// `labels` (or NULL), of look `look` (UT_LOOK_SEG, _CYCLE, _SWATCHES, _PICTURES: each word an
+// image's text, `own:KEY`).
+static inline int32_t ut_seg_look(const char *state, const char *label, const char *labels,
+                                  const char *look) {
     int32_t n = ut_node(UT_SEG, state);
     ut_prop_("bind", state);
     if (labels != NULL) {
         ut_prop_("labels", labels);
     }
     ut_prop_("label", label);
-    ut_prop_("look", UT_LOOK_SEG);
+    ut_prop_("look", look);
     return n;
+}
+
+// A seg of the seg look (ut_seg_look).
+static inline int32_t ut_seg(const char *state, const char *label, const char *labels) {
+    return ut_seg_look(state, label, labels, UT_LOOK_SEG);
 }
 
 // Tabs bound to enum state `state`, worded by the labels table `labels`.

@@ -2466,7 +2466,10 @@ def seg(label, name, labels=None, text=None, look="seg", **p):
     `text=`. `look="cycle"` shows the one value between chevrons and
     activation steps it; `look="seg"` shows every value; `look="swatches"`
     shows every value as a colour dot, each word a colour (0xRRGGBB, a
-    number in any base). Bound to `.FIELD`, an int field of its list's row,
+    number in any base); `look="pictures"` shows every value as a picture
+    in a tile at the row's right, each word an image's text (`own:KEY`,
+    `store:KIND/NAME`), the current one's tile the selection's, left and
+    right wrapping and activation taking the next. Bound to `.FIELD`, an int field of its list's row,
     the field is the index of its item and `text=`, a template over the
     row, renders its items one a line; `on=` is handed the row."""
     where = _caller()
@@ -3348,16 +3351,21 @@ class Pictures:
     an indexed drawing in the console's 16 colours that is no file, or one
     the app draws when the engine asks (`render(w, h)` answers a canvas
     layer of that size, which the engine keeps and releases when it lets the
-    picture go; None where it cannot). The engine holds them;
+    picture go; None where it cannot). A drawn picture put with `clear=True`
+    is clear where it has its corner's colour: what lies under it shows
+    there (a sprite on a picker's tile). The engine holds them;
     `image.own(key)` names one."""
 
     def __init__(self):
         self.src = {}
         self.gen = {}
 
-    def put(self, key, data=None, w=None, h=None, pixels=None, render=None):
+    def put(self, key, data=None, w=None, h=None, pixels=None, render=None, clear=False):
         if (data is not None) + (pixels is not None) + (render is not None) != 1:
             raise UIError("S02", "pictures.put(%r): bytes (data=), an indexed drawing (w=, h=, pixels=) or a drawer (render=)" % key, fix='pictures.put(KEY, data=PNG_BYTES), pictures.put(KEY, w=W, h=H, pixels=INDICES) or pictures.put(KEY, render=FN)')
+        if clear is not False and (clear is not True or render is None):
+            raise UIError("S02", "pictures.put(%r): clear=True is a drawn picture's (render=)" % key,
+                          found="clear=%r" % (clear,), fix='pictures.put(KEY, render=FN, clear=True)')
         if pixels is not None:
             if type(w) is not int or type(h) is not int or len(pixels) != w * h:
                 raise UIError("S02", "pictures.put(%r): pixels are w * h palette indices" % key,
@@ -3367,7 +3375,7 @@ class Pictures:
             if not callable(render):
                 raise UIError("S02", "pictures.put(%r): render= is a function of (w, h)" % key,
                               found=repr(render), fix='def render(w, h): ... return a w x h layer')
-            self.src[key] = ("render", render)
+            self.src[key] = ("render", render, clear)
         else:
             self.src[key] = ("bytes", bytes(data))
         self.gen[key] = self.gen.get(key, 0) + 1

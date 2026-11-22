@@ -37,7 +37,7 @@ def _tr(app, text):
 
 def _let_go(got):
     """A picture the cache let go: a layer an app's drawer made goes back."""
-    if got[0] == "layer":
+    if got[0] in ("layer", "clear"):
         got[1].release()
 
 
@@ -85,6 +85,9 @@ class PicEngine:
             cv.cover(pix[1], side, 0, 0, side, side, x, y, w, h, 0, False)
         elif kind == "layer":
             cv.blit565_resize(pix._buf, pix.w, pix.h, x, y, w, h)
+        elif kind == "clear":   # its corner's colour left out: the tile under it shows there
+            b = pix._buf
+            cv.blit565(b, pix.w, pix.h, x + (w - pix.w) // 2, y + (h - pix.h) // 2, 1, b[0] | b[1] << 8)
         else:                   # a drawing: centred in its tile at its own aspect
             cv.picture(pix, x + (w - pix.w) // 2, y + (h - pix.h) // 2, pix.w, pix.h)
 
@@ -188,7 +191,7 @@ class PicEngine:
             lay = src[1](w, h)
             if lay is None or lay.w != w or lay.h != h:
                 return "not drawn at %dx%d" % (w, h)
-            return ("layer", lay, w * h * 2)
+            return ("clear" if src[2] else "layer", lay, w * h * 2)
         blob, why = self._bytes(pic)
         if blob is None:
             return why

@@ -303,7 +303,11 @@ with `grow=True` a fill whose chevrons stand at its ends, `tone="dim"` its
 value dim;
 `ui.seg(label, ".FIELD", text=...)` in a rows' body binds an int field of
 the row, the index of its item, its items the lines `text=` renders over
-the row; `ui.dialog(..., look="keys")` draws no buttons on the T-Deck, whose
+the row; a seg's `look="pictures"` shows each item as the picture its word
+names (`own:KEY`) in a tile at the row's right, the current one's on the
+selection plate, left and right wrapping and activation taking the next;
+`ui.pictures.put(key, render=..., clear=True)` leaves a drawn picture's
+corner colour out, the tile showing there; `ui.dialog(..., look="keys")` draws no buttons on the T-Deck, whose
 band's Enter and Esc are its buttons, and a dialog of more than one field
 names the arrows that move between them;
 `ui.page(title, status=)` leads the hints band with its words (a page

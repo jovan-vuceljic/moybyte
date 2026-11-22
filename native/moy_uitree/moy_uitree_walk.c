@@ -1552,6 +1552,57 @@ static void draw_picture(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
     moy_ui_api_grid(c, s, span_of("", 0), 0, 0, NULL);
 }
 
+// A seg of look="pictures": its items image texts (`own:KEY`, `store:KIND/NAME`), the row the
+// engine's (moy_ui_api_pics) and each item's picture the front end's, drawn in its tile over the
+// plate. The row's gen is the pictures' while the front end holds every one (a shift frame moves
+// them), none while one is owed (it draws again).
+static void draw_pics(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
+                      uint32_t a1, uint32_t n1)
+{
+    const uit_node_t *N = NODE(k);
+    int field = (N->lit & NL_FIELD) != 0, count, at;
+    uint32_t len, items = field ? field_seg_items(e, N, model, row, &len, &count, &at)
+                                : seg_items(e, N, &len, &count, &at);
+    int32_t gen = 0, all = 1;
+    for (int i = 0, p = (int)items; i < count; i++) {
+        size_t n = strlen(e->scratch.p + p);
+        int held = n && e->pic_fn ? e->pic_fn(e->pic_ud, k, e->scratch.p + p, n, NULL) : 0;
+        all &= held > 0 || !n || !e->pic_fn;
+        gen = gen * 31 + held;
+        p += (int)n + 1;
+    }
+    moy_ui_over_t o;
+    char id[UIT_ID_MAX + 1];
+    over_for(e, k, model, row, c, &o, id);
+    if (all)
+        moy_ui_over_put(&o, MOY_UI_OV_GEN, &gen);
+    int32_t box[5];
+    int got = moy_ui_api_pics(c, s, sspan(e, a1, n1), count, at, &o, box);
+    if (e->pic_fn && box[2] > 0) {
+        int32_t room = e->rect[3] > e->band_h ? e->rect[3] - e->band_h : 0;
+        for (int i = 0, p = (int)items; i < count; i++) {
+            size_t n = strlen(e->scratch.p + p);
+            int32_t r[9] = {0, 0, 0, 0, e->rect[0], e->rect[1], e->rect[2], room, 0};
+            moy_ui_api_pics_tile(c, box, count, i, r);
+            moy_ui_api_card_clip(c, r + 4);
+            if (n && r[6] > 0 && r[7] > 0)
+                e->pic_fn(e->pic_ud, k, e->scratch.p + p, n, r);
+            p += (int)n + 1;
+        }
+    }
+    if (got >= 0 && got < count && got != at) {
+        if (field) {
+            char was[16], now[16];
+            snprintf(was, sizeof was, "%d", at);
+            snprintf(now, sizeof now, "%d", got);
+            row_wrote(e, k, model, row, now, was, now);
+        } else {
+            const char *v = seg_key(e, N, got);
+            wrote_text(e, k, v, strlen(v), "from", N->on);
+        }
+    }
+}
+
 // A split's cells' sizes across `span` (`_spans`): its first `limit` sizes, with a weight ("N*")
 // among them each int a fixed size in desk units and the weights sharing the rest, else every int
 // a weight; the last takes what rounding leaves. The count into *count.
@@ -2966,6 +3017,10 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
     }
     case UIT_SEG: {
         a1 = text(e, k, 0, model, row, &n1);
+        if (N->lit & NL_PICS) {
+            draw_pics(e, c, s, k, model, row, a1, n1);
+            break;
+        }
         int count, at;
         if (N->lit & NL_FIELD) {
             // bound to an int field of its row: its items the lines text= renders over the row

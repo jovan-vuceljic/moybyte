@@ -3355,12 +3355,16 @@ class Workstation:
         # overlay always reports animating, so it redraws every frame as before.
         # A picture a card in view waits for, one a frame, before the frame
         # paints: its damage paints it now, and the page is not quiet until
-        # every picture it shows has come (uitree_pics).
+        # every picture it shows has come (uitree_pics). The Config tab's
+        # pickers are the Editor's one page that shows pictures.
         try:
             for app in self.app_layers:
                 if getattr(app, "view_owed", False):
                     app.idle_step()
                     break
+            else:
+                if self.cards_layer.view_owed:
+                    self.cards_layer.idle_step()
         except Exception as exc:  # noqa: BLE001 -- a picture never ends a session
             if not self._idle_warned:
                 self._idle_warned = True

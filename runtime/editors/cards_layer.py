@@ -74,6 +74,14 @@ class _Damage:
         self.ws.mark_dirty()
 
 
+def _picker(f):
+    """Whether choice card `f` is a picker of its pictures: its sprites, its
+    backgrounds, or more than two icons."""
+    disp = f.get("display")
+    return disp in ("sprite-tiles", "bg-thumbs") or (
+        disp == "choice-icons" and (len(f["choices"]) != 2 or bool(f.get("names"))))
+
+
 class CardsLayout(LayoutBase):
     """The Config tab's geometry: the content rect under the bar (`cx`,
     `cy`, `cw`, `ch`) its pages draw in, from the SYSTEM canvas size and
@@ -104,6 +112,7 @@ class CardsLayer(Layer):
         self._opened = False
         self._shown = None            # what `_sync` wrote last
         self._count = (None, 0)       # (the cart's path, its files)
+        self._pics = (None, ())       # (what the pickers' pictures were drawn from, their puts)
         self._band = None             # whether the page's band names F6 (a desk pane's)
         sc = ws.sys_canvas
         self.layout = CardsLayout(sc.w, sc.h, getattr(sc, "font_scale", 1))
@@ -165,14 +174,14 @@ class CardsLayer(Layer):
 
     def _rows(self):
         """The cards' rows: an `int` a slider, a two-way choice a toggle, a
-        picture choice a picker (its row as tall as its tiles), any other
-        choice a cycle through its names, one a line."""
+        picture choice a picker of its pictures (`cfg:KEY:K`, `_pictures`),
+        any other choice a cycle through its names, one a line."""
         label = self._ui_mod.card_label
         rows = []
         for f in self._fields():
             cur = self._get(f)
             row = {"id": f["key"], "label": label(f), "shape": "int", "v": 0, "lo": 0, "hi": 0,
-                   "on": False, "k": 0, "names": ""}
+                   "on": False, "k": 0, "names": "", "pics": ""}
             if f["type"] == "int":
                 lo, hi = f.get("min", 0), f.get("max", 100)
                 try:
@@ -183,10 +192,10 @@ class CardsLayer(Layer):
             else:
                 ch = f["choices"]
                 idx = ch.index(cur) if cur in ch else 0
-                disp = f.get("display")
                 two = len(ch) == 2 and not f.get("names")
-                if disp in ("sprite-tiles", "bg-thumbs") or (disp == "choice-icons" and not two):
-                    row.update(shape="pics", k=idx)
+                if _picker(f):
+                    row.update(shape="pics", k=idx, pics="\n".join(
+                        ["own:cfg:%s:%d" % (f["key"], k) for k in range(len(ch))]))
                 elif two:
                     row.update(shape="two", on=idx == 1)
                 else:
@@ -206,11 +215,11 @@ class CardsLayer(Layer):
             rows = () if why else self._rows()
             vals = (rows, "" if why else (ws.editor_app.missing_note() or ""), why,
                     "The manifest didn't read" if why else "", bool(why),
-                    str(cart.get("title") or ""), str(self._file_count()), self._pick_h())
+                    str(cart.get("title") or ""), str(self._file_count()), self._pictures())
         except Exception as exc:  # noqa: BLE001 -- a card the checks missed must not take the frame
             ws.cart_error = self._err_text(exc)
             print("Moybyte cards error:", exc)
-            vals = ((), "", ws.cart_error, "This page didn't draw", False, "", "", 0)
+            vals = ((), "", ws.cart_error, "This page didn't draw", False, "", "", ())
         if vals != self._shown:
             self._shown = vals
             self.run("sync", vals)
@@ -258,39 +267,28 @@ class CardsLayer(Layer):
 
     # -- a picker's pictures ----------------------------------------------------------
 
-    def _pick_h(self):
-        """A picker row's height: its tiles and their margin."""
-        desk = _layout_base.metric_class() == _layout_base.DESK
-        fs = self.layout.fs
-        return 64 if desk else 44 * fs
+    def _pictures(self):
+        """The pickers' pictures to put, `(key, render)` each: drawn again
+        where what they show moved (the cards, the sheet's tiles, the look,
+        the text size), the same tuple otherwise."""
+        ws = self.ws
+        fields = [f for f in self._fields() if f["type"] != "int" and _picker(f)]
+        sheet = ws.run.project.sheet
+        src = (repr(fields), id(sheet), getattr(sheet, "gen", 0), ws.look.look_gen, self.layout.fs)
+        if src != self._pics[0]:
+            self._pics = (src, tuple(("cfg:%s:%d" % (f["key"], k), self._render(f, k))
+                                     for f in fields for k in range(len(f["choices"]))))
+        return self._pics[1]
 
-    def tiles(self, n, w, h):
-        """A picker's `n` tiles in its row of w x h: each (x, y, side) from
-        the row's corner, at its right."""
-        desk = _layout_base.metric_class() == _layout_base.DESK
-        fs = self.layout.fs
-        side, gap, pad = (48, 12, 16) if desk else (32 * fs, 8 * fs, 10 * fs)
-        x = w - pad - n * side - (n - 1) * gap
-        return [(x + k * (side + gap), (h - side) // 2, side) for k in range(n)]
-
-    def draw_picker(self, cv, th, x, y, w, h, key, label, cur):
-        """Picker card `key`'s row in (x, y, w, h): its label, cut where its
-        tiles start, then each choice's picture in a tile, the current one
-        (`cur`) on the selection plate."""
-        f = self.field(key)
-        if f is None:
-            return
-        fs = self.layout.fs
-        tiles = self.tiles(len(f["choices"]), w, h)
-        r = self._label
-        r[0], r[1], r[2], r[3] = x + 10 * fs, y, max(1, (tiles[0][0] if tiles else w) - 18 * fs), h
-        _ui_draw.label(cv, r, label, th["ink"])
-        for k, t in enumerate(tiles):
-            tx, ty, side = x + t[0], y + t[1], t[2]
-            cv.rrect(tx, ty, side, side, 4 * fs, th["selection"] if k == cur else th["surface_alt"])
-            self.draw_choice(cv, f, k, (tx, ty, side, side))
-
-    _label = [0, 0, 0, 0]
+    def _render(self, f, k):
+        """Choice `k` of picker card `f` drawn at the size its tile asks, on
+        a ground of the colour key, which `clear=True` leaves out."""
+        def render(w, h):
+            lay = self.ws.sys_canvas.new_layer(w, h)
+            lay.fill565(0, 0, w, h, 0xF81F)      # magenta: no colour a choice draws in
+            self.draw_choice(lay, f, k, (0, 0, w, h))
+            return lay
+        return render
 
     def _resolve_tiles(self, f):
         """For a `sprite-tiles` field, the list of sprite tile ids its choices map
@@ -403,6 +401,15 @@ class CardsLayer(Layer):
     def page_host(self):
         return self._host
 
+    @property
+    def view_owed(self):
+        """A picker's picture in view waits for its first draw (uitree_pics):
+        the console steps it before the frame paints."""
+        return self._opened and self.page.view_owed
+
+    def idle_step(self):
+        self.page.idle_step()
+
     def draw(self, dt):
         ws = self.ws
         ws.reset_canvas_state()          # game-canvas hygiene (degradation shares it)
@@ -421,9 +428,10 @@ class CardsLayer(Layer):
             ws.request_frame()
 
     def _on_link(self):
-        """Whether the focus is on a stop A takes (a door, a cycle, a picker)."""
+        """Whether the focus is on a stop A takes (a door, a cycle, a picker:
+        the page's one seg)."""
         kind = self.page.stop_kinds().get(self.page.focus_key)
-        return kind in ("link", "button", "field", "cycle", "canvas")
+        return kind in ("link", "button", "field", "cycle", "seg")
 
     def handle_input(self, i):
         ws = self.ws

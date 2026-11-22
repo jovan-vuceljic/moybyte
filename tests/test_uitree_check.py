@@ -44,6 +44,7 @@ PORTED = (
     "uitree_placed_table",
     "uitree_placed_swatches",
     "uitree_stepper",
+    "uitree_pictures",
     "editor_ui",
     "uitree_bar_row",
     "uitree_legacy_app",

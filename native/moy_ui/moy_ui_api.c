@@ -3776,6 +3776,74 @@ int32_t moy_ui_api_choice(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy
     return cur;
 }
 
+int32_t moy_ui_api_pics(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label, int n,
+                        int32_t cur, const moy_ui_over_t *o, int32_t out[5]) {
+    o = mua_over(o);
+    n = n < 0 ? 0 : n > 255 ? 255 : n;
+    int stacked;
+    moy_ui_box_t b = mua_place(c, moy_ui_pics_h(mua_ground_of(c), c->fs), &stacked);
+    int st = 0, moved = 0;
+    if (o->disabled != 1) {
+        st = mua_stop(c, mua_id_of(c, o, label), b, STOP_KEEP_LR, mua_name_of(o, label));
+        if (st >= 0) {
+            moved = mua_pic_note(c, o, 1);      // the tiles' pictures are the caller's
+        }
+        st = st < 0 ? 0 : st;
+    }
+    moy_ui_vrow_t r;
+    mua_vrow_init(c, &r, label);
+    r.n = (int16_t)n;
+    if (n > 0) {
+        // left and right step it while focused, wrapping; activation takes the next, a tap
+        // the tile tapped
+        int step = (st & MOY_UI_ST_FOCUS) ? c->step_x : 0;
+        if (st & MOY_UI_ST_ACTIVATED) {
+            int at = c->tap_x != INT16_MIN ? moy_ui_vrow_at(s, b, MOY_UI_V_PICS, &r, c->tap_x) : -1;
+            if (at >= 0) {
+                cur = at;
+                step = 0;
+            } else if (c->tap_x == INT16_MIN) {
+                step = 1;
+            }
+        }
+        if (step) {
+            cur = cur < 0 ? (step > 0 ? 0 : n - 1) : cur + step;
+            cur = (cur % n + n) % n;
+        }
+        if (cur >= n) {
+            cur = n - 1;
+        }
+    } else {
+        cur = -1;
+    }
+    r.cur = (int16_t)cur;
+    if (moved) {
+        // a picture whose gen moved on a shift frame: the row draws again, its tiles with it
+        rc_t q = mua_rc_of(b);
+        if (!stacked || mua_rc_cut(&q, mua_rc_of(c->page))) {
+            mua_pic_redraw(c, mua_box_of(q));
+        }
+    }
+    mua_vrow_draw(c, s, b, stacked, MOY_UI_V_PICS, st, o, &r);
+    // where the caller's pictures draw (moy_ui_api_card_clip): none where a shift frame's
+    // floor misses the row
+    int none = mua_outside_floor(c, b);
+    c->pic_clip = mua_pic_clip(c, b);
+    c->pic_tbl = 0;
+    if (out != NULL) {
+        out[0] = none ? 0 : b.x, out[1] = none ? 0 : b.y, out[2] = none ? 0 : b.w;
+        out[3] = none ? 0 : b.h, out[4] = st;
+    }
+    return cur;
+}
+
+void moy_ui_api_pics_tile(const moy_ui_ctx_t *c, const int32_t row[4], int n, int i,
+                          int32_t out[4]) {
+    moy_ui_box_t b = {(int16_t)row[0], (int16_t)row[1], (int16_t)row[2], (int16_t)row[3]};
+    moy_ui_box_t t = moy_ui_pics_tile(b, mua_ground_of(c), c->fs, n, i);
+    out[0] = t.x, out[1] = t.y, out[2] = t.w, out[3] = t.h;
+}
+
 // The band a rule takes between a card's rows: the row stack's gap and a
 // unit, twice over.
 int mua_rule_h(const moy_ui_ctx_t *c) {

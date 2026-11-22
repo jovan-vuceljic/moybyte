@@ -1,0 +1,11 @@
+build build page (builds 1)
+state face 'x' -> 'y' (from seg 'face')
+drew label 'Face {face}' -> 'Face y'
+state face 'y' -> 'z' (from seg 'face')
+drew label 'Face {face}' -> 'Face z'
+state face 'z' -> 'x' (from seg 'face')
+drew label 'Face {face}' -> 'Face x'
+state face 'x' -> 'z' (from seg 'face')
+drew label 'Face {face}' -> 'Face z'
+state face 'z' -> 'y' (from seg 'face')
+drew label 'Face {face}' -> 'Face y'

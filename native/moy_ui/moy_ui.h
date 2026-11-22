@@ -886,12 +886,12 @@ enum { MOY_UI_DESK = 1, MOY_UI_WINDOW = 2, MOY_UI_TAP = 8, MOY_UI_PANEL = 32, MO
 enum {
     MOY_UI_V_LABEL = 0, MOY_UI_V_INFO = 1, MOY_UI_V_LINK = 2, MOY_UI_V_CYCLE = 3,
     MOY_UI_V_SEG = 4, MOY_UI_V_SWATCH = 5, MOY_UI_V_TOGGLE = 6, MOY_UI_V_SLIDER = 7,
-    MOY_UI_V_PROGRESS = 8, MOY_UI_V_TABS = 9,
+    MOY_UI_V_PROGRESS = 8, MOY_UI_V_TABS = 9, MOY_UI_V_PICS = 10,
 };
 typedef struct {
     moy_ui_span_t label, value;     // seg: value holds the options, NUL-separated
     const uint8_t *colours;         // swatch: `n` colours, 0xRRGGBB as little-endian words
-    int16_t n, cur;                 // seg, swatch: the count and the current (-1 none);
+    int16_t n, cur;                 // seg, swatch, pics: the count and the current (-1 none);
                                     // toggle: cur is on
     int32_t v, lo, hi;              // slider; progress: v of hi done (lo 0)
     int16_t fs, desk, card;         // desk: the ground (MOY_UI_DESK | WINDOW | PANEL);
@@ -922,8 +922,15 @@ int moy_ui_vrow_w(const moy_ui_sink_t *s, int kind, const moy_ui_vrow_t *r);
 // The height a progress row given it draws tall at: its label and percent
 // on a line, its bar under them.
 int moy_ui_vrow_tall_h(int desk, int fs);
-// What x on row box b picks: a seg's, a swatch picker's or a tab row's option (-1 none),
-// a slider's value (lo..hi), -1 for another kind.
+// A pictures row (MOY_UI_V_PICS): `n` tiles at its right, centred down it, each a plate of
+// radius 4 units, the current one's the selection's colour and the rest surface_alt's, the
+// pictures in them the caller's. Its height, and tile i's box in row box b: side, gap and right
+// pad 48, 12 and 16 px times `fs` on the desk (`desk` holds MOY_UI_DESK), 32, 8 and 10 units on
+// a handheld; the row is 64 px times `fs` tall on the desk, 44 units on a handheld.
+int moy_ui_pics_h(int desk, int fs);
+moy_ui_box_t moy_ui_pics_tile(moy_ui_box_t b, int desk, int fs, int n, int i);
+// What x on row box b picks: a seg's, a swatch picker's, a pictures row's or a tab row's
+// option (-1 none), a slider's value (lo..hi), -1 for another kind.
 int32_t moy_ui_vrow_at(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, const moy_ui_vrow_t *r,
                        int x);
 // A table (ui.table): its columns' x and width over box b, the picture

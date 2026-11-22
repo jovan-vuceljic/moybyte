@@ -220,7 +220,7 @@ def test_wallpaper_carts_load_their_sheet_and_run_headless(tmp_path):
 
 def test_space_pet_picker_selects_a_sprite_tile(tmp_path):
     from runtime import host_app
-    from ws_helpers import settings_box, tap_box
+    from ws_helpers import picker_tile, settings_box, tap_box
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_cart(ws, "Space Desktop")
@@ -228,9 +228,7 @@ def test_space_pet_picker_selects_a_sprite_tile(tmp_path):
     pet = [f for f in ws.cart["edit"] if f["key"] == "pet"][0]
     assert pet["display"] == "sprite-tiles"
     assert len(pet["choices"]) == 2
-    x, y, w, h = settings_box(ws, "pet/pick")
-    tx, ty, side = ws.cards_layer.tiles(2, w, h)[1]
-    tap_box(ws, (x + tx, y + ty, side, side))           # the card takes the tile tapped
+    tap_box(ws, picker_tile(ws, settings_box(ws, "pet/k"), 2, 1))   # the card takes the tile tapped
     assert ws.run.project.config["pet"] == 1
     ws.saves.apply()
     assert ws.cart_error is None

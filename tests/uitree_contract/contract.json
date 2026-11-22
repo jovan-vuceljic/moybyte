@@ -1943,7 +1943,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:seg,cycle,swatches",
+     "type": "word:seg,cycle,swatches,pictures",
      "level": 2
     },
     "text": {

@@ -5,9 +5,8 @@ The cards page: a note where the cart's run reads none of some tabs' files
 (`EditorApp._offers`), the cart's `edit` cards as one group on a card (an
 `int` a slider stepping by the card's step, a two-way `choice` a toggle, a
 `sprite-tiles` or `bg-thumbs` choice and a `choice-icons` one of more than
-two a row of its pictures, the current one on the selection plate, left and
-right or Enter stepping it and a tap taking a picture, any other choice a
-cycle), then This project: Cart info and Files. A cart whose
+two a seg of look="pictures", the host's pictures of its choices, any other
+choice a cycle), then This project: Cart info and Files. A cart whose
 manifest did not parse (`moy_carts.load` keeps it with its reason in
 `cart["broken"]`) shows the reason and Files instead. Files is a page pushed
 over it: the project's own files, each the tab it opens in. Cart info and
@@ -21,8 +20,7 @@ import uitree_app
 
 s = ui.state(
     cards=ui.model(key="id", id="", shape=ui.enum("int", "two", "cycle", "pics", init="int"), label="",
-                   v=0, lo=0, hi=100, on=False, k=0, names=""),
-    pick_h=0,
+                   v=0, lo=0, hi=100, on=False, k=0, names="", pics=""),
     missing="", broken="", broken_title="", fixable=False, title="", nfiles="",
     file_rows=ui.model(key="name", name="", label="", word="", icon=""),
     files_msg="",
@@ -47,11 +45,18 @@ def card_label(f):
     return text[:1].upper() + text[1:].lower()
 
 
+_put = [()]         # the pickers' pictures last put
+
+
 def sync(vals):
     """The host's values: (the cards' rows, the missing tabs' note, why
     the page shows no cards and its title, whether Files fixes that, the
-    cart's title, its files' count, a picker row's height)."""
-    rows, s.missing, s.broken, s.broken_title, s.fixable, s.title, s.nfiles, s.pick_h = vals
+    cart's title, its files' count, the pickers' pictures to put)."""
+    rows, s.missing, s.broken, s.broken_title, s.fixable, s.title, s.nfiles, pics = vals
+    if pics is not _put[0]:
+        _put[0] = pics
+        for key, render in pics:
+            ui.pictures.put(key, render=render, clear=True)
     if s.cards != rows:
         s.cards = rows
 
@@ -71,42 +76,6 @@ def set_two(row):
 
 def set_k(row):
     uitree_app.env().set_choice(row.id, row.k)
-
-
-def draw_pick(cv, x, y, w, h, row):
-    """A picker's row: its label, then each choice's picture in a tile at
-    the row's right, the current one on the selection plate."""
-    _WH[0], _WH[1] = w, h
-    uitree_app.env().draw_picker(cv, ui.colors(), x, y, w, h, row.id, row.label, row.k)
-
-
-_WH = [0, 0]        # a picker's row as the last frame drew it: every picker's is one size
-
-
-def pick_keys(i, row):
-    """Left and right step a picker, Enter takes the next; the other keys
-    move focus off it."""
-    d = i.steps("right") - i.steps("left") + (1 if i.pressed("a") or i.pressed("run") else 0)
-    if not d:
-        return False
-    host = uitree_app.env()
-    f = host.field(row.id)
-    if f is not None:
-        host.set_choice(row.id, (row.k + d) % len(f["choices"]))
-    return True
-
-
-def pick_at(ev):
-    """A press on a picker's tile takes it."""
-    if ev.kind != "down" or ev.row is None:
-        return
-    host = uitree_app.env()
-    f = host.field(ev.row.id)
-    if f is None:
-        return
-    for k, t in enumerate(host.tiles(len(f["choices"]), _WH[0], _WH[1])):
-        if t[0] <= ev.x < t[0] + t[2] and t[1] <= ev.y < t[1] + t[2]:
-            host.set_choice(ev.row.id, k)
 
 
 def files():
@@ -170,7 +139,6 @@ ui.hook("sync", sync, takes="arg")
 ui.hook("set_int", set_int, takes="row")
 ui.hook("set_two", set_two, takes="row")
 ui.hook("set_k", set_k, takes="row")
-ui.hook("pick_at", pick_at, takes="pointer")
 ui.hook("typed", typed)
 ui.hook("open_name", open_name, takes="arg")
 ui.hook("say", say, takes="arg")
@@ -208,8 +176,7 @@ def cards_page():
                 "int": lambda: ui.slider("{.label}", ".v", "{.lo}", "{.hi}", on="set_int"),
                 "two": lambda: ui.toggle("{.label}", ".on", on="set_two"),
                 "cycle": lambda: ui.seg("{.label}", ".k", text="{.names}", look="cycle", on="set_k"),
-                "pics": lambda: ui.canvas("pick", draw_pick, h="{pick_h}", keys=pick_keys,
-                                          pointer="pick_at", hint="Change")})
+                "pics": lambda: ui.seg("{.label}", ".k", text="{.pics}", look="pictures", on="set_k")})
         with ui.group("This project", shown="!broken"):
             ui.link("cart_info", "{title}")
             ui.link("files", "{nfiles}")

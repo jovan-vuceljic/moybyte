@@ -1014,6 +1014,18 @@ int moy_ui_api_value(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui_s
 // option, a tap the one tapped. Answers the new cur.
 int32_t moy_ui_api_choice(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui_span_t label,
                           const uint8_t *opts, size_t len, int32_t cur, const moy_ui_over_t *o);
+// A pictures row (MOY_UI_V_PICS, moy_ui_pics_tile): its label, then `n` tiles at its right,
+// `cur` (from 0, -1 none) on the selection's plate. Left and right are its own while focused
+// and wrap; activation takes the next tile, a tap the one tapped. The caller draws each tile's
+// picture over its plate (moy_ui_api_pics_tile, clipped by moy_ui_api_card_clip); `o`'s gen is
+// the pictures' (a shift frame draws the row again where it moved, none: no shift frame).
+// out: the row's box (0 wide where a shift frame leaves it as it moved) and its state bits.
+// Answers the new cur.
+int32_t moy_ui_api_pics(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label, int n,
+                        int32_t cur, const moy_ui_over_t *o, int32_t out[5]);
+// Tile i of a pictures row of `n` whose box is row[0..3] (moy_ui_api_pics' out).
+void moy_ui_api_pics_tile(const moy_ui_ctx_t *c, const int32_t row[4], int n, int i,
+                          int32_t out[4]);
 // Keycap hints (`items` NUL-separated pairs of an action or keys and what it
 // does, moy_ui_hints) in a band at the page's foot, which its rows then stack
 // above; ui.at places them instead; `hint` the status words it leads with

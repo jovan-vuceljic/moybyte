@@ -670,8 +670,29 @@ static moy_ui_box_t dot_box(moy_ui_box_t b, const moy_ui_vrow_t *r, const vgeo_t
                           (int16_t)g->dot};
 }
 
+int moy_ui_pics_h(int desk, int fs) {
+    return ((desk & MOY_UI_DESK) ? 64 : 44) * fs;
+}
+
+moy_ui_box_t moy_ui_pics_tile(moy_ui_box_t b, int desk, int fs, int n, int i) {
+    int dk = (desk & MOY_UI_DESK) != 0;
+    int side = (dk ? 48 : 32) * fs, gap = (dk ? 12 : 8) * fs, pad = (dk ? 16 : 10) * fs;
+    int x = b.x + b.w - pad - n * side - (n - 1) * gap + i * (side + gap);
+    return (moy_ui_box_t){(int16_t)x, (int16_t)(b.y + (b.h - side) / 2), (int16_t)side,
+                          (int16_t)side};
+}
+
 int32_t moy_ui_vrow_at(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, const moy_ui_vrow_t *r,
                        int x) {
+    if (kind == MOY_UI_V_PICS) {
+        for (int i = 0; i < r->n; i++) {
+            moy_ui_box_t o = moy_ui_pics_tile(b, r->desk, r->fs, r->n, i);
+            if (x >= o.x && x < o.x + o.w) {
+                return i;
+            }
+        }
+        return -1;
+    }
     pd_t d;
     open_pd(s, &d, r->fs, r->desk);
     vgeo_t g;
@@ -1023,6 +1044,20 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                 rrect(&d, o.x, o.y, o.w, o.h, o.w / 2, 1, swatch(&d, colour_at(r->colours, i)),
                       key ? d.fs : 0, cink);
                 right = o.x;
+            }
+            break;
+        }
+        case MOY_UI_V_PICS: {
+            // the tiles' plates, the current one the selection's colour; their pictures are the
+            // caller's, drawn over them
+            uint16_t sel = pal(&d, tok(&d, MOY_UI_T_SELECTION, MOY_UI_T_ACCENT));
+            uint16_t alt = pal(&d, tok(&d, MOY_UI_T_SURFACE_ALT, MOY_UI_T_SURFACE));
+            for (int i = 0; i < r->n; i++) {
+                moy_ui_box_t o = moy_ui_pics_tile(b, r->desk, d.fs, r->n, i);
+                rrect(&d, o.x, o.y, o.w, o.h, 4 * d.fs, 1, i == r->cur ? sel : alt, 0, 0);
+                if (i == 0) {
+                    right = o.x;
+                }
             }
             break;
         }
