@@ -291,9 +291,11 @@ int uit_run_frame(uit_t *e, void *target, int flags);
 // frame and after an open, a build or a close.
 int uit_still(uit_t *e, const moy_ui_ctx_t *c, int x, int y, int w, int h, int flags, int fs, int input);
 // A canvas's draw: the walk calls it inside the frame, in the page's order,
-// with the canvas's node and the rect it draws in; the front end binds what
-// each node draws (a Python function, a Lua one, C).
-typedef void (*uit_draw_fn)(void *ud, int node, int x, int y, int w, int h);
+// with the canvas's node, the model and row it stands in (a canvas in a
+// rows' body: the row it draws; -1 and -1 elsewhere) and the rect it draws
+// in; the front end binds what each node draws (a Python function, a Lua
+// one, C).
+typedef void (*uit_draw_fn)(void *ud, int node, int model, int row, int x, int y, int w, int h);
 void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud);
 // The next event: its kind; its words into ev[0..2], its text (the source)
 // into buf.

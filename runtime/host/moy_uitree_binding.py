@@ -162,7 +162,7 @@ def peak_reset():
     lib().uit_mem_peak_reset()
 
 
-_DRAW = c.CFUNCTYPE(None, c.c_void_p, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int)
+_DRAW = c.CFUNCTYPE(None, c.c_void_p, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int)
 
 
 class Engine:
@@ -372,16 +372,17 @@ class Engine:
         return bool(r)
 
     def on_draw(self, fn):
-        """A canvas's draw, `fn(node, x, y, w, h)`, called inside the frame;
+        """A canvas's draw, `fn(node, model, row, x, y, w, h)` (model and
+        row -1 but in a rows' body), called inside the frame;
         what it raises is raised by the frame's call."""
         self._draw = fn
         self._cb = None if fn is None else _DRAW(self._tramp)
         self._L.uit_on_draw(self._e, self._cb, None)
 
-    def _tramp(self, _ud, node, x, y, w, h):
+    def _tramp(self, _ud, node, model, row, x, y, w, h):
         if self._raised is None:
             try:
-                self._draw(node, x, y, w, h)
+                self._draw(node, model, row, x, y, w, h)
             except BaseException as e:      # noqa: B036 -- ctypes would print and drop it
                 self._raised = e
 

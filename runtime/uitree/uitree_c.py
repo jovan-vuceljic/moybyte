@@ -139,6 +139,7 @@ class CEngine(Engine):
     handlers stay Python's (`uitree.Builder`, `uitree_app.Engine`)."""
 
     PLACED = False          # the page is stacked by the engine's layout (uit_set_placed)
+    th = None               # the theme's colours the last frame drew in
     unit = 0                # a placed page's unit, the host's (0: the engine's own)
 
     def __init__(self, *a, **k):
@@ -563,7 +564,7 @@ class CEngine(Engine):
         srcs = []
         units, lend_at = [], {}
         self._lend_at = lend_at
-        feet = set()                    # a flowing page's foot stacks its rows by the placed rule
+        feet = set()                    # a flowing page's foot stacks its rows by the placed rule, a row's too
 
         def node(n, parent):
             nk, l = n.kind, n.l
@@ -577,7 +578,7 @@ class CEngine(Engine):
             me = cnode(kind, n.key, parent)
             if me < 0:
                 fail(me, "node %s" % n.key, n.where)
-            if nk == "foot":
+            if nk == "foot" or nk == "row" and parent in feet:
                 feet.add(me)
             if n.unit is not None:
                 units.append((me, n.unit))
@@ -768,15 +769,29 @@ class CEngine(Engine):
             m.aux = node
             (lg if kind == "legacy" else pn)[node] = m
 
-    def _draw(self, node, x, y, w, h):
-        """A canvas's draw, called by the walk inside the frame at its rect."""
+    def _draw(self, node, model, row, x, y, w, h):
+        """A canvas's draw, called by the walk inside the frame at its rect;
+        a canvas in a rows' body is handed its row as well."""
         now = S._NOW
         app, frame = now.app, now.frame       # two names, not a tuple: a frame allocates nothing
         now.app, now.frame = self, True
         try:
-            self._draws[node](self.cv, x, y, w, h)
+            g = self._grounds.get(node)
+            if g:
+                self.cv.rect(x, y, w, h, self.th[g])
+            if model >= 0 and row >= 0:
+                self._draws[node](self.cv, x, y, w, h, self.s._v[self._names[model]][row])
+            else:
+                self._draws[node](self.cv, x, y, w, h)
         finally:
             now.app, now.frame = app, frame
+
+    def query(self, name, *a):
+        """What a handler or a canvas's draw asks: the theme's colours, the
+        last frame's; the rest the Builder's."""
+        if name == "colors" and self.th is not None:
+            return self.th
+        return Engine.query(self, name, *a)
 
     # -- the frame -------------------------------------------------------------------
 
@@ -874,6 +889,35 @@ class CEngine(Engine):
 
     def _visiting(self):
         return self._x is not None and not self._shut and self.root is not None
+
+    def point(self, px, py, click):
+        """A canvas with pointer= is handed down, drag and up in its own
+        coordinates, at the rect the last frame placed it; the press that
+        starts on it holds it until release, outside its rect too. Every
+        other press is the page's."""
+        held = self._held
+        if held is not None:
+            down = self.pointer_down()
+            key, act, r = held
+            ev = S.Ev("drag" if down else "up", px - r[0], py - r[1], "touch")
+            self.q.append((act, (ev,), "pointer %s on canvas %r" % (ev.kind, key)))
+            if not down:
+                self._held = None
+            self._damage.all()
+            return True
+        if click and self._pointers and self._visiting():
+            for key, act in self._pointers:
+                r = self._x.rect(key)
+                if r is not None and r[0] <= px < r[0] + r[2] and r[1] <= py < r[1] + r[3]:
+                    ev = S.Ev("down", px - r[0], py - r[1], "touch")
+                    self.q.append((act, (ev,), "pointer down on canvas %r" % key))
+                    if self.pointer_down():
+                        self._held = (key, act, r)
+                    else:
+                        self.q.append((act, (S.Ev("up", ev.x, ev.y, "touch"),), "pointer up on canvas %r" % key))
+                    self._damage.all()
+                    return True
+        return Engine.point(self, px, py, click)
 
     def dialog_shown(self):
         return self._visiting() and self._x.dialog() >= 0
@@ -1284,27 +1328,6 @@ class CEditorEngine(CEngine, _ed.Engine):
                         self.held_legacy = (n, r)
                     self._damage.all()
                     return True
-        held = self._held
-        if held is not None:
-            key, act, r = held
-            ev = S.Ev("drag" if down else "up", px - r[0], py - r[1], "touch")
-            self.q.append((act, (ev,), "pointer %s on canvas %r" % (ev.kind, key)))
-            if not down:
-                self._held = None
-            self._damage.all()
-            return True
-        if click and self._visiting():
-            for key, act in self._pointers:
-                r = self._x.rect(key)
-                if r is not None and r[0] <= px < r[0] + r[2] and r[1] <= py < r[1] + r[3]:
-                    ev = S.Ev("down", px - r[0], py - r[1], "touch")
-                    self.q.append((act, (ev,), "pointer down on canvas %r" % key))
-                    if down:
-                        self._held = (key, act, r)
-                    else:
-                        self.q.append((act, (S.Ev("up", ev.x, ev.y, "touch"),), "pointer up on canvas %r" % key))
-                    self._damage.all()
-                    return True
         return CEngine.point(self, px, py, click)
 
     def step_rows(self, d):
@@ -1650,7 +1673,7 @@ class CEditorEngine(CEngine, _ed.Engine):
         """The lent row's rule in C (`uit_lent_place`)."""
         return self._made().lent_place(cells, x0, w, h, fs, pad)
 
-    def _draw(self, node, x, y, w, h):
+    def _draw(self, node, model, row, x, y, w, h):
         """A canvas's draw in its rect, clipped to it, over its ground; a
         text editor's rows, its document's (`_r_text_editor`)."""
         te = self._editors.get(node)
@@ -1678,10 +1701,7 @@ class CEditorEngine(CEngine, _ed.Engine):
         if not _ed._clip_in(cv, x, y, w, h, self.clip_to):
             return
         try:
-            g = self._grounds.get(node)
-            if g:
-                cv.rect(x, y, w, h, self.th[g])
-            CEngine._draw(self, node, x, y, w, h)
+            CEngine._draw(self, node, model, row, x, y, w, h)
         finally:
             _ed._clip_back(cv, self.clip_to)
 

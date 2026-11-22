@@ -3,6 +3,7 @@
 #   card_of             the media card's answers from the face's
 #   MusicSection        the status item's section (the desk menu, the control center)
 #   _scan               the music folder's songs and playlists
+#   draw_now            what plays as the canvases draw it: art, equalizer, pulse, bar, meter
 #   build               the app's page: the library, Now playing, Add a station
 #   MusicAppLayer       the app's Layer over the page
 """Music -- the console's radio and music player (#110), a SYSTEM APP
@@ -15,10 +16,14 @@ design is docs/media/music_2026-11/README.md.
     it, and a name), kept in the app's prefs;
   * My music: the MP3s and the .m3u/.pls playlists in the music folder of
     the user files (`files/Music/` on the SD card);
-  * what plays in a strip under either list, which opens Now playing: the
-    title and its line, the transport, a file's place (a slider a tap or
-    the arrows seek along, SEEK_STEP seconds a step) or LIVE for a station,
-    and the volume; Q and E step to the previous or next.
+  * Now playing: the media card at its full density (the art, the title,
+    the artist and the station, LIVE or a file's bar a tap seeks along, the
+    transport, the volume meter between - and +), its keys the page's own
+    (Enter the focused button, Q E step, W S the volume, A D seek a file
+    SEEK_STEP seconds, M the list); on a handheld the strip over either
+    list's foot opens it;
+  * on the desk one window: the Library's two places beside the table, the
+    media card in one row across its foot.
 
 What plays is the media service's stream, the system's (the app is one of
 its clients): leaving the app keeps it playing, and Back on the desk
@@ -33,6 +38,8 @@ shows the no-audio page.
 
 import uitree as ui
 import uitree_app
+import ui_draw as _D
+import layout_base as _lb
 from moy_store_base import builtin_name, files_root
 import moybyte as _moybyte
 import devices as _devices
@@ -71,6 +78,7 @@ STATIONS_MAX = 24
 URL_MAX = 200
 NAME_MAX = 32
 POLL_MS = 250
+VOLUME_STEP = 10
 SEEK_STEP = 10              # seconds a key seeks a file
 ERR_ADDRESS = "This address won't play. Use one that starts with http://"
 HELP_ADDRESS = "An MP3 stream or playlist"
@@ -607,39 +615,277 @@ def _host(url):
 
 
 
+# -- the drawn pieces: what plays, as the canvases draw it -------------------------
+
+# A station's (or list's) art: a colour field, two MOY64 colours top to
+# bottom. One the table does not name takes a pair by its name.
+ART = {"Groove Salad": (58, 40), "Drone Zone": (60, 22), "Deep Space One": (61, 43),
+       "Space Station Soma": (59, 42), "Mission Control": (54, 12),
+       "Secret Agent": (56, 36)}
+ART_PAIRS = ((58, 40), (60, 22), (61, 43), (59, 42), (54, 12), (56, 36), (57, 37),
+             (52, 20), (46, 28))
+_EQ = (6, 10, 4, 8)
+_DIAMOND = (0, 1, 2, 3, 2, 1, 0)
+
+
+def _art_of(name):
+    pair = ART.get(name)
+    if pair is None:
+        h = 0
+        for ch in name:
+            h = (h * 31 + ord(ch)) & 0xffff
+        pair = ART_PAIRS[h % len(ART_PAIRS)]
+    return pair
+
+
+def paused_ink(th):
+    """The paused state's ink: the theme's `paused` content role, the dim
+    ink where the theme names none."""
+    v = th.get("paused")
+    return v if v is not None else th["chrome_ink_dim"]
+
+
+def eq(cv, x, y, w, h, c, fs, lively=True, size=12):
+    """The equalizer, the state of what plays: four bars on one baseline,
+    lively while it plays, 2 px and still while paused."""
+    sz = size * fs
+    bw = max(2 * fs, sz // 4)
+    gap = max(fs, sz // 8)
+    x0 = x + (w - 4 * bw - 3 * gap) // 2
+    base = y + h // 2 + sz // 2
+    for k in range(4):
+        bh = (sz * _EQ[k] // 10) if lively else 2 * fs
+        cv.rect(x0 + k * (bw + gap), base - bh, bw, bh, c)
+
+
+def pulse(cv, x, y, w, h, on, off, fs, lit=1):
+    """Connecting: three 2 px dots centred on the line, one lit, stepping."""
+    d = 2 * fs
+    x0 = x + (w - 5 * d) // 2
+    cy = y + (h - d) // 2
+    for k in range(3):
+        cv.rect(x0 + 2 * k * d, cy, d, d, on if k == lit else off)
+
+
+def chevron(cv, x, y, h, c, fs, desk=False):
+    """The toolkit's one chevron (a value row's), right pointing, its
+    column at x, centred on a line at y `h` tall; its width."""
+    w = _D.metrics("value_row")[3 if desk else 2] * fs
+    half = w // fs - 1
+    rows = 2 * half + 1
+    y0 = y + (h - rows * fs) // 2
+    for i in range(rows):
+        o = i if i <= half else rows - 1 - i
+        cv.rect(x + o * fs, y0 + i * fs, fs, fs, c)
+    return w
+
+
+def art(cv, x, y, w, h, name, fs, r=8):
+    """What plays, as art: its colour field. It carries no state."""
+    a, b = _art_of(name)
+    cv.rrect(x, y, w, h, r * fs, (0, 0, ((0, a), (1000, b))))
+    cv.circ(x + w * 3 // 4, y + h // 3, max(3 * fs, w // 7), b)
+
+
+_R = [0, 0, 0, 0]               # a text's box: one list, so a draw allocates nothing
+_DRAWN = {"volume": [0, 0, 0, 0, 1], "head": [0, 0, 0, 0, 1]}  # a canvas's last rect and scale
+
+
+def _drawn(key, x, y, w, h, fs):
+    d = _DRAWN[key]
+    d[0], d[1], d[2], d[3], d[4] = x, y, w, h, fs
+
+
+def _text(cv, x, y, w, h, t, ink, role="ui"):
+    """`t` in the theme's `role` face in (x, y, w, h), cut to fit, centred
+    on its line."""
+    r = _R
+    r[0], r[1], r[2], r[3] = x, y, max(1, w), h
+    if role == "ui":
+        _D.label(cv, r, t, ink)
+        return
+    was = _D.font("ui")[0]              # a label is the UI face's: the role's for this one
+    _D.use_font("ui", _D.font(role)[0])
+    _D.label(cv, r, t, ink)
+    _D.use_font("ui", was)
+
+
+def _line_h(fs, role="ui"):
+    return _D.font(role)[2] * fs + 2 * fs
+
+
+def _fit(meta, w, c, fs):
+    """A line too wide for `w` drops a part at its separator, never cut
+    inside one: a station keeps its name, a list its own."""
+    if " · " not in meta or _D.text_width(meta, fs, "ui") <= w:
+        return meta
+    k = meta.find(" · ")
+    return meta[k + 3:] if c["kind"] == "radio" else meta[:k]
+
+
+def state_line(cv, th, c, x, y, w, fs, size=8, meta=None):
+    """The state glyph (the equalizer, or the pulse while connecting) and
+    the second line, cut at its separator where it does not fit."""
+    if meta is None:
+        meta = lines(c)[1]
+    lh = _line_h(fs)
+    tx = x
+    gw = size * 2 * fs
+    if c["state"] == PLAYING:
+        eq(cv, x, y, gw, lh, th["value"] if not c["paused"] else paused_ink(th), fs,
+           not c["paused"], size)
+        tx = x + gw + 2 * fs
+    elif c["state"] == OPENING:
+        pulse(cv, x, y, gw, lh, th["value"], paused_ink(th), fs, STREAM.tick % 3)
+        tx = x + gw + 2 * fs
+    meta = _fit(meta, x + w - tx, c, fs)
+    _text(cv, tx, y, x + w - tx, lh, meta, th["danger"] if c["state"] == FAILED else th["chrome_ink_dim"])
+
+
+def head(cv, th, c, x, y, w, a, fs, role="ui", chev=True, desk=False):
+    """The card's head: the art, the title, the state line, the chevron."""
+    art(cv, x, y, a, a, c["station"], fs, 6 if a < 48 * fs else 8)
+    tx = x + a + 8 * fs
+    cw = 6 * fs if chev else 0
+    tw = x + w - tx - cw - (6 * fs if chev else 0)
+    lh = _line_h(fs)
+    ty = y + (a - 2 * lh) // 2
+    _text(cv, tx, ty, tw, lh, lines(c)[0], th["chrome_ink"], role)
+    state_line(cv, th, c, tx, ty + lh, tw, fs)
+    if chev:
+        chevron(cv, x + w - cw, y, a, th["chrome_ink_dim"], fs, desk)
+
+
+def _fs(cv):
+    return max(1, int(getattr(cv, "font_scale", 1)))
+
+
+def draw_strip(cv, x, y, w, h):
+    """The strip over a list's foot: a band, the head (a stop that opens
+    Now playing); the main button is the page's."""
+    c = STREAM.card
+    if c is None:
+        return
+    th, fs = ui.colors(), _fs(cv)
+    cv.rect(x, y, w, fs, th["border"])
+    a = h - 10 * fs
+    hx = x + 8 * fs
+    art(cv, hx, y + 5 * fs, a, a, c["station"], fs, 4)
+    tx = hx + a + 8 * fs
+    cw = 6 * fs
+    lh = _D.font("ui")[2] * fs + fs
+    ty = y + (h - 2 * lh) // 2
+    tw = x + w - tx - cw - 6 * fs
+    _text(cv, tx, ty, tw, lh, lines(c)[0], th["chrome_ink"])
+    state_line(cv, th, c, tx, ty + lh, tw, fs, 7)
+    chevron(cv, x + w - cw - 2 * fs, y, h, th["chrome_ink_dim"], fs)
+
+
+def draw_wide(cv, x, y, w, h):
+    """The desk window's foot: the head at its title face, no chevron."""
+    c = STREAM.card
+    if c is None:
+        return
+    head(cv, ui.colors(), c, x, y, w, h, _fs(cv), "title", False)
+
+
+def draw_now(cv, x, y, w, h):
+    """Now playing's head: the art, the title, the artist then the station
+    (the list, then the place), LIVE or the file's bar."""
+    c = STREAM.card
+    if c is None:
+        return
+    th, fs = ui.colors(), _fs(cv)
+    _drawn("head", x, y, w, h, fs)
+    art(cv, x, y, h, h, c["station"], fs)
+    tx = x + h + 12 * fs
+    tw = x + w - tx
+    title, meta = lines(c)
+    k = meta.find(" · ")
+    first, second = (meta[:k], meta[k + 3:]) if k >= 0 else (meta, "")
+    _text(cv, tx, y, tw, 20 * fs, title, th["chrome_ink"], "title")
+    state_line(cv, th, c, tx, y + 20 * fs, tw, fs, meta=first)
+    if second:
+        _text(cv, tx, y + 37 * fs, tw, 18 * fs, second, th["chrome_ink_dim"])
+    sy = y + 56 * fs
+    if c["state"] != PLAYING:
+        return
+    if c["kind"] == "radio":
+        live = not c["paused"]
+        ink = th["value"] if live else paused_ink(th)
+        cy = sy + 8 * fs
+        for i in range(7):
+            half = _DIAMOND[i]
+            cv.rect(tx + (3 - half) * fs, cy - 3 * fs + i * fs, (2 * half + 1) * fs, fs, ink)
+        _text(cv, tx + 11 * fs, sy, 60 * fs, 18 * fs, "LIVE", ink if live else th["chrome_ink_dim"])
+        return
+    if not c["len"]:
+        return
+    t = s.clock
+    bw = _bar_w(tw, fs)
+    cv.rrect(tx, sy + 8 * fs, bw, 4 * fs, 2 * fs, th["border"])
+    done = bw * min(c["at"], c["len"]) // c["len"]
+    if done > 0:
+        cv.rrect(tx, sy + 8 * fs, done, 4 * fs, 2 * fs, th["value"])
+    _text(cv, tx + bw + 8 * fs, sy, tw - bw - 8 * fs, 18 * fs, t, th["chrome_ink_dim"])
+
+
+def _bar_w(tw, fs):
+    """A file's bar's width in Now playing's head, its time after it."""
+    return tw - _D.text_width(s.clock, fs, "ui") - 10 * fs
+
+
+def draw_volume(cv, x, y, w, h):
+    """The volume's meter, ten steps (the speaker is the page's icon
+    before it), a tap or a drag the step it lands on."""
+    c = STREAM.card
+    if c is None:
+        return
+    th, fs = ui.colors(), _fs(cv)
+    _drawn("volume", x, y, w, h, fs)
+    sx, seg, gap = _steps(x, w, fs)
+    level = (c["volume"] + 5) // 10
+    sh = 8 * fs
+    for i in range(10):
+        cv.rect(sx + i * (seg + gap), y + (h - sh) // 2, seg, sh,
+                th["value"] if i < level else th["border"])
+
+
+def _steps(x, w, fs):
+    """The meter's first step's x, a step's width and the gap between."""
+    sx = x + 2 * fs
+    gap = 2 * fs
+    return sx, (x + w - 6 * fs - sx - 9 * gap) // 10, gap
+
+
 # -- the page ---------------------------------------------------------------------
 
-# What plays, as its glyph in the foot's button says it.
-MARK = {PLAYING: "equalizer", PAUSED_: "pause", OPENING: "pulse", FAILED: "warn"}
-# ...and the words its right column says in place of the row's own.
-STATE_WORD = {PLAYING: "Playing", PAUSED_: "Paused", OPENING: "Connecting...", FAILED: "Not answering"}
+# What plays, as its glyph in a row says it.
+LEAD = {PLAYING: "equalizer", PAUSED_: "pause", OPENING: "pulse", FAILED: "warn"}
 MAIN = {FAILED: ("retry", "Try again"), PAUSED_: ("play", "Play"), PLAYING: ("pause", "Pause")}
+VERB = {PLAYING: "Pause", PAUSED_: "Play", FAILED: "Play", OPENING: "Play", "lead": "Open"}
 ADD = "add"                 # the Radio list's first row, Add a station: no station's id
 
-_ROW = dict(key="id", id="", name="", right="", on=False)
+_ROW = dict(key="id", id="", name="", right="", kind="", st="", icon="", tone="")
 s = ui.state(
     audio=True,             # a media service to play through
     online=True,            # ...and a network for the radio
     view=ui.enum("radio", "files", "now", "add", "noaudio", init="radio"),   # the tabs' page, or another
     tab=ui.enum("radio", "files", init="radio"),
     folder=ui.enum("unread", "nosd", "empty", "some", init="unread"),
+    places=ui.model(key="id", id="", name="", icon=""),
+    here="",                # the Library place the tab shows
     stations=ui.model(**_ROW),
     scur=ui.row_of("stations"),
     songs=ui.model(**_ROW),
     fcur=ui.row_of("songs"),
+    verb="Play",            # what Enter does to the focused row
     playing=False,          # what plays: the card's
-    title="",
-    meta="",
-    tone="dim",             # ...its line's: danger where it failed
-    mark="music",
     main_icon="pause",
     main_word="Pause",
-    vol=0,
-    seekable=False,         # ...a file's place, SEEK_STEP seconds a step
-    pos=0,
-    steps=1,
+    seekable=False,         # ...a file's place
+    radio=False,            # ...a station's, whose step is Station
     clock="",
-    live=False,             # ...a station on air
     url="",                 # Add a station's fields
     name="",
     err="",
@@ -654,8 +900,9 @@ def _lay():
     return uitree_app.env()
 
 
-def _row(id, name, right, st):
-    return {"id": id, "name": name, "right": STATE_WORD.get(st, right), "on": st is not None}
+def _row(id, name, right, st, icon="music", kind=""):
+    return {"id": id, "name": name, "right": right, "kind": kind, "st": st or "",
+            "icon": LEAD.get(st, icon), "tone": "value" if st else ""}
 
 
 def fill(lay):
@@ -667,23 +914,21 @@ def fill(lay):
     s.audio = st.media() is not None
     s.playing = c is not None
     if c is not None:
-        title, meta = lines(c)
         state = FAILED if c["state"] == FAILED else PAUSED_ if c["paused"] else PLAYING
-        s.title, s.meta = title, meta
-        s.tone = "danger" if state == FAILED else "dim"
-        s.mark = MARK[OPENING] if c["state"] == OPENING else MARK[state]
         s.main_icon, s.main_word = MAIN[state]
-        s.vol = (c["volume"] + 5) // 10
         s.seekable = bool(c["len"]) and c["state"] == PLAYING
-        s.steps = max(1, c["len"] // SEEK_STEP)
-        s.pos = min(c["at"], c["len"]) // SEEK_STEP
+        s.radio = c["kind"] == "radio"
         s.clock = "%s / %s" % (_clock(c["at"]), _clock(c["len"]))
-        s.live = c["kind"] == "radio" and c["state"] == PLAYING and not c["paused"]
     elif s.view == "now":
         s.view = s.tab
     if not s.audio:
         s.view = "noaudio"
-    rows = [_row(ADD, "Add a station", "", None)]
+    if not s.places:
+        s.places = [{"id": "radio", "name": "Radio", "icon": "volume"},
+                    {"id": "files", "name": "My music", "icon": "music"}]
+        s.here = s.tab
+    rows = [_row(ADD, "Add a station", "", None, "plus")]
+    rows[0]["tone"] = "value"
     for k, (name, style, _url) in enumerate(st.stations):
         rows.append(_row("r%d" % k, name, style, _state(c, name, "radio")))
     if rows != lay.rows[0]:
@@ -692,19 +937,35 @@ def fill(lay):
     f = lay.files
     s.folder = "unread" if f is None else "nosd" if f is False else "some" if f[0] or f[1] else "empty"
     rows = []
+    desk = _lb.metric_class() == _lb.DESK      # the desk's table names each row's kind
     if f:
         for k, (name, _path, detail) in enumerate(f[1]):
-            rows.append(_row("l%d" % k, name, detail, _state(c, name, "list")))
+            rows.append(_row("l%d" % k, name, detail, _state(c, name, "list"), "playlist",
+                             "Playlist" if desk else ""))
         for k, (name, _path, detail) in enumerate(f[0]):
-            rows.append(_row("s%d" % k, name, detail, _state(c, name, "song")))
+            rows.append(_row("s%d" % k, name, detail, _state(c, name, "song"), "music",
+                             "Song" if desk else ""))
     if rows != lay.rows[1]:
         lay.rows[1] = rows
         s.songs = rows
+    _verb()
+
+
+def _verb():
+    """The confirm hint's word: what Enter does to the focused row."""
+    cur = s.fcur if s.tab == "files" else s.scur
+    rows = _lay().rows[1 if s.tab == "files" else 0] or ()
+    st = "lead" if cur == ADD else next((r["st"] for r in rows if r["id"] == cur), "")
+    s.verb = VERB.get(st, "Play")
+
+
+def row_moved(row):
+    _verb()
 
 
 def _playing_row(rows):
     for r in rows:
-        if r["on"]:
+        if r["st"]:
             return r["id"]
     return rows[1]["id"] if len(rows) > 1 and rows[0]["id"] == ADD else rows[0]["id"] if rows else ""
 
@@ -725,6 +986,7 @@ def opened():
     fill(lay)
     s.scur = _playing_row(lay.rows[0])
     s.fcur = _playing_row(lay.rows[1]) if lay.rows[1] else ""
+    _verb()
     _focus_list()
 
 
@@ -739,7 +1001,7 @@ def play(id):
     row = next((r for r in rows if r["id"] == id), None)
     if row is None:
         return
-    if row["on"]:
+    if row["st"]:
         STREAM.toggle()
         return
     k = int(id[1:])
@@ -756,15 +1018,30 @@ def pick(row):
     play(row.id)
 
 
+def place(row):
+    s.tab = row.id
+    tab_moved()
+
+
 def tab_moved():
     s.view = s.tab
+    s.here = s.tab
     if s.tab == "files" and _lay().files is None:
         _lay().folder_owed = True
+    _verb()
 
 
 def now():
     s.view = "now"
-    ui.focus("pos" if s.seekable else "main")
+    ui.focus("toggle")
+
+
+def player():
+    """M: Now playing from either list, the list from Now playing."""
+    if s.view == "now":
+        back()
+    else:
+        now()
 
 
 def back():
@@ -818,12 +1095,49 @@ def stop():
     STREAM.stop()
 
 
-def volume():
-    STREAM.volume(s.vol * 10)
+def louder():
+    STREAM.volume(STREAM.volume() + VOLUME_STEP)
 
 
-def seek():
-    STREAM.seek(s.pos * SEEK_STEP)
+def quieter():
+    STREAM.volume(STREAM.volume() - VOLUME_STEP)
+
+
+def back_seek():
+    STREAM.seek(STREAM.card["at"] - SEEK_STEP)
+
+
+def ahead():
+    STREAM.seek(STREAM.card["at"] + SEEK_STEP)
+
+
+def strip_at(ev):
+    """A press on the strip's head: Now playing."""
+    if ev.kind == "down":
+        now()
+
+
+def volume_at(ev):
+    """A tap or a drag on the meter: the step it lands on."""
+    c = STREAM.card
+    if c is None or ev.kind == "up":
+        return
+    d = _DRAWN["volume"]
+    sx, seg, gap = _steps(0, d[2], d[4])
+    STREAM.volume(10 * max(0, min(10, (ev.x - sx + seg) // (seg + gap))))
+
+
+def seek_at(ev):
+    """A tap on a file's bar in Now playing's head: the second it names."""
+    c = STREAM.card
+    if c is None or not c["len"] or ev.kind != "down":
+        return
+    d = _DRAWN["head"]
+    fs = d[4]
+    tx = d[3] + 12 * fs
+    bw = _bar_w(d[2] - tx, fs)
+    if ev.y >= 56 * fs and tx <= ev.x < tx + bw:
+        STREAM.seek(c["len"] * (ev.x - tx) // max(1, bw))
 
 
 def wifi():
@@ -836,44 +1150,52 @@ def home():
 
 ui.hook("opened", opened)
 ui.hook("tab_moved", tab_moved)
+ui.hook("row_moved", row_moved, takes="row")
 ui.hook("url_moved", url_moved)
 ui.hook("to_name", to_name)
-ui.hook("volume", volume)
-ui.hook("seek", seek)
-ui.action("pick", "Play", pick, takes="row")
-ui.action("now", "Player", now, keys=("role:more",), when="playing && listing", off="hide")
+ui.hook("strip_at", strip_at, takes="pointer")
+ui.hook("volume_at", volume_at, takes="pointer")
+ui.hook("seek_at", seek_at, takes="pointer")
+ui.action("pick", "Play", pick, takes="row", hint="{verb}")
+ui.action("place", "Open", place, takes="row")
+ui.action("player", "{view=now?List:Player}", player, keys=("m",), when="playing",
+          off="hide")
 ui.action("back", "Back", back, when="paged", off="hide")
 ui.action("cancel", "Cancel", back)
 ui.action("add", "Add", submit, when="!err", off="grey")
-ui.action("main", "Play", main, when="playing", off="hide")
-ui.action("prev", "Previous", prev, keys=("q",), when="playing && view=now", off="hide")
-ui.action("next", "Next", next_, keys=("e",), when="playing && view=now", off="hide")
+ui.action("main", "{main_word}", main, when="playing", off="hide")
+ui.action("toggle", "{main_word}", main, when="playing", off="hide")     # Now playing's, focused
+ui.action("prev", "Previous", prev, keys=("q",), when="playing && view=now", off="hide",
+          hint="{radio?Station:Song}")
+ui.action("next", "Next", next_, keys=("e",), when="playing && view=now", off="hide",
+          hint="{radio?Station:Song}")
 ui.action("stop", "Stop", stop, when="playing", off="hide")
+ui.action("louder", "Volume", louder, keys=("role:up", "w"), when="playing && view=now", off="hide")
+ui.action("quieter", "Volume", quieter, keys=("role:down", "s"), when="playing && view=now",
+          off="hide")
+ui.action("rewind", "Seek", back_seek, keys=("role:left", "a"), when="seekable && view=now",
+          off="hide")
+ui.action("ahead", "Seek", ahead, keys=("role:right", "d"), when="seekable && view=now",
+          off="hide")
+ui.action("back_one", "Previous", prev, when="playing", off="hide")    # the desk card's, keyless
+ui.action("on_one", "Next", next_, when="playing", off="hide")
+ui.action("softer", "Quieter", quieter, when="playing", off="hide")
+ui.action("harder", "Louder", louder, when="playing", off="hide")
 ui.action("wifi", "Wi-Fi settings", wifi)
 ui.action("home", "Back to home", home)
 
 
-def _strip(wifi=False):
-    """What plays, at the foot of either list's page; Wi-Fi's page where
-    the radio has no network."""
-    with ui.foot(look="share"):
-        if wifi:
-            ui.button("wifi", "primary", icon="wifi", shown="!online")
-        ui.button("main", icon="{main_icon}", label="")
-        ui.button("now", icon="{mark}", label="{title}")
-
-
 def _list(model, cur, shown):
     with ui.scroll(model + "_view", shown=shown):
-        with ui.rows(model, cur=cur):
-            ui.link("pick", "{.right}", label="{.name}")
+        with ui.rows(model, cur=cur, changed="row_moved"):
+            ui.link("pick", "{.right}", label="{.name}", icon="{.icon}", tone="{.tone}", tag="{.kind}")
 
 
 def _radio():
     _list("stations", "scur", "online")
     ui.empty("Radio needs Wi-Fi", icon="wifi_off", shown="!online",
              lines=["Turn on Wi-Fi to listen to stations.", "Your own music plays without it."])
-    _strip(wifi=True)
+    ui.button("wifi", "primary", icon="wifi", shown="!online")
 
 
 def _files():
@@ -882,19 +1204,52 @@ def _files():
              lines=["Put in an SD card with your songs on it.", "Radio plays without one."])
     ui.empty("No music yet", icon="music", shown="folder=empty",
              lines=["Put MP3 songs in the Music folder", "on the SD card."])
-    _strip()
+
+
+def _listing():
+    """Either list: on a handheld under the tabs, the strip at its foot; on
+    the desk the Library's two places beside it, the card across its foot."""
+    ui.switch("tab", {"radio": _radio, "files": _files}, shown="!@desk")
+    with ui.split("row", sizes=(168, "1*"), shown="@desk"):
+        with ui.group(""):
+            ui.label("Library", tone="dim")
+            with ui.rows("places", current="here"):
+                ui.link("place", label="{.name}", icon="{.icon}")
+        with ui.group(""):
+            ui.info("{tab=files?Name:Station}", "{tab=files?Length:Style}")
+            ui.switch("tab", {"radio": _radio, "files": _files})
+    with ui.foot(shown="playing && @desk"):
+        with ui.row("card", gap=8):
+            ui.canvas("wide", draw_wide, grow=True, h=64)
+            ui.button("back_one", icon="prev", label="", w=40)
+            ui.button("main", "primary", icon="{main_icon}", label="", w=80)
+            ui.button("on_one", icon="next", label="", w=40)
+            ui.button("stop", icon="stop", label="", w=40)
+            ui.button("softer", icon="minus", label="", w=32)
+            ui.label("", icon="volume")
+            ui.canvas("volume", draw_volume, w=112, pointer="volume_at")
+            ui.button("harder", icon="plus", label="", w=32)
 
 
 def _now():
-    ui.label("{title}", face="title")
-    ui.label("{meta}", tone="{tone}")
-    ui.label("LIVE", icon="equalizer", tone="value", shown="live")
-    ui.slider("{clock}", "pos", 0, "{steps}", look="bar", on="seek", shown="seekable")
-    ui.slider("Volume", "vol", 0, 10, look="steps", icon="volume", on="volume")
-    ui.link("main", icon="{main_icon}", label="{main_word}")
-    ui.link("prev", icon="prev")
-    ui.link("next", icon="next")
-    ui.link("stop", icon="stop")
+    """Now playing on a 12 px grid, its block centred: the head, the
+    transport on a 1:2:1 + 1 grid, the volume. Its keys are the page's own:
+    Enter plays, pauses or tries again, Q E step, W S the volume, A D seek
+    a file, M goes to the list."""
+    with ui.split("col", sizes=(72, 36, 28, "1*"), gap="m", pad="m"):
+        ui.canvas("head", draw_now, pointer="seek_at")
+        with ui.grid(5, 1, gap="m"):
+            ui.button("prev", icon="prev", label="")
+            ui.button("toggle", "primary", icon="{main_icon}", label="", span=2, focus=True)
+            ui.button("next", icon="next", label="")
+            ui.button("stop", icon="stop", label="")
+        with ui.split("row", sizes=(32, 22, "1*", 32), gap="s", pad="0"):
+            ui.button("quieter", icon="minus", label="")
+            ui.label("", icon="volume")
+            ui.canvas("volume", draw_volume, pointer="volume_at")
+            ui.button("louder", icon="plus", label="")
+        with ui.group(""):
+            pass
 
 
 def _add():
@@ -902,9 +1257,11 @@ def _add():
     ui.label("{err}", tone="danger", wrap="word", lines=2, shown="err")
     ui.label(HELP_ADDRESS, tone="dim", shown="!err")
     ui.field("Name", "name", NAME_MAX, hint="Optional", on="add")
-    with ui.foot(look="share"):
-        ui.button("cancel")
-        ui.button("add", "primary")
+    with ui.foot():
+        with ui.row("acts"):
+            ui.row("")
+            ui.button("cancel")
+            ui.button("add", "primary")
 
 
 def _no_audio():
@@ -916,9 +1273,13 @@ def _no_audio():
 
 def build():
     with ui.page(""):
-        ui.tabs("tab", labels="TABS", on="tab_moved", shown="listing")
-        ui.switch("view", {"radio": _radio, "files": _files, "now": _now, "add": _add,
+        ui.tabs("tab", labels="TABS", on="tab_moved", shown="listing && !@desk")
+        ui.switch("view", {"radio": _listing, "files": _listing, "now": _now, "add": _add,
                            "noaudio": _no_audio})
+        with ui.foot(look="band", shown="playing && listing && !@desk"):
+            with ui.row("strip", gap=0):
+                ui.canvas("strip", draw_strip, grow=True, h=34, pointer="strip_at")
+                ui.button("main", "tonal", icon="{main_icon}", label="", w=42)
 
 
 def is_app(cart):

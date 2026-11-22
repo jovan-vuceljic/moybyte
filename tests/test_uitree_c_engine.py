@@ -335,3 +335,63 @@ def test_up_from_a_row_scrolled_away_from_the_view_takes_its_neighbour(tmp_path)
     script = ["k:down"] * 60 + ["swipe:300", "f:20", "swipe:300", "f:20", "k:up"]
     frames = _long(tmp_path, "away", 60, script, app=TABBED)
     assert frames[-1].state.split()[0] == "r58/go", [f.state for f in frames[-6:]]
+
+
+ROW_CANVAS = '''
+import uitree as ui
+
+s = ui.state(songs=ui.model(key="id", id="", name=""), cur=ui.row_of("songs"))
+DRAWN = []
+
+
+def opened():
+    s.songs = [{"id": "a", "name": "One"}, {"id": "b", "name": "Two"}]
+
+
+def lead(cv, x, y, w, h, row):
+    DRAWN.append((row.id, ui.colors()["value"] is not None))
+
+
+def tap(ev):
+    DRAWN.append(("tap", ev.kind))
+
+
+ui.hook("opened", opened)
+ui.hook("tap", tap, takes="pointer")
+
+
+def build():
+    with ui.page("Rows"):
+        with ui.rows("songs", cur="cur"):
+            ui.canvas("lead", lead, h=12)
+        ui.canvas("pad", lambda cv, x, y, w, h: None, h=20, pointer="tap")
+'''
+
+
+def test_a_canvas_in_a_rows_body_is_handed_its_row(tmp_path):
+    """A canvas in a rows' body draws each row, handed the row it stands
+    in, and asks the theme's colours in its draw; a canvas's pointer= is
+    handed a press on a flowing page too."""
+    import uitree_app
+    import uitree_c
+    import uitree_parity as P
+    app_py = tmp_path / "rowcanvas" / "app.py"
+    app_py.parent.mkdir()
+    app_py.write_text(ROW_CANVAS)
+    mod = C._module(str(app_py))
+    cls = uitree_app.app_layer("rowcanvas_c", "Rows", mod.build, engine=uitree_c.CEngine)
+    seen = {}
+
+    def opened(ws):
+        seen["app"] = P.host(ws, cls)
+
+    def probe(ws):
+        app = seen["app"]
+        r = app.engine._x.rect("pad")
+        if r is not None and not any(d[0] == "tap" for d in mod.DRAWN):
+            app.handle_pointer(r[0] + 2, r[1] + 2, True)
+        return None
+    P.frames(C.CONFIGS[0], P.Surface(opened, probe=probe), ["k:down", "k:down"])
+    rows = [d for d in mod.DRAWN if d[0] != "tap"]
+    assert ("a", True) in rows and ("b", True) in rows
+    assert ("tap", "down") in mod.DRAWN

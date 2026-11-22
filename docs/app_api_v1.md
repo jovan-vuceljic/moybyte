@@ -253,7 +253,14 @@ actions at the top level, and names its root page `build`; it defines no
 `_update` or `_draw` (`runtime/run/player_tree.py`). A state that holds a
 `ui.doc` gives its page the Editor's kinds, among them `ui.text_editor`,
 and `s.NAME.adopt(ed)` hands that document an editor handle (below), so the
-text editor types into the handle's document and draws it.
+text editor types into the handle's document and draws it. What no kind
+draws an app draws in a `ui.canvas`: its `draw(cv, x, y, w, h)` paints the
+rect the engine laid out (in a rows' body `draw(cv, x, y, w, h, row)`, handed
+the row it stands in), `ui.colors()` answers the theme's colours there, and
+its `pointer=` is handed a press and its drag and release in its own
+coordinates on any page. A foot of `look="band"` lies edge to edge on the
+alternate surface under a rule, its rows as tall as their tallest canvas
+(Music's strip). `runtime/apps/music_app.py` draws what plays this way.
 `system_carts/moybyte.notes.moy` is the example, and
 `tests/uitree_conformance/counter/` holds one app in both languages to
 one trace and one picture.

@@ -1520,8 +1520,9 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     if (!strcmp(name, "cols") && kind == UIT_TABLE)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);      // a column's header, one prop each
     if (!strcmp(name, "look") && kind == UIT_FOOT) {
-        // "share": its buttons share its width (lit 1); "end" (0): at its end
-        N->lit = (uint8_t)!strcmp(src, "share");
+        // "share": its buttons share its width (lit 1); "band" (2): its rows edge to edge on
+        // the alternate surface under a rule; "end" (0): at its end
+        N->lit = (uint8_t)(!strcmp(src, "share") ? 1 : !strcmp(src, "band") ? 2 : 0);
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
     if (!strcmp(name, "follow") && kind == UIT_SCROLL) {

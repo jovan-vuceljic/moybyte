@@ -80,7 +80,9 @@ typedef struct {
 static app_t *s_app;
 
 // A canvas's draw: its rect kept for the pointer, and the app's draw called.
-static void drawn(void *ud, int node, int x, int y, int w, int h) {
+static void drawn(void *ud, int node, int model, int row, int x, int y, int w, int h) {
+    (void)model;
+    (void)row;
     app_t *a = ud;
     for (int i = 0; i < a->nptr; i++) {
         if (a->ptr[i].node == node) {

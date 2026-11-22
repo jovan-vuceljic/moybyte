@@ -1641,6 +1641,8 @@ static void fit_spans(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, const i
     }
 }
 
+static void put_rect(uit_t *e, int k, const int32_t r[4]);
+
 static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     const uit_node_t *N = NODE(k);
@@ -1668,11 +1670,12 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
                            across ? r[3] : sz};
         at += sz + gap;
         if (NODE(g)->kind == UIT_CANVAS) {
+            put_rect(e, g, cell);       // where a press on it lands (`uit_rect`)
             if (e->draw_fn)             // a cell of its own that only draws: drawn into the cell
-                e->draw_fn(e->draw_ud, g, cell[0], cell[1], cell[2], cell[3]);
+                e->draw_fn(e->draw_ud, g, model, row, cell[0], cell[1], cell[2], cell[3]);
             continue;
         }
-        if (NODE(g)->kind == UIT_GRID) {    // a grid's room is its cell
+        if (NODE(g)->kind == UIT_GRID || NODE(g)->kind == UIT_SPLIT) {     // a grid's or a split's room is its cell
             int32_t was[4];
             memcpy(was, e->rect, sizeof was);
             memcpy(e->rect, cell, sizeof cell);
@@ -1680,8 +1683,10 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
             memcpy(e->rect, was, sizeof was);
             continue;
         }
-        if (NODE(g)->kind != UIT_GROUP) {
+        if (NODE(g)->kind != UIT_GROUP) {   // any other node drawn placed in its cell
+            moy_ui_api_at(c, cell[0], cell[1], cell[2], cell[3]);
             draw(e, c, s, g, model, row);
+            moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3]);
             continue;
         }
         char sid[UIT_ID_MAX + 1];
@@ -1963,7 +1968,7 @@ static void stack(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int 
 static int32_t foot_stacked(uit_t *e, int k)
 {
     int32_t h = 0, any = 0;
-    if (NODE(k)->lit)
+    if (NODE(k)->lit == 1)
         return 0;
     KIDS(k, g) {
         any |= NODE(g)->kind != UIT_LABEL;
@@ -2015,6 +2020,15 @@ static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     int32_t x = e->foot_r[0], y = e->foot_r[1], w = e->foot_r[2], h = e->foot_r[3];
     int fh = desk ? 30 : 20 * fs, pad = desk ? 7 : fs, m = desk ? 16 : 4 * fs;
     int by = y + h - fh - pad;
+    if (NODE(k)->lit == 2) {            // a band: its rows edge to edge on the alternate surface
+        int32_t r[4] = {x, y, w, h};
+        fill_token(s, x, y, w, h, MOY_UI_T_SURFACE_ALT);
+        fill_token(s, x, y, w, fs, MOY_UI_T_BORDER);
+        e->in_foot = 1;
+        stack(e, c, s, k, model, row, r);
+        e->in_foot = 0;
+        return;
+    }
     if (!desk)
         fill_token(s, x + m, y, w - 2 * m, 1, MOY_UI_T_BORDER);
     if (foot_stacked(e, k)) {
@@ -2469,8 +2483,9 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         moy_ui_over_text(&o, MOY_UI_OV_ID, span_of(key, strlen(key)));
         moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &one);
         moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, N->btn, &o, r);
+        put_rect(e, k, r);              // where a press on it lands (`uit_rect`)
         if (e->draw_fn)
-            e->draw_fn(e->draw_ud, k, r[0], r[1], r[2], r[3]);
+            e->draw_fn(e->draw_ud, k, model, row, r[0], r[1], r[2], r[3]);
         break;
     }
     case UIT_TABS:
@@ -2945,7 +2960,11 @@ static int32_t fixed_h(uit_t *e, int k)
         }
         if (st && !field)
             return status_h(e);         // a status line's
-        break;
+        int32_t hh = h_row(e);
+        KIDS(k, g)                      // a row as tall as its tallest canvas of a fixed h=
+        if (NODE(g)->kind == UIT_CANVAS && fixed_h(e, g) > hh)
+            hh = fixed_h(e, g);
+        return hh;
     }
     }
     return h_row(e);
@@ -3209,6 +3228,11 @@ static int32_t natural(uit_t *e, int k, int model, int row, int32_t h)
         return sum + len_of(e, N->t_value, model, row, row_gap(e)) * (nk > 1 ? nk - 1 : 0) +
                2 * len_of(e, N->t_aux, model, row, 0);
     }
+    if (N->kind == UIT_LABEL && N->t_icon >= 0) {
+        text(e, k, 0, model, row, &n);
+        if (!n)
+            return 22 * ((e->flags & UIT_F_DESK) ? 1 : e->fs);   // an icon alone: its box and a gap
+    }
     return -1;
 }
 
@@ -3271,6 +3295,15 @@ static void row_share(const int32_t *nat, const int32_t *base, int32_t *ws, int 
 
 // A row's cells across it: each its natural width, the growing ones sharing the rest, inside
 // its pad= and gap= apart; a mid= row centred on it, each side's fills sharing that side's room.
+// Whether row `k` holds a canvas of a fixed h= taller than a line (its height `fixed_h`'s).
+static int canvas_tall(uit_t *e, int k)
+{
+    KIDS(k, g)
+    if (NODE(g)->kind == UIT_CANVAS && fixed_h(e, g) > h_row(e))
+        return 1;
+    return 0;
+}
+
 static void row_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
                       const int32_t r[4])
 {
@@ -3349,6 +3382,11 @@ static void row_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         if (e->placing || gk == UIT_ROW)
             place_at(e, c, s, g, km[i], kr[i], cell);   // a placement records the cells, drawing none
         else if (gk == UIT_BUTTON) {
+            int32_t hh = h_row(e);      // a line tall, centred in a row a canvas made taller
+            if (cell[3] > hh && canvas_tall(e, k)) {
+                cell[1] += (cell[3] - hh) / 2;
+                cell[3] = hh;
+            }
             put_rect(e, g, cell);
             moy_ui_api_at(c, cell[0], cell[1], cell[2], cell[3]);
             draw(e, c, s, g, km[i], kr[i]);
@@ -3431,14 +3469,14 @@ static void draw_canvas_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
     int32_t got[5];
     moy_ui_over_none(&o);
     moy_ui_over_text(&o, MOY_UI_OV_ID, span_of(key, strlen(key)));
-    if (e->flags & UIT_F_BARE) {
+    if ((e->flags & UIT_F_BARE) || e->in_foot) {
         int32_t one = 1;
-        moy_ui_over_put(&o, MOY_UI_OV_BARE, &one);       // a bare page's canvases sink no well
+        moy_ui_over_put(&o, MOY_UI_OV_BARE, &one);       // a bare page's canvases, and a foot's, sink no well
     }
     id_put(e, k, model, row, key);
     moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, 0, &o, got);
     if (e->draw_fn)
-        e->draw_fn(e->draw_ud, k, got[0], got[1], got[2], got[3]);
+        e->draw_fn(e->draw_ud, k, model, row, got[0], got[1], got[2], got[3]);
 }
 
 // Node `k` in its rect: the rect recorded, the node drawn there (in a placement, only the
@@ -3503,7 +3541,7 @@ static void place_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, i
         const char *key = uit_str(e, N->key);
         id_put(e, k, model, row, key);
         if (e->draw_fn)
-            e->draw_fn(e->draw_ud, k, r[0], r[1], r[2], r[3]);
+            e->draw_fn(e->draw_ud, k, model, row, r[0], r[1], r[2], r[3]);
         return;
     }
     }
@@ -4752,7 +4790,8 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         // the foot: docked above the band, on the page's ground
         int32_t got[4];
         int32_t fh = foot_stacked(e, e->foot), desk = (flags & UIT_F_DESK) != 0;
-        int32_t dh = fh ? fh + (desk ? 14 : 2 * fs) : (desk ? 44 : 22 * fs) + foot_line(e, e->foot);
+        int32_t dh = fh ? fh + (NODE(e->foot)->lit == 2 ? 0 : desk ? 14 : 2 * fs)
+                        : (desk ? 44 : 22 * fs) + foot_line(e, e->foot);
         if (moy_ui_api_dock(c, dh, got)) {
             memcpy(e->foot_r, got, sizeof got);
             e->rect[3] = got[1] - e->rect[1] > 0 ? got[1] - e->rect[1] : 0;
@@ -4773,7 +4812,7 @@ ids:;
     e->tv_stop_now = 0;
     if (e->placed)
         placed_walk(e, c, s);
-    else
+    else if (rects_ready(e))            // a flowing page's rects: where its canvases drew
         walk(e, c, s, 0, -1, -1);
     moy_ui_api_page_done(c, s);         // the next frame's plan reads what this one drew
     e->pop_hints_n = 0;         // (its buffer goes with this frame)

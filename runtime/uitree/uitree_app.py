@@ -316,8 +316,9 @@ class Engine(S.Builder):
 
     def _arrow_roles(self, i):
         """An arrow whose role an action answers (§13.1: left, right, up,
-        down) fires that action on its press and on each repeat, and the
-        toolkit never sees it: the app owns the arrow, focus stays."""
+        down) fires that action on its press and on each repeat while the
+        action is on, and the toolkit never sees it: the app owns the
+        arrow, focus stays. While the action is off the arrow moves focus."""
         inp, fired = self._ui.inp, False
         for bit in range(4):
             role = S.ARROWS[bit]
@@ -329,12 +330,17 @@ class Engine(S.Builder):
             if (down or reps) and a.can():
                 self.q.append((a, self.args_for(a), "role %s" % role))
                 fired = True
-            if down or reps:
                 inp[0] &= ~(1 << bit)
                 inp[1] &= ~(1 << bit)
                 u = inp[_IN_REP] & 0xFFFFFFFF & ~(0xFF << (8 * bit))
                 inp[_IN_REP] = u - 0x100000000 if u >> 31 else u     # the word is signed: no bigint
         return fired
+
+    def pointer_down(self):
+        """Whether the pointer is held: the surface's; a hosted page's host
+        replaces it with its own."""
+        p = self._surf.pointer() if self._surf is not None else None
+        return bool(p is not None and p.down)
 
     def point(self, px, py, click):
         self._bind()

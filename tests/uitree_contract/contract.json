@@ -1343,7 +1343,7 @@
    "section": "7.1",
    "props": {
     "look": {
-     "type": "word:end,share",
+     "type": "word:end,share,band",
      "level": 1
     }
    }

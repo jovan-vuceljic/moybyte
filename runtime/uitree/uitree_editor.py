@@ -455,12 +455,6 @@ class Engine(uitree_app.Engine):
 
     # -- popovers hang from a node's part -------------------------------------
 
-    def pointer_down(self):
-        """Whether the pointer is held: the surface's; a hosted page's host
-        replaces it with its own."""
-        p = self._surf.pointer() if self._surf is not None else None
-        return bool(p is not None and p.down)
-
     # -- keys ------------------------------------------------------------------
 
     def _into_doc(self, ek, ch, shift):
