@@ -1399,7 +1399,7 @@
      "level": 1
     },
     "size": {
-     "type": "word:fit",
+     "type": "word:fit,text",
      "level": 1
     },
     "wrap": {
@@ -1912,7 +1912,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:seg,cycle",
+     "type": "word:seg,cycle,swatches",
      "level": 2
     },
     "text": {
@@ -2144,6 +2144,10 @@
     "hint": {
      "type": "tpl",
      "level": 2
+    },
+    "row": {
+     "type": "int",
+     "level": 2
     }
    }
   },
@@ -2170,6 +2174,10 @@
      "type": "action",
      "level": 1,
      "designed": true
+    },
+    "look": {
+     "type": "word:keys",
+     "level": 1
     }
    }
   },
@@ -2281,6 +2289,14 @@
     },
     "pad": {
      "type": "int|word:s,m,l,0",
+     "level": 2
+    },
+    "w": {
+     "type": "int",
+     "level": 2
+    },
+    "h": {
+     "type": "int",
      "level": 2
     }
    }
@@ -2457,8 +2473,7 @@
     },
     "hint": {
      "type": "tpl",
-     "level": 2,
-     "designed": true
+     "level": 2
     },
     "focus": {
      "type": "cond",

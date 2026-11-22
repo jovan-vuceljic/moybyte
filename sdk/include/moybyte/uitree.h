@@ -410,6 +410,12 @@ static inline int32_t ut_focus(const char *key) {
     return uitree_focus(key, ut_len_(key));
 }
 
+// In a canvas's draw: the model row it stands in (a table's row its canvas
+// child draws, a row of a rows list's body), from 0; -1 for a canvas of its own.
+static inline int32_t ut_canvas_row(void) {
+    return uitree_draw_row();
+}
+
 // The page under this one built again, the focus back where it was.
 static inline void ut_pop(void) {
     if (ut_.npages > 1) {

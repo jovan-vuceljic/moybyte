@@ -94,11 +94,11 @@ def test_all_display_types_render_without_error():
     _draw_once(ws)                          # must not raise
     assert ws.cart_error is None
     assert probe.drew_something(ws.run.canvas)  # something was drawn
-    # every card is on the page: the meters as sliders, the pickers as steps
+    # every card is on the page: the meters as sliders, the pictures as pickers
     for key in ("n", "spd", "pick", "who"):
         assert _box(ws, key) is not None, key
-    kinds = {r.id: (r.shape, r.icon) for r in ws.cards_layer.s.cards}
-    assert kinds["pick"] == ("cycle", "heart") and kinds["who"][0] == "cycle"
+    kinds = {r.id: (r.shape, r.k) for r in ws.cards_layer.s.cards}
+    assert kinds["pick"] == ("pics", 1) and kinds["who"] == ("pics", 1)
 
 
 def test_missing_display_is_an_ordinary_card():
@@ -129,25 +129,72 @@ def _tap_card(ws, key):
     tap_box(ws, _box(ws, key))
 
 
-def test_a_sprite_tile_card_steps_its_choice_on_a_tap():
+def _tap_tile(ws, key, k, n):
+    """A tap on tile `k` of the `n` of picker card `key`, where its last
+    frame drew it."""
+    from ws_helpers import tap_box
+    _draw_once(ws)
+    x, y, w, h = _box(ws, key)
+    tx, ty, side = ws.cards_layer.tiles(n, w, h)[k]
+    tap_box(ws, (x + tx, y + ty, side, side))
+
+
+def test_a_sprite_tile_card_takes_the_tile_tapped():
     edit = [{"key": "who", "type": "choice", "choices": [0, 1], "tiles": [0, 1],
              "display": "sprite-tiles", "card": "WHO {value}"}]
     ws = _ws_with_cart(edit, {"who": 0}, _painted_sheet())
-    _tap_card(ws, "who")
+    _tap_tile(ws, "who", 1, 2)
     assert ws.run.project.config["who"] == 1
-    _tap_card(ws, "who")
+    _tap_tile(ws, "who", 1, 2)
+    assert ws.run.project.config["who"] == 1
+    _tap_tile(ws, "who", 0, 2)
     assert ws.run.project.config["who"] == 0
 
 
-def test_a_choice_icons_card_shows_its_choices_icon_and_steps_on_a_tap():
+def test_a_picker_steps_with_left_right_and_enter():
     edit = [{"key": "p", "type": "choice", "choices": ["x", "y", "z"],
              "display": "choice-icons", "icons": ["star", "heart", "dot"],
              "card": "P {value}"}]
     ws = _ws_with_cart(edit, {"p": "x"})
-    _tap_card(ws, "p")
-    assert ws.run.project.config["p"] == "y"
+    drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)
+    assert ws.cards_layer.page.focus_key == "p/pick"
+    for key, want in (("right", "y"), ("right", "z"), ("right", "x"), ("left", "z"), ("a", "x")):
+        drv.press(key)
+        drv.frame(1 / 30)
+        drv.frame(1 / 30)               # the key let go before the next press
+        assert ws.run.project.config["p"] == want, key
+    assert ws.cards_layer.page.hints()[:2] == ("confirm", "Change")
+
+
+def test_a_choice_of_names_cycles_with_left_and_right():
+    edit = [{"key": "c", "type": "choice", "choices": ["r", "g", "b"], "names": ["red", "green", "blue"],
+             "card": "C {value}"}]
+    ws = _ws_with_cart(edit, {"c": "g"})
+    drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)
+    assert ws.cards_layer.page.stop_kinds()["c/k"] == "cycle"
+    row = ws.cards_layer.s.cards[0]
+    assert (row.k, row.names) == (1, "red\ngreen\nblue")
+    drv.press("right")
+    drv.frame(1 / 30)
+    assert ws.run.project.config["c"] == "b"
+    for _ in range(2):
+        drv.press("left")
+        drv.frame(1 / 30)
+        drv.frame(1 / 30)
+    assert ws.run.project.config["c"] == "r"
+
+
+def test_a_choice_icons_card_of_three_is_a_picker_of_its_icons():
+    edit = [{"key": "p", "type": "choice", "choices": ["x", "y", "z"],
+             "display": "choice-icons", "icons": ["star", "heart", "dot"],
+             "card": "P {value}"}]
+    ws = _ws_with_cart(edit, {"p": "x"})
+    _tap_tile(ws, "p", 2, 3)
+    assert ws.run.project.config["p"] == "z"
     _draw_once(ws)
-    assert [r.icon for r in ws.cards_layer.s.cards] == ["heart"]
+    assert [(r.shape, r.k) for r in ws.cards_layer.s.cards] == [("pics", 2)]
 
 
 def test_a_two_way_choice_icons_card_is_a_toggle_at_row_height():
@@ -217,7 +264,7 @@ def test_showcase_star_catcher_opens_and_runs_headless(tmp_path):
     ws.text.open_menu()
     basket = [f for f in ws.cart["edit"] if f["key"] == "basket"][0]
     assert basket["display"] == "sprite-tiles"
-    _tap_card(ws, "basket")                             # step to the robot tile
+    _tap_tile(ws, "basket", 1, 2)                       # the robot tile
     assert ws.run.project.config["basket"] == 1
     ws.saves.apply()                                          # re-run with the new pick
     assert ws.cart_error is None
@@ -236,13 +283,12 @@ def test_showcase_runs_with_a_stale_string_basket(tmp_path):
 
 # -- P3: background picker (tap a thumbnail) --------------------------------
 
-def test_bg_thumbs_card_steps_through_its_presets_on_a_tap():
+def test_bg_thumbs_card_takes_the_preset_tapped():
     edit = [{"key": "bg", "type": "choice",
              "choices": ["dark_blue", "night", "stripes", "indigo"],
              "display": "bg-thumbs", "card": "SKY {value}"}]
     ws = _ws_with_cart(edit, {"bg": "dark_blue"})
-    _tap_card(ws, "bg")
-    _tap_card(ws, "bg")
+    _tap_tile(ws, "bg", 2, 4)
     assert ws.run.project.config["bg"] == "stripes"
 
 
@@ -253,11 +299,11 @@ def test_space_desktop_bg_picker_applies_a_preset(tmp_path):
     bg = [f for f in ws.cart["edit"] if f["key"] == "bg"][0]
     assert bg["display"] == "bg-thumbs"
     _draw_once(ws)
-    ws.cards_layer.page.want_focus = "bg/step"   # the page scrolls it into view
+    ws.cards_layer.page.want_focus = "bg/pick"   # the page scrolls it into view
     for _ in range(20):
         _draw_once(ws)
-    while ws.run.project.config.get("bg") != "stripes":
-        _tap_card(ws, "bg")
+    _tap_tile(ws, "bg", 2, 4)
+    assert ws.run.project.config.get("bg") == "stripes"
     ws.saves.apply()                                   # the cart paints stripes, no crash
     assert ws.cart_error is None
     for _ in range(10):

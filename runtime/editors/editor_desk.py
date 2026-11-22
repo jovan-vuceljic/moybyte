@@ -36,7 +36,6 @@ import moybuf
 import ui
 import editor_panes as P
 import editor_parts as Parts
-import editor_sound as Sound
 import layout_base as _lb
 from layers import Layer
 from ticks import _ticks_ms, _ticks_diff
@@ -58,10 +57,6 @@ _OPENED = ("cards", "code", "blocks", "paint", "map", "scene", "music")
 # knows how to lay out.
 _OWNERS_OR_CODE = tuple(_OWNERS) + ("code",)
 
-# The Editor tabs whose desk pane is drawn here on the verbs over the tab's
-# editor core, not by the tab's own surface: the Sound pane.
-_ON_VERBS = ("music",)
-
 # The panes whose frames may be their own: a frame the engine plans as the
 # pane's split frame draws it alone (`_split_frame`); the Sprite pane's while
 # its pickers are up.
@@ -77,7 +72,8 @@ _TEXT_PANES = ("code", "theme_config")
 # before anything else (Sprite, Map and Scene their `body_fill`, Code its
 # ground round the text view's rows, Settings its `ui.page`): their card is
 # drawn down to the header only, its body never seen
-# (tests/test_editor_desk.py holds it).
+# (tests/test_editor_desk.py holds it). The Sound pane's page is bare, on its
+# card.
 _FILLS_BODY = ("paint", "map", "scene", "code", "cards", "theme_config", "theme_sprites")
 
 # Which workspace shows an Editor tab, for a tab opened from elsewhere (a
@@ -438,7 +434,7 @@ class EditorDesk(Layer):
             for pane, r, _path in placed[0]:
                 for c in pane:
                     tab = P.CONTENTS[c][2]
-                    if tab is not None and c not in _ON_VERBS and tab in _OWNERS_OR_CODE:
+                    if tab is not None and tab in _OWNERS_OR_CODE:
                         self._pane_layout(tab, self._body(r, u, pane))
             return
 
@@ -719,8 +715,14 @@ class EditorDesk(Layer):
             else:
                 ws.code_layout = old
 
+    def _surface(self, tab):
+        """What tab `tab` draws with in a pane: its content layer, the Sound
+        pane's own page for the music tab (`SoundPane`)."""
+        ws = self.ws
+        return ws.music_ui.sound if tab == "music" else ws.layer_of(tab)
+
     def _tab_pane(self, tab, r, dt, own=False, moves=False):
-        layer = self.ws.layer_of(tab)
+        layer = self._surface(tab)
         if layer is None:
             return
         # the WM's word for the pane's frame (`window_frame`), which its
@@ -843,8 +845,8 @@ class EditorDesk(Layer):
     # only that pane, and nothing another pane draws changed: no edit the
     # other panes show, the made code, the sounds list) draws that pane alone
     # and names it as what it changed. A tab's pane draws its body (its
-    # header holds nothing the frame moved); the Sound pane, drawn on the
-    # desk's own verbs, its card, header and body.
+    # header holds nothing the frame moved); the Sound pane, whose header
+    # shows what its keys change, its card, header and body.
 
     def _own_pane(self):
         """(content, tab, pane, rect, body, index) of the focused pane where
@@ -859,7 +861,7 @@ class EditorDesk(Layer):
         if c not in _OWN_FRAMES:
             return None
         tab = P.CONTENTS[c][2]
-        if c != "music" and self.ws.layer_of(tab) is None:
+        if self._surface(tab) is None:
             return None
         if c == "paint" and self.ws.layer_of(tab)._pop != "pickers":
             return None
@@ -883,11 +885,11 @@ class EditorDesk(Layer):
                 return None
             return (id(be), be._hist.gen, be.target, bu.blk_graduated)
         if c == "music":
-            me = Sound.editor(self)
+            snd = ws.music_ui.sound
+            me = snd.editor()
             if me is None:
                 return None
-            st = Sound._state(self)
-            if st.get("rename") is not None or st.get("menu"):
+            if snd.asking():
                 return False            # a popover over the panes beside it
             return (id(me), me._hist.gen, me.view, me.sfx_idx, me.track_idx,
                     len(me.bank.sfx), len(me.bank.music), ws.music_ui.music_preview)
@@ -983,11 +985,13 @@ class EditorDesk(Layer):
                 self._changed = [0, 0, 0, 0]
             return True
         if c == "music":
-            # the desk's verbs run whole (focus rests on the first pane's
-            # header), their pixels clipped to the pane
+            # its page, then the desk's verbs run whole (focus rests on the
+            # first pane's header), their pixels clipped to the pane
             th = ws.theme_colors
             self._corners(cv, th["panel"], r[0], r[1], r[2], r[3], P.RADIUS * u)
+            pb = self._body(r, u, pane)
             self._card(cv, th, r, True, u)
+            self._tab_pane(tab, pb, dt, True)
             self._cursors = []
             self._clip = r
             cv.clip(*r)
@@ -1099,10 +1103,9 @@ class EditorDesk(Layer):
         c = self.tab_of(pane)
         body = self._body(r, u, pane)
         tab = P.CONTENTS[c][2]
-        filled = (body[1] if tab in _FILLS_BODY and c not in _ON_VERBS
-                  and ws.layer_of(tab) is not None else 0)
+        filled = (body[1] if tab in _FILLS_BODY and self._surface(tab) is not None else 0)
         self._card(cv, th, r, n == self._focus.get(self.key, 0), u, filled)
-        if tab is not None and c not in _ON_VERBS:
+        if tab is not None:
             self._tab_pane(tab, body, dt, moves=pane == self._moves)
         elif c == "game":
             self._game(cv, th, body, u)
@@ -1240,7 +1243,7 @@ class EditorDesk(Layer):
             # the more menu of the rest. The title or tabs keep left of them
             # all; tabs that would not fit labelled are short (`_short_tabs`).
             fixed = (cell * (1 + (c == "game")) + 4 * u
-                     + (7 * cell if c in _ON_VERBS else cell if c == "sounds" else 0))
+                     + (7 * cell if c == "music" else cell if c == "sounds" else 0))
             short = len(pane) > 1 and self._tabs_w(pane, -1, u) > w - fixed - 8 * u
             tools, folded = self._head_fit(pane, c, x, w, u, short)
             tools_w = fixed + cell * (len(tools) + bool(folded))
@@ -1293,7 +1296,7 @@ class EditorDesk(Layer):
                                         "current": self._tool_on(op)}):
                     self._head_tool(op)
             if c == "music":
-                tx = Sound.header(self, pid, tx, y, hh, u)
+                tx = self.ws.music_ui.sound.header(self, pid, tx, y, hh, u)
             elif c == "code" and len(pane) == 1:
                 tx = self._code_head(pid, x, y, hh, u, tx)
             elif c == "sounds" and self.key == "sound":
@@ -1303,8 +1306,6 @@ class EditorDesk(Layer):
                 self._still_tool(pid, u)
             if c in Parts.PARTS:
                 Parts.draw(self, c, self._body(r, u, pane), u)
-            elif c == "music":
-                Sound.draw(self, cv, th, self._body(r, u, pane), u)
             elif c in ("sheet", "sprites", "stamps"):
                 body = self._body(r, u, pane)
                 self._ref = c == "sprites"
@@ -1492,7 +1493,7 @@ class EditorDesk(Layer):
         if c == "code":
             return ws.text.code_file_name()
         if c == "music":
-            return Sound.title(self)
+            return ws.music_ui.sound.title()
         return label
 
     def _head_tool(self, op):
@@ -1793,7 +1794,13 @@ class EditorDesk(Layer):
         c = self.tab_of(pane)
         tab = P.CONTENTS[c][2]
         if c == "music":
-            if Sound.keys(self, i, self._fresh):
+            snd = ws.music_ui.sound
+            if snd.asking():
+                # a popover up takes the keys (the name's field, the menu's rows)
+                if self.alone() is not None:
+                    r = self._area()
+                self._in_pane(tab, self._body(r, self._unit(), pane), snd.page_keys, i)
+            elif snd.keys(self, i, self._fresh):
                 i.spend_edges()                 # a held arrow keeps its repeats
             elif self._host.keys(i):
                 ws.mark_dirty()
@@ -1909,7 +1916,7 @@ class EditorDesk(Layer):
         if self._menu_open():
             return True
         c = self.tab_of(self.focused()[0])
-        return c in Parts.PARTS or c in _ON_VERBS
+        return c in Parts.PARTS or c == "music"
 
     def shows(self, content):
         """Whether a pane on show holds `content` as its open tab."""
@@ -2108,9 +2115,8 @@ class EditorDesk(Layer):
         body = self._body(r, u, pane)
         tab = P.CONTENTS[c][2]
         if c == "music":
-            if Sound.pointer(self, body, u, px, py, click, down) \
-                    or host.point(px, py, click, down):
-                ws.mark_dirty()
+            self._in_pane(tab, body, ws.music_ui.sound.handle_pointer, px - body[0], py - body[1], click)
+            ws.mark_dirty()
             self._in_code = True
             return True
         if tab is not None:

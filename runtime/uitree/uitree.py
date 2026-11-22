@@ -2017,7 +2017,8 @@ SCHEMA = {
     "seg": dict(_C, label="text", on="action0", focus="cond", look="lit", labels="lit", text="text"),
     "rows": dict(_C, cur="lit", current="lit", empty="text", filter="lit", changed="action1", group="lit",
                  dir="lit", by="lit", check="lit"),
-    "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond"),
+    "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond",
+                  row="lit"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
                   changed="action1", group="lit", pad="int"),
@@ -2028,15 +2029,15 @@ SCHEMA = {
     "progress": dict(_C, label="text", value="int", max="int", look="lit"),
     "empty": dict(_C, icon="text", title="text", lines="texts"),
     "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit", look="lit"),
-    "dialog": dict(_C, title="text", buttons="lit", kind="lit"),
+    "dialog": dict(_C, title="text", buttons="lit", kind="lit", look="lit"),
     "popover": dict(_C, anchor="text", w="int", close="action0", wash="lit", at="text"),
     "menu": dict(_C, caption="text"),
     "item": dict(_C, label="text", icon="text", mkind="lit"),
     "split": dict(_C, dir="choice", sizes="ints", pad="lit", gap="lit", align="lit", rule="lit"),
-    "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit"),
+    "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit", w="int", h="int"),
     "panel": dict(_C),
     "canvas": dict(_C, draw="fn", h="int", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit",
-                   keys="fn", mark="lit"),
+                   keys="fn", mark="lit", hint="text"),
     "foot": dict(_C, look="lit"),
     "scroll": dict(_C),
     "switch": dict(_C),
@@ -2282,7 +2283,8 @@ def group(caption="", **p):
 
 def label(text, **p):
     """A row of text (§7.2): `face=` a type role, `size="fit"` shrinks it to
-    its width, `wrap="word"` breaks it at word breaks (at most `lines=`
+    its width, `size="text"` makes its cell in a placed row its text's
+    width, `wrap="word"` breaks it at word breaks (at most `lines=`
     lines, then an ellipsis), `align=`, `tone=`, `icon=` before it."""
     where = _caller()
     if "lines" in p and (type(p["lines"]) is not int or p["lines"] < 1):
@@ -2439,9 +2441,29 @@ def seg(label, name, labels=None, text=None, look="seg", **p):
     enum, each value's word from label table `labels=` (every value named);
     over a `row_of`, its model's rows in order, each word the row template
     `text=`. `look="cycle"` shows the one value between chevrons and
-    activation steps it; `look="seg"` shows every value."""
+    activation steps it; `look="seg"` shows every value; `look="swatches"`
+    shows every value as a colour dot, each word a colour (0xRRGGBB, a
+    number in any base). Bound to `.FIELD`, an int field of its list's row,
+    the field is the index of its item and `text=`, a template over the
+    row, renders its items one a line; `on=` is handed the row."""
     where = _caller()
     _checked("seg", "look", look, where)
+    if isinstance(name, str) and name.startswith("."):
+        f = _row_field("seg", name, INT, where)
+        if labels is not None or text is None:
+            raise UIError("N01", "ui.seg(%r) bound to a row's field words its items with text=" % name,
+                          where=where, fix='text="{.FIELD}", a text field of the row, one item a line')
+        on = p.pop("on", None)
+        n = _node("seg", f, dict(p, label=label, look=look), where)
+        n.l["field"] = f
+        if on is not None:          # it hands its row (G10)
+            n.l["on"] = _action(on, "row", "ui.seg %s on=" % name, where, seen=False)
+        if _NOW.app.direct:
+            _direct_src("seg", "text", text, "text", where)
+        else:
+            n.l["text"] = tmpl(text, _b().ctx, where, "text").g
+        n.src["text"] = text
+        return n
     _state_name(name, (Enum, RowOf), "ui.seg", where)
     t = _st()._t[name]
     if isinstance(t, Enum):
@@ -2505,7 +2527,9 @@ def _list(kind, model_name, p, where):
 
 
 def table(model_name, **p):
-    """Rows as a table: a header of cols=, one `col` child per column."""
+    """Rows as a table: a header of cols=, one `col` child per column; or,
+    with `row=` (a row's height) and one `canvas` child, each row drawn by
+    that canvas, `draw(cv, x, y, w, h, row)` handed its row."""
     return _list("table", model_name, p, _caller())
 
 
@@ -2910,11 +2934,12 @@ def lent(key, **p):
 
 
 class Ev:
-    """An event a canvas's pointer hook is handed. Read-only."""
-    __slots__ = ("kind", "x", "y", "source")
+    """An event a canvas's pointer hook is handed. Read-only. `row` is the
+    row of the list the canvas stands in, else None."""
+    __slots__ = ("kind", "x", "y", "source", "row")
 
-    def __init__(self, kind, x=0, y=0, source=""):
-        for k, v in (("kind", kind), ("x", x), ("y", y), ("source", source)):
+    def __init__(self, kind, x=0, y=0, source="", row=None):
+        for k, v in (("kind", kind), ("x", x), ("y", y), ("source", source), ("row", row)):
             object.__setattr__(self, k, v)
 
     def __setattr__(self, k, v):

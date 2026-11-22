@@ -1094,10 +1094,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
                                   uit_kind_names[kind], src, uit_type_name(e->tmpls[t].type));
         return add_prop(e, node, name, src, repr, PK_TMPL, t);
     } else if (kind == UIT_SEG && !strcmp(name, "text")) {
-        // a seg over a row_of: each row's word, a template over its model's rows
-        if (N->slot < 0 || e->slots[N->slot].type != UIT_ROWOF)
+        // a seg over a row_of: each row's word, a template over its model's rows; a seg
+        // bound to a row's field: its items, one a line, a template over that row
+        if (!(N->lit & NL_FIELD) && (N->slot < 0 || e->slots[N->slot].type != UIT_ROWOF))
             return uit_fail(e, UIT_E_ARG, UIT_MSG("seg text=%s before its row_of", "%s"), src);
-        model = e->slots[N->slot].model;
+        if (!(N->lit & NL_FIELD))
+            model = e->slots[N->slot].model;
         tslot = &N->t_value;
     } else if (!strcmp(name, "title") || !strcmp(name, "caption") || !strcmp(name, "text") ||
                !strcmp(name, "label"))
@@ -1143,12 +1145,15 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     }
     else if (!strcmp(name, "hint") && kind == UIT_TABLE)
         tslot = &N->t_value;
+    else if (!strcmp(name, "hint") && kind == UIT_CANVAS)
+        tslot = &N->t_main;         // a keys= canvas's confirm hint while it holds focus
     else if ((kind == UIT_CARDS && !strcmp(name, "w")) || (kind == UIT_CARD && !strcmp(name, "sub")) ||
              (kind == UIT_CANVAS && !strcmp(name, "w")) || (kind == UIT_ROW && !strcmp(name, "gap")) ||
-             (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_PICTURE && !strcmp(name, "side")) || (kind == UIT_POPOVER && !strcmp(name, "anchor")))
+             (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_PICTURE && !strcmp(name, "side")) || (kind == UIT_POPOVER && !strcmp(name, "anchor")) ||
+             (kind == UIT_GRID && !strcmp(name, "w")))
         tslot = &N->t_value;
     else if ((kind == UIT_CARDS && !strcmp(name, "h")) || (kind == UIT_POPOVER && !strcmp(name, "w")) ||
-             (kind == UIT_ROW && !strcmp(name, "pad")) ||
+             (kind == UIT_ROW && !strcmp(name, "pad")) || (kind == UIT_GRID && !strcmp(name, "h")) ||
              ((kind == UIT_CARD || kind == UIT_PICTURE || kind == UIT_BUTTON) && !strcmp(name, "tone")))
         tslot = &N->t_aux;
     else if ((!strcmp(name, "empty") && UIT_IS_LIST(kind)) ||
@@ -1164,7 +1169,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             (kind == UIT_PROGRESS && (!strcmp(name, "value") || !strcmp(name, "max"))) ||
             (kind == UIT_CARDS && name[1] == 0) || (kind == UIT_PICTURE && !strcmp(name, "side")) ||
             (kind == UIT_POPOVER && !strcmp(name, "w")) || (kind == UIT_CANVAS && !strcmp(name, "w")) ||
-            (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_ROW && (!strcmp(name, "gap") || !strcmp(name, "pad")))) {
+            (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_ROW && (!strcmp(name, "gap") || !strcmp(name, "pad"))) ||
+            (kind == UIT_GRID && name[1] == 0)) {
             // an int prop: an int template, or the int literal a number lowers to
             const char *d = src + (src[0] == '-');
             int lit_int = T->lit && *d;
@@ -1226,9 +1232,9 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, i);
     }
     if (kind == UIT_LABEL && !strcmp(name, "size")) {
-        if (strcmp(src, "fit"))
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("label size=%s: only \"fit\"", "label size=%s"), src);
-        N->nbtn |= LT_FIT;
+        if (strcmp(src, "fit") && strcmp(src, "text"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("label size=%s: \"fit\" or \"text\"", "label size=%s"), src);
+        N->nbtn |= src[0] == 'f' ? LT_FIT : LT_TEXT;
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (kind == UIT_CANVAS && (!strcmp(name, "draw") || !strcmp(name, "h") || !strcmp(name, "keys"))) {
@@ -1259,6 +1265,14 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         if (src[0] == 'F' || src[0] == '0')
             N->lit |= CV_NOMARK;
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & CV_NOMARK) == 0);
+    }
+    if (kind == UIT_TABLE && !strcmp(name, "row")) {
+        // row=: a row's height in the page's unit where a canvas child draws its rows
+        long v = strtol(src, NULL, 10);
+        if (v < 1 || v > 255)
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("table row=%s: 1 to 255", "row=%s"), src);
+        N->btn = (uint16_t)v;
+        return add_prop(e, node, name, src, repr, PK_LIT, (int)v);
     }
     if (kind == UIT_CANVAS && !strcmp(name, "grow")) {
         // a fill along a row, its w= the basis its share is over (CV_GROW)
@@ -1440,6 +1454,18 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->lit |= NL_FIELD;
         return 0;
     }
+    if (!strcmp(name, "field") && kind == UIT_SEG) {
+        // a seg bound to an int field of its list's row: the row's cell is the index of its
+        // item, its items the lines its text= renders over the row
+        int m = uit_model_of(e, node);
+        int f = uit_field_find(e, m, src, strlen(src));
+        if (f < 0 || e->slots[m].mf->ftype[f] != UIT_INT)
+            return uit_fail(e, UIT_E_NAME, UIT_MSG("seg .%s: no int field of its rows", "seg .%s"), src);
+        N->slot = (int16_t)m;
+        N->cur = (int16_t)f;
+        N->lit |= NL_FIELD;
+        return 0;
+    }
     if (!strcmp(name, "bind")) {
         int s = uit_slot_find(e, src, strlen(src));
         int t = s < 0 ? 0 : e->slots[s].type;
@@ -1480,6 +1506,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     if (!strcmp(name, "look") && (kind == UIT_SEG || kind == UIT_SLIDER || kind == UIT_PROGRESS)) {
         if (!strcmp(src, kind == UIT_SEG ? "cycle" : kind == UIT_SLIDER ? "steps" : "count"))
             N->lit |= kind == UIT_SEG ? NL_CYCLE : NL_STEPS;
+        else if (kind == UIT_SEG && !strcmp(src, "swatches"))
+            N->lit |= NL_SWATCH;
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
     if (kind == UIT_FIELD && (!strcmp(name, "max") || !strcmp(name, "commit") || !strcmp(name, "secret"))) {
@@ -1594,9 +1622,16 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     if (!strcmp(name, "buttons") && kind == UIT_DIALOG)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     if (!strcmp(name, "kind") && kind == UIT_DIALOG) {
-        // its verb (the last button) in the danger look; 0 the primary
-        N->lit = (uint8_t)!strcmp(src, "danger");
-        return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
+        // its verb (the last button) in the danger look (DL_DANGER); else the primary
+        N->lit = (uint8_t)((N->lit & ~DL_DANGER) | (!strcmp(src, "danger") ? DL_DANGER : 0));
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & DL_DANGER) != 0);
+    }
+    if (!strcmp(name, "look") && kind == UIT_DIALOG) {
+        // "keys": on the T-Deck its buttons are the band's Enter and Esc, no row of them (DL_KEYS)
+        if (strcmp(src, "keys"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("dialog look=%s: keys", "dialog look=%s"), src);
+        N->lit |= DL_KEYS;
+        return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     return uit_fail(e, UIT_E_KIND, UIT_MSG("%s=: a prop this engine does not draw on this kind (%d)", "%s= %d"), name, kind);
 }
@@ -1774,7 +1809,8 @@ int32_t uit_cell_gen(uit_t *e, int k)
 // `uit_cell_gen`; a lines view's rows are its view record's, moy_ui_api_text_view) and
 // those only a list's
 // cur= names (focus, which the toolkit draws); and whether it may carry one: no text of the build
-// names an engine value, and no canvas draws what no state says.
+// names an engine value and no legacy node draws what no state says (a canvas does too: a frame
+// after one drew carries none, `gen_ok`).
 static void gen_of_build(uit_t *e)
 {
     e->gen_safe = e->nslots <= UIT_GEN_SLOTS;
@@ -1784,7 +1820,7 @@ static void gen_of_build(uit_t *e)
     for (int c = e->m_conds; c < e->nconds; c++)
         e->gen_vals |= (uint8_t)names_engine_value(uit_str(e, e->conds[c].src));
     for (int k = 0; k < e->nnodes; k++)
-        if (e->nodes[k].kind == UIT_CANVAS || e->nodes[k].kind == UIT_LEGACY)
+        if (e->nodes[k].kind == UIT_LEGACY)
             e->gen_safe = 0;
     for (int i = 0; i < e->nslots; i++)
         e->slots[i].in_gen = 1;

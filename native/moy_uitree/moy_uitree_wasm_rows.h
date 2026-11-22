@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-#define MOY_UITREE_WASM_ROWS 27
+#define MOY_UITREE_WASM_ROWS 28
 
 int32_t moy_uitree_wasm_state(void *, const uint8_t *, uint32_t, int32_t, const uint8_t *,
                               uint32_t);
@@ -44,5 +44,6 @@ int32_t moy_uitree_wasm_error(void *, uint8_t *, uint32_t);
 int32_t moy_uitree_wasm_dump(void *, uint8_t *, uint32_t);
 int32_t moy_uitree_wasm_action_chars(void *, int32_t, const uint8_t *, uint32_t);
 int32_t moy_uitree_wasm_arg(void *, uint8_t *, uint32_t);
+int32_t moy_uitree_wasm_draw_row(void *);
 
 #endif // MOY_UITREE_WASM_ROWS_H

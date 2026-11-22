@@ -70,7 +70,8 @@ enum {
     MOY_ROW_UITREE_NEXT, MOY_ROW_UITREE_SET_INT, MOY_ROW_UITREE_SET_TEXT,
     MOY_ROW_UITREE_SET_ABSENT, MOY_ROW_UITREE_SET_MODEL, MOY_ROW_UITREE_GET_INT,
     MOY_ROW_UITREE_GET_TEXT, MOY_ROW_UITREE_GET_CELL, MOY_ROW_UITREE_ERROR,
-    MOY_ROW_UITREE_DUMP, MOY_ROW_UITREE_ACTION_CHARS, MOY_ROW_UITREE_ARG, MOY_ROW_N,
+    MOY_ROW_UITREE_DUMP, MOY_ROW_UITREE_ACTION_CHARS, MOY_ROW_UITREE_ARG,
+    MOY_ROW_UITREE_DRAW_ROW, MOY_ROW_N,
 };
 #define MOY_ROW_NAMES { \
     "damage.all", "damage.again", "surface.canvas", "surface.size", "surface.font_scale", \
@@ -108,6 +109,7 @@ enum {
     "uitree.frame", "uitree.next", "uitree.set_int", "uitree.set_text", \
     "uitree.set_absent", "uitree.set_model", "uitree.get_int", "uitree.get_text", \
     "uitree.get_cell", "uitree.error", "uitree.dump", "uitree.action_chars", "uitree.arg", \
+    "uitree.draw_row", \
 }
 
 // The role table, row for row: what the ROLE door names by index.
@@ -176,8 +178,9 @@ enum {
     MOY_T_UITREE_NEXT, MOY_T_UITREE_SET_INT, MOY_T_UITREE_SET_TEXT, MOY_T_UITREE_SET_ABSENT,
     MOY_T_UITREE_SET_MODEL, MOY_T_UITREE_GET_INT, MOY_T_UITREE_GET_TEXT, MOY_T_UITREE_GET_CELL,
     MOY_T_UITREE_ERROR, MOY_T_UITREE_DUMP, MOY_T_UITREE_ACTION_CHARS, MOY_T_UITREE_ARG,
+    MOY_T_UITREE_DRAW_ROW,
 };
-#define MOY_APP_TABLE_N 249u
+#define MOY_APP_TABLE_N 250u
 // Each row's "role.verb", its role and its C row (-1: the Python console
 // serves it).
 #define MOY_APP_TABLE_ROWS { \
@@ -430,6 +433,7 @@ enum {
     { "uitree.dump", MOY_ROLE_UITREE, MOY_ROW_UITREE_DUMP }, \
     { "uitree.action_chars", MOY_ROLE_UITREE, MOY_ROW_UITREE_ACTION_CHARS }, \
     { "uitree.arg", MOY_ROLE_UITREE, MOY_ROW_UITREE_ARG }, \
+    { "uitree.draw_row", MOY_ROLE_UITREE, MOY_ROW_UITREE_DRAW_ROW }, \
 }
 
 // The C rows the ROLE door serves (moy_app.c's door_c), each X(row, its

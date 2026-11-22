@@ -555,7 +555,7 @@ def test_music_editor_tap_works_in_system_coords(tmp_path):
     drv.frame(1 / 30)
     if ws.music_ui.musicedit is None:
         return                                     # no audio bank -- nothing to pin
-    bx, by, bw, bh = ws.music_ui.page().host.box("Hear")
+    bx, by, bw, bh = ws.music_ui.page.rect_of("hear")
     drv.click(bx + bw // 2, by + bh // 2)
     drv.frame(1 / 30)
     drv.frame(1 / 30)

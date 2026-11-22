@@ -70,6 +70,7 @@ typedef struct {
     int held;                   // the canvas a press started on (its `ptr`), held until release; -1 none
     int32_t hx, hy;             // ...the press's last point
     int trapped;                // the app's draw trapped in this frame
+    int draw_row;               // the model row the canvas being drawn stands in (draw_row()); -1 none
     owed_t *q;                  // the actions owed, [qat, qn)
     int qn, qat, qcap;
     uit_buf_t qtext;
@@ -81,8 +82,6 @@ static app_t *s_app;
 
 // A canvas's draw: its rect kept for the pointer, and the app's draw called.
 static void drawn(void *ud, int node, int model, int row, int x, int y, int w, int h) {
-    (void)model;
-    (void)row;
     app_t *a = ud;
     for (int i = 0; i < a->nptr; i++) {
         if (a->ptr[i].node == node) {
@@ -90,9 +89,11 @@ static void drawn(void *ud, int node, int model, int row, int x, int y, int w, i
             a->ptr[i].frame = a->frames;
         }
     }
+    a->draw_row = model >= 0 ? row : -1;
     if (moycore_ui_draw_call != NULL && !a->trapped && moycore_ui_draw_call(node, x, y, w, h) < 0) {
         a->trapped = 1;
     }
+    a->draw_row = -1;
 }
 
 static void app_drop(app_t *a) {
@@ -144,6 +145,7 @@ static app_t *app(void) {
         a->page = -1;
         a->refocus_due = -1;
         a->held = -1;
+        a->draw_row = -1;
         uit_on_draw(a->e, drawn, a);
     }
     return a;
@@ -1057,6 +1059,12 @@ int32_t moy_uitree_wasm_arg(void *x, uint8_t *out, uint32_t out_cap) {
     }
     const char *p = a->qtext.p + a->arg;
     return copy_out(p, strlen(p), out, out_cap);
+}
+
+int32_t moy_uitree_wasm_draw_row(void *x) {
+    (void)x;
+    APP(a);
+    return a->draw_row;
 }
 
 int32_t moy_uitree_wasm_dump(void *x, uint8_t *out, uint32_t out_cap) {
