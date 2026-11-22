@@ -308,7 +308,7 @@ class Pair:
 
 APPS = ("settings", "licences", "achievements", "myart", "getcarts", "files",
         "storybook", "appearance", "calc")
-SHIFTS = ("settings", "licences", "achievements", "myart", "getcarts", "files",
+SHIFTS = ("settings", "licences", "achievements", "myart", "files",
           "storybook", "appearance")
 
 
@@ -368,9 +368,8 @@ def _files_list(p):
 
 # The Waveshare P4's desk: what each app's pages show on it, every frame's
 # change byte for byte against whole repaints. Licences' list is the desk's
-# scroll region beside the text (the handheld's is a page of its own); Get
-# Carts' Check, drawn before its shelf opens, reaches four rows into it.
-P4_APPS = ("licences", "files", "storybook", "appearance", "getcarts")
+# scroll region beside the text (the handheld's is a page of its own).
+P4_APPS = ("licences", "files", "storybook", "appearance")
 
 
 @pytest.mark.parametrize("bufs", (1, 2, 3))
@@ -674,7 +673,7 @@ def test_a_popover_and_the_menu_scrim_over_a_glide(tmp_path, bufs, widget):
 # handheld shift: a mark after the pass is a whole repaint of a page the
 # pass drew (`all` is spent with the frame, so it paints nothing it means
 # to; `again` owes a whole frame where the engine owes a frame of rows).
-VERBS_APPS = ("files_app", "getcarts_app", "storybook_app", "appearance_app",
+VERBS_APPS = ("files_app", "storybook_app", "appearance_app",
               "myart_app")
 
 

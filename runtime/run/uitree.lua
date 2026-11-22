@@ -1701,6 +1701,15 @@ function T.empty(title, o, body)
   return n
 end
 
+-- a toast: its text and icon in a pill over the page's body, above its foot
+function T.toast(text, o)
+  local at = where()
+  local n = node("toast", at)
+  n.a[1] = head_text("toast", text, at, "text")
+  n.o = check_opts("toast", o, at)
+  return n
+end
+
 local function row_hands() return ROWCTX and "row" or "none" end
 
 function T.bubble(text, o)

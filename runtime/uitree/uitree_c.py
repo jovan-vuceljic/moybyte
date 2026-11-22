@@ -57,7 +57,7 @@ _KINDS = {"page": 1, "group": 2, "label": 3, "info": 4, "link": 5, "button": 6, 
           "cards": 27, "card": 28, "picture": 29, "popover": 30,
           "tools": 31, "row": 32, "status": 33, "text_editor": 34, "panes": 35, "pane": 36,
           "legacy": 37, "slot": 38, "panel": 39, "lent": 40, "rule": 41, "note": 42, "grid": 43,
-          "bubble": 44, "month": 45}
+          "bubble": 44, "month": 45, "toast": 46}
 # the placed kinds: a page the engine's layout places holds them (`CEditorPage`)
 _PLACED_KINDS = ("tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot", "panel", "lent")
 _PANE_KINDS = ("panes", "pane")
@@ -563,12 +563,11 @@ class CEngine(Engine):
         srcs = []
         units, lend_at = [], {}
         self._lend_at = lend_at
-        feet = set()                    # a flowing page's foot stacks its rows by the placed rule
 
         def node(n, parent):
             nk, l = n.kind, n.l
             kind = kinds.get(nk)
-            if kind is None or (nk in placed_kinds and not placed and not (nk == "row" and parent in feet)):
+            if kind is None or (nk in placed_kinds and not placed and nk != "row"):
                 raise EngineGap("a %s node" % nk + ("" if placed or nk not in placed_kinds else
                                                      " outside a placed page"))
             field = l.get("field") if l and nk != "text_view" else None
@@ -577,8 +576,6 @@ class CEngine(Engine):
             me = cnode(kind, n.key, parent)
             if me < 0:
                 fail(me, "node %s" % n.key, n.where)
-            if nk == "foot":
-                feet.add(me)
             if n.unit is not None:
                 units.append((me, n.unit))
             if nk == "tools" and l and l.get("lend"):

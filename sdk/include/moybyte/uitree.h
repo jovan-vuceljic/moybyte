@@ -549,6 +549,15 @@ static inline int32_t ut_progress(const char *value, const char *label, int32_t 
     return n;
 }
 
+// A toast: `text` (a template) in a pill over the page's body, above its
+// foot; its icon is ut_p_icon's, "check" where it has none. It draws over
+// the nodes before it.
+static inline int32_t ut_toast(const char *text) {
+    int32_t n = ut_node(UT_TOAST, NULL);
+    ut_prop_("text", text);
+    return n;
+}
+
 // A view of text state `state`'s lines.
 static inline int32_t ut_text_view(const char *state) {
     int32_t n = ut_node(UT_TEXT_VIEW, state);

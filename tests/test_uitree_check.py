@@ -54,6 +54,8 @@ PORTED = (
     "uitree_grid",
     "uitree_model_row",
     "calc_app",
+    "getcarts_app",
+    "music_app",
     "terminal_app",
     "text_console",
 )

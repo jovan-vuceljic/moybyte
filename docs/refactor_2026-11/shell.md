@@ -60,9 +60,8 @@ Text mode is imperative and set by every surface:
   - `player.py:1383,1385`;
   - `console_input.py:681,685`;
   - `wm_windowed.py:1667`.
-- 6 `ctx.nav.text_mode` sites:
+- 5 `ctx.nav.text_mode` sites:
   - `files_app.py:681`;
-  - `music_app.py:1042,1056,1196`;
   - `appearance_app.py:493,498`;
   - `story_edit.py:180,187`.
 
@@ -118,9 +117,9 @@ Four dispatchers with their own cascades:
 
 There are ~15 per-surface `back()` methods. Each re-implements "close the
 dialog or popover I drew, else step my page":
-- `files_app.py:710`, `music_app.py:1050`, `appearance_app.py:555`,
+- `files_app.py:710`, `appearance_app.py:555`,
   `myart_app.py:246`, `paint_app.py:477`, `storybook_app.py:431`,
-  `story_edit.py:121`, `getcarts_app.py:1199`, `terminal_app.py:152`;
+  `story_edit.py:121`, `getcarts_app.py:1615`, `terminal_app.py:152`;
 - `settings_layer.py:1917`, which branches on six view flags;
 - `about_ui.py:150`, `achievements_ui.py:215`, `log_ui.py:69`,
   `perms_ui.py:47`, `tasks_ui.py:175`;

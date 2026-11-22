@@ -1,16 +1,15 @@
 # Map (grep -n a name to jump there):
-#   GetCartsLayout                the page's rects: the shelf, a desk's pane and foot
+#   fill                          the page's states from the app's phase
+#   build                         the page: the shelf, the desk's pane, a cart's page, the rest
 #   GetCartsAppLayer              the Get Carts app: index, covers, install
 #   GetCartsAppLayer._pump        one frame's slice of fetching and installing
 #   GetCartsAppLayer._build_rows  the index's carts as rows
 #   GetCartsAppLayer.blocker      why a row cannot be installed here
-#   GetCartsAppLayer.draw         the app's frame: the page its phase shows
-#   GetCartsAppLayer._shelf       the carts as cards
-#   GetCartsAppLayer._cart_page   a cart's page (on the desk, the pane)
+#   GetCartsAppLayer.draw         the app's frame: its work's slice, then the page
 """Get Carts -- the console's store (#124): carts other people publish,
-browsed and installed over WiFi with no PC involved, drawn with the public UI
-API's verbs (docs/ui_api_2026-10.md; the look's
-docs/media/look_2026-10/APPS_RESTYLE.md, Get Carts).
+browsed and installed over WiFi with no PC involved, a `uitree` page the C
+engine lays out and paints (`build`), its states written from the app's
+phase each drawn frame (`fill`).
 
 The screens, in the order a kid meets them:
 
@@ -19,15 +18,14 @@ The screens, in the order a kid meets them:
              names others (runtime/shell/pkg.py, the shell's `pkg`) --
              then the covers they name that this session has not drawn yet:
              one busy page, the shelves counted as they come.
-  LIST       the shelf: a card per cart, its whole cover (the 128 x 128
-             cover.png, SPEC.md 3.6, decoded once at the card's side; a cart
-             with none, or one that does not decode, shows its genre's icon
-             on a tinted tile), its name and a sub line -- its size, or where
-             it stands: On console, Update ready, Name taken when a different
-             cart already has its folder, Too big or Can't play -- and a badge
-             on the cover's corner for those (the cover veiled where the
-             console cannot take it). The caption row counts them and says
-             what room is free; R checks again (on the desk, Check).
+  LIST       the shelf: a card per cart, its genre's icon on a tinted tile
+             (its cover, the 128 x 128 cover.png of SPEC.md 3.6, is handed
+             to the engine as the app's own picture, `ui.pictures`), its
+             name and a sub line -- its size, or where it stands: On
+             console, Update ready, Name taken when a different cart already
+             has its folder, Too big or Can't play. The caption row counts
+             them and says what room is free; R checks again (on the desk,
+             Check).
   CART       one cart: its cover, genre and source, where it stands, its
              description, what it takes and needs, and its verbs -- Remove,
              Play (a theme package's ("runtime": "theme") Use, which makes it
@@ -98,11 +96,11 @@ in that step and in the browser gives the frame back until its bytes come.
 """
 
 import json
-from array import array
 
-import ui
-from app_shell import ListShellApp
-from layout_base import bar_rows, content_of, metric_class, window_foot, DESK
+import uitree as ui
+import uitree_app
+from layout_base import metric_class, DESK
+from moy_store_base import builtin_name
 import app_perms as _perms
 import cart_index as _ci
 import cart_listing as _cl
@@ -131,13 +129,15 @@ BLOCKED = ("taken", "revoked", "too_big", "noplay", "newer")
 # (cart_index.addon_unfit). Every other cart lists whatever the build.
 NO_ADDON = "no browser console for this build"
 
-# A verb's words and icon, by its name.
-VERB = {"GET": ("Get", "getcarts"), "UPDATE": ("Update", "getcarts"),
-        "PLAY": ("Play", "play"), "USE": ("Use", "palette"), "REMOVE": ("Remove", "trash"),
-        "I AGREE": ("I agree", ""), "NO": ("No", ""), "CANCEL": ("Cancel", "close"),
-        "OK": ("OK", ""), "TRY AGAIN": ("Try again", "rotate"), "WIFI": ("Wi-Fi", "wifi")}
-# The verbs that go on: one is the page's primary, the last of them.
-GO = ("GET", "UPDATE", "PLAY", "USE", "I AGREE", "TRY AGAIN", "WIFI", "OK")
+# A verb's words, icon and action, by its name.
+VERB = {"GET": ("Get", "getcarts", "get"), "UPDATE": ("Update", "getcarts", "update"),
+        "PLAY": ("Play", "play", "play"), "USE": ("Use", "palette", "use"),
+        "REMOVE": ("Remove", "trash", "remove"), "I AGREE": ("I agree", "", "agree"),
+        "NO": ("No", "", "no"), "CANCEL": ("Cancel", "close", "cancel"), "OK": ("OK", "", "ok"),
+        "TRY AGAIN": ("Try again", "rotate", "try_again"), "WIFI": ("Wi-Fi", "wifi", "wifi")}
+
+# What the install prompt says over its password field (pkg.gated).
+PASSWORD_LINE = "A grown-up types the console's password to say yes:"
 
 # The id focus rests on while work is in hand: no stop, so Enter acts on none.
 _NOWHERE = "nowhere"
@@ -193,20 +193,9 @@ def _any_key(inp):
     return False
 
 
-_DIM = {"tone": "dim"}
-_DISABLED = {"disabled": True}
-_TITLE = {"face": "title"}
-_WRAP3 = {"wrap": True, "lines": 3}
-_CARD_GROUP = {"card": True}
-_DIM_CAPTION = {"tone": "dim", "face": "caption"}
-_CHECK = {"id": "Check"}
-_BACK = ("back", "Back")
-_SHELF_HINTS = ("confirm", "Open", "R", "Check", "back", "Back")
-
-
 def vid(verb):
-    """A verb's button's id: its words, apart from the dialog's."""
-    return "verb " + VERB[verb][0]
+    """A verb's action: its button's stop."""
+    return VERB[verb][2]
 
 
 def genre_icon(cart):
@@ -222,151 +211,439 @@ def genre_icon(cart):
     return "game"
 
 
-class _Pane:
-    """The desk pane's words and foot for one cart in one phase
-    (`GetCartsApp._pane_parts`)."""
+# -- the page ---------------------------------------------------------------------
 
-    def __init__(self):
-        self.row = None
-        self.st = self.phase = self.free = None
-        self.word = self.src = ""
-        self.state = None
-        self.state_icon = ""
-        self.state_h = 0
-        self.state_o = None
-        self.info = ()
-        self.status = ""
-        self.status_at = (0, 0, 0, 0)
-        self.buttons = []         # (verb, rect, label, icon, kind, override table)
-
-
-class GetCartsLayout:
-    """Get Carts' rects over the content rect: the caption row, the shelf and
-    the hint band on the handheld; on the desk the shelf beside the cart's
-    pane, a rule between them, and the window's foot under both."""
-
-    MIN_W = 300
-    MIN_H = 220
-    FOOT = 44            # the desk's foot: the rule to the frame's bottom
-    PANE = 290           # the desk's pane, its rule included
-
-    def __init__(self, w, h, fs=1, windowed=False, cs=None):
-        self.w = int(w)
-        self.h = int(h)
-        self.fs = fs = max(1, int(fs))
-        self.cs = max(fs, int(cs)) if cs else fs
-        self.windowed = bool(windowed)
-        self.desk = metric_class() == DESK
-        self.cx, self.cy, self.cw, self.ch = content_of(
-            self.w, self.h, 0 if windowed else bar_rows(self.cs))
-        content = (self.cx, self.cy, self.cw, self.ch)
-        self.full = content
-        if self.desk:
-            # the frame's rounded foot draws in the content's last rows: the
-            # foot's band is that much shorter, its rule as high off the frame
-            under = window_foot() if self.windowed else 0
-            self.foot, self.body = ui.cut_bottom(content, self.FOOT - under)
-            body = self.body
-            pane_w = min(self.PANE, body[2] // 3)
-            pane, self.shelf_area = ui.cut_right(body, pane_w)
-            self.rule = (pane[0], pane[1], 1, pane[3])
-            px, py, pw, ph = pane
-            self.pane = (px + 1 + 17, py + 16, pw - 1 - 17 - 6, ph - 16)
-            sx, sy, sw, sh = self.shelf_area
-            self.caption = (sx + 24, sy + 8, sw - 24 - 20, 30)
-            self.side = 128                       # a card's picture, the pane's cover
-            self.cols = max(1, (sw - 32 + 16) // (self.side + 16))
-            gw = self.cols * self.side + (self.cols - 1) * 16
-            self.grid = (sx, sy + 34, 24 + gw + 24, sh - 34)
-            self.margin = 24
-            self.grid_o = {"cols": self.cols, "foot": 0, "top": 0, "margin": self.margin}
-        else:
-            self.foot, self.body = ui.cut_bottom(content, 20 * fs)
-            bx, by, bw, bh = self.body
-            self.side = 64 * fs
-            self.cols = max(1, (bw - 32 * fs + 12 * fs) // (self.side + 12 * fs))
-            self.caption = (bx + 16 * fs, by + 2 * fs, bw - 32 * fs, 16 * fs)
-            self.grid = (bx, by + 16 * fs, bw, bh - 16 * fs)
-            self.margin = 16
-            self.grid_o = {"cols": self.cols, "foot": 32, "top": 4, "margin": self.margin}
-            self.pane = (bx + 6 * fs, by + 8 * fs, bw - 12 * fs, bh - 8 * fs)
-
-    def well(self):
-        """The licence's well on the handheld page, or the desk's window: its
-        rect, under the licence's name and over the verbs."""
-        x, y, w, h = self.pane if not self.desk else self.full
-        top = 28 * (1 if self.desk else self.fs)
-        btn = (40 if self.desk else 26 * self.fs) + 12 * (1 if self.desk else self.fs)
-        if self.desk:
-            x, y, w, h = self.full[0] + 24, self.full[1] + 16, self.full[2] - 48, \
-                self.full[3] - 16 - self.FOOT
-            btn = 12
-        return (x, y + top, w, max(20, h - top - btn))
-
-    def well_text_w(self):
-        return self.well()[2] - 2 * (8 if self.desk else 6 * self.fs)
-
-    def page_verbs(self):
-        """The handheld cart page's verb row: where its buttons sit."""
-        x, y, w, h = self.pane
-        fs = self.fs
-        return (x, y + h - 42 * fs, w, 26 * fs)
-
-    def split_verbs(self, rect, n):
-        """`rect` cut into `n` verb buttons, the one that goes on last and
-        wider."""
-        x, y, w, h = rect
-        gap = 6 * self.fs
-        extra = 20 * self.fs if n > 1 else 0
-        bw = (w - gap * (n - 1) - extra) // n
-        out = [(x + i * (bw + gap), y, bw, h) for i in range(n - 1)]
-        last = x + (n - 1) * (bw + gap)
-        out.append((last, y, x + w - last, h))
-        return out
-
-    def licence_verbs(self):
-        """The handheld licence page's No and I agree, under its well."""
-        x, y, w, h = self.well()
-        fs = self.fs
-        foot = y + h + 8 * fs
-        vw = 140 if self.desk else 96 * fs
-        vh = 36 if self.desk else 26 * fs
-        return ((x + w - 2 * vw - 6 * fs, foot, vw, vh), (x + w - vw, foot, vw, vh))
+_LINE = dict(key="id", id="", text="", tone="")
+s = ui.state(
+    # the page a phase shows (`fill`): the desk's is the shelf beside the pane
+    view=ui.enum("shelf", "desk", "cart", "getting", "licence", "pick", "busy", "words", init="shelf"),
+    caption="",                 # the shelf's count and its room free, on the desk's one line
+    count="",                   # ...on the handheld's: the count at its start, the room at its end
+    free="",
+    carts=ui.model(key="id", id="", name="", sub="", icon="", tone="", badge=""),
+    card=ui.row_of("carts"),
+    none=False,                 # the shelf is empty
+    shown=False,                # the desk's pane has a cart
+    name="",                    # the cart: its name, its cover's tile, where it is from
+    icon="game",
+    meta="",
+    genre="",
+    src="",
+    state="",                   # ...where it stands
+    state_icon="",
+    state_tone="",
+    desc="",
+    facts=ui.model(key="id", id="", label="", value=""),
+    busy=False,                 # the desk's pane shows the work in hand
+    title="",                   # the work in hand, or a page's title
+    line="",
+    done=0,
+    total=0,
+    bar=False,                  # ...its size known
+    what="Downloading",
+    counting=False,             # the check's shelves counted
+    step=0,
+    steps=1,
+    shelf="",
+    status="",                  # the desk's foot: the cart and where it stands
+    get_ok=True,                # no blocker stops Get
+    play_ok=True,               # the cart is on the console
+    v_get=False, v_update=False, v_play=False, v_use=False, v_remove=False, v_agree=False,
+    v_no=False, v_cancel=False, v_ok=False, v_try_again=False, v_wifi=False,
+    words_icon="getcarts",
+    lines=ui.model(**_LINE),    # Your copy's lines
+    w0="", w1="", w2="", w3="",  # a words page's paragraphs
+    licence_name="",
+    licence="",
+    toast="",
+    toast_icon="",
+    asking=False,               # Remove's dialog
+    rm_title="",
+    consent=False,              # the install prompt
+    q_title="",
+    perms=ui.model(**_LINE),
+    gated=False,
+    pw_line="",
+    pw_tone="dim",
+    password="",
+)
+ui.app("Get Carts", icon="getcarts")
 
 
-class GetCartsAppLayer(ListShellApp):
-    id = "getcarts"
-    domain = "system"
+def _lay():
+    """The app's Layer, which a handler's run owes a fill."""
+    lay = uitree_app.env()
+    lay.fill_owed = True
+    return lay
+
+
+class _Owed:
+    """The app's damage: what owes a frame owes the page a fill too."""
+
+    def __init__(self, damage, lay):
+        self._d, self._lay = damage, lay
+
+    def all(self):
+        self._lay.fill_owed = True
+        self._d.all()
+
+    def again(self):
+        self._lay.fill_owed = True
+        self._d.again()
+
+
+def _set(lay, name, rows):
+    """Model `name` written only where its rows moved."""
+    if lay.models.get(name) != rows:
+        lay.models[name] = rows
+        setattr(s, name, rows)
+
+
+def _lines(lay, name, pairs):
+    _set(lay, name, [{"id": str(i), "text": t, "tone": tone} for i, (t, tone) in enumerate(pairs)])
+
+
+def _view(lay):
+    ph = lay.phase
+    if lay.desk and lay._in_pane():
+        return "desk"
+    if ph == "list":
+        return "shelf"
+    if ph in ("cart", "done"):
+        return "cart"
+    if ph in ("getting", "consent"):
+        return "getting"
+    if ph in ("licence", "pick"):
+        return ph
+    return "busy" if ph in BUSY else "words"
+
+
+def _fill_shelf(lay):
+    rows = []
+    for r in lay.rows:
+        c = r["cart"]
+        sh = lay._shown(r)
+        rows.append({"id": c["folder"], "name": c["name"],
+                     "sub": STATE_WORD.get(sh) or _mb(r["plan"]["store_bytes"]),
+                     "icon": genre_icon(c), "badge": BADGE.get(sh, ""),
+                     "tone": "value" if sh == "update" else "danger" if sh in BLOCKED else ""})
+    _set(lay, "carts", rows)
+    s.none = not rows
+    left, right = lay._caption()
+    s.caption = left + (" · " + right if right else "")
+    s.count, s.free = left, right
+
+
+def _fill_cart(lay, row):
+    c = row["cart"]
+    s.name, s.icon, s.meta = c["name"], genre_icon(c), lay._meta(c)
+    s.genre = _cl.genre_word(c.get("genre")) or ""
+    s.src = c.get("shelf") or _host_of(c.get("index") or "")
+    st = lay._state_line(row)
+    text, icon, tone = st if st is not None else ("", "", "")
+    s.state = text.split(":")[0] if lay.desk and tone == "value" else text
+    s.state_icon, s.state_tone = icon, tone
+    s.desc = c.get("description") or ""
+    _set(lay, "facts", [{"id": str(i), "label": f[0], "value": f[1]}
+                        for i, f in enumerate(lay._info(row, lay.desk))])
+    s.get_ok = lay.blocker(row) is None
+    s.play_ok = lay._inst.find(c["folder"]) is not None
+    s.status = lay._status(row)
+
+
+def _fill_work(lay):
+    title, line, done, total = lay._progress_of()
+    s.title, s.line, s.done, s.total, s.bar = title, line, done, total, bool(total)
+    s.what = "Putting it on the shelf" if lay._shelving() else "Downloading"
+    n = len(lay.indexes)
+    s.counting = bool(lay.phase == "checking" and n and lay._step)
+    if s.counting:
+        step = max(0, min(lay._step - 1, n))
+        s.step, s.steps, s.shelf = step, n, "Shelf %d of %d" % (min(step + 1, n), n)
+
+
+def fill(lay):
+    """The page's states from the app's phase; each model written only
+    where its rows moved, so a settled page draws nothing."""
+    ph = lay.phase
+    if lay.desk and ph == "list" and lay.rows:
+        f = lay.engine.focus_key
+        lay._pane_follows(f.split("/")[0] if f else lay.rows[0]["cart"]["folder"])
+        ph = lay.phase
+    view = s.view = _view(lay)
+    verbs = lay._current_verbs()
+    for v in VERB:
+        setattr(s, "v_" + vid(v), v in verbs)
+    t = lay.toast
+    s.toast, s.toast_icon = (t[0], t[1]) if t is not None else ("", "")
+    if view in ("shelf", "desk"):
+        _fill_shelf(lay)
+    row = lay.cur if lay.cur is not None or view != "desk" or not lay.rows else lay.rows[0]
+    s.shown = row is not None
+    if row is not None and view in ("desk", "cart", "getting"):
+        _fill_cart(lay, row)
+    s.busy = ph in BUSY
+    if view in ("desk", "getting", "busy"):
+        _fill_work(lay)
+    elif view == "words":
+        icon, s.title, paras = lay._empty_words()
+        s.words_icon = icon
+        paras = list(paras[:3]) + [" ".join(paras[3:])] if len(paras) > 4 else list(paras) + [""] * (4 - len(paras))
+        s.w0, s.w1, s.w2, s.w3 = paras
+    elif view == "pick":
+        s.title, pairs = lay._copy_words()
+        _lines(lay, "lines", pairs)
+    elif view == "licence":
+        s.licence_name = lay.lic[0]["licence"].get("name") or "Its licence"
+        s.licence = lay._lic_text
+    s.asking = lay.asking and lay.cur is not None
+    if s.asking:
+        s.rm_title = "Remove %s?" % lay.cur["cart"]["name"]
+    q = lay.question if ph == "consent" and lay.cur is not None else None
+    s.consent = q is not None
+    if q is None:
+        s.password = ""
+    else:
+        s.q_title = "Install %s?" % lay.cur["cart"]["name"]
+        _lines(lay, "perms", _perms.rows(q))
+        s.gated = _pkg.gated(lay._inst, q)
+        s.pw_line = _pkg.WRONG_PASSWORD if lay.password_bad else PASSWORD_LINE
+        s.pw_tone = "danger" if lay.password_bad else "dim"
+    f = lay._focus
+    if f is not None:
+        lay._focus = None
+        if f != _NOWHERE:
+            ui.focus(f)
+
+
+def opened():
+    fill(_lay())
+
+
+def open_card(row):
+    lay = _lay()
+    lay._tap_row(lay.index(row.id))
+
+
+def follow(row):
+    """On the desk the pane shows the card focus moved to."""
+    lay = uitree_app.env()
+    if lay.desk and lay.phase in ("list", "cart", "done") and lay._pane_follows(row.id):
+        lay.fill_owed = True
+
+
+def _verb(verb):
+    def press():
+        _lay()._press(verb)
+    return press
+
+
+def back():
+    _lay().back()
+
+
+def remove():
+    """Remove on the cart's page asks; Remove in its dialog removes."""
+    lay = _lay()
+    if lay.asking:
+        lay._remove()
+    else:
+        lay._press("REMOVE")
+
+
+def install():
+    lay = _lay()
+    lay.password = s.password
+    lay._answer(True)
+    s.password = lay.password
+
+
+def check():
+    _lay()._check()
+
+
+ui.hook("opened", opened)
+ui.action("open", "Open", open_card, takes="row")
+ui.action("follow", "Show", follow, takes="row")
+ui.action("get", "Get", _verb("GET"), when="get_ok", off="grey")
+ui.action("update", "Update", _verb("UPDATE"), when="get_ok", off="grey")
+ui.action("play", "Play", _verb("PLAY"), when="play_ok", off="grey")
+ui.action("use", "Use", _verb("USE"), when="play_ok", off="grey")
+ui.action("remove", "Remove", remove)
+ui.action("agree", "I agree", _verb("I AGREE"))
+ui.action("no", "No", back)
+ui.action("cancel", "Cancel", back)
+ui.action("ok", "OK", _verb("OK"))
+ui.action("try_again", "Try again", _verb("TRY AGAIN"))
+ui.action("wifi", "Wi-Fi", _verb("WIFI"))
+ui.action("check", "Check", check, keys=("r",), when="view=shelf || view=desk", off="hide")
+ui.action("install", "Install", install)
+
+
+def _cards():
+    with ui.cards("carts", cur="card", changed="follow", w="{@desk?128:64}", h="{@desk?128:64}",
+                  pad="{@desk?16:12}"):
+        ui.card("open", label="{.name}", sub="{.sub}", icon="{.icon}", tone="{.tone}", badge="{.badge}")
+    ui.label("No carts on the shelf yet", tone="dim", shown="none")
+
+
+def _facts():
+    with ui.scroll("facts_view", shown="!busy"):
+        with ui.group("", look="card"):
+            with ui.rows("facts"):
+                ui.info("{.label}", "{.value}")
+
+
+def _verbs():
+    """The cart's verbs, the one that goes on last the primary: Play (Use)
+    beside Update is not."""
+    ui.button("remove", "danger", icon="trash", shown="v_remove")
+    ui.button("play", "{v_update?normal:primary}", icon="play", shown="v_play")
+    ui.button("use", "{v_update?normal:primary}", icon="palette", shown="v_use")
+    ui.button("update", "primary", icon="getcarts", shown="v_update")
+    ui.button("get", "primary", icon="getcarts", shown="v_get")
+
+
+def _toast():
+    ui.toast("{toast}", icon="{toast_icon}", shown="toast")
+
+
+def _shelf():
+    with ui.row("caption", pad=16):
+        ui.label("{count}", tone="dim", face="caption")
+        ui.label("{free}", tone="dim", face="caption", align="end", shown="free")
+    _cards()
+    _toast()
+
+
+def _desk():
+    with ui.split("row", sizes=("1*", 274), pad="0", gap="m", rule=True):
+        with ui.group(""):
+            with ui.row("caption", pad=24):
+                ui.label("{caption}", tone="dim", face="caption")
+                ui.button("check", icon="rotate")
+            _cards()
+        with ui.group("", shown="shown"):
+            with ui.row("head"):
+                ui.picture(icon="{icon}", side=128)
+                with ui.group(""):
+                    ui.label("{name}", face="title")
+                    ui.label("{genre}", tone="dim", face="caption", shown="genre")
+                    ui.label("{src}", tone="dim", face="caption", shown="src")
+                    ui.label("{state}", icon="{state_icon}", tone="{state_tone}", wrap="word", lines=2,
+                             shown="state && !busy")
+            ui.label("{desc}", wrap="word", lines=3, shown="desc")
+            _facts()
+            ui.label("{title}", shown="busy")
+            ui.progress("done", max="{total}", label="Downloading", shown="busy && bar")
+            ui.label("{line}", tone="dim", face="caption", shown="busy")
+    with ui.foot():
+        ui.label("{status}", tone="dim", face="caption")
+        _verbs()
+        ui.button("cancel", "danger", icon="close", shown="v_cancel")
+    _toast()
+
+
+def _cart():
+    with ui.row("head"):
+        ui.picture(icon="{icon}", side=64)
+        with ui.group(""):
+            ui.label("{meta}", tone="dim", face="caption")
+            ui.label("{state}", icon="{state_icon}", tone="{state_tone}", wrap="word", lines=2, shown="state")
+            ui.label("{desc}", wrap="word", lines=3, face="caption", shown="desc")
+    _facts()
+    with ui.foot(look="share"):
+        _verbs()
+    _toast()
+
+
+def _getting():
+    with ui.row("cover"):
+        ui.picture(icon="{icon}", side=64)
+    ui.label("{title}", face="title", align="center")
+    with ui.row("bar", pad=34):
+        ui.progress("done", max="{total}", label="{what}")
+    ui.label("{line}", tone="dim", face="caption", align="center", shown="line")
+    with ui.row("verbs"):
+        ui.button("cancel", "danger", icon="close", shown="v_cancel")
+
+
+def _licence():
+    ui.label("{licence_name}", face="title")
+    ui.text_view("licence", face="ui", wrap="word", look="well")
+    with ui.foot():
+        ui.button("no")
+        ui.button("agree", "primary")
+
+
+def _pick():
+    ui.label("{title}", face="title")
+    with ui.rows("lines"):
+        ui.label("{.text}", tone="{.tone}", wrap="word", lines=2)
+    with ui.foot():
+        ui.button("cancel", icon="close")
+
+
+def _busy():
+    with ui.empty("{title}", icon="getcarts", lines=["{line}"]):
+        ui.progress("step", max="{steps}", label="{shelf}", shown="counting")
+        with ui.row("verbs"):
+            ui.button("cancel", icon="close")
+
+
+def _words():
+    with ui.empty("{title}", icon="{words_icon}", lines=["{w0}", "{w1}", "{w2}", "{w3}"]):
+        with ui.row("verbs"):
+            ui.button("try_again", "{v_wifi?normal:primary}", icon="rotate", shown="v_try_again")
+            ui.button("wifi", "primary", icon="wifi", shown="v_wifi")
+            ui.button("ok", "primary", shown="v_ok")
+
+
+def build():
+    with ui.page(""):
+        ui.switch("view", {"shelf": _shelf, "desk": _desk, "cart": _cart, "getting": _getting,
+                           "licence": _licence, "pick": _pick, "busy": _busy, "words": _words})
+        with ui.dialog("{rm_title}", ["cancel", "remove"], kind="danger", shown="asking"):
+            ui.label("Its saves and the files it wrote go too.", wrap="word", lines=3)
+        with ui.dialog("{q_title}", ["no", "install"], shown="consent"):
+            with ui.rows("perms"):
+                ui.label("{.text}", tone="{.tone}", wrap="word", lines=3)
+            ui.label("{pw_line}", tone="{pw_tone}", wrap="word", lines=2, shown="gated")
+            ui.field("Password", "password", 64, secret=True, on="install", shown="gated")
+
+
+def is_app(cart):
+    """The shipped Get Carts identity cart: its title, its marker
+    permission, its folder."""
+    if (not cart or cart.get("title") != "Get Carts"
+            or "getcarts" not in (cart.get("permissions") or ())):
+        return False
+    path = cart.get("path")
+    if not path:
+        return int(cart.get("version", 0)) >= 1
+    return builtin_name(path) == "moybyte.get_carts.moy"
+
+
+class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build, is_app,
+                                            needs=("install", "nav", "carts"))):
+    """The Get Carts Layer: the page's engine handed this layer as what its
+    handlers reach (`uitree_app.env()`), and the index, the covers and the
+    install it steps a slice a frame (`_pump`)."""
+
     TITLE = "Get carts"
-    APP_TITLE = "Get Carts"
-    APP_PERM = "getcarts"
-    APP_FOLDER = "moybyte.get_carts.moy"
-    # `install` is the network, its lease, the store an install writes and the
-    # Wi-Fi page; `nav` is Play; `carts` the shelf an install is checked against.
-    NEEDS = ("surface", "theme", "damage", "install", "nav", "carts")
-    UI = True
 
-    def __init__(self, ctx, names):
-        self.ctx = ctx
-        self._surf = ctx.surface
-        self._theme = ctx.theme
-        self._damage = ctx.damage
+    def __init__(self, ctx, names=None):
+        super().__init__(ctx, names)
+        self.engine.env = self
         self._inst = ctx.install
         self._nav = ctx.nav
         self._carts_role = ctx.carts
-        self._ui = ctx.ui
         self.names = names
-        # the shelf region's override table and the cards' gens
-        # (docs/history/scroll_and_text_2026-10.md §3.3)
-        self._shelf_o = {"gen": 0}
-        self._shelf_rows = None
-        self._shelf_n = -1
-        self._card_gen = 0
-        self._clip = array("i", [0, 0, 0, 0])   # a cover's clip (`ui.card_clip`)
-        cv = self._surf.canvas()
-        self.layout = GetCartsLayout(cv.w, cv.h, self._surf.font_scale(),
-                                     self._surf.windowed(),
-                                     self._surf.chrome_scale())
+        self.desk = metric_class() == DESK
+        self.models = {}              # each model's rows as last written
+        self.owed = False             # the last frame's press moved the page
+        self.fill_owed = True         # the page's states owe a fill (`_Owed`, a handler's `_lay`)
+        self._damage = _Owed(self._damage, self)
         self.phase = "list"
         self.carts = []               # every index's carts, this session
         self.rows = []                # [{"cart", "plan", "state", "had", "runs", "fit"}]
@@ -378,7 +655,7 @@ class GetCartsAppLayer(ListShellApp):
         self.free = None              # (bytes, block) of the store
         self.cur = None               # the CART page's row (the desk's pane)
         self.job = None
-        self.lic = None               # [external, wrapped lines or None, first line shown]
+        self.lic = None               # [external]: the licence page's file
         self._lic_text = ""
         self.accepted = []
         self.asking = False           # Remove's dialog is up
@@ -392,12 +669,8 @@ class GetCartsAppLayer(ListShellApp):
         self.why = ""                 # the NOT INSTALLED page's reason
         self.why_detail = None        # ...and its cause exact, under it
         self.toast = None             # (text, icon, until ms): a passing message
-        self.thumbs = {}              # cover sha256 -> (side, RGB565) or None
-        self._pane_k = None           # the desk pane's parts (`_pane_parts`)
-        self._whole = (0, 0, 0, 0)    # the page's rect, the canvas's
-        self._caption_key = (-1, None, None, "", "", "", 0, False)   # the shelf's caption, as last made
+        self.thumbs = {}              # cover sha256 -> True once the engine holds it, None while not
         self._covers = []             # the covers this check still fetches
-        self._work = None             # the decode's scratch, while checking
         self._found = []
         self._step = 0
         self._fetch = None            # the cart_index job in hand, and what it is
@@ -410,9 +683,7 @@ class GetCartsAppLayer(ListShellApp):
         self.pick_why = None          # what was wrong with the last one
         self._held = False
         self._away = False            # the Wi-Fi page is open over the app
-        self._grab = None             # a drag over the licence: (y, first line) at its press
         self._focus = None            # the id focus moves to on the next frame
-        self._focused = None          # the focused id as the last frame left it
         self._board_free = None       # a Zero's page: the room the console reported
 
     # -- the app protocol (docs/app_api_v1.md) --------------------------------
@@ -440,13 +711,7 @@ class GetCartsAppLayer(ListShellApp):
                     self._focus = self._card_id(self.rows[0])
             else:
                 self._check()
-        self._damage.all()
-
-    def relayout(self, w, h, fs, cs=None):
-        self.layout = GetCartsLayout(w, h, fs, self._surf.windowed(), cs)
-        if self.lic is not None and self.lic[1] is not None:
-            self.lic[1] = self._wrap(self._lic_text)
-            self.lic[2] = 0
+        super().open()
 
     def close(self):
         job = self.job
@@ -461,10 +726,11 @@ class GetCartsAppLayer(ListShellApp):
         self._unpick()
         self._release()
         self._away = False
+        super().close()
 
     def page_title(self):
         """The bar's title on a cart's own pages: the cart's name."""
-        if self.cur is not None and not self.layout.desk and (
+        if self.cur is not None and not self.desk and (
                 self.phase in ("cart", "done", "licence", "pick")
                 or self.phase in BUSY and self.phase != "checking"):
             return self.cur["cart"]["name"]
@@ -512,7 +778,6 @@ class GetCartsAppLayer(ListShellApp):
         self._drop_fetch()
         self._found = []
         self._covers = []
-        self._work = None
         self.unreached = 0
         self.starved = False
         self.no_addon = False
@@ -720,7 +985,6 @@ class GetCartsAppLayer(ListShellApp):
         self.fetched_at = _ticks_ms()
         self._covers = self._covers_to_fetch(self.carts)
         if not self._covers:
-            self._work = None
             self._release()
         self._build_rows()
         self._go("list")
@@ -790,11 +1054,9 @@ class GetCartsAppLayer(ListShellApp):
         if self._covers:
             self._damage.again()
         else:
-            self._work = None
             self._release()
 
     def _covers_to_fetch(self, carts):
-        side = self.layout.side
         out = []
         seen = {}
         root = self._inst.root() if self._inst.board() is not None else None
@@ -805,8 +1067,7 @@ class GetCartsAppLayer(ListShellApp):
             if root is not None and not _exists("%s/%s/cover.png" % (root, c["folder"])):
                 continue
             seen[ref["sha256"]] = True
-            got = self.thumbs.get(ref["sha256"])
-            if got is None or got[0] != side:
+            if not self.thumbs.get(ref["sha256"]):
                 out.append(c)
         return out
 
@@ -842,22 +1103,11 @@ class GetCartsAppLayer(ListShellApp):
         return True
 
     def _decode_cover(self, cart, data):
+        """A cover's bytes handed to the engine, which decodes them where a
+        card draws its picture."""
         sha = cart["cover"]["sha256"]
-        import cover_png as _cp
-        side = self.layout.side
-        swapped = getattr(self._surf.canvas(), "swapped565", False)
-        try:
-            if self._work is None and _cp.native() is not None:
-                self._work = bytearray(_cp.WORK)
-            pix = _cp.decode(data, _cp.SIDE // side,
-                             _cp.RGB565_SW if swapped else _cp.RGB565, None,
-                             self._work)
-        except MemoryError:
-            pix = None
-        if pix is None:
-            _ci._log("%s's cover does not decode" % cart["id"])
-        else:
-            self.thumbs[sha] = (side, pix)
+        ui.pictures.put("cover:" + sha, data=data)
+        self.thumbs[sha] = True
 
     def _build_rows(self):
         inst = self._inst
@@ -1001,7 +1251,7 @@ class GetCartsAppLayer(ListShellApp):
     def _next_licence(self):
         for e in self.cur["plan"]["external"]:
             if e["path"] not in self.accepted:
-                self.lic = [e, None, 0]
+                self.lic = [e]
                 self._go("licence_fetch")
                 return
         self.lic = None
@@ -1030,8 +1280,6 @@ class GetCartsAppLayer(ListShellApp):
         if data is None:
             return
         self._lic_text = _ci.as_text(data)
-        self.lic[1] = self._wrap(self._lic_text)
-        self.lic[2] = 0
         self._go("licence")
         self._focus = vid("NO")             # No has the focus
 
@@ -1053,8 +1301,6 @@ class GetCartsAppLayer(ListShellApp):
             self._fail(job.error, getattr(job, "detail", None))
             return
         self._lic_text = str(job.doc.get("text") or "")
-        self.lic[1] = self._wrap(self._lic_text)
-        self.lic[2] = 0
         self._go("licence")
         self._focus = vid("NO")
 
@@ -1156,27 +1402,6 @@ class GetCartsAppLayer(ListShellApp):
         chk, self._filecheck = self._filecheck, None
         if chk is not None:
             chk.close()
-
-    def _wrap(self, text):
-        """The licence's lines, broken at word breaks in the well's width in
-        the face its lines print in."""
-        room = self.layout.well_text_w()
-        ui.face("ui")
-        out = []
-        try:
-            for para in text.split("\n"):
-                line = ""
-                for word in para.split():
-                    t = word if not line else line + " " + word
-                    if line and ui.text_size(t)[0] > room:
-                        out.append(line)
-                        line = word
-                    else:
-                        line = t
-                out.append(line)
-        finally:
-            ui.face()
-        return out
 
     def _pump_connect(self):
         board = self._inst.board()
@@ -1373,7 +1598,7 @@ class GetCartsAppLayer(ListShellApp):
     def has_page(self):
         """Whether a page of the app is open, which `back` steps out of: a
         licence, a fetch or a pick, a cart's page, Remove's dialog."""
-        if self.layout.desk and self._in_pane():
+        if self.desk and self._in_pane():
             return self.asking        # the pane is the shelf's: no page to leave
         return self._paged()
 
@@ -1393,7 +1618,7 @@ class GetCartsAppLayer(ListShellApp):
         back to the shelf. False on the shelf: the host leaves the app."""
         if self._tail is not None:
             return True
-        if not self._paged() or self.layout.desk and self.phase in ("cart", "done") \
+        if not self._paged() or self.desk and self.phase in ("cart", "done") \
                 and not self.asking:
             return False
         ph = self.phase
@@ -1438,18 +1663,9 @@ class GetCartsAppLayer(ListShellApp):
     def handle_input(self, inp):
         if self._tail is not None:
             return True
-        k = getattr(inp, "typed", 0)
-        typed = k != 0
-        if self.toast is not None and (typed or _any_key(inp)):
+        if self.toast is not None and (getattr(inp, "typed", 0) or _any_key(inp)):
             self.toast = None
             self._damage.all()
-        if typed and k in (82, 114) and self.phase == "list" and not self.asking:
-            self._check()                 # R: check again
-            return True
-        if self.phase == "licence" and self._focused == "Licence" and not self.asking:
-            if (inp.steps("up") or inp.steps("down")) \
-                    and self._scroll_licence(-1 if inp.steps("up") else 1):
-                return True               # the well scrolls; at its ends focus moves
         if self.phase in BUSY or self.phase == "pick":
             # A kid presses A at anything, and twice after Get: while work is
             # in hand only B (Esc) or a tap on Cancel stops it
@@ -1458,65 +1674,18 @@ class GetCartsAppLayer(ListShellApp):
             return True
         if inp.pressed("b"):
             self.back()
-        if self._ui.keys(inp):
-            self._damage.all()
-        return True
-
-    def _scroll_licence(self, d):
-        """The licence's text a line up or down: whether it moved."""
-        lines = self.lic[1] or ()
-        rows = self._well_rows()
-        top = max(0, min(self.lic[2] + d, len(lines) - rows))
-        if top == self.lic[2]:
-            return False
-        self.lic[2] = top
-        self._damage.all()
-        return True
-
-    def _well_rows(self):
-        ui.face("ui")
-        lh = ui.text_size("Ag")[1]
-        ui.face()
-        return max(1, (self.layout.well()[3] - 8) // max(1, lh))
+            return True
+        return self.engine.keys(inp)
 
     def handle_pointer(self, px, py, click):
         if self._tail is not None:
             return True
-        down = bool(getattr(self._surf.pointer(), "down", False))
-        if self.phase == "licence" and self.lic is not None and not self.asking:
-            self._drag_licence(px, py, click, down)
-        if self._ui.point(px, py, click, down):
-            self._damage.all()
-        return True
+        return self.engine.point(px, py, click)
 
-    def _drag_licence(self, px, py, click, down):
-        """A drag over the licence's well scrolls it a line per line's
-        height moved (a press with no drag focuses it, as a tap does)."""
-        if click:
-            box = self._ui.box("Licence")
-            inside = box is not None and box[0] <= px < box[0] + box[2] \
-                and box[1] <= py < box[1] + box[3]
-            self._grab = (py, self.lic[2]) if inside else None
-            return
-        if self._grab is None:
-            return
-        y0, top0 = self._grab
-        if not down:
-            self._grab = None
-        ui.face("ui")
-        lh = max(1, ui.text_size("Ag")[1])
-        ui.face()
-        lines = self.lic[1] or ()
-        d = py - y0
-        moved = d // lh if d >= 0 else -(-d // lh)     # whole lines, toward zero
-        top = max(0, min(top0 - moved, len(lines) - self._well_rows()))
-        if top != self.lic[2]:
-            self.lic[2] = top
-            self._damage.all()
-
-    # -- draw ------------------------------------------------------------------
+    # -- the frame -----------------------------------------------------------------
 
     def draw(self, dt):
+        self.engine.band = not self.desk      # a desk's window shows no hints band, as it never did
         self._pump()
         if self._away and not self._inst.wifi_open():
             self._away = False            # back from the Wi-Fi page: look again
@@ -1527,64 +1696,44 @@ class GetCartsAppLayer(ListShellApp):
         if self.toast is not None:
             if _ticks_diff(_ticks_ms(), self.toast[2]) >= 0:
                 self.toast = None
+                self.fill_owed = True
             else:
                 self._damage.again()
-        cv = self._surf.canvas()
-        lay = self.layout
-        th = self._theme.colors()
-        whole = self._whole
-        if whole[2] != cv.w or whole[3] != cv.h:
-            whole = self._whole = (0, 0, cv.w, cv.h)
-        self._ui.begin(cv, th, whole, lay.desk, lay.windowed)
-        ui.page("")                       # the ground under the bar's band too
-        was_asking = self.asking
-        if self.phase in BUSY or self.phase == "pick":
-            self._focus = _NOWHERE            # held there: no key reaches Cancel
-        if self._focus is not None:
-            ui.focus(self._focus)
-            self._focus = None
-        # The pane shows the card focus is on, this frame's (a key's step
-        # moved it at begin): it follows before the page is drawn.
-        self._focused = ui.focus()
-        if lay.desk and self.phase in ("list", "cart", "done"):
-            self._pane_follows()
-        was_phase = self.phase
-        was_cur = self.cur is None
-        ph = self.phase
-        shelf = ph == "list" or (lay.desk and self._in_pane())
-        if shelf:
-            self._shelf(cv)
-            if lay.desk:
-                self._pane(cv)
-        elif ph in ("cart", "done"):
-            self._cart_page(cv)
-        elif ph in ("getting", "consent"):
-            self._getting(cv)
-        elif ph == "licence":
-            self._licence(cv, th)
-        elif ph == "pick":
-            self._your_copy()
-        elif ph in BUSY:
-            self._busy()
-        else:
-            self._empty()
-        self._dialog()
-        self._prompt()
-        if self.toast is not None:
-            self._toast()
-        f = ui.focus()
-        if f != self._focused:
-            self._focused = f             # a tap moved it: the pane follows next frame
-            if lay.desk and ph in ("list", "cart", "done") and self._pane_follows():
-                self._ui.again()
-        if (self.phase != was_phase or (self.cur is None) != was_cur
-                or self.asking != was_asking):
-            self._ui.again()              # an answer changed what the page drew before it
+        if self.fill_owed:
+            self.fill_owed = False
+            self.engine.run(fill, self, action="fill")
+            ui.commit(self.engine)
+        super().draw(dt)
+        self.owed = self.fill_owed        # a press in the frame moved the page: the next frame shows it
+
+    def moved(self):
+        return self.owed or super().moved()
+
+    def do(self, fn, *args):
+        """`fn(*args)` run as the page's handler, then the page filled, one
+        commit."""
+        self.engine.run(fn, *args, action="console")
+        self.engine.run(fill, self, action="fill")
+        ui.commit(self.engine)
+        self._damage.all()
+
+    def state(self):
+        """The page's state, this engine's values."""
+        self.engine._bind()
+        return s
 
     # -- the shelf ---------------------------------------------------------------
 
     def _card_id(self, row):
-        return "Cart " + row["cart"]["folder"]
+        """Row `row`'s card's stop."""
+        return row["cart"]["folder"] + "/open"
+
+    def index(self, folder):
+        """The row of the cart in `folder`, or -1."""
+        for i in range(len(self.rows)):
+            if self.rows[i]["cart"]["folder"] == folder:
+                return i
+        return -1
 
     def _shown(self, row):
         """Where a card stands as it says it: a cart only for the getting
@@ -1604,123 +1753,21 @@ class GetCartsAppLayer(ListShellApp):
             return False
         return _ci.need_bytes(row["plan"], self.free[1]) > self.free[0]
 
-    def _pic(self, row):
-        """The cart's cover as decoded, (side, pixels), or None."""
-        ref = row["cart"].get("cover")
-        return self.thumbs.get(ref["sha256"]) if ref is not None else None
-
     def _caption(self):
         n = len(self.rows)
         left = "%d cart%s" % (n, "" if n == 1 else "s")
         if self.unreached:
-            left += " · %d shelf away" % self.unreached if ui.has_symbols() \
-                else " - %d shelf away" % self.unreached
+            left += " · %d shelf away" % self.unreached
         if self.no_addon:
-            left += (" · " if ui.has_symbols() else " - ") + NO_ADDON
+            left += " · " + NO_ADDON
         right = "%s free" % _mb(self.free[0]) if self.free is not None else ""
         return left, right
 
-    def _card(self, row):
-        """Row `row`'s card as the shelf draws it: (title, sub, override
-        table), made again only when where the cart stands, or the room
-        free, moves."""
-        c = row.get("_card")
-        st = row["state"]
-        if c is not None and c[0] == st and c[1] is self.free:
-            return c
-        shown = self._shown(row)
-        sub = STATE_WORD.get(shown) or _mb(row["plan"]["store_bytes"])
-        o = {"id": self._card_id(row)}
-        if shown in BADGE:
-            o["badge"] = BADGE[shown]
-        if shown == "update":
-            o["tone"] = "value"
-        elif shown in BLOCKED:
-            o["tone"] = "danger"
-        o["icon"] = genre_icon(row["cart"])
-        # the card's gen (docs/history/scroll_and_text_2026-10.md §3.3): it moves with
-        # the card made again, and its cover's coming tells the two apart
-        self._card_gen += 2
-        o["gen"] = self._card_gen
-        o_pic = dict(o)
-        del o_pic["icon"]
-        o_pic["gen"] = self._card_gen + 1
-        c = row["_card"] = (st, self.free, row["cart"]["name"], sub, o, o_pic)
-        return c
-
-    def _shelf(self, cv):
-        lay = self.layout
-        key = self._caption_key
-        if key[0] != len(self.rows) or key[1] != self.unreached or key[2] is not self.free \
-                or key[7] != self.no_addon:
-            left, right = self._caption()
-            dot = " · " if ui.has_symbols() else " - "
-            self._caption_key = (len(self.rows), self.unreached, self.free, left, right,
-                                 left + (dot + right if right else ""),
-                                 ui.text_size(right)[0] if right else 0, self.no_addon)
-            key = self._caption_key
-        x, y, w, h = lay.caption
-        if lay.desk:
-            bw = 104
-            ui.at(x, y, w - bw - 8, h)
-            ui.label(key[5], _DIM_CAPTION)
-            ui.at(x + w - bw, y, bw, h)
-            ui.icon("rotate")
-            if ui.button("Check", "normal", _CHECK):
-                self._check()
-        else:
-            ui.at(x, y, w, h)
-            ui.label(key[3], _DIM_CAPTION)
-            if key[4]:
-                rw = key[6]
-                ui.at(x + w - rw, y, rw, h)
-                ui.label(key[4], _DIM_CAPTION)
-            if ui.hints_width(_BACK) > 0:
-                r = lay.foot
-                ui.at(r[0], r[1], r[2], r[3])
-                ui.hints(_SHELF_HINTS)
-        g = lay.grid
-        rows = self.rows
-        so = self._shelf_o
-        if rows is not self._shelf_rows or len(rows) != self._shelf_n:
-            self._shelf_rows = rows
-            self._shelf_n = len(rows)
-            so["gen"] += 1              # the shelf's cards are others
-        ui.at(g[0], g[1], g[2], g[3])
-        ui.scroll("shelf", so)
-        side = lay.side
-        ui.grid("carts", side, side, lay.grid_o)
-        for i in range(len(rows)):
-            row = rows[i]
-            c = self._card(row)
-            pic = self._pic(row)
-            r = ui.card(c[2], c[3], c[4] if pic is None else c[5])
-            if r[2] and pic is not None:
-                k = self._clip
-                k[0] = g[0]
-                k[1] = g[1]
-                k[2] = g[2]
-                k[3] = g[3]
-                ui.card_clip(k)
-                cv.clip(k[0], k[1], k[2], k[3])
-                cv.cover(pic[1], pic[0], 0, 0, pic[0], pic[0], r[0], r[1], r[2], r[3], 0, False)
-                cv.clip()
-            if r[4] & ui.ACTIVATED:
-                self._tap_row(i)
-        ui.grid()
-        if not rows:
-            ui.label("No carts on the shelf yet", _DIM)
-        ui.end()
-        ui.scroll()
-
-    def _pane_follows(self):
-        """On the desk the pane shows the card focus is on: whether it moved
-        to another."""
-        f = self._focused
-        if f is None or not f.startswith("Cart "):
-            return False
+    def _pane_follows(self, folder):
+        """On the desk the pane shows the card focus is on, the one in
+        `folder`: whether it moved to another."""
         for row in self.rows:
-            if self._card(row)[4]["id"] == f and row is not self.cur:
+            if row["cart"]["folder"] == folder and row is not self.cur:
                 self.cur = row
                 if self.phase == "list" or self.phase == "done":
                     self.phase = "cart"
@@ -1729,25 +1776,8 @@ class GetCartsAppLayer(ListShellApp):
 
     # -- a cart's page -----------------------------------------------------------
 
-    def _cover(self, row, x, y, side):
-        """The cart's cover at (x, y), `side` square: a card of its own with
-        no name, its picture's edge and corners the engine's."""
-        top = (6 if self.layout.desk else 4 * self.layout.fs)    # style.json's card_top
-        ui.at(x, y - top, side, side + top)
-        c = row.get("_cover")
-        if c is None:
-            c = row["_cover"] = ("cover " + row["cart"]["folder"],
-                                 {"disabled": True, "icon": genre_icon(row["cart"])})
-        ui.grid(c[0], side, side)
-        pic = self._pic(row)
-        r = ui.card("", "", c[1] if pic is None else _DISABLED)
-        if r[2] and pic is not None:
-            cv = self._surf.canvas()
-            cv.cover(pic[1], pic[0], 0, 0, pic[0], pic[0], r[0], r[1], r[2], r[3], 0, False)
-        ui.grid()
-
     def _meta(self, c):
-        dot = " · " if ui.has_symbols() else " - "
+        dot = " · "
         word = _cl.genre_word(c.get("genre"))
         src = c.get("shelf") or _host_of(c.get("index") or "")
         return dot.join([p for p in (word, src) if p])
@@ -1756,7 +1786,7 @@ class GetCartsAppLayer(ListShellApp):
         """(text, icon, tone) of where the cart stands, or None."""
         c = row["cart"]
         st = row["state"]
-        arrow = " → " if ui.has_symbols() else " -> "
+        arrow = " → "
         if st in ("get", "update"):
             newer = _ci.newer_why(c)
             if newer is not None:
@@ -1783,8 +1813,8 @@ class GetCartsAppLayer(ListShellApp):
         c, p = row["cart"], row["plan"]
         lic = c["licence"]
         out = [("Licence", lic.get("spdx") or lic.get("name") or "?")]
-        dot = " · " if ui.has_symbols() else ", "
-        arrow = " → " if ui.has_symbols() else " -> "
+        dot = " · "
+        arrow = " → "
         if desk:
             if row["state"] == "update" and row.get("had"):
                 out.append(("Version", "%s%s%s" % (row["had"], arrow, c["version"])))
@@ -1800,243 +1830,10 @@ class GetCartsAppLayer(ListShellApp):
             out.append(("Plays slowly on this console", ""))
         return out
 
-    def _cart_page(self, cv):
-        """The handheld's page of one cart: its cover beside its genre and
-        source, where it stands and its description; its facts; its verbs."""
-        lay = self.layout
-        fs = lay.fs
-        row = self.cur
-        c = row["cart"]
-        x, y, w, h = lay.pane
-        side = lay.side
-        self._cover(row, x + 6 * fs, y, side)
-        tx = x + side + 18 * fs
-        tw = x + w - tx
-        ty = y - fs
-        ui.at(tx, ty, tw, 16 * fs)
-        ui.label(self._meta(c), {"tone": "dim", "face": "caption"})
-        ty += 16 * fs
-        state = self._state_line(row)
-        lines = 3
-        if state is not None:
-            text, icon, tone = state
-            n = 1 if tone == "value" else 2
-            ui.at(tx, ty, tw, n * 16 * fs)
-            ui.icon(icon)
-            ui.label(text, {"tone": tone, "wrap": n > 1, "lines": n})
-            ty += n * 16 * fs + 2 * fs
-            lines -= n
-        if c.get("description") and lines > 0:
-            ui.at(tx, ty, tw, lines * 14 * fs)
-            ui.label(c["description"], {"wrap": True, "lines": lines, "face": "caption"})
-        top = y + side + 8 * fs
-        foot = 26 * fs + 16 * fs
-        ui.at(x - 6 * fs, top, w + 12 * fs, y + h - top - foot - 4 * fs)
-        ui.scroll("facts")
-        ui.group("", {"card": True})
-        for label, value in self._info(row, False):
-            ui.info(label, value)
-        ui.group()
-        ui.scroll()
-        self._verb_row(lay.page_verbs())
-        if ui.hints_width(("back", "Back")) > 0:
-            v = self._current_verbs()
-            items = (("confirm", VERB[self._focused_verb(v)][0]) if v else ()) + ("back", "Back")
-            ui.at(*lay.foot)
-            ui.hints(items)
-
-    def _focused_verb(self, verbs):
-        for v in verbs:
-            if vid(v) == self._focused:
-                return v
-        return verbs[-1]
-
-    def _verb_row(self, rect):
-        """The page's verbs across `rect`, the one that goes on last and
-        wider; a verb a blocker stops is greyed."""
-        verbs = self._current_verbs()
-        if not verbs:
-            return
-        for v, r in zip(verbs, self.layout.split_verbs(rect, len(verbs))):
-            self._button(v, r)
-
-    def _kind(self, v):
-        verbs = self._current_verbs()
-        if v == "REMOVE" or (v == "CANCEL" and self.phase == "getting"):
-            return "danger"
-        if v in GO and v == verbs[-1]:
-            return "primary"
-        return "normal"
-
-    def _button(self, v, rect):
-        label, icon = VERB[v]
-        o = self._button_o(v)
-        ui.at(*rect)
-        if icon:
-            ui.icon(icon)
-        if ui.button(label, self._kind(v), o):
-            self._press(v)
-
-    def _button_o(self, v):
-        """Verb `v`'s button's override table: its id, and greyed where a
-        blocker stops it."""
-        o = {"id": vid(v)}
-        if v in ("GET", "UPDATE") and self.phase in ("cart", "done") \
-                and self.blocker(self.cur) is not None:
-            o["disabled"] = True
-        if v in ("PLAY", "USE") and self.phase in ("cart", "done") \
-                and self._inst.find(self.cur["cart"]["folder"]) is None:
-            o["disabled"] = True
-        return o
-
     # -- the desk's pane and foot ------------------------------------------------
 
-    def _pane(self, cv):
-        lay = self.layout
-        x, y, w, h = lay.rule
-        border = self._theme.colors()["border"]
-        cv.rect(x, y, w, h, border)
-        row = self.cur if self.cur is not None else (self.rows[0] if self.rows else None)
-        fx, fy, fw, fh = lay.foot
-        bx = lay.body[0]
-        cv.rect(bx + 16, fy, lay.body[2] - 32, 1, border)
-        if row is None:
-            return
-        c = row["cart"]
-        px, py, pw, ph = lay.pane
-        side = lay.side
-        self._cover(row, px, py, side)
-        busy = self.phase in BUSY
-        k = None if busy else self._pane_parts(row)
-        tx = px + side + 14
-        tw = px + pw - tx
-        ui.at(tx, py + 10, tw, 28)
-        ui.label(c["name"], _TITLE)
-        ty = py + 40
-        if k is None:
-            word = _cl.genre_word(c.get("genre"))
-            src = c.get("shelf") or _host_of(c.get("index") or "")
-        else:
-            word = k.word
-            src = k.src
-        if word:
-            ui.at(tx, ty, tw, 20)
-            ui.label(word, _DIM_CAPTION)
-            ty += 20
-        if src:
-            ui.at(tx, ty, tw, 20)
-            ui.label(src, _DIM_CAPTION)
-            ty += 20
-        if k is not None and k.state is not None:
-            ui.at(tx, ty + 4, tw, k.state_h)
-            ui.icon(k.state_icon)
-            ui.label(k.state, k.state_o)
-        dy = py + side + 16
-        if c.get("description"):
-            ui.at(px, dy, pw, 60)
-            ui.label(c["description"], _WRAP3)
-        dy += 72
-        if busy:
-            self._pane_busy((px, dy, pw, fy - dy))
-        else:
-            ui.at(px - 10, dy, pw + 10, fy - dy - 8)
-            ui.scroll("facts")
-            ui.group("", _CARD_GROUP)
-            for f in k.info:
-                ui.info(f[0], f[1])
-            ui.group()
-            ui.scroll()
-        if k is None:
-            self._foot(row)
-            return
-        ui.at(k.status_at[0], k.status_at[1], k.status_at[2], k.status_at[3])
-        ui.label(k.status, _DIM_CAPTION)
-        for b in k.buttons:
-            r = b[1]
-            ui.at(r[0], r[1], r[2], r[3])
-            if b[3]:
-                ui.icon(b[3])
-            if ui.button(b[2], b[4], b[5]):
-                self._press(b[0])
-
-    def _pane_parts(self, row):
-        """What the desk's pane and foot draw for `row` outside a job: made
-        again when the cart, where it stands, the phase or the room free
-        moves, so a frame that only scrolls the shelf makes nothing."""
-        k = self._pane_k
-        if (k is not None and k.row is row and k.st == row["state"] and k.phase == self.phase
-                and k.free is self.free):
-            return k
-        k = self._pane_k = _Pane()
-        k.row = row
-        k.st = row["state"]
-        k.phase = self.phase
-        k.free = self.free
-        c = row["cart"]
-        k.word = _cl.genre_word(c.get("genre"))
-        k.src = c.get("shelf") or _host_of(c.get("index") or "")
-        state = self._state_line(row)
-        if state is not None:
-            text, icon, tone = state
-            k.state = text.split(":")[0] if tone == "value" else text
-            k.state_icon = icon
-            k.state_h = 22 if tone == "value" else 44
-            k.state_o = {"tone": tone, "wrap": tone != "value", "lines": 2}
-        k.info = self._info(row, True)
-        lay = self.layout
-        fx, fy, fw, fh = lay.foot
-        verbs = self._current_verbs()
-        ui.face("caption")
-        widths = []
-        for v in verbs:
-            label, icon = VERB[v]
-            widths.append(ui.text_size(label)[0] + (48 if icon else 28))
-        ui.face()
-        bx = fx + fw - 16 - sum(widths) - 8 * max(0, len(verbs) - 1)
-        by = fy + max(1, (fh - 30) // 2)
-        k.status = self._status(row)
-        k.status_at = (fx + 26, by, max(0, bx - fx - 34), 30)
-        for i, v in enumerate(verbs):
-            label, icon = VERB[v]
-            k.buttons.append((v, (bx, by, widths[i], 30), label, icon, self._kind(v),
-                              self._button_o(v)))
-            bx += widths[i] + 8
-        return k
-
-    def _pane_busy(self, rect):
-        x, y, w, h = rect
-        title, line, done, total = self._progress_of()
-        ui.at(x, y, w, 24)
-        ui.label(title, {"face": "ui"})
-        if total:
-            ui.at(x, y + 26, w, 38)
-            ui.progress("Downloading", done, total)
-        if line:
-            ui.at(x, y + 70, w, 20)
-            ui.label(line, {"tone": "dim", "face": "caption"})
-
-    def _foot(self, row):
-        """The window's foot: the status at its left, the verbs at its
-        right, the one that goes on last and primary."""
-        lay = self.layout
-        fx, fy, fw, fh = lay.foot
-        verbs = self._current_verbs()
-        ui.face("caption")
-        widths = []
-        for v in verbs:
-            label, icon = VERB[v]
-            widths.append(ui.text_size(label)[0] + (48 if icon else 28))
-        ui.face()
-        bx = fx + fw - 16 - sum(widths) - 8 * max(0, len(verbs) - 1)
-        status = self._status(row)
-        ui.at(fx + 26, fy + max(1, (fh - 30) // 2), max(0, bx - fx - 34), 30)
-        ui.label(status, {"tone": "dim", "face": "caption"})
-        for i, v in enumerate(verbs):
-            self._button(v, (bx, fy + max(1, (fh - 30) // 2), widths[i], 30))
-            bx += widths[i] + 8
-
     def _status(self, row):
-        dot = " · " if ui.has_symbols() else " - "
+        dot = " · "
         if self.phase in BUSY:
             return self._progress_of()[0]
         st = self._shown(row)
@@ -2055,7 +1852,7 @@ class GetCartsAppLayer(ListShellApp):
         if self.phase == "getting" and job is not None:
             if self._shelving():
                 return ("Getting " + name, "Putting it on the shelf…", job.total, job.total)
-            dot = " · " if ui.has_symbols() else ", "
+            dot = " · "
             line = "%s of %s" % (_mb(job.done), _mb(job.total))
             rate = job.rate()
             if rate:
@@ -2069,35 +1866,6 @@ class GetCartsAppLayer(ListShellApp):
         shelf: the keeper has it, or its landing's steps are under way."""
         job = self.job
         return job is not None and (job.keeping or job.landing)
-
-    def _getting(self, cv):
-        lay = self.layout
-        fs = lay.fs
-        x, y, w, h = lay.pane
-        side = lay.side
-        self._cover(self.cur, x + (w - side) // 2, y, side)
-        title, line, done, total = self._progress_of()
-        ty = y + side + 7 * fs
-        ui.at(x, ty, w, 22 * fs)
-        ui.label(title, {"face": "title", "align": "center"})
-        ty += 24 * fs
-        bx, bw = x + 34 * fs, w - 68 * fs
-        ui.at(bx, ty, bw, 27 * fs)
-        if self._shelving():
-            ui.progress("Putting it on the shelf", total, total)
-        else:
-            ui.progress("Downloading", done, total)
-        ty += 30 * fs
-        if line and not self._shelving():
-            ui.at(x, ty, w, 16 * fs)
-            ui.label(line, {"tone": "dim", "face": "caption", "align": "center"})
-        ty += 18 * fs
-        if self._current_verbs():
-            bw = 96 * fs
-            self._button("CANCEL", (x + (w - bw) // 2, ty, bw, 26 * fs))
-        if ui.hints_width(("back", "Back")) > 0 and self._current_verbs():
-            ui.at(*lay.foot)
-            ui.hints(("back", "Cancel"))
 
     # -- the pages that are words and a verb -------------------------------------
 
@@ -2118,41 +1886,17 @@ class GetCartsAppLayer(ListShellApp):
             return ("Connecting", "Turning on Wi-Fi…")
         return ("", "")
 
-    def _busy(self):
-        """One busy page: the app's icon, a title, a line, the shelves
-        counted where they are, Cancel."""
-        lay = self.layout
-        title, line = self._busy_words()
-        x, y, w, h = lay.pane if not lay.desk else lay.full
-        top = y + (h // 6 if lay.desk else 0)
-        ui.at(x, top, w, h)
-        at = ui.empty("getcarts", title, (line,))
-        n = len(self.indexes)
-        if self.phase == "checking" and n and self._step:
-            step = max(0, min(self._step - 1, n))
-            bx, bw = x + w // 6, w - w // 3
-            ui.at(bx, at + 2 * lay.fs, bw, (38 if lay.desk else 27 * lay.fs))
-            ui.progress("Shelf %d of %d" % (min(step + 1, n), n), step, n)
-            at += 30 * lay.fs
-        bw = (120 if lay.desk else 96 * lay.fs)
-        self._button("CANCEL", (x + (w - bw) // 2, at + 6 * lay.fs, bw,
-                                40 if lay.desk else 26 * lay.fs))
-        if not lay.desk and ui.hints_width(("back", "Back")) > 0:
-            ui.at(*lay.foot)
-            ui.hints(("back", "Cancel"))
-
     def _empty_words(self):
         """(icon, title, lines) for the pages that say why there is no
         shelf, or how a getting ended."""
         ph = self.phase
         if ph == "board":
-            lines = self._lines("This page shows the carts kept on the console that "
-                                "served it.")
+            lines = ["This page shows the carts kept on the console that served it."]
             if self._inst.home() == "headless":
-                lines += self._lines("Update this console to get carts from here.")
+                lines.append("Update this console to get carts from here.")
             else:
-                lines += self._lines("Get new carts on the console itself: turn Web "
-                                     "console off there and open Get Carts.")
+                lines.append("Get new carts on the console itself: turn Web console off "
+                             "there and open Get Carts.")
             return ("getcarts", "On the console", lines)
         if ph == "nonet":
             return ("warn", "No internet", ["This console has no way to fetch carts."])
@@ -2163,81 +1907,13 @@ class GetCartsAppLayer(ListShellApp):
             return ("warn", "Shelf away", ["Couldn't reach the cart shelf.",
                                            "Try again soon."])
         if ph == "nomemory":
-            return ("warn", "Memory full", self._lines(_ci.NET_MEMORY))
+            return ("warn", "Memory full", [_ci.NET_MEMORY])
         if ph == "failed":
-            lines = self._lines(self.why) + ["Nothing changed."]
+            lines = [self.why, "Nothing changed."]
             if self.why_detail:
-                lines += self._lines("Details: " + self.why_detail)
+                lines.append("Details: " + self.why_detail)
             return ("warn", "Not installed", lines)
         return ("getcarts", "", [])
-
-    def _lines(self, text):
-        """`text` broken at word breaks into the empty page's width."""
-        lay = self.layout
-        room = (lay.full[2] if lay.desk else lay.pane[2]) - 32 * lay.fs
-        if lay.desk:
-            room = min(room, 420)
-        ui.face("ui")
-        out, line = [], ""
-        try:
-            for word in str(text).split():
-                t = word if not line else line + " " + word
-                if line and ui.text_size(t)[0] > room:
-                    out.append(line)
-                    line = word
-                else:
-                    line = t
-            if line:
-                out.append(line)
-        finally:
-            ui.face()
-        return out
-
-    def _empty(self):
-        lay = self.layout
-        fs = lay.fs
-        icon, title, lines = self._empty_words()
-        x, y, w, h = lay.pane if not lay.desk else lay.full
-        top = y + (h // 6 if lay.desk else 0)
-        ui.at(x, top, w, h)
-        at = ui.empty(icon, title, lines)
-        verbs = self._current_verbs()
-        if verbs:
-            bh = 40 if lay.desk else 26 * fs
-            bw = 180 if lay.desk else 124 * fs
-            mw = bw - (40 if lay.desk else 30 * fs)
-            g = 10 if lay.desk else 8 * fs
-            widths = [mw] * (len(verbs) - 1) + [bw]
-            bx = x + (w - sum(widths) - g * (len(verbs) - 1)) // 2
-            for i, v in enumerate(verbs):
-                self._button(v, (bx, at + (6 if lay.desk else 3 * fs), widths[i], bh))
-                bx += widths[i] + g
-        if not lay.desk and ui.hints_width(("back", "Back")) > 0:
-            items = ()
-            if verbs:
-                items = ("confirm", VERB[self._focused_verb(verbs)][0])
-            ui.at(*lay.foot)
-            ui.hints(items + ("back", "Back"))
-
-    def _your_copy(self):
-        lay = self.layout
-        fs = lay.fs
-        x, y, w, h = lay.pane if not lay.desk else lay.full
-        if lay.desk:
-            x, y, w = x + 24, y + 16, w - 48
-        title, lines = self._copy_words()
-        ui.at(x, y, w, 22 * fs)
-        ui.label(title, {"face": "title"})
-        ty = y + 26 * fs
-        for text, tone in lines:
-            ui.at(x, ty, w, 32 * fs)
-            ui.label(text, {"tone": tone, "wrap": True, "lines": 2})
-            ty += 34 * fs
-        bw = 96 * fs
-        self._button("CANCEL", (x + w - bw, y + h - 30 * fs, bw, 26 * fs))
-        if not lay.desk and ui.hints_width(("back", "Back")) > 0:
-            ui.at(*lay.foot)
-            ui.hints(("back", "Cancel"))
 
     def _copy_words(self):
         """(title, [(line, tone)]) of YOUR COPY's page."""
@@ -2250,92 +1926,3 @@ class GetCartsAppLayer(ListShellApp):
         lines.append(("Choose your own copy of %s (%s) in the box below."
                       % (e["path"], _mb(e["size"])), "dim"))
         return "Your copy of %s" % e["path"], lines
-
-    def _licence(self, cv, th):
-        """A file's licence before it is fetched: its name, its text in a
-        well the arrows scroll while it holds focus, No and I agree."""
-        lay = self.layout
-        fs = lay.fs
-        ext, lines, first = self.lic
-        x, y, w, h = lay.well()
-        ui.at(x, y - 26 * fs, w, 22 * fs)
-        ui.label(ext["licence"].get("name") or "Its licence", {"face": "title"})
-        ui.at(x, y, w, h)
-        bx, by, bw, bh, _st = ui.part("Licence")
-        ui.face("ui")
-        lh = ui.text_size("Ag")[1]
-        pad = 8 if lay.desk else 6 * fs
-        cv.clip(bx + 1, by + 1, bw - 2, bh - 2)
-        ty = by + pad // 2
-        ink = th["ink"]
-        for ln in (lines or ())[first:]:
-            if ty >= by + bh:
-                break
-            cv.print(ln, bx + pad, ty, ink)
-            ty += lh
-        cv.clip()
-        ui.face()
-        if lines and first + self._well_rows() < len(lines):
-            ui.fade((bx + 1, by + bh - 12 * fs, bw - 2, 12 * fs - 1))
-        no, agree = lay.licence_verbs()
-        self._button("NO", no)
-        self._button("I AGREE", agree)
-        if not lay.desk and ui.hints_width(("back", "Back")) > 0:
-            ui.at(*lay.foot)
-            f = self._focused
-            ui.hints(("scroll", "Scroll", "back", "No") if f == "Licence"
-                     else ("confirm", VERB[self._focused_verb(("NO", "I AGREE"))][0],
-                           "back", "No"))
-
-    # -- the dialog and the toast ------------------------------------------------
-
-    def _dialog(self):
-        if not self.asking or self.cur is None:
-            return
-        name = self.cur["cart"]["name"]
-        pick = ui.dialog("Remove %s?" % name, ("Cancel", "Remove"), "danger")
-        ui.label("Its saves and the files it wrote go too.", {"wrap": True, "lines": 3})
-        ui.dialog()
-        if pick == 1:
-            self._remove()
-        elif pick == 0:
-            self.asking = False
-            self._focus = vid("REMOVE")
-            self._damage.all()
-
-    def _prompt(self):
-        """The install prompt: what the cart can reach, a line a permission
-        (app_perms.prompt), in a dialog whose first stop is No."""
-        lines = self.question
-        if self.phase != "consent" or lines is None or self.cur is None:
-            return
-        pick = ui.dialog("Install %s?" % self.cur["cart"]["name"], ("No", "Install"),
-                         "primary")
-        _perms.show(ui, lines)
-        done = False
-        if _pkg.gated(self._inst, lines):
-            ui.label(_pkg.WRONG_PASSWORD if self.password_bad
-                     else "A grown-up types the console's password to say yes:",
-                     {"wrap": True, "lines": 2,
-                      "tone": "danger" if self.password_bad else "dim"})
-            self.password, done = ui.field("Password", self.password, 64,
-                                           {"id": "password", "secret": True})
-        ui.dialog()
-        if pick == 1 or done:
-            self._answer(True)
-        elif pick == 0:
-            self._answer(False)
-
-    def _toast(self):
-        lay = self.layout
-        text, icon, _until = self.toast
-        if lay.desk:
-            fx, fy, fw, fh = lay.foot
-            ui.at(lay.body[0], lay.body[1], lay.body[2], fy - lay.body[1] - 12)
-        elif self.phase in ("cart", "done"):
-            x, y, w, h = lay.pane                 # over the verbs, not on them
-            ui.at(x, y, w, h - (26 + 16 + 6) * lay.fs)
-        else:
-            x, y, w, h = lay.body
-            ui.at(x, y, w, h - 6 * lay.fs)
-        ui.toast(text, icon)

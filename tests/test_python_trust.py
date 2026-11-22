@@ -327,7 +327,7 @@ def test_get_carts_asks_for_the_console_s_password_to_accept_the_warning(tmp_pat
     assert app.phase == "consent" and app_perms.warned(app.question), app.why
     assert app.question[0] == "From Test carts"
     _frames(ws, 2)
-    assert app._ui.box("Password") is not None or app._focused == "password"
+    assert app.page_host().box("Password") is not None or app.engine.focus_key == "password"
     app.password = "nope"
     app._answer(True)
     _frames(ws, 2)

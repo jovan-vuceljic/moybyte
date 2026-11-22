@@ -153,7 +153,7 @@ def test_every_layout_lays_out_inside_the_content_rect(tmp_path, size):
     for want in ("Layout", "CodeLayout", "CardsLayout", "PaintLayout",
                  "MapLayout", "MusicLayout", "BlockLayout",
                  "FilesLayout", "StorybookLayout", "AppearanceLayout",
-                 "PaintAppLayout", "GetCartsLayout", "MyArtLayout"):
+                 "PaintAppLayout", "MyArtLayout"):
         assert want in names, want + " was never built"
     top = _rect_map(ws)
     _bottom(ws)
@@ -170,7 +170,7 @@ def test_every_layout_lays_out_inside_the_content_rect(tmp_path, size):
         rb, cb = bottom[key]
         if not _inside(rb, cb):
             bad.append("%s.%s[%d] %r in %r" % (key + (rb, cb)))
-    assert checked > 60
+    assert checked > 50
     assert not bad, "outside the content rect under a bottom bar: %s" % bad
     lay = ws.layout
     assert lay.icon_y0 >= lay.cy and lay.grid_bottom <= lay.cy + lay.ch

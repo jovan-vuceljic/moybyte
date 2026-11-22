@@ -895,7 +895,7 @@ const char *const uit_kind_names[UIT_KINDS] = {"", "page", "group", "label", "in
                                                "table", "col", "foot", "cards", "card", "picture",
                                                "popover", "tools", "row", "status", "text_editor",
                                                "panes", "pane", "legacy", "slot", "panel", "lent",
-                                               "rule", "note", "grid", "bubble", "month"};
+                                               "rule", "note", "grid", "bubble", "month", "toast"};
 
 static const char *const TONES[] = {"ink", "dim", "value", "danger"};
 static const char *const BKINDS[] = {"normal", "primary", "tonal", "danger", "toggle", "bar"};   // moy_ui's, then its bar item
@@ -1109,13 +1109,14 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     else if ((kind == UIT_BUBBLE && (!strcmp(name, "side") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              ((kind == UIT_INFO || kind == UIT_LINK) &&
               (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
-             (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today")))) {
-        // templates the draw finds among its props by name (uit_tmpl_prop); signal= and a month's
-        // year=, month= and today= ints
+             (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
+             (kind == UIT_CARD && !strcmp(name, "badge")) || (kind == UIT_CARDS && !strcmp(name, "pad"))) {
+        // templates the draw finds among its props by name (uit_tmpl_prop); signal=, a month's
+        // year=, month= and today= and a cards list's pad= ints
         int t = uit_tmpl_compile(e, src, model);
         if (t < 0)
             return t;
-        int ty = e->tmpls[t].type, want_int = !strcmp(name, "signal") || kind == UIT_MONTH;
+        int ty = e->tmpls[t].type, want_int = !strcmp(name, "signal") || kind == UIT_MONTH || kind == UIT_CARDS;
         if (want_int ? ty != UIT_INT && !e->tmpls[t].lit : ty == UIT_BOOL || ty == UIT_MODEL)
             return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not %s", "%s %s %s %s %s"), uit_kind_names[kind],
                                   name, src, uit_type_name(ty), want_int ? "an int" : "a text");
@@ -1178,6 +1179,16 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     if (kind == UIT_LEGACY && (!strcmp(name, "draw") || !strcmp(name, "pointer") || !strcmp(name, "keys") ||
                                !strcmp(name, "hints") || !strcmp(name, "gen")))
         return add_prop(e, node, name, src, repr, PK_LIT, 0);     // the front end's functions
+    if (!strcmp(name, "tone") && kind == UIT_LABEL && strchr(src, '{')) {
+        // a templated tone: its word drawn each frame (ink, dim, value, danger; another is ink)
+        int t = uit_tmpl_compile(e, src, model);
+        if (t < 0)
+            return t;
+        if (e->tmpls[t].type == UIT_BOOL || e->tmpls[t].type == UIT_MODEL)
+            return uit_check_fail(e, "T03", UIT_MSG("label tone=%s is a %s, not a text", "%s %s"), src,
+                                  uit_type_name(e->tmpls[t].type));
+        return add_prop(e, node, name, src, repr, PK_TMPL, t);
+    }
     if (!strcmp(name, "tone") && kind == UIT_LABEL) {
         int i = lit_index(src, TONES, 4);
         if (i <= 0)
@@ -1241,8 +1252,14 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         else if (name[0] == 'g')
             N->nbtn = (uint16_t)i;
         else
-            N->lit = (uint8_t)i;
+            N->lit = (uint8_t)((N->lit & SP_RULE) | i);
         return add_prop(e, node, name, src, repr, PK_LIT, i);
+    }
+    if (kind == UIT_SPLIT && !strcmp(name, "rule")) {
+        // rule=True: a rule down (or across) the middle of each gap between its cells
+        if (src[0] == 'T' || src[0] == '1')
+            N->lit |= SP_RULE;
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & SP_RULE) != 0);
     }
     if (kind == UIT_GRID && (!strcmp(name, "pad") || !strcmp(name, "gap"))) {
         static const char *const GAPS[] = {"s", "m", "l", "0"};
@@ -1352,6 +1369,17 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, 0);     // its front end routes the pointer to it
     if (!strcmp(name, "ground") && kind == UIT_CANVAS)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);     // its front end fills it (a theme role)
+    if (!strcmp(name, "kind") && kind == UIT_BUTTON && strchr(src, '{')) {
+        // a templated kind: its word drawn each frame (another word is normal)
+        int t = uit_tmpl_compile(e, src, model);
+        if (t < 0)
+            return t;
+        if (e->tmpls[t].type == UIT_BOOL || e->tmpls[t].type == UIT_MODEL)
+            return uit_check_fail(e, "T03", UIT_MSG("button kind=%s is a %s, not a text", "%s %s"), src,
+                                  uit_type_name(e->tmpls[t].type));
+        N->lit = 0;
+        return add_prop(e, node, name, src, repr, PK_TMPL, t);
+    }
     if (!strcmp(name, "kind") && kind == UIT_BUTTON) {
         int i = lit_index(src, BKINDS, 6);
         N->lit = (uint8_t)(i < 0 ? 0 : i);
@@ -1452,6 +1480,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->cur = (int16_t)f;
         return 0;
     }
+    if (kind == UIT_TEXT_VIEW && !strcmp(name, "look")) {
+        // "well": its prose on a part's well (TV_WELL)
+        N->lit = (uint8_t)((N->lit & ~TV_WELL) | (!strcmp(src, "well") ? TV_WELL : 0));
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & TV_WELL) != 0);
+    }
     if (kind == UIT_TEXT_VIEW && (!strcmp(name, "follow") || !strcmp(name, "wrap") || !strcmp(name, "face") ||
                                   !strcmp(name, "syntax"))) {
         static const char *const SYNTAXES[] = {"plain", "python", "lua", "json", "sgr", "markdown"};
@@ -1509,6 +1542,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     }
     if (!strcmp(name, "cols") && kind == UIT_TABLE)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);      // a column's header, one prop each
+    if (!strcmp(name, "look") && kind == UIT_GROUP) {
+        // "card": a captionless group drawn as a card (lit 1)
+        N->lit = (uint8_t)!strcmp(src, "card");
+        return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
+    }
     if (!strcmp(name, "look") && kind == UIT_FOOT) {
         // "share": its buttons share its width (lit 1); "end" (0): at its end
         N->lit = (uint8_t)!strcmp(src, "share");

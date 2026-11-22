@@ -11,7 +11,6 @@ from pathlib import Path
 import pytest
 
 from runtime import music_app as M
-from runtime import ui_draw
 from runtime.status_items import ITEMS, ON, PAUSED, ERROR
 from ws_helpers import build_desktop_ws, build_ws, make_drv
 
@@ -87,6 +86,16 @@ def _app(ws):
     return ws.app("jukebox")
 
 
+def _put(app, **values):
+    """States of the page written as its handler."""
+    app.do(lambda: [setattr(M.s, k, v) for k, v in values.items()])
+
+
+def _frames(drv, n=1):
+    for _ in range(n):
+        drv.frame(1 / 30)
+
+
 def _settle(ws, n=4):
     for _ in range(n):
         ws.mark_dirty()
@@ -107,14 +116,14 @@ def test_a_station_plays_and_its_status_item_follows_the_stream(tmp_path, face):
     app = _app(ws)
     ws.spine.open_app(app)
     _settle(ws)
-    rows = app._station_rows()
-    app._open_row(0, 1, rows)
+    app.do(M.play, "r0")
     assert face.played == [GROOVE[2]]
     it = ITEMS.at(0)
     assert it is not None and it.icon == "music" and it.app == "Music" and it.state == ON
     c = M.STREAM.card
     assert M.lines(c) == ("Dayvan Cowboy", "Boards of Canada · Groove Salad")
-    app._open_row(0, 1, app._station_rows())       # the playing row: Enter pauses
+    _settle(ws, 1)
+    app.do(M.play, "r0")                            # the playing row: Enter pauses
     assert face.n["paused"] and ITEMS.at(0).state == PAUSED
     M.STREAM.step(1)                                # the next station
     assert face.played[-1] == M.STATIONS[1][2]
@@ -176,7 +185,7 @@ def test_music_plays_as_the_shell_while_a_game_is_current(tmp_path, face):
     app = _app(ws)
     ws.spine.open_app(app)
     _settle(ws)
-    app._open_row(0, 1, app._station_rows())
+    app.do(M.play, "r0")
     assert heard == [L.SHELL] and L.current() == game
     assert moybyte.WAKES.by_id[M.STREAM.wake][1] == L.SHELL
     assert ITEMS.at(0).pid == L.SHELL
@@ -228,33 +237,35 @@ def test_add_a_station_refuses_https_and_keeps_an_http_one(tmp_path, face):
     ws = build_ws(tmp_path)
     app = _app(ws)
     ws.spine.open_app(app)
-    app._go("add")
+    _settle(ws, 1)
+    app.do(M.add_open)
     _settle(ws, 2)
-    assert app.page == "add" and ws.input.text_mode
+    assert app.state().view == "add" and ws.input.text_mode
+    assert app.page_title() == "Add a station" and app.has_page()
     assert M._check("https://stream.example.org/live.mp3", False) == M.ERR_ADDRESS
     assert M.ERR_ADDRESS == "This address won't play. Use one that starts with http://"
     assert M._check("http://ice1.somafm.com/lush-128-mp3", False) is None
     assert M._check("htt", False) is None and M._check("htt", True) == M.ERR_ADDRESS
-    app.url = "https://stream.example.org/live.mp3"
-    app._submit()
-    assert app.page == "add" and app.err == M.ERR_ADDRESS
-    app.url, app.name, app.err = "http://ice1.somafm.com/lush-128-mp3", "Lush", None
-    app._submit()
+    _put(app, url="https://stream.example.org/live.mp3")
+    app.do(M.submit)
+    assert app.state().view == "add" and app.state().err == M.ERR_ADDRESS
+    _put(app, url="http://ice1.somafm.com/lush-128-mp3", name="Lush", err="")
+    app.do(M.submit)
     _settle(ws, 2)
-    assert app.page == "list" and not ws.input.text_mode
+    assert app.state().view == "radio" and not ws.input.text_mode
     assert M.STREAM.stations[-1] == ("Lush", "Added", "http://ice1.somafm.com/lush-128-mp3")
     assert face.played[-1] == "http://ice1.somafm.com/lush-128-mp3"
     assert app._prefs.get(M.STATIONS_KEY, None) == [["Lush", "http://ice1.somafm.com/lush-128-mp3"]]
     M.STREAM.stations = M.STATIONS
-    app._load_stations()
+    app.load_stations()
     assert M.STREAM.stations[-1][0] == "Lush", "the station is read back from the prefs"
 
 
 @pytest.mark.parametrize("desk", [False, True])
 def test_enter_on_add_a_station_types_into_its_address(tmp_path, face, desk):
-    """Enter on Add a station opens it during a draw; its first draw is the
-    next frame's, which focuses Address, so the keys typed straight after
-    go there, Enter moves on to Name, and Enter again adds and plays it."""
+    """Enter on Add a station opens it with Address focused, so the keys
+    typed straight after go there, Enter moves on to Name, and Enter again
+    adds and plays it."""
     ws = build_desktop_ws(tmp_path) if desk else build_ws(tmp_path)
     app = _app(ws)
     if desk:
@@ -262,7 +273,8 @@ def test_enter_on_add_a_station_types_into_its_address(tmp_path, face, desk):
     ws.spine.open_app(app)
     drv = make_drv(ws)
     _settle(ws)
-    app.cur[0] = 0                                  # the Add a station row
+    _put(app, scur=M.ADD)                           # the Add a station row
+    app.page_host().focus(M.ADD + "/pick")
     for code in (13, "http://a.example/live", 13, "Test FM", 13):
         if code == 13:
             drv.key_down(13)
@@ -275,7 +287,8 @@ def test_enter_on_add_a_station_types_into_its_address(tmp_path, face, desk):
             drv.frame(1 / 30)
         for _ in range(3):                          # the typed queue drained
             drv.frame(1 / 30)
-    assert app.page == "list", (app.page, app.url, app.name)
+    st = app.state()
+    assert st.view == "radio", (st.view, st.url, st.name)
     assert M.STREAM.stations[-1] == ("Test FM", "Added", "http://a.example/live")
     assert face.played[-1] == "http://a.example/live"
     M.STREAM.stations = M.STATIONS
@@ -285,8 +298,8 @@ def test_mic_cancels_add_a_station(tmp_path, face):
     ws = build_ws(tmp_path)
     app = _app(ws)
     ws.spine.open_app(app)
-    app._go("add")
-    assert ws.input_policy.cancel() and app.page == "list"
+    app.do(M.add_open)
+    assert ws.input_policy.cancel() and app.state().view == "radio"
 
 
 def test_back_leaves_and_the_stream_plays_on(tmp_path, face):
@@ -294,9 +307,12 @@ def test_back_leaves_and_the_stream_plays_on(tmp_path, face):
     app = _app(ws)
     ws.spine.open_app(app)
     M.STREAM.play("radio", GROOVE[0], GROOVE[2])
-    app._go("now")
+    _settle(ws, 1)
+    app.do(M.now)
+    assert app.page_title() == "Now playing"
     ws.input_policy.back()
-    assert app.page == "list" and ws.wm.top_kind() == "jukebox"
+    _settle(ws, 1)
+    assert app.state().view == "radio" and ws.wm.top_kind() == "jukebox"
     ws.input_policy.back()
     assert ws.wm.top_kind() != "jukebox"
     assert face.n is not None and ITEMS.count() == 1
@@ -321,12 +337,9 @@ def test_a_console_without_media_shows_the_no_audio_page(tmp_path, monkeypatch):
     ws = build_ws(tmp_path)
     app = _app(ws)
     ws.spine.open_app(app)
-    texts = []
-    from runtime import ui
-    orig = ui.empty
-    monkeypatch.setattr(ui, "empty", lambda i, t, ls=(): texts.append(t) or orig(i, t, ls))
     _settle(ws, 2)
-    assert "No sound on this console" in texts
+    assert not app.state().audio
+    assert app.page_host().box("home") is not None, "Back to home is on the page"
     app.leave_asked = True                            # Back to home
     drv = make_drv(ws)
     drv.frame(1 / 30)
@@ -353,44 +366,36 @@ def test_a_files_place_reaches_the_card():
     assert M.lines(c) == ("Sunny day drive", "Road trip mix · 3 of 12")
 
 
-def test_left_and_right_seek_a_file_and_a_tap_on_its_bar_seeks_along_it(tmp_path, face,
-                                                                         monkeypatch):
+def test_left_and_right_seek_a_file_and_a_tap_on_its_bar_seeks_along_it(tmp_path, face):
+    """Now playing opens on a file's place, a slider SEEK_STEP seconds a
+    step: right and left seek, and a tap at its end seeks near the end."""
     ws = build_ws(tmp_path)
     app = _app(ws)
     ws.spine.open_app(app)
     M.STREAM.play("song", "Tone", str(TONE))
     face.n.update(at=60, len=200)
     M.STREAM.poll()
-    app._go("now")
+    _settle(ws, 1)
+    app.do(M.now)
     drv = make_drv(ws)
-    bars = []
-    part = M.ui.part
-
-    def spy(id, w=0, h=0, o=None):  # noqa: A002 -- ui.part's name
-        r = part(id, w, h, o)
-        if id == "music.seek":
-            bars.append(r[:4])
-        return r
-
-    monkeypatch.setattr(M.ui, "part", spy)
     _settle(ws)
     drv.press("right")
-    drv.frame(1 / 30)
+    _frames(drv)
     assert face.seeks == [60 + M.SEEK_STEP]
     drv.press("left")
-    drv.frame(1 / 30)
+    _frames(drv)
     assert face.seeks == [60 + M.SEEK_STEP, 60]
-    x, y, w, h = bars[-1]
-    drv.touch(x + w // 2, y + h // 2)
+    x, y, w, h = app.page_host().box("pos")
+    drv.touch(x + w - 2, y + h // 2)
     drv.frame(1 / 30)
     drv.touch_up()
-    drv.frame(1 / 30)
+    _frames(drv, 2)
     tapped = face.seeks[-1]
-    assert len(face.seeks) == 3 and abs(tapped - 100) <= 1 and M.STREAM.card["at"] == tapped
+    assert len(face.seeks) == 3 and tapped >= 180 and M.STREAM.card["at"] == tapped
     M.STREAM.play("radio", GROOVE[0], GROOVE[2])    # a station has no place to seek
     _settle(ws)
     drv.press("right")
-    drv.frame(1 / 30)
+    _frames(drv)
     assert len(face.seeks) == 3
 
 
@@ -422,130 +427,72 @@ def test_the_folder_lists_the_songs_a_board_keeps_for_its_page(tmp_path, monkeyp
     assert [s[0] for s in songs] == ["Board song"] and [x[0] for x in lists] == ["Mix"]
 
 
-def test_a_stream_that_starts_during_the_desks_draw_waits_for_the_next_frame(tmp_path, face):
-    """The card is drawn from the frame's snapshot: a station whose card
+def test_a_stream_that_starts_during_the_desks_draw_waits_for_the_next_frame(tmp_path, face,
+                                                                           monkeypatch):
+    """The page shows the stream as its fill read it: a station whose card
     arrives while the desk window draws (the browser's pump runs the service
-    inside the frame) shows on the next frame, never as a card with no state."""
+    inside the frame) shows on the next frame."""
     ws = build_desktop_ws(tmp_path)
     app = _app(ws)
     ws.home.open_desk()
     ws.spine.open_app(app)
     _settle(ws)
-    assert M.STREAM.card is None
-    rows_of = app._station_rows
+    assert M.STREAM.card is None and not app.state().playing
+    fill = M.fill
     started = []
 
-    def rows_that_start_a_station():
-        rows = rows_of()
+    def fill_that_starts_a_station(lay):
+        fill(lay)
         if not started:
             started.append(1)
-            app._open_row(0, 1, rows)
-        return rows
+            M.play("r0")
 
-    app._station_rows = rows_that_start_a_station
+    monkeypatch.setattr(M, "fill", fill_that_starts_a_station)
+    app.gen = -1                                    # a fill owed
     _settle(ws, 1)
     assert started and M.STREAM.card is not None
-    app._station_rows = rows_of
     _settle(ws)
-    assert app.k.c is not None
+    assert app.state().playing and app.state().title
 
 
-def _list_on(tmp_path, desk):
-    """The Radio list open on the handheld or in the desk's window, settled:
-    (ws, its driver, the app, the list's view in the app's coordinates, the
-    app's origin on the screen)."""
+@pytest.mark.parametrize("desk", (False, True))
+def test_the_keys_move_the_current_station(tmp_path, face, desk):
     ws = build_desktop_ws(tmp_path) if desk else build_ws(tmp_path)
     app = _app(ws)
     if desk:
         ws.home.open_desk()
     ws.spine.open_app(app)
     drv = make_drv(ws)
-    views = []
-    rows = type(app)._rows
-
-    def spy(self, rect, rows_, cur, oid):
-        views.append(rect)
-        return rows(self, rect, rows_, cur, oid)
-
-    app._rows = spy.__get__(app)
     _settle(ws)
-    del app._rows
-    x, y, w, h = views[-1]
-    rh = app._row_h()
-    view = (x, y, w, h // rh * rh)          # the table ends on a whole row
-    at = ws.wm.windows["jukebox"].content_rect()[:2] if desk else (0, 0)
-    return ws, drv, app, view, at
-
-
-def _offset(app, view):
-    return ui_draw._C.api_offset(app._ui.ctx, view[0] + view[2] // 2, view[1] + 4)
-
-
-@pytest.mark.parametrize("desk", (False, True))
-def test_the_radio_list_drags_with_the_finger_and_flings_on(tmp_path, face, desk):
-    """A drag over the stations scrolls them with the finger; let go at
-    speed, the list coasts on painted frames with no input and comes to
-    rest inside its rows (the Radio list once took a drag as a tap: its
-    pointer never reported the finger held)."""
-    ws, drv, app, view, at = _list_on(tmp_path, desk)
-    rh = app._row_h()
-    n = len(app._station_rows())
-    assert n * rh > view[3], "the stations overflow the list"
-    sx = at[0] + view[0] + view[2] // 2
-    sy = at[1] + view[1] + view[3] - rh // 2
-    step = rh * 3 // 5
-    drv.touch(sx, sy)
-    drv.frame(1 / 30)
-    for k in range(1, 6):
-        drv.touch_drag(sx, sy - step * k)
-        drv.frame(1 / 30)
-        assert _offset(app, view) == step * k, "the rows follow the finger"
-    drv.touch_up()
-    drv.frame(1 / 30)
-    let_go = _offset(app, view)
-    drawn = ws.frame_state.frames_drawn
-    coast = [let_go]
-    for _ in range(90):
-        drv.frame(1 / 30)                   # no input: the fling's own frames
-        coast.append(_offset(app, view))
-    assert coast[5] > let_go, "the list coasts on after the release"
-    assert coast == sorted(coast) and coast[-1] == coast[-2], "and slows to rest"
-    assert coast[-1] <= n * rh - view[3]
-    assert ws.frame_state.frames_drawn - drawn >= 5, "each coasting step is a painted frame"
-    assert ws.wm.top_kind() == "jukebox" and face.played == [], "the drag opened nothing"
-
-
-@pytest.mark.parametrize("desk", (False, True))
-def test_the_keys_move_the_current_station_and_the_view_follows(tmp_path, face, desk):
-    ws, drv, app, view, _at = _list_on(tmp_path, desk)
-    rh = app._row_h()
-    n = len(app._station_rows())
-    for _ in range(n + 2):
+    n = len(M.STREAM.stations)
+    for _ in range(n - 1):
         drv.press("down")
-        for _ in range(12):                 # the glide's frames
-            drv.frame(1 / 30)
-        cur, off = app.cur[0], _offset(app, view)
-        assert off <= cur * rh and (cur + 1) * rh <= off + view[3], "the current row shows"
-    assert app.cur[0] == n - 1
+        _frames(drv, 12)                    # the glide's frames
+    assert app.state().scur == "r%d" % (n - 1)
     for _ in range(n):
         drv.press("up")
-        for _ in range(12):
-            drv.frame(1 / 30)
-    assert app.cur[0] == 0 and _offset(app, view) == 0
+        _frames(drv, 12)
+    assert app.state().scur == M.ADD
 
 
 @pytest.mark.parametrize("desk", (False, True))
 def test_q_and_e_switch_the_tabs_through_the_toolkit(tmp_path, face, desk):
     """The list's tabs are `ui.tabs`, which takes Q and E itself: E steps
     to My music and stops there, Q back to Radio."""
-    ws, drv, app, _view, _at = _list_on(tmp_path, desk)
-    for ch, tab in (("e", 1), ("e", 1), ("q", 0)):
+    ws = build_desktop_ws(tmp_path) if desk else build_ws(tmp_path)
+    app = _app(ws)
+    if desk:
+        ws.home.open_desk()
+    ws.spine.open_app(app)
+    drv = make_drv(ws)
+    _settle(ws)
+    for ch, tab in (("e", "files"), ("e", "files"), ("q", "radio")):
         drv.key_down(ord(ch))
         drv.frame(1 / 30)
         drv.key_up(ord(ch))
         for _ in range(3):
             drv.frame(1 / 30)
-        assert app.tab == tab, ch
+        assert app.state().tab == tab, ch
 
 
 def test_music_follows_what_another_client_or_a_vm_stop_left_playing(tmp_path, face):

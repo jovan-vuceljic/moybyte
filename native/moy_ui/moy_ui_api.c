@@ -512,16 +512,17 @@ int mua_gap(int a0, int a1, int b0, int b1) {
     return lo < hi ? 0 : lo - hi;
 }
 
-// The nearest stop from `f` in direction `dir` (an arrow's bit): the least
-// gap along the arrow, then across it, then between the centres.
-static int nearest(const moy_ui_stop_t *v, int n, const moy_ui_stop_t *f, int dir) {
+// The nearest stop from `f` in direction `dir` (an arrow's bit), of page
+// `pg`'s stops (NO_PAGE: any): the least gap along the arrow, then across
+// it, then between the centres.
+static int nearest_of(const moy_ui_stop_t *v, int n, const moy_ui_stop_t *f, int dir, int pg) {
     moy_ui_box_t a = f->b;
     int acx = 2 * a.x + a.w, acy = 2 * a.y + a.h;
     int best = -1;
     int32_t score = INT32_MAX;
     for (int i = 0; i < n; i++) {
         const moy_ui_stop_t *s = &v[i];
-        if ((s->flags & STOP_PAGE) || s->id == f->id) {
+        if ((s->flags & STOP_PAGE) || s->id == f->id || (pg != NO_PAGE && s->page != pg)) {
             continue;
         }
         moy_ui_box_t b = s->b;
@@ -555,6 +556,20 @@ static int nearest(const moy_ui_stop_t *v, int n, const moy_ui_stop_t *f, int di
         }
     }
     return best;
+}
+
+// The stop an arrow steps to from `f`: the nearest of f's page where that
+// one lies out of the page's view (a row scrolled under what borders the
+// page, which the step scrolls in), else the nearest of all.
+static int nearest(const moy_ui_stop_t *v, int n, const moy_ui_stop_t *f, int dir) {
+    if (f->page != NO_PAGE && f->page < n) {
+        int t = nearest_of(v, n, f, dir, f->page);
+        moy_ui_box_t b = t >= 0 ? v[t].b : (moy_ui_box_t){0, 0, 0, 0}, p = v[f->page].b;
+        if (t >= 0 && (b.y < p.y || b.y + b.h > p.y + p.h || b.x < p.x || b.x + b.w > p.x + p.w)) {
+            return t;
+        }
+    }
+    return nearest_of(v, n, f, dir, NO_PAGE);
 }
 
 // The next or previous stop in call order, wrapping.

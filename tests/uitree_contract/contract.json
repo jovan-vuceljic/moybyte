@@ -1280,8 +1280,7 @@
     },
     "look": {
      "type": "word:card",
-     "level": 2,
-     "designed": true
+     "level": 2
     }
    }
   },
@@ -1438,13 +1437,11 @@
     },
     "tag": {
      "type": "tpl",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "tone": {
      "type": "tpl",
-     "level": 1,
-     "designed": true
+     "level": 1
     }
    }
   },
@@ -1539,11 +1536,9 @@
     },
     "icon": {
      "type": "tpl",
-     "level": 2,
-     "designed": true
+     "level": 2
     }
-   },
-   "designed": true
+   }
   },
   "picture": {
    "head": "state",
@@ -1602,6 +1597,10 @@
     },
     "face": {
      "type": "word:ui,title,mono,caption,result",
+     "level": 2
+    },
+    "look": {
+     "type": "word:well",
      "level": 2
     }
    }
@@ -1703,13 +1702,11 @@
     },
     "tag": {
      "type": "tpl",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "tone": {
      "type": "tpl",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "focus": {
      "type": "cond",
@@ -2068,8 +2065,7 @@
     },
     "pad": {
      "type": "int",
-     "level": 2,
-     "designed": true
+     "level": 2
     },
     "group": {
      "type": "tpl",
@@ -2251,6 +2247,10 @@
     "align": {
      "type": "word:start,center,end",
      "level": 1
+    },
+    "rule": {
+     "type": "bool",
+     "level": 2
     }
    }
   },

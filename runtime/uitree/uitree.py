@@ -1972,16 +1972,18 @@ class Node:
 _C = {"shown": "cond"}
 SCHEMA = {
     "page": {"title": "text"},
-    "group": dict(_C, caption="text", close="action0"),
-    "label": dict(_C, text="text", tone="lit", wrap="lit", face="lit", size="lit", icon="text",
+    "group": dict(_C, caption="text", close="action0", look="lit"),
+    "label": dict(_C, text="text", tone="text", wrap="lit", face="lit", size="lit", icon="text",
                   lines="lit", align="lit"),
     "rule": dict(_C),
     "note": dict(_C, icon="text", lines="texts"),
     "bubble": dict(_C, text="text", side="text", head="text", status="text", signal="int", tone="text",
                    max="lit", lines="lit", on="action1", cut="action1"),
     "month": dict(_C, year="int", month="int", today="int", prev="action0", next="action0"),
-    "info": dict(_C, label="text", value="text", icon="text", signal="int"),
-    "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond"),
+    "toast": dict(_C, text="text", icon="text"),
+    "info": dict(_C, label="text", value="text", icon="text", signal="int", tag="text", tone="text"),
+    "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond", tag="text",
+                 tone="text"),
     "button": dict(_C, kind="lit", label="text", icon="text", alone="lit", span="lit", arg="lit",
                    focus="cond", grow="lit", marked="cond", w="int", tone="text"),
     "toggle": dict(_C, label="text", on="action0", focus="cond", hint="text"),
@@ -1995,19 +1997,19 @@ SCHEMA = {
     "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
-                  changed="action1", group="lit"),
+                  changed="action1", group="lit", pad="int"),
     "card": dict(_C, label="text", sub="text", badge="text", image="image", icon="text", tone="text"),
     # G9, G13: a picture of its own (an image state, its fallback icon), a
     # progress bar (max= is required), a page that says why there is nothing
     "picture": dict(_C, image="image", icon="text", side="int", tone="text"),
     "progress": dict(_C, label="text", value="int", max="int", look="lit"),
     "empty": dict(_C, icon="text", title="text", lines="texts"),
-    "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit"),
+    "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit", look="lit"),
     "dialog": dict(_C, title="text", buttons="lit", kind="lit"),
     "popover": dict(_C, anchor="text", w="int", close="action0", wash="lit", at="text"),
     "menu": dict(_C, caption="text"),
     "item": dict(_C, label="text", icon="text", mkind="lit"),
-    "split": dict(_C, dir="choice", sizes="ints", pad="lit", gap="lit", align="lit"),
+    "split": dict(_C, dir="choice", sizes="ints", pad="lit", gap="lit", align="lit", rule="lit"),
     "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit"),
     "panel": dict(_C),
     "canvas": dict(_C, draw="fn", h="lit", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit"),
@@ -2281,7 +2283,9 @@ def text_view(name, **p):
     "cut" or "word", `follow=True` keeps a view at its foot there as lines
     arrive, `syntax=` a terminal's colours ("sgr") or a source's; `face="ui"`
     sets each line as a paragraph of prose in the ui face, half a line
-    between paragraphs (no syntax). A view whose text runs past it is a
+    between paragraphs (no syntax); with `look="well"` its prose lies on a
+    part's well, its paragraphs one under the next, its foot fading where
+    they run on. A view whose text runs past it is a
     stop: the arrows scroll it a line, PgUp and PgDn a page (L7)."""
     where = _caller()
     if p.get("face", "mono") not in ("mono", "ui"):
@@ -2557,6 +2561,13 @@ def cards(model_name, **p):
         raise UIError("N04", "cards paint= is retired (G9)", where=_caller(),
                       fix="give the rows an image field (image pic) and the card image=.pic")
     return _list("cards", model_name, p, _caller())
+
+
+def toast(text, **p):
+    """A toast (§7.2): `text` and its `icon` ("check" where it has none) in
+    a pill over the foot of the page's body, above its docked foot; no stop.
+    It draws over what the page drew before it: declare it after them."""
+    return _node("toast", None, dict(p, text=text), _caller())
 
 
 def picture(image=None, **p):
@@ -3336,7 +3347,7 @@ def _collecting(fn, returns_node):
 NODE_CALLS = ("page", "group", "label", "info", "link", "button", "item", "card", "toggle", "slider",
               "field", "seg", "table", "col", "rows", "cards", "picture", "progress", "empty", "dialog",
               "popover", "menu", "split", "grid", "panel", "canvas", "foot", "scroll", "rule", "note",
-              "bubble", "month", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
+              "bubble", "month", "toast", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
               "legacy")
 DECL_CALLS = ("action", "hook", "labels", "work", "derive", "app")
 COMMAND_CALLS = ("push", "pop", "focus", "after", "post")

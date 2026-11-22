@@ -30,13 +30,13 @@ local KINDS = { page = 1, group = 2, label = 3, info = 4, link = 5, button = 6, 
                 seg = 10, slider = 11, field = 12, empty = 13, progress = 14, text_view = 15, scroll = 16, menu = 17,
                 item = 18, split = 19, switch = 22, case = 23, table = 24, col = 25, foot = 26, popover = 30,
                 canvas = 20, tabs = 21, cards = 27, card = 28, row = 32, panel = 39, rule = 41, note = 42, grid = 43,
-                bubble = 44, month = 45 }
+                bubble = 44, month = 45, toast = 46 }
 local BASE = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = ENUM, rowof = ROWOF, model = MODEL }
 local FIELD = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = TEXT }
 -- a prop whose value is a literal the dump prints as one (its Python repr)
 local LIT = { kind = 1, wrap = 1, face = 1, size = 1, align = 1, alone = 1, span = 1, arg = 1, grow = 1, max = 1,
               secret = 1, commit = 1, look = 1, cur = 1, current = 1, check = 1, follow = 1, filter = 1, dir = 1,
-              icons = 1 }
+              icons = 1, rule = 1 }
 local FIX = "leave it out of the page: the C engine refuses it by name"
 
 local X = nil                   -- the store, made at the first frame
@@ -300,6 +300,7 @@ local SHAPE = {
   rows = { model = true },
   bubble = { last = function(n) return { pair("text", n.a[1]) } end },
   empty = { last = function(n) return { pair("title", n.a[1]) } end },
+  toast = { last = function(n) return { pair("text", n.a[1]) } end },
   note = { takes = { "lines", "icon" }, last = function(n) return { pair("lines", n.o.lines), pair("icon", n.o.icon or "") } end },
   dialog = { takes = { "buttons" }, last = function(n) return { pair("title", n.a[1]) } end },
   progress = { last = function(n) return { pair("value", n.a[1]) } end },

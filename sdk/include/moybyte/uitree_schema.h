@@ -11,7 +11,7 @@ enum {
     UT_ITEM, UT_SPLIT, UT_CANVAS, UT_TABS, UT_SWITCH, UT_CASE, UT_TABLE, UT_COL, UT_FOOT,
     UT_CARDS, UT_CARD, UT_PICTURE, UT_POPOVER, UT_TOOLS, UT_ROW, UT_STATUS, UT_TEXT_EDITOR,
     UT_PANES, UT_PANE, UT_LEGACY, UT_SLOT, UT_PANEL, UT_LENT, UT_RULE, UT_NOTE, UT_GRID,
-    UT_BUBBLE, UT_MONTH,
+    UT_BUBBLE, UT_MONTH, UT_TOAST,
 };
 
 // Each kind's name by its number: an unkeyed node's key is its kind's name and its place.
@@ -20,7 +20,7 @@ static const char *const ut_kind_names_[] = {
     "slider", "field", "empty", "progress", "text_view", "scroll", "menu", "item", "split",
     "canvas", "tabs", "switch", "case", "table", "col", "foot", "cards", "card", "picture",
     "popover", "tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot",
-    "panel", "lent", "rule", "note", "grid", "bubble", "month",
+    "panel", "lent", "rule", "note", "grid", "bubble", "month", "toast",
 };
 
 // A word prop's words (`off` takes the action's: "hide", "grey").
@@ -50,6 +50,7 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_END "end"
 #define UT_LOOK_SHARE "share"
 #define UT_LOOK_COUNT "count"
+#define UT_LOOK_WELL "well"
 #define UT_LOOK_BAR "bar"
 #define UT_LOOK_STEPS "steps"
 #define UT_LOOK_SEG "seg"
@@ -151,6 +152,7 @@ static inline int32_t ut_p_pointer(const char *v) { return ut_prop_("pointer", v
 static inline int32_t ut_p_prev(const char *v) { return ut_prop_("prev", v); }
 static inline int32_t ut_p_reads(const char *v) { return ut_prop_("reads", v); }
 static inline int32_t ut_p_rows(int32_t v) { return ut_prop_int_("rows", v); }
+static inline int32_t ut_p_rule(int v) { return ut_prop_("rule", v ? "True" : "False"); }
 static inline int32_t ut_p_secret(int v) { return ut_prop_("secret", v ? "True" : "False"); }
 static inline int32_t ut_p_shown(const char *v) { return ut_prop_("shown", v); }
 static inline int32_t ut_p_side(const char *v) { return ut_prop_("side", v); }

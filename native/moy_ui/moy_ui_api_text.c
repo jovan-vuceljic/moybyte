@@ -217,7 +217,19 @@ static int32_t text_prose(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
     if (mua_armed(c) && c->sh.in_id == mua_hash(id.p, id.n, TEXT_SALT) && c->fl.stage != 1) {
         moy_ui_api_shift_break(c);
     }
-    int pad = TEXT_PAD * fs, gap = lh / 2;
+    // MOY_UI_TXO_PAPER: the view on a part's well, in from the page's sides and clear of what
+    // follows it, its paragraphs one under the next, its foot fading where they run on
+    int well = opt[MOY_UI_TXO_PAPER] >= 0, desk = c->cls != 0;
+    int pad = TEXT_PAD * fs, gap = lh / 2, in = 0;
+    if (well) {
+        int mx = desk ? 24 : 6 * fs;
+        b.x = (int16_t)(b.x + mx);
+        b.w = (int16_t)(b.w - 2 * mx);
+        b.h = (int16_t)(b.h - (desk ? 8 : 4 * fs));
+        pad = desk ? 8 : 6 * fs;
+        gap = 0;
+        in = pad / 2;
+    }
     moy_ui_box_t tb = {(int16_t)(b.x + pad), 0, (int16_t)(b.w - 2 * pad), 0};
     uint32_t rid = mua_hash(id.p, id.n, TEXT_SALT);
     moy_ui_keep_t *k0 = mua_keep_of(c, rid);
@@ -242,6 +254,7 @@ static int32_t text_prose(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
             }
             content += moy_ui_prose(s, tb, t, MOY_UI_FONT_UI, 0, 0, 0, fs, gnd, 0, NULL);
         }
+        content += 2 * in;
         if (w != NULL) {
             w->gen = gen;
             w->cols = tb.w;
@@ -284,7 +297,7 @@ static int32_t text_prose(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
         mua_floor_add(c, mua_rc_of(b), 1);  // a frame that moves it draws it whole
     }
     // the paragraphs that show: the first, and where it starts
-    int32_t first = 0, y = b.y - scroll;
+    int32_t first = 0, y = b.y + in - scroll;
     for (; first < L->n; first++) {
         size_t n = 0;
         const uint8_t *p = L->get(L->src, first, &n);
@@ -300,6 +313,9 @@ static int32_t text_prose(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
     EACH_ROW(c, kc, s, b, 1, b) {        // its rows clipped to its box
         int32_t at = y;
         shown = 0;
+        if (well) {
+            moy_ui_well(s, b, 0, -1, fs, desk);
+        }
         for (int32_t i = first; i < L->n && at < b.y + b.h; i++, shown++) {
             size_t n = 0;
             const uint8_t *p = L->get(L->src, i, &n);
@@ -308,6 +324,11 @@ static int32_t text_prose(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
             pb.y = (int16_t)at;
             at += moy_ui_prose(s, pb, t, MOY_UI_FONT_UI, 0, b.y, b.y + b.h, fs, gnd, 1, NULL)
                   + gap;
+        }
+        if (well && content - scroll > b.h) {
+            moy_ui_box_t f = {(int16_t)(b.x + 1), (int16_t)(b.y + b.h - 12 * fs), (int16_t)(b.w - 2),
+                              (int16_t)(12 * fs - 1)};
+            moy_ui_fade(s, f, MOY_UI_FADE_WELL, 0, fs, desk);
         }
     }
     out[0] = first < L->n ? first : 0;

@@ -367,9 +367,9 @@ def get_carts_taps(n=3):
     """Where a tap lands on Get Carts' 320x240 handheld pages, as the browser
     draws them: `cards` the centres of the shelf's first `n` cards (in the
     shelf's order, by name), `verb` the cart page's one button (Get) and
-    `agree` the licence page's I agree. The cards are read off the app's own
-    frame, the buttons off its layout; the browser draws in the theme's
-    fonts, which a host workstation installs into this process first."""
+    `agree` the licence page's I agree, each read off the page the app's
+    host draws; the browser draws in the theme's fonts, which a host
+    workstation installs into this process first."""
     import tempfile
     sys.path.insert(0, str(ROOT / "tests"))
     from cart_store_fixtures import MemNet, Repo
@@ -395,8 +395,21 @@ def get_carts_taps(n=3):
             ws.mark_dirty()
             ws.frame(1 / 30)
         assert app.phase == "list" and len(app.rows) == n, app.phase
-        lay = app.layout
-        assert (lay.w, lay.h, lay.fs, lay.desk) == (320, 240, 1, False)
-        cards = [centre(app._ui.box(app._card_id(r))) for r in app.rows]
-        return {"cards": cards, "verb": centre(lay.split_verbs(lay.page_verbs(), 1)[0]),
-                "agree": centre(lay.licence_verbs()[1])}
+        cv = ws.sys_canvas
+        assert (cv.w, cv.h, app.desk) == (320, 240, False)
+        host = app.page_host()
+        cards = [centre(host.box(app._card_id(r))) for r in app.rows]
+
+        def shown(phase):
+            app._go(phase)
+            for _ in range(3):
+                ws.mark_dirty()
+                ws.frame(1 / 30)
+        app.cur = app.rows[0]
+        shown("cart")
+        verb = centre(host.box("get"))
+        app.lic = [{"path": "x", "licence": {"name": "Its licence"}}]
+        shown("licence")
+        agree = centre(host.box("agree"))
+        app.lic = None
+        return {"cards": cards, "verb": verb, "agree": agree}

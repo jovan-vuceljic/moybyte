@@ -911,7 +911,9 @@ enum {
 // face -- each line a paragraph broken at word breaks across the view, its
 // lines a line's pitch apart and paragraphs half a line more; no syntax,
 // caret, selection, gutter or mark; moy_ui_api_text_at, _aim and _reveal
-// answer 0 for it; `top` and `gen` name paragraphs.
+// answer 0 for it; `top` and `gen` name paragraphs. MOY_UI_TXO_PAPER 0 or more
+// lays its prose on a part's well (moy_ui_well), in from the page's sides,
+// its paragraphs one under the next and its foot fading where they run on.
 enum { MOY_UI_TXF_MONO = 0, MOY_UI_TXF_UI = 1 };
 // MOY_UI_TXO_KEYS 1: a view whose rows run past it is a focus stop (no
 // ring): Up and Down scroll it a line while it has rows that way, then step

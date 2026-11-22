@@ -1093,6 +1093,8 @@ static void draw_text_view(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
     opt[MOY_UI_TXO_FACE] = (N->lit & TV_PROSE) ? MOY_UI_TXF_UI : MOY_UI_TXF_MONO;
     opt[MOY_UI_TXO_WRAP] = (N->lit & TV_WRAP) != 0;
     opt[MOY_UI_TXO_FOLLOW] = (N->lit & TV_FOLLOW) != 0;
+    if (N->lit & TV_WELL)
+        opt[MOY_UI_TXO_PAPER] = 0;      // look="well"
     over_for(e, k, model, row, c, &o, id);
     moy_ui_api_text_view(c, s, span_of(id, strlen(id)), &L, opt, NULL, &o, out);
     int32_t box[4];
@@ -1103,6 +1105,8 @@ static void draw_text_view(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
 // A label's rows as the toolkit's labels, drawn; or with `h`, measured (their steps added to *h).
 // A label's rows drawn, or with `h` measured: each row's `part` of the measure (3 its height,
 // 4 how far the stack moves past it) added to *h.
+static uint32_t prop_text(uit_t *e, int k, const char *name, int model, int row, uint32_t *n);
+
 static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row, int32_t *h,
                          int part)
 {
@@ -1114,8 +1118,18 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         if (n)
             moy_ui_api_icon(c, sspan(e, at, n));
     }
+    // tone=: a literal's index, or a template's word (dim, value, danger; another is ink)
+    int tone = N->lit;
+    if (!tone) {
+        uint32_t nt, mark = e->scratch.n, at = prop_text(e, k, "tone", model, row, &nt);
+        static const char *const TONES[] = {"dim", "value", "danger"};
+        for (int i = 0; i < 3 && !tone; i++)
+            if (nt == strlen(TONES[i]) && !memcmp(e->scratch.p + at, TONES[i], nt))
+                tone = i + 1;
+        e->scratch.n = mark;
+    }
     a1 = text(e, k, 0, model, row, &n1);
-    int t = N->nbtn, opts = N->lit || (t & ~LT_CHAR);
+    int t = N->nbtn, opts = tone || (t & ~LT_CHAR);
     int lines = (t & LT_WRAP) == LT_WORD || (t & LT_LINES) ? (N->btn ? N->btn : 16) : 0;
     // wrap="char": lines of what fits the page's width, cut anywhere, each a label
     uint32_t per = 0;
@@ -1141,7 +1155,7 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
             face = -1;
         } else {
             int32_t out[5];
-            moy_ui_api_text(c, lines, (t >> LT_ALIGN_SHIFT) & 7, N->lit, face);
+            moy_ui_api_text(c, lines, (t >> LT_ALIGN_SHIFT) & 7, tone, face);
             moy_ui_over_none(&o);
             moy_ui_api_measure(c, s, MOY_UI_MEASURE_LABEL, sspan(e, a1, n1), &o, out);
             if (out[2] > e->pw - 32)
@@ -1161,7 +1175,7 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         if ((t & LT_WRAP) != LT_CHAR)
             m = n1;
         if (opts)
-            moy_ui_api_text(c, lines, (t >> LT_ALIGN_SHIFT) & 7, N->lit, face);
+            moy_ui_api_text(c, lines, (t >> LT_ALIGN_SHIFT) & 7, tone, face);
         moy_ui_over_none(&o);
         if (h) {
             int32_t out[5];
@@ -1233,20 +1247,26 @@ static int32_t size_of(uit_t *e, int32_t v)
     return (e->flags & UIT_F_DESK) ? v : v * e->fs;
 }
 
-// A card's or a picture's marks (`ui.card`'s o): its icon tile where it names an icon, its tone,
-// the lock where its tone is "locked".
-static void card_mark(uit_t *e, moy_ui_ctx_t *c, const uit_node_t *N, int model, int row)
+static uint32_t prop_text(uit_t *e, int k, const char *name, int model, int row, uint32_t *n);
+static int32_t prop_int(uit_t *e, int k, const char *name, int model, int row);
+
+// A card's or a picture's marks (`ui.card`'s o): its icon tile where it names an icon, its tone
+// (the sub line's ink, the veil a danger tone lays on its picture), the lock where its tone is
+// "locked", a card's badge= icon on its picture's corner.
+static void card_mark(uit_t *e, moy_ui_ctx_t *c, int k, int model, int row)
 {
+    const uit_node_t *N = NODE(k);
     static const char *const TONE_NAMES[] = {"ink", "dim", "value", "danger"};
     uint32_t tn = 0, ta = N->t_aux >= 0 ? uit_tmpl_render(e, N->t_aux, model, row, &tn) : 0;
     int tone = 0, locked = tn == 6 && !memcmp(e->scratch.p + ta, "locked", 6);
     for (int i = 0; i < 4 && tn && !locked; i++)
         if (strlen(TONE_NAMES[i]) == tn && !memcmp(e->scratch.p + ta, TONE_NAMES[i], tn))
             tone = i;
-    if (N->t_icon < 0 && !tn)
+    uint32_t bn = 0, ba = N->kind == UIT_CARD ? prop_text(e, k, "badge", model, row, &bn) : 0;
+    if (N->t_icon < 0 && !tn && !bn)
         return;
     uint32_t in = 0, ia = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &in) : 0;
-    moy_ui_api_card_mark(c, span_of("", 0), locked ? 4 : tone, sspan(e, ia, in));
+    moy_ui_api_card_mark(c, sspan(e, ba, bn), locked ? 4 : tone, sspan(e, ia, in));
 }
 
 // A card of a cards list (`_r_cards`' per row): its id, its marks, its label and sub line.
@@ -1258,7 +1278,7 @@ static void draw_card(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     over_for(e, k, model, row, c, &o, id);
     int32_t pic_gen = 0;        // the card's tile is the engine's alone: no app picture moves it
     moy_ui_over_put(&o, MOY_UI_OV_GEN, &pic_gen);
-    card_mark(e, c, N, model, row);
+    card_mark(e, c, k, model, row);
     uint32_t n1, n2, a1 = text(e, k, 0, model, row, &n1), a2 = text(e, k, 1, model, row, &n2);
     int32_t out[5];
     moy_ui_api_card(c, s, sspan(e, a1, n1), sspan(e, a2, n2), &o, out);
@@ -1282,11 +1302,21 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     KIDS(k, g)
     if (NODE(g)->t_value >= 0)
         subs = 1;
-    int margin = desk ? 16 : 8, foot = desk ? (subs ? 52 : 30) : 26 + (subs ? 6 : 0);
+    int margin = desk ? 16 : 8, foot = desk ? (subs ? 52 : 30) : 26 + (subs ? 6 : 0), cols = 0;
     int32_t w = size_of(e, int_of(e, N->t_value, -1, -1, 0)), h = size_of(e, int_of(e, N->t_aux, -1, -1, 0));
+    int32_t pad = prop_int(e, k, "pad", -1, -1);
+    if (pad > 0) {
+        // pad=: the gap between its cards, a margin of 16 (or the gap, where that is more) at
+        // either side; as many columns as its room holds at that gap, spread across it
+        int32_t gp = size_of(e, pad), room[5];
+        margin = pad > 16 ? pad : 16;
+        moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, room);
+        cols = (int)((room[2] - 2 * margin * e->fs + gp) / (w + gp > 0 ? w + gp : 1));
+        cols = cols < 1 ? 1 : cols;
+    }
     int grid = N->t_main < 0, capped = 0;
     if (grid) {
-        moy_ui_api_grid_spread(c, 0, foot, 4, margin, 2);
+        moy_ui_api_grid_spread(c, cols, foot, 4, margin, 2);
         moy_ui_api_grid(c, s, span_of(key, strlen(key)), w, h, NULL);
     }
     uit_after_removal(e, k);
@@ -1305,7 +1335,7 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
                 uit_buf_printf(&cap, "%.*s", (int)n, e->scratch.p + a);
                 gid.n = 0;
                 uit_buf_printf(&gid, "%s %.*s", key, (int)n, e->scratch.p + a);
-                moy_ui_api_grid_spread(c, 0, foot, 4, margin, 2);
+                moy_ui_api_grid_spread(c, cols, foot, 4, margin, 2);
                 moy_ui_api_grid(c, s, span_of(gid.p, gid.n), w, h, NULL);
                 grid = capped = 1;
             }
@@ -1335,7 +1365,7 @@ static void draw_picture(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
     moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &one);
     moy_ui_api_grid_spread(c, 1, -1, 4, (e->flags & UIT_F_DESK) ? 16 : 8, 0);
     moy_ui_api_grid(c, s, span_of("pic ", 4), side, side, NULL);
-    card_mark(e, c, N, model, row);
+    card_mark(e, c, k, model, row);
     moy_ui_api_card(c, s, span_of("", 0), span_of("", 0), &o, out);
     moy_ui_api_grid(c, s, span_of("", 0), 0, 0, NULL);
 }
@@ -1629,6 +1659,8 @@ static void fit_spans(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, const i
     }
 }
 
+static void fill_token(const moy_ui_sink_t *s, int32_t x, int32_t y, int32_t w, int32_t h, int token);
+
 static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     const uit_node_t *N = NODE(k);
@@ -1652,6 +1684,13 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
     for (int i = 0; i < nk && i < nz; i++) {
         int g = kids[i];
         int32_t sz = i < nk - 1 ? spans[i] : span - at;
+        if (i && (N->lit & SP_RULE)) {
+            int32_t mid = at - gap + gap / 2;
+            if (across)
+                fill_token(s, r[0] + mid, r[1], 1, r[3], MOY_UI_T_BORDER);
+            else
+                fill_token(s, r[0], r[1] + mid, r[2], 1, MOY_UI_T_BORDER);
+        }
         int32_t cell[4] = {across ? r[0] + at : r[0], across ? r[1] : r[1] + at, across ? sz : r[2],
                            across ? r[3] : sz};
         at += sz + gap;
@@ -1682,14 +1721,18 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
             moy_ui_over_put(&go, MOY_UI_OV_GEN, &cg);
         moy_ui_api_scroll(c, s, span_of(sid, strlen(sid)), cg >= 0 ? &go : NULL);
         uint8_t was = e->in_cell;
+        int32_t room[4];
+        memcpy(room, e->rect, sizeof room);
+        memcpy(e->rect, cell, sizeof cell);     // a split in it is laid out in its cell
         e->in_cell = 1;
-        if (across && N->lit == 1) {
+        if (across && (N->lit & SP_ALIGN) == 1) {
             int used = col_h(e, c, s, g, model, row);
             if (used >= 0)
                 moy_ui_api_space(c, (cell[3] - used) / 2);
         }
         walk(e, c, s, g, model, row);
         e->in_cell = was;
+        memcpy(e->rect, room, sizeof room);
         moy_ui_api_end(c, s);
         moy_ui_api_scroll(c, s, span_of("", 0), NULL);
         moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3]);
@@ -1946,7 +1989,7 @@ static int placed_shown(uit_t *e, int k, int model, int row);
 static void stack(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
                   const int32_t r[4]);
 
-// A foot of the end look holding more than labels (a button, a row, a field, a note): its
+// A foot of the end look holding more than labels and buttons (a row, a field, a note): its
 // children stacked by the placed rule, its height theirs.
 static int32_t foot_stacked(uit_t *e, int k)
 {
@@ -1954,7 +1997,7 @@ static int32_t foot_stacked(uit_t *e, int k)
     if (NODE(k)->lit)
         return 0;
     KIDS(k, g) {
-        any |= NODE(g)->kind != UIT_LABEL;
+        any |= NODE(g)->kind != UIT_LABEL && NODE(g)->kind != UIT_BUTTON;
         if (placed_shown(e, g, -1, -1))
             h += fixed_h(e, g);
     }
@@ -1993,6 +2036,63 @@ static int foot_of(uit_t *e)
 
 static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
 
+// A button's kind, the toolkit's: its literal's, or its template's word this frame (normal,
+// primary, tonal, danger; another word normal).
+static int button_kind(uit_t *e, int k, int model, int row)
+{
+    static const char *const KINDS[] = {"normal", "primary", "tonal", "danger"};
+    if (NODE(k)->lit)
+        return NODE(k)->lit;
+    uint32_t n, mark = e->scratch.n, at = prop_text(e, k, "kind", model, row, &n);
+    int kind = 0;
+    for (int i = 1; i < 4 && n; i++)
+        if (n == strlen(KINDS[i]) && !memcmp(e->scratch.p + at, KINDS[i], n))
+            kind = i;
+    e->scratch.n = mark;
+    return kind;
+}
+
+// A button's natural width: its label's with the toolkit's pads (its minimum taken), and its
+// icon's room where it has one beside its label.
+static int32_t button_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+{
+    const uit_node_t *N = NODE(k);
+    uint32_t n, mark = e->scratch.n, a = text(e, k, 0, model, row, &n);
+    int icon = N->t_icon >= 0 || (N->act >= 0 && uit_str(e, e->acts[N->act].icon)[0]);
+    if (N->t_icon >= 0) {
+        uint32_t ni;
+        uit_tmpl_render(e, N->t_icon, model, row, &ni);
+        icon = ni != 0;
+    }
+    int32_t out[5];
+    moy_ui_api_measure(c, s, MOY_UI_MEASURE_BUTTON, sspan(e, a, n), NULL, out);
+    e->scratch.n = mark;
+    if (icon && (N->btn & BT_ALONE))
+        return (e->flags & UIT_F_DESK) ? 36 : 26 * e->fs;
+    return out[2] + (icon ? ((e->flags & UIT_F_DESK) ? 20 : 14 * e->fs) : 0);
+}
+
+// An empty page's line onto `b`, broken at word breaks into lines of its column (the page's
+// width less its margins, at most 420 on the desk), NUL-separated.
+static void empty_line(uit_t *e, const moy_ui_sink_t *s, uit_buf_t *b, const char *p, uint32_t n)
+{
+    int32_t room = e->pw - 32 * e->fs;
+    if ((e->flags & UIT_F_DESK) && room > 420)
+        room = 420;
+    uint32_t start = 0, brk = 0;
+    for (uint32_t i = 0; i <= n; i++) {
+        if (i < n && p[i] != ' ')
+            continue;
+        if (brk > start && moy_ui_role_w(s, MOY_UI_FONT_CAPTION, span_of(p + start, i - start)) > room) {
+            uit_buf_printf(b, "%.*s", (int)(brk - start), p + start);
+            uit_buf_printf(b, "%c", 0);
+            start = brk + 1;
+        }
+        brk = i;
+    }
+    uit_buf_printf(b, "%.*s", (int)(n - start), p + start);
+}
+
 // The page's docked foot (`ui.dock`, on the page's ground), look="share"
 // (`_r_foot`): its buttons share its width, its label a line of its own over
 // them; on a handheld under a rule. A stacked foot's children lead in as
@@ -2022,12 +2122,26 @@ static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
             btn[nb++] = (int16_t)g;
     }
     if (!NODE(k)->lit) {
-        // the end look: its labels before its end
-        int32_t bx = x + w - m;
+        // the end look: its buttons at their natural widths at its end, its labels before them;
+        // on the desk under a rule where it holds buttons
+        int gap = desk ? 8 : 4 * fs;
+        int32_t bw[16], bx = x + w - m;
+        for (int i = 0; i < nb; i++) {
+            bw[i] = button_w(e, c, s, btn[i], model, row);
+            bx -= bw[i] + (i ? gap : 0);
+        }
+        if (nb && desk)
+            fill_token(s, x + m, y, w - 2 * m, 1, MOY_UI_T_BORDER);
+        int32_t lw = bx - (nb ? gap : 0) - x - 26;
         KIDS(k, g)
         if (NODE(g)->kind == UIT_LABEL && uit_shown(e, g, model, row)) {
-            moy_ui_api_at(c, x + 26, by, bx - x - 26 > 0 ? bx - x - 26 : 0, fh);
+            moy_ui_api_at(c, x + 26, by, lw > 0 ? lw : 0, fh);
             label_rows(e, c, s, g, model, row, NULL);
+        }
+        for (int i = 0; i < nb; i++) {
+            moy_ui_api_at(c, bx, by, bw[i], fh);
+            draw(e, c, s, btn[i], model, row);
+            bx += bw[i] + gap;
         }
         return;
     }
@@ -2049,13 +2163,203 @@ static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     }
 }
 
+// -- a row of the page's flow ---------------------------------------------------------------
+//
+// A `ui.row` on a page the toolkit stacks (not a placed one): its children side by side on one
+// row of the stack, as tall as its tallest. A button takes its natural width (unless grow=), a
+// picture its side and its margin, a label after the row's filler its text's width; the filler
+// (a grow= button, else the first other child) takes the width left. A row whose children all
+// take their own widths centres them; pad= sets it in from either side. A group in it is a
+// column, its children one under the next from its cell's top (a button its natural width);
+// every other child is centred down the row.
+
+enum { FLOW_KIDS = 16 };
+static int32_t h_row(const uit_t *e);
+static int32_t len_of(uit_t *e, int t, int model, int row, int32_t dflt);
+
+static int32_t pic_side(uit_t *e, int k, int model, int row)
+{
+    return size_of(e, int_of(e, NODE(k)->t_value, model, row, 64));
+}
+
+static int32_t pic_margin(uit_t *e)
+{
+    return ((e->flags & UIT_F_DESK) ? 16 : 8) * e->fs;
+}
+
+static int flow_shown(uit_t *e, int g, int model, int row)
+{
+    const uit_node_t *G = NODE(g);
+    return uit_shown(e, g, model, row) && G->kind != UIT_DIALOG && G->kind != UIT_POPOVER &&
+           (G->act < 0 || uit_act_can(e, G->act, model, row) || e->acts[G->act].off == 2);
+}
+
+static int32_t col_gap(uit_t *e)
+{
+    return (e->flags & UIT_F_DESK) ? 4 : 2 * e->fs;
+}
+
+static int32_t flow_h(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, int model, int row,
+                      int32_t x, int32_t y, int32_t w);
+
+// A column's height at width `w`: its children's, a small gap between them.
+static int32_t col_h_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
+                        int32_t x, int32_t y, int32_t w)
+{
+    int32_t h = 0;
+    int n = 0;
+    KIDS(k, g)
+    if (flow_shown(e, g, model, row))
+        h += flow_h(e, c, s, g, model, row, x, y, w) + (n++ ? col_gap(e) : 0);
+    return h;
+}
+
+// Child `g`'s height in a cell `w` wide at (x, y).
+static int32_t flow_h(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, int model, int row,
+                      int32_t x, int32_t y, int32_t w)
+{
+    const uit_node_t *G = NODE(g);
+    int32_t out[5], h = 0;
+    uint32_t n, mark = e->scratch.n, a;
+    switch (G->kind) {
+    case UIT_LABEL:
+        moy_ui_api_at(c, x, y, w, 0x3fff);
+        label_rows_m(e, c, s, g, model, row, &h, 3);
+        return h;
+    case UIT_BUTTON:
+        a = text(e, g, 0, model, row, &n);
+        moy_ui_api_at(c, x, y, w, 0);
+        moy_ui_api_measure(c, s, MOY_UI_MEASURE_BUTTON, sspan(e, a, n), NULL, out);
+        e->scratch.n = mark;
+        return out[3] > 0 ? out[3] : ((e->flags & UIT_F_DESK) ? 30 : 20 * e->fs);
+    case UIT_PICTURE:
+        return pic_side(e, g, model, row) + ((e->flags & UIT_F_DESK) ? 6 : 4 * e->fs);
+    case UIT_PROGRESS:
+        moy_ui_api_at(c, x, y, w, 0);
+        moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, out);
+        return out[3];
+    case UIT_GROUP:
+        return col_h_at(e, c, s, g, model, row, x, y, w);
+    }
+    return h_row(e);
+}
+
+static void flow_draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, int model, int row,
+                      const int32_t r[4]);
+
+// A column down `r`: each child its own height, a small gap between.
+static void col_draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
+                     const int32_t r[4])
+{
+    int32_t y = r[1];
+    KIDS(k, g) {
+        if (!flow_shown(e, g, model, row))
+            continue;
+        int32_t h = flow_h(e, c, s, g, model, row, r[0], y, r[2]), cell[4] = {r[0], y, r[2], h};
+        if (NODE(g)->kind == UIT_BUTTON && !(NODE(g)->btn & BT_GROW)) {
+            int32_t bw = button_w(e, c, s, g, model, row);
+            cell[2] = bw < r[2] ? bw : r[2];    // a button its natural width (a grow= one across)
+        }
+        flow_draw(e, c, s, g, model, row, cell);
+        y += h + col_gap(e);
+    }
+}
+
+// Child `g` drawn into its cell `r`.
+static void flow_draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, int model, int row,
+                      const int32_t r[4])
+{
+    int kind = NODE(g)->kind;
+    if (kind == UIT_GROUP) {
+        col_draw(e, c, s, g, model, row, r);
+        return;
+    }
+    if (kind == UIT_PICTURE) {
+        int32_t m = pic_margin(e);
+        moy_ui_api_at(c, r[0] - m, r[1], r[2] + m, r[3]);
+    } else {
+        moy_ui_api_at(c, r[0], r[1], r[2], r[3]);
+    }
+    uint8_t was = e->in_flow;
+    e->in_flow = 1;
+    draw(e, c, s, g, model, row);
+    e->in_flow = was;
+}
+
+static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+{
+    int16_t kids[FLOW_KIDS];
+    int32_t ws[FLOW_KIDS], hs[FLOW_KIDS], out[5];
+    int n = 0, fill = -1, desk = (e->flags & UIT_F_DESK) != 0;
+    KIDS(k, g)
+    if (n < FLOW_KIDS && flow_shown(e, g, model, row))
+        kids[n++] = (int16_t)g;
+    if (!n)
+        return;
+    moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, out);
+    int32_t x = out[0], y = out[1], room = out[2], gap = len_of(e, NODE(k)->t_value, model, row, desk ? 12 : 6 * e->fs);
+    int32_t step_gap = out[4] - out[3] > 0 ? out[4] - out[3] : 0, used = 0;
+    int32_t pad = len_of(e, NODE(k)->t_aux, model, row, 0);     // pad=: in from either side
+    x += pad, room -= 2 * pad;
+    for (int i = 0; i < n; i++) {
+        const uit_node_t *G = NODE(kids[i]);
+        if (G->kind == UIT_BUTTON && (G->btn & BT_GROW))
+            fill = i;
+    }
+    for (int i = 0; i < n && fill < 0; i++)
+        if (NODE(kids[i])->kind != UIT_BUTTON && NODE(kids[i])->kind != UIT_PICTURE)
+            fill = i;
+    for (int i = 0; i < n; i++) {
+        int g = kids[i], kind = NODE(g)->kind;
+        ws[i] = 0;
+        if (i == fill)
+            continue;
+        if (kind == UIT_BUTTON) {
+            ws[i] = button_w(e, c, s, g, model, row);
+        } else if (kind == UIT_PICTURE) {
+            ws[i] = pic_side(e, g, model, row) + pic_margin(e);
+        } else if (kind == UIT_LABEL) {
+            int32_t lw = 0;
+            moy_ui_api_at(c, x, y, room, 0x3fff);
+            label_rows_m(e, c, s, g, model, row, &lw, 2);
+            ws[i] = lw;
+        } else {
+            ws[i] = room / n;
+        }
+        used += ws[i];
+    }
+    used += gap * (n - 1);
+    int32_t at = x;
+    if (fill >= 0)
+        ws[fill] = room - used > 0 ? room - used : 0;
+    else if (used < room)
+        at = x + (room - used) / 2;
+    int32_t rh = 0, cx = at;
+    for (int i = 0; i < n; i++) {
+        int32_t cw = ws[i], px = NODE(kids[i])->kind == UIT_PICTURE ? pic_margin(e) : 0;
+        hs[i] = flow_h(e, c, s, kids[i], model, row, cx + px, y, cw - px);
+        rh = hs[i] > rh ? hs[i] : rh;
+        cx += cw + gap;
+    }
+    cx = at;
+    for (int i = 0; i < n; i++) {
+        int kind = NODE(kids[i])->kind;
+        int32_t px = kind == UIT_PICTURE ? pic_margin(e) : 0;
+        int32_t top = kind == UIT_GROUP || kind == UIT_PICTURE ? y : y + (rh - hs[i]) / 2;
+        int32_t cell[4] = {cx + px, top, ws[i] - px, hs[i]};
+        flow_draw(e, c, s, kids[i], model, row, cell);
+        cx += ws[i] + gap;
+    }
+    moy_ui_api_space(c, rh + step_gap);
+}
+
 // -- a long rows list: the rows in view ------------------------------------------------------
 //
 // A rows list of more than UIT_VROWS_MIN rows stacked on the page or a scroll region itself (its
 // ancestors up to the page, or the nearest scroll, groups and switches; ui.view answers) lays out
 // only the rows the view shows, UIT_VROWS_MARGIN more each side, widened to whole blocks of
 // UIT_VROWS_BLOCK (so a shift frame's stops match the last frame's but where the window crosses a
-// block), and the focused row: every other row is space as tall as it last drew (a row never
+// block), and the focused row with its two neighbours (an arrow's next stop): every other row is space as tall as it last drew (a row never
 // drawn: the height of the first that drew). The rows total is what a whole walk makes where the
 // rows are alike, its stops only the drawn rows'.
 #define UIT_VROWS_MIN 32
@@ -2097,6 +2401,7 @@ static uit_vrows_t *vrows_of(uit_t *e, int k, int n, int w, int fs)
         V->key = hk;
         V->unit = -1;
         V->n = -1;
+        V->focus = -1;
     }
     if (V->n != n || V->w != w || V->fs != fs) {
         if (V->cap < n) {
@@ -2170,9 +2475,13 @@ static int draw_vrows(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         if (sl && f < 0)
             f = uit_row_find(e, N->slot, fid, fn);
     }
+    // ...and its neighbours: a focus an arrow just moved has no name till drawn, so last
+    // frame's focused row stands for it
+    int g = f >= 0 ? f : V->focus < nr ? V->focus : -1;
+    V->focus = f;
     int skip = 0;
     for (int r = next; r < nr; r++) {
-        if ((r < first || r >= last) && r != f) {
+        if ((r < first || r >= last) && r != f && (g < 0 || r < g - 1 || r > g + 1)) {
             skip += h[r] >= 0 ? h[r] : u;
             continue;
         }
@@ -2302,7 +2611,10 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
     switch (N->kind) {
     case UIT_GROUP:
         a1 = text(e, k, 0, model, row, &n1);
-        moy_ui_api_group(c, s, sspan(e, a1, n1), NULL);
+        if (N->lit)
+            moy_ui_api_group_card(c, s);        // look="card": its rows on a card of their own
+        else
+            moy_ui_api_group(c, s, sspan(e, a1, n1), NULL);
         walk(e, c, s, k, model, row);
         moy_ui_api_group(c, s, span_of("", 0), NULL);
         break;
@@ -2329,7 +2641,8 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         }
         if ((N->btn & BT_ALONE) && (N->t_icon >= 0 || (N->act >= 0 && uit_str(e, e->acts[N->act].icon)[0])))
             n1 = 0;                 // its icon alone
-        if (moy_ui_api_button(c, s, sspan(e, a1, n1), N->lit, &o) && uit_act_can(e, N->act, model, row))
+        if (moy_ui_api_button(c, s, sspan(e, a1, n1), button_kind(e, k, model, row), &o) &&
+            uit_act_can(e, N->act, model, row))
             fire(e, N->act, k, model, row, NULL);
         break;
     case UIT_TOGGLE: {
@@ -2459,6 +2772,10 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
     case UIT_TABS:
         draw_tabs(e, c, s, k);
         break;
+    case UIT_ROW:
+        if (!e->placed)                 // a placed page's rows are the placed rule's (`place_at`)
+            draw_flow_row(e, c, s, k, model, row);
+        break;
     case UIT_SWITCH: {
         int cs = uit_case_of(e, k);
         if (cs >= 0)
@@ -2497,8 +2814,21 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         uint32_t ha = uit_tmpl_render(e, N->t_aux, model, row, &hn);
         int32_t hi = (int32_t)strtol(e->scratch.p + ha, NULL, 10);
         a1 = text(e, k, 0, model, row, &n1);
+        // stacked in a split's cell: its label and percent on a line, its bar under them, across
+        // the cell (a flow row's progress too; on the page its stacked row holds them on one)
+        int32_t pv[5], pm[5], pstep = -1;
+        if (e->in_cell && !e->in_flow && moy_ui_api_view(c, pv)) {
+            moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, pm);
+            int32_t gap = pm[4] - pm[3] > 0 ? pm[4] - pm[3] : 0, ph[5];
+            moy_ui_api_at(c, pm[0], pm[1], pm[2], 1);
+            moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, ph);
+            moy_ui_api_at(c, pm[0], pm[1], pm[2], ph[3]);
+            pstep = ph[3] + gap + ((e->flags & UIT_F_DESK) ? 6 : 3 * e->fs);
+        }
         if (!(N->lit & NL_STEPS)) {
             moy_ui_api_progress(c, s, sspan(e, a1, n1), v, hi, NULL);
+            if (pstep >= 0)
+                moy_ui_api_space(c, pstep);
             break;
         }
         // look="count": the label, where there is one, says the count in its own words
@@ -2510,11 +2840,24 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         moy_ui_over_none(&o);
         moy_ui_over_put(&o, MOY_UI_OV_STEPS, &one);
         moy_ui_api_progress(c, s, l, v, hi, &o);
+        if (pstep >= 0)
+            moy_ui_api_space(c, pstep);
         break;
     }
     case UIT_RULE:
         moy_ui_api_rule(c, s);
         break;
+    case UIT_TOAST: {
+        // its pill over the foot of the page's body, clear of its docked foot; its icon, else check
+        uint32_t ni = 0, ai = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &ni) : 0;
+        int32_t out[4], lift = (e->flags & UIT_F_DESK) ? 12 : 6 * e->fs;
+        a1 = text(e, k, 0, model, row, &n1);
+        if (!n1)
+            break;
+        moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3] - lift);
+        moy_ui_api_toast(c, s, sspan(e, a1, n1), sspan(e, ai, ni), 0, out);
+        break;
+    }
     case UIT_BUBBLE:
         draw_bubble(e, c, s, k, model, row);
         break;
@@ -2558,8 +2901,12 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
                 continue;
             if (any++)
                 uit_buf_printf(&lines, "%c", 0);
-            uit_buf_printf(&lines, "%.*s", (int)n, e->scratch.p + at);
+            empty_line(e, s, &lines, e->scratch.p + at, n);
         }
+        // on the desk a sixth of the page down, as its column of words
+        int32_t ev[5];
+        if ((e->flags & UIT_F_DESK) && moy_ui_api_view(c, ev) && ev[0] == 0)
+            moy_ui_api_space(c, e->rect[3] / 6);
         moy_ui_api_empty(c, s, ni ? sspan(e, ai, ni) : span_of("warn", 4), sspan(e, a1, n1),
                          (const uint8_t *)(lines.p ? lines.p : ""), lines.n);
         uit_buf_free(&lines);

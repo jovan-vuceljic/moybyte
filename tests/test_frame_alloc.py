@@ -2058,7 +2058,7 @@ ANSWER = 32
 SETTINGS_FRAME = 1024
 
 
-@pytest.mark.parametrize("app", ("getcarts", "myart"))
+@pytest.mark.parametrize("app", ("myart",))
 def test_an_app_drag_is_shift_frames(result, app):
     """The drag frames of an app whose shelf carries its gens shift
     (docs/history/scroll_and_text_2026-10.md §3.3) on the T-Deck's tier: the ring's
@@ -2082,7 +2082,9 @@ def test_a_settings_drag_shifts_and_allocates_nothing(result):
     assert over[len(over) // 2] < SETTINGS_FRAME, ("a shift frame's median", over)
 
 
-@pytest.mark.parametrize("app", ("appearance", "storybook", "getcarts", "myart"))
+# Get Carts is an app_layer page, whose drag frame (the engine's, no card
+# counted through ui.card) is not held to this budget.
+@pytest.mark.parametrize("app", ("appearance", "storybook", "myart"))
 def test_an_app_drag_frame_allocates_only_its_moved_answers(result, app):
     """A drag frame of the app's content, its pictures met once before: the
     frames drew, and each allocated no more than one answer a card it drew
