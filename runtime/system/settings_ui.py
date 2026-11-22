@@ -14,7 +14,8 @@ in its sub page's frame (`SettingsPages`):
 - Last crash: the kernel's record, the core dump's size with a button that
   clears it where one is in flash, and Back.
 - USB drive: off, what it does and Turn on (and why it did not, where it
-  did not); on, where the card is, how to give it back, and Turn off.
+  did not); on, where the card is, how to give it back, and Turn off, with
+  no Back: the page holds until the drive is off.
 
 The console's services reach the handlers through `SettingsPages`, which
 the hosting console makes; the Bluetooth and USB pages' state is
@@ -273,9 +274,15 @@ def turn_off():
     _sl()._usb.turn_off()
 
 
+def usb_back():
+    ui.pop()
+
+
 ui.hook("usb_poll", usb_poll, takes="arg")
 ui.action("turn_on", "Turn on", turn_on)
 ui.action("turn_off", "Turn off", turn_off)
+# the page holds while the drive is on (SettingsLayer.handle_input), so its back is off then
+ui.action("usb_back", "Back", usb_back, keys=("role:back",), when="!usb_on", off="hide")
 
 
 def usb_page():
