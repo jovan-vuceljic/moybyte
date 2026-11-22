@@ -1361,6 +1361,17 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, 0);     // its front end routes the pointer to it
     if (!strcmp(name, "ground") && kind == UIT_CANVAS)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);     // its front end fills it (a theme role)
+    if (!strcmp(name, "kind") && kind == UIT_BUTTON && strchr(src, '{')) {
+        // a templated kind: its word drawn each frame (another word is normal)
+        int t = uit_tmpl_compile(e, src, model);
+        if (t < 0)
+            return t;
+        if (e->tmpls[t].type == UIT_BOOL || e->tmpls[t].type == UIT_MODEL)
+            return uit_check_fail(e, "T03", UIT_MSG("button kind=%s is a %s, not a text", "%s %s"), src,
+                                  uit_type_name(e->tmpls[t].type));
+        N->lit = 0;
+        return add_prop(e, node, name, src, repr, PK_TMPL, t);
+    }
     if (!strcmp(name, "kind") && kind == UIT_BUTTON) {
         int i = lit_index(src, BKINDS, 6);
         N->lit = (uint8_t)(i < 0 ? 0 : i);

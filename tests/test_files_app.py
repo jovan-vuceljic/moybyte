@@ -624,3 +624,47 @@ def test_the_foot_is_a_bar_with_the_primary_verb_at_its_right(tmp_path):
     assert play[0] < opn[0], "Open, the primary, is right of Play"
     assert files_app.VERBS[-1][0] == "OPEN", "Open, Enter's verb, last"
     assert files_app._ICONS["OPEN"] != "enter"
+
+
+def test_the_verbs_are_icons_at_the_foots_end_each_word_its_tooltip(tmp_path, monkeypatch):
+    """On the desk and the handheld the current row's verbs are icon buttons
+    side by side at the foot's end (look="end", alone=True), Open last
+    against the end; on the desk a mouse resting on one shows its word as
+    the tooltip (moy_ui_api_tip), and nowhere else does."""
+    from array import array
+    from runtime import ui_host
+    for desk in (False, True):
+        if desk:
+            ws = host_app.build_workstation(str(tmp_path / "desk"), sys_size=(1024, 600),
+                                            panel_diagonal_in=7.0, font_scale=1, windowed=True)
+            ws.home.open_desk()
+            ws.spine.open_app(ws.app("files"))
+            drv = host_app.ConsoleDriver(ws)
+            _frames(drv, 4)
+            app = ws.app("files")
+        else:
+            app, drv = _files(_ws(tmp_path / "hand"))
+            _press(drv, "a")
+        host = app.page_host()
+        boxes = [host.box(f) for v, f in files_app.VERBS if host.box(f) is not None]
+        assert len(boxes) >= 2 and boxes[-1] == host.box("v_open")
+        for (x, y, w, h), (x2, y2, _w2, _h2) in zip(boxes, boxes[1:]):
+            assert y == y2 and x + w < x2, boxes
+        assert all(w <= 40 and w <= 2 * h for _x, _y, w, h in boxes), "icons, no words"
+        assert boxes[0][0] > drv.ws.sys_canvas.w // 4 or desk, "at the end, not across the foot"
+    # the sim's hosts deliver no hover to an app page: one is put in as a mouse's
+    x, y, w, h = host.box("v_open")
+    at = [(x + w // 2, y + h // 2)]
+    real = ui_host.AppHost.run
+
+    def run(self, cv, th, rect, a, *args, **kw):
+        if self is host and at[0] is not None and not a[4]:
+            a[2], a[3], a[4] = at[0][0], at[0][1], 1
+        return real(self, cv, th, rect, a, *args, **kw)
+    monkeypatch.setattr(ui_host.AppHost, "run", run)
+    box = array("i", [0] * 4)
+    _frames(drv)
+    assert host.popped(box), "a mouse resting on Open shows its tooltip"
+    at[0] = (x - 200, y - 200)
+    _frames(drv)
+    assert not host.popped(box), "off the button, none"

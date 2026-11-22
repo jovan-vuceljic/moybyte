@@ -291,12 +291,12 @@ def files_page():
             with ui.group(""):
                 _list()
         ui.switch("view", {"places": _places, "files": _hand_list}, shown="!@desk")
-        with ui.foot(look="share", shown="files_shown"):
+        with ui.foot(look="end", shown="files_shown"):
             ui.label("{status}", tone="dim")
             for v, field in VERBS:
                 if v == "OPEN":
-                    ui.button("empty", "danger", icon="trash")
-                ui.button(field, _KINDS.get(v, "normal"), icon=_ICONS[v])
+                    ui.button("empty", "danger", icon="trash", alone=True)
+                ui.button(field, _KINDS.get(v, "normal"), icon=_ICONS[v], alone=True)
         with ui.dialog("Rename", ["cancel", "rename_it"], shown="asking=rename"):
             ui.field("Name", "typed", ListShellApp.RENAME_MAX, on="rename_it")
         with ui.dialog("Empty the Trash?", ["cancel", "empty_it"], kind="danger", shown="asking=empty"):

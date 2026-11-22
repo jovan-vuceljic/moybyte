@@ -1274,10 +1274,12 @@ int32_t moy_ui_api_block_key(moy_ui_inst_t *I,
 // The page's end, after its rows: where they run on below what shows, a
 // fade at the foot of the page, over the hint band's top edge where the
 // page has one; and over everything, the tooltip of a tool a resting
-// pointer is over (ui.tool).
+// pointer is over (ui.tool, moy_ui_api_tip). Inside a nested page it
+// closes that page's parts alone.
 void moy_ui_api_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
 // The page is done, its fades left to ui.end: what it drew is kept for the
-// next frame's plan, as ui.end and the next page keep it.
+// next frame's plan, as ui.end and the next page keep it, and the tooltip a
+// resting pointer earned is drawn over it, as ui.end draws it.
 void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
 // A tool (§1): an icon button in ui.at's rect (else a row of the page),
 // flat but for its marks: the current mark where o->current, the focus mark
@@ -1288,6 +1290,10 @@ void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
 // frame it is activated.
 int moy_ui_api_tool(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t icon,
                     moy_ui_span_t label, const moy_ui_over_t *o);
+// The stop drawn last, where it is the stop of o's id, wears `label` as a
+// tool's tooltip (drawn at ui.end) while a resting pointer is over it on the
+// desk: a button drawn as its icon alone keeps its word this way.
+void moy_ui_api_tip(moy_ui_ctx_t *c, const moy_ui_over_t *o, moy_ui_span_t label);
 // The app's bar (§1): `title` and the tools (`tools` NUL-separated icon slot
 // names -- one that names no icon is a chip of those words, `len` bytes, at most MOY_UI_API_BAR; bit i of `off` the tool i drawn
 // at half strength, which nothing activates) lent to the host's bar for this
