@@ -273,7 +273,7 @@ own widths are centred). `ui.foot()` (the end look) sets its buttons at
 their natural widths at its end with a status label before them;
 `look="share"` shares its width among them. `ui.toast(text, icon=)` is a
 pill over the page above its foot; `ui.group("", look="card")` lays its
-rows on a card; `ui.text_view(..., look="well")` lays its prose on a
+rows on a card (as a split's cell, the cell is the card); `ui.text_view(..., look="well")` lays its prose on a
 well; `ui.cards(..., pad=)` sets the gap its columns are counted at; a
 card's `badge=` marks its picture; a button's `kind=` may be a template;
 `ui.split(..., rule=True)` draws a rule between its cells

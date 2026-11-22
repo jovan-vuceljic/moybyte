@@ -1103,6 +1103,9 @@ void moy_ui_api_grid_spread(moy_ui_ctx_t *c, int cols, int foot, int top, int ma
 // A group with no caption (ui.group's `card`): its rows on its card, from
 // the page's next row, until a group call ends it.
 void moy_ui_api_group_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
+// A card's plate at ui.at's rect, the rows it holds placed on it by the caller
+// (a split's cell of ui.group's `card`): rounded and filled, on the desk a ring.
+void moy_ui_api_card_at(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
 // An empty page's head (ui.empty) at `at`'s rect, else the page's next row:
 // the icon on its disc, the title and the lines (NUL-separated), centred.
 // Its foot's y, where the page's verbs go.

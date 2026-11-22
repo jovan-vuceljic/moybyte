@@ -1138,6 +1138,27 @@ void moy_ui_api_rule(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     }
 }
 
+void moy_ui_api_card_at(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
+    if (!c->has_at) {
+        return;
+    }
+    moy_ui_box_t b = c->at;
+    c->has_at = 0;
+    int flags = mua_ground_of(c) | MOY_UI_CARDED;
+    moy_ui_box_t rows = b, last = b;
+    if (flags & MOY_UI_DESK) {
+        // the ring's foot a pixel under its last row: that row ends a pixel
+        // inside the box, and the sides stop where the foot's corners begin
+        last.h = (int16_t)(b.h - c->fs);
+        rows.h = (int16_t)(last.h - moy_ui_group_r(c->fs));
+    }
+    clip_t k;
+    EACH_PIECE(c, k, s, b) {
+        moy_ui_group_band(s, b, rows, 1, c->fs, flags);
+        moy_ui_group_end(s, b, last, 0, c->fs, flags);
+    }
+}
+
 int moy_ui_api_bar_lent(const moy_ui_ctx_t *c, const char **title, int16_t *slots, int *n,
                         uint32_t *off) {
     if (!c->bar.seen) {

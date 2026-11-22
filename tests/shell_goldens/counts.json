@@ -473,11 +473,11 @@
     "music_desk": [2, 12],
     "music_desk_failed": [2, 16],
     "music_desk_files": [42, 55],
-    "music_desk_menu": [33, 23]
+    "music_desk_menu": [34, 23]
   },
   "p4_1024x600_cs2_fs1_popovers": {
     "desk_window_calc": [2, 10],
-    "popover_battery": [44, 32],
+    "popover_battery": [50, 32],
     "popover_clock": [27, 66],
     "popover_menu": [5, 24],
     "popover_wifi": [28, 39]
@@ -644,8 +644,8 @@
     "web_console": [297, 8]
   },
   "p4_1024x600_fs2_desk_popovers": {
-    "music_desk_menu": [33, 23],
-    "popover_battery": [45, 31],
+    "music_desk_menu": [34, 23],
+    "popover_battery": [51, 31],
     "popover_clock": [6, 53],
     "popover_clock_six": [4, 47],
     "popover_wifi": [29, 38],
@@ -1075,7 +1075,7 @@
     "music_add": [10, 10],
     "music_add_https": [10, 11],
     "music_bar_paused": [0, 0],
-    "music_cc": [69, 29],
+    "music_cc": [85, 29],
     "music_files": [30, 34],
     "music_files_empty": [5, 11],
     "music_files_nosd": [5, 11],
@@ -1099,8 +1099,8 @@
     "status_bar_music": [0, 0],
     "status_battery_charging": [0, 0],
     "status_battery_low": [0, 0],
-    "status_cc": [39, 17],
-    "status_cc_panel": [45, 19],
+    "status_cc": [49, 17],
+    "status_cc_panel": [55, 19],
     "status_cc_scrolled": [36, 16],
     "status_paused_bar": [8, 15],
     "status_vmstop": [4, 5]

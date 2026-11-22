@@ -81,7 +81,7 @@ _CASES = {
 
 def page():
     with ui.page(""):
-        with ui.group("", shown="cc || power"):
+        with ui.group("", shown="cc || power", look="card"):
             ui.info("{battery}", icon="battery", shown="power")
             ui.slider("Volume", "vol", "{vlo}", "{vhi}", look="steps", icon="{vicon}", on="louder")
             ui.slider("Brightness", "bri", "{blo}", "{bhi}", look="steps", icon="spark", on="brighter")

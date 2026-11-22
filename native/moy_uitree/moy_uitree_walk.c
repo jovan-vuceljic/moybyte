@@ -1789,6 +1789,10 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
         }
         char sid[UIT_ID_MAX + 1];
         snprintf(sid, sizeof sid, "split %s %d", uit_str(e, N->key), i);
+        if (NODE(g)->lit) {             // look="card": its card's plate behind the cell
+            moy_ui_api_at(c, cell[0], cell[1], cell[2], cell[3]);
+            moy_ui_api_card_at(c, s);
+        }
         moy_ui_api_at(c, cell[0], cell[1], cell[2], cell[3]);
         int32_t cg = (e->flags & UIT_F_GEN) && e->gen_safe ? uit_cell_gen(e, g) : -1;
         moy_ui_over_t go;           // the region carries a gen of its own, as a cards list's does

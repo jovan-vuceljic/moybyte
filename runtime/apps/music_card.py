@@ -1,7 +1,8 @@
 """Music's status section (runtime/system/status_items.py, SECTION): the
 compact card as a page Music builds. The head -- the art, the title, the
 state line, the chevron -- is one stop that opens the app; the transport sits
-under it on a 1:2:1 + 1 grid; on the desk the volume follows under a rule.
+under it on a 1:2:1 + 1 grid, the two on a card; on the desk the volume
+follows under the card.
 What plays is drawn from the stream (`music_app.STREAM`); the main button's
 icon is this page's state, written on each `item.changed()`."""
 
@@ -10,7 +11,7 @@ import uitree_app
 import music_app as M
 
 H = 84                      # the card at font scale 1: 6 + head 40 + 6 + transport 26 + 6
-H_DESK = 147                # the desk's: 10 + 40 + 10 + 26 + 10 + a rule + 10 + the volume's 30 + 10
+H_DESK = 156                # the desk's: 10 + the card (10 + 40 + 10 + 26 + 10) + 10 + the volume's 30 + 10
 
 s = ui.state(main_icon="pause")
 
@@ -119,12 +120,17 @@ def _card():
 def page():
     with ui.page(""):
         # each split ends in an empty weighted cell: its last fixed cell keeps its whole size
-        with ui.split("col", sizes=(40, 26, "1*"), gap="s", pad="s", shown="!@desk"):
-            _card()
+        with ui.split("col", sizes=(84, "1*"), gap="0", pad="0", shown="!@desk"):
+            with ui.group("", look="card"):
+                with ui.split("col", sizes=(40, 26, "1*"), gap="s", pad="s"):
+                    _card()
+                    ui.label("")
             ui.label("")
-        with ui.split("col", sizes=(40, 26, 1, 30, "1*"), gap="s", pad="s", shown="@desk"):
-            _card()
-            ui.rule()
+        with ui.split("col", sizes=(96, 30, "1*"), gap="s", pad="s", shown="@desk"):
+            with ui.group("", look="card"):
+                with ui.split("col", sizes=(40, 26, "1*"), gap="s", pad="s"):
+                    _card()
+                    ui.label("")
             with ui.split("row", sizes=(32, 38, "1*", 12, 32), gap="0", pad="0"):
                 ui.button("quieter", icon="minus", label="")
                 ui.label("", icon="volume")

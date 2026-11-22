@@ -473,11 +473,11 @@
     "music_desk": "acc858456b7d6d5f3530432862e6fa2b66372096e12c6dfde203d31b7570aedc",
     "music_desk_failed": "046ec5e68272c204eccaec6647be306b7cb0efe61343713c314b559948a9fbf3",
     "music_desk_files": "69173ed54827fd967aa26e700f9ccae8863536019621a5f92dcf1da9d1f5f4c5",
-    "music_desk_menu": "fcc727ca2ddfb93dd13f6b67436c8ed9b47cdcc13e154bf982ea83b3fda72863"
+    "music_desk_menu": "b73626b55fb37e34f2fdf1ed00b0ead0202fc232aa861feecea2862bebff5800"
   },
   "p4_1024x600_cs2_fs1_popovers": {
     "desk_window_calc": "3c9500fd82645d2d4ce0c1abbc4808f96ad80ce3139782c3fbf0a4da3b12d52b",
-    "popover_battery": "4f823188918b1bafeaccdad8bc79e4e10346046e56c57382a62b8202de6113b3",
+    "popover_battery": "6f40a7203aa93d8b3bdeacf679cfa9cf1cd4ee588f55cc07776ffb4012bfee2f",
     "popover_clock": "a7c7e44a63349e96ce3af1f3b5188485f12e8d36f728b1ed386ea1954689237d",
     "popover_menu": "1596a3bf6fecb3199c46f84eb9f768b546724b02de315f3eabbd98e30b6e6a43",
     "popover_wifi": "489fb784be560c22b6dc869e3f4d519ceb62c46b645a21276b5c57557179881f"
@@ -644,8 +644,8 @@
     "web_console": "edd24865bdf5d1608b3832dc51c26c985dc78980432b53dc2d878c2c32388fd8"
   },
   "p4_1024x600_fs2_desk_popovers": {
-    "music_desk_menu": "ee32a0f163a4e6135e2c93a64e1c9f3c61c8f425349a5d1a39ed361cb974ded0",
-    "popover_battery": "52ef88001c47ae549496f72d734840c25438ae225902432897a236ec80b0cce4",
+    "music_desk_menu": "85746e2320145c67a12ed9c08ed91cf004e9c818a7358cfd099ebf69f38621e2",
+    "popover_battery": "9e863e4cb7f36694cb13daf17db22cff1af5dcdfbac58b290c931290dea5a137",
     "popover_clock": "10014e2df78f7277133f2436b5def80adbcb4b8203300e5aecfe91133f64cb8b",
     "popover_clock_six": "2e637c9e4313d0f0c84e02090f37d9890bd255f4be2f155142181f26cc7389f6",
     "popover_wifi": "8be9f714e6edc4627fa6a71d2b6763aab747bdeac3d63f10a0881d3c47716031",
@@ -1075,7 +1075,7 @@
     "music_add": "4c400435b1034ceef997871d7ca0b9b429b40e0dc3ce756a1f8319691fe46681",
     "music_add_https": "d0128ec904f58f5784b2a61be17efdba7d2fa453e9c75f3c20a3bf717d674d8b",
     "music_bar_paused": "7e49c328a068b904188ed94ebb7f8f6f9ba622c58fc272bef77ffab31de79041",
-    "music_cc": "167ef611e348f005b94e492e102c7db091baec13d63046fa30580c858e828b87",
+    "music_cc": "cf47f4a089aa6202442504726c1b584c2d4240fa112d49ebd0d805952fed5092",
     "music_files": "f2af74a02b44d2eb6e879f55656e0d2a5d77bc5dde193aa22a145c3f697f89f0",
     "music_files_empty": "c5c07a1f0b047b6329c2587b8d01f1a71cd7ecb5944b469884f3a5010758e0d5",
     "music_files_nosd": "ad48b9678ef55a904c78164206de168480f64e665610d2d4e12d7b05098d24f6",
@@ -1099,8 +1099,8 @@
     "status_bar_music": "93a69aea8d00be6ce3392f9711c225f9233b7b928159f551a5fe32bbc9b37b55",
     "status_battery_charging": "0e89d596ddde76eb987cc65e651b360c079ba43369ec4e2f063454efb3d15e45",
     "status_battery_low": "25142e3aba79cc12609b804f3f145efdf576f852218e65ebedb2560d952bae87",
-    "status_cc": "3357c181e5d1a9992100f3f459427ded04bf906ddab92ace6fbf39f0150ae514",
-    "status_cc_panel": "a2ccc0ddaab7be5a0b29af2fc3ae65a2801bbd04ed063afabe65ceceea625aae",
+    "status_cc": "b72e6251af4116cf0dde450bb7c09d00e836161361ffae03a2ad78bf68b0fdad",
+    "status_cc_panel": "3bac86dd1fdf273d7fce2be61b02deffaa3444da7b26668f98bf75c9682708f8",
     "status_cc_scrolled": "82c5556bd0283837c796533901f30c8d7ccb2d50edb1af09a9db78de2f5afcc2",
     "status_paused_bar": "9c6a2b9476d27593a9f967da7655f112e97577c923b649d2f4a6c63c86733182",
     "status_vmstop": "eb3d203094437c93edefff17e18dde3a2b813c00bf8e606e0e1d3fc530e92795"
