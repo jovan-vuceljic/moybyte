@@ -90,6 +90,19 @@ def _seed(ws, *names):
 # identity
 # ---------------------------------------------------------------------------
 
+def test_a_game_opened_over_notes_runs_on_its_own_draw(tmp_path):
+    """A run started over Notes' (no exit between them) closes Notes' UI
+    tree: the game's frames are its own `_draw`, never the page's."""
+    ws = build_ws(tmp_path)
+    _ns, drv = _open(ws)
+    assert ws.run.player.tree is not None
+    assert select_on_home(ws, "Star Catcher") is not None
+    ws.open()
+    _frames(drv, 6)
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    assert ws.run.player.tree is None
+
+
 def test_notes_is_the_text_app_and_it_is_an_ordinary_cart(tmp_path):
     ws = build_ws(tmp_path)
     cart = next(c for c in ws.carts.all if c.get("title") == "Notes")

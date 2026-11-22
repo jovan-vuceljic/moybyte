@@ -736,12 +736,7 @@ class Player(PlayerDiag):
         # is the one place every exit path passes -- the tap on X,
         # quit(), a workspace swap, a crash -- so a kid's note is
         # saved by leaving, exactly as a code tab's half-typed Python is.
-        tree, self.tree = self.tree, None
-        if tree is not None:
-            try:
-                tree.close()
-            except Exception:  # noqa: BLE001 -- teardown must never raise
-                pass
+        self._close_tree()
         self._release_editors()
         # A USER APP's crash-guard arming dies with its run. Any STRIKE it took
         # stands -- an exit before the heal is precisely the evidence kept.
@@ -1095,6 +1090,15 @@ class Player(PlayerDiag):
         self._detail = detail
         return False
 
+    def _close_tree(self):
+        """The run's UI tree engine (`player_tree.CartTree`) closed and let go."""
+        tree, self.tree = self.tree, None
+        if tree is not None:
+            try:
+                tree.close()
+            except Exception:  # noqa: BLE001 -- teardown must never raise
+                pass
+
     def _begin_run(self, ws, project, t0):
         """Reset the previous run's world and stamp this run's per-run flags.
         Returns the cart."""
@@ -1115,6 +1119,7 @@ class Player(PlayerDiag):
         self._responsive = False
         self.face.reset()
         self._end_grant()
+        self._close_tree()             # a run over a tree app's: its page goes with it
         self._release_editors()        # a RE-RUN is an exit too: flush, then drop
         self.run.view = None      # the `view(w, h)` verb is per-run (cart_quit
                                        # pattern): a cart re-declares it each start
