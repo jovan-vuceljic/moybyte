@@ -1,8 +1,7 @@
 # Map (grep -n a name to jump there):
 #   _zoom_word                    a zoom as the bar and the seg say it
 #   fill                          the page's states from the layer's fields
-#   build                         the page: the tools, the rail or the desk's row and panel,
-#                                 the view canvas, the popovers, More, the toast
+#   build                         the page: tools, rail or desk row and panel, canvas, popovers
 #   PaintAppLayout                the content rect and the drawing's view in it
 #   PaintAppLayer                 the Paint app: the drawing, its tools and its pages
 #   PaintAppLayer.handle_input    the keys: a popover's the page's, else the drawing's
