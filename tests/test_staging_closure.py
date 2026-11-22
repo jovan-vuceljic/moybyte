@@ -254,10 +254,11 @@ GENERATED = {
     # board's headroom floor -- so a flashed Zero came up an empty console and its
     # carts arrived over a USB cable, or never.
     "zero": {"carts_data", "_ota_build"},
-    # The font set and the console's compiled pages, the modules every console
-    # board generates too (tools/make_font.py module, the board's `font_tier`;
-    # tools/uitree_compile.py --staged).
-    "web": {"fonts_data", "uitree_pages"},
+    # The font set, the console's compiled pages and the UI tree's Lua layer,
+    # the modules every console board generates too (tools/make_font.py
+    # module, the board's `font_tier`; tools/uitree_compile.py --staged;
+    # tools/uitree_lua_freeze.py).
+    "web": {"fonts_data", "uitree_pages", "uitree_lua"},
 }
 
 # Directory-shaped modules: a package staged wholesale rather than file by file.
