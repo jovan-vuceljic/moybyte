@@ -322,6 +322,7 @@ typedef struct {
     int16_t rh;                     // a placed table: its row height as it drew
     uint8_t rest;                   // a page under `follow`: it rests on its foot
     uint8_t cancel;
+    uint32_t thumb;                 // a page or placed table: its thumb as it drew last, 0 none
 } moy_ui_keep_t;
 
 // A snapping page's units as its last pass placed them (moy_ui_ctx_t's

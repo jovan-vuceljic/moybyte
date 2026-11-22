@@ -166,7 +166,8 @@ def test_the_display_kinds_draw_and_letters_and_arrows_fire_their_actions(tmp_pa
 def test_a_lines_view_that_follows_opens_at_its_foot_and_scrolls_a_new_line_in(tmp_path):
     """§7.2 text_view follow=True: the first frame already shows the last
     line (the view is aimed before it draws), and a line that arrives moves
-    the view by one line, the rest of it unchanged."""
+    the view by one line, the rest of it unchanged (its thumb, at the right
+    edge, moves along its track)."""
     import uitree as S
     import uitree_app
     import uitree_kinds as K
@@ -183,7 +184,7 @@ def test_a_lines_view_that_follows_opens_at_its_foot_and_scrolls_a_new_line_in(t
     finally:
         d.actions["opened"].fn = was
     w = fs[0].w * 2
-    rows = [[f.buf[y * w:(y + 1) * w] for y in range(fs[0].h)] for f in (fs[0], fs[-1])]
+    rows = [[f.buf[y * w:(y + 1) * w - 8] for y in range(fs[0].h)] for f in (fs[0], fs[-1])]
     moved = [y for y in range(1, 200) if rows[1][y] != rows[0][y]]
     assert moved, "a new line moves the view"
     step = next(d for d in range(8, 24) if all(rows[1][y] == rows[0][y + d] for y in range(30, 180)))
