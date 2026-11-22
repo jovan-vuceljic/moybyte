@@ -4967,3 +4967,69 @@ int32_t moy_ui_api_scroll(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
     mua_snap_open(c, s, o);
     return 0;
 }
+
+int32_t moy_ui_api_cells(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, int first,
+                         int count, int cols, int side, int gap, int32_t cur, int edge,
+                         const moy_ui_over_t *o, int *picked) {
+    o = mua_over(o);
+    *picked = 0;
+    if (count < 1) {
+        count = 1;
+    }
+    if (cols < 1 || cols > count) {
+        cols = count;
+    }
+    if (side < 1) {
+        side = 1;
+    }
+    int rows = (count + cols - 1) / cols;
+    int stacked;
+    moy_ui_box_t b = mua_place(c, rows * side, &stacked);
+    // the cells centred across the room they were given
+    int gw = cols * side;
+    moy_ui_box_t g = {(int16_t)(b.x + (b.w > gw ? (b.w - gw) / 2 : 0)), b.y, (int16_t)gw,
+                      (int16_t)(rows * side)};
+    int i = cur - first;
+    int r0 = i >= 0 && i < count ? i / cols : -1;
+    // the arrows are its own while they move the current cell: up at the top row, down at the
+    // last, go on to the next stop
+    int flags = STOP_KEEP_LR | STOP_KEEP_UD | (r0 <= 0 ? STOP_AT_TOP : 0)
+                | (r0 < 0 || r0 >= rows - 1 ? STOP_AT_END : 0);
+    uint32_t pid = o->id.p != NULL ? mua_hash(o->id.p, o->id.n, 0) : mua_hash(id.p, id.n, 0);
+    int st = o->disabled == 1 ? 0 : mua_stop(c, pid, g, flags, o->id.p != NULL ? o->id : id);
+    if (st < 0) {
+        st = 0;
+    }
+    if ((st & MOY_UI_ST_FOCUS) && (c->step_x || c->step_y)) {
+        if (i < 0 || i >= count) {
+            i = 0;
+        } else {
+            int x = i % cols + c->step_x, y = i / cols + c->step_y;
+            x = x < 0 ? 0 : x >= cols ? cols - 1 : x;
+            y = y < 0 ? 0 : y >= rows ? rows - 1 : y;
+            i = y * cols + x < count ? y * cols + x : count - 1;
+        }
+        cur = first + i;
+    }
+    if (st & MOY_UI_ST_ACTIVATED) {
+        *picked = 1;            // Enter on it, or a tap on a cell: that cell
+        if (c->tap_x != INT16_MIN) {
+            int x = c->tap_x - g.x, y = c->tap_y - g.y;
+            if (x >= 0 && y >= 0 && x / side < cols && y / side < rows
+                && (y / side) * cols + x / side < count) {
+                cur = first + (y / side) * cols + x / side;
+            } else {
+                *picked = 0;
+            }
+        }
+    }
+    clip_t k;
+    int ring = (mua_mark_flags(st, o) & MOY_UI_F_FOCUS) && moy_ui_sink_marks(s);
+    mua_band_mark(c, b, stacked, 0);
+    EACH_ROW(c, k, s, b, stacked, c->page) {
+        mua_band(c, s, b, stacked);
+        moy_ui_cells_draw(s, g.x, g.y, first, count, cols, side, gap, cur, ring, edge);
+        mua_clip_out(&k);
+    }
+    return cur;
+}

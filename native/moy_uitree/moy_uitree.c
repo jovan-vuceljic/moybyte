@@ -896,7 +896,7 @@ const char *const uit_kind_names[UIT_KINDS] = {"", "page", "group", "label", "in
                                                "table", "col", "foot", "cards", "card", "picture",
                                                "popover", "tools", "row", "status", "text_editor",
                                                "panes", "pane", "legacy", "slot", "panel", "lent",
-                                               "rule", "note", "grid", "bubble", "month", "toast"};
+                                               "rule", "note", "grid", "bubble", "month", "toast", "cells"};
 
 static const char *const TONES[] = {"ink", "dim", "value", "danger"};
 static const char *const BKINDS[] = {"normal", "primary", "tonal", "danger", "toggle", "bar"};   // moy_ui's, then its bar item
@@ -1113,13 +1113,16 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
              ((kind == UIT_INFO || kind == UIT_LINK) &&
               (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
-             (kind == UIT_CARD && !strcmp(name, "badge")) || (kind == UIT_CARDS && !strcmp(name, "pad"))) {
+             (kind == UIT_CARD && !strcmp(name, "badge")) || (kind == UIT_CARDS && !strcmp(name, "pad")) ||
+             (kind == UIT_CELLS && (!strcmp(name, "first") || !strcmp(name, "count") || !strcmp(name, "cols") ||
+                                    !strcmp(name, "side") || !strcmp(name, "gap")))) {
         // templates the draw finds among its props by name (uit_tmpl_prop); signal=, a month's
         // year=, month= and today= and a cards list's pad= ints
         int t = uit_tmpl_compile(e, src, model);
         if (t < 0)
             return t;
-        int ty = e->tmpls[t].type, want_int = !strcmp(name, "signal") || kind == UIT_MONTH || kind == UIT_CARDS;
+        int ty = e->tmpls[t].type, want_int = !strcmp(name, "signal") || kind == UIT_MONTH || kind == UIT_CARDS ||
+                                           kind == UIT_CELLS;
         if (want_int ? ty != UIT_INT && !e->tmpls[t].lit : ty == UIT_BOOL || ty == UIT_MODEL)
             return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not %s", "%s %s %s %s %s"), uit_kind_names[kind],
                                   name, src, uit_type_name(ty), want_int ? "an int" : "a text");
@@ -1480,7 +1483,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         int t = s < 0 ? 0 : e->slots[s].type;
         int ok = kind == UIT_TOGGLE ? t == UIT_BOOL : UIT_IS_LIST(kind) ? t == UIT_MODEL
                  : kind == UIT_TABS ? t == UIT_ENUM
-                 : kind == UIT_SEG ? t == UIT_ENUM || t == UIT_ROWOF : kind == UIT_SLIDER ? t == UIT_INT
+                 : kind == UIT_SEG ? t == UIT_ENUM || t == UIT_ROWOF : kind == UIT_SLIDER || kind == UIT_CELLS ? t == UIT_INT
                  : kind == UIT_FIELD ? t == UIT_TEXT : kind == UIT_TEXT_VIEW ? t == UIT_TEXT || t == UIT_MODEL : 0;
         if (!ok)
             return uit_fail(e, UIT_E_NAME, UIT_MSG("%s bound to %s: no such state of its type", "%s bound to %s"), uit_kind_names[kind], src);
@@ -1526,15 +1529,21 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= name[0] == 'c' ? NL_COMMIT : NL_SECRET;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
-    if ((!strcmp(name, "on") && (kind == UIT_TOGGLE || kind == UIT_SEG || kind == UIT_SLIDER ||
+    if (kind == UIT_CELLS && !strcmp(name, "edge")) {
+        if (!strcmp(src, "True"))
+            N->lit |= NL_EDGE;
+        return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    }
+    if ((!strcmp(name, "on") && (kind == UIT_TOGGLE || kind == UIT_SEG || kind == UIT_SLIDER || kind == UIT_CELLS ||
                                  kind == UIT_FIELD || kind == UIT_TABLE || kind == UIT_TABS || kind == UIT_BUBBLE)) ||
         (!strcmp(name, "changed") && kind == UIT_FIELD) || (!strcmp(name, "cut") && kind == UIT_BUBBLE) ||
         (!strcmp(name, "close") && (kind == UIT_POPOVER || kind == UIT_ROW || kind == UIT_GROUP)) ||
-        (kind == UIT_MONTH && (!strcmp(name, "prev") || !strcmp(name, "next")))) {
-        // on= (and close=, a month's prev=) in `on`; changed= (cut=, next=) in `changed`
+        (kind == UIT_MONTH && (!strcmp(name, "prev") || !strcmp(name, "next"))) ||
+        (kind == UIT_CELLS && !strcmp(name, "pick"))) {
+        // on= (and close=, a month's prev=) in `on`; changed= (cut=, next=, a cells' pick=) in `changed`
         for (int a = 0; a < e->nacts; a++)
             if (!strcmp(uit_str(e, e->acts[a].name), src)) {
-                if (name[0] == 'o' || (name[0] == 'c' && name[1] == 'l') || name[0] == 'p')
+                if (name[0] == 'o' || (name[0] == 'c' && name[1] == 'l') || (name[0] == 'p' && name[1] == 'r'))
                     N->on = (int16_t)a;
                 else
                     N->changed = (int16_t)a;

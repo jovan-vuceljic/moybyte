@@ -2023,6 +2023,8 @@ SCHEMA = {
                    max="lit", lines="lit", on="action1", cut="action1"),
     "month": dict(_C, year="int", month="int", today="int", prev="action0", next="action0"),
     "toast": dict(_C, text="text", icon="text"),
+    "cells": dict(_C, first="int", count="int", cols="int", side="int", gap="int", edge="lit",
+                  on="action0", pick="action0", focus="cond"),
     "info": dict(_C, label="text", value="text", icon="text", signal="int", tag="text", tone="text"),
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond", tag="text",
                  tone="text"),
@@ -2635,6 +2637,17 @@ def toast(text, **p):
     a pill over the foot of the page's body, above its docked foot; no stop.
     It draws over what the page drew before it: declare it after them."""
     return _node("toast", None, dict(p, text=text), _caller())
+
+
+def cells(name, **p):
+    """A palette's colours as square cells (§7.3), a stop bound to int state
+    `name`, the current colour: `count` of them from `first`, `cols` to a
+    row, each a `side` square (desk units) less `gap`, `edge=True` a border
+    round them. The current cell wears the current mark and, focused, the
+    keys' cursor; the arrows move it (on= hears it move), and Enter or a tap
+    on a cell (which moves it there) fires `pick=`."""
+    where = _caller()
+    return _node("cells", _state_name(name, (INT,), "ui.cells", where), p, where)
 
 
 def picture(image=None, **p):
@@ -3441,7 +3454,7 @@ def _collecting(fn, returns_node):
 NODE_CALLS = ("page", "group", "label", "info", "link", "button", "item", "card", "toggle", "slider",
               "field", "seg", "table", "col", "rows", "cards", "picture", "progress", "empty", "dialog",
               "popover", "menu", "split", "grid", "panel", "canvas", "foot", "scroll", "rule", "note",
-              "bubble", "month", "toast", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
+              "bubble", "month", "toast", "cells", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
               "legacy")
 DECL_CALLS = ("action", "hook", "labels", "work", "derive", "app")
 COMMAND_CALLS = ("push", "pop", "focus", "after", "post")

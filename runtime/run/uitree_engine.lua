@@ -31,7 +31,7 @@ local KINDS = { page = 1, group = 2, label = 3, info = 4, link = 5, button = 6, 
                 seg = 10, slider = 11, field = 12, empty = 13, progress = 14, text_view = 15, scroll = 16, menu = 17,
                 item = 18, split = 19, switch = 22, case = 23, table = 24, col = 25, foot = 26, popover = 30,
                 canvas = 20, tabs = 21, cards = 27, card = 28, row = 32, panel = 39, rule = 41, note = 42, grid = 43,
-                bubble = 44, month = 45, toast = 46 }
+                bubble = 44, month = 45, toast = 46, cells = 47 }
 local BASE = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = ENUM, rowof = ROWOF, model = MODEL }
 local FIELD = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = TEXT }
 -- a prop whose value is a literal the dump prints as one (its Python repr)
@@ -276,7 +276,7 @@ local function c_key(n)
   if k == "page" then return "page" end
   if k == "button" or k == "link" then return n.o.arg ~= nil and n.action .. "/" .. tostring(n.o.arg) or n.action end
   if k == "item" or k == "card" then return n.action end
-  if k == "toggle" or k == "slider" or k == "field" or k == "seg" or k == "text_view" or k == "tabs" then return n.a[2] end
+  if k == "toggle" or k == "slider" or k == "field" or k == "seg" or k == "text_view" or k == "tabs" or k == "cells" then return n.a[2] end
   if k == "rows" or k == "table" or k == "cards" then return n.a[1] end
   if k == "switch" then return "switch:" .. n.a[1] end
   if k == "foot" then return "foot" end
@@ -295,6 +295,7 @@ local SHAPE = {
   link = { takes = { "value", "arg" }, last = function(n) return { pair("value", n.o.value or "") } end },
   button = { takes = { "kind" }, last = function(n) return { pair("kind", n.o.kind or "normal") } end },
   toggle = { bind = true, takes = { "label" }, last = function(n) return { pair("label", n.a[1]) } end },
+  cells = { bind = true },
   slider = { bind = true, takes = { "label", "lo", "hi" },
              last = function(n) return { pair("label", n.a[1]), pair("lo", n.o.lo), pair("hi", n.o.hi) } end },
   field = { bind = true, takes = { "label", "max", "commit" },

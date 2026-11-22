@@ -92,7 +92,7 @@ _KINDS = {"page": 1, "group": 2, "label": 3, "info": 4, "link": 5, "button": 6, 
           "cards": 27, "card": 28, "picture": 29, "popover": 30,
           "tools": 31, "row": 32, "status": 33, "text_editor": 34, "panes": 35, "pane": 36,
           "legacy": 37, "slot": 38, "panel": 39, "lent": 40, "rule": 41, "note": 42, "grid": 43,
-          "bubble": 44, "month": 45, "toast": 46}
+          "bubble": 44, "month": 45, "toast": 46, "cells": 47}
 # the placed kinds: a page the engine's layout places holds them (`CEditorPage`)
 _PLACED_KINDS = ("tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot", "panel", "lent")
 _PANE_KINDS = ("panes", "pane")
@@ -100,7 +100,7 @@ _LEGACY_FNS = ("draw", "pointer", "keys", "hints", "gen")
 _HEAD = {"rows": ("model",), "table": ("model",), "cards": ("model",), "dialog": ("buttons",)}
 _KIND_NAMES = dict((v, k) for k, v in _KINDS.items())
 _KIND_NAMES[len(_KINDS) + 1] = "cycle"          # UIT_KINDS: a seg of the cycle look
-_BOUND = ("toggle", "seg", "slider", "field", "text_view", "tabs")       # a two-way control: bound to the state of its key
+_BOUND = ("toggle", "seg", "slider", "field", "text_view", "tabs", "cells")       # a two-way control: bound to the state of its key
 _LIT_ONLY = {"seg": ("values", "words", "model", "labels"), "text_view": ("name",),
              "switch": ("name",), "case": ("v",), "tabs": ("labels", "values")}    # a switch's and a case's: in their keys   # what the Builder keeps beside a node's props
 _TYPED = "typed in field "

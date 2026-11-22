@@ -88,7 +88,7 @@ static int is_stop(int kind)
 {
     return kind == UIT_LINK || kind == UIT_BUTTON || kind == UIT_TOGGLE || kind == UIT_SEG ||
            kind == UIT_SLIDER || kind == UIT_FIELD || kind == UIT_ITEM || kind == UIT_TABS ||
-           kind == UIT_CARD || kind == UIT_BUBBLE;
+           kind == UIT_CARD || kind == UIT_BUBBLE || kind == UIT_CELLS;
 }
 
 // The case child of `k` ("case:VALUE") whose value is v, else its "case:_", else -1.
@@ -1018,6 +1018,10 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
         if (F->kind == UIT_SEG || F->kind == UIT_SLIDER) {
             hint_add(b, "change", 6);
             hint_add(b, "Change", 6);
+        }
+        if (F->kind == UIT_CELLS && F->node >= 0 && NODE(F->node)->changed >= 0) {
+            hint_add(b, "confirm", 7);      // a cells' pick=: Enter takes the cell
+            hint_add(b, "Use", 3);
         }
         if (F->kind == UIT_TOGGLE) {
             int t = F->gen == e->gen && F->node >= 0 ? NODE(F->node)->t_aux : -1;
@@ -3141,6 +3145,36 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
     case UIT_RULE:
         moy_ui_api_rule(c, s);
         break;
+    case UIT_CELLS: {
+        // the palette's colours from first=, count= of them in rows of cols=, each a side=
+        // square (a handheld's at its scale) less gap=; the int it is bound to their current
+        // one, which on= hears move; Enter or a tap on a cell fires pick=
+        int32_t sc = (e->flags & UIT_F_DESK) ? 1 : e->fs;
+        int32_t first = prop_int(e, k, "first", model, row), count = prop_int(e, k, "count", model, row);
+        int32_t cols = prop_int(e, k, "cols", model, row), side = prop_int(e, k, "side", model, row) * sc;
+        int32_t gap = prop_int(e, k, "gap", model, row) * sc, cur = e->slots[N->slot].i;
+        int picked = 0;
+        over_for(e, k, model, row, c, &o, id);
+        moy_ui_over_put(&o, MOY_UI_OV_MARK, &(int32_t){0});    // its mark is the cursor on its cell
+        int32_t got = moy_ui_api_cells(c, s, span_of(id, strlen(id)), first, count ? count : 64,
+                                       cols ? cols : 8, side ? side : 12 * sc, gap, cur,
+                                       (N->lit & NL_EDGE) != 0, &o, &picked);
+        if (got != cur) {
+            char was[16], now[16];
+            uit_set_int(e, N->slot, got);
+            snprintf(was, sizeof was, "%ld", (long)cur);
+            snprintf(now, sizeof now, "%ld", (long)got);
+            uit_buf_t b = {0};
+            const char *key = uit_str(e, N->key);
+            uit_buf_printf(&b, "from cells ");
+            uit_buf_repr(&b, key, strlen(key));
+            wrote(e, k, was, now, b.p, N->on);
+            uit_buf_free(&b);
+        }
+        if (picked && N->changed >= 0 && uit_act_can(e, N->changed, model, row))
+            fire(e, N->changed, k, model, row, NULL);
+        break;
+    }
     case UIT_TOAST: {
         // its pill over the foot of the page's body, clear of its docked foot; its icon, else check
         uint32_t ni = 0, ai = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &ni) : 0;
@@ -4982,7 +5016,7 @@ static int pop_note(uit_t *e, int p)
     KIDS(p, g) {
         int kind = NODE(g)->kind;
         if (kind == UIT_FIELD || kind == UIT_ROWS || kind == UIT_LINK || kind == UIT_BUTTON || kind == UIT_MENU ||
-            kind == UIT_SLIDER || kind == UIT_TOGGLE || kind == UIT_SEG)
+            kind == UIT_SLIDER || kind == UIT_TOGGLE || kind == UIT_SEG || kind == UIT_CELLS)
             return 0;
     }
     return 1;
