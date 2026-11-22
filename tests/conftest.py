@@ -262,6 +262,35 @@ def _console_state_fresh():
     ui_draw.console_reset()
 
 
+# What one test may grow its process's resident memory by. The suite's largest
+# grows it by under 200 MB; a test that keeps every frame it paints (a root
+# buffer is up to 2 MB, a desk paints hundreds) passes 500 MB, and a dozen
+# xdist workers holding that much is more memory than a workstation has.
+_GROWTH_MB = 320
+
+
+def _rss_kb():
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1])
+    except OSError:                     # no procfs: not measured
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _memory_bounded():
+    """A test leaves its process at most _GROWTH_MB larger than it found it."""
+    before = _rss_kb()
+    yield
+    if before is not None:
+        grown = (_rss_kb() - before) // 1024
+        if grown > _GROWTH_MB:
+            pytest.fail("the test grew its process by %d MB (at most %d): what does it "
+                        "keep?" % (grown, _GROWTH_MB), pytrace=False)
+
+
 def pytest_configure(config):
     config.addinivalue_line(
         "markers", "first_run: the test's carts are asked before their first run "

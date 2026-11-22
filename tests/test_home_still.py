@@ -66,6 +66,7 @@ def _home(tmp_path, monkeypatch, bufs, ref, theme=None):
         if bufs > 1:
             root._comp.last = held[-1]
             root._buf[:] = held[-bufs] if len(held) > bufs else held[0]
+        del held[:-bufs]
         return held[-1]
 
     for _ in range(40):

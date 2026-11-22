@@ -3056,8 +3056,11 @@ def _free_heaps(board):
 # (`PauseMenu.prealloc`). What it may take: a layer an idle frame had not
 # minted yet, and the card's own widgets.
 PAUSE_PSRAM_MAX = 160 * 1024
-# What a resume may leave behind in PSRAM, against the run before the menu.
-PAUSE_PSRAM_LEAK_MAX = 4096
+# What a resume may leave behind in PSRAM, against the run before the menu,
+# and the shadow blend's tables (moy_shape.c `lut_get`: 4,096 B and the
+# heap's 4-byte header), minted at a boot's first shadow and kept since
+# 94beb3d51 -- the card's own shadow, when the suite starts at this test.
+PAUSE_PSRAM_LEAK_MAX = 4096 + 4100
 
 
 def _band_light(px, w, h, margin, rows):

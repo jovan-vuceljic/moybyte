@@ -144,6 +144,7 @@ def test_the_recording_indicator_stands_while_a_process_holds_the_microphone():
     now = 5000000
     moy_play.chrome_notice("", "", True, now)
     moy_play.chrome_note("", "", "", 0)
+    moy_play.chrome_toast_arm("", "", "", False, 0)   # an earlier test's, on the real clock
     raw = (ctypes.c_uint16 * (w * h))()
     assert devices.MIC[0] == 0
     assert not moy_play.chrome_overlay_draw(raw, w, h, pal, now)

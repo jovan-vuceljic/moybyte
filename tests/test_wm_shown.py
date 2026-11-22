@@ -49,6 +49,7 @@ def _desk(tmp_path, monkeypatch, bufs, ref, full=False):
             held.append(bytes(root._buf))
             root._comp.last = held[-1]
             root._buf[:] = held[-bufs] if len(held) >= bufs else held[0]
+            del held[:-bufs]
         return True
     held.append(bytes(root._buf))
     app.tool = paint_app.BRUSH
