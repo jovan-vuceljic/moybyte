@@ -11,7 +11,7 @@ enum {
     UT_ITEM, UT_SPLIT, UT_CANVAS, UT_TABS, UT_SWITCH, UT_CASE, UT_TABLE, UT_COL, UT_FOOT,
     UT_CARDS, UT_CARD, UT_PICTURE, UT_POPOVER, UT_TOOLS, UT_ROW, UT_STATUS, UT_TEXT_EDITOR,
     UT_PANES, UT_PANE, UT_LEGACY, UT_SLOT, UT_PANEL, UT_LENT, UT_RULE, UT_NOTE, UT_GRID,
-    UT_BUBBLE,
+    UT_BUBBLE, UT_MONTH,
 };
 
 // Each kind's name by its number: an unkeyed node's key is its kind's name and its place.
@@ -20,7 +20,7 @@ static const char *const ut_kind_names_[] = {
     "slider", "field", "empty", "progress", "text_view", "scroll", "menu", "item", "split",
     "canvas", "tabs", "switch", "case", "table", "col", "foot", "cards", "card", "picture",
     "popover", "tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot",
-    "panel", "lent", "rule", "note", "grid", "bubble",
+    "panel", "lent", "rule", "note", "grid", "bubble", "month",
 };
 
 // A word prop's words (`off` takes the action's: "hide", "grey").
@@ -139,7 +139,7 @@ static inline int32_t ut_p_max(int32_t v) { return ut_prop_int_("max", v); }
 static inline int32_t ut_p_mid(int v) { return ut_prop_("mid", v ? "True" : "False"); }
 static inline int32_t ut_p_min(const char *v) { return ut_prop_("min", v); }
 static inline int32_t ut_p_mkind(const char *v) { return ut_prop_("mkind", v); }
-static inline int32_t ut_p_month(const char *v) { return ut_prop_("month", v); }
+static inline int32_t ut_p_month(int32_t v) { return ut_prop_int_("month", v); }
 static inline int32_t ut_p_nav(const char *v) { return ut_prop_("nav", v); }
 static inline int32_t ut_p_new(const char *v) { return ut_prop_("new", v); }
 static inline int32_t ut_p_next(const char *v) { return ut_prop_("next", v); }
@@ -169,7 +169,7 @@ static inline int32_t ut_p_tabs(const char *v) { return ut_prop_("tabs", v); }
 static inline int32_t ut_p_tag(const char *v) { return ut_prop_("tag", v); }
 static inline int32_t ut_p_text(const char *v) { return ut_prop_("text", v); }
 static inline int32_t ut_p_title(const char *v) { return ut_prop_("title", v); }
-static inline int32_t ut_p_today(const char *v) { return ut_prop_("today", v); }
+static inline int32_t ut_p_today(int32_t v) { return ut_prop_int_("today", v); }
 static inline int32_t ut_p_tone(const char *v) { return ut_prop_("tone", v); }
 static inline int32_t ut_p_unit(const char *v) { return ut_prop_("unit", v); }
 static inline int32_t ut_p_value(const char *v) { return ut_prop_("value", v); }
@@ -177,6 +177,6 @@ static inline int32_t ut_p_w(int32_t v) { return ut_prop_int_("w", v); }
 static inline int32_t ut_p_wash(const char *v) { return ut_prop_("wash", v); }
 static inline int32_t ut_p_when(const char *v) { return ut_prop_("when", v); }
 static inline int32_t ut_p_wrap(const char *v) { return ut_prop_("wrap", v); }
-static inline int32_t ut_p_year(const char *v) { return ut_prop_("year", v); }
+static inline int32_t ut_p_year(int32_t v) { return ut_prop_int_("year", v); }
 
 #endif

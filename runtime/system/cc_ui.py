@@ -1,9 +1,11 @@
 """The status items' rows as a page (`popover.ControlCenter`,
-`popover.StatusMenu`): on a handheld the control center -- the console's
-group (Volume, Brightness, Wi-Fi), then each app's rows in a group under
-its app's name, in the bar's order; on the desk one item's menu, its rows
-alone. An item's rows are its panel (`status_items.Panel`, one model a
-slot); a bare item lists one row, Open, which opens its app."""
+`popover.StatusMenu`, `popover.PowerRows`): on a handheld the control
+center -- the console's group (Volume, Brightness, Wi-Fi), then each app's
+rows in a group under its app's name, in the bar's order; on the desk one
+item's menu, its rows alone, and the battery's popover, the console's group
+with the battery's line in place of Wi-Fi. An item's rows are its panel
+(`status_items.Panel`, one model a slot); a bare item lists one row, Open,
+which opens its app."""
 
 import uitree as ui
 import uitree_app
@@ -14,7 +16,7 @@ KINDS = ("text", "button", "toggle", "slider")      # status_items' row kinds, i
 
 _ROW = ui.model(key="id", id="", kind=ui.enum(*KINDS, init="text"), label="", value="", flag=False, v=0,
                 lo=0, hi=1)
-_decl = dict(cc=True, vol=0, vlo=0, vhi=1, vicon="volume", bri=0, blo=0, bhi=1,
+_decl = dict(cc=True, power=False, battery="Battery", vol=0, vlo=0, vhi=1, vicon="volume", bri=0, blo=0, bhi=1,
              wicon="wifi", net="Off")
 for _k in range(CAP):
     _decl["app%d" % _k] = ""
@@ -62,10 +64,11 @@ _CASES = {
 
 def page():
     with ui.page(""):
-        with ui.group("", shown="cc"):
+        with ui.group("", shown="cc || power"):
+            ui.info("{battery}", icon="battery", shown="power")
             ui.slider("Volume", "vol", "{vlo}", "{vhi}", look="steps", icon="{vicon}", on="louder")
             ui.slider("Brightness", "bri", "{blo}", "{bhi}", look="steps", icon="spark", on="brighter")
-            ui.link("wifi", "{net}", icon="{wicon}")
+            ui.link("wifi", "{net}", icon="{wicon}", shown="cc")
         for k in range(CAP):
             with ui.group("{app%d}" % k, shown="on%d" % k):
                 ui.rows("r%d" % k, by="kind", cases=_CASES)

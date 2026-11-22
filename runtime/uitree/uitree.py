@@ -771,8 +771,12 @@ class State:
         old = self._v[k]
         if type(val) is type(old) and type(val) in _SAME_OK and val == old:
             return                      # the value it holds, checked when it was written: a poll's read, no string made
-        new = _check(self._t[k], val, "s." + k)
-        if new == old and not isinstance(self._t[k], Model):
+        t = self._t[k]
+        if t is INT and type(val) is int or t is BOOL and type(val) is bool or t is TEXT and type(val) is str:
+            new = val                   # a plain value of its type: no name made for an error
+        else:
+            new = _check(t, val, "s." + k)
+        if new == old and not isinstance(t, Model):
             return
         self._v[k] = new
         self._ver[k] += 1
@@ -1935,6 +1939,7 @@ SCHEMA = {
     "note": dict(_C, icon="text", lines="texts"),
     "bubble": dict(_C, text="text", side="text", head="text", status="text", signal="int", tone="text",
                    max="lit", lines="lit", on="action1", cut="action1"),
+    "month": dict(_C, year="int", month="int", today="int", prev="action0", next="action0"),
     "info": dict(_C, label="text", value="text", icon="text", signal="int"),
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond"),
     "button": dict(_C, kind="lit", label="text", icon="text", alone="lit", span="lit", arg="lit",
@@ -2498,6 +2503,13 @@ def bubble(text, **p):
     text may take (1 the whole), `lines` at most that many; a press fires
     on=, or cut= where its text was cut."""
     return _node("bubble", None, dict(p, text=text), _caller())
+
+
+def month(**p):
+    """A month's calendar (§7.2): `year` and `month` (1-12) ints, `today`
+    the day marked (0 none); on the desk and under touch its head's
+    chevrons fire `prev` and `next`. Not a stop."""
+    return _node("month", None, p, _caller())
 
 
 def cards(model_name, **p):
@@ -3284,7 +3296,7 @@ def _collecting(fn, returns_node):
 NODE_CALLS = ("page", "group", "label", "info", "link", "button", "item", "card", "toggle", "slider",
               "field", "seg", "table", "col", "rows", "cards", "picture", "progress", "empty", "dialog",
               "popover", "menu", "split", "grid", "panel", "canvas", "foot", "scroll", "rule", "note",
-              "bubble", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
+              "bubble", "month", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
               "legacy")
 DECL_CALLS = ("action", "hook", "labels", "work", "derive", "app")
 COMMAND_CALLS = ("push", "pop", "focus", "after", "post")

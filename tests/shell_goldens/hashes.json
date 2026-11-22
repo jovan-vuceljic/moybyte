@@ -477,8 +477,8 @@
   },
   "p4_1024x600_cs2_fs1_popovers": {
     "desk_window_calc": "30e7448a0f2cbdf4f3cebfd3eadf1bec20e31f2d3256c6d178f3bd6f455ca418",
-    "popover_battery": "13a4fcd9f437fc10cf6de3d53f70a3cb695b6b993f9e8a04b3930edc152864c9",
-    "popover_clock": "88f7cfde6cd4a3485cd2d867770bc80f0943babeab14c9808db4b33bb80ffd56",
+    "popover_battery": "4be796c1f6b89b5a17716d5834fcf03db4f177d47d6f861aa97b96a658be3e9a",
+    "popover_clock": "c9d87a2ae014972da63375cdfa00e13d615d5c0eb945eec126c7155de20813a1",
     "popover_menu": "07e03280c39cbf645c3a998e8c9f30612eb2cf50c81a783bb3c3c045f5cc90eb",
     "popover_wifi": "32cf70f5b3b78b3f1ebe580ea3bdad4a6a69b1f6ef7fe7cd1c33a87547aa1bb9"
   },
@@ -645,11 +645,11 @@
   },
   "p4_1024x600_fs2_desk_popovers": {
     "music_desk_menu": "59dd70ca684ba44c107acc0241e06b9fe8573c2fef0c4feb28d1eb529b519062",
-    "popover_battery": "29d8e9450753665653df4ac5be59343ae5b7288b919e1ad9f392c4133bb4a289",
-    "popover_clock": "379aaa7167ae4c8db8d2ed8b08cd1da8affa9d23c3a080ad37359213e8d8148c",
-    "popover_clock_six": "667e3199f8e9da903c5324384eb15a605c36ba56f820331d6ec5afba40f9dab1",
-    "popover_wifi": "1451b921499841b67c12a54c5762159a93738d2a458ddc6a9152f6ff64042eff",
-    "popover_wifi_many": "777f02bd397af2797a09d729c60b85b70a31f442c6b2cce71b1bac0ef92d4277",
+    "popover_battery": "5b85dbaeacc447eaf716ca84cb44f65809564e45693a1145b52f3a93eeb9c2dc",
+    "popover_clock": "10014e2df78f7277133f2436b5def80adbcb4b8203300e5aecfe91133f64cb8b",
+    "popover_clock_six": "91757f39198315d70298ff75d9e8f542338fbe7d4fdc86c66216f20e00522932",
+    "popover_wifi": "fafa98d7510d15ae301d7f5bdc58aaf97a3b43d91ded0bbd4caf14eec20639ff",
+    "popover_wifi_many": "73d93990d2958d41c1d0b3190ee5dd96c534b3b81da907839c2add2986ede69c",
     "status_desk_panel": "924d6da4d7fa1e6efa43e6a617863d9b5d50522db5a1c2c7df2b436f0e7f3513",
     "status_desk_panel_full": "569ff77cba73e280ace6d97a6dbf149a1dd9d01663ea37f5c0ccdf5103367759"
   },

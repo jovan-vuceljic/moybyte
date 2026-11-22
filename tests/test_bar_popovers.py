@@ -9,8 +9,13 @@ test_status_items.py's."""
 
 import pytest
 
-from runtime.popover import shift_month
 from ws_helpers import build_desktop_ws, build_ws, make_drv
+
+
+def shift_month(y, m, n):
+    """(year, month) `n` months after month `m` of year `y`."""
+    k = y * 12 + (m - 1) + n
+    return k // 12, k % 12 + 1
 
 
 def _desk(tmp_path):
@@ -65,7 +70,7 @@ def _this_month(ws):
 
 def _box(ws, key):
     """The rect of the open popover's row `key` ("volume", "brightness")."""
-    return ws.sysmenu.comp.host.box({"volume": "Volume", "brightness": "Brightness"}[key])
+    return ws.sysmenu.comp.host.box({"volume": "vol", "brightness": "bri"}[key])
 
 
 def _chevrons(ws, drv):
