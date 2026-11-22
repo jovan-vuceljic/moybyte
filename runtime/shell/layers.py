@@ -103,6 +103,11 @@ class Layer:
         """The AppHost the surface's page draws through, or None."""
         return None
 
+    def lent_ctx(self):
+        """The ui context whose `ui.bar` lends the surface's bar, or None."""
+        h = self.ui_host()
+        return None if h is None else h.ctx
+
     def typing(self):
         """Whether the surface takes typed bytes: by default, a field focused
         on its page (`ui_draw.app_typing`)."""

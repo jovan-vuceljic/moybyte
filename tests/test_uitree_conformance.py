@@ -37,9 +37,6 @@ LUA_SCALE = ("the Lua half is an app cart, and an app cart's desk window (every 
              "rect 22 px narrower, where the Python half is a system app's window at the desk's scale 2; the "
              "spec's sizes scale with the text scale (§15): the spec sides with Python; the console's app "
              "window, not the engine (open)")
-BAR_AND_BAND = ("the bar's title (the Python app's is empty, the Lua cart's is its manifest title) and "
-                "the hints band (Python draws the engine's control hints, Lua none for a toggle or a "
-                "link): F-38 leaves the control hints open; the bar's title is the app declaration's (§19.1)")
 # The trace lines the two layers still spell apart, each an open item or a
 # Python gap: the Lua trace is held to the reference with these taken out.
 TRACE_OPEN = (
@@ -78,7 +75,6 @@ KNOWN = {
 }
 for _n in NAMES:
     KNOWN[("content", _n, DESK)] = LUA_SCALE
-    KNOWN[("glass", _n, SMALL)] = BAR_AND_BAND
     KNOWN[("glass", _n, DESK)] = LUA_SCALE
 
 

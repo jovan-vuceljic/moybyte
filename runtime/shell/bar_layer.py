@@ -1824,8 +1824,7 @@ class BarLayer:
             return ws.run.player.face.bar_ctx()
         if where == "app":
             app = ws.app(ws.wm.top_kind())
-            host = getattr(app, "_ui", None) if getattr(app, "UI", False) else None
-            return getattr(host, "ctx", None)
+            return app.lent_ctx() if getattr(app, "UI", False) else None
         return None
 
     def lent(self, where):

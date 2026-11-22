@@ -423,6 +423,9 @@ class App(AppLayer):
     def handle_pointer(self, px, py, click):
         return self.engine.point(px, py, click)
 
+    def lent_ctx(self):
+        return self.engine._ui.ctx
+
     def moved(self):
         """The page owes a frame (its band drawn before its focus landed): a
         window behind draws it again too."""
