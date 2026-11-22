@@ -2055,7 +2055,7 @@ static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
 // ancestors up to the page, or the nearest scroll, groups and switches; ui.view answers) lays out
 // only the rows the view shows, UIT_VROWS_MARGIN more each side, widened to whole blocks of
 // UIT_VROWS_BLOCK (so a shift frame's stops match the last frame's but where the window crosses a
-// block), and the focused row: every other row is space as tall as it last drew (a row never
+// block), and the focused row with its two neighbours (an arrow's next stop): every other row is space as tall as it last drew (a row never
 // drawn: the height of the first that drew). The rows total is what a whole walk makes where the
 // rows are alike, its stops only the drawn rows'.
 #define UIT_VROWS_MIN 32
@@ -2097,6 +2097,7 @@ static uit_vrows_t *vrows_of(uit_t *e, int k, int n, int w, int fs)
         V->key = hk;
         V->unit = -1;
         V->n = -1;
+        V->focus = -1;
     }
     if (V->n != n || V->w != w || V->fs != fs) {
         if (V->cap < n) {
@@ -2170,9 +2171,13 @@ static int draw_vrows(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         if (sl && f < 0)
             f = uit_row_find(e, N->slot, fid, fn);
     }
+    // ...and its neighbours: a focus an arrow just moved has no name till drawn, so last
+    // frame's focused row stands for it
+    int g = f >= 0 ? f : V->focus < nr ? V->focus : -1;
+    V->focus = f;
     int skip = 0;
     for (int r = next; r < nr; r++) {
-        if ((r < first || r >= last) && r != f) {
+        if ((r < first || r >= last) && r != f && (g < 0 || r < g - 1 || r > g + 1)) {
             skip += h[r] >= 0 ? h[r] : u;
             continue;
         }

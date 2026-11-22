@@ -274,6 +274,7 @@ typedef struct {
     int32_t n;                  // its rows when the heights were made
     int16_t w, unit;
     uint8_t fs;
+    int32_t focus;              // the focused row it drew last frame, -1 none
     int16_t *h;
     int cap;
 } uit_vrows_t;

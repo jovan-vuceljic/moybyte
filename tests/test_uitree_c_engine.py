@@ -285,3 +285,53 @@ def test_a_long_list_in_a_scroll_region_takes_focus_and_taps_to_its_last_row(tmp
     taps = _long(tmp_path, "taps", 200, ["swipe:-300", "f:20"] * 50 + ["tap:r199/go"], app=SCROLLED,
                  seen=seen)
     assert taps[-1].state.split()[-1] == "r199", (taps[-1].state, seen)
+
+
+TABBED = '''
+import uitree as ui
+
+s = ui.state(tab=ui.enum("a", "b", init="a"), items=ui.model(key="k", k="", name=""),
+             cur=ui.row_of("items"), got="")
+ui.labels("TABS", {"a": "One", "b": "Two"})
+
+
+def opened():
+    s.items = [{"k": "r%d" % i, "name": "Item %d" % i} for i in range(@N@)]
+
+
+def go(row):
+    s.got = row.k
+
+
+ui.hook("opened", opened)
+ui.action("go", "Open", go, takes="row")
+
+
+def build():
+    with ui.page(""):
+        ui.tabs("tab", labels="TABS")
+        with ui.scroll("view"):
+            with ui.rows("items", cur="cur"):
+                ui.link("go", "{.name}")
+'''
+
+
+@pytest.mark.parametrize("n", (12, 60))
+def test_up_walks_the_rows_of_a_scroll_under_tabs_one_press_each(tmp_path, n):
+    """Rows in a scroll under tabs: Down walks to the last row, then Up
+    walks every row back in one press each, scrolling each into view, and
+    only the press past the first row reaches the tabs."""
+    script = ["k:down"] * n + ["k:up"] * n
+    frames = _long(tmp_path, "tabbed", n, script, app=TABBED)
+    keys = [f.state.split()[0] for f in frames]
+    assert keys[n] == "r%d/go" % (n - 1), keys
+    ups = keys[n + 1:]
+    assert ups == ["r%d/go" % i for i in range(n - 2, -1, -1)] + ["tab"], ups
+
+
+def test_up_from_a_row_scrolled_away_from_the_view_takes_its_neighbour(tmp_path):
+    """The focused row of a long list keeps its neighbours drawn when a
+    swipe scrolls the view away from it, so Up lands on the row above."""
+    script = ["k:down"] * 60 + ["swipe:300", "f:20", "swipe:300", "f:20", "k:up"]
+    frames = _long(tmp_path, "away", 60, script, app=TABBED)
+    assert frames[-1].state.split()[0] == "r58/go", [f.state for f in frames[-6:]]
