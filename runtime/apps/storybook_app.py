@@ -5,7 +5,10 @@
 #   Frames                      slides drawn once into layers, kept by what they show
 #   fill                        the page's states from the layer's fields
 #   build                       the page: the stories' cards, a story's view, the dialogs
-#   _deck, _slide, _pictures    the desk editor's pages; _fill_editor their states
+#   _deck                       the desk editor's sorter
+#   _slide                      a slide: its tools, the column, the pasteboard, the panel
+#   _pictures                   Add a picture
+#   _fill_editor                the editor's states from the layer's fields
 #   StorybookAppLayer           the app: the store, Present, the editor's keys
 #   StorybookAppLayer._present  Present: the slide alone, its taps and transitions
 """Storybook -- the kids' slides app (docs/media/look_2026-10/APPS_RESTYLE.md,
@@ -68,6 +71,7 @@ STRIPS = ("none",) + tuple("c%d" % i for i in range(16))     # a text's strip be
 POINTS = ("r", "l", "ur", "ul")                             # a line's way: right, left, up right, up left
 SCALE_KEYS = ("s0", "s1", "s2", "s3", "s4")                 # a picture's size, story_doc.SCALES
 EDITOR = ("deck", "slide", "pictures")     # the desk editor's pages (runtime/apps/story_edit.py)
+BANDED = ("deck", "slide")                  # ...those whose desk window shows the hints band
 
 
 def dot():
@@ -1694,7 +1698,7 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is
             self.engine.run(fill, self, action="fill")
             ui.commit(self.engine)
         # a desk window's band says the editor's keys; the stories' page has none
-        self.engine.band = not self.desk or self.page in ("deck", "slide")
+        self.engine.band = not self.desk or self.page in BANDED
         super().draw(dt)
         if self.page == "view" and self.story is not None:
             if _v.bar(self.story.title() or "Untitled", ("play",), (), True) == 0:
