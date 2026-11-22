@@ -754,38 +754,31 @@ class PaintDraw:
 
     # -- the pages ----------------------------------------------------------------------
 
-    def _game_page(self, cv):
+    def _send_page(self, cv, th, dt):
+        """Put in a game or Put in a story over the drawing, its answer a
+        toast over the canvas."""
         lay = self.layout
-        self._lend("Put in a game", (), (), True)
-        if self.game is None:
-            self.page = None
+        game = self.page == "game"
+        self._lend("Put in a game" if game else "Put in a story", (), (), True)
+        send = self._sent()
+        got = send.draw(cv, th, lay.page, lay.desk, dt)
+        if got is None:
             return
-        got = self.game.draw(cv, lay.page, lay.desk, lay.fs)
-        if got is not None:
-            self.page = None
+        name = send.name
+        self._close_sent()
+        self.page = None
+        self._ui.reset()
+        if game:
             if got:
-                self._say(shown(self.game.name) + " is the background of " + got)
+                self._say(shown(name) + " is the background of " + got)
             else:
                 self._say(self._art.copies.last_error or "Can't put it there", "warn", True)
-            self.game = None
-
-    def _story_page(self, cv):
-        lay = self.layout
-        self._lend("Put in a story", (), (), True)
-        if self.story is None:
-            self.page = None
             return
-        got = self.story.draw(cv, lay.page, lay.desk, lay.fs)
-        if got is not None:
-            self.page = None
-            title, slide, undo = got
-            dot = _dot()
-            if slide:
-                self._say("Added as slide %d of %s%sUndo" % (slide, title, dot),
-                          undo=undo)
-            else:
-                self._say("Can't add it to " + title, "warn", True)
-            self.story = None
+        title, slide, undo = got
+        if slide:
+            self._say("Added as slide %d of %s%sUndo" % (slide, title, _dot()), undo=undo)
+        else:
+            self._say("Can't add it to " + title, "warn", True)
 
     def _view_page(self, cv, th):
         lay = self.layout

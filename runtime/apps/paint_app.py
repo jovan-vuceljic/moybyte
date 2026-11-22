@@ -357,6 +357,7 @@ class PaintAppLayer(PaintDraw, AppLayer):
         art = self._art
         self._return_bakes()           # #186: load() may re-mint the document
         self._close_viewer()
+        self._close_sent()
         self.pop = None
         self.page = None
         self.toast = None
@@ -438,6 +439,9 @@ class PaintAppLayer(PaintDraw, AppLayer):
         its bakes and a viewed drawing's screens go back. A document never
         built (Paint never opened) has nothing to write and lent no bake."""
         self._close_viewer()
+        if self._sent() is not None:
+            self._close_sent()
+            self.page = None
         if self._doc is None:
             return
         self._save()
@@ -461,12 +465,24 @@ class PaintAppLayer(PaintDraw, AppLayer):
             self.pop = None
             self._ui.reset()
         elif self.page is not None:
+            self._close_sent()
             self.page = None
             self._ui.reset()
         else:
             return False
         self._damage.all()
         return True
+
+    def _sent(self):
+        """The page a drawing is sent from that is open (Put in a game, Put
+        in a story), else None."""
+        return self.game if self.page == "game" else self.story if self.page == "story" else None
+
+    def _close_sent(self):
+        send = self._sent()
+        if send is not None:
+            send.close()
+        self.game = self.story = None
 
     def doc_title(self):
         if self.viewer is not None:
@@ -669,6 +685,9 @@ class PaintAppLayer(PaintDraw, AppLayer):
         if self.pop == "colours" and not self.layout.touch:
             self._swatch_keys(inp)
             return True
+        send = self._sent()
+        if send is not None:
+            return send.keys(inp)
         if self.pop is not None or self.page is not None:
             if self._ui.keys(inp):
                 self._damage.all()
@@ -798,16 +817,15 @@ class PaintAppLayer(PaintDraw, AppLayer):
         elif verb == "game":
             if self.viewer is None and (self.doc.W, self.doc.H) == (GAME_W, GAME_H) \
                     and self._save() and art.doc_name():
-                self.game = GamePage(art.copies, self._nav, art.doc_name())
-                self.page = "game"
                 self._ui.reset()
-                self._focus = "Games"
+                self.game = GamePage(art.copies, self._nav, art.doc_name(), self._ui, self._damage)
+                self.page = "game"
         elif verb == "story":
             name = self._source_name()
             if name and self._save() and stories_here():
-                self.story = StoryPage(art.ctx.carts, art.ctx.files, name)
-                self.page = "story"
                 self._ui.reset()
+                self.story = StoryPage(art.ctx.carts, art.ctx.files, name, self._ui, self._damage)
+                self.page = "story"
         elif verb == "show":
             self._save()
             self.page = "show"
@@ -863,6 +881,9 @@ class PaintAppLayer(PaintDraw, AppLayer):
                 return True
         if self.pop == "colours" and click and self._swatch_tap(px, py):
             return True
+        send = self._sent()
+        if send is not None:
+            return send.point(px, py, click)
         if self.pop is None and self.page is None and self.viewer is None:
             if self._canvas_pointer(px, py, click, down):
                 return True
@@ -1077,7 +1098,9 @@ class PaintAppLayer(PaintDraw, AppLayer):
                 and self._stroke_frame(cv, th)):
             self._changed = True
             return
-        self._ui.begin(cv, th, (0, 0, cv.w, cv.h), lay.desk, lay.windowed)
+        send = self._sent()
+        self._ui.begin(cv, th, lay.page if send is not None else (0, 0, cv.w, cv.h), lay.desk,
+                       lay.windowed)
         if self._touch is None:
             self._touch = ui.hints_width(("back", "Back")) == 0
             # the page this frame paints is the first a stroke frame may
@@ -1089,16 +1112,18 @@ class PaintAppLayer(PaintDraw, AppLayer):
         if self.page == "show":
             self._show(cv, th)
             return
+        if send is not None:
+            self._send_page(cv, th, dt)
+            if self.toast is not None:
+                self._draw_toast()
+            ui.end()
+            return
         ui.page("")
         was = (self.pop, self.page)
         if self._focus is not None:
             ui.focus(self._focus)
             self._focus = None
-        if self.page == "game":
-            self._game_page(cv)
-        elif self.page == "story":
-            self._story_page(cv)
-        elif self.viewer is not None:
+        if self.viewer is not None:
             self._view_page(cv, th)
         else:
             self._canvas(cv, th)

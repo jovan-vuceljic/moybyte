@@ -745,6 +745,33 @@ def test_put_in_a_story_adds_a_last_page_and_its_undo_takes_it_out(tmp_path):
     assert storybook_app.story_list(ws.artwork.ctx.carts, files)[0]["slides"] == n
 
 
+def test_put_in_a_story_is_a_page_of_the_stories_whose_card_adds_the_drawing(tmp_path):
+    """Paint's Put in a story: the stories as cards on a page over the
+    drawing; Enter on one adds it as a last slide, which the toast says."""
+    from runtime import storybook_app
+    ws = host_app.build_workstation(str(tmp_path / "carts"))
+    ws.pointer.visible = False
+    ws.app("storybook")._new_story()
+    app = _open_paint(ws)
+    app.doc.put(2, 2, 8)
+    app._mark_changed()
+    assert app._save()
+    app._verb("story")
+    assert app.page == "story" and app.story.stories
+    n = app.story.stories[0]["slides"]
+    drv = host_app.ConsoleDriver(ws)
+    for _ in range(3):
+        ws.mark_dirty()
+        drv.frame(1 / 30)
+    drv.press("a")
+    for _ in range(3):
+        drv.frame(1 / 30)
+    assert app.page is None and app.story is None
+    assert app.toast is not None and app.toast[0].startswith("Added as slide %d of " % (n + 1))
+    files = ws.artwork.ctx.files
+    assert storybook_app.story_list(ws.artwork.ctx.carts, files)[0]["slides"] == n + 1
+
+
 def test_the_desk_window_is_titled_with_the_drawing(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=(1024, 600),
                                     windowed=True, panel_diagonal_in=7.0)
@@ -1041,7 +1068,7 @@ def test_paints_frame_path_is_found_on_the_class_or_its_first_base():
     assert cls.__bases__[0] is paint_draw.PaintDraw
     assert not [n for n in ("draw", "retained", "changed") if n not in vars(cls)]
     for name in ("_canvas", "_stroke_frame", "_view", "_drawing", "_tools", "_rail",
-                 "_show", "_view_page", "_game_page", "_story_page", "_draw_toast",
+                 "_show", "_view_page", "_send_page", "_draw_toast",
                  "_desk_row", "_desk_panel", "_desk_foot", "_lend"):
         assert name in vars(cls) or name in vars(paint_draw.PaintDraw), name
 

@@ -65,6 +65,8 @@ PORTED = (
     "music_app",
     "music_card",
     "files_app",
+    "myart_app",
+    "drawing_pages",
     "terminal_app",
     "text_console",
 )
