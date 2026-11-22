@@ -10,7 +10,8 @@ from pathlib import Path
 from runtime import host_app, moy_carts
 from runtime import story_doc as D
 from runtime import story_render as R
-from runtime.storybook_app import StorybookAppLayer, StorybookLayout, is_app, zoom_fit
+from runtime.storybook_app import StorybookAppLayer, is_app, zoom_fit
+from runtime.story_edit import card_id
 
 ROOT = Path(__file__).resolve().parent.parent
 _DT = 1 / 30
@@ -275,8 +276,8 @@ def test_a_drag_moves_and_snaps_to_the_slides_middle(tmp_path):
     st = app.story
     o = st.slides[1]["objects"][1]              # the bubble at 608, 64, 352 wide
     ed.chosen = 1
-    sx, sy = app.layout.slide[0], app.layout.slide[1]
-    n, d = app.layout.edit_zoom
+    sx, sy = ed.slide[0], ed.slide[1]
+    n, d = ed.zoom
     px, py = sx + 700 * n // d, sy + 100 * n // d
     assert ed.handle_pointer(px, py, True, True)
     # left to two screen pixels short of the bubble's left edge on the middle
@@ -295,7 +296,7 @@ def test_the_sorter_adds_moves_and_deletes_slides(tmp_path):
     app.ed.opened()
     _frames(ws)
     st = app.story
-    app._focus = "Slide 1"
+    app._focus = card_id(1)
     _frames(ws)
     _key(ws, app, ord("n"))
     assert len(st.slides) == 4 and app.cur == 2
@@ -339,14 +340,15 @@ def test_a_picture_from_my_art_is_copied_in_and_fills_its_frame(tmp_path):
     assert _stored(ws, st.name)["slides"][j]["objects"][0]["image"] == "dragon"
 
 
-def test_the_full_screen_window_edits_at_five_eighths(tmp_path):
-    host_app.build_workstation(str(tmp_path / "carts"), sys_size=(1024, 600),
-                               panel_diagonal_in=7.0, windowed=True)
-    lay = StorybookLayout(1024, 600, 1, True)
-    assert lay.full and lay.edit_zoom == (5, 8) and lay.slide[2:] == (640, 375)
-    lay = StorybookLayout(900, 492, 1, True)
-    assert not lay.full and lay.edit_zoom == (1, 2) and lay.slide[2:] == (512, 300)
-    assert R.size(5, 64) == (80, 47)
+def test_the_slide_takes_the_largest_zoom_its_pasteboard_holds(tmp_path):
+    """5/8 where the window fills the glass, 1/2 in the desk's window, less
+    on a smaller pasteboard; the slide centred on it."""
+    ws, app, ed = _edit(tmp_path)
+    assert ed.zoom == (1, 2) and ed.slide[2:] == (512, 300)
+    for w, h, zoom in ((660, 400, (5, 8)), (528, 384, (1, 2)), (400, 260, (3, 8))):
+        ed.fit(w, h)
+        sw, sh = R.size(*zoom)
+        assert ed.zoom == zoom and ed.slide == ((w - sw) // 2, (h - sh) // 2, sw, sh)
 
 
 def test_a_drawing_put_in_a_story_is_its_new_last_slide_and_undo_takes_it_back(tmp_path):
@@ -403,7 +405,7 @@ def test_the_sorters_new_slide_card_opens_the_layouts(tmp_path):
     app._open_story(app.stories[0], "deck")
     app.ed.opened()
     _frames(ws)
-    _tap_part(ws, app, "Add slide")
+    _tap_part(ws, app, "add/edit_slide")
     assert app.ed.menu == "layouts"
 
 
@@ -413,8 +415,8 @@ def test_deleting_the_last_slide_from_the_sorters_button(tmp_path):
     app.ed.opened()
     _frames(ws)
     n = len(app.story.slides)
-    app._focus = "Slide %d" % (n - 1)
+    app._focus = card_id(n - 1)
     _frames(ws)
-    _tap_part(ws, app, "Delete")
+    _tap_part(ws, app, "del_slide")
     assert len(app.story.slides) == n - 1
     _frames(ws)
