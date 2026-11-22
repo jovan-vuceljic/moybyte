@@ -14,10 +14,19 @@
 #define KIDS(k, c) for (int c = NODE(k)->kid; c != (int)UIT_NONE; c = NODE(c)->next)
 
 // Whether the page carries a gen this frame: it may (`gen_safe`), and no canvas drew in the last
-// frame (a canvas draws what no state says, so a frame after one drew is drawn whole).
+// frame but one that names its states (a canvas draws what no state says, so a frame after one
+// drew is drawn whole; reads= names what it draws, `canvas_drew`).
 static int gen_ok(const uit_t *e)
 {
     return e->gen_safe && !e->canvas_last;
+}
+
+// Canvas k drew this frame: unless it names the states it draws (reads=, which the gen counts),
+// the next frame carries no gen.
+static void canvas_drew(uit_t *e, int k)
+{
+    if (!(e->nodes[k].lit & CV_READS))
+        e->canvas_now = 1;
 }
 
 static moy_ui_span_t span_of(const char *p, size_t n)
@@ -1399,13 +1408,14 @@ static void card_mark(uit_t *e, moy_ui_ctx_t *c, int k, int model, int row, int 
 }
 
 // A card's or a picture's image (`image=`): its text into the scratch at *a (*n 0 where it names
-// none or no front end draws pictures), and whether the front end holds the picture.
+// none or no front end draws pictures), and whether the front end holds the picture: 0, else the
+// picture's gen (uit_pic_fn).
 static int pic_held(uit_t *e, int k, int model, int row, uint32_t *a, uint32_t *n)
 {
     *a = prop_text(e, k, "image", model, row, n);
     if (!e->pic_fn)
         *n = 0;
-    return *n && e->pic_fn(e->pic_ud, k, e->scratch.p + *a, *n, NULL);
+    return *n ? e->pic_fn(e->pic_ud, k, e->scratch.p + *a, *n, NULL) : 0;
 }
 
 // The card's tile (`out`, moy_ui_api_card's) handed to the front end, which draws the picture
@@ -1415,7 +1425,8 @@ static void pic_draw(uit_t *e, moy_ui_ctx_t *c, int k, uint32_t a, uint32_t n, c
 {
     if (!n || out[2] <= 0)
         return;
-    int32_t r[9] = {out[0], out[1], out[2], out[3], e->rect[0], e->rect[1], e->rect[2], e->rect[3],
+    int32_t room = e->rect[3] > e->band_h ? e->rect[3] - e->band_h : 0;
+    int32_t r[9] = {out[0], out[1], out[2], out[3], e->rect[0], e->rect[1], e->rect[2], room,
                     (out[4] & MOY_UI_ST_FOCUS) != 0};
     moy_ui_api_card_clip(c, r + 4);
     if (r[6] > 0 && r[7] > 0)
@@ -1423,8 +1434,8 @@ static void pic_draw(uit_t *e, moy_ui_ctx_t *c, int k, uint32_t a, uint32_t n, c
 }
 
 // A card of a cards list (`_r_cards`' per row): its id, its marks, its label and sub line, its
-// picture where the front end holds it (the icon tile while it has none; a card with a picture
-// carries no gen, so a shift frame draws it again).
+// picture where the front end holds it, the picture's gen its gen (the icon tile while it has
+// none, and no gen: a shift frame draws it again).
 static void draw_card(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     const uit_node_t *N = NODE(k);
@@ -1433,8 +1444,8 @@ static void draw_card(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     over_for(e, k, model, row, c, &o, id);
     uint32_t pa, pn;
     int held = pic_held(e, k, model, row, &pa, &pn);
-    int32_t pic_gen = 0;        // the card's tile is the engine's alone: no app picture moves it
-    if (!pn)
+    int32_t pic_gen = pn ? held : 0;    // no app picture: the tile is the engine's alone
+    if (!pn || held > 0)
         moy_ui_over_put(&o, MOY_UI_OV_GEN, &pic_gen);
     card_mark(e, c, k, model, row, held);
     uint32_t n1, n2, a1 = text(e, k, 0, model, row, &n1), a2 = text(e, k, 1, model, row, &n2);
@@ -1872,7 +1883,7 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
         }
         if (NODE(g)->kind == UIT_CANVAS) {
             put_rect(e, g, cell);       // where a press on it lands (`uit_rect`)
-            e->canvas_now = 1;
+            canvas_drew(e, g);
             if (e->draw_fn)             // a cell of its own that only draws: drawn into the cell
                 e->draw_fn(e->draw_ud, g, model, row, cell[0], cell[1], cell[2], cell[3]);
             continue;
@@ -2173,7 +2184,7 @@ static void draw_table(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     if (cv >= 0) {
         int32_t pr[8];
         int32_t i;
-        e->canvas_now = 1;              // its rows are a canvas's: the next frame carries no gen
+        canvas_drew(e, cv);             // its rows are a canvas's: the next frame carries no gen but by reads=
         while ((i = moy_ui_api_table_part(c, s, pr)) >= 0)
             if (e->draw_fn && i < M->nrows)
                 e->draw_fn(e->draw_ud, cv, m, i, pr[0], pr[1], pr[2], pr[3]);
@@ -2327,6 +2338,8 @@ static void empty_line(uit_t *e, const moy_ui_sink_t *s, uit_buf_t *b, const cha
 // (`_r_foot`): its buttons share its width, its label a line of its own over
 // them; on a handheld under a rule. A stacked foot's children lead in as
 // the keys band's hints do.
+static int flow_shown(uit_t *e, int g, int model, int row);
+
 static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     int desk = (e->flags & UIT_F_DESK) != 0, fs = e->fs;
@@ -2356,9 +2369,8 @@ static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     int nb = 0;
     KIDS(k, g) {
         const uit_node_t *G = NODE(g);
-        if (G->kind == UIT_BUTTON && nb < 16 && uit_shown(e, g, model, row) &&
-            (G->act < 0 || uit_act_can(e, G->act, model, row)))
-            btn[nb++] = (int16_t)g;
+        if (G->kind == UIT_BUTTON && nb < 16 && flow_shown(e, g, model, row))
+            btn[nb++] = (int16_t)g;     // a grey one too: it stays, dimmed
     }
     if (!NODE(k)->lit) {
         // the end look: its buttons at their natural widths at its end, its labels before them;
@@ -3043,7 +3055,7 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         put_rect(e, k, r);              // where a press on it lands (`uit_rect`)
         if (model >= 0)
             put_cell(e, k, model, row, r);  // in a list's body: its row's (`uit_rect`'s ROWKEY/KEY)
-        e->canvas_now = 1;
+        canvas_drew(e, k);
         if (e->draw_fn)
             e->draw_fn(e->draw_ud, k, model, row, r[0], r[1], r[2], r[3]);
         break;
@@ -4136,7 +4148,7 @@ static void draw_canvas_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
     }
     id_put(e, k, model, row, key);
     moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, 0, &o, got);
-    e->canvas_now = 1;
+    canvas_drew(e, k);
     if (e->draw_fn)
         e->draw_fn(e->draw_ud, k, model, row, got[0], got[1], got[2], got[3]);
 }
@@ -5414,6 +5426,7 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
     if (ground)
         e->rect[0] = x, e->rect[1] = y, e->rect[2] = w, e->rect[3] = h;
     uit_buf_t hb = {0};
+    e->band_h = 0;
     if (e->placed) {
         if (flags & UIT_F_BAND)
             placed_band(e, c, s, &hb, pages ? pages : 1);
@@ -5477,10 +5490,22 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
             KIDS(0, k)
             if (NODE(k)->kind == UIT_POPOVER && uit_shown(e, k, -1, -1))
                 card = 1;
+        moy_ui_over_t so;           // the page's status= words, which the band leads with
+        moy_ui_over_none(&so);
+        if (NODE(0)->t_aux >= 0 && !(flags & UIT_F_ON_BAR)) {
+            uint32_t sn, sa = uit_tmpl_render(e, NODE(0)->t_aux, -1, -1, &sn);
+            if (sn)
+                moy_ui_over_text(&so, MOY_UI_OV_HINT, span_of(e->scratch.p + sa, sn));
+        }
         if (card) {
             e->pop_hints = hp, e->pop_hints_n = hn;
         } else if (!placed) {
-            moy_ui_api_hints(c, s, hp, hn, NULL);
+            // a flowing page's band docks at its foot: the room its pictures may draw in ends over it
+            if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {
+                int mn;
+                e->band_h = (flags & UIT_F_DESK) ? moy_ui_metrics(MOY_UI_K_VALUE_ROW, &mn)[17] * fs : 20 * fs;
+            }
+            moy_ui_api_hints(c, s, hp, hn, &so);
         } else if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {
             // a placed page's band: a handheld's its room's last line, the desk's and a foot's
             // at the page's foot
@@ -5491,7 +5516,7 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
             moy_ui_cut(e->rect, 1, hh, band, rest);
             if (!(flags & UIT_F_DESK) && e->foot < 0)
                 moy_ui_api_at(c, band[0], band[1], band[2], band[3]);
-            moy_ui_api_hints(c, s, hp, hn, NULL);
+            moy_ui_api_hints(c, s, hp, hn, &so);
             memcpy(e->rect, rest, sizeof rest);
         }
     }

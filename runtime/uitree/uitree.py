@@ -189,6 +189,7 @@ class _Now:
     importing = None        # the Decl a module imported by the running handler is making (a board)
     load_move = False       # a LoadView moving its load's state
     collect = None          # the checker's list: a refused call is recorded and the run goes on
+    reads = None            # the states a canvas's draw may read (its reads=), while it draws
 
 
 _NOW = _Now()
@@ -747,6 +748,10 @@ class State:
                 raise e
             _NOW.collect.append(e)      # the checker's run goes on with the declared value
             return self._v[k]
+        r = _NOW.reads
+        if r is not None and k not in r:
+            raise UIError("R01", "a canvas draw reads s.%s, which its reads= does not list" % k,
+                          expected="reads=%r" % (list(r) + [k],), fix="add %r to the canvas's reads=" % k)
         if k in self._derive:
             return self._derive[k]()
         t = self._t[k]
@@ -1994,7 +1999,7 @@ class Node:
 # contract's (`_check_prop`); this table only routes what that check let through.
 _C = {"shown": "cond"}
 SCHEMA = {
-    "page": {"title": "text"},
+    "page": {"title": "text", "status": "text"},
     "group": dict(_C, caption="text", close="action0", look="lit"),
     "label": dict(_C, text="text", tone="text", wrap="lit", face="lit", size="lit", icon="text",
                   lines="lit", align="lit"),
@@ -2037,7 +2042,7 @@ SCHEMA = {
     "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit", w="int", h="int"),
     "panel": dict(_C),
     "canvas": dict(_C, draw="fn", h="int", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit",
-                   keys="fn", mark="lit", hint="text"),
+                   keys="fn", mark="lit", hint="text", reads="lit"),
     "foot": dict(_C, look="lit"),
     "scroll": dict(_C),
     "switch": dict(_C),
@@ -3311,27 +3316,36 @@ def work(name, fn, due, budget=4, unit=None):
 
 class Pictures:
     """The app's own pictures: bytes the engine decodes (a PNG, a .moyimg),
-    or an indexed drawing in the console's 16 colours that is no file. The
-    engine holds them; `image.own(key)` names one."""
+    an indexed drawing in the console's 16 colours that is no file, or one
+    the app draws when the engine asks (`render(w, h)` answers a canvas
+    layer of that size, which the engine keeps and releases when it lets the
+    picture go; None where it cannot). The engine holds them;
+    `image.own(key)` names one."""
 
     def __init__(self):
         self.src = {}
         self.gen = {}
+        self.store_gen = {}         # a store path -> the times its file changed (`changed`)
 
-    def put(self, key, data=None, w=None, h=None, pixels=None):
-        if (data is None) == (pixels is None):
-            raise UIError("S02", "pictures.put(%r): bytes (data=) or an indexed drawing (w=, h=, pixels=)" % key, fix='pictures.put(KEY, data=PNG_BYTES) or pictures.put(KEY, w=W, h=H, pixels=INDICES)')
+    def put(self, key, data=None, w=None, h=None, pixels=None, render=None):
+        if (data is not None) + (pixels is not None) + (render is not None) != 1:
+            raise UIError("S02", "pictures.put(%r): bytes (data=), an indexed drawing (w=, h=, pixels=) or a drawer (render=)" % key, fix='pictures.put(KEY, data=PNG_BYTES), pictures.put(KEY, w=W, h=H, pixels=INDICES) or pictures.put(KEY, render=FN)')
         if pixels is not None:
             if type(w) is not int or type(h) is not int or len(pixels) != w * h:
                 raise UIError("S02", "pictures.put(%r): pixels are w * h palette indices" % key,
                               found="w=%r h=%r %d bytes" % (w, h, len(pixels)), fix='pixels= holds w * h bytes')
             self.src[key] = ("idx", w, h, bytes(pixels))
+        elif render is not None:
+            if not callable(render):
+                raise UIError("S02", "pictures.put(%r): render= is a function of (w, h)" % key,
+                              found=repr(render), fix='def render(w, h): ... return a w x h layer')
+            self.src[key] = ("render", render)
         else:
             self.src[key] = ("bytes", bytes(data))
         self.gen[key] = self.gen.get(key, 0) + 1
         a = _NOW.app
-        if a is not None and getattr(a, "pics", None) is not None:
-            a.pics.forget_own(key)
+        if a is not None and getattr(a, "pics", None) is not None and a.pics.forget_own(key):
+            a.pics_let_go()
 
     def drop(self, key):
         self.src.pop(key, None)
@@ -3344,9 +3358,10 @@ class Pictures:
         if not isinstance(path, str) or path.count("/") != 1:
             raise UIError("S02", "pictures.changed(%r): a store path is KIND/NAME" % (path,),
                           fix='pictures.changed("drawings/Cat")')
+        self.store_gen[path] = self.store_gen.get(path, 0) + 1
         a = _NOW.app
-        if a is not None and getattr(a, "pics", None) is not None:
-            a.pics.forget_store(path)
+        if a is not None and getattr(a, "pics", None) is not None and a.pics.forget_store(path):
+            a.pics_let_go()
 
 
 pictures = Pictures()

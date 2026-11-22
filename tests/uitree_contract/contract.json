@@ -1265,6 +1265,10 @@
      "type": "word:off",
      "level": 2,
      "designed": true
+    },
+    "status": {
+     "type": "tpl",
+     "level": 2
     }
    },
    "heads": "Python: a page is a function opening `with ui.page(TITLE):`, pushed as `ui.push(FUNCTION)` (L2); Lua and C: a named page, `ui.page(NAME, BUILD, { title = ... })`, pushed by its name"
@@ -2437,8 +2441,7 @@
     },
     "reads": {
      "type": "list",
-     "level": 2,
-     "designed": true
+     "level": 2
     },
     "size": {
      "type": "list",

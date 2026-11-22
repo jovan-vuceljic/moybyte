@@ -526,17 +526,18 @@ def _app(ws, app):
 
 
 def _shown_story(sb):
-    """The story whose card shows most and holds no mark: the frames after
+    """The story whose card shows most and holds no focus: the frames after
     a change to it move its pixels unless its gen moves."""
-    g = sb.layout.stories_grid
+    x, y, w, h = sb._surf.content_rect()
+    cur = sb.state().cur
     best, most = None, 0
-    for r in sb._rows:
-        b = sb._ui.box(r.o["id"])
-        if b is None or r.o["id"] == sb._focused:
+    for e in sb.stories:
+        b = sb._ui.box(e["name"] + "/open")
+        if b is None or e["name"] == cur:
             continue
-        shows = min(b[1] + b[3], g[1] + g[3]) - max(b[1], g[1])
+        shows = min(b[1] + b[3], y + h) - max(b[1], y)
         if shows > most:
-            best, most = r.entry, shows
+            best, most = e, shows
     assert best is not None, "no story's card shows"
     return best
 
@@ -550,15 +551,14 @@ def _story_renamed(ws):
 
 def _story_turned(ws):
     """Storybook: a shown story's first page turned over, another slide
-    first."""
+    first; the app's next frame fills its page."""
     from runtime import story_doc as D
     sb = _app(ws, "storybook")
     e = _shown_story(sb)
     doc = D.copy(e["doc"])
     doc["slides"].insert(0, D.layout_slide("blank", 9))
     e["doc"] = doc
-    if sb.cards is not None:
-        sb.cards.drop(e["name"])
+    sb.fill_owed = True
 
 
 CHANGES = {"story renamed": ("storybook", _story_renamed),

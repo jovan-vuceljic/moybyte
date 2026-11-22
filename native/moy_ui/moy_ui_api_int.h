@@ -124,6 +124,9 @@ int mua_rc_cut(rc_t *a, rc_t b);
 int mua_rc_meets(rc_t a, rc_t b);
 moy_ui_box_t mua_box_of(rc_t r);
 int mua_armed(const moy_ui_ctx_t *c);
+// Where a picture in `b` draws (moy_ui_api_card_clip): the page or scroll region it stands in,
+// on a shift frame cut to the floor's rect it lies in (mua_floor_of).
+moy_ui_box_t mua_pic_clip(const moy_ui_ctx_t *c, moy_ui_box_t b);
 int mua_floor_holds(const moy_ui_ctx_t *c, moy_ui_box_t b);
 int mua_floor_meets(const moy_ui_ctx_t *c, moy_ui_box_t b);
 moy_ui_box_t mua_floor_of(const moy_ui_ctx_t *c, moy_ui_box_t b);

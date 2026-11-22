@@ -175,6 +175,8 @@ class Pair:
         self.settle(check=False)
         if app == "myart":
             self._all_pictures()
+        if app == "storybook":
+            self._all_covers()
         del self.kinds[:]
         self.direct = 0
 
@@ -195,6 +197,23 @@ class Pair:
                 pass
             while a._unchecked:
                 a.idle_step()
+            ws.mark_dirty()
+        self.settle(check=False)
+
+    def _all_covers(self):
+        """Every story card's picture drawn at the card's size and kept (the
+        budget holding them all): which cards a frame reaches decides which
+        are drawn first, so the desks would otherwise show a picture landing
+        on different frames."""
+        import uitree as S
+        for ws in (self.a, self.b):
+            e = _inst(ws, "StorybookAppLayer").engine
+            e.pics.budget = 1 << 30
+            for w, h in set(e._pic_wh.values()):
+                for name in _inst(ws, "StorybookAppLayer").covers:
+                    e.pics.peek(S.Pic("own", "story:" + name), w, h)
+            while e.pics.idle_step():
+                pass
             ws.mark_dirty()
         self.settle(check=False)
 
@@ -448,17 +467,18 @@ def _file_deleted(ws):
 
 
 def _shown_story(sb):
-    """The story whose card shows most and holds no mark: the frames after
+    """The story whose card shows most and holds no focus: the frames after
     a change to it move its pixels unless its gen moves."""
-    g = sb.layout.stories_grid
+    x, y, w, h = sb._surf.content_rect()
+    cur = sb.state().cur
     best, most = None, 0
-    for r in sb._rows:
-        b = sb._ui.box(r.o["id"])
-        if b is None or r.o["id"] == sb._focused:
+    for e in sb.stories:
+        b = sb._ui.box(e["name"] + "/open")
+        if b is None or e["name"] == cur:
             continue
-        shows = min(b[1] + b[3], g[1] + g[3]) - max(b[1], g[1])
+        shows = min(b[1] + b[3], y + h) - max(b[1], y)
         if shows > most:
-            best, most = r.entry, shows
+            best, most = e, shows
     assert best is not None, "no story's card shows"
     return best
 
@@ -490,8 +510,7 @@ def _story_turned(ws):
     doc = D.copy(e["doc"])
     doc["slides"].insert(0, D.layout_slide("blank", 9))
     e["doc"] = doc
-    if sb.cards is not None:
-        sb.cards.drop(e["name"])
+    sb.fill_owed = True
 
 
 def _theme_changed(ws):
@@ -539,7 +558,7 @@ def _gen(ws, app):
     if app == "files":
         return _inst(ws, "FilesAppLayer").engine.gens()
     if app == "storybook":
-        return _inst(ws, "StorybookAppLayer")._stories_o["gen"]
+        return _inst(ws, "StorybookAppLayer").engine.gens()
     return _inst(ws, "AppearanceAppLayer")._page_o["gen"]
 
 
@@ -666,7 +685,7 @@ def test_a_popover_and_the_menu_scrim_over_a_glide(tmp_path, bufs, widget):
 # handheld shift: a mark after the pass is a whole repaint of a page the
 # pass drew (`all` is spent with the frame, so it paints nothing it means
 # to; `again` owes a whole frame where the engine owes a frame of rows).
-VERBS_APPS = ("files_app", "storybook_app", "appearance_app")
+VERBS_APPS = ("files_app", "appearance_app")
 
 
 def test_no_verbs_app_marks_its_page_after_the_pass():

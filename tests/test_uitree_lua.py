@@ -356,12 +356,13 @@ def test_a_canvas_draws_with_the_carts_verbs_inside_the_frame(tmp_path):
     carts = str(tmp_path / "carts")
     host_app.moy_carts.ensure_dirs(carts)
     head = ('ui.app("%s", { icon = "calc" })\n'
-            'local s = ui.state { n = 0 }\n'
+            'local s = ui.state { n = 0, m = 0 }\n'
             'ui.page("p", function()\n%s\nend)\n')
     pages = {
         "Bare": '  ui.label("x")',
         "Pad": '  ui.label("x")\n  ui.canvas("pad", { h = 40, draw = function(x, y, w, h) rect(x, y, w, h, 8) end })',
         "Writes": '  ui.canvas("pad", { h = 40, draw = function(x, y, w, h)\n    s.n = 1\n  end })',
+        "Reads": '  ui.canvas("pad", { h = 40, reads = { "m" }, draw = function(x, y, w, h)\n    local v = s.n\n  end })',
     }
     for name, page in pages.items():
         _cart(carts, name, head % (name, page))
@@ -380,6 +381,12 @@ def test_a_canvas_draws_with_the_carts_verbs_inside_the_frame(tmp_path):
         frame()
     err = ws.run.player.cart_error
     assert err and "error[S06] main.lua:5:" in err, err
+    ws.spine.exit_to_caller()
+    open_cart(ws, "Reads")
+    for _ in range(4):
+        frame()
+    err = ws.run.player.cart_error
+    assert err and "error[R01] main.lua:5:" in err, err
     ws.spine.exit_to_caller()
 
 
@@ -644,7 +651,7 @@ CASES = {
 # condition was checked at build.
 NOT_RAISABLE = {"X01"}
 # what only a frame raises, cased on the console above
-RUN_CASES = {"N08", "N06"}
+RUN_CASES = {"N08", "N06", "R01"}
 
 
 def test_every_code_the_layer_raises_has_a_case():

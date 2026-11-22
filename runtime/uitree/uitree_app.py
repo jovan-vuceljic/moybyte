@@ -126,6 +126,13 @@ class Engine(S.Builder):
         Editor's kinds hosts none."""
         return False
 
+    def pics_let_go(self):
+        """A picture a card showed was let go: every gen moves (the card
+        draws its tile again)."""
+        x = getattr(self, "_x", None)
+        if x is not None:
+            x.pics_moved()
+
     def idle_step(self):
         """A frame with nothing to paint: one owed picture decoded, the card
         showing it from the next frame (every gen moves)."""

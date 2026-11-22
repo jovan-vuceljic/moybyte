@@ -61,7 +61,7 @@ def python_facts():
     for k, props in U.SCHEMA.items():
         ps = set(props) - {PY_HEAD.get(k)}
         if k == "page":                     # the page's title is a prop in the table, a head in Python
-            ps = {"title"}
+            ps = set(props)
         kinds[k] = ps
     action = set(inspect.signature(U.action).parameters) - {"name", "label", "fn"}
     hook = set(inspect.signature(U.hook).parameters) - {"name", "fn"}

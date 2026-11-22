@@ -974,7 +974,7 @@ void moy_ui_api_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t titl
     if (mua_outside_floor(c, b)) {
         return;                     // a shift frame's: what the app drew there stands
     }
-    c->pic_clip = mua_floor_of(c, content);
+    c->pic_clip = mua_pic_clip(c, content);
     c->pic_tbl = 0;
     out[0] = content.x;
     out[1] = content.y;

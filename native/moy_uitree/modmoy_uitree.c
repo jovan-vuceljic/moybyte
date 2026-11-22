@@ -551,7 +551,7 @@ static mp_obj_t eng_on_draw(mp_obj_t self, mp_obj_t fn)
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eng_on_draw_obj, eng_on_draw);
 
-// A card's or a picture's image (uit_on_pic): fn(node, pic, None) whether it holds it, fn(node, pic,
+// A card's or a picture's image (uit_on_pic): fn(node, pic, None) 0 or the gen of the one it holds, fn(node, pic,
 // (x, y, w, h, cx, cy, cw, ch, focused)) its tile; what it raises is kept as a canvas's draw's is.
 static int pic_tramp(void *ud, int node, const char *pic, size_t n, const int32_t *r)
 {
@@ -568,7 +568,8 @@ static int pic_tramp(void *ud, int node, const char *pic, size_t n, const int32_
     int held = 0;
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
-        held = mp_obj_is_true(mp_call_function_n_kw(o->pic, 3, 0, args));
+        mp_obj_t got = mp_call_function_n_kw(o->pic, 3, 0, args);
+        held = got == mp_const_none ? 0 : mp_obj_get_int(got);
         nlr_pop();
     } else {
         o->raised = MP_OBJ_FROM_PTR(nlr.ret_val);

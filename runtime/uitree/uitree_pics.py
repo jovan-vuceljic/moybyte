@@ -33,6 +33,12 @@ def _tr(app, text):
         S._NOW.app = was
 
 
+def _let_go(got):
+    """A picture the cache let go: a layer an app's drawer made goes back."""
+    if got[0] == "layer":
+        got[1].release()
+
+
 class PicEngine:
     def __init__(self, app, files, swapped, budget):
         self.app, self.files, self.swapped, self.budget = app, files, swapped, budget
@@ -56,7 +62,7 @@ class PicEngine:
         if got is not None:
             self.cache[k] = self.cache.pop(k)       # the most recent last
             return got
-        if (pic, self._gen(pic)) not in self.failed and k not in self.owed:
+        if (pic, self.gen_of(pic)) not in self.failed and k not in self.owed:
             self.owed.append(k)
         return None
 
@@ -66,23 +72,28 @@ class PicEngine:
             return "none"
         if (pic, w, h) in self.cache:
             return "shown"
-        if (pic, self._gen(pic)) in self.failed:
+        if (pic, self.gen_of(pic)) in self.failed:
             return "failed"
         return "loading"
 
     def forget_store(self, path):
         """Store picture `path`'s file changed: its pictures and its
-        failure go."""
+        failure go. Answers whether any were held."""
+        held = False
         for k in [k for k in self.cache if k[0].kind == "store" and k[0].key == path]:
             self.used -= self.cache.pop(k)[2]
+            held = True
         for f in [f for f in self.failed if f[0].kind == "store" and f[0].key == path]:
             del self.failed[f]
+        return held
 
     def draw(self, cv, got, x, y, w, h):
         kind, pix, _n = got
         if kind == "cover":
             side = pix[0]
             cv.cover(pix[1], side, 0, 0, side, side, x, y, w, h, 0, False)
+        elif kind == "layer":
+            cv.blit565_resize(pix._buf, pix.w, pix.h, x, y, w, h)
         else:
             cv.picture(pix, x, y, w, h)
 
@@ -112,7 +123,7 @@ class PicEngine:
         except MemoryError:
             got = None
         if isinstance(got, str):
-            self.failed[(pic, self._gen(pic))] = got
+            self.failed[(pic, self.gen_of(pic))] = got
             self.stats["failed"] += 1
             _tr(self.app, "%r %dx%d failed: %s" % (pic, w, h, got))
             return True
@@ -142,17 +153,27 @@ class PicEngine:
                 return False
             old = self.cache.pop(k)
             self.used -= old[2]
+            _let_go(old)
             self.stats["evicted"] += 1
             _tr(self.app, "%r %dx%d evicted (least recently drawn, out of view), %d bytes back" % (
                 k[0], k[1], k[2], old[2]))
         return True
 
     def forget_own(self, key):
+        """The app put own picture `key` again: its decoded pixels let go.
+        Answers whether any were held (a card showing them changes)."""
+        held = False
         for k in [k for k in self.cache if k[0].kind == "own" and k[0].key == key]:
-            self.used -= self.cache.pop(k)[2]
+            old = self.cache.pop(k)
+            self.used -= old[2]
+            _let_go(old)
+            held = True
+        return held
 
-    def _gen(self, pic):
-        return S.pictures.gen.get(pic.key, 0) if pic.kind == "own" else 0
+    def gen_of(self, pic):
+        """What moves with the picture's pixels: an app's own picture's puts,
+        a store file's changes."""
+        return (S.pictures.gen if pic.kind == "own" else S.pictures.store_gen).get(pic.key, 0)
 
     # -- decoders ----------------------------------------------------------------------
 
@@ -172,6 +193,12 @@ class PicEngine:
         return src[1], None
 
     def _decode(self, pic, w, h):
+        src = S.pictures.src.get(pic.key) if pic.kind == "own" else None
+        if src is not None and src[0] == "render":
+            lay = src[1](w, h)
+            if lay is None or lay.w != w or lay.h != h:
+                return "not drawn at %dx%d" % (w, h)
+            return ("layer", lay, w * h * 2)
         blob, why = self._bytes(pic)
         if blob is None:
             return why
