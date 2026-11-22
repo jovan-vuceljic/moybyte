@@ -6,6 +6,8 @@ shows while it has none."""
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "uitree_fixtures"))
 
@@ -16,7 +18,18 @@ def _colours(f):
     return {bytes(f.buf[i:i + 2]) for i in range(0, len(f.buf), 2)}
 
 
-def test_a_cards_page_draws_its_pictures():
+@pytest.fixture(params=["built", "compiled"])
+def compiled(request, monkeypatch):
+    """The fixture's page built, or loaded compiled (tools/uitree_compile.py)."""
+    if request.param == "compiled":
+        import uitree_aot
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+        import uitree_compile as UC
+        monkeypatch.setattr(uitree_aot, "BLOBS", UC.compile_modules(["uitree_cards_pics"]).pages)
+    return request.param
+
+
+def test_a_cards_page_draws_its_pictures(compiled):
     import uitree_c
     import uitree_cards_pics as F
     seen = {}
