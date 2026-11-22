@@ -2525,6 +2525,70 @@ static void flow_draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, 
     e->in_flow = was;
 }
 
+// A child's natural width in a wrap= row: a button's, a picture's side and margin, a label's
+// text and its inset either side (its measure's), a group's widest child; any other kind the row's whole width.
+static int32_t wrap_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, int model, int row,
+                      int32_t x, int32_t y, int32_t room)
+{
+    int32_t w = 0, lw;
+    switch (NODE(g)->kind) {
+    case UIT_BUTTON:
+        return button_w(e, c, s, g, model, row);
+    case UIT_PICTURE:
+        return pic_side(e, g, model, row) + pic_margin(e);
+    case UIT_LABEL:
+        lw = 0;
+        moy_ui_api_at(c, x, y, room, 0x3fff);
+        label_rows_m(e, c, s, g, model, row, &lw, 2);
+        return lw < room ? lw : room;
+    case UIT_GROUP:
+        KIDS(g, k)
+        if (flow_shown(e, k, model, row) && (lw = wrap_w(e, c, s, k, model, row, x, y, room)) > w)
+            w = lw;
+        return w < room ? w : room;
+    default:
+        return room;
+    }
+}
+
+// A wrap= row (`ui.row(wrap=True)`): its children at their natural widths from its start, gap=
+// apart; a child that does not fit after another starts a line under them, the lines gap= apart.
+static void draw_wrap_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int model, int row,
+                          const int16_t *kids, int n, int32_t x, int32_t y, int32_t room, int32_t gap,
+                          int32_t step_gap)
+{
+    int32_t ws[FLOW_KIDS], hs[FLOW_KIDS], top = y;
+    for (int i = 0; i < n; i++) {
+        int32_t w = wrap_w(e, c, s, kids[i], model, row, x, y, room);
+        ws[i] = w < room ? w : room;
+    }
+    for (int a = 0; a < n;) {
+        int b = a + 1;
+        int32_t used = ws[a];
+        while (b < n && used + gap + ws[b] <= room)
+            used += gap + ws[b++];
+        int32_t rh = 0, cx = x;
+        for (int i = a; i < b; i++) {
+            int32_t px = NODE(kids[i])->kind == UIT_PICTURE ? pic_margin(e) : 0;
+            hs[i] = flow_h(e, c, s, kids[i], model, row, cx + px, top, ws[i] - px);
+            rh = hs[i] > rh ? hs[i] : rh;
+            cx += ws[i] + gap;
+        }
+        cx = x;
+        for (int i = a; i < b; i++) {
+            int kind = NODE(kids[i])->kind;
+            int32_t px = kind == UIT_PICTURE ? pic_margin(e) : 0;
+            int32_t ty = kind == UIT_GROUP || kind == UIT_PICTURE ? top : top + (rh - hs[i]) / 2;
+            int32_t cell[4] = {cx + px, ty, ws[i] - px, hs[i]};
+            flow_draw(e, c, s, kids[i], model, row, cell);
+            cx += ws[i] + gap;
+        }
+        top += rh + (b < n ? gap : 0);
+        a = b;
+    }
+    moy_ui_api_space(c, top - y + step_gap);
+}
+
 static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     int16_t kids[FLOW_KIDS];
@@ -2540,6 +2604,10 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
     int32_t step_gap = out[4] - out[3] > 0 ? out[4] - out[3] : 0, used = 0;
     int32_t pad = len_of(e, NODE(k)->t_aux, model, row, 0);     // pad=: in from either side
     x += pad, room -= 2 * pad;
+    if (NODE(k)->lit & RW_WRAP) {
+        draw_wrap_row(e, c, s, model, row, kids, n, x, y, room, gap, step_gap);
+        return;
+    }
     for (int i = 0; i < n; i++) {
         const uit_node_t *G = NODE(kids[i]);
         if (G->kind == UIT_BUTTON && (G->btn & BT_GROW))

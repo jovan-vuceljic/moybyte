@@ -2066,7 +2066,7 @@ SCHEMA = {
     "slot": dict(_C, min="lit"),
     # §7.7's bridge: a surface still on today's verbs hosted in one node
     "legacy": dict(_C, draw="fn", pointer="fn", keys="fn", hints="fn", gen="fn"),
-    "row": dict(_C, close="action0", gap="int", pad="int", mid="lit", grow="lit"),
+    "row": dict(_C, close="action0", gap="int", pad="int", mid="lit", grow="lit", wrap="lit"),
     "tools": dict(_C, lend="lit"),
     "lent": dict(_C),
     "status": dict(_C, text="text"),
@@ -2932,7 +2932,10 @@ def row(key, **p):
     On a placed page: gap= between cells and pad= at each end (a literal in
     the page's unit, an int state in pixels the host measured); a row in a
     row is a region of its own (an empty one a spacer), and mid=True
-    centres it on its parent, each side's fills sharing that side's room."""
+    centres it on its parent, each side's fills sharing that side's room.
+    wrap=True packs its children from its start at their natural widths
+    (a group as wide as its widest child), gap= apart, one that does not
+    fit starting a line under them."""
     return _node("row", key, p, _caller())
 
 

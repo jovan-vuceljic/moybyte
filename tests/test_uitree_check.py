@@ -67,6 +67,7 @@ PORTED = (
     "files_app",
     "terminal_app",
     "text_console",
+    "uitree_wrap_row",
 )
 
 

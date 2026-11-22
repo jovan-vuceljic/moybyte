@@ -144,7 +144,8 @@ enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8 };
 // A tools row lent to a site (`lit`); a button drawn as its icon alone (`btn`).
 enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2 };
-enum { RW_MID = 1, RW_GROW = 2 };   // a row's lit: centred on the row it is a cell of; a fill of its stack
+enum { RW_MID = 1, RW_GROW = 2, RW_WRAP = 4 };   // a row's lit: centred on the row it is a cell of; a fill of
+                                                // its stack; its cells packed from its start, wrapping
 enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4 };  // a canvas's lit: a fill along a row, its w= a basis; a stop whose
                                                   // keys are its keys='s; such a stop with no ring (mark=False)
 enum { SP_ALIGN = 3, SP_RULE = 16 };   // a split's lit: its align= index; rule=True

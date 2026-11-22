@@ -281,6 +281,9 @@ rows on a card (as a split's cell, the cell is the card); `ui.text_view(..., loo
 well; `ui.cards(..., pad=)` sets the gap its columns are counted at; a
 card's `badge=` marks its picture; a button's `kind=` may be a template;
 `ui.split(..., rule=True)` draws a rule between its cells;
+`ui.row(..., wrap=True)` packs its children from its start at their
+natural widths (a group as wide as its widest child), one that does not
+fit starting a line under them (the desk home's buttons);
 `ui.seg(label, ".FIELD", text=...)` in a rows' body binds an int field of
 the row, the index of its item, its items the lines `text=` renders over
 the row; `ui.dialog(..., look="keys")` draws no buttons on the T-Deck, whose

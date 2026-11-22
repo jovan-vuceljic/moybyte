@@ -1310,6 +1310,10 @@
     "mid": {
      "type": "bool",
      "level": 2
+    },
+    "wrap": {
+     "type": "bool",
+     "level": 2
     }
    },
    "head_optional": true

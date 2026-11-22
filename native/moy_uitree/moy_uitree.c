@@ -1280,9 +1280,10 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= CV_GROW;
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & CV_GROW) != 0);
     }
-    if (kind == UIT_ROW && (!strcmp(name, "mid") || !strcmp(name, "grow"))) {
-        // a row in a row centred on it (RW_MID); a row filling its stack (RW_GROW)
-        int bit = name[0] == 'm' ? RW_MID : RW_GROW;
+    if (kind == UIT_ROW && (!strcmp(name, "mid") || !strcmp(name, "grow") || !strcmp(name, "wrap"))) {
+        // a row in a row centred on it (RW_MID); a row filling its stack (RW_GROW); a row whose
+        // cells pack from its start and wrap (RW_WRAP)
+        int bit = name[0] == 'm' ? RW_MID : name[0] == 'g' ? RW_GROW : RW_WRAP;
         if (strcmp(src, "True") && strcmp(src, "False") && strcmp(src, "1") && strcmp(src, "0"))
             return uit_fail(e, UIT_E_KIND, UIT_MSG("row %s=%s: True or False", "row %s=%s"), name, src);
         if (src[0] == 'T' || src[0] == '1')
