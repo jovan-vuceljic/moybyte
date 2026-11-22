@@ -103,6 +103,9 @@ def module():
 def main(argv):
     if len(argv) != 2:
         sys.exit(__doc__.strip().splitlines()[2].strip())
+    if argv[1] in ("-h", "--help"):
+        print(__doc__.strip())
+        return
     out = os.path.join(argv[1], "uitree_lua.py")
     with open(out, "w") as f:
         f.write(module())
