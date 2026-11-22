@@ -185,6 +185,18 @@ class StorybookLayout:
         self.panel = (px, top + 8, x + w - 16 - px, bottom - top - 16)
 
 
+def cover(renderer, lay, slide, w, h, step=-1, edit=False):
+    """`slide` drawn into layer `lay` covering its w x h: its own zoom, or a
+    little more where the shapes differ, the overhang cut evenly."""
+    if w * R.SH >= h * R.SW:
+        num, den = w, R.SW
+    else:
+        num, den = h, R.SH
+    sw, sh = R.size(num, den)
+    renderer.draw(lay, slide, (w - sw) // 2, (h - sh) // 2, num, den, step, clip=(0, 0, w, h),
+                  edit=edit)
+
+
 class Frames:
     """Slides drawn once into layers and placed from them: kept by what
     they show (the story's generation, the slide, the size, the tap), at
@@ -206,15 +218,7 @@ class Frames:
         while len(self._order) >= self.n:
             self._drop(self._order[0])
         lay = cv.new_layer(w, h)
-        # the slide covering w x h: its own zoom, or a lifted card's a little
-        # more, the overhang cut evenly
-        if w * R.SH >= h * R.SW:
-            num, den = w, R.SW
-        else:
-            num, den = h, R.SH
-        sw, sh = R.size(num, den)
-        (renderer or self.renderer).draw(lay, slide, (w - sw) // 2, (h - sh) // 2, num, den,
-                                         step, clip=(0, 0, w, h), edit=edit)
+        cover(renderer or self.renderer, lay, slide, w, h, step, edit)
         self._kept[key] = lay
         self._order.append(key)
         return lay
@@ -248,7 +252,7 @@ class Frames:
 
 s = ui.state(
     page=ui.enum("stories", "view", "editor", init="stories"),
-    stories=ui.model(key="id", id="", title="", sub="", icon="", tone=""),
+    stories=ui.model(key="id", id="", title="", sub="", icon="", tone="", pic=ui.IMAGE),
     cur=ui.row_of("stories"),
     count="",                   # "3 stories", over the cards
     none=False,                 # no story on a handheld
@@ -281,16 +285,36 @@ def _set(lay, name, value):
         setattr(s, name, value)
 
 
+def _cover_of(lay, entry):
+    """Story `entry`'s card picture: its first slide, drawn when the engine
+    asks at the card's size, its pictures read for that and let go."""
+    def render(w, h):
+        cv = lay._surf.canvas()
+        layer = cv.new_layer(w, h)
+        rend = R.Renderer(R.Images(lay._load(entry["name"]), 4 * w * h))
+        cover(rend, layer, entry["doc"]["slides"][0], w, h)
+        rend.images.forget()
+        return layer
+    return render
+
+
 def _pic_rows(lay):
     rows = []
     if lay.desk:
-        rows.append({"id": NEW, "title": "New story", "sub": "", "icon": "new", "tone": "value"})
+        rows.append({"id": NEW, "title": "New story", "sub": "", "icon": "new", "tone": "value",
+                     "pic": None})
+    covers = lay.covers
     for e in lay.stories:
         doc = e["doc"]
+        name = e["name"]
+        key = "story:" + name
+        if covers.get(name) is not doc:
+            covers[name] = doc
+            ui.pictures.put(key, render=_cover_of(lay, e))
         k = len(doc["slides"])
-        rows.append({"id": e["name"], "title": doc["title"] or "Untitled",
+        rows.append({"id": name, "title": doc["title"] or "Untitled",
                      "sub": "%d slide%s" % (k, "" if k == 1 else "s"),
-                     "icon": "storybook", "tone": ""})
+                     "icon": "storybook", "tone": "", "pic": ui.image.own(key)})
     return rows
 
 
@@ -495,7 +519,8 @@ def _stories():
     ui.label("{count}", tone="dim", face="caption", shown="!none")
     with ui.cards("stories", cur="cur", changed="moved", w="{@desk?256:128}",
                   h="{@desk?150:75}", shown="!none"):
-        ui.card("open", label="{.title}", sub="{.sub}", icon="{.icon}", tone="{.tone}")
+        ui.card("open", label="{.title}", sub="{.sub}", icon="{.icon}", tone="{.tone}",
+                image=".pic")
     ui.empty("No stories yet", icon="storybook", shown="none",
              lines=["Stories are made on a desk board", "or in the web build."])
     with ui.foot(shown="@desk"):
@@ -579,6 +604,7 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is
         self.show = None              # Present's state
         self.ed = None                # the desk's editor (runtime/apps/story_edit.py)
         self.shown = {}               # each state as fill last wrote it
+        self.covers = {}              # story name -> the document its card's picture shows
         self.fill_owed = True
         self.focus_to = None          # the story whose card focus moves to at the next fill
         self._focus = None            # the editor's: the id focus moves to on its next frame
@@ -680,7 +706,19 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is
             self.frames.drop()
         if self.images is not None:
             self.images.forget()
+        self.forget_covers()
         super().close()
+
+    def forget_covers(self, name=None):
+        """The cards' pictures let go (story `name`'s): drawn again when a
+        card next shows one."""
+        for n in list(self.covers):
+            if name is None or n == name:
+                del self.covers[n]
+                ui.pictures.drop("story:" + n)
+                if self.engine.pics is not None:
+                    self.engine.pics.forget_own("story:" + n)
+        self.fill_owed = True
 
     def commit(self):
         """Write the open story now (an exit path, docs/app_api_v1.md)."""

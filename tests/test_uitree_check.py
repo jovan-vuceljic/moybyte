@@ -60,6 +60,7 @@ PORTED = (
     "music_app",
     "music_card",
     "files_app",
+    "storybook_app",
     "terminal_app",
     "text_console",
 )
