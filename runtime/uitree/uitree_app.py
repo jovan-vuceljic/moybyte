@@ -398,8 +398,9 @@ class App(AppLayer):
         eng = self.ENGINE[0] if self.ENGINE else _engine_class(False)
         if eng.__module__.rpartition(".")[2] == "uitree_editor":     # the Editor's kinds (runtime.uitree_editor on the host)
             eng = _engine_class(False, True)
+        # a flowing page's scrolls take shift frames; a placed one's band loses its key caps under a gen
         self.engine = eng(S.decl_of(S.module_of(build)), build, ctx.ui, ctx.surface, ctx.damage,
-                          getattr(ctx, "files", None), gen=True, env=ctx)     # its scrolls take shift frames
+                          getattr(ctx, "files", None), gen=not eng.PLACED, env=ctx)
 
     def is_app(self, cart):
         return bool(self.IS_APP and self.IS_APP[0](cart))
