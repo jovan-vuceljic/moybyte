@@ -306,6 +306,8 @@ def pytest_runtest_teardown(item, nextitem):
     same worker (`MemoryError: the glass's canvas table is full`)."""
     if nextitem is not None and nextitem.path == item.path:
         return
+    if _ROWS[0] != item.path:
+        return                  # none of its tests was set up (each skipped by its mark): it ran no console
     n = _canvas_rows()
     if n is None:
         return
