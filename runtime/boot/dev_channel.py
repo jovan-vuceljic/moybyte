@@ -1988,7 +1988,7 @@ class DevChannel:
                 return
             if what == "wifi" and hasattr(ws, "open_settings"):
                 ws.open_settings()
-                ws.settings_layer.open_wifi()
+                ws.settings_layer.open_page("wifi")
                 print("REMOTE open wifi")
                 return
             fn = {"settings": getattr(ws, "open_settings", None),

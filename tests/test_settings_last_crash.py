@@ -107,3 +107,18 @@ def test_the_page_clears_the_dump_on_its_button(tmp_path, monkeypatch):
     drv.press("a")                      # Back, the page's one button left
     drv.frame(DT)
     assert ws.settings_layer.showing("crash") is False
+
+
+def test_a_sub_page_holds_no_engine_until_it_opens(tmp_path, monkeypatch):
+    # every engine costs a board a few KB of live heap whether or not it is
+    # ever drawn, so Settings' sub pages are made at their first open
+    _kernel(monkeypatch, None)
+    ws, drv = _open(tmp_path)
+    sl = ws.settings_layer
+    assert sl.pages.pages == {}
+    sl.set_msel = [r[0] for r in sl._settings_rows()].index("crash")
+    sl.open_page("crash")
+    drv.frame(DT)
+    assert list(sl.pages.pages) == ["crash"]
+    sl.close()                          # every page's visit ends: an unmade one stays unmade
+    assert list(sl.pages.pages) == ["crash"]

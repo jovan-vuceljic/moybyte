@@ -1714,3 +1714,12 @@ def test_start_parts_split_the_kernels_stamps():
     got = start_parts("boot", (0, 430, 1300, None, None, None))
     assert got["vm"] == 430 and got["imports"] == 870
     assert got["workstation"] is None and got["total"] is None
+
+
+def test_open_wifi_opens_settings_at_its_wifi_page(capsys, tmp_path):
+    from ws_helpers import build_ws
+    ws = build_ws(tmp_path)
+    ch = DevChannel(ws, FakePointer())
+    ch.run(ws, "open wifi")
+    assert "REMOTE open wifi" in capsys.readouterr().out
+    assert ws.settings_layer.showing("wifi") is True
