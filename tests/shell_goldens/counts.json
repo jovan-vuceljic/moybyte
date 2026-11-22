@@ -420,8 +420,8 @@
     "web_console": [299, 8]
   },
   "p4_1024x600_cs2_fs1_moy_menus": {
-    "pause": [7, 14],
-    "pause_options": [19, 6],
+    "pause": [10, 15],
+    "pause_options": [13, 6],
     "sysmenu": [3, 12]
   },
   "p4_1024x600_cs2_fs1_moy_night": {
@@ -654,7 +654,7 @@
     "status_desk_panel_full": [17, 26]
   },
   "p4_1024x600_fs2_windowed": {
-    "about": [9, 6],
+    "about": [7, 5],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -744,7 +744,7 @@
     "web_console": [299, 10]
   },
   "p4_1024x600_render2_moy_day": {
-    "about": [11, 5],
+    "about": [11, 6],
     "app_appearance": [8, 5],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -1026,8 +1026,8 @@
     "web_console": [295, 8]
   },
   "tdeck_320x240_fs1_moy_menus": {
-    "pause": [7, 14],
-    "pause_options": [19, 6],
+    "pause": [10, 15],
+    "pause_options": [13, 6],
     "sysmenu": [3, 12]
   },
   "tdeck_320x240_fs1_moy_night": {
@@ -1102,7 +1102,7 @@
     "status_cc": [39, 17],
     "status_cc_panel": [45, 19],
     "status_cc_scrolled": [36, 16],
-    "status_paused_bar": [6, 14],
+    "status_paused_bar": [8, 15],
     "status_vmstop": [4, 5]
   },
   "tdeck_320x240_fs1_tasks": {

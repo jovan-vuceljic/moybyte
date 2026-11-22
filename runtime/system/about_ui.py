@@ -2,10 +2,16 @@
 #   version_words       the firmware's version and channel, as About says them
 #   list_page           Settings' Licences: the parts and their licences (a desk: and the text)
 #   LicencesPage        the page as Settings hosts it
+#   card_page           the system menu's About card
 """About on the console (docs/history/look_2026-10.md step 32): Settings'
-Licences page, a `uitree` build, and the words About says (the version, the
-board) that the system menu's About card (`shell_cards.AboutCard`) and
-Settings' About rows share.
+Licences page and the system menu's About card, `uitree` builds, and the
+words About says (the version, the board) that the card and Settings' About
+rows share.
+
+* The About card (`card_page`, hosted by `shell_cards.AboutCard` over the
+  washed content): a popover naming Moybyte, the version and the board,
+  then Updates (the updater's state; no row where there is no updater) and
+  Licences. Esc, B or a press outside closes it.
 
 * Licences is a page of Settings (its About group's last row): Moybyte's
   licence in a line, then a group of link rows per kind of part --
@@ -30,7 +36,7 @@ _CHANNELS = {"stable": "Stable", "unstable": "Beta"}
 TITLE = "Licences"
 
 s = ui.state(parts=ui.model(key="id", id="", lic="", group=""), sel=ui.row_of("parts"),
-             name="", title="", text="")
+             name="", title="", text="", ver="", board="", upd="")
 
 
 def version_words(updater, channel):
@@ -142,6 +148,40 @@ def text_page():
     with ui.page("{name}"):
         ui.label("{title}", face="caption", tone="dim")
         ui.text_view("text", face="ui", wrap="word")
+
+
+def card_words():
+    """The card's words, as its host says them (`AboutCard.words`)."""
+    s.ver, s.board, s.upd = uitree_app.env().words()
+
+
+def _updates():
+    uitree_app.env().updates()
+
+
+def _licences():
+    uitree_app.env().licences()
+
+
+def _shut():
+    uitree_app.env().close()
+
+
+ui.hook("card_opened", card_words)
+ui.action("updates", "Updates", _updates)
+ui.action("licences", "Licences", _licences)
+ui.action("shut", "Close", _shut)
+
+
+def card_page():
+    with ui.page(""):
+        with ui.popover("about", w="{@desk?420:248}", close="shut"):
+            ui.label("moybyte", icon="moy", face="title", align="center")
+            ui.label("{ver}", tone="dim", align="center", shown="ver")
+            ui.label("{board}", tone="dim", align="center", shown="board")
+            ui.rule()
+            ui.link("updates", "{upd}", shown="upd")
+            ui.link("licences")
 
 
 class LicencesPage:

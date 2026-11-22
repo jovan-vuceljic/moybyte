@@ -26,11 +26,8 @@ import achievements_ui as _ach_ui
 import achievements as _ach
 
 
-# The two questions a notice asks: stop the music, open a cart.
-_STOP_PLAY = ("Cancel", "Stop & play")
 STOP_POLL_MS = 50               # how often Stop & play looks for the music's end
 STOP_QUIET_MS = 3000            # and how long it waits for it
-_OPEN = ("No", "Open")
 
 
 def _in_box(px, py, b):
@@ -254,7 +251,7 @@ class Notices:
             self._open_when_quiet(media, cart)
         ws.confirm.ask_close("Stop the music to play %s?" % title,
                                "%s needs the music's memory. You can start the music "
-                               "again after." % title, then, _STOP_PLAY)
+                               "again after." % title, then, "stop_play")
 
     def _open_when_quiet(self, media, cart, waited=None):
         """`cart` opened once the media service's run has ended (a frame or
@@ -290,7 +287,7 @@ class Notices:
         def allow():
             consent.record(aid, perms)
             then()
-        ws.confirm.ask_lines("Open %s?" % title, _perms.prompt(cart), allow, _OPEN)
+        ws.confirm.ask_lines("Open %s?" % title, _perms.prompt(cart), allow)
         return True
 
     def open_status_menu(self, item):

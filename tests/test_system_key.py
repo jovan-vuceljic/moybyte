@@ -276,6 +276,7 @@ def test_restart_runs_the_cart_from_the_top(tmp_path):
     ws, drv = _game(tmp_path)
     _frames(drv, 5)
     drv.system_key()
+    _frames(drv, 1)                     # the card's first frame: its rows are stops
     _key(drv, "down")
     _key(drv, "down")
     _key(drv, "a")
@@ -300,6 +301,7 @@ def test_esc_over_an_editor_playtest_pauses_and_quit_returns_to_the_editor(tmp_p
     assert ws.plays_fullscreen() and ws.cart.get("input") is None
     drv.escape()                        # the simulator hands Esc to the console in play
     assert ws.pause.open and ws.run.player.pace.paused
+    _frames(drv, 1)                     # the card's first frame: its rows are stops
     for _ in range(3):
         _key(drv, "down")
     _key(drv, "a")
@@ -309,6 +311,7 @@ def test_esc_over_an_editor_playtest_pauses_and_quit_returns_to_the_editor(tmp_p
 def test_quit_leaves_for_the_caller(tmp_path):
     ws, drv = _game(tmp_path)
     drv.system_key()
+    _frames(drv, 1)                     # the card's first frame: its rows are stops
     for _ in range(4):
         _key(drv, "down")
     _key(drv, "a")
@@ -321,12 +324,12 @@ def test_a_tap_on_an_item_chooses_it_and_outside_resumes(tmp_path):
     _frames(drv, 3)
     b = ws.pause._host.box("Options")
     drv.click(b[0] + b[2] // 2, b[1] + b[3] // 2)
-    drv.frame(_DT)
+    _frames(drv, 2)                     # the tap lands, then the row answers
     assert ws.pause.page == 1
     drv.escape()
     _frames(drv, 2)
     drv.click(1, 1)
-    drv.frame(_DT)
+    _frames(drv, 2)
     assert not ws.pause.open
 
 

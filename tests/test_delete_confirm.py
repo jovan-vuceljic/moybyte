@@ -315,3 +315,18 @@ def test_the_hint_strip_names_the_dialogs_keys(tmp_path, monkeypatch, kind):
     c.cancel()
     _frames(drv)
     assert strip() == home, "the home's verbs come back with the dialog gone"
+
+
+def test_a_verb_that_loses_something_is_the_danger_button(tmp_path):
+    """Delete, Close and Stop & play lose something: their dialogs draw the
+    verb in the danger look (`ui.dialog(kind="danger")`, the goldens'
+    desk_close_refusal and status_vmstop pin its pixels); Receive and Open
+    lose nothing and are primary."""
+    ws = build_ws(tmp_path)
+    drv = _drv(ws)
+    ws.confirm.ask(_own(ws))
+    _asked(ws, drv)
+    kinds = {ln.split("buttons=")[1].split(",")[-1]: "kind='danger'" in ln
+             for ln in ws.confirm._page.dump().splitlines() if " dialog " in ln}
+    assert kinds == {"delete": True, "close": True, "stop_play": True, "receive": False,
+                     "open": False, "cancel": False}, kinds

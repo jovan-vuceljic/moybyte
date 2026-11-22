@@ -37,10 +37,10 @@ class _Confirm:
         self.line = ""
         self.asked = []
 
-    def ask_close(self, title, line, then, buttons=None, kind="danger", no=None):
+    def ask_close(self, title, line, then, verb="close", no=None):
         self.open, self.title, self.line = True, title, line
         self._yes, self._no = then, no
-        self.asked.append((title, line, buttons, kind))
+        self.asked.append((title, line, verb))
 
     def yes(self):
         self.open = False
@@ -239,7 +239,7 @@ def test_a_cart_crosses_a_lossy_link_and_installs_byte_identical(tmp_path):
     # anything is written to the store; the waiting notice goes first.
     assert wsb.confirm.title == "Receive Pong?"
     assert wsb.confirm.line.startswith("From Ada, ") and "shelf" in wsb.confirm.line
-    assert wsb.confirm.asked[-1][2:] == (("No", "Receive"), "primary")
+    assert wsb.confirm.asked[-1][2] == "receive"
     assert ("<withdrawn>", "Receiving", "ok") in wsb.notices.said
     assert _shelf(wsb) == before and _stage(wsb) == []
     wsb.confirm.yes()

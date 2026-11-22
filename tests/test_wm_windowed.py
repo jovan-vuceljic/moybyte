@@ -19,6 +19,7 @@ presentation's contracts:
 """
 
 import os
+import weakref
 
 import pytest
 import sys
@@ -4599,15 +4600,17 @@ def _pause_desk(tmp_path, ride=True, window=True):
         ws.mark_dirty()
         ring.frame(drv)
     ring.settle(drv, 4)
+    _PAUSE_DRV[id(ws)] = drv
     return ws, drv, ring
 
 
+_PAUSE_DRV = weakref.WeakValueDictionary()     # each desk's driver, by its console
+
+
 def _pause_key(ws, name):
-    """A key handed to the pause menu as the router does: the frame is
-    marked only where the menu does not paint its own change."""
-    ws.pause_layer.handle_input(_Key(name))
-    if not ws.wm.popover_takes_keys():
-        ws.mark_dirty()
+    """A key pressed for the next frame, whose input the router hands the
+    pause menu's page."""
+    _PAUSE_DRV[id(ws)].press(name)
 
 
 @pytest.mark.parametrize("window", [True, False])

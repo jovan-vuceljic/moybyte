@@ -1061,6 +1061,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         // a caption drawn where its value changes from the row before: over the rows
         model = N->slot;
         tslot = &N->t_main;
+    } else if (kind == UIT_POPOVER && !strcmp(name, "at")) {
+        // the rect it hangs from, "X Y W H" on the host's surface (`draw_popover`)
+        int t = uit_tmpl_compile(e, src, model);
+        if (t < 0)
+            return t;
+        return add_prop(e, node, name, src, repr, PK_TMPL, t);
     } else if ((kind == UIT_EMPTY || kind == UIT_NOTE) && !strcmp(name, "lines")) {
         // one prop a line, each a template, drawn in order (an empty one left out)
         int t = uit_tmpl_compile(e, src, model);
@@ -1495,6 +1501,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     }
     if (!strcmp(name, "buttons") && kind == UIT_DIALOG)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    if (!strcmp(name, "kind") && kind == UIT_DIALOG) {
+        // its verb (the last button) in the danger look; 0 the primary
+        N->lit = (uint8_t)!strcmp(src, "danger");
+        return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
+    }
     return uit_fail(e, UIT_E_KIND, UIT_MSG("%s=: a prop this engine does not draw on this kind (%d)", "%s= %d"), name, kind);
 }
 

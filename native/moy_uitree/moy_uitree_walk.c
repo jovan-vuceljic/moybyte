@@ -1513,12 +1513,39 @@ static void draw_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         }
         e->scratch.n = mark;
     }
+    for (int p = N->props; p != (int)UIT_NONE; p = e->props[p].next) {
+        // at=: hung from the rect its host hands in, "X Y W H" (none while it renders empty)
+        const uit_prop_t *P = &e->props[p];
+        if (P->kind != PK_TMPL || strcmp(uit_str(e, P->name), "at"))
+            continue;
+        uint32_t n, mark = e->scratch.n, a = uit_tmpl_render(e, P->idx, model, row, &n);
+        char t[64];
+        size_t m = n < sizeof t - 1 ? n : sizeof t - 1;
+        memcpy(t, e->scratch.p + a, m);
+        t[m] = 0;
+        e->scratch.n = mark;
+        long r[4];
+        char *q = t;
+        int got = 0;
+        for (char *end; got < 4; got++, q = end) {
+            r[got] = strtol(q, &end, 10);
+            if (end == q)
+                break;
+        }
+        if (got == 4)
+            moy_ui_api_at(c, (int32_t)r[0], (int32_t)r[1], (int32_t)r[2], (int32_t)r[3]);
+    }
     moy_ui_over_t o;
     if (!moy_ui_api_popover(c, s, span_of(key, strlen(key)), w, pop_over(N, &o)) && N->on >= 0)
         fire(e, N->on, k, -1, -1, NULL);
     e->in_pop = 1;
     walk(e, c, s, k, model, row);
     e->in_pop = 0;
+    if (e->pop_hints_n) {
+        // the bare page's band: the toolkit draws it in the card, under a rule
+        moy_ui_api_hints(c, s, e->pop_hints, e->pop_hints_n, NULL);
+        e->pop_hints_n = 0;
+    }
     moy_ui_api_popover(c, s, span_of("", 0), 0, NULL);
 }
 
@@ -2531,7 +2558,9 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
             uit_buf_printf(&b, "%s", l);
         }
         // the labels joined by NULs: b.n counts them (uit_buf_printf of "%c", 0 adds one byte)
-        int pick = moy_ui_api_dialog(c, s, sspan(e, a1, n1), (const uint8_t *)(b.p ? b.p : ""), b.n, 1, NULL);
+        // the verb's kind, the toolkit's: primary (1), or with kind="danger" danger (3)
+        int pick = moy_ui_api_dialog(c, s, sspan(e, a1, n1), (const uint8_t *)(b.p ? b.p : ""), b.n,
+                                     N->lit ? 3 : 1, NULL);
         uit_buf_free(&b);
         walk(e, c, s, k, model, row);
         moy_ui_api_dialog(c, s, span_of("", 0), (const uint8_t *)"", 0, 0, NULL);
@@ -4336,6 +4365,28 @@ static void placed_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
         }
         e->scratch.n = mark;
     }
+    for (int p = N->props; p != (int)UIT_NONE; p = e->props[p].next) {
+        // at=: hung from the rect its host hands in, "X Y W H" (none while it renders empty)
+        const uit_prop_t *P = &e->props[p];
+        if (P->kind != PK_TMPL || strcmp(uit_str(e, P->name), "at"))
+            continue;
+        uint32_t n, mark = e->scratch.n, a = uit_tmpl_render(e, P->idx, -1, -1, &n);
+        char t[64];
+        size_t m = n < sizeof t - 1 ? n : sizeof t - 1;
+        memcpy(t, e->scratch.p + a, m);
+        t[m] = 0;
+        e->scratch.n = mark;
+        long r[4];
+        char *q = t;
+        int got = 0;
+        for (char *end; got < 4; got++, q = end) {
+            r[got] = strtol(q, &end, 10);
+            if (end == q)
+                break;
+        }
+        if (got == 4)
+            moy_ui_api_at(c, (int32_t)r[0], (int32_t)r[1], (int32_t)r[2], (int32_t)r[3]);
+    }
     moy_ui_over_t o;
     if (!moy_ui_api_popover(c, s, span_of(key, strlen(key)), w, pop_over(N, &o)) && N->on >= 0)
         fire(e, N->on, k, -1, -1, NULL);
@@ -4638,7 +4689,14 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         KIDS(0, k)
         if ((NODE(k)->kind == UIT_SPLIT || NODE(k)->kind == UIT_GRID) && uit_shown(e, k, -1, -1))
             placed = 1;
-        if (!placed) {
+        int card = 0;           // a bare page's shown popover is the page: the band in its body
+        if (flags & UIT_F_BARE)
+            KIDS(0, k)
+            if (NODE(k)->kind == UIT_POPOVER && uit_shown(e, k, -1, -1))
+                card = 1;
+        if (card) {
+            e->pop_hints = hp, e->pop_hints_n = hn;
+        } else if (!placed) {
             moy_ui_api_hints(c, s, hp, hn, NULL);
         } else if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {
             // a placed page's band: a handheld's its room's last line, the desk's and a foot's
@@ -4681,6 +4739,7 @@ ids:;
         placed_walk(e, c, s);
     else
         walk(e, c, s, 0, -1, -1);
+    e->pop_hints_n = 0;         // (its buffer goes with this frame)
     e->tv_stop = e->tv_stop_now;
     // after: what holds focus, and whether the band named another node's verbs
     int had = e->has_focused;

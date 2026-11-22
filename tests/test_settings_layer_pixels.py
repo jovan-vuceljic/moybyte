@@ -325,8 +325,8 @@ def capture(cfg, carts_dir):
     ws.sysmenu.open = False
     ws.menu_ui._menu_about()
     for _ in range(2):              # its first frame lays its body out
-        ws.menu_ui._draw_about()
-    out["about"] = _shot(ws, lambda: ws.menu_ui._draw_about())
+        ws.menu_ui.about.draw()
+    out["about"] = _shot(ws, lambda: ws.menu_ui.about.draw())
     ws.about = False
 
     # The Achievements page (locked AND found cards, the console's and a
