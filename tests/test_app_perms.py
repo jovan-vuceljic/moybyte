@@ -442,9 +442,9 @@ def test_install_asks_with_the_tables_lines_and_no_has_the_focus(tmp_path):
     _get(ws, app, "radio")
     assert app.phase == "consent"
     assert app.question == ["From Test carts", "Switch the console's pins", "Keep its own settings"]
-    assert app._ui.box("No") is not None and app._ui.box("Install") is not None
+    assert app.page_host().box("No") is not None and app.page_host().box("Install") is not None
     _frames(ws, 2)
-    assert app._focused == "No"
+    assert app.engine.focus_key == "No"
     assert not (tmp_path / "carts" / "radio.moy").exists()
     app.handle_input(_In("a"))                      # a kid's A lands on No
     _frames(ws, 2)
@@ -456,7 +456,7 @@ def test_install_is_a_tap_away(tmp_path):
     repo = _repo(moybyte={"permissions": ["pins"]})
     ws, app = _store_ws(tmp_path, repo)
     _get(ws, app, "radio")
-    x, y, w, h = app._ui.box("Install")
+    x, y, w, h = app.page_host().box("Install")
     app.handle_pointer(x + w // 2, y + h // 2, True)
     _frames(ws, 1)
     app.handle_pointer(x + w // 2, y + h // 2, False)

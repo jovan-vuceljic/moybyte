@@ -2058,7 +2058,7 @@ ANSWER = 32
 SETTINGS_FRAME = 1024
 
 
-@pytest.mark.parametrize("app", ("getcarts", "myart"))
+@pytest.mark.parametrize("app", ("myart",))
 def test_an_app_drag_is_shift_frames(result, app):
     """The drag frames of an app whose shelf carries its gens shift
     (docs/history/scroll_and_text_2026-10.md §3.3) on the T-Deck's tier: the ring's

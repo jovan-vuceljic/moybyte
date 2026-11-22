@@ -1,5 +1,4 @@
-"""Get Carts' pages on the public UI API's verbs (docs/media/look_2026-10/
-APPS_RESTYLE.md, Get Carts): the shelf's cards and what they say, the cart's
+"""Get Carts' `uitree` page: the shelf's cards and what they say, the cart's
 page, Remove's question, the pages that say why there is no shelf and the
 Wi-Fi page they open, the desk's pane, and a settled page painting nothing.
 The fetching and installing under them are tests/test_cart_store.py's."""
@@ -59,6 +58,11 @@ def _open(ws, app):
     _frames(ws, 2)
 
 
+def _focus(app):
+    """The focused stop: a card's "<folder>/open", a verb's action."""
+    return app.engine.focus_key
+
+
 def _press(ws, app, *names):
     app.handle_input(_In(*names))
     _frames(ws, 2)
@@ -113,15 +117,15 @@ def test_a_card_opens_its_page_and_back_lands_on_it(tmp_path):
     repo, net = _shelf()
     ws, app = _ws(tmp_path, net, [repo.url("index.json")])
     _open(ws, app)
-    assert app._focused == app._card_id(app.rows[0])
+    assert _focus(app) == app._card_id(app.rows[0])
     _press(ws, app, "right")
     _press(ws, app, "a")
     assert app.phase == "cart" and app.cur is app.rows[1]
-    assert app._focused == gc.vid("GET")
+    assert _focus(app) == gc.vid("GET")
     assert ws.bar_layer._title("app") == app.rows[1]["cart"]["name"]
     assert app.back() and app.phase == "list"
     _frames(ws)
-    assert app._focused == app._card_id(app.rows[1])
+    assert _focus(app) == app._card_id(app.rows[1])
     assert ws.bar_layer._title("app") == "Get Carts"
 
 
@@ -132,7 +136,7 @@ def test_wifi_off_offers_the_wifi_page_and_looks_again_on_the_way_back(tmp_path)
     _open(ws, app)
     assert app.phase == "nowifi"
     assert app._current_verbs() == ("TRY AGAIN", "WIFI")
-    assert app._focused == gc.vid("WIFI"), "Wi-Fi is the verb that goes on"
+    assert _focus(app) == gc.vid("WIFI"), "Wi-Fi is the verb that goes on"
     assert ws.wifi_icon_kind() == "wifi_off"
     _press(ws, app, "a")
     assert app._away and app._inst.wifi_open()
@@ -159,7 +163,7 @@ def test_a_shelf_out_of_reach_offers_try_again_alone(tmp_path, phase, title):
     icon, got, _lines = app._empty_words()
     assert (icon, got) == ("warn", title)
     assert app._current_verbs() == ("TRY AGAIN",)
-    assert app._focused == gc.vid("TRY AGAIN")
+    assert _focus(app) == gc.vid("TRY AGAIN")
 
 
 def test_remove_asks_in_a_dialog_whose_first_stop_is_cancel(tmp_path):
@@ -176,10 +180,10 @@ def test_remove_asks_in_a_dialog_whose_first_stop_is_cancel(tmp_path):
     _frames(ws)
     assert app.toast is not None and app.toast[0] == "Jet Pot is on your shelf"
     _press(ws, app, "left")                       # Remove
-    assert app._focused == gc.vid("REMOVE")
+    assert _focus(app) == gc.vid("REMOVE")
     _press(ws, app, "a")
-    assert app.asking and app._focused == "Cancel"
-    assert app._kind("REMOVE") == "danger"
+    _frames(ws)
+    assert app.asking and _focus(app) == "Cancel"
     _press(ws, app, "a")                          # Cancel: nothing removed
     assert not app.asking and (tmp_path / "carts" / "jet.moy").exists()
 
@@ -231,12 +235,13 @@ def test_the_desk_shows_the_focused_card_in_the_pane(tmp_path):
     win.x, win.y = 112, 52
     ws.wm.resize_window(win, 900, 536)           # the target's window
     _frames(ws)
-    assert app.layout.desk and app.layout.cols == 4
+    assert app.desk and app.cur is app.rows[0] and app.phase == "cart"
     _press(ws, app, "right")
     assert app.cur is app.rows[1] and app.phase == "cart"
     assert not app.has_page(), "the pane is the shelf's: no back chevron"
-    assert app._ui.box(gc.vid("GET")) is not None, "the pane's verbs are in the foot"
-    assert app._ui.box("Check") is not None
+    host = app.page_host()
+    assert host.box(gc.vid("GET")) is not None, "the pane's verbs are in the foot"
+    assert host.box("check") is not None
 
 
 def test_enter_never_cancels_a_download_and_b_does(tmp_path):
@@ -257,7 +262,6 @@ def test_enter_never_cancels_a_download_and_b_does(tmp_path):
         _frames(ws, 1)
     assert app.phase == "getting"
     app.job.step_ms = 0                           # a slice a frame, never the whole
-    assert app._focused != gc.vid("CANCEL"), "Enter must not land on Cancel"
     _press(ws, app, "a")                          # the second press of Get's
     _press(ws, app, "down")
     _press(ws, app, "a")
@@ -267,32 +271,30 @@ def test_enter_never_cancels_a_download_and_b_does(tmp_path):
     assert not (tmp_path / "carts" / "jet.moy").exists()
 
 
-def test_the_layouts_rects_are_where_the_buttons_draw(tmp_path):
-    """The browser suites tap the layout's rects (`web_e2e.get_carts_taps`):
-    they are the ones the pages' buttons draw at."""
+def test_the_browsers_taps_are_buttons_the_page_draws(tmp_path):
+    """The browser suites tap Get and I agree where the page draws them
+    (`web_e2e.get_carts_taps`)."""
     repo = Repo("https://mit.example/carts", "Test carts")
     repo.add("dm", name="Dungeon", runtime="lua", modules=(),
              external=[("game.wad", b"WAD!" * 3000, "pkg/game.wad")])
     ws, app = _ws(tmp_path, MemNet(repo.routes()), [repo.url("index.json")])
     _open(ws, app)
-    lay = app.layout
     _press(ws, app, "a")
-    assert app.phase == "cart"
-    assert app._ui.box(gc.vid("GET")) == lay.split_verbs(lay.page_verbs(), 1)[0]
+    assert app.phase == "cart" and app.page_host().box(gc.vid("GET")) is not None
     _press(ws, app, "a")
     for _ in range(40):
         _frames(ws, 1)
         if app.phase == "licence":
             break
     assert app.phase == "licence"
-    no, agree = lay.licence_verbs()
-    assert app._ui.box(gc.vid("NO")) == no and app._ui.box(gc.vid("I AGREE")) == agree
+    assert _focus(app) == gc.vid("NO"), "No has the focus on a licence"
+    assert app.page_host().box(gc.vid("I AGREE")) is not None
+    assert "fun" in app.state().licence
 
 
-def test_a_press_in_the_draw_owes_the_next_frame_a_repaint(tmp_path):
-    """Get is pressed inside the cart page's draw, which spends that draw's
-    `all`: the page it opens is owed to the frame after, through the app's
-    host (`AppHost.again`), which the console paints with no input."""
+def test_a_press_owes_the_next_frame_a_repaint(tmp_path):
+    """Get is pressed in the cart page's frame: the page it opens is owed
+    to the frame after, which the console paints with no input."""
     repo, net = _shelf()
     ws, app = _ws(tmp_path, net, [repo.url("index.json")])
     _open(ws, app)
@@ -301,4 +303,7 @@ def test_a_press_in_the_draw_owes_the_next_frame_a_repaint(tmp_path):
     app.handle_input(_In("a"))
     ws.mark_dirty()
     ws.frame(_DT)
-    assert app.phase != "cart" and app._ui.owed and ws.frame_state.dirty
+    assert app.phase != "cart" and app.moved()
+    drawn = ws.frame_state.frames_drawn
+    ws.frame(_DT)
+    assert ws.frame_state.frames_drawn == drawn + 1

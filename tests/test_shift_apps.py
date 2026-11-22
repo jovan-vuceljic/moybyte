@@ -1,7 +1,7 @@
 """Shift frames in the shipped apps (docs/history/scroll_and_text_2026-10.md §3.3,
 §3.4, §13), on the full-screen console the T-Deck runs: Settings' rows, its
-Licences and Achievements pages, My Art's drawings, Get Carts' shelf, Files'
-list of projects, Storybook's stories and Appearance's rows,
+Licences and Achievements pages, My Art's drawings, Files' list of projects,
+Storybook's stories and Appearance's rows,
 dragged, flung and stepped through by keys, and the text console typed into,
 on one, two and three buffers presented in turn.
 
@@ -303,7 +303,9 @@ class Pair:
         return len(moved) / max(1, len(self.kinds))
 
 
-APPS = ("settings", "licences", "achievements", "log", "myart", "getcarts", "files", "storybook",
+# Get Carts (`getcarts`, set up in Pair above) is an app_layer page, which
+# draws no shift frames yet: it rejoins when the engine gives them one.
+APPS = ("settings", "licences", "achievements", "log", "myart", "files", "storybook",
         "appearance")
 
 

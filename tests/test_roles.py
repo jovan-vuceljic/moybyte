@@ -321,7 +321,7 @@ BUDGETS = {
     "files": {"surface.canvas": 1, "theme.colors": 6},
     "calc": {"surface.canvas": 1, "surface.windowed": 1, "surface.chrome_scale": 1, "theme.colors": 1,
              "theme.light": 1},
-    "getcarts": {"surface.canvas": 1, "theme.colors": 1},
+    "getcarts": {"surface.canvas": 1, "surface.windowed": 1, "surface.chrome_scale": 1, "theme.colors": 1},
 }
 
 

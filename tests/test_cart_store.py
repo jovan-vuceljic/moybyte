@@ -1107,7 +1107,7 @@ def _box(app, verb, arg=None):
     """Where the last frame drew the button for verb `arg` ("btn"), or the
     desk's Check ("check"); None where it drew none (or a disabled one)."""
     from runtime.getcarts_app import vid
-    return app._ui.box(vid(arg) if verb == "btn" else "Check")
+    return app.page_host().box(vid(arg) if verb == "btn" else "check")
 
 
 def _tap_at(ws, app, x, y):
@@ -1124,7 +1124,7 @@ def _tap(ws, app, verb, arg=None):
         _key(ws, app, ord("r"))
         return
     b = _box(app, verb, arg)
-    assert b is not None, "nothing drawn for %r %r (focus %r)" % (verb, arg, app._focused)
+    assert b is not None, "nothing drawn for %r %r (focus %r)" % (verb, arg, app.engine.focus_key)
     _tap_at(ws, app, b[0] + b[2] // 2, b[1] + b[3] // 2)
 
 
@@ -1197,8 +1197,8 @@ def test_a_cart_with_an_external_file_asks_first_and_no_is_no(tmp_path):
     assert app.phase == "licence"
     ws.mark_dirty()
     ws.frame(1 / 30)
-    assert app._focused == "verb No", "No must have the focus on a licence"
-    assert any("fun" in ln for ln in app.lic[1])
+    assert app.engine.focus_key == "no", "No must have the focus on a licence"
+    assert "fun" in app.state().licence
     assert "carts" in ws.leases.holders()            # held through the reading
     app.handle_input(_In("a"))                    # A on the focused No
     ws.mark_dirty()
@@ -1249,84 +1249,21 @@ def _lic_open(ws, app):
     assert app.phase == "licence"
 
 
-def _well(ws, app):
-    """The licence's well as the last frame drew it: (x, y, w, h)."""
-    ws.mark_dirty()
-    ws.frame(1 / 30)
-    b = app._ui.box("Licence")
-    assert b is not None, "no licence well drawn"
-    return b
-
-
-def _lic_drag(ws, app, x, y0, dy, steps=8):
-    """Press at (x, y0) over the well, drag by `dy` over `steps` samples, a
-    frame each, and release at the end."""
-    ptr = ws.pointer
-    ptr.down = True
-    app.handle_pointer(x, y0, True)                # press edge
-    for i in range(1, steps + 1):
-        app.handle_pointer(x, y0 + dy * i // steps, False)
-        ws.mark_dirty()
-        ws.frame(1 / 30)
-    ptr.down = False
-    app.handle_pointer(x, y0 + dy, False)           # release
-    ws.mark_dirty()
-    ws.frame(1 / 30)
-
-
-def test_a_drag_scrolls_the_licence_text(tmp_path):
-    gpl, mit, net = _shelves(tmp_path)
-    _long_licence(gpl, net, "dm", "game.wad")
-    ws, app = _app_ws(tmp_path, net, [gpl.url("index.json"), mit.url("index.json")])
-    _open(ws, app)
-    _lic_open(ws, app)
-    assert app.lic[2] == 0
-    x, y, w, h = _well(ws, app)
-    _lic_drag(ws, app, x + w // 2, y + h // 2, -h // 2)   # finger moves UP
-    assert app.lic[2] > 0, "a drag must move the text"
-    assert app.phase == "licence"                       # still on the screen
-
-
 def test_a_tap_on_the_licence_text_does_nothing(tmp_path):
+    """The licence is a lines view the engine scrolls: a tap on it holds
+    the keys there and answers nothing."""
     gpl, mit, net = _shelves(tmp_path)
     _long_licence(gpl, net, "dm", "game.wad")
     ws, app = _app_ws(tmp_path, net, [gpl.url("index.json"), mit.url("index.json")])
     _open(ws, app)
     _lic_open(ws, app)
-    x, y, w, h = _well(ws, app)
+    ws.mark_dirty()
+    ws.frame(1 / 30)
+    assert app.state().licence.startswith("Line 0 of the licence.")
+    x, y, w, h = app.page_host().box("licence")
     _tap_at(ws, app, x + w // 2, y + h // 2)
-    assert app.lic[2] == 0
     assert app.phase == "licence", "a tap on the text must not act like No"
-    assert app._focused == "Licence", "a tap on the text holds the keys there"
-
-
-def test_keys_scroll_the_licence_while_it_has_focus(tmp_path):
-    gpl, mit, net = _shelves(tmp_path)
-    _long_licence(gpl, net, "dm", "game.wad")
-    ws, app = _app_ws(tmp_path, net, [gpl.url("index.json"), mit.url("index.json")])
-    _open(ws, app)
-    _lic_open(ws, app)
-    app._ui.focus("Licence")
-    _well(ws, app)
-    app.handle_input(_In("down"))
-    assert app.lic[2] == 1
-    app.handle_input(_In("down"))
-    assert app.lic[2] == 2
-    app.handle_input(_In("up"))
-    assert app.lic[2] == 1
-
-
-def test_the_licence_scroll_clamps_at_both_ends(tmp_path):
-    gpl, mit, net = _shelves(tmp_path)
-    _long_licence(gpl, net, "dm", "game.wad", n=40)
-    ws, app = _app_ws(tmp_path, net, [gpl.url("index.json"), mit.url("index.json")])
-    _open(ws, app)
-    _lic_open(ws, app)
-    x, y, w, h = _well(ws, app)
-    _lic_drag(ws, app, x + w // 2, y + h // 2, -100000)    # way past the last line
-    assert app.lic[2] == len(app.lic[1]) - app._well_rows()
-    _lic_drag(ws, app, x + w // 2, y + h // 2, 100000)     # way past the top
-    assert app.lic[2] == 0
+    assert app.engine.focus_key == "licence", "a tap on the text holds the keys there"
 
 
 def test_a_cart_that_will_not_fit_offers_no_get(tmp_path):
@@ -1458,14 +1395,16 @@ def test_remove_asks_first(tmp_path, monkeypatch):
     ws.mark_dirty()
     ws.frame(1 / 30)
     _tap(ws, app, "btn", "REMOVE")
+    ws.mark_dirty()
+    ws.frame(1 / 30)                              # the dialog's first frame
     assert app.asking and (tmp_path / "carts" / "jet.moy").exists()
-    assert app._focused == "Cancel", "the dialog opens on its safe button"
+    assert app.engine.focus_key == "Cancel", "the dialog opens on its safe button"
     app.handle_input(_In("b"))                    # Esc: the dialog closes
     ws.mark_dirty()
     ws.frame(1 / 30)
     assert not app.asking and app.phase == "cart"
     _tap(ws, app, "btn", "REMOVE")
-    b = app._ui.box("Remove")                     # the dialog's
+    b = app.page_host().box("Remove")                     # the dialog's
     _tap_at(ws, app, b[0] + b[2] // 2, b[1] + b[3] // 2)
     _frames(ws, app)                          # the removal, a store op a frame
     assert app.phase == "list" and not (tmp_path / "carts" / "jet.moy").exists()
@@ -1563,19 +1502,19 @@ def test_buttons_walk_the_screens_without_a_finger(tmp_path):
     gpl, mit, net = _shelves(tmp_path)
     ws, app = _app_ws(tmp_path, net, [mit.url("index.json")])
     _open(ws, app)
-    assert app._focused == app._card_id(app.rows[0])     # the shelf opens on its first card
+    assert app.engine.focus_key == app._card_id(app.rows[0])     # the shelf opens on its first card
     _press_key(ws, app, "right")
-    assert app._focused == app._card_id(app.rows[1])
+    assert app.engine.focus_key == app._card_id(app.rows[1])
     _press_key(ws, app, "a")
     assert app.phase == "cart" and app.cur["cart"]["name"] == "Rock Run"
     app.handle_input(_In("b"))
     ws.mark_dirty()
     ws.frame(1 / 30)
     assert app.phase == "list"
-    assert app._focused == app._card_id(app.rows[1]), "back lands on the card it left"
+    assert app.engine.focus_key == app._card_id(app.rows[1]), "back lands on the card it left"
     _press_key(ws, app, "left")
     _press_key(ws, app, "a")                      # Jet Pot
-    assert app._focused == "verb Get", "the page opens on the verb that goes on"
+    assert app.engine.focus_key == "get", "the page opens on the verb that goes on"
     _press_key(ws, app, "a")                      # Get
     assert app.phase in ("connecting", "getting")
     _frames(ws, app)
@@ -1583,7 +1522,7 @@ def test_buttons_walk_the_screens_without_a_finger(tmp_path):
     ws.mark_dirty()
     ws.frame(1 / 30)
     assert app.toast[0] == "Jet Pot is on your shelf"
-    assert app._focused == "verb Play", "a cart on the shelf opens on Play"
+    assert app.engine.focus_key == "play", "a cart on the shelf opens on Play"
     app.handle_input(_In("b"))
     assert app.phase == "list"
 
@@ -1698,8 +1637,8 @@ def test_the_app_draws_at_every_shell_size(tmp_path):
         assert app.phase == "licence"
         ws.mark_dirty()
         ws.frame(1 / 30)
-        for name in ("Licence", "verb No", "verb I agree"):
-            rect = app._ui.box(name)
+        for name in ("no", "agree"):
+            rect = app.page_host().box(name)
             assert rect is not None, name
             assert rect[0] >= 0 and rect[1] >= 0
             assert rect[0] + rect[2] <= ws.sys_canvas.w
@@ -1738,33 +1677,19 @@ def _canvas_rows(cv, rect):
     return out
 
 
-# style.json's value_row card_pad and card_top on the handheld at fs 1
-_CARD_PAD, _CARD_TOP = 5, 4
-
-
 def test_the_cards_show_the_covers_the_indexes_name(tmp_path):
     """CHECKING fetches each cover an index names while it holds the radio,
-    checks it, and keeps it decoded at the card's side in the canvas's own
-    byte order, and the card draws it whole as its picture."""
-    from runtime import cover_png
+    checks it, and hands its bytes to the engine as the app's own picture
+    (`ui.pictures`), which a card names."""
+    from runtime import uitree as ui
     repo, jet, net = _covered_shelf()
     ws, app = _app_ws(tmp_path, net, [repo.url("index.json")])
     _open(ws, app)
     assert app.phase == "list"
     assert repo.url("carts/jet/cover.png") in net.opened
     assert "carts" not in ws.leases.holders() and ws.wifi.radio is False
-    cv = ws.sys_canvas
-    side = app.layout.side
-    assert side == 64
-    fmt = cover_png.RGB565_SW if cv.swapped565 else cover_png.RGB565
-    want = cover_png.decode(jet, 128 // side, fmt)
-    assert app.thumbs[sha(jet)] == (side, want)
-    row = [r for r in app.rows if r["cart"]["name"] == "Jet Pot"][0]
-    assert app._focused != app._card_id(row)      # not lifted: drawn at its side
-    x, y, _w, _h = app._ui.box(app._card_id(row))
-    mid = side // 2                               # a row clear of the cut corners
-    got = _canvas_rows(cv, (x + _CARD_PAD + 8, y + _CARD_TOP + mid, side - 16, 1))
-    assert got == [want[2 * (side * mid + 8):2 * (side * mid + side - 8)]]
+    assert app.thumbs[sha(jet)] is True
+    assert ui.pictures.src["cover:" + sha(jet)] == ("bytes", jet)
 
 
 @pytest.mark.parametrize("fault", ["wrong bytes", "missing", "not a cover"])
@@ -1787,7 +1712,7 @@ def test_a_cover_that_does_not_come_leaves_the_card_as_it_is(tmp_path, fault):
         assert "carts" not in ws.leases.holders()
         i = [row["cart"]["name"] for row in app.rows].index("Rock Run")
         assert ("cover" in app.rows[i]["cart"]) == (cover is not None)
-        views.append(_canvas_rows(ws.sys_canvas, app._ui.box(app._card_id(app.rows[i]))))
+        views.append(_canvas_rows(ws.sys_canvas, app.page_host().box(app._card_id(app.rows[i]))))
     assert views[0] == views[1]
 
 
@@ -1960,7 +1885,7 @@ def test_a_theme_package_installs_as_a_cart_and_its_verb_is_use(tmp_path):
         _tap(ws, app, "btn", "USE")
         assert ws.look.theme_name == "dusk" and moy_ui.theme_installed() == "dusk"
         _tap(ws, app, "btn", "REMOVE")
-        b = app._ui.box("Remove")                 # the dialog's
+        b = app.page_host().box("Remove")                 # the dialog's
         _tap_at(ws, app, b[0] + b[2] // 2, b[1] + b[3] // 2)
         _frames(ws, app)                          # the removal, a store op a frame
         assert not (tmp_path / "carts" / "dusk.moy").exists()
