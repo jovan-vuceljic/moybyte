@@ -1972,7 +1972,7 @@ class Node:
 _C = {"shown": "cond"}
 SCHEMA = {
     "page": {"title": "text"},
-    "group": dict(_C, caption="text", close="action0"),
+    "group": dict(_C, caption="text", close="action0", look="lit"),
     "label": dict(_C, text="text", tone="text", wrap="lit", face="lit", size="lit", icon="text",
                   lines="lit", align="lit"),
     "rule": dict(_C),
@@ -1980,6 +1980,7 @@ SCHEMA = {
     "bubble": dict(_C, text="text", side="text", head="text", status="text", signal="int", tone="text",
                    max="lit", lines="lit", on="action1", cut="action1"),
     "month": dict(_C, year="int", month="int", today="int", prev="action0", next="action0"),
+    "toast": dict(_C, text="text", icon="text"),
     "info": dict(_C, label="text", value="text", icon="text", signal="int", tag="text", tone="text"),
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond", tag="text",
                  tone="text"),
@@ -1996,7 +1997,7 @@ SCHEMA = {
     "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
-                  changed="action1", group="lit"),
+                  changed="action1", group="lit", pad="int"),
     "card": dict(_C, label="text", sub="text", badge="text", image="image", icon="text", tone="text"),
     # G9, G13: a picture of its own (an image state, its fallback icon), a
     # progress bar (max= is required), a page that says why there is nothing
@@ -2558,6 +2559,13 @@ def cards(model_name, **p):
         raise UIError("N04", "cards paint= is retired (G9)", where=_caller(),
                       fix="give the rows an image field (image pic) and the card image=.pic")
     return _list("cards", model_name, p, _caller())
+
+
+def toast(text, **p):
+    """A toast (§7.2): `text` and its `icon` ("check" where it has none) in
+    a pill over the foot of the page's body, above its docked foot; no stop.
+    It draws over what the page drew before it: declare it after them."""
+    return _node("toast", None, dict(p, text=text), _caller())
 
 
 def picture(image=None, **p):
@@ -3337,7 +3345,7 @@ def _collecting(fn, returns_node):
 NODE_CALLS = ("page", "group", "label", "info", "link", "button", "item", "card", "toggle", "slider",
               "field", "seg", "table", "col", "rows", "cards", "picture", "progress", "empty", "dialog",
               "popover", "menu", "split", "grid", "panel", "canvas", "foot", "scroll", "rule", "note",
-              "bubble", "month", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
+              "bubble", "month", "toast", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
               "legacy")
 DECL_CALLS = ("action", "hook", "labels", "work", "derive", "app")
 COMMAND_CALLS = ("push", "pop", "focus", "after", "post")

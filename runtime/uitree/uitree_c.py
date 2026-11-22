@@ -57,7 +57,7 @@ _KINDS = {"page": 1, "group": 2, "label": 3, "info": 4, "link": 5, "button": 6, 
           "cards": 27, "card": 28, "picture": 29, "popover": 30,
           "tools": 31, "row": 32, "status": 33, "text_editor": 34, "panes": 35, "pane": 36,
           "legacy": 37, "slot": 38, "panel": 39, "lent": 40, "rule": 41, "note": 42, "grid": 43,
-          "bubble": 44, "month": 45}
+          "bubble": 44, "month": 45, "toast": 46}
 # the placed kinds: a page the engine's layout places holds them (`CEditorPage`)
 _PLACED_KINDS = ("tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot", "panel", "lent")
 _PANE_KINDS = ("panes", "pane")

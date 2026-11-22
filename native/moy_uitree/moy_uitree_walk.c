@@ -1245,20 +1245,26 @@ static int32_t size_of(uit_t *e, int32_t v)
     return (e->flags & UIT_F_DESK) ? v : v * e->fs;
 }
 
-// A card's or a picture's marks (`ui.card`'s o): its icon tile where it names an icon, its tone,
-// the lock where its tone is "locked".
-static void card_mark(uit_t *e, moy_ui_ctx_t *c, const uit_node_t *N, int model, int row)
+static uint32_t prop_text(uit_t *e, int k, const char *name, int model, int row, uint32_t *n);
+static int32_t prop_int(uit_t *e, int k, const char *name, int model, int row);
+
+// A card's or a picture's marks (`ui.card`'s o): its icon tile where it names an icon, its tone
+// (the sub line's ink, the veil a danger tone lays on its picture), the lock where its tone is
+// "locked", a card's badge= icon on its picture's corner.
+static void card_mark(uit_t *e, moy_ui_ctx_t *c, int k, int model, int row)
 {
+    const uit_node_t *N = NODE(k);
     static const char *const TONE_NAMES[] = {"ink", "dim", "value", "danger"};
     uint32_t tn = 0, ta = N->t_aux >= 0 ? uit_tmpl_render(e, N->t_aux, model, row, &tn) : 0;
     int tone = 0, locked = tn == 6 && !memcmp(e->scratch.p + ta, "locked", 6);
     for (int i = 0; i < 4 && tn && !locked; i++)
         if (strlen(TONE_NAMES[i]) == tn && !memcmp(e->scratch.p + ta, TONE_NAMES[i], tn))
             tone = i;
-    if (N->t_icon < 0 && !tn)
+    uint32_t bn = 0, ba = N->kind == UIT_CARD ? prop_text(e, k, "badge", model, row, &bn) : 0;
+    if (N->t_icon < 0 && !tn && !bn)
         return;
     uint32_t in = 0, ia = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &in) : 0;
-    moy_ui_api_card_mark(c, span_of("", 0), locked ? 4 : tone, sspan(e, ia, in));
+    moy_ui_api_card_mark(c, sspan(e, ba, bn), locked ? 4 : tone, sspan(e, ia, in));
 }
 
 // A card of a cards list (`_r_cards`' per row): its id, its marks, its label and sub line.
@@ -1270,7 +1276,7 @@ static void draw_card(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     over_for(e, k, model, row, c, &o, id);
     int32_t pic_gen = 0;        // the card's tile is the engine's alone: no app picture moves it
     moy_ui_over_put(&o, MOY_UI_OV_GEN, &pic_gen);
-    card_mark(e, c, N, model, row);
+    card_mark(e, c, k, model, row);
     uint32_t n1, n2, a1 = text(e, k, 0, model, row, &n1), a2 = text(e, k, 1, model, row, &n2);
     int32_t out[5];
     moy_ui_api_card(c, s, sspan(e, a1, n1), sspan(e, a2, n2), &o, out);
@@ -1294,11 +1300,21 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     KIDS(k, g)
     if (NODE(g)->t_value >= 0)
         subs = 1;
-    int margin = desk ? 16 : 8, foot = desk ? (subs ? 52 : 30) : 26 + (subs ? 6 : 0);
+    int margin = desk ? 16 : 8, foot = desk ? (subs ? 52 : 30) : 26 + (subs ? 6 : 0), cols = 0;
     int32_t w = size_of(e, int_of(e, N->t_value, -1, -1, 0)), h = size_of(e, int_of(e, N->t_aux, -1, -1, 0));
+    int32_t pad = prop_int(e, k, "pad", -1, -1);
+    if (pad > 0) {
+        // pad=: the gap between its cards, a margin that much and a little more at either side;
+        // as many columns as its room holds at that gap, spread across it
+        int32_t gp = size_of(e, pad), room[5];
+        margin = pad + (desk ? 8 : 4);
+        moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, room);
+        cols = (int)((room[2] - 2 * margin * e->fs + gp) / (w + gp > 0 ? w + gp : 1));
+        cols = cols < 1 ? 1 : cols;
+    }
     int grid = N->t_main < 0, capped = 0;
     if (grid) {
-        moy_ui_api_grid_spread(c, 0, foot, 4, margin, 2);
+        moy_ui_api_grid_spread(c, cols, foot, 4, margin, 2);
         moy_ui_api_grid(c, s, span_of(key, strlen(key)), w, h, NULL);
     }
     uit_after_removal(e, k);
@@ -1317,7 +1333,7 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
                 uit_buf_printf(&cap, "%.*s", (int)n, e->scratch.p + a);
                 gid.n = 0;
                 uit_buf_printf(&gid, "%s %.*s", key, (int)n, e->scratch.p + a);
-                moy_ui_api_grid_spread(c, 0, foot, 4, margin, 2);
+                moy_ui_api_grid_spread(c, cols, foot, 4, margin, 2);
                 moy_ui_api_grid(c, s, span_of(gid.p, gid.n), w, h, NULL);
                 grid = capped = 1;
             }
@@ -1347,7 +1363,7 @@ static void draw_picture(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
     moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &one);
     moy_ui_api_grid_spread(c, 1, -1, 4, (e->flags & UIT_F_DESK) ? 16 : 8, 0);
     moy_ui_api_grid(c, s, span_of("pic ", 4), side, side, NULL);
-    card_mark(e, c, N, model, row);
+    card_mark(e, c, k, model, row);
     moy_ui_api_card(c, s, span_of("", 0), span_of("", 0), &o, out);
     moy_ui_api_grid(c, s, span_of("", 0), 0, 0, NULL);
 }
@@ -2319,7 +2335,10 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
     switch (N->kind) {
     case UIT_GROUP:
         a1 = text(e, k, 0, model, row, &n1);
-        moy_ui_api_group(c, s, sspan(e, a1, n1), NULL);
+        if (N->lit)
+            moy_ui_api_group_card(c, s);        // look="card": its rows on a card of their own
+        else
+            moy_ui_api_group(c, s, sspan(e, a1, n1), NULL);
         walk(e, c, s, k, model, row);
         moy_ui_api_group(c, s, span_of("", 0), NULL);
         break;
@@ -2532,6 +2551,17 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
     case UIT_RULE:
         moy_ui_api_rule(c, s);
         break;
+    case UIT_TOAST: {
+        // its pill over the foot of the page's body, clear of its docked foot; its icon, else check
+        uint32_t ni = 0, ai = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &ni) : 0;
+        int32_t out[4], lift = (e->flags & UIT_F_DESK) ? 12 : 6 * e->fs;
+        a1 = text(e, k, 0, model, row, &n1);
+        if (!n1)
+            break;
+        moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3] - lift);
+        moy_ui_api_toast(c, s, sspan(e, a1, n1), sspan(e, ai, ni), 0, out);
+        break;
+    }
     case UIT_BUBBLE:
         draw_bubble(e, c, s, k, model, row);
         break;

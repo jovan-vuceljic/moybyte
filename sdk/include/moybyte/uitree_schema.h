@@ -11,7 +11,7 @@ enum {
     UT_ITEM, UT_SPLIT, UT_CANVAS, UT_TABS, UT_SWITCH, UT_CASE, UT_TABLE, UT_COL, UT_FOOT,
     UT_CARDS, UT_CARD, UT_PICTURE, UT_POPOVER, UT_TOOLS, UT_ROW, UT_STATUS, UT_TEXT_EDITOR,
     UT_PANES, UT_PANE, UT_LEGACY, UT_SLOT, UT_PANEL, UT_LENT, UT_RULE, UT_NOTE, UT_GRID,
-    UT_BUBBLE, UT_MONTH,
+    UT_BUBBLE, UT_MONTH, UT_TOAST,
 };
 
 // Each kind's name by its number: an unkeyed node's key is its kind's name and its place.
@@ -20,7 +20,7 @@ static const char *const ut_kind_names_[] = {
     "slider", "field", "empty", "progress", "text_view", "scroll", "menu", "item", "split",
     "canvas", "tabs", "switch", "case", "table", "col", "foot", "cards", "card", "picture",
     "popover", "tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot",
-    "panel", "lent", "rule", "note", "grid", "bubble", "month",
+    "panel", "lent", "rule", "note", "grid", "bubble", "month", "toast",
 };
 
 // A word prop's words (`off` takes the action's: "hide", "grey").

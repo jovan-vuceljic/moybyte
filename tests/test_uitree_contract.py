@@ -43,7 +43,7 @@ CODE = re.compile(r'"([A-Z][0-9]{2})"')
 # Python stores a kind's head under a prop of SCHEMA; the table's head is positional
 PY_HEAD = {"group": "caption", "label": "text", "dialog": "title", "info": "label", "empty": "title",
            "picture": "image", "progress": "value", "status": "text", "col": "text", "menu": "caption",
-           "page": "title", "bubble": "text"}
+           "page": "title", "bubble": "text", "toast": "text"}
 
 
 def _codes(paths):

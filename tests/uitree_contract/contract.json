@@ -1280,8 +1280,7 @@
     },
     "look": {
      "type": "word:card",
-     "level": 2,
-     "designed": true
+     "level": 2
     }
    }
   },
@@ -1537,11 +1536,9 @@
     },
     "icon": {
      "type": "tpl",
-     "level": 2,
-     "designed": true
+     "level": 2
     }
-   },
-   "designed": true
+   }
   },
   "picture": {
    "head": "state",
@@ -2064,8 +2061,7 @@
     },
     "pad": {
      "type": "int",
-     "level": 2,
-     "designed": true
+     "level": 2
     },
     "group": {
      "type": "tpl",
