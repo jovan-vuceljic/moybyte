@@ -445,5 +445,5 @@ def test_a_window_bound_app_lays_out_in_its_window_and_scrolls_to_its_end(tmp_pa
         d.wheel(0, 1)
         d.frame(DT)
         d.frame(DT)
-    bx, by, bw, bh = ui_draw._C.api_box(ws.run.player.ui[0], "vault")
-    assert by + bh <= ch, "the list runs on under the window's bottom"
+    bx, by, bw, bh = ui_draw._C.api_box(ws.run.player.ui[0], "note39md/open")
+    assert cy <= by and by + bh <= cy + ch, "the last note's row is not in the window"
