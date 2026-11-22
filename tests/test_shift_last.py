@@ -143,6 +143,7 @@ def test_a_canvas_shifts_out_of_the_last_presented_buffer(bufs):
             if bufs > 1:
                 cv._comp.last = held[-1]
                 cv._buf[:] = held[-bufs] if len(held) >= bufs else held[0]
+            del held[:-bufs]
             before = bytes(cv._buf)
             assert cv.shift_last(*rect, dx, dy) is True
             cv.shift_fence()

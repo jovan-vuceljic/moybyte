@@ -157,7 +157,8 @@ int64_t moy_clock_build_day(void) {
         m++;
     }
     int day = (d[4] == ' ' ? 0 : d[4] - '0') * 10 + (d[5] - '0');
-    return moy_clock_civil(atoi(d + 7), m + 1, day, 0, 0, 0);
+    // __DATE__ is the build machine's local date, up to a day ahead of UTC's.
+    return moy_clock_civil(atoi(d + 7), m + 1, day, 0, 0, 0) - 86400;
 }
 #endif
 

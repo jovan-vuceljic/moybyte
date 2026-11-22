@@ -159,7 +159,8 @@ int moy_clock_server(const char *name);
 #define MOY_CLOCK_LEAP_MAX (400LL * 86400)
 int64_t moy_clock_cert_time(int64_t now, int64_t floor, int64_t answer);
 int moy_clock_future_counts(int64_t now, int64_t floor, int64_t answer);
-// The Unix time of 00:00 UTC on the day this file was compiled.
+// The Unix time of 00:00 UTC on the day before the one this file was compiled on
+// (its local date), so it is never ahead of the UTC clock at build time.
 int64_t moy_clock_build_day(void);
 // The Unix time of a UTC date and time, the month 1 to 12.
 int64_t moy_clock_civil(int year, int month, int day, int hour, int min, int sec);

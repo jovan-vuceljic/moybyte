@@ -42,76 +42,14 @@ def board():
 # the file on purpose: the comparison is against a fresh boot, and the wasm
 # block at the end brings the radios up. The baseline is (free, largest)
 # internal SRAM at the launcher on a fresh boot of a module-free image of the
-# same tree: board.toml's moy_wasm `take` turned to `deny`, built from an
-# EMPTY build dir (a configured one keeps the engine in its module table and
-# fails to link; a fresh `tools/worktree.py new` has one). Measured
-# 2026-11-05 on 687c296a5, two fresh boots: 125843 and 125863 free, 86016
-# largest; the image with the engine read 124683 free. The idle desk's bar
-# reads the battery gauge (its low glyph), so the baseline holds what the
-# ADC driver keeps in internal SRAM once read. A change that adds internal
-# statics, or internal RAM the idle desk holds, re-measures it the same way.
-# Plus mDNS's scratch (the espressif/mdns component's four function-static
-# buffers, a PSRAM block while the responder runs, moybyte_patch_mdns_psram):
-# 1849 bytes of .bss by the link map against dev 145567a4f, 2026-11-06.
-# Less CORE_DUMP_SRAM, what the core dump keeps internal (8fa65650d,
-# 2026-11-09), all of it reached by a panic with the cache off: its own
-# 1792-byte stack (the IDF's floor while task stacks may be PSRAM), 1892 with
-# what the IDF adds to it; the ISR stacks, which an ELF dump needs at 2096
-# bytes a core where they were 1536, 1120; the panic's registers, frames,
-# flash config and the writer's other statics, 941; the kernel's table of
-# loaded modules, which the dump carries (native/moy_elf/moy_elf_maps.h,
-# .dram2.coredump), and its keys, 240; and 177 bytes of IRAM, the flash and
-# port functions the writer calls with the cache off, which move the DRAM's
-# start a 256-byte step. 4450 bytes by the heap's start against dev
-# eb0498275, link maps, 2026-11-09.
-# And BATCH6_SRAM, the statics of the kernel's alarms (native/moy_kernel/
-# moy_evq.c: the woken pids and the timer counters, the timers themselves
-# PSRAM in their queues), the media service's last run's end and key time
-# (native/moy_media/moy_media.c, its state PSRAM) and the VM queue's flag:
-# 70 bytes of .bss by the link map against dev eb0498275, 2026-11-09.
-CORE_DUMP_SRAM = 4450
-BATCH6_SRAM = 70
-# Plus MOVED_SRAM, internal statics moved to PSRAM against them, each made at
-# its first use: the per-verb profiler's counters (native/moycore/
-# moycore_prof.c, 2304 bytes, made when LUAPROF installs), the compiled face's
-# shape scratch (native/moy_ui/moy_ui_run.c, 1236, made while a compiled
-# app's theme names another shape) and the dev channel's `state` line while a
-# run is in front (native/moy_kernel/moy_devch.c, 1024): 4560 bytes by the
-# heap's start against 65e7e49ae, link maps, 2026-11-09. With them the
-# heap's start sits where it was at eb0498275 or lower, and the largest
-# block with it.
-MOVED_SRAM = 4560
-# And TAP_FONTS_SRAM, the tap floor's two font roles in the UI's font tables
-# (native/moy_ui/moy_ui.c's `s_font`, 8, and the main instance's `font_from`
-# and `font_local`, native/moy_ui/moy_ui_api.h, 16): ids the draw path reads
-# every row, so they stay internal. 24 bytes of .bss by the link map against
-# dev 57dfc2d20, 2026-11-11.
-TAP_FONTS_SRAM = 24
-# And STATICS_1116_SRAM, the internal statics added against dev b909d0d96
-# (2026-11-16): the back-stack's kind-to-qstr cache (native/moy_spine/
-# modmoy_spine.c's `s_kq`, 161), the desk restore's shadow fill and its
-# colour table (native/moy_ui/moy_shape.c, 52), the browser console page's
-# state (native/moy_net/moy_page.c, 16), the quiet collect's retry counters
-# and the window stamp's (native/moy_kernel/moy_loop_board.c, 16) and the
-# profiler's phase (4): 249 bytes of .bss and .data by the link maps, which
-# move the heap's start a 256-byte step, against bc539dd86, 2026-11-17. The
-# browser console's add-on cart on the store costs nothing: fresh boots of one
-# image read the same with and without it, and move by up to 156 bytes (the
-# largest block by a 4096-byte step) with the store's folders alone. A cart
-# pushed over the cable costs 240 bytes once a boot (the SHA engine's first
-# digest and the first `recv`), which is why a board pass reboots after it
-# installs the add-on.
-STATICS_1116_SRAM = 256
-# And PMEM_SRAM, the pmem saver and its raw log (native/moy_store): the
-# saver's mutex, stats and slots (moy_save.c, 128), the reader's error
-# (moy_pmem.c, 8), the log's handle and state pointer (moy_plog.c, 12; its
-# state is a store block in PSRAM), the audio overflow ISR (22) and the IDF's
-# internal bookkeeping for the `pmem` partition's mmap, against dev
-# 164ecd289, 2026-11-19.
-PMEM_SRAM = 160
-WASM_IDLE_BASELINE = (125863 + 1849 - CORE_DUMP_SRAM - BATCH6_SRAM + MOVED_SRAM - TAP_FONTS_SRAM
-                      - STATICS_1116_SRAM - PMEM_SRAM,
-                      86016)
+# same tree: board.toml's moy_wasm `take` turned to `deny`. Measured
+# 2026-11-22 on 8a49d256e, three fresh boots: 126103, 125963 and 125963 free,
+# 86016 largest; the image with the engine read 125391 free (three boots),
+# 81920 largest. The idle desk's bar reads the battery gauge (its low glyph),
+# so the baseline holds what the ADC driver keeps in internal SRAM once read.
+# A change that adds internal statics, or internal RAM the idle desk holds,
+# re-measures it the same way.
+WASM_IDLE_BASELINE = (125963, 86016)
 WASM_BOARD_DIR = ROOT / "firmware" / "lilygo_t_deck_plus_mainline"
 
 

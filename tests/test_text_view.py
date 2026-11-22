@@ -255,6 +255,7 @@ class Pair:
             if self.bufs > 1:
                 ra._comp.last = shot
                 ra._buf[:] = self.held[-self.bufs] if len(self.held) > self.bufs else self.held[0]
+            del self.held[:-self.bufs]
 
     def both(self, verb, *args):
         getattr(self.da, verb)(*args)
@@ -576,6 +577,7 @@ class TermRig:
         if self.bufs > 1:
             self.cv._comp.last = shot
             self.cv._buf[:] = self.held[-self.bufs] if len(self.held) > self.bufs else self.held[0]
+        del self.held[:-self.bufs]
 
     def point(self, x, y, click, down):
         self.a.point(x, y, click, down)

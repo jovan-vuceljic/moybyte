@@ -174,6 +174,8 @@ def test_the_browser_console_awards_achievements_as_a_board_does():
     assert got["after"] > got["before"], got     # First Steps, as on a board
 
 
+@pytest.mark.skipif(not os.environ.get("MOYBYTE_WEB_E2E"),
+                    reason="MOYBYTE_WEB_E2E not set (boots the built wasm console)")
 def test_the_browser_console_draws_its_pages_on_the_c_engine_from_compiled_pages():
     """The wasm carries native/moy_uitree and the console's compiled pages
     (firmware/web_runner/build.sh), so its pages run on the C engine as on a

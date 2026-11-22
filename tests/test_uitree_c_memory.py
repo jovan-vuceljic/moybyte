@@ -132,3 +132,20 @@ def test_a_page_opened_again_neither_builds_nor_lowers(result):
     again = [c for c in result["calls"] if c[0] > 0]
     assert all(c[2] >= 1 and c[3] >= 1 for c in first), first
     assert all(c[2] == 0 and c[3] == 0 for c in again), [c for c in again if c[2] or c[3]]
+
+
+def test_a_declared_action_holds_on_itself_only_what_its_class_does_not():
+    """A board's image declares hundreds of actions and hooks at boot, and
+    each attribute an instance holds costs its dict a slot: what an action's
+    declaration left at its class's value stays the class's."""
+    import uitree as S
+    import uitree_compile
+    for m in uitree_compile.SYSTEM:
+        __import__(m)
+    n = 0
+    for d in S._DECLS.values():
+        for a in d.actions.values():
+            n += 1
+            same = [k for k, v in a.__dict__.items() if k in S.Action.__dict__ and S.Action.__dict__[k] == v]
+            assert not same, (d.module, a.name, same)
+    assert n > 100, n

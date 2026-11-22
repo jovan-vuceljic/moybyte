@@ -243,6 +243,7 @@ class Rig:
         if self.bufs > 1:
             self.cv._comp.last = shot
             self.cv._buf[:] = self.held[-self.bufs] if len(self.held) > self.bufs else self.held[0]
+        del self.held[:-self.bufs]
 
     def point(self, x, y, click, down):
         self.a.point(x, y, click, down)

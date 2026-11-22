@@ -122,6 +122,7 @@ def _console(tmp_path, monkeypatch, bufs, ref, windowed, force=True):
             if bufs > 1:
                 root._comp.last = held[-1]
                 root._buf[:] = held[-bufs] if len(held) > bufs else held[0]
+            del held[:-bufs]
     frame.drv = drv
     return ws, frame, shots, puts
 

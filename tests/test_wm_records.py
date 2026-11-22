@@ -264,6 +264,7 @@ class Pair:
                     h.append(bytes(root._buf))
                     root._comp.last = h[-1]
                     root._buf[:] = h[-self.bufs] if len(h) > self.bufs else h[0]
+                    del h[:-self.bufs]
         self.painted = painted
         if check:
             shot, want = self.glass(self.a), self.glass(self.b)

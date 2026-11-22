@@ -896,11 +896,17 @@ class CEngine(Engine):
             kind, _c, key = pic.partition(":")
             p = self._pic_of[pic] = S.Pic(kind, key)
         wh = self._pic_wh.get(node)
+        pics = self.pics
         if r is None:
-            return self.pics.gen_of(p) + 1 if wh is not None and self.pics.state(p, wh[0], wh[1]) == "shown" else 0
+            return pics.gen_of(p) + 1 if wh is not None and pics is not None and pics.state(p, wh[0], wh[1]) == "shown" else 0
+        if pics is None:
+            import uitree_pics
+            cv = self.cv
+            pics = self.pics = uitree_pics.PicEngine(self, self.files, getattr(cv, "swapped565", False),
+                                                     uitree_pics.budget_for(cv.w, cv.h))
         if not r[8] and (wh is None or wh[0] != r[2] or wh[1] != r[3]):
             wh = self._pic_wh[node] = (r[2], r[3])
-        got = self.pics.peek(p, wh[0], wh[1]) if wh is not None else self.pics.peek(p, r[2], r[3])
+        got = pics.peek(p, wh[0], wh[1]) if wh is not None else pics.peek(p, r[2], r[3])
         if got is not None:
             cv = self.cv
             cv.clip(r[4], r[5], r[6], r[7])
@@ -922,11 +928,8 @@ class CEngine(Engine):
         if self._shut:
             self._resume()
         self._ready()
-        if self.pics is None:
-            import uitree_pics
-            self.pics = uitree_pics.PicEngine(self, self.files, getattr(cv, "swapped565", False),
-                                              uitree_pics.budget_for(cv.w, cv.h))
-        self.pics.begin_frame()
+        if self.pics is not None:
+            self.pics.begin_frame()
         x = self._x
         if self.want_focus is not None:
             w, at, self.want_focus, self.focus_at = self.want_focus, self.focus_at, None, None
