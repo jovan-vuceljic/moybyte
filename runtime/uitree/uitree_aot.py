@@ -258,6 +258,7 @@ def _load(eng, x, blob, f, tb):
     eng._draws, eng._grounds = draws, f["G"]
     eng.unfront(f["X"])
     x.on_draw(eng._draw)
+    x.on_pic(eng._pic)
     eng._drawing = True
     for name in names:
         eng._push(name)
