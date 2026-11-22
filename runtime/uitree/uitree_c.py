@@ -16,6 +16,7 @@ engine's own writes (a toggle, a list's cursor) are pulled back before any
 handler runs."""
 
 import struct
+from array import array
 import sys
 
 from moy_input import SHIFT as _SHIFT
@@ -193,6 +194,7 @@ class CEngine(Engine):
         self._draws, self._drawing = {}, False
         self._canvas_keys = {}          # a canvas's key -> (its keys= function, the model of the list it stands in or None)
         self._grounds = {}      # a canvas's ground= role, by its node
+        self._row_clip = array("i", [0, 0, 0, 0])     # a list row's canvas's clip (`_draw`)
         self._docs = {}         # a document's state -> what it was pushed at (`_push_doc`)
         self._doc_reads = {}    # ...and the fields of it the lowered page reads
         self._editors = {}      # a text editor's node -> its stand-in (`_TextEditor`)
@@ -836,14 +838,29 @@ class CEngine(Engine):
         now = S._NOW
         app, frame = now.app, now.frame       # two names, not a tuple: a frame allocates nothing
         now.app, now.frame = self, True
+        cv = self.cv
         try:
             g = self._grounds.get(node)
-            if g:
-                self.cv.rect(x, y, w, h, self.th[g])
-            if model >= 0 and row >= 0:
-                self._draws[node](self.cv, x, y, w, h, self.s._v[self._names[model]][row])
+            if model >= 0 and row >= 0 and not self.PLACED:
+                # a flowing list's row: drawn where its page or scroll region shows it
+                k = self._row_clip
+                k[0] = x                # one at a time: a four-way unpack builds a tuple on a board
+                k[1] = y
+                k[2] = w
+                k[3] = h
+                _v.card_clip(k)
+                cv.clip(k[0], k[1], k[2], k[3])
+                if g:
+                    cv.rect(x, y, w, h, self.th[g])
+                self._draws[node](cv, x, y, w, h, self.s._v[self._names[model]][row])
+                cv.clip()
             else:
-                self._draws[node](self.cv, x, y, w, h)
+                if g:
+                    cv.rect(x, y, w, h, self.th[g])
+                if model >= 0 and row >= 0:
+                    self._draws[node](cv, x, y, w, h, self.s._v[self._names[model]][row])
+                else:
+                    self._draws[node](cv, x, y, w, h)
         finally:
             now.app, now.frame = app, frame
 

@@ -3337,6 +3337,17 @@ class Pictures:
         self.src.pop(key, None)
         self.gen[key] = self.gen.get(key, 0) + 1
 
+    def changed(self, path):
+        """The store file `image.store(path)` names was written since the
+        engine made its pictures: they go, and a card showing it reads the
+        file again."""
+        if not isinstance(path, str) or path.count("/") != 1:
+            raise UIError("S02", "pictures.changed(%r): a store path is KIND/NAME" % (path,),
+                          fix='pictures.changed("drawings/Cat")')
+        a = _NOW.app
+        if a is not None and getattr(a, "pics", None) is not None:
+            a.pics.forget_store(path)
+
 
 pictures = Pictures()
 
