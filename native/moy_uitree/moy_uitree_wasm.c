@@ -24,8 +24,10 @@ enum { LOG_ERR = 3, LOG_INFO = 6 };
 // The module that drives a compiled run (none in a library with no compiled run).
 #pragma weak moycore_ui_target
 #pragma weak moycore_ui_snap
+#pragma weak moycore_ui_draw_call
 
 #define DEPTH 8                 // the pages a stack remembers a focus for
+#define CANVASES 8              // the canvases of a page a pointer is routed to
 #define BACK_EV 0x10000         // `next`'s answer for the bar's back with a page to pop (UT_BACK)
 
 // An action owed to the app, handed out by `next` in the order the frame took it.
@@ -55,12 +57,36 @@ typedef struct {
     char refocus[DEPTH][48];    // the key focused on each page as the next was pushed
     int refocus_due;            // build_end puts the focus back on this depth's key (-1 none)
     char title[64];             // the page's title, for a trace's "on 'TITLE'"
+    struct {                    // each canvas of the page a pointer is routed to: its pointer= action,
+        int node, act;          // the rect the last frame drew it at and that frame
+        int32_t r[4];
+        uint32_t frame;
+        char key[32];
+    } ptr[CANVASES];
+    int nptr;
+    int held;                   // the canvas a press started on (its `ptr`), held until release; -1 none
+    int32_t hx, hy;             // ...the press's last point
+    int trapped;                // the app's draw trapped in this frame
     owed_t *q;                  // the actions owed, [qat, qn)
     int qn, qat, qcap;
     uit_buf_t qtext;
 } app_t;
 
 static app_t s_app;
+
+// A canvas's draw: its rect kept for the pointer, and the app's draw called.
+static void drawn(void *ud, int node, int x, int y, int w, int h) {
+    app_t *a = ud;
+    for (int i = 0; i < a->nptr; i++) {
+        if (a->ptr[i].node == node) {
+            a->ptr[i].r[0] = x, a->ptr[i].r[1] = y, a->ptr[i].r[2] = w, a->ptr[i].r[3] = h;
+            a->ptr[i].frame = a->frames;
+        }
+    }
+    if (moycore_ui_draw_call != NULL && !a->trapped && moycore_ui_draw_call(node, x, y, w, h) < 0) {
+        a->trapped = 1;
+    }
+}
 
 static void app_drop(app_t *a) {
     if (a->e != NULL) {
@@ -99,6 +125,8 @@ static app_t *app(void) {
         a->hook_open = -1;
         a->page = -1;
         a->refocus_due = -1;
+        a->held = -1;
+        uit_on_draw(a->e, drawn, a);
     }
     return a;
 }
@@ -340,6 +368,8 @@ int32_t moy_uitree_wasm_build(void *x, const uint8_t *page, uint32_t page_n) {
     uit_build_begin(a->e, at(a, p));
     a->page = -1;
     a->title[0] = 0;
+    a->nptr = 0;
+    a->held = -1;
     return 0;
 }
 
@@ -371,6 +401,16 @@ int32_t moy_uitree_wasm_prop(void *x, int32_t node, const uint8_t *name, uint32_
     int r = uit_prop(a->e, (int)node, at(a, n), at(a, s), NULL);
     if (r >= 0 && node == a->page && strcmp(at(a, n), "title") == 0) {
         snprintf(a->title, sizeof a->title, "%s", at(a, s));
+    }
+    if (r >= 0 && a->e->nodes[node].kind == UIT_CANVAS && strcmp(at(a, n), "pointer") == 0 && a->nptr < CANVASES) {
+        for (int k = 0; k < a->e->nacts; k++) {
+            if (strcmp(uit_str(a->e, a->e->acts[k].name), at(a, s)) == 0) {
+                a->ptr[a->nptr].node = (int)node;
+                a->ptr[a->nptr].act = k;
+                a->ptr[a->nptr].frame = 0;
+                snprintf(a->ptr[a->nptr++].key, sizeof a->ptr[0].key, "%s", uit_str(a->e, a->e->nodes[node].key));
+            }
+        }
     }
     if (r < 0) {
         char where[200];
@@ -470,6 +510,50 @@ static int with_flag(const app_t *a, int flag) {
     return -1;
 }
 
+static void pointed(app_t *a, int i, int kind, int32_t x, int32_t y) {
+    static const char *const what[] = {"", "down", "drag", "up"};
+    char src[80];
+    int32_t pev[3] = {kind, x - a->ptr[i].r[0], y - a->ptr[i].r[1]};
+    snprintf(src, sizeof src, "pointer %s on canvas '%s'", what[kind], a->ptr[i].key);
+    owe(a, a->ptr[i].act, -1, -1, pev, src, 1);
+}
+
+// The pointer before the keys: a canvas with pointer= is handed down, drag
+// and up in its own coordinates, at the rect the last frame drew it at; the
+// press that starts on it holds it until release.
+static void pointers(app_t *a, const int32_t *snap) {
+    int st = snap[MOYCORE_UI_SNAP_PTR];
+    int32_t tx = snap[MOYCORE_UI_SNAP_X], ty = snap[MOYCORE_UI_SNAP_Y];
+    if (a->held >= 0) {
+        int i = a->held;
+        if (st && (st & 2)) {
+            if (tx != a->hx || ty != a->hy) {
+                a->hx = tx, a->hy = ty;
+                pointed(a, i, 2, tx, ty);
+            }
+            return;
+        }
+        a->held = -1;
+        pointed(a, i, 3, st ? tx : a->hx, st ? ty : a->hy);
+        return;
+    }
+    if (!(st & 4)) {
+        return;
+    }
+    for (int i = 0; i < a->nptr; i++) {
+        const int32_t *r = a->ptr[i].r;
+        if (a->ptr[i].frame == a->frames && tx >= r[0] && tx < r[0] + r[2] && ty >= r[1] && ty < r[1] + r[3]) {
+            pointed(a, i, 1, tx, ty);
+            if (st & 2) {
+                a->held = i, a->hx = tx, a->hy = ty;
+            } else {
+                pointed(a, i, 3, tx, ty);
+            }
+            return;
+        }
+    }
+}
+
 // The keys before the page: a letter an action declares, where the engine
 // gives it to that action (not into a focused field), and the confirm role's
 // key (A, Enter) where nothing is focused and no dialog shows.
@@ -531,6 +615,7 @@ int32_t moy_uitree_wasm_frame(void *x, int32_t flags) {
         a->qtext.n = 0;
     }
     if (snap != NULL) {
+        pointers(a, snap);
         keys(a, snap);
     }
     // the bar's title is the app's (its window's): the page's title is the page's to draw
@@ -544,10 +629,14 @@ int32_t moy_uitree_wasm_frame(void *x, int32_t flags) {
     }
     a->handler = -1;
     a->frames++;
+    a->trapped = 0;
     int depth = a->depth < 1 ? 1 : a->depth > 255 ? 255 : a->depth;
     int r = uit_run_frame(a->e, target, UIT_F_BAND | UIT_F_TRACE | depth << UIT_F_PAGES_SHIFT);
     if (r < 0) {
         return refuse(a, r, "frame", "", "no compiled run is open");
+    }
+    if (a->trapped) {
+        return refuse(a, UIT_E_ARG, "frame", "", "the app's _uitree_draw trapped");
     }
     char line[600];
     while (uit_trace_next(a->e, line, sizeof line) >= 0) {

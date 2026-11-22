@@ -23,7 +23,10 @@
 //                 traced as a push and remembers the focused key; a
 //                 shallower one is traced as Back and puts the focus back on
 //                 the key its page had, as the layers trace and focus them.
-//   frame(flags)  the frame as the Lua layer's back end runs it: a letter
+//   frame(flags)  the frame as the Lua layer's back end runs it: a press on
+//                 a canvas with pointer= owes its action down, each drag and
+//                 up (in the canvas's coordinates, at the rect the last frame
+//                 drew it at; the press holds the canvas), a letter
 //                 key an action declares (uit_letter) and the confirm role's
 //                 key (A, Enter, with nothing focused and no dialog) owe
 //                 their actions; the host's bar is lent with no title, its
@@ -33,6 +36,9 @@
 //                 the page, or the back role's action; then uit_run_frame on
 //                 the run's canvas with the hints band, the trace and the
 //                 page depth, and the engine's actions owed after those.
+//                 Each canvas the walk draws calls the module's export
+//                 `_uitree_draw(node, x, y, w, h)` (moycore_ui_draw_call,
+//                 the driving module's), and a trap there is refused.
 //                 `flags` is 0 (no flag is defined yet). The engine's trace
 //                 lines go to the OS log as "[trace] " lines, the Python and
 //                 Lua layers' format.
@@ -42,7 +48,9 @@
 //                 the first one `next` hands out after it.
 //   next(ev)      the next action owed, its index (-1: none; 0x10000: the
 //                 bar's Back pops the page, which the app builds): ev[0] its
-//                 model slot, ev[1] its row (-1 each where it acts on none).
+//                 model slot, ev[1] its row (-1 each where it acts on none),
+//                 and where ev holds five words a pointer's kind (1 down,
+//                 2 drag, 3 up), x and y.
 //                 An action that is off now is traced as skipped and not
 //                 handed out; a control's write is not an event here (the
 //                 slot holds it: read it with get_*). Every set_* until the

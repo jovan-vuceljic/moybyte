@@ -209,3 +209,20 @@ def test_a_model_write_is_traced_as_the_layers_trace_a_set():
         ]
     finally:
         r.close()
+
+
+def test_a_canvas_is_drawn_by_the_app_and_hands_its_pointer_to_an_action():
+    """A canvas's draw is the module's own, called inside the frame; a press
+    on it, its drag and its release reach the pointer= action as down, drag
+    and up in the canvas's coordinates, the press holding the canvas."""
+    import uitree_conf as C
+    cart = os.path.join(ROOT, "tests", "fixtures", "uitree_canvas_wasm.moy")
+    trace, frames = C.run_wasm(None, C.CONFIGS[0], ["swipe:20"], cart=cart)
+    acts = [l for l in trace if l.startswith("action poke")]
+    assert acts[0] == "action poke from pointer down on canvas 'pad'"
+    assert acts[-1] == "action poke from pointer up on canvas 'pad'"
+    assert "action poke from pointer drag on canvas 'pad'" in acts
+    down = next(re.search(r"-> 'down (\d+),(\d+) drawn' \(in poke\)$", l) for l in trace if "-> 'down " in l)
+    up = next(re.search(r"-> 'up (\d+),(\d+) drawn' \(in poke\)$", l) for l in trace if "-> 'up " in l)
+    assert up.group(1) == down.group(1) and int(up.group(2)) - int(down.group(2)) == 20
+

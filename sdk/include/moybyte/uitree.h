@@ -64,11 +64,14 @@ enum {
 #define UT_ACTIONS 64           // actions with a handler
 #define UT_PAGES 8              // pages on the stack
 #define UT_BACK 0x10000         // uitree_next's answer for the bar's back: pop the page
+#define UT_CANVASES 8           // canvases with a draw on a page
 
 // A handler: `row` is the row of the model the action came from, else -1.
 typedef void (*ut_fn)(int32_t row);
 // A page: its build, a ut_page block.
 typedef void (*ut_page_fn)(void);
+// A canvas's draw, called inside the frame with the rect it draws in.
+typedef void (*ut_draw_fn)(int32_t x, int32_t y, int32_t w, int32_t h);
 
 // The build's place and the handlers: one copy for every unit that includes this.
 struct ut_ {
@@ -79,8 +82,34 @@ struct ut_ {
     ut_page_fn pages[UT_PAGES];             // the page stack, its top last
     int32_t npages;
     int32_t ev[5];                          // the running action's model slot, row, and a pointer's kind, x, y
+    int32_t canvas[UT_CANVASES];            // the page's canvases with a draw, and each draw
+    ut_draw_fn draws[UT_CANVASES];
+    int32_t ncanvas;
 };
 __attribute__((weak)) struct ut_ ut_;
+
+// The module's `_uitree_draw` (the face calls it for each canvas the frame draws): the canvas's draw.
+__attribute__((weak, export_name("_uitree_draw"))) void ut_draw_(int32_t node, int32_t x, int32_t y, int32_t w,
+                                                                 int32_t h) {
+    for (int32_t i = 0; i < ut_.ncanvas; i++) {
+        if (ut_.canvas[i] == node) {
+            ut_.draws[i](x, y, w, h);
+        }
+    }
+}
+
+// A pointer action's event: down, drag or up, at x, y in its canvas.
+#define UT_DOWN 1
+#define UT_DRAG 2
+#define UT_UP 3
+typedef struct {
+    int32_t kind, x, y;
+} ut_point_t;
+
+static inline ut_point_t ut_point(void) {
+    ut_point_t p = {ut_.ev[2], ut_.ev[3], ut_.ev[4]};
+    return p;
+}
 
 static inline uint32_t ut_len_(const char *s) {
     return s != NULL ? (uint32_t)strlen(s) : 0u;
@@ -305,6 +334,7 @@ static inline int ut_page_(const char *id, const char *title) {
     memcpy(e, id, n);
     uitree_build(b, (uint32_t)(e + n - b));
     ut_.depth = 0;
+    ut_.ncanvas = 0;
     ut_node(UT_PAGE, "page");
     if (title != NULL) {
         ut_prop_("title", title);
@@ -529,6 +559,22 @@ static inline int32_t ut_card(const char *action, const char *label, const char 
         ut_prop_("sub", sub);
     }
     uitree_node_action(n, ut_action_of_(action));
+    return n;
+}
+
+// A canvas keyed `key`, drawn by `draw` (or NULL), its pointer handed to
+// the action `pointer` (or NULL), whose handler reads ut_point(). Its size:
+// ut_p_h, ut_p_w, ut_p_size after it.
+static inline int32_t ut_canvas(const char *key, ut_draw_fn draw, const char *pointer) {
+    int32_t n = ut_node(UT_CANVAS, key);
+    if (draw != NULL && ut_.ncanvas < UT_CANVASES) {
+        ut_.canvas[ut_.ncanvas] = n;
+        ut_.draws[ut_.ncanvas++] = draw;
+    }
+    ut_prop_("draw", "draw");
+    if (pointer != NULL) {
+        ut_prop_("pointer", pointer);
+    }
     return n;
 }
 

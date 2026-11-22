@@ -283,6 +283,23 @@ const moy_app_run_t *moy_app_wasm_run_of(void *e)
     return NULL;
 }
 
+/* A compiled app's canvas draw (native/moy_uitree/moy_uitree_wasm.c): its
+ * exported `_uitree_draw(node, x, y, w, h)`, called inside the frame the
+ * module's own uitree_frame runs. 1 drawn, 0 the module exports none, -1 it
+ * trapped: the trap stays on the module, so the call that ran the frame ends
+ * in it. moycore_wasm.c's is the boards' twin. */
+int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t h);
+int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    host_wasm *r = hw_current();
+    if (!r || !r->bound || r->dead || r->w.items) return 0;
+    wasm_function_inst_t fn = wasm_runtime_lookup_function(r->inst, "_uitree_draw");
+    if (!fn || wasm_func_get_param_count(fn, r->inst) != 5 || wasm_func_get_result_count(fn, r->inst) != 0)
+        return 0;
+    uint32_t argv[5] = {(uint32_t)node, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h};
+    return wasm_runtime_call_wasm(r->env, fn, 5, argv) ? 1 : -1;
+}
+
 /* The canvas the ui rows draw on (native/moy_ui/moy_ui_run.h): the live
  * run's draw target, an owed or kept frame written in first, as the board's
  * module does. */
