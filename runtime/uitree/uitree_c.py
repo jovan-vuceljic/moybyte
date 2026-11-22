@@ -150,6 +150,7 @@ class CEngine(Engine):
             raise EngineGap("on a tier with no moy_uitree")
         self._x = None          # the store: made at the first open (`_made`), so a page never opened holds none
         self._shut = False      # closed (`close`): the store keeps its lowered page and no visit
+        self.owes = False       # the last frame drew a band its own focus moved past (OWE)
         self._lowered = None    # the page function whose tree the store holds
         self._slot, self._names, self._types, self._pushed = {}, [], [], {}
         self.direct = BUILD == "direct"
@@ -794,6 +795,7 @@ class CEngine(Engine):
         self._buttons = 0
         if r & 0xffff or S.TRACING:
             self._drain()
+        self.owes = bool(r & OWE)
         if r & OWE:
             self._damage.all()
         q = self.q

@@ -1434,6 +1434,10 @@ class WindowPaint:
 
     # -- a window's content: an app's buffer, a game's frame -------------------
 
+    def _behind_moved(self, win):
+        lyr = self.ws.layer_of(win.kind)
+        return lyr is not None and lyr.moved()
+
     def _draw_app_window(self, win, focused, dt):
         # Freeze the content render while THIS window is being dragged/resized
         # (#58 drag perf): its buffer can't change under a drag (no input reaches
@@ -1459,9 +1463,11 @@ class WindowPaint:
         if moving:
             self._win_touched = True
             self._fresh(win)              # the move stamps its page
-        elif not focused and (win._look_gen != self.ws.look.look_gen or win._marked):
-            # A background window's retained buffer under an older look, or
-            # drawn while it had the focus mark.
+        elif not focused and (win._look_gen != self.ws.look.look_gen or win._marked
+                              or self._behind_moved(win)):
+            # A background window's retained buffer under an older look,
+            # drawn while it had the focus mark, or behind what its content
+            # shows now (`Layer.moved`).
             win._look_gen = self.ws.look.look_gen
             self._win_touched = True
             self.prewarm(win)

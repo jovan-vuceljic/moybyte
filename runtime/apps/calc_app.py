@@ -21,7 +21,6 @@ tape persist while the app stays open, and reset on a fresh open.
 
 import uitree as ui
 import uitree_app
-from layout_base import metric_class, DESK
 from moy_store_base import builtin_name
 
 # The keypad, 4 x 5, row by row; "0" spans two cells. A key is its
@@ -161,10 +160,4 @@ def is_app(cart):
     return builtin_name(path) == "moybyte.calc.moy"
 
 
-class CalcAppLayer(uitree_app.app_layer("calc", "Calc", calc_page, is_app)):
-    """The page as the app the manifest names. A desk's window shows no
-    hints band: a keyboard types every key."""
-
-    def draw(self, dt):
-        self.engine.band = metric_class() != DESK
-        super().draw(dt)
+CalcAppLayer = uitree_app.app_layer("calc", "Calc", calc_page, is_app)

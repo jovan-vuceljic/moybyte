@@ -423,6 +423,11 @@ class App(AppLayer):
     def handle_pointer(self, px, py, click):
         return self.engine.point(px, py, click)
 
+    def moved(self):
+        """The page owes a frame (its band drawn before its focus landed): a
+        window behind draws it again too."""
+        return self.engine.owes
+
     def has_page(self):
         return bool(self.engine.has_page())
 

@@ -1583,7 +1583,7 @@ def _console_home(g, ws):
 
 def _key_calc(g, ws):
     calc = _app(ws, "calc")
-    mod, eng = sys.modules[type(calc).__module__], calc.engine
+    mod, eng = sys.modules[calc.BUILD[0].__module__], calc.engine
     for expr in CALC_TAPE:
         for k in "C" + expr:
             eng.run(mod.press, k, action="press")
