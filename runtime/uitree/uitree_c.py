@@ -15,6 +15,7 @@ only: the commit's writes are pushed to C's slots at its end, and the
 engine's own writes (a toggle, a list's cursor) are pulled back before any
 handler runs."""
 
+import struct
 import sys
 
 from moy_input import SHIFT as _SHIFT
@@ -164,7 +165,10 @@ class CEngine(Engine):
         self._pop_lists = {}    # a popover's key -> (model, cur) of the list the arrows walk in it
         self._pop_fields = {}   # a popover's key -> whether a field of its own takes typed keys
         self._loaded = False    # the store came from a compiled page whose build is not yet counted
+        self._units = b""       # the nodes bound to a unit, int16 each (`uit_live`)...
+        self._unit_names = ()   # ...and each one's unit
         self._lend_at = {}      # a lent row's node -> its line (L03 names the second)
+        self._live = None       # the units mask uitree.LIVE was made from; None: never made here
 
     def _made(self):
         """The store, made and declared at the first way in that needs it."""
@@ -302,8 +306,8 @@ class CEngine(Engine):
         self._acts = list(self.actions.values())
         self._aidx = {}
         for a in self._acts:
-            if a.chars or a.unit is not None:
-                raise EngineGap("action %s's chars= or unit" % a.name)
+            if a.chars:
+                raise EngineGap("action %s's chars=" % a.name)
             flags = (A_HOOK if a.hook else 0) | (A_ROLE_CONFIRM if "role:confirm" in a.keys else 0) | (
                 A_ROLE_BACK if "role:back" in a.keys else 0) | (A_SHIFT_ENTER if S.SHIFT_ENTER in a.keys else 0)
             off = {"hide": 1, "grey": 2}.get(getattr(a, "off", None), 0)
@@ -538,7 +542,8 @@ class CEngine(Engine):
         stand = self._pn = {}           # node -> a panes or pane's stand-in (`_pane_node`)
         legacies = self._legacy = {}    # node -> a legacy node's stand-in: its functions
         srcs = []
-        lend_at = self._lend_at = {}
+        units, lend_at = [], {}
+        self._lend_at = lend_at
         feet = set()                    # a flowing page's foot stacks its rows by the placed rule
 
         def node(n, parent):
@@ -555,6 +560,8 @@ class CEngine(Engine):
                 fail(me, "node %s" % n.key, n.where)
             if nk == "foot":
                 feet.add(me)
+            if n.unit is not None:
+                units.append((me, n.unit))
             if nk == "tools" and l and l.get("lend"):
                 lend_at[me] = n.where
             if field:
@@ -669,6 +676,12 @@ class CEngine(Engine):
                 node(k, me)
         node(root, -1)
         self._ck(x.build_end(), "the build")
+        if len(units) > 31:
+            raise EngineGap("%d nodes bound to units" % len(units))
+        self._units = struct.pack("<%dh" % len(units), *[k for k, _u in units])
+        self._unit_names = tuple(u for _k, u in units)
+        if self._live is not None:
+            self._live = -1         # the bits name other nodes now
         # what the page's templates and conditions read of each document: the fields pushed
         reads = self._doc_reads = {}
         for name in self._docs:
@@ -684,6 +697,8 @@ class CEngine(Engine):
         as itself (0), a dict as its items (1), a function as its name in
         the page's module (2); a dict of conditions is the store's alone."""
         mod = sys.modules[_aot._module(self.pages[0])]
+        if self._unit_names:
+            raise _aot.Refused("a case bound to a unit")
 
         def lits(d):
             out = []
@@ -762,7 +777,7 @@ class CEngine(Engine):
             w, at, self.want_focus, self.focus_at = self.want_focus, self.focus_at, None, None
             if x.want_focus(w) < 0:
                 self._fail(E_CHECK, "ui.focus(%r)" % w, at)
-        self._lent_check()
+        self._live_units()
         kind = _v.input_kind()
         self.input = kind if kind in S.INPUTS else "keys"
         t = _D.UI_TARGET
@@ -788,11 +803,18 @@ class CEngine(Engine):
         if q or self.timers or self.work_run or self.decl.posts:
             self._damage.all()
 
-    def _lent_check(self):
-        """Two shown rows lent to one site are L03, at the second's line (`uit_live`)."""
-        r = self._x.live(b"")
+    def _live_units(self):
+        """The units shown (`uit_live`), `uitree.LIVE` while this page binds
+        any; two shown rows lent to one site are L03, at the second's line."""
+        r = self._x.live(self._units)
         if type(r) is tuple:
             self._fail(r[0], "a lent row", self._lend_at.get(r[1]))
+        if r != self._live and (self._unit_names or self._live is not None):
+            self._live, names, live = r, self._unit_names, set()
+            for i in range(len(names)):     # no comprehension: one would hold `r` in a cell every frame
+                if r >> i & 1:
+                    live.add(names[i])
+            S.LIVE = live
 
     def _flags(self, desk):
         b = self._buttons
@@ -1529,7 +1551,7 @@ class CEditorEngine(CEngine, _ed.Engine):
         self.committed()
         self.placed = []
         self._pane_sync()
-        self._lent_check()
+        self._live_units()
         self._x.place(area[0], area[1], area[2], area[3], self._flags(desk), max(1, getattr(self, "fs", 1)))
         self._pane_read()
 

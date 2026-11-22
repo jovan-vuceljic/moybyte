@@ -1,6 +1,8 @@
 """What the C engine refuses while a page runs, at the line of the call that
-made the mistake: a handler's ui.focus naming a key two shown nodes have
-(N08, `uit_want_focus`) and two shown rows lent to one site (L03, `uit_live`)."""
+made the mistake, and the units it says are shown (`uit_live`, `uit_want_focus`):
+a handler's ui.focus naming a key two shown nodes have (N08), two shown
+rows lent to one site (L03), and an action whose unit's case is off screen,
+which is not live until the case shows."""
 
 import sys
 from pathlib import Path
@@ -106,3 +108,52 @@ def test_two_shown_rows_lent_to_one_site_are_l03_at_the_second(tmp_path):
     assert e.value.code == "L03" and e.value.where == ("app.py", 18), e.value.text()
     assert "lend to bar: one and two" in e.value.text()
 
+
+UNITS = '''import uitree as ui
+
+s = ui.state(mode=ui.enum("list", "code", init="list"), saved=0)
+
+
+def save():
+    s.saved += 1
+
+
+def nothing():
+    pass
+
+
+ui.action("save", "Save", save, unit="code", keys=["ctrl+s"])
+ui.action("pick", "Pick", nothing)
+
+
+def code_body():
+    ui.link("save")
+
+
+def list_body():
+    ui.link("pick")
+
+
+def build():
+    with ui.page("Units"):
+        ui.switch("mode", {"list": list_body, "code": (code_body, "code")})
+'''
+
+
+def test_a_units_action_is_live_while_its_case_shows(tmp_path):
+    import ui_draw
+    import uitree as S
+    import uitree_c
+    mod = _module(tmp_path, "units", UNITS)
+    page = uitree_c.CEditorPage(mod.build, ui_draw.AppHost(), _Damage())
+    page.open(hook="none")
+    page.fs = 1
+    save = page.actions["save"]
+    page.place((0, 0, 300, 200), desk=False)
+    assert S.LIVE == frozenset() and not save.live() and not save.can()
+    page.run(setattr, mod.s, "mode", "code")
+    page.place((0, 0, 300, 200), desk=False)
+    assert S.LIVE == {"code"} and save.live() and save.can()
+    page.run(setattr, mod.s, "mode", "list")
+    page.place((0, 0, 300, 200), desk=False)
+    assert not save.live()
