@@ -21,10 +21,11 @@ import collections
 import uitree as S
 
 def budget_for(w, h):
-    """The app's picture budget: one glass of RGB565. A view's pictures fit
-    it on every glass the runs used (320x240: 6 cards of 17 KB in 150 KB;
-    the desk: 8 of 52 KB in 1.2 MB)."""
-    return w * h * 2
+    """The app's picture budget: two glasses of RGB565. A drawing's picture
+    keeps its indices and its RGB565 bake, three bytes a pixel, and a view
+    counts its cards cut at its edges whole: a view of drawings' cards
+    (My Art's, twelve on a T-Deck) fits it where one glass did not."""
+    return w * h * 4
 
 
 def _tr(app, text):
@@ -77,6 +78,17 @@ class PicEngine:
         if (pic, self.gen_of(pic)) in self.failed:
             return "failed"
         return "loading"
+
+    def forget_store(self, path):
+        """Store picture `path`'s file changed: its pictures and its
+        failure go. Answers whether any were held."""
+        held = False
+        for k in [k for k in self.cache if k[0].kind == "store" and k[0].key == path]:
+            self.used -= self.cache.pop(k)[2]
+            held = True
+        for f in [f for f in self.failed if f[0].kind == "store" and f[0].key == path]:
+            del self.failed[f]
+        return held
 
     def draw(self, cv, got, x, y, w, h):
         kind, pix, _n = got
@@ -165,8 +177,9 @@ class PicEngine:
         return held
 
     def gen_of(self, pic):
-        """What moves with the picture's pixels: an app's own picture's puts."""
-        return S.pictures.gen.get(pic.key, 0) if pic.kind == "own" else 0
+        """What moves with the picture's pixels: an app's own picture's puts,
+        a store file's changes."""
+        return (S.pictures.gen if pic.kind == "own" else S.pictures.store_gen).get(pic.key, 0)
 
     # -- decoders ----------------------------------------------------------------------
 

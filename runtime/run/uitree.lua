@@ -1809,6 +1809,8 @@ function T.slider(name, o)
   return n
 end
 function T.field(name, o) return two_way("field", name, { "text" }, o, where()) end
+-- a palette's colours as square cells, bound to the int of the current one
+function T.cells(name, o) return two_way("cells", name, { "int" }, o, where()) end
 
 -- a list's filter (a text state the rows' text key is matched against) and its
 -- group (a caption over the rows: a template of the row, drawn where it changes)

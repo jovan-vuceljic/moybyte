@@ -240,6 +240,9 @@ def test_the_sprite_tab_w_moves_the_cursor_and_e_steps_the_sprite(tmp_path):
 
 def test_my_art_w_is_no_wallpaper_on_the_tdeck(tmp_path):
     ws, _drv, t = _console(tmp_path)
+    from runtime import moy_carts
+    moy_carts.save_file("drawings", "kite", moy_carts.encode_moyimg(8, 8, bytes((14,)) * 64),
+                        ws.carts_root)
     ws.spine.open_app(ws.app("myart"))
     t.tick(3)
     calls = []

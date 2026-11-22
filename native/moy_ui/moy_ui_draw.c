@@ -352,6 +352,41 @@ int moy_ui_sink_glyph(const moy_ui_sink_t *s, int g, int x, int y, int w, int h,
     return MOY_UI_OK;
 }
 
+int moy_ui_cells_draw(const moy_ui_sink_t *s, int x, int y, int first, int count, int cols,
+                      int side, int gap, int cur, int ring, int edge) {
+    draw_t d;
+    open_draw(s, &d);
+    int t = side - gap;
+    if (cols < 1 || t < 1) {
+        return MOY_UI_OK;
+    }
+    int rows = (count + cols - 1) / cols;
+    for (int i = 0; i < count; i++) {
+        fill(&d, x + (i % cols) * side, y + (i / cols) * side, t, t, (first + i) & 63);
+    }
+    int sf = moy_ui_token(d.look, MOY_UI_T_SURFACE);
+    if (edge) {
+        rectb(&d, x - gap / 2, y - gap / 2, cols * side, rows * side,
+              moy_ui_token(d.look, MOY_UI_T_BORDER));
+    }
+    int i = cur - first;
+    if (i < 0 || i >= count) {
+        return MOY_UI_OK;
+    }
+    int cx = x + (i % cols) * side, cy = y + (i / cols) * side;
+    // the current mark: a line of ink, one of surface within, never a palette colour
+    rectb(&d, cx, cy, t, t, moy_ui_token(d.look, MOY_UI_T_INK));
+    rectb(&d, cx + 1, cy + 1, t - 2, t - 2, sf);
+    if (ring) {
+        // the keys' cursor (ui_draw.cursor): a dark keyline, surface, the accent ring, surface
+        rectb(&d, cx - 1, cy - 1, t + 2, t + 2, 0);
+        rectb(&d, cx - 2, cy - 2, t + 4, t + 4, sf);
+        rings(&d, cx - 4, cy - 4, t + 8, t + 8, moy_ui_token(d.look, MOY_UI_T_ACCENT), 2);
+        rectb(&d, cx - 5, cy - 5, t + 10, t + 10, sf);
+    }
+    return MOY_UI_OK;
+}
+
 int moy_ui_fdiv(int a, int b) {
     int q = a / b, r = a % b;
     return (r != 0 && ((r < 0) != (b < 0))) ? q - 1 : q;

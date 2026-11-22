@@ -1595,7 +1595,7 @@ int moy_ui_api_pop_box(const moy_ui_ctx_t *c, int32_t out[4]);
 // differs from the last frame's draws from its top to R's foot (but for one
 // ui.at placed both frames that moved where the floor holds both its
 // boxes, which moves nothing else), a picture
-// whose gen moved draws its own box, a stop gone from R's tail leaves the
+// whose gen moved, or a card's with none, draws its own box, a stop gone from R's tail leaves the
 // ground. What a stop outside R draws into it (a box reaching in, a mark's
 // reach) is floor where R moved or its marks changed, and where such a stop
 // draws before R opens the floor is the pass's from its start.
@@ -1753,5 +1753,16 @@ int moy_ui_api_keep(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, i
 // call and zeroes them (`on` -1 reads, leaving the switch as it is); per
 // instance (NULL: the main one).
 uint32_t moy_ui_api_audit(moy_ui_inst_t *I, int on);
+
+// A palette's cells, a stop (§1): `count` of the MOY64 colours from `first`,
+// `cols` to a row, each a `side` square less `gap`, centred in the row the
+// page places them in; `edge` draws the border round them. The colour `cur`
+// wears the current mark, and while focus is on them the keys' cursor; the
+// arrows move it a cell (up at the top row and down at the last go on to the
+// next stop). Enter, or a tap on a cell (which moves `cur` there), sets
+// `*picked`. Answers the new `cur`.
+int32_t moy_ui_api_cells(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, int first,
+                         int count, int cols, int side, int gap, int32_t cur, int edge,
+                         const moy_ui_over_t *o, int *picked);
 
 #endif // MOY_UI_API_H

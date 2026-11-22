@@ -49,6 +49,7 @@ enum {
     UIT_BUBBLE,             // level 1: a chat's bubble, a stop
     UIT_MONTH,              // level 2: a month's calendar, no stop; its chevrons fire prev= and next=
     UIT_TOAST,              // level 2: a toast over the page's body, above its foot; no stop
+    UIT_CELLS,              // level 2: a palette's colours as square cells, a stop bound to an int
     UIT_STEPPER,            // level 2: a value between two chevrons that fire prev= and next=, a stop
     UIT_KINDS
 };

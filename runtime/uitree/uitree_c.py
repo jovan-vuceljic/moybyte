@@ -16,6 +16,7 @@ engine's own writes (a toggle, a list's cursor) are pulled back before any
 handler runs."""
 
 import struct
+from array import array
 import sys
 
 from moy_input import SHIFT as _SHIFT
@@ -103,8 +104,7 @@ _KINDS = {"page": 1, "group": 2, "label": 3, "info": 4, "link": 5, "button": 6, 
           "cards": 27, "card": 28, "picture": 29, "popover": 30,
           "tools": 31, "row": 32, "status": 33, "text_editor": 34, "panes": 35, "pane": 36,
           "legacy": 37, "slot": 38, "panel": 39, "lent": 40, "rule": 41, "note": 42, "grid": 43,
-          "bubble": 44, "month": 45, "toast": 46,
-          "stepper": 47}
+          "bubble": 44, "month": 45, "toast": 46, "cells": 47, "stepper": 48}
 # the placed kinds: a page the engine's layout places holds them (`CEditorPage`)
 _PLACED_KINDS = ("tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot", "panel", "lent")
 _PANE_KINDS = ("panes", "pane")
@@ -112,7 +112,7 @@ _LEGACY_FNS = ("draw", "pointer", "keys", "hints", "gen")
 _HEAD = {"rows": ("model",), "table": ("model",), "cards": ("model",), "dialog": ("buttons",)}
 _KIND_NAMES = dict((v, k) for k, v in _KINDS.items())
 _KIND_NAMES[len(_KINDS) + 1] = "cycle"          # UIT_KINDS: a seg of the cycle look
-_BOUND = ("toggle", "seg", "slider", "field", "text_view", "tabs")       # a two-way control: bound to the state of its key
+_BOUND = ("toggle", "seg", "slider", "field", "text_view", "tabs", "cells")       # a two-way control: bound to the state of its key
 _LIT_ONLY = {"seg": ("values", "words", "model", "labels"), "text_view": ("name",),
              "switch": ("name",), "case": ("v",), "tabs": ("labels", "values")}    # a switch's and a case's: in their keys   # what the Builder keeps beside a node's props
 _TYPED = "typed in field "
@@ -207,6 +207,7 @@ class CEngine(Engine):
         self._reads = {}                # a canvas's node -> the states its draw may read (reads=)
         self._canvas_keys = {}          # a canvas's key -> (its keys= function, the model of the list it stands in or None)
         self._grounds = {}      # a canvas's ground= role, by its node
+        self._row_clip = array("i", [0, 0, 0, 0])     # a list row's canvas's clip (`_draw`)
         self._docs = {}         # a document's state -> what it was pushed at (`_push_doc`)
         self._doc_reads = {}    # ...and the fields of it the lowered page reads
         self._editors = {}      # a text editor's node -> its stand-in (`_TextEditor`)
@@ -863,14 +864,29 @@ class CEngine(Engine):
         app, frame = now.app, now.frame       # two names, not a tuple: a frame allocates nothing
         now.app, now.frame = self, True
         now.reads = self._reads.get(node)
+        cv = self.cv
         try:
             g = self._grounds.get(node)
-            if g:
-                self.cv.rect(x, y, w, h, self.th[g])
-            if model >= 0 and row >= 0:
-                self._draws[node](self.cv, x, y, w, h, self.s._v[self._names[model]][row])
+            if model >= 0 and row >= 0 and not self.PLACED:
+                # a flowing list's row: drawn where its page or scroll region shows it
+                k = self._row_clip
+                k[0] = x                # one at a time: a four-way unpack builds a tuple on a board
+                k[1] = y
+                k[2] = w
+                k[3] = h
+                _v.card_clip(k)
+                cv.clip(k[0], k[1], k[2], k[3])
+                if g:
+                    cv.rect(x, y, w, h, self.th[g])
+                self._draws[node](cv, x, y, w, h, self.s._v[self._names[model]][row])
+                cv.clip()
             else:
-                self._draws[node](self.cv, x, y, w, h)
+                if g:
+                    cv.rect(x, y, w, h, self.th[g])
+                if model >= 0 and row >= 0:
+                    self._draws[node](cv, x, y, w, h, self.s._v[self._names[model]][row])
+                else:
+                    self._draws[node](cv, x, y, w, h)
         finally:
             now.app, now.frame = app, frame
             now.reads = None

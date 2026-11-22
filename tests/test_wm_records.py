@@ -86,7 +86,6 @@ def _open(ws, root, app):
         # every picture made stays: which ones a frame reaches decides what
         # is made first, and an eviction would then differ between the desks
         _settle_mtimes(os.path.dirname(str(ws.carts_root).rstrip("/")))
-        ws.app("myart").covers.KEEP = 1000
         assert ws.spine.open_app(ws.app("myart")) is not False
     elif app == "blocks":
         from ws_helpers import select_on_home
@@ -182,20 +181,22 @@ class Pair:
         self.direct = 0
 
     def _all_pictures(self):
-        """Every drawing's picture made, at both sizes a card draws one (a
-        focused card's rect grows with its mark): which pictures a frame's
-        floor reaches decides which are made first, so the desks would
-        otherwise show a picture landing on different frames."""
+        """Every drawing's picture made at the card's size and kept (the
+        budget holding them all), and every drawing read against it: which
+        cards a frame reaches decides which are made first, so the desks
+        would otherwise show a picture landing on different frames."""
+        import uitree as S
         for ws in (self.a, self.b):
             a = ws.app("myart")
-            sizes = set((e[0], e[1]) for v in a.covers._got.values() for e in v)
-            w, h = a._pic_wh
-            sizes.update(((w, h), (w + 10, h + 10)))
-            for name in a.drawings:
-                for w, h in sizes:
-                    a.covers.get(name, w, h)
-            del a._owed[:]
-            a._gens_due = True
+            e = a.engine
+            e.pics.budget = 1 << 30
+            for w, h in set(e._pic_wh.values()):
+                for name in a.drawings:
+                    e.pics.peek(S.Pic("store", "drawings/" + name), w, h)
+            while e.pics.idle_step():
+                pass
+            while a._unchecked:
+                a.idle_step()
             ws.mark_dirty()
         self.settle(check=False)
 
@@ -685,7 +686,7 @@ def test_a_popover_and_the_menu_scrim_over_a_glide(tmp_path, bufs, widget):
 # handheld shift: a mark after the pass is a whole repaint of a page the
 # pass drew (`all` is spent with the frame, so it paints nothing it means
 # to; `again` owes a whole frame where the engine owes a frame of rows).
-VERBS_APPS = ("files_app", "appearance_app", "myart_app")
+VERBS_APPS = ("files_app", "appearance_app")
 
 
 def test_no_verbs_app_marks_its_page_after_the_pass():

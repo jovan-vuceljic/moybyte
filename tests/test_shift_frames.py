@@ -73,6 +73,7 @@ class App:
         self.rows = ["Row %d" % i for i in range(rows)]
         self.gen = 1
         self.pic_gen = {}
+        self.owed = set()               # cards whose picture the app owes: none drawn, no gen
         self.toggles = {}
         self.toast = False
         self.pop = False
@@ -172,10 +173,10 @@ class App:
                             continue
                     o = {"id": r}
                     pg = self.pic_gen.get(r, 0) if g is not None else None
-                    if pg is not None:
+                    if pg is not None and r not in self.owed:
                         o["gen"] = pg
                     x, y, w, h, _st = ui.card(r, "c%d" % i, o)
-                    if w:
+                    if w and r not in self.owed:
                         drawn[r] = self.pic_gen.get(r, 0)
                         k = ui.card_clip(array("i", (8, 40, W - 16, H - 60)))
                         cv.clip(k[0], k[1], k[2], k[3])
@@ -382,6 +383,50 @@ def test_a_cover_landing_mid_fling_draws_its_card(th, kind, bufs):
         r.frame()
     r.coast()
     assert r.shifted() > 4
+
+
+@pytest.mark.parametrize("bufs", BUFS)
+def test_cards_whose_pictures_are_owed_still_shift(th, bufs):
+    """A card whose picture the app owes (none to draw yet, so no gen):
+    each shift frame draws it again, in view or scrolled into it, and one
+    out of view draws nothing to go stale, so the page still shifts; a
+    picture landing mid-drag draws its card."""
+    r = Rig(th, "grid", bufs)
+    r.app.owed = {"Row %d" % i for i in range(0, 40, 3)}
+    _ready(r)
+    del r.kinds[:]
+    r.point(160, 200, True, True)
+    r.frame()
+    for i in range(8):
+        if i % 2:
+            r.app.owed.discard("Row %d" % (3 * i))
+        r.point(160, 200 - 10 * (i + 1), False, True)
+        r.frame()
+    r.point(160, 120, False, False)
+    r.frame()
+    r.coast()
+    assert r.share() > 0.6, "the drag shifted %.2f of the frames: %r" % (r.share(), r.kinds)
+
+
+def test_an_owed_picture_saves_no_copy(th):
+    """A move pays for its copy with what it leaves undrawn (`host_pays`):
+    a card whose picture is owed draws again, so a grid of them dragged on
+    a canvas whose copy costs a row's raster draws whole."""
+    r = Rig(th, "grid", 1)
+    r.cv.SHIFT_COST = 1000
+    r.app.owed = set(r.app.rows)
+    _ready(r)
+    del r.kinds[:]
+    r.drag(200, -12, 4)
+    r.coast()
+    assert r.shifted() == 0, r.kinds
+    r.app.owed = set()
+    r.app.gen += 1
+    r.frame()
+    del r.kinds[:]
+    r.drag(200, -12, 4)
+    r.coast()
+    assert r.shifted() > 0, "held pictures left undrawn pay for the copy: %r" % r.kinds
 
 
 @pytest.mark.parametrize("bufs", BUFS)
