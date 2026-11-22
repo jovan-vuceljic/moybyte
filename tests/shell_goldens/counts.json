@@ -2,7 +2,7 @@
   "big_800x480_fs3_dark": {
     "about": [10, 6],
     "app_appearance": [13, 10],
-    "app_artwork": [29, 15],
+    "app_artwork": [31, 14],
     "app_calc": [34, 29],
     "app_files": [11, 3],
     "app_files_document": [16, 9],
@@ -43,7 +43,7 @@
   "guition_480x320_fs1_dark": {
     "about": [9, 6],
     "app_appearance": [49, 26],
-    "app_artwork": [29, 15],
+    "app_artwork": [34, 20],
     "app_calc": [34, 29],
     "app_files": [6, 3],
     "app_files_document": [12, 9],
@@ -148,7 +148,7 @@
   "guition_tapfloor_dark": {
     "about": [9, 6],
     "app_appearance": [35, 20],
-    "app_artwork": [29, 15],
+    "app_artwork": [34, 20],
     "app_calc": [34, 29],
     "app_files": [6, 3],
     "app_files_document": [12, 9],
@@ -791,7 +791,7 @@
   "tdeck_320x240_fs1_blocks": {
     "about": [11, 6],
     "app_appearance": [40, 19],
-    "app_artwork": [32, 15],
+    "app_artwork": [35, 16],
     "app_calc": [36, 29],
     "app_files": [8, 3],
     "app_files_document": [14, 9],
@@ -832,7 +832,7 @@
   "tdeck_320x240_fs1_bottombar": {
     "about": [9, 6],
     "app_appearance": [36, 20],
-    "app_artwork": [29, 15],
+    "app_artwork": [32, 16],
     "app_calc": [34, 29],
     "app_files": [5, 3],
     "app_files_document": [12, 9],
@@ -875,7 +875,7 @@
     "app_appearance": [36, 20],
     "app_appearance_name": [33, 22],
     "app_appearance_walls": [5, 3],
-    "app_artwork": [29, 15],
+    "app_artwork": [32, 16],
     "app_calc": [34, 29],
     "app_files": [6, 3],
     "app_files_document": [12, 9],
@@ -938,7 +938,7 @@
     "app_appearance": [38, 20],
     "app_appearance_name": [35, 22],
     "app_appearance_walls": [7, 3],
-    "app_artwork": [32, 15],
+    "app_artwork": [37, 18],
     "app_calc": [36, 29],
     "app_files": [8, 3],
     "app_files_document": [14, 9],
@@ -987,7 +987,7 @@
   "tdeck_320x240_fs1_moy_day": {
     "about": [11, 6],
     "app_appearance": [38, 20],
-    "app_artwork": [32, 15],
+    "app_artwork": [37, 18],
     "app_calc": [36, 29],
     "app_files": [8, 3],
     "app_files_document": [14, 9],
@@ -1033,7 +1033,7 @@
   "tdeck_320x240_fs1_moy_night": {
     "about": [9, 6],
     "app_appearance": [36, 20],
-    "app_artwork": [29, 15],
+    "app_artwork": [32, 16],
     "app_calc": [34, 29],
     "app_files": [6, 3],
     "app_files_document": [12, 9],
