@@ -13,6 +13,13 @@
 #define NODE(k) (&e->nodes[k])
 #define KIDS(k, c) for (int c = NODE(k)->kid; c != (int)UIT_NONE; c = NODE(c)->next)
 
+// Whether the page carries a gen this frame: it may (`gen_safe`), and no canvas drew in the last
+// frame (a canvas draws what no state says, so a frame after one drew is drawn whole).
+static int gen_ok(const uit_t *e)
+{
+    return e->gen_safe && !e->canvas_last;
+}
+
 static moy_ui_span_t span_of(const char *p, size_t n)
 {
     moy_ui_span_t s = {(const uint8_t *)p, (uint16_t)n};
@@ -1399,7 +1406,7 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     const char *key = uit_str(e, N->key);
     int m = N->slot, desk = (e->flags & UIT_F_DESK) != 0, subs = 0;
     moy_ui_over_t go;
-    int32_t gen = (e->flags & UIT_F_GEN) && e->gen_safe ? uit_cell_gen(e, k) : -1;
+    int32_t gen = (e->flags & UIT_F_GEN) && gen_ok(e) ? uit_cell_gen(e, k) : -1;
     moy_ui_over_none(&go);
     if (gen >= 0)
         moy_ui_over_put(&go, MOY_UI_OV_GEN, &gen);
@@ -1815,6 +1822,7 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
         }
         if (NODE(g)->kind == UIT_CANVAS) {
             put_rect(e, g, cell);       // where a press on it lands (`uit_rect`)
+            e->canvas_now = 1;
             if (e->draw_fn)             // a cell of its own that only draws: drawn into the cell
                 e->draw_fn(e->draw_ud, g, model, row, cell[0], cell[1], cell[2], cell[3]);
             continue;
@@ -1840,7 +1848,7 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
             moy_ui_api_card_at(c, s);
         }
         moy_ui_api_at(c, cell[0], cell[1], cell[2], cell[3]);
-        int32_t cg = (e->flags & UIT_F_GEN) && e->gen_safe ? uit_cell_gen(e, g) : -1;
+        int32_t cg = (e->flags & UIT_F_GEN) && gen_ok(e) ? uit_cell_gen(e, g) : -1;
         moy_ui_over_t go;           // the region carries a gen of its own, as a cards list's does
         moy_ui_over_none(&go);
         if (cg >= 0)
@@ -2938,6 +2946,7 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         put_rect(e, k, r);              // where a press on it lands (`uit_rect`)
         if (model >= 0)
             put_cell(e, k, model, row, r);  // in a list's body: its row's (`uit_rect`'s ROWKEY/KEY)
+        e->canvas_now = 1;
         if (e->draw_fn)
             e->draw_fn(e->draw_ud, k, model, row, r[0], r[1], r[2], r[3]);
         break;
@@ -4010,6 +4019,7 @@ static void draw_canvas_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
     }
     id_put(e, k, model, row, key);
     moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, 0, &o, got);
+    e->canvas_now = 1;
     if (e->draw_fn)
         e->draw_fn(e->draw_ud, k, model, row, got[0], got[1], got[2], got[3]);
 }
@@ -5219,7 +5229,9 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
     if (e->gen_vals & GV_INPUT)
         e->gv += (uint32_t)(input + 1) * 40503u;
     e->page_gen = -1;
-    if ((flags & UIT_F_GEN) && e->gen_safe) {
+    e->canvas_last = e->canvas_now;
+    e->canvas_now = 0;
+    if ((flags & UIT_F_GEN) && gen_ok(e)) {
         uint32_t g = (uint32_t)e->gen + e->edits + e->gv;
         for (int i = 0; i < e->nslots; i++)
             if (e->slots[i].in_gen)

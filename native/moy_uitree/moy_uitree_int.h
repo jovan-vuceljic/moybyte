@@ -343,7 +343,8 @@ struct uit {
     uit_draft_t *drafts;
     int ndrafts, cdrafts;
     uint32_t edits;             // drafts' edits: the page's gen moves with them
-    uint8_t gen_safe;           // the page may carry a gen: no canvas, not too many states
+    uint8_t gen_safe;           // the page may carry a gen: no legacy node, not too many states
+    uint8_t canvas_now, canvas_last;    // a canvas drew in this frame, in the last (`gen_ok`)
     uint8_t gen_vals;           // the engine values its text names, which its gens count (GV_*)
     uint32_t gv;                // what they are this frame, hashed (the focus at the frame's begin, the input)
     // a text view's lines: where each line of text slot `tvl_slot` starts, as its version `tvl_ver` held

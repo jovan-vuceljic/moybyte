@@ -1788,7 +1788,8 @@ int32_t uit_cell_gen(uit_t *e, int k)
 // `uit_cell_gen`; a lines view's rows are its view record's, moy_ui_api_text_view) and
 // those only a list's
 // cur= names (focus, which the toolkit draws); and whether it may carry one: no text of the build
-// names an engine value, and no canvas draws what no state says.
+// names an engine value and no legacy node draws what no state says (a canvas does too: a frame
+// after one drew carries none, `gen_ok`).
 static void gen_of_build(uit_t *e)
 {
     e->gen_safe = e->nslots <= UIT_GEN_SLOTS;
@@ -1798,7 +1799,7 @@ static void gen_of_build(uit_t *e)
     for (int c = e->m_conds; c < e->nconds; c++)
         e->gen_vals |= (uint8_t)names_engine_value(uit_str(e, e->conds[c].src));
     for (int k = 0; k < e->nnodes; k++)
-        if (e->nodes[k].kind == UIT_CANVAS || e->nodes[k].kind == UIT_LEGACY)
+        if (e->nodes[k].kind == UIT_LEGACY)
             e->gen_safe = 0;
     for (int i = 0; i < e->nslots; i++)
         e->slots[i].in_gen = 1;

@@ -1060,8 +1060,11 @@ class CEngine(Engine):
         f = self._x.focused()
         if not f:
             return False
-        rk, _, key = f.rpartition("/")
-        got = self._canvas_keys.get(key)
+        got = self._canvas_keys.get(f)       # a canvas of the page: nothing made
+        rk = None
+        if got is None and "/" in f:        # in a list's body: ROWKEY/KEY
+            rk, _, key = f.rpartition("/")
+            got = self._canvas_keys.get(key)
         if got is None:
             return False
         fn, model = got
