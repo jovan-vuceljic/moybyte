@@ -258,6 +258,20 @@ text editor types into the handle's document and draws it.
 `tests/uitree_conformance/counter/` holds one app in both languages to
 one trace and one picture.
 
+**A flowing page's layout.** The engine stacks a page's nodes; `ui.row`
+sets its children side by side on one row of the stack (a button at its
+natural width unless `grow=True`, a picture beside a `ui.group` column of
+labels, a label after the row's filler at its end; children all at their
+own widths are centred). `ui.foot()` (the end look) sets its buttons at
+their natural widths at its end with a status label before them;
+`look="share"` shares its width among them. `ui.toast(text, icon=)` is a
+pill over the page above its foot; `ui.group("", look="card")` lays its
+rows on a card; `ui.text_view(..., look="well")` lays its prose on a
+well; `ui.cards(..., pad=)` sets the gap its columns are counted at; a
+card's `badge=` marks its picture; a button's `kind=` may be a template;
+`ui.split(..., rule=True)` draws a rule between its cells
+(`tests/uitree_contract/contract.json` holds every kind and prop).
+
 **The bar is the host's.** The console draws the bar (its back chevron,
 your title, the status) over your app and routes its taps; your app draws
 none. Lay out inside `content_rect()` (`x, y, w, h`), wherever the bar sits;

@@ -306,3 +306,55 @@ def build():
     plain, _ = run(tmp_path, build.replace("LOOK", ""), name="plain")
     well, _ = run(tmp_path, build.replace("LOOK", ', look="well"'), name="well")
     assert plain[0].buf != well[0].buf
+
+
+LUA_SHELF = '''ui.app("Shelf", { icon = "getcarts" })
+local s = ui.state {
+  carts = ui.model { key = "i", i = "", name = "", badge = "" }, on = false, text = "Line one",
+}
+ui.action("tap", "Open", function(row) s.on = not s.on end, { takes = "row" })
+ui.action("flip", "Check", function() s.on = not s.on end)
+ui.hook("opened", function()
+  s.carts:set({ { i = "a", name = "Doom", badge = "check" }, { i = "b", name = "Jet", badge = "" } })
+end)
+ui.page("p", function()
+  ui.row("caption", { pad = 16 }, function()
+    ui.label("2 carts", { tone = "dim" })
+    ui.button("flip", { icon = "rotate" })
+  end)
+  ui.split({ dir = "row", sizes = { "1*", "1*" }, rule = true }, function()
+    ui.cards("carts", { w = 64, h = 64, pad = 12 }, function()
+      ui.card("tap", { label = "{.name}", badge = "{.badge}" })
+    end)
+    ui.group("", { look = "card" }, function() ui.text_view("text", { face = "ui", look = "well" }) end)
+  end)
+  ui.foot(function()
+    ui.label("Doom", { tone = "dim" })
+    ui.button("flip", { kind = "{on?primary:normal}" })
+  end)
+  ui.toast("Doom is on your shelf", { icon = "check", shown = "on" })
+end)
+'''
+
+
+def test_the_lua_front_makes_the_same_kinds_and_props(tmp_path):
+    """A Lua page of a row, a split's rule, a cards list's pad= and its
+    cards' badge=, a card group, a well, an end foot with a templated kind
+    and a toast: built, lowered and drawn on the C engine; Check shows the
+    toast."""
+    import test_uitree_lua as L
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    L._cart(carts, "Shelf", LUA_SHELF)
+    ws, drv, frame, open_cart = L._console(carts)
+    open_cart(ws, "Shelf")
+    for _ in range(4):
+        frame()
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    before = bytes(drv.rgb888())
+    drv.press("a")
+    for _ in range(4):
+        frame()
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    assert bytes(drv.rgb888()) != before
