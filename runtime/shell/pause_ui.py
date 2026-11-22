@@ -30,6 +30,7 @@ s = ui.state(
     vhi=1,
     vicon="volume",
     w=188,
+    back_word="Resume",
 )
 
 
@@ -52,7 +53,7 @@ def _louder():
 
 ui.hook("put", put)
 ui.action("choose", "Choose", _choose, takes="row")
-ui.action("away", "Close", _away)
+ui.action("away", "Close", _away, hint="{back_word}")
 ui.action("louder", "Volume", _louder)
 
 

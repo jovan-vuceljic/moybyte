@@ -1519,6 +1519,11 @@ static void draw_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
     e->in_pop = 1;
     walk(e, c, s, k, model, row);
     e->in_pop = 0;
+    if (e->pop_hints_n) {
+        // the bare page's band: the toolkit draws it in the card, under a rule
+        moy_ui_api_hints(c, s, e->pop_hints, e->pop_hints_n, NULL);
+        e->pop_hints_n = 0;
+    }
     moy_ui_api_popover(c, s, span_of("", 0), 0, NULL);
 }
 
@@ -4606,7 +4611,14 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         KIDS(0, k)
         if ((NODE(k)->kind == UIT_SPLIT || NODE(k)->kind == UIT_GRID) && uit_shown(e, k, -1, -1))
             placed = 1;
-        if (!placed) {
+        int card = 0;           // a bare page's shown popover is the page: the band in its body
+        if (flags & UIT_F_BARE)
+            KIDS(0, k)
+            if (NODE(k)->kind == UIT_POPOVER && uit_shown(e, k, -1, -1))
+                card = 1;
+        if (card) {
+            e->pop_hints = hp, e->pop_hints_n = hn;
+        } else if (!placed) {
             moy_ui_api_hints(c, s, hp, hn, NULL);
         } else if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {
             // a placed page's band: a handheld's its room's last line, the desk's and a foot's
@@ -4649,6 +4661,7 @@ ids:;
         placed_walk(e, c, s);
     else
         walk(e, c, s, 0, -1, -1);
+    e->pop_hints_n = 0;         // (its buffer goes with this frame)
     e->tv_stop = e->tv_stop_now;
     // after: what holds focus, and whether the band named another node's verbs
     int had = e->has_focused;

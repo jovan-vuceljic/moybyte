@@ -142,6 +142,8 @@ class PauseMenu:
         self.icons = self.ICONS
         self._chosen = None         # the row a handler chose, taken at the frame's tail
         self._fresh = False         # the next `put` is an open's
+        self._painting = False      # inside the card's draw (`all`)
+        self._grew = False          # ...whose band moved: it owes the next (`card_rect`)
 
     def prealloc(self):
         """Mint the layers the frame under the card is kept and held in
@@ -212,7 +214,6 @@ class PauseMenu:
             import pause_ui
             self._page = uitree_app.hosted_page(pause_ui.page, self._host, self, env=self)
             self._page.bare = True    # the held game is its ground
-            self._page.band = False   # the card alone: the windowed desk paints its rect alone
         self._page.open(hook="put")
         ws.pause_touch()
 
@@ -229,6 +230,7 @@ class PauseMenu:
         s.details = self.details
         desk = _desk_class()
         s.w = (520 if desk else 288) if self.stopped else (300 if desk else 188)
+        s.back_word = "Home" if self.stopped else ("Back" if self.page else "Resume")
         if not self.stopped:
             s.state = "Paused"
             cur, lo, hi = ws.settings_layer.level("volume")
@@ -256,8 +258,14 @@ class PauseMenu:
         self.ws.pause_touch()
 
     def all(self):
-        """The page's damage: the card draws again."""
-        self.ws.pause_touch()
+        """The page's damage: the card draws again -- as a change the WM
+        paints, or from inside the card's own draw (a band that names its
+        focused row a frame late), as the next frame that draw owes."""
+        if self._painting:
+            self._grew = True         # its body outgrew the card it was laid in
+            self.ws.request_frame()
+        else:
+            self.ws.pause_touch()
 
     def volume(self, v):
         """Options' slider moved."""
@@ -529,8 +537,9 @@ class PauseMenu:
     def card_rect(self):
         """The rect the card's last draw painted, its shadow's reach with
         it, on the glass; None before it first draws. A draw that had not
-        settled lays its body out before it knows its height, down to the
-        foot of the surface it centres on."""
+        settled lays its body out before it knows its height, and one whose
+        hints moved draws them before the card fits them: down to the foot
+        of the surface it centres on."""
         box = self._host.box("Pause") if self._host is not None else None
         if box is None:
             return None
@@ -540,7 +549,7 @@ class PauseMenu:
         cv = self.ws.sys_canvas
         x0, y0 = max(0, x - r), max(0, y - r)
         x1, y1 = min(cv.w, x + w + r), min(cv.h, y + h + r)
-        if self._host.owed:
+        if self._host.owed or self._grew:
             sx, sy, sw, sh = self.surface()
             y1 = max(y1, min(cv.h, sy + sh + r))
         return (x0, y0, x1 - x0, y1 - y0)
@@ -550,7 +559,11 @@ class PauseMenu:
         cv = ws.sys_canvas
         rect, desk = self.surface(), _desk_class()
         self._host.begin(cv, ws.theme_colors, rect, desk)
-        self._page.paint(0.0, cv, ws.theme_colors, rect, desk)
+        self._painting, self._grew = True, False
+        try:
+            self._page.paint(0.0, cv, ws.theme_colors, rect, desk)
+        finally:
+            self._painting = False
         if self._host.due():
             ws.request_frame()
 
@@ -1420,10 +1433,6 @@ class AboutCard:
         cv = ws.sys_canvas
         desk = _desk_class()
         rect = (lay.cx, lay.cy, lay.cw, lay.ch)
-        strip = self._strip()
-        if strip is not None:
-            # the home's hint strip, which the card's band says its keys over
-            cv.rect(strip[0], strip[1], strip[2], strip[3], ws.theme_colors["panel"])
         ws.icon_spec()
         self.host.begin(cv, ws.theme_colors, rect, desk)
         self.page.paint(0.0, cv, ws.theme_colors, rect, desk)

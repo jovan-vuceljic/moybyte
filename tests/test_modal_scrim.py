@@ -106,8 +106,10 @@ def test_the_paused_game_dims_once_and_comes_back_whole(tmp_path):
     frozen = bytes(cv._buf)               # the frame the pause holds
     ws.system_key()
     assert ws.pause.open
-    shown = _frames(ws, 4)
-    assert len(set(shown[1:])) == 1, "the scrim darkens the frozen frame once"
+    shown = _frames(ws, 5)
+    # focus lands on the card's first frame and its band names that row's
+    # keys on the next: from then on every frame is the same
+    assert len(set(shown[2:])) == 1, "the scrim darkens the frozen frame once"
     lit = [(x, y) for y in range(0, cv.h, 7) for x in range(0, cv.w, 7)
            if _lum(_px(frozen, cv.w, x, y)) > 40]
     x, y = lit[0]

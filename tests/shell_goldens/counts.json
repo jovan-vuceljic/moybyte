@@ -1,6 +1,6 @@
 {
   "big_800x480_fs3_dark": {
-    "about": [9, 6],
+    "about": [10, 6],
     "app_appearance": [11, 10],
     "app_artwork": [29, 15],
     "app_calc": [22, 22],
@@ -101,7 +101,7 @@
     "tasks_two_games": [4, 18]
   },
   "guition_p4_1280x800_windowed": {
-    "about": [8, 6],
+    "about": [9, 6],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -187,7 +187,7 @@
     "web_console": [294, 7]
   },
   "p4_1024x600_cs2_fs1_blocks": {
-    "about": [10, 6],
+    "about": [11, 6],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -232,7 +232,7 @@
     "web_console": [299, 8]
   },
   "p4_1024x600_cs2_fs1_console": {
-    "about": [8, 6],
+    "about": [9, 6],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -273,7 +273,7 @@
     "web_console": [297, 8]
   },
   "p4_1024x600_cs2_fs1_contrast_light": {
-    "about": [9, 6],
+    "about": [10, 6],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -318,7 +318,7 @@
     "web_console": [299, 8]
   },
   "p4_1024x600_cs2_fs1_gnomebar": {
-    "about": [8, 6],
+    "about": [9, 6],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -375,7 +375,7 @@
     "launcher_mine": [0, 0]
   },
   "p4_1024x600_cs2_fs1_moy_day": {
-    "about": [10, 6],
+    "about": [11, 6],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -420,12 +420,12 @@
     "web_console": [299, 8]
   },
   "p4_1024x600_cs2_fs1_moy_menus": {
-    "pause": [4, 12],
-    "pause_options": [10, 4],
+    "pause": [10, 15],
+    "pause_options": [13, 6],
     "sysmenu": [3, 12]
   },
   "p4_1024x600_cs2_fs1_moy_night": {
-    "about": [8, 6],
+    "about": [9, 6],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -500,7 +500,7 @@
     "tasks_two_games": [4, 18]
   },
   "p4_1024x600_cs2_fs1_twobars": {
-    "about": [8, 6],
+    "about": [9, 6],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -545,7 +545,7 @@
     "web_console": [297, 8]
   },
   "p4_1024x600_cs2_fs1_win95bar": {
-    "about": [8, 6],
+    "about": [9, 6],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -590,7 +590,7 @@
     "web_console": [297, 8]
   },
   "p4_1024x600_cs2_fs1_windowed": {
-    "about": [8, 6],
+    "about": [9, 6],
     "app_appearance": [0, 0],
     "app_appearance_name": [0, 0],
     "app_appearance_walls": [11, 8],
@@ -654,7 +654,7 @@
     "status_desk_panel_full": [17, 26]
   },
   "p4_1024x600_fs2_windowed": {
-    "about": [8, 6],
+    "about": [7, 5],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -699,7 +699,7 @@
     "web_console": [297, 10]
   },
   "p4_1024x600_fs2_windowed_light": {
-    "about": [10, 6],
+    "about": [11, 6],
     "app_appearance": [0, 0],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -744,7 +744,7 @@
     "web_console": [299, 10]
   },
   "p4_1024x600_render2_moy_day": {
-    "about": [10, 6],
+    "about": [11, 6],
     "app_appearance": [8, 5],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
@@ -1026,8 +1026,8 @@
     "web_console": [295, 8]
   },
   "tdeck_320x240_fs1_moy_menus": {
-    "pause": [4, 12],
-    "pause_options": [10, 4],
+    "pause": [10, 15],
+    "pause_options": [13, 6],
     "sysmenu": [3, 12]
   },
   "tdeck_320x240_fs1_moy_night": {
@@ -1102,7 +1102,7 @@
     "status_cc": [39, 17],
     "status_cc_panel": [45, 19],
     "status_cc_scrolled": [36, 16],
-    "status_paused_bar": [4, 12],
+    "status_paused_bar": [8, 15],
     "status_vmstop": [4, 5]
   },
   "tdeck_320x240_fs1_tasks": {
