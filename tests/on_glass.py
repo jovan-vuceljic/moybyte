@@ -88,6 +88,7 @@ def session(port, board_dir):
         else:
             b.reset()                  # verifies identity once the desk is up
         before = take_store(b)
+        b.store_before = before
         try:
             yield b
         finally:
@@ -159,6 +160,24 @@ def give_store_back(board, before):
             warnings.warn("the suite left folders on the store: %r" % (left,))
     except Exception as exc:  # noqa: BLE001
         warnings.warn("could not give the store back: %r" % (exc,))
+
+
+def store_room(board, blocks):
+    """Give the store back mid-suite when fewer than `blocks` 4 KiB blocks of
+    it are free: every folder the suite has pushed since it opened goes
+    (`give_store_back`), so a board whose store is small (the 2.7 MB tail of
+    a 16 MB flash, a third of it the seeds') has room for the next fixture.
+    A fixture a later check reads is pushed again by that check, which is why
+    a suite for such a board scopes them to the test. Returns the free blocks
+    after."""
+    def free():
+        # littlefs can report more used than there is: a negative is none
+        return max(0, board.pyval("__import__('os').statvfs('/moy/carts')",
+                                  timeout=20, strict=True)[3])
+    if free() < blocks and getattr(board, "store_before", None) is not None:
+        give_store_back(board, board.store_before)
+        board.pyval(RESCAN, timeout=60)
+    return free()
 
 
 # The store scanned again for the folders a suite pushed, each cart on the
@@ -1793,11 +1812,12 @@ def an_on_crash_service_restarts_after_a_forced_crash(board):
 
 def lease_pin(board_dir):
     """A pin of the board's `lease` row (board.toml [hardware]): free, so a
-    test may drive it."""
+    test may drive it. Never GPIO54, which MicroPython's port treats as input
+    only (a leased `Pin` there refuses OUT, `pin can only be input`)."""
     sys.path.insert(0, str(ROOT / "tools"))
     import board_config
     rows = board_config.hardware(str(ROOT / "firmware" / board_dir))[2]
-    return max(p for r in rows if r["class"] == "lease" for p in r["pins"])
+    return max(p for r in rows if r["class"] == "lease" for p in r["pins"] if p < 54)
 
 
 LOST_TAP = """\
@@ -1862,6 +1882,22 @@ def a_gpio_lease_loses_no_tap(board, board_dir):
     assert (n, lost, drops) == (32, 368, 368), shallow
 
 
+def lease_driver_pins(board_dir):
+    """(sck, mosi, miso, dc, res, cs) for the leased-driver check: the board's
+    `spi2` row's three pins, and three more of its `gpio` lease row for the
+    display's lines -- 45, 46 and 2 where the row has them (the Waveshare's
+    and the Guition's), the row's first three left over otherwise."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import board_config
+    rows = board_config.hardware(str(ROOT / "firmware" / board_dir))[2]
+    spi = next(r for r in rows if r["name"] == "spi2" and r["class"] == "lease")["pins"]
+    sck, mosi, miso = spi                  # the row's order: sck, mosi, miso
+    free = sorted(p for r in rows if r["name"] == "gpio" and r["class"] == "lease"
+                  for p in r["pins"] if p not in (sck, mosi, miso))
+    dc, res, cs = (45, 46, 2) if {45, 46, 2} <= set(free) else free[:3]
+    return sck, mosi, miso, dc, res, cs
+
+
 SSD1306 = ("lib", "micropython-lib", "micropython", "drivers", "display", "ssd1306", "ssd1306.py")
 
 LEASED_DRIVER = """\
@@ -1875,19 +1911,19 @@ leases.LEASES.grants = None         # a process the console runs no row for
 moy_log.current(pid)
 try:
     spi = moybyte.lease('spi2', baudrate=1000000)
-    dc, res, cs = moybyte.lease('gpio45'), moybyte.lease('gpio46'), moybyte.lease('gpio2')
+    dc, res, cs = moybyte.lease('gpioDC'), moybyte.lease('gpioRES'), moybyte.lease('gpioCS')
     oled = mod['SSD1306_SPI'](128, 64, spi, dc, res, cs)
     oled.fill(0)
     oled.text('moybyte', 0, 0, 1)
     oled.show()
     rows = leases.LEASES.rows()
-    held = ([N.pin_state(p) & N.PIN_PERIPH for p in (49, 50)], cs.value(), N.held(N.VM),
-            [r[3] for r in rows if r[0] in ('spi2', 'gpio45')])
+    held = ([N.pin_state(p) & N.PIN_PERIPH for p in (SCK, MOSI)], cs.value(), N.held(N.VM),
+            [r[3] for r in rows if r[0] in ('spi2', 'gpioDC')])
 finally:
     moy_log.current(was)
     leases.LEASES.grants = grants
 moybyte.end(pid)
-safe = [N.pin_state(p) for p in (49, 50, 51, 45, 46, 2)]
+safe = [N.pin_state(p) for p in (SCK, MOSI, MISO, DC, RES, CS)]
 try:
     oled.show()
     kept = 'showed'
@@ -1923,7 +1959,11 @@ def a_lease_runs_a_driver_and_a_crash_leaves_it_safe(board, board_dir):
     import time
     mp = ROOT / "firmware" / board_dir / ".build" / "micropython"
     src = (mp.joinpath(*SSD1306)).read_text()
-    board.pyexec("DRIVER = %r\n" % src + LEASED_DRIVER, timeout=60.0, strict=True)
+    pins = lease_driver_pins(board_dir)
+    code = LEASED_DRIVER
+    for name, pin in zip(("SCK", "MOSI", "MISO", "DC", "RES", "CS"), pins):
+        code = code.replace(name, str(pin))
+    board.pyexec("DRIVER = %r\n" % src + code, timeout=60.0, strict=True)
     held, safe, kept, left = board.pyval("ws._ld", strict=True)
     periph, cs, n_held, holders = held
     assert periph == [16, 16] and cs == 1 and n_held == 4, held
@@ -3794,6 +3834,23 @@ def _push_folder(board, board_dir, local, dest):
         mark_pushed(board, dest)
 
 
+def _push_one_shot(board, board_dir, local, dest):
+    """`_push_folder` for a fixture one check uses and no later one reads (a
+    variant of the hello cart, the huge, newer and deep carts, the folder
+    reader): when the test that pushed the previous ones is not the one
+    pushing now, those are taken off the store first, so they never stack. A
+    board whose store is the 2.7 MB tail of a 16 MB flash has no room for
+    eleven of them beside the showcase."""
+    import push_cart as pc
+    test = os.environ.get("PYTEST_CURRENT_TEST", "").split(" ")[0]
+    owner, dests = getattr(board, "_one_shots", (None, []))
+    if owner != test and dests:
+        pc.remove_folders(board, [d.rstrip("/").rsplit("/", 1)[-1] for d in dests])
+        dests = []
+    _push_folder(board, board_dir, local, dest)
+    board._one_shots = (test, dests + [dest])
+
+
 def push_fixture(board, title):
     """The seed cart `title` on the board's store for a check, where no image
     carries it (tools/gen_device_carts.in_image: a test fixture, or an
@@ -4604,7 +4661,7 @@ def _wasm_fixture_variant(board, board_dir, chip, title, slug, change=None,
     if change is not None:
         change(out)
     root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
-    _push_folder(board, board_dir, out, root.rstrip("/") + "/wasm_" + slug + ".moy")
+    _push_one_shot(board, board_dir, out, root.rstrip("/") + "/wasm_" + slug + ".moy")
     board.pyval(RESCAN, timeout=60)
 
 
@@ -4633,7 +4690,7 @@ def wasm_read_of_a_folder_reads_nothing(board, board_dir):
     wasm_cart.build(str(ROOT / "tests" / "fixtures" / "wasm" / "readdir.moy"), out,
                     chips=(chip,))
     root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
-    _push_folder(board, board_dir, out, root.rstrip("/") + "/wasm_readdir.moy")
+    _push_one_shot(board, board_dir, out, root.rstrip("/") + "/wasm_readdir.moy")
     board.pyval(RESCAN, timeout=60)
     size = os.path.getsize(os.path.join(out, "manifest.json"))
     pm = ("(lambda a: (__import__('moycore').pmem_image(a), list(a)[:3])[1])"
@@ -5085,7 +5142,7 @@ def wasm_too_big_cart_opens_the_notice(board, board_dir):
     wasm_cart.build(str(ROOT / "tests" / "fixtures" / "wasm" / "huge.moy"), out,
                     chips=(chip,))
     root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
-    _push_folder(board, board_dir, out, root.rstrip("/") + "/wasm_huge.moy")
+    _push_one_shot(board, board_dir, out, root.rstrip("/") + "/wasm_huge.moy")
     board.pyval(RESCAN, timeout=60)
     need, have = wasm_fit(board, HUGE_TITLE)
     assert need[0] > have[0], (need, have)
@@ -5118,7 +5175,7 @@ def wasm_newer_cart_opens_the_notice(board, board_dir):
     out = os.path.join(tmp, "newer.moy")
     wasm_cart.build(str(ROOT / "tests" / "fixtures" / "wasm" / "newer.moy"), out)
     root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
-    _push_folder(board, board_dir, out, root.rstrip("/") + "/wasm_newer.moy")
+    _push_one_shot(board, board_dir, out, root.rstrip("/") + "/wasm_newer.moy")
     board.pyval(RESCAN, timeout=60)
     missing = board.pyval(
         "ws.runtimes['wasm'].missing([c for c in ws.carts.all if c['title'] == %r][0])"
@@ -5159,7 +5216,7 @@ def wasm_deep_recursion_traps_with_its_numbers(board, board_dir):
     wasm_cart.build(str(ROOT / "tests" / "fixtures" / "wasm" / "deep.moy"), out,
                     chips=(chip,))
     root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
-    _push_folder(board, board_dir, out, root.rstrip("/") + "/wasm_deep.moy")
+    _push_one_shot(board, board_dir, out, root.rstrip("/") + "/wasm_deep.moy")
     board.pyval(RESCAN, timeout=60)
     err = _wasm_run_error(board, DEEP_TITLE)
     m = STACK_NOTE.search(err)

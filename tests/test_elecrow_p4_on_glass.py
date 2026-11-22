@@ -48,12 +48,24 @@ def board():
 # the wasm block at the end brings the radios up.
 WASM_BOARD_DIR = BOARD_DIR
 
+# This board's store is the 2.7 MB tail of a 16 MB flash and the seeds take 1.4
+# MB of it, so the compiled-cart fixtures cannot all stay: before a test, a
+# store with less than STORE_ROOM_BLOCKS free (4 KiB each: the showcase's 150
+# is the biggest fixture) is given back, and the fixtures below are scoped to
+# the test, which pushes what it needs again (files already there are skipped).
+STORE_ROOM_BLOCKS = 160
+
+
+@pytest.fixture(autouse=True)
+def store_room(board):
+    on_glass.store_room(board, STORE_ROOM_BLOCKS)
+
 
 def test_the_wasm_engine_costs_the_idle_desk_at_most_a_constant(board):
     on_glass.wasm_idle_cost_is_bounded(board, WASM_IDLE_BASELINE,
                                        ble_at_boot=True)
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def wasm(board):
     return on_glass.wasm_push(board, WASM_BOARD_DIR)
 
@@ -102,7 +114,7 @@ WASM_HELLO_FPS_FLOOR = 27
 WASM_BLIT_FPS_FLOOR = 50
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def wasm_carts(board):
     return on_glass.wasm_carts_push(board, WASM_BOARD_DIR)
 
@@ -242,12 +254,9 @@ def test_doom_frames_match_the_host(board):
                                         floor=DOOM_FPS_FLOOR)
 
 
-# A file doom1.wad's size (4196020 bytes): the regression for "the board did
-# not arm the raw upload (no reply)" on this UART. Slow by design (this
-# board's ack is its only backpressure) -- measured ~8 minutes for the send.
-def test_a_doom_sized_file_is_skipped_when_current_and_sent_when_not(board):
-    on_glass.big_push_skips_when_current_and_sends_when_changed(
-        board, WASM_BOARD_DIR)
+# No doom1.wad-sized push (the Waveshare's regression for the raw upload on its
+# UART): this board's internal store is the 2.7 MB tail of a 16 MB flash, so
+# a 4 MB file cannot fit and the refusal leaves a partial file behind.
 
 
 def test_boots_to_the_desk(board):
@@ -596,7 +605,7 @@ def test_a_compiled_frame_makes_no_crossing(board, wasm_carts, which):
 
 # The runaway watch (native/moy_play/moy_play.h): a frame that never comes
 # back is ended, Lua on its line and a compiled cart at its next import call.
-@pytest.fixture(scope="module")
+@pytest.fixture
 def stuck_carts(board):
     on_glass.stuck_carts_push(board, WASM_BOARD_DIR)
 
@@ -607,7 +616,7 @@ def test_a_frame_that_never_ends_is_ended(board, stuck_carts, runtime):
 
 
 # A Lua app on the UI tree: the image's frozen layer over the C engine.
-@pytest.fixture(scope="module")
+@pytest.fixture
 def tree_form(board):
     on_glass.tree_form_push(board, WASM_BOARD_DIR)
 
@@ -619,7 +628,7 @@ def test_a_lua_tree_app_runs_on_the_engine(board, tree_form):
 # The timed lanes (native/moy_wasm/moy_wasm_session.h): moy_audio and moy_timer
 # run on their own core, AOT and interpreted, and a lane that spins is struck
 # at its deadline, the ring muted, the cart running on.
-@pytest.fixture(scope="module")
+@pytest.fixture
 def lanes_carts(board):
     on_glass.lanes_carts_push(board, WASM_BOARD_DIR)
 
