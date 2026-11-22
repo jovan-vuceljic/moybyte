@@ -69,10 +69,11 @@ def _appearance_name(ws):
 
 
 def _music_add(ws):
+    from runtime import music_app as M
     m = ws.app("jukebox")
-    m._go("add")
+    m.do(M.add_open)
     # Music's own cancel closes Add a station, its draft with it
-    return lambda: m.url if m.page == "add" else "", ""
+    return lambda: m.state().url if m.state().view == "add" else "", ""
 
 
 FIELDS = {"files": _files_rename, "appearance": _appearance_name,

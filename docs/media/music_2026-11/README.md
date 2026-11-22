@@ -222,18 +222,28 @@ as they are. Three things change:
 
 ## Where the build differs
 
-Build step 2 (`runtime/apps/music_app.py`, cart
-`system_carts/moybyte.music.moy`) differs from the renders in these places:
+The build (`runtime/apps/music_app.py`, cart `system_carts/moybyte.music.moy`)
+is a `uitree` page the C engine lays out in its one look (owner, 2026-11-21:
+of two looks the one needing less code wins), so it differs from the renders
+in these places:
 - Its process kind is `jukebox`: `music` is the Editor's Music tab.
-- A list's current row draws no fill once the focus leaves the table.
-- The volume meter changes by a tap or by its − and + buttons. It takes no
-  ← → of its own.
-- On a pad, Y opens Now playing. L and R do not switch tabs: the input
-  table has no shoulder keys.
+- Radio and My music are tables (Station and Style, Name and Length). The
+  row that plays says Playing, Paused, Connecting... or Not answering in its
+  right column; there is no equalizer, pulse or art in a row.
+- What plays is a foot under either list: the main button and a button with
+  the state glyph and the title, which opens Now playing. A page with
+  nothing playing shows an empty foot.
+- Now playing is rows: the title, the line, LIVE or the file's place (a
+  slider, `SEEK_STEP` seconds a step, which a tap or ← → moves), the volume
+  (a slider of ten steps), then Play or Pause, Previous, Next and Stop. The
+  arrows move the focus, which opens on the place where there is one; Q E
+  step; W S and A D are not the page's.
+- On a pad, Y (M) opens Now playing from a list. L and R do not switch
+  tabs: the input table has no shoulder keys.
 - Every seed names the `paused` role in both modes; a theme that does not
   falls back to `ink_dim`.
 - The Radio tab shows its no-Wi-Fi page when the console has a Wi-Fi radio
-  that is not up and knows no network.
+  that is not up and knows no network; Wi-Fi settings is in its foot.
 - Its prefs keep only the stations added (`music_stations`); there is no
   settings page.
 

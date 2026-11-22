@@ -1551,9 +1551,10 @@ _MUSIC_FILES = ((("Beach trip", "/m/Beach trip.mp3", "3:41"), ("Birthday song", 
                 (("Road trip mix", "/m/r.m3u", "12 songs"), ("Sleepy time", "/m/s.m3u", "8 songs")))
 
 
-def _music(ws, now, what, page="list", tab=0, cur=None, files=None):
+def _music(ws, now, what, page="list", tab=0, cur=None, files=None, put=None):
     """Music open on `page` while the faked face answers `now` for `what`
-    (kind, name, src); the stream's wake cancelled, so the frame is still."""
+    (kind, name, src); the stream's wake cancelled, so the frame is still.
+    `put` runs last as the page's handler (a field's text, Wi-Fi off)."""
     from runtime import music_app as M
     import moybyte
     s = M.STREAM
@@ -1567,14 +1568,22 @@ def _music(ws, now, what, page="list", tab=0, cur=None, files=None):
             moybyte.cancel(s.wake)
             s.wake = None
     ws.spine.open_app(app)
-    app.tab = tab
     if files is not None:
         app.files = files
-        app.idle_owed = False
-    if cur is not None:
-        app.cur[tab] = cur
-    if page != "list":
-        app._go(page)
+        app.folder_owed = False
+
+    def show():
+        M.fill(app)
+        M.s.tab = M.s.view = ("radio", "files")[tab]
+        if cur is not None:
+            setattr(M.s, ("scur", "fcur")[tab], app.rows[tab][cur]["id"])
+        if page == "now":
+            M.now()
+        elif page == "add":
+            M.add_open()
+        if put is not None:
+            put(M.s)
+    app.do(show)
     return app
 
 
@@ -1625,9 +1634,7 @@ def _music_plan(ws, cfg):
                ("radio", "Drone Zone", M.STATIONS[1][2]), cur=2)
 
     def nowifi():
-        app = _music(ws, None, None)
-        app._has_wifi = lambda: False
-        app.wifi = False
+        _music(ws, None, None, put=lambda s: setattr(s, "online", False))
 
     def cc():
         _music(ws, _MUSIC_RADIO, groove)
@@ -1642,14 +1649,17 @@ def _music_plan(ws, cfg):
         _music(ws, dict(_MUSIC_RADIO, paused=True), groove)
         ws.home.go_home()
 
+    def typed(url):
+        def put(s):
+            s.url = url
+            M.url_moved()
+        return put
+
     def add_https():
-        app = _music(ws, None, None, page="add")
-        app.url = "https://stream.example.org/live.mp3"
-        app.err = M._check(app.url, False)
+        _music(ws, None, None, page="add", put=typed("https://stream.example.org/live.mp3"))
 
     def add():
-        app = _music(ws, None, None, page="add")
-        app.url = "http://ice1.somafm.com/lush-128-mp3"
+        _music(ws, None, None, page="add", put=typed("http://ice1.somafm.com/lush-128-mp3"))
     return [("music_radio", lambda: _music(ws, _MUSIC_RADIO, groove, cur=3)),
             ("music_radio_connecting", connecting),
             ("music_files", lambda: _music(ws, _MUSIC_LIST, road, tab=1, cur=2,
