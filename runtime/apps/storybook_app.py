@@ -3,7 +3,6 @@
 #   add_picture_slide           a drawing as a story's new last slide, and its undo
 #   StorybookLayout             the desk editor's rects
 #   Frames                      slides drawn once into layers, kept by what they show
-#   s                           the page's state: the stories, the page, the dialogs
 #   fill                        the page's states from the layer's fields
 #   build                       the page: the stories' cards, a story's view, the dialogs
 #   StorybookAppLayer           the app: the store, Present, the desk's editor
@@ -37,7 +36,6 @@ an old story cart's deck) is not listed: it reads as absent.
 import ui as _v
 import uitree as ui
 import uitree_app
-import ui_draw as _D
 from layers import AppLayer
 from layout_base import bar_rows, content_of, metric_class, window_foot, DESK
 from moy_store_base import builtin_name
@@ -488,15 +486,16 @@ def draw_view(cv, x, y, w, h):
     n = len(st.slides)
     word = "%d / %d" % (lay.cur + 1, n)
     ty = sy + sh + 4 * fs
-    tw = _D.text_width(word, fs)
+    tw = _v.text_size(word)[0]
     mid = x + w // 2
-    ink, dim = th["ink"], th["ink_dim"]
-    _D.label(cv, (mid - tw // 2 - 4 * fs, ty, tw + 8 * fs, 16 * fs), word, ink, _D.ALIGN_CENTER)
     for k, ax in ((0, mid - tw // 2 - 36 * fs), (1, mid + tw // 2 + 12 * fs)):
         _v.at(ax, ty, 24 * fs, 16 * fs)
         _v.icon("back" if k == 0 else "forward")
         _v.label("", _DIM if (k == 0 and lay.cur == 0) or (k == 1 and lay.cur >= n - 1) else None)
-    _D.label(cv, (x, ty + 16 * fs, w, 14 * fs), NOTE, dim, _D.ALIGN_CENTER)
+    _v.at(mid - tw // 2 - 4 * fs, ty, tw + 8 * fs, 16 * fs)
+    _v.label(word, _CENTRE)
+    _v.at(x, ty + 16 * fs, w, 14 * fs)
+    _v.label(NOTE, _DIM_CENTRE)
 
 
 def view_at(ev):
@@ -509,6 +508,8 @@ def view_at(ev):
 
 
 _DIM = {"tone": "dim"}
+_CENTRE = {"align": "center"}
+_DIM_CENTRE = {"tone": "dim", "align": "center"}
 NOTE = "Edit stories on a desk board or the web"
 _VIEW_W = [0]                   # the view canvas's width, as last drawn
 ui.hook("view_at", view_at, takes="pointer")
@@ -612,7 +613,7 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is
         self._edited_at = None
         self._menu_story = None
         self._whole = (0, 0, 0, 0)    # the editor's page rect, the canvas's
-        self._was = None              # (page, asking, menu, story) the last fill saw
+        self._was = [None] * 6        # page, asking, menu, story, slide, stories: what the last fill saw
         _LAYER[0] = self
 
     # -- the page's state --------------------------------------------------------------
@@ -975,16 +976,17 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is
                 self.commit()
             else:
                 self._damage.again()
-        cv = self._surf.canvas()
         if self.show is not None:
-            self._present(cv)
+            self._present(self._surf.canvas())
             return
         if self.page in EDITOR and self.ed is not None:
-            self._editor_frame(cv)
+            self._editor_frame(self._surf.canvas())
             return
-        was = (self.page, self.asking, self.menu, self.story, self.cur, len(self.stories))
-        if was != self._was:
-            self._was = was
+        w = self._was
+        if (w[0] is not self.page or w[1] is not self.asking or w[2] is not self.menu
+                or w[3] is not self.story or w[4] != self.cur or w[5] != len(self.stories)):
+            w[0], w[1], w[2], w[3], w[4], w[5] = (self.page, self.asking, self.menu, self.story,
+                                                  self.cur, len(self.stories))
             self.fill_owed = True
         if self.fill_owed:
             self.fill_owed = False
