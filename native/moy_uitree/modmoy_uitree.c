@@ -364,6 +364,20 @@ static mp_obj_t eng_lent(mp_obj_t self, mp_obj_t site)
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eng_lent_obj, eng_lent);
 
+// live(units) -> the units shown (`uit_live`): `units` the int16 nodes bound to them; a
+// refusal is (answer, node)
+static mp_obj_t eng_live(mp_obj_t self, mp_obj_t units)
+{
+    mp_buffer_info_t b;
+    mp_get_buffer_raise(units, &b, MP_BUFFER_READ);
+    int node = -1, r = uit_live(eng(self), (const int16_t *)b.buf, (int)(b.len / 2), &node);
+    if (r >= 0)
+        return mp_obj_new_int(r);
+    mp_obj_t t[2] = {MP_OBJ_NEW_SMALL_INT(r), MP_OBJ_NEW_SMALL_INT(node)};
+    return mp_obj_new_tuple(2, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_live_obj, eng_live);
+
 // lent_place(cells, x0, w, h, fs, pad) -> (density, [(x, w, labelled)], hairlines, need);
 // cells (kind, flags, width named) each
 static mp_obj_t eng_lent_place(size_t na, const mp_obj_t *a)
@@ -784,6 +798,7 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_pane_ask), MP_ROM_PTR(&eng_pane_ask_obj) },
     { MP_ROM_QSTR(MP_QSTR_rect), MP_ROM_PTR(&eng_rect_obj) },
     { MP_ROM_QSTR(MP_QSTR_lent), MP_ROM_PTR(&eng_lent_obj) },
+    { MP_ROM_QSTR(MP_QSTR_live), MP_ROM_PTR(&eng_live_obj) },
     { MP_ROM_QSTR(MP_QSTR_cond_of), MP_ROM_PTR(&eng_cond_of_obj) },
     { MP_ROM_QSTR(MP_QSTR_anchor), MP_ROM_PTR(&eng_anchor_obj) },
     { MP_ROM_QSTR(MP_QSTR_take_focused), MP_ROM_PTR(&eng_take_focused_obj) },

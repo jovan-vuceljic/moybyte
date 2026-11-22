@@ -78,7 +78,7 @@ E_GAP = -3                  # UIT_E_KIND: what this engine does not draw yet
 # "checked": `uitree.Builder` compiles and checks them first, as the
 # host's checker does.
 BUILD = "direct"
-# each code C raises (its compiler, `uit_want_focus`), with its fix
+# each code C raises (its compiler, `uit_live`, `uit_want_focus`), with its fix
 FIXES = {"T01": "the template's syntax: {name}, {name|fmt %d}, {cond?a:b}; '{{' for a brace, '\\:' for a colon "
                 "in a branch",
          "T02": "name a declared state, a field of the rows, a system value or a label table",
@@ -89,7 +89,8 @@ FIXES = {"T01": "the template's syntax: {name}, {name|fmt %d}, {cond?a:b}; '{{' 
          "C02": "a condition needing && and || is a derive, named here",
          "C03": "a condition with brackets is a derive, named here",
          "N04": "a size class: @wide, @desk, @tall, @handheld",
-         "N08": "a key one shown node has: key the two apart, or show one at a time"}
+         "N08": "a key one shown node has: key the two apart, or show one at a time",
+         "L03": "lend to two sites, or show one of the two rows at a time"}
 
 
 class _TextEditor:
@@ -163,6 +164,7 @@ class CEngine(Engine):
         self._pop_lists = {}    # a popover's key -> (model, cur) of the list the arrows walk in it
         self._pop_fields = {}   # a popover's key -> whether a field of its own takes typed keys
         self._loaded = False    # the store came from a compiled page whose build is not yet counted
+        self._lend_at = {}      # a lent row's node -> its line (L03 names the second)
 
     def _made(self):
         """The store, made and declared at the first way in that needs it."""
@@ -536,6 +538,7 @@ class CEngine(Engine):
         stand = self._pn = {}           # node -> a panes or pane's stand-in (`_pane_node`)
         legacies = self._legacy = {}    # node -> a legacy node's stand-in: its functions
         srcs = []
+        lend_at = self._lend_at = {}
         feet = set()                    # a flowing page's foot stacks its rows by the placed rule
 
         def node(n, parent):
@@ -552,6 +555,8 @@ class CEngine(Engine):
                 fail(me, "node %s" % n.key, n.where)
             if nk == "foot":
                 feet.add(me)
+            if nk == "tools" and l and l.get("lend"):
+                lend_at[me] = n.where
             if field:
                 r = cprop(me, "field", field, None)
                 if r >= 0 and "on" in l:
@@ -757,6 +762,7 @@ class CEngine(Engine):
             w, at, self.want_focus, self.focus_at = self.want_focus, self.focus_at, None, None
             if x.want_focus(w) < 0:
                 self._fail(E_CHECK, "ui.focus(%r)" % w, at)
+        self._lent_check()
         kind = _v.input_kind()
         self.input = kind if kind in S.INPUTS else "keys"
         t = _D.UI_TARGET
@@ -781,6 +787,12 @@ class CEngine(Engine):
             self.frame_calls.append(self.calls)
         if q or self.timers or self.work_run or self.decl.posts:
             self._damage.all()
+
+    def _lent_check(self):
+        """Two shown rows lent to one site are L03, at the second's line (`uit_live`)."""
+        r = self._x.live(b"")
+        if type(r) is tuple:
+            self._fail(r[0], "a lent row", self._lend_at.get(r[1]))
 
     def _flags(self, desk):
         b = self._buttons
@@ -1517,6 +1529,7 @@ class CEditorEngine(CEngine, _ed.Engine):
         self.committed()
         self.placed = []
         self._pane_sync()
+        self._lent_check()
         self._x.place(area[0], area[1], area[2], area[3], self._flags(desk), max(1, getattr(self, "fs", 1)))
         self._pane_read()
 

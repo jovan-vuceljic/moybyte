@@ -4698,6 +4698,54 @@ static int lender(uit_t *e, int k, const char *site)
     return -1;
 }
 
+// `uit_live`'s walk: what `lender` walks, each shown node of `units` setting its bit of
+// `*mask` and each shown lender's site held against the ones met before it.
+static int live_walk(uit_t *e, int k, const int16_t *units, int n, uint32_t *mask, int16_t *lend,
+                     int *nlend, int *node)
+{
+    const uit_node_t *N = NODE(k);
+    if (!uit_shown(e, k, -1, -1) || UIT_IS_LIST(N->kind))
+        return 0;
+    for (int i = 0; i < n; i++)
+        if (units[i] == k)
+            *mask |= 1u << i;
+    if (N->kind == UIT_TOOLS && (N->lit & TL_LEND)) {
+        const char *site = prop_src(e, k, "lend");
+        for (int i = 0; i < *nlend; i++)
+            if (!strcmp(prop_src(e, lend[i], "lend"), site)) {
+                *node = k;
+                return uit_check_fail(e, "L03", UIT_MSG("two shown rows lend to %s: %s and %s", "%s %s %s"), site,
+                                      uit_str(e, NODE(lend[i])->key), uit_str(e, N->key));
+            }
+        if (*nlend < UIT_LIVE_LENDERS)
+            lend[(*nlend)++] = (int16_t)k;
+        return 0;
+    }
+    if (N->kind == UIT_SWITCH) {
+        int cs = uit_case_of(e, k);
+        return cs < 0 ? 0 : live_walk(e, cs, units, n, mask, lend, nlend, node);
+    }
+    KIDS(k, g) {
+        int r = live_walk(e, g, units, n, mask, lend, nlend, node);
+        if (r < 0)
+            return r;
+    }
+    return 0;
+}
+
+int uit_live(uit_t *e, const int16_t *units, int n, int *node)
+{
+    int lenders = 0;
+    for (int k = 0; k < e->nnodes && lenders < 2; k++)
+        lenders += NODE(k)->kind == UIT_TOOLS && (NODE(k)->lit & TL_LEND);
+    if (!e->nnodes || n < 0 || n > 31 || (!n && lenders < 2))
+        return n < 0 || n > 31 ? UIT_E_ARG : 0;
+    uint32_t mask = 0;
+    int16_t lend[UIT_LIVE_LENDERS];
+    int nlend = 0, r = live_walk(e, 0, units, n, &mask, lend, &nlend, node);
+    return r < 0 ? r : (int)mask;
+}
+
 // Whether tabs node `k` offers value `v`: no offered= for it, or its condition holds.
 static int offered(uit_t *e, int k, const char *v)
 {
