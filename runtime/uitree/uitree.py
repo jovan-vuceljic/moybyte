@@ -2004,12 +2004,12 @@ SCHEMA = {
     "picture": dict(_C, image="image", icon="text", side="int", tone="text"),
     "progress": dict(_C, label="text", value="int", max="int", look="lit"),
     "empty": dict(_C, icon="text", title="text", lines="texts"),
-    "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit"),
+    "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit", look="lit"),
     "dialog": dict(_C, title="text", buttons="lit", kind="lit"),
     "popover": dict(_C, anchor="text", w="int", close="action0", wash="lit", at="text"),
     "menu": dict(_C, caption="text"),
     "item": dict(_C, label="text", icon="text", mkind="lit"),
-    "split": dict(_C, dir="choice", sizes="ints", pad="lit", gap="lit", align="lit"),
+    "split": dict(_C, dir="choice", sizes="ints", pad="lit", gap="lit", align="lit", rule="lit"),
     "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit"),
     "panel": dict(_C),
     "canvas": dict(_C, draw="fn", h="lit", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit"),
@@ -2283,7 +2283,9 @@ def text_view(name, **p):
     "cut" or "word", `follow=True` keeps a view at its foot there as lines
     arrive, `syntax=` a terminal's colours ("sgr") or a source's; `face="ui"`
     sets each line as a paragraph of prose in the ui face, half a line
-    between paragraphs (no syntax). A view whose text runs past it is a
+    between paragraphs (no syntax); with `look="well"` its prose lies on a
+    part's well, its paragraphs one under the next, its foot fading where
+    they run on. A view whose text runs past it is a
     stop: the arrows scroll it a line, PgUp and PgDn a page (L7)."""
     where = _caller()
     if p.get("face", "mono") not in ("mono", "ui"):

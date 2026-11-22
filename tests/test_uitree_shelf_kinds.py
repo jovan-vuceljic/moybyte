@@ -176,3 +176,133 @@ ui.action("tap2", "Check", tap2)
         assert ax + aw < bx and aw < w // 3 and bw < w // 3, fs[0].state
         assert config == DESK or bx + bw > w * 3 // 4, fs[0].state
         assert app.engine.s._v["kind"] == "primary" and fs[0].buf != fs[1].buf
+
+
+def test_a_row_on_a_flowing_page_sets_a_picture_beside_a_column_and_a_button_at_its_end(tmp_path):
+    """ui.row outside a placed page: the picture with a column of a label and
+    a button beside it, the row as tall as the picture; a row of a label and
+    a button, the label taking what the button leaves; the page's next row
+    under both."""
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        with ui.row("head"):
+            ui.picture(icon="game", side=64)
+            with ui.group(""):
+                ui.label("Doom", face="title")
+                ui.button("tap2")
+        with ui.row("caption", pad=16):
+            ui.label("4 carts", tone="dim")
+            ui.button("flip", icon="rotate")
+        ui.label("{text}")
+
+
+def tap2():
+    s.n = s.n + 1
+
+
+ui.action("tap2", "Info", tap2)
+'''
+    for config in (TDECK, DESK):
+        fs, _ = run(tmp_path, build, config=config, boxes=["tap2", "flip"], name="row_" + config[:4])
+        (ax, ay, aw, ah), (bx, by, bw, bh) = fs[0].state
+        assert ax >= 64 and aw < fs[0].w // 2, fs[0].state          # beside the picture
+        assert by >= ay + ah and by - ay >= 40, fs[0].state                   # under the picture's row
+        assert bw < fs[0].w // 3 and bx > ax, fs[0].state                     # at the row's end
+
+
+def test_a_row_of_buttons_alone_centres_them_at_their_natural_widths(tmp_path):
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        ui.label("{text}")
+        with ui.row("verbs"):
+            ui.button("flip", icon="rotate")
+'''
+    fs, app = run(tmp_path, build, boxes=["flip"])
+    x, y, w, h = fs[0].state[0]
+    page = fs[0].w
+    assert w < page // 2 and abs(x + w // 2 - page // 2) <= 8, fs[0].state
+
+
+def test_a_progress_in_a_split_cell_draws_its_label_over_its_bar(tmp_path):
+    """In a split's cell as on the page, the progress takes the tall form (its
+    label and percent on a line, its bar under them, as tall as two rows),
+    not a value row's one line."""
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        with ui.split("row", sizes=("1*", 274)):
+            ui.label("shelf")
+            with ui.group(""):
+                ui.button("tap2")
+                ui.progress("n", max=4, label="Downloading")
+                ui.button("flip")
+
+
+def tap2():
+    s.n = s.n + 1
+
+
+ui.action("tap2", "Info", tap2)
+'''
+    fs, _ = run(tmp_path, build, boxes=["tap2", "flip"], config=DESK)
+    (ax, ay, aw, ah), (bx, by, bw, bh) = fs[0].state
+    assert by - (ay + ah) >= 40, fs[0].state
+
+
+def test_an_empty_breaks_a_long_line_at_word_breaks(tmp_path):
+    """A line wider than the page breaks into lines of its column: the
+    control under it stands lower than under a short line."""
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        with ui.empty("Not installed", lines=["{LINE}"]):
+            ui.button("flip")
+'''
+    long_ = "The download stopped before it finished: the network went away while it was coming."
+    short, _ = run(tmp_path, build.replace("{LINE}", "Nothing changed."), boxes=["flip"], name="short")
+    wrapped, _ = run(tmp_path, build.replace("{LINE}", long_), boxes=["flip"], name="long")
+    assert wrapped[0].state[0][1] > short[0].state[0][1], (short[0].state, wrapped[0].state)
+
+
+def test_a_split_draws_its_rule_and_a_split_in_a_cell_lays_out_in_that_cell(tmp_path):
+    """rule=True draws a rule between the cells; a split inside a group cell
+    takes that cell's room, not the page's."""
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        with ui.split("row", sizes=("1*", "1*"), RULE):
+            with ui.group(""):
+                ui.label("left")
+            with ui.group(""):
+                with ui.split("row", sizes=("1*", "1*")):
+                    with ui.group(""):
+                        ui.button("tap2")
+                    with ui.group(""):
+                        ui.button("flip")
+
+
+def tap2():
+    s.n = s.n + 1
+
+
+ui.action("tap2", "Info", tap2)
+'''
+    plain, _ = run(tmp_path, build.replace(", RULE", ""), boxes=["tap2", "flip"], name="plain")
+    ruled, _ = run(tmp_path, build.replace("RULE", "rule=True"), boxes=["tap2", "flip"], name="ruled")
+    assert plain[0].buf != ruled[0].buf
+    (ax, _, _, _), (bx, _, _, _) = ruled[0].state
+    w = ruled[0].w
+    assert ax >= w // 2 - 8 and bx > ax, ruled[0].state
+
+
+def test_a_text_view_of_the_well_look_lays_its_prose_on_a_well(tmp_path):
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        ui.text_view("text", face="ui", wrap="word"LOOK)
+'''
+    plain, _ = run(tmp_path, build.replace("LOOK", ""), name="plain")
+    well, _ = run(tmp_path, build.replace("LOOK", ', look="well"'), name="well")
+    assert plain[0].buf != well[0].buf

@@ -1598,6 +1598,10 @@
     "face": {
      "type": "word:ui,title,mono,caption,result",
      "level": 2
+    },
+    "look": {
+     "type": "word:well",
+     "level": 2
     }
    }
   },
@@ -2243,6 +2247,10 @@
     "align": {
      "type": "word:start,center,end",
      "level": 1
+    },
+    "rule": {
+     "type": "bool",
+     "level": 2
     }
    }
   },

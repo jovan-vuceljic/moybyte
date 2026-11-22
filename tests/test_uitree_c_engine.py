@@ -91,10 +91,9 @@ def test_a_form_the_engine_lacks_is_refused_by_name():
 
     def build():
         with S.page("P"):
-            with S.row("r"):
-                pass
+            S.status("a · b")
     eng = uitree_c.CEngine(S.decl_of(S.module_of(mod.build)), build, _Host(), None, None)
-    with pytest.raises(uitree_c.EngineGap, match="row node outside a placed page"):
+    with pytest.raises(uitree_c.EngineGap, match="status node outside a placed page"):
         eng._ready()
 
 

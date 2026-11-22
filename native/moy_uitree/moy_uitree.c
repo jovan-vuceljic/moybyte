@@ -1252,8 +1252,14 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         else if (name[0] == 'g')
             N->nbtn = (uint16_t)i;
         else
-            N->lit = (uint8_t)i;
+            N->lit = (uint8_t)((N->lit & SP_RULE) | i);
         return add_prop(e, node, name, src, repr, PK_LIT, i);
+    }
+    if (kind == UIT_SPLIT && !strcmp(name, "rule")) {
+        // rule=True: a rule down (or across) the middle of each gap between its cells
+        if (src[0] == 'T' || src[0] == '1')
+            N->lit |= SP_RULE;
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & SP_RULE) != 0);
     }
     if (kind == UIT_GRID && (!strcmp(name, "pad") || !strcmp(name, "gap"))) {
         static const char *const GAPS[] = {"s", "m", "l", "0"};
@@ -1473,6 +1479,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             return uit_fail(e, UIT_E_NAME, UIT_MSG("text_view .%s: no text field of its model", "text_view .%s"), src);
         N->cur = (int16_t)f;
         return 0;
+    }
+    if (kind == UIT_TEXT_VIEW && !strcmp(name, "look")) {
+        // "well": its prose on a part's well (TV_WELL)
+        N->lit = (uint8_t)((N->lit & ~TV_WELL) | (!strcmp(src, "well") ? TV_WELL : 0));
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & TV_WELL) != 0);
     }
     if (kind == UIT_TEXT_VIEW && (!strcmp(name, "follow") || !strcmp(name, "wrap") || !strcmp(name, "face") ||
                                   !strcmp(name, "syntax"))) {

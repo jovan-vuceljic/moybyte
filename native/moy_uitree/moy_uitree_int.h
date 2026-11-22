@@ -138,11 +138,12 @@ enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_FIELD = 4, N
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.
 enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 // A text view's options (`lit`); its syntax's index in `btn` (ui.py's _SYNTAXES).
-enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4 };
+enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8 };
 // A tools row lent to a site (`lit`); a button drawn as its icon alone (`btn`).
 enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2 };
 enum { RW_MID = 1, RW_GROW = 2 };   // a row's lit: centred on the row it is a cell of; a fill of its stack
-enum { CV_GROW = 1 };           // a canvas's lit: a fill along a row, its w= a basis
+enum { CV_GROW = 1 };
+enum { SP_ALIGN = 3, SP_RULE = 16 };   // a split's lit: its align= index; rule=True           // a canvas's lit: a fill along a row, its w= a basis
 enum { LT_WORD = 1, LT_CHAR = 2, LT_WRAP = 3, LT_FACE_SHIFT = 2, LT_ALIGN_SHIFT = 5, LT_LINES = 256,
        LT_FIT = 512 };     // size="fit": its face only where its text fits the page's width
 
@@ -356,6 +357,7 @@ struct uit {
     const uint8_t *pop_hints;   // a bare page's band, drawn in its shown popover's body (`draw_popover`)...
     size_t pop_hints_n;         // ...its bytes, 0 none
     uint8_t in_foot;            // drawing a stacked foot: its fields bare, on the hints' lead (`draw_foot`)
+    uint8_t in_flow;            // drawing a child of a flow row into its cell (`draw_flow_row`)
     int16_t foot;               // the page's shown foot this frame, or -1
     int32_t page_gen;           // the gen the last frame's page carried, or -1 (none)
     int32_t foot_r[4];          // its rect

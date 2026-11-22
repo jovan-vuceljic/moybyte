@@ -563,12 +563,11 @@ class CEngine(Engine):
         srcs = []
         units, lend_at = [], {}
         self._lend_at = lend_at
-        feet = set()                    # a flowing page's foot stacks its rows by the placed rule
 
         def node(n, parent):
             nk, l = n.kind, n.l
             kind = kinds.get(nk)
-            if kind is None or (nk in placed_kinds and not placed and not (nk == "row" and parent in feet)):
+            if kind is None or (nk in placed_kinds and not placed and nk != "row"):
                 raise EngineGap("a %s node" % nk + ("" if placed or nk not in placed_kinds else
                                                      " outside a placed page"))
             field = l.get("field") if l and nk != "text_view" else None
@@ -577,8 +576,6 @@ class CEngine(Engine):
             me = cnode(kind, n.key, parent)
             if me < 0:
                 fail(me, "node %s" % n.key, n.where)
-            if nk == "foot":
-                feet.add(me)
             if n.unit is not None:
                 units.append((me, n.unit))
             if nk == "tools" and l and l.get("lend"):
