@@ -119,7 +119,7 @@ There are ~15 per-surface `back()` methods. Each re-implements "close the
 dialog or popover I drew, else step my page":
 - `files_app.py:710`, `appearance_app.py:555`,
   `myart_app.py:246`, `paint_app.py:477`, `storybook_app.py:431`,
-  `story_edit.py:121`, `getcarts_app.py:1582`, `terminal_app.py:152`;
+  `story_edit.py:121`, `getcarts_app.py:1615`, `terminal_app.py:152`;
 - `settings_layer.py:1917`, which branches on six view flags;
 - `about_ui.py:150`, `achievements_ui.py:215`, `log_ui.py:69`,
   `perms_ui.py:47`, `tasks_ui.py:175`;

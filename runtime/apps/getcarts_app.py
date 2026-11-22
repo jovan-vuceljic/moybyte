@@ -217,8 +217,10 @@ _LINE = dict(key="id", id="", text="", tone="")
 s = ui.state(
     # the page a phase shows (`fill`): the desk's is the shelf beside the pane
     view=ui.enum("shelf", "desk", "cart", "getting", "licence", "pick", "busy", "words", init="shelf"),
-    caption="",                 # the shelf's count and its room free
-    carts=ui.model(key="id", id="", name="", sub="", icon="", tone=""),
+    caption="",                 # the shelf's count and its room free, on the desk's one line
+    count="",                   # ...on the handheld's: the count at its start, the room at its end
+    free="",
+    carts=ui.model(key="id", id="", name="", sub="", icon="", tone="", badge=""),
     card=ui.row_of("carts"),
     none=False,                 # the shelf is empty
     shown=False,                # the desk's pane has a cart
@@ -249,7 +251,8 @@ s = ui.state(
     v_get=False, v_update=False, v_play=False, v_use=False, v_remove=False, v_agree=False,
     v_no=False, v_cancel=False, v_ok=False, v_try_again=False, v_wifi=False,
     words_icon="getcarts",
-    lines=ui.model(**_LINE),    # a words page's paragraphs, Your copy's lines
+    lines=ui.model(**_LINE),    # Your copy's lines
+    w0="", w1="", w2="", w3="",  # a words page's paragraphs
     licence_name="",
     licence="",
     toast="",
@@ -322,12 +325,13 @@ def _fill_shelf(lay):
         sh = lay._shown(r)
         rows.append({"id": c["folder"], "name": c["name"],
                      "sub": STATE_WORD.get(sh) or _mb(r["plan"]["store_bytes"]),
-                     "icon": genre_icon(c),
+                     "icon": genre_icon(c), "badge": BADGE.get(sh, ""),
                      "tone": "value" if sh == "update" else "danger" if sh in BLOCKED else ""})
     _set(lay, "carts", rows)
     s.none = not rows
     left, right = lay._caption()
     s.caption = left + (" · " + right if right else "")
+    s.count, s.free = left, right
 
 
 def _fill_cart(lay, row):
@@ -378,15 +382,14 @@ def fill(lay):
     s.shown = row is not None
     if row is not None and view in ("desk", "cart", "getting"):
         _fill_cart(lay, row)
-    if t is not None:
-        s.status = t[0]
     s.busy = ph in BUSY
     if view in ("desk", "getting", "busy"):
         _fill_work(lay)
     elif view == "words":
         icon, s.title, paras = lay._empty_words()
         s.words_icon = icon
-        _lines(lay, "lines", [(p, "dim") for p in paras])
+        paras = list(paras[:3]) + [" ".join(paras[3:])] if len(paras) > 4 else list(paras) + [""] * (4 - len(paras))
+        s.w0, s.w1, s.w2, s.w3 = paras
     elif view == "pick":
         s.title, pairs = lay._copy_words()
         _lines(lay, "lines", pairs)
@@ -478,85 +481,97 @@ ui.action("install", "Install", install)
 
 
 def _cards():
-    with ui.cards("carts", cur="card", changed="follow", w="{@desk?128:64}", h="{@desk?128:64}"):
-        ui.card("open", label="{.name}", sub="{.sub}", icon="{.icon}", tone="{.tone}")
+    with ui.cards("carts", cur="card", changed="follow", w="{@desk?128:64}", h="{@desk?128:64}",
+                  pad="{@desk?16:12}"):
+        ui.card("open", label="{.name}", sub="{.sub}", icon="{.icon}", tone="{.tone}", badge="{.badge}")
     ui.label("No carts on the shelf yet", tone="dim", shown="none")
 
 
 def _facts():
     with ui.scroll("facts_view", shown="!busy"):
-        with ui.rows("facts"):
-            ui.info("{.label}", "{.value}")
+        with ui.group("", look="card"):
+            with ui.rows("facts"):
+                ui.info("{.label}", "{.value}")
 
 
 def _verbs():
-    """The cart's verbs, the one that goes on last; Play (Use) is the
-    primary beside Update too (one primary a frame)."""
+    """The cart's verbs, the one that goes on last the primary: Play (Use)
+    beside Update is not."""
     ui.button("remove", "danger", icon="trash", shown="v_remove")
-    ui.button("play", "primary", icon="play", shown="v_play")
-    ui.button("use", "primary", icon="palette", shown="v_use")
-    ui.button("update", icon="getcarts", shown="v_update")
+    ui.button("play", "{v_update?normal:primary}", icon="play", shown="v_play")
+    ui.button("use", "{v_update?normal:primary}", icon="palette", shown="v_use")
+    ui.button("update", "primary", icon="getcarts", shown="v_update")
     ui.button("get", "primary", icon="getcarts", shown="v_get")
 
 
 def _toast():
-    ui.label("{toast}", icon="{toast_icon}", tone="dim", shown="toast")
+    ui.toast("{toast}", icon="{toast_icon}", shown="toast")
 
 
 def _shelf():
-    ui.label("{caption}", tone="dim", face="caption")
+    with ui.row("caption", pad=16):
+        ui.label("{count}", tone="dim", face="caption")
+        ui.label("{free}", tone="dim", face="caption", align="end", shown="free")
     _cards()
-    with ui.foot(look="share", shown="toast"):
-        _toast()
+    _toast()
 
 
 def _desk():
-    with ui.split("row", sizes=("1*", 290)):
+    with ui.split("row", sizes=("1*", 274), pad="0", gap="m", rule=True):
         with ui.group(""):
-            ui.label("{caption}", tone="dim", face="caption")
+            with ui.row("caption", pad=24):
+                ui.label("{caption}", tone="dim", face="caption")
+                ui.button("check", icon="rotate")
             _cards()
         with ui.group("", shown="shown"):
-            ui.picture(icon="{icon}", side=128)
-            ui.label("{name}", face="title")
-            ui.label("{genre}", tone="dim", face="caption", shown="genre")
-            ui.label("{src}", tone="dim", face="caption", shown="src")
-            ui.label("{state}", icon="{state_icon}", tone="{state_tone}", wrap="word", lines=2,
-                     shown="state && !busy")
+            with ui.row("head"):
+                ui.picture(icon="{icon}", side=128)
+                with ui.group(""):
+                    ui.label("{name}", face="title")
+                    ui.label("{genre}", tone="dim", face="caption", shown="genre")
+                    ui.label("{src}", tone="dim", face="caption", shown="src")
+                    ui.label("{state}", icon="{state_icon}", tone="{state_tone}", wrap="word", lines=2,
+                             shown="state && !busy")
             ui.label("{desc}", wrap="word", lines=3, shown="desc")
             _facts()
             ui.label("{title}", shown="busy")
             ui.progress("done", max="{total}", label="Downloading", shown="busy && bar")
             ui.label("{line}", tone="dim", face="caption", shown="busy")
-    with ui.foot(look="share"):
+    with ui.foot():
         ui.label("{status}", tone="dim", face="caption")
-        ui.button("check", icon="rotate")
         _verbs()
         ui.button("cancel", "danger", icon="close", shown="v_cancel")
+    _toast()
 
 
 def _cart():
-    ui.picture(icon="{icon}", side=64)
-    ui.label("{meta}", tone="dim", face="caption")
-    ui.label("{state}", icon="{state_icon}", tone="{state_tone}", wrap="word", lines=2, shown="state")
-    ui.label("{desc}", wrap="word", lines=3, face="caption", shown="desc")
+    with ui.row("head"):
+        ui.picture(icon="{icon}", side=64)
+        with ui.group(""):
+            ui.label("{meta}", tone="dim", face="caption")
+            ui.label("{state}", icon="{state_icon}", tone="{state_tone}", wrap="word", lines=2, shown="state")
+            ui.label("{desc}", wrap="word", lines=3, face="caption", shown="desc")
     _facts()
     with ui.foot(look="share"):
-        _toast()
         _verbs()
+    _toast()
 
 
 def _getting():
-    ui.picture(icon="{icon}", side=64)
+    with ui.row("cover"):
+        ui.picture(icon="{icon}", side=64)
     ui.label("{title}", face="title", align="center")
-    ui.progress("done", max="{total}", label="{what}")
+    with ui.row("bar", pad=34):
+        ui.progress("done", max="{total}", label="{what}")
     ui.label("{line}", tone="dim", face="caption", align="center", shown="line")
-    ui.button("cancel", "danger", icon="close", shown="v_cancel")
+    with ui.row("verbs"):
+        ui.button("cancel", "danger", icon="close", shown="v_cancel")
 
 
 def _licence():
     ui.label("{licence_name}", face="title")
-    ui.text_view("licence", face="ui", wrap="word")
-    with ui.foot(look="share"):
+    ui.text_view("licence", face="ui", wrap="word", look="well")
+    with ui.foot():
         ui.button("no")
         ui.button("agree", "primary")
 
@@ -565,24 +580,23 @@ def _pick():
     ui.label("{title}", face="title")
     with ui.rows("lines"):
         ui.label("{.text}", tone="{.tone}", wrap="word", lines=2)
-    with ui.foot(look="share"):
+    with ui.foot():
         ui.button("cancel", icon="close")
 
 
 def _busy():
     with ui.empty("{title}", icon="getcarts", lines=["{line}"]):
         ui.progress("step", max="{steps}", label="{shelf}", shown="counting")
-        ui.button("cancel", icon="close")
+        with ui.row("verbs"):
+            ui.button("cancel", icon="close")
 
 
 def _words():
-    with ui.empty("{title}", icon="{words_icon}"):
-        with ui.rows("lines"):
-            ui.label("{.text}", tone="dim", face="caption", wrap="word", align="center", lines=4)
-    with ui.foot(look="share"):
-        ui.button("try_again", icon="rotate", shown="v_try_again")
-        ui.button("wifi", "primary", icon="wifi", shown="v_wifi")
-        ui.button("ok", "primary", shown="v_ok")
+    with ui.empty("{title}", icon="{words_icon}", lines=["{w0}", "{w1}", "{w2}", "{w3}"]):
+        with ui.row("verbs"):
+            ui.button("try_again", "{v_wifi?normal:primary}", icon="rotate", shown="v_try_again")
+            ui.button("wifi", "primary", icon="wifi", shown="v_wifi")
+            ui.button("ok", "primary", shown="v_ok")
 
 
 def build():
@@ -1671,6 +1685,7 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build, is_a
     # -- the frame -----------------------------------------------------------------
 
     def draw(self, dt):
+        self.engine.band = not self.desk      # a desk's window shows no hints band, as it never did
         self._pump()
         if self._away and not self._inst.wifi_open():
             self._away = False            # back from the Wi-Fi page: look again
