@@ -68,6 +68,7 @@ PORTED = (
     "terminal_app",
     "text_console",
     "uitree_wrap_row",
+    "home_ui",
 )
 
 

@@ -230,22 +230,15 @@ def test_one_focus_mark_under_the_pause_menu(tmp_path):
 
 
 @pytest.mark.parametrize("theme,mode", [("moy", "light"), ("contrast", "dark")])
-def test_the_desk_homes_play_draws_the_icon_sets_play(tmp_path, monkeypatch, theme, mode):
-    """The details pane's Play takes the icon set's play, as the dock, Files,
-    the pause menu and the Editor do (R2-18)."""
+def test_the_desk_homes_play_wears_the_play_icon(tmp_path, theme, mode):
+    """The details pane's Play wears the icon `play`, which the engine
+    draws from the theme's icon set, as the dock, Files, the pause menu and
+    the Editor do (R2-18)."""
     ws = _ws(tmp_path, CONSOLE, theme, mode)
     _home(ws)
     _frame(ws, 2)
-    kinds = []
-    real = ws.draw_icon
-
-    def draw_icon(kind, rect, ink, cv=None):
-        kinds.append(kind)
-        return real(kind, rect, ink, cv)
-
-    monkeypatch.setattr(ws, "draw_icon", draw_icon)
-    _frame(ws, 1)
-    assert "play" in kinds, "the details pane's Play drew the pixel triangle"
+    page = ws.launcher_layer._dpage.dump()
+    assert "label='{l0}' = 'Play'  icon='{i0}' = 'play'" in page, page
 
 
 class _Rec:
@@ -405,27 +398,19 @@ def test_the_star_stands_clear_of_its_chip():
         assert abs(min(ys) - (side - 1 - max(ys))) <= 1
 
 
-def test_the_desk_facts_stand_on_the_buttons_columns(tmp_path, monkeypatch):
-    """The details pane's facts, Played, Last and By, start on the left
-    edges of the buttons under them (design review R4-31)."""
+def test_the_desk_facts_name_played_last_and_by(tmp_path):
+    """The details pane's facts, Played, Last and By, in that order, each
+    its value under it."""
     ws = _ws(tmp_path, CONSOLE, "moy", "dark")
     _home(ws)
     y, m, d = g._DATE
     sel = ws.launcher.selected()
     ws.system.set("plays", {sel["path"]: [12, y * 10000 + m * 100 + d]})
     _frame(ws, 2)
-    printed = {}
-    for kind in {type(ws.sys_canvas), type(ws.glass_canvas)}:
-        real = kind.print_scaled
-
-        def print_scaled(cv, text, x, *a, _real=real, **kw):
-            printed.setdefault(str(text), x)
-            return _real(cv, text, x, *a, **kw)
-        monkeypatch.setattr(kind, "print_scaled", print_scaled)
-    _frame(ws, 1)
-    xs = [r[0] for _v, r, _k in ws.launcher_layer._desk_buttons()]
-    facts = [printed.get(k) for k in ("Played", "Last", "By")]
-    assert facts == xs[:3], (facts, xs)
+    page = ws.launcher_layer._dpage.dump()
+    for k, (key, value) in enumerate((("Played", "12 times"), ("Last", "Today"), ("By", "Moybyte"))):
+        assert "text='{fk%d}' = '%s'" % (k, key) in page, page
+        assert "text='{fv%d}' = '%s'" % (k, value) in page, page
 
 
 def test_the_narrow_editor_bar_keeps_play_clear_of_the_status(tmp_path):

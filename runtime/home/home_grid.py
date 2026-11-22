@@ -12,7 +12,8 @@
 #   Launcher.band_pass          the band as a table of parts, on its own app host
 #   tab_count_title             the bar's title on the home: the tab's count
 #   day_words                   a date as the home says it
-#   desk_button_layout          the desk pane's rows of verb buttons
+#   desk_button_span            the room the desk pane keeps for its rows of buttons
+#   desk_button_layout          ...its buttons as that room is counted
 """The home's GRID arrangement and the cards every arrangement draws.
 
 `Launcher` is the selection model (items, sel, scroll, nav) every home
@@ -26,9 +27,9 @@ home's `grid` arrangement; `Carousel` (home_carousel.py) and `IconHome`
 Beside it, what the arrangements and the home layers share: the "+ New"
 pseudo card and its art, the favourite's star, the cover decodes and their
 clean scales, the hint strip's rect, the home's tabs and their nouns, the
-words a card's details say (`day_words`, `text_scale`), and the desk pane's
-rows of verb buttons (`desk_button_layout`, `desk_button_span`). A leaf: it
-imports no home module.
+words a card's details say (`day_words`, `text_scale`), and the room the
+desk pane keeps for its rows of verb buttons (`desk_button_span`,
+`desk_button_layout`). A leaf: it imports no home module.
 """
 
 from array import array
@@ -1587,9 +1588,10 @@ def text_scale(px, fs, role="ui"):
 
 
 def desk_button_layout(verbs, dw, fs, u):
-    """[(verb, x, row, w, kind, dy)] of the desk details pane's buttons in a
-    pane `dw` wide: the first a primary where it plays, opens, makes or
-    changes, DEL a danger set apart by a group's gap (three buttons' gaps,
+    """[(verb, x, row, w, kind, dy)] of the desk details pane's buttons as
+    the pane keeps room for them (`desk_button_span`; `home_ui`'s verbs row
+    draws them, wrapping), in a pane `dw` wide: the first a primary where
+    it plays, opens, makes or changes, DEL a danger set apart by a group's gap (three buttons' gaps,
     the button-row form of a menu's rule), the rest plain, left to right, a
     button that does not fit starting the next row (never dropped), `x` from
     the pane's left edge. Where they wrap, every button takes the widest

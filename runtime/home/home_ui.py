@@ -1,0 +1,74 @@
+"""The desk home's details pane, a `uitree` page the home layers host
+beside the hero (`home_details.HomeDetails`): the selected card's title,
+its metadata line, its description, its facts (how often and when it was
+played, who made it) and its verb buttons, the tab's tap verb first.
+
+The host writes what the card shows (`put`, run when the card, the tab or
+the verbs move). Its buttons are places, the card's verbs in order (`b0`,
+`b1`, ...), so the button the keys are on stays a stop of the frame before
+when the card's verbs change; the host keeps the keys and hands the page
+the one they are on as its focus.
+"""
+
+import uitree as ui
+import uitree_app
+
+BUTTONS = 4          # the most verbs a card shows: Projects' Make card's
+FACTS = 3            # the most facts a card shows: Played, Last, By
+
+SHOWN = tuple("b%d" % k for k in range(BUTTONS))      # each button shown
+LABELS = tuple("l%d" % k for k in range(BUTTONS))     # ...its words
+ICONS = tuple("i%d" % k for k in range(BUTTONS))      # ...its glyph, "" none
+KINDS = tuple("k%d" % k for k in range(BUTTONS))      # ...its look
+ARGS = tuple(str(k) for k in range(BUTTONS))
+FACT_KEYS = tuple("fk%d" % k for k in range(FACTS))   # each fact's caption
+FACT_VALUES = tuple("fv%d" % k for k in range(FACTS))  # ...and its value
+
+_decl = dict(title="", title_h=0, meta="", desc="", meta_on=True, facts_on=True)
+for _k in range(BUTTONS):
+    _decl[SHOWN[_k]] = False
+    _decl[LABELS[_k]] = ""
+    _decl[ICONS[_k]] = ""
+    _decl[KINDS[_k]] = ui.enum("normal", "primary", "danger", init="normal")
+for _k in range(FACTS):
+    _decl[FACT_KEYS[_k]] = ""
+    _decl[FACT_VALUES[_k]] = ""
+s = ui.state(**_decl)
+
+
+def put():
+    """What the card shows, the host's (`HomeDetails.details_put`)."""
+    uitree_app.env().details_put(s)
+
+
+def _press(arg):
+    uitree_app.env().details_press(int(arg))
+
+
+def _title(cv, x, y, w, h):
+    uitree_app.env().draw_title(cv, x, y, w, h)
+
+
+ui.hook("put", put)
+ui.action("press", "Choose", _press, takes="arg")
+
+
+def page():
+    with ui.page(""):
+        ui.canvas("title", _title, h="{title_h}", mark=False)
+        with ui.row("words", wrap=True):
+            with ui.group(""):
+                ui.label("{meta}", tone="dim", face="ui", shown="meta_on && meta")
+                ui.label("{desc}", tone="dim", face="ui", wrap="word", lines=3, shown="desc")
+        with ui.row("facts", wrap=True, gap=48, shown="facts_on && fk0"):
+            for k in range(FACTS):
+                with ui.group("", shown=FACT_KEYS[k]):
+                    ui.label("{%s}" % FACT_KEYS[k], tone="dim", face="caption")
+                    ui.label("{%s}" % FACT_VALUES[k], face="ui")
+        with ui.row("verbs", wrap=True, gap=14):
+            for k in range(BUTTONS):
+                ui.button("press", "{%s}" % KINDS[k], arg=ARGS[k], label="{%s}" % LABELS[k],
+                          icon="{%s}" % ICONS[k], shown=SHOWN[k])
+
+
+DESK_PAGES = (page,)    # a handheld's home has no details pane: its image carries none
