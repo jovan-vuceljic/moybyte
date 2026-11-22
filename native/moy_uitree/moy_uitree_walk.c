@@ -2008,13 +2008,13 @@ static void draw_foot(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
 
 // -- a long rows list: the rows in view ------------------------------------------------------
 //
-// A rows list of more than UIT_VROWS_MIN rows stacked on the page itself (its ancestors the page,
-// groups and switches; ui.view answers) lays out only the rows the view shows, UIT_VROWS_MARGIN
-// more each side, widened to whole blocks of UIT_VROWS_BLOCK (so a shift frame's stops match the
-// last frame's but where the window crosses a block), and the focused row: every other row is
-// space as tall as it last drew (a row never drawn: the height of the first that drew). The
-// page's rows total is what a whole walk makes where the rows are alike, its stops only the
-// drawn rows'. uitree_app.Engine._r_rows lays out the same rows.
+// A rows list of more than UIT_VROWS_MIN rows stacked on the page or a scroll region itself (its
+// ancestors up to the page, or the nearest scroll, groups and switches; ui.view answers) lays out
+// only the rows the view shows, UIT_VROWS_MARGIN more each side, widened to whole blocks of
+// UIT_VROWS_BLOCK (so a shift frame's stops match the last frame's but where the window crosses a
+// block), and the focused row: every other row is space as tall as it last drew (a row never
+// drawn: the height of the first that drew). The rows total is what a whole walk makes where the
+// rows are alike, its stops only the drawn rows'.
 #define UIT_VROWS_MIN 32
 #define UIT_VROWS_MARGIN 2
 #define UIT_VROWS_BLOCK 4
@@ -2023,6 +2023,8 @@ static int vrows_ok(uit_t *e, int k)
 {
     for (int p = NODE(k)->parent; p >= 0 && p != (int)UIT_NONE; p = NODE(p)->parent) {
         int kd = NODE(p)->kind;
+        if (kd == UIT_SCROLL)
+            return 1;
         if (kd != UIT_PAGE && kd != UIT_GROUP && kd != UIT_SWITCH && kd != UIT_CASE)
             return 0;
     }

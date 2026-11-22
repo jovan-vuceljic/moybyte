@@ -223,17 +223,17 @@ def build():
 '''
 
 
-def _long(tmp_path, engine, n, script, config=None):
+def _long(tmp_path, engine, n, script, config=None, app=LONG, seen=None):
     import uitree_app
     import uitree_c
     import uitree_parity as P
     app_py = tmp_path / ("long_%s_%d" % (engine, n)) / "app.py"
     app_py.parent.mkdir()
-    app_py.write_text(LONG.replace("@N@", str(n)))
+    app_py.write_text(app.replace("@N@", str(n)))
     mod = C._module(str(app_py))
     cls = uitree_app.app_layer("long_%s_%d" % (engine, n), "Long", mod.build,
                                engine=uitree_c.CEngine)
-    seen = {}
+    seen = {} if seen is None else seen
 
     def opened(ws):
         seen["app"] = P.host(ws, cls)
@@ -255,3 +255,33 @@ def test_a_long_list_walks_past_its_fortieth_row_as_the_reference_did(tmp_path, 
     assert c[46].state.split()[0] == "r46/go", c[46].state
     assert c[47].state.split() == ["r46/go", "r46"], c[47].state
     R.held(__file__, "long/%d" % n, c)
+
+
+SCROLLED = LONG.replace('''        with ui.group("Items"):
+            with ui.rows''', '''        with ui.scroll("items_view"):
+            with ui.rows''')
+
+
+def test_a_long_list_in_a_scroll_region_takes_focus_and_taps_to_its_last_row(tmp_path, monkeypatch):
+    """A rows list in a scroll region lays out only its rows in view, as one
+    on the page does (draw_vrows): the keys walk focus to the 200th row and
+    open it, and after a swipe scrolls the region to its end a tap opens the
+    last row -- no row past the toolkit's 40 stops a frame is lost."""
+    import uitree_parity as P
+    assert SCROLLED != LONG
+    seen = {}
+    orig = P._step
+
+    def stepped(ws, driver, step):
+        if not step.startswith("tap:"):
+            return orig(ws, driver, step)
+        x, y, w, h = seen["tapped"] = seen["app"].engine._ui.box(step[4:])
+        driver.click(x + w // 2, y + h // 2)
+        driver.frame(1 / 30)
+    monkeypatch.setattr(P, "_step", stepped)
+    keys = _long(tmp_path, "keys", 200, ["k:down"] * 199 + ["k:a"], app=SCROLLED, seen=seen)
+    assert keys[-2].state.split()[0] == "r199/go", keys[-2].state
+    assert keys[-1].state.split() == ["r199/go", "r199"], keys[-1].state
+    taps = _long(tmp_path, "taps", 200, ["swipe:-300", "f:20"] * 50 + ["tap:r199/go"], app=SCROLLED,
+                 seen=seen)
+    assert taps[-1].state.split()[-1] == "r199", (taps[-1].state, seen)

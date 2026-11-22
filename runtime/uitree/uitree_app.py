@@ -51,7 +51,6 @@ class Engine(S.Builder):
         self._pass = 0                  # the replay passes so far
         self._n_ids = 0                 # the ids this pass drew
         self._list_at = {}              # a cards list's key -> [the pass that last drew it, the one before]
-        self._vr = {}                   # a long rows list's key -> [its key, unit, row heights] (_vrows)
         self._all_names = None          # every state name, and whether one is a document (no versions)
         self._hint = None               # the band's hints, and what they were made at (_hints)
         self.dups = set()
@@ -211,7 +210,6 @@ class Engine(S.Builder):
         self.root = None
         self.want_focus = None          # a fresh visit: no focus, cur or row order carried over
         self._sync, self.ids, self.focused, self.drawn = {}, {}, None, {}
-        self._vr = {}
         self._seen = {}
         self.drafts = {}
         self._orders = {}
@@ -225,7 +223,6 @@ class Engine(S.Builder):
         """The visit is over (its host left the page): the built tree is let
         go, built again at the next frame; the next open resets the rest."""
         self.root = None
-        self._vr = {}
 
     def forget(self):
         """Everything the page holds for a visit let go (the C engine's store

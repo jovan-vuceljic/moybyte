@@ -4136,8 +4136,8 @@ void moy_ui_api_space(moy_ui_ctx_t *c, int h) {
 }
 
 int moy_ui_api_view(const moy_ui_ctx_t *c, int32_t out[5]) {
-    if (c->page_stop == NO_PAGE || c->n_nest || c->grid_open || c->has_at || c->tp.open
-        || c->snap.on) {
+    if (c->page_stop == NO_PAGE || (c->n_nest && c->nest[c->n_nest - 1].kind != 1)
+        || c->grid_open || c->has_at || c->tp.open || c->snap.on) {
         return 0;
     }
     out[0] = c->y;
@@ -4568,6 +4568,11 @@ int moy_ui_api_box(const moy_ui_ctx_t *c, moy_ui_span_t id, int32_t out[4]) {
     int i = mua_find(c->cur, c->n_cur, mua_hash(id.p, id.n, 0));
     if (i < 0 && c->dlg.id != 0) {
         i = mua_find(c->cur, c->n_cur, mua_hash(id.p, id.n, c->dlg.id));   // a button at its foot
+    }
+    for (uint32_t h = mua_hash(id.p, id.n, SCROLL_SALT), j = 0; i < 0 && j < c->n_cur; j++) {
+        if (c->cur[j].id == h && (c->cur[j].flags & STOP_PAGE)) {
+            i = (int)j;                 // a scroll region's view
+        }
     }
     if (i < 0) {
         return 0;

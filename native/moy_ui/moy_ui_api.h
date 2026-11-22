@@ -1507,8 +1507,9 @@ int moy_ui_api_tap_armed(const moy_ui_ctx_t *c);
 void moy_ui_api_at(moy_ui_ctx_t *c, int x, int y, int w, int h);
 // Where stop `id` drew in the frame drawn last (the host's: a popover beside
 // a row, a test's tap), or the card of the popover `id` drawn then, or of
-// the dialog titled `id`, or the button labelled `id` at that dialog's foot:
-// its box into out, 1; 0 where it drew no such stop, popover or dialog.
+// the dialog titled `id`, or the button labelled `id` at that dialog's foot,
+// or the view of the scroll region `id`: its box into out, 1; 0 where it
+// drew no such stop, popover, dialog or region.
 int moy_ui_api_box(const moy_ui_ctx_t *c, moy_ui_span_t id, int32_t out[4]);
 // A duplicate id drawn this frame, its text, once per id (NULL none).
 const char *moy_ui_api_dup(moy_ui_ctx_t *c);
@@ -1678,12 +1679,13 @@ int moy_ui_api_card_clip(const moy_ui_ctx_t *c, int32_t r[4]);
 // bounding rect on a shift frame, else what shows of the page. 0 where no
 // page is open.
 int moy_ui_api_band(const moy_ui_ctx_t *c, int32_t out[4]);
-// ui.view(): where the next stacked row of the open page lies and what
-// shows of the page, for a list that lays out only the rows in view: out
-// the row cursor (content coordinates), the page's scroll, its view's
-// height, its width and the font scale. 0 where the next row would not
-// stack on the page itself (no page open, a scroll region, dialog or
-// popover open, a grid, a table's part, ui.at's rect, a snapping band).
+// ui.view(): where the next stacked row of the open page, or of the scroll
+// region open innermost, lies and what shows of it, for a list that lays
+// out only the rows in view: out the row cursor (content coordinates), the
+// page's or region's scroll, its view's height, its width and the font
+// scale. 0 where the next row would not stack on the page or region itself
+// (no page open, a dialog or popover open innermost, a grid, a table's
+// part, ui.at's rect, a snapping band).
 int moy_ui_api_view(const moy_ui_ctx_t *c, int32_t out[5]);
 // ui.keep(id, h): a stop the app does not draw this frame (it lies outside
 // the band), carried forward as the last frame drew it -- a card of the open
