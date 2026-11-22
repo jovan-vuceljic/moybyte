@@ -116,6 +116,10 @@ s = ui.state(
     size_cur=ui.row_of("sizes"),
     shape_cur=ui.enum("line", "rect", "oval", init="rect"),
     fill_cur=ui.enum("outline", "filled", init="outline"),
+    # the brush popover's own three, for the desk shows the panel's beside it
+    pop_size=ui.row_of("sizes"),
+    pop_shape=ui.enum("line", "rect", "oval", init="rect"),
+    pop_fill=ui.enum("outline", "filled", init="outline"),
     zooms=ui.model(key="id", id="", word=""),
     zoom_cur=ui.row_of("zooms"),
     pop=ui.enum("none", "colours", "brush", "more", init="none"),
@@ -206,9 +210,12 @@ def fill(lay):
     _set(lay, "look_h", h)
     _set(lay, "cap", cap)
     _words(lay, "sizes", tuple((str(i), str(w)) for i, w in enumerate(lay.sizes())))
-    _set(lay, "size_cur", str(min(lay.size_i, len(lay.sizes()) - 1)))
-    _set(lay, "shape_cur", SHAPES[lay.shape][0])
-    _set(lay, "fill_cur", "filled" if lay.shape_fill else "outline")
+    for k in ("size_cur", "pop_size"):
+        _set(lay, k, str(min(lay.size_i, len(lay.sizes()) - 1)))
+    for k in ("shape_cur", "pop_shape"):
+        _set(lay, k, SHAPES[lay.shape][0])
+    for k in ("fill_cur", "pop_fill"):
+        _set(lay, k, "filled" if lay.shape_fill else "outline")
     _words(lay, "zooms", tuple((str(i), _zoom_word(z) if z else "Fit") for i, z in enumerate(ZOOM_SEG)))
     _set(lay, "zoom_cur", str(ZOOM_SEG.index(lay.zoom) if lay.zoom in ZOOM_SEG else 0))
     _set(lay, "can_undo", d is not None and v is None and bool(d.history))
@@ -227,7 +234,9 @@ def fill(lay):
 
 
 def opened():
-    fill(_lay())
+    lay = _lay()
+    fill(lay)
+    ui.focus("view" if s.mode == "draw" else "look" if s.mode == "view" else "show")
 
 
 def _verb(verb):
@@ -278,21 +287,21 @@ def cpage_moved():
     _set(lay, "pop_c", first)
 
 
-def size_moved():
+def _size(v):
     lay = _lay()
-    lay.size_i = int(s.size_cur)
+    lay.size_i = int(v)
     lay._damage.all()
 
 
-def shape_moved():
+def _shape(v):
     lay = _lay()
-    lay.shape = ("line", "rect", "oval").index(s.shape_cur)
+    lay.shape = ("line", "rect", "oval").index(v)
     lay._damage.all()
 
 
-def fill_moved():
+def _fill(v):
     lay = _lay()
-    lay.shape_fill = s.fill_cur == "filled"
+    lay.shape_fill = v == "filled"
     lay._damage.all()
 
 
@@ -337,9 +346,12 @@ ui.hook("panel_moved", panel_moved)
 ui.hook("pop_moved", pop_moved)
 ui.hook("pop_picked", pop_picked)
 ui.hook("cpage_moved", cpage_moved)
-ui.hook("size_moved", size_moved)
-ui.hook("shape_moved", shape_moved)
-ui.hook("fill_moved", fill_moved)
+ui.hook("size_moved", lambda: _size(s.size_cur))
+ui.hook("shape_moved", lambda: _shape(s.shape_cur))
+ui.hook("fill_moved", lambda: _fill(s.fill_cur))
+ui.hook("pop_size_moved", lambda: _size(s.pop_size))
+ui.hook("pop_shape_moved", lambda: _shape(s.pop_shape))
+ui.hook("pop_fill_moved", lambda: _fill(s.pop_fill))
 ui.hook("zoom_moved", zoom_moved)
 
 
@@ -351,8 +363,7 @@ def _tools(pitch, cols=1):
 
 
 def _view_canvas():
-    ui.canvas("view", draw_view, keys=view_keys, reads=["view"], hint="Draw",
-              mark=False, focus=True)
+    ui.canvas("view", draw_view, keys=view_keys, reads=["view"], hint="Draw", mark=False)
 
 
 def _rail():
@@ -382,7 +393,7 @@ def _panel():
 
 
 def _desk_row():
-    with ui.split("row", sizes=(172, 180, "1*", 404), gap="s", pad="0"):
+    with ui.split("row", sizes=(172, 180, "1*", 424), gap="s", pad="0"):
         with ui.row("row_verbs", pad=6, gap=8):
             ui.button("new", alone=True, kind="bar")
             ui.button("open", alone=True, kind="bar")
@@ -432,13 +443,13 @@ def _draw_touch():
 
 def _view():
     ui.canvas("look", draw_view, keys=view_keys, reads=["view"], mark=False,
-              focus=True, h="{look_h}", shown="mode=view")
+              h="{look_h}", shown="mode=view")
     ui.label("{cap}", tone="dim", face="caption", align="center", shown="mode=view && cap")
 
 
 def _show():
     ui.canvas("show", draw_view, keys=view_keys, reads=["view"], mark=False,
-              focus=True, h="{look_h}", shown="mode=show")
+              h="{look_h}", shown="mode=show")
 
 
 def _pops():
@@ -452,9 +463,9 @@ def _pops():
         ui.seg("", "cpage", labels="CPAGES", on="cpage_moved", shown="touch")
     with ui.popover("brush_pop", anchor="brush", at="{pop_at}", shown="pop=brush", close="close_pop", w=194):
         ui.label("{tool_word}", face="title")
-        ui.seg("Size", "size_cur", text="{.word}", on="size_moved")
-        ui.seg("Shape", "shape_cur", labels="SHAPES", on="shape_moved", shown="tool=shape")
-        ui.seg("Fill", "fill_cur", labels="FILLS", on="fill_moved", shown="tool=shape")
+        ui.seg("Size", "pop_size", text="{.word}", on="pop_size_moved")
+        ui.seg("Shape", "pop_shape", labels="SHAPES", on="pop_shape_moved", shown="tool=shape")
+        ui.seg("Fill", "pop_fill", labels="FILLS", on="pop_fill_moved", shown="tool=shape")
     with ui.popover("more_pop", anchor="more", at="{pop_at}", shown="pop=more", close="close_pop",
                     w="{@desk?300:182}"):
         with ui.menu(""):
@@ -675,6 +686,7 @@ class PaintAppLayer(PaintDraw, uitree_app.app_layer("artwork", "Paint", build)):
         self._undo_seen = 0           # the undo and redo the page last showed
         self._drip_seen = -1          # the colour under the cursor the band last said
         self._view_n = 0              # the whole frames drawn: the view canvas's reads= state
+        self._page_down = False       # a press the page took is held: its frames are whole
 
     # -- the document ------------------------------------------------------------
 
@@ -1246,6 +1258,11 @@ class PaintAppLayer(PaintDraw, uitree_app.app_layer("artwork", "Paint", build)):
             down = bool(getattr(self._surf.pointer(), "down", False))
             if self._canvas_pointer(px, py, click, down or click):
                 return True
+        if click or self._page_down:
+            # the page's press, drag and release: the frames that resolve them are whole
+            # ones (the page draws its stops, a stroke frame does not)
+            self._page_down = bool(getattr(self._surf.pointer(), "down", False))
+            self._damage.all()
         return self.engine.point(px, py, click)
 
     def _canvas_pointer(self, px, py, click, down):

@@ -97,6 +97,29 @@ def test_going_home_with_paint_never_opened_writes_nothing(tmp_path):
     assert not ws.ach.has("system", "first_paint")     # a save's award
 
 
+def test_a_tap_on_the_rail_takes_a_colour_and_on_the_one_in_use_opens_the_colours(tmp_path):
+    from runtime import ui_draw
+    ws = host_app.build_workstation(str(tmp_path / "carts"))
+    app = _open_paint(ws)
+    driver = host_app.ConsoleDriver(ws)
+
+    def tap(key, dx, dy):
+        x, y = ui_draw._C.api_box(ws._app_hosts["artwork"].ctx, key)[:2]
+        driver.touch(x + dx, y + dy)
+        for _ in range(2):
+            ws.mark_dirty()
+            driver.frame(1 / 30)
+        driver.touch_up()
+        for _ in range(2):
+            ws.mark_dirty()
+            driver.frame(1 / 30)
+
+    tap("rail_c", 18, 30)              # the second column, third row of the sixteen
+    assert app.color == 5 and app.pop is None
+    tap("use_c", 10, 10)
+    assert app.pop == "colours"
+
+
 def test_touch_stroke_undo_redo_and_shared_save(tmp_path):
     carts = str(tmp_path / "carts")
     ws = host_app.build_workstation(carts)
