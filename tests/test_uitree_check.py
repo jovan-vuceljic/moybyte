@@ -30,6 +30,7 @@ PORTED = (
     "about_ui",
     "confirm_ui",
     "pause_ui",
+    "sysmenu_ui",
     "uitree_popover_at",
     "tasks_ui",
     "achievements_ui",

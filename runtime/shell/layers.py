@@ -648,14 +648,7 @@ class _SysMenuLayer(Layer):
                     if c[0] <= px < c[0] + c[2] and c[1] <= py < c[1] + c[3]:
                         ws.ach_ui._tap_clock()    # the clock's egg counts the tap that closes it
             else:
-                hit = ws.menu_ui.look_hit(px, py)
-                if hit is None:
-                    m.close()             # outside dismisses
-                elif hit >= 0:
-                    m.sel = hit           # a row: move+select
-                    m.activate()
-                    ws.mark_dirty()
-                ws.popover_touch()
+                ws.menu_ui.point(px, py, click)   # a row runs, outside dismisses
         _strip_tap(ws)
         return True
 

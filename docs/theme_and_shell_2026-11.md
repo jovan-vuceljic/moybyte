@@ -1845,10 +1845,11 @@ sizes itself again -- the Wi-Fi card to the networks a scan found -- asks
 for a frame that repaints whole at its new rect. The snapshots and the face are
 released by the fit check (§8.1) once no popover is live. A change outside the panel (a connect, a stepped
 setting, a row's action) marks the frame dirty as before. The system menu
-takes the same path; it is the look's card
-(docs/history/look_2026-10.md step 25a), whose rect -- the card and its shadow's
-reach, known before it draws (`SystemMenuUI.panel_rect`) -- a riding paint
-first restores from the snapshot, since the card's shadow blends. Its
+takes the same path; it is a `uitree` page's popover
+(`runtime/shell/sysmenu_ui.py`), whose rect -- the card the engine drew and
+its shadow's reach, before its first draw the glass it can take
+(`SystemMenuUI.panel_rect`), the card sizing itself again once drawn -- a
+riding paint first restores from the snapshot, since the card's shadow blends. Its
 scrim rides with it over a still desk with no playtest (`_pop_wash`): the
 frame it opens on snapshots what the scrim covers, renders the focused
 window as it shows once the menu holds the keys (no focus mark, ui.marks),

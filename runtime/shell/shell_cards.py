@@ -4,7 +4,7 @@
 #   SystemMenuUI                the system menu's rows and their actions
 #   SystemMenuUI.card_rows      the home's selected card as a menu group
 #   SystemMenuUI.open_card      that group alone, hung at a card (long press, pad X)
-#   SystemMenuUI._draw_look     the rows as the look's popover card
+#   SystemMenuUI._draw_look     the rows as sysmenu_ui's popover card
 #   AboutCard                   the system menu's About: Moy, the version, the board, two rows
 """The cards the console puts up over what is running: the pause and stop
 cards (`PauseMenu`), the delete confirm (`DeleteConfirm`), the system menu
@@ -811,37 +811,21 @@ class DeleteConfirm:
 
 
 # A popover's fade, rows at the scale (native/moy_ui/moy_ui_api_int.h's FADE_H).
-_FADE_H = 10
-
-
-def _peek(rows, cut, fade, rh):
-    """The body a popover cut at `cut` shows (the engine's `pop_body` and
-    `peek_note`): the cut where it falls inside a row at least `fade` (half
-    the engine's FADE_H at the scale) under its middle -- a part taller
-    than a row `rh`, a row's middle down it --, else the deepest such cut
-    above it, so the top of a row's words always reads above the fade's
-    dense half. `rows` are (top, height, peekable)."""
-    best = 0
-    for t, h, row in rows:
-        if not row:
-            continue
-        at = t + min(h, rh) // 2 + fade
-        if at <= cut < t + h:
-            return cut
-        if best < at <= cut:
-            best = at
-    return best if 0 < best < cut else cut
-
-
 class SystemMenuUI:
-    """The ≡ system menu's rows and their actions (#52). Its drawing is the
-    look's card (`_draw_look`); About is about_ui's card. The `sysmenu` Popup, the `_about` flag,
+    """The ≡ system menu's rows and their actions (#52). Its card is
+    runtime/shell/sysmenu_ui.py's page, the `sysmenu` Popup's rows hung from
+    `_menu_cell`; About is about_ui's card. The `sysmenu` Popup, the `_about` flag,
     `reboot_hook` and `toggle_sysmenu()` stay on the Workstation (its tested
     surface); the privileged verbs (REBOOT, DELETE) are reached through it."""
 
     def __init__(self, ws):
         self.ws = ws
-        self._host = None           # the look's card: its verbs' context
+        self._host = _ui_draw.AppHost()
+        self._page = None           # sysmenu_ui's page, made at the first draw
+        self._items = None          # the Popup's rows the page holds ...
+        self._took = None           # ... at (its row, its anchor)
+        self._tap = None            # the row a tap chose, run at the frame's tail
+        self._painting = False      # inside the card's draw (`all`)
         self._card_at = (0, 0)      # where a card's menu hangs (`open_card`)
         self._card_proj = False     # a card's menu hangs from PROJECTS' hero
         self.about = AboutCard(ws)
@@ -1008,7 +992,7 @@ class SystemMenuUI:
         self.ws.home.go_home()                 # safe stub when no reboot hook is wired
 
     def _draw_sysmenu(self):
-        """The popover: the menu's rows as the look's card (`_draw_look`), or
+        """The popover: the menu's rows as sysmenu_ui's card (`_draw_look`), or
         a component in the system's flat card."""
         ws = self.ws
         m = ws.sysmenu
@@ -1215,71 +1199,37 @@ class SystemMenuUI:
         return (x, y, w, h)
 
     def looked(self):
-        """The menu's rows show as the look's card: the menu is open on
+        """The menu's rows show as sysmenu_ui's card: the menu is open on
         rows, not a component."""
         m = self.ws.sysmenu
         return m.open and m.comp is None
 
     def _look_w(self, desk):
+        """The card's width (sysmenu_ui's popover's w=), what a point's
+        anchor spans."""
         return 220 if desk else 150 * self.ws.layout.fs
 
     def look_card(self):
-        """The look's card, (x, y, w, h), as the engine lays it out (a
-        popover hung under the system button, `_draw_look`'s rows), known
-        before it draws: what the windowed desk snapshots and paints alone.
-        tests/test_system_menu.py holds it to the card the engine draws."""
+        """The menu's card, (x, y, w, h), as the engine lays it out: what
+        the windowed desk snapshots and paints alone, known before the card
+        first draws (rows the page has not drawn are laid out under an empty
+        clip, nothing drawn: the two passes a popover's first frame takes)."""
         ws = self.ws
-        cv = ws.sys_canvas
-        desk = _desk_class()
-        fs = getattr(cv, "font_scale", 1) or 1
-        d = 1 if desk else 0
-        row = _ui_draw.metrics("row")
-        grp = _ui_draw.metrics("group")
-        vr = _ui_draw.metrics("value_row")
-        rh, gap = row[5 + d] * fs, row[7] * fs
-        cap = grp[3 + d] * fs
-        pad = vr[28 + d] * fs
-        rule = (2 * row[7] + (9 if desk else 5)) * fs
-        # the body's rows as the engine stacks them, (top, height, a row
-        # its cut may peek: a rule is not)
-        rows, body, n, ruled = [], 0, 0, False
-        for it in ws.sysmenu.items:
-            if it[0] == "header":
-                rows.append((body, cap, True))
-                body += cap + gap
-                n, ruled = 0, False
-            elif it[0] == "sep":
-                ruled = n > 0             # inside a group: its danger rows set apart
-            elif it[0] == "item":
-                if ruled:
-                    rows.append((body, rule, False))
-                    body += rule + gap
-                    n, ruled = 0, False
-                rows.append((body, rh, True))
-                body += rh + gap
-                n += 1
-        sx, sy, sw, sh = self.surface()
-        e = 4 * fs                       # the card's gap from every edge
-        x0, x1, y0, y1 = sx + e, sx + sw - e, sy + e, sy + sh - e
-        w = min(self._look_w(desk), sw - 2 * pad, x1 - x0)
-        ax, ay, aw, ah = self._menu_cell()
-        x = max(x0, min(ax, x1 - w))
-        top, foot = max(ay + ah + e, y0), min(ay - e, y1)
-        below, above = y1 - top, foot - y0
-        bh = body
-        dn = 2 * pad + bh <= below or (2 * pad + bh > above and below >= above)
-        room = below if dn else above
-        if ah == 0 and room < 2 * pad + bh <= y1 - y0:
-            # a point's card (a finger's) slides to fit whole
-            return (x, y1 - (2 * pad + bh) if dn else y0, w, 2 * pad + bh)
-        if 2 * pad + bh > room:
-            bh = max(rh, _peek(rows, room - 2 * pad, _FADE_H * fs // 2, rh))
-        h = 2 * pad + bh
-        y = top if dn else foot - h
-        return (x, y, w, h)
+        if ws.sysmenu.items is not self._items:
+            cv = ws.sys_canvas
+            asked = ws.frame_requested    # the frame it owes is its first draw's
+            cv.clip(0, 0, 0, 0)
+            try:
+                for _ in range(2):
+                    self._draw_look()
+            finally:
+                cv.clip()
+                ws.frame_requested = asked
+        box = self._host.box("System")
+        return tuple(box) if box is not None else self.surface()
 
     def panel_rect(self):
-        """The rect the open popover paints: the Popup's, or the look's card
+        """The rect the open popover paints: the Popup's, or the menu's card
         with its shadow's reach."""
         m = self.ws.sysmenu
         if not self.looked():
@@ -1299,7 +1249,7 @@ class SystemMenuUI:
         at the font scale, 8 on the desk), as far as it hangs below the bar.
         A card's menu (`open_card`) starts at its point instead, a line as
         wide as the card and centred on it, kept on the glass, and slides
-        to fit whole where the content has the room (`look_card`); from the
+        to fit whole where the content has the room (the engine's popover); from the
         desk's PROJECTS window, from its hero's cover, a rect it never
         covers."""
         ws = self.ws
@@ -1325,53 +1275,101 @@ class SystemMenuUI:
         return (x, ry + by, bw, bh)
 
     def _draw_look(self):
-        """The rows as a popover of the public UI API's hung under the system
-        button: a captioned `ui.menu` a group, each row its icon, the
-        Popup's row the focused one (its keys stay the Popup's, so an action
-        runs in the input phase)."""
+        """The rows as sysmenu_ui's card hung from the system button (or a
+        card's point): its focused row the Popup's (its keys stay the
+        Popup's, so a key's action runs in the input phase), put ahead of
+        the frame where it moved."""
         ws = self.ws
         m = ws.sysmenu
         cv = ws.sys_canvas
-        host = self._host
-        if host is None:
-            host = self._host = _ui_draw.AppHost()
-        if 0 <= m.sel < len(m.items) and m.items[m.sel][0] == "item":
-            host.focus(m.items[m.sel][4])
+        if self._page is None:
+            import uitree_app
+            import sysmenu_ui
+            self._page = uitree_app.hosted_page(sysmenu_ui.page, self._host, self, env=self)
+            self._page.bare = True      # the scrim is its ground
+            self._page.band = False     # the home's strip names its keys
         desk = _desk_class()
-        host.begin(cv, ws.theme_colors, self.surface(), desk)
-        _ui.at(*self._menu_cell())
-        _ui.popover("System", self._look_w(desk))
-        cap, texts, icons, kinds = "", [], [], []
-        for it in m.items:
-            if it[0] in ("header", "sep"):
-                # a header begins a group; a rule inside one sets its danger
-                # rows apart, a menu of their own under the group's rows
-                if texts:
-                    _ui.menu(cap, texts, icons, kinds=kinds)
-                if it[0] == "header" or texts:
-                    cap, texts, icons, kinds = (it[4] if it[0] == "header" else ""), [], [], []
-            elif it[0] == "item":
-                texts.append(it[4])
-                icons.append(it[3])
-                # Delete is a verb that destroys: the danger rows' ink
-                kinds.append("danger" if it[3] == _DANGER_ICON else "")
-        if texts:
-            _ui.menu(cap, texts, icons, kinds=kinds)
-        _ui.popover()
-        if host.due():
+        rect = self.surface()
+        self._painting = True
+        try:
+            took = (m.sel, self._menu_cell())
+            if m.items is not self._items:
+                self._items, self._took = m.items, took
+                self._host.reset()
+                self._page.open(hook="put")
+            elif took != self._took:
+                self._took = took
+                import sysmenu_ui
+                self._page.run(sysmenu_ui.put, action="put")
+                sysmenu_ui.ui.commit(self._page)
+            else:
+                took = None
+            if took is not None and m._is_selectable(m.sel):
+                self._host.focus(m.items[m.sel][4])   # ahead of the frame: its begin shows it
+            self._host.begin(cv, ws.theme_colors, rect, desk)
+            self._page.paint(0.0, cv, ws.theme_colors, rect, desk)
+        finally:
+            self._painting = False
+        if self._host.due():
             ws.request_frame()
 
-    def look_hit(self, px, py):
-        """The Popup row index a tap at (px, py) lands on in the look's card,
-        -1 inside the card on no row, None outside it."""
-        host = self._host
-        if host is None:
-            return None
+    def put(self, s):
+        """The rows as the page shows them (sysmenu_ui's `put` hook): the
+        first group's -- a danger row a rule sets apart in a menu of its
+        own --, then the next group's."""
         m = self.ws.sysmenu
+        s.at = "%d %d %d %d" % self._took[1]
+        caps, rows, ruled = [], [], False
+        for it in m.items:
+            if it[0] == "header":
+                caps.append(it[4])
+            elif it[0] == "sep":
+                ruled = bool(rows)        # inside the first group: its danger rows set apart
+            elif it[0] == "item":
+                grp = ("more" if len(caps) > 1 else "apart" if ruled
+                       else "danger" if it[3] == _DANGER_ICON else "first")
+                rows.append({"id": it[4], "icon": it[3], "grp": grp})
+        s.cap = caps[0] if caps else ""
+        s.more = caps[1] if len(caps) > 1 else ""
+        s.apart = any(r["grp"] == "apart" for r in rows)
+        s.rows = rows
+        if m._is_selectable(m.sel):
+            s.sel = m.items[m.sel][4]
+
+    def all(self):
+        """The page's damage: the card draws again -- as a change the WM
+        paints, or from inside its own draw as the next frame that draw
+        owes."""
+        if self._painting:
+            self.ws.request_frame()
+        else:
+            self.ws.popover_touch()
+
+    def point(self, px, py, click):
+        """A tap on the open menu: outside the card it closes, on it the
+        page's (a row's runs at the frame's tail)."""
+        if _in_box(px, py, self.look_card()):
+            self._page.point(px, py, click)
+        else:
+            self.ws.sysmenu.close()
+            self.ws.popover_touch()
+
+    def chosen(self, text):
+        """A row the page's tap chose."""
+        self._tap = text
+        self.ws.defer(self._take, toast=False)
+
+    def _take(self):
+        text, self._tap = self._tap, None
+        m = self.ws.sysmenu
+        if not self.looked():
+            return
         for i, it in enumerate(m.items):
-            if it[0] == "item" and _in_box(px, py, host.box(it[4])):
-                return i
-        return -1 if _in_box(px, py, host.box("System")) else None
+            if it[0] == "item" and it[4] == text:
+                m.sel = i
+                m.activate()
+                self.ws.popover_touch()
+                return
 
 
 class AboutCard:
