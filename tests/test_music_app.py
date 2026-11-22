@@ -565,8 +565,8 @@ def test_now_playing_takes_its_own_keys_and_the_strip_opens_it(tmp_path, face):
     drv.type_char(ord("a"))
     _frames(drv)
     assert face.seeks == [60 + M.SEEK_STEP, 60]
-    vx, vy, vw, vh, fs = M._DRAWN["volume"]
-    drv.touch(vx + vw - 2, vy + vh // 2)
+    vx, vy, vw, vh = app.page_host().box("vol")
+    drv.touch(vx + vw - 8, vy + vh // 2)
     drv.frame(1 / 30)
     drv.touch_up()
     _frames(drv, 2)

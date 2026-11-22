@@ -3,7 +3,7 @@
 #   card_of             the media card's answers from the face's
 #   MusicSection        the status item's section, a page (music_card: the desk menu, the control center)
 #   _scan               the music folder's songs and playlists
-#   draw_now            what plays as the canvases draw it: art, equalizer, pulse, bar, meter
+#   draw_now            what plays as the canvases draw it: art, equalizer, pulse, bar
 #   build               the app's page: the library, Now playing, Add a station
 #   MusicAppLayer       the app's Layer over the page
 """Music -- the console's radio and music player (#110), a SYSTEM APP
@@ -666,7 +666,7 @@ def art(cv, x, y, w, h, name, fs, r=8):
 
 
 _R = [0, 0, 0, 0]               # a text's box: one list, so a draw allocates nothing
-_DRAWN = {"volume": [0, 0, 0, 0, 1], "head": [0, 0, 0, 0, 1]}  # a canvas's last rect and scale
+_DRAWN = {"head": [0, 0, 0, 0, 1]}  # a canvas's last rect and scale
 
 
 def _drawn(key, x, y, w, h, fs):
@@ -813,32 +813,14 @@ def _bar_w(tw, fs):
     return tw - _D.text_width(s.clock, fs, "ui") - 10 * fs
 
 
-def draw_volume(cv, x, y, w, h):
-    """The volume's meter, ten steps (the speaker is the page's icon
-    before it), a tap or a drag the step it lands on."""
-    draw_meter(cv, x, y, w, h, _DRAWN["volume"])
+def level(c):
+    """The volume as the meter's ten steps."""
+    return (c["volume"] + 5) // 10 if c is not None else 0
 
 
-def draw_meter(cv, x, y, w, h, d):
-    """The meter in (x, y, w, h), its rect and scale kept in `d`."""
-    c = STREAM.card
-    if c is None:
-        return
-    th, fs = ui.colors(), _fs(cv)
-    d[0], d[1], d[2], d[3], d[4] = x, y, w, h, fs
-    sx, seg, gap = _steps(x, w, fs)
-    level = (c["volume"] + 5) // 10
-    sh = 8 * fs
-    for i in range(10):
-        cv.rect(sx + i * (seg + gap), y + (h - sh) // 2, seg, sh,
-                th["value"] if i < level else th["border"])
-
-
-def _steps(x, w, fs):
-    """The meter's first step's x, a step's width and the gap between."""
-    sx = x + 2 * fs
-    gap = 2 * fs
-    return sx, (x + w - 6 * fs - sx - 9 * gap) // 10, gap
+def set_level(v):
+    """The meter moved (a tap, a drag, its keys): the volume at its step."""
+    STREAM.volume(10 * max(0, min(10, v)))
 
 
 # -- the page ---------------------------------------------------------------------
@@ -869,6 +851,7 @@ s = ui.state(
     seekable=False,         # ...a file's place
     radio=False,            # ...a station's, whose step is Station
     clock="",
+    vol=0,                  # the volume's meter, ten steps
     url="",                 # Add a station's fields
     name="",
     err="",
@@ -902,6 +885,7 @@ def fill(lay):
         s.seekable = bool(c["len"]) and c["state"] == PLAYING
         s.radio = c["kind"] == "radio"
         s.clock = "%s / %s" % (_clock(c["at"]), _clock(c["len"]))
+        s.vol = level(c)
     elif s.view == "now":
         s.view = s.tab
     if not s.audio:
@@ -1100,20 +1084,6 @@ def strip_at(ev):
         now()
 
 
-def volume_at(ev):
-    """A tap or a drag on the meter: the step it lands on."""
-    if ev.kind != "up":
-        meter_at(ev, _DRAWN["volume"])
-
-
-def meter_at(ev, d):
-    """A press at `ev` on the meter drawn where `d` keeps: its step."""
-    if STREAM.card is None:
-        return
-    sx, seg, gap = _steps(0, d[2], d[4])
-    STREAM.volume(10 * max(0, min(10, (ev.x - sx + seg) // (seg + gap))))
-
-
 def seek_at(ev):
     """A tap on a file's bar in Now playing's head: the second it names."""
     c = STREAM.card
@@ -1140,7 +1110,7 @@ ui.hook("tab_moved", tab_moved)
 ui.hook("row_moved", row_moved, takes="row")
 ui.hook("url_moved", url_moved)
 ui.hook("strip_at", strip_at, takes="pointer")
-ui.hook("volume_at", volume_at, takes="pointer")
+ui.hook("vol_set", lambda: set_level(s.vol))
 ui.hook("seek_at", seek_at, takes="pointer")
 ui.action("pick", "Play", pick, takes="row", hint="{verb}")
 ui.action("place", "Open", place, takes="row")
@@ -1214,7 +1184,7 @@ def _listing():
             ui.button("stop", icon="stop", label="", w=40)
             ui.button("softer", icon="minus", label="", w=32)
             ui.label("", icon="volume")
-            ui.canvas("volume", draw_volume, w=112, pointer="volume_at")
+            ui.slider("", "vol", 0, 10, look="blocks", on="vol_set")
             ui.button("harder", icon="plus", label="", w=32)
 
 
@@ -1233,7 +1203,7 @@ def _now():
         with ui.split("row", sizes=(32, 38, "1*", 12, 32), gap="0", pad="0"):
             ui.button("quieter", icon="minus", label="")
             ui.label("", icon="volume")
-            ui.canvas("volume", draw_volume, pointer="volume_at")
+            ui.slider("", "vol", 0, 10, look="blocks", on="vol_set")
             ui.label("")
             ui.button("louder", icon="plus", label="")
         with ui.group(""):

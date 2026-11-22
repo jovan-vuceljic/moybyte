@@ -3516,7 +3516,7 @@ int32_t moy_ui_api_slider(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
     mua_vrow_init(c, &r, label);
     r.lo = lo;
     r.hi = hi;
-    r.steps = o->steps == 1;
+    r.steps = o->steps == 1 || o->steps == 2 ? o->steps : 0;
     int p = c->in[MOY_UI_IN_PTR];
     if (o->disabled != 1 && c->press == id && c->gesture == 3 && (p & MOY_UI_P_LIVE)
         && (p & MOY_UI_P_HELD) && b.w > 0) {

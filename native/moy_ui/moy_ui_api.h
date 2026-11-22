@@ -167,7 +167,8 @@ typedef struct {
     int32_t fill, ink, border;      // MOY_UI_O_NONE, RGB, or MOY_UI_O_ROLE + a token
     moy_ui_span_t id;               // p NULL: the label's
     int8_t current, disabled, nav, mark;    // -1 absent
-    int8_t steps;                   // a slider: a segment per step, no number
+    int8_t steps;                   // a slider: 1 a segment per step, no number; 2 the same
+                                    // blocks across the whole row (a meter)
     moy_ui_span_t hint;             // a field's placeholder (p NULL: none)
     int8_t wash;                    // a popover: wash what it covers (-1 absent), or
                                     // 2 ("view") its anchor's view alone, less the

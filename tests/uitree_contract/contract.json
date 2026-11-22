@@ -1856,7 +1856,7 @@
      "level": 1
     },
     "look": {
-     "type": "word:bar,steps",
+     "type": "word:bar,steps,blocks",
      "level": 2
     },
     "icon": {

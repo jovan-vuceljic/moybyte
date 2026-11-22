@@ -3005,9 +3005,9 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         int32_t hi = (int32_t)strtol(e->scratch.p + ha, NULL, 10);
         a1 = text(e, k, 0, model, row, &n1);
         over_for(e, k, model, row, c, &o, id);
-        if (N->lit & NL_STEPS) {
-            int32_t one = 1;
-            moy_ui_over_put(&o, MOY_UI_OV_STEPS, &one);
+        if (N->lit & (NL_STEPS | NL_BLOCKS)) {
+            int32_t look = (N->lit & NL_BLOCKS) ? 2 : 1;     // look="blocks": the steps across the row
+            moy_ui_over_put(&o, MOY_UI_OV_STEPS, &look);
         }
         int field = (N->lit & NL_FIELD) != 0;
         int32_t cur = field ? (int32_t)strtol(uit_cell(e, model, row, N->cur), NULL, 10) : e->slots[N->slot].i;
@@ -3926,6 +3926,14 @@ static int32_t natural(uit_t *e, int k, int model, int row, int32_t h)
         moy_font_info_t fi;
         int mn, pad = moy_ui_metrics(MOY_UI_K_STATUS, &mn)[1] * e->fs;
         return text_px(role_font(MOY_UI_FONT_UI, &fi), p, n, e->fs) + 2 * pad + 2;
+    }
+    if (N->kind == UIT_SLIDER && (N->lit & NL_BLOCKS)) {
+        // a meter with no label: 10 units a step and 12 more (its blocks' margins); labelled, a fill
+        at = text(e, k, 0, model, row, &n);
+        if (!n) {
+            int32_t lo = int_of(e, N->t_value, model, row, 0), hi = int_of(e, N->t_aux, model, row, 0);
+            return ((hi > lo ? hi - lo : 1) * 10 + 12) * row_unit(e);
+        }
     }
     if (N->kind == UIT_STEPPER) {
         if (N->btn & BT_GROW)

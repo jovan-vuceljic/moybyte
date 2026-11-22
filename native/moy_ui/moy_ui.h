@@ -897,7 +897,8 @@ typedef struct {
     int16_t fs, desk, card;         // desk: the ground (MOY_UI_DESK | WINDOW | PANEL);
                                     // card: on a group's card
     int16_t icon_slot, icon_glyph;  // the icon before the label (-1 none)
-    int16_t steps;                  // slider: a segment per step, no number;
+    int16_t steps;                  // slider: 1 a segment per step, no number, 2 those
+                                    // segments across the row (a meter);
                                     // progress: a count, its label alone (no percent)
     int16_t kind;                   // MOY_UI_VROW_*: a danger row inks its label and icon
                                     // in the menu danger ink

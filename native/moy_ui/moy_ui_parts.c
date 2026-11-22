@@ -593,6 +593,20 @@ static void geo(const pd_t *d, moy_ui_box_t b, const moy_ui_vrow_t *r, int kind,
     int tw_ = pm(d, MOY_UI_M_VALUE_ROW_TRACK, 1);
     g->track = (moy_ui_box_t){(int16_t)(g->right - tw_), (int16_t)(b.y + b.h / 2 - d->fs),
                               (int16_t)tw_, (int16_t)(3 * d->fs)};
+    if (kind == MOY_UI_V_SLIDER && r->steps == 2) {
+        // a meter's blocks: with no label or icon, 2 units in from the row's start to 6 from its
+        // end; else from past the label to the value column's edge
+        int x0 = b.x + 2 * d->fs, x1 = b.x + b.w - 6 * d->fs;
+        if (r->label.n || r->icon_slot >= 0 || r->icon_glyph >= 0) {
+            pf_t fl = font_of(d, MOY_UI_FONT_UI);
+            int gap = pm(d, MOY_UI_M_VALUE_ROW_GAP, 1);
+            x0 = b.x + pad_of(d, r) + (r->icon_slot >= 0 || r->icon_glyph >= 0 ? 16 * d->fs + gap : 0) +
+                 tw(&fl, r->label.p, r->label.n, tscale(d->s)) + gap;
+            x1 = g->right;
+        }
+        g->track.x = (int16_t)x0;
+        g->track.w = (int16_t)(x1 > x0 ? x1 - x0 : 0);
+    }
 }
 
 // Option i's box of a seg: x from the right, `ph` tall.
@@ -639,6 +653,10 @@ static moy_ui_box_t tab_box(const pd_t *d, const pf_t *f, moy_ui_box_t b, const 
 static int step_geo(const pd_t *d, const vgeo_t *g, const moy_ui_vrow_t *r, int *pitch) {
     int n = r->hi > r->lo ? r->hi - r->lo : 1;
     int p = 8 * d->fs, room = (g->track.w + 2 * d->fs) / n;
+    if (r->steps == 2) {
+        *pitch = room < 2 ? 2 : room;       // blocks: the track's whole width, from its start
+        return g->track.x;
+    }
     *pitch = p < room ? p : room < 2 ? 2 : room;
     return g->track.x + g->track.w - (n * *pitch - 2 * d->fs);
 }
@@ -1076,6 +1094,8 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                 for (int i = 0; i < span; i++) {
                     if (i < r->v - r->lo) {
                         fill(&d, x0 + i * pitch, sy, sw, sh, on);
+                    } else if (r->steps == 2 && rowfill < 0) {
+                        fill(&d, x0 + i * pitch, sy, sw, sh, line);     // a meter's rest: the border
                     } else if (hollow) {
                         rrect(&d, x0 + i * pitch, sy, sw, sh, 0, 0, 0, d.fs, base);
                     } else {

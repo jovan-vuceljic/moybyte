@@ -2426,8 +2426,10 @@ def toggle(label, name, **p):
 
 def slider(label, name, lo, hi, look="bar", **p):
     """A value from lo to hi, left and right its own. `look="steps"` draws
-    a segment a step and no number; `icon=` (a template; empty draws none)
-    stands before its label."""
+    a segment a step and no number; `look="blocks"` draws those segments
+    across the whole row, a meter (with no label, 10 units a step and 12
+    more wide in a row); `icon=` (a template; empty draws none) stands
+    before its label."""
     where = _caller()
     _checked("slider", "look", look, where)
     p = dict(p, look=look) if look != "bar" else p

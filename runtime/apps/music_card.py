@@ -13,7 +13,7 @@ import music_app as M
 H = 84                      # the card at font scale 1: 6 + head 40 + 6 + transport 26 + 6
 H_DESK = 156                # the desk's: 10 + the card (10 + 40 + 10 + 26 + 10) + 10 + the volume's 30 + 10
 
-s = ui.state(main_icon="pause")
+s = ui.state(main_icon="pause", vol=0)
 
 
 def _sec():
@@ -25,6 +25,7 @@ def changed():
     c = M.STREAM.card
     s.main_icon = M.MAIN.get(M.FAILED if c and c["state"] == M.FAILED else
                              M.PAUSED_ if c and c["paused"] else M.PLAYING)[0]
+    s.vol = M.level(c)
 
 
 def opened():
@@ -54,18 +55,6 @@ def head_keys(i):
 def head_at(ev):
     if ev.kind == "up":
         open_app()
-
-
-def draw_volume(cv, x, y, w, h):
-    M.draw_meter(cv, x, y, w, h, _DRAWN)
-
-
-def volume_at(ev):
-    if ev.kind != "up":
-        M.meter_at(ev, _DRAWN)
-
-
-_DRAWN = [0, 0, 0, 0, 1]        # the meter's last rect and scale
 
 
 def open_app():
@@ -99,7 +88,7 @@ def louder():
 ui.hook("opened", opened)
 ui.hook("changed", changed)
 ui.hook("head_at", head_at, takes="pointer")
-ui.hook("volume_at", volume_at, takes="pointer")
+ui.hook("vol_set", lambda: M.set_level(s.vol))
 ui.action("main", "Play", main)
 ui.action("prev", "Previous", prev)
 ui.action("next", "Next", next_)
@@ -134,7 +123,7 @@ def page():
             with ui.split("row", sizes=(32, 38, "1*", 12, 32), gap="0", pad="0"):
                 ui.button("quieter", icon="minus", label="")
                 ui.label("", icon="volume")
-                ui.canvas("volume", draw_volume, pointer="volume_at")
+                ui.slider("", "vol", 0, 10, look="blocks", on="vol_set")
                 ui.label("")
                 ui.button("louder", icon="plus", label="")
             ui.label("")
