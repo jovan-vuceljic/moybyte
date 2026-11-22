@@ -256,7 +256,9 @@ and `s.NAME.adopt(ed)` hands that document an editor handle (below), so the
 text editor types into the handle's document and draws it. What no kind
 draws an app draws in a `ui.canvas`: its `draw(cv, x, y, w, h)` paints the
 rect the engine laid out (in a rows' body `draw(cv, x, y, w, h, row)`, handed
-the row it stands in), `ui.colors()` answers the theme's colours there, and
+the row it stands in, as its `keys=` function is, `keys(i, row)`, and its
+pointer event as `ev.row`), `ui.colors()` answers the theme's colours there,
+its `hint=` is the band's confirm word while it holds focus, and
 its `pointer=` is handed a press and its drag and release in its own
 coordinates on any page. A foot of `look="band"` lies edge to edge on the
 alternate surface under a rule, its rows as tall as their tallest canvas
@@ -276,7 +278,12 @@ pill over the page above its foot; `ui.group("", look="card")` lays its
 rows on a card (as a split's cell, the cell is the card); `ui.text_view(..., look="well")` lays its prose on a
 well; `ui.cards(..., pad=)` sets the gap its columns are counted at; a
 card's `badge=` marks its picture; a button's `kind=` may be a template;
-`ui.split(..., rule=True)` draws a rule between its cells
+`ui.split(..., rule=True)` draws a rule between its cells;
+`ui.seg(label, ".FIELD", text=...)` in a rows' body binds an int field of
+the row, the index of its item, its items the lines `text=` renders over
+the row; `ui.dialog(..., look="keys")` draws no buttons on the T-Deck, whose
+band's Enter and Esc are its buttons, and a dialog of more than one field
+names the arrows that move between them
 (`tests/uitree_contract/contract.json` holds every kind and prop).
 
 **The bar is the host's.** The console draws the bar (its back chevron,

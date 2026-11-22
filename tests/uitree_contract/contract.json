@@ -2166,6 +2166,10 @@
      "type": "action",
      "level": 1,
      "designed": true
+    },
+    "look": {
+     "type": "word:keys",
+     "level": 1
     }
    }
   },
@@ -2453,8 +2457,7 @@
     },
     "hint": {
      "type": "tpl",
-     "level": 2,
-     "designed": true
+     "level": 2
     },
     "focus": {
      "type": "cond",

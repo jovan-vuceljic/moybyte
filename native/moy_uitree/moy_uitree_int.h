@@ -134,6 +134,8 @@ typedef struct {
 
 // Node flags (`lit` of a two-way control).
 enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_FIELD = 4, NL_HIDE = 8 };
+// A dialog's lit bits: kind="danger"; look="keys" (no button row on the T-Deck).
+enum { DL_DANGER = 1, DL_KEYS = 2 };
 // A label's text options (`nbtn`): wrap= in bits 0-1 (LT_WORD, LT_CHAR), its face's
 // role + 1 in bits 2-4, the toolkit's `centre` for align= in bits 5-7, lines= given.
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.
@@ -375,6 +377,8 @@ struct uit {
     int16_t ground[4];
     char legacy_hints[128];     // a focused legacy stop's band hints, NUL-separated (its host's)
     uint8_t nlegacy_hints;
+    char band_extra[48];        // the items its host adds to the band before Back, NUL-separated
+    uint8_t nband_extra;
     int16_t *rects;
     int crects;
     uit_mc_t mcells[UIT_MCELLS];   // a pass's model row cells (`put_cell`)

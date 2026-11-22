@@ -1094,10 +1094,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
                                   uit_kind_names[kind], src, uit_type_name(e->tmpls[t].type));
         return add_prop(e, node, name, src, repr, PK_TMPL, t);
     } else if (kind == UIT_SEG && !strcmp(name, "text")) {
-        // a seg over a row_of: each row's word, a template over its model's rows
-        if (N->slot < 0 || e->slots[N->slot].type != UIT_ROWOF)
+        // a seg over a row_of: each row's word, a template over its model's rows; a seg
+        // bound to a row's field: its items, one a line, a template over that row
+        if (!(N->lit & NL_FIELD) && (N->slot < 0 || e->slots[N->slot].type != UIT_ROWOF))
             return uit_fail(e, UIT_E_ARG, UIT_MSG("seg text=%s before its row_of", "%s"), src);
-        model = e->slots[N->slot].model;
+        if (!(N->lit & NL_FIELD))
+            model = e->slots[N->slot].model;
         tslot = &N->t_value;
     } else if (!strcmp(name, "title") || !strcmp(name, "caption") || !strcmp(name, "text") ||
                !strcmp(name, "label"))
@@ -1134,6 +1136,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         tslot = &N->t_icon;
     else if (!strcmp(name, "hint") && kind == UIT_TABLE)
         tslot = &N->t_value;
+    else if (!strcmp(name, "hint") && kind == UIT_CANVAS)
+        tslot = &N->t_main;         // a keys= canvas's confirm hint while it holds focus
     else if ((kind == UIT_CARDS && !strcmp(name, "w")) || (kind == UIT_CARD && !strcmp(name, "sub")) ||
              (kind == UIT_CANVAS && !strcmp(name, "w")) || (kind == UIT_ROW && !strcmp(name, "gap")) ||
              (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_PICTURE && !strcmp(name, "side")) || (kind == UIT_POPOVER && !strcmp(name, "anchor")))
@@ -1431,6 +1435,18 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->lit |= NL_FIELD;
         return 0;
     }
+    if (!strcmp(name, "field") && kind == UIT_SEG) {
+        // a seg bound to an int field of its list's row: the row's cell is the index of its
+        // item, its items the lines its text= renders over the row
+        int m = uit_model_of(e, node);
+        int f = uit_field_find(e, m, src, strlen(src));
+        if (f < 0 || e->slots[m].mf->ftype[f] != UIT_INT)
+            return uit_fail(e, UIT_E_NAME, UIT_MSG("seg .%s: no int field of its rows", "seg .%s"), src);
+        N->slot = (int16_t)m;
+        N->cur = (int16_t)f;
+        N->lit |= NL_FIELD;
+        return 0;
+    }
     if (!strcmp(name, "bind")) {
         int s = uit_slot_find(e, src, strlen(src));
         int t = s < 0 ? 0 : e->slots[s].type;
@@ -1585,9 +1601,16 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     if (!strcmp(name, "buttons") && kind == UIT_DIALOG)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     if (!strcmp(name, "kind") && kind == UIT_DIALOG) {
-        // its verb (the last button) in the danger look; 0 the primary
-        N->lit = (uint8_t)!strcmp(src, "danger");
-        return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
+        // its verb (the last button) in the danger look (DL_DANGER); else the primary
+        N->lit = (uint8_t)((N->lit & ~DL_DANGER) | (!strcmp(src, "danger") ? DL_DANGER : 0));
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & DL_DANGER) != 0);
+    }
+    if (!strcmp(name, "look") && kind == UIT_DIALOG) {
+        // "keys": on the T-Deck its buttons are the band's Enter and Esc, no row of them (DL_KEYS)
+        if (strcmp(src, "keys"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("dialog look=%s: keys", "dialog look=%s"), src);
+        N->lit |= DL_KEYS;
+        return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     return uit_fail(e, UIT_E_KIND, UIT_MSG("%s=: a prop this engine does not draw on this kind (%d)", "%s= %d"), name, kind);
 }

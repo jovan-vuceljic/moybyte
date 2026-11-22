@@ -2008,7 +2008,7 @@ SCHEMA = {
     "progress": dict(_C, label="text", value="int", max="int", look="lit"),
     "empty": dict(_C, icon="text", title="text", lines="texts"),
     "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit", look="lit"),
-    "dialog": dict(_C, title="text", buttons="lit", kind="lit"),
+    "dialog": dict(_C, title="text", buttons="lit", kind="lit", look="lit"),
     "popover": dict(_C, anchor="text", w="int", close="action0", wash="lit", at="text"),
     "menu": dict(_C, caption="text"),
     "item": dict(_C, label="text", icon="text", mkind="lit"),
@@ -2016,7 +2016,7 @@ SCHEMA = {
     "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit"),
     "panel": dict(_C),
     "canvas": dict(_C, draw="fn", h="int", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit",
-                   keys="fn", mark="lit"),
+                   keys="fn", mark="lit", hint="text"),
     "foot": dict(_C, look="lit"),
     "scroll": dict(_C),
     "switch": dict(_C),
@@ -2419,9 +2419,28 @@ def seg(label, name, labels=None, text=None, look="seg", **p):
     enum, each value's word from label table `labels=` (every value named);
     over a `row_of`, its model's rows in order, each word the row template
     `text=`. `look="cycle"` shows the one value between chevrons and
-    activation steps it; `look="seg"` shows every value."""
+    activation steps it; `look="seg"` shows every value. Bound to `.FIELD`,
+    an int field of its list's row, the field is the index of its item and
+    `text=`, a template over the row, renders its items one a line; `on=`
+    is handed the row."""
     where = _caller()
     _checked("seg", "look", look, where)
+    if isinstance(name, str) and name.startswith("."):
+        f = _row_field("seg", name, INT, where)
+        if labels is not None or text is None:
+            raise UIError("N01", "ui.seg(%r) bound to a row's field words its items with text=" % name,
+                          where=where, fix='text="{.FIELD}", a text field of the row, one item a line')
+        on = p.pop("on", None)
+        n = _node("seg", f, dict(p, label=label, look=look), where)
+        n.l["field"] = f
+        if on is not None:          # it hands its row (G10)
+            n.l["on"] = _action(on, "row", "ui.seg %s on=" % name, where, seen=False)
+        if _NOW.app.direct:
+            _direct_src("seg", "text", text, "text", where)
+        else:
+            n.l["text"] = tmpl(text, _b().ctx, where, "text").g
+        n.src["text"] = text
+        return n
     _state_name(name, (Enum, RowOf), "ui.seg", where)
     t = _st()._t[name]
     if isinstance(t, Enum):
@@ -2890,11 +2909,12 @@ def lent(key, **p):
 
 
 class Ev:
-    """An event a canvas's pointer hook is handed. Read-only."""
-    __slots__ = ("kind", "x", "y", "source")
+    """An event a canvas's pointer hook is handed. Read-only. `row` is the
+    row of the list the canvas stands in, else None."""
+    __slots__ = ("kind", "x", "y", "source", "row")
 
-    def __init__(self, kind, x=0, y=0, source=""):
-        for k, v in (("kind", kind), ("x", x), ("y", y), ("source", source)):
+    def __init__(self, kind, x=0, y=0, source="", row=None):
+        for k, v in (("kind", kind), ("x", x), ("y", y), ("source", source), ("row", row)):
             object.__setattr__(self, k, v)
 
     def __setattr__(self, k, v):

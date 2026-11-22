@@ -58,6 +58,7 @@ _SIGS = (
     ("uit_set_placed", [_P, _I], None),
     ("uit_set_ground", [_P, _I, _I, _I, _I], None),
     ("uit_set_legacy_hints", [_P, _S, _Z], None),
+    ("uit_set_band_extra", [_P, _S, _Z], None),
     ("uit_place", [_P, _I, _I, _I, _I, _I, _I], _I),
     ("uit_rect", [_P, _S, _I32], _I),
     ("uit_cond_of", [_P, _I, _S], _I),
@@ -434,6 +435,10 @@ class Engine:
     def legacy_hints(self, text):
         b = text.encode()
         self._L.uit_set_legacy_hints(self._e, b, len(b))
+
+    def band_extra(self, text):
+        b = text.encode()
+        self._L.uit_set_band_extra(self._e, b, len(b))
 
     def place(self, x, y, w, h, flags, fs):
         return self._L.uit_place(self._e, x, y, w, h, flags, fs)
