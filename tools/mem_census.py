@@ -389,18 +389,20 @@ def pauses(b, title=None, secs=20):
 
 
 def cut(b):
-    """The destructive live-bytes census. The reply and every row come back
-    on this one handle; the board is rebooted after."""
+    """The destructive live-bytes census: the board prints a `CUT what
+    bytes` line a row and `CUT left bytes` last, all on this one handle (its
+    dev channel is among what the cut drops, so no `py` reply follows them);
+    the board is rebooted after."""
     n0 = len(b.lines)
-    line = b.cmd("py " + M + ".cut(ws)", wait_for="PY", timeout=600, retry=False)
-    rows = None
-    if line and line.startswith("PY ") and "PY ERR" not in line:
-        try:
-            rows = eval(line.split("PY ", 1)[1])          # noqa: S307
-        except Exception:  # noqa: BLE001
-            rows = None
-    return {"rows": rows, "reply": None if rows else line,
-            "lines": b.lines[n0:][-20:] if rows is None else None}
+    b.cmd("py " + M + ".cut(ws)", wait_for="CUT left", timeout=600, retry=False)
+    rows = []
+    for ln in b.lines[n0:]:
+        what, _, n = ln[4:].rpartition(" ") if ln.startswith("CUT ") else ("", "", "")
+        if what and n.lstrip("-").isdigit():
+            rows.append((what, int(n)))
+    done = bool(rows) and rows[-1][0] == "left"
+    return {"rows": rows if done else None,
+            "lines": None if done else b.lines[n0:][-20:]}
 
 
 def attach(name, dirs, port=None):
