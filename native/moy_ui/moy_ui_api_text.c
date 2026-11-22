@@ -162,7 +162,8 @@ static int32_t view_keys(moy_ui_ctx_t *c, moy_ui_span_t id, const moy_ui_over_t 
         return 0;
     }
     int32_t scroll = k0 != NULL ? k0->scroll : 0, most = content - b.h;
-    int fl = STOP_KEEP_UD | (scroll <= 0 ? STOP_AT_TOP : 0) | (scroll >= most ? STOP_AT_END : 0);
+    int fl = STOP_KEEP_UD | STOP_QUIET | (scroll <= 0 ? STOP_AT_TOP : 0)
+             | (scroll >= most ? STOP_AT_END : 0);
     c->at_last = (uint8_t)placed;
     uint32_t sid = mua_id_of(c, o, id);     // ui.focus names it as any stop
     int st = mua_stop(c, sid, b, fl, mua_name_of(o, id));

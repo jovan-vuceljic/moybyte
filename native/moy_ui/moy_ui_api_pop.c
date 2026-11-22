@@ -999,6 +999,12 @@ void moy_ui_api_table_pics(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     mua_edge_fades(c, s, pic, c->tbl.n * c->tbl.rh, v.y - c->tbl.y0, MOY_UI_DEFAULT, 1, c->tbl.rh);
 }
 
+void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
+    if (c->n_nest == 0) {
+        mua_page_close(c, s);
+    }
+}
+
 void moy_ui_api_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     mua_parts_close(c, s);
     if (c->n_nest == 0) {

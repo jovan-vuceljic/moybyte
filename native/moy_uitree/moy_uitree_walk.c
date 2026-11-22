@@ -4656,6 +4656,7 @@ ids:;
         placed_walk(e, c, s);
     else
         walk(e, c, s, 0, -1, -1);
+    moy_ui_api_page_done(c, s);         // the next frame's plan reads what this one drew
     e->tv_stop = e->tv_stop_now;
     // after: what holds focus, and whether the band named another node's verbs
     int had = e->has_focused;

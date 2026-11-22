@@ -1628,6 +1628,8 @@ static void mark_rest(const uit_t *e, int k, uint8_t *m)
         mark_tree(e, k, m, 0, 1);
         return;
     }
+    if (e->nodes[k].kind == UIT_TEXT_VIEW)
+        return;                         // a lines view is a region: its rows are its own record's
     mark_node(e, k, m, 0, 0);
     for (int g = e->nodes[k].kid; g != (int)UIT_NONE; g = e->nodes[g].next)
         if (e->nodes[k].kind != UIT_SPLIT || e->nodes[g].kind != UIT_GROUP)
@@ -1636,7 +1638,7 @@ static void mark_rest(const uit_t *e, int k, uint8_t *m)
 
 static void mark_cells(const uit_t *e, int k, uint8_t *m)
 {
-    if (e->nodes[k].kind == UIT_CARDS) {
+    if (e->nodes[k].kind == UIT_CARDS || e->nodes[k].kind == UIT_TEXT_VIEW) {
         mark_tree(e, k, m, 0, 0);
         return;
     }
@@ -1661,7 +1663,8 @@ int32_t uit_cell_gen(uit_t *e, int k)
 }
 
 // What the page's gen counts (`_cell_gens`, `_gen_safe`): every state but those only a cards
-// list's rows or a split's group read (each region carries a gen of its own, `uit_cell_gen`) and
+// list's rows, a split's group or a lines view read (each region carries a gen of its own,
+// `uit_cell_gen`; a lines view's rows are its view record's, moy_ui_api_text_view) and
 // those only a list's
 // cur= names (focus, which the toolkit draws); and whether it may carry one: no text of the build
 // names an engine value, and no canvas draws what no state says.

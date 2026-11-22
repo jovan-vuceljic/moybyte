@@ -397,9 +397,11 @@ def test_the_text_console_draws_its_prompt_alone(tmp_path, bufs, desk):
     """The text console's page under the FPS chip (`overdrew`), whose log
     the chip misses: a typed prompt's frames draw its rows alone -- on two
     and three buffers moving nothing where the buffer the frame paints holds
-    the log (`moy_ui_api_lag`), the frames after a line was entered too --
-    on a desk a drag of the log draws rows (the finger lies outside it), and
-    every frame is a whole repaint's bytes. On a desk the run's canvas is its
+    the log (`moy_ui_api_lag`), the frames after a move of it too -- the
+    entered line's move of the log (on the frame after Enter, where the
+    page's action has run) and a drag of it are shift frames (on a desk the
+    drag's finger lies outside the log, so its frames draw rows), and every
+    frame is a whole repaint's bytes. On a desk the run's canvas is its
     window's own (`AppFace.holds`), which holds the log whatever the glass's
     buffers do."""
     p = Pair(tmp_path, "console", bufs, desk, chip=True)
@@ -408,9 +410,9 @@ def test_the_text_console_draws_its_prompt_alone(tmp_path, bufs, desk):
         assert p.a.run.player.face.holds(p.a.run.canvas)
     _console_session(p)
     k = p.kinds
-    assert k[:10] + k[14:16] == ["rows"] * 12, k
-    if desk:
-        assert set(k[16:]) == {"rows"}, k
+    assert k[:11] + k[12:16] == ["rows"] * 15, k
+    assert k[11] == "shift", k
+    assert set(k[17:]) == {"rows" if desk else "shift"}, k
 
 
 _NOTE = "\n".join(["# Plans", "", "- [ ] buy milk"]

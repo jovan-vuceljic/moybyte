@@ -260,6 +260,7 @@ typedef struct {
     // and row 0's top on screen, so a key step reveals its row at begin.
     int16_t row, top;
     uint8_t st;                     // the state bits it drew with (MOY_UI_ST_*)
+    uint8_t quiet;                  // a press or a hover on it draws no mark: a text view's
     int32_t gen;                    // the app's generation for what it draws in it
     uint32_t sig;                   // its record (kind, text, value), under the audit
 } moy_ui_stop_t;
@@ -788,9 +789,9 @@ typedef struct {
     uint8_t at_last;
     moy_ui_box_t pic_clip;          // the floor's rect the last card's picture draws through
     uint8_t pic_tbl;                // ...or the floor of the placed table drawn last as R
-    // hover_off: no pointer held but one pressed over no stop
-    // (`press_bare`, from its press to the next), and no stop under it this
-    // frame or last.
+    // hover_off: no pointer held but one pressed over no stop it marks
+    // (`press_bare`, from its press to the next), and no such stop under it
+    // this frame or last (a quiet stop is none).
     uint8_t hover_off, press_bare;
     // what the last pass began under, which a shift frame's must equal
     moy_ui_box_t was_surface;
@@ -1273,6 +1274,9 @@ int32_t moy_ui_api_block_key(moy_ui_inst_t *I,
 // page has one; and over everything, the tooltip of a tool a resting
 // pointer is over (ui.tool).
 void moy_ui_api_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
+// The page is done, its fades left to ui.end: what it drew is kept for the
+// next frame's plan, as ui.end and the next page keep it.
+void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
 // A tool (§1): an icon button in ui.at's rect (else a row of the page),
 // flat but for its marks: the current mark where o->current, the focus mark
 // by its size, at half strength where o->disabled. `label` is its word,

@@ -67,22 +67,21 @@ _ANSWER = "\x01"
 _ENDED = "The script ended."
 LINE_MAX = 200          # the prompt line's characters
 
-s = ui.state(log=ui.model(key="n", n=0, line=""), reading=False, ended=False, ask="", line="")
+s = ui.state(log=ui.model(key="n", n=0, line=""), ended=False, ask="", line="")
 
 
 def sync(con):
-    """The page's states from the console: the log's rows, and whether a
-    line is read (its prompt) or the script ended."""
+    """The page's states from the console: the log's rows, the prompt a
+    line is read with, and whether the script ended. A frame between two
+    `input()` calls, reading nothing, changes none of them."""
     if con._shown_gen != con._gen:
         s.log = con._rows()
     reading = con.reading()
-    if reading and not s.reading:
-        s.line = ""
-        ui.focus("line")
-    elif con.ended and not s.ended:
-        ui.focus("again")
-    s.reading, s.ended = reading, con.ended and not reading
-    if reading:
+    ended = con.ended and not reading
+    if ended != s.ended:
+        s.ended = ended
+        ui.focus("again" if ended else "line")
+    if reading and con._prompt != s.ask:
         s.ask = con._prompt
 
 
@@ -97,6 +96,12 @@ def again():
     uitree_app.env()._restart()
 
 
+def opened():
+    s.ended, s.ask, s.line = False, "", ""
+    ui.focus("line")
+
+
+ui.hook("opened", opened)
 ui.hook("sync", sync, takes="arg")
 ui.action("send", "Send", send)
 ui.action("again", "Run again", again)
@@ -106,7 +111,7 @@ def console_page():
     with ui.page(""):
         ui.text_view("log", follow=True, syntax="sgr")
         with ui.foot():
-            ui.field("{ask}", "line", max=LINE_MAX, on="send", shown="!ended", when="reading", off="grey")
+            ui.field("{ask}", "line", max=LINE_MAX, on="send", shown="!ended")
             ui.label(_ENDED, tone="dim", shown="ended")
             ui.button("again", shown="ended")
 
