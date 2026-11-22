@@ -1962,19 +1962,24 @@
    "section": "7.3",
    "props": {
     "count": {
-     "type": "tpl",
-     "level": 2,
-     "designed": true
+     "type": "int",
+     "level": 2
     },
     "first": {
-     "type": "tpl",
-     "level": 2,
-     "designed": true
+     "type": "int",
+     "level": 2
     },
     "cols": {
-     "type": "tpl",
-     "level": 2,
-     "designed": true
+     "type": "int",
+     "level": 2
+    },
+    "side": {
+     "type": "int",
+     "level": 2
+    },
+    "gap": {
+     "type": "int",
+     "level": 2
     },
     "face": {
      "type": "name",
@@ -1986,18 +1991,23 @@
      "level": 2,
      "designed": true
     },
+    "edge": {
+     "type": "bool",
+     "level": 2
+    },
     "on": {
      "type": "action|hook",
-     "level": 2,
-     "designed": true
+     "level": 2
+    },
+    "pick": {
+     "type": "action|hook",
+     "level": 2
     },
     "focus": {
      "type": "cond",
-     "level": 2,
-     "designed": true
+     "level": 2
     }
-   },
-   "designed": true
+   }
   },
   "rows": {
    "head": "model",

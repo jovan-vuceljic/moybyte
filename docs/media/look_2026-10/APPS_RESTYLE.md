@@ -145,7 +145,7 @@ shows (its cart's title, Appearance's Pictures tab).
 
 | function | part |
 |---|---|
-| the drawings | `ui.grid` of `ui.card`s, each its drawing at 4:3, its name; New drawing first |
+| the drawings | a `ui.cards` list (`runtime/apps/myart_app.py`), each its drawing at 4:3, its name; New drawing first |
 | which one is the wallpaper | the `wallpaper` badge, and the caption's "Wallpaper: Garden" |
 | open | Enter, a tap; on the desk the foot's Open (primary) |
 | use as wallpaper, put in a game | the card's menu (W, G); the desk's foot |

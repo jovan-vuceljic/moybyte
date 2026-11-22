@@ -97,6 +97,29 @@ def test_going_home_with_paint_never_opened_writes_nothing(tmp_path):
     assert not ws.ach.has("system", "first_paint")     # a save's award
 
 
+def test_a_tap_on_the_rail_takes_a_colour_and_on_the_one_in_use_opens_the_colours(tmp_path):
+    from runtime import ui_draw
+    ws = host_app.build_workstation(str(tmp_path / "carts"))
+    app = _open_paint(ws)
+    driver = host_app.ConsoleDriver(ws)
+
+    def tap(key, dx, dy):
+        x, y = ui_draw._C.api_box(ws._app_hosts["artwork"].ctx, key)[:2]
+        driver.touch(x + dx, y + dy)
+        for _ in range(2):
+            ws.mark_dirty()
+            driver.frame(1 / 30)
+        driver.touch_up()
+        for _ in range(2):
+            ws.mark_dirty()
+            driver.frame(1 / 30)
+
+    tap("rail_c", 18, 30)              # the second column, third row of the sixteen
+    assert app.color == 5 and app.pop is None
+    tap("use_c", 10, 10)
+    assert app.pop == "colours"
+
+
 def test_touch_stroke_undo_redo_and_shared_save(tmp_path):
     carts = str(tmp_path / "carts")
     ws = host_app.build_workstation(carts)
@@ -676,8 +699,11 @@ def test_the_arrows_move_the_cursor_and_a_draws_there(tmp_path):
 def test_more_offers_put_in_a_game_only_for_a_game_size_drawing(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     app = _open_paint(ws)
-    verbs = [r[0] for r in app._more_rows() if r != "-"]
-    assert verbs == ["new", "open", "wallpaper", "game", "show"]
+    # More's rows past New drawing, Open..., Use as wallpaper and Show: Put in a game
+    ws.mark_dirty()
+    ws.frame(1 / 30)
+    assert app.shown["game_ok"]
+    assert not (app.shown["story_ok"] or app.shown["copy_ok"] or app.shown["viewing"])
     app.doc.put(1, 1, 8)
     app._mark_changed()
     app._verb("game")
@@ -709,9 +735,11 @@ def test_a_handheld_views_a_desks_drawing_and_never_decodes_it_whole(tmp_path):
     _type(ws, "z", "z")
     bmp, k = v.window()
     assert k == 1 and bmp.w <= 320 and v._src[1:3] == (1024, 600)
-    # its More keeps the verbs a viewer has
-    verbs = [r[0] for r in app._more_rows() if r != "-"]
-    assert verbs == ["open", "wallpaper", "story", "show"]
+    # its More keeps the verbs a viewer has: Open..., Use as wallpaper, Put in a story, Show
+    ws.mark_dirty()
+    ws.frame(1 / 30)
+    assert app.shown["viewing"] and app.shown["story_ok"]
+    assert not (app.shown["game_ok"] or app.shown["copy_ok"])
     assert app.doc_title() == "Garden"
 
 
@@ -743,6 +771,33 @@ def test_put_in_a_story_adds_a_last_page_and_its_undo_takes_it_out(tmp_path):
     assert storybook_app.story_list(ws.artwork.ctx.carts, files)[0]["slides"] == n + 1
     undo()
     assert storybook_app.story_list(ws.artwork.ctx.carts, files)[0]["slides"] == n
+
+
+def test_put_in_a_story_is_a_page_of_the_stories_whose_card_adds_the_drawing(tmp_path):
+    """Paint's Put in a story: the stories as cards on a page over the
+    drawing; Enter on one adds it as a last slide, which the toast says."""
+    from runtime import storybook_app
+    ws = host_app.build_workstation(str(tmp_path / "carts"))
+    ws.pointer.visible = False
+    ws.app("storybook")._new_story()
+    app = _open_paint(ws)
+    app.doc.put(2, 2, 8)
+    app._mark_changed()
+    assert app._save()
+    app._verb("story")
+    assert app.page == "story" and app.story.stories
+    n = app.story.stories[0]["slides"]
+    drv = host_app.ConsoleDriver(ws)
+    for _ in range(3):
+        ws.mark_dirty()
+        drv.frame(1 / 30)
+    drv.press("a")
+    for _ in range(3):
+        drv.frame(1 / 30)
+    assert app.page is None and app.story is None
+    assert app.toast is not None and app.toast[0].startswith("Added as slide %d of " % (n + 1))
+    files = ws.artwork.ctx.files
+    assert storybook_app.story_list(ws.artwork.ctx.carts, files)[0]["slides"] == n + 1
 
 
 def test_the_desk_window_is_titled_with_the_drawing(tmp_path):
@@ -1041,9 +1096,8 @@ def test_paints_frame_path_is_found_on_the_class_or_its_first_base():
     cls = paint_app.PaintAppLayer
     assert cls.__bases__[0] is paint_draw.PaintDraw
     assert not [n for n in ("draw", "retained", "changed") if n not in vars(cls)]
-    for name in ("_canvas", "_stroke_frame", "_view", "_drawing", "_tools", "_rail",
-                 "_show", "_view_page", "_game_page", "_story_page", "_draw_toast",
-                 "_desk_row", "_desk_panel", "_desk_foot", "_lend"):
+    for name in ("_draw_view", "_stroke_frame", "_view", "_drawing", "_look", "_show",
+                 "_send_page", "_lend", "_lead", "_pop_at", "_look_h", "_drip_colour"):
         assert name in vars(cls) or name in vars(paint_draw.PaintDraw), name
 
 

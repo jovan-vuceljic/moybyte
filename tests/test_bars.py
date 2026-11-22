@@ -150,7 +150,7 @@ def test_every_layout_lays_out_inside_what_four_bars_leave(tmp_path):
         rb, cb = four[key]
         if not _inside(rb, cb):
             bad.append("%s.%s[%d] %r in %r" % (key + (rb, cb)))
-    assert checked > 50
+    assert checked > 30           # the layouts' rects (a uitree page lays out its own)
     assert not bad, "outside the content rect under four bars: %s" % bad
 
 

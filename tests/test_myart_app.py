@@ -46,6 +46,14 @@ def _open(ws):
     return app
 
 
+def _pic(app, name, w=88, h=66):
+    """The picture the engine made of drawing `name` at w x h, or None."""
+    for k, got in app.engine.pics.cache.items():
+        if k[0].kind == "store" and k[0].key == "drawings/" + name and (k[1], k[2]) == (w, h):
+            return got[1]
+    return None
+
+
 def _key(ws, k):
     """A typed key, through the host driver the browser and the keyboard use."""
     drv = host_app.ConsoleDriver(ws)
@@ -73,11 +81,15 @@ def test_the_drawings_are_cards_new_drawing_first_and_the_wallpapers_badge(tmp_p
     app = _open(ws)
     assert sorted(app.drawings) == ["garden", "rocket"]
     assert app.wallpaper == "garden"
-    assert app._ui.box("New drawing") is not None
+    stops = app.engine.stop_kinds()
+    assert stops["+/open"] == "card", "New drawing is the first card"
     for name in ("garden", "rocket"):
-        assert app._ui.box("Drawing " + name) is not None
+        assert stops[name + "/open"] == "card"
+    assert app.shown["wall"] == "Wallpaper: Garden"
+    badges = dict((r["id"], r["badge"]) for r in app.shown["art"])
+    assert badges == {"+": "", "garden": "wallpaper", "rocket": ""}
     # the cards' pictures are read at the card's size, never the drawing's
-    pic = app.covers.get("garden", 88, 66)
+    pic = _pic(app, "garden")
     assert (pic.w, pic.h) == (88, 66) and pic.pix[0] == 8
 
 
@@ -106,8 +118,8 @@ def test_a_reopen_decodes_only_the_drawings_that_changed(tmp_path, monkeypatch):
     _frames(ws)
     _open(ws)
     assert len(decoded) == 3
-    assert app.covers.get("rocket", 88, 66).pix[0] == 2
-    assert app.covers.get("garden", 88, 66).pix[0] == 8
+    assert _pic(app, "rocket").pix[0] == 2
+    assert _pic(app, "garden").pix[0] == 8
 
 
 def test_the_pictures_are_made_on_idle_frames_one_a_frame_never_in_a_draw(
@@ -147,14 +159,16 @@ def test_an_empty_page_offers_new_drawing(tmp_path):
     ws = _ws(tmp_path)
     app = _open(ws)
     assert app.drawings == []
-    assert app._ui.box("New drawing") is not None
+    assert app.shown["none"]
+    assert app.engine.stop_kinds() == {"first": "button"}
+    assert app.engine.hints()[:2] == ("confirm", "New drawing")
 
 
 def test_del_moves_a_drawing_to_the_trash_without_asking(tmp_path):
     ws = _ws(tmp_path)
     _draw(ws, "rocket")
     app = _open(ws)
-    app._focus = app._card_id("rocket")
+    app.focus_card("rocket")
     _frames(ws)
     assert app.cur == "rocket"
     _key(ws, 0x7F)
@@ -169,14 +183,14 @@ def test_ctrl_d_duplicates_and_r_renames_in_a_dialog(tmp_path):
     ws = _ws(tmp_path)
     _draw(ws, "rocket")
     app = _open(ws)
-    app._focus = app._card_id("rocket")
+    app.focus_card("rocket")
     _frames(ws)
     _key(ws, 0x04)
     assert len(app.drawings) == 2
-    app._focus = app._card_id("rocket")
+    app.focus_card("rocket")
     _frames(ws)
     _key(ws, ord("r"))
-    assert app.renaming is not None
+    assert app.renaming == "rocket" and app.shown["renaming"]
     app._rename("rocket", "Space ship")
     assert "space_ship" in app.drawings and "rocket" not in app.drawings
 
@@ -185,12 +199,15 @@ def test_the_card_menu_opens_on_m_and_washes(tmp_path):
     ws = _ws(tmp_path)
     _draw(ws, "rocket")
     app = _open(ws)
-    app._focus = app._card_id("rocket")
+    app.focus_card("rocket")
     _frames(ws)
     _key(ws, ord("m"))
     assert app.menu and app.cur == "rocket"
-    rows = [r[0] for r in app._menu_rows(True)]
-    assert rows == ["open", "wallpaper", "game", "rename", "dup"]
+    _frames(ws)
+    assert app.shown["menu"] and app.shown["game_ok"], "Put in a game is on offer"
+    items = [k.split("\t")[0] for k, v in app.engine.stop_kinds().items() if v == "item"]
+    assert items == ["Open in Paint", "Use as wallpaper", "Put in a game\u2026", "Rename\u2026",
+                     "Duplicate", "Move to Trash"]
     assert app.back() and not app.menu
 
 
@@ -199,12 +216,22 @@ def test_put_in_a_game_is_for_a_game_size_drawing_only(tmp_path):
     _draw(ws, "rocket")
     _draw(ws, "wide", 1024, 600)
     app = _open(ws)
-    app.cur = "wide"
-    assert "game" not in [r[0] for r in app._menu_rows(True)]
+    app.focus_card("wide")
+    _frames(ws)
+    assert not app.shown["game_ok"]
     app._verb("game", "wide")
     assert app.game is None
     app._verb("game", "rocket")
     assert app.game is not None and app.game.carts
+    _frames(ws)
+    assert app.page_title() == "Put in a game"
+    title = app.game.carts[0].get("title")
+    drv = host_app.ConsoleDriver(ws)
+    drv.press("a")                      # Enter on the first project's row
+    for _ in range(3):
+        drv.frame(_DT)
+    assert app.game is None
+    assert app.toast is not None and app.toast[0] == "Rocket is the background of " + title
 
 
 def test_open_takes_the_drawing_to_paint(tmp_path):
@@ -252,3 +279,38 @@ def test_a_settled_page_paints_nothing(tmp_path):
     for _ in range(10):
         drv.frame(_DT)
     assert ws.frame_state.frames_drawn == drawn, "an idle page painted"
+
+
+def test_a_drawing_written_meanwhile_is_made_again_on_an_idle_frame(tmp_path):
+    """A picture made of bytes another app has since written goes: the idle
+    frame reads the drawing again, and the card's picture is made anew."""
+    ws = _ws(tmp_path)
+    _draw(ws, "rocket", c=1)
+    app = _open(ws)
+    assert _pic(app, "rocket").pix[0] == 1
+    _draw(ws, "rocket", c=4)            # Paint in a window beside it saves
+    app._unchecked = ["rocket"]
+    _idle(ws)
+    assert _pic(app, "rocket").pix[0] == 4
+
+
+def test_a_scrolled_cards_picture_stays_inside_its_region(tmp_path):
+    """The cards scroll in a region under the caption: a card scrolled past
+    the region's top shows none of its picture over the caption."""
+    from runtime.layout_base import bar_rows, content_of
+    ws = _ws(tmp_path)
+    for i in range(9):
+        _draw(ws, "pic%d" % i, c=12)
+    app = _open(ws)
+    app.focus_card("pic8")
+    _frames(ws)
+    _idle(ws)
+    _frames(ws)
+    cv = ws.sys_canvas
+    from device_canvas import PAL565
+    blue = PAL565[12]
+    top = content_of(cv.w, cv.h, bar_rows(max(1, cv.font_scale)))[1]
+    b = bytes(cv._buf)
+    for y in range(top, top + 12):
+        row = [b[2 * (y * cv.w + x)] << 8 | b[2 * (y * cv.w + x) + 1] for x in range(cv.w)]
+        assert blue not in row, "a picture drawn over the caption at y=%d" % y

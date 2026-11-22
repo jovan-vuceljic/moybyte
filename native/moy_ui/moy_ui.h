@@ -282,6 +282,12 @@ typedef struct {
 } moy_ui_sink_t;
 int moy_ui_sink_row(moy_ui_sink_t *s, uint32_t canvas, int look);
 // A glyph through a sink (moy_ui_glyph_draw's raster, a fill per span).
+// A palette's cells (moy_ui_api_cells): `count` of the MOY64 colours from
+// `first`, `cols` to a row, each a `side` square less `gap`; the colour `cur`
+// wears the current mark (a line of ink, one of surface within), under `ring`
+// the keys' cursor round it too; `edge` a line of the border round them all.
+int moy_ui_cells_draw(const moy_ui_sink_t *s, int x, int y, int first, int count, int cols,
+                      int side, int gap, int cur, int ring, int edge);
 int moy_ui_sink_glyph(const moy_ui_sink_t *s, int g, int x, int y, int w, int h, int ci,
                       int scale);
 // The live theme's icon set for the parts the C draws (docs/history/look_2026-10.md
