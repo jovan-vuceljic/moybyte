@@ -152,7 +152,7 @@ def _add_station(url):
     return ([{"key": "Enter"}, {"wait": 800}, {"click": [160, 66]}]
             + [{"key": c} for c in url]
             + [{"click": [160, 135]}] + [{"key": c} for c in "Test FM"]
-            + [{"click": [263, 193]}, {"wait": 800}])
+            + [{"click": [263, 213]}, {"wait": 800}])
 
 
 @pytest.mark.parametrize("cors", [True, False])
