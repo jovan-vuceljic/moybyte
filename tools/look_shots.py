@@ -3668,16 +3668,15 @@ def _fade_bands(ws):
     win = getattr(ws.wm, "windows", {}).get("files")
     shown = ws.screen == "files" or (win is not None and not getattr(win, "minimized", False)
                                      and ws.wm.desk_open())
-    host = getattr(files, "_ui", None)
+    host = files.page_host() if files is not None else None
     if shown and host is not None and getattr(files, "rows", None) and not m.open:
         # (under a menu's scrim the list is no focus, its fade washed out)
-        from runtime import ui_draw
-        got = ui_draw._C.api_table_rows(host.ctx)
-        if got is not None and len(files.rows) * got[1] > got[2][3]:
+        view, row = host.box("list"), host.box("r0/open")
+        if view is not None and row is not None and len(files.rows) * row[3] > view[3]:
             ox, oy = (win.content_rect()[:2] if win is not None and ws.wm.desk_open()
                       else (0, 0))
-            vx, vy, vw, vh = got[2]
-            out.append(("Files' rows", (ox + vx, oy + vy + vh - got[1], vw, got[1])))
+            vx, vy, vw, vh = view
+            out.append(("Files' rows", (ox + vx, oy + vy + vh - row[3], vw, row[3])))
     return out
 
 

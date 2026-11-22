@@ -152,7 +152,7 @@ def test_every_layout_lays_out_inside_the_content_rect(tmp_path, size):
     names = {n for n, _l in _layouts(ws)}
     for want in ("Layout", "CodeLayout", "CardsLayout", "PaintLayout",
                  "MapLayout", "MusicLayout", "BlockLayout",
-                 "FilesLayout", "StorybookLayout", "AppearanceLayout",
+                 "StorybookLayout", "AppearanceLayout",
                  "PaintAppLayout", "GetCartsLayout", "MyArtLayout"):
         assert want in names, want + " was never built"
     top = _rect_map(ws)
@@ -170,7 +170,7 @@ def test_every_layout_lays_out_inside_the_content_rect(tmp_path, size):
         rb, cb = bottom[key]
         if not _inside(rb, cb):
             bad.append("%s.%s[%d] %r in %r" % (key + (rb, cb)))
-    assert checked > 60
+    assert checked > 50
     assert not bad, "outside the content rect under a bottom bar: %s" % bad
     lay = ws.layout
     assert lay.icon_y0 >= lay.cy and lay.grid_bottom <= lay.cy + lay.ch
@@ -180,10 +180,10 @@ def test_every_layout_lays_out_inside_the_content_rect(tmp_path, size):
 def test_a_window_has_no_bar_over_its_content(tmp_path):
     """The shipped apps' heads: a window's content is its whole buffer, the
     title strip being the WM's -- wherever the bar is."""
-    from runtime.files_app import FilesLayout
+    from runtime.storybook_app import StorybookLayout
     for edge in ("top", "bottom"):
         layout_base.place_bar(edge)
-        lay = FilesLayout(480, 300, 1, windowed=True)
+        lay = StorybookLayout(480, 300, 1, windowed=True)
         assert (lay.cx, lay.cy, lay.cw, lay.ch) == (0, 0, 480, 300)
 
 
@@ -230,7 +230,7 @@ SURFACES = {
     "menu": lambda ws: (ws.open_in_editor(next(
         c for c in ws.carts.all if c.get("title") == "Star Catcher")),
         ws.text.set_menu_view("code")),
-    "app": lambda ws: ws.spine.open_app(ws.app("files")),
+    "app": lambda ws: ws.spine.open_app(ws.app("storybook")),
 }
 
 

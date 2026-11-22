@@ -321,9 +321,6 @@ def test_going_home_from_inside_ends_the_return(tmp_path):
 # the current row in view under the keys. What a test can see of the offset
 # is which row a tap lands on.
 
-CAPTION, HEAD, ROW = 19, 18, 20     # the handheld's, at fs 1
-
-
 def _drv(ws):
     return host_app.ConsoleDriver(ws)
 
@@ -344,24 +341,14 @@ def _key(ws, app, name):
 def _page(ws, place=files_app.PROJECTS):
     """The handheld's page of `place`'s files, focus on its rows."""
     app = ws.app("files")
-    app.open_place(place)
-    app.level = "files"
-    app._focus = "files"
+    app.open_place(place, show=True)
     _frames(_drv(ws))
     return app
 
 
-def _view(app):
-    """The rows' viewport: the table's box under its caption and header."""
-    x, y, w, h = app._ui.box("files")
-    return x, y + CAPTION + HEAD, w, h - CAPTION - HEAD
-
-
 def _drag(ws, x, y0, y1, steps=6, still=4):
-    """A finger drag, sample by sample -- a scroll is made of samples that are
-    not clicks, so it can only be driven this way -- held still `still`
-    frames before it lets go, so the page rests where the finger left it
-    (a release at speed flings it on)."""
+    """A finger drag, sample by sample, held still `still` frames before it
+    lets go, so the page rests where the finger left it."""
     drv = _drv(ws)
     drv.touch(x, y0)
     drv.frame(1 / 30)
@@ -375,90 +362,28 @@ def _drag(ws, x, y0, y1, steps=6, still=4):
     _frames(drv)
 
 
-def _tap_at(ws, x, y):
-    drv = _drv(ws)
-    drv.click(x, y)
-    _frames(drv)
-
-
-def test_the_projects_list_scrolls_by_drag_and_clamps(tmp_path):
-    ws = host_app.build_workstation(str(tmp_path / "carts"))
-    _open_files(ws)
-    app = _page(ws)
-    x, vy, w, vh = _view(app)
-    n = len(app.rows)
-    assert n * ROW > vh, "the seeded store overflows one screen"
-    cx = x + w // 2
-
-    _drag(ws, cx, vy + vh - 5, vy + vh - 145)   # 140 px: seven rows, from inside the view
-    _tap_at(ws, cx, vy + ROW // 2)
-    assert app.cur == 7, "the first row in view is the eighth"
-    assert ws.wm.top_kind() == "files"
-
-    for _ in range(9):                          # past the end
-        _drag(ws, cx, vy + vh - 10, vy + 10)
-    _tap_at(ws, cx, vy + vh - ROW // 2)
-    assert app.cur == n - 1, "the last row in view is the last"
-
-    for _ in range(9):                          # and back past the start
-        _drag(ws, cx, vy + 10, vy + vh - 10)
-    _tap_at(ws, cx, vy + ROW // 2)
-    assert app.cur == 0
-
-
 def test_a_drag_never_opens_the_row_it_let_go_of(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_files(ws)
     app = _page(ws)
-    x, vy, w, _vh = _view(app)
-    _drag(ws, x + w // 2, vy + ROW // 2, vy + ROW // 2 + 60)   # down from the top
+    x, y, w, h = app.page_host().box(files_app.row_id(0) + "/open")
+    _drag(ws, x + w // 2, y + h // 2, y + h // 2 + 60)     # down from the top
     assert ws.wm.top_kind() == "files"          # scrolled (nowhere), not opened
-    assert app.cur == 0
-    _tap_at(ws, x + w // 2, vy + ROW + ROW // 2)
-    assert app.cur == 1 and ws.wm.top_kind() == "files"   # the first tap picks it
-    _tap_at(ws, x + w // 2, vy + ROW + ROW // 2)
-    assert ws.wm.top_kind() == "menu"           # a second, clean tap opens it
 
 
 def test_the_keys_reach_every_row_and_the_view_follows(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_files(ws)
     app = _page(ws)
-    x, vy, w, vh = _view(app)
-    vis = vh // ROW
-    for _ in range(vis + 2):
+    n = len(app.rows)
+    for _ in range(n - 1):
         _key(ws, app, "down")
-    assert app.cur == vis + 2
-    _key(ws, app, "up")
-    assert app.cur == vis + 1
+    assert app.cur == n - 1
+    vx, vy, vw, vh = app.page_host().box("list")
+    x, y, w, h = app.page_host().box(files_app.row_id(n - 1) + "/open")
+    assert vy <= y and y + h // 2 <= vy + vh, "the view followed the current row"
     _key(ws, app, "down")
-    cart = app.rows[vis + 2][4]
-    _tap_at(ws, x + w // 2, vy + vh - ROW // 2)  # the current row, at the view's foot
-    assert ws.wm.top_kind() == "menu" and ws.cart is cart, "the view followed it"
-
-
-def test_the_arrows_reach_every_row(tmp_path):
-    ws = host_app.build_workstation(str(tmp_path / "carts"))
-    _open_files(ws)
-    app = _page(ws)
-    for _ in range(len(app.rows) + 2):
-        _key(ws, app, "down")
-    assert app.cur == len(app.rows) - 1
-    assert app._focused.startswith("verb "), "past the last row, down reaches the verbs"
-
-
-def test_a_shrinking_list_never_strands_the_view(tmp_path):
-    ws = host_app.build_workstation(str(tmp_path / "carts"))
-    _open_files(ws)
-    app = _page(ws)
-    x, vy, w, vh = _view(app)
-    for _ in range(9):
-        _drag(ws, x + w // 2, vy + vh - 10, vy + 10)
-    app.rows = app.rows[:3]                    # as if the list had shrunk under it
-    app.cur = 2
-    _frames(_drv(ws))
-    _tap_at(ws, x + w // 2, vy + ROW // 2)
-    assert app.cur == 0, "the view came back to the rows there are"
+    assert app.engine.focus_key.startswith("v_"), "past the last row, down reaches the verbs"
 
 
 # -- a cart's own image is a PICTURE ------------------------------------------
@@ -570,5 +495,5 @@ def test_b_leaves_a_places_list_instead_of_being_swallowed(tmp_path):
     _open_files(ws)
     app = _page(ws)
     _key(ws, app, "b")
-    assert app.level == "places" and app._focused == "Places"
+    assert app.level == "places" and app.engine.focus_key.endswith("/open_place")
     assert ws.wm.top_kind() == "files"

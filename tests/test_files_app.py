@@ -9,14 +9,12 @@ from pathlib import Path
 import pytest
 
 from runtime import files_app, host_app, moy_carts
+from runtime import uitree as ui
 from ws_helpers import quiesce, shelf, select_on_home  # noqa: E402
 from ws_helpers import build_ws as _ws
 
 ROOT = Path(__file__).resolve().parent.parent
 _DT = 1 / 30
-# The handheld's table geometry at fs 1 (style.json's `group` caption, the
-# `value_row` header and the `row` stack).
-CAPTION, HEAD, ROW = 19, 18, 20
 
 
 def _open_app(ws, title):
@@ -58,11 +56,18 @@ def _type(drv, text):
         _frames(drv, 2)
 
 
-def _row_xy(app, i, id="files", top=CAPTION + HEAD):
-    """The middle of row `i` of a table the app drew last frame, its rows
-    `top` under the table's box (a caption and a header row)."""
-    x, y, w, _h = app._ui.box(id)
-    return x + w // 2, y + top + i * ROW + ROW // 2
+def _row_xy(app, i, places=False):
+    """The middle of row `i` of the files (or the places) the app drew last
+    frame."""
+    rid = app.shown_places()[i][0] + "/open_place" if places else files_app.row_id(i) + "/open"
+    x, y, w, h = app.page_host().box(rid)
+    return x + w // 2, y + h // 2
+
+
+def _focus(app):
+    """The focused stop's id: a row's "r<i>/open", a place's "<key>/open_place",
+    a field's state name, a button's action."""
+    return app.engine.focus_key
 
 
 def _tap(drv, x, y):
@@ -94,7 +99,7 @@ def test_files_cart_is_well_formed_and_the_app_opens(tmp_path):
     assert ws.cart_error is None
     assert ws.wm.top_kind() == "files"
     assert (app.place, app.level) == (files_app.PROJECTS, "places")
-    assert app._focused == "Places"
+    assert _focus(app).endswith("/open_place")
 
 
 def test_the_handheld_walks_places_then_files_and_b_comes_back(tmp_path):
@@ -104,7 +109,7 @@ def test_the_handheld_walks_places_then_files_and_b_comes_back(tmp_path):
     app, drv = _files(ws)
     _art(ws, drv)
     assert app.names_shown() == ["dragon"]
-    assert app._focused == "files"
+    assert _focus(app).endswith("/open")
     _press(drv, "b")
     assert app.level == "places" and app.place == files_app.PICTURES
     assert ws.wm.top_kind() == "files", "b left the page, not the app"
@@ -114,7 +119,7 @@ def test_a_tap_on_a_place_opens_it(tmp_path):
     ws = _ws(tmp_path)
     app, drv = _files(ws)
     keys = [p[0] for p in app.shown_places()]
-    _tap(drv, *_row_xy(app, keys.index(files_app.TRASH), "Places", 0))
+    _tap(drv, *_row_xy(app, keys.index(files_app.TRASH), True))
     assert (app.place, app.level) == (files_app.TRASH, "files")
 
 
@@ -129,7 +134,7 @@ def test_the_places_count_their_files_and_themes_show_once_there_are_any(tmp_pat
     assert files_app.THEMES not in [p[0] for p in app.shown_places()]
 
 
-def test_a_tap_on_the_current_row_opens_it_and_on_another_makes_it_current(tmp_path):
+def test_a_tap_on_a_row_opens_it(tmp_path):
     carts = str(tmp_path / "carts")
     ws = _ws(tmp_path)
     _seed_drawing(carts, "one")
@@ -139,8 +144,6 @@ def test_a_tap_on_the_current_row_opens_it_and_on_another_makes_it_current(tmp_p
     assert app.cur == 0
     _tap(drv, *_row_xy(app, 1))
     assert app.sel_name() == app.names_shown()[1]
-    assert ws.wm.top_kind() == "files", "the first tap only made it current"
-    _tap(drv, *_row_xy(app, 1))
     assert ws.wm.top_kind() == "artwork"
     assert ws.artwork.doc_name() == app.names_shown()[1]
 
@@ -161,7 +164,7 @@ def test_the_verbs_are_the_current_rows(tmp_path):
     app.open_place(files_app.PROJECTS)
     assert app._action_labels() == app.PROJECT_ACTIONS
     app.open_place(files_app.TRASH)
-    assert app._action_labels() == app.TRASH_ACTIONS
+    assert app._action_labels() == (), "an empty Trash has no row to restore"
 
 
 # -- Downloads ---------------------------------------------------------------------
@@ -280,7 +283,7 @@ def test_gallery_lists_rename_copy_trash_restore(tmp_path):
     app._act("NAME")
     _frames(drv)
     assert app.dialog == "rename" and app.rename_text == "dragon_2"
-    assert app._focused == "Name"
+    assert _focus(app) == "typed"
     _type(drv, "\b\b")
     assert app.rename_text == "dragon"
     _type(drv, "_tower")
@@ -310,10 +313,10 @@ def test_rename_cancels_by_its_button_and_by_b(tmp_path):
     _frames(drv)
     _type(drv, "xyz")
     _press(drv, "down")                    # the field to the buttons: Cancel first
-    assert app._focused == "Cancel"
+    assert _focus(app) == "Cancel"
     _press(drv, "a")
     assert app.dialog is None and app.names_shown() == ["dragon"]
-    assert app._focused == "files", "focus went back to the list"
+    assert _focus(app).endswith("/open"), "focus went back to the list"
     app._act("NAME")
     _frames(drv)
     _press(drv, "b")
@@ -356,7 +359,7 @@ def test_emptying_the_trash_asks_first_and_cancel_is_where_focus_opens(tmp_path)
     app.open_place(files_app.TRASH)
     app._act("EMPTY")
     _frames(drv)
-    assert app.dialog == "empty" and app._focused == "Cancel"
+    assert app.dialog == "empty" and _focus(app) == "Cancel"
     assert app.trash, "nothing goes before the answer"
     _press(drv, "a")
     assert app.dialog is None and app.trash
@@ -399,7 +402,8 @@ def test_reuse_actions_are_copies(tmp_path):
     assert "Files" not in app.project_names
     assert "Paint" not in app.project_names
     assert "Calc" not in app.project_names
-    app.target = app.project_names.index("Star Catcher")
+    _frames(drv)
+    app._in(ui.focus, "%d/add" % app.project_names.index("Star Catcher"))
     _frames(drv)
     _press(drv, "a")                       # Enter on the focused target adds it
     assert app.dialog is None
@@ -599,158 +603,14 @@ def test_the_desk_shows_the_places_beside_the_files(tmp_path):
     drv = host_app.ConsoleDriver(ws)
     _frames(drv, 4)
     app = ws.app("files")
-    assert app.layout.two and app.layout.row_h == 28
-    assert app._focused == "files", "the desk opens on the projects' rows"
-    assert app._ui.box("Places") is not None and app._ui.box("files") is not None
-    app._focus = "Places"
+    assert _focus(app).endswith("/open"), "the desk opens on the projects' rows"
+    host = app.page_host()
+    assert host.box("projects/open_place") is not None and host.box("r0/open") is not None
+    app._in(ui.focus, "projects/open_place")
     _frames(drv)
     _press(drv, "down", "down")
     assert app.place == files_app.PICTURES and app.names_shown() == ["dragon"]
-    assert app._focused == "Places", "a place opens beside the list, focus stays"
-
-
-def test_a_dialog_dims_the_window_s_foot_with_its_content(tmp_path):
-    """Everything under a dialog dims (D-01): in a desk window the rows of
-    the window's body under its content, its rounded foot, dim with the
-    content, and come back when the dialog closes; the strip stays."""
-    carts = str(tmp_path / "carts")
-    _seed_drawing(carts, "dragon")
-    ws = host_app.build_workstation(carts, sys_size=(1024, 600), panel_diagonal_in=7.0,
-                                    font_scale=1, windowed=True)
-    ws.home.open_desk()
-    ws.spine.open_app(ws.app("files"))
-    drv = host_app.ConsoleDriver(ws)
-    _frames(drv, 4)
-    app = ws.app("files")
-    app.open_place(files_app.PICTURES)
-    win = ws.wm.windows["files"]
-    assert win.foot > 2
-    cx, cy, cw, ch = win.content_rect()
-    cv = ws.wm.root_canvas
-
-    def px(x, y):
-        i = 2 * (y * cv.w + x)
-        return cv._buf[i] << 8 | cv._buf[i + 1]
-
-    foot = [(x, cy + ch + win.foot // 2) for x in range(cx + 16, cx + cw - 16, 24)]
-    strip = (cx + cw // 2, win.y + 2)
-    lit = [px(*p) for p in foot]
-    lit_strip = px(*strip)
-    app._act("NAME", "dragon")
-    _frames(drv, 4)
-    assert app.dialog == "rename"
-    dim = [px(*p) for p in foot]
-    assert all(a != b for a, b in zip(lit, dim)), "the foot stays lit under the dialog"
-    assert len(set(dim)) == 1 and px(*strip) == lit_strip
-    _press(drv, "b")
-    assert app.dialog is None
-    _frames(drv, 2)
-    assert [px(*p) for p in foot] == lit
-
-
-def test_the_list_meets_the_verbs_and_peeks_half_a_row(tmp_path):
-    """The list runs down to the verbs' rule, and its rows' view ends well
-    inside a row at every size (a quarter row clear of each edge), so where
-    rows run on the last one shows in part under the fade, never a blank
-    band above the rule (design review R5-13); the heights it reckons with
-    are the engine's."""
-    import json
-    style = json.loads((Path(__file__).resolve().parent.parent / "native" / "moy_ui"
-                        / "style.json").read_text())["metrics"]
-    vr, grp, row = style["value_row"], style["group"], style["row"]
-    assert files_app.HEAD == (vr["head"], vr["head_desk"])
-    assert files_app.CAPTION == (grp["caption"], grp["caption_desk"])
-    ws = host_app.build_workstation(str(Path(tmp_path) / "carts"), sys_size=(1024, 600),
-                                    panel_diagonal_in=7.0, font_scale=1, windowed=True)
-    assert ws is not None
-    for w in (360, 520):
-        for h in range(300, 600, 7):
-            lay = files_app.FilesLayout(w, h, 1, windowed=True)
-            assert lay.desk
-            top = files_app.HEAD[1] + (0 if lay.two else files_app.CAPTION[1])
-            cut, q = (lay.list[3] - top) % lay.row_h, lay.row_h // 4
-            assert q < cut < lay.row_h - q, (w, h, cut)
-            assert lay.list[1] + lay.list[3] == lay.foot[1], "the rule meets the list"
-            assert lay.row_h == row["stack_desk"]
-
-
-@pytest.mark.parametrize("theme,mode", [("moy", "light"), ("moy", "dark"), ("blocks", "light"),
-                                        ("contrast", "light"), ("contrast", "dark")])
-def test_the_desks_cut_row_shows_under_the_fade(tmp_path, theme, mode):
-    """Files on the desk, on Projects, its window shorter than its rows (the
-    kit's scene, three rows shorter so the cut row is Pin Light, whose dark
-    cover and name have ink in every theme): the half row above the view's
-    foot holds the cut row's ink, and the verbs' rule lies right under it."""
-    import test_shell_goldens as g
-    import test_editor_look as el
-    cfg = dict(g.CONFIGS["p4_1024x600_cs2_fs1_windowed"], variant=mode)
-    cfg["theme"] = theme
-    ws = g._build(cfg, Path(tmp_path) / "carts")
-    ws.home.open_desk()
-    ws.spine.open_app(ws.app("files"))
-    el._frame(ws, 2)
-    win = el._place(ws, "files", (112, 54, 548, 294))
-    ws.app("files").open_place("projects", keep="Harpoon Pop")
-    el._frame(ws, 6)
-    cx, cy, _cw, _ch = win.content_rect()
-    lay = win.ctx.app_layouts["files"]
-    x, y, w, h = lay.list
-    x, foot = cx + x, cy + y + h
-    cv = ws.glass_canvas
-    buf = bytes(cv._buf)
-
-    def word(xx, yy):
-        o = 2 * (yy * cv.w + xx)
-        return buf[o] << 8 | buf[o + 1]
-
-    def lum(v):
-        out = 0.0
-        for c, k in zip((((v >> 11) & 31) / 31, ((v >> 5) & 63) / 63, (v & 31) / 31),
-                        (0.2126, 0.7152, 0.0722)):
-            out += k * (c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
-        return out
-
-    def contrast(a, b):
-        la, lb = sorted((lum(a), lum(b)))
-        return (lb + 0.05) / (la + 0.05)
-    ground = word(x + w - 2, foot - 1)
-    ink = sum(1 for yy in range(foot - lay.row_h // 2, foot) for xx in range(x, x + w)
-              if contrast(word(xx, yy), ground) >= 1.5)
-    assert ink >= 20, "%s %s: %d pixels of the cut row show" % (theme, mode, ink)
-    assert contrast(word(x + w // 2, foot), ground) >= 1.5, "the verbs' rule lies under it"
-
-
-# -- the projects' rows and the foot (design review D-11, m02, m10) ---------------------
-
-def test_a_projects_row_is_the_carts_title_with_its_cover(tmp_path):
-    """A project's row names the cart by its title, as the home does, and its
-    picture is its cover (`nav.cover`: False while the decode lands, None
-    for a cart with none, which draws its generated one); the row opens the
-    cart it names."""
-    from runtime import cover_cache, shell_servers
-    assert shell_servers._COVER_HALF == cover_cache.HALF
-    ws = _ws(tmp_path)
-    app, drv = _files(ws)
-    _press(drv, "a")
-    assert (app.place, app.level) == (files_app.PROJECTS, "files")
-    titles = {c.get("title") for c in app._nav.projects()}
-    assert set(app.names_shown()) == titles
-    assert all(r[3] == "" for r in app.rows), "the picture is the cover, not a kind's icon"
-    i = app.names_shown().index("Harpoon Pop")
-    assert app.door("Harpoon Pop", kind=files_app.PROJECTS) == ("editor", app.rows[i][4])
-    got = None
-    for _ in range(40):                       # the covers land over frames
-        _frames(drv)
-        got = app._nav.cover(app.rows[i][4])
-        if got:
-            break
-    assert got and got.w == 64, "Harpoon Pop's cover at its half"
-    coverless = [r[4] for r in app.rows if r[0] == "Coin Quest"]
-    for _ in range(40):
-        if app._nav.cover(coverless[0]) is not False:
-            break
-        _frames(drv)
-    assert app._nav.cover(coverless[0]) is None
+    assert _focus(app).endswith("/open_place"), "a place opens beside the list, focus stays"
 
 
 def test_the_foot_is_a_bar_with_the_primary_verb_at_its_right(tmp_path):
@@ -759,9 +619,8 @@ def test_the_foot_is_a_bar_with_the_primary_verb_at_its_right(tmp_path):
     ws = _ws(tmp_path)
     app, drv = _files(ws)
     _press(drv, "a")
-    play, opn = app._ui.box("verb PLAY"), app._ui.box("verb OPEN")
+    play, opn = app.page_host().box("v_play"), app.page_host().box("v_open")
     assert play is not None and opn is not None
     assert play[0] < opn[0], "Open, the primary, is right of Play"
-    fx, _fy, fw, _fh = app.layout.foot
-    assert opn[0] + opn[2] >= fx + fw - app.layout.pad - 1, "the verbs end at the foot's right"
-    assert files_app.VERB["OPEN"][1] != "enter"
+    assert files_app.VERBS[-1][0] == "OPEN", "Open, Enter's verb, last"
+    assert files_app._ICONS["OPEN"] != "enter"

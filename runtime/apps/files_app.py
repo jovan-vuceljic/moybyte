@@ -1,51 +1,44 @@
 # Map (grep -n a name to jump there):
 #   shown_name                      a cart folder as a row shows it
-#   FilesLayout                    the places column, the list and its foot
+#   files_page                      the page: places, files, foot, dialogs
 #   FilesAppLayer.open_place        a place's rows, listed once
 #   FilesAppLayer.door              the router's rules, as a pure function
 #   FilesAppLayer._act              the verbs on the current row
-#   FilesAppLayer.draw              the page: places, files, foot, dialog
-#   FilesAppLayer._dialog           rename, empty the Trash, use in a game, used in
-"""Files -- the kid file manager system app (#108), drawn with the public UI
-API's verbs (docs/ui_api_2026-10.md) and nothing under them.
+"""Files -- the kid file manager system app (#108), a `uitree` page the C
+engine lays out and paints.
 
 Places down the side (Projects, the shared folders Documents, Pictures,
 Music and Downloads as they are named on disk, Themes once there are any,
-and the Trash), and the place's files in columns: each file's picture
-(an icon by what it is; a project's cover, else its generated one), its
-Name (a project's title) and its Kind (docs/media/look_2026-10/DESIGN.md,
-Files). No paths, and no extensions outside Downloads, whose files keep the
-whole names they arrived under (a beam from a console nearby lands there,
-runtime/run/link_beam.py) and show their type as their Kind: one opens in
-the app that takes its type, as any file does, and nothing there runs. The
-handheld shows the places, then a place's files, one page at a time; the
-desk shows both. A file's verbs
-ride a foot bar under the list, at its right, the one Enter does last: OPEN
-in the owning app (Enter, or a second tap on the current row, does the
-same), OPEN WITH (the "open with" menu of the apps whose manifest opens the
-file's type, runtime/system/intents.py, the one picked becoming the choice),
-RENAME in a dialog (Paint's open picture follows it,
-`artwork.follow`), COPY (Duplicate), WALL / GAME / USE for a
-drawing (`picture_copies.PictureCopies`), SEND to a console nearby where
-the console's radio link can come up (`intents.Intents.send`,
-runtime/run/link_beam.py), and DELETE, which moves it to the
-restorable Trash and never destroys -- the Trash restores, and emptying it
-is the one verb that asks first.
+and the Trash), and the place's files as rows: each file's icon (by what it
+is), its name (a project's title) and its kind. No paths, and no extensions
+outside Downloads, whose files keep the whole names they arrived under (a
+beam from a console nearby lands there, runtime/run/link_beam.py) and show
+their type as their kind: one opens in the app that takes its type, as any
+file does, and nothing there runs. The handheld shows the places, then a
+place's files, one page at a time; the desk shows both. A file's verbs ride
+the page's foot, the one Enter does last: OPEN in the owning app (Enter, or
+a tap on the row, does the same), OPEN WITH (the "open with" menu of the apps
+whose manifest opens the file's type, runtime/system/intents.py, the one
+picked becoming the choice), RENAME in a dialog (Paint's open picture follows
+it, `artwork.follow`), DUPLICATE, WALLPAPER / USE IN GAME / USED IN for a
+drawing (`picture_copies.PictureCopies`), SEND to a console nearby where the
+console's radio link can come up (`intents.Intents.send`,
+runtime/run/link_beam.py), and DELETE, which moves it to the restorable
+Trash and never destroys -- the Trash restores, and emptying it is the one
+verb that asks first.
 
-Presented exactly like Paint: a `.moy` cartridge identity on the launcher
-(`moybyte.files.moy`) backed by a responsive SYSTEM process. Projects is a
-place beside the file kinds but never a store kind, because a project is a
-thing you edit and not a directory you browse; Themes are the store's theme
-packages, whose rows open the Appearance app.
+A `.moy` cartridge identity on the launcher (`moybyte.files.moy`) backed by
+a SYSTEM process. Projects is a place beside the file kinds but never a store
+kind, because a project is a thing you edit and not a directory you browse;
+Themes are the store's theme packages, whose rows open the Appearance app.
 """
 
-from array import array
-
-from layout_base import bar_rows, content_of, metric_class, DESK
+import uitree as ui
+import uitree_app
+from moy_store_base import builtin_name
 from picture_copies import PictureCopies
 from app_shell import ListShellApp
 import text_modes as _modes
-import ui
 import intents as _intents
 
 
@@ -62,8 +55,8 @@ MUSIC = "music"
 DOWNLOADS = "downloads"
 TRASH = "trash"
 
-# The places, in the sidebar's order: key, label, icon, and the store kinds
-# a place lists. The shared folders are named as on disk
+# The places, in the side's order: key, label, icon, and the store kinds a
+# place lists. The shared folders are named as on disk
 # (moy_store_base.SHARED_FOLDERS); THEMES shows once there are any; the rest
 # always do.
 PLACES = (
@@ -76,7 +69,7 @@ PLACES = (
     (TRASH, "Trash", "trash", ()),
 )
 
-# What a store kind's file is called in the Kind column, and its picture.
+# What a store kind's file is called as its kind, and its icon.
 KIND_OF = {
     "docs": ("Note", "notes"),
     "drawings": ("Drawing", "art"),
@@ -107,25 +100,11 @@ CART_KIND = {
     "theme": ("Theme", "wallpaper"),
 }
 
-# A verb's label at the foot, and its icon (a mouse's button names no key, so
-# Open is the open folder, never Enter's sign). The verb the current row's
-# Enter does, where its list has one, is the foot's primary, at its right.
-PRIMARY = ("OPEN", "RUN", "RESTORE")
-VERB = {
-    "OPEN": ("Open", "folder_open"),
-    "WITH": ("Open with\u2026", "app"),
-    "RUN": ("Run", "run"),
-    "PLAY": ("Play", "play"),
-    "NAME": ("Rename", "pencil"),
-    "COPY": ("Duplicate", "dup"),
-    "WALL": ("Wallpaper", "wallpaper"),
-    "GAME": ("Use in game", "game"),
-    "USE": ("Used in", "search"),
-    "SEND": ("Send", "export"),
-    "DEL": ("Delete", "del"),
-    "RESTORE": ("Restore", "back"),
-    "EMPTY": ("Empty", "trash"),
-}
+# A verb's row field (the current row offers it where true) and the action
+# that does it, in the foot's order: Enter's verb last.
+VERBS = (("WITH", "v_with"), ("NAME", "v_name"), ("COPY", "v_copy"), ("WALL", "v_wall"),
+         ("GAME", "v_game"), ("USE", "v_use"), ("SEND", "v_send"), ("DEL", "v_del"),
+         ("PLAY", "v_play"), ("RUN", "v_run"), ("RESTORE", "v_restore"), ("OPEN", "v_open"))
 
 
 def _cap(word):
@@ -135,8 +114,8 @@ def _cap(word):
 
 
 def kind_of(kind, name):
-    """What a `kind` file named `name` is called in the Kind column, and its
-    picture: a download's by its extension."""
+    """What a `kind` file named `name` is called as its kind, and its icon:
+    a download's by its extension."""
     if kind == DOWNLOADS:
         ext = _modes.ext_of(name)
         got = DOWNLOAD_KIND.get(ext)
@@ -162,95 +141,206 @@ def shown_name(folder):
     return name[dot + 1:] if dot >= 0 else name
 
 
-# The engine's table head and group caption heights (style.json's
-# `value_row` `head` and `group` `caption`, handheld then desk; held to it
-# by tests/test_files_app.py), which sit over a table's rows: the list's
-# peek reckons from under them.
-HEAD = (18, 34)
-CAPTION = (19, 26)
-# How far a list stands off a window's frame and off the divider between
-# the places and the files, at the font scale: a row's current mark (Blocks'
-# sliver at the row's left) never touches a rule (design review R3-25).
-MARK_CLEAR = 3
+def row_id(i):
+    """Row i's key in the files model: an index, so a name of any spelling
+    makes a stop id."""
+    return "r%d" % i
 
 
-class FilesLayout:
-    """Files' rects over the content rect: on the desk the places beside the
-    list, else one of them at a time; the verbs' band under the list."""
+# -- the page's state and actions ---------------------------------------------------
 
-    MIN_W = 310
-    MIN_H = 230
-    SIDE = 160           # the desk's places column (the targets')
-
-    def __init__(self, w, h, fs=1, windowed=False, cs=None):
-        self.w = int(w)
-        self.h = int(h)
-        self.fs = fs = max(1, int(fs))
-        self.cs = max(fs, int(cs)) if cs else fs
-        self.desk = metric_class() == DESK
-        self.windowed = bool(windowed)     # its page lies in a window's body
-        self.cx, self.cy, self.cw, self.ch = content_of(
-            self.w, self.h, 0 if windowed else bar_rows(self.cs))
-        # style.json's `row` stack: the engine's row height in this size class
-        self.row_h = (28 if self.desk else 20) * fs
-        self.two = self.desk and self.cw >= 400 * fs
-        content = (self.cx, self.cy, self.cw, self.ch)
-        clear = MARK_CLEAR * fs
-        lead = clear if self.windowed else 0      # off the window's frame
-        if self.two:
-            self.side, rest = ui.cut_left(content, self.SIDE * fs)
-            _rule, self.pane = ui.cut_left(rest, fs)
-            # the places' list: off the frame and off the divider at its right
-            sx, sy, sw, sh = self.side
-            self.side_list = (sx + lead, sy, sw - lead - clear, sh)
-            lead = clear                          # the files: off the divider
-        else:
-            self.side = self.pane = self.side_list = content
-        pad = 8 if self.desk else 4 * fs
-        self.foot, self.list = ui.cut_bottom(self.pane, self.row_h + 2 * pad)
-        x, y, w, h = self.list
-        self.list = (x + lead, y, w - lead, h)
-        self.pad = pad
-        # The list runs down to the verbs' rule and its rows' view ends well
-        # inside a row, on the desk as on the handheld: where rows run on,
-        # the last one shows in part under the table's fade, as a phone's
-        # list peeks its next row (the popovers' rule: a cut within a
-        # quarter row of a row's edge moves up to the row's middle). What
-        # that leaves over goes to the verbs' band, over its verbs, so its
-        # rule meets the list and no blank band lies between the two.
-        top = HEAD[self.desk] * fs + (0 if self.two else CAPTION[self.desk] * fs)
-        x, y, w, h = self.list
-        rh = self.row_h
-        cut = (h - top) % rh
-        if h > top + rh and not rh // 4 < cut < rh - rh // 4:
-            spare = (cut - rh // 2) % rh
-            self.list = (x, y, w, h - spare)
-            fx, fy, fw, fh = self.foot
-            self.foot = (fx, fy - spare, fw, fh + spare)
-        # the handheld's places page: the places over the keycap hints
-        self.hints, self.places = ui.cut_bottom(content, 20 * fs)
-        if self.windowed and not self.two:
-            x, y, w, h = self.places
-            self.places = (x + clear, y, w - clear, h)
+s = ui.state(
+    places=ui.model(key="id", id="", label="", icon="", count=""),
+    place=ui.row_of("places"),
+    files=ui.model(key="id", id="", name="", kind="", icon="", v_with=False, v_name=False,
+                   v_copy=False, v_wall=False, v_game=False, v_use=False, v_send=False, v_del=False,
+                   v_play=False, v_run=False, v_restore=False, v_open=False),
+    cur=ui.row_of("files"),
+    any=False,                      # the place lists a file
+    trashed=False,                  # the Trash holds something: Empty
+    in_trash=False,                 # the place is the Trash
+    caption="",                     # the place's name over a handheld's list
+    none_line="",                   # what an empty place says
+    view=ui.enum("places", "files", init="places"),     # what a handheld shows (the desk: both, "files")
+    status="",                      # what the last verb did, at the foot's start
+    asking=ui.enum("none", "rename", "empty", "game", "used", init="none"),
+    typed="",                       # the rename dialog's name
+    empty_line="",                  # the Trash's count, as emptying it says it
+    targets=ui.model(key="id", id="", title=""),        # Use in game's projects
+    target=ui.row_of("targets"),
+    uses=ui.model(key="id", id="", label="", note=""),  # Used in's copies
+    use=ui.row_of("uses"),
+)
+ui.app("Files", icon="folder_open", back="back")
 
 
-class FilesAppLayer(ListShellApp):
-    id = "files"
-    domain = "system"
-    TITLE = "Files"
-    APP_TITLE = "Files"
-    APP_PERM = "files"
-    APP_FOLDER = "moybyte.files.moy"
-    # The shell roles this app uses (runtime/shell/app_context.py). `nav` carries the
-    # app-to-app jumps the router takes (a drawing opens in Paint, a note on
-    # the text page, a project in the Editor) -- app_api_v1 called that a v1
-    # non-goal and it shipped anyway, because it is a real product need. WALL,
-    # GAME and USE copy a drawing into the backdrop and into a project
-    # (`carts`, `wallpaper`: runtime/apps/picture_copies.py), and `artwork` follows
-    # a renamed drawing Paint has open.
-    NEEDS = ("surface", "theme", "damage", "files", "nav", "artwork", "carts",
-             "wallpaper")
-    UI = True
+def _f():
+    return uitree_app.env()
+
+
+def opened():
+    _f()._opened()
+
+
+def pick_place(row):
+    _f().open_place(row.id, pick=True)
+
+
+def open_place(row):
+    _f().open_place(row.id, show=True)
+
+
+def back():
+    s.view = "places"
+    ui.focus(s.place + "/open_place")
+
+
+def open_row(row):
+    f = _f()
+    f._open_row(f.index(row.id))
+
+
+def _verb(verb):
+    def act(row):
+        f = _f()
+        f.cur = f.index(row.id)
+        f._act(verb)
+    return act
+
+
+def empty_trash():
+    _f()._act("EMPTY")
+
+
+def del_key(c):
+    _f()._act("DEL")
+
+
+def rename_it():
+    _f()._rename_commit()
+
+
+def empty_it():
+    _f()._empty_trash()
+
+
+def add(row):
+    f = _f()
+    f._game_pick(int(row.id))
+
+
+def resend(row):
+    _f()._resend(int(row.id))
+
+
+def cancel():
+    _f()._close_dialog()
+
+
+ui.hook("opened", opened)
+ui.action("back", "Back", back, when="!@desk && view=files", off="hide")
+ui.action("pick_place", "Show", pick_place, takes="row", hint="")
+ui.action("open_place", "Open", open_place, takes="row")
+ui.action("open", "Open", open_row, takes="row")
+_LABELS = {"WITH": "Open with…", "NAME": "Rename", "COPY": "Duplicate", "WALL": "Wallpaper",
+           "GAME": "Use in game", "USE": "Used in", "SEND": "Send", "DEL": "Delete", "PLAY": "Play",
+           "RUN": "Run", "RESTORE": "Restore", "OPEN": "Open"}
+for _v, _field in VERBS:
+    ui.action(_field, _LABELS[_v], _verb(_v), takes="row", row="cur", when="cur." + _field, off="hide")
+ui.action("empty", "Empty", empty_trash, when="in_trash && trashed", off="hide")
+ui.action("del_key", "Delete", del_key, takes="char", chars="\b\x7f",
+          when="view=files && cur.v_del && asking=none", off="hide")
+ui.action("cancel", "Cancel", cancel)
+ui.action("rename_it", "Rename", rename_it)
+ui.action("empty_it", "Empty", empty_it)
+ui.action("add", "Add", add, takes="row", row="target", off="hide")
+ui.action("close_used", "Close", cancel)
+ui.action("resend", "Send again", resend, takes="row", row="use", off="hide")
+
+# Each verb's icon at the foot, and its button's kind.
+_ICONS = {"WITH": "app", "NAME": "pencil", "COPY": "dup", "WALL": "wallpaper", "GAME": "game",
+          "USE": "search", "SEND": "export", "DEL": "del", "PLAY": "play", "RUN": "run",
+          "RESTORE": "back", "OPEN": "folder_open"}
+_KINDS = {"DEL": "danger", "RESTORE": "primary", "OPEN": "primary"}
+
+
+def _places():
+    with ui.scroll("side"):
+        with ui.rows("places", cur="place", changed="pick_place"):
+            ui.link("open_place", "{.count}", icon="{.icon}", label="{.label}")
+
+
+def _list():
+    with ui.scroll("list"):
+        with ui.rows("files", cur="cur"):
+            ui.link("open", "{.kind}", icon="{.icon}", label="{.name}")
+    ui.label("{none_line}", tone="dim", shown="!any")
+
+
+def _hand_list():
+    ui.label("{caption}", tone="dim", face="caption")
+    _list()
+
+
+def files_page():
+    with ui.page(""):
+        with ui.split("row", sizes=(160, "1*"), shown="@desk"):
+            with ui.group(""):
+                _places()
+            with ui.group(""):
+                _list()
+        ui.switch("view", {"places": _places, "files": _hand_list}, shown="!@desk")
+        with ui.foot(look="share", shown="view=files"):
+            ui.label("{status}", tone="dim")
+            for v, field in VERBS:
+                if v == "OPEN":
+                    ui.button("empty", "danger", icon="trash")
+                ui.button(field, _KINDS.get(v, "normal"), icon=_ICONS[v])
+        with ui.dialog("Rename", ["cancel", "rename_it"], shown="asking=rename"):
+            ui.field("Name", "typed", ListShellApp.RENAME_MAX, on="rename_it")
+        with ui.dialog("Empty the Trash?", ["cancel", "empty_it"], kind="danger", shown="asking=empty"):
+            ui.label("{empty_line}", wrap="word")
+        with ui.dialog("Use in a game", ["cancel", "add"], shown="asking=game"):
+            with ui.rows("targets", cur="target"):
+                ui.link("add", icon="game", label="{.title}")
+        with ui.dialog("Used in", ["close_used", "resend"], shown="asking=used"):
+            with ui.rows("uses", cur="use", empty="Not used yet."):
+                ui.link("resend", "{.note}", icon="game", label="{.label}")
+
+
+def is_app(cart):
+    """True only for the shipped Files identity, not a renamed or copied
+    cart."""
+    if (not cart or cart.get("title") != "Files"
+            or "files" not in (cart.get("permissions") or ())):
+        return False
+    path = cart.get("path")
+    if not path:                 # embedded fallback cart (no writable store)
+        return int(cart.get("version", 0)) >= 1
+    return builtin_name(path) == "moybyte.files.moy"
+
+
+def _inside(fn):
+    """A method that writes the page's state: run in a handler's run, or in
+    one of its own when the console asks (a test, the router)."""
+    def run(self, *args, **kw):
+        return self._in(lambda: fn(self, *args, **kw))
+    return run
+
+
+# The shell roles this app uses (runtime/shell/app_context.py). `nav` carries
+# the app-to-app jumps the router takes (a drawing opens in Paint, a note on
+# the text page, a project in the Editor). WALL, GAME and USE copy a drawing
+# into the backdrop and into a project (`carts`, `wallpaper`:
+# runtime/apps/picture_copies.py), and `artwork` follows a renamed drawing
+# Paint has open.
+NEEDS = ("files", "nav", "artwork", "carts", "wallpaper")
+
+
+class FilesAppLayer(uitree_app.app_layer("files", "Files", files_page, is_app, needs=NEEDS),
+                    ListShellApp):
+    """The Files app: the page's engine, and what its handlers ask of the
+    console (the store, the router, the verbs)."""
 
     PICTURE_ACTIONS = ("OPEN", "WITH", "NAME", "COPY", "WALL", "GAME", "USE", "DEL")
     DOC_ACTIONS = ("OPEN", "WITH", "NAME", "COPY", "DEL")   # the kinds the router opens
@@ -264,61 +354,99 @@ class FilesAppLayer(ListShellApp):
     DOWNLOAD_ACTIONS = ("OPEN", "WITH", "DEL")
     PROJECT_ACTIONS = ("OPEN", "PLAY")
     THEME_ACTIONS = ("OPEN",)
-    TRASH_ACTIONS = ("RESTORE", "EMPTY")
+    TRASH_ACTIONS = ("RESTORE",)
     # The kinds a row's SEND offers to a console nearby where this console
     # can beam (runtime/run/link_beam.py): a project as its cart, a file as
     # it is; recordings and stories are folders, which a beam does not carry.
     SEND_KINDS = (PROJECTS, "docs", "drawings", "sprites", "music", "downloads")
 
-    def __init__(self, ctx, names):
-        self.ctx = ctx
-        # Roles bound ONCE (the hoist mandate, ui_refactor_2026-08 Section 2.4).
-        self._surf = ctx.surface
-        self._theme = ctx.theme
-        self._damage = ctx.damage
+    def __init__(self, ctx, names=None):
+        super().__init__(ctx, names)
+        self.engine.env = self
         self._store = ctx.files       # ListShellApp's storage role
         self._nav = ctx.nav
         self._art = ctx.artwork
         self._carts = ctx.carts
-        self._ui = ctx.ui
         self._copies = PictureCopies(ctx)
         self.names = names
-        cv = ctx.surface.canvas()
-        self.layout = FilesLayout(cv.w, cv.h, self._surf.font_scale(),
-                                  self._surf.windowed(),
-                                  self._surf.chrome_scale())
-        self.place = PROJECTS
-        self.level = "places"         # the handheld's page: places | files
         self.rows = ()                # (name, kind, kind label, icon, cart) per row
-        self.cur = -1                 # the current row
         self.counts = {}
         self.trash = ()
-        self.status = ""
         self._save_failed = False
-        self.dialog = None
-        self.rename_text = ""
-        self.project_names = ()       # GAME's targets
-        self.target = -1
+        self.project_names = ()       # Use in game's targets
         self.used_rows = ()           # provenance "used in:" rows (#108 phase 2)
         self.used_name = None
-        self.used_cur = -1
-        self._focus = None            # the id focus moves to on the next frame
-        self._focused = None          # the focused id as the last frame left it
-        # The lists' override tables and what their gens were moved for
-        # (docs/history/scroll_and_text_2026-10.md §3.3): a gen moves exactly when
-        # what its list draws does, so a frame that only scrolls or steps
-        # moves the last frame's rows.
-        self._files_o = {"id": "files", "gen": 0}
-        self._files_k = None          # (rows, label, the covers' gen) the gen was moved for
-        self._cells = None            # (rows, the table's cells)
-        self._places_o = {"id": "Places", "gen": 0}
-        self._side_o = {"gen": 0}
-        self._places_k = None         # the places' cells (and current, in the side column)
-        self._clip = array("i", [0, 0, 0, 0])   # a cover's clip (`ui.card_clip`)
-        self._drawn = None            # the rows the list drew in the pass under way
 
-    def relayout(self, w, h, fs, cs=None):
-        self.layout = FilesLayout(w, h, fs, self._surf.windowed(), cs)
+    # -- the page's state, read and written from the console's side -------------
+
+    def _in(self, fn, *args):
+        """`fn` run where the page's state may be written: a handler's run,
+        or one of its own when the console asks (a test, the router)."""
+        e = self.engine
+        if ui._NOW.app is e:
+            return fn(*args)
+        got = e.run(fn, *args, action="console")
+        ui.commit(e)
+        self._damage.all()
+        return got
+
+    def _get(self, name):
+        self.engine._bind()
+        return self.engine.s._v[name]
+
+    def _put(self, name, value):
+        self._in(setattr, s, name, value)
+
+    @property
+    def place(self):
+        return self._get("place") or PROJECTS
+
+    @property
+    def level(self):
+        """The handheld's page: places | files."""
+        return self._get("view")
+
+    @level.setter
+    def level(self, v):
+        self._put("view", v)
+
+    @property
+    def cur(self):
+        r = self._get("cur")
+        return int(r[1:]) if r else -1
+
+    @cur.setter
+    def cur(self, i):
+        self._put("cur", row_id(i) if 0 <= i < len(self.rows) else "")
+
+    @property
+    def dialog(self):
+        """None | rename | empty | game | used: the dialog that is up."""
+        d = self._get("asking")
+        return None if d == "none" else d
+
+    @dialog.setter
+    def dialog(self, d):
+        self._put("asking", d or "none")
+
+    @property
+    def status(self):
+        return self._get("status")
+
+    @status.setter
+    def status(self, v):
+        self._put("status", v)
+
+    @property
+    def rename_text(self):
+        return self._get("typed")
+
+    @rename_text.setter
+    def rename_text(self, v):
+        self._put("typed", v)
+
+    def index(self, rid):
+        return int(rid[1:]) if rid else -1
 
     # -- store ----------------------------------------------------------------
 
@@ -335,6 +463,13 @@ class FilesAppLayer(ListShellApp):
         counts[THEMES] = len(self._themes())
         counts[TRASH] = len(self.trash)
         self.counts = counts
+        self._show_places()
+
+    @_inside
+    def _show_places(self):
+        s.places = [{"id": p[0], "label": p[1], "icon": p[2], "count": str(self._count(p[0]))}
+                    for p in self.shown_places()]
+        s.trashed = bool(self.trash)
 
     def _themes(self):
         """The store's theme packages, by folder."""
@@ -350,7 +485,7 @@ class FilesAppLayer(ListShellApp):
         return 0
 
     def shown_places(self):
-        """The places the sidebar shows: THEMES once there are any."""
+        """The places the side shows: THEMES once there are any."""
         return tuple(p for p in PLACES if p[0] != THEMES or self.counts.get(THEMES))
 
     def _list(self, key):
@@ -358,12 +493,11 @@ class FilesAppLayer(ListShellApp):
         out = []
         if key == PROJECTS:
             for cart in self._nav.projects():
-                label, _icon = CART_KIND.get(cart.get("type") or "game",
-                                             (_cap(cart.get("type") or "cart"), "game"))
-                # its title, as the home names it; its picture is its cover,
-                # which the list draws itself (`_covers`)
+                label, icon = CART_KIND.get(cart.get("type") or "game",
+                                            (_cap(cart.get("type") or "cart"), "game"))
+                # its title, as the home names it
                 name = cart.get("title") or shown_name(_folder_of(cart))
-                out.append((name, PROJECTS, label, "", cart))
+                out.append((name, PROJECTS, label, icon, cart))
         elif key == THEMES:
             for folder in self._themes():
                 out.append((shown_name(folder), THEMES, "Theme", "wallpaper", folder))
@@ -388,25 +522,56 @@ class FilesAppLayer(ListShellApp):
         return tuple(out)
 
     def open(self):
-        self.dialog = None
-        self.level = "places"
+        self.engine.open()
+        self._damage.all()
+
+    def _opened(self):
+        s.asking = "none"
+        s.view = "files" if metric_desk() else "places"
+        s.status = ""
         self._refresh_counts()
         self.open_place(self.place)
-        self._ui.reset()
-        self._focus = "files" if self.rows else "Places"
-        self._damage.all()
+        if self.rows and metric_desk():
+            ui.focus(row_id(0) + "/open")
+        else:
+            ui.focus(self.place + "/open_place")
 
     # -- the place and its rows ---------------------------------------------------
 
-    def open_place(self, key, keep=None):
+    @_inside
+    def open_place(self, key, keep=None, show=False, pick=False):
         """Show place `key`: its rows listed once (never per frame), the row
-        named `keep` current, else the first."""
-        self.place = key
+        named `keep` current, else the first; `show` (a place opened) turns a
+        handheld to its files, `pick` (the focus moved onto it) leaves the
+        focus where it is."""
         self.rows = self._list(key)
-        self.cur = 0 if self.rows else -1
+        s.place = key
+        send = _intents.INTENTS.can_send()
+        s.files = [self._model_row(i, r, key, send) for i, r in enumerate(self.rows)]
+        s.any = bool(self.rows)
+        s.in_trash = key == TRASH
+        s.none_line = "The Trash is empty" if key == TRASH else "Nothing here yet"
+        for p in PLACES:
+            if p[0] == key:
+                s.caption = p[1]
+        first = row_id(0) if self.rows else ""
+        if not pick and s.cur != first:     # a write moves the focus onto the row
+            s.cur = first
+        elif pick and self.index(s.cur) >= len(self.rows):
+            s.cur = ""                      # a place picked on the desk keeps the focus on the places
         if keep is not None:
             self.select(keep)
-        self._damage.all()
+        if show:
+            s.view = "files"
+            if self.rows:
+                ui.focus(s.cur + "/open")
+
+    def _model_row(self, i, r, place, send):
+        labels = self._labels(place, r[1], r[0], send)
+        row = {"id": row_id(i), "name": r[0], "kind": r[2], "icon": r[3]}
+        for v, field in VERBS:
+            row[field] = v in labels
+        return row
 
     def _refresh(self, keep=None):
         self._refresh_counts()
@@ -418,14 +583,16 @@ class FilesAppLayer(ListShellApp):
 
     def select(self, name):
         """Make the row named `name` current (None: none)."""
-        self.cur = -1
-        for i, r in enumerate(self.rows):
+        i = -1
+        for j, r in enumerate(self.rows):
             if r[0] == name:
-                self.cur = i
+                i = j
                 break
+        self.cur = i
 
     def _row(self):
-        return self.rows[self.cur] if 0 <= self.cur < len(self.rows) else None
+        cur = self.cur
+        return self.rows[cur] if 0 <= cur < len(self.rows) else None
 
     def sel_name(self):
         r = self._row()
@@ -436,29 +603,34 @@ class FilesAppLayer(ListShellApp):
         return r[1] if r is not None else None
 
     def _action_labels(self):
-        """The verbs the current row takes (a place's when none is current),
-        SEND before DELETE where the row can be sent."""
-        labels = self._row_labels()
-        if self.sel_kind() in self.SEND_KINDS and _intents.INTENTS.can_send():
+        """The verbs the current row takes, SEND before DELETE where the row
+        can be sent."""
+        r = self._row()
+        if r is None:
+            return ()
+        return self._labels(self.place, r[1], r[0], _intents.INTENTS.can_send())
+
+    def _labels(self, place, kind, name, send):
+        labels = self._row_labels(place, kind, name)
+        if send and kind in self.SEND_KINDS:
             if labels[-1:] == ("DEL",):
                 return labels[:-1] + ("SEND", "DEL")
             return labels + ("SEND",)
         return labels
 
-    def _row_labels(self):
-        if self.place == PROJECTS:
+    def _row_labels(self, place, kind, name):
+        if place == PROJECTS:
             return self.PROJECT_ACTIONS
-        if self.place == THEMES:
+        if place == THEMES:
             return self.THEME_ACTIONS
-        if self.place == TRASH:
+        if place == TRASH:
             return self.TRASH_ACTIONS
-        kind = self.sel_kind()
         if kind == DOWNLOADS:
             return self.DOWNLOAD_ACTIONS
         if kind == "drawings":
             return self.PICTURE_ACTIONS
         if kind == "docs":
-            if _modes.is_script(self.sel_name() or ""):
+            if _modes.is_script(name or ""):
                 return self.SCRIPT_ACTIONS
             return self.DOC_ACTIONS
         return self.PLAIN_ACTIONS
@@ -577,6 +749,7 @@ class FilesAppLayer(ListShellApp):
         """The open gesture on row i: its door, or the Trash's restore."""
         if not 0 <= i < len(self.rows):
             return
+        self.cur = i
         name, kind, _label, _icon, cart = self.rows[i]
         if self.place == TRASH:
             self._restore(i)
@@ -589,6 +762,7 @@ class FilesAppLayer(ListShellApp):
 
     # -- the verbs --------------------------------------------------------------
 
+    @_inside
     def _act(self, verb, name=None):
         """Verb `verb` on the current row (`name`, where given, made current)."""
         if name is not None:
@@ -597,8 +771,9 @@ class FilesAppLayer(ListShellApp):
         art = self._copies
         if verb == "EMPTY":
             if self.trash:
-                self.dialog = "empty"
-            self._damage.all()
+                s.empty_line = "%d %s deleted for good." % (
+                    len(self.trash), "item is" if len(self.trash) == 1 else "items are")
+                s.asking = "empty"
             return
         if row is None:
             return
@@ -625,8 +800,9 @@ class FilesAppLayer(ListShellApp):
         elif verb == "RESTORE":
             self._restore(self.cur)
         elif verb == "NAME":
-            self.rename_text = name[:self.RENAME_MAX]
-            self.dialog = "rename"
+            s.typed = name[:self.RENAME_MAX]
+            s.asking = "rename"
+            ui.focus("typed")
         elif verb == "COPY":
             res = self._store.duplicate(kind, name)
             if self._persist(res):
@@ -637,39 +813,46 @@ class FilesAppLayer(ListShellApp):
                 (art.last_error or "Can't set")
         elif verb == "GAME":
             self.project_names = art.targets()
-            self.target = 0 if self.project_names else -1
-            self.dialog = "game"
+            s.targets = [{"id": str(i), "title": n} for i, n in enumerate(self.project_names)]
+            s.target = "0" if self.project_names else ""
+            s.asking = "game"
         elif verb == "USE":
             # Provenance "used in:" list (#108 phase 2): the wallpaper and
             # every project background copied from this drawing, stale copies
             # flagged.
             self.used_name = name
-            self.used_rows = tuple(art.usage(name))
-            self.used_cur = 0 if self.used_rows else -1
-            self.dialog = "used"
+            self._uses()
+            s.use = "0" if self.used_rows else ""
+            s.asking = "used"
         elif verb == "DEL":
             if self._persist(self._store.delete(kind, name)):
                 self.status = "Moved to the Trash"
                 cur = self.cur
                 self._refresh()
                 self.cur = min(cur, len(self.rows) - 1)
-        self._damage.all()
 
+    def _uses(self):
+        self.used_rows = tuple(self._copies.usage(self.used_name))
+        s.uses = [{"id": str(i), "label": r["label"], "note": "Changed" if r.get("stale") else ""}
+                  for i, r in enumerate(self.used_rows)]
+
+    @_inside
     def _rename_commit(self):
         row = self._row()
-        self.dialog = None
-        if row is not None and self.rename_text.strip():
+        text = s.typed
+        s.asking = "none"
+        if row is not None and text.strip():
             name, kind = row[0], row[1]
-            res = self._store.rename(kind, name, self.rename_text)
+            res = self._store.rename(kind, name, text)
             if self._persist(res):
                 new = res[0] or name
                 # A renamed open drawing keeps Paint pointed at it.
                 self._art.follow(kind, name, new)
                 self.status = "Renamed"
                 self._refresh(keep=new)
-        self._focus = "files"
-        self._damage.all()
+        self._focus_cur()
 
+    @_inside
     def _restore(self, index):
         try:
             name, kind = self.rows[index][0], self.rows[index][1]
@@ -679,13 +862,15 @@ class FilesAppLayer(ListShellApp):
             self.status = "Restored " + name
             self._refresh()
 
+    @_inside
     def _empty_trash(self):
-        self.dialog = None
+        s.asking = "none"
         if self._persist(self._store.empty_trash()):
             self.status = "The Trash is empty"
         self._refresh()
-        self._focus = "files"
+        self._focus_cur()
 
+    @_inside
     def _resend(self, i):
         """Re-copy the drawing to one usage row -- the one-tap UPDATE / send-
         again (#108 phase 2). Stays in the list, re-scanned so the mark clears."""
@@ -696,296 +881,28 @@ class FilesAppLayer(ListShellApp):
                 self.status = "Sent to " + row["label"]
             else:
                 self.status = art.last_error or "Can't send"
-            self.used_rows = tuple(art.usage(self.used_name))
-        self._damage.all()
+            self._uses()
 
+    @_inside
     def _game_pick(self, i):
         art = self._copies
         name = self.sel_name()
-        self.dialog = None
+        s.asking = "none"
         if 0 <= i < len(self.project_names) and name:
             title = art.attach(i, name)
             self.status = ("Added to " + title) if title else \
                 (art.last_error or "Can't add")
-        self._focus = "files"
-        self._damage.all()
+        self._focus_cur()
 
-    @property
-    def dialog(self):
-        """None | rename | empty | game | used: the dialog that is up."""
-        return self._up
-
-    @dialog.setter
-    def dialog(self, d):
-        self._up = d
-
+    @_inside
     def _close_dialog(self):
-        self.dialog = None
-        self._focus = "files"
-        self._damage.all()
+        s.asking = "none"
+        self._focus_cur()
 
-    # -- input ----------------------------------------------------------------
+    def _focus_cur(self):
+        ui.focus(s.cur + "/open" if s.cur else s.place + "/open_place")
 
-    def handle_input(self, inp):
-        if getattr(inp, "typed", 0) in (8, 127) and self.dialog is None \
-                and self._focused == "files" and self._row() is not None \
-                and "DEL" in self._action_labels():
-            self._act("DEL")
-        if inp.pressed("b"):
-            self.back()
-        if self._ui.keys(inp):
-            self._damage.all()
-        return True
 
-    def has_page(self):
-        """Whether a page of the app is open, which `back` steps out of: a
-        dialog, or a folder's list where one column shows it alone."""
-        return self.dialog is not None or (not self.layout.two and self.level == "files")
-
-    def back(self):
-        """Back one level (B, Esc, the bar's chevron): a dialog closes, a
-        one-column list goes back to the places. False on the places: the
-        host leaves the app."""
-        if not self.has_page():
-            return False
-        if self.dialog is not None:
-            self._close_dialog()
-        else:
-            self.level = "places"
-            self._focus = "Places"
-        self._damage.all()
-        return True
-
-    def handle_pointer(self, px, py, click):
-        if self._ui.point(px, py, click):
-            self._damage.all()
-        return True
-
-    # -- draw -----------------------------------------------------------------
-
-    def draw(self, dt):
-        cv = self._surf.canvas()
-        lay = self.layout
-        th = self._theme.colors()
-        self._ui.begin(cv, th, (0, 0, cv.w, cv.h), lay.desk, lay.windowed)
-        level, dialog = self.level, self.dialog
-        self._drawn = None            # the rows the list drew this pass
-        ui.page("")                   # the ground under the bar's band too
-        if self._focus is not None:
-            ui.focus(self._focus)
-            self._focus = None
-        if lay.two:
-            got = self._places_rows()
-            ui.at(*lay.side_list)
-            ui.scroll("side", self._side_o)
-            self._places(*got)
-            ui.scroll()
-            x, y, w, h = lay.side
-            cv.rect(x + w, y, lay.fs, h, th["border"])
-            self._files(cv, th)
-        elif self.level == "places":
-            self._places(*self._places_rows())
-        else:
-            self._files(cv, th)
-        self._dialog()
-        self._focused = ui.focus()
-        if (self.level != level or self.dialog != dialog
-                or (self._drawn is not None and self.rows is not self._drawn)):
-            self._ui.again()          # an answer changed what the page drew before it
-
-    def _places_rows(self):
-        """The places as the frame shows them: their keys, the current
-        one's index and the table's cells; the places' gen moved where the
-        cells (and on the desk the current place) differ from the last
-        frame's."""
-        two = self.layout.two
-        shown = self.shown_places()
-        keys = [p[0] for p in shown]
-        at = keys.index(self.place) if self.place in keys else 0
-        if two:
-            rows = [(p[2], p[1]) for p in shown]
-            k = (rows, at)
-        else:
-            rows = [(p[2], p[1], str(self._count(p[0]))) for p in shown]
-            k = rows
-        if k != self._places_k:
-            self._places_k = k
-            self._side_o["gen"] += 1
-            self._places_o["gen"] += 1
-        return keys, at, rows
-
-    def _places(self, keys, at, rows):
-        """The places: a column on the desk, a page of their own else."""
-        lay = self.layout
-        if lay.two:
-            cur, opened = ui.table("Places", ("", ""), rows, at)
-        else:
-            ui.at(*lay.hints)
-            ui.hints(("confirm", "Open"))
-            ui.at(*lay.places)
-            cur, opened = ui.table("", ("", "", ""), rows, at, self._places_o)
-        if cur != at and 0 <= cur < len(keys):
-            self.open_place(keys[cur])
-            if not lay.two and not ui.keys_taken():
-                opened = True             # a tap on a place opens it
-        if opened and not lay.two:
-            self.level = "files"
-            self._focus = "files"
-
-    def _files(self, cv, th):
-        lay = self.layout
-        label = ""
-        if not lay.two:
-            for p in PLACES:
-                if p[0] == self.place:
-                    label = p[1]
-        ui.at(*lay.list)
-        cols = ("", "Name", "Kind")
-        c = self._cells
-        if c is None or c[0] is not self.rows:
-            c = self._cells = (self.rows, [(r[3], r[0], r[2]) for r in self.rows])
-        rows = c[1]
-        # the list's gen: its rows, its caption and, where rows draw covers,
-        # every cover the cache holds
-        cg = self._nav.cover_gen() if self.place == PROJECTS else 0
-        k = self._files_k
-        if k is None or k[0] is not self.rows or k[1] != label or k[2] != cg:
-            self._files_k = (self.rows, label, cg)
-            self._files_o["gen"] += 1
-        self._drawn = self.rows
-        cur, opened = ui.table(label, cols, rows, self.cur, self._files_o)
-        self.cur = cur
-        if self.place == PROJECTS:
-            self._covers(cv)
-        if not self.rows:
-            x, y, w, h = lay.list
-            ui.at(x, y + 2 * lay.row_h, w, lay.row_h)
-            ui.label("The Trash is empty" if self.place == TRASH else "Nothing here yet")
-        if opened:
-            self._open_row(cur)
-        self._foot(cv, th)
-
-    def _covers(self, cv):
-        """Each project row's picture over its cell: the cart's cover, else
-        its generated one (its initial on its colour block), as its card on
-        the home shows it."""
-        got = ui.table_rows()
-        if got is None:
-            return
-        y0, rh, view, px, side = got
-        vx, vy, vw, vh = view
-        r = side // 4
-        due = False
-        k = self._clip
-        for i in range(len(self.rows)):
-            y = y0 + i * rh + (rh - side) // 2
-            if y + side <= vy or y >= vy + vh:
-                continue
-            # a row half out of the view is cut; on a shift frame a row the
-            # floor does not reach is drawn by the move
-            k[0] = px
-            k[1] = y if y > vy else vy
-            k[2] = side
-            k[3] = (y + side if y + side < vy + vh else vy + vh) - k[1]
-            ui.card_clip(k)
-            if k[2] <= 0 or k[3] <= 0:
-                continue
-            cv.clip(k[0], k[1], k[2], k[3])
-            cart = self.rows[i][4]
-            cover = self._nav.cover(cart)
-            if cover:
-                cv.cover(cover.pix, cover.w, 0, 0, cover.w, cover.h, px, y, side, side, r,
-                         False)
-            else:
-                due = due or cover is False    # its decode lands over the next frames
-                ui.initial((px, y, side, side), cart.get("title") or self.rows[i][0], r)
-            cv.clip()
-        ui.table_pictures()                    # the cut row's cover fades with it
-        if due:
-            self._damage.all()
-
-    def _foot(self, cv, th):
-        """The foot bar under the list, a rule over it: the status at its
-        left, the current row's verbs as buttons at its right, the primary
-        (the verb Enter does) last."""
-        lay = self.layout
-        fs = lay.fs
-        fx, fy, fw, fh = lay.foot
-        cv.rect(fx, fy, fw, fs, th["border"])
-        # the verbs a row tall, at the band's foot: what the list's peek
-        # leaves over lies above them
-        x, y, w, h = ui.inset((fx, fy + fh - lay.row_h - 2 * lay.pad, fw,
-                               lay.row_h + 2 * lay.pad), lay.pad, lay.pad)
-        verbs = self._action_labels()
-        if verbs and verbs[0] in PRIMARY:
-            verbs = verbs[1:] + verbs[:1]
-        none = self._row() is None
-        gap = 6 if lay.desk else 3 * fs
-        side = 16 * fs
-        pad = (12 if lay.desk else 6 * fs)
-        widths = [ui.text_size(VERB[v][0] if ui.has_symbols()
-                               else VERB[v][0].replace("\u2026", "..."))[0]
-                  + side + 2 * fs + 2 * pad for v in verbs]
-        labelled = sum(widths) + gap * (len(verbs) - 1) <= w
-        if not labelled:
-            widths = [side + 2 * pad for _v in verbs]
-        bx = x + w - (sum(widths) + gap * (len(verbs) - 1))
-        if self.status and bx - gap > x:
-            ui.at(x, y, bx - gap - x, h)
-            ui.label(self.status)
-        for i, v in enumerate(verbs):
-            label, icon = VERB[v]
-            if not ui.has_symbols():
-                label = label.replace("\u2026", "...")
-            o = {"id": "verb " + v}
-            if none and v != "EMPTY" or (v == "EMPTY" and not self.trash):
-                o["disabled"] = True
-            kind = "danger" if v in ("DEL", "EMPTY") else \
-                "primary" if v in PRIMARY else "normal"
-            ui.at(bx, y, widths[i], h)
-            ui.icon(icon)
-            if ui.button(label if labelled else "", kind, o):
-                self._act(v)
-            bx += widths[i] + gap
-
-    def _dialog(self):
-        d = self.dialog
-        if d == "rename":
-            pick = ui.dialog("Rename", ("Cancel", "Rename"))
-            self.rename_text, done = ui.field("Name", self.rename_text, self.RENAME_MAX)
-            ui.dialog()
-            if pick == 1 or done:
-                self._rename_commit()
-            elif pick == 0:
-                self._close_dialog()
-        elif d == "empty":
-            pick = ui.dialog("Empty the Trash?", ("Cancel", "Empty"), "danger")
-            n = len(self.trash)
-            ui.label("%d %s deleted for good." % (n, "item is" if n == 1 else "items are"))
-            ui.dialog()
-            if pick == 1:
-                self._empty_trash()
-            elif pick == 0:
-                self._close_dialog()
-        elif d == "game":
-            pick = ui.dialog("Use in a game", ("Cancel", "Add"))
-            rows = [("game", n) for n in self.project_names]
-            self.target, opened = ui.table("", ("", ""), rows, self.target, {"id": "targets"})
-            ui.dialog()
-            if pick == 1 or opened:
-                self._game_pick(self.target)
-            elif pick == 0:
-                self._close_dialog()
-        elif d == "used":
-            pick = ui.dialog("Used in", ("Close", "Send again"))
-            if not self.used_rows:
-                ui.label("Not used yet.")
-            rows = [("game", r["label"], "Changed" if r.get("stale") else "")
-                    for r in self.used_rows]
-            self.used_cur, opened = ui.table("", ("", "", ""), rows, self.used_cur,
-                                             {"id": "uses"})
-            ui.dialog()
-            if pick == 1 or opened:
-                self._resend(self.used_cur)
-            elif pick == 0:
-                self._close_dialog()
+def metric_desk():
+    from layout_base import metric_class, DESK
+    return metric_class() == DESK

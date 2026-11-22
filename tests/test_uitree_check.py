@@ -53,6 +53,7 @@ PORTED = (
     "uitree_grid",
     "uitree_model_row",
     "calc_app",
+    "files_app",
     "terminal_app",
     "text_console",
 )
