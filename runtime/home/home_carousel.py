@@ -3,7 +3,8 @@
 #   Carousel._geom              its geometry: the handheld's row or the desk's hero and shelf
 #   Carousel.anim_frame         the fling, the glide to the centre, the settle
 #   Carousel.pointer_frame      one pointer sample over the row
-#   Carousel.band_pass          the row as a table of parts side by side, the wallpaper around the cards
+#   Carousel.band_pass          the row: the handheld's the engine's carousel, the desk's shelf a table of parts
+#   Carousel.band_put           the handheld band's cards as its page's rows
 #   Carousel._paint_details     the desk's hero and its details
 """The home's CAROUSEL (docs/theme_and_shell_2026-11.md §8.10): the `carousel`
 arrangement, the default (the layout's `home`), and the home window's,
@@ -14,6 +15,8 @@ shelf of one-size cards. A `Launcher` (home_grid.py): the same selection
 model, its own geometry, motion and draw. Its instances are ws.launcher in
 the `carousel` arrangement and ws.projects_grid.
 """
+
+from array import array
 
 import ui as _ui
 import ui_draw as _ui_draw
@@ -26,6 +29,11 @@ from home_grid import (_clean_side, _COVER_BASE, _COVER_SIDE, desk_button_span,
                        _PART_COL, PSEUDO_TILE_TYPES, SHELF_GAP, _TAB_NAME, text_scale)
 
 _G_PASS = [None, None]   # the row a band pass runs on and its geometry (`_geom`)
+
+# The words the handheld band's page draws its carousel under (moy_uitree.h's uit_drive)
+_DRIVE_MARK, _DRIVE_NOTE, _DRIVE_GROUND, _DRIVE_ALL = 1, 2, 4, 8
+# ...and what its ground hook is handed (uit_on_ground)
+_GROUND_FLOOR, _GROUND_PUT, _GROUND_COPY, _GROUND_END = 0, 1, 2, 3
 _PK = [None, None]       # the row whose paint key was answered last, and the key (`paint_key`)
 
 
@@ -48,7 +56,11 @@ class Carousel(Launcher):
     The cards lie on the home's wallpaper, so a moving frame cannot shift the
     band's pixels (the wallpaper would slide with them): it restores the
     wallpaper around the cards from the band's capture
-    (`LauncherHomeLayer._backdrop_fill`) and paints the cards over it."""
+    (`LauncherHomeLayer._backdrop_fill`) and paints the cards over it. On
+    the handheld the band is the engine's carousel (`ui.cards(look=
+    "carousel")`, `home_ui.band`) on the band's host, which this class
+    drives: its scroll, its motion, the key its tiles are kept under, its
+    ground and its cards' pictures are the home's (`_hh_pass`)."""
 
     arrangement = "carousel"
     verb_sets = _DESK_VERB_SETS     # the buttons its desk pane keeps rows for
@@ -65,7 +77,13 @@ class Carousel(Launcher):
         self.own_for = None           # optional cart -> bool (ws.carts.is_own)
         self.plays_for = None         # optional cart -> its play record (ws.carts.plays)
         self.today_for = None         # optional () -> today as YYYYMMDD, 0 unknown
-        self._cap = None              # the caption laid out: (card, layout, parts)
+        self._bpage = None            # the handheld band's page (`_band_page`)
+        self._dw = array("i", [0] * 11)     # the words it is driven by (`_hh_pass`)
+        self._put = None              # what its rows were put from: (items, their play records)
+        self._pic_ix = {}             # a card's picture name -> its item
+        self._gcv = None              # the canvas a handheld pass draws on
+        self._fill = None             # ...and the ground it puts back
+        self._end = 0                 # ...and its floor's end
         self.wall_ink = None          # (white, black) over a wallpaper (_wall_ink)
         self._quiet_for = None        # the geometry `quiet` was computed for
         self._quiet_q = ()
@@ -488,19 +506,20 @@ class Carousel(Launcher):
         bx, _by, bw, _bh = g[1]
         if g[9] is not None:
             return (bx + g[9][4] + i * g[3] - s, g[9][3], g[2], g[2])
-        mid = bx + bw // 2
         d = i * g[3] - s
         t = self._side(abs(d), moving, g, big)
-        if g[8] is not None:
-            # The handheld's cards keep their gap beside the hero: each is
-            # pushed out by half what the centre card grew, in proportion
-            # to its distance up to one pitch.
-            grow = self._side(0, moving, g, big) - g[2]
-            ad = min(abs(d), g[3])
-            push = grow * ad // (2 * g[3])
-            d += push if d > 0 else -push
-        xc = mid + d
+        xc = bx + bw // 2 + self._pushed(d, moving, g, big)
         return (xc - t // 2, g[7] - t // 2, t, t)
+
+    def _pushed(self, d, moving, g, big):
+        """A card `d` px from the centre, pushed out: on the handheld each
+        card keeps its gap beside the hero, pushed out by half what the
+        centre card grew, in proportion to its distance up to one pitch."""
+        if g[8] is None:
+            return d
+        grow = self._side(0, moving, g, big) - g[2]
+        push = grow * min(abs(d), g[3]) // (2 * g[3])
+        return d + push if d > 0 else d - push
 
     def _visible(self):
         """(index, rect) for every card in the band, smallest first -- the
@@ -554,11 +573,40 @@ class Carousel(Launcher):
         bx, by, bw, bh = self.band_rect()
         if not (bx <= px < bx + bw):
             return None
+        if self.handheld():
+            return self._tile_at_hh(px, py, bx, bw)
         vis = self._visible()
         for k in range(len(vis) - 1, -1, -1):
             if _in(px, py, vis[k][1]):
                 return vis[k][0]
         return None
+
+    def _tile_at_hh(self, px, py, bx, bw):
+        """The handheld's card at (px, py): of the cards whose square holds
+        it, the one drawn last (`_visible`'s order: the larger over the
+        smaller, the centre's over a neighbour its size), each laid out in
+        place, so a press allocates nothing for it."""
+        n = len(self.items)
+        g = self._geom()
+        s = self.scroll
+        moving = self.moving
+        big = self._big()
+        c = self.nearest()
+        pitch = g[3]
+        mid = bx + bw // 2
+        reach = bw // 2 + 2 * g[2]
+        got = None
+        gk = -1
+        for i in range(max(0, (s - reach) // pitch), min(n - 1, (s + reach) // pitch + 1) + 1):
+            d = i * pitch - s
+            t = self._side(abs(d), moving, g, big)
+            x = mid + self._pushed(d, moving, g, big) - t // 2
+            y = g[7] - t // 2
+            k = 2 * t + (i == c)
+            if x <= px < x + t and y <= py < y + t and k >= gk:
+                got = i
+                gk = k
+        return got
 
     def plate_rect(self):
         """The handheld's title and metadata lines across the band; on the
@@ -580,9 +628,7 @@ class Carousel(Launcher):
         """What the band's pixels depend on besides the offset and the
         statics: the selection, the motion (a card at rest wears its mark),
         whether the tabs or the bar hold the focus (the mark goes), the
-        centre card's title and star (its caption's line is laid out once a
-        card and a play record, `_draw_caption`). The same tuple while
-        they stand."""
+        centre card's title and star. The same tuple while they stand."""
         it = self.items[self.nearest()] if self.items else None
         f = self.favorite_for
         title = it and it.get("title")
@@ -636,23 +682,23 @@ class Carousel(Launcher):
 
     def band_pass(self, cv, sheet_for, fill, key=_NO_KEYS, whole=True, over=None, beside=None,
                   need=False, marks=False, note=False):
-        """The row as a table of parts side by side that keeps them
-        (`ui.table` with `o.axis` "x" and `o.keep`) on the band's own app
-        host, the scroll the home's (`o.offset`): on the handheld under
-        `o.snap`, row 0 at the centre at scroll 0, each part room past its
-        cell for the card its distance from the centre grows (`o.spill`);
-        on the desk the shelf's cards one size from its margin. A card's
-        size is a function of its distance from the centre, and what the
-        centre card shows is in `key` (`band_key`), so the engine's floor
-        is the band whole or what was drawn over it (`over`, the cursor),
-        or nothing. In each floor rect the ground goes back round the
-        cards (`fill`; None: a full paint drew it) and the cards the engine
-        says show draw in the order the row paints them (`_paint`).
-        `beside`, `note` and the answer are `Launcher.band_pass`'s. The
-        pass draws under the geometry it begins with (`_geom`)."""
+        """The row, on the band's own app host: on the handheld the engine's
+        carousel (`_hh_pass`); on the desk the shelf as a table of parts
+        side by side that keeps them (`ui.table` with `o.axis` "x" and
+        `o.keep`), the scroll the home's (`o.offset`), its cards one size
+        from its margin. What the centre card shows is in `key`
+        (`band_key`), so the engine's floor is the band whole or what was
+        drawn over it (`over`, the cursor), or nothing. In each floor rect
+        the ground goes back round the cards (`fill`; None: a full paint
+        drew it) and the cards the engine says show draw in the order the
+        row paints them (`_paint`). `beside`, `note` and the answer are
+        `Launcher.band_pass`'s. The pass draws under the geometry it
+        begins with (`_geom`)."""
         g = _G_PASS[1] = self._geom()
         _G_PASS[0] = self
         try:
+            if g[9] is None:
+                return self._hh_pass(cv, g, fill, key, whole, over, beside, need, note)
             band = g[1]
             n = len(self.items)
             held = self._begin_band(cv, band, g[9] is not None, key, need, over)
@@ -664,14 +710,9 @@ class Carousel(Launcher):
             p[0] = g[3]
             p[1] = 0
             o["axis"] = "x"
-            if g[9] is None:
-                o["snap"] = True
-                o["offset"] = self.scroll
-                o["spill"] = self._big()
-            else:
-                o["snap"] = False
-                o["offset"] = self.scroll - g[9][4]
-                o["spill"] = g[3]
+            o["snap"] = False
+            o["offset"] = self.scroll - g[9][4]
+            o["spill"] = g[3]
             o["keep"] = key[1]
             o["whole"] = whole or not held
             o["over"] = over
@@ -701,6 +742,167 @@ class Carousel(Launcher):
         finally:
             _G_PASS[0] = _G_PASS[1] = None
 
+    def _hh_pass(self, cv, g, fill, key, whole, over, beside, need, note):
+        """The handheld's band pass: the band's page (`_band_page`) drawn
+        on the band's host in the band, its carousel driven by the home
+        (moy_uitree.h's uit_drive): the scroll and the motion the home's,
+        its tiles kept under `key` (`o.keep`), whole where `whole` or the
+        buffer lacks the frame round the band, `over` drawn over it, the
+        centre at rest marked while the cards hold the keys, its caption
+        white over black on a wallpaper (`wall_ink`). In each floor rect
+        the ground goes back around the cards (`_band_ground`: `fill`;
+        None, a full paint drew it). `beside` draws first."""
+        held = self._begin_band(cv, g[1], False, key, need, over)
+        if held is None:
+            return None
+        whole = whole or not held
+        if beside is not None:
+            beside(cv, whole)
+        pg = self._band_page()
+        self._band_cards()
+        w = self._dw
+        w[0] = self.scroll
+        w[1] = 1 if self.moving else 0
+        w[2] = key[1]
+        w[3] = 1 if whole else 0
+        if over is None:
+            w[4] = w[5] = w[6] = w[7] = 0
+        else:
+            w[4] = over[0]
+            w[5] = over[1]
+            w[6] = over[2]
+            w[7] = over[3]
+        w[8] = ((0 if self.tab_focus else _DRIVE_MARK) | (_DRIVE_NOTE if note else 0)
+                | (0 if fill is None else _DRIVE_GROUND | (_DRIVE_ALL if self.restore_whole else 0)))
+        wall = self.wall_ink
+        if wall is None:
+            w[9] = w[10] = -1
+        else:
+            w[9] = wall[0]
+            w[10] = wall[1]
+        pg.drive(w)
+        self._gcv = cv
+        self._fill = fill
+        del self.floor[:]
+        del self.copied[:]
+        pg.paint(0, cv, self.theme, g[1], False)
+        if note:
+            del self.floor[:]
+        _ui.end()
+        self._fill = self._gcv = None
+        return self._end
+
+    def _band_page(self):
+        """The handheld band's page (`home_ui.band`) on the band's host,
+        made at the first handheld pass: on the home's ground, its
+        pictures and its ground the home's."""
+        pg = self._bpage
+        if pg is None:
+            import uitree_app
+            import home_ui
+            pg = uitree_app.hosted_page(home_ui.band, self._band_host(), self, env=self)
+            pg.bare = True
+            pg.band = False
+            pg.pictures = self._band_picture
+            pg.ground = self._band_ground
+            pg.open()
+            self._bpage = pg
+        return pg
+
+    def all(self):
+        """The band page's damage: the home paints its band when it moves."""
+
+    def _band_cards(self):
+        """Put the band page's rows (`band_put`) where what they show moved:
+        the items, or the centre card's play record."""
+        items = self.items
+        p = self._put
+        if p is not None and p[0] is items:
+            c = self.nearest()
+            if c >= len(p[1]) or p[1][c] == self.played(items[c]):
+                return
+        import home_ui
+        pg = self._bpage
+        pg.run(home_ui.band_put, action="band_put")
+        home_ui.ui.commit(pg)
+
+    def band_put(self, s):
+        """The band's cards as its page's rows (home_ui's `band_put`): each
+        card's title ("New" on the "+ New" card), its metadata (`_meta`),
+        apart by tabs, and its picture, which the home draws
+        (`_band_picture`)."""
+        import home_ui
+        items = self.items
+        rows = []
+        ix = {}
+        recs = []
+        for i in range(len(items)):
+            it = items[i]
+            k = str(i)
+            name = "New" if it.get("type") == NEW_TILE_TYPE else str(it.get("title") or "")
+            pic = home_ui.ui.image.own(k)
+            ix[repr(pic)] = i
+            recs.append(self.played(it))
+            rows.append(dict(id=k, name=name, sub="\t".join(self._meta(it)), pic=pic))
+        s.cards = rows
+        self._pic_ix = ix
+        self._put = (items, recs)
+
+    def band_open(self, row):
+        """The band page's card action: the home's keys and pointer are its
+        own, so the page fires none."""
+
+    def _band_ground(self, node, kind, x, y, w, h):
+        """The band page's ground (moy_uitree.h's uit_on_ground): a floor
+        rect noted (`floor`), the ground put back (`fill`), a rect copied
+        out of the buffer the last frame painted (`copied`), the floor's
+        end."""
+        if kind == _GROUND_PUT:
+            self._fill(self._gcv, (x, y, w, h))
+        elif kind == _GROUND_FLOOR:
+            self.floor.append((x, y, w, h))
+        elif kind == _GROUND_COPY:
+            cl = getattr(self._gcv, "copy_last", None)
+            if cl is not None and cl(x, y, w, h):
+                self.copied.append((x, y, w, h))
+                return True
+        else:
+            self._end = x
+        return False
+
+    def _band_picture(self, node, pic, r):
+        """A card of the band's page (the engine's picture call, `r` its
+        tile, clip, flags, corners): its picture (`_draw_picture`), at rest
+        on the centre the favourite's star, the broken mark, the frame of a
+        square card. Every card holds one."""
+        if r is None:
+            return True
+        i = self._pic_ix.get(pic)
+        items = self.items
+        if i is None or i >= len(items):
+            return False
+        it = items[i]
+        cv = self._gcv
+        cv.clip(r[4], r[5], r[6], r[7])
+        pseudo = it.get("type") in PSEUDO_TILE_TYPES
+        cr = r[9]
+        # (a cover's draw reads the tile by index, so `r` serves; the rest take it whole)
+        self._draw_picture(cv, it, (r[0], r[1], r[2], r[3]) if pseudo else r, r[8] & 4 != 0, None, cr)
+        star = r[8] & 8 and self.favorite_for is not None and it.get("path") and not pseudo
+        broken = self.is_broken(it)
+        if star or broken or not cr:
+            rect = (r[0], r[1], r[2], r[3])
+            names = self._NAMES
+            if star:
+                _draw_star_badge(cv, names, self.theme or {}, self._favorite_badge_geom(rect),
+                                 bool(self.favorite_for(it)))
+            if broken:
+                _draw_broken_badge(cv, names, self.theme or {}, self._broken_badge_geom(rect))
+            if not cr:
+                self._card_frame(cv, rect)
+        cv.clip()
+        return True
+
     def _fill_around_cards(self, cv, fill, r, marks=False):
         """Restore rect `r`'s backdrop except where a card lies: every card
         paints its whole square opaque, so the backdrop is owed only around
@@ -716,7 +918,7 @@ class Carousel(Launcher):
         x = x0
         reach = _ui_draw.mark_reach("card") + 1
         on = -1 if marks else self.nearest()
-        lim, vis = (x0, self._visible()) if self.handheld() else self._shelf()
+        lim, vis = self._shelf()
         for i, c in sorted(vis, key=lambda e: e[1][0]):
             cx0 = max(c[0], x, lim)
             cx1 = min(c[0] + c[2], x1)
@@ -755,13 +957,10 @@ class Carousel(Launcher):
         return r if side > g[2] else r * 7 // 10
 
     def _paint(self, cv, sheet_for, r):
-        """The band, clipped to rect `r`: the handheld's (`_paint_hh`), or the
-        desk's shelf -- its caption, every card's shadow (the theme's depth,
-        `ui.cast`; a moving card keeps its own), the cards, the selected one
-        last and at rest under the theme's focus mark."""
-        if self.handheld():
-            return self._paint_hh(cv, sheet_for, r)
-        g = self._geom()
+        """The desk's shelf, clipped to rect `r`: its caption, every card's
+        shadow (the theme's depth, `ui.cast`; a moving card keeps its own),
+        the cards, the selected one last and at rest under the theme's
+        focus mark."""
         left, vis = self._shelf()
         shows = self._shows
         if r[0] < left:
@@ -849,95 +1048,6 @@ class Carousel(Launcher):
         if not self._corner_r(hero[2]):
             self._card_frame(cv, hero)
 
-    def _paint_hh(self, cv, sheet_for, r):
-        """The handheld home's band (docs/history/look_2026-10.md step 17): every
-        card's shadow, the hero's (the card nearest the centre) at the
-        theme's size and the others' smaller, in motion as at rest; the
-        cards, smallest first, the hero last and at rest lifted by the
-        theme's focus mark; then the title and the metadata of the hero."""
-        clip = hasattr(cv, "clip")
-        if clip:
-            self._card_clip = r
-            cv.clip(r[0], r[1], r[2], r[3])
-        c = self.nearest()
-        th = self.theme
-        vis = self._visible()
-        shows = self._shows
-        for i, t in vis:
-            if not shows[i]:
-                continue
-            if i == c:
-                _ui_draw.cast(cv, th, t, _ui_draw.CAST_CARD)
-            else:
-                _ui_draw.cast(cv, th, t, _ui_draw.CAST_CARD, _ui_draw.UNDER_SMALL)
-        for i, t in vis:
-            if shows[i]:
-                self._draw_home_card(cv, self.items[i], t, i == c, sheet_for)
-        if self.items:
-            self._draw_caption(cv, self.items[c])
-        if clip:
-            self._card_clip = None
-            cv.clip()
-
-    def _draw_caption(self, cv, it):
-        """The title of the card nearest the centre in the `title` face,
-        centred, and its metadata in the `ui` face under it, the items
-        apart by a dot: on the home's ground in its ink under a theme's
-        depth, on a plate in the bar's colours without one (a legacy
-        ground is any colour)."""
-        th = self.theme or {}
-        lay = self.layout
-        fs = lay.fs
-        ty, tht, tsc, my, mh, _hints = self._geom()[8]
-        bx, _by, bw, _bh = self.band_rect()
-        sep = 12 * fs
-        fid = _ui_draw.font("hero")[0]
-        cap = self._cap
-        rec = self.played(it)
-        if (cap is None or cap[0] is not it or cap[1] is not self._g
-                or cap[7] != rec):
-            # laid out once a card: a moving frame draws it again as it is
-            name = it.get("title") or ""
-            if it.get("type") == NEW_TILE_TYPE:
-                name = "New"
-            was = _ui_draw.print_font(fid)
-            name = _ui_draw.print_fit(name, bw - 16 * fs, tsc)
-            tw = _ui_draw.print_width(name, tsc)
-            if was is not None:
-                _ui_draw.print_font(was)
-            parts = self._meta(it)
-            ws_ = [_ui_draw.print_width(t, fs) for t in parts]
-            cap = self._cap = (it, self._g, name, tw, parts, ws_,
-                               sum(ws_) + sep * (len(parts) - 1), rec)
-        name, tw, parts, ws_, mw = cap[2], cap[3], cap[4], cap[5], cap[6]
-        was = _ui_draw.print_font()
-        ink, dim = th.get("ink", 7), th.get("ink_dim", 6)
-        wall = self.wall_ink
-        if wall is not None:
-            ink = dim = wall[0]
-        tx = bx + (bw - tw) // 2
-        swap = _ui_draw.print_font(fid)
-        if wall is not None:
-            cv.print_scaled(name, tx + 1, ty + 1, wall[1], tsc)
-        cv.print_scaled(name, tx, ty, ink, tsc)
-        if swap is not None:
-            _ui_draw.print_font(was)
-        x0 = bx + (bw - mw) // 2
-        d = 2 * fs if _ui_draw.font_v2(_ui_draw.font()[0]) else fs
-        dy = _dot_top(my, fs, d)
-        if wall is not None:
-            self._meta_line(cv, parts, ws_, x0 + 1, my + 1, dy + 1, d, sep, wall[1])
-        self._meta_line(cv, parts, ws_, x0, my, dy, d, sep, dim)
-
-    def _meta_line(self, cv, parts, ws_, x, y, dy, d, sep, c):
-        """The caption's metadata `parts` (widths `ws_`) from (x, y) in
-        ink `c`, apart by a dot `d` across at row `dy`."""
-        for k in range(len(parts)):
-            if k:
-                cv.rect(x - (sep + d) // 2, dy, d, d, c)
-            cv.print(parts[k], x, y, c, 1)
-            x += ws_[k] + sep
-
     def _dims(self, centre):
         """A handheld neighbour's dimming (step 15), off the centre."""
         if centre or self.dim is None or not self.handheld():
@@ -980,12 +1090,6 @@ class Carousel(Launcher):
                                         r=self._corner_r(rect[2]), selected=sel)
         cr = self._corner_r(rect[2])
         self._draw_picture(cv, it, rect, centre, sheet_for, cr)
-        if centre and self.favorite_for is not None and not self.moving \
-                and not self.desk() \
-                and it.get("path") and it.get("type") not in PSEUDO_TILE_TYPES:
-            _draw_star_badge(cv, NAMES, self.theme or {},
-                             self._favorite_badge_geom(rect),
-                             bool(self.favorite_for(it)))
         if self.is_broken(it):
             _draw_broken_badge(cv, NAMES, self.theme or {},
                                self._broken_badge_geom(rect))

@@ -37,7 +37,7 @@
     "settings_licences": [18, 13],
     "settings_log": [12, 3],
     "settings_permissions": [25, 13],
-    "unlock_banner": [95, 11],
+    "unlock_banner": [94, 8],
     "web_console": [297, 10]
   },
   "guition_480x320_fs1_dark": {
@@ -78,7 +78,7 @@
     "settings_licences": [42, 28],
     "settings_log": [4, 2],
     "settings_permissions": [45, 19],
-    "unlock_banner": [63, 16],
+    "unlock_banner": [62, 13],
     "web_console": [294, 7]
   },
   "guition_480x320_fs1_music": {
@@ -183,7 +183,7 @@
     "settings_licences": [26, 18],
     "settings_log": [4, 2],
     "settings_permissions": [38, 16],
-    "unlock_banner": [63, 16],
+    "unlock_banner": [62, 13],
     "web_console": [294, 7]
   },
   "p4_1024x600_cs2_fs1_blocks": {
@@ -826,7 +826,7 @@
     "settings_licences": [30, 21],
     "settings_log": [5, 2],
     "settings_permissions": [40, 19],
-    "unlock_banner": [67, 14],
+    "unlock_banner": [66, 11],
     "web_console": [295, 8]
   },
   "tdeck_320x240_fs1_bottombar": {
@@ -867,7 +867,7 @@
     "settings_licences": [29, 21],
     "settings_log": [3, 2],
     "settings_permissions": [42, 19],
-    "unlock_banner": [62, 14],
+    "unlock_banner": [61, 11],
     "web_console": [294, 8]
   },
   "tdeck_320x240_fs1_dark": {
@@ -918,7 +918,7 @@
     "settings_licences": [29, 21],
     "settings_log": [4, 2],
     "settings_permissions": [42, 19],
-    "unlock_banner": [62, 14],
+    "unlock_banner": [61, 11],
     "web_console": [294, 8]
   },
   "tdeck_320x240_fs1_homegrid": {
@@ -981,7 +981,7 @@
     "settings_licences": [28, 19],
     "settings_log": [5, 2],
     "settings_permissions": [40, 19],
-    "unlock_banner": [67, 14],
+    "unlock_banner": [66, 11],
     "web_console": [295, 8]
   },
   "tdeck_320x240_fs1_moy_day": {
@@ -1022,7 +1022,7 @@
     "settings_licences": [28, 19],
     "settings_log": [5, 2],
     "settings_permissions": [40, 19],
-    "unlock_banner": [67, 14],
+    "unlock_banner": [66, 11],
     "web_console": [295, 8]
   },
   "tdeck_320x240_fs1_moy_menus": {
@@ -1068,14 +1068,14 @@
     "settings_licences": [29, 21],
     "settings_log": [4, 2],
     "settings_permissions": [42, 19],
-    "unlock_banner": [62, 14],
+    "unlock_banner": [61, 11],
     "web_console": [294, 8]
   },
   "tdeck_320x240_fs1_music": {
     "music_add": [10, 5],
     "music_add_https": [10, 5],
     "music_bar_paused": [0, 0],
-    "music_cc": [85, 29],
+    "music_cc": [84, 26],
     "music_files": [31, 34],
     "music_files_empty": [6, 11],
     "music_files_nosd": [6, 11],

@@ -68,7 +68,7 @@ only the answers the drag moved (DESK_DRAG_FRAME).
 
 Then the home, idle: the launcher's input and frame path with nothing pressed
 paints nothing and allocates nothing. Then its carousel gliding a card and
-back: a moving frame (the band's table pass) allocates under a ceiling,
+back: a moving frame (the band's pass) allocates under a ceiling,
 HOME_BAND_FRAME, not yet nothing, and the carousel at rest allocates nothing.
 Then a finger on its Games tab, over a shelf of the kid's games: the
 carousel flung (HOME_SWIPE_FRAME, HOME_SWIPE_MEAN) and the icons
@@ -2016,10 +2016,12 @@ def test_a_live_wallpaper_home_frame_allocates_under_its_ceiling(result):
 
 
 # What one moving frame of the T-Deck home's carousel may allocate: a
-# ceiling, not zero. The band's table pass and the frame around it allocate
-# 1.1-2.8 KB a moving frame (2026-10-30; the private band path before it
-# allocated 0.5-2.8 KB on the same driver), and no frame of the home's is
-# pinned at zero until what allocates is found by line.
+# ceiling, not zero. The band's pass (the engine's carousel the home drives,
+# its picture and ground calls) and the frame around it allocate 0.2-0.5 KB
+# a moving frame (2026-11-22; the band's table of parts before it 0.5-1.1
+# KB, and the private band path before that 0.5-2.8 KB on the same driver),
+# and no frame of the home's is pinned at zero until what allocates is
+# found by line.
 HOME_BAND_FRAME = 3 * 1024
 
 
@@ -2042,12 +2044,13 @@ def test_a_home_band_frame_allocates_under_its_ceiling(result):
 
 
 # What a frame of a finger on the home's bands may allocate: a ceiling, not
-# zero. A moving carousel frame lays its cards out again (each card's rect
-# and its place in the row, `Carousel._visible`), the band's floor and the
-# rects it hands as damage are new each frame (`band_floor`), and a card
-# with no cover draws its title tile. Measured 2026-11-18 on the shelf
-# `_stage_shelf` stages: the carousel's fling at most 2928 bytes a frame and
-# 1309 on average (3264 and 1821 before its keys were kept and its geometry
+# zero. A moving carousel frame hands each card's tile to the home's
+# picture call, the band's floor and the rects it hands as damage are new
+# each frame (`Carousel._band_ground`), a card with no cover draws its title
+# tile, and the press lays the row out to find its card. Measured 2026-11-22
+# on the shelf `_stage_shelf` stages: the carousel's fling at most 2816 bytes
+# a frame, the press's, and 838 on average (2928 and 1309 on the band's
+# table of parts, 3264 and 1821 before its keys were kept and its geometry
 # read once a pass); the icons' drag a median of 736 (1056 before) and
 # their fling 784, around two frames of the drag over 7 KB that were there
 # before too.

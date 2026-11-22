@@ -376,7 +376,8 @@ def test_on_the_boards_python_a_loaded_page_neither_builds_nor_lowers_and_keeps_
     first = [c for c in out["loaded"]["calls"] if c[0] == 0]
     assert all(c[2] == 0 and c[3] == 0 for c in first), first
     assert out["loaded"]["kept"] == out["built"]["kept"], (out["loaded"]["kept"], out["built"]["kept"])
-    assert out["loaded"]["forgot"] == out["loaded"]["desk"] == 0
+    assert out["loaded"]["forgot"] == 0, out["loaded"]["forgot"]
+    assert out["loaded"]["desk"] == out["built"]["desk"], (out["loaded"]["desk"], out["built"]["desk"])
 
 
 FRAMES_DRIVER = r'''
