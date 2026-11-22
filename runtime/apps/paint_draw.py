@@ -1,13 +1,14 @@
 # Map (grep -n a name to jump there):
 #   PaintDraw                     Paint's draw half: the first base of paint_app.PaintAppLayer
-#   PaintDraw._canvas             the drawing in its view, the cursor and the rail
+#   PaintDraw._draw_view          the view canvas's draw: the drawing, a viewed one, or Show
 #   PaintDraw._stroke_frame       a frame only a mark changed: the view's changed part alone
-#   PaintDraw._view_page          a desk's drawing viewed on a handheld
-#   PaintDraw._more               More: the drawing's verbs
-"""Paint's draw half (paint_app.PaintAppLayer): the canvas page, its tools,
-rail and drip, the stroke frame that repaints only what a mark changed, the
-desk's row, panel and foot, the popovers and More, and the pages a drawing
-goes to (a game, a story, Show).
+#   PaintDraw._look               a desk's drawing viewed on a handheld
+"""Paint's draw half (paint_app.PaintAppLayer): what the page's canvases
+draw -- the drawing in its view with the ring cursor, a desk's drawing
+viewed on a handheld, Show -- the stroke frame that repaints only what a
+mark changed, what the bar is lent, the band's words, and the pages a
+drawing goes to (a game, a story). Everything else the page draws
+(paint_app's `build`).
 
 `PaintDraw` is PaintAppLayer's FIRST base: the layer's `draw` (and the WM's
 `retained`/`changed`) stay on the class, and every method here they reach
@@ -18,7 +19,7 @@ nothing here that it did not before.
 """
 
 import ui
-from artwork import colour_name, GAME_W, GAME_H
+from artwork import colour_name
 try:
     import moy_loop as _loop
 except ImportError:
@@ -29,69 +30,104 @@ from drawing_pages import shown, dot as _dot
 class PaintDraw:
     """Paint's draw half, PaintAppLayer's first base (see above)."""
 
-    def _lend(self, title, tools=(), off=(), back=False):
-        got = ui.bar(title, tools, off, back)
+    def _lend(self):
+        """The bar this frame: the drawing's title, and on a handheld undo,
+        redo and the zoom (a viewed drawing's zoom and More)."""
+        lay = self.layout
+        if self.page == "show":
+            return
+        v = self.viewer
+        if v is not None:
+            got = ui.bar(shown(v.name), (_zoom_word(v.quarters()), "more"), (False, False))
+            if got == 0:
+                self._verb("zoom")
+            elif got == 1:
+                self._open("more")
+        elif lay.desk:
+            got = ui.bar(self.doc_title())
+        else:
+            d = self.doc
+            got = ui.bar("Paint", ("undo", "redo", _zoom_word(self._quarters())),
+                         (not d.history, not d.future, False))
+            if got == 0:
+                self._verb("undo")
+            elif got == 1:
+                self._verb("redo")
+            elif got == 2:
+                self._verb("zoom")
         if got == ui.UP:
             self.back()
-        return got
 
-    def _canvas(self, cv, th):
+    def _lead(self):
+        """The band's words before its keys: the tool (Pick's with the
+        colour under the cursor), "View only", the desk's status line."""
+        if self.page == "show" or self.pop is not None:
+            return ""
+        if self.viewer is not None:
+            return "View only"
+        if self.layout.desk:
+            return self._status()
+        if self.tool == PICK:
+            return "Pick" + _dot() + colour_name(self._drip_colour(), _dot()) + _dot().rstrip()
+        return TOOLS[self.tool][2] + _dot().rstrip()
+
+    def _pop_at(self):
+        """Where the open popover hangs, "X Y W H" on the glass: a viewed
+        drawing's More under the bar's end, the rest from the drawing's
+        foot at its right; "" on the desk's More, its button's."""
         lay = self.layout
-        d = self.doc
-        zw = _zoom_word(self._quarters())
-        if lay.desk:
-            got = self._lend(self.doc_title())
-        else:
-            got = self._lend("Paint", ("undo", "redo", zw),
-                             (not d.history, not d.future, False))
-        if got == 0:
-            self._verb("undo")
-        elif got == 1:
-            self._verb("redo")
-        elif got == 2:
-            self._verb("zoom")
-        if self.pop is None:
-            ui.focus("nowhere")       # the arrows are the cursor's
-        if lay.desk:
-            self._desk_row(cv, th)
-        self._tools(cv, th)
+        pop = self.pop
+        u = lay.fs
+        if pop is None:
+            return ""
+        if pop == "more" and lay.desk:
+            # under the row's More, at the window's right
+            return "%d %d 36 36" % (lay.cx + lay.cw - 52, lay.cy + 8)
+        if self.viewer is not None:
+            w = 194 * u
+            return "%d %d %d 1" % (lay.cx + lay.cw - 6 * u - w, lay.cy - 4 * u, w)
+        w = (190 if lay.desk else 260 * u if lay.touch else 176 * u) if pop == "colours" else (
+            194 * u if pop == "brush" else 182 * u)
+        vx, vy, vw, vh = lay.view
+        if lay.touch and pop == "colours":
+            return "%d %d %d 1" % (vx, vy + vh + 4 * u, vw)
+        return "%d %d %d 1" % (vx + vw - 2 * u - w, vy + vh + 4 * u, w)
+
+    def _look_h(self):
+        """The viewed drawing's canvas height, and its caption under it (at
+        Fit), or Show's."""
+        lay = self.layout
+        u = lay.fs
+        hint_h = 0 if lay.touch or lay.desk else 20 * u
+        if self.page == "show":
+            return lay.ch, ""
+        v = self.viewer
+        if v is None:
+            return 0, ""
+        if v.zoom == FIT:
+            bmp = v.fit_bitmap()
+            q = v.quarters()
+            cap = ("%d \u00d7 %d, made on a desk%sshown at %s" % (v.W, v.H, _dot(), _zoom_word(q))
+                   if ui.has_symbols() else
+                   "%dx%d, made on a desk - shown at %s" % (v.W, v.H, _zoom_word(q)))
+            return (bmp.h if bmp is not None else lay.ch // 2) + 6 * u, cap
+        return lay.ch - hint_h, ""
+
+    def _draw_view(self, cv, x, y, w, h):
+        """The view canvas's draw at (x, y, w, h): Show, a viewed drawing,
+        else the drawing with its cursor."""
+        th = self._theme.colors()
+        if self.page == "show":
+            self._show(cv, th, x, y, w, h)
+            return
+        if self.viewer is not None:
+            self._look(cv, th, x, y, w, h)
+            return
+        lay = self.layout
+        v = lay.view
+        if v[0] != x or v[1] != y or v[2] != w or v[3] != h:
+            lay.view = (x, y, w, h)
         self._drawing(cv, th)
-        if lay.desk:
-            self._desk_panel(cv, th)
-            self._desk_foot(cv, th)
-        else:
-            self._rail(cv, th)
-            self._hints()
-        if self.pop == "colours":
-            self._colours_pop(cv, th)
-        elif self.pop == "brush":
-            self._brush_pop()
-        elif self.pop == "more":
-            self._more()
-
-    def _tools(self, cv, th):
-        lay = self.layout
-        for i, (icon, key, word) in enumerate(TOOLS):
-            if i == SHAPE:
-                icon = SHAPES[self.shape][0]
-            ui.at(*lay.tools[i])
-            label = word + "\t" + key if lay.desk else ""
-            if ui.tool(icon, label, {"id": "Tool " + word, "current": i == self.tool}):
-                self._pick_tool(i)
-            if i == PICK:
-                self._drip(cv, lay.tools[i])
-
-    def _drip(self, cv, r):
-        """Pick's drip, in the colour under the cursor."""
-        x, y, w, h = r
-        side = 24 if self.layout.desk else 16 * self.layout.fs
-        k = side / 24
-        o = (w - side) // 2
-        dd = max(3, side // 6)
-        c = self._drip_colour()
-        cx = x + o + int(5.8 * k)
-        cy = y + (h - side) // 2 + int(20 * k)
-        cv.rrect(cx - dd // 2, cy - dd // 2, dd, dd, dd // 2, c)
 
     def _drip_colour(self):
         """The colour under the cursor; while a stroke is drawn, the one it
@@ -435,156 +471,6 @@ class PaintDraw:
         else:
             cv.clip()
 
-    def _two_tone(self, cv, th, x, y, w, h):
-        """The colour in use's edge: a line of ink, then one of surface
-        within, never a palette colour."""
-        cv.rectb(x, y, w, h, th["ink"])
-        cv.rectb(x + 1, y + 1, w - 2, h - 2, th["surface"])
-
-    def _rail(self, cv, th):
-        lay = self.layout
-        u = lay.fs
-        ui.at(*lay.colour)
-        if ui.tool("", "", {"id": "Colour in use", "current": lay.touch and self.pop == "colours"}):
-            self._open("colours")
-        x, y, w, h = lay.colour
-        cv.rect(x, y, w, h, self.color)
-        self._two_tone(cv, th, x, y, w, h)
-        if lay.swatch_page is not None:
-            x0, y0, s = lay.swatch_page
-            first = (self.color // 16) * 16
-            for i in range(16):
-                sx, sy = x0 + (i % 2) * s, y0 + (i // 2) * s
-                cv.rect(sx, sy, s, s, first + i)
-                if first + i == self.color:
-                    self._two_tone(cv, th, sx, sy, s, s)
-            cv.rectb(x0, y0, 2 * s, 8 * s, th["border"])
-        ui.at(*lay.brush)
-        if ui.tool("", "", {"id": "Brush", "current": self.pop == "brush"}):
-            self._open("brush")
-        x, y, w, h = lay.brush
-        if lay.touch:
-            cv.rrect(x, y, w, h, 6 * u, None, th["border"])
-        ds = min(self.size(), 8) * u
-        cv.rrect(x + (w - ds) // 2, y + (h - ds) // 2, ds, ds, ds // 2, th["ink"])
-        ui.at(*lay.more)
-        if ui.tool("more", "", {"id": "More", "current": self.pop == "more"}):
-            self._open("more")
-
-    def _hints(self):
-        lay = self.layout
-        if lay.hints is None or lay.touch:
-            return
-        x, y, w, h = lay.hints
-        u = lay.fs
-        if self.pop is not None:
-            ui.at(x, y, w, h)
-            ui.hints(("back", "Close"))
-            return
-        lead = TOOLS[self.tool][2] + (" ·" if ui.has_symbols() else " -")
-        ui.face("caption")
-        lw = ui.text_size(lead)[0]
-        ui.face()
-        ui.at(x + 8 * u, y, lw + 2 * u, h)
-        ui.label(lead, {"face": "caption"})
-        ui.at(x + 8 * u + lw, y, w - 8 * u - lw, h)
-        ui.hints(("confirm", "Draw", "C", "Colours", "M", "More"))
-
-    # -- the desk's row, panel and foot ----------------------------------------------
-
-    def _desk_row(self, cv, th):
-        lay = self.layout
-        x, y, w, h = lay.row
-        d = self.doc
-        for bx, icon, verb, word, key, off in (
-                (0, "new", "new", "New drawing", "N", False),
-                (40, "folder_open", "open", "Open", "O", False),
-                (96, "undo", "undo", "Undo", "Ctrl Z", not d.history),
-                (136, "redo", "redo", "Redo", "Ctrl Y", not d.future)):
-            ui.at(x + bx, y, h, h)
-            if ui.tool(icon, word + "\t" + key, {"id": "Row " + verb, "disabled": off}):
-                self._verb(verb)
-        ui.at(x + 86, y + 6, 1, h - 12)
-        ui.rule()
-        xr = x + w - h
-        ui.at(xr, y, h, h)
-        if ui.tool("more", "More\tM", {"id": "Row more", "current": self.pop == "more"}):
-            self._open("more")
-        xr -= 8
-        ui.face("caption")
-        verbs = (("Show", "maximize", "show"), ("Wallpaper", "wallpaper", "wallpaper"),
-                 ("Put in a story", "storybook", "story"))
-        widths = [ui.text_size(v[0])[0] + 48 for v in verbs]
-        ui.face()
-        for i in range(len(verbs) - 1, -1, -1):
-            label, icon, verb = verbs[i]
-            xr -= widths[i]
-            ui.at(xr, y + (h - 32) // 2, widths[i], 32)
-            ui.icon(icon)
-            if ui.button(label, "normal", {"id": "Row " + verb}):
-                self._verb(verb)
-            xr -= 8
-        segs = [_zoom_word(z) if z else "Fit" for z in ZOOM_SEG]
-        cur = ZOOM_SEG.index(self.zoom) if self.zoom in ZOOM_SEG else 0
-        sx = x + 180
-        ui.at(sx, y, xr - 8 - sx, h)
-        got = ui.seg("", segs, cur, {"id": "Zoom"})
-        if got != cur and 0 <= got < len(ZOOM_SEG):
-            self._zoom_to(ZOOM_SEG[got])
-        ui.at(*lay.rule)
-        ui.rule()
-
-    def _desk_panel(self, cv, th):
-        lay = self.layout
-        px, py, pw, ph = lay.panel
-        ui.at(px, py, pw, 20)
-        ui.label("Colour", {"tone": "dim", "face": "caption"})
-        x, y, w, h = lay.colour
-        cv.rect(x, y, w, h, self.color)
-        self._two_tone(cv, th, x, y, w, h)
-        ui.at(x + w + 12, y, pw - w - 12, h)
-        ui.label(colour_name(self.color, _dot()))
-        x0, y0, s = lay.swatch_page
-        for i in range(64):
-            sx, sy = x0 + (i % 8) * s, y0 + (i // 8) * s
-            cv.rect(sx, sy, s - 2, s - 2, i)
-            if i == 7 or i == 48:
-                cv.rectb(sx, sy, s - 2, s - 2, th["ink_dim"])
-            if i == self.color:
-                self._two_tone(cv, th, sx, sy, s - 2, s - 2)
-        ty = y0 + 8 * s + 6
-        ui.at(px, ty, pw, 20)
-        word = TOOLS[self.tool][2]
-        ui.label(word, {"tone": "dim", "face": "caption"})
-        sizes = self.sizes()
-        ui.at(px - 10, ty + 22, pw + 30, 30)
-        got = ui.seg("Size", [str(v) for v in sizes], self.size_i, {"id": "Size"})
-        if got != self.size_i and 0 <= got < len(sizes):
-            self.size_i = got
-        if self.tool == SHAPE:
-            ui.at(px - 10, ty + 56, pw + 30, 30)
-            got = ui.seg("Shape", [s[1] for s in SHAPES], self.shape, {"id": "Shape"})
-            if got != self.shape and 0 <= got < len(SHAPES):
-                self.shape = got
-            ui.at(px - 10, ty + 90, pw + 30, 30)
-            f = 1 if self.shape_fill else 0
-            got = ui.seg("Fill", ("Outline", "Filled"), f, {"id": "Fill"})
-            if got != f and got in (0, 1):
-                self.shape_fill = got == 1
-
-    def _desk_foot(self, cv, th):
-        lay = self.layout
-        fx, fy, fw, fh = lay.foot
-        ui.at(fx + 16, fy, fw - 32, 1)
-        ui.rule()
-        hints = ("Z", "Zoom", "C", "Colours", "Ctrl Z", "Undo")
-        hw = ui.hints_width(hints)
-        ui.at(fx + 26, fy + 8, max(0, fw - 52 - hw), 30)
-        ui.label(self._status(), {"tone": "dim", "face": "caption"})
-        if hw:
-            ui.at(fx + fw - 16 - hw, fy + 8, hw, 30)
-            ui.hints(hints)
-
     def _status(self):
         """The desk foot's sentence: the tool, its size, the zoom, the save."""
         dot = _dot()
@@ -597,161 +483,6 @@ class PaintDraw:
 
     # -- popovers ---------------------------------------------------------------------
 
-    def _hang(self, w):
-        """Hang the rail's popover inside the drawing's frame: its right 2 px
-        in from the frame's, its bottom on the frame's bottom."""
-        vx, vy, vw, vh = self.layout.view
-        u = self.layout.fs
-        ui.at(vx + vw - 2 * u - w, vy + vh + 4 * u, w, 1)
-
-    def _colours_pop(self, cv, th):
-        lay = self.layout
-        u = lay.fs
-        if lay.touch:
-            vx, vy, vw, vh = lay.view
-            cols, s, first = 7, 32 * u, (self.color // 28) * 28 if self.color < 56 else 56
-            w = vw
-            ui.at(vx, vy + vh + 4 * u, vw, 1)
-        else:
-            cols, s, first = 8, 18 * u, 0
-            w = 162 * u
-            self._hang(w)
-        shown_ = ui.popover("Colours", w)
-        n = 64 - first if not lay.touch else min(28, 64 - first)
-        rows = (n + cols - 1) // cols
-        head = (14 if lay.touch else 20) * u
-        foot = 10 * u if lay.touch else 0
-        x, y, pw, ph, _st = ui.part("Swatches", w, head + rows * s + foot, {"disabled": True})
-        if lay.touch:
-            pages = ("1\u201328", "29\u201356", "57\u201364") if ui.has_symbols() \
-                else ("1-28", "29-56", "57-64")
-            cur = first // 28
-            got = ui.seg("", pages, cur, {"id": "Colour page"})
-            if got != cur and 0 <= got < 3:
-                self.color = got * 28
-        ui.popover()
-        if not shown_:
-            self.pop = None
-            self._damage.all()
-            return
-        # the head and the grid over the part's well, on the card's ground
-        cv.rect(x, y, pw, ph, th["surface"])
-        gx = x + (pw - cols * s) // 2
-        gy = y + head
-        ui.at(gx, y, pw // 2, head - 4 * u)
-        ui.label("Colour", {"face": "title"})
-        for i in range(n):
-            c = first + i
-            sx, sy = gx + (i % cols) * s, gy + (i // cols) * s
-            cv.rect(sx, sy, s - 2 * u, s - 2 * u, c)
-            if c == self.color:
-                self._two_tone(cv, th, sx, sy, s - 2 * u, s - 2 * u)
-        cv.rectb(gx - u, gy - u, cols * s, rows * s, th["border"])
-        self._pop_rect = (gx, gy, cols, rows, s, first)
-        on = self.color
-        if not lay.touch:
-            on = self.swatch
-            i = on - first
-            if 0 <= i < n:
-                ui.cursor(gx + (i % cols) * s, gy + (i // cols) * s, s - 2 * u, s - 2 * u)
-        word = colour_name(on, _dot())
-        ui.face("caption")
-        tw = ui.text_size(word)[0]
-        ui.face()
-        ui.at(gx + cols * s - 2 * u - tw, y, tw, head - 4 * u)
-        ui.label(word, {"tone": "dim", "face": "caption"})
-
-    def _brush_pop(self):
-        lay = self.layout
-        u = lay.fs
-        w = 194 * u
-        self._hang(w)
-        shown_ = ui.popover("Brush", w)
-        word = TOOLS[self.tool][2]
-        ui.label(word, {"face": "title"})
-        sizes = self.sizes()
-        got = ui.seg("Size", [str(v) for v in sizes], self.size_i, {"id": "Size"})
-        if got != self.size_i and 0 <= got < len(sizes):
-            self.size_i = got
-        if self.tool == SHAPE:
-            got = ui.seg("Shape", [s[1] for s in SHAPES], self.shape, {"id": "Shape"})
-            if got != self.shape and 0 <= got < len(SHAPES):
-                self.shape = got
-            f = 1 if self.shape_fill else 0
-            got = ui.seg("Fill", ("Outline", "Filled"), f, {"id": "Fill"})
-            if got != f and got in (0, 1):
-                self.shape_fill = got == 1
-        ui.popover()
-        if not shown_:
-            self.pop = None
-            self._damage.all()
-
-    def _more_rows(self):
-        """More's rows: (verb, label, icon, key), "-" a rule between parts."""
-        d = self._doc
-        rows = []
-        if self.viewer is None:
-            rows.append(("new", "New drawing", "new", "N"))
-            if self.layout.desk:
-                rows.append(("new_game", "New game-size drawing (320×240)"
-                             if ui.has_symbols() else "New game-size drawing (320x240)",
-                             "new", ""))
-        rows.append(("open", "Open…" if ui.has_symbols() else "Open...",
-                     "folder_open", "O"))
-        rows.append("-")
-        if self.viewer is None and not self._art.editable():
-            rows.append(("copy", "Copy to My Art", "dup", ""))
-        rows.append(("wallpaper", "Use as wallpaper", "wallpaper", "W"))
-        if self.viewer is None and d is not None and (d.W, d.H) == (GAME_W, GAME_H):
-            rows.append(("game", "Put in a game…" if ui.has_symbols() else "Put in a game...",
-                         "export", "G"))
-        if self.viewer is not None or self.layout.desk:
-            rows.append(("story", "Put in a story…" if ui.has_symbols()
-                         else "Put in a story...", "storybook", "T"))
-        rows.append(("show", "Show", "maximize", "V"))
-        return rows
-
-    def _more(self):
-        lay = self.layout
-        u = lay.fs
-        rows = self._more_rows()
-        if lay.desk:
-            x, y, w, h = lay.row
-            ui.at(x + w - h, y, h, h)
-            width = 300
-        elif self.viewer is not None:
-            width = 194 * u
-            ui.at(lay.cx + lay.cw - 6 * u - width, lay.cy - 4 * u, width, 1)
-        else:
-            width = 182 * u
-            self._hang(width)
-        shown_ = ui.popover("More", width)
-        part = []
-        parts = [part]
-        for r in rows:
-            if r == "-":
-                part = []
-                parts.append(part)
-            else:
-                part.append(r)
-        pick = None
-        keys = ui.hints_width(("back", "Back")) > 0
-        for p in parts:
-            if not p:
-                continue
-            got = ui.menu("", [r[1] + ("\t" + r[3] if r[3] and keys else "") for r in p],
-                          [r[2] for r in p])
-            if got >= 0:
-                pick = p[got][0]
-        ui.popover()
-        if pick is not None:
-            self.pop = None
-            self._ui.reset()
-            self._verb(pick)
-        elif not shown_:
-            self.pop = None
-            self._damage.all()
-
     # -- the pages ----------------------------------------------------------------------
 
     def _send_page(self, cv, th, dt):
@@ -759,7 +490,9 @@ class PaintDraw:
         toast over the canvas."""
         lay = self.layout
         game = self.page == "game"
-        self._lend("Put in a game" if game else "Put in a story", (), (), True)
+        if ui.bar("Put in a game" if game else "Put in a story", (), (), True) == ui.UP:
+            self.back()
+            return
         send = self._sent()
         got = send.draw(cv, th, lay.page, lay.desk, dt)
         if got is None:
@@ -768,6 +501,7 @@ class PaintDraw:
         self._close_sent()
         self.page = None
         self._ui.reset()
+        self.fill_owed = True
         if game:
             if got:
                 self._say(shown(name) + " is the background of " + got)
@@ -780,110 +514,64 @@ class PaintDraw:
         else:
             self._say("Can't add it to " + title, "warn", True)
 
-    def _view_page(self, cv, th):
+    def _look(self, cv, th, x, y, w, h):
+        """A desk's drawing viewed on a handheld, in the look canvas's rect:
+        at Fit the quarter-size picture on its shadow (its caption is the
+        page's), else the window on it and a sixteenth of the whole showing
+        where it is."""
         lay = self.layout
         v = self.viewer
-        q = v.quarters()
-        got = self._lend(shown(v.name), (_zoom_word(q), "more"), (False, False))
-        if got == 0:
-            self._verb("zoom")
-        elif got == 1:
-            self._open("more")
-        if self.pop is None:
-            ui.focus("nowhere")
         u = lay.fs
-        cx, cy, cw, ch = lay.full
-        hint_h = 22 * u if not lay.touch else 0
         if v.zoom == FIT:
             bmp = v.fit_bitmap()
             if bmp is not None:
-                x = cx + (cw - bmp.w) // 2
-                y = cy + 6 * u
-                cv.shadow(x, y, bmp.w, bmp.h, 2, 0, 60, 6, 0, 2, (x, y, bmp.w, bmp.h, 0))
-                cv.picture(bmp, x, y, bmp.w, bmp.h)
-                cv.rrect(x - 1, y - 1, bmp.w + 2, bmp.h + 2, 0, None, th["border"])
-                cap = "%d × %d, made on a desk%sshown at %s" % (
-                    v.W, v.H, _dot(), _zoom_word(q)) if ui.has_symbols() else \
-                    "%dx%d, made on a desk - shown at %s" % (v.W, v.H, _zoom_word(q))
-                ui.at(cx, y + bmp.h + 6 * u, cw, 18 * u)
-                ui.label(cap, {"tone": "dim", "face": "caption", "align": "center"})
-        else:
-            v.view = (cx, cy, cw, ch - hint_h)
-            bmp, k = v.window()
-            if bmp is not None:
-                cv.picture(bmp, cx, cy, bmp.w * k, bmp.h * k)
-            mini = v.mini()
-            if mini is not None:
-                mx = cx + cw - 10 * u - mini.w
-                my = cy + 6 * u
-                cv.rect(mx - 2 * u, my - 2 * u, mini.w + 4 * u, mini.h + 4 * u, th["surface"])
-                cv.picture(mini, mx, my, mini.w, mini.h)
-                fx, fy, fw, fh = v.frame()
-                cv.rectb(mx + fx // 16, my + fy // 16, max(2, fw // 16), max(2, fh // 16),
-                         th["accent"])
-                cv.rectb(mx - 2 * u, my - 2 * u, mini.w + 4 * u, mini.h + 4 * u, th["border"])
-        if not lay.touch and lay.hints is not None:
-            x, y, w, h = lay.hints
-            if self.pop is not None:
-                ui.at(x, y, w, h)
-                ui.hints(("confirm", "Use", "back", "Close"))
-            else:
-                lead = "View only"
-                ui.face("caption")
-                lw = ui.text_size(lead)[0]
-                ui.face()
-                ui.at(x + 8 * u, y, lw + 2 * u, h)
-                ui.label(lead, {"face": "caption"})
-                ui.at(x + 8 * u + lw + 8 * u, y, w - 16 * u - lw, h)
-                if v.zoom == FIT:
-                    ui.hints(("Z", "Zoom", "M", "More", "back", "Back"))
-                else:
-                    ui.hints(("move", "Pan", "Z", "Zoom", "M", "More"))
-        if self.pop == "more":
-            self._more()
+                bx = x + (w - bmp.w) // 2
+                by = y + 6 * u
+                cv.shadow(bx, by, bmp.w, bmp.h, 2, 0, 60, 6, 0, 2, (bx, by, bmp.w, bmp.h, 0))
+                cv.picture(bmp, bx, by, bmp.w, bmp.h)
+                cv.rrect(bx - 1, by - 1, bmp.w + 2, bmp.h + 2, 0, None, th["border"])
+            return
+        v.view = (x, y, w, h)
+        bmp, k = v.window()
+        if bmp is not None:
+            cv.picture(bmp, x, y, bmp.w * k, bmp.h * k)
+        mini = v.mini()
+        if mini is not None:
+            mx = x + w - 10 * u - mini.w
+            my = y + 6 * u
+            cv.rect(mx - 2 * u, my - 2 * u, mini.w + 4 * u, mini.h + 4 * u, th["surface"])
+            cv.picture(mini, mx, my, mini.w, mini.h)
+            fx, fy, fw, fh = v.frame()
+            cv.rectb(mx + fx // 16, my + fy // 16, max(2, fw // 16), max(2, fh // 16),
+                     th["accent"])
+            cv.rectb(mx - 2 * u, my - 2 * u, mini.w + 4 * u, mini.h + 4 * u, th["border"])
 
-    def _show(self, cv, th):
-        """Show: the drawing alone on the whole surface, black around it;
-        any key or tap returns."""
-        cv.cls(self.names["black"])
+    def _show(self, cv, th, x, y, w, h):
+        """Show: the drawing alone on the show canvas, black around it; any
+        key or tap returns."""
+        cv.rect(x, y, w, h, self.names["black"])
         v = self.viewer
         if v is not None:
-            w = cv.w
-            h = v.H * w // v.W
-            if h > cv.h:
-                h = cv.h
-                w = v.W * h // v.H
-            bmp = v.show_bitmap(w, h)
+            sw = w
+            sh = v.H * w // v.W
+            if sh > h:
+                sh = h
+                sw = v.W * h // v.H
+            bmp = v.show_bitmap(sw, sh)
             if bmp is not None:
-                cv.picture(bmp, (cv.w - w) // 2, (cv.h - h) // 2, w, h)
+                cv.picture(bmp, x + (w - sw) // 2, y + (h - sh) // 2, sw, sh)
             return
         d = self.doc
         dirty = d.take_dirty()
         if dirty is not None:
             cv.rebake(d.image, *dirty)
-        w = cv.w
-        h = d.H * w // d.W
-        if h > cv.h:
-            h = cv.h
-            w = d.W * h // d.H
-        cv.picture(d.image, (cv.w - w) // 2, (cv.h - h) // 2, w, h)
-
-    def _draw_toast(self):
-        lay = self.layout
-        text, icon, _until, _undo = self.toast
-        if self.viewer is not None and self.viewer.zoom == FIT:
-            bmp = self.viewer.fit_bitmap()
-            u = lay.fs
-            cx, cy, cw, ch = lay.full
-            h = bmp.h if bmp is not None else ch // 2
-            ui.at(cx, cy + 6 * u, cw, h - 10 * u)
-        elif lay.desk:
-            ui.at(*lay.view)
-        else:
-            vx, vy, vw, vh = lay.view
-            ui.at(vx, vy, vw, vh - 9 * lay.fs)
-        ui.toast(text, icon)
+        sw = w
+        sh = d.H * w // d.W
+        if sh > h:
+            sh = h
+            sw = d.W * h // d.H
+        cv.picture(d.image, x + (w - sw) // 2, y + (h - sh) // 2, sw, sh)
 
 
 # paint_app's tools, zooms and helpers, imported last (see above).
-from paint_app import FIT, PICK, SHAPE, SHAPES, TOOLS, ZOOM_SEG, _RING, _grow, _zoom_word
+from paint_app import FIT, PICK, TOOLS, _RING, _grow, _zoom_word

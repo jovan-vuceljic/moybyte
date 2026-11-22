@@ -676,8 +676,11 @@ def test_the_arrows_move_the_cursor_and_a_draws_there(tmp_path):
 def test_more_offers_put_in_a_game_only_for_a_game_size_drawing(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     app = _open_paint(ws)
-    verbs = [r[0] for r in app._more_rows() if r != "-"]
-    assert verbs == ["new", "open", "wallpaper", "game", "show"]
+    # More's rows past New drawing, Open..., Use as wallpaper and Show: Put in a game
+    ws.mark_dirty()
+    ws.frame(1 / 30)
+    assert app.shown["game_ok"]
+    assert not (app.shown["story_ok"] or app.shown["copy_ok"] or app.shown["viewing"])
     app.doc.put(1, 1, 8)
     app._mark_changed()
     app._verb("game")
@@ -709,9 +712,11 @@ def test_a_handheld_views_a_desks_drawing_and_never_decodes_it_whole(tmp_path):
     _type(ws, "z", "z")
     bmp, k = v.window()
     assert k == 1 and bmp.w <= 320 and v._src[1:3] == (1024, 600)
-    # its More keeps the verbs a viewer has
-    verbs = [r[0] for r in app._more_rows() if r != "-"]
-    assert verbs == ["open", "wallpaper", "story", "show"]
+    # its More keeps the verbs a viewer has: Open..., Use as wallpaper, Put in a story, Show
+    ws.mark_dirty()
+    ws.frame(1 / 30)
+    assert app.shown["viewing"] and app.shown["story_ok"]
+    assert not (app.shown["game_ok"] or app.shown["copy_ok"])
     assert app.doc_title() == "Garden"
 
 
@@ -1068,9 +1073,8 @@ def test_paints_frame_path_is_found_on_the_class_or_its_first_base():
     cls = paint_app.PaintAppLayer
     assert cls.__bases__[0] is paint_draw.PaintDraw
     assert not [n for n in ("draw", "retained", "changed") if n not in vars(cls)]
-    for name in ("_canvas", "_stroke_frame", "_view", "_drawing", "_tools", "_rail",
-                 "_show", "_view_page", "_send_page", "_draw_toast",
-                 "_desk_row", "_desk_panel", "_desk_foot", "_lend"):
+    for name in ("_draw_view", "_stroke_frame", "_view", "_drawing", "_look", "_show",
+                 "_send_page", "_lend", "_lead", "_pop_at", "_look_h", "_drip_colour"):
         assert name in vars(cls) or name in vars(paint_draw.PaintDraw), name
 
 

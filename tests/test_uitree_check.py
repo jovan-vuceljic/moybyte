@@ -71,6 +71,7 @@ PORTED = (
     "files_app",
     "myart_app",
     "drawing_pages",
+    "paint_app",
     "storybook_app",
     "terminal_app",
     "text_console",

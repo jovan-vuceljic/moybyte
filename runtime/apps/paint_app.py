@@ -1,14 +1,21 @@
 # Map (grep -n a name to jump there):
 #   _zoom_word                    a zoom as the bar and the seg say it
-#   PaintAppLayout                   the rects: a handheld's with keys, one under touch, the desk's
-#   PaintAppLayer                 the Paint app: the canvas, its tools and its pages
-#   PaintAppLayer.handle_input    the keys: the tools, the cursor, the verbs
-#   PaintAppLayer.handle_pointer  a tap or a drag: on the drawing, else the verbs'
-#   PaintAppLayer.draw            the frame: the page in hand
+#   fill                          the page's states from the layer's fields
+#   build                         the page: the tools, the rail or the desk's row and panel,
+#                                 the view canvas, the popovers, More, the toast
+#   PaintAppLayout                the content rect and the drawing's view in it
+#   PaintAppLayer                 the Paint app: the drawing, its tools and its pages
+#   PaintAppLayer.handle_input    the keys: a popover's the page's, else the drawing's
+#   PaintAppLayer._canvas_keys    the drawing's keys: the tools, the cursor, the verbs
+#   PaintAppLayer.handle_pointer  a press on the drawing and its drag, else the page's
+#   PaintAppLayer.draw            the frame: a stroke frame, else the page whole
 #   PaintAppLayer.retained        the WM's word on a window draw's target (and `changed`)
 #   -- Viewer and the draw half   paint_viewer's Viewer; paint_draw's PaintDraw, the first base
-"""Paint: drawing with the public UI API's verbs (docs/ui_api_2026-10.md; the
-look's docs/media/look_2026-10/APPS_RESTYLE.md, Paint).
+"""Paint: a `uitree` page round a drawing (the look's
+docs/media/look_2026-10/APPS_RESTYLE.md, Paint). The page draws everything
+but the drawing, which is its `view` canvas; a frame that changed nothing
+but a mark repaints only the part of the view it changed (`paint_draw`'s
+stroke frame).
 
 The canvas, in the order a kid meets it:
 
@@ -37,11 +44,13 @@ Autosave (#108): a drawing persists on an idle debounce, a kid never saves;
 the first save of a new drawing says its name in a toast.
 """
 
-import ui
-from layout_base import bar_rows, content_of, metric_class, window_foot, DESK
-from artwork import ArtworkService, PaintDocument, DESK_W, DESK_H, GAME_W, GAME_H
+import ui as _v
+import uitree as ui
+import uitree_app
+from layout_base import bar_rows, content_of, ground_round, metric_class, window_foot, DESK
+from artwork import ArtworkService, PaintDocument, DESK_W, DESK_H, GAME_W, GAME_H, colour_name
 from ticks import _ticks_ms, _ticks_diff
-from drawing_pages import GamePage, StoryPage, shown, stories_here
+from drawing_pages import GamePage, StoryPage, shown, stories_here, dot as _dot
 
 
 # The tools, in their order: (icon, key, word). Shape's icon is the shape in use.
@@ -49,6 +58,7 @@ TOOLS = (("pencil", "P", "Pencil"), ("paint", "B", "Brush"), ("eraser", "E", "Er
          ("bucket", "F", "Fill"), ("rect", "S", "Shape"), ("spray", "A", "Spray"),
          ("picker", "I", "Pick"), ("pan", "Space", "Move"))
 PENCIL, BRUSH, ERASER, FILL, SHAPE, SPRAY, PICK, MOVE = range(8)
+TOOL_IDS = ("pencil", "brush", "eraser", "fill", "shape", "spray", "pick", "move")
 SHAPES = (("line", "Line"), ("rect", "Rect"), ("oval", "Oval"))
 # A tool's key, typed: the tool (a repeat on the tool in use opens the brush).
 _TOOL_KEYS = {ord("p"): PENCIL, ord("b"): BRUSH, ord("e"): ERASER, ord("f"): FILL,
@@ -74,23 +84,410 @@ RETRY_S = 30.0                           # a failing store retries slowly, not h
 def _zoom_word(q):
     """A zoom in quarters as the bar and the seg say it."""
     if q == 1:
-        return "¼" if ui.has_symbols() else "1/4"
+        return "¼" if _v.has_symbols() else "1/4"
     if q == 2:
-        return "½" if ui.has_symbols() else "1/2"
-    return "%d%s" % (q // 4, "×" if ui.has_symbols() else "x")
+        return "½" if _v.has_symbols() else "1/2"
+    return "%d%s" % (q // 4, "×" if _v.has_symbols() else "x")
+
+
+# -- the page ---------------------------------------------------------------------
+#
+# Everything around the drawing is the page's: the tools, the rail or the
+# desk's row and panel, the popovers, More, the toast. The drawing itself is
+# the `view` canvas (`PaintDraw._view`), whose draw the stroke frame repeats
+# alone where only a mark changed.
+
+s = ui.state(
+    mode=ui.enum("draw", "view", "show", init="draw"),    # the canvas, a desk's drawing viewed, Show
+    draw=True,                  # ...the canvas
+    tool=ui.enum(*TOOL_IDS, init="pencil"),
+    shape_icon="rect",
+    use_c=12,                   # the colour in use's tile
+    rail_c=12,                  # ...the rail's sixteen, from rail_first
+    rail_first=0,
+    panel_c=12,                 # ...the desk panel's 64
+    pop_c=12,                   # ...the colours popover's, from pop_first, pop_n of them
+    pop_first=0,
+    pop_n=64,
+    cpage=ui.enum("p1", "p2", "p3", init="p1"),          # the colours' page under touch
+    colour_word="",
+    tool_word="Pencil",
+    sizes=ui.model(key="id", id="", word=""),
+    size_cur=ui.row_of("sizes"),
+    shape_cur=ui.enum("line", "rect", "oval", init="rect"),
+    fill_cur=ui.enum("outline", "filled", init="outline"),
+    zooms=ui.model(key="id", id="", word=""),
+    zoom_cur=ui.row_of("zooms"),
+    pop=ui.enum("none", "colours", "brush", "more", init="none"),
+    touch=False,
+    desk=False,
+    pop_w=162,                  # the colours popover: its width, its cells' columns and side
+    pop_cols=8,
+    pop_side=18,
+    pop_at="",                  # where the open popover hangs: "X Y W H" on the glass, "" its anchor
+    look_h=0,                   # the viewed drawing's canvas, and its caption under it at Fit
+    cap="",
+    lead="",                    # the band's words before its keys
+    can_undo=False,
+    can_redo=False,
+    viewing=False,              # a desk's drawing, looked at
+    copy_ok=False,              # a show-only picture: Copy to My Art
+    game_ok=False,              # a 320 x 240 drawing: Put in a game
+    story_ok=False,
+    view=0,                     # moves where the view's drawing does outside a stroke frame
+    toasting=False,
+    toast="",
+    toast_icon="check",
+)
+ui.app("Paint", icon="paint")
+ui.labels("SHAPES", {"line": "Line", "rect": "Rect", "oval": "Oval"})
+ui.labels("FILLS", {"outline": "Outline", "filled": "Filled"})
+ui.labels("CPAGES", {"p1": "1-28", "p2": "29-56", "p3": "57-64"})
+
+
+def _lay():
+    """The app's Layer, which a handler's run owes a fill."""
+    lay = uitree_app.env()
+    lay.fill_owed = True
+    return lay
+
+
+def _set(lay, name, value):
+    """State `name` written only where it moved."""
+    if lay.shown.get(name) != value:
+        lay.shown[name] = value
+        setattr(s, name, value)
+
+
+def _words(lay, name, rows):
+    """Model `name`'s rows, (id, word) each, written where they moved."""
+    if lay.shown.get(name) != rows:
+        lay.shown[name] = rows
+        setattr(s, name, [{"id": i, "word": w} for i, w in rows])
+
+
+def fill(lay):
+    """The page's states from the layer's fields."""
+    d = lay._doc
+    v = lay.viewer
+    _set(lay, "mode", "show" if lay.page == "show" else "view" if v is not None else "draw")
+    _set(lay, "viewing", v is not None)
+    _set(lay, "draw", s.mode == "draw")
+    t = lay.tool
+    _set(lay, "tool", TOOL_IDS[t])
+    _set(lay, "tool_word", TOOLS[t][2])
+    _set(lay, "shape_icon", SHAPES[lay.shape][0])
+    c = lay.color
+    for name in ("use_c", "rail_c", "panel_c"):
+        _set(lay, name, c)
+    _set(lay, "rail_first", (c // 16) * 16)
+    pop = lay.pop or "none"
+    if pop == "colours" and lay.pop_was != "colours":
+        if lay.layout.touch:
+            _set(lay, "cpage", ("p1", "p2", "p3")[min(2, c // 28)])
+        _set(lay, "pop_c", c)
+    if pop == "none" and lay.pop_was not in (None, "none") and s.mode == "draw":
+        ui.focus("view")            # back on the drawing, whose keys the arrows are
+    lay.pop_was = pop
+    if lay.layout.touch:
+        first = ("p1", "p2", "p3").index(s.cpage) * 28
+        _set(lay, "pop_first", first)
+        _set(lay, "pop_n", min(28, 64 - first))
+    _set(lay, "colour_word", colour_name(s.pop_c if pop == "colours" else c, _dot()))
+    _set(lay, "pop", pop)
+    touch = bool(lay.layout.touch)
+    _set(lay, "touch", touch)
+    _set(lay, "desk", bool(lay.layout.desk))
+    _set(lay, "pop_w", 190 if lay.layout.desk else 260 if touch else 176)
+    _set(lay, "pop_cols", 7 if touch else 8)
+    _set(lay, "pop_side", 32 if touch else 18)
+    _set(lay, "pop_at", lay._pop_at())
+    h, cap = lay._look_h()
+    _set(lay, "look_h", h)
+    _set(lay, "cap", cap)
+    _words(lay, "sizes", tuple((str(i), str(w)) for i, w in enumerate(lay.sizes())))
+    _set(lay, "size_cur", str(min(lay.size_i, len(lay.sizes()) - 1)))
+    _set(lay, "shape_cur", SHAPES[lay.shape][0])
+    _set(lay, "fill_cur", "filled" if lay.shape_fill else "outline")
+    _words(lay, "zooms", tuple((str(i), _zoom_word(z) if z else "Fit") for i, z in enumerate(ZOOM_SEG)))
+    _set(lay, "zoom_cur", str(ZOOM_SEG.index(lay.zoom) if lay.zoom in ZOOM_SEG else 0))
+    _set(lay, "can_undo", d is not None and v is None and bool(d.history))
+    _set(lay, "can_redo", d is not None and v is None and bool(d.future))
+    art = lay._art
+    _set(lay, "copy_ok", v is None and not art.editable())
+    _set(lay, "game_ok", v is None and d is not None and (d.W, d.H) == (GAME_W, GAME_H))
+    _set(lay, "story_ok", v is not None or lay.layout.desk)
+    _set(lay, "lead", lay._lead())
+    _set(lay, "view", lay._view_n)
+    toast = lay.toast
+    _set(lay, "toasting", toast is not None)
+    if toast is not None:
+        _set(lay, "toast", toast[0])
+        _set(lay, "toast_icon", toast[1])
+
+
+def opened():
+    fill(_lay())
+
+
+def _verb(verb):
+    def press():
+        _lay()._verb(verb)
+    return press
+
+
+def _tool(i):
+    def press():
+        _lay()._pick_tool(i)
+    return press
+
+
+def close_pop():
+    lay = _lay()
+    lay.pop = None
+    lay._damage.all()
+
+
+def use_moved():
+    pass
+
+
+def rail_moved():
+    _lay()._take(s.rail_c)
+
+
+def panel_moved():
+    _lay()._take(s.panel_c)
+
+
+def pop_moved():
+    lay = _lay()
+    lay.shown["pop_c"] = s.pop_c
+
+
+def pop_picked():
+    lay = _lay()
+    lay._take(s.pop_c)
+    lay.pop = None
+
+
+def cpage_moved():
+    lay = _lay()
+    first = ("p1", "p2", "p3").index(s.cpage) * 28
+    lay.shown["cpage"] = s.cpage
+    _set(lay, "pop_c", first)
+
+
+def size_moved():
+    lay = _lay()
+    lay.size_i = int(s.size_cur)
+    lay._damage.all()
+
+
+def shape_moved():
+    lay = _lay()
+    lay.shape = ("line", "rect", "oval").index(s.shape_cur)
+    lay._damage.all()
+
+
+def fill_moved():
+    lay = _lay()
+    lay.shape_fill = s.fill_cur == "filled"
+    lay._damage.all()
+
+
+def zoom_moved():
+    lay = _lay()
+    lay._zoom_to(ZOOM_SEG[int(s.zoom_cur)])
+
+
+def view_keys(i):
+    """The canvas's keys while the drawing holds focus: the tools, the
+    verbs, the cursor."""
+    return uitree_app.env()._canvas_keys(i)
+
+
+def draw_view(cv, x, y, w, h):
+    lay = uitree_app.env()
+    lay._draw_view(cv, x, y, w, h)
+
+
+ui.hook("opened", opened)
+for _i in range(8):
+    ui.action("t_" + TOOL_IDS[_i], TOOLS[_i][2] + "\t" + TOOLS[_i][1], _tool(_i), icon=TOOLS[_i][0])
+ui.action("undo", "Undo\tCtrl Z", _verb("undo"), icon="undo", hint="Undo", when="can_undo", off="grey")
+ui.action("redo", "Redo\tCtrl Y", _verb("redo"), icon="redo", when="can_redo", off="grey")
+ui.action("new", "New drawing\tN", _verb("new"), icon="new")
+ui.action("new_game", "New game-size drawing (320x240)", _verb("new_game"), icon="new")
+ui.action("open", "Open" + "...\tO", _verb("open"), icon="folder_open")
+ui.action("copy", "Copy to My Art", _verb("copy"), icon="dup")
+ui.action("wallpaper", "Wallpaper", _verb("wallpaper"), icon="wallpaper")
+ui.action("game", "Put in a game...", _verb("game"), icon="export")
+ui.action("story", "Put in a story", _verb("story"), icon="storybook")
+ui.action("show", "Show", _verb("show"), icon="maximize")
+ui.action("colours", "Colours", _verb("colours"), keys=("c",), hint="Colours", when="draw",
+          off="hide")
+ui.action("brush", "Brush", _verb("brush"), icon="brush")
+ui.action("more", "More\tM", _verb("more"), icon="more", keys=("m",), hint="More")
+ui.action("zoom", "Zoom", _verb("zoom"), keys=("z",), hint="Zoom")
+ui.action("close_pop", "Close", close_pop)
+ui.hook("use_moved", use_moved)
+ui.hook("rail_moved", rail_moved)
+ui.hook("panel_moved", panel_moved)
+ui.hook("pop_moved", pop_moved)
+ui.hook("pop_picked", pop_picked)
+ui.hook("cpage_moved", cpage_moved)
+ui.hook("size_moved", size_moved)
+ui.hook("shape_moved", shape_moved)
+ui.hook("fill_moved", fill_moved)
+ui.hook("zoom_moved", zoom_moved)
+
+
+def _tools(pitch, cols=1):
+    with ui.grid(cols, 8 // cols, h=pitch, gap="0"):
+        for i in range(8):
+            ui.button("t_" + TOOL_IDS[i], icon="{shape_icon}" if i == SHAPE else TOOLS[i][0],
+                      alone=True, kind="bar", marked="tool=" + TOOL_IDS[i])
+
+
+def _view_canvas():
+    ui.canvas("view", draw_view, keys=view_keys, reads=["view"], hint="Draw",
+              mark=False, focus=True)
+
+
+def _rail():
+    """A handheld's colours: the colour in use, its sixteen, the brush, More."""
+    with ui.split("col", sizes=(27, 102, 26, 26, "1*"), gap="0", pad="0"):
+        ui.cells("use_c", first="{use_c}", count=1, cols=1, side=24, edge=True, pick="colours")
+        ui.cells("rail_c", first="{rail_first}", count=16, cols=2, side=12, edge=True,
+                 on="rail_moved")
+        ui.button("brush", alone=True, kind="bar", marked="pop=brush")
+        ui.button("more", alone=True, kind="bar", marked="pop=more")
+        ui.label("")
+
+
+def _panel():
+    """The desk's colours and the tool's sizes beside the drawing."""
+    with ui.split("col", sizes=(20, 34, 206, 22, 32, 32, 32, "1*"), gap="0", pad="0"):
+        ui.label("Colour", tone="dim", face="caption")
+        with ui.split("row", sizes=(56, "1*"), gap="0", pad="0"):
+            ui.cells("use_c", first="{use_c}", count=1, cols=1, side=28, pick="colours")
+            ui.label("{colour_word}")
+        ui.cells("panel_c", first=0, count=64, cols=8, side=25, gap=2, on="panel_moved")
+        ui.label("{tool_word}", tone="dim", face="caption")
+        ui.seg("Size", "size_cur", text="{.word}", on="size_moved")
+        ui.seg("Shape", "shape_cur", labels="SHAPES", on="shape_moved", shown="tool=shape")
+        ui.seg("Fill", "fill_cur", labels="FILLS", on="fill_moved", shown="tool=shape")
+        ui.label("")
+
+
+def _desk_row():
+    with ui.split("row", sizes=(172, 180, "1*", 404), gap="s", pad="0"):
+        with ui.row("row_verbs", pad=6, gap=8):
+            ui.button("new", alone=True, kind="bar")
+            ui.button("open", alone=True, kind="bar")
+            ui.rule()
+            ui.button("undo", alone=True, kind="bar")
+            ui.button("redo", alone=True, kind="bar")
+        ui.seg("", "zoom_cur", text="{.word}", on="zoom_moved")
+        ui.label("")
+        with ui.row("row_end", gap=8):
+            ui.label("")
+            ui.button("show")
+            ui.button("wallpaper")
+            ui.button("story")
+            ui.button("more", alone=True, kind="bar", marked="pop=more")
+
+
+def _draw_desk():
+    with ui.split("col", sizes=(36, "1*"), gap="s", pad="s", rule=True, shown="draw && desk"):
+        _desk_row()
+        with ui.split("row", sizes=(44, "1*", 244), gap="s", pad="0"):
+            _tools(44)
+            _view_canvas()
+            _panel()
+
+
+def _draw_handheld():
+    with ui.split("row", sizes=(26, "1*", 28), gap="s", pad="0", shown="draw && !desk && !touch"):
+        _tools(23)
+        _view_canvas()
+        _rail()
+
+
+def _draw_touch():
+    """A handheld under a finger: the tools two by four, the colour in use
+    and the brush side by side under them, More, and the drawing."""
+    with ui.split("row", sizes=(64, "1*"), gap="s", pad="0", shown="draw && !desk && touch"):
+        with ui.split("col", sizes=(128, 34, 34, "1*"), gap="s", pad="0"):
+            _tools(32, 2)
+            with ui.split("row", sizes=(32, 32), gap="0", pad="0"):
+                ui.cells("use_c", first="{use_c}", count=1, cols=1, side=28, edge=True,
+                         pick="colours")
+                ui.button("brush", alone=True, kind="bar", marked="pop=brush")
+            ui.button("more", alone=True, kind="bar", marked="pop=more")
+            ui.label("")
+        _view_canvas()
+
+
+def _view():
+    ui.canvas("look", draw_view, keys=view_keys, reads=["view"], mark=False,
+              focus=True, h="{look_h}", shown="mode=view")
+    ui.label("{cap}", tone="dim", face="caption", align="center", shown="mode=view && cap")
+
+
+def _show():
+    ui.canvas("show", draw_view, keys=view_keys, reads=["view"], mark=False,
+              focus=True, h="{look_h}", shown="mode=show")
+
+
+def _pops():
+    with ui.popover("colours_pop", anchor="use_c", at="{pop_at}", shown="pop=colours", close="close_pop",
+                    w="{pop_w}"):
+        with ui.row("colours_head", pad=4):
+            ui.label("Colour", face="title")
+            ui.label("{colour_word}", tone="dim", face="caption", align="end")
+        ui.cells("pop_c", first="{pop_first}", count="{pop_n}", cols="{pop_cols}",
+                 side="{pop_side}", gap=2, edge=True, on="pop_moved", pick="pop_picked")
+        ui.seg("", "cpage", labels="CPAGES", on="cpage_moved", shown="touch")
+    with ui.popover("brush_pop", anchor="brush", at="{pop_at}", shown="pop=brush", close="close_pop", w=194):
+        ui.label("{tool_word}", face="title")
+        ui.seg("Size", "size_cur", text="{.word}", on="size_moved")
+        ui.seg("Shape", "shape_cur", labels="SHAPES", on="shape_moved", shown="tool=shape")
+        ui.seg("Fill", "fill_cur", labels="FILLS", on="fill_moved", shown="tool=shape")
+    with ui.popover("more_pop", anchor="more", at="{pop_at}", shown="pop=more", close="close_pop",
+                    w="{@desk?300:182}"):
+        with ui.menu(""):
+            ui.item("new", label="New drawing\tN", shown="!viewing")
+            ui.item("new_game", label="New game-size drawing (320x240)", shown="@desk && !viewing")
+            ui.item("open", label="Open...\tO")
+        with ui.menu(""):
+            ui.item("copy", shown="copy_ok")
+            ui.item("wallpaper", label="Use as wallpaper\tW")
+            ui.item("game", label="Put in a game...\tG", shown="game_ok")
+            ui.item("story", label="Put in a story...\tT", shown="story_ok")
+            ui.item("show", label="Show\tV")
+
+
+def build():
+    with ui.page("", status="{lead}"):
+        _draw_desk()
+        _draw_handheld()
+        _draw_touch()
+        _view()
+        _show()
+        _pops()
+        ui.toast("{toast}", icon="{toast_icon}", shown="toasting")
 
 
 class PaintAppLayout:
-    """Paint's rects over the content rect. `touch` lays the handheld out for
-    a finger (the tools two by four at 28 px, one colour target, no hint
-    strip); else a handheld with keys (the T-Deck: the tools down the left at
-    22, the rail at the right); `desk` the window's (or the desk's whole
-    surface): the tool row and its rule, the tools down the left at 40, the
-    drawing on its pasteboard, the colours beside it and the foot."""
+    """Paint's glass: the content rect, whether it is a desk's or a
+    handheld's (under touch, `touch`), and `view`, the drawing's rect --
+    where the page laid the `view` canvas out at its last draw, and before
+    the first a rect of about its size, so a drawing opens centred."""
 
     MIN_W = 310
     MIN_H = 230
-    FOOT = 44
 
     def __init__(self, w, h, fs=1, windowed=False, cs=None, touch=False):
         self.w = int(w)
@@ -104,48 +501,18 @@ class PaintAppLayout:
             self.w, self.h, 0 if windowed else bar_rows(self.cs))
         cx, cy, cw, ch = self.cx, self.cy, self.cw, self.ch
         self.full = (cx, cy, cw, ch)
-        self.hints = None
-        self.swatch_page = None
+        self.page = (cx, cy, cw, ch)
+        u = fs
         if self.desk:
-            self._desk(cx, cy, cw, ch)
+            under = window_foot() if self.windowed else 0
+            self.view = (cx + 68, cy + 62, cw - 68 - 264, ch - 62 - 44 + under)
+            self.radius = 0
         elif self.touch:
-            u = fs
-            self.tools = [(cx + 4 * u + (i % 2) * 32 * u, cy + 2 * u + (i // 2) * 32 * u,
-                           28 * u, 28 * u) for i in range(8)]
-            self.colour = (cx + 4 * u, cy + 132 * u, 28 * u, 28 * u)
-            self.brush = (cx + 36 * u, cy + 132 * u, 28 * u, 28 * u)
-            self.more = (cx + 4 * u, cy + 168 * u, 28 * u, 28 * u)
             self.view = (cx + 68 * u, cy + 2 * u, cw - 72 * u, ch - 6 * u)
             self.radius = 6 * u
         else:
-            u = fs
-            self.hints = (cx, cy + ch - 22 * u, cw, 22 * u)
-            self.tools = [(cx + 4 * u, cy + 3 * u + i * 23 * u, 22 * u, 22 * u)
-                          for i in range(8)]
             self.view = (cx + 32 * u, cy + 3 * u, cw - 64 * u, ch - 28 * u)
-            rx = cx + cw - 28 * u
-            vy = self.view[1]
-            self.colour = (rx, vy, 24 * u, 22 * u)
-            self.swatch_page = (rx, vy + 27 * u, 12 * u)
-            self.brush = (rx, vy + 129 * u, 24 * u, 22 * u)
-            self.more = (rx, vy + 155 * u, 24 * u, 22 * u)
             self.radius = 6 * u
-        self.page = (cx, cy, cw, ch)
-
-    def _desk(self, cx, cy, cw, ch):
-        under = window_foot() if self.windowed else 0
-        self.foot, body = ui.cut_bottom((cx, cy, cw, ch), self.FOOT - under)
-        self.row = (cx + 16, cy + 8, cw - 32, 36)
-        self.rule = (cx + 16, cy + 52, cw - 32, 1)
-        self.tools = [(cx + 16, cy + 66 + i * 44, 40, 40) for i in range(8)]
-        self.panel = (cx + cw - 248, cy + 62, 208, body[1] + body[3] - cy - 62)
-        px = self.panel[0]
-        self.board = (cx + 68, cy + 62, px - 16 - cx - 68,
-                      self.foot[1] - 2 - cy - 62)
-        self.view = self.board
-        self.radius = 0
-        self.colour = (px, cy + 62 + 26, 44, 28)
-        self.swatch_page = (px, cy + 62 + 64, 26)
 
 
 def _grow(c, x0, y0, x1, y1):
@@ -165,20 +532,24 @@ def _grow(c, x0, y0, x1, y1):
 
 class _Damage:
     """Paint's damage role: `all` and `again` as the role's, each counted in
-    `gen`; `mark` asks for a frame whose only change is a mark's -- the doc's
-    pixels and a shape's outline -- which the stroke frame paints alone;
-    `settle` asks, from a draw, for one more frame of the same page."""
+    `gen` and owing the page a fill; `mark` asks for a frame whose only
+    change is a mark's -- the doc's pixels and a shape's outline -- which the
+    stroke frame paints alone; `settle` asks, from a draw, for one more frame
+    of the same page."""
 
-    def __init__(self, role):
+    def __init__(self, role, lay):
         self._role = role
+        self._lay = lay
         self.gen = 0
 
     def all(self):
         self.gen += 1
+        self._lay.fill_owed = True
         self._role.all()
 
     def again(self):
         self.gen += 1
+        self._lay.fill_owed = True
         self._role.again()
 
     def mark(self):
@@ -199,15 +570,14 @@ _RING = 3
 # here, after those are bound.
 from paint_viewer import Viewer
 from paint_draw import PaintDraw
-from layers import AppLayer
 
 
-class PaintAppLayer(PaintDraw, AppLayer):
-    """The Paint app: the canvas, its tools and colours, More's verbs, and a
-    desk's drawing viewed on a handheld."""
+class PaintAppLayer(PaintDraw, uitree_app.app_layer("artwork", "Paint", build)):
+    """The Paint app: the page (`build`) round the drawing, the drawing's
+    tools and colours, More's verbs, and a desk's drawing viewed on a
+    handheld."""
 
     id = "artwork"
-    domain = "system"
     TITLE = "Paint"
     # The shell roles this app uses (runtime/shell/app_context.py): its document
     # model's (`ArtworkService`, built here), its copies' and My Art's door.
@@ -216,7 +586,6 @@ class PaintAppLayer(PaintDraw, AppLayer):
     # The open picture's rows, `paint_doc` and `paint_doc_kind`, which the
     # artwork role's C rows read (native/moy_app's MOY_APP_ARTWORK_NS).
     PREFS_NS = "paint"
-    UI = True
     # The WM's shown protocol (docs/surface_model_v1.md §14.3): `retained`
     # before a window draw, `changed` after it.
     HELD = True
@@ -224,10 +593,12 @@ class PaintAppLayer(PaintDraw, AppLayer):
     RETRY_S = RETRY_S
 
     def __init__(self, ctx, names):
-        self.ctx = ctx
-        self._surf = ctx.surface
-        self._theme = ctx.theme
-        self._damage = _Damage(ctx.damage)
+        uitree_app.App.__init__(self, ctx, names)
+        self.engine.env = self
+        self.shown = {}               # each state as last written (`_set`)
+        self.fill_owed = True
+        self.pop_was = None           # the popover the last fill saw open
+        self._damage = _Damage(ctx.damage, self)
         self._nav = ctx.nav
         self._ui = ctx.ui
         self._art = self.service = ArtworkService(ctx)
@@ -251,7 +622,6 @@ class PaintAppLayer(PaintDraw, AppLayer):
         self.cur = [0, 0]             # the cursor, in drawing pixels
         self.mark = None              # where the last mark was made
         self.pop = None               # the popover open: colours | brush | more
-        self.swatch = 0               # the colour the colours' ring is on
         self.page = None              # a page over the canvas: game | story | show
         self.viewer = None            # a desk's drawing, looked at
         self.toast = None             # (text, icon, until ms, undo or None)
@@ -269,8 +639,6 @@ class PaintAppLayer(PaintDraw, AppLayer):
         self._unsaved = False
         self._idle = 0.0
         self._first_save = False      # the drawing has never been written
-        self._focus = None
-        self._pop_rect = None
         self._opened = None           # the doc pointer the open drawing was opened at
         # The stroke frame (`_stroke_frame`): the paints behind it, each
         # [frame, epoch, x0, y0, x1, y1) the glass its marks changed; the
@@ -304,6 +672,9 @@ class PaintAppLayer(PaintDraw, AppLayer):
         self._said = False            # this draw's target is the one the WM said
         self._sf_ran = False          # the last draw weighed a stroke frame
         self._changed = False
+        self._undo_seen = 0           # the undo and redo the page last showed
+        self._drip_seen = -1          # the colour under the cursor the band last said
+        self._view_n = 0              # the whole frames drawn: the view canvas's reads= state
 
     # -- the document ------------------------------------------------------------
 
@@ -362,7 +733,7 @@ class PaintAppLayer(PaintDraw, AppLayer):
         self.page = None
         self.toast = None
         self._touch = None
-        self._ui.reset()
+        self.engine.open()
         peek = None if self.layout.desk else art.peek()
         if peek is not None and (peek[0] > GAME_W or peek[1] > GAME_H):
             # A desk's drawing on a handheld: to look at, never decoded whole.
@@ -442,6 +813,7 @@ class PaintAppLayer(PaintDraw, AppLayer):
         if self._sent() is not None:
             self._close_sent()
             self.page = None
+        self.engine.close()
         if self._doc is None:
             return
         self._save()
@@ -463,7 +835,6 @@ class PaintAppLayer(PaintDraw, AppLayer):
         page goes back to the canvas. False on the canvas: the host leaves."""
         if self.pop is not None:
             self.pop = None
-            self._ui.reset()
         elif self.page is not None:
             self._close_sent()
             self.page = None
@@ -682,16 +1053,19 @@ class PaintAppLayer(PaintDraw, AppLayer):
         if inp.pressed("b"):
             self.back()
             return True
-        if self.pop == "colours" and not self.layout.touch:
-            self._swatch_keys(inp)
-            return True
         send = self._sent()
         if send is not None:
             return send.keys(inp)
-        if self.pop is not None or self.page is not None:
-            if self._ui.keys(inp):
-                self._damage.all()
-            return True
+        if self.pop is not None:
+            return self.engine.keys(inp)
+        return self._canvas_keys(inp)
+
+    def _canvas_keys(self, inp):
+        """The keys on the drawing (the view canvas's keys=): a tool, a verb,
+        the arrows moving the cursor, `a` drawing at it, Space held moving the
+        drawing."""
+        k = getattr(inp, "typed", 0)
+        typed = k != 0
         self._space = k == SPACE
         if typed and k != SPACE:
             lk = k + 32 if 65 <= k <= 90 else k
@@ -740,23 +1114,6 @@ class PaintAppLayer(PaintDraw, AppLayer):
             self._release()
             self._damage.mark()
         return True
-
-    def _swatch_keys(self, inp):
-        """The colours popover under keys: the arrows move its ring over the
-        64, Enter or `a` takes the colour it is on."""
-        dx = inp.steps("right") - inp.steps("left")
-        dy = inp.steps("down") - inp.steps("up")
-        if dx or dy:
-            c = self.swatch
-            x = max(0, min(7, c % 8 + dx))
-            y = max(0, min(7, c // 8 + dy))
-            self.swatch = y * 8 + x
-            self._damage.all()
-        if inp.pressed("a") or inp.pressed("run") or inp.last_key == 0x0D:
-            self.color = self.swatch
-            self.pop = None
-            self._ui.reset()
-            self._damage.all()
 
     def _verb_key(self, k):
         """A typed key on the canvas: a tool, a verb. Whether it was one."""
@@ -856,18 +1213,17 @@ class PaintAppLayer(PaintDraw, AppLayer):
             self._say(art.last_error or "Can't copy it", "warn", True)
 
     def _open(self, which):
-        if self.pop == which:
-            self.pop = None
-        else:
-            self.pop = which
-            self.swatch = self.color
-        self._ui.reset()
+        self.pop = None if self.pop == which else which
+        self._damage.all()
+
+    def _take(self, c):
+        """Colour `c` in use."""
+        self.color = c
         self._damage.all()
 
     # -- the pointer ----------------------------------------------------------------
 
     def handle_pointer(self, px, py, click):
-        down = bool(getattr(self._surf.pointer(), "down", False))
         if self.page == "show":
             if click:
                 self.page = None
@@ -879,20 +1235,20 @@ class PaintAppLayer(PaintDraw, AppLayer):
                 self.toast = None
                 self._damage.all()
                 return True
-        if self.pop == "colours" and click and self._swatch_tap(px, py):
-            return True
         send = self._sent()
         if send is not None:
             return send.point(px, py, click)
-        if self.pop is None and self.page is None and self.viewer is None:
-            if self._canvas_pointer(px, py, click, down):
+        if self.pop is None and self.page is None and self.viewer is None and (
+                self._down or click):
+            # a press on the drawing, its drag and its release are the drawing's, wherever
+            # the pointer goes, in the frame they come in: the stroke frame weighs them
+            # (a canvas's pointer= runs after the frame's paint)
+            down = bool(getattr(self._surf.pointer(), "down", False))
+            if self._canvas_pointer(px, py, click, down or click):
                 return True
-        if self._ui.point(px, py, click, down):
-            self._damage.all()
-        return True
+        return self.engine.point(px, py, click)
 
     def _canvas_pointer(self, px, py, click, down):
-        lay = self.layout
         if click:
             p = self._to_doc(px, py)
             if p is not None:
@@ -905,18 +1261,6 @@ class PaintAppLayer(PaintDraw, AppLayer):
                     self._press(p)
                     self._damage.mark()
                 return True
-            if lay.swatch_page is not None and not lay.desk:
-                c = self._page_swatch(px, py)
-                if c is not None:
-                    self.color = c
-                    self._damage.all()
-                    return True
-            if lay.desk:
-                c = self._desk_swatch(px, py)
-                if c is not None:
-                    self.color = c
-                    self._damage.all()
-                    return True
             return False
         if not self._down:
             return False
@@ -938,37 +1282,6 @@ class PaintAppLayer(PaintDraw, AppLayer):
             self._release()
             self._damage.mark()
         return True
-
-    def _page_swatch(self, px, py):
-        x0, y0, s = self.layout.swatch_page
-        i = (px - x0) // s if px >= x0 else -1
-        j = (py - y0) // s if py >= y0 else -1
-        if 0 <= i < 2 and 0 <= j < 8:
-            return (self.color // 16) * 16 + j * 2 + i
-        return None
-
-    def _desk_swatch(self, px, py):
-        x0, y0, s = self.layout.swatch_page
-        i = (px - x0) // s if px >= x0 else -1
-        j = (py - y0) // s if py >= y0 else -1
-        if 0 <= i < 8 and 0 <= j < 8 and (px - x0) % s < s - 2 and (py - y0) % s < s - 2:
-            return j * 8 + i
-        return None
-
-    def _swatch_tap(self, px, py):
-        r = self._pop_rect
-        if r is None:
-            return False
-        x0, y0, cols, rows, s, first = r
-        i = (px - x0) // s if px >= x0 else -1
-        j = (py - y0) // s if py >= y0 else -1
-        if 0 <= i < cols and 0 <= j < rows and first + j * cols + i < 64:
-            self.color = first + j * cols + i
-            self.pop = None
-            self._ui.reset()
-            self._damage.all()
-            return True
-        return False
 
     def _toast_hit(self, px, py):
         """A tap on the toast's band, the foot of the view."""
@@ -1090,45 +1403,57 @@ class PaintAppLayer(PaintDraw, AppLayer):
         if self.toast is not None:
             if _ticks_diff(_ticks_ms(), self.toast[2]) >= 0:
                 self.toast = None
+                self._damage.all()
             else:
-                self._damage.again()
+                self._damage.settle()         # a frame to take it down at its time
         th = self._theme.colors()
         lay = self.layout
-        if (self.page is None and self.viewer is None and self._doc is not None
+        d = self._doc
+        if d is not None:
+            u = (1 if d.history else 0) | (2 if d.future else 0)
+            if u != self._undo_seen:
+                # a mark made or taken back: the undo and redo the page shows move
+                self._undo_seen = u
+                self.fill_owed = True
+            if self.tool == PICK:
+                c = self._drip_colour()
+                if c != self._drip_seen:
+                    self._drip_seen = c       # the band says the colour under the cursor
+                    self.fill_owed = True
+        if self.fill_owed or self.engine.owes:
+            self._damage.gen += 1         # the page moves: no stroke frame
+        if (self.page is None and self.viewer is None and d is not None
                 and self._stroke_frame(cv, th)):
             self._changed = True
             return
         send = self._sent()
-        self._ui.begin(cv, th, lay.page if send is not None else (0, 0, cv.w, cv.h), lay.desk,
-                       lay.windowed)
+        if send is not None:
+            self._ui.begin(cv, th, lay.page, lay.desk, lay.windowed)
+            self._send_page(cv, th, dt)
+            _v.end()
+            return
+        # a whole frame: the view canvas draws again (its reads= state moves),
+        # so it holds what the stroke frames after it repaint parts of
+        self._view_n += 1
+        self.fill_owed = False
+        self.engine.run(fill, self, action="fill")
+        ui.commit(self.engine)
+        content = lay.full
+        ground_round(cv, content, th["panel"])
+        eng = self.engine
+        eng.hosted(dt, cv, th, content, lay.desk)
+        eng._ui.begin(cv, th, content, lay.desk, lay.windowed)
         if self._touch is None:
-            self._touch = ui.hints_width(("back", "Back")) == 0
+            self._touch = _v.hints_width(("back", "Back")) == 0
             # the page this frame paints is the first a stroke frame may
             # follow: one more frame begins bringing every buffer to it
             self._damage.again()
             if self._touch != lay.touch and not lay.desk:
                 self.relayout(lay.w, lay.h, lay.fs, lay.cs)
                 lay = self.layout
-        if self.page == "show":
-            self._show(cv, th)
-            return
-        if send is not None:
-            self._send_page(cv, th, dt)
-            if self.toast is not None:
-                self._draw_toast()
-            ui.end()
-            return
-        ui.page("")
+                self.fill_owed = True
+        self._lend()
         was = (self.pop, self.page)
-        if self._focus is not None:
-            ui.focus(self._focus)
-            self._focus = None
-        if self.viewer is not None:
-            self._view_page(cv, th)
-        else:
-            self._canvas(cv, th)
-        if self.toast is not None:
-            self._draw_toast()
-        ui.end()
+        eng.paint(dt, cv, th, content, lay.desk)
         if (self.pop, self.page) != was:
             self._damage.again()
