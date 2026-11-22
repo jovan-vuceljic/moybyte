@@ -42,7 +42,9 @@ typedef struct {
     uit_buf_t tmp;              // the call's texts, NUL-terminated
 } app_t;
 
-static app_t s_app;
+// Made by a compiled run's first row through the engine's allocator (PSRAM on
+// a board) and freed as the run ends, so an image costs no internal SRAM for it.
+static app_t *s_app;
 
 static void app_drop(app_t *a) {
     if (a->e != NULL) {
@@ -55,12 +57,23 @@ static void app_drop(app_t *a) {
 }
 
 void moy_uitree_wasm_end(void) {
-    app_drop(&s_app);
+    if (s_app != NULL) {
+        app_drop(s_app);
+        UIT_FREE(s_app);
+        s_app = NULL;
+    }
 }
 
 // The run's app: made by the run's first row, dropped when another run opens.
 static app_t *app(void) {
-    app_t *a = &s_app;
+    if (s_app == NULL) {
+        s_app = UIT_MALLOC(sizeof *s_app);
+        if (s_app == NULL) {
+            return NULL;
+        }
+        memset(s_app, 0, sizeof *s_app);
+    }
+    app_t *a = s_app;
     uint32_t tick = 0, serial = 0;
     if (moycore_ui_snap != NULL) {
         (void)moycore_ui_snap(&tick, &serial);
