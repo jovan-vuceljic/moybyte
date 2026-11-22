@@ -28,6 +28,7 @@ PORTED = (
     "log_ui",
     "web_console_ui",
     "about_ui",
+    "confirm_ui",
     "tasks_ui",
     "achievements_ui",
     "wifi_ui",

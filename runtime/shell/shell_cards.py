@@ -588,7 +588,6 @@ _STOP_SENTENCE = {"wrap": True, "lines": 2}
 _STOP_WORDS = {"wrap": True, "lines": 4, "tone": "dim"}
 _STOP_ERROR = {"wrap": True, "lines": 4, "face": "mono", "sunk": True}
 _STOP_ERROR_HAND = {"wrap": True, "lines": 3, "face": "mono", "sunk": True}
-_WRAP = {"wrap": True, "lines": 3}
 
 
 class DeleteConfirm:
@@ -596,70 +595,78 @@ class DeleteConfirm:
     deletes one: Make's X and DEL, the desk PROJECTS window's Delete, a
     card menu's Delete and the system menu's "Delete cart". Deleting a cart
     is permanent (the Trash holds files, never carts), so the console asks
-    with the public UI API's dialog, the kind Files asks "Empty the Trash?"
-    with: "Delete <title>?", "This can't be undone.", Cancel and Delete,
-    Delete the danger button and Cancel where focus opens. The dialog dims
-    the content under the bars (D-01), centred in it.
+    in a dialog (runtime/shell/confirm_ui.py, a `uitree` page): "Delete
+    <title>?", "This can't be undone.", Cancel and Delete, focus opening on
+    Cancel. The dialog dims the content under the bars (D-01), centred in
+    it.
 
-    Its keys and taps go to the dialog's engine, which moves focus between
+    Its keys and taps go to the page's engine, which moves focus between
     the buttons and activates one; B, Esc, HOME, the console's key (the
-    T-Deck's Mic) and a press outside the card cancel. The answer is read
-    as the dialog draws, and the delete runs at the frame's tail.
+    T-Deck's Mic) and a press outside the card cancel. The answer runs at
+    the frame's tail.
 
     The same dialog asks the running set's one question (`ask_close`,
     runtime/shell/procs.py): a game that does not fit beside the ones
     running names what to close, Cancel and Close; and the Player's before
     a compiled game the VM must stop for while the music holds the Wi-Fi,
-    Cancel and Stop & play. Its line wraps, the card growing to fit.
+    Cancel and Stop & play (`verb` "stop_play").
 
-    And a cart beamed from a console nearby (`ask_close` with `kind` and
-    `no`, runtime/run/link_beam.py): "Receive <title>?", the console it
-    comes from, No and Receive; every way the dialog closes but Receive
-    answers no.
+    And a cart beamed from a console nearby (`ask_close` with `verb`
+    "receive" and `no`, runtime/run/link_beam.py): "Receive <title>?", the
+    console it comes from, No and Receive; every way the dialog closes but
+    Receive answers no.
 
     And the first run of a cart that arrived as files (`ask_lines`,
-    `Notices.ask_first`): "Open <title>?" over the install prompt's
-    lines, as Get Carts draws them (`app_perms.show`), No and Open.
+    `Notices.ask_first`): "Open <title>?" over the install prompt's lines
+    (`app_perms.rows`), No and Open.
 
     And the intents' "open with" menu (`choose`, runtime/system/intents.py):
     "Open with", the item's name over a menu of the apps that open it, each
     row its app's icon and title, the one chosen last first and focused, and
-    Cancel. The rows are stops of the dialog's engine: up and down move
-    through them, Enter or A picks, a tap on a row picks it."""
+    Cancel."""
 
-    BUTTONS = ("Cancel", "Delete")
+    UNDONE = "This can't be undone."
 
     def __init__(self, ws):
         self.ws = ws
         self.open = False
         self.cart = None
         self.title = ""
+        self.verb = "delete"         # the question's verb (confirm_ui.VERBS)
         self._then = None            # what follows a delete (the open cart's: go home)
-        self._host = None
+        self._host = _ui_draw.AppHost()
+        self._page = None
         self.focused = None          # the focused button as the last frame left it
         self.line = self.UNDONE      # the line under the title
-        self.buttons = self.BUTTONS
-        self._act = None             # what the danger button does
+        self._act = None             # what the verb does
         self.rows = ()               # a choice's rows (`choose`), else ()
         self.icons = ()
         self._choice = None          # fn(i) told the row picked, None on a cancel
         self.lines = ()              # a first-run prompt's lines (`ask_lines`), else ()
-        self.kind = "danger"         # the verb button's kind
         self._no = None              # what a cancel answers (`ask_close`'s `no`)
 
-    UNDONE = "This can't be undone."
-    CLOSE = ("Cancel", "Close")
-
-    def _arm(self):
+    def _arm(self, verb):
         ws = self.ws
+        self.verb = verb
         self.open = True
         self.focused = None
         ws.input.spend_key()         # the key that asked is no press of the dialog's
-        if self._host is None:
-            self._host = _ui_draw.AppHost()
-        else:
-            self._host.reset()
+        if self._page is None:
+            import uitree_app
+            import confirm_ui
+            self._page = uitree_app.hosted_page(confirm_ui.page, self._host, self, env=self)
+            self._page.bare = True    # the content it dims is its ground
+            self._page.band = False   # the dialog's buttons are its keys
+        self._page.open(hook="asked")
         ws.mark_dirty()
+
+    def line_rows(self):
+        """The first-run prompt's lines as (line, tone) rows."""
+        return _perms.rows(self.lines)
+
+    def all(self):
+        """The page's damage: the frame draws again."""
+        self.ws.mark_dirty()
 
     def choose(self, title, label, rows, icons, then):
         """Ask which of `rows` (their `icons` beside them), under `label`:
@@ -673,10 +680,9 @@ class DeleteConfirm:
         self.lines = ()
         self.rows = list(rows)
         self.icons = list(icons)
-        self.buttons = ("Cancel",)
         self._then = self._act = None
         self._choice = then
-        self._arm()
+        self._arm("choose")
         return True
 
     def _drop_choice(self):
@@ -685,31 +691,26 @@ class DeleteConfirm:
         if fn is not None:
             fn(None)
 
-    def ask_close(self, title, line, then, buttons=None, kind="danger", no=None):
+    def ask_close(self, title, line, then, verb="close", no=None, lines=()):
         """Ask to close what `title` names so that what `line` says can
-        open; `then()` closes it and opens that. `buttons` (Cancel, then
-        the verb) name the answers where Close does not, `kind` is the
-        verb's button, and `no()` runs at the tail on every other answer."""
+        open; `then()` closes it and opens that. `verb` names the answer
+        where Close does not (confirm_ui.VERBS), and `no()` runs at the
+        tail on every other answer."""
         self._drop_choice()
         self._no = no
-        self.kind = kind
         self.cart = None
         self.title = title
         self.line = line
-        self.lines = ()
-        self.buttons = buttons or self.CLOSE
+        self.lines = lines
         self._then = None
         self._act = then
-        self._arm()
+        self._arm(verb)
         return True
 
-    def ask_lines(self, title, lines, then, buttons):
+    def ask_lines(self, title, lines, then):
         """Ask the install prompt's question: `title` over the prompt's
-        `lines` (`app_perms.show`), `buttons` No and the verb; `then()` on
-        the verb."""
-        self.ask_close(title, "", then, buttons)
-        self.lines = list(lines)
-        return True
+        `lines` (`app_perms.rows`), No and Open; `then()` on Open."""
+        return self.ask_close(title, "", then, "open", lines=list(lines))
 
     def ask(self, cart, then=None):
         """Ask before `cart` (a cart dict, or None for the open cart) is
@@ -721,33 +722,56 @@ class DeleteConfirm:
         name = str(target.get("title") or "").strip()
         self._drop_choice()
         self._no = None
-        self.kind = "danger"
         self.cart = cart
         self.title = "Delete %s?" % name if name else "Delete this cart?"
         self.line = self.UNDONE
         self.lines = ()
-        self.buttons = self.BUTTONS
         self._then = then
         self._act = self._delete
-        self._arm()
+        self._arm("delete")
         return True
+
+    def _done(self):
+        """The dialog is answered: it goes, and its page lets go of what it
+        holds at the frame's tail (a handler runs inside its frame)."""
+        self.open = False
+        self.ws.defer(self._release, toast=False)
+        self.ws.mark_dirty()
+
+    def _release(self):
+        if not self.open and self._page is not None:
+            self._page.forget()
 
     def cancel(self):
         """The cart stays."""
         if not self.open:
             return
-        self.open = False
         self.cart = self._then = self._act = None
+        self._done()
         self._drop_choice()
         no, self._no = self._no, None
         if no is not None:
             self.ws.defer(no, toast=False)
-        self.ws.mark_dirty()
+
+    def answer(self):
+        """The verb: it acts at the tail."""
+        act, self._act = self._act, None
+        self._no = None
+        self._done()
+        if act is not None:
+            self.ws.defer(act, toast=False)
+
+    def picked(self, i):
+        """A choice's row `i`: its `then(i)` at the tail."""
+        fn, self._choice = self._choice, None
+        self.rows = self.icons = ()
+        self._done()
+        if fn is not None:
+            self.ws.defer(lambda: fn(i), toast=False)
 
     def _delete(self):
         ws = self.ws
         cart, then = self.cart, self._then
-        self.open = False
         self.cart = self._then = None
         before = len(ws.carts.all)
         ws.carts.delete(cart)
@@ -779,18 +803,14 @@ class DeleteConfirm:
         if i.pressed("b") or i.pressed("stop") or i.pressed("home") or getattr(i, "typed", 0) == 27:
             self.cancel()
             return
-        if self._host.keys(i):
-            self.ws.mark_dirty()
+        self._page.keys(i)
 
     def handle_pointer(self, px, py, click):
-        host = self._host
-        ws = self.ws
-        card = host.box(self.title)
+        card = self._host.box(self.title)
         if click and card is not None and not _in_box(px, py, card):
             self.cancel()             # a press outside the card: the cart stays
             return
-        if host.point(px, py, click, bool(getattr(ws.pointer, "down", False))):
-            ws.mark_dirty()
+        self._page.point(px, py, click)
 
     def surface(self):
         """What the dialog dims and centres in: the content under the bars."""
@@ -803,35 +823,12 @@ class DeleteConfirm:
         ws = self.ws
         cv = ws.sys_canvas
         ws.icon_spec()                # the theme's set in the engine, as the bar has it
-        self._host.begin(cv, ws.theme_colors, self.surface(), _desk_class())
-        got = -1
-        if self.rows:
-            pick = _ui.dialog(self.title, self.buttons, "normal")
-            got = _ui.menu(self.line, self.rows, self.icons)
-        elif self.lines:
-            pick = _ui.dialog(self.title, self.buttons, "primary")
-            _perms.show(_ui, self.lines)
-        else:
-            pick = _ui.dialog(self.title, self.buttons, self.kind)
-            _ui.label(self.line, _WRAP)
-        _ui.dialog()
+        rect, desk = self.surface(), _desk_class()
+        self._host.begin(cv, ws.theme_colors, rect, desk)
+        self._page.paint(0.0, cv, ws.theme_colors, rect, desk)
         self._unwash_strip(cv)
         self.focused = _ui.focus()
-        if got >= 0:
-            self.open = False         # the answer is in: the tail hands it over
-            fn, self._choice = self._choice, None
-            self.rows = self.icons = ()
-            if fn is not None:
-                ws.defer(lambda: fn(got), toast=False)
-        elif pick == 0:
-            self.cancel()
-        elif pick == 1:
-            self.open = False         # the answer is in: the tail acts
-            act, self._act = self._act, None
-            self._no = None
-            if act is not None:
-                ws.defer(act, toast=False)
-        elif self._host.due():
+        if self.open and self._host.due():
             ws.request_frame()
 
 
