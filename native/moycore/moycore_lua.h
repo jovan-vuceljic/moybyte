@@ -136,6 +136,8 @@ int moycore_lua_call(const char *fn, const char *json, size_t len, char *err, si
 // One chunk, as TEXT only (a binary chunk can reach outside the VM): 0, or -1
 // with Lua's message in `err`.
 int moycore_lua_exec(const char *src, size_t len, const char *name, char *err, size_t n);
+// The same over a chunk whose text `read` hands Lua's parser a piece at a time.
+int moycore_lua_exec_from(lua_Reader read, void *ud, const char *name, char *err, size_t n);
 // The load's two brackets: begin before the cart's first chunk, finish after
 // its last (it runs _layout with `layout`'s three words where `layout` is not
 // NULL and the cart defines one, then _init, then settles the collector). 0,

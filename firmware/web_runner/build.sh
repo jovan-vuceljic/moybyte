@@ -372,6 +372,11 @@ if [ "${UITREE_RC}" -ne 0 ] && { [ "${UITREE_RC}" -ne 3 ] || [ "${#UITREE_ARGS[@
   exit 1
 fi
 
+# uitree_lua.py: the UI tree API's Lua layer, deflated (tools/uitree_lua_freeze.py,
+# the step every console board's build takes, moybyte_stage_uitree_lua), which a
+# Lua app that declares `moybyte.uitree` runs ahead of its own scripts.
+"${PY}" "${REPO_ROOT}/tools/uitree_lua_freeze.py" "${STAGE_DIR}/modules"
+
 # ---------------------------------------------------------------------------
 # 3. The cart bundle: the runner's shelf roster packed as one JSON
 #    {"<cart>.moy/<relpath>": text}, and {"b": base64} for a cart's cover.png

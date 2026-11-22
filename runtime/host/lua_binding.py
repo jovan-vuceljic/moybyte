@@ -25,6 +25,7 @@ as a device build without the native module has none.
 
 import ctypes
 import os
+import zlib
 
 from . import native_build
 from .lua_ext import cfg_blob
@@ -49,6 +50,9 @@ _AUDIO = os.path.join(_NATIVE, "moy_audio")
 _GLASS = os.path.join(_NATIVE, "moy_glass")
 _LUA = os.path.join(_NATIVE, "moy_lua", "lua")       # the vendored VM
 _SHIM = os.path.join(_HERE, "moyhost_lua.c")
+# A deflated chunk's widest window, as a power of two: modmoycore.c's
+# MOYCORE_Z_WINDOW, and tools/uitree_lua_freeze.py's WBITS.
+Z_WBITS = 12
 
 # The sandbox's source set, matching the boards': the unused stdlibs -- and
 # linit.c, whose luaL_openlibs references all of them -- stay out entirely, so
@@ -482,6 +486,15 @@ class HostLuaRun:
             return 0
         return 1
 
+    @staticmethod
+    def _chunk_text(src):
+        """A chunk's text as bytes: `src` itself, or, `src` being bytes, that
+        text raw-deflated in a window of at most 2**Z_WBITS bytes, inflated
+        whole -- a board's moycore inflates it as it parses, through a ring
+        of that size (modmoycore.c's run_chunk), and refuses a wider one as
+        this does."""
+        return src.encode("utf-8") if isinstance(src, str) else zlib.decompress(src, -Z_WBITS)
+
     def _err(self, rc, err):
         return err.value.decode("utf-8", "replace") if rc else None
 
@@ -489,7 +502,7 @@ class HostLuaRun:
         """Run a chunk that is NOT the cart -- the glue prelude. None, or the
         error text."""
         err = ctypes.create_string_buffer(256)
-        b = src.encode("utf-8") if isinstance(src, str) else bytes(src)
+        b = self._chunk_text(src)
         return self._err(self._d.hl_exec(self._r, b, len(b), name.encode(),
                                          ctypes.cast(err, _P), 256), err)
 
@@ -511,8 +524,7 @@ class HostLuaRun:
         is given and the cart defines one, then `_init`: None, or the error.
         `chunks` is [(src, chunkname), ...], SPEC.md 4's `sources`."""
         n = len(chunks)
-        bufs = [s.encode("utf-8") if isinstance(s, str) else bytes(s)
-                for s, _ in chunks]
+        bufs = [self._chunk_text(s) for s, _ in chunks]
         srcs = (_C * n)(*bufs)
         lens = (_I * n)(*[len(b) for b in bufs])
         names = (_C * n)(*[nm.encode() for _, nm in chunks])

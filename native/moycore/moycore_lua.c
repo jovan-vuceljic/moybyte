@@ -1521,6 +1521,17 @@ int moycore_lua_exec(const char *src, size_t len, const char *name, char *err, s
     return 0;
 }
 
+int moycore_lua_exec_from(lua_Reader read, void *ud, const char *name, char *err, size_t n)
+{
+    if (lua_load(RUN.L, read, ud, name, "t") != LUA_OK
+        || lua_pcall(RUN.L, 0, 0, 0) != LUA_OK) {
+        put_err(err, n, lua_tostring(RUN.L, -1));
+        lua_pop(RUN.L, 1);
+        return -1;
+    }
+    return 0;
+}
+
 void moycore_lua_load_begin(void)
 {
     HOOK(load_begin, RUN.L);

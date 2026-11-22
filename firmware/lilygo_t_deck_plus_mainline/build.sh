@@ -178,12 +178,13 @@ moybyte_patch_mdns_psram
 #    console blob generated into the staged copy; then the shared PYTHON
 #    modules (#161 Phase 3, board.toml [modules.*] -- runtime/ by denylist,
 #    device/ by allowlist, with the stager pruning untracked strays); then the
-#    C engine's compiled pages and the GENERATED modules (`keep` in board.toml
-#    names them).
+#    C engine's compiled pages, the UI tree's Lua layer and the GENERATED
+#    modules (`keep` in board.toml names them).
 # ---------------------------------------------------------------------------
 moybyte_stage_native
 "${BUILD_PYTHON}" "${REPO_ROOT}/tools/board_config.py" stage "${SCRIPT_DIR}"
 moybyte_stage_uitree_pages
+moybyte_stage_uitree_lua
 
 #    carts_data.py is built from system_carts/ so the seed + embedded-fallback
 #    carts can never drift from the host source of truth. PACKED (2026-08-30):

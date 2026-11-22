@@ -1,6 +1,7 @@
 // Moybyte web runner headless harness (#151): boot the console under node from
 // dist/ (the exact bundle the page ships), run the shelf + every game cart for a
-// few seconds each, and report frame stats. This is the pre-browser gate: any
+// few seconds each (a cart that ends on its error panel fails), and report
+// frame stats. This is the pre-browser gate: any
 // staged-module import error, cart crash, or protocol break surfaces here.
 //
 //   node harness.mjs             # full sweep
@@ -110,6 +111,10 @@ for (const cart of roster) {
             { type: "down", x: 160, y: 120 }, { type: "up" }] }));
         step(1 / 60);
         if (drawn < 1) throw new Error("cart drew nothing");
+        mp.runPython("_run = web_boot._S['ws'].run\n"
+            + "_err = _run.player.cart_error if _run is not None else None");
+        const err = mp.globals.get("_err");
+        if (err) throw new Error("cart error: " + err);
     } catch (e) {
         failed++;
         console.error(`FAIL ${cart}:`, e.message || e);

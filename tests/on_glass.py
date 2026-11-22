@@ -4888,6 +4888,42 @@ def a_stuck_run_is_ended(board, runtime):
     return err
 
 
+# -- a Lua app on the UI tree (runtime/run/uitree.lua, native/moy_uitree) ------
+#
+# Tree Form (tests/fixtures/uitree_lua/form.moy): the layer the image freezes
+# (uitree_lua.py, tools/uitree_lua_freeze.py) lowers its page of rows, a field
+# and an action into the C engine; A on the focused Add one fires the action
+# in the engine, and its Lua handler counts the presses in pmem cell 0.
+
+TREE_FORM = "Tree Form"
+_TREE_FORM_PMEM = ("(lambda p: (p.lua.flush_pmem(), ws.run.project.pmem.cells[0])[1])"
+                   "(ws.run.player)")
+
+
+def tree_form_push(board, board_dir):
+    """Tree Form into the store, rescanned."""
+    root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True)).rstrip("/")
+    _push_folder(board, board_dir, str(ROOT / "tests" / "fixtures" / "uitree_lua" / "form.moy"),
+                 root + "/tree_form.moy")
+    board.pyval(RESCAN, timeout=60)
+
+
+def a_lua_tree_app_runs_on_the_engine(board, presses=3):
+    """Tree Form runs from the launcher with no error, and each A it is given
+    fires Add one: pmem cell 0 counts `presses`."""
+    def press(b):
+        assert b.pyval(_TREE_FORM_PMEM, strict=True) == 0
+        for _ in range(presses):
+            b.pyval("ws.input.set_held('a', True)", strict=True)
+            b.drain(0.4)
+            b.pyval("ws.input.set_held('a', False)", strict=True)
+            b.drain(0.4)
+        assert not b.state().get("cart_error")
+        got = b.pyval(_TREE_FORM_PMEM, strict=True)
+        assert got == presses, "%d presses of Add one counted %r" % (presses, got)
+    _runs_clean(board, TREE_FORM, press)
+
+
 # -- the timed lanes (native/moy_wasm/moy_wasm_session.h, the P4s) -------------
 #
 # lanes.moy's moy_audio fills the render-ahead ring and its moy_timer asks for

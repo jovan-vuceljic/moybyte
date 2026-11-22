@@ -13,6 +13,7 @@ import os
 import shutil
 import sys
 import tempfile
+import zlib
 
 import pytest
 
@@ -79,6 +80,67 @@ def test_an_app_opens_paints_takes_input_and_closes(tmp_path):
     assert before != after, "three presses of the focused Add one changed nothing on glass"
     ws.spine.exit_to_caller()
     assert player.lua is None, "the app's Lua state outlived its run"
+
+
+def _form_run(carts):
+    """Tree Form (tests/fixtures/uitree_lua/form.moy) opened and pressed three
+    times: its frames before and after, and its pmem cell 0."""
+    from runtime import host_app
+    host_app.moy_carts.ensure_dirs(carts)
+    shutil.copytree(os.path.join(FIX, "form.moy"), os.path.join(carts, "form.moy"))
+    ws, drv, frame, open_cart = _console(carts)
+    open_cart(ws, "Tree Form")
+    for _ in range(4):
+        frame()
+    player = ws.run.player
+    before = bytes(drv.rgb888())
+    for _ in range(3):
+        drv.press("a")
+        frame()
+        frame()
+    assert player.cart_error is None, player.cart_error
+    player.lua.flush_pmem()
+    cells = ws.run.project.pmem.cells[0]
+    after = bytes(drv.rgb888())
+    ws.spine.exit_to_caller()
+    return before, after, cells
+
+
+def test_a_board_runs_the_frozen_layer_as_the_host_runs_the_files(tmp_path, monkeypatch):
+    """A board reads the layer from uitree_lua (tools/uitree_lua_freeze.py):
+    each text keeps its file's lines, deflated, and Tree Form draws the same
+    frames and keeps the same count on it as on the files."""
+    import lua_ext
+    import uitree_lua_freeze as freeze
+    for name in freeze.FILES:
+        with open(os.path.join(ROOT, "runtime", "run", name)) as f:
+            src = f.read()
+        assert freeze.strip(src).count("\n") == src.count("\n"), name
+    files = _form_run(str(tmp_path / "a"))
+    assert files[0] != files[1] and files[2] == 3, files[2]
+    mods = tmp_path / "mods"
+    mods.mkdir()
+    freeze.main(["", str(mods)])
+    monkeypatch.syspath_prepend(str(mods))
+    monkeypatch.setattr(lua_ext, "_uitree_src", {})
+    monkeypatch.delitem(sys.modules, "uitree_lua", raising=False)
+    try:
+        with open(os.path.join(ROOT, "runtime", "run", "uitree.lua")) as f:
+            assert zlib.decompress(lua_ext.uitree_source(), -freeze.WBITS) == freeze.strip(f.read()).encode()
+        assert _form_run(str(tmp_path / "b")) == files
+    finally:
+        sys.modules.pop("uitree_lua", None)
+
+
+def test_a_deflated_chunk_has_one_window_on_every_tier():
+    """The window the freeze deflates in is the ring a board's moycore
+    inflates through and the widest the host's binding takes."""
+    import re
+    import uitree_lua_freeze as freeze
+    from runtime import lua_binding
+    with open(os.path.join(ROOT, "native", "moycore", "modmoycore.c")) as f:
+        ring = int(re.search(r"#define MOYCORE_Z_WINDOW (\d+)", f.read()).group(1))
+    assert ring == 1 << freeze.WBITS == 1 << lua_binding.Z_WBITS
 
 
 @pytest.mark.parametrize("size", sorted(parity.SIZES))

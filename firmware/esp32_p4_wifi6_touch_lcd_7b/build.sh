@@ -198,6 +198,7 @@ moybyte_patch_tinyusb_msc_psram
 moybyte_stage_native
 "${BUILD_PYTHON}" "${REPO_ROOT}/tools/board_config.py" stage "${SCRIPT_DIR}"
 moybyte_stage_uitree_pages
+moybyte_stage_uitree_lua
 
 #    carts_data.py is built from system_carts/ so the seed + embedded-fallback
 #    carts can never drift from the host source of truth. PACKED (2026-08-30):
