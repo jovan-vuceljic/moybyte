@@ -100,10 +100,21 @@ import wm_strip as _strip
 
 # The desk's default OUTER sizes of the apps the 2026-10 look sizes to their
 # content (DESIGN.md "The sizes"; the `*desktop*` targets), in glass pixels
-# at chrome size 1. Every other window takes `_win_size`'s formulas.
+# at chrome size 1 and font scale 1 (`_desk_size`). Every other window takes `_win_size`'s formulas.
 DESK_SIZES = {"files": (548, 534), "calc": (344, 488), "getcarts": (900, 536),
               "notes": (900, 536), "artwork": (900, 536), "myart": (900, 536),
               "storybook": (900, 536), "jukebox": (820, 490), "terminal": (720, 480)}
+
+
+def _desk_size(key, fs):
+    """A DESK_SIZES window's default size at font scale `fs`, in
+    system-surface pixels: grown by its chrome size, and by the text's scale
+    on the glass where that is more (the font scale times the render
+    scale), as larger text grows what the window holds."""
+    r = _layout_base.render_scale()
+    n = max(_layout_base.chrome_size(fs), fs * r)
+    return (DESK_SIZES[key][0] * n // r, DESK_SIZES[key][1] * n // r)
+
 
 # A dev playtest's scale where the desk holds it (D-03.4).
 _DEV_SCALE = 2
@@ -848,18 +859,14 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         2026-10 look sizes to their content take that size (`DESK_SIZES`)."""
         th = _layout_base.metric("title", fs)
         if _layout_base.metric_class() == _layout_base.DESK and key in DESK_SIZES:
-            n = _layout_base.chrome_size(fs)
-            r = _layout_base.render_scale()
-            return (DESK_SIZES[key][0] * n // r, DESK_SIZES[key][1] * n // r)
+            return _desk_size(key, fs)
         if key == "desktop" and self.ws.run.app_window_canvas:
             # a window-bound app cart (Notes): its designed size, by the
             # last part of its id, else the default panel below
             cid = str((self.ws.cart or {}).get("id") or "")
             key = cid[cid.rfind(".") + 1:] or key
             if _layout_base.metric_class() == _layout_base.DESK and key in DESK_SIZES:
-                n = _layout_base.chrome_size(fs)
-                r = _layout_base.render_scale()
-                return (DESK_SIZES[key][0] * n // r, DESK_SIZES[key][1] * n // r)
+                return _desk_size(key, fs)
             key = "app"
         if key == "desktop":
             # A dev playtest (#178) opens at 2x where the desk holds it, else

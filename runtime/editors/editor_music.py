@@ -18,7 +18,7 @@ import uitree_app
 
 s = ui.state(
     none=False, song=False, view=ui.enum("sound", "song", init="sound"),
-    name="", speed=1, pad_w=124, pop=False, playing=False, looping=False, count="",
+    name="", speed=1, pad_w=126, pop=False, playing=False, looping=False, count="",
     steps=ui.model(key="k", k="", a="", b="", c="", lit=0),
     at=ui.row_of("steps"),
 )
