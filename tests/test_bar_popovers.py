@@ -65,7 +65,7 @@ def _this_month(ws):
 
 def _box(ws, key):
     """The rect of the open popover's row `key` ("volume", "brightness")."""
-    return ws.sysmenu.comp.host.box({"volume": "Volume", "brightness": "Brightness"}[key])
+    return ws.sysmenu.comp.host.box({"volume": "vol", "brightness": "bri"}[key])
 
 
 def _chevrons(ws, drv):

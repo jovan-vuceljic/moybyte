@@ -1895,7 +1895,8 @@ component is a registered app or a desk icon. The components are
 flat card: the wifi panel is Settings' Wi-Fi page
 (`SettingsLayer.wifi_page`, its popover form the joined network and the
 networks as a menu) over the component's own UI context, the power rows are
-the battery's line over Settings' Volume and Brightness sliders, the
+the control center's console group with the battery's line in place of
+Wi-Fi (`cc_ui`), the
 calendar is `ui.month`, and the battery's level reads None on every board
 today (no board measures one), its line then reading Battery. An app that
 asks for the Wi-Fi page (`Workstation.open_wifi_panel`) still gets Settings'

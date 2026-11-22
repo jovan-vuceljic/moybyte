@@ -6,7 +6,7 @@ its content on the public UI API's verbs.
   `clock`    MonthView   the month (`ui.month`), today marked; left/right page
   `wifi`     WifiPanel   Settings' Wi-Fi page, the one implementation
   `battery`  PowerRows   on the desk: the battery's line, then Volume and
-                         Brightness
+                         Brightness (`cc_ui`'s page)
              ControlCenter  on a handheld, opened by the status cluster:
                          the console's group, then each app's status rows
                          (`cc_ui`'s page)
@@ -243,81 +243,14 @@ class WifiPanel:
             self.page.close()
 
 
-class PowerRows:
-    """The `battery` widget's component: the battery's line (its level
-    where the board reads one), then Volume and Brightness as Settings'
-    sliders. Up/down pick a row, left/right (or a tap or a drag on a track)
-    change it through Settings (`set_level`)."""
-
-    KEYS = ("volume", "brightness")
-    _LABELS = ("Volume", "Brightness")
-
-    def __init__(self, ws):
-        self.ws = ws
-        self.rect = None
-        self.host = _ui_draw.AppHost()
-
-    def size(self):
-        desk = _desk()
-        fs = self.ws.layout.fs
-        row = _ui_draw.metrics("row")
-        rh = row[6 if desk else 5] * fs
-        gap = row[7] * fs
-        rule = (2 * row[7] + (9 if desk else 5)) * fs
-        foot = _foot(fs) if desk else 0
-        return ((300 if desk else 236) * fs,
-                2 * _pad(self.ws) + 3 * rh + 3 * gap + rule + foot)
-
-    def keys(self):
-        return _POWER_KEYS
-
-    def draw(self, cv, rect):
-        ws = self.ws
-        desk = _desk()
-        self.rect = rect
-        sl = ws.settings_layer
-        self.host.begin(cv, ws.theme_colors, _inner(ws, rect), desk, "panel")
-        lvl = ws.battery_level()
-        _ui.icon("battery")
-        _ui.info("Battery" if lvl is None else "%d%%" % lvl, "")
-        _ui.rule()
-        for k in range(len(self.KEYS)):
-            key = self.KEYS[k]
-            cur, lo, hi = sl.level(key)
-            _ui.icon("mute" if key == "volume" and cur == lo
-                     else "volume" if key == "volume" else "spark")
-            got = _ui.slider(self._LABELS[k], cur, lo, hi)
-            if got != cur:
-                sl.set_level(key, got)
-                ws.mark_dirty()
-        if desk:
-            _ui.hints(("change", "Change", "back", "Close"))
-        if self.host.due() or self.host.tap == 2:
-            ws.popover_touch()
-
-    def handle_input(self, i):
-        if self.host.keys(i):
-            return "local"
-        return None
-
-    def click(self, px, py, rect):
-        self.host.point(px, py, True)
-        return "local"
-
-    def typing(self):
-        return False
-
-    def closed(self):
-        self.host.reset()
-
-
 class _Rows:
     """The status items' rows (`cc_ui`'s page) in a popover's card, over
     its own UI context: the base of the control center and an item's desk
     menu. The page's handlers reach the host through `level`, `wifi` and
     `press`; `poll` writes what it shows."""
 
-    CC = False
+    CC = False                  # the console's group with Wi-Fi
+    POWER = False               # ... with the battery's line
 
     def __init__(self, ws):
         self.ws = ws
@@ -349,6 +282,7 @@ class _Rows:
 
     def poll(self, s):
         s.cc = self.CC
+        s.power = self.POWER
         g = _ITEMS.gen
         if g != self.gen:
             import cc_ui
@@ -411,7 +345,41 @@ def _rows_h(n, fs, desk=False):
     return n * (row[6 if desk else 5] + row[7]) * fs
 
 
-class ControlCenter(_Rows):
+class _Console(_Rows):
+    """A page with the console's group: Volume and Brightness as Settings'
+    levels (`SettingsLayer.set_level`), then Wi-Fi or the battery's line."""
+
+    def poll(self, s):
+        ws = self.ws
+        sl = ws.settings_layer
+        cur, lo, hi = sl.level("volume")
+        s.vol, s.vlo, s.vhi = cur, lo, hi
+        s.vicon = "mute" if cur == lo else "volume"
+        s.bri, s.blo, s.bhi = sl.level("brightness")
+        s.wicon = "wifi" if ws.wifi_icon_kind() == "wifi" else "wifi_off"
+        s.net = self._network()
+        _Rows.poll(self, s)
+
+    def level(self, key, v):
+        self.ws.settings_layer.set_level(key, v)
+        self.ws.mark_dirty()
+
+    def wifi(self):
+        ws = self.ws
+        ws.close_popover()
+        ws.toggle_popover("wifi")
+
+    def _network(self):
+        """The Wi-Fi row's value: the network joined, else Off."""
+        w = self.ws.wifi
+        try:
+            st = w.status() if w is not None else None
+        except Exception:  # noqa: BLE001 -- a status hiccup reads as no link
+            st = None
+        return st[1] if st and st[0] and st[1] else "Off"
+
+
+class ControlCenter(_Console):
     """A handheld's control center, the `battery` widget's component there,
     which the bar's status cluster opens (docs/theme_and_shell_2026-11.md
     §8.6): `cc_ui`'s page, the console's group first (Volume, Brightness,
@@ -451,34 +419,28 @@ class ControlCenter(_Rows):
             room = strip[1] - lay.cy           # above the hint strip
         return (self.W * lay.fs, min(first, room - 4 * lay.fs))
 
+
+class PowerRows(_Console):
+    """The desk battery's popover, the `battery` widget's component there:
+    the console's group with the battery's line (its level where the board
+    reads one) over Volume and Brightness."""
+
+    POWER = True
+
+    def __init__(self, ws):
+        _Console.__init__(self, ws)
+        self.lvl = -1                   # the level the line was written at
+
     def poll(self, s):
-        ws = self.ws
-        sl = ws.settings_layer
-        cur, lo, hi = sl.level("volume")
-        s.vol, s.vlo, s.vhi = cur, lo, hi
-        s.vicon = "mute" if cur == lo else "volume"
-        s.bri, s.blo, s.bhi = sl.level("brightness")
-        s.wicon = "wifi" if ws.wifi_icon_kind() == "wifi" else "wifi_off"
-        s.net = self._network()
-        _Rows.poll(self, s)
+        lvl = self.ws.battery_level()
+        if lvl != self.lvl:
+            self.lvl = lvl
+            s.battery = "Battery" if lvl is None else "%d%%" % lvl
+        _Console.poll(self, s)
 
-    def level(self, key, v):
-        self.ws.settings_layer.set_level(key, v)
-        self.ws.mark_dirty()
-
-    def wifi(self):
-        ws = self.ws
-        ws.close_popover()
-        ws.toggle_popover("wifi")
-
-    def _network(self):
-        """The Wi-Fi row's value: the network joined, else Off."""
-        w = self.ws.wifi
-        try:
-            st = w.status() if w is not None else None
-        except Exception:  # noqa: BLE001 -- a status hiccup reads as no link
-            st = None
-        return st[1] if st and st[0] and st[1] else "Off"
+    def size(self):
+        fs = self.ws.layout.fs
+        return (300 * fs, 2 * _pad(self.ws) + _rows_h(3, fs, True) + _foot(fs))
 
 
 class StatusMenu(_Rows):

@@ -477,7 +477,7 @@
   },
   "p4_1024x600_cs2_fs1_popovers": {
     "desk_window_calc": [2, 10],
-    "popover_battery": [35, 31],
+    "popover_battery": [42, 29],
     "popover_clock": [29, 64],
     "popover_menu": [5, 24],
     "popover_wifi": [26, 36]
@@ -645,7 +645,7 @@
   },
   "p4_1024x600_fs2_desk_popovers": {
     "music_desk_menu": [15, 23],
-    "popover_battery": [35, 31],
+    "popover_battery": [42, 29],
     "popover_clock": [10, 54],
     "popover_clock_six": [28, 63],
     "popover_wifi": [26, 36],
