@@ -103,12 +103,13 @@ def test_settings_name_is_a_field_only_where_something_types(tmp_path, kind, fie
     assert page.engine.s.name_shown == "Moy" and page.engine.s.can_type is field
 
 
-@pytest.mark.parametrize("kind,hints", [("keys", ("confirm", "Connect", "back", "Cancel")),
+@pytest.mark.parametrize("kind,hints", [("keys", ("confirm", "Connect", "cancel", "Cancel")),
                                         ("pad", ("back", "Cancel")),
                                         ("touch", ("back", "Cancel"))])
 def test_the_wifi_prompt_promises_connect_only_where_something_types(tmp_path, kind, hints):
     """The password prompt's strip names Connect only where a field is there
-    to type into; elsewhere it is Cancel alone (R4-08)."""
+    to type into; elsewhere it is Cancel alone (R4-08). In the focused field
+    Cancel names the key that never types."""
     ws = build_ws(tmp_path)
     drv = make_drv(ws)
     ws.open_settings()
@@ -121,7 +122,8 @@ def test_the_wifi_prompt_promises_connect_only_where_something_types(tmp_path, k
         ws.mark_dirty()
         drv.frame(1 / 30)
         got.append(sl.wifi.engine.hints())          # what the prompt's band names after the frame
-    assert hints in got and all(h == hints for h in got if "Cancel" in h), got
+    assert got[-1] == hints, got
+    assert all(("Connect" in h) == ("Connect" in hints) for h in got if "Cancel" in h), got
 
 
 @pytest.mark.parametrize("kind", ["pad", "touch"])
