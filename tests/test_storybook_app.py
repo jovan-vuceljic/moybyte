@@ -271,6 +271,31 @@ def test_tab_chooses_in_z_order_and_front_and_back_move_it(tmp_path):
     assert not ed.on_slide, "Esc with nothing chosen: the keys go to the parts"
 
 
+def _handle_px(ws, app, ed, k):
+    """The middle pixel of the chosen object's handle `k`, on the glass."""
+    bx, by, _bw, _bh = app.engine._x.rect("board")
+    cx, cy, _cw, _ch = ws.wm.windows["storybook"].content_rect()
+    hx, hy = ed._handles(ed._to_screen(ed._bounds(ed._obj())))[k]
+    cv = ws.sys_canvas
+    i = 2 * ((cy + by + hy) * cv.w + cx + bx + hx)
+    return cv._buf[i] << 8 | cv._buf[i + 1]
+
+
+def test_the_chosen_objects_handles_stand_under_the_panels_colours(tmp_path):
+    """A press on the panel's Colour row opens the colours over the slide:
+    the chosen object keeps its handles, as it does until Esc or Y sends the
+    keys to the parts."""
+    from device_canvas import PAL565
+    ws, app, ed = _edit(tmp_path)
+    _key(ws, app, 9)
+    _frames(ws)
+    assert ed.chosen == 0 and _handle_px(ws, app, ed, 0) == PAL565[7]
+    _tap_part(ws, app, "pick_colour")
+    assert ed.menu == "colours"
+    _frames(ws)
+    assert _handle_px(ws, app, ed, 0) == PAL565[7], "the handles under the colours"
+
+
 def test_a_drag_moves_and_snaps_to_the_slides_middle(tmp_path):
     ws, app, ed = _edit(tmp_path)
     st = app.story

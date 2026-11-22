@@ -71,6 +71,7 @@ class Editor:
         self._board = None            # the board's size the rect was fitted to
         self.step = STEP
         self.resizing = False
+        self.parts = False            # Esc or Y sent the keys to the parts: the outline alone
         self.snap = True
         self.clip = None              # the copied object
         self.layout_kind = "picture"
@@ -102,6 +103,7 @@ class Editor:
     @on_slide.setter
     def on_slide(self, v):
         """The keys to the slide, else to the parts (the tool row's first)."""
+        self.parts = not v
         self.app._focus = "board" if v else "add"
         self.app.owe()
 
@@ -819,7 +821,7 @@ class Editor:
         key = ("edit", st.gen, app.cur, sw, sh)
         app.frames.place(cv, key, st.slides[app.cur], sx, sy, sw, sh, edit=True)
         cv.rectb(sx - 1, sy - 1, sw + 2, sh + 2, th["edge"])
-        on = self.on_slide
+        on = not self.parts
         if self.step == GRID and on:
             self._grid(cv, sx, sy, sw, sh)
         self._chosen(cv, th, x, y, on)
@@ -836,8 +838,9 @@ class Editor:
 
     def _chosen(self, cv, th, ox, oy, on):
         """The chosen object's outline in its dark keyline, and its handles
-        (8 x 8, white in a dark border) while the slide has the keys; while
-        writing, the caret."""
+        (8 x 8, white in a dark border) while it is what the keys, the panel
+        and the menus over the slide edit (`on`: no Esc or Y sent the keys to
+        the parts); while writing, the caret."""
         o = self._obj()
         if o is None:
             return
@@ -897,7 +900,7 @@ class Editor:
         st = self.app.story
         return "%s %d %d %r %d %d %d %d %r" % (
             st.name if st is not None else "", st.gen if st is not None else 0, self.app.cur,
-            self.chosen, self.writing, self.step, self.on_slide, self.resizing, self.guides)
+            self.chosen, self.writing, self.step, not self.parts, self.resizing, self.guides)
 
     # -- the words the page shows ----------------------------------------------------------
 
