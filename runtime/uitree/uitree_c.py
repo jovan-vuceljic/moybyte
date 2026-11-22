@@ -182,6 +182,7 @@ class CEngine(Engine):
             self._slot, self._names, self._types, self._pushed = {}, [], [], {}
             self._docs = {}
             self._drawing = False
+            self._pic_of, self._pic_wh = {}, {}     # an image's text -> its Pic; a node -> its tile's size
             self._bind()            # the module's state holds this engine's values before any is pushed
             if not self._load(x):
                 self._declare()
@@ -261,8 +262,8 @@ class CEngine(Engine):
                 ty = INT
             elif t is S.NUM:
                 ty = NUM
-            elif t is S.TEXT:
-                ty = TEXT
+            elif t is S.TEXT or t is S.IMAGE:
+                ty = TEXT       # an image: its repr ("own:KEY"), which a card's image= hands the front (`_pic`)
             elif isinstance(t, S.Model):
                 ty = MODEL
             elif isinstance(t, S.RowOf):
@@ -323,7 +324,7 @@ class CEngine(Engine):
 
     @staticmethod
     def _ftype(t, model):
-        for k, v in ((S.BOOL, BOOL), (S.INT, INT), (S.NUM, NUM), (S.TEXT, TEXT)):
+        for k, v in ((S.BOOL, BOOL), (S.INT, INT), (S.NUM, NUM), (S.TEXT, TEXT), (S.IMAGE, TEXT)):
             if t is k:
                 return v
         if type(t) is S.Enum:
@@ -366,8 +367,8 @@ class CEngine(Engine):
                         add(c)
                     elif k == 2:
                         add("1" if c else "0")
-                    elif k == 3:
-                        add(repr(c))
+                    elif k == 3 or k == 5:
+                        add(repr(c) if c is not None else "")
                     else:
                         add(str(c))
             raw = ("\0".join(cells) + "\0").encode("utf-8") if cells else b""
@@ -548,6 +549,7 @@ class CEngine(Engine):
         draws = self._draws = {}
         if not self._drawing:
             x.on_draw(self._draw)
+            x.on_pic(self._pic)
             self._drawing = True
         cnode, cprop, cact, aidx, fail = x.node, x.prop, x.node_action, self._aidx, self._fail
         kinds, bound, heads, lits_only, action = _KINDS, _BOUND, _HEAD, _LIT_ONLY, S.Action
@@ -778,6 +780,27 @@ class CEngine(Engine):
         finally:
             now.app, now.frame = app, frame
 
+    def _pic(self, node, pic, r):
+        """A card's or a picture's image (`uit_on_pic`): with no tile, whether
+        the picture is decoded at the size the node's unfocused tile last
+        had; with one, drawn there clipped, or owed to the idle step."""
+        p = self._pic_of.get(pic)
+        if p is None:
+            kind, _c, key = pic.partition(":")
+            p = self._pic_of[pic] = S.Pic(kind, key)
+        wh = self._pic_wh.get(node)
+        if r is None:
+            return wh is not None and self.pics.state(p, wh[0], wh[1]) == "shown"
+        if not r[8] and (wh is None or wh[0] != r[2] or wh[1] != r[3]):
+            wh = self._pic_wh[node] = (r[2], r[3])
+        got = self.pics.peek(p, wh[0], wh[1]) if wh is not None else self.pics.peek(p, r[2], r[3])
+        if got is not None:
+            cv = self.cv
+            cv.clip(r[4], r[5], r[6], r[7])
+            self.pics.draw(cv, got, r[0], r[1], r[2], r[3])
+            cv.clip()
+        return got is not None
+
     # -- the frame -------------------------------------------------------------------
 
     def paint(self, dt, cv, th, content, desk):
@@ -792,6 +815,11 @@ class CEngine(Engine):
         if self._shut:
             self._resume()
         self._ready()
+        if self.pics is None:
+            import uitree_pics
+            self.pics = uitree_pics.PicEngine(self, self.files, getattr(cv, "swapped565", False),
+                                              uitree_pics.budget_for(cv.w, cv.h))
+        self.pics.begin_frame()
         x = self._x
         if self.want_focus is not None:
             w, at, self.want_focus, self.focus_at = self.want_focus, self.focus_at, None, None

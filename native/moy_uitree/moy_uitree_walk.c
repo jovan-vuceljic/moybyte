@@ -1235,7 +1235,7 @@ static int32_t size_of(uit_t *e, int32_t v)
 
 // A card's or a picture's marks (`ui.card`'s o): its icon tile where it names an icon, its tone,
 // the lock where its tone is "locked".
-static void card_mark(uit_t *e, moy_ui_ctx_t *c, const uit_node_t *N, int model, int row)
+static void card_mark(uit_t *e, moy_ui_ctx_t *c, const uit_node_t *N, int model, int row, int pic)
 {
     static const char *const TONE_NAMES[] = {"ink", "dim", "value", "danger"};
     uint32_t tn = 0, ta = N->t_aux >= 0 ? uit_tmpl_render(e, N->t_aux, model, row, &tn) : 0;
@@ -1243,25 +1243,57 @@ static void card_mark(uit_t *e, moy_ui_ctx_t *c, const uit_node_t *N, int model,
     for (int i = 0; i < 4 && tn && !locked; i++)
         if (strlen(TONE_NAMES[i]) == tn && !memcmp(e->scratch.p + ta, TONE_NAMES[i], tn))
             tone = i;
-    if (N->t_icon < 0 && !tn)
+    if ((N->t_icon < 0 || pic) && !tn)
         return;
-    uint32_t in = 0, ia = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &in) : 0;
+    uint32_t in = 0, ia = N->t_icon >= 0 && !pic ? uit_tmpl_render(e, N->t_icon, model, row, &in) : 0;
     moy_ui_api_card_mark(c, span_of("", 0), locked ? 4 : tone, sspan(e, ia, in));
 }
 
-// A card of a cards list (`_r_cards`' per row): its id, its marks, its label and sub line.
+static uint32_t prop_text(uit_t *e, int k, const char *name, int model, int row, uint32_t *n);
+
+// A card's or a picture's image (`image=`): its text into the scratch at *a (*n 0 where it names
+// none or no front end draws pictures), and whether the front end holds the picture.
+static int pic_held(uit_t *e, int k, int model, int row, uint32_t *a, uint32_t *n)
+{
+    *a = prop_text(e, k, "image", model, row, n);
+    if (!e->pic_fn)
+        *n = 0;
+    return *n && e->pic_fn(e->pic_ud, k, e->scratch.p + *a, *n, NULL);
+}
+
+// The card's tile (`out`, moy_ui_api_card's) handed to the front end, which draws the picture
+// where it holds it and else owes it: clipped to the page's room cut to the scroll's floor, and
+// whether the card is focused (its tile lifted, larger than the others').
+static void pic_draw(uit_t *e, moy_ui_ctx_t *c, int k, uint32_t a, uint32_t n, const int32_t out[5])
+{
+    if (!n || out[2] <= 0)
+        return;
+    int32_t r[9] = {out[0], out[1], out[2], out[3], e->rect[0], e->rect[1], e->rect[2], e->rect[3],
+                    (out[4] & MOY_UI_ST_FOCUS) != 0};
+    moy_ui_api_card_clip(c, r + 4);
+    if (r[6] > 0 && r[7] > 0)
+        e->pic_fn(e->pic_ud, k, e->scratch.p + a, n, r);
+}
+
+// A card of a cards list (`_r_cards`' per row): its id, its marks, its label and sub line, its
+// picture where the front end holds it (the icon tile while it has none; a card with a picture
+// carries no gen, so a shift frame draws it again).
 static void draw_card(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     const uit_node_t *N = NODE(k);
     moy_ui_over_t o;
     char id[UIT_ID_MAX + 1];
     over_for(e, k, model, row, c, &o, id);
+    uint32_t pa, pn;
+    int held = pic_held(e, k, model, row, &pa, &pn);
     int32_t pic_gen = 0;        // the card's tile is the engine's alone: no app picture moves it
-    moy_ui_over_put(&o, MOY_UI_OV_GEN, &pic_gen);
-    card_mark(e, c, N, model, row);
+    if (!pn)
+        moy_ui_over_put(&o, MOY_UI_OV_GEN, &pic_gen);
+    card_mark(e, c, N, model, row, held);
     uint32_t n1, n2, a1 = text(e, k, 0, model, row, &n1), a2 = text(e, k, 1, model, row, &n2);
     int32_t out[5];
     moy_ui_api_card(c, s, sspan(e, a1, n1), sspan(e, a2, n2), &o, out);
+    pic_draw(e, c, k, pa, pn, out);
     if ((out[4] & 2) && N->act >= 0 && uit_act_can(e, N->act, model, row))
         fire(e, N->act, k, model, row, NULL);
 }
@@ -1335,8 +1367,11 @@ static void draw_picture(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
     moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &one);
     moy_ui_api_grid_spread(c, 1, -1, 4, (e->flags & UIT_F_DESK) ? 16 : 8, 0);
     moy_ui_api_grid(c, s, span_of("pic ", 4), side, side, NULL);
-    card_mark(e, c, N, model, row);
+    uint32_t pa, pn;
+    int held = pic_held(e, k, model, row, &pa, &pn);
+    card_mark(e, c, N, model, row, held);
     moy_ui_api_card(c, s, span_of("", 0), span_of("", 0), &o, out);
+    pic_draw(e, c, k, pa, pn, out);
     moy_ui_api_grid(c, s, span_of("", 0), 0, 0, NULL);
 }
 

@@ -295,13 +295,14 @@ class Model(T):
         # store's field indexes, a compiled page's among them, are this order's.
         self.order = tuple(sorted(self.fields))
         # each field of `order` with how the C store takes its cell (uitree_c's push):
-        # 0 a text (an enum's value too) as it is, 1 an int, 2 a bool, 3 a number, 4 str() of it
+        # 0 a text (an enum's value too) as it is, 1 an int, 2 a bool, 3 a number, 4 str() of it,
+    # 5 an image (its repr, "" for none)
         self.wire = tuple((f, _wire(self.fields[f])) for f in self.order)
 
 
 def _wire(t):
     return (0 if t is TEXT or type(t) is Enum else 1 if t is INT else 2 if t is BOOL else
-            3 if t is NUM else 4)
+            3 if t is NUM else 5 if t is IMAGE else 4)
 
 
 class RowOf(T):

@@ -128,8 +128,9 @@ class Engine(S.Builder):
 
     def idle_step(self):
         """A frame with nothing to paint: one owed picture decoded, the card
-        showing it from the next frame."""
+        showing it from the next frame (every gen moves)."""
         if self.pics is not None and self.pics.idle_step():
+            self._x.pics_moved()
             self._damage.all()
 
     def _posts(self):
