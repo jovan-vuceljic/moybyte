@@ -1136,6 +1136,13 @@ int32_t moy_ui_api_bar(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t ti
     return got;
 }
 
+void moy_ui_api_status_band(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_box_t b) {
+    clip_t k;
+    EACH_PIECE(c, k, s, b) {
+        moy_ui_status(s, b, (const uint8_t *)"", 0, 0, c->fs);
+    }
+}
+
 void moy_ui_api_rule(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     if (c->has_at) {
         moy_ui_box_t b = c->at;

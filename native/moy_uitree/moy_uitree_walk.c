@@ -3106,15 +3106,12 @@ static void stack(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int 
 }
 
 // A status line: its first field always, the others while they fit, joined by the `ui`
-// face's separator, its words on the page's text column (the text view's inset). A row's
-// status cell with no words draws nothing: the row keeps a status line's height.
+// face's separator, its words on the page's text column (the text view's inset).
 static void draw_status(uit_t *e, const moy_ui_sink_t *s, int k, int model, int row, const int32_t r[4])
 {
     int mn, fs = e->fs;
     int pad = moy_ui_metrics(MOY_UI_K_STATUS, &mn)[1] * fs;
     uint32_t n, at = text(e, k, 0, model, row, &n);
-    if (!n && NODE(k)->parent != UIT_NONE && NODE(NODE(k)->parent)->kind == UIT_ROW)
-        return;
     moy_font_info_t fi;
     uint32_t f = role_font(MOY_UI_FONT_UI, &fi);
     const char *p = e->scratch.p + at, *end = p + n;
@@ -3361,7 +3358,7 @@ static void row_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     const uit_node_t *R = NODE(k);
     if (st && !st_shown && !e->placing) {
         moy_ui_box_t b = {(int16_t)r[0], (int16_t)r[1], (int16_t)r[2], (int16_t)r[3]};
-        moy_ui_status(s, b, (const uint8_t *)"", 0, 0, s->fs);     // a status row's band, its line hidden
+        moy_ui_api_status_band(c, s, b);        // a status row's band, its line hidden
     }
     for (int i = 0; i < n; i++) {
         nat[i] = natural(e, kids[i], km[i], kr[i], r[3]);

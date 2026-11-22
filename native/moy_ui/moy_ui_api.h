@@ -1306,6 +1306,10 @@ void moy_ui_api_tip(moy_ui_ctx_t *c, const moy_ui_over_t *o, moy_ui_span_t label
 #define MOY_UI_BAR_UP (-2)
 int32_t moy_ui_api_bar(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t title,
                        const uint8_t *tools, size_t len, uint32_t off);
+// An empty status band filling box b: drawn through the pass's floor, as a
+// row's cells are, where a direct moy_ui_status would paint over the pixels a
+// rows frame keeps.
+void moy_ui_api_status_band(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_box_t b);
 // A rule (§1): a line in the structure colour, one pixel at the scale
 // across ui.at's rect (down it where the rect is taller than wide), else a
 // row of the page's with the line across its middle.
