@@ -113,7 +113,7 @@ def test_a_board_runs_the_frozen_layer_as_the_host_runs_the_files(tmp_path, monk
     import lua_ext
     import uitree_lua_freeze as freeze
     for name in freeze.FILES:
-        with open(os.path.join(ROOT, "runtime", "run", name)) as f:
+        with open(os.path.join(freeze.RUN, name)) as f:
             src = f.read()
         assert freeze.strip(src).count("\n") == src.count("\n"), name
     files = _form_run(str(tmp_path / "a"))
@@ -125,7 +125,7 @@ def test_a_board_runs_the_frozen_layer_as_the_host_runs_the_files(tmp_path, monk
     monkeypatch.setattr(lua_ext, "_uitree_src", {})
     monkeypatch.delitem(sys.modules, "uitree_lua", raising=False)
     try:
-        with open(os.path.join(ROOT, "runtime", "run", "uitree.lua")) as f:
+        with open(os.path.join(freeze.RUN, "uitree.lua")) as f:
             assert zlib.decompress(lua_ext.uitree_source(), -freeze.WBITS) == freeze.strip(f.read()).encode()
         assert _form_run(str(tmp_path / "b")) == files
     finally:
