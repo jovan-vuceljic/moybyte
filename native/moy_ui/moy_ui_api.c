@@ -1219,6 +1219,7 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     c->grid_open = 0;
     c->fin_on = 0;
     c->card_slot = c->card_glyph = c->card_blank = c->card_blank_glyph = -1;
+    c->card_lead = c->card_lead_glyph = -1;
     c->card_tone = 0;
     c->spread.cols = 0;
     c->spread.foot = c->spread.top = c->spread.margin = 0;
@@ -3543,6 +3544,30 @@ void moy_ui_api_group_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     c->grp_card = (uint8_t)(c->cls != 0);
     c->y = (int16_t)(c->y + c->grp_card * c->fs);
     c->grp_top = c->y;
+}
+
+void moy_ui_api_group_rules(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
+    mua_grid_end(c, s);
+    mua_group_close(c, s);
+    c->has_at = 0;
+    c->grp_open = 1;
+    c->grp_n = 0;
+    c->grp_top = c->y;
+}
+
+int moy_ui_api_group_row(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int h) {
+    if (!c->grp_open) {
+        return 0;
+    }
+    c->has_at = 0;                  // (a measure's rect: the row is the page's next)
+    int stacked;
+    clip_t k;
+    moy_ui_box_t b = mua_place(c, h, &stacked);
+    EACH_ROW(c, k, s, b, stacked, c->page) {
+        mua_band(c, s, b, stacked);
+        mua_clip_out(&k);
+    }
+    return 1;
 }
 
 void moy_ui_api_group(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t caption,

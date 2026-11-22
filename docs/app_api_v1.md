@@ -281,12 +281,18 @@ centred). `ui.foot()` (the end look) sets its buttons at
 their natural widths at its end with a status label before them;
 `look="share"` shares its width among them. `ui.toast(text, icon=)` is a
 pill over the page above its foot; `ui.group("", look="card")` lays its
-rows on a card (as a split's cell, the cell is the card); `ui.text_view(..., look="well")` lays its prose on a
+rows on a card (as a split's cell, the cell is the card), and
+`look="rules"` parts its rows with a rule as a captioned group's are (a
+`ui.row` among them one of its rows); `ui.text_view(..., look="well")` lays its prose on a
 well; `ui.cards(..., pad=)` sets the gap its columns are counted at, and its
 `current=` marks the card whose key a state holds; a link's
 `swatch="#RRGGBB"` (a template, empty for none) draws a chip of that colour
 before its value; a
-card's `badge=` marks its picture; a button's `kind=` may be a template;
+card's `badge=` marks its picture and its `label_icon=` stands an icon
+before its label; a button's `kind=` may be a template, and `kind="bar"`
+alone is a flat icon, narrower than a button's; on the desk a popover
+anchored at a button or a link hangs under it; a swatches row whose label
+its dots would cut moves them into its right pad where that makes it whole;
 `ui.split(..., rule=True)` draws a rule between its cells;
 `ui.seg(label, ".FIELD", text=...)` in a rows' body binds an int field of
 the row, the index of its item, its items the lines `text=` renders over

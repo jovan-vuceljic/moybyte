@@ -570,7 +570,7 @@ typedef struct {
     moy_ui_box_t track;
 } vgeo_t;
 
-static void geo(const pd_t *d, moy_ui_box_t b, const moy_ui_vrow_t *r, vgeo_t *g) {
+static void geo(const pd_t *d, moy_ui_box_t b, const moy_ui_vrow_t *r, int kind, vgeo_t *g) {
     g->right = b.x + b.w - pad_of(d, r);
     g->gap = pm(d, MOY_UI_M_VALUE_ROW_SEG, 1);
     g->dot = pm(d, MOY_UI_M_VALUE_ROW_DOT, 1);
@@ -579,6 +579,17 @@ static void geo(const pd_t *d, moy_ui_box_t b, const moy_ui_vrow_t *r, vgeo_t *g
     g->ring = 3 * d->fs;
     g->apart = g->ring + 4 * d->fs - (g->step - g->dot);
     g->apart = g->apart > 0 ? g->apart : 0;
+    if (kind == MOY_UI_V_SWATCH && r->label.n && r->n > 0) {
+        // a label the dots would cut takes the row's right pad, where that makes it whole
+        pf_t fl = font_of(d, MOY_UI_FONT_UI);
+        int gap = pm(d, MOY_UI_M_VALUE_ROW_GAP, 1);
+        int lx = b.x + pad_of(d, r) + (r->icon_slot >= 0 || r->icon_glyph >= 0 ? 16 * d->fs + gap : 0);
+        int dots = g->dot + (r->n - 1) * g->step + (r->cur >= 0 && r->cur < r->n ? 2 * g->apart : 0);
+        int need = lx + tw(&fl, r->label.p, r->label.n, tscale(d->s)) + gap + g->ring + dots;
+        if (need > g->right && need <= b.x + b.w) {
+            g->right = need;
+        }
+    }
     int tw_ = pm(d, MOY_UI_M_VALUE_ROW_TRACK, 1);
     g->track = (moy_ui_box_t){(int16_t)(g->right - tw_), (int16_t)(b.y + b.h / 2 - d->fs),
                               (int16_t)tw_, (int16_t)(3 * d->fs)};
@@ -646,7 +657,7 @@ int32_t moy_ui_vrow_at(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, const m
     pd_t d;
     open_pd(s, &d, r->fs, r->desk);
     vgeo_t g;
-    geo(&d, b, r, &g);
+    geo(&d, b, r, kind, &g);
     if (kind == MOY_UI_V_SLIDER && r->steps) {
         int pitch, x0 = step_geo(&d, &g, r, &pitch);
         int32_t v = x < x0 ? r->lo : r->lo + 1 + (x - x0) / pitch;
@@ -763,7 +774,7 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
     }
     int pad = pad_of(&d, r);
     vgeo_t g;
-    geo(&d, b, r, &g);
+    geo(&d, b, r, kind, &g);
     pf_t fl = font_of(&d, MOY_UI_FONT_UI), fv = font_of(&d, MOY_UI_FONT_CAPTION);
     int rh = (d.desk ? 28 : 20) * d.fs, bh = (d.desk ? 8 : 6) * d.fs;
     if (kind == MOY_UI_V_PROGRESS && b.h >= moy_ui_vrow_tall_h(d.desk, d.fs)) {
@@ -1216,9 +1227,30 @@ static int tone_ink(const pd_t *d, int tone) {
                    : tok(d, MOY_UI_T_CHROME_INK, MOY_UI_T_INK);
 }
 
+// A card's title line centred across x..x+w, icon `lead` (-1 none) in ink `li` before it.
+static void card_title(pd_t *d, const pf_t *f, moy_ui_span_t t, int x, int w, int y, int h,
+                       int room, uint16_t c, int sc, int lead, int lead_glyph, int li) {
+    int side = 16 * d->fs, gap = 4 * d->fs;
+    if ((lead < 0 && lead_glyph < 0) || room <= side + gap) {
+        centred_cut(d, f, t, x, w, y, h, room, c, sc);
+        return;
+    }
+    int ell = 0;
+    size_t k = moy_text_cut_px(f->id, t.p, t.n, room - side - gap, sc, &ell);
+    int tw_ = tw(f, t.p, k, sc) + (ell ? tw(f, s_dots, sizeof(s_dots), sc) : 0);
+    int ix = x + (w - side - gap - tw_) / 2;
+    moy_ui_box_t ib = {(int16_t)ix, (int16_t)(y + moy_ui_fdiv(h - side, 2)), (int16_t)side,
+                       (int16_t)side};
+    icon_d(d, lead, lead_glyph, ib, li);
+    int at = text(d, f, t.p, k, ix + side + gap, y, h, c, sc);
+    if (ell) {
+        text(d, f, s_dots, sizeof(s_dots), ix + side + gap + at, y, h, c, sc);
+    }
+}
+
 int moy_ui_card(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_box_t pic, int lw,
                 moy_ui_span_t title, moy_ui_span_t sub, int flags, int fs, int desk, int tone,
-                moy_ui_box_t *content, uint16_t *gnd) {
+                int lead, int lead_glyph, moy_ui_box_t *content, uint16_t *gnd) {
     pd_t d;
     open_pd(s, &d, fs, desk);
     const moy_ui_marks_t *m = moy_ui_marks();
@@ -1284,11 +1316,11 @@ int moy_ui_card(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_box_t pic, int lw
     if (head > 0 && head < title.n) {
         moy_ui_span_t a = {title.p, (uint16_t)head};
         moy_ui_span_t z = {title.p + head + 1, (uint16_t)(title.n - head - 1)};
-        centred_cut(&d, &ft, a, b.x, b.w, y, th, room, pal(&d, ink), sc);
+        card_title(&d, &ft, a, b.x, b.w, y, th, room, pal(&d, ink), sc, lead, lead_glyph, dim);
         centred_cut(&d, &ft, z, b.x, b.w, y + tl, th, room, pal(&d, ink), sc);
         sy += tl;
     } else if (title.n && room > 0) {
-        centred_cut(&d, &ft, title, b.x, b.w, y, th, room, pal(&d, ink), sc);
+        card_title(&d, &ft, title, b.x, b.w, y, th, room, pal(&d, ink), sc, lead, lead_glyph, dim);
     }
     if (sub.n && room > 0 && sy + 2 * d.fs + fsub.ascent * sc <= b.y + b.h) {  // where the foot holds it
         centred_cut(&d, &fsub, sub, b.x, b.w, sy, sh, room, pal(&d, dim), sc);

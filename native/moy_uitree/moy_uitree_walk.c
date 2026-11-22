@@ -1407,6 +1407,14 @@ static void card_mark(uit_t *e, moy_ui_ctx_t *c, int k, int model, int row, int 
     moy_ui_api_card_mark(c, sspan(e, ba, bn), locked ? 4 : tone, sspan(e, ia, in));
 }
 
+// A card's label_icon=: the icon before its label.
+static void card_lead(uit_t *e, moy_ui_ctx_t *c, int k, int model, int row)
+{
+    uint32_t n = 0, a = prop_text(e, k, "label_icon", model, row, &n);
+    if (n)
+        moy_ui_api_card_lead(c, sspan(e, a, n));
+}
+
 // A card's or a picture's image (`image=`): its text into the scratch at *a (*n 0 where it names
 // none or no front end draws pictures), and whether the front end holds the picture: 0, else the
 // picture's gen (uit_pic_fn).
@@ -1448,6 +1456,7 @@ static void draw_card(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     if (!pn || held > 0)
         moy_ui_over_put(&o, MOY_UI_OV_GEN, &pic_gen);
     card_mark(e, c, k, model, row, held);
+    card_lead(e, c, k, model, row);
     uint32_t n1, n2, a1 = text(e, k, 0, model, row, &n1), a2 = text(e, k, 1, model, row, &n2);
     int32_t out[5];
     moy_ui_api_card(c, s, sspan(e, a1, n1), sspan(e, a2, n2), &o, out);
@@ -1673,8 +1682,8 @@ static void pop_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
 }
 
 // A popover (`_r_popover`): centred across the page, from the top of its anchor's stop (a list's
-// current row for "LIST.cur") as a point it slides up from to fit whole; its close= fired the
-// frame it is dismissed.
+// current row for "LIST.cur") as a point it slides up from to fit whole; on the desk a button's
+// or a link's hangs under it; its close= fired the frame it is dismissed.
 static void placed_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k);
 
 // A popover's override: its wash= (lit: the toolkit's wash + 1, 0 none given)
@@ -1716,8 +1725,19 @@ static void draw_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
             const char *got = I->row >= 0 ? row_key(e, uit_model_of(e, I->node), I->row) : uit_str(e, NODE(I->node)->key);
             int32_t box[4];
             if (strlen(got) == wn && !memcmp(got, want, wn)) {
-                if (moy_ui_api_box(c, span_of(I->id, strlen(I->id)), box))
-                    moy_ui_api_at(c, e->rect[0] + (e->rect[2] - w) / 2, box[1] - 8, w, 0);
+                if (moy_ui_api_box(c, span_of(I->id, strlen(I->id)), box)) {
+                    int32_t x = e->rect[0] + (e->rect[2] - w) / 2, y = box[1] - 8;
+                    int kd = NODE(I->node)->kind;
+                    if ((e->flags & UIT_F_DESK) && I->row < 0 && (kd == UIT_BUTTON || kd == UIT_LINK)) {
+                        // on the desk a button's or a link's hangs under it, its left edge at
+                        // the anchor's, kept inside the page
+                        int32_t most = e->rect[0] + e->rect[2] - w;
+                        x = box[0] < most ? box[0] : most;
+                        x = x > e->rect[0] ? x : e->rect[0];
+                        y = box[1] + box[3] + 4;
+                    }
+                    moy_ui_api_at(c, x, y, w, 0);
+                }
                 break;
             }
         }
@@ -1904,7 +1924,7 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
         }
         char sid[UIT_ID_MAX + 1];
         snprintf(sid, sizeof sid, "split %s %d", uit_str(e, N->key), i);
-        if (NODE(g)->lit) {             // look="card": its card's plate behind the cell
+        if (NODE(g)->lit == 1) {        // look="card": its card's plate behind the cell
             moy_ui_api_at(c, cell[0], cell[1], cell[2], cell[3]);
             moy_ui_api_card_at(c, s);
         }
@@ -2308,8 +2328,8 @@ static int32_t button_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
     int32_t out[5];
     moy_ui_api_measure(c, s, MOY_UI_MEASURE_BUTTON, sspan(e, a, n), NULL, out);
     e->scratch.n = mark;
-    if (icon && (N->btn & BT_ALONE))
-        return (e->flags & UIT_F_DESK) ? 36 : 26 * e->fs;
+    if (icon && (N->btn & BT_ALONE))    // a bar item's (flat, no plate) the narrower
+        return (e->flags & UIT_F_DESK) ? (N->lit == 5 ? 28 : 36) : 26 * e->fs;
     return out[2] + (icon ? ((e->flags & UIT_F_DESK) ? 20 : 14 * e->fs) : 0);
 }
 
@@ -2598,6 +2618,7 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
         rh = hs[i] > rh ? hs[i] : rh;
         cx += cw + gap;
     }
+    int grouped = moy_ui_api_group_row(c, s, rh);     // a row of an open group: its rule
     cx = at;
     for (int i = 0; i < n; i++) {
         int kind = NODE(kids[i])->kind;
@@ -2610,7 +2631,8 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
             flow_draw(e, c, s, kids[i], model, row, cell);
         cx += ws[i] + gap;
     }
-    moy_ui_api_space(c, rh + step_gap);
+    if (!grouped)
+        moy_ui_api_space(c, rh + step_gap);
 }
 
 // -- a long rows list: the rows in view ------------------------------------------------------
@@ -2877,8 +2899,10 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
     switch (N->kind) {
     case UIT_GROUP:
         a1 = text(e, k, 0, model, row, &n1);
-        if (N->lit)
+        if (N->lit == 1)
             moy_ui_api_group_card(c, s);        // look="card": its rows on a card of their own
+        else if (N->lit == 2)
+            moy_ui_api_group_rules(c, s);       // look="rules": its rows ruled apart
         else
             moy_ui_api_group(c, s, sspan(e, a1, n1), NULL);
         walk(e, c, s, k, model, row);

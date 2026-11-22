@@ -2027,7 +2027,8 @@ SCHEMA = {
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
                   changed="action1", group="lit", pad="int"),
-    "card": dict(_C, label="text", sub="text", badge="text", image="image", icon="text", tone="text"),
+    "card": dict(_C, label="text", sub="text", badge="text", label_icon="text", image="image",
+                 icon="text", tone="text"),
     # G9, G13: a picture of its own (an image state, its fallback icon), a
     # progress bar (max= is required), a page that says why there is nothing
     "picture": dict(_C, image="image", icon="text", side="int", tone="text"),

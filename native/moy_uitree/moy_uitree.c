@@ -1114,7 +1114,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
               (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              (kind == UIT_LINK && !strcmp(name, "swatch")) ||
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
-             (kind == UIT_CARD && !strcmp(name, "badge")) || (kind == UIT_CARDS && !strcmp(name, "pad"))) {
+             (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon"))) || (kind == UIT_CARDS && !strcmp(name, "pad"))) {
         // templates the draw finds among its props by name (uit_tmpl_prop); signal=, a month's
         // year=, month= and today= and a cards list's pad= ints
         int t = uit_tmpl_compile(e, src, model);
@@ -1614,8 +1614,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     if (!strcmp(name, "cols") && kind == UIT_TABLE)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);      // a column's header, one prop each
     if (!strcmp(name, "look") && kind == UIT_GROUP) {
-        // "card": a captionless group drawn as a card (lit 1)
-        N->lit = (uint8_t)!strcmp(src, "card");
+        // "card": a captionless group drawn as a card (lit 1); "rules": its rows ruled apart (2)
+        N->lit = (uint8_t)(!strcmp(src, "card") ? 1 : !strcmp(src, "rules") ? 2 : 0);
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
     if (!strcmp(name, "look") && kind == UIT_FOOT) {
