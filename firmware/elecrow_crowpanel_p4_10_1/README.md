@@ -81,6 +81,16 @@ apply. The kernel has an SX1262 driver (`native/moy_net/moy_lora.c`, named by a
 row waits for the module. GPIOs 6-10 and 28 are in the `gpio` lease row and 27
 (a USB pad) in `never`; moving them into a `lora` row is the whole change.
 
+## Free pins
+
+The `gpio` lease row of `[hardware]` holds exactly these pads: GPIO2, GPIO3,
+GPIO4, GPIO5, GPIO6, GPIO7, GPIO8, GPIO9, GPIO10, GPIO11, GPIO12, GPIO13,
+GPIO20, GPIO28, GPIO33, GPIO47, GPIO48, GPIO49, GPIO50, GPIO51, GPIO52, GPIO53
+and GPIO54; nothing else on the pin map is free. A program's `uart1`
+(TX GPIO47, RX GPIO48) and `spi2` (SCK GPIO8, MOSI GPIO6, MISO GPIO7) sit on
+those pins by default, and the GPIO matrix can route either unit to others in
+the row.
+
 ## The traps this port carries
 
 - **LDO4 powers the pad domain and the I2C pull-ups.** The vendor sequence

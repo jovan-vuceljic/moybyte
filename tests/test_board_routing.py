@@ -874,7 +874,8 @@ def test_the_feeder_task_is_pinned_lazy_and_chunked():
     # Under the esp_timer task where the two share a core.
     assert "#define MOY_AUDIO_PRIO (ESP_TASK_TIMER_PRIO - 1)" in tasks
     for board in ("esp32_p4_wifi6_touch_lcd_7b/boards/MOYBYTE_P4",
-                  "guition_jc8012p4a1c/boards/MOYBYTE_GUITION_P4"):
+                  "guition_jc8012p4a1c/boards/MOYBYTE_GUITION_P4",
+                  "elecrow_crowpanel_p4_10_1/boards/MOYBYTE_ELECROW_P4"):
         h = (Path("firmware") / board / "mpconfigboard.h").read_text(encoding="utf-8")
         assert re.search(r"#define MOY_AUDIO_CORE\s+\(0\)", h), board
     for fn in ("i2s_new_channel(", "i2s_channel_init_std_mode(",
