@@ -87,18 +87,17 @@ class PauseMenu:
     Minimise follows Resume where the run can join the running set
     (owner, 2026-11-03; `Procs.minimise`): the game is held where it is
     and the console goes home. Options is the card's
-    second page, the console's Volume (Esc goes back). The card is a
-    popover of the public UI API's with nothing to hang from, holding a
-    `ui.menu`, drawn on the system canvas over the frozen frame; the menu's
-    keys and taps are this object's, so an action runs in the input phase,
-    and Options' slider takes the engine's.
+    second page, the console's Volume (Esc goes back). The card is
+    runtime/shell/pause_ui.py's page, a popover with nothing to hang from,
+    drawn on the system canvas over the frozen frame; its keys and taps are
+    its engine's, and a row chosen acts at the frame's tail.
 
     A stopped run is its sibling, the stop card (GAPS 49, `stop`): the same
     card over the run's last frame washed, naming the cart and Stopped, the
     sentence (`say.crash_line`), then See why (the Code tab on the line,
     `Workstation._crash_to_code`; none for a compiled or native cart or
     one with nothing to edit), Restart, Home and Details (the error exact
-    in the code face on a `sunk` inset), its keys in its foot. A notice (a
+    in the code face). A notice (a
     compiled cart this console cannot run) is the same card with its words
     in the body face and Open Updates (a newer console's) or Home. Esc, B or
     Super leave for Home.
@@ -127,9 +126,9 @@ class PauseMenu:
     def __init__(self, ws):
         self.ws = ws
         self.open = False
-        self.sel = 0
         self.page = 0               # 0 the menu, 1 Options
-        self._host = None
+        self._host = _ui_draw.AppHost()
+        self._page = None           # pause_ui's page, made at the first open
         # The run's frame under the card, kept as the game left it and held
         # washed as the card draws over it (`ui_draw.Hold`), where the game's
         # frame is the system canvas (the handheld): each frame starts from
@@ -141,12 +140,8 @@ class PauseMenu:
         self.details = False        # ...its Details shown: the error exact
         self.rows = self.ITEMS      # the card's rows
         self.icons = self.ICONS
-
-    def _width(self, desk):
-        if self.stopped:
-            fs = self.ws.layout.fs
-            return 520 if desk else min(self.ws.sys_canvas.w - 32 * fs, 340 * fs)
-        return 300 if desk else 188 * self.ws.layout.fs
+        self._chosen = None         # the row a handler chose, taken at the frame's tail
+        self._fresh = False         # the next `put` is an open's
 
     def prealloc(self):
         """Mint the layers the frame under the card is kept and held in
@@ -204,17 +199,96 @@ class PauseMenu:
     def _open(self):
         ws = self.ws
         self.open = True
-        self.sel = 0
         self.page = 0
+        self._chosen = None
+        self._fresh = True
         ws.input.spend_key()        # the key that opened it is no press of the menu's
         self._hold.drop()
         self.ws.bar_layer.drop_strips("pause")   # its bar's strip with it
         self._capture = True
-        if self._host is None:
-            self._host = _ui_draw.AppHost()
-        else:
-            self._host.reset()
+        self._host.reset()
+        if self._page is None:
+            import uitree_app
+            import pause_ui
+            self._page = uitree_app.hosted_page(pause_ui.page, self._host, self, env=self)
+            self._page.bare = True    # the held game is its ground
+            self._page.band = False   # the card alone: the windowed desk paints its rect alone
+        self._page.open(hook="put")
         ws.pause_touch()
+
+    def put(self, s):
+        """The card as the page shows it (pause_ui's `put` hook)."""
+        ws = self.ws
+        cart = ws.cart
+        s.title = str((cart.get("title") if cart else "") or "Game")
+        s.card = "stop" if self.stopped else ("options" if self.page else "menu")
+        if self._fresh:               # an open: its rows, the keys on the first
+            self._fresh = False
+            s.rows = [{"id": r, "icon": i} for r, i in zip(self.rows, self.icons)]
+            s.sel = self.rows[0]
+        s.details = self.details
+        desk = _desk_class()
+        s.w = (520 if desk else 288) if self.stopped else (300 if desk else 188)
+        if not self.stopped:
+            s.state = "Paused"
+            cur, lo, hi = ws.settings_layer.level("volume")
+            s.vol, s.vlo, s.vhi = cur, lo, hi
+            s.vicon = "mute" if cur == lo else "volume"
+            return
+        player = ws.run.player
+        if player.notice is not None:
+            s.state = ""
+            s.sentence = str(player.notice_title or "")
+            s.words = str(player.notice or "")
+            s.error = str(player.notice_detail or "")
+            s.details = self.details and bool(player.notice_detail)
+        else:
+            s.state = "Stopped"
+            s.sentence = _ch.crash_title(ws.cart_error, player.crash_line)
+            s.words = _ui_draw.s("stop.yours" if self.SEE_WHY in self.rows else "stop.maker")
+            s.error = str(ws.cart_error or "").strip() or _ui_draw.s("chrome.no_text")
+
+    def _put(self):
+        """What the card shows moved: the page takes it."""
+        import pause_ui
+        self._page.run(pause_ui.put, action="put")
+        pause_ui.ui.commit(self._page)
+        self.ws.pause_touch()
+
+    def all(self):
+        """The page's damage: the card draws again."""
+        self.ws.pause_touch()
+
+    def volume(self, v):
+        """Options' slider moved."""
+        self.ws.settings_layer.set_level("volume", v)
+        self._put()
+
+    def away(self):
+        """A press outside the card: Options back to the menu, the menu
+        back to the game (at the frame's tail); the stop card stays."""
+        if self.page:
+            self.back()
+        elif not self.stopped:
+            self.chosen("Resume")
+
+    def chosen(self, row):
+        """A row the page chose: Options and Details change the card now;
+        a row that leaves it acts at the frame's tail."""
+        if row == "Options" or row == self.DETAILS:
+            self.choose(self.rows.index(row))
+            return
+        self._chosen = row
+        self.ws.defer(self._take, toast=False)
+
+    def _take(self):
+        row, self._chosen = self._chosen, None
+        if self.open and row in self.rows:
+            self.choose(self.rows.index(row))
+
+    def focused(self):
+        """The row the keys are on, None while the card is down."""
+        return self._page.s._v["sel"] if self._page is not None and self.open else None
 
     def close(self):
         """Resume: the run is given back (a stopped run's card goes Home)."""
@@ -226,16 +300,22 @@ class PauseMenu:
         self.open = False
         self._hold.unsnap(self.ws, self.ws.sys_canvas)   # the frame as the game left it
         self._hold.drop()
+        self._release()
         self.ws.bar_layer.drop_strips("pause")   # its bar's strip with it
         self.ws.run.player.pace.resume()
         self.ws.pause_touch()
+
+    def _release(self):
+        """The page lets go of what it holds: the card holds nothing while
+        it is down."""
+        if not self.open and self._page is not None:
+            self._page.forget()
 
     def back(self):
         """Esc and B: Options back to the menu, the menu back to the game."""
         if self.page:
             self.page = 0
-            self._host.reset()
-            self.ws.pause_touch()
+            self._put()
         else:
             self.close()
 
@@ -250,6 +330,7 @@ class PauseMenu:
         self.stopped = False
         self._hold.unsnap(self.ws, self.ws.sys_canvas)
         self._hold.drop()
+        self._release()
         self.ws.bar_layer.drop_strips("pause")   # its bar's strip with it
         self.ws.pause_touch()
         self.ws.mark_dirty()
@@ -263,8 +344,7 @@ class PauseMenu:
         ws = self.ws
         if row == self.DETAILS:
             self.details = not self.details
-            self._host.reset()
-            ws.pause_touch()
+            self._put()
             ws.mark_dirty()
             return
         self._shut()
@@ -306,8 +386,7 @@ class PauseMenu:
             ws.start()                   # the same cart from the top, same caller
         elif row == "Options":
             self.page = 1
-            self._host.reset()
-            ws.pause_touch()
+            self._put()
             return
         elif row == "Quit":
             self.close()
@@ -315,43 +394,11 @@ class PauseMenu:
             ws.spine.exit_to_caller()
         ws.mark_dirty()
 
-    def _unwash_strip(self, cv):
-        """The desk's PROJECTS window's hint strip names the dialog's keys
-        (`launcher_layer.modal_keys`), so it stays unwashed, as under the
-        system menu (`SystemMenuUI._scrim_bands`): its pixels back from the
-        window's buffer over the dialog's scrim, where the card is clear of
-        it."""
-        ws = self.ws
-        p = ws.menu_ui._projects()
-        blit = getattr(cv, "blit_strip_rect", None)
-        if p is None or p[1] is None or blit is None:
-            return
-        sx, sy, sw, sh = p[1]
-        card = self._host.box(self.title)
-        if card is not None and card[0] < sx + sw and sx < card[0] + card[2] \
-                and card[1] < sy + sh and sy < card[1] + card[3]:
-            return
-        win = ws.wm.windows["projects"]
-        cx, cy = win.content_rect()[:2]
-        blit(win.buf, cx, cy, sx, sy, sw, sh)
-
     def handle_input(self, i):
         if i.pressed("b") or i.pressed("stop") or getattr(i, "typed", 0) == 27:
             self.back()
             return
-        if self.page:
-            if self._host.keys(i):
-                self.ws.pause_touch()
-            return
-        n = len(self.rows)
-        if i.steps("up") and self.sel > 0:
-            self.sel -= 1
-            self.ws.pause_touch()
-        elif i.steps("down") and self.sel < n - 1:
-            self.sel += 1
-            self.ws.pause_touch()
-        elif i.pressed("a") or i.pressed("run"):
-            self.choose(self.sel)
+        self._page.keys(i)
 
     def shows_bar(self):
         """Whether the bar shows over the paused game (owner, 2026-11-05):
@@ -363,29 +410,14 @@ class PauseMenu:
 
     def at_top(self):
         """The keys are on the card's first row: up walks onto the bar."""
-        return not self.page and self.sel == 0
+        return not self.page and self.focused() == self.rows[0]
 
     def handle_pointer(self, px, py, click):
-        host = self._host
         ws = self.ws
         if click and self.shows_bar() and ws.bar_layer.handle_bar_tap("pause", px, py):
             ws.pause_touch()
             return
-        if self.page:
-            if click and not _in_box(px, py, host.box("Pause")):
-                self.back()
-            elif host.point(px, py, click, bool(getattr(ws.pointer, "down", False))):
-                ws.pause_touch()
-            return
-        if not click:
-            return
-        for j, t in enumerate(self.rows):
-            if _in_box(px, py, host.box(t)):
-                self.sel = j
-                self.choose(j)
-                return
-        if not self.stopped and not _in_box(px, py, host.box("Pause")):
-            self.close()                  # a press outside the card resumes
+        self._page.point(px, py, click)
 
     def surface(self):
         """The rect the card centres on: the paused game's window content on
@@ -516,78 +548,11 @@ class PauseMenu:
     def _card(self):
         ws = self.ws
         cv = ws.sys_canvas
-        host = self._host
-        desk = _desk_class()
-        if not self.page:
-            host.focus(self.rows[self.sel])
-        host.begin(cv, ws.theme_colors, self.surface(), desk)
-        _ui.popover("Pause", self._width(desk))
-        cart = ws.cart
-        _ui.icon("moy")
-        if self.stopped:
-            self._stop_body(cart)
-            _ui.popover()
-            if host.due():
-                ws.request_frame()
-            return
-        _ui.info(str((cart.get("title") if cart else "") or "Game"), "Paused")
-        if self.page:
-            sl = ws.settings_layer
-            cur, lo, hi = sl.level("volume")
-            if cur == lo:
-                _ui.icon("mute")
-            got = _ui.slider("Volume", cur, lo, hi, {"steps": True})
-            if got != cur:
-                sl.set_level("volume", got)
-            _ui.hints(("change", "Change", "back", "Back"))
-        else:
-            _ui.menu("", self.rows, self.icons)
-            _ui.hints(("back", "Resume"))
-        _ui.popover()
-        if host.due():
+        rect, desk = self.surface(), _desk_class()
+        self._host.begin(cv, ws.theme_colors, rect, desk)
+        self._page.paint(0.0, cv, ws.theme_colors, rect, desk)
+        if self._host.due():
             ws.request_frame()
-
-    def _error_lines(self):
-        """The error exact's inset: four lines on the desk, three on a
-        handheld, whose glass holds it with the card's rows."""
-        return _STOP_ERROR if _desk_class() else _STOP_ERROR_HAND
-
-    def _stop_body(self, cart):
-        """The stop card's body under its icon: the cart and its state, what
-        happened, the rows and the keys."""
-        ws = self.ws
-        player = ws.run.player
-        title = str((cart.get("title") if cart else "") or "Game")
-        if player.notice is not None:
-            _ui.info(title, "")
-            _ui.rule()
-            _ui.label(str(player.notice_title or ""), _STOP_SENTENCE)
-            if self.details and player.notice_detail:
-                _ui.label(player.notice_detail, self._error_lines())
-            else:
-                _ui.label(player.notice, _STOP_WORDS)
-        else:
-            _ui.info(title, "Stopped")
-            _ui.rule()
-            _ui.label(_ch.crash_title(ws.cart_error, ws.run.player.crash_line), _STOP_SENTENCE)
-            if self.details:
-                _ui.label(str(ws.cart_error or "").strip() or _ui_draw.s("chrome.no_text"),
-                          self._error_lines())
-            else:
-                _ui.label(_ui_draw.s("stop.yours" if self.SEE_WHY in self.rows
-                                     else "stop.maker"), _STOP_WORDS)
-        _ui.menu("", self.rows, self.icons)
-        if _desk_class() or not (self.details or self.SEE_CODE in self.rows):
-            # a handheld's glass holds the keys under three rows and the
-            # words, not under four or the error exact
-            _ui.hints(("confirm", "Choose", "back", "Home"))
-
-
-# The stop card's lines: the sentence, a notice's words, the error exact.
-_STOP_SENTENCE = {"wrap": True, "lines": 2}
-_STOP_WORDS = {"wrap": True, "lines": 4, "tone": "dim"}
-_STOP_ERROR = {"wrap": True, "lines": 4, "face": "mono", "sunk": True}
-_STOP_ERROR_HAND = {"wrap": True, "lines": 3, "face": "mono", "sunk": True}
 
 
 class DeleteConfirm:

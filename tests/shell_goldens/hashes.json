@@ -420,8 +420,8 @@
     "web_console": "48c839e4d1081335986652ed8bf03cdd29cff30172aff694a159cd67e08958b7"
   },
   "p4_1024x600_cs2_fs1_moy_menus": {
-    "pause": "6fc368493523786ad0f6064ea4bc3eeb3289807291364434a82324e9490cf8b3",
-    "pause_options": "91554d9d6093130eee63754df78db7804977a5953b04a752512bb9b4dca2358f",
+    "pause": "c17bc5d2f58502351b69d4de931dbeaad886c79cd85278d23a85d7087db7cb3f",
+    "pause_options": "1b711157092f78def6c09eea28b47edfa3c779159f5c7ef86de19e8c82c42d52",
     "sysmenu": "7a4918bfde4ffdbe35fdb5371386ff71761a6617420f5dac02af257526e85fdf"
   },
   "p4_1024x600_cs2_fs1_moy_night": {
@@ -1026,8 +1026,8 @@
     "web_console": "89b36065a3954d76b6af6471cd7158bf1fef1ebdd864a21a2d0957538c3f7543"
   },
   "tdeck_320x240_fs1_moy_menus": {
-    "pause": "2ade5eb8056e1d086d4ec8270b61420b19cbd503e83767ca25809a8341e6c02e",
-    "pause_options": "ebb4e03f344ec5b691c813d0821d553c7149f5fffdc54cebdbb0de7626cc86f9",
+    "pause": "608af9852ac3460cc8b7a8f0880fe8db5a79f30bc33c8adc655cc4101f8e3a02",
+    "pause_options": "2623a34f989ace9ec6a60ddf36e9270654f2dd0cda16993ad560e01a450aa2ab",
     "sysmenu": "a3fb69bfed7c2398dfb6c176a9470176c32700158f13b09f58da10db21826093"
   },
   "tdeck_320x240_fs1_moy_night": {
@@ -1102,7 +1102,7 @@
     "status_cc": "3357c181e5d1a9992100f3f459427ded04bf906ddab92ace6fbf39f0150ae514",
     "status_cc_panel": "a2ccc0ddaab7be5a0b29af2fc3ae65a2801bbd04ed063afabe65ceceea625aae",
     "status_cc_scrolled": "82c5556bd0283837c796533901f30c8d7ccb2d50edb1af09a9db78de2f5afcc2",
-    "status_paused_bar": "a8c744b3b7e3fee55777df83f379786fb2e30daa10cdb3cb38f64879e2f1a896",
+    "status_paused_bar": "0e95a635b24c8288114c44acf7badaa9e4fcc0251ace17a3f86730ea1fec2b66",
     "status_vmstop": "50755b2fba866d6165457464732d4df264c1e9d747b4d9e7aede198d635e98fe"
   },
   "tdeck_320x240_fs1_tasks": {

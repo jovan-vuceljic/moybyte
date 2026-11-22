@@ -50,7 +50,7 @@ except ImportError as e:            # the host library is made by a C compiler
 # compiled from, where the image stages them.
 SYSTEM = ("settings_rows", "settings_ui", "wifi_ui", "update_ui", "log_ui", "perms_ui", "about_ui",
           "web_console_ui", "tasks_ui", "achievements_ui", "editor_ui", "code_ui", "bar_ui",
-          "wm_strip_ui", "cc_ui", "confirm_ui")
+          "wm_strip_ui", "cc_ui", "confirm_ui", "pause_ui")
 # ...of which the placed ones: laid out by the engine's layout rule (`uitree_c.CEditorEngine`)
 PLACED = ("editor_ui", "code_ui", "bar_ui", "wm_strip_ui")
 

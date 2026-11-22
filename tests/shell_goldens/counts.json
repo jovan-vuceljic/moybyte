@@ -420,8 +420,8 @@
     "web_console": [299, 8]
   },
   "p4_1024x600_cs2_fs1_moy_menus": {
-    "pause": [7, 14],
-    "pause_options": [19, 6],
+    "pause": [4, 12],
+    "pause_options": [10, 4],
     "sysmenu": [3, 12]
   },
   "p4_1024x600_cs2_fs1_moy_night": {
@@ -1026,8 +1026,8 @@
     "web_console": [295, 8]
   },
   "tdeck_320x240_fs1_moy_menus": {
-    "pause": [7, 14],
-    "pause_options": [19, 6],
+    "pause": [4, 12],
+    "pause_options": [10, 4],
     "sysmenu": [3, 12]
   },
   "tdeck_320x240_fs1_moy_night": {
@@ -1102,7 +1102,7 @@
     "status_cc": [39, 17],
     "status_cc_panel": [45, 19],
     "status_cc_scrolled": [36, 16],
-    "status_paused_bar": [6, 14],
+    "status_paused_bar": [4, 12],
     "status_vmstop": [4, 5]
   },
   "tdeck_320x240_fs1_tasks": {

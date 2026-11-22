@@ -29,6 +29,7 @@ PORTED = (
     "web_console_ui",
     "about_ui",
     "confirm_ui",
+    "pause_ui",
     "tasks_ui",
     "achievements_ui",
     "wifi_ui",
