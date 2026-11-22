@@ -355,7 +355,9 @@
     {"name": "uitree.get_text", "server": "c", "in": ["slot:int", "out:out"], "ret": "len", "how": "direct", "wasm": true},
     {"name": "uitree.get_cell", "server": "c", "in": ["slot:int", "row:int", "f:int", "out:out"], "ret": "len", "how": "direct", "wasm": true},
     {"name": "uitree.error", "server": "c", "in": ["out:out"], "ret": "len", "how": "direct", "wasm": true},
-    {"name": "uitree.dump", "server": "c", "in": ["out:out"], "ret": "len", "how": "direct", "wasm": true}
+    {"name": "uitree.dump", "server": "c", "in": ["out:out"], "ret": "len", "how": "direct", "wasm": true},
+    {"name": "uitree.action_chars", "server": "c", "in": ["a:int", "chars:str"], "ret": "int", "how": "direct", "wasm": true},
+    {"name": "uitree.arg", "server": "c", "in": ["out:out"], "ret": "len", "how": "direct", "wasm": true}
   ],
   "permissions": [
     {"perm": "graphics", "grants": "floor", "prompt": null, "needs": null, "py": [], "doc": "nothing extra: the floor every cart has", "spec": true},

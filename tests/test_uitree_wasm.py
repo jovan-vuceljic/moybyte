@@ -257,6 +257,22 @@ def test_more_role_runs_on_the_m_key():
         "action open from key more on 'b/open' on 'Shelf'"]
 
 
+def test_a_buttons_arg_and_a_typed_char_reach_their_handlers():
+    """A button's arg= reaches its action's handler (ut_arg), each button of
+    one action keyed by its arg; a typed key an action's chars= holds owes
+    that action, the key its arg, and a key no action holds owes none."""
+    import uitree_conf as C
+    cart = os.path.join(ROOT, "tests", "fixtures", "uitree_arg_wasm.moy")
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "k:a", "k:down", "k:a", "t:5", "t:x"], cart=cart)
+    assert [l for l in trace if l.startswith(("action", "state"))] == [
+        "action key from button 'key/7' on 'Keypad'",
+        "state said '' -> '7' (in key)",
+        "action key from button 'key/+' on 'Keypad'",
+        "state said '7' -> '+' (in key)",
+        "action typed from key '5'",
+        "state said '+' -> '5' (in typed)"]
+
+
 def test_build_refuses_an_app_the_engine_refused_in_init(tmp_path):
     """tools/wasm_cart.build runs a UI tree app's `_init` on the host's WAMR and
     fails with the engine's refusal, naming its code; a good app builds."""

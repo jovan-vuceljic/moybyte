@@ -65,6 +65,7 @@ enum {
 #define UT_PAGES 8              // pages on the stack
 #define UT_BACK 0x10000         // uitree_next's answer for the bar's back: pop the page
 #define UT_CANVASES 8           // canvases with a draw on a page
+#define UT_ARG 64               // the longest arg a handler reads whole (ut_arg)
 
 // A handler: `row` is the row of the model the action came from, else -1.
 typedef void (*ut_fn)(int32_t row);
@@ -85,6 +86,7 @@ struct ut_ {
     int32_t canvas[UT_CANVASES];            // the page's canvases with a draw, and each draw
     ut_draw_fn draws[UT_CANVASES];
     int32_t ncanvas;
+    char arg[UT_ARG + 1];                   // the running handler's arg (ut_arg)
 };
 __attribute__((weak)) struct ut_ ut_;
 
@@ -246,6 +248,20 @@ static inline int32_t ut_action_when(const char *name, const char *label, const 
 static inline int32_t ut_action_more(const char *name, const char *label, ut_fn fn) {
     return ut_on_(uitree_action(name, ut_len_(name), label, ut_len_(label), NULL, 0, NULL, 0, UT_OFF_NONE,
                                 UT_A_ROLE_MORE, NULL, 0, NULL, 0), name, fn);
+}
+
+// ...that is handed each typed key `chars` holds (chars=), as ut_arg(), where
+// no field takes it: `a` the action's index.
+static inline int32_t ut_action_chars(int32_t a, const char *chars) {
+    return uitree_action_chars(a, chars, ut_len_(chars));
+}
+
+// What the running handler was handed: the arg= of the button or link that
+// fired it (an int's digits), or the typed key its chars= holds; "" none.
+static inline const char *ut_arg(void) {
+    int32_t n = uitree_arg(ut_.arg, UT_ARG);
+    ut_.arg[n < 0 ? 0 : n > UT_ARG ? UT_ARG : n] = 0;
+    return ut_.arg;
 }
 
 // A handler no person sees, named `name` (`opened`: the engine's, run as the visit opens): its index.
@@ -466,6 +482,24 @@ static inline int32_t ut_link(const char *action, const char *label) {
 static inline int32_t ut_button(const char *action, const char *kind) {
     int32_t n = ut_node(UT_BUTTON, action);
     ut_prop_("kind", kind != NULL ? kind : UT_KIND_NORMAL);
+    uitree_node_action(n, ut_action_of_(action));
+    return n;
+}
+
+// ...that hands its action `arg` (arg=, read by ut_arg), keyed "ACTION/ARG"
+// as the Python and Lua layers key it.
+static inline int32_t ut_button_arg(const char *action, const char *arg, const char *kind) {
+    char k[64];
+    size_t a = strlen(action), g = strlen(arg);
+    a = a < sizeof k - 2 ? a : sizeof k - 2;
+    g = g < sizeof k - 2 - a ? g : sizeof k - 2 - a;
+    memcpy(k, action, a);
+    k[a] = '/';
+    memcpy(k + a + 1, arg, g);
+    k[a + 1 + g] = 0;
+    int32_t n = ut_node(UT_BUTTON, k);
+    ut_prop_("kind", kind != NULL ? kind : UT_KIND_NORMAL);
+    ut_prop_("arg", arg);
     uitree_node_action(n, ut_action_of_(action));
     return n;
 }
