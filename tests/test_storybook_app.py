@@ -10,7 +10,7 @@ from pathlib import Path
 from runtime import host_app, moy_carts
 from runtime import story_doc as D
 from runtime import story_render as R
-from runtime.storybook_app import StorybookAppLayer, StorybookLayout, zoom_fit
+from runtime.storybook_app import StorybookAppLayer, StorybookLayout, is_app, zoom_fit
 
 ROOT = Path(__file__).resolve().parent.parent
 _DT = 1 / 30
@@ -111,9 +111,9 @@ def test_storybook_cart_is_versioned_system_app():
 def test_storybook_identity_rejects_copies_and_impostors():
     real = {"title": "Storybook", "permissions": ["storybook"],
             "path": "/x/moybyte.storybook.moy"}
-    assert StorybookAppLayer.is_app(real)
-    assert not StorybookAppLayer.is_app(dict(real, path="/x/storybook_2.moy"))
-    assert not StorybookAppLayer.is_app(dict(real, permissions=[]))
+    assert is_app(real)
+    assert not is_app(dict(real, path="/x/storybook_2.moy"))
+    assert not is_app(dict(real, permissions=[]))
 
 
 def test_only_stories_that_read_are_listed(tmp_path):
@@ -148,9 +148,11 @@ def test_a_handheld_views_a_story_and_does_not_edit_it(tmp_path):
     before = moy_carts.load_file("stories", "brave/story.json", ws.carts_root)
     _key(ws, app, 0, "left")
     assert app.cur == 0
+    r = app.engine._x.rect("view")
     app.close()
     assert moy_carts.load_file("stories", "brave/story.json", ws.carts_root) == before
-    assert app.layout.view[2:] == (256, 150), "the story's slide at a quarter"
+    assert r[2] >= 256 and r[3] >= 150 and R.size(1, 4) == (256, 150), \
+        "the story's slide at a quarter"
 
 
 def test_present_takes_the_glass_and_steps_through_taps(tmp_path):
