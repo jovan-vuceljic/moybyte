@@ -39,6 +39,10 @@
 //                 Each canvas the walk draws calls the module's export
 //                 `_uitree_draw(node, x, y, w, h)` (moycore_ui_draw_call,
 //                 the driving module's), and a trap there is refused.
+//                 After the frame, the `m` key (the more role,
+//                 UIT_A_ROLE_MORE) with no field focused owes the focused
+//                 row's action where the role's action hangs from a rows
+//                 list's node, else the page's, as the Lua layer's ROLE_KEYS.
 //                 `flags` is 0 (no flag is defined yet). The engine's trace
 //                 lines go to the OS log as "[trace] " lines, the Python and
 //                 Lua layers' format.

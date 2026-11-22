@@ -56,6 +56,7 @@ typedef struct {
     int depth;                  // the page stack's depth: the leading number of the page's id
     char refocus[DEPTH][48];    // the key focused on each page as the next was pushed
     int refocus_due;            // build_end puts the focus back on this depth's key (-1 none)
+    char pname[48];             // the page's name (its id after the depth), for a role key's trace
     char title[64];             // the page's title, for a trace's "on 'TITLE'"
     struct {                    // each canvas of the page a pointer is routed to: its pointer= action,
         int node, act;          // the rect the last frame drew it at and that frame
@@ -373,6 +374,11 @@ int32_t moy_uitree_wasm_build(void *x, const uint8_t *page, uint32_t page_n) {
         a->refocus_due = depth - 1;
     }
     a->depth = depth;
+    const char *nm = at(a, p);
+    while (*nm >= '0' && *nm <= '9') {
+        nm++;
+    }
+    snprintf(a->pname, sizeof a->pname, "%s", nm + (*nm == ' '));
     uit_build_begin(a->e, at(a, p));
     a->page = -1;
     a->title[0] = 0;
@@ -494,9 +500,10 @@ static void owe(app_t *a, int act, int m, int row, const int32_t *pev, const cha
         a->q = q;
         a->qcap = c;
     }
-    int off = placed || strstr(src, " dialog ") != NULL || strncmp(src, "the ", 4) == 0
-                  ? uit_buf_puts(&a->qtext, src) : uit_buf_printf(&a->qtext, "%s on '%s'", src, a->title);
-    if (off < 0 || uit_buf_put(&a->qtext, "", 0) < 0) {
+    int off = (int)a->qtext.n;
+    int w = placed || strstr(src, " dialog ") != NULL || strncmp(src, "the ", 4) == 0
+                ? uit_buf_puts(&a->qtext, src) : uit_buf_printf(&a->qtext, "%s on '%s'", src, a->title);
+    if (w < 0 || uit_buf_put(&a->qtext, "", 0) < 0) {
         return;
     }
     owed_t *o = &a->q[a->qn++];
@@ -576,6 +583,36 @@ static void keys(app_t *a, const int32_t *snap) {
     if (act >= 0 && (((snap[MOYCORE_UI_SNAP_BTNP] >> 4) & 1) || k == 13) && uit_unfocused(a->e) &&
         uit_dialog(a->e) < 0) {
         owe(a, act, -1, -1, NULL, "role confirm", 1);
+    }
+}
+
+// The more role's key (`m`), after the frame, where no field is focused: the
+// focused row's action when it is the role's, else the page's. An action that
+// hangs from a rows list's node takes a row and acts on no other.
+static void more(app_t *a, const int32_t *snap) {
+    int act = with_flag(a, UIT_A_ROLE_MORE);
+    if (act < 0 || snap[MOYCORE_UI_SNAP_KEY] != 'm') {
+        return;
+    }
+    const uit_id_t *F = &a->e->focused;
+    int has = a->e->has_focused && F->gen == a->e->gen;
+    char src[160], id[UIT_ID_MAX * 2 + 2];
+    if (has && F->kind == UIT_FIELD) {
+        return;
+    }
+    int row = 0;
+    for (int k = 0; k < a->e->nnodes && !row; k++) {
+        row = a->e->nodes[k].act == act && uit_model_of(a->e, k) >= 0;
+    }
+    if (row) {
+        if (has && F->row >= 0 && F->act == act) {
+            uit_focused(a->e, id, sizeof id);
+            snprintf(src, sizeof src, "key more on '%s'", id);
+            owe(a, act, uit_model_of(a->e, F->node), F->row, NULL, src, 0);
+        }
+    } else if (uit_can(a->e, act, -1)) {
+        snprintf(src, sizeof src, "key more on '%s'", a->pname);
+        owe(a, act, -1, -1, NULL, src, 0);
     }
 }
 
@@ -669,6 +706,9 @@ int32_t moy_uitree_wasm_frame(void *x, int32_t flags) {
             }
             owe(a, w[0], w[1], w[2], NULL, src, 1);
         }                           // a control's write: the slot holds it
+    }
+    if (snap != NULL) {
+        more(a, snap);
     }
     return r;
 }

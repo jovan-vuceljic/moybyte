@@ -240,3 +240,18 @@ def test_a_page_takes_a_row_and_the_app_moves_the_focus():
         "state sel '' -> 'b' (in open)",
         "page push page 2, opened from 'b/open'",
         "page back page 1, focus back to 'b/open'"]
+
+
+def test_more_role_runs_on_the_m_key():
+    """The more role's key (m) runs the page's action where no field is
+    focused and the focused row's action where it hangs from a row; a field
+    that holds focus takes the letter."""
+    import uitree_conf as C
+    fx = os.path.join(ROOT, "tests", "fixtures")
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "t:m", "f:1", "k:down", "t:m"],
+                          cart=os.path.join(fx, "uitree_more_wasm.moy"))
+    assert [l for l in trace if l.startswith("action more")] == [
+        "action more from key more on 'tools' on 'Tools'"]
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "t:m"], cart=os.path.join(fx, "uitree_morerow_wasm.moy"))
+    assert [l for l in trace if l.startswith("action open from")] == [
+        "action open from key more on 'b/open' on 'Shelf'"]

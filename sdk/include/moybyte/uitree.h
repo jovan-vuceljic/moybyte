@@ -51,7 +51,7 @@ extern "C" {
 enum { UT_BOOL = 1, UT_INT, UT_NUM, UT_TEXT, UT_ENUM, UT_ROWOF, UT_MODEL };
 
 // An action's flags and how its nodes look while it is off (uitree_action).
-enum { UT_A_HOOK = 1, UT_A_ROLE_CONFIRM = 2, UT_A_ROLE_BACK = 4, UT_A_ROW = 8, UT_A_SHIFT_ENTER = 16 };
+enum { UT_A_HOOK = 1, UT_A_ROLE_CONFIRM = 2, UT_A_ROLE_BACK = 4, UT_A_ROW = 8, UT_A_SHIFT_ENTER = 16, UT_A_ROLE_MORE = 32 };
 enum { UT_OFF_NONE = 0, UT_OFF_HIDE = 1, UT_OFF_GREY = 2 };
 
 // The refusals every uitree_* call may answer (uitree_error says which and where).
@@ -239,6 +239,13 @@ static inline int32_t ut_action(const char *name, const char *label, ut_fn fn) {
 static inline int32_t ut_action_when(const char *name, const char *label, const char *when, int32_t off, ut_fn fn) {
     return ut_on_(uitree_action(name, ut_len_(name), label, ut_len_(label), NULL, 0, when, ut_len_(when), off, 0,
                                 NULL, 0, NULL, 0), name, fn);
+}
+
+// ...that takes the more role: the `m` key, where no field is focused, runs it
+// on the focused row when it hangs from a row's node, else on the page.
+static inline int32_t ut_action_more(const char *name, const char *label, ut_fn fn) {
+    return ut_on_(uitree_action(name, ut_len_(name), label, ut_len_(label), NULL, 0, NULL, 0, UT_OFF_NONE,
+                                UT_A_ROLE_MORE, NULL, 0, NULL, 0), name, fn);
 }
 
 // A handler no person sees, named `name` (`opened`: the engine's, run as the visit opens): its index.
