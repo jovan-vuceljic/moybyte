@@ -188,20 +188,25 @@ def test_a_focus_on_no_node_stops_the_run_at_its_line(tmp_path):
 
 
 def test_a_focus_on_a_key_two_shown_nodes_have_stops_the_run_at_its_line(tmp_path):
+    """The focus runs on the second frame whatever the clock reads: the
+    open arms a timer of 0 ms, which its frame fires, and that arms the
+    jump's, which a frame's timers pass reaches only on the next. A run's
+    time() is the kernel's monotonic clock, which no host test drives."""
     from runtime import host_app
     carts = str(tmp_path / "carts")
     host_app.moy_carts.ensure_dirs(carts)
     _cart(carts, "Twice", 'ui.app("Twice", { icon = "calc" })\n'
                           'ui.action("go", "Go", function() end)\n'
                           'ui.action("jump", "Jump", function() ui.focus("go") end)\n'
-                          'ui.hook("opened", function() ui.after(100, "jump") end)\n'
+                          'ui.action("arm", "Arm", function() ui.after(0, "jump") end)\n'
+                          'ui.hook("opened", function() ui.after(0, "arm") end)\n'
                           'ui.page("p", function()\n'
                           '  ui.group("A", function() ui.link("go") end)\n'
                           '  ui.group("B", function() ui.link("go") end)\n'
                           'end)\n')
     ws, drv, frame, open_cart = _console(carts)
     open_cart(ws, "Twice")
-    for _ in range(20):
+    for _ in range(3):
         frame()
     err = ws.run.player.cart_error
     assert err and "error[N08] main.lua:3:" in err and "two shown nodes are keyed go" in err, err
