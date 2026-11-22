@@ -5024,7 +5024,8 @@ int32_t moy_ui_api_cells(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
         }
     }
     clip_t k;
-    int ring = (mua_mark_flags(st, o) & MOY_UI_F_FOCUS) && moy_ui_sink_marks(s);
+    // its focus is the ring on the current cell, whatever mark= says of a ring round the stop
+    int ring = (st & MOY_UI_ST_FOCUS) && moy_ui_sink_marks(s);
     mua_band_mark(c, b, stacked, 0);
     EACH_ROW(c, k, s, b, stacked, c->page) {
         mua_band(c, s, b, stacked);
