@@ -6,10 +6,10 @@
 #   SettingsLayer.open_page          a page of its own over the rows (_PAGES)
 #   SettingsLayer.draw               the Settings app
 """The Settings app (#28/#39/#53): the console's AGGREGATOR, a page of rows
-in captioned groups (docs/history/look_2026-10.md step 19) drawn with the public UI
-API's verbs (`runtime/toolkit/ui.py`, docs/ui_api_2026-10.md) and nothing else: the
-engine owns focus, navigation, activation and the page's scroll; this layer
-owns what each row shows and does.
+in captioned groups (docs/history/look_2026-10.md step 19), every page of it a
+`uitree` page (runtime/system/settings_rows.py, settings_ui.py and the
+modules below): the engine owns focus, navigation, activation and the page's
+scroll; this layer owns what each row shows and does.
 
 The groups: General (Wi-Fi, the Bluetooth keyboard where a board has one,
 Appearance, Text size, Layout, Volume, Brightness and Name), Play and Developer (the SETTINGS_TOGGLES registry's ON/OFF
@@ -17,8 +17,8 @@ rows), Power (the idle ladder's rungs), Updates (the web console, the OTA
 channel and the update flows) and About (the version and its channel, the
 board, storage, battery, App permissions, Achievements, Licences and the System log). Brightness is the
 panel light's (the idle ladder's top, `IdleLadder.brightness`); Name stores
-a value nothing applies yet. The Wi-Fi panel, the Bluetooth picker, a
-toggle's warning, the last crash record, App permissions
+a value nothing applies yet. The Wi-Fi panel, the Bluetooth picker, the
+time zones, the paired browsers, the last crash record, the USB drive, App permissions
 (runtime/system/perms_ui.py), Achievements (runtime/system/achievements_ui.py),
 Licences (runtime/system/about_ui.py) and the System log
 (runtime/system/log_ui.py, `open_log`) are pages of
@@ -46,7 +46,7 @@ pointer this layer is routed.
 
 import ui as _ui
 import layout_base as _lb
-from crash_guard import clear_core_dump, core_dump, crash_available, crash_lines, last_crash
+from crash_guard import core_dump, crash_available, last_crash
 from achievements_ui import AchievementsPage
 from about_ui import LicencesPage, version_words, board_words
 from log_ui import LogPage
@@ -203,17 +203,6 @@ BOARDS = {"tdeck": "T-Deck Plus", "p4": "Waveshare P4 7″", "guition_s3": "Guit
 _PAGE_TITLES = {"achievements": "Achievements", "licences": "Licences", "log": "System log",
                 "permissions": "App permissions"}
 
-# The USB drive page's words, by the drive's state (usb_drive.STOPPED ..
-# EJECTED), and what it adds while on.
-_USB_SAYS = ("Show your memory card on a computer over the USB cable. "
-             "Games and apps stay closed while it is on.",
-             "Waiting for a computer. Plug the USB cable in.",
-             "On the computer now, as a drive.",
-             "The computer let the card go.")
-_USB_EJECT = "Eject it on the computer and it comes back here."
-_USB_SERIAL_OFF = "The serial port is off while it is on."
-_USB_SERIAL_BACK = "The serial port comes back when it is off."
-
 # The hints while the Name is typed (the field's own: Done and Cancel).
 _HINT_TYPE = ("confirm", "Done", "cancel", "Cancel")
 
@@ -227,7 +216,6 @@ NAME_MAX = 16                 # the Name row's bytes
 # interim words, `Text.can_type`).
 NAME_NO_KEYBOARD = "Pair a keyboard to change"
 
-_NETS = 24                    # the keyboards the Bluetooth page lists
 WIFI_LOOKING = "Looking for networks..."  # the panel's line while a scan runs
 WIFI_POLL_MS = 100            # a running scan or join, asked this often
 
@@ -240,20 +228,6 @@ def _capital(s):
     for ch in s:
         out += ch.upper() if up else ch
         up = ch == " "
-    return out
-
-
-def _wrap(text, n):
-    """`text` in lines of at most `n` characters, broken at spaces."""
-    out, line = [], ""
-    for w in text.split():
-        if line and len(line) + 1 + len(w) > n:
-            out.append(line)
-            line = w
-        else:
-            line = w if not line else line + " " + w
-    if line:
-        out.append(line)
     return out
 
 
@@ -325,7 +299,6 @@ class SettingsLayer(Layer):
         self._view = None             # the page drawn last
         self._want = None             # the row key focus moves to next frame
         self._focused = None          # the focused row's key after the last frame
-        self._sub_focused = None      # ... and the open panel page's focused id
         self._about = ()              # About's facts, read at each visit
         # The WIFI panel (#38, spec §10): scan list -> pick -> (password) ->
         # connect/forget over the station its wifi role hands it.
@@ -349,6 +322,7 @@ class SettingsLayer(Layer):
         self.bt_sel = 0
         self.bt_msg = ""
         self._bt_state = None
+        self.bt_shown = None          # the devices the page last listed
         # Memo for _settings_rows (see there): the built tuple plus the
         # capability flags it was built from, held as separate attributes so
         # the comparison allocates NOTHING.
@@ -382,7 +356,7 @@ class SettingsLayer(Layer):
         self.licences = LicencesPage(ws.app_context("licences", LicencesPage.NEEDS), self._sub)
         self.syslog = LogPage(self._sub, _pctx.damage, ws)
         self.permits = PermsPage(_pctx, self._sub, _pctx.damage)
-        self.pages = SettingsPages(ws, self._sub, _pctx.damage, self._drop)
+        self.pages = SettingsPages(self, self._sub, _pctx.damage, self._drop)
         self.wifi = _wifi_ui.WifiPage(self, self._sub, _pctx.damage)
         import settings_rows           # it reads this module's tables: imported once they are made
         self.rows = settings_rows.RowsPage(self, self._host)
@@ -549,7 +523,9 @@ class SettingsLayer(Layer):
                 pass
         self.bt_msg = ""
         self._bt_state = None
+        self.bt_shown = None
         self._bt_refresh()
+        self.pages.open("bt")
 
     def _bt_refresh(self):
         svc = self._bt_service()
@@ -636,40 +612,8 @@ class SettingsLayer(Layer):
         return state in ("scanning", "found", "connecting", "pairing",
                          "discovering", "subscribe-retry")
 
-    def _bt_page(self):
-        """The picker: the keyboard input switch and its state, the keyboards
-        found (one taps or Enter to use), Scan and Forget."""
-        status = self._bt_refresh()
-        enabled, state, name, _preferred, _error = status
-        _ui.page("")
-        _ui.hints(("confirm", "Use", "back", "Back"))
-        _ui.group("Bluetooth keyboard")
-        if _ui.toggle("Keyboard input", bool(enabled)) != bool(enabled):
-            self._bt_action("toggle")
-        _ui.info(name or "No keyboard", state[:1].upper() + state[1:])
-        if self.bt_msg:
-            _ui.label(self.bt_msg)
-        _ui.group("Keyboards")
-        if not self.bt_devices:
-            _ui.label("Scanning..." if state == "scanning" else "No keyboards found.")
-        for k in range(min(len(self.bt_devices), _NETS)):
-            address, dev_name, rssi, preferred, connected = self.bt_devices[k]
-            _ui.icon("key")
-            value = "Online" if connected else ("Saved" if preferred else
-                                                ("%d dBm" % int(rssi) if int(rssi) > -127
-                                                 else ""))
-            if _ui.link(str(dev_name), value, {"id": "bt%d" % k}):
-                self.bt_sel = k
-                self._bt_action("connect", address)
-        _ui.group("Options")
-        if _ui.link("Scan"):
-            self._bt_action("scan")
-        if _ui.link("Forget the saved keyboard"):
-            self._bt_action("forget")
-        _ui.group()
-        f = _ui.focus()
-        if f and f.startswith("bt") and f[2:].isdigit():
-            self.bt_sel = int(f[2:])
+    def _bt_draw(self):
+        self._hosted("bt")
 
     # -- the WIFI panel (#38; spec shell_ux_v1.md §10) ----------------------------
 
@@ -888,27 +832,13 @@ class SettingsLayer(Layer):
         self.wifi.draw(ws.sys_canvas, ws.theme_colors, self._content(),
                        _lb.metric_class() == _lb.DESK, self._dt)
 
-    # -- LAST CRASH page (the kernel's record, read-only) -----------------------
+    def _crash_open(self, _pid=None):
+        self.pages.open("crash")
 
-    def _crash_page(self):
-        """The record's lines, the core dump's size with a button that
-        clears it when one is in flash, and one button back."""
-        _x, _y, w, _h = _ui.page("")
-        _ui.hints(("confirm", "Back"))
-        _ui.group("Last crash")
-        n = max(8, (w - 32) // max(1, self.ws.layout.font_w))
-        dump = core_dump()
-        for line in crash_lines(last_crash(), dump):
-            for part in _wrap(line, n):
-                _ui.label(part)
-        if dump and _ui.button("Clear core dump"):
-            clear_core_dump()
-            self.ws.mark_dirty()
-        if _ui.button("Back"):
-            self._drop("crash")
-        _ui.group()
+    def _crash_draw(self):
+        self._hosted("crash")
 
-    # -- Time zone and Paired browsers: uitree pages (settings_ui.py) -------------
+    # -- the pages of settings_ui.py ------------------------------------------------
 
     def _tz_open(self, _pid=None):
         self.pages.open("tz")
@@ -946,41 +876,10 @@ class SettingsLayer(Layer):
 
     def _usb_open(self, _pid=None):
         self._usb.drive().why = None
+        self.pages.open("usb")
 
-    def _usb_page(self):
-        """Off: what the drive does and its one button, Turn on (and why it
-        did not, where it did not). On: where the card is, how to give it
-        back, and Turn off, the page's only way out."""
-        ws = self.ws
-        d = self._usb.drive()
-        st = d.state()
-        self._usb_seen = st
-        _x, _y, w, _h = _ui.page("")
-        n = max(8, (w - 32) // max(1, ws.layout.font_w))
-        if d.on:
-            _ui.hints(("confirm", "Turn off"))
-        else:
-            _ui.hints(("confirm", "Turn on", "back", "Back"))
-        _ui.group("USB drive")
-        for line in _wrap(_USB_SAYS[st], n):
-            _ui.label(line)
-        if d.on:
-            for line in _wrap(_USB_EJECT, n):
-                _ui.label(line)
-            if d.dev_channel:
-                for line in _wrap(_USB_SERIAL_BACK, n):
-                    _ui.label(line)
-            if _ui.button("Turn off", "danger"):
-                self._usb.turn_off()
-        else:
-            if d.dev_channel:
-                for line in _wrap(_USB_SERIAL_OFF, n):
-                    _ui.label(line)
-            if d.why is not None:
-                _ui.label(d.why)
-            if _ui.button("Turn on"):
-                self._usb.turn_on()
-        _ui.group()
+    def _usb_draw(self):
+        self._hosted("usb")
 
     # -- the lent left zone (#46 zoned bar) -------------------------------------
 
@@ -1237,7 +1136,7 @@ class SettingsLayer(Layer):
     def _close_engine(self, page):
         """Page `page`'s visit is over: its engine keeps its built page and
         lets the rest go (`Engine.close`)."""
-        if page in ("tz", "paired"):
+        if page in SettingsPages.PAGES:
             self.pages.close(page)
         else:
             holder = _ENGINES.get(page)
@@ -1471,7 +1370,6 @@ class SettingsLayer(Layer):
         else:
             self.commit_name()
             _PAGES[view][3](self)
-            self._sub_focused = _ui.focus()
         _ui.end()                     # the fade where the rows run on below
         if ws.frame_state.dirty or self.page != view or host.owed or host.owes() or host.tap == 2:
             ws.request_frame()        # an answer changed what the page shows
@@ -1525,12 +1423,12 @@ class SettingsLayer(Layer):
 _L = SettingsLayer
 _PAGES = {
     "wifi": ("wifi", _L._wifi_open, _L.wifi_leave, _L._wifi_draw, "wifi", _L._wifi_step),
-    "bt": ("bt", _L._bt_open, None, _L._bt_page, "bluetooth", None),
-    "crash": ("crash", None, None, _L._crash_page, "crash", None),
+    "bt": ("bt", _L._bt_open, None, _L._bt_draw, "bluetooth", None),
+    "crash": ("crash", _L._crash_open, None, _L._crash_draw, "crash", None),
     "tz": ("tz", _L._tz_open, None, _L._tz_page, "tz", None),
     "paired": ("paired", _L._paired_open, _L._paired_close, _L._paired_page,
                "paired", None),
-    "usb": ("usb", _L._usb_open, None, _L._usb_page, "usb_drive", _L._usb_on),
+    "usb": ("usb", _L._usb_open, None, _L._usb_draw, "usb_drive", _L._usb_on),
     "achievements": ("about", _L._ach_open, None, _L._ach_draw, "achievements",
                      lambda sl: sl.achievements.back()),
     "licences": ("about", _L._lic_open, None, _L._lic_draw, "licences",
