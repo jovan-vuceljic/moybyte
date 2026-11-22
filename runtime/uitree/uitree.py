@@ -3286,21 +3286,29 @@ def work(name, fn, due, budget=4, unit=None):
 
 class Pictures:
     """The app's own pictures: bytes the engine decodes (a PNG, a .moyimg),
-    or an indexed drawing in the console's 16 colours that is no file. The
-    engine holds them; `image.own(key)` names one."""
+    an indexed drawing in the console's 16 colours that is no file, or one
+    the app draws when the engine asks (`render(w, h)` answers a canvas
+    layer of that size, which the engine keeps and releases when it lets the
+    picture go; None where it cannot). The engine holds them;
+    `image.own(key)` names one."""
 
     def __init__(self):
         self.src = {}
         self.gen = {}
 
-    def put(self, key, data=None, w=None, h=None, pixels=None):
-        if (data is None) == (pixels is None):
-            raise UIError("S02", "pictures.put(%r): bytes (data=) or an indexed drawing (w=, h=, pixels=)" % key, fix='pictures.put(KEY, data=PNG_BYTES) or pictures.put(KEY, w=W, h=H, pixels=INDICES)')
+    def put(self, key, data=None, w=None, h=None, pixels=None, render=None):
+        if (data is not None) + (pixels is not None) + (render is not None) != 1:
+            raise UIError("S02", "pictures.put(%r): bytes (data=), an indexed drawing (w=, h=, pixels=) or a drawer (render=)" % key, fix='pictures.put(KEY, data=PNG_BYTES), pictures.put(KEY, w=W, h=H, pixels=INDICES) or pictures.put(KEY, render=FN)')
         if pixels is not None:
             if type(w) is not int or type(h) is not int or len(pixels) != w * h:
                 raise UIError("S02", "pictures.put(%r): pixels are w * h palette indices" % key,
                               found="w=%r h=%r %d bytes" % (w, h, len(pixels)), fix='pixels= holds w * h bytes')
             self.src[key] = ("idx", w, h, bytes(pixels))
+        elif render is not None:
+            if not callable(render):
+                raise UIError("S02", "pictures.put(%r): render= is a function of (w, h)" % key,
+                              found=repr(render), fix='def render(w, h): ... return a w x h layer')
+            self.src[key] = ("render", render)
         else:
             self.src[key] = ("bytes", bytes(data))
         self.gen[key] = self.gen.get(key, 0) + 1

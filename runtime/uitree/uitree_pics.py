@@ -32,6 +32,12 @@ def _tr(app, text):
         S._NOW.app = was
 
 
+def _let_go(got):
+    """A picture the cache let go: a layer an app's drawer made goes back."""
+    if got[0] == "layer":
+        got[1].release()
+
+
 class PicEngine:
     def __init__(self, app, files, swapped, budget):
         self.app, self.files, self.swapped, self.budget = app, files, swapped, budget
@@ -74,6 +80,8 @@ class PicEngine:
         if kind == "cover":
             side = pix[0]
             cv.cover(pix[1], side, 0, 0, side, side, x, y, w, h, 0, False)
+        elif kind == "layer":
+            cv.blit565_resize(pix._buf, pix.w, pix.h, x, y, w, h)
         else:
             cv.picture(pix, x, y, w, h)
 
@@ -133,6 +141,7 @@ class PicEngine:
                 return False
             old = self.cache.pop(k)
             self.used -= old[2]
+            _let_go(old)
             self.stats["evicted"] += 1
             _tr(self.app, "%r %dx%d evicted (least recently drawn, out of view), %d bytes back" % (
                 k[0], k[1], k[2], old[2]))
@@ -140,7 +149,9 @@ class PicEngine:
 
     def forget_own(self, key):
         for k in [k for k in self.cache if k[0].kind == "own" and k[0].key == key]:
-            self.used -= self.cache.pop(k)[2]
+            old = self.cache.pop(k)
+            self.used -= old[2]
+            _let_go(old)
 
     def _gen(self, pic):
         return S.pictures.gen.get(pic.key, 0) if pic.kind == "own" else 0
@@ -163,6 +174,12 @@ class PicEngine:
         return src[1], None
 
     def _decode(self, pic, w, h):
+        src = S.pictures.src.get(pic.key) if pic.kind == "own" else None
+        if src is not None and src[0] == "render":
+            lay = src[1](w, h)
+            if lay is None or lay.w != w or lay.h != h:
+                return "not drawn at %dx%d" % (w, h)
+            return ("layer", lay, w * h * 2)
         blob, why = self._bytes(pic)
         if blob is None:
             return why

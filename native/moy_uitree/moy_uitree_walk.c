@@ -5281,6 +5281,12 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         if (card) {
             e->pop_hints = hp, e->pop_hints_n = hn;
         } else if (!placed) {
+            // a flowing page's band docks at its foot: the room its pictures may draw in ends over it
+            if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {
+                int mn;
+                int32_t hh = (flags & UIT_F_DESK) ? moy_ui_metrics(MOY_UI_K_VALUE_ROW, &mn)[17] * fs : 20 * fs;
+                e->rect[3] = e->rect[3] > hh ? e->rect[3] - hh : 0;
+            }
             moy_ui_api_hints(c, s, hp, hn, NULL);
         } else if (moy_ui_api_hints_w(c, s, hp, hn) > 0) {
             // a placed page's band: a handheld's its room's last line, the desk's and a foot's
