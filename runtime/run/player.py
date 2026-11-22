@@ -64,6 +64,7 @@ import moybyte as _moybyte
 from moy_play import Tick as TickScheduler     # the kernel's tick model
 import moy_play as _moy_play
 from lua_ext import uitree_chunks as _uitree_chunks
+import player_tree as _tree
 
 
 # Auto-native carts (#67 spike): when the runtime HAS the native code emitter
@@ -313,6 +314,7 @@ class Player(PlayerDiag):
                                       # responsive app's, whose `ui` verbs do
         self._responsive = False      # the app defines `_layout` (Player._wants_layout)
         self.ui = None               # a Python app's frame of ui verbs: [context, input, canvas]
+        self.tree = None             # a Python app's UI tree engine (player_tree.CartTree)
         self._run_handle = 0          # the kernel Player's handle on this run, or 0
         self.app_ctx = None          # a user app's, script's or game's context: its run grant
         self._grant_perms = None     # a game's grant's permissions (_game_perms)
@@ -734,6 +736,12 @@ class Player(PlayerDiag):
         # is the one place every exit path passes -- the tap on X,
         # quit(), a workspace swap, a crash -- so a kid's note is
         # saved by leaving, exactly as a code tab's half-typed Python is.
+        tree, self.tree = self.tree, None
+        if tree is not None:
+            try:
+                tree.close()
+            except Exception:  # noqa: BLE001 -- teardown must never raise
+                pass
         self._release_editors()
         # A USER APP's crash-guard arming dies with its run. Any STRIKE it took
         # stands -- an exit before the heal is precisely the evidence kept.
@@ -1006,6 +1014,8 @@ class Player(PlayerDiag):
                         self._app_layout(*self._app_wh)
                 if ns.get("_init"):
                     ns["_init"]()
+                if self.ui is not None and _tree.wants(cart):
+                    self.tree = _tree.CartTree(self, ns)
             finally:
                 _cart_text(_was)
                 a1 = _allocated()
@@ -1037,8 +1047,9 @@ class Player(PlayerDiag):
         self.crash_line = None
         self.crash_file = None
         self.ns = ns
-        self.update = ns.get("_update")
-        self.draw = ns.get("_draw")
+        tree = self.tree
+        self.update = ns.get("_update") if tree is None else tree.update
+        self.draw = ns.get("_draw") if tree is None else tree.draw
         # Declared background (#63): the api's frame-start restore hook. Cached here so
         # tick() pays one attribute read; it early-outs when the cart declared nothing.
         self._restore_bg = ns.get("_moy_restore_bg")
@@ -1232,7 +1243,7 @@ class Player(PlayerDiag):
         A runtime with no such answer, or one that fails, is fixed."""
         rt = _perms.run_tier(ws, cart)
         if rt == "python":
-            return wants_layout(cart.get("src"))
+            return _tree.wants(cart) or wants_layout(cart.get("src"))
         probe = getattr((getattr(ws, "runtimes", None) or {}).get(rt), "wants_layout", None)
         if probe is None:
             return False
@@ -1357,6 +1368,8 @@ class Player(PlayerDiag):
                                       owner=self.pid))
             if "ui" in ns:
                 self.face.bind(ns, cart)
+                if _tree.wants(cart):
+                    _tree.namespace(ns, cart)
         elif _game(cart, ws.spine):
             perms = _game_perms(cart, self.granted)
             ctx = make_run_grant(ws.app_context, cart, keep=self._keep_grant,

@@ -114,6 +114,18 @@ class AppFace:
             if self._bg is not None:
                 ns["background"] = self.background
 
+    def host(self):
+        """The run's app host: what a Python cart's UI tree engine is hosted
+        on (`player_tree.CartTree`)."""
+        return self._uh
+
+    def owe(self):
+        """The run owes a frame: what its page drew is no longer what it
+        shows (a UI tree engine's damage)."""
+        if self._owe < 1:
+            self._owe = 1
+        self.pl.ws.request_frame()
+
     def ui_room(self):
         """The rect the run's `ui` frame lies in: an app's `content_rect()`,
         its surface less the host's bars, so `ui.page` lies below them on
@@ -455,6 +467,9 @@ class AppFace:
             if getattr(lua, "own_ui", False):
                 return lua.ui_back(take)
             return bool(_ui_draw.run_back(take))
+        tree = pl.tree
+        if tree is not None:
+            return tree.back(take)
         ui = pl.ui
         return ui is not None and bool(_ui_draw.app_back(ui[0], take))
 

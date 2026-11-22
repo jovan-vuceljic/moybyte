@@ -131,6 +131,34 @@ def run_wasm(name, config, script, cart=None):
     return norm_trace(lines), frames
 
 
+def pycart_fixture(name):
+    """The Python cart half (NAME/NAME_py.moy: the app as a cart whose `ui` is
+    the UI tree API), or None where the fixture has none."""
+    cart = os.path.join(FIX, name, name + "_py.moy")
+    return cart if os.path.isdir(cart) else None
+
+
+def run_pycart(name, config, script):
+    """(trace lines, frames) of the Python cart half: the cart copied into the
+    run's store and opened by its title; the trace is its engine's."""
+    import uitree_parity as P
+    from ws_helpers import open_cart
+    cart = pycart_fixture(name)
+    seen = {}
+
+    def prepare(carts_dir):
+        shutil.copytree(cart, os.path.join(carts_dir, os.path.basename(cart)))
+
+    def opened(ws):
+        from runtime import app_perms
+        c = next(c for c in ws.carts.all if c["title"] == _title(cart))
+        ws.consent.record(app_perms.app_id(c), [])   # a Python app asks once, at its first open
+        open_cart(ws, _title(cart))
+        seen["engine"] = ws.run.player.tree.engine
+    frames = P.frames(config, P.Surface(opened, prepare), script)
+    return norm_trace(seen["engine"].trace), frames
+
+
 def dump_python(name):
     import uitree_check
     app_py, _ = fixture(name)

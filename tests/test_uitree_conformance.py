@@ -256,6 +256,33 @@ def test_a_compiled_app_draws_the_lua_apps_glass(name, config):
     assert [C.differing(a, b) for a, b in zip(got, lua)] == [(None, 0)] * len(lua)
 
 
+# the fixtures with a Python cart half (NAME/NAME_py.moy, the app as a cart on the UI tree API)
+PYCART = tuple(n for n in NAMES if C.pycart_fixture(n))
+
+
+@functools.lru_cache(maxsize=None)
+def _run_pycart(name, config):
+    return C.run_pycart(name, config, _script(name))
+
+
+@pytest.mark.parametrize("name,config", _params("trace", names=PYCART))
+def test_a_python_cart_writes_the_references_trace(name, config):
+    """A Python cart that declares the UI tree extension runs its pages on
+    the system apps' engine: its trace is the reference's line for line."""
+    got, _ = _run_pycart(name, SMALL)
+    assert got == _expected(name, "trace.txt")
+
+
+@pytest.mark.parametrize("name,config", _params("pycart_glass", names=PYCART, configs=C.CONFIGS))
+def test_a_python_cart_draws_the_lua_apps_glass(name, config):
+    """Both are app carts on the run's canvas, so every frame of the script is
+    the Lua half's, pixel for pixel, bar and band included."""
+    got = _run_pycart(name, config)[1]
+    lua = _run("lua", name, config)[1]
+    assert len(got) == len(lua)
+    assert [C.differing(a, b) for a, b in zip(got, lua)] == [(None, 0)] * len(lua)
+
+
 @pytest.mark.parametrize("name,config", _params("dump"))
 def test_lua_dump_is_the_references(name, config):
     assert C.dump_lua(name)[1].splitlines() == _expected(name, "dump.txt")
