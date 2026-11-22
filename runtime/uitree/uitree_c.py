@@ -951,7 +951,7 @@ class CEngine(Engine):
 
     def gens(self):
         """The gens the page's regions drew under (the page's, then each
-        cards list's and split group's), or None where the page carries none: the engine's."""
+        cards list's, scroll region's and split group's), or None where the page carries none: the engine's."""
         return (self._x.gens() or None) if self._visiting() else None
 
     def hints(self):

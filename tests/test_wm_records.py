@@ -308,7 +308,7 @@ class Pair:
 
 APPS = ("settings", "licences", "achievements", "myart", "getcarts", "files",
         "storybook", "appearance", "calc")
-SHIFTS = ("settings", "licences", "achievements", "myart", "getcarts",
+SHIFTS = ("settings", "licences", "achievements", "myart", "getcarts", "files", "calc",
           "storybook", "appearance")
 
 
@@ -363,7 +363,7 @@ def _files_list(p):
 # change byte for byte against whole repaints. Licences' list is the desk's
 # scroll region beside the text (the handheld's is a page of its own); Get
 # Carts' Check, drawn before its shelf opens, reaches four rows into it.
-P4_APPS = ("licences", "storybook", "appearance", "getcarts")
+P4_APPS = ("licences", "files", "storybook", "appearance", "getcarts")
 
 
 @pytest.mark.parametrize("bufs", (1, 2, 3))
@@ -371,6 +371,8 @@ P4_APPS = ("licences", "storybook", "appearance", "getcarts")
 def test_the_p4_desk_shifts_its_apps_pages_byte_for_byte(tmp_path, app, bufs):
     p = Pair(tmp_path, app, bufs, board=P4)
     kind = p.a.wm.focus_key
+    if app == "files":
+        _files_list(p)
     _, _, _, ch = p.win(kind).content_rect()
     del p.kinds[:]
     p.drag(kind, -ch // 2)
@@ -393,6 +395,60 @@ def test_the_p4_desk_shifts_its_apps_pages_byte_for_byte(tmp_path, app, bufs):
         app, p.share(), p.kinds)
     if app != "appearance":           # its rows fit the desk's window: they never move
         assert "shift" in p.kinds
+
+
+def _drawings(ws, n=20):
+    from runtime import moy_carts
+    for i in range(n):
+        moy_carts.save_file("drawings", "Drawing %02d" % i,
+                            moy_carts.encode_moyimg(32, 24, bytes([8 + i % 8]) * 768),
+                            ws.carts_root)
+    _settle_mtimes(os.path.dirname(str(ws.carts_root).rstrip("/")))
+
+
+def _art(p):
+    """Files' Pictures place on both desks, its drawings listed, the focus
+    on its rows."""
+    from runtime import files_app, uitree as ui
+    for ws in (p.a, p.b):
+        _drawings(ws)
+        f = _inst(ws, "FilesAppLayer")
+        f._in(f._refresh_counts)
+        f._in(f.open_place, files_app.PICTURES)
+    p.settle()
+    for ws in (p.a, p.b):
+        f = _inst(ws, "FilesAppLayer")
+        f._in(ui.focus, "r0/open")
+    p.settle()
+
+
+def _shown_row(f):
+    """The current row's name: one the list shows."""
+    return f.rows[f.cur][0]
+
+
+def _file_added(ws):
+    from runtime import moy_carts
+    f = _inst(ws, "FilesAppLayer")
+    moy_carts.save_file("drawings", "Drawing 99",
+                        moy_carts.encode_moyimg(32, 24, bytes([3]) * 768), ws.carts_root)
+    f._refresh(keep=_shown_row(f))
+
+
+def _file_renamed(ws):
+    """The last row renamed (the drag left the list's end in view): a row
+    no mark moves."""
+    f = _inst(ws, "FilesAppLayer")
+    keep = _shown_row(f)
+    name = f.rows[-1][0]
+    res = f._store.rename("drawings", name, name + "b")
+    assert res[1] is None
+    f._refresh(keep=keep)
+
+
+def _file_deleted(ws):
+    f = _inst(ws, "FilesAppLayer")
+    f._act("DEL")
 
 
 def _shown_story(sb):
@@ -453,7 +509,8 @@ def _accent_changed(ws):
     a._change("accent", a._accents[3][1])
 
 
-CHANGES = {"story added": ("storybook", _story_added),
+CHANGES = {"file added": ("files", _file_added), "file renamed": ("files", _file_renamed),
+           "file deleted": ("files", _file_deleted), "story added": ("storybook", _story_added),
            "story renamed": ("storybook", _story_renamed),
            "story page turned": ("storybook", _story_turned),
            "theme changed": ("appearance", _theme_changed),
@@ -478,11 +535,13 @@ class _NoMark:
         pass
 
 
-_CLS = {"storybook": "StorybookAppLayer",
+_CLS = {"files": "FilesAppLayer", "storybook": "StorybookAppLayer",
         "appearance": "AppearanceAppLayer"}
 
 
 def _gen(ws, app):
+    if app == "files":
+        return _inst(ws, "FilesAppLayer").engine.gens()
     if app == "storybook":
         return _inst(ws, "StorybookAppLayer")._stories_o["gen"]
     return _inst(ws, "AppearanceAppLayer")._page_o["gen"]
@@ -497,6 +556,8 @@ def test_a_change_the_page_shows_moves_its_gen(tmp_path, change, bufs):
     app, fn = CHANGES[change]
     p = Pair(tmp_path, app, bufs, board=P4)
     kind = p.a.wm.focus_key
+    if app == "files":
+        _art(p)
     p.keys("down", 2)
     p.settle()
     _, _, _, ch = p.win(kind).content_rect()

@@ -2516,11 +2516,14 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
         draw_popover(e, c, s, k, model, row);
         break;
     case UIT_SCROLL: {
+        // a region of its own: its gen counts what it reads, so its scroll takes shift frames
         const char *key = uit_str(e, N->key);
-        int32_t one = 1;
+        int32_t one = 1, gen = (e->flags & UIT_F_GEN) && e->gen_safe ? uit_cell_gen(e, k) : -1;
         moy_ui_over_none(&o);
         if (N->lit)
             moy_ui_over_put(&o, MOY_UI_OV_FOLLOW, &one);
+        if (gen >= 0)
+            moy_ui_over_put(&o, MOY_UI_OV_GEN, &gen);
         moy_ui_api_scroll(c, s, span_of(key, strlen(key)), &o);
         walk(e, c, s, k, model, row);
         moy_ui_api_scroll(c, s, span_of("", 0), NULL);
@@ -4542,7 +4545,8 @@ int uit_gens(uit_t *e, int32_t *out, int cap)
         out[n] = e->page_gen;
     n++;
     for (int k = 1; k < e->nnodes; k++)
-        if (NODE(k)->kind == UIT_CARDS || (NODE(k)->kind == UIT_GROUP && NODE(NODE(k)->parent)->kind == UIT_SPLIT)) {
+        if (NODE(k)->kind == UIT_CARDS || NODE(k)->kind == UIT_SCROLL ||
+            (NODE(k)->kind == UIT_GROUP && NODE(NODE(k)->parent)->kind == UIT_SPLIT)) {
             if (n < cap)
                 out[n] = uit_cell_gen(e, k);
             n++;

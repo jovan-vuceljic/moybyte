@@ -341,7 +341,7 @@ int uit_row_stop(uit_t *e, const char *cur, const char *rowkey, char *buf, size_
 // whether a foot was shown.
 int uit_page_rects(const uit_t *e, int32_t out[8]);
 // The gens a gen-carrying page's regions draw under: the last frame's page's, then each cards
-// list's and split group's now, in node order, into out (at most cap): their count, 0 where the page carries none.
+// list's, scroll region's and split group's now, in node order, into out (at most cap): their count, 0 where the page carries none.
 int uit_gens(uit_t *e, int32_t *out, int cap);
 // The band's items as the last frame's state names them, NUL-separated
 // (the last NUL included): their length; written only where it fits cap.

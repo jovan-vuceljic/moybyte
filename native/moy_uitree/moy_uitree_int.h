@@ -398,7 +398,7 @@ enum { GV_FOCUS = 1, GV_INPUT = 2 };
 #define UIT_IS_LIST(kind) ((kind) == UIT_ROWS || (kind) == UIT_TABLE || (kind) == UIT_CARDS)
 // The states a page's gen can count (more: it carries none).
 #define UIT_GEN_SLOTS 128
-// A cards list's region's gen (`_cell_gens`): the builds and edits, and the versions of what its
+// A region's gen (a cards list's, a scroll region's, a split group's) (`_cell_gens`): the builds and edits, and the versions of what its
 // rows read; -1 past UIT_GEN_SLOTS.
 int32_t uit_cell_gen(uit_t *e, int k);
 // What template `t` reads, as a key: the versions of the states it reads summed; `*engine` set

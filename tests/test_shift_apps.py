@@ -181,6 +181,8 @@ def _console(tmp_path, app, ships, desk=False, chip=False, big=False):
             seed_stories(ws)
         app_ = ws.app(app)
         assert ws.spine.open_app(app_) is not False
+        if app == "files":
+            app_.level = "files"            # the list of projects
     return ws
 
 
@@ -307,7 +309,7 @@ class Pair:
         return len(moved) / max(1, len(self.kinds))
 
 
-APPS = ("settings", "licences", "achievements", "log", "myart", "getcarts", "storybook",
+APPS = ("settings", "licences", "achievements", "log", "myart", "getcarts", "files", "storybook",
         "appearance", "jukebox")
 
 

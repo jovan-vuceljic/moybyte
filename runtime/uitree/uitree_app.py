@@ -399,7 +399,7 @@ class App(AppLayer):
         if eng.__module__.rpartition(".")[2] == "uitree_editor":     # the Editor's kinds (runtime.uitree_editor on the host)
             eng = _engine_class(False, True)
         self.engine = eng(S.decl_of(S.module_of(build)), build, ctx.ui, ctx.surface, ctx.damage,
-                          getattr(ctx, "files", None), env=ctx)
+                          getattr(ctx, "files", None), gen=True, env=ctx)     # its scrolls take shift frames
 
     def is_app(self, cart):
         return bool(self.IS_APP and self.IS_APP[0](cart))
