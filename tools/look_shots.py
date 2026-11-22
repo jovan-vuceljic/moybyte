@@ -1583,10 +1583,11 @@ def _console_home(g, ws):
 
 def _key_calc(g, ws):
     calc = _app(ws, "calc")
+    mod, eng = sys.modules[type(calc).__module__], calc.engine
     for expr in CALC_TAPE:
-        calc._key("C")
-        for k in expr:
-            calc._key(k)
+        for k in "C" + expr:
+            eng.run(mod.press, k, action="press")
+    mod.ui.commit(eng)
 
 
 def _desk(g, ws, calc_x=648):
@@ -3427,9 +3428,7 @@ def _calc_pairs(ws, img):
     """The desk Calc's backspace key draws its sign as tall as a digit's
     cap less a pixel (design review R3-09)."""
     win = getattr(ws.wm, "windows", {}).get("calc")
-    app = ws.app("calc")
-    app = getattr(app, "_inst", app)
-    host = getattr(app, "_ui", None)
+    host = getattr(getattr(ws.app("calc"), "engine", None), "_ui", None)
     if win is None or getattr(win, "minimized", False) or host is None:
         return []
     cx, cy, _w, _h = win.content_rect()
@@ -3447,7 +3446,7 @@ def _calc_pairs(ws, img):
         ys = [yy for yy in range(r[1], r[1] + r[3])
               if any(_diff(px[xx, yy], plate) > 96 for xx in range(r[0], r[0] + r[2]))]
         return (max(ys) - min(ys) + 1) if ys else None
-    back, digit = ink_h("<"), ink_h("7")
+    back, digit = ink_h("back"), ink_h("d7")
     if back is None or digit is None:
         return []
     return [_measure("desk backspace ink height vs digit cap", back, digit - 1,

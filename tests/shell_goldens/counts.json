@@ -477,10 +477,10 @@
   },
   "p4_1024x600_cs2_fs1_popovers": {
     "desk_window_calc": [2, 10],
-    "popover_battery": [37, 34],
-    "popover_clock": [31, 67],
+    "popover_battery": [34, 31],
+    "popover_clock": [28, 64],
     "popover_menu": [5, 24],
-    "popover_wifi": [28, 39]
+    "popover_wifi": [25, 36]
   },
   "p4_1024x600_cs2_fs1_procs": {
     "desk_close_refusal": [8, 18],
@@ -645,11 +645,11 @@
   },
   "p4_1024x600_fs2_desk_popovers": {
     "music_desk_menu": [15, 23],
-    "popover_battery": [40, 34],
+    "popover_battery": [37, 31],
     "popover_clock": [10, 54],
-    "popover_clock_six": [33, 66],
-    "popover_wifi": [31, 39],
-    "popover_wifi_many": [34, 41],
+    "popover_clock_six": [30, 63],
+    "popover_wifi": [28, 36],
+    "popover_wifi_many": [31, 38],
     "status_desk_panel": [13, 22],
     "status_desk_panel_full": [17, 26]
   },

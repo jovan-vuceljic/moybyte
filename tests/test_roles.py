@@ -319,7 +319,8 @@ BUDGETS = {
                    "wallpaper.preview": 1, "wallpaper.title": 1},
     "storybook": {"surface.canvas": 1, "theme.colors": 2, "carts.all": 1},
     "files": {"surface.canvas": 1, "theme.colors": 6},
-    "calc": {"surface.canvas": 1, "theme.colors": 1, "theme.light": 1},
+    "calc": {"surface.canvas": 1, "surface.windowed": 1, "surface.chrome_scale": 1, "theme.colors": 1,
+             "theme.light": 1},
     "getcarts": {"surface.canvas": 1, "theme.colors": 1},
 }
 
