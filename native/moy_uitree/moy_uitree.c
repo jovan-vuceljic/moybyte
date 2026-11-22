@@ -509,6 +509,7 @@ int uit_model(uit_t *e, int slot, const char *names, size_t nlen, const uint8_t 
             return UIT_E_NOMEM;
         S->mf->fname[f] = (uint16_t)o;
         S->mf->ftype[f] = types[f];
+        S->mf->fvals[f] = 0;     // an enum's values (`uit_field_enum`); a blob writes it whatever the type
         S->mf->fnvals[f] = 0;
         at += n + 1;
     }
