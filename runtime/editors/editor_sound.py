@@ -145,13 +145,9 @@ def sound_page():
             for icon, _w, op in OPS:
                 ui.button(op, icon=icon, alone=True, w=OP_W, kind="danger" if op == "del" else "normal")
             with ui.row("oct_step", pad=8, shown="!paged || roomy"):
-                ui.button("oct_down", icon="back", alone=True, kind="bar")
-                ui.label("{oct}", tone="dim", align="center")
-                ui.button("oct_up", icon="forward", alone=True, kind="bar")
+                ui.stepper("{oct}", "oct_down", "oct_up", tone="dim", grow=True)
             with ui.row("page_step", pad=8, shown="paged"):
-                ui.button("page_down", icon="back", alone=True, kind="bar")
-                ui.label("{span}", tone="dim", align="center")
-                ui.button("page_up", icon="forward", alone=True, kind="bar")
+                ui.stepper("{span}", "page_down", "page_up", tone="dim", grow=True)
         with ui.popover("sound_name", at="{name_at}", w="{name_w}", close="close", shown="asking=name"):
             ui.field("Name", "f_name", max=SFX_NAME_MAX, on="named", hint="no name")
         with ui.popover("sound_menu", at="{menu_at}", w="{menu_w}", close="close", shown="asking=menu"):

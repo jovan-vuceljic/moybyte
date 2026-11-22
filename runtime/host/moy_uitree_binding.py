@@ -397,7 +397,7 @@ class Engine:
 
     def on_pic(self, fn):
         """A card's or a picture's image, `fn(node, pic, r)` (uit_on_pic):
-        r None asks whether it holds the picture, else r is the card's tile,
+        r None asks whether it holds the picture (0, else its gen), else r is the card's tile,
         its clip and whether it is focused (moy_uitree.h); what it raises is
         raised by the frame's call."""
         self._pic = fn
@@ -408,7 +408,8 @@ class Engine:
         if self._raised is not None:
             return 0
         try:
-            return 1 if self._pic(node, c.string_at(pic, n).decode("utf-8"), r if r else None) else 0
+            got = self._pic(node, c.string_at(pic, n).decode("utf-8"), r if r else None)
+            return int(got) if got else 0
         except BaseException as e:      # noqa: B036 -- ctypes would print and drop it
             self._raised = e
             return 0

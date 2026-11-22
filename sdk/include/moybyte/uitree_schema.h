@@ -11,7 +11,7 @@ enum {
     UT_ITEM, UT_SPLIT, UT_CANVAS, UT_TABS, UT_SWITCH, UT_CASE, UT_TABLE, UT_COL, UT_FOOT,
     UT_CARDS, UT_CARD, UT_PICTURE, UT_POPOVER, UT_TOOLS, UT_ROW, UT_STATUS, UT_TEXT_EDITOR,
     UT_PANES, UT_PANE, UT_LEGACY, UT_SLOT, UT_PANEL, UT_LENT, UT_RULE, UT_NOTE, UT_GRID,
-    UT_BUBBLE, UT_MONTH, UT_TOAST,
+    UT_BUBBLE, UT_MONTH, UT_TOAST, UT_CELLS, UT_STEPPER,
 };
 
 // Each kind's name by its number: an unkeyed node's key is its kind's name and its place.
@@ -20,7 +20,7 @@ static const char *const ut_kind_names_[] = {
     "slider", "field", "empty", "progress", "text_view", "scroll", "menu", "item", "split",
     "canvas", "tabs", "switch", "case", "table", "col", "foot", "cards", "card", "picture",
     "popover", "tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot",
-    "panel", "lent", "rule", "note", "grid", "bubble", "month", "toast",
+    "panel", "lent", "rule", "note", "grid", "bubble", "month", "toast", "cells", "stepper",
 };
 
 // A word prop's words (`off` takes the action's: "hide", "grey").
@@ -47,6 +47,7 @@ static const char *const ut_kind_names_[] = {
 #define UT_KIND_TONAL "tonal"
 #define UT_KIND_BAR "bar"
 #define UT_LOOK_CARD "card"
+#define UT_LOOK_RULES "rules"
 #define UT_LOOK_END "end"
 #define UT_LOOK_SHARE "share"
 #define UT_LOOK_BAND "band"
@@ -55,9 +56,11 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_LARGE "large"
 #define UT_LOOK_BAR "bar"
 #define UT_LOOK_STEPS "steps"
+#define UT_LOOK_BLOCKS "blocks"
 #define UT_LOOK_SEG "seg"
 #define UT_LOOK_CYCLE "cycle"
 #define UT_LOOK_SWATCHES "swatches"
+#define UT_LOOK_PICTURES "pictures"
 #define UT_LOOK_CAROUSEL "carousel"
 #define UT_LOOK_KEYS "keys"
 #define UT_MKIND_DANGER "danger"
@@ -74,6 +77,8 @@ static const char *const ut_kind_names_[] = {
 #define UT_SYNTAX_LUA "lua"
 #define UT_SYNTAX_JSON "json"
 #define UT_SYNTAX_MARKDOWN "markdown"
+#define UT_TONE_INK "ink"
+#define UT_TONE_DIM "dim"
 #define UT_WASH_PAGE "page"
 #define UT_WASH_VIEW "view"
 #define UT_WASH_NONE "none"
@@ -98,20 +103,21 @@ static inline int32_t ut_p_check(int v) { return ut_prop_("check", v ? "True" : 
 static inline int32_t ut_p_close(const char *v) { return ut_prop_("close", v); }
 static inline int32_t ut_p_cols(const char *v) { return ut_prop_("cols", v); }
 static inline int32_t ut_p_commit(int v) { return ut_prop_("commit", v ? "True" : "False"); }
-static inline int32_t ut_p_count(const char *v) { return ut_prop_("count", v); }
+static inline int32_t ut_p_count(int32_t v) { return ut_prop_int_("count", v); }
 static inline int32_t ut_p_cur(const char *v) { return ut_prop_("cur", v); }
 static inline int32_t ut_p_current(const char *v) { return ut_prop_("current", v); }
 static inline int32_t ut_p_cut(const char *v) { return ut_prop_("cut", v); }
 static inline int32_t ut_p_default(const char *v) { return ut_prop_("default", v); }
 static inline int32_t ut_p_dir(const char *v) { return ut_prop_("dir", v); }
 static inline int32_t ut_p_draw(const char *v) { return ut_prop_("draw", v); }
+static inline int32_t ut_p_edge(int v) { return ut_prop_("edge", v ? "True" : "False"); }
 static inline int32_t ut_p_empty(const char *v) { return ut_prop_("empty", v); }
 static inline int32_t ut_p_face(const char *v) { return ut_prop_("face", v); }
 static inline int32_t ut_p_fill(const char *v) { return ut_prop_("fill", v); }
 static inline int32_t ut_p_filter(const char *v) { return ut_prop_("filter", v); }
 static inline int32_t ut_p_find(const char *v) { return ut_prop_("find", v); }
 static inline int32_t ut_p_find_on(const char *v) { return ut_prop_("find_on", v); }
-static inline int32_t ut_p_first(const char *v) { return ut_prop_("first", v); }
+static inline int32_t ut_p_first(int32_t v) { return ut_prop_int_("first", v); }
 static inline int32_t ut_p_focus(const char *v) { return ut_prop_("focus", v); }
 static inline int32_t ut_p_focused(const char *v) { return ut_prop_("focused", v); }
 static inline int32_t ut_p_follow(int v) { return ut_prop_("follow", v ? "True" : "False"); }
@@ -134,6 +140,7 @@ static inline int32_t ut_p_input(const char *v) { return ut_prop_("input", v); }
 static inline int32_t ut_p_keys(const char *v) { return ut_prop_("keys", v); }
 static inline int32_t ut_p_kind(const char *v) { return ut_prop_("kind", v); }
 static inline int32_t ut_p_label(const char *v) { return ut_prop_("label", v); }
+static inline int32_t ut_p_label_icon(const char *v) { return ut_prop_("label_icon", v); }
 static inline int32_t ut_p_labels(const char *v) { return ut_prop_("labels", v); }
 static inline int32_t ut_p_lend(const char *v) { return ut_prop_("lend", v); }
 static inline int32_t ut_p_lines(const char *v) { return ut_prop_("lines", v); }
@@ -154,6 +161,7 @@ static inline int32_t ut_p_off(const char *v) { return ut_prop_("off", v); }
 static inline int32_t ut_p_offered(const char *v) { return ut_prop_("offered", v); }
 static inline int32_t ut_p_on(const char *v) { return ut_prop_("on", v); }
 static inline int32_t ut_p_pad(const char *v) { return ut_prop_("pad", v); }
+static inline int32_t ut_p_pick(const char *v) { return ut_prop_("pick", v); }
 static inline int32_t ut_p_pointer(const char *v) { return ut_prop_("pointer", v); }
 static inline int32_t ut_p_prev(const char *v) { return ut_prop_("prev", v); }
 static inline int32_t ut_p_reads(const char *v) { return ut_prop_("reads", v); }
@@ -174,6 +182,7 @@ static inline int32_t ut_p_span(int32_t v) { return ut_prop_int_("span", v); }
 static inline int32_t ut_p_start(const char *v) { return ut_prop_("start", v); }
 static inline int32_t ut_p_status(const char *v) { return ut_prop_("status", v); }
 static inline int32_t ut_p_sub(const char *v) { return ut_prop_("sub", v); }
+static inline int32_t ut_p_swatch(const char *v) { return ut_prop_("swatch", v); }
 static inline int32_t ut_p_syntax(const char *v) { return ut_prop_("syntax", v); }
 static inline int32_t ut_p_tabs(const char *v) { return ut_prop_("tabs", v); }
 static inline int32_t ut_p_tag(const char *v) { return ut_prop_("tag", v); }

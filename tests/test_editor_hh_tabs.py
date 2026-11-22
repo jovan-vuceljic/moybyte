@@ -80,7 +80,8 @@ def test_the_music_pad_edits_the_step_under_the_cursor(hh):
 def test_the_music_tabs_chevrons_and_hear(hh):
     ws, drv, mu, page = _music(hh)
     me = mu.musicedit
-    _tap(drv, page.rect_of("next"))
+    x, y, w, h = page.rect_of("stepper#1")          # the stepper's forward half
+    _tap(drv, (x + w // 2, y, w - w // 2, h))
     assert me.sfx_idx == 1
     x, y, w, h = page.rect_of("view")
     _tap(drv, (x, y, w, h), dx=70)               # Song, the strip's second tab

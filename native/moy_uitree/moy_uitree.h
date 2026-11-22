@@ -49,6 +49,8 @@ enum {
     UIT_BUBBLE,             // level 1: a chat's bubble, a stop
     UIT_MONTH,              // level 2: a month's calendar, no stop; its chevrons fire prev= and next=
     UIT_TOAST,              // level 2: a toast over the page's body, above its foot; no stop
+    UIT_CELLS,              // level 2: a palette's colours as square cells, a stop bound to an int
+    UIT_STEPPER,            // level 2: a value between two chevrons that fire prev= and next=, a stop
     UIT_KINDS
 };
 
@@ -304,8 +306,9 @@ int uit_still(uit_t *e, const moy_ui_ctx_t *c, int x, int y, int w, int h, int f
 typedef void (*uit_draw_fn)(void *ud, int node, int model, int row, int x, int y, int w, int h);
 void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud);
 // A card's or a picture's image (`image=`, its template's text `pic`, n bytes; never empty): the
-// front end finds, decodes and draws it. With `r` NULL it answers whether it holds the picture
-// (the card then draws no icon tile); else r is the card's tile, r[0..3], its clip, r[4..7] (the
+// front end finds, decodes and draws it. With `r` NULL it answers 0 where it does not hold the
+// picture, else a positive number that moves with the picture's pixels (the card then draws no icon
+// tile, and carries that as its gen); else r is the card's tile, r[0..3], its clip, r[4..7] (the
 // scroll's floor), r[8] bit 1 where the card is focused (its tile lifted), and on a carousel's
 // tile (bit 2) bit 4 where it is the centre's and bit 8 where the band is at rest; r[9] its
 // corners' radius (0 on a grid's card, which cuts its own), r[10..11] the size the front end

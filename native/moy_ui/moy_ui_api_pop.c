@@ -610,6 +610,11 @@ void moy_ui_api_card_mark(moy_ui_ctx_t *c, moy_ui_span_t badge, int tone,
     c->card_blank_glyph = (int16_t)(blank.n ? moy_ui_icon_glyph(blank.p, blank.n) : -1);
 }
 
+void moy_ui_api_card_lead(moy_ui_ctx_t *c, moy_ui_span_t icon) {
+    c->card_lead = (int16_t)(icon.n ? moy_ui_icon_slot(icon.p, icon.n) : -1);
+    c->card_lead_glyph = (int16_t)(icon.n ? moy_ui_icon_glyph(icon.p, icon.n) : -1);
+}
+
 void moy_ui_api_grid_spread(moy_ui_ctx_t *c, int cols, int foot, int top, int margin,
                             int wrap) {
     c->spread.wrap = (uint8_t)(wrap < 0 ? 0 : wrap > 2 ? 2 : wrap);
@@ -942,7 +947,7 @@ void moy_ui_api_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t titl
         memcpy(saved, &row->st[MOY_ST_CX0], sizeof(saved));
         row->st[MOY_ST_CX1] = row->st[MOY_ST_CX0];
         moy_ui_card(s, b, pic, lw, title, sub, f | (c->grid_wrap ? MOY_UI_F_WRAP : 0), c->fs,
-                    gnd, c->card_tone, &content, &g);
+                    gnd, c->card_tone, c->card_lead, c->card_lead_glyph, &content, &g);
         memcpy(&row->st[MOY_ST_CX0], saved, sizeof(saved));
         rc_t q = mua_rc_of(content);
         if (!stacked || mua_rc_cut(&q, mua_rc_of(c->page))) {
@@ -952,7 +957,7 @@ void moy_ui_api_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t titl
     c->fl.cast = 1;
     EACH_ROW(c, k, s, b, stacked, c->page) {
         moy_ui_card(s, b, pic, lw, title, sub, f | (c->grid_wrap ? MOY_UI_F_WRAP : 0), c->fs,
-                    gnd, c->card_tone, &content, &g);
+                    gnd, c->card_tone, c->card_lead, c->card_lead_glyph, &content, &g);
         if (c->card_blank >= 0 || c->card_blank_glyph >= 0) {
             moy_ui_card_blank(s, content, c->card_blank, c->card_blank_glyph, c->card_tone,
                               c->fs, gnd);
@@ -962,6 +967,7 @@ void moy_ui_api_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t titl
     if (!any) {
         out[4] = st;
         c->card_slot = c->card_glyph = c->card_blank = c->card_blank_glyph = -1;
+        c->card_lead = c->card_lead_glyph = -1;
         c->card_tone = 0;
         return;                     // scrolled out of view: nothing to draw into
     }
@@ -969,6 +975,7 @@ void moy_ui_api_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t titl
     c->fin_glyph = c->card_glyph;
     c->fin_tone = c->card_tone;
     c->card_slot = c->card_glyph = c->card_blank = c->card_blank_glyph = -1;
+    c->card_lead = c->card_lead_glyph = -1;
     c->card_tone = 0;
     c->fin_on = 1;
     c->fin_flags = (uint8_t)(f & MOY_UI_F_FOCUS ? 1 : 0);
@@ -979,7 +986,7 @@ void moy_ui_api_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t titl
     if (mua_outside_floor(c, b)) {
         return;                     // a shift frame's: what the app drew there stands
     }
-    c->pic_clip = mua_floor_of(c, content);
+    c->pic_clip = mua_pic_clip(c, content);
     c->pic_tbl = 0;
     out[0] = content.x;
     out[1] = content.y;

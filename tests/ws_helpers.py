@@ -408,6 +408,18 @@ def settings_box(ws, key):
     return ws.cards_layer.page._ui.box(key)
 
 
+def picker_tile(ws, box, n, k):
+    """Tile `k` of the `n` of a seg of look="pictures" whose row is `box`,
+    as a box: native/moy_ui's moy_ui_pics_tile (side, gap and right pad 48,
+    12 and 16 px on the desk, 32, 8 and 10 units on a handheld)."""
+    import layout_base
+    fs = max(1, getattr(ws.sys_canvas, "font_scale", 1))
+    desk = layout_base.metric_class() == layout_base.DESK
+    side, gap, pad = (48 * fs, 12 * fs, 16 * fs) if desk else (32 * fs, 8 * fs, 10 * fs)
+    x = box[0] + box[2] - pad - n * side - (n - 1) * gap + k * (side + gap)
+    return (x, box[1] + (box[3] - side) // 2, side, side)
+
+
 def tap_box(ws, box):
     """A tap in the middle of `box` on the Config page, its release, and
     the frames after."""

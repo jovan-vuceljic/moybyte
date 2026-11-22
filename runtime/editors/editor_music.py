@@ -106,9 +106,7 @@ def music_page():
         ui.empty("No sounds", icon="music", lines=["This cart has no sound bank"], shown="none")
         with ui.row("head", pad=4, gap=6, shown="!none"):
             ui.tabs("view", "VIEWS", on="view_moved")
-            ui.button("prev", icon="back", alone=True, kind="bar")
-            ui.label("{name}", size="text", align="center")
-            ui.button("next", icon="forward", alone=True, kind="bar")
+            ui.stepper("{name}", "prev", "next")
             ui.button("speed_open", label="Speed {speed}", kind="bar", marked="pop")
         with ui.row("body", grow=True, shown="!none"):
             with ui.table("steps", cur="at", row=17, changed="picked"):

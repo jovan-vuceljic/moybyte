@@ -1,5 +1,5 @@
 // Conformance fixture `kinds` (level 2), the compiled half: a seg over an enum
-// worded by a label table, a progress bar, a menu and its item, a table with
+// worded by a label table, a progress bar, a stepper, a menu and its item, a table with
 // its columns, a lines view, and an action a table's row fires
 // (sdk/include/moybyte/uitree.h). Its Python half is ../app.py, its Lua half
 // ../kinds.moy.
@@ -23,10 +23,13 @@ static void pick(int32_t row) {
 
 static void bump(int32_t row) { uitree_set_int(s_done, uitree_get_int(s_done) + 1); }
 
+static void less(int32_t row) { uitree_set_int(s_done, uitree_get_int(s_done) - 1); }
+
 static void page(void) {
     ut_page("kinds", "Kinds") {
         ut_seg("mode", "Mode", "MODES");
         ut_progress("{done}", "Done", 5);
+        ut_stepper("{done} done", "less", "bump");
         ut_menu("Do") ut_item("bump");
         ut_table("items", "sel", "pick", "Name", "Size") {
             ut_col("{.name}");
@@ -48,6 +51,7 @@ EXPORT(_init) void _init(void) {
     ut_hook("opened", opened);
     ut_action("pick", "Pick", pick);
     ut_action("bump", "More", bump);
+    ut_action_when("less", "Less", "done!=0", UT_OFF_GREY, less);
     ut_open(page);
 }
 

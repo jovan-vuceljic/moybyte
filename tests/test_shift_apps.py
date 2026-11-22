@@ -527,17 +527,18 @@ def _app(ws, app):
 
 
 def _shown_story(sb):
-    """The story whose card shows most and holds no mark: the frames after
+    """The story whose card shows most and holds no focus: the frames after
     a change to it move its pixels unless its gen moves."""
-    g = sb.layout.stories_grid
+    x, y, w, h = sb._surf.content_rect()
+    cur = sb.state().cur
     best, most = None, 0
-    for r in sb._rows:
-        b = sb._ui.box(r.o["id"])
-        if b is None or r.o["id"] == sb._focused:
+    for e in sb.stories:
+        b = sb._ui.box(e["name"] + "/open")
+        if b is None or e["name"] == cur:
             continue
-        shows = min(b[1] + b[3], g[1] + g[3]) - max(b[1], g[1])
+        shows = min(b[1] + b[3], y + h) - max(b[1], y)
         if shows > most:
-            best, most = r.entry, shows
+            best, most = e, shows
     assert best is not None, "no story's card shows"
     return best
 
@@ -551,15 +552,14 @@ def _story_renamed(ws):
 
 def _story_turned(ws):
     """Storybook: a shown story's first page turned over, another slide
-    first."""
+    first; the app's next frame fills its page."""
     from runtime import story_doc as D
     sb = _app(ws, "storybook")
     e = _shown_story(sb)
     doc = D.copy(e["doc"])
     doc["slides"].insert(0, D.layout_slide("blank", 9))
     e["doc"] = doc
-    if sb.cards is not None:
-        sb.cards.drop(e["name"])
+    sb.fill_owed = True
 
 
 CHANGES = {"story renamed": ("storybook", _story_renamed),
@@ -591,6 +591,35 @@ def test_a_change_the_page_shows_moves_its_gen(tmp_path, change, bufs):
     p.keys("down", 2)
     p.keys("up", 1)
     p.settle()
+
+
+@pytest.mark.parametrize("bufs", (1, 2, 3))
+def test_a_storys_view_draws_its_slide_once_and_takes_its_steppers_press(tmp_path, bufs):
+    """Storybook's view of a story on the handheld: the frames after it
+    opens leave its canvas outside their floor, so its draw is not asked
+    (a canvas handed no rect drew its slide off at the page's corner) and a
+    press on its stepper still lands on it (its rect is where it stands,
+    not the 0s of a pass that left it undrawn): every frame holds to a
+    whole repaint's bytes, and the press turns the page on both."""
+    p = Pair(tmp_path, "storybook", bufs)
+    for ws in (p.a, p.b):
+        sb = _app(ws, "storybook")
+        e = next(e for e in sb.stories if len(e["doc"]["slides"]) > 1)
+        sb._open_story(e, "view")
+        sb.owe()
+    for _ in range(8):
+        p.frame()
+    sb = _app(p.a, "storybook")
+    x, y, w, h = sb.engine._x.rect("view")
+    assert w > 0 and h > 0, "the view's rect after its undrawn frames: %r" % ((x, y, w, h),)
+    x, y, w, h = sb.engine._x.rect("stepper#1")
+    p.both("touch", x + w * 3 // 4, y + h // 2)
+    p.frame()
+    p.both("touch_up")
+    for _ in range(4):
+        p.frame()
+    assert [_app(ws, "storybook").cur for ws in (p.a, p.b)] == [1, 1]
+    assert "rows" in p.kinds or "shift" in p.kinds
 
 
 # The Editor's tabs on the verbs (docs/history/scroll_and_text_2026-10.md §15 P5).

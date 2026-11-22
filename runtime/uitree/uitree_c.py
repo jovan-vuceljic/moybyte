@@ -16,6 +16,7 @@ engine's own writes (a toggle, a list's cursor) are pulled back before any
 handler runs."""
 
 import struct
+from array import array
 import sys
 
 from moy_input import SHIFT as _SHIFT
@@ -63,6 +64,18 @@ def _list_model(n):
     return None
 
 
+def _stirs(i):
+    """Whether the frame's input holds anything a canvas's keys= could take:
+    a key typed, a button held or pressed. A quiet frame asks the engine for
+    nothing (its focused key is a new string each time)."""
+    if getattr(i, "typed", 0):
+        return True
+    try:
+        return i.any_held() or i.any_pressed()
+    except AttributeError:
+        return True
+
+
 class EngineGap(S.UIError):
     """What the C engine does not draw yet, by name: never drawn wrong."""
 
@@ -91,7 +104,7 @@ _KINDS = {"page": 1, "group": 2, "label": 3, "info": 4, "link": 5, "button": 6, 
           "cards": 27, "card": 28, "picture": 29, "popover": 30,
           "tools": 31, "row": 32, "status": 33, "text_editor": 34, "panes": 35, "pane": 36,
           "legacy": 37, "slot": 38, "panel": 39, "lent": 40, "rule": 41, "note": 42, "grid": 43,
-          "bubble": 44, "month": 45, "toast": 46}
+          "bubble": 44, "month": 45, "toast": 46, "cells": 47, "stepper": 48}
 # the placed kinds: a page the engine's layout places holds them (`CEditorPage`)
 _PLACED_KINDS = ("tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot", "panel", "lent")
 _PANE_KINDS = ("panes", "pane")
@@ -99,7 +112,7 @@ _LEGACY_FNS = ("draw", "pointer", "keys", "hints", "gen")
 _HEAD = {"rows": ("model",), "table": ("model",), "cards": ("model",), "dialog": ("buttons",)}
 _KIND_NAMES = dict((v, k) for k, v in _KINDS.items())
 _KIND_NAMES[len(_KINDS) + 1] = "cycle"          # UIT_KINDS: a seg of the cycle look
-_BOUND = ("toggle", "seg", "slider", "field", "text_view", "tabs")       # a two-way control: bound to the state of its key
+_BOUND = ("toggle", "seg", "slider", "field", "text_view", "tabs", "cells")       # a two-way control: bound to the state of its key
 _LIT_ONLY = {"seg": ("values", "words", "model", "labels"), "text_view": ("name",),
              "switch": ("name",), "case": ("v",), "tabs": ("labels", "values")}    # a switch's and a case's: in their keys   # what the Builder keeps beside a node's props
 _TYPED = "typed in field "
@@ -198,8 +211,10 @@ class CEngine(Engine):
         self._slot, self._names, self._types, self._pushed = {}, [], [], {}
         self.direct = BUILD == "direct"
         self._draws, self._drawing = {}, False
+        self._reads = {}                # a canvas's node -> the states its draw may read (reads=)
         self._canvas_keys = {}          # a canvas's key -> (its keys= function, the model of the list it stands in or None)
         self._grounds = {}      # a canvas's ground= role, by its node
+        self._row_clip = array("i", [0, 0, 0, 0])     # a list row's canvas's clip (`_draw`)
         self._docs = {}         # a document's state -> what it was pushed at (`_push_doc`)
         self._doc_reads = {}    # ...and the fields of it the lowered page reads
         self._editors = {}      # a text editor's node -> its stand-in (`_TextEditor`)
@@ -607,6 +622,7 @@ class CEngine(Engine):
         x.build_begin(self._page_id())
         draws = self._draws = {}
         self._canvas_keys = {}
+        self._reads = {}
         if not self._drawing:
             self.bind_draws(x)
         cnode, cprop, cact, aidx, fail = x.node, x.prop, x.node_action, self._aidx, self._fail
@@ -697,6 +713,16 @@ class CEngine(Engine):
                     r = cprop(me, "keys", getattr(src, "__name__", "keys"), None)
                     if r < 0:
                         fail(r, "canvas %s keys=" % n.key, n.where)
+                    continue
+                if k == "reads" and nk == "canvas":        # one prop a state its draw reads
+                    if isinstance(src, str) or not isinstance(src, (list, tuple)):
+                        raise S.UIError("N01", "ui.canvas %s reads= is a list of state names" % n.key,
+                                        where=n.where, found=repr(src), fix="reads=[%r]" % (src,))
+                    for name in src:
+                        r = cprop(me, "reads", name, None)
+                        if r < 0:
+                            fail(r, "canvas %s reads=%r" % (n.key, name), n.where)
+                    self._reads[me] = tuple(src)
                     continue
                 if k == "draw" and nk == "canvas":         # the front end's function: called inside the frame
                     draws[me] = src
@@ -811,7 +837,7 @@ class CEngine(Engine):
                 tuple((node, te.key, tuple(te.l.items()), te.conds) for node, te in self._editors.items()),
                 tuple((node, m.kind, m.key, m.parent.aux if m.parent is not None else -1, tuple(m.where),
                        lits(m.src), lits(m.l)) for node, m in stand),
-                tuple(keys))
+                tuple(keys), tuple(self._reads.items()))
 
     def unfront(self, f):
         """`front`'s literals made again into what lowering leaves the front end."""
@@ -821,6 +847,7 @@ class CEngine(Engine):
             return v if d == 0 else dict(v) if d == 1 else getattr(mod, v)
         self._pointers = [(k, acts[a], m) for k, a, m in f[0]]
         self._canvas_keys = dict((k, (_fn_at(mod, n), m)) for k, n, m in f[6])
+        self._reads = dict(f[7])
         self._pop_lists = dict((k, (m, c)) for k, m, c in f[1])
         self._pop_fields = dict(f[2])
         self._doc_reads = dict(f[3])
@@ -843,16 +870,33 @@ class CEngine(Engine):
         now = S._NOW
         app, frame = now.app, now.frame       # two names, not a tuple: a frame allocates nothing
         now.app, now.frame = self, True
+        now.reads = self._reads.get(node)
+        cv = self.cv
         try:
             g = self._grounds.get(node)
-            if g:
-                self.cv.rect(x, y, w, h, self.th[g])
-            if model >= 0 and row >= 0:
-                self._draws[node](self.cv, x, y, w, h, self.s._v[self._names[model]][row])
+            if model >= 0 and row >= 0 and not self.PLACED:
+                # a flowing list's row: drawn where its page or scroll region shows it
+                k = self._row_clip
+                k[0] = x                # one at a time: a four-way unpack builds a tuple on a board
+                k[1] = y
+                k[2] = w
+                k[3] = h
+                _v.card_clip(k)
+                cv.clip(k[0], k[1], k[2], k[3])
+                if g:
+                    cv.rect(x, y, w, h, self.th[g])
+                self._draws[node](cv, x, y, w, h, self.s._v[self._names[model]][row])
+                cv.clip()
             else:
-                self._draws[node](self.cv, x, y, w, h)
+                if g:
+                    cv.rect(x, y, w, h, self.th[g])
+                if model >= 0 and row >= 0:
+                    self._draws[node](cv, x, y, w, h, self.s._v[self._names[model]][row])
+                else:
+                    self._draws[node](cv, x, y, w, h)
         finally:
             now.app, now.frame = app, frame
+            now.reads = None
 
     def query(self, name, *a):
         """What a handler or a canvas's draw asks: the theme's colours, the
@@ -862,11 +906,11 @@ class CEngine(Engine):
         return Engine.query(self, name, *a)
 
     def _pic(self, node, pic, r):
-        """A card's or a picture's image (`uit_on_pic`): with no tile, whether
-        the picture is decoded at the size the node's unfocused tile last
-        had (a carousel's tile: the size it names, its centre's); with one,
-        drawn there clipped, its corners rounded where it names a radius, or
-        owed to the idle step."""
+        """A card's or a picture's image (`uit_on_pic`): with no tile, 0 where
+        the picture is not decoded at the size the node's unfocused tile last
+        had (a carousel's tile: the size it names, its centre's), else its gen
+        (which moves with its pixels, a put's); with one, drawn there clipped,
+        its corners rounded where it names a radius, or owed to the idle step."""
         p = self._pic_of.get(pic)
         if p is None:
             kind, _c, key = pic.partition(":")
@@ -874,7 +918,7 @@ class CEngine(Engine):
         wh = self._pic_wh.get(node)
         pics = self.pics
         if r is None:
-            return wh is not None and pics is not None and pics.state(p, wh[0], wh[1]) == "shown"
+            return pics.gen_of(p) + 1 if wh is not None and pics is not None and pics.state(p, wh[0], wh[1]) == "shown" else 0
         if pics is None:
             import uitree_pics
             cv = self.cv
@@ -1174,7 +1218,7 @@ class CEngine(Engine):
         if self._shut:
             self._resume()
         self._bind()
-        if self._canvas_keys and self._canvas_took(i):
+        if self._canvas_keys and _stirs(i) and self._canvas_took(i):
             return True
         ch = getattr(i, "typed", 0)
         a = self._x.letter(ch) if ch else -1

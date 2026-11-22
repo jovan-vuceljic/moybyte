@@ -3353,6 +3353,22 @@ class Workstation:
         # host window simply retains the last frame, so an idle UI costs ~0 and the
         # device saves the SPI flush + power. A running cart / live wallpaper / active
         # overlay always reports animating, so it redraws every frame as before.
+        # A picture a card in view waits for, one a frame, before the frame
+        # paints: its damage paints it now, and the page is not quiet until
+        # every picture it shows has come (uitree_pics). The Config tab's
+        # pickers are the Editor's one page that shows pictures.
+        try:
+            for app in self.app_layers:
+                if getattr(app, "view_owed", False):
+                    app.idle_step()
+                    break
+            else:
+                if self.cards_layer.view_owed:
+                    self.cards_layer.idle_step()
+        except Exception as exc:  # noqa: BLE001 -- a picture never ends a session
+            if not self._idle_warned:
+                self._idle_warned = True
+                print("Moybyte idle work failed:", _err_text(exc))
         if not self._needs_redraw(dt):
             # Nothing to paint. Spend the frame bringing a window's buffer up
             # to the glass (the WM's `refill_step`, a copy), and warming the

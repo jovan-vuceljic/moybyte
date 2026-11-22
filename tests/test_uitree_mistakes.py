@@ -71,6 +71,7 @@ PY = {
 
 # codes both layers raise that have no pair here, and why
 NO_PAIR = {
+    "R01": "raised by a canvas's draw, which no checker run draws; cased in tests/test_uitree_c_reads.py",
     "P05": "raised by a handler's ui.pop() on the first page, which no checker run fires; cased in "
            "tests/test_uitree_codes.py (Python) and tests/test_uitree_lua.py (Lua)",
     "N06": "Lua raises it in a frame, for a popover's anchor no drawn node has (cased on the console in "

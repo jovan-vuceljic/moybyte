@@ -121,10 +121,24 @@ class Engine(S.Builder):
     def idle_owed(self):
         return (self.pics is not None and self.pics.idle_owed) or self.legacy_moved()
 
+    @property
+    def view_owed(self):
+        """A picture a card in view waits for: one decoded a frame before
+        the frame paints (the console's), so the page is not quiet until it
+        shows every picture it holds."""
+        return self.pics is not None and self.pics.idle_owed
+
     def legacy_moved(self):
         """Whether a hosted surface's gen moved since it drew: a page with no
         Editor's kinds hosts none."""
         return False
+
+    def pics_let_go(self):
+        """A picture a card showed was let go: every gen moves (the card
+        draws its tile again)."""
+        x = getattr(self, "_x", None)
+        if x is not None:
+            x.pics_moved()
 
     def idle_step(self):
         """A frame with nothing to paint: one owed picture decoded, the card
@@ -457,6 +471,10 @@ class App(AppLayer):
     @property
     def idle_owed(self):
         return self.engine.idle_owed
+
+    @property
+    def view_owed(self):
+        return self.engine.view_owed
 
     def idle_step(self):
         self.engine.idle_step()

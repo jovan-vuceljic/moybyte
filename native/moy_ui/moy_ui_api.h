@@ -167,7 +167,8 @@ typedef struct {
     int32_t fill, ink, border;      // MOY_UI_O_NONE, RGB, or MOY_UI_O_ROLE + a token
     moy_ui_span_t id;               // p NULL: the label's
     int8_t current, disabled, nav, mark;    // -1 absent
-    int8_t steps;                   // a slider: a segment per step, no number
+    int8_t steps;                   // a slider: 1 a segment per step, no number; 2 the same
+                                    // blocks across the whole row (a meter)
     moy_ui_span_t hint;             // a field's placeholder (p NULL: none)
     int8_t wash;                    // a popover: wash what it covers (-1 absent), or
                                     // 2 ("view") its anchor's view alone, less the
@@ -630,10 +631,11 @@ typedef struct {
     uint32_t mid_page;              // the page a middle-button drag scrolls
     int16_t mid_y;
     int16_t tap_x, tap_y;           // where the activating tap was released
-    moy_ui_box_t pa_box;            // the part answered last (w 0: none this frame)...
+    moy_ui_box_t pa_box;            // the part answered last, where it stands (w 0: none)...
     moy_ui_box_t sp_hit[MOY_UI_API_DIVS];   // the dividers this frame's splits drew: what a press takes
     uint8_t sp_n;
-    uint8_t pa_st;                  // ...and its state bits (moy_ui_api_part_at)
+    uint8_t pa_st;                  // ...its state bits (moy_ui_api_part_at)...
+    uint8_t pa_none;                // ...and whether this pass leaves it undrawn (its out 0s)
     // The panes the last pass's splits cut (moy_ui_api_split_frame): a pane
     // a later split cut again (`sp_cut`, a bit a pane) is no pane of its own;
     // `sp_cur` the one a split's focus names (-1 none), `sp_held` whether a
@@ -744,7 +746,7 @@ typedef struct {
     // The next card's badge and tone (moy_ui_api_card_mark), the next
     // grid's spread (moy_ui_api_grid_spread) and the next label's text
     // options (moy_ui_api_text): each cleared once used and by begin.
-    int16_t card_slot, card_glyph, card_blank, card_blank_glyph;
+    int16_t card_slot, card_glyph, card_blank, card_blank_glyph, card_lead, card_lead_glyph;
     int8_t card_tone;
     uint8_t grid_wrap;
     moy_ui_spread_t spread;
@@ -986,6 +988,15 @@ int moy_ui_api_toggle(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
                       const moy_ui_over_t *o);
 int32_t moy_ui_api_slider(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label,
                           int32_t v, int32_t lo, int32_t hi, const moy_ui_over_t *o);
+// A stepper (moy_ui_stepper): `value` between a back and a forward chevron,
+// each greyed where `can` lacks its bit (1 back, 2 forward), its words `ink`
+// (MOY_UI_TONE_INK or MOY_UI_TONE_DIM). Stacked on a page it stands its
+// natural width centred on its row; ui.at's rect is its own, the chevrons at
+// its ends. Left and right are its own while focused, activation steps
+// forward and a tap steps the half it lands in. Answers -1 or 1 the frame it
+// steps a way `can` allows, else 0; its box (x, y, w, h) in `box`.
+int moy_ui_api_stepper(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t value, int can,
+                       int tone, const moy_ui_over_t *o, int32_t box[4]);
 // `items` NUL-separated in `len` bytes; `cur` from 0, -1 none. Answers the new cur.
 int32_t moy_ui_api_list(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label,
                         const uint8_t *items, size_t len, int32_t cur, const moy_ui_over_t *o);
@@ -1005,10 +1016,23 @@ int moy_ui_api_value(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui_s
 // option, a tap the one tapped. Answers the new cur.
 int32_t moy_ui_api_choice(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui_span_t label,
                           const uint8_t *opts, size_t len, int32_t cur, const moy_ui_over_t *o);
+// A pictures row (MOY_UI_V_PICS, moy_ui_pics_tile): its label, then `n` tiles at its right,
+// `cur` (from 0, -1 none) on the selection's plate. Left and right are its own while focused
+// and wrap; activation takes the next tile, a tap the one tapped. The caller draws each tile's
+// picture over its plate (moy_ui_api_pics_tile, clipped by moy_ui_api_card_clip); `o`'s gen is
+// the pictures' (a shift frame draws the row again where it moved, none: no shift frame).
+// out: the row's box (0 wide where a shift frame leaves it as it moved) and its state bits.
+// Answers the new cur.
+int32_t moy_ui_api_pics(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label, int n,
+                        int32_t cur, const moy_ui_over_t *o, int32_t out[5]);
+// Tile i of a pictures row of `n` whose box is row[0..3] (moy_ui_api_pics' out).
+void moy_ui_api_pics_tile(const moy_ui_ctx_t *c, const int32_t row[4], int n, int i,
+                          int32_t out[4]);
 // Keycap hints (`items` NUL-separated pairs of an action or keys and what it
 // does, moy_ui_hints) in a band at the page's foot, which its rows then stack
-// above; ui.at places them instead. Under the input touch there is no band
-// and a ui.at before it is spent.
+// above; ui.at places them instead; `hint` the status words it leads with
+// (moy_ui_hints_status). Under the input touch there is no band and a ui.at
+// before it is spent.
 void moy_ui_api_hints(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const uint8_t *items, size_t len,
                       const moy_ui_over_t *o);
 // The width those hints take with the input in use, their margin at either
@@ -1105,11 +1129,21 @@ void moy_ui_api_text(moy_ui_ctx_t *c, int lines, int centre, int tone, int role)
 void moy_ui_api_text_size(moy_ui_ctx_t *c, int scale, int w);
 void moy_ui_api_card_mark(moy_ui_ctx_t *c, moy_ui_span_t badge, int tone,
                           moy_ui_span_t blank);
+// The next card's title's icon (`icon`, empty none): drawn before its title,
+// the two centred under its picture as one.
+void moy_ui_api_card_lead(moy_ui_ctx_t *c, moy_ui_span_t icon);
 void moy_ui_api_grid_spread(moy_ui_ctx_t *c, int cols, int foot, int top, int margin,
                             int wrap);
 // A group with no caption (ui.group's `card`): its rows on its card, from
 // the page's next row, until a group call ends it.
 void moy_ui_api_group_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
+// A group with no caption whose rows a rule parts, as a captioned group's
+// (ui.group's `rules`): from the page's next row, until a group call ends it.
+void moy_ui_api_group_rules(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
+// Where a group is open, the page's next `h` pixels a row of it the caller
+// draws placed: the page's cursor under it and its rule (on the handheld its
+// card's band) drawn. 0 where none is open, and nothing done.
+int moy_ui_api_group_row(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int h);
 // A card's plate at ui.at's rect, the rows it holds placed on it by the caller
 // (a split's cell of ui.group's `card`): rounded and filled, on the desk a ring.
 void moy_ui_api_card_at(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
@@ -1612,7 +1646,7 @@ int moy_ui_api_pop_box(const moy_ui_ctx_t *c, int32_t out[4]);
 // differs from the last frame's draws from its top to R's foot (but for one
 // ui.at placed both frames that moved where the floor holds both its
 // boxes, which moves nothing else), a picture
-// whose gen moved draws its own box, a stop gone from R's tail leaves the
+// whose gen moved, or a card's with none, draws its own box, a stop gone from R's tail leaves the
 // ground. What a stop outside R draws into it (a box reaching in, a mark's
 // reach) is floor where R moved or its marks changed, and where such a stop
 // draws before R opens the floor is the pass's from its start.
@@ -1770,5 +1804,16 @@ int moy_ui_api_keep(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, i
 // call and zeroes them (`on` -1 reads, leaving the switch as it is); per
 // instance (NULL: the main one).
 uint32_t moy_ui_api_audit(moy_ui_inst_t *I, int on);
+
+// A palette's cells, a stop (§1): `count` of the MOY64 colours from `first`,
+// `cols` to a row, each a `side` square less `gap`, centred in the row the
+// page places them in; `edge` draws the border round them. The colour `cur`
+// wears the current mark, and while focus is on them the keys' cursor; the
+// arrows move it a cell (up at the top row and down at the last go on to the
+// next stop). Enter, or a tap on a cell (which moves `cur` there), sets
+// `*picked`. Answers the new `cur`.
+int32_t moy_ui_api_cells(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, int first,
+                         int count, int cols, int side, int gap, int32_t cur, int edge,
+                         const moy_ui_over_t *o, int *picked);
 
 #endif // MOY_UI_API_H

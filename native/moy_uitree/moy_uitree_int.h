@@ -133,7 +133,8 @@ typedef struct {
 } uit_prop_t;
 
 // Node flags (`lit` of a two-way control).
-enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_SWATCH = 2, NL_FIELD = 4, NL_HIDE = 8 };
+enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_SWATCH = 2, NL_BLOCKS = 2, NL_FIELD = 4,
+       NL_HIDE = 8, NL_PICS = 16, NL_EDGE = 16 };      // NL_EDGE: a cells' edge=True
 // A dialog's lit bits: kind="danger"; look="keys" (no button row on the T-Deck).
 enum { DL_DANGER = 1, DL_KEYS = 2 };
 // A cards list's lit bits: look="carousel" (one row of tiles, its centre's words under it).
@@ -148,8 +149,9 @@ enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8 };
 enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4 };
 enum { RW_MID = 1, RW_GROW = 2, RW_WRAP = 4 };   // a row's lit: centred on the row it is a cell of; a fill of
                                                 // its stack; its cells packed from its start, wrapping
-enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4 };  // a canvas's lit: a fill along a row, its w= a basis; a stop whose
-                                                  // keys are its keys='s; such a stop with no ring (mark=False)
+enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4, CV_READS = 8 };  // a canvas's lit: a fill along a row, its w= a
+                                                  // basis; a stop whose keys are its keys='s; such a stop with no
+                                                  // ring (mark=False); one that names the states it draws (reads=)
 enum { SP_ALIGN = 3, SP_RULE = 16 };   // a split's lit: its align= index; rule=True
 enum { LT_WORD = 1, LT_CHAR = 2, LT_WRAP = 3, LT_FACE_SHIFT = 2, LT_ALIGN_SHIFT = 5, LT_LINES = 256,
        LT_FIT = 512,       // size="fit": its face only where its text fits the page's width
@@ -366,6 +368,7 @@ struct uit {
     int32_t drive[UIT_DRIVE_WORDS];     // the words a host drives its carousels by (uit_drive)
     uint8_t driven;
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
+    int32_t band_h;             // a flowing page's hints band, docked at its foot: its pictures end over it
     uint8_t in_cell;            // drawing a split's column: a button takes its natural width
     uint8_t tv_stop, tv_stop_now;   // a text view that runs on drew last frame / this frame (the band's PgUp PgDn)
     int16_t page_tabs, page_tabs_now;   // the tabs node the band names (hint=) drawn last frame / this frame, else -1

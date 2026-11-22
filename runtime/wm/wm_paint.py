@@ -1540,7 +1540,11 @@ class WindowPaint:
                 finally:
                     _ui_draw.window_frame(0)
                     self.install_window(self.root_ctx)
-                self._row_over(win, win.buf, held, kept)
+                # the row is the buffer's already where it holds the page as the
+                # last draw left it, or lags it only clear of the row
+                lag = win._lag
+                self._row_over(win, win.buf, held,
+                               kept or (held and bool(lag[4]) and self._row_clear(win, lag)))
                 win._buf_stale = False
                 if held:
                     self._own_of(win, content, held)

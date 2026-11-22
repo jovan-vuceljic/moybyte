@@ -352,6 +352,41 @@ int moy_ui_sink_glyph(const moy_ui_sink_t *s, int g, int x, int y, int w, int h,
     return MOY_UI_OK;
 }
 
+int moy_ui_cells_draw(const moy_ui_sink_t *s, int x, int y, int first, int count, int cols,
+                      int side, int gap, int cur, int ring, int edge) {
+    draw_t d;
+    open_draw(s, &d);
+    int t = side - gap;
+    if (cols < 1 || t < 1) {
+        return MOY_UI_OK;
+    }
+    int rows = (count + cols - 1) / cols;
+    for (int i = 0; i < count; i++) {
+        fill(&d, x + (i % cols) * side, y + (i / cols) * side, t, t, (first + i) & 63);
+    }
+    int sf = moy_ui_token(d.look, MOY_UI_T_SURFACE);
+    if (edge) {
+        rectb(&d, x - gap / 2, y - gap / 2, cols * side, rows * side,
+              moy_ui_token(d.look, MOY_UI_T_BORDER));
+    }
+    int i = cur - first;
+    if (i < 0 || i >= count) {
+        return MOY_UI_OK;
+    }
+    int cx = x + (i % cols) * side, cy = y + (i / cols) * side;
+    // the current mark: a line of ink, one of surface within, never a palette colour
+    rectb(&d, cx, cy, t, t, moy_ui_token(d.look, MOY_UI_T_INK));
+    rectb(&d, cx + 1, cy + 1, t - 2, t - 2, sf);
+    if (ring) {
+        // the keys' cursor (ui_draw.cursor): a dark keyline, surface, the accent ring, surface
+        rectb(&d, cx - 1, cy - 1, t + 2, t + 2, 0);
+        rectb(&d, cx - 2, cy - 2, t + 4, t + 4, sf);
+        rings(&d, cx - 4, cy - 4, t + 8, t + 8, moy_ui_token(d.look, MOY_UI_T_ACCENT), 2);
+        rectb(&d, cx - 5, cy - 5, t + 10, t + 10, sf);
+    }
+    return MOY_UI_OK;
+}
+
 int moy_ui_fdiv(int a, int b) {
     int q = a / b, r = a % b;
     return (r != 0 && ((r < 0) != (b < 0))) ? q - 1 : q;
@@ -1064,6 +1099,56 @@ int moy_ui_bar_item_w(int slot, int glyph, moy_ui_span_t label, int h, int fs) {
     int side = bar_side(label.n > 0, h, fs), x0 = 0, x1 = side;
     moy_ui_icon_ink(slot, side, &x0, &x1);
     return x1 - x0 + (label.n ? 6 * (side / 16) + lw : 0);
+}
+
+// A stepper's gap between a chevron's ink and its value, at the scale.
+#define STEP_GAP 12
+
+static void step_icons(int *slot, int *glyph) {
+    slot[0] = moy_ui_icon_slot((const uint8_t *)"back", 4);
+    glyph[0] = moy_ui_icon_glyph((const uint8_t *)"back", 4);
+    slot[1] = moy_ui_icon_slot((const uint8_t *)"forward", 7);
+    glyph[1] = moy_ui_icon_glyph((const uint8_t *)"forward", 7);
+}
+
+int moy_ui_stepper_w(moy_ui_span_t value, int h, int fs) {
+    int slot[2], glyph[2];
+    step_icons(slot, glyph);
+    tfont_t f = role_font(0, MOY_UI_FONT_UI);
+    moy_ui_span_t none = {NULL, 0};
+    return moy_ui_bar_item_w(slot[0], glyph[0], none, h, fs) +
+           moy_ui_bar_item_w(slot[1], glyph[1], none, h, fs) +
+           (value.n ? t_w(&f, value.p, value.n, fs) : 0) + 2 * STEP_GAP * fs;
+}
+
+int moy_ui_stepper(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t value, int flags, int can,
+                   int ink, int fs) {
+    int slot[2], glyph[2];
+    step_icons(slot, glyph);
+    moy_ui_span_t none = {NULL, 0};
+    int aw[2] = {moy_ui_bar_item_w(slot[0], glyph[0], none, b.h, fs),
+                 moy_ui_bar_item_w(slot[1], glyph[1], none, b.h, fs)};
+    int side = bar_side(0, b.h, fs), u = side / 16, mi = -1;
+    moy_ui_box_t pill = {(int16_t)(b.x - 5 * u), b.y, (int16_t)(b.w + 10 * u), b.h};
+    if (flags & MOY_UI_F_FOCUS) {
+        moy_ui_focus(s, pill, MOY_UI_ITEM_CELL, 5 * fs, MOY_UI_MARK_PILL, u, NULL, &mi);
+    }
+    for (int i = 0; i < 2; i++) {
+        moy_ui_button_t bt = {none, (int16_t)glyph[i], (int16_t)fs,
+                              {MOY_UI_FROM_STYLE, (int16_t)(mi >= 0 ? mi : MOY_UI_FROM_STYLE),
+                               MOY_UI_FROM_STYLE}, -1, (int16_t)slot[i]};
+        moy_ui_box_t ab = {(int16_t)(i ? b.x + b.w - aw[1] : b.x), b.y, (int16_t)aw[i], b.h};
+        moy_ui_bar_item(s, ab, MOY_UI_F_ICON | ((can >> i) & 1 ? 0 : MOY_UI_F_DISABLED), &bt);
+    }
+    moy_ui_box_t vb = {(int16_t)(b.x + aw[0]), b.y, (int16_t)(b.w - aw[0] - aw[1]), b.h};
+    if (vb.w > 0 && value.n) {
+        moy_ui_label(s, vb, value, mi >= 0 ? mi : ink, MOY_TEXT_CENTER);
+    }
+    if (flags & MOY_UI_F_FOCUS) {
+        moy_ui_focus(s, pill, MOY_UI_ITEM_CELL, 5 * fs, MOY_UI_MARK_PILL | MOY_UI_MARK_AFTER, u,
+                     NULL, &mi);
+    }
+    return MOY_UI_OK;
 }
 
 // A bar item's ON mark: its plate BAR_MARK_X units out from the content along x and

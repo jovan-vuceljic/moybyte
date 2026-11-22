@@ -896,7 +896,8 @@ const char *const uit_kind_names[UIT_KINDS] = {"", "page", "group", "label", "in
                                                "table", "col", "foot", "cards", "card", "picture",
                                                "popover", "tools", "row", "status", "text_editor",
                                                "panes", "pane", "legacy", "slot", "panel", "lent",
-                                               "rule", "note", "grid", "bubble", "month", "toast"};
+                                               "rule", "note", "grid", "bubble", "month", "toast", "cells",
+                                               "stepper"};
 
 static const char *const TONES[] = {"ink", "dim", "value", "danger"};
 static const char *const BKINDS[] = {"normal", "primary", "tonal", "danger", "toggle", "bar"};   // moy_ui's, then its bar item
@@ -1107,19 +1108,23 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     else if (!strcmp(name, "value") || (!strcmp(name, "lo") && kind == UIT_SLIDER) ||
              (!strcmp(name, "head") && kind == UIT_BUBBLE))
         tslot = &N->t_value;
-    else if (!strcmp(name, "status") && kind == UIT_BUBBLE)
+    else if (!strcmp(name, "status") && (kind == UIT_BUBBLE || kind == UIT_PAGE))
         tslot = &N->t_aux;
     else if ((kind == UIT_BUBBLE && (!strcmp(name, "side") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              ((kind == UIT_INFO || kind == UIT_LINK) &&
               (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
+             (kind == UIT_LINK && !strcmp(name, "swatch")) ||
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
-             (kind == UIT_CARD && !strcmp(name, "badge")) || (kind == UIT_CARDS && !strcmp(name, "pad"))) {
+             (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon"))) || (kind == UIT_CARDS && !strcmp(name, "pad")) ||
+             (kind == UIT_CELLS && (!strcmp(name, "first") || !strcmp(name, "count") || !strcmp(name, "cols") ||
+                                    !strcmp(name, "side") || !strcmp(name, "gap")))) {
         // templates the draw finds among its props by name (uit_tmpl_prop); signal=, a month's
         // year=, month= and today= and a cards list's pad= ints
         int t = uit_tmpl_compile(e, src, model);
         if (t < 0)
             return t;
-        int ty = e->tmpls[t].type, want_int = !strcmp(name, "signal") || kind == UIT_MONTH || kind == UIT_CARDS;
+        int ty = e->tmpls[t].type, want_int = !strcmp(name, "signal") || kind == UIT_MONTH || kind == UIT_CARDS ||
+                                           kind == UIT_CELLS;
         if (want_int ? ty != UIT_INT && !e->tmpls[t].lit : ty == UIT_BOOL || ty == UIT_MODEL)
             return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not %s", "%s %s %s %s %s"), uit_kind_names[kind],
                                   name, src, uit_type_name(ty), want_int ? "an int" : "a text");
@@ -1264,6 +1269,15 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= CV_KEYS;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
+    if (kind == UIT_CANVAS && !strcmp(name, "reads")) {
+        // a state its draw reads, one prop each: what it draws is a function of these (CV_READS),
+        // so the page's gen counts them and a frame after it drew may carry one
+        int sl = uit_slot_find(e, src, strlen(src));
+        if (sl < 0)
+            return uit_fail(e, UIT_E_NAME, UIT_MSG("canvas reads=%s: no state of that name", "canvas reads=%s"), src);
+        N->lit |= CV_READS;
+        return add_prop(e, node, name, src, repr, PK_LIT, sl);
+    }
     if (kind == UIT_CANVAS && !strcmp(name, "mark")) {
         // mark=False: a keys= canvas draws no ring while it holds focus (what it hosts marks it)
         if (src[0] == 'F' || src[0] == '0')
@@ -1389,6 +1403,19 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->btn |= BT_LARGE;
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
+    if (kind == UIT_STEPPER && (!strcmp(name, "grow") || !strcmp(name, "tone"))) {
+        // a fill along a row (BT_GROW); its value's ink, ink or dim (`lit`)
+        if (name[0] == 'g') {
+            if (!strcmp(src, "True"))
+                N->btn |= BT_GROW;
+            return add_prop(e, node, name, src, repr, PK_LIT, 0);
+        }
+        int i = lit_index(src, TONES, 2);
+        if (i < 0)
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("stepper tone=%s: ink or dim", "stepper tone=%s"), src);
+        N->lit = (uint8_t)i;
+        return add_prop(e, node, name, src, repr, PK_LIT, i);
+    }
     if (!strcmp(name, "grow") && kind == UIT_BUTTON) {
         // a fill along a row (BT_GROW): a bar item's label cut at its cell's end
         if (!strcmp(src, "True"))
@@ -1483,7 +1510,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         int t = s < 0 ? 0 : e->slots[s].type;
         int ok = kind == UIT_TOGGLE ? t == UIT_BOOL : UIT_IS_LIST(kind) ? t == UIT_MODEL
                  : kind == UIT_TABS ? t == UIT_ENUM
-                 : kind == UIT_SEG ? t == UIT_ENUM || t == UIT_ROWOF : kind == UIT_SLIDER ? t == UIT_INT
+                 : kind == UIT_SEG ? t == UIT_ENUM || t == UIT_ROWOF : kind == UIT_SLIDER || kind == UIT_CELLS ? t == UIT_INT
                  : kind == UIT_FIELD ? t == UIT_TEXT : kind == UIT_TEXT_VIEW ? t == UIT_TEXT || t == UIT_MODEL : 0;
         if (!ok)
             return uit_fail(e, UIT_E_NAME, UIT_MSG("%s bound to %s: no such state of its type", "%s bound to %s"), uit_kind_names[kind], src);
@@ -1520,6 +1547,10 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= kind == UIT_SEG ? NL_CYCLE : NL_STEPS;
         else if (kind == UIT_SEG && !strcmp(src, "swatches"))
             N->lit |= NL_SWATCH;
+        else if (kind == UIT_SEG && !strcmp(src, "pictures"))
+            N->lit |= NL_PICS;
+        else if (kind == UIT_SLIDER && !strcmp(src, "blocks"))
+            N->lit |= NL_BLOCKS;
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
     if (kind == UIT_FIELD && (!strcmp(name, "max") || !strcmp(name, "commit") || !strcmp(name, "secret"))) {
@@ -1529,15 +1560,22 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= name[0] == 'c' ? NL_COMMIT : NL_SECRET;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
-    if ((!strcmp(name, "on") && (kind == UIT_TOGGLE || kind == UIT_SEG || kind == UIT_SLIDER ||
+    if (kind == UIT_CELLS && !strcmp(name, "edge")) {
+        if (!strcmp(src, "True"))
+            N->lit |= NL_EDGE;
+        return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    }
+    if ((!strcmp(name, "on") && (kind == UIT_TOGGLE || kind == UIT_SEG || kind == UIT_SLIDER || kind == UIT_CELLS ||
                                  kind == UIT_FIELD || kind == UIT_TABLE || kind == UIT_TABS || kind == UIT_BUBBLE)) ||
         (!strcmp(name, "changed") && kind == UIT_FIELD) || (!strcmp(name, "cut") && kind == UIT_BUBBLE) ||
         (!strcmp(name, "close") && (kind == UIT_POPOVER || kind == UIT_ROW || kind == UIT_GROUP)) ||
-        (kind == UIT_MONTH && (!strcmp(name, "prev") || !strcmp(name, "next")))) {
-        // on= (and close=, a month's prev=) in `on`; changed= (cut=, next=) in `changed`
+        ((kind == UIT_MONTH || kind == UIT_STEPPER) && (!strcmp(name, "prev") || !strcmp(name, "next"))) ||
+        (kind == UIT_CELLS && !strcmp(name, "pick"))) {
+        // on= (and close=, a month's or a stepper's prev=) in `on`; changed= (cut=, next=, a cells' pick=) in
+        // `changed`
         for (int a = 0; a < e->nacts; a++)
             if (!strcmp(uit_str(e, e->acts[a].name), src)) {
-                if (name[0] == 'o' || (name[0] == 'c' && name[1] == 'l') || name[0] == 'p')
+                if (name[0] == 'o' || (name[0] == 'c' && name[1] == 'l') || (name[0] == 'p' && name[1] == 'r'))
                     N->on = (int16_t)a;
                 else
                     N->changed = (int16_t)a;
@@ -1573,7 +1611,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         }
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
-    if (!strcmp(name, "current") && kind == UIT_ROWS) {
+    if (!strcmp(name, "current") && (kind == UIT_ROWS || kind == UIT_CARDS)) {
         int s = uit_slot_find(e, src, strlen(src));
         int t = s < 0 ? 0 : e->slots[s].type;
         if (t != UIT_TEXT && t != UIT_ROWOF && t != UIT_INT)
@@ -1616,8 +1654,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     if (!strcmp(name, "cols") && kind == UIT_TABLE)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);      // a column's header, one prop each
     if (!strcmp(name, "look") && kind == UIT_GROUP) {
-        // "card": a captionless group drawn as a card (lit 1)
-        N->lit = (uint8_t)!strcmp(src, "card");
+        // "card": a captionless group drawn as a card (lit 1); "rules": its rows ruled apart (2)
+        N->lit = (uint8_t)(!strcmp(src, "card") ? 1 : !strcmp(src, "rules") ? 2 : 0);
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
     if (!strcmp(name, "look") && kind == UIT_FOOT) {
@@ -1763,7 +1801,7 @@ static void mark_node(const uit_t *e, int k, uint8_t *m, int cur, int hint_only)
             mark_tmpl(e, P->idx, m);
         else if (P->kind == PK_COND)
             mark_cond(e, P->idx, m);
-        else if (P->kind == PK_LIT && !strcmp(name, "current") && P->idx >= 0)
+        else if (P->kind == PK_LIT && (!strcmp(name, "current") || !strcmp(name, "reads")) && P->idx >= 0)
             m[P->idx] = 1;
     }
     if (hint_only)
@@ -1828,8 +1866,8 @@ int32_t uit_cell_gen(uit_t *e, int k)
 // `uit_cell_gen`; a lines view's rows are its view record's, moy_ui_api_text_view) and
 // those only a list's
 // cur= names (focus, which the toolkit draws); and whether it may carry one: no text of the build
-// names an engine value and no legacy node draws what no state says (a canvas does too: a frame
-// after one drew carries none, `gen_ok`).
+// names an engine value and no legacy node draws what no state says (a canvas does too, but for
+// one that names its states, reads=: a frame after one drew carries none, `gen_ok`).
 static void gen_of_build(uit_t *e)
 {
     e->gen_safe = e->nslots <= UIT_GEN_SLOTS;

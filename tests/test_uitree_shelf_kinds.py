@@ -358,3 +358,101 @@ def test_the_lua_front_makes_the_same_kinds_and_props(tmp_path):
         frame()
     assert ws.run.player.cart_error is None, ws.run.player.cart_error
     assert bytes(drv.rgb888()) != before
+
+
+def test_a_rule_in_a_row_divides_its_neighbours_and_is_never_its_filler(tmp_path):
+    """A rule in a flowing row is a line down the row between its
+    neighbours, its own width: the label after it stays the filler, so the
+    button beside the rule keeps its place."""
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        with ui.row("tools"):
+            ui.button("tap2")
+            RULE
+            ui.button("flip")
+            ui.label("")
+
+
+def tap2():
+    s.n = s.n + 1
+
+
+ui.action("tap2", "Info", tap2)
+'''
+    for config in (TDECK, DESK):
+        plain, _ = run(tmp_path, build.replace("RULE", "pass"), config=config, boxes=["flip"],
+                       name="plain_" + config[:4])
+        ruled, _ = run(tmp_path, build.replace("RULE", "ui.rule()"), config=config, boxes=["flip"],
+                       name="ruled_" + config[:4])
+        assert plain[0].buf != ruled[0].buf
+        moved = ruled[0].state[0][0] - plain[0].state[0][0]
+        assert 0 < moved <= 16, (plain[0].state, ruled[0].state)
+
+
+def test_a_cards_current_marks_its_row(tmp_path):
+    """current= on a cards list marks the card whose key the state holds."""
+    global HEAD
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        with ui.cards("carts", CURRENT w=48, h=48):
+            ui.card("tap", label="{.name}")
+'''
+    was = HEAD
+    HEAD = HEAD.replace('text="Line one"', 'text="2"')
+    try:
+        plain, _ = run(tmp_path, build.replace("CURRENT", ""), name="cur_off")
+        marked, _ = run(tmp_path, build.replace("CURRENT", 'current="text",'), name="cur_on")
+    finally:
+        HEAD = was
+    assert plain[0].buf != marked[0].buf
+
+
+def test_a_split_in_a_switchs_case_is_laid_out_above_the_band(tmp_path):
+    """A page whose split stands in a switch's case is laid out in cells as
+    one whose split is the page's own: the band is cut from its room."""
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        OPEN
+            with ui.split("col", sizes=("1*", 40)):
+                ui.label("{text}")
+                ui.button("tap2")
+
+
+def body():
+    pass
+
+
+def tap2():
+    s.n = s.n + 1
+
+
+ui.action("tap2", "Info", tap2)
+'''
+    own, _ = run(tmp_path, build.replace("OPEN", "if True:"), config=DESK, boxes=["tap2"],
+                 name="own")
+    case = build.replace("OPEN", "ui.switch(\"on\", {\"_\": cased})\n        if False:") + '''
+
+def cased():
+    with ui.split("col", sizes=("1*", 40)):
+        ui.label("{text}")
+        ui.button("tap2")
+'''
+    cased, _ = run(tmp_path, case, config=DESK, boxes=["tap2"], name="cased")
+    assert cased[0].state == own[0].state, (own[0].state, cased[0].state)
+
+
+def test_a_links_swatch_draws_a_chip_of_its_colour_before_its_value(tmp_path):
+    """swatch="#RRGGBB" on a link: a chip of that colour before its value;
+    an empty one draws none."""
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        ui.link("flip", "Red", SWATCH)
+'''
+    plain, _ = run(tmp_path, build.replace("SWATCH", 'swatch=""'), config=DESK, name="chip_off")
+    chip, _ = run(tmp_path, build.replace("SWATCH", 'swatch="#FF004D"'), config=DESK,
+                  name="chip_on")
+    assert plain[0].buf != chip[0].buf

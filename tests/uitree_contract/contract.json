@@ -1265,6 +1265,10 @@
      "type": "word:off",
      "level": 2,
      "designed": true
+    },
+    "status": {
+     "type": "tpl",
+     "level": 2
     }
    },
    "heads": "Python: a page is a function opening `with ui.page(TITLE):`, pushed as `ui.push(FUNCTION)` (L2); Lua and C: a named page, `ui.page(NAME, BUILD, { title = ... })`, pushed by its name"
@@ -1279,7 +1283,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:card",
+     "type": "word:card,rules",
      "level": 2
     },
     "gap": {
@@ -1556,6 +1560,33 @@
     }
    }
   },
+  "stepper": {
+   "head": "tpl",
+   "level": 2,
+   "section": "7.3",
+   "props": {
+    "value": {
+     "type": "tpl",
+     "level": 2
+    },
+    "prev": {
+     "type": "action",
+     "level": 2
+    },
+    "next": {
+     "type": "action",
+     "level": 2
+    },
+    "tone": {
+     "type": "word:ink,dim",
+     "level": 2
+    },
+    "focus": {
+     "type": "cond",
+     "level": 2
+    }
+   }
+  },
   "picture": {
    "head": "state",
    "level": 2,
@@ -1728,6 +1759,10 @@
      "type": "tpl",
      "level": 1
     },
+    "swatch": {
+     "type": "tpl",
+     "level": 2
+    },
     "focus": {
      "type": "cond",
      "level": 1
@@ -1841,7 +1876,7 @@
      "level": 1
     },
     "look": {
-     "type": "word:bar,steps",
+     "type": "word:bar,steps,blocks",
      "level": 2
     },
     "icon": {
@@ -1928,7 +1963,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:seg,cycle,swatches",
+     "type": "word:seg,cycle,swatches,pictures",
      "level": 2
     },
     "text": {
@@ -1974,19 +2009,24 @@
    "section": "7.3",
    "props": {
     "count": {
-     "type": "tpl",
-     "level": 2,
-     "designed": true
+     "type": "int",
+     "level": 2
     },
     "first": {
-     "type": "tpl",
-     "level": 2,
-     "designed": true
+     "type": "int",
+     "level": 2
     },
     "cols": {
-     "type": "tpl",
-     "level": 2,
-     "designed": true
+     "type": "int",
+     "level": 2
+    },
+    "side": {
+     "type": "int",
+     "level": 2
+    },
+    "gap": {
+     "type": "int",
+     "level": 2
     },
     "face": {
      "type": "name",
@@ -1998,18 +2038,23 @@
      "level": 2,
      "designed": true
     },
+    "edge": {
+     "type": "bool",
+     "level": 2
+    },
     "on": {
      "type": "action|hook",
-     "level": 2,
-     "designed": true
+     "level": 2
+    },
+    "pick": {
+     "type": "action|hook",
+     "level": 2
     },
     "focus": {
      "type": "cond",
-     "level": 2,
-     "designed": true
+     "level": 2
     }
-   },
-   "designed": true
+   }
   },
   "rows": {
    "head": "model",
@@ -2115,6 +2160,10 @@
      "level": 2
     },
     "badge": {
+     "type": "tpl",
+     "level": 2
+    },
+    "label_icon": {
      "type": "tpl",
      "level": 2
     },
@@ -2461,8 +2510,7 @@
     },
     "reads": {
      "type": "list",
-     "level": 2,
-     "designed": true
+     "level": 2
     },
     "size": {
      "type": "list",

@@ -189,6 +189,7 @@ class _Now:
     importing = None        # the Decl a module imported by the running handler is making (a board)
     load_move = False       # a LoadView moving its load's state
     collect = None          # the checker's list: a refused call is recorded and the run goes on
+    reads = None            # the states a canvas's draw may read (its reads=), while it draws
 
 
 _NOW = _Now()
@@ -747,6 +748,10 @@ class State:
                 raise e
             _NOW.collect.append(e)      # the checker's run goes on with the declared value
             return self._v[k]
+        r = _NOW.reads
+        if r is not None and k not in r:
+            raise UIError("R01", "a canvas draw reads s.%s, which its reads= does not list" % k,
+                          expected="reads=%r" % (list(r) + [k],), fix="add %r to the canvas's reads=" % k)
         if k in self._derive:
             return self._derive[k]()
         t = self._t[k]
@@ -2008,7 +2013,7 @@ class Node:
 # contract's (`_check_prop`); this table only routes what that check let through.
 _C = {"shown": "cond"}
 SCHEMA = {
-    "page": {"title": "text"},
+    "page": {"title": "text", "status": "text"},
     "group": dict(_C, caption="text", close="action0", look="lit", gap="int"),
     "label": dict(_C, text="text", tone="text", wrap="lit", face="lit", size="lit", icon="text",
                   lines="lit", align="lit", scale="int", w="int"),
@@ -2018,9 +2023,12 @@ SCHEMA = {
                    max="lit", lines="lit", on="action1", cut="action1"),
     "month": dict(_C, year="int", month="int", today="int", prev="action0", next="action0"),
     "toast": dict(_C, text="text", icon="text"),
+    "cells": dict(_C, first="int", count="int", cols="int", side="int", gap="int", edge="lit",
+                  on="action0", pick="action0", focus="cond"),
+    "stepper": dict(_C, value="text", prev="action0", next="action0", tone="lit", grow="lit", focus="cond"),
     "info": dict(_C, label="text", value="text", icon="text", signal="int", tag="text", tone="text"),
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond", tag="text",
-                 tone="text"),
+                 tone="text", swatch="text"),
     "button": dict(_C, kind="lit", label="text", icon="text", alone="lit", span="lit", arg="lit",
                    focus="cond", grow="lit", marked="cond", w="int", tone="text", look="lit"),
     "toggle": dict(_C, label="text", on="action0", focus="cond", hint="text"),
@@ -2036,7 +2044,8 @@ SCHEMA = {
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
                   changed="action1", group="lit", pad="int", look="lit"),
-    "card": dict(_C, label="text", sub="text", badge="text", image="image", icon="text", tone="text"),
+    "card": dict(_C, label="text", sub="text", badge="text", label_icon="text", image="image",
+                 icon="text", tone="text"),
     # G9, G13: a picture of its own (an image state, its fallback icon), a
     # progress bar (max= is required), a page that says why there is nothing
     "picture": dict(_C, image="image", icon="text", side="int", tone="text"),
@@ -2051,7 +2060,7 @@ SCHEMA = {
     "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit", w="int", h="int"),
     "panel": dict(_C),
     "canvas": dict(_C, draw="fn", h="int", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit",
-                   keys="fn", mark="lit", hint="text"),
+                   keys="fn", mark="lit", hint="text", reads="lit"),
     "foot": dict(_C, look="lit"),
     "scroll": dict(_C),
     "switch": dict(_C),
@@ -2421,8 +2430,10 @@ def toggle(label, name, **p):
 
 def slider(label, name, lo, hi, look="bar", **p):
     """A value from lo to hi, left and right its own. `look="steps"` draws
-    a segment a step and no number; `icon=` (a template; empty draws none)
-    stands before its label."""
+    a segment a step and no number; `look="blocks"` draws those segments
+    across the whole row, a meter (with no label, 10 units a step and 12
+    more wide in a row); `icon=` (a template; empty draws none) stands
+    before its label."""
     where = _caller()
     _checked("slider", "look", look, where)
     p = dict(p, look=look) if look != "bar" else p
@@ -2459,7 +2470,10 @@ def seg(label, name, labels=None, text=None, look="seg", **p):
     `text=`. `look="cycle"` shows the one value between chevrons and
     activation steps it; `look="seg"` shows every value; `look="swatches"`
     shows every value as a colour dot, each word a colour (0xRRGGBB, a
-    number in any base). Bound to `.FIELD`, an int field of its list's row,
+    number in any base); `look="pictures"` shows every value as a picture
+    in a tile at the row's right, each word an image's text (`own:KEY`,
+    `store:KIND/NAME`), the current one's tile the selection's, left and
+    right wrapping and activation taking the next. Bound to `.FIELD`, an int field of its list's row,
     the field is the index of its item and `text=`, a template over the
     row, renders its items one a line; `on=` is handed the row."""
     where = _caller()
@@ -2620,6 +2634,17 @@ def month(**p):
     return _node("month", None, p, _caller())
 
 
+def stepper(value, prev, next, **p):
+    """A value between two chevrons (§7.3), "‹ 2 / 5 ›": `value` a
+    template, the back chevron firing action `prev` and the forward one
+    `next`, each greyed while its action is off (its when=). Focused, left
+    and right step it and activation steps forward; a tap steps the half it
+    lands in. `tone="dim"` draws the value dim. Stacked on a page or in a
+    row it is as wide as its chevrons and value, `grow=True` a fill whose
+    chevrons stand at its ends."""
+    return _node("stepper", None, dict(p, value=value, prev=prev, next=next), _caller())
+
+
 def cards(model_name, **p):
     if "paint" in p:
         raise UIError("N04", "cards paint= is retired (G9)", where=_caller(),
@@ -2632,6 +2657,17 @@ def toast(text, **p):
     a pill over the foot of the page's body, above its docked foot; no stop.
     It draws over what the page drew before it: declare it after them."""
     return _node("toast", None, dict(p, text=text), _caller())
+
+
+def cells(name, **p):
+    """A palette's colours as square cells (§7.3), a stop bound to int state
+    `name`, the current colour: `count` of them from `first`, `cols` to a
+    row, each a `side` square (desk units) less `gap`, `edge=True` a border
+    round them. The current cell wears the current mark and, focused, the
+    keys' cursor; the arrows move it (on= hears it move), and Enter or a tap
+    on a cell (which moves it there) fires `pick=`."""
+    where = _caller()
+    return _node("cells", _state_name(name, (INT,), "ui.cells", where), p, where)
 
 
 def picture(image=None, **p):
@@ -3330,31 +3366,57 @@ def work(name, fn, due, budget=4, unit=None):
 
 class Pictures:
     """The app's own pictures: bytes the engine decodes (a PNG, a .moyimg),
-    or an indexed drawing in the console's 16 colours that is no file. The
-    engine holds them; `image.own(key)` names one."""
+    an indexed drawing in the console's 16 colours that is no file, or one
+    the app draws when the engine asks (`render(w, h)` answers a canvas
+    layer of that size, which the engine keeps and releases when it lets the
+    picture go; None where it cannot). A drawn picture put with `clear=True`
+    is clear where it has its corner's colour: what lies under it shows
+    there (a sprite on a picker's tile). The engine holds them;
+    `image.own(key)` names one."""
 
     def __init__(self):
         self.src = {}
         self.gen = {}
+        self.store_gen = {}         # a store path -> the times its file changed (`changed`)
 
-    def put(self, key, data=None, w=None, h=None, pixels=None):
-        if (data is None) == (pixels is None):
-            raise UIError("S02", "pictures.put(%r): bytes (data=) or an indexed drawing (w=, h=, pixels=)" % key, fix='pictures.put(KEY, data=PNG_BYTES) or pictures.put(KEY, w=W, h=H, pixels=INDICES)')
+    def put(self, key, data=None, w=None, h=None, pixels=None, render=None, clear=False):
+        if (data is not None) + (pixels is not None) + (render is not None) != 1:
+            raise UIError("S02", "pictures.put(%r): bytes (data=), an indexed drawing (w=, h=, pixels=) or a drawer (render=)" % key, fix='pictures.put(KEY, data=PNG_BYTES), pictures.put(KEY, w=W, h=H, pixels=INDICES) or pictures.put(KEY, render=FN)')
+        if clear is not False and (clear is not True or render is None):
+            raise UIError("S02", "pictures.put(%r): clear=True is a drawn picture's (render=)" % key,
+                          found="clear=%r" % (clear,), fix='pictures.put(KEY, render=FN, clear=True)')
         if pixels is not None:
             if type(w) is not int or type(h) is not int or len(pixels) != w * h:
                 raise UIError("S02", "pictures.put(%r): pixels are w * h palette indices" % key,
                               found="w=%r h=%r %d bytes" % (w, h, len(pixels)), fix='pixels= holds w * h bytes')
             self.src[key] = ("idx", w, h, bytes(pixels))
+        elif render is not None:
+            if not callable(render):
+                raise UIError("S02", "pictures.put(%r): render= is a function of (w, h)" % key,
+                              found=repr(render), fix='def render(w, h): ... return a w x h layer')
+            self.src[key] = ("render", render, clear)
         else:
             self.src[key] = ("bytes", bytes(data))
         self.gen[key] = self.gen.get(key, 0) + 1
         a = _NOW.app
-        if a is not None and getattr(a, "pics", None) is not None:
-            a.pics.forget_own(key)
+        if a is not None and getattr(a, "pics", None) is not None and a.pics.forget_own(key):
+            a.pics_let_go()
 
     def drop(self, key):
         self.src.pop(key, None)
         self.gen[key] = self.gen.get(key, 0) + 1
+
+    def changed(self, path):
+        """The store file `image.store(path)` names was written since the
+        engine made its pictures: they go, and a card showing it reads the
+        file again."""
+        if not isinstance(path, str) or path.count("/") != 1:
+            raise UIError("S02", "pictures.changed(%r): a store path is KIND/NAME" % (path,),
+                          fix='pictures.changed("drawings/Cat")')
+        self.store_gen[path] = self.store_gen.get(path, 0) + 1
+        a = _NOW.app
+        if a is not None and getattr(a, "pics", None) is not None and a.pics.forget_store(path):
+            a.pics_let_go()
 
 
 pictures = Pictures()
@@ -3420,7 +3482,7 @@ def _collecting(fn, returns_node):
 NODE_CALLS = ("page", "group", "label", "info", "link", "button", "item", "card", "toggle", "slider",
               "field", "seg", "table", "col", "rows", "cards", "picture", "progress", "empty", "dialog",
               "popover", "menu", "split", "grid", "panel", "canvas", "foot", "scroll", "rule", "note",
-              "bubble", "month", "toast", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
+              "bubble", "month", "toast", "cells", "stepper", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
               "legacy")
 DECL_CALLS = ("action", "hook", "labels", "work", "derive", "app")
 COMMAND_CALLS = ("push", "pop", "focus", "after", "post")

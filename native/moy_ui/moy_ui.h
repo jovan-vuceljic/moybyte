@@ -286,6 +286,12 @@ typedef struct {
 } moy_ui_sink_t;
 int moy_ui_sink_row(moy_ui_sink_t *s, uint32_t canvas, int look);
 // A glyph through a sink (moy_ui_glyph_draw's raster, a fill per span).
+// A palette's cells (moy_ui_api_cells): `count` of the MOY64 colours from
+// `first`, `cols` to a row, each a `side` square less `gap`; the colour `cur`
+// wears the current mark (a line of ink, one of surface within), under `ring`
+// the keys' cursor round it too; `edge` a line of the border round them all.
+int moy_ui_cells_draw(const moy_ui_sink_t *s, int x, int y, int first, int count, int cols,
+                      int side, int gap, int cur, int ring, int edge);
 int moy_ui_sink_glyph(const moy_ui_sink_t *s, int g, int x, int y, int w, int h, int ci,
                       int scale);
 // The live theme's icon set for the parts the C draws (docs/history/look_2026-10.md
@@ -654,6 +660,14 @@ int moy_ui_button_x(moy_ui_box_t b, int flags, moy_ui_span_t label, int fs);
 // icon's ink and its label whole (a row's natural width for the item).
 int moy_ui_bar_item(const moy_ui_sink_t *s, moy_ui_box_t b, int flags, const moy_ui_button_t *k);
 int moy_ui_bar_item_w(int slot, int glyph, moy_ui_span_t label, int h, int fs);
+// A stepper (ui.stepper): the bar's back and forward icons as bar items at
+// the box's ends, each in the dim chrome ink where `can` lacks its bit (1
+// back, 2 forward), and `value` centred between them in colour index `ink`;
+// F_FOCUS the bar's pill round the whole box. stepper_w: its natural width
+// in a box `h` high, the chevrons' ink and the value 12 units from each.
+int moy_ui_stepper(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t value, int flags, int can,
+                   int ink, int fs);
+int moy_ui_stepper_w(moy_ui_span_t value, int h, int fs);
 // A chip: a glyph, when it has one, REPLACES its label.
 int moy_ui_chip(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags, int interact,
                 const moy_ui_button_t *k, int phase);
@@ -882,18 +896,19 @@ enum { MOY_UI_DESK = 1, MOY_UI_WINDOW = 2, MOY_UI_TAP = 8, MOY_UI_PANEL = 32, MO
 enum {
     MOY_UI_V_LABEL = 0, MOY_UI_V_INFO = 1, MOY_UI_V_LINK = 2, MOY_UI_V_CYCLE = 3,
     MOY_UI_V_SEG = 4, MOY_UI_V_SWATCH = 5, MOY_UI_V_TOGGLE = 6, MOY_UI_V_SLIDER = 7,
-    MOY_UI_V_PROGRESS = 8, MOY_UI_V_TABS = 9,
+    MOY_UI_V_PROGRESS = 8, MOY_UI_V_TABS = 9, MOY_UI_V_PICS = 10,
 };
 typedef struct {
     moy_ui_span_t label, value;     // seg: value holds the options, NUL-separated
     const uint8_t *colours;         // swatch: `n` colours, 0xRRGGBB as little-endian words
-    int16_t n, cur;                 // seg, swatch: the count and the current (-1 none);
+    int16_t n, cur;                 // seg, swatch, pics: the count and the current (-1 none);
                                     // toggle: cur is on
     int32_t v, lo, hi;              // slider; progress: v of hi done (lo 0)
     int16_t fs, desk, card;         // desk: the ground (MOY_UI_DESK | WINDOW | PANEL);
                                     // card: on a group's card
     int16_t icon_slot, icon_glyph;  // the icon before the label (-1 none)
-    int16_t steps;                  // slider: a segment per step, no number;
+    int16_t steps;                  // slider: 1 a segment per step, no number, 2 those
+                                    // segments across the row (a meter);
                                     // progress: a count, its label alone (no percent)
     int16_t kind;                   // MOY_UI_VROW_*: a danger row inks its label and icon
                                     // in the menu danger ink
@@ -917,8 +932,15 @@ int moy_ui_vrow_w(const moy_ui_sink_t *s, int kind, const moy_ui_vrow_t *r);
 // The height a progress row given it draws tall at: its label and percent
 // on a line, its bar under them.
 int moy_ui_vrow_tall_h(int desk, int fs);
-// What x on row box b picks: a seg's, a swatch picker's or a tab row's option (-1 none),
-// a slider's value (lo..hi), -1 for another kind.
+// A pictures row (MOY_UI_V_PICS): `n` tiles at its right, centred down it, each a plate of
+// radius 4 units, the current one's the selection's colour and the rest surface_alt's, the
+// pictures in them the caller's. Its height, and tile i's box in row box b: side, gap and right
+// pad 48, 12 and 16 px times `fs` on the desk (`desk` holds MOY_UI_DESK), 32, 8 and 10 units on
+// a handheld; the row is 64 px times `fs` tall on the desk, 44 units on a handheld.
+int moy_ui_pics_h(int desk, int fs);
+moy_ui_box_t moy_ui_pics_tile(moy_ui_box_t b, int desk, int fs, int n, int i);
+// What x on row box b picks: a seg's, a swatch picker's, a pictures row's or a tab row's
+// option (-1 none), a slider's value (lo..hi), -1 for another kind.
 int32_t moy_ui_vrow_at(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, const moy_ui_vrow_t *r,
                        int x);
 // A table (ui.table): its columns' x and width over box b, the picture
@@ -961,9 +983,11 @@ int moy_ui_table_row(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_tgeo_t
 // `tone` (MOY_UI_TONE_*) is the sub line's ink: the dim ink, else `value`
 // or the danger ink. With F_WRAP a title wider than the band breaks at its
 // last word that fits onto a second line, where the card's foot holds it.
+// An icon `lead`/`lead_glyph` (-1 none) stands before the title's first line,
+// the two centred as one.
 int moy_ui_card(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_box_t pic, int lw,
                 moy_ui_span_t title, moy_ui_span_t sub, int flags, int fs, int desk, int tone,
-                moy_ui_box_t *content, uint16_t *gnd);
+                int lead, int lead_glyph, moy_ui_box_t *content, uint16_t *gnd);
 // The pixels a card's label band `bw` wide adds under its picture for
 // `title`: the second line's step where F_WRAP breaks it, else 0. Measures,
 // draws nothing.
@@ -1280,6 +1304,11 @@ int moy_ui_hints(const moy_ui_sink_t *s, moy_ui_box_t b, const uint8_t *items, s
 // nothing spans nothing (x0 == x1). Answers the pairs: 0 under touch.
 int moy_ui_hints_at(const moy_ui_sink_t *s, moy_ui_box_t b, const uint8_t *items, size_t len,
                     int fs, int desk, int draw, int16_t *spans, int cap);
+// A band's status words (`t`, its caption face, its ink) at its start, where its hints
+// begin: drawn when `draw`. Answers how far the hints after them move right: 0 under
+// touch, which shows no band, or for no words.
+int moy_ui_hints_status(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t t, int fs,
+                        int desk, int draw);
 // Text in font `font` (a run's: petme128) at (x, y), its line's top, in
 // colour `col` (the buffer's word), inside a part's crossing: `table` text
 // is the string table's (moy_str.h), else a caller's. Answers its width.

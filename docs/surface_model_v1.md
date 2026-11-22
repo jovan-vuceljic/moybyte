@@ -1103,7 +1103,7 @@ glide's step, a focus move, a key typed into a field, a placed table's row
 step) and the generation every page, placed table and picture inside R
 carries (`gen` in the override block, the app's word that what it draws
 there is a function of it). A page with no gen, a stop `ui.at` placed
-inside R, a picture with no gen, a press, an activation, a stepped value, a
+inside R, a table's or a part's picture with no gen, a press, an activation, a stepped value, a
 hover, a dialog, a popover, a tooltip: the frame draws whole; so does the
 frame after a pass whose answer changed what it had already drawn
 (`AppHost.again`), whose page is not the app's. The pass then draws the FLOOR -- the band, the fades,
@@ -1112,7 +1112,8 @@ of the frame's region it reaches (outside R, and the floor's rects), so a
 floor pixel takes every draw over it in a whole frame's order; the floor only
 widens during the pass (a stop unlike the last frame's takes R from its top
 down, but for a placed stop that moved where the floor holds both its
-boxes; a picture whose gen moved, its box). What a stop outside R draws
+boxes; a picture whose gen moved, and a card's with none -- one the app
+still owes -- its box, while one out of view draws nothing). What a stop outside R draws
 into R -- a box reaching in, a mark's reach -- is floor where R moved or
 its marks changed, and a stop drawn before R opens makes the floor the
 pass's from its start, so its part of R draws through it (Get Carts' Check

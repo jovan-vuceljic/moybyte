@@ -132,11 +132,9 @@ def _tap_card(ws, key):
 def _tap_tile(ws, key, k, n):
     """A tap on tile `k` of the `n` of picker card `key`, where its last
     frame drew it."""
-    from ws_helpers import tap_box
+    from ws_helpers import picker_tile, tap_box
     _draw_once(ws)
-    x, y, w, h = _box(ws, key)
-    tx, ty, side = ws.cards_layer.tiles(n, w, h)[k]
-    tap_box(ws, (x + tx, y + ty, side, side))
+    tap_box(ws, picker_tile(ws, _box(ws, key), n, k))
 
 
 def test_a_sprite_tile_card_takes_the_tile_tapped():
@@ -158,13 +156,13 @@ def test_a_picker_steps_with_left_right_and_enter():
     ws = _ws_with_cart(edit, {"p": "x"})
     drv = host_app.ConsoleDriver(ws)
     drv.frame(1 / 30)
-    assert ws.cards_layer.page.focus_key == "p/pick"
+    assert ws.cards_layer.page.focus_key == "p/k"
     for key, want in (("right", "y"), ("right", "z"), ("right", "x"), ("left", "z"), ("a", "x")):
         drv.press(key)
         drv.frame(1 / 30)
         drv.frame(1 / 30)               # the key let go before the next press
         assert ws.run.project.config["p"] == want, key
-    assert ws.cards_layer.page.hints()[:2] == ("confirm", "Change")
+    assert ws.cards_layer.page.hints()[:2] == ("change", "Change")
 
 
 def test_a_choice_of_names_cycles_with_left_and_right():
@@ -299,7 +297,7 @@ def test_space_desktop_bg_picker_applies_a_preset(tmp_path):
     bg = [f for f in ws.cart["edit"] if f["key"] == "bg"][0]
     assert bg["display"] == "bg-thumbs"
     _draw_once(ws)
-    ws.cards_layer.page.want_focus = "bg/pick"   # the page scrolls it into view
+    ws.cards_layer.page.want_focus = "bg/k"   # the page scrolls it into view
     for _ in range(20):
         _draw_once(ws)
     _tap_tile(ws, "bg", 2, 4)

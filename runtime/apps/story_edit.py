@@ -1,12 +1,10 @@
 # Map (grep -n a name to jump there):
-#   Editor                 the desk's story editor: the sorter, a slide, Add a picture
-#   Editor.draw            the page it is on
-#   Editor._deck           the sorter: a card a slide, its verbs
-#   Editor._slide          a slide: the tool row, the slides column, the slide, the panel
-#   Editor._panel          the style panel: the chosen object's, else the slide's
+#   Editor                 the desk's story editor's state and verbs; its page is storybook_app's
+#   Editor.handle_input    the editor's keys before the page's
 #   Editor._slide_keys     the keys a slide takes: choose, move, resize, write, add
 #   Editor.handle_pointer  a pointer on the slide: choose, drag, resize, snap
-#   Editor._pictures       Add a picture: My Art's drawings, copied into the story
+#   Editor.draw_board      the slide on its pasteboard (the page's board canvas)
+#   Editor._place          Add a picture: a drawing of My Art's copied into the story
 """Storybook's editor, on the desk boards and in the web build
 (docs/media/look_2026-10/APPS_RESTYLE.md, Storybook: Screens, Desk, Inputs).
 A handheld does not edit a story; runtime/apps/storybook_app.py makes this only
@@ -16,10 +14,15 @@ where the console is a desk.
             its transition's icon; New slide last, which opens the layouts;
             N adds after the focused slide, [ and ] move it, Ctrl+D
             duplicates it, Del deletes it, M its menu.
-  A SLIDE   at 1/2 in the window, 5/8 where the window fills the glass: the
-            slides column at its left, the style panel at its right. The
-            keys are the slide's until Y (the panel) or Esc with nothing
-            chosen (the parts).
+  A SLIDE   on its pasteboard at the largest zoom it takes (1/2 in the
+            window, 5/8 where the window fills the glass): the slides column
+            at its left, the style panel at its right. The keys are the
+            slide's while the pasteboard holds focus, until Y or Esc with
+            nothing chosen (the parts).
+
+The page that shows all this is storybook_app's (`build`); this module holds
+what it shows and what its verbs do, the selection, the handles and the drag
+apart from any drawing but the pasteboard's.
   ADD A PICTURE  My Art's drawings, each copied into the story when it is
             placed (copy-on-use); a picture at half its size reads the half
             baked beside it then.
@@ -41,6 +44,7 @@ TRANS_ICONS = ("trans_none", "trans_fade", "trans_swipe")
 TRANS_NAMES = ("None", "Fade", "Swipe")
 SCALE_WORDS = ("½", "1", "2", "3", "4")
 LAYOUT_ICONS = ("text", "background", "slides", "layout")
+EDIT_ZOOMS = ((5, 8), (1, 2), (3, 8), (1, 4))     # the slide's on the pasteboard, the largest that fits
 SHAPE_TITLES = ("Rectangle", "Rounded rectangle", "Ellipse", "Line", "Arrow", "Star",
                 "Speech bubble")
 
@@ -62,9 +66,12 @@ class Editor:
         self.app = app
         self.chosen = None            # the chosen object's index on the slide
         self.writing = False
-        self.on_slide = True          # the keys are the slide's
+        self.zoom = (1, 2)            # the slide's on the pasteboard (fit)
+        self.slide = (0, 0, 0, 0)     # and its rect, in the board canvas's coordinates
+        self._board = None            # the board's size the rect was fitted to
         self.step = STEP
         self.resizing = False
+        self.parts = False            # Esc or Y sent the keys to the parts: the outline alone
         self.snap = True
         self.clip = None              # the copied object
         self.layout_kind = "picture"
@@ -74,25 +81,40 @@ class Editor:
         self.pic_mode = "add"         # pictures: "add" a picture, or the "bg"
         self.pic_tab = 0
         self.pics = None              # [(name, w, h)] My Art's drawings
-        self.thumbs = {}              # name -> _Pic at its card's size
         self.added = []               # pictures copied in this session
         self.drag = None
         self.guides = ()
         self.say = ""                 # the foot's status while a drag lines up
         self._click = None            # (ms, x, y) of the last press: a double click
         self._press = None            # (ms, x, y): a press held, for a long press
-        self._focus = None
         self._new = False
 
     # -- what the app asks -------------------------------------------------------------
 
     def relayout(self):
         self.app.frames.drop() if self.app.frames is not None else None
+        self._board = None
+
+    @property
+    def on_slide(self):
+        """The slide has the keys: the board canvas holds focus (or is about to)."""
+        return self.app.focused_id() == "board"
+
+    @on_slide.setter
+    def on_slide(self, v):
+        """The keys to the slide, else to the parts (the tool row's first)."""
+        self.parts = not v
+        self.app._focus = "board" if v else "add"
+        self.app.owe()
+
+    def deck_focus(self):
+        """The sorter's focused slide, or None (none, or the New slide card)."""
+        f = self.app.state().dcur
+        return int(f) if f and f.isdigit() and int(f) < len(self.app.story.slides) else None
 
     def opened(self, new=False):
         self.chosen = None
         self.writing = False
-        self.on_slide = True
         self.menu = None
         self.resizing = False
         self._new = new
@@ -106,9 +128,6 @@ class Editor:
     def presented(self, i):
         self.app.cur = i
 
-    def keys_elsewhere(self):
-        return self.app.page == "slide" and self.on_slide and self.menu is None
-
     def back(self):
         app = self.app
         if self.menu is not None:
@@ -117,7 +136,6 @@ class Editor:
             return True
         if app.page == "pictures":
             app.page = "slide"
-            self._drop_thumbs()
             app._damage.all()
             return True
         if app.page == "slide":
@@ -130,10 +148,9 @@ class Editor:
                 return True
             if not self.on_slide:
                 self.on_slide = True
-                app._damage.all()
                 return True
             app.page = "deck"
-            app._focus = "Slide %d" % app.cur
+            app._focus = card_id(app.cur)
             app._damage.all()
             return True
         if app.page == "deck":
@@ -239,9 +256,8 @@ class Editor:
         return D.bounds(o, self._size_of)
 
     def _to_screen(self, b):
-        lay = self.app.layout
-        n, d = lay.edit_zoom
-        sx, sy = lay.slide[0], lay.slide[1]
+        n, d = self.zoom
+        sx, sy = self.slide[0], self.slide[1]
         return (sx + b[0] * n // d, sy + b[1] * n // d, b[2] * n // d, b[3] * n // d)
 
     def _choose(self, j):
@@ -400,7 +416,7 @@ class Editor:
             app._say("A story holds %d slides" % D.MAX_SLIDES, "warn")
             return None
         app.cur = j
-        app._focus = "Slide %d" % j
+        app._focus = card_id(j)
         self._edited()
         return j
 
@@ -422,44 +438,42 @@ class Editor:
     # -- input --------------------------------------------------------------------------
 
     def handle_input(self, inp, k):
+        """The editor's keys before the page's: Present, the sorter's, the
+        slide's while its pasteboard has focus (or its words are written),
+        undo and stepping the slides while the parts have the keys. False:
+        the page's."""
         app = self.app
         if self.menu is not None:
-            if k == 27 or inp.pressed("b"):
-                self.back()
-                return True
-            if app._ui.keys(inp):
-                app._damage.all()
-            return True
-        if k in (ord("p"), ord("P")) and not self.writing:
+            return False
+        if self.writing:
+            return self._slide_keys(inp, k)
+        if k in (ord("p"), ord("P")):
             app._start(app.cur)
             return True
-        if app.page == "slide" and self.on_slide:
+        if app.page == "deck":
+            if k in (26, 25):
+                self._undo(redo=k == 25)
+                return True
+            return self._deck_keys(k)
+        if app.page != "slide":
+            return False
+        if self.on_slide:
             return self._slide_keys(inp, k)
-        if app.page == "deck" and self._deck_keys(k):
-            return True
-        if k == 26:
-            self._undo()
-            return True
-        if k == 25:
-            self._undo(redo=True)
-            return True
-        if app.page == "slide" and k in (27, ord("y"), ord("Y")) and not self.on_slide:
+        if k in (26, 25):
+            self._undo(redo=k == 25)
+        elif k in (ord("y"), ord("Y")):
             self.on_slide = True
-            app._damage.all()
-            return True
-        if inp.pressed("b") or k == 27:
-            app.back()
-            return True
-        if app._ui.keys(inp):
-            app._damage.all()
+        elif k in (ord("."), ord(",")):
+            self._goto(app.cur + (1 if k == ord(".") else -1))
+        else:
+            return False
         return True
 
     def _deck_keys(self, k):
         app = self.app
         st = app.story
-        f = app._focused or ""
-        i = int(f[6:]) if f.startswith("Slide ") and f[6:].isdigit() else None
-        if i is None or i >= len(st.slides):
+        i = self.deck_focus()
+        if i is None:
             if k in (ord("n"), ord("N")):
                 self._new_slide(len(st.slides) - 1)
                 return True
@@ -470,21 +484,21 @@ class Editor:
             j = st.move_slide(i, -1 if k == ord("[") else 1)
             if j is not None:
                 app.cur = j
-                app._focus = "Slide %d" % j
+                app._focus = card_id(j)
                 self._edited()
         elif k == 4:
             j = st.duplicate_slide(i)
             if j is None:
                 app._say("A story holds %d slides" % D.MAX_SLIDES, "warn")
             else:
-                app._focus = "Slide %d" % j
+                app._focus = card_id(j)
                 self._edited()
         elif k == 127:
             self._delete_slide(i)
         elif k in (ord("m"), ord("M")):
             app.cur = i
             self.menu = "slide"
-            app._damage.all()
+            app.owe()
         else:
             return False
         return True
@@ -496,7 +510,7 @@ class Editor:
             app._say("A story keeps one slide", "warn")
             return
         app.cur = j
-        app._focus = "Slide %d" % j
+        app._focus = card_id(j)
         app._say("Slide deleted" + D_DOT() + "Ctrl+Z brings it back", "trash")
         self._edited()
 
@@ -583,12 +597,12 @@ class Editor:
     # -- a pointer -----------------------------------------------------------------------
 
     def handle_pointer(self, px, py, click, down):
-        """A pointer sample on the slide: True where the slide took it."""
+        """A pointer sample on the board, in its coordinates: True where the
+        slide took it."""
         app = self.app
         if app.page != "slide" or self.menu is not None:
             return False
-        lay = app.layout
-        sx, sy, sw, sh = lay.slide
+        sx, sy, sw, sh = self.slide
         inside = sx <= px < sx + sw and sy <= py < sy + sh
         now = _ticks_ms()
         if click:
@@ -672,8 +686,7 @@ class Editor:
 
     def _drag_to(self, px, py):
         app = self.app
-        lay = app.layout
-        n, d = lay.edit_zoom
+        n, d = self.zoom
         kind = self.drag[0]
         if kind == "maybe":
             if abs(px - self.drag[2]) < 4 and abs(py - self.drag[3]) < 4:
@@ -729,8 +742,7 @@ class Editor:
         self.say = ""
         if not self.snap:
             return x, y
-        lay = self.app.layout
-        n, d = lay.edit_zoom
+        n, d = self.zoom
         reach = (SNAP_TOUCH if ui.input_kind() == "touch" else SNAP_POINTER) * d // n
         xs = [(0, "the slide's edge"), (D.SW // 2, "the slide's middle"),
               (D.SW, "the slide's edge")]
@@ -780,290 +792,75 @@ class Editor:
             return "the words"
         return "the " + SHAPE_TITLES[D.SHAPES.index(o["shape"])].lower()
 
-    # -- the frame ------------------------------------------------------------------------
+    # -- the slide on its pasteboard (the page's `board` canvas) --------------------------
 
-    def draw(self, cv, th):
+    def fit(self, w, h):
+        """The slide's rect on a pasteboard w x h: the largest edit zoom
+        whose slide fits it with a margin, centred."""
+        for n, d in EDIT_ZOOMS:
+            sw, sh = R.size(n, d)
+            if sw + 12 <= w and sh + 12 <= h:
+                break
+        self.zoom = (n, d)
+        self.slide = ((w - sw) // 2, (h - sh) // 2, sw, sh)
+
+    def draw_board(self, cv, x, y, w, h, th):
+        """The pasteboard: the slide at its edit zoom on a rounded ground,
+        its edge, the grid while G steps it, the chosen object's outline
+        and handles (or the caret while writing), the snap guides."""
         app = self.app
-        page = app.page
-        if page == "deck":
-            self._deck(cv, th)
-        elif page == "pictures":
-            self._pictures(cv, th)
-        else:
-            self._slide(cv, th)
-        self._menus()
-
-    # -- the sorter -------------------------------------------------------------------------
-
-    def _deck(self, cv, th):
-        app = self.app
-        lay = app.layout
         st = app.story
-        x, y, w, _h = lay.row
-        by = y + (lay.ROW - 34) // 2
-        bx = x + 16
-        f = app._focused or ""
-        i = int(f[6:]) if f.startswith("Slide ") and f[6:].isdigit() else None
-        has = i is not None and i < len(st.slides)
-        for label, icon, kind, wd, act in (
-                ("New slide", "layout", "normal", 116, "new"),
-                ("Duplicate", "dup", "normal", 112, "dup"),
-                ("Delete", "trash", "danger", 92, "del")):
-            ui.at(bx, by, wd, 32)
-            ui.icon(icon)
-            o = {"id": label}
-            if act != "new" and not has:
-                o["disabled"] = True
-            if ui.button(label, kind, o):
-                if act == "new":
-                    self.menu = "layouts"
-                elif act == "dup" and has:
-                    self._deck_keys(4)
-                elif act == "del" and has:
-                    self._delete_slide(i)
-            bx += wd + 8
-        if has and i >= len(st.slides):         # Delete took the last slide
-            i = len(st.slides) - 1
-        bx += 2
-        ui.at(bx, by, 1, 32)
-        ui.rule()
-        bx += 12
-        bx = self._undo_tools(bx, by)
-        self._present_button(x + w - 16 - 124, by)
-        ui.at(*lay.row_rule)
-        ui.rule()
-        grid = lay.deck_grid
-        ui.at(*grid)
-        ui.scroll("slides")
-        ui.grid("slides", 256, 150, {"cols": lay.cols, "margin": lay.margin, "foot": 30,
-                                     "top": 12})
-        for k, s in enumerate(st.slides):
-            cx, cy, cw, ch, state = ui.card("", "", {"id": "Slide %d" % k})
-            if cw:
-                key = ("card", st.gen, k, cw, ch)
-                app.frames.place(cv, key, s, cx, cy, cw, ch, grid)
-                ui.at(cx, cy + ch + 4, 80, 20)
-                ui.icon(TRANS_ICONS[D.TRANSITIONS.index(s["transition"])])
-                ui.label(str(k + 1), {"tone": "dim", "face": "caption"})
-            if state & ui.ACTIVATED:
-                app.cur = k
-                app.page = "slide"
-                self.chosen = None
-                self.on_slide = True
-                app._damage.all()
-        if len(st.slides) < D.MAX_SLIDES:
-            _x, _y, _w, _h2, state = ui.card("New slide", "", {"icon": "new", "id": "Add slide",
-                                                              "tone": "value"})
-            if state & ui.ACTIVATED:
-                self.menu = "layouts"
-        ui.grid()
-        ui.end()
-        ui.scroll()
-        status = ""
-        if has:
-            status = "Slide %d" % (i + 1)
-            t = self._slide_words(st.slides[i])
-            if t:
-                status += app_dot() + t
-            status += app_dot() + "the slides at " + _zw(1, 4)
-        self._foot(status, ("confirm", "Edit", "[ ]", "Move", "Ctrl D", "Duplicate", "Del",
-                            "Delete"))
-
-    def _slide_words(self, s):
-        for o in s["objects"]:
-            if o["type"] in ("text", "shape") and o["text"]:
-                return o["text"]
-        return ""
-
-    def _undo_tools(self, bx, by):
-        st = self.app.story
-        ui.at(bx, by - 1, 36, 36)
-        if ui.tool("undo", "Undo\tCtrl+Z", {"disabled": True} if not st.can_undo() else None):
-            self._undo()
-        ui.at(bx + 40, by - 1, 36, 36)
-        if ui.tool("redo", "Redo\tCtrl+Y", {"disabled": True} if not st.can_redo() else None):
-            self._undo(redo=True)
-        return bx + 80
-
-    def _present_button(self, x, y):
-        ui.at(x, y, 124, 34)
-        ui.icon("play")
-        if ui.button("Present", "primary", {"id": "Present"}):
-            self.app._start(self.app.cur)
-
-    def _foot(self, status, hints):
-        lay = self.app.layout
-        ui.at(*lay.foot_rule)
-        ui.rule()
-        fx, fy, fw, fh = lay.foot
-        hw = ui.hints_width(hints)
-        ui.face("caption")
-        lh = ui.text_size("Ag")[1]
-        ui.face()
-        ui.at(fx + 26, fy + (fh - lh) // 2, max(0, fw - 26 - hw - 40), lh + 2)
-        ui.label(status, {"tone": "dim", "face": "caption"})
-        if hw > 0:
-            ui.at(fx + fw - 16 - hw, fy, hw, fh)
-            ui.hints(hints)
-
-    # -- a slide ---------------------------------------------------------------------------
-
-    def _slide(self, cv, th):
-        app = self.app
-        lay = app.layout
-        st = app.story
-        self._tool_row()
-        self._column(cv)
-        ui.at(*lay.column_rule)
-        ui.rule()
-        px, py, pw, ph = lay.pasteboard
-        ui.at(px, py, pw, ph)
-        ui.part("Pasteboard", pw, ph)
-        cv.rrect(px, py, pw, ph, 10, th["surface_alt"])
-        sx, sy, sw, sh = lay.slide
-        ui.at(sx, sy, sw, sh)
-        ui.part("Slide", sw, sh)
+        if st is None:
+            return
+        if self.slide[2] == 0 or self._board != (w, h):
+            self._board = (w, h)
+            self.fit(w, h)
+        cv.rrect(x, y, w, h, 10, th["surface_alt"])
+        sx, sy, sw, sh = self.slide
+        sx, sy = x + sx, y + sy
         key = ("edit", st.gen, app.cur, sw, sh)
         app.frames.place(cv, key, st.slides[app.cur], sx, sy, sw, sh, edit=True)
         cv.rectb(sx - 1, sy - 1, sw + 2, sh + 2, th["edge"])
-        if self.step == GRID and self.on_slide:
+        on = not self.parts
+        if self.step == GRID and on:
             self._grid(cv, sx, sy, sw, sh)
-        self._chosen(cv, th)
+        self._chosen(cv, th, x, y, on)
         for g in self.guides:
-            self._guide(cv, g)
-        self._panel()
-        self._slide_foot()
-
-    def _tool_row(self):
-        app = self.app
-        lay = app.layout
-        st = app.story
-        x, y, w, _h = lay.row
-        rh = 34 if not lay.full else 32
-        by = y + ((lay.ROW if not lay.full else 40) - rh) // 2
-        bx = x + 16
-        if lay.full:
-            ui.at(bx, by, 28, rh)
-            if ui.tool("back", "Back\tEsc"):
-                app.back()
-            bx += 34
-            ui.face("title")
-            tw = ui.text_size(st.title() or "Untitled")[0]
-            ui.face()
-            ui.at(bx, by, tw + 8, rh)
-            ui.label(st.title() or "Untitled", {"face": "title"})
-            bx += tw + 24
-        ui.at(bx, by, 92, rh)
-        ui.icon("new")
-        if ui.button("Add", "normal", {"id": "Add"}):
-            self.menu = "add"
-        bx += 100
-        ui.at(bx, by, 1, rh)
-        ui.rule()
-        bx += 12
-        has = self._obj() is not None
-        off = {"disabled": True} if not has else {}
-        for label, icon, act, wd in (("Front", "to_front", "front", 76),
-                                     ("Back", "to_back", "back", 72)):
-            ui.at(bx, by, wd, rh)
-            ui.icon(icon)
-            if ui.button(label, "normal", dict(off, id=label)):
-                self._front(back=act == "back")
-            bx += wd + 4
-        ui.at(bx + 4, by, 1, rh)
-        ui.rule()
-        bx += 16
-        ui.at(bx, by, 72, rh)
-        ui.icon("copy")
-        if ui.button("Copy", "normal", dict(off, id="Copy")):
-            self._copy()
-        bx += 76
-        ui.at(bx, by, 76, rh)
-        ui.icon("paste")
-        if ui.button("Paste", "normal", {"id": "Paste", "disabled": True} if self.clip is None
-                     else {"id": "Paste"}):
-            self._paste()
-        bx += 84
-        ui.at(bx, by, 1, rh)
-        ui.rule()
-        bx += 12
-        bx = self._undo_tools(bx, by)
-        right = x + w - 16 - 124
-        if not lay.full:
-            n = len(st.slides)
-            sx = right - 12 - 104
-            ui.at(sx, by, 28, rh)
-            if ui.tool("back", "Previous slide\t,", {"disabled": True} if app.cur == 0
-                       else None):
-                self._goto(app.cur - 1)
-            ui.at(sx + 28, by, 48, rh)
-            ui.label("%d/%d" % (app.cur + 1, n), {"align": "center"})
-            ui.at(sx + 76, by, 28, rh)
-            if ui.tool("forward", "Next slide\t.", {"disabled": True} if app.cur >= n - 1
-                       else None):
-                self._goto(app.cur + 1)
-        self._present_button(right, by)
-        ui.at(*lay.row_rule)
-        ui.rule()
-
-    def _column(self, cv):
-        """The slides column: each slide at 5/64 (80 x 46) a 76 px pitch,
-        its number and its transition's icon under it."""
-        app = self.app
-        lay = app.layout
-        st = app.story
-        x, y, w, h = lay.column
-        ui.at(x, y, w, h)
-        ui.scroll("column")
-        for k, s in enumerate(st.slides):
-            ui.at(x, y + 4 + k * 76, w, 72)
-            px, py, pw, ph, state = ui.part("Column %d" % k, w, 72,
-                                            {"current": k == app.cur})
-            if pw:
-                fx, fy = px + (pw - 80) // 2, py + 4
-                app.frames.place(cv, ("col", st.gen, k, 80, 46), s, fx, fy, 80, 46,
-                                 (x, y, w, h))
-                ui.at(fx - 2, fy + 48, 60, 18)
-                ui.icon(TRANS_ICONS[D.TRANSITIONS.index(s["transition"])])
-                ui.label(str(k + 1), {"tone": "dim", "face": "caption"})
-            if state & ui.ACTIVATED:
-                self._goto(k)
-                self.on_slide = True
-        ui.scroll()
+            self._guide(cv, g, sx, sy, sw, sh)
 
     def _grid(self, cv, sx, sy, sw, sh):
-        lay = self.app.layout
-        n, d = lay.edit_zoom
+        n, d = self.zoom
         step = GRID * 4
         for gx in range(step, D.SW, step):
             cv.fill565(sx + gx * n // d, sy, 1, sh, 0xC618)
         for gy in range(step, D.SH, step):
             cv.fill565(sx, sy + gy * n // d, sw, 1, 0xC618)
 
-    def _chosen(self, cv, th):
+    def _chosen(self, cv, th, ox, oy, on):
         """The chosen object's outline in its dark keyline, and its handles
-        (8 x 8, white in a dark border); while writing, the caret."""
+        (8 x 8, white in a dark border) while it is what the keys, the panel
+        and the menus over the slide edit (`on`: no Esc or Y sent the keys to
+        the parts); while writing, the caret."""
         o = self._obj()
         if o is None:
             return
         x, y, w, h = self._to_screen(self._bounds(o))
+        x, y = x + ox, y + oy
         cv.rectb(x - 2, y - 2, w + 4, h + 4, 0)
         cv.rectb(x - 1, y - 1, w + 2, h + 2, th["value"])
         cv.rectb(x, y, w, h, th["value"])
         if self.writing:
-            self._caret(cv, o, th)
-        elif not self.on_slide:
+            self._caret(cv, o, th, ox, oy)
+        elif not on:
             return
         hs = HANDLE
         for hx, hy in self._handles((x, y, w, h)):
             cv.rect(hx - hs // 2, hy - hs // 2, hs, hs, 0)
             cv.rect(hx - hs // 2 + 1, hy - hs // 2 + 1, hs - 2, hs - 2, 7)
 
-    def _caret(self, cv, o, th):
-        app = self.app
-        lay = app.layout
-        n, d = lay.edit_zoom
-        rend = app.renderer
+    def _caret(self, cv, o, th, ox, oy):
+        n, d = self.zoom
+        rend = self.app.renderer
         if o["type"] == "text":
             bx, by, bw = o["x"], o["y"], o["w"]
             top = by * 64
@@ -1079,15 +876,13 @@ class Editor:
             dx = bw * 64 - lw
         else:
             dx = 0
-        cx = lay.slide[0] + (bx * 64 + dx + lw) * n // d // 64 + 2
-        cy = lay.slide[1] + (top + (len(lines) - 1) * R.line_h(o["size"])) * n // d // 64
+        cx = ox + self.slide[0] + (bx * 64 + dx + lw) * n // d // 64 + 2
+        cy = oy + self.slide[1] + (top + (len(lines) - 1) * R.line_h(o["size"])) * n // d // 64
         cv.rect(cx, cy + o["size"] * n // d // 8, 2, o["size"] * n // d, th["value"])
 
-    def _guide(self, cv, g):
+    def _guide(self, cv, g, sx, sy, sw, sh):
         """A snap guide across the slide: indigo dashes on a white keyline."""
-        lay = self.app.layout
-        n, d = lay.edit_zoom
-        sx, sy, sw, sh = lay.slide
+        n, d = self.zoom
         if g[0] == "v":
             gx = sx + g[1] * n // d
             cv.fill565(gx - 1, sy, 3, sh, WHITE_565)
@@ -1099,11 +894,36 @@ class Editor:
             for t in range(0, sw, 8):
                 cv.fill565(sx + t, gy, 5, 1, GUIDE_565)
 
-    def _slide_foot(self):
+    def board_view(self):
+        """What the board shows, as one text: the page reads it (the
+        board canvas's reads=)."""
+        st = self.app.story
+        return "%s %d %d %r %d %d %d %d %r" % (
+            st.name if st is not None else "", st.gen if st is not None else 0, self.app.cur,
+            self.chosen, self.writing, self.step, not self.parts, self.resizing, self.guides)
+
+    # -- the words the page shows ----------------------------------------------------------
+
+    def deck_status(self, i):
+        """The sorter's band: slide `i` (the focused card's), its words, the zoom."""
+        st = self.app.story
+        if i is None or i >= len(st.slides):
+            return ""
+        out = "Slide %d" % (i + 1)
+        t = self._slide_words(st.slides[i])
+        if t:
+            out += app_dot() + t
+        return out + app_dot() + "the slides at " + _zw(1, 4)
+
+    def _slide_words(self, s):
+        for o in s["objects"]:
+            if o["type"] in ("text", "shape") and o["text"]:
+                return o["text"]
+        return ""
+
+    def slide_status(self):
         app = self.app
-        lay = app.layout
-        st = app.story
-        status = "Slide %d of %d" % (app.cur + 1, len(st.slides))
+        status = "Slide %d of %d" % (app.cur + 1, len(app.story.slides))
         o = self._obj()
         if self.writing and o is not None:
             status += app_dot() + "writing" + app_dot() + "%d of %d letters" % (
@@ -1114,13 +934,18 @@ class Editor:
             status += app_dot() + "nothing chosen"
         else:
             status += app_dot() + self._describe(o)
-        n, d = lay.edit_zoom
-        status += app_dot() + "shown at " + _zw(n, d)
-        if self.writing:
-            hints = ("back", "Done")
-        else:
-            hints = ("Ctrl D", "Duplicate", "Del", "Delete")
-        self._foot(status, hints)
+        n, d = self.zoom
+        return status + app_dot() + "shown at " + _zw(n, d)
+
+    def slide_hints(self):
+        return ("back", "Done") if self.writing else ("Ctrl D", "Duplicate", "Del", "Delete")
+
+    def pics_status(self, name):
+        if name is None:
+            return ""
+        where = ("the background of slide %d" if self.pic_mode == "bg"
+                 else "it goes on slide %d, chosen") % (self.app.cur + 1)
+        return _shown(name) + app_dot() + where
 
     def _describe(self, o):
         t = o["type"]
@@ -1135,308 +960,100 @@ class Editor:
             return "words in " + D.FONT_NAMES[D.FONTS.index(o["font"])] + " " + str(o["size"])
         return SHAPE_TITLES[D.SHAPES.index(o["shape"])].lower()
 
-    # -- the style panel ---------------------------------------------------------------------
-    #
-    # Rows of 28 placed one under the next, a rule under each: the chosen
-    # object's style, else the slide's.
+    # -- the menus' picks -------------------------------------------------------------------
 
-    def _panel(self):
-        app = self.app
-        x, y, w, h = app.layout.panel
-        self._px, self._py, self._pw = x, y, w
-        self._cv = app._surf.canvas()
-        o = self._obj()
-        if o is None:
-            self._slide_panel()
-        elif o["type"] == "picture":
-            self._picture_panel(o)
-        elif o["type"] == "text":
-            self._text_panel(o)
-        elif o["type"] == "shape":
-            self._shape_panel(o)
+    def add_pick(self, a):
+        """The Add menu's: a text box, a shape, a picture, a background."""
+        self.menu = None
+        if a == "text":
+            self._add("text")
+        elif a == "shape":
+            self._add("shape")
         else:
-            self._head("sprite", "Sprite")
-            self._appears(o)
+            self._open_pictures("add" if a == "pic" else "bg")
 
-    def _row(self, h=28, rule=True):
-        x, y, w = self._px, self._py, self._pw
-        self._py += h
-        if rule:
-            ui.at(x, y + h - 1, w, 1)
-            ui.rule()
-        ui.at(x, y, w, h - (1 if rule else 0))
-        return (x, y, w, h)
-
-    def _head(self, icon, title):
-        self._py += 6
-        self._row(34, rule=False)
-        ui.icon(icon)
-        ui.label(title, {"face": "title"})
-
-    def _caption(self, text):
-        self._row(22, rule=False)
-        ui.label(text, {"tone": "dim", "face": "caption"})
-
-    def _slide_panel(self):
+    def layout_pick(self, k):
+        """The layouts menu's: a new slide of layout `k` after the focused
+        slide (the last where none is)."""
         app = self.app
-        s = self._slide_doc()
-        self._head("layout", "Slide %d" % (app.cur + 1))
-        bg = s["bg"]
-        recent = list(self.recent)
-        if isinstance(bg, int) and bg not in recent:
-            recent = [bg] + recent[:3]
-        cur = recent.index(bg) if bg in recent else -1
-        x, y, w, h = self._row()
-        ui.at(x, y, w - 14, h - 1)
-        got = ui.swatches("Background", [D.COLOURS[c] for c in recent], cur)
-        if got != cur and 0 <= got < len(recent):
-            self._set_slide("bg", recent[got])
-        ui.at(x + w - 16, y + 4, 16, h - 9)
-        if ui.tool("forward", "All colours", {"id": "All colours"}):
-            self.menu = "bgcolours"
-        self._row()
-        if ui.link("Picture", bg if isinstance(bg, str) else "None"):
-            self._open_pictures("bg")
-        self._caption("Transition")
-        self._row(32, rule=False)
-        t = D.TRANSITIONS.index(s["transition"])
-        got = ui.seg("", TRANS_NAMES, t, {"id": "Transition"})
-        if got != t:
-            self._set_slide("transition", D.TRANSITIONS[got])
+        self.menu = None
+        i = self.deck_focus()
+        self._new_slide(len(app.story.slides) - 1 if i is None else i, D.LAYOUTS[k])
 
-    def _appears(self, o):
-        self._py += 8
-        self._row(rule=False)
-        cur = 0 if o["step"] == 0 else 1
-        got = ui.seg("Appears", ("With slide", "On tap"), cur)
-        if got != cur:
-            if got == 0:
-                self._set("step", 0)
-            else:
-                m = 0
-                for p in self._slide_doc()["objects"]:
-                    m = max(m, p["step"])
-                self._set("step", min(D.MAX_OBJECTS, m + 1))
+    def more_pick(self, a):
+        self.menu = None
+        if a == "front":
+            self._front()
+        elif a == "back":
+            self._front(back=True)
+        elif a == "copy":
+            self._copy()
+        elif a == "paste":
+            self._paste()
+        elif a == "centre":
+            self._centre()
+        elif a == "snap":
+            self._toggle_snap()
+        elif a == "dup":
+            self._duplicate()
+        else:
+            self._delete()
 
-    def _colour_row(self, label, key, value, none=False):
-        x, y, w, h = self._row()
-        name = "None" if value is None else D.COLOUR_NAMES[value]
-        if ui.link(label, name, {"id": label}):
-            self.menu = "colours"
-            self.colour_key = (key, none)
-        if value is not None:
-            tw = ui.text_size(name)[0]
-            sx, sy = x + w - 18 - tw - 22, y + (h - 14) // 2
-            th = self.app._theme.colors()
-            self._cv.rect(sx, sy, 14, 14, th["edge"])
-            self._cv.rect(sx + 1, sy + 1, 12, 12, value)
-
-    def _words_rows(self, o):
-        self._row()
-        f = D.FONTS.index(o["font"])
-        got = ui.cycle("Font", D.FONT_NAMES, f)
-        if got != f:
-            self._set("font", D.FONTS[got])
-        x, y, w, h = self._row()
-        ui.at(x, y + 2, 96, h - 5)
-        text, _done = ui.field("Size", str(o["size"]), 3, {"id": "Size in pixels"})
-        if text.isdigit() and text != str(o["size"]):
-            v = int(text)
-            if D.SIZE_MIN <= v <= D.SIZE_MAX:
-                self._set("size", v)
-        sizes = [v for _n, v in D.SIZES]
-        cur = sizes.index(o["size"]) if o["size"] in sizes else -1
-        ui.at(x + 100, y, w - 100, h - 1)
-        got = ui.seg("", [n for n, _v in D.SIZES], cur, {"id": "Size steps"})
-        if got != cur and got >= 0:
-            self._set("size", sizes[got])
-        self._colour_row("Colour", "colour", o["colour"])
-        self._row()
-        a = D.ALIGNS.index(o["align"])
-        got = ui.seg("Align", ("Left", "Centre", "Right"), a)
-        if got != a:
-            self._set("align", D.ALIGNS[got])
-
-    def _text_panel(self, o):
-        self._head("text", "Text")
-        self._words_rows(o)
-        self._row()
-        strips = ["None"] + list(D.COLOUR_NAMES)
-        cur = 0 if o["strip"] is None else o["strip"] + 1
-        got = ui.cycle("Strip behind", strips, cur)
-        if got != cur:
-            self._set("strip", None if got == 0 else got - 1)
-        self._appears(o)
-
-    def _shape_panel(self, o):
-        k = D.SHAPES.index(o["shape"])
-        self._head("bubble" if o["shape"] == "bubble" else "shapes", SHAPE_TITLES[k])
-        self._row()
-        got = ui.cycle("Shape", D.SHAPE_NAMES, k)
-        if got != k:
-            self._set("shape", D.SHAPES[got])
-        if o["shape"] not in ("line", "arrow"):
-            self._colour_row("Fill", "fill", o["fill"], True)
-        self._colour_row("Line", "line", o["line"], True)
-        self._row()
-        wcur = D.WIDTHS.index(o["width"])
-        got = ui.seg("Width", ("Thin", "Thick"), wcur)
-        if got != wcur:
-            self._set("width", D.WIDTHS[got])
-        if o["shape"] in ("line", "arrow"):
-            self._row()
-            got = ui.cycle("Points", ("Right", "Left", "Up right", "Up left"), o["flip"])
-            if got != o["flip"]:
-                self._set("flip", got)
-        if o["shape"] not in ("line", "arrow"):
-            self._caption("Text")
-            self._words_rows(o)
-        self._appears(o)
-
-    def _picture_panel(self, o):
-        name = o["image"]
-        self._head("art", "Picture" if name is None else "Picture" + app_dot() + _shown(name))
-        if name is None:
-            self._row()
-            if ui.link("Add a picture", ""):
-                self._open_pictures("add")
-            return
-        self._row()
-        k = D.SCALES.index(o["scale"])
-        words = SCALE_WORDS if ui.has_symbols() else ("1/2",) + SCALE_WORDS[1:]
-        got = ui.seg("Size", words, k)
-        if got != k:
-            self._set("scale", D.SCALES[got])
-        self._row()
-        got = ui.toggle("Clear background", o["clear"])
-        if got != o["clear"]:
-            self._set("clear", got)
-        self._appears(o)
-
-    # -- menus and popovers -------------------------------------------------------------------
-
-    def _menus(self):
+    def slide_pick(self, a):
+        """The slide menu's: its transition steps (the menu stays), a copy,
+        a move, a delete."""
         app = self.app
-        m = self.menu
-        if m is None:
-            return
-        lay = app.layout
-        if m == "add":
-            box = app._ui.box("Add")
-            if box is not None:
-                ui.at(*box)
-            alive = ui.popover("Add menu", 236)
-            dots = "…" if ui.has_symbols() else "..."
-            a = ui.menu("", ["Text\tT", "Shape\tS", "Picture" + dots + "\tI",
-                             "Background" + dots + "\tB"],
-                        ["text", "shapes", "art", "background"])
-            ui.popover()
-            if not alive:
-                self.menu = None
-            if a >= 0:
-                self.menu = None
-                if a == 0:
-                    self._add("text")
-                elif a == 1:
-                    self._add("shape")
-                elif a == 2:
-                    self._open_pictures("add")
-                else:
-                    self._open_pictures("bg")
-        elif m == "layouts":
-            box = app._ui.box("New slide")
-            if box is not None:
-                ui.at(*box)
-            alive = ui.popover("Layouts", 236)
-            k = D.LAYOUTS.index(self.layout_kind)
-            items = [n + ("\tEnter" if i == k else "") for i, n in enumerate(D.LAYOUT_NAMES)]
-            a = ui.menu("New slide", items, LAYOUT_ICONS)
-            ui.popover()
-            if not alive:
-                self.menu = None
-            if a >= 0:
-                self.menu = None
-                self._new_slide(len(app.story.slides) - 1 if app.page == "deck"
-                                and not (app._focused or "").startswith("Slide ")
-                                else app.cur, D.LAYOUTS[a])
-        elif m == "more":
-            alive = ui.popover("More", 260, {"wash": True})
-            items = ["Front\t]", "Back\t[", "Copy\tCtrl+C", "Paste\tCtrl+V",
-                     "Centre on the slide", "Snap" + ("\ton" if self.snap else "\toff"),
-                     "Duplicate\tCtrl+D", "Delete\tDel"]
-            a = ui.menu(self._describe(self._obj()) if self._obj() is not None else "Slide",
-                        items, ["to_front", "to_back", "copy", "paste", "align_c", "check",
-                                "dup", "trash"],
-                        kinds=("", "", "", "", "", "", "", "danger"))
-            ui.popover()
-            if not alive:
-                self.menu = None
-            if a >= 0:
-                self.menu = None
-                (self._front, lambda: self._front(back=True), self._copy, self._paste,
-                 self._centre, self._toggle_snap, self._duplicate, self._delete)[a]()
-        elif m == "slide":
-            alive = ui.popover("Slide menu", 260, {"wash": True})
-            s = app.story.slides[app.cur]
-            t = D.TRANSITIONS.index(s["transition"])
-            a = ui.menu("Slide %d" % (app.cur + 1),
-                        ["Transition\t" + TRANS_NAMES[t], "Duplicate\tCtrl+D",
-                         "Move earlier\t[", "Move later\t]", "Delete\tDel"],
-                        ["trans_fade", "dup", "arrow_left", "arrow_right", "trash"],
-                        kinds=("", "", "", "", "danger"))
-            ui.popover()
-            if not alive:
-                self.menu = None
-            if a >= 0:
-                self.menu = None
-                if a == 0:
-                    self._set_slide("transition", D.TRANSITIONS[(t + 1) % 3])
-                    self.menu = "slide"
-                elif a == 1:
-                    self._deck_keys(4)
-                elif a in (2, 3):
-                    j = app.story.move_slide(app.cur, -1 if a == 2 else 1)
-                    if j is not None:
-                        app.cur = j
-                        app._focus = "Slide %d" % j
-                        self._edited()
-                else:
-                    self._delete_slide(app.cur)
-        elif m in ("colours", "bgcolours"):
-            alive = ui.popover("Colours", 300)
-            if m == "colours":
-                key, none = self.colour_key
-                o = self._obj()
-                cur = o.get(key) if o is not None else None
+        self.menu = None
+        if a == "trans":
+            t = D.TRANSITIONS.index(app.story.slides[app.cur]["transition"])
+            self._set_slide("transition", D.TRANSITIONS[(t + 1) % 3])
+            self.menu = "slide"
+        elif a == "dup":
+            j = app.story.duplicate_slide(app.cur)
+            if j is None:
+                app._say("A story holds %d slides" % D.MAX_SLIDES, "warn")
             else:
-                key, none = "bg", False
-                cur = self._slide_doc()["bg"]
-            cur = cur if isinstance(cur, int) else -1
-            a = ui.swatches("Colours", [D.COLOURS[c] for c in range(8)],
-                            cur if 0 <= cur < 8 else -1, {"id": "Colours 1"})
-            b = ui.swatches(" ", [D.COLOURS[c] for c in range(8, 16)],
-                            cur - 8 if cur >= 8 else -1, {"id": "Colours 2"})
-            pick = None
-            if a != (cur if 0 <= cur < 8 else -1) and a >= 0:
-                pick = a
-            if b != (cur - 8 if cur >= 8 else -1) and b >= 0:
-                pick = b + 8
-            if none and ui.button("None", "normal", {"id": "No colour"}):
-                pick = -1
-            ui.popover()
-            if not alive:
-                self.menu = None
-            if pick is not None:
-                self.menu = None
-                if m == "bgcolours":
-                    self._set_slide("bg", pick)
-                else:
-                    self._set(key, None if pick < 0 else pick)
-        _ = lay
+                app._focus = card_id(j)
+                self._edited()
+        elif a in ("earlier", "later"):
+            j = app.story.move_slide(app.cur, -1 if a == "earlier" else 1)
+            if j is not None:
+                app.cur = j
+                app._focus = card_id(j)
+                self._edited()
+        else:
+            self._delete_slide(app.cur)
+
+    def colours(self, key, none):
+        """The colours menu for `key` (the slide's "bg", else the chosen
+        object's), with None where `none`."""
+        self.menu = "colours"
+        self.colour_key = (key, none)
+        self.app._damage.all()
+
+    def colour_now(self):
+        """The colour the colours menu shows chosen: an index, -1 none."""
+        key, _none = self.colour_key or ("bg", False)
+        if key == "bg":
+            cur = self._slide_doc()["bg"]
+        else:
+            o = self._obj()
+            cur = o.get(key) if o is not None else None
+        return cur if isinstance(cur, int) else -1
+
+    def colour_pick(self, c):
+        """Colour `c` (-1 None) for what the colours menu sets."""
+        key, _none = self.colour_key or ("bg", False)
+        self.menu = None
+        if key == "bg":
+            self._set_slide("bg", c)
+        else:
+            self._set(key, None if c < 0 else c)
 
     def _toggle_snap(self):
         self.snap = not self.snap
         self.app._say("Snap " + ("on" if self.snap else "off"), "check")
+
 
     # -- Add a picture ---------------------------------------------------------------------------
 
@@ -1446,10 +1063,11 @@ class Editor:
         self.pic_mode = mode
         self.pics = None
         app.page = "pictures"
-        app._focus = None
-        app._damage.all()
+        app.owe()
 
-    def _scan_pictures(self):
+    def _scan_pictures(self, each=None):
+        """My Art's drawings, [(name, w, h)], each that reads handed to
+        `each(name, blob)` as well."""
         files = self.app._files
         names, err = files.list("drawings")
         out = []
@@ -1458,98 +1076,9 @@ class Editor:
             size = R._blob_size(blob) if blob else None
             if size is not None:
                 out.append((name, size[0], size[1]))
+                if each is not None:
+                    each(name, blob)
         self.pics = out
-
-    def _drop_thumbs(self):
-        for pic in self.thumbs.values():
-            R._moybuf.free(pic.rgb)
-        self.thumbs = {}
-
-    def _thumb(self, cv, name, w, h):
-        pic = self.thumbs.get(name)
-        if pic is None or pic.w != w or pic.h != h:
-            if pic is not None:
-                R._moybuf.free(pic.rgb)
-            blob, err = self.app._files.load("drawings", name)
-            pic = R.read_picture(cv, blob, w, h) if blob else None
-            if pic is None:
-                return None
-            self.thumbs[name] = pic
-        return pic
-
-    def _pictures(self, cv, th):
-        app = self.app
-        lay = app.layout
-        if self.pics is None:
-            self._scan_pictures()
-        x, y, w, _h = lay.row
-        ui.at(x + 16, y + 10, 300, 32)
-        tab = ui.tabs("Pictures", ("My Art", "Sprites"), self.pic_tab)
-        if tab != self.pic_tab:
-            self.pic_tab = tab
-            app._damage.all()
-        ui.at(*lay.row_rule)
-        ui.rule()
-        body = (x, y + lay.ROW + 1, w, lay.foot[1] - y - lay.ROW - 1)
-        f = app._focused or ""
-        pick = None
-        if self.pic_tab == 1:
-            ui.at(*body)
-            ui.empty("sprite", "No sprites here yet",
-                     ("A story takes My Art's drawings;", "sprites come later."))
-        elif not self.pics:
-            ui.at(*body)
-            ui.empty("art", "No drawings yet", ("Draw one in Paint, then put it",
-                                               "in your story from here."))
-        else:
-            ui.at(*body)
-            ui.scroll("pictures")
-            ui.grid("drawings", 152, 112, {"cols": 5, "margin": 20, "foot": 44, "top": 14})
-            for name, pw, ph in self.pics:
-                size = "%d × %d" % (pw, ph) if ui.has_symbols() else "%dx%d" % (pw, ph)
-                cx, cy, cw, ch, state = ui.card(_shown(name), size,
-                                                {"id": "Pic " + name})
-                if cw:
-                    fw = cw
-                    fh = cw * ph // pw
-                    if fh > ch:
-                        fh = ch
-                        fw = ch * pw // ph
-                    pic = self._thumb(cv, name, fw, fh)
-                    if pic is not None:
-                        cv.clip(*body)
-                        cv.blit565(pic.rgb, fw, fh, cx + (cw - fw) // 2, cy + (ch - fh) // 2)
-                        cv.clip()
-                if state & ui.ACTIVATED:
-                    pick = (name, pw, ph)
-            ui.grid()
-            ui.end()
-            ui.scroll()
-        chosen = None
-        if f.startswith("Pic "):
-            for p in self.pics or ():
-                if p[0] == f[4:]:
-                    chosen = p
-        ui.at(*lay.foot_rule)
-        ui.rule()
-        fx, fy, fw, fh = lay.foot
-        status = ""
-        if chosen is not None:
-            where = ("the background of slide %d" if self.pic_mode == "bg"
-                     else "it goes on slide %d, chosen") % (app.cur + 1)
-            status = _shown(chosen[0]) + app_dot() + where
-        ui.face("caption")
-        lh = ui.text_size("Ag")[1]
-        ui.face()
-        ui.at(fx + 26, fy + (fh - lh) // 2, fw - 200, lh + 2)
-        ui.label(status, {"tone": "dim", "face": "caption"})
-        ui.at(fx + fw - 16 - 76, fy + (fh - 32) // 2, 76, 32)
-        ui.icon("new")
-        if ui.button("Add", "primary", {"id": "Add picture", "disabled": chosen is None}) \
-                and chosen is not None:
-            pick = chosen
-        if pick is not None:
-            self._place(pick)
 
     def _place(self, pick):
         """Copy drawing `pick` into the story and put it on the slide (or
@@ -1576,7 +1105,6 @@ class Editor:
         self.added.append(img)
         app.images.forget(img)
         app.page = "slide"
-        self._drop_thumbs()
         if self.pic_mode == "bg":
             self._set_slide("bg", img)
             app._damage.all()
@@ -1634,6 +1162,11 @@ def _shown(name):
     """A file's name as words: "fish_tank" is "Fish tank"."""
     t = name.replace("_", " ")
     return t[:1].upper() + t[1:]
+
+
+def card_id(i):
+    """Slide `i`'s card in the sorter, as the page's focus names it."""
+    return "%d/edit_slide" % i
 
 
 def app_dot():

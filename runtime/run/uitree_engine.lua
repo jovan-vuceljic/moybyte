@@ -19,6 +19,7 @@ local LABELS, KEYMAP, DERIVED, stack, R = I.LABELS, I.KEYMAP, I.DERIVED, I.stack
 local fail, q, trace, frozen, fire, fire_fn = I.fail, I.q, I.trace, I.frozen, I.fire, I.fire_fn
 local fire_placed, event = I.fire_placed, I.event
 local build_page, touched, T = I.build_page, I.touched, I.T
+local reading = I.reading
 
 -- the engine's numbers (native/moy_uitree/moy_uitree.h)
 local BOOL, INT, NUM, TEXT, ENUM, ROWOF, MODEL = 1, 2, 3, 4, 5, 6, 7
@@ -30,7 +31,7 @@ local KINDS = { page = 1, group = 2, label = 3, info = 4, link = 5, button = 6, 
                 seg = 10, slider = 11, field = 12, empty = 13, progress = 14, text_view = 15, scroll = 16, menu = 17,
                 item = 18, split = 19, switch = 22, case = 23, table = 24, col = 25, foot = 26, popover = 30,
                 canvas = 20, tabs = 21, cards = 27, card = 28, row = 32, panel = 39, rule = 41, note = 42, grid = 43,
-                bubble = 44, month = 45, toast = 46 }
+                bubble = 44, month = 45, toast = 46, cells = 47, stepper = 48 }
 local BASE = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = ENUM, rowof = ROWOF, model = MODEL }
 local FIELD = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = TEXT }
 -- a prop whose value is a literal the dump prints as one (its Python repr)
@@ -51,6 +52,7 @@ local ROW_ACT = {}              -- a row's node's key -> the action it fires
 local DRAWS = {}                -- a canvas's node -> its draw
 local ROWS = false              -- the lowered page lists rows (whose keys are data)
 local POINTERS = {}             -- each canvas of the lowered page a pointer is routed to: { node, key, its pointer= action }
+local READS_OF = {}             -- a canvas's node -> the states its draw may read (reads=), a set
 local DRAWN = {}                -- a canvas's node -> { x, y, w, h, the frame that drew it there }
 local FRAMES = 0                -- the frames run
 local HELD = nil                -- the canvas a press started on, held until its release
@@ -274,7 +276,7 @@ local function c_key(n)
   if k == "page" then return "page" end
   if k == "button" or k == "link" then return n.o.arg ~= nil and n.action .. "/" .. tostring(n.o.arg) or n.action end
   if k == "item" or k == "card" then return n.action end
-  if k == "toggle" or k == "slider" or k == "field" or k == "seg" or k == "text_view" or k == "tabs" then return n.a[2] end
+  if k == "toggle" or k == "slider" or k == "field" or k == "seg" or k == "text_view" or k == "tabs" or k == "cells" then return n.a[2] end
   if k == "rows" or k == "table" or k == "cards" then return n.a[1] end
   if k == "switch" then return "switch:" .. n.a[1] end
   if k == "foot" then return "foot" end
@@ -293,6 +295,7 @@ local SHAPE = {
   link = { takes = { "value", "arg" }, last = function(n) return { pair("value", n.o.value or "") } end },
   button = { takes = { "kind" }, last = function(n) return { pair("kind", n.o.kind or "normal") } end },
   toggle = { bind = true, takes = { "label" }, last = function(n) return { pair("label", n.a[1]) } end },
+  cells = { bind = true },
   slider = { bind = true, takes = { "label", "lo", "hi" },
              last = function(n) return { pair("label", n.a[1]), pair("lo", n.o.lo), pair("hi", n.o.hi) } end },
   field = { bind = true, takes = { "label", "max", "commit" },
@@ -301,6 +304,7 @@ local SHAPE = {
   bubble = { last = function(n) return { pair("text", n.a[1]) } end },
   empty = { last = function(n) return { pair("title", n.a[1]) } end },
   toast = { last = function(n) return { pair("text", n.a[1]) } end },
+  stepper = { last = function(n) return { pair("value", n.a[1]) } end },
   note = { takes = { "lines", "icon" }, last = function(n) return { pair("lines", n.o.lines), pair("icon", n.o.icon or "") } end },
   dialog = { takes = { "buttons" }, last = function(n) return { pair("title", n.a[1]) } end },
   progress = { last = function(n) return { pair("value", n.a[1]) } end },
@@ -370,6 +374,11 @@ local function lower_node(n, parent, path, model)
   end
   if n.kind == "canvas" then
     DRAWS[me] = n.o.draw
+    if n.o.reads then
+      local r = {}
+      for _, name in ipairs(n.o.reads) do r[name] = true end
+      READS_OF[me] = r
+    end
     if n.o.pointer then POINTERS[#POINTERS + 1] = { me, key, n.o.pointer } end
   end
   if n.action then check(X:node_action(me, AIDX[n.action]), "ui." .. n.kind .. " " .. q(key) .. "'s action", n.at) end
@@ -410,7 +419,7 @@ local function anchors(n)
 end
 
 local function lower(p)
-  KEYS, ROW_ACT, ROWS, DRAWS, POINTERS, HELD, DRAWN = {}, {}, false, {}, {}, nil, {}
+  KEYS, ROW_ACT, ROWS, DRAWS, POINTERS, HELD, DRAWN, READS_OF = {}, {}, false, {}, {}, nil, {}, {}
   X:build_begin(string.format("%d %s", #stack, p.def.name):sub(1, 31))
   lower_node(p.root, -1, p.def.name)
   check(X:build_end(), "the page " .. q(p.def.name), p.def.at)
@@ -427,13 +436,17 @@ local function made()
     if f then
       local r = DRAWN[node]
       if r then r[1], r[2], r[3], r[4], r[5] = x, y, w, h, FRAMES else DRAWN[node] = { x, y, w, h, FRAMES } end
+      local ok, err
+      reading(READS_OF[node])
       if m >= 0 and ri >= 0 then             -- a canvas in a rows' body: handed its row
         local model = V[NAMES[m]]
         local row = model.rows[ri + 1]
-        f(x, y, w, h, frozen(row, "row " .. q(row[model.key]) .. " of " .. q(model.name), model.ty))
+        ok, err = pcall(f, x, y, w, h, frozen(row, "row " .. q(row[model.key]) .. " of " .. q(model.name), model.ty))
       else
-        f(x, y, w, h)
+        ok, err = pcall(f, x, y, w, h)
       end
+      reading(nil)
+      if not ok then error(err, 0) end
     end
   end)
   declare()
