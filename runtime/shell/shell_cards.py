@@ -1024,7 +1024,7 @@ class SystemMenuUI:
         cv = ws.sys_canvas
         th = ws.theme_colors
         desk = _desk_class()
-        drop = 2 * (1 if desk else ws.layout.fs)
+        drop = _ui_draw.modal_drop(cv)
         _ui_draw.modal(cv, th, (x, y, w, h - drop), desk)
         m.comp.draw(cv, (x, y, w, h - drop))
         strip = self.about._strip()

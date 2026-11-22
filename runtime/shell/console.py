@@ -2021,8 +2021,7 @@ class Workstation:
         if opened is not None:
             opened()                  # first: its size counts what it found (a scan)
         w, h = comp.size()
-        desk = self.metric_class == _layout_base.DESK
-        h += 2 if desk else 2 * self.layout.fs   # the card's drop
+        h += _ui_draw.modal_drop(self.sys_canvas)   # the card's drop
         w = min(max(w, _POPUP_W * m.fs), self.sys_canvas.w)
         self._place_popover(widget, w, h)
         m.show_component(comp, widget, (w, min(h, self.popover_room())))

@@ -1824,9 +1824,9 @@ A change that stays inside the panel -- it opened, a row moved, it closed --
 does not mark the frame dirty: the WM owes the popover's rect to each of the
 root's real buffers (`RETAINED_FRAMES`; one on a persistent root, so the
 Guition P4 pays one frame), and such a frame draws the popover's layers
-alone over the retained one, its rect the frame's damage: a component's
-card with the rows its drop reaches below it at the font scale
-(`WindowOverlays._pop_rect`, `ui_draw.modal_drop`). Before the
+alone over the retained one, its rect the frame's damage: the panel's
+rect, which holds a component's card and the rows its drop reaches below
+it at the font scale (`WindowOverlays._pop_rect`, `ui_draw.modal_drop`). Before the
 panel's first paint the pixels under it are snapshotted; a close puts them
 back into each buffer. Two snapshot slots, because a popover may open while
 the last one's restore is still owed. A frame that does repaint (a dirty
