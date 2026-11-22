@@ -498,6 +498,9 @@ WIFI_DIALOG_BAND = ("under the password dialog the old popover's band still name
                     "(Join, Close); the port's names the dialog's (Connect, Cancel), as Settings' "
                     "page always did")
 
+POPOVER_DROP = ("at font scale 2 the old close put back the card's rect alone, which held 2 of its "
+                "drop's 4 rows: the desk kept the rest as a line; the close puts the whole drop back")
+
 WIFI_RING_IN_VIEW = ("the old popover drew its menu with no page, so focus on its last row, Scan "
                      "again, left the ring's reach under the card's foot; the port's page keeps "
                      "it in view, the rows 2 px higher. " + WIFI_OWN_HINT)
@@ -579,7 +582,7 @@ RUNS = (
     ("wifi_popover-desk", "wifi_popover", "p4_1024x600_fs2_windowed",
      ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abc", "enter", "f:2", "k:down", "k:a", "f:2", "back"],
      {5: WIFI_DIALOG_BAND, 6: WIFI_DIALOG_BAND, 9: WIFI_RING_IN_VIEW, 10: WIFI_RING_IN_VIEW,
-      11: WIFI_RING_IN_VIEW}),
+      11: WIFI_RING_IN_VIEW, 12: POPOVER_DROP}),
     ("wifi_popover-tdeck", "wifi_popover", "tdeck_320x240_fs1_dark",
      ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abc", "enter", "f:2", "back"]),
     # the web console's page: the QR its canvas draws beside the address, the

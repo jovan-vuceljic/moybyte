@@ -3474,6 +3474,10 @@ int moy_ui_modal_band(int fs, int desk) {
     return (m != NULL && slot < n ? m[slot] : 0) * (fs < 1 ? 1 : fs);
 }
 
+int moy_ui_modal_drop(int fs) {
+    return MOY_UI_DROP * (fs < 1 ? 1 : fs);
+}
+
 int moy_ui_modal_round(int fs, int desk) {
     const moy_ui_depth_t *dp = moy_ui_depth();
     return (dp->card_r < (desk ? 12 : 8) ? dp->card_r : (desk ? 12 : 8)) * (fs < 1 ? 1 : fs);
@@ -3495,7 +3499,7 @@ int moy_ui_modal(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t title, in
               pal(&d, tok(&d, MOY_UI_T_INK, MOY_UI_T_INK)));
     } else {
         int dk = dark(&d);
-        rrect(&d, b.x, b.y + MOY_UI_DROP * d.fs, b.w, b.h, r, 1, mix(ground(&d), 0, dk ? 115 : 31),
+        rrect(&d, b.x, b.y + moy_ui_modal_drop(d.fs), b.w, b.h, r, 1, mix(ground(&d), 0, dk ? 115 : 31),
               0, 0);
         edge = mix(edge, pal(&d, dk ? tok(&d, MOY_UI_T_INK, MOY_UI_T_INK)
                                     : tok(&d, MOY_UI_T_INK_DIM, MOY_UI_T_INK)), dk ? 77 : 51);

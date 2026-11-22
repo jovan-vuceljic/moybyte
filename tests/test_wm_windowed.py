@@ -3136,8 +3136,8 @@ class _Ring:
         return list(self.bufs)
 
 
-def _popover_desk(tmp_path, game=False):
-    ws = build_desktop_ws(tmp_path, font_scale=1, panel_diagonal_in=7.0)
+def _popover_desk(tmp_path, game=False, fs=1):
+    ws = build_desktop_ws(tmp_path, font_scale=fs, panel_diagonal_in=7.0)
     use_theme(ws, "night", "dark")
     drv = _drv(ws)
     ws.bar_layer.clock_text = lambda: "00:00"
@@ -3272,10 +3272,10 @@ def test_a_popover_change_paints_its_rect_alone(tmp_path):
     for step, marks in ((lambda: ws.widget_tap("battery"), [win]),
                         (lambda: ws.sysmenu_layer.handle_input(_Key("down")), []),
                         (lambda: ws.widget_tap("battery"), [win])):
-        rect = ws.sysmenu.panel_rect() if ws.sysmenu.open else None
+        rect = ws.wm._pop_rect() if ws.sysmenu.open else None    # the card's drop with it
         damage.clear()
         step()
-        rect = rect or ws.sysmenu.panel_rect()
+        rect = rect or ws.wm._pop_rect()
         assert ring.settle(drv) == ["pop"]
         assert sorted(damage) == sorted(marks + [rect])
     assert ring.settle(drv) == []                     # idle: no frame at all
@@ -3305,13 +3305,15 @@ def test_a_component_popovers_card_repaints_over_what_it_covers(tmp_path):
     assert seen == [card(b) for b in ring.full(drv)]
 
 
-def test_a_popover_is_pixel_identical_in_every_buffer(tmp_path):
+@pytest.mark.parametrize("fs", (1, 2))
+def test_a_popover_is_pixel_identical_in_every_buffer(tmp_path, fs):
     """On a triple-buffered root, after the popover opens, moves and closes,
     every buffer equals a full repaint of the same state: the focused window
     under it shown without its focus mark while the popover holds the keys
-    (one a screen), with it again once it closes."""
+    (one a screen), with it again once it closes. At font scale 2 a card's
+    drop is twice as deep, and its close puts all of it back."""
     for name in ("clock", "wifi", "menu"):
-        ws, drv = _popover_desk(tmp_path / name)
+        ws, drv = _popover_desk(tmp_path / name, fs=fs)
         ring = _Ring(ws, 3)
         for _ in range(3):
             ws.mark_dirty()

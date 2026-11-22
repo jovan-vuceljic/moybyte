@@ -394,6 +394,9 @@ def install(m, lib, tokens):
     def modal_band(fs, desk):
         return int(lib.moy_ui_modal_band(int(fs), 1 if desk else 0))
 
+    def modal_drop(fs):
+        return int(lib.moy_ui_modal_drop(int(fs)))
+
     def modal(cv, look, rect, fs, desk):
         t, keep = span("")
         _check(lib.moy_ui_modal(c.byref(sink(cv, look)), box_of(rect), t, int(fs), int(desk), 0))
@@ -512,7 +515,7 @@ def install(m, lib, tokens):
     for f in (row, cell, label, bar_rect, scrollbar, fill_uncovered, fade,
               button, button_x, chip, tab_rects, tab, status, hints, game_btn, game_icon_btn,
               mini_btn, toolbar, paint, frame, frame_band, frame_geom, bar_part,
-              scrim, scrim_alpha, tile, unlock, rec, modal, modal_band, month_h, perf,
+              scrim, scrim_alpha, tile, unlock, rec, modal, modal_band, modal_drop, month_h, perf,
               frame_under, frame_under_fill, frame_under_onto, cast, dialog, text_field, panel,
               focus, current,
               marks, mark_reach, inset, cut,

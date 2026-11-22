@@ -1900,6 +1900,12 @@ static mp_obj_t ui_modal_band(mp_obj_t fs, mp_obj_t desk) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(ui_modal_band_obj, ui_modal_band);
 
+// modal_drop(fs) -> how far a modal card's drop reaches below it (moy_ui_modal_drop)
+static mp_obj_t ui_modal_drop(mp_obj_t fs) {
+    return MP_OBJ_NEW_SMALL_INT(moy_ui_modal_drop(num(fs)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(ui_modal_drop_obj, ui_modal_drop);
+
 // modal(cv, look, rect, fs, desk): a system card, flat (moy_ui_modal)
 static mp_obj_t ui_modal(size_t n_args, const mp_obj_t *a) {
     (void)n_args;
@@ -3256,6 +3262,7 @@ static const mp_rom_map_elem_t moy_ui_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_modal), MP_ROM_PTR(&ui_modal_obj) },
     { MP_ROM_QSTR(MP_QSTR_month_h), MP_ROM_PTR(&ui_month_h_obj) },
     { MP_ROM_QSTR(MP_QSTR_modal_band), MP_ROM_PTR(&ui_modal_band_obj) },
+    { MP_ROM_QSTR(MP_QSTR_modal_drop), MP_ROM_PTR(&ui_modal_drop_obj) },
     { MP_ROM_QSTR(MP_QSTR_perf), MP_ROM_PTR(&ui_perf_obj) },
     { MP_ROM_QSTR(MP_QSTR_frame_band), MP_ROM_PTR(&ui_frame_band_obj) },
     { MP_ROM_QSTR(MP_QSTR_dialog), MP_ROM_PTR(&ui_dialog_obj) },

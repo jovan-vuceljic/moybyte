@@ -1,6 +1,7 @@
 # Map (grep -n a name to jump there):
 #   WindowOverlays                     the mixin WindowedWM's overlays live on
 #   WindowOverlays.popover_changed     the popover opened, moved or closed: its debts
+#   WindowOverlays._pop_rect           the rect the open popover paints, its drop's reach in it
 #   WindowOverlays.pause_changed       the pause menu came or went: its debts
 #   WindowOverlays._pop_wash_changed   the riding scrim's debts
 #   WindowOverlays._pop_restore        put back what a closed popover covered
@@ -66,7 +67,7 @@ class WindowOverlays:
             self.ws.mark_dirty()
         slots = self._pop_slots
         cur = self._pop_cur
-        rect = self.ws.menu_ui.panel_rect() if m.open else None
+        rect = self._pop_rect() if m.open else None
         if cur is not None and slots[cur][1] != rect:
             slots[cur][2] = n             # closing (or moved): restore owed
             cur = self._pop_cur = None
@@ -88,6 +89,16 @@ class WindowOverlays:
             s[3] = False
             cur = self._pop_cur = j
         slots[cur][2] = n
+
+    def _pop_rect(self):
+        """The rect the open popover paints and its close puts back: the
+        menu's card with its shadow's reach (`panel_rect`), or a component's
+        card with the rows its drop reaches below it at the font scale."""
+        ws = self.ws
+        x, y, w, h = ws.menu_ui.panel_rect()
+        if ws.sysmenu.comp is not None:
+            h = min(h + _ui_draw.modal_drop(ws.sys_canvas), ws.sys_canvas.h - y)
+        return (x, y, w, h)
 
     def popover_owed(self):
         """True while a retained buffer is owed the popover's rect."""
@@ -409,7 +420,7 @@ class WindowOverlays:
         if fresh:
             # Taken at its rect as it is now: a card that grew (the networks
             # a scan found) repainted the frame whole at its new size.
-            s[1] = self.ws.menu_ui.panel_rect()
+            s[1] = self._pop_rect()
             if not self._pop_capture(s):
                 self.ws.menu_ui._draw_sysmenu()
                 return
@@ -450,7 +461,7 @@ class WindowOverlays:
         ws.menu_ui._draw_sysmenu()
         moving = ws.frame_requested
         ws.frame_requested = asked
-        if moving and ws.menu_ui.panel_rect() != r:
+        if moving and self._pop_rect() != r:
             # It sized itself again (the networks a scan found): the next
             # frame repaints whole, its snapshot taken at the new rect.
             ws.frame_requested = True
