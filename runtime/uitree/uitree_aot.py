@@ -104,9 +104,17 @@ def bare(blob):
 def pack(blob):
     """`blob` as a frozen entry holds it: its header as it is, the rest
     raw-deflated with a window of 2**WBITS bytes (made on the host)."""
-    import zlib
-    c = zlib.compressobj(9, zlib.DEFLATED, -WBITS)
-    return blob[:32] + c.compress(blob[32:]) + c.flush()
+    try:
+        import deflate
+    except ImportError:             # CPython
+        import zlib
+        c = zlib.compressobj(9, zlib.DEFLATED, -WBITS)
+        return blob[:32] + c.compress(blob[32:]) + c.flush()
+    import io
+    dst = io.BytesIO()
+    with deflate.DeflateIO(dst, deflate.RAW, WBITS) as z:
+        z.write(blob[32:])
+    return blob[:32] + dst.getvalue()
 
 
 def unpack(packed):
