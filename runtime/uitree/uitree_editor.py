@@ -149,8 +149,8 @@ class Engine(uitree_app.Engine):
     def idle_step(self):
         if self.legacy_moved():
             self._damage.all()
-            return
-        uitree_app.Engine.idle_step(self)
+            return True
+        return uitree_app.Engine.idle_step(self)
 
     #
     # A page that hosts a surface still drawn with today's verbs draws in

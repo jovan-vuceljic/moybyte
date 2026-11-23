@@ -148,10 +148,13 @@ class Engine(S.Builder):
 
     def idle_step(self):
         """A frame with nothing to paint: one owed picture decoded, the card
-        showing it from the next frame (every gen moves)."""
+        showing it from the next frame (every gen moves). Answers whether
+        one landed."""
         if self.pics is not None and self.pics.idle_step():
             self._x.pics_moved()
             self._damage.all()
+            return True
+        return False
 
     def _posts(self):
         if not self.decl.posts:
@@ -427,6 +430,7 @@ class App(AppLayer):
         # a flowing page's scrolls take shift frames; a placed one's band loses its key caps under a gen
         self.engine = eng(S.decl_of(S.module_of(build)), build, ctx.ui, ctx.surface, ctx.damage,
                           getattr(ctx, "files", None), gen=not eng.PLACED, env=ctx)
+        self._landed = False    # a picture landed since the page drew
 
     def is_app(self, cart):
         return bool(self.IS_APP and self.IS_APP[0](cart))
@@ -442,6 +446,7 @@ class App(AppLayer):
         self.engine.close()
 
     def draw(self, dt):
+        self._landed = False
         cv = self._surf.canvas()
         th = self._theme.colors()
         desk = metric_class() == DESK
@@ -464,9 +469,10 @@ class App(AppLayer):
         return self.engine._ui
 
     def moved(self):
-        """The page owes a frame (its band drawn before its focus landed): a
-        window behind draws it again too."""
-        return self.engine.owes
+        """The page owes a frame (its band drawn before its focus landed, or
+        a picture it waited for landed since): a window behind draws it
+        again too."""
+        return self.engine.owes or self._landed
 
     def has_page(self):
         return bool(self.engine.has_page())
@@ -483,7 +489,8 @@ class App(AppLayer):
         return self.engine.view_owed
 
     def idle_step(self):
-        self.engine.idle_step()
+        if self.engine.idle_step():
+            self._landed = True
 
 
 def env():
