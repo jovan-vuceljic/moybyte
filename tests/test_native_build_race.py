@@ -44,3 +44,26 @@ def test_concurrent_builds_of_one_library_share_one_result(tmp_path):
     paths = {out.strip() for out, _ in outs}
     assert len(paths) == 1 and os.path.exists(paths.pop())
     assert [f for f in os.listdir(cache) if f.endswith(".tmp")] == []
+
+
+def test_a_build_prunes_the_cache_past_its_newest_and_its_last_day(tmp_path):
+    """Every worktree shares one cache, and each change to the C builds a new
+    library: the old ones go once they are past the newest few and a day old."""
+    import os
+    import native_build
+    now = 1_000_000_000.0
+    for i in range(6):
+        so = tmp_path / ("moyhost-%02d.so" % i)
+        so.write_bytes(b"x")
+        (tmp_path / ("moyhost-%02d.so.lock" % i)).write_bytes(b"")
+        (tmp_path / ("moyhost-%02d.src" % i)).mkdir()
+        age = 3 * 86400 if i < 4 else 60          # 0-3 old, 4-5 fresh
+        os.utime(so, (now - age + i, now - age + i))
+    (tmp_path / "other-00.so").write_bytes(b"x")
+    os.utime(tmp_path / "other-00.so", (0, 0))
+    native_build.prune("moyhost", str(tmp_path), keep=3, age=86400, now=now)
+    left = sorted(p.name for p in tmp_path.iterdir())
+    assert left == ["moyhost-03.so", "moyhost-03.so.lock", "moyhost-03.src",
+                    "moyhost-04.so", "moyhost-04.so.lock", "moyhost-04.src",
+                    "moyhost-05.so", "moyhost-05.so.lock", "moyhost-05.src",
+                    "other-00.so"], left
