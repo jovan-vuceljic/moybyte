@@ -1066,7 +1066,7 @@ int moy_ui_prose(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t t, int ro
                  int y0, int y1, int fs, int desk, int draw, int *pitch);
 // An empty page's head (ui.empty), centred across b from its top: icon `slot`
 // (else `glyph`) on a disc of `value` mixed into the ground (`surface_alt` in
-// a dark look), `title` in the title role, then `lines` (NUL-separated, `n`
+// a dark look; neither, -1 both: no disc, the title at the top), `title` in the title role, then `lines` (NUL-separated, `n`
 // bytes) in the caption role's dim ink, each centred. The height it takes,
 // to a line's pitch under the last, drawn where `draw`.
 int moy_ui_empty(const moy_ui_sink_t *s, moy_ui_box_t b, int slot, int glyph, moy_ui_span_t title,

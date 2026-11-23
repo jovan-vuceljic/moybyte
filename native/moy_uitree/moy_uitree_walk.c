@@ -3085,6 +3085,7 @@ static int foot_of(uit_t *e)
 }
 
 static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
+static int32_t empty_controls_h(uit_t *e, int k, int model, int row);
 static void empty_controls(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
                            int32_t x, int32_t w, int32_t y);
 static int32_t natural(uit_t *e, int k, int model, int row, int32_t h);
@@ -4330,10 +4331,30 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         }
         int32_t m[4] = {c->has_at ? c->at.x : c->page.x, 0, c->has_at ? c->at.w : c->page.w, 0};
         // on the desk a sixth of the page down, as its column of words
+        // on the desk a sixth of the page down, as its column of words, as far as the room under
+        // it holds what it says and its controls; where they run past the view even at the
+        // top, no disc (an empty icon)
         int32_t ev[5];
-        if ((e->flags & UIT_F_DESK) && moy_ui_api_view(c, ev) && ev[0] == 0)
-            moy_ui_api_space(c, e->rect[3] / 6);
-        int32_t y = moy_ui_api_empty(c, s, ni ? sspan(e, ai, ni) : span_of("warn", 4), sspan(e, a1, n1),
+        moy_ui_span_t icon = ni ? sspan(e, ai, ni) : span_of("warn", 4);
+        if (moy_ui_api_view(c, ev)) {
+            moy_ui_box_t mb = {0, 0, (int16_t)ev[3], 0};
+            moy_ui_span_t t = sspan(e, a1, n1);
+            const uint8_t *lp = (const uint8_t *)(lines.p ? lines.p : "");
+            int desk = (e->flags & UIT_F_DESK) ? MOY_UI_DESK : 0;
+            int32_t need = moy_ui_empty(s, mb, 0, -1, t, lp, lines.n, e->fs, desk, 0)
+                           + empty_controls_h(e, k, model, row);
+            int32_t room = ev[2] - ev[0];
+            if (need > room) {
+                icon = span_of("", 0);
+                need = moy_ui_empty(s, mb, -1, -1, t, lp, lines.n, e->fs, desk, 0)
+                       + empty_controls_h(e, k, model, row);
+            }
+            int32_t sp = e->rect[3] / 6;
+            sp = sp < room - need ? sp : room - need;
+            if (desk && ev[0] == 0 && sp > 0)
+                moy_ui_api_space(c, sp);
+        }
+        int32_t y = moy_ui_api_empty(c, s, icon, sspan(e, a1, n1),
                                      (const uint8_t *)(lines.p ? lines.p : ""), lines.n);
         uit_buf_free(&lines);
         empty_controls(e, c, s, k, model, row, m[0], m[2], y);
@@ -4378,6 +4399,22 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         break;
     }
     }
+}
+
+// The height an empty's controls take under what it says (empty_controls').
+static int32_t empty_controls_h(uit_t *e, int k, int model, int row)
+{
+    int desk = (e->flags & UIT_F_DESK) != 0, mn;
+    int32_t hh = (moy_ui_metrics(MOY_UI_K_VALUE_ROW, &mn)[desk ? 17 : 16] + 4) * e->fs, h = 0;
+    KIDS(k, c2) {
+        const uit_node_t *N = NODE(c2);
+        if (!uit_shown(e, c2, model, row))
+            continue;
+        if (N->act >= 0 && !uit_act_can(e, N->act, model, row) && e->acts[N->act].off != 2)
+            continue;
+        h += hh + row_gap(e) * e->fs;
+    }
+    return h;
 }
 
 // An empty's controls under what it says (from y), each its natural width and a value row

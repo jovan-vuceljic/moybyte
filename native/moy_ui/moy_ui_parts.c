@@ -1802,7 +1802,8 @@ int moy_ui_empty(const moy_ui_sink_t *s, moy_ui_box_t b, int slot, int glyph, mo
     open_pd(s, &d, fs, desk);
     int sc = tscale(s);
     int k = d.fs;
-    int dd = (d.desk ? 72 : 52) * k;
+    int disc = slot >= 0 || glyph >= 0;
+    int dd = disc ? (d.desk ? 72 : 52) * k : 0;
     pf_t ft = font_of(&d, MOY_UI_FONT_TITLE), fl = font_of(&d, MOY_UI_FONT_CAPTION);
     // baselines: the title's under the disc, then a line's each pitch
     int tb = b.y + dd + (d.desk ? 32 : 22) * k;
@@ -1820,11 +1821,13 @@ int moy_ui_empty(const moy_ui_sink_t *s, moy_ui_box_t b, int slot, int glyph, mo
     }
     uint16_t g = ground(&d);
     int v = tok(&d, MOY_UI_T_VALUE, MOY_UI_T_ACCENT);
-    uint16_t disc = dark(&d) ? pal(&d, tok(&d, MOY_UI_T_SURFACE_ALT, MOY_UI_T_SURFACE))
-                             : mix(g, pal(&d, v), 26);
-    moy_ui_box_t db = {(int16_t)(b.x + (b.w - dd) / 2), b.y, (int16_t)dd, (int16_t)dd};
-    rrect(&d, db.x, db.y, db.w, db.h, dd / 2, 1, disc, 0, 0);
-    icon_d(&d, slot, glyph, db, v);
+    uint16_t ink = dark(&d) ? pal(&d, tok(&d, MOY_UI_T_SURFACE_ALT, MOY_UI_T_SURFACE))
+                            : mix(g, pal(&d, v), 26);
+    if (disc) {
+        moy_ui_box_t db = {(int16_t)(b.x + (b.w - dd) / 2), b.y, (int16_t)dd, (int16_t)dd};
+        rrect(&d, db.x, db.y, db.w, db.h, dd / 2, 1, ink, 0, 0);
+        icon_d(&d, slot, glyph, db, v);
+    }
     centred_cut(&d, &ft, title, b.x, b.w, tb - ft.ascent * sc, ft.line * sc, b.w,
                 pal(&d, tone_ink(&d, MOY_UI_TONE_INK)), sc);
     uint16_t dim = pal(&d, tone_ink(&d, MOY_UI_TONE_DIM));
