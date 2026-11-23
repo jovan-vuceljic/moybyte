@@ -264,7 +264,7 @@ static int32_t car_slide(moy_ui_ctx_t *c, moy_ui_keep_t *kp, int32_t offset, int
 }
 
 static int32_t car_motion(moy_ui_ctx_t *c, moy_ui_keep_t *kp, int st, int focused, int count, int rh,
-                          int ext, int32_t offset, int *cur, int *opened) {
+                          int ext, int32_t offset, int32_t *cur, int *opened) {
     moy_ui_scroll_t *sc = &kp->sc;
     int app = c->car.app;
     kp->car = 1;
