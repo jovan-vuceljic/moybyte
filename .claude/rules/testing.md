@@ -77,9 +77,11 @@ paths:
   it found it: `tests/test_p4_on_glass.py` (`MOYBYTE_P4_PORT`),
   `tests/test_tdeck_on_glass.py` (`MOYBYTE_TDECK_PORT`),
   `tests/test_guition_on_glass.py` (`MOYBYTE_GUITION_PORT`),
-  `tests/test_guition_p4_on_glass.py` (`MOYBYTE_GUITION_P4_PORT`), over
+  `tests/test_guition_p4_on_glass.py` (`MOYBYTE_GUITION_P4_PORT`),
+  `tests/test_elecrow_p4_on_glass.py` (`MOYBYTE_ELECROW_P4_PORT`), over
   `P4Board` and the shared `tests/on_glass.py` fixture, which RESETS the
-  Waveshare P4 and ATTACHES to the others as they are. `tools/board.py pass`
+  Waveshare and Elecrow P4s (external UART bridges) and ATTACHES to the others
+  as they are. `tools/board.py pass`
   builds, flashes and runs them in one command, and finds each board's suite
   and variable in these files (`on_glass.gate(...)` and the board dir its
   session opens); `tests/test_board_pass.py` pins one suite per console board.

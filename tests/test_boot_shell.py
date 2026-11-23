@@ -28,6 +28,7 @@ BOARDS = {
     "esp32_p4_wifi6_touch_lcd_7b": "moybyte_shell",
     "guition_jc3248w535": "guition_smoke",
     "guition_jc8012p4a1c": "guition_p4_smoke",
+    "elecrow_crowpanel_p4_10_1": "moybyte_shell",
 }
 
 

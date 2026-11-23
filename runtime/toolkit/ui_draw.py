@@ -170,8 +170,10 @@ def font_v2(fid):
 
 def use_hero(fid):
     """Draw the handheld home's title in font `fid` (a `font_load` id; 0:
-    the `title` role's), a face of the look's type (`fontset.ROLES`)."""
+    the `title` role's), a face of the look's type (`fontset.ROLES`): the
+    toolkit's `hero` role, a carousel's title (`ui.cards(look="carousel")`)."""
     _HERO[0] = fid
+    _C.use_font("hero", fid)
 
 
 def use_font(role, fid):

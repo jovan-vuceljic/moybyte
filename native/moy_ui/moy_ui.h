@@ -179,12 +179,16 @@ enum {
     MOY_UI_FONT_UI = 0, MOY_UI_FONT_TITLE = 1, MOY_UI_FONT_MONO = 2, MOY_UI_FONT_CAPTION = 3,
     MOY_UI_FONT_KEY = 4, MOY_UI_FONT_OP = 5, MOY_UI_FONT_RESULT = 6
 };
-// Past the theme's roles, the console's own two: the tap floor's (MOY_UI_TAP)
+// Past the theme's roles, the console's own three: the tap floor's (MOY_UI_TAP)
 // body and caption faces, a bubble's words and head on a 3.5-inch glass read
 // at arm's length (the console installs them where the floor stands, from
-// the look's family: fontset.TAP_ROLES). Uninstalled, each draws in `ui`'s
-// and `caption`'s.
-enum { MOY_UI_FONT_TAP_UI = MOY_THEME_FONT_ROLES, MOY_UI_FONT_TAP_CAPTION, MOY_UI_FONT_ROLES };
+// the look's family: fontset.TAP_ROLES), and the hero face a carousel's title
+// draws in (`ui_draw.use_hero`). Uninstalled, each draws in `ui`'s, `caption`'s
+// and `title`'s.
+enum {
+    MOY_UI_FONT_TAP_UI = MOY_THEME_FONT_ROLES, MOY_UI_FONT_TAP_CAPTION, MOY_UI_FONT_HERO,
+    MOY_UI_FONT_ROLES
+};
 // Install `font` (an id moy_font_load gave, or 0 for petme128) for `role`:
 // 1, or 0 for an unknown role or font, which installs nothing.
 int moy_ui_font_use(int role, uint32_t font);

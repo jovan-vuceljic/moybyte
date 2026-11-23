@@ -61,6 +61,7 @@ PORTED = (
     "uitree_grid",
     "uitree_model_row",
     "uitree_cards_pics",
+    "uitree_carousel",
     "uitree_cards_drawn",
     "uitree_foot_grey",
     "uitree_band_status",
@@ -77,6 +78,9 @@ PORTED = (
     "storybook_app",
     "terminal_app",
     "text_console",
+    "uitree_wrap_row",
+    "uitree_sizes",
+    "home_ui",
 )
 
 

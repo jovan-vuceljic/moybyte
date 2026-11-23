@@ -13,7 +13,10 @@ function of its module's code alone, and the variant key is empty (`VARIANT`).
 blob builds on the device as before. The frozen module holds each blob with
 its front already read (`entry`), every part of it a constant: a frozen
 constant is ROM on a board, where reading the blob's front would allocate
-a string a name, and the dicts a load binds by are made by the load.
+a string a name, and the dicts a load binds by are made by the load. The
+blob itself is held packed (`pack`): its header as it is, the rest
+raw-deflated, about a third of its bytes, inflated by the load
+(`unpack`) into the one buffer the store is copied from.
 """
 
 import sys
@@ -21,6 +24,7 @@ import sys
 import uitree as S
 
 VARIANT = ""
+WBITS = 11          # a packed blob's deflate window: 2**WBITS bytes, what `unpack` allocates beside the blob
 
 try:
     from uitree_pages import PAGES as BLOBS       # staged with the image, frozen beside it
@@ -64,9 +68,9 @@ def entry(blob):
     their type codes, action names, (node, draw) pairs, (node, ground)
     pairs, the rest of the front end's literals (`CEngine.front`), the
     slots' orders (`orders`)), every part a constant made on the host, so
-    an image keeps it in flash (`constant`)."""
+    an image keeps it in flash (`constant`), the blob packed (`pack`)."""
     f = front_of(blob)
-    return (bare(blob), tuple(f["S"]), f["T"], tuple(f["A"]), tuple(sorted(f["D"].items())),
+    return (pack(bare(blob)), tuple(f["S"]), f["T"], tuple(f["A"]), tuple(sorted(f["D"].items())),
             tuple(sorted(f["G"].items())), f["X"], f["O"])
 
 
@@ -95,6 +99,50 @@ def bare(blob):
         h = ((h ^ c) * 16777619) & 0xffffffff
     _put32(out, 16, h)
     return bytes(out)
+
+
+def pack(blob):
+    """`blob` as a frozen entry holds it: its header as it is, the rest
+    raw-deflated with a window of 2**WBITS bytes (made on the host)."""
+    try:
+        import deflate
+    except ImportError:             # CPython
+        import zlib
+        c = zlib.compressobj(9, zlib.DEFLATED, -WBITS)
+        return blob[:32] + c.compress(blob[32:]) + c.flush()
+    import io
+    dst = io.BytesIO()
+    with deflate.DeflateIO(dst, deflate.RAW, WBITS) as z:
+        z.write(blob[32:])
+    return blob[:32] + dst.getvalue()
+
+
+def unpack(packed):
+    """A packed blob (`pack`) whole again: one buffer of the length its
+    header names, filled as it inflates."""
+    n = _u32(packed, 20)
+    try:
+        import deflate
+    except ImportError:             # CPython
+        import zlib
+        out = packed[:32] + zlib.decompress(packed[32:], -WBITS)
+        got = len(out)
+    else:
+        import io
+        src = io.BytesIO(packed)
+        src.seek(32)
+        out = bytearray(n)
+        out[:32] = packed[:32]
+        mv = memoryview(out)
+        got, z = 32, deflate.DeflateIO(src, deflate.RAW, WBITS)
+        while got < n:
+            k = z.readinto(mv[got:])
+            if not k:
+                break
+            got += k
+    if got != n:
+        raise Refused("a packed blob that does not inflate to its length")
+    return out
 
 
 def tables(f):
@@ -202,16 +250,18 @@ def load(eng, x, blob):
         f = {"S": blob[1], "T": blob[2], "A": blob[3], "D": dict(blob[4]), "G": dict(blob[5]),
              "X": blob[6], "O": blob[7]}
         blob = blob[0]
+        packed = True
     else:
         f = front_of(blob)
-    _load(eng, x, blob, f, tables(f))
+        packed = False
+    _load(eng, x, blob, packed, f, tables(f))
 
 
 # a scalar's store type, by the type object (`ctype` for the rest)
 _SCALAR = {S.BOOL: 1, S.INT: 2, S.NUM: 3, S.TEXT: 4}
 
 
-def _load(eng, x, blob, f, tb):
+def _load(eng, x, blob, packed, f, tb):
     """The compiler proved the blob against the module it was made from; the
     load binds each name in one pass, the lookups the engine needs anyway
     refusing what this module lacks or types otherwise."""
@@ -247,7 +297,7 @@ def _load(eng, x, blob, f, tb):
         if fn is None:
             raise Refused("canvas %d: no draw %r in %s" % (node, name, mod.__name__))
         draws[node] = fn
-    r = x.load(blob, eng._page_id(), VARIANT)
+    r = x.load(unpack(blob) if packed else blob, eng._page_id(), VARIANT)
     if r < 0:
         raise Refused(x.error())
     eng._slot, eng._aidx = slot, aidx
@@ -257,8 +307,6 @@ def _load(eng, x, blob, f, tb):
     eng._acts = bound
     eng._draws, eng._grounds = draws, f["G"]
     eng.unfront(f["X"])
-    x.on_draw(eng._draw)
-    x.on_pic(eng._pic)
-    eng._drawing = True
+    eng.bind_draws(x)
     for name in names:
         eng._push(name)

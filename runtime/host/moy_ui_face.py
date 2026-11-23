@@ -438,6 +438,7 @@ SIGS = (
     ("moy_ui_api_change_box", [c.c_void_p, c.c_void_p], c.c_int),
     ("moy_ui_api_host_arm", [c.c_void_p], c.c_int),
     ("moy_ui_api_host_whole", [c.c_void_p], None),
+    ("moy_ui_api_host_stand", [c.c_void_p], None),
     ("moy_ui_api_keys_back", [c.c_void_p], None),
     ("moy_ui_api_pop_box", [c.c_void_p, c.c_void_p], c.c_int),
     ("moy_ui_api_text_at", [c.c_void_p, moy_ui_span_t, c.c_int, c.c_int, c.c_void_p], c.c_int),
@@ -908,6 +909,10 @@ def install(m, lib, ctx_, sink, span0, over, box_of):
         p_, k_ = ctx_(ctx)
         lib.moy_ui_api_host_whole(p_)
     m.api_host_whole = api_host_whole
+    def api_host_stand(ctx):
+        p_, k_ = ctx_(ctx)
+        lib.moy_ui_api_host_stand(p_)
+    m.api_host_stand = api_host_stand
     def api_keys_back(ctx):
         p_, k_ = ctx_(ctx)
         lib.moy_ui_api_keys_back(p_)

@@ -88,6 +88,7 @@ def session(port, board_dir):
         else:
             b.reset()                  # verifies identity once the desk is up
         before = take_store(b)
+        b.store_before = before
         try:
             yield b
         finally:
@@ -159,6 +160,24 @@ def give_store_back(board, before):
             warnings.warn("the suite left folders on the store: %r" % (left,))
     except Exception as exc:  # noqa: BLE001
         warnings.warn("could not give the store back: %r" % (exc,))
+
+
+def store_room(board, blocks):
+    """Give the store back mid-suite when fewer than `blocks` 4 KiB blocks of
+    it are free: every folder the suite has pushed since it opened goes
+    (`give_store_back`), so a board whose store is small (the 2.7 MB tail of
+    a 16 MB flash, a third of it the seeds') has room for the next fixture.
+    A fixture a later check reads is pushed again by that check, which is why
+    a suite for such a board scopes them to the test. Returns the free blocks
+    after."""
+    def free():
+        # littlefs can report more used than there is: a negative is none
+        return max(0, board.pyval("__import__('os').statvfs('/moy/carts')",
+                                  timeout=20, strict=True)[3])
+    if free() < blocks and getattr(board, "store_before", None) is not None:
+        give_store_back(board, board.store_before)
+        board.pyval(RESCAN, timeout=60)
+    return free()
 
 
 # The store scanned again for the folders a suite pushed, each cart on the
@@ -1793,11 +1812,12 @@ def an_on_crash_service_restarts_after_a_forced_crash(board):
 
 def lease_pin(board_dir):
     """A pin of the board's `lease` row (board.toml [hardware]): free, so a
-    test may drive it."""
+    test may drive it. Never GPIO54, which MicroPython's port treats as input
+    only (a leased `Pin` there refuses OUT, `pin can only be input`)."""
     sys.path.insert(0, str(ROOT / "tools"))
     import board_config
     rows = board_config.hardware(str(ROOT / "firmware" / board_dir))[2]
-    return max(p for r in rows if r["class"] == "lease" for p in r["pins"])
+    return max(p for r in rows if r["class"] == "lease" for p in r["pins"] if p < 54)
 
 
 LOST_TAP = """\
@@ -1862,6 +1882,22 @@ def a_gpio_lease_loses_no_tap(board, board_dir):
     assert (n, lost, drops) == (32, 368, 368), shallow
 
 
+def lease_driver_pins(board_dir):
+    """(sck, mosi, miso, dc, res, cs) for the leased-driver check: the board's
+    `spi2` row's three pins, and three more of its `gpio` lease row for the
+    display's lines -- 45, 46 and 2 where the row has them (the Waveshare's
+    and the Guition's), the row's first three left over otherwise."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import board_config
+    rows = board_config.hardware(str(ROOT / "firmware" / board_dir))[2]
+    spi = next(r for r in rows if r["name"] == "spi2" and r["class"] == "lease")["pins"]
+    sck, mosi, miso = spi                  # the row's order: sck, mosi, miso
+    free = sorted(p for r in rows if r["name"] == "gpio" and r["class"] == "lease"
+                  for p in r["pins"] if p not in (sck, mosi, miso))
+    dc, res, cs = (45, 46, 2) if {45, 46, 2} <= set(free) else free[:3]
+    return sck, mosi, miso, dc, res, cs
+
+
 SSD1306 = ("lib", "micropython-lib", "micropython", "drivers", "display", "ssd1306", "ssd1306.py")
 
 LEASED_DRIVER = """\
@@ -1875,19 +1911,19 @@ leases.LEASES.grants = None         # a process the console runs no row for
 moy_log.current(pid)
 try:
     spi = moybyte.lease('spi2', baudrate=1000000)
-    dc, res, cs = moybyte.lease('gpio45'), moybyte.lease('gpio46'), moybyte.lease('gpio2')
+    dc, res, cs = moybyte.lease('gpioDC'), moybyte.lease('gpioRES'), moybyte.lease('gpioCS')
     oled = mod['SSD1306_SPI'](128, 64, spi, dc, res, cs)
     oled.fill(0)
     oled.text('moybyte', 0, 0, 1)
     oled.show()
     rows = leases.LEASES.rows()
-    held = ([N.pin_state(p) & N.PIN_PERIPH for p in (49, 50)], cs.value(), N.held(N.VM),
-            [r[3] for r in rows if r[0] in ('spi2', 'gpio45')])
+    held = ([N.pin_state(p) & N.PIN_PERIPH for p in (SCK, MOSI)], cs.value(), N.held(N.VM),
+            [r[3] for r in rows if r[0] in ('spi2', 'gpioDC')])
 finally:
     moy_log.current(was)
     leases.LEASES.grants = grants
 moybyte.end(pid)
-safe = [N.pin_state(p) for p in (49, 50, 51, 45, 46, 2)]
+safe = [N.pin_state(p) for p in (SCK, MOSI, MISO, DC, RES, CS)]
 try:
     oled.show()
     kept = 'showed'
@@ -1923,7 +1959,11 @@ def a_lease_runs_a_driver_and_a_crash_leaves_it_safe(board, board_dir):
     import time
     mp = ROOT / "firmware" / board_dir / ".build" / "micropython"
     src = (mp.joinpath(*SSD1306)).read_text()
-    board.pyexec("DRIVER = %r\n" % src + LEASED_DRIVER, timeout=60.0, strict=True)
+    pins = lease_driver_pins(board_dir)
+    code = LEASED_DRIVER
+    for name, pin in zip(("SCK", "MOSI", "MISO", "DC", "RES", "CS"), pins):
+        code = code.replace(name, str(pin))
+    board.pyexec("DRIVER = %r\n" % src + code, timeout=60.0, strict=True)
     held, safe, kept, left = board.pyval("ws._ld", strict=True)
     periph, cs, n_held, holders = held
     assert periph == [16, 16] and cs == 1 and n_held == 4, held
@@ -3794,6 +3834,23 @@ def _push_folder(board, board_dir, local, dest):
         mark_pushed(board, dest)
 
 
+def _push_one_shot(board, board_dir, local, dest):
+    """`_push_folder` for a fixture one check uses and no later one reads (a
+    variant of the hello cart, the huge, newer and deep carts, the folder
+    reader): when the test that pushed the previous ones is not the one
+    pushing now, those are taken off the store first, so they never stack. A
+    board whose store is the 2.7 MB tail of a 16 MB flash has no room for
+    eleven of them beside the showcase."""
+    import push_cart as pc
+    test = os.environ.get("PYTEST_CURRENT_TEST", "").split(" ")[0]
+    owner, dests = getattr(board, "_one_shots", (None, []))
+    if owner != test and dests:
+        pc.remove_folders(board, [d.rstrip("/").rsplit("/", 1)[-1] for d in dests])
+        dests = []
+    _push_folder(board, board_dir, local, dest)
+    board._one_shots = (test, dests + [dest])
+
+
 def push_fixture(board, title):
     """The seed cart `title` on the board's store for a check, where no image
     carries it (tools/gen_device_carts.in_image: a test fixture, or an
@@ -4604,7 +4661,7 @@ def _wasm_fixture_variant(board, board_dir, chip, title, slug, change=None,
     if change is not None:
         change(out)
     root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
-    _push_folder(board, board_dir, out, root.rstrip("/") + "/wasm_" + slug + ".moy")
+    _push_one_shot(board, board_dir, out, root.rstrip("/") + "/wasm_" + slug + ".moy")
     board.pyval(RESCAN, timeout=60)
 
 
@@ -4633,7 +4690,7 @@ def wasm_read_of_a_folder_reads_nothing(board, board_dir):
     wasm_cart.build(str(ROOT / "tests" / "fixtures" / "wasm" / "readdir.moy"), out,
                     chips=(chip,))
     root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
-    _push_folder(board, board_dir, out, root.rstrip("/") + "/wasm_readdir.moy")
+    _push_one_shot(board, board_dir, out, root.rstrip("/") + "/wasm_readdir.moy")
     board.pyval(RESCAN, timeout=60)
     size = os.path.getsize(os.path.join(out, "manifest.json"))
     pm = ("(lambda a: (__import__('moycore').pmem_image(a), list(a)[:3])[1])"
@@ -5085,7 +5142,7 @@ def wasm_too_big_cart_opens_the_notice(board, board_dir):
     wasm_cart.build(str(ROOT / "tests" / "fixtures" / "wasm" / "huge.moy"), out,
                     chips=(chip,))
     root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
-    _push_folder(board, board_dir, out, root.rstrip("/") + "/wasm_huge.moy")
+    _push_one_shot(board, board_dir, out, root.rstrip("/") + "/wasm_huge.moy")
     board.pyval(RESCAN, timeout=60)
     need, have = wasm_fit(board, HUGE_TITLE)
     assert need[0] > have[0], (need, have)
@@ -5118,7 +5175,7 @@ def wasm_newer_cart_opens_the_notice(board, board_dir):
     out = os.path.join(tmp, "newer.moy")
     wasm_cart.build(str(ROOT / "tests" / "fixtures" / "wasm" / "newer.moy"), out)
     root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
-    _push_folder(board, board_dir, out, root.rstrip("/") + "/wasm_newer.moy")
+    _push_one_shot(board, board_dir, out, root.rstrip("/") + "/wasm_newer.moy")
     board.pyval(RESCAN, timeout=60)
     missing = board.pyval(
         "ws.runtimes['wasm'].missing([c for c in ws.carts.all if c['title'] == %r][0])"
@@ -5159,7 +5216,7 @@ def wasm_deep_recursion_traps_with_its_numbers(board, board_dir):
     wasm_cart.build(str(ROOT / "tests" / "fixtures" / "wasm" / "deep.moy"), out,
                     chips=(chip,))
     root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
-    _push_folder(board, board_dir, out, root.rstrip("/") + "/wasm_deep.moy")
+    _push_one_shot(board, board_dir, out, root.rstrip("/") + "/wasm_deep.moy")
     board.pyval(RESCAN, timeout=60)
     err = _wasm_run_error(board, DEEP_TITLE)
     m = STACK_NOTE.search(err)
@@ -6067,3 +6124,272 @@ def wasm_stale_format_module_runs_on_the_interpreter(board, board_dir):
                           change=_leave_only_a_stale_module)
     return _runs_on_interpreter(board, STALE_FORMAT_TITLE,
                                 check=hello_read_its_greeting)
+
+
+# -- shared bodies of the windowed desk's tour and the OTA checks ------------
+# Hoisted from the Waveshare P4's suite (2026-11-22) so the second board of
+# its tier makes them too; `board_id` is the board's `[board] ota`.
+
+SIGNED_MANIFEST = {
+    "channel": "unstable", "version": 1785665581, "size": 4292512,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "url": "https://example/app.bin", "label": "beta",
+}
+
+
+def appearance_cart_is_claimed(board):
+    """The Appearance app must claim its cart on the DEVICE store, or Settings'
+    APPEARANCE row silently does nothing."""
+    st = board.state()
+    cart = st.get("appearance_cart")
+    assert cart, "no Appearance cart in the device store"
+    assert cart.get("is_app") is True, cart
+
+
+def settings_rows_scroll_on_swipe(board):
+    st = board.state()
+    y0 = board.settings_scrolled(st)
+    board.swipe_settings(st)
+    st = board.state()
+    assert y0 is not None and board.settings_scrolled(st) < y0, st["settings"]
+
+
+def scroll_survives_release(board):
+    """Letting go must NOT snap the rows back to the top (the on-glass
+    'thrown at the start' report): a release may coast on in the swipe's
+    direction, then the rows hold where it stopped."""
+    y = board.settings_scrolled(board.state())
+    board.drain(1.0)
+    st = board.state()
+    rest = board.settings_scrolled(st)
+    assert rest <= y, st["settings"]
+    board.drain(1.0)
+    st = board.state()
+    assert board.settings_scrolled(st) == rest, st["settings"]
+
+
+def play_parks_the_windows_and_the_back_brings_them_back(board):
+    """Console mode on glass (docs/theme_and_shell_2026-11.md §8.1): the desk's
+    PLAY parks the open windows and truncates the route to the home; the
+    home's back, tapped where the bar draws it, puts every window back; the
+    HOME key shows the desktop and brings the windows back."""
+    before = board.state().get("order")
+    assert before, "no window open to park"
+    board.pyexec("ws.home.open_library()", strict=True)
+    st = board._settle(lambda s: s.get("desk") is False, 0.5)
+    assert st.get("stack") == ["launcher"], st.get("stack")
+    assert not st.get("order") and st.get("parked") == before, st
+    x, y, w, h = board.pyval("ws.bar_layer.back_rect('home') or ws.layout.context_x_btn",
+                             strict=True)
+    board.tap(x + w // 2, y + h // 2)
+    st = board._settle(lambda s: s.get("desk") is True, 0.5)
+    assert st.get("order") == before and not st.get("parked"), st
+    # The HOME key on the desk minimises every window and closes none; HOME
+    # again brings them back (owner, 2026-10-13).
+    mins = "[ws.wm.windows[k].minimized for k in ws.wm.z_order]"
+    board.pyexec("ws.home.home_key()", strict=True)
+    board.drain(0.5)
+    assert board.pyval(mins, strict=True) == [True] * len(before)
+    assert board.state().get("order") == before
+    board.pyexec("ws.home.home_key()", strict=True)
+    board.drain(0.5)
+    assert board.pyval(mins, strict=True) == [False] * len(before)
+
+
+def window_buffers_are_single_retained_surfaces(board):
+    """(#113) A window buffer holds the LAST paint, so it must advertise
+    RETAINED_FRAMES = 1. The class default 2 describes the root DPI ping-pong;
+    inheriting it made a picker drag shift by ~twice the real delta and ghost a
+    duplicate of every card (owner-reported on glass, 2026-07-25)."""
+    ret = board.state().get("win_retained") or {}
+    assert ret, "no window buffers to check"
+    assert all(v == 1 for v in ret.values()), ret
+
+
+def window_chrome_freezes_during_a_content_scroll(board):
+    """(#155) A window's title strip is disjoint from its content stamp, so a
+    quiet frame must leave it alone once both ping-pong buffers hold it -- 8.2ms
+    of a 70ms picker-scroll frame before the freeze. Probed MID-gesture: the
+    freeze only engages while the desk serves its cache.
+
+    tools/p4_chrome_freeze.py is the deeper version (it byte-compares the strip
+    out of both ping-pong buffers); this pins that the freeze engages at all."""
+    board.open("settings")
+    board.drain(1.0)
+    w = board.state()["wins"]["settings"]
+    cx = w[0] + 1 + w[2] // 2
+    ctop = w[1] + 1 + w[4]
+    board.swipe_async(cx, ctop + (w[3] - w[4]) - 40, cx, ctop + 40, frames=200)
+    board.drain(1.5)                     # let the streak reach both buffers
+    quiet = board.pyval("ws.wm.chrome_quiet")
+    streak = board.pyval("ws.wm.windows['settings']._chrome_streak")
+    board.wait_line("swipe done", 30)
+    assert quiet is True, "the scroll frame never went quiet"
+    assert (streak or 0) >= 2, "chrome never froze (streak=%s)" % (streak,)
+
+
+def a_drag_touches_no_storage_and_rebuilds_no_cache(board):
+    """The two invariants this board's UI perf now rests on, asserted on the real
+    console via ws.perf.note_cost (reported in `state` as "costs").
+
+    Both were bugs found the slow way on 2026-07-26, each costing a day because
+    neither produced any signal -- they just made two frames per gesture 5x
+    slower:
+
+      * cover blob reads (58ms each on this flash, 22ms even when the file is
+        absent) landed on DRAG frames, because a cover was only loaded when its
+        card first scrolled into view. Now prefetched on idle frames, so a drag
+        must read nothing at all.
+      * the bar's strip cache rebuilt on every switch between the WM's two draw
+        destinations (root canvas via viewport / window buffer) -- 72ms of an 86ms
+        frame. Now cached per destination, so a long drag must build ~once, not
+        once per frame.
+
+    Counted on the build/read side only, so this net costs nothing when healthy."""
+    board.open("projects")
+    board.drain(16.0)                    # let the idle prefetch finish the store
+    g = board.pyval("ws.wm.windows['projects'].ctx.layout.lib_grid")
+    assert g is not None, "the projects window did not open"
+    w = board.state()["wins"]["projects"]
+    ox, oy = w[0] + 1, w[1] + 1 + w[4]
+    gx, gy, gw, gh = g
+    cy = oy + gy + gh // 2
+    board.pyexec("ws.costs.clear()")
+    f0 = board.state()["frames"]
+    for _ in range(3):
+        board.swipe(ox + gx + gw - 40, cy, ox + gx + 60, cy, 30)
+    st = board.state()
+    costs = st.get("costs") or {}
+    painted = st["frames"] - f0
+    assert painted > 60, "the drags painted only %d frames" % painted
+    assert costs.get("cover.blob.read", 0) == 0, (
+        "a drag read %d cover blobs from flash -- the idle prefetch is not "
+        "covering the store (costs=%r)" % (costs.get("cover.blob.read"), costs))
+    # A handful over ~135 frames is the healthy shape; one per frame is the bug.
+    assert costs.get("bar.strip.render", 0) <= 4, (
+        "the bar strip rebuilt %d times across %d frames (costs=%r)"
+        % (costs.get("bar.strip.render"), painted, costs))
+
+
+def ota_verification_is_fast_enough(board):
+    """It runs once per update check, behind a screen already waiting on the
+    network; the bound catches an order-of-magnitude regression only."""
+    import json as _json
+    import sys as _sys
+
+    _sys.path.insert(0, str(ROOT / "tests"))
+    from test_ota_signing import TEST_KEYS, sign_with_test_key
+
+    manifest = dict(SIGNED_MANIFEST)
+    manifest["sig"] = sign_with_test_key(manifest)
+    assert board.pyexec(
+        "import time\n"
+        "KEYS = %r\n"
+        "M = %r\n"
+        "t0 = time.ticks_us()\n"
+        "for _ in range(5):\n"
+        "    __import__('moy_net').ota_judge(M, None, True, KEYS)\n"
+        "VERIFY_US = time.ticks_diff(time.ticks_us(), t0) // 5\n"
+        % (TEST_KEYS, _json.dumps(manifest)),
+        timeout=60), board.last_error
+    us = board.pyval("ws._g['VERIFY_US']", strict=True)
+    print("\nota_judge: %dus (%.1fms)" % (us, us / 1000.0))
+    assert 0 < us < 500_000, "verify took %dus -- something got much slower" % us
+
+
+def ota_updater_is_live(board, board_id):
+    """#53 on a P4 board. The partition table has been OTA-shaped since bring-up and
+    update_ui frozen in all along; what was missing was moy_ota itself, the
+    staging directory (this board has no SD), the identity stamp and the
+    mark_valid call. Verified on glass 2026-08-02 by installing the board's OWN
+    running image into the inactive slot: 3,085,216 bytes in 11 steps, reboot
+    came up on ota_1 and marked itself valid there.
+
+    Asserted here rather than re-run: a full install is ~90s and leaves the
+    board on the other slot, which every test after this one would inherit."""
+    assert board.pyval("ws.updater is not None") is True
+    assert board.pyval("ws.updater.available()") is True, "not an OTA build"
+    assert board.pyval("__import__('moy_ota').BOARD") == board_id
+    assert board.pyval("ws.updater.update_dir") == "/moy/update"
+    assert board.pyval("ws.updater.slot()") in ("ota_0", "ota_1")
+    # The manifest it would fetch is this board's, not another's -- an OTA
+    # payload is an app-partition image, so the wrong one cannot boot.
+    url = board.pyval("ws.updater.manifest_url('unstable')")
+    assert url.endswith("/latest-%s.json" % board_id), url
+    # mark_valid ran; without it the bootloader reverts every OTA.
+    assert any("marked app valid" in ln for ln in board.lines), \
+        "no mark_valid at boot -- rollback would undo every update"
+
+
+def rollback_confirm_comes_from_the_frame_loop(board):
+    """The confirm has to be worth something, and where it is made decides that.
+
+    Made on the boot path it certifies an image that has never drawn a pixel --
+    a board that boots to a black screen (this project shipped one, #56) would
+    confirm itself and lose the safety net. So it waits for a painted frame AND
+    for the loop to keep running afterwards, and this asserts the loop is what
+    actually got there on a live board.
+
+    The full pass -- install, reboot into the new slot, and a reset inside the
+    confirm window to force the bootloader to revert -- was run on glass
+    2026-08-02: 15/15, both directions, banner and verdict correct each time.
+    Not re-run here because one install is ~2min and leaves the board on the
+    other slot, which every later test would inherit."""
+    # The kernel's loop makes it (native/moy_kernel/moy_loop.c, its two
+    # thresholds pinned in tests/test_moy_loop.py) and its service upcall
+    # tells the updater; the loop has run at least that many frames since.
+    assert board.pyval("ws.updater.confirmed") is True
+    frames = board.pyval("__import__('moy_loop').frames()")
+    assert frames >= 120, "confirmed after %s loop frames" % frames
+    assert board.pyval("ws.frame_state.frames_drawn") >= 1
+
+
+def pending_marker_becomes_a_verdict(board):
+    """The marker round trip against the real filesystem, without a 3MB install.
+
+    What is device-specific here is exactly what a host test cannot reach: this
+    board's card has a bus of its own, so `with_sd` is a plain call-through, and
+    the marker lands on the internal VFS whatever the store is -- the same path
+    that has to hold a rollback's evidence across a reboot.
+
+    The mkdirs are not scaffolding, they are the firmware's own step:
+    `update_dir` does NOT exist on a board whose VFS has never taken an OTA, nor
+    does its parent `/moy` when the store is the card, and `finish()` creates
+    every level before its first write. This test writes the marker directly,
+    so it has to do the same -- without it the test passes only on a board that
+    happens to have the directories already, and fails on any freshly-flashed
+    one (a cable flash that moves the store formats the VFS).
+
+    AND IT HAS TO BE ITS OWN SHORT COMMAND, not a line of the snippet below.
+    `pyexec` uploads a multi-line snippet in chunks; `cmd` sends one line. A
+    real `os.mkdir` is a flash erase+write that stalls the frame loop for long
+    enough that, with PERF diag streaming (the module fixture sends `diag 1`),
+    a diag line interleaves into the chunk exchange and the reader parses the
+    fragment as a serial COMMAND instead of Python -- surfacing as the baffling
+    `PY ERR SyntaxError: invalid syntax for integer with base 10`. It reproduces
+    only when the mkdir actually creates something: with the directory already
+    present mkdir raises EEXIST immediately, never stalls, and the upload is
+    clean. Any device call that blocks on flash belongs outside a chunked
+    upload for the same reason."""
+    for d in ("/moy", "/moy/update"):     # the path test_the_ota_updater_is_live_on_this_board pins
+        board.cmd("py (lambda: (__import__('os').mkdir(%r), 1)[1])()" % d,
+                  wait_for="PY", timeout=20)     # EEXIST if it is already there
+    assert board.pyexec(
+        "import json\n"
+        "f = open(ws.updater._pending_path(), 'w')\n"
+        "f.write(json.dumps({'slot': 'nowhere', 'label': 'v99'}))\n"
+        "f.close()\n"
+        "V = ws.updater.boot_check()\n"), \
+        "the device raised while writing the pending marker"
+    verdict = board.pyval("eval('V', ws._g)")
+    assert verdict[0] == "rolled_back", verdict
+    # Reading it must NOT consume it: an image that reports and then dies has to
+    # still have its marker on the boot after the rollback.
+    listing = board.pyval("__import__('os').listdir(ws.updater.update_dir)")
+    assert "pending.json" in listing, listing
+    board.pyexec("import os\n"
+                 "os.remove(ws.updater._pending_path())\n"
+                 "ws.updater.boot_verdict = None\n"
+                 "ws.notice_up = None\n")
+    assert "pending.json" not in board.pyval(
+        "__import__('os').listdir(ws.updater.update_dir)")

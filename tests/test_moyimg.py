@@ -44,6 +44,7 @@ BOARDS = (
     "esp32_p4_wifi6_touch_lcd_7b/boards/MOYBYTE_P4",
     "guition_jc3248w535/boards/MOYBYTE_GUITION_S3",
     "guition_jc8012p4a1c/boards/MOYBYTE_GUITION_P4",
+    "elecrow_crowpanel_p4_10_1/boards/MOYBYTE_ELECROW_P4",
     "seeed_xiao_esp32s3_zero/boards/MOYBYTE_ZERO",
 )
 

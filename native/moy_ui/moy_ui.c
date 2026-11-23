@@ -618,7 +618,8 @@ int64_t moy_ui_print_font(uint32_t font) {
 
 uint32_t moy_ui_font(int cart, int role, moy_font_info_t *out) {
     if (role >= MOY_THEME_FONT_ROLES && role < MOY_UI_FONT_ROLES && s_font[role] == 0) {
-        role = role == MOY_UI_FONT_TAP_UI ? MOY_UI_FONT_UI : MOY_UI_FONT_CAPTION;
+        role = role == MOY_UI_FONT_TAP_UI ? MOY_UI_FONT_UI
+               : role == MOY_UI_FONT_HERO ? MOY_UI_FONT_TITLE : MOY_UI_FONT_CAPTION;
     }
     uint32_t id = !cart && role >= 0 && role < MOY_UI_FONT_ROLES ? s_font[role]
                                                                   : MOY_FONT_PETME128;

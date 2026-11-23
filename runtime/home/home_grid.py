@@ -12,7 +12,8 @@
 #   Launcher.band_pass          the band as a table of parts, on its own app host
 #   tab_count_title             the bar's title on the home: the tab's count
 #   day_words                   a date as the home says it
-#   desk_button_layout          the desk pane's rows of verb buttons
+#   desk_button_span            the room the desk pane keeps for its rows of buttons
+#   desk_button_layout          ...its buttons as that room is counted
 """The home's GRID arrangement and the cards every arrangement draws.
 
 `Launcher` is the selection model (items, sel, scroll, nav) every home
@@ -26,9 +27,9 @@ home's `grid` arrangement; `Carousel` (home_carousel.py) and `IconHome`
 Beside it, what the arrangements and the home layers share: the "+ New"
 pseudo card and its art, the favourite's star, the cover decodes and their
 clean scales, the hint strip's rect, the home's tabs and their nouns, the
-words a card's details say (`day_words`, `text_scale`), and the desk pane's
-rows of verb buttons (`desk_button_layout`, `desk_button_span`). A leaf: it
-imports no home module.
+words a card's details say (`day_words`, `text_scale`), and the room the
+desk pane keeps for its rows of verb buttons (`desk_button_span`,
+`desk_button_layout`). A leaf: it imports no home module.
 """
 
 from array import array
@@ -819,14 +820,18 @@ class Launcher:
         the parts named in the paint this frame began there."""
         self._band_host().resume(cv, self.theme)
 
-    def _begin_band(self, cv, b, desk, key, need, over=None):
-        """Begin the band's frame on its host: whether the buffer this frame
-        paints holds the band as a frame drew it under `key` (`ui.held`);
-        None, with the frame ended, where `need` asks for that and it does
-        not."""
+    def _begin_band(self, cv, b, desk, key, need, over=None, keys=False):
+        """Begin the band's frame on its host, the keys its own where `keys`
+        (the handheld's carousel; else the home's): whether the buffer this
+        frame paints holds the band as a frame drew it under `key`
+        (`ui.held`); None, with the frame ended, where `need` asks for that
+        and it does not."""
         host = self._band_host()
-        host.whole()
-        host.begin(cv, self.theme, b, desk, False, True)   # its keys are the home's
+        if keys and host.begun():
+            host.resume(cv, self.theme)     # (its keys and its clock the frame's first pass's)
+        else:
+            host.whole()
+            host.begin(cv, self.theme, b, desk, False, not keys)
         # (a stamp drawn over the frame round the band: no later frame of
         # the band's puts that buffer's frame back)
         held = _ui.held("band", key[0] if over is None or (
@@ -1490,24 +1495,9 @@ HOME_TABS = (("games", "Games"), ("mine", "Mine"), ("apps", "Apps"),
 _TAB_NAME = dict(HOME_TABS)
 _TAB_NOUN = {"games": ("GAME", "GAMES"), "mine": ("CART", "CARTS"),
              "apps": ("APP", "APPS"), "make": ("PROJECT", "PROJECTS")}
-# The handheld hero's scale the home is laid out for: a board's verdict
-# (FullscreenStackWM.HOME_SCALE) draws it at most this large.
-HOME_SCALE_HH = 2.0
-# The handheld home (docs/history/look_2026-10.md step 17): each card shows its
-# whole cover at a clean scale (`_clean_side`), a neighbour at half the
-# cover's side and the hero at twice that, a gap between cards, the corners
-# of a neighbour 7/10 of the hero's.
+# The handheld grid's card (docs/history/look_2026-10.md step 17): half the
+# cover's side, at a clean scale (`_clean_side`).
 _HH_CARD = _COVER_SIDE // 2
-_HH_GAP = 14
-# The least the handheld home leaves over and under the hero's caption
-# (title over metadata), at the font scale, when a face needs their room.
-_HH_SQUEEZE = (2, 4)
-# The handheld caption's lines for a version 2 face, at the font scale (the
-# title's at its own scale): the title's line and its baseline, the
-# metadata's baseline under the title's, its line and its baseline. The
-# size class's -- the targets' Night faces' -- so a mode whose faces set
-# more leading draws its caption on the same baselines.
-_HH_CAPTION = (24, 19, 17, 15, 12)
 
 
 def _clean_side(limit):
@@ -1587,9 +1577,10 @@ def text_scale(px, fs, role="ui"):
 
 
 def desk_button_layout(verbs, dw, fs, u):
-    """[(verb, x, row, w, kind, dy)] of the desk details pane's buttons in a
-    pane `dw` wide: the first a primary where it plays, opens, makes or
-    changes, DEL a danger set apart by a group's gap (three buttons' gaps,
+    """[(verb, x, row, w, kind, dy)] of the desk details pane's buttons as
+    the pane keeps room for them (`desk_button_span`; `home_ui`'s verbs row
+    draws them, wrapping), in a pane `dw` wide: the first a primary where
+    it plays, opens, makes or changes, DEL a danger set apart by a group's gap (three buttons' gaps,
     the button-row form of a menu's rule), the rest plain, left to right, a
     button that does not fit starting the next row (never dropped), `x` from
     the pane's left edge. Where they wrap, every button takes the widest

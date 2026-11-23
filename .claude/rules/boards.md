@@ -407,6 +407,16 @@ ports, flash, push, reboot, screenshots — are the `on-glass` skill
   section; `tools/board.py guition_p4 c6 URL` is the SDIO route for a slave
   that takes an OTA).
 
+- **The Elecrow P4 is the Waveshare's tier on a 16 MB flash**
+  (`firmware/elecrow_crowpanel_p4_10_1/`, `elecrow_p4`): the same unrotated
+  1024x600 desk over the PPA, a GT911, and a UART console through a CH340K
+  (`1a86:7522`; both lines LOW at rest, resettable, so its suite resets it as
+  the Waveshare's does). It differs in its panel reset pin, a TF slot on a
+  1-bit SDMMC bus (a `sdmmc0` row with no `d1`), two I2S amplifiers and a PDM
+  microphone with no codec (`MOY_AUDIO_I2S_NUM`, `MOY_MIC_PDM`), and a C6
+  running Elecrow's factory slave, which no tool here flashes. Its README is
+  the authority and lists what is still unconfirmed.
+
 ## The Zero (headless, #41)
 
 A build target since 2026-08-29 (its board.toml records the reversal): the

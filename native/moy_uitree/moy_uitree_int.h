@@ -137,15 +137,18 @@ enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_SWATCH = 2, 
        NL_HIDE = 8, NL_PICS = 16, NL_EDGE = 16 };      // NL_EDGE: a cells' edge=True
 // A dialog's lit bits: kind="danger"; look="keys" (no button row on the T-Deck).
 enum { DL_DANGER = 1, DL_KEYS = 2 };
+// A cards list's lit bits: look="carousel" (one row of tiles, its centre's words under it).
+enum { CD_CAROUSEL = 1 };
 // A label's text options (`nbtn`): wrap= in bits 0-1 (LT_WORD, LT_CHAR), its face's
 // role + 1 in bits 2-4, the toolkit's `centre` for align= in bits 5-7, lines= given.
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.
 enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 // A text view's options (`lit`); its syntax's index in `btn` (ui.py's _SYNTAXES).
 enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8 };
-// A tools row lent to a site (`lit`); a button drawn as its icon alone (`btn`).
-enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2 };
-enum { RW_MID = 1, RW_GROW = 2 };   // a row's lit: centred on the row it is a cell of; a fill of its stack
+// A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large" (`btn`).
+enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4 };
+enum { RW_MID = 1, RW_GROW = 2, RW_WRAP = 4 };   // a row's lit: centred on the row it is a cell of; a fill of
+                                                // its stack; its cells packed from its start, wrapping
 enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4, CV_READS = 8 };  // a canvas's lit: a fill along a row, its w= a
                                                   // basis; a stop whose keys are its keys='s; such a stop with no
                                                   // ring (mark=False); one that names the states it draws (reads=)
@@ -365,6 +368,10 @@ struct uit {
     void *draw_ud;
     uit_pic_fn pic_fn;          // a card's or a picture's image, the front end's
     void *pic_ud;
+    // The page's carousel as the last frame drew it (uit_carousel's words), its node + 1 (0: none
+    // drawn since the page was built).
+    int32_t car[UIT_CAROUSEL_WORDS];
+    int16_t car_node;
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
     int32_t band_h;             // a flowing page's hints band, docked at its foot: its pictures end over it
     uint8_t menu_keys;          // the last menu drawn showed its items' letters (`draw_menu`)

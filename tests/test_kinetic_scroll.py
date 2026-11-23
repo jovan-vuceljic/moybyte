@@ -187,24 +187,21 @@ def test_fling_frames_take_the_partial(tmp_path):
 
 
 def test_fling_frame_is_pixel_faithful(tmp_path):
-    ws, drv = _fling_setup(tmp_path)
-    for _ in range(4):                     # a few coasting frames
-        drv.frame(1 / 30)
-    assert ws.launcher.flinging
-    partial = bytes(ws.sys_canvas._buf)
-    off = ws.launcher.scroll
-    lz = ws.launcher                       # freeze the coast at this offset,
-    lz._region.stop()                      # still MOVING (a frame in motion
-    lz._region.glide_to(lz.max_scroll())   # draws no rest-only pixels)
-    lz.anim_frame = lambda dt: False
-    ws.launcher_layer._full_streak = 0     # force the FULL path, same state
-    ws.launcher._region.invalidate()
-    ws.mark_dirty()
-    drv.frame(1 / 30)
-    assert ws.launcher.scroll == off
-    full = bytes(ws.sys_canvas._buf)
-    row = ws.sys_canvas.w * ws.layout.status_h
-    assert full[row:] == partial[row:]
+    """A coasting frame drawn by the band's path is the frame a FULL
+    repaint of the same fling draws: the same flick on two homes, one held
+    to full frames."""
+    got = []
+    for full in (False, True):
+        ws, drv = _fling_setup(tmp_path / ("full" if full else "band"))
+        if full:
+            ws.launcher_layer._try_band_frame = lambda cv, dt: False
+        for _ in range(4):                 # a few coasting frames
+            drv.frame(1 / 30)
+        assert ws.launcher.flinging
+        row = ws.sys_canvas.w * ws.layout.status_h
+        got.append((ws.launcher.scroll, bytes(ws.sys_canvas._buf)[row:]))
+    assert got[0][0] == got[1][0]
+    assert got[0][1] == got[1][1]
 
 
 def test_gate_recloses_after_the_fling_rests(tmp_path):

@@ -490,3 +490,55 @@ def test_a_zero_s_root_undoes_a_removal_when_its_link_is_followed(
         assert nb.page_state() == 3
     finally:
         nb.page_say("", 0)
+
+
+class Sized(Console):
+    """A console whose store has `room` bytes free in blocks of 512."""
+
+    def __init__(self, root, net, room):
+        Console.__init__(self, root, net)
+        self.room = room
+
+    def free(self):
+        return self.room, 512
+
+
+def test_a_store_with_no_room_for_the_add_on_is_not_asked_again(tmp_path, monkeypatch, board):
+    """An add-on larger than the store's free space is found out once, the
+    index fetched and the radio let go, and the store records it. The next
+    boot's step starts nothing, holds no radio and fetches nothing; the
+    screen says what it needs; and the free space reaching the record (a
+    card mounted, carts deleted) lets a start install it."""
+    pages, routes, root = _absent(tmp_path, monkeypatch, b"new")
+    clock = [0]
+    monkeypatch.setattr(web_addon, "_now", lambda: clock[0])
+    index = BASE + "carts-tdeck.json"
+    net = MemNet(routes)
+    inst = Sized(root, net, room=1024)
+    step = web_addon.AddonStep(inst, index, absent=True)
+    assert step.short() is None, "nothing is known before an attempt"
+    assert step.start()
+    _run(step)
+    assert step.error is None and step.due is None and inst.held == 0
+    assert os.listdir(root) == [] and step.short() is not None
+    need, free = step.short()
+    assert free == 1024 and need > free
+    assert "needs" in step.short_text() and "card" in step.short_text()
+    assert not step.start(retry=True) and not step.nudge()
+    asked = list(net.opened)
+    assert inst.held == 0
+
+    boot = web_addon.AddonStep(Sized(root, net, room=1024), index, absent=True)
+    assert boot.wanted() and boot.short() == (need, 1024)
+    assert not boot.start() and boot.phase is None and boot.due is None
+    assert boot.inst.held == 0 and net.opened == asked, "a boot fetches nothing"
+
+    boot.inst.room = need - 1       # still short by a byte
+    clock[0] += web_addon.ROOM_RECHECK_MS
+    assert boot.short() == (need, need - 1)
+    boot.inst.room = need           # the room is there
+    assert boot.start(), "a person's press looks at the room again"
+    _run(boot)
+    assert boot.error is None and boot.short() is None
+    assert os.listdir(root) == [web_pack.cart_id(pages[0][1]) + ".moy"]
+    assert nb.page_state() == web_addon.STATE_READY

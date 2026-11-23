@@ -106,8 +106,12 @@ def initial_cover(cv, rect, r, title, stepped=False):
     `rect` would be -- each letter pixel the card columns and rows
     `cv.cover` samples it at -- so it keeps its proportion to its card at
     every size a carousel's motion passes through, as a cover's art does.
-    The letter's rects at a card's size are kept, and fill in one call."""
-    x, y, w, h = rect
+    The letter's rects at a card's size are kept, and fill in one call.
+    `rect` is read by index: its first four words."""
+    x = rect[0]
+    y = rect[1]
+    w = rect[2]
+    h = rect[3]
     block, ink, q = _initial_parts(cv, title, w, h)
     cv.rrect(x, y, w, h, r, block, stepped=stepped)
     if q:

@@ -7,7 +7,7 @@ description: Drive an attached Moybyte board -- find its port, check who holds i
 
 One command per step: `tools/board.py BOARD VERB`. BOARD is the board.toml
 `[board] ota` id: `tdeck`, `guition_s3` (both ESP32-S3), `p4` (Waveshare, the
-only CH343), `guition_p4`, and the headless `xiao_zero` and `c3_zero` — read from the tree,
+only CH343), `guition_p4`, `elecrow_p4` (a CH340K UART like the Waveshare's, resettable), and the headless `xiao_zero` and `c3_zero` — read from the tree,
 so a new board is drivable the day its board.toml lands. Do not write a pyserial
 script: each board opens with its own, opposite line state, and `P4Board`
 (`tools/p4_autotest.py`), which every verb goes through, is what gets it right.
@@ -202,9 +202,10 @@ MOYBYTE_TDECK_PORT=$(tools/board.py tdeck port) .venv/bin/python -m pytest tests
 MOYBYTE_GUITION_PORT=$(tools/board.py guition_s3 port) .venv/bin/python -m pytest tests/test_guition_on_glass.py
 MOYBYTE_P4_PORT=$(tools/board.py p4 port) .venv/bin/python -m pytest tests/test_p4_on_glass.py
 MOYBYTE_GUITION_P4_PORT=$(tools/board.py guition_p4 port) .venv/bin/python -m pytest tests/test_guition_p4_on_glass.py
+MOYBYTE_ELECROW_P4_PORT=$(tools/board.py elecrow_p4 port) .venv/bin/python -m pytest tests/test_elecrow_p4_on_glass.py
 ```
 
-The Waveshare's suite resets its board at the start; the attach-only boards
+The Waveshare's and the Elecrow's suites reset their boards at the start; the attach-only boards
 are attached to as they are, so their desk must be clean. Every suite gives the
 store back when its session closes: each folder that was not there when it
 opened goes, the way `remove` takes one, and a push marks the folder it makes

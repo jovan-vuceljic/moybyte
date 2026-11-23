@@ -2190,3 +2190,26 @@ def test_a_gc_grow_step_line_that_changed_shape_FAILS_and_writes_nothing(tmp_pat
     gc_c, r = _grow(tmp_path, text)
     assert r.returncode != 0 and "did not apply" in r.stderr
     assert gc_c.read_text(encoding="utf-8") == text
+
+
+def test_every_board_that_takes_the_ui_engine_stages_its_pages_and_lua_layer():
+    """A board's build.sh calls the two stagers and its board.toml keeps what
+    they write: a board that takes `moy_uitree` and does neither builds an
+    image whose Lua tree apps hang the console (the Elecrow P4's first merge
+    with the engine, 2026-11-22), and nothing else in the build says so."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import board
+    import board_config
+
+    taking = []
+    for name, d in sorted(board.boards(ROOT).items()):
+        takes = {t for t in board_config.native_takes(d)}
+        if "moy_uitree" in takes:
+            taking.append(name)
+            script = (Path(d) / "build.sh").read_text(encoding="utf-8")
+            keep = board.board_file(d).get("modules", {}).get("keep", [])
+            for stager in ("moybyte_stage_uitree_pages", "moybyte_stage_uitree_lua"):
+                assert stager in script, "%s's build.sh never calls %s" % (name, stager)
+            for kept in ("uitree_pages.py", "uitree_lua.py"):
+                assert kept in keep, "%s's board.toml does not keep %s" % (name, kept)
+    assert len(taking) >= 5, taking

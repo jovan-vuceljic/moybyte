@@ -76,8 +76,9 @@ enum {
 // over_on). Then the lag history (moy_ui_api_lag's), the frame begun last
 // (began1, its number + 1; 0 none), what that frame was (shifting, dy: a
 // rows frame, a shift by dy), the move its begin planned for the host's
-// canvas (mv_dy) and whether the next frame draws whole (again). All zero is
-// a host that painted nothing.
+// canvas (mv_dy), whether the next frame draws whole (again) and whether the
+// frame begun last let its page stand (stand). All zero is a host that
+// painted nothing.
 #define MOY_UI_HOST_RING 3          // the paints a host remembers (RETAINED_FRAMES at most)
 #define MOY_UI_HOST_HIST 4          // the frames its lag history keeps
 #define MOY_UI_HOST_BANDS 3         // the bands a frame's floor is kept as
@@ -86,7 +87,7 @@ typedef struct {
     int32_t key[MOY_UI_HOST_RING];
     int32_t over[MOY_UI_HOST_RING][4];
     uint8_t whole[MOY_UI_HOST_RING], over_on[MOY_UI_HOST_RING];
-    uint8_t ri, rn, shifting, again;
+    uint8_t ri, rn, shifting, again, stand;
     int32_t hist[MOY_UI_HOST_HIST * (2 + 2 * MOY_UI_HOST_BANDS)];
     int32_t began1;
     int16_t dy, mv_dy;
@@ -323,6 +324,11 @@ typedef struct {
     int16_t rh;                     // a placed table: its row height as it drew
     uint8_t rest;                   // a page under `follow`: it rests on its foot
     uint8_t cancel;
+    // A carousel's page (moy_ui_api_carousel): the row its keys and taps carry to the centre,
+    // the row it rests on as the app was told, and a fling that came to rest at this frame's
+    // begin (its glide to the nearest row starts unticked, as the frame after a fling's).
+    uint8_t car, car_fling;
+    int16_t car_row, car_set;
     uint32_t thumb;                 // a page or placed table: its thumb as it drew last, 0 none
 } moy_ui_keep_t;
 
@@ -513,6 +519,14 @@ typedef struct {
     moy_ui_tops_t tops[MOY_UI_API_SNAPS];
 } moy_ui_snap_t;
 
+// The carousel the table drawn next is (moy_ui_api_carousel; `on` 0: none): its geometry
+// (moy_ui_api_carousel_geom's), its band, and the row its app holds current.
+typedef struct {
+    int8_t on;
+    int16_t app;
+    int32_t g[10], band[4];
+} moy_ui_car_t;
+
 // ui.popover's: moy_ui_ctx_t's `pop`, owned by moy_ui_api_pop.c.
 typedef struct {
     moy_ui_box_t card, prev, at;
@@ -552,6 +566,8 @@ typedef struct {
 // The next label's text options: moy_ui_ctx_t's `txt`, owned by moy_ui_api_pop.c.
 typedef struct {
     int8_t lines, centre, tone, role;
+    uint8_t scale;                  // moy_ui_api_text_size's
+    int16_t w;
 } moy_ui_txt_t;
 
 // A shift frame: moy_ui_ctx_t's `sh`, owned by moy_ui_api_host.c.
@@ -816,6 +832,7 @@ typedef struct {
     // frame (each drawn with none; 255 at most), and the count told last.
     uint8_t keep_lost, keep_lost_told;
     moy_ui_snap_t snap;
+    moy_ui_car_t car;
     // The console's paste this frame (moy_ui_api_paste): the focused field
     // takes it; 0 none, and none once a frame begins.
     uint16_t paste_n;
@@ -1122,6 +1139,10 @@ void moy_ui_api_menu_danger(moy_ui_ctx_t *c, uint32_t rows);
 // `cols` 0 keeps the columns the grid fits, its `foot` and `top` still
 // taken; `foot` below 0 is none).
 void moy_ui_api_text(moy_ui_ctx_t *c, int lines, int centre, int tone, int role);
+// The next label's size, with its text options: its text at the whole scale
+// `scale` (0: the sink's) and at most `w` pixels wide from where it starts
+// (0: its row's width), a measure of prose or a display line.
+void moy_ui_api_text_size(moy_ui_ctx_t *c, int scale, int w);
 void moy_ui_api_card_mark(moy_ui_ctx_t *c, moy_ui_span_t badge, int tone,
                           moy_ui_span_t blank);
 // The next card's title's icon (`icon`, empty none): drawn before its title,
@@ -1210,6 +1231,76 @@ int32_t moy_ui_api_table_part(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int32_t o
 // from its view's centre along the rows' axis, in 256ths of a row, negative
 // before it (above, or on the left); 0 where none was answered.
 int32_t moy_ui_api_table_dist(const moy_ui_ctx_t *c);
+// The table drawn last, its parts not yet all answered: out[0] 1 where it holds the focus
+// (the keys this surface's), out[1] its scroll along its rows' axis, out[2] 1 while its view
+// moves (a drag, a fling or a glide).
+void moy_ui_api_table_state(moy_ui_ctx_t *c, int32_t out[3]);
+// A carousel (ui.cards look "carousel", the handheld home's band): its geometry in band `b`
+// (x, y, w, h) at font scale `fs` for tiles at most `side` px a side, the pitch 14 px more at
+// the scale. out[0]
+// the side a tile rests at off the centre (the largest that shows a whole cover at a clean
+// scale, moy_ui_api_clean_side, and leaves the caption its room), [1] the pitch, [2] the
+// tiles' centre line, [3] the title's top, [4] its line, [5] its scale (16 px at the font
+// scale, at least that scale), [6] the sub line's top, [7] its line, [8] the centre tile's
+// side at rest (twice [0]), [9] the room kept over the centre tile for its focus mark.
+void moy_ui_api_carousel_geom(int fs, const int32_t b[4], int side, int32_t out[10]);
+// A carousel's tile for row `i` at scroll `offset` (geometry `g`, band `b`): its side a function
+// of its distance from the centre alone, `g[0]` at a pitch or more, rising to `g[8]` at the
+// centre, each other tile pushed out by its share of what the centre grew; out its x, y, w, h.
+void moy_ui_api_carousel_tile(const int32_t g[10], const int32_t b[4], int32_t offset, int i,
+                              int32_t out[4]);
+// The row of `n` whose tile holds (x, y) at scroll `offset`: of the tiles that hold it, the
+// one drawn last (the larger over the smaller, the centre's over a neighbour its size); -1
+// none.
+int moy_ui_api_carousel_at(const int32_t g[10], const int32_t b[4], int32_t offset, int n, int x,
+                           int y);
+// A carousel's row of tiles, `n` rows of `cells` (each row's key), in band `b` under geometry
+// `g`: one stop, a table of parts side by side that snaps, the motion the handheld home's
+// (moy_ui.h's slide): left and right (a held key's repeats, the wheel's notches) carry the row
+// a card from where its glide is going, a drag past the slop moves it with the finger and a
+// release flings it, a row come to rest between two cards slides to the nearest, and a tap on
+// a tile slides that tile to the centre; Enter, or a tap on the centre's tile at rest, opens.
+// `cur` the row the app holds current, which the row lands on at once where it moves while
+// the row rests. out[0] the row it rests on (its last while it moves), out[1] 1 where it
+// opened that row, out[2] its scroll, out[3] its motion (MOY_UI_SCROLL_DRAG, _FLING,
+// _GLIDE), out[4] 1 where it holds the focus. Its parts answer as a table's.
+void moy_ui_api_carousel(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, const int32_t b[4],
+                         const int32_t g[10], const uint8_t *cells, size_t cells_n, int32_t cur,
+                         int32_t out[5]);
+// The largest side at most `limit` that shows a whole 128 px cover at a clean scale: a whole
+// multiple of it, else its half, quarter or eighth.
+int moy_ui_api_clean_side(int limit);
+// A carousel tile's shadow: box `t` (x, y, w, h) under clip `clip` (what of its part shows,
+// moy_ui_api_table_part's), the theme's card shadow, the smaller one off the `centre`.
+void moy_ui_api_tile_cast(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4],
+                          const int32_t clip[4], int centre);
+// A carousel tile in a row whose tiles rest at `card` px: where `mark`, its focus mark (its
+// box first shrunk by as much as the theme's mark grows a card, so a lifted card keeps its
+// side, raised). out[0..3] the box its picture takes, out[4] that box's corner radius (the
+// depth's card radius on a tile larger than `card`, 7/10 of it on the others), out[5..8] the
+// mark's box and out[9] 1 where it drew one: moy_ui_api_tile_end's.
+void moy_ui_api_tile(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4],
+                     const int32_t clip[4], int card, int mark, int32_t out[10]);
+// The corner radius of a carousel tile `side` px across in a row whose tiles rest at `card`
+// px (moy_ui_api_tile's out[4] for a tile that wears no mark): the depth's card radius on
+// a tile larger than `card`, 7/10 of it on the others.
+int moy_ui_api_tile_radius(int side, int card);
+// A tile with no picture of its own: icon `icon` on a tinted tile in its picture's box
+// (moy_ui_card_blank; empty: the tile alone).
+void moy_ui_api_tile_blank(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t tile[10],
+                           const int32_t clip[4], moy_ui_span_t icon);
+// After the picture: the lifted tile's rim, where moy_ui_api_tile drew a mark.
+void moy_ui_api_tile_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t tile[10],
+                         const int32_t clip[4]);
+// The caption under a carousel's tiles (geometry `g`, moy_ui_api_carousel_geom's, band
+// `band`), drawn inside `clip`: `title` in the hero face at its scale, cut to the band less
+// 8 px a side at the font scale and centred; `sub`'s items (apart by tabs) in the ui face, centred, a dot
+// between each two. In the theme's ink and dim ink, or both in `ink` (an override's colour:
+// RGB or MOY_UI_O_ROLE + a token; MOY_UI_O_NONE the theme's), then each over a black shadow
+// a pixel right and down.
+void moy_ui_api_carousel_caption(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t band[4],
+                                 const int32_t clip[4], const int32_t g[10], moy_ui_span_t title,
+                                 moy_ui_span_t sub, int32_t ink);
 // The table drawn last, where it keeps its parts (o->keep): the next rect
 // of its view the frame draws (its floor) into out[0..3], 1, for an app
 // that puts its own ground back there before its parts draw; the parts
@@ -1725,6 +1816,11 @@ int moy_ui_api_host_begin(moy_ui_ctx_t *c, int32_t *in, moy_ui_box_t surface, in
 int moy_ui_api_host_arm(moy_ui_ctx_t *c);
 // The frame begun next draws whole (AppHost.whole, AppHost.again).
 void moy_ui_api_host_whole(moy_ui_ctx_t *c);
+// The frame begun last draws none of its page (its buffers hold it as the
+// last frame drew it): where no pass of the frame draws it after all, the
+// stops, the captions and the kept state the frame before left stand into
+// the next frame, as though this one had drawn them.
+void moy_ui_api_host_stand(moy_ui_ctx_t *c);
 // The frame draws whole from here: a host saw an op that ignores the floor
 // (a cart's cls) land on its page. The pass after it draws every stop.
 void moy_ui_api_shift_break(moy_ui_ctx_t *c);

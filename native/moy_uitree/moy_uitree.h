@@ -309,12 +309,27 @@ void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud);
 // front end finds, decodes and draws it. With `r` NULL it answers 0 where it does not hold the
 // picture, else a positive number that moves with the picture's pixels (the card then draws no icon
 // tile, and carries that as its gen); else r is the card's tile, r[0..3], its clip, r[4..7] (the
-// scroll's floor), and r[8] 1 where the card is focused (its tile lifted): the front end draws the
-// picture there where it holds it, else owes it. uit_pics_moved: a picture it holds came or went,
-// and every gen moves (a frame draws it).
+// scroll's floor), r[8] bit 1 where the card is focused (its tile lifted), and on a carousel's
+// tile (bit 2) bit 4 where it is the centre's and bit 8 where the band is at rest; r[9] its
+// corners' radius (0 on a grid's card, which cuts its own), r[10..11] the size the front end
+// decodes it at (0: the tile's): the front end draws the picture there where it holds it, else
+// owes it. uit_pics_moved: a picture it holds came or went, and every gen moves (a frame draws it).
 typedef int (*uit_pic_fn)(void *ud, int node, const char *pic, size_t n, const int32_t *r);
 void uit_on_pic(uit_t *e, uit_pic_fn fn, void *ud);
 void uit_pics_moved(uit_t *e);
+// The page's carousel (ui.cards look="carousel") as the last frame drew it: out[0..3] its band,
+// [4..13] its geometry (moy_ui_api_carousel_geom's), [14] its scroll, [15] its motion
+// (MOY_UI_SCROLL_DRAG, _FLING, _GLIDE), [16] the row nearest the centre, [17] the row it rests
+// on, [18] its rows, [19] 1 where it held the focus; 0 where none drew since the page was built.
+// uit_carousel_tile: row `row`'s tile there (x, y, w, h), 0 where it lies outside the band;
+// uit_carousel_at: the row whose tile holds (x, y), -1 none. uit_carousel_geom: the geometry
+// the page's carousel lays out in band `b` at font scale `fs` (on the desk's metrics where
+// `desk`), outside a frame; 0 where the page has none.
+enum { UIT_CAROUSEL_WORDS = 20 };
+int uit_carousel(const uit_t *e, int32_t out[UIT_CAROUSEL_WORDS]);
+int uit_carousel_tile(const uit_t *e, int row, int32_t out[4]);
+int uit_carousel_at(const uit_t *e, int x, int y);
+int uit_carousel_geom(uit_t *e, const int32_t b[4], int fs, int desk, int32_t out[10]);
 // The next event: its kind; its words into ev[0..2], its text (the source)
 // into buf.
 int uit_next(uit_t *e, int32_t ev[3], char *buf, size_t cap);

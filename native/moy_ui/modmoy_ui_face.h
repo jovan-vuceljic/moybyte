@@ -747,6 +747,13 @@ static mp_obj_t ui_api_host_whole(mp_obj_t a0) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_host_whole_obj, ui_api_host_whole);
 
+static mp_obj_t ui_api_host_stand(mp_obj_t a0) {
+    moy_ui_ctx_t *c = ctx_of(a0);
+    moy_ui_api_host_stand(c);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_host_stand_obj, ui_api_host_stand);
+
 static mp_obj_t ui_api_keys_back(mp_obj_t a0) {
     moy_ui_ctx_t *c = ctx_of(a0);
     moy_ui_api_keys_back(c);
@@ -939,6 +946,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_lost_obj, ui_api_lost);
     { MP_ROM_QSTR(MP_QSTR_api_change_box), MP_ROM_PTR(&ui_api_change_box_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_host_arm), MP_ROM_PTR(&ui_api_host_arm_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_host_whole), MP_ROM_PTR(&ui_api_host_whole_obj) }, \
+    { MP_ROM_QSTR(MP_QSTR_api_host_stand), MP_ROM_PTR(&ui_api_host_stand_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_keys_back), MP_ROM_PTR(&ui_api_keys_back_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_pop_box), MP_ROM_PTR(&ui_api_pop_box_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_text_at), MP_ROM_PTR(&ui_api_text_at_obj) }, \

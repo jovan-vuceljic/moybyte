@@ -147,6 +147,7 @@ def _code_tab(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     drv = host_app.ConsoleDriver(ws)
     select_first_game(ws)
+    drv.frame(1 / 30)                     # (the home's row lands on it)
     drv.press("run")
     drv.frame(1 / 30)
     ws.text.open_menu()

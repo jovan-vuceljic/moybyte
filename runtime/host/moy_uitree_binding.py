@@ -20,6 +20,13 @@ PART = native_build.Part("uitree", ("moy_uitree.h", "moy_uitree_int.h", "moy_uit
 _P, _I, _S, _Z = c.c_void_p, c.c_int, c.c_char_p, c.c_size_t
 _I32 = c.POINTER(c.c_int32)
 
+
+def _addr(words, n):
+    """The address of array('i') `words`, at least `n` of them."""
+    if len(words) < n:
+        raise TypeError("moy_uitree: takes array('i') of %d words" % n)
+    return words.buffer_info()[0]
+
 _SIGS = (
     ("uit_new", [], _P),
     ("uit_free", [_P], None),
@@ -53,6 +60,10 @@ _SIGS = (
     ("uit_on_draw", [_P, _P, _P], None),
     ("uit_on_pic", [_P, _P, _P], None),
     ("uit_pics_moved", [_P], None),
+    ("uit_carousel", [_P, _P], _I),
+    ("uit_carousel_tile", [_P, _I, _P], _I),
+    ("uit_carousel_at", [_P, _I, _I], _I),
+    ("uit_carousel_geom", [_P, _P, _I, _I, _P], _I),
     ("uit_build_end", [_P], _I),
     ("uit_open", [_P], None),
     ("uit_close", [_P], None),
@@ -416,6 +427,27 @@ class Engine:
 
     def pics_moved(self):
         self._L.uit_pics_moved(self._e)
+
+    def carousel(self, out):
+        """The page's carousel as the last frame drew it (uit_carousel)
+        into `out`, an array('i') of 20: whether one drew."""
+        return bool(self._L.uit_carousel(self._e, _addr(out, 20)))
+
+    def carousel_tile(self, row, out):
+        """Row `row`'s tile into `out`, an array('i') of 4
+        (uit_carousel_tile): whether it shows."""
+        return bool(self._L.uit_carousel_tile(self._e, row, _addr(out, 4)))
+
+    def carousel_at(self, x, y):
+        """The row whose tile holds (x, y), -1 none (uit_carousel_at)."""
+        return self._L.uit_carousel_at(self._e, x, y)
+
+    def carousel_geom(self, band, fs, desk, out):
+        """The geometry the page's carousel lays out in `band` (an
+        array('i') of 4) into `out` (of 10), outside a frame
+        (uit_carousel_geom): whether the page has one."""
+        return bool(self._L.uit_carousel_geom(self._e, _addr(band, 4), fs, 1 if desk else 0,
+                                              _addr(out, 10)))
 
     def next(self):
         """The next event: (kind, a, b, c, text), or None."""

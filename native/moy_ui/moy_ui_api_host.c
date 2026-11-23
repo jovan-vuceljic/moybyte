@@ -387,6 +387,8 @@ static int rep_dirs(uint32_t rw) {
            | ((rw >> 24) ? 8 : 0);
 }
 
+static void host_stood(moy_ui_ctx_t *c);
+
 int moy_ui_api_host_begin(moy_ui_ctx_t *c, int32_t *in, moy_ui_box_t surface, int flags,
                           int fs, const int32_t *pf, int32_t *hp) {
     moy_ui_host_t *h = &c->host;
@@ -412,6 +414,10 @@ int moy_ui_api_host_begin(moy_ui_ctx_t *c, int32_t *in, moy_ui_box_t surface, in
         moy_ui_api_lag_note(c, h->hist, MOY_UI_HOST_HIST, MOY_UI_HOST_BANDS, h->began1 - 1,
                             h->shifting && (drawn || clean) ? (h->dy ? 2 : 1) : 0);
     }
+    if (h->stand && c->n_cur == 0) {
+        host_stood(c);
+    }
+    h->stand = 0;
     in[MOY_UI_IN_DT] = pf[MOY_UI_PF_DT];
     int settled = moy_ui_api_begin(c, in, surface, flags, fs);
     mua_kept_begin(c, f, hp[MOY_UI_HP_RETAINED]);
@@ -464,6 +470,24 @@ int moy_ui_api_host_arm(moy_ui_ctx_t *c) {
 
 void moy_ui_api_host_whole(moy_ui_ctx_t *c) {
     c->host.again = 1;
+}
+
+void moy_ui_api_host_stand(moy_ui_ctx_t *c) {
+    c->host.stand = 1;
+}
+
+// The frame begun last let its page stand and no pass of it drew the page:
+// what the frame before left stands in its place.
+static void host_stood(moy_ui_ctx_t *c) {
+    memcpy(c->cur, c->prev, c->n_prev * sizeof(moy_ui_stop_t));
+    c->n_cur = c->n_prev;
+    memcpy(c->cap_cur, c->cap_prev, c->n_cap_prev * sizeof(moy_ui_cap_t));
+    c->n_cap_cur = c->n_cap_prev;
+    for (int i = 0; i < MOY_UI_API_KEEP; i++) {
+        if (c->keep[i].id) {
+            c->keep[i].seen = 1;
+        }
+    }
 }
 
 int moy_ui_api_floor_box(const moy_ui_ctx_t *c, int32_t out[4]) {

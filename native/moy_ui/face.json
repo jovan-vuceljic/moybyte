@@ -112,6 +112,7 @@
       {"api": "host_begin", "hand": true},
       {"api": "host_arm"},
       {"api": "host_whole"},
+      {"api": "host_stand"},
       {"api": "keys_back"},
       {"api": "pop_box", "buf": {"out": 4}, "ret": "bool"},
       {"api": "text_view", "hand": true, "run": "nest", "run_fix": {"marks": "NULL"}},

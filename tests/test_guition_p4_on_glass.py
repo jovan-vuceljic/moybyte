@@ -399,6 +399,10 @@ def test_the_bar_wifi_widget_opens_the_wifi_panel(board):
     on_glass.the_bar_wifi_widget_opens_the_wifi_panel(board)
 
 
+def test_appearance_cart_is_claimed(board):
+    on_glass.appearance_cart_is_claimed(board)
+
+
 def test_every_system_app_claims_exactly_one_cart(board):
     on_glass.every_app_claims_one_cart(board)
 
@@ -547,10 +551,12 @@ def test_projects_opens(board):
     assert "projects" in st.get("order", ())
 
 
+def test_play_parks_the_windows_and_the_back_brings_them_back(board):
+    on_glass.play_parks_the_windows_and_the_back_brings_them_back(board)
+
+
 def test_window_buffers_are_single_retained_surfaces(board):
-    ret = board.state().get("win_retained") or {}
-    assert ret, "no window buffers to check"
-    assert all(v == 1 for v in ret.values()), ret
+    on_glass.window_buffers_are_single_retained_surfaces(board)
 
 
 def test_perf_line_is_the_one_format(board):
@@ -563,6 +569,10 @@ def test_the_wm_meters_answer_for_the_frame_they_measured(board):
     (.claude/rules/testing.md). This one was pinned on the Waveshare P4 alone
     and silently unpinned here."""
     on_glass.wm_meters_answer_for_the_frame_they_measured(board)
+
+
+def test_a_drag_touches_no_storage_and_rebuilds_no_cache(board):
+    on_glass.a_drag_touches_no_storage_and_rebuilds_no_cache(board)
 
 
 def test_a_cart_runs_and_exits(board):
@@ -710,6 +720,25 @@ def test_draw_gates_are_installed(board):
 
 def test_draw_gates_take_the_traffic(board):
     on_glass.draw_gates_take_the_traffic(board, windowed=True)
+
+
+# -- the OTA manifest verifier and updater (#53, #224), the Waveshare's checks --
+
+
+def test_verification_is_fast_enough_to_not_think_about(board):
+    on_glass.ota_verification_is_fast_enough(board)
+
+
+def test_the_ota_updater_is_live_on_this_board(board):
+    on_glass.ota_updater_is_live(board, "guition_p4")
+
+
+def test_the_rollback_confirm_comes_from_the_frame_loop(board):
+    on_glass.rollback_confirm_comes_from_the_frame_loop(board)
+
+
+def test_a_pending_marker_becomes_a_verdict_on_this_board(board):
+    on_glass.pending_marker_becomes_a_verdict(board)
 
 
 def test_the_cart_store_is_the_card_when_one_mounted(board):

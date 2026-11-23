@@ -285,3 +285,29 @@ def test_build_refuses_an_app_the_engine_refused_in_init(tmp_path):
     wasm_cart.build(os.path.join(fx, "uitree_more_wasm.moy"), str(tmp_path / "good.moy"))
     with pytest.raises(ValueError, match=r"T02 .*no state nothing"):
         wasm_cart.build(os.path.join(fx, "uitree_bad_wasm.moy"), str(tmp_path / "bad.moy"))
+
+
+def test_a_carousel_is_a_cards_look_the_rows_take_and_another_look_is_refused():
+    """A compiled app's carousel (`ut_carousel_`, sdk/include/moybyte/uitree.h):
+    cards look="carousel" lowers and draws; another word is refused at the
+    row that names it, by the contract's table."""
+    cards = _enums("sdk/include/moybyte/uitree_schema.h", "UT_")
+    cards = next(e for e in cards if "CARDS" in e)["CARDS"]
+    for look, ok in (("carousel", True), ("grid", False)):
+        r = Rows()
+        try:
+            m = r.state("items", MODEL, b"")
+            r.model(m, b"id\0name", bytes([TEXT, TEXT]), 0)
+            assert r.state("at", 6, b"items") >= 0
+            r.build("1 page")
+            page = r.node(PAGE, "page", -1)
+            node = r.node(cards, "items", page)
+            assert r.prop(node, "bind", "items") >= 0 and r.prop(node, "cur", "at") >= 0
+            got = r.prop(node, "look", look)
+            if ok:
+                assert got >= 0, r.read("error", cap=400)[1]
+            else:
+                assert got == E_CHECK
+                assert "cards look='grid'" in r.read("error", cap=400)[1], r.read("error", cap=400)[1]
+        finally:
+            r.close()

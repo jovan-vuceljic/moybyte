@@ -240,6 +240,21 @@ def test_a_pages_pool_keeps_each_text_once(compiled):
         assert not twice, (page, twice[:8])
 
 
+def test_a_frozen_entry_holds_its_blob_packed_and_a_load_inflates_it_whole(compiled):
+    """An image keeps each blob packed (`pack`: the header as it is, the
+    rest deflated), under half its bytes; `unpack` gives back the bare blob
+    byte for byte, and one that does not inflate to its header's length is
+    refused."""
+    packed = bare = 0
+    for page, blob in compiled.pages.items():
+        z, b = uitree_aot.entry(blob)[0], uitree_aot.bare(blob)
+        assert z[:32] == b[:32] and bytes(uitree_aot.unpack(z)) == b, page
+        packed, bare = packed + len(z), bare + len(b)
+    assert packed * 2 < bare, (packed, bare)
+    with pytest.raises(uitree_aot.Refused, match="does not inflate to its length"):
+        uitree_aot.unpack(z[:20] + (len(b) + 1).to_bytes(4, "little") + z[24:])
+
+
 def test_a_blob_carries_every_field_of_every_record():
     """Each struct a blob stores names every member in moy_uitree_aot.c's
     field tables; a slot's members the visit owns are listed there by name."""
@@ -311,15 +326,16 @@ def test_staging_compiles_the_staged_pages_and_names_a_stale_one(compiled, tmp_p
 def test_a_board_with_no_desk_stages_no_desk_page(compiled, tmp_path, capsys):
     """A handheld's image carries no page only a desk opens (each SYSTEM
     module's `DESK_PAGES`: the Editor's workspaces and its Sound pane, the
-    Licences page's desk build); which boards have a desk is the shell's metric class of each
-    board's glass."""
+    Licences page's desk build, the home's details pane); which boards have a desk is the
+    shell's metric class of each board's glass."""
     desk = dict((d.name, UC.has_desk(d)) for d in (ROOT / "firmware").iterdir()
                 if (d / "board.toml").exists())
     assert desk["lilygo_t_deck_plus_mainline"] is False and desk["guition_jc3248w535"] is False
     assert desk["esp32_p4_wifi6_touch_lcd_7b"] is True and desk["guition_jc8012p4a1c"] is True
     gone = UC.desk_pages()
-    assert gone == set(["about_ui.desk_page", "editor_sound.sound_page"] + ["editor_ui.%s_space" % k for k in
-                                                  ("settings", "code", "art", "world", "sound", "theme")])
+    assert gone == set(["about_ui.desk_page", "editor_sound.sound_page", "home_ui.page"] +
+                       ["editor_ui.%s_space" % k for k in
+                        ("settings", "code", "art", "world", "sound", "theme")])
     assert gone <= set(compiled.pages)
     mods = _staged(tmp_path)
     assert UC.stage(str(mods), desk=False) == 0
@@ -375,7 +391,8 @@ def test_on_the_boards_python_a_loaded_page_neither_builds_nor_lowers_and_keeps_
     first = [c for c in out["loaded"]["calls"] if c[0] == 0]
     assert all(c[2] == 0 and c[3] == 0 for c in first), first
     assert out["loaded"]["kept"] == out["built"]["kept"], (out["loaded"]["kept"], out["built"]["kept"])
-    assert out["loaded"]["forgot"] == out["loaded"]["desk"] == 0
+    assert out["loaded"]["forgot"] == 0, out["loaded"]["forgot"]
+    assert out["loaded"]["desk"] == out["built"]["desk"], (out["loaded"]["desk"], out["built"]["desk"])
 
 
 FRAMES_DRIVER = r'''
@@ -422,6 +439,10 @@ def frames(loop):
               ("licences", ws.open_settings, page("licences")), ("paired", ws.open_settings, page("paired")),
               ("achievements", ws.open_settings, page("achievements")),
               ("wifi", ws.open_settings, page("wifi")), ("tasks", None, ws.open_tasks), ("code", None, code)]
+    # the task manager's cpu and memory are measured live, so the rounds read them held
+    import tasks_ui
+    tasks_ui.cpu_text = lambda pm: "1%"
+    tasks_ui.mem_text = lambda b: "1 KB"
     steps(40)
     out = {"routes": [r[0] for r in routes], "moved": {}, "loads": {}}
     shots = {}

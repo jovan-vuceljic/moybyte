@@ -22,7 +22,8 @@ from runtime.chrome import text_scale_floor
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONTS = os.path.join(ROOT, "native", "moy_ui", "fonts")
 
-DESKS = (("p4", (1024, 600), 7.0), ("guition_p4", (1280, 800), 10.1))
+DESKS = (("p4", (1024, 600), 7.0), ("guition_p4", (1280, 800), 10.1),
+         ("elecrow_p4", (1024, 600), 10.1))
 
 
 def _ws(tmp_path, size=(1024, 600), diag=7.0, **kw):

@@ -303,6 +303,7 @@ def test_eggs_do_not_block_normal_nav(tmp_path):
     ws = _ws(tmp_path)
     drv = host_app.ConsoleDriver(ws)
     start = ws.launcher.sel
+    drv.frame(1 / 30)                        # (the home drawn: its row takes the keys)
     _press(drv, "right")                     # first key is "up", so this resets to 0
     assert ws.ach_ui._konami_pos == 0
     for _ in range(60):                      # the row glides, then settles
