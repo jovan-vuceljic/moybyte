@@ -213,8 +213,8 @@ def test_a_band_frame_is_pixel_faithful(tmp_path):
     assert calls[0] == n_mid + 1              # the forced frame went FULL
     assert ws.launcher.scroll == scroll
     full = bytes(ws.sys_canvas._buf)
-    row = ws.sys_canvas.w * ws.layout.status_h    # compare below the bar (the
-    assert full[row:] == partial[row:]            # clock may tick between)
+    row = 2 * ws.sys_canvas.w * ws.layout.status_h  # compare below the bar (the clock
+    assert full[row:] == partial[row:]              # may tick between): two bytes a pixel
     drv.touch_up()
     drv.frame(1 / 30)
     assert ws.screen == "launcher"            # and the release opened nothing

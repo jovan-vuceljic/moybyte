@@ -429,6 +429,9 @@ class App(AppLayer):
     IS_APP = None           # (is_app,): claims the app's identity cart
     ENGINE = None           # (Engine subclass,): uitree_editor.Engine for the Editor's kinds
     MIN = None              # (w, h): ui.app's min=, the window's least size in desk units
+    LENDS_BAR = False       # its pages lend the shell's bar a row (`ui.tools(KEY, lend="bar")`)...
+    bar_title = None        # ...after this title (None: the page's)
+    zone_gen = 0            # moves where what that row reads moved
 
     def __init__(self, ctx, names=None):
         self._surf, self._theme, self._damage = ctx.surface, ctx.theme, ctx.damage

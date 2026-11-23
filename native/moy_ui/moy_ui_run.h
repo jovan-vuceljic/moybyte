@@ -93,6 +93,9 @@ int moy_ui_run_table_part(void *target, int32_t out[8]);
 // The host's back over the run's frame drawn last (moy_ui_api_back): 1 where
 // the app takes it, 0 where the host leaves the app; `take` 0 only asks.
 int moy_ui_run_back(int take);
+// Whether the host took the way back the run's frame drawn last offered
+// (moy_ui_api_way_taken): 1 once, then 0.
+int moy_ui_run_way_taken(void);
 // The host's cancel over the run's frame drawn last (moy_ui_api_cancel): 1
 // where its focused field has an edit in progress, which `take` gives back.
 int moy_ui_run_cancel(int take);

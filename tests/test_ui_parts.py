@@ -2589,37 +2589,6 @@ def test_a_resting_pointer_on_a_desk_tool_shows_its_word_and_key_at_the_end():
     assert any(under), "the tooltip under the tool"
 
 
-def _bar_page():
-    st = {}
-
-    def draw():
-        ui.page("")
-        st["b"] = ui.bar("Story", ("undo", "redo"), (False, True), True)
-        return st
-    r = _Run(draw)
-    r.frame()
-    return r
-
-
-def test_the_bar_an_app_lends_is_read_and_tapped_by_its_host():
-    from runtime import iconsets
-    r = _bar_page()
-    title, slots, off, back, _chip = ui_draw.bar_lent(r.ctx)
-    assert title == "Story" and [iconsets.SLOTS[s] for s in slots] == ["undo", "redo"]
-    assert off == 0b10 and back is True
-    ui_draw.bar_tap(r.ctx, 0)
-    r.frame()
-    assert r.out["b"] == 0, "the tool the bar activated, once"
-    r.frame()
-    assert r.out["b"] == -1
-    ui_draw.bar_tap(r.ctx, 1)
-    r.frame()
-    assert r.out["b"] == -1, "a tool at half strength activates nothing"
-    ui_draw.bar_tap(r.ctx, -2)
-    r.frame()
-    assert r.out["b"] == ui.UP
-
-
 def test_a_bar_not_lent_this_frame_is_none():
     st = {"lend": True}
 
