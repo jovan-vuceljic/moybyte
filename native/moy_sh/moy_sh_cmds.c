@@ -1098,6 +1098,11 @@ static int clearcmd(int argc, char **argv) {
 #define MOY_SH_FETCH_CHIP 1
 #endif
 
+// The kernel's WiFi link and its address (native/moy_net/moy_net.h): weak,
+// so an image without moy_net, or a link not up, shows no IP row.
+int moy_net_link(uint32_t *ip);
+#pragma weak moy_net_link
+
 // The console's palette, its first sixteen the base colours (native/moy_ui's
 // generated tables): weak, NULL in an image without the toolkit (the Zero),
 // where neofetch draws plain.
@@ -1406,6 +1411,15 @@ static int neofetchcmd(int argc, char **argv) {
     fetch_console(f, text, tn, "theme", "Theme", 11);
     v = fetch_add(f, "Shell", 12);
     snprintf(v, FETCH_VALUE, "moy_sh (dash)");
+    uint32_t ip = 0;                    // network order: the first octet lowest
+    if (moy_net_link != NULL && moy_net_link(&ip) && ip != 0) {
+        v = fetch_add(f, "IP", 2);
+        if (v != NULL) {
+            snprintf(v, FETCH_VALUE, "%u.%u.%u.%u", (unsigned)(ip & 0xFF),
+                     (unsigned)((ip >> 8) & 0xFF), (unsigned)((ip >> 16) & 0xFF),
+                     (unsigned)(ip >> 24));
+        }
+    }
     fetch_console(f, text, tn, "wifi", "WiFi", 8);
     moy_sh_hfree(text);
 
