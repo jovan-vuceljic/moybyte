@@ -11,6 +11,60 @@
       "id": "CVE-2021-32921",
       "date": "2026-11-17",
       "reason": "A non-constant-time secret comparison in Prosody before 0.11.9; NVD names Lua 5.2 and later only as the runtime Prosody runs under. Nothing in Lua itself is affected, and the console runs no Prosody."
+    },
+    {
+      "pin": "native/moy_wasm/wamr_vendor.json",
+      "id": "GHSA-3963-9c35-mqhg",
+      "date": "2026-11-23",
+      "reason": "The unchecked offset is reached only through wasm_runtime_module_malloc and its kin, which no code of ours calls and whose callers in WAMR, libc-builtin and libc-wasi, are built out (WASM_ENABLE_LIBC_BUILTIN=0 and WASM_ENABLE_LIBC_WASI=0 on the boards, -DWAMR_BUILD_LIBC_BUILTIN=0 and -DWAMR_BUILD_LIBC_WASI=0 on the host)."
+    },
+    {
+      "pin": "native/moy_wasm/wamr_vendor.json",
+      "id": "GHSA-759c-wrgv-373r",
+      "date": "2026-11-23",
+      "reason": "fd_readdir is libc-wasi's, which no build compiles (WASM_ENABLE_LIBC_WASI=0, no libc-wasi in the vendored copy); a command's WASI is native/moy_wasm/moy_wasi.c, whose fd_readdir refuses a descriptor that is not a folder."
+    },
+    {
+      "pin": "native/moy_wasm/wamr_vendor.json",
+      "id": "GHSA-7r9m-5m8j-w9gw",
+      "date": "2026-11-23",
+      "reason": "The strtol and strtoul wrappers are libc-builtin's, which no build compiles (WASM_ENABLE_LIBC_BUILTIN=0, no libc-builtin in the vendored copy)."
+    },
+    {
+      "pin": "native/moy_wasm/wamr_vendor.json",
+      "id": "GHSA-9fcg-52m6-m9ww",
+      "date": "2026-11-23",
+      "reason": "fd_renumber is libc-wasi's, which no build compiles (WASM_ENABLE_LIBC_WASI=0, no libc-wasi in the vendored copy); native/moy_wasm/moy_wasi.c's fd_renumber answers fd_renumber(fd, fd) before it touches either descriptor."
+    },
+    {
+      "pin": "native/moy_wasm/wamr_vendor.json",
+      "id": "GHSA-g346-ch27-jm9r",
+      "date": "2026-11-23",
+      "reason": "Extended constant expressions are built out of the runtime (WASM_ENABLE_EXTENDED_CONST_EXPR=0 on the boards, WAMR's default of 0 on the host), where the advisory's module fails to load cleanly; wamrc compiles with them on, where a malformed module crashes only that compile."
+    },
+    {
+      "pin": "native/moy_wasm/wamr_vendor.json",
+      "id": "GHSA-g6c4-rrg2-2r9g",
+      "date": "2026-11-23",
+      "reason": "wasi_thread_start is lib-wasi-threads', which no build compiles (WASM_ENABLE_LIB_WASI_THREADS=0 and WASM_ENABLE_THREAD_MGR=0, no lib-wasi-threads in the vendored copy); every export the console calls by name has its type checked first."
+    },
+    {
+      "pin": "native/moy_wasm/wamr_vendor.json",
+      "id": "GHSA-h9g6-88wg-9v27",
+      "date": "2026-11-23",
+      "reason": "The wraparound is in the bounds checks wamrc emits for memory64, and the runtime is built without memory64 (WASM_ENABLE_MEMORY64=0), so its interpreter and AOT loaders both refuse a memory64 module."
+    },
+    {
+      "pin": "native/moy_wasm/wamr_vendor.json",
+      "id": "GHSA-j2xr-57ww-mfcw",
+      "date": "2026-11-23",
+      "reason": "wasi_sock_send is libc-wasi's and its race needs wasi-threads, neither of which any build compiles (WASM_ENABLE_LIBC_WASI=0, WASM_ENABLE_SHARED_MEMORY=0); native/moy_wasm/moy_wasi.c's sock_send reads no iovec and answers ENOTSOCK."
+    },
+    {
+      "pin": "native/moy_wasm/wamr_vendor.json",
+      "id": "GHSA-v5m3-pg8j-fqrv",
+      "date": "2026-11-23",
+      "reason": "realloc is libc-builtin's, which no build compiles (WASM_ENABLE_LIBC_BUILTIN=0, no libc-builtin in the vendored copy)."
     }
   ]
 }
