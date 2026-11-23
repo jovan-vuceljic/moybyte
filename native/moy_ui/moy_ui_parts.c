@@ -584,10 +584,20 @@ static void geo(const pd_t *d, moy_ui_box_t b, const moy_ui_vrow_t *r, int kind,
         pf_t fl = font_of(d, MOY_UI_FONT_UI);
         int gap = pm(d, MOY_UI_M_VALUE_ROW_GAP, 1);
         int lx = b.x + pad_of(d, r) + (r->icon_slot >= 0 || r->icon_glyph >= 0 ? 16 * d->fs + gap : 0);
-        int dots = g->dot + (r->n - 1) * g->step + (r->cur >= 0 && r->cur < r->n ? 2 * g->apart : 0);
+        int ap = r->cur >= 0 && r->cur < r->n ? 2 * g->apart : 0;
+        int dots = g->dot + (r->n - 1) * g->step + ap;
         int need = lx + tw(&fl, r->label.p, r->label.n, tscale(d->s)) + gap + g->ring + dots;
         if (need > g->right && need <= b.x + b.w) {
             g->right = need;
+        } else if (need > b.x + b.w) {
+            // nor whole there: the dots shrink, as far apart, until it is (2 px of the scale at least)
+            int sp = g->step - g->dot, room = b.x + b.w - (need - dots);
+            int step = (room + sp - ap) / r->n;
+            if (step - sp >= 2 * d->fs) {
+                g->right = b.x + b.w;
+                g->step = step;
+                g->dot = step - sp;
+            }
         }
     }
     int tw_ = pm(d, MOY_UI_M_VALUE_ROW_TRACK, 1);
@@ -678,8 +688,21 @@ moy_ui_box_t moy_ui_pics_tile(moy_ui_box_t b, int desk, int fs, int n, int i) {
     int dk = (desk & MOY_UI_DESK) != 0;
     int side = (dk ? 48 : 32) * fs, gap = (dk ? 12 : 8) * fs, pad = (dk ? 16 : 10) * fs;
     int x = b.x + b.w - pad - n * side - (n - 1) * gap + i * (side + gap);
-    return (moy_ui_box_t){(int16_t)x, (int16_t)(b.y + (b.h - side) / 2), (int16_t)side,
-                          (int16_t)side};
+    return (moy_ui_box_t){(int16_t)x, (int16_t)(b.y + b.h - (moy_ui_pics_h(desk, fs) + side) / 2),
+                          (int16_t)side, (int16_t)side};
+}
+
+int moy_ui_pics_two(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_vrow_t *r) {
+    if (!r->label.n || r->n <= 0) {
+        return 0;
+    }
+    pd_t d;
+    open_pd(s, &d, r->fs, r->desk);
+    pf_t fl = font_of(&d, MOY_UI_FONT_UI);
+    int gap = pm(&d, MOY_UI_M_VALUE_ROW_GAP, 1);
+    int tx = b.x + pad_of(&d, r) + (r->icon_slot >= 0 || r->icon_glyph >= 0 ? 16 * d.fs + gap : 0);
+    return tx + tw(&fl, r->label.p, r->label.n, tscale(s)) + gap
+           > moy_ui_pics_tile(b, r->desk, r->fs, r->n, 0).x;
 }
 
 int32_t moy_ui_vrow_at(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, const moy_ui_vrow_t *r,
@@ -811,6 +834,16 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
         }
     }
     int pad = pad_of(&d, r);
+    moy_ui_vrow_t low;
+    if (kind == MOY_UI_V_PICS && r->two) {
+        // its label on a line of its own over the tiles, cut to the row
+        pf_t f1 = font_of(&d, MOY_UI_FONT_UI);
+        text_cut(&d, &f1, r->label, b.x + pad, b.y, b.h - moy_ui_pics_h(r->desk, d.fs), b.w - 2 * pad,
+                 pal(&d, lab), sc);
+        low = *r;
+        low.label.n = 0;
+        r = &low;
+    }
     vgeo_t g;
     geo(&d, b, r, kind, &g);
     pf_t fl = font_of(&d, MOY_UI_FONT_UI), fv = font_of(&d, MOY_UI_FONT_CAPTION);
@@ -1220,6 +1253,18 @@ int moy_ui_vrow_w(const moy_ui_sink_t *s, int kind, const moy_ui_vrow_t *r) {
     int w = 2 * pad_of(&d, r) + gap;
     if (r->icon_slot >= 0 || r->icon_glyph >= 0) {
         w += 16 * d.fs + gap;
+    }
+    if (kind == MOY_UI_V_SEG) {
+        // its options as seg_box sets them from the right, its label's room
+        vgeo_t g;
+        pf_t fv = font_of(&d, MOY_UI_FONT_CAPTION);
+        geo(&d, (moy_ui_box_t){0, 0, 0, 0}, r, kind, &g);
+        w += r->label.n ? tw(&fl, r->label.p, r->label.n, sc) : -gap;
+        for (int j = 0; j < r->n; j++) {
+            moy_ui_span_t o = option(r->value, j);
+            w += tw(&fv, o.p, o.n, sc) + g.gap + (j ? (d.desk ? 4 : 2) * d.fs : 0);
+        }
+        return w;
     }
     w += tw(&fl, r->label.p, r->label.n, sc) + tw(&fl, r->value.p, r->value.n, sc);
     if (kind == MOY_UI_V_LINK) {

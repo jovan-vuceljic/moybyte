@@ -1000,8 +1000,8 @@ int moy_ui_button_x(moy_ui_box_t b, int flags, moy_ui_span_t label, int fs) {
     int pad = metric(MOY_UI_K_BUTTON, MOY_UI_M_BUTTON_PAD) * fs;
     tfont_t f = role_font(moy_ui_cart_ui(), MOY_UI_FONT_UI);
     int ell = 0;
-    size_t ln = moy_text_cut_px(f.id, label.p, label.n, b.w - 2 * pad - iw, fs, &ell);
-    int lw = t_w(&f, label.p, ln, fs) + (ell ? t_w(&f, (const uint8_t *)"\xe2\x80\xa6", 3, fs) : 0);
+    size_t ln = moy_ui_cut_text(f.id, label.p, label.n, b.w - 2 * pad - iw, fs, &ell);
+    int lw = !ln && (flags & MOY_UI_F_ICON) ? 0 : t_w(&f, label.p, ln, fs) + (ell ? t_w(&f, moy_ui_dots(ell).p, 3, fs) : 0);
     return b.x + button_off(b, iw, lw, fs);
 }
 
@@ -1069,13 +1069,15 @@ static void button_body(draw_t *d, moy_ui_box_t b, const moy_ui_btn_style_t *bs,
 
 // The face a button's label draws in: the `key` or `op` role's where the
 // kind's font leaf names one (moy_ui_button_style), a font is installed for
-// it and it draws every character of the label; else the ui role's.
-static void label_font(draw_t *d, const moy_ui_btn_style_t *bs, moy_ui_span_t label) {
+// it and it draws every character of the label, and the label fits the `w`
+// it has or the ui role's face does not draw it all; else the ui role's.
+static void label_font(draw_t *d, const moy_ui_btn_style_t *bs, moy_ui_span_t label, int w, int fs) {
     if (d->run || bs->font < 0) {
         return;
     }
     tfont_t f = role_font(d->cart, bs->font == 0 ? MOY_UI_FONT_KEY : MOY_UI_FONT_OP);
-    if (f.id != MOY_FONT_PETME128 && moy_text_covers(f.id, label.p, label.n)) {
+    if (f.id != MOY_FONT_PETME128 && moy_text_covers(f.id, label.p, label.n)
+        && (t_w(&f, label.p, label.n, fs) <= w || !moy_text_covers(d->f.id, label.p, label.n))) {
         d->f = f;
     }
 }
@@ -1136,7 +1138,7 @@ int moy_ui_button(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags, i
         return MOY_UI_OK;
     }
     use_part(&d, kind, state, fs);
-    label_font(&d, &bs, k->label);
+    label_font(&d, &bs, k->label, w - 2 * metric(MOY_UI_K_BUTTON, MOY_UI_M_BUTTON_PAD) * fs, fs);
     int icon = k->icon, gl = k->glyph;
     if (bs.check > 0 && (flags & MOY_UI_F_ON) && !(flags & (MOY_UI_F_ICON | MOY_UI_F_GLYPH))
         && k->label.n) {
@@ -1149,7 +1151,13 @@ int moy_ui_button(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags, i
     int iw = button_iw(flags, fs);
     int pad = metric(MOY_UI_K_BUTTON, MOY_UI_M_BUTTON_PAD) * fs;
     uint8_t lb[T_CUT];
-    moy_ui_span_t lt = t_cut(&d.f, k->label, w - 2 * pad - iw, fs, lb);
+    // beside an icon, a label that keeps no character is dropped: the icon stands alone
+    int ell = 0;
+    moy_ui_span_t lt = {k->label.p, 0};
+    if (!(flags & MOY_UI_F_ICON) || (icon < 0 && gl < 0)
+        || moy_ui_cut_text(d.f.id, k->label.p, k->label.n, w - 2 * pad - iw, fs, &ell) > 0) {
+        lt = t_cut(&d.f, k->label, w - 2 * pad - iw, fs, lb);
+    }
     int ln = lt.n;
     int tx = x + button_off(b, iw, t_w(&d.f, lt.p, (size_t)ln, fs), fs);
     if (!(flags & MOY_UI_F_ICON) && (flags & MOY_UI_F_GLYPH) && gl >= 0) {

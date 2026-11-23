@@ -917,13 +917,16 @@ typedef struct {
                                     // lit bars + 1 (0: none)
     int16_t check;                  // link: a pick, no chevron: 1 its place blank, 2 a check
                                     // there (the current pick)
+    int16_t two;                    // pics: its label on a line of its own over the tiles
+                                    // (moy_ui_pics_two), the row a line taller
 } moy_ui_vrow_t;
 enum { MOY_UI_VROW_PLAIN = 0, MOY_UI_VROW_DANGER = 1 };
 int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                 const moy_ui_vrow_t *r);
-// The width an info or a link row (`kind`) needs to draw its label and its
-// value whole: its pads, its icon, the two texts, a link's chevron, the gaps
-// between them. A row narrower cuts its label with an ellipsis.
+// The width an info, a link or a seg row (`kind`) needs to draw its label
+// and its value whole: its pads, its icon, the two texts (a seg's options,
+// `n` of them), a link's chevron, the gaps between them. A row narrower cuts
+// its label with an ellipsis.
 int moy_ui_vrow_w(const moy_ui_sink_t *s, int kind, const moy_ui_vrow_t *r);
 // The height a progress row given it draws tall at: its label and percent
 // on a line, its bar under them.
@@ -932,9 +935,13 @@ int moy_ui_vrow_tall_h(int desk, int fs);
 // radius 4 units, the current one's the selection's colour and the rest surface_alt's, the
 // pictures in them the caller's. Its height, and tile i's box in row box b: side, gap and right
 // pad 48, 12 and 16 px times `fs` on the desk (`desk` holds MOY_UI_DESK), 32, 8 and 10 units on
-// a handheld; the row is 64 px times `fs` tall on the desk, 44 units on a handheld.
+// a handheld; the row is 64 px times `fs` tall on the desk, 44 units on a handheld, the tiles
+// centred down its last that many (a row with its label on a line of its own is a line taller).
 int moy_ui_pics_h(int desk, int fs);
 moy_ui_box_t moy_ui_pics_tile(moy_ui_box_t b, int desk, int fs, int n, int i);
+// Whether pics row `r` in row box `b` cannot draw its label whole beside its tiles: it takes a
+// line of its own over them (`two`).
+int moy_ui_pics_two(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_vrow_t *r);
 // What x on row box b picks: a seg's, a swatch picker's, a pictures row's or a tab row's
 // option (-1 none), a slider's value (lo..hi), -1 for another kind.
 int32_t moy_ui_vrow_at(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, const moy_ui_vrow_t *r,
@@ -963,7 +970,7 @@ int moy_ui_table_geo(const moy_ui_sink_t *s, moy_ui_box_t b, const uint8_t *cols
 // icon by name (moy_ui_icon_slot, else the glyph table's; none with F_PART,
 // where the column is the app's part), with F_BAR the cursor bar (the
 // `value` token, 2 px of the scale) at the row's left, the first text
-// column cut with an ellipsis where the font has one.
+// column cut with an ellipsis ("..." in a font with none).
 int moy_ui_table_head(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_tgeo_t *g,
                       const uint8_t *cols, size_t cols_n, int fs, int desk);
 int moy_ui_table_row(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_tgeo_t *g,

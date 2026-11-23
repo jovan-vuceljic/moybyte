@@ -1441,10 +1441,12 @@ int moy_ui_api_part_at(const moy_ui_ctx_t *c, int32_t out[2]);
 // its row's.
 // MOY_UI_MEASURE_LINK: a link row, `text` its label and its value joined by
 // a tab; w the width that draws both whole (its pads, an icon before it, the
-// chevron: moy_ui_vrow_w), at most the row's, h its row's. 1, or 0 for an
-// unknown kind.
+// chevron: moy_ui_vrow_w), at most the row's, h its row's.
+// MOY_UI_MEASURE_SEG: a seg row (ui.choice's MOY_UI_V_SEG), `text` its label
+// and its options (NUL-separated, as ui.choice takes them) joined by a tab;
+// w and h as a link row's. 1, or 0 for an unknown kind.
 enum { MOY_UI_MEASURE_LABEL = 0, MOY_UI_MEASURE_BUTTON = 1, MOY_UI_MEASURE_PROGRESS = 2,
-       MOY_UI_MEASURE_LINK = 3 };
+       MOY_UI_MEASURE_LINK = 3, MOY_UI_MEASURE_SEG = 4 };
 int moy_ui_api_measure(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui_span_t text,
                        const moy_ui_over_t *o, int32_t out[5]);
 // ui.space(h): the stack moves `h` pixels down (0 or less: none), as a row

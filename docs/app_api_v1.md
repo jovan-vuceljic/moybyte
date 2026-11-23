@@ -292,8 +292,14 @@ card's `badge=` marks its picture and its `label_icon=` stands an icon
 before its label; a button's `kind=` may be a template, and `kind="bar"`
 alone is a flat icon, narrower than a button's; on the desk a popover
 anchored at a button or a link hangs under it; a swatches row whose label
-its dots would cut moves them into its right pad where that makes it whole;
-`ui.split(..., rule=True)` draws a rule between its cells;
+its dots would cut moves them into its right pad where that makes it whole,
+else shrinks them, as far apart, until it is;
+`ui.split(..., rule=True)` draws a rule between its cells; a row split's
+fixed sizes that its width cannot hold share it by their sizes, and a cell
+that is a row, a group or a seg widens to what it needs, its neighbours
+giving up at most half theirs; a row of buttons wider than its room closes
+its gaps, then stands its labelled icon buttons as their icons alone, from
+the end, until it fits;
 a slider's `look="blocks"` is a meter, its steps' blocks across the whole
 row (with no label, 10 units a step and 12 more wide in a row);
 `ui.stepper(value, prev, next)` is "‹ value ›", the bar's chevrons firing
@@ -305,7 +311,8 @@ value dim;
 the row, the index of its item, its items the lines `text=` renders over
 the row; a seg's `look="pictures"` shows each item as the picture its word
 names (`own:KEY`) in a tile at the row's right, the current one's on the
-selection plate, left and right wrapping and activation taking the next;
+selection plate, left and right wrapping and activation taking the next, its
+label on a line of its own over the tiles where they would cut it;
 `ui.pictures.put(key, render=..., clear=True)` leaves a drawn picture's
 corner colour out, the tile showing there; `ui.dialog(..., look="keys")` draws no buttons on the T-Deck, whose
 band's Enter and Esc are its buttons, and a dialog of more than one field

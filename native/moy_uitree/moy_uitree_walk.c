@@ -1611,10 +1611,11 @@ static void draw_pics(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
 
 // A split's cells' sizes across `span` (`_spans`): its first `limit` sizes, with a weight ("N*")
 // among them each int a fixed size in desk units and the weights sharing the rest, else every int
-// a weight; the last takes what rounding leaves. The count into *count.
+// a weight; the last takes what rounding leaves, across (`across`) the fixed sizes the span cannot
+// hold sharing it by their sizes. The count into *count.
 enum { SPLIT_CELLS = 8 };
 static int32_t split_spans(uit_t *e, const uit_node_t *N, int model, int row, int32_t room, int32_t gap,
-                           int limit, int32_t spans[SPLIT_CELLS], int *count)
+                           int across, int limit, int32_t spans[SPLIT_CELLS], int *count)
 {
     uint32_t zn, za = uit_tmpl_render(e, N->t_aux, model, row, &zn);
     int32_t v[SPLIT_CELLS];
@@ -1644,9 +1645,11 @@ static int32_t split_spans(uit_t *e, const uit_node_t *N, int model, int row, in
                 ws += v[i];
             else
                 fixed += size_of(e, v[i]);
-        int32_t rest = span - fixed > 0 ? span - fixed : 0;
+        int32_t rest = span - fixed > 0 ? span - fixed : 0, share = across && fixed > span && span > 0;
         for (int i = 0; i < nz; i++)
-            spans[i] = weight[i] ? rest * v[i] / (ws > 1 ? ws : 1) : size_of(e, v[i]);
+            spans[i] = weight[i] ? rest * v[i] / (ws > 1 ? ws : 1)
+                       : share   ? (int32_t)((int64_t)size_of(e, v[i]) * span / fixed)
+                                 : size_of(e, v[i]);
     } else {
         int32_t tot = 0;
         for (int i = 0; i < nz; i++)
@@ -1716,7 +1719,7 @@ static void pop_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     int32_t x = out[0] + pad, y = out[1] + pad, w = out[2] - 2 * pad > 0 ? out[2] - 2 * pad : 0;
     int32_t spans[SPLIT_CELLS];
     int nz;
-    split_spans(e, N, model, row, w, gap, nk, spans, &nz);
+    split_spans(e, N, model, row, w, gap, 1, nk, spans, &nz);
     int32_t at = x;
     for (int i = 0; i < nk && i < nz; i++) {
         int g = kids[i];
@@ -1886,11 +1889,37 @@ static int32_t row_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, i
     return w;
 }
 
-static int32_t row_need(uit_t *e, int k, int model, int row, int32_t h);
+static int32_t row_need(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
+                        int32_t h, int least);
+static int32_t button_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
+
+// The width seg `k` (a seg of words) needs to show its label and options whole, else 0.
+static int32_t seg_need(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+{
+    const uit_node_t *N = NODE(k);
+    if (N->lit & (NL_PICS | NL_FIELD | NL_CYCLE | NL_SWATCH))
+        return 0;
+    uint32_t mark = e->scratch.n, n1, len;
+    int count, at;
+    uint32_t a1 = text(e, k, 0, model, row, &n1), items = seg_items(e, N, &len, &count, &at);
+    char buf[256];
+    uint32_t n = 0;
+    if (n1 + 1 + len <= sizeof buf) {
+        memcpy(buf, e->scratch.p + a1, n1);
+        buf[n1] = '\t';
+        memcpy(buf + n1 + 1, e->scratch.p + items, len);
+        n = n1 + 1 + len;
+    }
+    e->scratch.n = mark;
+    int32_t out[5] = {0};
+    if (n)
+        moy_ui_api_measure(c, s, MOY_UI_MEASURE_SEG, span_of(buf, n), NULL, out);
+    return out[2];
+}
 
 // A row split's widths (`_fit_spans`): each group cell whose link rows need more than its size,
 // and each row whose cells' natural widths do, gives it widened to that need, the cells beside
-// it giving up at most half their share.
+// it giving up at most half their share, down to their needs (a row's least: `row_need`).
 static void fit_spans(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int *kids, int nk,
                       int model, int row, int32_t *spans, int nz, int32_t h)
 {
@@ -1900,11 +1929,16 @@ static void fit_spans(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, const i
         if (NODE(kids[i])->kind == UIT_GROUP)
             any |= (need[i] = row_w(e, c, s, kids[i], model, row)) > 0;
         else if (NODE(kids[i])->kind == UIT_ROW)
-            any |= (need[i] = row_need(e, kids[i], model, row, h)) > 0;
+            any |= (need[i] = row_need(e, c, s, kids[i], model, row, h, 0)) > 0;
+        else if (NODE(kids[i])->kind == UIT_SEG)
+            any |= (need[i] = seg_need(e, c, s, kids[i], model, row)) > 0;
     if (!any)
         return;
-    for (int j = 0; j < nz; j++)
-        floor[j] = spans[j] / 2 > need[j] ? spans[j] / 2 : need[j];
+    for (int j = 0; j < nz; j++) {
+        int32_t least = j < nk && NODE(kids[j])->kind == UIT_ROW
+                            ? row_need(e, c, s, kids[j], model, row, h, 1) : need[j];
+        floor[j] = spans[j] / 2 > least ? spans[j] / 2 : least;
+    }
     for (int i = 0; i < nk && i < nz; i++) {
         int32_t short_ = need[i] - spans[i];
         for (int j = 0; j < nz && short_ > 0; j++) {
@@ -1979,21 +2013,14 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
     int pad = gap_px(e, N->btn), gap = gap_px(e, N->nbtn), nz;
     int32_t r[4], spans[SPLIT_CELLS];
     moy_ui_inset32(e->rect, pad, pad, r);
-    int32_t span = split_spans(e, N, model, row, across ? r[2] : r[3], gap, SPLIT_CELLS, spans, &nz);
+    int32_t span = split_spans(e, N, model, row, across ? r[2] : r[3], gap, across, SPLIT_CELLS, spans, &nz);
     int kids[SPLIT_CELLS], nk = 0;
     KIDS(k, g)
     if (nk < SPLIT_CELLS && uit_shown(e, g, model, row))
         kids[nk++] = g;
-    if (across) {
-        // fixed widths the span cannot hold share it by their sizes, then widen to their needs
-        int32_t sum = 0;
-        for (int i = 0; i < nz; i++)
-            sum += spans[i];
-        if (sum > span && span > 0)
-            for (int i = 0; i < nz; i++)
-                spans[i] = (int32_t)((int64_t)spans[i] * span / sum);
+    if (across)
         fit_spans(e, c, s, kids, nk, model, row, spans, nz, r[3]);
-    } else
+    else
         fit_heights(e, kids, nk, model, row, spans, nz);
     int32_t at = 0;
     for (int i = 0; i < nk && i < nz; i++) {
@@ -2437,18 +2464,43 @@ static int button_kind(uit_t *e, int k, int model, int row)
     return kind;
 }
 
+// Whether button `k` shows an icon: its icon= rendered, else its action's.
+static int btn_icon(uit_t *e, int k, int model, int row)
+{
+    const uit_node_t *N = NODE(k);
+    if (N->t_icon < 0)
+        return N->act >= 0 && uit_str(e, e->acts[N->act].icon)[0];
+    uint32_t ni, mark = e->scratch.n;
+    uit_tmpl_render(e, N->t_icon, model, row, &ni);
+    e->scratch.n = mark;
+    return ni != 0;
+}
+
+// Cells `w` of a row `used` wide in `room`: where they do not fit, a labelled button with an
+// icon, from the end, stands as its icon alone until they do (the toolkit drops a label that keeps
+// no character beside its icon). `km`, `kr` each cell's model and row, NULL for `model`, `row`.
+// Answers the width they take then.
+#define ALONE_W(e) (((e)->flags & UIT_F_DESK) ? 36 : 26 * (e)->fs)
+static int32_t icons_alone(uit_t *e, const int16_t *kids, const int16_t *km, const int16_t *kr, int model,
+                        int row, int32_t *w, int n, int32_t used, int32_t room)
+{
+    int32_t a = ALONE_W(e);
+    for (int i = n - 1; i >= 0 && used > room; i--) {
+        const uit_node_t *G = NODE(kids[i]);
+        if (G->kind == UIT_BUTTON && !(G->btn & (BT_ALONE | BT_GROW)) && w[i] > a
+            && btn_icon(e, kids[i], km ? km[i] : model, kr ? kr[i] : row))
+            used -= w[i] - a, w[i] = a;
+    }
+    return used;
+}
+
 // A button's natural width: its label's with the toolkit's pads (its minimum taken), and its
 // icon's room where it has one beside its label.
 static int32_t button_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     const uit_node_t *N = NODE(k);
     uint32_t n, mark = e->scratch.n, a = text(e, k, 0, model, row, &n);
-    int icon = N->t_icon >= 0 || (N->act >= 0 && uit_str(e, e->acts[N->act].icon)[0]);
-    if (N->t_icon >= 0) {
-        uint32_t ni;
-        uit_tmpl_render(e, N->t_icon, model, row, &ni);
-        icon = ni != 0;
-    }
+    int icon = btn_icon(e, k, model, row);
     int32_t out[5];
     moy_ui_api_measure(c, s, MOY_UI_MEASURE_BUTTON, sspan(e, a, n), NULL, out);
     e->scratch.n = mark;
@@ -2736,6 +2788,12 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
         used += ws[i];
     }
     used += gap * (n - 1);
+    if (used > room && n > 1) {         // wider than the room: the gaps close first
+        int32_t g = gap - (used - room + n - 2) / (n - 1);
+        g = g > 0 ? g : 0;
+        used -= (gap - g) * (n - 1), gap = g;
+    }
+    used = icons_alone(e, kids, NULL, NULL, model, row, ws, n, used, room);
     int32_t at = x;
     if (fill >= 0)
         ws[fill] = room - used > 0 ? room - used : 0;
@@ -4102,21 +4160,34 @@ static int row_kids(uit_t *e, int k, int model, int row, int16_t *kids, int16_t 
     return n;
 }
 
-// The width row `k`'s cells take at their natural widths, its gaps and pads (`row_cells`); 0
-// where one of them is a fill.
-static int32_t row_need(uit_t *e, int k, int model, int row, int32_t h)
+// The width row `k`'s cells take at their natural widths, its gaps and pads: on a placed page
+// `row_cells`'s, 0 where one of them is a fill; else `draw_flow_row`'s, a fill taking none. With
+// `least`, each labelled button with an icon as its icon alone (`icons_alone`), and a flow row's
+// gaps closed.
+static int32_t row_need(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
+                        int32_t h, int least)
 {
     int16_t kids[PLACE_KIDS], km[PLACE_KIDS], kr[PLACE_KIDS];
-    int st = 0, st_shown = 0;
+    int st = 0, st_shown = 0, desk = (e->flags & UIT_F_DESK) != 0;
     int n = row_kids(e, k, model, row, kids, km, kr, &st, &st_shown);
     const uit_node_t *R = NODE(k);
     int32_t w = 0, x;
     for (int i = 0; i < n; i++) {
-        if ((x = natural(e, kids[i], km[i], kr[i], h)) < 0)
+        int kind = NODE(kids[i])->kind;
+        if (kind == UIT_RULE)
+            x = desk ? 1 : e->fs;
+        else if (!e->placed && kind == UIT_BUTTON)
+            x = button_w(e, c, s, kids[i], km[i], kr[i]);
+        else if ((x = natural(e, kids[i], km[i], kr[i], h)) < 0 && e->placed)
             return 0;
-        w += x;
+        if (least && kind == UIT_BUTTON && x > ALONE_W(e) && !(NODE(kids[i])->btn & (BT_ALONE | BT_GROW))
+            && btn_icon(e, kids[i], km[i], kr[i]))
+            x = ALONE_W(e);
+        w += x > 0 ? x : 0;
     }
-    int32_t gap = len_of(e, R->t_value, model, row, row_gap(e)), pad = len_of(e, R->t_aux, model, row, 0);
+    int32_t gap = len_of(e, R->t_value, model, row, e->placed ? row_gap(e) : desk ? 12 : 6 * e->fs);
+    gap = least && !e->placed ? 0 : gap;
+    int32_t pad = len_of(e, R->t_aux, model, row, 0);
     return n ? w + gap * (n - 1) + 2 * pad : 0;
 }
 
@@ -4328,6 +4399,10 @@ static void row_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     int32_t gap = R->kind == UIT_ROW ? len_of(e, R->t_value, model, row, row_gap(e)) : row_gap(e);
     int32_t pad = R->kind == UIT_ROW ? len_of(e, R->t_aux, model, row, 0) : 0;
     int32_t x0 = r[0] + pad, x1 = r[0] + r[2] - pad, ms = 0, b = 0;
+    int32_t sum = gap * (n > 1 ? n - 1 : 0);
+    for (int i = 0; i < n; i++)
+        sum += nat[i] >= 0 ? nat[i] : base[i];
+    icons_alone(e, kids, km, kr, model, row, nat, n, sum, x1 - x0);
     int fills = 0;
     for (int i = 0; i < n; i++)
         fills += nat[i] < 0;

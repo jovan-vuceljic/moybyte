@@ -95,10 +95,10 @@ ui.action("tap0", "Tap", tap0)
 
 def test_a_swatches_rows_cut_label_takes_its_right_pad_where_that_makes_it_whole(tmp_path):
     """A swatches row whose dots would cut its label moves them into its
-    right pad where that makes the label whole, and only then: across labels
-    a letter longer each, the dots stand where a short label's do, then
-    (one label at least) further right, then back where they were, the
-    label cut either way."""
+    right pad where that makes the label whole, else shrinks them until it
+    is: across labels a letter longer each, the dots stand where a short
+    label's do, then (one label at least) further right, the longest's
+    leftmost further right still."""
     build = '''
 def build():
     with ui.page("Shelf"):
@@ -126,7 +126,7 @@ ui.hook("opened", fill)
     assert all(x >= rest for x in xs), (rest, xs)
     moved = [i for i, x in enumerate(xs) if x > rest]
     assert moved, (rest, xs)
-    assert xs[-1] == rest, (rest, xs)
+    assert xs[-1] > xs[moved[0]], (rest, xs)
 
 
 def test_a_bar_items_icon_alone_is_narrower_than_a_buttons(tmp_path):

@@ -3816,8 +3816,14 @@ int32_t moy_ui_api_pics(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t l
                         int32_t cur, const moy_ui_over_t *o, int32_t out[5]) {
     o = mua_over(o);
     n = n < 0 ? 0 : n > 255 ? 255 : n;
+    moy_ui_vrow_t r;
+    mua_vrow_init(c, &r, label);
+    r.n = (int16_t)n;
+    // a label the tiles would cut: on a line of its own over them
+    r.two = (int16_t)(!c->has_at && moy_ui_pics_two(s, stack_row(c), &r));
     int stacked;
-    moy_ui_box_t b = mua_place(c, moy_ui_pics_h(mua_ground_of(c), c->fs), &stacked);
+    moy_ui_box_t b = mua_place(c, moy_ui_pics_h(mua_ground_of(c), c->fs) + (r.two ? mua_row_h(c) : 0),
+                               &stacked);
     int st = 0, moved = 0;
     if (o->disabled != 1) {
         st = mua_stop(c, mua_id_of(c, o, label), b, STOP_KEEP_LR, mua_name_of(o, label));
@@ -3826,9 +3832,6 @@ int32_t moy_ui_api_pics(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t l
         }
         st = st < 0 ? 0 : st;
     }
-    moy_ui_vrow_t r;
-    mua_vrow_init(c, &r, label);
-    r.n = (int16_t)n;
     if (n > 0) {
         // left and right step it while focused, wrapping; activation takes the next, a tap
         // the tile tapped
@@ -4295,7 +4298,7 @@ int moy_ui_api_measure(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui
     } else if (kind == MOY_UI_MEASURE_PROGRESS) {
         h = moy_ui_vrow_tall_h(c->cls, c->fs);
         w = r.w;
-    } else if (kind == MOY_UI_MEASURE_LINK) {
+    } else if (kind == MOY_UI_MEASURE_LINK || kind == MOY_UI_MEASURE_SEG) {
         moy_ui_span_t label = text, value = {text.p, 0};
         for (uint16_t i = 0; i < text.n; i++) {
             if (text.p[i] == '\t') {
@@ -4311,7 +4314,15 @@ int moy_ui_api_measure(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui
         v.icon_glyph = c->icon_glyph;
         v.value = value;
         h = vrow_h(c);
-        w = moy_ui_vrow_w(s, MOY_UI_V_LINK, &v);
+        if (kind == MOY_UI_MEASURE_SEG) {
+            v.icon_slot = c->row_slot;      // as ui.choice's (mua_vrow_init)
+            v.icon_glyph = c->row_glyph;
+            for (uint16_t i = 0; i < value.n; i++) {
+                v.n += value.p[i] == 0;
+            }
+            v.n += value.n && value.p[value.n - 1] != 0;     // as ui.choice counts them
+        }
+        w = moy_ui_vrow_w(s, kind == MOY_UI_MEASURE_SEG ? MOY_UI_V_SEG : MOY_UI_V_LINK, &v);
     } else {
         return 0;
     }
