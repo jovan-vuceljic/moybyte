@@ -186,9 +186,8 @@ def _paged(edge, cells):
     """Whether the bar page draws a bar's widgets (`_page_draw`): a top or
     bottom bar whose cells are the page's in its order, some of
     `bar_engine.LEFT` from its start and of its RIGHT from its end, its
-    zone among them (`bar_engine.placed`, read off the packing), on a desk
-    (a handheld's status cluster keeps its ring room: not the page's yet)."""
-    if edge not in ("top", "bottom") or _layout_base.metric_class() != _layout_base.DESK:
+    zone among them (`bar_engine.placed`, read off the packing)."""
+    if edge not in ("top", "bottom"):
         return False
     zone = False
     side = 0
@@ -1441,7 +1440,9 @@ class BarLayer:
             self._ink_dx = self._status_dx(cells, self._cluster(game)) \
                 if looked and not across else None
             paged = looked and not across and _paged(edge, cells)
-            sel = None if game or across or paged else self._selected_box(where, cells)
+            # (the page marks an open status item; a handheld's open cluster is the bar's)
+            sel = None if game or across or (paged and not self._cluster(game)) \
+                else self._selected_box(where, cells)
             self._sel_ink = None
             if sel is not None:
                 # the bar item whose popover is open: selected, the tabs' fill;
@@ -1702,17 +1703,14 @@ class BarLayer:
             x -= ox
             for c in cells:
                 if c[0] == name:
-                    r = c[1]
                     break
             else:
                 return
             if name == "battery":
-                u = _layout_base.unit()
+                u = self.ws.layout.cs              # the page's unit
                 side = 16 * u
                 self._battery_glyph(cv, x + (w - side) // 2, (box[3] - side) // 2, side, u,
                                     self._battery_state())
-            else:
-                self._paint_look_cell(cv, where, name, (x, r[1], w, r[3]), None, box, False)
         finally:
             if ox or oy:
                 cv.camera(0, 0)
@@ -2088,8 +2086,11 @@ class BarLayer:
         u = _layout_base.unit()
         x0 = x1 = None
         y = side = 0
+        paged = _paged("top", cells)        # (a cluster stands on a top or bottom bar)
         for name, r, text, _slot in cells:
-            if name == "status" and text:
+            if paged and name in _CLUSTER:
+                a, b = r[0], r[0] + r[2] - 1            # the page's cells: each its ink wide
+            elif name == "status" and text:
                 a = self._status_x(r, text)[0] + u
                 b = a
             elif name in ("wifi", "battery"):
@@ -2665,10 +2666,16 @@ class BarLayer:
             return bool(owner.zone_tap(px, py, zone)) \
                 if owner is not None and zone is not None else False
         hit = None
+        cluster = None
+        hh = self._cluster(self.zone_is_game(where)) and bar[0] in ("top", "bottom")
         for c in cells:
+            if hh and c[0] in _CLUSTER:
+                cluster = c if cluster is None else (c[0], _union(cluster[1], c[1]))
             if c[0] in _TAPPED and _in(px, py, c[1]):
                 hit = c
                 break
+        if hit is None and cluster is not None and _in(px, py, cluster[1]):
+            hit = cluster               # the gaps between the cluster's icons are its own
         name = hit[0] if hit is not None else None
         # Clock Easter egg (#21): tapping the bar's clock _CLOCK_TAP_GOAL times
         # wakes the Time Traveler; every tap also opens (or closes) its calendar.

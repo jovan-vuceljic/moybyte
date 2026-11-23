@@ -303,11 +303,9 @@ def test_moys_bar_is_the_moy_button_then_status(tmp_path, desk):
     L = ws.layout
     assert L.status_h == (40 if desk else 28)
     names = _names_of(L.bars)[0]
-    # (a handheld's status cluster keeps its ring's room: a `status` cell
-    # ahead of the Wi-Fi, empty of items)
-    status = [] if desk else ["status"]
-    assert names[0] == "menu" and names[-4 - len(status):] == \
-        ["zone"] + status + ["wifi", "battery", "clock"]
+    # (a handheld's status cluster keeps its ring's room in the page's
+    # cluster row: no cell of its own)
+    assert names[0] == "menu" and names[-4:] == ["zone", "wifi", "battery", "clock"]
     assert ("chips" in names) == desk
     menu = L.bars[0][3][0][1]
     assert menu[0] == 2 * L.cs and menu[2] == layout_base.sys_tile(L.status_h)[2]

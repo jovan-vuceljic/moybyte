@@ -54,6 +54,9 @@ TAP_MIN = 16
 # Pages whose taps a host resolves by a hit of its own rather than their
 # stops' boxes, each with why: the app's module.
 OWN_HIT = {
+    "runtime.bar_ui":
+        "the bar layer resolves a bar tap by its cells (BarLayer._tap_bar), a handheld's status "
+        "cluster one target across its icons and the gaps between them",
     "runtime.wm_strip_ui":
         "the window manager resolves a strip tap by its fat-finger hit, at least 32 px a button "
         "(WindowChrome._strip_button_hit)",
