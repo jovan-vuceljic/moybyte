@@ -85,12 +85,20 @@ def hostlua():
     if os.path.exists(out):
         return out
     os.makedirs(BUILD, exist_ok=True)
-    main = os.path.join(BUILD, "main.c")
+    # each builder its own files: two test workers building at once must not
+    # write one binary while the other renames or runs it (ETXTBSY)
+    tag = ".%d" % os.getpid()
+    main = os.path.join(BUILD, "main" + tag + ".c")
     with open(main, "w") as f:
         f.write(MAIN_C)
-    subprocess.check_call(["cc", "-O1", "-w", "-I" + LUA_SRC] + ["-I" + os.path.dirname(p) for p in CHECK_SRC[2:]] +
-                          ["-o", out + ".tmp", main, CHECK_SRC[0]] + srcs + ["-lm"])
-    os.replace(out + ".tmp", out)
+    try:
+        subprocess.check_call(["cc", "-O1", "-w", "-I" + LUA_SRC] + ["-I" + os.path.dirname(p) for p in CHECK_SRC[2:]] +
+                              ["-o", out + tag, main, CHECK_SRC[0]] + srcs + ["-lm"])
+        os.replace(out + tag, out)
+    finally:
+        for f in (main, out + tag):
+            if os.path.exists(f):
+                os.remove(f)
     return out
 
 

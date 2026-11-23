@@ -1995,11 +1995,11 @@ def test_the_home_idle_paints_nothing_and_allocates_nothing(result):
 
 
 # What the T-Deck home's frame over a live wallpaper may allocate: every
-# frame is a full paint -- the wallpaper, its blit, the hint strip as it was
-# laid out (`HomeHints._hint_laid_out`) and the band's table pass. What is
+# frame is a full paint -- the wallpaper, its blit, the hint strip's page
+# over the rows put last (`HomeHints._hint_moved`) and the band's table pass. What is
 # left is the band pass's cards and caption, the path HOME_BAND_FRAME holds
-# a ceiling over (2026-11-18: 576 B, down from 3 KB).
-HOME_LIVE_FRAME = 640
+# a ceiling over (2026-11-18: 576 B, down from 3 KB; 240 B 2026-11-23).
+HOME_LIVE_FRAME = 384
 
 
 def test_a_live_wallpaper_home_frame_allocates_under_its_ceiling(result):
@@ -2057,13 +2057,17 @@ def test_a_home_band_frame_allocates_under_its_ceiling(result):
 # (3216 before, the press's the most;
 # 2816 when the home moved the row and the band kept its tiles; 2928 and
 # 1309 on the band's table of parts, 3264 and 1821 before its keys were
-# kept and its geometry read once a pass); the icons' drag a median of 960
-# and their fling 896 on the engine's look="icons" (2026-11-23; 1600 before
-# each card's cover was kept for it and the engine held a grid's picture
-# names, 736 and 784 on the Python cells before it).
+# kept and its geometry read once a pass); the icons' drag a median of 352
+# and their fling 304 on the engine's look="icons" (2026-11-23: 960 and 896
+# while a kept face's stamp built a tuple a card, four names assigned four
+# values at once; 1600 before each card's cover was kept for it and the
+# engine held a grid's picture names, 736 and 784 on the Python cells
+# before it). The fling's largest frames are the first ones, which decode
+# the covers the band brings in (the decode's output, kept): 352 a frame
+# once the covers are in.
 HOME_SWIPE_FRAME = 3 * 1024
 HOME_SWIPE_MEAN = 1536
-ICONS_SWIPE_MEDIAN = 1024
+ICONS_SWIPE_MEDIAN = 512
 
 
 def _moved(info, key, least):

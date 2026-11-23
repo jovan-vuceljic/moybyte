@@ -3941,6 +3941,54 @@ static void draw_month(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
         fire(e, a, k, model, row, NULL);
 }
 
+static void put_cell(uit_t *e, int k, int model, int row, const int32_t r[4]);
+
+// A hints row: each row of its model a keycap hint, keys= its keys (an action the input's keys
+// draw, or keys spelled out) and label= what they do; the rows tail= holds stand at its end, the
+// others from its start in order while they fit, the rows drop= holds going first, the last
+// first (moy_ui_api_hint_row). No stop: a press on one fires on= with its row.
+static void draw_hints(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
+{
+    enum { MAX = 16 };
+    const uit_node_t *N = NODE(k);
+    int m = N->slot, rows[MAX], n = 0, tail = 0;
+    uint32_t drop = 0;
+    // each row's keys and words rendered one after the other into the scratch, each with its
+    // NUL: the pairs' items, made with nothing taken from the heap once the scratch has grown
+    uit_buf_t *b = &e->scratch;
+    uint32_t mark = b->n;
+    for (int end = 0; end < 2; end++)
+        for (int r = 0; m >= 0 && r < e->slots[m].nrows && n < MAX; r++) {
+            if ((N->mark >= 0 && uit_cond_eval(e, N->mark, m, r)) != end)
+                continue;
+            uint32_t kn = 0, ln = 0;
+            if (N->t_value >= 0)
+                uit_tmpl_render(e, N->t_value, m, r, &kn);
+            else
+                uit_buf_put(b, "", 0);
+            if (N->t_main >= 0)
+                uit_tmpl_render(e, N->t_main, m, r, &ln);
+            else
+                uit_buf_put(b, "", 0);
+            if (!end && N->cur >= 0 && uit_cond_eval(e, N->cur, m, r))
+                drop |= 1u << n;
+            rows[n++] = r;
+            tail += end;
+        }
+    int32_t sp[4 + 2 * MAX];
+    uint32_t len = b->n > mark ? b->n - mark - 1u : 0;
+    int at = moy_ui_api_hint_row(c, s, (const uint8_t *)(len ? b->p + mark : ""), len, tail, drop, sp,
+                                 4 + 2 * n);
+    b->n = mark;
+    for (int i = 0; i < n; i++)
+        if (sp[5 + 2 * i] > sp[4 + 2 * i]) {
+            int32_t r[4] = {sp[4 + 2 * i], sp[1], sp[5 + 2 * i] - sp[4 + 2 * i], sp[3]};
+            put_cell(e, k, m, rows[i], r);      // where a press on it lands (`uit_rect` ROWKEY/KEY)
+        }
+    if (at >= 0 && at < n && N->on >= 0 && uit_act_can(e, N->on, m, rows[at]))
+        fire(e, N->on, k, m, rows[at], NULL);
+}
+
 // An info's or a link's tag=, tone= (its ink: a theme role) and signal= (0-4 bars) on `o`; the
 // tag's text stays in the scratch for the draw.
 static void value_over(uit_t *e, int k, int model, int row, moy_ui_over_t *o)
@@ -4387,6 +4435,9 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         break;
     case UIT_MONTH:
         draw_month(e, c, s, k, model, row);
+        break;
+    case UIT_HINTS:
+        draw_hints(e, c, s, k);
         break;
     case UIT_NOTE: {
         // its icon ("info" where it has none) and each line's paragraph, empty ones kept
@@ -4879,6 +4930,8 @@ static int32_t fixed_h(uit_t *e, int k)
         return N->t_aux >= 0 ? len_of(e, N->t_aux, -1, -1, 0) : -1;
     case UIT_STATUS:
         return status_h(e);
+    case UIT_HINTS:                     // a hints row: a fill of its stack
+        return -1;
     case UIT_RULE:                      // a rule across: its line
         return (e->flags & UIT_F_DESK) ? 1 : e->fs;
     case UIT_TOOLS:

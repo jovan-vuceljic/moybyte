@@ -92,7 +92,10 @@ def draw_new_art(cv, th, rect, r, stepped, spec, fs=1):
     them, `r` plus its width, so the frame's corner reads rounded at 1x as
     a filled cover's does where a thin line at `r` reads square (design
     review R5-10, F6-04)."""
-    x, y, w, h = rect[0], rect[1], rect[2], rect[3]
+    x = rect[0]
+    y = rect[1]
+    w = rect[2]
+    h = rect[3]
     if not _ui_draw.depth()[5]:
         line = 2 * fs
         cv.rrect(x, y, w, h, r + line, th.get("border", 0), stepped=stepped)
@@ -210,13 +213,20 @@ def _draw_broken_badge(cv, names, th, rect):
         cv.rect(x + side - m - t - k, y + m + k, t, 1, red)
 
 
+# The value_row metrics' slots (MOY_UI_M_VALUE_ROW_*): the desk's key cap, and
+# the band of hints, the handheld's and the desk's.
+VR_KEY_DESK, VR_HINTS, VR_HINTS_DESK = 15, 16, 17
+
+
 def _hint_strip(lay, keys, desk):
     """The home's hint strip along the content's foot, (x, y, w, h): the
     handheld's 20 rows at the font scale, the desk's 34 glass pixels at the
-    target's 1x or 18 rows, none under touch (no `keys`), whose cards take
-    its height. Every arrangement's, so the strip stays put across them."""
+    target's 1x or its key caps' height at the font scale where they are
+    taller, none under touch (no `keys`), whose cards take its height.
+    Every arrangement's, so the strip stays put across them."""
     if desk:
-        h = max(34 // _lb.render_scale(), 18 * lay.fs) if keys else 0
+        cap = _ui_draw.metrics("value_row")[VR_KEY_DESK] * lay.fs
+        h = max(34 // _lb.render_scale(), cap) if keys else 0
     else:
         h = 20 * lay.fs if keys else 0
     return (lay.cx, lay.cy + lay.ch - h, lay.cw, h)
@@ -1048,7 +1058,11 @@ class Launcher:
         else:
             y0 = y - m
             y1 = y + n + m
-        bx0, by0, bx1, by1 = t[4], t[5], t[4] + t[6], t[5] + t[7]
+        # (one name a line: four names from four values build a tuple)
+        bx0 = t[4]
+        by0 = t[5]
+        bx1 = t[4] + t[6]
+        by1 = t[5] + t[7]
         ry0 = y0 if y0 > by0 else by0
         ry1 = y1 if y1 < by1 else by1
         rx0 = x - m if x - m > bx0 else bx0
@@ -1236,7 +1250,10 @@ class Launcher:
         0)."""
         th = self.theme or {}
         fs = self.layout.fs
-        x, y, w, h = rect[0], rect[1], rect[2], rect[3]
+        x = rect[0]
+        y = rect[1]
+        w = rect[2]
+        h = rect[3]
         for i in range(fs):
             cv.rectb(x - i, y - i, w + 2 * i, h + 2 * i, th.get("border", self._NAMES["black"]))
 

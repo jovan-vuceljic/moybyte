@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check an app written against `uitree` without drawing it:
 
-    tools/uitree_check.py MODULE_OR_PATH... [--snap]
+    tools/uitree_check.py MODULE_OR_PATH_OR_CART... [--snap]
 
 For each app module, every error is printed with its code, its file:line and
 its fix, and the run goes on past it:
@@ -19,11 +19,13 @@ its fix, and the run goes on past it:
    their declared start; no handler runs, `opened` included).
 
 Exit status 0 when there is no error. A module is named as Python imports
-it (`perms_ui`) or by its path.
+it (`perms_ui`) or by its path; a cart by its `.moy` folder or its main
+script, whose `ui` is the API the Player hands it.
 """
 import ast
 import importlib
 import importlib.util
+import json
 import os
 import sys
 
@@ -216,7 +218,8 @@ def dry(app):
 
         def walk(n, rows):
             nonlocal n_ok
-            for row in rows:
+            # (a hints row's props are templates of its own model's rows)
+            for row in (list(app.s._v[n.l["model"]]) if n.kind == "hints" else rows):
                 for g in n.p.values():
                     g(row)
                     n_ok += 1
@@ -238,12 +241,18 @@ def _nodes(n):
 
 
 def _import(target):
-    """The module, imported fresh in the checker's collecting run."""
+    """The module, imported fresh in the checker's collecting run. A cart (a
+    `.moy` folder, or its main script) names `ui` without importing it, as
+    the Player hands it the API (runtime/run/player_tree.py)."""
+    if os.path.isdir(target):
+        with open(os.path.join(target, "manifest.json"), encoding="utf-8") as f:
+            target = os.path.join(target, json.load(f).get("main") or "main.py")
     if target.endswith(".py") or os.sep in target:
         path = os.path.abspath(target)
         name = os.path.basename(path)[:-3]
         spec = importlib.util.spec_from_file_location(name, path)
         mod = importlib.util.module_from_spec(spec)
+        mod.ui = S
         sys.modules[name] = mod
         spec.loader.exec_module(mod)
         return mod, path

@@ -198,6 +198,7 @@ def test_make_tab_copy_and_delete_through_the_bar(tmp_path):
     drv.frame(1 / 30)
     assert len(ws.launcher.items) == n0 + 1
     drv.click(*_make_chip(ws, "delete"))
+    drv.frame(1 / 30)                 # the strip takes the press; the tail asks
     drv.frame(1 / 30)
     assert ws.confirm.open and len(ws.launcher.items) == n0 + 1
     x, y, w, h = ws.confirm._host.box("Delete")

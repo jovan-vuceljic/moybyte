@@ -484,7 +484,7 @@ def test_a_cover_landing_keeps_the_frames_damage(tmp_path, monkeypatch, arrangem
 # beside the band, and the zone's int the bar's strip cache reads.
 HOME_FRAME_PATH = ("draw", "_try_band_frame", "_try_still_frame", "_statics_key",
                    "_retained_key", "_note_still", "_outside_key", "_beside",
-                   "_draw_home_chrome", "_draw_hints", "_hint_fit", "_hint_inner",
+                   "_draw_home_chrome", "_draw_hints", "_hint_moved", "_strip_page", "_hint_inner",
                    "_hint_lead", "_hint_pad", "_wall_theme", "_search_line",
                    "_search_open", "_quiet", "_still_now", "zone_gen", "grid")
 

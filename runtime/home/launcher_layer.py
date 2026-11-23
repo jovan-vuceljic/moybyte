@@ -121,7 +121,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         self._hk = _Keyed()
         self._beside_drew = []
         # what the hint strip's key was made of, and the key (`_outside_key`)
-        self._ok = [None, None, None, None, None, None, None, None, None]
+        self._ok = [None, None, None, None, None, None, None, None, None, None]
         self._st_parts = [None] * 16  # the statics key's parts (`_statics_key`)
         # Retained WHOLE-frame cache (2026-07-27, the damage-model doctrine at
         # shelf granularity): the last full home frame, captured at the END of
@@ -248,9 +248,10 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         and item count -- the cover-cache generation, trackball hover, the
         items and the titles they carry (the list, never mutated, and the
         roster's count of titles taken in place), the settings rows'
-        generation for the favorites and the play records) and the bar's own
+        generation for the favorites and the play records), the bar's own
         pixel key (`shown_key` -- clock minute, wifi state, the look; reusing
-        it means the bar's cache discipline IS this cache's discipline).
+        it means the bar's cache discipline IS this cache's discipline) and
+        the samples and keys the hint strip's page took (`_sgen`).
         Anything that draws a pixel of the home frame and is NOT derivable
         from this tuple is a staleness bug -- the silent-cache family
         surface_model_v1.md §14.2 documents -- so additions to the home draw
@@ -260,7 +261,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         return (self._statics_key(cv) if statics is None else statics, g.sel,
                 g.scroll, ws.covers.gen, self._lhover, g.items,
                 ws.carts.titled, ws.system.gen(), ws.bar_layer.shown_key("home"),
-                self._on_bar)
+                self._on_bar, self._sgen)
 
     def _try_stamp_retained(self, cv, dt):
         """Present the retained home frame when nothing it depends on changed:
@@ -504,8 +505,8 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         icons' caption band its cart and the day its line counts from. The
         hint strip's is made again only where what it is made of moved: the
         grid's selection or items (its `zone_gen`), its tab, the favourites
-        (the settings rows' generation), the keys on the bar and the store's
-        `can_manage`."""
+        (the settings rows' generation), the keys on the bar, the store's
+        `can_manage` and the pointer samples the strip took (`_sgen`)."""
         g = self.grid
         ws = self.ws
         m = self._ok
@@ -513,10 +514,11 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         sg = ws.system.gen()
         tk = self._on_bar
         cm = getattr(ws, "can_manage", True)
+        pg = self._sgen
         if not (m[1] == zg and m[0] is g and m[2] == g.tab and m[3] == sg and m[4] == tk
-                and m[5] == cm and m[6] is g.favorite_for):
+                and m[5] == cm and m[6] is g.favorite_for and m[9] == pg):
             it = self.favourable()
-            m[7] = (self.zone_verbs(), it is not None and ws.carts.is_favorite(it), tk)
+            m[7] = (self.zone_verbs(), it is not None and ws.carts.is_favorite(it), tk, pg)
             m[0] = g
             m[1] = zg
             m[2] = g.tab
@@ -524,6 +526,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             m[4] = tk
             m[5] = cm
             m[6] = g.favorite_for
+            m[9] = pg
         hint = m[7]
         now = m[8]
         if now is None or now[0] is not hint:
@@ -665,7 +668,10 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         a shelf card does, `Carousel._fill_around_cards`); all of it in one
         copy where the band's goes back so (`restore_whole`)."""
         hx, hy, hs, _h = self.grid.hero_rect()
-        x0, y0, x1, y1 = r[0], r[1], r[0] + r[2], r[1] + r[3]
+        x0 = r[0]
+        y0 = r[1]
+        x1 = r[0] + r[2]
+        y1 = r[1] + r[3]
         if self.grid.restore_whole or not (x0 <= hx and y0 <= hy and hx + hs <= x1
                                            and hy + hs <= y1):
             fill(cv, r)
@@ -1050,7 +1056,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
     def handle_input(self, i):
         ws = self.ws
         if getattr(ws, "search_typing", False):
-            return self._handle_search_typing(i)
+            return self._search_keys(i)
         ws.ach_ui.konami_watch(i)
         if self._pane_keys(i):
             return True
@@ -1164,13 +1170,15 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         if tip != self._back_tip:
             self._back_tip = tip
             ws.mark_dirty()
+        if not click and self._sptr and self._strip_point(px, py, False, down):
+            return True
         if click:
             self._hold = None
             if self._button_focus is not None:
                 self._button_focus = None    # a press takes the keys' mark away
             if ws.bar_layer.handle_bar_tap(self.strip, px, py):
                 return True
-            if self._search_tap(px, py) or self._hint_tap(px, py):
+            if self._search_tap(px, py) or self._strip_point(px, py, True, down):
                 return True
             frect = grid.favorite_rect(grid.sel)
             if frect is not None and _in(px, py, frect):

@@ -471,6 +471,29 @@ def seed_stories(ws, n=14):
 
 def hint_rects(layer):
     """{verb: rect on the glass} of a home layer's hint strip, its tabs'
-    keys left out: where a tap on the strip (`_hint_tap`) does each verb."""
-    spans, hr = layer._hint_spans(layer.ws.sys_canvas)
-    return {v: (x0, hr[1], x1 - x0, hr[3]) for v, x0, x1 in spans if v != "tabs"}
+    keys left out, as a frame draws it now: where a tap on the strip
+    (`hint_tap`) does each verb."""
+    ws = layer.ws
+    ws.mark_dirty()
+    ws.frame(1 / 30)
+    out = {}
+    for r in layer._hrows:
+        if r[0] not in (None, "tabs"):
+            rect = layer.hint_rect(r[0])
+            if rect is not None:
+                out[r[0]] = rect
+    return out
+
+
+def hint_tap(layer, x, y):
+    """A tap at (x, y) on a home layer's hint strip: the press, the frame
+    its strip takes it in (the verb it lands on runs behind that frame) and
+    its release. Whether the strip took it."""
+    ws = layer.ws
+    ws.pointer.down = True
+    took = layer.handle_pointer(x, y, True)
+    ws.mark_dirty()
+    ws.frame(1 / 30)
+    ws.pointer.down = False
+    layer.handle_pointer(x, y, False)
+    return took
