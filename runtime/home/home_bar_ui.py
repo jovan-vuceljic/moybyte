@@ -15,9 +15,9 @@ from home_grid import HOME_TABS
 
 s = ui.state(tab=ui.enum(*[t for t, _l in HOME_TABS], init=HOME_TABS[0][0]))
 ui.labels("TABS", dict(HOME_TABS))
-# Each tab's icon, a slot of every icon set (iconsets.SLOTS): the pad,
-# the kid's own (a heart), the apps' grid, a page under a pencil.
-ui.labels("TAB_ICONS", {"games": "game", "mine": "heart", "apps": "app", "make": "projects"})
+# Each tab's icon, a slot of every icon set (iconsets.SLOTS): the play
+# triangle, the player's own folder, the apps' grid, a page under a pencil.
+ui.labels("TAB_ICONS", {"games": "play", "mine": "folder", "apps": "app", "make": "projects"})
 
 
 def _open():

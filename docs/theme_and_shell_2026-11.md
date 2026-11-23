@@ -1961,7 +1961,7 @@ status item's menu) wears the cell's `on` mark (§1.5); on an opaque fill
 2026-10-27). The tabs are a row the home lends the bar, the Editor's kind
 (`runtime/home/home_bar_ui.py`: a `ui.tabs` in `ui.tools(lend="bar")`,
 replayed and walked by `uitree_editor.BarZone`, drawn by `bar_layer.ZoneLook`,
-each tab with its icon: Games the pad, Mine a heart, Apps the grid, Make a
+each tab with its icon: Games the play triangle, Mine a folder, Apps the grid, Make a
 page under a pencil). Up from the cards at their top lands the keys on the
 open tab (`LauncherHomeLayer.at_top`, `InputRouter.bar_open_x`), and from
 the desk pane's buttons the page's edge does; left and right walk the bar's
