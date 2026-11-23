@@ -156,14 +156,14 @@ def focus(eng):
 
 
 def overlays(eng, st):
-    """A dialog or a popover keeps off the hints band: none of its stops
-    lies under it."""
+    """No stop lies under the hints band: a dialog's or a popover's, nor
+    one of the page's a control placed past its view (an empty's button).
+    A holder meets it where its view runs under the band's edge."""
     band = eng.band_rect()
     if band is None:
         return []
-    over = eng.over_stops()
     return ["%s %r at %r lies under the hints band at %r" % (k, sid, b, band)
-            for sid, k, b, _w in st if sid in over and _meets(b, band)]
+            for sid, k, b, _w in st if k not in HOLDERS and _meets(b, band)]
 
 
 # Pages whose band names another way out than back, each with why: (the

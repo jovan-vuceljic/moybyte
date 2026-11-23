@@ -1972,7 +1972,8 @@ uint32_t moy_ui_api_audit(moy_ui_inst_t *I, int on);
 
 // A palette's cells, a stop (§1): `count` of the MOY64 colours from `first`,
 // `cols` to a row, each a `side` square less `gap`, centred in the row the
-// page places them in; `edge` draws the border round them. The colour `cur`
+// page places them in (in a box ui.at placed, as tall as it holds their rows,
+// at most `side`, the gap at most a quarter of it); `edge` draws the border round them. The colour `cur`
 // wears the current mark, and while focus is on them the keys' cursor; the
 // arrows move it a cell (up at the top row and down at the last go on to the
 // next stop). Enter, or a tap on a cell (which moves `cur` there), sets

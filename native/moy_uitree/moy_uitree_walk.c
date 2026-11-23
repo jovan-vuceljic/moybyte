@@ -2631,6 +2631,38 @@ static void fit_heights(uit_t *e, const int *kids, int nk, int model, int row, i
     }
 }
 
+static int32_t h_row(const uit_t *e);
+
+// A column split whose cells run past its room (a window shorter than its design, a font
+// scale its sizes do not hold): the overrun -- what the last cell's room falls short of 0 --
+// given by the palettes of cells before it, which fit their cells to the room they get: down to
+// a row's height, each by its share of what lies above that, then as far as 8 px.
+static void fit_room(uit_t *e, const int *kids, int nk, int32_t *spans, int nz, int32_t span)
+{
+    int last = (nk < nz ? nk : nz) - 1;
+    int32_t over = -span;
+    for (int i = 0; i < last; i++)
+        over += spans[i];
+    for (int pass = 0; pass < 2 && over > 0; pass++) {
+        int32_t room[SPLIT_CELLS], all = 0, need = pass ? 8 : h_row(e);
+        for (int i = 0; i < last; i++) {
+            room[i] = NODE(kids[i])->kind == UIT_CELLS && spans[i] > need ? spans[i] - need : 0;
+            all += room[i];
+        }
+        if (!all)
+            continue;
+        int32_t take = over < all ? over : all, took = 0;
+        for (int i = 0; i < last; i++) {
+            int32_t give = (int32_t)((int64_t)room[i] * take / all);
+            spans[i] -= give, took += give;
+        }
+        for (int i = 0; i < last && took < take; i++)      // what the shares rounded off
+            if (room[i] > 0)
+                spans[i]--, took++;
+        over -= took;
+    }
+}
+
 static void fill_token(const moy_ui_sink_t *s, int32_t x, int32_t y, int32_t w, int32_t h, int token);
 static void put_rect(uit_t *e, int k, const int32_t r[4]);
 
@@ -2661,7 +2693,7 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
     if (across)
         fit_spans(e, c, s, kids, nk, model, row, spans, nz, r[3]);
     else
-        fit_heights(e, kids, nk, model, row, spans, nz);
+        fit_heights(e, kids, nk, model, row, spans, nz), fit_room(e, kids, nk, spans, nz, span);
     int32_t at = 0;
     for (int i = 0; i < nk && i < nz; i++) {
         int g = kids[i];

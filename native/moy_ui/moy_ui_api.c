@@ -5259,6 +5259,12 @@ int32_t moy_ui_api_cells(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
     int rows = (count + cols - 1) / cols;
     int stacked;
     moy_ui_box_t b = mua_place(c, rows * side, &stacked);
+    if (!stacked) {
+        // placed: the rows as tall as the box holds them, at most `side`
+        int fit = b.h / rows;
+        side = fit < side ? (fit > 1 ? fit : 1) : side;
+        gap = 2 * gap < side ? gap : side / 4;
+    }
     // the cells centred across the room they were given
     int gw = cols * side;
     moy_ui_box_t g = {(int16_t)(b.x + (b.w > gw ? (b.w - gw) / 2 : 0)), b.y, (int16_t)gw,

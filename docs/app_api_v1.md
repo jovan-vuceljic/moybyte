@@ -345,7 +345,9 @@ else shrinks them, as far apart, until it is;
 `ui.split(..., rule=True)` draws a rule between its cells; a row split's
 fixed sizes that its width cannot hold share it by their sizes, and a cell
 that is a row, a group or a seg widens to what it needs, its neighbours
-giving up at most half theirs; a row of buttons wider than its room closes
+giving up at most half theirs; a column split's cells that run past its
+height take the overrun from its palettes (`ui.cells`), whose cells fit the
+room left them, down to a row's height and then to 8 px; a row of buttons wider than its room closes
 its gaps, then stands its labelled icon buttons as their icons alone, from
 the end, until it fits;
 `ui.row(..., wrap=True)` packs its children from its start at their
