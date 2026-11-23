@@ -128,8 +128,10 @@ _KEY_OPS = {
 # menu's last. With a selection, clear takes shift's place.
 _HINTS = ("flip", "Flip", "rotate", "Rotate", "shift", "Shift", "more", "More")
 _HINTS_SEL = ("flip", "Flip", "rotate", "Rotate", "clear", "Clear", "more", "More")
-# The desk Editor's Sprite pane: its sprite keys, the more menu, the next pane.
+# The desk Editor's Sprite pane: its sprite keys, the more menu, the next pane;
+# an input with no Q, W or F6 names only the more menu.
 _HINTS_PANE = ("Q W", "Sprite", "more", "More", "F6", "Next pane")
+_HINTS_PANE_PAD = ("more", "More")
 # While a popover is open its keys alone: what closes it.
 _HINTS_POP = ("back", "Close")
 # The pickers' sizes, PaintEditor.SIZES's order.
@@ -1157,7 +1159,7 @@ class PaintLayer(Layer):
         elif self._pop:
             items = _HINTS_POP
         elif pe.sel is None and lay.pane:
-            items = _HINTS_PANE
+            items = _HINTS_PANE if _ui_draw.hint_kind() == "keys" else _HINTS_PANE_PAD
         else:
             items = _HINTS_SEL if pe.sel is not None else _HINTS
         x, y, w, h = lay.hints
