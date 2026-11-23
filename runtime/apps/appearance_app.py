@@ -1,5 +1,6 @@
 # Map (grep -n a name to jump there):
-#   build / walls                    the two pages: the cards and the rows; the wallpapers
+#   build                            the rows' page: the theme cards over the rows, NAME
+#   walls                            the wallpapers' page: tabs over cards
 #   fill                             the pages' states from the layer and the choices
 #   AppearanceAppLayer               the app: the choices, the changes, NAME, the pictures put
 #   AppearanceAppLayer._preview      a theme's card picture: its colours
@@ -238,25 +239,24 @@ def _name_dialog(button, shown):
 
 def build():
     with ui.page("", status="{status}"):
-        with ui.scroll("rows"):
-            with ui.group("Theme"):
-                with ui.cards("themes", cur="card", current="theme", w="{@desk?192:66}",
-                              h="{@desk?112:50}", flow=True):
-                    ui.card("use", label="{.title}", sub="{.sub}", image=".pic")
-                ui.seg("Mode", "mode", text="{.word}", on="mode_set", shown="two_modes")
-                ui.seg("Accent", "accent", text="{.rgb}", look="swatches", on="accent_set",
-                       shown="has_accents")
-                ui.seg("Tint", "tint", text="{.word}", look="cycle", on="tint_set")
-                ui.link("wallpaper", "{wall_title}")
-                ui.seg("Window style", "frame", text="{.word}", look="cycle", on="frame_set",
-                       shown="@desk")
-                ui.seg("Font", "font", text="{.word}", look="cycle", on="font_set")
-                ui.seg("Code font", "code", text="{.word}", look="cycle", on="code_set",
-                       shown="has_codes")
-                ui.seg("Chrome size", "chrome", text="{.word}", look="cycle", on="chrome_set",
-                       shown="has_chromes")
-                ui.link("name_ask", "Keep as a theme", shown="custom")
-                ui.link("edit", "{edit_word}")
+        with ui.group("Theme"):
+            with ui.cards("themes", cur="card", current="theme", w="{@desk?192:66}",
+                          h="{@desk?112:50}", flow=True):
+                ui.card("use", label="{.title}", sub="{.sub}", image=".pic")
+            ui.seg("Mode", "mode", text="{.word}", on="mode_set", shown="two_modes")
+            ui.seg("Accent", "accent", text="{.rgb}", look="swatches", on="accent_set",
+                   shown="has_accents")
+            ui.seg("Tint", "tint", text="{.word}", look="cycle", on="tint_set")
+            ui.link("wallpaper", "{wall_title}")
+            ui.seg("Window style", "frame", text="{.word}", look="cycle", on="frame_set",
+                   shown="@desk")
+            ui.seg("Font", "font", text="{.word}", look="cycle", on="font_set")
+            ui.seg("Code font", "code", text="{.word}", look="cycle", on="code_set",
+                   shown="has_codes")
+            ui.seg("Chrome size", "chrome", text="{.word}", look="cycle", on="chrome_set",
+                   shown="has_chromes")
+            ui.link("name_ask", "Keep as a theme", shown="custom")
+            ui.link("edit", "{edit_word}")
         _name_dialog("keep", "naming && !armed")
         _name_dialog("replace", "naming && armed")
 
