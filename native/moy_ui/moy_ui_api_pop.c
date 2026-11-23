@@ -1039,6 +1039,12 @@ static void tip_draw(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
 
 void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     if (c->n_nest == 0) {
+        moy_ui_keep_t *k = mua_page_keep(c);
+        if (k != NULL && !c->no_foot) {
+            // a page whose rows run past it: its thumb, as a scroll region's (mua_nest_close)
+            mua_thumb_track(c, k, c->page, k->rows, c->scroll);
+            mua_thumb(c, s, c->page, k->rows, c->scroll);
+        }
         mua_page_close(c, s);
         tip_draw(c, s);
         mua_dialog_gone(c);
@@ -1978,8 +1984,60 @@ static int desk_pad(int w, int u) {
     return imin(48 / u, imax(12 / u, w / 20));
 }
 
-void moy_ui_api_carousel_desk(int fs, int u, int keys, int brows, const int32_t b[4],
-                              int32_t out[MOY_UI_DESK_G]) {
+#define DESK_ROW_GAP 8              // the pane's rows of buttons stand this far apart
+#define DESK_DANGER 3               // moy_ui_button_kinds' danger
+
+// The row the last of `n` buttons `w` px wide flows onto in a pane `dw` wide, left to right
+// 14 px apart, a danger three gaps apart, one that does not fit starting the next row; *dy
+// the pixels its row stands lower than the row pitch puts it (a danger starting a row).
+static int desk_flow(const uint8_t *kind, const int *w, int n, int dw, int u, int *dy) {
+    int x = 0, row = 0, gap = 14 / u, apart = 3 * 14 / u;
+    *dy = 0;
+    for (int k = 0; k < n; k++) {
+        int lead = x ? (kind[k] == DESK_DANGER ? apart : gap) : 0;
+        if (x && x + lead + w[k] > dw) {
+            row++;
+            x = 0;
+            lead = 0;
+            if (kind[k] == DESK_DANGER) {
+                *dy += DESK_ROW_GAP / u;
+            }
+        }
+        x += lead + w[k];
+    }
+    return row;
+}
+
+// The pixels the pane keeps for its buttons under their first row: as many as the widest of
+// `sets` takes in a pane `dw` wide, `bh` a button's height; where a set wraps, every button
+// the widest one's width.
+static int desk_span(const moy_ui_desk_sets_t *sets, int dw, int fs, int u, int bh) {
+    uint32_t font = moy_text_print_font();
+    int most = 0;
+    for (int k = 0; k < sets->n; k++) {
+        int n = sets->count[k], w[MOY_UI_DESK_SET_MAX], wide = 0, dy;
+        if (!n) {
+            continue;
+        }
+        for (int i = 0; i < n; i++) {
+            moy_ui_span_t l = sets->label[k][i];
+            w[i] = imin(dw, imax((sets->kind[k][i] == 1 ? 148 : 112) / u,
+                                 moy_text_width(font, l.p, l.n, fs) + 56 / u + 16 * fs));
+            wide = imax(wide, w[i]);
+        }
+        int row = desk_flow(sets->kind[k], w, n, dw, u, &dy);
+        if (row) {
+            for (int i = 0; i < n; i++) {
+                w[i] = wide;
+            }
+            row = desk_flow(sets->kind[k], w, n, dw, u, &dy);
+        }
+        most = imax(most, row * (bh + DESK_ROW_GAP / u) + dy);
+    }
+    return most;
+}
+
+static void desk_at(int fs, int u, int keys, int brows, const int32_t b[4], int32_t out[MOY_UI_DESK_G]) {
     moy_font_info_t tf, uf;
     moy_ui_font(0, MOY_UI_FONT_TITLE, &tf);
     moy_ui_font(0, MOY_UI_FONT_UI, &uf);
@@ -2049,8 +2107,22 @@ void moy_ui_api_carousel_desk(int fs, int u, int keys, int brows, const int32_t 
     int32_t o[MOY_UI_DESK_G] = {hx, hy, hero, hero, dx, dy, imax(0, cx + cw - pad - dx), pane,
                                 cx, cap_y, cw, imax(0, imin(foot, shelf_y + shelf + down) - cap_y),
                                 shelf, shelf_y, pad, ts, ms, ks, vs, bh, rows[0], rows[1], ring,
-                                20 / u};
+                                20 / u, brows};
     memcpy(out, o, sizeof o);
+}
+
+void moy_ui_api_carousel_desk(int fs, int u, int keys, const moy_ui_desk_sets_t *sets, const int32_t b[4],
+                              int32_t out[MOY_UI_DESK_G]) {
+    u = u > 1 ? u : 1;
+    int span = 0;
+    for (int k = 0; k < 3; k++) {
+        desk_at(fs, u, keys, span, b, out);
+        int got = desk_span(sets, (int)out[MOY_UI_DESK_PANE + 2], fs, u, (int)out[MOY_UI_DESK_BH]);
+        if (got <= span) {
+            break;
+        }
+        span = got;
+    }
 }
 
 void moy_ui_api_desk_shelf_geom(int fs, int u, const int32_t b[4], int side, int32_t out[MOY_UI_CELLS_G]) {

@@ -335,10 +335,14 @@ int uit_carousel_at(const uit_t *e, int x, int y);
 int uit_carousel_geom(uit_t *e, const int32_t b[4], int fs, int desk, int32_t out[10]);
 // The desk home's geometry (moy_ui_api_carousel_desk's words, MOY_UI_DESK_*): the carousel
 // look on the desk class laid out in content rect `b` down to its hint strip at font scale
-// `fs`, with `keys` (a hint strip: no touch) and `brows` px of the details pane's buttons'
-// rows under their first. The shelf it draws in its band is the page's cards (uit_cells).
-enum { UIT_DESK_WORDS = 24 };
-void uit_carousel_desk(const int32_t b[4], int fs, int keys, int brows, int32_t out[UIT_DESK_WORDS]);
+// `fs`, with `keys` (a hint strip: no touch), the details pane keeping room for the rows the
+// widest of its button sets wraps to: `nsets` sets, set k `counts[k]` buttons, each its label
+// and its kind (normal, primary, tonal or danger), in order in `labels` and `kinds`. -1 for
+// more sets or buttons than MOY_UI_DESK_SETS and MOY_UI_DESK_SET_MAX or another kind (`out`
+// untouched), else 0. The shelf it draws in its band is the page's cards (uit_cells).
+enum { UIT_DESK_WORDS = 25 };
+int uit_carousel_desk(const int32_t b[4], int fs, int keys, int nsets, const int32_t *counts,
+                      const char *const *labels, const char *const *kinds, int32_t out[UIT_DESK_WORDS]);
 // The page's shelf or icons (ui.cards look="shelf" or "icons", and the carousel look's desk
 // shelf, geometry word MOY_UI_CELLS_LOOK MOY_UI_LOOK_DESK) as the last frame drew them:
 // out[0..3] their band, [4..19] their geometry (moy_ui_api_cells_geom's, MOY_UI_CELLS_*), [20]

@@ -7,7 +7,9 @@ shelf and icons, on every class (`home_grid.Launcher._cells_pass`). The
 host puts their rows (`band_put`), the card a selection made from outside
 lands them on and their words' ink (`band_set`), and draws their pictures.
 
-The desk home's details pane (`page`), beside the hero
+The desk home's hero (`hero`): the selected card's picture, which the
+host draws, a tap on it the tab's tap (`HomeDetails.hero_press`). Its
+details pane (`page`), beside the hero
 (`home_details.HomeDetails`): the selected card's title,
 its metadata line, its description, its facts (how often and when it was
 played, who made it) and its verb buttons, the tab's tap verb first, the
@@ -48,6 +50,8 @@ _decl["sel"] = ui.row_of("cards")        # ...the one it rests on
 _decl["tone"] = ""       # ...and its caption's ink ("" the theme's)
 _decl["side"] = 64       # ...its cards' side (the desk shelf's, in glass pixels)
 _decl["caption"] = ""    # ...and the desk shelf's caption
+_decl["hero"] = ui.IMAGE     # the desk hero's picture: the selected card's
+_decl["hero_side"] = 128     # ...and its side, in glass pixels
 s = ui.state(**_decl)
 
 
@@ -75,11 +79,16 @@ def _open(row):
     uitree_app.env().band_open(row)
 
 
+def _hero():
+    uitree_app.env().hero_press()
+
+
 ui.hook("put", put)
 ui.hook("band_put", band_put)
 ui.hook("band_set", band_set)
 ui.action("press", "Choose", _press, takes="arg")
 ui.action("open", "Open", _open, takes="row")
+ui.action("play", "Open", _hero)
 
 
 def band():
@@ -121,4 +130,9 @@ def page():
                                   icon="{%s}" % ICONS[k], shown=SHOWN[k], look="large")
 
 
-DESK_PAGES = (page,)    # a handheld's home has no details pane: its image carries none
+def hero():
+    with ui.page(""):
+        ui.picture(image="hero", side="{hero_side}", on="play", look="tile")
+
+
+DESK_PAGES = (page, hero)    # a handheld's home has no details pane: its image carries none

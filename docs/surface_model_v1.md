@@ -1107,7 +1107,8 @@ inside R, a table's or a part's picture with no gen, a press, an activation, a s
 hover, a dialog, a popover, a tooltip: the frame draws whole; so does the
 frame after a pass whose answer changed what it had already drawn
 (`AppHost.again`), whose page is not the app's. The pass then draws the FLOOR -- the band, the fades,
-the rows whose marks moved, the track of a thumb that moved -- and every draw goes once through each piece
+the rows whose marks moved, the track of a thumb that moved or that a part drew over
+outside the floor (a canvas draws its whole rect) -- and every draw goes once through each piece
 of the frame's region it reaches (outside R, and the floor's rects), so a
 floor pixel takes every draw over it in a whole frame's order; the floor only
 widens during the pass (a stop unlike the last frame's takes R from its top

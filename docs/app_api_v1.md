@@ -273,7 +273,9 @@ alternate surface under a rule, its rows as tall as their tallest canvas
 `tests/uitree_conformance/counter/` holds one app in both languages to
 one trace and one picture.
 
-**A flowing page's layout.** The engine stacks a page's nodes; `ui.row`
+**A flowing page's layout.** The engine stacks a page's nodes, and a page
+whose rows run past its room scrolls and draws its scrollbar's thumb, as a
+`ui.scroll` region does; `ui.row`
 sets its children side by side on one row of the stack (a button at its
 natural width unless `grow=True`, a picture beside a `ui.group` column of
 labels, a `ui.rule()` a line down the row between its neighbours, a label
@@ -328,7 +330,11 @@ current and fires its action as Enter does, the current card grows and
 wears the focus mark flat while the cards hold the keys, its label bold,
 and up from the top row leaves the grid; `tone=` inks the labels over a
 black shadow and `cur=` follows the current card (a value the app writes
-there lands the view on it); a link's
+there lands the view on it); `ui.picture(..., look="tile")` draws the
+picture as a carousel's tile of its own at its place, `side=` across, its
+shadow round it and its corners those of a carousel's centre card (the
+desk home's hero), and `ui.picture(..., on=)` makes a picture a stop that
+a tap or Enter fires `on=` from; a link's
 `swatch="#RRGGBB"` (a template, empty for none) draws a chip of that colour
 before its value; a
 card's `badge=` marks its picture and its `label_icon=` stands an icon
@@ -347,7 +353,8 @@ the end, until it fits;
 natural widths (a group as wide as its widest child), one that does not
 fit starting a line under them (the desk home's buttons), a row in a
 group's column at its cell; `ui.row(key, grow=True)` on a flowing page
-fills its stack, so the rows after it stand at the page's foot;
+fills its stack, so the rows after it stand at the page's foot and the
+page fits its room;
 `ui.group("", gap=)` sets its column's children that far apart;
 `ui.label(..., scale=)` draws its face at that whole scale (a display
 line, never under the page's), `w=` keeps its text that wide at most (a

@@ -714,13 +714,36 @@ static mp_obj_t eng_cells_geom(size_t n, const mp_obj_t *a)
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_cells_geom_obj, 5, 5, eng_cells_geom);
 
-// carousel_desk(band, fs, keys, brows, out) (uit_carousel_desk): band an array('i') of 4, out of
-// UIT_DESK_WORDS; the desk home's geometry.
+// carousel_desk(band, fs, keys, sets, out) (uit_carousel_desk): band an array('i') of 4, sets a
+// tuple of the details pane's button sets, each a tuple of (label, kind) pairs, out of
+// UIT_DESK_WORDS; the desk home's geometry. ValueError for a set it cannot take.
 static mp_obj_t eng_carousel_desk(size_t n, const mp_obj_t *a)
 {
     (void)n;
-    uit_carousel_desk(words_of(a[1], 4), mp_obj_get_int(a[2]), mp_obj_is_true(a[3]), mp_obj_get_int(a[4]),
-                      words_of(a[5], UIT_DESK_WORDS));
+    enum { MOST = MOY_UI_DESK_SETS * MOY_UI_DESK_SET_MAX };
+    const char *labels[MOST], *kinds[MOST];
+    int32_t counts[MOY_UI_DESK_SETS];
+    size_t ns, nb, np, at = 0;
+    mp_obj_t *set, *btn, *pair;
+    mp_obj_tuple_get(a[4], &ns, &set);
+    if (ns > MOY_UI_DESK_SETS)
+        mp_raise_ValueError(MP_ERROR_TEXT("carousel_desk: too many button sets"));
+    for (size_t k = 0; k < ns; k++) {
+        mp_obj_tuple_get(set[k], &nb, &btn);
+        if (nb > MOY_UI_DESK_SET_MAX)
+            mp_raise_ValueError(MP_ERROR_TEXT("carousel_desk: too many buttons in a set"));
+        counts[k] = (int32_t)nb;
+        for (size_t i = 0; i < nb; i++, at++) {
+            mp_obj_tuple_get(btn[i], &np, &pair);
+            if (np != 2)
+                mp_raise_ValueError(MP_ERROR_TEXT("carousel_desk: a button is (label, kind)"));
+            labels[at] = mp_obj_str_get_str(pair[0]);
+            kinds[at] = mp_obj_str_get_str(pair[1]);
+        }
+    }
+    if (uit_carousel_desk(words_of(a[1], 4), mp_obj_get_int(a[2]), mp_obj_is_true(a[3]), (int)ns, counts,
+                          labels, kinds, words_of(a[5], UIT_DESK_WORDS)) < 0)
+        mp_raise_ValueError(MP_ERROR_TEXT("carousel_desk: a button's kind is not a button kind"));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_carousel_desk_obj, 6, 6, eng_carousel_desk);

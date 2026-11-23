@@ -11,8 +11,7 @@
 #   Launcher._band_picture      a card's face, kept or drawn
 #   tab_count_title             the bar's title on the home: the tab's count
 #   day_words                   a date as the home says it
-#   desk_button_span            the room the desk pane keeps for its rows of buttons
-#   desk_button_layout          ...its buttons as that room is counted
+#   desk_buttons                a card's verbs as the desk pane's buttons
 """The home's GRID arrangement and the cards every arrangement draws.
 
 `Launcher` is the selection model (items, sel, scroll, nav) every home
@@ -26,9 +25,10 @@ home's `grid` arrangement; `Carousel` (home_carousel.py) and `IconHome`
 Beside it, what the arrangements and the home layers share: the "+ New"
 pseudo card and its art, the favourite's star, the cover decodes and their
 clean scales, the hint strip's rect, the home's tabs and their nouns, the
-words a card's details say (`day_words`, `text_scale`), and the room the
-desk pane keeps for its rows of verb buttons (`desk_button_span`,
-`desk_button_layout`). A leaf: it imports no home module.
+words a card's details say (`day_words`, `text_scale`), and the desk pane's
+verb buttons (`desk_buttons`, `button_kind`), whose widest sets the desk's
+geometry keeps room for (`DESK_BUTTON_SETS`, `PROJECTS_BUTTON_SETS`). A
+leaf: it imports no home module.
 """
 
 from array import array
@@ -1308,13 +1308,6 @@ SHELF_GAP = 42       # the details block's foot to the shelf's caption, in
                      # glass pixels: the full PROJECTS window's, at every size
 DETAILS_MIN = 280    # the narrowest details pane beside the hero, in glass
                      # pixels at the target's 1x: a primary button and one more
-# The most buttons a desk card shows, per kind of tab: a played tab's
-# (Games, Mine), Make's on a real card. The details pane keeps room for as
-# many rows as the widest of them wraps to, so the shelf stays put as the
-# selection moves.
-_DESK_VERB_SETS = (("play", "change", "copy"), ("change", "copy", "delete"))
-# ...and the desk's Projects window's, whose Make card has Play third
-PROJECTS_VERB_SETS = _DESK_VERB_SETS + (("change", "copy", "window", "delete"),)
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep",
            "Oct", "Nov", "Dec")
 
@@ -1357,62 +1350,28 @@ def text_scale(px, fs, role="ui"):
     return max(fs, (px + lh // 2) // max(1, lh))
 
 
-def desk_button_layout(verbs, dw, fs, u):
-    """[(verb, x, row, w, kind, dy)] of the desk details pane's buttons as
-    the pane keeps room for them (`desk_button_span`; `home_ui`'s verbs row
-    draws them, wrapping), in a pane `dw` wide: the first a primary where
-    it plays, opens, makes or changes, DEL a danger set apart by a group's gap (three buttons' gaps,
-    the button-row form of a menu's rule), the rest plain, left to right, a
-    button that does not fit starting the next row (never dropped), `x` from
-    the pane's left edge. Where they wrap, every button takes the widest
-    one's width, and a danger that starts a row stands a group's gap under
-    the row above (two rows' gaps): `dy`, the pixels its row and the rows
-    after it stand lower than the row pitch puts them (DESK_ROW_GAP)."""
-    kinds, widths = [], []
-    for k, v in enumerate(verbs):
-        label = _VERB_HINT[v][1]
-        if k == 0 and v in ("play", "open", "new", "change"):
-            kind = "primary"
-        elif v == "delete":
-            kind = "danger"
-        else:
-            kind = "normal"
-        kinds.append(kind)
-        widths.append(min(dw, max((148 if kind == "primary" else 112) // u,
-                                  _ui_draw.print_width(label, fs) + 56 // u + 16 * fs)))
-    out = _desk_button_flow(verbs, kinds, widths, dw, u)
-    if out and out[-1][2]:
-        out = _desk_button_flow(verbs, kinds, [max(widths)] * len(widths), dw, u)
-    return out
+_PRIMARY = ("play", "open", "new", "change")    # a first button that is the tab's tap
 
 
-DESK_ROW_GAP = 8     # the desk pane's rows of buttons stand this far apart
+def button_kind(k, verb):
+    """The look of the desk pane's `k`th button, `verb`'s: the first a
+    primary where it plays, opens, makes or changes, Delete a danger."""
+    return "primary" if k == 0 and verb in _PRIMARY else ("danger" if verb == "delete" else "normal")
 
 
-def _desk_button_flow(verbs, kinds, widths, dw, u):
-    out = []
-    x, row, dy = 0, 0, 0
-    gap = 14 // u
-    apart = 3 * 14 // u
-    for v, kind, w in zip(verbs, kinds, widths):
-        lead = (apart if kind == "danger" else gap) if x else 0
-        if x and x + lead + w > dw:
-            row += 1
-            x, lead = 0, 0
-            if kind == "danger":
-                dy += DESK_ROW_GAP // u
-        out.append((v, x + lead, row, w, kind, dy))
-        x += lead + w
-    return out
+def desk_buttons(verbs):
+    """A card's `verbs` as the desk pane's buttons: ((label, kind), ...)."""
+    return tuple((_VERB_HINT[v][1], button_kind(k, v)) for k, v in enumerate(verbs))
 
 
-def desk_button_span(dw, fs, u, bh, sets=_DESK_VERB_SETS):
-    """The pixels the desk pane keeps for its buttons under their first
-    row: as many as the widest card's (`sets`, a home's verb sets) rows
-    take in a pane `dw` wide, `bh` a button's height."""
-    return max(b[2] * (bh + DESK_ROW_GAP // u) + b[5]
-               for vs in sets
-               for b in desk_button_layout(vs, dw, fs, u)[-1:])
+# The most buttons a desk card shows, per kind of tab: a played tab's
+# (Games, Mine), Make's on a real card. The details pane keeps room for as
+# many rows as the widest of them wraps to (the engine's desk geometry), so
+# the shelf stays put as the selection moves.
+DESK_BUTTON_SETS = (desk_buttons(("play", "change", "copy")),
+                    desk_buttons(("change", "copy", "delete")))
+# ...and the desk's Projects window's, whose Make card has Play third
+PROJECTS_BUTTON_SETS = DESK_BUTTON_SETS + (desk_buttons(("change", "copy", "window", "delete")),)
 
 
 def tab_count_title(tab, n):

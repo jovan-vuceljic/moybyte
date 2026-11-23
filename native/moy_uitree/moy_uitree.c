@@ -1583,7 +1583,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
     if ((!strcmp(name, "on") && (kind == UIT_TOGGLE || kind == UIT_SEG || kind == UIT_SLIDER || kind == UIT_CELLS ||
-                                 kind == UIT_FIELD || kind == UIT_TABLE || kind == UIT_TABS || kind == UIT_BUBBLE)) ||
+                                 kind == UIT_FIELD || kind == UIT_TABLE || kind == UIT_TABS || kind == UIT_BUBBLE ||
+                                 kind == UIT_PICTURE)) ||
         (!strcmp(name, "changed") && kind == UIT_FIELD) || (!strcmp(name, "cut") && kind == UIT_BUBBLE) ||
         (!strcmp(name, "close") && (kind == UIT_POPOVER || kind == UIT_ROW || kind == UIT_GROUP)) ||
         ((kind == UIT_MONTH || kind == UIT_STEPPER) && (!strcmp(name, "prev") || !strcmp(name, "next"))) ||
@@ -1708,6 +1709,13 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             return uit_fail(e, UIT_E_KIND, UIT_MSG("cards look=%s: carousel, shelf, icons", "cards look=%s"), src);
         N->lit |= (uint8_t)lk;
         return add_prop(e, node, name, src, repr, PK_LIT, lk);
+    }
+    if (!strcmp(name, "look") && kind == UIT_PICTURE) {
+        // "tile": a carousel's tile of its own, at its place, its shadow round it (PC_TILE)
+        if (strcmp(src, "tile"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("picture look=%s: tile", "picture look=%s"), src);
+        N->lit |= PC_TILE;
+        return add_prop(e, node, name, src, repr, PK_LIT, PC_TILE);
     }
     if (!strcmp(name, "look") && kind == UIT_DIALOG) {
         // "keys": on the T-Deck its buttons are the band's Enter and Esc, no row of them (DL_KEYS)

@@ -2,6 +2,8 @@
 the shell the goldens build (`tests/test_shell_goldens.py`'s configs and
 pinning)."""
 
+from array import array
+
 import pytest
 
 import test_shell_goldens as g
@@ -460,7 +462,7 @@ def test_the_shelf_keeps_one_gap_under_the_details_at_any_window_size(tmp_path, 
     included, and the height the window has spare goes under the shelf
     (design review R5-08). The narrow size is one whose height holds Make's
     four buttons wrapped (Play the third, 2026-10-31); a shorter window
-    splits what it has (`_geom_desk_at`)."""
+    splits what it has (`Carousel._geom_desk`)."""
     ws = _ws(tmp_path, DESK, theme, mode)
     ui_draw.input_kind("keys")
     ws.home.open_desk()
@@ -489,21 +491,54 @@ def test_the_shelf_keeps_one_gap_under_the_details_at_any_window_size(tmp_path, 
     assert gaps[0] == gaps[1] == home_grid.SHELF_GAP, gaps
 
 
-def test_wrapped_desk_buttons_take_one_width_and_keep_the_danger_apart():
-    """Where the details pane's buttons wrap they take the widest one's
-    width, and Delete starting a row stands a group's gap under the row
-    above, the row form of its gap beside the others (design review F6-03);
-    on one row each keeps its own width."""
-    verbs = ("change", "copy", "delete")
-    one = home_grid.desk_button_layout(verbs, 1000, 1, 1)
-    assert [b[2] for b in one] == [0, 0, 0] and len({b[3] for b in one}) > 1
-    assert all(b[5] == 0 for b in one)
-    stack = home_grid.desk_button_layout(verbs, 220, 1, 1)
-    assert [b[2] for b in stack] == [0, 1, 2]
-    assert len({b[3] for b in stack}) == 1, "one width a stack"
-    assert [b[5] for b in stack] == [0, 0, home_grid.DESK_ROW_GAP]
-    assert home_grid.desk_button_span(220, 1, 1, 42) == \
-        2 * (42 + home_grid.DESK_ROW_GAP) + home_grid.DESK_ROW_GAP
+def test_wrapped_desk_buttons_stand_in_the_room_the_engine_keeps(tmp_path):
+    """In a PROJECTS window too narrow for a Make card's buttons on one row,
+    the engine's desk geometry keeps the pane room for the rows they wrap
+    to (moy_ui_api_carousel_desk's BROWS), and the buttons the page lays
+    there stand inside the pane, apart, none over the shelf's caption."""
+    ws = _ws(tmp_path, DESK, "moy", "light")
+    ui_draw.input_kind("keys")
+    ws.home.open_desk()
+    ws.home.open_projects()
+    _frame(ws)
+    win = ws.wm.windows["projects"]
+    ws.wm.resize_window(win, 480, 534)
+    grid = ws.projects_grid
+    grid.sel = next(i for i, it in enumerate(grid.items) if it.get("path"))
+    _frame(ws)
+    ws.wm.install_window(win.ctx)
+    try:
+        dk = grid._geom()[9]
+        dx, dw, dy, pane, bh, kept = dk[1], dk[2], dk[6], dk[5][5], dk[5][4], dk[8]
+        rects = [r for _v, r, _k in ws.projects_layer._desk_buttons()]
+        cap = grid.band_rect()[1]
+    finally:
+        ws.wm.install_window(ws.wm.root_ctx)
+    assert len(rects) >= 3 and all(r[2] for r in rects), rects
+    rows = sorted({r[1] for r in rects})
+    assert len(rows) > 1 and kept >= (len(rows) - 1) * bh, (rows, kept)
+    for k, r in enumerate(rects):
+        assert dx <= r[0] and r[0] + r[2] <= dx + dw, (r, dx, dw)
+        assert dy <= r[1] and r[1] + r[3] <= min(dy + pane, cap), (r, dy, pane, cap)
+        assert all(not _overlap(r, o) for o in rects[k + 1:]), rects
+
+
+def test_the_desk_geometry_refuses_a_button_set_it_cannot_take(tmp_path):
+    """The desk pane's button sets are typed: a kind that is no button
+    kind, or more buttons than a set holds, is a ValueError."""
+    ws = _ws(tmp_path, DESK, "moy", "light")
+    _frame(ws)
+    page = ws.launcher._band_page()
+    q, out = array("i", [0, 40, 1024, 520]), array("i", [0] * 25)
+    page.carousel_desk(q, 1, True, home_grid.PROJECTS_BUTTON_SETS, out)
+    assert out[2] > 0
+    for bad in (((("Play", "bogus"),),), ((("A", "normal"),) * 5,)):
+        with pytest.raises(ValueError):
+            page.carousel_desk(q, 1, True, bad, out)
+
+
+def _overlap(a, b):
+    return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
 
 
 def test_the_desk_title_cuts_with_an_ellipsis(tmp_path):

@@ -140,6 +140,8 @@ enum { DL_DANGER = 1, DL_KEYS = 2 };
 // A cards list's lit bits: look="carousel" (one row of tiles, its centre's words under it),
 // "shelf", "icons"; flow=True (its grid in the page's flow).
 enum { CD_CAROUSEL = 1, CD_SHELF = 2, CD_ICONS = 4, CD_FLOW = 8 };
+// A picture's lit bits: look="tile" (a carousel's tile of its own, its shadow round it).
+enum { PC_TILE = 1 };
 // A label's text options (`nbtn`): wrap= in bits 0-1 (LT_WORD, LT_CHAR), its face's
 // role + 1 in bits 2-4, the toolkit's `centre` for align= in bits 5-7, lines= given.
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.

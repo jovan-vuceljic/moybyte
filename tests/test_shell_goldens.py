@@ -379,6 +379,10 @@ class _GoldenWebHost:
 _DEFAULT_BARS = [{"edge": "top", "size": 18, "left": ["menu", "chips", "zone"],
                   "right": ["close", "wifi", "battery", "clock"]}]
 
+# The inputs a T-Deck config's console declares (Workstation.use_inputs), as
+# its board does: the hints draw its keyboard's keys.
+TDECK_INPUTS = (("local", "tdeck"),)
+
 CONFIGS = {
     "tdeck_320x240_fs1_dark": dict(
         sys_size=None, font_scale=1, windowed=False, variant="dark",
@@ -655,6 +659,8 @@ def _build(cfg, carts_dir):
         str(carts_dir), sys_size=cfg["sys_size"],
         font_scale=cfg["font_scale"], windowed=cfg["windowed"],
         panel_diagonal_in=cfg["diagonal_in"])
+    if cfg["sys_size"] is None:
+        ws.use_inputs(TDECK_INPUTS)     # the T-Deck's canvas, its keyboard's keys
     pick_layout(ws, cfg)
     theme = cfg.get("theme", ws.look.theme_name)
     if cfg.get("render", 1) != 1:
@@ -867,8 +873,6 @@ def _surface_plan(ws, cfg):
     plan.append(("web_console", park))
     from runtime import ui_draw
     kind = ui_draw.input_kind(), ui_draw.hint_kind()
-    if cfg.get("appearance") and not cfg["windowed"]:
-        kind = ("tdeck", "tdeck")       # the handheld rows run on the T-Deck's keys
     plan += _terminal_plan(ws, cfg)
     plan.append(("open_with", lambda: (_input_as_built(kind), _open_with(ws, home))))
     plan.append(("pick", lambda: _pick(ws, home)))

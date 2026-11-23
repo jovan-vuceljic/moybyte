@@ -997,13 +997,15 @@ class CEngine(Engine):
             self._ready()
         return self._x.cells_geom(band, fs, desk, out)
 
-    def carousel_desk(self, band, fs, keys, brows, out):
+    def carousel_desk(self, band, fs, keys, sets, out):
         """The desk home's geometry (the carousel look on the desk class)
         in content rect `band` down to its hint strip, an array('i') of 4,
-        into `out`, an array('i') of 24 (moy_ui_api.h's MOY_UI_DESK_*):
-        `keys` where a hint strip shows, `brows` the pixels of the details
-        pane's buttons' rows under their first."""
-        self._x.carousel_desk(band, fs, keys, brows, out)
+        into `out`, an array('i') of 25 (moy_ui_api.h's MOY_UI_DESK_*):
+        `keys` where a hint strip shows, the details pane keeping room for
+        the rows the widest of `sets` wraps to (a tuple of button sets, each
+        a tuple of (label, kind) pairs, a kind normal, primary, tonal or
+        danger; ValueError for another)."""
+        self._x.carousel_desk(band, fs, keys, sets, out)
 
     # -- the frame -------------------------------------------------------------------
 

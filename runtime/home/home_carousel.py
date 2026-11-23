@@ -3,7 +3,7 @@
 #   Carousel._geom              its geometry: the handheld's row or the desk's hero and shelf
 #   Carousel.band_pass          the row: the engine's carousel, the handheld's row or the desk's shelf
 #   Carousel._band_picture      a card's picture, the engine's picture call
-#   Carousel._paint_details     the desk's hero
+#   Carousel.hero_picture       the desk hero's picture, the engine's picture call
 """The home's CAROUSEL (docs/theme_and_shell_2026-11.md §8.10): the `carousel`
 arrangement, the default (the layout's `home`), and the home window's,
 always. On the handheld one row of square cover cards slides sideways, the
@@ -19,7 +19,7 @@ from array import array
 import ui as _ui
 import ui_draw as _ui_draw
 import layout_base as _lb
-from home_grid import (_COVER_BASE, _COVER_SIDE, desk_button_span, _DESK_VERB_SETS,
+from home_grid import (_COVER_BASE, _COVER_SIDE, DESK_BUTTON_SETS,
                        _draw_broken_badge, _draw_star_badge, _hint_strip, Launcher, _NO_KEYS,
                        PSEUDO_TILE_TYPES, _TAB_NAME)
 
@@ -35,9 +35,10 @@ _D_SCROLL, _D_MOTION, _D_CUR, _D_FOCUS = 20, 21, 22, 24
 _DRAG, _ON_ITS_OWN = 1, 6
 # The desk's geometry words (moy_ui_api.h's MOY_UI_DESK_*): a shelf card's side, the shelf's
 # top, its margin, the pane's first type scale (four, then the button height), the facts' row
-# shown (the metadata's after it), the focus mark's reach, the shelf's gap
+# shown (the metadata's after it), the focus mark's reach, the shelf's gap, the pane's rows of
+# buttons under their first
 (_D_SIDE, _D_SHELF_Y, _D_PAD, _D_TS) = (12, 13, 14, 15)
-_D_FACTS, _D_RING, _D_GAP = 20, 22, 23
+_D_FACTS, _D_RING, _D_GAP, _D_BROWS = 20, 22, 23, 24
 
 
 class Carousel(Launcher):
@@ -71,7 +72,7 @@ class Carousel(Launcher):
 
     arrangement = "carousel"
     page_fn = "band"                # its handheld band's page (home_ui)
-    verb_sets = _DESK_VERB_SETS     # the buttons its desk pane keeps rows for
+    button_sets = DESK_BUTTON_SETS  # the buttons its desk pane keeps rows for
 
     def __init__(self, items, layout=None, names=None):
         self._g_lay = None            # the layout _g was computed for
@@ -83,7 +84,7 @@ class Carousel(Launcher):
         self._scroll = 0
         self._quiet_for = None        # the geometry `quiet` was computed for
         self._quiet_q = ()
-        self._dg = array("i", [0] * 24)     # the desk's geometry words (`_geom_desk_at`)
+        self._dg = array("i", [0] * 25)     # the desk's geometry words (`_geom_desk`)
         self.keyed = False            # input that may move the selection waits on a pass
         self._down = False            # ...the pointer was down at its last sample
         Launcher.__init__(self, items, layout, names)
@@ -130,41 +131,28 @@ class Carousel(Launcher):
                 (g[3], g[4], g[5], g[6], g[7], hints), None)
 
     def _geom_desk(self, lay, keys=True):
-        """The desk home's geometry (`_geom_desk_at`) with room in its pane
-        for as many rows of buttons as its width wraps them to
-        (`desk_button_span`): a pane narrowed by a smaller hero is laid out
-        again, the rows it then needs kept."""
-        span = 0
-        for _ in range(3):
-            g = self._geom_desk_at(lay, keys, span)
-            dk = g[9]
-            got = desk_button_span(dk[2], lay.fs, dk[5][6], dk[5][4], self.verb_sets)
-            if got <= span:
-                break
-            span = got
-        return g
-
-    def _geom_desk_at(self, lay, keys, brows):
         """The desk home's geometry, the engine's (the carousel look on the
         desk class, moy_ui_api_carousel_desk): the hero at the top left, the
-        details pane beside it (or under it in a narrow window), the shelf
-        under them bleeding off the right edge, its caption over it, the
-        hint strip `_hint_strip` along the foot. The tuple's band is the
+        details pane beside it (or under it in a narrow window), keeping
+        room for the rows the widest of its `button_sets` wraps to, the
+        shelf under them bleeding off the right edge, its caption over it,
+        the hint strip `_hint_strip` along the foot. The tuple's band is the
         shelf's (its caption, its cards, their lift and their shadows); the
         desk's own is (the hero, the pane's x, its width, the shelf's top,
         its margin, (the pane's title, metadata, fact caption and value
         scales, a button's height, the pane's height, the render scale),
-        the pane's y, (facts, metadata) shown, `brows`)."""
+        the pane's y, (facts, metadata) shown, the pixels of its buttons'
+        rows under their first)."""
         hints = _hint_strip(lay, keys, True)
         q = self._cq
         q[0], q[1], q[2], q[3] = lay.cx, lay.cy, lay.cw, hints[1] - lay.cy
         d = self._dg
-        self._band_page().carousel_desk(q, lay.fs, keys, brows, d)
+        self._band_page().carousel_desk(q, lay.fs, keys, self.button_sets, d)
         shelf, shelf_y = d[_D_SIDE], d[_D_SHELF_Y]
         desk = ((d[0], d[1], d[2], d[3]), d[4], d[6], shelf_y, d[_D_PAD],
                 (d[_D_TS], d[_D_TS + 1], d[_D_TS + 2], d[_D_TS + 3], d[_D_TS + 4], d[7],
                  _lb.render_scale()),
-                d[5], (d[_D_FACTS] != 0, d[_D_FACTS + 1] != 0), brows)
+                d[5], (d[_D_FACTS] != 0, d[_D_FACTS + 1] != 0), d[_D_BROWS])
         return (None, (d[8], d[9], d[10], d[11]), shelf, shelf + d[_D_GAP], d[_D_RING],
                 d[_D_GAP], 0, shelf_y + shelf // 2, (0, 0, 0, 0, 0, hints), desk)
 
@@ -427,10 +415,7 @@ class Carousel(Launcher):
         return out
 
     def draw(self, cv, sheet_for=None, key=_NO_KEYS, over=None, beside=None):
-        end = self.band_pass(cv, sheet_for, None, key, True, over, beside)
-        if self.desk():
-            self._paint_details(cv)          # (the hero the pass's selection)
-        return end
+        return self.band_pass(cv, sheet_for, None, key, True, over, beside)
 
     def repaint_band(self, cv, sheet_for, fill, key=_NO_KEYS, over=None, beside=None, need=False,
                      marks=False, whole=False):
@@ -620,28 +605,42 @@ class Carousel(Launcher):
             return r * 7 // 5 if side > g[2] else r
         return r if side > g[2] else r * 7 // 10
 
-    def _paint_details(self, cv):
-        """The desk home's hero (a full paint's): its shadow, the
-        selected card's picture at the hero's size and its favourite star
-        (on a hero of the cover's side or more in glass pixels).
-        The details beside it are the home layer's (`_draw_details`)."""
-        hero = self.hero_rect()
+    def paint_hero(self, pg, cv, th, rect):
+        """The desk home's hero page (`home_ui.hero`, a full paint's or the
+        selection part's) in its rect, its picture the selected card's
+        (`hero_picture`)."""
+        self._gcv = cv
+        pg.paint(0.0, cv, th, rect, True)
+        self._gcv = None
+
+    def hero_picture(self, node, pic, r):
+        """The desk hero's picture (the engine's picture call, `r` its box,
+        clip, flags and corners): the selected card's picture over the box,
+        its favourite star (on a hero of the cover's side
+        or more in glass pixels), its broken mark, the frame of a square
+        card."""
+        if r is None:
+            return True
         if not self.items:
-            return
+            return False
         it = self.items[self.nearest()]
-        _ui_draw.cast(cv, self.theme, hero, _ui_draw.CAST_CARD)
-        self._draw_picture(cv, it, hero, True)
+        cv = self._gcv
+        cv.clip(r[4], r[5], r[6], r[7])
+        hero = (r[0], r[1], r[2], r[3])
+        cr = r[9]
+        self._draw_picture(cv, it, hero, True, None, cr)
+        names = self._NAMES
         if (self.favorite_for is not None and it.get("path")
                 and hero[2] * _lb.render_scale() >= _COVER_SIDE
                 and it.get("type") not in PSEUDO_TILE_TYPES):
-            _draw_star_badge(cv, self._NAMES, self.theme or {},
-                             self._favorite_badge_geom(hero),
+            _draw_star_badge(cv, names, self.theme or {}, self._favorite_badge_geom(hero),
                              bool(self.favorite_for(it)))
         if self.is_broken(it):
-            _draw_broken_badge(cv, self._NAMES, self.theme or {},
-                               self._broken_badge_geom(hero))
-        if not self._corner_r(hero[2]):
+            _draw_broken_badge(cv, names, self.theme or {}, self._broken_badge_geom(hero))
+        if not cr:
             self._card_frame(cv, hero)
+        cv.clip()
+        return True
 
     def _dims(self, centre):
         """A handheld neighbour's dimming (step 15), off the centre."""

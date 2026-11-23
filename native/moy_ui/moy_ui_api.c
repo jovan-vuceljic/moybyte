@@ -1304,6 +1304,7 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     c->kf.held = MOY_UI_KF_HELD;
     c->fl.on = c->fl.stage = c->fl.n = c->fl.unlike = c->fl.dirty = c->fl.susp = 0;
     c->fl.lost = c->at_last = c->fl.cast = c->fl.early = 0;
+    c->fl.loose = (moy_ui_box_t){0, 0, 0, 0};
     c->pic_clip = (moy_ui_box_t){0, 0, 0, 0};
     c->pic_tbl = 0;
     c->fl.pend = 0;
@@ -4286,6 +4287,15 @@ void moy_ui_api_part(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, 
         }
     }
     int none = mua_outside_floor(c, b);
+    if (!none && mua_armed(c) && c->fl.stage == 1 && !mua_floor_holds(c, b)) {
+        rc_t u = mua_rc_of(b);
+        if (c->fl.loose.w > 0) {
+            rc_t l = mua_rc_of(c->fl.loose);
+            u = (rc_t){u.x0 < l.x0 ? u.x0 : l.x0, u.y0 < l.y0 ? u.y0 : l.y0,
+                       u.x1 > l.x1 ? u.x1 : l.x1, u.y1 > l.y1 ? u.y1 : l.y1};
+        }
+        c->fl.loose = mua_box_of(u);
+    }
     c->pic_clip = mua_pic_clip(c, b);
     c->pic_tbl = 0;
     out[0] = none ? 0 : b.x;
@@ -5087,8 +5097,9 @@ void mua_edge_fades(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_box_t v, int
 // The thumb page or placed table `k` draws in view `v` (rows `rows` high, at
 // `scroll`): kept as its last frame drew it, and on a shift frame its track
 // joins the floor where the view moves or the thumb is not the last frame's
-// (a line added below a text view, a scroll a rows frame took), so the thumb
-// is drawn again along it. The thumb fills its whole track, so nothing under
+// (a line added below a text view, a scroll a rows frame took) or a part
+// drew over it outside the floor (fl.loose), so the thumb is drawn again
+// along it. The thumb fills its whole track, so nothing under
 // it draws there again but the rows the floor already held.
 void mua_thumb_track(moy_ui_ctx_t *c, moy_ui_keep_t *k, moy_ui_box_t v, int rows, int scroll) {
     if (k == NULL) {
@@ -5101,8 +5112,9 @@ void mua_thumb_track(moy_ui_ctx_t *c, moy_ui_keep_t *k, moy_ui_box_t v, int rows
         return;
     }
     int moved = (k->id == c->sh.id && c->sh.dy) || (k->id == c->sh.in_id && c->sh.in_dy);
-    if (moved || now != was) {
-        mua_floor_add(c, mua_rc_of(moy_ui_thumb_track(v, c->fs)), 0);
+    rc_t track = mua_rc_of(moy_ui_thumb_track(v, c->fs));
+    if (moved || now != was || (c->fl.loose.w > 0 && mua_rc_meets(mua_rc_of(c->fl.loose), track))) {
+        mua_floor_add(c, track, 0);
     }
 }
 
