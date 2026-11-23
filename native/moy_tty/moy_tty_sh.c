@@ -16,6 +16,7 @@
 
 #include "moy_platform.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -478,8 +479,22 @@ static int sh_secret(void *sh) {
     return h->app == NULL && moy_sh_asking_secret(h->s);
 }
 
+// $HOME/.sh_history as the store names it: the host's root before the shell's
+// path, as the session's files tree is (moy_sh_board.h).
+static int sh_history(void *sh, char *out, size_t cap) {
+    sh_t *h = sh;
+    const char *home = moy_sh_getvar(h->s, "HOME");
+    if (home == NULL || home[0] != '/') {
+        return ENOENT;
+    }
+    const char *root = moy_sh_host(h->s)->root;
+    int n = snprintf(out, cap, "%s%s/.sh_history", root != NULL ? root : "",
+                     strcmp(home, "/") == 0 ? "" : home);
+    return n > 0 && (size_t)n < cap ? 0 : ENAMETOOLONG;
+}
+
 const moy_tty_shell_t moy_tty_moy_sh = {
     sh_open, sh_run, sh_prompt, sh_status, sh_cancel, sh_close,
     sh_front, sh_keys, sh_line, sh_show, sh_tick, sh_resize, sh_complete, sh_sftp, sh_secret,
-    sh_asking,
+    sh_asking, sh_history,
 };

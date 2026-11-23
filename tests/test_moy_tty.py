@@ -459,6 +459,27 @@ def test_ctrl_c_ends_a_command_and_exit_closes_with_its_status(host):
     wait_stat(host, "live", 0)
 
 
+def test_a_login_runs_the_profile_and_its_lines_come_back_to_the_next(host):
+    """A login sources /etc/profile before its first prompt, and the lines it
+    ran are $HOME/.sh_history at its end, which Up walks in the next login."""
+    system = host.tree / "sd" / "moybyte" / "system"
+    (system / "profile").write_text("echo profile-ran\n")
+    ws = WS(host)
+    assert b"profile-ran" in ws.read_until(b"$ ")
+    ws.send(b"echo kept-line\r")
+    ws.read_until(b"$ ")
+    ws.send(b"exit\r")
+    ws.read_until(b"\xff", 5.0)
+    wait_stat(host, "live", 0)
+    hist = host.tree / "sd" / "moybyte" / "files" / ".sh_history"
+    assert hist.read_text() == "echo kept-line\nexit\n"
+    again = WS(host)
+    again.read_until(b"$ ")
+    again.send(b"\x1b[A\x1b[A")
+    assert b"echo kept-line" in again.read_until(b"kept-line", 5.0)
+    again.close()
+
+
 def test_a_page_that_closes_frees_the_session_for_the_next(host):
     ws = WS(host)
     ws.read_until(b"$ ")

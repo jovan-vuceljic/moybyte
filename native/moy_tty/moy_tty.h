@@ -16,7 +16,9 @@
 // run before (an arrow as ESC [ or ESC O, however the reads split it), and Tab
 // completes the word left of the caret as the Terminal's face does
 // (moy_sh_cands: a command's name, a path's from its folder; several names
-// complete to what they share and a second Tab lists them). While the prompt
+// complete to what they share and a second Tab lists them). A login (no CMD)
+// sources /etc/profile before its first prompt, and Up reaches the lines of
+// the logins before it (the shell's `history` file). While the prompt
 // is a secret question's (the console's password: moy_sh.h's moy_sh_ask,
 // MOY_SH_ASK_SECRET) it echoes nothing of the line typed -- no key, no
 // erase, no redraw -- its arrows and Tab do nothing, and the line is kept
@@ -90,6 +92,10 @@ typedef struct {
     // it is a question's at all (may be NULL: never).
     int (*secret)(void *sh);
     int (*asking)(void *sh);
+    // The store's path of the session's history file ($HOME/.sh_history),
+    // which a login reads at its start and writes at its end: 0, or an errno
+    // (may be NULL: no history kept).
+    int (*history)(void *sh, char *out, size_t cap);
 } moy_tty_shell_t;
 
 void moy_tty_set_shell(const moy_tty_shell_t *shell);
