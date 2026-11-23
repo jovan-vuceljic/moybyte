@@ -702,6 +702,7 @@ def test_host_runs_shared_console_at_320x240(tmp_path):
     drv.frame(1 / 30)
     assert probe.distinct_pixels_in(drv.rgb888(), 3) > 1                   # launcher renders
     select_first_game(ws)
+    drv.frame(1 / 30)                   # (the home's row lands on it)
     drv.press("run")
     drv.frame(1 / 30)
     assert ws.screen == "desktop"                       # opened a cart (plays)
@@ -732,6 +733,7 @@ def test_code_view_arrows_move_caret_and_scroll(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     drv = host_app.ConsoleDriver(ws)
     select_first_game(ws)
+    drv.frame(1 / 30)                   # (the home's row lands on it)
     drv.press("run"); drv.frame(1 / 30)
     assert ws.screen == "desktop"            # launcher RUN plays the cart
     ws.text.open_menu()                          # Stage 5: reach the Editor (maker path -- pause
@@ -764,6 +766,7 @@ def test_code_editor_drag_scrolls_without_crashing(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     drv = host_app.ConsoleDriver(ws)
     select_first_game(ws)
+    drv.frame(1 / 30)                   # (the home's row lands on it)
     drv.press("run"); drv.frame(1 / 30)
     assert ws.screen == "desktop"            # launcher RUN plays the cart
     ws.text.open_menu()                          # Stage 5: reach the Editor (maker path -- pause
@@ -785,6 +788,7 @@ def test_code_editor_symbol_palette_inserts(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     drv = host_app.ConsoleDriver(ws)
     select_first_game(ws)
+    drv.frame(1 / 30)                   # (the home's row lands on it)
     drv.press("run"); drv.frame(1 / 30)
     assert ws.screen == "desktop"            # launcher RUN plays the cart
     ws.text.open_menu()                          # Stage 5: reach the Editor (maker path -- pause
@@ -820,6 +824,7 @@ def test_host_console_paint_via_mouse(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     drv = host_app.ConsoleDriver(ws)
     select_first_game(ws)
+    drv.frame(1 / 30)                   # (the home's row lands on it)
     drv.press("run")
     drv.frame(1 / 30)
     ws.text.open_paint()                                     # the Editor's PAINT, over the run
@@ -1356,6 +1361,7 @@ def test_host_console_map_open_place_and_render(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     drv = host_app.ConsoleDriver(ws)
     select_first_game(ws)
+    drv.frame(1 / 30)                   # (the home's row lands on it)
     drv.press("run")
     drv.frame(1 / 30)
     ws.text.open_map()                                       # the Editor's MAP, over the run
@@ -1385,6 +1391,7 @@ def test_host_console_map_erase_and_pan(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     drv = host_app.ConsoleDriver(ws)
     select_first_game(ws)
+    drv.frame(1 / 30)                   # (the home's row lands on it)
     drv.press("run"); drv.frame(1 / 30)
     ws.text.open_map()                                       # the Editor's MAP, over the run
     ws.map_ui.mapedit.n = 3
@@ -1411,6 +1418,7 @@ def test_host_console_map_save_roundtrips(tmp_path):
     ws = host_app.build_workstation(carts_dir)
     drv = host_app.ConsoleDriver(ws)
     select_first_game(ws)
+    drv.frame(1 / 30)                   # (the home's row lands on it)
     drv.press("run"); drv.frame(1 / 30)
     cart_path = ws.cart["path"]
     ws.text.open_map()                                       # the Editor's MAP, over the run
@@ -1434,6 +1442,7 @@ def test_map_edit_seen_by_running_cart_via_gen(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     drv = host_app.ConsoleDriver(ws)
     select_first_game(ws)
+    drv.frame(1 / 30)                   # (the home's row lands on it)
     drv.press("run"); drv.frame(1 / 30)
     tm = ws.run.project.tilemap
     before = tm.gen

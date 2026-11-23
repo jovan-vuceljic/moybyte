@@ -51,17 +51,6 @@ class FullscreenStackWM:
     back-stack `screen` projects onto (`self.stack`, moy_spine.BackStack). One instance
     per Workstation, built in `Workstation.__init__`."""
 
-    # The home carousel's motion verdict (docs/theme_and_shell_2026-11.md §8.10),
-    # a per-board constant: a board whose drag frames do not fit its budget
-    # degrades down this order, only as far as its measurement says (#66) --
-    # "full" (the centre card scales with its distance from the centre, in
-    # motion and at rest; HOME_SCALE lowered is the order's "reduced scale"),
-    # "rest" (every card at 1.0 while the row moves, the centre scaled once
-    # settled), "one" (one card size). Every board runs "full" at 2: the
-    # handheld's 2x hero (home_grid.HOME_SCALE_HH). The desk's shelf
-    # cards keep one size, so the verdict moves only the handheld's.
-    HOME_MOTION = "full"
-    HOME_SCALE = 2.0
     # Registered apps the home's Apps tab and the desk leave out: reached
     # through Settings instead.
     HIDDEN_APPS = ("appearance", "myart")

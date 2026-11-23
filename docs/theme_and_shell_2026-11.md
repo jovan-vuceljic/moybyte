@@ -2269,9 +2269,10 @@ measures it on every board (`docs/history/shell_layout_2026-10.md` §13) against
 **If a board's drag frames do not fit its budget it degrades**, by this order
 and only as far as the measurement says: (1) the centre scale is reduced;
 (2) every card is at scale 1.0 while moving and the centre card scales up
-only once settled; (3) one card size with the frame and the plate. The
-verdict is a per-board constant on the WM (`HOME_MOTION`, `HOME_SCALE`),
-recorded in #66, never a theme key.
+only once settled; (3) one card size with the frame and the plate. Every
+board runs the full motion at the 2x centre, so the engine's carousel
+carries no verdict; one a board needs is recorded in #66 and lands in the
+engine's carousel, never a theme key.
 
 **The wallpaper slot.** The home draws the `home` slot's wallpaper
 (§3.9); the desk draws `desk`; a console-only

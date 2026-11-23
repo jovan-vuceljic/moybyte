@@ -642,6 +642,15 @@ static inline int32_t ut_cards_(const char *model, const char *cur, int32_t w, i
     return n;
 }
 
+// A carousel (`ui.cards(look="carousel")`): one row of tiles at most `w` px a side off the
+// centre, the centre card's twice that, its label and sub line under the row; `cur` the
+// row_of it keeps its centre card in.
+static inline int32_t ut_carousel_(const char *model, const char *cur, int32_t w) {
+    int32_t n = ut_cards_(model, cur, w, w);
+    ut_prop_("look", "carousel");
+    return n;
+}
+
 // Cards of model `model`, `w` x `h` each, its cursor `cur` (or NULL), each card (ut_card) the body.
 #define ut_cards(model, cur, w, h) ut_in(ut_cards_(model, cur, w, h))
 

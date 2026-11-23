@@ -157,6 +157,37 @@ def _frame(eng, host, cv, th, box):
     ui.end()
 
 
+def carousel(flow, cv, th, box):
+    """The carousel fixture on the frame's clock: right, then each frame's
+    allocation and whether it moved until the row rests, the frames at rest
+    after it, and the card it rests on."""
+    import gc
+    import ui_draw
+    import uitree as S
+    mod = _load("conf_carousel_c", CAROUSEL_SRC)
+    eng, host = _engine(flow, mod)
+    eng.open()
+    ui_draw.frame_dt(33)
+    for _ in range(4):
+        _frame(eng, host, cv, th, box)
+    eng.keys(Inp("right"))
+    moving, rest = [], []
+    gc.collect()
+    for _ in range(40):
+        a0 = gc.mem_alloc()
+        _frame(eng, host, cv, th, box)
+        a = gc.mem_alloc() - a0
+        if host.moving:
+            moving.append(a)
+        else:
+            rest.append(a)
+    ui_draw.frame_dt(0)
+    got = [moving, rest, eng.s.pick]
+    eng = mod = None
+    gc.collect()
+    return got
+
+
 def conf(loop):
     import gc
     import time
@@ -202,6 +233,7 @@ def conf(loop):
     out["pics"] = [eng.pics.stats["decoded"], first != _digest(cv._buf)]
     eng = mod = None
     gc.collect()
+    out["carousel"] = carousel(flow, cv, th, box)
     with open(ROOT + "/fakes/conf_opened.py", "w") as f:
         f.write(OPENED_SRC)                     # a module a handler imports declares into its own
     mod = _load("conf_opener", OPENER_SRC)
@@ -443,6 +475,7 @@ def result(tmp_path_factory):
     grid = (Path(__file__).resolve().parent / "uitree_fixtures" / "uitree_grid.py").read_text()
     mrow = (Path(__file__).resolve().parent / "uitree_fixtures" / "uitree_model_row.py").read_text()
     pics = (Path(__file__).resolve().parent / "uitree_fixtures" / "uitree_cards_pics.py").read_text()
+    car = (Path(__file__).resolve().parent / "uitree_fixtures" / "uitree_carousel.py").read_text()
     more = (DRIVER.replace("@FIXTURES@", repr(_fixtures())) + "\nLONG_SRC = %r\n" % LONG
             + "PLACED_SRC = %r\nPLACED_SCRIPT = %r\nBAR_SRC = %r\n" % (placed, PLACED_SCRIPT, bar_row)
             + "TE_SRC = %r\nTE_SCRIPT = %r\n" % (te, TE_SCRIPT)
@@ -452,6 +485,7 @@ def result(tmp_path_factory):
             + "GRID_SRC = %r\nGRID_SCRIPT = %r\n" % (grid, GRID_SCRIPT)
             + "MROW_SRC = %r\nMROW_SCRIPT = %r\n" % (mrow, MROW_SCRIPT)
             + "PICS_SRC = %r\nOPENER_SRC = %r\nOPENED_SRC = %r\n" % (pics, OPENER, OPENED)
+            + "CAROUSEL_SRC = %r\n" % car
             + "SETTINGS_KEYS = %r\nSETTINGS_RUNS = %r\n" % (SETTINGS_KEYS, SETTINGS_RUNS))
     info, text = FA._run(tmp_path_factory.mktemp("uitree_c"), entry="conf", more=more,
                          why="the C engine runs on the boards' MicroPython: this is its check there")
@@ -504,6 +538,23 @@ def test_a_cards_page_draws_its_pictures_on_the_boards_micropython(result):
     info, _text = result
     decoded, drawn = info["pics"]
     assert decoded == 4 and drawn, info["pics"]     # three cards' and the picture's, on glass
+
+
+def test_a_carousel_glides_and_rests_on_the_boards_micropython(result):
+    """`ui.cards(look="carousel")` on the boards' MicroPython: right glides
+    the row over frames that move and lands it on the next card, and no
+    frame painted, moving or at rest, allocates more than the home's band
+    frame may (test_frame_alloc's HOME_BAND_FRAME; what it allocates is the
+    front end's picture lookups, `uitree_pics.PicEngine.peek`). A console
+    paints no frame of a band at rest (tests/test_uitree_carousel.py); this
+    harness paints every one. Each frame's allocation is printed for the
+    record (`-s`)."""
+    info, _text = result
+    moving, rest, pick = info["carousel"]
+    print("carousel moving", json.dumps(moving), "rest", json.dumps(rest[-10:]))
+    assert pick == "game 1", pick
+    assert len(moving) >= 3 and rest, (moving, rest)
+    assert max(moving + rest) <= FA.HOME_BAND_FRAME, (moving, rest)
 
 
 def test_the_c_engine_on_the_boards_micropython_draws_as_the_reference_did(result):

@@ -15,12 +15,19 @@
 moy_ui_ctx_t *moy_ui_mp_ctx(mp_obj_t ctx);
 void moy_ui_mp_sink(moy_ui_sink_t *s, mp_obj_t cv, mp_obj_t look);
 
+enum { PIC_NAMES = 16, PIC_R = 12 };
+
 typedef struct {
     mp_obj_base_t base;
     uit_t *e;
     mp_obj_t draw;              // on_draw's function: (node, x, y, w, h)
     mp_obj_t pic;               // on_pic's function: (node, pic, rect or None)
     mp_obj_t raised;            // what it raised inside a frame, raised again after it
+    // what on_pic is handed, made once: the tile's tuple, written in place each call, and
+    // the picture names handed last, most recent first (a name again is the same str), so
+    // a frame of pictures allocates nothing
+    mp_obj_t pic_r;
+    mp_obj_t pic_s[PIC_NAMES];
 } eng_obj_t;
 
 static uit_t *eng(mp_obj_t self)
@@ -61,7 +68,9 @@ static mp_obj_t eng_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_
     (void)args;
     eng_obj_t *o = mp_obj_malloc_with_finaliser(eng_obj_t, type);
     o->e = uit_new();
-    o->draw = o->pic = o->raised = MP_OBJ_NULL;
+    o->draw = o->pic = o->raised = o->pic_r = MP_OBJ_NULL;
+    for (int i = 0; i < PIC_NAMES; i++)
+        o->pic_s[i] = MP_OBJ_NULL;
     if (o->e == NULL)
         mp_raise_type(&mp_type_MemoryError);
     return MP_OBJ_FROM_PTR(o);
@@ -72,7 +81,9 @@ static mp_obj_t eng_del(mp_obj_t self)
     eng_obj_t *o = MP_OBJ_TO_PTR(self);
     uit_free(o->e);
     o->e = NULL;
-    o->draw = o->pic = o->raised = MP_OBJ_NULL;
+    o->draw = o->pic = o->raised = o->pic_r = MP_OBJ_NULL;
+    for (int i = 0; i < PIC_NAMES; i++)
+        o->pic_s[i] = MP_OBJ_NULL;
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_del_obj, eng_del);
@@ -551,19 +562,46 @@ static mp_obj_t eng_on_draw(mp_obj_t self, mp_obj_t fn)
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eng_on_draw_obj, eng_on_draw);
 
-// A card's or a picture's image (uit_on_pic): fn(node, pic, None) 0 or the gen of the one it holds, fn(node, pic,
-// (x, y, w, h, cx, cy, cw, ch, focused)) its tile; what it raises is kept as a canvas's draw's is.
+// A picture's name as a str: the engine's few recent ones kept, so a frame allocates none.
+static mp_obj_t pic_name(eng_obj_t *o, const char *p, size_t n)
+{
+    int at = PIC_NAMES - 1;
+    mp_obj_t s = MP_OBJ_NULL;
+    for (int i = 0; i < PIC_NAMES && o->pic_s[i] != MP_OBJ_NULL; i++) {
+        size_t m;
+        const char *d = mp_obj_str_get_data(o->pic_s[i], &m);
+        if (m == n && !memcmp(d, p, n)) {
+            at = i;
+            s = o->pic_s[i];
+            break;
+        }
+    }
+    if (s == MP_OBJ_NULL)
+        s = mp_obj_new_str(p, n);   // a name not held: the one handed longest ago goes
+    memmove(&o->pic_s[1], &o->pic_s[0], (size_t)at * sizeof(mp_obj_t));
+    o->pic_s[0] = s;
+    return s;
+}
+
+// A card's or a picture's image (uit_on_pic): fn(node, pic, None) 0 or the gen of the one it
+// holds, fn(node, pic, (x, y, w, h, cx, cy, cw, ch, flags, radius, dw, dh)) its tile (uit_pic_fn's
+// r: one tuple an engine, written anew each call, which the function reads and never keeps); what
+// it raises is kept as a canvas's draw's is.
 static int pic_tramp(void *ud, int node, const char *pic, size_t n, const int32_t *r)
 {
     eng_obj_t *o = ud;
     if (o->pic == MP_OBJ_NULL || o->raised != MP_OBJ_NULL)
         return 0;
-    mp_obj_t args[3] = {MP_OBJ_NEW_SMALL_INT(node), mp_obj_new_str(pic, n), mp_const_none};
+    mp_obj_t args[3] = {MP_OBJ_NEW_SMALL_INT(node), pic_name(o, pic, n), mp_const_none};
     if (r) {
-        mp_obj_t t[9];
-        for (int i = 0; i < 9; i++)
-            t[i] = MP_OBJ_NEW_SMALL_INT(r[i]);
-        args[2] = mp_obj_new_tuple(9, t);
+        if (o->pic_r == MP_OBJ_NULL) {
+            mp_obj_t t[PIC_R] = {0};
+            o->pic_r = mp_obj_new_tuple(PIC_R, t);
+        }
+        mp_obj_tuple_t *t = MP_OBJ_TO_PTR(o->pic_r);
+        for (int i = 0; i < PIC_R; i++)
+            t->items[i] = MP_OBJ_NEW_SMALL_INT(r[i]);
+        args[2] = o->pic_r;
     }
     int held = 0;
     nlr_buf_t nlr;
@@ -592,6 +630,48 @@ static mp_obj_t eng_pics_moved(mp_obj_t self)
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_pics_moved_obj, eng_pics_moved);
+
+// The int32 words of array `a` (typecode i or l), at least `n` of them.
+static int32_t *words_of(mp_obj_t a, size_t n)
+{
+    mp_buffer_info_t bi;
+    mp_get_buffer_raise(a, &bi, MP_BUFFER_RW);
+    if ((bi.typecode != 'i' && bi.typecode != 'l') || bi.len < n * sizeof(int32_t))
+        mp_raise_TypeError(MP_ERROR_TEXT("moy_uitree: takes array('i') of enough words"));
+    return bi.buf;
+}
+
+// carousel(out) (uit_carousel): the page's carousel as the last frame drew it into out, an
+// array('i') of 20; whether one drew.
+static mp_obj_t eng_carousel(mp_obj_t self, mp_obj_t out)
+{
+    return mp_obj_new_bool(uit_carousel(eng(self), words_of(out, UIT_CAROUSEL_WORDS)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_carousel_obj, eng_carousel);
+
+// carousel_tile(row, out) (uit_carousel_tile): its tile into out, an array('i') of 4; whether it shows.
+static mp_obj_t eng_carousel_tile(mp_obj_t self, mp_obj_t row, mp_obj_t out)
+{
+    return mp_obj_new_bool(uit_carousel_tile(eng(self), mp_obj_get_int(row), words_of(out, 4)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(eng_carousel_tile_obj, eng_carousel_tile);
+
+// carousel_at(x, y) (uit_carousel_at): the row whose tile holds the point, -1 none.
+static mp_obj_t eng_carousel_at(mp_obj_t self, mp_obj_t x, mp_obj_t y)
+{
+    return MP_OBJ_NEW_SMALL_INT(uit_carousel_at(eng(self), mp_obj_get_int(x), mp_obj_get_int(y)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(eng_carousel_at_obj, eng_carousel_at);
+
+// carousel_geom(band, fs, desk, out) (uit_carousel_geom): band an array('i') of 4, out of 10;
+// whether the page has a carousel.
+static mp_obj_t eng_carousel_geom(size_t n, const mp_obj_t *a)
+{
+    (void)n;
+    return mp_obj_new_bool(uit_carousel_geom(eng(a[0]), words_of(a[1], 4), mp_obj_get_int(a[2]),
+                                             mp_obj_is_true(a[3]), words_of(a[4], 10)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_carousel_geom_obj, 5, 5, eng_carousel_geom);
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_frame_obj, 11, 11, eng_frame);
 
 // still(ctx, x, y, w, h, flags, fs, input) -> whether the frame drawn last is what a frame now draws
@@ -843,6 +923,10 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_on_draw), MP_ROM_PTR(&eng_on_draw_obj) },
     { MP_ROM_QSTR(MP_QSTR_on_pic), MP_ROM_PTR(&eng_on_pic_obj) },
     { MP_ROM_QSTR(MP_QSTR_pics_moved), MP_ROM_PTR(&eng_pics_moved_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel), MP_ROM_PTR(&eng_carousel_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel_tile), MP_ROM_PTR(&eng_carousel_tile_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel_at), MP_ROM_PTR(&eng_carousel_at_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel_geom), MP_ROM_PTR(&eng_carousel_geom_obj) },
     { MP_ROM_QSTR(MP_QSTR_build_end), MP_ROM_PTR(&eng_build_end_obj) },
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&eng_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&eng_close_obj) },
