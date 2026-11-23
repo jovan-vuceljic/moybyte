@@ -20,7 +20,6 @@ import pytest
 
 import on_glass
 from on_glass import ROOT
-from test_p4_on_glass import WASM_IDLE_BASELINE
 
 PORT, pytestmark = on_glass.gate("MOYBYTE_ELECROW_P4_PORT", "the Elecrow P4")
 
@@ -47,6 +46,13 @@ def board():
 # FIRST in the file on purpose: the comparison is against a fresh boot, and
 # the wasm block at the end brings the radios up.
 WASM_BOARD_DIR = BOARD_DIR
+
+# (free, largest block) of internal SRAM on this board's idle desk, read on a
+# fresh boot with no radio up (three boots, identical): the add-on step holds
+# the radio only where there is something to fetch, so a card in the slot or an
+# add-on already in the store leaves the guard below to compare, where it
+# skips a desk whose WiFi came up. It bounds this image's growth.
+WASM_IDLE_BASELINE = (276283, 188416)
 
 # This board's store is the 2.7 MB tail of a 16 MB flash and the seeds take 1.4
 # MB of it, so the compiled-cart fixtures cannot all stay: before a test, a

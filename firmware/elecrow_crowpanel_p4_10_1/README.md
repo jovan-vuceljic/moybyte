@@ -26,13 +26,18 @@ and the seed carts take about half of it:
   scopes its compiled-cart fixtures to the test (`on_glass.store_room`); it
   carries no doom-sized upload;
 - the browser console add-on (the pack in `dist/elecrow_p4/`) is larger than
-  what is free, so with no card in the TF slot it cannot be installed, and the
-  add-on step retries at every boot while a network is saved, which keeps the
-  WiFi radio up after boot. The suite's idle-SRAM guard refuses to compare a
-  desk that has had WiFi (a skip, with its reason), and `pkg` and clock-sync
-  checks skip while the board's release names no cart shelf;
-- the idle-SRAM baseline in that guard is the Waveshare's (same silicon, kernel
-  and patch ladder) and has not been measured on this board.
+  the free store, so a board with no card in the TF slot ships without it:
+  the add-on step fetches the release index once while a network is saved,
+  finds the pack does not fit, records that (`system/addon_room`) and lets the
+  radio go. Later boots hold no radio and fetch nothing; the browser console's
+  screen says how much room it needs and offers no Update. A card in the slot
+  moves the store onto it, and the next boot installs the add-on there (the
+  screen's Update does it at once when room appears while the console is up).
+  `pkg` and clock-sync checks in the suite skip while the board's release
+  names no cart shelf;
+- the idle-SRAM baseline in that guard is this board's own, measured on a
+  fresh boot with no radio up (the guard compares only a desk that has had no
+  WiFi).
 
 ## The board
 
@@ -157,10 +162,20 @@ microphone's gain and orientation (its level was read only from the speaker's
 tone, about 300 counts peak against about 100 of room noise; nobody has spoken
 into it yet);
 that the panel is lit and its picture is right (only the framebuffer and the
-scan counters have been read back); the TF slot (no card was in it);
-the USB bridge's DTR/RTS rest state beyond "attaching and `reboot` work with
+scan counters have been read back); the USB bridge's DTR/RTS rest state beyond "attaching and `reboot` work with
 the Waveshare's"; the BOOT button's pin (35 from the net names); BLE over the
 C6; the SDIO link under a sustained download at 20 MHz.
+
+## The TF card (2026-11-23)
+
+A FAT32 card in the slot mounts as the cart store: `card_store.STATUS` reads
+`mounted`, `ws.carts_root` is `/sd/moybyte/carts` and its siblings
+(`store.ver`, `system`) sit under `/sd/moybyte`, as on the Guition P4. With
+the card in, the first boot after a flash installed the browser console
+add-on there (the pack is 2.2 MB, the internal store had 1.2 MB free) and the
+webhost's page state read READY; the following boots start no add-on step and
+raise no WiFi (`ws.wifi.driver_up` false at the desk). A fresh boot's
+internal SRAM there is the baseline of the suite's idle guard.
 
 ## First flash (2026-11-20)
 
