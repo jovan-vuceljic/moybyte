@@ -2052,7 +2052,7 @@ SCHEMA = {
     "picture": dict(_C, image="image", icon="text", side="int", tone="text", on="action0", look="lit"),
     "progress": dict(_C, label="text", value="int", max="int", look="lit"),
     "empty": dict(_C, icon="text", title="text", lines="texts"),
-    "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit", look="lit"),
+    "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit", look="lit", gutter="lit"),
     "dialog": dict(_C, title="text", buttons="lit", kind="lit", look="lit"),
     "popover": dict(_C, anchor="text", w="int", close="action0", wash="lit", at="text"),
     "menu": dict(_C, caption="text"),
@@ -2334,7 +2334,8 @@ def text_view(name, **p):
     """A read-only lines view (§7.2) of a text state (its lines) or a model
     of lines (each row's first text field that is not its key): `wrap=`
     "cut" or "word", `follow=True` keeps a view at its foot there as lines
-    arrive, `syntax=` a terminal's colours ("sgr") or a source's; `face="ui"`
+    arrive, `syntax=` a terminal's colours ("sgr") or a source's, `gutter=True`
+    each line's number before it; `face="ui"`
     sets each line as a paragraph of prose in the ui face, half a line
     between paragraphs (no syntax); with `look="well"` its prose lies on a
     part's well, its paragraphs one under the next, its foot fading where

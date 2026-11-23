@@ -147,7 +147,7 @@ enum { PC_TILE = 1 };
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.
 enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 // A text view's options (`lit`); its syntax's index in `btn` (ui.py's _SYNTAXES).
-enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8 };
+enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8, TV_GUTTER = 16 };
 // A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large" (`btn`).
 enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4 };
 enum { RW_MID = 1, RW_GROW = 2, RW_WRAP = 4 };   // a row's lit: centred on the row it is a cell of; a fill of

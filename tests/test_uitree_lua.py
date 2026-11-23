@@ -813,3 +813,29 @@ def test_a_cells_clear_colour_draws_the_checker_on_the_c_engine(tmp_path):
     dark, light = chrome.FIXED[0] & 0xffffff, chrome.FIXED[1] & 0xffffff
     for rgb in (dark, light):
         assert count(shots["Clear"], rgb) > count(shots["Plain"], rgb), hex(rgb)
+
+
+def test_a_text_views_gutter_numbers_its_lines_on_the_c_engine(tmp_path):
+    """ui.text_view's gutter= from Lua: the lines' numbers stand before
+    them, which shifts the text right; without it the text starts at the
+    view's edge."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    body = ('ui.app("%s", { icon = "calc" })\n'
+            'local s = ui.state { t = "x = 1\\ny = 2\\nz = 3" }\n'
+            'ui.page("p", function()\n'
+            '  ui.text_view("t", { syntax = "python"%s })\n'
+            'end)\n')
+    for name, gutter in (("Plain", ""), ("Numbered", ", gutter = true")):
+        _cart(carts, name, body % (name, gutter))
+    ws, drv, frame, open_cart = _console(carts)
+    shots = {}
+    for name in ("Plain", "Numbered"):
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        assert ws.run.player.cart_error is None, (name, ws.run.player.cart_error)
+        shots[name] = bytes(drv.rgb888())
+        ws.spine.exit_to_caller()
+    assert shots["Plain"] != shots["Numbered"]

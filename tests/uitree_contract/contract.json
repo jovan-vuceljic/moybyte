@@ -1646,6 +1646,10 @@
      "type": "bool",
      "level": 2
     },
+    "gutter": {
+     "type": "bool",
+     "level": 2
+    },
     "syntax": {
      "type": "word:plain,sgr,python,lua,json,markdown",
      "level": 2

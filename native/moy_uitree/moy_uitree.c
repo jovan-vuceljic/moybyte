@@ -1614,6 +1614,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->lit = (uint8_t)((N->lit & ~CD_FLOW) | (src[0] == 'T' || src[0] == '1' ? CD_FLOW : 0));
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & CD_FLOW) != 0);
     }
+    if (kind == UIT_TEXT_VIEW && !strcmp(name, "gutter")) {
+        // gutter=True: each line's number in a gutter before it (TV_GUTTER)
+        N->lit = (uint8_t)((N->lit & ~TV_GUTTER) | (!strcmp(src, "True") ? TV_GUTTER : 0));
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & TV_GUTTER) != 0);
+    }
     if (kind == UIT_TEXT_VIEW && !strcmp(name, "look")) {
         // "well": its prose on a part's well (TV_WELL)
         N->lit = (uint8_t)((N->lit & ~TV_WELL) | (!strcmp(src, "well") ? TV_WELL : 0));

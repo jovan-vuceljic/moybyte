@@ -1261,6 +1261,7 @@ static void draw_text_view(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
     opt[MOY_UI_TXO_FACE] = (N->lit & TV_PROSE) ? MOY_UI_TXF_UI : MOY_UI_TXF_MONO;
     opt[MOY_UI_TXO_WRAP] = (N->lit & TV_WRAP) != 0;
     opt[MOY_UI_TXO_FOLLOW] = (N->lit & TV_FOLLOW) != 0;
+    opt[MOY_UI_TXO_GUTTER] = (N->lit & TV_GUTTER) != 0;
     if (N->lit & TV_WELL)
         opt[MOY_UI_TXO_PAPER] = 0;      // look="well"
     over_for(e, k, model, row, c, &o, id);
@@ -4721,6 +4722,7 @@ static int32_t fixed_h(uit_t *e, int k)
     case UIT_LEGACY:
     case UIT_SCROLL:                    // a scroll region: what its stack leaves, its rows scrolled in it
     case UIT_TABLE:                     // a table: what its stack leaves, its rows scrolled in it
+    case UIT_TEXT_VIEW:                 // a text view: what its stack leaves, its lines scrolled in it
         return -1;
     case UIT_GRID:                      // a grid: its h=, else what its stack leaves
         return N->t_aux >= 0 ? len_of(e, N->t_aux, -1, -1, 0) : -1;
