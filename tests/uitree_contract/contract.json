@@ -2119,6 +2119,10 @@
     "group": {
      "type": "tpl",
      "level": 2
+    },
+    "flow": {
+     "type": "bool",
+     "level": 2
     }
    }
   },

@@ -150,6 +150,7 @@ enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4, CV_READS = 8 };  // a canvas's l
                                                   // basis; a stop whose keys are its keys='s; such a stop with no
                                                   // ring (mark=False); one that names the states it draws (reads=)
 enum { SP_ALIGN = 3, SP_RULE = 16 };   // a split's lit: its align= index; rule=True
+enum { CD_FLOW = 1 };                // a cards list's lit: flow=True, its grid in the page's flow
 enum { LT_WORD = 1, LT_CHAR = 2, LT_WRAP = 3, LT_FACE_SHIFT = 2, LT_ALIGN_SHIFT = 5, LT_LINES = 256,
        LT_FIT = 512,       // size="fit": its face only where its text fits the page's width
        LT_TEXT = 1024 };   // size="text": in a placed row, as wide as its text

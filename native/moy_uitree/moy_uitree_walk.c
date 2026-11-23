@@ -1475,7 +1475,23 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
 {
     const uit_node_t *N = NODE(k);
     const char *key = uit_str(e, N->key);
-    int m = N->slot, desk = (e->flags & UIT_F_DESK) != 0, subs = 0;
+    int m = N->slot, desk = (e->flags & UIT_F_DESK) != 0, subs = 0, flow = (N->lit & CD_FLOW) != 0;
+    int32_t w = size_of(e, int_of(e, N->t_value, -1, -1, 0)), h = size_of(e, int_of(e, N->t_aux, -1, -1, 0));
+    if (flow) {
+        // in the page's flow: its grid on the page's next rows (in a group, between its caption
+        // and its rows), its cards stops of the page, scrolling with it
+        moy_ui_api_grid(c, s, span_of(key, strlen(key)), w, h, NULL);
+        uit_after_removal(e, k);
+        for (int r = 0; r < e->slots[m].nrows; r++) {
+            uint32_t mark = e->scratch.n;
+            KIDS(k, g)
+            if (NODE(g)->kind == UIT_CARD)
+                draw_card(e, c, s, g, m, r);
+            e->scratch.n = mark;
+        }
+        moy_ui_api_grid(c, s, span_of("", 0), 0, 0, NULL);
+        return;
+    }
     moy_ui_over_t go;
     int32_t gen = (e->flags & UIT_F_GEN) && gen_ok(e) ? uit_cell_gen(e, k) : -1;
     moy_ui_over_none(&go);
@@ -1486,7 +1502,6 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     if (NODE(g)->t_value >= 0)
         subs = 1;
     int margin = desk ? 16 : 8, foot = desk ? (subs ? 52 : 30) : 26 + (subs ? 6 : 0), cols = 0;
-    int32_t w = size_of(e, int_of(e, N->t_value, -1, -1, 0)), h = size_of(e, int_of(e, N->t_aux, -1, -1, 0));
     int32_t pad = prop_int(e, k, "pad", -1, -1);
     if (pad > 0) {
         // pad=: the gap between its cards, a margin of 16 (or the gap, where that is more) at
@@ -2163,7 +2178,9 @@ static void draw_tabs(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     if (pad)
         moy_ui_inset32(band, 2 * pad, pad, band);
     tabs_in(e, c, s, k, band);
-    moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3]);
+    // what follows them takes the rest, over a flowing page's hints band
+    int32_t h = e->rect[3] > e->band_h ? e->rect[3] - e->band_h : 0;
+    moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], h);
 }
 
 static int32_t row_unit(const uit_t *e);
@@ -5434,7 +5451,7 @@ int uit_gens(uit_t *e, int32_t *out, int cap)
         out[n] = e->page_gen;
     n++;
     for (int k = 1; k < e->nnodes; k++)
-        if (NODE(k)->kind == UIT_CARDS || NODE(k)->kind == UIT_SCROLL ||
+        if ((NODE(k)->kind == UIT_CARDS && !(NODE(k)->lit & CD_FLOW)) || NODE(k)->kind == UIT_SCROLL ||
             (NODE(k)->kind == UIT_GROUP && NODE(NODE(k)->parent)->kind == UIT_SPLIT)) {
             if (n < cap)
                 out[n] = uit_cell_gen(e, k);

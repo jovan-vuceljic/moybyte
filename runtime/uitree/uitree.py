@@ -2043,7 +2043,7 @@ SCHEMA = {
                   row="lit"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
-                  changed="action1", group="lit", pad="int"),
+                  changed="action1", group="lit", pad="int", flow="lit"),
     "card": dict(_C, label="text", sub="text", badge="text", label_icon="text", image="image",
                  icon="text", tone="text"),
     # G9, G13: a picture of its own (an image state, its fallback icon), a
@@ -2644,6 +2644,10 @@ def stepper(value, prev, next, **p):
 
 
 def cards(model_name, **p):
+    """A model's rows as cards, each its picture and label: a region of their
+    own that takes the rest of the page's room, or with `flow=True` a grid in
+    the page's flow (in a group, between its caption and its rows) that
+    scrolls with the page."""
     if "paint" in p:
         raise UIError("N04", "cards paint= is retired (G9)", where=_caller(),
                       fix="give the rows an image field (image pic) and the card image=.pic")

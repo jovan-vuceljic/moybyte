@@ -284,8 +284,11 @@ pill over the page above its foot; `ui.group("", look="card")` lays its
 rows on a card (as a split's cell, the cell is the card), and
 `look="rules"` parts its rows with a rule as a captioned group's are (a
 `ui.row` among them one of its rows); `ui.text_view(..., look="well")` lays its prose on a
-well; `ui.cards(..., pad=)` sets the gap its columns are counted at, and its
-`current=` marks the card whose key a state holds; a link's
+well; `ui.cards(..., pad=)` sets the gap its columns are counted at, its
+`current=` marks the card whose key a state holds, and `flow=True` lays
+its cards in the page's flow (in a group, between its caption and its
+rows) where they scroll with the page, not in a region of their own that
+takes the rest of it; a link's
 `swatch="#RRGGBB"` (a template, empty for none) draws a chip of that colour
 before its value; a
 card's `badge=` marks its picture and its `label_icon=` stands an icon
