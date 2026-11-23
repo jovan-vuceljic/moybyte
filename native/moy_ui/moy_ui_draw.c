@@ -46,7 +46,7 @@ static int t_w(const tfont_t *f, const uint8_t *p, size_t n, int scale) {
 
 // The text a primitive draws for `t` in `maxw`: all of it where it fits,
 // else the longest prefix with an ellipsis after it, the two put together in
-// `buf` (moy_ui_fit; a font with no U+2026 cuts bare). The cut a label
+// `buf` (moy_ui_fit, moy_ui_dots). The cut a label
 // longer than `buf` takes is bare.
 #define T_CUT 160
 static moy_ui_span_t t_cut(const tfont_t *f, moy_ui_span_t t, int maxw, int scale, uint8_t *buf) {
@@ -55,7 +55,7 @@ static moy_ui_span_t t_cut(const tfont_t *f, moy_ui_span_t t, int maxw, int scal
     moy_ui_span_t r = {t.p, (uint16_t)k};
     if (ell && k + 3 <= T_CUT) {
         memcpy(buf, t.p, k);
-        memcpy(buf + k, "\xe2\x80\xa6", 3);
+        memcpy(buf + k, moy_ui_dots(ell).p, 3);
         r.p = buf;
         r.n = (uint16_t)(k + 3);
     }
@@ -190,8 +190,30 @@ void moy_ui_fit_tap(moy_ui_fit_fn fn, void *ud) {
     fit.mute = 0;
 }
 
+size_t moy_ui_cut_text(uint32_t font, const uint8_t *p, size_t n, int maxw, int scale, int *ell) {
+    size_t k = moy_text_cut_px(font, p, n, maxw, scale, ell);
+    if (k == n || *ell) {
+        return k;
+    }
+    int room = maxw - moy_text_width(font, (const uint8_t *)"...", 3, scale);
+    if (room < 0) {
+        return 0;               // not even the dots fit: none of it
+    }
+    size_t j = moy_text_fit_px(font, p, n, room, scale);
+    while (j > 0 && p[j - 1] == ' ') {
+        j--;
+    }
+    *ell = 2;
+    return j;
+}
+
+moy_ui_span_t moy_ui_dots(int ell) {
+    moy_ui_span_t r = {(const uint8_t *)(ell == 2 ? "..." : "\xe2\x80\xa6"), (uint16_t)(ell ? 3 : 0)};
+    return r;
+}
+
 size_t moy_ui_fit(uint32_t font, moy_ui_span_t t, int maxw, int scale, int *ell) {
-    size_t k = ell != NULL ? moy_text_cut_px(font, t.p, t.n, maxw, scale, ell)
+    size_t k = ell != NULL ? moy_ui_cut_text(font, t.p, t.n, maxw, scale, ell)
                            : moy_text_fit_px(font, t.p, t.n, maxw, scale);
     if (fit.fn != NULL && t.n) {
         int how = ell != NULL && *ell ? MOY_UI_FIT_ELLIPSIS : k < t.n ? MOY_UI_FIT_CUT : MOY_UI_FIT_WHOLE;
@@ -1168,8 +1190,6 @@ static int bar_side(int labelled, int h, int fs) {
     return labelled ? 16 * fs : h >= 16 ? h / 16 * 16 : 16;
 }
 
-static const uint8_t s_ell[] = "\xe2\x80\xa6";
-
 int moy_ui_bar_item_w(int slot, int glyph, moy_ui_span_t label, int h, int fs) {
     int icon = slot >= 0 || glyph >= 0;
     tfont_t f = role_font(0, MOY_UI_FONT_UI);
@@ -1258,13 +1278,13 @@ int moy_ui_bar_item(const moy_ui_sink_t *s, moy_ui_box_t b, int flags, const moy
     // character of it fits
     int ell = 0, room = b.w - iw - gap;
     size_t ln = k->label.n && (!icon || labelled) && room > 0
-                    && (!icon || moy_text_cut_px(d.f.id, k->label.p, k->label.n, room, fs, &ell) > 0)
+                    && (!icon || moy_ui_cut_text(d.f.id, k->label.p, k->label.n, room, fs, &ell) > 0)
                     ? moy_ui_fit(d.f.id, k->label, room, fs, &ell)
                     : 0;
     if (icon && !ln) {
         ell = 0;
     }
-    int lw = ln || ell ? t_w(&d.f, k->label.p, ln, fs) + (ell ? t_w(&d.f, s_ell, 3, fs) : 0) : 0;
+    int lw = ln || ell ? t_w(&d.f, k->label.p, ln, fs) + (ell ? t_w(&d.f, moy_ui_dots(ell).p, 3, fs) : 0) : 0;
     if (icon && lw > room) {
         ln = 0, ell = 0, lw = 0;
     }
@@ -1290,7 +1310,7 @@ int moy_ui_bar_item(const moy_ui_sink_t *s, moy_ui_box_t b, int flags, const moy
         int tx = icon ? cx + iw + gap : cx, ty = b.y + moy_ui_fdiv(b.h - d.f.line * fs, 2);
         text(&d, k->label.p, ln, tx, ty, ink);
         if (ell) {
-            text(&d, s_ell, 3, tx + t_w(&d.f, k->label.p, ln, fs), ty, ink);
+            text(&d, moy_ui_dots(ell).p, 3, tx + t_w(&d.f, k->label.p, ln, fs), ty, ink);
         }
     }
     if (flags & MOY_UI_F_FOCUS) {

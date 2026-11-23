@@ -1049,8 +1049,8 @@ static mp_obj_t ui_text_width(size_t n_args, const mp_obj_t *args) {
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(ui_text_width_obj, 1, 3, ui_text_width);
 
 // text_cut(s, maxw, scale=1, font=0): `s` as a box `maxw` pixels wide shows
-// it (moy_text_cut_px): whole where it fits, else cut at a codepoint with
-// the font's ellipsis after it where the font has one.
+// it (moy_ui_cut_text): whole where it fits, else cut at a codepoint with
+// the font's ellipsis after it, "..." in a font with none.
 static mp_obj_t ui_text_cut(size_t n_args, const mp_obj_t *args) {
     size_t n;
     const char *s = mp_obj_str_get_data(args[0], &n);
@@ -1058,7 +1058,7 @@ static mp_obj_t ui_text_cut(size_t n_args, const mp_obj_t *args) {
     int scale = n_args > 2 ? (int)mp_obj_get_int(args[2]) : 1;
     uint32_t font = n_args > 3 ? (uint32_t)mp_obj_get_int_truncated(args[3]) : MOY_FONT_PETME128;
     int ell = 0;
-    size_t k = moy_text_cut_px(font, (const uint8_t *)s, n, maxw < 0 ? 0 : maxw, scale, &ell);
+    size_t k = moy_ui_cut_text(font, (const uint8_t *)s, n, maxw < 0 ? 0 : maxw, scale, &ell);
     if (k == n && !ell) {
         return args[0];
     }
@@ -1066,7 +1066,7 @@ static mp_obj_t ui_text_cut(size_t n_args, const mp_obj_t *args) {
     vstr_init(&v, k + 3);
     vstr_add_strn(&v, s, k);
     if (ell) {
-        vstr_add_strn(&v, "\xe2\x80\xa6", 3);
+        vstr_add_strn(&v, (const char *)moy_ui_dots(ell).p, 3);
     }
     return mp_obj_new_str_from_vstr(&v);
 }

@@ -125,15 +125,11 @@ def print_fit(s, maxw, scale=1):
 def print_ellipsis(s, maxw, scale=1):
     """`s` as a canvas's `print` shows it in a box `maxw` pixels wide at
     `scale`: whole where it fits, else cut at a codepoint with the font's
-    ellipsis after it where the font has one (the toolkit's cut, the one
-    a label and a table cell take), three full stops where it has none."""
+    ellipsis after it, three full stops where it has none (moy_ui_cut_text,
+    the cut a label and a table cell take)."""
     if type(s) is not str:
         s = str(s)
-    got = _C.text_cut(s, maxw, scale, _C.print_font())
-    if got is s or got == s or got.endswith("\u2026"):
-        return got
-    head = print_fit(s, maxw - print_width("...", scale), scale).rstrip()
-    return head + "..." if head else got
+    return _C.text_cut(s, maxw, scale, _C.print_font())
 
 
 def text_width(s, scale=1, role=None):

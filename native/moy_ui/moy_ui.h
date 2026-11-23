@@ -1310,10 +1310,16 @@ int moy_ui_hints_status(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t t,
 // is the string table's (moy_str.h), else a caller's. Answers its width.
 int moy_ui_text_in(const moy_ui_sink_t *s, uint32_t font, int table, moy_ui_span_t t, int x,
                    int y, uint16_t col);
+// The bytes of `p` that go before an ellipsis in `maxw` pixels at `scale` in
+// `font`: moy_text_cut_px, and where the font has no U+2026 the prefix "..."
+// follows in that font (*ell 2); none of it (0, *ell 0) where not even the
+// ellipsis fits. moy_ui_dots(*ell) is the ellipsis' bytes: none, "…" or "...".
+size_t moy_ui_cut_text(uint32_t font, const uint8_t *p, size_t n, int maxw, int scale, int *ell);
+moy_ui_span_t moy_ui_dots(int ell);
 // The bytes of `t` a primitive draws in `maxw` pixels at `scale` in `font`:
 // with `ell` NULL the longest prefix that fits (moy_text_fit_px), else the
-// prefix an ellipsis follows where the whole does not fit (moy_text_cut_px,
-// *ell 1). Under the fit tap the cut is what the next text drawn from those
+// prefix an ellipsis follows where the whole does not fit (moy_ui_cut_text).
+// Under the fit tap the cut is what the next text drawn from those
 // bytes reports.
 size_t moy_ui_fit(uint32_t font, moy_ui_span_t t, int maxw, int scale, int *ell);
 // The fit tap: each text a primitive draws, as the bytes it was given (a cut

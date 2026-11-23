@@ -740,7 +740,6 @@ static moy_ui_box_t on_card_mark(const pd_t *d, moy_ui_box_t b, int first, int l
 enum { SIGN_ENTER = 4, SIGN_BALL_LR = 5, SIGN_DPAD_LR = 6, SIGN_BALL = 7, SIGNS = 8 };
 static int key_sign(moy_ui_span_t k);
 
-static const uint8_t s_dots[] = {0xE2, 0x80, 0xA6};
 static void text_cut(pd_t *d, const pf_t *f, moy_ui_span_t t, int x, int y, int h, int room,
                      uint16_t c, int sc);
 
@@ -950,9 +949,9 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                     text(&d, &fl, r->value.p, r->value.n, x, b.y, b.h, vc, sc);
                 } else {
                     int ell = 0;
-                    size_t k = moy_text_cut_px(fl.id, r->value.p, r->value.n, vroom, sc, &ell);
+                    size_t k = moy_ui_cut_text(fl.id, r->value.p, r->value.n, vroom, sc, &ell);
                     if (k > 0) {
-                        vw = tw(&fl, r->value.p, k, sc) + (ell ? tw(&fl, s_dots, sizeof(s_dots), sc) : 0);
+                        vw = tw(&fl, r->value.p, k, sc) + (ell ? tw(&fl, moy_ui_dots(ell).p, 3, sc) : 0);
                         x -= vw;
                         text_cut(&d, &fl, r->value, x, b.y, b.h, vroom, vc, sc);
                     }
@@ -1231,16 +1230,16 @@ int moy_ui_vrow_w(const moy_ui_sink_t *s, int kind, const moy_ui_vrow_t *r) {
 
 
 // Text across x..x+w in the rows y..y+h, cut to `room` with an ellipsis
-// where the font has one: centred where `align` is 1, at the end where 2.
+// (moy_ui_cut_text): centred where `align` is 1, at the end where 2.
 static void aligned_cut(pd_t *d, const pf_t *f, moy_ui_span_t t, int x, int w, int y, int h,
                         int room, uint16_t c, int sc, int align) {
     int ell = 0;
     size_t k = moy_ui_fit(f->id, t, room, sc, &ell);
-    int tw_ = tw(f, t.p, k, sc) + (ell ? tw(f, s_dots, sizeof(s_dots), sc) : 0);
+    int tw_ = tw(f, t.p, k, sc) + (ell ? tw(f, moy_ui_dots(ell).p, 3, sc) : 0);
     int tx = x + (align == 2 ? w - tw_ : (w - tw_) / 2);
     int at = text(d, f, t.p, k, tx, y, h, c, sc);
     if (ell) {
-        text(d, f, s_dots, sizeof(s_dots), tx + at, y, h, c, sc);
+        text(d, f, moy_ui_dots(ell).p, 3, tx + at, y, h, c, sc);
     }
 }
 
@@ -1294,14 +1293,14 @@ static void card_title(pd_t *d, const pf_t *f, moy_ui_span_t t, int x, int w, in
     }
     int ell = 0;
     size_t k = moy_ui_fit(f->id, t, room - side - gap, sc, &ell);
-    int tw_ = tw(f, t.p, k, sc) + (ell ? tw(f, s_dots, sizeof(s_dots), sc) : 0);
+    int tw_ = tw(f, t.p, k, sc) + (ell ? tw(f, moy_ui_dots(ell).p, 3, sc) : 0);
     int ix = x + (w - side - gap - tw_) / 2;
     moy_ui_box_t ib = {(int16_t)ix, (int16_t)(y + moy_ui_fdiv(h - side, 2)), (int16_t)side,
                        (int16_t)side};
     icon_d(d, lead, lead_glyph, ib, li);
     int at = text(d, f, t.p, k, ix + side + gap, y, h, c, sc);
     if (ell) {
-        text(d, f, s_dots, sizeof(s_dots), ix + side + gap + at, y, h, c, sc);
+        text(d, f, moy_ui_dots(ell).p, 3, ix + side + gap + at, y, h, c, sc);
     }
 }
 
@@ -1808,9 +1807,9 @@ int moy_ui_toast(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t text_, in
     int side = 16 * d.fs, gap = 6 * d.fs;
     int room = b.w - 2 * pad - side - gap;
     int ell = 0;
-    size_t k = moy_text_cut_px(f.id, text_.p, text_.n, room, sc, &ell);
+    size_t k = moy_ui_cut_text(f.id, text_.p, text_.n, room, sc, &ell);
     int w = 2 * pad + side + gap + tw(&f, text_.p, k, sc)
-            + (ell ? tw(&f, s_dots, sizeof(s_dots), sc) : 0);
+            + (ell ? tw(&f, moy_ui_dots(ell).p, 3, sc) : 0);
     moy_ui_box_t p = {(int16_t)(b.x + (b.w - w) / 2), (int16_t)(b.y + b.h - h), (int16_t)w,
                       (int16_t)h};
     if (out != NULL) {
@@ -1920,10 +1919,10 @@ int moy_ui_bubble(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_bubble_t 
         int w;
         if (i == shown - 1 && was_cut) {
             int ell = 0;
-            size_t kk = moy_text_cut_px(fu.id, bb->text.p + ln[i].off, bb->text.n - ln[i].off,
+            size_t kk = moy_ui_cut_text(fu.id, bb->text.p + ln[i].off, bb->text.n - ln[i].off,
                                         room, sc, &ell);
             w = tw(&fu, bb->text.p + ln[i].off, kk, sc)
-                + (ell ? tw(&fu, s_dots, sizeof(s_dots), sc) : 0);
+                + (ell ? tw(&fu, moy_ui_dots(ell).p, 3, sc) : 0);
         } else {
             w = tw(&fu, bb->text.p + ln[i].off, ln[i].len, sc);
         }
@@ -1936,8 +1935,8 @@ int moy_ui_bubble(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_bubble_t 
             hroom = room - 4 * k - sw;
         }
         int ell = 0;
-        size_t kk = moy_text_cut_px(fc.id, bb->head.p, bb->head.n, hroom, sc, &ell);
-        int hw = tw(&fc, bb->head.p, kk, sc) + (ell ? tw(&fc, s_dots, sizeof(s_dots), sc) : 0)
+        size_t kk = moy_ui_cut_text(fc.id, bb->head.p, bb->head.n, hroom, sc, &ell);
+        int hw = tw(&fc, bb->head.p, kk, sc) + (ell ? tw(&fc, moy_ui_dots(ell).p, 3, sc) : 0)
                  + (sw ? 4 * k + sw : 0);
         wmax = hw > wmax ? hw : wmax;
         headh = fc.ascent * sc + 3 * k;
@@ -1988,9 +1987,9 @@ int moy_ui_bubble(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_bubble_t 
         text_cut(&d, &fc, hd, box.x + pad, ty - k, fc.line * sc, hroom, pal(&d, vi), sc);
         if (sw) {
             int ell = 0;
-            size_t kk = moy_text_cut_px(fc.id, hd.p, hd.n, hroom, sc, &ell);
+            size_t kk = moy_ui_cut_text(fc.id, hd.p, hd.n, hroom, sc, &ell);
             int nx = box.x + pad + tw(&fc, hd.p, kk, sc)
-                     + (ell ? tw(&fc, s_dots, sizeof(s_dots), sc) : 0) + 4 * k;
+                     + (ell ? tw(&fc, moy_ui_dots(ell).p, 3, sc) : 0) + 4 * k;
             signal_d(&d, nx, ty + fc.ascent * sc - k, bb->signal, fillc);
         }
         ty += headh;
@@ -2133,8 +2132,8 @@ int moy_ui_row2(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_row2_t *r, 
     int mw = r->tag.n > 0 ? pill_w(&fc, r->tag, k, sc, 0) : r->mark.n > 0 ? ms : 0;
     int room = right - tx - (ww ? ww + 8 * k : 0) - (mw ? mw + 6 * k : 0);
     int ell = 0;
-    size_t tn = moy_text_cut_px(fu.id, r->title.p, r->title.n, room, sc, &ell);
-    int tw_ = tw(&fu, r->title.p, tn, sc) + (ell ? tw(&fu, s_dots, sizeof(s_dots), sc) : 0);
+    size_t tn = moy_ui_cut_text(fu.id, r->title.p, r->title.n, room, sc, &ell);
+    int tw_ = tw(&fu, r->title.p, tn, sc) + (ell ? tw(&fu, moy_ui_dots(ell).p, 3, sc) : 0);
     text_cut(&d, &fu, r->title, tx, l1 - k, lh, room, pal(&d, unread ? vi : ink), sc);
     int ax = tx + tw_ + 6 * k;
     if (r->tag.n > 0) {
@@ -3320,7 +3319,7 @@ int moy_ui_table_geo(const moy_ui_sink_t *s, moy_ui_box_t b, const uint8_t *cols
     return dropped;
 }
 
-// Text cut to `room` with an ellipsis where the font has one.
+// Text cut to `room` with an ellipsis (moy_ui_cut_text).
 static void text_cut(pd_t *d, const pf_t *f, moy_ui_span_t t, int x, int y, int h, int room,
                      uint16_t c, int sc) {
     if (room <= 0 || t.n == 0) {
@@ -3330,8 +3329,7 @@ static void text_cut(pd_t *d, const pf_t *f, moy_ui_span_t t, int x, int y, int 
     size_t k = moy_ui_fit(f->id, t, room, sc, &ell);
     int w = text(d, f, t.p, k, x, y, h, c, sc);
     if (ell) {
-        static const uint8_t dots[] = {0xE2, 0x80, 0xA6};
-        text(d, f, dots, sizeof(dots), x + w, y, h, c, sc);
+        text(d, f, moy_ui_dots(ell).p, 3, x + w, y, h, c, sc);
     }
 }
 
@@ -3546,14 +3544,14 @@ int moy_ui_field(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t label, mo
     size_t from = 0;
     int lead = 0;
     if (text_.n && tw(&fl, text_.p, text_.n, sc) > room) {
-        lead = tw(&fl, s_dots, sizeof(s_dots), sc);
+        moy_ui_span_t dots = moy_ui_dots(moy_text_covers(fl.id, (const uint8_t *)"\xe2\x80\xa6", 3) ? 1 : 2);
+        lead = tw(&fl, dots.p, dots.n, sc);
         while (from < text_.n && tw(&fl, text_.p + from, text_.n - from, sc) > room - lead) {
             from++;
             while (from < text_.n && (text_.p[from] & 0xC0) == 0x80) {
                 from++;
             }
         }
-        moy_ui_span_t dots = {s_dots, sizeof(s_dots)};
         moy_ui_text_in(s, fl.id, 0, dots, tx, ty, tink);
     }
     moy_ui_span_t tt = {text_.p + from, (uint16_t)(text_.n - from)};
@@ -3569,8 +3567,7 @@ int moy_ui_field(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t label, mo
         moy_ui_span_t ht = {hint.p, (uint16_t)hn};
         hx += moy_ui_text_in(s, fl.id, 0, ht, hx, ty, pal(&d, hc));
         if (ell) {
-            moy_ui_span_t dots = {s_dots, sizeof(s_dots)};
-            moy_ui_text_in(s, fl.id, 0, dots, hx, ty, pal(&d, hc));
+            moy_ui_text_in(s, fl.id, 0, moy_ui_dots(ell), hx, ty, pal(&d, hc));
         }
     }
     if (focused) {
