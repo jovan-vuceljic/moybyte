@@ -1898,6 +1898,14 @@ def ui_frame(ctx, cv, th, rect=None, inp=None, desk=False, window=False, app=Non
 RUN_UI = "run"
 
 
+def page_title(ctx):
+    """The title of the top page the app whose context is `ctx` (RUN_UI: the
+    running cart's own) opened in the frame it drew last (`ui.page`), "" for
+    none."""
+    got = _C.api_run_page_title() if ctx is RUN_UI else _C.api_page_title(ctx)
+    return got or ""
+
+
 def bar_lent(ctx):
     """What the app whose context is `ctx` (RUN_UI: the running cart's own)
     lent its bar in the frame it drew last (`ui.bar`): (title, icon slots,

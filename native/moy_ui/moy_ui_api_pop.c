@@ -1221,6 +1221,10 @@ void moy_ui_api_card_at(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     }
 }
 
+const char *moy_ui_api_page_title(const moy_ui_ctx_t *c) {
+    return c->page_title;
+}
+
 int moy_ui_api_bar_lent(const moy_ui_ctx_t *c, const char **title, int16_t *slots, int *n,
                         uint32_t *off) {
     if (!c->bar.seen) {

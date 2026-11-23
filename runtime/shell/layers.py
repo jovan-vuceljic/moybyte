@@ -104,15 +104,15 @@ class Layer:
         return None
 
     def page_host(self):
-        """The AppHost whose frame holds the surface's page: what its bar is
-        lent (`lent_ctx`) and the field it types into (`typing`, `cancel`).
+        """The AppHost whose frame holds the surface's page: what names its
+        bar (`page_ctx`) and the field it types into (`typing`, `cancel`).
         Its `ui_host()` by default; a uitree App answers its engine's, whose
         Back stays the engine's own (`ui_host` is what the input policy's
         Back steps the toolkit of)."""
         return self.ui_host()
 
-    def lent_ctx(self):
-        """The ui context whose `ui.bar` lends the surface's bar, or None."""
+    def page_ctx(self):
+        """The ui context whose top page names the surface's bar, or None."""
         h = self.page_host()
         return None if h is None else h.ctx
 

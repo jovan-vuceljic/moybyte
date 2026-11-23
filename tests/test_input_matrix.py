@@ -641,13 +641,13 @@ def _reference(tmp_path, row, col, monkeypatch, built):
 
 
 def test_a_linked_toolkit_lends_no_bar_beside_an_open_lua_run(tmp_path, monkeypatch, built):
-    """An app linking its own toolkit (a WASI or native app) lends the host's
-    bar nothing, while the run's context (native/moy_ui/moy_ui_run.c) still
-    answers for a Lua app's run another workstation left open: its title
-    showed in the C app's bar."""
+    """An app linking its own toolkit (a WASI or native app) names the
+    host's bar nothing, while the run's context (native/moy_ui/moy_ui_run.c)
+    still answers for a Lua app's run another workstation left open: its
+    page's title showed in the C app's bar."""
     from runtime.toolkit import ui_draw
     Rig(tmp_path / "lua", "lua_app", "button", monkeypatch, built)
-    assert ui_draw.bar_lent(ui_draw.RUN_UI) is not None, "the Lua run lends its bar"
+    assert ui_draw.page_title(ui_draw.RUN_UI), "the Lua run names its page"
     ran = 0
     for layer in ("wasm_app", "elf_app"):
         if isinstance(built[(layer, "button")], Exception):

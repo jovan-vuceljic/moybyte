@@ -99,6 +99,9 @@ int moy_ui_run_way_taken(void);
 // The host's cancel over the run's frame drawn last (moy_ui_api_cancel): 1
 // where its focused field has an edit in progress, which `take` gives back.
 int moy_ui_run_cancel(int take);
+// The title of the top page of the run's frame drawn last
+// (moy_ui_api_page_title), NULL with no run open.
+const char *moy_ui_run_page_title(void);
 // The host's bar over the run's frame drawn last, as moy_ui_api_bar_lent,
 // moy_ui_api_bar_chip and moy_ui_api_bar_tap are over a context: what a Lua
 // or compiled app lent it with ui.bar (0: nothing, or no run open), and a

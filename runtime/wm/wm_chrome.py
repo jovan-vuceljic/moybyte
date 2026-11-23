@@ -540,9 +540,9 @@ class WindowChrome:
             t = str((ws.cart.get("title") if ws.cart else "") or "GAME")
             if getattr(self, "play_intent", None) == "dev":
                 return _PLAY + _title_sep() + t       # a playtest from the Editor
-            lent = ws.bar_layer.lent("tool") if ws.run.app_window_canvas else None
-            if lent is not None and lent[0]:
-                return t + _title_sep() + lent[0]     # the page an app lent ("Notes · Story ideas")
+            named = ws.bar_layer.page_named("tool") if ws.run.app_window_canvas else ""
+            if named:
+                return t + _title_sep() + named       # the page an app names ("Notes · Story ideas")
             return t
         named = self._page_named(win)
         if named:

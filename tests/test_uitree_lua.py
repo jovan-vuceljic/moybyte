@@ -269,6 +269,36 @@ def test_a_foot_that_shares_its_width_and_a_slider_icon_draw(tmp_path):
     assert shots["Shared"] != shots["Plain"] and shots["Iconed"] != shots["Plain"]
 
 
+def test_a_lua_apps_top_page_names_the_bar_on_its_own_read(tmp_path):
+    """The bar names a Lua app's top page through the page title's own read
+    (moy_ui_run_page_title), with nothing lent: the pushed page's, then
+    the first's again after Back."""
+    from runtime import host_app
+    from runtime.toolkit import ui_draw
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Named", 'ui.app("Named", { icon = "calc" })\n'
+          'ui.action("go", "Go", function() ui.push("more") end, { keys = { "g" } })\n'
+          'ui.page("first", function() ui.label("one") end, { title = "First" })\n'
+          'ui.page("more", function() ui.label("two") end, { title = "More" })\n')
+    ws, drv, frame, open_cart = _console(carts)
+    open_cart(ws, "Named")
+    for _ in range(4):
+        frame()
+    first = ui_draw.page_title(ui_draw.RUN_UI)
+    assert first == "First" and ws.bar_layer._title("tool") == first
+    drv.type_char(ord("g"))
+    frame()
+    frame()
+    assert ui_draw.page_title(ui_draw.RUN_UI) == "More"
+    assert ws.bar_layer._title("tool") == ui_draw.page_title(ui_draw.RUN_UI)
+    assert ws.run.player.face.back()
+    frame()
+    frame()
+    assert ui_draw.page_title(ui_draw.RUN_UI) == first
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+
+
 def test_a_slider_in_a_narrow_row_keeps_its_label(tmp_path):
     """A slider's row too narrow for its label, its value and its whole
     track: the track gives way, so the label still draws (it drew nothing,

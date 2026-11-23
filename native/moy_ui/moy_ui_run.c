@@ -246,6 +246,11 @@ static moy_ui_ctx_t *run_ctx_now(void) {
     return snap != NULL && s_ctx != NULL && s_live && serial == s_serial ? s_ctx : NULL;
 }
 
+const char *moy_ui_run_page_title(void) {
+    moy_ui_ctx_t *c = run_ctx_now();
+    return c == NULL ? NULL : moy_ui_api_page_title(c);
+}
+
 int moy_ui_run_bar_lent(const char **title, int16_t *slots, int *n, uint32_t *off,
                         const char **chip) {
     moy_ui_ctx_t *c = run_ctx_now();

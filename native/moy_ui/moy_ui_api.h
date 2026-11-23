@@ -1592,6 +1592,9 @@ void moy_ui_api_status_band(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_box_
 // across ui.at's rect (down it where the rect is taller than wide), else a
 // row of the page's with the line across its middle.
 void moy_ui_api_rule(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
+// The title of the top page the frame drawn last opened (ui.page's), "" for
+// none: what the host's bar and a desk window's title name the page by.
+const char *moy_ui_api_page_title(const moy_ui_ctx_t *c);
 // The host's side of ui.bar: whether the frame drawn last lent a bar (or a
 // top page with a title, which lends that title alone), its title then (the
 // page's where ui.bar named none), its tools' slots into `slots` (room for MOY_UI_API_BAR) and

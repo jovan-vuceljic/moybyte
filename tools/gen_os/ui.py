@@ -382,7 +382,7 @@ def _mp_row(v):
         o.append("    return box_tuple(%s);" % cx)
     elif rb == "char *":
         o.append("    const char *r_ = %s;" % cx)
-        o.append("    return r_ == NULL ? mp_const_none : mp_obj_new_str(r_, strlen(r_));")
+        o.append("    return r_ == NULL ? mp_const_none : ret_str(r_, strlen(r_));")
     elif rb in ("uint32_t", "size_t"):
         o.append("    return mp_obj_new_int_from_uint(%s);" % cx)
     else:

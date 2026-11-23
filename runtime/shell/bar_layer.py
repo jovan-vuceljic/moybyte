@@ -1266,11 +1266,12 @@ class BarLayer:
         if need & 128:
             key[7] = ws.wifi_icon_kind()      # the wifi status glyph
         if need & 256:
-            # the tool bar's title, and what the running app lent it (ui.bar)
-            t = self._title(where) if ws.cart else None
+            # the tool bar's title (a registered app's: its top page's), and
+            # what the running app lent it (ui.bar)
+            t = self._title(where) if ws.cart else self.page_named(key[0])
             lent = self.lent(key[0])
             k8 = self._k8
-            if k8[0] is not t or k8[1] is not lent:
+            if k8[0] != t or k8[1] is not lent:
                 k8[0] = t
                 k8[1] = lent
                 k8[2] = (t, lent)
@@ -1843,16 +1844,27 @@ class BarLayer:
 
     # -- what a running app lends its bar (ui.bar) -----------------------------
 
-    def _lent_ctx(self, where):
-        """The ui context whose `ui.bar` lends `where`'s bar: the running app
+    def _page_ctx(self, where):
+        """The ui context whose top page names `where`'s bar: the running app
         cart's ("tool"), the registered app's on top ("app"), else None."""
         ws = self.ws
         if where == "tool":
             return ws.run.player.face.bar_ctx()
         if where == "app":
             app = ws.app(ws.wm.top_kind())
-            return app.lent_ctx() if getattr(app, "UI", False) else None
+            return app.page_ctx() if getattr(app, "UI", False) else None
         return None
+
+    def page_named(self, where):
+        """The title of the top page the app on `where`'s bar opened in its
+        last frame (`ui.page`), "" for none."""
+        ctx = self._page_ctx(where)
+        return _ui_draw.page_title(ctx) if ctx is not None else ""
+
+    def _lent_ctx(self, where):
+        """The ui context whose `ui.bar` lends `where`'s bar: an immediate
+        app cart's ("tool"), else None."""
+        return self.ws.run.player.face.bar_ctx() if where == "tool" else None
 
     def lent(self, where):
         """(title, icon names, half-strength bits, back, chip) the running
@@ -2268,7 +2280,10 @@ class BarLayer:
                 return t                    # the title its page's row stands after
         lent = self.lent(where)
         if lent is not None and lent[0]:
-            return lent[0]
+            return lent[0]                  # the title an immediate app's ui.bar names
+        t = self.page_named(where)
+        if t:
+            return t                        # its top page's
         if where == "app":
             kind = ws.wm.top_kind()
             app = ws.app(kind)
