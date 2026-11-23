@@ -65,10 +65,11 @@ def _in_modal(n):
 
 
 def _list_model(n):
-    """The model of the list node `n` stands in the body of, else None."""
+    """The model of the list node `n` stands in the body of (a rows list's,
+    or a table's whose rows it draws), else None."""
     p = n.parent
     while p is not None:
-        if p.kind == "rows":
+        if p.kind in ("rows", "table"):
             return p.l["model"]
         p = p.parent
     return None
@@ -1245,6 +1246,9 @@ class CEngine(Engine):
             r = self._x.rect(key)
             return (r, None) if r is not None and r[0] <= px < r[0] + r[2] and r[1] <= py < r[1] + r[3] \
                 else (None, None)
+        v = self._x.rect(model)         # a table's view: a row it cuts takes no press past it
+        if v is not None and not (v[0] <= px < v[0] + v[2] and v[1] <= py < v[1] + v[3]):
+            return None, None
         kf = self.s._t[model].key
         for row in self.s._v[model]:
             r = self._x.rect("%s/%s" % (getattr(row, kf), key))

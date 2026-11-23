@@ -121,3 +121,70 @@ def test_a_placed_empty_fills_its_stack_and_drops_its_disc_where_it_would_run_pa
     assert tall[1] + tall[3] <= bottom and short[1] + short[3] <= bottom, (page, tall, short)
     with_disc, without = tall[1] - (head[1] + head[3]), short[1] - (head2[1] + head2[3])
     assert with_disc - without >= 48, (with_disc, without)
+
+
+def test_a_tables_canvas_is_handed_the_press_on_its_row(tmp_path):
+    """A table's canvas child with pointer= takes a press on a row, handed
+    that row (ev.row) in the row's coordinates, on any frame: the rows a
+    frame did not draw again take it too."""
+    import uitree_c
+    import uitree_placed_parts as F
+    from runtime import host_app
+    ws = host_app.build_workstation(str(tmp_path / "carts"))
+    ws.pointer.visible = False
+    app = P.host(ws, F.layer(uitree_c.CEditorEngine))
+    drv = host_app.ConsoleDriver(ws)
+    for _ in range(3):
+        ws.mark_dirty()
+        drv.frame(1 / 30)
+    e = app.engine
+    x, y, _w, _h = e.rect_of("rows")
+    for row in (2, 2, 0):
+        _tap(ws, drv, x + 20, y + row * 40 + 12)
+    assert e.s.pressed == "down:2@12,up:2@12,down:2@12,up:2@12,down:0@12,up:0@12,", e.s.pressed
+
+
+def _boxes(tmp_path, build, ids, placed=True, keys=()):
+    """The toolkit's box of each focus id after the fixture's page opened
+    full screen and `keys` were pressed: {id: (x, y, w, h)}."""
+    import uitree_c
+    import uitree_placed_rows as F
+    from runtime import host_app
+    ws = host_app.build_workstation(str(tmp_path / "carts"))
+    ws.pointer.visible = False
+    cls = F.layer(getattr(F, build), uitree_c.CEditorEngine if placed else uitree_c.CEngine)
+    app = P.host(ws, cls)
+    drv = host_app.ConsoleDriver(ws)
+    for k in (None,) * 3 + tuple(keys):
+        if k is not None:
+            drv.press(k)
+        ws.mark_dirty()
+        drv.frame(1 / 30)
+    host = ws._app_hosts[cls.id]
+    return app.engine, dict((i, host.box(i)) for i in ids)
+
+
+def test_a_placed_rows_body_and_by_case_draw_their_rows(tmp_path):
+    """A ui.row in a rows' body and in a by= case draws on a placed page:
+    each row's button is a stop, one row under the other."""
+    e, got = _boxes(tmp_path, "rows_page", ("a/go", "b/go", "c/go", "p/go", "r/go"))
+    assert e.focus_key == "a/go", e.focus_key
+    a, b, c, p, r = (got[k] for k in ("a/go", "b/go", "c/go", "p/go", "r/go"))
+    assert a and b and c and a[1] < b[1] < c[1] and a[0] == b[0], got
+    assert p and r and c[1] < p[1] < r[1], got
+
+
+def test_groups_in_a_placed_row_stand_side_by_side(tmp_path):
+    _e, got = _boxes(tmp_path, "groups_page", ("left", "right"))
+    left, right = got["left"], got["right"]
+    assert left[1] == right[1] and left[0] + left[2] <= right[0], got
+
+
+def test_a_split_among_a_flowing_pages_rows_takes_its_cells_height(tmp_path):
+    """A split between a flowing page's rows stands at the flow's place as
+    tall as its tallest cell: the button after it is under the split's
+    three rows, not over them."""
+    _e, got = _boxes(tmp_path, "split_page", ("after",), placed=False)
+    _e, one = _boxes(tmp_path, "rows_page", ("a/go", "b/go"))
+    pitch = one["b/go"][1] - one["a/go"][1]
+    assert got["after"][1] > 28 + 3 * pitch, (got, pitch)

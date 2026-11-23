@@ -228,6 +228,19 @@ def test_a_canvas_is_drawn_by_the_app_and_hands_its_pointer_to_an_action():
 
 
 
+def test_a_tables_canvas_hands_the_press_on_a_row_with_that_row():
+    """A table's canvas child draws each row; a press on one, its drag and
+    its release reach the pointer= action with the row pressed, in that
+    row's coordinates, as a Python or Lua app's handler is handed ev.row."""
+    import uitree_conf as C
+    cart = os.path.join(ROOT, "tests", "fixtures", "uitree_table_wasm.moy")
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "swipe:5"], cart=cart)
+    got = [re.search(r"-> '(\w+) (-?\d+),(-?\d+)' \(in poke\)$", l) for l in trace if "(in poke)" in l]
+    got = [(m.group(1), int(m.group(2)), int(m.group(3))) for m in got if m]
+    assert got and got[0][0] == "down" and got[-1][0] == "up", trace
+    assert len({row for _k, row, _y in got}) == 1 and got[0][1] >= 0 and 0 <= got[0][2] < 30, got
+
+
 def test_a_canvas_under_an_open_dialog_takes_no_press():
     """While a dialog is up a canvas outside it takes no press (only one in
     it would), as uitree_c.py's point() routes a Python app's."""

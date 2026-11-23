@@ -434,7 +434,7 @@ Python's alone.
 |---|---|---|
 | `rows(model)` | a model's rows, each drawing the body (Python `with`, Lua the function) | `cur=` the `row_of` focus writes, `changed=` run with the row where the user moves it from one row to another (focus arriving from elsewhere writes `cur=` alone), `current=` the row marked, `check=`, `empty=`, `by=` with cases, `filter=`, `group=` |
 | `cards(model)`, `card(action)` | rows as cards; `card` is the body | `cur=`, `current=`, `w=`, `h=`, `cols=`, `flow=`, `look=` (`carousel`, `shelf`, `icons`); a card's `label=`, `sub=`, `image=`, `badge=` |
-| `table(model)`, `col(text)` | rows as a table, one `col` a column | `cols=` the header, `cur=`, `changed=` (as a rows' list's), `on=`, `empty=`; `row=` (a height, or an int state holding one) with one canvas child that draws each row |
+| `table(model)`, `col(text)` | rows as a table, one `col` a column | `cols=` the header, `cur=`, `changed=` (as a rows' list's), `on=`, `empty=`; `row=` (a height, or an int state holding one) with one canvas child that draws each row and, with `pointer=`, takes the press on its row (`ev.row`) |
 
 **Over the page**
 
@@ -484,7 +484,9 @@ widths at the page's end, a status label before them, under what scrolls;
 pill over the page above its foot; a dialog lies over the page.
 `ui.page(title, status=)` leads the hints band with its words (a page laid
 out in a split, its own or one in a switch's shown case, has the band cut
-from its room).
+from its room). A split among a page's other rows, or in a group or a
+scroll, stands where they flow instead, as tall as its tallest cell (a
+column split its cells' sum), each cell a column.
 
 **Groups and splits.** `ui.group("", look="card")` lays its rows on a card
 (as a split's cell, the cell is the card), and `look="rules"` parts its rows
@@ -493,6 +495,8 @@ with a rule as a captioned group's are (a `row` among them one of its rows);
 draws a rule between its cells; a row split's fixed sizes that its width
 cannot hold share it by their sizes, and a cell that is a row, a group or a
 seg widens to what it needs, its neighbours giving up at most half theirs.
+Groups in a `row` stand side by side, each a column of its rows (no
+caption), on a flowing page and a placed one.
 
 **A placed page** gives each region a rect by the engine's one layout rule:
 a container gives each shown child its rect, fixed rows their height and

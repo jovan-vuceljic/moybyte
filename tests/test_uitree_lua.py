@@ -888,3 +888,75 @@ def test_a_lists_changed_runs_on_a_users_move_only_on_the_c_engine(tmp_path):
     assert seen == ["state cur '' -> 'a' (focus)",
                     "state cur 'a' -> 'b' (focus)", "action moved from rows 'items' cur moved",
                     "state cur 'b' -> 'a' (focus)", "action moved from rows 'items' cur moved"], lines
+
+
+def test_a_canvas_in_a_table_is_handed_the_press_on_its_row(tmp_path):
+    """A table's canvas child with pointer= is handed a press with the row it
+    lands on (ev.row), in that row's coordinates, as a Python app's is."""
+    from runtime import host_app
+    from runtime.host import moy_log
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Taps", 'ui.app("Taps", { icon = "calc" })\n'
+          'local s = ui.state { items = ui.model { key = "id", id = "" }, cur = ui.row_of("items"), got = "" }\n'
+          'ui.hook("opened", function() s.items:set({ { id = "a" }, { id = "b" }, { id = "c" } }) end)\n'
+          'ui.hook("press", function(ev) s.got = s.got .. ev.kind .. ":" .. ev.row.id .. "@" .. ev.y .. "," end,'
+          ' { takes = "pointer" })\n'
+          'ui.page("p", function()\n'
+          '  ui.table("items", { cur = "cur", row = 30 }, function()\n'
+          '    ui.canvas("cell", { pointer = "press", draw = function(x, y, w, h, row) end })\n'
+          '  end)\n'
+          'end)\n')
+    ws, drv, frame, open_cart = _console(carts)
+    seq = moy_log.next()
+    open_cart(ws, "Taps")
+    for _ in range(4):
+        frame()
+    for y in (50, 80):
+        drv.click(40, y)
+        frame()
+        frame()
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    lines = [r[4].split("[trace] ", 1)[1] for r in moy_log.read(seq, 4000) if "[trace] " in r[4]]
+    got = [l.split("-> ", 1)[1].split('"')[1] for l in lines if l.split()[1:3] == ["state", "got"]][-1]
+    taps = [t.split(":")[1] for t in got.split(",") if t.startswith("down")]
+    (r1, y1), (r2, y2) = [t.split("@") for t in taps]
+    assert (y1, ord(r2) - ord(r1)) == (y2, 1), (got, lines)
+
+
+def test_a_split_among_a_pages_rows_takes_its_cells_height_on_the_c_engine(tmp_path):
+    """A split between a flowing page's rows stands where they flow, as tall
+    as its tallest cell: the button after it is under the split's three
+    rows (the first tap down the page that fires it is past them), as on a
+    Python app's page."""
+    from runtime import host_app
+    from runtime.host import moy_log
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Flow", 'ui.app("Flow", { icon = "calc" })\n'
+          'local s = ui.state { n = 0 }\n'
+          'ui.action("after", "After", function() s.n = s.n + 1 end)\n'
+          'ui.page("p", function()\n'
+          '  ui.label("Before")\n'
+          '  ui.split({ dir = "row", sizes = { 1, 1 } }, function()\n'
+          '    ui.group("", function() ui.label("L1") ui.label("L2") ui.label("L3") end)\n'
+          '    ui.group("", function() ui.label("R1") end)\n'
+          '  end)\n'
+          '  ui.button("after")\n'
+          'end)\n')
+    ws, drv, frame, open_cart = _console(carts)
+    seq = moy_log.next()
+    open_cart(ws, "Flow")
+    for _ in range(4):
+        frame()
+    hit = None
+    for y in range(30, 230, 6):
+        drv.click(160, y)
+        frame()
+        frame()
+        lines = [r[4] for r in moy_log.read(seq, 4000) if "[trace] " in r[4]]
+        if any("action  after" in l or "action after" in l for l in lines):
+            hit = y
+            break
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    assert hit is not None and hit > 28 + 4 * 18, hit

@@ -2138,8 +2138,11 @@ function T.table(name, o, body)
   local ok, err = pcall(run_body, c, body)
   ROWCTX = sr
   if not ok then error(err, 0) end
-  for _, k in ipairs(c.kids) do
-    if k.kind ~= "col" then fail("N03", k.at, "ui." .. k.kind .. " in a ui.table", "ui.col, one a column", "ui." .. k.kind) end
+  local parts = n.o.row ~= nil and #c.kids == 1 and c.kids[1].kind == "canvas"
+  for _, k in ipairs(c.kids) do       -- (with row=, one canvas that draws each row)
+    if k.kind ~= "col" and not parts then
+      fail("N03", k.at, "ui." .. k.kind .. " in a ui.table", "ui.col, one a column, or with row= one ui.canvas", "ui." .. k.kind)
+    end
   end
   if n.o.cols and #n.o.cols ~= #c.kids then
     fail("N01", at, "ui.table(" .. q(name) .. ") has " .. #n.o.cols .. " headers and " .. #c.kids .. " columns", "one header a column", tostring(#c.kids))
@@ -2417,13 +2420,15 @@ local function page_def(name, at)
 end
 
 -- the event a canvas's pointer handler is handed: kind ("down", "drag",
--- "up"), x and y in the canvas, source ("touch"); read-only
+-- "up"), x and y in the canvas, source ("touch"), row (the list row it
+-- stands in, else nil); read-only
 local EvMT = { __newindex = function(_, k)
   fail("S03", where(), "an event is read-only (ev." .. tostring(k) .. " = ...)", "a read", "a write",
        "a canvas handler reads the event; it writes state")
 end }
-local function event(kind, x, y, source)
-  return setmetatable({}, { __index = { kind = kind, x = x, y = y, source = source }, __newindex = EvMT.__newindex })
+local function event(kind, x, y, source, row)
+  return setmetatable({}, { __index = { kind = kind, x = x, y = y, source = source, row = row },
+                            __newindex = EvMT.__newindex })
 end
 
 local function fire(name, from, ...)

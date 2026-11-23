@@ -381,7 +381,7 @@ local function lower_node(n, parent, path, model, modal)
       for _, name in ipairs(n.o.reads) do r[name] = true end
       READS_OF[me] = r
     end
-    if n.o.pointer then POINTERS[#POINTERS + 1] = { me, key, n.o.pointer, modal } end
+    if n.o.pointer then POINTERS[#POINTERS + 1] = { me, key, n.o.pointer, modal, model } end
   end
   if n.action then check(X:node_action(me, AIDX[n.action]), "ui." .. n.kind .. " " .. q(key) .. "'s action", n.at) end
   if n.kind == "dialog" then
@@ -480,6 +480,21 @@ local function wants_back()
   return #stack > 1 or X:dialog() >= 0 or X:popover() ~= nil or KEYMAP["role:back"] ~= nil
 end
 
+-- Where the last frame drew canvas KEY in the row of list MODEL (a rows list's
+-- body or a table's) under (tx, ty): its corner and the row, read-only; nil
+-- outside the list's view and its rows
+local function list_point(model, key, tx, ty)
+  local vx, vy, vw, vh = X:rect(model)
+  if vx and not (tx >= vx and tx < vx + vw and ty >= vy and ty < vy + vh) then return nil end
+  local m = V[model]
+  for _, row in ipairs(m.rows) do
+    local x, y, w, h = X:rect(tostring(row[m.key]) .. "/" .. key)
+    if x and tx >= x and tx < x + w and ty >= y and ty < y + h then
+      return x, y, frozen(row, "row " .. q(row[m.key]) .. " of " .. q(m.name), m.ty)
+    end
+  end
+end
+
 -- A canvas with pointer= is handed down, drag and up in its own coordinates,
 -- at the rect the last frame drew it at; the press that starts on it holds it
 -- until release; while a popover or a dialog is up, only a canvas in it takes
@@ -492,23 +507,31 @@ local function pointers()
     if tx ~= nil and held then
       if tx ~= h.px or ty ~= h.py then
         h.px, h.py = tx, ty
-        fire_placed(h.name, "pointer drag on canvas " .. q(h.key), event("drag", tx - h.x, ty - h.y, "touch"))
+        fire_placed(h.name, "pointer drag on canvas " .. q(h.key), event("drag", tx - h.x, ty - h.y, "touch", h.row))
       end
       return
     end
     HELD = nil
-    fire_placed(h.name, "pointer up on canvas " .. q(h.key), event("up", (tx or h.px) - h.x, (ty or h.py) - h.y, "touch"))
+    fire_placed(h.name, "pointer up on canvas " .. q(h.key), event("up", (tx or h.px) - h.x, (ty or h.py) - h.y, "touch", h.row))
     return
   end
   if not tapped then return end
   local up = X:dialog() >= 0 or X:popover() ~= nil
   for _, p in ipairs(POINTERS) do
-    local r = DRAWN[p[1]]
-    if r and r[5] == FRAMES and (p[4] or not up) and tx >= r[1] and tx < r[1] + r[3] and ty >= r[2] and ty < r[2] + r[4] then
-      local key, name, x, y = p[2], p[3], r[1], r[2]
-      fire_placed(name, "pointer down on canvas " .. q(key), event("down", tx - x, ty - y, "touch"))
-      if held then HELD = { key = key, name = name, x = x, y = y, px = tx, py = ty }
-      else fire_placed(name, "pointer up on canvas " .. q(key), event("up", tx - x, ty - y, "touch")) end
+    local x, y, row
+    if p[5] then
+      x, y, row = list_point(p[5], p[2], tx, ty)
+    else
+      local r = DRAWN[p[1]]
+      if r and r[5] == FRAMES and tx >= r[1] and tx < r[1] + r[3] and ty >= r[2] and ty < r[2] + r[4] then
+        x, y = r[1], r[2]
+      end
+    end
+    if x and (p[4] or not up) then
+      local key, name = p[2], p[3]
+      fire_placed(name, "pointer down on canvas " .. q(key), event("down", tx - x, ty - y, "touch", row))
+      if held then HELD = { key = key, name = name, x = x, y = y, px = tx, py = ty, row = row }
+      else fire_placed(name, "pointer up on canvas " .. q(key), event("up", tx - x, ty - y, "touch", row)) end
       return
     end
   end

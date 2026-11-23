@@ -438,6 +438,17 @@ static int l_uit_focused(lua_State *L)
     return 1;
 }
 
+/* Where node KEY (ROWKEY/KEY: a list row's cell of it) was drawn by the last
+ * frame: x, y, w, h, else nothing. */
+static int l_uit_rect(lua_State *L)
+{
+    uit_t *e = moycore_uit(L);
+    int32_t r[4];
+    if (!uit_rect(e, luaL_checkstring(L, 2), r)) return 0;
+    for (int i = 0; i < 4; i++) lua_pushinteger(L, r[i]);
+    return 4;
+}
+
 static int l_uit_popover(lua_State *L)
 {
     uit_t *e = moycore_uit(L);
@@ -505,7 +516,7 @@ static void moycore_uitree_open(lua_State *L)
         {"can", l_uit_can}, {"letter", l_uit_letter}, {"dialog", l_uit_dialog},
         {"unfocused", l_uit_unfocused}, {"back_dialog", l_uit_back_dialog},
         {"back_popover", l_uit_back_popover}, {"focused", l_uit_focused},
-        {"popover", l_uit_popover}, {"hints", l_uit_hints}, {"leave", l_uit_leave},
+        {"popover", l_uit_popover}, {"rect", l_uit_rect}, {"hints", l_uit_hints}, {"leave", l_uit_leave},
         {"dump", l_uit_dump}, {"error", l_uit_error}, {"error_code", l_uit_error_code},
         {"free", l_uit_free},
         {NULL, NULL},
