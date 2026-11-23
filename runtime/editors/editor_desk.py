@@ -1460,7 +1460,7 @@ class EditorDesk(Layer):
             se = su.sceneedit
             what = op[6:]
             if what == "zoom":
-                su._cycle_zoom()
+                su.cycle_zoom()
             elif se is not None:
                 if what == "snap":
                     se.snap = not se.snap

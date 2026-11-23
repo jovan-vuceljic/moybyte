@@ -13,9 +13,6 @@ class _UI:
     def __init__(self):
         self.calls = 0
 
-    def _scene_input(self):
-        self.calls += 1
-
     def handle_input(self, i):
         self.calls += 1
 

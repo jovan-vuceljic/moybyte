@@ -256,7 +256,7 @@ SURFACES = {
         BAR,
     ]),
     "scene": ("ws._g['_edit']('scene', %r)", [
-        ("ws.scene_ui", "_draw_scene", "scene._draw_scene"),
+        ("ws.scene_ui", "draw", "scene.draw"),
         ("ws.scene_ui", "_frame_world", "scene.frame_world"),
         BAR,
     ]),

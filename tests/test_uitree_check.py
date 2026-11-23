@@ -44,6 +44,7 @@ PORTED = (
     "editor_blocks",
     "editor_sprite",
     "editor_map",
+    "editor_scene",
     "uitree_placed_table",
     "uitree_placed_swatches",
     "uitree_stepper",

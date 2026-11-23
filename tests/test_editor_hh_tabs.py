@@ -310,7 +310,7 @@ def _scene(hh):
     ws, drv = _open(hh, "scene")
     su = ws.scene_ui
     assert su.layout.verbs and su.sceneedit is not None
-    return ws, drv, su, su.page()
+    return ws, drv, su, su
 
 
 def _world_px(su, wx, wy):
@@ -328,12 +328,12 @@ def test_the_stamp_tool_places_and_the_pick_tool_does_not(hh):
     for _ in range(2):
         drv.frame(DT)
     assert len(se.rows) == n, "the pick tool places nothing on empty world"
-    _tap(drv, page.host.box("Tool Stamp"))
-    assert su.place_taps
-    lay = su.layout
-    drv.click(lay.tp_x0 + 22 + 4, lay.tp_y0 + 4)     # the second stamp
+    _tap(drv, page.rect_of("stamp"))
+    assert su.tool == "stamp"
+    bx, by, _w, _h = page.rect_of("stamps")
+    drv.click(bx + 6 + 22 + 4, by + 6 + 4)           # the second stamp
     drv.frame(DT)
-    assert se.n == su._palette_ids()[1]
+    assert se.n == su.brush_ids()[1]
     drv.click(x, y)
     for _ in range(2):
         drv.frame(DT)
@@ -347,9 +347,9 @@ def test_the_actors_verbs_flip_and_remove_the_picked_actor(hh):
     n = len(se.rows)
     ws.mark_dirty()
     drv.frame(DT)
-    _tap(drv, page.host.box("Flip"))
+    _tap(drv, su._host.box("Flip"))
     assert se.selected().get("flip")
-    _tap(drv, page.host.box("Remove"))
+    _tap(drv, su._host.box("Remove"))
     assert len(se.rows) == n - 1 and se.selected() is None
 
 
@@ -359,9 +359,9 @@ def test_a_tag_is_typed_in_its_popover(hh):
     se.place(64, 64, "coin")
     ws.mark_dirty()
     drv.frame(DT)
-    _tap(drv, page.host.box("Tag"))
+    _tap(drv, su._host.box("Tag"))
     drv.frame(DT)
-    assert page.pop == "tag" and ws.input.text_mode, "its field holds the keys"
+    assert su.popover() and ws.input.text_mode, "its field holds the keys"
     for ch in "gem":
         drv.type_char(ord(ch))
         drv.frame(DT)
@@ -369,23 +369,51 @@ def test_a_tag_is_typed_in_its_popover(hh):
     for _ in range(3):              # the page redraws without the popover
         drv.frame(DT)               # and the input policy reads that
     assert se.selected()["tag"] == "coingem"
-    assert page.pop is None and not ws.input.text_mode
+    assert not su.popover() and not ws.input.text_mode
 
 
 def test_snap_and_zoom_from_the_foot(hh):
     ws, drv, su, page = _scene(hh)
     se = su.sceneedit
     snap = se.snap
-    _tap(drv, page.host.box("Snap"))
+    _tap(drv, page.rect_of("snap"))
     assert se.snap != snap
-    _tap(drv, page.host.box("Zoom"))
+    _tap(drv, page.rect_of("zoom"))
     assert su.scene_zoom == 1
+
+
+def test_the_scene_tab_by_keys_alone(hh):
+    """The view's arrows nudge a picked actor and pan an empty pick; an
+    arrow the camera cannot follow moves focus on, to the column and the
+    foot, whose tools A presses."""
+    ws, drv, su, page = _scene(hh)
+    se = su.sceneedit
+    se.place(64, 64, "coin")
+    ws.mark_dirty()
+    drv.frame(DT)
+    assert page.page._focus_key() == "view"
+    _key(drv, "right")
+    assert se.selected()["x"] > 64
+    se.sel = None
+    _key(drv, "right", 3)
+    assert se.cam_x > 0
+    for _ in range(200):
+        if page.page._focus_key() != "view":
+            break
+        _key(drv, "down")
+    assert page.page._focus_key() in ("pick", "stamp", "snap", "zoom")
+    while page.page._focus_key() != "pick":
+        _key(drv, "left")
+    _key(drv, "right")
+    assert page.page._focus_key() == "stamp"
+    _key(drv, "a")
+    assert su.tool == "stamp" and page.page._focus_key() == "view"
 
 
 def test_a_settled_scene_tab_paints_nothing(hh):
     ws, drv, su, page = _scene(hh)
     assert _settles(ws, drv)
-    _tap(drv, page.host.box("Tool Stamp"))
+    _tap(drv, page.rect_of("stamp"))
     assert _settles(ws, drv)
 
 
