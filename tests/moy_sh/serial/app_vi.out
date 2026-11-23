@@ -1,0 +1,369 @@
+> sh printf 'one\ntwo\nthree\n' > /notes.txt
+SH end 0
+> sh vi /notes.txt
+SH one
+SH two
+SH three
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "notes.txt"                                                                 1,1
+SH app vi
+> sh jdd
+SH one
+SH three
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "notes.txt" [+]                                                             2,1
+SH app vi
+> sh u
+SH one
+SH two
+SH three
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "notes.txt" [+]                                                             2,1
+SH app vi
+> sh Goadded^[
+SH one
+SH two
+SH three
+SH added
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "notes.txt" [+]                                                             4,5
+SH app vi
+> sh :wq^M
+SH end 0
+> sh cat /notes.txt
+SH one
+SH two
+SH three
+SH added
+SH end 0
+> sh vim /notes.txt
+SH one
+SH two
+SH three
+SH added
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "notes.txt"                                                                 1,1
+SH app vim
+> sh 2dd
+SH three
+SH added
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "notes.txt" [+]                                                             1,1
+SH app vim
+> sh p
+SH three
+SH one
+SH two
+SH added
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "notes.txt" [+]                                                             2,1
+SH app vim
+> sh :x^M
+SH end 0
+> sh cat /notes.txt
+SH three
+SH one
+SH two
+SH added
+SH end 0
+> sh vi /fresh.txt
+SH 
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH a new file                                                                  1,1
+SH app vi
+> sh ihi^[
+SH hi
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "fresh.txt" [+]                                                             1,2
+SH app vi
+> sh :q^M
+SH hi
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH unsaved changes: :wq saves, :q! leaves them                                 1,2
+SH app vi
+> sh :q!^M
+SH end 0
+> sh ls /
+SH bin/  dev/  etc  notes.txt  notes.txt.bak  proc/  sd
+SH end 0
+> sh view /notes.txt
+SH three
+SH one
+SH two
+SH added
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "notes.txt" [read-only]                                                     1,1
+SH app view
+> sh x
+SH three
+SH one
+SH two
+SH added
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH read-only: q leaves                                                         1,1
+SH app view
+> sh q
+SH end 0
+> sh less /notes.txt
+SH three
+SH one
+SH two
+SH added
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "notes.txt" [read-only]                                                     1,1
+SH app less
+> sh q
+SH end 0
+> sh more /none.txt
+SH more: /none.txt: not a file in the store
+SH end 1
+[exit 0]

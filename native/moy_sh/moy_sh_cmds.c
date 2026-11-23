@@ -1492,9 +1492,11 @@ static const struct builtincmd core[] = {
     { "grep", grepcmd, BUILTIN_REGULAR },
     { "head", headcmd, BUILTIN_REGULAR },
     { "help", helpcmd, BUILTIN_REGULAR },
+    { "less", appcmd, BUILTIN_REGULAR },
     { "log", logcmd, BUILTIN_REGULAR },
     { "ls", lscmd, BUILTIN_REGULAR },
     { "mkdir", mkdircmd, BUILTIN_REGULAR },
+    { "more", appcmd, BUILTIN_REGULAR },
     { "mv", mvcmd, BUILTIN_REGULAR },
     { "neofetch", neofetchcmd, BUILTIN_REGULAR },
     { "ps", pscmd, BUILTIN_REGULAR },
@@ -1507,6 +1509,9 @@ static const struct builtincmd core[] = {
     { "top", appcmd, BUILTIN_REGULAR },
     { "touch", touchcmd, BUILTIN_REGULAR },
     { "uname", unamecmd, BUILTIN_REGULAR },
+    { "vi", appcmd, BUILTIN_REGULAR },
+    { "view", appcmd, BUILTIN_REGULAR },
+    { "vim", appcmd, BUILTIN_REGULAR },
     { "wc", wccmd, BUILTIN_REGULAR },
 };
 
