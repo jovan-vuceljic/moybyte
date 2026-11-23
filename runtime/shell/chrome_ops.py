@@ -47,9 +47,18 @@ def replay(ops, cv, ws=None):
         elif op == 3:
             cv.print(t, x, y, c, sc)
         elif op == 4:
-            _ui_draw.glyph(cv, t, (x, y, w, h), c, sc or None)
+            glyph(cv, t, (x, y, w, h), c, sc or None)
         elif op == 5:
             ws.icon(t, x, y, cv, sc or None)
+
+
+def glyph(cv, kind, rect, c, scale=None):
+    """Glyph `kind` centred in `rect` in colour `c` on `cv`, each glyph
+    pixel a `scale` square (the canvas's font scale by default): the
+    kernel's 12x12 glyph raster, its display lists' op 4, which the
+    chrome draws an icon with where the icon set has none. An unknown
+    kind draws nothing."""
+    _ui_draw.glyph(cv, kind, rect, c, scale)
 
 
 # The panels' words (#143): moy_chrome.h's one table, whichever tier draws.

@@ -31,7 +31,7 @@ import editor_settings      # declared at import, never inside another page's ha
 from layers import Layer
 import layout_base as _layout_base
 import text_modes as _modes
-from bar_layer import glyph as _bar_glyph
+import chrome_ops as _ch_ops
 from layout_base import LayoutBase
 
 # The project's files (step 5 of docs/theme_and_shell_2026-11.md §10) are reached from
@@ -323,8 +323,8 @@ class CardsLayer(Layer):
         else:
             icons = f.get("icons") or []
             side = max(12, min(w, h) // 2)
-            _bar_glyph(icons[k] if k < len(icons) else "dot",
-                       (x + (w - side) // 2, y + (h - side) // 2, side, side), self.ws.theme_colors["ink"], cv)
+            _ch_ops.glyph(cv, icons[k] if k < len(icons) else "dot",
+                          (x + (w - side) // 2, y + (h - side) // 2, side, side), self.ws.theme_colors["ink"])
 
     # Each bg-thumbs choice is drawn as a tiny "what the screen will look like"
     # preview. A cart reads the chosen name in cfg("bg") and paints to match.

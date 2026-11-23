@@ -326,10 +326,6 @@ def _masked(ws, buf, w, h):
     return bytes(out)
 
 
-def _not_paged(edge, cells):
-    return False
-
-
 def _old_packing():
     from runtime import shell_layout
     return shell_layout.pack
@@ -350,12 +346,10 @@ def frames(config, surface, script, carts_dir=None):
         os.makedirs(carts_dir, exist_ok=True)
         surface.prepare(carts_dir)
     # a run compares a page with its old self: the desk's bar stays on the
-    # old painters and the old packing here (the bar page's own pictures are
-    # the shell goldens'; a commit before the bar's page has neither hook)
-    from runtime import bar_layer, chrome
-    paged, packing = getattr(bar_layer, "_paged", None), getattr(chrome, "_bar_pack", None)
-    if paged is not None:
-        bar_layer._paged = _not_paged
+    # old packing here (the bar pages' own pictures are the shell goldens';
+    # a commit before the bar's page has no hook)
+    from runtime import chrome
+    packing = getattr(chrome, "_bar_pack", None)
     if packing is not None:
         chrome._bar_pack = _old_packing
     out = []
@@ -373,8 +367,6 @@ def frames(config, surface, script, carts_dir=None):
             out.append(Frame(step, _masked(ws, _settle(ws, g, driver), cv.w, cv.h),
                              cv.w, cv.h, probe(ws)))
     finally:
-        if paged is not None:
-            bar_layer._paged = paged
         if packing is not None:
             chrome._bar_pack = packing
         if ws is not None:

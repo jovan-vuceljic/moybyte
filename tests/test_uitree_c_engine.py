@@ -167,6 +167,9 @@ def test_still_answers_a_frame_that_would_draw_what_the_last_drew(tmp_path, monk
     paint = uitree_c.CEngine.paint
 
     def watched(self, dt, cv, th, content, desk):
+        app = seen.get("app")
+        if app is not None and self is not app.engine:
+            return paint(self, dt, cv, th, content, desk)       # (the bar's page)
         said.append((step[0], self.still(content, desk) if self._x is not None else None))
         paint(self, dt, cv, th, content, desk)
         step[0] = "after " + step[0].split(" ")[-1]

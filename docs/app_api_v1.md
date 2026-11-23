@@ -476,6 +476,9 @@ path of its own (owner, 2026-10-29). A long document is a `text_view` or a
   at its cell;
 - a row of buttons wider than its room closes its gaps, then stands its
   labelled icon buttons as their icons alone, from the end, until it fits;
+  a row from a model's cells (`ui.rows(dir="row")`) keep their labels and
+  are cut, the widest first, to one width, and dropped from the end where
+  even that does not fit;
 - `ui.row(key, grow=True)` on a flowing page fills its stack, so the rows
   after it stand at the page's foot and the page fits its room.
 
@@ -511,7 +514,10 @@ their spans.
 a container gives each shown child its rect, fixed rows their height and
 the fills sharing the rest, a text editor whole lines. A `rows` list
 standing in a placed stack (no `scroll` round it) is a fill that scrolls
-its rows, as a table is. A Python app whose
+its rows, as a table is; with `dir="col"` its rows' cells stand down the
+stack instead, as `dir="row"` stands them along a placed row: a button its
+`w=` down the stack, else a square of the stack's width, and a labelled bar
+item its own width, centred across. A Python app whose
 state holds a `ui.doc` runs on the Editor's kinds (`text_editor`, `panes`),
 and its pages are placed; `split` and `grid` place their cells on any page.
 

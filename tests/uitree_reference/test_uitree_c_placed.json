@@ -89,8 +89,8 @@
    null
   ]
  ],
- "placed/big_800x480_fs3_dark": "sha256:6cfd1f343bcec249bf8f2f72119347a4eb77b040d5d90bc981ee5ee2eb31e7fd",
- "placed/p4_1024x600_cs2_fs1_windowed": "sha256:85b1075efe69677effb8252a21ac710b8b99199284839d13960e732986c0c4b6",
- "placed/p4_1024x600_fs2_windowed": "sha256:ae8a78c1033616f92ed8746343af1a4b0a3b9eeb6adc5974c487541505f768e9",
+ "placed/big_800x480_fs3_dark": "sha256:fa9d5c1dc90ffd76478f37fd6543df58cd8f6ae18a2debc6f172586189c2bd48",
+ "placed/p4_1024x600_cs2_fs1_windowed": "sha256:b808067372fd3e8023befd8212a169b794507fef66a233bbe5bce2205f4c27bf",
+ "placed/p4_1024x600_fs2_windowed": "sha256:dc33baa3d4f72c8829be5ee28895db17ce9d2cc8df2ff0873716831958e874da",
  "placed/tdeck_320x240_fs1_dark": "sha256:d5a158e4c61b1d036103d0a8330d9394d79916881cc0121c93d68ca243c3b0fc"
 }

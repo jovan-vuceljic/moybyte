@@ -1426,9 +1426,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, f);
     }
     if (kind == UIT_ROWS && !strcmp(name, "dir")) {
-        // dir="row": a row from a model, its cells along the placed row it stands in (row_kids)
+        // dir="row": a row from a model, its cells along the placed row it stands in (row_kids);
+        // dir="col": a column from a model, its cells down the placed stack it stands in (stack)
         if (strcmp(src, "row") && strcmp(src, "col"))
             return uit_fail(e, UIT_E_KIND, UIT_MSG("rows dir=%s: row or col", "rows dir=%s"), src);
+        if (src[0] == 'c')
+            N->lit |= RS_COL;
         return add_prop(e, node, name, src, repr, PK_LIT, src[0] == 'r');
     }
     if (!strcmp(name, "mkind") && kind == UIT_ITEM) {
@@ -1701,9 +1704,10 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, i);
     }
     if (!strcmp(name, "check") && kind == UIT_ROWS) {
-        // check=True: each row's link a pick, the current one's checked (lit 1)
-        N->lit = (uint8_t)!strcmp(src, "True");
-        return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
+        // check=True: each row's link a pick, the current one's checked (RS_CHECK)
+        if (!strcmp(src, "True"))
+            N->lit |= RS_CHECK;
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & RS_CHECK) != 0);
     }
     if (!strcmp(name, "cur") && UIT_IS_LIST(kind)) {
         int s = uit_slot_find(e, src, strlen(src));

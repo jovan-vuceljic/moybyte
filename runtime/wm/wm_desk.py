@@ -13,7 +13,7 @@ from layers import Layer
 from widgets import _ticks_ms
 import ui as _ui
 import ui_draw as _ui_draw
-from bar_layer import glyph as _bar_glyph
+import chrome_ops as _ch_ops
 import layout_base as _layout_base
 import iconsets as _iconsets
 from status_items import ITEMS as _ITEMS
@@ -511,7 +511,7 @@ class _BackdropLayer(Layer):
                 sc = max(1, r[2] // 16)
                 cv.spr(img, r[0] + (r[2] - 16 * sc) // 2, r[1] + (r[3] - 16 * sc) // 2, sc)
             else:
-                _bar_glyph(self.ICON_GLYPHS.get(key, "app"), box, tink, cv)
+                _ch_ops.glyph(cv, self.ICON_GLYPHS.get(key, "app"), box, tink)
         cv.clip()
         return True
 

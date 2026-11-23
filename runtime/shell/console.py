@@ -234,7 +234,8 @@ from layers import (_LegacyLayer, _PlayerLayer, _BlocksLayer, _UpdateLayer,
 # tests reference as console._X are imported back here rather than
 # duplicated. NAMES is injected into the one BarLayer a Workstation builds
 # (circular-import dodge).
-from bar_layer import BarLayer, _BAR_ICON, _STATUS_H, glyph as _bar_glyph
+from bar_layer import BarLayer, _BAR_ICON, _STATUS_H
+import chrome_ops as _ch_ops
 
 # The Editor's Config tab ("Make it mine", #3/#15 -- see cards_layer.py). CART
 # STATE stays on Workstation: ws.run.project.config / ws.saves.apply; the tab's page mutates
@@ -3832,8 +3833,8 @@ class Workstation:
         if img is not None:
             cv.spr(img, x, y, fs)                        # 16px art upscaled by that scale
         else:
-            _bar_glyph(kind, (x, y, _BAR_ICON * fs, _BAR_ICON * fs),
-                       self.theme_colors.get("chrome_ink_dim", 6), cv, fs)
+            _ch_ops.glyph(cv, kind, (x, y, _BAR_ICON * fs, _BAR_ICON * fs),
+                          self.theme_colors.get("chrome_ink_dim", 6), fs)
 
 
 def wire_workstation_core(ws, store, carts_root, make_api, wifi,

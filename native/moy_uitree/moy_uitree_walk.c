@@ -295,7 +295,7 @@ static void over_for(uit_t *e, int k, int model, int row, moy_ui_ctx_t *c, moy_u
         if (list >= 0 && NODE(list)->current >= 0) {
             int32_t on = uit_row_current(e, list, model, row), one = 1;
             moy_ui_over_put(o, MOY_UI_OV_CURRENT, &on);
-            if (NODE(list)->kind == UIT_ROWS && NODE(list)->lit)
+            if (NODE(list)->kind == UIT_ROWS && (NODE(list)->lit & RS_CHECK))
                 moy_ui_over_put(o, MOY_UI_OV_CHECK, &one);
         }
     }
@@ -3345,6 +3345,7 @@ static int32_t empty_controls_h(uit_t *e, int k, int model, int row);
 static void empty_controls(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
                            int32_t x, int32_t w, int32_t y);
 static int32_t natural(uit_t *e, int k, int model, int row, int32_t h);
+static int32_t bar_item_w(uit_t *e, int k, int model, int row, int32_t h);
 static int32_t row_gap(const uit_t *e);
 
 // A button's kind, the toolkit's: its literal's, or its template's word this frame (normal,
@@ -3377,8 +3378,8 @@ static int btn_icon(uit_t *e, int k, int model, int row)
 
 // Cells `w` of a row `used` wide in `room`: where they do not fit, a labelled button with an
 // icon, from the end, stands as its icon alone until they do (the toolkit drops a label that keeps
-// no character beside its icon). `km`, `kr` each cell's model and row, NULL for `model`, `row`.
-// Answers the width they take then.
+// no character beside its icon); a row from a model's cells are `fit_cells`' to cut. `km`, `kr`
+// each cell's model and row, NULL for `model`, `row`. Answers the width they take then.
 #define ALONE_W(e) (((e)->flags & UIT_F_DESK) ? 36 : 26 * (e)->fs)
 static int32_t icons_alone(uit_t *e, const int16_t *kids, const int16_t *km, const int16_t *kr, int model,
                         int row, int32_t *w, int n, int32_t used, int32_t room)
@@ -3386,7 +3387,7 @@ static int32_t icons_alone(uit_t *e, const int16_t *kids, const int16_t *km, con
     int32_t a = ALONE_W(e);
     for (int i = n - 1; i >= 0 && used > room; i--) {
         const uit_node_t *G = NODE(kids[i]);
-        if (G->kind == UIT_BUTTON && !(G->btn & (BT_ALONE | BT_GROW)) && w[i] > a
+        if (G->kind == UIT_BUTTON && !(G->btn & (BT_ALONE | BT_GROW)) && w[i] > a && !(km && km[i] != model)
             && btn_icon(e, kids[i], km ? km[i] : model, kr ? kr[i] : row))
             used -= w[i] - a, w[i] = a;
     }
@@ -5213,11 +5214,47 @@ static void line_put(uit_buf_t *b, const char *p, size_t n)
         b->n--;
 }
 
-// The shown children of `k` down `r`: fixed rows their height, the fills sharing the rest.
+// A cell's height down a column from a model (`stack`): a button its w= (its length along the
+// list, as along a row from a model), else a square of the column's width `w`; a label its line
+// and its pads; the rest as down any stack.
+static int32_t model_col_h(uit_t *e, int k, int model, int row, int32_t w)
+{
+    const uit_node_t *N = NODE(k);
+    if (N->kind == UIT_BUTTON)
+        return N->t_value >= 0 ? natural(e, k, model, row, w) : w;
+    if (N->kind == UIT_LABEL) {
+        moy_font_info_t fi;
+        role_font(MOY_UI_FONT_UI, &fi);
+        return (fi.line + 8) * e->fs;
+    }
+    return fixed_h(e, k);
+}
+
+// A column from a model's cells (rows `g` of dir="col"): each row's body's children on that row,
+// a column from a model among them its own cells in their place.
+static void col_kids(uit_t *e, int g, int32_t w, int16_t *kids, int16_t *km, int16_t *kr, int32_t *hs, int *n)
+{
+    int m = NODE(g)->slot;
+    for (int i = 0, y; i < e->slots[m].nrows; i++)
+        if ((y = uit_row_body(e, g, i)) >= 0)
+            KIDS(y, b) {
+                if (*n == PLACE_KIDS || !placed_shown(e, b, m, i))
+                    continue;
+                if (NODE(b)->kind == UIT_ROWS && (NODE(b)->lit & RS_COL)) {
+                    col_kids(e, b, w, kids, km, kr, hs, n);
+                    continue;
+                }
+                kids[*n] = (int16_t)b, km[*n] = (int16_t)m, kr[*n] = (int16_t)i;
+                hs[(*n)++] = model_col_h(e, b, m, i, w);
+            }
+}
+
+// The shown children of `k` down `r`: fixed rows their height, the fills sharing the rest; a
+// `rows` among them of dir="col" a cell per child of each row's body, on that row (`model_col_h`).
 static void stack(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
                   const int32_t r[4])
 {
-    int16_t kids[PLACE_KIDS];
+    int16_t kids[PLACE_KIDS], km[PLACE_KIDS], kr[PLACE_KIDS];
     int32_t hs[PLACE_KIDS], fixed = 0;
     int n = 0, fills = 0;
     int body = NODE(k)->kind == UIT_PANE;      // a pane's body: its tools are its header's
@@ -5226,7 +5263,17 @@ static void stack(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int 
         if (n == PLACE_KIDS || kind == UIT_POPOVER || kind == UIT_DIALOG || (body && kind == UIT_TOOLS) ||
             !placed_shown(e, g, model, row))
             continue;
-        kids[n] = (int16_t)g;
+        if (kind == UIT_ROWS && (NODE(g)->lit & RS_COL)) {
+            int was = n;
+            col_kids(e, g, r[2], kids, km, kr, hs, &n);
+            for (int i = was; i < n; i++)
+                if (hs[i] > 0)
+                    fixed += hs[i];
+                else if (hs[i] < 0)
+                    fills++;
+            continue;
+        }
+        kids[n] = (int16_t)g, km[n] = (int16_t)model, kr[n] = (int16_t)row;
         hs[n] = fixed_h(e, g);
         if (hs[n] > 0)
             fixed += hs[n];
@@ -5249,7 +5296,17 @@ static void stack(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int 
             kh -= spare;
         }
         int32_t cell[4] = {r[0], y, r[2], kh};
-        place_at(e, c, s, kids[i], model, row, cell);
+        if (km[i] != model) {
+            const uit_node_t *K = NODE(kids[i]);
+            if (K->kind == UIT_BUTTON && K->lit == MOY_UI_BUTTON_BAR && !(K->btn & BT_ALONE)) {
+                // a labelled bar item down a column: its own width, centred across
+                int32_t nw = bar_item_w(e, kids[i], km[i], kr[i], kh);
+                if (nw > 0 && nw < cell[2])
+                    cell[0] += (cell[2] - nw) / 2, cell[2] = nw;
+            }
+            put_cell(e, kids[i], km[i], kr[i], cell);   // a column's cell: its row's (`uit_rect`)
+        }
+        place_at(e, c, s, kids[i], km[i], kr[i], cell);
         y += kh;
     }
     if (e->placing)
@@ -5409,6 +5466,26 @@ static void put_cell(uit_t *e, int k, int model, int row, const int32_t r[4])
     }
 }
 
+// A bar item's width in a box `h` high: its icon's ink and its label (moy_ui_bar_item_w).
+static int32_t bar_item_w(uit_t *e, int k, int model, int row, int32_t h)
+{
+    const uit_node_t *N = NODE(k);
+    const char *ic = N->act >= 0 ? uit_str(e, e->acts[N->act].icon) : "";
+    uint32_t in = strlen(ic), ia = 0, n = 0, at = 0;
+    int slot = -1, glyph = -1;
+    if (N->t_icon >= 0) {
+        ia = uit_tmpl_render(e, N->t_icon, model, row, &in);
+        ic = e->scratch.p + ia;
+    }
+    if (in) {
+        slot = moy_ui_icon_slot((const uint8_t *)ic, in);
+        glyph = moy_ui_icon_glyph((const uint8_t *)ic, in);
+    }
+    if (!((N->btn & BT_ALONE) && (N->t_icon >= 0 || in)))
+        at = text(e, k, 0, model, row, &n);
+    return moy_ui_bar_item_w(slot, glyph, sspan(e, at, n), h, e->fs);
+}
+
 // A row cell's natural width, or -1 where it grows (`_natural`).
 static int32_t natural(uit_t *e, int k, int model, int row, int32_t h)
 {
@@ -5420,24 +5497,8 @@ static int32_t natural(uit_t *e, int k, int model, int row, int32_t h)
         if (N->t_value >= 0)            // its w=: a literal in units, a template's size (`size_of`)
             return e->tmpls[N->t_value].lit ? len_of(e, N->t_value, model, row, 0)
                                             : size_of(e, int_of(e, N->t_value, model, row, 0));
-        if (N->lit == MOY_UI_BUTTON_BAR) {
-            // a bar item: its icon's ink and its label (moy_ui_bar_item_w)
-            const char *ic = N->act >= 0 ? uit_str(e, e->acts[N->act].icon) : "";
-            uint32_t in = strlen(ic), ia = 0;
-            int slot = -1, glyph = -1;
-            if (N->t_icon >= 0) {
-                ia = uit_tmpl_render(e, N->t_icon, model, row, &in);
-                ic = e->scratch.p + ia;
-            }
-            if (in) {
-                slot = moy_ui_icon_slot((const uint8_t *)ic, in);
-                glyph = moy_ui_icon_glyph((const uint8_t *)ic, in);
-            }
-            n = 0, at = 0;
-            if (!((N->btn & BT_ALONE) && (N->t_icon >= 0 || in)))
-                at = text(e, k, 0, model, row, &n);
-            return moy_ui_bar_item_w(slot, glyph, sspan(e, at, n), h, e->fs);
-        }
+        if (N->lit == MOY_UI_BUTTON_BAR)
+            return bar_item_w(e, k, model, row, h);
         if (N->t_icon >= 0 && (N->btn & BT_ALONE))
             return h;
         // its label in the face and at the scale it draws in, and its plate's pads and icon
@@ -5637,12 +5698,13 @@ static void row_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
                 else
                     b -= v;
             }
-        if (nat[mid] < 0) {             // a mid of fills: the widest span centred that clears both
-            int32_t half = cx - a < b - cx ? cx - a : b - cx;
-            if (half < 0)
-                half = 0;
-            ms = cx - half, ws[mid] = 2 * half;
-        } else
+        int32_t half = cx - a < b - cx ? cx - a : b - cx;
+        if (half < 0)
+            half = 0;
+        if (nat[mid] < 0 || nat[mid] > 2 * half)
+            ms = cx - half, ws[mid] = 2 * half;     // a mid of fills, or one wider than it: the widest
+                                                    // span centred that clears both (its cells cut to it)
+        else
             ms = r[0] + fdiv(r[2] - nat[mid], 2), ws[mid] = nat[mid];
         row_share(nat, base, ws, 0, mid, ms - x0 - gap * mid);
         row_share(nat, base, ws, mid + 1, n, x1 - (ms + ws[mid]) - gap * (n - 1 - mid));

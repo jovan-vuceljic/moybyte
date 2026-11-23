@@ -29,7 +29,7 @@ fullscreen tiers only (the windowed WM suppressed it). Do not re-grow it;
 ratchet.
 
 `BarLayer` reaches everything else through its `self.ws` back-ref; the chrome's
-glyph and chip (`glyph`, `mini_btn`) are this module's functions. Only
+chip (`mini_btn`) is this module's function. Only
 `NAMES` (palette) is injected at construction -- the same circular-import dodge the
 other extracted UIs use, since console.py builds the one BarLayer instance a
 Workstation holds; the rect hit-test `_in` is widgets', imported directly. The trivial time helpers `_ticks_ms`/
@@ -127,7 +127,7 @@ import layout_base as _layout_base
 import iconsets as _iconsets
 import bar_engine as _bar_engine
 import bar_ui as _bar_ui
-from shell_layout import STATUS as _STATUS, ITEMS as _SL_ITEMS, RING_ROOM as _RING_ROOM
+from shell_layout import ITEMS as _SL_ITEMS, RING_ROOM as _RING_ROOM
 from status_items import ITEMS as _ITEMS, PAUSED as _PAUSED, ERROR as _ERROR
 
 
@@ -166,18 +166,6 @@ _KEY_UNDO = 1 << 9          # drawn only by the Editor's zone ("menu")
 _KEY_PARTS = (1 << 6) | (1 << 12)   # the fields drawn in a part of the bar: the zone, the pill
 
 
-def _battery(cv, x, y, side, u, ink):
-    """The look's battery in a `side`-square cell at unit `u`: an outlined
-    body with its cap, filled to the level (full: the host reads no level)."""
-    bw, bh = 11 * u, 7 * u
-    bx = x + (side - bw - u) // 2
-    by = y + (side - bh) // 2
-    for k in range(u):
-        cv.rectb(bx + k, by + k, bw - 2 * k, bh - 2 * k, ink)
-    cv.rect(bx + bw, by + 2 * u, u, bh - 4 * u, ink)
-    cv.rect(bx + 2 * u, by + 2 * u, bw - 4 * u, bh - 4 * u, ink)
-
-
 # A look leaf no theme sets (moy_theme.h's MOY_THEME_NONE).
 _NONE = -2147483648
 
@@ -213,19 +201,7 @@ def _band_part():
     return _ui_draw.BAR_HH_BAND
 
 
-# -- the chrome's glyph and chip ----------------------------------------------
-# What the bar, the windows' title bars, the desk's tiles and the Editor's
-# chrome draw their icons and Settings-style chips with: the toolkit's raster,
-# taken with the argument order of a `glyph_draw=` hook (kind first, the
-# canvas after).
-
-def glyph(kind, rect, c, cv, scale=None):
-    """Glyph `kind` centred in `rect` in colour `c` on `cv`, each glyph pixel
-    a `scale` square (the canvas's font scale by default; the bar passes its
-    chrome scale so a glyph fills its slot, #203). An unknown kind draws
-    nothing."""
-    _ui_draw.glyph(cv, kind, rect, c, scale)
-
+# -- the chrome's chip ----------------------------------------------------------
 
 def mini_btn(label, rect, fill, cv, label_rect=None):
     """A tiny labelled chip on `cv` (ui_draw.mini_btn): the Settings steppers'
@@ -347,7 +323,7 @@ class ZoneLook:
         ws = self.ws
         if icon == "run" and ws.icon_spec() is None:
             _ui_draw.button(cv, ws.theme_colors, r, label.upper(), kind="primary", glyph="run",
-                            glyph_draw=glyph)
+                            glyph_draw=_ui_draw.glyph_draw)
         elif icon == "run":
             self._bare_play(cv, r)
         else:
@@ -452,7 +428,7 @@ class ZoneLook:
             m = 4 * fs
             cv.rect(x + m, y + m, box - 2 * m, box - 2 * m, ink)
         elif not ws.draw_icon(slot, (x, y, box, box), ink, cv):
-            glyph(slot, (x, y, box, box), ink, cv)
+            _ch.glyph(cv, slot, (x, y, box, box), ink)
         line = _ui_draw.font("ui")[2] * fs
         cv.print(word, x + box + gap, r[1] + (r[3] - line) // 2, ink, 1)
         return x, y
@@ -468,7 +444,7 @@ class ZoneLook:
             return
         ink = _ui_draw.disabled_ink(ws.theme_colors)
         if not ws.draw_icon(icon, (x, y, ic, ic), ink, cv):
-            glyph(icon, (x, y, ic, ic), ink, cv)
+            _ch.glyph(cv, icon, (x, y, ic, ic), ink)
 
 
 class BarLayer:
@@ -571,8 +547,6 @@ class BarLayer:
         # and the clock text redraw_clock last painted there.
         self._strip_cv = None
         self._clock_drawn = None
-        self._ink_dx = None           # {status widget: dx} the strip last laid out
-        self._sel_ink = None          # (box, ink): the open item's opaque fill and its ink
         # The game canvas's packing (_packed) and what it was packed from;
         # each packing's per-bar key fields (_key_fields).
         self._game_of = None
@@ -1395,9 +1369,8 @@ class BarLayer:
             w = _ui_draw.print_width(self.clock_text(), fs)
             x0, x1 = r[0] - t - u, r[0] + w + t + u
         else:
-            dx = self._ink_dx.get(name, 0) if self._ink_dx else 0
             side = 16 * u + 2 * (t + u)
-            x0 = r[0] + dx + (r[2] - side) // 2
+            x0 = r[0] + (r[2] - side) // 2
             x1 = x0 + side
         x1 = min(x1, bar[2])
         return (x0, y, x1 - x0, h), rad, u
@@ -1439,32 +1412,21 @@ class BarLayer:
             cs = 0 if game else ws.layout.cs
             across = edge in ("left", "right")
             show_x = self.show_x(where)
-            self._ink_dx = self._status_dx(cells, self._cluster(game)) \
-                if looked and not across else None
-            paged = looked and not across and _paged(edge, cells)
-            # (the page marks an open status item; a handheld's open cluster is the bar's)
-            sel = None if game or across or (paged and not self._cluster(game)) \
+            # (a page marks an open status item; a handheld's open cluster is the bar's)
+            sel = None if game or across or (looked and not self._cluster(game)) \
                 else self._selected_box(where, cells)
-            self._sel_ink = None
             if sel is not None:
-                # the bar item whose popover is open: selected, the tabs' fill;
-                # on an opaque fill (Contrast's) the items in it take its ink
+                # the bar item whose popover is open: selected, the tabs' fill
                 fs = ws.layout.fs
-                got = _ui_draw.current(cv, ws.theme_colors, sel, r=5 * fs, fs=fs)
-                if got is not None and _ui_draw.marks()[3]:
-                    self._sel_ink = (sel, got)
-            if paged:
-                self._ink_dx = None
+                _ui_draw.current(cv, ws.theme_colors, sel, r=5 * fs, fs=fs)
+            if looked:
                 self._page_draw(cv, where, bar, edge, cells, only)
             else:
                 for name, r, text, _slot in cells:
                     if name in _PAINTED and (show_x or name != "close"):
                         if only is not None and not _meets(r, only):
                             continue
-                        if looked:
-                            self._paint_look_cell(cv, where, name, r, text, bar, across)
-                        else:
-                            self._paint_cell(cv, mp, where, name, r, text, cs, dy, across, game)
+                        self._paint_cell(cv, mp, where, name, r, text, cs, dy, across, game)
         zone = self.lent_zone(where, packed)
         if zone is None or (only is not None and not _meets(zone, only)):
             return
@@ -1473,9 +1435,6 @@ class BarLayer:
             if back:
                 end = self._paint_back_title(cv, zone, self._title(where), bar, game)
                 self._paint_lent_tools(cv, where, end, bar, game)
-                return
-            if looked:
-                self._paint_look_cell(cv, where, "title", zone, None, bar, False)
                 return
             _ch.replay(mp.chrome_strip_cell("title", zone, 0, dy, self._title(where), False),
                        cv, ws)
@@ -1512,14 +1471,20 @@ class BarLayer:
         _bar_ui.TAP[0], _bar_ui.CHIP[0], _bar_ui.ITEM[0] = hooks
         self._page_items(where)
         if "menu" in names:
-            self._sys_plate(cv, bar, cells, clip)
+            self._sys_plate(cv, bar, cells, clip, edge in ("left", "right"))
+        if not _paged(edge, cells):
+            _bar_engine.draw_shaped(cv, ws.theme_colors, bar, edge, cells, L.cs, L.fs, cw or L.clock_w,
+                                    sys_w, n_items, ws.wifi_icon_kind(), self.clock_text(),
+                                    self._battery_state() != 0, self._title(where), self.show_x(where),
+                                    clip, self._wins())
+            return
         f = self.focus_item
         focus = self._page_stop(where, f) if f is not None and self.focus_where == where else None
         _bar_engine.draw(cv, ws.theme_colors, bar, names, L.cs, L.fs, cw or L.clock_w, sys_w,
                          n_items, ws.wifi_icon_kind(), self.clock_text(), self._battery_state() != 0,
                          clip, self._wins(), focus)
 
-    def _sys_plate(self, cv, bar, cells, clip):
+    def _sys_plate(self, cv, bar, cells, clip, across=False):
         """The system button's plate under the page's `menu` item: the
         theme's own part on its tile (`sys_tile`) in the item's cell,
         pressed while the system menu shows; nothing where `clip`, the part
@@ -1534,7 +1499,7 @@ class BarLayer:
             if r is None:
                 got[4] = None
             else:
-                tx, ty, tw, tht = self.sys_tile(r, (0, 0, bar[2], bar[3]), False)
+                tx, ty, tw, tht = self.sys_tile(r, (0, 0, bar[2], bar[3]), across)
                 got[4] = (tx + bar[0], ty + bar[1], tw, tht)
             got[0], got[1], got[2], got[3] = cells, bar[0], bar[1], bar[3]
         box = got[4]                    # (kept while the packing and the bar's place stand)
@@ -1624,10 +1589,11 @@ class BarLayer:
         their rects in the bar's coordinates in the items' order into `out`,
         or None where the page does not draw that bar (`_paged`)."""
         edge, rect, _dy, cells = bar
-        if not _paged(edge, cells):
-            return None
         names, cw, sys_w, n_items = self._page_names(cells)
         L = self.ws.layout
+        if not _paged(edge, cells):
+            return _bar_engine.shaped_item_rects(rect, edge, cells, L.cs, L.fs, cw or L.clock_w, sys_w,
+                                                 n_items, out)
         return _bar_engine.item_rects(rect, names, L.cs, L.fs, cw or L.clock_w, sys_w, n_items, out)
 
     def _status_boxes(self, bar, r, n):
@@ -1677,10 +1643,11 @@ class BarLayer:
         rect)] on the root canvas into `out`, or None where the page does
         not draw that bar (`_paged`)."""
         edge, rect, _dy, cells = bar
-        if not _paged(edge, cells):
-            return None
         names, cw, sys_w, n_items = self._page_names(cells)
         L = self.ws.layout
+        if not _paged(edge, cells):
+            return _bar_engine.shaped_chip_rects(rect, edge, cells, L.cs, L.fs, cw or L.clock_w, sys_w,
+                                                 n_items, self._wins() or [], out)
         return _bar_engine.chip_rects(rect, names, L.cs, L.fs, cw or L.clock_w, sys_w, n_items,
                                       self._wins() or [], out)
 
@@ -1692,7 +1659,6 @@ class BarLayer:
         clip = (bx + span[0], by + span[1], span[2], span[3])
         cv.clip(clip[0], clip[1], clip[2], clip[3])
         try:
-            self._sel_ink = None
             self._page_draw(cv, where, (bx, by, bw, bh), edge, cells, clip)
         finally:
             cv.clip()
@@ -1702,7 +1668,7 @@ class BarLayer:
         painter in the bar's coordinates (the page is drawn at the bar's
         origin on `cv`)."""
         at = self._page_at
-        where, bar, cells = at[0], at[1], at[2]
+        bar, cells = at[1], at[2]
         ox, oy = _bar_engine._ORIGIN
         box = (0, 0, bar[2], bar[3])
         if ox or oy:
@@ -1714,11 +1680,16 @@ class BarLayer:
                     break
             else:
                 return
-            if name == "battery":
+            if name == "close":
+                if _bar_engine.SHOW_X[0]:
+                    side = 16 * self.ws.layout.cs
+                    self.ws.draw_icon("close", (x + (w - side) // 2, y - oy + (h - side) // 2, side, side),
+                                      self.ws.theme_colors["chrome_ink"], cv)
+            elif name == "battery":
                 u = self.ws.layout.cs              # the page's unit
                 side = 16 * u
-                self._battery_glyph(cv, x + (w - side) // 2, (box[3] - side) // 2, side, u,
-                                    self._battery_state())
+                gy = (box[3] - side) // 2 if w < box[3] else y - oy + (h - side) // 2
+                self._battery_glyph(cv, x + (w - side) // 2, gy, side, u, self._battery_state())
         finally:
             if ox or oy:
                 cv.camera(0, 0)
@@ -1798,7 +1769,7 @@ class BarLayer:
         side = 16 * u
         gy = (thick - side) // 2
         if not ws.draw_icon("back", (x, gy, side, side), ink, cv):
-            glyph("arr_l", (x, gy, side, side), ink, cv, u)
+            _ch.glyph(cv, "arr_l", (x, gy, side, side), ink, u)
         if not title:
             return x + side
         tf = _ui_draw.font("title")
@@ -1898,7 +1869,7 @@ class BarLayer:
                     _ui_draw.print_font(was)
                 continue
             if not ws.draw_icon(name, r, ink, cv):
-                glyph(name, r, ink, cv)
+                _ch.glyph(cv, name, r, ink)
 
     def _title_end(self, where, zone, bar, game):
         """Where the back chevron's title ends in bar coordinates: what the
@@ -1921,7 +1892,8 @@ class BarLayer:
         ws = self.ws
         s = None
         if name == "status":
-            self._paint_status(cv, r, text, game)
+            if text:
+                self._game_status(cv, r, text)
             return
         if name == "clock":
             s = self.clock_text()
@@ -1943,73 +1915,6 @@ class BarLayer:
                 tw = _bar_text_w(s) * (1 if game else ws.layout.fs)
                 r = (r[0] + (r[2] - tw) // 2, r[1], tw, r[3])
         _ch.replay(mp.chrome_strip_cell(name, r, cs, dy, s, across), cv, ws)
-
-    def _paint_look_cell(self, cv, where, name, r, text, bar, across):
-        """One OS widget's cell under the theme's look (docs/history/look_2026-10.md
-        step 14): the system button is the pixel Moy on its tile, open while
-        the system menu shows; the status glyphs, the clock and the strings
-        draw in the bar's ink, centred across the bar."""
-        ws = self.ws
-        th = ws.theme_colors
-        ink = self._inverse(r, th["chrome_ink"])
-        x, y, w, h = r
-        thick = bar[2] if across else bar[3]
-        u = _layout_base.unit()
-        if name == "menu":
-            tx, ty, tw, tht = self.sys_tile(r, bar, across)
-            m = ws.sysmenu
-            part = _ui_draw.BAR_HH_SYS if _band_part() == _ui_draw.BAR_HH_BAND \
-                else _ui_draw.BAR_SYS
-            _ui_draw.bar_part(cv, th, part, (tx, ty, tw, tht), m.open and m.widget == "menu")
-            sc = max(1, tht // 16)
-            if ws.draw_icon("moy", (tx, ty, tw, tht), ink, cv):   # outlined, its set's
-                return
-            img = ws.icon_image_keyed("moy")          # its plate keyed on the tile
-            if img is not None:
-                cv.spr(img, tx + (tw - 16 * sc) // 2, ty + (tht - 16 * sc) // 2, sc)
-            return
-        if name == "status":
-            self._paint_status(cv, r, text)
-            return
-        if name in ("wifi", "battery", "close"):
-            kind = name
-            if name == "wifi":
-                kind = ws.wifi_icon_kind()            # the true state: wifi_off with no link
-            dx = self._ink_dx.get(name, 0) if self._ink_dx else 0
-            x += dx                                    # its ink evened out (_status_dx)
-            side = 16 * u                              # the theme's icon set, centred
-            gx = x + (w - side) // 2 if not across else (thick - side) // 2
-            gy = (thick - side) // 2 if not across else y + (h - side) // 2
-            st = self._battery_state() if name == "battery" else 0
-            if st:
-                self._battery_glyph(cv, gx, gy, side, u, st)
-                return
-            if ws.draw_icon(kind, (gx, gy, side, side), ink, cv):
-                return
-            side = 12 * u
-            gx = x + (w - side) // 2 if not across else (thick - side) // 2
-            gy = (thick - side) // 2 if not across else y + (h - side) // 2
-            if name == "battery":
-                _battery(cv, gx, gy, side, u, ink)
-            else:
-                glyph(name, (gx, gy, side, side), ink, cv, u)
-            return
-        if name == "separator":
-            if across:
-                cv.rect(x + 2 * u, y + h // 2, w - 4 * u, 1, th["chrome_ink_dim"])
-            else:
-                cv.rect(x + w // 2, (thick - 16 * u) // 2, 1, 16 * u, th["chrome_ink_dim"])
-            return
-        s = self.clock_text() if name == "clock" else \
-            self._title(where) if name == "title" else (text or "")
-        L = ws.layout
-        if name == "clock" and across:
-            for i, part in enumerate((s[:2], s[3:5])):
-                cv.print(part, (thick - 2 * L.font_w) // 2, y + i * (h // 2), ink, 1)
-            return
-        if name == "title":
-            s = s[:max(0, w // max(1, L.font_w))]
-        cv.print(s, x, (thick - L.line_h) // 2, ink, 1)
 
     def _battery_glyph(self, cv, x, y, side, u, st):
         """The battery low (`st` 1: its body all in the danger ink, a sliver
@@ -2041,24 +1946,13 @@ class BarLayer:
         x0 = r[0] + r[2] - (n * side + max(0, n - 1) * sg)
         return x0, side, side + sg
 
-    def _inverse(self, r, ink):
-        """`ink`, or the open item's fill's ink where box `r` lies on that
-        opaque fill (Contrast's open status cluster)."""
-        s = self._sel_ink
-        if s is None:
-            return ink
-        b, got = s
-        cx, cy = r[0] + r[2] // 2, r[1] + r[3] // 2
-        return got if b[0] <= cx < b[0] + b[2] and b[1] <= cy < b[1] + b[3] else ink
-
-    def _paint_status(self, cv, r, n, game=False):
-        """The apps' status items in their cell `r`: each its icon in its
-        state's ink (the accent, the paused ink, the danger ink)."""
-        if not n:
-            return
+    def _game_status(self, cv, r, n):
+        """The apps' status items in their cell `r` of the kernel's strip
+        over a game: each its bar icon in its state's ink (the accent, the
+        paused ink, the danger ink)."""
         ws = self.ws
         th = ws.theme_colors
-        x, side, step = self._status_x(r, n, game)
+        x, side, step = self._status_x(r, n, True)
         for k in range(n):
             it = _ITEMS.at(k)
             if it is None:
@@ -2067,11 +1961,7 @@ class BarLayer:
             ink = th["danger"] if st == _ERROR else \
                 ws.look.content_colors().get("paused", th["ink_dim"]) if st == _PAUSED \
                 else th["accent"]
-            ink = self._inverse((x, r[1], side, side), ink)
-            g = 16 * _layout_base.unit()
-            if game or not ws.draw_icon(it.icon, (x + (side - g) // 2, r[1] + (side - g) // 2,
-                                                  g, g), ink, cv):
-                ws.icon(it.icon, x, r[1], cv, scale=max(1, side // 16), ink=ink)
+            ws.icon(it.icon, x, r[1], cv, scale=max(1, side // 16), ink=ink)
             x += step
 
     def status_hit(self, r, n, px, bar=None):
@@ -2102,10 +1992,7 @@ class BarLayer:
                 a = self._status_x(r, text)[0] + u
                 b = a
             elif name in ("wifi", "battery"):
-                dx = self._ink_dx.get(name, 0) if self._ink_dx else 0
                 a, b = self._ink(name, r)
-                a += dx
-                b += dx
             else:
                 continue
             x0 = a if x0 is None else min(x0, a)
@@ -2138,7 +2025,7 @@ class BarLayer:
 
     def _ink(self, name, r):
         """(first, last) column of status widget `name`'s ink in its cell `r`
-        of a horizontal bar, as `_paint_look_cell` draws it: an icon's from
+        of a horizontal bar, as a bar page draws it: an icon's from
         its set's mask (the wider of Wi-Fi's two states), the fallback
         battery's from its outline, the clock's its cell."""
         x, _y, w, _h = r
@@ -2163,40 +2050,6 @@ class BarLayer:
             bx = gx + (side - 12 * u) // 2
             return (bx, bx + 12 * u - 1)
         return (gx, gx + side - 1)
-
-    def _status_dx(self, cells, cluster=False):
-        """{name: dx} for the status widgets (`shell_layout.STATUS`) of a
-        horizontal bar's runs: where two or more sit side by side, the
-        middle ones move so the ink of each is as far from the next as the
-        last gap is from the first -- one gap between Wi-Fi, the battery and
-        the clock whatever room each icon's art leaves in its cell. The ends
-        stay and a clock never moves (a run with one inside is left as
-        packed), so the clock's own repaint (`redraw_clock`) lands where the
-        strip drew it."""
-        out = None
-        run = []
-        for c in cells + (("", (0, 0, 0, 0), None, -1),):
-            if c[0] in _STATUS and (not run or run[-1][3] == c[3]) \
-                    and not (cluster and c[0] == "clock"):
-                run.append(c)
-                continue
-            if len(run) > 2 and all(n != "clock" for n, _r, _t, _s in run[1:-1]):
-                inks = [self._ink(n, r) for n, r, _t, _s in run]
-                inner = 0
-                for a, b in inks[1:-1]:
-                    inner += b - a + 1
-                free = inks[-1][0] - inks[0][1] - 1 - inner
-                at = inks[0][1] + 1
-                for i in range(1, len(run) - 1):
-                    gap = free // (len(run) - i)
-                    free -= gap
-                    at += gap
-                    if out is None:
-                        out = {}
-                    out[run[i][0]] = at - inks[i][0]
-                    at += inks[i][1] - inks[i][0] + 1
-            run = [c] if c[0] in _STATUS and not (cluster and c[0] == "clock") else []
-        return out
 
     def sys_tile(self, r, bar, across):
         """The system button's tile in its cell `r` of bar rect `bar`: 36x34 on
@@ -2349,13 +2202,7 @@ class BarLayer:
         if not looked:
             return
         edge, (bx, by, bw, bh), _dy, cells = bar
-        if _paged(edge, cells):
-            self._page_again(cv, where, bar, self._tile_span((x - bx, y - by, w, h), bar))
-        else:
-            cv.camera(-bx, -by)
-            self._paint_look_cell(cv, where, "menu", (x - bx, y - by, w, h), None,
-                                  (0, 0, bw, bh), edge in ("left", "right"))
-            cv.camera(0, 0)
+        self._page_again(cv, where, bar, self._tile_span((x - bx, y - by, w, h), bar))
         self.strip_moved(cv, x, y, w, h)
         self._redraw_status(where)
 
@@ -2364,6 +2211,8 @@ class BarLayer:
         each way, inside the bar (bar coordinates)."""
         x, y, w, h = cell
         u = 5 * self.ws.layout.fs
+        if bar[0] in ("left", "right"):
+            return (0, 0, bar[1][2], bar[1][3])    # (its chips move what follows them down it)
         a = max(0, x - u)
         return (a, y, min(bar[1][2], x + w + u) - a, h)
 
@@ -2377,7 +2226,7 @@ class BarLayer:
         if m[0] is not packed or m[1] != where:
             m[0], m[1], m[2] = packed, where, None
             got = self.cell(where, "chips")
-            if got is not None and _paged(got[0][0], got[0][3]):
+            if got is not None:
                 bar = got[0]
                 span = self._chips_span(got[1], bar)
                 m[2] = (bar, self._ground_of(bar, span),
@@ -2390,7 +2239,6 @@ class BarLayer:
         self._paint_ground(cv, where, bar, ground)
         cv.clip(clip[0], clip[1], clip[2], clip[3])
         try:
-            self._sel_ink = None
             self._page_draw(cv, where, bar[1], bar[0], bar[3], clip)
         finally:
             cv.clip()
@@ -2406,22 +2254,9 @@ class BarLayer:
         edge, (bx, by, bw, bh), _dy, cells = bar
         if not looked or edge in ("left", "right"):
             return
-        if _paged(edge, cells):
-            span = self._status_span((x - bx, y - by, w, h), bar)
-            self._page_again(cv, where, bar, span)
-            self.strip_moved(cv, span[0] + bx, span[1] + by, span[2], span[3])
-            return
-        cv.camera(-bx, -by)
-        sel = self._selected_box(where, cells)
-        if sel is not None:
-            fs = self.ws.layout.fs
-            _ui_draw.current(cv, self.ws.theme_colors, sel, r=5 * fs, fs=fs)
-        for name, r, text, _slot in cells:
-            if name == "status":
-                self._paint_status(cv, r, text)
-        cv.camera(0, 0)
-        sx, sy, sw, sh = self._status_span((x - bx, y - by, w, h), bar)
-        self.strip_moved(cv, sx + bx, sy + by, sw, sh)
+        span = self._status_span((x - bx, y - by, w, h), bar)
+        self._page_again(cv, where, bar, span)
+        self.strip_moved(cv, span[0] + bx, span[1] + by, span[2], span[3])
 
     def _status_span(self, r, bar):
         """The status cell and the selected fill's reach past it, in its
@@ -2457,13 +2292,8 @@ class BarLayer:
         th = ws.theme_colors
         text = self.clock_text()
         across = edge in ("left", "right")
-        if looked and _paged(edge, _cells):
+        if looked:
             self._page_again(cv, where, bar, (x - bx, y - by, w, h))
-        elif looked:
-            cv.camera(-bx, -by)
-            self._paint_look_cell(cv, where, "clock", (x - bx, y - by, w, h), None,
-                                  (0, 0, bw, bh), across)
-            cv.camera(0, 0)
         elif across:
             cv.camera(-bx, -by)
             mp = _ch.chrome_inks(th, self._NAMES)

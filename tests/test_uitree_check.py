@@ -62,6 +62,7 @@ PORTED = (
     "uitree_across_bar",
     "uitree_bar_look",
     "bar_ui",
+    "bar_shape_ui",
     "wm_strip_ui",
     "cc_ui",
     "month_ui",

@@ -1224,7 +1224,8 @@ def test_a_chip_names_its_window_whole_while_the_bar_has_room(tmp_path):
     ws.wm._win_title = lambda win: "A VERY LONG WINDOW TITLE INDEED " * 2
     chips = ws.wm.chip_rects()
     assert len(chips) == 3
-    assert all(len(lb) < 64 for _k, _r, lb in chips)
+    # the three cut to one width, each still wider than its icon alone
+    assert len({r[2] for _k, r, _l in chips}) == 1 and all(r[2] > r[3] for _k, r, _l in chips)
     assert all(bx + cx <= r[0] and r[0] + r[2] <= bx + cx + cw for _k, r, _l in chips)
 
 
@@ -2505,8 +2506,8 @@ def test_a_dead_window_releases_its_buffer_and_the_backdrop_survives_a_relayout(
 # installs each window's layout context: a row the console shared, or one read
 # from the last window installed, lays an app out at the other window's size.
 TWO_WINDOWS = (
-    "d670aaf3ebe719006d2543c4262030528a3fb031afe397cf08f9a054a3c4616f",
-    "10cccabbef46a441eb29e6ddf7adafd0c45ec07712c1ab59afe23ea84fc0ad52",
+    "722e0daf48595a1c228a07eafc84b76a9e9b4966c65893155c56640f36e873ab",
+    "253bd8860e8eb40386aa6a64289759b2d0dba727448a52442b2437eb88e904be",
 )
 
 
@@ -3860,15 +3861,10 @@ def test_a_window_under_the_look_is_titled_and_drawn_whole(tmp_path):
     wm = ws.wm
     win = wm.windows["calc"]
     assert wm._win_title(win) == "Calc"
-    drawn = []
-    real = ws.draw_icon
-    ws.draw_icon = lambda kind, rect, ink, cv=None: (
-        drawn.append(kind), real(kind, rect, ink, cv))[1]
     grips = []
     real_fill = wm.root_canvas.rect
     assert wm._strip_icon(win) == "calc"
-    wm._draw_look_chips(wm.root_canvas, ws.theme_colors, 1, wm.root_ctx.layout.line_h)
-    assert drawn == ["calc"]
+    assert [r["icon"] for r in wm.chip_model()] == ["calc"]
     gx, gy, gw, gh = wm._grip_rect(win)
     wm.root_canvas.rect = lambda *a: (grips.append(a), real_fill(*a))[1]
     try:
@@ -3920,29 +3916,18 @@ def test_the_root_takes_back_its_marks_after_the_windows_draw(tmp_path, held):
 
 @pytest.mark.parametrize("theme", ["moy", "contrast"])
 def test_the_focused_chip_prints_in_the_current_ink(tmp_path, theme):
-    """The focused window's chip is current content: its icon and title take
-    the ink the look gives that (Moy's accent, beside the raised plate;
-    Contrast's `value_ink`, on its solid ink plate, D-14); the others the
-    dim ink."""
+    """The focused window's chip is current content: its bar item is marked
+    and takes the ink its mark gives (no tone of its own); the others the
+    dim chrome ink."""
     ws = _moy_desk(tmp_path)
     if theme != "moy":
         ws.look.set_theme(theme, persist=False, variant="light")
     for app in ("files", "calc"):
         ws.spine.open_app(ws.app(app))
         ws.frame(1 / 30)
-    wm = ws.wm
-    sc, th = wm.root_canvas, ws.theme_colors
-    inks = {}
-    real = sc.print
-    sc.print = lambda text, x, y, c=None, *a: (inks.__setitem__(text, c),
-                                               real(text, x, y, c, *a))[1]
-    try:
-        wm._draw_look_chips(sc, th, 1, wm.root_ctx.layout.line_h)
-    finally:
-        sc.print = real
-    want = th["ink_accent"] if theme == "moy" else th["value_ink"]
-    assert inks["Calc"] == want
-    assert inks["Files"] == th["chrome_ink_dim"]
+    rows = dict((r["title"], r) for r in ws.wm.chip_model())
+    assert rows["Calc"]["on"] and rows["Calc"]["tone"] == ""
+    assert not rows["Files"]["on"] and rows["Files"]["tone"] == "chrome_ink_dim"
 
 
 # -- the wallpaper's subject (docs/history/look_2026-10.md step 28) -------------------

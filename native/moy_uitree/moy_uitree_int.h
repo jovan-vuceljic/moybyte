@@ -154,6 +154,7 @@ enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8, TV_GUTTER = 16 };
 // A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large"
 // (`btn`).
 enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4 };
+enum { RS_CHECK = 1, RS_COL = 2 };    // a rows list's lit: check=True; dir="col", its cells down the stack
 enum { RW_MID = 1, RW_GROW = 2, RW_WRAP = 4 };   // a row's lit: centred on the row it is a cell of; a fill of
                                                 // its stack; its cells packed from its start, wrapping
 enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4, CV_READS = 8 };  // a canvas's lit: a fill along a row, its w= a
@@ -209,7 +210,7 @@ typedef struct {
     uint8_t depth, path[PN_DEPTH];
 } uit_pa_t;
 
-#define UIT_MCELLS 16           // the model row cells a pass records at most
+#define UIT_MCELLS 32           // the model row cells a pass records at most
 typedef struct {
     int16_t node, model, row, r[4];
 } uit_mc_t;                     // a row from a model: one row's cell                     // a pane arranged, a body placed, a pane drawn
