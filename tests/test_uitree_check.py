@@ -52,6 +52,7 @@ PORTED = (
     "uitree_placed_empty",
     "uitree_placed_parts",
     "uitree_placed_rows",
+    "uitree_placed_label",
     "uitree_placed_swatches",
     "uitree_stepper",
     "uitree_pictures",

@@ -128,7 +128,7 @@ def head_page():
     with ui.page(""):
         with ui.row("head", pad="{pad}", gap=0, grow=True):
             ui.canvas("lead", _nothing, w="{lead}", shown="kind=title")
-            ui.label("{title}", icon="{icon}", face="ui", size="text", shown="kind=title && fitted")
+            ui.label("{title}", icon="{icon}", size="text", shown="kind=title && fitted")
             ui.label("{status}", tone="dim", shown="kind=title && fitted")
             ui.label("{title}", icon="{icon}", face="ui", shown="kind=title && !fitted")
             ui.tabs("tab", text="{.label}", on="chose_tab", shown="kind=tabs")

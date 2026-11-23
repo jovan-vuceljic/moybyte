@@ -1721,13 +1721,16 @@ int moy_ui_text_block(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t t, i
         n = n < 1 ? 1 : n;
     }
     int shown = n < lines ? n : lines;
-    if (!draw || t.n == 0) {
+    if (!draw) {
         return shown * lh;
     }
-    uint16_t c = pal(&d, tone_ink(&d, tone));
     if (ib.w > 0) {
         icon_d(&d, slot, glyph, ib, tone_ink(&d, tone));
     }
+    if (t.n == 0) {
+        return shown * lh;              // an icon alone
+    }
+    uint16_t c = pal(&d, tone_ink(&d, tone));
     uint8_t buf[256];
     for (int i = 0; i < shown; i++) {
         moy_ui_span_t part = t;

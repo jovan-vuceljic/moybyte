@@ -198,3 +198,33 @@ def test_a_split_among_a_flowing_pages_rows_takes_its_cells_height(tmp_path):
     _e, one = _boxes(tmp_path, "rows_page", ("a/go", "b/go"))
     pitch = one["b/go"][1] - one["a/go"][1]
     assert got["after"][1] > 28 + 3 * pitch, (got, pitch)
+
+
+def _row_pixels(cv, r):
+    """The canvas's RGB565 bytes inside rect `r`, row by row."""
+    b = bytes(cv._buf)
+    x, y, w, h = r
+    return b"".join(b[((y + j) * cv.w + x) * 2:((y + j) * cv.w + x + w) * 2] for j in range(h))
+
+
+def test_a_size_text_label_draws_as_measured_and_an_icon_alone_draws(tmp_path):
+    """A size="text" label draws its whole text in the ui face it is
+    measured in, the same pixels as with face="ui" (it drew as a plain row
+    once, with that row's pads, and cut its text); a dim label with an
+    icon and no words draws the icon."""
+    import uitree_c
+    import uitree_placed_label as F
+    from runtime import host_app
+    for config in ({}, dict(sys_size=(800, 480), font_scale=3)):
+        ws = host_app.build_workstation(str(tmp_path / ("carts%d" % len(config))), **config)
+        ws.pointer.visible = False
+        app = P.host(ws, F.layer(uitree_c.CEditorEngine))
+        drv = host_app.ConsoleDriver(ws)
+        for _ in range(3):
+            ws.mark_dirty()
+            drv.frame(1 / 30)
+        e, cv = app.engine, ws.sys_canvas
+        a, b, c, d = (e.rect_of(k) for k in "abcd")
+        assert a[2:] == b[2:] and c[2:] == d[2:], (a, b, c, d)
+        assert _row_pixels(cv, a) == _row_pixels(cv, b), config
+        assert _row_pixels(cv, c) != _row_pixels(cv, d), config

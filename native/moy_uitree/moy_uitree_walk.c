@@ -1356,6 +1356,8 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
     if ((t & LT_WRAP) == LT_CHAR && !n1)
         return;
     int face = ((t >> LT_FACE_SHIFT) & 7) - 1;
+    if ((t & LT_TEXT) && face < 0)
+        face = MOY_UI_FONT_UI;          // size="text": drawn in the face it is measured in (`natural`)
     if ((t & LT_FIT) && face >= 0) {
         // its face where the theme has one that draws every character of its text and the
         // text fits the page's width in it, else the page's own face
@@ -5428,8 +5430,9 @@ static int32_t natural(uit_t *e, int k, int model, int row, int32_t h)
     if (N->kind == UIT_GRID && N->t_value >= 0)
         return len_of(e, N->t_value, model, row, 0);     // a grid's w=
     if (N->kind == UIT_LABEL && (N->nbtn & LT_TEXT)) {
-        // size="text": its text's width in the ui face, the row pad each side, and where it
-        // shows an icon, its box and gap (`moy_ui_text_block`'s)
+        // size="text": its text's width in the ui face (`label_rows_m` draws it in that face, as
+        // a text block from its cell's left), room after it, and where it shows an icon, its box
+        // and gap (`moy_ui_text_block`'s)
         moy_font_info_t fi;
         int32_t ic = 0;
         if (N->t_icon >= 0) {

@@ -960,3 +960,34 @@ def test_a_split_among_a_pages_rows_takes_its_cells_height_on_the_c_engine(tmp_p
             break
     assert ws.run.player.cart_error is None, ws.run.player.cart_error
     assert hit is not None and hit > 28 + 4 * 18, hit
+
+
+def test_a_size_text_label_draws_as_measured_and_an_icon_alone_draws_on_the_c_engine(tmp_path):
+    """From Lua: a size="text" label in a row draws the same pixels as with
+    face="ui", the face it is measured in (it drew as a plain row once and
+    cut its text), and a dim label with an icon and no words draws its icon."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    body = ('ui.app("%s", { icon = "calc" })\n'
+            'ui.page("p", function()\n'
+            '  ui.row(function()\n'
+            '    ui.label("Sound effects for the long level", { size = "text"%s })\n'
+            '    ui.label("12 notes", { tone = "dim" })\n'
+            '  end)\n'
+            '  ui.row(function() ui.label("", { tone = "dim"%s }) end)\n'
+            'end)\n')
+    cases = {"Plain": ("", ""), "Face": (', face = "ui"', ""), "Icon": ("", ', icon = "music"')}
+    for name, (face, icon) in cases.items():
+        _cart(carts, name, body % (name, face, icon))
+    ws, drv, frame, open_cart = _console(carts)
+    shots = {}
+    for name in cases:
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        assert ws.run.player.cart_error is None, (name, ws.run.player.cart_error)
+        shots[name] = bytes(drv.rgb888())[20 * 320 * 3:]   # below the bar, which carries the title
+        ws.spine.exit_to_caller()
+    assert shots["Plain"] == shots["Face"]
+    assert shots["Icon"] != shots["Plain"]
