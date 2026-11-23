@@ -83,6 +83,7 @@ PORTED = (
     "uitree_sizes",
     "home_ui",
     "home_bar_ui",
+    "home_strip_ui",
 )
 
 

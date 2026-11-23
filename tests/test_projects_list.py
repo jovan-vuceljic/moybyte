@@ -13,7 +13,7 @@ ConsoleDriver -- mouse == touch, arrows == trackball.
 from ws_helpers import build_desktop_ws, build_ws as _ws, shelf  # noqa: E402
 import pytest
 from ws_helpers import boot_on_fixture
-from ws_helpers import hint_rects
+from ws_helpers import hint_rects, hint_tap
 
 @pytest.fixture(autouse=True)
 def _on_the_night_fixture(monkeypatch):
@@ -209,7 +209,7 @@ def _make_with(ws, title):
 def _verb_tap(ws, layer, verb):
     rects = hint_rects(layer)
     x, y, w, h = rects[verb]
-    return layer._hint_tap(x + w // 2, y + h // 2)
+    return hint_tap(layer, x + w // 2, y + h // 2)
 
 
 def _extra(ws, title="Extra"):

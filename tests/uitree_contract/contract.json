@@ -2626,6 +2626,33 @@
      "level": 1
     }
    }
+  },
+  "hints": {
+   "head": "model",
+   "level": 2,
+   "section": "7.2",
+   "props": {
+    "keys": {
+     "type": "tpl",
+     "level": 2
+    },
+    "label": {
+     "type": "tpl",
+     "level": 2
+    },
+    "tail": {
+     "type": "cond",
+     "level": 2
+    },
+    "drop": {
+     "type": "cond",
+     "level": 2
+    },
+    "on": {
+     "type": "action|hook",
+     "level": 2
+    }
+   }
   }
  },
  "takes": {

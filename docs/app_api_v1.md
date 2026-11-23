@@ -366,6 +366,12 @@ the two actions and greyed while either is off (its `when=`), one stop whose
 left and right step it, at its own width (centred where it is stacked) or
 with `grow=True` a fill whose chevrons stand at its ends, `tone="dim"` its
 value dim;
+`ui.hints(MODEL, keys=, label=, tail=, drop=, on=)` is a row of keycap
+hints, one a row of the model (keys= its keys, an action or keys spelled
+out as `ui.hints`' items, label= what they do), no stop: the rows tail=
+holds stand at the row's end, the rest from its start in order, and where
+they run into the end the rows drop= holds go first, then the others, the
+last first each time; a press on one fires on= with its row;
 `ui.seg(label, ".FIELD", text=...)` in a rows' body binds an int field of
 the row, the index of its item, its items the lines `text=` renders over
 the row; a seg's `look="pictures"` shows each item as the picture its word

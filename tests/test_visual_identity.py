@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 from ws_helpers import build_ws as _build_ws, use_theme
-from ws_helpers import hint_rects
+from ws_helpers import hint_rects, hint_tap
 
 
 def _ws(tmp_path, **kw):
@@ -253,13 +253,13 @@ def test_base_tier_zone_chips_dispatch(tmp_path):
     chips = hint_rects(home)
     assert chips is not None
     x, y, w, h = chips["change"]
-    assert home._hint_tap(x + 1, y + 1)
+    assert hint_tap(home, x + 1, y + 1)
     ws.frame(1 / 30)                  # #184: the tap scheduled; a frame lands it
     assert ws.screen == "menu"
     ws.home.go_home()
     _select_real_cart(ws)
     x, y, w, h = chips["play"]
-    assert home._hint_tap(x + 1, y + 1)
+    assert hint_tap(home, x + 1, y + 1)
     ws.frame(1 / 30)
     assert ws.screen == "desktop"
     # On Make's "+ New" card the one chip is NEW: no PLAY to tap.

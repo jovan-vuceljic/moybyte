@@ -901,7 +901,7 @@ const char *const uit_kind_names[UIT_KINDS] = {"", "page", "group", "label", "in
                                                "popover", "tools", "row", "status", "text_editor",
                                                "panes", "pane", "legacy", "slot", "panel", "lent",
                                                "rule", "note", "grid", "bubble", "month", "toast", "cells",
-                                               "stepper"};
+                                               "stepper", "hints"};
 
 static const char *const TONES[] = {"ink", "dim", "value", "danger"};
 static const char *const BKINDS[] = {"normal", "primary", "tonal", "danger", "toggle", "bar"};   // moy_ui's, then its bar item
@@ -1079,7 +1079,20 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->focus = (int16_t)c;
         return add_prop(e, node, name, src, repr, PK_COND, c);
     }
-    if ((kind == UIT_ROWS || kind == UIT_CARDS) && !strcmp(name, "group")) {
+    if (kind == UIT_HINTS && (!strcmp(name, "tail") || !strcmp(name, "drop"))) {
+        // a hints row's tail= and drop=: conditions of each row of its model, the rows at its
+        // end and the rows that go first where the row runs out of room
+        int c = uit_cond_compile(e, src, N->slot);
+        if (c < 0)
+            return c;
+        *(name[0] == 't' ? &N->mark : &N->cur) = (int16_t)c;
+        return add_prop(e, node, name, src, repr, PK_COND, c);
+    }
+    if (kind == UIT_HINTS && (!strcmp(name, "keys") || !strcmp(name, "label"))) {
+        // a hints row's keys= and label=: templates of each row of its model
+        model = N->slot;
+        tslot = name[0] == 'k' ? &N->t_value : &N->t_main;
+    } else if ((kind == UIT_ROWS || kind == UIT_CARDS) && !strcmp(name, "group")) {
         // a caption drawn where its value changes from the row before: over the rows
         model = N->slot;
         tslot = &N->t_main;
@@ -1515,7 +1528,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     if (!strcmp(name, "bind")) {
         int s = uit_slot_find(e, src, strlen(src));
         int t = s < 0 ? 0 : e->slots[s].type;
-        int ok = kind == UIT_TOGGLE ? t == UIT_BOOL : UIT_IS_LIST(kind) ? t == UIT_MODEL
+        int ok = kind == UIT_TOGGLE ? t == UIT_BOOL : UIT_IS_LIST(kind) || kind == UIT_HINTS ? t == UIT_MODEL
                  : kind == UIT_TABS ? t == UIT_ENUM
                  : kind == UIT_SEG ? t == UIT_ENUM || t == UIT_ROWOF : kind == UIT_SLIDER || kind == UIT_CELLS ? t == UIT_INT
                  : kind == UIT_FIELD ? t == UIT_TEXT : kind == UIT_TEXT_VIEW ? t == UIT_TEXT || t == UIT_MODEL : 0;
@@ -1574,7 +1587,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     }
     if ((!strcmp(name, "on") && (kind == UIT_TOGGLE || kind == UIT_SEG || kind == UIT_SLIDER || kind == UIT_CELLS ||
                                  kind == UIT_FIELD || kind == UIT_TABLE || kind == UIT_TABS || kind == UIT_BUBBLE ||
-                                 kind == UIT_PICTURE)) ||
+                                 kind == UIT_PICTURE || kind == UIT_HINTS)) ||
         (!strcmp(name, "changed") && kind == UIT_FIELD) || (!strcmp(name, "cut") && kind == UIT_BUBBLE) ||
         (!strcmp(name, "close") && (kind == UIT_POPOVER || kind == UIT_ROW || kind == UIT_GROUP)) ||
         ((kind == UIT_MONTH || kind == UIT_STEPPER) && (!strcmp(name, "prev") || !strcmp(name, "next"))) ||
@@ -1922,9 +1935,41 @@ static void gen_of_build(uit_t *e)
             e->slots[i].in_gen = 0;
 }
 
+// An array a build grew by doublings held at what it holds: a page keeps its tree as long as it
+// lives, and a build that comes again grows it from there.
+static void trim(void **p, int n, int *cap, size_t size)
+{
+    if (n <= 0 || n >= *cap)
+        return;
+    void *q = UIT_REALLOC(*p, (size_t)n * size);
+    if (q) {
+        *p = q;
+        *cap = n;
+    }
+}
+
+#define TRIM(e, arr, n, cap) trim((void **)&(e)->arr, (e)->n, &(e)->cap, sizeof *(e)->arr)
+
 int uit_build_end(uit_t *e)
 {
     intern_drop(e);
+    TRIM(e, slots, nslots, cslots);
+    TRIM(e, acts, nacts, cacts);
+    TRIM(e, tmpls, ntmpls, ctmpls);
+    TRIM(e, ops, nops, cops);
+    TRIM(e, conds, nconds, cconds);
+    TRIM(e, terms, nterms, cterms);
+    TRIM(e, nodes, nnodes, cnodes);
+    TRIM(e, props, nprops, cprops);
+    TRIM(e, btns, nbtns, cbtns);
+    TRIM(e, labels, nlabels, clabels);
+    if (e->pool.n && e->pool.n < e->pool.cap) {
+        char *q = UIT_REALLOC(e->pool.p, e->pool.n);
+        if (q) {
+            e->pool.p = q;
+            e->pool.cap = e->pool.n;
+        }
+    }
     e->has_panes = 0;
     for (int k = 0; k < e->nnodes; k++) {
         if (e->nodes[k].kind == UIT_PANES || e->nodes[k].kind == UIT_LEGACY)

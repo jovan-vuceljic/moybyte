@@ -131,9 +131,12 @@ def test_the_home_search_says_to_pair_a_keyboard_where_nothing_types(tmp_path, k
     ws = build_ws_with_shelf(tmp_path, 4)
     drv = make_drv(ws)
     drv.frame(1 / 30)
+    import home_strip_ui
     ws.home.open_search()
     ws.use_inputs([("local", kind)])
-    assert ws.no_keyboard_text in _printed(ws, drv)
+    _printed(ws, drv)
+    # (the strip's search field says it empty: its page's state)
+    assert home_strip_ui.s.searching and home_strip_ui.s.search_hint == ws.no_keyboard_text
     ws.use_inputs([("local", "keys")])
-    text = _printed(ws, drv)
-    assert ws.no_keyboard_text not in text and "Search: " in text
+    _printed(ws, drv)
+    assert home_strip_ui.s.searching and home_strip_ui.s.search_hint == ""

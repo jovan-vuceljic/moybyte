@@ -124,9 +124,9 @@ def test_search_esc_cancels_and_restores_the_full_grid(tmp_path):
 
 
 def _search_frame(ws, drv, kind, typed=""):
-    """Search open under input `kind`, `typed` typed: (the words printed,
-    the hint items drawn) of one repaint."""
-    from runtime import ui_draw
+    """Search open under input `kind`, `typed` typed, one repaint: the hint
+    strip's page's state (`home_strip_ui.s`) and the rows it shows."""
+    import home_strip_ui
     ws.launcher_layer._lib_unsupported = True   # every frame a full paint
     ws.use_inputs([("local", kind)])
     ws.home.open_search()
@@ -134,38 +134,21 @@ def _search_frame(ws, drv, kind, typed=""):
     for ch in typed:
         drv.type_char(ord(ch))
         drv.frame(1 / 30)
-    printed, hints = [], []
-    cv = ws.sys_canvas
-    real_print, real_hints = cv.print, ui_draw.hints
-
-    def spy_print(text, *a, **kw):
-        printed.append(str(text))
-        return real_print(text, *a, **kw)
-
-    def spy_hints(c, th, rect, items, *a, **kw):
-        if kw.get("draw", True):
-            hints.append(tuple(items))
-        return real_hints(c, th, rect, items, *a, **kw)
-    cv.print, ui_draw.hints = spy_print, spy_hints
-    try:
-        ws.mark_dirty()
-        drv.frame(1 / 30)
-    finally:
-        cv.print, ui_draw.hints = real_print, real_hints
-    return printed, hints
+    ws.mark_dirty()
+    drv.frame(1 / 30)
+    return home_strip_ui.s, [r[1:3] for r in ws.launcher_layer._hrows]
 
 
-def test_search_reads_in_sentence_case_with_a_bar_caret(tmp_path):
-    """The search line reads "Search: " and the query, no capitals past
-    the S and no underscore: a bar caret follows the query while it is
+def test_search_is_the_strips_field_and_takes_the_keys_while_typed(tmp_path):
+    """The search is the strip page's field: what is typed is its text and
+    filters the grid, and it holds the keys (its caret) while a query is
     typed (design review R5-04)."""
     from runtime import host_app
     ws = _ws(tmp_path)
     drv = host_app.ConsoleDriver(ws)
-    printed, _hints = _search_frame(ws, drv, "keys", "st")
-    line = next(t for t in printed if t.startswith("Search"))
-    assert line == "Search: st"
-    assert not any(c.isupper() for c in line[1:]) and "_" not in line
+    s, _rows = _search_frame(ws, drv, "keys", "st")
+    assert s.searching and s.query == "st" == ws.search_query
+    assert ws.launcher_layer._spage.focused_id() == "query"
 
 
 def test_search_offers_its_way_out_on_every_strip(tmp_path):
@@ -177,7 +160,7 @@ def test_search_offers_its_way_out_on_every_strip(tmp_path):
     for kind, typed in (("keys", "st"), ("tdeck", "st"), ("pad", "")):
         ws = _ws(tmp_path / kind)
         drv = host_app.ConsoleDriver(ws)
-        _printed, hints = _search_frame(ws, drv, kind, typed)
+        _s, hints = _search_frame(ws, drv, kind, typed)
         assert ("cancel", "Close") in hints, (kind, hints)
     ws = _ws(tmp_path / "b")
     drv = host_app.ConsoleDriver(ws)
@@ -210,8 +193,8 @@ def test_under_touch_the_search_line_lies_inside_the_glass(tmp_path):
     from runtime import ui_draw
     ws = _ws(tmp_path)
     drv = host_app.ConsoleDriver(ws)
-    printed, _hints = _search_frame(ws, drv, "touch")
-    assert ws.no_keyboard_text in printed
+    st, _hints = _search_frame(ws, drv, "touch")
+    assert st.search_hint == ws.no_keyboard_text
     line = ws.launcher_layer._search_line()
     lay = ws.layout
     assert line is not None and line[3] > 0
