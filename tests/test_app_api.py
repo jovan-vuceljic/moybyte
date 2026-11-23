@@ -107,6 +107,13 @@ def test_late_app_metadata_reaches_windowed_wm(tmp_path):
     assert ws.wm._win_title(win) == "Story Editor"
 
 
+def test_a_ui_tree_apps_min_is_its_window_floor(tmp_path):
+    """`ui.app(min=)` is the floor the console registers a ui tree app with."""
+    ws = _ws(tmp_path, sys_size=(1024, 600), windowed=True)
+    assert ws.spine.app_min_size("appearance") == (310, 230)
+    assert ws.spine.app_min_size("jukebox") == (300, 220)
+
+
 def test_files_types_only_while_its_rename_field_shows(tmp_path):
     """Files' rows are no text surface (the T-Deck's W A S D step them);
     its Rename dialog's field is, while it shows."""

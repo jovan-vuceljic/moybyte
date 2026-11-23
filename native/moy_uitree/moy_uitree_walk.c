@@ -910,6 +910,27 @@ static void hint_act(uit_t *e, uit_buf_t *b, int a)
     hint_add(b, e->scratch.p + at, n);
 }
 
+// Dialog `d`'s labels= template of its button i, else -1 (the button is its action's word).
+static int dialog_label(uit_t *e, int d, int i)
+{
+    for (int p = NODE(d)->props; p != (int)UIT_NONE; p = e->props[p].next)
+        if (!strcmp(uit_str(e, e->props[p].name), "labels") && i-- == 0)
+            return e->props[p].idx;
+    return -1;
+}
+
+// Dialog `d`'s button i as the band names it: its label, else its action's hint.
+static void hint_button(uit_t *e, uit_buf_t *b, int d, int i)
+{
+    int t = dialog_label(e, d, i);
+    if (t < 0) {
+        hint_act(e, b, e->btns[NODE(d)->btn + i]);
+        return;
+    }
+    uint32_t n, at = uit_tmpl_render(e, t, -1, -1, &n);
+    hint_add(b, e->scratch.p + at, n);
+}
+
 static int role_action(uit_t *e, int flag)
 {
     for (int a = 0; a < e->nacts; a++)
@@ -994,12 +1015,12 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
         int field = e->has_focused && e->focused.kind == UIT_FIELD;
         if (D->nbtn == 1) {
             hint_add(b, field ? "cancel" : "back", field ? 6 : 4);
-            hint_act(e, b, e->btns[D->btn]);
+            hint_button(e, b, d, 0);
         } else if (D->nbtn > 1) {
             hint_add(b, "confirm", 7);
-            hint_act(e, b, e->btns[D->btn + D->nbtn - 1]);
+            hint_button(e, b, d, D->nbtn - 1);
             hint_add(b, field ? "cancel" : "back", field ? 6 : 4);
-            hint_act(e, b, e->btns[D->btn]);
+            hint_button(e, b, d, 0);
         }
         return;
     }
@@ -3070,6 +3091,7 @@ static int foot_of(uit_t *e)
 }
 
 static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
+static int32_t empty_controls_h(uit_t *e, int k, int model, int row);
 static void empty_controls(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
                            int32_t x, int32_t w, int32_t y);
 static int32_t natural(uit_t *e, int k, int model, int row, int32_t h);
@@ -3827,6 +3849,54 @@ static void draw_month(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
         fire(e, a, k, model, row, NULL);
 }
 
+static void put_cell(uit_t *e, int k, int model, int row, const int32_t r[4]);
+
+// A hints row: each row of its model a keycap hint, keys= its keys (an action the input's keys
+// draw, or keys spelled out) and label= what they do; the rows tail= holds stand at its end, the
+// others from its start in order while they fit, the rows drop= holds going first, the last
+// first (moy_ui_api_hint_row). No stop: a press on one fires on= with its row.
+static void draw_hints(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
+{
+    enum { MAX = 16 };
+    const uit_node_t *N = NODE(k);
+    int m = N->slot, rows[MAX], n = 0, tail = 0;
+    uint32_t drop = 0;
+    // each row's keys and words rendered one after the other into the scratch, each with its
+    // NUL: the pairs' items, made with nothing taken from the heap once the scratch has grown
+    uit_buf_t *b = &e->scratch;
+    uint32_t mark = b->n;
+    for (int end = 0; end < 2; end++)
+        for (int r = 0; m >= 0 && r < e->slots[m].nrows && n < MAX; r++) {
+            if ((N->mark >= 0 && uit_cond_eval(e, N->mark, m, r)) != end)
+                continue;
+            uint32_t kn = 0, ln = 0;
+            if (N->t_value >= 0)
+                uit_tmpl_render(e, N->t_value, m, r, &kn);
+            else
+                uit_buf_put(b, "", 0);
+            if (N->t_main >= 0)
+                uit_tmpl_render(e, N->t_main, m, r, &ln);
+            else
+                uit_buf_put(b, "", 0);
+            if (!end && N->cur >= 0 && uit_cond_eval(e, N->cur, m, r))
+                drop |= 1u << n;
+            rows[n++] = r;
+            tail += end;
+        }
+    int32_t sp[4 + 2 * MAX];
+    uint32_t len = b->n > mark ? b->n - mark - 1u : 0;
+    int at = moy_ui_api_hint_row(c, s, (const uint8_t *)(len ? b->p + mark : ""), len, tail, drop, sp,
+                                 4 + 2 * n);
+    b->n = mark;
+    for (int i = 0; i < n; i++)
+        if (sp[5 + 2 * i] > sp[4 + 2 * i]) {
+            int32_t r[4] = {sp[4 + 2 * i], sp[1], sp[5 + 2 * i] - sp[4 + 2 * i], sp[3]};
+            put_cell(e, k, m, rows[i], r);      // where a press on it lands (`uit_rect` ROWKEY/KEY)
+        }
+    if (at >= 0 && at < n && N->on >= 0 && uit_act_can(e, N->on, m, rows[at]))
+        fire(e, N->on, k, m, rows[at], NULL);
+}
+
 // An info's or a link's tag=, tone= (its ink: a theme role) and signal= (0-4 bars) on `o`; the
 // tag's text stays in the scratch for the draw.
 static void value_over(uit_t *e, int k, int model, int row, moy_ui_over_t *o)
@@ -4278,6 +4348,9 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     case UIT_MONTH:
         draw_month(e, c, s, k, model, row);
         break;
+    case UIT_HINTS:
+        draw_hints(e, c, s, k);
+        break;
     case UIT_NOTE: {
         // its icon ("info" where it has none) and each line's paragraph, empty ones kept
         uint32_t ni, ai = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &ni) : 0;
@@ -4319,10 +4392,30 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         }
         int32_t m[4] = {c->has_at ? c->at.x : c->page.x, 0, c->has_at ? c->at.w : c->page.w, 0};
         // on the desk a sixth of the page down, as its column of words
+        // on the desk a sixth of the page down, as its column of words, as far as the room under
+        // it holds what it says and its controls; where they run past the view even at the
+        // top, no disc (an empty icon)
         int32_t ev[5];
-        if ((e->flags & UIT_F_DESK) && moy_ui_api_view(c, ev) && ev[0] == 0)
-            moy_ui_api_space(c, e->rect[3] / 6);
-        int32_t y = moy_ui_api_empty(c, s, ni ? sspan(e, ai, ni) : span_of("warn", 4), sspan(e, a1, n1),
+        moy_ui_span_t icon = ni ? sspan(e, ai, ni) : span_of("warn", 4);
+        if (moy_ui_api_view(c, ev)) {
+            moy_ui_box_t mb = {0, 0, (int16_t)ev[3], 0};
+            moy_ui_span_t t = sspan(e, a1, n1);
+            const uint8_t *lp = (const uint8_t *)(lines.p ? lines.p : "");
+            int desk = (e->flags & UIT_F_DESK) ? MOY_UI_DESK : 0;
+            int32_t need = moy_ui_empty(s, mb, 0, -1, t, lp, lines.n, e->fs, desk, 0)
+                           + empty_controls_h(e, k, model, row);
+            int32_t room = ev[2] - ev[0];
+            if (need > room) {
+                icon = span_of("", 0);
+                need = moy_ui_empty(s, mb, -1, -1, t, lp, lines.n, e->fs, desk, 0)
+                       + empty_controls_h(e, k, model, row);
+            }
+            int32_t sp = e->rect[3] / 6;
+            sp = sp < room - need ? sp : room - need;
+            if (desk && ev[0] == 0 && sp > 0)
+                moy_ui_api_space(c, sp);
+        }
+        int32_t y = moy_ui_api_empty(c, s, icon, sspan(e, a1, n1),
                                      (const uint8_t *)(lines.p ? lines.p : ""), lines.n);
         uit_buf_free(&lines);
         empty_controls(e, c, s, k, model, row, m[0], m[2], y);
@@ -4333,11 +4426,17 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         uit_buf_t b = {0};
         // look="keys" on the T-Deck: the band's Enter and Esc are its buttons, no row of them
         int nb = (N->lit & DL_KEYS) && e->input == UIT_IN_TDECK && N->nbtn <= 2 ? 0 : N->nbtn;
+        // each button's label: its labels= template (one a button), else its action's
         for (int i = 0; i < nb; i++) {
-            const char *l = uit_str(e, e->acts[e->btns[N->btn + i]].label);
+            int t = dialog_label(e, k, i);
             if (i)
                 uit_buf_printf(&b, "%c", 0);
-            uit_buf_printf(&b, "%s", l);
+            if (t >= 0) {
+                uint32_t ln, la = uit_tmpl_render(e, t, model, row, &ln);
+                uit_buf_printf(&b, "%.*s", (int)ln, e->scratch.p + la);
+            } else {
+                uit_buf_printf(&b, "%s", uit_str(e, e->acts[e->btns[N->btn + i]].label));
+            }
         }
         // the labels joined by NULs: b.n counts them (uit_buf_printf of "%c", 0 adds one byte)
         // the verb's kind, the toolkit's: primary (1), or with kind="danger" danger (3)
@@ -4361,6 +4460,22 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         break;
     }
     }
+}
+
+// The height an empty's controls take under what it says (empty_controls').
+static int32_t empty_controls_h(uit_t *e, int k, int model, int row)
+{
+    int desk = (e->flags & UIT_F_DESK) != 0, mn;
+    int32_t hh = (moy_ui_metrics(MOY_UI_K_VALUE_ROW, &mn)[desk ? 17 : 16] + 4) * e->fs, h = 0;
+    KIDS(k, c2) {
+        const uit_node_t *N = NODE(c2);
+        if (!uit_shown(e, c2, model, row))
+            continue;
+        if (N->act >= 0 && !uit_act_can(e, N->act, model, row) && e->acts[N->act].off != 2)
+            continue;
+        h += hh + row_gap(e) * e->fs;
+    }
+    return h;
 }
 
 // An empty's controls under what it says (from y), each its natural width and a value row
@@ -4728,6 +4843,8 @@ static int32_t fixed_h(uit_t *e, int k)
         return N->t_aux >= 0 ? len_of(e, N->t_aux, -1, -1, 0) : -1;
     case UIT_STATUS:
         return status_h(e);
+    case UIT_HINTS:                     // a hints row: a fill of its stack
+        return -1;
     case UIT_RULE:                      // a rule across: its line
         return (e->flags & UIT_F_DESK) ? 1 : e->fs;
     case UIT_TOOLS:

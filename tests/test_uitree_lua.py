@@ -108,8 +108,9 @@ def _form_run(carts):
 
 def test_a_board_runs_the_frozen_layer_as_the_host_runs_the_files(tmp_path, monkeypatch):
     """A board reads the layer from uitree_lua (tools/uitree_lua_freeze.py):
-    each text keeps its file's lines, deflated, and Tree Form draws the same
-    frames and keeps the same count on it as on the files."""
+    each text keeps its file's lines, deflated (the browser's as text), and
+    Tree Form draws the same frames and keeps the same count on either as on
+    the files."""
     import lua_ext
     import uitree_lua_freeze as freeze
     for name in freeze.FILES:
@@ -128,6 +129,17 @@ def test_a_board_runs_the_frozen_layer_as_the_host_runs_the_files(tmp_path, monk
         with open(os.path.join(freeze.RUN, "uitree.lua")) as f:
             assert zlib.decompress(lua_ext.uitree_source(), -freeze.WBITS) == freeze.strip(f.read()).encode()
         assert _form_run(str(tmp_path / "b")) == files
+    finally:
+        sys.modules.pop("uitree_lua", None)
+    text = tmp_path / "text"
+    text.mkdir()
+    freeze.main(["", str(text), "--text"])
+    monkeypatch.syspath_prepend(str(text))
+    monkeypatch.setattr(lua_ext, "_uitree_src", {})
+    try:
+        with open(os.path.join(freeze.RUN, "uitree.lua")) as f:
+            assert lua_ext.uitree_source() == freeze.strip(f.read())
+        assert _form_run(str(tmp_path / "c")) == files
     finally:
         sys.modules.pop("uitree_lua", None)
 
@@ -682,6 +694,8 @@ CASES = {
     "T02": (APP + 'ui.page("p", function() ui.label("{@nope}") end)\n', 2, None),
     "T03": (APP + 'local s = ui.state { n = 0 }\nui.page("p", function() ui.label("{n.x}") end)\n', 3, None),
     "T03 signal": (APP + 'local s = ui.state { t = "" }\nui.page("p", function() ui.info("Signal", { signal = "{t}" }) end)\n', 3, None),
+    "N01 labels": (APP + GO + 'ui.page("p", function()\n'
+                   '  ui.dialog("D", { buttons = { "go" }, labels = { "A", "B" } }, function() end)\nend)\n', 4, None),
     "N01 signal": (APP + 'ui.page("p", function() ui.info("Signal", { signal = "3 bars" }) end)\n', 2, None),
     "T04": (APP + 'local s = ui.state { e = ui.enum("a", "b", { init = "a" }) }\nui.labels("L", { a = "A" })\n'
             'ui.page("p", function() ui.label("{e|map L}") end)\n', 4, None),

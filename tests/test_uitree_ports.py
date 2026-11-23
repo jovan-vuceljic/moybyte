@@ -544,8 +544,6 @@ PAGE_THUMB_STEPS = {
     "update_sd-desk": range(4),
     "update_sd-tdeck": (3,),
     "update_sd_none-tdeck": (1,),
-    "wifi_popover-desk": (0, 1, 2, 3, 4, 7, 8),
-    "wifi_popover-tdeck": range(9),
 }
 
 

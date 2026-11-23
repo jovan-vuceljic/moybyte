@@ -1,6 +1,7 @@
 # Map (grep -n a name to jump there):
 #   LauncherHomeLayer           the home: wallpaper, the cells, the bar's tabs, the hints
 #   LauncherHomeLayer.draw      the home frame
+#   LauncherHomeLayer.at_top    up from the cards goes on to the bar
 #   LauncherHomeLayer.zone_gen  the int the bar's strip key reads (the zone is HomeZone's)
 #   HomeWindowLayer             the home in a desktop-mode window (PROJECTS)
 """The home (#28), extracted from Workstation (runtime/shell/console.py) as a Layer
@@ -31,8 +32,8 @@
                       Its bases, in order: `HomeHints` (home_hints.py, the
                       hint strip, which a band frame draws), `HomeDetails`
                       (home_details.py, the desk hero's details and verb
-                      buttons), `HomeZone` (home_zone.py, its tabs in the
-                      bar's zone and the tab's verbs) and `HomeSearch`
+                      buttons), `HomeZone` (home_zone.py, its tabs' row lent
+                      to the bar and the tab's verbs) and `HomeSearch`
                       (home_search.py, the search line). What a frame reads every frame stays on the
                       class or its first base.
   * `HomeWindowLayer` -- the "projects" content Layer: the SAME home in a
@@ -49,11 +50,12 @@ modules it takes its arrangements and band frame from import no console
 module (the only console touch is Launcher's lazy Layout fallback for a bare
 Launcher() that no caller ever constructs).
 
-The lent bar zone (#46): each home layer draws and taps it (`draw_zone`/`zone_tap`)
-and answers its `zone_gen` -- one int of what the zone shows, the home's tabs (the
-open one and the tab row's focus), so BarLayer's strip cache trusts one int. The
-grid's own `zone_gen` (bumped whenever its `sel` or `items` changes) is the
-grid's.
+The lent bar zone (#46): each home layer lends the bar its tabs' row
+(`HomeZone.bar_zone`), which the bar draws, taps and walks with its keys; up
+from the cards at their top goes on to it (`at_top`). Its `zone_gen`, the
+count of the open tab's moves, is the one int the bar's strip cache reads
+every frame through the row. The grid's own
+`zone_gen` (bumped whenever its `sel` or `items` changes) is the grid's.
 """
 
 
@@ -67,7 +69,6 @@ _in = _ui.rect_in   # one hit-test (ui.rect_in)
 # The tick helpers feed the perf_capture-gated home-frame split (see draw below).
 from chrome import _ticks_ms, _ticks_diff
 import layout_base as _lb
-import shell_layout as _shell_layout
 from home_band import (_wall_ink, _overlaps_any, _ground_of, _dim_of, _cursor_stamp,
                        _statics_base, _Keyed, _band_key, _band_frame)
 from home_hints import HomeHints, modal_keys
@@ -76,12 +77,10 @@ from home_details import HomeDetails
 from home_search import HomeSearch
 from layers import Layer
 from home_carousel import Carousel
-from home_grid import (HOME_TABS, PSEUDO_TILE_TYPES)
+from home_grid import PSEUDO_TILE_TYPES
 
 
-# The home layer's own words: the tab row's order, the long press, the
-# chevron's tooltip.
-_TAB_ORDER = {tid: i for i, (tid, _label) in enumerate(HOME_TABS)}
+# The home layer's own words: the long press, the chevron's tooltip.
 # A press held this long on a card without travel opens the card's verbs (a
 # phone home screen's long press), in frame milliseconds.
 LONG_PRESS_MS = 500
@@ -110,9 +109,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         self._back_tip = False        # a mouse rests on the bar's way back to the desk
         self._hold = None             # a press on a card: [index, x, y, ms held]
         self._on_open = self._band_open     # the handheld band's card opened (`Carousel.on_open`)
-        self._tab_at = None           # the tab the keys are on, on the tab row
         self._on_bar = False          # the keys are on the home's bar (BarLayer.focus_enter)
-        self._tab_focus = False       # keys drive the tab row (up from the carousel)
         # The band frame's keys (`_band_frame`; #58/#66: a FULL home repaint
         # stacks megabytes of writes on a board): the band table's
         # (`_band_key`), the hint strip's and the caption band's (`_beside`),
@@ -124,9 +121,8 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         self._hk = _Keyed()
         self._beside_drew = []
         # what the hint strip's key was made of, and the key (`_outside_key`)
-        self._ok = [None, None, None, None, None, None, None, None, None]
+        self._ok = [None, None, None, None, None, None, None, None, None, None]
         self._st_parts = [None] * 16  # the statics key's parts (`_statics_key`)
-        self._zone_bump = 0           # the tab row's focus moved (the bar's zone shows it)
         # Retained WHOLE-frame cache (2026-07-27, the damage-model doctrine at
         # shelf granularity): the last full home frame, captured at the END of
         # a live paint (right after our own last pixel -- overlays/cursor draw
@@ -181,93 +177,37 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         else None."""
         return _wall_ink(self.ws)
 
-    @property
-    def _tab_focus(self):
-        return self._tab_keys
-
     def at_top(self):
-        """Up goes on to the bar from the tab row where the row is below
-        the bar (InputRouter._bar_keys); where the bar holds the tabs they
-        are one row with its items, and up stays."""
-        return bool(self._tab_keys) and not self.tabs_in_bar()
-
-    def tabs_in_bar(self):
-        """`tab_rects` where the tabs sit in the bar's row (the handheld's
-        zone), so the keys walk them and the bar's items as one row
-        (`BarLayer.focus_beside_tabs`); else []."""
-        return self.tab_rects()
-
-    def tab_enter(self, k):
-        """The keys onto the tab row at its `k`th tab (-1 the last), from
-        the bar's items beside it."""
-        self._tab_focus = True
-        ids = self._tab_ids()
-        self._tab_at = ids[k]
-        self._zone_bump += 1
-        self.ws.mark_dirty()
-
-    def _tab_ids(self):
-        """The ids of the tabs the row shows, left to right."""
-        return [t[0] for t in self.tab_rects()] or [t for t, _l in HOME_TABS]
-
-    def focused_tab(self):
-        """The tab the keys are on while the tab row has them (it opens on
-        confirm), else None."""
-        if not self._tab_keys:
-            return None
-        ids = self._tab_ids()
-        at = self._tab_at
-        return at if at in ids else self.grid.tab
-
-    def _tab_step(self, d):
-        """The tab row's focus `d` tabs along; off its ends onto the bar's
-        item beside it where the bar holds the tabs, else it stops there.
-        The open tab stays until a confirm."""
-        ids = self._tab_ids()
-        at = self.focused_tab()
-        k = ids.index(at) + d if at in ids else 0
-        if not 0 <= k < len(ids) and self.ws.bar_layer.focus_beside_tabs(d):
-            return
-        k = max(0, min(len(ids) - 1, k))
-        if ids[k] != self._tab_at:
-            self._tab_at = ids[k]
-            self._zone_bump += 1
-            self.ws.mark_dirty()
-
-    @_tab_focus.setter
-    def _tab_focus(self, on):
-        # one focus mark a screen: the tab row's takes it from the cards
-        if on != getattr(self, "_tab_keys", None):
-            self._zone_bump = getattr(self, "_zone_bump", 0) + 1
-            g = self._grid_or_none()
-            self._tab_at = g.tab if on and g is not None else None
-        self._tab_keys = on
-        if on:
-            self._btn = None
-        g = self._grid_or_none()
-        if g is not None:
-            g.tab_focus = (on or getattr(self, "_btn", None) is not None
-                           or getattr(self, "_on_bar", False))
+        """Up goes on to the bar (InputRouter._bar_keys): from the
+        handheld's carousel, the grid's and the icons' top row, and the
+        desk's shelf where its card has no buttons; from the desk pane's
+        buttons the pane's page hands the keys on (`details_owed`)."""
+        ws = self.ws
+        grid = self._grid_or_none()
+        if grid is None or self._btn is not None or getattr(ws, "search_typing", False):
+            return False
+        if self._carousel():
+            return not (grid.desk() and self._desk_buttons())
+        return grid.top_row()
 
     def bar_focus(self, on):
         """The keys go on to the home's bar (`on`) or off it: the cards let
         their focus mark go meanwhile, one mark a screen."""
-        if on != self._on_bar:
-            self._on_bar = on
-            self._zone_bump += 1
+        self._on_bar = on
         g = self._grid_or_none()
         if g is not None:
-            g.tab_focus = on or self._tab_keys or getattr(self, "_btn", None) is not None
+            g.tab_focus = on or getattr(self, "_btn", None) is not None
         self.ws.mark_dirty()
 
     def _statics_key(self, cv):
         """Everything the home frame's STATIC chrome (wallpaper backdrop +
         Library panel fill/header/footer) is a pure function of: the shared
         base plus the wallpaper, the search field and the keys a modal's hint
-        strip names (`modal_keys`). A key change forces full paints until the
-        streak re-arms. Where the keys are -- the tab row, the bar, a card --
-        is not in it: the tabs are the bar's, which a band frame draws, the
-        hint strip names the tab row's keys under its own key (`_outside_key`)
+        strip names (`modal_keys`, the bar's left out). A key change forces
+        full paints until the streak re-arms. Where the keys are -- the bar,
+        a card -- is not in it: the tabs are the bar's, which a band frame
+        draws, the hint strip names the bar's keys under its own key
+        (`_outside_key`)
         and the selected card wears the focus as its part's gen. The base's
         six (`_statics_base`) then these, read into a kept list and made a
         tuple only where one moved from the key the band last keyed on
@@ -283,7 +223,8 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         v[4] = g.band_rect()
         v[5] = len(g.items)
         v[6] = look.wallpaper_id
-        v[7] = modal_keys(ws)
+        mk = modal_keys(ws)
+        v[7] = None if mk is _ui_draw.BAR_KEYS else mk
         v[8] = getattr(ws, "search_query", "")
         typing = v[9] = getattr(ws, "search_typing", False)
         v[10] = typing and ws.text.can_type()
@@ -307,9 +248,10 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         and item count -- the cover-cache generation, trackball hover, the
         items and the titles they carry (the list, never mutated, and the
         roster's count of titles taken in place), the settings rows'
-        generation for the favorites and the play records) and the bar's own
+        generation for the favorites and the play records), the bar's own
         pixel key (`shown_key` -- clock minute, wifi state, the look; reusing
-        it means the bar's cache discipline IS this cache's discipline).
+        it means the bar's cache discipline IS this cache's discipline) and
+        the samples and keys the hint strip's page took (`_sgen`).
         Anything that draws a pixel of the home frame and is NOT derivable
         from this tuple is a staleness bug -- the silent-cache family
         surface_model_v1.md §14.2 documents -- so additions to the home draw
@@ -319,7 +261,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         return (self._statics_key(cv) if statics is None else statics, g.sel,
                 g.scroll, ws.covers.gen, self._lhover, g.items,
                 ws.carts.titled, ws.system.gen(), ws.bar_layer.shown_key("home"),
-                self._tab_keys, self._tab_at, self._on_bar)
+                self._on_bar, self._sgen)
 
     def _try_stamp_retained(self, cv, dt):
         """Present the retained home frame when nothing it depends on changed:
@@ -558,24 +500,25 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
 
     def _outside_key(self):
         """What the home's parts outside the band show of the selection:
-        the hint strip its verbs and its star (`_hint_groups`), or the tab
-        row's keys while the tab row has them (`_draw_hints`), the handheld
+        the hint strip its verbs and its star (`_hint_groups`), or the bar's
+        keys while the bar has them (`_draw_hints`), the handheld
         icons' caption band its cart and the day its line counts from. The
         hint strip's is made again only where what it is made of moved: the
         grid's selection or items (its `zone_gen`), its tab, the favourites
-        (the settings rows' generation), the tab row's keys and the store's
-        `can_manage`."""
+        (the settings rows' generation), the keys on the bar, the store's
+        `can_manage` and the pointer samples the strip took (`_sgen`)."""
         g = self.grid
         ws = self.ws
         m = self._ok
         zg = g.zone_gen
         sg = ws.system.gen()
-        tk = bool(self._tab_keys)
+        tk = self._on_bar
         cm = getattr(ws, "can_manage", True)
+        pg = self._sgen
         if not (m[1] == zg and m[0] is g and m[2] == g.tab and m[3] == sg and m[4] == tk
-                and m[5] == cm and m[6] is g.favorite_for):
+                and m[5] == cm and m[6] is g.favorite_for and m[9] == pg):
             it = self.favourable()
-            m[7] = (self.zone_verbs(), it is not None and ws.carts.is_favorite(it), tk)
+            m[7] = (self.zone_verbs(), it is not None and ws.carts.is_favorite(it), tk, pg)
             m[0] = g
             m[1] = zg
             m[2] = g.tab
@@ -583,6 +526,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             m[4] = tk
             m[5] = cm
             m[6] = g.favorite_for
+            m[9] = pg
         hint = m[7]
         now = m[8]
         if now is None or now[0] is not hint:
@@ -688,8 +632,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         typing = getattr(ws, "search_typing", False)
         base = (bd, cv.w, cv.h, ws.layout.fs, ws.look.look_gen, g._geom(),
                 ws.look.wallpaper_id, modal_keys(ws), getattr(ws, "search_query", ""),
-                typing, typing and ws.text.can_type(), self._tab_focus, self._tab_at,
-                self._on_bar, self._back_tip)
+                typing, typing and ws.text.can_type(), self._on_bar, self._back_tip)
         items = g.items
         it = items[g.nearest()] if items else None
         rows = ws.system.gen()
@@ -725,7 +668,10 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         a shelf card does, `Carousel._fill_around_cards`); all of it in one
         copy where the band's goes back so (`restore_whole`)."""
         hx, hy, hs, _h = self.grid.hero_rect()
-        x0, y0, x1, y1 = r[0], r[1], r[0] + r[2], r[1] + r[3]
+        x0 = r[0]
+        y0 = r[1]
+        x1 = r[0] + r[2]
+        y1 = r[1] + r[3]
         if self.grid.restore_whole or not (x0 <= hx and y0 <= hy and hx + hs <= x1
                                            and hy + hs <= y1):
             fill(cv, r)
@@ -1070,35 +1016,6 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         cv.rrect(x, y, tw + 2 * pad, h, 4 * u, th["ink"])
         cv.print(BACK_TIP, x + pad, y + (h - ws.layout.line_h) // 2, th["surface"], 1)
 
-    def tab_rects(self):
-        """[(tab id, rect, labels_on)] of the home's tabs in the bar's zone
-        (`zone_tabs`), on the glass."""
-        got = _shell_layout.cell_of(self.ws.layout.bars, "zone")
-        if got is None:
-            return []
-        rx, ry = self.ws.layout.bars[got[0]][1][:2]
-        zx, zy, zw, zh = got[1]
-        return [(tid, (rx + r[0], ry + r[1], r[2], r[3]), True)
-                for tid, _l, r in self.zone_tabs((zx, zy, zw, zh))]
-
-    def _tab_under(self, px, py):
-        """The home's tab under (px, py), else None: the tabs are laid out
-        (`tab_rects`) for a press in the bar's zone alone, whose plates
-        reach a chrome unit past it above and below."""
-        got = _shell_layout.cell_of(self.ws.layout.bars, "zone")
-        if got is None:
-            return None
-        bar = self.ws.layout.bars[got[0]][1]
-        zx, zy, zw, zh = got[1]
-        cs = self.ws.layout.cs
-        x, y = px - bar[0] - zx, py - bar[1] - zy
-        if not (0 <= x < zw and -cs <= y < zh + cs):
-            return None
-        for tid, r, _on in self.tab_rects():
-            if _in(px, py, r):
-                return tid
-        return None
-
     def _draw_home_chrome(self, cv):
         """The hint strip along the home's foot (its tabs are the bar's)."""
         self._draw_hints(cv)
@@ -1139,31 +1056,8 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
     def handle_input(self, i):
         ws = self.ws
         if getattr(ws, "search_typing", False):
-            return self._handle_search_typing(i)
+            return self._search_keys(i)
         ws.ach_ui.konami_watch(i)
-        if self._tab_focus:
-            # The tab row (up from the carousel): left and right move the
-            # focus along it (`_tab_step`), confirm opens the tab it is on
-            # and takes the keys to its cards, down returns to them.
-            if i.steps("left"):
-                self._tab_step(-1)
-            elif i.steps("right"):
-                self._tab_step(1)
-            if i.pressed("a") or i.pressed("run"):
-                at = self.focused_tab()
-                self._tab_focus = False
-                if at != self.grid.tab:
-                    ws.home.set_home_tab(at, self.grid)
-                ws.mark_dirty()
-            elif i.steps("down"):
-                self._tab_focus = False
-                ws.mark_dirty()
-            if i.pressed("b") and ws.ach_ui._konami_pos == 0:
-                self._tab_focus = False
-                ws.mark_dirty()
-            elif i.pressed("home"):
-                ws.home.home_key()
-            return True
         if self._pane_keys(i):
             return True
         if self._hint_keys(i):
@@ -1171,23 +1065,17 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         grid = self.grid
         # The band page's keys (the carousel, §12, the grid, the icons): the
         # arrows (a held key's repeats, the wheel's notches) step it, Enter
-        # opens its card (`_band_open`); up takes the keys to the tab row
-        # from the handheld's carousel, and from the grid's and the icons'
-        # top row, and on the desk's carousel to the details pane's buttons
-        # first.
+        # opens its card (`_band_open`); up at the top goes on to the bar
+        # (`at_top`, the router's), on the desk's carousel to the details
+        # pane's buttons first.
         if grid is None:
             self._card_keys(i)
             return True
         desk = self._carousel() and grid.desk()
-        top = self._carousel() or grid.top_row()
         if grid.band_keys(i):
             ws.mark_dirty()
-        if i.steps("up") and top:
-            if desk and self._desk_buttons():
-                self._button_focus = 0
-            else:
-                self._tab_focus = True
-            ws.mark_dirty()
+        if i.steps("up") and desk and self._desk_buttons():
+            self._button_focus = 0
         self._card_keys(i)
         return True
 
@@ -1236,7 +1124,6 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
     def _band_open(self):
         """The handheld band's card opened (Enter, a tap on the centre card
         at rest): the active tab's tap, behind the painted frame (#184)."""
-        self._tab_focus = False
         self.ws.defer(self._launch)
 
     def _change(self):
@@ -1253,8 +1140,6 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         ws = self.ws
         grid = self.grid
         down = ws.pointer.down
-        if click and _in(px, py, grid.band_rect()):
-            self._tab_focus = False
         if grid.band_point(px, py, click, down):
             ws.mark_dirty()
         if click or down:
@@ -1285,18 +1170,15 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         if tip != self._back_tip:
             self._back_tip = tip
             ws.mark_dirty()
+        if not click and self._sptr and self._strip_point(px, py, False, down):
+            return True
         if click:
             self._hold = None
             if self._button_focus is not None:
                 self._button_focus = None    # a press takes the keys' mark away
             if ws.bar_layer.handle_bar_tap(self.strip, px, py):
                 return True
-            if self._search_tap(px, py) or self._hint_tap(px, py):
-                return True
-            tid = self._tab_under(px, py)
-            if tid is not None:
-                self._tab_focus = False
-                ws.home.set_home_tab(tid, grid)
+            if self._search_tap(px, py) or self._strip_point(px, py, True, down):
                 return True
             frect = grid.favorite_rect(grid.sel)
             if frect is not None and _in(px, py, frect):
@@ -1312,8 +1194,6 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         # desk's shelf) and a release flings it, a tap slides a card to the
         # centre (on the desk makes it current) or opens the current one
         # (`_band_open`)
-        if click and _in(px, py, grid.band_rect()):
-            self._tab_focus = False
         if grid.band_point(px, py, click, down):
             ws.mark_dirty()
         if click or down:
@@ -1344,7 +1224,6 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         grid.band_cancel()                             # the gesture ends untapped
         if h[0] != grid.sel and 0 <= h[0] < len(grid.items):
             grid.sel = h[0]
-        self._tab_focus = False
         self.open_card_menu((h[1], h[2]))
         self.ws.mark_dirty()
         return True
@@ -1369,13 +1248,19 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
 
     # -- the lent left zone (Stage 4, #46 zoned bar) --------------------------
 
+    _zone_tab = None     # the open tab `zone_gen` last saw
+    _zone_n = 0          # ...and the count it moved
+
     @property
     def zone_gen(self):
-        """What the zone's pixels follow, as one int for the bar's strip key:
-        the open tab and the tab row's focus (`_zone_bump`). The zone draws
-        the tabs alone, so a selection moving along the row (a held key's
-        glide) leaves the bar's strip as it is."""
-        return self._zone_bump * 8 + _TAB_ORDER.get(self.grid.tab, 7)
+        """What the zone's pixels follow, as one int that only grows: a
+        count of the open tab's moves (the row's own moves are its
+        `BarZone.gen`, which the bar adds)."""
+        tab = self.grid.tab
+        if tab != self._zone_tab:
+            self._zone_tab = tab
+            self._zone_n += 1
+        return self._zone_n
 
     def _do_verb(self, verb):
         """One of the active tab's verbs on the selected card (§12's table),

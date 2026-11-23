@@ -183,7 +183,9 @@ class PicEngine:
     def gen_of(self, pic):
         """What moves with the picture's pixels: an app's own picture's puts,
         a store file's changes."""
-        return (S.pictures.gen if pic.kind == "own" else S.pictures.store_gen).get(pic.key, 0)
+        if pic.kind == "own":
+            return S.pictures.gen_of(self.app, pic.key)
+        return S.pictures.store_gen.get(pic.key, 0)
 
     # -- decoders ----------------------------------------------------------------------
 

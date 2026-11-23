@@ -121,7 +121,7 @@ s = ui.state(
     name="",
     name_note="",
 )
-ui.app("Appearance", icon="palette")
+ui.app("Appearance", icon="palette", min=(310, 230))
 ui.labels("WTABS", {"pictures": "Pictures", "carts": "Carts"})
 
 
@@ -227,14 +227,7 @@ ui.action("name_ask", "Name", name_ask, hint="Open")
 ui.action("edit", EDIT_THEME, edit, hint="Open")
 ui.hook("name_typed", name_typed)
 ui.action("keep", "Keep", keep)
-ui.action("replace", "Replace", keep)
 ui.action("cancel", "Cancel", cancel)
-
-
-def _name_dialog(button, shown):
-    with ui.dialog("Name your theme", ["cancel", button], shown=shown):
-        ui.field("Name", "name", NAME_MAX, on="keep", changed="name_typed")
-        ui.label("{name_note}")
 
 
 def build():
@@ -257,8 +250,10 @@ def build():
                    shown="has_chromes")
             ui.link("name_ask", "Keep as a theme", shown="custom")
             ui.link("edit", "{edit_word}")
-        _name_dialog("keep", "naming && !armed")
-        _name_dialog("replace", "naming && armed")
+        with ui.dialog("Name your theme", ["cancel", "keep"], labels=["Cancel", "{armed?Replace:Keep}"],
+                       shown="naming"):
+            ui.field("Name", "name", NAME_MAX, on="keep", changed="name_typed")
+            ui.label("{name_note}")
 
 
 def walls():
@@ -328,6 +323,7 @@ def fill(lay):
     tints = [t[0] for t in lay.tints]
     _picks(lay, "tint", [""] + tints, ["None"] + [_title(t) for t in tints],
            ch["tint"] if ch["tint"] in tints else "")
+    pics, carts = lay.wall_rows(ch)        # (the titles wall_title reads)
     tab, key = lay.wall_now()
     _set(lay, "wall_title", lay.walls[key][1] if key in lay.walls else "")
     _picks(lay, "frame", *_own_or(FRAMES, FRAME_NAMES, ch["frame"]))
@@ -343,7 +339,6 @@ def fill(lay):
         _picks(lay, "chrome", [str(c) for c in chromes], ["%d×" % c for c in chromes], str(cur))
     _set(lay, "custom", name == "custom")
     _set(lay, "edit_word", "" if name == "custom" else "Makes a copy")
-    pics, carts = lay.wall_rows(ch)
     _set(lay, "pics", pics)
     _set(lay, "carts", carts)
     _set(lay, "no_carts", not carts)
@@ -385,8 +380,6 @@ class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build,
     # CAPABILITY, not a core role: this app and the two that copy a drawing
     # into it (Paint, Files) are its only consumers. A pick is a change to
     # the theme (docs/theme_and_shell_2026-11.md D6), so it lands in `custom`.
-    MIN_W = 310
-    MIN_H = 230
 
     def __init__(self, ctx, names=None):
         super().__init__(ctx, names)
@@ -406,7 +399,6 @@ class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build,
         self._pics = {}             # a picture's key -> what it was drawn from
         self._ch = None
         self._gen = None
-        self._stale = 0
         # (name, the change's value, its swatch in dark, in light): a
         # preset is picked by its dark value and shows each mode's.
         by = dict((p[0], (p[0], p[1], p[1], p[2])) for p in theme_presets())
@@ -421,7 +413,6 @@ class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build,
         self.naming = False
         self.armed = self.why = self.note = None
         self._ch = None
-        self._stale = 2
         self.fill_owed = True
         self.focus_to = self.choices()["theme"] + "/use"
         super().open()
@@ -458,8 +449,6 @@ class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build,
             self.engine.run(fill, self, action="fill")
             ui.commit(self.engine)
         super().draw(dt)
-        if self._stale:
-            self._damage.again()        # a change shows at the next frame's tick
 
     # -- what the rows show ----------------------------------------------------
 
@@ -472,16 +461,13 @@ class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build,
         return self._ch
 
     def _refresh(self):
-        """Read `ctx.theme.choices()` again when the token generation moved,
-        and for the two frames after an action of the page's own (a change
-        shows at the next frame)."""
+        """Read `ctx.theme.choices()` again when the token generation moved
+        (a change lands at the next frame's tick, and moves it)."""
         g = self._theme.gen()
-        if self._ch is None or g != self._gen or self._stale:
+        if self._ch is None or g != self._gen:
             self._ch = self._theme.choices()
             self._gen = g
             self.fill_owed = True
-            if self._stale:
-                self._stale -= 1
             if self.naming and self._ch["theme"] != "custom":
                 self.close_name(acted=False)
 
@@ -633,7 +619,6 @@ class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build,
 
     def acted(self):
         self.note = None
-        self._stale = 2
         self.fill_owed = True
         self._damage.all()
 

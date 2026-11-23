@@ -267,6 +267,11 @@ fi
 # inflater's part (runtime/host/host_native.py): NO_INFLATER builds them so here.
 NO_INFLATER=(env MOYHOST_NO_INFLATER=1)
 step "browser console builds"                       "${NO_INFLATER[@]}" firmware/web_runner/build.sh
+# Its add-on lives in every board's store, and CI's firmware job writes each
+# board's install (tools/store_image.py) only after the images build: the
+# check reads each store from the board's partition table, so a bundle that
+# outgrows one fails here, image or not.
+step "the browser console add-on fits every board's store" "${PY}" tools/store_image.py --check
 [ "${NATIVE}" = "1" ] || step "the CI image and its venv" "${IN[@]}" true
 step "desktop MicroPython with the native usermods" "${IN[@]}" make unix-micropython
 step "docs agree with the tree"                     "${PY}" tools/check_docs.py

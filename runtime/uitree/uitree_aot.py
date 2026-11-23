@@ -13,10 +13,13 @@ function of its module's code alone, and the variant key is empty (`VARIANT`).
 blob builds on the device as before. The frozen module holds each blob with
 its front already read (`entry`), every part of it a constant: a frozen
 constant is ROM on a board, where reading the blob's front would allocate
-a string a name, and the dicts a load binds by are made by the load. The
-blob itself is held packed (`pack`): its header as it is, the rest
-raw-deflated, about a third of its bytes, inflated by the load
-(`unpack`) into the one buffer the store is copied from.
+a string a name, and the dicts a load binds by are made by the load. A
+board's image holds the blob itself packed (`pack`): its header as it is,
+the rest raw-deflated, about a third of its bytes, inflated by the load
+(`unpack`) into the one buffer the store is copied from. The browser's
+holds it bare: its wasm is served gzipped whole, which compresses the
+blobs together smaller than each packed alone, and a bare blob loads as
+it is.
 """
 
 import sys
@@ -63,14 +66,16 @@ def _u32(b, at):
 DOC = "#doc"        # a document's hidden model: its state's name and this (uitree_c's `_DOC`)
 
 
-def entry(blob):
+def entry(blob, packed=True):
     """A page's entry as the frozen module holds it: (blob, state names,
     their type codes, action names, (node, draw) pairs, (node, ground)
     pairs, the rest of the front end's literals (`CEngine.front`), the
     slots' orders (`orders`)), every part a constant made on the host, so
-    an image keeps it in flash (`constant`), the blob packed (`pack`)."""
+    an image keeps it in flash (`constant`), the blob `bare`, and `packed`
+    (`pack`) unless told not to."""
     f = front_of(blob)
-    return (pack(bare(blob)), tuple(f["S"]), f["T"], tuple(f["A"]), tuple(sorted(f["D"].items())),
+    b = bare(blob)
+    return (pack(b) if packed else b, tuple(f["S"]), f["T"], tuple(f["A"]), tuple(sorted(f["D"].items())),
             tuple(sorted(f["G"].items())), f["X"], f["O"])
 
 
@@ -119,8 +124,11 @@ def pack(blob):
 
 def unpack(packed):
     """A packed blob (`pack`) whole again: one buffer of the length its
-    header names, filled as it inflates."""
+    header names, filled as it inflates. A bare blob, the length its header
+    names already, is itself."""
     n = _u32(packed, 20)
+    if len(packed) == n:
+        return packed
     try:
         import deflate
     except ImportError:             # CPython

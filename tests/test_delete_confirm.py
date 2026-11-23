@@ -11,6 +11,7 @@ import pytest
 
 from runtime import host_app, moy_carts, ui_draw
 from ws_helpers import build_ws, shelf
+from ws_helpers import hint_rects, hint_tap
 
 
 @pytest.fixture(autouse=True)
@@ -87,8 +88,8 @@ class _Pad:
 
 def _verb_tap(ws, verb):
     layer = ws.launcher_layer
-    x, y, w, h = layer._zone_action_rects(ws.layout.zone_left)[verb]
-    return layer.zone_tap(x + w // 2, y + h // 2)
+    x, y, w, h = hint_rects(layer)[verb]
+    return hint_tap(layer, x + w // 2, y + h // 2)
 
 
 def test_make_x_asks_and_cancel_keeps_the_cart(tmp_path):
@@ -283,21 +284,14 @@ def test_the_hint_strip_names_the_dialogs_keys(tmp_path, monkeypatch, kind):
     keys, Choose and Cancel in the input's own keycaps, never the home's
     verbs (design review F6-02), as it names Close under the system menu;
     it names the home's verbs again once the dialog is answered."""
-    from runtime import launcher_layer
     from runtime import home_hints
     ws = build_ws(tmp_path)
     drv = _drv(ws)
     ui_draw.input_kind(kind)
     _own(ws)
-    drawn = []
-    hints = launcher_layer._ui_draw.hints
-
-    def spy(cv, th, rect, items, desk=False, draw=True, answer=True):
-        if draw:
-            # (the strip draws the line it laid out, `ui_draw.hint_line`)
-            drawn.append(tuple(items.decode().split("\0")) if type(items) is bytes
-                         else tuple(items))
-        return hints(cv, th, rect, items, desk, draw, answer)
+    def shown():
+        # (the strip's rows as its page was last put: keys and words in turn)
+        return tuple(w for r in ws.launcher_layer._hrows for w in r[1:3])
 
     def strip():
         cv = ws.glass_canvas
@@ -308,10 +302,10 @@ def test_the_hint_strip_names_the_dialogs_keys(tmp_path, monkeypatch, kind):
     ws.mark_dirty()
     _frames(drv)
     home = strip()
-    monkeypatch.setattr(launcher_layer._ui_draw, "hints", spy)
+    assert shown() != home_hints._CONFIRM_KEYS
     assert ws.confirm.ask(ws.launcher.selected())
     c = _asked(ws, drv)
-    assert drawn == [home_hints._CONFIRM_KEYS] * len(drawn) and drawn, drawn
+    assert shown() == home_hints._CONFIRM_KEYS
     assert strip() != home
     c.cancel()
     _frames(drv)

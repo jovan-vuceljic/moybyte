@@ -274,10 +274,24 @@ static int take_rec(rd_t *r, void *base, const uit_fld_t *f, int n)
     return 0;
 }
 
+// A loaded array held at the count the blob gives, not grown to a doubling past it: a page's
+// arrays stay what it loaded while it lives (a build's grow as it goes).
+static int fit(void **arr, int *cap, int c, size_t size)
+{
+    if (c <= *cap)
+        return 0;
+    void *q = UIT_REALLOC(*arr, (size_t)c * size);
+    if (!q)
+        return -1;
+    *arr = q;
+    *cap = c;
+    return 0;
+}
+
 static int take_recs(rd_t *r, void **arr, int *count, int *cap, size_t size, const uit_fld_t *f, int n)
 {
     uint32_t c;
-    if (take32(r, &c) || c > UIT_NONE || uit_grow(arr, cap, (int)c, size))
+    if (take32(r, &c) || c > UIT_NONE || fit(arr, cap, (int)c, size))
         return -1;
     memset(*arr, 0, (size_t)c * size);
     for (uint32_t i = 0; i < c; i++)
@@ -305,10 +319,17 @@ static int load(uit_t *e, rd_t *r)
     if (take32(r, &n) || n < 1 || n > r->n - r->at)
         return -1;
     e->pool.n = 0;
+    if (n + 1 > e->pool.cap) {
+        char *q = UIT_REALLOC(e->pool.p, n + 1);       // the pool as the blob holds it, its NUL after
+        if (!q)
+            return -1;
+        e->pool.p = q;
+        e->pool.cap = n + 1;
+    }
     if (raw(&e->pool, r->p + r->at, n) || e->pool.p[n - 1])
         return -1;
     r->at += n;
-    if (take32(r, &n) || n > UIT_NONE || uit_grow((void **)&e->slots, &e->cslots, (int)n, sizeof *e->slots))
+    if (take32(r, &n) || n > UIT_NONE || fit((void **)&e->slots, &e->cslots, (int)n, sizeof *e->slots))
         return -1;
     memset(e->slots, 0, n * sizeof *e->slots);
     e->nslots = (int)n;
@@ -325,7 +346,7 @@ static int load(uit_t *e, rd_t *r)
         TAKE_RECS(r, e, conds, nconds, cconds, f_cond) || TAKE_RECS(r, e, terms, nterms, cterms, f_term) ||
         TAKE_RECS(r, e, nodes, nnodes, cnodes, f_node) || TAKE_RECS(r, e, props, nprops, cprops, f_prop))
         return -1;
-    if (take32(r, &n) || n > UIT_NONE || uit_grow((void **)&e->btns, &e->cbtns, (int)n, sizeof *e->btns) ||
+    if (take32(r, &n) || n > UIT_NONE || fit((void **)&e->btns, &e->cbtns, (int)n, sizeof *e->btns) ||
         take(r, e->btns, n * sizeof *e->btns))
         return -1;
     e->nbtns = (int)n;

@@ -629,9 +629,8 @@ class InputRouter:
 
     def _bar_keys(self, i, pressed, edge):
         """The keys on the bar (`BarLayer.focus_keys`), and the ways onto
-        it: up from a surface at its top (its `at_top`: a home's tab row
-        below the bar, a list's first row; the handheld home's tabs walk on
-        to it sideways, `BarLayer.focus_beside_tabs`) or an up that went past the top of a page drawn
+        it: up from a surface at its top (its `at_top`: the home's cards at
+        their top, a list's first row) or an up that went past the top of a page drawn
         last frame (`edge`, this frame's `ui_draw.edge_take`). Neither under a menu, a popover or
         a dialog, which hold the keys. True where the bar took them.
         `handle_input` calls it only while the bar holds the keys or one of
@@ -669,8 +668,7 @@ class InputRouter:
             top = getattr(layer, "at_top", None)
             if top is None or not top():
                 return False
-        if not bl.focus_enter(where, "tabs" if where == "home" else "page",
-                              self.bar_open_x(where)) or not pressed:
+        if not bl.focus_enter(where, self.bar_open_x(where)) or not pressed:
             return False
         if where == "home":
             ws.ach_ui.konami_watch(i)
@@ -698,12 +696,16 @@ class InputRouter:
 
     def bar_open_x(self, where):
         """Where on `where`'s bar the keys land (an x in its bar's
-        coordinates): the Editor's open tab's chip; None, the first item."""
+        coordinates): the open tab's cell, the Editor's or the home's; None,
+        the first item."""
         ws = self.ws
-        if where != "menu":
+        if where == "menu":
+            box = ws.editor_app.tab_box(ws.editor_app.tab)
+        elif where == "home":
+            box = ws.launcher_layer.tab_box(ws.launcher.tab)
+        else:
             return None
-        box = ws.editor_app.tab_box(ws.editor_app.tab)
-        got = ws.bar_layer.cell("menu", "zone")
+        got = ws.bar_layer.cell(where, "zone")
         if box is None or got is None:
             return None
         return box[0] - got[0][1][0] + box[2] // 2

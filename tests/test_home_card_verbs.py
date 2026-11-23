@@ -16,6 +16,7 @@ from runtime import launcher_layer, moy_input, ui_draw
 from runtime import home_hints
 from runtime import home_grid
 from ws_helpers import make_drv
+from test_home_tab_row import focused_tab
 
 HANDHELD = "tdeck_320x240_fs1_dark"
 CONSOLE = "p4_1024x600_cs2_fs1_console"
@@ -345,8 +346,9 @@ def test_up_from_the_desk_shelf_reaches_its_buttons(tmp_path):
     """On the desk home the keys and a gamepad reach the details pane's
     buttons (R3-16): up from the shelf puts the focus mark on the first,
     left and right move along them (the pane's page's, in the frame that
-    draws it), confirm presses one; up again goes on to the tabs, down
-    comes back to the shelf. One focus mark a screen."""
+    draws it), confirm presses one; up again goes on to the bar's tabs
+    (the page's edge, the router's), down comes back to the shelf. One
+    focus mark a screen."""
     ws = _ws(tmp_path, CONSOLE)
     ws.launcher_layer._lib_unsupported = True
     _select(ws, "games", "cart")
@@ -356,12 +358,17 @@ def test_up_from_the_desk_shelf_reaches_its_buttons(tmp_path):
     assert _marks(ws) == 1
 
     def key(name):
-        home.handle_input(_Pad(name))
+        i = _Pad(name)
+        if ws.bar_layer.focus is not None:
+            ws.bar_layer.focus_keys(i)       # the router's, while the bar holds the keys
+        else:
+            home.handle_input(i)
         for _ in range(2):           # (a step past the buttons hands the keys on the next frame)
+            ws.router.handle_input()         # (the frame's: a page's edge the bar takes)
             ws.mark_dirty()
             ws.frame(g._DT)
     key("up")
-    assert home._button_focus == 0 and not home._tab_focus
+    assert home._button_focus == 0 and ws.bar_layer.focus is None
     assert _marks(ws) == 1, "the button's mark, the card's gone"
     key("right")
     assert home._button_focus == 1
@@ -370,12 +377,12 @@ def test_up_from_the_desk_shelf_reaches_its_buttons(tmp_path):
         items, _verbs = home._hint_groups()
         assert items[:2] == ["confirm", "Change"], "%s: confirm names the button" % kind
     key("up")
-    assert home._tab_focus and home._button_focus is None
+    assert focused_tab(ws) == "games" and home._button_focus is None
     key("down")
     key("up")
     key("right")
     key("down")
-    assert home._button_focus is None and not home._tab_focus
+    assert home._button_focus is None and ws.bar_layer.focus is None
     assert _marks(ws) == 1, "the card's mark back"
     key("up")
     key("right")
@@ -427,7 +434,9 @@ def test_the_make_strip_keeps_its_tab_keys(tmp_path, kind):
     ws.launcher.sel = next(i for i, it in enumerate(ws.launcher.items)
                            if it.get("path") and builtin_name(it["path"]) is None)
     ui_draw.input_kind(kind)
-    spans, _rect = ws.launcher_layer._hint_spans(ws.sys_canvas)
-    got = [v for v, _a, _b in spans]
+    layer = ws.launcher_layer
+    ws.mark_dirty()
+    _frames(drv)
+    got = [r[0] for r in layer._hrows if layer.hint_rect(r[0]) is not None]
     assert got[-1] == "tabs", got
     assert "change" in got or kind == "pad", got

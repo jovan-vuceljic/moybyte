@@ -41,3 +41,4 @@ def build():
             ui.link("add", label="{.label}")  # A02
             ui.link("pick", label="{.label}")
         ui.label("{count}", colour="red")  # N01
+        ui.dialog("Sure?", ["add"], labels=["Add", "Twice"])  # N01

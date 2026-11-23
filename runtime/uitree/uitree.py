@@ -2026,6 +2026,7 @@ SCHEMA = {
     "cells": dict(_C, first="int", count="int", cols="int", side="int", gap="int", clear="int", edge="lit",
                   on="action0", pick="action0", focus="cond"),
     "stepper": dict(_C, value="text", prev="action0", next="action0", tone="lit", grow="lit", focus="cond"),
+    "hints": dict(_C, keys="text", label="text", tail="cond", drop="cond", on="action1"),
     "info": dict(_C, label="text", value="text", icon="text", signal="int", tag="text", tone="text"),
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond", tag="text",
                  tone="text", swatch="text"),
@@ -2053,7 +2054,7 @@ SCHEMA = {
     "progress": dict(_C, label="text", value="int", max="int", look="lit"),
     "empty": dict(_C, icon="text", title="text", lines="texts"),
     "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit", look="lit", gutter="lit"),
-    "dialog": dict(_C, title="text", buttons="lit", kind="lit", look="lit"),
+    "dialog": dict(_C, title="text", buttons="lit", kind="lit", look="lit", labels="texts"),
     "popover": dict(_C, anchor="text", w="int", close="action0", wash="lit", at="text"),
     "menu": dict(_C, caption="text"),
     "item": dict(_C, label="text", icon="text", mkind="lit"),
@@ -2649,6 +2650,28 @@ def stepper(value, prev, next, **p):
     return _node("stepper", None, dict(p, value=value, prev=prev, next=next), _caller())
 
 
+def hints(model_name, **p):
+    """Keycap hints along a row (§7.2), one a row of model `model_name`:
+    `keys` its keys (an action -- confirm, back, tabs, search... -- drawn
+    as the input's own keys, or keys spelled out) and `label` what they do,
+    templates of the row; the rows `tail` holds stand at the row's end, the
+    rest from its start in order while they end short of them: where they
+    run in, the rows `drop` holds go first, the last first, then the
+    others, the last first. No stop: a press on one fires `on` with its
+    row."""
+    where = _caller()
+    _state_name(model_name, (Model,), "ui.hints", where)
+    b = _b()
+    ctx = b.ctx
+    b.ctx = Ctx(_st()._t[model_name])
+    try:
+        n = _node("hints", model_name, p, where)
+    finally:
+        b.ctx = ctx
+    n.l["model"] = model_name
+    return n
+
+
 def cards(model_name, **p):
     """A model's rows as cards, each its picture and label: a region of their
     own that takes the rest of the page's room, or with `flow=True` a grid in
@@ -2710,6 +2733,10 @@ def dialog(title, buttons, **p):
     acts = [_action(x, "none", "ui.dialog button", where) for x in buttons]
     if len(acts) < 1:
         raise UIError("N01", "a dialog has at least one button", where=where, fix='ui.dialog(title, ["cancel", "ok"]): Back takes the first')
+    labels = p.get("labels")
+    if labels is not None and isinstance(labels, (list, tuple)) and len(labels) != len(acts):
+        raise UIError("N01", "ui.dialog has %d labels= for its %d buttons" % (len(labels), len(acts)), where=where,
+                      fix="one label a button, in the buttons' order, or no labels= (each its action's label)")
     n = _node("dialog", None, dict(p, title=title, buttons=buttons), where)
     n.l["buttons"] = acts
     return n
@@ -3401,30 +3428,36 @@ class Pictures:
     picture go; None where it cannot). A drawn picture put with `clear=True`
     is clear where it has its corner's colour: what lies under it shows
     there (a sprite on a picker's tile). The engine holds them: a put
-    from a handler lands in the running engine's own sources, so two
-    consoles in one process each hold theirs and a console that goes takes
-    its drawers with it; one from outside a handler in the module's.
+    lands in the running engine's own sources, so its keys are its app's
+    alone, two consoles in one process each hold theirs and a console that
+    goes takes its drawers with it. A put or a drop runs in a handler (an
+    app's work off its handlers through `engine.run`); one outside is S06.
     `image.own(key)` names one."""
 
     def __init__(self):
-        self.src = {}               # a key -> its source, put outside a handler
-        self.gen = {}
         self.store_gen = {}         # a store path -> the times its file changed (`changed`)
 
-    def _held(self, app):
+    def _held(self, verb, key):
+        """The running engine's pictures and their gens, for `verb` of `key`."""
+        app = _NOW.app
         if app is None:
-            return self.src
+            raise UIError("S06", "pictures.%s(%r) outside a handler" % (verb, key), where=_caller(),
+                          fix="from a handler, or from the app's own work through engine.run(fn, ...)")
         own = getattr(app, "own_pics", None)
         if own is None:
-            own = app.own_pics = {}
+            own = app.own_pics = ({}, {})       # (key -> its source, key -> its gen)
         return own
 
     def source(self, app, key):
-        """Own picture `key`'s source as engine `app` reads it: its own
-        put's, else the module's; None where none was put."""
+        """Own picture `key`'s source as engine `app` reads it; None where
+        it put none."""
         own = getattr(app, "own_pics", None)
-        got = own.get(key) if own else None
-        return got if got is not None else self.src.get(key)
+        return own[0].get(key) if own else None
+
+    def gen_of(self, app, key):
+        """What moves with engine `app`'s own picture `key`: its puts and drops."""
+        own = getattr(app, "own_pics", None)
+        return own[1].get(key, 0) if own else 0
 
     def put(self, key, data=None, w=None, h=None, pixels=None, render=None, clear=False):
         if (data is not None) + (pixels is not None) + (render is not None) != 1:
@@ -3432,27 +3465,28 @@ class Pictures:
         if clear is not False and (clear is not True or render is None):
             raise UIError("S02", "pictures.put(%r): clear=True is a drawn picture's (render=)" % key,
                           found="clear=%r" % (clear,), fix='pictures.put(KEY, render=FN, clear=True)')
+        src, gen = self._held("put", key)
         if pixels is not None:
             if type(w) is not int or type(h) is not int or len(pixels) != w * h:
                 raise UIError("S02", "pictures.put(%r): pixels are w * h palette indices" % key,
                               found="w=%r h=%r %d bytes" % (w, h, len(pixels)), fix='pixels= holds w * h bytes')
-            self._held(_NOW.app)[key] = ("idx", w, h, bytes(pixels))
+            src[key] = ("idx", w, h, bytes(pixels))
         elif render is not None:
             if not callable(render):
                 raise UIError("S02", "pictures.put(%r): render= is a function of (w, h)" % key,
                               found=repr(render), fix='def render(w, h): ... return a w x h layer')
-            self._held(_NOW.app)[key] = ("render", render, clear)
+            src[key] = ("render", render, clear)
         else:
-            self._held(_NOW.app)[key] = ("bytes", bytes(data))
-        self.gen[key] = self.gen.get(key, 0) + 1
+            src[key] = ("bytes", bytes(data))
+        gen[key] = gen.get(key, 0) + 1
         a = _NOW.app
-        if a is not None and getattr(a, "pics", None) is not None and a.pics.forget_own(key):
+        if getattr(a, "pics", None) is not None and a.pics.forget_own(key):
             a.pics_let_go()
 
     def drop(self, key):
-        self._held(_NOW.app).pop(key, None)
-        self.src.pop(key, None)
-        self.gen[key] = self.gen.get(key, 0) + 1
+        src, gen = self._held("drop", key)
+        src.pop(key, None)
+        gen[key] = gen.get(key, 0) + 1
 
     def changed(self, path):
         """The store file `image.store(path)` names was written since the
@@ -3530,7 +3564,7 @@ def _collecting(fn, returns_node):
 NODE_CALLS = ("page", "group", "label", "info", "link", "button", "item", "card", "toggle", "slider",
               "field", "seg", "table", "col", "rows", "cards", "picture", "progress", "empty", "dialog",
               "popover", "menu", "split", "grid", "panel", "canvas", "foot", "scroll", "rule", "note",
-              "bubble", "month", "toast", "cells", "stepper", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
+              "bubble", "month", "toast", "cells", "stepper", "hints", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
               "legacy")
 DECL_CALLS = ("action", "hook", "labels", "work", "derive", "app")
 COMMAND_CALLS = ("push", "pop", "focus", "after", "post")

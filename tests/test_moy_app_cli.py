@@ -123,6 +123,7 @@ def test_front_is_needed_only_from_the_background(tmp_path):
 
 def test_a_wasm_module_s_imports_are_its_uses(tmp_path):
     cart = _new(tmp_path, "w", tier="wasm")
+    _manifest(cart, lambda m: m["moybyte"]["permissions"].append("prefs"))
     os.remove(os.path.join(cart, "src", "main.c"))
     module = wat.assemble(
         '(module (import "moybyte.app" "moybyte_notify" '

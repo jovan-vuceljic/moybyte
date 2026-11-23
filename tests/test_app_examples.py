@@ -49,18 +49,18 @@ def test_the_python_app_scrolls_its_list_and_keeps_its_choice(tmp_path):
     ws = build_ws(tmp_path)
     _install(ws, "shopping.moy")
     ns, drv = _open(ws, "Shopping")
-    assert ns["cur"] == 0
+    assert ns["s"].cur == "Item 1"
     for _ in range(30):                     # well past the rows a screen shows
         drv.press("down")
         _frames(drv)
     drv.press("a")
     _frames(drv)
-    assert ns["cur"] == 30
-    assert ns["prefs"].get("cur") == 30
+    assert ns["s"].cur == "Item 31"
+    assert ns["prefs"].get("cur") == "Item 31"
     ws.spine.exit()
     _frames(drv)
     ns, drv = _open(ws, "Shopping")         # a new run reads its prefs back
-    assert ns["cur"] == 30
+    assert ns["s"].cur == "Item 31"
 
 
 @pytest.fixture

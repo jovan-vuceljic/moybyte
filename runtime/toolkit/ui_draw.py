@@ -61,9 +61,10 @@ Design rules (deliberate, argued in the redesign thread):
     every state cue is a delta painted ON the rest look, resolved through the
     theme's own semantic roles, never a new literal.
 
-Min-size convention: a window-content layout may expose `MIN_W` / `MIN_H`
-constants; app registration adopts them and the windowed WM clamps resizes to
-the registered floor.
+Min-size convention: a ui tree app declares `ui.app(min=(w, h))`, and a
+window-content layout may expose `MIN_W` / `MIN_H` constants; app
+registration adopts them and the windowed WM clamps resizes to the
+registered floor.
 
 MicroPython-safe: tuples/lists/dicts, no f-strings, and no imports from the
 shell/surface graph. Glyph drawing is injected by callers that want it, keeping

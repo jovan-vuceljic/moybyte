@@ -1915,13 +1915,14 @@ section or its program described, or of the slot its page section paints
 in (`cc_ui`, §1.5).
 
 **The keys reach the bar** (owner call 2026-10-26), in console mode on every
-board and the browser. Up past the top of the surface under a bar (on
-the home, the tab row's left and right: below) -- a page's first row (`ui_draw.edge_take`, the
-engine's `api_edge`), the Editor's list, outline, step, map or sprite
-grid at its top (`at_top`) -- puts focus on the bar's items
+board and the browser. Up past the top of the surface under a bar -- a
+page's first row (`ui_draw.edge_take`, the engine's `api_edge`), the
+Editor's list, outline, step, map or sprite grid at its top, the home's
+cards at theirs (`at_top`) -- puts focus on the bar's items
 (`BarLayer.focus_items`): the OS widgets, the back chevron, a running app's
 lent tools and the zone's targets (the Editor's tabs, undo, redo and Play,
-`zone_targets`), the Editor's landing on its open tab. Left and right walk
+the home's tabs, `zone_targets`), the Editor and the home landing on their
+open tab. Left and right walk
 them, confirm opens one as a tap on it does (a widget's popover over the
 bar, focus staying on the widget under it; a tab, the keys going down into
 it), down, back and stop come off
@@ -1957,20 +1958,27 @@ status item's menu) wears the cell's `on` mark (§1.5); on an opaque fill
 (Contrast's) the items in it take the fill's ink.
 
 **The home's tabs and the bar's items are one row** (owner calls
-2026-10-27). Where the bar holds the tabs (the handheld's home: the T-Deck,
-the Guition S3, the browser), left and right walk the bar's items and the
-tabs in their order on the screen -- on the T-Deck the system button, Games,
-Mine, Apps, Make, the status cluster and the clock -- and stop at the row's
-ends (`BarLayer.focus_beside_tabs`, `_tabs_split`); up stays, the row being
-the top line, and down and back go to the cards from anywhere on it. The
-walk moves a focus and opens nothing: confirm opens the tab the focus is on
-and takes the keys to its cards, or opens a bar item as a tap on it does; Q
-and E open the previous and the next tab at once, and a tap opens a tab at
-once (`LauncherHomeLayer.focused_tab`). The focused tab wears the ring and
-the open one its current mark, so the two read apart; the hint strip names
-the row's keys, the bar's (`ui_draw.BAR_KEYS`). Where the tabs sit below the
-bar (`LauncherHomeLayer.tabs_in_bar` empty), the row stops at the tabs'
-ends and up goes on to the bar. A trackball roll steps on its stronger axis,
+2026-10-27). The tabs are a row the home lends the bar, the Editor's kind
+(`runtime/home/home_bar_ui.py`: a `ui.tabs` in `ui.tools(lend="bar")`,
+replayed and walked by `uitree_editor.BarZone`, drawn by `bar_layer.ZoneLook`,
+each tab with its icon: Games the play triangle, Mine a folder, Apps the grid, Make a
+page under a pencil). Up from the cards at their top lands the keys on the
+open tab (`LauncherHomeLayer.at_top`, `InputRouter.bar_open_x`), and from
+the desk pane's buttons the page's edge does; left and right walk the bar's
+items and the tabs in their order on the screen -- on the T-Deck the system
+button, Games, Mine, Apps, Make, the status cluster and the clock -- and stop
+at the row's ends; up stays, the row being the top line, and down and back
+go to the cards from anywhere on it. The walk moves the bar's focus and
+opens nothing: confirm opens the tab the focus is on and takes the keys to
+its cards, or opens a bar item as a tap on it does; Q and E open the
+previous and the next tab at once, and a tap opens a tab at once. The
+focused tab wears the bar's focus pill and the open one its current mark,
+so the two read apart; the hint strip names the bar's keys
+(`ui_draw.BAR_KEYS`). Where the zone holds every tab named (the desk) each
+is a chip; where it does not (the T-Deck), the open tab is named and the
+rest are icons. The desk's Projects window lends its band the same row; a
+window's bar takes no keys, so there up past the top goes on to the desk's
+bar, as from any window. A trackball roll steps on its stronger axis,
 and mid-roll the other axis takes `InputRouter.BALL_TURN` pulses, so a roll
 along the row that drifts a pulse or two down stays on it; a pause frees it
 (`InputRouter._ball_roll`).

@@ -45,7 +45,7 @@ def _onto(ws, drv, name):
     bl = ws.bar_layer
     items = bl.focus_items("home")
     k = [j for j, it in enumerate(items) if it[2] == name][0]
-    assert bl.focus_enter("home", "page", k=k)
+    assert bl.focus_enter("home", k=k)
     for _ in range(2):
         drv.frame(1 / 30)
 

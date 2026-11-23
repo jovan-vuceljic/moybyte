@@ -255,6 +255,21 @@ def test_a_frozen_entry_holds_its_blob_packed_and_a_load_inflates_it_whole(compi
         uitree_aot.unpack(z[:20] + (len(b) + 1).to_bytes(4, "little") + z[24:])
 
 
+def test_the_browser_stages_its_blobs_bare_and_each_loads_as_it_is(compiled, tmp_path):
+    """The browser's build (`--bare`) holds each blob bare, its wasm being
+    gzipped whole; `unpack` hands a bare blob back as it is, and the entry
+    is the packed one's but for its blob."""
+    mods = _staged(tmp_path)
+    assert UC.stage(str(mods), packed=False) == 0
+    ns = {}
+    exec((mods / "uitree_pages.py").read_text(), ns)
+    assert set(ns["PAGES"]) == set(compiled.pages)
+    for page, blob in compiled.pages.items():
+        e, b = ns["PAGES"][page], uitree_aot.bare(blob)
+        assert e[0] == b and uitree_aot.unpack(e[0]) is e[0], page
+        assert e[1:] == uitree_aot.entry(blob)[1:], page
+
+
 def test_a_blob_carries_every_field_of_every_record():
     """Each struct a blob stores names every member in moy_uitree_aot.c's
     field tables; a slot's members the visit owns are listed there by name."""

@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 from ws_helpers import build_ws as _build_ws, use_theme
+from ws_helpers import hint_rects, hint_tap
 
 
 def _ws(tmp_path, **kw):
@@ -239,7 +240,7 @@ def test_the_zone_carries_the_active_tabs_verbs_on_every_tier(tmp_path):
         ws.launcher.sel = next(i for i, it in enumerate(ws.launcher.items)
                                if (it.get("title") or "").endswith(" copy"))
         assert home.zone_verbs() == ("new", "change", "copy", "delete")
-        chips = home._zone_action_rects(ws.layout.zone_left)
+        chips = hint_rects(home)
         # ...and the selected cart's favourite star where the strip has room
         assert set(chips) - {"favourite"} == {"new", "change", "copy", "delete"}
 
@@ -249,23 +250,23 @@ def test_base_tier_zone_chips_dispatch(tmp_path):
     ws = _ws(tmp_path)
     _select_real_cart(ws)
     home = _home_layer(ws)
-    chips = home._zone_action_rects(ws.layout.zone_left)
+    chips = hint_rects(home)
     assert chips is not None
     x, y, w, h = chips["change"]
-    assert home.zone_tap(x + 1, y + 1, ws.layout.zone_left)
+    assert hint_tap(home, x + 1, y + 1)
     ws.frame(1 / 30)                  # #184: the tap scheduled; a frame lands it
     assert ws.screen == "menu"
     ws.home.go_home()
     _select_real_cart(ws)
     x, y, w, h = chips["play"]
-    assert home.zone_tap(x + 1, y + 1, ws.layout.zone_left)
+    assert hint_tap(home, x + 1, y + 1)
     ws.frame(1 / 30)
     assert ws.screen == "desktop"
     # On Make's "+ New" card the one chip is NEW: no PLAY to tap.
     ws.spine.exit_to_caller()
     ws.home.set_home_tab("make")
     ws.launcher.sel = 0
-    assert set(home._zone_action_rects(ws.layout.zone_left)) == {"new"}
+    assert set(hint_rects(home)) == {"new"}
 
 
 def test_the_home_shows_its_wallpaper_behind_the_cards(tmp_path):

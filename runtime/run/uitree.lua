@@ -2003,6 +2003,10 @@ function T.dialog(title, o, body)
     fail("N01", at, "ui.dialog's buttons are " .. describe(buttons), "buttons = { \"cancel\", \"switch\" }: actions", describe(buttons))
   end
   for _, b in ipairs(buttons) do use_action(b, "none", at, "ui.dialog's button " .. q(b), true) end
+  if n.o.labels ~= nil and #n.o.labels ~= #buttons then
+    fail("N01", at, "ui.dialog has " .. #n.o.labels .. " labels for its " .. #buttons .. " buttons",
+         "one label a button, in the buttons' order, or no labels (each its action's label)", describe(n.o.labels))
+  end
   if n.o.default ~= nil then
     local ok = false
     for _, b in ipairs(buttons) do if b == n.o.default then ok = true end end
@@ -2242,6 +2246,25 @@ function T.cards(name, o, body)
   n.body = c
   return n
 end
+-- keycap hints along a row, one a row of the model: keys= its keys and label= what they do,
+-- templates of the row; the rows tail= holds at the row's end, the rows drop= holds the first to go
+-- where the rest run into them; no stop, a press fires on= with its row
+function T.hints(name, o)
+  local at = where()
+  local n = node("hints", at)
+  if ROWCTX then fail("N03", at, "ui.hints inside a row", "hints at a page's level", "hints in rows") end
+  local m = model_arg("hints", name, at)
+  n.a[1] = name
+  local sr = ROWCTX
+  ROWCTX = { fields = m.fields, order = m.order, name = name }
+  local ok, err = pcall(check_opts, "hints", o, at)
+  ROWCTX = sr
+  if not ok then error(err, 0) end
+  n.o = err
+  if n.o.on ~= nil then use_action(n.o.on, "row", at, "ui.hints' on", true) end
+  return n
+end
+
 function T.card(name, o)
   local at = where()
   local n = node("card", at)

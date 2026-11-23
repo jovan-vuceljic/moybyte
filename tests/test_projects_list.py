@@ -13,6 +13,7 @@ ConsoleDriver -- mouse == touch, arrows == trackball.
 from ws_helpers import build_desktop_ws, build_ws as _ws, shelf  # noqa: E402
 import pytest
 from ws_helpers import boot_on_fixture
+from ws_helpers import hint_rects, hint_tap
 
 @pytest.fixture(autouse=True)
 def _on_the_night_fixture(monkeypatch):
@@ -206,9 +207,9 @@ def _make_with(ws, title):
 
 
 def _verb_tap(ws, layer, verb):
-    rects = layer._zone_action_rects(ws.layout.zone_left)
+    rects = hint_rects(layer)
     x, y, w, h = rects[verb]
-    return layer.zone_tap(x + w // 2, y + h // 2)
+    return hint_tap(layer, x + w // 2, y + h // 2)
 
 
 def _extra(ws, title="Extra"):
@@ -350,11 +351,11 @@ def test_an_apps_pick_opens_its_app_window(tmp_path):
 
 def test_the_window_draws_through_the_window_bar(tmp_path):
     """The window's bar is its lent zone alone (no OS widgets in a window);
-    the zone owner is the window's home, with the home's verbs, no SEARCH."""
+    the zone owner is the window's home's tabs' row; its verbs carry no SEARCH."""
     ws, drv = _desk(tmp_path)
     ws.home.open_projects()
     drv.frame(1 / 30)
-    assert ws.bar_layer._zone_owner("projects") is ws.projects_layer
+    assert ws.bar_layer._zone_owner("projects") is ws.projects_layer.bar_zone
     g = ws.projects_grid
     ws.home.set_home_tab("games", g)
     g.sel = _first_real(g)

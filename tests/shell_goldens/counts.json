@@ -13,11 +13,11 @@
     "app_moymesh_details": [0, 0],
     "app_moymesh_radio": [0, 0],
     "app_moymesh_thread": [0, 0],
-    "app_myart": [9, 9],
+    "app_myart": [6, 8],
     "app_notes": [7, 12],
     "app_notes_note": [1, 0],
     "app_notes_script": [13, 11],
-    "app_storybook": [8, 2],
+    "app_storybook": [4, 2],
     "app_terminal": [9, 7],
     "editor_blocks": [5, 9],
     "editor_cards": [12, 3],
@@ -37,7 +37,7 @@
     "settings_licences": [20, 13],
     "settings_log": [12, 3],
     "settings_permissions": [27, 13],
-    "unlock_banner": [94, 8],
+    "unlock_banner": [95, 9],
     "web_console": [297, 10]
   },
   "guition_480x320_fs1_dark": {
@@ -142,7 +142,7 @@
     "settings_licences": [38, 68],
     "settings_log": [4, 13],
     "settings_permissions": [19, 19],
-    "unlock_banner": [79, 27],
+    "unlock_banner": [77, 27],
     "web_console": [297, 8]
   },
   "guition_tapfloor_dark": {
@@ -166,7 +166,7 @@
     "app_storybook": [4, 2],
     "app_terminal": [9, 7],
     "editor_blocks": [4, 9],
-    "editor_cards": [12, 3],
+    "editor_cards": [7, 3],
     "editor_code": [6, 1],
     "editor_map": [26, 16],
     "editor_music": [20, 39],
@@ -228,7 +228,7 @@
     "settings_licences": [45, 59],
     "settings_log": [5, 13],
     "settings_permissions": [21, 19],
-    "unlock_banner": [86, 27],
+    "unlock_banner": [84, 27],
     "web_console": [299, 8]
   },
   "p4_1024x600_cs2_fs1_console": {
@@ -269,7 +269,7 @@
     "settings_licences": [41, 60],
     "settings_log": [4, 13],
     "settings_permissions": [19, 19],
-    "unlock_banner": [79, 27],
+    "unlock_banner": [77, 27],
     "web_console": [297, 8]
   },
   "p4_1024x600_cs2_fs1_contrast_light": {
@@ -314,7 +314,7 @@
     "settings_licences": [45, 59],
     "settings_log": [5, 13],
     "settings_permissions": [21, 19],
-    "unlock_banner": [85, 27],
+    "unlock_banner": [83, 27],
     "web_console": [299, 8]
   },
   "p4_1024x600_cs2_fs1_gnomebar": {
@@ -359,7 +359,7 @@
     "settings_licences": [41, 60],
     "settings_log": [4, 13],
     "settings_permissions": [19, 19],
-    "unlock_banner": [79, 27],
+    "unlock_banner": [77, 27],
     "web_console": [297, 8]
   },
   "p4_1024x600_cs2_fs1_homegrid": {
@@ -416,7 +416,7 @@
     "settings_licences": [44, 58],
     "settings_log": [5, 13],
     "settings_permissions": [21, 19],
-    "unlock_banner": [86, 27],
+    "unlock_banner": [84, 27],
     "web_console": [299, 8]
   },
   "p4_1024x600_cs2_fs1_moy_menus": {
@@ -466,7 +466,7 @@
     "settings_licences": [41, 60],
     "settings_log": [4, 13],
     "settings_permissions": [19, 19],
-    "unlock_banner": [79, 27],
+    "unlock_banner": [77, 27],
     "web_console": [297, 8]
   },
   "p4_1024x600_cs2_fs1_music": {
@@ -478,9 +478,9 @@
   "p4_1024x600_cs2_fs1_popovers": {
     "desk_window_calc": [2, 10],
     "popover_battery": [50, 32],
-    "popover_clock": [29, 66],
+    "popover_clock": [27, 66],
     "popover_menu": [5, 24],
-    "popover_wifi": [30, 39]
+    "popover_wifi": [28, 39]
   },
   "p4_1024x600_cs2_fs1_procs": {
     "desk_close_refusal": [8, 18],
@@ -541,7 +541,7 @@
     "settings_licences": [39, 56],
     "settings_log": [5, 13],
     "settings_permissions": [20, 19],
-    "unlock_banner": [79, 25],
+    "unlock_banner": [77, 25],
     "web_console": [297, 8]
   },
   "p4_1024x600_cs2_fs1_win95bar": {
@@ -586,7 +586,7 @@
     "settings_licences": [40, 60],
     "settings_log": [4, 13],
     "settings_permissions": [19, 19],
-    "unlock_banner": [79, 27],
+    "unlock_banner": [77, 27],
     "web_console": [297, 8]
   },
   "p4_1024x600_cs2_fs1_windowed": {
@@ -640,15 +640,15 @@
     "settings_licences": [41, 60],
     "settings_log": [4, 13],
     "settings_permissions": [19, 19],
-    "unlock_banner": [79, 27],
+    "unlock_banner": [77, 27],
     "web_console": [297, 8]
   },
   "p4_1024x600_fs2_desk_popovers": {
     "music_desk_menu": [57, 46],
     "popover_battery": [50, 32],
-    "popover_clock": [8, 53],
+    "popover_clock": [6, 53],
     "popover_clock_six": [29, 70],
-    "popover_wifi": [30, 39],
+    "popover_wifi": [28, 39],
     "popover_wifi_many": [31, 41],
     "status_desk_panel": [13, 22],
     "status_desk_panel_full": [19, 26]
@@ -695,7 +695,7 @@
     "settings_licences": [20, 31],
     "settings_log": [4, 13],
     "settings_permissions": [20, 17],
-    "unlock_banner": [82, 22],
+    "unlock_banner": [80, 22],
     "web_console": [297, 10]
   },
   "p4_1024x600_fs2_windowed_light": {
@@ -740,7 +740,7 @@
     "settings_licences": [24, 31],
     "settings_log": [5, 13],
     "settings_permissions": [22, 17],
-    "unlock_banner": [88, 22],
+    "unlock_banner": [86, 22],
     "web_console": [299, 10]
   },
   "p4_1024x600_render2_moy_day": {
@@ -785,7 +785,7 @@
     "settings_licences": [23, 28],
     "settings_log": [5, 13],
     "settings_permissions": [22, 17],
-    "unlock_banner": [75, 22],
+    "unlock_banner": [73, 22],
     "web_console": [299, 10]
   },
   "tdeck_320x240_fs1_blocks": {

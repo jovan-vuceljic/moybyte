@@ -575,15 +575,17 @@ class Page(Engine):
     verbs (`uitree_app.Page`'s bridge): the host begins the frame, routes
     the keys and the pointer, and `paint` draws the page into its rect."""
 
-    def __init__(self, build, host, damage, files=None, close=None, gen=False):
-        Engine.__init__(self, S.decl_of(S.module_of(build)), build, host, None, damage, files, gen)
+    def __init__(self, build, host, damage, files=None, close=None, gen=False, env=None):
+        Engine.__init__(self, S.decl_of(S.module_of(build)), build, host, None, damage, files, gen,
+                        env)
         self.close_root = close
 
 
-def page(build, host, damage, files=None, close=None, gen=False):
+def page(build, host, damage, files=None, close=None, gen=False, env=None):
     """A page on the Editor's kinds: the C engine's `CEditorPage`; `gen`
-    where its host draws it on the frames its gen plans (shift frames)."""
-    return uitree_app._engine_class(True, True)(build, host, damage, files, close, gen)
+    where its host draws it on the frames its gen plans (shift frames),
+    `env` what its handlers' `uitree_app.env()` answers."""
+    return uitree_app._engine_class(True, True)(build, host, damage, files, close, gen, env)
 
 
 class BarZone:

@@ -1884,7 +1884,6 @@ class Workstation:
                 _ui_draw.hint_kind(keys)
                 if self.bar_layer.focus is not None:
                     self.bar_layer.focus_leave()
-                self.launcher_layer._tab_focus = False
             self.frame_state.dirty = True
 
     # -- top-bar system menu (#52) -------------------------------------------

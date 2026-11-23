@@ -11,7 +11,7 @@ enum {
     UT_ITEM, UT_SPLIT, UT_CANVAS, UT_TABS, UT_SWITCH, UT_CASE, UT_TABLE, UT_COL, UT_FOOT,
     UT_CARDS, UT_CARD, UT_PICTURE, UT_POPOVER, UT_TOOLS, UT_ROW, UT_STATUS, UT_TEXT_EDITOR,
     UT_PANES, UT_PANE, UT_LEGACY, UT_SLOT, UT_PANEL, UT_LENT, UT_RULE, UT_NOTE, UT_GRID,
-    UT_BUBBLE, UT_MONTH, UT_TOAST, UT_CELLS, UT_STEPPER,
+    UT_BUBBLE, UT_MONTH, UT_TOAST, UT_CELLS, UT_STEPPER, UT_HINTS,
 };
 
 // Each kind's name by its number: an unkeyed node's key is its kind's name and its place.
@@ -21,6 +21,7 @@ static const char *const ut_kind_names_[] = {
     "canvas", "tabs", "switch", "case", "table", "col", "foot", "cards", "card", "picture",
     "popover", "tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot",
     "panel", "lent", "rule", "note", "grid", "bubble", "month", "toast", "cells", "stepper",
+    "hints",
 };
 
 // A word prop's words (`off` takes the action's: "hide", "grey").
@@ -114,6 +115,7 @@ static inline int32_t ut_p_cut(const char *v) { return ut_prop_("cut", v); }
 static inline int32_t ut_p_default(const char *v) { return ut_prop_("default", v); }
 static inline int32_t ut_p_dir(const char *v) { return ut_prop_("dir", v); }
 static inline int32_t ut_p_draw(const char *v) { return ut_prop_("draw", v); }
+static inline int32_t ut_p_drop(const char *v) { return ut_prop_("drop", v); }
 static inline int32_t ut_p_edge(int v) { return ut_prop_("edge", v ? "True" : "False"); }
 static inline int32_t ut_p_empty(const char *v) { return ut_prop_("empty", v); }
 static inline int32_t ut_p_face(const char *v) { return ut_prop_("face", v); }
@@ -191,6 +193,7 @@ static inline int32_t ut_p_swatch(const char *v) { return ut_prop_("swatch", v);
 static inline int32_t ut_p_syntax(const char *v) { return ut_prop_("syntax", v); }
 static inline int32_t ut_p_tabs(const char *v) { return ut_prop_("tabs", v); }
 static inline int32_t ut_p_tag(const char *v) { return ut_prop_("tag", v); }
+static inline int32_t ut_p_tail(const char *v) { return ut_prop_("tail", v); }
 static inline int32_t ut_p_text(const char *v) { return ut_prop_("text", v); }
 static inline int32_t ut_p_title(const char *v) { return ut_prop_("title", v); }
 static inline int32_t ut_p_today(int32_t v) { return ut_prop_int_("today", v); }
