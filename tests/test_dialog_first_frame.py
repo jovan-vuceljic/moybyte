@@ -121,3 +121,29 @@ def test_a_dialog_shows_its_card_on_its_first_frame(tmp_path, face, rows, button
         assert d is not None, "focus opens on its first button on the frame after"
         x0, y0, x1, y1 = d
         assert y1 - y0 <= 32 and x1 - x0 <= 80 and x0 > w // 2 and y0 > h // 2, d
+
+
+@pytest.mark.parametrize("face", ("python", "lua"))
+def test_the_arrows_scroll_a_cut_body_where_no_stop_lies_that_way(tmp_path, face):
+    """A dialog whose body runs past its card and holds no stop: Down, where
+    no stop lies below its buttons, scrolls the body a row, and Up brings it
+    back, so the keys read what a finger drags into view."""
+    root = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(root)
+    _cart(root, face, 30, ("No", "Yes"))
+    ws = host_app.build_workstation(root)
+    ws.pointer.visible = False
+    open_cart(ws, "Dlg " + face)
+    drv = host_app.ConsoleDriver(ws)
+    for _ in range(OPEN + 4):
+        _frame(drv)
+    shots = [bytes(ws.run.canvas._buf)]
+    for key in ("down", "down", "up", "up"):
+        drv.press(key)
+        _frame(drv)
+        _frame(drv)
+        assert ws.run.player.cart_error is None, ws.run.player.cart_error
+        shots.append(bytes(ws.run.canvas._buf))
+    ws.spine.exit()
+    assert shots[1] != shots[0] and shots[2] != shots[1], "Down scrolls the body a row each"
+    assert shots[3] == shots[1] and shots[4] == shots[0], "Up scrolls it back"

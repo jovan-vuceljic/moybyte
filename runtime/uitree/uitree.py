@@ -2694,7 +2694,8 @@ def cells(name, **p):
     """A palette's colours as square cells (§7.3), a stop bound to int state
     `name`, the current colour: `count` of them from `first`, `cols` to a
     row, each a `side` square (desk units) less `gap`, `edge=True` a border
-    round them. The current cell wears the current mark and, focused, the
+    round them; in a split's cell, as tall as it holds their rows at most,
+    and a third of `side` at least. The current cell wears the current mark and, focused, the
     keys' cursor; the arrows move it (on= hears it move), and Enter or a tap
     on a cell (which moves it there) fires `pick=`; `clear=` names the
     colour shown as clear (transparency's grey checker under a white

@@ -468,7 +468,8 @@ path of its own (owner, 2026-10-29). A long document is a `text_view` or a
 - a button at its natural width unless `grow=True`, a field growing, a
   picture beside a `group` column of labels, a `rule()` a line down the row
   between its neighbours, a label after the row's filler at its end;
-  children all at their own widths are centred;
+  children all at their own widths are centred; what they draw ends at
+  the page's view, as a stacked row's does;
 - `wrap=True` packs its children from its start at their natural widths (a
   group as wide as its widest child), one that does not fit starting a line
   under them (the desk home's buttons); in a group's column the row stands
@@ -493,6 +494,10 @@ with a rule as a captioned group's are (a `row` among them one of its rows);
 draws a rule between its cells; a row split's fixed sizes that its width
 cannot hold share it by their sizes, and a cell that is a row, a group or a
 seg widens to what it needs, its neighbours giving up at most half theirs.
+A column split's cells that run past its height take the overrun from its
+palettes (`ui.cells`), whose cells fit the room left them down to a third
+of their side (8 px at least); past that the column scrolls, its cells at
+their spans.
 
 **A placed page** gives each region a rect by the engine's one layout rule:
 a container gives each shown child its rect, fixed rows their height and

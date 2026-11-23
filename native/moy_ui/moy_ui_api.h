@@ -263,6 +263,7 @@ typedef struct {
     int16_t row, top;
     uint8_t st;                     // the state bits it drew with (MOY_UI_ST_*)
     uint8_t quiet;                  // a press or a hover on it draws no mark: a text view's
+    uint8_t cut;                    // placed while moy_ui_api_cut: inside its page's view, as stacked
     int32_t gen;                    // the app's generation for what it draws in it
     uint32_t sig;                   // its record (kind, text, value), under the audit
 } moy_ui_stop_t;
@@ -485,6 +486,7 @@ typedef struct {
     uint32_t open;              // the button a dialog opens on (its `focus`; 0: its first stop)
     moy_ui_box_t card;
     uint8_t held;
+    uint8_t tight;              // a glass too short for its pads: their least (moy_ui_api_dialog)
     int8_t pick;                // the dialog button activated this frame, -1 none
     int32_t gen;
     uint32_t btn;
@@ -689,6 +691,9 @@ typedef struct {
     moy_ui_box_t page;              // the content rect rows stack in
     moy_ui_box_t at;
     moy_ui_box_t at_view;           // the view ui.at's rect lay in: a scroll's, else the page
+    moy_ui_box_t cut;               // the view placed draws clip to while cut_on (moy_ui_api_cut)
+    uint8_t cut_on, cut_nest;       // cut_nest: the nest that view is of
+    moy_ui_box_t over_band;         // the first page draw this frame that met the hints band, w 0 none
     int16_t y;                      // the row cursor, in content coordinates
     int16_t scroll;                 // the page's scroll
     int8_t page_keep;               // the page's kept state, or -1
@@ -1108,7 +1113,10 @@ int32_t moy_ui_api_field(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
 // end answers -1. Its first frame shows it at the size it rests at: drawn as
 // tall as the surface lets it, its body laid out in that room, and moved to
 // its place when the end closes it (as a popover's first frame, the
-// instance's `lent`).
+// instance's `lent`). A body taller than its room is cut to it, a fade at
+// each edge its rows run on past; a drag scrolls it, and so does an arrow
+// where no stop lies that way. Where the room leaves the body under three
+// rows at the card's pads, the pads are their least (`dlg.tight`).
 // Its wash is the surface, less the page's hint band at its foot; with the
 // override `wash` false it draws none, where the page under it was washed
 // already (`moy_ui_api_wash`, the page an app holds under its dialog).
@@ -1775,6 +1783,13 @@ void moy_ui_api_enter(moy_ui_ctx_t *c, int dir);
 // that has not become a page's drag (nor caught a fling, which taps nothing).
 int moy_ui_api_tap_armed(const moy_ui_ctx_t *c);
 void moy_ui_api_at(moy_ui_ctx_t *c, int x, int y, int w, int h);
+// While `on`, what a ui.at rect places draws clipped to the view the rows stack in now, as a
+// stacked row's does: a flowing row's cells scroll with its page and end at its view. Answers
+// whether it was on.
+int moy_ui_api_cut(moy_ui_ctx_t *c, int on);
+// The first draw of the page's (not a dialog's or a popover's) this frame that met the hints
+// band, where it showed: 1 with its box at out, else 0. The UI checks' (tests/ui_checks.py).
+int moy_ui_api_over_band(const moy_ui_ctx_t *c, int32_t out[4]);
 // Where stop `id` drew in the frame drawn last (the host's: a popover beside
 // a row, a test's tap), or the card of the popover `id` drawn then, or of
 // the dialog titled `id`, or the button labelled `id` at that dialog's foot,
@@ -1982,7 +1997,8 @@ uint32_t moy_ui_api_audit(moy_ui_inst_t *I, int on);
 
 // A palette's cells, a stop (§1): `count` of the MOY64 colours from `first`,
 // `cols` to a row, each a `side` square less `gap`, centred in the row the
-// page places them in; `edge` draws the border round them. The colour `cur`
+// page places them in (in a box ui.at placed, as tall as it holds their rows,
+// at most `side`, the gap at most a quarter of it); `edge` draws the border round them. The colour `cur`
 // wears the current mark, and while focus is on them the keys' cursor; the
 // arrows move it a cell (up at the top row and down at the last go on to the
 // next stop). Enter, or a tap on a cell (which moves `cur` there), sets
