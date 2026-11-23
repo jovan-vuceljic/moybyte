@@ -832,6 +832,10 @@ class SystemMenuUI:
         # The handheld home under the card, washed (`put_home`), and the
         # frame that put it back
         self._held = _ui_draw.Hold()
+        self._spage = None          # the popover's hint strip's page, made at its first paint
+        self._shost = None
+        self._skeys = None          # the keys its rows hold
+        self._swas = [None] * 4
         self._put_f = -1
         self._key = None            # the key `put_home` asked, on frame `_key_f`
         self._key_f = -1
@@ -1003,19 +1007,53 @@ class SystemMenuUI:
             return
         # A component's popover: the system's flat card, its drop inside the
         # panel's rect, the component's verbs in it; on a handheld home the
-        # hint strip says its keys
+        # hint strip says its keys (`popover_strip_ui`)
         x, y, w, h = m.panel_rect()
         cv = ws.sys_canvas
-        th = ws.theme_colors
-        desk = _desk_class()
         drop = _ui_draw.modal_drop(cv)
-        _ui_draw.modal(cv, th, (x, y, w, h - drop), desk)
+        _ui_draw.modal(cv, ws.theme_colors, (x, y, w, h - drop), _desk_class())
         m.comp.draw(cv, (x, y, w, h - drop))
         strip = self.about._strip()
         if strip is not None:
-            cv.rect(strip[0], strip[1], strip[2], strip[3], th["panel"])
-            _ui.at(strip[0], strip[1], strip[2], strip[3])
-            _ui.hints(m.comp.keys())
+            self._draw_strip(cv, strip, m.comp.keys())
+
+    def _draw_strip(self, cv, rect, keys):
+        """The popover's hint strip (`popover_strip_ui.strip`) over the home's
+        in `rect`, on the panel: `keys` the component's, written to its page
+        where they are others."""
+        pg = self._spage
+        if pg is None:
+            import uitree_app
+            import popover_strip_ui
+            self._shost = _ui_draw.AppHost()
+            pg = self._spage = uitree_app.hosted_page(popover_strip_ui.strip, self._shost, self,
+                                                      env=self)
+            pg.band = False                  # it is the band
+            pg.open()
+        if keys is not self._skeys:
+            import popover_strip_ui
+            self._skeys = keys
+            pg.run(popover_strip_ui.put, action="put")
+            popover_strip_ui.ui.commit(pg)
+        th = self.ws.theme_colors
+        t = _ui_draw.UI_TARGET               # the target the frame set, given back after
+        was = self._swas
+        was[0] = t[0]                        # (one by one: a four-way unpack builds a tuple)
+        was[1] = t[1]
+        was[2] = t[2]
+        was[3] = t[3]
+        self._shost.begin(cv, th, rect, False)
+        pg.paint(0.0, cv, th, rect, True)
+        t[0] = was[0]
+        t[1] = was[1]
+        t[2] = was[2]
+        t[3] = was[3]
+
+    def strip_put(self, s):
+        """The strip's rows (popover_strip_ui's `put`): the component's keys,
+        a key and what it does each."""
+        k = self._skeys
+        s.hints = [dict(id=str(i), keys=k[i], words=k[i + 1]) for i in range(0, len(k) - 1, 2)]
 
     # -- the 2026-10 look's card (docs/history/look_2026-10.md step 25a) ----------------
 
