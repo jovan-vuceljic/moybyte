@@ -1934,6 +1934,10 @@ def bar_tap(ctx, i):
 KEY_PASTE = 0x16
 PASTE = [None]
 
+# The console's pointer (`ws.pointer`, set with it), or None: a hosted page
+# hovers under it while it is a mouse's (`hovers`), as a finger never does.
+POINTER = [None]
+
 
 def paste_text():
     """The text the console's Paste brings, UTF-8 bytes; None for none."""

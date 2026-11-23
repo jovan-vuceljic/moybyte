@@ -159,6 +159,8 @@ class EditorDesk(Layer):
         self._head_due = False          # a header took input its next whole frame answers
         self._code_rows = (None, ())    # the Code more menu's rows, for the hints' kind
         self._press = None              # the pane a press went down in
+        self._was_down = False          # the pointer was held at the sample before
+        self._head_over = None          # (pane index, x, y) where a mouse over a header was last
         self._last = (None, 0)          # the last press: its target, when
         self._ev = 0                    # last frame's key event
         self._shown = None              # the workspace whose panes were built
@@ -1071,7 +1073,7 @@ class EditorDesk(Layer):
         tab = P.CONTENTS[c][2]
         filled = (body[1] if tab in _FILLS_BODY and self._surface(tab) is not None else 0)
         self._card(cv, th, r, n == self._focus.get(self.key, 0), u, filled)
-        if not self._headless(pane) and not self.head(n).pop:
+        if not self._headless(pane) and not self._head_over_panes(n):
             self._draw_head(n, pane, r, u, dt)
         if tab is not None:
             self._tab_pane(tab, body, dt, moves=pane == self._moves)
@@ -1199,8 +1201,8 @@ class EditorDesk(Layer):
         due = False
         for n, pane, r in shown:
             if not self._headless(pane):
-                if self.head(n).pop:
-                    self._draw_head(n, pane, r, u, dt)      # its menu over the panes
+                if self._head_over_panes(n):
+                    self._draw_head(n, pane, r, u, dt)      # its menu or tooltip over the panes
                 drawn |= 1 << n
                 due |= not self._heads[n]._host.still()
         self._head_due = due
@@ -1223,6 +1225,12 @@ class EditorDesk(Layer):
         if h is None:
             h = self._heads[n] = Heads.HeadHost(self, n)
         return h
+
+    def _head_over_panes(self, n):
+        """Whether pane `n`'s header draws after the bodies: its More menu
+        hangs over the panes, or a mouse over it shows a tooltip there."""
+        o = self._head_over
+        return self.head(n).pop or (o is not None and o[0] == n)
 
     def _draw_head(self, n, pane, r, u, dt):
         """Pane `n`'s header on its rect `r`: its focus shows where the keys
@@ -1292,7 +1300,7 @@ class EditorDesk(Layer):
             self._code_rows = (keys, tuple((ic, _word(wd, keys), op) for ic, wd, op in _CODE_MORE))
         snd = ws.music_ui.sound.head_vals(self) if c == "music" else (False, False, "", False, False)
         return (kind, form, icon, title, status, tabs, tab, shorts,
-                tuple((ic, op, self._tool_on(op)) for ic, _wd, op in reversed(tools)),
+                tuple((ic, _word(wd, keys), op, self._tool_on(op)) for ic, wd, op in reversed(tools)),
                 tuple((ic, _word(wd, keys), op) for ic, wd, op in folded),
                 (c == "game", self.paused, ws.editor_app.playing()), files, file, find, snd,
                 c == "sounds" and self.key == "sound",
@@ -1872,6 +1880,7 @@ class EditorDesk(Layer):
     def _pointer(self, px, py, click):
         ws = self.ws
         down = ws.pointer.down
+        was, self._was_down = self._was_down, down
         if self._on_div:
             # a divider's press, its drag and its release are the frame's
             # (`_dividers`)
@@ -1899,6 +1908,16 @@ class EditorDesk(Layer):
                     if n != self._focus.get(self.key, 0):
                         self.focus_pane(n)
                     break
+        elif not down and not was and ws.pointer.hovers and self._head_open() is None:
+            over = self._head_at(px, py)    # a mouse over a header: what it rests on hovers
+            if over is not None or self._head_over is not None:
+                if over != self._head_over:
+                    self._head_due = True   # the header's pass answers it: a whole frame
+                    ws.mark_dirty()
+                self._head_over = over
+                if over is not None:
+                    self.head(over[0]).handle_pointer(px, py, False)
+                    return True
         h = self._head_open()
         if h is not None:
             r = h._rect
@@ -1957,6 +1976,16 @@ class EditorDesk(Layer):
                 self._owe_restart("scene")
             return True
         return True
+
+    def _head_at(self, px, py):
+        """(pane index, x, y) where (px, py) is on a shown pane's header,
+        else None."""
+        u = self._unit()
+        for n, pane, r in self._shown_panes():
+            if (not self._headless(pane) and r[0] <= px < r[0] + r[2]
+                    and r[1] <= py < r[1] + self._head_h(u)):
+                return (n, px, py)
+        return None
 
     def _shown_panes(self):
         alone = self.alone()

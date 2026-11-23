@@ -324,6 +324,38 @@ def _shows_what_a_whole_repaint_shows(ws, drv):
     return got == _glass(ws)
 
 
+def test_a_mouse_over_a_header_tool_shows_its_word_over_the_body(desk):
+    """A mouse resting on a header's tool, with no press before it, hovers
+    it: its word shows as the tooltip, over the pane's body, and goes
+    when the mouse leaves the header."""
+    from array import array
+    ws, drv = desk
+    d = ws.editor_desk
+    _tap(drv, ord("4"), 1)                       # World: the Scene's tools in its header
+    n = next(i for i, p in enumerate(d.panes()) if "scene" in p[0])
+    settle_badges(ws)
+    ws.toast_until = 0
+    for _ in range(3):
+        drv.frame(DT)
+    bx, by, bw, bh = d.head(n).rect_of("scene:delete/tool")
+    ws.pointer.hovers = True
+    ws.pointer.place(bx + bw // 2, by + bh // 2)
+    for _ in range(3):
+        drv.frame(DT)
+    box = array("i", [0] * 4)
+    assert d.head(n)._host.popped(box), "the tool's tooltip shows"
+    cv = ws.sys_canvas
+
+    def under():                                 # the body's rows under the tool
+        return bytes(cv._buf[2 * cv.w * (by + bh):2 * cv.w * (by + bh + 30)])
+    tipped = under()
+    ws.pointer.place(bx + bw // 2, by + 200)
+    for _ in range(3):
+        drv.frame(DT)
+    assert not d.head(n)._host.popped(box), "off the header, none"
+    assert under() != tipped, "it drew over the body"
+
+
 @pytest.mark.parametrize("fast", (False, True), ids=("press-then-release", "one-frame-click"))
 def test_a_header_tools_tap_shows_with_no_input_after_it(desk, fast):
     """The panes' headers are their pages, drawn after the panes' bodies: a

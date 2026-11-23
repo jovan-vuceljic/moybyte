@@ -1555,6 +1555,7 @@ class Workstation:
             pointer.w, pointer.h = self._half.w, self._half.h
             pointer.div = self.render_scale
         self.pointer = pointer
+        _ui_draw.POINTER[0] = pointer
         self.app_abi.bind_pointer(pointer)
 
     def surface_write(self, ox=0, oy=0):

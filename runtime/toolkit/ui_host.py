@@ -44,6 +44,7 @@ _HP_MOVES = 17
 # The pointer word a tap makes (MOY_UI_IN_PTR), by AppHost.tap: none, a
 # press (live, held, its edge), its release (live), held.
 _TAP_PTR = (0, 7, 1, 3)
+_P_LIVE = 1                             # MOY_UI_P_LIVE: a pointer over the page, a hover
 _HH_HELD = 2
 # moy_ui_api_host_begin's answer (MOY_UI_HB_*)
 _HB_SETTLED = 1
@@ -89,6 +90,8 @@ class AppHost:
         self.hold = False               # the pointer is down since the press
         self.owed = False
         self.px = self.py = -1          # where the pointer was last seen, in the app's space
+        self.over = False               # a mouse rests or moves over the page since the frame begun last
+        self._gx = self._gy = -1        # ...and where the console's pointer was then
         self.mid = False                # the middle button is held
         # What the frames before left of the page in their buffers, the
         # plan and the lag are the context's (moy_ui_api_host_begin); its
@@ -164,11 +167,22 @@ class AppHost:
         """A pointer sample in the app's coordinates; a click starts a tap.
         With `down` (the pointer held; with none, the host's surface's
         pointer says), the press stays held while it moves and is released
-        where it comes up."""
+        where it comes up. A mouse's sample with nothing held (the
+        console's pointer `hovers`) is the hover the next frame begun shows,
+        while the pointer stays where this page saw it; one that moved owes
+        that frame."""
         if down is None and self.surface is not None:
             down = bool(getattr(self.surface.pointer(), "down", False))
-        self.px = int(x)
-        self.py = int(y)
+        x = int(x)
+        y = int(y)
+        p = POINTER[0]
+        moved = x != self.px or y != self.py
+        self.px = x
+        self.py = y
+        self.over = p is not None and bool(getattr(p, "hovers", False)) and not down
+        if self.over:
+            self._gx = p.x              # where the console's pointer was as the page saw it
+            self._gy = p.y
         if click:
             self.inp[2] = int(x)
             self.inp[3] = int(y)
@@ -176,7 +190,7 @@ class AppHost:
             self.hold = bool(down)
             return True
         if down is None or not self.hold:
-            return False
+            return self.over and moved  # what it hovers moved: a frame shows it
         self.inp[2] = int(x)
         self.inp[3] = int(y)
         if not down:
@@ -291,6 +305,12 @@ class AppHost:
         a = self.inp
         t = self.tap
         a[4] = _TAP_PTR[t]
+        p = POINTER[0]
+        if not t and self.over and p is not None and p.x == self._gx and p.y == self._gy:
+            a[2] = self.px              # a mouse over the page: what it rests on hovers
+            a[3] = self.py
+            a[4] = _P_LIVE
+        self.over = False
         if (self.mid or a[7] or a[8]) and self.px >= 0:
             if not a[4]:                # the wheel and the middle button act where it rests
                 a[2] = self.px
@@ -1011,7 +1031,7 @@ from ui_draw import (
     UI_IN_LEN, UI_TARGET, _AGAIN, _APP_SHIFT, _CHANGE, _DESK, _EDGE, _ELSEWHERE,
     _HOST_BUTTONS, _IN_KEYREP, _IN_REP, _KEYS_HOST, _KEY_EDGE, _MOVING, _ON_BAR,
     _PAINT, _PANEL, _PB_MIDDLE, _PF, _PF_WIN, _P_MIDDLE, _ROWS, _SHIFT, _TAP, _TAP_FLOOR,
-    _WHOLE, _WINDOW, KEY_PASTE,
+    _WHOLE, _WINDOW, KEY_PASTE, POINTER,
     _app_row, _drew_last, _fs, _look, _rep_dirs, paste_text, rows_drawn, ui_context,
     window_frame, within)
 from ui_scroll import PaintRing

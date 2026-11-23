@@ -22,7 +22,7 @@ s = ui.state(
     form=ui.enum("named", "words", "icon", init="named"), icon="", title="", status="",
     tabs=ui.model(key="k", k="", label=""), tab=ui.row_of("tabs"),
     shorts=ui.model(key="k", k="", label="", icon="", cur=False),
-    tools=ui.model(key="k", k="", icon="", on=False),
+    tools=ui.model(key="k", k="", icon="", label="", on=False),
     folded=ui.model(key="k", k="", icon="", label=""), folds=False,
     game=False, paused=False, playing=False,
     files=ui.model(key="k", k=""), file=ui.row_of("files"), finding=False,
@@ -44,7 +44,7 @@ def sync(vals):
     if s.tab != tab:
         s.tab = tab
     s.shorts = [dict(k=k, label=label, icon=ic, cur=cur) for k, label, ic, cur in shorts]
-    s.tools = [dict(k=op, icon=ic, on=on) for ic, op, on in tools]
+    s.tools = [dict(k=op, icon=ic, label=label, on=on) for ic, label, op, on in tools]
     s.folded = [dict(k=op, icon=ic, label=label) for ic, label, op in folded]
     s.folds = bool(folded)
     s.game, s.paused, s.playing = game
@@ -150,7 +150,8 @@ def head_page():
             ui.button("play", icon="run", kind="bar", alone=True, w="{cell}", marked="sounding", shown="sound")
             ui.button("new_sound", icon="new", kind="bar", alone=True, w="{cell}", shown="adds")
             with ui.rows("tools", dir="row"):
-                ui.button("tool", icon="{.icon}", kind="bar", alone=True, w="{cell}", marked=".on")
+                ui.button("tool", label="{.label}", icon="{.icon}", kind="bar", alone=True, w="{cell}",
+                          marked=".on")
             ui.button("find", icon="search", kind="bar", alone=True, w="{cell}", marked="finding",
                       shown="kind=code")
             ui.button("goto", icon="arrow_right", kind="bar", alone=True, w="{cell}", shown="kind=code")
