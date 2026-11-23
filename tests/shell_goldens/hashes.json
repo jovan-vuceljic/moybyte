@@ -2,7 +2,7 @@
   "big_800x480_fs3_dark": {
     "about": "c5c220a86b16a018d4cbf8e5f987a557b6f6a2978394785ccd606af79b872ff4",
     "app_appearance": "ee612c1f77fef928bf17010a5b72bf4b5f978b3e14364545a370e5462897eaf5",
-    "app_artwork": "8b971072992f89585061edcdd7d7753d33bad4430548bf0abf3482193009c2b9",
+    "app_artwork": "e9805b99bdb8986ef1f6bc5bf706963eb64f5ef3451583d661c83f3e12a5f112",
     "app_calc": "5d450305f4a781720e996567ab8e514285521d847018738ec17e604d006d0d1c",
     "app_files": "84030168db14d1ab1725559205de6910c3398589b838ca7b326c9c20d4a55a52",
     "app_files_document": "909e0919357142fefb212b18b9ddd71b140f773f458662af1bb16bdc982a4d4e",
@@ -43,7 +43,7 @@
   "guition_480x320_fs1_dark": {
     "about": "b90b736b4b0ba0a4beca5926d2a204d5199c9cfba8b41127026665a4ec8afcc1",
     "app_appearance": "cdea04c462798a46b901ae1beacf1ebf36027cb4cd44cd75bab049f7f5f6570c",
-    "app_artwork": "9a5b3642758540bbe945d4cf93aff47881bb1f83edbbae71daba4a64c49e6f1b",
+    "app_artwork": "5bd048aa175d91b5d31ca14d9115c6b09620c4150077bc9387ff315fc8e393ea",
     "app_calc": "081f9cf5ac33eb79e2b8ea925038113642ef017b51bf26d9f27ad1dd4149d1dd",
     "app_files": "b5075e7cf54ae2ac87f741e7499f2adf4dd152a60c617c7641b119d24132bc93",
     "app_files_document": "5872c20a463c0d1384658db6698913123ad2a3334721f0861600a8b38ee78a88",
@@ -148,7 +148,7 @@
   "guition_tapfloor_dark": {
     "about": "9a0f998abce0fdc81f6aed6a0e24c307fcbfd9a3935bb9abaa02ce92825858d4",
     "app_appearance": "511e9874f20928a7723d9bd7b2d2b42e9617b5c82b57b98aa79ffc6b07e4f3b2",
-    "app_artwork": "cef4108afc3fd4f91b1eee9adfff5018f07b36d007c0c329cb27a3f1501cdbf3",
+    "app_artwork": "dcf273beb6e7111e0eabe0ed9d299ab6b4149458eb66724c438f776559c007b8",
     "app_calc": "32cabe78228e8656d5fd91b5804b748ba58a7b7c8411f5221f6bf40559052c95",
     "app_files": "c61238911cf5c45f97d3c2b7087c60253c4ea39f5f02df46d49601f38509ee70",
     "app_files_document": "d08e25a5111c5058348b427510601cdeb607b0e362e004dc8c702b04a083a2c4",
@@ -791,7 +791,7 @@
   "tdeck_320x240_fs1_blocks": {
     "about": "b3222dc25ace14662250666d56dc41d592a134129260f4c6ddda57b75c4d6f86",
     "app_appearance": "de3713d862c6d532724519ca49bdcc72b52048ac14fbe1a50a398a6d86cefdb0",
-    "app_artwork": "18788b28efe2b1ec079eb64a89b53e03ed0a3fa4d18f920960ba05fc5611cef9",
+    "app_artwork": "0b382baadea12e48c253c7e649fdf11a33ace23805d9a0e20d2dbc4d773e31b7",
     "app_calc": "a24f4167d4846babd5977f674bd15008f584c5e340a6be152b30b17d3da4106e",
     "app_files": "220c83f87b06ad35ae4967b7fb50c17f9b276f70c7101024bbab8dffc648361c",
     "app_files_document": "f87d741c853574fe79e7866796ad9790b75f8a8bc166302d1a517124ccdd8c79",
@@ -832,7 +832,7 @@
   "tdeck_320x240_fs1_bottombar": {
     "about": "e7147885798fbfc0007a5ac84f074f6b18ec28fd3eb3ad12bd7ac96bd395b3f5",
     "app_appearance": "181aaeb0e7951699d3e1530c9bf8ec9b6b30f5c32be51a9520e0cc247ab3796e",
-    "app_artwork": "e0c26f86205024abce4ecb17d24db75a35d26ab227a5110bca7aed3230da79f0",
+    "app_artwork": "03d4cf3f5e5129d5ad555245cc8e176988ec96a6c6ecb2deee36611fb270f3f4",
     "app_calc": "424721643d1be4e09fb1ffc62f84eac27169e44bb538c34ba26b218d79ba07c5",
     "app_files": "3fb42a81462457a5b097dae8c7431b27c1abfaf452482bb706e13168eeee1d73",
     "app_files_document": "443d91dc2c6afc665ce55ba6a3c071602fb62f92c684e434ba81bf31a403393e",
@@ -875,7 +875,7 @@
     "app_appearance": "3fa70436cf74d902dc7ea685dcdfea2988669e2f307ec3bbf68917969b9df9fd",
     "app_appearance_name": "df8f8f30f5d9eabb0fb43462aa737f4e8f6b95c277d1e8e253b853f407e53987",
     "app_appearance_walls": "d1548723b93e11aac7cd58f6ff6639f57d257e4a830c7fa46e6a53022a6217d1",
-    "app_artwork": "571c6ca65286c14f825b77afdb9d4e6db66f21dcae4202633a0b053615bad8fb",
+    "app_artwork": "3b02c41ff420d863d5aeddd272616b1dc5f25529f392b9d9f56d89907443fa99",
     "app_calc": "32e5866624356d637a6743f13a067feaf0dcc5892fd1a91435d0ab710c38000b",
     "app_files": "9c4318e74e4daee7da82cbc79f319376ed849c0448dd11ef04b5b83c8ccb0785",
     "app_files_document": "23101955db606bf9858b6a9d90810e05a045045669e7b3cfbc03d81a29b54d00",
@@ -938,7 +938,7 @@
     "app_appearance": "244c8a2d884911f6b944d6e19db27de278d62169dfae13b7df095c342f1cc231",
     "app_appearance_name": "f231b10ad9272f0630c04173ee76cf263a8643a7d7a6cdf6e48368f1852dcc7b",
     "app_appearance_walls": "aefaed0c12b96a793dbb0988a87c1d9c1faa02c647a2e9728ab7af8378ba2601",
-    "app_artwork": "e17821991efe5efc32c83ca4386c0f8273ddf6aff4156197892e60c1bb175167",
+    "app_artwork": "0f99be04c82e35174e584afc4b495881a89317ffbdff18a15201f78f2c129415",
     "app_calc": "5597042654114dc6cc7d6f6354e00ba58dcb79a4baf3449bb0dac8f04945d449",
     "app_files": "e3d99ca1af839150b6970e396b12fd4cded73bff023b00787c208f1e75eecb1a",
     "app_files_document": "7659a005d760b06cf76af6682813eefc5a74d68b5bf2da3a891f0ce47eb0b92a",
@@ -987,7 +987,7 @@
   "tdeck_320x240_fs1_moy_day": {
     "about": "a8ac4bd9d74bfb402b9b2a88ff2d7a67001736c0fa4f7011713c7a9dfa6eba05",
     "app_appearance": "244c8a2d884911f6b944d6e19db27de278d62169dfae13b7df095c342f1cc231",
-    "app_artwork": "e17821991efe5efc32c83ca4386c0f8273ddf6aff4156197892e60c1bb175167",
+    "app_artwork": "0f99be04c82e35174e584afc4b495881a89317ffbdff18a15201f78f2c129415",
     "app_calc": "5597042654114dc6cc7d6f6354e00ba58dcb79a4baf3449bb0dac8f04945d449",
     "app_files": "cfb03ad0c1e1ff39a8ecba5b0c661eeb342210dc25d840848b302004d757079a",
     "app_files_document": "7659a005d760b06cf76af6682813eefc5a74d68b5bf2da3a891f0ce47eb0b92a",
@@ -1033,7 +1033,7 @@
   "tdeck_320x240_fs1_moy_night": {
     "about": "7bc2e39c65dcad859dae4d78700f7ec34bcb7255fa5bd5ef1fbd7f1d0f23d0dd",
     "app_appearance": "3fa70436cf74d902dc7ea685dcdfea2988669e2f307ec3bbf68917969b9df9fd",
-    "app_artwork": "571c6ca65286c14f825b77afdb9d4e6db66f21dcae4202633a0b053615bad8fb",
+    "app_artwork": "3b02c41ff420d863d5aeddd272616b1dc5f25529f392b9d9f56d89907443fa99",
     "app_calc": "32e5866624356d637a6743f13a067feaf0dcc5892fd1a91435d0ab710c38000b",
     "app_files": "b89753ab7b308caf14721b4d732058b3b7ce34f1e8790de9227c3ab064223750",
     "app_files_document": "23101955db606bf9858b6a9d90810e05a045045669e7b3cfbc03d81a29b54d00",
