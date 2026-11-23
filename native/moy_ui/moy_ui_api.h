@@ -612,6 +612,10 @@ typedef struct {
     uint8_t s0, p0, pn;
     uint8_t ci, pi;
     uint32_t pend;
+    // the app's parts this pass drew where the floor does not hold them (a
+    // canvas draws its whole rect), as one box, w 0 none: what the engine
+    // draws over them is drawn again (mua_thumb_track)
+    moy_ui_box_t loose;
     moy_ui_box_t box[MOY_UI_API_FLOOR];
 } moy_ui_fl_t;
 

@@ -76,7 +76,7 @@ def test_a_c_run_draws_its_record_with_its_pages_loaded(name, order, compiled, t
     if order == "board":
         _board_order(monkeypatch, request)
     run = [r for r in PORTS.RUNS if r[0] == name][0]
-    moved = run[4] if len(run) > 4 else None
+    moved = PORTS.moved_of(run)
     built_frames = None
     if moved == P.BEHAVIOUR:
         # a run held to its states alone: its loaded frames are held to its built ones, up

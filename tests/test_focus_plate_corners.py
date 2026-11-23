@@ -50,17 +50,17 @@ def _pixels(ws):
     return lambda x, y: buf[2 * (y * cv.w + x)] << 8 | buf[2 * (y * cv.w + x) + 1]
 
 
-def _blocks_past_the_plate(px, box):
+def _blocks_past_the_plate(px, box, end):
     """[(y, colour, run)] of the runs of two or more pixels of one colour
     that follow the plate's own run along a row of the plate's lower
-    quarter: past the plate a row holds only the corner's antialiasing, each
-    pixel its own step, until the ground."""
+    quarter, up to x `end`: past the plate a row holds only the corner's
+    antialiasing, each pixel its own step, until the ground."""
     x0, y0, w, h = box
     plate = collections.Counter(px(x, y) for y in range(y0, y0 + h)
                                 for x in range(x0, x0 + w)).most_common(1)[0][0]
     out = []
     for y in range(y0 + h * 3 // 4, y0 + h):
-        xs = range(x0 + w // 2, x0 + w + 4)
+        xs = range(x0 + w // 2, min(x0 + w + 4, end))
         row = [px(x, y) for x in xs]
         if row[0] != plate:
             continue                 # the card's frame under the plate
@@ -80,4 +80,7 @@ def _blocks_past_the_plate(px, box):
 @pytest.mark.parametrize("mode", ["dark", "light"])
 def test_the_last_rows_plate_is_one_colour_into_its_corner(tmp_path, mode):
     ws, box = _focused(tmp_path, mode, "show_fps")
-    assert _blocks_past_the_plate(_pixels(ws), box) == []
+    # the page's scrollbar track stands 3 px in from its right edge
+    # (moy_ui_thumb_track, font scale 1): the ground ends there
+    end = ws.layout.cx + ws.layout.cw - 3
+    assert _blocks_past_the_plate(_pixels(ws), box, end) == []
