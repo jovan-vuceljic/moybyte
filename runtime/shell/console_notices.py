@@ -1,11 +1,13 @@
 # Map (grep -n a name to jump there):
 #   Notices                     the achievements process's start, the notice banner, the unlock banner
 #   Notices._draw_note          the notification banner (notifications.py) and its input
+#   Notices.paint_banner        a banner's page (banner_ui) placed and painted
 """What the console SAYS on its own: the achievements process's start and
 its unlock banner (deadline + beep), the timed system notice and the
 firmware-update verdict that rides it, the banners -- the notice, the unlock
-and an app's notification (runtime/system/notifications.py), each
-native/moy_ui's `moy_ui_unlock` -- and the notification's input. The
+and an app's notification (runtime/system/notifications.py), each a page of
+`banner_ui.banner`, and the loading toast `banner_ui.loading` -- and the
+notification's input. The
 console's `ws.notices`; the deadlines it arms are the flat kernel fields
 `animating` and both WMs read. The cards the console puts up over what is
 running are runtime/shell/shell_cards.py's; the intents' hooks are
@@ -26,6 +28,10 @@ import achievements_ui as _ach_ui
 import achievements as _ach
 
 
+# The banners' pages (`Notices.paint_banner`): each its own, so each keeps its words.
+UNLOCK, NOTICE, NOTE, LOADING = 0, 1, 2, 3
+
+
 STOP_POLL_MS = 50               # how often Stop & play looks for the music's end
 STOP_QUIET_MS = 3000            # and how long it waits for it
 
@@ -42,6 +48,11 @@ class Notices:
 
     def __init__(self, ws):
         self.ws = ws
+        self._pages = [None, None, None, None]     # the banners' pages (`paint_banner`)
+        self._ctx = None                # their toolkit context
+        self._was = [0, 0, 0, 0]        # the toolkit's target, given back after a paint
+        self._rects = [None, None, None, None]     # each banner's room, kept while it stands
+        self._cards = [None, None, None, None]     # ...and its card, kept while its words do
 
     def load_achievements(self):
         """(Re)start the achievements process (runtime/system/achievements.py,
@@ -154,6 +165,79 @@ class Notices:
             self.notice(_ui_draw.s("notice.undone"), _ui_draw.s("notice.still_on") % u.version_label(), "warn")
         return True
 
+    def room(self, which, x, y, w, h):
+        """Banner `which`'s room (x, y, w, h), the tuple kept while it stands:
+        a frame under a banner allocates nothing."""
+        r = self._rects[which]
+        if r is None or r[0] != x or r[1] != y or r[2] != w or r[3] != h:
+            r = self._rects[which] = (x, y, w, h)
+            self._cards[which] = None
+        return r
+
+    def paint_banner(self, which, rect, head, sub="", icon="", burst=0):
+        """Banner `which` (UNLOCK, NOTICE, NOTE: `banner_ui.banner`; LOADING:
+        `banner_ui.loading`) painted on the system canvas in `rect`, its
+        words written where they are others: a banner's card at the top
+        centre of `rect`, the loading pill filling it. Its card's rect, or
+        None where it drew none."""
+        import banner_ui
+        ws = self.ws
+        pg = self._pages[which]
+        if pg is None:
+            import uitree_editor
+            pg = uitree_editor.page(banner_ui.loading if which == LOADING else banner_ui.banner,
+                                    None, None)
+            pg._damage = banner_ui.NoDamage()
+            pg.bare = True
+            pg.band = False             # no keys: a banner is no stop
+            self._pages[which] = pg
+        pg._bind()
+        v, ver = banner_ui.s._v, banner_ui.s._ver
+        moved = False
+        if v["head"] != head:
+            v["head"] = head
+            ver["head"] += 1
+            moved = True
+        if v["sub"] != sub:
+            v["sub"] = sub
+            ver["sub"] += 1
+            moved = True
+        if v["icon"] != icon:
+            v["icon"] = icon
+            ver["icon"] += 1
+            moved = True
+        if v["burst"] != burst:
+            v["burst"] = burst
+            ver["burst"] += 1
+            moved = True
+        if moved:
+            pg.committed()
+            self._cards[which] = None
+        cv = ws.sys_canvas
+        th = ws.theme_colors
+        desk = _desk_class()
+        ctx = self._ctx
+        if ctx is None:
+            ctx = self._ctx = _ui_draw.ui_context()
+        t = _ui_draw.UI_TARGET
+        was = self._was
+        was[0] = t[0]                   # (one by one: a four-way unpack builds a tuple)
+        was[1] = t[1]
+        was[2] = t[2]
+        was[3] = t[3]
+        try:
+            _ui_draw.ui_frame(ctx, cv, th, rect=rect, desk=desk, elsewhere=True)
+            pg.paint(0, cv, th, rect, desk)
+        finally:
+            t[0] = was[0]
+            t[1] = was[1]
+            t[2] = was[2]
+            t[3] = was[3]
+        card = self._cards[which]
+        if card is None:                # the page's toast, by its key
+            card = self._cards[which] = pg.rect_of("banner")
+        return card
+
     def _draw_notice(self):
         """The system notice: the unlock banner's card at the top centre of
         the content, its tile a check (a warning's, the warning sign), the
@@ -165,9 +249,9 @@ class Notices:
         cv = ws.sys_canvas
         lay = ws.layout
         title, sub, kind = notice
-        desk = _desk_class()
-        return _ui_draw.unlock(cv, ws.theme_colors, cv.w // 2, lay.cy + (12 if desk else 6 * lay.fs),
-                        title, sub or "", "check" if kind == "ok" else "warn", 0, desk)
+        top = lay.cy + (12 if _desk_class() else 6 * lay.fs)
+        return self.paint_banner(NOTICE, self.room(NOTICE, 0, top, cv.w, cv.h - top), title, sub or "",
+                                 "check" if kind == "ok" else "warn")
 
     def _draw_toast(self):
         """The unlock banner over whatever is up (`ach.toast`), at the top
@@ -179,17 +263,12 @@ class Notices:
         if t is None:
             return
         cv = ws.sys_canvas
-        lay = ws.layout
-        desk = _desk_class()
-        wm = ws.wm
-        game = (wm.top_is_player() and getattr(wm, "mode", None) != "desktop"
-                and not ws.running_cart_shows_bar())
-        top = (8 if desk else 6 * lay.fs) if game else lay.cy + (12 if desk else 6 * lay.fs)
+        top = self._note_top()
         burst = 0
         if t[3]:
             el = _ticks_diff(_ticks_ms(), ws.toast_at)
             burst = 255 if el >= _ach_ui.BURST_MS else max(1, el * 255 // _ach_ui.BURST_MS)
-        _ui_draw.unlock(cv, ws.theme_colors, cv.w // 2, top, t[0], t[1], t[2], burst, desk)
+        self.paint_banner(UNLOCK, self.room(UNLOCK, 0, top, cv.w, cv.h - top), t[0], t[1], t[2], burst)
 
     # -- notifications (docs/os_2026-11/processes.md §7) ----------------------
 
@@ -409,8 +488,8 @@ class Notices:
         return None
 
     def _note_top(self):
-        """The banner's top: under the bar where there is one, at the
-        glass's top over a fullscreen game (the unlock banner's)."""
+        """A banner's top: under the bar where there is one, at the
+        glass's top over a fullscreen game."""
         ws = self.ws
         lay = ws.layout
         desk = _desk_class()
@@ -427,8 +506,9 @@ class Notices:
         if n is None:
             return
         cv = ws.sys_canvas
-        ws._note_rect = _ui_draw.unlock(cv, ws.theme_colors, cv.w // 2, self._note_top(),
-                                          n.app, n.summary, n.icon, 0, _desk_class())
+        top = self._note_top()
+        ws._note_rect = self.paint_banner(NOTE, self.room(NOTE, 0, top, cv.w, cv.h - top), n.app, n.summary,
+                                          n.icon)
 
     def _draw_rec(self):
         """The recording indicator while a process holds the microphone

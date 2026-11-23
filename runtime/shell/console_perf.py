@@ -96,7 +96,6 @@ class PerfMeters:
         ws._fb_sc_fn = None
         ws._lb_wm = None        # frame()'s WM / letterbox_inplace
         ws._lb_fn = None
-        ws._loading_host = None  # the loading pill's UI context (_draw_loading_toast)
         ws._loading_rect = None  # ...and the rect it drew last
         ws._dsf_comp = None     # _disarm_fn's compositor / disarm_scale_fold
         ws._dsf_fn = None

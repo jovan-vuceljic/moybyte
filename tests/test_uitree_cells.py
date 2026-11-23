@@ -94,3 +94,65 @@ def test_a_clear_colour_shows_the_checker_under_a_white_stroke(tmp_path):
     for rgb in (dark, light):
         assert count(clear, rgb) - count(plain, rgb) >= side * side // 4, hex(rgb)
     assert count(clear, white) - count(plain, white) >= side - 2
+
+
+COLUMN = '''
+import uitree as ui
+
+s = ui.state(c=0, n=0)
+
+
+def go():
+    s.n = s.n + 1
+
+
+for k in ("one", "two", "three", "four"):
+    ui.action(k, k.title(), go)
+
+
+def build():
+    with ui.page("Cells"):
+        with ui.split("col", sizes=(20, 216, 32, 32, 32, 32, "1*"), gap="0", pad="0"):
+            ui.label("Colour")
+            ui.cells("c", first=0, count=64, cols=8, side=25, gap=2)
+            for k in ("one", "two", "three", "four"):
+                ui.button(k)
+            ui.label("")
+'''
+
+
+def column(tmp_path, script):
+    import ui_draw
+    import uitree_app
+    import uitree_c
+    import uitree_conf as C
+    app_py = tmp_path / "column" / "app.py"
+    app_py.parent.mkdir()
+    app_py.write_text(COLUMN)
+    mod = C._module(str(app_py))
+    cls = uitree_app.app_layer("column_c", "Column", mod.build, engine=uitree_c.CEngine)
+    seen = {}
+
+    def opened(ws):
+        seen["app"] = P.host(ws, cls)
+
+    def probe(ws):
+        e = seen["app"].engine
+        ctx, lib = ui_draw.UI_TARGET[0], ui_draw._C
+        four, cells = lib.api_hit_box(ctx, "four"), lib.api_hit_box(ctx, "c")
+        return (e.focus_key, four is not None and four == lib.api_box(ctx, "four"), cells)
+
+    return P.frames(TDECK, P.Surface(opened, probe=probe), list(script))
+
+
+def test_a_column_its_palette_cannot_fit_scrolls_and_the_keys_bring_its_foot_in(tmp_path):
+    """A column split whose palette, at a third of its side, still leaves its
+    cells past the room scrolls: its last button lies past the view at
+    first (pressed nowhere: its hit box is cut to the view) and the keys
+    walk down to it, scrolling it whole into view; the palette keeps its
+    rows."""
+    fs = column(tmp_path, ["k:down"] * 12)
+    first, last = fs[0].state, fs[-1].state
+    assert not first[1], first                  # the foot past the view at rest
+    assert last[0] == "four" and last[1], last  # the keys bring it in whole
+    assert first[2][3] >= 8 * 9, first          # eight rows of at least 9 px

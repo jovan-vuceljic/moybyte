@@ -1,7 +1,7 @@
 """The bars' packing and drawing from the bar page (`bar_ui`): `pack`
 answers what `shell_layout.pack` answers, from the page's rects, for every
-bar of a layout of the page's shape (`placed`) on a desk; any other layout,
-and a handheld's (its status cluster's ring room is not the page's yet), is
+bar of a layout of the page's shape (`placed`), a handheld's status cluster
+keeping its ring room (`shell_layout.RING_ROOM`); any other layout is
 `shell_layout.pack`'s. `draw` is a frame of the page onto a bar's strip."""
 
 import bar_ui
@@ -18,7 +18,7 @@ _PAGE = [None]
 SHOWN = {"menu": "menu_on", "wifi": "wifi_on", "clock": "clock_on"}     # a widget's shown= state, where not its name
 _SHOWN = tuple((n, SHOWN.get(n, n)) for n in LEFT + RIGHT if n != "battery")
 _DIRTY = [False]                # a state written since the page's store last took the writes
-_LAST = [None] * 8              # the bar `_states` wrote last: names, cs, fs, clock_w, sys_len, n, glyph, wins
+_LAST = [None] * 8              # the bar `_states` wrote last: names, cs, fs, clock_w, sys_len, n, glyph, cluster
 
 
 def _ordered(names, order):
@@ -66,10 +66,26 @@ def _put(nm, v):
         _DIRTY[0] = True
 
 
-def _place(rect, names, cs, fs, clock_w, sys_len, n_items):
-    page = _states(names, cs, fs, clock_w, sys_len, n_items)
+def _cluster():
+    """Whether the bars hold a handheld's status cluster (`shell_layout.pack`'s default)."""
+    return LB.metric_class() != LB.DESK
+
+
+def _row(rect, cs, cluster):
+    """Where the page lies in a bar at `rect`, in the bar's coordinates: a
+    desk's bar whole; a handheld's icon row, BAR_ROWS units across its
+    middle, so an item's icon is the chrome scale's (a bar item's icon is
+    the largest multiple of 16 its row holds)."""
+    if not cluster:
+        return (0, 0, rect[2], rect[3])
+    h = min(rect[3], LB.BAR_ROWS * cs)
+    return (0, (rect[3] - h) // 2, rect[2], h)
+
+
+def _place(rect, names, cs, fs, clock_w, sys_len, n_items, cluster):
+    page = _states(names, cs, fs, clock_w, sys_len, n_items, cluster=cluster)
     page.unit = cs
-    page.place((0, 0, rect[2], rect[3]), desk=True)
+    page.place(_row(rect, cs, cluster), desk=True)
     return page
 
 
@@ -105,18 +121,19 @@ def _items(n):
     return rows
 
 
-def _states(names, cs, fs, clock_w, sys_len, n_items, glyph=None, wins=None):
+def _states(names, cs, fs, clock_w, sys_len, n_items, glyph=None, wins=None, cluster=False):
     """The page's states written for a bar of widgets `names`; `wins` the
     chips' rows where given (a list the window manager keeps while it
-    stands: written again only when it is another). The bar written last
-    again (`names` the same list) writes nothing."""
+    stands: written again only when it is another); `cluster`, a handheld's
+    status cluster, its ring's room round it. The bar written last again
+    (`names` the same list) writes nothing."""
     page = _page()
     page._bind()
-    n = min(n_items, _status.CAP)
+    n = min(n_items, _status.CAP) if "wifi" in names or "battery" in names else 0
     items = _items(n)
     L = _LAST
     if (L[0] is names and L[1] == cs and L[2] == fs and L[3] == clock_w and L[4] == sys_len
-            and L[5] == n and L[6] is glyph and (wins is None or wins is _WINS[0])
+            and L[5] == n and L[6] is glyph and L[7] == cluster and (wins is None or wins is _WINS[0])
             and items is _ITEMS_W[0]):
         return page
     if wins is not None and wins is not _WINS[0]:
@@ -133,7 +150,11 @@ def _states(names, cs, fs, clock_w, sys_len, n_items, glyph=None, wins=None):
     _put("sg", sg)
     _put("cw", clock_w)
     _put("sys_w", sys_len or 16 * cs)
-    _put("status", bool(n) and ("wifi" in names or "battery" in names))
+    # a handheld's cluster: RING_ROOM round it, CLOCK_CLEAR more before the clock
+    ring = SL.RING_ROOM * fs if cluster else 0
+    _put("ring", ring)
+    _put("cg", SL.CLOCK_CLEAR * fs if cluster else sg)
+    _put("cluster", "wifi" in names or "battery" in names)
     tray = False
     for nm, st in _SHOWN:
         _put(st, nm in names)
@@ -146,7 +167,7 @@ def _states(names, cs, fs, clock_w, sys_len, n_items, glyph=None, wins=None):
         _put("batt_icon", "battery" in names)
         _put("batt_glyph", False)
     _put("tray", tray)
-    L[0], L[1], L[2], L[3], L[4], L[5], L[6] = names, cs, fs, clock_w, sys_len, n, glyph
+    L[0], L[1], L[2], L[3], L[4], L[5], L[6], L[7] = names, cs, fs, clock_w, sys_len, n, glyph, cluster
     return page
 
 
@@ -157,21 +178,21 @@ def pack(w, h, rows, cs, fs, clock_w, text_w=None, of=None, sys_len=0, cluster=N
         of = LB.bars()
     n_items = SL.ITEMS[0] if items is None else items
     if cluster is None:
-        cluster = LB.metric_class() != LB.DESK
-    if cluster or not all(placed(b) for b in of):
+        cluster = _cluster()
+    if not all(placed(b) for b in of):
         return SL.pack(w, h, rows, cs, fs, clock_w, text_w, of, sys_len, cluster, items)
     rects = LB.bar_rects_of(w, h, rows, of)
     ic = 16 * cs
     out = []
     for bar, rect in zip(of, rects):
         names = bar[2] + bar[4]
-        page = _place(rect, names, cs, fs, clock_w, sys_len, n_items)
+        page = _place(rect, names, cs, fs, clock_w, sys_len, n_items, cluster)
         thick = rect[3]
         iy = 1 + (thick - LB.BAR_ROWS * cs) // 2
         cells = []
         for name in LEFT + ("status",) + RIGHT:
             if name == "status":
-                r = _items_span(page, n_items) if s._v["status"] else None
+                r = _items_span(page, n_items) if s._v["items"] else None
             else:
                 r = page.rect_of("battery_st" if name == "battery" and s._v["batt_glyph"] else name)
             if r is None or (name != "status" and name not in names):
@@ -203,7 +224,7 @@ def item_rects(rect, names, cs, fs, clock_w, sys_len, n_items, out):
     """The status items of a bar at `rect` (a packed bar of the page's
     shape): their rects in its bar's coordinates into `out` (cleared), in
     the items' order."""
-    page = _place(rect, names, cs, fs, clock_w, sys_len, n_items)
+    page = _place(rect, names, cs, fs, clock_w, sys_len, n_items, _cluster())
     del out[:]
     for k in range(min(n_items, _status.CAP)):
         r = page.rect_of(_KEYS[k] + "/item")
@@ -217,9 +238,10 @@ def chip_rects(rect, names, cs, fs, clock_w, sys_len, n_items, wins, out):
     the window manager's rows `wins`: [(kind, rect)] into `out` (cleared)
     on the canvas the bar lies on, a chip the row's fit rule dropped left
     out."""
-    page = _states(names, cs, fs, clock_w, sys_len, n_items, wins=wins)
+    cluster = _cluster()
+    page = _states(names, cs, fs, clock_w, sys_len, n_items, wins=wins, cluster=cluster)
     page.unit = cs
-    page.place((0, 0, rect[2], rect[3]), desk=True)
+    page.place(_row(rect, cs, cluster), desk=True)
     del out[:]
     for row in wins:
         k = row["k"]
@@ -283,6 +305,7 @@ def _ui_draw():
         import ui_draw as D
         _D[0] = D
     return D
+_ROW_AT = [0, 0, None, 0]       # a handheld bar's scale and height, its icon row's rect, its offset
 _ORIGIN = [0, 0]                # where the page is drawn on its canvas: the bar's origin there
 
 
@@ -296,7 +319,18 @@ def draw(cv, th, rect, names, cs, fs, clock_w, sys_len, n_items, wicon, time, gl
     toolkit's target the host's frame set is given back. `focus`: the id
     of the page's stop the keys are on (its bar item draws the focus mark),
     None while they are elsewhere."""
-    page = _states(names, cs, fs, clock_w, sys_len, n_items, glyph, wins)
+    cluster = _cluster()
+    page = _states(names, cs, fs, clock_w, sys_len, n_items, glyph, wins, cluster)
+    oy = 0
+    if cluster:
+        m = _ROW_AT
+        k = m[2]
+        if k is None or m[0] != cs or m[1] != rect[3] or k[0] != rect[0] or k[2] != rect[2] \
+                or k[1] - m[3] != rect[1]:
+            row = _row(rect, cs, cluster)
+            m[0], m[1], m[3] = cs, rect[3], row[1]
+            m[2] = (rect[0], rect[1] + row[1], rect[2], row[3])
+        rect, oy = m[2], m[3]       # (kept while the bar's place stands)
     _put("wicon", wicon)
     _put("time", time)
     if _DIRTY[0]:
@@ -313,7 +347,7 @@ def draw(cv, th, rect, names, cs, fs, clock_w, sys_len, n_items, wicon, time, gl
     t = D.UI_TARGET
     a, b, c, d = t[0], t[1], t[2], t[3]
     _ORIGIN[0] = rect[0]
-    _ORIGIN[1] = rect[1]
+    _ORIGIN[1] = rect[1] - oy
     page.clip_to = clip
     try:
         if focus is not None:

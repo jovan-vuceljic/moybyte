@@ -502,6 +502,11 @@ WIFI_DIALOG_BAND = ("under the password dialog the old popover's band still name
                     "(Join, Close); the port's names the dialog's (Connect, Cancel), as Settings' "
                     "page always did")
 
+DIALOG_TIGHT = ("a dialog on a glass whose wash leaves its body under three rows at the card's pads "
+                "(the T-Deck's popover) stands a third of a pad from the wash's edges, its buttons "
+                "half a pad from its body and its foot: its field shows whole "
+                "(moy_ui_api_table.c's dlg_card)")
+
 POPOVER_DROP = ("at font scale 2 the old close put back the card's rect alone, which held 2 of its "
                 "drop's 4 rows: the desk kept the rest as a line; the close puts the whole drop back")
 
@@ -635,7 +640,8 @@ RUNS = (
      {5: WIFI_DIALOG_BAND, 6: WIFI_DIALOG_BAND, 9: WIFI_RING_IN_VIEW, 10: WIFI_RING_IN_VIEW,
       11: WIFI_RING_IN_VIEW, 12: POPOVER_DROP}),
     ("wifi_popover-tdeck", "wifi_popover", "tdeck_320x240_fs1_dark",
-     ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abc", "enter", "f:2", "back"]),
+     ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abc", "enter", "f:2", "back"],
+     {5: DIALOG_TIGHT, 6: DIALOG_TIGHT}),
     # the web console's page: the QR its canvas draws beside the address, the
     # keys stepped over it (Turn off on a desk, where it is a button)
     ("web_console-tdeck", "web_console", "tdeck_320x240_fs1_dark", ["f:2", "k:down"]),

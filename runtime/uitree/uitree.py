@@ -2022,7 +2022,7 @@ SCHEMA = {
     "bubble": dict(_C, text="text", side="text", head="text", status="text", signal="int", tone="text",
                    max="lit", lines="lit", on="action1", cut="action1"),
     "month": dict(_C, year="int", month="int", today="int", prev="action0", next="action0"),
-    "toast": dict(_C, text="text", icon="text"),
+    "toast": dict(_C, text="text", icon="text", sub="text", burst="int", look="lit", key="lit"),
     "cells": dict(_C, first="int", count="int", cols="int", side="int", gap="int", clear="int", edge="lit",
                   on="action0", pick="action0", focus="cond"),
     "stepper": dict(_C, value="text", prev="action0", next="action0", tone="lit", grow="lit", focus="cond"),
@@ -2686,15 +2686,27 @@ def cards(model_name, **p):
 def toast(text, **p):
     """A toast (§7.2): `text` and its `icon` ("check" where it has none) in
     a pill over the foot of the page's body, above its docked foot; no stop.
-    It draws over what the page drew before it: declare it after them."""
-    return _node("toast", None, dict(p, text=text), _caller())
+    It draws over what the page drew before it: declare it after them.
+    look="flat" draws the pill in flat fills, filling the page's room. With
+    `sub` it is a banner: a card centred at the top of the page's room, the
+    icon on its tile, `text` over the `sub` line, and `burst` (an int,
+    1..255 of the way out, 0 none) confetti from its edges. `key` names it
+    (its kind and place where it has none), the name a host's `rect_of`
+    asks its rect by."""
+    where = _caller()
+    key = p.pop("key", None)
+    if key is not None and (not isinstance(key, str) or not key):
+        raise UIError("N01", "ui.toast key=%r" % (key,), where=where, found=repr(key),
+                      fix='key="NAME", a text')
+    return _node("toast", key, dict(p, text=text), where)
 
 
 def cells(name, **p):
     """A palette's colours as square cells (§7.3), a stop bound to int state
     `name`, the current colour: `count` of them from `first`, `cols` to a
     row, each a `side` square (desk units) less `gap`, `edge=True` a border
-    round them. The current cell wears the current mark and, focused, the
+    round them; in a split's cell, as tall as it holds their rows at most,
+    and a third of `side` at least. The current cell wears the current mark and, focused, the
     keys' cursor; the arrows move it (on= hears it move), and Enter or a tap
     on a cell (which moves it there) fires `pick=`; `clear=` names the
     colour shown as clear (transparency's grey checker under a white

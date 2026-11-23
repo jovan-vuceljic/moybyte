@@ -62,6 +62,9 @@ TAP_MIN = 16
 # Pages whose taps a host resolves by a hit of its own rather than their
 # stops' boxes, each with why: the app's module.
 OWN_HIT = {
+    "runtime.bar_ui":
+        "the bar layer resolves a bar tap by its cells (BarLayer._tap_bar), a handheld's status "
+        "cluster one target across its icons and the gaps between them",
     "runtime.wm_strip_ui":
         "the window manager resolves a strip tap by its fat-finger hit, at least 32 px a button "
         "(WindowChrome._strip_button_hit)",
@@ -156,14 +159,21 @@ def focus(eng):
 
 
 def overlays(eng, st):
-    """A dialog or a popover keeps off the hints band: none of its stops
-    lies under it."""
+    """No stop lies under the hints band: a dialog's or a popover's, nor
+    one of the page's a control placed past its view (an empty's button).
+    A holder meets it where its view runs under the band's edge. Nor does
+    any part the page draws show over it, a stop or not (a row's progress
+    placed past the view): the toolkit notes the first that did."""
     band = eng.band_rect()
     if band is None:
         return []
-    over = eng.over_stops()
-    return ["%s %r at %r lies under the hints band at %r" % (k, sid, b, band)
-            for sid, k, b, _w in st if sid in over and _meets(b, band)]
+    out = ["%s %r at %r lies under the hints band at %r" % (k, sid, b, band)
+           for sid, k, b, _w in st if k not in HOLDERS and _meets(b, band)]
+    import ui_draw
+    over = ui_draw._C.api_over_band(ui_draw.UI_TARGET[0])
+    if over is not None:
+        out.append("a part of the page shows at %r, over the hints band at %r" % (over, band))
+    return out
 
 
 # Pages whose band names another way out than back, each with why: (the

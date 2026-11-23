@@ -1557,6 +1557,22 @@
     "icon": {
      "type": "tpl",
      "level": 2
+    },
+    "sub": {
+     "type": "tpl",
+     "level": 2
+    },
+    "burst": {
+     "type": "int",
+     "level": 2
+    },
+    "look": {
+     "type": "word:flat",
+     "level": 2
+    },
+    "key": {
+     "type": "key",
+     "level": 2
     }
    }
   },
@@ -1737,7 +1753,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:large",
+     "type": "word:large,small",
      "level": 2
     }
    }

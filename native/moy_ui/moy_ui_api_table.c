@@ -1311,15 +1311,16 @@ void moy_ui_api_wash(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
 
 // A dialog's card `w` wide, its title band `top` high and its foot `foot`,
 // for a body `body` high: centred on the surface above its hint band (the
-// wash's box), the body cut to the room that leaves it (never under one
-// row), its height in *bh.
+// wash's box), a pad clear of its edges (a third of one, tight), the body
+// cut to the room that leaves it (never under one row), its height in *bh.
 static moy_ui_box_t dlg_card(const moy_ui_ctx_t *c, int w, int top, int foot, int body,
                              int *bh_out) {
     moy_ui_box_t sf = moy_ui_api_wash_box(c);
     int pad = moy_ui_modal_band(c->fs, c->cls), rh = mua_row_h(c);
+    int clear = c->dlg.tight ? pad / 3 : pad;
     int bh = body;
-    if (top + bh + foot > sf.h - 2 * pad) {
-        bh = sf.h - 2 * pad - top - foot;
+    if (top + bh + foot > sf.h - 2 * clear) {
+        bh = sf.h - 2 * clear - top - foot;
         if (bh < rh) {
             bh = rh;
         }
@@ -1341,7 +1342,7 @@ static moy_ui_box_t dlg_card(const moy_ui_ctx_t *c, int w, int top, int foot, in
 static void dlg_land(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int took) {
     moy_ui_box_t t = c->dlg.card;
     int rh = mua_row_h(c), pad = moy_ui_modal_band(c->fs, c->cls), bh;
-    int top = pad + rh + pad / 2, foot = t.y + t.h - c->dlg.foot;
+    int top = pad + rh + (c->dlg.tight ? 0 : pad / 2), foot = t.y + t.h - c->dlg.foot;
     moy_ui_box_t card = dlg_card(c, t.w, top, foot, took > 0 ? took : rh, &bh);
     mua_lend_put(c, s, card, top + bh, 0, 1);
     mua_lend_stops(c, card.y - t.y, card.y + card.h - (t.y + t.h));
@@ -1398,6 +1399,14 @@ int32_t moy_ui_api_dialog(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
     int reach = moy_ui_mark_reach(MOY_UI_ITEM_CELL) * fs;
     int foot = nb ? rh + 2 * pad + reach : pad;     // no buttons: the keys are the hint strip's
     int top = pad + rh + pad / 2;
+    // tight: a glass whose wash leaves the body under three rows at the card's pads, where
+    // the card stands a third of a pad clear of the wash's edges, its body right under the
+    // title and its buttons half a pad from the body and from the foot
+    c->dlg.tight = (uint8_t)(moy_ui_api_wash_box(c).h - 2 * pad - top - foot < 3 * rh);
+    if (c->dlg.tight) {
+        top = pad + rh;
+        foot = nb ? rh + pad + reach : foot;
+    }
     moy_ui_box_t sf = c->surface;
     int w = mua_pmetric(c, MOY_UI_M_VALUE_ROW_MODAL);
     if (w > sf.w - 2 * pad) {
@@ -1507,7 +1516,7 @@ int32_t moy_ui_api_dialog(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
     uint8_t body_stop = c->page_stop;
     c->page_stop = NO_PAGE;             // a button is no row of the body's
     int x = card.x + w - pad - total;
-    int by = card.y + h - pad - reach - rh;
+    int by = card.y + h - (foot - rh - reach) / 2 - reach - rh;    // the foot's pads shared about them
     for (int i = 0; i < nb; i++) {
         size_t at = 0;
         int k = 0;

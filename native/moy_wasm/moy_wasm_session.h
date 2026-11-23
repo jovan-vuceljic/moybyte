@@ -197,8 +197,9 @@ void moy_wasm_session_lane_wait(int lane);
 //                                   `buf`, which is the stack's top
 //                                   2 x n bytes
 //
-// A lane may call no import: one traps the lane (libmoy's binding refuses an
-// unbound instance). THE DEADLINE MONITOR, an esp_timer above every lane,
+// A lane starts only when its exports are of the types above. A lane may
+// call no import: one traps the lane (libmoy's binding refuses an unbound
+// instance). THE DEADLINE MONITOR, an esp_timer above every lane,
 // strikes a lane whose call has run past MOY_WASM_TLANE_DEADLINE_US: it
 // suspends the lane's task (AOT code reads a termination only at an import
 // return, so a spinning lane would otherwise hold its core), mutes the ring
@@ -221,8 +222,9 @@ typedef struct {
 // From the session's thread, once _init has returned: start a lane for each
 // of moy_audio and moy_timer the module exports (with moy_lane_stack and
 // __stack_pointer). The lanes started as a mask of 1 << MOY_WASM_TLANE_*, 0
-// for none (or a board without timed lanes), or -1 with `err` set (the LANES
-// row, the pool or a stack refused them; none runs).
+// for none (or a board without timed lanes), or -1 with `err` set (an export
+// of another type, or the LANES row, the pool or a stack refused them; none
+// runs).
 int moy_wasm_tlanes_start(moy_wasm_env env, const moy_wasm_tlane_sink_t *sink,
                           char *err, size_t errlen);
 // From the session's thread, before the runtime goes: every lane stopped,

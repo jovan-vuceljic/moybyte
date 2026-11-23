@@ -1945,8 +1945,11 @@ the cell's focus keyline outside it, with no plate, so the item keeps its
 own ink -- a fill would blot a 16-pixel icon out. On the OS widgets it
 is one height, the system tile's, centred across the bar
 (`BarLayer._pill`); on a handheld the status cluster wears one ring round
-its icons; on the zone's targets it is their rect and a ring round it. On
-a bar the bar page draws (`runtime/shell/bar_ui.py`), an item that is a
+its icons (`BarLayer._cluster_box`, round the page's `cluster` row, which
+keeps the ring's room); on the zone's targets it is their rect and a ring
+round it. On a bar the bar page draws (`runtime/shell/bar_ui.py`: every
+top or bottom bar of the themes' shape, the desk's and the handheld's,
+whose items stand in its icon row at the chrome scale), an item that is a
 bar item (the system button, a chip, Wi-Fi, the battery, the clock, a
 status item) wears the bar
 item's own focus mark instead, drawn by the page: the theme's pill tint

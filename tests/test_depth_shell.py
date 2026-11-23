@@ -25,7 +25,11 @@ def _desk(tmp_path, variant="light"):
 
 
 def _quiet(ws):
+    """Still what moves between two runs of a comparison: the pointer, the
+    badges, a toast, and the bar's HH:MM, which a minute boundary between the
+    two runs would change."""
     ws.pointer.visible = False
+    ws.bar_layer.clock_text = lambda: "10:30"
     settle_badges(ws)
     ws.toast_until = 0
 
