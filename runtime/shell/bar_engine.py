@@ -306,6 +306,7 @@ def _ui_draw():
         import ui_draw as D
         _D[0] = D
     return D
+_ROW_AT = [0, 0, None, 0]       # a handheld bar's scale and height, its icon row's rect, its offset
 _ORIGIN = [0, 0]                # where the page is drawn on its canvas: the bar's origin there
 
 
@@ -321,8 +322,16 @@ def draw(cv, th, rect, names, cs, fs, clock_w, sys_len, n_items, wicon, time, gl
     None while they are elsewhere."""
     cluster = _cluster()
     page = _states(names, cs, fs, clock_w, sys_len, n_items, glyph, wins, cluster)
-    row = _row(rect, cs, cluster)
-    rect = (rect[0], rect[1] + row[1], rect[2], row[3])
+    oy = 0
+    if cluster:
+        m = _ROW_AT
+        k = m[2]
+        if k is None or m[0] != cs or m[1] != rect[3] or k[0] != rect[0] or k[2] != rect[2] \
+                or k[1] - m[3] != rect[1]:
+            row = _row(rect, cs, cluster)
+            m[0], m[1], m[3] = cs, rect[3], row[1]
+            m[2] = (rect[0], rect[1] + row[1], rect[2], row[3])
+        rect, oy = m[2], m[3]       # (kept while the bar's place stands)
     _put("wicon", wicon)
     _put("time", time)
     if _DIRTY[0]:
@@ -339,7 +348,7 @@ def draw(cv, th, rect, names, cs, fs, clock_w, sys_len, n_items, wicon, time, gl
     t = D.UI_TARGET
     a, b, c, d = t[0], t[1], t[2], t[3]
     _ORIGIN[0] = rect[0]
-    _ORIGIN[1] = rect[1] - row[1]
+    _ORIGIN[1] = rect[1] - oy
     page.clip_to = clip
     try:
         if focus is not None:

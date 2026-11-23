@@ -596,6 +596,8 @@ class BarLayer:
         self.focus = None
         self.focus_where = None
         self._page_at = [None, None, None]      # the bar the page draws: where, its rect, its cells
+        self._plate_at = [None, 0, 0, 0, None]  # the system plate's box: the cells, the bar's x, y, h
+        self._chips_at = [None, None, None]     # the chips' repaint: the packing, where, (bar, ground, clip)
         self.focus_item = None
         self._items_lgen = -1         # the status items' count the packing holds
         self._hooks = None            # the bar page's actions' ways out (`_page_draw`)
@@ -1522,23 +1524,29 @@ class BarLayer:
         theme's own part on its tile (`sys_tile`) in the item's cell,
         pressed while the system menu shows; nothing where `clip`, the part
         drawn again, misses it."""
-        r = None
-        for c in cells:
-            if c[0] == "menu":
-                r = c[1]
-                break
-        if r is None:
+        got = self._plate_at
+        if got[0] is not cells or got[1] != bar[0] or got[2] != bar[1] or got[3] != bar[3]:
+            r = None
+            for c in cells:
+                if c[0] == "menu":
+                    r = c[1]
+                    break
+            if r is None:
+                got[4] = None
+            else:
+                tx, ty, tw, tht = self.sys_tile(r, (0, 0, bar[2], bar[3]), False)
+                got[4] = (tx + bar[0], ty + bar[1], tw, tht)
+            got[0], got[1], got[2], got[3] = cells, bar[0], bar[1], bar[3]
+        box = got[4]                    # (kept while the packing and the bar's place stand)
+        if box is None:
             return
-        tx, ty, tw, tht = self.sys_tile(r, (0, 0, bar[2], bar[3]), False)
-        tx += bar[0]
-        ty += bar[1]
+        tx, ty, tw, tht = box
         if clip is not None and (clip[0] >= tx + tw or tx >= clip[0] + clip[2]
                                  or clip[1] >= ty + tht or ty >= clip[1] + clip[3]):
             return
         m = self.ws.sysmenu
         part = _ui_draw.BAR_HH_SYS if _band_part() == _ui_draw.BAR_HH_BAND else _ui_draw.BAR_SYS
-        _ui_draw.bar_part(cv, self.ws.theme_colors, part, (tx, ty, tw, tht),
-                          m.open and m.widget == "menu")
+        _ui_draw.bar_part(cv, self.ws.theme_colors, part, box, m.open and m.widget == "menu")
 
     def page_tap(self, name):
         """The bar page's open of an OS widget (`bar_ui.TAP`): its component,
@@ -2268,14 +2276,19 @@ class BarLayer:
         got = self.cell(where, name)
         if got is None:
             return None
-        bar, (x, y, w, h) = got
+        bar, r = got
+        g = self._ground_of(bar, span(r, bar) if span is not None else r)
+        looked = self._paint_ground(cv, where, bar, g)
+        return cv, bar, (r[0] + bar[1][0], r[1] + bar[1][1], r[2], r[3]), looked
+
+    @staticmethod
+    def _ground_of(bar, r):
+        """Rect `r` of packed bar `bar` (bar coordinates) on its canvas, less
+        the band's edge line, which a repaint never eats."""
         edge, (bx, by, bw, bh), _dy, _cells = bar
-        th = self.ws.theme_colors
-        cx, cy, cw, ch = span((x, y, w, h), bar) if span is not None else (x, y, w, h)
+        cx, cy, cw, ch = r
         cx += bx
         cy += by
-        x += bx
-        y += by
         if edge == "top":
             ch = min(ch, max(0, by + bh - 1 - cy))
         elif edge == "bottom":
@@ -2285,15 +2298,21 @@ class BarLayer:
             cw = min(cw, max(0, bx + bw - 1 - cx))
         elif cx == bx:
             cx, cw = bx + 1, cw - 1
-        cv.clip(cx, cy, cw, ch)
+        return (cx, cy, cw, ch)
+
+    def _paint_ground(self, cv, where, bar, g):
+        """The band the strip itself draws, again inside `g` (`_ground_of`) on
+        `cv`: whether the look drew it."""
+        edge, r = bar[0], bar[1]
+        th = self.ws.theme_colors
+        cv.clip(g[0], g[1], g[2], g[3])
         looked = not self.zone_is_game(where) and not self._in_window(where)
         if not looked:
-            _ui_draw.frame_band(cv, th, (bx, by, bw, bh), self.zone_band_light(where),
-                                _BAND_SIDE[edge])
+            _ui_draw.frame_band(cv, th, r, self.zone_band_light(where), _BAND_SIDE[edge])
         elif not self._home_ground(cv, where, 0, 0):
-            _ui_draw.bar_part(cv, th, _band_part(), (bx, by, bw, bh), _BAND_SIDE[edge])
+            _ui_draw.bar_part(cv, th, _band_part(), r, _BAND_SIDE[edge])
         cv.clip()
-        return cv, bar, (x, y, w, h), looked
+        return looked
 
     def drop_strips(self, where):
         """Give back `where`'s cached strips: a bar shown only for a while
@@ -2353,16 +2372,28 @@ class BarLayer:
         page, the marks' reach past it included: True, or False where the
         page does not draw that bar (`_paged`) and the window manager
         paints them."""
-        got = self.cell(where, "chips")
-        if got is None or not _paged(got[0][0], got[0][3]) or self.zone_is_game(where) \
-                or self._in_window(where):
+        packed = self._packed(where)
+        m = self._chips_at
+        if m[0] is not packed or m[1] != where:
+            m[0], m[1], m[2] = packed, where, None
+            got = self.cell(where, "chips")
+            if got is not None and _paged(got[0][0], got[0][3]):
+                bar = got[0]
+                span = self._chips_span(got[1], bar)
+                m[2] = (bar, self._ground_of(bar, span),
+                        (bar[1][0] + span[0], bar[1][1] + span[1], span[2], span[3]))
+        got = m[2]                      # (kept while the packing stands: a frame allocates nothing)
+        cv = self._bar_canvas(where)
+        if got is None or cv is None or self.zone_is_game(where) or self._in_window(where):
             return False
-        got = self.repaint_cell(where, "chips", self._chips_span)
-        if got is None:
-            return False
-        cv, bar, (x, y, w, h), _looked = got
-        bx, by = bar[1][0], bar[1][1]
-        self._page_again(cv, where, bar, self._chips_span((x - bx, y - by, w, h), bar))
+        bar, ground, clip = got
+        self._paint_ground(cv, where, bar, ground)
+        cv.clip(clip[0], clip[1], clip[2], clip[3])
+        try:
+            self._sel_ink = None
+            self._page_draw(cv, where, bar[1], bar[0], bar[3], clip)
+        finally:
+            cv.clip()
         return True
 
     def _redraw_status(self, where):
