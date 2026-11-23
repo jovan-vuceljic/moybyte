@@ -668,7 +668,10 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         a shelf card does, `Carousel._fill_around_cards`); all of it in one
         copy where the band's goes back so (`restore_whole`)."""
         hx, hy, hs, _h = self.grid.hero_rect()
-        x0, y0, x1, y1 = r[0], r[1], r[0] + r[2], r[1] + r[3]
+        x0 = r[0]
+        y0 = r[1]
+        x1 = r[0] + r[2]
+        y1 = r[1] + r[3]
         if self.grid.restore_whole or not (x0 <= hx and y0 <= hy and hx + hs <= x1
                                            and hy + hs <= y1):
             fill(cv, r)

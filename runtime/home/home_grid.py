@@ -92,7 +92,10 @@ def draw_new_art(cv, th, rect, r, stepped, spec, fs=1):
     them, `r` plus its width, so the frame's corner reads rounded at 1x as
     a filled cover's does where a thin line at `r` reads square (design
     review R5-10, F6-04)."""
-    x, y, w, h = rect[0], rect[1], rect[2], rect[3]
+    x = rect[0]
+    y = rect[1]
+    w = rect[2]
+    h = rect[3]
     if not _ui_draw.depth()[5]:
         line = 2 * fs
         cv.rrect(x, y, w, h, r + line, th.get("border", 0), stepped=stepped)
@@ -1055,7 +1058,11 @@ class Launcher:
         else:
             y0 = y - m
             y1 = y + n + m
-        bx0, by0, bx1, by1 = t[4], t[5], t[4] + t[6], t[5] + t[7]
+        # (one name a line: four names from four values build a tuple)
+        bx0 = t[4]
+        by0 = t[5]
+        bx1 = t[4] + t[6]
+        by1 = t[5] + t[7]
         ry0 = y0 if y0 > by0 else by0
         ry1 = y1 if y1 < by1 else by1
         rx0 = x - m if x - m > bx0 else bx0
@@ -1243,7 +1250,10 @@ class Launcher:
         0)."""
         th = self.theme or {}
         fs = self.layout.fs
-        x, y, w, h = rect[0], rect[1], rect[2], rect[3]
+        x = rect[0]
+        y = rect[1]
+        w = rect[2]
+        h = rect[3]
         for i in range(fs):
             cv.rectb(x - i, y - i, w + 2 * i, h + 2 * i, th.get("border", self._NAMES["black"]))
 
