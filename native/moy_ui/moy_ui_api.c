@@ -1543,6 +1543,13 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
                 c->edge = (uint8_t)(one == MOY_UI_B_UP ? MOY_UI_EDGE_UP : one == MOY_UI_B_DOWN ? MOY_UI_EDGE_DOWN
                                     : one == MOY_UI_B_LEFT ? MOY_UI_EDGE_LEFT : MOY_UI_EDGE_RIGHT);
             }
+            moy_ui_keep_t *body = to < 0 && c->modal && c->dw.id ? mua_keep_of(c, c->dw.id) : NULL;
+            if (body != NULL && (one & (MOY_UI_B_UP | MOY_UI_B_DOWN))) {
+                // no stop that way in a dialog: its body scrolls a row (its page clamps it)
+                body->scroll += (one == MOY_UI_B_UP ? -k : k) * mua_row_h(c);
+                body->scroll = body->scroll < 0 ? 0 : body->scroll;
+                settled = 0;
+            }
         }
         if (to >= 0) {
             c->focus = v[to].id;
@@ -5181,9 +5188,9 @@ int mua_nest_close(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind) {
             mua_thumb_track(c, kk, c->page, kk->rows, c->scroll);
             mua_thumb(c, s, c->page, kk->rows, c->scroll);
         }
-    } else if (kind == 3 && mua_page_keep(c) != NULL && !c->pop.hide) {
-        // a popover's body cut to its room: a fade toward the card at each
-        // edge its rows run on past
+    } else if (((kind == 3 && !c->pop.hide) || kind == 2) && mua_page_keep(c) != NULL) {
+        // a popover's or a dialog's body cut to its room: a fade toward the
+        // card at each edge its rows run on past
         mua_edge_fades(c, s, c->page, mua_page_keep(c)->rows, c->scroll, MOY_UI_FADE_CARD, 1,
                        FADE_H * c->fs);
     }

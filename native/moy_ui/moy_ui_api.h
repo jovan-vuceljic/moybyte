@@ -485,6 +485,7 @@ typedef struct {
     uint32_t open;              // the button a dialog opens on (its `focus`; 0: its first stop)
     moy_ui_box_t card;
     uint8_t held;
+    uint8_t tight;              // a glass too short for its pads: their least (moy_ui_api_dialog)
     int8_t pick;                // the dialog button activated this frame, -1 none
     int32_t gen;
     uint32_t btn;
@@ -1098,7 +1099,10 @@ int32_t moy_ui_api_field(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
 // end answers -1. Its first frame shows it at the size it rests at: drawn as
 // tall as the surface lets it, its body laid out in that room, and moved to
 // its place when the end closes it (as a popover's first frame, the
-// instance's `lent`).
+// instance's `lent`). A body taller than its room is cut to it, a fade at
+// each edge its rows run on past; a drag scrolls it, and so does an arrow
+// where no stop lies that way. Where the room leaves the body under three
+// rows at the card's pads, the pads are their least (`dlg.tight`).
 // Its wash is the surface, less the page's hint band at its foot; with the
 // override `wash` false it draws none, where the page under it was washed
 // already (`moy_ui_api_wash`, the page an app holds under its dialog).
