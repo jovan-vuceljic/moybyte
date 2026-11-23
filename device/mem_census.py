@@ -414,7 +414,12 @@ def cut(ws, keep=("mem_census", "gc", "sys", "builtins", "micropython",
                   "uctypes", "esp32", "moy_alloc"), modules=None):
     """Drop every attribute of `ws` (LATE ones last), then every module's
     globals, collecting after each; record (what, freed bytes, used bytes per
-    area) into CUTS and return it. The console is dead afterwards.
+    area) into CUTS and return it. Each row is also printed as it is taken,
+    `CUT what bytes`, the last `CUT left bytes`: the console is dead
+    afterwards, its dev channel's globals among the cut, so the rows are
+    what reaches the host. The kernel's task watchdog is fed after every
+    collection: the cut is one call that holds the frame for longer than
+    the watchdog's timeout.
 
     A drop frees only what nothing else still reaches. The frame loop's own
     locals (the spine's Desktop, the pump, the dev channel's scope) and the
@@ -422,6 +427,12 @@ def cut(ws, keep=("mem_census", "gc", "sys", "builtins", "micropython",
     an attribute they share is charged to no row and stays in "left"; the
     boot trace armed "live" is what names the live bytes by boot step."""
     global CUTS
+    try:
+        from moy_kernel import feed
+        if not __import__("moy_kernel").watchdog()[0]:
+            feed = None                 # unarmed: a first feed would subscribe the task
+    except (ImportError, AttributeError):
+        feed = None
     rows = []
     gc.collect()
     base = gc.mem_alloc()
@@ -440,6 +451,8 @@ def cut(ws, keep=("mem_census", "gc", "sys", "builtins", "micropython",
             except Exception:  # noqa: BLE001
                 continue
         gc.collect()
+        if feed is not None:
+            feed()
         now = gc.mem_alloc()
         rows.append(("ws." + k, prev - now, _used()))
         print("CUT %s %d" % (rows[-1][0], rows[-1][1]))
@@ -454,11 +467,14 @@ def cut(ws, keep=("mem_census", "gc", "sys", "builtins", "micropython",
         except Exception:  # noqa: BLE001 -- a built-in module's table is ROM
             continue
         gc.collect()
+        if feed is not None:
+            feed()
         now = gc.mem_alloc()
         rows.append(("mod:" + name, prev - now, _used()))
         print("CUT %s %d" % (rows[-1][0], rows[-1][1]))
         prev = now
     rows.append(("left", prev, _used()))
+    print("CUT left %d" % prev)
     CUTS = rows
     return rows
 

@@ -128,6 +128,9 @@ def test_two_engines_over_one_module_each_hold_their_own_state():
     a = uitree_app.Page(F.build, None, None, env="console a")
     b = uitree_app.Page(F.build, None, None, env="console b")
     a.run(lambda: setattr(F.s, "seen", 3), action="t")
+    got = []
+    b.run(lambda: got.append(F.s.seen), action="t")
+    assert got == [F.s._init.get("seen")]               # the second engine in starts at the declaration's values
     b.run(lambda: setattr(F.s, "seen", 5), action="t")
     got = []
     a.run(lambda: got.append((F.s.seen, uitree_app.env())), action="t")
