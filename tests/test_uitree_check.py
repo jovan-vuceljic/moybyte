@@ -42,6 +42,7 @@ PORTED = (
     "editor_music",
     "editor_sound",
     "editor_blocks",
+    "editor_sprite",
     "uitree_placed_table",
     "uitree_placed_swatches",
     "uitree_stepper",

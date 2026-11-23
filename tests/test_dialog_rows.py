@@ -46,20 +46,12 @@ def _console(tmp_path, windowed):
 
 
 class Pair:
-    """The session on both consoles, frame by frame: `a` as it ships, `b`
-    drawing every dialog whole; `a`'s buffers presented in turn."""
+    """The session on two consoles, frame by frame: `a`'s buffers
+    presented in turn, each presented picture held to `b`'s."""
 
     def __init__(self, tmp_path, monkeypatch, bufs, windowed):
-        real = ui_draw.Hold.ok
         self.a = _console(tmp_path / "ships", windowed)
         self.b = _console(tmp_path / "whole", windowed)
-        b = self.b
-
-        def ok(rows, plan):
-            return False if getattr(rows, "ws_of", None) is b else real(rows, plan)
-        for ws in (self.a, self.b):
-            ws.paint_layer._hold.ws_of = ws
-        monkeypatch.setattr(ui_draw.Hold, "ok", ok)
         self.da = host_app.ConsoleDriver(self.a)
         self.db = host_app.ConsoleDriver(self.b)
         self.bufs = bufs

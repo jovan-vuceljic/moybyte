@@ -29,7 +29,7 @@ def _contrast(a, b):
 
 def _open(tmp_path, config, theme, mode):
     """The Sprites tab: the handheld's, or the desk Editor's Sprite pane in
-    the Art workspace. (ws, its PaintLayout, the glass origin of its
+    the Art workspace. (ws, its PaintLayer, the glass origin of its
     surface)."""
     ws = el._ws(tmp_path, config, theme, mode)
     if config == HANDHELD:
@@ -42,7 +42,7 @@ def _open(tmp_path, config, theme, mode):
     pane, r, _p = next(p for p in d.panes() if "paint" in p[0])
     body = d._body(r, d._unit(), pane)
     ox, oy = d._origin()
-    return ws, d._pane_layout("paint", body), ox + body[0], oy + body[1]
+    return ws, ws.paint_layer, ox + body[0], oy + body[1]
 
 
 @pytest.mark.parametrize("theme,mode", THEMES)
@@ -51,15 +51,16 @@ def test_the_selection_reads_against_the_grid_lines(tmp_path, theme, mode):
     lines and `surface` within: one of the two stands at 3:1 or more off
     the grid's lines in every theme-mode (design review R4-02; Contrast
     Night's lines are its ink, Moy Day's and Blocks' a hair from white)."""
-    ws, lay, ox, oy = _open(tmp_path, HANDHELD, theme, mode)
+    ws, pl, ox, oy = _open(tmp_path, HANDHELD, theme, mode)
     ws.paint.set_selection(1, 1, 4, 4)
     el._frame(ws)
     px = el._px(ws)
     cv = ws.glass_canvas
     border = el._rgb(cv, ws.theme_colors["border"])
-    cell = lay.pg_span // ws.paint.dim
-    x0 = ox + lay.pg_x0 + cell          # the selection's first column
-    ys = range(oy + lay.pg_y0 + 2 * cell, oy + lay.pg_y0 + 4 * cell)
+    gx, gy = pl.grid_at()
+    cell = pl.layout.span // ws.paint.dim
+    x0 = ox + gx + cell                 # the selection's first column
+    ys = range(oy + gy + 2 * cell, oy + gy + 4 * cell)
     outer = {px[y][x0 - 1] for y in ys}
     inner = {px[y][x0] for y in ys}
     assert outer == {el._rgb(cv, ws.theme_colors["ink"])}, outer
@@ -73,14 +74,15 @@ def test_the_maps_mark_leaves_the_sprite_whole(tmp_path, theme, mode):
     """The sprite map's mark lies outside the sprite -- `surface` around
     it, then `ink` -- so every pixel of the sprite shows as the sheet holds
     it (design review R4-03: the inner line used to cover its edge)."""
-    ws, lay, ox, oy = _open(tmp_path, HANDHELD, theme, mode)
+    ws, pl, ox, oy = _open(tmp_path, HANDHELD, theme, mode)
     pe = ws.paint
     sheet = pe.sheet
-    pl = ws.paint_layer
-    x0, y0, k, first, rows = pl._map_geom(lay, pe, sheet)
+    mx, my, mw, mh = pl.rect_of("map")
+    o = pl._map_ring()
+    k, first, rows = pl._map_geom(pe, sheet, mw, mh)
     tile = sheet.TILE * k
-    sx = ox + x0 + (pe.n % sheet.cols) * tile
-    sy = oy + y0 + (pe.n // sheet.cols - first) * tile
+    sx = ox + mx + 2 * o + (pe.n % sheet.cols) * tile
+    sy = oy + my + 2 * o + (pe.n // sheet.cols - first) * tile
     px = el._px(ws)
     cv = ws.glass_canvas
     tx, ty = sheet.tile_origin(pe.n)
@@ -96,7 +98,6 @@ def test_the_maps_mark_leaves_the_sprite_whole(tmp_path, theme, mode):
                 for xx in range(k):
                     assert px[sy + y * k + yy][sx + x * k + xx] == want, (x, y)
     assert inked
-    o = pl._map_ring(lay)
     mid = sy + tile // 2
     th = ws.theme_colors
     assert px[mid][sx - 1] == el._rgb(cv, th["surface"])
@@ -104,38 +105,33 @@ def test_the_maps_mark_leaves_the_sprite_whole(tmp_path, theme, mode):
     assert px[mid][sx + tile + o] == el._rgb(cv, th["ink"])
 
 
-def test_the_map_stands_on_the_columns_edge(tmp_path):
-    """The map's left edge is the column's (design review R4-17), where
-    the steppers, the tool row at the column's head and the file buttons
-    start."""
-    ws, lay, _ox, _oy = _open(tmp_path, HANDHELD, "moy", "light")
-    x0 = ws.paint_layer._map_geom(lay, ws.paint, ws.paint.sheet)[0]
-    assert x0 == lay.map_rect[0] == lay.spr_prev[0] == lay.get_btn[0]
+def test_the_map_stands_beside_the_palette(tmp_path):
+    """The map takes the room right of the palette, from the grid's top
+    to its foot."""
+    ws, pl, _ox, _oy = _open(tmp_path, HANDHELD, "moy", "light")
+    m, p, g = pl.rect_of("map"), pl.rect_of("color"), pl.rect_of("grid")
+    assert m[0] >= p[0] + p[2] and m[1] == g[1] and m[3] == g[3]
 
 
-def test_a_tool_row_under_the_grid_stands_on_the_file_buttons_line(tmp_path):
+def test_the_tool_row_and_the_file_buttons_share_the_foot(tmp_path):
     """Under the grid (the handheld), the tool row and the file buttons
-    under the map share one line (design review R4-17), their plates one
-    height."""
-    ws, lay, _ox, _oy = _open(tmp_path, HANDHELD, "moy", "light")
-    if lay.tool_btns[0][1] < lay.pg_y0 + lay.pg_span:
-        pytest.skip("the tool row stands at the column's head here")
-    assert {b[1] for b in lay.tool_btns} == {lay.get_btn[1]}
+    share one line (design review R4-17), centred on it."""
+    ws, pl, _ox, _oy = _open(tmp_path, HANDHELD, "moy", "light")
+    mids = {r[1] + r[3] // 2 for r in (pl.rect_of(k) for k in ("pen", "more", "load", "files"))}
+    assert max(mids) - min(mids) <= 1, mids
 
 
 @pytest.mark.parametrize("theme,mode", THEMES)
-def test_the_sprite_number_sits_between_its_steppers(tmp_path, theme, mode):
-    """‹ n › (D-10's "‹ value ›", design review R4-18): the sprite's number
-    in the ink between the steppers, the Size caption on its own after
-    them."""
-    ws, lay, ox, oy = _open(tmp_path, HANDHELD, theme, mode)
-    px_, py_, pw, _ph = lay.spr_prev
-    nx, ny, nw, nh = lay.num_rect
-    assert nx == px_ + pw and lay.spr_next[0] == nx + nw
-    assert lay.size_xy[0] > lay.spr_next[0] + lay.spr_next[2]
+def test_the_head_names_the_sprite_and_its_size(tmp_path, theme, mode):
+    """"Sprite N" heads the tab and ‹ n › and "Size" stand at its end
+    (D-10's "‹ value ›", design review R4-18), the number in the ink."""
+    ws, pl, ox, oy = _open(tmp_path, HANDHELD, theme, mode)
+    hx, hy, hw, hh = pl.rect_of("head")
+    sx = pl.rect_of("pickers")[0]
+    assert sx > hx + hw // 2
     px = el._px(ws)
     ink = el._rgb(ws.glass_canvas, ws.theme_colors["ink"])
-    seen = {px[oy + y][ox + x] for y in range(ny, ny + nh) for x in range(nx, nx + nw)}
+    seen = {px[oy + y][ox + x] for y in range(hy, hy + hh) for x in range(hx + hw // 2, sx)}
     assert ink in seen
 
 
@@ -143,43 +139,34 @@ def test_the_grid_cursor_is_drawn_for_keys_and_not_for_touch(tmp_path):
     """The grid's cursor is a key's: under touch it is gone (design review
     R4-19), and a key's move brings it back."""
     from runtime import ui_draw
-    ws, lay, ox, oy = _open(tmp_path, HANDHELD, "moy", "light")
+    ws, pl, ox, oy = _open(tmp_path, HANDHELD, "moy", "light")
     cv = ws.glass_canvas
     keyline = el._rgb(cv, ws.look.live.fixed[2])
     border = el._rgb(cv, ws.theme_colors["border"])
-    ws.paint_layer._cur[:] = [0, 0]
+    pl._cur[:] = [0, 0]
     # the cursor cell's left line, the grid's own left edge: where it stands
-    # in either layout (touch has no hint band, and so another grid span)
-    y, x = oy + lay.pg_y0 + 3, ox + lay.pg_x0 - 1
+    # in either layout (touch has no band, and so another grid margin)
     el._frame(ws)
-    assert el._px(ws)[y][x] == keyline
+    gx, gy = pl.grid_at()
+    assert el._px(ws)[oy + gy + 3][ox + gx - 1] == keyline
     ui_draw.input_kind("touch")
     el._frame(ws)
-    assert el._px(ws)[y][x] == border
+    el._frame(ws)
+    gx, gy = pl.grid_at()
+    assert el._px(ws)[oy + gy + 3][ox + gx - 1] == border
 
 
-def test_while_a_popover_is_open_the_strip_shows_only_its_close(tmp_path):
-    """The hint strip shows the operations' keys, and while the more menu
-    is open only the key that closes it (design review R4-13), never keys
-    the menu has taken."""
-    from runtime import paint_layer, ui_draw
-    ws, lay, _ox, _oy = _open(tmp_path, HANDHELD, "moy", "light")
-    seen = []
-    real = ui_draw.hints
-
-    def spy(cv, th, rect, items, desk=False, draw=True):
-        if draw:
-            seen.append(tuple(items))
-        return real(cv, th, rect, items, desk, draw)
-    paint_layer._ui_draw.hints = spy
-    try:
-        el._frame(ws)
-        assert seen and "Close" not in seen[-1]
-        ws.paint_layer._open_more()
-        el._frame(ws)
-        assert seen[-1] == paint_layer._HINTS_POP
-    finally:
-        paint_layer._ui_draw.hints = real
+def test_while_a_popover_is_open_the_band_shows_only_its_close(tmp_path):
+    """The band shows the operations' keys, and while the more menu is open
+    only what Enter picks and the key that closes it (design review R4-13),
+    never keys the menu has taken."""
+    ws, pl, _ox, _oy = _open(tmp_path, HANDHELD, "moy", "light")
+    band = pl.page.hints()
+    assert "Flip" in band and "Close" not in band
+    pl._open_more()
+    el._frame(ws)
+    band = pl.page.hints()
+    assert band[-2:] == ("back", "Close") and "Flip" not in band, band
 
 
 def _key_ink_h(px, box, ox, oy, w):
@@ -202,22 +189,23 @@ def test_the_more_menus_arrow_keys_stand_as_tall_as_its_letters(tmp_path, theme,
     """The desk Sprite pane's more menu's key column draws the shifts' arrows as tall as
     the letters beside them, "F" (design review R5-09), not as specks half
     their height."""
-    from runtime import paint_layer, ui_draw
-    ws, lay, ox, oy = _open(tmp_path, DESK, theme, mode)
+    from runtime import paint_layer, editor_sprite, ui_draw
+    ws, pl, ox, oy = _open(tmp_path, DESK, theme, mode)
     ui_draw.input_kind("keys")
     ws.paint.set_selection(1, 1, 4, 4)
-    ws.paint_layer._open_more()
+    pl._open_more()
+    el._frame(ws)
     el._frame(ws)
     px = el._px(ws)
     keys = paint_layer._OP_KEYS["keys"]
-    rows = {op[0]: op[1] + "\t" + keys[op[0]] for op in paint_layer._OPS if op[0] in keys}
-    host = ws.paint_layer._host
+    rows = {a: word + "\t" + keys[a] for a, word, _i in editor_sprite.OPS if a in keys}
+    host = pl._host
     w = 24
     letter = _key_ink_h(px, host.box(rows["fliph"]), ox, oy, w)
     assert letter > 0
     # a row the menu's cut peeks under its fade is the fade's measure
     # (tests/test_system_menu.py), not its key's
-    card = host.box("Shift" if ws.paint_layer._shifts else "More")
+    card = host.box("more_pop")
     fade = card[1] + card[3] - ui_draw.metrics("value_row")[29] - 10 * ws.layout.fs
     shown = [op for op in ("sleft", "sright", "sup", "sdown")
              if host.box(rows[op])[1] + host.box(rows[op])[3] <= fade]

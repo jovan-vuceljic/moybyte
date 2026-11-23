@@ -857,6 +857,16 @@ class EditorDesk(Layer):
         return (c, tab, pane, r, self._body(r, self._unit(), pane),
                 self._focus.get(self.key, 0))
 
+    def _sprite_owes(self):
+        """Whether a Sprite pane shown beside the one the keys are in owes
+        its page the next frame (its first places its focus): that frame
+        draws whole."""
+        for _n, pane, _r in self._shown_panes():
+            if self.tab_of(pane) == "paint":
+                pg = self.ws.paint_layer.page
+                return pg is not None and pg.owes
+        return False
+
     def _own_data(self, c):
         """What the frame's input may change that a pane besides `c` draws or
         `c`'s header shows: an edit's undo step, the sounds, the blocks'
@@ -918,7 +928,8 @@ class EditorDesk(Layer):
         still = not (data is False or app.playing() or ws.animating(dt, False)
                      or self._spills() or self._loupe is not None
                      or (c == "paint" and ws.paint_layer._host.tap == 2
-                         and ws.paint_layer._host.tap_armed()))
+                         and ws.paint_layer._host.tap_armed())
+                     or (c != "paint" and self._sprite_owes()))
         key = (c, tab, self._acts, self.key, self._focus.get(self.key, 0), self.grown, pane,
                r, self.placed()[0], cv.w, cv.h, look.look_gen, look.effective_font_scale(),
                look.effective_chrome_scale(), ws.bar_layer.shown_gen("menu"), data,

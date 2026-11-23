@@ -262,7 +262,8 @@ as `ev.row`; a compiled app's draw asks `ut_canvas_row()` for the row's
 index), `ui.colors()` answers the theme's colours there, its `hint=` is the
 band's confirm word while it holds focus, and its `pointer=` is handed a
 press and its drag and release in its own
-coordinates on any page. Its `reads=` names the states its draw reads (a
+coordinates on any page; while a popover or a dialog is open only a canvas
+inside it takes a press. Its `reads=` names the states its draw reads (a
 read of another is R01): the page's gen then counts them, so the page keeps
 its shift frames where a canvas that names none draws the frame after it
 whole. A foot of `look="band"` lies edge to edge on the

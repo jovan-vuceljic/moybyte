@@ -259,9 +259,13 @@ def _painted(ws, drv, n=4):
 def test_a_clean_switch_paints_once_and_a_commit_paints_again(desk):
     """The owed commit rides the frame's tail and shows nothing: a switch
     away from a clean tab paints the destination once; a tab that wrote
-    paints once more, since a commit may move what the Editor shows."""
+    paints once more, since a commit may move what the Editor shows. (A
+    tab's page's first frame owes the next, which places its focus: each
+    tab is shown once before.)"""
     ws, drv = desk
-    _painted(ws, drv)
+    for tab in ("paint", "cards"):
+        ws.editor_app.set_tab(tab)
+        _painted(ws, drv)
     ws.editor_app.set_tab("code")
     assert _painted(ws, drv) == 1
     ws.editor_app.set_tab("paint")
@@ -1522,15 +1526,17 @@ def test_a_press_held_on_the_sheet_shows_its_tile_in_a_3x_loupe(desk):
     assert d._loupe is None and ws.paint.n == 3
 
 
-def test_the_sprite_panes_palette_wears_its_64_chip(desk):
+def test_the_sprite_panes_steppers_and_64_stand_under_the_palette(desk):
+    """The Sprite pane's ‹ n ›, its size and the "64" (MOY64) chip share
+    one row under the grid and the palette."""
     ws, drv = desk
     _tap(drv, ord("3"), 1)
-    lay = ws.editor_desk._pane_layout("paint", ws.editor_desk._body(
-        _pane(ws.editor_desk, "paint"), 1))
-    x, y, w, h = lay.pal_chip
-    assert (x, w) == (lay.sw_x0, 2 * lay.sw) and h >= 32
-    assert y > lay.sw_y0 + 8 * lay.sw            # under the palette, beside the steppers
-    assert y == lay.spr_prev[1]
+    ws.mark_dirty()
+    drv.frame(DT)
+    pl = ws.paint_layer
+    nav, col, grid, size = (pl.rect_of(k) for k in ("nav", "color", "grid", "pickers"))
+    assert nav[1] >= max(col[1] + col[3], grid[1] + grid[3])
+    assert nav[1] <= size[1] and size[1] + size[3] <= nav[1] + nav[3]
 
 
 # -- a header's tools that do not fit -----------------------------------------------------

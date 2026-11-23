@@ -1,20 +1,14 @@
-"""The sprite pickers' frames (docs/history/scroll_and_text_2026-10.md §9): while
-the pickers are up the page under them does not change but by the input
-that reaches them, so it is a modal's page, held (`ui_draw.Hold`): on the
-handheld's full screen a frame puts the page back as it was held and draws
-the pickers over it, or, where each buffer holds the page and the card as
-the frames before drew them, draws inside the card's band alone
-(`HOLD_LEFT`); inside the desk's Sprite pane the desk draws the pane alone
-(its own frames), and the pickers inside their band alone where the WM's
-word says the window's target holds them. The sheet in their part is one `blit_indices_scale`
-of the rows the body shows.
+"""The sprite pickers' frames: the pickers are the Art page's popover
+(runtime/editors/editor_sprite.py), the size seg over the sheet, a canvas
+whose tapped sprite becomes the sprite. On the handheld's full screen the
+engine draws the page's frames; inside the desk's Sprite pane the desk
+draws the pane alone (its own frames) while the pickers are up.
 
 Each case runs one session on two consoles: one as it ships, its root
 presenting one, two or three buffers in turn, and one that draws every
 frame whole; every presented picture of the first is held to the second's
-bytes, and the share of its frames that put the page back or left it (the
-desk: drew the pane alone) is held above a floor (a mechanism that quietly never
-engages fails)."""
+bytes, and on the desk the share of its frames that drew the pane alone is
+held above a floor (a mechanism that quietly never engages fails)."""
 
 from array import array
 
@@ -86,25 +80,8 @@ def _console(path, desk, ships):
             took[0] = drew = ships and rows(dt, o)
             return drew
         ws.editor_desk._split_frame = own
-    else:
-        if not ships:
-            ws.wm.CONTENT_RING = False
-        hold = ws.paint_layer._hold
-        put = hold.put
-        under = hold.under
-
-        def held(*a, put=put):
-            return ships and put(*a)
-
-        def kept(*a, under=under, took=ws.took):
-            got = under(*a)
-            took[0] = got in (ui_draw.HOLD_PUT, ui_draw.HOLD_LEFT)
-            return got
-        hold.put = held
-        hold.under = kept
-        if not ships:
-            hold._left = lambda *a: False
-            hold.last = lambda *a: False
+    elif not ships:
+        ws.wm.CONTENT_RING = False
     ws.editor_app.set_tab("paint")
     ws.pointer.visible = False
     _fill(ws.paint.sheet)
@@ -210,31 +187,24 @@ class Pair:
             self.frame()
 
     def body(self):
-        """The pickers' card's band on the glass (the body it shows)."""
-        cv = self.a.sys_canvas
-        card = self.a.paint_layer._host.box("Sprites")
-        assert card is not None
-        x, y, w, h = ui_draw.popover_band(card, cv, self.a.paint_layer.layout.desk)
+        """The pickers' sheet on the glass."""
+        x0, y0, x1, y1 = self.a.paint_layer.sheet_shown
+        x, y = x0, y0
         if self.desk:
-            vp = self.a.editor_desk
-            own = vp._own_pane()
+            own = self.a.editor_desk._own_pane()
             assert own is not None and own[0] == "paint"
-            x += own[4][0]
-            y += own[4][1]
             content = self.a.wm.windows["menu"].content_rect()
-            x += content[0]
-            y += content[1]
-        return x, y, w, h
+            x += own[4][0] + content[0]
+            y += own[4][1] + content[1]
+        return x, y, x1 - x0, y1 - y0
 
     def share(self):
         return sum(self.alone) / max(1, len(self.alone))
 
 
 def _session(p):
-    x, y, w, h = p.body()
-    p.drag(x + w // 2, y + h * 3 // 4, -h // 2)
-    p.drag(x + w // 2, y + h * 3 // 4, -h // 3, steps=2, rest=30)     # a fling, coasting
-    p.drag(x + w // 2, y + h // 4, h // 2)
+    p.key(mi.KEY_RIGHT, 2)
+    p.key(mi.KEY_LEFT, 1, held=20)
     p.key(mi.KEY_DOWN, 4)
     p.key(mi.KEY_UP, 2)
     p.key(mi.KEY_DOWN, 1, held=20)
@@ -242,53 +212,21 @@ def _session(p):
 
 @pytest.mark.parametrize("bufs", (1, 2, 3))
 @pytest.mark.parametrize("desk", (False, True), ids=("handheld", "desk"))
-def test_the_pickers_frames_over_the_held_page_draw_as_a_whole_draw_does(tmp_path, desk, bufs):
+def test_the_pickers_frames_draw_as_a_whole_draw_does(tmp_path, desk, bufs):
     p = Pair(tmp_path, desk, bufs)
     _session(p)
     assert p.a.paint_layer._pop == "pickers"
-    assert p.share() > 0.6, p.alone
-
-
-@pytest.mark.parametrize("kind", ("touch", "keys"))
-@pytest.mark.parametrize("bufs", (1, 2, 3))
-@pytest.mark.parametrize("desk", (False, True), ids=("handheld", "desk"))
-def test_the_pickers_open_on_their_first_frame_over_the_page_as_it_was(tmp_path, monkeypatch,
-                                                                       desk, bufs, kind):
-    """A popover shows its card on the frame that opens it. Opened by an
-    input that changed nothing else, over a page the frame before drew
-    alone on the glass, that frame takes the page from it (`Hold.last`) and
-    draws only the hint strip, which names the pickers' keys; a desk pane
-    draws it once. Each frame after takes the page and
-    the card from the frame before and draws inside the card's band. Every
-    frame draws what a whole draw does."""
-    monkeypatch.setattr(ui_draw, "hint_kind", lambda: kind)
-    p = Pair(tmp_path, desk, bufs, settle=False)
-    pl = p.a.paint_layer
-    looks = []
-    look = pl._draw_look
-
-    def drawn(*a):
-        looks.append(p.a.frame_state.frames_drawn)
-        return look(*a)
-    pl._draw_look = drawn
-    p.frame()
-    assert pl.sheet_shown is not None
-    for _ in range(6):
-        p.frame()
-    assert pl._pop == "pickers"
-    assert len(looks) == (1 if desk else 0), looks
-    assert all(p.alone[1:]), p.alone
+    if desk:
+        assert p.share() > 0.6, p.alone
 
 
 @pytest.mark.parametrize("desk", (False, True), ids=("handheld", "desk"))
 def test_a_size_picked_and_a_sprite_tapped_draw_the_page_again(tmp_path, desk):
-    """The size seg changes the page under the pickers and a tapped tile
+    """The size seg changes the page under the pickers and a tapped sprite
     closes them: each draws what a whole draw does."""
     p = Pair(tmp_path, desk, 2)
-    p.key(mi.KEY_UP, 3)
     p.key(mi.KEY_RIGHT)
     assert p.a.paint.size == p.b.paint.size != 1
-    p.key(mi.KEY_DOWN, 2)
     x, y, w, h = p.body()
     p.both("touch", x + w // 2, y + h // 2)
     p.frame()
@@ -296,83 +234,39 @@ def test_a_size_picked_and_a_sprite_tapped_draw_the_page_again(tmp_path, desk):
     for _ in range(4):
         p.frame()
     assert not p.a.paint_layer._pop
-    assert p.a.paint.n == p.b.paint.n
+    assert p.a.paint.n == p.b.paint.n != 37
 
 
 @pytest.mark.parametrize("desk", (False, True), ids=("handheld", "desk"))
-def test_the_sheet_draws_inside_the_pickers_body(tmp_path, desk):
-    """The sheet is taller than the card's body: it is drawn through a clip
-    inside the body's band, so what the body does not show of it draws
-    nowhere."""
+def test_the_sheet_draws_inside_the_pickers_card(tmp_path, desk):
+    """The sheet's canvas lies inside the pickers' card, and its blit
+    inside its canvas."""
     p = Pair(tmp_path, desk, 2)
-    cv = p.a.sys_canvas
-    clips = []
-    blit = cv.blit_indices_scale
-
-    def spy(*a, **k):
-        card = p.a.paint_layer._host.box("Sprites")
-        band = ui_draw.popover_band(card, cv, p.a.paint_layer.layout.desk)
-        clips.append(((cv._clip_x0 - cv._ox, cv._clip_y0 - cv._oy,
-                       cv._clip_x1 - cv._ox, cv._clip_y1 - cv._oy), band))
-        return blit(*a, **k)
-
-    cv.blit_indices_scale = spy
-    x, y, w, h = p.body()
-    p.drag(x + w // 2, y + h * 3 // 4, -h // 2, rest=30)
-    p.drag(x + w // 2, y + h // 4, h // 3)
-    assert len(clips) > 10
-    for (x0, y0, x1, y1), b in clips:
-        assert b[0] <= x0 < x1 <= b[0] + b[2] and b[1] <= y0 < y1 <= b[1] + b[3], (
-            (x0, y0, x1, y1), b)
-
-
-@pytest.mark.parametrize("kind", ("touch", "keys"))
-def test_the_sprite_panes_layout_is_kept_whichever_input_is_in_use(tmp_path, monkeypatch, kind):
-    """The desk keeps one layout of the Sprite pane per hint kind (its hint
-    strip comes and goes with the keys): one built for the other kind would
-    be built again every frame, and no frame of the pickers could be the
-    pane's own."""
-    p = Pair(tmp_path, True, 2)
-    monkeypatch.setattr(ui_draw, "hint_kind", lambda: kind)
-    for _ in range(3):
-        p.frame()
-    del p.alone[:]
-    lays = []
     pl = p.a.paint_layer
-    draw = pl._draw_pickers
+    x0, y0, x1, y1 = pl.sheet_shown
+    cx, cy, cw, ch = pl._host.box("pick_pop")
+    assert cx <= x0 < x1 <= cx + cw and cy <= y0 < y1 <= cy + ch, (pl.sheet_shown, (cx, cy, cw, ch))
 
-    def drawn(*a):
-        lays.append(pl.layout)
-        draw(*a)
-    pl._draw_pickers = drawn
+
+def test_a_sheet_taller_than_the_room_scrolls_under_a_drag(tmp_path):
+    """The handheld's pickers show the rows of a tall sheet that fit; a
+    drag up the sheet shows the rows below, and a tap there picks the
+    sprite it shows, every frame as a whole draw does."""
+    p = Pair(tmp_path, False, 2)
+    pl = p.a.paint_layer
+    sheet = p.a.paint.sheet
+    fit = pl._sheet_fit
+    assert fit < sheet.rows, "the sheet fits the handheld's room"
+    x, y, w, h = p.body()
+    first = pl._sheet_first
+    tile = sheet.TILE * pl._sheet_geom(sheet)[0]
+    p.drag(x + w // 2, y + h - 4, -(h - 8))
+    assert pl._sheet_first > first and pl._pop == "pickers"
+    m = 2 * pl.layout.fs
+    p.both("touch", x + m + tile // 2, y + m + tile // 2)
+    p.frame()
+    p.both("touch_up")
     for _ in range(4):
         p.frame()
-    assert len(lays) == 4
-    assert all(lay is lays[0] for lay in lays)
-    assert all(p.alone), p.alone
-
-
-@pytest.mark.parametrize("bufs", (2, 3))
-def test_a_page_drawn_anew_is_taken_from_the_frame_before_while_the_input_rests(tmp_path, bufs):
-    """A frame that draws the page under the pickers anew (the size seg
-    changed it) holds none of it, and asks for the frames that bring each
-    buffer up to it: each takes the page and the card from the frame before
-    (`copy_last`) and draws inside the card's band (`HOLD_LEFT`)."""
-    p = Pair(tmp_path, False, bufs)
-    hold = p.a.paint_layer._hold
-    under = hold.under
-    got = []
-
-    def rec(*a, under=under, ws=p.a):
-        r = under(*a)
-        got.append((r, ws.frame_requested))
-        return r
-    hold.under = rec
-    p.key(mi.KEY_UP, 3)
-    del got[:]
-    p.key(mi.KEY_RIGHT)
-    p.frame()
-    assert p.a.paint.size == p.b.paint.size != 1
-    L, D = ui_draw.HOLD_LEFT, ui_draw.HOLD_DRAW
-    assert got[1:1 + bufs] == [(D, True)] + [(L, True)] * (bufs - 2) + [(L, False)], got
-    assert hold.key is None
+    assert p.a.paint.n == pl._sheet_first * sheet.cols == p.b.paint.n
+    assert not pl._pop

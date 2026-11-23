@@ -60,8 +60,7 @@ _LAZY_MODULES = {
     "map_editor_ui": ("MapEditorUI", "_MV_ZOOMS"),
     "scene_editor_ui": ("SceneEditorUI",),
     "music_editor_ui": ("MusicEditorUI",),
-    "paint_layer": ("PaintLayer", "_PG_X0", "_PG_Y0", "_PG_SPAN",
-                    "_SW_X0", "_SW_Y0", "_SW", "_SW_COLS"),
+    "paint_layer": ("PaintLayer",),
 }
 
 

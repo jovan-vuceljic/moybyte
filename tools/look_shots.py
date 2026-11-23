@@ -3322,9 +3322,11 @@ def _sprite_pairs(ws, img):
     button."""
     if ws.screen != "menu" or getattr(ws, "menu_view", None) != "paint" or ws.paint is None:
         return []
-    from runtime import paint_layer, ui_draw
-    lay, ox, oy = _editor_origin(ws, "paint_layout", ws.paint_layer.layout)
-    if lay is None:
+    from runtime import ui_draw
+    pl = ws.paint_layer
+    lay, ox, oy = _editor_origin(ws, "paint_layout", pl.layout)
+    row = [pl.rect_of(t) for t in ("pen", "fill", "shape", "select", "stamp", "more")]
+    if lay is None or None in row:
         return []
     th = ws.theme_colors
     px = img.load()
@@ -3333,15 +3335,14 @@ def _sprite_pairs(ws, img):
     others.add(_index_rgb(ws, ui_draw.button_ink(th, "danger")))
     others.discard(ink)
     bad = 0
-    for tid, (x, y, w, h) in zip(paint_layer._TOOLS, lay.tool_btns):
-        if tid == "stamp" or ws.paint_layer._tool_on(ws.paint, tid):
+    for tid, (x, y, w, h) in zip(("pen", "fill", "shape", "select", "stamp", "more"), row):
+        if tid in ("stamp", pl.s.tool) or (tid == "more" and pl._pop == "more"):
             continue
         seen = {px[ox + xx, oy + yy] for yy in range(y, y + h) for xx in range(x, x + w)
                 if 0 <= ox + xx < img.width and 0 <= oy + yy < img.height}
         if ink not in seen or seen & others:
             bad += 1
-    row = lay.tool_btns
-    pitch = 24 * lay.fs
+    pitch = 24 * lay.fs + 2
     off = sum(1 for a, b in zip(row, row[1:]) if b[0] - a[0] != pitch)
     return [_measure("sprite tools off the chrome ink", bad, 0, bad == 0),
             _measure("sprite tool row off the mockup's pitch", off, 0, off == 0)]
@@ -3527,11 +3528,12 @@ def _selection_pairs(ws, img):
     if sel is None:
         return []
     lay, ox, oy = _editor_origin(ws, "paint_layout", ws.paint_layer.layout)
-    if lay is None:
+    g = ws.paint_layer.grid_at()
+    if lay is None or g is None:
         return []
-    cell = lay.pg_span // ws.paint.dim
-    x0 = ox + lay.pg_x0 + sel[0] * cell
-    ys = range(oy + lay.pg_y0 + (sel[1] + 1) * cell, oy + lay.pg_y0 + sel[3] * cell)
+    cell = lay.span // ws.paint.dim
+    x0 = ox + g[0] + sel[0] * cell
+    ys = range(oy + g[1] + (sel[1] + 1) * cell, oy + g[1] + sel[3] * cell)
     if x0 < 1 or x0 >= img.width or not ys:
         return []
     border = _index_rgb(ws, ws.theme_colors["border"])
@@ -3616,19 +3618,25 @@ def _fade_bands(ws):
     pl = getattr(ws, "paint_layer", None)
     if pl is not None and getattr(pl, "_pop", None) == "more" and ws.screen == "menu" \
             and getattr(ws, "menu_view", None) == "paint":
-        from runtime import paint_layer, ui_draw
+        from runtime import paint_layer, ui_draw, editor_sprite
         keys = paint_layer._OP_KEYS.get(ui_draw.input_kind(), {})
-        labels = []
-        for oid, label, _slot in pl._more_rows(pl.layout.desk):
-            k = keys.get(oid)
-            labels.append(label + ("\t" + k if k else ""))
+        words = dict((a, w) for a, w, _i in editor_sprite.OPS)
+        words["clear"] = "Clear"
+
+        def lab(o):
+            return words[o] + ("\t" + keys[o] if o in keys else "")
+        if pl._shifts:
+            labels = [lab(o) for o in editor_sprite.SHIFTS]
+        else:
+            labels = [lab(o) for o in ("copy", "fliph", "flipv", "rot")]
+            labels += ([lab(o) for o in editor_sprite.SHIFTS] if pl.layout.desk else ["Shift"])
+            labels += ["Turn off mirror" if ws.paint.mirror else "Turn on mirror", lab("clear")]
         origin = (0, 0)
         if ws.wm.desk_open():
             win = getattr(ws.wm, "windows", {}).get(ws.wm.input_holder())
             if win is not None:
                 origin = win.content_rect()[:2]
-        out += _popover_bands(ws, "the more menu", pl._host,
-                              "Shift" if pl._shifts else "More", labels, origin)
+        out += _popover_bands(ws, "the more menu", pl._host, "more_pop", labels, origin)
     files = _app(ws, "files") if ws.app("files") is not None else None
     win = getattr(ws.wm, "windows", {}).get("files")
     shown = ws.screen == "files" or (win is not None and not getattr(win, "minimized", False)

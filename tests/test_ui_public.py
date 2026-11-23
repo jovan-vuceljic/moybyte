@@ -695,7 +695,7 @@ APPS = (
     "runtime/apps/calc_app.py", "runtime/editors/code_layer.py", "runtime/editors/editor_app.py",
     "runtime/editors/editor_blocks.py", "runtime/editors/editor_desk.py", "runtime/editors/editor_map.py", "runtime/editors/editor_music.py",
     "runtime/editors/editor_parts.py", "runtime/editors/editor_scene.py", "runtime/editors/editor_settings.py",
-    "runtime/editors/editor_sound.py",
+    "runtime/editors/editor_sound.py", "runtime/editors/editor_sprite.py",
     "runtime/toolkit/file_widgets.py", "runtime/apps/files_app.py", "runtime/apps/getcarts_app.py",
     "runtime/editors/map_editor_ui.py", "runtime/editors/music_editor_ui.py", "runtime/editors/paint_layer.py",
     "runtime/editors/scene_editor_ui.py", "runtime/system/settings_layer.py", "runtime/apps/storybook_app.py",

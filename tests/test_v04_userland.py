@@ -830,13 +830,19 @@ def test_host_console_paint_via_mouse(tmp_path):
     ws.text.open_paint()                                     # the Editor's PAINT, over the run
     drv.frame(1 / 30)
     assert ws.menu_view == "paint" and ws.paint is not None
-    lay = ws.paint_layer.layout
-    sx = lay.sw_x0 + (12 % lay.sw_cols) * lay.sw        # palette swatch for color 12
-    sy = lay.sw_y0 + (12 // lay.sw_cols) * lay.sw
-    drv.click(sx + 2, sy + 2)
+    from runtime import ui_draw
+    ui_draw.input_kind("touch")                         # the clicks that follow: touch's layout
+    ws.mark_dirty()
     drv.frame(1 / 30)
+    pl = ws.paint_layer
+    px, py, _pw, _ph = pl.rect_of("color")
+    sw = pl.layout.sw
+    drv.click(px + (12 % 2) * sw + 2, py + (12 // 2) * sw + 2)   # palette swatch for color 12
+    drv.frame(1 / 30)
+    drv.frame(1 / 30)                                   # (the cell's on= runs the frame after)
     assert ws.paint.color == 12
-    drv.click(lay.pg_x0 + 2, lay.pg_y0 + 2)             # paint sprite 0, pixel (0,0)
+    gx, gy = pl.grid_at()
+    drv.click(gx + 2, gy + 2)                           # paint sprite 0, pixel (0,0)
     drv.frame(1 / 30)
     assert ws.sheet.tget(0, 0, 0) == 12
 

@@ -51,7 +51,7 @@ local KEYS = {}                 -- the keys of the lowered page's nodes: a row's
 local ROW_ACT = {}              -- a row's node's key -> the action it fires
 local DRAWS = {}                -- a canvas's node -> its draw
 local ROWS = false              -- the lowered page lists rows (whose keys are data)
-local POINTERS = {}             -- each canvas of the lowered page a pointer is routed to: { node, key, its pointer= action }
+local POINTERS = {}             -- each canvas of the lowered page a pointer is routed to: { node, key, its pointer= action, in a popover or a dialog }
 local READS_OF = {}             -- a canvas's node -> the states its draw may read (reads=), a set
 local DRAWN = {}                -- a canvas's node -> { x, y, w, h, the frame that drew it there }
 local FRAMES = 0                -- the frames run
@@ -325,7 +325,7 @@ local SHAPE = {
 -- a prop given as a list that is one prop: its values joined, as the Python layer joins a tuple
 local JOINED = { sizes = 1 }
 
-local function lower_node(n, parent, path, model)
+local function lower_node(n, parent, path, model, modal)
   local kind = KINDS[n.kind]
   if not kind then fail("E00", n.at, "the C engine does not draw ui." .. n.kind .. " yet", nil, nil, FIX) end
   local key = c_key(n)
@@ -380,7 +380,7 @@ local function lower_node(n, parent, path, model)
       for _, name in ipairs(n.o.reads) do r[name] = true end
       READS_OF[me] = r
     end
-    if n.o.pointer then POINTERS[#POINTERS + 1] = { me, key, n.o.pointer } end
+    if n.o.pointer then POINTERS[#POINTERS + 1] = { me, key, n.o.pointer, modal } end
   end
   if n.action then check(X:node_action(me, AIDX[n.action]), "ui." .. n.kind .. " " .. q(key) .. "'s action", n.at) end
   if n.kind == "dialog" then
@@ -391,11 +391,12 @@ local function lower_node(n, parent, path, model)
   end
   local kids = n.body and n.body.kids or n.kids
   model = shape.model and n.a[1] or model
-  for _, k in ipairs(kids) do lower_node(k, me, path .. "/" .. key, model) end
+  modal = modal or n.kind == "popover" or n.kind == "dialog"
+  for _, k in ipairs(kids) do lower_node(k, me, path .. "/" .. key, model, modal) end
   if n.cases then              -- rows by=: a case child a value, the row's value picking it
     for _, v in ipairs(DECL[n.a[1]].fields[n.o.by].values) do
       local cm = check(X:node(KINDS.case, "case:" .. v, me), "ui.rows case " .. q(v), n.at)
-      for _, k in ipairs(n.cases[v].kids) do lower_node(k, cm, path .. "/" .. v, model) end
+      for _, k in ipairs(n.cases[v].kids) do lower_node(k, cm, path .. "/" .. v, model, modal) end
     end
   end
   if n.built then
@@ -405,7 +406,7 @@ local function lower_node(n, parent, path, model)
       local c = n.built[v]
       local cv = v == "true" and "True" or v == "false" and "False" or v
       local cm = check(X:node(KINDS.case, "case:" .. cv, me), "ui.switch case " .. q(v), n.at)
-      for _, k in ipairs(c.kids) do lower_node(k, cm, path .. "/" .. v, model) end
+      for _, k in ipairs(c.kids) do lower_node(k, cm, path .. "/" .. v, model, modal) end
     end
   end
 end
@@ -480,7 +481,8 @@ end
 
 -- A canvas with pointer= is handed down, drag and up in its own coordinates,
 -- at the rect the last frame drew it at; the press that starts on it holds it
--- until release (uitree_c.py's CEditorPage.point)
+-- until release; while a popover or a dialog is up, only a canvas in it takes
+-- a press (uitree_c.py's CEditorPage.point)
 local function pointers()
   if #POINTERS == 0 and not HELD then return end
   local tx, ty, tapped, held = touch()
@@ -498,9 +500,10 @@ local function pointers()
     return
   end
   if not tapped then return end
+  local up = X:dialog() >= 0 or X:popover() ~= nil
   for _, p in ipairs(POINTERS) do
     local r = DRAWN[p[1]]
-    if r and r[5] == FRAMES and tx >= r[1] and tx < r[1] + r[3] and ty >= r[2] and ty < r[2] + r[4] then
+    if r and r[5] == FRAMES and (p[4] or not up) and tx >= r[1] and tx < r[1] + r[3] and ty >= r[2] and ty < r[2] + r[4] then
       local key, name, x, y = p[2], p[3], r[1], r[2]
       fire_placed(name, "pointer down on canvas " .. q(key), event("down", tx - x, ty - y, "touch"))
       if held then HELD = { key = key, name = name, x = x, y = y, px = tx, py = ty }

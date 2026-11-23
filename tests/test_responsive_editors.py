@@ -432,13 +432,13 @@ def test_paint_editor_grid_grows_on_large_canvas(tmp_path):
     """At 960x600 the zoomed pixel grid grows (a multiple of 48px, so every sprite
     size still edits in whole on-screen pixels) and the editor renders valid pixels
     on the system canvas with no viewport bezel."""
-    from runtime import paint_layer as P
     from runtime import host_app
+    from runtime.paint_layer import PaintLayout
     ws = _ws(tmp_path, sys_size=(960, 600))
     drv = host_app.ConsoleDriver(ws)
     ws.text.open_paint()
     lay = ws.paint_layer.layout
-    assert lay.pg_span > P._PG_SPAN and lay.pg_span % 48 == 0
+    assert lay.span > PaintLayout(320, 240, 1).span and lay.span % 48 == 0
     drv.frame(1 / 30)
     buf = drv.rgb888()
     assert len(buf) == 960 * 600 * 3
@@ -454,15 +454,18 @@ def test_paint_editor_tap_paints_in_system_coords(tmp_path):
     ws.text.open_paint()
     drv.frame(1 / 30)
     pe = ws.paint
-    lay = ws.paint_layer.layout
-    # Pick color 12 from the swatch column.
-    sx = lay.sw_x0 + (12 % lay.sw_cols) * lay.sw + 1
-    sy = lay.sw_y0 + (12 // lay.sw_cols) * lay.sw + 1
-    drv.touch(sx, sy)
+    pl = ws.paint_layer
+    # Pick color 12 from the palette's two columns.
+    px, py, _pw, _ph = pl.rect_of("color")
+    sw = pl.layout.sw
+    drv.touch(px + (12 % 2) * sw + 1, py + (12 // 2) * sw + 1)
+    drv.frame(1 / 30)
+    drv.touch_up()
     drv.frame(1 / 30)
     assert pe.color == 12
     # Paint pixel (0, 0) of the tile via the top-left grid cell.
-    drv.touch(lay.pg_x0 + 2, lay.pg_y0 + 2)
+    gx, gy = pl.grid_at()
+    drv.touch(gx + 2, gy + 2)
     drv.frame(1 / 30)
     ox, oy = ws.run.project.sheet.tile_origin(pe.n)
     assert ws.run.project.sheet.pget(ox, oy) == 12

@@ -23,21 +23,25 @@ def _on_the_night_fixture(monkeypatch):
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def _cell_center(C, lx, ly, dim):
+def _cell_center(ws, lx, ly, dim):
     """Screen pixel at the centre of grid cell (lx, ly) for an editor of side
-    `dim` pixels -- mirrors console._paint_grid_cell's inverse mapping."""
-    cell = C._PG_SPAN // dim
-    return (C._PG_X0 + lx * cell + cell // 2,
-            C._PG_Y0 + ly * cell + cell // 2)
+    `dim` pixels, where the last frame placed the grid."""
+    pl = ws.paint_layer
+    cell = pl.layout.span // dim
+    gx, gy = pl.grid_at()
+    return (gx + lx * cell + cell // 2, gy + ly * cell + cell // 2)
 
 
 def _open_paint(ws):
-    from runtime import host_app  # noqa: F401
     # Open the first cart that has a sheet, then the paint editor.
     ws.launcher.sel = 0
     ws.open()
     ws.text.open_paint()
     assert ws.menu_view == "paint"
+    from runtime import ui_draw
+    ui_draw.input_kind("touch")     # the presses that follow: touch's layout
+    ws.mark_dirty()
+    ws.frame(1 / 30)                # the page placed: its rects
 
 
 # -- Part B: larger sprites (PaintEditor logic) ------------------------------
@@ -146,14 +150,13 @@ def test_spr_with_wh_span_blits_a_16x16_image():
 # -- Part A: drag-to-draw through the pointer path ---------------------------
 
 def test_tap_paints_one_pixel(tmp_path):
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_paint(ws)
     drv = host_app.ConsoleDriver(ws)
     ws.paint.color = 11
-    x, y = _cell_center(C, 3, 4, ws.paint.dim)
+    x, y = _cell_center(ws, 3, 4, ws.paint.dim)
     drv.touch(x, y)
     drv.frame(1 / 30)
     drv.touch_up()
@@ -165,7 +168,6 @@ def test_tap_paints_one_pixel(tmp_path):
 def test_drag_paints_a_continuous_stroke_no_gaps(tmp_path):
     # Press on cell (0,0), drag to (7,0) sampling only the endpoints (a fast drag):
     # every cell on the line must be painted -- the line-fill closes the gaps.
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -174,10 +176,10 @@ def test_drag_paints_a_continuous_stroke_no_gaps(tmp_path):
     ws.paint.color = 12
     dim = ws.paint.dim
 
-    x0, y0 = _cell_center(C, 0, 0, dim)
+    x0, y0 = _cell_center(ws, 0, 0, dim)
     drv.touch(x0, y0)
     drv.frame(1 / 30)                              # press paints the first cell
-    x1, y1 = _cell_center(C, 7, 0, dim)
+    x1, y1 = _cell_center(ws, 7, 0, dim)
     drv.touch_drag(x1, y1)                          # jump straight to the far cell
     drv.frame(1 / 30)
     drv.touch_up()
@@ -189,7 +191,6 @@ def test_drag_paints_a_continuous_stroke_no_gaps(tmp_path):
 
 
 def test_drag_paints_a_diagonal_run(tmp_path):
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -198,10 +199,10 @@ def test_drag_paints_a_diagonal_run(tmp_path):
     ws.paint.color = 8
     dim = ws.paint.dim
 
-    x0, y0 = _cell_center(C, 0, 0, dim)
+    x0, y0 = _cell_center(ws, 0, 0, dim)
     drv.touch(x0, y0)
     drv.frame(1 / 30)
-    x1, y1 = _cell_center(C, 7, 7, dim)
+    x1, y1 = _cell_center(ws, 7, 7, dim)
     drv.touch_drag(x1, y1)
     drv.frame(1 / 30)
     drv.touch_up()
@@ -215,7 +216,6 @@ def test_drag_paints_a_diagonal_run(tmp_path):
 def test_release_resets_stroke_so_taps_dont_connect(tmp_path):
     # Tap (0,0), lift, tap (7,7): the two separate taps must NOT be joined by a line
     # (the gap between them stays blank). This guards the stroke-origin reset.
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -227,7 +227,7 @@ def test_release_resets_stroke_so_taps_dont_connect(tmp_path):
     mid_before = ws.sheet.pget(ox + 3, oy + 3)     # seed art may live here; capture it
 
     for (lx, ly) in ((0, 0), (7, 7)):
-        x, y = _cell_center(C, lx, ly, dim)
+        x, y = _cell_center(ws, lx, ly, dim)
         drv.touch(x, y)
         drv.frame(1 / 30)
         drv.touch_up()
@@ -293,7 +293,6 @@ def _map_cell_center(ws, cx, cy):
 def test_map_tap_paints_one_cell(tmp_path):
     # In the map editor a tap (press + release in place) stamps the brush into the
     # single cell under it -- the drag gesture is reserved for panning (#37).
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))

@@ -246,8 +246,8 @@ SURFACES = {
     ]),
     "paint": ("ws._g['_edit']('paint', %r)", [
         ("ws.paint_layer", "draw", "paint.draw"),
-        ("ws.paint_layer", "_draw_paint", "paint._draw_paint"),
-        ("ws.paint_layer", "_draw_tools", "paint.tools"),
+        ("ws.paint_layer", "draw_grid", "paint.grid"),
+        ("ws.paint_layer", "draw_map", "paint.map"),
         ("ws.paint_layer", "_draw_grid_overlay", "paint.grid_overlay"),
         BAR,
     ]),

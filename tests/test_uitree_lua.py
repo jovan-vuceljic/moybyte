@@ -462,6 +462,56 @@ def test_a_canvas_pointer_hands_down_drag_and_up_in_its_own_coordinates(tmp_path
     assert any("down:touch drag:touch up:touch" in l for l in lines), lines
 
 
+def test_while_a_popover_is_open_only_a_canvas_in_it_takes_a_press(tmp_path):
+    """A canvas under an open popover takes no press; one inside the
+    popover takes its own (docs/app_api_v1.md's canvas), as uitree_c.py's
+    point() routes a Python app's."""
+    from runtime import host_app
+    from runtime.host import moy_log
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Modal", 'ui.app("Modal", { icon = "calc" })\n'
+          'local s = ui.state { open = true }\n'
+          'ui.action("under", "Under", function(ev) end, { takes = "pointer" })\n'
+          'ui.action("inner", "Inner", function(ev) end, { takes = "pointer" })\n'
+          'ui.page("p", function()\n'
+          '  ui.canvas("pad", { h = 160, pointer = "under", draw = function(x, y, w, h) rect(x, y, w, h, 12) end })\n'
+          '  ui.popover("pop", { shown = "open", anchor = "pad", w = 120 }, function()\n'
+          '    ui.canvas("in", { h = 40, pointer = "inner", draw = function(x, y, w, h) rect(x, y, w, h, 8) end })\n'
+          '  end)\n'
+          'end)\n')
+    ws, drv, frame, open_cart = _console(carts)
+    open_cart(ws, "Modal")
+    for _ in range(6):
+        frame()
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    w, h = ws.sys_canvas.w, ws.sys_canvas.h
+    rgb = bytes(drv.rgb888())
+    # colour 8 is red, 12 blue (the PICO-8 palette)
+    px = [(x, y, rgb[(y * w + x) * 3], rgb[(y * w + x) * 3 + 2])
+          for y in range(0, h, 2) for x in range(0, w, 2)]
+    inner = [(x, y) for x, y, r, b in px if r > 200 and b < 120]
+    blue = [(x, y) for x, y, r, b in px if b > 200 and r < 120]
+    assert inner and blue
+
+    def tap(x, y):
+        seq = moy_log.next()
+        drv.touch(x, y)
+        frame()
+        drv.touch_up()
+        frame()
+        frame()
+        lines = [r[4].split("[trace] ", 1)[1] for r in moy_log.read(seq, 4000) if "[trace] " in r[4]]
+        return [" ".join(l.split()[1:]) for l in lines if l.split()[1:2] == ["action"]]
+
+    ix, iy = inner[len(inner) // 2]
+    took = tap(ix, iy)
+    assert any("action inner from pointer down on canvas 'in'" in l for l in took), took
+    ux, uy = blue[len(blue) // 2]
+    took = tap(ux, uy)
+    assert not any("canvas 'pad'" in l for l in took), took
+
+
 def test_a_letter_key_and_the_confirm_role_fire_on_the_c_engine(tmp_path):
     """An action's letter key fires it, traced `key 's'`, and the confirm
     role's key fires its action where nothing on the page is focused, as

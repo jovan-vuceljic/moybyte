@@ -54,6 +54,16 @@ def _fn_at(mod, ref):
     return getattr(mod, ref)
 
 
+def _in_modal(n):
+    """Whether node `n` stands in a popover or a dialog."""
+    p = n.parent
+    while p is not None:
+        if p.kind in ("popover", "dialog"):
+            return True
+        p = p.parent
+    return False
+
+
 def _list_model(n):
     """The model of the list node `n` stands in the body of, else None."""
     p = n.parent
@@ -217,7 +227,8 @@ class CEngine(Engine):
         self._legacy = {}       # a legacy node -> its stand-in (`_pane_node`), its functions in .l
         self._pn = {}           # a panes or pane node -> its stand-in (`_pane_node`)
         self._pn_roots = None   # ...the outermost panes' nodes, found at the first frame
-        self._pointers = []     # (key, its pointer= action, the model of the list it stands in or None) of each canvas a pointer is routed to
+        self._pointers = []     # (key, its pointer= action, the model of the list it stands in or None,
+                                # whether it stands in a popover or a dialog) of each canvas a pointer is routed to
         self._held = None       # (key, action, rect, row): the canvas a press holds until its release
         self._pop_lists = {}    # a popover's key -> (model, cur) of the list the arrows walk in it
         self._pop_fields = {}   # a popover's key -> whether a field of its own takes typed keys
@@ -673,7 +684,7 @@ class CEngine(Engine):
                         pop_lists[n.key] = (k.l["model"], k.src["cur"])
                         break
             if nk == "canvas" and l and l.get("pointer") is not None:
-                pointers.append((n.key, l["pointer"], _list_model(n)))
+                pointers.append((n.key, l["pointer"], _list_model(n), _in_modal(n)))
             if nk == "canvas" and l and l.get("ground"):
                 grounds[me] = l["ground"]
             elif nk == "text_editor":
@@ -824,7 +835,7 @@ class CEngine(Engine):
         keys = []
         for k, (fn, m) in self._canvas_keys.items():
             keys.append((k, _fn_ref(mod, fn, "canvas %s keys=" % k), m))
-        return (tuple((k, a.name, m) for k, a, m in self._pointers),
+        return (tuple((k, a.name, m, o) for k, a, m, o in self._pointers),
                 tuple((k, m, c) for k, (m, c) in self._pop_lists.items()),
                 tuple(self._pop_fields.items()),
                 tuple(self._doc_reads.items()),
@@ -839,7 +850,7 @@ class CEngine(Engine):
 
         def made(v, d):
             return v if d == 0 else dict(v) if d == 1 else getattr(mod, v)
-        self._pointers = [(k, acts[a], m) for k, a, m in f[0]]
+        self._pointers = [(k, acts[a], m, o) for k, a, m, o in f[0]]
         self._canvas_keys = dict((k, (_fn_at(mod, n), m)) for k, n, m in f[6])
         self._reads = dict(f[7])
         self._pop_lists = dict((k, (m, c)) for k, m, c in f[1])
@@ -1105,7 +1116,8 @@ class CEngine(Engine):
     def point(self, px, py, click):
         """A canvas with pointer= is handed down, drag and up in its own
         coordinates, at the rect the last frame placed it; the press that
-        starts on it holds it until release, outside its rect too. Every
+        starts on it holds it until release, outside its rect too. While a
+        popover or a dialog is up, only a canvas in it takes a press. Every
         other press is the page's."""
         held = self._held
         if held is not None:
@@ -1118,7 +1130,11 @@ class CEngine(Engine):
             self._damage.all()
             return True
         if click and self._pointers and self._visiting():
-            for key, act, model in self._pointers:
+            x = self._x
+            up = x.dialog() >= 0 or x.back_popover() != -2
+            for key, act, model, modal in self._pointers:
+                if up and not modal:
+                    continue
                 r, row = self._canvas_at(key, model, px, py)
                 if r is not None:
                     ev = S.Ev("down", px - r[0], py - r[1], "touch", row)
@@ -1596,9 +1612,9 @@ class CEditorEngine(CEngine, _ed.Engine):
 
     def point(self, px, py, click):
         """A canvas with pointer= is handed down, drag and up in its own
-        coordinates, at the rect the last frame placed it, while no popover
-        shows; the press that starts on it holds it until release
-        (`uitree_editor.Engine.point`).
+        coordinates, at the rect the last frame placed it (while a popover
+        shows, only one in it); the press that starts on it holds it until
+        release (`uitree_editor.Engine.point`).
         A legacy body with pointer= is handed the press (its stop takes
         focus) and what follows until the release, in its own coordinates."""
         down = self.pointer_down()
@@ -1625,9 +1641,6 @@ class CEditorEngine(CEngine, _ed.Engine):
                         self.held_legacy = (n, r)
                     self._damage.all()
                     return True
-        if click and self._held is None and self.popover_shown():
-            # a canvas under a shown popover takes no press: the popover holds the pointer
-            return Engine.point(self, px, py, click)
         return CEngine.point(self, px, py, click)
 
     def step_rows(self, d):

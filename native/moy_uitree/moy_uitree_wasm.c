@@ -572,9 +572,20 @@ static void pointed(app_t *a, int i, int kind, int32_t x, int32_t y) {
     owe(a, a->ptr[i].act, -1, -1, pev, src, 1);
 }
 
+// Whether node `k` stands in a popover or a dialog.
+static int in_modal(const uit_t *e, int k) {
+    for (int p = e->nodes[k].parent; p >= 0 && p != (int)UIT_NONE; p = e->nodes[p].parent) {
+        if (e->nodes[p].kind == UIT_POPOVER || e->nodes[p].kind == UIT_DIALOG) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // The pointer before the keys: a canvas with pointer= is handed down, drag
 // and up in its own coordinates, at the rect the last frame drew it at; the
-// press that starts on it holds it until release.
+// press that starts on it holds it until release; while a popover or a dialog
+// is up, only a canvas in it takes a press.
 static void pointers(app_t *a, const int32_t *snap) {
     int st = snap[MOYCORE_UI_SNAP_PTR];
     int32_t tx = snap[MOYCORE_UI_SNAP_X], ty = snap[MOYCORE_UI_SNAP_Y];
@@ -594,8 +605,12 @@ static void pointers(app_t *a, const int32_t *snap) {
     if (!(st & 4)) {
         return;
     }
+    int up = uit_dialog(a->e) >= 0 || uit_back_popover(a->e, NULL, 0) != -2;
     for (int i = 0; i < a->nptr; i++) {
         const int32_t *r = a->ptr[i].r;
+        if (up && !in_modal(a->e, a->ptr[i].node)) {
+            continue;
+        }
         if (a->ptr[i].frame == a->frames && tx >= r[0] && tx < r[0] + r[2] && ty >= r[1] && ty < r[1] + r[3]) {
             pointed(a, i, 1, tx, ty);
             if (st & 2) {
