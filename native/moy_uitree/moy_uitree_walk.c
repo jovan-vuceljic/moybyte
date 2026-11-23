@@ -1308,21 +1308,6 @@ static uint32_t prop_text(uit_t *e, int k, const char *name, int model, int row,
 static int32_t len_of(uit_t *e, int t, int model, int row, int32_t dflt);
 static int32_t int_of(uit_t *e, int t, int model, int row, int32_t dflt);
 
-// A label's tone=: a literal's index, or a template's word (dim, value, danger; another is ink).
-static int label_tone(uit_t *e, int k, int model, int row)
-{
-    int tone = NODE(k)->lit;
-    if (!tone) {
-        uint32_t nt, mark = e->scratch.n, at = prop_text(e, k, "tone", model, row, &nt);
-        static const char *const TONES[] = {"dim", "value", "danger"};
-        for (int i = 0; i < 3 && !tone; i++)
-            if (nt == strlen(TONES[i]) && !memcmp(e->scratch.p + at, TONES[i], nt))
-                tone = i + 1;
-        e->scratch.n = mark;
-    }
-    return tone;
-}
-
 static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row, int32_t *h,
                          int part)
 {
@@ -1334,7 +1319,16 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         if (n)
             moy_ui_api_icon(c, sspan(e, at, n));
     }
-    int tone = label_tone(e, k, model, row);
+    // tone=: a literal's index, or a template's word (dim, value, danger; another is ink)
+    int tone = N->lit;
+    if (!tone) {
+        uint32_t nt, mark = e->scratch.n, at = prop_text(e, k, "tone", model, row, &nt);
+        static const char *const TONES[] = {"dim", "value", "danger"};
+        for (int i = 0; i < 3 && !tone; i++)
+            if (nt == strlen(TONES[i]) && !memcmp(e->scratch.p + at, TONES[i], nt))
+                tone = i + 1;
+        e->scratch.n = mark;
+    }
     a1 = text(e, k, 0, model, row, &n1);
     // scale=: its face at that whole scale, never under the page's; w=: its text at most that wide
     int32_t sc = int_of(e, N->t_value, model, row, 0), cap = len_of(e, N->t_aux, model, row, 0);
