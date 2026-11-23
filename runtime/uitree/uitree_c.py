@@ -114,7 +114,7 @@ _KIND_NAMES = dict((v, k) for k, v in _KINDS.items())
 _KIND_NAMES[len(_KINDS) + 1] = "cycle"          # UIT_KINDS: a seg of the cycle look
 _BOUND = ("toggle", "seg", "slider", "field", "text_view", "tabs", "cells")       # a two-way control: bound to the state of its key
 _LIT_ONLY = {"seg": ("values", "words", "model", "labels"), "text_view": ("name",),
-             "switch": ("name",), "case": ("v",), "tabs": ("labels", "values")}    # a switch's and a case's: in their keys   # what the Builder keeps beside a node's props
+             "switch": ("name",), "case": ("v",), "tabs": ("labels", "values", "model")}    # a switch's and a case's: in their keys   # what the Builder keeps beside a node's props
 _TYPED = "typed in field "
 _DOC = "#doc"               # a document's model: its state's name and this
 LOWERED = "lowered"         # an engine's root once its page is in the store: the Python tree is gone
@@ -1966,7 +1966,19 @@ class CEditorEngine(CEngine, _ed.Engine):
                 now.app, now.frame = app, frame
             return
         cv = self.cv
-        if not _ed._clip_in(cv, x, y, w, h, self.clip_to):
+        outer = self.clip_to
+        k = self._row_clip
+        if model >= 0 and self._x.draw_clip(k):
+            # a table's part: what of its row the view shows, inside the host's clip
+            if outer is not None:
+                x0 = max(k[0], outer[0])
+                y0 = max(k[1], outer[1])
+                k[2] = max(0, min(k[0] + k[2], outer[0] + outer[2]) - x0)
+                k[3] = max(0, min(k[1] + k[3], outer[1] + outer[3]) - y0)
+                k[0] = x0
+                k[1] = y0
+            outer = k
+        if not _ed._clip_in(cv, x, y, w, h, outer):
             return
         try:
             CEngine._draw(self, node, model, row, x, y, w, h)

@@ -2556,7 +2556,8 @@ static void draw_table(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     moy_ui_over_none(&o);
     moy_ui_over_text(&o, MOY_UI_OV_ID, span_of(key, strlen(key)));
     if (cv >= 0) {
-        int32_t part[2] = {0, (int32_t)(N->btn ? N->btn : 1) * row_unit(e)}, one = 1;
+        int32_t rh = N->btn ? (int32_t)N->btn * row_unit(e) : len_of(e, uit_tmpl_prop(e, k, "row"), -1, -1, row_unit(e));
+        int32_t part[2] = {0, rh > 0 ? rh : 1}, one = 1;
         moy_ui_over_put(&o, MOY_UI_OV_PART, part);
         moy_ui_over_put(&o, MOY_UI_OV_BAR, &one);
     }
@@ -2568,8 +2569,12 @@ static void draw_table(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
         int32_t i;
         canvas_drew(e, cv);             // its rows are a canvas's: the next frame carries no gen but by reads=
         while ((i = moy_ui_api_table_part(c, s, pr)) >= 0)
-            if (e->draw_fn && i < M->nrows)
+            if (e->draw_fn && i < M->nrows) {
+                memcpy(e->draw_clip, pr + 4, sizeof e->draw_clip);     // what of the row the view shows
+                e->draw_clip_on = 1;
                 canvas_draw(e, cv, m, i, pr[0], pr[1], pr[2], pr[3]);
+                e->draw_clip_on = 0;
+            }
     }
     int got = out[0];
     if (got < 0 || got >= M->nrows)
@@ -6516,7 +6521,11 @@ int uit_lent(uit_t *e, const char *site, int32_t *cells, int max, char *text, si
         if (!placed_shown(e, g, -1, -1))
             continue;
         const char *key = uit_str(e, G->key);
-        if (G->kind == UIT_TABS) {
+        if (G->kind == UIT_TABS && e->slots[G->slot].type != UIT_ENUM) {
+            r = uit_fail(e, UIT_E_KIND, UIT_MSG("tabs over a row_of in a row lent to %s: an enum's tabs",
+                                                "row_of tabs lent to %s"), site);
+            break;
+        } else if (G->kind == UIT_TABS) {
             const uit_slot_t *S = &e->slots[G->slot];
             const char *v = uit_str(e, S->vals);
             for (int i = 0; i < S->nvals && n < max; i++, v += strlen(v) + 1) {

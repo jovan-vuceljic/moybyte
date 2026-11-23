@@ -2145,9 +2145,25 @@ function T.tabs(name, o, extra)
   local at = where()
   local n = node("tabs", at)
   if extra ~= nil then fail("N01", at, "ui.tabs takes its state and its props", "ui.tabs(NAME, { labels = \"TABLE\" })", describe(extra)) end
-  local ty = head_state("tabs", name, { "enum" }, at)
+  local ty = head_state("tabs", name, { "enum", "rowof" }, at)
   n.a[2] = name
+  if ty.t == "rowof" then
+    local m = DECL[ty.model]
+    local ctx = { fields = m.fields, order = m.order, name = ty.model }
+    local sr = ROWCTX
+    ROWCTX = ctx
+    local ok, err = pcall(check_opts, "tabs", o, at)
+    ROWCTX = sr
+    if not ok then error(err, 0) end
+    n.o = err
+    if n.o.text == nil or n.o.labels ~= nil or n.o.icons ~= nil or n.o.offered ~= nil then
+      fail("N01", at, "ui.tabs(" .. q(name) .. ") over a row_of words each row with text", "text = \"{.FIELD}\"", n.o.labels and "labels" or "none")
+    end
+    if n.o.on ~= nil then use_action(n.o.on, "none", at, "ui.tabs' on", false) end
+    return n
+  end
   n.o = check_opts("tabs", o, at)
+  if n.o.text ~= nil then fail("N01", at, "ui.tabs(" .. q(name) .. "): text words a row_of's rows", "labels = \"TABLE\" for an enum", "text") end
   for _, p in ipairs({ "labels", "icons" }) do
     local tn = n.o[p]
     if tn == nil and p == "labels" then
@@ -2297,7 +2313,7 @@ T.on = not_here("ui.on", "the handler is the third argument of ui.action or the 
 local function ident(k)
   if k.o.key then return k.o.key end
   if k.kind == "item" then return k.action end
-  if k.kind == "seg" or k.kind == "text_view" then return k.a[2] end
+  if k.kind == "seg" or k.kind == "text_view" or k.kind == "tabs" then return k.a[2] end
   if k.kind == "table" then return k.a[1] end
   if k.kind == "button" or k.kind == "link" then return k.action end
   if k.kind == "toggle" or k.kind == "slider" or k.kind == "field" then return k.a[2] end

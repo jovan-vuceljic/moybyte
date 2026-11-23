@@ -203,24 +203,27 @@ def test_blocks_outline_drag_scrolls(tmp_path):
     if be is None:
         import pytest
         pytest.skip("no block editor for this cart")
-    lay = bu.block_layout
+    from runtime.block_editor_ui import ROW
+    for _ in range(2):
+        drv.frame(1 / 30)
+    rx, ry, rw, rh = bu.page().rect_of("lines")
     # Guarantee overflow: pad the program past one screen of rows.
-    while len(be.rows) <= lay.rows + 3:
+    while len(be.rows) <= rh // ROW + 3:
         be.rows.append(be.rows[-1])
     be._hist.gen += 1
     for _ in range(3):
         drv.frame(1 / 30)
-    x = lay.x0 + 4
-    y = lay.y0 + lay.rows * lay.row_h - 4
+    x = rx + 4
+    y = ry + rh - 4
     drv.touch(x, y)
     drv.frame(1 / 30)
     for _ in range(6):
-        y -= lay.row_h
+        y -= ROW
         drv.touch_drag(x, y)
         drv.frame(1 / 30)
     drv.touch_up()
     drv.frame(1 / 30)
-    assert ui_draw._C.api_offset(bu.page().host.ctx, x, lay.y0 + 2) > 0
+    assert ui_draw._C.api_offset(bu._host.ctx, x, ry + 2) > 0
 
 
 def test_scroll_region_clamps_and_shows():

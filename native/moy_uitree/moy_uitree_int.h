@@ -366,6 +366,8 @@ struct uit {
     const char *tvl_s;
     uit_draw_fn draw_fn;        // a canvas's draw, the front end's
     void *draw_ud;
+    int32_t draw_clip[4];       // a table part's clip while its canvas draws (`uit_draw_clip`)
+    uint8_t draw_clip_on;
     uit_pic_fn pic_fn;          // a card's or a picture's image, the front end's
     void *pic_ud;
     // The page's carousel as the last frame drew it (uit_carousel's words), its node + 1 (0: none

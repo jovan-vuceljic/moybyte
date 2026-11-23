@@ -2040,7 +2040,7 @@ SCHEMA = {
     "rows": dict(_C, cur="lit", current="lit", empty="text", filter="lit", changed="action1", group="lit",
                  dir="lit", by="lit", check="lit"),
     "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond",
-                  row="lit"),
+                  row="int"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
                   changed="action1", group="lit", pad="int", look="lit", tone="text"),
@@ -2066,7 +2066,8 @@ SCHEMA = {
     "switch": dict(_C),
     "case": {},
     # EXT-4. The Editor's kinds (see the calls below)
-    "tabs": dict(_C, labels="lit", icons="lit", focus="cond", on="action0", offered="conds", hint="text"),
+    "tabs": dict(_C, labels="lit", icons="lit", focus="cond", on="action0", offered="conds", hint="text",
+                 text="text"),
     "panes": dict(_C, dir="choice", gap="lit", size="lit", start="lit", min="lit", grow="lit",
                   focused="lit", grown="lit"),
     "pane": dict(_C, title="text", icon="text", size="lit", start="lit", min="lit", grow="lit",
@@ -2558,8 +2559,9 @@ def _list(kind, model_name, p, where):
 
 def table(model_name, **p):
     """Rows as a table: a header of cols=, one `col` child per column; or,
-    with `row=` (a row's height) and one `canvas` child, each row drawn by
-    that canvas, `draw(cv, x, y, w, h, row)` handed its row."""
+    with `row=` (a row's height: a literal in the page's unit, or an int
+    state, pixels the host measured) and one `canvas` child, each row drawn
+    by that canvas, `draw(cv, x, y, w, h, row)` handed its row."""
     return _list("table", model_name, p, _caller())
 
 
@@ -2800,15 +2802,32 @@ def switch(name, cases, **p):
 ANCHORS = {"text_editor": ("caret", "word"), "tabs": None, "pane": ("head",), "rows": ("cur",), "cards": ("cur",)}
 
 
-def tabs(name, labels, **p):
+def tabs(name, labels=None, text=None, **p):
     """A tab strip bound two-way to an enum: one tab per value, labelled by a
     label table that must cover every value. The body is a ui.switch on the
     same name, whose cases are built once and kept. `hint=` puts the tabs
     keys in the band with its words (a template), and the strip is then no
-    stop: those keys or a tap switch it."""
+    stop: those keys or a tap switch it. Bound to a `row_of`, one tab per
+    row of its model in order, each worded by the row template `text=`."""
     where = _caller()
-    _state_name(name, (Enum,), "ui.tabs", where)
+    _state_name(name, (Enum, RowOf), "ui.tabs", where)
     t = _st()._t[name]
+    if isinstance(t, RowOf):
+        if labels is not None or text is None or p.get("offered") or p.get("icons"):
+            raise UIError("N01", "ui.tabs(%r) over a row_of words each row with text=" % name, where=where,
+                          fix='text="{.FIELD}", a template over a row of %s (no labels=, icons= or offered=)'
+                          % t.model)
+        n = _node("tabs", name, p, where)
+        n.l["model"] = t.model
+        if _NOW.app.direct:
+            _direct_src("tabs", "text", text, "text", where)
+        else:
+            n.l["text"] = tmpl(text, Ctx(_st()._t[t.model]), where, "text").g
+        n.src["text"] = text
+        return n
+    if text is not None:
+        raise UIError("N01", "ui.tabs(%r): text= words a row_of's rows; an enum's words are a label table"
+                      % name, where=where, fix='labels="TABLE", declared with ui.labels')
     tab = _d().labels.get(labels)
     if tab is None:
         raise UIError("T02", "ui.tabs(%r): no label table %r" % (name, labels), where=where,
@@ -3246,6 +3265,8 @@ def snapshot(app):
                 bits.append("%s=%s" % (k, v.name))
             elif k in n.p and isinstance(src, str) and ("{" in src or SCHEMA[n.kind][k] == "cond"):
                 bits.append("%s=%r = %r" % (k, src, v))
+            elif callable(v):           # a row template (a seg's or tabs' text= over a row_of)
+                bits.append("%s=%r" % (k, src))
             else:
                 bits.append("%s=%r" % (k, v))
         if n.kind == "dialog":

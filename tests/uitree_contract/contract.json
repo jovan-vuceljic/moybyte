@@ -1985,6 +1985,10 @@
      "type": "table",
      "level": 2
     },
+    "text": {
+     "type": "tpl",
+     "level": 2
+    },
     "on": {
      "type": "action|hook",
      "level": 2

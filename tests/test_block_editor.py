@@ -208,12 +208,12 @@ def test_blocks_view_opens_and_renders(tmp_path):
 def _menu_word(ws, item):
     """The handheld menu's row for `item`, as the page names it."""
     bu = ws.block_ui
-    return bu.page().menu_word(bu.blk_menu["items"].index(item))
+    return bu.menu_word(bu.blk_menu["items"].index(item))
 
 
 def _menu_focus(ws, item):
     """Focus the handheld menu's row for `item`, as the keys would."""
-    ws.block_ui.page().host.focus(_menu_word(ws, item))
+    ws.block_ui._host.focus(_menu_word(ws, item))
 
 
 def _tap_stop(ws, drv, stop):
@@ -221,7 +221,8 @@ def _tap_stop(ws, drv, stop):
     ws.mark_dirty()
     drv.frame(1 / 30)
     drv.frame(1 / 30)
-    x, y, w, h = ws.block_ui.page().host.box(stop)
+    bu = ws.block_ui
+    x, y, w, h = bu.page().rect_of(stop) or bu._host.box(stop)     # a page's node, else a menu's row
     drv.click(x + w // 2, y + h // 2)
     drv.frame(1 / 30)
     drv.frame(1 / 30)
@@ -367,7 +368,7 @@ def test_pointer_taps_insert_and_action_bar(tmp_path):
     drv = _driver(ws)
     drv.frame(1 / 30)
     # tap Add -> the category menu opens
-    _tap_stop(ws, drv, "Tool Add")
+    _tap_stop(ws, drv, "add")
     assert ws.block_ui.blk_menu is not None
     # tap a menu row (Draw) -> its blocks
     _tap_stop(ws, drv, _menu_word(ws, blocks.CAT_DRAW))
@@ -550,6 +551,7 @@ def test_name_prompt_keyboard_flow_through_the_driver(tmp_path):
     ws.block_ui.blk_menu["sel"] = ws.block_ui.blk_menu["items"].index(blocks.CAT_VARIABLES)
     ws.block_ui._blk_menu_select()
     ws.block_ui.blk_menu["sel"] = 0                               # "+ new variable"
+    drv.frame(1 / 30)                                    # the menu up, on it
     drv.press("a")
     drv.frame(1 / 30)
     drv.frame(1 / 30)                                    # release
@@ -582,6 +584,7 @@ def test_new_variable_prompt_survives_the_opening_keypress(tmp_path):
     ws.block_ui.blk_menu["sel"] = ws.block_ui.blk_menu["items"].index(blocks.CAT_VARIABLES)
     ws.block_ui._blk_menu_select()
     ws.block_ui.blk_menu["sel"] = 0
+    drv.frame(1 / 30)                                    # the menu up, on it
     # SELECT it with A *while ALSO* holding the Enter byte (0x0D) -- on the device A
     # is the Enter/z alias, so last_key carries that byte; with no idle frame between
     # the select and the next pass the trigger could leak into the prompt's commit.
@@ -635,7 +638,7 @@ def test_new_variable_prompt_survives_the_opening_tap(tmp_path):
     ws.mark_dirty()
     drv.frame(1 / 30)
     drv.frame(1 / 30)                                  # the popover settles in place
-    x, y, w, h = ws.block_ui.page().host.box(ws.block_ui.page().menu_word(0))
+    x, y, w, h = ws.block_ui._host.box(ws.block_ui.menu_word(0))
     drv.click(x + w // 2, y + h // 2)
     drv.frame(1 / 30)
     drv.frame(1 / 30)                                  # the release activates the row
@@ -1321,3 +1324,35 @@ def test_in_ram_save_and_build_fallback_do_not_alias_cart_blocks(tmp_path):
     be2.insert_block("beep", {"freq": 220})
     assert ws.run.project.cart["blocks"] == saved
     assert "beep" not in _body_types(ws.run.project.cart["blocks"])
+
+
+def test_a_finger_drag_scrolls_the_outline(tmp_path):
+    """A press held and dragged up the outline scrolls it (the page's host
+    reads the console's pointer as held), and moves no cursor."""
+    ws, _, _ = _ws_with_block_cart(tmp_path)
+    ws.text.open_blocks()
+    bu = ws.block_ui
+    be = bu.blocks_ed
+    while len(be.rows) < 40:
+        be.rows.append(be.rows[-1])
+    be._hist.gen += 1
+    drv = _driver(ws)
+    for _ in range(3):
+        ws.mark_dirty()
+        drv.frame(1 / 30)
+    top = []
+    draw = bu.draw_row
+    bu.draw_row = lambda cv, i, x, y, w, h: (top.append(i), draw(cv, i, x, y, w, h))
+    x, y = 80, 180
+    drv.touch(x, y)
+    drv.frame(1 / 30)
+    for _ in range(12):
+        y -= 8
+        drv.touch_drag(x, y)
+        drv.frame(1 / 30)
+    drv.touch_up()
+    top.clear()
+    ws.mark_dirty()
+    drv.frame(1 / 30)
+    assert min(top) > 0, "the outline did not scroll under the finger"
+    assert be.cur == 0, "a drag moved the cursor"

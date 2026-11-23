@@ -318,7 +318,8 @@ local SHAPE = {
   split = { takes = { "dir", "sizes" }, last = function(n) return { pair("dir", n.o.dir), pair("sizes", n.o.sizes) } end },
   grid = { takes = { "cols", "rows" }, last = function(n) return { pair("cols", n.o.cols), pair("rows", n.o.rows) } end },
   canvas = { takes = { "draw" }, last = function(n) return { pair("draw", "draw") } end },
-  tabs = { bind = true, takes = { "labels", "offered" }, last = function(n) return { pair("labels", n.o.labels) } end },
+  tabs = { bind = true, takes = { "labels", "offered", "text" },
+           last = function(n) return { pair("labels", n.o.labels), pair("text", n.o.text) } end },
   cards = { model = true },
 }
 -- a prop given as a list that is one prop: its values joined, as the Python layer joins a tuple

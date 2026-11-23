@@ -555,6 +555,15 @@ static inline int32_t ut_tabs(const char *state, const char *labels) {
     return n;
 }
 
+// Tabs bound to row_of state `state`: a tab a row of its model, each worded by the row
+// template `text` ("{.name}").
+static inline int32_t ut_tabs_rows(const char *state, const char *text) {
+    int32_t n = ut_node(UT_TABS, state);
+    ut_prop_("bind", state);
+    ut_prop_("text", text);
+    return n;
+}
+
 // A progress bar showing `value` (a template) of `max`, labelled `label`.
 static inline int32_t ut_progress(const char *value, const char *label, int32_t max) {
     int32_t n = ut_node(UT_PROGRESS, NULL);

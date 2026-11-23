@@ -159,12 +159,15 @@ def test_code_editor_font_scale_grows_text(tmp_path):
 
 def test_block_editor_shows_more_rows_and_wider_blocks(tmp_path):
     """At 960x600 the block outline shows MORE rows + a WIDER block area."""
-    from runtime.block_editor_ui import BlockLayout
+    from runtime import host_app
+    from runtime.block_editor_ui import ROW
     ws = _ws(tmp_path, sys_size=(960, 600))
+    drv = host_app.ConsoleDriver(ws)
     _enter(ws, "blocks")
-    base = BlockLayout(320, 240, 1)
-    assert ws.block_ui.block_layout.rows > base.rows
-    assert ws.block_ui.block_layout.outline_w > base.outline_w
+    drv.frame(1 / 30)
+    _x, _y, w, h = ws.block_ui.page().rect_of("lines")
+    assert h > 240 and h // ROW > 10        # past the T-Deck's whole glass
+    assert w > 320
 
 
 def test_code_editor_renders_without_error_on_large_canvas(tmp_path):
@@ -257,7 +260,7 @@ def test_block_editor_add_tool_tap_opens_menu(tmp_path):
     drv = host_app.ConsoleDriver(ws)
     _enter(ws, "blocks")
     drv.frame(1 / 30)
-    bx, by, bw, bh = ws.block_ui.page().host.box("Tool Add")
+    bx, by, bw, bh = ws.block_ui.page().rect_of("add")
     drv.click(bx + bw // 2, by + bh // 2)
     for _ in range(3):
         drv.frame(1 / 30)

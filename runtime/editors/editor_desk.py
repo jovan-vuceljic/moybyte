@@ -177,12 +177,10 @@ class EditorDesk(Layer):
         self._warm_left = []            # ...and those still to warm
         self._warm_due = False          # a quiet frame has warming to do
         self.dt = 0
-        # The shown protocol (docs/surface_model_v1.md §14.3) while a prompt
-        # is up: whether the buffer this draw goes into holds the desk as the
-        # last draw left it (`retained`), and what the draw changed
-        # (`changed`). What the desk draws outside the pane the keys reach
-        # is a function of `_surround`, its gen `_gen` (`_split_frame`).
-        self._known = False
+        # The shown protocol (docs/surface_model_v1.md §14.3): what the
+        # buffer this draw goes into lags (`retained`), and what the draw
+        # changed (`changed`). What the desk draws outside the pane the keys
+        # reach is a function of `_surround`, its gen `_gen` (`_split_frame`).
         self._surround = None
         self._gen = 0
         self._changed = None
@@ -751,19 +749,18 @@ class EditorDesk(Layer):
     # those rows and nothing else.
 
     def _prompt(self):
-        """(tab, its layer, pane, rect) of the pane on show whose tab has a
-        prompt up, else None."""
-        ws = self.ws
+        """(tab, its layer, pane, rect) of the Blocks pane on show while its
+        prompt is up, which takes the keys, else None."""
+        if self.ws.block_ui.blk_kbd is None:
+            return None
         alone = self.alone()
         for pane, r, _path in self.panes():
             if alone is not None:
                 if pane != alone:
                     continue
                 r = self._area()
-            tab = P.CONTENTS[self.tab_of(pane)][2]
-            layer = ws.block_ui if tab == "blocks" else None
-            if layer is not None and layer.prompt_host() is not None:
-                return tab, layer, pane, r
+            if P.CONTENTS[self.tab_of(pane)][2] == "blocks":
+                return "blocks", self.ws.block_ui, pane, r
         return None
 
     @property
@@ -773,12 +770,11 @@ class EditorDesk(Layer):
         if self._drew_in is not None:
             ws.layout = self._drew_in
         try:
-            return self._prompt() is not None or self._own_pane() is not None
+            return self._own_pane() is not None
         finally:
             ws.layout = was
 
     def retained(self, known, x0, y0, x1, y1):
-        self._known = bool(known) and (x1 <= x0 or y1 <= y0)
         r = self._ret
         r[0] = 1 if known else 0
         r[1] = x0
@@ -792,11 +788,8 @@ class EditorDesk(Layer):
     def takes_lag(self, lag):
         """Whether this frame's draw repaints `lag` [x0, y0, x1, y1), what
         its target lags (a direct render's): a pane's own frames repaint a
-        lag inside that pane; a prompt's rows need the desk as the last
-        draw left it, which the buffer the last frame drew into does, so a
-        lag inside the pane is copied from there (`_catch_up`); a lag
-        outside the pane would draw the desk whole and leave the next buffer
-        as far behind."""
+        lag inside that pane; a lag outside the pane would draw the desk
+        whole and leave the next buffer as far behind."""
         if lag[2] <= lag[0] or lag[3] <= lag[1]:
             return True
         ws = self.ws
@@ -809,14 +802,10 @@ class EditorDesk(Layer):
             ws.layout = was
 
     def _takes(self, lag):
-        got = self._prompt()
-        if got is not None:
-            b = self._body(got[3], self._unit(), got[2])
-        else:
-            own = self._own_pane()
-            if own is None:
-                return False
-            b = own[3] if own[0] == "music" else own[4]
+        own = self._own_pane()
+        if own is None:
+            return False
+        b = own[3] if own[0] == "music" else own[4]
         return (lag[0] >= b[0] and lag[1] >= b[1] and lag[2] <= b[0] + b[2]
                 and lag[3] <= b[1] + b[3])
 
@@ -903,18 +892,18 @@ class EditorDesk(Layer):
             return (pe.n, pe.size, pe.sheet, pe.sheet.gen)
         return None
 
-    def _split_frame(self, dt, got, own):
+    def _split_frame(self, dt, own):
         """The frame as the split frame of the pane the keys reach, where
         the engine plans one (`AppHost.split_frame`, docs/ui_api_2026-10.md
-        §5a): that pane drawn alone -- its prompt's rows (`got`), or its
-        body (`own`; the Sound pane its card, header and body) -- and what
+        §5a): that pane drawn alone -- its body (`own`; the Sound pane its
+        card, header and body) -- and what
         it changed said (`changed`). True where it drew. The desk gives the
         engine what it draws outside the pane as a gen, and None where that
         changes on its own this frame."""
         ws = self.ws
         host = self._host
         b = self._box
-        if got is None and own is None:
+        if own is None:
             host.split_frame(None, False, 0, _NO_LAG, b)
             return False
         cv = ws.sys_canvas
@@ -922,27 +911,14 @@ class EditorDesk(Layer):
         app = ws.editor_app
         ret = self._ret
         u = self._unit()
-        if got is not None:
-            tab, layer, pane, r = got
-            c = None
-            data = layer.prompt_host()
-            # the WM spoke; the prompt's rows draw alone where the buffer
-            # lags nothing (`_known`) or its lag is copied from the last
-            # frame's (`_catch_up`), and a frame that lags draws whole with
-            # its gen still the desk's, so the next may be rows
-            known = ret[0] != 0
-            lag = ret[1:]
-            still = not ws.animating(dt)
-        else:
-            c, tab, pane, r, _body, _n = own
-            layer = None
-            data = self._own_data(c)
-            known = ret[0] != 0
-            lag = ret[1:]
-            still = not (data is False or app.playing() or ws.animating(dt, False)
-                         or self._spills() or self._loupe is not None
-                         or (c == "paint" and ws.paint_layer._host.tap == 2
-                             and ws.paint_layer._host.tap_armed()))
+        c, tab, pane, r, _body, _n = own
+        data = self._own_data(c)
+        known = ret[0] != 0
+        lag = ret[1:]
+        still = not (data is False or app.playing() or ws.animating(dt, False)
+                     or self._spills() or self._loupe is not None
+                     or (c == "paint" and ws.paint_layer._host.tap == 2
+                         and ws.paint_layer._host.tap_armed()))
         key = (c, tab, self._acts, self.key, self._focus.get(self.key, 0), self.grown, pane,
                r, self.placed()[0], cv.w, cv.h, look.look_gen, look.effective_font_scale(),
                look.effective_chrome_scale(), ws.bar_layer.shown_gen("menu"), data,
@@ -957,9 +933,8 @@ class EditorDesk(Layer):
             return False
         body = (b[0], b[1], b[2], b[3])
         x0, y0, x1, y1 = b[0], b[1], b[0] + b[2], b[1] + b[3]
-        if v == host.SPLIT_LAGS or (got is not None and not self._known
-                                    and not self._catch_up(cv, lag)):
-            # the buffer lags outside the pane (a prompt's, anywhere): the
+        if v == host.SPLIT_LAGS:
+            # the buffer lags outside the pane: the
             # frame draws whole, and what it changed is still the pane
             # alone -- everything else
             # draws as the frame before showed it -- so the buffers behind
@@ -969,21 +944,6 @@ class EditorDesk(Layer):
             if c in _TEXT_PANES and self._vouch >= 2:
                 self._moves = pane
             return False
-        if got is not None:
-            # the buffer holds the desk as the last draw left it: the
-            # prompt's frame may be its rows alone (`Hold.ok`)
-            was = host.window(2)
-            try:
-                if not self._in_pane(tab, body, layer.prompt_rows, dt):
-                    return False
-            finally:
-                host.window(was)
-            if data.floor_box(b):
-                self._changed = [body[0] + b[0], body[1] + b[1], body[0] + b[0] + b[2],
-                                 body[1] + b[1] + b[3]]
-            else:
-                self._changed = [0, 0, 0, 0]
-            return True
         if c == "music":
             # its page, then the desk's verbs run whole (focus rests on the
             # first pane's header), their pixels clipped to the pane
@@ -1021,20 +981,6 @@ class EditorDesk(Layer):
         self._changed = [x0, y0, x1, y1]
         return True
 
-    def _catch_up(self, cv, lag):
-        """Copy `lag` [x0, y0, x1, y1) of the window's page, what the buffer
-        this frame paints lags, from the buffer the last frame drew into,
-        where the WM vouches that one holds the page as the last draw left
-        it (`vouched` 2 and up: a direct render's): whether it did."""
-        if self._vouch < 2 or lag[2] <= lag[0] or lag[3] <= lag[1]:
-            return False
-        vp = cv.viewport()
-        if not cv.shift_last(vp[0] + lag[0], vp[1] + lag[1], lag[2] - lag[0], lag[3] - lag[1],
-                             0, 0):
-            return False
-        cv.shift_fence()                # the rows frame draws over rows the copy wrote
-        return True
-
     def draw(self, dt):
         ws = self.ws
         self._drew_in = ws.layout
@@ -1046,15 +992,13 @@ class EditorDesk(Layer):
             self._warm_due = True
         self._changed = None
         try:
-            got = self._prompt()
-            own = self._own_pane() if got is None else None
-            if not self._split_frame(dt, got, own):
+            own = self._own_pane()
+            if not self._split_frame(dt, own):
                 self._draw(dt)
                 if own is not None and self._changed is None:
                     cv = ws.sys_canvas
                     self._changed = [0, 0, cv.w, cv.h]
         finally:
-            self._known = False
             self._ret[0] = 0
             self._vouch = 0
             self._moves = None

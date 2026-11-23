@@ -68,7 +68,7 @@ def _desk(path, cart, key, tab, ships, window=False):
     ws.editor_app.set_tab(tab)
     ws.pointer.visible = False
     if not ships:
-        d._split_frame = lambda dt, got, own: False
+        d._split_frame = lambda dt, own: False
     return ws, drv
 
 
@@ -223,7 +223,7 @@ def test_an_edit_in_the_blocks_pane_reaches_the_made_code(tmp_path, bufs):
     p = Pair(tmp_path, "blocks", bufs)
     p.key(mi.KEY_DOWN, 2)
     for ws in (p.a, p.b):
-        ws.block_ui.page().act("down")
+        ws.block_ui.act("down")
         ws.mark_dirty()
     p.frame()
     p.frame()

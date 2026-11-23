@@ -1007,16 +1007,16 @@ def editor(loop, info):
             loop.step()
         info[tab + "_view"] = ws.menu_view
         # the page's own draw, measured apart from the Editor's frame around it
-        import editor_blocks
-        page = editor_blocks.BlocksPage
+        import block_editor_ui
+        page = block_editor_ui.BlockEditorUI
         drew = [0]
-        draw = page.draw
+        draw = page._draw_blocks
 
-        def counted(self, cv, th, rect, desk):
+        def counted(self, dt=0):
             m0 = mem_alloc()
-            draw(self, cv, th, rect, desk)
+            draw(self, dt)
             drew[0] += mem_alloc() - m0
-        page.draw = counted
+        page._draw_blocks = counted
         gc.collect()
         gc.disable()
         walk = []
@@ -1043,7 +1043,7 @@ def editor(loop, info):
                 drag.append((drew[0] - p0, ws.frame_state.frames_drawn - d0,
                              ws.frame_change == "shift"))
             gc.enable()
-        page.draw = draw
+        page._draw_blocks = draw
         info[tab + "_drag"] = drag
         info[tab + "_banner"] = ws.toast_until != banner
     ws.spine.exit()
@@ -2221,11 +2221,20 @@ def test_the_bar_undo_read_allocates_nothing_through_a_typing_burst(tmp_path):
     assert spent == 0, "50 bar undo reads through a typing burst allocated %d bytes" % spent
 
 
+# What a uitree page's cursor move allocates: the host's hook run with the
+# rows it left and is on, the two rows' fields updated in the page's model.
+MARK = 256
+# What a uitree page's swipe frame allocates: its paint (`CEngine.paint`)
+# and its host's begin, two answers a frame.
+SWIPE = 2 * ANSWER
+
+
 def test_the_blocks_outlines_moving_frames_allocate_nothing(result):
-    """The Blocks outline, a table of parts: a frame whose cursor moved a
-    row draws, and the page's draw allocates no more than the table's
-    answer; a swipe's frames shift, and the page's draw in each
-    allocates no more than that."""
+    """The Blocks outline, a uitree table of parts: a frame whose cursor
+    moved a row draws, and the page's draw allocates no more than the two
+    rows the move marks through the page's model (`MARK`); a swipe's
+    frames shift, and the page's draw in each allocates no more than a
+    uitree page's swipe frame (`SWIPE`)."""
     info, text = result
     tab = "blocks"
     assert info.get(tab + "_view") == tab, text[-3000:]
@@ -2235,13 +2244,13 @@ def test_the_blocks_outlines_moving_frames_allocate_nothing(result):
     assert not info[tab + "_banner"], "a badge was earned while the outline was measured"
     walk = info[tab + "_walk"]
     assert sum(1 for d in walk if d[1]) > len(walk) // 2, (tab, walk)
-    # The page's draw allocates no more than the table's answer a frame
-    # (the Editor's frame around it is not the table's to pin).
-    assert info[tab + "_page"] <= ANSWER * len(walk), (tab, info[tab + "_page"], walk)
+    # The page's draw allocates no more than a move's marks a frame (the
+    # Editor's frame around it is not the table's to pin).
+    assert info[tab + "_page"] <= MARK * len(walk), (tab, info[tab + "_page"], walk)
     drawn = [d for d in info[tab + "_drag"] if d[1]]
     shifted = [d for d in drawn if d[2]]
     assert len(shifted) > len(drawn) // 2, (tab, len(shifted), len(drawn))
-    over = [d for d in drawn if d[0] > ANSWER]
+    over = [d for d in drawn if d[0] > SWIPE]
     assert len(over) <= 1, (tab, over)
 
 

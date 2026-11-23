@@ -337,6 +337,8 @@ the row; a seg's `look="pictures"` shows each item as the picture its word
 names (`own:KEY`) in a tile at the row's right, the current one's on the
 selection plate, left and right wrapping and activation taking the next, its
 label on a line of its own over the tiles where they would cut it;
+`ui.tabs(name, text=)` bound to a `row_of` is a tab a row of its model,
+each worded by the row template `text=` (the Editor's Blocks objects);
 `ui.pictures.put(key, render=..., clear=True)` leaves a drawn picture's
 corner colour out, the tile showing there; `ui.dialog(..., look="keys")` draws no buttons on the T-Deck, whose
 band's Enter and Esc are its buttons, and a dialog of more than one field
