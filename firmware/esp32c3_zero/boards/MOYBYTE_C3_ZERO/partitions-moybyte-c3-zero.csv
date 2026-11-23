@@ -2,7 +2,8 @@
 #
 # ONE APP SLOT, no OTA (owner, 2026-11-17). The browser console is not in
 # the image: it is an add-on cart in the store (native/moy_net/moy_page.h),
-# about 1.9 MB, which a cable flash installs (tools/board_flash.py). The
+# which a cable flash installs (tools/board_flash.py) and whose size
+# `tools/store_image.py --check` holds to this store's room. The
 # factory slot is sized to the image without it, with room to grow -- the
 # build's #168 guard prints the headroom -- and everything after it is the
 # store.

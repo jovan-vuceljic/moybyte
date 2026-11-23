@@ -11,6 +11,7 @@ whole, junk past the image left as free space, and room to write after."""
 
 import hashlib
 import json
+import os
 import re
 import struct
 import subprocess
@@ -98,6 +99,42 @@ def test_the_store_is_where_each_board_mounts_it(name):
     offset = int(str(board_config.load(board)["flash"]["offset"]), 0)
     merged = _merged(board, offset)
     assert store_image.store_part(merged, offset) == BOARDS[name][1:]
+
+
+@pytest.mark.parametrize("name", sorted(BOARDS))
+def test_a_board_s_sources_lay_the_store_its_image_carries(name):
+    """The check reads a board's store from its partition CSV and sdkconfig
+    (`board_store`), where the install reads it from the image they build."""
+    board = _board(name)
+    offset = int(str(board_config.load(board)["flash"]["offset"]), 0)
+    assert store_image.board_store(str(board)) == store_image.store_part(_merged(board, offset), offset)
+
+
+def _wasm_pack(size):
+    import random
+    body = random.Random(size).randbytes(size)
+    return gen_web_blob.pack_bytes([("micropython.wasm.gz", body)])[0]
+
+
+def test_the_check_fails_a_pack_that_outgrows_a_board_s_store():
+    """Every board with a store is checked; a pack whose add-on does not fit
+    one fails it, and a headless board's store must also hold its first
+    boot's carts with the seed's reserve free, which a console board's card
+    takes."""
+    import io
+    assert sorted(os.path.basename(d) for d in store_image.board_dirs()) == sorted(b[0] for b in BOARDS.values())
+    c3 = str(_board("c3_zero"))
+    blocks = store_image.board_store(c3)[1] // store_image.BLOCK
+    out = io.StringIO()
+    assert store_image.check(_wasm_pack(1 << 20), out) == [], out.getvalue()
+    out = io.StringIO()
+    assert store_image.check(_wasm_pack((blocks + 1) * store_image.BLOCK), out) == ["esp32c3_zero"]
+    assert "do not fit a store of %d blocks" % blocks in out.getvalue()
+    fits = _wasm_pack((blocks - 24) * store_image.BLOCK)
+    _b, alone, both = store_image.room(c3, fits)
+    assert alone <= blocks and (both is None or blocks - both < store_image.seed_reserve() // store_image.BLOCK)
+    out = io.StringIO()
+    assert store_image.check(fits, out) == ["esp32c3_zero"], out.getvalue()
 
 
 @pytest.mark.parametrize("name", sorted(BOARDS))

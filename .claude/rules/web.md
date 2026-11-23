@@ -49,7 +49,10 @@ nor those docs will warn you about:
   firmware version alone. Changing a web build means
   `firmware/web_runner/build.sh`, then rebuild, reflash and install the add-on
   that fits (`tools/board.py BOARD addon`). The pack sits in the store beside
-  the carts, so its size is the store's to pay. For that reason the page, the two worker
+  the carts, so its size is the store's to pay: `tools/store_image.py --check`
+  (preflight, after the browser console builds) holds it to every board's
+  store, and a headless board's to its first boot's carts and the seed's
+  reserve too, the C3 Zero's being the tightest. For that reason the page, the two worker
   modules and the VM's loader ship without their comments (build.sh re-prints
   their scripts with emsdk's terser, nothing renamed or compressed): read
   `page_core.html`, `page_tail.js`, `worker.js` and `moy_store.mjs` in the
