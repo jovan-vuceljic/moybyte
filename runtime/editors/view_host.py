@@ -1,6 +1,7 @@
 # Map (grep -n a name to jump there):
 #   ViewLayout     the page's measures: the view, the column beside it, the foot, the brushes
-#   ViewHost       the page's host: its sync, frame, keys and pointer, the view's gestures, the brushes
+#   PageHost       a placed page's host: made at its first use, its sync, frame and pointer
+#   ViewHost       a view tab's PageHost: its keys, the view's gestures, the brushes
 #   checker        transparency's grey checker (the Sprite, Map, Scene and theme editors)
 """The host of a placed `uitree` page round a panned, zoomed view: the
 Editor's World tab (`map_editor_ui.MapEditorUI`, its page `editor_map.py`)
@@ -13,9 +14,11 @@ brushes four by four at the largest scale the column holds and the lines
 under them it has room for, a foot tool's pitch; in a desk pane the view
 alone, over a status line where the tab has one.
 
-`ViewHost` hosts the page: made at its first use, the tab's state handed to
-its `sync` hook where it moved (`push`), drawn on the content rect, its
-keys and its pointer. The view's canvas hands the host a press, its drag
+`PageHost` hosts a placed page an Editor tab draws on the content rect
+(the theme mode's Sprites tab, `theme_editor.SpritesLayer`, is one): made
+at its first use, the tab's state handed to its `sync` hook where it moved
+(`push`), its frame and its pointer. `ViewHost` is one round a view, with
+its keys. The view's canvas hands the host a press, its drag
 and its release (`press`, `drag`, `release`, in SYSTEM coords); a drag past
 the tap's dead zone pans (`pan_drag`); the view's keys are the arrows
 (`arrows`) and A, which steps the zoom. The brushes' canvas draws a page of
@@ -98,29 +101,25 @@ class _Damage:
         self.ws.mark_dirty()
 
 
-class ViewHost:
-    """A view tab's page host over `ws`: `tab` the Editor tab it is,
-    `build` its page, `layout` its `ViewLayout` class."""
+class PageHost:
+    """A placed page an Editor tab draws on the content rect, hosted over
+    `ws`: `tab` the tab it is (a desk pane the keys are not in shows no
+    focus), `build` its page. The subclass hands the page its state
+    (`_sync`, through `push`) and has a `layout` with the content rect,
+    `desk` and `pane`."""
 
-    def __init__(self, ws, names, tab, build, layout):
+    BAND = False                       # the page's band names its keys
+
+    def __init__(self, ws, names, tab, build):
         self.ws = ws
         self._NAMES = names            # injected, not imported back from console.py (a cycle)
         self.tab = tab
         self._build = build
-        self._layout = layout
         self.page = None               # the page's engine, made at its first use
         self._host = _ui_draw.AppHost("editor_" + tab, self)
-        self._view_r = None            # the view's rect as the page placed it last
         self._shown = None             # the values handed to the page's sync last
         self._rect = None              # the content rect, as a tuple drawn with
-        self._due = None               # a hook the next draw runs (the view takes the keys)
-        self.brush_page = 0            # the first sprite on the brushes' page
-        self._press = None             # the view's press (px, py); None outside one
-        self._panning = False          # the press's drag crossed the dead zone: it pans
-        self._drag = None              # where the pan's drag is consumed to
-        self._pan_acc = [0, 0]         # a middle drag's pixels not yet a step
-        sc = ws.sys_canvas
-        self.layout = layout(sc.w, sc.h, getattr(sc, "font_scale", 1))
+        self._due = None               # a hook the next draw runs (the keys' new stop)
 
     # -- the page ------------------------------------------------------------
 
@@ -131,7 +130,7 @@ class ViewHost:
             pg = self.page = uitree_editor.page(self._build, self._host, _Damage(self.ws))
             pg.env = self                   # what its handlers reach (`uitree_app.env()`)
             pg.bare = True                  # its ground is the host's
-            pg.band = False                 # the tab names no keys
+            pg.band = self.BAND
             ws = self.ws                    # a canvas holds its press while the pointer is down
             pg.pointer_down = lambda: bool(ws.pointer.down)
             pg.open(hook="none")
@@ -160,14 +159,6 @@ class ViewHost:
             self._shown = vals
             self.run("sync", vals)
 
-    def relayout(self, w, h, fs, cs=None):
-        """Rebuild the responsive geometry (#39): ws.relayout's fan-out on a
-        font-scale change, and EditorApp.set_tab's on every entry into the
-        tab (#216); the camera clamped to the reflowed view."""
-        self.layout = self._layout(w, h, fs, chrome_scale=cs)
-        self._view_r = None
-        self.clamp_cam()
-
     def draw(self, dt):
         """The tab: the page on the content rect (the handheld's tab, a
         desk pane's view)."""
@@ -194,18 +185,6 @@ class ViewHost:
         if not self._host.still():
             ws.request_frame()
 
-    def handle_input(self, i):
-        """The frame's keys: the page's (the view's and the brushes' their
-        canvases'); B closes an open popover, else leaves the tab."""
-        if self.popover():
-            if i.pressed("b"):
-                self.close_pop()
-            else:
-                self._page().keys(i)
-            return
-        self._page().keys(i)          # (the page's damage marks what the keys moved)
-        self.ws.home.leave_or_home(self.ws.spine.exit)
-
     def handle_pointer(self, px, py, click):
         """A pointer sample for the page; what a canvas's press does lands
         with the input, where a desk's frame sees what it changed."""
@@ -217,6 +196,42 @@ class ViewHost:
             pg._bind()
             for act, args, src in q:
                 pg.run_action(act, args, src)
+
+class ViewHost(PageHost):
+    """A view tab's page host (`PageHost`): `layout` its `ViewLayout`
+    class."""
+
+    def __init__(self, ws, names, tab, build, layout):
+        PageHost.__init__(self, ws, names, tab, build)
+        self._layout = layout
+        self._view_r = None            # the view's rect as the page placed it last
+        self.brush_page = 0            # the first sprite on the brushes' page
+        self._press = None             # the view's press (px, py); None outside one
+        self._panning = False          # the press's drag crossed the dead zone: it pans
+        self._drag = None              # where the pan's drag is consumed to
+        self._pan_acc = [0, 0]         # a middle drag's pixels not yet a step
+        sc = ws.sys_canvas
+        self.layout = layout(sc.w, sc.h, getattr(sc, "font_scale", 1))
+
+    def relayout(self, w, h, fs, cs=None):
+        """Rebuild the responsive geometry (#39): ws.relayout's fan-out on a
+        font-scale change, and EditorApp.set_tab's on every entry into the
+        tab (#216); the camera clamped to the reflowed view."""
+        self.layout = self._layout(w, h, fs, chrome_scale=cs)
+        self._view_r = None
+        self.clamp_cam()
+
+    def handle_input(self, i):
+        """The frame's keys: the page's (the view's and the brushes' their
+        canvases'); B closes an open popover, else leaves the tab."""
+        if self.popover():
+            if i.pressed("b"):
+                self.close_pop()
+            else:
+                self._page().keys(i)
+            return
+        self._page().keys(i)          # (the page's damage marks what the keys moved)
+        self.ws.home.leave_or_home(self.ws.spine.exit)
 
     def at_top(self):
         """The view holding the keys at its top (`view_top`), no popover

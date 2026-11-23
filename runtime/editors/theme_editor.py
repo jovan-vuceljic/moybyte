@@ -5,8 +5,8 @@
 #   ThemeDoc.step         undo and redo, the session's alone
 #   ConfigLayout          the Config tab's geometry: the code view, its status line, the hints
 #   ConfigLayer           the Config tab: theme.json in the Code tab's view, json mode
-#   SpritesLayout         the Sprites tab's geometry, a handheld's and a desk pane's
-#   SpritesLayer          the Sprites tab: the open slot at its zoom, the sheet, the palette
+#   SpritesLayout         the Sprites tab's measures, a handheld's and a desk pane's
+#   SpritesLayer          the Sprites page's host (editor_theme.py): the slot, the sheet, their keys
 """The Editor's theme mode (docs/history/look_2026-10.md step 33, GAPS 56): a theme
 package opened in the console's Editor with two tabs and nothing a cart has
 -- no Code, Blocks, Map, Music and no Play: an edit applies live, so there is
@@ -31,15 +31,16 @@ sheet (`icons.moygfx`, the pixel set's shape) and names it in the look's
 the live look as it is painted (`Appearance.preview_pixels`); a save writes
 the sheet and theme.json together.
 
-Keys: the T-Deck's are its hint strip's -- in Sprites F and V flip, R
-rotates, the trackball picks a tool, a colour or a tab and K is Done; in
-Config, where letters type and the trackball is the caret's arrows, Mic
-opens the menu on its Home row, which leaves saving as Done does, and the
-tabs are a touch's. A keyboard steps the slot with Q and W (E on
-the T-Deck, where W moves), moves the cursor with the arrows and paints
-where it stands with Enter; Ctrl+Tab changes tab, Esc is Done. The desk shows
-both tabs as panes side by side (runtime/editors/editor_desk.py's `theme`
-workspace), the tab following the focused one (F6).
+Keys: the page's (`editor_theme.py`): the arrows move the slot's cursor
+and A paints where it stands, one past its edge moving focus on to the
+sheet, the palette and the tools; in Sprites F and V flip and R rotates,
+a keyboard steps the slot with Q and W (E on the T-Deck, where W moves),
+Ctrl+Tab changes tab and Esc (B on a pad) is Done; in Config, where
+letters type and the trackball is the caret's arrows, Mic opens the menu
+on its Home row, which leaves saving as Done does, and the tabs are a
+touch's. The desk shows both tabs as panes side by side
+(runtime/editors/editor_desk.py's `theme` workspace), the tab following
+the focused one (F6).
 """
 
 import json as _json
@@ -50,15 +51,15 @@ import ui_draw as _ui_draw
 from layers import Layer
 import text_modes as _modes
 import layout_base as _lb
-from code_layer import CodeLayer, _status_line
+from code_layer import CodeLayer
 from chrome import CodeLayout
 from editors_code import CodeEditor
 from op_history import History, OpCodec
 from editors_paint_map import PaintEditor
-from view_host import checker as _checker
+from view_host import PageHost, checker as _checker
+import editor_theme
 from moy_input import CTRL as _CTRL
 from theme_custom import dumps as _dumps
-from widgets import _in
 
 TAB_CONFIG = "theme_config"
 TAB_SPRITES = "theme_sprites"
@@ -74,10 +75,10 @@ RED = 8                          # the pencil's first colour
 _NAMES = {"wifi": "Wi-Fi", "wifi_off": "Wi-Fi off", "getcarts": "Get Carts",
           "cart_py": "Python cart", "cart_lua": "Lua cart", "cart_wasm": "Compiled cart",
           "cart_p8": "PICO-8 cart"}
-# The tools under the zoom: (icon slot, glyph, PaintEditor tool).
-TOOLS = (("pencil", "pencil", PaintEditor.PEN), ("bucket", "fill", PaintEditor.FILL),
-         ("line", "line", PaintEditor.LINE), ("rect", "rect", PaintEditor.RECT),
-         ("select", "select", PaintEditor.SELECT))
+# The page's tools (editor_theme.TOOLS) as PaintEditor's, and back.
+_TOOL_OF = dict(pencil=PaintEditor.PEN, bucket=PaintEditor.FILL, line=PaintEditor.LINE,
+                rect=PaintEditor.RECT, select=PaintEditor.SELECT)
+_TOOL_ID = dict((v, k) for k, v in _TOOL_OF.items())
 
 
 def slot_name(slot):
@@ -439,36 +440,17 @@ def _builtin_names():
 
 
 def _hints_for(tab):
-    """The tab's hint strip for the hint input (`ui_draw.hint_kind`): the
-    T-Deck's are its own keys (moy_ui_parts.c's ACT_KEYS), a keyboard's its
-    chords, none under touch alone."""
+    """Config's keys for the hint input (`ui_draw.hint_kind`): the T-Deck's
+    are its own (moy_ui_parts.c's ACT_KEYS), a keyboard's its chords, none
+    under touch alone."""
     inp = _ui_draw.hint_kind()
     if inp == "touch":
         return ()
-    if tab == TAB_CONFIG:
-        if inp == "tdeck":
-            return ("menu", "Home")     # the menu opens on its Home row
-        if inp == "pad":
-            return ("back", "Done")
-        return ("Ctrl Tab", "Sprites", "back", "Done")
     if inp == "tdeck":
-        return ("flip", "Flip", "rotate", "Rotate", "ball", "Colour", "back", "Done")
+        return ("menu", "Home")     # the menu opens on its Home row
     if inp == "pad":
-        return ("confirm", "Paint", "back", "Done")
-    return ("Q W", "Icon", "flip", "Flip", "rotate", "Rotate", "back", "Done")
-
-
-def _draw_hints(cv, th, band, items, desk):
-    if not items or band is None:
-        return
-    spans = _ui_draw.hints(cv, th, band, items, desk, draw=False)
-    n = 0
-    for _x0, x1 in spans:
-        if x1 > band[0] + band[2]:
-            break
-        n += 1
-    if n:
-        _ui_draw.hints(cv, th, band, items[:2 * n], desk)
+        return ("back", "Done")
+    return ("Ctrl Tab", "Sprites", "back", "Done")
 
 
 # -- Config -------------------------------------------------------------------------
@@ -628,12 +610,14 @@ def _contrast(th):
 
 
 class SpritesLayout:
-    """The Sprites tab's geometry (the mockups' `theme_sprites` and
-    `theme_desk`): the open slot at its zoom with the tools under it, the
-    sheet beside it with the pixel-art legend, the slot's name, state and
-    preview, the palette, and the hint strip. A handheld's is the T-Deck's
-    and, under touch, the S3's (28 px slots, swatches and tools, the sheet
-    paged); a desk pane's names every slot under its tile."""
+    """The Sprites tab's measures (the mockups' `theme_sprites` and
+    `theme_desk`), the page's (`editor_theme.py`) to lay out: the open
+    slot's zoom (`cell`) and its canvas's width (`grid_w`, the margin, the
+    slot and the gap to the sheet), the sheet's tiles, their pitch and
+    rows, a palette cell's side and a tool's pitch. A handheld's is the
+    T-Deck's and, under touch or the tap floor, the S3's (28 px slots,
+    swatches and tools, the sheet paged); a desk pane's names every slot
+    under its tile."""
 
     def __init__(self, w, h, font_scale=1, chrome_scale=None, keys=True):
         base = _lb.LayoutBase(w, h, font_scale, chrome_scale=chrome_scale)
@@ -641,87 +625,64 @@ class SpritesLayout:
         fs = self.fs = base.fs
         self.keys = keys
         self.desk = desk = _lb.metric_class() == _lb.DESK
+        self.pane = _lb.pane()
         # the tap floor's (the S3's chrome scale over its font scale) or a
         # touch input's: 28 px slots, swatches and tools, the sheet paged
-        touch = not keys or base.cs > base.fs
-        self.touch = touch
-        cx, cy, cw, ch = self.cx, self.cy, self.cw, self.ch
+        self.touch = touch = not keys or base.cs > base.fs
+        self.unit = 1 if desk else fs
         if desk:
-            self.cell = 16
-            self.grid = (cx + 16, cy + 14)
-            span = 16 * self.cell
-            ty = cy + 14 + span + 12
-            self.tsz = 32
-            self.tools = [(cx + 16 + i * 38, ty, 32, 32) for i in range(len(TOOLS))]
-            self.sw, self.sw_gap = 14, 6
-            self.sw_xy = (cx + 18, ty + 46)
-            pvx = cx + 16 + 176
-            self.prev1 = (pvx, ty + 48)
-            self.prev2 = (pvx + 26, ty + 40)
-            self.scale_text = (pvx + 76, ty + 52)
-            sx = cx + 16 + span + 24
-            self.tile, self.pitch, self.pitch_y = 32, 64, 56
-            self.sheet_xy = (sx, cy + 12)
-            self.cols = max(1, (cx + cw - sx - 8) // self.pitch)
-            status_h = 26
-            self.status = (cx, cy + ch - status_h, cw, status_h)
-            avail = self.status[1] - (cy + 12) - 24
-            self.rows = max(1, min(6, avail // self.pitch_y))
-            self.legend = (sx, cy + 12 + self.rows * self.pitch_y + 4)
-            self.hints = None
-            self.name_xy = None
-            self.page_xy = None
-            return
-        cell = (13 if touch else 9) * fs
-        self.cell = cell
-        gx, gy = cx + 8 * fs, cy + 8 * fs
-        self.grid = (gx, gy)
-        span = 16 * cell
-        self.tsz = (30 if touch else 22) * fs
-        ty = gy + span + 6 * fs
-        self.tools = [(gx + i * (self.tsz + 4 * fs), ty, self.tsz, self.tsz)
-                      for i in range(len(TOOLS))]
-        rx = gx + span + 12 * fs
-        step, tc = ((32, 28) if touch else (19, 16))
-        self.pitch = self.pitch_y = step * fs
-        self.tile = tc * fs
-        self.sheet_xy = (rx, gy)
-        self.cols = max(1, (cx + cw - rx - 4 * fs) // self.pitch)
-        self.rows = 4
-        yy = gy + self.rows * self.pitch + 2 * fs
-        self.legend = (rx, yy)
-        self.page_xy = (cx + cw - 8 * fs, yy) if touch else None
-        yy += 16 * fs
-        self.prev1 = (rx, yy + 2 * fs)
-        self.name_xy = (rx + 22 * fs, yy)
-        self.state_xy = (rx, yy + 20 * fs)
-        self.sw = (26 if touch else 9) * fs
-        self.sw_gap = (5 if touch else 3) * fs
-        self.sw_xy = (rx + 2 * fs, yy + (44 if touch else 40) * fs)
-        self.prev2 = None
-        self.scale_text = None
-        # the tap floor's tools reach the foot: no strip there (its keys are
-        # the keyboard's, the trackball has none)
-        hint_h = 22 * fs if keys and not touch else 0
-        self.hints = (cx, cy + ch - hint_h, cw, hint_h) if hint_h else None
-        self.status = None
+            self.cell, self.mx, self.my, gap = 16, 16, 14, 24
+            self.tsz, self.sw = 36, 20
+            # a slot's pitch holds its name at the font's scale
+            self.tile, self.pitch, self.pitch_y = 32, 64 * fs, 40 + 16 * fs
+            self.legend_h = 10 + 10 * fs
+        else:
+            self.cell = (13 if touch else 9) * fs
+            self.mx = self.my = 8 * fs
+            gap = 12 * fs
+            self.tsz = (30 if touch else 22) * fs
+            self.sw = (31 if touch else 12) * fs
+            step, tc = ((32, 28) if touch else (19, 16))
+            self.pitch = self.pitch_y = step * fs
+            self.tile = tc * fs
+            self.legend_h = 16 * fs
+        self.grid_w = self.mx + 16 * self.cell + gap
+        # the handheld's column beside the slot: the sheet's rows (four at
+        # most) and the slot's name and state lines (`lines`) its room holds
+        # over the palette, the pager under touch; a desk's rows are what its
+        # pane holds (`sheet`)
+        self.rows, self.lines = 4, 2
+        # the slot's canvas: as tall as its zoom, short of the tools under it
+        # (a stop whose foot touches the next row's loses the arrows to it)
+        self.grid_h = self.my + 16 * self.cell + 4
+        if not desk:
+            row = 22 * fs
+            room = self.ch - row - (row if keys else 0)
+            self.grid_h = min(self.grid_h, room - fs)
+            avail = room - 2 * self.sw - (row if touch else 0) - self.legend_h - self.my
+            while self.rows > 1 and self.rows * self.pitch_y + self.lines * row > avail:
+                if self.lines:
+                    self.lines -= 1
+                else:
+                    self.rows -= 1
 
-    def per_page(self):
-        return self.cols * self.rows
-
-    def swatch(self, i):
-        d, g = self.sw, self.sw_gap
-        x0, y0 = self.sw_xy
-        return (x0 + (i % 8) * (d + g), y0 + (i // 8) * (d + g), d, d)
-
-    def slot_cell(self, k):
-        """Where the k-th tile of the page shown starts, (x, y)."""
-        x0, y0 = self.sheet_xy
-        return (x0 + (k % self.cols) * self.pitch, y0 + (k // self.cols) * self.pitch_y)
+    def sheet(self, w, h):
+        """The sheet's (columns, rows) in a canvas w x h."""
+        cols = max(1, (w - 4 * (1 if self.desk else self.fs)) // self.pitch)
+        if not self.desk:
+            return cols, self.rows
+        return cols, max(1, min(6, (h - self.my - self.legend_h) // self.pitch_y))
 
 
-class SpritesLayer(Layer):
-    """The Sprites tab's content layer (system domain, as the sprite tab's)."""
+# The band's items before its way back (a desk pane's: the slot's keys and the next pane)
+_BAND_TDECK = ("flip", "Flip", "rotate", "Rotate")
+_BAND_KEYS = ("Q W", "Icon", "flip", "Flip", "rotate", "Rotate")
+_BAND_PANE = ("Q W", "Icon", "F6", "Next pane")
+
+
+class SpritesLayer(PageHost, Layer):
+    """The Sprites tab's content layer (system domain, as the sprite
+    tab's), the host of its page (`editor_theme.py`)."""
     # Esc closes theme mode back to Appearance (its handle_input), not
     # the Editor's leave.
     ESC_LEAVES = False
@@ -734,21 +695,23 @@ class SpritesLayer(Layer):
         return False
 
     def __init__(self, ws, names):
-        self.ws = ws
-        self._NAMES = names
+        PageHost.__init__(self, ws, names, TAB_SPRITES, editor_theme.theme_page)
         self.layout = None
         self._args = None
         self._drag = None
         self._shape0 = None
+        self._band = None               # the band's items as handed the page
+        self._cell = 1                  # the slot's zoom as its canvas drew it last
+        self._sheet_r = None            # ...and the sheet's
 
     def relayout(self, w, h, fs, cs=None):
         self._args = (w, h, fs, cs)
         self.layout = SpritesLayout(w, h, fs, cs, keys=_ui_draw.hint_kind() != "touch")
 
-    def _sync(self):
+    def _lay(self):
         """Lay the tab out where nothing has (a desk pane lays it out at the
         pane's size, `EditorDesk._in_pane`), and again on a handheld where the
-        input moved between touch and keys (the hint strip)."""
+        input moved between touch and keys."""
         ws = self.ws
         if self.layout is None:
             sc = ws.sys_canvas
@@ -761,62 +724,158 @@ class SpritesLayer(Layer):
     def _doc(self):
         return self.ws.editor_app.theme
 
-    # -- drawing -----------------------------------------------------------------
+    # -- the page ------------------------------------------------------------
+
+    def _sync(self):
+        """The open theme's state the page shows, handed to its `sync`
+        hook where it moved."""
+        doc = self._doc()
+        lay = self.layout
+        u = lay.unit
+        per, first = self._page_of()
+        n = len(_iconsets.SLOTS)
+        name = status = ""
+        tool, color = "pencil", 0
+        if doc is not None:
+            name = slot_name(doc.slot)
+            st = doc.state()
+            status = st if lay.pane else st.split(_dot(), 1)[1] if _dot() in st else st
+            tool = _TOOL_ID.get(doc.pe.tool, "pencil")
+            color = doc.pe.color & 15
+        pages = max(1, -(-n // per))
+        vals = (lay.pane, lay.touch and not lay.desk, lay.lines > 0, lay.lines > 1, name, status,
+                "%d / %d" % (first // per + 1, pages), first == 0, first + per >= n, tool, color,
+                lay.grid_w // u, lay.grid_h // u, (lay.my + lay.rows * lay.pitch_y + lay.legend_h) // u, lay.tsz // u,
+                lay.sw // u, 60 if lay.pane else 18, 34 if lay.pane else 18, 4 * u)
+        self.push(vals)
+
+    def _page_of(self):
+        """(slots a page of the sheet shows, the first it shows)."""
+        lay = self.layout
+        r = self._sheet_r
+        cols, rows = lay.sheet(r[2], r[3]) if r is not None else (1, lay.rows)
+        per = cols * rows
+        doc = self._doc()
+        slot = doc.slot if doc is not None else 0
+        if lay.desk:
+            return per, max(0, (slot // cols - rows + 1)) * cols
+        return per, (slot // per) * per
 
     def draw(self, dt):
-        ws = self.ws
         doc = self._doc()
-        self._sync()
-        lay = self.layout
-        cv = ws.sys_canvas
-        th = ws.theme_colors
-        cv.rect(lay.cx, lay.cy, lay.cw, lay.ch, th["panel"] if lay.desk else th["panel"])
-        if lay.desk:
-            cv.rect(lay.cx, lay.cy, lay.cw, lay.ch, th["surface"])
+        self._lay()
         if doc is not None:
             doc.follow()
-            self._grid(cv, th, lay, doc)
-            self._tools(cv, th, lay, doc)
-            self._sheet(cv, th, lay, doc)
-            self._side(cv, th, lay, doc)
-            self._palette(cv, th, lay, doc)
-            self._foot(cv, th, lay, doc)
+        pg = self._page()
+        lay = self.layout
+        band = (_BAND_PANE if lay.pane else _BAND_KEYS) if _ui_draw.hint_kind() == "keys" else \
+            _BAND_TDECK if _ui_draw.hint_kind() == "tdeck" else ()
+        if band is not self._band:
+            self._band = band
+            pg.band_extra(band)
+        pg.band = lay.keys
+        PageHost.draw(self, dt)
 
-    def _greys(self):
-        return self.ws.look.live.fixed[:2]
+    def act(self, verb):
+        """A tool picked, or the sheet's page before or after."""
+        doc = self._doc()
+        if doc is None:
+            return
+        if verb in _TOOL_OF:
+            doc.pe.set_tool(_TOOL_OF[verb])
+            self._due = "home"              # the keys go back to the slot
+        else:
+            per, first = self._page_of()
+            n = len(_iconsets.SLOTS)
+            doc.select(max(0, first - per) if verb == "sprev" else min(n - 1, first + per))
+        self.ws.mark_dirty()
 
-    def _grid(self, cv, th, lay, doc):
+    def set_color(self, c):
+        doc = self._doc()
+        if doc is not None:
+            doc.pe.color = c
+            self.ws.mark_dirty()
+
+    # -- the slot ------------------------------------------------------------
+
+    def grid_pointer(self, kind, x, y):
+        """A press on the slot, its drag and its release, in its coordinates."""
+        doc = self._doc()
+        lay = self.layout
+        if doc is None:
+            return
+        c = self._cell
+        cx, cy = (x - lay.mx) // c, (y - lay.my) // c
+        inside = 0 <= cx < 16 and 0 <= cy < 16
+        if kind == "down":
+            if inside:
+                self._press(doc, cx, cy)
+        elif kind == "drag":
+            if inside and (self._drag is not None or self._shape0 is not None):
+                self._move(doc, cx, cy)
+        elif self._drag is not None or self._shape0 is not None:
+            self._release(doc)
+        self.ws.mark_dirty()
+
+    def grid_keys(self, i):
+        """The slot's keys while it holds focus: the arrows move the
+        cursor (one past its edge is the page's), A paints where it stands."""
+        doc = self._doc()
+        if doc is None:
+            return False
+        dx = i.steps("right") - i.steps("left")
+        dy = i.steps("down") - i.steps("up")
+        took = False
+        if dx or dy:
+            x, y = doc.cur[0] + dx, doc.cur[1] + dy
+            if 0 <= x < 16 and 0 <= y < 16:
+                doc.cur[0], doc.cur[1] = x, y
+                took = True
+        if i.pressed("a") or i.pressed("run"):
+            self._press(doc, doc.cur[0], doc.cur[1])
+            self._release(doc)
+            took = True
+        if took:
+            self.ws.mark_dirty()
+        return took
+
+    def draw_grid(self, cv, x, y, w, h):
         """The open slot at its zoom: in pixels its tile's colours on the grey
         checker; still smooth its mask in solid ink on a plain ground, a cell
         set where the canvas would set it. The centre lines, then the
         cursor's ring."""
-        gx, gy = lay.grid
-        c = lay.cell
+        doc = self._doc()
+        if doc is None:
+            return
+        th = self.ws.theme_colors
+        lay = self.layout
+        gx, gy = x + lay.mx, y + lay.my
+        c = self._cell = max(1, min(lay.cell, (w - 2 * lay.mx) // 16, (h - lay.my - 2) // 16))
         span = 16 * c
         s = doc.slot
         line = th["border"]
         if doc.is_pixels(s):
-            g = self._greys()
+            g = self.ws.look.live.fixed[:2]
             _checker(cv, gx, gy, span, span, c, g[0], g[1])
             ox, oy = doc.sheet.tile_origin(s)
             clear = doc.sheet.clear
             get = doc.sheet.pget
-            for y in range(16):
-                for x in range(16):
-                    v = get(ox + x, oy + y)
+            for yy in range(16):
+                for xx in range(16):
+                    v = get(ox + xx, oy + yy)
                     if v != clear:
-                        cv.rect(gx + x * c, gy + y * c, c, c, v)
+                        cv.rect(gx + xx * c, gy + yy * c, c, c, v)
         else:
             cv.rect(gx, gy, span, span, th["surface"])
             cv.rectb(gx, gy, span, span, line)
             mask = doc.mask(s)
             if mask is not None:
                 ink = th["ink"]
-                for y in range(16):
-                    row = y * 16
-                    for x in range(16):
-                        if mask[row + x]:
-                            cv.rect(gx + x * c, gy + y * c, c, c, ink)
+                for yy in range(16):
+                    row = yy * 16
+                    for xx in range(16):
+                        if mask[row + xx]:
+                            cv.rect(gx + xx * c, gy + yy * c, c, c, ink)
         cv.rect(gx + 8 * c, gy, 1, span, line)
         cv.rect(gx, gy + 8 * c, span, 1, line)
         pe = doc.pe
@@ -825,140 +884,127 @@ class SpritesLayer(Layer):
             cv.rectb(gx + x0 * c, gy + y0 * c, (x1 - x0 + 1) * c, (y1 - y0 + 1) * c, th["value"])
         if lay.keys:
             keyline = self.ws.look.live.fixed[2]
-            x, y = gx + doc.cur[0] * c, gy + doc.cur[1] * c
-            box = (x - 1, y - 1, c + 2, c + 2)
+            bx, by = gx + doc.cur[0] * c, gy + doc.cur[1] * c
+            box = (bx - 1, by - 1, c + 2, c + 2)
             cv.rectb(box[0], box[1], box[2], box[3], keyline)
             cv.rectb(box[0] - 1, box[1] - 1, box[2] + 2, box[3] + 2, th["surface"])
             _ui_draw.focus(cv, th, (box[0] - 1, box[1] - 1, box[2] + 2, box[3] + 2),
                            "cell", ring=True)
 
-    def _tools(self, cv, th, lay, doc):
-        pe = doc.pe
-        r = 8 if lay.tsz >= 30 else 6
-        for (slot, glyph, tool), rect in zip(TOOLS, lay.tools):
-            ink = th["chrome_ink"]
-            if pe.tool == tool:
-                got = _ui_draw.current(cv, th, rect, r)
-                ink = th["ink"] if got is None else got
-            box = 16 if lay.tsz < 30 else 20
-            box = min(box * (lay.fs if not lay.desk else 1), rect[2])
-            ir = (rect[0] + (rect[2] - box) // 2, rect[1] + (rect[3] - box) // 2, box, box)
-            if not self.ws.draw_icon(slot, ir, ink, cv):
-                _ui_draw.glyph(cv, glyph, ir, ink)
+    # -- the sheet -----------------------------------------------------------
 
-    def _page(self, lay, doc):
-        per = lay.per_page()
-        if lay.desk:
-            first = max(0, (doc.slot // lay.cols - lay.rows + 1)) * lay.cols
-            return first, per
-        return (doc.slot // per) * per, per
+    def sheet_tap(self, x, y):
+        """A tap on the sheet, in its coordinates: its slot opens."""
+        doc = self._doc()
+        r = self._sheet_r
+        if doc is None or r is None:
+            return
+        lay = self.layout
+        cols, rows = lay.sheet(r[2], r[3])
+        cx, cy = x // lay.pitch, (y - lay.my) // lay.pitch_y
+        per, first = self._page_of()
+        s = first + cy * cols + cx
+        if 0 <= cx < cols and 0 <= cy < rows and s < len(_iconsets.SLOTS):
+            doc.select(s)
+            self.ws.mark_dirty()
 
-    def _sheet(self, cv, th, lay, doc):
+    def sheet_keys(self, i):
+        """The sheet's keys while it holds focus: the arrows move along it,
+        up and down past the page shown to the page before or after; one
+        past its edge is the page's."""
+        doc = self._doc()
+        r = self._sheet_r
+        if doc is None or r is None:
+            return False
+        dx = i.steps("right") - i.steps("left")
+        dy = i.steps("down") - i.steps("up")
+        if not (dx or dy):
+            return False
+        cols = self.layout.sheet(r[2], r[3])[0]
+        k = doc.slot
+        x = k % cols + dx
+        s = k + dx + dy * cols
+        if not (0 <= x < cols and 0 <= s < len(_iconsets.SLOTS)):
+            return False
+        doc.select(s)
+        self.ws.mark_dirty()
+        return True
+
+    def draw_sheet(self, cv, x, y, w, h):
         """The sheet: a smooth slot as the set draws it, a slot in pixels
         from the tiles with a `value` dot in its corner; the open one marked
-        (a ring on the desk, every slot named under its tile)."""
+        (a ring on the desk, every slot named under its tile); the legend
+        under it: a pixel tile's dot is "pixel art"."""
+        self._sheet_r = (x, y, w, h)
+        doc = self._doc()
+        if doc is None:
+            return
         ws = self.ws
-        first, per = self._page(lay, doc)
+        th = ws.theme_colors
+        lay = self.layout
+        cols, rows = lay.sheet(w, h)
+        per, first = self._page_of()
         n = len(_iconsets.SLOTS)
         t = lay.tile
         ink = th["ink"]
         dot = th["value"] if not _contrast(th) else th["ink"]
         cap = _ui_draw.font("caption")
+        y0 = y + lay.my
         for k in range(per):
             s = first + k
             if s >= n:
                 break
-            x, y = lay.slot_cell(k)
+            sx, sy = x + (k % cols) * lay.pitch, y0 + (k // cols) * lay.pitch_y
             if lay.desk:
-                x += (lay.pitch - t) // 2
+                sx += (lay.pitch - t) // 2
             if s == doc.slot:
-                if lay.desk:
-                    _ui_draw.focus(cv, th, (x - 2, y - 2, t + 4, t + 4), "cell", ring=True)
-                else:
-                    _ui_draw.focus(cv, th, (x - 2, y - 2, t + 4, t + 4), "cell")
+                _ui_draw.focus(cv, th, (sx - 2, sy - 2, t + 4, t + 4), "cell", ring=lay.desk)
             kind = _iconsets.SLOTS[s]
             if doc.is_pixels(s):
                 img = doc.sheet.tile_image(s, doc.sheet.clear)
                 sc = max(1, t // 16)
-                cv.spr(img, x + (t - 16 * sc) // 2, y + (t - 16 * sc) // 2, sc)
-                d = 4 if t >= 28 else 3
-                if lay.desk:
-                    d = 5
-                cv.rrect(x + t - d - (0 if lay.desk else 1), y, d, d, d // 2 + 1, dot)
+                cv.spr(img, sx + (t - 16 * sc) // 2, sy + (t - 16 * sc) // 2, sc)
+                d = 5 if lay.desk else 4 if t >= 28 else 3
+                cv.rrect(sx + t - d - (0 if lay.desk else 1), sy, d, d, d // 2 + 1, dot)
             else:
                 box = 16 * max(1, t // 16) if lay.desk else 16 * lay.fs
-                ox = x + (t - box) // 2
-                oy = y + (t - box) // 2
-                if not ws.draw_icon(kind, (ox, oy, box, box), th["ink"], cv):
-                    ws.icon(kind, ox, oy, cv, ink=th["ink"])
+                ox = sx + (t - box) // 2
+                oy = sy + (t - box) // 2
+                if not ws.draw_icon(kind, (ox, oy, box, box), ink, cv):
+                    ws.icon(kind, ox, oy, cv, ink=ink)
             if lay.desk:
                 was = _ui_draw.print_font(cap[0])
                 try:
                     name = _ui_draw.print_cut(slot_name(s), lay.pitch - 4, 1)
-                    w = _ui_draw.print_width(name, 1)
-                    cx = x - (lay.pitch - t) // 2 + (lay.pitch - w) // 2
-                    cv.print(name, cx, y + t + 6, ink if s == doc.slot else th["ink_dim"], 1)
+                    nw = _ui_draw.print_width(name, 1)
+                    nx = sx - (lay.pitch - t) // 2 + (lay.pitch - nw) // 2
+                    cv.print(name, nx, sy + t + 6, ink if s == doc.slot else th["ink_dim"], 1)
                 finally:
                     _ui_draw.print_font(was)
-        # the legend: a pixel tile's dot is "pixel art"
-        lx, ly = lay.legend
-        d = 5 if lay.desk else 4 * lay.fs
         f = 1 if lay.desk else lay.fs
-        tx = lx + (14 if lay.desk else 8 * lay.fs)
+        d = 5 if lay.desk else 4 * f
+        lx = x + (4 if lay.desk else 0)
+        ly = y0 + rows * lay.pitch_y + 2 * f
         ty = ly + 6 * f - cap[3] * f // 2 - 1
-        cv.rrect(lx + (4 if lay.desk else 0), ty + cap[3] * f // 2 - d // 2 + 2, d, d,
-                 d // 2 + 1, dot)
+        cv.rrect(lx, ty + cap[3] * f // 2 - d // 2 + 2, d, d, d // 2 + 1, dot)
         was = _ui_draw.print_font(cap[0])
         try:
-            cv.print("pixel art", tx, ty, th["ink_dim"], 1)
-            if lay.page_xy is not None:
-                pages = -(-n // per)
-                s = "%d of %d" % (first // per + 1, pages)
-                ic = 12 * lay.fs
-                w = _ui_draw.print_width(s, lay.fs)
-                px, py = lay.page_xy
-                cv.print(s, px - w - ic - 4 * lay.fs, ty, th["ink_dim"], 1)
-                r = (px - ic, ty + (cap[2] * lay.fs - ic) // 2, ic, ic)
-                if not self.ws.draw_icon("forward", r, th["ink_dim"], cv):
-                    _ui_draw.glyph(cv, "arr_r", r, th["ink_dim"])
+            cv.print("pixel art", lx + (10 if lay.desk else 8 * f), ty, th["ink_dim"], 1)
         finally:
             _ui_draw.print_font(was)
 
-    def _side(self, cv, th, lay, doc):
-        """The open slot as the shell draws it at 1x (and 2x on the desk), its
-        name and its state."""
-        s = doc.slot
-        kind = _iconsets.SLOTS[s]
-        x, y = lay.prev1
-        self._slot_at(cv, th, doc, kind, x, y, 16)
-        if lay.prev2 is not None:
-            self._slot_at(cv, th, doc, kind, lay.prev2[0], lay.prev2[1], 32)
-            cap = _ui_draw.font("caption")
-            was = _ui_draw.print_font(cap[0])
-            try:
-                cv.print("1x" + _dot() + "2x", lay.scale_text[0], lay.scale_text[1],
-                         th["ink_dim"], 1)
-            finally:
-                _ui_draw.print_font(was)
-        if lay.name_xy is None:
+    def draw_preview(self, cv, x, y, w, h):
+        """The open slot as the shell draws it: at 1x (on the desk 1x and 2x)."""
+        doc = self._doc()
+        if doc is None:
             return
-        f = _ui_draw.font("title")
-        was = _ui_draw.print_font(f[0])
-        try:
-            nx, ny = lay.name_xy
-            cv.print(slot_name(s), nx, ny + (16 * lay.fs + 2 - f[2] * lay.fs) // 2, th["ink"], 1)
-        finally:
-            _ui_draw.print_font(was)
-        cap = _ui_draw.font("caption")
-        was = _ui_draw.print_font(cap[0])
-        try:
-            st = doc.state()
-            rest = st.split(_dot(), 1)[1] if _dot() in st else st
-            sx, sy = lay.state_xy
-            cv.print(_ui_draw.print_cut(rest, lay.cx + lay.cw - sx - 2, lay.fs), sx, sy,
-                     th["ink_dim"], 1)
-        finally:
-            _ui_draw.print_font(was)
+        th = self.ws.theme_colors
+        kind = _iconsets.SLOTS[doc.slot]
+        if self.layout.pane:
+            self._slot_at(cv, th, doc, kind, x, y + (h - 16) // 2, 16)
+            self._slot_at(cv, th, doc, kind, x + 26, y + (h - 32) // 2, 32)
+        else:
+            self._slot_at(cv, th, doc, kind, x + (w - 16) // 2, y + (h - 16) // 2, 16)
 
     def _slot_at(self, cv, th, doc, kind, x, y, box):
         ws = self.ws
@@ -969,33 +1015,6 @@ class SpritesLayer(Layer):
             return
         if not ws.draw_icon(kind, (x, y, box, box), th["ink"], cv):
             ws.icon(kind, x, y, cv, ink=th["ink"])
-
-    def _palette(self, cv, th, lay, doc):
-        keyline, white = self.ws.look.live.fixed[2:]
-        cur = doc.pe.color & 15
-        for i in range(16):
-            x, y, d, _d = lay.swatch(i)
-            cv.rrect(x, y, d, d, 3, i)
-        x, y, d, _d = lay.swatch(cur)
-        cv.rrect(x, y, d, d, 3, None, white, 2)
-        cv.rrect(x - 2, y - 2, d + 4, d + 4, 4, None, keyline, 2)
-
-    def _foot(self, cv, th, lay, doc):
-        if lay.desk:
-            _ui_draw.status_row(cv, th, lay.status, ())
-            items = ("Q W", "Icon", "F6", "Next pane") if _ui_draw.hint_kind() == "keys" else ()
-            x, y, w, h = lay.status
-            tx = x + 10
-            spans = _ui_draw.hints(cv, th, (x, y, w - 8, h), items, True, draw=False) \
-                if items else []
-            right = (x + w - 8 - (spans[-1][1] - spans[0][0])) if spans else x + w - 8
-            _ui_draw.status_row(cv, th, (tx, y, max(0, right - tx - 8), h),
-                                (_status_line((doc.state(),), right - tx - 8, 1),))
-            if items:
-                band = (right, y, x + w - 8 - right, h)
-                _ui_draw.hints(cv, th, band, items, True)
-            return
-        _draw_hints(cv, th, lay.hints, _hints_for(TAB_SPRITES), False)
 
     # -- input -------------------------------------------------------------------
 
@@ -1033,15 +1052,18 @@ class SpritesLayer(Layer):
         if i.pressed("b"):
             ws.defer(app.close_theme)
             return True
-        dx = i.steps("right") - i.steps("left")
-        dy = i.steps("down") - i.steps("up")
-        if dx or dy:
-            doc.cur[0] = max(0, min(15, doc.cur[0] + dx))
-            doc.cur[1] = max(0, min(15, doc.cur[1] + dy))
-            ws.mark_dirty()
-        if i.pressed("a") or i.pressed("run"):
-            self._press(doc, doc.cur[0], doc.cur[1])
-            self._release(doc)
+        self._lay()
+        self._page().keys(i)
+        return True
+
+    def handle_pointer(self, px, py, click):
+        ws = self.ws
+        if click and ws.bar_layer.handle_bar_tap("menu", px, py):
+            return True
+        if self._doc() is None:
+            return True
+        self._lay()
+        PageHost.handle_pointer(self, px, py, click)
         return True
 
     def _op(self, doc, op):
@@ -1055,15 +1077,6 @@ class SpritesLayer(Layer):
             pe.rotate()
         doc.end_edit()
         self.ws.mark_dirty()
-
-    def _cell(self, px, py):
-        lay = self.layout
-        gx, gy = lay.grid
-        c = lay.cell
-        x, y = (px - gx) // c, (py - gy) // c
-        if 0 <= x < 16 and 0 <= y < 16:
-            return x, y
-        return None
 
     def _press(self, doc, x, y):
         pe = doc.pe
@@ -1099,57 +1112,6 @@ class SpritesLayer(Layer):
         self._drag = None
         self._shape0 = None
         doc.end_edit()
-
-    def handle_pointer(self, px, py, click):
-        ws = self.ws
-        doc = self._doc()
-        if doc is None:
-            return True
-        if click and ws.bar_layer.handle_bar_tap("menu", px, py):
-            return True
-        self._sync()
-        lay = self.layout
-        down = bool(ws.pointer.down)
-        if click:
-            cell = self._cell(px, py)
-            if cell is not None:
-                self._press(doc, cell[0], cell[1])
-                ws.mark_dirty()
-                return True
-            for (slot, _g, tool), r in zip(TOOLS, lay.tools):
-                if _in(px, py, r):
-                    doc.pe.set_tool(tool)
-                    ws.mark_dirty()
-                    return True
-            for i in range(16):
-                if _in(px, py, lay.swatch(i)):
-                    doc.pe.color = i
-                    ws.mark_dirty()
-                    return True
-            first, per = self._page(lay, doc)
-            for k in range(per):
-                s = first + k
-                if s >= len(_iconsets.SLOTS):
-                    break
-                x, y = lay.slot_cell(k)
-                if _in(px, py, (x, y, lay.pitch, lay.pitch_y)):
-                    doc.select(s)
-                    return True
-            if lay.page_xy is not None and not lay.desk and py >= lay.legend[1] - 4 \
-                    and py < lay.legend[1] + 16 and px >= lay.page_xy[0] - 60:
-                nxt = first + per
-                doc.select(nxt if nxt < len(_iconsets.SLOTS) else 0)   # the next page
-                return True
-            return True
-        if down and (self._drag is not None or self._shape0 is not None):
-            cell = self._cell(px, py)
-            if cell is not None:
-                self._move(doc, cell[0], cell[1])
-                ws.mark_dirty()
-        elif not down and (self._drag is not None or self._shape0 is not None):
-            self._release(doc)
-            ws.mark_dirty()
-        return True
 
 
 def _line(x0, y0, x1, y1):
