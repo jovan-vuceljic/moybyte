@@ -253,6 +253,7 @@ class moy_ui_over_t(_c.Structure):
         ("tag", moy_ui_span_t),
         ("focus", moy_ui_span_t),
         ("flags2", _c.c_int32),
+        ("small", _c.c_int8),
     ]
 
 

@@ -406,7 +406,7 @@ Python's alone.
 | `rule()` | a divider | |
 | `note(lines)` | a card in the page's flow | `icon=` (`"warn"` in the danger tone) |
 | `empty(title)` | what a page with nothing on it says; controls built in it stand under it | `icon=`, `lines=` |
-| `toast(text)` | a pill over the page's foot | `icon=` |
+| `toast(text)` | a pill over the page's foot, or a banner | `icon=`, `sub=`, `burst=`, `look="flat"`, `key=` the name a host's `rect_of` asks by |
 | `bubble(text)` | a chat message, a stop | `side="in"`/`"out"`, `head=`, `status=`, `signal=`, `tone="failed"`, `lines=`, `on=`, `cut=` |
 | `text_view(name)` | read-only lines of a text state or a model | `wrap=`, `follow=`, `syntax=`, `face=`, `look="well"`, `gutter=` |
 | `picture(image)` | one picture | `side=`, `icon=`, `tone=`, `look="tile"`, `on=` makes it a stop |
@@ -418,7 +418,7 @@ Python's alone.
 
 | kind | is | key props |
 |---|---|---|
-| `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look="large"`, `w=` |
+| `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look=` (`large`, `small`), `w=` |
 | `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=` |
 | `toggle(label, name)` | a bool | `on=`, `hint=` |
 | `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=` |
@@ -482,7 +482,10 @@ path of its own (owner, 2026-10-29). A long document is a `text_view` or a
 **The foot.** `ui.foot()` (the end look) docks its buttons at their natural
 widths at the page's end, a status label before them, under what scrolls;
 `look="share"` shares its width among them. `ui.toast(text, icon=)` is a
-pill over the page above its foot; a dialog lies over the page.
+pill over the page above its foot (`look="flat"` in flat fills, filling the
+page's room), and with `sub=` a banner: a card at the top centre of the
+page, `text` over the `sub` line, `burst=` (0..255) its confetti; a dialog
+lies over the page.
 `ui.page(title, status=)` leads the hints band with its words (a page laid
 out in a split, its own or one in a switch's shown case, has the band cut
 from its room).
@@ -512,8 +515,10 @@ and its pages are placed; `split` and `grid` place their cells on any page.
   measure of prose); `text_view(..., look="well")` lays its prose on a well,
   and `gutter=True` numbers its lines in a gutter before them.
 - `button(..., kind="bar")` alone is a flat icon, narrower than a button's,
-  and a button's `kind=` may be a template; `look="large"` is half again a
-  row's height with twice the pads, on a flowing page. On the desk a
+  the largest its row holds (`look="small"`: 16 units at the page's scale,
+  as beside a label), and a button's `kind=` may be a template;
+  `look="large"` is half again a row's height with twice the pads, on a
+  flowing page. On the desk a
   popover anchored at a button or a link hangs under it.
 - A link's `swatch="#RRGGBB"` (a template, empty for none) draws a chip of
   that colour before its value; a swatches row whose label its dots would

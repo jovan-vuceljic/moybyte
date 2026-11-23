@@ -24,9 +24,9 @@ AppContext's `notify` role.
   secret one "Secret" until found and a goal under way its count ("3 of
   5"). Enter or a tap opens a badge's popover, centred across the page from
   its card's top: the day it was found, or its goal's bar. The desk's foot names the focused badge.
-* The banner is native/moy_ui's `moy_ui_unlock`, drawn by the console
-  (`console_notices.Notices._draw_toast`) with the head the process posted
-  and the confetti's burst named here.
+* The banner is a page of `banner_ui.banner` (a toast with its sub line),
+  painted by the console (`console_notices.Notices._draw_toast`) with the
+  head the process posted and the confetti's burst named here.
 """
 
 import uitree as ui

@@ -373,15 +373,6 @@ def install(m, lib, tokens):
         _check(lib.moy_ui_tile(c.byref(sink(cv, look)), box_of(rect), sl, gl, int(tone), int(r),
                                int(fs), int(desk)))
 
-    def unlock(cv, look, cx, y, head, name, icon, burst, fs, desk):
-        sl, gl = _icon(icon)
-        h, keep = span(head)
-        n, keep2 = span(name)
-        out = _Box()
-        _check(lib.moy_ui_unlock(c.byref(sink(cv, look)), int(cx), int(y), h, n, sl, gl,
-                                 int(burst), int(fs), int(desk), c.byref(out)))
-        return (out.x, out.y, out.w, out.h)
-
     def rec(cv, look, right, top, fs, desk):
         out = _Box()
         _check(lib.moy_ui_rec(c.byref(sink(cv, look)), int(right), int(top), int(fs), int(desk),
@@ -515,7 +506,7 @@ def install(m, lib, tokens):
     for f in (row, cell, label, bar_rect, scrollbar, fill_uncovered, fade,
               button, button_x, chip, tab_rects, tab, status, hints, game_btn, game_icon_btn,
               mini_btn, toolbar, paint, frame, frame_band, frame_geom, bar_part,
-              scrim, scrim_alpha, tile, unlock, rec, modal, modal_band, modal_drop, month_h, perf,
+              scrim, scrim_alpha, tile, rec, modal, modal_band, modal_drop, month_h, perf,
               frame_under, frame_under_fill, frame_under_onto, cast, dialog, text_field, panel,
               focus, current,
               marks, mark_reach, inset, cut,

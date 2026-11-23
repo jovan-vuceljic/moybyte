@@ -1860,23 +1860,6 @@ static mp_obj_t ui_tile(size_t n_args, const mp_obj_t *a) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(ui_tile_obj, 8, 8, ui_tile);
 
-// unlock(cv, look, cx, y, head, name, icon, burst, fs, desk) -> (x, y, w, h): the
-// unlock banner
-static mp_obj_t ui_unlock(size_t n_args, const mp_obj_t *a) {
-    (void)n_args;
-    moy_ui_sink_t s;
-    sink_of(&s, a[0], a[1]);
-    moy_ui_span_t ic = span_of(a[6]);
-    moy_ui_box_t b;
-    check(moy_ui_unlock(&s, num(a[2]), num(a[3]), span_of(a[4]), span_of(a[5]),
-                        moy_ui_icon_slot(ic.p, ic.n), moy_ui_icon_glyph(ic.p, ic.n), num(a[7]),
-                        num(a[8]), num(a[9]), &b));
-    mp_obj_t t[4] = {MP_OBJ_NEW_SMALL_INT(b.x), MP_OBJ_NEW_SMALL_INT(b.y),
-                     MP_OBJ_NEW_SMALL_INT(b.w), MP_OBJ_NEW_SMALL_INT(b.h)};
-    return ret_tuple(4, t);
-}
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(ui_unlock_obj, 10, 10, ui_unlock);
-
 // rec(cv, look, right, top, fs, desk) -> (x, y, w, h): the recording indicator
 static mp_obj_t ui_rec(size_t n_args, const mp_obj_t *a) {
     (void)n_args;
@@ -3260,7 +3243,6 @@ static const mp_rom_map_elem_t moy_ui_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_scrim), MP_ROM_PTR(&ui_scrim_obj) },
     { MP_ROM_QSTR(MP_QSTR_scrim_alpha), MP_ROM_PTR(&ui_scrim_alpha_obj) },
     { MP_ROM_QSTR(MP_QSTR_tile), MP_ROM_PTR(&ui_tile_obj) },
-    { MP_ROM_QSTR(MP_QSTR_unlock), MP_ROM_PTR(&ui_unlock_obj) },
     { MP_ROM_QSTR(MP_QSTR_rec), MP_ROM_PTR(&ui_rec_obj) },
     { MP_ROM_QSTR(MP_QSTR_modal), MP_ROM_PTR(&ui_modal_obj) },
     { MP_ROM_QSTR(MP_QSTR_month_h), MP_ROM_PTR(&ui_month_h_obj) },

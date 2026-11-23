@@ -55,10 +55,11 @@ SYSTEM = ("settings_rows", "settings_ui", "wifi_ui", "update_ui", "log_ui", "per
           "storybook_app", "myart_app", "drawing_pages", "paint_app", "appearance_app", "month_ui",
           "confirm_ui", "pause_ui", "sysmenu_ui", "editor_settings", "editor_music", "editor_sound",
           "editor_blocks", "editor_sprite", "editor_map", "editor_scene", "editor_theme", "editor_part",
-          "home_ui", "home_bar_ui", "home_strip_ui")
+          "home_ui", "home_bar_ui", "home_strip_ui", "popover_strip_ui", "banner_ui")
 # ...of which the placed ones: laid out by the engine's layout rule (`uitree_c.CEditorEngine`)
 PLACED = ("editor_ui", "code_ui", "bar_ui", "wm_strip_ui", "editor_music", "editor_sound", "editor_blocks",
-          "editor_sprite", "editor_map", "editor_scene", "editor_theme", "editor_part", "home_bar_ui")
+          "editor_sprite", "editor_map", "editor_scene", "editor_theme", "editor_part", "home_bar_ui",
+          "banner_ui")
 
 CANNOT_RUN = 3
 
