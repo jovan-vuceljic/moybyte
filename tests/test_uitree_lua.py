@@ -778,3 +778,38 @@ def test_a_carousel_steps_and_plays_its_centre_card_on_the_c_engine(tmp_path):
     assert any("'one' -> 'two'" in l and "(carousel)" in l for l in lines), lines
     acts = [l for l in lines if l.split()[1:3] == ["action", "pick"]]
     assert len(acts) == 1 and "'two/pick'" in acts[0], lines
+
+
+def test_a_cells_clear_colour_draws_the_checker_on_the_c_engine(tmp_path):
+    """ui.cells' clear= from Lua: colour 0's cell is transparency's grey
+    checker (chrome.FIXED's dark and light) under a white stroke, where
+    without it the cell is black."""
+    from runtime import host_app
+    import chrome
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    body = ('ui.app("%s", { icon = "calc" })\n'
+            'local s = ui.state { c = 3 }\n'
+            'ui.page("p", function()\n'
+            '  ui.cells("c", { first = 0, count = 16, cols = 4, side = 24%s })\n'
+            'end)\n')
+    for name, clear in (("Plain", ""), ("Clear", ", clear = 0")):
+        _cart(carts, name, body % (name, clear))
+    ws, drv, frame, open_cart = _console(carts)
+    shots = {}
+    for name in ("Plain", "Clear"):
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        assert ws.run.player.cart_error is None, (name, ws.run.player.cart_error)
+        shots[name] = bytes(drv.rgb888())
+        ws.spine.exit_to_caller()
+
+    def count(buf, rgb):
+        r, g, b = (rgb >> 16) & 0xf8, (rgb >> 8) & 0xfc, rgb & 0xf8
+        return sum(1 for i in range(0, len(buf), 3)
+                   if buf[i] & 0xf8 == r and buf[i + 1] & 0xfc == g and buf[i + 2] & 0xf8 == b)
+
+    dark, light = chrome.FIXED[0] & 0xffffff, chrome.FIXED[1] & 0xffffff
+    for rgb in (dark, light):
+        assert count(shots["Clear"], rgb) > count(shots["Plain"], rgb), hex(rgb)

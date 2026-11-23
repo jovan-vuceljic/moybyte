@@ -274,6 +274,13 @@ int32_t moy_theme_lum_of(int32_t v);
 // The loader's predicate: (a, b) reaches the contrast floor (MOY_THEME_CONTRAST).
 int moy_theme_reads(int32_t a, int32_t b);
 int32_t moy_theme_nearest(int32_t v);
+// The colours no theme changes (runtime/shell/chrome.py's FIXED, which every
+// look places in its block): transparency's grey checker, dark then light,
+// the black of a cursor's keyline and the white that strokes colour 0. One's
+// value to draw with: the live block's slot holding it, else its nearest
+// MOY64 index.
+enum { MOY_THEME_FIXED_DARK, MOY_THEME_FIXED_LIGHT, MOY_THEME_FIXED_BLACK, MOY_THEME_FIXED_WHITE };
+int32_t moy_theme_fixed(int which);
 // Place `n` colour values into a block: an index stays, an RGB value takes
 // the slot of its RGB565 word (64 + its place in `block`, a new word the next
 // free one; past MOY_THEME_BLOCK, its nearest index). out[i] is the placed

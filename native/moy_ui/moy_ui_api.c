@@ -5236,7 +5236,7 @@ int32_t moy_ui_api_scroll(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
 }
 
 int32_t moy_ui_api_cells(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, int first,
-                         int count, int cols, int side, int gap, int32_t cur, int edge,
+                         int count, int cols, int side, int gap, int32_t cur, int edge, int clear,
                          const moy_ui_over_t *o, int *picked) {
     o = mua_over(o);
     *picked = 0;
@@ -5296,7 +5296,7 @@ int32_t moy_ui_api_cells(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
     mua_band_mark(c, b, stacked, 0);
     EACH_ROW(c, k, s, b, stacked, c->page) {
         mua_band(c, s, b, stacked);
-        moy_ui_cells_draw(s, g.x, g.y, first, count, cols, side, gap, cur, ring, edge);
+        moy_ui_cells_draw(s, g.x, g.y, first, count, cols, side, gap, cur, ring, edge, clear);
         mua_clip_out(&k);
     }
     return cur;

@@ -2023,7 +2023,7 @@ SCHEMA = {
                    max="lit", lines="lit", on="action1", cut="action1"),
     "month": dict(_C, year="int", month="int", today="int", prev="action0", next="action0"),
     "toast": dict(_C, text="text", icon="text"),
-    "cells": dict(_C, first="int", count="int", cols="int", side="int", gap="int", edge="lit",
+    "cells": dict(_C, first="int", count="int", cols="int", side="int", gap="int", clear="int", edge="lit",
                   on="action0", pick="action0", focus="cond"),
     "stepper": dict(_C, value="text", prev="action0", next="action0", tone="lit", grow="lit", focus="cond"),
     "info": dict(_C, label="text", value="text", icon="text", signal="int", tag="text", tone="text"),
@@ -2672,7 +2672,9 @@ def cells(name, **p):
     row, each a `side` square (desk units) less `gap`, `edge=True` a border
     round them. The current cell wears the current mark and, focused, the
     keys' cursor; the arrows move it (on= hears it move), and Enter or a tap
-    on a cell (which moves it there) fires `pick=`."""
+    on a cell (which moves it there) fires `pick=`; `clear=` names the
+    colour shown as clear (transparency's grey checker under a white
+    stroke), none where it is not given."""
     where = _caller()
     return _node("cells", _state_name(name, (INT,), "ui.cells", where), p, where)
 

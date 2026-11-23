@@ -2020,6 +2020,10 @@
    "level": 2,
    "section": "7.3",
    "props": {
+    "clear": {
+     "type": "int",
+     "level": 2
+    },
     "count": {
      "type": "int",
      "level": 2

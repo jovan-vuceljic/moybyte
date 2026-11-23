@@ -4228,9 +4228,13 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         break;
     case UIT_CELLS: {
         // the palette's colours from first=, count= of them in rows of cols=, each a side=
-        // square (a handheld's at its scale) less gap=; the int it is bound to their current
-        // one, which on= hears move; Enter or a tap on a cell fires pick=
+        // square (a handheld's at its scale) less gap=, the colour clear= (none where it has
+        // none) shown as clear; the int it is bound to their current one, which on= hears
+        // move; Enter or a tap on a cell fires pick=
         int32_t sc = (e->flags & UIT_F_DESK) ? 1 : e->fs;
+        uint32_t cn, cm = e->scratch.n, ca = prop_text(e, k, "clear", model, row, &cn);
+        int32_t clear = cn ? (int32_t)strtol(e->scratch.p + ca, NULL, 10) : -1;
+        e->scratch.n = cm;
         int32_t first = prop_int(e, k, "first", model, row), count = prop_int(e, k, "count", model, row);
         int32_t cols = prop_int(e, k, "cols", model, row), side = prop_int(e, k, "side", model, row) * sc;
         int32_t gap = prop_int(e, k, "gap", model, row) * sc, cur = e->slots[N->slot].i;
@@ -4239,7 +4243,7 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         moy_ui_over_put(&o, MOY_UI_OV_MARK, &(int32_t){0});    // its mark is the cursor on its cell
         int32_t got = moy_ui_api_cells(c, s, span_of(id, strlen(id)), first, count ? count : 64,
                                        cols ? cols : 8, side ? side : 12 * sc, gap, cur,
-                                       (N->lit & NL_EDGE) != 0, &o, &picked);
+                                       (N->lit & NL_EDGE) != 0, clear, &o, &picked);
         if (got != cur) {
             char was[16], now[16];
             uit_set_int(e, N->slot, got);

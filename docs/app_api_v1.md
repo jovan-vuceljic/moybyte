@@ -367,6 +367,9 @@ the two actions and greyed while either is off (its `when=`), one stop whose
 left and right step it, at its own width (centred where it is stacked) or
 with `grow=True` a fill whose chevrons stand at its ends, `tone="dim"` its
 value dim;
+`ui.cells(name, ..., clear=N)` shows colour N as clear, transparency's
+grey checker under a white stroke corner to corner (the sprite editor's
+colour 0);
 `ui.seg(label, ".FIELD", text=...)` in a rows' body binds an int field of
 the row, the index of its item, its items the lines `text=` renders over
 the row; a seg's `look="pictures"` shows each item as the picture its word

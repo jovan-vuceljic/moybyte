@@ -1122,7 +1122,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
              (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon"))) || (kind == UIT_CARDS && (!strcmp(name, "pad") || !strcmp(name, "tone") || !strcmp(name, "label"))) ||
              (kind == UIT_CELLS && (!strcmp(name, "first") || !strcmp(name, "count") || !strcmp(name, "cols") ||
-                                    !strcmp(name, "side") || !strcmp(name, "gap")))) {
+                                    !strcmp(name, "side") || !strcmp(name, "gap") || !strcmp(name, "clear")))) {
         // templates the draw finds among its props by name (uit_tmpl_prop); signal=, a month's
         // year=, month= and today= and a cards list's pad= ints; a carousel's tone= its caption's
         // ink, and label= its desk shelf's caption

@@ -3065,6 +3065,19 @@ int32_t moy_theme_nearest(int32_t v) {
     return best;
 }
 
+int32_t moy_theme_fixed(int which) {
+    static const int32_t FIXED[4] = {MOY_THEME_RGB | 0x6e6e78, MOY_THEME_RGB | 0x9a9aa4,
+                                     MOY_THEME_RGB | 0x000000, MOY_THEME_RGB | 0xffffff};
+    int32_t v = FIXED[which & 3];
+    uint16_t w = moy_theme_rgb565(v);
+    for (int k = 0; k < s_live_n; k++) {
+        if (s_live[k] == w) {
+            return MOY_THEME_SLOT0 + k;
+        }
+    }
+    return moy_theme_nearest(v);
+}
+
 int moy_theme_place(const int32_t *in, int n, int32_t *out, int32_t *near,
                     uint16_t block[MOY_THEME_BLOCK]) {
     int used = 0;

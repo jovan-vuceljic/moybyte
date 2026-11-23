@@ -195,7 +195,7 @@ def sprite_page():
             ui.canvas("grid", _draw_grid, w="{grid_w}", h="{grid_h}", keys=grid_keys, pointer="grid",
                       mark=False)
             with ui.grid(1, 1, w="{pal_w}", h="{pal_h}", gap=0, pad=0):
-                ui.cells("color", first=0, count=16, cols=2, side="{sw}", on="colored")
+                ui.cells("color", first=0, count=16, cols=2, side="{sw}", clear=0, on="colored")
             ui.canvas("map", _draw_map, pointer="map_tap", shown="!pane")
         with ui.row("nav", pad="{pad}", gap="{gap}", shown="!none && pane"):
             ui.stepper("{n}", "prev", "next")
