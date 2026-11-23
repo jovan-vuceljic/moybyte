@@ -37,7 +37,7 @@ local FIELD = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = TEXT }
 -- a prop whose value is a literal the dump prints as one (its Python repr)
 local LIT = { kind = 1, wrap = 1, face = 1, size = 1, align = 1, alone = 1, span = 1, arg = 1, grow = 1, max = 1,
               secret = 1, commit = 1, look = 1, cur = 1, current = 1, check = 1, follow = 1, filter = 1, dir = 1,
-              icons = 1, rule = 1 }
+              icons = 1, rule = 1, flow = 1 }
 local FIX = "leave it out of the page: the C engine refuses it by name"
 
 local X = nil                   -- the store, made at the first frame

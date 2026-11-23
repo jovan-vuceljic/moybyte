@@ -30,10 +30,18 @@ _TDECK = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") | {
 _PAD = {"A", "B", "Start", "left", "right", "up", "down", "dpad_lr"}
 KEYS = {"tdeck": _TDECK, "pad": _PAD}
 
-# The hint actions (moy_ui.h's MOY_UI_ACT_*): each draws the keys of the
-# input in use, so it names no key of its own.
-ACTIONS = {"confirm", "back", "change", "tabs", "menu", "cancel", "flip", "rotate", "shift", "clear",
-           "copy", "more", "search", "move", "scroll"}
+# The hint actions, in moy_ui.h's MOY_UI_ACT_* order: each draws the keys
+# the input in use does it with (moy_ui_hint_keys), which the check reads
+# as the band spells them.
+ACTIONS = ("confirm", "back", "change", "tabs", "menu", "cancel", "flip", "rotate", "shift", "clear",
+           "copy", "more", "search", "move", "scroll")
+INPUTS = ("keys", "tdeck", "pad", "touch")     # moy_ui.h's MOY_UI_INPUT_*
+
+# The keys an action's row names that its input lacks, each with why: the
+# gamepad column is a physical pad's, whose shoulders (tabs) and Y (more)
+# the browser's on-screen pad has none of (docs/ui_api_2026-10.md, "Hints";
+# no board declares a physical pad, #98).
+ACT_BEYOND = {"pad": {"L", "R", "Y"}}
 
 # Stops that hold other stops: one's box over another's is nesting, not
 # overlap.
@@ -169,9 +177,17 @@ WAY_OUT = {
 }
 
 
+def action_keys(input, act):
+    """The keys input `input` draws hint action `act` with (moy_ui_parts.c's
+    ACT_KEYS)."""
+    import ui_draw
+    return ui_draw._C.lib.moy_ui_hint_keys(INPUTS.index(input), ACTIONS.index(act)).decode()
+
+
 def hints(eng, desk):
     """Where the band shows, it names the way back (or a field's cancel);
-    and every key it spells out is one the input in use has."""
+    and every key it draws, spelled out or an action's, is one the input in
+    use has."""
     have = KEYS.get(eng.input)
     if eng.input == "touch" or not eng.band:
         return []
@@ -184,10 +200,10 @@ def hints(eng, desk):
     if have is None:
         return out
     for keys, what in pairs:
-        if keys in ACTIONS:
-            continue
-        for k in keys.replace("+", " ").split():
-            if k not in have:
+        act = keys in ACTIONS
+        drawn = action_keys(eng.input, keys) if act else keys
+        for k in drawn.replace("+", " ").split():
+            if k not in have and not (act and k in ACT_BEYOND.get(eng.input, ())):
                 out.append("hint %r names %r, a key the %s input does not have" % ((keys, what), k, eng.input))
     return out
 

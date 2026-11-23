@@ -160,6 +160,7 @@ _DRAW_SIGS = (
     ("moy_ui_input", [], _I),
     ("moy_ui_set_hint_input", [_I], None),
     ("moy_ui_hint_input", [], _I),
+    ("moy_ui_hint_keys", [_I, _I], c.c_char_p),
     ("moy_ui_game_btn", [c.POINTER(_Sink), _Box, _Span, _I, _I], _I),
     ("moy_ui_game_icon_btn", [c.POINTER(_Sink), _Box, _I, _Span, _I, _I, _I], _I),
     ("moy_ui_mini_btn", [c.POINTER(_Sink), _Box, _Span, _I, _I, _I], _I),

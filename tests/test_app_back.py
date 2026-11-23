@@ -84,10 +84,10 @@ def test_back_steps_an_apps_own_page_before_leaving_it(tmp_path):
     _open(ws, "appearance")
     _frames(drv)
     app = ws.app("appearance")
-    app.view = "walls"
+    app.open_walls()
     _tap_back(ws, drv, "app")
     _frames(drv)
-    assert ws.screen == "appearance" and app.view == "rows", "a page back first"
+    assert ws.screen == "appearance" and not app.has_page(), "a page back first"
     _press(ws, "b")
     _frames(drv)
     assert ws.screen == "launcher", "then out of the app"
@@ -166,7 +166,7 @@ def _strip(ws, win):
 def test_a_desk_window_shows_its_back_only_on_a_page(tmp_path, theme):
     ws, drv, app, win = _desk_app(tmp_path, "appearance", theme)
     assert "back" not in _strip(ws, win), "the rows are the app's first page"
-    app.view = "walls"
+    app.open_walls()
     ws.mark_dirty()
     _frames(drv)
     btns = ws.wm._frame_buttons(win)
@@ -177,7 +177,7 @@ def test_a_desk_window_shows_its_back_only_on_a_page(tmp_path, theme):
     bx, by, bw, bh = btns[0][1]
     drv.click(bx + bw // 2, by + bh // 2)
     _frames(drv)
-    assert app.view == "rows", "the chevron steps out of the page"
+    assert not app.has_page(), "the chevron steps out of the page"
     assert "appearance" in ws.wm.windows, "and never closes the window"
     assert "back" not in _strip(ws, win)
 
@@ -196,7 +196,7 @@ def test_the_window_chrome_repaints_when_its_back_comes_and_goes(tmp_path):
         return bytes(out)
 
     rest = strip()
-    app.view = "walls"
+    app.open_walls()
     ws.mark_dirty()
     _frames(drv)
     assert strip() != rest, "the chevron drew"
@@ -256,7 +256,7 @@ def test_the_hosts_esc_steps_a_desk_windows_page(tmp_path):
 
 
 @pytest.mark.parametrize("app_id,page", [
-    ("appearance", lambda a: setattr(a, "view", "walls")),
+    ("appearance", lambda a: a.open_walls()),
     ("files", lambda a: setattr(a, "dialog", "rename")),
     ("getcarts", lambda a: setattr(a, "phase", "cart")),
     ("storybook", lambda a: setattr(a, "page", "view")),

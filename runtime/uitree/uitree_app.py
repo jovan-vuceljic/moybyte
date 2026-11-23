@@ -148,10 +148,13 @@ class Engine(S.Builder):
 
     def idle_step(self):
         """A frame with nothing to paint: one owed picture decoded, the card
-        showing it from the next frame (every gen moves)."""
+        showing it from the next frame (every gen moves). Answers whether
+        one landed."""
         if self.pics is not None and self.pics.idle_step():
             self._x.pics_moved()
             self._damage.all()
+            return True
+        return False
 
     def _posts(self):
         if not self.decl.posts:
@@ -416,6 +419,7 @@ class App(AppLayer):
     BUILD = None            # (build,): the app module's root page
     IS_APP = None           # (is_app,): claims the app's identity cart
     ENGINE = None           # (Engine subclass,): uitree_editor.Engine for the Editor's kinds
+    MIN = None              # (w, h): ui.app's min=, the window's least size in desk units
 
     def __init__(self, ctx, names=None):
         self._surf, self._theme, self._damage = ctx.surface, ctx.theme, ctx.damage
@@ -427,6 +431,7 @@ class App(AppLayer):
         # a flowing page's scrolls take shift frames; a placed one's band loses its key caps under a gen
         self.engine = eng(S.decl_of(S.module_of(build)), build, ctx.ui, ctx.surface, ctx.damage,
                           getattr(ctx, "files", None), gen=not eng.PLACED, env=ctx)
+        self.landed = 0         # the pictures that landed (a window behind draws again at a new one)
 
     def is_app(self, cart):
         return bool(self.IS_APP and self.IS_APP[0](cart))
@@ -483,7 +488,8 @@ class App(AppLayer):
         return self.engine.view_owed
 
     def idle_step(self):
-        self.engine.idle_step()
+        if self.engine.idle_step():
+            self.landed += 1
 
 
 def env():
@@ -522,6 +528,7 @@ def app_layer(id, title, build, is_app=None, needs=(), engine=None):
     return type(title.replace(" ", "") + "App", (App,), {
         "id": id, "TITLE": title, "BUILD": (build,), "IS_APP": (is_app,) if is_app else None,
         "ENGINE": (engine,) if engine is not None else None,
+        "MIN": tuple(ad.min) if ad is not None and ad.min is not None else None,
         "NEEDS": App.NEEDS + tuple(needs)})
 
 

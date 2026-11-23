@@ -2,82 +2,83 @@
 start-here table): each a program that runs as it is, using what its
 manifest asks for and nothing more, so `moy app check` passes it clean."""
 
-PY_APP = '''FRUIT = ["Apple", "Banana", "Cherry", "Date", "Elderberry", "Fig", "Grape"]
-cur = 0
+# An app on the UI tree (docs/app_api_v1.md section 1): the counter of
+# tests/uitree_conformance/counter/, titled by the cart.
+PY_APP = '''s = ui.state(count=0, loud=False)
+ui.app(%(title_str)s, icon="calc")
 
 
-def _init():
-    global cur
-    cur = prefs.get("cur") or 0         # saved across runs and reboots
+def add():
+    s.count += 1
 
 
-def _draw():
-    global cur
-    ui.page(%(title_str)s)
-    new = ui.list("Fruit", FRUIT, cur)  # arrows, Enter, a tap or a drag
-    if new != cur:
-        cur = new
-        prefs.set("cur", cur)
+def reset():
+    s.count = 0
+
+
+ui.action("add", "Add one", add)
+ui.action("reset", "Reset", reset, when="count", off="grey")
+
+
+def build():
+    with ui.page(%(title_str)s):
+        with ui.group("Count"):
+            ui.info("Count", "{count}")
+            ui.toggle("Loud", "loud")
+            ui.link("add")
+            ui.link("reset")
+            ui.label("{count|plural press,presses} so far, {loud?loud:quiet}")
 '''
 
-LUA_APP = '''FRUIT = {"Apple", "Banana", "Cherry", "Date", "Elderberry", "Fig", "Grape"}
-cur = 1
+LUA_APP = '''ui.app(%(title_str)s, { icon = "calc" })
+local s = ui.state { count = 0, loud = false }
 
-function _init()
-  cur = prefs.get("cur") or 1
-end
+ui.action("add", "Add one", function() s.count = s.count + 1 end)
+ui.action("reset", "Reset", function() s.count = 0 end, { when = "count", off = "grey" })
 
-function _draw()
-  ui.page(%(title_str)s)
-  local new = ui.list("Fruit", FRUIT, cur)
-  if new ~= cur then
-    cur = new
-    prefs.set("cur", cur)
-  end
-end
+ui.page("counter", function()
+  ui.group("Count", function()
+    ui.info("Count", { value = "{count}" })
+    ui.toggle("loud", { label = "Loud" })
+    ui.link("add")
+    ui.link("reset")
+    ui.label("{count|plural press,presses} so far, {loud?loud:quiet}")
+  end)
+end, { title = %(title_str)s })
 '''
 
-# A compiled app: a wasm reactor whose exports are its loop, reaching the
-# console through its moybyte.app imports (moybyte/app.h).
-WASM_APP = '''#include <stdint.h>
-
-#include "moybyte/app.h"
+# A compiled app on the UI tree: the counter of
+# tests/uitree_conformance/counter/counter_wasm.moy, titled by the cart.
+WASM_APP = '''#include "moybyte/uitree.h"
 
 #define EXPORT(name) __attribute__((export_name(#name)))
 
-static const char TITLE[] = "%(title_c)s";
-static const char FRUIT[] = "Apple\\0Banana\\0Cherry\\0Date\\0Elderberry\\0Fig\\0Grape";
-static int32_t cur;
+static int32_t s_count;
 
-EXPORT(_init) void init(void) {
-    char json[12];
-    int32_t n = prefs_get("cur", 3, json, sizeof json);   // saved across runs
-    cur = 0;
-    for (int32_t i = 0; i < n && json[i] >= '0' && json[i] <= '9'; i++) {
-        cur = cur * 10 + (json[i] - '0');
+static void add(int32_t row) { uitree_set_int(s_count, uitree_get_int(s_count) + 1); }
+static void reset(int32_t row) { uitree_set_int(s_count, 0); }
+
+EXPORT(_init) void _init(void) {
+    s_count = ut_int("count", 0);
+    ut_bool("loud", 0);
+    ut_action("add", "Add one", add);
+    ut_action_when("reset", "Reset", "count", UT_OFF_GREY, reset);
+    ut_page("counter", "%(title_c)s") {
+        ut_group("Count") {
+            ut_info("Count", "{count}");
+            ut_toggle("loud", "Loud");
+            ut_link("add", NULL);
+            ut_link("reset", NULL);
+            ut_label("{count|plural press,presses} so far, {loud?loud:quiet}");
+        }
     }
+    uitree_open();
 }
 
-EXPORT(_update) void update(float dt) {
-    (void)dt;
-}
-
-EXPORT(_draw) void draw(void) {
-    int32_t page[4];
-    ui_page(TITLE, sizeof TITLE - 1, 0, 0, page, sizeof page);
-    int32_t now = ui_list("Fruit", 5, FRUIT, sizeof FRUIT - 1, cur, 0, 0);
-    if (now >= 0 && now != cur) {
-        char json[12];
-        int32_t k = sizeof json;
-        int32_t v = now;
-        do {
-            json[--k] = (char)('0' + v %% 10);
-            v /= 10;
-        } while (v);
-        cur = now;
-        prefs_set("cur", 3, json + k, sizeof json - k);
-    }
-}
+// A responsive app: it draws in the shell's look on its window's surface.
+EXPORT(_layout) void _layout(int32_t w, int32_t h, int32_t fs) {}
+EXPORT(_update) void _update(float dt) {}
+EXPORT(_draw) void _draw(void) { ut_frame(); }
 '''
 
 # A compiled cart, a game: one source that builds to main.wasm and to a

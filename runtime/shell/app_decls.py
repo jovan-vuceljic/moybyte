@@ -19,7 +19,7 @@ app; there is no per-app line anywhere in the shell.
   folder     the identity cart it rides on, in system_carts/
   title      that cart's title
   min_size   optional (w, h) windowed resize floor; omitted means the app's
-             layout MIN_W/MIN_H are adopted at registration
+             ui.app(min=), else its layout's MIN_W/MIN_H, at registration
 """
 
 APPS = [

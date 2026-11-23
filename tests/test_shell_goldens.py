@@ -379,6 +379,10 @@ class _GoldenWebHost:
 _DEFAULT_BARS = [{"edge": "top", "size": 18, "left": ["menu", "chips", "zone"],
                   "right": ["close", "wifi", "battery", "clock"]}]
 
+# The inputs a T-Deck config's console declares (Workstation.use_inputs), as
+# its board does: the hints draw its keyboard's keys.
+TDECK_INPUTS = (("local", "tdeck"),)
+
 CONFIGS = {
     "tdeck_320x240_fs1_dark": dict(
         sys_size=None, font_scale=1, windowed=False, variant="dark",
@@ -655,6 +659,8 @@ def _build(cfg, carts_dir):
         str(carts_dir), sys_size=cfg["sys_size"],
         font_scale=cfg["font_scale"], windowed=cfg["windowed"],
         panel_diagonal_in=cfg["diagonal_in"])
+    if cfg["sys_size"] is None:
+        ws.use_inputs(TDECK_INPUTS)     # the T-Deck's canvas, its keyboard's keys
     pick_layout(ws, cfg)
     theme = cfg.get("theme", ws.look.theme_name)
     if cfg.get("render", 1) != 1:
@@ -867,8 +873,6 @@ def _surface_plan(ws, cfg):
     plan.append(("web_console", park))
     from runtime import ui_draw
     kind = ui_draw.input_kind(), ui_draw.hint_kind()
-    if cfg.get("appearance") and not cfg["windowed"]:
-        kind = ("tdeck", "tdeck")       # the handheld rows run on the T-Deck's keys
     plan += _terminal_plan(ws, cfg)
     plan.append(("open_with", lambda: (_input_as_built(kind), _open_with(ws, home))))
     plan.append(("pick", lambda: _pick(ws, home)))
@@ -1208,10 +1212,7 @@ def _walls_page(ws):
     """The Appearance page's wallpapers (docs/history/look_2026-10.md step 20): the
     tabs over the cards, on the tab of the wallpaper in use."""
     def enter():
-        app = ws.app("appearance")
-        app.view = "walls"
-        app.tab, title = app._wall_kind(app.choices())
-        app._focus = "Wallpaper " + title
+        ws.app("appearance").open_walls()
     return enter
 
 
@@ -1223,8 +1224,7 @@ def _name_page(ws):
         ws.look.change("accent", _ui().theme_accents()[9][1])
         ws.look.tick(0.0)
         assert ws.look.theme_name == "custom"
-        app._refresh()
-        app._open_name()
+        app.open_name()
         app.name_text = "bubble"
     return enter
 
@@ -1235,14 +1235,11 @@ def _after_appearance(ws, enter):
     theme in use focused, as it opens."""
     def go():
         app = ws.app("appearance")
-        app.view = "rows"
-        app._close_name(acted=False)
         if ws.look.theme_name == "custom":
             ws.look.set_theme("moy")
             ws.carts_store.delete({"path": os.path.join(ws.carts_root,
                                                         "custom.moy")})
             ws.carts.rescan()
-            app._refresh()
         app.open()
         enter()
     return go

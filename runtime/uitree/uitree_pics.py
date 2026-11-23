@@ -183,7 +183,9 @@ class PicEngine:
     def gen_of(self, pic):
         """What moves with the picture's pixels: an app's own picture's puts,
         a store file's changes."""
-        return (S.pictures.gen if pic.kind == "own" else S.pictures.store_gen).get(pic.key, 0)
+        if pic.kind == "own":
+            return S.pictures.gen_of(self.app, pic.key)
+        return S.pictures.store_gen.get(pic.key, 0)
 
     # -- decoders ----------------------------------------------------------------------
 
@@ -194,7 +196,7 @@ class PicEngine:
             if err is not None or not blob:
                 return None, "no file %s" % pic.key
             return blob, None
-        src = S.pictures.src.get(pic.key)
+        src = S.pictures.source(self.app, pic.key)
         if src is None:
             return None, "no picture %r put" % pic.key
         if src[0] == "idx":
@@ -203,7 +205,7 @@ class PicEngine:
         return src[1], None
 
     def _decode(self, pic, w, h):
-        src = S.pictures.src.get(pic.key) if pic.kind == "own" else None
+        src = S.pictures.source(self.app, pic.key) if pic.kind == "own" else None
         if src is not None and src[0] == "render":
             lay = src[1](w, h)
             if lay is None or lay.w != w or lay.h != h:

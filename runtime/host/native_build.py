@@ -49,6 +49,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 
 try:
     import fcntl
@@ -384,7 +385,37 @@ def _compile(compiler, name, sources, units, cache_dir, cflags, link_flags, verb
         os.replace(tmp, so_path)        # whole, or not there at all
         if verbose:
             print("%s: built %s" % (name, os.path.relpath(so_path, ROOT)))
+        prune(name, cache_dir)
         return so_path
+
+
+KEEP_BUILDS = 30            # a cache's newest libraries of one name
+KEEP_SECONDS = 24 * 3600    # and every one built within this
+
+
+def prune(name, cache_dir, keep=KEEP_BUILDS, age=KEEP_SECONDS, now=None):
+    """Removes `name`'s cached libraries (each `.so` with its `.src` and
+    `.lock`) past the newest `keep` and older than `age` seconds. Every
+    worktree shares one cache, and each change to the C builds a new library
+    of ~20 MB, so an unpruned cache grows by gigabytes a day."""
+    now = time.time() if now is None else now
+    try:
+        found = [(os.path.getmtime(os.path.join(cache_dir, f)), f)
+                 for f in os.listdir(cache_dir)
+                 if f.startswith(name + "-") and f.endswith(".so")]
+    except OSError:
+        return
+    found.sort(reverse=True)
+    for mtime, f in found[keep:]:
+        if now - mtime <= age:
+            continue
+        base = os.path.join(cache_dir, f)
+        for path in (base + ".lock", base):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        shutil.rmtree(base[:-3] + ".src", ignore_errors=True)
 
 
 def check():

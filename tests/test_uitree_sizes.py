@@ -65,5 +65,7 @@ def test_a_large_button_is_half_again_as_tall_and_roomier(boxes):
 
 def test_a_grow_row_stands_what_follows_it_at_the_pages_foot(boxes):
     plain, large, _n = boxes("page_foot", 3)
-    assert large[1] + large[3] == RECT[1] + RECT[3], large
+    # the last row counts the gap a row leaves after it (2 px), as every row of the page
+    # does: with it the rows end at the page's foot, so the page fits and never scrolls
+    assert large[1] + large[3] + 2 == RECT[1] + RECT[3], large
     assert large[1] - (plain[1] + plain[3]) == 20, "the group's gap= between its children"

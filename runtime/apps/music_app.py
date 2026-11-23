@@ -859,7 +859,7 @@ s = ui.state(
 ui.derive("listing", cond="view=radio || view=files")
 ui.derive("paged", cond="view=now || view=add")
 ui.labels("TABS", {"radio": "Radio", "files": "My music"})
-ui.app("Music", icon="music", back="back")
+ui.app("Music", icon="music", back="back", min=(300, 220))
 
 
 def _lay():
@@ -1269,8 +1269,6 @@ class MusicAppLayer(uitree_app.app_layer("jukebox", "Music", build, is_app,
     fill, the music folder read off the draw (`idle_step`)."""
 
     PREFS_NS = "music"          # its prefs, the stations it added: portable
-    MIN_W = 300
-    MIN_H = 220
     # Back on its first page leaves the app; on the desk it minimises the
     # window. Either way the stream plays on.
     BACK_MINIMISES = True

@@ -206,7 +206,7 @@ def test_settings_appearance_row_opens_the_one_picker(tmp_path):
     assert ws.wm.top_kind() == "appearance"
     before = ws.look.wallpaper_id
     drv.frame(1 / 30)          # its first frame: focus opens on the theme in use
-    ws.app("appearance")._ui.focus("Wallpaper")
+    ws.app("appearance").show_row("Wallpaper")
     drv.frame(1 / 30)
     for key in ("a", "right", "a"):   # WALLPAPER's page, the next card, use it
         drv.press(key)

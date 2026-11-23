@@ -82,7 +82,7 @@ against the ground beside it, the focused desk chip's label, a disabled
 history icon against the enabled ink, an Off toggle against its row, a lifted
 hero's rim against its cover, a Settings caption cut at the page top, the
 Code tab's left edges against its inset and its caret against the next stem,
-the sprite tools' ink and columns, the desk Appearance foot, the desk Calc's
+the sprite tools' ink and columns, the desk Calc's
 backspace against a digit, a menu's card against its anchor and the edge of
 the glass it takes, its danger rows' words and the hint strip's ink under
 it and under the PROJECTS window's, the sprite selection's ring against the
@@ -2019,14 +2019,18 @@ def _desk_appearance_at(label):
         win = ws.wm.windows["appearance"]
 
         def box():
-            b = app._ui.box(app._focused) if app._focused else None
+            f = app.engine.focused_id()
+            b = app.page_host().box(f) if f else None
             if b is None:
                 return None
             cx, cy, _w, _h = win.content_rect()
             return (b[0] + cx, b[1] + cy, b[2], b[3])
+
+        def kind():
+            f = app.engine.focused_id()
+            return "swatches" if f == "accent" else app.engine.stop_kinds().get(f)
         _FOCUSED[0] = box
-        _FOCUSED_KIND[0] = lambda: (PART_KINDS.get(app._focused)
-                                    or app._kinds.get(app._focused))
+        _FOCUSED_KIND[0] = kind
     return setup
 
 
@@ -3343,39 +3347,6 @@ def _sprite_pairs(ws, img):
             _measure("sprite tool row off the mockup's pitch", off, 0, off == 0)]
 
 
-def _foot_pairs(ws, img):
-    """The desk Appearance window's foot (design review R3-27): its status
-    starts on the rows' label column and stands as far below the foot's
-    rule as above the frame's bottom (within the face's 3 px), no more than
-    17 px up."""
-    win = getattr(ws.wm, "windows", {}).get("appearance")
-    if win is None or getattr(win, "minimized", False) or not ws.wm.desk_open():
-        return []
-    from runtime import ui_draw
-    lay = win.ctx.app_layouts.get("appearance")
-    if lay is None or not hasattr(lay, "foot"):
-        return []
-    cx, cy, _cw, _ch = win.content_rect()
-    px = img.load()
-    bx, _by, bw, _bh = lay.body
-    _fx, fy, _fw, _fh = lay.foot
-    ground = px[cx + bx + bw // 2, cy + fy + 4]
-    rule = cy + fy
-    bottom = win.y + win.h - 1 - win.edge
-    cols = range(cx + bx, cx + bx + bw // 2)
-    rows = [y for y in range(rule + 1, bottom) if any(px[x, y] != ground for x in cols)]
-    if not rows:
-        return []
-    above, below = rows[0] - rule - 1, bottom - rows[-1] - 1
-    pad = ui_draw.metrics("group")[1] * lay.fs
-    x0 = _ink_left(px, cx + bx, cx + bx + bw // 2, rows[0], rows[-1] + 1, ground)
-    dx = (x0 - (cx + bx + pad)) if x0 is not None else bw
-    return [_measure("desk Appearance foot off the rows' column", abs(dx), 0,
-                     0 <= dx <= lay.fs),
-            _measure("desk Appearance foot gaps apart", abs(above - below), 3,
-                     abs(above - below) <= 3 and below <= 17)]
-
-
 def _caption_pairs(ws, img):
     """No section caption is cut at the top of Settings' page (design
     review R3-14): a header is wholly in or wholly out, so no caption ink
@@ -3803,7 +3774,6 @@ def audit(ws, probe, img):
     out += _code_pairs(ws, img)
     out += [] if modal else _caret_pairs(ws, probe, img)
     out += _sprite_pairs(ws, img)
-    out += _foot_pairs(ws, img)
     out += _calc_pairs(ws, img)
     out += _menu_pairs(ws, img)
     if ws.confirm.open:

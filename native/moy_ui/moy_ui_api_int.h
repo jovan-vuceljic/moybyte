@@ -117,6 +117,10 @@ const moy_ui_stop_t *mua_table_of(const moy_ui_stop_t *v, int n, uint32_t id);
 int mua_same_box(moy_ui_box_t a, moy_ui_box_t b);
 int mua_ground_of(const moy_ui_ctx_t *c);
 moy_ui_keep_t *mua_page_keep(moy_ui_ctx_t *c);
+// The open top-level page's rows, where they run past its view by no more
+// than the gap a stacked row leaves under it: its view's height, so a page
+// that holds its rows neither scrolls nor draws a thumb.
+void mua_page_fit(moy_ui_ctx_t *c);
 moy_ui_box_t mua_place_row(moy_ui_ctx_t *c, int h, int *stacked, int row);
 moy_ui_box_t mua_place(moy_ui_ctx_t *c, int h, int *stacked);
 rc_t mua_rc_of(moy_ui_box_t b);

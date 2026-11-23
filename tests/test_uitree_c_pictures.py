@@ -115,7 +115,34 @@ def test_a_drawing_stands_whole_in_its_tile_letterboxed():
     import uitree as S
     import uitree_pics
     blob = moy_carts.encode_moyimg(96, 96, bytes([1]) * (96 * 96))
-    S.pictures.put("t_square", data=blob.encode() if isinstance(blob, str) else blob)
-    eng = uitree_pics.PicEngine(None, None, False, 1 << 20)
+    app = type("App", (), {})()             # the engine the put runs as: its pictures its own
+    was, S._NOW.app = S._NOW.app, app
+    try:
+        S.pictures.put("t_square", data=blob.encode() if isinstance(blob, str) else blob)
+    finally:
+        S._NOW.app = was
+    eng = uitree_pics.PicEngine(app, None, False, 1 << 20)
     kind, bmp, _n = eng._decode(S.image.own("t_square"), 152, 112)
     assert kind == "bmp" and (bmp.w, bmp.h) == (112, 112), (kind, bmp.w, bmp.h)
+
+
+def test_a_picture_key_is_its_apps_alone():
+    """Two apps of one console put one key: each reads its own picture and
+    its own gen, and a put outside a handler is refused (S06)."""
+    import pytest
+    import uitree as S
+    a, b = type("A", (), {})(), type("B", (), {})()
+    was = S._NOW.app
+    try:
+        S._NOW.app = a
+        S.pictures.put("cover:x", data=b"a")
+        S._NOW.app = b
+        S.pictures.put("cover:x", data=b"b")
+        S.pictures.put("cover:x", data=b"b2")
+    finally:
+        S._NOW.app = was
+    assert S.pictures.source(a, "cover:x") == ("bytes", b"a")
+    assert S.pictures.source(b, "cover:x") == ("bytes", b"b2")
+    assert (S.pictures.gen_of(a, "cover:x"), S.pictures.gen_of(b, "cover:x")) == (1, 2)
+    with pytest.raises(S.UIError, match="S06"):
+        S.pictures.put("cover:x", data=b"c")

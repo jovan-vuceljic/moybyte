@@ -80,6 +80,7 @@ CHIPS = ("esp32s3", "esp32p4", "host")
 # A theme package (runtime/carts/cart_index.py): data, no program.
 THEME = "theme"
 WASM_APP = "moybyte.app"
+UITREE_EXT = "moybyte.uitree"
 WASM_OS = "moybyte.os"
 # Moybyte's own extensions a compiled cart imports from by their names
 # (native/moycore/moycore_wasm_ext.h, sdk/include/moybyte/cart.h).
@@ -723,7 +724,7 @@ def new_cart(name, tier="python", service=None, typ=None, into="."):
             ven["receives"] = ["ping"]
         else:
             files["main" + ext] = templates.PY_APP if tier == "python" else templates.LUA_APP
-            ven["permissions"] = ["prefs"]
+            man["extensions"] = [UITREE_EXT]
     elif tier == "wasm" and typ == "game":
         man.update({"runtime": "wasm", "main": "main.wasm", "memory": 2,
                     "canvas": "320x240", "input": ["buttons"]})
@@ -733,7 +734,6 @@ def new_cart(name, tier="python", service=None, typ=None, into="."):
         man.update({"runtime": "wasm", "main": "main.wasm", "memory": 2,
                     "extensions": [WASM_APP]})
         files["src/main.c"] = templates.WASM_APP
-        ven["permissions"] = ["prefs"]
     else:
         if tier == "wasi":
             man.update({"runtime": "wasm", "main": "main.wasm"})

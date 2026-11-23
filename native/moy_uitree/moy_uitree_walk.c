@@ -916,6 +916,27 @@ static void hint_act(uit_t *e, uit_buf_t *b, int a)
     hint_add(b, e->scratch.p + at, n);
 }
 
+// Dialog `d`'s labels= template of its button i, else -1 (the button is its action's word).
+static int dialog_label(uit_t *e, int d, int i)
+{
+    for (int p = NODE(d)->props; p != (int)UIT_NONE; p = e->props[p].next)
+        if (!strcmp(uit_str(e, e->props[p].name), "labels") && i-- == 0)
+            return e->props[p].idx;
+    return -1;
+}
+
+// Dialog `d`'s button i as the band names it: its label, else its action's hint.
+static void hint_button(uit_t *e, uit_buf_t *b, int d, int i)
+{
+    int t = dialog_label(e, d, i);
+    if (t < 0) {
+        hint_act(e, b, e->btns[NODE(d)->btn + i]);
+        return;
+    }
+    uint32_t n, at = uit_tmpl_render(e, t, -1, -1, &n);
+    hint_add(b, e->scratch.p + at, n);
+}
+
 static int role_action(uit_t *e, int flag)
 {
     for (int a = 0; a < e->nacts; a++)
@@ -1000,12 +1021,12 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
         int field = e->has_focused && e->focused.kind == UIT_FIELD;
         if (D->nbtn == 1) {
             hint_add(b, field ? "cancel" : "back", field ? 6 : 4);
-            hint_act(e, b, e->btns[D->btn]);
+            hint_button(e, b, d, 0);
         } else if (D->nbtn > 1) {
             hint_add(b, "confirm", 7);
-            hint_act(e, b, e->btns[D->btn + D->nbtn - 1]);
+            hint_button(e, b, d, D->nbtn - 1);
             hint_add(b, field ? "cancel" : "back", field ? 6 : 4);
-            hint_act(e, b, e->btns[D->btn]);
+            hint_button(e, b, d, 0);
         }
         return;
     }
@@ -1515,7 +1536,23 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
 {
     const uit_node_t *N = NODE(k);
     const char *key = uit_str(e, N->key);
-    int m = N->slot, desk = (e->flags & UIT_F_DESK) != 0, subs = 0;
+    int m = N->slot, desk = (e->flags & UIT_F_DESK) != 0, subs = 0, flow = (N->lit & CD_FLOW) != 0;
+    int32_t w = size_of(e, int_of(e, N->t_value, -1, -1, 0)), h = size_of(e, int_of(e, N->t_aux, -1, -1, 0));
+    if (flow) {
+        // in the page's flow: its grid on the page's next rows (in a group, between its caption
+        // and its rows), its cards stops of the page, scrolling with it
+        moy_ui_api_grid(c, s, span_of(key, strlen(key)), w, h, NULL);
+        uit_after_removal(e, k);
+        for (int r = 0; r < e->slots[m].nrows; r++) {
+            uint32_t mark = e->scratch.n;
+            KIDS(k, g)
+            if (NODE(g)->kind == UIT_CARD)
+                draw_card(e, c, s, g, m, r);
+            e->scratch.n = mark;
+        }
+        moy_ui_api_grid(c, s, span_of("", 0), 0, 0, NULL);
+        return;
+    }
     moy_ui_over_t go;
     int32_t gen = (e->flags & UIT_F_GEN) && gen_ok(e) ? uit_cell_gen(e, k) : -1;
     moy_ui_over_none(&go);
@@ -1526,7 +1563,6 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     if (NODE(g)->t_value >= 0)
         subs = 1;
     int margin = desk ? 16 : 8, foot = desk ? (subs ? 52 : 30) : 26 + (subs ? 6 : 0), cols = 0;
-    int32_t w = size_of(e, int_of(e, N->t_value, -1, -1, 0)), h = size_of(e, int_of(e, N->t_aux, -1, -1, 0));
     int32_t pad = prop_int(e, k, "pad", -1, -1);
     if (pad > 0) {
         // pad=: the gap between its cards, a margin of 16 (or the gap, where that is more) at
@@ -2875,7 +2911,9 @@ static void draw_tabs(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     if (pad)
         moy_ui_inset32(band, 2 * pad, pad, band);
     tabs_in(e, c, s, k, band);
-    moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3]);
+    // what follows them takes the rest, over a flowing page's hints band
+    int32_t h = e->rect[3] > e->band_h ? e->rect[3] - e->band_h : 0;
+    moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], h);
 }
 
 static int32_t row_unit(const uit_t *e);
@@ -3059,6 +3097,7 @@ static int foot_of(uit_t *e)
 }
 
 static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
+static int32_t empty_controls_h(uit_t *e, int k, int model, int row);
 static void empty_controls(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
                            int32_t x, int32_t w, int32_t y);
 static int32_t natural(uit_t *e, int k, int model, int row, int32_t h);
@@ -3575,9 +3614,10 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
     int32_t rest = flow_rest(e, c, s, k, model, row);
     if (rest < 0)
         return;
+    // the rest's rows each count the gap after them, as the page's do: the rows end at the
+    // page's foot, which a page that fills its room never scrolls past
     moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, out);
-    int32_t step_gap = out[4] - out[3] > 0 ? out[4] - out[3] : 0;
-    int32_t room = c->page.y + c->page.h - out[1] - (rest > 0 ? rest - step_gap : 0);
+    int32_t room = c->page.y + c->page.h - out[1] - rest;
     moy_ui_api_space(c, room > 0 ? room : 0);
 }
 
@@ -4375,10 +4415,30 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         }
         int32_t m[4] = {c->has_at ? c->at.x : c->page.x, 0, c->has_at ? c->at.w : c->page.w, 0};
         // on the desk a sixth of the page down, as its column of words
+        // on the desk a sixth of the page down, as its column of words, as far as the room under
+        // it holds what it says and its controls; where they run past the view even at the
+        // top, no disc (an empty icon)
         int32_t ev[5];
-        if ((e->flags & UIT_F_DESK) && moy_ui_api_view(c, ev) && ev[0] == 0)
-            moy_ui_api_space(c, e->rect[3] / 6);
-        int32_t y = moy_ui_api_empty(c, s, ni ? sspan(e, ai, ni) : span_of("warn", 4), sspan(e, a1, n1),
+        moy_ui_span_t icon = ni ? sspan(e, ai, ni) : span_of("warn", 4);
+        if (moy_ui_api_view(c, ev)) {
+            moy_ui_box_t mb = {0, 0, (int16_t)ev[3], 0};
+            moy_ui_span_t t = sspan(e, a1, n1);
+            const uint8_t *lp = (const uint8_t *)(lines.p ? lines.p : "");
+            int desk = (e->flags & UIT_F_DESK) ? MOY_UI_DESK : 0;
+            int32_t need = moy_ui_empty(s, mb, 0, -1, t, lp, lines.n, e->fs, desk, 0)
+                           + empty_controls_h(e, k, model, row);
+            int32_t room = ev[2] - ev[0];
+            if (need > room) {
+                icon = span_of("", 0);
+                need = moy_ui_empty(s, mb, -1, -1, t, lp, lines.n, e->fs, desk, 0)
+                       + empty_controls_h(e, k, model, row);
+            }
+            int32_t sp = e->rect[3] / 6;
+            sp = sp < room - need ? sp : room - need;
+            if (desk && ev[0] == 0 && sp > 0)
+                moy_ui_api_space(c, sp);
+        }
+        int32_t y = moy_ui_api_empty(c, s, icon, sspan(e, a1, n1),
                                      (const uint8_t *)(lines.p ? lines.p : ""), lines.n);
         uit_buf_free(&lines);
         empty_controls(e, c, s, k, model, row, m[0], m[2], y);
@@ -4389,11 +4449,17 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         uit_buf_t b = {0};
         // look="keys" on the T-Deck: the band's Enter and Esc are its buttons, no row of them
         int nb = (N->lit & DL_KEYS) && e->input == UIT_IN_TDECK && N->nbtn <= 2 ? 0 : N->nbtn;
+        // each button's label: its labels= template (one a button), else its action's
         for (int i = 0; i < nb; i++) {
-            const char *l = uit_str(e, e->acts[e->btns[N->btn + i]].label);
+            int t = dialog_label(e, k, i);
             if (i)
                 uit_buf_printf(&b, "%c", 0);
-            uit_buf_printf(&b, "%s", l);
+            if (t >= 0) {
+                uint32_t ln, la = uit_tmpl_render(e, t, model, row, &ln);
+                uit_buf_printf(&b, "%.*s", (int)ln, e->scratch.p + la);
+            } else {
+                uit_buf_printf(&b, "%s", uit_str(e, e->acts[e->btns[N->btn + i]].label));
+            }
         }
         // the labels joined by NULs: b.n counts them (uit_buf_printf of "%c", 0 adds one byte)
         // the verb's kind, the toolkit's: primary (1), or with kind="danger" danger (3)
@@ -4417,6 +4483,22 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         break;
     }
     }
+}
+
+// The height an empty's controls take under what it says (empty_controls').
+static int32_t empty_controls_h(uit_t *e, int k, int model, int row)
+{
+    int desk = (e->flags & UIT_F_DESK) != 0, mn;
+    int32_t hh = (moy_ui_metrics(MOY_UI_K_VALUE_ROW, &mn)[desk ? 17 : 16] + 4) * e->fs, h = 0;
+    KIDS(k, c2) {
+        const uit_node_t *N = NODE(c2);
+        if (!uit_shown(e, c2, model, row))
+            continue;
+        if (N->act >= 0 && !uit_act_can(e, N->act, model, row) && e->acts[N->act].off != 2)
+            continue;
+        h += hh + row_gap(e) * e->fs;
+    }
+    return h;
 }
 
 // An empty's controls under what it says (from y), each its natural width and a value row
@@ -6538,7 +6620,7 @@ int uit_gens(uit_t *e, int32_t *out, int cap)
         out[n] = e->page_gen;
     n++;
     for (int k = 1; k < e->nnodes; k++)
-        if (NODE(k)->kind == UIT_CARDS || NODE(k)->kind == UIT_SCROLL ||
+        if ((NODE(k)->kind == UIT_CARDS && !(NODE(k)->lit & CD_FLOW)) || NODE(k)->kind == UIT_SCROLL ||
             (NODE(k)->kind == UIT_GROUP && NODE(NODE(k)->parent)->kind == UIT_SPLIT)) {
             if (n < cap)
                 out[n] = uit_cell_gen(e, k);

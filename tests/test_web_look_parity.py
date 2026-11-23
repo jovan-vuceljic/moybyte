@@ -206,8 +206,11 @@ def test_the_browser_console_draws_its_pages_on_the_c_engine_from_compiled_pages
 # the real wasm console, and the two framebuffers are compared pixel for
 # pixel. The clock reads a fixed time in both (the host's zone is not node's),
 # the pointer is hidden (the page boots it hidden; the host draws the
-# cursor), and achievements stay quiet (a toast's slide is timed by the clock).
+# cursor), achievements stay quiet (a toast's slide is timed by the clock),
+# and Settings' About names no facts (the host names the board it stands in
+# for, the browser none: rows below the fold the page's thumb measures).
 _STEADY = ("_ws.bar_layer.clock_text = lambda: '12:00'\n"
+           "_ws.settings_layer._read_about = lambda: ()\n"
            "_ws.pointer.visible = False\n"
            "_ws.ach.mute = True\n"
            "_ws.ach.toast = None\n"

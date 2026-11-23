@@ -76,6 +76,7 @@ PORTED = (
     "drawing_pages",
     "paint_app",
     "storybook_app",
+    "appearance_app",
     "terminal_app",
     "text_console",
     "uitree_wrap_row",
@@ -93,6 +94,24 @@ def test_every_ported_surface_checks_clean(module):
     r = uitree_check.check(module)
     assert not r.errors, r.text()
     assert r.pages and r.nodes
+
+
+@pytest.mark.parametrize("cart", ["tests/uitree_conformance/counter/counter_py.moy",
+                                  "tests/fixtures/apps/shopping.moy", "system_carts/moybyte.notes.moy"])
+def test_a_python_cart_checks_by_its_folder(cart):
+    r = uitree_check.check(str(ROOT / cart))
+    assert not r.errors, r.text()
+    assert r.pages and r.nodes
+
+
+def test_a_cart_s_mistake_is_reported_at_its_line(tmp_path):
+    cart = tmp_path / "bad.moy"
+    cart.mkdir()
+    (cart / "manifest.json").write_text('{"runtime": "python", "main": "main.py"}')
+    (cart / "main.py").write_text('s = ui.state(n=0)\nui.app("Bad")\n\n\ndef build():\n'
+                                  '    with ui.page("Bad"):\n        ui.link("nope")\n')
+    r = uitree_check.check(str(cart))
+    assert [(e.code, e.where[1]) for e in r.errors] == [("A01", 7)], r.text()
 
 
 def test_one_run_reports_every_planted_mistake_at_its_line():

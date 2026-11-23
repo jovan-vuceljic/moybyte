@@ -3,7 +3,7 @@
 The one guide to Moybyte's app and OS surface: read it top to bottom and you
 can build an app, a background service or a command on any tier. It is the
 authority for what makes a cart an APP: the manifest's `moybyte` fields,
-permissions, the `ui` verbs' place, files, prefs, intents, services,
+permissions, the UI tree an app draws with, files, prefs, intents, services,
 messages, alarms, notifications, achievements and what each tier can call.
 
 What it is not: the GAME verbs (drawing, sprites, maps, sound, `btn`) are
@@ -14,7 +14,8 @@ generated or held by code, this guide points at it rather than copying it:
 | what | its authority |
 |---|---|
 | every call an app reaches, on every tier | the call table (§10), written from `native/os_calls.json` |
-| the `ui` verbs and their semantics | `docs/ui_api_2026-10.md` |
+| the UI tree's kinds, props, verbs and error codes | `tests/uitree_contract/contract.json` (§3) |
+| the immediate `ui` verbs | `docs/ui_api_2026-10.md` (§3, "The immediate API") |
 | Python's `moybyte` verbs, each with its signature | `runtime/system/moybyte.py`'s header |
 | a Python app's globals per permission | `runtime/shell/system_api.py` |
 | how the OS runs processes, and why | `docs/os_2026-11/processes.md`, `tiers.md`, `between_apps.md` |
@@ -22,7 +23,8 @@ generated or held by code, this guide points at it rather than copying it:
 | which board runs which tier | `docs/os_2026-11.md` §5 |
 
 Two worked examples run in the host suite, `tests/test_app_examples.py`: a
-Python app with a scrolling list and prefs (`tests/fixtures/apps/shopping.moy`)
+Python app on the UI tree with a list longer than the screen and prefs
+(`tests/fixtures/apps/shopping.moy`)
 and a Lua service answering a message (`tests/fixtures/apps/echo_lua.moy`).
 `system_carts/moybyte.notes.moy` is the full-size app. Moy Mesh, an
 installable app in moybyte-org/carts (`carts/moymesh/`, `pkg install
@@ -38,80 +40,113 @@ keys, its own pair the console's, `moybyte.key_make`); its copy
 ## 1. Your first app
 
 An app is a `.moy` folder: `manifest.json` and a main script. No build, no
-registration, no firmware.
+registration, no firmware. Its interface is a UI tree (§3): it declares its
+state and its actions, describes its page once, and the console's engine
+draws the page, moves focus and runs an action when a person takes it.
 
-**Python** (`hello.moy/`):
+**Python** (`counter.moy/`):
 
 ```json
 {
   "format": "moy-1",
-  "title": "Hello",
-  "id": "local.hello",
+  "title": "Counter",
   "runtime": "python",
   "main": "main.py",
-  "moybyte": {"type": "app", "permissions": ["prefs"]}
+  "extensions": ["moybyte.uitree"],
+  "moybyte": {"type": "app", "permissions": []}
 }
 ```
 
 ```python
-FRUIT = ["Apple", "Banana", "Cherry", "Date", "Elderberry", "Fig", "Grape"]
-cur = 0
+s = ui.state(count=0, loud=False)
+ui.app("Counter", icon="calc")
 
 
-def _init():
-    global cur
-    cur = prefs.get("cur") or 0         # saved across runs and reboots
+def add():
+    s.count += 1
 
 
-def _draw():
-    global cur
-    ui.page("Hello")
-    new = ui.list("Fruit", FRUIT, cur)  # arrows, Enter, a tap or a drag
-    if new != cur:
-        cur = new
-        prefs.set("cur", cur)
+def reset():
+    s.count = 0
+
+
+ui.action("add", "Add one", add)
+ui.action("reset", "Reset", reset, when="count", off="grey")
+
+
+def build():
+    with ui.page("Counter"):
+        with ui.group("Count"):
+            ui.info("Count", "{count}")
+            ui.toggle("Loud", "loud")
+            ui.link("add")
+            ui.link("reset")
+            ui.label("{count|plural press,presses} so far, {loud?loud:quiet}")
 ```
 
-**Lua** is the same app with `"runtime": "lua"` and `"main": "main.lua"`;
-a list's rows count from 1 and `nil` stands for Python's `None`:
+Read it top down:
+
+- `ui.state` declares the app's state, typed by its first values: an int and
+  a bool. Only a handler writes it.
+- `ui.app` names the app: its title and its icon.
+- `ui.action` names what a person can do: a name, the words every node
+  shows for it, and its handler. `when="count"` makes Reset unavailable
+  while the count is 0, and `off="grey"` says it stays on the page, dimmed,
+  meanwhile.
+- `build` is the root page. It runs once, at the open, and reads no state:
+  `"{count}"` is a template the engine fills in, and `"loud"` names the
+  state the toggle writes. A link fires its action on Enter, A or a tap.
+
+The app defines no `_init`, `_update` or `_draw`: the engine runs the page.
+
+**Lua** is the same app with `"runtime": "lua"` and `"main": "main.lua"`. A
+page is a named function, and a node's props go in a table:
 
 ```lua
-FRUIT = {"Apple", "Banana", "Cherry", "Date", "Elderberry", "Fig", "Grape"}
-cur = 1
+ui.app("Counter", { icon = "calc" })
+local s = ui.state { count = 0, loud = false }
 
-function _init()
-  cur = prefs.get("cur") or 1
-end
+ui.action("add", "Add one", function() s.count = s.count + 1 end)
+ui.action("reset", "Reset", function() s.count = 0 end, { when = "count", off = "grey" })
 
-function _draw()
-  ui.page("Hello")
-  local new = ui.list("Fruit", FRUIT, cur)
-  if new ~= cur then
-    cur = new
-    prefs.set("cur", cur)
-  end
-end
+ui.page("counter", function()
+  ui.group("Count", function()
+    ui.info("Count", { value = "{count}" })
+    ui.toggle("loud", { label = "Loud" })
+    ui.link("add")
+    ui.link("reset")
+    ui.label("{count|plural press,presses} so far, {loud?loud:quiet}")
+  end)
+end, { title = "Counter" })
 ```
 
-**Start from a template:** `moy app new hello --tier python` writes this
-folder (`--tier lua|wasm|wasi|c` the others, `--service <tier>` an app's own
-service), `moy app check hello.moy` says what the console would refuse and
-which permissions the code uses that the manifest does not ask for (or asks
-for and never uses), `moy app build hello.moy` compiles a wasm or C
-program from its `src/` (`--chip esp32s3|esp32p4|host`, which a C program
-must name; Python and Lua have nothing to build), and `moy app stubs
-hello.moy` gives an editor the tier's names. `moy app` is moy-spec's `moy` running Moybyte's plugin,
-`moy-app`, which `make setup` installs (`sdk/README.md`).
+Both halves are one conformance fixture (`tests/uitree_conformance/counter/`),
+held to one trace and one picture, and its compiled half is §3's C example.
 
-**Run it in the simulator:** `python tools/simulate_desktop.py --cart hello.moy`
+**Start from a template:** `moy app new Counter` writes this folder, its
+manifest with an `id` (§2). `--tier lua|wasm|wasi|c` writes the other tiers'
+(the Lua app above, §3's compiled counter, a WASI or C command) and
+`--service <tier>` an app's own service. `moy app check counter.moy` says
+what the console would refuse and which permissions the code uses that the
+manifest does not ask for (or asks for and never uses), `moy app build
+counter.moy` compiles a wasm or C program from its `src/` (`--chip
+esp32s3|esp32p4|host`, which a C program must name; Python and Lua have
+nothing to build), and `moy app stubs counter.moy` gives an editor the
+tier's names. `moy app` is moy-spec's `moy` running Moybyte's plugin,
+`moy-app`, which `make setup` installs (`sdk/README.md`). The UI tree's own
+checks are `tools/uitree_check.py counter.moy` (Python) and
+`tools/uitree_lua_check.py counter.moy` (Lua): every page built once with
+nothing drawn, every mistake reported with its code (§3, Errors).
+
+**Run it in the simulator:** `python tools/simulate_desktop.py --cart counter.moy`
 (`--windowed --size 1024x600 --font-scale 2` for a P4's desk). The simulator
 copies the folder into its store, `~/.moybyte/projects`, over the copy there
-at every launch, so each run is the folder as it is; `moy app push hello.moy`
+at every launch, so each run is the folder as it is; `moy app push counter.moy`
 copies it there without a launch.
 
-**Run it on a board:** `tools/board.py tdeck push hello.moy` (or `moy app
-push hello.moy --board tdeck`) copies the folder into the board's store, then
-`tools/board.py tdeck run Hello` opens it (any board id from
+**Run it on a board:** `tools/board.py tdeck push counter.moy` (or `moy app
+push counter.moy --board tdeck`) copies the folder into the board's store, then
+`tools/board.py tdeck run Counter` opens it (any board id from
 `tools/board.py ports`; the `on-glass` skill has the rest).
 On the console itself, the home's Make tab makes and edits carts, apps
 included.
@@ -123,7 +158,7 @@ this guide is each step in full.
 |---|---|---|---|---|---|
 | the manifest (§2) | `"runtime": "python"` | `"runtime": "lua"` | `"runtime": "wasm"`, `"extensions": ["moybyte.app"]` | `"runtime": "wasm"`, `type` `command` or `service` | `"native": [chips]`, `type` `command` or `service` |
 | permissions (§6) | its list; the prompt calls it trusted | its list, enforced | its list, enforced at load | its list | `full_access` and its list |
-| entry points (§7, §11) | `_init`, `_update`, `_draw`; a service's `moy_start`; a command's `main(argv)` | `_init`, `_update`, `_draw`; `moy_start` | the exports `_init`, `_update`, `_draw` | `_start` | `main` |
+| entry points (§7, §11) | an app's state, actions and `build` (§3); a service's `moy_start`; a command's `main(argv)` | an app's state, actions and pages (§3); `moy_start` | the exports `_init`, `_update`, `_draw`, an app's `_draw` running `ut_frame()` (§3) | `_start` | `main` |
 | messages and timers (§8, §9) | `moybyte.on`, `send`, `every`, `after`, `at` | the same | `moybyte_on`, `moybyte_recv`, `moybyte_every` | `poll_oneoff` on `MOY_EVQ_FD`, `moybyte.os` | `poll` on `MOY_EVQ_FD`, `moy_on` |
 | files (§5) | `files` | `files`, `io`, `os` | `files_*` imports | WASI's own and `moybyte.os` `files_*`, in the granted folder | POSIX, in the granted folder |
 | build and test on the host (§12) | `tools/simulate_desktop.py --cart`; `tests/test_app_examples.py` | the same | `moy app build`, then the simulator | `moy app build`; the terminal | `moy app build --chip host`; the terminal |
@@ -222,201 +257,372 @@ add-only. A level adds; it never removes or repurposes anything a lower level
 had, so a cart that ran at level N runs at every level above it. How a breaking
 change is made is decided when there are user apps.
 
-## 3. Drawing an app
+## 3. The UI tree: drawing an app
 
-**The verbs.** An app draws its interface with `ui`, the public UI API
-(`docs/ui_api_2026-10.md` §1 lists every verb, §2 their semantics): pages,
-labels, buttons, toggles, sliders, lists, tables, tabs, menus, dialogs,
-fields, cards, scroll regions and text views, themed by the console. The
-same verbs exist in Python, Lua and a compiled app (§10), drawn by one C
-engine (`native/moy_ui`), so a page looks the same from every tier. Call
-them in `_draw()`; the engine keeps focus, each list's row and each page's
-scroll by id, so your script keeps only its values. The game verbs
-(`rect`, `spr`, `print`) draw inside a `ui.part` or a `ui.at` rect.
+An app's interface is a UI tree. The app declares typed state and named
+actions, and describes each page once; one C engine (`native/moy_uitree`,
+the one the console's own apps run on) lays the page out, draws it in the
+console's theme, moves focus, routes keys and taps to the actions and
+answers the host's Back. Python, Lua and compiled apps share it, each in its
+own spelling:
 
-**One scroller, one frame path.** A list, a table, `ui.scroll` and
-`ui.text_view` scroll on the engine's one scroll model and get their fast
-frames from the engine (shift frames, `docs/surface_model_v1.md` §14.7). An
-app never keeps a scroll offset or a frame path of its own (owner,
-2026-10-29: the surfaces that did were folded back). A long document is a
-`ui.text_view`; a long list is one `ui.list` or `ui.table`.
+| tier | the API | the manifest |
+|---|---|---|
+| Python | `ui` is the UI tree (`runtime/uitree/uitree.py`; `runtime/run/player_tree.py` runs a cart) | `"extensions": ["moybyte.uitree"]` |
+| Lua | `ui` is the UI tree (`runtime/run/uitree.lua`) | `"extensions": ["moybyte.uitree"]` |
+| compiled (wasm) | `ut_*` over the `uitree_*` imports (`sdk/include/moybyte/uitree.h`) | `"extensions": ["moybyte.app"]` |
 
-**Pages declared once: the UI tree (`moybyte.uitree`).** A Python or Lua app
-whose manifest lists the extension `moybyte.uitree` describes its pages
-instead of drawing them each frame: its `ui` is the UI tree API (typed
-state, named actions, pages built once, conditions and templates, errors
-with a code), and the console's own engine (`native/moy_uitree`, the one
-its shipped apps run on) lays the page out, draws it, moves focus, routes
-keys and taps to the actions and answers the host's back. A Python cart
-declares `s = ui.state(...)`, then `ui.app("Title", icon=...)` and its
-actions at the top level, and names its root page `build`; it defines no
-`_update` or `_draw` (`runtime/run/player_tree.py`). A state that holds a
-`ui.doc` gives its page the Editor's kinds, among them `ui.text_editor`,
-and `s.NAME.adopt(ed)` hands that document an editor handle (below), so the
-text editor types into the handle's document and draws it. What no kind
-draws an app draws in a `ui.canvas`: its `draw(cv, x, y, w, h)` paints the
-rect the engine laid out (in a rows' body, or as a table's child that draws
-the table's rows `row=` tall, `draw(cv, x, y, w, h, row)`, handed the row it
-stands in, as its `keys=` function is, `keys(i, row)`, and its pointer event
-as `ev.row`; a compiled app's draw asks `ut_canvas_row()` for the row's
-index), `ui.colors()` answers the theme's colours there, its `hint=` is the
-band's confirm word while it holds focus, and its `pointer=` is handed a
-press and its drag and release in its own
-coordinates on any page. Its `reads=` names the states its draw reads (a
-read of another is R01): the page's gen then counts them, so the page keeps
-its shift frames where a canvas that names none draws the frame after it
-whole. A foot of `look="band"` lies edge to edge on the
-alternate surface under a rule, its rows as tall as their tallest canvas
-(Music's strip). `runtime/apps/music_app.py` draws what plays this way.
-`system_carts/moybyte.notes.moy` is the example, and
-`tests/uitree_conformance/counter/` holds one app in both languages to
-one trace and one picture.
+`tests/uitree_contract/contract.json` is the authority on every kind, prop,
+verb and error code below; `tests/uitree_contract/known.json` lists where a
+tier lacks one, and this guide names only what the Python tier builds.
 
-**A flowing page's layout.** The engine stacks a page's nodes; `ui.row`
-sets its children side by side on one row of the stack (a button at its
-natural width unless `grow=True`, a picture beside a `ui.group` column of
-labels, a `ui.rule()` a line down the row between its neighbours, a label
-after the row's filler at its end; children all at their own widths are
-centred). `ui.foot()` (the end look) sets its buttons at
-their natural widths at its end with a status label before them;
+### The model
+
+**State.** `s = ui.state(...)` declares the app's state once, at the top
+level. Each name is typed by its first value, and a write of another type is
+an error (S02):
+
+| declared as | holds |
+|---|---|
+| `0`, `1.5`, `""`, `False` | an int, a number, a text, a bool |
+| `ui.enum("a", "b", init="a")` | one of named values |
+| `ui.opt(0)` | a value that may be absent: it draws as nothing and is false in a condition |
+| `ui.record(field=initial, ...)` | a fixed set of typed fields, written whole (`s.r.set(field=...)` in Python) |
+| `ui.model(key="id", id="", name="")` | rows keyed by one field: a list, a table, cards |
+| `ui.row_of("items")` | one row of a model, by its key: a list's cursor, the row a page shows |
+| `ui.doc("", "markdown")` | a text document the engine owns (Documents, below) |
+
+A handler reads `s.count` and writes `s.count = 3`. A model is written whole
+(`s.items = [{...}, ...]`, Lua `s.items:set({...})`) or by its verbs
+(`put(row)`, `update(key, field=...)`, `remove(key)`, `get(key)`; Lua's
+`s.items:put(row)` and kin), never by index. A row a handler is handed is
+read-only.
+
+**The app.** `ui.app(title, icon=...)` declares the app once, at the top
+level (D04 without it): its title is a template (the bar's zone, the desk
+window's strip and chip), `size=(w, h)` its window in desk units or
+fractions of the glass (`"7/8"`), `min=(w, h)` the least a window shrinks to,
+and `back=` an action Back runs where no page is left to pop (`"pages"`, the
+default, leaves the app). Where a window stands is the console's (D01).
+
+**Actions and hooks.** `ui.action(name, label, handler, ...)` is something a
+person can do: the label names it on every node and in the hints band. A
+node names an action by its name (`ui.button("add")`). `ui.hook(name,
+handler)` is a handler no person sees, named by a node's `on=` or
+`changed=`, a timer or a post. Their props:
+
+| prop | does |
+|---|---|
+| `takes=` | what every site hands the handler: `"none"`, `"row"` (the model row the action came from), `"arg"` (a site's `arg=`), `"char"` (a typed character, with `chars=`), `"pointer"` (a canvas's event) |
+| `when=`, `off=` | a condition under which the action is available; `off="hide"` removes its nodes meanwhile, `off="grey"` dims them and takes them out of focus |
+| `row=` | the `row_of` whose row the handler gets wherever it is taken (a list's verbs in a band or a menu) |
+| `keys=` | key shortcuts: a letter, `"ctrl+d"`, or a role, `"role:search"` (§4) |
+| `hint=` | the hints band's words for it (`""` keeps it out of the band) |
+| `icon=` | the icon a button or tool shows for it |
+| `push=` | a page function the action opens, with no handler |
+
+The commands a handler gives: `ui.push(page)` opens a page over this one,
+`ui.pop()` closes it, `ui.focus(key)` moves focus to a node,
+`ui.after(ms, name)` runs an action or hook later (`ui.cancel(name)` drops
+it), and `ui.post(name, value)` hands a hook a value from outside every
+handler (a service's message, a callback), which it runs before the next
+frame. The hook named `opened` runs as the app opens: where an app fills its
+models and reads its prefs.
+
+**Pages built once.** A page is a function that describes nodes and reads
+no state. Python's root page is the function named `build`, and a page opens
+`with ui.page(title):`, its containers `with` blocks. Lua registers each
+page by name, `ui.page(name, build, { title = ... })`, the first registered
+opening, and a container takes its body as its last argument. A page builds
+at the open (or at its push), and from then on the engine evaluates its
+templates and conditions each frame: a node never rebuilds because a value
+changed.
+
+**Templates and conditions.** A text prop is a template: literal text with
+`{...}` pieces the engine fills in.
+
+| piece | shows |
+|---|---|
+| `{count}` | a state's value; `{rec.field}` a record's field, `{doc.line}` a document's |
+| `{.name}` | the field of the row a node stands in (a list's body, a card, a column) |
+| `{count\|plural press,presses}` | the number and the word that agrees with it |
+| `{x\|fmt %.1f}` | a printf spec over an int or a number |
+| `{mode\|map MODES}` | an enum's word from a label table, `ui.labels("MODES", {"a": "Apple", ...})` |
+| `{items\|count}`, `{n\|bytes}` | a model's row count; an int as a size in bytes |
+| `{loud?on:off}` | one of two texts by a condition (a `:` inside a branch is `\:`) |
+| `{@desk?28:20}` | a system value: `@desk`, `@handheld`, `@wide`, `@tall`, `@touch`, `@input`, `@focus`, `@current` |
+
+A prop that is a condition (`shown=`, `when=`, `focus=`, `marked=`) is a
+name (true where a bool is true, a number non-zero, a text non-empty, a
+model holds rows; an enum is compared, `mode=a`), `!name`,
+`name=value` or `name!=value`, joined by `&&` or by `||` but never both.
+`ui.derive("ok", cond="a && (b || c)")` names a longer one, and
+`ui.derive("line", text="...")` a template. Every node takes `shown=`, which
+hides it while its condition is false.
+
+**Strict errors.** Every mistake is an error with a code, the app's file and
+line, what was expected, what was found and the fix, in one line:
+`error[A01] main.py:12: ...; fix: ...`. There are no warnings. A mistake
+raises at the call that makes it, a declaration's as the app loads and a
+page's as it builds, and the run stops on the stop card (§11). The checkers
+find them with nothing drawn: `tools/uitree_check.py` imports a Python app
+(a cart by its folder) and builds every page for every size class, and
+`tools/uitree_lua_check.py` runs a Lua app's scripts and builds its pages.
+The codes are in the table below.
+
+### The kinds
+
+Each kind is `ui.<kind>(...)`; a container is a `with` block in Python and
+takes a function last in Lua. The tables spell each kind as Python calls
+it; Lua passes the props in a table after the head
+(`ui.toggle("loud", { label = "Loud" })`, §1). Every node takes `shown=`; a
+row's child takes `grow=`, a grid's `span=`. A kind marked "no Lua" is
+Python's alone.
+
+**The page and its regions**
+
+| kind | is | key props |
+|---|---|---|
+| `page(title)` | a page: its title is the bar's | `status=` the hints band's lead words |
+| `group(caption)` | a captioned column of rows | `look="card"` on a card, `"rules"` a rule between rows; `gap=`; `close=` |
+| `row(key)` | children side by side | `wrap=`, `gap=`, `pad=`, `mid=`, `close=` what Back does while it shows |
+| `scroll(key)` | a region that scrolls its children | |
+| `foot()` | the page's docked foot: buttons at its end, a label before them | `look="share"` its buttons share its width, `"band"` an edge-to-edge strip |
+| `split(dir, sizes)` | cells along `"row"` or `"col"`, sized in units or weights (`"1*"`) | `gap=`, `pad=`, `align=`, `rule=` |
+| `grid(cols, rows)` | a fixed grid of cells | `gap=`, `pad=`, `w=`, `h=` |
+| `panel(key)` | a region of its own | |
+| `switch(name, cases)` | one of several bodies by an enum's or a bool's value (`"_"` the rest) | |
+| `panes(dir)`, `pane(key)` | panes a person resizes by their dividers; one grows (no Lua) | `size=`, `start=`, `min=`, `grow=`; a pane's `tabs=`, `title=` |
+| `slot(name)` | a hole another process's window docks in (no Lua) | `min=` |
+| `tools(key)`, `lent(key)` | buttons a shown tab lends, and where they draw (no Lua) | `lend=` |
+
+**Words and pictures** (no stop, but where noted)
+
+| kind | is | key props |
+|---|---|---|
+| `label(text)` | a line of text | `face=`, `tone=`, `icon=`, `wrap="word"` with `lines=`, `size="fit"`, `align=`, `scale=`, `w=` |
+| `info(label, value)` | a label and its value on one row | `icon=`, `tag=` a pill, `signal=` 0 to 4 bars, `tone=` |
+| `status(text)` | a status line, cut at its `" · "` fields (no Lua) | |
+| `rule()` | a divider | |
+| `note(lines)` | a card in the page's flow | `icon=` (`"warn"` in the danger tone) |
+| `empty(title)` | what a page with nothing on it says; controls built in it stand under it | `icon=`, `lines=` |
+| `toast(text)` | a pill over the page's foot, or a banner | `icon=`, `sub=`, `burst=`, `look="flat"` |
+| `bubble(text)` | a chat message, a stop | `side="in"`/`"out"`, `head=`, `status=`, `signal=`, `tone="failed"`, `lines=`, `on=`, `cut=` |
+| `text_view(name)` | read-only lines of a text state or a model | `wrap=`, `follow=`, `syntax=`, `face=`, `look="well"` |
+| `picture(image)` | one picture | `side=`, `icon=`, `tone=`, `look="tile"`, `on=` makes it a stop |
+| `progress(value)` | a bar of an int state | `max=` (required), `label=`, `look="count"` |
+| `month()` | a month's calendar | `year=`, `month=`, `today=`, `prev=`, `next=` |
+| `hints(model)` | keycap hints, one a row of the model | `keys=`, `label=`, `tail=`, `drop=`, `on=` |
+
+**Controls** (each a stop; a control bound to a state writes it two-way)
+
+| kind | is | key props |
+|---|---|---|
+| `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look=` (`large`, `small`), `w=` |
+| `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=` |
+| `toggle(label, name)` | a bool | `on=`, `hint=` |
+| `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=` |
+| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `secret=`, `grow=`, `on=`, `changed=`, `when=` |
+| `seg(label, name)` | one of an enum's values, or of a model's rows | `labels=`, `text=`, `look=` (`seg`, `cycle`, `swatches`, `pictures`), `on=` |
+| `tabs(name, labels)` | a tab strip over an enum; a `switch` on the same name is its body | `icons=`, `offered=`, `hint=` |
+| `stepper(value, prev, next)` | "‹ value ›", its chevrons two actions | `tone="dim"`, `grow=` |
+| `cells(name)` | a palette's colour cells over an int state | `count=`, `first=`, `cols=`, `side=`, `gap=`, `edge=`, `pick=` |
+
+**Lists of rows**
+
+| kind | is | key props |
+|---|---|---|
+| `rows(model)` | a model's rows, each drawing the body (Python `with`, Lua the function) | `cur=` the `row_of` focus writes, `current=` the row marked, `check=`, `empty=`, `by=` with cases, `filter=`, `group=` |
+| `cards(model)`, `card(action)` | rows as cards; `card` is the body | `cur=`, `current=`, `w=`, `h=`, `cols=`, `flow=`, `look=` (`carousel`, `shelf`, `icons`); a card's `label=`, `sub=`, `image=`, `badge=` |
+| `table(model)`, `col(text)` | rows as a table, one `col` a column | `cols=` the header, `cur=`, `on=`, `empty=`; `row=` with one canvas child that draws each row |
+
+**Over the page**
+
+| kind | is | key props |
+|---|---|---|
+| `dialog(title, buttons)` | a modal card; Back takes its first button | `shown=`, `kind=`, `labels=` its buttons' words, `look="keys"` no buttons on the T-Deck |
+| `popover(key)` | a card hung from a node | `anchor=`, `w=`, `close=` Back's action, `wash=` |
+| `menu(caption)`, `item(action)` | a menu and its items | an item's `icon=`, `label=`, `mkind="danger"` |
+
+**Drawing and editing**
+
+| kind | is | key props |
+|---|---|---|
+| `canvas(key, draw)` | a rect the app draws itself (Canvases, below) | `h=`, `w=`, `reads=`, `pointer=`, `keys=`, `hint=`, `focus=`, `mark=`, `ground=` |
+| `text_editor(name)` | the console's text editor over a `ui.doc` (no Lua) | `find=`, `marks=`, `gutter=`, `focus=` |
+| `legacy(key, draw)` | a surface drawn with the immediate verbs in one node (no Lua; it goes at the clean cut) | `pointer=`, `keys=`, `hints=`, `gen=` |
+
+### Layout
+
+**A flowing page** stacks its nodes down its room. A page whose rows run
+past its room scrolls and draws its scrollbar's thumb, as a `ui.scroll`
+region does; the engine moves focus into view and keeps each region's
+offset. A list, a table, a `scroll` region and a `text_view` scroll on the
+engine's one scroll model and get their fast frames from it (shift frames,
+`docs/surface_model_v1.md` §14.7): an app keeps no scroll offset or frame
+path of its own (owner, 2026-10-29). A long document is a `text_view` or a
+`text_editor`; a long list is one `rows` or `table`.
+
+**Rows.** A `row` sets its children side by side on one line of the stack:
+
+- a button at its natural width unless `grow=True`, a field growing, a
+  picture beside a `group` column of labels, a `rule()` a line down the row
+  between its neighbours, a label after the row's filler at its end;
+  children all at their own widths are centred;
+- `wrap=True` packs its children from its start at their natural widths (a
+  group as wide as its widest child), one that does not fit starting a line
+  under them (the desk home's buttons); in a group's column the row stands
+  at its cell;
+- a row of buttons wider than its room closes its gaps, then stands its
+  labelled icon buttons as their icons alone, from the end, until it fits;
+- `ui.row(key, grow=True)` on a flowing page fills its stack, so the rows
+  after it stand at the page's foot and the page fits its room.
+
+**The foot.** `ui.foot()` (the end look) docks its buttons at their natural
+widths at the page's end, a status label before them, under what scrolls;
 `look="share"` shares its width among them. `ui.toast(text, icon=)` is a
 pill over the page above its foot (`look="flat"` in flat fills, filling the
 page's room), and with `sub=` a banner: a card at the top centre of the
-page, `text` over the `sub` line, `burst=` (0..255) its confetti; `ui.group("", look="card")` lays its
-rows on a card (as a split's cell, the cell is the card), and
-`look="rules"` parts its rows with a rule as a captioned group's are (a
-`ui.row` among them one of its rows); `ui.text_view(..., look="well")` lays its prose on a
-well; `ui.cards(..., pad=)` sets the gap its columns are counted at, and its
-`current=` marks the card whose key a state holds;
-`ui.cards(..., look="carousel", cur=)` is the handheld home's band: from
-where the stack stands to the page's foot, one row of tiles at most `w=`
-a side (the largest that shows a whole cover at a clean scale and leaves
-its words their room), the centre card twice that and each tile's size a
-function of its distance from the centre alone; the engine moves it
-(the toolkit's table of parts): left and right (the wheel's notches too)
-glide it a card, a drag carries it and a fling or a let-go settles on the
-nearest card; the centre card is lifted by the focus mark at rest, its
-`label=` in the hero face and its `sub=`'s tab-separated items, a dot
-between each two, under the row in `tone=` (a theme role or `#RRGGBB`, a
-template, empty for the theme's ink) over a black shadow; Enter or a tap
-on the centre card at rest fires its card's action, a tap on another card
-glides it to the centre, and `cur=` follows the card the row comes to rest
-on (a value the app writes there while the row rests moves it there).
-On the desk class the same carousel is the desk home's shelf: one row of
-cards all `w=` a side (glass pixels), captioned over them with its
-`label=` (a template) and the count of its cards, apart by a dot; the
-arrows (the wheel's notches too) make the next card current in the frame
-they are pressed and the shelf glides to show it with two cards before
-it, a tap on a card makes it current and a tap on the current card at
-rest or Enter fires its action, the current card wearing the focus mark
-while the cards hold the keys and a current mark otherwise, and the
-cards scrolled past the shelf's margin are cut there;
-`look="shelf"` lays the cards in the rows its room holds, in columns that
-scroll across (cards of the clean side a carousel's neighbour takes, the
-desk's a whole cover, the columns spaced so the last on the glass stands
-cut by a third or more), each card's `label=` under it, and
-`look="icons"` lays them as tiles in the columns its room holds, in rows
-that scroll down, each named under it on the desk and, on the handheld,
-the current card named with its `sub=`'s items in a caption band along
-the foot; in both the engine moves the grid: the arrows step the current
-card across it and the view lands where it shows that card with its
-margin, the wheel's notches step it down (Shift's across), a drag
-scrolls the view and a release flings it, a tap on a card makes it
-current and fires its action as Enter does, the current card grows and
-wears the focus mark flat while the cards hold the keys, its label bold,
-and up from the top row leaves the grid; `tone=` inks the labels over a
-black shadow and `cur=` follows the current card (a value the app writes
-there lands the view on it); `ui.picture(..., look="tile")` draws the
-picture as a carousel's tile of its own at its place, `side=` across, its
-shadow round it and its corners those of a carousel's centre card (the
-desk home's hero), and `ui.picture(..., on=)` makes a picture a stop that
-a tap or Enter fires `on=` from; a link's
-`swatch="#RRGGBB"` (a template, empty for none) draws a chip of that colour
-before its value; a
-card's `badge=` marks its picture and its `label_icon=` stands an icon
-before its label; a button's `kind=` may be a template, and `kind="bar"`
-alone is a flat icon, narrower than a button's, the largest its row holds
-(`look="small"`: 16 units at the page's scale, as beside a label); on the desk a popover
-anchored at a button or a link hangs under it; a swatches row whose label
-its dots would cut moves them into its right pad where that makes it whole,
-else shrinks them, as far apart, until it is;
-`ui.split(..., rule=True)` draws a rule between its cells; a row split's
-fixed sizes that its width cannot hold share it by their sizes, and a cell
-that is a row, a group or a seg widens to what it needs, its neighbours
-giving up at most half theirs; a row of buttons wider than its room closes
-its gaps, then stands its labelled icon buttons as their icons alone, from
-the end, until it fits;
-`ui.row(..., wrap=True)` packs its children from its start at their
-natural widths (a group as wide as its widest child), one that does not
-fit starting a line under them (the desk home's buttons), a row in a
-group's column at its cell; `ui.row(key, grow=True)` on a flowing page
-fills its stack, so the rows after it stand at the page's foot;
-`ui.group("", gap=)` sets its column's children that far apart;
-`ui.label(..., scale=)` draws its face at that whole scale (a display
-line, never under the page's), `w=` keeps its text that wide at most (a
-measure of prose); `ui.button(..., look="large")` is half again a row's
-height with twice the pads, on a flowing page;
-a slider's `look="blocks"` is a meter, its steps' blocks across the whole
-row (with no label, 10 units a step and 12 more wide in a row);
-`ui.stepper(value, prev, next)` is "‹ value ›", the bar's chevrons firing
-the two actions and greyed while either is off (its `when=`), one stop whose
-left and right step it, at its own width (centred where it is stacked) or
-with `grow=True` a fill whose chevrons stand at its ends, `tone="dim"` its
-value dim;
-`ui.hints(MODEL, keys=, label=, tail=, drop=, on=)` is a row of keycap
-hints, one a row of the model (keys= its keys, an action or keys spelled
-out as `ui.hints`' items, label= what they do), no stop: the rows tail=
-holds stand at the row's end, the rest from its start in order, and where
-they run into the end the rows drop= holds go first, then the others, the
-last first each time; a press on one fires on= with its row;
-`ui.seg(label, ".FIELD", text=...)` in a rows' body binds an int field of
-the row, the index of its item, its items the lines `text=` renders over
-the row; a seg's `look="pictures"` shows each item as the picture its word
-names (`own:KEY`) in a tile at the row's right, the current one's on the
-selection plate, left and right wrapping and activation taking the next, its
-label on a line of its own over the tiles where they would cut it;
-`ui.pictures.put(key, render=..., clear=True)` leaves a drawn picture's
-corner colour out, the tile showing there; `ui.dialog(..., look="keys")` draws no buttons on the T-Deck, whose
-band's Enter and Esc are its buttons, and a dialog of more than one field
-names the arrows that move between them;
-`ui.page(title, status=)` leads the hints band with its words (a page
-laid out in a split, its own or one in a switch's shown case, has the band
-cut from its room)
-(`tests/uitree_contract/contract.json` holds every kind and prop).
+page, `text` over the `sub` line, `burst=` (0..255) its confetti; a dialog
+lies over the page.
+`ui.page(title, status=)` leads the hints band with its words (a page laid
+out in a split, its own or one in a switch's shown case, has the band cut
+from its room).
 
-**The bar is the host's.** The console draws the bar (its back chevron,
-your title, the status) over your app and routes its taps; your app draws
-none. Lay out inside `content_rect()` (`x, y, w, h`), wherever the bar sits;
-`ui.page` already does on every tier, an app's `ui` frame being that rect
-(a game's is its whole canvas). `bar_h()` is that rect's `y`.
+**Groups and splits.** `ui.group("", look="card")` lays its rows on a card
+(as a split's cell, the cell is the card), and `look="rules"` parts its rows
+with a rule as a captioned group's are (a `row` among them one of its rows);
+`gap=` sets its column's children that far apart. `ui.split(..., rule=True)`
+draws a rule between its cells; a row split's fixed sizes that its width
+cannot hold share it by their sizes, and a cell that is a row, a group or a
+seg widens to what it needs, its neighbours giving up at most half theirs.
+
+**A placed page** gives each region a rect by the engine's one layout rule:
+a container gives each shown child its rect, fixed rows their height and
+the fills sharing the rest, a text editor whole lines. A Python app whose
+state holds a `ui.doc` runs on the Editor's kinds (`text_editor`, `panes`),
+and its pages are placed; `split` and `grid` place their cells on any page.
+
+**How the kinds look.** What the tables above leave out:
+
+- `label(..., scale=)` draws its face at that whole scale (a display line,
+  never under the page's), and `w=` keeps its text that wide at most (a
+  measure of prose); `text_view(..., look="well")` lays its prose on a well.
+- `button(..., kind="bar")` alone is a flat icon, narrower than a button's,
+  the largest its row holds (`look="small"`: 16 units at the page's scale,
+  as beside a label), and a button's `kind=` may be a template;
+  `look="large"` is half again a row's height with twice the pads, on a
+  flowing page. On the desk a
+  popover anchored at a button or a link hangs under it.
+- A link's `swatch="#RRGGBB"` (a template, empty for none) draws a chip of
+  that colour before its value; a swatches row whose label its dots would
+  cut moves them into its right pad where that makes it whole, else shrinks
+  them, as far apart, until it is.
+- A slider's `look="blocks"` is a meter, its steps' blocks across the whole
+  row (with no label, 10 units a step and 12 more wide in a row).
+- `stepper(value, prev, next)` is "‹ value ›", the bar's chevrons firing the
+  two actions and greyed while either is off (its `when=`), one stop whose
+  left and right step it, at its own width (centred where it is stacked) or
+  with `grow=True` a fill whose chevrons stand at its ends.
+- `seg(label, ".FIELD", text=...)` in a rows' body binds an int field of the
+  row, the index of its item, its items the lines `text=` renders over the
+  row. A seg's `look="pictures"` shows each item as the picture its word
+  names (`own:KEY`) in a tile at the row's right, the current one's on the
+  selection plate, left and right wrapping and activation taking the next,
+  its label on a line of its own over the tiles where they would cut it;
+  `ui.pictures.put(key, render=..., clear=True)` leaves a drawn picture's
+  corner colour out, the tile showing there.
+- `hints(MODEL, keys=, label=, tail=, drop=, on=)`: one keycap hint a row,
+  no stop; the rows `tail=` holds stand at the row's end, the rest from its
+  start in order, and where they run into the end the rows `drop=` holds go
+  first, then the others, the last first each time; a press on one fires
+  `on=` with its row.
+- `dialog(..., look="keys")` draws no buttons on the T-Deck, whose band's
+  Enter and Esc are its buttons, and a dialog of more than one field names
+  the arrows that move between them; its `labels=` (one template a button,
+  in the buttons' order) names its buttons where their actions' labels
+  would not (one dialog whose verb reads Keep or Replace).
+- A card's `badge=` marks its picture and its `label_icon=` stands an icon
+  before its label. `cards(..., pad=)` sets the gap its columns are counted
+  at, `current=` marks the card whose key a state holds, and `flow=True`
+  lays the cards in the page's flow (in a group, between its caption and
+  its rows), where they scroll with the page, not in a region of their own
+  that takes the rest of it.
+- `picture(..., look="tile")` draws the picture as a carousel's tile of its
+  own at its place, `side=` across, its shadow round it and its corners
+  those of a carousel's centre card (the desk home's hero); `on=` makes a
+  picture a stop that a tap or Enter fires.
+
+**The home's bands: `cards` looks.** The engine moves each of them (the
+toolkit's table of parts); `tone=` (a theme role or `#RRGGBB`, a template,
+empty for the theme's ink) inks their words over a black shadow, and `cur=`
+follows the card at rest (a value the app writes there moves the band to
+it).
+
+- `look="carousel"`, on a handheld: from where the stack stands to the
+  page's foot, one row of tiles at most `w=` a side (the largest that shows
+  a whole cover at a clean scale and leaves its words their room), the
+  centre card twice that and each tile's size a function of its distance
+  from the centre alone. Left and right (the wheel's notches too) glide it a
+  card, a drag carries it and a fling or a let-go settles on the nearest
+  card; the centre card is lifted by the focus mark at rest, its `label=` in
+  the hero face and its `sub=`'s tab-separated items, a dot between each
+  two, under the row. Enter or a tap on the centre card at rest fires its
+  card's action, and a tap on another card glides it to the centre.
+- `look="carousel"`, on the desk: the desk home's shelf, one row of cards
+  all `w=` a side (glass pixels), captioned over them with its `label=` (a
+  template) and the count of its cards, apart by a dot. The arrows (the
+  wheel's notches too) make the next card current in the frame they are
+  pressed and the shelf glides to show it with two cards before it; a tap
+  on a card makes it current, and a tap on the current card at rest or
+  Enter fires its action. The current card wears the focus mark while the
+  cards hold the keys and a current mark otherwise, and the cards scrolled
+  past the shelf's margin are cut there.
+- `look="shelf"`: the cards in the rows its room holds, in columns that
+  scroll across (cards of the clean side a carousel's neighbour takes, the
+  desk's a whole cover, the columns spaced so the last on the glass stands
+  cut by a third or more), each card's `label=` under it.
+- `look="icons"`: tiles in the columns its room holds, in rows that scroll
+  down, each named under it on the desk and, on the handheld, the current
+  card named with its `sub=`'s items in a caption band along the foot.
+
+In a shelf or icons grid the arrows step the current card across it and the
+view lands where it shows that card with its margin, the wheel's notches
+step it down (Shift's across), a drag scrolls the view and a release flings
+it, a tap on a card makes it current and fires its action as Enter does, the
+current card grows and wears the focus mark flat while the cards hold the
+keys, its label bold, and up from the top row leaves the grid.
+
+**The bar is the host's.** The console draws the bar (its back chevron, your
+title, the status) over your app and routes its taps; your app draws none.
+The page lays out in the content rect the bar leaves, `content_rect()` (`x,
+y, w, h`), wherever the bar sits; `bar_h()` is that rect's `y`. A UI tree
+app is responsive with no code of its own: it draws on the whole surface (a
+desk window's on the desk) in the shell's faces and theme, and its size
+classes (`@desk`, `@wide`, ...) and `ui.app(size=, min=)` say how it fits.
 
 **Drawn on change.** An app paints a frame only when something changed: its
-input, a message, a timer. One that moves on its own says
-`"animates": true` beside its `type` and is drawn every frame like a game;
-an app that lists `audio` is too, since its sound is pulled in the frame.
+input, a message, a timer, a state a handler wrote. One that moves on its
+own says `"animates": true` beside its `type` and is drawn every frame; an
+app that lists `audio` is too, since its sound is pulled in the frame.
 
 **Five names with no permission**, because they are how an app draws: `ui`,
 `screen()` (the canvas), `theme()` (the live colour tokens),
 `content_rect()` and `bar_h()`. Lua holds `ui` and `content_rect()`, which
 answers four values.
 
-**The canvas: fixed by default, responsive by opt-in.** The manifest's
-`canvas` is the raster, and the console centres and integer-scales it, as it
-does a game's. A cart that defines `_layout(w, h, fs)` (each tier its own way,
-the table below) opts into the whole surface: it draws on the system canvas,
-is called before `_init` and again whenever the size or font scale changes,
-and gets the responsive bar. A cart that also declares a small `canvas` keeps the fixed raster and
-is told so through `_layout`'s arguments. On the desk the cart gets a window
-surface of its own, `_layout` and `content_rect()` being the window's
-content (`Workstation.app_window_canvas`); from the fullscreen Library, the
-whole desktop surface. Responsive is real work: no literal coordinates, a
-rect-algebra layout pass, testing at more than one size, and reading
-`_layout`'s arguments rather than `W`/`H`, which are bound once at start.
-For a calculator or a notepad, fixed is the right answer.
-
-The opt-in is the same on every tier, each defining the one callback its
-own way and the console finding it before the cart runs
-(`Player._wants_layout`):
+**The canvas: fixed by default, responsive by opt-in** (a game, and an app
+on the immediate API). The manifest's `canvas` is the raster, which the
+console centres and integer-scales. A cart that defines `_layout(w, h, fs)`
+opts into the whole surface: it draws on the system canvas, is called
+before `_init` and again whenever the size or font scale changes, and gets
+the responsive bar; a cart that also declares a small `canvas` keeps the
+fixed raster and is told so through `_layout`'s arguments. On the desk the
+cart gets a window surface of its own, `_layout` and `content_rect()` being
+the window's content (`Workstation.app_window_canvas`). A UI tree app is
+responsive by its extension (`player_tree.wants`, `lua_ext.wants_layout`).
+Each tier defines the callback its own way, and the console finds it before
+the cart runs (`Player._wants_layout`):
 
 | tier | `_layout` is | how the console finds it | how it hears a change |
 |---|---|---|---|
@@ -428,45 +634,66 @@ own way and the console finding it before the cart runs
 A Python, Lua or compiled app hears `_layout` before `_init`; a WASI or
 native app, which has no `_init`, before the first frame its loop reads.
 
-**A responsive app's `ui` looks like the shell's apps.** Its `ui` verbs draw
-in the theme's faces, colours, row styles and selection marks, as a
-built-in app's do, at the font scale of the canvas it draws on (the
-console's on a whole surface, 1 in a desk window and on the handheld's
-raster), and lay out on the desk's rows where its surface is the desk's.
-The same calls draw the same pixels on every tier
-(`tests/test_app_layout.py`): a Python app's frame is drawn by its Player
-(`ui_draw.CART_APP`, the boundary keeping only its `print` and its own
-colours), a Lua, compiled, WASI or native run's by the RUN face over the
-word its snapshot carries (`AppFace.ui_face`, `moy_ui_run.h`'s
-`MOYCORE_UI_FACE_*`). The rest of its drawing stays a cart's: `print` in
-petme128, colours MOY64. A game's `ui`, and a fixed app's, draws as a
-cart's.
+### Canvases
 
-**Text editing: the editor handle (#112).** `open_editor` hands the cart the
-console's own text editor over one document. You draw it into a rect and
-forward taps; it does the text, the caret, the selection, wrap, undo, the
-clipboard, the Markdown rendering and the saving. There is no Save button to
-build: it writes on an idle pause and again when the cart exits.
+What no kind draws, an app draws in a `ui.canvas`. Its draw paints the rect
+the engine laid out, inside the frame, and writes no state:
+
+- **Python:** `draw(cv, x, y, w, h)`, `cv` the canvas; `ui.colors()`
+  answers the theme's colours there and `ui.text_size(text, scale)` a
+  text's size.
+- **Lua:** `draw = function(x, y, w, h) ... end` in the props, drawing with
+  the cart's own verbs (`rect`, `print`).
+- **C:** `ut_canvas(key, draw, pointer)`, `draw(x, y, w, h)`.
+
+A canvas in a rows' body, or a table's child that draws the table's rows
+`row=` tall, is handed the row it stands in: `draw(cv, x, y, w, h, row)`
+(Lua `draw(x, y, w, h, row)`, C `ut_canvas_row()`). Its other props:
+
+| prop | does |
+|---|---|
+| `reads=` | the states its draw reads; the page's shift frames count them, and a read of another state is R01. A canvas that names none draws the frame after it whole |
+| `pointer=` | an action or hook `takes="pointer"`, handed a press and its drag and release in the canvas's own coordinates (`ev.kind` `"down"`, `"drag"`, `"up"`; `ev.x`, `ev.y`; `ev.row`). C reads `ut_point()` |
+| `keys=` | Python: `keys(i)` (`keys(i, row)` in a table) is handed the input while the canvas holds focus, and answers True for a key it took |
+| `hint=` | the band's confirm word while it holds focus |
+| `h=`, `w=` | its size (a template); `ground=` the theme role painted under it |
+
+A foot of `look="band"` lies edge to edge under a rule, its rows as tall as
+their tallest canvas: `runtime/apps/music_app.py` draws what plays this way.
+
+### Documents and the text editor
+
+A state that holds `ui.doc(text, lang)` (`lang` one of `plain`, `python`,
+`lua`, `json`, `markdown`) is a document the engine owns: its buffer, caret,
+selection, undo and view. `ui.text_editor(name)` shows it and takes typed
+keys into it with no app code. A handler changes it through its verbs
+(`set_text`, `insert`, `go(line, col)`, `place`, `select`, `select_all`,
+`find`, `undo`, `redo`, `copy`, `cut`, `paste`, `indent`, `outdent`,
+`complete`) and reads `text`, `lines`, `line`, `col`, `sel`, `word`,
+`edits`; a template shows `{note.line}`, `{note.can_undo}` and the rest of
+its fields. A document is Python's (Lua has no `ui.doc`).
+
+**The editor handle (#112).** `open_editor` hands the cart the console's own
+text editor over one document, and the page shows it: `s.note.adopt(ed)`
+makes the text editor type into the handle's document and draw it in its
+mode, while the handle keeps the text, the caret, the selection, wrap,
+undo, the clipboard, the Markdown rendering and the saving. There is no
+Save button to build: it writes on an idle pause and again when the cart
+exits.
 
 | call | does |
 |---|---|
 | `open_editor(name)` | an editor over the document `name` in the kind your `files` permission granted. Never a path and never another kind |
-| `open_editor()` | the document the console was asked to open (a file tapped in Files, a project's own file on the Editor's Config tab), or `None`. Call it once in `_init` |
+| `open_editor()` | the document the console was asked to open (a file tapped in Files, a project's own file on the Editor's Config tab), or `None`. Call it once, in the `opened` hook |
 
 The kind that arrives with `open_editor()` may be one you were never granted:
 a person chose that file, not your cart. One of them is a whole project,
 `project:<folder>.moy`, a `.moy` folder's own files, reached only through the
-Config tab's Files so the cart loader re-reads the folder afterwards. You
-still just draw it. Everything else is on the handle:
+Config tab's Files so the cart loader re-reads the folder afterwards. Every
+other verb is the handle's:
 
 | call | does |
 |---|---|
-| `ed.draw(x, y, w, h)` | render the document into that rect, this frame; a `scale` for a big screen. On a `ui.page` given a `gen` it draws only the rows that changed |
-| `ed.tap(x, y, click)` | forward a pointer press. Answers what it meant: `("link", name)` a tapped `[[note]]`, `("check", row)` a checkbox it ticked, `("caret", None)` a plain place, `None` outside |
-| `ed.drag(x, y, down)` | forward what follows the press: it pans, or in SELECT mode grows the selection |
-| `ed.nav(dx, dy)` | move the caret by cells (the console feeds it from the T-Deck's trackball and the arrows while the handle has focus) |
-| `ed.focus(on)` / `ed.focused()` | take or release the keyboard; while a handle has it, `key()`/`keyp()` read nothing |
-| `ed.key(code)` | feed one byte (an on-screen key) |
 | `ed.undo()` / `ed.redo()` / `ed.can_undo()` / `ed.can_redo()` | one step, and whether there is one |
 | `ed.select_all()` / `ed.copy()` / `ed.cut()` / `ed.paste()` | the console's clipboard with the `clipboard` permission, the document's own otherwise |
 | `ed.select_mode(on)` / `ed.selecting()` | SELECT mode: a drag and the trackball extend the selection, the way to mark a range with no shift-arrow |
@@ -482,249 +709,324 @@ still just draw it. Everything else is on the handle:
 A note is Markdown, rendered by the handle: `#` headings, `- [ ]` checkboxes
 ticked by a tap, `[[note]]` links and `![[a drawing]]`, one of Paint's
 pictures inline by name. Prose wraps; code and JSON pan. In Lua the handle
-is a table with the same verbs as methods (`ed:draw(...)`), `ed:tap`
-answering two values rather than a pair. `system_carts/moybyte.notes.moy`
-is built on it, its page's text editor adopting the handle.
+is a table with the same verbs as methods (`ed:undo()`).
+`system_carts/moybyte.notes.moy` is the example: a vault of notes beside the
+open one on the desk, one at a time on a handheld, its text editor adopting
+the handle.
+
+### Errors
+
+Each code, what it means and its fix (Python's; Lua's or C's where Python
+has none), as `tests/uitree_contract/contract.json` holds them
+(`tests/test_app_guide.py` fails a row that differs).
+`tests/test_uitree_mistakes.py` makes each mistake both layers raise once in
+Python and once in Lua.
+
+| code | the mistake | the fix |
+|---|---|---|
+| A01 | a site names no action (the message says when the text given is an action's label) | `ui.action("add", "Add one", add)`, then `ui.button("add")` |
+| A02 | a site hands what the action's `takes=` does not take (an `arg=`, a row, a typed char, a timer's or a post's key) | `takes="arg"` on the action, or no `arg=` at the site |
+| A03 | a handler's parameter count against its `takes=` | `def choose(row):` for `takes="row"` |
+| A07 | a row action reached from rows of another model | a second action, or `row=` naming a `row_of` of this model |
+| A08 | an action with an empty label | `ui.hook("scanned", scanned)` |
+| A09 | a bad value in an action's declaration: `off`, `takes`, a `row` naming no `row_of`, a name or label not a text, a handler not a function | pass the function: `add`, not `add()` |
+| A10 | `after` called outside a handler | call it from a handler or the `opened` hook |
+| B01 | a build reads state, a derive, a document's field or a system value, or asks the engine anything | a template `"{count}"`, a condition `shown="busy"`, a switch or rows |
+| B02 | a build writes state or issues a command (`push`, `pop`, `focus`, `after`, `post`, `damage`) | name an action the node fires: `on="add"` |
+| B03 | a declaration inside a page's or a case's function, or a node outside one | declare at the module's top level; make nodes in a page function, under `with ui.page(TITLE):` |
+| C01 | a condition that is a template, neither a text nor a bool, or joined with a single `&` or `\|` (and is `&&`, or is `\|\|`) | `shown="pick"`, not `shown="{pick}"`; `"a && b"`, not `"a & b"` |
+| C02 | `&&` and `\|\|` mixed at one bracket level (inline: at all) | `ui.derive("ok", cond="a && (b \|\| c)")` and `shown="ok"` |
+| C03 | brackets in an inline condition | a derive, as for C02 |
+| D01 | the `app` declaration: an unknown or placement field (`x`, `place`, `tools`...), or a second one | drop `place=`: the shell places windows |
+| D02 | `size=` or `min=` not `(w, h)` of desk units or fractions `"a/b"` with `0 < a ≤ b` | `size=("7/8", "9/10")` |
+| D04 | an app with no `app` declaration | `ui.app("Counter", icon="calc")` |
+| D05 | a `slot` not in `slots=`, or `slots=` naming a slot the tree lacks | `slots=["run"]` and `ui.slot("run")` |
+| D06 | the manifest's `"ui"` level is missing, or one this console does not run | `"ui": 1` in the manifest |
+| E00 | a kind, a prop or a form the C engine does not draw yet, by name (`uitree_c.EngineGap`), never drawn wrong | run the app on the reference (`uitree`), or build it from what the C engine draws |
+| E01 | an enum with no `init=` | `ui.enum("a", "b", init="a")` |
+| E02 | `init=` is not one of the enum's values | name one of them |
+| E03 | an enum with fewer than two distinct non-empty values | a bool, or a second value |
+| G01 | a derive cycle | compute one of them in a handler |
+| H01 | a hook where an action belongs (a button, link, tool, item, card, a dialog's `buttons=`) | `ui.action(NAME, "Label", fn)` |
+| H03 | a hook with a label, an icon, keys or `when=` | an action, if a person sees it |
+| I01 | a tool or a lent action with no icon from its action or its site, and no `fill=` | `icon="pencil"` on the action |
+| I02 | an action's `icon=` is a template | a site's `icon="{...}"`, or a name |
+| K01 | an app names a shell role (`home`, `full`, `system`) | a role of the app's (§13.1) |
+| K02 | two actions on one key live together in one unit, or an app action beside a unit action | one key, one action |
+| K03 | a bad key: a chord other than `ctrl+LETTER`, an unknown role | `keys=["ctrl+f", "role:search"]` |
+| L01 | a lender with no `lent` site, or a frame lending to itself | `ui.lent("bar")` in the frame |
+| L02 | two shown `lent` sites of one name in one size class | one site per class |
+| L03 | two shown lenders on one site | lend to two sites |
+| M01 | C: a handle that is not one | a handle the build returned |
+| M02 | C: a handed value read when none was handed, or a field of another model | read it in the handler it is handed to |
+| M03 | C: `put_*`, `put_row` or `rows_end` outside `rows_begin ... rows_end`, or a handle not a field of the model | `moy_ui_rows_begin(model)` first |
+| M04 | C: fields put after the last `put_row` | end with `moy_ui_put_row()` |
+| N01 | an unknown kind or prop, a bad prop value, a missing required prop (`progress` with no `max=`; a `derive` with neither or both of `cond=` and `text=`), a wrong count of arguments, a function given where its result belongs or the reverse | the near name the message offers |
+| N02 | two siblings with one key | a key of its own: `ui.row("find_strip")` |
+| N03 | a node or declaration where it may not stand (a `tools` in a `group`, a node after the page's `scroll` outside the `foot`, a label table declared on a unit) | move it: the message names where it may stand |
+| N04 | a retired name (§7.9), with its replacement | the replacement |
+| N06 | an anchor naming no node, a part the node lacks, or a tab its enum lacks | `anchor="msgs.cur"` |
+| N07 | `split`: no weight, or a bare `0`; `panes`: not exactly one child grows | `sizes=[112, "1*"]` |
+| N08 | `focus(KEY)` names no node, or more than one, in the handler's unit | a key the unit's nodes have |
+| O01 | an action or a control that can be off (`when=` or `row=`) with no `off=` | `off="hide"` |
+| O02 | `off=` with neither `when=` nor `row=` | drop `off=` |
+| O04 | `when=` or `off=` on a node that is neither an action's site nor a two-way control | `when=` on the action |
+| P01 | a push names no page | push the page function: `ui.push(about)`, where `about` opens `with ui.page("About"):` |
+| P02 | a `push=` action declares `takes=` | drop `takes=` |
+| P03 | a `push=` action has a handler | `ui.action("about_open", "About", None, push=about)` |
+| P04 | a push's argument does not fit the page's `arg=`, or `arg=` names no state | `arg=` naming a `row_of` of the pushed row's model |
+| P05 | `ui.pop()` on the app's first page (a page its host shows is closed by its host instead) | Back leaves the app; `ui.pop()` closes a page `ui.push()` opened |
+| Q01 | Lua: a global name nothing declares | `local` it, or declare it |
+| R01 | a canvas draw reads state its `reads=` does not list | `reads=["tape", "fresh"]` |
+| S01 | no state with that name | declare it in `ui.state(...)` |
+| S02 | a write of the wrong type, of None or nil to a non-optional, or of a key no row has; C: a bool not 0 or 1, an enum index out of range | write the declared type, or declare it `ui.opt(...)` |
+| S03 | a write into what is written whole or by verbs: a handed row, a record's field, a document, an event, a model by index, an engine-written field | `s.pick.set(state="failed")`, or the whole record |
+| S04 | a read of a field the row or record does not have | a declared field |
+| S05 | a row of the wrong shape written to a model: a missing non-optional field, an unknown field, two rows with one key, no row with that key, `order` not a permutation | every declared field, keys unique |
+| S06 | a state write outside a handler: in a draw, from a service | `ui.post("indexed", data)` from the service's callback |
+| S07 | a model with no key field, a key field not text or int, or a field named `key` | `ui.model(key="id", id="", ...)` |
+| S08 | Python: a typed name compared with None | `if s.pick:` |
+| S09 | a write to a derive | write the names it reads |
+| S10 | a write to a value the engine writes (`scroll new=`, `canvas size=`) | read it; the engine writes it |
+| S11 | a `row_of` naming no model | `ui.row_of("nets")` after `nets=ui.model(...)` |
+| S12 | a `doc` with an unknown `lang` | `lang="python"` |
+| S13 | a declaration whose initial value has no type: `None` or `nil`, a list, a function | `ui.opt(0)` for a value that may be absent |
+| T01 | template syntax (§3.1) | the message shows the column; `\:` for a colon in a branch |
+| T02 | a name, field, system value or label table that does not exist, with the near one | the near name |
+| T03 | a name of the wrong type at a site | the message names the type the site takes |
+| T04 | exhaustiveness: a label table, a switch, rows by kind, a `tabs` or `seg` table | a case or label per value, or `_` |
+| T05 | `{.field}` or `@current` outside a row | `{sel.field}` |
+| T06 | Python: an enum used as a truth value | `if s.op != "none":` |
+| U02 | a name declared twice in one key space (two states; a state and an action; a unit and a document; two pages) | rename one |
+| U03 | a unit's action named outside every node bound to its unit | `unit=code` on the pane or case |
+| U05 | a dotted name names nothing in that unit | the near name |
+| U06 | a name a unit declares that the app also declares | rename one |
+| U07 | `unit=` on a node that cannot bind | a case, pane, popover or page |
+| U08 | two units answering one key that some size class shows together | give the key to one of them |
+| U10 | a unit declared on a unit | declare it on the app |
+| W01 | a two-way control's `on=` names an action or hook that does not take what the control hands (`none` for a state, `row` for a `.field`) | `takes="none"`, reading the state |
+| W02 | a `work` step's `budget=` is not an int of 1 to 16 ms | `budget=4` |
+| X01 | an internal assertion: the layer missed a check at build | report it: the layer missed a check |
+| Y01 | a process-1 word (`shell.*`, `geom`, `from_app`, `order`) in an app | an app's own kinds |
+| Y02 | `from_app` of an unknown field | a field of §19.1 |
+| Y03 | `shell.windows` over rows without `geom` `x y w h` | `x=shell.geom()` and the rest |
+| Y04 | `shell.zone` over rows without `from_app` | `title=shell.from_app("title")` |
+| Y05 | a dock into a slot its host does not declare | the host's `slots=` |
+| Y06 | after a handler, a model and its orders disagree | drop the key from every order with the row |
+
+### One app per tier
+
+**Python**: `tests/fixtures/apps/shopping.moy`, a list longer than the
+screen and the row last picked kept in prefs (its manifest asks for
+`prefs`), which `tests/test_app_examples.py` drives:
+
+```python
+s = ui.state(items=ui.model(key="name", name=""), cur=ui.row_of("items"))
+ui.app("Shopping", icon="list")
+
+
+def opened():
+    s.items = [{"name": "Item %d" % n} for n in range(1, 41)]
+    s.cur = prefs.get("cur") or "Item 1"    # saved across runs and reboots
+
+
+def pick(row):
+    prefs.set("cur", row.name)
+
+
+ui.hook("opened", opened)
+ui.action("pick", "Pick", pick, takes="row")
+
+
+def build():
+    with ui.page("Shopping"):
+        with ui.rows("items", cur="cur"):
+            ui.link("pick", label="{.name}")
+```
+
+**Lua**: a model filled at the open, rows with a cursor and a row action
+(`tests/uitree_conformance/list/list.moy`):
+
+```lua
+ui.app("Shopping", { icon = "list" })
+local s = ui.state { items = ui.model { key = "id", id = "", name = "" }, sel = ui.row_of("items"), msg = "" }
+
+ui.hook("opened", function()
+  s.items:set({ { id = "a", name = "Apples" }, { id = "b", name = "Bread" }, { id = "c", name = "Cheese" } })
+end)
+ui.action("pick", "Pick", function(row) s.msg = "Picked " .. row.name end, { takes = "row" })
+
+ui.page("shopping", function()
+  ui.group("Things", function()
+    ui.rows("items", { cur = "sel" }, function()
+      ui.link("pick", { label = "{.name}" })
+    end)
+    ui.label("{msg}")
+  end)
+end, { title = "Shopping" })
+```
+
+**C**, a compiled app built by `moy app build` (§10): the counter of §1
+(`tests/uitree_conformance/counter/counter_wasm.moy`). `_init` declares the
+state and the actions with their handlers and builds the page;
+`uitree_open()` opens it, and `_draw` runs `ut_frame()`, which draws the
+page and runs the handler of each action taken:
+
+```c
+#include "moybyte/uitree.h"
+
+#define EXPORT(name) __attribute__((export_name(#name)))
+
+static int32_t s_count;
+
+static void add(int32_t row) { uitree_set_int(s_count, uitree_get_int(s_count) + 1); }
+static void reset(int32_t row) { uitree_set_int(s_count, 0); }
+
+EXPORT(_init) void _init(void) {
+    s_count = ut_int("count", 0);
+    ut_bool("loud", 0);
+    ut_action("add", "Add one", add);
+    ut_action_when("reset", "Reset", "count", UT_OFF_GREY, reset);
+    ut_page("counter", "Counter") {
+        ut_group("Count") {
+            ut_info("Count", "{count}");
+            ut_toggle("loud", "Loud");
+            ut_link("add", NULL);
+            ut_link("reset", NULL);
+            ut_label("{count|plural press,presses} so far, {loud?loud:quiet}");
+        }
+    }
+    uitree_open();
+}
+
+// A responsive app: it draws in the shell's look on its window's surface.
+EXPORT(_layout) void _layout(int32_t w, int32_t h, int32_t fs) {}
+EXPORT(_update) void _update(float dt) {}
+EXPORT(_draw) void _draw(void) { ut_frame(); }
+```
+
+### The immediate API (until the clean cut)
+
+Beside the UI tree, an app may still draw its interface itself: `ui.page`,
+`ui.list`, `ui.button` and the rest called in `_draw()` every frame, the
+script keeping its own values and the engine (`native/moy_ui`) keeping
+focus and scroll by id. `docs/ui_api_2026-10.md` lists those verbs. A
+compiled app reaches them as the `ui_*` imports (`native/moy_ui/moy_ui_wasm.h`),
+a WASI or native app through the toolkit it links (`sdk/include/moybyte/ui.h`),
+and the editor handle's drawing verbs (`ed.draw`, `ed.tap`, `ed.drag`,
+`ed.nav`, `ed.focus`, `ed.key`) are this API's.
+
+A responsive app's verbs draw in the theme's faces, colours, row styles and
+selection marks, as a built-in app's do, at the font scale of the canvas it
+draws on, the same pixels on every tier (`tests/test_app_layout.py`): a
+Python app's frame by its Player (`ui_draw.CART_APP`, the boundary keeping
+only its `print` and its own colours), a Lua, compiled, WASI or native run's
+by the RUN face over the word its snapshot carries (`AppFace.ui_face`,
+`moy_ui_run.h`'s `MOYCORE_UI_FACE_*`). A game's `ui`, and a fixed app's,
+draws as a cart's. Back steps out of its views first there too (§4): a
+focused field's edit, then a popover the last frame drew, then, while the
+app lends the bar its way back (`ui.bar`'s fourth argument), the next
+`ui.bar`, which answers it.
+
+Write an app on the UI tree: the immediate verbs, and the `legacy` node
+that hosts them in a tree, go at the clean cut of the OS work (#246).
 
 ## 4. Input
 
 **Keyboard first; never keyboard only.** The keyboard is the primary input on
 every board, and every surface must also work with a gamepad alone and with
-touch alone (#242, #239). The `ui` engine gives you all three: arrows (the
-T-Deck's WASD and trackball, a pad's d-pad) move focus between stops,
-Enter, A or a tap activates, a drag scrolls. A `ui.field` in focus takes
-the keyboard as text: on the T-Deck its WASD type there, and the trackball
+touch alone (#242, #239). The engine gives a UI tree page all three: arrows
+(the T-Deck's WASD and trackball, a pad's d-pad) move focus between stops,
+Enter, A or a tap fires the focused stop's action, a drag scrolls. The app
+writes no focus code: the engine moves focus into view, keeps it across
+frames and puts it back on the node that pushed a page when the page pops;
+a handler moves it with `ui.focus(key)`. A `ui.field` in focus takes the
+keyboard as text: on the T-Deck its WASD type there, and the trackball
 steps focus off it. Nothing sets the keyboard's mode by hand: the console's
 input policy (`runtime/shell/input_policy.py`) derives it from what the
-surface holding the keys has focused, and a menu over it is game mode. So:
-every action is a stop
-(a button, a list row, a menu item), and a key shortcut only ever doubles
-one.
+surface holding the keys has focused, and a menu over it is game mode. So
+every action is a stop (a button, a link, a list row, a menu item), and a
+key shortcut only ever doubles one.
+
+**Shortcuts are an action's `keys=`.** `ui.action("trash", "Move to Trash",
+trash, takes="row", row="cur", keys=("t",), ...)` fires on T wherever the
+keys do not type into a field, on the row the cursor holds, and the hints
+band names it. A key is a letter, `"ctrl+LETTER"` or a role, `"role:NAME"`:
+`confirm`, `back`, `more`, `left`, `right`, `up`, `down`, `search`, `goto`,
+`complete`, `undo`, `redo`, `play`, `tools`, each the input's own keys for
+it. `home`, `full` and `system` are the shell's (K01), and two actions on
+one key is K02. A canvas that takes keys of its own does so in its `keys=`
+(§3, Canvases).
 
 **Back is the host's, and steps out of your views first.** Esc, B, the
 T-Deck's K (its B), the bar's back chevron and a desk window's are the
-console's way back; the ui never reads them. Back steps out of the app's own
-views before it leaves the app, on every tier:
+console's way back; a page never reads them. Back steps out of the app's own
+views before it leaves the app, in this order:
 
-1. a focused `ui.field`'s edit in progress is cancelled, its text given
-   back (`docs/ui_api_2026-10.md`, Cancel), as the T-Deck's Mic does too;
-2. else a `ui.popover` the last frame drew is dismissed (it answers false);
-3. else, while the app lends the bar its way back (`ui.bar`'s fourth
-   argument), the next `ui.bar` answers it -- `ui.UP` in Python, -1 in Lua,
-   -2 in a compiled app -- and the app steps back itself; the console shows
-   the chevron meanwhile, in a desk window's title strip too;
-4. else the chevron leaves the app, and Esc and B reach your `keyp` and
-   `btnp` (Notes calls `quit()` on Esc there).
+1. a focused `commit=True` field's draft is dropped (its Cancel), the state
+   keeping its text;
+2. else a shown dialog takes its first button, and a shown popover its
+   `close=`;
+3. else, on a placed page (§3, Layout), a shown row or group with `close=`
+   runs it (a find strip's close);
+4. else a page `ui.push` opened pops, and focus returns to the node that
+   pushed it;
+5. else the action with `keys=("role:back",)`, or the one `ui.app(back=)`
+   names, runs;
+6. else Back leaves the app.
 
 Esc is the same key everywhere, the host's included: a board's keyboard
 sends it as `stop` (the console's back) and, on a text surface, as the byte
 27, which over a view of the app's own (a field's edit, a dialog) is that
 same back and anywhere else the surface's own byte.
 
-A second page, a dialog, a picker: lend the way back while it shows. A
-page's title is the bar's: `ui.page("Radio")` draws no head in the page
-and the bar reads "Radio" (a desk window "Moy Mesh · Radio") where
-`ui.bar` lends no title of its own.
+A second page is a page function, which a handler opens with
+`ui.push(details)` (Lua `ui.push("details")`); the bar shows the back
+chevron while it is open, and its title is the bar's (a desk window "Moy
+Mesh · Radio"). From `tests/uitree_conformance/pages/`:
 
-```lua
-page = "list"
-function _draw()
-  if ui.bar(page == "chat" and "Chat" or "", {}, {}, page == "chat") == -1 then
-    page = "list"                      -- back: the second page closes
-  end
-  ui.page("Mesh")
-  if page == "list" then
-    if ui.button("Open chat", "primary") then page = "chat" end
-  else
-    if ui.button("Who", "normal") then who = true end
-    if who then
-      who = ui.popover("who", 120)     -- back dismisses this first
-      ui.label("Nodes heard")
-      ui.popover()
-    end
-  end
-end
+```python
+def details():
+    with ui.page("Details"):
+        with ui.group("Now"):
+            ui.info("Count", "{count}")
 ```
 
 A shell app built into the console answers the same back through its
 AppHost, then its `back()` and `has_page()` (`InputPolicy.back`, one cascade
 for Esc, B and both chevrons); a running app cart's are the Player's, over
-its `ui` context. The console's own key (the T-Deck's
-Mic) opens the system menu and is never yours.
+its engine. The console's own key (the T-Deck's Mic) opens the system menu
+and is never yours.
 
-**Tabs switch themselves.** `ui.tabs` takes Q and E (the `tabs` hint's
-keys) wherever the keys do not type into a field, left and right while it
-holds focus, and a tap, and answers the new tab; an app never reads Q or
-E for it (a `keyp` in `_draw` keeps the frame from settling):
+**Tabs switch themselves.** `ui.tabs("view", "VIEWS")` over an enum takes
+the `tabs` keys (Q and E on a keyboard) wherever the keys do not type into
+a field, left and right while it holds focus, and a tap; a `ui.switch` on
+the same name is its body. The app reads no key for it.
 
-```lua
-tab = 1
-function _draw()
-  ui.page("Mesh")
-  ui.hints({"tabs", "Switch"})
-  tab = ui.tabs("Views", {"Chat", "Nodes"}, tab)
-  if tab == 1 then chat() else nodes() end
-end
-```
-
-**An empty page says what is missing.** `ui.empty(icon, title, lines)`
-draws the head of a page with nothing on it yet -- the icon on a disc, the
-title, then each line dim -- and answers the y under it; the one verb that
-fills the page follows as a button:
-
-```lua
-if #log == 0 then
-  ui.empty("bubble", "No messages yet", {"Say hello to the mesh"})
-  if ui.button("Write one", "primary") then ui.focus("msg") end
-end
-```
-
-**A chat is bubbles.** `ui.bubble(text, side, o)` is one message, a stop
-that wraps itself: `"in"` at the left with its sender (`o.head`) and the
-signal glyph (`o.signal`, 0 to 4 bars), `"out"` at the right in your
-colour, `o.tone = "failed"` as its tint; `o.status` is the line under it.
-It answers its rect and state; `ui.CUT` is set where the text ran past
-`o.lines` (4), the cue to offer the whole message on a page of its own.
-The details repeat the glyph on an info row, `ui.info("Signal", "-104
-dBm", {signal = 2})`:
-
-```lua
-for i, m in ipairs(log) do
-  local o = {id = "m" .. i}
-  if m.from then o.head, o.signal = m.name, m.bars end
-  if m.failed then o.tone, o.status = "failed", "Not sent" end
-  local x, y, w, h, st = ui.bubble(m.text, m.from and "in" or "out", o)
-  if st & 2 ~= 0 then open_details(i, st & ui.CUT ~= 0) end
-end
-```
-
-**Details hang from what they detail.** `ui.at` the rect `ui.bubble`
-answered (its height takes in the status line), then `ui.popover(id, w)`
-with the room's width less the gutters spans the chat; its buttons form one
-row at the card's foot, the primary last. `wash = "view"` washes the scroll
-region the bubble lies in, all but the bubble and its ring:
-
-```lua
-ui.scroll("history")
--- ... the bubbles before it
-local x, y, w, h = ui.bubble(m.text, "out", {tone = "failed", anchor = true})
-ui.at(x, y, w, h)
-ui.scroll()
-details = ui.popover("details", pw - 16, {wash = "view"})   -- back or a press outside: false
-ui.info("Status", "Not sent")
-if ui.button("Delete", "danger") then delete(m) end
-if ui.button("Send again", "primary") then resend(m) end
-ui.popover()
-```
-
-**A list says more on its right.** `o.values` gives each `ui.list` row a
-secondary text in the dim ink, and `o.check` marks the current row with
-the check icon:
-
-```lua
-region = ui.list("Region", {"EU_868", "US"}, region,
-                 {values = {"Europe", "United States"}, check = true})
-```
-
-**A conversation is a two-line row.** `o.subs` makes each `ui.list` row
-two lines: its item the title, its sub the caption line under it, and its
-value the time at the right of the title. `o.icons` leads each row with an
-icon, or with `"@"` and a name, that person's initials on a disc;
-`o.counts` puts the unread badge at the row's right (`""` or 0 none), and a
-row with one draws its title in your colour; `o.tags` sets a pill after
-the title and `o.marks` an icon there. `{card = true}` opens a group with
-no caption around it, a card on every console (on the desk a ring round
-its rows, where a captioned group's rows have rules alone):
-
-```lua
-ui.group("", {card = true})
-local open = ui.list("", {"LongFast", "Ana Ridge"}, -1,
-                     {subs = {"Base Camp: Gate opens at seven", "Back by noon"},
-                      values = {"2 min", "1 h"}, icons = {"bubble", "@Ana Ridge"},
-                      counts = {0, 2}, tags = {"Public", ""}, marks = {"", "lock"}})
-ui.group()
-```
-
-**A note belongs to the page.** `ui.note(icon, lines)` is a card in the
-page's flow, no stop and no dialog: the icon (`"warn"` in the danger tone)
-and the lines, the first in `ink`, the rest dim. A row's tag, `{tag =
-"Public"}` on `ui.link` or `ui.info`, is a short pill at its right:
-
-```lua
-ui.note("warn", {"Every radio on a mesh uses one preset.",
-                 "On another one you hear none of them."})
-if ui.link("LongFast", "", {tag = "Public"}) then open_channel() end
-```
-
-**A field is a row's value.** In a group, `ui.field(label, text, max)` sits
-at the row's right as wide as its text, cut at `max` bytes; a text wider
-than it shows its tail after an ellipsis. `{disabled = true}` draws it off
-and takes no focus. The console's Paste (the desk's Ctrl+V) puts its
-clipboard into the focused field, as many whole characters as `max` leaves
-room for: the app reads no clipboard and needs no `clipboard` permission
-for it, on every tier. A confirm opens on the button `o.focus` names:
-
-```lua
-ui.group("This node")
-name = ui.field("Name", name, 39)
-short = ui.field("Short name", short, 4)
-ui.group()
-ui.field("", "", 200, {hint = "Replaced by Srbija", disabled = true})
-if ui.dialog("Switch to ShortFast?", {"Cancel", "Switch"}, "primary",
-             {focus = "Cancel"}) == 2 then switch() end
-ui.dialog()
-```
-
-**A settings page shows whole rows.** `{snap = true}` on `ui.page` or
-`ui.scroll` leaves out a row the view's edge would cut (a group's caption
-goes with its first row, a list's label with its first row, a list's rows
-are each a row), and the band the foot leaves says "More below". A drag let
-go, a fling or the wheel spent, and a focus step all rest the view with a
-row flush at its top:
-
-```lua
-ui.scroll("radio", {snap = true})
-ui.group("This node")
-ui.info("Name", name)
-ui.group("Channels")
-ch = ui.list("", channels, ch, {values = kinds})
-ui.group()
-ui.scroll()
-```
-
-**A chat's history rests on its foot.** `{follow = true}` on a snapping
-region opens it at its foot and keeps it there as messages arrive, until
-the person scrolls up; the gap its top leaves says "Older messages" while
-older ones lie above:
-
-```lua
-ui.scroll("chat", {snap = true, follow = true})
-for _, m in ipairs(history) do
-  ui.bubble(m.text, m.side, {head = m.from, status = m.status})
-end
-ui.scroll()
-```
-
-**A finger's rows come by themselves.** On a board whose tap floor stands
-(the Guition S3's 3.5-inch glass), a `ui.list` row and an info, link,
-toggle, slider, cycle, seg, swatch or tabs row are 36 px tall and a bubble takes larger
-pads and faces; the app's code is the same on every
-board (`docs/ui_api_2026-10.md`, the tap floor).
-
-**Hints name actions, not keys.** `ui.hints(("confirm", "Open", "menu",
-"Menu"))` names actions (`confirm`, `back`, `change`, `tabs`, `menu`,
-`cancel`, `flip`, `rotate`, `shift`, `clear`, `copy`, `more`, `search`,
-`move`, `scroll`) and the engine shows each input's own keys
-(`native/moy_ui/moy_ui_parts.c`, `ACT_KEYS`). The T-Deck has Enter, K, WASD
+**Hints name actions, not keys.** The band under the page names the focused
+stop's action and the page's shortcuts, and the engine shows each input's
+own keys for them (`native/moy_ui/moy_ui_parts.c`, `ACT_KEYS`); an action's
+`hint=` gives its words, `""` keeps it out. The T-Deck has Enter, K, WASD
 and the trackball, Q E, Mic, F V, R, Del, M and Sym G, and no arrows, Tab,
 Esc, Ctrl or brackets: a hint or a shortcut naming those does not exist
 there.
 
-**Reading input yourself.** Beside the ui, an app reads the cart API's
+**A finger's rows come by themselves.** On a board whose tap floor stands
+(the Guition S3's 3.5-inch glass), a list row and an info, link, toggle,
+slider, seg or tabs row are 36 px tall and a bubble takes larger pads and
+faces; the app's code is the same on every board (`docs/ui_api_2026-10.md`,
+the tap floor).
+
+**Paste is the console's.** The console's Paste (the desk's Ctrl+V) puts its
+clipboard into the focused field, as many whole characters as its `max`
+leaves room for: the app reads no clipboard and needs no `clipboard`
+permission for it, on every tier.
+
+**Reading input yourself.** A game, and a canvas's draw, read the cart API's
 `btn`, `btnp`, `key`, `keyp` and `touch` (`docs/moy_cart_api.md`, Input),
-`textmode(True)` for typing, and `ui.keys_taken()` to skip a frame's keys
-the ui used. A Python process reads raw input records, timestamped, with
-`moybyte.on("keys" | "touch" | "pad", fn)` and `moybyte.events(into)`.
+`textmode(True)` for typing. A Python process reads raw input records,
+timestamped, with `moybyte.on("keys" | "touch" | "pad", fn)` and
+`moybyte.events(into)`.
 
 ## 5. Storage, files and other apps
 
@@ -1201,8 +1503,8 @@ and `moy_progress`.
 | C (ELF) | — | yes | yes | U-mode and PMP on the P4s; nothing on the S3s |
 
 The calls a program reaches on more than one tier, each by its name there
-(`docs/os_2026-11/tiers.md` §1; the `ui` rows are
-`docs/ui_api_2026-10.md`'s, every app's with no permission):
+(`docs/os_2026-11/tiers.md` §1; the UI tree's rows and the immediate `ui`
+rows are §3's, every app's with no permission):
 
 <!-- GENERATED by tools/gen_os_table.py from native/os_calls.json. Do not edit. -->
 | call | permission | Python | Lua | wasm (`moybyte.app`; a WASI program's `moybyte.os`) | C (ELF) |
@@ -1374,9 +1676,11 @@ when the app is removed.
 as an `i32`, text or a blob is written into the caller's buffer and answers
 its length, and a negative answer is `moy_app.h`'s code negated. The theme's
 reads are every app's; an import from a role its permissions do not name is
-refused at load, the import named. The `ui` rows are every compiled app's
-(`native/moy_ui/moy_ui_wasm.h`), the same C a Python and a Lua app draw
-with; `tests/fixtures/wasm/app_ui.moy` imports every row. The console calls
+refused at load, the import named. Its page is the UI tree's `uitree_*`
+rows (`native/moy_uitree/moy_uitree_wasm.h`; `sdk/include/moybyte/uitree.h`
+is its header, §3), the engine a Python and a Lua app draw with, every
+compiled app's; the immediate API's `ui_*` rows (`native/moy_ui/moy_ui_wasm.h`)
+are too, and `tests/fixtures/wasm/app_ui.moy` imports every one. The console calls
 (`moybyte_notify`, `open_with`, `share`, `pick`, `send`, `award`,
 `progress`, `on`, `at`, `every`, `after`, `cancel`, `log`) are every
 compiled app's to import, each
@@ -1429,8 +1733,8 @@ it back, and the process's end closes what it left open. A ring's records
 are read through the handle on every tier, never posted as messages: a
 pin's edges (`dev_set(h, "edges=both")`, then 8 bytes an edge from
 `dev_read`), a packet the radio heard, the microphone's samples, the BLE
-face's events. A program polls its handles where it polls its messages, in
-`_update` or on a timer. The radio also says when it has something: the
+face's events. A program polls its handles where it polls its messages: on
+a timer (`moybyte.every`), or in a compiled app's `_update`. The radio also says when it has something: the
 holder of a `lora` handle that listens on `"lora"` (`moybyte.on("lora",
 fn)`, a compiled program's `moy_on`) is posted the system's message
 `"lora"` with the event (1 a packet heard, 2 one sent, then LoRaWAN's
@@ -1632,10 +1936,11 @@ item `moy_status_show` to `moy_status_remove` (above).
 
 ## 11. Lifecycle
 
-`_init()` once, then `_update(dt)` and `_draw()` (a game's three, in
-`docs/moy_cart_api.md`), `_layout(w, h, fs)` for a responsive app on any
-tier (§3), and
-`quit()` to leave. Several apps run at once: an app the user minimises keeps
+A UI tree app (§3) declares at its top level, its `opened` hook runs as it
+opens, and the engine runs its frames. A game, and an app on the immediate
+API, has `_init()` once, then `_update(dt)` and `_draw()` (a game's three, in
+`docs/moy_cart_api.md`) and `_layout(w, h, fs)` where it is responsive
+(§3). `quit()` leaves. Several apps run at once: an app the user minimises keeps
 its `_update` every frame with no `_draw` (a player, a download), hearing
 `_minimise()` going in and `_restore()` coming out; a minimised game is
 paused (`docs/os_2026-11/processes.md` §1). Closing the app ends its
@@ -1723,8 +2028,8 @@ class MyAppLayer(AppLayer):      # from layers import AppLayer
 
 That is the whole list: the console registers it from the declaration
 (`ws.spine.register_app`), and the launcher's claim, the router, the back-stack,
-the window and its chip, the resize floor (`min_size`, or the layout's
-`MIN_W`/`MIN_H`), text mode (what its page has focused) and the exitable
+the window and its chip, the resize floor (`min_size`, else `ui.app(min=)`,
+else the layout's `MIN_W`/`MIN_H`), text mode (what its page has focused) and the exitable
 bar all follow; a new `runtime/`
 module reaches every board unless a `board.toml` denies it (#161). The shell's
 own two, Settings and the task manager, register through the same call with
@@ -1779,7 +2084,8 @@ A user app's globals (§6) are a filter over the same contexts
 No role hands out the console: `tests/test_app_context.py` fails an app
 module that names the Workstation.
 
-**What it draws with.** The same `ui` verbs (§3) into the frame its host,
+**What it draws with.** Its UI tree page (§3; `uitree_app.app_layer`, as
+Calc's above), or the immediate `ui` verbs, into the frame its host,
 `ctx.ui` (`ui_host.AppHost`), begins, with `UI = True`; its handlers hand
 the host the input (`keys`, `point`). The engine under them,
 `runtime/toolkit/ui_draw.py`, is the chrome's; a shipped app not yet moved

@@ -512,6 +512,50 @@ WIFI_RING_IN_VIEW = ("the old popover drew its menu with no page, so focus on it
 THUMB_UNDER_GEN = ("the old page's scroll ran under a gen and drew no thumb; every scrolled view "
                    "draws its thumb now, gen or not, its track redrawn on a shift frame")
 
+PAGE_THUMB = ("the old flowing page drew no thumb where its rows ran past its room; the page "
+              "draws its scrollbar's thumb there now, as a scroll region does (#1)")
+
+# The steps of a run that a page's thumb moves (PAGE_THUMB), by run.
+PAGE_THUMB_STEPS = {
+    "settings_log-tdeck": (6,),
+    "settings_paired-desk": range(3),
+    "settings_paired-tdeck": (7,),
+    "settings_paired_none-big": (2,),
+    "settings_permissions-desk": range(11),
+    "settings_permissions-tdeck": range(14),
+    "settings_permissions_seed-p4": range(4),
+    "settings_permissions_seed-tdeck": range(4),
+    "settings_rows-desk": range(20),
+    "settings_rows-p4": range(7),
+    "settings_rows-tdeck": (*range(24), 26, 27, 28, 29, 30, 31, 34, 35, 36),
+    "settings_rows_full-desk": range(23),
+    "settings_rows_full-tdeck": range(28),
+    "settings_rows_layout-tdeck": range(7),
+    "settings_rows_swipe-tdeck": range(6),
+    "settings_tz-desk": range(8),
+    "settings_tz-p4": range(5),
+    "settings_tz-tdeck": range(10),
+    "settings_wifi-desk": (*range(5), *range(7, 14)),
+    "settings_wifi-p4": (0, 2, 3, 4),
+    "settings_wifi-tdeck": (0, 2, 3, 4, 7, 8, 13, 14, 21),
+    "update_c6-desk": (0, 1),
+    "update_online-big": (2,),
+    "update_online-tdeck": (3,),
+    "update_sd-desk": range(4),
+    "update_sd-tdeck": (3,),
+    "update_sd_none-tdeck": (1,),
+}
+
+
+def moved_of(run):
+    """A run's moved steps, {step: cause}, the page's thumb's among them, or
+    BEHAVIOUR; None where none moved."""
+    moved = run[4] if len(run) > 4 else None
+    thumb = PAGE_THUMB_STEPS.get(run[0], ())
+    if moved == P.BEHAVIOUR or not thumb:
+        return moved
+    return {**dict.fromkeys(thumb, PAGE_THUMB), **(moved or {})}
+
 # (record name, surface, golden configuration, script[, {step: cause}])
 RUNS = (
     ("settings_permissions-tdeck", "settings_permissions", "tdeck_320x240_fs1_dark",
@@ -656,7 +700,7 @@ def test_a_ported_surface_draws_its_old_frames(run, tmp_path):
     body = P.load(name)
     assert (body["surface"], body["config"], body["script"]) == (surface, config, script), (
         "the run moved from its record: re-record it with its cause")
-    P.check_recorded(name, SURFACES[surface], tmp_path / "carts", run[4] if len(run) > 4 else None)
+    P.check_recorded(name, SURFACES[surface], tmp_path / "carts", moved_of(run))
 
 
 # The runs whose surfaces run on the C engine (native/moy_uitree), each held
@@ -700,6 +744,6 @@ def test_a_ported_surface_draws_its_old_frames_on_the_c_engine(name, tmp_path, m
         lowered.append(root.kind)
         return lower(self, root)
     monkeypatch.setattr(uitree_c.CEngine, "lower", counted)
-    P.check_recorded(name, SURFACES[run[1]], tmp_path / "carts", run[4] if len(run) > 4 else None)
+    P.check_recorded(name, SURFACES[run[1]], tmp_path / "carts", moved_of(run))
     assert not gaps, gaps
     assert lowered, "no page of the run was built on the C engine"
