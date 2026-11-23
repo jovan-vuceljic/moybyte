@@ -261,9 +261,9 @@ def test_a_clean_switch_paints_once_and_a_commit_paints_again(desk):
     away from a clean tab paints the destination once; a tab that wrote
     paints once more, since a commit may move what the Editor shows. (A
     tab's page's first frame owes the next, which places its focus: each
-    tab is shown once before.)"""
+    tab is shown once before, as is the pane beside each, a page of its own.)"""
     ws, drv = desk
-    for tab in ("paint", "cards"):
+    for tab in ("code", "paint", "cards"):
         ws.editor_app.set_tab(tab)
         _painted(ws, drv)
     ws.editor_app.set_tab("code")
@@ -382,12 +382,21 @@ def test_a_grown_pane_takes_the_workspace_and_esc_gives_it_back(desk):
     assert d.grown is None
 
 
+def _sheet_page(d, part):
+    """The first sheet page pane `part`'s canvas drew, in the desk's
+    coordinates."""
+    host = d.part(part)
+    x, y = host._cv_xy
+    g = host._sheet_at
+    return (x + g[0], y + g[1], g[2], g[3])
+
+
 def test_a_sheet_pick_sets_the_sprite_and_the_brush_and_a_slide_previews(desk):
     ws, drv = desk
     d = ws.editor_desk
     _tap(drv, ord("3"), 1)
     drv.frame(DT)
-    (pg, (x, y, w, h)), _second = d._sheet_rects
+    x, y, w, h = _sheet_page(d, "sheet")
     tw = w // 16
     drv.touch(x + 3 * tw + 1, y + 1)
     drv.frame(DT)
@@ -728,12 +737,63 @@ def test_the_actor_pane_flips_and_removes_the_picked_actor(desk):
     n = len(se.rows)
     ws.mark_dirty()
     drv.frame(DT)
-    box = d._host.box("actor flip")
+    part = d.part("actor")
+    box = part.rect_of("flip")
     _click(drv, box[0] + box[2] - 8, box[1] + box[3] // 2)
     assert bool(se.rows[0].get("flip")) != flip
-    box = d._host.box("actor remove")
+    box = part.rect_of("remove")
     _click(drv, box[0] + box[2] // 2, box[1] + box[3] // 2)
     assert len(se.rows) == n - 1
+
+
+def _arrow(drv, k, n=1):
+    for _ in range(n):
+        drv.press(k)
+        drv.frame(DT)
+        drv.frame(DT)
+
+
+def test_the_actor_pane_by_keys_alone(desk):
+    """The arrows walk the Actor pane's stops from its tag field down to
+    Remove, whose A removes the picked actor."""
+    ws, drv = desk
+    d = ws.editor_desk
+    _tap(drv, ord("4"), 1)                       # World
+    se = ws.scene_ui.sceneedit
+    se.sel = 0
+    n = len(se.rows)
+    d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("actor"))
+    ws.mark_dirty()
+    drv.frame(DT)
+    pg = d.part("actor").page
+    assert pg._focus_key() == "tag"
+    for _ in range(8):
+        if pg._focus_key() == "remove":
+            break
+        _arrow(drv, "down")
+    for _ in range(4):
+        if pg._focus_key() == "remove":
+            break
+        _arrow(drv, "right")
+    assert pg._focus_key() == "remove"
+    _arrow(drv, "a")
+    assert len(se.rows) == n - 1
+
+
+def test_the_sheet_by_keys_alone(desk):
+    """The Sheet's arrows pick the next sprite, a row's step down the
+    next row's; the Sprite pane and the map's brush follow."""
+    ws, drv = desk
+    d = ws.editor_desk
+    _tap(drv, ord("3"), 1)                       # Art
+    d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("sheet"))
+    ws.mark_dirty()
+    drv.frame(DT)
+    n = ws.paint.n
+    _arrow(drv, "right")
+    assert ws.paint.n == n + 1
+    _arrow(drv, "down")
+    assert ws.paint.n == n + 17 and ws.map_ui.mapedit.n == n + 17
 
 
 def test_the_sounds_list_picks_a_sound_and_the_song(desk):
@@ -762,7 +822,7 @@ def test_a_stamp_pick_sets_the_scenes_brush(desk):
     d._tabs[pane] = 1
     ws.mark_dirty()
     drv.frame(DT)
-    (_pg, (x, y, w, h)) = d._sheet_rects[0]
+    x, y, w, h = _sheet_page(d, "stamps")
     tw = w // 16
     _click(drv, x + 6 * tw + 1, y + 1)
     assert ws.scene_ui.sceneedit.n == 6
@@ -791,14 +851,14 @@ def test_a_reference_pick_inserts_its_call_at_the_caret(desk):
     _tap(drv, ord("2"), 1)                       # Code: the Reference's Sprites
     ws.mark_dirty()
     drv.frame(DT)
-    (_pg, (x, y, w, h)) = d._sheet_rects[0]
+    x, y, w, h = _sheet_page(d, "sprites")
     tw = w // 16
     _click(drv, x + 6 * tw + 1, y + 1)
     assert d._cur_sprite() == 6
     ws.editor.row, ws.editor.col = 0, 0
     ws.mark_dirty()
     drv.frame(DT)
-    bx, by, bw, bh = d._host.box("insert call")
+    bx, by, bw, bh = d.part("sprites").rect_of("insert")
     _click(drv, bx + bw // 2, by + bh // 2)
     assert ws.editor.text().startswith("spr(6, x, y)")
 
@@ -1023,23 +1083,24 @@ def test_a_blocks_carts_code_workspace_shows_the_palette_and_the_made_code(block
 
 
 def test_the_made_code_is_a_text_view_the_wheel_scrolls(blocks_desk):
-    """The made code draws through `ui.text_view` on the desk's verbs: its
-    rows answer a hit test, and the wheel over it scrolls it by pixels."""
+    """The made code is its page's `ui.text_view`: its rows answer a hit
+    test, and the wheel over it scrolls it by pixels."""
     from runtime import ui_draw, editor_parts as Parts
     ws, drv = blocks_desk
     d = ws.editor_desk
     lines = len(Parts.made_lines(ws.block_ui.blocks_ed))
     pane, r = next((p, r) for p, r, _p in d.panes() if p == ("made",))
     x, y, w, h = d._body(r, d._unit(), pane)
-    px, py = x + 60, y + 20
-    first = ui_draw.text_at(d._host, "made", px, py)
+    px, py = x + 60, y + 6
+    host = d.part("made")._host
+    first = ui_draw.text_at(host, "made", px, py)
     assert first is not None and first[0] == 0
     ox, oy = d._origin()
     drv.hover(ox + px, oy + py)
     drv.wheel(0, 3)
     for _ in range(20):
         drv.frame(DT)
-    got = ui_draw.text_at(d._host, "made", px, py)
+    got = ui_draw.text_at(host, "made", px, py)
     assert lines > h // ws.code_layout.lh, "the made code fits its pane: nothing to scroll"
     assert got[0] > 0, "the wheel did not scroll the made code"
 
@@ -1495,7 +1556,7 @@ def test_a_press_held_on_the_sheet_shows_its_tile_in_a_3x_loupe(desk):
     d = ws.editor_desk
     _tap(drv, ord("3"), 1)                       # Art: the Sheet under the Map
     drv.frame(DT)
-    (_pg, (x, y, w, h)) = d._sheet_rects[0]
+    x, y, w, h = _sheet_page(d, "sheet")
     tw = w // 16
     drv.touch(x + 3 * tw + 2, y + 2)
     drv.frame(DT)

@@ -6,7 +6,7 @@
 #   EditorDesk.draw         ground, cards, each pane's content, headers, dividers
 #   EditorDesk._tab_pane    an Editor tab drawn in a pane through a viewport
 #   EditorDesk._game        the Run slot: the game's frame at a whole scale
-#   EditorDesk._sheet       the Sheet: two pages at 2x, a pick sets the sprite and brush
+#   EditorDesk.part         a pane of the desk's own as a page (editor_parts.PartHost)
 #   EditorDesk.handle_input  the workspace chords, then the focused pane's keys
 #   EditorDesk.handle_pointer  the row, the dividers, a pane's header and its content
 """The Editor on the desk (docs/media/look_2026-10/EDITOR_LAYOUT.md, concept
@@ -23,7 +23,8 @@ wears the `value` edge along its top. An Editor tab in a pane (Settings,
 Code, Blocks, Sprite, Map, Scene, Sound) is that tab's own surface laid
 out at the pane's size with no bar, drawn through a viewport on the
 window's canvas, and its taps translated into it; the panes the desk adds
-(the Run slot, the Sheet) are drawn here. Moving focus never commits; a
+are the Run slot, drawn here, and pages of their own (the Actor, the Sheet,
+the Stamps, the Reference's Sprites and the made code: editor_part.py). Moving focus never commits; a
 workspace switch commits the panes it leaves that are dirty, through
 `EditorApp.commit_later`, as a tab switch does.
 
@@ -161,11 +162,11 @@ class EditorDesk(Layer):
         self._loupe = None              # (tile, x, y): a press held on the Sheet
         self._still = None
         self._cursors = []
-        self.part_state = {}            # the verbs parts' kept state (a typed tag)
+        self.part_state = {}            # the verbs parts' kept state
+        self._parts = {}                # content -> its page's host (`Parts.PAGES`)
         self._mid = None                # the middle button's last place, while held
         self._scale = 0                 # the Run slot's scale, last drawn
         self._still_at = None           # where the game stands on the surface
-        self._ref = False               # the sheet drawn is the Reference's
         self._picked = 0                # the sprite picked with no Sprite pane built
         self._was_playing = False
         self.paused = False             # the Run slot's pause: the run held, its still shown
@@ -260,14 +261,13 @@ class EditorDesk(Layer):
         return [k for k, _l, _i in self.ws.editor_app.workspaces()]
 
     def _page(self, key=None):
-        """Workspace `key`'s page (editor_ui.SPACES): its panes, each body a
-        legacy node this desk draws (`pane_body`)."""
+        """Workspace `key`'s page (editor_ui.SPACES): its panes, whose
+        bodies this desk draws (`pane_body`)."""
         key = key or self.key
         page = self._pages.get(key)
         if page is None:
             import editor_ui
             import uitree_editor
-            editor_ui._desk[0] = self
             page = uitree_editor.page(editor_ui.SPACES[key], self._host, _Damage(self.ws))
             self._pages[key] = page
         return page
@@ -719,6 +719,14 @@ class EditorDesk(Layer):
         ws = self.ws
         return ws.music_ui.sound if tab == "music" else ws.layer_of(tab)
 
+    def part(self, c):
+        """The host of pane content `c`'s own page (`Parts.PAGES`), made at
+        its first use."""
+        got = self._parts.get(c)
+        if got is None:
+            got = self._parts[c] = Parts.PartHost(self, c)
+        return got
+
     def _tab_pane(self, tab, r, dt, own=False, moves=False):
         layer = self._surface(tab)
         if layer is None:
@@ -1026,11 +1034,9 @@ class EditorDesk(Layer):
         shown = self._shown_panes()
         self._cursors = []
         self._still_at = None
-        # each pane's card and body, through its page's legacy nodes
-        self._drawing = shown
-        import editor_ui
-        editor_ui._desk[0] = self
-        self._page().draw_hosted(cv, th, dt)
+        for n, pane, r in shown:
+            self.pane_body(n, pane, r, dt)
+            cv.clip()
         self._frame(cv, th, shown, u)
         if self._loupe is not None and not ws.pointer.down:
             self._loupe = None
@@ -1039,22 +1045,13 @@ class EditorDesk(Layer):
         ws.bar_layer.draw_status_strip("menu")
         self._dock()
 
-    def pane_body(self, dt):
-        """The body of the pane whose legacy node the page is hosting
-        (`editor_ui.pane_body`): its card, then its tab's surface, the Run
-        slot or the Map's parts."""
+    def pane_body(self, n, pane, r, dt):
+        """Pane `n`'s body in its rect `r`: its card, then its tab's
+        surface, the Run slot or the Map's parts."""
         ws = self.ws
         cv = ws.sys_canvas
         th = ws.theme_colors
         u = self._unit()
-        page = self._page()
-        n = page.desk_keys.index(page.hosting.parent.key)
-        r = pane = None
-        for m, p, rr in self._drawing:
-            if m == n:
-                pane, r = p, rr
-        if pane is None:
-            return
         c = self.tab_of(pane)
         body = self._body(r, u, pane)
         tab = P.CONTENTS[c][2]
@@ -1064,6 +1061,8 @@ class EditorDesk(Layer):
             self._tab_pane(tab, body, dt, moves=pane == self._moves)
         elif c == "game":
             self._game(cv, th, body, u)
+        elif c in Parts.PAGES:
+            self.part(c).draw(body, dt)
         elif c == "maps":
             Parts.drawn_before(self, c, cv, th, body, u)
 
@@ -1176,7 +1175,6 @@ class EditorDesk(Layer):
         host = self._host
         host.begin(cv, th, (0, 0, cv.w, cv.h), True, True,
                    elsewhere=not self._part_focused())
-        self._loupe = None              # a Sheet's part held says where (`_sheet`)
         if self.alone() is None:
             self._draw_splits(u)
         else:
@@ -1261,14 +1259,6 @@ class EditorDesk(Layer):
                 self._still_tool(pid, u)
             if c in Parts.PARTS:
                 Parts.draw(self, c, self._body(r, u, pane), u)
-            elif c in ("sheet", "sprites", "stamps"):
-                body = self._body(r, u, pane)
-                self._ref = c == "sprites"
-                self._sheet(cv, th, body, u, pid, c == "stamps")
-                if c == "stamps":
-                    Parts.stamps_label(self, body, u)
-                elif c == "sprites":
-                    self._pick_line(body, u)
         for r in self._cursors:
             ui.cursor(*r)
         if self.part_state.get("code more") is not None:
@@ -1577,86 +1567,6 @@ class EditorDesk(Layer):
         self._still = None if live else (gx, gy, gw, gh)
         self._still_at = (gx, gy, gw, gh)
 
-    def _sheet(self, cv, th, r, u, pid, stamps=False):
-        """The Sheet: two pages of the sprite sheet at 2x side by side (a page
-        16 x 8 tiles), captioned; the current sprite ringed. The pages are
-        one part (`ui.part`, in no page, so its press stays its own through a
-        drag): a press or a held slide on a tile picks it, its loupe over the
-        finger (`ui.part_at`)."""
-        ws = self.ws
-        sh = ws.sheet
-        if sh is None:
-            return
-        x, y, w, h = r
-        cols, prow = 16, 8
-        pages = max(1, sh.rows // prow)
-        s = 2 * u
-        tw = 8 * s
-        pw = cols * tw
-        ph = prow * tw
-        cap = 20 * u
-        n = max(1, min(2, (w - cap) // (pw + cap)))
-        if stamps or self._ref:
-            h -= 40 * u                     # the foot's line
-        first = min(self._sheet_page, max(0, pages - n))
-        top = y + max(0, (h - ph) // 2)
-        # the part: the pages and the gaps between them, where the pane
-        # shows them
-        x0 = x + cap
-        sw = max(0, min(n * pw + (n - 1) * cap, x + w - x0))
-        sh_ = max(0, min(ph, y + h - top))
-        ui.at(x0, top, sw, sh_)
-        bx, by, bw, bh, st = ui.part(pid + " sheet", sw, sh_)
-        loupe = None
-        if bw > 0 and st & (ui.PRESSED | ui.ACTIVATED):
-            at = ui.part_at()
-            if at is not None:
-                k = at[0] // (pw + cap)
-                ax = at[0] - k * (pw + cap)
-                if 0 <= k < n and 0 <= ax < pw and 0 <= at[1] < ph:
-                    t = ((first + k) * prow + at[1] // tw) * cols + ax // tw
-                    self._pick_tile(t, stamps)
-                    if st & ui.PRESSED:
-                        loupe = (t, bx + at[0], by + at[1])
-        if loupe is not None:
-            self._loupe = loupe
-        cur = self._cur_sprite()
-        if stamps:
-            se = ws.scene_ui.sceneedit
-            cur = se.n if se is not None else -1
-        cv.clip(x, y, w, h)
-        px = x0
-        for k in range(1, n):
-            cv.rect(x0 + k * pw + (k - 1) * cap, top, cap, sh_, th["surface"])  # a gap
-        self._sheet_rects = []          # where the pages drew: (page, rect)
-        for k in range(n):
-            pg = first + k
-            cv.print(str(pg + 1), px - cap + 6 * u, top, th["ink_dim"], 1)
-            cv.rect(px, top, pw, ph, th["surface_alt"])
-            cv.sspr(sh, 0, pg * prow * 8, cols * 8, prow * 8, px, top, pw, ph, 0)
-            t = cur - pg * prow * cols
-            if 0 <= t < prow * cols:
-                self._cursors.append((px + (t % cols) * tw, top + (t // cols) * tw, tw, tw))
-            self._sheet_rects.append((pg, (px, top, pw, ph)))
-            px += pw + cap
-        cv.clip()
-
-    def _pick_tile(self, t, stamps):
-        """Tile `t` pressed on the Sheet: the Stamps pane's brush, else the
-        sprite picked (`_pick`); the panes drawn before it this frame show
-        it on the next, which the pick asks for."""
-        ws = self.ws
-        if stamps:
-            se = ws.scene_ui.sceneedit
-            if se is None or se.n == t:
-                return
-            se.set_brush(t)
-        elif self._cur_sprite() == t:
-            return
-        else:
-            self._pick(t)
-        ws.request_frame()
-
     def _draw_loupe(self, cv, th, u):
         """The Sheet's loupe (EDITOR_LAYOUT.md): the tile under a held press
         at 3x its 16 px, on a card over the finger, inside the surface."""
@@ -1682,21 +1592,6 @@ class EditorDesk(Layer):
         else the last picked."""
         ws = self.ws
         return ws.paint.n if ws.paint is not None else self._picked
-
-    def _pick_line(self, r, u):
-        """The Reference's Sprites foot: the call a pick puts at the Code
-        pane's caret, and Insert."""
-        ws = self.ws
-        x, y, w, h = r
-        call = "spr(%d, x, y)" % self._cur_sprite()
-        row = 30 * u
-        ui.at(x + 10 * u, y + h - row - 4 * u, w - 110 * u, row)
-        ui.label(call, {"tone": "dim"})
-        ui.at(x + w - 96 * u, y + h - row - 4 * u, 88 * u, row)
-        if ui.button("Insert", "normal", {"id": "insert call"}) and ws.editor is not None:
-            ws.history.code_burst_open()
-            ws.editor.insert_text(call)
-            ws.mark_dirty()
 
     def _pick(self, t):
         """A sprite picked on the Sheet: the Sprite pane's and the map's
@@ -1770,15 +1665,16 @@ class EditorDesk(Layer):
                 if i.last_key or self._fresh or i.any_pressed():
                     self._owe_restart(tab)     # only a key edits: the check reads the doc
                 return got
-        if c in ("sheet", "sprites"):
-            return self._sheet_keys(i)
+        if c in Parts.PAGES:
+            self.part(c)._page().keys(i)
+            if c == "actor":
+                self._owe_restart("scene")
+            return True
         if c in Parts.PARTS:
             if Parts.keys(self, c, i):
                 i.spend_edges()
             elif self._host.keys(i):
                 ws.mark_dirty()
-            if c == "actor":
-                self._owe_restart("scene")
             return True
         return False
 
@@ -1832,14 +1728,15 @@ class EditorDesk(Layer):
             return False
         tab = P.CONTENTS[self.tab_of(hit[0])][2]
         if tab not in ("map", "scene"):
-            if tab is None and self.tab_of(hit[0]) in ("sheet", "sprites") and wy:
+            if tab is None and self.tab_of(hit[0]) in ("sheet", "sprites", "stamps") and wy:
                 self._sheet_page = max(0, min(3, self._sheet_page + (1 if wy > 0 else -1)))
                 ws.mark_dirty()
                 return True
             if tab is None and wy and self.tab_of(hit[0]) == "made":
                 # the made code's text view takes the wheel where it rests
-                self._host.point(px, py, False)
-                if self._host.wheel(0, wy):
+                host = self.part("made")._host
+                host.point(px, py, False)
+                if host.wheel(0, wy):
                     ws.mark_dirty()
                 return True
             if tab is None and wy:
@@ -1904,21 +1801,6 @@ class EditorDesk(Layer):
         """The console's back over the desk Editor (`InputPolicy.step`):
         a grown pane goes back."""
         return self.escape()
-
-    def _sheet_keys(self, i):
-        ws = self.ws
-        if ws.sheet is None:
-            return False
-        dx = i.steps("right") - i.steps("left")
-        dy = i.steps("down") - i.steps("up")
-        if not (dx or dy):
-            return False
-        n = max(0, min(ws.sheet.cols * ws.sheet.rows - 1, self._cur_sprite() + dx + dy * 16))
-        self._pick(n)
-        self._sheet_page = min(self._sheet_page, n // 128)
-        if n // 128 > self._sheet_page + 1:
-            self._sheet_page = n // 128 - 1
-        return True
 
     def _chord(self, code, mods):
         """The workspace keys (EDITOR_LAYOUT.md's input table): True where
@@ -2090,20 +1972,16 @@ class EditorDesk(Layer):
             if click and (self.paused or not ws.editor_app.playing()):
                 self._play_slot()
             return True
-        if c in ("sprites", "stamps") and py >= body[1] + body[3] - 40 * u:
-            if host.point(px, py, click, down):     # the foot's line (Insert)
-                ws.mark_dirty()
-            return True
-        if c in ("sheet", "sprites", "stamps"):
-            if host.point(px, py, click, down):     # the Sheet's part (`_sheet`)
-                ws.mark_dirty()
+        if c in Parts.PAGES:
+            self.part(c).handle_pointer(px, py, click)
+            ws.mark_dirty()
+            if c == "actor":
+                self._owe_restart("scene")
             return True
         if c in Parts.PARTS:
             if Parts.pointer(self, c, body, u, px, py, click, down) \
                     or host.point(px, py, click, down):
                 ws.mark_dirty()
-            if c == "actor":
-                self._owe_restart("scene")
             return True
         return True
 

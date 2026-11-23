@@ -12,8 +12,8 @@ this row shows into the state (`head_sync`) and does what each action
 asks (`_activate_zone_tab`, `theme_tab`, `close_theme`).
 
 On the desk each workspace is a page of its own (`SPACES`): its panes
-(`ui.panes`), each pane's body a `ui.legacy` node the desk draws
-(`EditorDesk.pane_body`). Its shape and starting sizes follow the area and
+(`ui.panes`), which the desk places and whose bodies it draws, each its
+content's own page (`EditorDesk.pane_body`). Its shape and starting sizes follow the area and
 the cart through state its host writes (`EditorDesk._sync`): `big` (the
 1024 arrangement, a Run slot over a context pane; else one tabbed pane at
 the right), the start sizes in desk units (`col_w`, `run_h`, `art_w`,
@@ -151,9 +151,6 @@ def head():
 
 # -- the desk's workspaces --------------------------------------------------
 
-# The desk (an EditorDesk), set by it once: it draws each pane's body.
-_desk = [None]
-
 # The condition each content shows under: the cart offers its Editor tab
 # (or the tab it serves), the Game while no window of its own holds it.
 _WHEN = {"cards": "has_cards", "code": "has_code", "blocks": "has_blocks",
@@ -163,28 +160,20 @@ _WHEN = {"cards": "has_cards", "code": "has_code", "blocks": "has_blocks",
          "song": "has_music", "game": "game"}
 
 
-def pane_body(cv, th, x, y, w, h, focused, dt):
-    """A pane's body (its legacy node's draw): the desk draws the content
-    of the pane the node being hosted is in."""
-    _desk[0].pane_body(dt)
-
-
 def _one(c, also=None, **p):
     """A pane of one content, keyed by it, shown where its content is and
     `also` holds."""
     label, icon, _tab, least = CONTENTS[c]
     when = " && ".join(w for w in (_WHEN.get(c), also) if w) or None
-    with ui.pane(c, title=label, icon=icon, min=least, shown=when, **p):
-        ui.legacy("body", draw=pane_body)
+    ui.pane(c, title=label, icon=icon, min=least, shown=when, **p)
 
 
 def _tabbed(key, tabs, **p):
     """A pane of several contents, its tabs `tabs`' values."""
     vals = TAB_SETS[tabs]
     off = dict((c, _WHEN[c]) for c in vals if c in _WHEN)
-    with ui.pane(key, tabs=tabs, labels="PANES", offered=off or None,
-                 min=dict((c, CONTENTS[c][3]) for c in vals), **p):
-        ui.legacy("body", draw=pane_body)
+    ui.pane(key, tabs=tabs, labels="PANES", offered=off or None,
+            min=dict((c, CONTENTS[c][3]) for c in vals), **p)
 
 
 def settings_space():

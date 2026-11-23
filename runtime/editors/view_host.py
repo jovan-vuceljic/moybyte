@@ -93,6 +93,10 @@ class ViewLayout(LayoutBase):
         self.lines = max(0, min(3, (room - self.brushes_h * u) // row))
 
 
+# The ring a canvas draws round what it picked (the brushes', the desk Sheet's).
+cursor = _ui_draw.cursor
+
+
 class _Damage:
     def __init__(self, ws):
         self.ws = ws

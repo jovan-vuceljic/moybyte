@@ -1,7 +1,7 @@
 # Map (grep -n a name to jump there):
+#   PAGES           the panes that are a page of their own (editor_part.py)
+#   PartHost        such a pane's host: its page's state, the sheet, the actor's verbs
 #   PARTS           the panes the desk Editor draws on the verbs
-#   actor           the World's Actor pane: the selected actor's props
-#   stamps_label    the Stamps pane's line: the tag the stamp gives
 #   sounds          the Sound workspace's list: the song, then a row a sound
 #   song            the Song pane: its verbs, then its slots, the current one marked
 #   song_do         a Song verb on the core: a slot's sound, add, delete, play
@@ -11,29 +11,30 @@
 #   map_view        the Reference's Map: a pick puts its mget() at the caret
 #   log             the Reference's Log: the run's and the code's errors, to their line
 #   pointer, keys   a press on the map, the arrows over it
-"""The desk Editor's own panes on the public UI API
-(docs/media/look_2026-10/EDITOR_LAYOUT.md's World and Sound): each draws in
-its pane's body inside `EditorDesk`'s frame, over the editor cores the
-handheld tabs edit (`SceneEditor`, `MusicEditor`), and answers its taps and
-keys through the verbs. A change is the core's own (its undo step), synced
-to the running game as the tab's is."""
+"""The desk Editor's own panes (docs/media/look_2026-10/EDITOR_LAYOUT.md's
+World, Art, Code and Sound workspaces), over the editor cores the handheld
+tabs edit (`SceneEditor`, `MusicEditor`): the Actor, the Sheet, the
+Reference's Sprites, the Stamps and the made code are a page each
+(editor_part.py, hosted by `PartHost` on the pane's body); the rest draw in
+their pane's body inside `EditorDesk`'s frame and answer its taps and keys
+through the verbs. A change is the core's own (its undo step), synced to
+the running game as the tab's is."""
 
 import ui
 import editor_sound as Sound
 import blocks as B
+from view_host import PageHost, cursor
 
-PARTS = ("actor", "sounds", "song", "log", "maps", "palette", "made")
+PAGES = ("actor", "sheet", "sprites", "stamps", "made")
+PARTS = ("sounds", "song", "log", "maps", "palette")
 
-_ROW = 36
 _LIST_ROW = 28              # a list's row on the desk (style.json's stack_desk)
 _INK, _DIM = {"tone": "ink"}, {"tone": "dim"}
 
 
 def draw(desk, c, r, u):
     """Part `c` in body rect `r` (the frame is begun)."""
-    if c == "actor":
-        actor(desk, r, u)
-    elif c == "sounds":
+    if c == "sounds":
         if desk.key == "sound":
             sounds(desk, r, u)
         else:
@@ -46,8 +47,6 @@ def draw(desk, c, r, u):
         map_foot(desk, r, u)
     elif c == "log":
         log(desk, r, u)
-    elif c == "made":
-        made(desk, r, u)
 
 
 def drawn_before(desk, c, cv, th, r, u):
@@ -55,87 +54,6 @@ def drawn_before(desk, c, cv, th, r, u):
     Reference's map."""
     if c == "maps":
         map_view(desk, cv, th, r, u)
-
-
-def _rows(r, u, n):
-    """`n` rows of the part's height down `r`, inset."""
-    x, y, w, _h = r
-    pad = 10 * u
-    h = _ROW * u
-    return [(x + pad, y + pad + k * (h + 6 * u), w - 2 * pad, h) for k in range(n)]
-
-
-def actor(desk, r, u):
-    """The selected actor (EDITOR_LAYOUT.md's World): its tag, the tags the
-    scene uses, Flip, Front and Back, its tile and place, and Remove. No
-    selection: what to do."""
-    ws = desk.ws
-    su = ws.scene_ui
-    se = su.sceneedit
-    a = se.selected() if se is not None else None
-    if a is None:
-        ui.at(*r)
-        ui.empty("scene", "No actor picked", ("Tap one in the scene to change it",))
-        return
-    rows = _rows(r, u, 4)
-    st = desk.part_state
-    if st.get("tag_of") != se.sel:
-        st["tag_of"] = se.sel
-        st["tag"] = str(a.get("tag") or "")
-    ui.at(*rows[0])
-    text, enter = ui.field("Tag", st["tag"], 16, {"id": "actor tag"})
-    st["tag"] = text
-    changed = False
-    if enter and text and text != a.get("tag"):
-        changed = se.set_tag(text)
-    tags = []
-    for row in se.rows:
-        t = row.get("tag")
-        if t and t not in tags:
-            tags.append(str(t))
-    tags = tags[:5]
-    if tags:
-        cur = tags.index(a.get("tag")) if a.get("tag") in tags else -1
-        ui.at(*rows[1])
-        got = ui.seg("Tags", tags, cur, {"id": "actor tags"})
-        if got is not None and got != cur and got >= 0:
-            changed = se.set_tag(tags[got]) or changed
-            st["tag"] = tags[got]
-    x, y, w, h = rows[2]
-    third = (w - 16 * u) // 3
-    ui.at(x, y, third, h)
-    flip = bool(a.get("flip"))
-    if ui.toggle("Flip", flip, {"id": "actor flip"}) != flip:
-        changed = se.toggle_flip() or changed
-    ui.at(x + third + 8 * u, y, third, h)
-    if ui.button("Front", "normal", {"id": "actor front"}):
-        changed = se.front_sel() or True
-    ui.at(x + 2 * (third + 8 * u), y, third, h)
-    if ui.button("Back", "normal", {"id": "actor back"}):
-        changed = se.back_sel() or True
-    x, y, w, h = rows[3]
-    ui.at(x, y, w - third - 8 * u, h)
-    ui.label("Tile %d   x %d   y %d" % (a.get("tile", 0), a.get("x", 0), a.get("y", 0)),
-             {"tone": "dim"})
-    ui.at(x + w - third, y, third, h)
-    if ui.button("Remove", "danger", {"id": "actor remove"}):
-        se.delete_sel()
-        changed = True
-    if changed:
-        su._sync_live()
-        ws.mark_dirty()
-        desk._owe_restart("scene")
-
-
-def stamps_label(desk, r, u):
-    """Under the Stamps pane's sheet: the tag a stamp gives its actors."""
-    se = desk.ws.scene_ui.sceneedit
-    if se is None:
-        return
-    x, y, w, h = r
-    ui.at(x + 10 * u, y + h - 30 * u, w - 20 * u, 24 * u)
-    ui.label("A stamp makes a %s" % (getattr(se, "stamp_tag", None) or "thing"),
-             {"tone": "dim"})
 
 
 def _music(desk):
@@ -498,20 +416,6 @@ def made_lines(be):
     return _made[1]
 
 
-def made(desk, r, u):
-    """The code the blocks make (EDITOR_LAYOUT.md's blocks cart), read only,
-    numbered, in the Code tab's colours: a text view, which a drag and the
-    wheel scroll."""
-    ws = desk.ws
-    _bu, be = _blocks(desk)
-    if be is None:
-        return
-    x, y, w, h = r
-    pad = 8 * u
-    ui.at(x, y + pad, w, h - 2 * pad)
-    ui.text_view("made", made_lines(be), {"gutter": True, "syntax": ws.code_layer._lang()})
-
-
 def scroll(desk, c, d):
     """The wheel over a part that scrolls by rows: `d` notches."""
     st = desk.part_state
@@ -738,3 +642,211 @@ def keys(desk, c, i):
     st["ref cell"] = (cx + dx, cy + dy)
     desk.ws.mark_dirty()
     return True
+
+
+# -- the panes that are a page of their own ------------------------------------------
+
+_SHEET_COLS, _SHEET_ROWS = 16, 8    # a sheet page: 16 x 8 tiles
+
+
+class PartHost(PageHost):
+    """Pane content `part`'s page (editor_part.py, one of `PAGES`) on the
+    desk `desk`'s pane body: its state from the cores (`_sync`), the sheet
+    its canvas draws, picks from and moves along, and the verbs its
+    buttons ask for (`act`)."""
+
+    def __init__(self, desk, part):
+        import editor_part
+        PageHost.__init__(self, desk.ws, None, part, editor_part.part_page)
+        self.desk = desk
+        self._sheet_at = None           # the sheet's pages as drawn: (x0, y0, page w, page h,
+                                        # caption, pages shown, the first, tile px) in its canvas
+        self._cv_xy = (0, 0)            # the sheet canvas's corner, as drawn
+
+    def _sync(self):
+        ws = self.ws
+        part = self.tab
+        picked, tag, tags, at, flip, place, stamp, call, made = False, "", (), "", False, "", "thing", "", ""
+        roomy = ws.look.effective_font_scale() < 2
+        se = ws.scene_ui.sceneedit if part in ("actor", "stamps") else None
+        if part == "actor" and se is not None:
+            a = se.selected()
+            if a is not None:
+                picked = True
+                tag = str(a.get("tag") or "")
+                got = []
+                for row in se.rows:
+                    t = row.get("tag")
+                    if t and str(t) not in got:
+                        got.append(str(t))
+                tags = tuple(got[:5])
+                at = tag if tag in tags else ""
+                flip = bool(a.get("flip"))
+                gap = "   " if roomy else "  "
+                place = gap.join(("Tile %d" % a.get("tile", 0), "x %d" % a.get("x", 0),
+                                  "y %d" % a.get("y", 0)))
+        elif part == "stamps" and se is not None:
+            stamp = getattr(se, "stamp_tag", None) or "thing"
+        elif part == "sprites":
+            call = "spr(%d, x, y)" % self.desk._cur_sprite()
+        elif part == "made":
+            _bu, be = _blocks(self.desk)
+            made = "\n".join(made_lines(be)) if be is not None else ""
+        self.push((part, picked, tag, tags, at, flip, place, stamp, call, made, roomy))
+
+    def draw(self, r, dt):
+        """The page on body rect `r`, on the pane's card (its ground)."""
+        ws = self.ws
+        cv = ws.sys_canvas
+        th = ws.theme_colors
+        pg = self._page()
+        if self._rect != r:
+            self._rect = r
+        d = self.desk
+        away = d.tab_of(d.focused()[0]) != self.tab
+        self._host.begin(cv, th, r, True, False, away)
+        self._sync()
+        pg.paint(dt, cv, th, r, True)
+        ui.end()
+        if not self._host.still():
+            ws.request_frame()
+
+    # -- the actor's verbs and the Reference's Insert
+
+    def act(self, verb, *args):
+        ws = self.ws
+        if verb == "insert":
+            if ws.editor is not None:
+                ws.history.code_burst_open()
+                ws.editor.insert_text("spr(%d, x, y)" % self.desk._cur_sprite())
+                ws.mark_dirty()
+            return
+        su = ws.scene_ui
+        se = su.sceneedit
+        if se is None or se.selected() is None:
+            return
+        if verb == "tag":
+            if not args[0] or args[0] == se.selected().get("tag") or not se.set_tag(args[0]):
+                return
+        elif verb == "flip":
+            se.toggle_flip()
+        elif verb == "front":
+            se.front_sel()
+        elif verb == "back":
+            se.back_sel()
+        elif verb == "remove":
+            se.delete_sel()
+        su._sync_live()
+        ws.mark_dirty()
+        self.desk._owe_restart("scene")
+
+    # -- the sheet
+
+    def _cur(self):
+        """The tile the sheet rings: the Stamps' brush, else the sprite."""
+        if self.tab == "stamps":
+            se = self.ws.scene_ui.sceneedit
+            return se.n if se is not None else -1
+        return self.desk._cur_sprite()
+
+    def draw_sheet(self, cv, x, y, w, h):
+        """Two pages of the sprite sheet at 2x side by side (a page 16 x 8
+        tiles) where the canvas holds them, centred down it, each captioned
+        with its number; the current tile ringed by the cursor."""
+        ws = self.ws
+        sh = ws.sheet
+        self._sheet_at = None
+        if sh is None:
+            return
+        th = ws.theme_colors
+        u = self.desk._unit()
+        pages = max(1, sh.rows // _SHEET_ROWS)
+        tw = 16 * u
+        pw, ph = _SHEET_COLS * tw, _SHEET_ROWS * tw
+        cap = 20 * u
+        n = max(1, min(2, (w - cap) // (pw + cap)))
+        first = min(self.desk._sheet_page, max(0, pages - n))
+        top = y + max(0, (h - ph) // 2)
+        self._cv_xy = (x, y)
+        self._sheet_at = (cap, top - y, pw, ph, cap, n, first, tw)
+        cur = self._cur()
+        px = x + cap
+        ring = None
+        for k in range(n):
+            pg = first + k
+            if k:
+                cv.rect(px - cap, top, cap, ph, th["surface"])
+            cv.print(str(pg + 1), px - cap + 6 * u, top, th["ink_dim"], 1)
+            cv.rect(px, top, pw, ph, th["surface_alt"])
+            cv.sspr(sh, 0, pg * _SHEET_ROWS * 8, _SHEET_COLS * 8, _SHEET_ROWS * 8, px, top, pw, ph, 0)
+            t = cur - pg * _SHEET_ROWS * _SHEET_COLS
+            if 0 <= t < _SHEET_ROWS * _SHEET_COLS:
+                ring = (px + (t % _SHEET_COLS) * tw, top + (t // _SHEET_COLS) * tw, tw, tw)
+            px += pw + cap
+        if ring is not None:
+            cursor(cv, ring)
+
+    def _tile_at(self, x, y):
+        """The tile under (x, y) in the canvas, or -1."""
+        g = self._sheet_at
+        if g is None:
+            return -1
+        x0, y0, pw, ph, cap, n, first, tw = g
+        k = (x - x0) // (pw + cap) if x >= x0 else -1
+        ax, ay = x - x0 - k * (pw + cap), y - y0
+        if not (0 <= k < n and 0 <= ax < pw and 0 <= ay < ph):
+            return -1
+        return ((first + k) * _SHEET_ROWS + ay // tw) * _SHEET_COLS + ax // tw
+
+    def sheet_pointer(self, kind, x, y):
+        """A press on the sheet, its slide and its release: the tile under
+        it picked (`_pick_tile`), its loupe over the finger while held."""
+        d = self.desk
+        if kind == "up":
+            d._loupe = None
+            self.ws.mark_dirty()
+            return
+        t = self._tile_at(x, y)
+        if t < 0:
+            return
+        self._pick_tile(t)
+        d._loupe = (t, self._cv_xy[0] + x, self._cv_xy[1] + y)
+        self.ws.mark_dirty()
+
+    def _pick_tile(self, t):
+        """Tile `t` picked: the Stamps' brush, else the sprite (`EditorDesk._pick`)."""
+        ws = self.ws
+        if self.tab == "stamps":
+            se = ws.scene_ui.sceneedit
+            if se is None or se.n == t:
+                return
+            se.set_brush(t)
+        elif self.desk._cur_sprite() == t:
+            return
+        else:
+            self.desk._pick(t)
+        ws.request_frame()
+
+    def sheet_keys(self, i):
+        """The arrows along the sheet: the next tile picked, the pages shown
+        following it; one past the sheet's edge is not taken."""
+        ws = self.ws
+        sh = ws.sheet
+        if sh is None:
+            return False
+        dx = i.steps("right") - i.steps("left")
+        dy = i.steps("down") - i.steps("up")
+        if not (dx or dy):
+            return False
+        cur = self._cur()
+        n = cur + dx + dy * _SHEET_COLS
+        if not 0 <= n < sh.cols * sh.rows or (dx and n // _SHEET_COLS != cur // _SHEET_COLS):
+            return False
+        self._pick_tile(n)
+        page = _SHEET_COLS * _SHEET_ROWS
+        d = self.desk
+        d._sheet_page = min(d._sheet_page, n // page)
+        if n // page > d._sheet_page + 1:
+            d._sheet_page = n // page - 1
+        ws.mark_dirty()
+        return True
