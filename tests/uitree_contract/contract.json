@@ -2374,11 +2374,11 @@
      "level": 1
     },
     "gap": {
-     "type": "int|word:s,m,l,0",
+     "type": "word:s,m,l,0",
      "level": 1
     },
     "pad": {
-     "type": "int|word:s,m,l,0",
+     "type": "word:s,m,l,0",
      "level": 1
     },
     "align": {
@@ -2405,11 +2405,11 @@
      "level": 1
     },
     "gap": {
-     "type": "int|word:s,m,l,0",
+     "type": "word:s,m,l,0",
      "level": 1
     },
     "pad": {
-     "type": "int|word:s,m,l,0",
+     "type": "word:s,m,l,0",
      "level": 2
     },
     "w": {

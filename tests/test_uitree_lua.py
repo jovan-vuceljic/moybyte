@@ -991,3 +991,29 @@ def test_a_size_text_label_draws_as_measured_and_an_icon_alone_draws_on_the_c_en
         ws.spine.exit_to_caller()
     assert shots["Plain"] == shots["Face"]
     assert shots["Icon"] != shots["Plain"]
+
+
+def test_a_grids_spacing_is_a_word_and_an_int_stops_the_run_at_its_line(tmp_path):
+    """A grid's and a split's gap= and pad= are the spacing words (s, m, l,
+    0), the engine's: from Lua a word draws, a number stops the run at its
+    line with N01."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    body = ('ui.app("%s", { icon = "calc" })\n'
+            'ui.action("a", "Add", function() end)\nui.action("b", "Back", function() end)\n'
+            'ui.page("p", function()\n'
+            '  ui.grid({ cols = 2, rows = 1, gap = %s }, function() ui.button("a") ui.button("b") end)\n'
+            'end)\n')
+    for name, gap in (("Word", '"s"'), ("Int", "4")):
+        _cart(carts, name, body % (name, gap))
+    ws, drv, frame, open_cart = _console(carts)
+    got = {}
+    for name in ("Word", "Int"):
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        got[name] = ws.run.player.cart_error
+        ws.spine.exit_to_caller()
+    assert got["Word"] is None, got["Word"]
+    assert got["Int"] and "error[N01] main.lua:5:" in got["Int"], got["Int"]

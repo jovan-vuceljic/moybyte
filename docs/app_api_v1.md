@@ -388,8 +388,8 @@ Python's alone.
 | `row(key)` | children side by side | `wrap=`, `gap=`, `pad=`, `mid=`, `close=` what Back does while it shows |
 | `scroll(key)` | a region that scrolls its children | |
 | `foot()` | the page's docked foot: buttons at its end, a label before them | `look="share"` its buttons share its width, `"band"` an edge-to-edge strip |
-| `split(dir, sizes)` | cells along `"row"` or `"col"`, sized in units or weights (`"1*"`) | `gap=`, `pad=`, `align=`, `rule=` |
-| `grid(cols, rows)` | a fixed grid of cells | `gap=`, `pad=`, `w=`, `h=` |
+| `split(dir, sizes)` | cells along `"row"` or `"col"`, sized in units or weights (`"1*"`) | `gap=`, `pad=` (a spacing word: `"s"`, `"m"`, `"l"`, `"0"`), `align=`, `rule=` |
+| `grid(cols, rows)` | a fixed grid of cells | `gap=`, `pad=` (spacing words, as a split's), `w=`, `h=` |
 | `panel(key)` | a region of its own | |
 | `switch(name, cases)` | one of several bodies by an enum's or a bool's value (`"_"` the rest) | |
 | `panes(dir)`, `pane(key)` | panes a person resizes by their dividers; one grows (no Lua) | `size=`, `start=`, `min=`, `grow=`; a pane's `tabs=`, `title=` |
