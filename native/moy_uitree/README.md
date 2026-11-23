@@ -87,7 +87,10 @@ every declaration dict the other way. The image's frozen `uitree_pages` module h
 part already read (`uitree_aot.entry`), every part of it a constant the image keeps
 in flash (the dicts a load binds by made by the load), and the
 blob itself bare of that part (`uitree_aot.bare`: its length and checksum
-made again), so the front is in the image once. A board
+made again), so the front is in the image once, and packed
+(`uitree_aot.pack`: the header as it is, the rest raw-deflated), about a
+third of its bytes; a load inflates it (`uitree_aot.unpack`) into the one
+buffer the store is copied from. A board
 build that takes this module writes it into its staged modules
 (`moybyte_stage_uitree_pages` in `tools/esp32_build_lib.sh`, which runs
 `tools/uitree_compile.py --staged` over the console's pages, `SYSTEM`); where

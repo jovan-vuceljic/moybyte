@@ -3153,7 +3153,7 @@ class Builder:
         self.focus_key = ""
         self.want_focus = None
         self.focus_at = None            # where the handler's ui.focus stands (N08 names it)
-        self.trace = collections.deque((), 200)
+        self.trace = collections.deque((), 200) if TRACING else ()     # a board keeps none (`_trace`)
 
     def _build(self):
         was = _NOW.app

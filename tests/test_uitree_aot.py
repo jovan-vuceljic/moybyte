@@ -240,6 +240,21 @@ def test_a_pages_pool_keeps_each_text_once(compiled):
         assert not twice, (page, twice[:8])
 
 
+def test_a_frozen_entry_holds_its_blob_packed_and_a_load_inflates_it_whole(compiled):
+    """An image keeps each blob packed (`pack`: the header as it is, the
+    rest deflated), under half its bytes; `unpack` gives back the bare blob
+    byte for byte, and one that does not inflate to its header's length is
+    refused."""
+    packed = bare = 0
+    for page, blob in compiled.pages.items():
+        z, b = uitree_aot.entry(blob)[0], uitree_aot.bare(blob)
+        assert z[:32] == b[:32] and bytes(uitree_aot.unpack(z)) == b, page
+        packed, bare = packed + len(z), bare + len(b)
+    assert packed * 2 < bare, (packed, bare)
+    with pytest.raises(uitree_aot.Refused, match="does not inflate to its length"):
+        uitree_aot.unpack(z[:20] + (len(b) + 1).to_bytes(4, "little") + z[24:])
+
+
 def test_a_blob_carries_every_field_of_every_record():
     """Each struct a blob stores names every member in moy_uitree_aot.c's
     field tables; a slot's members the visit owns are listed there by name."""

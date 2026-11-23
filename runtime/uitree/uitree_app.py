@@ -75,8 +75,9 @@ class Engine(S.Builder):
         self._cells = {}                # a split's region (its group) -> [its override block, the states it reads]
         self._edits = 0                 # a commit field's draft edits, which move the gen too
         self._buttons = 0               # the frame's buttons, as keys() handed them to the host
-        st = decl.state                 # this engine's own values: two consoles in one process each hold theirs
-        self._own = [dict((k, st._init.get(k)) for k in st._t), dict.fromkeys(st._t, 0)]
+        # this engine's own values: two consoles in one process each hold theirs,
+        # put by (`_bind`) only when another engine takes the module's state
+        self._own = [None, None]
 
     def _bind(self):
         """The module's state holds this engine's values: at every way in (a
@@ -93,9 +94,14 @@ class Engine(S.Builder):
         if was is not None:
             was[0], was[1] = dict(st._v), dict(st._ver)
             st._v.clear()
-            st._v.update(own[0])
             st._ver.clear()
-            st._ver.update(own[1])
+            if own[0] is None:          # never put by: the declaration's first values
+                for k in st._t:
+                    st._v[k] = st._init.get(k)
+                    st._ver[k] = 0
+            else:
+                st._v.update(own[0])
+                st._ver.update(own[1])
         object.__setattr__(st, "_owner", own)
 
     # -- the engine's counted runs (G12) ------------------------------------
