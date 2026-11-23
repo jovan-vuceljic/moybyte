@@ -14,7 +14,8 @@ from runtime import ui_draw
 from runtime.status_items import ITEMS, ROWS_MAX, parse
 from ws_helpers import build_desktop_ws, make_drv
 
-GLASSES = {"p4": ((1024, 600), 7.0), "guition_p4": ((1280, 800), 10.1)}
+GLASSES = {"p4": ((1024, 600), 7.0), "guition_p4": ((1280, 800), 10.1),
+           "elecrow_p4": ((1024, 600), 10.1)}
 
 _BOTTOM = "fit-bottom-bar"
 

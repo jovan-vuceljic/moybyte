@@ -23,6 +23,7 @@ CONSOLES = {
     "guition_jc3248w535": "MOYBYTE_GUITION_S3",
     "esp32_p4_wifi6_touch_lcd_7b": "MOYBYTE_P4",
     "guition_jc8012p4a1c": "MOYBYTE_GUITION_P4",
+    "elecrow_crowpanel_p4_10_1": "MOYBYTE_ELECROW_P4",
 }
 
 # The port's configuration header is the one VM header a driver reads: it

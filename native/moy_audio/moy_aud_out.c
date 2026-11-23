@@ -28,7 +28,9 @@
 //   MOY_HW_SPEAKER_MCLK                 the master clock pin, where a codec needs one
 //   MOY_AUDIO_CODEC_ES8311              the codec on the kernel's I2C bus (moy_codec_es8311.c)
 //   MOY_HW_SPEAKER_PA                   the amplifier's enable, driven high once the codec is up
+//   MOY_AUDIO_PA_ACTIVE_LOW             ... or low, where the amplifier's control pin is active low
 //   MOY_AUDIO_RATE                      the output rate, 22050 unless named
+//   MOY_AUDIO_I2S_NUM                   the controller, I2S_NUM_0 unless named (a PDM microphone takes I2S0)
 //   MOY_AUDIO_STEREO                    16-bit stereo at MOY_AUDIO_RATE, twice the
 //                                       mix's (moy_aud_render_st); mono otherwise
 //   MOY_AUDIO_DAC_MONO                  the codec reads one slot: both carry the mean
@@ -65,6 +67,9 @@
 
 #ifndef MOY_AUDIO_RATE
 #define MOY_AUDIO_RATE 22050
+#endif
+#ifndef MOY_AUDIO_I2S_NUM
+#define MOY_AUDIO_I2S_NUM I2S_NUM_0
 #endif
 #ifndef MOY_HW_SPEAKER_MCLK
 #define MOY_HW_SPEAKER_MCLK (-1)
@@ -160,7 +165,7 @@ static bool IRAM_ATTR on_ovf(i2s_chan_handle_t h, i2s_event_data_t *e, void *ctx
 // The channel on the board's pins with a ring of `desc` x `frames`, enabled:
 // 0, or -1 with nothing left open.
 static int chan_open(int desc, int frames) {
-    i2s_chan_config_t cc = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    i2s_chan_config_t cc = I2S_CHANNEL_DEFAULT_CONFIG(MOY_AUDIO_I2S_NUM, I2S_ROLE_MASTER);
     cc.dma_desc_num = desc;
     cc.dma_frame_num = frames;
     cc.auto_clear = true;       // silence, not stale DMA, on an under-run
@@ -183,9 +188,10 @@ static int chan_open(int desc, int frames) {
         .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT,
                                                         SLOT_MODE),
 #else
-        // MSB-justified mono on the left slot: the MAX98357's mono input.
+        // MSB-justified, mono on the left slot (the MAX98357's mono input) or,
+        // where the board names MOY_AUDIO_STEREO, two slots for two amplifiers.
         .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT,
-                                                    I2S_SLOT_MODE_MONO),
+                                                    SLOT_MODE),
 #endif
         .gpio_cfg = {
             .mclk = (gpio_num_t)MOY_HW_SPEAKER_MCLK,
@@ -390,7 +396,11 @@ int moy_aud_out_start(void) {
 #ifdef MOY_HW_SPEAKER_PA
     gpio_config_t pa = {.pin_bit_mask = 1ULL << MOY_HW_SPEAKER_PA, .mode = GPIO_MODE_OUTPUT};
     gpio_config(&pa);
+#ifdef MOY_AUDIO_PA_ACTIVE_LOW
+    gpio_set_level(MOY_HW_SPEAKER_PA, 0);
+#else
     gpio_set_level(MOY_HW_SPEAKER_PA, 1);
+#endif
 #endif
     s_mutex = xSemaphoreCreateMutex();
     if (s_mutex == NULL) {
