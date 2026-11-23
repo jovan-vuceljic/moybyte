@@ -22,8 +22,8 @@ from array import array
 
 from editors_music import MusicEditor
 from audio import MusicTrack, SFX
-import ui as _ui
 import ui_draw as _ui_draw
+import ui_font as _ui_font
 import layout_base as _layout_base
 from layout_base import LayoutBase
 import uitree_editor
@@ -409,7 +409,7 @@ class MusicEditorUI:
         self._sync()
         self._host.begin(cv, ws.theme_colors, r, desk, False, elsewhere=not self.s.pop)
         pg.paint(0, cv, ws.theme_colors, r, desk)
-        _ui.end()
+        self._host.end()
         if not self._host.still():
             ws.request_frame()
 
@@ -427,7 +427,7 @@ class MusicEditorUI:
         cur = me.slot if song else me.step
         ink, dim = th["ink"], th["ink_dim"]
         fs = max(1, getattr(cv, "font_scale", 1))
-        _ui.face("mono")
+        was = _ui_font.print_face("mono")
         lab = _ui_draw.label
         lab(cv, (x + 10 * fs, y, 20 * fs, h), _NUMS[i] if i < 256 else str(i + 1),
             ink if i == cur else dim)
@@ -443,7 +443,7 @@ class MusicEditorUI:
                 cv.fill_rects(_METER, -1, mx, my, th["surface_alt"])
             if lit:
                 cv.fill_rects(_METER, lit, mx, my, th["value"])
-        _ui.face()
+        _ui_font.print_font(was)
 
 
 # -- the desk Editor's Sound pane ----------------------------------------------------
@@ -640,7 +640,7 @@ class SoundPane:
         self._sync()
         self._host.begin(cv, th, r, True, False, elsewhere=not self.asking())
         pg.paint(dt, cv, th, r, True)
-        _ui.end()
+        self._host.end()
         if not self._host.still():
             ws.request_frame()
 
@@ -841,7 +841,7 @@ class SoundPane:
         if named is not None:
             cx, top, p = named
             t = note_name(p)
-            tw = _ui.text_size(t, getattr(cv, "font_scale", 1))[0] + 10 * u
+            tw = _ui_font.print_size(t, getattr(cv, "font_scale", 1))[0] + 10 * u
             th_ = 18 * u
             nx = max(gx, min(gx + gw - tw, cx + (cw - tw) // 2))
             ny = max(gy + 2 * u, top - th_ - 2 * u)

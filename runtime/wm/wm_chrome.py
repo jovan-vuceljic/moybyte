@@ -548,12 +548,9 @@ class WindowChrome:
             base = _TITLES.get(win.kind)
             if base is None:
                 base = win.kind.upper()
-        app = ws.app(win.kind)
-        ctx = app.lent_ctx() if getattr(app, "UI", False) else None
-        if ctx is not None:
-            lent = _ui_draw.bar_lent(ctx)
-            if lent is not None and lent[0] and lent[0] != base:
-                return base + _title_sep() + lent[0]   # the document it lent ("Paint · Garden")
+        t = getattr(ws.app(win.kind), "bar_title", None)
+        if t and t != base:
+            return base + _title_sep() + t     # the document its bar names ("Paint · Garden")
         doc = self._theme_doc(win)
         if doc is not None:
             return THEME_TITLE + _title_sep() + doc.name     # "Theme · custom"

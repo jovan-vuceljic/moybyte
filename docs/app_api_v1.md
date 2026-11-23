@@ -388,19 +388,19 @@ Python's alone.
 | `row(key)` | children side by side | `wrap=`, `gap=`, `pad=`, `mid=`, `close=` what Back does while it shows |
 | `scroll(key)` | a region that scrolls its children | |
 | `foot()` | the page's docked foot: buttons at its end, a label before them | `look="share"` its buttons share its width, `"band"` an edge-to-edge strip |
-| `split(dir, sizes)` | cells along `"row"` or `"col"`, sized in units or weights (`"1*"`) | `gap=`, `pad=`, `align=`, `rule=` |
-| `grid(cols, rows)` | a fixed grid of cells | `gap=`, `pad=`, `w=`, `h=` |
+| `split(dir, sizes)` | cells along `"row"` or `"col"`, sized in units or weights (`"1*"`) | `gap=`, `pad=` (a spacing word: `"s"`, `"m"`, `"l"`, `"0"`), `align=`, `rule=` |
+| `grid(cols, rows)` | a fixed grid of cells | `gap=`, `pad=` (spacing words, as a split's), `w=`, `h=` |
 | `panel(key)` | a region of its own | |
 | `switch(name, cases)` | one of several bodies by an enum's or a bool's value (`"_"` the rest) | |
 | `panes(dir)`, `pane(key)` | panes a person resizes by their dividers; one grows (no Lua) | `size=`, `start=`, `min=`, `grow=`; a pane's `tabs=`, `title=` |
 | `slot(name)` | a hole another process's window docks in (no Lua) | `min=` |
-| `tools(key)`, `lent(key)` | buttons a shown tab lends, and where they draw (no Lua) | `lend=` |
+| `tools(key)`, `lent(key)` | buttons a shown tab lends, and where they draw (no Lua); `lend="bar"` lends them to the shell's bar, after its title | `lend=` |
 
 **Words and pictures** (no stop, but where noted)
 
 | kind | is | key props |
 |---|---|---|
-| `label(text)` | a line of text | `face=`, `tone=`, `icon=`, `wrap="word"` with `lines=`, `size="fit"`, `size="text"` (in a placed row, as wide as its text and its icon), `align=`, `scale=`, `w=` |
+| `label(text)` | a line of text | `face=`, `tone=`, `icon=`, `wrap="word"` with `lines=`, `size="fit"`, `size="text"` (in a placed row, as wide as its text and its icon, in the ui face), `align=`, `scale=`, `w=` |
 | `info(label, value)` | a label and its value on one row | `icon=`, `tag=` a pill, `signal=` 0 to 4 bars, `tone=` |
 | `status(text)` | a status line, cut at its `" · "` fields (no Lua) | |
 | `rule()` | a divider | |

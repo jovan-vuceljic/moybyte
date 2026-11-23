@@ -198,7 +198,8 @@ def test_fling_frame_is_pixel_faithful(tmp_path):
         for _ in range(4):                 # a few coasting frames
             drv.frame(1 / 30)
         assert ws.launcher.flinging
-        row = ws.sys_canvas.w * ws.layout.status_h
+        # below the bar, whose clock is the wall clock's: two bytes a pixel
+        row = 2 * ws.sys_canvas.w * ws.layout.status_h
         got.append((ws.launcher.scroll, bytes(ws.sys_canvas._buf)[row:]))
     assert got[0][0] == got[1][0]
     assert got[0][1] == got[1][1]

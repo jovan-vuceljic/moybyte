@@ -23,7 +23,6 @@ only where a second script would run (`moy_carts.multi_script`), is the ONE
 door that adds a file to a cart (the Code tab's scripts menu opens it too).
 """
 
-import ui as _ui
 import ui_draw as _ui_draw
 import uitree as _tree
 import uitree_app
@@ -425,7 +424,7 @@ class CardsLayer(Layer):
         cv = ws.sys_canvas
         self._host.begin(cv, ws.theme_colors, r, desk)
         self.page.paint(dt, cv, ws.theme_colors, r, desk)
-        _ui.end()
+        self._host.end()
         if not self._host.still():
             ws.request_frame()
 

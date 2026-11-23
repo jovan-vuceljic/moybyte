@@ -44,6 +44,7 @@ the first save of a new drawing says its name in a toast.
 """
 
 import ui as _v
+import ui_font as _ui_font
 import uitree as ui
 import uitree_app
 from layout_base import bar_rows, content_of, ground_round, metric_class, window_foot, DESK
@@ -83,10 +84,10 @@ RETRY_S = 30.0                           # a failing store retries slowly, not h
 def _zoom_word(q):
     """A zoom in quarters as the bar and the seg say it."""
     if q == 1:
-        return "¼" if _v.has_symbols() else "1/4"
+        return "¼" if _ui_font.print_symbols() else "1/4"
     if q == 2:
-        return "½" if _v.has_symbols() else "1/2"
-    return "%d%s" % (q // 4, "×" if _v.has_symbols() else "x")
+        return "½" if _ui_font.print_symbols() else "1/2"
+    return "%d%s" % (q // 4, "×" if _ui_font.print_symbols() else "x")
 
 
 # -- the page ---------------------------------------------------------------------
@@ -134,6 +135,8 @@ s = ui.state(
     can_undo=False,
     can_redo=False,
     viewing=False,              # a desk's drawing, looked at
+    lends=False,                # the bar's row after its title: a handheld's drawing or view
+    zoom_word="",               # ...its zoom
     copy_ok=False,              # a show-only picture: Copy to My Art
     game_ok=False,              # a 320 x 240 drawing: Put in a game
     story_ok=False,
@@ -155,11 +158,17 @@ def _lay():
     return lay
 
 
+# The states the row lent to the bar reads: a write moves the bar's zone.
+_BAR_READS = ("lends", "viewing", "can_undo", "can_redo", "zoom_word")
+
+
 def _set(lay, name, value):
     """State `name` written only where it moved."""
     if lay.shown.get(name) != value:
         lay.shown[name] = value
         setattr(s, name, value)
+        if name in _BAR_READS:
+            lay.zone_gen += 1
 
 
 def _words(lay, name, rows):
@@ -217,6 +226,9 @@ def fill(lay):
         _set(lay, k, "filled" if lay.shape_fill else "outline")
     _words(lay, "zooms", tuple((str(i), _zoom_word(z) if z else "Fit") for i, z in enumerate(ZOOM_SEG)))
     _set(lay, "zoom_cur", str(ZOOM_SEG.index(lay.zoom) if lay.zoom in ZOOM_SEG else 0))
+    _set(lay, "lends", not lay.layout.desk and lay.page is None)
+    _set(lay, "zoom_word", _zoom_word(v.quarters()) if v is not None else
+         _zoom_word(lay._quarters()) if d is not None else "")
     _set(lay, "can_undo", d is not None and v is None and bool(d.history))
     _set(lay, "can_redo", d is not None and v is None and bool(d.future))
     art = lay._art
@@ -488,6 +500,11 @@ def build():
         _show()
         _pops()
         ui.toast("{toast}", icon="{toast_icon}", shown="toasting")
+        with ui.tools("bar", lend="bar", shown="lends"):
+            ui.button("undo", icon="undo", alone=True, shown="!viewing")
+            ui.button("redo", icon="redo", alone=True, shown="!viewing")
+            ui.button("zoom", label="{zoom_word}", icon="search")
+            ui.button("more", icon="more", alone=True, shown="viewing")
 
 
 class PaintAppLayout:
@@ -589,6 +606,7 @@ class PaintAppLayer(PaintDraw, uitree_app.app_layer("artwork", "Paint", build)):
 
     id = "artwork"
     TITLE = "Paint"
+    LENDS_BAR = True
     # The shell roles this app uses (runtime/shell/app_context.py): its document
     # model's (`ArtworkService`, built here), its copies' and My Art's door.
     NEEDS = ("surface", "theme", "damage", "files", "carts", "wallpaper",
@@ -1444,9 +1462,13 @@ class PaintAppLayer(PaintDraw, uitree_app.app_layer("artwork", "Paint", build)):
             return
         send = self._sent()
         if send is not None:
+            if self.shown.get("lends"):
+                self.engine.run(fill, self, action="fill")    # the bar's row goes
+                ui.commit(self.engine)
+            self._name_bar()
             self._ui.begin(cv, th, lay.page, lay.desk, lay.windowed)
             self._send_page(cv, th, dt)
-            _v.end()
+            self._ui.end()
             return
         # a whole frame: the view canvas draws again (its reads= state moves),
         # so it holds what the stroke frames after it repaint parts of
@@ -1468,7 +1490,7 @@ class PaintAppLayer(PaintDraw, uitree_app.app_layer("artwork", "Paint", build)):
                 self.relayout(lay.w, lay.h, lay.fs, lay.cs)
                 lay = self.layout
                 self.fill_owed = True
-        self._lend()
+        self._name_bar()
         was = (self.pop, self.page)
         eng.paint(dt, cv, th, content, lay.desk)
         if (self.pop, self.page) != was:

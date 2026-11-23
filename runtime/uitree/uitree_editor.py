@@ -3,6 +3,7 @@
 #   Engine.draw_hosted     the bridge: each hosted surface drawn where the page laid it out
 #   Engine.nudge           a divider moved by keys
 #   Engine._r_text_editor  the text editor's options and its document's view
+#   text_view              a text view drawn on its packed options (text_options)
 #   lent_place             a lent row's cells placed
 #   Page                   a page on the Editor's kinds hosted by a surface on today's verbs
 #   page                   that page on the C engine
@@ -17,7 +18,7 @@ row a page lends the shell's bar (`BarZone`, `lent_place`). The C engine
 draws them (`uitree_c.CEditorEngine`)."""
 from array import array
 
-import ui as _v
+import moy_ui as _C
 import ui_draw as _ud
 import uitree as S
 from uitree import _NOW
@@ -78,6 +79,47 @@ def fit(start, mins, total):
             need -= give
     sizes[flex] = max(0, rest)
     return sizes
+
+
+# A text view's options packed (moy_ui_api.h's MOY_UI_TXO_*): the words
+# `text_options` makes and a frame writes in place.
+TXO_WRAP, TXO_SYNTAX, TXO_GUTTER, TXO_CARET = 1, 2, 4, 5
+TXO_SEL, TXO_ERR, TXO_FIND_CI, TXO_LEFT, TXO_MARK, TXO_GEN, TXO_TOP = 7, 11, 12, 13, 14, 15, 16
+TXO_FONT, TXO_PAPER = 17, 18
+TXO_LEN = 21
+_SYNTAXES = ("plain", "python", "lua", "json", "sgr", "markdown")
+
+
+def text_options(syntax, wrap, mark=False):
+    """A text view's options packed: its lines coloured as `syntax` (one of
+    "plain", "python", "lua", "json", "markdown"; else a terminal's "sgr"),
+    broken at the view's width where `wrap`, the current line marked where
+    `mark`; no caret, selection, error, top line, font or paper, which a
+    frame writes in place (the TXO_* words; a caret, a selection and an
+    error their line and column words in turn, -1 none)."""
+    o = array("i", [0] * TXO_LEN)
+    o[TXO_WRAP] = 1 if wrap else 0
+    o[TXO_SYNTAX] = _SYNTAXES.index(syntax) if syntax in _SYNTAXES else 4
+    o[TXO_MARK] = 1 if mark else 0
+    o[TXO_CARET] = o[TXO_CARET + 1] = -1
+    o[TXO_SEL] = o[TXO_SEL + 2] = -1
+    o[TXO_ERR] = o[TXO_TOP] = o[TXO_PAPER] = -1
+    return o
+
+
+def text_view(key, x, y, w, h, lines, o, err=None, find=None, into=None):
+    """Text view `key` of `lines` (a list of str) drawn in `(x, y, w, h)` of
+    the frame its host began, on its packed options `o` (`text_options`),
+    `err` the error's words, `find` the query whose matches it marks, its
+    own scroll region (moy_ui_api_text_view): a drag scrolls it, its release
+    coasts, the wheel steps it, and a frame draws the rows that changed.
+    Answers the first line shown and the rows shown, written into `into`
+    (an array('i') of two) where given, so a frame makes no tuple."""
+    t = _ud.UI_TARGET
+    _C.api_at(t[0], x, y, w, h)
+    return _C.api_text_view(t[0], t[1], t[2], key, lines, o, None, err, find, into)
+
+
 _TEXT_PAD = 8          # moy_ui_api_int.h's TEXT_PAD: the view's text inset at the scale
 
 
@@ -340,7 +382,7 @@ class Engine(uitree_app.Engine):
         return m
 
     def _r_text_editor(self, n, row, rect):
-        """A text editor's rows: one `ui.text_view` on its packed options,
+        """A text editor's rows: one `text_view` on its packed options,
         which a frame fills in place (the view allocates nothing a frame).
         Its parts' anchors (`caret`, `word`) are read where a popover hangs
         from one (`_part_anchor`)."""
@@ -358,7 +400,7 @@ class Engine(uitree_app.Engine):
         tv = self._tv.get(key)
         if tv is None or tv[3] is not doc.lang or tv[4] != doc.wrap:
             # made again where the document was adopted in another syntax or wrap
-            o = _v.text_options({"syntax": _SYN[doc.lang], "mark": True, "wrap": doc.wrap})
+            o = text_options(_SYN[doc.lang], doc.wrap, True)
             tv = self._tv[key] = (o, array("i", [0, 0]), (n, None), doc.lang, doc.wrap)
             v = self.views.get(key)
             if v is None:
@@ -392,19 +434,19 @@ class Engine(uitree_app.Engine):
             q = self.s._v[n.l["find"]]
         doc.find_q = q
         err = None
-        o[_v.TXO_ERR] = -1
+        o[TXO_ERR] = -1
         if "marks" in n.l:
             marks = self.s._v[n.l["marks"]]
             for i in range(len(marks)):
                 mk = marks[i]
                 if mk.kind == "error":
-                    o[_v.TXO_ERR] = mk.line - 1
+                    o[TXO_ERR] = mk.line - 1
                     err = mk.words
                     break
-        o[_v.TXO_GUTTER] = 1 if gutter else 0
-        o[_v.TXO_CARET] = ed.row
-        o[_v.TXO_CARET + 1] = ed.col
-        k = _v.TXO_SEL
+        o[TXO_GUTTER] = 1 if gutter else 0
+        o[TXO_CARET] = ed.row
+        o[TXO_CARET + 1] = ed.col
+        k = TXO_SEL
         b = ed.selection_bounds() if ed.sel is not None else None
         if b is None:
             o[k] = o[k + 2] = -1
@@ -414,14 +456,13 @@ class Engine(uitree_app.Engine):
             o[k + 1] = b[1]
             o[k + 2] = b[2]
             o[k + 3] = b[3]
-        o[_v.TXO_FIND_CI] = 1 if q and doc.find_ci else 0
-        o[_v.TXO_LEFT] = ed.left
-        o[_v.TXO_GEN] = ed.edits + 1    # names the lines' content: a wrapped view counts its rows once a gen
+        o[TXO_FIND_CI] = 1 if q and doc.find_ci else 0
+        o[TXO_LEFT] = ed.left
+        o[TXO_GEN] = ed.edits + 1    # names the lines' content: a wrapped view counts its rows once a gen
         # the editor's top line, where it moved it; a wrapped view's rows are
         # its own (the editor counts lines), which its host reveals the caret in
-        o[_v.TXO_TOP] = ed.top if v[1] != ed.top and not doc.wrap else -1
-        _v.at(x, y, w, h)
-        _v.text_view(key, ed.lines, o, err, q or None, into)
+        o[TXO_TOP] = ed.top if v[1] != ed.top and not doc.wrap else -1
+        text_view(key, x, y, w, h, ed.lines, o, err, q or None, into)
         ed.top = into[0]
         if into[1] > 0:
             lh = h // into[1]
@@ -636,12 +677,24 @@ class BarZone:
         self.site = site
         self.gen = 0
         self.zone_opened = False
-        self.back_title = None
+        self._title = None
         self._vers = -1
 
     @property
     def zone_gen(self):
         return self.gen + getattr(self.host, "zone_gen", 0)
+
+    @property
+    def back_title(self):
+        """The title the bar draws after its back chevron, the row after
+        it; None: the bar's own. A new one moves `zone_gen`."""
+        return self._title
+
+    @back_title.setter
+    def back_title(self, title):
+        if title != self._title:
+            self._title = title
+            self.gen += 1
 
     def _row(self):
         """The shown lender's cells, the states synced first: [kind, key,

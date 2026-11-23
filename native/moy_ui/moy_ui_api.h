@@ -803,6 +803,10 @@ typedef struct {
     // that lent them (bar.seen), and the tool the host's bar activated for
     // the next ui.bar to answer (-1 none).
     moy_ui_bar_t bar;
+    // The way back the frame drawn last offers a front that takes the
+    // host's back through the toolkit (moy_ui_api_way), and whether the
+    // host took it since (moy_ui_api_way_taken answers it once).
+    uint8_t way_on, way_taken;
     char page_title[MOY_UI_API_TIP];    // the top page's title this frame ("" none)
     // A shift frame (docs/history/scroll_and_text_2026-10.md §3.3): the region R that
     // moved (its keep's id and its box as the last frame drew it), the move
@@ -1565,6 +1569,15 @@ void moy_ui_api_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
 // next frame's plan, as ui.end and the next page keep it, and the tooltip a
 // resting pointer earned is drawn over it, as ui.end draws it.
 void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
+// The top page done (moy_ui_api_page_done) drew what the next frame's begin would change: it
+// closed short of its scroll (its rows end above what it showed: rows hidden, a glide past
+// them), or focus is on a stop of it the last frame drew and this pass drew none of (where no
+// dialog drew). Answers 1 with its scroll clamped, the focus passed to the nearest stop the
+// pass drew, and the frame ready for the page's pass to run again from moy_ui_api_page: its
+// stops back to the page's, the input the first pass took gone (no stop takes it twice), the
+// shift floor off (the second pass draws the page whole, and the frame is told the host as a
+// whole one). 0, and nothing changed, otherwise.
+int moy_ui_api_page_again(moy_ui_ctx_t *c);
 // A tool (§1): an icon button in ui.at's rect (else a row of the page),
 // flat but for its marks: the current mark where o->current, the focus mark
 // by its size, at half strength where o->disabled. `label` is its word,
@@ -1613,10 +1626,18 @@ void moy_ui_api_bar_tap(moy_ui_ctx_t *c, int i);
 // The host's back (the bar's chevron, a window's, Esc, B and the T-Deck's
 // K) over the frame drawn last: 1 where the app takes it -- a field's edit
 // is cancelled or a popover it drew dismissed (moy_ui_api_cancel), else the
-// bar it lent with
+// frame's way back is taken (moy_ui_api_way), else the bar it lent with
 // MOY_UI_BAR_BACK answers MOY_UI_BAR_UP -- and 0 where it has no view to
 // step out of, so the host leaves the app. `take` 0 only asks.
 int moy_ui_api_back(moy_ui_ctx_t *c, int take);
+// This frame's page has a way back (`on`: a page under it, a dialog, a
+// popover, a back role) that its front takes when the host's back comes
+// (the UI tree engine's, for a front that asks it: UIT_F_BACK). A frame's
+// begin clears it.
+void moy_ui_api_way(moy_ui_ctx_t *c, int on);
+// Whether the host took the way back since this was asked last
+// (moy_ui_api_back with `take`): 1 once, then 0.
+int moy_ui_api_way_taken(moy_ui_ctx_t *c);
 // The host's cancel (the T-Deck's Mic, and the back above) over the frame
 // drawn last: 1 where the focused field has an edit in progress -- its text
 // other than it was when focus came onto it, or Enter last left it -- and

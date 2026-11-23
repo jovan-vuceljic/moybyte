@@ -29,7 +29,6 @@ gestures and the brush (`brush`, `set_brush`)."""
 
 from array import array
 
-import ui as _ui              # frozen on device
 import ui_draw as _ui_draw
 import uitree_editor
 from layout_base import (LayoutBase, BASE_W as _BASE_W, BASE_H as _BASE_H, pane as _in_pane,
@@ -106,8 +105,13 @@ hint_kind = _ui_draw.hint_kind
 
 
 def ui_line():
-    """The UI face's line height at scale 1."""
+    """The UI face's ascent at scale 1."""
     return _ui_draw.font("ui")[3]
+
+
+def ui_face_line():
+    """The UI face's line, its leading included, at scale 1."""
+    return _ui_draw.font("ui")[2]
 
 
 def text_w(text, fs=1):
@@ -203,13 +207,9 @@ class PageHost:
             self._due = None
             self.run(due)
         pg.paint(dt, cv, th, r, lay.desk)
-        self._end()
+        self._host.end()
         if not self._host.still():
             ws.request_frame()
-
-    def _end(self):
-        """The frame's end, after the page painted."""
-        _ui.end()
 
     def handle_pointer(self, px, py, click):
         """A pointer sample for the page; what a canvas's press does lands

@@ -16,7 +16,7 @@ edges. `App` is a registered app whose screen is a build (`app_layer` makes
 the class a manifest names); `Page` is a build hosted by a surface still
 drawn with today's verbs. Both are made on the C engine."""
 
-import ui as _v
+import moy_ui as _C
 from layers import AppLayer
 from layout_base import bar_rows, content_of, ground_round, metric_class, DESK
 
@@ -387,14 +387,14 @@ class Engine(S.Builder):
         one, outside a dialog (EDGE_* bits, 0 none): the keys went past this
         page's side and its focus stayed. Whoever holds the keys above the
         pages hands them on that way (`enter`)."""
-        return _v._C.api_edge(self._ui.ctx)
+        return _C.api_edge(self._ui.ctx)
 
     def enter(self, way):
         """The keys come into this page travelling `way` (EDGE_*): its next
         frame drawn with them lands focus on its stop nearest the side they
         come in by (its first going down, its last going up, its rightmost
         going left, its leftmost going right)."""
-        _v._C.api_enter(self._ui.ctx, way)
+        _C.api_enter(self._ui.ctx, way)
         if self._damage is not None:
             self._damage.all()
 
@@ -421,6 +421,9 @@ class App(AppLayer):
     IS_APP = None           # (is_app,): claims the app's identity cart
     ENGINE = None           # (Engine subclass,): uitree_editor.Engine for the Editor's kinds
     MIN = None              # (w, h): ui.app's min=, the window's least size in desk units
+    LENDS_BAR = False       # its pages lend the shell's bar a row (`ui.tools(KEY, lend="bar")`)...
+    bar_title = None        # ...after this title (None: the page's)
+    zone_gen = 0            # moves where what that row reads moved
 
     def __init__(self, ctx, names=None):
         self._surf, self._theme, self._damage = ctx.surface, ctx.theme, ctx.damage

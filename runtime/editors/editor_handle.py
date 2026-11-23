@@ -38,7 +38,7 @@ mouse cursor is a question about which surface holds the keyboard -- so
 `InputRouter.nav` answers it once, for the Code tab and for a cart's focused
 handle alike, and reports whether it spent the pulses.
 
-**The document draws as a text view** (`ui.text_view`, the Code tab's): the
+**The document draws as a text view** (`uitree_editor.text_view`, the Code tab's): the
 monospace source, wrapped where the mode wraps prose, coloured by the C's
 highlight where it is a program or data. A Markdown note shows its source
 as typed, coloured as Code colours a program (`syntax` "markdown": its
@@ -53,8 +53,8 @@ from editors_code import CodeEditor, TextMouse
 from moy_input import PB_MIDDLE as _PB_MIDDLE, SHIFT as _SHIFT
 from op_history import History, TextEditCodec, text_diff_op
 import text_modes as _modes
-import ui as _ui
 import ui_draw as _ui_draw
+import uitree_editor as _te
 from ticks import _ticks_ms, _ticks_diff
 from array import array as _array
 
@@ -66,10 +66,10 @@ INVALID = "INVALID"    # the badge a mode's gate raises (#154's SYNTAX twin)
 _BURST_BREAK = ".,!?;:"   # a typing burst closes here (#111 phase 3)
 
 # The view's packed options' words the handle writes each frame
-# (`ui.text_options`), and the text's inset from its left (moy_ui_api_int.h's
+# (`uitree_editor.text_options`), and the text's inset from its left (moy_ui_api_int.h's
 # TEXT_PAD) at the scale.
-_TXO_CARET, _TXO_SEL, _TXO_LEFT, _TXO_GEN = _ui.TXO_CARET, _ui.TXO_SEL, _ui.TXO_LEFT, _ui.TXO_GEN
-_TXO_FONT, _TXO_PAPER, _TXO_TOP = _ui.TXO_FONT, _ui.TXO_PAPER, _ui.TXO_TOP
+_TXO_CARET, _TXO_SEL, _TXO_LEFT, _TXO_GEN = _te.TXO_CARET, _te.TXO_SEL, _te.TXO_LEFT, _te.TXO_GEN
+_TXO_FONT, _TXO_PAPER, _TXO_TOP = _te.TXO_FONT, _te.TXO_PAPER, _te.TXO_TOP
 _TEXT_PAD = 8
 _VIEWS = [0]           # the handles made: each view's id is its own
 
@@ -182,7 +182,7 @@ class EditorHandle:
         self._caret_col = 0          # ...and its column
         self._gen = 0                # bumped by every verb that changes what it draws
         self._drawn = -1             # the _gen the last draw showed
-        # The view (`ui.text_view`): its id, its options packed once and
+        # The view (`uitree_editor.text_view`): its id, its options packed once and
         # written in place, its answer, the rect it drew in, the first line
         # it showed and the columns it was panned to; the host whose pass
         # drew it last, and the handle's own for a draw in none. `frame` is
@@ -198,7 +198,7 @@ class EditorHandle:
             syn = _modes.lang_for(self._name) or self._m.lang
         self.syntax = syn            # the view's syntax, which a ui.doc that adopts the handle takes
         self.journal = _Journal(self)   # ...and its journal (uitree_doc.Journal)
-        self._opt = _ui.text_options({"wrap": self._m.wrap, "syntax": syn})
+        self._opt = _te.text_options(syn, self._m.wrap)
         self._into = _array("i", [0, 0])
         self._fm = [None, 0, 8, 10]  # look_gen, the view's font (0: mono's), its cell, line
         self._vr = [0, 0, 0, 0]
@@ -521,7 +521,7 @@ class EditorHandle:
     def _put(self, where):
         """Put the caret and the view back where `_where` read them, before
         this handle's first draw: its first frame shows that top line
-        (`ui.text_view`'s `top`, a jump on a view's first frame), not the
+        (`text_view`'s `top`, a jump on a view's first frame), not the
         caret's row from the top. The shell's call."""
         row, col, top, left = where
         self._place(row, col, False)
@@ -600,7 +600,7 @@ class EditorHandle:
 
     def draw(self, x, y, w, h, scale=1, r=0):
         """Render the document into `(x, y, w, h)` of the cart's canvas, on
-        its paper (corners of radius `r`): one `ui.text_view` in the
+        its paper (corners of radius `r`): one `text_view` in the
         monospace face (`_face`), wrapped where the mode wraps prose, coloured where
         the mode is a program's or data's. `scale` is the canvas's font
         scale's, which the view takes itself.
@@ -687,8 +687,7 @@ class EditorHandle:
             # the columns scrolled across: every row changes
             self._left = ed.left
             host.whole()
-        _ui.at(x, y, w, h)
-        got = _ui.text_view(self._vid, ed.lines, o, None, None, self._into)
+        got = _te.text_view(self._vid, x, y, w, h, ed.lines, o, None, None, self._into)
         ed.top = self._top = got[0]
         rows = got[1] - 1 if got[1] > 1 else 1
         if ed.ROWS != rows or ed.COLS != self._cols(cv, w):
@@ -701,7 +700,7 @@ class EditorHandle:
             _ui_draw.text_cover(host, self._vid, a[1] - 7 * s, a[1] + 7 * s)
 
     def _cols(self, cv, w):
-        """The columns a row of the view shows (`ui.text_view`'s count:
+        """The columns a row of the view shows (`text_view`'s count:
         its face's cell at the canvas's scale (`_face`), the text's inset from
         the view's left and, wrapped, from its right): where a line that
         does not wrap pans sideways to keep the caret (`CodeEditor`)."""
@@ -860,7 +859,7 @@ class EditorHandle:
 
     def _face(self):
         """`[look_gen, font, cell, line]`: the font the view draws in
-        (`ui.text_view`'s `font`: the look's `note_font`, the desk's 15 px
+        (`text_view`'s `font`: the look's `note_font`, the desk's 15 px
         face; 0 the `mono` role's) and its cell and line, unscaled (a
         petme128 line 10, the view's pitch); asked of the look once a look
         generation."""

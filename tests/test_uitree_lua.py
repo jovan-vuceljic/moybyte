@@ -583,6 +583,50 @@ def test_a_letter_key_and_the_confirm_role_fire_on_the_c_engine(tmp_path):
     assert acts == ["action save from key 's'", "action go from role confirm"], lines
 
 
+def test_the_hosts_back_steps_a_lua_apps_pages_through_the_engines_way_back(tmp_path):
+    """The engine offers the host's back a way back where the page has one
+    (`UIT_F_BACK`: a page under the top one, the back role) and answers a
+    taken one at the next frame (`e:backed()`): the pushed page goes, then
+    the back role's action runs, once each; with neither the host leaves."""
+    from runtime import host_app, ui_draw
+    from runtime.host import moy_log
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    pages = ('ui.action("go", "Go", function() ui.push("two") end, { keys = { "g" } })\n'
+             'ui.page("one", function() ui.label("one") end)\n'
+             'ui.page("two", function() ui.label("two") end)\n')
+    _cart(carts, "Plain", 'ui.app("Plain", { icon = "calc" })\n' + pages)
+    _cart(carts, "Role", 'ui.app("Role", { icon = "calc" })\n'
+          'ui.action("off", "Off", function() end, { keys = { "role:back" } })\n' + pages)
+    ws, drv, frame, open_cart = _console(carts)
+    seq = moy_log.next()
+    for name in ("Plain", "Role"):
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        face = ws.run.player.face
+        assert face.has_page() == (name == "Role"), (name, "the back role is a way back")
+        drv.type_char(ord("g"))
+        frame()
+        frame()
+        assert face.has_page(), (name, "the page under the pushed one")
+        lent = ui_draw.bar_lent(ui_draw.RUN_UI)
+        assert lent is None or not lent[3], "the way back is the engine's, no bar's"
+        assert face.back(), (name, "the pushed page is the app's to step out of")
+        frame()
+        frame()
+        assert face.has_page() == (name == "Role"), (name, "back on the first page")
+        assert face.back() == (name == "Role"), (name, "the back role's action, or the host's")
+        frame()
+        frame()
+        assert ws.run.player.cart_error is None, ws.run.player.cart_error
+        ws.spine.exit_to_caller()
+    lines = [r[4].split("[trace] ", 1)[1] for r in moy_log.read(seq, 8000) if "[trace] " in r[4]]
+    acts = [" ".join(l.split()[1:]) for l in lines if l.split()[1:2] == ["action"]]
+    assert acts == ["action go from key 'g'", "action go from key 'g'",
+                    "action off from role back on 'one'"], lines
+
+
 def test_a_typed_char_and_a_buttons_arg_reach_their_actions_on_the_c_engine(tmp_path):
     """An action's chars= is handed the character typed, as typed, and a
     button's arg= is handed to its action on a press, as uitree_c.py hands
@@ -989,3 +1033,60 @@ def test_a_split_among_a_pages_rows_takes_its_cells_height_on_the_c_engine(tmp_p
             break
     assert ws.run.player.cart_error is None, ws.run.player.cart_error
     assert hit is not None and hit > 28 + 4 * 18, hit
+
+
+def test_a_size_text_label_draws_as_measured_and_an_icon_alone_draws_on_the_c_engine(tmp_path):
+    """From Lua: a size="text" label in a row draws the same pixels as with
+    face="ui", the face it is measured in (it drew as a plain row once and
+    cut its text), and a dim label with an icon and no words draws its icon."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    body = ('ui.app("%s", { icon = "calc" })\n'
+            'ui.page("p", function()\n'
+            '  ui.row(function()\n'
+            '    ui.label("Sound effects for the long level", { size = "text"%s })\n'
+            '    ui.label("12 notes", { tone = "dim" })\n'
+            '  end)\n'
+            '  ui.row(function() ui.label("", { tone = "dim"%s }) end)\n'
+            'end)\n')
+    cases = {"Plain": ("", ""), "Face": (', face = "ui"', ""), "Icon": ("", ', icon = "music"')}
+    for name, (face, icon) in cases.items():
+        _cart(carts, name, body % (name, face, icon))
+    ws, drv, frame, open_cart = _console(carts)
+    shots = {}
+    for name in cases:
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        assert ws.run.player.cart_error is None, (name, ws.run.player.cart_error)
+        shots[name] = bytes(drv.rgb888())[20 * 320 * 3:]   # below the bar, which carries the title
+        ws.spine.exit_to_caller()
+    assert shots["Plain"] == shots["Face"]
+    assert shots["Icon"] != shots["Plain"]
+
+
+def test_a_grids_spacing_is_a_word_and_an_int_stops_the_run_at_its_line(tmp_path):
+    """A grid's and a split's gap= and pad= are the spacing words (s, m, l,
+    0), the engine's: from Lua a word draws, a number stops the run at its
+    line with N01."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    body = ('ui.app("%s", { icon = "calc" })\n'
+            'ui.action("a", "Add", function() end)\nui.action("b", "Back", function() end)\n'
+            'ui.page("p", function()\n'
+            '  ui.grid({ cols = 2, rows = 1, gap = %s }, function() ui.button("a") ui.button("b") end)\n'
+            'end)\n')
+    for name, gap in (("Word", '"s"'), ("Int", "4")):
+        _cart(carts, name, body % (name, gap))
+    ws, drv, frame, open_cart = _console(carts)
+    got = {}
+    for name in ("Word", "Int"):
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        got[name] = ws.run.player.cart_error
+        ws.spine.exit_to_caller()
+    assert got["Word"] is None, got["Word"]
+    assert got["Int"] and "error[N01] main.lua:5:" in got["Int"], got["Int"]

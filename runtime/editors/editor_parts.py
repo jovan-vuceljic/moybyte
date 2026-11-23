@@ -383,7 +383,7 @@ class PartHost(PageHost):
         self._host.begin(cv, th, r, True, False, away)
         self._sync()
         pg.paint(dt, cv, th, r, True)
-        self._end()
+        self._host.end()
         if not self._host.still():
             ws.request_frame()
 

@@ -41,6 +41,7 @@ an old story cart's deck) is not listed: it reads as absent.
 """
 
 import ui as _v
+import ui_font as _ui_font
 import uitree as ui
 import uitree_app
 from layers import AppLayer
@@ -75,7 +76,7 @@ BANDED = ("deck", "slide")                  # ...those whose desk window shows t
 
 
 def dot():
-    return " · " if _v.has_symbols() else " - "
+    return " · " if _ui_font.print_symbols() else " - "
 
 
 def zoom_fit(w, h):
@@ -90,7 +91,7 @@ def zoom_word(n, d):
     words = {(1, 1): "1:1", (1, 2): "½", (1, 4): "¼", (1, 8): "⅛", (5, 8): "5/8",
              (5, 16): "5/16", (3, 4): "¾", (7, 8): "7/8"}
     w = words.get((n, d), "%d/%d" % (n, d))
-    if not _v.has_symbols():
+    if not _ui_font.print_symbols():
         w = {"½": "1/2", "¼": "1/4", "⅛": "1/8", "¾": "3/4"}.get(w, w)
     return w
 
@@ -565,7 +566,7 @@ def _fill_editor(lay):
             import story_edit as E
             ed._scan_pictures(lambda name, blob: ui.pictures.put(
                 "draw:" + name, data=blob.encode() if isinstance(blob, str) else blob))
-            x = "×" if _v.has_symbols() else "x"
+            x = "×" if _ui_font.print_symbols() else "x"
             _set(lay, "pics", [{"id": name, "title": E._shown(name), "sub": "%d %s %d" % (w, x, h),
                                 "pic": ui.image.own("draw:" + name)} for name, w, h in ed.pics])
             _set(lay, "pics_none", not ed.pics)
@@ -736,6 +737,8 @@ def _view():
     ui.canvas("view", draw_view, h=152, ground="panel", reads=["view"])
     ui.stepper("{count_word}", "prev", "next")
     ui.label("Edit stories on a desk board or the web", tone="dim", align="center")
+    with ui.tools("bar", lend="bar"):
+        ui.button("present", icon="play", alone=True)
 
 
 # -- the desk's editor (runtime/apps/story_edit.py holds its state and verbs) ---------
@@ -1247,6 +1250,7 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is
 
     APP_TITLE = "Storybook"
     APP_FOLDER = "moybyte.storybook.moy"
+    LENDS_BAR = True
     domain = "system"
 
     def __init__(self, ctx, names=None):
@@ -1681,10 +1685,8 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is
             ui.commit(self.engine)
         # a desk window's band says the editor's keys; the stories' page has none
         self.engine.band = not self.desk or self.page in BANDED
+        self.bar_title = self.page_title()    # the row lent after it: `_view`'s
         super().draw(dt)
-        if self.page == "view" and self.story is not None:
-            if _v.bar(self.story.title() or "Untitled", ("play",), (), True) == 0:
-                self._start(self.cur)
 
     # -- Present ------------------------------------------------------------------------
 

@@ -46,7 +46,7 @@ the focused one (F6).
 import json as _json
 
 import iconsets as _iconsets
-import ui as _ui
+import ui_font as _ui_font
 import ui_draw as _ui_draw
 from layers import Layer
 import text_modes as _modes
@@ -92,7 +92,7 @@ def slot_name(slot):
 
 
 def _dot():
-    return " · " if _ui.has_symbols() else " - "
+    return " · " if _ui_font.print_symbols() else " - "
 
 
 # -- the package ------------------------------------------------------------------

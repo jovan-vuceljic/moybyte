@@ -36,7 +36,7 @@ class HeadHost(PageHost):
         self._host.begin(cv, th, r, True, False, not keys)
         self._sync()
         pg.paint(dt, cv, th, r, True)
-        self._end()
+        self._host.end()
         if not self._host.still():
             ws.request_frame()
 

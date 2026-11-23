@@ -464,7 +464,7 @@ class Carousel(Launcher):
         if key[0] < 0:
             # (the band not the home's alone on the glass: no buffer holds its frame)
             if need:
-                _ui.end()
+                host.end()
                 return None
             held = False
         whole = whole or not held
@@ -508,7 +508,7 @@ class Carousel(Launcher):
             # what the band shows, under its key: each buffer that drew it so holds it
             _ui.held("cards", kf(key, w))
         end = 0 if _ui.held_all() else -1
-        _ui.end()
+        host.end()
         return end
 
     @staticmethod

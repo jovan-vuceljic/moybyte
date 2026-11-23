@@ -646,7 +646,7 @@ class Launcher:
             b[0] <= over[0] and over[0] + over[2] <= b[0] + b[2]
             and b[1] <= over[1] and over[1] + over[3] <= b[1] + b[3]) else -1)
         if need and not held:
-            _ui.end()
+            host.end()
             return None
         return held
 
@@ -705,7 +705,7 @@ class Launcher:
         if key[0] < 0:
             # (the band not the home's alone on the glass: no buffer holds its frame)
             if need:
-                _ui.end()
+                host.end()
                 return None
             held = False
         whole = whole or not held
@@ -739,7 +739,7 @@ class Launcher:
                 self._sel = w[_W_CUR]       # the keys moved the selection
             _ui.held("cards", self._cells_key(key, w))
         end = 0 if _ui.held_all() else -1
-        _ui.end()
+        host.end()
         return end
 
     @staticmethod

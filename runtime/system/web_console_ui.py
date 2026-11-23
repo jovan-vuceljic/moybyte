@@ -38,7 +38,6 @@ it the content rect and draws the bar's status strip over it. NAMES is
 injected at construction rather than imported back from console.py.
 """
 
-import ui as _ui
 import ui_draw as _ui_draw
 import uitree as ui
 import uitree_app

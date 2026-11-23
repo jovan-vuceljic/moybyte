@@ -23,7 +23,7 @@ drawing back. On the desk the window's foot carries the focused card's
 verbs. With nothing drawn yet the page says so and offers New drawing.
 """
 
-import ui as _v
+import ui_font as _ui_font
 import uitree as ui
 import uitree_app
 
@@ -110,7 +110,7 @@ def fill(lay):
             status = "%d drawings" % n
         else:
             w, h = lay._size(name)
-            status = shown(name) + dot() + ("%d \u00d7 %d" % (w, h) if _v.has_symbols()
+            status = shown(name) + dot() + ("%d \u00d7 %d" % (w, h) if _ui_font.print_symbols()
                                             else "%dx%d" % (w, h))
         _set(lay, "status", status)
     menu = lay.menu and name is not None

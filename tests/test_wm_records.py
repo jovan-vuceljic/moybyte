@@ -525,6 +525,15 @@ def _mode_changed(ws):
     _theme_cards_made(a)
 
 
+def _theme_to(name):
+    def changed(ws):
+        a = _inst(ws, "AppearanceAppLayer")
+        a._theme.set(name if a.choices()["theme"] != name else "moy")
+        a.acted()
+        _theme_cards_made(a)
+    return changed
+
+
 def _theme_cards_made(a):
     """The rows filled and every theme card's picture made at its tile's
     size (the budget holding them all): the cards draw in the mode, and
@@ -555,6 +564,8 @@ CHANGES = {"file added": ("files", _file_added), "file renamed": ("files", _file
            "story renamed": ("storybook", _story_renamed),
            "story page turned": ("storybook", _story_turned),
            "mode changed": ("appearance", _mode_changed),
+           "theme switched, a row hidden": ("appearance", _theme_to("blocks")),
+           "theme switched, a seg hidden": ("appearance", _theme_to("contrast")),
            "accent changed": ("appearance", _accent_changed)}
 
 

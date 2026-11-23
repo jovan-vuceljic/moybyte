@@ -849,18 +849,63 @@ def test_a_tap_on_the_handheld_bars_zoom_chip_steps_the_zoom(tmp_path):
         ws.mark_dirty()
         ws.frame(1 / 30)
     bl = ws.bar_layer
-    edge, rect, _dy, _cells = bl._packed("app")[0]
+    bar = bl._packed("app")[0]
+    rect = bar[1]
     box = (0, 0, rect[2], rect[3])
-    end = bl._title_end("app", bl.lent_zone("app", bl._packed("app")[0]), box, False)
-    chip = [h for h, _i, _off, name, _r in bl._lent_rects("app", end, box, False)
-            if name == bl.lent("app")[4]]
-    assert chip
+    chip = ws.bar_layer._zone_owner("app").box("zoom", zone=bl._row_zone("app", bl.lent_zone("app", bar), box, False))
+    assert chip, "the zoom in the row the page lends the bar"
     was = app.zoom
-    x, y, w, h = chip[0]
+    x, y, w, h = chip
     assert bl.handle_bar_tap("app", rect[0] + x + w // 2, rect[1] + y + h // 2)
     ws.mark_dirty()
     ws.frame(1 / 30)
     assert app.zoom != was
+
+
+def test_the_row_paint_lends_the_bar_stands_after_its_title_and_takes_its_taps(tmp_path):
+    """The handheld's row (`ui.tools("bar", lend="bar")`): undo, redo and
+    the zoom after the bar's "Paint", undo and redo on where the history
+    has a step; a tap on one runs it once, a tap on one that is off runs
+    nothing."""
+    from runtime.uitree_editor import LC_ON
+    ws = host_app.build_workstation(str(tmp_path / "carts"))
+    app = _open_paint(ws)
+    driver = host_app.ConsoleDriver(ws)
+    x, y = app._spec()[:2]
+    driver.touch(x + 10, y + 8)
+    driver.frame(1 / 30)
+    driver.touch_drag(x + 26, y + 8)
+    driver.frame(1 / 30)
+    driver.touch_up()
+    driver.frame(1 / 30)
+    for _ in range(3):
+        ws.mark_dirty()
+        ws.frame(1 / 30)
+    bl = ws.bar_layer
+    bar = bl._packed("app")[0]
+    rect = bar[1]
+    box = (0, 0, rect[2], rect[3])
+    zone = bl.lent_zone("app", bar)
+    assert bl._title("app") == "Paint"
+    row = bl._row_zone("app", zone, box, False)
+    assert row[0] > bl._title_end("app", zone, box, False), "the row after the title"
+    cells = {c[2]: c for c in ws.bar_layer._zone_owner("app")._layout(row)[0]}
+    assert sorted(cells) == ["redo", "undo", "zoom"]
+    assert cells["undo"][7] & LC_ON and not cells["redo"][7] & LC_ON
+
+    def tap(key):
+        r = cells[key][0]
+        assert bl.handle_bar_tap("app", rect[0] + r[0] + r[2] // 2, rect[1] + r[1] + r[3] // 2)
+        ws.mark_dirty()
+        ws.frame(1 / 30)
+
+    drawn = bytes(app.doc.pix)
+    tap("redo")
+    assert bytes(app.doc.pix) == drawn, "redo is off: the tap runs nothing"
+    tap("undo")
+    assert bytes(app.doc.pix) != drawn and not app.doc.history, "one undo"
+    tap("undo")
+    assert app.doc.future, "undo is off: the redo step stays"
 
 
 def _stroke_glass(tmp_path, monkeypatch, desk, stroke_frames, tool, shape=1, bufs=1,
@@ -1097,7 +1142,7 @@ def test_paints_frame_path_is_found_on_the_class_or_its_first_base():
     assert cls.__bases__[0] is paint_draw.PaintDraw
     assert not [n for n in ("draw", "retained", "changed") if n not in vars(cls)]
     for name in ("_draw_view", "_stroke_frame", "_view", "_drawing", "_look", "_show",
-                 "_send_page", "_lend", "_lead", "_pop_at", "_look_h", "_drip_colour"):
+                 "_send_page", "_name_bar", "_lead", "_pop_at", "_look_h", "_drip_colour"):
         assert name in vars(cls) or name in vars(paint_draw.PaintDraw), name
 
 

@@ -236,8 +236,7 @@ def pages(tmp_path_factory):
                     _frame(drv)
                 assert ws.run.player.cart_error is None, (tier, ws.run.player.cart_error)
                 out[(console, tier, page)] = _pixels(ws)
-                lent = ws.bar_layer.lent("tool")
-                out[(console, tier, page, "bar")] = lent and lent[0]
+                out[(console, tier, page, "bar")] = ws.bar_layer._title("tool")
                 if SHOTS:
                     _shot("%s_%d_%s" % (console, page, tier), *out[(console, tier, page)])
                 if page == 2:

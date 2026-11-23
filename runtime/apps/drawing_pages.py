@@ -11,6 +11,7 @@ APPS_RESTYLE.md), `uitree` pages each app hosts in its frame
 is chosen (`SendPage.draw`)."""
 
 import ui as _v
+import ui_font as _ui_font
 import uitree as ui
 import uitree_app
 
@@ -21,11 +22,11 @@ except ImportError:
 
 
 def dot():
-    return " · " if _v.has_symbols() else " - "
+    return " · " if _ui_font.print_symbols() else " - "
 
 
 def dots():
-    return "…" if _v.has_symbols() else "..."
+    return "…" if _ui_font.print_symbols() else "..."
 
 
 def shown(name):

@@ -26,8 +26,8 @@ construction instead of imported back from console.py, which would be a
 circular import.
 """
 
-import ui as _ui
 import ui_draw as _ui_draw
+import ui_font as _ui_font
 import uitree_editor
 import editor_blocks
 
@@ -1156,7 +1156,7 @@ class BlockEditorUI:
         self._host.begin(cv, ws.theme_colors, r, desk, False, not up)
         self._sync()
         pg.paint(dt, cv, ws.theme_colors, r, desk)
-        _ui.end()
+        self._host.end()
         ws.bar_layer.draw_status_strip("menu")
         if not self._host.still():
             ws.request_frame()
@@ -1251,21 +1251,21 @@ class BlockEditorUI:
         picked one's key (an index)."""
         w = self.block_layout.cw
         fs = self.block_layout.fs
-        _ui.face("ui")
-        sw = min(_ui.text_size(status, fs)[0] + 4 * fs, w // 2) if status else 0
-        room = w - 16 * fs - sw - 8 * fs - (_ui.text_size("Stage", fs)[0] + 20 * fs)
+        was = _ui_font.print_face("ui")
+        sw = min(_ui_font.print_size(status, fs)[0] + 4 * fs, w // 2) if status else 0
+        room = w - 16 * fs - sw - 8 * fs - (_ui_font.print_size("Stage", fs)[0] + 20 * fs)
         tags = self._tags
         del tags[:]
         cur = 0
         for t in self._roster_tags():
-            tw = _ui.text_size(t, fs)[0] + 20 * fs
+            tw = _ui_font.print_size(t, fs)[0] + 20 * fs
             if tw > room:
                 break
             room -= tw
             tags.append(t)
             if t == be.target:
                 cur = len(tags)
-        _ui.face()
+        _ui_font.print_font(was)
         objs = [dict(k="0", name="Stage")] + [dict(k=str(i + 1), name=t) for i, t in enumerate(tags)]
         return objs, str(cur)
 
@@ -1299,7 +1299,7 @@ class BlockEditorUI:
             label = self._blk_row_text(b, row.is_else)
             fill = self._cat_color("control" if row.is_else else self._blk_block_cat(b))
             hat = not row.is_else and self._is_hat_block(b)
-            tw, lh = _ui.text_size(label, fs)
+            tw, lh = _ui_font.print_size(label, fs)
             lk = self._looks[i] = [label, tw + (20 if hat else 22) * fs, fill,
                                    self._blk_ink(fill) if hat else None, hat, lh]
         return lk
@@ -1318,16 +1318,16 @@ class BlockEditorUI:
         cursor = i == be.cur
         rx = self._row_x(row)
         rw = x + w - 8 * fs - rx
-        _ui.face("ui")
+        was = _ui_font.print_face("ui")
         look = self._look(i, row)
         if look is None:
             if cursor:
-                aw = _ui.text_size("add block", fs)[0] + 40 * fs
+                aw = _ui_font.print_size("add block", fs)[0] + 40 * fs
                 _ui_draw.button(cv, th, (rx, y + fs, min(rw, aw), h - 2 * fs), "add block",
                                 "tonal", glyph="plus", glyph_draw=self._add_icon)
             else:
                 cv.rect(rx + 2 * fs, y + h // 2 - fs, 10 * fs, 2 * fs, th["border"])
-            _ui.face()
+            _ui_font.print_font(was)
             return
         label, fill = look[0], look[2]
         tw = min(rw, look[1])
@@ -1346,7 +1346,7 @@ class BlockEditorUI:
         cv.print(label, tx, ty, ink, 1)
         if cursor and not row.is_else:
             self._draw_caret(cv, th, row.block, label, tx, ty + look[5])
-        _ui.face()
+        _ui_font.print_font(was)
 
     def _add_icon(self, kind, rect, ink, cv):
         """"add block"'s icon: the theme's icon set's `new`, else the plus glyph."""
@@ -1368,8 +1368,8 @@ class BlockEditorUI:
                 if col is not None:
                     val = self._blk_slot_display(b, slots[si])
                     fs = self.block_layout.fs
-                    c[2] = _ui.text_size(label[:col], fs)[0]
-                    c[3] = max(4 * fs, _ui.text_size(val, fs)[0])
+                    c[2] = _ui_font.print_size(label[:col], fs)[0]
+                    c[3] = max(4 * fs, _ui_font.print_size(val, fs)[0])
         if c[2] is not None:
             cv.rect(tx + c[2], y, c[3], 2 * self.block_layout.fs, th["value"])
 

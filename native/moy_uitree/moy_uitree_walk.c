@@ -1308,21 +1308,6 @@ static uint32_t prop_text(uit_t *e, int k, const char *name, int model, int row,
 static int32_t len_of(uit_t *e, int t, int model, int row, int32_t dflt);
 static int32_t int_of(uit_t *e, int t, int model, int row, int32_t dflt);
 
-// A label's tone=: a literal's index, or a template's word (dim, value, danger; another is ink).
-static int label_tone(uit_t *e, int k, int model, int row)
-{
-    int tone = NODE(k)->lit;
-    if (!tone) {
-        uint32_t nt, mark = e->scratch.n, at = prop_text(e, k, "tone", model, row, &nt);
-        static const char *const TONES[] = {"dim", "value", "danger"};
-        for (int i = 0; i < 3 && !tone; i++)
-            if (nt == strlen(TONES[i]) && !memcmp(e->scratch.p + at, TONES[i], nt))
-                tone = i + 1;
-        e->scratch.n = mark;
-    }
-    return tone;
-}
-
 static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row, int32_t *h,
                          int part)
 {
@@ -1334,7 +1319,16 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         if (n)
             moy_ui_api_icon(c, sspan(e, at, n));
     }
-    int tone = label_tone(e, k, model, row);
+    // tone=: a literal's index, or a template's word (dim, value, danger; another is ink)
+    int tone = N->lit;
+    if (!tone) {
+        uint32_t nt, mark = e->scratch.n, at = prop_text(e, k, "tone", model, row, &nt);
+        static const char *const TONES[] = {"dim", "value", "danger"};
+        for (int i = 0; i < 3 && !tone; i++)
+            if (nt == strlen(TONES[i]) && !memcmp(e->scratch.p + at, TONES[i], nt))
+                tone = i + 1;
+        e->scratch.n = mark;
+    }
     a1 = text(e, k, 0, model, row, &n1);
     // scale=: its face at that whole scale, never under the page's; w=: its text at most that wide
     int32_t sc = int_of(e, N->t_value, model, row, 0), cap = len_of(e, N->t_aux, model, row, 0);
@@ -1356,6 +1350,8 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
     if ((t & LT_WRAP) == LT_CHAR && !n1)
         return;
     int face = ((t >> LT_FACE_SHIFT) & 7) - 1;
+    if ((t & LT_TEXT) && face < 0)
+        face = MOY_UI_FONT_UI;          // size="text": drawn in the face it is measured in (`natural`)
     if ((t & LT_FIT) && face >= 0) {
         // its face where the theme has one that draws every character of its text and the
         // text fits the page's width in it, else the page's own face
@@ -2781,7 +2777,8 @@ static void flow_draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, 
 static void put_cell(uit_t *e, int k, int model, int row, const int32_t r[4]);
 
 // Whether split `k` stands among a flowing page's rows: in a group or a scroll, or beside a shown
-// row that is no region in its page, its case or its split's cell. A split alone there (or a
+// row that is no region in its page, its case or its split's cell (a tools row lent to a site
+// draws elsewhere, so it is none). A split alone there (or a
 // split's or a grid's cell) lays that room out in cells.
 static int split_flows(uit_t *e, int k)
 {
@@ -2799,7 +2796,8 @@ static int split_flows(uit_t *e, int k)
     KIDS(p, g) {
         int gk = NODE(g)->kind;
         if (g != k && gk != UIT_POPOVER && gk != UIT_DIALOG && gk != UIT_FOOT && gk != UIT_TOAST &&
-            gk != UIT_SPLIT && gk != UIT_GRID && uit_shown(e, g, -1, -1))
+            gk != UIT_SPLIT && gk != UIT_GRID && !(gk == UIT_TOOLS && (NODE(g)->lit & TL_LEND)) &&
+            uit_shown(e, g, -1, -1))
             return 1;
     }
     return 0;
@@ -5534,8 +5532,9 @@ static int32_t natural(uit_t *e, int k, int model, int row, int32_t h)
     if (N->kind == UIT_GRID && N->t_value >= 0)
         return len_of(e, N->t_value, model, row, 0);     // a grid's w=
     if (N->kind == UIT_LABEL && (N->nbtn & LT_TEXT)) {
-        // size="text": its text's width in the ui face, the row pad each side, and where it
-        // shows an icon, its box and gap (`moy_ui_text_block`'s)
+        // size="text": its text's width in the ui face (`label_rows_m` draws it in that face, as
+        // a text block from its cell's left), room after it, and where it shows an icon, its box
+        // and gap (`moy_ui_text_block`'s)
         moy_font_info_t fi;
         int32_t ic = 0;
         if (N->t_icon >= 0) {
@@ -7166,6 +7165,10 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         e->page_gen = gen;
     }
     e->foot = (int16_t)foot_of(e);
+    int redone = 0;                 // the page's pass runs again, clamped (moy_ui_api_page_again)
+    int moved = 0;
+    char ahead[UIT_ID_MAX + 1];
+again:;
     int ground = e->placed && e->ground[2] > 0;
     if (ground)
         moy_ui_api_at(c, e->ground[0], e->ground[1], e->ground[2], e->ground[3]);
@@ -7182,6 +7185,17 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         if (flags & UIT_F_BAND)
             placed_band(e, c, s, &hb, pages ? pages : 1);
         goto ids;
+    }
+    if (redone) {
+        // the page's second pass: focus where the first pass left it, by the first pass's ids
+        char f2[UIT_ID_MAX + 1];
+        int n2 = moy_ui_api_focus(c, span_of(NULL, 0), f2, sizeof f2);
+        const uit_id_t *now2 = n2 > 0 ? id_find(e->ids, e->nids, f2) : NULL;
+        if (now2) {
+            e->focused = *now2;
+            e->has_focused = 1;
+        }
+        goto band;
     }
     // what focus is on as the page begins
     char f[UIT_ID_MAX + 1];
@@ -7226,6 +7240,7 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         }
         UIT_FREE(st.s);
     }
+band:
     // the hints band
     hints(e, &hb, pages ? pages : 1);
     if (hb.n && (flags & UIT_F_BAND)) {
@@ -7283,17 +7298,20 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
         }
     }
 ids:;
-    // this frame's ids
-    uit_id_t *t = e->prev;
-    int tc = e->cprev;
-    e->prev = e->ids;
-    e->cprev = e->cids;
-    e->nprev = e->nids;
-    e->ids = t;
-    e->cids = tc;
-    e->nids = 0;
-    char ahead[UIT_ID_MAX + 1];
-    int moved = land_focus(e, c, ahead);
+    if (redone) {
+        e->nids = 0;
+    } else {
+        // this frame's ids
+        uit_id_t *t = e->prev;
+        int tc = e->cprev;
+        e->prev = e->ids;
+        e->cprev = e->cids;
+        e->nprev = e->nids;
+        e->ids = t;
+        e->cids = tc;
+        e->nids = 0;
+        moved = land_focus(e, c, ahead);
+    }
     e->tv_stop_now = 0;
     e->page_tabs_now = -1;
     if (e->placed)
@@ -7301,6 +7319,21 @@ ids:;
     else if (rects_ready(e))            // a flowing page's rects: where its canvases drew
         walk(e, c, s, 0, -1, -1);
     moy_ui_api_page_done(c, s);         // the next frame's plan reads what this one drew
+    if (!redone && moy_ui_api_page_again(c)) {
+        // the page closed short of its scroll (rows hidden under it): it draws again, clamped,
+        // in this frame, its input taken by the first pass
+        redone = 1;
+        uit_buf_free(&hb);
+        e->scratch.n = 0;
+        e->nanc = 0;
+        e->canvas_now = 0;
+        e->pop_hints_n = 0;
+        if (e->fits_on) {
+            e->fits.n = 0;
+            e->fit_k = -1;
+        }
+        goto again;
+    }
     e->band[0] = c->hint_band.x, e->band[1] = c->hint_band.y;
     e->band[2] = c->hint_band.w, e->band[3] = c->hint_band.h;
     e->pop_hints_n = 0;         // (its buffer goes with this frame)
@@ -7337,6 +7370,9 @@ ids:;
     e->still_ok = !owe;
     if (e->fits_on)
         moy_ui_fit_tap(NULL, NULL);
+    if (flags & UIT_F_BACK)             // the way back the host's back takes (uit_run_backed)
+        moy_ui_api_way(c, pages > 1 || uit_dialog(e) >= 0 || popover_of(e) >= 0 ||
+                              role_action(e, UIT_A_ROLE_BACK) >= 0);
     return (e->nevs - e->evat) | (owe ? 1 << 16 : 0);
 }
 

@@ -655,7 +655,7 @@ class CodeLayer(Layer):
         self.page.ground = None if desk else (0, 0, cv.w, cv.h)
         host.begin(cv, ws.theme_colors, r, desk)
         self.page.paint(dt, cv, ws.theme_colors, r, desk)
-        _ui.end()
+        host.end()
         b = self._pop
         if host.popped(b) and b[2] > 0 and b[3] > 0:
             pad = _POP_PAD * max(1, getattr(cv, "font_scale", 1))
