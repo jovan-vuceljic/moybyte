@@ -282,10 +282,11 @@ class HomeHints:
         return (rect[0] + e, rect[1], rect[2] - 2 * e, rect[3])
 
     def _hint_tap(self, px, py):
-        """A tap on the hint strip: its verb, as the bar's chip was."""
-        spans, rect = self._hint_spans(self.ws.sys_canvas)
-        if not _in(px, py, rect):
+        """A tap on the hint strip: its verb, as the bar's chip was. The
+        strip's spans are laid out for a tap inside it alone."""
+        if not _in(px, py, self.grid.foot()[5]):
             return False
+        spans, _rect = self._hint_spans(self.ws.sys_canvas)
         for v, x0, x1 in spans:
             if x0 <= px < x1:
                 if v == "tabs":

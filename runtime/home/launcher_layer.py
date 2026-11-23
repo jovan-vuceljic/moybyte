@@ -1154,6 +1154,24 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         return [(tid, (rx + r[0], ry + r[1], r[2], r[3]), True)
                 for tid, _l, r in self.zone_tabs((zx, zy, zw, zh))]
 
+    def _tab_under(self, px, py):
+        """The home's tab under (px, py), else None: the tabs are laid out
+        (`tab_rects`) for a press in the bar's zone alone, whose plates
+        reach a chrome unit past it above and below."""
+        got = _shell_layout.cell_of(self.ws.layout.bars, "zone")
+        if got is None:
+            return None
+        bar = self.ws.layout.bars[got[0]][1]
+        zx, zy, zw, zh = got[1]
+        cs = self.ws.layout.cs
+        x, y = px - bar[0] - zx, py - bar[1] - zy
+        if not (0 <= x < zw and -cs <= y < zh + cs):
+            return None
+        for tid, r, _on in self.tab_rects():
+            if _in(px, py, r):
+                return tid
+        return None
+
     def _draw_home_chrome(self, cv):
         """The hint strip along the home's foot (its tabs are the bar's)."""
         self._draw_hints(cv)
@@ -1387,11 +1405,11 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
                 return True
             if self._search_tap(px, py) or self._hint_tap(px, py):
                 return True
-            for tid, r, _on in self.tab_rects():
-                if _in(px, py, r):
-                    self._tab_focus = False
-                    ws.home.set_home_tab(tid, grid)
-                    return True
+            tid = self._tab_under(px, py)
+            if tid is not None:
+                self._tab_focus = False
+                ws.home.set_home_tab(tid, grid)
+                return True
             frect = grid.favorite_rect(grid.sel)
             if frect is not None and _in(px, py, frect):
                 self.toggle_favourite()

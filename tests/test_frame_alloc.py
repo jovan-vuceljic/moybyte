@@ -2049,14 +2049,17 @@ def test_a_home_band_frame_allocates_under_its_ceiling(result):
 # zero. A moving carousel frame draws the band whole, each card's tile
 # through the home's picture call, the band's floor and the rects it hands
 # as damage new each frame, and a card with no cover draws its title tile.
-# Measured 2026-11-22 on the shelf `_stage_shelf` stages: the carousel's
-# fling at most 3216 bytes a frame, the press's, the engine moving the row
-# (2816 when the home moved it and the band kept its tiles; 2928 and 1309
-# on the band's table of parts, 3264 and 1821 before its keys were kept and
-# its geometry read once a pass); the icons' drag a median of 736 (1056
-# before) and their fling 784, around two frames of the drag over 7 KB that
-# were there before too.
-HOME_SWIPE_FRAME = 3584
+# Measured 2026-11-23 on the shelf `_stage_shelf` stages: the carousel's
+# fling's first twelve frames at most 2016 bytes, a drag's, most of it the
+# cards' covers, and 812 on average over the frames that drew; the press 736
+# since it lays out the hint strip and the tabs only for a press inside them
+# (3216 before, the press's the most;
+# 2816 when the home moved the row and the band kept its tiles; 2928 and
+# 1309 on the band's table of parts, 3264 and 1821 before its keys were
+# kept and its geometry read once a pass); the icons' drag a median of 736
+# (1056 before) and their fling 784, around two frames of the drag over 7
+# KB that were there before too.
+HOME_SWIPE_FRAME = 3 * 1024
 HOME_SWIPE_MEAN = 1536
 ICONS_SWIPE_MEDIAN = 1024
 
