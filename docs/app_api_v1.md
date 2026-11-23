@@ -1720,8 +1720,8 @@ class MyAppLayer(AppLayer):      # from layers import AppLayer
 
 That is the whole list: the console registers it from the declaration
 (`ws.spine.register_app`), and the launcher's claim, the router, the back-stack,
-the window and its chip, the resize floor (`min_size`, or the layout's
-`MIN_W`/`MIN_H`), text mode (what its page has focused) and the exitable
+the window and its chip, the resize floor (`min_size`, else `ui.app(min=)`,
+else the layout's `MIN_W`/`MIN_H`), text mode (what its page has focused) and the exitable
 bar all follow; a new `runtime/`
 module reaches every board unless a `board.toml` denies it (#161). The shell's
 own two, Settings and the task manager, register through the same call with

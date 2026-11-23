@@ -514,7 +514,7 @@ APP_DECLS_HEADER = (
     "  folder     the identity cart it rides on, in system_carts/\n"
     "  title      that cart's title\n"
     "  min_size   optional (w, h) windowed resize floor; omitted means the app's\n"
-    "             layout MIN_W/MIN_H are adopted at registration\n"
+    "             ui.app(min=), else its layout's MIN_W/MIN_H, at registration\n"
     '"""\n'
 )
 

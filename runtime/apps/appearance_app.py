@@ -121,7 +121,7 @@ s = ui.state(
     name="",
     name_note="",
 )
-ui.app("Appearance", icon="palette")
+ui.app("Appearance", icon="palette", min=(310, 230))
 ui.labels("WTABS", {"pictures": "Pictures", "carts": "Carts"})
 
 
@@ -385,8 +385,6 @@ class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build,
     # CAPABILITY, not a core role: this app and the two that copy a drawing
     # into it (Paint, Files) are its only consumers. A pick is a change to
     # the theme (docs/theme_and_shell_2026-11.md D6), so it lands in `custom`.
-    MIN_W = 310
-    MIN_H = 230
 
     def __init__(self, ctx, names=None):
         super().__init__(ctx, names)

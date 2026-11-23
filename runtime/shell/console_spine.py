@@ -409,14 +409,17 @@ class Spine:
 
         and the input protocol `layers.Layer` defaults (its text mode is what
         its `typing` answers); `min_size=(w, h)` is the windowed-WM resize minimum in fs-scaled
-        units (the ui.py convention). When omitted, MIN_W/MIN_H on
-        the app's layout are adopted. TITLE supplies window/taskbar text. A
+        units (the ui.py convention). When omitted, a ui tree app's `MIN`
+        (its `ui.app(min=)`), else MIN_W/MIN_H on the app's layout, are
+        adopted. TITLE supplies window/taskbar text. A
         launcher tap on the claimed cart opens the app instead of the Player;
         everything else (window chrome, theme tokens, toolkit) comes free.
         `cart` False: no cart is the app (Settings, the task manager), so it
         joins the router, the app table and `ws.app`, but not `app_layers`,
         the apps a launcher tap, the desk's tiles and the Apps tab walk."""
         ws = self.ws
+        if min_size is None:
+            min_size = getattr(app, "MIN", None)
         if min_size is None:
             layout = getattr(app, "layout", None)
             min_w = getattr(layout, "MIN_W", None)

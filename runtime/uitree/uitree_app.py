@@ -419,6 +419,7 @@ class App(AppLayer):
     BUILD = None            # (build,): the app module's root page
     IS_APP = None           # (is_app,): claims the app's identity cart
     ENGINE = None           # (Engine subclass,): uitree_editor.Engine for the Editor's kinds
+    MIN = None              # (w, h): ui.app's min=, the window's least size in desk units
 
     def __init__(self, ctx, names=None):
         self._surf, self._theme, self._damage = ctx.surface, ctx.theme, ctx.damage
@@ -527,6 +528,7 @@ def app_layer(id, title, build, is_app=None, needs=(), engine=None):
     return type(title.replace(" ", "") + "App", (App,), {
         "id": id, "TITLE": title, "BUILD": (build,), "IS_APP": (is_app,) if is_app else None,
         "ENGINE": (engine,) if engine is not None else None,
+        "MIN": tuple(ad.min) if ad is not None and ad.min is not None else None,
         "NEEDS": App.NEEDS + tuple(needs)})
 
 
