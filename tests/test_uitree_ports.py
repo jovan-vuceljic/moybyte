@@ -498,21 +498,10 @@ WIFI_PROMPT_ABOVE_BAND = ("the password prompt stood centred on the whole surfac
                           "band on the T-Deck; a dialog now centres in the room above the band "
                           "(moy_ui_api_table.c's dlg_card)")
 
-WIFI_DIALOG_BAND = ("under the password dialog the old popover's band still named the list's keys "
-                    "(Join, Close); the port's names the dialog's (Connect, Cancel), as Settings' "
-                    "page always did")
-
 DIALOG_TIGHT = ("a dialog on a glass whose wash leaves its body under three rows at the card's pads "
                 "(the T-Deck's popover) stands a third of a pad from the wash's edges, its buttons "
                 "half a pad from its body and its foot: its field shows whole "
                 "(moy_ui_api_table.c's dlg_card)")
-
-POPOVER_DROP = ("at font scale 2 the old close put back the card's rect alone, which held 2 of its "
-                "drop's 4 rows: the desk kept the rest as a line; the close puts the whole drop back")
-
-WIFI_RING_IN_VIEW = ("the old popover drew its menu with no page, so focus on its last row, Scan "
-                     "again, left the ring's reach under the card's foot; the port's page keeps "
-                     "it in view, the rows 2 px higher. " + WIFI_OWN_HINT)
 
 THUMB_UNDER_GEN = ("the old page's scroll ran under a gen and drew no thumb; every scrolled view "
                    "draws its thumb now, gen or not, its track redrawn on a shift frame")
@@ -523,7 +512,6 @@ PAGE_THUMB = ("the old flowing page drew no thumb where its rows ran past its ro
 # The steps of a run that a page's thumb moves (PAGE_THUMB), by run.
 PAGE_THUMB_STEPS = {
     "settings_log-tdeck": (6,),
-    "settings_paired-desk": range(3),
     "settings_paired-tdeck": (7,),
     "settings_paired_none-big": (2,),
     "settings_permissions-desk": range(11),
@@ -541,7 +529,6 @@ PAGE_THUMB_STEPS = {
     "settings_tz-p4": range(5),
     "settings_tz-tdeck": range(10),
     "settings_wifi-desk": (*range(5), *range(7, 14)),
-    "settings_wifi-p4": (0, 2, 3, 4),
     "settings_wifi-tdeck": (0, 2, 3, 4, 7, 8, 13, 14, 21),
     "update_c6-desk": (0, 1),
     "update_online-big": (2,),
@@ -636,9 +623,7 @@ RUNS = (
     # the bar's Wi-Fi popover: an open network joined, a locked one's
     # password typed, then closed
     ("wifi_popover-desk", "wifi_popover", "p4_1024x600_fs2_windowed",
-     ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abc", "enter", "f:2", "k:down", "k:a", "f:2", "back"],
-     {5: WIFI_DIALOG_BAND, 6: WIFI_DIALOG_BAND, 9: WIFI_RING_IN_VIEW, 10: WIFI_RING_IN_VIEW,
-      11: WIFI_RING_IN_VIEW, 12: POPOVER_DROP}),
+     ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abc", "enter", "f:2", "k:down", "k:a", "f:2", "back"]),
     ("wifi_popover-tdeck", "wifi_popover", "tdeck_320x240_fs1_dark",
      ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abc", "enter", "f:2", "back"],
      {5: DIALOG_TIGHT, 6: DIALOG_TIGHT}),
