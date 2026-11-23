@@ -77,6 +77,7 @@ PORTED = (
     "drawing_pages",
     "paint_app",
     "storybook_app",
+    "appearance_app",
     "terminal_app",
     "text_console",
     "uitree_wrap_row",

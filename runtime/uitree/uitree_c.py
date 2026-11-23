@@ -962,6 +962,38 @@ class CEngine(Engine):
             self._ready()
         return self._x.carousel_geom(band, fs, desk, out)
 
+    def cells(self, out):
+        """The page's shelf or icons as the last frame drew them (moy_uitree.h's
+        uit_cells) into `out`, an array('i') of 25: whether they drew."""
+        return self._visiting() and self._x.cells(out)
+
+    def cells_tile(self, i, out):
+        """Card `i`'s box in the shelf or icons the last frame drew into `out`
+        (an array('i') of 4): whether it shows."""
+        return self._visiting() and self._x.cells_tile(i, out)
+
+    def cells_at(self, x, y):
+        """The card whose box or title holds (x, y) in the shelf or icons the
+        last frame drew, -1 none."""
+        return self._x.cells_at(x, y) if self._visiting() else -1
+
+    def cells_geom(self, band, fs, desk, out):
+        """The geometry the page's shelf or icons lay out in `band` (an
+        array('i') of 4) into `out` (an array('i') of 16), outside a frame:
+        whether the page has them (built here where no frame built it)."""
+        if self.root is None:
+            self._bind()
+            self._ready()
+        return self._x.cells_geom(band, fs, desk, out)
+
+    def carousel_desk(self, band, fs, keys, brows, out):
+        """The desk home's geometry (the carousel look on the desk class)
+        in content rect `band` down to its hint strip, an array('i') of 4,
+        into `out`, an array('i') of 24 (moy_ui_api.h's MOY_UI_DESK_*):
+        `keys` where a hint strip shows, `brows` the pixels of the details
+        pane's buttons' rows under their first."""
+        self._x.carousel_desk(band, fs, keys, brows, out)
+
     # -- the frame -------------------------------------------------------------------
 
     def paint(self, dt, cv, th, content, desk):

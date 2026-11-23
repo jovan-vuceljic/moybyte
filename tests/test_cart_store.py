@@ -1689,7 +1689,7 @@ def test_the_cards_show_the_covers_the_indexes_name(tmp_path):
     assert repo.url("carts/jet/cover.png") in net.opened
     assert "carts" not in ws.leases.holders() and ws.wifi.radio is False
     assert app.thumbs[sha(jet)] is True
-    assert ui.pictures.src["cover:" + sha(jet)] == ("bytes", jet)
+    assert ui.pictures.source(app.engine, "cover:" + sha(jet)) == ("bytes", jet)
 
 
 @pytest.mark.parametrize("fault", ["wrong bytes", "missing", "not a cover"])

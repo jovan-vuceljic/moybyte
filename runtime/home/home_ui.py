@@ -1,8 +1,11 @@
-"""The home's pages the home layers host. The handheld home's band
+"""The home's pages the home layers host. The carousel arrangement's band
 (`band`): the tab's cards as the engine's carousel, which moves itself on
-the band's host (`home_carousel.Carousel._hh_pass`): the host puts its rows
-(`band_put`), the card a selection made from outside lands it on and its
-caption's ink (`band_set`), and draws its pictures.
+the band's host (`home_carousel.Carousel._page_pass`): on the handheld its
+row, on the desk its shelf under the hero and the details; the grid
+arrangement's (`shelf`) and the icons arrangement's (`icons`) the engine's
+shelf and icons, on every class (`home_grid.Launcher._cells_pass`). The
+host puts their rows (`band_put`), the card a selection made from outside
+lands them on and their words' ink (`band_set`), and draws their pictures.
 
 The desk home's details pane (`page`), beside the hero
 (`home_details.HomeDetails`): the selected card's title,
@@ -43,6 +46,8 @@ for _k in range(FACTS):
 _decl["cards"] = ui.model("id", id="", name="", sub="", pic=ui.IMAGE)    # the band's cards
 _decl["sel"] = ui.row_of("cards")        # ...the one it rests on
 _decl["tone"] = ""       # ...and its caption's ink ("" the theme's)
+_decl["side"] = 64       # ...its cards' side (the desk shelf's, in glass pixels)
+_decl["caption"] = ""    # ...and the desk shelf's caption
 s = ui.state(**_decl)
 
 
@@ -79,7 +84,19 @@ ui.action("open", "Open", _open, takes="row")
 
 def band():
     with ui.page(""):
-        with ui.cards("cards", look="carousel", cur="sel", tone="{tone}"):
+        with ui.cards("cards", look="carousel", cur="sel", tone="{tone}", w="{side}", label="{caption}"):
+            ui.card("open", label="{.name}", sub="{.sub}", image=".pic")
+
+
+def shelf():
+    with ui.page(""):
+        with ui.cards("cards", look="shelf", cur="sel", tone="{tone}"):
+            ui.card("open", label="{.name}", sub="{.sub}", image=".pic")
+
+
+def icons():
+    with ui.page(""):
+        with ui.cards("cards", look="icons", cur="sel", tone="{tone}"):
             ui.card("open", label="{.name}", sub="{.sub}", image=".pic")
 
 

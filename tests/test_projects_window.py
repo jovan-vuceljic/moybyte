@@ -283,10 +283,27 @@ def test_the_card_the_shelfs_margin_cuts_shows_its_part_past_it(tmp_path, where)
     g = at(grid._geom)
     left, pitch, side = g[1][0] + g[9][4] - g[5], g[3], g[2]
     k = 1
+    from runtime import host_app
+    from test_shell_goldens import _DT
+    drv = host_app.ConsoleDriver(ws)
+    ox, oy = win.content_rect()[:2] if where == "projects" else (0, 0)
+    x0, y0 = ox + g[1][0] + g[1][2] // 2, oy + g[1][1] + g[1][3] // 2
 
     def put(s):
-        at(lambda: setattr(grid, "scroll", s))
-        _frame(ws)
+        # the shelf's offset is the engine's: a drag carries it there, held
+        # still before the let-go (no fling)
+        def frame():
+            ws.mark_dirty()
+            drv.frame(_DT)
+        d = at(lambda: grid.scroll) - s
+        drv.touch(x0, y0)
+        for x in (x0 + d // 3, x0 + 2 * d // 3) + (x0 + d,) * 5:
+            frame()
+            drv.touch_drag(x, y0)
+        frame()
+        drv.touch_up()
+        for _ in range(3):
+            frame()
         assert at(lambda: grid.scroll) == s and not grid.moving
         return at(lambda: dict(grid._visible())[k]), bytes(cv._buf)
 

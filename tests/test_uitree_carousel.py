@@ -211,17 +211,22 @@ ui.hook("opened", function()
 end)
 ui.action("play", "Play", function(row) moybyte.log(6, "played " .. row.name) end, { takes = "row" })
 ui.page("carousel", function()
-  ui.cards("games", { look = "carousel", cur = "pick", w = 32, tone = "%s" }, function()
+  ui.cards("games", { look = "carousel", cur = "pick", w = %(w)d, tone = "%(tone)s",
+                      label = "%(label)s" }, function()
     ui.card("play", { label = "{.name}", sub = "{.sub}" })
   end)
 end, { title = "Lua Carousel" })
 """
 
 
-def _lua_carousel(tmp_path, tone):
-    """A workstation with a Lua app whose page is a carousel of seven cards
-    in caption ink `tone`, open and drawn: its driver and a frame function
-    answering the canvas's bytes."""
+_DESK = dict(sys_size=(1024, 600), font_scale=1, windowed=True, panel_diagonal_in=7.0)
+
+
+def _lua_carousel(tmp_path, tone, desk=False, label=""):
+    """A workstation (the handheld, or the desk where `desk`) with a Lua app
+    whose page is a carousel of seven cards in caption ink `tone`, its desk
+    shelf's caption `label`, open and drawn: its driver and a frame function
+    answering the glass's bytes."""
     import json
     from runtime import host_app
     from ws_helpers import open_cart
@@ -232,17 +237,20 @@ def _lua_carousel(tmp_path, tone):
         "format": "moy-1", "title": "Lua Carousel", "runtime": "lua", "main": "main.lua",
         "extensions": ["moybyte.ui", "moybyte.uitree"],
         "moybyte": {"type": "app", "permissions": []}}))
-    (cart / "main.lua").write_text(_LUA_CAROUSEL % tone)
-    ws = host_app.build_workstation(str(carts))
+    (cart / "main.lua").write_text(_LUA_CAROUSEL % dict(tone=tone, label=label,
+                                                       w=64 if desk else 32))
+    ws = host_app.build_workstation(str(carts), **_DESK if desk else {})
     ws.pointer.visible = False
     drv = host_app.ConsoleDriver(ws)
     drv.frame(1 / 30)
     open_cart(ws, "Lua Carousel")
 
+    glass = ws.wm.root_canvas if desk else ws.sys_canvas
+
     def frame():
         ws.mark_dirty()
         drv.frame(1 / 30)
-        return bytes(ws.sys_canvas._buf)
+        return bytes(glass._buf)
     for _ in range(30):
         frame()
     return ws, drv, frame
@@ -280,3 +288,46 @@ def test_a_lua_carousels_caption_takes_its_tone(tmp_path):
     rows = [r for r in range(ws.sys_canvas.h) if ink[r * span:(r + 1) * span] != red[r * span:(r + 1) * span]]
     assert rows, "the tone changed nothing"
     assert rows[-1] - rows[0] < ws.sys_canvas.h // 4, ("the caption's rows alone", rows)
+
+
+def test_a_lua_carousel_on_the_desk_is_a_shelf_whose_current_card_moves_at_once(tmp_path):
+    """On the desk class the carousel look is a shelf of same-size cards:
+    right makes the next card current in the frame it is pressed (the
+    shelf, its cards all on the glass, does not move), it rests there, and
+    Enter plays the current card."""
+    from runtime.host import moy_log
+    ws, drv, frame = _lua_carousel(tmp_path, "", desk=True, label="Games")
+    rest = frame()
+    seq = moy_log.next()
+    drv.press("right")
+    moved = frame()
+    assert moved != rest, "the current card moved"
+    assert [frame() for _ in range(3)] == [moved] * 3, "at once: nothing glides"
+    drv.press("a")
+    for _ in range(3):
+        frame()
+    played = [r[4] for r in moy_log.read(seq, 400) if "played " in r[4]]
+    assert played and played[-1].endswith("played game 1"), played
+
+
+def test_a_desk_shelfs_caption_is_its_label_and_its_count(tmp_path):
+    """label= captions the desk shelf over its cards, with the count of its
+    cards: the same shelf with another label differs in the caption's rows
+    alone, above the cards; with none the count stands alone."""
+    ws, _drv, frame = _lua_carousel(tmp_path / "games", "", desk=True, label="Games")
+    games = frame()
+    _ws, _drv, frame = _lua_carousel(tmp_path / "tools", "", desk=True, label="Tools")
+    tools = frame()
+    _ws, _drv, frame = _lua_carousel(tmp_path / "none", "", desk=True)
+    bare = frame()
+    w = ws.wm.root_canvas.w
+    span = 2 * w
+
+    def rows(a, b):
+        return [r for r in range(len(a) // span) if a[r * span:(r + 1) * span] != b[r * span:(r + 1) * span]]
+    moved = rows(games, tools)
+    assert moved, "the label changed nothing"
+    assert moved[-1] - moved[0] < 40, ("the caption's rows alone", moved)
+    bare = rows(games, bare)
+    assert bare and moved[0] - 4 <= bare[0] and bare[-1] <= moved[-1] + 4, (
+        "no label: the count alone, on the caption's rows", bare, moved)

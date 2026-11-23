@@ -62,6 +62,8 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_SWATCHES "swatches"
 #define UT_LOOK_PICTURES "pictures"
 #define UT_LOOK_CAROUSEL "carousel"
+#define UT_LOOK_SHELF "shelf"
+#define UT_LOOK_ICONS "icons"
 #define UT_LOOK_KEYS "keys"
 #define UT_MKIND_DANGER "danger"
 #define UT_NAV_OFF "off"
@@ -118,6 +120,7 @@ static inline int32_t ut_p_filter(const char *v) { return ut_prop_("filter", v);
 static inline int32_t ut_p_find(const char *v) { return ut_prop_("find", v); }
 static inline int32_t ut_p_find_on(const char *v) { return ut_prop_("find_on", v); }
 static inline int32_t ut_p_first(int32_t v) { return ut_prop_int_("first", v); }
+static inline int32_t ut_p_flow(int v) { return ut_prop_("flow", v ? "True" : "False"); }
 static inline int32_t ut_p_focus(const char *v) { return ut_prop_("focus", v); }
 static inline int32_t ut_p_focused(const char *v) { return ut_prop_("focused", v); }
 static inline int32_t ut_p_follow(int v) { return ut_prop_("follow", v ? "True" : "False"); }

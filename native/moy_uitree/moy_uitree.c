@@ -334,6 +334,7 @@ void uit_close(uit_t *e)
     e->still_ok = 0;
     e->cells_node = 0;
     e->car_node = 0;
+    e->cel_node = 0;
     for (int i = 0; i < e->nvr; i++)
         UIT_FREE(e->vr[i].h);
     UIT_FREE(e->vr);
@@ -1119,12 +1120,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
               (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              (kind == UIT_LINK && !strcmp(name, "swatch")) ||
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
-             (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon"))) || (kind == UIT_CARDS && (!strcmp(name, "pad") || !strcmp(name, "tone"))) ||
+             (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon"))) || (kind == UIT_CARDS && (!strcmp(name, "pad") || !strcmp(name, "tone") || !strcmp(name, "label"))) ||
              (kind == UIT_CELLS && (!strcmp(name, "first") || !strcmp(name, "count") || !strcmp(name, "cols") ||
                                     !strcmp(name, "side") || !strcmp(name, "gap")))) {
         // templates the draw finds among its props by name (uit_tmpl_prop); signal=, a month's
         // year=, month= and today= and a cards list's pad= ints; a carousel's tone= its caption's
-        // ink
+        // ink, and label= its desk shelf's caption
         int t = uit_tmpl_compile(e, src, model);
         if (t < 0)
             return t;
@@ -1607,6 +1608,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->cur = (int16_t)f;
         return 0;
     }
+    if (kind == UIT_CARDS && !strcmp(name, "flow")) {
+        // flow=True: its grid in the page's flow, scrolling with the page (CD_FLOW)
+        N->lit = (uint8_t)((N->lit & ~CD_FLOW) | (src[0] == 'T' || src[0] == '1' ? CD_FLOW : 0));
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & CD_FLOW) != 0);
+    }
     if (kind == UIT_TEXT_VIEW && !strcmp(name, "look")) {
         // "well": its prose on a part's well (TV_WELL)
         N->lit = (uint8_t)((N->lit & ~TV_WELL) | (!strcmp(src, "well") ? TV_WELL : 0));
@@ -1693,11 +1699,15 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & DL_DANGER) != 0);
     }
     if (!strcmp(name, "look") && kind == UIT_CARDS) {
-        // "carousel": one row of tiles that snaps, its centre card's words under it (CD_CAROUSEL)
-        if (strcmp(src, "carousel"))
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("cards look=%s: \"carousel\"", "cards look=%s"), src);
-        N->lit |= CD_CAROUSEL;
-        return add_prop(e, node, name, src, repr, PK_LIT, 1);
+        // "carousel": one row of tiles that snaps, its centre card's words under it (CD_CAROUSEL);
+        // "shelf": cards in the rows the band holds, scrolling across (CD_SHELF); "icons": tiles
+        // in the columns it holds, scrolling down (CD_ICONS)
+        int lk = !strcmp(src, "carousel") ? CD_CAROUSEL : !strcmp(src, "shelf") ? CD_SHELF
+                 : !strcmp(src, "icons") ? CD_ICONS : 0;
+        if (!lk)
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("cards look=%s: carousel, shelf, icons", "cards look=%s"), src);
+        N->lit |= (uint8_t)lk;
+        return add_prop(e, node, name, src, repr, PK_LIT, lk);
     }
     if (!strcmp(name, "look") && kind == UIT_DIALOG) {
         // "keys": on the T-Deck its buttons are the band's Enter and Esc, no row of them (DL_KEYS)
@@ -1835,11 +1845,11 @@ static void mark_tree(const uit_t *e, int k, uint8_t *m, int cur, int hint_only)
         mark_tree(e, g, m, cur, hint_only);
 }
 
-// What lies outside the page's cells (a cards list each): each node's reads but a cur='s, and
+// What lies outside the page's cells (a cards list each, but one in the page's flow): each node's reads but a cur='s, and
 // every hint= inside a cell too.
 static void mark_rest(const uit_t *e, int k, uint8_t *m)
 {
-    if (e->nodes[k].kind == UIT_CARDS) {
+    if (e->nodes[k].kind == UIT_CARDS && !(e->nodes[k].lit & CD_FLOW)) {
         mark_tree(e, k, m, 0, 1);
         return;
     }
@@ -1853,7 +1863,7 @@ static void mark_rest(const uit_t *e, int k, uint8_t *m)
 
 static void mark_cells(const uit_t *e, int k, uint8_t *m)
 {
-    if (e->nodes[k].kind == UIT_CARDS || e->nodes[k].kind == UIT_TEXT_VIEW) {
+    if ((e->nodes[k].kind == UIT_CARDS && !(e->nodes[k].lit & CD_FLOW)) || e->nodes[k].kind == UIT_TEXT_VIEW) {
         mark_tree(e, k, m, 0, 0);
         return;
     }

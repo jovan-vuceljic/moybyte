@@ -346,27 +346,27 @@ class _Right:
 def _step_chrome(ws):
     """CHROME SIZE stepped once, as a person does: focused, then right."""
     app = ws.app("appearance")
-    app._ui.focus("Chrome size")
+    app.show_row("Chrome size")
     _frames(ws, 1)
     app.handle_input(_Right())
     _frames(ws)
 
 
 def _row_keys(ws):
-    return [k for k in _appearance(ws)._kinds if not k.startswith("theme ")]
+    return [k for k in _appearance(ws).engine.stop_kinds() if "/" not in k]
 
 
 def test_appearance_offers_chrome_size_only_where_there_is_a_choice(tmp_path):
     desk = _desk(tmp_path / "desk")
     keys = _row_keys(desk)
-    assert keys[keys.index("Code font") + 1] == "Chrome size"
+    assert keys[keys.index("code") + 1] == "chrome"
     assert "chrome_scale" not in [r[0] for r in desk.settings_layer._settings_rows()]
     p4 = _row_keys(_desk(tmp_path / "p4", panel_diagonal_in=7.0))
-    assert p4[p4.index("Code font") + 1] == "Chrome size"
+    assert p4[p4.index("code") + 1] == "chrome"
     for name, kw in (("handheld", {"sys_size": None, "windowed": False}),
                      ("guition_s3", {"sys_size": (480, 320), "windowed": False,
                                      "panel_diagonal_in": 3.5})):
-        assert "Chrome size" not in _row_keys(_desk(tmp_path / name, **kw)), name
+        assert "chrome" not in _row_keys(_desk(tmp_path / name, **kw)), name
 
 
 def test_chrome_size_steps_live_and_persists(tmp_path):
@@ -435,7 +435,7 @@ def test_switching_chrome_size_matches_booting_at_it(tmp_path):
     ref.bar_layer.clock_text = lambda: "10:30"
     drv = ConsoleDriver(ref)
     _appearance(ref)
-    ref.app("appearance")._ui.focus("Chrome size")    # where the live desk's focus is
+    ref.app("appearance").show_row("Chrome size")     # where the live desk's focus is
     settle(ref, drv)
     reference = bytes(ref.sys_canvas._buf)
 

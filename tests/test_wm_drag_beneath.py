@@ -12,8 +12,9 @@ the look's icon set, which the C engine draws only once the set is installed
 Each case starts as a fresh process does, with no icon set installed
 (`iconsets.reset`), in one of two ways the window beneath was last drawn:
 
-- `together`: it and Settings open in one navigation, so it is drawn once,
-  as it is created behind Settings (`WindowedWM._prewarm`);
+- `together`: it and Settings open in one navigation, so it is drawn as it
+  is created behind Settings (`WindowedWM._prewarm`), and again as each
+  picture its page waits for lands;
 - `look`: the look switches while it sits under Settings, and it re-renders
   under the new one as a background window.
 """
@@ -24,15 +25,10 @@ from runtime import iconsets
 from ws_helpers import build_desktop_ws, make_drv, quiesce, use_theme
 
 _APPS = ("calc", "files", "storybook", "artwork", "appearance", "getcarts")
-# A window created behind another is drawn once, and these two apps' one
-# render is not their settled one: Files' covers decode over the frames
-# after it, and Appearance's hints follow the stop the render before focused.
-_ONE_RENDER_UNSETTLED = ("files", "appearance")
 _DRAGGED = "settings"
 SETTLE = 4              # frames each window is focused before the next opens
 
-_CASES = [(app, "look") for app in _APPS] + [
-    (app, "together") for app in _APPS if app not in _ONE_RENDER_UNSETTLED]
+_CASES = [(app, how) for how in ("look", "together") for app in _APPS]
 
 
 def _desk(tmp_path, beneath, how):

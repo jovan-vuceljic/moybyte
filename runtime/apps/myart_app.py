@@ -385,7 +385,7 @@ class MyArtAppLayer(uitree_app.app_layer("myart", "My Art", build, is_app,
         """A frame with nothing to paint: a picture owed is made, else a
         drawing is read against the picture made from it."""
         if self.engine.idle_owed or not self._unchecked:
-            self.engine.idle_step()
+            super().idle_step()
             return
         self.engine.run(_check, self, self._unchecked.pop(0), action="check")
 

@@ -1438,6 +1438,16 @@ class WindowPaint:
         lyr = self.ws.layer_of(win.kind)
         return lyr is not None and lyr.moved()
 
+    def _landed(self, win):
+        """Whether a picture its page waited for landed since the window last
+        drew (`App.landed`), which it then has."""
+        lyr = self.ws.layer_of(win.kind)
+        landed = getattr(lyr, "landed", 0) if lyr is not None else 0
+        if landed == win._landed:
+            return False
+        win._landed = landed
+        return True
+
     def _draw_app_window(self, win, focused, dt):
         # Freeze the content render while THIS window is being dragged/resized
         # (#58 drag perf): its buffer can't change under a drag (no input reaches
@@ -1460,14 +1470,16 @@ class WindowPaint:
                    and self.windows.get(self._drag[0]) is win)
                   or (self._resize is not None
                       and self.windows.get(self._resize[0]) is win))
+        landed = self._landed(win)
         if moving:
             self._win_touched = True
             self._fresh(win)              # the move stamps its page
         elif not focused and (win._look_gen != self.ws.look.look_gen or win._marked
-                              or self._behind_moved(win)):
+                              or landed or self._behind_moved(win)):
             # A background window's retained buffer under an older look,
-            # drawn while it had the focus mark, or behind what its content
-            # shows now (`Layer.moved`).
+            # drawn while it had the focus mark, before a picture its page
+            # waited for landed, or behind what its content shows now
+            # (`Layer.moved`).
             win._look_gen = self.ws.look.look_gen
             self._win_touched = True
             self.prewarm(win)

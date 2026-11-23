@@ -1461,7 +1461,8 @@ def home_swiped(loop, info):
                                  @FLING_STEPS@)
     ws.home.set_home_arrangement("icons")
     g, (bx, by, bw, bh) = _top()
-    info["icons_rows"] = (len(g.items), g.max_scroll())
+    c = g._cells()
+    info["icons_rows"] = (len(g.items), c.rows * c.cols)
     cx = bx + bw // 2
     info["icons_drag"] = _swiped(loop, cx, by + bh - 10, cx, by + 10, 40, 70)
     _top()
@@ -2021,10 +2022,10 @@ def test_a_live_wallpaper_home_frame_allocates_under_its_ceiling(result):
 # ceiling, not zero. The band's pass (the engine's carousel, which moves
 # itself, and the home's picture calls) and the frame around it allocate 0.2-0.5 KB
 # a moving frame (2026-11-22; the band's table of parts before it 0.5-1.1
-# KB, and the private band path before that 0.5-2.8 KB on the same driver),
-# and no frame of the home's is pinned at zero until what allocates is
-# found by line.
-HOME_BAND_FRAME = 3 * 1024
+# KB, and the private band path before that 0.5-2.8 KB on the same driver;
+# 368 at most 2026-11-23, each card's cover kept for it), and no frame of
+# the home's is pinned at zero until what allocates is found by line.
+HOME_BAND_FRAME = 1024
 
 
 def test_a_home_band_frame_allocates_under_its_ceiling(result):
@@ -2056,9 +2057,10 @@ def test_a_home_band_frame_allocates_under_its_ceiling(result):
 # (3216 before, the press's the most;
 # 2816 when the home moved the row and the band kept its tiles; 2928 and
 # 1309 on the band's table of parts, 3264 and 1821 before its keys were
-# kept and its geometry read once a pass); the icons' drag a median of 736
-# (1056 before) and their fling 784, around two frames of the drag over 7
-# KB that were there before too.
+# kept and its geometry read once a pass); the icons' drag a median of 960
+# and their fling 896 on the engine's look="icons" (2026-11-23; 1600 before
+# each card's cover was kept for it and the engine held a grid's picture
+# names, 736 and 784 on the Python cells before it).
 HOME_SWIPE_FRAME = 3 * 1024
 HOME_SWIPE_MEAN = 1536
 ICONS_SWIPE_MEDIAN = 1024
@@ -2089,7 +2091,7 @@ def test_the_icons_dragged_and_flung_allocate_under_the_ceiling(result):
     run past the glass): the frames that drew allocate a median of no more
     than ICONS_SWIPE_MEDIAN."""
     info, text = result
-    assert info["icons_rows"][1] > 0, info["icons_rows"]
+    assert info["icons_rows"][0] > info["icons_rows"][1], info["icons_rows"]
     for key, least in (("icons_drag", 30), ("icons_fling", 6)):
         moved = sorted(_moved(info, key, least))
         assert moved[len(moved) // 2] <= ICONS_SWIPE_MEDIAN, (key, info[key])
@@ -2102,12 +2104,15 @@ ANSWER = 32
 SETTINGS_FRAME = 1024
 
 
+# The restyled apps are app_layer pages: their drag frames are the engine's,
+# held to shifting (My Art's shelf here, which scrolls far enough to say;
+# Appearance's and Storybook's in tests/test_shift_apps.py), not to a count
+# of cards' answers.
 @pytest.mark.parametrize("app", ("myart",))
 def test_an_app_drag_is_shift_frames(result, app):
     """The drag frames of an app whose shelf carries its gens shift
     (docs/history/scroll_and_text_2026-10.md §3.3) on the T-Deck's tier: the ring's
-    slots and the floor's rects are kept, so the budget the test below holds
-    every drawn frame to holds the shift frames."""
+    slots and the floor's rects are kept."""
     info, text = result
     drawn = [d for d in info[app + "_drag"] if d[1]]
     shifted = [d for d in drawn if d[3]]
@@ -2124,21 +2129,6 @@ def test_a_settings_drag_shifts_and_allocates_nothing(result):
     assert len(drawn) > 30 and len(shifted) > len(drawn) // 2, (len(shifted), len(drawn))
     over = sorted(d[0] for d in shifted)
     assert over[len(over) // 2] < SETTINGS_FRAME, ("a shift frame's median", over)
-
-
-# Get Carts, Storybook and My Art are app_layer pages, whose drag frame (the
-# engine's, no card counted through ui.card) is not held to this budget.
-@pytest.mark.parametrize("app", ("appearance",))
-def test_an_app_drag_frame_allocates_only_its_moved_answers(result, app):
-    """A drag frame of the app's content, its pictures met once before: the
-    frames drew, and each allocated no more than one answer a card it drew
-    and the finger's four, but for one frame (the clock's minute)."""
-    info, text = result
-    drag = info[app + "_drag"]
-    drawn = [d for d in drag if d[1]]
-    assert len(drawn) > 30, (app, len(drawn))
-    over = [d for d in drawn if d[0] > ANSWER * (d[2] + 4)]
-    assert len(over) <= 1, (app, over[:10])
 
 
 # -- the Code tab's paint ------------------------------------------------------

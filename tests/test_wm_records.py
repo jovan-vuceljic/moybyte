@@ -223,6 +223,10 @@ class Pair:
         that took the keys. The second desk is the twin a held key's steps
         always reach (no step is dead), so where the first desk's dead-step
         rule paints nothing the twin's frame must show the same."""
+        self.within(ws, drv.frame, _DT)
+
+    def within(self, ws, fn, *args):
+        """`fn(*args)` with the toolkit's per-console state `ws`'s own."""
         st = self._state.setdefault(id(ws), [None, [-1, False, None] + [-1] * (
             len(ui_draw._PAINT) - 3), ui_draw._PF[:]])
         ui_draw._KEYS_HOST[0] = st[0]
@@ -234,7 +238,7 @@ class Pair:
             ui_draw.steps_dead = lambda rw, console=None: False
             ui_draw.AppHost.dead = lambda host, rw: False
         try:
-            drv.frame(_DT)
+            return fn(*args)
         finally:
             if twin:
                 ui_draw.steps_dead, ui_draw.AppHost.dead = sd, dead
@@ -514,22 +518,43 @@ def _story_turned(ws):
     sb.fill_owed = True
 
 
-def _theme_changed(ws):
+def _mode_changed(ws):
     a = _inst(ws, "AppearanceAppLayer")
-    a._theme.set("machine" if a._ch["theme"] != "machine" else "moy")
-    a._acted()
+    a._theme.set_variant("dark" if a.choices()["variant"] != "dark" else "light")
+    a.acted()
+    _theme_cards_made(a)
+
+
+def _theme_cards_made(a):
+    """The rows filled and every theme card's picture made at its tile's
+    size (the budget holding them all): the cards draw in the mode, and
+    which cards a frame reaches decides which are made first, so the
+    desks would otherwise show a picture landing on different frames."""
+    import uitree as S
+    from runtime import appearance_app
+    a._refresh()
+    a.fill_owed = False
+    a.engine.run(appearance_app.fill, a, action="fill")
+    S.commit(a.engine)
+    e = a.engine
+    e.pics.budget = 1 << 30
+    for w, h in set(e._pic_wh.values()):
+        for key in a._pics:
+            e.pics.peek(S.Pic("own", key), w, h)
+    while e.pics.idle_step():
+        pass
 
 
 def _accent_changed(ws):
     a = _inst(ws, "AppearanceAppLayer")
-    a._change("accent", a._accents[3][1])
+    a.change("accent", a.accents[3][1])
 
 
 CHANGES = {"file added": ("files", _file_added), "file renamed": ("files", _file_renamed),
            "file deleted": ("files", _file_deleted), "story added": ("storybook", _story_added),
            "story renamed": ("storybook", _story_renamed),
            "story page turned": ("storybook", _story_turned),
-           "theme changed": ("appearance", _theme_changed),
+           "mode changed": ("appearance", _mode_changed),
            "accent changed": ("appearance", _accent_changed)}
 
 
@@ -556,11 +581,7 @@ _CLS = {"files": "FilesAppLayer", "storybook": "StorybookAppLayer",
 
 
 def _gen(ws, app):
-    if app == "files":
-        return _inst(ws, "FilesAppLayer").engine.gens()
-    if app == "storybook":
-        return _inst(ws, "StorybookAppLayer").engine.gens()
-    return _inst(ws, "AppearanceAppLayer")._page_o["gen"]
+    return _inst(ws, _CLS[app]).engine.gens()
 
 
 @pytest.mark.parametrize("bufs", (1, 2, 3))
@@ -584,7 +605,7 @@ def test_a_change_the_page_shows_moves_its_gen(tmp_path, change, bufs):
         d = a._damage
         a._damage = _NoMark(d)
         try:
-            fn(ws)
+            p.within(ws, fn, ws)
         finally:
             a._damage = d
     p.both("touch_up")
@@ -686,7 +707,7 @@ def test_a_popover_and_the_menu_scrim_over_a_glide(tmp_path, bufs, widget):
 # handheld shift: a mark after the pass is a whole repaint of a page the
 # pass drew (`all` is spent with the frame, so it paints nothing it means
 # to; `again` owes a whole frame where the engine owes a frame of rows).
-VERBS_APPS = ("files_app", "appearance_app")
+VERBS_APPS = ("files_app",)
 
 
 def test_no_verbs_app_marks_its_page_after_the_pass():

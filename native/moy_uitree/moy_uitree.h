@@ -333,6 +333,26 @@ int uit_carousel(const uit_t *e, int32_t out[UIT_CAROUSEL_WORDS]);
 int uit_carousel_tile(const uit_t *e, int row, int32_t out[4]);
 int uit_carousel_at(const uit_t *e, int x, int y);
 int uit_carousel_geom(uit_t *e, const int32_t b[4], int fs, int desk, int32_t out[10]);
+// The desk home's geometry (moy_ui_api_carousel_desk's words, MOY_UI_DESK_*): the carousel
+// look on the desk class laid out in content rect `b` down to its hint strip at font scale
+// `fs`, with `keys` (a hint strip: no touch) and `brows` px of the details pane's buttons'
+// rows under their first. The shelf it draws in its band is the page's cards (uit_cells).
+enum { UIT_DESK_WORDS = 24 };
+void uit_carousel_desk(const int32_t b[4], int fs, int keys, int brows, int32_t out[UIT_DESK_WORDS]);
+// The page's shelf or icons (ui.cards look="shelf" or "icons", and the carousel look's desk
+// shelf, geometry word MOY_UI_CELLS_LOOK MOY_UI_LOOK_DESK) as the last frame drew them:
+// out[0..3] their band, [4..19] their geometry (moy_ui_api_cells_geom's, MOY_UI_CELLS_*), [20]
+// their scroll, [21] their motion (MOY_UI_SCROLL_DRAG, _FLING), [22] the card the keys are on,
+// [23] their cards, [24] 1 where they held the focus; 0 where none drew since the page was
+// built. uit_cells_tile: card `i`'s box there (x, y, w, h), 0 where it lies outside the band;
+// uit_cells_at: the card whose box or title holds (x, y), -1 none. uit_cells_geom: the
+// geometry the page's shelf or icons lay out in band `b` at font scale `fs` (on the desk's
+// metrics where `desk`), outside a frame; 0 where the page has none.
+enum { UIT_CELLS_WORDS = 25 };
+int uit_cells(const uit_t *e, int32_t out[UIT_CELLS_WORDS]);
+int uit_cells_tile(const uit_t *e, int i, int32_t out[4]);
+int uit_cells_at(const uit_t *e, int x, int y);
+int uit_cells_geom(uit_t *e, const int32_t b[4], int fs, int desk, int32_t out[16]);
 // The next event: its kind; its words into ev[0..2], its text (the source)
 // into buf.
 int uit_next(uit_t *e, int32_t ev[3], char *buf, size_t cap);

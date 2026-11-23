@@ -2144,11 +2144,19 @@
      "type": "tpl",
      "level": 2
     },
+    "flow": {
+     "type": "bool",
+     "level": 2
+    },
     "look": {
-     "type": "word:carousel",
+     "type": "word:carousel,shelf,icons",
      "level": 2
     },
     "tone": {
+     "type": "tpl",
+     "level": 2
+    },
+    "label": {
      "type": "tpl",
      "level": 2
     }

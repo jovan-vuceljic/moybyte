@@ -65,6 +65,11 @@ _SIGS = (
     ("uit_carousel_tile", [_P, _I, _P], _I),
     ("uit_carousel_at", [_P, _I, _I], _I),
     ("uit_carousel_geom", [_P, _P, _I, _I, _P], _I),
+    ("uit_cells", [_P, _P], _I),
+    ("uit_cells_tile", [_P, _I, _P], _I),
+    ("uit_cells_at", [_P, _I, _I], _I),
+    ("uit_cells_geom", [_P, _P, _I, _I, _P], _I),
+    ("uit_carousel_desk", [_P, _I, _I, _I, _P], None),
     ("uit_build_end", [_P], _I),
     ("uit_open", [_P], None),
     ("uit_close", [_P], None),
@@ -454,6 +459,32 @@ class Engine:
         (uit_carousel_geom): whether the page has one."""
         return bool(self._L.uit_carousel_geom(self._e, _addr(band, 4), fs, 1 if desk else 0,
                                               _addr(out, 10)))
+
+    def cells(self, out):
+        """The page's shelf or icons as the last frame drew them (uit_cells)
+        into `out`, an array('i') of 25: whether they drew."""
+        return bool(self._L.uit_cells(self._e, _addr(out, 25)))
+
+    def cells_tile(self, i, out):
+        """Card `i`'s box there into `out`, an array('i') of 4
+        (uit_cells_tile): whether it shows."""
+        return bool(self._L.uit_cells_tile(self._e, i, _addr(out, 4)))
+
+    def cells_at(self, x, y):
+        """The card whose box or title holds (x, y), -1 none (uit_cells_at)."""
+        return self._L.uit_cells_at(self._e, x, y)
+
+    def cells_geom(self, band, fs, desk, out):
+        """The geometry the page's shelf or icons lay out in `band` (an
+        array('i') of 4) into `out`, an array('i') of 16 (uit_cells_geom):
+        whether the page has them."""
+        return bool(self._L.uit_cells_geom(self._e, _addr(band, 4), fs, 1 if desk else 0,
+                                           _addr(out, 16)))
+
+    def carousel_desk(self, band, fs, keys, brows, out):
+        """The desk home's geometry in content rect `band` (an array('i')
+        of 4) into `out`, an array('i') of 24 (uit_carousel_desk)."""
+        self._L.uit_carousel_desk(_addr(band, 4), fs, 1 if keys else 0, brows, _addr(out, 24))
 
     def next(self):
         """The next event: (kind, a, b, c, text), or None."""

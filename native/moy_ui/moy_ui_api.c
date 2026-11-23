@@ -672,7 +672,7 @@ const moy_ui_stop_t *mua_page_of_keep(const moy_ui_stop_t *v, int n,
 static void table_reveal(moy_ui_ctx_t *c, const moy_ui_stop_t *v, int n,
                          const moy_ui_stop_t *t) {
     moy_ui_keep_t *k = mua_keep_of(c, t->id);
-    if (k == NULL || !(k->kd & MOY_UI_KD_TABLE) || k->rh <= 0) {
+    if (k == NULL || !(k->kd & MOY_UI_KD_TABLE) || k->rh <= 0 || k->car) {
         return;
     }
     const moy_ui_stop_t *p = mua_page_of_keep(v, n, k);
@@ -1475,11 +1475,22 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
         int dir = (sx < 0 ? MOY_UI_B_LEFT : sx > 0 ? MOY_UI_B_RIGHT : 0)
                   | (sy < 0 ? MOY_UI_B_UP : sy > 0 ? MOY_UI_B_DOWN : 0);
         const moy_ui_keep_t *fck = f != NULL ? mua_keep_of(c, f->id) : NULL;
-        if (fck != NULL && fck->car) {
+        if (fck != NULL && (fck->car == MOY_UI_LOOK_CAROUSEL || fck->car == MOY_UI_LOOK_DESK)) {
             // a carousel's: the wheel's notches, across or down, step it as its arrows do
             sx += in[MOY_UI_IN_WHEEL_X] + in[MOY_UI_IN_WHEEL_Y];
             dir = (dir & ~(MOY_UI_B_LEFT | MOY_UI_B_RIGHT))
                   | (sx < 0 ? MOY_UI_B_LEFT : sx > 0 ? MOY_UI_B_RIGHT : 0);
+        } else if (fck != NULL && fck->car) {
+            // a shelf's or icons': the wheel's notches step it down, Shift's across
+            int wx = in[MOY_UI_IN_WHEEL_X], wy = in[MOY_UI_IN_WHEEL_Y];
+            if (in[MOY_UI_IN_MODS] & MOY_UI_MOD_SHIFT) {
+                wx += wy;
+                wy = 0;
+            }
+            sx += wx;
+            sy += wy;
+            dir = (sx < 0 ? MOY_UI_B_LEFT : sx > 0 ? MOY_UI_B_RIGHT : 0)
+                  | (sy < 0 ? MOY_UI_B_UP : sy > 0 ? MOY_UI_B_DOWN : 0);
         }
         sx = sx < -127 ? -127 : sx > 127 ? 127 : sx;
         sy = sy < -127 ? -127 : sy > 127 ? 127 : sy;
@@ -1596,9 +1607,13 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
             int across = !own && dx > slop && dx > dy
                              ? page_on(c, v, n, c->press_x, c->press_y, 1) : -1;
             moy_ui_keep_t *ck = h >= 0 ? mua_keep_of(c, v[h].id) : NULL;
+            int down = -1;
             if (ck != NULL && ck->car) {
-                // a carousel's: travel past its slop either way drags it along its row
-                across = dx > slop + 2 || dy > slop + 2 ? h : -1;
+                // a carousel's, a shelf's, icons': travel past its slop either way drags it
+                // along its axis
+                int far = dx > slop + 2 || dy > slop + 2;
+                across = far && (ck->kd & MOY_UI_KD_X) ? h : -1;
+                down = far && !(ck->kd & MOY_UI_KD_X) ? h : -1;
                 own = 0;
                 keep_lr = 0;
             }
@@ -1620,8 +1635,8 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
             } else if (keep_lr && dx > slop && dx > dy) {
                 c->gesture = 3;         // a slider's knob follows it; a stepper's release taps
                 settled = 0;
-            } else if (dy > slop) {
-                int pg = page_on(c, v, n, c->press_x, c->press_y, 0);
+            } else if (dy > slop || down >= 0) {
+                int pg = down >= 0 ? down : page_on(c, v, n, c->press_x, c->press_y, 0);
                 c->drag_page = pg >= 0 ? v[pg].id : 0;
                 c->drag_x = 0;
                 c->press = 0;
@@ -1779,7 +1794,7 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     for (int i = 0; i < MOY_UI_API_KEEP; i++) {
         moy_ui_keep_t *k = &c->keep[i];
         if (k->id == 0 || !moy_ui_scroll_moving(&k->sc)
-            || (k->car && ((c->focus == k->id && c->step_x) || c->act == k->id))) {
+            || (k->car && ((c->focus == k->id && (c->step_x || c->step_y)) || c->act == k->id))) {
             continue;
         }
         int fling = k->car && (k->sc.flags & MOY_UI_SCROLL_FLING);

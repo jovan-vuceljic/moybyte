@@ -23,8 +23,10 @@ static int gen_ok(const uit_t *e)
     return e->gen_safe && !e->canvas_last;
 }
 
-// Whether node `k` is a carousel (`ui.cards(look="carousel")`): one stop, its key the id.
+// Whether node `k` is a carousel (`ui.cards(look="carousel")`); whether it is a cards list of a
+// look that is one stop, its key the id (a carousel, a shelf, icons).
 #define IS_CAROUSEL(k) (NODE(k)->kind == UIT_CARDS && (NODE(k)->lit & CD_CAROUSEL))
+#define IS_ONE_STOP(k) (NODE(k)->kind == UIT_CARDS && (NODE(k)->lit & (CD_CAROUSEL | CD_SHELF | CD_ICONS)))
 
 // A carousel's card: its first `ui.card`, -1 none.
 static int carousel_card(uit_t *e, int k)
@@ -731,7 +733,7 @@ static void stops_of(uit_t *e, int k, int model, int row, stops_t *out)
         const uit_node_t *N = NODE(c);
         if (!uit_shown(e, c, model, row))
             continue;
-        if (IS_CAROUSEL(c)) {
+        if (IS_ONE_STOP(c)) {
             if (e->slots[N->slot].nrows)
                 stop_put(out, c, 0);        // one stop, as a table's
         } else if (N->kind == UIT_ROWS || N->kind == UIT_CARDS) {
@@ -768,7 +770,7 @@ static int drawn_id(uit_t *e, int k, const char *rowkey, size_t rn, const char *
         const uit_node_t *N = NODE(c);
         if (!uit_shown(e, c, -1, -1))
             continue;
-        if (N->kind == UIT_ROWS || (N->kind == UIT_CARDS && !IS_CAROUSEL(c))) {
+        if (N->kind == UIT_ROWS || (N->kind == UIT_CARDS && !IS_ONE_STOP(c))) {
             if (!rn)
                 continue;
             int r = uit_row_find(e, N->slot, rowkey, rn), b = r < 0 ? -1 : uit_row_body(e, c, r);
@@ -791,7 +793,7 @@ static int drawn_id(uit_t *e, int k, const char *rowkey, size_t rn, const char *
         }
         if (N->kind == UIT_TOOLS && (N->lit & TL_LEND))
             continue;
-        if (N->kind == UIT_TABLE || IS_CAROUSEL(c)) {
+        if (N->kind == UIT_TABLE || IS_ONE_STOP(c)) {
             if (rn || strcmp(uit_str(e, N->key), nodekey))
                 continue;
             snprintf(out, UIT_ID_MAX + 1, "%s", nodekey);     // one stop, its key the id
@@ -1050,7 +1052,7 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
             } else {
                 hint_add(b, "Change", 6);
             }
-        } else if (F->kind == UIT_CARDS && F->gen == e->gen && IS_CAROUSEL(F->node)) {
+        } else if (F->kind == UIT_CARDS && F->gen == e->gen && IS_ONE_STOP(F->node)) {
             int cd = carousel_card(e, F->node), m = NODE(F->node)->slot;
             if (cd >= 0 && NODE(cd)->act >= 0 && F->row >= 0 && F->row < e->slots[m].nrows &&
                 uit_act_can(e, NODE(cd)->act, m, F->row)) {
@@ -1507,7 +1509,23 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
 {
     const uit_node_t *N = NODE(k);
     const char *key = uit_str(e, N->key);
-    int m = N->slot, desk = (e->flags & UIT_F_DESK) != 0, subs = 0;
+    int m = N->slot, desk = (e->flags & UIT_F_DESK) != 0, subs = 0, flow = (N->lit & CD_FLOW) != 0;
+    int32_t w = size_of(e, int_of(e, N->t_value, -1, -1, 0)), h = size_of(e, int_of(e, N->t_aux, -1, -1, 0));
+    if (flow) {
+        // in the page's flow: its grid on the page's next rows (in a group, between its caption
+        // and its rows), its cards stops of the page, scrolling with it
+        moy_ui_api_grid(c, s, span_of(key, strlen(key)), w, h, NULL);
+        uit_after_removal(e, k);
+        for (int r = 0; r < e->slots[m].nrows; r++) {
+            uint32_t mark = e->scratch.n;
+            KIDS(k, g)
+            if (NODE(g)->kind == UIT_CARD)
+                draw_card(e, c, s, g, m, r);
+            e->scratch.n = mark;
+        }
+        moy_ui_api_grid(c, s, span_of("", 0), 0, 0, NULL);
+        return;
+    }
     moy_ui_over_t go;
     int32_t gen = (e->flags & UIT_F_GEN) && gen_ok(e) ? uit_cell_gen(e, k) : -1;
     moy_ui_over_none(&go);
@@ -1518,7 +1536,6 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     if (NODE(g)->t_value >= 0)
         subs = 1;
     int margin = desk ? 16 : 8, foot = desk ? (subs ? 52 : 30) : 26 + (subs ? 6 : 0), cols = 0;
-    int32_t w = size_of(e, int_of(e, N->t_value, -1, -1, 0)), h = size_of(e, int_of(e, N->t_aux, -1, -1, 0));
     int32_t pad = prop_int(e, k, "pad", -1, -1);
     if (pad > 0) {
         // pad=: the gap between its cards, a margin of 16 (or the gap, where that is more) at
@@ -1582,8 +1599,13 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
 // card's action; cur= follows the card the row rests on. The page's carousel as the frame left
 // it is the front end's to ask after (uit_carousel).
 enum { CAROUSEL_PARTS = 24, CAROUSEL_FLOOR = 8 };
+static void draw_desk_shelf(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k);
 static void draw_carousel(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
 {
+    if (e->flags & UIT_F_DESK) {
+        draw_desk_shelf(e, c, s, k);
+        return;
+    }
     const uit_node_t *N = NODE(k);
     int m = N->slot, n = e->slots[m].nrows, cd = carousel_card(e, k);
     const char *key = uit_str(e, N->key);
@@ -1714,6 +1736,315 @@ static void draw_carousel(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
     id_put(e, k, m, got, key);
     if (out[1] && cd >= 0 && NODE(cd)->act >= 0 && uit_act_can(e, NODE(cd)->act, m, got))
         fire(e, NODE(cd)->act, cd, m, got, NULL);
+}
+
+// A cards list of the shelf or icons look (`look="shelf"`, `look="icons"`, the home's grid and
+// icons arrangements): from where the page's stack stands to its foot, across its room, a grid
+// of cards (moy_ui_api_cells_grid: its keys, its taps, a drag and a fling); in each rect of the
+// floor the frame draws, every card but the current one, its picture the front end's (its tile,
+// its clip, 16 a cell's, its corners, the size it decodes at) and its label under it, then the
+// current card over its neighbours, grown by the focus and ringed flat while the cards hold the
+// keys, its label bold; then the foot (a handheld shelf's fade into the ground, the handheld
+// icons' caption band naming the current card and its sub line). In tone= (a theme role or
+// "#RRGGBB") its labels lie over a black shadow and no fade hides what is under the band.
+// Opening a card fires its card's action; cur= follows the card the keys are on. The page's
+// cells as the frame left them are the front end's to ask after (uit_cells).
+static void cells_pic(uit_t *e, int cd, int m, int r, const int32_t t[4], const int32_t *Q, int flags,
+                      int corners, int side)
+{
+    uint32_t pa = 0, pn = 0, mark = e->scratch.n;
+    if (cd >= 0 && pic_held(e, cd, m, r, &pa, &pn) && pn) {
+        int32_t pq[12] = {t[0], t[1], t[2], t[3], Q[0], Q[1], Q[2], Q[3], flags, corners, side, side};
+        e->pic_fn(e->pic_ud, cd, e->scratch.p + pa, pn, pq);
+    }
+    e->scratch.n = mark;
+}
+
+static void draw_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
+{
+    const uit_node_t *N = NODE(k);
+    int m = N->slot, n = e->slots[m].nrows, cd = carousel_card(e, k);
+    int look = (N->lit & CD_SHELF) ? MOY_UI_LOOK_SHELF : MOY_UI_LOOK_ICONS;
+    const char *key = uit_str(e, N->key);
+    uit_after_removal(e, k);
+    int32_t at[5];
+    moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, at);
+    int32_t band[4] = {e->rect[0], at[1], e->rect[2], e->rect[1] + e->rect[3] - at[1]};
+    if (band[3] <= 0)
+        return;
+    moy_ui_api_space(c, band[3]);
+    int desk = (e->flags & UIT_F_DESK) != 0;
+    int32_t g[MOY_UI_CELLS_G];
+    moy_ui_api_cells_geom(look, e->fs, desk, desk ? moy_ui_render_scale() : 1, band, g);
+    int across = (int)g[MOY_UI_CELLS_ACROSS];
+    int per = (int)(across ? g[MOY_UI_CELLS_ROWS] : g[MOY_UI_CELLS_COLS]);
+    per = per < 1 ? 1 : per > 16 ? 16 : per;
+    int cur = 0;
+    if (N->cur >= 0) {
+        const uit_slot_t *C = &e->slots[N->cur];
+        int r = uit_row_find(e, m, C->s ? C->s : "", C->sn);
+        if (r >= 0)
+            cur = r;
+    }
+    id_put(e, k, m, n ? cur : -1, key);
+    // its cards' keys, `per` a row of the table (the last row's cards to come empty): made
+    // again only where its model or the grid's rows moved
+    uit_buf_t *B = &e->cells;
+    int rows = (n + per - 1) / per;
+    uint32_t ckey = (uint32_t)e->gen * 65537u + (uint32_t)e->slots[m].ver * 257u + (uint32_t)n
+                    + (uint32_t)per * 0x9e3779b1u;
+    if (e->cells_node != k + 1 || e->cells_key != ckey) {
+        B->n = 0;
+        for (int r = 0; r < rows * per; r++) {
+            const char *v = r < n ? row_key(e, m, r) : "";
+            uit_buf_put(B, v, strlen(v));
+        }
+        e->cells_node = (int16_t)(k + 1);
+        e->cells_key = ckey;
+    }
+    int32_t out[5];
+    moy_ui_api_cells_grid(c, s, span_of(key, strlen(key)), band, g, (const uint8_t *)B->p, n ? B->n : 0, n,
+                     cur, out);
+    int32_t off = out[2];
+    int focused = out[4], sel = out[0];
+    int32_t *cw = e->cel;
+    memcpy(cw, band, 4 * sizeof band[0]);
+    memcpy(cw + 4, g, sizeof g);
+    cw[20] = off;
+    cw[21] = out[3];
+    cw[22] = sel;
+    cw[23] = n;
+    cw[24] = focused;
+    e->cel_node = (int16_t)(k + 1);
+    int32_t F[CAROUSEL_FLOOR][4], q[4];
+    int nf = 0;
+    while (moy_ui_api_table_floor(c, q) > 0)
+        if (nf < CAROUSEL_FLOOR)
+            memcpy(F[nf++], q, sizeof q);
+    // the table's rows the floor meets
+    int32_t pr[8], i, lo = -1, hi = -1;
+    while ((i = moy_ui_api_table_part(c, s, pr)) >= 0) {
+        lo = lo < 0 || i < lo ? i : lo;
+        hi = i > hi ? i : hi;
+    }
+    uint32_t tn, tmark = e->scratch.n, ta = prop_text(e, k, "tone", -1, -1, &tn);
+    int32_t ink = tn ? button_ink(e->scratch.p + ta, tn) : -1;
+    e->scratch.n = tmark;
+    int side = (int)g[MOY_UI_CELLS_SIDE], cr = (int)g[MOY_UI_CELLS_R], gr = (int)g[MOY_UI_CELLS_GROW];
+    int vh = (int)g[MOY_UI_CELLS_VIEW_H];
+    for (int f = 0; f < nf; f++) {
+        int32_t *Q = F[f];
+        // the cards inside the view (the caption band under it is the foot's)
+        int32_t V[4] = {Q[0], Q[1], Q[2], Q[3]};
+        int vy1 = band[1] + vh;
+        if (V[1] + V[3] > vy1)
+            V[3] = vy1 - V[1] > 0 ? vy1 - V[1] : 0;
+        for (int pass = 0; pass < 2 && lo >= 0 && V[3] > 0; pass++) {
+            for (int r = pass ? sel : lo * per; r < n && (pass ? r == sel : r < (hi + 1) * per); r++) {
+                int on = r == sel && focused;
+                if (!pass && r == sel)
+                    continue;
+                int32_t t[4];
+                moy_ui_api_cells_tile(g, band, off, r, t);
+                int gg = on ? gr : 0;
+                int32_t pt[4] = {t[0] - gg, t[1] - gg, t[2] + 2 * gg, t[3] + 2 * gg};
+                cells_pic(e, cd, m, r, pt, V, 16 | on, cr ? cr + gg : 0, side);
+                uint32_t mark = e->scratch.n, n1;
+                uint32_t a1 = cd >= 0 ? text(e, cd, 0, m, r, &n1) : 0;
+                if (cd < 0)
+                    n1 = 0;
+                moy_ui_api_cells_card(c, s, g, t, V, on, sspan(e, a1, n1), ink >= 0 ? ink : MOY_UI_O_NONE);
+                e->scratch.n = mark;
+            }
+        }
+    }
+    if (nf && n && cd >= 0) {
+        // the foot, across the band the frame draws whole (the caption band lies under the view)
+        uint32_t mark = e->scratch.n, n1, n2;
+        uint32_t a1 = text(e, cd, 0, m, sel, &n1), a2 = text(e, cd, 1, m, sel, &n2);
+        moy_ui_api_cells_foot(c, s, g, band, band, ink < 0, sspan(e, a1, n1), sspan(e, a2, n2));
+        e->scratch.n = mark;
+    }
+    if (sel < 0 || sel >= n)
+        return;
+    const char *gk = row_key(e, m, sel);
+    size_t gn = strlen(gk);
+    if (N->cur >= 0) {
+        const uit_slot_t *C = &e->slots[N->cur];
+        if (gn != C->sn || memcmp(gk, C->s ? C->s : "", gn))
+            uit_cur_moved(e, k, gk, gn, "cells");
+    }
+    id_put(e, k, m, sel, key);
+    if (out[1] && cd >= 0 && NODE(cd)->act >= 0 && uit_act_can(e, NODE(cd)->act, m, sel))
+        fire(e, NODE(cd)->act, cd, m, sel, NULL);
+}
+
+// A cards list of the carousel look on the desk class (the desk home's shelf): from where the
+// page's stack stands to its foot, one row of cards `w=` a side (moy_ui_api_desk_shelf_geom),
+// its motion the desk's (moy_ui_api_cells_grid under MOY_UI_LOOK_DESK: the current card moves
+// at once and the shelf glides to show it); in each rect of the floor the frame draws, cut at
+// the shelf's margin, its caption (`label=` and the count of its cards, apart by a dot), every
+// card's shadow, then the cards, the current one last and, at rest, under the theme's focus
+// mark where the cards hold the keys and focus draws, else its current mark: the card the app
+// describes beside the shelf. Each card's picture is the front end's (its tile, its clip, 4 the current
+// card's and 1 lifted, its corners, the size it decodes at). Opening a card fires its card's
+// action; cur= follows the current card. The shelf as the frame left it is the front end's to
+// ask after (uit_cells).
+static void draw_desk_shelf(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
+{
+    const uit_node_t *N = NODE(k);
+    int m = N->slot, n = e->slots[m].nrows, cd = carousel_card(e, k);
+    const char *key = uit_str(e, N->key);
+    uit_after_removal(e, k);
+    int32_t at[5];
+    moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, at);
+    int32_t band[4] = {e->rect[0], at[1], e->rect[2], e->rect[1] + e->rect[3] - at[1]};
+    if (band[3] <= 0)
+        return;
+    moy_ui_api_space(c, band[3]);
+    int32_t g[MOY_UI_CELLS_G];
+    int side = (int)int_of(e, N->t_value, -1, -1, 64);
+    moy_ui_api_desk_shelf_geom(e->fs, moy_ui_render_scale(), band, side > 0 ? side : 64, g);
+    int cur = 0;
+    if (N->cur >= 0) {
+        const uit_slot_t *C = &e->slots[N->cur];
+        int r = uit_row_find(e, m, C->s ? C->s : "", C->sn);
+        if (r >= 0)
+            cur = r;
+    }
+    id_put(e, k, m, n ? cur : -1, key);
+    // its cards' keys, one a row of the table: made again only where its model moved
+    uit_buf_t *B = &e->cells;
+    uint32_t ckey = (uint32_t)e->gen * 65537u + (uint32_t)e->slots[m].ver * 257u + (uint32_t)n + 0x5bd1e995u;
+    if (e->cells_node != k + 1 || e->cells_key != ckey) {
+        B->n = 0;
+        for (int r = 0; r < n; r++) {
+            const char *v = row_key(e, m, r);
+            uit_buf_put(B, v, strlen(v));
+        }
+        e->cells_node = (int16_t)(k + 1);
+        e->cells_key = ckey;
+    }
+    int32_t out[5];
+    moy_ui_api_cells_grid(c, s, span_of(key, strlen(key)), band, g, (const uint8_t *)B->p, n ? B->n : 0, n,
+                          cur, out);
+    int32_t off = out[2];
+    int focused = out[4], sel = out[0], moving = out[3] != 0;
+    int32_t *cw = e->cel;
+    memcpy(cw, band, 4 * sizeof band[0]);
+    memcpy(cw + 4, g, sizeof g);
+    cw[20] = off;
+    cw[21] = out[3];
+    cw[22] = sel;
+    cw[23] = n;
+    cw[24] = focused;
+    e->cel_node = (int16_t)(k + 1);
+    int32_t F[CAROUSEL_FLOOR][4], q[4];
+    int nf = 0;
+    while (moy_ui_api_table_floor(c, q) > 0)
+        if (nf < CAROUSEL_FLOOR)
+            memcpy(F[nf++], q, sizeof q);
+    int32_t pr[8], i, lo = -1, hi = -1;
+    while ((i = moy_ui_api_table_part(c, s, pr)) >= 0) {
+        lo = lo < 0 || i < lo ? i : lo;
+        hi = i > hi ? i : hi;
+    }
+    // the current card at rest wears the focus mark where the cards hold the keys and focus
+    // draws (not under touch, nor while a window or a dialog over the page holds the marks),
+    // else its current mark
+    int at_rest = focused && moy_ui_sink_marks(s) ? 1 : 2;
+    int32_t left = g[MOY_UI_CELLS_X0] + g[MOY_UI_CELLS_SIDE] - g[MOY_UI_CELLS_PX];
+    uint32_t ln, lmark = e->scratch.n, la = prop_text(e, k, "label", -1, -1, &ln);
+    for (int f = 0; f < nf; f++) {
+        // the floor rect, cut at the shelf's margin: a card scrolled across it is cut there
+        int32_t *Q = F[f], V[4] = {Q[0], Q[1], Q[2], Q[3]};
+        if (V[0] < left) {
+            V[2] = V[0] + V[2] - left > 0 ? V[0] + V[2] - left : 0;
+            V[0] = left;
+        }
+        if (V[2] <= 0)
+            continue;
+        moy_ui_api_desk_caption(c, s, g, band, V, sspan(e, la, ln), n);
+        for (int pass = 0; pass < 3 && lo >= 0; pass++) {
+            // the shadows, the cards, then the current card over its neighbours
+            for (int r = lo; r <= hi && r < n; r++) {
+                if (pass && (r == sel) != (pass == 2))
+                    continue;
+                int32_t t[4];
+                moy_ui_api_cells_tile(g, band, off, r, t);
+                if (t[0] + t[2] <= left || t[0] >= band[0] + band[2])
+                    continue;
+                if (!pass) {
+                    moy_ui_api_tile_cast(c, s, t, V, 0);
+                    continue;
+                }
+                int rest = r == sel && !moving;
+                int32_t tile[10];
+                moy_ui_api_tile(c, s, t, V, -(int)g[MOY_UI_CELLS_SIDE], rest ? at_rest : 0, tile);
+                int32_t pt[4] = {tile[0], tile[1], tile[2], tile[3]};
+                cells_pic(e, cd, m, r, pt, V, (r == sel ? 4 : 0) | (tile[9] ? 1 : 0), (int)tile[4],
+                          (int)g[MOY_UI_CELLS_SIDE]);
+                moy_ui_api_tile_end(c, s, tile, V);
+            }
+        }
+    }
+    e->scratch.n = lmark;
+    if (sel < 0 || sel >= n)
+        return;
+    const char *gk = row_key(e, m, sel);
+    size_t gn = strlen(gk);
+    if (N->cur >= 0) {
+        const uit_slot_t *C = &e->slots[N->cur];
+        if (gn != C->sn || memcmp(gk, C->s ? C->s : "", gn))
+            uit_cur_moved(e, k, gk, gn, "carousel");
+    }
+    id_put(e, k, m, sel, key);
+    if (out[1] && cd >= 0 && NODE(cd)->act >= 0 && uit_act_can(e, NODE(cd)->act, m, sel))
+        fire(e, NODE(cd)->act, cd, m, sel, NULL);
+}
+
+int uit_cells(const uit_t *e, int32_t out[UIT_CELLS_WORDS])
+{
+    if (!e->cel_node)
+        return 0;
+    memcpy(out, e->cel, UIT_CELLS_WORDS * sizeof out[0]);
+    return 1;
+}
+
+int uit_cells_tile(const uit_t *e, int i, int32_t out[4])
+{
+    const int32_t *w = e->cel;
+    if (!e->cel_node || i < 0 || i >= w[23])
+        return 0;
+    moy_ui_api_cells_tile(w + 4, w, w[20], i, out);
+    return out[0] + out[2] > w[0] && out[0] < w[0] + w[2] && out[1] + out[3] > w[1]
+           && out[1] < w[1] + w[4 + MOY_UI_CELLS_VIEW_H];
+}
+
+int uit_cells_at(const uit_t *e, int x, int y)
+{
+    if (!e->cel_node)
+        return -1;
+    if (e->cel[4 + MOY_UI_CELLS_LOOK] == MOY_UI_LOOK_DESK)
+        return moy_ui_api_desk_at(e->cel + 4, e->cel, e->cel[20], e->cel[23], x, y);
+    return moy_ui_api_cells_at(e->cel + 4, e->cel, e->cel[20], e->cel[23], x, y);
+}
+
+int uit_cells_geom(uit_t *e, const int32_t b[4], int fs, int desk, int32_t out[16])
+{
+    for (int k = 0; k < (int)e->nnodes; k++) {
+        if (NODE(k)->kind != UIT_CARDS || !(NODE(k)->lit & (CD_SHELF | CD_ICONS)))
+            continue;
+        moy_ui_api_cells_geom((NODE(k)->lit & CD_SHELF) ? MOY_UI_LOOK_SHELF : MOY_UI_LOOK_ICONS, fs, desk,
+                              desk ? moy_ui_render_scale() : 1, b, out);
+        return 1;
+    }
+    return 0;
+}
+
+void uit_carousel_desk(const int32_t b[4], int fs, int keys, int brows, int32_t out[UIT_DESK_WORDS])
+{
+    moy_ui_api_carousel_desk(fs, moy_ui_render_scale(), keys, brows, b, out);
 }
 
 int uit_carousel(const uit_t *e, int32_t out[UIT_CAROUSEL_WORDS])
@@ -2470,7 +2801,9 @@ static void draw_tabs(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     if (pad)
         moy_ui_inset32(band, 2 * pad, pad, band);
     tabs_in(e, c, s, k, band);
-    moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3]);
+    // what follows them takes the rest, over a flowing page's hints band
+    int32_t h = e->rect[3] > e->band_h ? e->rect[3] - e->band_h : 0;
+    moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], h);
 }
 
 static int32_t row_unit(const uit_t *e);
@@ -3751,6 +4084,8 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     case UIT_CARDS:
         if (NODE(k)->lit & CD_CAROUSEL)
             draw_carousel(e, c, s, k);
+        else if (NODE(k)->lit & (CD_SHELF | CD_ICONS))
+            draw_cells(e, c, s, k);
         else
             draw_cards(e, c, s, k);
         break;
@@ -4015,7 +4350,7 @@ static int row_stop_id(uit_t *e, int lst, const char *key, size_t n, char out[UI
         menu_row_id(e, NODE(lst)->kid, NODE(lst)->slot, r, out);     // a menu row's id is its text
         return 1;
     }
-    if (NODE(lst)->kind == UIT_TABLE || IS_CAROUSEL(lst)) {
+    if (NODE(lst)->kind == UIT_TABLE || IS_ONE_STOP(lst)) {
         snprintf(out, UIT_ID_MAX + 1, "%s", uit_str(e, NODE(lst)->key));     // one stop, its key the id
         return 1;
     }
@@ -6057,7 +6392,7 @@ int uit_gens(uit_t *e, int32_t *out, int cap)
         out[n] = e->page_gen;
     n++;
     for (int k = 1; k < e->nnodes; k++)
-        if (NODE(k)->kind == UIT_CARDS || NODE(k)->kind == UIT_SCROLL ||
+        if ((NODE(k)->kind == UIT_CARDS && !(NODE(k)->lit & CD_FLOW)) || NODE(k)->kind == UIT_SCROLL ||
             (NODE(k)->kind == UIT_GROUP && NODE(NODE(k)->parent)->kind == UIT_SPLIT)) {
             if (n < cap)
                 out[n] = uit_cell_gen(e, k);

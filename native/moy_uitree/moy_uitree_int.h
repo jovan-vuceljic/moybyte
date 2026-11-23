@@ -137,8 +137,9 @@ enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_SWATCH = 2, 
        NL_HIDE = 8, NL_PICS = 16, NL_EDGE = 16 };      // NL_EDGE: a cells' edge=True
 // A dialog's lit bits: kind="danger"; look="keys" (no button row on the T-Deck).
 enum { DL_DANGER = 1, DL_KEYS = 2 };
-// A cards list's lit bits: look="carousel" (one row of tiles, its centre's words under it).
-enum { CD_CAROUSEL = 1 };
+// A cards list's lit bits: look="carousel" (one row of tiles, its centre's words under it),
+// "shelf", "icons"; flow=True (its grid in the page's flow).
+enum { CD_CAROUSEL = 1, CD_SHELF = 2, CD_ICONS = 4, CD_FLOW = 8 };
 // A label's text options (`nbtn`): wrap= in bits 0-1 (LT_WORD, LT_CHAR), its face's
 // role + 1 in bits 2-4, the toolkit's `centre` for align= in bits 5-7, lines= given.
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.
@@ -374,6 +375,8 @@ struct uit {
     // drawn since the page was built).
     int32_t car[UIT_CAROUSEL_WORDS];
     int16_t car_node;
+    int32_t cel[UIT_CELLS_WORDS];       // the page's shelf or icons as the last frame drew them
+    int16_t cel_node;
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
     int32_t band_h;             // a flowing page's hints band, docked at its foot: its pictures end over it
     uint8_t menu_keys;          // the last menu drawn showed its items' letters (`draw_menu`)

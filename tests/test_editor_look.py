@@ -75,13 +75,6 @@ def _ink_left(px, x0, x1, y0, y1, ground=None):
     return None
 
 
-def _place(ws, key, rect):
-    win = ws.wm.windows[key]
-    win.x, win.y = rect[0], rect[1]
-    ws.wm.resize_window(win, rect[2], rect[3])
-    return win
-
-
 def _editor(ws, tab):
     """The handheld Editor on Star Catcher's `tab`: its CodeLayout and the
     glass origin of its content (0, 0)."""
@@ -252,56 +245,6 @@ def test_the_sprite_tool_row_keeps_the_mockups_spacing(tmp_path, theme, mode):
     assert len(row) == len(paint_layer._TOOL_ROW)
     assert {b[0] - a[0] for a, b in zip(row, row[1:])} == {24 * lay.fs}
     assert row[0][0] in (lay.pg_x0, lay.spr_prev[0])
-
-
-# The desk Appearance window, the target's (tools/look_shots.py's
-# `_desk_appearance`).
-APPEARANCE_WIN = (226, 65, 680, 510)
-
-
-def _desk_appearance(ws):
-    ws.home.open_desk()
-    ws.spine.open_app(ws.app("appearance"))
-    _frame(ws, 2)
-    win = _place(ws, "appearance", APPEARANCE_WIN)
-    _frame(ws)
-    app = ws.app("appearance")
-    return getattr(app, "app", app), win
-
-
-@pytest.mark.parametrize("theme,mode", THEMES)
-def test_the_desk_appearance_foot_sits_on_the_rows_column_and_inset(tmp_path, theme, mode):
-    """The window's foot: the theme's status starts on the rows' label
-    column (where a desk row's label starts), and stands centred between
-    the foot's rule and the frame's bottom, as far from the bottom as the
-    rows from the sides (design review R3-27: 2 px left of the rows, 27 px
-    above the bottom)."""
-    ws = _ws(tmp_path, DESK, theme, mode)
-    app, win = _desk_appearance(ws)
-    lay = win.ctx.app_layouts["appearance"]
-    cx, cy, _cw, _ch = win.content_rect()
-    px = _px(ws)
-    bx, _by, bw, _bh = lay.body
-    fx, fy, _fw, fh = lay.foot
-    ground = px[cy + fy + 4][cx + bx + bw // 2]
-    # the status's ink: the rows between the rule and the frame's bottom,
-    # left of the hints
-    rule = cy + fy
-    bottom = win.y + win.h - 1 - win.edge             # the frame's inside bottom edge
-    cols = range(cx + bx, cx + bx + bw // 2)
-    rows = [y for y in range(rule + 1, bottom) if any(px[y][x] != ground for x in cols)]
-    assert rows, "no status"
-    above, below = rows[0] - rule - 1, bottom - rows[-1] - 1
-    # centred by the face's line box, which holds its ink a pixel or two
-    # off its middle
-    assert abs(above - below) <= 3, (above, below)
-    assert below <= 17, below
-    # on the rows' label column: the desk rows' label inset, style.json's
-    # group pad
-    from runtime import ui_draw
-    pad = ui_draw.metrics("group")[1] * lay.fs
-    x0 = _ink_left(px, cx + bx, cx + bx + bw // 2, rows[0], rows[-1] + 1, ground)
-    assert 0 <= x0 - (cx + bx + pad) <= lay.fs, (x0 - cx - bx, pad)
 
 
 @pytest.mark.parametrize("app_id", ("appearance", "calc"))
