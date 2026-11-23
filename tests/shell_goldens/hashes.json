@@ -1,7 +1,7 @@
 {
   "big_800x480_fs3_dark": {
     "about": "50c52a49e00731c252d0ed99a003b5596b4acefcc1e562053ff046ac19884b19",
-    "app_appearance": "e85b9aa255299e04ac00e73fe3bb52e2fbd4be3e9dcee62a33389ac0d502fa8a",
+    "app_appearance": "78c390ea5b454a119d4b00441abb75971731339b1f5dbfb1df7ec7395d2768bd",
     "app_artwork": "d39a9afb0896b353bdf8d615e32d5a7ea7aca2b18b1504e6628ced18327f2ca9",
     "app_calc": "2f40a15690c298393a5ffe67ba41092d58e3ff475642b0a170d77c3e0b143e71",
     "app_files": "9acea1210e4ff8a913353604dd60dd7a02867f872d4cfc84300654fedd8710bf",
@@ -147,7 +147,7 @@
   },
   "guition_tapfloor_dark": {
     "about": "da15b9fe192bc956e1875f73b12087c07a88f6eb79a374b4a8d1f72a7cf82114",
-    "app_appearance": "33fe65efd11424c7a2e91966131eac3acdd7008cbc18cd55ef8f55efa46c27d2",
+    "app_appearance": "d678a3a65bff8e28f9e65133cb6dcaa21f5306bee610b3010739279e36a03c71",
     "app_artwork": "cfa3266da60517151c5c459faf9d0d42e468dbe98b514e4dfb3c9bd27a68eddf",
     "app_calc": "94c08e82e8fefe4abb79b189b8c80a9b3d083394a136aac1dbf5ef2fc5b0675f",
     "app_files": "5fd47678a390cb7d83797a572c8b01b36f7d90a56d17b31632df71c5b26ce886",
@@ -188,7 +188,7 @@
   },
   "p4_1024x600_cs2_fs1_blocks": {
     "about": "10d618371e68f47fa7c07bfc7f10ca230247424783f0ca8ecf163e95502f1715",
-    "app_appearance": "5927cfbf82907ca6ef2fc432ed2726ce4ea06a8ea0a25272ae43565bd7abce2b",
+    "app_appearance": "21d6c36c76c4d35948ae1b47b81615981e9215fcbaf11a707410251b4a4eec88",
     "app_artwork": "0019747fdf85cbfcb710564e5010b475a02300ec1da8cae3b8ea540af7a63775",
     "app_calc": "b75f55a5fe66830b6cad62f14d712cd820fd0476dc99f6c2c0e4fcaac63bb665",
     "app_files": "5174542bf1c38af49d719caefbfb42dba761b6b53de7391e810570366d4a45ba",
@@ -233,7 +233,7 @@
   },
   "p4_1024x600_cs2_fs1_console": {
     "about": "337469b4ab405c0a9fff2fcd1d32682e7e3c1e07398c300de1fcf3160b6932b5",
-    "app_appearance": "25c27952c32e2df32236668fea34f3933ab9b295323cdc93fa2518cf2aab664d",
+    "app_appearance": "3b80c07aafd793f08f47fa108cbb03e292fa398841b5002b58e1b399474fdda7",
     "app_artwork": "4b82ade792e855577acefd1174a2da307fad1d0d0f509c0cd4686421e8b7106c",
     "app_calc": "e8ac135a3bc405e2da315a0d894157721807800ec61d52b15492e77684b8920a",
     "app_files": "9b045f12eb74ccb4cb08e494221f7d6c01f52ff266e0c42370f79946d665f168",
@@ -319,7 +319,7 @@
   },
   "p4_1024x600_cs2_fs1_gnomebar": {
     "about": "21915dd168280abbf9071a5daa69dfad69d456b9393004ee49eb457636edbf3d",
-    "app_appearance": "25c27952c32e2df32236668fea34f3933ab9b295323cdc93fa2518cf2aab664d",
+    "app_appearance": "3b80c07aafd793f08f47fa108cbb03e292fa398841b5002b58e1b399474fdda7",
     "app_artwork": "4b82ade792e855577acefd1174a2da307fad1d0d0f509c0cd4686421e8b7106c",
     "app_calc": "e8ac135a3bc405e2da315a0d894157721807800ec61d52b15492e77684b8920a",
     "app_files": "9b045f12eb74ccb4cb08e494221f7d6c01f52ff266e0c42370f79946d665f168",
@@ -376,7 +376,7 @@
   },
   "p4_1024x600_cs2_fs1_moy_day": {
     "about": "6cb928025c049197aa01f657d59a041c991a7c8f5fb70f32f36b1024c1dbb73f",
-    "app_appearance": "73c7ee9cf0389c6917e069c1e94d6babae62297097c093505b94431dc2133215",
+    "app_appearance": "3b2c5e2c3ba1eacf104d5ba3a8a73cefda87d4a2f445ff98abc6393d9e6ade3b",
     "app_artwork": "5f97e33c74bc6b4826bdf17f7b4d1a37ad02d20f3f3e058322be4640c3285521",
     "app_calc": "6fff350064749ccfd459faaf145447b851c906083ba1e84e9e37ed974f0e206d",
     "app_files": "a354d6980e92a379f2d48948e5febb47d69b6e0beb0cb8441ba6b8d61b4908b9",
@@ -426,7 +426,7 @@
   },
   "p4_1024x600_cs2_fs1_moy_night": {
     "about": "337469b4ab405c0a9fff2fcd1d32682e7e3c1e07398c300de1fcf3160b6932b5",
-    "app_appearance": "25c27952c32e2df32236668fea34f3933ab9b295323cdc93fa2518cf2aab664d",
+    "app_appearance": "3b80c07aafd793f08f47fa108cbb03e292fa398841b5002b58e1b399474fdda7",
     "app_artwork": "4b82ade792e855577acefd1174a2da307fad1d0d0f509c0cd4686421e8b7106c",
     "app_calc": "e8ac135a3bc405e2da315a0d894157721807800ec61d52b15492e77684b8920a",
     "app_files": "9b045f12eb74ccb4cb08e494221f7d6c01f52ff266e0c42370f79946d665f168",
@@ -501,7 +501,7 @@
   },
   "p4_1024x600_cs2_fs1_twobars": {
     "about": "c17a4f51ff80cdda2ce793ca993bf95fd5c96626f11a6fffbdfb709436890971",
-    "app_appearance": "fba3430cad2815e6ad42b26e7600a5d88a7a53fb9ce35c9f1eed3fc055355691",
+    "app_appearance": "2a20828f2580115a32c87d8fb945fd184c4be1476e41f1114ddf427dd64eda08",
     "app_artwork": "f39731d9435e79fd654c167fab8420f4a6c433c738f4fc0852378b502f993590",
     "app_calc": "ecd1d7205ad3df7a025b7415b425c45e5d47ec9dfdca188e9940790428900e58",
     "app_files": "a5b7e489fb067f7eb7df6c55ab01c9d8091c9c9f56b4db209a72395add3b2bfe",
@@ -546,7 +546,7 @@
   },
   "p4_1024x600_cs2_fs1_win95bar": {
     "about": "a5f958fbeeecc0ff9084df77f07913a06e531330c7c57076fd1a247b984c0cb8",
-    "app_appearance": "b262bac897ffa163ac8e45b3a277d1b5f4c6ed7f12fa23943388205f3d7a3383",
+    "app_appearance": "a7aa23a4d373b552bb19bf7c5a419189acdf8d99895bc086ef6932e00da5a87d",
     "app_artwork": "a32df9dba3fc3fcf7f20a1a4db33f59d3402027613a13bd871476eb393f8cc4d",
     "app_calc": "57b8c2e6c3895415512241d909644d96ed29e58f51e083c578f9663dcf19542d",
     "app_files": "6c5bf138efbaf11a01529a47c3f9c1e078e50d6bf6256d72f96d277f356e9f03",
@@ -591,8 +591,8 @@
   },
   "p4_1024x600_cs2_fs1_windowed": {
     "about": "337469b4ab405c0a9fff2fcd1d32682e7e3c1e07398c300de1fcf3160b6932b5",
-    "app_appearance": "25c27952c32e2df32236668fea34f3933ab9b295323cdc93fa2518cf2aab664d",
-    "app_appearance_name": "5c0a216bc7e657ab3f63670062f7ad8b9fa90b1801225f081623e451c76fde1a",
+    "app_appearance": "3b80c07aafd793f08f47fa108cbb03e292fa398841b5002b58e1b399474fdda7",
+    "app_appearance_name": "52bd4e8ef3f191424ecde6d86de4c7502686d1dc599873c84bfbbde76b5f7a2a",
     "app_appearance_walls": "208de34f9656d933698a848909819b5317845685d4139d322ccb10fcf146f3cd",
     "app_artwork": "4b82ade792e855577acefd1174a2da307fad1d0d0f509c0cd4686421e8b7106c",
     "app_calc": "239cfda7a8a1006795fdcc0075a85d4f0382762e5320e00fa3b5a5a2dda14068",
@@ -655,7 +655,7 @@
   },
   "p4_1024x600_fs2_windowed": {
     "about": "ddde643620ce7d058154224ca09e1c95313c33e88a1d9c628153b7d0053bc6df",
-    "app_appearance": "f3f28f2f5c5fd003fd7a0bcc45b1001d2f2af5b0098ffa96881e535492bc4950",
+    "app_appearance": "2a03716ef1c1791d5e1bbe6bb84b216bfd26b257049c4cb665874e23dece4dba",
     "app_artwork": "e5828974e0e0fcd5926948a1a5e00852900aed1c4acb08f8300d84c2f22de7d0",
     "app_calc": "afc24c74f4d6e718cc5f8ca9adc04860b1f36c05b62f83fd101977e410c08c1b",
     "app_files": "99ace86183801860100daeba52023839a1e0124a13ce11f13dc214f52978d85d",
@@ -700,7 +700,7 @@
   },
   "p4_1024x600_fs2_windowed_light": {
     "about": "3ba1f28376e56988d3238696da9fe2084c6670db38a5382a561d311dd857308a",
-    "app_appearance": "3073950a848d8445c4d4e3c9ac0a90d93d91963ad13d5f14caab7694c9a80f50",
+    "app_appearance": "faafc0303565773022c117a60ecba6aa3ab9cb9375428a9d1a8e0b557f68bdad",
     "app_artwork": "a121dad49def55df2048696b5ea761d72cc9f090a67499f18d314357592a2585",
     "app_calc": "d860f1a495e10f02e48f7301f5b4ef200ec2ec8c8b8c1bffea39bc178dd089fa",
     "app_files": "97a041305047d9f8297425f44d0d671aa61c4aee556dad0f756ddb4f597ce349",
@@ -745,7 +745,7 @@
   },
   "p4_1024x600_render2_moy_day": {
     "about": "623e6fd1268373005bdd9eaa281f5107aa0deec7ec65e2c5d1441e0657301835",
-    "app_appearance": "1d7b42fd51b8e2fd68ed94f8155d484368bc3306e0bde1b89e2f9958414ddf6c",
+    "app_appearance": "377557d007fa5f4ed1e20cd2bb84a7bf85311a70a4f4fd7c13ab72df61cc70c0",
     "app_artwork": "7f8b5b264472259b90dd33c4b355c515687a1d129398fbe8e867c126d7ff38ba",
     "app_calc": "c5f7df0d9c990671d187c6185229645ead42122fb5d872aa076ccd625fe4c995",
     "app_files": "1893c3d281e89f49d1eeb2fdbcbcf62206478dc8892101c0885602d13e6f821d",
@@ -790,7 +790,7 @@
   },
   "tdeck_320x240_fs1_blocks": {
     "about": "e522ec2c1d14d286159fec3e35e915b4a792cc9cd1d26771065538c6928d033f",
-    "app_appearance": "9377049f20a1f0e70004260ffd86bbbe52b3d8dae8f4dbac58281ad05c72894a",
+    "app_appearance": "f7c728f07792168dbebfe04b0a6a48a4c11fe5f12a4d010b70ace30a96ecec82",
     "app_artwork": "4a0d12d42f8170e82e6446b200b0d290b2c87403a461fb0dab12a94ccaac4ecb",
     "app_calc": "c05b88f68707b783c0355676fa4e60c7796337203d2aad682531af981feb0334",
     "app_files": "1d36c3d25247a4e5159239a3c3a40ae3baf3dce4bc6098da04be364c5581999e",
@@ -831,7 +831,7 @@
   },
   "tdeck_320x240_fs1_bottombar": {
     "about": "889845e9c1d5e50d6e905d394b320f7a293c8b89fbc826b693bdc268c940a42a",
-    "app_appearance": "ecd4ccfa77de7a60c9a5409679c9735db29cd3af5164b3669382c4edbc10b76f",
+    "app_appearance": "b14609eea6d2f3ee81481ec1048d28a780ebd36ae262d8765f72959ef57b086e",
     "app_artwork": "37debd974384a5e04653f5956b77dd850005608ac7fb60be44b0cf1180980e73",
     "app_calc": "22971d434ff07f15841179179bebc9d385bb87491385dc1730767b73f49a4025",
     "app_files": "cea3a79acd0564232e1f6b461ef681162402beb594ca182c8cd241d20127d61b",
@@ -872,8 +872,8 @@
   },
   "tdeck_320x240_fs1_dark": {
     "about": "e91c052a5c5357ba1f1e87a938806051d9bb9030782237a01a6389e7fea299be",
-    "app_appearance": "aa6d34eb2a23eb18fbfca8c296d9460c34e6c83a1346bd26627621691938768d",
-    "app_appearance_name": "3c9aa7e165fc8a37b4c5a2e47de493d33b17a49bcff72dfbbc98973cde8d42ec",
+    "app_appearance": "e6077ed63d08a2b0f6bbdd139739777577693dc1d325ead073a184b448f5ebad",
+    "app_appearance_name": "911124bd9b19df35c87604adcb5dd5ea69f1c1f0ca86b50fa57213a3002cd6d6",
     "app_appearance_walls": "bd9838334a50b450137d6e0a4788be380c44a95428dac868d683ff60274c3c64",
     "app_artwork": "065a5f7285104c488866eb6dd41ae62ed1cff46430aa54196f1c8ae289898401",
     "app_calc": "d098cf30f0a4cbfd932ff99ad092b0805f5fd85b89dc83053c0e3a04c4c967d3",
@@ -935,8 +935,8 @@
   },
   "tdeck_320x240_fs1_light": {
     "about": "501f61d6f88b8b2cf9bfc6a5436cbfde3834a582e7d104f4d5ad3110e5cf6559",
-    "app_appearance": "5250e78a33d305363a82f7f087e7d42e144600478465dc13e9fa89a26b82743b",
-    "app_appearance_name": "b3f08abc22ff912456c7c353b6a58d06fc6aa74098c82e4ef93c128012d12adb",
+    "app_appearance": "c23bad11a3c78df20bb4206d0ab0ee58ae004142352ddf777cec82536932ace5",
+    "app_appearance_name": "e94570f27030328f468f34bb57accf7a3da2c90df4fadfa95394f54b9a9529b8",
     "app_appearance_walls": "9c0650f362f86d3912121c938c531c5fb072d9e2995da8f6f8aa6abb58baa76d",
     "app_artwork": "8fa31d57d0d13c515c9599d9914f354976ac3750a01bb92896c4c71f4fb7dda3",
     "app_calc": "aedbeb21f2a922eec0a3065948804f55a12381cd356851d5653f8f0805e0a41e",
@@ -986,7 +986,7 @@
   },
   "tdeck_320x240_fs1_moy_day": {
     "about": "501f61d6f88b8b2cf9bfc6a5436cbfde3834a582e7d104f4d5ad3110e5cf6559",
-    "app_appearance": "5250e78a33d305363a82f7f087e7d42e144600478465dc13e9fa89a26b82743b",
+    "app_appearance": "c23bad11a3c78df20bb4206d0ab0ee58ae004142352ddf777cec82536932ace5",
     "app_artwork": "8fa31d57d0d13c515c9599d9914f354976ac3750a01bb92896c4c71f4fb7dda3",
     "app_calc": "aedbeb21f2a922eec0a3065948804f55a12381cd356851d5653f8f0805e0a41e",
     "app_files": "d5ef6bcec098b317c3fabb314736739a18e4af53c386e26302ebb71dd70707de",
@@ -1032,7 +1032,7 @@
   },
   "tdeck_320x240_fs1_moy_night": {
     "about": "e91c052a5c5357ba1f1e87a938806051d9bb9030782237a01a6389e7fea299be",
-    "app_appearance": "aa6d34eb2a23eb18fbfca8c296d9460c34e6c83a1346bd26627621691938768d",
+    "app_appearance": "e6077ed63d08a2b0f6bbdd139739777577693dc1d325ead073a184b448f5ebad",
     "app_artwork": "065a5f7285104c488866eb6dd41ae62ed1cff46430aa54196f1c8ae289898401",
     "app_calc": "d098cf30f0a4cbfd932ff99ad092b0805f5fd85b89dc83053c0e3a04c4c967d3",
     "app_files": "8c1c358681546afa9ef814415727f005051f3bff8a0ea7498b65ae1578abde08",
