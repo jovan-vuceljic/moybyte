@@ -3,8 +3,8 @@
 How a person sets up and opens the browser console of a board whose storage
 cannot hold it, and the design those steps need. §2 is the user flows the
 owner decided (2026-11-23). §1 is what IS. Everything after §2 is PROPOSED
-unless it carries an owner's date, and §12 lists the questions that are
-still open.
+unless it carries an owner's date, and §12 holds the owner's answers to
+the questions it raised.
 
 ## 0. Why
 
@@ -375,7 +375,7 @@ Settings, and join My consoles when you type that address.
   loader image's digest.
 - **The C3 has no OTA.** Its users run a stable image for a long time, so
   os.moybyte.com keeps every pack a stable release's image names. Beta's packs,
-  one per web build a `dev` push publishes, need a retention window (§12).
+  one per web build a `dev` push publishes, are kept for 30 days (§12).
 - **A worktree build** names a digest no site publishes, so its mirror is
   the developer's own (§4).
 
@@ -449,8 +449,7 @@ of its sources. That keeps the one way a fresh browser starts a console on a
 LAN without internet, and costs nothing the add-on machinery does not
 already cost. Losing the room stops being an error a browser sees: a board
 whose add-on does not fit records that once (`system/addon_room`, as now),
-and its loader goes online. Whether the add-on machinery is worth keeping
-at all is §12's first question.
+and its loader goes online. The add-on machinery stays (§12).
 
 **Rejected:**
 
@@ -577,13 +576,22 @@ Tests:
 Tests: its prompt and its refusal, and the link still used where the
 permission is denied.
 
-## 12. Open questions for the owner
+**Phase 7: the field mode.** A board serves the loader on its own access
+point (§12), and My consoles opens it at the access point's address.
 
-1. **The add-on on boards with room**: keep it as the offline source, as
-   this doc recommends, or delete `AddonStep`'s page half, the install's
-   store and the add-on's removal record, and make every board online-only?
-2. **A console on the board's own access point**, as a field mode with no
-   router. No board serves the console on its AP today. This is where the
-   hand-off from an offline My consoles would earn the most.
-3. **The beta window** of the pack store: how many `dev` web builds
-   os.moybyte.com keeps (it keeps every stable one).
+Tests: a C3 on its access point booting the console a phone's offline
+My consoles hands it, and a T-Deck booting its own copy there; the
+phones' "no internet" handling of that network, on Android and iPhone.
+
+## 12. The owner's answers (2026-11-23)
+
+1. **Boards with room keep the add-on** as one source of the pack (§4). It is
+   the one way a browser that never saw os.moybyte.com starts a console on a
+   LAN with no internet.
+2. **A board serves the console on its own access point**, a field mode
+   with no router (phase 7). A C3 needs no copy for it: a phone that has
+   opened os.moybyte.com before hands its cached pack to the board's window,
+   and a board with room serves its own.
+3. **os.moybyte.com keeps every stable pack and the `dev` packs of the last
+   30 days.** A `dev` board older than that updates its firmware, or boots
+   its own copy where it keeps one.
