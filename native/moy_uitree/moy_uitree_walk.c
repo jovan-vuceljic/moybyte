@@ -910,6 +910,27 @@ static void hint_act(uit_t *e, uit_buf_t *b, int a)
     hint_add(b, e->scratch.p + at, n);
 }
 
+// Dialog `d`'s labels= template of its button i, else -1 (the button is its action's word).
+static int dialog_label(uit_t *e, int d, int i)
+{
+    for (int p = NODE(d)->props; p != (int)UIT_NONE; p = e->props[p].next)
+        if (!strcmp(uit_str(e, e->props[p].name), "labels") && i-- == 0)
+            return e->props[p].idx;
+    return -1;
+}
+
+// Dialog `d`'s button i as the band names it: its label, else its action's hint.
+static void hint_button(uit_t *e, uit_buf_t *b, int d, int i)
+{
+    int t = dialog_label(e, d, i);
+    if (t < 0) {
+        hint_act(e, b, e->btns[NODE(d)->btn + i]);
+        return;
+    }
+    uint32_t n, at = uit_tmpl_render(e, t, -1, -1, &n);
+    hint_add(b, e->scratch.p + at, n);
+}
+
 static int role_action(uit_t *e, int flag)
 {
     for (int a = 0; a < e->nacts; a++)
@@ -994,12 +1015,12 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
         int field = e->has_focused && e->focused.kind == UIT_FIELD;
         if (D->nbtn == 1) {
             hint_add(b, field ? "cancel" : "back", field ? 6 : 4);
-            hint_act(e, b, e->btns[D->btn]);
+            hint_button(e, b, d, 0);
         } else if (D->nbtn > 1) {
             hint_add(b, "confirm", 7);
-            hint_act(e, b, e->btns[D->btn + D->nbtn - 1]);
+            hint_button(e, b, d, D->nbtn - 1);
             hint_add(b, field ? "cancel" : "back", field ? 6 : 4);
-            hint_act(e, b, e->btns[D->btn]);
+            hint_button(e, b, d, 0);
         }
         return;
     }
@@ -4323,11 +4344,17 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         uit_buf_t b = {0};
         // look="keys" on the T-Deck: the band's Enter and Esc are its buttons, no row of them
         int nb = (N->lit & DL_KEYS) && e->input == UIT_IN_TDECK && N->nbtn <= 2 ? 0 : N->nbtn;
+        // each button's label: its labels= template (one a button), else its action's
         for (int i = 0; i < nb; i++) {
-            const char *l = uit_str(e, e->acts[e->btns[N->btn + i]].label);
+            int t = dialog_label(e, k, i);
             if (i)
                 uit_buf_printf(&b, "%c", 0);
-            uit_buf_printf(&b, "%s", l);
+            if (t >= 0) {
+                uint32_t ln, la = uit_tmpl_render(e, t, model, row, &ln);
+                uit_buf_printf(&b, "%.*s", (int)ln, e->scratch.p + la);
+            } else {
+                uit_buf_printf(&b, "%s", uit_str(e, e->acts[e->btns[N->btn + i]].label));
+            }
         }
         // the labels joined by NULs: b.n counts them (uit_buf_printf of "%c", 0 adds one byte)
         // the verb's kind, the toolkit's: primary (1), or with kind="danger" danger (3)

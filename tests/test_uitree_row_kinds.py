@@ -123,8 +123,39 @@ def test_a_keys_dialog_draws_no_buttons_on_the_t_deck_and_names_its_fields(page)
     assert "cancel" in h                # in a field the key that never types
 
 
+def test_a_dialogs_labels_name_its_buttons_in_the_band(page):
+    """labels= (a template a button) is what the band names the buttons by,
+    as their row draws them; without it, the actions' words."""
+    page._bind()
+    page.run_action(page.actions["ask"], (), "host")
+    ui_draw.input_kind("keys")
+    ui_draw.hint_kind("keys")
+    page.test_paint()
+    h = page.hints()
+    assert h[2:4] == ("confirm", "Save") and h[-1] == "Cancel", h
+    page.run_action(page.actions["take"], (), "host")
+    page.test_paint()
+    h = page.hints()
+    assert h[2:4] == ("confirm", "Replace"), h
+
+
 def test_a_host_adds_items_to_the_band_before_back(page):
     page.band_extra(("F6", "Next pane"))
     page.test_paint()
     h = page.hints()
     assert h[-4:-2] == ("F6", "Next pane"), h
+
+
+def test_the_engine_refuses_a_dialog_whose_labels_are_not_one_a_button():
+    """The C engine's own check, for a front that hands it props directly
+    (a compiled app's): labels= is one a button, or none."""
+    from runtime.host.moy_uitree_binding import Engine
+    import uitree_c
+    x = Engine()
+    a = x.action("go", "Go", "Go", None, 0, 0, "", "")
+    page = x.node(uitree_c._KINDS["page"], "p", -1)
+    d = x.node(uitree_c._KINDS["dialog"], "d", page)
+    for src in ("D", "A", "B"):
+        assert x.prop(d, "title" if src == "D" else "labels", src, None) >= 0
+    x.node_action(d, a)
+    assert x.build_end() < 0 and x.error_code() == "N01", x.error()

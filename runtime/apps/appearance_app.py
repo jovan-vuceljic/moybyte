@@ -227,14 +227,7 @@ ui.action("name_ask", "Name", name_ask, hint="Open")
 ui.action("edit", EDIT_THEME, edit, hint="Open")
 ui.hook("name_typed", name_typed)
 ui.action("keep", "Keep", keep)
-ui.action("replace", "Replace", keep)
 ui.action("cancel", "Cancel", cancel)
-
-
-def _name_dialog(button, shown):
-    with ui.dialog("Name your theme", ["cancel", button], shown=shown):
-        ui.field("Name", "name", NAME_MAX, on="keep", changed="name_typed")
-        ui.label("{name_note}")
 
 
 def build():
@@ -257,8 +250,10 @@ def build():
                    shown="has_chromes")
             ui.link("name_ask", "Keep as a theme", shown="custom")
             ui.link("edit", "{edit_word}")
-        _name_dialog("keep", "naming && !armed")
-        _name_dialog("replace", "naming && armed")
+        with ui.dialog("Name your theme", ["cancel", "keep"], labels=["Cancel", "{armed?Replace:Keep}"],
+                       shown="naming"):
+            ui.field("Name", "name", NAME_MAX, on="keep", changed="name_typed")
+            ui.label("{name_note}")
 
 
 def walls():

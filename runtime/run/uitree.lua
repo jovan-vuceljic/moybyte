@@ -2003,6 +2003,10 @@ function T.dialog(title, o, body)
     fail("N01", at, "ui.dialog's buttons are " .. describe(buttons), "buttons = { \"cancel\", \"switch\" }: actions", describe(buttons))
   end
   for _, b in ipairs(buttons) do use_action(b, "none", at, "ui.dialog's button " .. q(b), true) end
+  if n.o.labels ~= nil and #n.o.labels ~= #buttons then
+    fail("N01", at, "ui.dialog has " .. #n.o.labels .. " labels for its " .. #buttons .. " buttons",
+         "one label a button, in the buttons' order, or no labels (each its action's label)", describe(n.o.labels))
+  end
   if n.o.default ~= nil then
     local ok = false
     for _, b in ipairs(buttons) do if b == n.o.default then ok = true end end

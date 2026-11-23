@@ -1089,14 +1089,16 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         if (t < 0)
             return t;
         return add_prop(e, node, name, src, repr, PK_TMPL, t);
-    } else if ((kind == UIT_EMPTY || kind == UIT_NOTE) && !strcmp(name, "lines")) {
-        // one prop a line, each a template, drawn in order (an empty one left out)
+    } else if (((kind == UIT_EMPTY || kind == UIT_NOTE) && !strcmp(name, "lines"))
+               || (kind == UIT_DIALOG && !strcmp(name, "labels"))) {
+        // one prop a line (an empty's or a note's, drawn in order, an empty one left out) or
+        // a dialog's button (its label, one a button, in order), each a template
         int t = uit_tmpl_compile(e, src, model);
         if (t < 0)
             return t;
         if (e->tmpls[t].type == UIT_BOOL || e->tmpls[t].type == UIT_MODEL)
-            return uit_check_fail(e, "T03", UIT_MSG("%s lines=%s is a %s, not a text", "%s %s %s"),
-                                  uit_kind_names[kind], src, uit_type_name(e->tmpls[t].type));
+            return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not a text", "%s %s %s %s"),
+                                  uit_kind_names[kind], name, src, uit_type_name(e->tmpls[t].type));
         return add_prop(e, node, name, src, repr, PK_TMPL, t);
     } else if (kind == UIT_SEG && !strcmp(name, "text")) {
         // a seg over a row_of: each row's word, a template over its model's rows; a seg
@@ -1928,6 +1930,14 @@ int uit_build_end(uit_t *e)
         if (e->nodes[k].kind == UIT_PANES || e->nodes[k].kind == UIT_LEGACY)
             e->has_panes = 1;
         const uit_node_t *N = &e->nodes[k];
+        if (N->kind == UIT_DIALOG) {    // labels=: one a button, or none
+            int nl = 0;
+            for (int p = N->props; p != (int)UIT_NONE; p = e->props[p].next)
+                nl += !strcmp(uit_str(e, e->props[p].name), "labels");
+            if (nl && nl != N->nbtn)
+                return uit_check_fail(e, "N01", UIT_MSG("dialog %s has %d labels for its %d buttons", "%s %d %d"),
+                                      uit_str(e, N->key), nl, (int)N->nbtn);
+        }
         if (N->kind == UIT_SPLIT)       // a popover's split lays out pictures, labels, progress, groups of them
             for (int p = N->parent; p != (int)UIT_NONE; p = e->nodes[p].parent)
                 if (e->nodes[p].kind == UIT_POPOVER)

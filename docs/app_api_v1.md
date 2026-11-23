@@ -374,8 +374,10 @@ selection plate, left and right wrapping and activation taking the next, its
 label on a line of its own over the tiles where they would cut it;
 `ui.pictures.put(key, render=..., clear=True)` leaves a drawn picture's
 corner colour out, the tile showing there; `ui.dialog(..., look="keys")` draws no buttons on the T-Deck, whose
-band's Enter and Esc are its buttons, and a dialog of more than one field
-names the arrows that move between them;
+band's Enter and Esc are its buttons, a dialog of more than one field
+names the arrows that move between them, and its `labels=` (one template a
+button, in the buttons' order) names its buttons where their actions'
+labels would not (one dialog whose verb reads Keep or Replace);
 `ui.page(title, status=)` leads the hints band with its words (a page
 laid out in a split, its own or one in a switch's shown case, has the band
 cut from its room)

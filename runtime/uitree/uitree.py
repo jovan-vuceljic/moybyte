@@ -2053,7 +2053,7 @@ SCHEMA = {
     "progress": dict(_C, label="text", value="int", max="int", look="lit"),
     "empty": dict(_C, icon="text", title="text", lines="texts"),
     "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit", look="lit"),
-    "dialog": dict(_C, title="text", buttons="lit", kind="lit", look="lit"),
+    "dialog": dict(_C, title="text", buttons="lit", kind="lit", look="lit", labels="texts"),
     "popover": dict(_C, anchor="text", w="int", close="action0", wash="lit", at="text"),
     "menu": dict(_C, caption="text"),
     "item": dict(_C, label="text", icon="text", mkind="lit"),
@@ -2705,6 +2705,10 @@ def dialog(title, buttons, **p):
     acts = [_action(x, "none", "ui.dialog button", where) for x in buttons]
     if len(acts) < 1:
         raise UIError("N01", "a dialog has at least one button", where=where, fix='ui.dialog(title, ["cancel", "ok"]): Back takes the first')
+    labels = p.get("labels")
+    if labels is not None and isinstance(labels, (list, tuple)) and len(labels) != len(acts):
+        raise UIError("N01", "ui.dialog has %d labels= for its %d buttons" % (len(labels), len(acts)), where=where,
+                      fix="one label a button, in the buttons' order, or no labels= (each its action's label)")
     n = _node("dialog", None, dict(p, title=title, buttons=buttons), where)
     n.l["buttons"] = acts
     return n
