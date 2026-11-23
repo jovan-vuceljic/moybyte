@@ -1915,9 +1915,41 @@ static void gen_of_build(uit_t *e)
             e->slots[i].in_gen = 0;
 }
 
+// An array a build grew by doublings held at what it holds: a page keeps its tree as long as it
+// lives, and a build that comes again grows it from there.
+static void trim(void **p, int n, int *cap, size_t size)
+{
+    if (n <= 0 || n >= *cap)
+        return;
+    void *q = UIT_REALLOC(*p, (size_t)n * size);
+    if (q) {
+        *p = q;
+        *cap = n;
+    }
+}
+
+#define TRIM(e, arr, n, cap) trim((void **)&(e)->arr, (e)->n, &(e)->cap, sizeof *(e)->arr)
+
 int uit_build_end(uit_t *e)
 {
     intern_drop(e);
+    TRIM(e, slots, nslots, cslots);
+    TRIM(e, acts, nacts, cacts);
+    TRIM(e, tmpls, ntmpls, ctmpls);
+    TRIM(e, ops, nops, cops);
+    TRIM(e, conds, nconds, cconds);
+    TRIM(e, terms, nterms, cterms);
+    TRIM(e, nodes, nnodes, cnodes);
+    TRIM(e, props, nprops, cprops);
+    TRIM(e, btns, nbtns, cbtns);
+    TRIM(e, labels, nlabels, clabels);
+    if (e->pool.n && e->pool.n < e->pool.cap) {
+        char *q = UIT_REALLOC(e->pool.p, e->pool.n);
+        if (q) {
+            e->pool.p = q;
+            e->pool.cap = e->pool.n;
+        }
+    }
     e->has_panes = 0;
     for (int k = 0; k < e->nnodes; k++) {
         if (e->nodes[k].kind == UIT_PANES || e->nodes[k].kind == UIT_LEGACY)
