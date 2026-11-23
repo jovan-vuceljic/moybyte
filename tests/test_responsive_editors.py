@@ -495,11 +495,11 @@ def test_map_editor_shows_more_cells_on_large_canvas(tmp_path):
     ws.text.open_map()
     lay = ws.map_ui.layout
     base = M.MapLayout(320, 240, 1)
-    assert lay.mv_avail_w > base.mv_avail_w and lay.mv_avail_h > base.mv_avail_h
+    assert lay.view_w > base.view_w and lay.view_h > base.view_h
     assert lay.zooms[0] == base.zooms[0]           # same field size on every tier
     x0, y0, cell, cols, rows = ws.map_ui._mv_metrics()
-    assert cols > base.mv_avail_w // base.zooms[0]   # ...so the bigger view shows more
-    assert rows > base.mv_avail_h // base.zooms[0]
+    assert cols > base.view_w // base.zooms[0]   # ...so the bigger view shows more
+    assert rows > base.view_h // base.zooms[0]
     drv.frame(1 / 30)
     buf = drv.rgb888()
     assert len(buf) == 960 * 600 * 3

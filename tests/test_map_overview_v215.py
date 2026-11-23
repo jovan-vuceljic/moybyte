@@ -130,7 +130,7 @@ def test_the_seed_store_still_ships_a_map_bigger_than_the_view():
     assert maps, "no seed cart ships a map.moymap"
     base = M.MapLayout(320, 240, 1)
     cell = base.zooms[0]
-    assert any(w > base.mv_avail_w // cell or h > base.mv_avail_h // cell
+    assert any(w > base.view_w // cell or h > base.view_h // cell
                for _n, w, h in maps)
 
 
@@ -153,7 +153,7 @@ def test_every_shipped_map_reaches_overview_at_a_readable_cell():
     for w, h, fs in TIERS:
         lay = M.MapLayout(w, h, fs)
         for name, mw, mh in _shipped_maps():
-            cell = M._mv_fit_cell(lay.mv_avail_w, lay.mv_avail_h, mw, mh)
+            cell = M._mv_fit_cell(lay.view_w, lay.view_h, mw, mh)
             where = "%s %dx%d on %dx%d fs%d" % (name, mw, mh, w, h, fs)
             assert M._MV_FIT_MIN <= cell <= M._MV_FIT_MAX, where
 
@@ -164,9 +164,9 @@ def test_the_maps_that_fit_at_the_floor_fit_whole_and_the_rest_pan():
         lay = M.MapLayout(w, h, fs)
         pans = PANS_AT_THE_FLOOR[(w, h, fs)]
         for name, mw, mh in _shipped_maps():
-            cell = M._mv_fit_cell(lay.mv_avail_w, lay.mv_avail_h, mw, mh)
+            cell = M._mv_fit_cell(lay.view_w, lay.view_h, mw, mh)
             where = "%s %dx%d on %dx%d fs%d" % (name, mw, mh, w, h, fs)
-            whole = (cell * mw <= lay.mv_avail_w and cell * mh <= lay.mv_avail_h)
+            whole = (cell * mw <= lay.view_w and cell * mh <= lay.view_h)
             assert whole == (name not in pans), where
             if not whole:
                 # A map that does not fit sits exactly ON the floor: the fit is what
@@ -179,8 +179,8 @@ def test_the_floor_shows_far_more_of_a_wide_map_than_the_detail_rung():
     # for the maps that pan, or it is just the 8px rung with worse pixels.
     from runtime import map_editor_ui as M
     lay = M.MapLayout(320, 240, 1)
-    cols_at_8 = lay.mv_avail_w // M._MV_ZOOMS[0]
-    cols_at_ov = lay.mv_avail_w // M._mv_fit_cell(lay.mv_avail_w, lay.mv_avail_h,
+    cols_at_8 = lay.view_w // M._MV_ZOOMS[0]
+    cols_at_ov = lay.view_w // M._mv_fit_cell(lay.view_w, lay.view_h,
                                                   100, 30)
     assert cols_at_ov >= 2 * cols_at_8
 
@@ -192,9 +192,9 @@ def test_the_resize_ceiling_lands_on_the_floor_and_pans():
     from runtime import map_editor_ui as M
     lay = M.MapLayout(320, 240, 1)
     d = M._MAP_MAX_DIM
-    cell = M._mv_fit_cell(lay.mv_avail_w, lay.mv_avail_h, d, d)
+    cell = M._mv_fit_cell(lay.view_w, lay.view_h, d, d)
     assert cell == M._MV_FIT_MIN
-    assert cell * d > lay.mv_avail_w
+    assert cell * d > lay.view_w
 
 
 def test_fit_cell_stays_between_its_two_bounds_and_never_divides_by_zero():
@@ -247,7 +247,7 @@ def _tap_button(drv, name, dt=1 / 30):
 def _to_overview(ws):
     """Cycle the zoom to the OVERVIEW rung (it is last on every tier)."""
     ws.map_ui.map_zoom = len(ws.map_ui.layout.zooms) - 1
-    ws.map_ui._map_clamp_cam()
+    ws.map_ui.clamp_cam()
     assert ws.map_ui._mv_overview()
 
 
@@ -283,7 +283,7 @@ def test_overview_shows_a_fitting_map_whole_and_pins_the_camera(tmp_path):
     x0, y0, cell, cols, rows = ws.map_ui._mv_metrics()
     assert cell < 8
     assert cols >= tm.w and rows >= tm.h                 # the whole level, at once
-    ws.map_ui._map_pan(1, 1)                             # nowhere left to pan to
+    ws.map_ui.pan(1, 1)                             # nowhere left to pan to
     assert (ws.map_ui.mapedit.cam_x, ws.map_ui.mapedit.cam_y) == (0, 0)
 
 
@@ -300,13 +300,13 @@ def test_overview_pans_and_clamps_a_map_too_wide_for_the_floor(tmp_path):
     assert cell == M._MV_FIT_MIN
     assert cols < tm.w                                   # wider than the view...
     assert rows >= tm.h                                  # ...but not taller
-    ws.map_ui._map_pan(10, 0)
+    ws.map_ui.pan(10, 0)
     assert (me.cam_x, me.cam_y) == (10, 0)
-    ws.map_ui._map_pan(0, 5)                             # no vertical room to give
+    ws.map_ui.pan(0, 5)                             # no vertical room to give
     assert (me.cam_x, me.cam_y) == (10, 0)
-    ws.map_ui._map_pan(999, 0)                           # clamped to the right edge
+    ws.map_ui.pan(999, 0)                           # clamped to the right edge
     assert me.cam_x == tm.w - cols
-    ws.map_ui._map_pan(-999, 0)
+    ws.map_ui.pan(-999, 0)
     assert me.cam_x == 0
 
 
@@ -316,7 +316,7 @@ def test_overview_hit_tests_through_the_pan_offset(tmp_path):
     ws, drv = _open_map(tmp_path, "Sky Run")
     tm = ws.run.project.tilemap
     _to_overview(ws)
-    ws.map_ui._map_pan(tm.w, 0)                          # clamp to the right edge
+    ws.map_ui.pan(tm.w, 0)                          # clamp to the right edge
     target = (tm.w - 1, tm.h - 1)
     px, py = _cell_px(ws, *target)
     assert ws.map_ui._map_cell_at(px, py) == target
@@ -538,12 +538,12 @@ def test_a_map_resize_refits_the_overview_cell(tmp_path):
     from runtime import map_editor_ui as M
     small = ws.map_ui._mv_metrics()[2]
     tm.resize(40, 26)
-    ws.map_ui._map_clamp_cam()
+    ws.map_ui.clamp_cam()
     x0, y0, cell, cols, rows = ws.map_ui._mv_metrics()
     assert cell < small                              # re-fitted, still whole
     assert cols >= tm.w and rows >= tm.h
     tm.resize(96, 96)                                # ...and past what fits
-    ws.map_ui._map_clamp_cam()
+    ws.map_ui.clamp_cam()
     x0, y0, cell, cols, rows = ws.map_ui._mv_metrics()
     assert cell == M._MV_FIT_MIN and cols < tm.w
 

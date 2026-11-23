@@ -1374,13 +1374,13 @@ def test_host_console_map_open_place_and_render(tmp_path):
     drv.frame(1 / 30)
     assert ws.menu_view == "map" and ws.map_ui.mapedit is not None
     # pick the 2nd palette tile (id == map_page + 1) ...
-    from runtime import map_editor_ui
+    from runtime import view_host as map_editor_ui
     bx, by, _w, _h = ws.map_ui.rect_of("brushes")
     px = bx + (map_editor_ui.BRUSH_PAD + map_editor_ui.CELL) * ws.map_ui.layout.unit
     py = by + map_editor_ui.BRUSH_PAD * ws.map_ui.layout.unit
     drv.click(px + 2, py + 2)
     drv.frame(1 / 30)
-    assert ws.map_ui.mapedit.n == ws.map_ui.map_page + 1
+    assert ws.map_ui.mapedit.n == ws.map_ui.brush_page + 1
     # ... then stamp it onto the top-left visible map cell and confirm mget reflects it
     mx, my = _mv0(ws)
     drv.click(mx + 2, my + 2)

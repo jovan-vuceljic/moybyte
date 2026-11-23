@@ -37,7 +37,7 @@ import ui_draw as _ui_draw
 import uitree_editor
 import editor_sprite
 from layers import Layer
-from map_editor_ui import checker as _checker, checker_quads as _checker_quads
+from view_host import checker as _checker, checker_quads as _checker_quads
 from editors_paint_map import PaintEditor, _pe_line
 from array import array
 

@@ -55,7 +55,7 @@ from chrome import CodeLayout
 from editors_code import CodeEditor
 from op_history import History, OpCodec
 from editors_paint_map import PaintEditor
-from map_editor_ui import checker as _checker
+from view_host import checker as _checker
 from moy_input import CTRL as _CTRL
 from theme_custom import dumps as _dumps
 from widgets import _in

@@ -1480,7 +1480,7 @@ class EditorDesk(Layer):
             if what == "erase":
                 mu.map_erase = not mu.map_erase
             elif what == "zoom":
-                mu._map_cycle_zoom()
+                mu.cycle_zoom()
             else:
                 mu.map_tool = what
                 mu.map_erase = False

@@ -193,7 +193,7 @@ def test_a_tap_in_the_view_paints_and_a_brush_tap_picks(hh):
     bx, by, _w, _h = mu.rect_of("brushes")
     drv.click(bx + 6 + 22 + 5, by + 6 + 5)          # the second brush
     drv.frame(DT)
-    assert mu.mapedit.n == mu._map_palette_ids()[1]
+    assert mu.mapedit.n == mu.brush_ids()[1]
     x, y = _view_cell(mu, 2, 3)
     drv.click(x, y)
     for _ in range(2):
