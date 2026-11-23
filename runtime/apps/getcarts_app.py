@@ -1104,9 +1104,9 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build, is_a
 
     def _decode_cover(self, cart, data):
         """A cover's bytes handed to the engine, which decodes them where a
-        card draws its picture."""
+        card draws its picture (the idle step's work, run as the app's)."""
         sha = cart["cover"]["sha256"]
-        ui.pictures.put("cover:" + sha, data=data)
+        self.engine.run(lambda: ui.pictures.put("cover:" + sha, data=data))
         self.thumbs[sha] = True
 
     def _build_rows(self):

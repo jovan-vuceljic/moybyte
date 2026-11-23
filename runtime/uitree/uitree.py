@@ -3381,30 +3381,36 @@ class Pictures:
     picture go; None where it cannot). A drawn picture put with `clear=True`
     is clear where it has its corner's colour: what lies under it shows
     there (a sprite on a picker's tile). The engine holds them: a put
-    from a handler lands in the running engine's own sources, so two
-    consoles in one process each hold theirs and a console that goes takes
-    its drawers with it; one from outside a handler in the module's.
+    lands in the running engine's own sources, so its keys are its app's
+    alone, two consoles in one process each hold theirs and a console that
+    goes takes its drawers with it. A put or a drop runs in a handler (an
+    app's work off its handlers through `engine.run`); one outside is S06.
     `image.own(key)` names one."""
 
     def __init__(self):
-        self.src = {}               # a key -> its source, put outside a handler
-        self.gen = {}
         self.store_gen = {}         # a store path -> the times its file changed (`changed`)
 
-    def _held(self, app):
+    def _held(self, verb, key):
+        """The running engine's pictures and their gens, for `verb` of `key`."""
+        app = _NOW.app
         if app is None:
-            return self.src
+            raise UIError("S06", "pictures.%s(%r) outside a handler" % (verb, key), where=_caller(),
+                          fix="from a handler, or from the app's own work through engine.run(fn, ...)")
         own = getattr(app, "own_pics", None)
         if own is None:
-            own = app.own_pics = {}
+            own = app.own_pics = ({}, {})       # (key -> its source, key -> its gen)
         return own
 
     def source(self, app, key):
-        """Own picture `key`'s source as engine `app` reads it: its own
-        put's, else the module's; None where none was put."""
+        """Own picture `key`'s source as engine `app` reads it; None where
+        it put none."""
         own = getattr(app, "own_pics", None)
-        got = own.get(key) if own else None
-        return got if got is not None else self.src.get(key)
+        return own[0].get(key) if own else None
+
+    def gen_of(self, app, key):
+        """What moves with engine `app`'s own picture `key`: its puts and drops."""
+        own = getattr(app, "own_pics", None)
+        return own[1].get(key, 0) if own else 0
 
     def put(self, key, data=None, w=None, h=None, pixels=None, render=None, clear=False):
         if (data is not None) + (pixels is not None) + (render is not None) != 1:
@@ -3412,27 +3418,28 @@ class Pictures:
         if clear is not False and (clear is not True or render is None):
             raise UIError("S02", "pictures.put(%r): clear=True is a drawn picture's (render=)" % key,
                           found="clear=%r" % (clear,), fix='pictures.put(KEY, render=FN, clear=True)')
+        src, gen = self._held("put", key)
         if pixels is not None:
             if type(w) is not int or type(h) is not int or len(pixels) != w * h:
                 raise UIError("S02", "pictures.put(%r): pixels are w * h palette indices" % key,
                               found="w=%r h=%r %d bytes" % (w, h, len(pixels)), fix='pixels= holds w * h bytes')
-            self._held(_NOW.app)[key] = ("idx", w, h, bytes(pixels))
+            src[key] = ("idx", w, h, bytes(pixels))
         elif render is not None:
             if not callable(render):
                 raise UIError("S02", "pictures.put(%r): render= is a function of (w, h)" % key,
                               found=repr(render), fix='def render(w, h): ... return a w x h layer')
-            self._held(_NOW.app)[key] = ("render", render, clear)
+            src[key] = ("render", render, clear)
         else:
-            self._held(_NOW.app)[key] = ("bytes", bytes(data))
-        self.gen[key] = self.gen.get(key, 0) + 1
+            src[key] = ("bytes", bytes(data))
+        gen[key] = gen.get(key, 0) + 1
         a = _NOW.app
-        if a is not None and getattr(a, "pics", None) is not None and a.pics.forget_own(key):
+        if getattr(a, "pics", None) is not None and a.pics.forget_own(key):
             a.pics_let_go()
 
     def drop(self, key):
-        self._held(_NOW.app).pop(key, None)
-        self.src.pop(key, None)
-        self.gen[key] = self.gen.get(key, 0) + 1
+        src, gen = self._held("drop", key)
+        src.pop(key, None)
+        gen[key] = gen.get(key, 0) + 1
 
     def changed(self, path):
         """The store file `image.store(path)` names was written since the

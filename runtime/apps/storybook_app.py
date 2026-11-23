@@ -1332,7 +1332,7 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is
 
     def forget_pic(self, key):
         self.slide_pics.pop(key, None)
-        ui.pictures.drop(key)
+        self.engine.run(ui.pictures.drop, key)
         if self.engine.pics is not None:
             self.engine.pics.forget_own(key)
 
@@ -1408,7 +1408,7 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is
         for n in list(self.covers):
             if name is None or n == name:
                 del self.covers[n]
-                ui.pictures.drop("story:" + n)
+                self.engine.run(ui.pictures.drop, "story:" + n)
                 if self.engine.pics is not None:
                     self.engine.pics.forget_own("story:" + n)
         self.fill_owed = True
