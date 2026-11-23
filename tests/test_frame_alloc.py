@@ -2094,12 +2094,15 @@ ANSWER = 32
 SETTINGS_FRAME = 1024
 
 
+# The restyled apps are app_layer pages: their drag frames are the engine's,
+# held to shifting (My Art's shelf here, which scrolls far enough to say;
+# Appearance's and Storybook's in tests/test_shift_apps.py), not to a count
+# of cards' answers.
 @pytest.mark.parametrize("app", ("myart",))
 def test_an_app_drag_is_shift_frames(result, app):
     """The drag frames of an app whose shelf carries its gens shift
     (docs/history/scroll_and_text_2026-10.md §3.3) on the T-Deck's tier: the ring's
-    slots and the floor's rects are kept, so the budget the test below holds
-    every drawn frame to holds the shift frames."""
+    slots and the floor's rects are kept."""
     info, text = result
     drawn = [d for d in info[app + "_drag"] if d[1]]
     shifted = [d for d in drawn if d[3]]
@@ -2116,21 +2119,6 @@ def test_a_settings_drag_shifts_and_allocates_nothing(result):
     assert len(drawn) > 30 and len(shifted) > len(drawn) // 2, (len(shifted), len(drawn))
     over = sorted(d[0] for d in shifted)
     assert over[len(over) // 2] < SETTINGS_FRAME, ("a shift frame's median", over)
-
-
-# Get Carts, Storybook and My Art are app_layer pages, whose drag frame (the
-# engine's, no card counted through ui.card) is not held to this budget.
-@pytest.mark.parametrize("app", ("appearance",))
-def test_an_app_drag_frame_allocates_only_its_moved_answers(result, app):
-    """A drag frame of the app's content, its pictures met once before: the
-    frames drew, and each allocated no more than one answer a card it drew
-    and the finger's four, but for one frame (the clock's minute)."""
-    info, text = result
-    drag = info[app + "_drag"]
-    drawn = [d for d in drag if d[1]]
-    assert len(drawn) > 30, (app, len(drawn))
-    over = [d for d in drawn if d[0] > ANSWER * (d[2] + 4)]
-    assert len(over) <= 1, (app, over[:10])
 
 
 # -- the Code tab's paint ------------------------------------------------------

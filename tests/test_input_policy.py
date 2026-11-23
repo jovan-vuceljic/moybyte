@@ -64,7 +64,7 @@ def _files_rename(ws):
 
 def _appearance_name(ws):
     a = ws.app("appearance")
-    a._open_name()
+    a.open_name()
     return lambda: a.name_text, ""
 
 
