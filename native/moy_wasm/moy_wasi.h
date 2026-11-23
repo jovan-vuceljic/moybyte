@@ -117,7 +117,7 @@
 
 #define MOY_WASI_STOP_US 2000000       // a service's start to its first poll; its stop to its end
 #define MOY_WASI_TRAPPED (-1)           // moy_wasi_main: the module trapped
-#define MOY_WASI_NOT_COMMAND (-2)       // moy_wasi_main: no `_start`
+#define MOY_WASI_NOT_COMMAND (-2)       // moy_wasi_main: no `_start` of type () -> ()
 
 typedef struct moy_wasi moy_wasi_t;
 

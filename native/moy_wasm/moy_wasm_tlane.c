@@ -88,6 +88,25 @@ void moy_share_give(uint8_t row, uint32_t n);
 #pragma weak moy_share_give
 
 static const char *const EXPORTS[MOY_WASM_TLANES] = {"moy_audio", "moy_timer"};
+static const uint32_t ARGS[MOY_WASM_TLANES] = {2, 1};   // moy_audio(buf, n), moy_timer(t_us)
+
+// Whether `fn` is (i32 x np) -> i32: WAMR writes a callee's results back
+// through the caller's cells, and a lane's call hands it np of them.
+static bool i32_fn(wasm_module_inst_t inst, wasm_function_inst_t fn, uint32_t np) {
+    wasm_valkind_t k[2];
+    if (fn == NULL || np > 2 || wasm_func_get_param_count(fn, inst) != np
+        || wasm_func_get_result_count(fn, inst) != 1) {
+        return false;
+    }
+    wasm_func_get_param_types(fn, inst, k);
+    for (uint32_t i = 0; i < np; i++) {
+        if (k[i] != WASM_I32) {
+            return false;
+        }
+    }
+    wasm_func_get_result_types(fn, inst, k);
+    return k[0] == WASM_I32;
+}
 
 typedef struct {
     int kind;
@@ -258,8 +277,8 @@ static int lane_make(tls_t *t, int k, wasm_exec_env_t env, char *err, size_t err
     }
     wasm_function_inst_t sf = wasm_runtime_lookup_function(main, STACK_EXPORT);
     uint32_t argv[1] = {(uint32_t)k};
-    if (sf == NULL || !wasm_runtime_call_wasm(env, sf, 1, argv)) {
-        snprintf(err, errlen, "%s wants an export %s", EXPORTS[k], STACK_EXPORT);
+    if (!i32_fn(main, sf, 1) || !wasm_runtime_call_wasm(env, sf, 1, argv)) {
+        snprintf(err, errlen, "%s wants an export i32 %s(i32)", EXPORTS[k], STACK_EXPORT);
         wasm_runtime_clear_exception(main);
         return -1;
     }
@@ -281,7 +300,11 @@ static int lane_make(tls_t *t, int k, wasm_exec_env_t env, char *err, size_t err
         return -1;
     }
     l->fn = wasm_runtime_lookup_function(l->inst, EXPORTS[k]);
-    if (l->fn == NULL || !wasm_runtime_get_export_global_inst(l->inst, SP_EXPORT, &g)
+    if (!i32_fn(l->inst, l->fn, ARGS[k])) {
+        snprintf(err, errlen, "lane %s is not of the type moy_wasm_session.h gives it", EXPORTS[k]);
+        return -1;
+    }
+    if (!wasm_runtime_get_export_global_inst(l->inst, SP_EXPORT, &g)
         || g.kind != WASM_I32 || !g.is_mutable) {
         snprintf(err, errlen, "lane %s wants an export %s", EXPORTS[k], SP_EXPORT);
         return -1;

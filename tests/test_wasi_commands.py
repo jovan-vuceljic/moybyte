@@ -361,6 +361,27 @@ def test_a_module_that_imports_what_a_command_cannot_is_refused(term, tmp_path):
     assert got[-1] == "status 126" and "acommandonthisconsolecannot" in "".join(got).replace(" ", ""), got
 
 
+def test_a_start_of_another_type_is_refused(term, tmp_path):
+    """WAMR writes a callee's results back through the cells the caller
+    hands it, and `_start` is called with none: one that returns values is
+    not a command, refused before it runs."""
+    ws, app = term
+    src = tmp_path / "multi"
+    (src / "src").mkdir(parents=True)
+    (src / "src" / "main.wat").write_text(
+        '(module (memory (export "memory") 1)'
+        ' (func (export "_start") (result i32 i32 i32 i32)'
+        ' i32.const 1 i32.const 2 i32.const 3 i32.const 4))')
+    (src / "manifest.json").write_text(json.dumps({
+        "format": "moy-1", "title": "Multi", "id": "wasi.multi", "runtime": "wasm",
+        "main": "main.wasm", "memory": 1, "moybyte": {"type": "command", "permissions": []}}))
+    from tools import wasm_cart
+    wasm_cart.build(str(src), str(tmp_path / "carts" / "wasi_multi.moy"))
+    ws.carts.synced()
+    got = out(app, "wasi.multi/multi; echo status $?")
+    assert got[-1] == "status 126" and "_startisnot()->()" in "".join(got).replace(" ", ""), got
+
+
 def test_a_background_command_logs_and_its_status_waits(term):
     _ws, app = term
     assert out(app, "wasi.probe/probe exit 5 & wait $!; echo status $?")[0] == "status 5"

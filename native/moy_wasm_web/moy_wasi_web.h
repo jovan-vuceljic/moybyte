@@ -107,6 +107,8 @@ void wasm_runtime_terminate(wasm_module_inst_t inst);
 wasm_function_inst_t wasm_runtime_lookup_function(wasm_module_inst_t inst, const char *name);
 bool wasm_runtime_call_wasm(wasm_exec_env_t env, wasm_function_inst_t fn, uint32_t argc,
                             uint32_t argv[]);
+uint32_t wasm_func_get_param_count(wasm_function_inst_t fn, wasm_module_inst_t inst);
+uint32_t wasm_func_get_result_count(wasm_function_inst_t fn, wasm_module_inst_t inst);
 wasm_memory_inst_t wasm_runtime_get_default_memory(wasm_module_inst_t inst);
 uint64_t wasm_memory_get_cur_page_count(wasm_memory_inst_t mem);
 uint64_t wasm_memory_get_bytes_per_page(wasm_memory_inst_t mem);
