@@ -2067,14 +2067,68 @@ int uit_carousel_geom(uit_t *e, const int32_t b[4], int fs, int desk, int32_t ou
     return 0;
 }
 
-// One picture at its own place (`_r_picture`): a card with no words, its icon on a tinted tile.
+static void put_rect(uit_t *e, int k, const int32_t r[4]);
+
+// A picture of look="tile": a carousel's tile of its own at its place (its part, a stop where it
+// has on=): its shadow round it, its picture the front end's over the tile at the radius of a
+// carousel's centre card (pic_fn's flags 4), else its icon on a blank tile, the focus mark round
+// it where it holds the keys.
+static void draw_tile_picture(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model,
+                              int row, int32_t side, int on)
+{
+    char key[UIT_ID_MAX + 1];
+    node_id(e, k, model, row, key);
+    int32_t one = 1, zero = 0, r[5];
+    moy_ui_over_t o;
+    moy_ui_over_none(&o);
+    moy_ui_over_text(&o, MOY_UI_OV_ID, span_of(key, strlen(key)));
+    moy_ui_over_put(&o, MOY_UI_OV_BARE, &one);      // the tile is its well
+    moy_ui_over_put(&o, MOY_UI_OV_MARK, &zero);     // ...and its mark the tile's own
+    if (!on)
+        moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &one);
+    moy_ui_api_part(c, s, span_of(key, strlen(key)), side, side, &o, r);
+    int32_t t[4] = {c->pa_box.x, c->pa_box.y, c->pa_box.w, c->pa_box.h};
+    put_rect(e, k, t);                  // where a press on it lands (`uit_rect`)
+    if (!c->pa_none && t[2] > 0) {
+        // (the sink's clip bounds what shows: its shadow falls round the place)
+        static const int32_t all[4] = {-0x3fff, -0x3fff, 0x7ffe, 0x7ffe};
+        int desk = (e->flags & UIT_F_DESK) != 0, mark = (r[4] & MOY_UI_ST_FOCUS) && moy_ui_sink_marks(s);
+        int32_t tile[10];
+        moy_ui_api_tile_cast(c, s, t, all, 1);
+        moy_ui_api_tile(c, s, t, all, desk ? -(t[2] / 2) : t[2] / 2, mark, tile);
+        uint32_t pa, pn, m = e->scratch.n;
+        if (pic_held(e, k, model, row, &pa, &pn) && pn) {
+            int32_t pq[12] = {tile[0], tile[1], tile[2], tile[3], all[0], all[1], all[2], all[3], 4, tile[4],
+                              tile[2], tile[3]};
+            e->pic_fn(e->pic_ud, k, e->scratch.p + pa, pn, pq);
+        } else {
+            // no picture held: its icon on a blank tile
+            uint32_t in = 0, ia = NODE(k)->t_icon >= 0 ? uit_tmpl_render(e, NODE(k)->t_icon, model, row, &in) : 0;
+            moy_ui_api_tile_blank(c, s, tile, all, sspan(e, ia, in));
+        }
+        e->scratch.n = m;
+        moy_ui_api_tile_end(c, s, tile, all);
+    }
+    if (on && (r[4] & MOY_UI_ST_ACTIVATED))
+        fire(e, NODE(k)->on, k, model, row, NULL);
+}
+
+// One picture at its own place (`_r_picture`): a card with no words, its icon on a tinted tile;
+// look="tile" a carousel's tile (draw_tile_picture). With on= it is a stop a tap or Enter fires
+// on= from, else no stop.
 static void draw_picture(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     const uit_node_t *N = NODE(k);
     int32_t side = size_of(e, int_of(e, N->t_value, model, row, 64)), one = 1, out[5];
+    int on = N->on >= 0 && uit_act_can(e, N->on, model, row);
+    if (N->lit & PC_TILE) {
+        draw_tile_picture(e, c, s, k, model, row, side, on);
+        return;
+    }
     moy_ui_over_t o;
     moy_ui_over_none(&o);
-    moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &one);
+    if (!on)
+        moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &one);
     moy_ui_api_grid_spread(c, 1, -1, 4, (e->flags & UIT_F_DESK) ? 16 : 8, 0);
     moy_ui_api_grid(c, s, span_of("pic ", 4), side, side, NULL);
     uint32_t pa, pn;
@@ -2083,6 +2137,8 @@ static void draw_picture(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
     moy_ui_api_card(c, s, span_of("", 0), span_of("", 0), &o, out);
     pic_draw(e, c, k, pa, pn, out);
     moy_ui_api_grid(c, s, span_of("", 0), 0, 0, NULL);
+    if (on && (out[4] & MOY_UI_ST_ACTIVATED))
+        fire(e, N->on, k, model, row, NULL);
 }
 
 // A seg of look="pictures": its items image texts (`own:KEY`, `store:KIND/NAME`), the row the

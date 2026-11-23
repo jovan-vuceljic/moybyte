@@ -3,7 +3,7 @@
 #   Carousel._geom              its geometry: the handheld's row or the desk's hero and shelf
 #   Carousel.band_pass          the row: the engine's carousel, the handheld's row or the desk's shelf
 #   Carousel._band_picture      a card's picture, the engine's picture call
-#   Carousel._paint_details     the desk's hero
+#   Carousel.hero_picture       the desk hero's picture, the engine's picture call
 """The home's CAROUSEL (docs/theme_and_shell_2026-11.md §8.10): the `carousel`
 arrangement, the default (the layout's `home`), and the home window's,
 always. On the handheld one row of square cover cards slides sideways, the
@@ -427,10 +427,7 @@ class Carousel(Launcher):
         return out
 
     def draw(self, cv, sheet_for=None, key=_NO_KEYS, over=None, beside=None):
-        end = self.band_pass(cv, sheet_for, None, key, True, over, beside)
-        if self.desk():
-            self._paint_details(cv)          # (the hero the pass's selection)
-        return end
+        return self.band_pass(cv, sheet_for, None, key, True, over, beside)
 
     def repaint_band(self, cv, sheet_for, fill, key=_NO_KEYS, over=None, beside=None, need=False,
                      marks=False, whole=False):
@@ -620,28 +617,42 @@ class Carousel(Launcher):
             return r * 7 // 5 if side > g[2] else r
         return r if side > g[2] else r * 7 // 10
 
-    def _paint_details(self, cv):
-        """The desk home's hero (a full paint's): its shadow, the
-        selected card's picture at the hero's size and its favourite star
-        (on a hero of the cover's side or more in glass pixels).
-        The details beside it are the home layer's (`_draw_details`)."""
-        hero = self.hero_rect()
+    def paint_hero(self, pg, cv, th, rect):
+        """The desk home's hero page (`home_ui.hero`, a full paint's or the
+        selection part's) in its rect, its picture the selected card's
+        (`hero_picture`)."""
+        self._gcv = cv
+        pg.paint(0.0, cv, th, rect, True)
+        self._gcv = None
+
+    def hero_picture(self, node, pic, r):
+        """The desk hero's picture (the engine's picture call, `r` its box,
+        clip, flags and corners): the selected card's picture over the box,
+        its favourite star (on a hero of the cover's side
+        or more in glass pixels), its broken mark, the frame of a square
+        card."""
+        if r is None:
+            return True
         if not self.items:
-            return
+            return False
         it = self.items[self.nearest()]
-        _ui_draw.cast(cv, self.theme, hero, _ui_draw.CAST_CARD)
-        self._draw_picture(cv, it, hero, True)
+        cv = self._gcv
+        cv.clip(r[4], r[5], r[6], r[7])
+        hero = (r[0], r[1], r[2], r[3])
+        cr = r[9]
+        self._draw_picture(cv, it, hero, True, None, cr)
+        names = self._NAMES
         if (self.favorite_for is not None and it.get("path")
                 and hero[2] * _lb.render_scale() >= _COVER_SIDE
                 and it.get("type") not in PSEUDO_TILE_TYPES):
-            _draw_star_badge(cv, self._NAMES, self.theme or {},
-                             self._favorite_badge_geom(hero),
+            _draw_star_badge(cv, names, self.theme or {}, self._favorite_badge_geom(hero),
                              bool(self.favorite_for(it)))
         if self.is_broken(it):
-            _draw_broken_badge(cv, self._NAMES, self.theme or {},
-                               self._broken_badge_geom(hero))
-        if not self._corner_r(hero[2]):
+            _draw_broken_badge(cv, names, self.theme or {}, self._broken_badge_geom(hero))
+        if not cr:
             self._card_frame(cv, hero)
+        cv.clip()
+        return True
 
     def _dims(self, centre):
         """A handheld neighbour's dimming (step 15), off the centre."""
