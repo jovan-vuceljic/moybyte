@@ -69,7 +69,7 @@ _OWN_FRAMES = ("blocks", "cards", "code", "theme_config", "map", "music", "paint
 _TEXT_PANES = ("code", "theme_config")
 
 # The Editor tabs whose surface, drawn in a pane, fills the pane's whole body
-# before anything else (Sprite, Map and Scene their `body_fill`, Code its
+# before anything else (Sprite and Map their page's ground, Scene its `body_fill`, Code its
 # ground round the text view's rows, Settings its `ui.page`): their card is
 # drawn down to the header only, its body never seen
 # (tests/test_editor_desk.py holds it). The Sound pane's page is bare, on its

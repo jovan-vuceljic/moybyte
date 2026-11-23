@@ -178,7 +178,7 @@ def _map(hh):
     ws, drv = _open(hh, "map")
     mu = ws.map_ui
     assert mu.layout.verbs and mu.mapedit is not None
-    return ws, drv, mu, mu.page()
+    return ws, drv, mu, mu
 
 
 def _view_cell(mu, cx, cy):
@@ -189,9 +189,9 @@ def _view_cell(mu, cx, cy):
 
 def test_a_tap_in_the_view_paints_and_a_brush_tap_picks(hh):
     ws, drv, mu, page = _map(hh)
-    lay = mu.layout
     tm = ws.run.project.tilemap
-    drv.click(lay.tp_x0 + 22 + 5, lay.tp_y0 + 5)     # the second brush
+    bx, by, _w, _h = mu.rect_of("brushes")
+    drv.click(bx + 6 + 22 + 5, by + 6 + 5)          # the second brush
     drv.frame(DT)
     assert mu.mapedit.n == mu._map_palette_ids()[1]
     x, y = _view_cell(mu, 2, 3)
@@ -219,24 +219,25 @@ def test_a_still_hold_in_the_view_picks_the_cells_tile(hh):
 
 def test_the_foot_picks_the_tools_the_size_and_the_zoom(hh):
     ws, drv, mu, page = _map(hh)
-    _tap(drv, page.host.box("Tool Box"))
+    _tap(drv, page.rect_of("box"))
     assert mu.map_tool == "rect"
-    _tap(drv, page.host.box("Tool Erase"))
+    _tap(drv, page.rect_of("erase"))
     assert (mu.map_tool, mu.map_erase) == ("stamp", True)
-    _tap(drv, page.host.box("Tool Pen"))
+    _tap(drv, page.rect_of("pen"))
     assert (mu.map_tool, mu.map_erase) == ("stamp", False)
     size = mu.mapedit.size
-    _tap(drv, page.host.box("Brush size"))
+    _tap(drv, page.rect_of("size"))
     assert mu.mapedit.size != size
-    _tap(drv, page.host.box("Zoom"))
+    _tap(drv, page.rect_of("zoom"))
     assert mu.map_zoom == 1
     assert page.zoom_word().startswith("2")
-    _tap(drv, page.host.box("Tool Select"))
-    assert page.host.box("Copy") is None, "no selection: Copy is off"
+    _tap(drv, page.rect_of("select"))
+    _tap(drv, page.rect_of("copy"))
+    assert not mu.mapedit.has_clip, "no selection: Copy is off"
     mu.mapedit.set_selection(0, 0, 1, 1)
     ws.mark_dirty()
     drv.frame(DT)
-    _tap(drv, page.host.box("Copy"))
+    _tap(drv, page.rect_of("copy"))
     assert mu.mapedit.has_clip
 
 
@@ -244,20 +245,62 @@ def test_resize_grows_the_map_from_its_popover(hh):
     ws, drv, mu, page = _map(hh)
     tm = ws.run.project.tilemap
     w = tm.w
-    _tap(drv, page.host.box("Resize"))
-    assert page.pop == "resize"
-    drv.frame(DT)                    # the card's first frame measures its row
-    _tap(drv, page.host.box("Wider"))
+    _tap(drv, page.rect_of("resize"))
+    assert mu._pop
+    drv.frame(DT)                    # the card's first frames measure its rows
+    drv.frame(DT)
+    _tap(drv, page._host.box("wider"))
     assert tm.w == w + 1
     drv.press("b")
     drv.frame(DT)
-    assert page.pop is None
+    assert not mu._pop
+
+
+def _key(drv, k, n=1):
+    for _ in range(n):
+        drv.press(k)
+        for _ in range(2):
+            drv.frame(DT)
+
+
+def test_the_keys_pan_the_view_and_reach_the_brushes_and_the_tools(hh):
+    """Keys alone: the arrows pan the view, and one the camera cannot
+    follow moves on -- right to the brushes, whose arrows move the brush,
+    down to the tools; Enter on a tool takes it and hands the keys back to
+    the view."""
+    ws, drv, mu, page = _map(hh)
+    me = mu.mapedit
+    assert page.page._focus_key() == "view"
+    _key(drv, "a", 3)                   # A steps the zoom: 32 px a cell, the map past the view
+    assert mu.map_zoom == 3
+    for _ in range(200):
+        if page.page._focus_key() != "view":
+            break
+        _key(drv, "right")
+    assert page.page._focus_key() == "brushes" and me.cam_x > 0
+    n = me.n
+    _key(drv, "down")
+    assert me.n != n and page.page._focus_key() == "brushes"
+    _key(drv, "left", 8)
+    assert page.page._focus_key() == "view"
+    for _ in range(200):
+        if page.page._focus_key() != "view":
+            break
+        _key(drv, "down")
+    assert page.page._focus_key() in ("pen", "box", "fill", "select", "erase")
+    while page.page._focus_key() != "pen":
+        _key(drv, "left")
+    _key(drv, "right")
+    assert page.page._focus_key() == "box"
+    _key(drv, "a")
+    assert mu.map_tool == "rect"
+    assert page.page._focus_key() == "view"
 
 
 def test_a_settled_map_tab_paints_nothing(hh):
     ws, drv, mu, page = _map(hh)
     assert _settles(ws, drv)
-    _tap(drv, page.host.box("Tool Box"))
+    _tap(drv, page.rect_of("box"))
     assert _settles(ws, drv)
 
 

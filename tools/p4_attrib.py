@@ -47,7 +47,7 @@ TRAPS (each of these produced a confident wrong number first)
     dispatch column rather than the kernel column. On the editor tabs that is a
     rounding error; on a sprite-heavy surface it is not.
   * The wrapped method must be the one that RUNS. layers.py routes the tabs
-    (_MapLayer.draw -> ws.map_ui._draw_map, _BlocksLayer.draw ->
+    (_MapLayer.draw -> ws.map_ui.draw, _BlocksLayer.draw ->
     ws.block_ui._draw_blocks), while paint owns its own PaintLayer.draw. Wrapping
     a plausible-but-unused method reports "0 calls" and reads like a fast phase.
     A missing attribute is reported as `!MISSING`, a wrapped-but-never-called one
@@ -241,7 +241,7 @@ BAR = ("ws.bar_layer", "draw_status_strip", "bar.strip")
 # everything else nests inside -- the table's "top".
 SURFACES = {
     "map": ("ws._g['_edit']('map', %r)", [
-        ("ws.map_ui", "_draw_map", "map._draw_map"),
+        ("ws.map_ui", "draw", "map.draw"),
         BAR,
     ]),
     "paint": ("ws._g['_edit']('paint', %r)", [

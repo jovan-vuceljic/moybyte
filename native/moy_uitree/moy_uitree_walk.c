@@ -5086,6 +5086,8 @@ static int32_t natural(uit_t *e, int k, int model, int row, int32_t h)
         if (!n)
             return 22 * ((e->flags & UIT_F_DESK) ? 1 : e->fs);   // an icon alone: its box and a gap
     }
+    if (N->kind == UIT_RULE)
+        return 9 * row_unit(e);         // a rule in a row: its line and a margin either side
     return -1;
 }
 
@@ -5238,7 +5240,13 @@ static void row_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
             cell[1] += (cell[3] - kw) / 2, cell[3] = kw;    // an icon of its own w=: square, centred down
         if (km[i] != model)
             put_cell(e, g, km[i], kr[i], cell);
-        if (e->placing || gk == UIT_ROW)
+        if (gk == UIT_RULE) {
+            // a line down the row between its neighbours, in from its ends
+            int32_t u = row_unit(e), line = (e->flags & UIT_F_DESK) ? 1 : e->fs, in = 4 * u;
+            put_rect(e, g, cell);
+            if (!e->placing && r[3] > 2 * in)
+                fill_token(s, x + (kw - line) / 2, r[1] + in, line, r[3] - 2 * in, MOY_UI_T_BORDER);
+        } else if (e->placing || gk == UIT_ROW)
             place_at(e, c, s, g, km[i], kr[i], cell);   // a placement records the cells, drawing none
         else if (gk == UIT_BUTTON) {
             int32_t hh = h_row(e);      // a line tall, centred in a row a canvas made taller

@@ -220,7 +220,9 @@ def _open_map(tmp_path, title="Harpoon Pop"):
     ws_helpers.open_cart(ws, title)
     ws.text.open_map()
     assert ws.menu_view == "map" and ws.map_ui.mapedit is not None
-    return ws, host_app.ConsoleDriver(ws)
+    drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                         # the page placed: its view takes the presses and keys
+    return ws, drv
 
 
 def _paint(ws, drv):
@@ -497,9 +499,11 @@ def test_keyboard_cycles_into_overview_and_the_dpad_pans_and_clamps(tmp_path):
     _tap_button(drv, "right")
     assert me.cam_x > 0 and me.cam_y == 0
     _tap_button(drv, "down")
-    assert me.cam_y == 0                      # the map is shorter than the view
-    _tap_button(drv, "left")
+    assert me.cam_y == 0                      # the map is shorter than the view...
+    assert ws.map_ui.page._focus_key() != "view"    # ...so down moves on to the tools
     _tap_button(drv, "up")
+    assert ws.map_ui.page._focus_key() == "view"
+    _tap_button(drv, "left")
     assert (me.cam_x, me.cam_y) == (0, 0)     # ...and back, clamped at the origin
     _tap_button(drv, "a")                     # ...and it wraps back to the default
     assert ws.map_ui.map_zoom == 0

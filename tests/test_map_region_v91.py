@@ -164,6 +164,7 @@ def _open_map(tmp_path):
     ws.open()
     ws.text.open_map()
     drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                  # the page placed: its view takes the presses
     return ws, drv
 
 
@@ -209,7 +210,7 @@ def test_ui_copy_button_then_tap_pastes(tmp_path):
     # COPY via the SELECT-mode action strip (over the palette column).
     ws.mark_dirty()
     drv.frame(1 / 30)
-    cbx, cby, cbw, cbh = ws.map_ui.page().host.box("Copy")
+    cbx, cby, cbw, cbh = ws.map_ui.rect_of("copy")
     drv.touch(cbx + cbw // 2, cby + cbh // 2)
     drv.frame(1 / 30)
     drv.touch_up()

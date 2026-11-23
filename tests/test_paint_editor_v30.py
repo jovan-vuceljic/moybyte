@@ -299,6 +299,7 @@ def test_map_tap_paints_one_cell(tmp_path):
     _open_map_cart(ws)
     assert ws.menu_view == "map"
     drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                  # the page placed: its view takes the presses
     me = ws.map_ui.mapedit
     me.n = 4                                       # a recognizable brush tile id
     cells_before = bytes(ws.run.project.tilemap.cells)
@@ -331,6 +332,7 @@ def test_map_drag_pans_view_while_tap_still_paints(tmp_path):
     _open_map_cart(ws)
     assert ws.menu_view == "map"
     drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                  # the page placed: its view takes the presses
     me = ws.map_ui.mapedit
     me.n = 4
     # Zoom all the way IN so the map is bigger than the view and a pan has room to
@@ -379,6 +381,7 @@ def test_map_drag_with_size_brush_reverts_the_whole_block(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_map_cart(ws)
     drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                  # the page placed: its view takes the presses
     me = ws.map_ui.mapedit
     me.n = 4
     me.size = 2
@@ -411,6 +414,7 @@ def test_map_empty_sky_tile_is_selectable_and_clears_a_cell(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_map_cart(ws)
     drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                  # the page placed: its view takes the presses
 
     # First fill a cell with a real tile.
     ws.map_ui.mapedit.n = 4
@@ -450,7 +454,9 @@ def _open_map(tmp_path):
     from runtime import host_app
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_map_cart(ws)
-    return ws, host_app.ConsoleDriver(ws)
+    drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                  # the page placed: its view takes the presses
+    return ws, drv
 
 
 def _tap(drv, x, y):
@@ -464,7 +470,9 @@ def _stop(ws, drv, stop):
     """The centre of the handheld Map page's stop `stop`, drawn afresh."""
     ws.mark_dirty()
     drv.frame(1 / 30)
-    return _btn_center(ws.map_ui.page().host.box(stop))
+    mu = ws.map_ui
+    r = mu.rect_of(stop)
+    return _btn_center(r if r is not None else mu._host.box(stop))
 
 
 def _blank_map(ws):
@@ -519,7 +527,7 @@ def test_map_rect_tool_fills_dragged_rectangle_as_one_step(tmp_path):
     _blank_map(ws)
     me = ws.map_ui.mapedit
     me.n = 5
-    _tap(drv, *_stop(ws, drv, "Tool Box"))
+    _tap(drv, *_stop(ws, drv, "box"))
     assert ws.map_ui.map_tool == "rect"
 
     x0, y0 = _map_cell_center(ws, 1, 1)
@@ -549,7 +557,7 @@ def test_map_flood_tool_taps_one_committed_step(tmp_path):
     _blank_map(ws)
     me = ws.map_ui.mapedit
     me.n = 7
-    _tap(drv, *_stop(ws, drv, "Tool Fill"))
+    _tap(drv, *_stop(ws, drv, "fill"))
     assert ws.map_ui.map_tool == "flood"
 
     cell = (me.cam_x + 2, me.cam_y + 2)
@@ -566,23 +574,24 @@ def test_map_resize_panel_grows_and_shrinks(tmp_path):
     tm.mset(0, 0, 3)                               # a top-left marker to preserve
     w0, h0 = tm.w, tm.h
 
-    page = ws.map_ui.page()
-    _tap(drv, *_stop(ws, drv, "Resize"))
-    assert page.pop == "resize"
-    drv.frame(1 / 30)                # the card's first frame measures its row
+    mu = ws.map_ui
+    _tap(drv, *_stop(ws, drv, "resize"))
+    assert mu._pop
+    drv.frame(1 / 30)                # the card's first frames measure its rows
+    drv.frame(1 / 30)
 
-    _tap(drv, *_stop(ws, drv, "Wider"))            # +1 column
-    _tap(drv, *_stop(ws, drv, "Taller"))           # +1 row
+    _tap(drv, *_stop(ws, drv, "wider"))            # +1 column
+    _tap(drv, *_stop(ws, drv, "taller"))           # +1 row
     assert ws.run.project.tilemap.w == w0 + 1 and ws.run.project.tilemap.h == h0 + 1
     assert ws.run.project.tilemap.mget(0, 0) == 3             # content preserved through resize
 
-    _tap(drv, *_stop(ws, drv, "Narrower"))         # -1 column
+    _tap(drv, *_stop(ws, drv, "narrower"))         # -1 column
     assert ws.run.project.tilemap.w == w0
     assert ws.run.project.tilemap.mget(0, 0) == 3
 
     drv.press("b")
     drv.frame(1 / 30)
-    assert page.pop is None
+    assert not mu._pop
 
     # The resized map serializes at the new dims and round-trips through map.moymap
     # (SAVE writes exactly this blob), so a cart reloads the grown grid + content.

@@ -20,7 +20,7 @@ while it is open. Every change is the core's (`SceneEditor`), synced to the
 running game as the tab's taps are."""
 
 import ui
-from editor_map import checker
+from map_editor_ui import checker
 
 ACTOR_VERBS = ("Tag", "Flip", "Front", "Back", "Remove")
 ACTOR_ICONS = ("notes", "flip", "arrow_up", "arrow_down", "del")

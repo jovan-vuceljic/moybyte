@@ -1,14 +1,17 @@
 # Map (grep -n a name to jump there):
 #   MapLayout          the map editor's geometry: the handheld page's or a desk pane's
-#   MapEditorUI        the map editor's UI: the panned, zoomed view and its gestures
+#   MapEditorUI        the Map page's host: the panned, zoomed view, its gestures and keys
 #   MapEditorUI.build  build the MapEditor over the cart's map
-"""The map (tilemap) editor's UI layer (issue #32): a panned, zoomed view of
-the map where each cell shows the placed sprite tile, and the tap-to-paint /
-drag-to-pan gestures over it (#37). On the handheld the Map tab is the page
-`runtime/editors/editor_map.py` draws round the view (its brushes, tools and foot);
-in a desk Editor's Map pane the view fills the pane above a status line, the
-brush is the Sheet pane's and the tools the pane header's
-(`runtime/editors/editor_desk.py`).
+#   checker            transparency's grey checker (the Sprite, Map, Scene and theme editors)
+"""The map (tilemap) editor's UI (issue #32): a panned, zoomed view of the
+map where each cell shows the placed sprite tile, and the tap-to-paint /
+drag-to-pan gestures over it (#37). The page round it is
+`runtime/editors/editor_map.py`'s, on the handheld its brushes, tools and
+foot; in a desk Editor's Map pane the view fills the pane above a status
+line, the brush is the Sheet pane's and the tools the pane header's
+(`runtime/editors/editor_desk.py`). `MapEditorUI` hosts the page: the
+editor's state into the page's, the view and the brushes drawn in its
+canvases with their presses and keys.
 
 One instance lives on Workstation (`ws.map_ui`), with a back-reference to it
 for the cart's shared resources (the sheet and the tilemap, which a run
@@ -22,13 +25,21 @@ import ui as _ui              # frozen on device
 import ui_draw as _ui_draw
 _in = _ui.rect_in   # one hit-test (ui.rect_in)
 
+import uitree_editor
+import editor_map
 from editors_paint_map import MapEditor
-from layout_base import LayoutBase, BASE_W as _BASE_W, BASE_H as _BASE_H, pane as _in_pane
+from layout_base import (LayoutBase, BASE_W as _BASE_W, BASE_H as _BASE_H, pane as _in_pane,
+                         metric_class as _metric_class, DESK as _DESK)
 
-# The handheld page (editor_map.py): the right column's width and the foot's
-# height, beside and under the view.
+# The handheld page (editor_map.py): the right column's width beside the
+# view, in the page's unit.
 HAND_COL = 104
-HAND_FOOT = 27
+# A brush's pitch, the tile 20 inside it, and the brushes' pad round them,
+# in the page's unit.
+CELL = 22
+BRUSH_PAD = 6
+# A foot tool's cell, in the page's unit.
+TOOL = 24
 
 # TIC-80-style zoom: a small ascending list of DETAIL CELL SIZES in px. Every rung
 # is a multiple of the 8px tile, so a tile UPSCALES to fill its cell exactly (scale
@@ -84,6 +95,13 @@ _MAP_MIN_DIM = 1
 # release taps one cell (tap = paint). Touch-drag panning is the primary way to
 # navigate a map larger than the 320x240 view, so it wins over drag-to-stamp.
 _MAP_PAN_THRESH = 6
+# The page's tools (editor_map.TOOLS) as the editor's (tool, erasing), and
+# back.
+_TOOL_OF = {"pen": ("stamp", False), "box": ("rect", False), "fill": ("flood", False),
+            "select": ("select", False), "erase": ("stamp", True)}
+_TOOL_ID = {"stamp": "pen", "rect": "box", "flood": "fill", "select": "select"}
+# Resize's steps: (wider, taller).
+_RESIZE = {"wider": (1, 0), "narrower": (-1, 0), "taller": (0, 1), "shorter": (0, -1)}
 
 
 def _mv_fit_cell(avail_w, avail_h, mw, mh):
@@ -104,10 +122,12 @@ def _mv_fit_cell(avail_w, avail_h, mw, mh):
 
 class MapLayout(LayoutBase):
     """The map editor's geometry, from the SYSTEM canvas size (w, h) and font
-    scale. On the handheld (`verbs`) the view runs from the content rect's
-    top left to the page's right column and foot, which
-    `editor_map.MapPage` draws; in a desk Editor's Map pane (`pane`) the
-    view fills the pane above a status line.
+    scale: where the page (`editor_map.map_page`) places the view. On the
+    handheld (`verbs`) the view runs from the content rect's top left to the
+    page's right column and its foot (a rule and a row); in a desk Editor's
+    Map pane (`pane`) it fills the pane above the status line. The view's
+    rect as the page drew it last is what the map reads
+    (`MapEditorUI._mv_metrics`); these are its measure before that.
 
     The zoom list is the detail sizes, then the OVERVIEW sentinel LAST on
     every tier, so the rung a reader is on is a name, not an index."""
@@ -117,33 +137,51 @@ class MapLayout(LayoutBase):
         LayoutBase.__init__(self, w, h, font_scale, chrome_scale=chrome_scale)
         fs = self.fs
         cx, cy, cw, ch = self.cx, self.cy, self.cw, self.ch
-        self.body_fill = (cx, cy, cw, ch)
         self.zooms = tuple(_MV_ZOOMS) + (48, 64, _MV_OVERVIEW)
         self.pan_thresh = _MAP_PAN_THRESH * fs
         self.tp_page = _TP_PAGE
+        self.desk = desk = _metric_class() == _DESK
         self.pane = _in_pane()
         self.verbs = not self.pane
+        # the page's unit: a canvas's h= and a button's w= are multiplied by it
+        self.unit = u = 1 if desk else fs
+        row = 48 if desk else 22 * fs
+        self.mv_x0, self.mv_y0 = cx, cy
         if self.pane:
-            line = _ui_draw.font("ui")[2] * fs
-            self.status_h = line + 8 * fs
-            self.mv_x0, self.mv_y0 = cx + 2 * fs, cy + 2 * fs
-            self.mv_avail_w = cw - 4 * fs
-            self.mv_avail_h = ch - 4 * fs - self.status_h
-            self.status_xy = (cx + 8 * fs, cy + ch - self.status_h + 4 * fs)
+            line = _ui_draw.font("ui")[2]
+            self.mv_avail_w = cw
+            self.mv_avail_h = ch - max(20, line + 2) * fs
         else:
-            self.mv_x0, self.mv_y0 = cx, cy
-            self.mv_avail_w = cw - HAND_COL
-            self.mv_avail_h = ch - HAND_FOOT - 1
-            self.tp_x0 = cx + cw - HAND_COL + 6
-            self.tp_y0 = cy + 6
+            self.mv_avail_w = max(0, cw - HAND_COL * u)
+            self.mv_avail_h = max(0, ch - row - (1 if desk else fs))
+        # a foot tool's pitch in the page's unit: a desk's touch target (32 px at
+        # least), else narrower where the foot would not hold the whole row
+        self.pitch = 36 if desk else TOOL if cw >= 320 * u else TOOL - 4
+        # the column beside the view: the brushes at the largest scale `bk` (up to
+        # the unit) that leaves a row for their pager, then as many of the tile's,
+        # the cell's and the hold's lines (`lines`) as its height holds
+        need = 2 * BRUSH_PAD + 4 * CELL - 2
+        room = self.mv_avail_h - row
+        self.bk = bk = max(1, min(u, room // need))
+        self.brushes_h = (need * bk + u - 1) // u
+        self.lines = max(0, min(3, (room - self.brushes_h * u) // row))
+
+
+class _Damage:
+    def __init__(self, ws):
+        self.ws = ws
+
+    def all(self):
+        self.ws.mark_dirty()
 
 
 class MapEditorUI:
-    """The map/tilemap editor's UI: pan/zoom view + tile palette + gesture
-    handling (draw + input/pointer). One instance lives on Workstation
-    (`self.map_ui`), built once in Workstation.__init__; `ws.map_ui.build()` is
-    called lazily from `set_menu_view("map")` the first time a cart's map
-    editor is opened, exactly like the pre-extraction code did inline."""
+    """The map/tilemap editor's UI: the Map page's host (editor_map.py) --
+    the pan/zoom view and the brushes its canvases, their gestures and keys,
+    and the page's actions over the MapEditor. One instance lives on
+    Workstation (`self.map_ui`), built once in Workstation.__init__;
+    `ws.map_ui.build()` is called lazily from `set_menu_view("map")` the
+    first time a cart's map editor is opened."""
 
     def __init__(self, ws, names):
         self.ws = ws
@@ -164,40 +202,324 @@ class MapEditorUI:
                                        # stamps s x s cells); reverted if the gesture
                                        # turns out to be a pan
         self._ov_buf = None            # the OVERVIEW rung's reused quad buffer (#215)
+        self.page = None               # the page's engine (editor_map.py), made at its first use
+        self._host = _ui_draw.AppHost("editor_map", self)
+        self._pop = False              # the resize popover is open
+        self._view_r = None            # the view's rect as the page placed it last
+        self._made = [None] * 15       # what `_sync` made the page's values from
+        self._shown = None             # the values it handed the page last
+        self._rect = None              # the content rect, as a tuple drawn with
+        self._home = False             # a tool picked: the view takes the keys at the next draw
+        self._popped = False           # the popover opened: its first step takes them
         sc = ws.sys_canvas
         self.layout = MapLayout(sc.w, sc.h, getattr(sc, "font_scale", 1))
 
     _pan_acc = [0, 0]
     _hover_cell = None
-    _page = None
     _hold = 0                          # frames a still press has been held
 
-    def page(self):
-        """The handheld's Map page on the verbs, built at its first use."""
-        if self._page is None:
-            from editor_map import MapPage
-            self._page = MapPage(self, _ui_draw.AppHost("editor_map"))
-        return self._page
+    # -- the page ------------------------------------------------------------
 
-    def pointer(self, px, py, click, down):
-        """A pointer sample on the handheld's page (the layer's, after the
-        bar's): a press in the view is the map's gesture, held still it picks
-        the cell's tile; the rest are the verbs'."""
-        page = self.page()
-        if page.pop is None:
-            if click and _in(px, py, self._mv_area()):
-                self._hold = 0
-                self._map_click(px, py)
-                return True
+    def _page(self):
+        """The page's engine, made and opened at its first use, the view
+        holding the keys."""
+        if self.page is None:
+            self.page = uitree_editor.page(editor_map.map_page, self._host, _Damage(self.ws))
+            self.page.env = self            # what its handlers reach (`uitree_app.env()`)
+            self.page.bare = True           # its ground is the host's
+            self.page.band = False          # the tab names no keys
+            ws = self.ws                    # a canvas holds its press while the pointer is down
+            self.page.pointer_down = lambda: bool(ws.pointer.down)
+            self.page.open(hook="none")
+            self._sync()
+            self.run("home")
+        return self.page
+
+    def run(self, name, *args):
+        """Run the page's action or hook `name` now."""
+        pg = self._page()
+        pg._bind()
+        pg.run_action(pg.actions[name], args, "host")
+
+    def pointer(self):
+        """The pointer, where the page's host reads whether it is held."""
+        return self.ws.pointer
+
+    def rect_of(self, key):
+        """Where the last frame placed the page's node `key`, in SYSTEM
+        coords (None before it drew)."""
+        return None if self.page is None else self.page.rect_of(key)
+
+    def _sync(self):
+        """The editor's state the page shows, handed to its `sync` hook
+        where it moved."""
+        ws = self.ws
+        me = self.mapedit
+        lay = self.layout
+        tm = ws.run.project.tilemap
+        sheet = ws.run.project.sheet
+        g = self._made
+        if (g[0] is me and g[1] is lay and g[2] is tm and g[3] is sheet and g[4] == self._pop
+                and g[5] == self.map_tool and g[6] == self.map_erase and g[7] == self.map_page
+                and g[8] == self._hover_cell and g[9] == self.map_zoom
+                and (me is None or tm is None or (g[10] == me.n and g[11] == me.size
+                                                  and g[12] == (tm.w, tm.h) and g[13] == me.sel
+                                                  and g[14] == me.has_clip))):
+            return
+        g[0], g[1], g[2], g[3], g[4], g[5], g[6], g[7], g[8], g[9] = (
+            me, lay, tm, sheet, self._pop, self.map_tool, self.map_erase, self.map_page,
+            self._hover_cell, self.map_zoom)
+        u = lay.unit
+        col = HAND_COL * u
+        pad = BRUSH_PAD * u
+        if me is None or tm is None or sheet is None:
+            vals = (True, lay.pane, "pen", "none", False, False, True, True, "", "", "", "", "",
+                    "", "", lay.mv_avail_w, lay.brushes_h, lay.lines, lay.pitch, pad, 160 * u)
+        else:
+            g[10], g[11], g[12], g[13], g[14] = me.n, me.size, (tm.w, tm.h), me.sel, me.has_clip
+            tool = _TOOL_ID.get(self.map_tool, "pen")
+            if tool == "pen" and self.map_erase:
+                tool = "erase"
+            pages = max(1, (sheet.count + _TP_PAGE - 1) // _TP_PAGE)
+            cur = self.map_page // _TP_PAGE
+            cell = self._hover_cell
+            x = "\u00d7" if _ui.has_symbols() else "x"
+            dims = "%d%s%d" % (tm.w, x, tm.h)
+            status = ""
+            if lay.pane:
+                parts = []
+                if cell is not None:
+                    parts.append("Cell %d, %d" % cell)
+                parts.append("tile %d" % me.n if me.n >= 0 else "sky")
+                parts.append(dims)
+                parts.append("zoom " + self._mv_zoom_label())
+                parts.append("hold a cell to pick its tile")
+                status = " \u00b7 ".join(parts)
+            vals = (False, lay.pane, tool, "resize" if self._pop else "none", me.sel is not None,
+                    bool(me.has_clip), cur == 0, cur + 1 >= pages, "%d / %d" % (cur + 1, pages),
+                    "Tile %d" % me.n if me.n >= 0 else "Sky",
+                    "Cell %d, %d" % cell if cell is not None else "Tap to paint",
+                    "%d%s%d" % (me.size, x, me.size), self.zoom_word(), dims, status,
+                    lay.mv_avail_w, lay.brushes_h, lay.lines, lay.pitch, pad, 160 * u)
+        if vals != self._shown:
+            self._shown = vals
+            self.run("sync", vals)
+
+    def zoom_word(self):
+        """The zoom button's word: the tile's scale, or Fit for the overview."""
+        if self._mv_overview():
+            return "Fit"
+        x = "\u00d7" if _ui.has_symbols() else "x"
+        return "%d%s" % (max(1, self._mv_metrics()[2] // 8), x)
+
+    def act(self, verb):
+        """One of the page's actions: a tool, Copy, Cut or Paste, the
+        brushes' page before or after, the brush's size, the zoom, Resize
+        and its four steps, or the popover closed."""
+        me = self.mapedit
+        if me is None:
+            return
+        if verb in _TOOL_OF:
+            self.map_tool, self.map_erase = _TOOL_OF[verb]
+            self._map_rect = None
+            self._map_sel = None
+            self._home = True           # the keys go back to the view, which the tool paints
+        elif verb == "copy":
+            me.copy_selection()
+        elif verb == "cut":
+            me.cut_selection()
+        elif verb == "paste":
+            self._sel_paste_default(me)
+        elif verb == "bprev":
+            self.map_page = max(0, self.map_page - _TP_PAGE)
+        elif verb == "bnext":
+            sheet = self.ws.run.project.sheet
+            last = max(0, (sheet.count - 1) // _TP_PAGE * _TP_PAGE) if sheet is not None else 0
+            self.map_page = min(last, self.map_page + _TP_PAGE)
+        elif verb == "size":
+            me.cycle_size()
+        elif verb == "zoom":
+            self._map_cycle_zoom()
+        elif verb == "resize":
+            self._pop = not self._pop
+            self._popped = self._pop    # its first step takes the keys at the next draw
+        elif verb in _RESIZE:
+            self._map_resize(*_RESIZE[verb])
+        elif verb == "close":
+            self._pop = False
+        self.ws.mark_dirty()
+
+    # -- the page's canvases ---------------------------------------------------
+
+    def view_pointer(self, kind, x, y):
+        """A press on the view, its drag and its release, in its coordinates:
+        a tap paints, a drag pans, a still hold picks the cell's tile."""
+        r = self._view_r
+        if r is None:
+            return
+        px, py = x + r[0], y + r[1]
+        if kind == "down":
+            self._hold = 0
+            self._map_click(px, py)
+        elif kind == "drag":
             if self._map_press is not None:
-                if down:
-                    self._map_pan_drag(px, py)
-                    return self._held_pick(px, py)
-                self._map_release(px, py)
-                return True
-            if click and page.palette_tap(px, py):
-                return True
-        return page.point(px, py, click, down)
+                self._map_pan_drag(px, py)
+                self._held_pick(px, py)
+        else:
+            self._map_release(px, py)
+        self.ws.mark_dirty()
+
+    def view_keys(self, i):
+        """The view's keys while it holds focus: the arrows pan the map, A
+        steps the zoom. An arrow the camera cannot follow is the page's,
+        which moves focus on."""
+        me = self.mapedit
+        if me is None:
+            return False
+        was = (me.cam_x, me.cam_y)
+        dx = i.steps("right") - i.steps("left")
+        dy = i.steps("down") - i.steps("up")
+        if dx or dy:
+            self._map_pan(dx, dy)
+        took = me.cam_x != was[0] or me.cam_y != was[1]
+        if i.pressed("a"):          # A cycles the zoom level (#37 follow-up)
+            self._map_cycle_zoom()
+            took = True
+        if took:
+            self.ws.mark_dirty()
+        return took
+
+    def _brush_at(self, x, y):
+        """The brush (its place on the page) at (x, y) in the brushes'
+        canvas, -1 none."""
+        u = self.layout.bk
+        x -= BRUSH_PAD * u
+        y -= BRUSH_PAD * u
+        c = CELL * u
+        if x < 0 or y < 0 or x >= 4 * c or y >= 4 * c:
+            return -1
+        k = y // c * 4 + x // c
+        return k if k < len(self._map_palette_ids()) else -1
+
+    def _pick_brush(self, k):
+        me = self.mapedit
+        ids = self._map_palette_ids()
+        if me is None or not 0 <= k < len(ids):
+            return
+        me.n = ids[k]
+        self.map_erase = False
+        self.ws.mark_dirty()
+
+    def brush_tap(self, x, y):
+        """A tap on the brushes, in their coordinates: the brush under it
+        becomes the brush, the pen with it."""
+        self._pick_brush(self._brush_at(x, y))
+
+    def brush_keys(self, i):
+        """The brushes' keys while they hold focus: the arrows move the brush
+        along the page's four rows of four. An arrow past their edge is the
+        page's."""
+        me = self.mapedit
+        ids = self._map_palette_ids()
+        if me is None or not ids:
+            return False
+        dx = i.steps("right") - i.steps("left")
+        dy = i.steps("down") - i.steps("up")
+        if not (dx or dy):
+            return False
+        k = ids.index(me.n) if me.n in ids else -1
+        if k < 0:
+            self._pick_brush(0)
+            return True
+        x, y = k % 4 + dx, k // 4 + dy
+        if not (0 <= x < 4 and 0 <= y < 4 and y * 4 + x < len(ids)):
+            return False
+        self._pick_brush(y * 4 + x)
+        return True
+
+    def draw_brushes(self, cv, x, y, w, h):
+        """The brushes: the page's sixteen tiles on the grey checker four by
+        four, the brush's ringed by the cursor."""
+        ws = self.ws
+        sheet = ws.run.project.sheet
+        me = self.mapedit
+        if sheet is None or me is None:
+            return
+        u = self.layout.bk
+        c = CELL * u
+        s = c - 2 * u
+        x0, y0 = x + BRUSH_PAD * u, y + BRUSH_PAD * u
+        ids = self._map_palette_ids()
+        dark, light = ws.look.live.fixed[:2]
+        d = 2 * sheet.TILE * u
+        for k in range(len(ids)):
+            tx = x0 + (k % 4) * c
+            ty = y0 + (k // 4) * c
+            checker(cv, tx, ty, s, s, 4 * u, dark, light)
+            if 0 <= ids[k] < sheet.count:
+                ox, oy = sheet.tile_origin(ids[k])
+                cv.sspr(sheet, ox, oy, sheet.TILE, sheet.TILE,
+                        tx + (s - d) // 2, ty + (s - d) // 2, d, d, -1)
+        if me.n in ids:
+            k = ids.index(me.n)
+            _ui_draw.cursor(cv, (x0 + (k % 4) * c, y0 + (k // 4) * c, s, s))
+
+    # -- the layer's facets ------------------------------------------------------
+
+    def draw(self, dt):
+        """The Map tab: the page on the content rect (the handheld's tab, a
+        desk pane's view over its status line)."""
+        ws = self.ws
+        lay = self.layout
+        r = self._rect
+        if r is None or r[0] != lay.cx or r[1] != lay.cy or r[2] != lay.cw or r[3] != lay.ch:
+            r = self._rect = (lay.cx, lay.cy, lay.cw, lay.ch)
+        cv = ws.sys_canvas
+        th = ws.theme_colors
+        pg = self._page()
+        cv.rect(r[0], r[1], r[2], r[3], th["surface"])
+        d = ws.editor_desk if lay.pane else None
+        # a desk's pane the keys are not in shows no focus
+        away = d is not None and d.tab_of(d.focused()[0]) != "map"
+        self._host.begin(cv, th, r, lay.desk, False, away)
+        self._sync()
+        if self._home:
+            self._home = False
+            self.run("home")
+        if self._popped:
+            self._popped = False
+            self.run("popped")
+        pg.paint(dt, cv, th, r, lay.desk)
+        _ui.end()
+        if not self._host.still():
+            ws.request_frame()
+
+    def handle_input(self, i):
+        """The frame's keys: the page's (the view's and the brushes' their
+        canvases'); B closes the popover, else leaves the tab."""
+        if self._pop:
+            if i.pressed("b"):
+                self.act("close")
+                return
+            self._sync()
+            self._page().keys(i)
+            return
+        self._sync()
+        self._page().keys(i)          # (the page's damage marks what the keys moved)
+        self.ws.home.leave_or_home(self.ws.spine.exit)
+
+    def handle_pointer(self, px, py, click):
+        """A pointer sample for the page; what a canvas's press does lands
+        with the input, where a desk's frame sees what it changed."""
+        self._sync()
+        pg = self._page()
+        pg.point(px, py, click)
+        q = pg.q
+        if q:
+            pg.q = []
+            pg._bind()
+            for act, args, src in q:
+                pg.run_action(act, args, src)
 
     # A press held still this many frames picks the tile under it.
     HOLD_FRAMES = 15
@@ -235,6 +557,7 @@ class MapEditorUI:
         overview = (0 <= self.map_zoom < len(old)
                     and old[self.map_zoom] == _MV_OVERVIEW)
         self.layout = MapLayout(w, h, fs, chrome_scale=cs)
+        self._view_r = None
         if overview:
             self.map_zoom = len(self.layout.zooms) - 1
         elif self.map_zoom >= len(self.layout.zooms):
@@ -272,42 +595,11 @@ class MapEditorUI:
     # -- input -----------------------------------------------------------------
 
     def at_top(self):
-        """The map's camera on its top row and no popover open: an up goes
-        on to the bar (InputRouter._bar_keys)."""
+        """The view holding the keys with the map's camera on its top row, no
+        popover open: an up goes on to the bar (InputRouter._bar_keys)."""
         me = self.mapedit
-        page = self._page if self.layout.verbs else None
-        return me is not None and me.cam_y <= 0 and (page is None or page.pop is None)
-
-    def _map_input(self):
-        """The d-pad pans the visible map window (the grid is bigger than the
-        screen); B leaves (#37). Painting stays pointer/touch-driven. Called from
-        InputRouter.handle_input's menu_view == "map" branch."""
-        ws = self.ws
-        i = ws.input
-        me = self.mapedit
-        page = self._page if self.layout.verbs else None
-        if page is not None:
-            if page.pop is not None:
-                if page.keys(i):
-                    ws.mark_dirty()
-                if i.pressed("b"):
-                    page.pop = None
-                    ws.mark_dirty()
-                return
-            if page.owed():
-                ws.mark_dirty()
-        if me is not None:
-            if i.steps("up"):
-                self._map_pan(0, -1)
-            if i.steps("down"):
-                self._map_pan(0, 1)
-            if i.steps("left"):
-                self._map_pan(-1, 0)
-            if i.steps("right"):
-                self._map_pan(1, 0)
-            if i.pressed("a"):          # A cycles the zoom level (#37 follow-up)
-                self._map_cycle_zoom()
-        ws.home.leave_or_home(ws.spine.exit)
+        return (me is not None and me.cam_y <= 0 and not self._pop and self.page is not None
+                and self.page._focus_key() == "view")
 
     def _map_palette_ids(self):
         """The tile ids shown on the current palette page (a window into the sheet,
@@ -337,9 +629,10 @@ class MapEditorUI:
         cell = lay.zooms[idx]
         if cell == _MV_OVERVIEW:
             cell = self._mv_overview_cell()
-        cols = lay.mv_avail_w // cell
-        rows = lay.mv_avail_h // cell
-        return (lay.mv_x0, lay.mv_y0, cell, cols, rows)
+        r = self._view_r
+        if r is None:
+            r = (lay.mv_x0, lay.mv_y0, lay.mv_avail_w, lay.mv_avail_h)
+        return (r[0], r[1], cell, r[2] // cell, r[3] // cell)
 
     def _mv_overview_cell(self):
         """The OVERVIEW rung's cell size for the map that is open."""
@@ -347,7 +640,10 @@ class MapEditorUI:
         tm = self.ws.run.project.tilemap
         if tm is None:
             return _MV_FIT_MAX
-        return _mv_fit_cell(lay.mv_avail_w, lay.mv_avail_h, tm.w, tm.h)
+        r = self._view_r
+        if r is None:
+            return _mv_fit_cell(lay.mv_avail_w, lay.mv_avail_h, tm.w, tm.h)
+        return _mv_fit_cell(r[2], r[3], tm.w, tm.h)
 
     def _mv_overview(self):
         """True while the view is on the OVERVIEW rung -- the cell is below one
@@ -699,47 +995,21 @@ class MapEditorUI:
 
     # -- drawing -----------------------------------------------------------------
 
-    def _draw_map(self):
-        """The Map tab: the handheld's page round the view, or a desk pane's
-        view over its status line. Drawn with the indexed API only, so host
-        == device."""
-        ws = self.ws
-        cv = ws.sys_canvas
-        lay = self.layout
-        th = ws.theme_colors
-        if lay.verbs:
-            self.page().draw(cv, th, (lay.cx, lay.cy, lay.cw, lay.ch), False)
-            return
-        bx, by, bw, bh = lay.body_fill
-        col = th["surface"]
-        me = self.mapedit
-        tm = ws.run.project.tilemap
-        if me is None or ws.run.project.sheet is None or tm is None:
-            cv.rect(bx, by, bw, bh, col)
-            return
-        # The view fills its own rect first (its cells' backgrounds): the
-        # body round it is all that takes the surface.
-        vx, vy, vw, vh = self._mv_area()
-        vx = max(bx, min(vx, bx + bw))
-        vy = max(by, min(vy, by + bh))
-        vr = max(vx, min(vx + vw, bx + bw))
-        vb = max(vy, min(vy + vh, by + bh))
-        cv.rect(bx, by, bw, vy - by, col)
-        cv.rect(bx, vb, bw, by + bh - vb, col)
-        cv.rect(bx, vy, vx - bx, vb - vy, col)
-        cv.rect(vr, vy, bx + bw - vr, vb - vy, col)
-        self.draw_view(cv)
-        self._pane_status(cv, lay, me, tm, th)
-
-    def draw_view(self, cv):
-        """The map field: the window of the map at the zoom, its lattice, and
-        the RECT and SELECT overlays (the handheld page's view as well)."""
+    def draw_view(self, cv, x, y, w, h):
+        """The view, the page's canvas at (x, y, w, h): the window of the map
+        at the zoom, its lattice, and the RECT and SELECT overlays."""
+        r = self._view_r
+        if r is None or r[0] != x or r[1] != y or r[2] != w or r[3] != h:
+            self._view_r = (x, y, w, h)
+            self._map_clamp_cam()
         ws = self.ws
         NAMES = self._NAMES
         me = self.mapedit
         sheet = ws.run.project.sheet
-        x0, y0, cell, cols, rows = self._mv_metrics()
         tm = ws.run.project.tilemap
+        if me is None or sheet is None or tm is None:
+            return
+        x0, y0, cell, cols, rows = self._mv_metrics()
         # Visible map region: each cell is the sprite tile placed there, UPSCALED to
         # fill the cell (scale = cell // TILE, crisp pixel-art) and centered, with grid
         # lines so empty cells read as empty. Tile images are cached by id within the
@@ -854,22 +1124,6 @@ class MapEditorUI:
                                    self._map_sel[2], self._map_sel[3],
                                    NAMES["yellow"], True)
 
-    def _pane_status(self, cv, lay, me, tm, th):
-        """The Map pane's status line: the cell the pointer is over, the
-        brush's tile, the map's size, the zoom, and the hold's pick."""
-        fs = lay.fs
-        cell = getattr(self, "_hover_cell", None)
-        parts = []
-        if cell is not None:
-            parts.append("Cell %d, %d" % cell)
-        parts.append("tile %d" % me.n if me.n >= 0 else "sky")
-        parts.append("%d\u00d7%d" % (tm.w, tm.h) if _ui.has_symbols() else "%dx%d" % (tm.w, tm.h))
-        parts.append("zoom " + self._mv_zoom_label())
-        parts.append("hold a cell to pick its tile")
-        text = "  \u00b7  ".join(parts) if _ui.has_symbols() else "  -  ".join(parts)
-        cv.print(_ui_draw.print_cut(text, lay.cw - 16 * fs, fs),
-                 lay.status_xy[0], lay.status_xy[1], th["ink_dim"], 1)
-
     def _draw_map_blocks(self, cv, tm, sheet, me, x0, y0, cell, nx, ny):
         """The OVERVIEW rung's minimap (#215): every placed cell as a solid block of
         its tile's dominant colour, equal-colour neighbours merged into one quad per
@@ -954,3 +1208,90 @@ class MapEditorUI:
         cv.rectb(rpx, rpy, rpw, rph, color)
         if double and rpw > 2 and rph > 2:
             cv.rectb(rpx + 1, rpy + 1, rpw - 2, rph - 2, color)
+
+
+# -- transparency's checker ----------------------------------------------------
+
+_CHECKERS = {}                   # (w, h, s) packed in one int -> the dark squares
+
+
+# The bytes one array of `bands` may hold. A board's heap finds a free run
+# that long anywhere; one array for a whole checker or lattice (20 KB for the
+# Sprite tab's sheet) found none on a T-Deck's fragmented heap, and the
+# collection that allocation set off cost the frame 140-150 ms.
+CHUNK = 2048
+
+
+def bands(template, n, step):
+    """`n` copies of the packed quads `template` (x, y, w, h, colour), the
+    k-th moved down by k * `step`, in order, as a list of arrays of at most
+    CHUNK bytes (whole copies each, one `fill_rects` an array): each copy a
+    slice store and its y fields."""
+    L = len(template)
+    per = max(1, CHUNK // (2 * L)) if L else 1
+    out = []
+    k = 0
+    while k < n:
+        m = min(per, n - k)
+        a = array("h", bytes(2 * L * m))
+        i = 0
+        for _ in range(m):
+            a[i:i + L] = template
+            if k:
+                dy = k * step
+                for j in range(i + 1, i + L, 5):
+                    a[j] += dy
+            i += L
+            k += 1
+        out.append(a)
+    return out
+
+
+def _checker_quads(w, h, s):
+    """The dark squares of a w x h checker in squares of `s`, the first
+    row's first square light, band by band (`bands`' arrays): the two bands'
+    squares alternate, and the last band is cut to the height left."""
+    s2 = 2 * s
+    pair = []
+    for k in (0, 1):
+        for xx in range(s - k * s, w, s2):
+            pair += (xx, k * s, s if xx + s <= w else w - xx, s, 0)
+    first = 5 * len(range(s, w, s2))                # the first band's length
+    second = len(pair) - first
+    nb = (h + s - 1) // s
+    out = bands(array("h", pair), (nb + 1) // 2, s2)
+    odd = nb & 1
+    tail = out[-1]
+    if odd and second:
+        tail = out[-1] = tail[:len(tail) - second]   # the last pair's second band
+    last = (nb - 1) * s
+    if h - last < s:
+        n = len(tail)
+        for j in range(n - (first if odd else second) + 3, n, 5):
+            tail[j] = h - last
+    return out
+
+
+def checker(cv, x, y, w, h, s, dark, light):
+    """Transparency's grey checker over (x, y, w, h) in squares of `s`, the
+    first row's first square light (the Sprite tab's grid and swatch, the
+    Map's and the Scene's brushes): the light ground, then the dark squares
+    in a `fill_rects` an array of quads kept per size."""
+    cv.rect(x, y, w, h, light)
+    if w <= 0 or h <= 0 or s <= 0:
+        return
+    for q in checker_quads(w, h, s):
+        cv.fill_rects(q, -1, x, y, dark)
+
+
+def checker_quads(w, h, s):
+    """The dark squares of a w x h checker in squares of `s` from (0, 0), as
+    `fill_rects` arrays, kept per size: what `checker` draws over its light
+    ground."""
+    key = (w & 0xFFF) | ((h & 0xFFF) << 12) | ((s & 0x3F) << 24)
+    quads = _CHECKERS.get(key)
+    if quads is None:
+        if len(_CHECKERS) >= 32:
+            _CHECKERS.clear()
+        quads = _CHECKERS[key] = _checker_quads(w, h, s)
+    return quads

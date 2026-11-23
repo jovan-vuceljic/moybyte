@@ -360,13 +360,14 @@ class _WebConsoleLayer(Layer):
 
 class _MapLayer(Layer):
     """The map/tilemap editor (#32), SYSTEM-domain responsive (#39 step 3): the
-    handheld's Map page, or a desk pane's view (`map_editor_ui.py`). Tap = paint
-    one cell, drag = pan (#37); the d-pad pans the window.
+    Map page (`editor_map.py`, hosted by `map_editor_ui.MapEditorUI`), the
+    handheld's tab or a desk pane's view. Tap = paint one cell, drag = pan
+    (#37); the arrows pan the view.
 
     The frame draws the "menu" strip over it (`bar_layer.STRIP_OF`), the
     Editor's lent top-bar zone (the tab ladder + PLAY); handle_pointer routes a
-    tap through ws.bar_layer.handle_bar_tap("menu", ...) FIRST, before the map
-    click/pan."""
+    tap through ws.bar_layer.handle_bar_tap("menu", ...) FIRST, before the
+    page's."""
 
     id = "map"
     domain = "system"
@@ -377,14 +378,14 @@ class _MapLayer(Layer):
     def draw(self, dt):
         ws = self.ws
         ws.reset_canvas_state()          # game-canvas hygiene (degradation shares it)
-        ws.map_ui._draw_map()
+        ws.map_ui.draw(dt)
 
     def at_top(self):
         """Up goes on to the bar from the map's top row (InputRouter._bar_keys)."""
         return self.ws.map_ui.at_top()
 
     def handle_input(self, i):
-        self.ws.map_ui._map_input()
+        self.ws.map_ui.handle_input(i)
         return True
 
     def handle_pointer(self, px, py, click):
@@ -393,15 +394,7 @@ class _MapLayer(Layer):
         # native size, so it hit-tests the raw pointer -- no _game_xy translation.
         if click and ws.bar_layer.handle_bar_tap("menu", px, py):
             return True         # the Editor's lent zone (Stage 4) claimed the tap
-        if ws.map_ui.layout.verbs:
-            if ws.map_ui.pointer(px, py, click, ws.pointer.down):
-                ws.mark_dirty()
-        elif click:
-            ws.map_ui._map_click(px, py)
-        elif ws.pointer.down:
-            ws.map_ui._map_pan_drag(px, py)
-        else:
-            ws.map_ui._map_release(px, py)
+        ws.map_ui.handle_pointer(px, py, click)
         return True
 
 

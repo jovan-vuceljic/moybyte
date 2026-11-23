@@ -16,7 +16,7 @@ class _UI:
     def _scene_input(self):
         self.calls += 1
 
-    def _map_input(self):
+    def handle_input(self, i):
         self.calls += 1
 
 
