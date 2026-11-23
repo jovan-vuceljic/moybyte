@@ -28,8 +28,8 @@ gate on phase 1).
 ## 1. What is there today
 
 - **The image names its page by digest.** Every board's build packs the
-  bundle (`tools/gen_web_blob.py --pack`) and bakes into the image only the
-  sha256 of the pack's body (`moy_web_want`, `native/moy_web/moy_web_blob.h`).
+  bundle (`tools/gen_web_blob.py --pack`); the image carries the pack body's
+  sha256 alone (`moy_web_want`, `native/moy_web/moy_web_blob.h`).
   The webhost serves a pack only when its head names that digest, from
   `/p/<12 hex>/`, its assets `immutable`; `/` is a 302 there, or the sentence
   saying why there is none (`page_root`, `native/moy_net/moy_webhost.c`).
@@ -46,8 +46,8 @@ gate on phase 1).
   pack), and the flasher (`site/flash.js`, esptool-js over Web Serial), which
   writes each board's install: the merged image and a store holding the
   add-on that fits (none on an online board).
-- **Two web modes, no crossover** (`.claude/rules/web.md`): where a page is
-  served from decides where its carts live. The page decides once at boot,
+- **Two web modes, no crossover** (`.claude/rules/web.md`): a page's
+  serving host decides where its carts live. The page decides once at boot,
   by probing `GET /sync` on its own origin, before the VFS is seeded.
 - **The Zero's setup** is its own open access point and a form on it
   (`device/zero_setup.py`): the network, the board's name and its password.

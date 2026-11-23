@@ -195,7 +195,9 @@ TIERS = [
 # THE PAGE OFFERS THE INSTALL (owner, 2026-11-17): `images[0]` is the merged
 # image the cable flash writes, and what the page publishes is its INSTALL
 # (tools/store_image.py's install_name), that image followed, at the internal
-# store's offset, by a store holding the browser console add-on that fits it --
+# store's offset, by a store holding the browser console add-on that fits it
+# (an empty one where the board's console is online, board.toml's `[web]
+# console`) --
 # one download that starts the board fresh and erases its internal store (an SD
 # card is not touched). `install` says so on the card. A board updates itself
 # over the air; the C3 Zero, which has no OTA slot, also offers its merged

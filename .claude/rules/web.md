@@ -28,7 +28,9 @@ nor those docs will warn you about:
   `tools/gen_web_blob.py --pack`) and bakes into the image only the sha256 of
   the pack's body; the release publishes the cart beside the payload
   (`.claude/rules/ota.md`). EVERY BOARD HAS IT BY DEFAULT (owner,
-  2026-11-17): the website's install writes it into the board's internal
+  2026-11-17) but one whose board.toml declares its console online (`[web]
+  console`, the C3 Zero's since 2026-11-23, whose store the add-on
+  outgrew): the website's install writes it into the board's internal
   store (`tools/store_image.py`; a board on a card moves it there on its
   first boot, `moy_seed.bring_addon`, which takes other pages' add-ons off
   both stores), and `runtime/carts/web_addon.py`'s
@@ -52,7 +54,7 @@ nor those docs will warn you about:
   the carts, so its size is the store's to pay: `tools/store_image.py --check`
   (preflight, after the browser console builds) holds it to every board's
   store, and a headless board's to its first boot's carts and the seed's
-  reserve too, the C3 Zero's being the tightest. For that reason the page, the two worker
+  reserve too. For that reason the page, the two worker
   modules and the VM's loader ship without their comments (build.sh re-prints
   their scripts with emsdk's terser, nothing renamed or compressed): read
   `page_core.html`, `page_tail.js`, `worker.js` and `moy_store.mjs` in the
