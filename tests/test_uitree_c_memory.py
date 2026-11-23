@@ -22,11 +22,11 @@ import test_frame_alloc as FA  # noqa: E402
 
 # The engine bytes at the T-Deck's desk before any other page opens: the home's
 # band (`home_ui.band`, its lowered tree and the tab's cards), its tabs' row
-# (`home_bar_ui.head`) and its hint strip (`home_strip_ui.strip`), each
-# build's arrays held at what they hold (13,434 B the three when the strip
-# came), every other page the console makes at boot (Settings' rows, Wi-Fi,
-# the log) holding no store yet.
-DESK_MAX = 14 * 1024
+# (`home_bar_ui.head`) and its hint strip with its search field
+# (`home_strip_ui.strip`), each build's arrays held at what they hold (14,288 B
+# the three when the field came), every other page the console makes at boot
+# (Settings' rows, Wi-Fi, the log) holding no store yet.
+DESK_MAX = 15 * 1024
 # The lowered trees and state values of the pages below, kept after each is
 # left (52,333 B when this was written, 9.7 KB of it values; the rows page is
 # 17 KB of it).

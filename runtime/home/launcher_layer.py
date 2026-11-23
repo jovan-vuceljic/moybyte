@@ -248,9 +248,10 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         and item count -- the cover-cache generation, trackball hover, the
         items and the titles they carry (the list, never mutated, and the
         roster's count of titles taken in place), the settings rows'
-        generation for the favorites and the play records) and the bar's own
+        generation for the favorites and the play records), the bar's own
         pixel key (`shown_key` -- clock minute, wifi state, the look; reusing
-        it means the bar's cache discipline IS this cache's discipline).
+        it means the bar's cache discipline IS this cache's discipline) and
+        the samples and keys the hint strip's page took (`_sgen`).
         Anything that draws a pixel of the home frame and is NOT derivable
         from this tuple is a staleness bug -- the silent-cache family
         surface_model_v1.md §14.2 documents -- so additions to the home draw
@@ -260,7 +261,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         return (self._statics_key(cv) if statics is None else statics, g.sel,
                 g.scroll, ws.covers.gen, self._lhover, g.items,
                 ws.carts.titled, ws.system.gen(), ws.bar_layer.shown_key("home"),
-                self._on_bar)
+                self._on_bar, self._sgen)
 
     def _try_stamp_retained(self, cv, dt):
         """Present the retained home frame when nothing it depends on changed:
@@ -1052,7 +1053,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
     def handle_input(self, i):
         ws = self.ws
         if getattr(ws, "search_typing", False):
-            return self._handle_search_typing(i)
+            return self._search_keys(i)
         ws.ach_ui.konami_watch(i)
         if self._pane_keys(i):
             return True

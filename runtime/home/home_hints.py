@@ -5,6 +5,7 @@
 #   HomeHints._draw_hints    the hint strip along the home's foot: its page
 #   HomeHints.hints_put      the strip's hints, its page's rows
 #   HomeHints._strip_point   a pointer sample on the strip
+#   HomeHints._search_keys   the keys while a query is typed: the search field's
 #   HomeHints._hint_keys     a verb's letter, the star's, from a keyboard
 """The home's HINT STRIP: the keycap hints along the home's foot -- the
 selected card's verbs and its star, the bar's keys while it has them, a
@@ -115,16 +116,20 @@ class HomeHints:
     def _hint_rows(self):
         """[(verb or None, keys, words, tail, spare)]: the hints the strip
         shows. A system modal's keys (`modal_keys`), else the selected
-        card's verbs and its star (`_hint_groups`), none while a search is
-        open (its line stands in their place), and the tab keys at the
-        strip's end. Where the verbs run into the tab keys the engine drops
-        the spare ones, the star first, then Duplicate (it stays on Y and in
-        the card's menu; design review R4-22)."""
+        card's verbs and its star (`_hint_groups`), or while a search is
+        open the key that closes it (its field stands in the verbs' place),
+        and the tab keys at the strip's end. Where the verbs run into the
+        tab keys the engine drops the spare ones, the star first, then
+        Duplicate (it stays on Y and in the card's menu; design review
+        R4-22)."""
         keys = modal_keys(self.ws)
         if keys is not None:
             return [(None, keys[k], keys[k + 1], False, False) for k in range(0, len(keys), 2)]
         rows = []
-        if not self._search_open():
+        if self._search_open():
+            k = self._search_close_items()
+            rows.append(("close", k[0], k[1], False, False))
+        else:
             items, verbs = self._hint_groups()
             for k in range(len(verbs)):
                 rows.append((verbs[k], items[2 * k], items[2 * k + 1], False,
@@ -137,13 +142,17 @@ class HomeHints:
         rect, inside the margin `_hint_pad` -- keycaps naming the active
         tab's verbs on the selected card from the left and the tab keys at
         the right (`_hint_rows`) -- on the wallpaper's ink; while search is
-        open its line (`_draw_search`) in the verbs' place."""
+        open its field in the verbs' place, which takes the keys while a
+        query is typed. Under touch, which has no strip, the page draws the
+        search alone on its line (`_search_line`)."""
         th = self.ws.theme_colors
         wall = self._wall()
         if wall is not None:
             th = self._wall_theme(th, wall[0])
         rect = self.grid.foot()[5]
-        if rect[2] > 0 and rect[3] > 0:
+        if rect[3] <= 0:
+            rect = self._search_line()
+        if rect is not None and rect[2] > 0 and rect[3] > 0:
             pg = self._strip_page()
             # the verbs' target as the frame round the strip left it (a band
             # frame's band host), given back after the strip's page
@@ -159,14 +168,13 @@ class HomeHints:
                 pg.run(home_strip_ui.put, action="put")
                 home_strip_ui.ui.commit(pg)
             inner = self._hint_inner(rect)
-            self._shost.begin(cv, th, inner, self.grid.desk(), elsewhere=True)
+            typing = getattr(self.ws, "search_typing", False)
+            self._shost.begin(cv, th, inner, self.grid.desk(), elsewhere=not typing)
             pg.paint(0.0, cv, th, inner, True)
             t[0] = was[0]
             t[1] = was[1]
             t[2] = was[2]
             t[3] = was[3]
-        if self._search_open():
-            self._draw_search(cv, th, th["ink"])
 
     def _strip_page(self):
         """The hint strip's page (`home_strip_ui.strip`) on a host of its
@@ -183,9 +191,47 @@ class HomeHints:
         return pg
 
     def hints_put(self, s):
-        """The strip's hints as its page's rows (home_strip_ui's `put`)."""
-        s.hints = [dict(id=str(k), keys=r[1], words=r[2], tail=r[3], spare=r[4])
-                   for k, r in enumerate(self._hrows)]
+        """The strip's hints as its page's rows and its search's state
+        (home_strip_ui's `put`): while search is open and no modal holds
+        the keys, the query, what the field says empty (that a keyboard is
+        needed, where nothing types) and the hints after it."""
+        ws = self.ws
+        search = self._search_open() and modal_keys(ws) is None
+        rows = [dict(id=str(k), keys=r[1], words=r[2], tail=r[3], spare=r[4])
+                for k, r in enumerate(self._hrows)]
+        s.searching = search
+        s.hints = rows
+        q = getattr(ws, "search_query", "")
+        if s.query != q:
+            s.query = q
+        typing = getattr(ws, "search_typing", False)
+        s.search_hint = ws.no_keyboard_text if typing and not ws.text.can_type() else ""
+
+    def search_typed(self, q):
+        """The search field edited (home_strip_ui's `typed`): the grid
+        filtered by its query, behind the frame."""
+        self.ws.defer(lambda: self.ws.home.set_search_query(q), toast=False)
+
+    def search_done(self):
+        """Enter in the search field (home_strip_ui's `done`): typing stops,
+        the filtered grid stays up for the keys to browse."""
+        self.ws.defer(lambda: self.ws.home.close_search(clear=False), toast=False)
+
+    def _search_keys(self, i):
+        """The keys while a query is typed: B and Esc close search, cleared;
+        the rest are the search field's (its typing, Backspace, Enter)."""
+        ws = self.ws
+        k = ws.input.typed
+        if i.pressed("b") or k == 27:
+            ws.home.close_search(clear=True)
+            return True
+        if k or i.pressed("a"):
+            # (fed where a key came: the frame that draws the field takes it)
+            self._strip_page()
+            self._shost.keys(i)
+            self._sgen += 1                  # (the strip's part draws again: it takes the key)
+            ws.mark_dirty()
+        return True
 
     def hint_press(self, rid):
         """A press on a hint (home_strip_ui's `hint`): its verb, behind the frame;
@@ -193,6 +239,8 @@ class HomeHints:
         v = self._hrows[int(rid)][0]
         if v == "tabs":
             self.ws.defer(lambda: self.ws.home.step_home_tab(1, self.grid), toast=False)
+        elif v == "close":
+            self.ws.defer(lambda: self.ws.home.close_search(clear=True), toast=False)
         elif v is not None:
             self.ws.defer(lambda: self._do_verb(v), toast=False)
 
@@ -211,7 +259,9 @@ class HomeHints:
         it to its release. False where the strip does not have it."""
         if click:
             r = self.grid.foot()[5]
-            self._sptr = self._spage is not None and r[3] > 0 and _in(px, py, r)
+            if r[3] <= 0:
+                r = self._search_line()
+            self._sptr = self._spage is not None and r is not None and r[3] > 0 and _in(px, py, r)
         if not self._sptr:
             return False
         self._shost.point(px, py, click, down)
