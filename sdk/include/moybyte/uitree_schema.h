@@ -146,6 +146,7 @@ static inline int32_t ut_p_icon(const char *v) { return ut_prop_("icon", v); }
 static inline int32_t ut_p_icons(const char *v) { return ut_prop_("icons", v); }
 static inline int32_t ut_p_image(const char *v) { return ut_prop_("image", v); }
 static inline int32_t ut_p_input(const char *v) { return ut_prop_("input", v); }
+static inline int32_t ut_p_key(const char *v) { return ut_prop_("key", v); }
 static inline int32_t ut_p_keys(const char *v) { return ut_prop_("keys", v); }
 static inline int32_t ut_p_kind(const char *v) { return ut_prop_("kind", v); }
 static inline int32_t ut_p_label(const char *v) { return ut_prop_("label", v); }

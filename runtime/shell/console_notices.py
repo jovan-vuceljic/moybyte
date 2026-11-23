@@ -234,8 +234,8 @@ class Notices:
             t[2] = was[2]
             t[3] = was[3]
         card = self._cards[which]
-        if card is None:                # the page's one toast, by the name a keyless node takes
-            card = self._cards[which] = pg.rect_of("toast#0")
+        if card is None:                # the page's toast, by its key
+            card = self._cards[which] = pg.rect_of("banner")
         return card
 
     def _draw_notice(self):

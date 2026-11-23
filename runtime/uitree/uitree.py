@@ -2022,7 +2022,7 @@ SCHEMA = {
     "bubble": dict(_C, text="text", side="text", head="text", status="text", signal="int", tone="text",
                    max="lit", lines="lit", on="action1", cut="action1"),
     "month": dict(_C, year="int", month="int", today="int", prev="action0", next="action0"),
-    "toast": dict(_C, text="text", icon="text", sub="text", burst="int", look="lit"),
+    "toast": dict(_C, text="text", icon="text", sub="text", burst="int", look="lit", key="lit"),
     "cells": dict(_C, first="int", count="int", cols="int", side="int", gap="int", edge="lit",
                   on="action0", pick="action0", focus="cond"),
     "stepper": dict(_C, value="text", prev="action0", next="action0", tone="lit", grow="lit", focus="cond"),
@@ -2687,8 +2687,15 @@ def toast(text, **p):
     look="flat" draws the pill in flat fills, filling the page's room. With
     `sub` it is a banner: a card centred at the top of the page's room, the
     icon on its tile, `text` over the `sub` line, and `burst` (an int,
-    1..255 of the way out, 0 none) confetti from its edges."""
-    return _node("toast", None, dict(p, text=text), _caller())
+    1..255 of the way out, 0 none) confetti from its edges. `key` names it
+    (its kind and place where it has none), the name a host's `rect_of`
+    asks its rect by."""
+    where = _caller()
+    key = p.pop("key", None)
+    if key is not None and (not isinstance(key, str) or not key):
+        raise UIError("N01", "ui.toast key=%r" % (key,), where=where, found=repr(key),
+                      fix='key="NAME", a text')
+    return _node("toast", key, dict(p, text=text), where)
 
 
 def cells(name, **p):

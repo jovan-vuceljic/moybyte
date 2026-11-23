@@ -1569,6 +1569,10 @@
     "look": {
      "type": "word:flat",
      "level": 2
+    },
+    "key": {
+     "type": "key",
+     "level": 2
     }
    }
   },

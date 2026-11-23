@@ -564,13 +564,19 @@ static inline int32_t ut_progress(const char *value, const char *label, int32_t 
     return n;
 }
 
-// A toast: `text` (a template) in a pill over the page's body, above its
+// A toast keyed `key` (NULL: its kind#place), the name a host asks its
+// rect by: `text` (a template) in a pill over the page's body, above its
 // foot; its icon is ut_p_icon's, "check" where it has none. It draws over
 // the nodes before it.
-static inline int32_t ut_toast(const char *text) {
-    int32_t n = ut_node(UT_TOAST, NULL);
+static inline int32_t ut_toast_keyed(const char *key, const char *text) {
+    int32_t n = ut_node(UT_TOAST, key);
     ut_prop_("text", text);
     return n;
+}
+
+// A toast keyed by its kind and place (ut_toast_keyed).
+static inline int32_t ut_toast(const char *text) {
+    return ut_toast_keyed(NULL, text);
 }
 
 // A stepper: `value` (a template) between two chevrons, the back one firing

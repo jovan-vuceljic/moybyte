@@ -552,3 +552,54 @@ def test_the_lua_front_makes_a_banner_and_a_flat_toast(tmp_path):
         frame()
     assert ws.run.player.cart_error is None, ws.run.player.cart_error
     assert bytes(drv.rgb888()) != before
+
+
+def test_a_keyed_toast_answers_rect_of_by_its_key(tmp_path):
+    """key= names a toast: the engine places its rect (the banner's card)
+    under that name, and a second toast keyed the same under one parent is
+    two nodes with one identity."""
+    import pytest
+    import uitree as S
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        ui.label("{text}")
+        ui.toast("Unlocked", sub="{text}", icon="check", key="banner")
+'''
+    _fs, app = run(tmp_path, build)
+    r = app.engine.rect_of("banner")
+    assert r is not None and r[2] > 0 and r[3] > 0, r
+    assert app.engine.rect_of("toast#1") is None
+    twice = '''
+def build():
+    with ui.page("Shelf"):
+        ui.toast("One", key="banner")
+        ui.toast("Two", key="banner")
+'''
+    with pytest.raises(S.UIError) as e:
+        run(tmp_path, twice, name="twice")
+    assert e.value.code == "N02"
+
+
+LUA_KEYED = '''ui.app("Keyed", { icon = "getcarts" })
+local s = ui.state({ sub = "Line two" })
+ui.page("Keyed", function()
+  ui.label("Keyed")
+  ui.toast("Unlocked", { sub = "{sub}", icon = "check", key = "banner" })
+end)
+'''
+
+
+def test_the_lua_front_keys_a_toast(tmp_path):
+    """A Lua page's toast with key=: built, lowered and drawn on the C
+    engine, its rect under its key."""
+    import test_uitree_lua as L
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    L._cart(carts, "Keyed", LUA_KEYED)
+    ws, drv, frame, open_cart = L._console(carts)
+    open_cart(ws, "Keyed")
+    for _ in range(4):
+        frame()
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
