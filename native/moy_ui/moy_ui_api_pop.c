@@ -1039,6 +1039,7 @@ static void tip_draw(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
 
 void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     if (c->n_nest == 0) {
+        mua_page_fit(c);
         moy_ui_keep_t *k = mua_page_keep(c);
         if (k != NULL && !c->no_foot) {
             // a page whose rows run past it: its thumb, as a scroll region's (mua_nest_close)
@@ -1055,6 +1056,7 @@ void moy_ui_api_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     mua_parts_close(c, s);
     if (c->n_nest == 0) {
         mua_group_close(c, s);
+        mua_page_fit(c);
         mua_foot_fade(c, s);
         mua_page_close(c, s);
         tip_draw(c, s);

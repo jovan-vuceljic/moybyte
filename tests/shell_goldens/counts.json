@@ -166,7 +166,7 @@
     "app_storybook": [4, 2],
     "app_terminal": [9, 7],
     "editor_blocks": [1, 0],
-    "editor_cards": [12, 3],
+    "editor_cards": [7, 3],
     "editor_code": [6, 1],
     "editor_map": [26, 16],
     "editor_music": [20, 39],
@@ -478,9 +478,9 @@
   "p4_1024x600_cs2_fs1_popovers": {
     "desk_window_calc": [2, 10],
     "popover_battery": [50, 32],
-    "popover_clock": [29, 66],
+    "popover_clock": [27, 66],
     "popover_menu": [5, 24],
-    "popover_wifi": [30, 39]
+    "popover_wifi": [28, 39]
   },
   "p4_1024x600_cs2_fs1_procs": {
     "desk_close_refusal": [8, 18],
@@ -646,9 +646,9 @@
   "p4_1024x600_fs2_desk_popovers": {
     "music_desk_menu": [57, 46],
     "popover_battery": [50, 32],
-    "popover_clock": [8, 53],
+    "popover_clock": [6, 53],
     "popover_clock_six": [29, 70],
-    "popover_wifi": [30, 39],
+    "popover_wifi": [28, 39],
     "popover_wifi_many": [31, 41],
     "status_desk_panel": [13, 22],
     "status_desk_panel_full": [19, 26]

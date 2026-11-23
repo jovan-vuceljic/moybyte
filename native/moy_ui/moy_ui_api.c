@@ -1945,6 +1945,13 @@ static int stack_gap(const moy_ui_ctx_t *c) {
     return c->grp_open ? 0 : metric(MOY_UI_M_ROW_STACK_GAP) * c->fs;
 }
 
+void mua_page_fit(moy_ui_ctx_t *c) {
+    moy_ui_keep_t *k = mua_page_keep(c);
+    if (k != NULL && k->rows > c->page.h && k->rows - c->page.h <= stack_gap(c)) {
+        k->rows = c->page.h;
+    }
+}
+
 // The next call's box: ui.at's, or the next row of the page. *stacked says
 // which (a row clips to the page); a row a popover's cut may peek is `row`.
 moy_ui_box_t mua_place_row(moy_ui_ctx_t *c, int h, int *stacked, int row) {

@@ -166,7 +166,7 @@
     "app_storybook": "1524f66824e49759d9eef20eccf44328ebbf9068715c6911d1be2839c1ce9ebc",
     "app_terminal": "fbacf8977b77e01830324fc612b5c2f65fc70096453dc76e22d605a534a9e8bc",
     "editor_blocks": "df4ecd32de91d2c45c2f44deb73bd07bd1c454eba3a9bdab83915c5db39e44e7",
-    "editor_cards": "ff3ee04bdd97bcdb5e2022abb456476b77f096fc12f004c990f88dc8da584620",
+    "editor_cards": "35e48e2ebffca4e76e62e7ce5750783103c18b8ef56a48064d4e836c420f6d6a",
     "editor_code": "eb48deafa9a7864afb02588e6ed947b5ff156669ac10cc2ca97ffe9407dbb2a1",
     "editor_map": "23a36fe150a7908a03840c0e2d61b050ff6459efaa7dcf1aa4751b17d2edf6c3",
     "editor_music": "cb262011cbd3786f7dc2e9a0e9d4ff0670112f78312ccf3d75051846c8264db9",
@@ -478,9 +478,9 @@
   "p4_1024x600_cs2_fs1_popovers": {
     "desk_window_calc": "3c9500fd82645d2d4ce0c1abbc4808f96ad80ce3139782c3fbf0a4da3b12d52b",
     "popover_battery": "6f40a7203aa93d8b3bdeacf679cfa9cf1cd4ee588f55cc07776ffb4012bfee2f",
-    "popover_clock": "c2dc59fbc3891709ecd557355fbcbfaa8de8da5922aef6b7a5210f5f788cae33",
+    "popover_clock": "a7c7e44a63349e96ce3af1f3b5188485f12e8d36f728b1ed386ea1954689237d",
     "popover_menu": "1596a3bf6fecb3199c46f84eb9f768b546724b02de315f3eabbd98e30b6e6a43",
-    "popover_wifi": "55cb7ea5085c4b391cdbb814c79485a4a4cbfaf00425ba0605c90233e3747720"
+    "popover_wifi": "489fb784be560c22b6dc869e3f4d519ceb62c46b645a21276b5c57557179881f"
   },
   "p4_1024x600_cs2_fs1_procs": {
     "desk_close_refusal": "e3d1a27afe37f4bf8ffa503df789ff57eedd546586055e518a090346baaf21d9",
@@ -646,9 +646,9 @@
   "p4_1024x600_fs2_desk_popovers": {
     "music_desk_menu": "e6e1569e123b0aec8a1df9e0763342bd097ce9fef6a2fd66ea20bd2d2988ca0a",
     "popover_battery": "8c537e9d2a3eb0713ee9c3ef386a5814b3ed53731b3169fd2c42c02edaaf6f38",
-    "popover_clock": "a87a27e3feae5f74ad202afdff7701088820243b74d12da4bd59df0669316fe7",
+    "popover_clock": "3d2f51337bf7aa2d7651b004f66a63539b580c4857fc24c0ff6cc66a4af3a5ed",
     "popover_clock_six": "5d867a44858b66ff009e8b3449d5889713d982de8a616d3b21de9d0b9734bac4",
-    "popover_wifi": "02e170219460db7aabe6cdbaeb351b2a2de3cb08466d281dbb5bfc1fd9a9bf55",
+    "popover_wifi": "cc2cfb1bc80ce65595090a70d94d3177e677cfd88f51e24ae10c72b0b27d79bf",
     "popover_wifi_many": "988b8f8d14fb42569564b2ac26e0bdb5fe0f343d5c77731f115047df3219a2b5",
     "status_desk_panel": "f256156c6d037651e17c26d929a3c1c6e40cf9ec97851b8be7918a3dcdb35db7",
     "status_desk_panel_full": "d4da5d2f15d5249de6de806d6c0524ec711282ce8c2b4f08629d00aa19f8bda1"
