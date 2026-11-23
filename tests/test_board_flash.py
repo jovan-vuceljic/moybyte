@@ -528,13 +528,14 @@ ZERO = ROOT / "firmware" / "seeed_xiao_esp32s3_zero"
 C3_ZERO = ROOT / "firmware" / "esp32c3_zero"
 
 
-@pytest.mark.parametrize("board_dir", [ZERO, C3_ZERO], ids=["zero", "c3-zero"])
-def test_a_zero_s_cable_flash_installs_the_add_on_that_fits_into_its_store(
-        monkeypatch, tmp_path, board_dir):
-    """The C3 has no OTA, so a cable flash is how its page and its official
-    carts follow its image; both Zeros speak a bare REPL, so the install goes
+@pytest.mark.parametrize("board_dir,addon", [(ZERO, True), (C3_ZERO, False)], ids=["zero", "c3-zero"])
+def test_a_zero_s_cable_flash_installs_its_add_on_and_its_carts(
+        monkeypatch, tmp_path, board_dir, addon):
+    """A cable flash is how a Zero's page and its official carts follow its
+    image (the C3 has no OTA); both speak a bare REPL, so the install goes
     over it, into the carts folder their store host serves
-    (device/zero_host.py): the add-on, then the official carts, then one
+    (device/zero_host.py): the add-on where the board keeps one (the C3's
+    console is online, `[web] console`), then the official carts, then one
     reset, after the board's boot is left alone: opened while it boots, a
     Zero's USB-Serial/JTAG wedged."""
     sys.path.insert(0, str(ROOT / "device"))
@@ -547,9 +548,11 @@ def test_a_zero_s_cable_flash_installs_the_add_on_that_fits_into_its_store(
     monkeypatch.setattr(board_flash, "install_carts",
                         lambda d, p, reset=True: got.append(("carts", d, p, reset)) or 0)
     rc, fake = _flash(monkeypatch, tmp_path, board_dir)
-    assert rc == 0 and got == [("boot", "/dev/fake"),
-                               ("addon", str(board_dir), "/dev/fake", False),
-                               ("carts", str(board_dir), "/dev/fake", True)]
+    want = [("boot", "/dev/fake")]
+    if addon:
+        want.append(("addon", str(board_dir), "/dev/fake", False))
+    want.append(("carts", str(board_dir), "/dev/fake", True))
+    assert rc == 0 and got == want
     assert _verbs(fake.calls)[-1] == "write_flash"
 
 

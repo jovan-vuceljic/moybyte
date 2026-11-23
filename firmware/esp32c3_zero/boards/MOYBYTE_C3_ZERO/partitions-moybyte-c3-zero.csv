@@ -1,8 +1,9 @@
 # Moybyte Zero (ESP32-C3) partition table: 4 MB of in-package flash.
 #
 # ONE APP SLOT, no OTA (owner, 2026-11-17). The browser console is not in
-# the image: it is an add-on cart in the store (native/moy_net/moy_page.h),
-# about 1.9 MB, which a cable flash installs (tools/board_flash.py). The
+# the image, and its add-on cart outgrew this store: board.toml declares the
+# console online ([web] console), and `tools/store_image.py --check` holds
+# the store to its first boot's carts and the seed's reserve. The
 # factory slot is sized to the image without it, with room to grow -- the
 # build's #168 guard prints the headroom -- and everything after it is the
 # store.

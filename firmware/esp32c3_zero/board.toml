@@ -145,6 +145,15 @@ updater's available() is False, and /update says so."""
 image = "core"
 install = ["moybyte.pin_light"]
 
+[web]
+# This board's browser console pack comes from a mirror by digest
+# (docs/web_console_online_2026-11.md), not from its store (owner,
+# 2026-11-23): the add-on outgrew this store. The website's install
+# (tools/store_image.py) and the cable flash (tools/board_flash.py) put none
+# in it, and `tools/store_image.py --check` holds the store to its first
+# boot's carts and the seed's reserve instead.
+console = "online"
+
 [flash]
 # No `after`: esptool's hard_reset (an RTS pulse through the USB-Serial/JTAG)
 # boots the C3's app and its USB device stays put. A watchdog_reset resets the
