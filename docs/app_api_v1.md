@@ -290,12 +290,16 @@ well; `ui.cards(..., pad=)` sets the gap its columns are counted at, and its
 where the stack stands to the page's foot, one row of tiles at most `w=`
 a side (the largest that shows a whole cover at a clean scale and leaves
 its words their room), the centre card twice that and each tile's size a
-function of its distance from the centre alone, left and right gliding
-it a card and a drag or a fling settling on one (the toolkit's table of
-parts), the centre card lifted by the focus mark at rest, its `label=` in
-the hero face and its `sub=`'s tab-separated items, a dot between each
-two, under the row; Enter or a tap on the centre card fires its card's
-action, and `cur=` follows the card the row steps to; a link's
+function of its distance from the centre alone; the engine moves it
+(the toolkit's table of parts): left and right (the wheel's notches too)
+glide it a card, a drag carries it and a fling or a let-go settles on the
+nearest card; the centre card is lifted by the focus mark at rest, its
+`label=` in the hero face and its `sub=`'s tab-separated items, a dot
+between each two, under the row in `tone=` (a theme role or `#RRGGBB`, a
+template, empty for the theme's ink) over a black shadow; Enter or a tap
+on the centre card at rest fires its card's action, a tap on another card
+glides it to the centre, and `cur=` follows the card the row comes to rest
+on (a value the app writes there while the row rests moves it there); a link's
 `swatch="#RRGGBB"` (a template, empty for none) draws a chip of that colour
 before its value; a
 card's `badge=` marks its picture and its `label_icon=` stands an icon

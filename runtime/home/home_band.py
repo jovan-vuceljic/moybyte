@@ -179,8 +179,9 @@ def _band_frame(layer, cv, dt, grid, kind, fill, strip, timed=False, steps=False
     if getattr(cv, "RETAINED_FRAMES", 0) < 1:
         return False
     # Anything animating over the surface (toast/confetti/splash/live
-    # wallpaper) moves pixels outside the band -> full frames.
-    if ws.animating(dt):
+    # wallpaper) moves pixels outside the band -> full frames; the band's
+    # own page moving (the handheld's carousel) is this frame's.
+    if ws.animating(dt, False):
         return False
     top = getattr(ws.wm, "top_kind", None)
     if top is not None and top() != kind:

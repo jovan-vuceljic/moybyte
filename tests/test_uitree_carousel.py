@@ -1,10 +1,12 @@
 """`ui.cards(look="carousel")` on the C engine (native/moy_uitree's
 `draw_carousel`, the toolkit's carousel verbs): one row of tiles, the centre
 card's twice the others' at rest and a tile's size a function of its
-distance from the centre alone; left and right glide the row a card (the
-toolkit's table of parts: its keys, its glide, its settle), cur= following;
-the glide is a motion the frame gate sees, and a settled band draws no
-frame; Enter fires the centre card's action."""
+distance from the centre alone; the engine moves the row (the toolkit's
+table of parts): left and right glide it a card, a drag carries it and a
+let-go settles on the nearest card, a tap on a neighbour glides it to the
+centre, and cur= follows the card it comes to rest on; the motion is one
+the frame gate sees, and a settled band draws no frame; Enter or a tap on
+the centre card fires its action."""
 
 import sys
 from pathlib import Path
@@ -34,8 +36,10 @@ def live(tmp_path, monkeypatch, request):
         load = uitree_c.CEngine._load
 
         def _load(self, x):
-            loaded.append(load(self, x))
-            return loaded[-1]
+            r = load(self, x)
+            if getattr(self.pages[0], "__module__", None) == F.__name__:
+                loaded.append(r)        # (the fixture's page: not the home band's)
+            return r
         monkeypatch.setattr(uitree_c.CEngine, "_load", _load)
     tiles = []
     was = uitree_c.CEngine._pic
@@ -98,8 +102,8 @@ def test_right_glides_the_row_a_card_and_cur_follows(live):
     drv.press("right")
     ws.mark_dirty()
     frames(1)
-    assert e.s.pick == "game 1"
     assert host.moving, "a step glides: the frame gate sees the motion"
+    assert e.s.pick == "game 0", "cur= is the card the row rests on"
     mid = []
     for _ in range(3):
         ws.mark_dirty()
@@ -107,6 +111,7 @@ def test_right_glides_the_row_a_card_and_cur_follows(live):
         mid.append([r[2] for _p, r in sorted(tiles, key=lambda t: t[1][0])])
     _settle(live)
     assert not host.moving
+    assert e.s.pick == "game 1"
     got = sorted(tiles, key=lambda t: t[1][0])
     sides = [r[2] for _p, r in got]
     # a tile's size is a function of its distance alone: the row reads the same both ways
@@ -140,46 +145,52 @@ def test_enter_plays_the_centre_card(live):
     assert e.s.played == "game 1", e.s.played
 
 
-def test_a_driven_band_is_drawn_at_its_hosts_scroll_over_its_hosts_ground(live):
-    """A host that drives the band (moy_uitree.h's uit_drive) moves it
-    itself: the tiles stand at its scroll, the floor's rects and its end are
-    handed to its ground (uit_on_ground) with the ground around the tiles,
-    and a frame whose buffer holds the band under the same key draws
-    nothing of it."""
-    from array import array
+def _centre(tiles):
+    """The centre tile's centre (x, y) in the last frame drawn."""
+    r = [r for _p, r in tiles if r[8] & 4][0]
+    return r[0] + r[2] // 2, r[1] + r[3] // 2
+
+
+def test_a_drag_carries_the_row_and_a_let_go_settles_on_the_nearest_card(live):
     ws, drv, e, host, tiles, frames = live
     _settle(live)
-    calls = []
+    cx, cy = _centre(tiles)
+    drv.touch(cx, cy)
+    ws.mark_dirty()
+    frames(1)
+    xs = []
+    for i in range(1, 6):
+        drv.touch_drag(cx - i * 3, cy)
+        ws.mark_dirty()
+        frames(1)
+        xs.append(min(r[0] for _p, r in tiles))
+    assert xs == sorted(xs, reverse=True) and xs[-1] < xs[0], ("the row follows the finger", xs)
+    assert e.s.pick == "game 0"
+    drv.touch_up()
+    _settle(live)
+    assert not host.moving
+    assert e.s.pick == "game 0", "a short drag settles back on the card it left"
+    assert _centre(tiles) == (cx, cy)
+    assert e.s.played == "", "a drag opens nothing"
 
-    def ground(node, kind, x, y, w, h):
-        calls.append((kind, x, y, w, h))
-        return False
-    e._x.on_ground(ground)
-    w = array("i", [0, 0, 7, 1, 0, 0, 0, 0, 1 | 4, -1, -1])
-    e.drive(w)
+
+def test_a_tap_on_a_neighbour_glides_it_in_and_a_tap_on_the_centre_plays(live):
+    ws, drv, e, host, tiles, frames = live
+    _settle(live)
+    cx, cy = _centre(tiles)
+    nb = [r for _p, r in tiles if not r[8] & 4 and r[0] > cx][0]
+    drv.touch(nb[0] + nb[2] // 2, nb[1] + nb[3] // 2)
     ws.mark_dirty()
     frames(1)
-    sizes = _sizes(tiles)
-    centre = [x for c, x, _s in sizes if c]
-    assert centre and not [x for c, x, _s in sizes if not c and x < centre[0]], sizes
-    kinds = [k for k, *_ in calls]
-    assert kinds[:2] == [0, 3] and kinds[2:] and set(kinds[2:]) == {1}, kinds
-    big = [s_ for c, _x, s_ in sizes if c][0]
-    nx, card = [(x, s_) for c, x, s_ in sizes if not c][0]
-    pitch = nx - centre[0] - (big - card)          # the neighbour sits a pitch and the growth out
-    floor = [c[1:] for c in calls if c[0] == 0][0]
-    put = sum(c[3] * c[4] for c in calls if c[0] == 1)
-    assert 0 < put < floor[2] * floor[3], (put, floor)       # around the tiles, not under them
-    w[0] = 6 * pitch                                         # the last of the seven cards
-    w[3] = 0
-    e.drive(w)
+    drv.touch_up()
     ws.mark_dirty()
     frames(1)
-    sizes = _sizes(tiles)
-    centre = [x for c, x, _s in sizes if c]
-    assert centre and not [x for c, x, _s in sizes if not c and x > centre[0]], sizes
-    del calls[:]
+    assert host.moving and e.s.played == ""
+    _settle(live)
+    assert e.s.pick == "game 1" and _centre(tiles) == (cx, cy)
+    drv.touch(cx, cy)
     ws.mark_dirty()
     frames(1)
-    assert [k for k, *_ in calls] == [3] and not tiles, (calls, tiles)
-    e.drive(None)
+    drv.touch_up()
+    frames(3)
+    assert e.s.played == "game 1", e.s.played

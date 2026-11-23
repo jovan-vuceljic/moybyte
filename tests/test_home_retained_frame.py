@@ -189,6 +189,8 @@ def test_a_frame_that_deferred_a_cover_is_not_stamped_back(tmp_path, monkeypatch
     la.sel = len(la.items) - 1
     la._scroll_to_sel()
     ws.mark_dirty()
+    _quiesce(ws)
+    drv.frame(0.0)                                # (the row lands on it: what shows is its frame's)
     shown = set((la.items[i].get("path")) for i, _r in la._visible())
     want = [(it["path"], div) for it, div in la.cover_specs() if it["path"] in shown]
     assert want, "no covered card on the last screenful"

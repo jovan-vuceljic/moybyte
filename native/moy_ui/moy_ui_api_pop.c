@@ -1268,9 +1268,9 @@ int32_t moy_ui_api_offset(moy_ui_ctx_t *c, int x, int y) {
 
 // -- a carousel (ui.cards look "carousel") ----------------------------------------------
 //
-// The handheld home's band (runtime/home/home_carousel.py) as the engine draws it: its
-// geometry (`Carousel._geom_hh`), its tiles (`_paint_hh`, `_draw_home_card`) and the
-// caption under them (`_draw_caption`).
+// The handheld home's band (`home_ui.band`, runtime/home/home_carousel.py) as the engine
+// draws and moves it: its geometry, its tiles, the caption under them and its motion (a
+// step, a drag, a fling and the slide to the nearest card, moy_ui_api_table.c).
 
 #define CAROUSEL_COVER 128          // a cover's side (SPEC.md 3.6)
 #define CAROUSEL_GAP 14             // the gap between tiles, at the font scale
@@ -1308,8 +1308,7 @@ static int font_v2(uint32_t id, const moy_font_info_t *fi) {
     return id != MOY_FONT_PETME128 && fi->first == 0;
 }
 
-void moy_ui_api_carousel_geom(const moy_ui_ctx_t *c, const int32_t b[4], int side, int32_t out[10]) {
-    int fs = c->fs;
+void moy_ui_api_carousel_geom(int fs, const int32_t b[4], int side, int32_t out[10]) {
     moy_font_info_t tf, uf;
     uint32_t tid = carousel_font(MOY_UI_FONT_HERO, &tf);
     uint32_t uid = carousel_font(MOY_UI_FONT_UI, &uf);
@@ -1372,6 +1371,41 @@ void moy_ui_api_carousel_geom(const moy_ui_ctx_t *c, const int32_t b[4], int sid
     out[7] = meta_h;
     out[8] = 2 * card;                      // the centre tile's side at rest
     out[9] = ring;
+}
+
+void moy_ui_api_carousel_tile(const int32_t g[10], const int32_t b[4], int32_t offset, int i,
+                              int32_t out[4]) {
+    int32_t card = g[0], pitch = g[1] > 0 ? g[1] : 1, big = g[8];
+    int32_t d = i * pitch - offset, ad = d < 0 ? -d : d;
+    int32_t t = ad >= pitch ? card : card + (big - card) * (pitch - ad) / pitch;
+    int32_t push = (big - card) * (ad < pitch ? ad : pitch) / (2 * pitch);
+    d += d > 0 ? push : -push;
+    out[0] = b[0] + b[2] / 2 + d - t / 2;
+    out[1] = g[2] - t / 2;
+    out[2] = t;
+    out[3] = t;
+}
+
+int moy_ui_api_carousel_at(const int32_t g[10], const int32_t b[4], int32_t offset, int n, int x,
+                           int y) {
+    int32_t pitch = g[1] > 0 ? g[1] : 1, reach = b[2] / 2 + 2 * g[0];
+    int32_t most = (n - 1) * pitch, at = offset < most ? offset : most;
+    int near = (int)floor_div(at + pitch / 2, pitch);
+    near = near < 0 ? 0 : near > n - 1 ? n - 1 : near;
+    int i0 = (int)floor_div(offset - reach, pitch), i1 = (int)floor_div(offset + reach, pitch) + 1;
+    i0 = i0 > 0 ? i0 : 0;
+    i1 = i1 < n - 1 ? i1 : n - 1;
+    int got = -1;
+    int32_t gk = -1, t[4];
+    for (int i = i0; i <= i1; i++) {
+        moy_ui_api_carousel_tile(g, b, offset, i, t);
+        int32_t k = 2 * t[2] + (i == near);
+        if (t[0] <= x && x < t[0] + t[2] && t[1] <= y && y < t[1] + t[3] && k >= gk) {
+            got = i;
+            gk = k;
+        }
+    }
+    return got;
 }
 
 // A tile's corner radius `side` across in a row of `card`: the depth's card radius on the
@@ -1487,8 +1521,17 @@ static void carousel_caption(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int bx, in
 
 void moy_ui_api_carousel_caption(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t band[4],
                                  const int32_t clip[4], const int32_t g[10], moy_ui_span_t title,
-                                 moy_ui_span_t sub, int ink, int shadow) {
-    int fs = c->fs, bx = band[0], bw = band[2];
+                                 moy_ui_span_t sub, int32_t ink) {
+    int fs = c->fs, bx = band[0], bw = band[2], shadow = -1;
+    if (ink >= MOY_UI_O_ROLE) {
+        int t = moy_ui_token(s->look, ink - MOY_UI_O_ROLE);
+        ink = t;
+    } else if (ink >= 0) {
+        ink = moy_theme_nearest(MOY_THEME_RGB | (ink & 0xffffff));
+    }
+    if (ink >= 0) {
+        shadow = moy_theme_nearest(MOY_THEME_RGB | 0x000000);
+    }
     clip_t k;
     moy_ui_box_t bb = {(int16_t)clip[0], (int16_t)clip[1], (int16_t)clip[2], (int16_t)clip[3]};
     if (mua_clip_in(&k, s, bb)) {

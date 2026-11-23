@@ -333,6 +333,7 @@ void uit_close(uit_t *e)
 {
     e->still_ok = 0;
     e->cells_node = 0;
+    e->car_node = 0;
     for (int i = 0; i < e->nvr; i++)
         UIT_FREE(e->vr[i].h);
     UIT_FREE(e->vr);
@@ -1115,16 +1116,17 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
               (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              (kind == UIT_LINK && !strcmp(name, "swatch")) ||
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
-             (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon"))) || (kind == UIT_CARDS && !strcmp(name, "pad")) ||
+             (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon"))) || (kind == UIT_CARDS && (!strcmp(name, "pad") || !strcmp(name, "tone"))) ||
              (kind == UIT_CELLS && (!strcmp(name, "first") || !strcmp(name, "count") || !strcmp(name, "cols") ||
                                     !strcmp(name, "side") || !strcmp(name, "gap")))) {
         // templates the draw finds among its props by name (uit_tmpl_prop); signal=, a month's
-        // year=, month= and today= and a cards list's pad= ints
+        // year=, month= and today= and a cards list's pad= ints; a carousel's tone= its caption's
+        // ink
         int t = uit_tmpl_compile(e, src, model);
         if (t < 0)
             return t;
-        int ty = e->tmpls[t].type, want_int = !strcmp(name, "signal") || kind == UIT_MONTH || kind == UIT_CARDS ||
-                                           kind == UIT_CELLS;
+        int ty = e->tmpls[t].type, want_int = !strcmp(name, "signal") || kind == UIT_MONTH ||
+                                           (kind == UIT_CARDS && name[0] == 'p') || kind == UIT_CELLS;
         if (want_int ? ty != UIT_INT && !e->tmpls[t].lit : ty == UIT_BOOL || ty == UIT_MODEL)
             return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not %s", "%s %s %s %s %s"), uit_kind_names[kind],
                                   name, src, uit_type_name(ty), want_int ? "an int" : "a text");
@@ -1936,19 +1938,6 @@ void uit_on_pic(uit_t *e, uit_pic_fn fn, void *ud)
 void uit_pics_moved(uit_t *e)
 {
     e->edits++;
-}
-
-void uit_drive(uit_t *e, const int32_t *w, int n)
-{
-    e->driven = n > 0;
-    for (int i = 0; i < UIT_DRIVE_WORDS; i++)
-        e->drive[i] = i < n ? w[i] : -1;
-}
-
-void uit_on_ground(uit_t *e, uit_ground_fn fn, void *ud)
-{
-    e->ground_fn = fn;
-    e->ground_ud = ud;
 }
 
 void uit_open(uit_t *e)

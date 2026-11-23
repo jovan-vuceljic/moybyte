@@ -1,7 +1,8 @@
 """The home's pages the home layers host. The handheld home's band
-(`band`): the tab's cards as the engine's carousel, which the home drives
-(`home_carousel.Carousel._hh_pass`): its scroll, its keys, its pictures and
-its ground are the home's, and the host puts its rows (`band_put`).
+(`band`): the tab's cards as the engine's carousel, which moves itself on
+the band's host (`home_carousel.Carousel._hh_pass`): the host puts its rows
+(`band_put`), the card a selection made from outside lands it on and its
+caption's ink (`band_set`), and draws its pictures.
 
 The desk home's details pane (`page`), beside the hero
 (`home_details.HomeDetails`): the selected card's title,
@@ -40,6 +41,8 @@ for _k in range(FACTS):
     _decl[FACT_KEYS[_k]] = ""
     _decl[FACT_VALUES[_k]] = ""
 _decl["cards"] = ui.model("id", id="", name="", sub="", pic=ui.IMAGE)    # the band's cards
+_decl["sel"] = ui.row_of("cards")        # ...the one it rests on
+_decl["tone"] = ""       # ...and its caption's ink ("" the theme's)
 s = ui.state(**_decl)
 
 
@@ -57,19 +60,26 @@ def band_put():
     uitree_app.env().band_put(s)
 
 
+def band_set():
+    """The band's current card and its caption's ink, the host's
+    (`Carousel.band_set`)."""
+    uitree_app.env().band_set(s)
+
+
 def _open(row):
     uitree_app.env().band_open(row)
 
 
 ui.hook("put", put)
 ui.hook("band_put", band_put)
+ui.hook("band_set", band_set)
 ui.action("press", "Choose", _press, takes="arg")
 ui.action("open", "Open", _open, takes="row")
 
 
 def band():
     with ui.page(""):
-        with ui.cards("cards", look="carousel"):
+        with ui.cards("cards", look="carousel", cur="sel", tone="{tone}"):
             ui.card("open", label="{.name}", sub="{.sub}", image=".pic")
 
 

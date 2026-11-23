@@ -363,10 +363,10 @@ struct uit {
     void *draw_ud;
     uit_pic_fn pic_fn;          // a card's or a picture's image, the front end's
     void *pic_ud;
-    uit_ground_fn ground_fn;    // a driven carousel's ground, the front end's
-    void *ground_ud;
-    int32_t drive[UIT_DRIVE_WORDS];     // the words a host drives its carousels by (uit_drive)
-    uint8_t driven;
+    // The page's carousel as the last frame drew it (uit_carousel's words), its node + 1 (0: none
+    // drawn since the page was built).
+    int32_t car[UIT_CAROUSEL_WORDS];
+    int16_t car_node;
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
     int32_t band_h;             // a flowing page's hints band, docked at its foot: its pictures end over it
     uint8_t in_cell;            // drawing a split's column: a button takes its natural width

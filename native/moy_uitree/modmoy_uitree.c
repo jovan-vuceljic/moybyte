@@ -22,7 +22,6 @@ typedef struct {
     uit_t *e;
     mp_obj_t draw;              // on_draw's function: (node, x, y, w, h)
     mp_obj_t pic;               // on_pic's function: (node, pic, rect or None)
-    mp_obj_t ground;            // on_ground's function: (node, kind, x, y, w, h)
     mp_obj_t raised;            // what it raised inside a frame, raised again after it
     // what on_pic is handed, made once: the tile's tuple, written in place each call, and
     // the picture names handed last, most recent first (a name again is the same str), so
@@ -69,7 +68,7 @@ static mp_obj_t eng_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_
     (void)args;
     eng_obj_t *o = mp_obj_malloc_with_finaliser(eng_obj_t, type);
     o->e = uit_new();
-    o->draw = o->pic = o->ground = o->raised = o->pic_r = MP_OBJ_NULL;
+    o->draw = o->pic = o->raised = o->pic_r = MP_OBJ_NULL;
     for (int i = 0; i < PIC_NAMES; i++)
         o->pic_s[i] = MP_OBJ_NULL;
     if (o->e == NULL)
@@ -82,7 +81,7 @@ static mp_obj_t eng_del(mp_obj_t self)
     eng_obj_t *o = MP_OBJ_TO_PTR(self);
     uit_free(o->e);
     o->e = NULL;
-    o->draw = o->pic = o->ground = o->raised = o->pic_r = MP_OBJ_NULL;
+    o->draw = o->pic = o->raised = o->pic_r = MP_OBJ_NULL;
     for (int i = 0; i < PIC_NAMES; i++)
         o->pic_s[i] = MP_OBJ_NULL;
     return mp_const_none;
@@ -632,51 +631,47 @@ static mp_obj_t eng_pics_moved(mp_obj_t self)
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_pics_moved_obj, eng_pics_moved);
 
-// drive(words) (uit_drive): an array of int32 words, or None (the carousels their own). The words
-// are copied: a frame reads them, never the array.
-static mp_obj_t eng_drive(mp_obj_t self, mp_obj_t words)
+// The int32 words of array `a` (typecode i or l), at least `n` of them.
+static int32_t *words_of(mp_obj_t a, size_t n)
 {
-    if (words == mp_const_none) {
-        uit_drive(eng(self), NULL, 0);
-        return mp_const_none;
-    }
     mp_buffer_info_t bi;
-    mp_get_buffer_raise(words, &bi, MP_BUFFER_READ);
-    if (bi.typecode != 'i' && bi.typecode != 'l')
-        mp_raise_TypeError(MP_ERROR_TEXT("moy_uitree: drive takes array('i')"));
-    uit_drive(eng(self), bi.buf, (int)(bi.len / sizeof(int32_t)));
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_2(eng_drive_obj, eng_drive);
-
-// The ground under a driven carousel (uit_on_ground): fn(node, kind, x, y, w, h), its answer
-// truthy where a copy was made; what it raises is kept as a canvas's draw's is.
-static int ground_tramp(void *ud, int node, int kind, int x, int y, int w, int h)
-{
-    eng_obj_t *o = ud;
-    if (o->ground == MP_OBJ_NULL || o->raised != MP_OBJ_NULL)
-        return 0;
-    mp_obj_t args[6] = {MP_OBJ_NEW_SMALL_INT(node), MP_OBJ_NEW_SMALL_INT(kind), MP_OBJ_NEW_SMALL_INT(x),
-                        MP_OBJ_NEW_SMALL_INT(y), MP_OBJ_NEW_SMALL_INT(w), MP_OBJ_NEW_SMALL_INT(h)};
-    int r = 0;
-    nlr_buf_t nlr;
-    if (nlr_push(&nlr) == 0) {
-        r = mp_obj_is_true(mp_call_function_n_kw(o->ground, 6, 0, args));
-        nlr_pop();
-    } else {
-        o->raised = MP_OBJ_FROM_PTR(nlr.ret_val);
-    }
-    return r;
+    mp_get_buffer_raise(a, &bi, MP_BUFFER_RW);
+    if ((bi.typecode != 'i' && bi.typecode != 'l') || bi.len < n * sizeof(int32_t))
+        mp_raise_TypeError(MP_ERROR_TEXT("moy_uitree: takes array('i') of enough words"));
+    return bi.buf;
 }
 
-static mp_obj_t eng_on_ground(mp_obj_t self, mp_obj_t fn)
+// carousel(out) (uit_carousel): the page's carousel as the last frame drew it into out, an
+// array('i') of 20; whether one drew.
+static mp_obj_t eng_carousel(mp_obj_t self, mp_obj_t out)
 {
-    eng_obj_t *o = MP_OBJ_TO_PTR(self);
-    o->ground = fn == mp_const_none ? MP_OBJ_NULL : fn;
-    uit_on_ground(eng(self), o->ground == MP_OBJ_NULL ? NULL : ground_tramp, o);
-    return mp_const_none;
+    return mp_obj_new_bool(uit_carousel(eng(self), words_of(out, UIT_CAROUSEL_WORDS)));
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(eng_on_ground_obj, eng_on_ground);
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_carousel_obj, eng_carousel);
+
+// carousel_tile(row, out) (uit_carousel_tile): its tile into out, an array('i') of 4; whether it shows.
+static mp_obj_t eng_carousel_tile(mp_obj_t self, mp_obj_t row, mp_obj_t out)
+{
+    return mp_obj_new_bool(uit_carousel_tile(eng(self), mp_obj_get_int(row), words_of(out, 4)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(eng_carousel_tile_obj, eng_carousel_tile);
+
+// carousel_at(x, y) (uit_carousel_at): the row whose tile holds the point, -1 none.
+static mp_obj_t eng_carousel_at(mp_obj_t self, mp_obj_t x, mp_obj_t y)
+{
+    return MP_OBJ_NEW_SMALL_INT(uit_carousel_at(eng(self), mp_obj_get_int(x), mp_obj_get_int(y)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(eng_carousel_at_obj, eng_carousel_at);
+
+// carousel_geom(band, fs, desk, out) (uit_carousel_geom): band an array('i') of 4, out of 10;
+// whether the page has a carousel.
+static mp_obj_t eng_carousel_geom(size_t n, const mp_obj_t *a)
+{
+    (void)n;
+    return mp_obj_new_bool(uit_carousel_geom(eng(a[0]), words_of(a[1], 4), mp_obj_get_int(a[2]),
+                                             mp_obj_is_true(a[3]), words_of(a[4], 10)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_carousel_geom_obj, 5, 5, eng_carousel_geom);
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_frame_obj, 11, 11, eng_frame);
 
 // still(ctx, x, y, w, h, flags, fs, input) -> whether the frame drawn last is what a frame now draws
@@ -928,8 +923,10 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_on_draw), MP_ROM_PTR(&eng_on_draw_obj) },
     { MP_ROM_QSTR(MP_QSTR_on_pic), MP_ROM_PTR(&eng_on_pic_obj) },
     { MP_ROM_QSTR(MP_QSTR_pics_moved), MP_ROM_PTR(&eng_pics_moved_obj) },
-    { MP_ROM_QSTR(MP_QSTR_drive), MP_ROM_PTR(&eng_drive_obj) },
-    { MP_ROM_QSTR(MP_QSTR_on_ground), MP_ROM_PTR(&eng_on_ground_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel), MP_ROM_PTR(&eng_carousel_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel_tile), MP_ROM_PTR(&eng_carousel_tile_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel_at), MP_ROM_PTR(&eng_carousel_at_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel_geom), MP_ROM_PTR(&eng_carousel_geom_obj) },
     { MP_ROM_QSTR(MP_QSTR_build_end), MP_ROM_PTR(&eng_build_end_obj) },
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&eng_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&eng_close_obj) },

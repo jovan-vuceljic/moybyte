@@ -820,14 +820,18 @@ class Launcher:
         the parts named in the paint this frame began there."""
         self._band_host().resume(cv, self.theme)
 
-    def _begin_band(self, cv, b, desk, key, need, over=None):
-        """Begin the band's frame on its host: whether the buffer this frame
-        paints holds the band as a frame drew it under `key` (`ui.held`);
-        None, with the frame ended, where `need` asks for that and it does
-        not."""
+    def _begin_band(self, cv, b, desk, key, need, over=None, keys=False):
+        """Begin the band's frame on its host, the keys its own where `keys`
+        (the handheld's carousel; else the home's): whether the buffer this
+        frame paints holds the band as a frame drew it under `key`
+        (`ui.held`); None, with the frame ended, where `need` asks for that
+        and it does not."""
         host = self._band_host()
-        host.whole()
-        host.begin(cv, self.theme, b, desk, False, True)   # its keys are the home's
+        if keys and host.begun():
+            host.resume(cv, self.theme)     # (its keys and its clock the frame's first pass's)
+        else:
+            host.whole()
+            host.begin(cv, self.theme, b, desk, False, not keys)
         # (a stamp drawn over the frame round the band: no later frame of
         # the band's puts that buffer's frame back)
         held = _ui.held("band", key[0] if over is None or (
@@ -1491,24 +1495,9 @@ HOME_TABS = (("games", "Games"), ("mine", "Mine"), ("apps", "Apps"),
 _TAB_NAME = dict(HOME_TABS)
 _TAB_NOUN = {"games": ("GAME", "GAMES"), "mine": ("CART", "CARTS"),
              "apps": ("APP", "APPS"), "make": ("PROJECT", "PROJECTS")}
-# The handheld hero's scale the home is laid out for: a board's verdict
-# (FullscreenStackWM.HOME_SCALE) draws it at most this large.
-HOME_SCALE_HH = 2.0
-# The handheld home (docs/history/look_2026-10.md step 17): each card shows its
-# whole cover at a clean scale (`_clean_side`), a neighbour at half the
-# cover's side and the hero at twice that, a gap between cards, the corners
-# of a neighbour 7/10 of the hero's.
+# The handheld grid's card (docs/history/look_2026-10.md step 17): half the
+# cover's side, at a clean scale (`_clean_side`).
 _HH_CARD = _COVER_SIDE // 2
-_HH_GAP = 14
-# The least the handheld home leaves over and under the hero's caption
-# (title over metadata), at the font scale, when a face needs their room.
-_HH_SQUEEZE = (2, 4)
-# The handheld caption's lines for a version 2 face, at the font scale (the
-# title's at its own scale): the title's line and its baseline, the
-# metadata's baseline under the title's, its line and its baseline. The
-# size class's -- the targets' Night faces' -- so a mode whose faces set
-# more leading draws its caption on the same baselines.
-_HH_CAPTION = (24, 19, 17, 15, 12)
 
 
 def _clean_side(limit):

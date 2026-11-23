@@ -1,8 +1,8 @@
 # Map (grep -n a name to jump there):
 #   Carousel                    the home's row: the centre card scaled by its distance
 #   Carousel._geom              its geometry: the handheld's row or the desk's hero and shelf
-#   Carousel.anim_frame         the fling, the glide to the centre, the settle
-#   Carousel.pointer_frame      one pointer sample over the row
+#   Carousel.anim_frame         the desk shelf's fling and glide
+#   Carousel.band_keys          the handheld's keys and pointer: its band page's, whose carousel moves itself
 #   Carousel.band_pass          the row: the handheld's the engine's carousel, the desk's shelf a table of parts
 #   Carousel.band_put           the handheld band's cards as its page's rows
 #   Carousel._paint_details     the desk's hero and its details
@@ -21,20 +21,18 @@ from array import array
 import ui as _ui
 import ui_draw as _ui_draw
 import layout_base as _lb
-from home_grid import (_clean_side, _COVER_BASE, _COVER_SIDE, desk_button_span,
+from home_grid import (_COVER_BASE, _COVER_SIDE, desk_button_span,
                        _DESK_VERB_SETS, DETAILS_MIN, _dot_top, _draw_broken_badge,
-                       _draw_star_badge,
-                       _HH_CAPTION, _HH_CARD, _HH_GAP, _HH_SQUEEZE, _hint_strip,
-                       HOME_SCALE_HH, _in, Launcher, NEW_TILE_TYPE, _NO_KEYS, _PART,
+                       _draw_star_badge, _hint_strip, _in, Launcher, NEW_TILE_TYPE, _NO_KEYS, _PART,
                        _PART_COL, PSEUDO_TILE_TYPES, SHELF_GAP, _TAB_NAME, text_scale)
 
 _G_PASS = [None, None]   # the row a band pass runs on and its geometry (`_geom`)
-
-# The words the handheld band's page draws its carousel under (moy_uitree.h's uit_drive)
-_DRIVE_MARK, _DRIVE_NOTE, _DRIVE_GROUND, _DRIVE_ALL = 1, 2, 4, 8
-# ...and what its ground hook is handed (uit_on_ground)
-_GROUND_FLOOR, _GROUND_PUT, _GROUND_COPY, _GROUND_END = 0, 1, 2, 3
 _PK = [None, None]       # the row whose paint key was answered last, and the key (`paint_key`)
+# The words of the handheld band's carousel as its last frame left it (moy_uitree.h's
+# uit_carousel): its scroll, its motion (drag, fling, glide bits), the card nearest the
+# centre, the card it rests on, whether it held the keys
+_W_SCROLL, _W_MOTION, _W_NEAR, _W_REST, _W_FOCUS = 14, 15, 16, 17, 19
+_DRAG, _ON_ITS_OWN = 1, 6
 
 
 class Carousel(Launcher):
@@ -58,16 +56,15 @@ class Carousel(Launcher):
     wallpaper around the cards from the band's capture
     (`LauncherHomeLayer._backdrop_fill`) and paints the cards over it. On
     the handheld the band is the engine's carousel (`ui.cards(look=
-    "carousel")`, `home_ui.band`) on the band's host, which this class
-    drives: its scroll, its motion, the key its tiles are kept under, its
-    ground and its cards' pictures are the home's (`_hh_pass`)."""
+    "carousel")`, `home_ui.band`) on the band's host: its geometry, its
+    keys, its pointer, its motion and its settle are the engine's, its
+    cards' pictures and the ground under the band the home's (`_hh_pass`),
+    and the class reads the row back as the band's last frame left it."""
 
     arrangement = "carousel"
     verb_sets = _DESK_VERB_SETS     # the buttons its desk pane keeps rows for
 
     def __init__(self, items, layout=None, names=None):
-        self.motion = "full"
-        self.scale = HOME_SCALE_HH
         self._was_drag = False
         self._g_lay = None            # the layout _g was computed for
         self._g_reach = 0
@@ -78,17 +75,21 @@ class Carousel(Launcher):
         self.plays_for = None         # optional cart -> its play record (ws.carts.plays)
         self.today_for = None         # optional () -> today as YYYYMMDD, 0 unknown
         self._bpage = None            # the handheld band's page (`_band_page`)
-        self._dw = array("i", [0] * 11)     # the words it is driven by (`_hh_pass`)
+        self._cw = array("i", [0] * 20)     # its carousel as its last frame left it (`_hh`)
+        self._cw_ok = False           # ...where a pass drew it
+        self._cq = array("i", [0] * 4)      # a band (`_geom_hh`)
+        self._cg = array("i", [0] * 10)     # ...and the carousel's geometry in it
+        self._ct = array("i", [0] * 4)      # a tile (`tile_rect`)
         self._put = None              # what its rows were put from: (items, their play records)
+        self._set = None              # ...and its current card and caption's ink (`band_set`)
         self._pic_ix = {}             # a card's picture name -> its item
         self._gcv = None              # the canvas a handheld pass draws on
-        self._fill = None             # ...and the ground it puts back
-        self._end = 0                 # ...and its floor's end
+        self.on_open = None           # () -> the band's card opened (Enter, a tap on the centre)
         self.wall_ink = None          # (white, black) over a wallpaper (_wall_ink)
         self._quiet_for = None        # the geometry `quiet` was computed for
         self._quiet_q = ()
         self._vis_g = None            # the geometry and key `_vis` was laid out for
-        self._vis_key = [None] * 6    # (scroll, moving, centre, count, motion, scale)
+        self._vis_key = [None] * 3    # (scroll, selected, count)
         self._vis = None
         Launcher.__init__(self, items, layout, names)
 
@@ -107,68 +108,31 @@ class Carousel(Launcher):
         keys = _ui_draw.hint_kind() != "touch"    # touch alone shows no hint strip
         if self._g_lay is lay and self._g_reach == reach and self._g_keys == keys:
             return self._g
-        self._g = (self._geom_hh(lay, reach, keys) if _lb.metric_class() == _lb.HANDHELD
+        self._g = (self._geom_hh(lay, keys) if _lb.metric_class() == _lb.HANDHELD
                    else self._geom_desk(lay, reach, keys))
         self._g_lay = lay
         self._g_reach = reach
         self._g_keys = keys
         return self._g
 
-    def _geom_hh(self, lay, reach, keys=True):
-        """The handheld home's geometry (docs/history/look_2026-10.md step 17), the
-        same tuple with its foot: no tab row (the tabs are the bar's), the
-        hero twice a neighbour's side, its title and its metadata under it
-        and the hint strip along the content's foot (none with no `keys`: touch
-        shows no keycaps, and the cards take its height). A neighbour is half the
-        cover's side at the font scale where that fits, and the next clean
-        side down (`_clean_side`) where it does not."""
-        fs = lay.fs
-        cx, cy, cw = lay.cx, lay.cy, lay.cw
+    def _geom_hh(self, lay, keys=True):
+        """The handheld home's geometry (docs/history/look_2026-10.md step 17),
+        the same tuple with its foot: no tab row (the tabs are the bar's),
+        the band from the content's top to the hint strip along its foot
+        (none with no `keys`: touch shows no keycaps, and the cards take its
+        height), and in it the band page's carousel's geometry, the
+        engine's (moy_uitree.h's uit_carousel_geom): a neighbour's side, the
+        pitch, the hero twice the side, its title and its metadata under
+        it."""
         hints = _hint_strip(lay, keys, False)
-        tf = _ui_draw.font("hero")
-        tsc = max(fs, (16 * fs) // max(1, tf[2]))
-        v2 = _ui_draw.font_v2(tf[0])
-        # A version 2 face's line holds its leading: the caption lays out on
-        # the size class's lines (`_HH_CAPTION`), the title 6 under the hero
-        # and 10 over the hints (the targets'), and each line draws on its
-        # baseline there, whatever leading the mode's faces set; a pixel
-        # face's line is its ink, so 12, 3 and 4.
-        if v2:
-            tl, tb, mb, ml, ma = _HH_CAPTION
-            title_h, meta_h = tl * tsc, ml * fs
-            between = tb * tsc + (mb - ma) * fs - title_h
-            above, below = 6 * fs, 10 * fs
-        else:
-            title_h, meta_h = tf[2] * tsc, lay.line_h
-            above, between, below = 12 * fs, 3 * fs, 4 * fs
-        ring = max(2 * fs + 2, reach)
-        space = hints[1] - cy
-        # The gaps give before the card does: a face taller than the targets'
-        # (Day's against Night's) takes its pixels from over and under the
-        # caption, down to `_HH_SQUEEZE`, so every mode of a theme keeps one
-        # hero side; only what the gaps cannot hold steps the card down.
-        text = title_h + between + meta_h
-        lo = (_HH_SQUEEZE[0] * fs, _HH_SQUEEZE[1] * fs)
-        card = _clean_side(_HH_CARD * fs)
-        while card > _COVER_SIDE // 8 and ring + 2 * card + text + lo[0] + lo[1] > space:
-            card = _clean_side(card - 1)
-        short = ring + 2 * card + text + above + below - space
-        if short > 0:
-            give = min(short, above + below - lo[0] - lo[1])
-            cut = give * (above - lo[0]) // max(1, above + below - lo[0] - lo[1])
-            above, below = above - cut, below - (give - cut)
-        foot = above + text + below
-        gap = _HH_GAP * fs
-        top = cy + max(ring, (space - 2 * card - foot) // 2)
-        title_y = top + 2 * card + above
-        meta_y = title_y + title_h + between
-        if v2:
-            # each face on its line's baseline
-            meta_y += (ma - _ui_draw.font()[3]) * fs
-            title_y += (tb - tf[3]) * tsc
-        band = (cx, cy, cw, hints[1] - cy)
-        return (None, band, card, card + gap, ring, gap, 0, top + card,
-                (title_y, title_h, tsc, meta_y, meta_h, hints), None)
+        band = (lay.cx, lay.cy, lay.cw, hints[1] - lay.cy)
+        q = self._cq
+        q[0], q[1], q[2], q[3] = band
+        g = self._cg
+        self._band_page().carousel_geom(q, lay.fs, False, g)
+        card, pitch = g[0], g[1]
+        return (None, band, card, pitch, g[9], pitch - card, 0, g[2],
+                (g[3], g[4], g[5], g[6], g[7], hints), None)
 
     def _geom_desk(self, lay, reach, keys=True):
         """The desk home's geometry (`_geom_desk_at`) with room in its pane
@@ -340,6 +304,14 @@ class Carousel(Launcher):
 
     # -- the offset, the motion, the selection ---------------------------------
 
+    def _hh(self):
+        """The handheld band's carousel as its page's last frame left it
+        (`_cw`, moy_uitree.h's uit_carousel, read once a pass), else None:
+        on the desk, or before the band's first frame."""
+        if not self._cw_ok or self._geom()[9] is not None:
+            return None
+        return self._cw
+
     @property
     def sel(self):
         return self._sel
@@ -350,8 +322,9 @@ class Carousel(Launcher):
             self.zone_gen += 1
         self._sel = value
         # A selection made from outside (a tab switch, a resume, a remote
-        # run) brings its card to the centre; the settle's own assignment
-        # lands where the row already rests.
+        # run) brings its card to the centre: on the handheld the band's
+        # current card, where its row lands while it rests (`band_set`);
+        # the settle's own assignment lands where the row already rests.
         if self.layout is not None and not self.moving:
             self._scroll = self._rest_of(value)
 
@@ -364,15 +337,44 @@ class Carousel(Launcher):
         return max(0, i) * self.pitch()
 
     @property
+    def scroll(self):
+        """The pixel offset: the handheld band's as its last frame left it,
+        else clamped against the live layout."""
+        w = self._hh()
+        if w is not None:
+            return w[_W_SCROLL]
+        return max(0, min(self._scroll, self.max_scroll()))
+
+    @scroll.setter
+    def scroll(self, value):
+        self._scroll = max(0, min(int(value), self.max_scroll()))
+        if self._region.animating:
+            self._region.stop()     # a programmatic scroll cancels a fling
+
+    @property
+    def dragging(self):
+        """True while a drag (past the slop) moves the row."""
+        w = self._hh()
+        if w is not None:
+            return w[_W_MOTION] & _DRAG != 0
+        return self._taps.dragging
+
+    @property
     def flinging(self):
-        """True while the row coasts on its own: a released fling, or the
-        glide that carries the nearest card to the centre (a key's motion
-        too) -- the frames that take the drag partial."""
+        """True while the row moves on its own: a released fling, or the
+        glide that carries a card to the centre (a key's motion too) --
+        the frames that take the band's partial."""
+        w = self._hh()
+        if w is not None:
+            return w[_W_MOTION] & _ON_ITS_OWN != 0
         return self._region.animating
 
     @property
     def moving(self):
-        return self._taps.dragging or self.flinging
+        w = self._hh()
+        if w is not None:
+            return w[_W_MOTION] != 0
+        return self._taps.dragging or self._region.animating
 
     def max_scroll(self):
         g = self._geom()
@@ -383,14 +385,18 @@ class Carousel(Launcher):
         return max(0, (len(self.items) - 1) * self.pitch())
 
     def nearest(self):
-        """The card nearest the centre at the current offset; on the desk's
-        shelf, the selected one."""
+        """The card nearest the centre at the current offset (the handheld
+        band's as its last frame left it); on the desk's shelf, the
+        selected one."""
         n = len(self.items)
         if not n:
             return 0
         g = self._geom()
         if g[9] is not None:
             return max(0, min(n - 1, self._sel))
+        w = self._hh()
+        if w is not None:
+            return min(n - 1, w[_W_NEAR])
         g = g[3]
         n -= 1
         # (`scroll`, clamped to the handheld's `max_scroll`, in pitches)
@@ -413,157 +419,114 @@ class Carousel(Launcher):
         return self._region
 
     def glide_to(self, i):
-        """Carry card `i` to the centre, frame by frame (`anim_frame`): on
-        the handheld the row slides there, on the desk the shelf glides --
-        the scroll model's two eases (`ScrollRegion.glide_to`)."""
+        """The desk: select card `i` at once and glide the shelf to show it,
+        frame by frame (`anim_frame`). The handheld's row moves itself
+        (`band_keys`)."""
         n = len(self.items)
-        if not n:
+        if not n or not self.desk():
             return
         self._region.stop()
         region = self._scroll_region()
         i = max(0, min(n - 1, i))
-        if self.desk():
-            # the desk selects at once and the shelf glides to show it
-            if i != self._sel:
-                self.zone_gen += 1
-                self._sel = i
-            region.glide_to(self._rest_of(i))
-            return
-        region.glide_to(i * self.pitch(), slide=self.handheld())
+        if i != self._sel:
+            self.zone_gen += 1
+            self._sel = i
+        region.glide_to(self._rest_of(i))
 
     def nav2d(self, dx, dy):
-        """Left/right move the row by a card with the glide; a key held is one
-        motion, each repeat pushing the target a card further."""
-        if not self.items or not dx:
-            return
-        if self.desk():
+        """Left/right move the desk's selection by a card, the shelf
+        gliding to show it."""
+        if self.items and dx:
             self.glide_to(self._sel + dx)
-            return
-        p = self.pitch()
-        base = self._region.target
-        if base is None:
-            base = self.nearest() * p
-        self.glide_to(base // p + dx)
-
-    def _snap(self):
-        if not self.desk():                  # the desk's shelf rests anywhere
-            self.glide_to(self.nearest())
 
     def anim_frame(self, dt):
-        """Advance the fling or the glide one frame (dt in SECONDS), and
-        settle the selection once the row is still: a fling that comes to
-        rest glides the nearest card the rest of the way. True when the view
-        moved."""
-        moved = False
+        """Advance the desk shelf's fling or glide one frame (dt in
+        SECONDS). True when the view moved."""
         region = self._region
-        if region.animating:
-            fling = region.flinging
-            was = self._scroll
-            self._scroll_region()
-            if region.tick(dt * 1000.0):
-                self._scroll = region.offset   # direct: the setter would stop it
-                moved = fling or self._scroll != was
-            if fling and not region.animating:
-                self._snap()
-        if not self.moving and not self.desk():
-            c = self.nearest()
-            if c != self._sel:
-                self.sel = c
-        return moved
-
-    def pointer_frame(self, px, py, click, down, dt_ms=None):
-        i = Launcher.pointer_frame(self, px, py, click, down, dt_ms)
-        drag = self._taps.dragging
-        if self._was_drag and not drag and not self._region.animating:
-            self._snap()
-        self._was_drag = drag
-        return i
+        if not region.animating:
+            return False
+        fling = region.flinging
+        was = self._scroll
+        self._scroll_region()
+        if region.tick(dt * 1000.0):
+            self._scroll = region.offset   # direct: the setter would stop it
+            return fling or self._scroll != was
+        return False
 
     def scroll_cols(self, d):
         self.nav2d(d, 0)
 
+    # -- the handheld's keys and pointer ----------------------------------------
+
+    def band_keys(self, i):
+        """The handheld's keys this frame, its band page's (its carousel
+        steps, glides and opens itself): whether a frame is owed."""
+        return self._band_host().keys(i)
+
+    def band_point(self, px, py, click, down):
+        """A pointer sample on the handheld, its band host's (a drag moves
+        the row and a release flings it, a tap slides a card to the centre
+        or opens the centre's): whether it is the band's, or the band owes
+        a frame (a release, the motion a tap started)."""
+        h = self._band_host()
+        return h.point(px, py, click, down) or h.owed
+
+    def band_cancel(self):
+        """The gesture on the band ends untapped (a long press took it)."""
+        self._band_host().clear()
+
     # -- cards -----------------------------------------------------------------
 
-    def _side(self, d, moving, g, big):
-        """A card's side at distance `d` px from the centre, under geometry
-        `g` with the hero's side `big` (`_big`)."""
-        card, pitch = g[2], g[3]
-        if (d >= pitch or self.motion == "one"
-                or (moving and self.motion == "rest")):
-            return card
-        return card + (big - card) * (pitch - d) // pitch
+    def _rect_at(self, i):
+        return self._rect_of(i, self._geom(), self.scroll)
 
-    def _big(self):
-        """The handheld hero's side at rest: the board's scale, at most 2x."""
-        g = self._geom()
-        return int(g[2] * min(self.scale, HOME_SCALE_HH) + 0.5)
-
-    def _rect_at(self, i, moving):
-        return self._rect_of(i, moving, self._geom(), self.scroll, self._big())
-
-    def _rect_of(self, i, moving, g, s, big):
-        """Card `i`'s rect at offset `s` under geometry `g` (`_side`'s)."""
-        bx, _by, bw, _bh = g[1]
-        if g[9] is not None:
-            return (bx + g[9][4] + i * g[3] - s, g[9][3], g[2], g[2])
-        d = i * g[3] - s
-        t = self._side(abs(d), moving, g, big)
-        xc = bx + bw // 2 + self._pushed(d, moving, g, big)
-        return (xc - t // 2, g[7] - t // 2, t, t)
-
-    def _pushed(self, d, moving, g, big):
-        """A card `d` px from the centre, pushed out: on the handheld each
-        card keeps its gap beside the hero, pushed out by half what the
-        centre card grew, in proportion to its distance up to one pitch."""
-        if g[8] is None:
-            return d
-        grow = self._side(0, moving, g, big) - g[2]
-        push = grow * min(abs(d), g[3]) // (2 * g[3])
-        return d + push if d > 0 else d - push
+    def _rect_of(self, i, g, s):
+        """The desk shelf's card `i` at offset `s` under geometry `g`."""
+        return (g[1][0] + g[9][4] + i * g[3] - s, g[9][3], g[2], g[2])
 
     def _visible(self):
-        """(index, rect) for every card in the band, smallest first -- the
-        order they paint in, so the centre card lands on top. Kept for the
-        offset, motion and selection it was laid out at, so a frame's
-        restore and its paint lay the row out once; callers read it and
-        never change it."""
+        """(index, rect) for every card in the band, the selected one last
+        -- the order they paint in: on the handheld the engine's tiles as
+        its last frame laid them out; on the desk the shelf's, kept for the
+        offset and selection it was laid out at, so a frame's restore and
+        its paint lay the row out once. Callers read it and never change
+        it."""
         n = len(self.items)
         if not n:
             return []
+        if self.handheld():
+            c = self.nearest()
+            out = [(i, r) for i, r in ((i, self.tile_rect(i)) for i in range(n)) if r is not None]
+            out.sort(key=lambda e: e[0] == c)
+            return out
         g = self._geom()
         s = self.scroll
-        moving = self.moving
         c = self.nearest()
         key = self._vis_key
-        motion = self.motion
-        scale = self.scale
-        if (self._vis_g is g and key[0] == s and key[1] == moving and key[2] == c
-                and key[3] == n and key[4] == motion and key[5] == scale):
+        if self._vis_g is g and key[0] == s and key[1] == c and key[2] == n:
             return self._vis
         bx, _by, bw, _bh = g[1]
         pitch = g[3]
-        if g[9] is not None:
-            i0 = max(0, s // pitch - 1)
-            i1 = min(n - 1, (s + bw) // pitch + 1)
-        else:
-            reach = bw // 2 + 2 * g[2]
-            i0 = max(0, (s - reach) // pitch)
-            i1 = min(n - 1, (s + reach) // pitch + 1)
+        i0 = max(0, s // pitch - 1)
+        i1 = min(n - 1, (s + bw) // pitch + 1)
         out = []
-        big = self._big()
         for i in range(i0, i1 + 1):
-            r = self._rect_of(i, moving, g, s, big)
+            r = self._rect_of(i, g, s)
             if r[0] + r[2] > bx and r[0] < bx + bw:
                 out.append((i, r))
-        out.sort(key=lambda e: 2 * e[1][2] + (e[0] == c))
-        key[0], key[1], key[2], key[3], key[4], key[5] = s, moving, c, n, motion, scale
+        out.sort(key=lambda e: e[0] == c)
+        key[0], key[1], key[2] = s, c, n
         self._vis_g, self._vis = g, out
         return out
 
     def tile_rect(self, i):
         if not (0 <= i < len(self.items)):
             return None
-        r = self._rect_at(i, self.moving)
+        if self.handheld():
+            t = self._ct
+            pg = self._bpage
+            return (t[0], t[1], t[2], t[3]) if pg is not None and pg.carousel_tile(i, t) else None
+        r = self._rect_at(i)
         bx, _by, bw, _bh = self.band_rect()
         if r[0] + r[2] <= bx or r[0] >= bx + bw:
             return None
@@ -574,39 +537,14 @@ class Carousel(Launcher):
         if not (bx <= px < bx + bw):
             return None
         if self.handheld():
-            return self._tile_at_hh(px, py, bx, bw)
+            pg = self._bpage
+            i = pg.carousel_at(px, py) if pg is not None else -1
+            return None if i < 0 else i
         vis = self._visible()
         for k in range(len(vis) - 1, -1, -1):
             if _in(px, py, vis[k][1]):
                 return vis[k][0]
         return None
-
-    def _tile_at_hh(self, px, py, bx, bw):
-        """The handheld's card at (px, py): of the cards whose square holds
-        it, the one drawn last (`_visible`'s order: the larger over the
-        smaller, the centre's over a neighbour its size), each laid out in
-        place, so a press allocates nothing for it."""
-        n = len(self.items)
-        g = self._geom()
-        s = self.scroll
-        moving = self.moving
-        big = self._big()
-        c = self.nearest()
-        pitch = g[3]
-        mid = bx + bw // 2
-        reach = bw // 2 + 2 * g[2]
-        got = None
-        gk = -1
-        for i in range(max(0, (s - reach) // pitch), min(n - 1, (s + reach) // pitch + 1) + 1):
-            d = i * pitch - s
-            t = self._side(abs(d), moving, g, big)
-            x = mid + self._pushed(d, moving, g, big) - t // 2
-            y = g[7] - t // 2
-            k = 2 * t + (i == c)
-            if x <= px < x + t and y <= py < y + t and k >= gk:
-                got = i
-                gk = k
-        return got
 
     def plate_rect(self):
         """The handheld's title and metadata lines across the band; on the
@@ -744,58 +682,78 @@ class Carousel(Launcher):
 
     def _hh_pass(self, cv, g, fill, key, whole, over, beside, need, note):
         """The handheld's band pass: the band's page (`_band_page`) drawn
-        on the band's host in the band, its carousel driven by the home
-        (moy_uitree.h's uit_drive): the scroll and the motion the home's,
-        its tiles kept under `key` (`o.keep`), whole where `whole` or the
-        buffer lacks the frame round the band, `over` drawn over it, the
-        centre at rest marked while the cards hold the keys, its caption
-        white over black on a wallpaper (`wall_ink`). In each floor rect
-        the ground goes back around the cards (`_band_ground`: `fill`;
-        None, a full paint drew it). `beside` draws first."""
-        held = self._begin_band(cv, g[1], False, key, need, over)
+        on the band's host in the band, its carousel moving itself (its
+        keys and its pointer the host's: `band_keys`, `band_point`) and
+        marking its centre at rest while the cards hold the keys (not the
+        tab row's), its caption white over black on a wallpaper
+        (`wall_ink`). It keeps no tiles: a pass that draws the band draws
+        it whole, over the ground `fill` puts back there first (None: a
+        full paint drew it), and names what it drew (`ui.held`) so the floor's end
+        says whether every buffer holds it. A pass that finds the buffer
+        holding the band as it stands (nothing moving, nothing to take) and
+        a `note` pass, the band lying there by other means, draw none of it
+        and name it, its page standing as it was (`AppHost.stand`). `beside`
+        draws first."""
+        host = self._band_host()
+        held = self._begin_band(cv, g[1], False, key, need, over, not self.tab_focus)
         if held is None:
             return None
+        if key[0] < 0:
+            # (the band not the home's alone on the glass: no buffer holds its frame)
+            if need:
+                _ui.end()
+                return None
+            held = False
         whole = whole or not held
         if beside is not None:
             beside(cv, whole)
-        pg = self._band_page()
-        self._band_cards()
-        w = self._dw
-        w[0] = self.scroll
-        w[1] = 1 if self.moving else 0
-        w[2] = key[1]
-        w[3] = 1 if whole else 0
-        if over is None:
-            w[4] = w[5] = w[6] = w[7] = 0
-        else:
-            w[4] = over[0]
-            w[5] = over[1]
-            w[6] = over[2]
-            w[7] = over[3]
-        w[8] = ((0 if self.tab_focus else _DRIVE_MARK) | (_DRIVE_NOTE if note else 0)
-                | (0 if fill is None else _DRIVE_GROUND | (_DRIVE_ALL if self.restore_whole else 0)))
-        wall = self.wall_ink
-        if wall is None:
-            w[9] = w[10] = -1
-        else:
-            w[9] = wall[0]
-            w[10] = wall[1]
-        pg.drive(w)
-        self._gcv = cv
-        self._fill = fill
         del self.floor[:]
         del self.copied[:]
-        pg.paint(0, cv, self.theme, g[1], False)
+        pg = self._band_page()
+        puts = not note and self._band_cards()
+        w = self._hh()
+        if (not note and not whole and not puts and not host.owed and w is not None
+                and not w[_W_MOTION] and w[_W_FOCUS] != self.tab_focus
+                and _ui.held("cards", self._cards_key(key, w))):
+            note = True                     # (the buffer holds it as it stands)
         if note:
-            del self.floor[:]
+            host.stand()                    # (where no pass of this frame draws the page)
+        else:
+            if fill is not None:
+                fill(cv, g[1])
+            self._gcv = cv
+            self.floor.append(g[1])
+            pg.paint(0, cv, self.theme, g[1], False)
+            self._gcv = None
+            self._cw_ok = pg.carousel(self._cw)
+            w = self._hh()
+        if w is not None:
+            if w[_W_REST] != self._sel and w[_W_REST] < len(self.items):
+                self.zone_gen += 1
+                self._sel = w[_W_REST]      # the row settled on a card
+            # what the band shows, under its key: each buffer that drew it so holds it
+            _ui.held("cards", self._cards_key(key, w))
+        end = 0 if _ui.held_all() else -1
         _ui.end()
-        self._fill = self._gcv = None
-        return self._end
+        return end
+
+    @staticmethod
+    def _cards_key(key, w):
+        """What the band shows under the home's band key `key` and its
+        carousel's words `w`: its scroll, its motion, the card nearest the
+        centre and whether it wears the focus mark (-1: no buffer holds it).
+        Each step held under 2**27: no long int a frame."""
+        k = key[1]
+        if k < 0:
+            return -1
+        k = ((k & 0x3fffff) * 31 + w[_W_SCROLL]) & 0x3fffff
+        k = ((k * 31 + w[_W_NEAR]) & 0x3fffff) * 31 + w[_W_MOTION]
+        return (k & 0x3fffff) * 2 + w[_W_FOCUS]
 
     def _band_page(self):
         """The handheld band's page (`home_ui.band`) on the band's host,
         made at the first handheld pass: on the home's ground, its
-        pictures and its ground the home's."""
+        pictures the home's."""
         pg = self._bpage
         if pg is None:
             import uitree_app
@@ -804,7 +762,6 @@ class Carousel(Launcher):
             pg.bare = True
             pg.band = False
             pg.pictures = self._band_picture
-            pg.ground = self._band_ground
             pg.open()
             self._bpage = pg
         return pg
@@ -814,17 +771,27 @@ class Carousel(Launcher):
 
     def _band_cards(self):
         """Put the band page's rows (`band_put`) where what they show moved:
-        the items, or the centre card's play record."""
+        the items, or the centre card's play record; and its current card
+        and its caption's ink (`band_set`) where the home moved them:
+        whether it put either."""
         items = self.items
         p = self._put
-        if p is not None and p[0] is items:
-            c = self.nearest()
-            if c >= len(p[1]) or p[1][c] == self.played(items[c]):
-                return
-        import home_ui
-        pg = self._bpage
-        pg.run(home_ui.band_put, action="band_put")
-        home_ui.ui.commit(pg)
+        c = self.nearest()
+        put = False
+        if p is None or p[0] is not items or (c < len(p[1]) and p[1][c] != self.played(items[c])):
+            import home_ui
+            pg = self._bpage
+            pg.run(home_ui.band_put, action="band_put")
+            home_ui.ui.commit(pg)
+            put = True
+        q = self._set
+        if q is None or q[0] != self._sel or q[1] is not self.wall_ink:
+            import home_ui
+            pg = self._bpage
+            pg.run(home_ui.band_set, action="band_set")
+            home_ui.ui.commit(pg)
+            put = True
+        return put
 
     def band_put(self, s):
         """The band's cards as its page's rows (home_ui's `band_put`): each
@@ -848,27 +815,19 @@ class Carousel(Launcher):
         self._pic_ix = ix
         self._put = (items, recs)
 
-    def band_open(self, row):
-        """The band page's card action: the home's keys and pointer are its
-        own, so the page fires none."""
+    def band_set(self, s):
+        """The band's current card, the one a selection made from outside
+        lands the row on, and its caption's ink: white (over black) on a
+        wallpaper (`wall_ink`), else the theme's (home_ui's `band_set`)."""
+        s.sel = str(self._sel)
+        s.tone = "" if self.wall_ink is None else "#FFFFFF"
+        self._set = (self._sel, self.wall_ink)
 
-    def _band_ground(self, node, kind, x, y, w, h):
-        """The band page's ground (moy_uitree.h's uit_on_ground): a floor
-        rect noted (`floor`), the ground put back (`fill`), a rect copied
-        out of the buffer the last frame painted (`copied`), the floor's
-        end."""
-        if kind == _GROUND_PUT:
-            self._fill(self._gcv, (x, y, w, h))
-        elif kind == _GROUND_FLOOR:
-            self.floor.append((x, y, w, h))
-        elif kind == _GROUND_COPY:
-            cl = getattr(self._gcv, "copy_last", None)
-            if cl is not None and cl(x, y, w, h):
-                self.copied.append((x, y, w, h))
-                return True
-        else:
-            self._end = x
-        return False
+    def band_open(self, row):
+        """The band page's card action (Enter, or a tap on the centre card
+        at rest): the home's `on_open`."""
+        if self.on_open is not None:
+            self.on_open()
 
     def _band_picture(self, node, pic, r):
         """A card of the band's page (the engine's picture call, `r` its
@@ -971,7 +930,6 @@ class Carousel(Launcher):
             clip(*r)
         self._draw_shelf_caption(cv)
         c = self.nearest()
-        moving = self.moving
         for i, t in vis:
             if shows[i]:
                 _ui_draw.cast(cv, self.theme, t, _ui_draw.CAST_CARD, _ui_draw.UNDER_SMALL)

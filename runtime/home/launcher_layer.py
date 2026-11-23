@@ -78,7 +78,7 @@ from home_search import HomeSearch
 from layers import Layer
 from home_icons import IconHome
 from home_carousel import Carousel
-from home_grid import (HOME_SCALE_HH, HOME_TABS, PSEUDO_TILE_TYPES)
+from home_grid import (HOME_TABS, PSEUDO_TILE_TYPES)
 
 
 # The home layer's own words: the tab row's order, the long press, the
@@ -111,6 +111,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         self._lhover = (-1, -1)       # the last pointer sample (a release is not a move)
         self._back_tip = False        # a mouse rests on the bar's way back to the desk
         self._hold = None             # a press on a card: [index, x, y, ms held]
+        self._on_open = self._band_open     # the handheld band's card opened (`Carousel.on_open`)
         self._tab_at = None           # the tab the keys are on, on the tab row
         self._on_bar = False          # the keys are on the home's bar (BarLayer.focus_enter)
         self._tab_focus = False       # keys drive the tab row (up from the carousel)
@@ -1038,18 +1039,17 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             # the scrim, no frame of the home's own (no band paint names
             # the home's parts in it)
             return
-        # The board's motion verdict (a WM constant, §12's degradation order).
-        wm = ws.wm
         carousel = self._carousel()
         if carousel:
-            self.grid.motion = getattr(wm, "HOME_MOTION", "full")
-            self.grid.scale = getattr(wm, "HOME_SCALE", HOME_SCALE_HH)
             self.grid.dim = _dim_of(ws)
+            if self.grid.on_open is not self._on_open:
+                self.grid.on_open = self._on_open
         self.grid.wall_ink = self._wall()
         self.grid.ground = _ground_of(ws)
-        # Kinetic fling (#113) and the glide to the centre card: advance the
-        # row BEFORE painting, and keep the redraw gate open until it rests.
-        # Both ride the partial path (its gate includes flinging).
+        # Kinetic fling (#113) and the shelf's glide: advance the row BEFORE
+        # painting, and keep the redraw gate open until it rests (the
+        # handheld's carousel moves itself in its band's pass). Both ride
+        # the partial path (its gate includes flinging).
         self.grid.anim_frame(dt)
         if self.grid.flinging:
             ws.request_frame()
@@ -1223,11 +1223,23 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             return True
         if self._hint_keys(i):
             return True
-        # The carousel (§12): left/right glide by a card, a held key one
-        # motion; up takes the keys to the tab row (on the desk, to the
-        # details pane's buttons first). The grid: the arrows step its
-        # cells, and up from its top row takes them to the tabs.
         grid = self.grid
+        if self._carousel() and grid.handheld():
+            # The handheld's carousel (§12): its band page's keys -- left
+            # and right (a held key's repeats, the wheel's notches) carry
+            # the row a card, Enter opens the centre card (`_band_open`);
+            # up takes the keys to the tab row.
+            if grid.band_keys(i):
+                ws.mark_dirty()
+            if i.steps("up"):
+                self._tab_focus = True
+                ws.mark_dirty()
+            self._card_keys(i)
+            return True
+        # The desk's carousel: left/right glide the shelf by a card, a held
+        # key one motion; up takes the keys to the details pane's buttons
+        # first, then the tab row. The grid: the arrows step its cells, and
+        # up from its top row takes them to the tabs.
         wy, wx = getattr(i, "wheel_y", 0), getattr(i, "wheel_x", 0)
         if wy or wx:
             # The wheel: the carousel glides a card a notch, the grid steps a
@@ -1262,13 +1274,19 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             # #184: DEFERRED -- the cart start runs behind the next painted
             # frame (LOADING toast), never inside this input dispatch.
             ws.defer(self._launch)           # the active tab's tap
+        self._card_keys(i)
+        return True
+
+    def _card_keys(self, i):
+        """The card's keys beside the arrows: a gamepad's X its verbs, B
+        back, Home the home key."""
+        ws = self.ws
         if i.pressed("x"):
             self.open_card_menu()            # a gamepad's X: the card's verbs
         if i.pressed("b") and ws.ach_ui._konami_pos == 0:
             self._back()                     # (a B inside the Konami code is the code's)
         elif i.pressed("home"):
             ws.home.home_key()
-        return True
 
     def favourable(self):
         """The selected card where it takes the favourite star (a cart of
@@ -1300,6 +1318,12 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
     # The doors out of the home.
     def _launch(self):
         self.ws.home.launch_selected(self.grid)
+
+    def _band_open(self):
+        """The handheld band's card opened (Enter, a tap on the centre card
+        at rest): the active tab's tap, behind the painted frame (#184)."""
+        self._tab_focus = False
+        self.ws.defer(self._launch)
 
     def _change(self):
         self.ws.home.change_selected(self.grid)
@@ -1378,6 +1402,17 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             return True
         if not self._carousel():
             return self._grid_pointer(px, py, click)
+        if grid.handheld():
+            # its band page's pointer: a drag moves the row and a release
+            # flings it, a tap slides a card to the centre or opens the
+            # centre's (`_band_open`)
+            if click and _in(px, py, grid.band_rect()):
+                self._tab_focus = False
+            if grid.band_point(px, py, click, down):
+                ws.mark_dirty()
+            if click or down:
+                self._lhover = (px, py)
+            return True
         i = grid.pointer_frame(px, py, click, down, dt_ms=ws.frame_state.pointer_dt_ms)
         if grid.moving:
             ws.mark_dirty()
@@ -1415,7 +1450,10 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         if h[3] < LONG_PRESS_MS:
             return False
         self._hold = None
-        grid.pointer_frame(px, py, False, False)      # the gesture ends untapped
+        if self._carousel() and grid.handheld():
+            grid.band_cancel()                         # the gesture ends untapped
+        else:
+            grid.pointer_frame(px, py, False, False)
         if h[0] != grid.sel and 0 <= h[0] < len(grid.items):
             grid.sel = h[0]
         self._tab_focus = False
@@ -1553,8 +1591,6 @@ class HomeWindowLayer(LauncherHomeLayer):
         cv = ws.sys_canvas
         grid = self.grid
         th = ws.theme_colors
-        grid.motion = getattr(ws.wm, "HOME_MOTION", "full")
-        grid.scale = getattr(ws.wm, "HOME_SCALE", HOME_SCALE_HH)
         dim = _dim_of(ws)                     # the neighbours dim toward the panel
         grid.dim = None if dim is None else (th["panel"], dim[1])
         grid.wall_ink = None

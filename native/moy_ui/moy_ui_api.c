@@ -1444,6 +1444,13 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
                  - ((pressed & MOY_UI_B_UP) ? 1 : 0) - (int)((rw >> 16) & 0xFFu);
         int dir = (sx < 0 ? MOY_UI_B_LEFT : sx > 0 ? MOY_UI_B_RIGHT : 0)
                   | (sy < 0 ? MOY_UI_B_UP : sy > 0 ? MOY_UI_B_DOWN : 0);
+        const moy_ui_keep_t *fck = f != NULL ? mua_keep_of(c, f->id) : NULL;
+        if (fck != NULL && fck->car) {
+            // a carousel's: the wheel's notches, across or down, step it as its arrows do
+            sx += in[MOY_UI_IN_WHEEL_X] + in[MOY_UI_IN_WHEEL_Y];
+            dir = (dir & ~(MOY_UI_B_LEFT | MOY_UI_B_RIGHT))
+                  | (sx < 0 ? MOY_UI_B_LEFT : sx > 0 ? MOY_UI_B_RIGHT : 0);
+        }
         sx = sx < -127 ? -127 : sx > 127 ? 127 : sx;
         sy = sy < -127 ? -127 : sy > 127 ? 127 : sy;
         int go = pressed & (field ? MOY_UI_B_RUN : (MOY_UI_B_A | MOY_UI_B_RUN));
@@ -1558,6 +1565,13 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
             dy = dy < 0 ? -dy : dy;
             int across = !own && dx > slop && dx > dy
                              ? page_on(c, v, n, c->press_x, c->press_y, 1) : -1;
+            moy_ui_keep_t *ck = h >= 0 ? mua_keep_of(c, v[h].id) : NULL;
+            if (ck != NULL && ck->car) {
+                // a carousel's: travel past its slop either way drags it along its row
+                across = dx > slop + 2 || dy > slop + 2 ? h : -1;
+                own = 0;
+                keep_lr = 0;
+            }
             if (own) {
                 // a part with nav off, or with no page under it to drag,
                 // keeps its press: the pointer held on it is the part's
@@ -1645,7 +1659,7 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     if (live && wy) {
         int pg = mua_page_at(v, n, x, y);
         moy_ui_keep_t *k = pg >= 0 ? mua_keep_of(c, v[pg].id) : NULL;
-        if (k != NULL) {
+        if (k != NULL && !k->car) {         // (a carousel's notches are its steps)
             int32_t content, extent;
             k->over = 0;
             span_of(&v[pg], k, &content, &extent);
@@ -1730,12 +1744,15 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     c->jump = 0;
     c->reveal_box.w = 0;
     c->reveal_id = 0;
-    // Every page's motion steps on the frame's clock; with none, it lands.
+    // Every page's motion steps on the frame's clock; with none, it lands. A carousel that
+    // a step or a tap re-aims this frame takes its one step from where it is, in its pass.
     for (int i = 0; i < MOY_UI_API_KEEP; i++) {
         moy_ui_keep_t *k = &c->keep[i];
-        if (k->id == 0 || !moy_ui_scroll_moving(&k->sc)) {
+        if (k->id == 0 || !moy_ui_scroll_moving(&k->sc)
+            || (k->car && ((c->focus == k->id && c->step_x) || c->act == k->id))) {
             continue;
         }
+        int fling = k->car && (k->sc.flags & MOY_UI_SCROLL_FLING);
         const moy_ui_stop_t *pp = mua_page_of_keep(v, n, k);
         int32_t off = k->scroll;
         if (dt <= 0 || pp == NULL) {
@@ -1744,6 +1761,9 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
             int32_t content, extent;
             span_of(pp, k, &content, &extent);
             moy_ui_scroll_tick(&k->sc, (float)dt, &off, content, extent);
+        }
+        if (fling && !moy_ui_scroll_moving(&k->sc)) {
+            k->car_fling = 1;
         }
         if (off != k->scroll) {
             k->scroll = off;

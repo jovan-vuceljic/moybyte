@@ -569,8 +569,7 @@ def test_zoned_bar_follows_the_home_tabs_not_its_selection(tmp_path):
         return orig_whole(cv, key, i)
     ws.bar_layer._render_cart_part = counting
     ws.bar_layer._render_cart_bar = counting_whole
-    ws.launcher.nav2d(1, 0)
-    ws.mark_dirty()
+    drv.press("right")
     for _ in range(60):
         drv.frame(1 / 30)
     assert not ws.launcher.moving and ws.launcher.sel == 1

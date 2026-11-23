@@ -192,9 +192,6 @@ class CEngine(Engine):
     # A host's own pictures: fn(node, pic, r), `_pic`'s contract, in place of the engine's
     # decoded ones (the console's home draws its covers so); set before the page opens.
     pictures = None
-    # The ground under a carousel its host drives (`drive`): fn(node, kind, x, y, w, h)
-    # (moy_uitree.h's uit_on_ground); set before the page opens.
-    ground = None
 
     def __init__(self, *a, **k):
         Engine.__init__(self, *a, **k)
@@ -204,7 +201,6 @@ class CEngine(Engine):
         if _New is None:
             raise EngineGap("on a tier with no moy_uitree")
         self._x = None          # the store: made at the first open (`_made`), so a page never opened holds none
-        self._words = None      # the words its carousels are driven by (`drive`), handed each store made
         self._shut = False      # closed (`close`): the store keeps its lowered page and no visit
         self.owes = False       # the last frame drew a band its own focus moved past (OWE)
         self._lowered = None    # the page function whose tree the store holds
@@ -247,8 +243,6 @@ class CEngine(Engine):
                 x.set_placed(1)
             if self._band_extra:
                 x.band_extra(self._band_extra)
-            if self._words is not None:
-                x.drive(self._words)
             self._slot, self._names, self._types, self._pushed = {}, [], [], {}
             self._docs = {}
             self._drawing = False
@@ -938,22 +932,35 @@ class CEngine(Engine):
         return got is not None
 
     def bind_draws(self, x):
-        """Hand store `x` the front end's draws: a canvas's, the pictures
-        (the host's own, `pictures`, where it has them) and a driven
-        carousel's ground (`ground`)."""
+        """Hand store `x` the front end's draws: a canvas's and the pictures
+        (the host's own, `pictures`, where it has them)."""
         x.on_draw(self._draw)
         x.on_pic(self._pic if self.pictures is None else self.pictures)
-        if self.ground is not None:
-            x.on_ground(self.ground)
         self._drawing = True
 
-    def drive(self, words):
-        """Drive the page's carousels (moy_uitree.h's uit_drive): `words`
-        an array('i') the next frames draw them under, copied (and handed
-        again to a store made after a `forget`); None, each its own."""
-        self._words = words
-        if self._x is not None:
-            self._x.drive(words)
+    def carousel(self, out):
+        """The page's carousel as the last frame drew it (moy_uitree.h's
+        uit_carousel) into `out`, an array('i') of 20: whether one drew."""
+        return self._visiting() and self._x.carousel(out)
+
+    def carousel_tile(self, row, out):
+        """Row `row`'s tile in the carousel the last frame drew into `out`
+        (x, y, w, h): whether it shows."""
+        return self._visiting() and self._x.carousel_tile(row, out)
+
+    def carousel_at(self, x, y):
+        """The row whose tile holds (x, y) in the carousel the last frame
+        drew, -1 none."""
+        return self._x.carousel_at(x, y) if self._visiting() else -1
+
+    def carousel_geom(self, band, fs, desk, out):
+        """The geometry the page's carousel lays out in `band` (an
+        array('i') of 4) at font scale `fs` into `out` (of 10), outside a
+        frame: whether the page has one (built here where no frame built it)."""
+        if self.root is None:
+            self._bind()
+            self._ready()
+        return self._x.carousel_geom(band, fs, desk, out)
 
     # -- the frame -------------------------------------------------------------------
 

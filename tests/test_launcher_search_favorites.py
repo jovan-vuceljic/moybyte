@@ -265,6 +265,7 @@ def test_favorite_star_badge_tap_toggles_without_launching(tmp_path):
     drv = host_app.ConsoleDriver(ws)
     idx = next(i for i, it in enumerate(ws.launcher.items) if it.get("path"))
     ws.launcher.sel = idx
+    drv.frame(1 / 30)                          # (the row lands on it)
     cart = ws.launcher.selected()
     frect = ws.launcher.favorite_rect(ws.launcher.sel)
     assert frect is not None

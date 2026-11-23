@@ -20,6 +20,13 @@ PART = native_build.Part("uitree", ("moy_uitree.h", "moy_uitree_int.h", "moy_uit
 _P, _I, _S, _Z = c.c_void_p, c.c_int, c.c_char_p, c.c_size_t
 _I32 = c.POINTER(c.c_int32)
 
+
+def _addr(words, n):
+    """The address of array('i') `words`, at least `n` of them."""
+    if len(words) < n:
+        raise TypeError("moy_uitree: takes array('i') of %d words" % n)
+    return words.buffer_info()[0]
+
 _SIGS = (
     ("uit_new", [], _P),
     ("uit_free", [_P], None),
@@ -53,8 +60,10 @@ _SIGS = (
     ("uit_on_draw", [_P, _P, _P], None),
     ("uit_on_pic", [_P, _P, _P], None),
     ("uit_pics_moved", [_P], None),
-    ("uit_drive", [_P, _P, _I], None),
-    ("uit_on_ground", [_P, _P, _P], None),
+    ("uit_carousel", [_P, _P], _I),
+    ("uit_carousel_tile", [_P, _I, _P], _I),
+    ("uit_carousel_at", [_P, _I, _I], _I),
+    ("uit_carousel_geom", [_P, _P, _I, _I, _P], _I),
     ("uit_build_end", [_P], _I),
     ("uit_open", [_P], None),
     ("uit_close", [_P], None),
@@ -169,7 +178,6 @@ def peak_reset():
 
 _DRAW = c.CFUNCTYPE(None, c.c_void_p, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int)
 _PIC = c.CFUNCTYPE(c.c_int, c.c_void_p, c.c_int, c.POINTER(c.c_char), c.c_size_t, c.POINTER(c.c_int32))
-_GROUND = c.CFUNCTYPE(c.c_int, c.c_void_p, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int)
 
 
 class Engine:
@@ -193,7 +201,6 @@ class Engine:
         self._pn = None
         self._draw = self._cb = self._raised = None
         self._pic = self._pcb = None
-        self._ground = self._gcb = None
 
     def __del__(self):
         e, self._e = getattr(self, "_e", None), None
@@ -417,32 +424,26 @@ class Engine:
     def pics_moved(self):
         self._L.uit_pics_moved(self._e)
 
-    def drive(self, words):
-        """The words the carousels are drawn under (uit_drive): an
-        array('i'), copied; None, each carousel its own."""
-        if words is None:
-            self._L.uit_drive(self._e, None, 0)
-            return
-        buf = (c.c_int32 * len(words)).from_buffer(words)
-        self._L.uit_drive(self._e, c.addressof(buf), len(words))
-        del buf
+    def carousel(self, out):
+        """The page's carousel as the last frame drew it (uit_carousel)
+        into `out`, an array('i') of 20: whether one drew."""
+        return bool(self._L.uit_carousel(self._e, _addr(out, 20)))
 
-    def on_ground(self, fn):
-        """The ground under a driven carousel, `fn(node, kind, x, y, w, h)`
-        (uit_on_ground), its answer truthy where a copy was made; what it
-        raises is raised by the frame's call."""
-        self._ground = fn
-        self._gcb = None if fn is None else _GROUND(self._ground_tramp)
-        self._L.uit_on_ground(self._e, self._gcb, None)
+    def carousel_tile(self, row, out):
+        """Row `row`'s tile into `out`, an array('i') of 4
+        (uit_carousel_tile): whether it shows."""
+        return bool(self._L.uit_carousel_tile(self._e, row, _addr(out, 4)))
 
-    def _ground_tramp(self, _ud, node, kind, x, y, w, h):
-        if self._raised is not None:
-            return 0
-        try:
-            return 1 if self._ground(node, kind, x, y, w, h) else 0
-        except BaseException as e:      # noqa: B036 -- ctypes would print and drop it
-            self._raised = e
-            return 0
+    def carousel_at(self, x, y):
+        """The row whose tile holds (x, y), -1 none (uit_carousel_at)."""
+        return self._L.uit_carousel_at(self._e, x, y)
+
+    def carousel_geom(self, band, fs, desk, out):
+        """The geometry the page's carousel lays out in `band` (an
+        array('i') of 4) into `out` (of 10), outside a frame
+        (uit_carousel_geom): whether the page has one."""
+        return bool(self._L.uit_carousel_geom(self._e, _addr(band, 4), fs, 1 if desk else 0,
+                                              _addr(out, 10)))
 
     def next(self):
         """The next event: (kind, a, b, c, text), or None."""

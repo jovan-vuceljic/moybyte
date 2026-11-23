@@ -181,7 +181,8 @@ class AppHost:
         self.inp[3] = int(y)
         if not down:
             self.hold = False
-            self.tap = 2
+            if self.tap != 1:
+                self.tap = 2            # (a press no frame took yet: it, then the release)
         return True
 
     def focus(self, id):
@@ -273,6 +274,12 @@ class AppHost:
         t[3] = self._t3
         if self._keys:
             _KEYS_HOST[0] = self
+
+    def begun(self):
+        """Whether a pass began a frame on it in the frame being painted: a
+        second pass of that frame `resume`s, its input and its clock the
+        first pass's."""
+        return self._began == _PAINT[0]
 
     def begin(self, cv, th, rect, desk=False, window=False, elsewhere=False):
         """Begin the frame on `cv` under theme `th`, its page `rect` (in a
@@ -410,6 +417,13 @@ class AppHost:
         view's columns scrolled across), so a move would be copied for
         nothing."""
         _C.api_host_whole(self.ctx)
+
+    def stand(self):
+        """The frame begun draws none of its page, which every buffer holds
+        as the last frame drew it: where no later pass of the frame draws
+        it after all, its stops, its focus and its kept state stand into the
+        next frame as though this one had drawn them."""
+        _C.api_host_stand(self.ctx)
 
     def again(self):
         """The pass changed what it had drawn before the change (a page it
