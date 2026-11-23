@@ -69,9 +69,19 @@ static int pop_edge(const moy_ui_ctx_t *c) {
     return c->pop.placed ? (c->cls ? 12 : 8) * c->fs : moy_ui_modal_band(c->fs, c->cls);
 }
 
+// The room a popover's card lies in: the surface above the hints band
+// where one stands at its foot, which the card leaves showing.
+static moy_ui_box_t pop_room(const moy_ui_ctx_t *c) {
+    moy_ui_box_t sf = c->surface, hb = c->hint_band;
+    if (hb.h > 0 && hb.y > sf.y && hb.y < sf.y + sf.h) {
+        sf.h = (int16_t)(hb.y - sf.y);
+    }
+    return sf;
+}
+
 static moy_ui_box_t pop_place(moy_ui_ctx_t *c, const moy_ui_keep_t *kb, int body, int w,
                               int *bh_out) {
-    moy_ui_box_t a = c->pop.at, sf = c->surface;
+    moy_ui_box_t a = c->pop.at, sf = pop_room(c);
     int fs = c->fs, rh = mua_row_h(c), pad = moy_ui_modal_band(fs, c->cls);
     int gap = 4 * fs;
     int x0 = sf.x + gap, x1 = sf.x + sf.w - gap;
@@ -396,7 +406,7 @@ int moy_ui_api_popover(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id
         c->owe = 1;                     // its first frame: focus opens in it on the next
     }
     int pad = moy_ui_modal_band(fs, c->cls);
-    moy_ui_box_t sf = c->surface;
+    moy_ui_box_t sf = pop_room(c);
     // a card hung from ui.at's rect may span the surface but for the
     // page's gutters (8 px at the scale, 12 on the desk); any other keeps
     // the modal band each side
@@ -594,6 +604,11 @@ void moy_ui_api_text(moy_ui_ctx_t *c, int lines, int centre, int tone, int role)
     c->txt.centre = (int8_t)(centre >= 2 && centre <= 4 ? centre : centre != 0);
     c->txt.tone = (int8_t)(tone < 0 || tone > MOY_UI_TONE_DANGER ? 0 : tone);
     c->txt.role = (int8_t)(role < 0 || role > MOY_UI_FONT_RESULT ? -1 : role);
+}
+
+void moy_ui_api_text_size(moy_ui_ctx_t *c, int scale, int w) {
+    c->txt.scale = (uint8_t)(scale < 0 ? 0 : scale > 16 ? 16 : scale);
+    c->txt.w = (int16_t)(w < 0 ? 0 : w > 0x3fff ? 0x3fff : w);
 }
 
 void moy_ui_api_card_mark(moy_ui_ctx_t *c, moy_ui_span_t badge, int tone,
@@ -1026,6 +1041,7 @@ void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     if (c->n_nest == 0) {
         mua_page_close(c, s);
         tip_draw(c, s);
+        mua_dialog_gone(c);
     }
 }
 
@@ -1036,6 +1052,7 @@ void moy_ui_api_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
         mua_foot_fade(c, s);
         mua_page_close(c, s);
         tip_draw(c, s);
+        mua_dialog_gone(c);
     }
 }
 
@@ -1259,4 +1276,669 @@ int32_t moy_ui_api_offset(moy_ui_ctx_t *c, int x, int y) {
     int pg = mua_page_at(c->cur, c->n_cur, x, y);
     moy_ui_keep_t *k = pg >= 0 ? mua_keep_of(c, c->cur[pg].id) : NULL;
     return k != NULL ? k->scroll : -1;
+}
+
+// -- a carousel (ui.cards look "carousel") ----------------------------------------------
+//
+// The handheld home's band (`home_ui.band`, runtime/home/home_carousel.py) as the engine
+// draws and moves it: its geometry, its tiles, the caption under them and its motion (a
+// step, a drag, a fling and the slide to the nearest card, moy_ui_api_table.c).
+
+#define CAROUSEL_COVER 128          // a cover's side (SPEC.md 3.6)
+#define CAROUSEL_GAP 14             // the gap between tiles, at the font scale
+#define CAROUSEL_SQUEEZE_A 2        // the least over and under the caption, at the font scale
+#define CAROUSEL_SQUEEZE_B 4
+// A version 2 face's caption lines at the font scale (the title's at its own scale): the
+// title's line and its baseline, the sub line's baseline under the title's, its line and
+// its baseline.
+static const int16_t CAROUSEL_LINES[5] = {24, 19, 17, 15, 12};
+
+static int floor_div(int a, int b) {
+    return a >= 0 ? a / b : -((-a + b - 1) / b);
+}
+
+int moy_ui_api_clean_side(int limit) {
+    if (limit >= CAROUSEL_COVER) {
+        return limit / CAROUSEL_COVER * CAROUSEL_COVER;
+    }
+    int side = CAROUSEL_COVER / 2;
+    while (side > CAROUSEL_COVER / 8 && side > limit) {
+        side /= 2;
+    }
+    return side;
+}
+
+// The font a carousel's title draws in (the hero face where one is installed, else the
+// title role's) and the sub line's (the ui role's), each with its metrics.
+static uint32_t carousel_font(int role, moy_font_info_t *fi) {
+    return moy_ui_font(0, role, fi);
+}
+
+// Whether font `id` is a version 2 face: anti-aliased, its line holding its leading
+// (`ui_draw.font_v2`).
+static int font_v2(uint32_t id, const moy_font_info_t *fi) {
+    return id != MOY_FONT_PETME128 && fi->first == 0;
+}
+
+void moy_ui_api_carousel_geom(int fs, const int32_t b[4], int side, int32_t out[10]) {
+    moy_font_info_t tf, uf;
+    uint32_t tid = carousel_font(MOY_UI_FONT_HERO, &tf);
+    uint32_t uid = carousel_font(MOY_UI_FONT_UI, &uf);
+    int tl = tf.line > 0 ? tf.line : 1;
+    int tsc = (16 * fs) / tl;
+    tsc = tsc > fs ? tsc : fs;
+    int title_h, meta_h, between, above, below;
+    int v2 = font_v2(tid, &tf);
+    if (v2) {
+        const int16_t *L = CAROUSEL_LINES;
+        title_h = L[0] * tsc;
+        meta_h = L[3] * fs;
+        between = L[1] * tsc + (L[2] - L[4]) * fs - title_h;
+        above = 6 * fs;
+        below = 10 * fs;
+    } else {
+        title_h = tf.line * tsc;
+        meta_h = uf.line * fs;
+        above = 12 * fs;
+        between = 3 * fs;
+        below = 4 * fs;
+    }
+    int reach = moy_ui_mark_reach(MOY_UI_ITEM_CARD);
+    int ring = 2 * fs + 2 > reach ? 2 * fs + 2 : reach;
+    int space = b[3];
+    // the gaps give before the tile does: a face taller than the targets' takes its pixels
+    // from over and under the caption, down to the squeeze, and only what the gaps cannot
+    // hold steps the tile down
+    int text = title_h + between + meta_h;
+    int lo0 = CAROUSEL_SQUEEZE_A * fs, lo1 = CAROUSEL_SQUEEZE_B * fs;
+    int card = moy_ui_api_clean_side(side);
+    while (card > CAROUSEL_COVER / 8 && ring + 2 * card + text + lo0 + lo1 > space) {
+        card = moy_ui_api_clean_side(card - 1);
+    }
+    int short_ = ring + 2 * card + text + above + below - space;
+    if (short_ > 0) {
+        int room = above + below - lo0 - lo1;
+        int give = short_ < room ? short_ : room;
+        int cut = give * (above - lo0) / (room > 1 ? room : 1);
+        above -= cut;
+        below -= give - cut;
+    }
+    int foot = above + text + below;
+    int top = floor_div(space - 2 * card - foot, 2);
+    top = b[1] + (ring > top ? ring : top);
+    int title_y = top + 2 * card + above;
+    int meta_y = title_y + title_h + between;
+    if (v2) {
+        meta_y += (CAROUSEL_LINES[4] - uf.ascent) * fs;
+        title_y += (CAROUSEL_LINES[1] - tf.ascent) * tsc;
+    }
+    (void)uid;
+    out[0] = card;
+    out[1] = card + CAROUSEL_GAP * fs;      // the pitch
+    out[2] = top + card;                    // the tiles' centre line
+    out[3] = title_y;
+    out[4] = title_h;
+    out[5] = tsc;
+    out[6] = meta_y;
+    out[7] = meta_h;
+    out[8] = 2 * card;                      // the centre tile's side at rest
+    out[9] = ring;
+}
+
+void moy_ui_api_carousel_tile(const int32_t g[10], const int32_t b[4], int32_t offset, int i,
+                              int32_t out[4]) {
+    int32_t card = g[0], pitch = g[1] > 0 ? g[1] : 1, big = g[8];
+    int32_t d = i * pitch - offset, ad = d < 0 ? -d : d;
+    int32_t t = ad >= pitch ? card : card + (big - card) * (pitch - ad) / pitch;
+    int32_t push = (big - card) * (ad < pitch ? ad : pitch) / (2 * pitch);
+    d += d > 0 ? push : -push;
+    out[0] = b[0] + b[2] / 2 + d - t / 2;
+    out[1] = g[2] - t / 2;
+    out[2] = t;
+    out[3] = t;
+}
+
+int moy_ui_api_carousel_at(const int32_t g[10], const int32_t b[4], int32_t offset, int n, int x,
+                           int y) {
+    int32_t pitch = g[1] > 0 ? g[1] : 1, reach = b[2] / 2 + 2 * g[0];
+    int32_t most = (n - 1) * pitch, at = offset < most ? offset : most;
+    int near = (int)floor_div(at + pitch / 2, pitch);
+    near = near < 0 ? 0 : near > n - 1 ? n - 1 : near;
+    int i0 = (int)floor_div(offset - reach, pitch), i1 = (int)floor_div(offset + reach, pitch) + 1;
+    i0 = i0 > 0 ? i0 : 0;
+    i1 = i1 < n - 1 ? i1 : n - 1;
+    int got = -1;
+    int32_t gk = -1, t[4];
+    for (int i = i0; i <= i1; i++) {
+        moy_ui_api_carousel_tile(g, b, offset, i, t);
+        int32_t k = 2 * t[2] + (i == near);
+        if (t[0] <= x && x < t[0] + t[2] && t[1] <= y && y < t[1] + t[3] && k >= gk) {
+            got = i;
+            gk = k;
+        }
+    }
+    return got;
+}
+
+// A tile's corner radius `side` across in a row of `card`: the depth's card radius on the
+// hero, 7/10 of it on a neighbour.
+static int tile_r(int side, int card) {
+    int r = moy_ui_depth()->card_r;
+    return side > card ? r : r * 7 / 10;
+}
+
+int moy_ui_api_tile_radius(int side, int card) {
+    return tile_r(side, card);
+}
+
+void moy_ui_api_tile_cast(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4],
+                          const int32_t clip[4], int centre) {
+    (void)c;
+    clip_t k;
+    moy_ui_box_t q = {(int16_t)clip[0], (int16_t)clip[1], (int16_t)clip[2], (int16_t)clip[3]};
+    if (mua_clip_in(&k, s, q)) {
+        moy_ui_box_t b = {(int16_t)t[0], (int16_t)t[1], (int16_t)t[2], (int16_t)t[3]};
+        moy_ui_cast(s, b, MOY_UI_CAST_CARD, centre ? MOY_UI_UNDER_FULL : MOY_UI_UNDER_SMALL);
+    }
+    mua_clip_out(&k);
+}
+
+void moy_ui_api_tile(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4],
+                     const int32_t clip[4], int card, int mark, int32_t out[10]) {
+    (void)c;
+    moy_ui_box_t rect = {(int16_t)t[0], (int16_t)t[1], (int16_t)t[2], (int16_t)t[3]};
+    moy_ui_box_t at = rect;
+    out[9] = 0;
+    clip_t k;
+    moy_ui_box_t q = {(int16_t)clip[0], (int16_t)clip[1], (int16_t)clip[2], (int16_t)clip[3]};
+    if (mark && mua_clip_in(&k, s, q)) {
+        // the mark's box: the tile shrunk by as much as the theme's mark grows a card (a
+        // lift's, read off the canvas's edge, where it draws nothing), so the lifted card
+        // keeps its side, raised where it lifts
+        int w = rect.w, h = rect.h, ink;
+        moy_ui_box_t off = {(int16_t)(-4 * w - 64), (int16_t)(-4 * h - 64), (int16_t)w, (int16_t)h}, box;
+        moy_ui_focus(s, off, MOY_UI_ITEM_CARD, 0, MOY_UI_MARK_AFTER, s->fs, &box, &ink);
+        int g = floor_div(box.w - w, 2);
+        if (g > 0) {
+            at = (moy_ui_box_t){(int16_t)(rect.x + g), (int16_t)(rect.y + g), (int16_t)(w - 2 * g),
+                                (int16_t)(h - 2 * g)};
+        }
+        moy_ui_focus(s, at, MOY_UI_ITEM_CARD, tile_r(rect.w, card), 0, s->fs, &rect, &ink);
+        out[9] = 1;
+    }
+    if (mark) {
+        mua_clip_out(&k);
+    }
+    out[0] = rect.x;
+    out[1] = rect.y;
+    out[2] = rect.w;
+    out[3] = rect.h;
+    out[4] = tile_r(rect.w, card);
+    out[5] = at.x;
+    out[6] = at.y;
+    out[7] = at.w;
+    out[8] = at.h;
+}
+
+void moy_ui_api_tile_blank(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t tile[10],
+                           const int32_t clip[4], moy_ui_span_t icon) {
+    clip_t k;
+    moy_ui_box_t q = {(int16_t)clip[0], (int16_t)clip[1], (int16_t)clip[2], (int16_t)clip[3]};
+    if (mua_clip_in(&k, s, q)) {
+        moy_ui_box_t b = {(int16_t)tile[0], (int16_t)tile[1], (int16_t)tile[2], (int16_t)tile[3]};
+        int slot = icon.n ? moy_ui_icon_slot(icon.p, icon.n) : -1;
+        int glyph = icon.n ? moy_ui_icon_glyph(icon.p, icon.n) : -1;
+        moy_ui_card_blank(s, b, slot, glyph, 0, c->fs, mua_ground_of(c));
+    }
+    mua_clip_out(&k);
+}
+
+void moy_ui_api_tile_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t tile[10],
+                         const int32_t clip[4]) {
+    (void)c;
+    if (!tile[9]) {
+        return;
+    }
+    clip_t k;
+    moy_ui_box_t q = {(int16_t)clip[0], (int16_t)clip[1], (int16_t)clip[2], (int16_t)clip[3]};
+    if (mua_clip_in(&k, s, q)) {
+        moy_ui_box_t at = {(int16_t)tile[5], (int16_t)tile[6], (int16_t)tile[7], (int16_t)tile[8]};
+        moy_ui_box_t box;
+        int ink;
+        moy_ui_focus(s, at, MOY_UI_ITEM_CARD, (int)tile[4], MOY_UI_MARK_AFTER, s->fs, &box, &ink);
+    }
+    mua_clip_out(&k);
+}
+
+// Text `t` from (x, y), its line's top, in font `id` at `scale`: its shadow first, one pixel
+// right and down in colour index `shadow` (-1 none), then the text in `ink`.
+static void caption_text(const moy_ui_sink_t *s, const moy_text_target_t *tg, uint32_t id,
+                         moy_ui_span_t t, int x, int y, int ink, int shadow, int scale) {
+    moy_canvas_row_t *row = (moy_canvas_row_t *)s->dst;
+    if (shadow >= 0) {
+        moy_text(tg, id, MOY_TEXT_DATA, t.p, t.n, x + 1, y + 1, row->pal[moy_ui_pidx(s->cart, shadow)],
+                 scale, 0, -1);
+    }
+    moy_text(tg, id, MOY_TEXT_DATA, t.p, t.n, x, y, row->pal[moy_ui_pidx(s->cart, ink)], scale, 0, -1);
+}
+
+static void caption_dot(const moy_ui_sink_t *s, const moy_text_target_t *tg, int x, int y, int d,
+                        int ci) {
+    moy_canvas_row_t *row = (moy_canvas_row_t *)s->dst;
+    moy_target_fill(tg, x, y, d, d, row->pal[moy_ui_pidx(s->cart, ci)]);
+}
+
+static void carousel_caption(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int bx, int bw, const int32_t g[10],
+                             moy_ui_span_t title, moy_ui_span_t sub, int ink, int shadow, int fs);
+
+void moy_ui_api_carousel_caption(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t band[4],
+                                 const int32_t clip[4], const int32_t g[10], moy_ui_span_t title,
+                                 moy_ui_span_t sub, int32_t ink) {
+    int fs = c->fs, bx = band[0], bw = band[2], shadow = -1;
+    if (ink >= MOY_UI_O_ROLE) {
+        int t = moy_ui_token(s->look, ink - MOY_UI_O_ROLE);
+        ink = t;
+    } else if (ink >= 0) {
+        ink = moy_theme_nearest(MOY_THEME_RGB | (ink & 0xffffff));
+    }
+    if (ink >= 0) {
+        shadow = moy_theme_nearest(MOY_THEME_RGB | 0x000000);
+    }
+    clip_t k;
+    moy_ui_box_t bb = {(int16_t)clip[0], (int16_t)clip[1], (int16_t)clip[2], (int16_t)clip[3]};
+    if (mua_clip_in(&k, s, bb)) {
+        carousel_caption(c, s, bx, bw, g, title, sub, ink, shadow, fs);
+    }
+    mua_clip_out(&k);
+}
+
+static void carousel_caption(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int bx, int bw, const int32_t g[10],
+                             moy_ui_span_t title, moy_ui_span_t sub, int ink, int shadow, int fs) {
+    (void)c;
+    moy_canvas_row_t *row = (moy_canvas_row_t *)s->dst;
+    const int32_t *st = row->st;
+    moy_text_target_t tg = {row->px, row->cap, (int)st[MOY_ST_W], (int)st[MOY_ST_CAM_X],
+                            (int)st[MOY_ST_CAM_Y], (int)st[MOY_ST_CX0], (int)st[MOY_ST_CY0],
+                            (int)st[MOY_ST_CX1], (int)st[MOY_ST_CY1]};
+    int look = s->look;
+    int ti = ink >= 0 ? ink : moy_ui_token(look, MOY_UI_T_INK);
+    int di = ink >= 0 ? ink : moy_ui_token(look, MOY_UI_T_INK_DIM);
+    moy_font_info_t tf, uf;
+    uint32_t tid = carousel_font(MOY_UI_FONT_HERO, &tf);
+    uint32_t uid = carousel_font(MOY_UI_FONT_UI, &uf);
+    int tsc = (int)g[5];
+    // the title, cut to what fits the band less 8 px a side at the scale, centred
+    size_t tn = moy_text_fit_px(tid, title.p, title.n, bw - 16 * fs, tsc);
+    moy_ui_span_t name = {title.p, (uint16_t)tn};
+    int tw = moy_text_width(tid, name.p, name.n, tsc);
+    caption_text(s, &tg, tid, name, bx + floor_div(bw - tw, 2), (int)g[3], ti, shadow, tsc);
+    // the sub line's items (apart by tabs), a dot between each two
+    int sep = 12 * fs, mw = 0, k = 0;
+    for (size_t i = 0, a = 0; i <= sub.n; i++) {
+        if (i == sub.n || sub.p[i] == '\t') {
+            mw += moy_text_width(uid, sub.p + a, i - a, fs) + (k ? sep : 0);
+            k++;
+            a = i + 1;
+        }
+    }
+    if (!sub.n) {
+        return;
+    }
+    int d = font_v2(uid, &uf) ? 2 * fs : fs;
+    int my = (int)g[6], dy;
+    if (!font_v2(uid, &uf)) {
+        dy = my + floor_div(uf.line * fs - d, 2);
+    } else {
+        int asc = uf.ascent * fs;
+        dy = my + asc - floor_div(asc / 2 + d, 2);
+    }
+    for (int pass = shadow >= 0 ? 0 : 1; pass < 2; pass++) {
+        int o = pass ? 0 : 1, ci = pass ? di : shadow;
+        int x = bx + floor_div(bw - mw, 2) + o;
+        k = 0;
+        for (size_t i = 0, a = 0; i <= sub.n; i++) {
+            if (i == sub.n || sub.p[i] == '\t') {
+                if (k) {
+                    caption_dot(s, &tg, x - floor_div(sep + d, 2), dy + o, d, ci);
+                }
+                moy_text(&tg, uid, MOY_TEXT_DATA, sub.p + a, i - a, x, my + o,
+                         row->pal[moy_ui_pidx(s->cart, ci)], fs, 0, -1);
+                x += moy_text_width(uid, sub.p + a, i - a, fs) + sep;
+                k++;
+                a = i + 1;
+            }
+        }
+    }
+}
+
+// -- a home grid of cards (ui.cards look "shelf" or "icons") ----------------------------
+//
+// The home's grid and icons arrangements (runtime/home/home_grid.py, home_icons.py) as the
+// engine lays them out, hit-tests and draws round the pictures the app draws: a shelf of
+// cards in the rows the band holds, scrolling across, or tiles in the columns it holds,
+// scrolling down. Handheld sizes are at the font scale, the desk's in glass pixels at the
+// target's 1x (over `u` on a doubled desk).
+
+// A shelf: the margin its first column stands in from the band's edge, the least and the most
+// gap a column takes, its top under the band's, the title's baseline under its card and the
+// rows a card's title takes.
+static const int16_t SHELF_HH[6] = {16, 20, 28, 14, 17, 28};
+static const int16_t SHELF_DK[6] = {48, 32, 44, 24, 26, 44};
+// Icons: a narrow handheld's tile, a wide one's (CELLS_WIDE or more across), the column gap,
+// the row gap, the grid's top under the band's and the caption band; the desk's tile, column
+// gap, row gap (its label under the tile), top and label baseline under its tile.
+static const int16_t ICONS_HH[6] = {40, 52, 18, 8, 8, 28};
+static const int16_t ICONS_DK[5] = {64, 32, 44, 24, 20};
+#define CELLS_WIDE 400
+#define CELLS_MARGIN 16             // the icons' least margin either side
+#define CELLS_FADE 12               // the handheld shelf's last rows dissolve over this many
+#define CELLS_TITLE_MAX 120         // the most bytes of a card's title drawn
+
+void moy_ui_api_cells_geom(int look, int fs, int desk, int u, const int32_t b[4],
+                           int32_t out[MOY_UI_CELLS_G]) {
+    moy_font_info_t uf;
+    moy_ui_font(0, MOY_UI_FONT_UI, &uf);
+    u = u > 1 ? u : 1;
+    memset(out, 0, MOY_UI_CELLS_G * sizeof out[0]);
+    int bw = (int)b[2], bh = (int)b[3], side, px, py, rows, cols, x0, y0, tdy = 0, tw, cap = 0;
+    if (look == MOY_UI_LOOK_SHELF) {
+        int v[6];
+        for (int i = 0; i < 6; i++) {
+            v[i] = desk ? SHELF_DK[i] / u : SHELF_HH[i] * fs;
+        }
+        int margin = v[0], g0 = v[1], g1 = v[2], top = v[3], base = v[4], room = v[5];
+        side = moy_ui_api_clean_side(desk ? CAROUSEL_COVER / u : CAROUSEL_COVER / 2 * fs);
+        for (;;) {
+            rows = floor_div(bh - top - side, side + room) + 1;
+            rows = rows > 1 ? rows : 1;
+            if (rows > 1 || side <= CAROUSEL_COVER / 8) {
+                break;
+            }
+            side = moy_ui_api_clean_side(side - 1);
+        }
+        int avail = bw - margin, gap = g0;
+        for (int g = g0; g <= g1; g++) {
+            int p = side + g, last = avail - floor_div(avail - 1, p) * p;
+            if (last <= side * 2 / 3) {
+                gap = g;
+                break;
+            }
+        }
+        px = side + gap;
+        py = side + room;
+        cols = floor_div(avail - 1, px) + 1;
+        x0 = (int)b[0] + margin;
+        y0 = (int)b[1] + top;
+        tdy = side + base - uf.ascent * fs;
+        tw = side;
+        out[MOY_UI_CELLS_ACROSS] = 1;
+        out[MOY_UI_CELLS_GROW] = desk ? 4 : 3;
+    } else {
+        int gap, room, top, margin;
+        if (desk) {
+            side = ICONS_DK[0] / u;
+            gap = ICONS_DK[1] / u;
+            room = ICONS_DK[2] / u;
+            top = ICONS_DK[3] / u;
+            tdy = side + ICONS_DK[4] / u - uf.ascent * fs;
+            margin = CELLS_MARGIN / u;
+        } else {
+            side = (bw >= CELLS_WIDE * fs ? ICONS_HH[1] : ICONS_HH[0]) * fs;
+            gap = ICONS_HH[2] * fs;
+            room = ICONS_HH[3] * fs;
+            top = ICONS_HH[4] * fs;
+            cap = ICONS_HH[5] * fs;
+            margin = CELLS_MARGIN * fs;
+        }
+        px = side + gap;
+        py = side + room;
+        cols = (bw - margin) / px;
+        cols = cols > 1 ? cols : 1;
+        x0 = (int)b[0] + floor_div(bw - cols * px, 2) + gap / 2;
+        y0 = (int)b[1] + top;
+        rows = floor_div(bh - cap - top - 1, py) + 1;
+        rows = rows > 1 ? rows : 1;
+        tw = px;
+        out[MOY_UI_CELLS_GROW] = 3;
+    }
+    out[MOY_UI_CELLS_SIDE] = side;
+    out[MOY_UI_CELLS_R] = moy_ui_depth()->card_r;
+    out[MOY_UI_CELLS_X0] = x0;
+    out[MOY_UI_CELLS_Y0] = y0;
+    out[MOY_UI_CELLS_PX] = px;
+    out[MOY_UI_CELLS_PY] = py;
+    out[MOY_UI_CELLS_ROWS] = rows;
+    out[MOY_UI_CELLS_COLS] = cols;
+    out[MOY_UI_CELLS_TITLE_DY] = tdy;
+    out[MOY_UI_CELLS_TITLE_W] = tw;
+    out[MOY_UI_CELLS_CAP_H] = cap;
+    out[MOY_UI_CELLS_VIEW_H] = bh - cap;
+    out[MOY_UI_CELLS_DESK] = desk != 0;
+    out[MOY_UI_CELLS_LOOK] = look;
+}
+
+// The cards a row of the table holds (a shelf's column, a row of icons).
+static int cells_per(const int32_t g[MOY_UI_CELLS_G]) {
+    int per = (int)(g[MOY_UI_CELLS_ACROSS] ? g[MOY_UI_CELLS_ROWS] : g[MOY_UI_CELLS_COLS]);
+    return per > 0 ? per : 1;
+}
+
+// The extent of `n` cards under geometry `g` whose X0 and Y0 are offsets into the band.
+static int32_t cells_extent(const int32_t g[MOY_UI_CELLS_G], int n) {
+    if (n <= 0) {
+        return 0;
+    }
+    int last = (n - 1) / cells_per(g);
+    if (g[MOY_UI_CELLS_ACROSS]) {
+        return 2 * g[MOY_UI_CELLS_X0] + last * g[MOY_UI_CELLS_PX] + g[MOY_UI_CELLS_SIDE];
+    }
+    return 2 * g[MOY_UI_CELLS_Y0] + last * g[MOY_UI_CELLS_PY] + g[MOY_UI_CELLS_SIDE]
+           + (g[MOY_UI_CELLS_DESK] ? g[MOY_UI_CELLS_PY] - g[MOY_UI_CELLS_SIDE] : 0);
+}
+
+// Geometry `g` with its X0 and Y0 offsets into band `b`.
+static void cells_rel(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int32_t r[MOY_UI_CELLS_G]) {
+    memcpy(r, g, MOY_UI_CELLS_G * sizeof r[0]);
+    r[MOY_UI_CELLS_X0] -= b[0];
+    r[MOY_UI_CELLS_Y0] -= b[1];
+}
+
+int32_t moy_ui_api_cells_extent(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int n) {
+    int32_t r[MOY_UI_CELLS_G];
+    cells_rel(g, b, r);
+    return cells_extent(r, n);
+}
+
+int32_t moy_ui_api_cells_reveal(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int n, int i,
+                                int32_t off) {
+    if (n <= 0) {
+        return 0;
+    }
+    int32_t r[MOY_UI_CELLS_G];
+    cells_rel(g, b, r);
+    int per = cells_per(g), across = (int)g[MOY_UI_CELLS_ACROSS];
+    int32_t p = (int32_t)(i / per) * (across ? g[MOY_UI_CELLS_PX] : g[MOY_UI_CELLS_PY]);
+    int32_t size = across ? g[MOY_UI_CELLS_SIDE] + 2 * r[MOY_UI_CELLS_X0]
+                          : 2 * r[MOY_UI_CELLS_Y0] + g[MOY_UI_CELLS_SIDE]
+                                + (g[MOY_UI_CELLS_DESK] ? g[MOY_UI_CELLS_PY] - g[MOY_UI_CELLS_SIDE] : 0);
+    int32_t view = across ? b[2] : g[MOY_UI_CELLS_VIEW_H];
+    int32_t most = cells_extent(r, n) - view;
+    if (p < off) {
+        off = p;
+    } else if (p + size > off + view) {
+        off = p + size - view;
+    }
+    off = off > most ? most : off;
+    return off < 0 ? 0 : off;
+}
+
+void moy_ui_api_cells_tile(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int32_t off, int i,
+                           int32_t out[4]) {
+    (void)b;
+    int per = cells_per(g), a = i / per, k = i % per;
+    if (g[MOY_UI_CELLS_ACROSS]) {
+        out[0] = g[MOY_UI_CELLS_X0] + a * g[MOY_UI_CELLS_PX] - off;
+        out[1] = g[MOY_UI_CELLS_Y0] + k * g[MOY_UI_CELLS_PY];
+    } else {
+        out[0] = g[MOY_UI_CELLS_X0] + k * g[MOY_UI_CELLS_PX];
+        out[1] = g[MOY_UI_CELLS_Y0] + a * g[MOY_UI_CELLS_PY] - off;
+    }
+    out[2] = out[3] = g[MOY_UI_CELLS_SIDE];
+}
+
+int moy_ui_api_cells_at(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int32_t off, int n,
+                        int x, int y) {
+    if (x < b[0] || x >= b[0] + b[2] || y < b[1] || y >= b[1] + g[MOY_UI_CELLS_VIEW_H] || n <= 0) {
+        return -1;
+    }
+    int per = cells_per(g), across = (int)g[MOY_UI_CELLS_ACROSS];
+    int side = (int)g[MOY_UI_CELLS_SIDE], px = (int)g[MOY_UI_CELLS_PX], py = (int)g[MOY_UI_CELLS_PY];
+    // the row of the table the point lies across, then its cards along it
+    int along = across ? x - (int)g[MOY_UI_CELLS_X0] + off : y - (int)g[MOY_UI_CELLS_Y0] + off;
+    int a = floor_div(along, across ? px : py);
+    for (int k = 0; k < per && a >= 0; k++) {
+        int i = a * per + k;
+        if (i >= n) {
+            break;
+        }
+        int32_t t[4];
+        moy_ui_api_cells_tile(g, b, off, i, t);
+        int hx = (int)t[0], hw = side, hh = across ? py : (g[MOY_UI_CELLS_DESK] ? py : side);
+        if (!across) {
+            hx -= (px - side) / 2;
+            hw = px;
+        }
+        if (x >= hx && x < hx + hw && y >= t[1] && y < t[1] + hh) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void moy_ui_api_cells_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t g[MOY_UI_CELLS_G],
+                           const int32_t t[4], const int32_t clip[4], int focus, moy_ui_span_t title,
+                           int32_t ink) {
+    clip_t k;
+    moy_ui_box_t q = {(int16_t)clip[0], (int16_t)clip[1], (int16_t)clip[2], (int16_t)clip[3]};
+    if (mua_clip_in(&k, s, q)) {
+        int fs = c->fs, gr = focus ? (int)g[MOY_UI_CELLS_GROW] : 0;
+        if (focus) {
+            // the theme's focus mark, flat: a ring that moves with every step and lifts nothing
+            moy_ui_box_t box = {(int16_t)(t[0] - gr), (int16_t)(t[1] - gr), (int16_t)(t[2] + 2 * gr),
+                                (int16_t)(t[3] + 2 * gr)}, got;
+            int mi, r = g[MOY_UI_CELLS_R] ? (int)g[MOY_UI_CELLS_R] + gr : 0;
+            moy_ui_focus(s, box, MOY_UI_ITEM_CARD, r, MOY_UI_MARK_RING | MOY_UI_MARK_COUNT, fs, &got, &mi);
+        }
+        if (g[MOY_UI_CELLS_TITLE_DY] && title.n) {
+            // its title centred under it in the ui face, cut to the cells' title width: bold on
+            // focus (drawn twice a pixel apart), over a black shadow in an ink of its own
+            moy_font_info_t uf;
+            uint32_t fid = moy_ui_font(0, MOY_UI_FONT_UI, &uf);
+            int w = (int)g[MOY_UI_CELLS_TITLE_W], bold = focus && ink == MOY_UI_O_NONE;
+            // cut to the title width (a pixel less where bold) with the font's ellipsis
+            uint8_t buf[CELLS_TITLE_MAX + 3];
+            int ell = 0;
+            size_t k = moy_text_cut_px(fid, title.p, title.n, w - (bold ? fs : 0), fs, &ell);
+            k = k < CELLS_TITLE_MAX ? k : CELLS_TITLE_MAX;
+            memcpy(buf, title.p, k);
+            if (ell) {
+                memcpy(buf + k, "\xe2\x80\xa6", 3);
+                k += 3;
+            }
+            moy_ui_span_t cut = {buf, (uint16_t)k};
+            moy_ui_box_t tb = {(int16_t)(t[0] + t[2] / 2 - w / 2), (int16_t)(t[1] + g[MOY_UI_CELLS_TITLE_DY]),
+                               (int16_t)w, (int16_t)(uf.line * fs)};
+            moy_ui_label_paint_t lp = {-1, -1, 0, 0, 0};
+            int ci;
+            if (ink == MOY_UI_O_NONE) {
+                ci = moy_ui_token(s->look, MOY_UI_T_INK);
+            } else {
+                ci = ink >= MOY_UI_O_ROLE ? moy_ui_token(s->look, ink - MOY_UI_O_ROLE)
+                                          : moy_theme_nearest(MOY_THEME_RGB | (ink & 0xffffff));
+                lp = (moy_ui_label_paint_t){-1, (int16_t)moy_theme_nearest(MOY_THEME_RGB | 0x000000), 255,
+                                            1, 1};
+            }
+            if (bold) {
+                moy_ui_box_t b2 = tb;           // bold: drawn twice, a pixel at the scale apart
+                b2.x = (int16_t)(b2.x + fs);
+                moy_ui_label_paint(s, b2, cut, ci, MOY_TEXT_CENTER, &lp);
+            }
+            moy_ui_label_paint(s, tb, cut, ci, MOY_TEXT_CENTER, &lp);
+        }
+    }
+    mua_clip_out(&k);
+}
+
+void moy_ui_api_cells_foot(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t g[MOY_UI_CELLS_G],
+                           const int32_t b[4], const int32_t clip[4], int fade, moy_ui_span_t title,
+                           moy_ui_span_t sub) {
+    int fs = c->fs;
+    clip_t k;
+    moy_ui_box_t q = {(int16_t)clip[0], (int16_t)clip[1], (int16_t)clip[2], (int16_t)clip[3]};
+    if (!mua_clip_in(&k, s, q)) {
+        mua_clip_out(&k);
+        return;
+    }
+    if (g[MOY_UI_CELLS_ACROSS]) {
+        if (fade && !g[MOY_UI_CELLS_DESK]) {
+            int h = CELLS_FADE * fs;
+            moy_ui_fade(s, (moy_ui_box_t){(int16_t)b[0], (int16_t)(b[1] + b[3] - h), (int16_t)b[2], (int16_t)h},
+                        moy_ui_token(s->look, MOY_UI_T_DESKTOP), 0, fs, 0);
+        }
+        mua_clip_out(&k);
+        return;
+    }
+    int cap = (int)g[MOY_UI_CELLS_CAP_H];
+    if (cap <= 0) {
+        mua_clip_out(&k);
+        return;
+    }
+    // the caption band on the ground under a hairline, the current card's name in the title
+    // face from the first column's left and its items after it in the dim ink
+    moy_canvas_row_t *row = (moy_canvas_row_t *)s->dst;
+    const int32_t *st = row->st;
+    moy_text_target_t tg = {row->px, row->cap, (int)st[MOY_ST_W], (int)st[MOY_ST_CAM_X],
+                            (int)st[MOY_ST_CAM_Y], (int)st[MOY_ST_CX0], (int)st[MOY_ST_CY0],
+                            (int)st[MOY_ST_CX1], (int)st[MOY_ST_CY1]};
+    int x = (int)b[0], y = (int)(b[1] + b[3] - cap), w = (int)b[2], look = s->look;
+    moy_target_fill(&tg, x, y, w, cap, row->pal[moy_ui_pidx(s->cart, moy_ui_token(look, MOY_UI_T_DESKTOP))]);
+    moy_target_fill(&tg, x, y, w, fs, row->pal[moy_ui_pidx(s->cart, moy_ui_token(look, MOY_UI_T_EDGE))]);
+    if (!title.n) {
+        mua_clip_out(&k);
+        return;
+    }
+    int base = y + 22 * fs, left = (int)g[MOY_UI_CELLS_X0], right = x + w - (left - x);
+    moy_font_info_t tf, uf;
+    uint32_t tid = moy_ui_font(0, MOY_UI_FONT_TITLE, &tf);
+    uint32_t uid = moy_ui_font(0, MOY_UI_FONT_UI, &uf);
+    size_t tn = moy_text_fit_px(tid, title.p, title.n, right - left, fs);
+    int tw = moy_text_width(tid, title.p, tn, fs);
+    caption_text(s, &tg, tid, (moy_ui_span_t){title.p, (uint16_t)tn}, left, base - tf.ascent * fs,
+                 moy_ui_token(look, MOY_UI_T_INK), -1, fs);
+    int sep = 12 * fs, mx = left + tw + 10 * fs, my = base - uf.ascent * fs, di = moy_ui_token(look, MOY_UI_T_INK_DIM);
+    int d = font_v2(uid, &uf) ? 2 * fs : fs, dy;
+    if (!font_v2(uid, &uf)) {
+        dy = my + floor_div(uf.line * fs - d, 2);
+    } else {
+        int asc = uf.ascent * fs;
+        dy = my + asc - floor_div(asc / 2 + d, 2);
+    }
+    int n = 0;
+    for (size_t i = 0, a = 0; i <= sub.n; i++) {
+        if (i < sub.n && sub.p[i] != '\t') {
+            continue;
+        }
+        size_t m = moy_text_fit_px(uid, sub.p + a, i - a, right - mx, fs);
+        if (!m) {
+            break;
+        }
+        if (n) {
+            caption_dot(s, &tg, mx - floor_div(sep + d, 2), dy, d, di);
+        }
+        moy_text(&tg, uid, MOY_TEXT_DATA, sub.p + a, m, mx, my, row->pal[moy_ui_pidx(s->cart, di)], fs, 0, -1);
+        mx += moy_text_width(uid, sub.p + a, m, fs) + sep;
+        n++;
+        a = i + 1;
+    }
+    mua_clip_out(&k);
 }

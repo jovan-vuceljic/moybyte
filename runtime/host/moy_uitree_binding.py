@@ -20,6 +20,13 @@ PART = native_build.Part("uitree", ("moy_uitree.h", "moy_uitree_int.h", "moy_uit
 _P, _I, _S, _Z = c.c_void_p, c.c_int, c.c_char_p, c.c_size_t
 _I32 = c.POINTER(c.c_int32)
 
+
+def _addr(words, n):
+    """The address of array('i') `words`, at least `n` of them."""
+    if len(words) < n:
+        raise TypeError("moy_uitree: takes array('i') of %d words" % n)
+    return words.buffer_info()[0]
+
 _SIGS = (
     ("uit_new", [], _P),
     ("uit_free", [_P], None),
@@ -53,6 +60,14 @@ _SIGS = (
     ("uit_on_draw", [_P, _P, _P], None),
     ("uit_on_pic", [_P, _P, _P], None),
     ("uit_pics_moved", [_P], None),
+    ("uit_carousel", [_P, _P], _I),
+    ("uit_carousel_tile", [_P, _I, _P], _I),
+    ("uit_carousel_at", [_P, _I, _I], _I),
+    ("uit_carousel_geom", [_P, _P, _I, _I, _P], _I),
+    ("uit_cells", [_P, _P], _I),
+    ("uit_cells_tile", [_P, _I, _P], _I),
+    ("uit_cells_at", [_P, _I, _I], _I),
+    ("uit_cells_geom", [_P, _P, _I, _I, _P], _I),
     ("uit_build_end", [_P], _I),
     ("uit_open", [_P], None),
     ("uit_close", [_P], None),
@@ -88,8 +103,12 @@ _SIGS = (
     ("uit_still", [_P, _P, _I, _I, _I, _I, _I, _I, _I], _I),
     ("uit_dump", [_P, c.c_char_p, _Z], _I),
     ("uit_hints", [_P, c.c_char_p, _Z], _I),
+    ("uit_fits_on", [_P, _I], None),
+    ("uit_fits", [_P, c.c_char_p, _Z], _I),
     ("uit_gens", [_P, c.POINTER(c.c_int32), _I], _I),
     ("uit_page_rects", [_P, c.POINTER(c.c_int32)], _I),
+    ("uit_band", [_P, c.POINTER(c.c_int32)], _I),
+    ("uit_stop_over", [_P, _I], _I),
     ("uit_row_stop", [_P, c.c_char_p, c.c_char_p, c.c_char_p, _Z], _I),
     ("uit_popover", [_P, c.c_char_p, _Z], _I),
     ("uit_stats", [_P, _I32], _I),
@@ -413,6 +432,48 @@ class Engine:
     def pics_moved(self):
         self._L.uit_pics_moved(self._e)
 
+    def carousel(self, out):
+        """The page's carousel as the last frame drew it (uit_carousel)
+        into `out`, an array('i') of 20: whether one drew."""
+        return bool(self._L.uit_carousel(self._e, _addr(out, 20)))
+
+    def carousel_tile(self, row, out):
+        """Row `row`'s tile into `out`, an array('i') of 4
+        (uit_carousel_tile): whether it shows."""
+        return bool(self._L.uit_carousel_tile(self._e, row, _addr(out, 4)))
+
+    def carousel_at(self, x, y):
+        """The row whose tile holds (x, y), -1 none (uit_carousel_at)."""
+        return self._L.uit_carousel_at(self._e, x, y)
+
+    def carousel_geom(self, band, fs, desk, out):
+        """The geometry the page's carousel lays out in `band` (an
+        array('i') of 4) into `out` (of 10), outside a frame
+        (uit_carousel_geom): whether the page has one."""
+        return bool(self._L.uit_carousel_geom(self._e, _addr(band, 4), fs, 1 if desk else 0,
+                                              _addr(out, 10)))
+
+    def cells(self, out):
+        """The page's shelf or icons as the last frame drew them (uit_cells)
+        into `out`, an array('i') of 25: whether they drew."""
+        return bool(self._L.uit_cells(self._e, _addr(out, 25)))
+
+    def cells_tile(self, i, out):
+        """Card `i`'s box there into `out`, an array('i') of 4
+        (uit_cells_tile): whether it shows."""
+        return bool(self._L.uit_cells_tile(self._e, i, _addr(out, 4)))
+
+    def cells_at(self, x, y):
+        """The card whose box or title holds (x, y), -1 none (uit_cells_at)."""
+        return self._L.uit_cells_at(self._e, x, y)
+
+    def cells_geom(self, band, fs, desk, out):
+        """The geometry the page's shelf or icons lay out in `band` (an
+        array('i') of 4) into `out`, an array('i') of 16 (uit_cells_geom):
+        whether the page has them."""
+        return bool(self._L.uit_cells_geom(self._e, _addr(band, 4), fs, 1 if desk else 0,
+                                           _addr(out, 16)))
+
     def next(self):
         """The next event: (kind, a, b, c, text), or None."""
         k = self._L.uit_next(self._e, self._ev, self._buf, 512)
@@ -527,6 +588,13 @@ class Engine:
         foot = self._L.uit_page_rects(self._e, r)
         return tuple(r[:4]), tuple(r[4:]) if foot else None
 
+    def band(self):
+        r = (c.c_int32 * 4)()
+        return tuple(r) if self._L.uit_band(self._e, r) else None
+
+    def stop_over(self, i):
+        return self._L.uit_stop_over(self._e, i) == 1
+
     def gens(self):
         g = (c.c_int32 * 16)()
         n = self._L.uit_gens(self._e, g, 16)
@@ -537,6 +605,15 @@ class Engine:
         buf = c.create_string_buffer(n + 1)
         self._L.uit_hints(self._e, buf, n)
         return buf.raw[:n].decode("utf-8")
+
+    def fits_on(self, on):
+        self._L.uit_fits_on(self._e, 1 if on else 0)
+
+    def fits(self):
+        n = self._L.uit_fits(self._e, None, 0)
+        buf = c.create_string_buffer(n + 1)
+        self._L.uit_fits(self._e, buf, n)
+        return buf.raw[:n].decode("utf-8", "replace")
 
     def dump(self):
         n = self._L.uit_dump(self._e, None, 0)

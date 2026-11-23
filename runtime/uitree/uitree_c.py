@@ -189,6 +189,9 @@ class CEngine(Engine):
     _band_extra = ""        # the items its host adds to the band before Back, NUL-separated
     th = None               # the theme's colours the last frame drew in
     unit = 0                # a placed page's unit, the host's (0: the engine's own)
+    # A host's own pictures: fn(node, pic, r), `_pic`'s contract, in place of the engine's
+    # decoded ones (the console's home draws its covers so); set before the page opens.
+    pictures = None
 
     def __init__(self, *a, **k):
         Engine.__init__(self, *a, **k)
@@ -615,9 +618,7 @@ class CEngine(Engine):
         self._canvas_keys = {}
         self._reads = {}
         if not self._drawing:
-            x.on_draw(self._draw)
-            x.on_pic(self._pic)
-            self._drawing = True
+            self.bind_draws(x)
         cnode, cprop, cact, aidx, fail = x.node, x.prop, x.node_action, self._aidx, self._fail
         kinds, bound, heads, lits_only, action = _KINDS, _BOUND, _HEAD, _LIT_ONLY, S.Action
         placed, placed_kinds = self.PLACED, _PLACED_KINDS
@@ -901,8 +902,9 @@ class CEngine(Engine):
     def _pic(self, node, pic, r):
         """A card's or a picture's image (`uit_on_pic`): with no tile, 0 where
         the picture is not decoded at the size the node's unfocused tile last
-        had, else its gen (which moves with its pixels, a put's); with one,
-        drawn there clipped, or owed to the idle step."""
+        had (a carousel's tile: the size it names, its centre's), else its gen
+        (which moves with its pixels, a put's); with one, drawn there clipped,
+        its corners rounded where it names a radius, or owed to the idle step."""
         p = self._pic_of.get(pic)
         if p is None:
             kind, _c, key = pic.partition(":")
@@ -916,15 +918,73 @@ class CEngine(Engine):
             cv = self.cv
             pics = self.pics = uitree_pics.PicEngine(self, self.files, getattr(cv, "swapped565", False),
                                                      uitree_pics.budget_for(cv.w, cv.h))
-        if not r[8] and (wh is None or wh[0] != r[2] or wh[1] != r[3]):
+        if r[8] & 2:
+            if wh is None or wh[0] != r[10] or wh[1] != r[11]:
+                wh = self._pic_wh[node] = (r[10], r[11])
+        elif not r[8] and (wh is None or wh[0] != r[2] or wh[1] != r[3]):
             wh = self._pic_wh[node] = (r[2], r[3])
         got = pics.peek(p, wh[0], wh[1]) if wh is not None else pics.peek(p, r[2], r[3])
         if got is not None:
             cv = self.cv
             cv.clip(r[4], r[5], r[6], r[7])
-            self.pics.draw(cv, got, r[0], r[1], r[2], r[3])
+            self.pics.draw(cv, got, r[0], r[1], r[2], r[3], r[9])
             cv.clip()
         return got is not None
+
+    def bind_draws(self, x):
+        """Hand store `x` the front end's draws: a canvas's and the pictures
+        (the host's own, `pictures`, where it has them)."""
+        x.on_draw(self._draw)
+        x.on_pic(self._pic if self.pictures is None else self.pictures)
+        self._drawing = True
+
+    def carousel(self, out):
+        """The page's carousel as the last frame drew it (moy_uitree.h's
+        uit_carousel) into `out`, an array('i') of 20: whether one drew."""
+        return self._visiting() and self._x.carousel(out)
+
+    def carousel_tile(self, row, out):
+        """Row `row`'s tile in the carousel the last frame drew into `out`
+        (x, y, w, h): whether it shows."""
+        return self._visiting() and self._x.carousel_tile(row, out)
+
+    def carousel_at(self, x, y):
+        """The row whose tile holds (x, y) in the carousel the last frame
+        drew, -1 none."""
+        return self._x.carousel_at(x, y) if self._visiting() else -1
+
+    def carousel_geom(self, band, fs, desk, out):
+        """The geometry the page's carousel lays out in `band` (an
+        array('i') of 4) at font scale `fs` into `out` (of 10), outside a
+        frame: whether the page has one (built here where no frame built it)."""
+        if self.root is None:
+            self._bind()
+            self._ready()
+        return self._x.carousel_geom(band, fs, desk, out)
+
+    def cells(self, out):
+        """The page's shelf or icons as the last frame drew them (moy_uitree.h's
+        uit_cells) into `out`, an array('i') of 25: whether they drew."""
+        return self._visiting() and self._x.cells(out)
+
+    def cells_tile(self, i, out):
+        """Card `i`'s box in the shelf or icons the last frame drew into `out`
+        (an array('i') of 4): whether it shows."""
+        return self._visiting() and self._x.cells_tile(i, out)
+
+    def cells_at(self, x, y):
+        """The card whose box or title holds (x, y) in the shelf or icons the
+        last frame drew, -1 none."""
+        return self._x.cells_at(x, y) if self._visiting() else -1
+
+    def cells_geom(self, band, fs, desk, out):
+        """The geometry the page's shelf or icons lay out in `band` (an
+        array('i') of 4) into `out` (an array('i') of 16), outside a frame:
+        whether the page has them (built here where no frame built it)."""
+        if self.root is None:
+            self._bind()
+            self._ready()
+        return self._x.cells_geom(band, fs, desk, out)
 
     # -- the frame -------------------------------------------------------------------
 
@@ -1117,6 +1177,24 @@ class CEngine(Engine):
             out[got[1]] = _KIND_NAMES[got[0]]
             i += 1
 
+    def over_stops(self):
+        """The ids of the last frame's stops that lie in a dialog or a
+        popover, over the page: the engine's."""
+        out, i = set(), 0
+        if not self._visiting():
+            return out
+        while True:
+            got = self._x.stop(i)
+            if got is None:
+                return out
+            if self._x.stop_over(i):
+                out.add(got[1])
+            i += 1
+
+    def band_rect(self):
+        """(x, y, w, h) of the hints band the last frame drew, or None: the engine's."""
+        return self._x.band() if self._visiting() else None
+
     def gens(self):
         """The gens the page's regions drew under (the page's, then each
         cards list's, scroll region's and split group's), or None where the page carries none: the engine's."""
@@ -1207,6 +1285,21 @@ class CEngine(Engine):
         if damage and (took or self.q) or self.q:
             self._damage.all()
         return True
+
+    def fits(self):
+        """The texts the last frame drew, as the toolkit measured and fitted
+        them (`uit_fits`, armed by `_x.fits_on`): one (id, kind, how, x, y,
+        w, room, text) a text, `id` the node's ("" the page's own), `how`
+        moy_ui.h's MOY_UI_FIT_* (0 whole, 1 cut with an ellipsis, 2 cut bare)
+        and `room` -1 where the toolkit fitted it to none."""
+        if not self._visiting():
+            return []
+        out = []
+        for r in self._x.fits().split("\x1e")[:-1]:
+            f = r.split("\x1f", 7)
+            out.append((f[0], _KIND_NAMES[int(f[1])] if f[1] != "0" else "page", int(f[2]), int(f[3]),
+                        int(f[4]), int(f[5]), int(f[6]), f[7]))
+        return out
 
     def dump(self):
         """The tree as the engine holds it (the dump's grammar, uitree.py's)."""

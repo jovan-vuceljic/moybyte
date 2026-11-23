@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from runtime import host_app, launcher_layer, ui_draw
+from runtime import host_app, ui_draw
 from runtime import home_grid
 from runtime.cover_cache import BASE, HALF
 from ws_helpers import build_ws_with_shelf, shelf
@@ -177,9 +177,9 @@ def test_the_shelf_takes_its_columns_and_rows_from_the_glass(tmp_path, size, sid
     shown = lay.cx + lay.cw - (c.x0 + (c.cols - 1) * c.px)
     assert 0 < shown <= c.side * 2 // 3
     # column-major: a column stacks the rows, the next column right of it
-    assert g.cell_of(0) == (0, 0) and g.cell_of(1) == (1, 0) and g.cell_of(rows) == (0, 1)
-    r0, r1 = g.tile_rect(0), g.tile_rect(rows)
-    assert r1[0] - r0[0] == c.px and r1[1] == r0[1]
+    r0, r1, r2 = g.tile_rect(0), g.tile_rect(1), g.tile_rect(rows)
+    assert r1[0] == r0[0] and r1[1] - r0[1] == c.py
+    assert r2[0] - r0[0] == c.px and r2[1] == r0[1]
     assert g.cover_specs()[0][1] == (HALF if side < 128 else BASE)
 
 
@@ -189,38 +189,52 @@ def test_the_shelf_scrolls_sideways_to_the_focus(tmp_path):
     c = g._cells()
     for _ in range(c.cols + 1):
         _press(drv, "right")
-    assert g.cell_of(g.sel) == (0, c.cols + 1) and g.scroll > 0
+    assert g.sel == (c.cols + 1) * c.rows and g.scroll > 0
     r = g.tile_rect(g.sel)
     assert c.band[0] < r[0] and r[0] + r[2] < c.band[0] + c.band[2]   # whole, in view
     _press(drv, "down")
-    assert g.cell_of(g.sel) == (1, c.cols + 1)
+    assert g.sel == (c.cols + 1) * c.rows + 1
 
 
 def test_focus_is_flat_and_the_focused_title_bold(tmp_path, monkeypatch):
     ws, drv = _home(tmp_path, "grid")
     g = ws.launcher
-    focus, casts, labels = [], [], []
-    real_focus, real_label = ui_draw.focus, ui_draw.label
+    faces, casts = [], []
+    face, stamp = g._face, g._stamp_face
 
-    def spy_focus(cv, th, rect, *a, **k):
-        focus.append((rect, k.get("flat")))
-        return real_focus(cv, th, rect, *a, **k)
+    def spy_face(cv, it, pic, r, cover):
+        if not isinstance(pic, tuple):     # (the picture call's words)
+            faces.append((g.items.index(it), (pic[0], pic[1], pic[2], pic[3]), pic[8] & 1))
+        return face(cv, it, pic, r, cover)
 
-    def spy_label(cv, rect, text, ink, *a):
-        labels.append((rect, text, a))
-        return real_label(cv, rect, text, ink, *a)
+    def spy_stamp(cv, it, i, t, r, plain=True):
+        faces.append((i, (t[0], t[1], t[2], t[3]), t[8] & 1))
+        return stamp(cv, it, i, t, r, plain)
 
-    monkeypatch.setattr(ui_draw, "focus", spy_focus)
-    monkeypatch.setattr(ui_draw, "label", spy_label)
+    g._face = spy_face
+    g._stamp_face = spy_stamp
     monkeypatch.setattr(ui_draw, "cast", lambda *a, **k: casts.append(a))
+    cv = ws.sys_canvas
     _full_frame(ws, drv)
     c = g._cells()
     r = g.tile_rect(g.sel)
     grown = (r[0] - c.grow, r[1] - c.grow, r[2] + 2 * c.grow, r[3] + 2 * c.grow)
-    assert (grown, True) in focus and not casts, "the theme's ring on the grown card, no shadow"
-    bold = [t for _r, t, a in labels if len(a) > 2 and a[2] is not None]
-    assert bold == [g.selected()["title"]]
-    assert all(rr[2] == c.side for rr, _t, _a in labels), "titles cut to the card"
+    assert (g.sel, grown, 1) in faces and not casts, "the grown card, no shadow"
+    assert all(f == 0 for i, _b, f in faces if i != g.sel)
+    # its title bold: the focused card's title row inks more than as a neighbour's
+    def inked(i):
+        t = g.tile_rect(i)
+        y0 = t[1] + c.title_dy
+        row = bytes(cv._buf)
+        n = 0
+        for y in range(y0, y0 + 8):
+            for x in range(t[0], t[0] + c.side):
+                n += row[2 * (y * cv.w + x)] != row[2 * (y * cv.w + c.band[0])]
+        return n
+    bold = inked(g.sel)
+    _press(drv, "down")
+    _full_frame(ws, drv)
+    assert inked(0) < bold, "the focused title is bold"
     # no PLAY or CHANGE on a card: Enter plays and C changes, in the hint strip
     items, verbs = ws.launcher_layer._hint_groups()
     assert verbs[:2] == ["play", "change"]
@@ -249,11 +263,11 @@ def test_the_icons_take_their_columns_from_the_glass(tmp_path, size, tile, cols)
     assert (c.side, c.cols) == (tile, cols)
     assert (c.caption is None) == (size is not None), "a caption band on the handheld alone"
     if c.caption is not None:
-        assert c.band[1] + c.band[3] == c.caption[1] and c.caption[1] + c.caption[3] == c.hints[1]
+        assert c.band[1] + c.band[3] == c.caption[1] + c.caption[3] == c.hints[1]
         # the band clips the top of the next row: the grid reads as scrolling
         assert any(c.y0 + k * c.py < c.caption[1] < c.y0 + k * c.py + c.side
                    for k in range(c.rows))
-    assert g.cell_of(cols) == (1, 0)
+    assert g.tile_rect(cols)[0] == g.tile_rect(0)[0] and g.tile_rect(cols)[1] > g.tile_rect(0)[1]
     assert all(div == HALF for _it, div in g.cover_specs())
     _press(drv, "down")
     assert g.sel == cols
@@ -264,42 +278,40 @@ def test_the_icons_take_their_columns_from_the_glass(tmp_path, size, tile, cols)
 def test_the_handheld_caption_names_the_focused_cart(tmp_path):
     ws, drv = _home(tmp_path, "icons")
     g = ws.launcher
-    printed = []
     cv = ws.sys_canvas
-    real = cv.print
-
-    def spy(s, x, y, c, *a):
-        printed.append((s, y))
-        return real(s, x, y, c, *a)
-
-    cv.print = spy
-    try:
-        _press(drv, "right")
-        _full_frame(ws, drv)
-    finally:
-        cv.print = real
     cap = g._cells().caption
-    words = [s for s, y in printed if cap[1] <= y < cap[1] + cap[3]]
-    assert words[0] == g.selected()["title"]
-    assert "Built in" in words or "Installed" in words or "Yours" in words
+    span = 2 * cv.w
+
+    def rows():
+        _full_frame(ws, drv)
+        b = bytes(cv._buf)
+        return b[cap[1] * span:(cap[1] + cap[3]) * span], b[:cap[1] * span]
+
+    was, _above = rows()
+    _press(drv, "right")
+    now, _above = rows()
+    assert now != was, "the caption band names the focused cart"
+    assert g.selected()["title"] and g.sel == 1
 
 
-def test_the_desk_names_every_tile(tmp_path, monkeypatch):
+def test_the_desk_names_every_tile(tmp_path):
     ws, drv = _home(tmp_path, "icons", sys_size=(1024, 600), font_scale=1, windowed=True,
                      panel_diagonal_in=7.0)
     g = ws.launcher
-    labels = []
-    real = ui_draw.label
-
-    def spy(cv, rect, text, ink, *a):
-        labels.append((text, len(a) > 2 and a[2] is not None))
-        return real(cv, rect, text, ink, *a)
-
-    monkeypatch.setattr(ui_draw, "label", spy)
     _full_frame(ws, drv)
-    shown = [g.items[i] for i, _r in g._visible()]
-    assert len(labels) == len(shown) > 10
-    assert [t for t, b in labels if b] == [g.selected()["title"]]
+    c = g._cells()
+    cv = ws.wm.root_canvas
+    b = bytes(cv._buf)
+    ground = b[2 * (c.band[1] * cv.w + c.band[0]):2 * (c.band[1] * cv.w + c.band[0]) + 2]
+    shown = [i for i in range(len(g.items)) if g.tile_rect(i) is not None]
+    assert len(shown) > 10
+    for i in shown:
+        t = g.tile_rect(i)
+        y = t[1] + c.title_dy + 6
+        if y >= c.band[1] + c.band[3]:
+            continue
+        line = [b[2 * (y * cv.w + x):2 * (y * cv.w + x) + 2] for x in range(t[0], t[0] + t[2])]
+        assert any(px != ground for px in line), "tile %d is named under it" % i
 
 
 @pytest.mark.parametrize("arrangement, dx, dy", (("grid", -9, 0), ("icons", 0, -9)))

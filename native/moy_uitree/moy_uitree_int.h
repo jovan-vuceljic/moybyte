@@ -137,20 +137,23 @@ enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_SWATCH = 2, 
        NL_HIDE = 8, NL_PICS = 16, NL_EDGE = 16 };      // NL_EDGE: a cells' edge=True
 // A dialog's lit bits: kind="danger"; look="keys" (no button row on the T-Deck).
 enum { DL_DANGER = 1, DL_KEYS = 2 };
+// A cards list's lit bits: look="carousel" (one row of tiles, its centre's words under it),
+// "shelf", "icons"; flow=True (its grid in the page's flow).
+enum { CD_CAROUSEL = 1, CD_SHELF = 2, CD_ICONS = 4, CD_FLOW = 8 };
 // A label's text options (`nbtn`): wrap= in bits 0-1 (LT_WORD, LT_CHAR), its face's
 // role + 1 in bits 2-4, the toolkit's `centre` for align= in bits 5-7, lines= given.
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.
 enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 // A text view's options (`lit`); its syntax's index in `btn` (ui.py's _SYNTAXES).
 enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8 };
-// A tools row lent to a site (`lit`); a button drawn as its icon alone (`btn`).
-enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2 };
-enum { RW_MID = 1, RW_GROW = 2 };   // a row's lit: centred on the row it is a cell of; a fill of its stack
+// A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large" (`btn`).
+enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4 };
+enum { RW_MID = 1, RW_GROW = 2, RW_WRAP = 4 };   // a row's lit: centred on the row it is a cell of; a fill of
+                                                // its stack; its cells packed from its start, wrapping
 enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4, CV_READS = 8 };  // a canvas's lit: a fill along a row, its w= a
                                                   // basis; a stop whose keys are its keys='s; such a stop with no
                                                   // ring (mark=False); one that names the states it draws (reads=)
 enum { SP_ALIGN = 3, SP_RULE = 16 };   // a split's lit: its align= index; rule=True
-enum { CD_FLOW = 1 };                // a cards list's lit: flow=True, its grid in the page's flow
 enum { LT_WORD = 1, LT_CHAR = 2, LT_WRAP = 3, LT_FACE_SHIFT = 2, LT_ALIGN_SHIFT = 5, LT_LINES = 256,
        LT_FIT = 512,       // size="fit": its face only where its text fits the page's width
        LT_TEXT = 1024 };   // size="text": in a placed row, as wide as its text
@@ -334,11 +337,16 @@ struct uit {
     uit_id_t focused;
     int has_focused;
     char focus_key[UIT_ID_MAX + 1];
+    char lost[UIT_ID_MAX + 1];      // the focus key a frame drew no stop for and owed the next for
     // events and trace
     uit_ev_t *evs;
     int nevs, cevs, evat;
     uit_buf_t evtext;
     uit_buf_t trace;
+    // the fit report (`uit_fits`): armed, the node a text draws for, the last frame's records
+    uint8_t fits_on;
+    int16_t fit_k, fit_model, fit_row;
+    uit_buf_t fits;
     uint32_t trace_at;
     uit_drew_t *drew;
     int ndrew, cdrew;
@@ -361,8 +369,16 @@ struct uit {
     void *draw_ud;
     uit_pic_fn pic_fn;          // a card's or a picture's image, the front end's
     void *pic_ud;
+    // The page's carousel as the last frame drew it (uit_carousel's words), its node + 1 (0: none
+    // drawn since the page was built).
+    int32_t car[UIT_CAROUSEL_WORDS];
+    int16_t car_node;
+    int32_t cel[UIT_CELLS_WORDS];       // the page's shelf or icons as the last frame drew them
+    int16_t cel_node;
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
     int32_t band_h;             // a flowing page's hints band, docked at its foot: its pictures end over it
+    uint8_t menu_keys;          // the last menu drawn showed its items' letters (`draw_menu`)
+    int16_t band[4];            // the hints band the toolkit drew last frame (`uit_band`), h 0 none
     uint8_t in_cell;            // drawing a split's column: a button takes its natural width
     uint8_t tv_stop, tv_stop_now;   // a text view that runs on drew last frame / this frame (the band's PgUp PgDn)
     int16_t page_tabs, page_tabs_now;   // the tabs node the band names (hint=) drawn last frame / this frame, else -1

@@ -1,12 +1,13 @@
 """The C engine's memory on the boards' MicroPython (the board model `make
 unix-micropython` builds): every block the engine holds is counted by its
 allocator (`moy_uitree.mem()`, native/moy_uitree/moy_uitree.c), which a board
-points at PSRAM. A page made at boot holds nothing until it opens; a page
+points at PSRAM. The desk holds the home's band (`home_ui.band`), the one
+page it shows; a page made at boot holds nothing until it opens; a page
 left keeps only its lowered tree and its state's values (`Engine.close`), so
 opening and leaving every page again and again ends where the first round
 ended but for what the values hold (the log's lines grow with the log), and letting
-each go (`forget`) ends at the bytes the desk started with. A page opened
-again draws the tree it kept: no build, no lowering.
+each go (`forget`) ends at no engine byte. A page opened again draws the
+tree it kept: no build, no lowering.
 """
 
 import sys
@@ -18,9 +19,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import test_frame_alloc as FA  # noqa: E402
 
-# The engine bytes at the T-Deck's desk before any page opens: every page the
-# console makes at boot (Settings' rows, Wi-Fi, the log) holds no store yet.
-DESK_BYTES = 0
+# The engine bytes at the T-Deck's desk before any other page opens: the home's
+# band (`home_ui.band`, its lowered tree and the tab's cards; 9,604 B when this
+# was written), every other page the console makes at boot (Settings' rows,
+# Wi-Fi, the log) holding no store yet.
+DESK_MAX = 12 * 1024
 # The lowered trees and state values of the pages below, kept after each is
 # left (52,333 B when this was written, 9.7 KB of it values; the rows page is
 # 17 KB of it).
@@ -107,9 +110,9 @@ def result(tmp_path_factory):
     return info
 
 
-def test_the_desk_holds_no_engine_bytes_before_a_page_opens(result):
+def test_the_desk_holds_the_home_band_alone_before_a_page_opens(result):
     assert result["engines_at_desk"] > 0, "the console made no page at boot: the pin measures nothing"
-    assert result["desk"] == DESK_BYTES, result["desk"]
+    assert 0 < result["desk"] <= DESK_MAX, result["desk"]
 
 
 def test_leaving_a_page_keeps_its_tree_and_nothing_grows(result):
@@ -120,11 +123,11 @@ def test_leaving_a_page_keeps_its_tree_and_nothing_grows(result):
     held = [b - v for b, v in rounds]
     assert len(set(held)) == 1, rounds
     assert sum(result["kept"].values()) == rounds[0][0] - result["desk"], result["kept"]
-    assert rounds[0][0] <= KEPT_MAX, (rounds[0], result["kept"])
+    assert rounds[0][0] - result["desk"] <= KEPT_MAX, (rounds[0], result["kept"])
 
 
 def test_letting_every_page_go_returns_every_byte(result):
-    assert result["forgot"] == result["desk"], result["forgot"]
+    assert result["forgot"] == 0, result["forgot"]
 
 
 def test_a_page_opened_again_neither_builds_nor_lowers(result):

@@ -348,6 +348,7 @@ SIGS = (
      c.c_int32, c.c_int32, c.c_void_p], c.c_int32),
     ("moy_ui_api_icon", [c.c_void_p, moy_ui_span_t], c.c_int),
     ("moy_ui_api_box", [c.c_void_p, moy_ui_span_t, c.c_void_p], c.c_int),
+    ("moy_ui_api_hit_box", [c.c_void_p, moy_ui_span_t, c.c_void_p], c.c_int),
     ("moy_ui_api_progress", [c.c_void_p, c.POINTER(moy_ui_sink_t), moy_ui_span_t, c.c_int32,
      c.c_int32, c.c_void_p], None),
     ("moy_ui_api_list", [c.c_void_p, c.POINTER(moy_ui_sink_t), moy_ui_span_t, c.c_char_p,
@@ -437,6 +438,7 @@ SIGS = (
     ("moy_ui_api_change_box", [c.c_void_p, c.c_void_p], c.c_int),
     ("moy_ui_api_host_arm", [c.c_void_p], c.c_int),
     ("moy_ui_api_host_whole", [c.c_void_p], None),
+    ("moy_ui_api_host_stand", [c.c_void_p], None),
     ("moy_ui_api_keys_back", [c.c_void_p], None),
     ("moy_ui_api_pop_box", [c.c_void_p, c.c_void_p], c.c_int),
     ("moy_ui_api_text_at", [c.c_void_p, moy_ui_span_t, c.c_int, c.c_int, c.c_void_p], c.c_int),
@@ -543,6 +545,14 @@ def install(m, lib, ctx_, sink, span0, over, box_of):
             return None
         return tuple(out_w)
     m.api_box = api_box
+    def api_hit_box(ctx, id):
+        p_, k_ = ctx_(ctx)
+        id_t, id_k = span0(id)
+        out_w = (c.c_int32 * 4)()
+        if not lib.moy_ui_api_hit_box(p_, id_t, out_w):
+            return None
+        return tuple(out_w)
+    m.api_hit_box = api_hit_box
     def api_progress(ctx, cv, look, label, v, hi, o):
         p_, k_ = ctx_(ctx)
         label_t, label_k = span0(label)
@@ -899,6 +909,10 @@ def install(m, lib, ctx_, sink, span0, over, box_of):
         p_, k_ = ctx_(ctx)
         lib.moy_ui_api_host_whole(p_)
     m.api_host_whole = api_host_whole
+    def api_host_stand(ctx):
+        p_, k_ = ctx_(ctx)
+        lib.moy_ui_api_host_stand(p_)
+    m.api_host_stand = api_host_stand
     def api_keys_back(ctx):
         p_, k_ = ctx_(ctx)
         lib.moy_ui_api_keys_back(p_)

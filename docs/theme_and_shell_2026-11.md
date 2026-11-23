@@ -2269,9 +2269,10 @@ measures it on every board (`docs/history/shell_layout_2026-10.md` §13) against
 **If a board's drag frames do not fit its budget it degrades**, by this order
 and only as far as the measurement says: (1) the centre scale is reduced;
 (2) every card is at scale 1.0 while moving and the centre card scales up
-only once settled; (3) one card size with the frame and the plate. The
-verdict is a per-board constant on the WM (`HOME_MOTION`, `HOME_SCALE`),
-recorded in #66, never a theme key.
+only once settled; (3) one card size with the frame and the plate. Every
+board runs the full motion at the 2x centre, so the engine's carousel
+carries no verdict; one a board needs is recorded in #66 and lands in the
+engine's carousel, never a theme key.
 
 **The wallpaper slot.** The home draws the `home` slot's wallpaper
 (§3.9); the desk draws `desk`; a console-only
@@ -2476,7 +2477,8 @@ default.
 | surface | scrolls through | drag/fling | key, repeat, ball steps |
 |---|---|---|---|
 | verbs-engine pages, `ui.scroll`, `ui.table` rows (Settings and its pages, Config's cards and its file list, Files, Get Carts, Storybook, My Art, Calc, Appearance) | the nest's `moy_ui_scroll_t` | the engine's drag-tap; the fling | focus moves a stop; the reveal is `glide_to` (`docs/history/scroll_and_text_2026-10.md` §7) |
-| the home's carousel, grid and icons; the PROJECTS window | `ScrollRegion` (`Launcher._scroll_region`) | as today | the selection moves; `glide_to` the card |
+| the home's handheld carousel, grid and icons | their band page's `ui.cards` (`look="carousel"`, `"shelf"`, `"icons"`): the engine's table of parts | the engine's drag-tap; the fling | the card steps; the engine reveals it |
+| the desk's carousel; the PROJECTS window | `ScrollRegion` | as today | the selection moves; `glide_to` the card |
 | the Code tab, theme Config text, the desk's made code, the text console's log | `ui.text_view` (`docs/history/scroll_and_text_2026-10.md` §5): the nest's `moy_ui_scroll_t`, in visual rows | the engine's drag-tap; the fling | the editor's `top`, moved to keep its caret in view, lands the view there in that frame (`ui_draw.text_aim`); a fling and the wheel glide |
 | Notes | its page's `ui.text_editor`, a `ui.text_view` the UI tree engine draws (`docs/history/scroll_and_text_2026-10.md` §5) | the engine's drag-tap; the fling | the caret's row lands in view in that frame (`ui_draw.text_reveal`, `player_tree.CartTree.aim`) |
 | the fields | one row in the verbs engine | -- | -- |

@@ -499,3 +499,53 @@ def _processes_fresh():
     _processes_reset()
     yield
     _processes_reset()
+
+
+# -- the UI checks (#272 §2): every frame a test draws on a UI tree page ---------------------
+#
+# `ui_checks.check` runs after each frame a C engine page draws (`CEngine.paint`), with the
+# engine's fit report armed, and a finding fails the test that drew the frame. A finding is a
+# bug in the surface: fix it there (a page still drawn beside the engine, `legacy` or `lent`,
+# goes in `ui_checks.EXEMPT` with why until the clean cut).
+# MOYBYTE_UI_CHECKS=log writes the findings to MOYBYTE_UI_CHECKS_LOG instead (a triage run).
+
+_UI_FOUND = []
+
+
+def _ui_checks_install():
+    import uitree_c
+    import ui_checks
+    paint = uitree_c.CEngine.paint
+    if getattr(paint, "_checked", False):
+        return
+
+    def checked(self, dt, cv, th, content, desk):
+        x = self._x
+        if x is not None and not getattr(x, "fits_armed", False):
+            x.fits_on(True)
+            x.fits_armed = True
+        r = paint(self, dt, cv, th, content, desk)
+        if x is not None and self._x is x:
+            _UI_FOUND.extend(ui_checks.check(self, content, desk))
+        return r
+
+    checked._checked = True
+    uitree_c.CEngine.paint = checked
+
+
+@pytest.fixture(autouse=True)
+def _ui_checks(request):
+    _ui_checks_install()
+    del _UI_FOUND[:]
+    yield
+    found = sorted(set(_UI_FOUND))
+    del _UI_FOUND[:]
+    if not found:
+        return
+    if os.environ.get("MOYBYTE_UI_CHECKS") == "log":
+        with open(os.environ["MOYBYTE_UI_CHECKS_LOG"], "a") as f:
+            for line in found:
+                f.write("%s\t%s\n" % (request.node.nodeid, line))
+        return
+    pytest.fail("the UI checks found (tests/ui_checks.py):\n  " + "\n  ".join(found[:20])
+                + ("\n  ... %d more" % (len(found) - 20) if len(found) > 20 else ""), pytrace=False)

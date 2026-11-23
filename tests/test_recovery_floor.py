@@ -33,6 +33,7 @@ CONSOLES = {
     "guition_s3": (480, 320, 0, 1, 1, 3),
     "p4": (1024, 600, 1, 2, 0, 3),
     "guition_p4": (1280, 800, 1, 2, 0, 3),
+    "elecrow_p4": (1024, 600, 1, 2, 0, 3),
 }
 # The hint each floor's head shows (native/moy_spine/strings/en.json).
 HINTS = {
@@ -40,6 +41,7 @@ HINTS = {
     "guition_s3": "Tap a choice, or type retry, safe or repl on serial.",
     "p4": "Tap a choice, or type retry, safe or repl on serial.",
     "guition_p4": "Tap a choice, or type retry, safe or repl on serial.",
+    "elecrow_p4": "Tap a choice, or type retry, safe or repl on serial.",
 }
 # What moy_recovery_view says for a fault the console crashed with three
 # boots running.
@@ -53,6 +55,7 @@ GOLDEN = {
     "guition_s3": 0xDB487BBB,
     "p4": 0xDB8A3023,
     "guition_p4": 0x2ACE65DD,
+    "elecrow_p4": 0xDB8A3023,
 }
 NONE, RETRY, SAFE, REBOOT, REPL = -1, 0, 1, 2, 3
 

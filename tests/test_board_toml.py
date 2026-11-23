@@ -41,8 +41,10 @@ GUITION = ROOT / "firmware" / "guition_jc3248w535"
 ZERO = ROOT / "firmware" / "seeed_xiao_esp32s3_zero"
 C3_ZERO = ROOT / "firmware" / "esp32c3_zero"
 GUITION_P4 = ROOT / "firmware" / "guition_jc8012p4a1c"
+ELECROW_P4 = ROOT / "firmware" / "elecrow_crowpanel_p4_10_1"
 BOARDS = {"tdeck": TDECK, "p4": P4, "guition-s3": GUITION, "zero": ZERO,
-          "guition-p4": GUITION_P4, "c3-zero": C3_ZERO}
+          "guition-p4": GUITION_P4, "c3-zero": C3_ZERO,
+          "elecrow-p4": ELECROW_P4}
 
 try:                                    # 3.11+
     import tomllib as _real_toml
@@ -240,7 +242,7 @@ def test_the_panel_diagonal_is_declared_once_and_reaches_the_console():
     declared = {b: board_config.load(d).get("panel", {}).get("diagonal_in")
                 for b, d in BOARDS.items()}
     assert {b for b, v in declared.items() if v} == {
-        "guition-s3", "guition-p4", "p4"}, (
+        "guition-s3", "guition-p4", "p4", "elecrow-p4"}, (
         "the set of boards opting in to the chrome tap-target floor changed: "
         "%s. Read chrome_scale_floor's docstring before updating this."
         % sorted(b for b, v in declared.items() if v))
@@ -251,7 +253,8 @@ def test_the_panel_diagonal_is_declared_once_and_reaches_the_console():
     for name, board_dir, glass, floor in (
             ("guition-s3", GUITION, (480, 320), 2),
             ("guition-p4", GUITION_P4, (1280, 800), 1),
-            ("p4", P4, (1024, 600), 1)):
+            ("p4", P4, (1024, 600), 1),
+            ("elecrow-p4", ELECROW_P4, (1024, 600), 1)):
         diag = declared[name]
         runtime_py = (board_dir / "modules" / "moy_runtime.py").read_text(
             encoding="utf-8")
@@ -367,7 +370,7 @@ def test_the_ssh_server_comes_with_its_face_and_the_face_with_its_shell(board):
 # The WebAssembly tier ships on every console board or on none
 # (native/moy_wasm/README.md), so its engine is the one shared module
 # whose default "yes" is not enough: every board file decides it in writing.
-CONSOLE_BOARDS = ("tdeck", "p4", "guition-s3", "guition-p4")
+CONSOLE_BOARDS = ("tdeck", "p4", "guition-s3", "guition-p4", "elecrow-p4")
 
 
 def test_every_board_with_an_ota_slot_carries_its_headroom_floor():
@@ -765,7 +768,8 @@ def test_every_target_the_makefile_suggests_exists():
 # exactly as much of as the others (it is the module STAGING checks that care
 # whether a board has a console, and they use BOARDS above).
 _DEVICE_BOARDS = {"tdeck": TDECK, "p4": P4, "guition-s3": GUITION,
-                  "zero": ZERO, "guition-p4": GUITION_P4, "c3-zero": C3_ZERO}
+                  "zero": ZERO, "guition-p4": GUITION_P4, "c3-zero": C3_ZERO,
+                  "elecrow-p4": ELECROW_P4}
 
 
 @pytest.mark.parametrize("board", sorted(_DEVICE_BOARDS))
@@ -885,7 +889,8 @@ def test_the_on_glass_suites_read_the_declaration_instead_of_retyping_it():
     that stops a reset stranding the handle was data with no consumer."""
     for suite, name in (("test_tdeck_on_glass.py", "lilygo_t_deck_plus_mainline"),
                         ("test_guition_on_glass.py", "guition_jc3248w535"),
-                        ("test_guition_p4_on_glass.py", "guition_jc8012p4a1c")):
+                        ("test_guition_p4_on_glass.py", "guition_jc8012p4a1c"),
+                        ("test_elecrow_p4_on_glass.py", "elecrow_crowpanel_p4_10_1")):
         src = (ROOT / "tests" / suite).read_text()
         assert 'board_dir=ROOT / "firmware" / "%s"' % name in src, (
             "%s no longer points P4Board at %s/board.toml" % (suite, name))
@@ -1147,7 +1152,7 @@ def test_the_zeros_pin_allowlist_is_its_lease_row():
         assert ("#define MOY_NET_GPIO_ROUTE" in text) == (board in ("zero", "c3-zero")), board
 
 
-@pytest.mark.parametrize("board", ("p4", "guition-p4"))
+@pytest.mark.parametrize("board", ("p4", "guition-p4", "elecrow-p4"))
 def test_a_p4_readme_lists_its_free_pins_as_its_lease_row(board):
     lease = sorted(p for r in board_config.hardware(BOARDS[board])[2]
                    if r["class"] == "lease" and not r.get("bus") for p in r["pins"])

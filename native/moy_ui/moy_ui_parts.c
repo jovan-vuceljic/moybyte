@@ -584,10 +584,20 @@ static void geo(const pd_t *d, moy_ui_box_t b, const moy_ui_vrow_t *r, int kind,
         pf_t fl = font_of(d, MOY_UI_FONT_UI);
         int gap = pm(d, MOY_UI_M_VALUE_ROW_GAP, 1);
         int lx = b.x + pad_of(d, r) + (r->icon_slot >= 0 || r->icon_glyph >= 0 ? 16 * d->fs + gap : 0);
-        int dots = g->dot + (r->n - 1) * g->step + (r->cur >= 0 && r->cur < r->n ? 2 * g->apart : 0);
+        int ap = r->cur >= 0 && r->cur < r->n ? 2 * g->apart : 0;
+        int dots = g->dot + (r->n - 1) * g->step + ap;
         int need = lx + tw(&fl, r->label.p, r->label.n, tscale(d->s)) + gap + g->ring + dots;
         if (need > g->right && need <= b.x + b.w) {
             g->right = need;
+        } else if (need > b.x + b.w) {
+            // nor whole there: the dots shrink, as far apart, until it is (2 px of the scale at least)
+            int sp = g->step - g->dot, room = b.x + b.w - (need - dots);
+            int step = (room + sp - ap) / r->n;
+            if (step - sp >= 2 * d->fs) {
+                g->right = b.x + b.w;
+                g->step = step;
+                g->dot = step - sp;
+            }
         }
     }
     int tw_ = pm(d, MOY_UI_M_VALUE_ROW_TRACK, 1);
@@ -678,8 +688,21 @@ moy_ui_box_t moy_ui_pics_tile(moy_ui_box_t b, int desk, int fs, int n, int i) {
     int dk = (desk & MOY_UI_DESK) != 0;
     int side = (dk ? 48 : 32) * fs, gap = (dk ? 12 : 8) * fs, pad = (dk ? 16 : 10) * fs;
     int x = b.x + b.w - pad - n * side - (n - 1) * gap + i * (side + gap);
-    return (moy_ui_box_t){(int16_t)x, (int16_t)(b.y + (b.h - side) / 2), (int16_t)side,
-                          (int16_t)side};
+    return (moy_ui_box_t){(int16_t)x, (int16_t)(b.y + b.h - (moy_ui_pics_h(desk, fs) + side) / 2),
+                          (int16_t)side, (int16_t)side};
+}
+
+int moy_ui_pics_two(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_vrow_t *r) {
+    if (!r->label.n || r->n <= 0) {
+        return 0;
+    }
+    pd_t d;
+    open_pd(s, &d, r->fs, r->desk);
+    pf_t fl = font_of(&d, MOY_UI_FONT_UI);
+    int gap = pm(&d, MOY_UI_M_VALUE_ROW_GAP, 1);
+    int tx = b.x + pad_of(&d, r) + (r->icon_slot >= 0 || r->icon_glyph >= 0 ? 16 * d.fs + gap : 0);
+    return tx + tw(&fl, r->label.p, r->label.n, tscale(s)) + gap
+           > moy_ui_pics_tile(b, r->desk, r->fs, r->n, 0).x;
 }
 
 int32_t moy_ui_vrow_at(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, const moy_ui_vrow_t *r,
@@ -740,7 +763,6 @@ static moy_ui_box_t on_card_mark(const pd_t *d, moy_ui_box_t b, int first, int l
 enum { SIGN_ENTER = 4, SIGN_BALL_LR = 5, SIGN_DPAD_LR = 6, SIGN_BALL = 7, SIGNS = 8 };
 static int key_sign(moy_ui_span_t k);
 
-static const uint8_t s_dots[] = {0xE2, 0x80, 0xA6};
 static void text_cut(pd_t *d, const pf_t *f, moy_ui_span_t t, int x, int y, int h, int room,
                      uint16_t c, int sc);
 
@@ -812,6 +834,16 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
         }
     }
     int pad = pad_of(&d, r);
+    moy_ui_vrow_t low;
+    if (kind == MOY_UI_V_PICS && r->two) {
+        // its label on a line of its own over the tiles, cut to the row
+        pf_t f1 = font_of(&d, MOY_UI_FONT_UI);
+        text_cut(&d, &f1, r->label, b.x + pad, b.y, b.h - moy_ui_pics_h(r->desk, d.fs), b.w - 2 * pad,
+                 pal(&d, lab), sc);
+        low = *r;
+        low.label.n = 0;
+        r = &low;
+    }
     vgeo_t g;
     geo(&d, b, r, kind, &g);
     pf_t fl = font_of(&d, MOY_UI_FONT_UI), fv = font_of(&d, MOY_UI_FONT_CAPTION);
@@ -838,8 +870,7 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                  sc);
         }
         if (r->label.n) {
-            size_t ln = moy_text_fit_px(fl.id, r->label.p, r->label.n, b.w - vw - 8 * d.fs, sc);
-            text(&d, &fl, r->label.p, ln, b.x, b.y, rh, pal(&d, lab), sc);
+            text_cut(&d, &fl, r->label, b.x, b.y, rh, b.w - vw - 8 * d.fs, pal(&d, lab), sc);
         }
         int ty = b.y + rh + (d.desk ? 2 : 1) * d.fs;
         uint16_t line = pal(&d, tok(&d, MOY_UI_T_BORDER, MOY_UI_T_EDGE));
@@ -930,8 +961,9 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                     arrow_sign(&d, x, ky, sw, kh, sign, 1, cdim);
                 }
             } else {
-                // a value wider than the row (its label and icon aside) is
-                // cut with an ellipsis, leaving its label up to half the row
+                // a value wider than the room its label leaves (the label
+                // keeps up to half the row) is cut with an ellipsis, and one
+                // that shows none of itself so is left out
                 int iconed = r->icon_slot >= 0 || r->icon_glyph >= 0;
                 int lx = r->label.n || iconed ? b.x + pad + (iconed ? 16 * d.fs + gap : 0) : b.x;
                 int sig = 0;
@@ -945,15 +977,17 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                 int vroom = all - (lw < all / 2 ? lw : all / 2);
                 int vw = tw(&fl, r->value.p, r->value.n, sc);
                 uint16_t vc = kind == MOY_UI_V_CYCLE ? cink : cdim;
-                if (vw <= all) {
+                if (vw <= vroom) {
                     x -= vw;
                     text(&d, &fl, r->value.p, r->value.n, x, b.y, b.h, vc, sc);
                 } else {
                     int ell = 0;
-                    size_t k = moy_text_cut_px(fl.id, r->value.p, r->value.n, vroom, sc, &ell);
-                    vw = tw(&fl, r->value.p, k, sc) + (ell ? tw(&fl, s_dots, sizeof(s_dots), sc) : 0);
-                    x -= vw;
-                    text_cut(&d, &fl, r->value, x, b.y, b.h, vroom, vc, sc);
+                    size_t k = moy_ui_cut_text(fl.id, r->value.p, r->value.n, vroom, sc, &ell);
+                    if (k > 0) {
+                        vw = tw(&fl, r->value.p, k, sc) + (ell ? tw(&fl, moy_ui_dots(ell).p, 3, sc) : 0);
+                        x -= vw;
+                        text_cut(&d, &fl, r->value, x, b.y, b.h, vroom, vc, sc);
+                    }
                 }
             }
             if (kind == MOY_UI_V_LINK && r->colours != NULL && r->n == 1) {
@@ -1220,6 +1254,18 @@ int moy_ui_vrow_w(const moy_ui_sink_t *s, int kind, const moy_ui_vrow_t *r) {
     if (r->icon_slot >= 0 || r->icon_glyph >= 0) {
         w += 16 * d.fs + gap;
     }
+    if (kind == MOY_UI_V_SEG) {
+        // its options as seg_box sets them from the right, its label's room
+        vgeo_t g;
+        pf_t fv = font_of(&d, MOY_UI_FONT_CAPTION);
+        geo(&d, (moy_ui_box_t){0, 0, 0, 0}, r, kind, &g);
+        w += r->label.n ? tw(&fl, r->label.p, r->label.n, sc) : -gap;
+        for (int j = 0; j < r->n; j++) {
+            moy_ui_span_t o = option(r->value, j);
+            w += tw(&fv, o.p, o.n, sc) + g.gap + (j ? (d.desk ? 4 : 2) * d.fs : 0);
+        }
+        return w;
+    }
     w += tw(&fl, r->label.p, r->label.n, sc) + tw(&fl, r->value.p, r->value.n, sc);
     if (kind == MOY_UI_V_LINK) {
         w += pm(&d, MOY_UI_M_VALUE_ROW_CHEV, 1) + gap;
@@ -1229,16 +1275,16 @@ int moy_ui_vrow_w(const moy_ui_sink_t *s, int kind, const moy_ui_vrow_t *r) {
 
 
 // Text across x..x+w in the rows y..y+h, cut to `room` with an ellipsis
-// where the font has one: centred where `align` is 1, at the end where 2.
+// (moy_ui_cut_text): centred where `align` is 1, at the end where 2.
 static void aligned_cut(pd_t *d, const pf_t *f, moy_ui_span_t t, int x, int w, int y, int h,
                         int room, uint16_t c, int sc, int align) {
     int ell = 0;
-    size_t k = moy_text_cut_px(f->id, t.p, t.n, room, sc, &ell);
-    int tw_ = tw(f, t.p, k, sc) + (ell ? tw(f, s_dots, sizeof(s_dots), sc) : 0);
+    size_t k = moy_ui_fit(f->id, t, room, sc, &ell);
+    int tw_ = tw(f, t.p, k, sc) + (ell ? tw(f, moy_ui_dots(ell).p, 3, sc) : 0);
     int tx = x + (align == 2 ? w - tw_ : (w - tw_) / 2);
     int at = text(d, f, t.p, k, tx, y, h, c, sc);
     if (ell) {
-        text(d, f, s_dots, sizeof(s_dots), tx + at, y, h, c, sc);
+        text(d, f, moy_ui_dots(ell).p, 3, tx + at, y, h, c, sc);
     }
 }
 
@@ -1291,15 +1337,15 @@ static void card_title(pd_t *d, const pf_t *f, moy_ui_span_t t, int x, int w, in
         return;
     }
     int ell = 0;
-    size_t k = moy_text_cut_px(f->id, t.p, t.n, room - side - gap, sc, &ell);
-    int tw_ = tw(f, t.p, k, sc) + (ell ? tw(f, s_dots, sizeof(s_dots), sc) : 0);
+    size_t k = moy_ui_fit(f->id, t, room - side - gap, sc, &ell);
+    int tw_ = tw(f, t.p, k, sc) + (ell ? tw(f, moy_ui_dots(ell).p, 3, sc) : 0);
     int ix = x + (w - side - gap - tw_) / 2;
     moy_ui_box_t ib = {(int16_t)ix, (int16_t)(y + moy_ui_fdiv(h - side, 2)), (int16_t)side,
                        (int16_t)side};
     icon_d(d, lead, lead_glyph, ib, li);
     int at = text(d, f, t.p, k, ix + side + gap, y, h, c, sc);
     if (ell) {
-        text(d, f, s_dots, sizeof(s_dots), ix + side + gap + at, y, h, c, sc);
+        text(d, f, moy_ui_dots(ell).p, 3, ix + side + gap + at, y, h, c, sc);
     }
 }
 
@@ -1806,9 +1852,9 @@ int moy_ui_toast(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t text_, in
     int side = 16 * d.fs, gap = 6 * d.fs;
     int room = b.w - 2 * pad - side - gap;
     int ell = 0;
-    size_t k = moy_text_cut_px(f.id, text_.p, text_.n, room, sc, &ell);
+    size_t k = moy_ui_cut_text(f.id, text_.p, text_.n, room, sc, &ell);
     int w = 2 * pad + side + gap + tw(&f, text_.p, k, sc)
-            + (ell ? tw(&f, s_dots, sizeof(s_dots), sc) : 0);
+            + (ell ? tw(&f, moy_ui_dots(ell).p, 3, sc) : 0);
     moy_ui_box_t p = {(int16_t)(b.x + (b.w - w) / 2), (int16_t)(b.y + b.h - h), (int16_t)w,
                       (int16_t)h};
     if (out != NULL) {
@@ -1918,10 +1964,10 @@ int moy_ui_bubble(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_bubble_t 
         int w;
         if (i == shown - 1 && was_cut) {
             int ell = 0;
-            size_t kk = moy_text_cut_px(fu.id, bb->text.p + ln[i].off, bb->text.n - ln[i].off,
+            size_t kk = moy_ui_cut_text(fu.id, bb->text.p + ln[i].off, bb->text.n - ln[i].off,
                                         room, sc, &ell);
             w = tw(&fu, bb->text.p + ln[i].off, kk, sc)
-                + (ell ? tw(&fu, s_dots, sizeof(s_dots), sc) : 0);
+                + (ell ? tw(&fu, moy_ui_dots(ell).p, 3, sc) : 0);
         } else {
             w = tw(&fu, bb->text.p + ln[i].off, ln[i].len, sc);
         }
@@ -1934,8 +1980,8 @@ int moy_ui_bubble(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_bubble_t 
             hroom = room - 4 * k - sw;
         }
         int ell = 0;
-        size_t kk = moy_text_cut_px(fc.id, bb->head.p, bb->head.n, hroom, sc, &ell);
-        int hw = tw(&fc, bb->head.p, kk, sc) + (ell ? tw(&fc, s_dots, sizeof(s_dots), sc) : 0)
+        size_t kk = moy_ui_cut_text(fc.id, bb->head.p, bb->head.n, hroom, sc, &ell);
+        int hw = tw(&fc, bb->head.p, kk, sc) + (ell ? tw(&fc, moy_ui_dots(ell).p, 3, sc) : 0)
                  + (sw ? 4 * k + sw : 0);
         wmax = hw > wmax ? hw : wmax;
         headh = fc.ascent * sc + 3 * k;
@@ -1986,9 +2032,9 @@ int moy_ui_bubble(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_bubble_t 
         text_cut(&d, &fc, hd, box.x + pad, ty - k, fc.line * sc, hroom, pal(&d, vi), sc);
         if (sw) {
             int ell = 0;
-            size_t kk = moy_text_cut_px(fc.id, hd.p, hd.n, hroom, sc, &ell);
+            size_t kk = moy_ui_cut_text(fc.id, hd.p, hd.n, hroom, sc, &ell);
             int nx = box.x + pad + tw(&fc, hd.p, kk, sc)
-                     + (ell ? tw(&fc, s_dots, sizeof(s_dots), sc) : 0) + 4 * k;
+                     + (ell ? tw(&fc, moy_ui_dots(ell).p, 3, sc) : 0) + 4 * k;
             signal_d(&d, nx, ty + fc.ascent * sc - k, bb->signal, fillc);
         }
         ty += headh;
@@ -2131,8 +2177,8 @@ int moy_ui_row2(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_row2_t *r, 
     int mw = r->tag.n > 0 ? pill_w(&fc, r->tag, k, sc, 0) : r->mark.n > 0 ? ms : 0;
     int room = right - tx - (ww ? ww + 8 * k : 0) - (mw ? mw + 6 * k : 0);
     int ell = 0;
-    size_t tn = moy_text_cut_px(fu.id, r->title.p, r->title.n, room, sc, &ell);
-    int tw_ = tw(&fu, r->title.p, tn, sc) + (ell ? tw(&fu, s_dots, sizeof(s_dots), sc) : 0);
+    size_t tn = moy_ui_cut_text(fu.id, r->title.p, r->title.n, room, sc, &ell);
+    int tw_ = tw(&fu, r->title.p, tn, sc) + (ell ? tw(&fu, moy_ui_dots(ell).p, 3, sc) : 0);
     text_cut(&d, &fu, r->title, tx, l1 - k, lh, room, pal(&d, unread ? vi : ink), sc);
     int ax = tx + tw_ + 6 * k;
     if (r->tag.n > 0) {
@@ -2516,10 +2562,8 @@ int moy_ui_page_ground(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t tit
         sh = sh > b.h ? b.h : sh;
         pf_t f = font_of(&d, MOY_UI_FONT_TITLE);
         int sc = tscale(s);
-        size_t n = moy_text_fit_px(f.id, title.p, title.n, b.w - 2 * gm(MOY_UI_M_GROUP_PAD, fs),
-                                   sc);
-        text(&d, &f, title.p, n, b.x + gm(MOY_UI_M_GROUP_PAD, fs), b.y, sh,
-             pal(&d, tok(&d, MOY_UI_T_CHROME_INK, MOY_UI_T_INK)), sc);
+        text_cut(&d, &f, title, b.x + gm(MOY_UI_M_GROUP_PAD, fs), b.y, sh,
+                 b.w - 2 * gm(MOY_UI_M_GROUP_PAD, fs), pal(&d, tok(&d, MOY_UI_T_CHROME_INK, MOY_UI_T_INK)), sc);
         ct.y = (int16_t)(ct.y + sh);
         ct.h = (int16_t)(ct.h - sh);
     }
@@ -2819,10 +2863,9 @@ int moy_ui_caption(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t t, int 
     pf_t f = font_of(&d, MOY_UI_FONT_CAPTION);
     int sc = tscale(s);
     int x = b.x + gm(MOY_UI_M_GROUP_PAD, fs);
-    size_t n = moy_text_fit_px(f.id, t.p, t.n, b.w - 2 * gm(MOY_UI_M_GROUP_PAD, fs), sc);
     int h = f.line * sc;
-    text(&d, &f, t.p, n, x, b.y + b.h - h - d.fs, h,
-         pal(&d, tok(&d, MOY_UI_T_CHROME_INK_DIM, MOY_UI_T_INK_DIM)), sc);
+    text_cut(&d, &f, t, x, b.y + b.h - h - d.fs, h, b.w - 2 * gm(MOY_UI_M_GROUP_PAD, fs),
+             pal(&d, tok(&d, MOY_UI_T_CHROME_INK_DIM, MOY_UI_T_INK_DIM)), sc);
     return MOY_UI_OK;
 }
 
@@ -3321,18 +3364,17 @@ int moy_ui_table_geo(const moy_ui_sink_t *s, moy_ui_box_t b, const uint8_t *cols
     return dropped;
 }
 
-// Text cut to `room` with an ellipsis where the font has one.
+// Text cut to `room` with an ellipsis (moy_ui_cut_text).
 static void text_cut(pd_t *d, const pf_t *f, moy_ui_span_t t, int x, int y, int h, int room,
                      uint16_t c, int sc) {
     if (room <= 0 || t.n == 0) {
         return;
     }
     int ell = 0;
-    size_t k = moy_text_cut_px(f->id, t.p, t.n, room, sc, &ell);
+    size_t k = moy_ui_fit(f->id, t, room, sc, &ell);
     int w = text(d, f, t.p, k, x, y, h, c, sc);
     if (ell) {
-        static const uint8_t dots[] = {0xE2, 0x80, 0xA6};
-        text(d, f, dots, sizeof(dots), x + w, y, h, c, sc);
+        text(d, f, moy_ui_dots(ell).p, 3, x + w, y, h, c, sc);
     }
 }
 
@@ -3547,14 +3589,14 @@ int moy_ui_field(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t label, mo
     size_t from = 0;
     int lead = 0;
     if (text_.n && tw(&fl, text_.p, text_.n, sc) > room) {
-        lead = tw(&fl, s_dots, sizeof(s_dots), sc);
+        moy_ui_span_t dots = moy_ui_dots(moy_text_covers(fl.id, (const uint8_t *)"\xe2\x80\xa6", 3) ? 1 : 2);
+        lead = tw(&fl, dots.p, dots.n, sc);
         while (from < text_.n && tw(&fl, text_.p + from, text_.n - from, sc) > room - lead) {
             from++;
             while (from < text_.n && (text_.p[from] & 0xC0) == 0x80) {
                 from++;
             }
         }
-        moy_ui_span_t dots = {s_dots, sizeof(s_dots)};
         moy_ui_text_in(s, fl.id, 0, dots, tx, ty, tink);
     }
     moy_ui_span_t tt = {text_.p + from, (uint16_t)(text_.n - from)};
@@ -3565,9 +3607,13 @@ int moy_ui_field(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t label, mo
         int hc = moy_ui_disabled() >= 0 && !disabled
                      ? moy_ui_disabled()
                      : tok(&d, MOY_UI_T_INK_DIM, MOY_UI_T_CHROME_INK_DIM);
-        size_t hn = moy_text_fit_px(fl.id, hint.p, hint.n, room, sc);
+        int ell = 0, hx = tx + (focused ? 2 * d.fs : 0);
+        size_t hn = moy_ui_fit(fl.id, hint, room, sc, &ell);
         moy_ui_span_t ht = {hint.p, (uint16_t)hn};
-        moy_ui_text_in(s, fl.id, 0, ht, tx + (focused ? 2 * d.fs : 0), ty, pal(&d, hc));
+        hx += moy_ui_text_in(s, fl.id, 0, ht, hx, ty, pal(&d, hc));
+        if (ell) {
+            moy_ui_text_in(s, fl.id, 0, moy_ui_dots(ell), hx, ty, pal(&d, hc));
+        }
     }
     if (focused) {
         // the caret: a pixel at the scale past the text, from a pixel over

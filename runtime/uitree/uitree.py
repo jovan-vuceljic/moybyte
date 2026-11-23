@@ -2014,9 +2014,9 @@ class Node:
 _C = {"shown": "cond"}
 SCHEMA = {
     "page": {"title": "text", "status": "text"},
-    "group": dict(_C, caption="text", close="action0", look="lit"),
+    "group": dict(_C, caption="text", close="action0", look="lit", gap="int"),
     "label": dict(_C, text="text", tone="text", wrap="lit", face="lit", size="lit", icon="text",
-                  lines="lit", align="lit"),
+                  lines="lit", align="lit", scale="int", w="int"),
     "rule": dict(_C),
     "note": dict(_C, icon="text", lines="texts"),
     "bubble": dict(_C, text="text", side="text", head="text", status="text", signal="int", tone="text",
@@ -2030,7 +2030,7 @@ SCHEMA = {
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond", tag="text",
                  tone="text", swatch="text"),
     "button": dict(_C, kind="lit", label="text", icon="text", alone="lit", span="lit", arg="lit",
-                   focus="cond", grow="lit", marked="cond", w="int", tone="text"),
+                   focus="cond", grow="lit", marked="cond", w="int", tone="text", look="lit"),
     "toggle": dict(_C, label="text", on="action0", focus="cond", hint="text"),
     "slider": dict(_C, label="text", lo="int", hi="int", on="action0", focus="cond", look="lit",
                    icon="text"),
@@ -2043,7 +2043,7 @@ SCHEMA = {
                   row="lit"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
-                  changed="action1", group="lit", pad="int", flow="lit"),
+                  changed="action1", group="lit", pad="int", flow="lit", look="lit", tone="text"),
     "card": dict(_C, label="text", sub="text", badge="text", label_icon="text", image="image",
                  icon="text", tone="text"),
     # G9, G13: a picture of its own (an image state, its fallback icon), a
@@ -2075,7 +2075,7 @@ SCHEMA = {
     "slot": dict(_C, min="lit"),
     # §7.7's bridge: a surface still on today's verbs hosted in one node
     "legacy": dict(_C, draw="fn", pointer="fn", keys="fn", hints="fn", gen="fn"),
-    "row": dict(_C, close="action0", gap="int", pad="int", mid="lit", grow="lit"),
+    "row": dict(_C, close="action0", gap="int", pad="int", mid="lit", grow="lit", wrap="lit"),
     "tools": dict(_C, lend="lit"),
     "lent": dict(_C),
     "status": dict(_C, text="text"),
@@ -2308,7 +2308,9 @@ def label(text, **p):
     """A row of text (§7.2): `face=` a type role, `size="fit"` shrinks it to
     its width, `size="text"` makes its cell in a placed row its text's
     width, `wrap="word"` breaks it at word breaks (at most `lines=`
-    lines, then an ellipsis), `align=`, `tone=`, `icon=` before it."""
+    lines, then an ellipsis), `align=`, `tone=`, `icon=` before it;
+    `scale=` draws its face at that whole scale (a display line), `w=`
+    keeps its text that wide at most (a measure of prose)."""
     where = _caller()
     if "lines" in p and (type(p["lines"]) is not int or p["lines"] < 1):
         raise UIError("N01", "ui.label lines=%r" % (p["lines"],), where=where,
@@ -2972,7 +2974,10 @@ def row(key, **p):
     On a placed page: gap= between cells and pad= at each end (a literal in
     the page's unit, an int state in pixels the host measured); a row in a
     row is a region of its own (an empty one a spacer), and mid=True
-    centres it on its parent, each side's fills sharing that side's room."""
+    centres it on its parent, each side's fills sharing that side's room.
+    wrap=True packs its children from its start at their natural widths
+    (a group as wide as its widest child), gap= apart, one that does not
+    fit starting a line under them."""
     return _node("row", key, p, _caller())
 
 

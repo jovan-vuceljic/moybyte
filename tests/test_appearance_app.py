@@ -125,7 +125,11 @@ def _box(app, sid):
 
 
 def _tap(ws, app, sid, dx=None):
-    """A tap on stop `sid` where it drew, `dx` in from its left (else its middle)."""
+    """A tap on stop `sid` where it shows, `dx` in from its left (else its
+    middle): focus scrolls it into the page's view first, since a press
+    takes a row only where the view shows it."""
+    _focus(ws, app, sid)
+    _frame(ws, 2)
     x, y, w, h = _box(app, sid)
     app.handle_pointer(x + (w // 2 if dx is None else dx), y + h // 2, True)
     _frame(ws, 3)

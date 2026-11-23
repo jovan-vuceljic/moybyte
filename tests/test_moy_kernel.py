@@ -39,6 +39,7 @@ CONSOLES = {
     "guition_s3": (480, 320, 0, 1),
     "p4": (1024, 600, 0, 0),
     "guition_p4": (1280, 800, 270, 0),
+    "elecrow_p4": (1024, 600, 0, 0),
 }
 TOUCH = {"guition_s3"}
 # moy_kernel.c's K_BAND_ROWS and K_SCRATCH.

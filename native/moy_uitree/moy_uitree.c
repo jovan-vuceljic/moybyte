@@ -333,6 +333,8 @@ void uit_close(uit_t *e)
 {
     e->still_ok = 0;
     e->cells_node = 0;
+    e->car_node = 0;
+    e->cel_node = 0;
     for (int i = 0; i < e->nvr; i++)
         UIT_FREE(e->vr[i].h);
     UIT_FREE(e->vr);
@@ -374,6 +376,7 @@ void uit_close(uit_t *e)
     uit_buf_free(&e->evtext);
     uit_buf_free(&e->trace);
     uit_buf_free(&e->cells);
+    uit_buf_free(&e->fits);
     e->trace_at = 0;
     // what stays, cut to what it holds: the declarations and the lowered page
     UIT_SHRINK(e, slots, nslots, cslots);
@@ -420,6 +423,7 @@ void uit_free(uit_t *e)
     UIT_FREE(e->labels); UIT_FREE(e->tvl); UIT_FREE(e->rects); UIT_FREE(e->arr);
     uit_buf_free(&e->pool); uit_buf_free(&e->scratch); uit_buf_free(&e->evtext); uit_buf_free(&e->cells);
     uit_buf_free(&e->trace);
+    uit_buf_free(&e->fits);
     UIT_FREE(e);
 }
 
@@ -1115,16 +1119,17 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
               (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              (kind == UIT_LINK && !strcmp(name, "swatch")) ||
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
-             (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon"))) || (kind == UIT_CARDS && !strcmp(name, "pad")) ||
+             (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon"))) || (kind == UIT_CARDS && (!strcmp(name, "pad") || !strcmp(name, "tone"))) ||
              (kind == UIT_CELLS && (!strcmp(name, "first") || !strcmp(name, "count") || !strcmp(name, "cols") ||
                                     !strcmp(name, "side") || !strcmp(name, "gap")))) {
         // templates the draw finds among its props by name (uit_tmpl_prop); signal=, a month's
-        // year=, month= and today= and a cards list's pad= ints
+        // year=, month= and today= and a cards list's pad= ints; a carousel's tone= its caption's
+        // ink
         int t = uit_tmpl_compile(e, src, model);
         if (t < 0)
             return t;
-        int ty = e->tmpls[t].type, want_int = !strcmp(name, "signal") || kind == UIT_MONTH || kind == UIT_CARDS ||
-                                           kind == UIT_CELLS;
+        int ty = e->tmpls[t].type, want_int = !strcmp(name, "signal") || kind == UIT_MONTH ||
+                                           (kind == UIT_CARDS && name[0] == 'p') || kind == UIT_CELLS;
         if (want_int ? ty != UIT_INT && !e->tmpls[t].lit : ty == UIT_BOOL || ty == UIT_MODEL)
             return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not %s", "%s %s %s %s %s"), uit_kind_names[kind],
                                   name, src, uit_type_name(ty), want_int ? "an int" : "a text");
@@ -1155,10 +1160,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     else if ((kind == UIT_CARDS && !strcmp(name, "w")) || (kind == UIT_CARD && !strcmp(name, "sub")) ||
              (kind == UIT_CANVAS && !strcmp(name, "w")) || (kind == UIT_ROW && !strcmp(name, "gap")) ||
              (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_PICTURE && !strcmp(name, "side")) || (kind == UIT_POPOVER && !strcmp(name, "anchor")) ||
-             (kind == UIT_GRID && !strcmp(name, "w")))
+             (kind == UIT_GRID && !strcmp(name, "w")) || (kind == UIT_LABEL && !strcmp(name, "scale")) ||
+             (kind == UIT_GROUP && !strcmp(name, "gap")))
         tslot = &N->t_value;
     else if ((kind == UIT_CARDS && !strcmp(name, "h")) || (kind == UIT_POPOVER && !strcmp(name, "w")) ||
              (kind == UIT_ROW && !strcmp(name, "pad")) || (kind == UIT_GRID && !strcmp(name, "h")) ||
+             (kind == UIT_LABEL && !strcmp(name, "w")) ||
              ((kind == UIT_CARD || kind == UIT_PICTURE || kind == UIT_BUTTON) && !strcmp(name, "tone")))
         tslot = &N->t_aux;
     else if ((!strcmp(name, "empty") && UIT_IS_LIST(kind)) ||
@@ -1175,6 +1182,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             (kind == UIT_CARDS && name[1] == 0) || (kind == UIT_PICTURE && !strcmp(name, "side")) ||
             (kind == UIT_POPOVER && !strcmp(name, "w")) || (kind == UIT_CANVAS && !strcmp(name, "w")) ||
             (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_ROW && (!strcmp(name, "gap") || !strcmp(name, "pad"))) ||
+            (kind == UIT_LABEL && (!strcmp(name, "scale") || !strcmp(name, "w"))) ||
+            (kind == UIT_GROUP && !strcmp(name, "gap")) ||
             (kind == UIT_GRID && name[1] == 0)) {
             // an int prop: an int template, or the int literal a number lowers to
             const char *d = src + (src[0] == '-');
@@ -1294,9 +1303,10 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= CV_GROW;
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & CV_GROW) != 0);
     }
-    if (kind == UIT_ROW && (!strcmp(name, "mid") || !strcmp(name, "grow"))) {
-        // a row in a row centred on it (RW_MID); a row filling its stack (RW_GROW)
-        int bit = name[0] == 'm' ? RW_MID : RW_GROW;
+    if (kind == UIT_ROW && (!strcmp(name, "mid") || !strcmp(name, "grow") || !strcmp(name, "wrap"))) {
+        // a row in a row centred on it (RW_MID); a row filling its stack (RW_GROW); a row whose
+        // cells pack from its start and wrap (RW_WRAP)
+        int bit = name[0] == 'm' ? RW_MID : name[0] == 'g' ? RW_GROW : RW_WRAP;
         if (strcmp(src, "True") && strcmp(src, "False") && strcmp(src, "1") && strcmp(src, "0"))
             return uit_fail(e, UIT_E_KIND, UIT_MSG("row %s=%s: True or False", "row %s=%s"), name, src);
         if (src[0] == 'T' || src[0] == '1')
@@ -1390,6 +1400,13 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         if (!strcmp(src, "True"))
             N->btn |= BT_ALONE;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    }
+    if (!strcmp(name, "look") && kind == UIT_BUTTON) {
+        // look="large" (BT_LARGE): half again a row's height, twice the pads, a wider least width
+        if (strcmp(src, "large"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("button look=%s: \"large\"", "button look=%s"), src);
+        N->btn |= BT_LARGE;
+        return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (kind == UIT_STEPPER && (!strcmp(name, "grow") || !strcmp(name, "tone"))) {
         // a fill along a row (BT_GROW); its value's ink, ink or dim (`lit`)
@@ -1668,6 +1685,17 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         // its verb (the last button) in the danger look (DL_DANGER); else the primary
         N->lit = (uint8_t)((N->lit & ~DL_DANGER) | (!strcmp(src, "danger") ? DL_DANGER : 0));
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & DL_DANGER) != 0);
+    }
+    if (!strcmp(name, "look") && kind == UIT_CARDS) {
+        // "carousel": one row of tiles that snaps, its centre card's words under it (CD_CAROUSEL);
+        // "shelf": cards in the rows the band holds, scrolling across (CD_SHELF); "icons": tiles
+        // in the columns it holds, scrolling down (CD_ICONS)
+        int lk = !strcmp(src, "carousel") ? CD_CAROUSEL : !strcmp(src, "shelf") ? CD_SHELF
+                 : !strcmp(src, "icons") ? CD_ICONS : 0;
+        if (!lk)
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("cards look=%s: carousel, shelf, icons", "cards look=%s"), src);
+        N->lit |= (uint8_t)lk;
+        return add_prop(e, node, name, src, repr, PK_LIT, lk);
     }
     if (!strcmp(name, "look") && kind == UIT_DIALOG) {
         // "keys": on the T-Deck its buttons are the band's Enter and Esc, no row of them (DL_KEYS)

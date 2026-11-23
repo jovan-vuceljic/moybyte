@@ -1285,6 +1285,10 @@
     "look": {
      "type": "word:card,rules",
      "level": 2
+    },
+    "gap": {
+     "type": "int",
+     "level": 2
     }
    }
   },
@@ -1312,6 +1316,10 @@
      "level": 2
     },
     "mid": {
+     "type": "bool",
+     "level": 2
+    },
+    "wrap": {
      "type": "bool",
      "level": 2
     }
@@ -1413,6 +1421,14 @@
     "align": {
      "type": "word:start,center,end",
      "level": 1
+    },
+    "scale": {
+     "type": "int",
+     "level": 2
+    },
+    "w": {
+     "type": "int",
+     "level": 2
     }
    }
   },
@@ -1706,6 +1722,10 @@
     },
     "tone": {
      "type": "tpl",
+     "level": 2
+    },
+    "look": {
+     "type": "word:large",
      "level": 2
     }
    }
@@ -2122,6 +2142,14 @@
     },
     "flow": {
      "type": "bool",
+     "level": 2
+    },
+    "look": {
+     "type": "word:carousel,shelf,icons",
+     "level": 2
+    },
+    "tone": {
+     "type": "tpl",
      "level": 2
     }
    }

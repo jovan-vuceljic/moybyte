@@ -307,8 +307,6 @@ def _load(eng, x, blob, packed, f, tb):
     eng._acts = bound
     eng._draws, eng._grounds = draws, f["G"]
     eng.unfront(f["X"])
-    x.on_draw(eng._draw)
-    x.on_pic(eng._pic)
-    eng._drawing = True
+    eng.bind_draws(x)
     for name in names:
         eng._push(name)

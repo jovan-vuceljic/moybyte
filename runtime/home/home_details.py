@@ -1,28 +1,33 @@
 # Map (grep -n a name to jump there):
 #   HomeDetails                   the mixin the home's details and desk buttons live on
 #   HomeDetails.card_verbs        the selected card's verbs, its menu's rows
-#   HomeDetails._desk_buttons     the desk pane's verb buttons, laid out
-#   HomeDetails._draw_details     the desk hero's details: title, facts, words, buttons
+#   HomeDetails._desk_buttons     the desk pane's verb buttons, where the page drew them
+#   HomeDetails._draw_details     the desk hero's details: the page in the pane
+#   HomeDetails.details_put       what the page shows of the selected card
 #   HomeDetails._details_tap      a tap on the desk pane's buttons
 """The home's DETAILS: what the desk home says of the selected card beside
-its hero -- the title, the facts line (`_facts`: kind, plays, the last day),
-the description and the rows of verb buttons (docs/theme_and_shell_2026-11.md
-§8.10) -- with the buttons' layout and their tap, and the card's verbs a
-card's menu lists (`card_verbs`). A mixin over `LauncherHomeLayer`, after
-`HomeHints` among its bases: the details are drawn on the desk home's
-painted frames, never on a band frame.
-It owns no state of its own: the button focus it draws is the layer's.
+its hero -- the title, the metadata, the description, the facts (`_facts`:
+plays, the last day, the maker) and the verb buttons
+(docs/theme_and_shell_2026-11.md §8.10), a `uitree` page (`home_ui.page`)
+laid in the pane on a host of its own -- with the buttons' tap, and the
+card's verbs a card's menu lists (`card_verbs`). A mixin over
+`LauncherHomeLayer`, after `HomeHints` among its bases: the details are drawn
+on the desk home's painted frames, never on a band frame. The keys stay the
+layer's: the button they are on (`_button_focus`) is handed to the page's
+host as its focus, and with them on the shelf the page shows none.
 """
 
 import ui as _ui
 import ui_draw as _ui_draw
-from home_grid import (day_words, desk_button_layout, DESK_ROW_GAP, _dot_top,
-                       NEW_TILE_TYPE, PSEUDO_TILE_TYPES, _VERB_HINT)
+from home_grid import day_words, NEW_TILE_TYPE, PSEUDO_TILE_TYPES, _VERB_HINT
 _in = _ui.rect_in   # one hit-test (ui.rect_in)
 
-DESC_LINES = 3       # the desk home's description: at most this many lines,
-DESC_EMS = 48        # ... as wide as this many n's: about 60 characters of
-                     # running text, the width of the buttons' row
+_PRIMARY = ("play", "open", "new", "change")    # a first button that is the tab's tap
+_PLAYS = ("play", "open", "window")             # a button that wears the Play glyph
+_BUTTON_IDS = ("press/0", "press/1", "press/2", "press/3")   # home_ui's buttons' stops
+_NO_RECT = (0, 0, 0, 0)     # a button the page has not drawn yet
+_META_SEP = "  \u00b7  "    # between the metadata's parts
+DESC_EMS = 48               # the description's measure, this many n's: about 60 characters
 
 
 def times_words(n):
@@ -30,9 +35,19 @@ def times_words(n):
     return "Not yet" if not n else ("Once" if n == 1 else "%d times" % n)
 
 
+def _kind(k, verb):
+    """The look of the pane's `k`th button, `verb`'s."""
+    return "primary" if k == 0 and verb in _PRIMARY else ("danger" if verb == "delete" else "normal")
+
+
 class HomeDetails:
     """The desk hero's details, its verb buttons and the card's verbs of
     `LauncherHomeLayer`."""
+
+    _dpage = None       # the details pane's page and its host, made at the first desk paint
+    _dhost = None
+    _dkey = None        # what the page shows was put at (`_draw_details`)
+    _dput = None        # ...and what `details_put` hands it
 
     def card_verbs(self):
         """The selected card's verbs beyond its tap, the ONE list every
@@ -72,26 +87,39 @@ class HomeDetails:
         out.extend(v for v in self.card_verbs() if v not in ("favourite", "send"))
         return out
 
-    def _desk_button_top(self):
-        """The y of the details pane's first row of buttons."""
-        dk = self.grid._geom()[9]
-        h, block, u = dk[5][4], dk[5][5], dk[5][6]
-        return dk[6] + block - 6 // u - h - dk[8]
+    def _details_page(self):
+        """The details pane's page (`home_ui.page`) on its own host, made at
+        the first desk paint: a handheld never makes one."""
+        pg = self._dpage
+        if pg is None:
+            import ui_host
+            import uitree_app
+            import home_ui
+            self._dhost = ui_host.AppHost()
+            pg = self._dpage = uitree_app.hosted_page(home_ui.page, self._dhost, self, env=self)
+            pg.bare = True                   # the home's ground is its ground
+            pg.band = False                  # the hint strip names its keys
+            pg.open()
+        return pg
+
+    def all(self):
+        """The page's damage: the home draws again."""
+        self.ws.mark_dirty()
 
     def _desk_buttons(self):
-        """[(verb, rect, kind)] of the details pane's buttons over the
-        pane's foot (`desk_button_layout`): rows from the first the pane
-        keeps (`_desk_button_top`), every one of the card's verbs."""
+        """[(verb, rect, kind)] of the details pane's buttons: the desk's
+        verbs (`_desk_verbs`), each where the page drew its place last (an
+        empty rect before it has), the first a primary where it plays,
+        opens, makes or changes, DEL a danger."""
         verbs = self._desk_verbs()
         if not verbs:
             return []                        # off the desk
-        dk = self.grid._geom()[9]
-        dx, dw = dk[1], dk[2]
-        h, u = dk[5][4], dk[5][6]
-        y = self._desk_button_top()
-        return [(v, (dx + x, y + r * (h + DESK_ROW_GAP // u) + dy, w, h), kind)
-                for v, x, r, w, kind, dy in desk_button_layout(verbs, dw,
-                                                               self.ws.layout.fs, u)]
+        box = self._dhost.box if self._dpage is not None else None
+        out = []
+        for k, v in enumerate(verbs):
+            r = box(_BUTTON_IDS[k]) if box is not None else None
+            out.append((v, r if r is not None else _NO_RECT, _kind(k, v)))
+        return out
 
     def _details_tap(self, px, py):
         """A press on the desk home's hero (the active tab's tap) or one of
@@ -110,93 +138,76 @@ class HomeDetails:
         return False
 
     def _draw_details(self, cv):
-        """The desk home's details pane beside the hero (step 18): the
-        selected card's title in the `title` face, its metadata, its facts
-        (how often and when it was played, the play record's; who made it,
-        its id's), then its buttons. On the home's ground under a theme's
-        depth, on a plate in the bar's colours without one."""
+        """The desk home's details pane beside the hero (step 18), the page
+        laid in the pane: the selected card's title in the `title` face at
+        the pane's scale, its metadata, its description, its facts (how
+        often and when it was played, the play record's; who made it, its
+        id's), then its buttons, the one the keys are on marked."""
         ws = self.ws
         g = self.grid
         if not g.items:
             return
-        it = g.items[g.nearest()]
-        th = ws.theme_colors
+        pg = self._details_page()
         dk = g._geom()[9]
-        dx, dw, hy = dk[1], dk[2], dk[6]
-        ts, ms, ks, vs, bh, block, u = dk[5]
-        ink, dim = th["ink"], th["ink_dim"]
-        name = it.get("title") or ""
-        if it.get("type") == NEW_TILE_TYPE:
-            name = "New"
-        ty = hy + 4 // u
-        was = _ui_draw.print_font(_ui_draw.font("title")[0])
-        cv.print_scaled(_ui_draw.print_ellipsis(name, dw, ts), dx, ty, ink, ts)
-        if was is not None:
-            _ui_draw.print_font(was)
-        lh = _ui_draw.font()[2]
-        facts_on, meta_on = dk[7]
-        my = ty + _ui_draw.font("title")[2] * ts + 14 // u
-        sep = 8 // u
-        x = dx
-        for k, t in enumerate(g._meta(it, played=False) if meta_on else ()):
-            if k:                                            # the facts' Last
-                if x + ms + sep >= dx + dw:
-                    break
-                cv.rect(x, _dot_top(my, ms, ms), ms, ms, dim)
-                x += ms + sep
-            cv.print_scaled(_ui_draw.print_fit(t, dx + dw - x, ms), x, my, dim, ms)
-            x += _ui_draw.print_width(t, ms) + sep
-        if not meta_on:
-            my -= lh * ms + 14 // u
-        buttons = self._desk_buttons()
-        by = self._desk_button_top()
-        if it.get("type") not in PSEUDO_TILE_TYPES:
-            vy = by - 16 // u - lh * vs
-            ky = vy - 6 // u - lh * ks
-            if not facts_on:
-                ky = by - 6 // u
-            # the manifest's description (SPEC.md 3.7) in the room between
-            # the metadata and the facts: a measure of DESC_EMS, DESC_LINES
-            # lines at most, the last cut with an ellipsis (owner, 2026-10-19)
-            gap = 10 // u
-            room = min(DESC_LINES, (ky - gap - (my + lh * ms + gap)) // (lh * ms))
-            text = it.get("description")
-            if text and room > 0:
-                tw = min(dw, _ui_draw.print_width("n" * DESC_EMS, ms))
-                lines = list(_ui_draw.wrap_px(text, tw, ms))
-                if len(lines) > room:
-                    lines = lines[:room]
-                    lines[-1] = _ui_draw.print_fit(lines[-1], tw - _ui_draw.print_width("...", ms), ms) + "..."
-                dy = my + lh * ms + gap
-                for line in lines:
-                    cv.print_scaled(line, dx, dy, dim, ms)
-                    dy += lh * ms
-            # the facts' columns stand on the buttons' left edges under them
-            # (design review R4-31); a fact past the last button a column on
-            col = 150 // u
-            facts = self._facts(it) if facts_on else ()
-            xs = [r[0] for _v, r, _k in buttons if r[1] == by][:len(facts)]
-            while len(xs) < len(facts):
-                xs.append(xs[-1] + col if xs else dx)
-            for k, (key, val) in enumerate(facts):
-                fx = xs[k]
-                w = (xs[k + 1] - fx if k + 1 < len(xs) else col) - 10 // u
-                w = min(w, dx + dw - fx)
-                if w <= 0:
-                    break                    # a column past the pane's edge
-                cv.print_scaled(key, fx, ky, dim, ks)
-                cv.print_scaled(_ui_draw.print_fit(val, w, vs), fx, vy, ink, vs)
+        rect = (dk[1], dk[6], dk[2], dk[5][5])
+        it = g.items[g.nearest()]
+        verbs = self._desk_verbs()
+        key = (it, g.tab, tuple(verbs), dk[5][0], dk[7], g.played(it), g.today())
+        if key != self._dkey:
+            self._dkey = key
+            self._dput = (it, verbs, dk)
+            import home_ui
+            pg.run(home_ui.put, action="put")
+            home_ui.ui.commit(pg)
         on = self._button_focus
-        for k, (v, r, kind) in enumerate(buttons):
-            _ui_draw.button(cv, th, r, _VERB_HINT[v][1], kind=kind, app="home",
-                            glyph="play" if v in ("play", "open") else None,
-                            glyph_draw=self._play_glyph, focus=k == on)
+        host = self._dhost
+        if on is not None and verbs:
+            host.focus(_BUTTON_IDS[min(on, len(verbs) - 1)])
+        host.begin(cv, ws.theme_colors, rect, True, elsewhere=on is None)
+        pg.paint(0.0, cv, ws.theme_colors, rect, True)
 
-    def _play_glyph(self, kind, rect, c, cv):
-        """A details-pane button's glyph: the theme's icon set's (the dock's,
-        Files' and the Editor's Play), else the toolkit's own raster."""
-        if not self.ws.draw_icon(kind, rect, c, cv):
-            _ui_draw.glyph(cv, "run" if kind == "play" else kind, rect, c)
+    def details_put(self, s):
+        """What the details pane shows of the selected card (home_ui's `put`)."""
+        import home_ui
+        it, verbs, dk = self._dput
+        g = self.grid
+        pseudo = it.get("type") in PSEUDO_TILE_TYPES
+        s.title = "New" if it.get("type") == NEW_TILE_TYPE else str(it.get("title") or "")
+        ts, ms, _ks, _vs, bh, pane, _u = dk[5]
+        s.title_scale = ts
+        facts_on, meta_on = dk[7]
+        facts_on = facts_on and not pseudo
+        # what the pane's height holds at the text's scale, each a line and
+        # half one apart: the title and the buttons' rows always, the facts (two
+        # lines), then the metadata, then two lines of the description
+        lh = _ui_draw.font()[2] * self.ws.layout.fs
+        step = 3 * lh // 2
+        room = pane - _ui_draw.font("title")[2] * ts - bh - dk[8] - lh
+        facts_on = facts_on and room >= 2 * step
+        room -= 2 * step if facts_on else 0
+        meta_on = meta_on and room >= step
+        room -= step if meta_on else 0
+        s.meta_on, s.facts_on = meta_on, facts_on
+        s.meta = _META_SEP.join(g._meta(it, played=False)) if meta_on else ""
+        s.desc = "" if pseudo or room < 2 * lh else str(it.get("description") or "")
+        s.desc_w = _ui_draw.print_width("n" * DESC_EMS, ms)
+        facts = () if pseudo or not facts_on else self._facts(it)
+        for k in range(home_ui.FACTS):
+            setattr(s, home_ui.FACT_KEYS[k], facts[k][0] if k < len(facts) else "")
+            setattr(s, home_ui.FACT_VALUES[k], facts[k][1] if k < len(facts) else "")
+        for k in range(home_ui.BUTTONS):
+            v = verbs[k] if k < len(verbs) else None
+            setattr(s, home_ui.SHOWN[k], v is not None)
+            if v is not None:
+                setattr(s, home_ui.LABELS[k], _VERB_HINT[v][1])
+                setattr(s, home_ui.ICONS[k], "play" if v in _PLAYS else "")
+                setattr(s, home_ui.KINDS[k], _kind(k, v))
+
+    def details_press(self, k):
+        """The page's button `k` pressed: its verb."""
+        verbs = self._desk_verbs()
+        if k < len(verbs):
+            self._do_verb(verbs[k])
 
     def _facts(self, it):
         """The details pane's facts of a cart: (caption, value) pairs."""

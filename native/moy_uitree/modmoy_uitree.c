@@ -15,12 +15,19 @@
 moy_ui_ctx_t *moy_ui_mp_ctx(mp_obj_t ctx);
 void moy_ui_mp_sink(moy_ui_sink_t *s, mp_obj_t cv, mp_obj_t look);
 
+enum { PIC_NAMES = 96, PIC_R = 12 };
+
 typedef struct {
     mp_obj_base_t base;
     uit_t *e;
     mp_obj_t draw;              // on_draw's function: (node, x, y, w, h)
     mp_obj_t pic;               // on_pic's function: (node, pic, rect or None)
     mp_obj_t raised;            // what it raised inside a frame, raised again after it
+    // what on_pic is handed, made once: the tile's tuple, written in place each call, and
+    // the picture names handed last, most recent first (a name again is the same str), so
+    // a frame of pictures allocates nothing
+    mp_obj_t pic_r;
+    mp_obj_t pic_s[PIC_NAMES];
 } eng_obj_t;
 
 static uit_t *eng(mp_obj_t self)
@@ -61,7 +68,9 @@ static mp_obj_t eng_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_
     (void)args;
     eng_obj_t *o = mp_obj_malloc_with_finaliser(eng_obj_t, type);
     o->e = uit_new();
-    o->draw = o->pic = o->raised = MP_OBJ_NULL;
+    o->draw = o->pic = o->raised = o->pic_r = MP_OBJ_NULL;
+    for (int i = 0; i < PIC_NAMES; i++)
+        o->pic_s[i] = MP_OBJ_NULL;
     if (o->e == NULL)
         mp_raise_type(&mp_type_MemoryError);
     return MP_OBJ_FROM_PTR(o);
@@ -72,7 +81,9 @@ static mp_obj_t eng_del(mp_obj_t self)
     eng_obj_t *o = MP_OBJ_TO_PTR(self);
     uit_free(o->e);
     o->e = NULL;
-    o->draw = o->pic = o->raised = MP_OBJ_NULL;
+    o->draw = o->pic = o->raised = o->pic_r = MP_OBJ_NULL;
+    for (int i = 0; i < PIC_NAMES; i++)
+        o->pic_s[i] = MP_OBJ_NULL;
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_del_obj, eng_del);
@@ -551,19 +562,47 @@ static mp_obj_t eng_on_draw(mp_obj_t self, mp_obj_t fn)
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eng_on_draw_obj, eng_on_draw);
 
-// A card's or a picture's image (uit_on_pic): fn(node, pic, None) 0 or the gen of the one it holds, fn(node, pic,
-// (x, y, w, h, cx, cy, cw, ch, focused)) its tile; what it raises is kept as a canvas's draw's is.
+// A picture's name as a str: the engine's recent ones kept, as many as a grid of cards
+// draws a frame (the desk's icons), so a frame allocates none.
+static mp_obj_t pic_name(eng_obj_t *o, const char *p, size_t n)
+{
+    int at = PIC_NAMES - 1;
+    mp_obj_t s = MP_OBJ_NULL;
+    for (int i = 0; i < PIC_NAMES && o->pic_s[i] != MP_OBJ_NULL; i++) {
+        size_t m;
+        const char *d = mp_obj_str_get_data(o->pic_s[i], &m);
+        if (m == n && !memcmp(d, p, n)) {
+            at = i;
+            s = o->pic_s[i];
+            break;
+        }
+    }
+    if (s == MP_OBJ_NULL)
+        s = mp_obj_new_str(p, n);   // a name not held: the one handed longest ago goes
+    memmove(&o->pic_s[1], &o->pic_s[0], (size_t)at * sizeof(mp_obj_t));
+    o->pic_s[0] = s;
+    return s;
+}
+
+// A card's or a picture's image (uit_on_pic): fn(node, pic, None) 0 or the gen of the one it
+// holds, fn(node, pic, (x, y, w, h, cx, cy, cw, ch, flags, radius, dw, dh)) its tile (uit_pic_fn's
+// r: one tuple an engine, written anew each call, which the function reads and never keeps); what
+// it raises is kept as a canvas's draw's is.
 static int pic_tramp(void *ud, int node, const char *pic, size_t n, const int32_t *r)
 {
     eng_obj_t *o = ud;
     if (o->pic == MP_OBJ_NULL || o->raised != MP_OBJ_NULL)
         return 0;
-    mp_obj_t args[3] = {MP_OBJ_NEW_SMALL_INT(node), mp_obj_new_str(pic, n), mp_const_none};
+    mp_obj_t args[3] = {MP_OBJ_NEW_SMALL_INT(node), pic_name(o, pic, n), mp_const_none};
     if (r) {
-        mp_obj_t t[9];
-        for (int i = 0; i < 9; i++)
-            t[i] = MP_OBJ_NEW_SMALL_INT(r[i]);
-        args[2] = mp_obj_new_tuple(9, t);
+        if (o->pic_r == MP_OBJ_NULL) {
+            mp_obj_t t[PIC_R] = {0};
+            o->pic_r = mp_obj_new_tuple(PIC_R, t);
+        }
+        mp_obj_tuple_t *t = MP_OBJ_TO_PTR(o->pic_r);
+        for (int i = 0; i < PIC_R; i++)
+            t->items[i] = MP_OBJ_NEW_SMALL_INT(r[i]);
+        args[2] = o->pic_r;
     }
     int held = 0;
     nlr_buf_t nlr;
@@ -592,6 +631,80 @@ static mp_obj_t eng_pics_moved(mp_obj_t self)
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_pics_moved_obj, eng_pics_moved);
+
+// The int32 words of array `a` (typecode i or l), at least `n` of them.
+static int32_t *words_of(mp_obj_t a, size_t n)
+{
+    mp_buffer_info_t bi;
+    mp_get_buffer_raise(a, &bi, MP_BUFFER_RW);
+    if ((bi.typecode != 'i' && bi.typecode != 'l') || bi.len < n * sizeof(int32_t))
+        mp_raise_TypeError(MP_ERROR_TEXT("moy_uitree: takes array('i') of enough words"));
+    return bi.buf;
+}
+
+// carousel(out) (uit_carousel): the page's carousel as the last frame drew it into out, an
+// array('i') of 20; whether one drew.
+static mp_obj_t eng_carousel(mp_obj_t self, mp_obj_t out)
+{
+    return mp_obj_new_bool(uit_carousel(eng(self), words_of(out, UIT_CAROUSEL_WORDS)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_carousel_obj, eng_carousel);
+
+// carousel_tile(row, out) (uit_carousel_tile): its tile into out, an array('i') of 4; whether it shows.
+static mp_obj_t eng_carousel_tile(mp_obj_t self, mp_obj_t row, mp_obj_t out)
+{
+    return mp_obj_new_bool(uit_carousel_tile(eng(self), mp_obj_get_int(row), words_of(out, 4)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(eng_carousel_tile_obj, eng_carousel_tile);
+
+// carousel_at(x, y) (uit_carousel_at): the row whose tile holds the point, -1 none.
+static mp_obj_t eng_carousel_at(mp_obj_t self, mp_obj_t x, mp_obj_t y)
+{
+    return MP_OBJ_NEW_SMALL_INT(uit_carousel_at(eng(self), mp_obj_get_int(x), mp_obj_get_int(y)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(eng_carousel_at_obj, eng_carousel_at);
+
+// carousel_geom(band, fs, desk, out) (uit_carousel_geom): band an array('i') of 4, out of 10;
+// whether the page has a carousel.
+static mp_obj_t eng_carousel_geom(size_t n, const mp_obj_t *a)
+{
+    (void)n;
+    return mp_obj_new_bool(uit_carousel_geom(eng(a[0]), words_of(a[1], 4), mp_obj_get_int(a[2]),
+                                             mp_obj_is_true(a[3]), words_of(a[4], 10)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_carousel_geom_obj, 5, 5, eng_carousel_geom);
+
+// cells(out) (uit_cells): the page's shelf or icons as the last frame drew them into out, an
+// array('i') of 25; whether they drew.
+static mp_obj_t eng_cells(mp_obj_t self, mp_obj_t out)
+{
+    return mp_obj_new_bool(uit_cells(eng(self), words_of(out, UIT_CELLS_WORDS)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_cells_obj, eng_cells);
+
+// cells_tile(i, out) (uit_cells_tile): card i's box into out, an array('i') of 4; whether it shows.
+static mp_obj_t eng_cells_tile(mp_obj_t self, mp_obj_t i, mp_obj_t out)
+{
+    return mp_obj_new_bool(uit_cells_tile(eng(self), mp_obj_get_int(i), words_of(out, 4)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(eng_cells_tile_obj, eng_cells_tile);
+
+// cells_at(x, y) (uit_cells_at): the card whose box or title holds the point, -1 none.
+static mp_obj_t eng_cells_at(mp_obj_t self, mp_obj_t x, mp_obj_t y)
+{
+    return MP_OBJ_NEW_SMALL_INT(uit_cells_at(eng(self), mp_obj_get_int(x), mp_obj_get_int(y)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(eng_cells_at_obj, eng_cells_at);
+
+// cells_geom(band, fs, desk, out) (uit_cells_geom): band an array('i') of 4, out of 16; whether
+// the page has a shelf or icons.
+static mp_obj_t eng_cells_geom(size_t n, const mp_obj_t *a)
+{
+    (void)n;
+    return mp_obj_new_bool(uit_cells_geom(eng(a[0]), words_of(a[1], 4), mp_obj_get_int(a[2]),
+                                          mp_obj_is_true(a[3]), words_of(a[4], 16)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_cells_geom_obj, 5, 5, eng_cells_geom);
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_frame_obj, 11, 11, eng_frame);
 
 // still(ctx, x, y, w, h, flags, fs, input) -> whether the frame drawn last is what a frame now draws
@@ -750,6 +863,26 @@ static mp_obj_t eng_page_rects(mp_obj_t self)
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_page_rects_obj, eng_page_rects);
 
+// band(): the hints band the last frame drew, (x, y, w, h), or None (uit_band)
+static mp_obj_t eng_band(mp_obj_t self)
+{
+    int32_t r[4];
+    if (!uit_band(eng(self), r))
+        return mp_const_none;
+    mp_obj_t o[4];
+    for (int i = 0; i < 4; i++)
+        o[i] = MP_OBJ_NEW_SMALL_INT(r[i]);
+    return mp_obj_new_tuple(4, o);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(eng_band_obj, eng_band);
+
+// stop_over(i): whether stop i lies in a dialog or a popover (uit_stop_over)
+static mp_obj_t eng_stop_over(mp_obj_t self, mp_obj_t i)
+{
+    return mp_obj_new_bool(uit_stop_over(eng(self), mp_obj_get_int(i)) == 1);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_stop_over_obj, eng_stop_over);
+
 static mp_obj_t eng_gens(mp_obj_t self)
 {
     int32_t g[16];
@@ -782,6 +915,25 @@ static mp_obj_t eng_dump(mp_obj_t self)
     return mp_obj_new_str_from_vstr(&v);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_dump_obj, eng_dump);
+
+// fits_on(on): the fit report armed (uit_fits_on); fits(): the last frame's records (uit_fits)
+static mp_obj_t eng_fits_on(mp_obj_t self, mp_obj_t on)
+{
+    uit_fits_on(eng(self), mp_obj_is_true(on));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_fits_on_obj, eng_fits_on);
+
+static mp_obj_t eng_fits(mp_obj_t self)
+{
+    uit_t *e = eng(self);
+    int n = uit_fits(e, NULL, 0);
+    vstr_t v;
+    vstr_init_len(&v, (size_t)n);
+    uit_fits(e, v.buf, (size_t)n);
+    return mp_obj_new_str_from_vstr(&v);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(eng_fits_obj, eng_fits);
 
 static mp_obj_t eng_stats(mp_obj_t self)
 {
@@ -822,6 +974,8 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_hints), MP_ROM_PTR(&eng_hints_obj) },
     { MP_ROM_QSTR(MP_QSTR_gens), MP_ROM_PTR(&eng_gens_obj) },
     { MP_ROM_QSTR(MP_QSTR_page_rects), MP_ROM_PTR(&eng_page_rects_obj) },
+    { MP_ROM_QSTR(MP_QSTR_band), MP_ROM_PTR(&eng_band_obj) },
+    { MP_ROM_QSTR(MP_QSTR_stop_over), MP_ROM_PTR(&eng_stop_over_obj) },
     { MP_ROM_QSTR(MP_QSTR_row_stop), MP_ROM_PTR(&eng_row_stop_obj) },
     { MP_ROM_QSTR(MP_QSTR_popover), MP_ROM_PTR(&eng_popover_obj) },
     { MP_ROM_QSTR(MP_QSTR_stop), MP_ROM_PTR(&eng_stop_obj) },
@@ -843,6 +997,14 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_on_draw), MP_ROM_PTR(&eng_on_draw_obj) },
     { MP_ROM_QSTR(MP_QSTR_on_pic), MP_ROM_PTR(&eng_on_pic_obj) },
     { MP_ROM_QSTR(MP_QSTR_pics_moved), MP_ROM_PTR(&eng_pics_moved_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel), MP_ROM_PTR(&eng_carousel_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel_tile), MP_ROM_PTR(&eng_carousel_tile_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel_at), MP_ROM_PTR(&eng_carousel_at_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel_geom), MP_ROM_PTR(&eng_carousel_geom_obj) },
+    { MP_ROM_QSTR(MP_QSTR_cells), MP_ROM_PTR(&eng_cells_obj) },
+    { MP_ROM_QSTR(MP_QSTR_cells_tile), MP_ROM_PTR(&eng_cells_tile_obj) },
+    { MP_ROM_QSTR(MP_QSTR_cells_at), MP_ROM_PTR(&eng_cells_at_obj) },
+    { MP_ROM_QSTR(MP_QSTR_cells_geom), MP_ROM_PTR(&eng_cells_geom_obj) },
     { MP_ROM_QSTR(MP_QSTR_build_end), MP_ROM_PTR(&eng_build_end_obj) },
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&eng_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&eng_close_obj) },
@@ -877,6 +1039,8 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_dialog), MP_ROM_PTR(&eng_dialog_obj) },
     { MP_ROM_QSTR(MP_QSTR_unfocused), MP_ROM_PTR(&eng_unfocused_obj) },
     { MP_ROM_QSTR(MP_QSTR_dump), MP_ROM_PTR(&eng_dump_obj) },
+    { MP_ROM_QSTR(MP_QSTR_fits_on), MP_ROM_PTR(&eng_fits_on_obj) },
+    { MP_ROM_QSTR(MP_QSTR_fits), MP_ROM_PTR(&eng_fits_obj) },
     { MP_ROM_QSTR(MP_QSTR_stats), MP_ROM_PTR(&eng_stats_obj) },
 };
 static MP_DEFINE_CONST_DICT(eng_locals, eng_locals_table);

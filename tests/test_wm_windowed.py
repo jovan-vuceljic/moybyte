@@ -407,8 +407,8 @@ def test_change_leaves_library_for_desktop_backdrop(tmp_path):
     original_launch = ws.home.launch_selected
     ws.home.launch_selected = lambda *a, **k: (launched.append(1),
                                           original_launch(*a, **k))
-    tile = ws.launcher.tile_rect(ws.launcher.sel)
-    ws.wm._backdrop_layer.handle_pointer(tile[0] + 2, tile[1] + 2, True)
+    bx, by, bw, bh = ws.launcher.band_rect()     # (the selected card lies at its centre)
+    ws.wm._backdrop_layer.handle_pointer(bx + bw // 2, by + bh // 2, True)
     assert launched == []
     assert ws.screen != "launcher" and ws.wm.stack.has("desk")
 

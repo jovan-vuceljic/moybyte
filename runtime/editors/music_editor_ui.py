@@ -216,11 +216,12 @@ class MusicEditorUI:
             self.run("sync", vals)
 
     def _pad_w(self):
-        """The pad's width: two 60 px buttons on a 320 px tab, more of a
-        wider one's room (its words whole), at the font scale."""
+        """The pad's width: two 61 px buttons on a 320 px tab, the widest
+        words (Paste, Down) whole beside their icons, more of a wider one's
+        room, at the font scale."""
         lay = self.layout
         fs = max(1, getattr(self.ws.sys_canvas, "font_scale", 1))
-        return max(124 * fs, min(lay.cw * 3 // 8, 180 * fs))
+        return max(126 * fs, min(lay.cw * 3 // 8, 180 * fs))
 
     # -- the verbs (the page's handlers) -----------------------------------------------
 
@@ -466,11 +467,12 @@ def _rungs(w, vh, u):
 _RUNGS = [0, None]           # (width, pitch, unit) packed -> the ladder's quads
 
 
-def geometry(x, y, w, h, u):
+def geometry(x, y, w, h, u, lw=None):
     """The graph canvas's parts in its rect: a dict of rects and sizes. The
     graph is 12 px a semitone where the canvas holds it, else 8 (800 x 480),
     6 at the least; a step 26 px where 16 fit, else narrower; the octaves'
-    names left of it, each step's wave and the volume ladder under it."""
+    names left of it in a column `lw` wide (24 units, or more where the
+    text scale is larger), each step's wave and the volume ladder under it."""
     pad = 12 * u
     fixed = 4 * u + 4 * u + 20 * u + 8 * LEVELS * u + 8 * u
     semi = 6 * u
@@ -478,7 +480,8 @@ def geometry(x, y, w, h, u):
         if fixed + SPAN * sv * u <= h:
             semi = sv * u
             break
-    gx = x + pad + 30 * u
+    lw = max(24 * u, lw or 0)
+    gx = x + pad + lw + 6 * u
     cw = max(10 * u, min(26 * u, (x + w - pad - gx) // PAGE))
     gy = y + 4 * u
     gh = SPAN * semi
@@ -487,7 +490,7 @@ def geometry(x, y, w, h, u):
     vy = wy + 20 * u
     return {"graph": (gx, gy, cw * PAGE, gh), "semi": semi, "cw": cw,
             "waves": (gx, wy, cw * PAGE, 16 * u), "ladder": (gx, vy, cw * PAGE, vh * LEVELS),
-            "vh": vh}
+            "vh": vh, "lw": lw}
 
 
 class SoundPane:
@@ -506,6 +509,7 @@ class SoundPane:
         self.brush = 1              # the wave brush: a wave id
         self.octs = {}              # a sound -> the graph's lowest C, as the pane left it
         self._u = 1
+        self._lw = None             # the graph's names' column, 24 px at the text scale (`geometry`)
 
     def _page(self):
         if self.page is None:
@@ -745,7 +749,7 @@ class SoundPane:
         if me is None or r is None or kind == "up":
             return
         u = self._u
-        g = geometry(0, 0, r[2], r[3], u)
+        g = geometry(0, 0, r[2], r[3], u, self._lw)
         hit = None
         for key in ("graph", "waves", "ladder"):
             gx, gy, gw, gh = g[key]
@@ -788,10 +792,11 @@ class SoundPane:
             return
         th = self.ws.theme_colors
         u = self._u
-        g = geometry(x, y, w, h, u)
+        self._lw = 24 * max(u, getattr(cv, "font_scale", 1))
+        g = geometry(x, y, w, h, u, self._lw)
         s = me.cur_sfx()
         gx, gy, gw, gh = g["graph"]
-        semi, cw = g["semi"], g["cw"]
+        semi, cw, lw = g["semi"], g["cw"], g["lw"]
         lo = self.low(me)
         light = th.get("surface_light", False)
         dim, lab = th["ink_dim"], _ui_draw.label
@@ -830,11 +835,11 @@ class SoundPane:
                 named = (cx, top, p)
         uitree_editor._clip_in(cv, x, y, w, h, outer)
         for k in range(0, SPAN, 12):
-            lab(cv, (gx - 26 * u, gy + gh - k * semi - 14 * u, 24 * u, 14 * u), note_name(lo + k), dim)
+            lab(cv, (gx - lw - 2 * u, gy + gh - k * semi - 14 * u, lw, 14 * u), note_name(lo + k), dim)
         if named is not None:
             cx, top, p = named
             t = note_name(p)
-            tw = _ui.text_size(t)[0] + 10 * u
+            tw = _ui.text_size(t, getattr(cv, "font_scale", 1))[0] + 10 * u
             th_ = 18 * u
             nx = max(gx, min(gx + gw - tw, cx + (cw - tw) // 2))
             ny = max(gy + 2 * u, top - th_ - 2 * u)
@@ -859,7 +864,7 @@ class SoundPane:
                 cv.fill_rects(rungs, -1, cx + 4 * u, ly, th["border"])
             if lit:
                 cv.fill_rects(rungs, lit, cx + 4 * u, ly, th["value"])
-        lab(cv, (gx - 26 * u, ly + (LEVELS * vh - 14 * u) // 2, 24 * u, 14 * u), "Vol", dim)
+        lab(cv, (gx - lw - 2 * u, ly + (LEVELS * vh - 14 * u) // 2, lw, 14 * u), "Vol", dim)
 
     # -- the desk's half: the header, the keys, the popovers' doors -----------------------
 

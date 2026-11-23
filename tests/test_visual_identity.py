@@ -372,24 +372,3 @@ def test_a_relayout_keeps_one_base_per_cover(tmp_path):
     divs = sorted(k[1] for k in ws.covers._cache
                   if k[0] == covered["path"] and len(k) == 2)      # not a dimmed tint
     assert divs in ([1], [1, 2])
-
-
-def test_a_cover_takes_the_next_scale_up_when_it_overflows_by_a_tenth_at_most():
-    """The one rule that picks a cover's scale (`_cover_scale`): the largest
-    whole number that fits the art slot, or the next one up when that
-    overflows the slot by at most 10% each way. The Guition P4's 258x245 card
-    takes 2x (11 px over); the Waveshare's 206x173 stays at 1x (2x would be
-    48% over)."""
-    from runtime.home_grid import _cover_scale
-    assert _cover_scale(128, 258, 245) == 2
-    assert _cover_scale(128, 206, 173) == 1
-    assert _cover_scale(128, 256, 256) == 2
-    assert _cover_scale(128, 233, 233) == 2      # 256 is 9.9% over 233
-    assert _cover_scale(128, 232, 400) == 1      # ... and 10.3% over 232
-    assert _cover_scale(128, 400, 232) == 1
-    assert _cover_scale(128, 120, 120) == 1      # 1x near-fits too
-    assert _cover_scale(128, 116, 300) == 0
-    assert _cover_scale(64, 97, 75) == 1
-    assert _cover_scale(64, 85, 49) == 0
-    assert _cover_scale(128, 0, 0) == 0
-    assert _cover_scale(128, 300, -4) == 0

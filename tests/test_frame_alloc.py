@@ -68,7 +68,7 @@ only the answers the drag moved (DESK_DRAG_FRAME).
 
 Then the home, idle: the launcher's input and frame path with nothing pressed
 paints nothing and allocates nothing. Then its carousel gliding a card and
-back: a moving frame (the band's table pass) allocates under a ceiling,
+back: a moving frame (the band's pass) allocates under a ceiling,
 HOME_BAND_FRAME, not yet nothing, and the carousel at rest allocates nothing.
 Then a finger on its Games tab, over a shelf of the kid's games: the
 carousel flung (HOME_SWIPE_FRAME, HOME_SWIPE_MEAN) and the icons
@@ -1348,20 +1348,22 @@ def home(loop, info):
     info["home_idle"] = _frames(loop, @WINDOW_MS@, False, @MIN_FRAMES@)
     info["home_idle_drawn"] = ws.frame_state.frames_drawn - d0
     gc.enable()
-    # A card right, then back, BAND_STEPS frames each (the move the home's
-    # left and right keys make, `nav2d`): the carousel glides, its moving
-    # frames the band's (the table pass over its ground), then rests. A
-    # frame's allocation and whether it drew.
-    g = ws.launcher
+    # A card right, then back, BAND_STEPS frames each (the home's right and
+    # left keys, held a frame): the carousel glides, its moving frames the
+    # band's (its page's pass over its ground), then rests. A frame's
+    # allocation and whether it drew.
+    src = ws.input.source("kbd")
     gc.collect()
     gc.disable()
     d0 = ws.frame_state.frames_drawn
     band = []
     drew = []
     for k in range(@BAND_MOVES@):
-        g.nav2d(1 if k % 2 == 0 else -1, 0)
-        ws.mark_dirty()
-        for _ in range(@BAND_STEPS@):
+        key = "right" if k % 2 == 0 else "left"
+        src.set_button(key, True)
+        for j in range(@BAND_STEPS@):
+            if j == 1:
+                src.set_button(key, False)
             n = ws.frame_state.frames_drawn
             a = gc.mem_alloc()
             loop.step()
@@ -1459,7 +1461,8 @@ def home_swiped(loop, info):
                                  @FLING_STEPS@)
     ws.home.set_home_arrangement("icons")
     g, (bx, by, bw, bh) = _top()
-    info["icons_rows"] = (len(g.items), g.max_scroll())
+    c = g._cells()
+    info["icons_rows"] = (len(g.items), c.rows * c.cols)
     cx = bx + bw // 2
     info["icons_drag"] = _swiped(loop, cx, by + bh - 10, cx, by + 10, 40, 70)
     _top()
@@ -2016,11 +2019,13 @@ def test_a_live_wallpaper_home_frame_allocates_under_its_ceiling(result):
 
 
 # What one moving frame of the T-Deck home's carousel may allocate: a
-# ceiling, not zero. The band's table pass and the frame around it allocate
-# 1.1-2.8 KB a moving frame (2026-10-30; the private band path before it
-# allocated 0.5-2.8 KB on the same driver), and no frame of the home's is
-# pinned at zero until what allocates is found by line.
-HOME_BAND_FRAME = 3 * 1024
+# ceiling, not zero. The band's pass (the engine's carousel, which moves
+# itself, and the home's picture calls) and the frame around it allocate 0.2-0.5 KB
+# a moving frame (2026-11-22; the band's table of parts before it 0.5-1.1
+# KB, and the private band path before that 0.5-2.8 KB on the same driver;
+# 368 at most 2026-11-23, each card's cover kept for it), and no frame of
+# the home's is pinned at zero until what allocates is found by line.
+HOME_BAND_FRAME = 1024
 
 
 def test_a_home_band_frame_allocates_under_its_ceiling(result):
@@ -2042,15 +2047,20 @@ def test_a_home_band_frame_allocates_under_its_ceiling(result):
 
 
 # What a frame of a finger on the home's bands may allocate: a ceiling, not
-# zero. A moving carousel frame lays its cards out again (each card's rect
-# and its place in the row, `Carousel._visible`), the band's floor and the
-# rects it hands as damage are new each frame (`band_floor`), and a card
-# with no cover draws its title tile. Measured 2026-11-18 on the shelf
-# `_stage_shelf` stages: the carousel's fling at most 2928 bytes a frame and
-# 1309 on average (3264 and 1821 before its keys were kept and its geometry
-# read once a pass); the icons' drag a median of 736 (1056 before) and
-# their fling 784, around two frames of the drag over 7 KB that were there
-# before too.
+# zero. A moving carousel frame draws the band whole, each card's tile
+# through the home's picture call, the band's floor and the rects it hands
+# as damage new each frame, and a card with no cover draws its title tile.
+# Measured 2026-11-23 on the shelf `_stage_shelf` stages: the carousel's
+# fling's first twelve frames at most 2016 bytes, a drag's, most of it the
+# cards' covers, and 812 on average over the frames that drew; the press 736
+# since it lays out the hint strip and the tabs only for a press inside them
+# (3216 before, the press's the most;
+# 2816 when the home moved the row and the band kept its tiles; 2928 and
+# 1309 on the band's table of parts, 3264 and 1821 before its keys were
+# kept and its geometry read once a pass); the icons' drag a median of 960
+# and their fling 896 on the engine's look="icons" (2026-11-23; 1600 before
+# each card's cover was kept for it and the engine held a grid's picture
+# names, 736 and 784 on the Python cells before it).
 HOME_SWIPE_FRAME = 3 * 1024
 HOME_SWIPE_MEAN = 1536
 ICONS_SWIPE_MEDIAN = 1024
@@ -2081,7 +2091,7 @@ def test_the_icons_dragged_and_flung_allocate_under_the_ceiling(result):
     run past the glass): the frames that drew allocate a median of no more
     than ICONS_SWIPE_MEDIAN."""
     info, text = result
-    assert info["icons_rows"][1] > 0, info["icons_rows"]
+    assert info["icons_rows"][0] > info["icons_rows"][1], info["icons_rows"]
     for key, least in (("icons_drag", 30), ("icons_fling", 6)):
         moved = sorted(_moved(info, key, least))
         assert moved[len(moved) // 2] <= ICONS_SWIPE_MEDIAN, (key, info[key])

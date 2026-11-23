@@ -309,12 +309,40 @@ void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud);
 // front end finds, decodes and draws it. With `r` NULL it answers 0 where it does not hold the
 // picture, else a positive number that moves with the picture's pixels (the card then draws no icon
 // tile, and carries that as its gen); else r is the card's tile, r[0..3], its clip, r[4..7] (the
-// scroll's floor), and r[8] 1 where the card is focused (its tile lifted): the front end draws the
-// picture there where it holds it, else owes it. uit_pics_moved: a picture it holds came or went,
-// and every gen moves (a frame draws it).
+// scroll's floor), r[8] bit 1 where the card is focused (its tile lifted), and on a carousel's
+// tile (bit 2) bit 4 where it is the centre's and bit 8 where the band is at rest; r[9] its
+// corners' radius (0 on a grid's card, which cuts its own), r[10..11] the size the front end
+// decodes it at (0: the tile's): the front end draws the picture there where it holds it, else
+// owes it. uit_pics_moved: a picture it holds came or went, and every gen moves (a frame draws it).
 typedef int (*uit_pic_fn)(void *ud, int node, const char *pic, size_t n, const int32_t *r);
 void uit_on_pic(uit_t *e, uit_pic_fn fn, void *ud);
 void uit_pics_moved(uit_t *e);
+// The page's carousel (ui.cards look="carousel") as the last frame drew it: out[0..3] its band,
+// [4..13] its geometry (moy_ui_api_carousel_geom's), [14] its scroll, [15] its motion
+// (MOY_UI_SCROLL_DRAG, _FLING, _GLIDE), [16] the row nearest the centre, [17] the row it rests
+// on, [18] its rows, [19] 1 where it held the focus; 0 where none drew since the page was built.
+// uit_carousel_tile: row `row`'s tile there (x, y, w, h), 0 where it lies outside the band;
+// uit_carousel_at: the row whose tile holds (x, y), -1 none. uit_carousel_geom: the geometry
+// the page's carousel lays out in band `b` at font scale `fs` (on the desk's metrics where
+// `desk`), outside a frame; 0 where the page has none.
+enum { UIT_CAROUSEL_WORDS = 20 };
+int uit_carousel(const uit_t *e, int32_t out[UIT_CAROUSEL_WORDS]);
+int uit_carousel_tile(const uit_t *e, int row, int32_t out[4]);
+int uit_carousel_at(const uit_t *e, int x, int y);
+int uit_carousel_geom(uit_t *e, const int32_t b[4], int fs, int desk, int32_t out[10]);
+// The page's shelf or icons (ui.cards look="shelf" or "icons") as the last frame drew them:
+// out[0..3] their band, [4..19] their geometry (moy_ui_api_cells_geom's, MOY_UI_CELLS_*), [20]
+// their scroll, [21] their motion (MOY_UI_SCROLL_DRAG, _FLING), [22] the card the keys are on,
+// [23] their cards, [24] 1 where they held the focus; 0 where none drew since the page was
+// built. uit_cells_tile: card `i`'s box there (x, y, w, h), 0 where it lies outside the band;
+// uit_cells_at: the card whose box or title holds (x, y), -1 none. uit_cells_geom: the
+// geometry the page's shelf or icons lay out in band `b` at font scale `fs` (on the desk's
+// metrics where `desk`), outside a frame; 0 where the page has none.
+enum { UIT_CELLS_WORDS = 25 };
+int uit_cells(const uit_t *e, int32_t out[UIT_CELLS_WORDS]);
+int uit_cells_tile(const uit_t *e, int i, int32_t out[4]);
+int uit_cells_at(const uit_t *e, int x, int y);
+int uit_cells_geom(uit_t *e, const int32_t b[4], int fs, int desk, int32_t out[16]);
 // The next event: its kind; its words into ev[0..2], its text (the source)
 // into buf.
 int uit_next(uit_t *e, int32_t ev[3], char *buf, size_t cap);
@@ -351,6 +379,11 @@ int uit_row_stop(uit_t *e, const char *cur, const char *rowkey, char *buf, size_
 // The last frame's page rect into out[0..3] and its shown foot's into out[4..7]:
 // whether a foot was shown.
 int uit_page_rects(const uit_t *e, int32_t out[8]);
+// The hints band the last frame drew, on the glass: 1 and its rect into out, else 0.
+int uit_band(const uit_t *e, int32_t out[4]);
+// Whether stop `i` (`uit_stop`) lies in a dialog or a popover (a menu's
+// items among them), over the page: 1, else 0 (-1 no such stop).
+int uit_stop_over(const uit_t *e, int i);
 // The gens a gen-carrying page's regions draw under: the last frame's page's, then each cards
 // list's, scroll region's and split group's now, in node order, into out (at most cap): their count, 0 where the page carries none.
 int uit_gens(uit_t *e, int32_t *out, int cap);
@@ -365,6 +398,16 @@ int uit_leave(uit_t *e);
 // The tree as text (the reference's snapshot): its length; at most cap-1
 // bytes are written.
 int uit_dump(uit_t *e, char *buf, size_t cap);
+// The fit report: with `on` each frame after records every text its walk draws through the
+// toolkit (moy_ui_fit_tap), as the toolkit measured and fitted it; off (the default) a frame
+// records nothing and costs nothing.
+void uit_fits_on(uit_t *e, int on);
+// The last frame's records, each the id of the node the text drew for ("" the page's own: its
+// title, its band), that node's kind (0 the page's), how the toolkit fitted it
+// (MOY_UI_FIT_*), where it drew (x, y), its measured width, its room (-1: fitted to none) and
+// its text, in decimal and 0x1F-separated, each record ended by 0x1E. Answers the bytes; `buf`
+// takes them where `cap` holds them all.
+int uit_fits(uit_t *e, char *buf, size_t cap);
 // Bytes the store holds: nodes, templates, ops, the pool, state.
 int uit_stats(const uit_t *e, int32_t out[8]);
 

@@ -11,7 +11,7 @@ it through ConsoleDriver -- mouse == touch, arrows == trackball -- exactly like
 tests/test_v04_userland.py."""
 
 from pathlib import Path
-from ws_helpers import build_ws_with_shelf as _ws_with_carts
+from ws_helpers import build_ws_with_shelf
 import pytest
 from ws_helpers import boot_on_fixture
 
@@ -22,6 +22,23 @@ def _on_the_night_fixture(monkeypatch):
     boot_on_fixture(monkeypatch)
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def _ws_with_carts(tmp_path, n):
+    """A home with at least `n` carts, drawn: the handheld's row is the
+    engine's, laid out by its frames."""
+
+    ws = build_ws_with_shelf(tmp_path, n)
+    _frame(ws)
+    return ws
+
+
+def _frame(ws):
+    """One frame of the home drawn (what the row shows is its last frame's)."""
+    from runtime import host_app
+
+    ws.mark_dirty()
+    host_app.ConsoleDriver(ws).frame(1 / 30)
 
 
 def test_more_carts_than_one_viewport_seeded(tmp_path):
@@ -59,50 +76,6 @@ def test_cards_lay_out_in_one_row_the_centre_card_largest(tmp_path):
         assert by <= r[1] and r[1] + r[3] <= by + bh
 
 
-def test_a_cards_size_is_a_function_of_its_distance_alone(tmp_path):
-    ws = _ws_with_carts(tmp_path, 10)
-    lz = ws.launcher
-    p = lz.pitch()
-    sizes = []
-    for off in (0, p // 4, p // 2, p):
-        lz._scroll = 2 * p + off
-        sizes.append(lz.tile_rect(2)[2])
-    assert sizes == sorted(sizes, reverse=True)
-    assert sizes[0] == lz.card_side() * 2 and sizes[-1] == lz.card_side()
-    lz._scroll = 2 * p - p // 4                # the same distance the other side
-    assert lz.tile_rect(2)[2] == sizes[1]
-
-
-def test_the_degradation_order_is_the_wms_constant(tmp_path):
-    """§12's order, a per-board WM constant: "rest" draws every card at 1.0
-    while the row moves and scales the centre once settled; "one" never
-    scales; a lower HOME_SCALE is the reduced scale."""
-    from runtime import host_app
-
-    ws = _ws_with_carts(tmp_path, 10)
-    drv = host_app.ConsoleDriver(ws)
-    lz = ws.launcher
-    card = lz.card_side()
-    drv.frame(1 / 30)
-    assert (lz.motion, lz.scale) == ("full", 2.0)        # every board's verdict
-    ws.wm.HOME_SCALE = 1.25
-    ws.mark_dirty()
-    drv.frame(1 / 30)
-    assert lz.tile_rect(0)[2] == int(card * 1.25 + 0.5)
-    ws.wm.HOME_SCALE = 2.0
-    ws.wm.HOME_MOTION = "rest"
-    drv.press("right")
-    drv.frame(1 / 30)
-    assert lz.moving
-    assert all(r[2] == card for _i, r in lz._visible())
-    _settle(drv)
-    assert lz.tile_rect(1)[2] == card * 2
-    ws.wm.HOME_MOTION = "one"
-    ws.mark_dirty()
-    drv.frame(1 / 30)
-    assert lz.tile_rect(1)[2] == card
-
-
 def test_tile_at_hit_tests_the_row(tmp_path):
     ws = _ws_with_carts(tmp_path, 10)
     lz = ws.launcher
@@ -125,25 +98,21 @@ def test_scroll_reveals_later_carts(tmp_path):
     assert lz.scroll == 0
     last = len(lz.items) - 1
     assert lz.tile_rect(last) is None                    # right of the band
-    lz.scroll = lz.max_scroll()
+    lz.sel = last
+    _frame(ws)
+    assert lz.scroll == lz.max_scroll()
     assert lz.tile_rect(last) is not None                # now visible
 
 
-def test_scroll_clamps_at_both_ends(tmp_path):
+def test_left_at_the_first_card_moves_nothing(tmp_path):
     from runtime import host_app
 
     ws = _ws_with_carts(tmp_path, 10)
     drv = host_app.ConsoleDriver(ws)
     lz = ws.launcher
-    lz.scroll_cols(-5)
-    ws.mark_dirty()
-    _settle(drv)
-    assert lz.scroll == 0
-    lz.scroll_cols(99)
-    ws.mark_dirty()
-    _settle(drv)
-    assert lz.scroll == lz.max_scroll()
-    assert lz.sel == len(lz.items) - 1                   # settled on the last card
+    drv.press("left")
+    drv.frame(1 / 30)
+    assert lz.scroll == 0 and not lz.moving and lz.sel == 0
 
 
 def test_touch_drag_scrolls_the_row_and_rests_on_a_card(tmp_path):
@@ -349,7 +318,7 @@ def test_right_arrow_glides_one_card(tmp_path):
     drv = host_app.ConsoleDriver(ws)
     drv.press("right")
     drv.frame(1 / 30)
-    assert ws.launcher.flinging                          # the glide runs as a fling
+    assert ws.launcher.moving                            # it glides
     _settle(drv)
     assert ws.launcher.sel == 1
     drv.press("right")
@@ -513,16 +482,16 @@ def test_cursor_delta_is_faster_and_accelerates():
 def test_the_handheld_hero_keeps_its_gap_to_the_neighbours(tmp_path):
     """A hero twice its neighbours, every gap the same, the card half the
     cover's side; the title and the hint strip under the band."""
-    from runtime import home_grid as ll
 
     ws = _ws_with_carts(tmp_path, 10)
     lz = ws.launcher
     assert lz.handheld()
     lz.sel = 3
+    _frame(ws)
     card = lz.card_side()
-    assert card == ll._HH_CARD * ws.layout.fs
+    assert card == 64 * ws.layout.fs            # (half the cover's side)
     left, hero, right, far = (lz.tile_rect(i) for i in (2, 3, 4, 5))
-    gap = ll._HH_GAP * ws.layout.fs
+    gap = 14 * ws.layout.fs                     # (moy_ui_api_pop.c's CAROUSEL_GAP)
     assert hero[2] == 2 * card and left[2] == right[2] == card
     assert hero[0] - (left[0] + left[2]) == gap
     assert right[0] - (hero[0] + hero[2]) == gap
@@ -532,20 +501,22 @@ def test_the_handheld_hero_keeps_its_gap_to_the_neighbours(tmp_path):
     assert hero[1] + hero[3] < ty < my and my + mh <= by + bh <= hints[1]
 
 
-def test_a_handheld_slide_takes_six_frames(tmp_path):
+def test_a_handheld_slide_takes_its_200_ms(tmp_path):
+    """A slide spends MOY_UI_SLIDE_MS (moy_ui.h) on the engine's whole-ms
+    clock: five frames of 40 ms."""
     from runtime import host_app
 
     ws = _ws_with_carts(tmp_path, 10)
     drv = host_app.ConsoleDriver(ws)
-    drv.frame(1 / 30)
+    drv.frame(0.04)
     drv.press("right")
     n = 0
     while True:
-        drv.frame(1 / 30)
+        drv.frame(0.04)
         n += 1
         if not ws.launcher.moving or n > 30:
             break
-    assert n == 6 and ws.launcher.sel == 1
+    assert n == 5 and ws.launcher.sel == 1
 
 
 def test_the_tabs_are_the_bars_and_the_verbs_the_hint_strips(tmp_path):
@@ -692,10 +663,7 @@ def test_a_card_shows_its_whole_cover_at_a_clean_scale(tmp_path, monkeypatch):
     """Every home card draws the WHOLE 128x128 cover (owner call 2026-10-17),
     and a card side is only ever a whole multiple of the cover's or its half,
     quarter or eighth -- never a ratio like 1.5x."""
-    from runtime import home_grid as ll
 
-    assert [ll._clean_side(n) for n in (400, 320, 256, 200, 128, 112, 64, 50, 20)] \
-        == [384, 256, 256, 128, 128, 64, 64, 32, 16]
     ws = _ws_with_carts(tmp_path, 10)
     lz = ws.launcher
     drawn = []
@@ -713,6 +681,8 @@ def test_a_card_shows_its_whole_cover_at_a_clean_scale(tmp_path, monkeypatch):
 
     lz.cover_for = lambda it, div: _Cover
     lz.sel = 3
+    _frame(ws)
+    del drawn[:]
     for i, centre in ((3, True), (4, False)):
         lz._draw_hh_cover(ws.sys_canvas, lz.items[i], lz.tile_rect(i), centre)
     assert [d[:4] for d in drawn] == [(0, 0, 128, 128)] * 2
@@ -739,14 +709,13 @@ def test_the_desk_home_lays_out_the_hero_its_details_and_the_shelf(tmp_path):
     pane beside it, the shelf under them at half its scale with the
     selected card two in, bleeding off the right edge, the hint strip
     along the foot."""
-    from runtime import home_grid as ll
 
     ws, drv = _desk_home(tmp_path)
     lz = ws.launcher
     assert lz.desk() and not lz.handheld()
     hx, hy, hs, _ = lz.hero_rect()
     card = lz.card_side()
-    assert hs % ll._COVER_SIDE == 0 and card == hs // 2
+    assert hs % 128 == 0 and card == hs // 2           # (a whole cover at a clean scale)
     px, py, pw, ph = lz.plate_rect()
     assert px > hx + hs and py == hy
     assert len(lz.items) > 7

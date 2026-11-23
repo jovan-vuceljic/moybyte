@@ -14,7 +14,7 @@ import pytest
 from runtime import ui_draw
 from ws_helpers import build_desktop_ws, build_ws_with_shelf, use_theme
 
-from runtime import host_app, wm_chrome, launcher_layer
+from runtime import host_app, wm_chrome
 from ws_helpers import settle_badges  # noqa: E402
 
 
@@ -257,38 +257,43 @@ def _settle(drv, n=120):
 
 
 def test_the_hero_keeps_its_shadow_on_a_moving_frame(tmp_path, monkeypatch):
-    """Every frame of a glide casts the card nearest the centre at the
-    theme's size and its neighbours smaller, as the settled row does, so no
-    shadow pops when the row stops."""
+    """Every frame of a glide draws the card nearest the centre as the
+    centre's (the engine's carousel casts it at the theme's size and its
+    neighbours smaller, `moy_ui_api_tile_cast`), as the settled row does, so
+    no shadow pops when the row stops."""
+    from runtime import home_carousel
+    tiles = []
+    real = home_carousel.Carousel._band_picture
+
+    def picture(self, node, pic, r):
+        if r is not None:
+            tiles.append(((r[0], r[1], r[2], r[3]), r[8] & 4 != 0))
+        return real(self, node, pic, r)
+
+    monkeypatch.setattr(home_carousel.Carousel, "_band_picture", picture)
     ws = build_ws_with_shelf(tmp_path, 8)
     ws.look.set_theme("moy", persist=False, variant="light")
     drv = host_app.ConsoleDriver(ws)
     _settle(drv)
-    calls = _spy(monkeypatch, launcher_layer, "cast")
-
-    def heroes():
-        """The cards cast at the theme's size since the spy last emptied."""
-        return [c[2] for c in calls if len(c) < 5 or c[4] == ui_draw.UNDER_FULL]
-
     drv.press("right")
     drv.frame(1 / 30)
     moving = 0
     for _ in range(60):
         if not ws.launcher.moving:
             break
-        del calls[:]
+        del tiles[:]
         drv.frame(1 / 30)
         moving += 1
         if ws.launcher.moving:
-            assert heroes() == [ws.launcher.tile_rect(ws.launcher.nearest())], \
+            assert [t for t, centre in tiles if centre] == [ws.launcher.tile_rect(ws.launcher.nearest())], \
                 "a moving frame dropped the hero's shadow"
-            assert len(calls) > 1, "a moving frame dropped the neighbours' shadows"
+            assert len(tiles) > 1, "a moving frame dropped the neighbours' shadows"
     assert moving >= 3
     _settle(drv)
-    n = len(calls)
+    n = len(tiles)
     for _ in range(5):
         drv.frame(1 / 30)
-    assert len(calls) == n                   # a still home paints nothing
+    assert len(tiles) == n                   # a still home paints nothing
 
 
 def test_the_settled_home_is_its_full_repaint(tmp_path):

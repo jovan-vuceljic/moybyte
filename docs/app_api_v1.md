@@ -288,15 +288,61 @@ well; `ui.cards(..., pad=)` sets the gap its columns are counted at, its
 `current=` marks the card whose key a state holds, and `flow=True` lays
 its cards in the page's flow (in a group, between its caption and its
 rows) where they scroll with the page, not in a region of their own that
-takes the rest of it; a link's
+takes the rest of it;
+`ui.cards(..., look="carousel", cur=)` is the handheld home's band: from
+where the stack stands to the page's foot, one row of tiles at most `w=`
+a side (the largest that shows a whole cover at a clean scale and leaves
+its words their room), the centre card twice that and each tile's size a
+function of its distance from the centre alone; the engine moves it
+(the toolkit's table of parts): left and right (the wheel's notches too)
+glide it a card, a drag carries it and a fling or a let-go settles on the
+nearest card; the centre card is lifted by the focus mark at rest, its
+`label=` in the hero face and its `sub=`'s tab-separated items, a dot
+between each two, under the row in `tone=` (a theme role or `#RRGGBB`, a
+template, empty for the theme's ink) over a black shadow; Enter or a tap
+on the centre card at rest fires its card's action, a tap on another card
+glides it to the centre, and `cur=` follows the card the row comes to rest
+on (a value the app writes there while the row rests moves it there);
+`look="shelf"` lays the cards in the rows its room holds, in columns that
+scroll across (cards of the clean side a carousel's neighbour takes, the
+desk's a whole cover, the columns spaced so the last on the glass stands
+cut by a third or more), each card's `label=` under it, and
+`look="icons"` lays them as tiles in the columns its room holds, in rows
+that scroll down, each named under it on the desk and, on the handheld,
+the current card named with its `sub=`'s items in a caption band along
+the foot; in both the engine moves the grid: the arrows step the current
+card across it and the view lands where it shows that card with its
+margin, the wheel's notches step it down (Shift's across), a drag
+scrolls the view and a release flings it, a tap on a card makes it
+current and fires its action as Enter does, the current card grows and
+wears the focus mark flat while the cards hold the keys, its label bold,
+and up from the top row leaves the grid; `tone=` inks the labels over a
+black shadow and `cur=` follows the current card (a value the app writes
+there lands the view on it); a link's
 `swatch="#RRGGBB"` (a template, empty for none) draws a chip of that colour
 before its value; a
 card's `badge=` marks its picture and its `label_icon=` stands an icon
 before its label; a button's `kind=` may be a template, and `kind="bar"`
 alone is a flat icon, narrower than a button's; on the desk a popover
 anchored at a button or a link hangs under it; a swatches row whose label
-its dots would cut moves them into its right pad where that makes it whole;
-`ui.split(..., rule=True)` draws a rule between its cells;
+its dots would cut moves them into its right pad where that makes it whole,
+else shrinks them, as far apart, until it is;
+`ui.split(..., rule=True)` draws a rule between its cells; a row split's
+fixed sizes that its width cannot hold share it by their sizes, and a cell
+that is a row, a group or a seg widens to what it needs, its neighbours
+giving up at most half theirs; a row of buttons wider than its room closes
+its gaps, then stands its labelled icon buttons as their icons alone, from
+the end, until it fits;
+`ui.row(..., wrap=True)` packs its children from its start at their
+natural widths (a group as wide as its widest child), one that does not
+fit starting a line under them (the desk home's buttons), a row in a
+group's column at its cell; `ui.row(key, grow=True)` on a flowing page
+fills its stack, so the rows after it stand at the page's foot;
+`ui.group("", gap=)` sets its column's children that far apart;
+`ui.label(..., scale=)` draws its face at that whole scale (a display
+line, never under the page's), `w=` keeps its text that wide at most (a
+measure of prose); `ui.button(..., look="large")` is half again a row's
+height with twice the pads, on a flowing page;
 a slider's `look="blocks"` is a meter, its steps' blocks across the whole
 row (with no label, 10 units a step and 12 more wide in a row);
 `ui.stepper(value, prev, next)` is "‹ value ›", the bar's chevrons firing
@@ -308,7 +354,8 @@ value dim;
 the row, the index of its item, its items the lines `text=` renders over
 the row; a seg's `look="pictures"` shows each item as the picture its word
 names (`own:KEY`) in a tile at the row's right, the current one's on the
-selection plate, left and right wrapping and activation taking the next;
+selection plate, left and right wrapping and activation taking the next, its
+label on a line of its own over the tiles where they would cut it;
 `ui.pictures.put(key, render=..., clear=True)` leaves a drawn picture's
 corner colour out, the tile showing there; `ui.dialog(..., look="keys")` draws no buttons on the T-Deck, whose
 band's Enter and Esc are its buttons, and a dialog of more than one field

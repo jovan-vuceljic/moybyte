@@ -18,9 +18,14 @@
 #include "moy_ui.h"
 
 static moy_ui_depth_t s_depth;
+static uint8_t s_render = 1;            // render.scale: glass pixels a desk pixel
 
 const moy_ui_depth_t *moy_ui_depth(void) {
     return &s_depth;
+}
+
+int moy_ui_render_scale(void) {
+    return s_render;
 }
 
 static int leaf_of(const char *name) {
@@ -244,6 +249,7 @@ static void depth_of(moy_ui_depth_t *d, moy_theme_look_t *lk, const char *name, 
     d->key_r = (uint8_t)num(leaf(lk, "key_r"), 10);
     d->corners = (uint8_t)num(leaf(lk, "win_corners"), 15);
     d->stepped = num(leaf(lk, "render.shapes"), 0) == 1;
+    s_render = num(leaf(lk, "render.scale"), 1) == 2 ? 2 : 1;
     d->edges = (uint8_t)num(leaf(lk, "edges"), 0);
     int kind = num(leaf(lk, "shadow.kind"), 0);
     int32_t c = leaf(lk, "shadow.c");
@@ -1282,7 +1288,7 @@ int moy_ui_recs_depth(moy_ui_rec_t *r) {
         {&s_paints, NULL, sizeof(s_paints)}, {&s_marks, NULL, sizeof(s_marks)},
         {NULL, (void **)&s_km, sizeof(kmarks_t)}, {&s_keycap, NULL, sizeof(s_keycap)},
         {&s_display, NULL, sizeof(s_display)}, {&s_scrim_c, NULL, sizeof(s_scrim_c)},
-        {&s_scrim_a, NULL, sizeof(s_scrim_a)},
+        {&s_scrim_a, NULL, sizeof(s_scrim_a)}, {&s_render, NULL, sizeof(s_render)},
     };
     memcpy(r, v, sizeof(v));
     return (int)(sizeof(v) / sizeof(v[0]));

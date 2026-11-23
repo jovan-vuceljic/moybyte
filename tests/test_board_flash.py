@@ -27,9 +27,10 @@ TDECK = ROOT / "firmware" / "lilygo_t_deck_plus_mainline"
 P4 = ROOT / "firmware" / "esp32_p4_wifi6_touch_lcd_7b"
 GUITION = ROOT / "firmware" / "guition_jc3248w535"
 GUITION_P4 = ROOT / "firmware" / "guition_jc8012p4a1c"
+ELECROW_P4 = ROOT / "firmware" / "elecrow_crowpanel_p4_10_1"
 WEB_RUNNER = ROOT / "firmware" / "web_runner"
 BOARDS = {"tdeck": TDECK, "p4": P4, "guition-s3": GUITION,
-          "guition-p4": GUITION_P4}
+          "guition-p4": GUITION_P4, "elecrow-p4": ELECROW_P4}
 
 SUBCOMMANDS = ("erase_region", "write_flash", "read_flash")
 
@@ -574,7 +575,7 @@ def test_a_failed_write_installs_no_add_on(monkeypatch, tmp_path):
 
 
 def test_the_console_boards_install_theirs_through_the_dev_channel():
-    for board_dir in (TDECK, P4, GUITION, GUITION_P4):
+    for board_dir in (TDECK, P4, GUITION, GUITION_P4, ELECROW_P4):
         assert "addon" not in board_config.load(board_dir)["flash"], board_dir
 
 

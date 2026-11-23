@@ -238,6 +238,166 @@ static int page_open_on(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int top, int he
     return 1;
 }
 
+// A carousel's motion (moy_ui_api_carousel), on its page's keep `kp` at scroll `offset`, rows
+// `rh` apart in a view `ext` long: the row its keys and taps carry to the centre, a slide (a
+// glide over moy_ui.h's SLIDE_MS) each frame takes its share of, from where the frame found it.
+// Answers the scroll; *cur the row it rests on (the last while it moves), *opened 1 where Enter
+// or a tap on the centre's tile at rest opened that row.
+#define CAR_MOVING (MOY_UI_SCROLL_DRAG | MOY_UI_SCROLL_FLING | MOY_UI_SCROLL_GLIDE)
+static int car_near(int32_t offset, int rh, int count) {
+    int32_t most = (int32_t)(count - 1) * rh;
+    int n = (int)moy_ui_fdiv((offset < most ? offset : most) + rh / 2, rh > 0 ? rh : 1);
+    return n < 0 ? 0 : n > count - 1 ? count - 1 : n;
+}
+
+static int32_t car_slide(moy_ui_ctx_t *c, moy_ui_keep_t *kp, int32_t offset, int32_t to, int ext,
+                         int tick) {
+    int32_t off = offset;
+    moy_ui_scroll_stop(&kp->sc);
+    moy_ui_scroll_glide_to(&kp->sc, offset, to, 1, kp->rows, ext);
+    if (c->in[MOY_UI_IN_DT] <= 0) {
+        moy_ui_scroll_land(&kp->sc, &off);
+    } else if (tick) {
+        moy_ui_scroll_tick(&kp->sc, (float)c->in[MOY_UI_IN_DT], &off, kp->rows, ext);
+    }
+    return off;
+}
+
+static int32_t car_motion(moy_ui_ctx_t *c, moy_ui_keep_t *kp, int st, int focused, int count, int rh,
+                          int ext, int32_t offset, int32_t *cur, int *opened) {
+    moy_ui_scroll_t *sc = &kp->sc;
+    int app = c->car.app;
+    kp->car = 1;
+    if (count <= 0) {
+        kp->car_row = kp->car_set = 0;
+        kp->car_fling = 0;
+        *cur = -1;
+        return 0;
+    }
+    app = app < 0 ? 0 : app > count - 1 ? count - 1 : app;
+    if (kp->rh == 0 || ((app != kp->car_set || kp->car_set >= count) && !(sc->flags & CAR_MOVING))) {
+        // a first frame, or the app moved its current row while the row rests: it lands there
+        moy_ui_scroll_stop(sc);
+        offset = (int32_t)app * rh;
+        kp->car_row = kp->car_set = (int16_t)app;
+    }
+    int step = focused ? c->step_x : 0;
+    if (step) {
+        // a card from where the glide is going, else from the card nearest the centre
+        int32_t base = (sc->flags & MOY_UI_SCROLL_GLIDE) ? sc->target : (int32_t)car_near(offset, rh, count) * rh;
+        int i = (int)moy_ui_fdiv(base, rh > 0 ? rh : 1) + step;
+        i = i < 0 ? 0 : i > count - 1 ? count - 1 : i;
+        offset = car_slide(c, kp, offset, (int32_t)i * rh, ext, 1);
+        kp->car_row = (int16_t)i;
+    }
+    if (st & MOY_UI_ST_ACTIVATED) {
+        if (c->tap_y == INT16_MIN) {
+            *opened = 1;                // Enter: the row it rests on
+        } else {
+            // a tap: a tile under the press and the release alike
+            int i = moy_ui_api_carousel_at(c->car.g, c->car.band, offset, count, c->tap_x, c->tap_y);
+            if (i >= 0 && i == moy_ui_api_carousel_at(c->car.g, c->car.band, offset, count, c->press_x,
+                                                      c->press_y)) {
+                if (i == kp->car_set && !(sc->flags & CAR_MOVING)) {
+                    *opened = 1;
+                } else {
+                    offset = car_slide(c, kp, offset, (int32_t)i * rh, ext, 1);
+                    kp->car_row = (int16_t)i;
+                }
+            }
+        }
+    }
+    if (kp->car_fling) {
+        // a fling spent at this frame's begin: the slide to the nearest starts next frame
+        kp->car_fling = 0;
+        if (!(sc->flags & CAR_MOVING)) {
+            int n = car_near(offset, rh, count);
+            offset = car_slide(c, kp, offset, (int32_t)n * rh, ext, 0);
+            kp->car_row = (int16_t)n;
+        }
+    } else if (!(sc->flags & CAR_MOVING) && offset != (int32_t)car_near(offset, rh, count) * rh) {
+        // at rest between two cards (a drag let go): it slides to the nearest
+        int n = car_near(offset, rh, count);
+        offset = car_slide(c, kp, offset, (int32_t)n * rh, ext, 1);
+        kp->car_row = (int16_t)n;
+    }
+    if (!(sc->flags & CAR_MOVING)) {
+        kp->car_set = (int16_t)car_near(offset, rh, count);      // it settles
+        kp->car_row = kp->car_set;
+    }
+    *cur = kp->car_set;
+    return offset;
+}
+
+// A shelf's or icons' motion (moy_ui_api_cells_grid), on its page's keep `kp` at scroll `offset`:
+// the card its arrows step across the grid (a shelf's left and right a column, up and down a
+// card in it; icons' left and right a tile in its row, up and down a row), the card a tap
+// lands on, or the card the app moved its current to, each brought into view with its margin
+// at once (a fling under way stops). Answers the scroll; *cur the card the keys are on,
+// *opened 1 where Enter or a tap opened it.
+static int32_t cells_motion(moy_ui_ctx_t *c, moy_ui_keep_t *kp, int st, int focused, int count,
+                            int32_t offset, int32_t *cur, int *opened) {
+    const int32_t *g = c->car.g, *b = c->car.band;
+    kp->car = (uint8_t)c->car.on;
+    if (count <= 0) {
+        kp->car_row = kp->car_set = 0;
+        *cur = -1;
+        return 0;
+    }
+    int app = c->car.app;
+    app = app < 0 ? 0 : app > count - 1 ? count - 1 : app;
+    int sel = kp->car_set < count ? kp->car_set : count - 1, shown = 0;
+    if (kp->rh == 0 || app != kp->car_row) {
+        sel = app;                      // a first frame, or the app moved its current card
+        shown = 1;
+    }
+    if (focused && (c->step_x || c->step_y)) {
+        int across = (int)g[MOY_UI_CELLS_ACROSS];
+        int per = (int)(across ? g[MOY_UI_CELLS_ROWS] : g[MOY_UI_CELLS_COLS]);
+        per = per > 0 ? per : 1;
+        int a = sel / per, k = sel % per;
+        if (c->step_x) {
+            if (across) {
+                a += c->step_x;
+                a = a > 0 ? a : 0;
+            } else {
+                k += c->step_x;
+                k = k < 0 ? 0 : k > per - 1 ? per - 1 : k;
+            }
+        } else if (across) {
+            k += c->step_y;
+            k = k < 0 ? 0 : k > per - 1 ? per - 1 : k;
+        } else {
+            a += c->step_y;
+        }
+        sel = a * per + k;
+        sel = sel < 0 ? 0 : sel > count - 1 ? count - 1 : sel;
+        shown = 1;
+    }
+    if (st & MOY_UI_ST_ACTIVATED) {
+        if (c->tap_y == INT16_MIN) {
+            *opened = 1;                // Enter: the card the keys are on
+        } else {
+            // a tap: a card under the press and the release alike
+            int i = moy_ui_api_cells_at(g, b, offset, count, c->tap_x, c->tap_y);
+            if (i >= 0 && i == moy_ui_api_cells_at(g, b, offset, count, c->press_x, c->press_y)) {
+                sel = i;
+                *opened = 1;
+            }
+        }
+    }
+    if (shown) {
+        int32_t to = moy_ui_api_cells_reveal(g, b, count, sel, offset);
+        if (to != offset) {
+            moy_ui_scroll_stop(&kp->sc);
+            offset = to;
+        }
+    }
+    kp->car_set = kp->car_row = (int16_t)sel;
+    *cur = sel;
+    return offset;
+}
+
 void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label,
                       const uint8_t *cols, size_t cols_n, const uint8_t *cells, size_t cells_n,
                       int32_t cur, const moy_ui_over_t *o, int32_t out[2]) {
@@ -253,6 +413,7 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
     // rows side by side (`axis` "x"): rh is a row's width along the axis,
     // ph its height (0: the view's), and the row is the part
     int xa = part && o->axis_x == 1, ph = 0;
+    int cl = c->car.on >= MOY_UI_LOOK_SHELF;        // a shelf's or icons' (moy_ui_api_cells_grid)
     if (xa) {
         rh = o->part_w > 0 ? o->part_w : mua_row_h(c);
         ph = o->part_h;
@@ -307,7 +468,7 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
     uint32_t id = mua_id_of(c, o, label);
     int disabled = o->disabled == 1;
     moy_ui_keep_t *kp = disabled || !placed ? NULL : mua_keep(c, id, MOY_UI_KEEP_PAGE);
-    int carry = part && kp != NULL && !xa;
+    int carry = part && kp != NULL && !xa && !cl;
     if (cur >= count) {
         cur = count - 1;
     }
@@ -322,6 +483,12 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
     int lead = o->snap == 1 && count > 0 ? (ext - rh) / 2 : 0;
     int32_t content = o->snap == 1 && count > 0 ? (int32_t)(count - 1) * rh + ext
                                                 : (int32_t)count * rh;
+    if (cl) {
+        // a shelf's or icons' rows start their margin in, and run on as far past the last
+        lead = xa ? (int)(c->car.g[MOY_UI_CELLS_X0] - view.x) : (int)(c->car.g[MOY_UI_CELLS_Y0] - view.y);
+        content = moy_ui_api_cells_extent(c->car.g, c->car.band, c->car.app_n);
+        ext = xa ? view.w : (int)c->car.g[MOY_UI_CELLS_VIEW_H];
+    }
     if (row >= count) {
         row = count - 1;
     }
@@ -342,7 +509,15 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
     int flags = xa ? STOP_KEEP_LR
                    : STOP_KEEP_UD | (row <= 0 ? STOP_AT_TOP : 0)
                          | (row >= count - 1 ? STOP_AT_END : 0) | (placed ? 0 : STOP_ROWS);
+    if (cl) {
+        // every arrow is the grid's; up leaves it from its top row
+        int per = (int)(xa ? c->car.g[MOY_UI_CELLS_ROWS] : c->car.g[MOY_UI_CELLS_COLS]);
+        int k = kp != NULL && kp->rh ? kp->car_set : c->car.app;
+        int top = xa ? k % (per > 0 ? per : 1) == 0 : k < per;
+        flags = STOP_KEEP_LR | STOP_KEEP_UD | (top ? STOP_AT_TOP : 0);
+    }
     int st = disabled ? 0 : mua_stop(c, id, b, flags, mua_name_of(o, label));
+    int si = !disabled && st >= 0 ? c->n_cur - 1 : -1;      // (its stop, a shelf's or icons')
     if (carry && st >= 0 && c->inst->audit_on) {
         // where its rows end is the carried rows' record's, not its own
         moy_ui_span_t nm = mua_name_of(o, label);
@@ -362,7 +537,8 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
     if (kp != NULL && o->has_offset) {
         offset = o->offset;             // the app's own scroll
     }
-    if ((st & MOY_UI_ST_ACTIVATED) && count) {
+    int car = c->car.on && (xa || cl) && kp != NULL;
+    if ((st & MOY_UI_ST_ACTIVATED) && count && !car) {
         if (c->tap_y != INT16_MIN) {
             int t = xa ? c->tap_x - view.x - lead : c->tap_y - view.y;
             int r = moy_ui_fdiv(t + offset, rh > 0 ? rh : 1);
@@ -374,8 +550,21 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
             opened = row >= 0;
         }
     }
-    if (focused || (st & MOY_UI_ST_ACTIVATED)) {
+    if ((focused || (st & MOY_UI_ST_ACTIVATED)) && !car) {
         cur = row;
+    }
+    if (car && cl) {
+        kp->rows = content;
+        offset = cells_motion(c, kp, st, focused, c->car.app_n, offset, &cur, &opened);
+        if (si >= 0 && c->cur[si].id == id) {
+            // up leaves it from the top row the card the keys are on now stands in
+            int per = (int)(xa ? c->car.g[MOY_UI_CELLS_ROWS] : c->car.g[MOY_UI_CELLS_COLS]);
+            int top = cur < 0 || (xa ? cur % (per > 0 ? per : 1) == 0 : cur < per);
+            c->cur[si].flags = (uint16_t)((c->cur[si].flags & ~STOP_AT_TOP) | (top ? STOP_AT_TOP : 0));
+        }
+    } else if (car) {
+        kp->rows = content;
+        offset = car_motion(c, kp, st, focused, count, rh, ext, offset, &cur, &opened);
     }
     if (kp != NULL) {
         // the rows' own scroll: a step glides it to the row, where the
@@ -384,9 +573,10 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
         // a step or a tap moved it, else the app did (its own keys); a
         // table's first frame (no row height drawn yet) opens on its
         // current row, wherever the app put it
-        int stepped = focused && ((xa ? c->step_x : c->step_y) || (st & MOY_UI_ST_ACTIVATED));
+        int stepped = !car && focused && ((xa ? c->step_x : c->step_y) || (st & MOY_UI_ST_ACTIVATED));
         int moved = !stepped && cur >= 0 && ((carry && cur != c->tc.cur) || kp->rh == 0);
-        int snap = o->snap == 1 && count > 0 && !o->has_offset;
+        int snap = o->snap == 1 && count > 0 && !o->has_offset && !car;
+        moved = moved && !car;
         if (cur >= 0 && (stepped || moved) && !o->has_offset) {
             int to = (kp->sc.flags & MOY_UI_SCROLL_GLIDE) ? kp->sc.target : offset;
             int was = to;
@@ -398,8 +588,8 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
                 to = (cur + 1) * rh - ext;
             }
             if (to != was && c->in[MOY_UI_IN_DT] > 0 && !moved) {
-                int32_t off = offset;   // the glide's first step is this frame's
-                moy_ui_scroll_glide_to(&kp->sc, offset, to, 0, kp->rows, ext);
+                int32_t off = offset;   // the glide's first step is this frame's (a slide, snapping)
+                moy_ui_scroll_glide_to(&kp->sc, offset, to, snap, kp->rows, ext);
                 moy_ui_scroll_tick(&kp->sc, (float)c->in[MOY_UI_IN_DT], &off, kp->rows, ext);
                 offset = off;
             } else if (to != was) {
@@ -438,7 +628,7 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
         kp->rh = (int16_t)rh;
         kp->s0 = kp->sn = 0;
     }
-    if (!xa) {
+    if (!xa && !cl) {
         mua_rows_note(c, id, cur, view.y);
     }
     fresh = fresh && !opened_on;        // a first frame its page could not move in
@@ -787,7 +977,7 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
         c->tp.keep = (uint8_t)keeping;
         c->tp.np = (uint8_t)(o->has_across && nc < 256 ? nc : 1);
         // (rows side by side, and rows the app scrolls itself, fade at no edge)
-        c->tp.fade = (uint8_t)(placed && !xa && !o->has_offset && pv.x0 < pv.x1 && pv.y0 < pv.y1);
+        c->tp.fade = (uint8_t)(placed && !xa && !cl && !o->has_offset && pv.x0 < pv.x1 && pv.y0 < pv.y1);
         if (xa) {
             c->tp.w = (int16_t)(ph > 0 && ph < view.h ? ph : view.h);   // a row's height
         }
@@ -855,6 +1045,13 @@ int32_t moy_ui_api_table_part(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int32_t o
 
 int32_t moy_ui_api_table_dist(const moy_ui_ctx_t *c) {
     return c->tp.open ? c->tp.dist : 0;
+}
+
+void moy_ui_api_table_state(moy_ui_ctx_t *c, int32_t out[3]) {
+    const moy_ui_keep_t *k = c->tp.id ? mua_keep_of(c, c->tp.id) : NULL;
+    out[0] = c->tp.id != 0 && c->focus == c->tp.id && !c->elsewhere;
+    out[1] = c->tp.off;
+    out[2] = k != NULL && (k->sc.flags & (MOY_UI_SCROLL_DRAG | MOY_UI_SCROLL_FLING | MOY_UI_SCROLL_GLIDE)) != 0;
 }
 
 // -- a field's edit ------------------------------------------------------------------
@@ -1081,6 +1278,12 @@ moy_ui_box_t moy_ui_api_wash_box(const moy_ui_ctx_t *c) {
     return sf;
 }
 
+void mua_dialog_gone(moy_ui_ctx_t *c) {
+    if (c->modal_from && c->dw.id != 0 && c->dlg.id == 0) {
+        c->owe = 1;
+    }
+}
+
 void mua_dims(const moy_ui_ctx_t *c) {
     moy_ui_box_t b = moy_ui_api_wash_box(c);
     if (b.y + b.h >= c->surface.y + c->surface.h) {
@@ -1099,11 +1302,12 @@ void moy_ui_api_wash(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
 }
 
 // A dialog's card `w` wide, its title band `top` high and its foot `foot`,
-// for a body `body` high: centred on the surface, the body cut to the room
-// the surface leaves it (never under one row), its height in *bh.
+// for a body `body` high: centred on the surface above its hint band (the
+// wash's box), the body cut to the room that leaves it (never under one
+// row), its height in *bh.
 static moy_ui_box_t dlg_card(const moy_ui_ctx_t *c, int w, int top, int foot, int body,
                              int *bh_out) {
-    moy_ui_box_t sf = c->surface;
+    moy_ui_box_t sf = moy_ui_api_wash_box(c);
     int pad = moy_ui_modal_band(c->fs, c->cls), rh = mua_row_h(c);
     int bh = body;
     if (top + bh + foot > sf.h - 2 * pad) {
@@ -1345,4 +1549,74 @@ int32_t moy_ui_api_dialog(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
     c->page_stop = body_stop;
     c->dlg.pick = (int8_t)pick;
     return pick;
+}
+
+void moy_ui_api_carousel(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, const int32_t b[4],
+                         const int32_t g[10], const uint8_t *cells, size_t cells_n, int32_t cur,
+                         int32_t out[5]) {
+    moy_ui_over_t o;
+    moy_ui_over_none(&o);
+    moy_ui_over_text(&o, MOY_UI_OV_ID, id);
+    int32_t part[2] = {g[1], 0}, one = 1, zero = 0, spill = g[8];
+    moy_ui_over_put(&o, MOY_UI_OV_PART, part);
+    moy_ui_over_put(&o, MOY_UI_OV_AXIS, &one);
+    moy_ui_over_put(&o, MOY_UI_OV_SNAP, &one);
+    moy_ui_over_put(&o, MOY_UI_OV_SPILL, &spill);
+    moy_ui_over_put(&o, MOY_UI_OV_MARK, &zero);         // the tiles wear the focus mark
+    moy_ui_over_put(&o, MOY_UI_OV_CURRENT, &zero);
+    moy_ui_api_at(c, b[0], b[1], b[2], b[3]);
+    c->car.on = 1;
+    c->car.app = (int16_t)cur;
+    memcpy(c->car.g, g, 10 * sizeof g[0]);
+    memcpy(c->car.band, b, sizeof c->car.band);
+    int32_t t[2] = {cur, 0};
+    moy_ui_api_table(c, s, (moy_ui_span_t){(const uint8_t *)"", 0}, (const uint8_t *)"", 1, cells, cells_n,
+                     cur, &o, t);
+    c->car.on = 0;
+    const moy_ui_keep_t *k = c->tp.id ? mua_keep_of(c, c->tp.id) : NULL;
+    out[0] = t[0];
+    out[1] = t[1];
+    out[2] = c->tp.off;
+    out[3] = k != NULL ? (k->sc.flags & CAR_MOVING) : 0;
+    out[4] = c->tp.id != 0 && c->focus == c->tp.id && !c->elsewhere;
+}
+
+void moy_ui_api_cells_grid(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id,
+                           const int32_t b[4], const int32_t g[MOY_UI_CELLS_G], const uint8_t *cells,
+                           size_t cells_n, int n, int32_t cur, int32_t out[5]) {
+    static const uint8_t COLS[16] = {0};
+    int across = (int)g[MOY_UI_CELLS_ACROSS];
+    int per = (int)(across ? g[MOY_UI_CELLS_ROWS] : g[MOY_UI_CELLS_COLS]);
+    per = per < 1 ? 1 : per > 16 ? 16 : per;
+    moy_ui_over_t o;
+    moy_ui_over_none(&o);
+    moy_ui_over_text(&o, MOY_UI_OV_ID, id);
+    int32_t part[2] = {across ? g[MOY_UI_CELLS_PX] : 0, across ? 0 : g[MOY_UI_CELLS_PY]};
+    int32_t zero = 0, ax = across;
+    int32_t spill = g[MOY_UI_CELLS_GROW] + moy_ui_mark_reach(MOY_UI_ITEM_CARD) + 2;
+    int32_t a[2] = {across ? g[MOY_UI_CELLS_Y0] - b[1] : g[MOY_UI_CELLS_X0] - b[0],
+                    across ? g[MOY_UI_CELLS_PY] : g[MOY_UI_CELLS_PX]};
+    moy_ui_over_put(&o, MOY_UI_OV_PART, part);
+    moy_ui_over_put(&o, MOY_UI_OV_AXIS, &ax);
+    moy_ui_over_put(&o, MOY_UI_OV_SNAP, &zero);
+    moy_ui_over_put(&o, MOY_UI_OV_SPILL, &spill);
+    moy_ui_over_put(&o, MOY_UI_OV_ACROSS, a);
+    moy_ui_over_put(&o, MOY_UI_OV_MARK, &zero);         // the cards wear their own focus mark
+    moy_ui_over_put(&o, MOY_UI_OV_CURRENT, &zero);
+    moy_ui_api_at(c, b[0], b[1], b[2], across ? b[3] : g[MOY_UI_CELLS_VIEW_H]);
+    c->car.on = (int8_t)g[MOY_UI_CELLS_LOOK];
+    c->car.app = (int16_t)cur;
+    c->car.app_n = (int16_t)n;
+    memcpy(c->car.g, g, sizeof c->car.g);
+    memcpy(c->car.band, b, sizeof c->car.band);
+    int32_t t[2] = {cur, 0};
+    moy_ui_api_table(c, s, (moy_ui_span_t){(const uint8_t *)"", 0}, COLS, (size_t)per, cells, cells_n,
+                     cur, &o, t);
+    c->car.on = 0;
+    const moy_ui_keep_t *k = c->tp.id ? mua_keep_of(c, c->tp.id) : NULL;
+    out[0] = t[0];
+    out[1] = t[1];
+    out[2] = c->tp.off;
+    out[3] = k != NULL ? (k->sc.flags & CAR_MOVING) : 0;
+    out[4] = c->tp.id != 0 && c->focus == c->tp.id && !c->elsewhere;
 }

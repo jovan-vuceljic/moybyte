@@ -533,9 +533,12 @@ def test_tapping_a_cart_icon_runs_it_from_home(tmp_path):
     drv = host_app.ConsoleDriver(ws)
     real = next(i for i, it in enumerate(ws.launcher.items)
                 if it.get("path") and it.get("type") == "game")
+    ws.launcher.sel = real
+    drv.frame(1 / 30)                           # (the home's row lands on it)
     x, y, w, h = ws.launcher.tile_rect(real)
     drv.click(x + w // 2, y + h // 2)
-    drv.frame(1 / 30)
+    for _ in range(3):                          # (the release, then the deferred start)
+        drv.frame(1 / 30)
     assert ws.screen == "desktop"               # tap -> RUN
     assert ws.cart is not None and ws.cart.get("path")  # ...a real cart loaded
 
@@ -553,7 +556,8 @@ def test_the_make_tabs_new_card_starts_a_project(tmp_path):
     assert ws.launcher.selected().get("type") == "new"
     x, y, w, h = ws.launcher.tile_rect(0)
     drv.click(x + w // 2, y + h // 2)
-    drv.frame(1 / 30)
+    for _ in range(3):                          # (the release, then the deferred start)
+        drv.frame(1 / 30)
     assert ws.screen == "menu"                  # a new project, in the Editor
 
 

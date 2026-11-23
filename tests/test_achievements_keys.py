@@ -8,6 +8,7 @@ the page; a secret is named Secret until found."""
 import pytest
 
 import moybyte  # noqa: F401  (the frozen device names, before the console)
+from runtime import ui_draw
 from ws_helpers import build_desktop_ws, build_ws, make_drv, no_unlock_banner, settle_badges
 
 _DT = 1 / 30
@@ -71,13 +72,18 @@ def test_enter_opens_a_found_badge_and_back_closes_then_leaves(tmp_path, desk):
 
 def _walk(drv, sl, pg):
     """Every badge the arrows reach from the first, each popover as Enter
-    opens it: each badge found by its keys from the first (Up past the
-    first row leaves the grid, Down comes back onto its first badge), then
-    every arrow tried from it."""
+    opens it: each badge found by its keys from the first (where the page
+    opens its focus, put back before each path once keys that left the page
+    for the bar are back on it), then every arrow tried from it."""
+    first = pg.focused()
+
     def go(path):
-        _keys(drv, *(("up",) * 10 + ("down",) + path))
+        if ui_draw.on_bar():
+            _keys(drv, "down")
+        pg.focus(first)
+        drv.frame(_DT)
+        _keys(drv, *path)
         return pg.focused()
-    first = go(())
     paths, todo = {first: ()}, [()]
     while todo:
         path = todo.pop(0)

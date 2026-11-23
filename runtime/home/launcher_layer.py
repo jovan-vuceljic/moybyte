@@ -61,7 +61,6 @@ from array import array
 
 import ui as _ui
 import ui_draw as _ui_draw
-from moy_input import SHIFT as _SHIFT
 _in = _ui.rect_in   # one hit-test (ui.rect_in)
 
 
@@ -76,9 +75,8 @@ from home_zone import HomeZone
 from home_details import HomeDetails
 from home_search import HomeSearch
 from layers import Layer
-from home_icons import IconHome
 from home_carousel import Carousel
-from home_grid import (HOME_SCALE_HH, HOME_TABS, PSEUDO_TILE_TYPES)
+from home_grid import (HOME_TABS, PSEUDO_TILE_TYPES)
 
 
 # The home layer's own words: the tab row's order, the long press, the
@@ -111,6 +109,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         self._lhover = (-1, -1)       # the last pointer sample (a release is not a move)
         self._back_tip = False        # a mouse rests on the bar's way back to the desk
         self._hold = None             # a press on a card: [index, x, y, ms held]
+        self._on_open = self._band_open     # the handheld band's card opened (`Carousel.on_open`)
         self._tab_at = None           # the tab the keys are on, on the tab row
         self._on_bar = False          # the keys are on the home's bar (BarLayer.focus_enter)
         self._tab_focus = False       # keys drive the tab row (up from the carousel)
@@ -123,7 +122,6 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         self._keys = array("i", [-1, -1])
         self._keyed_gen = -1          # the cover gen `_band_key` keyed the band under
         self._hk = _Keyed()
-        self._ck = _Keyed()
         self._beside_drew = []
         # what the hint strip's key was made of, and the key (`_outside_key`)
         self._ok = [None, None, None, None, None, None, None, None, None]
@@ -397,7 +395,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         ws = self.ws
         g = self.grid
         return (self._statics_key(cv) if statics is None else statics, g.sel,
-                g._scroll, ws.covers.gen, self._lhover, g.items,
+                g.scroll, ws.covers.gen, self._lhover, g.items,
                 ws.carts.titled, ws.system.gen(), ws.bar_layer.shown_key("home"),
                 self._tab_keys, self._tab_at, self._on_bar)
 
@@ -608,7 +606,6 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             fill = self._backdrop_fill
         if self._search_line() is not None:
             return False
-        self.grid.flat = bd is not None and bd[0] == "bg"
         steps = (bd is not None and not self._lib_unsupported
                  and not (self._carousel() and self.grid.desk()))
         return _band_frame(self, cv, dt, self.grid, self.id, fill, self.strip,
@@ -666,13 +663,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             m[6] = g.favorite_for
         hint = m[7]
         now = m[8]
-        if isinstance(g, IconHome) and g._cells().caption is not None:
-            sel = g.sel
-            day = g.today()
-            if now is None or now[0] is not hint or now[1] is None or now[1][0] != sel \
-                    or now[1][1] != day:
-                now = m[8] = (hint, (sel, day))
-        elif now is None or now[0] is not hint or now[1] is not None:
+        if now is None or now[0] is not hint:
             now = m[8] = (hint, None)
         return now
 
@@ -703,16 +694,6 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
                     self.ws.wallpaper.restorer(cv, self._bd_now)(cv, h)
                     self._draw_home_chrome(cv)
                 drew.append(h)
-        if now[1] is not None:
-            kc = self._ck.of(now[1])
-            held = _ui.held("caption", kc)
-            if draw and (whole or not held):
-                c = g._cells()
-                r = c.caption
-                if not (cl is not None and _ui.held_last("caption", kc)
-                        and cl(r[0], r[1], r[2], r[3])):
-                    g._draw_caption_band(cv, c)
-                drew.append(r)
 
     def _name_beside(self, cv, whole):
         """`_beside` naming the parts a whole paint drew."""
@@ -1038,18 +1019,17 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             # the scrim, no frame of the home's own (no band paint names
             # the home's parts in it)
             return
-        # The board's motion verdict (a WM constant, §12's degradation order).
-        wm = ws.wm
         carousel = self._carousel()
         if carousel:
-            self.grid.motion = getattr(wm, "HOME_MOTION", "full")
-            self.grid.scale = getattr(wm, "HOME_SCALE", HOME_SCALE_HH)
             self.grid.dim = _dim_of(ws)
+        if self.grid.on_open is not self._on_open:
+            self.grid.on_open = self._on_open
         self.grid.wall_ink = self._wall()
         self.grid.ground = _ground_of(ws)
-        # Kinetic fling (#113) and the glide to the centre card: advance the
-        # row BEFORE painting, and keep the redraw gate open until it rests.
-        # Both ride the partial path (its gate includes flinging).
+        # Kinetic fling (#113) and the shelf's glide: advance the row BEFORE
+        # painting, and keep the redraw gate open until it rests (the
+        # handheld's carousel moves itself in its band's pass). Both ride
+        # the partial path (its gate includes flinging).
         self.grid.anim_frame(dt)
         if self.grid.flinging:
             ws.request_frame()
@@ -1154,6 +1134,24 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         return [(tid, (rx + r[0], ry + r[1], r[2], r[3]), True)
                 for tid, _l, r in self.zone_tabs((zx, zy, zw, zh))]
 
+    def _tab_under(self, px, py):
+        """The home's tab under (px, py), else None: the tabs are laid out
+        (`tab_rects`) for a press in the bar's zone alone, whose plates
+        reach a chrome unit past it above and below."""
+        got = _shell_layout.cell_of(self.ws.layout.bars, "zone")
+        if got is None:
+            return None
+        bar = self.ws.layout.bars[got[0]][1]
+        zx, zy, zw, zh = got[1]
+        cs = self.ws.layout.cs
+        x, y = px - bar[0] - zx, py - bar[1] - zy
+        if not (0 <= x < zw and -cs <= y < zh + cs):
+            return None
+        for tid, r, _on in self.tab_rects():
+            if _in(px, py, r):
+                return tid
+        return None
+
     def _draw_home_chrome(self, cv):
         """The hint strip along the home's foot (its tabs are the bar's)."""
         self._draw_hints(cv)
@@ -1223,52 +1221,57 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             return True
         if self._hint_keys(i):
             return True
-        # The carousel (§12): left/right glide by a card, a held key one
-        # motion; up takes the keys to the tab row (on the desk, to the
-        # details pane's buttons first). The grid: the arrows step its
-        # cells, and up from its top row takes them to the tabs.
         grid = self.grid
+        if grid is not None and not (self._carousel() and grid.desk()):
+            # The band page's keys (the handheld's carousel, §12, the grid,
+            # the icons): the arrows (a held key's repeats, the wheel's
+            # notches) step it, Enter opens its card (`_band_open`); up
+            # takes the keys to the tab row from the carousel, and from the
+            # grid's and the icons' top row.
+            top = self._carousel() or grid.top_row()
+            if grid.band_keys(i):
+                ws.mark_dirty()
+            if i.steps("up") and top:
+                self._tab_focus = True
+                ws.mark_dirty()
+            self._card_keys(i)
+            return True
+        # The desk's carousel: left/right glide the shelf by a card, a held
+        # key one motion, the wheel a card a notch; up takes the keys to the
+        # details pane's buttons first, then the tab row.
         wy, wx = getattr(i, "wheel_y", 0), getattr(i, "wheel_x", 0)
         if wy or wx:
-            # The wheel: the carousel glides a card a notch, the grid steps a
-            # row, Shift's wheel a column.
-            if getattr(i, "mods", 0) & _SHIFT:
-                wx, wy = wx + wy, 0
-            if self._carousel():
-                grid.nav2d(wx + wy, 0)
-            else:
-                grid.nav2d(wx, wy)
+            grid.nav2d(wx + wy, 0)
             ws.mark_dirty()
-        # a step is a cell (a card on the carousel): a frame's steps, a held
-        # key's repeats and a roll's, move as many
+        # a step is a card: a frame's steps, a held key's repeats and a
+        # roll's, move as many
         dx = i.steps("right") - i.steps("left")
         if dx:
             grid.nav2d(dx, 0)
             ws.mark_dirty()
-        up = i.steps("up")
-        if up:
+        if i.steps("up"):
             if self._desk_buttons():
                 self._button_focus = 0
-            elif self._carousel() or self._grid_top_row():
-                self._tab_focus = True
             else:
-                grid.nav2d(0, -up)
-            ws.mark_dirty()
-        down = i.steps("down")
-        if down and not self._carousel():
-            grid.nav2d(0, down)
+                self._tab_focus = True
             ws.mark_dirty()
         if i.pressed("a") or i.pressed("run"):
             # #184: DEFERRED -- the cart start runs behind the next painted
             # frame (LOADING toast), never inside this input dispatch.
             ws.defer(self._launch)           # the active tab's tap
+        self._card_keys(i)
+        return True
+
+    def _card_keys(self, i):
+        """The card's keys beside the arrows: a gamepad's X its verbs, B
+        back, Home the home key."""
+        ws = self.ws
         if i.pressed("x"):
             self.open_card_menu()            # a gamepad's X: the card's verbs
         if i.pressed("b") and ws.ach_ui._konami_pos == 0:
             self._back()                     # (a B inside the Konami code is the code's)
         elif i.pressed("home"):
             ws.home.home_key()
-        return True
 
     def favourable(self):
         """The selected card where it takes the favourite star (a cart of
@@ -1301,32 +1304,30 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
     def _launch(self):
         self.ws.home.launch_selected(self.grid)
 
+    def _band_open(self):
+        """The handheld band's card opened (Enter, a tap on the centre card
+        at rest): the active tab's tap, behind the painted frame (#184)."""
+        self._tab_focus = False
+        self.ws.defer(self._launch)
+
     def _change(self):
         self.ws.home.change_selected(self.grid)
 
     def _new(self):
         self.ws.home.new_cart_and_edit(self.grid)
 
-    def _grid_top_row(self):
-        grid = self.grid
-        if not grid.items:
-            return True
-        return grid.cell_of(grid.sel)[0] == 0
-
     def _grid_pointer(self, px, py, click):
-        """The grid and icons arrangements' pointer: a card fires the active
-        tab's tap on a clean RELEASE (ui.DragTap), so a drag never launches;
-        a mouse's cursor selects the card it moves onto."""
+        """The grid and icons arrangements' pointer, their band page's: a
+        drag scrolls the cells and a release flings them, a tap on a card
+        selects it and fires the active tab's tap (`_band_open`), so a drag
+        never launches; a mouse's cursor selects the card it moves onto."""
         ws = self.ws
         grid = self.grid
         down = ws.pointer.down
-        i = grid.pointer_frame(px, py, click, down, dt_ms=ws.frame_state.pointer_dt_ms)
-        if grid.moving:
+        if click and _in(px, py, grid.band_rect()):
+            self._tab_focus = False
+        if grid.band_point(px, py, click, down):
             ws.mark_dirty()
-        if i is not None:
-            grid.sel = i
-            ws.defer(self._launch)           # #184: start behind the paint
-            return True
         if click or down:
             self._lhover = (px, py)
             return True
@@ -1363,11 +1364,11 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
                 return True
             if self._search_tap(px, py) or self._hint_tap(px, py):
                 return True
-            for tid, r, _on in self.tab_rects():
-                if _in(px, py, r):
-                    self._tab_focus = False
-                    ws.home.set_home_tab(tid, grid)
-                    return True
+            tid = self._tab_under(px, py)
+            if tid is not None:
+                self._tab_focus = False
+                ws.home.set_home_tab(tid, grid)
+                return True
             frect = grid.favorite_rect(grid.sel)
             if frect is not None and _in(px, py, frect):
                 self.toggle_favourite()
@@ -1378,6 +1379,17 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             return True
         if not self._carousel():
             return self._grid_pointer(px, py, click)
+        if grid.handheld():
+            # its band page's pointer: a drag moves the row and a release
+            # flings it, a tap slides a card to the centre or opens the
+            # centre's (`_band_open`)
+            if click and _in(px, py, grid.band_rect()):
+                self._tab_focus = False
+            if grid.band_point(px, py, click, down):
+                ws.mark_dirty()
+            if click or down:
+                self._lhover = (px, py)
+            return True
         i = grid.pointer_frame(px, py, click, down, dt_ms=ws.frame_state.pointer_dt_ms)
         if grid.moving:
             ws.mark_dirty()
@@ -1415,7 +1427,10 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         if h[3] < LONG_PRESS_MS:
             return False
         self._hold = None
-        grid.pointer_frame(px, py, False, False)      # the gesture ends untapped
+        if not (self._carousel() and grid.desk()):
+            grid.band_cancel()                         # the gesture ends untapped
+        else:
+            grid.pointer_frame(px, py, False, False)
         if h[0] != grid.sel and 0 <= h[0] < len(grid.items):
             grid.sel = h[0]
         self._tab_focus = False
@@ -1553,8 +1568,6 @@ class HomeWindowLayer(LauncherHomeLayer):
         cv = ws.sys_canvas
         grid = self.grid
         th = ws.theme_colors
-        grid.motion = getattr(ws.wm, "HOME_MOTION", "full")
-        grid.scale = getattr(ws.wm, "HOME_SCALE", HOME_SCALE_HH)
         dim = _dim_of(ws)                     # the neighbours dim toward the panel
         grid.dim = None if dim is None else (th["panel"], dim[1])
         grid.wall_ink = None

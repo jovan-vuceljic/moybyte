@@ -297,29 +297,22 @@ def test_the_desk_strip_names_its_buttons_verbs(tmp_path):
     assert verbs[len(buttons):] == ["search", "favourite"]
 
 
-def test_the_desk_says_when_last_played_once(tmp_path, monkeypatch):
+def test_the_desk_says_when_last_played_once(tmp_path):
     """The desk's details pane names the last play in its facts, so its
     metadata line does not say it again (R3-28)."""
     ws = _ws(tmp_path, CONSOLE)
     it = _select(ws, "games", "cart")
     y, m, d = g._DATE
     ws.system.set("plays", {it["path"]: [12, y * 10000 + m * 100 + d]})
-    said = []
-    for kind in {type(ws.sys_canvas), type(ws.glass_canvas)}:
-        real = kind.print_scaled
-
-        def print_scaled(cv, s, *a, _real=real, **kw):
-            said.append(s)
-            return _real(cv, s, *a, **kw)
-
-        monkeypatch.setattr(kind, "print_scaled", print_scaled)
     ws.launcher_layer._lib_unsupported = True
     for _ in range(2):
         g._quiesce(ws)
         ws.mark_dirty()
         ws.frame(g._DT)
-    assert "Last" in said and "Today" in said
-    assert not any(s.startswith("Played ") for s in said), said
+    page = ws.launcher_layer._dpage.dump()
+    assert "= 'Last'" in page and "= 'Today'" in page, page
+    meta = [line for line in page.splitlines() if "text='{meta}'" in line]
+    assert meta and "Played" not in meta[0], meta
 
 
 def test_the_star_rows_wear_the_icon_sets_star(tmp_path):

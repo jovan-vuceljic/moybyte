@@ -228,17 +228,18 @@ def test_wrapped_buttons_take_up_and_down_between_their_rows(tmp_path):
     try:
         home = ws.projects_layer
         buttons = home._desk_buttons()
+        top = buttons[0][1][1]
         assert len({r[1] for _v, r, _k in buttons}) > 1, "the narrow pane wraps"
-        assert home._button_rows_apart(buttons, 0) == (None, 1)
-        assert home._button_rows_apart(buttons, 1) == (0, 2)
+        up, down = home._button_rows_apart(buttons, 0)
+        assert up is None and buttons[down][1][1] > top, (up, down, buttons)
+        assert buttons[home._button_rows_apart(buttons, down)[0]][1][1] == top
     finally:
         ws.wm.install_window(ws.wm.root_ctx)
 
 
-def test_delete_stands_a_groups_gap_apart(tmp_path):
-    """DEL is set apart from the verbs before it by a group's gap, wider
-    than the gap between Change and Duplicate (R5-15), and Play keeps the
-    plain gap after Duplicate."""
+def test_delete_stands_last_in_the_danger_look(tmp_path):
+    """DEL is the last of the card's buttons, in the danger look, on the
+    one row the full-size window holds, the buttons evenly apart."""
     ws = _ws(tmp_path)
     win, grid = _projects(ws)
     _own(ws, grid)
@@ -247,8 +248,7 @@ def test_delete_stands_a_groups_gap_apart(tmp_path):
         (_c, a, _k1), (_y, b, _k2), (_p, p, _k3), (_d, c, kind) = \
             ws.projects_layer._desk_buttons()
         assert kind == "danger" and a[1] == b[1] == p[1] == c[1], "one row at the full size"
-        assert p[0] - (b[0] + b[2]) == b[0] - (a[0] + a[2]) > 0
-        assert c[0] - (p[0] + p[2]) > b[0] - (a[0] + a[2])
+        assert c[0] - (p[0] + p[2]) == p[0] - (b[0] + b[2]) == b[0] - (a[0] + a[2]) > 0
     finally:
         ws.wm.install_window(ws.wm.root_ctx)
 

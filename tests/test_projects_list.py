@@ -111,7 +111,8 @@ def test_a_tap_on_the_make_tab_edits(tmp_path):
     drv.frame(1 / 30)
     x, y, w, h = ws.launcher.tile_rect(ws.launcher.sel)
     drv.click(x + w // 2, y + h // 2)
-    drv.frame(1 / 30)
+    for _ in range(3):                  # (the release, then the deferred start)
+        drv.frame(1 / 30)
     assert ws.screen == "menu" and ws.menu_view == "cards"
     assert ws.cart.get("path") == target.get("path")
 
@@ -127,7 +128,8 @@ def test_new_card_creates_a_game_and_opens_the_editor(tmp_path):
     drv.frame(1 / 30)
     x, y, w, h = ws.launcher.tile_rect(0)
     drv.click(x + w // 2, y + h // 2)
-    drv.frame(1 / 30)
+    for _ in range(3):                  # (the release, then the deferred start)
+        drv.frame(1 / 30)
     assert ws.screen == "menu"
     assert ws.cart is not None and ws.cart.get("type") == "game"
     assert len(ws.carts.all) == n0 + 1

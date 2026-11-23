@@ -34,7 +34,10 @@ nor those docs will warn you about:
   both stores), and `runtime/carts/web_addon.py`'s
   step installs the one that fits after an update and wherever there is
   none -- once a network is saved, never during a game, backing off on
-  failure -- unless its owner removed it: any removal of it (Get Carts, the
+  failure -- unless its owner removed it, and where the pack does not fit
+  the store's free space (the Elecrow with no card in its TF slot) it finds
+  that out once, records it (`system/addon_room`), keeps the radio down and
+  asks again only when the room is there: any removal of it (Get Carts, the
   shelf, `pkg remove`, a page's delete) records the console as one line of
   `system/removed` (`moy_seed.ADDON_LINE`, `native/moy_store/moy_removed.c`),
   which installing one from Get Carts drops. Where the one that fits is

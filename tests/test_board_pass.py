@@ -204,11 +204,11 @@ def run_pass(bench, steps, *argv):
 
 def test_every_board_builds_at_once(bench):
     """The configure lock lives in the build itself (esp32_build_lib.sh), so
-    the pass holds none: the barrier breaks unless all four builds are in it
+    the pass holds none: the barrier breaks unless every console's build is in it
     at once."""
-    steps = FakeSteps(build_barrier=threading.Barrier(4, timeout=5))
+    steps = FakeSteps(build_barrier=threading.Barrier(len(CONSOLES), timeout=5))
     assert run_pass(bench, steps, "--all") == 0
-    assert steps.peak == {"esp32p4": 2, "esp32s3": 2}
+    assert steps.peak == {"esp32p4": 3, "esp32s3": 2}
 
 
 def test_the_wait_column_is_the_builds_own_wait_for_the_configure_lock(tmp_path):
