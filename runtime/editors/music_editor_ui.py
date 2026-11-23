@@ -453,15 +453,6 @@ _F2 = 0x101 + 1
 _CTRL, _SHIFT, _ALT = 1, 2, 4
 
 
-def _centred(text, x, y, w, h, o, u):
-    """A label centred in (x, y, w, h): a label's row pads its start by
-    style.json's row pad."""
-    tw = _ui.text_size(text)[0]
-    pad = (w - tw) // 2
-    _ui.at(x + pad - 4 * u, y, tw + 8 * u, h)
-    _ui.label(text, o)
-
-
 def _rungs(w, vh, u):
     """A step's ladder as LEVELS quads from its column's top left, the
     bottom rung first, so `fill_rects(q, n, ...)` draws the n lit ones."""
@@ -879,49 +870,32 @@ class SoundPane:
 
     # -- the desk's half: the header, the keys, the popovers' doors -----------------------
 
-    def header(self, desk, pid, tx, y, hh, u):
-        """The header's tools right to left from `tx` (grow's left edge): play,
-        the speed stepper, loop, rename, and where no Sounds list shows, the
-        sounds as a menu. The x left of them."""
+    def head_vals(self, desk):
+        """The pane header's Sound tools (editor_head.py): whether there is a
+        sound, whether it plays, its speed, whether it loops, and whether
+        the sounds menu stands in for a Sounds list the desk does not show."""
         me = self.editor()
         if me is None:
-            return tx
+            return (False, False, "", False, False)
         mu = self.mu
         s = me.cur_sfx()
-        cell = 32 * u
-        tx -= cell
-        _ui.at(tx, y, cell, hh)
-        playing = mu.music_preview is not None and mu.music_preview[0] == "sfx"
-        if _ui.tool("run", "Stop\tSpace" if playing else "Play\tSpace",
-                    {"id": pid + " sound play", "current": playing}):
+        return (True, mu.music_preview is not None and mu.music_preview[0] == "sfx",
+                "%d" % int(s.speed) if s is not None else "", bool(s is not None and s.loop),
+                not desk.shows("sounds"))
+
+    def head_act(self, desk, op):
+        """A header tool: play, faster, slower, loop, rename or the sounds
+        menu."""
+        if self.editor() is None:
+            return
+        if op == "play":
             self.play()
-        tx -= cell
-        _ui.at(tx, y, cell, hh)
-        if _ui.tool("forward", "Faster\t]", {"id": pid + " sound faster"}):
-            self.act("faster")
-        sp = "%d" % int(s.speed) if s is not None else ""
-        lw = _ui.text_size(sp)[0] + 12 * u
-        tx -= lw
-        _centred(sp, tx, y, lw, hh, None, u)
-        tx -= cell
-        _ui.at(tx, y, cell, hh)
-        if _ui.tool("back", "Slower\t[", {"id": pid + " sound slower"}):
-            self.act("slower")
-        tx -= cell + 4 * u
-        _ui.at(tx, y, cell, hh)
-        if _ui.tool("rotate", "Loop\tL", {"id": pid + " sound loop",
-                                          "current": bool(s is not None and s.loop)}):
-            self.act("loop")
-        tx -= cell
-        _ui.at(tx, y, cell, hh)
-        if _ui.tool("pencil", "Rename\tF2", {"id": pid + " sound rename"}):
+        elif op == "rename":
             self.open_rename(desk)
-        if not desk.shows("sounds"):
-            tx -= cell
-            _ui.at(tx, y, cell, hh)
-            if _ui.tool("down", "Sounds", {"id": pid + " sound menu"}):
-                self.open_menu(desk)
-        return tx
+        elif op == "menu":
+            self.open_menu(desk)
+        else:
+            self.act(op)
 
     def open_rename(self, desk):
         """The name popover, hung under the pane's header: a field whose

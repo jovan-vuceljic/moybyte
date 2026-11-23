@@ -400,7 +400,7 @@ Python's alone.
 
 | kind | is | key props |
 |---|---|---|
-| `label(text)` | a line of text | `face=`, `tone=`, `icon=`, `wrap="word"` with `lines=`, `size="fit"`, `align=`, `scale=`, `w=` |
+| `label(text)` | a line of text | `face=`, `tone=`, `icon=`, `wrap="word"` with `lines=`, `size="fit"`, `size="text"` (in a placed row, as wide as its text and its icon), `align=`, `scale=`, `w=` |
 | `info(label, value)` | a label and its value on one row | `icon=`, `tag=` a pill, `signal=` 0 to 4 bars, `tone=` |
 | `status(text)` | a status line, cut at its `" · "` fields (no Lua) | |
 | `rule()` | a divider | |

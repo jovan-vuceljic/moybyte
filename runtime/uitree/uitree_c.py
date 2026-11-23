@@ -1939,7 +1939,7 @@ class CEditorEngine(CEngine, _ed.Engine):
         has open (`uitree_editor.Engine.draw_splits`), in C (`uit_splits`)."""
         self.div_held = None
         self.flash = None
-        if not self.splits:
+        if not self.splits and self.alone_pane is None:
             return
         self._bind()
         x = self._made()

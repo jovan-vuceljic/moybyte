@@ -1302,6 +1302,21 @@ static uint32_t prop_text(uit_t *e, int k, const char *name, int model, int row,
 static int32_t len_of(uit_t *e, int t, int model, int row, int32_t dflt);
 static int32_t int_of(uit_t *e, int t, int model, int row, int32_t dflt);
 
+// A label's tone=: a literal's index, or a template's word (dim, value, danger; another is ink).
+static int label_tone(uit_t *e, int k, int model, int row)
+{
+    int tone = NODE(k)->lit;
+    if (!tone) {
+        uint32_t nt, mark = e->scratch.n, at = prop_text(e, k, "tone", model, row, &nt);
+        static const char *const TONES[] = {"dim", "value", "danger"};
+        for (int i = 0; i < 3 && !tone; i++)
+            if (nt == strlen(TONES[i]) && !memcmp(e->scratch.p + at, TONES[i], nt))
+                tone = i + 1;
+        e->scratch.n = mark;
+    }
+    return tone;
+}
+
 static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row, int32_t *h,
                          int part)
 {
@@ -1313,16 +1328,7 @@ static void label_rows_m(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
         if (n)
             moy_ui_api_icon(c, sspan(e, at, n));
     }
-    // tone=: a literal's index, or a template's word (dim, value, danger; another is ink)
-    int tone = N->lit;
-    if (!tone) {
-        uint32_t nt, mark = e->scratch.n, at = prop_text(e, k, "tone", model, row, &nt);
-        static const char *const TONES[] = {"dim", "value", "danger"};
-        for (int i = 0; i < 3 && !tone; i++)
-            if (nt == strlen(TONES[i]) && !memcmp(e->scratch.p + at, TONES[i], nt))
-                tone = i + 1;
-        e->scratch.n = mark;
-    }
+    int tone = label_tone(e, k, model, row);
     a1 = text(e, k, 0, model, row, &n1);
     // scale=: its face at that whole scale, never under the page's; w=: its text at most that wide
     int32_t sc = int_of(e, N->t_value, model, row, 0), cap = len_of(e, N->t_aux, model, row, 0);
@@ -5289,10 +5295,16 @@ static int32_t natural(uit_t *e, int k, int model, int row, int32_t h)
     if (N->kind == UIT_GRID && N->t_value >= 0)
         return len_of(e, N->t_value, model, row, 0);     // a grid's w=
     if (N->kind == UIT_LABEL && (N->nbtn & LT_TEXT)) {
-        // size="text": its text's width in the ui face, the row pad each side
+        // size="text": its text's width in the ui face, the row pad each side, and where it
+        // shows an icon, its box and gap (`moy_ui_text_block`'s)
         moy_font_info_t fi;
+        int32_t ic = 0;
+        if (N->t_icon >= 0) {
+            uit_tmpl_render(e, N->t_icon, model, row, &n);
+            ic = n ? (16 + ((e->flags & UIT_F_DESK) ? 6 : 4)) * e->fs : 0;
+        }
         at = text(e, k, 0, model, row, &n);
-        return text_px(role_font(MOY_UI_FONT_UI, &fi), e->scratch.p + at, n, e->fs) + 8 * e->fs;
+        return text_px(role_font(MOY_UI_FONT_UI, &fi), e->scratch.p + at, n, e->fs) + 8 * e->fs + ic;
     }
     if (N->kind == UIT_CANVAS && N->t_value >= 0 && !(N->lit & CV_GROW)) {
         if (e->tmpls[N->t_value].lit && !int_of(e, N->t_value, model, row, 0))
@@ -5471,8 +5483,9 @@ static void row_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         int32_t cell[4] = {x, r[1] + 2, kw, r[3] - 4};
         int gk = NODE(g)->kind;
         if (gk == UIT_STATUS || gk == UIT_CASE || gk == UIT_SWITCH || gk == UIT_PANEL || gk == UIT_CANVAS ||
-            gk == UIT_ROW || gk == UIT_STEPPER || (gk == UIT_BUTTON && NODE(g)->lit == MOY_UI_BUTTON_BAR))
-            cell[1] = r[1], cell[3] = r[3];     // a band, a region, a bar item, a stepper: the row's height
+            gk == UIT_ROW || gk == UIT_STEPPER || gk == UIT_TABS ||
+            (gk == UIT_BUTTON && NODE(g)->lit == MOY_UI_BUTTON_BAR))
+            cell[1] = r[1], cell[3] = r[3];     // a band, a region, a bar item, a stepper, tabs: the row's height
         else if (gk == UIT_BUTTON && (NODE(g)->btn & BT_ALONE) && NODE(g)->t_value >= 0 && kw < cell[3])
             cell[1] += (cell[3] - kw) / 2, cell[3] = kw;    // an icon of its own w=: square, centred down
         if (km[i] != model)
@@ -6177,8 +6190,11 @@ static void panes_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, i
             A->least[0] = (int16_t)pn_min(e, k, 0), A->least[1] = (int16_t)pn_min(e, k, 1);
         }
         int alone = pn_alone(e, k, r);
-        if (A->arranging && e->placing)
+        if (A->arranging && e->placing) {
             A->alone = (int16_t)alone;
+            for (int i = 0; i < 4; i++)
+                A->alone_r[i] = (int16_t)r[i];
+        }
         if (alone >= 0) {
             if (e->placing) {
                 // the arrangement under the pane alone, as a host's placement answers it
@@ -6349,6 +6365,13 @@ int uit_splits(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int flags, int
     for (int i = 0; i < A->nsplits; i++)
         if (pn_split(e, c, s, i, out))
             out[UIT_SP_OWE] = 1;
+    if (A->alone >= 0) {
+        // the pane alone over the panes' rect: a split of one, its focus the pane the keys reach
+        int32_t one = 0, w[4 + 4], opt[MOY_UI_SPO_N] = {0};
+        opt[MOY_UI_SPO_FLAGS] = MOY_UI_SPLIT_FOCUS;
+        moy_ui_api_at(c, A->alone_r[0], A->alone_r[1], A->alone_r[2], A->alone_r[3]);
+        moy_ui_api_split(c, s, span_of("split alone", 11), &one, 1, NULL, opt, w);
+    }
     out[UIT_SP_WRITES] = A->writes;
     return e->nevs - e->evat;
 }

@@ -102,11 +102,17 @@ ALIGN_RIGHT = _ui_draw.ALIGN_RIGHT
 current = _ui_draw.current
 plate = _ui_draw.button
 glyph = _ui_draw.glyph
+hint_kind = _ui_draw.hint_kind
 
 
 def ui_line():
     """The UI face's line height at scale 1."""
     return _ui_draw.font("ui")[3]
+
+
+def text_w(text, fs=1):
+    """The pixels `text` takes in the UI face at scale `fs`."""
+    return _ui_draw.text_width(text, fs, "ui")
 
 
 class _Damage:

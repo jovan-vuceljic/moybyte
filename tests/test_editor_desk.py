@@ -326,10 +326,9 @@ def _shows_what_a_whole_repaint_shows(ws, drv):
 
 @pytest.mark.parametrize("fast", (False, True), ids=("press-then-release", "one-frame-click"))
 def test_a_header_tools_tap_shows_with_no_input_after_it(desk, fast):
-    """The panes' headers are the desk's verbs pass, drawn after the panes'
-    bodies: a tap a header answers (a tab, a tool, Grow) changes what the
-    bodies drew, and the pass owes the frame that shows it (the AppHost's
-    `owed`), never the next input."""
+    """The panes' headers are their pages, drawn after the panes' bodies: a
+    tap a header answers (a tab, a tool, Grow) changes what the bodies drew,
+    and the frame that shows it is owed, never the next input."""
     ws, drv = desk
     d = ws.editor_desk
     _tap(drv, ord("4"), 1)                       # World: the Scene's zoom in its header
@@ -337,7 +336,7 @@ def test_a_header_tools_tap_shows_with_no_input_after_it(desk, fast):
     for _ in range(3):
         drv.frame(DT)
     zoom = ws.scene_ui.scene_zoom
-    bx, by, bw, bh = d._host.box("pane %d scene:zoom" % n)
+    bx, by, bw, bh = d.head(n).rect_of("scene:zoom/tool")
     drv.touch(bx + bw // 2, by + bh // 2)
     if not fast:
         drv.frame(DT)
@@ -345,7 +344,7 @@ def test_a_header_tools_tap_shows_with_no_input_after_it(desk, fast):
     drv.frame(DT)
     shows = _shows_what_a_whole_repaint_shows(ws, drv)
     assert ws.scene_ui.scene_zoom != zoom and shows
-    bx, by, bw, bh = d._host.box("pane %d grow" % n)
+    bx, by, bw, bh = d.head(n).rect_of("grow")
     drv.touch(bx + bw // 2, by + bh // 2)
     if not fast:
         drv.frame(DT)
@@ -999,7 +998,7 @@ def test_a_sound_is_renamed_and_its_name_saved_with_the_bank(desk):
 def test_the_sounds_list_adds_a_sound_and_plays_one(desk):
     ws, drv, d, me, snd = _sound(desk)
     n = len(me.bank.sfx)
-    bx, by, bw, bh = d._host.box("pane 0 new sound")
+    bx, by, bw, bh = d.head(0).rect_of("new_sound")
     _click(drv, bx + bw // 2, by + bh // 2)
     assert len(me.bank.sfx) == n + 1 and me.sfx_idx == n
 
@@ -1270,6 +1269,14 @@ def _press(drv, d, id, part=None):
     _click(drv, bx + bw // 2, by + bh // 2)
 
 
+def _hpress(drv, d, n, key):
+    """A click on pane `n`'s header node `key` (editor_head.py's page; a
+    model row's "ROWKEY/KEY", a menu row's its words)."""
+    h = d.head(n)
+    bx, by, bw, bh = h.rect_of(key) or h.box(key)
+    _click(drv, bx + bw // 2, by + bh // 2)
+
+
 def test_a_reference_sound_pick_inserts_its_sfx_call(desk):
     ws, drv, d = _reference(desk, "sounds")
     part = d.part("sounds")
@@ -1329,25 +1336,25 @@ def test_the_code_panes_header_finds_jumps_and_opens_its_more_menu(desk):
     d = ws.editor_desk
     _tap(drv, ord("2"), 1)
     cl = ws.code_layer
-    assert d._host.box("pane 0 files") is not None
-    _press(drv, d, "pane 0 code find")
+    assert d.head(0).rect_of("file") is not None
+    _hpress(drv, d, 0, "find")
     assert cl._find_open
-    _press(drv, d, "pane 0 code find")
+    _hpress(drv, d, 0, "find")
     assert not cl._find_open
-    _press(drv, d, "pane 0 code goto")
+    _hpress(drv, d, 0, "goto")
     assert cl._jump_open
     cl.run("overlay_close")
     gutter = cl._gutter
-    _press(drv, d, "pane 0 code more")
-    assert d.part_state["code more"] is not None
+    _hpress(drv, d, 0, "code_more")
+    assert d.head(0).pop
     drv.frame(DT)
-    _press(drv, d, "Line numbers")
+    _hpress(drv, d, 0, "Line numbers")
     assert cl._gutter != gutter
-    assert d.part_state["code more"] is None
-    _press(drv, d, "pane 0 code more")
+    assert not d.head(0).pop
+    _hpress(drv, d, 0, "code_more")
     drv.frame(DT)
     _click(drv, 900, 500)                        # outside the card: dismissed
-    assert d.part_state["code more"] is None
+    assert not d.head(0).pop
 
 
 def test_the_code_panes_file_tabs_switch_the_script(desk, monkeypatch):
@@ -1359,7 +1366,7 @@ def test_the_code_panes_file_tabs_switch_the_script(desk, monkeypatch):
     monkeypatch.setattr(ws.text, "open_code_file", lambda name: opened.append(name) or True)
     ws.mark_dirty()
     drv.frame(DT)
-    bx, by, bw, bh = d._host.box("pane 0 files")
+    bx, by, bw, bh = d.head(0).rect_of("file")
     _click(drv, bx + 110, by + bh // 2)          # the second tab
     assert opened == ["enemies.py"]
 
@@ -1368,7 +1375,7 @@ def test_a_settled_code_pane_paints_nothing_with_its_more_menu_open(desk):
     ws, drv = desk
     d = ws.editor_desk
     _tap(drv, ord("2"), 1)
-    _press(drv, d, "pane 0 code more")
+    _hpress(drv, d, 0, "code_more")
     ws.pointer.visible = False
     settle_badges(ws)
     ws.toast_until = 0
@@ -1409,6 +1416,27 @@ def test_a_drag_in_the_code_pane_draws_the_pane_alone(desk):
     drv.touch_up()
     drv.frame(DT)
     assert got == [list(pane)] * len(got)
+
+
+def test_a_grown_code_pane_draws_its_key_frames_alone(desk):
+    """A pane grown over the workspace is a split of one (the workspace
+    page's `draw_splits`), which names it as the pane the keys reach: a key
+    frame of the grown Code pane draws that pane alone."""
+    ws, drv = desk
+    d, _pane = _code_ready(ws, drv)
+    d.grow(d.focused()[0])
+    for _ in range(4):
+        ws.mark_dirty()
+        drv.frame(DT)
+    assert d.alone() is not None
+    b = d._own_pane()[4]
+    _tap(drv, ord("a"))
+    for code in (ord("b"), ord("c")):
+        drv.key_down(code)
+        drv.frame(DT)
+        assert d.changed() == [b[0], b[1], b[0] + b[2], b[1] + b[3]]
+        drv.key_up(code)
+        drv.frame(DT)
 
 
 def test_a_key_in_the_code_pane_draws_straight_to_the_glass(desk):
@@ -1508,7 +1536,7 @@ def test_at_800_the_sound_panes_menu_picks_a_sound(tmp_path):
     d = ws.editor_desk
     me = ws.music_ui.musicedit
     snd = ws.music_ui.sound
-    _press(drv, d, "pane 0 sound menu")
+    _hpress(drv, d, 0, "sounds")
     drv.frame(DT)
     assert snd.s.asking == "menu"
     _press_sound(drv, d, snd, "1")
@@ -1592,7 +1620,7 @@ def test_the_run_slots_pause_holds_the_run_and_shows_its_still(desk):
     _tap(drv, ord("2"), 1)                       # Code: the Run slot
     _play(drv)
     win = ws.wm.windows["desktop"]
-    _press(drv, d, "pane 1 pause")
+    _hpress(drv, d, 1, "pause")
     drv.frame(DT)
     assert d.paused and ws.run.player.pace.paused and win.minimized
     assert d._still is not None                  # the still, dimmed under Play
@@ -1699,12 +1727,12 @@ def test_a_narrow_headers_tools_fold_into_its_more_menu(blocks_desk):
     se = ws.scene_ui.sceneedit
     se.sel = 0
     flip = bool(se.selected().get("flip"))
-    _press(drv, d, "pane %d head more" % n)
+    _hpress(drv, d, n, "more")
     drv.frame(DT)
     assert "Flip" in [f[1] for f in folded]
-    _press(drv, d, "Flip")
+    _hpress(drv, d, n, "Flip")
     assert bool(se.rows[0].get("flip")) != flip
-    assert d.part_state.get("head more") is None
+    assert not d.head(n).pop
     for _n, (pane, r, _p) in enumerate(d.panes()):    # a wide header folds nothing
         if pane != ("scene", "game"):
             for c in pane:
@@ -1730,8 +1758,8 @@ def test_a_short_panes_tabs_are_its_current_one_labelled_and_icons(tmp_path, mon
     d = ws.editor_desk
     drawn = []                                   # the panes the window's frame draws
     frame = d._frame
-    monkeypatch.setattr(d, "_frame", lambda cv, th, shown, u: (
-        drawn.append(list(shown)), frame(cv, th, shown, u)))
+    monkeypatch.setattr(d, "_frame", lambda cv, th, shown, u, dt: (
+        drawn.append(list(shown)), frame(cv, th, shown, u, dt)))
     for _ in range(3):
         ws.mark_dirty()
         drv.frame(DT)
@@ -1741,7 +1769,7 @@ def test_a_short_panes_tabs_are_its_current_one_labelled_and_icons(tmp_path, mon
     cur = d._tabs.get(pane, 0)
     assert x + 4 + d._tabs_w(pane, cur, 1) <= d._tools_x[n]
     other = next(j for j, k in enumerate(pane) if j != cur)
-    bx, by, bw, bh = d._host.box("pane %d tab %s" % (n, pane[other]))
+    bx, by, bw, bh = d.head(n).rect_of("%d/short" % other)
     cx, cy = ws.wm.windows["menu"].content_rect()[:2]   # the window's, on the glass
     _click(drv, cx + bx + bw // 2, cy + by + bh // 2)
     ws.mark_dirty()
@@ -1753,8 +1781,9 @@ def test_a_short_panes_tabs_are_its_current_one_labelled_and_icons(tmp_path, mon
 def test_a_settled_header_more_menu_paints_nothing(blocks_desk):
     ws, drv = blocks_desk
     d = ws.editor_desk
-    _press(drv, d, "pane %d head more" % _scene_game(d))
-    assert d.part_state.get("head more") is not None
+    n = _scene_game(d)
+    _hpress(drv, d, n, "more")
+    assert d.head(n).pop
     ws.pointer.visible = False
     settle_badges(ws)
     ws.toast_until = 0

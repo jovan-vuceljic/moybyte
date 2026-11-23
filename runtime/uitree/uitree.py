@@ -2310,7 +2310,7 @@ def group(caption="", **p):
 def label(text, **p):
     """A row of text (§7.2): `face=` a type role, `size="fit"` shrinks it to
     its width, `size="text"` makes its cell in a placed row its text's
-    width, `wrap="word"` breaks it at word breaks (at most `lines=`
+    width (and its icon's where it shows one), `wrap="word"` breaks it at word breaks (at most `lines=`
     lines, then an ellipsis), `align=`, `tone=`, `icon=` before it;
     `scale=` draws its face at that whole scale (a display line), `w=`
     keeps its text that wide at most (a measure of prose)."""

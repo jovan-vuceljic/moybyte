@@ -35,8 +35,10 @@ Editor is one tab at a time under its one bar (`EditorApp`)."""
 
 import moybuf
 import ui
+import editor_heads as Heads
 import editor_panes as P
 import editor_parts as Parts
+import view_host as _V
 import layout_base as _lb
 from layers import Layer
 from ticks import _ticks_ms, _ticks_diff
@@ -92,14 +94,19 @@ _HEAD_TOOLS = {"paint": (("rotate", "Rotate\tR", "rot"), ("flip", "Flip\tF", "fl
                          ("trash", "Delete", "scene:delete"), ("to_back", "Back", "scene:back"),
                          ("to_front", "Front", "scene:front"), ("flip", "Flip", "scene:flip"))}
 
-# The Code pane's header tools right of its file tabs, and its more menu's
-# rows: (icon, word, the Code tab's tool).
-_CODE_TOOLS = (("more", "More", "more"), ("arrow_right", "Go to definition", "goto"),
-               ("search", "Find\tCtrl+F", "find"))
+# The Code pane's more menu's rows: (icon, word, the Code tab's tool).
 _CODE_MORE = (("select", "Select", "sel"), ("copy", "Copy\tCtrl+C", "copy"),
               ("cut", "Cut\tCtrl+X", "cut"), ("paste", "Paste\tCtrl+V", "paste"),
               ("indent", "Indent\tTab", "indent"), ("outdent", "Outdent", "outdent"),
               ("linenums", "Line numbers", "gutter"), ("code", "Complete", "auto"))
+
+
+
+def _word(word, keys):
+    """A tool's word for a menu row: its key after a tab where the hints
+    name keys (a keyboard's), else the word alone."""
+    return word if keys else word.split("\t")[0]
+
 
 _TAB_PAD = 28               # a header tab's room beside its word
 _TAB_LEAD = 12              # the tabs row's lead before its first tab (the desk's group pad)
@@ -148,9 +155,10 @@ class EditorDesk(Layer):
         self._lay = {}                  # (tab, w, h, fs, cs) -> the pane's layout
         self._drag = None               # a divider held: (path, i, axis, at, stop, live)
         self._on_div = False            # the pointer went down on a divider: the frame's
-        self._split_out = [0] * (4 * 8 + 4)
-        self._one = [0]                 # the split of one pane alone over the area
-        self._one_o = {"focus": 0}
+        self._heads = {}                # pane index -> its header's page host (`head`)
+        self._head_down = None          # the pane whose header a press went down in
+        self._head_due = False          # a header took input its next whole frame answers
+        self._code_rows = (None, ())    # the Code more menu's rows, for the hints' kind
         self._press = None              # the pane a press went down in
         self._last = (None, 0)          # the last press: its target, when
         self._ev = 0                    # last frame's key event
@@ -823,7 +831,7 @@ class EditorDesk(Layer):
         under it (a font scale over the chrome's): a pane's own rows
         there are the header's too, so its frames draw whole."""
         u = self._unit()
-        return ui.text_size("M")[1] * self.ws.look.effective_font_scale() > (P.HEADER - 4) * u
+        return _V.ui_line() * self.ws.look.effective_font_scale() > (P.HEADER - 4) * u
 
     def changed(self):
         return self._changed
@@ -849,6 +857,8 @@ class EditorDesk(Layer):
     def _own_pane(self):
         """(content, tab, pane, rect, body, index) of the focused pane where
         its frames may be its own, else None."""
+        if self._menu_open() or self._head_due:
+            return None                 # a header's menu over the panes, or its answer due
         pane, r, _path = self.focused()
         alone = self.alone()
         if alone is not None:
@@ -942,8 +952,7 @@ class EditorDesk(Layer):
         key = (c, tab, self._acts, self.key, self._focus.get(self.key, 0), self.grown, pane,
                r, self.placed()[0], cv.w, cv.h, look.look_gen, look.effective_font_scale(),
                look.effective_chrome_scale(), ws.bar_layer.shown_gen("menu"), data,
-               self._flash, self.part_state.get("code more"),
-               self.part_state.get("head more"))
+               self._flash)
         if key != self._surround:
             self._surround = key
             self._gen = (self._gen + 1) & 0x3FFFFFFF
@@ -969,16 +978,22 @@ class EditorDesk(Layer):
             # first pane's header), their pixels clipped to the pane
             th = ws.theme_colors
             self._corners(cv, th["panel"], r[0], r[1], r[2], r[3], P.RADIUS * u)
+            top = r[1] - ws.layout.cy
+            if r[1] == self._area()[1] and top > 0:
+                # the margin over it, where its header's focus ring reaches,
+                # among what the frame changed
+                cv.rect(r[0], ws.layout.cy, r[2], top, th["panel"])
+                y0 = min(y0, ws.layout.cy)
             pb = self._body(r, u, pane)
             self._card(cv, th, r, True, u)
-            self._tab_pane(tab, pb, dt, True)
             self._clip = r
             cv.clip(*r)
             try:
-                self._frame(cv, th, self._shown_panes(), u)
+                self._draw_head(own[5], pane, r, u, dt)
             finally:
                 self._clip = None
                 cv.clip()
+            self._tab_pane(tab, pb, dt, True)
         else:
             self._tab_pane(tab, body, dt, True)
             if c == "cards" and self._own_data(c) != data:
@@ -1036,7 +1051,7 @@ class EditorDesk(Layer):
         for n, pane, r in shown:
             self.pane_body(n, pane, r, dt)
             cv.clip()
-        self._frame(cv, th, shown, u)
+        self._frame(cv, th, shown, u, dt)
         if self._loupe is not None and not ws.pointer.down:
             self._loupe = None
         if self._loupe is not None:
@@ -1045,8 +1060,10 @@ class EditorDesk(Layer):
         self._dock()
 
     def pane_body(self, n, pane, r, dt):
-        """Pane `n`'s body in its rect `r`: its card, then its tab's
-        surface, the Run slot or its part's page."""
+        """Pane `n` in its rect `r`: its card, its header (where no More
+        menu of its hangs over the panes: `_frame` draws that one last),
+        then its body -- its tab's surface, the Run slot or its part's
+        page, over whatever of the header's marks reach past it."""
         ws = self.ws
         cv = ws.sys_canvas
         th = ws.theme_colors
@@ -1056,6 +1073,8 @@ class EditorDesk(Layer):
         tab = P.CONTENTS[c][2]
         filled = (body[1] if tab in _FILLS_BODY and self._surface(tab) is not None else 0)
         self._card(cv, th, r, n == self._focus.get(self.key, 0), u, filled)
+        if not self._headless(pane) and not self.head(n).pop:
+            self._draw_head(n, pane, r, u, dt)
         if tab is not None:
             self._tab_pane(tab, body, dt, moves=pane == self._moves)
         elif c == "game":
@@ -1161,106 +1180,35 @@ class EditorDesk(Layer):
             cv.rrect(x, y, w, h, rad, th["value"])
             cv.clip()
 
-    def _frame(self, cv, th, shown, u):
-        """Every pane's header on the verbs: its icon and name, or its tabs;
-        its grow tool; the empties of the panes not built yet; the tag of a
-        divider stopped at its minimum. It runs inside the draw, after the
-        bodies, so what its answers change (a tab, a tool, Grow, a divider's
+    def _frame(self, cv, th, shown, u, dt):
+        """The dividers, a header whose More menu is open and the tag of a
+        divider stopped at its minimum, after the bodies. The dividers are
+        the workspace page's (`_draw_splits`: its C draws them into the
+        desk host's pass, which a press on one reaches, and a pane alone is
+        a split of one); each header is its pane's page (editor_head.py,
+        hosted by `editor_heads.HeadHost`) on the pane's rect, drawn here
+        where its More menu hangs over the panes, else under its body
+        (`pane_body`). What the pass answers (a divider's
         release) shows on the frame it owes (`AppHost.owed`, asked for with
-        `request_frame`): a `ws.frame_state.dirty` set here is spent by this frame's
-        own tail."""
+        `request_frame`)."""
         host = self._host
-        host.begin(cv, th, (0, 0, cv.w, cv.h), True, True,
-                   elsewhere=not self._part_focused())
-        if self.alone() is None:
-            self._draw_splits(u)
-        else:
-            # the pane alone over the panes area is a split of one, which
-            # the keys reach (`_split_frame`)
-            ui.at(*self._area())
-            ui.split("split alone", "x", self._one, self._one_o, self._split_out)
-        hh = P.HEADER * u
-        cell = 32 * u
+        host.begin(cv, th, (0, 0, cv.w, cv.h), True, True, elsewhere=True)
+        self._draw_splits(u)
+        ui.end()
+        if host.owed or host.tap == 2:
+            self.ws.request_frame()     # the frame that shows what the pass answered
+        drawn = 0
+        due = False
         for n, pane, r in shown:
-            x, y, w, _h = r
-            pid = "pane %d" % n
-            if self._headless(pane):
-                self._still_tool(pid, u)
-                continue
-            c = self.tab_of(pane)
-            # The header's tools, right to left: Grow, the Game's pause and
-            # the Sound and Sounds headers' own, then the tools that fit and
-            # the more menu of the rest. The title or tabs keep left of them
-            # all; tabs that would not fit labelled are short (`_short_tabs`).
-            fixed = (cell * (1 + (c == "game")) + 4 * u
-                     + (7 * cell if c == "music" else cell if c == "sounds" else 0))
-            short = len(pane) > 1 and self._tabs_w(pane, -1, u) > w - fixed - 8 * u
-            tools, folded = self._head_fit(pane, c, x, w, u, short)
-            tools_w = fixed + cell * (len(tools) + bool(folded))
-            if c == "code" and len(pane) == 1:
-                pass                            # its file tabs: `_code_head`
-            elif len(pane) == 1:
-                label, icon, _tab, _m = P.CONTENTS[pane[0]]
-                title = self._title(pane[0], label)
-                ui.at(x + 8 * u, y, max(0, w - 8 * u - tools_w), hh)
-                ui.icon(icon)
-                ui.label(title)
-                status = self._status(pane[0])
-                if status:
-                    sx = x + 8 * u + 28 * u + ui.text_size(title)[0] + 14 * u
-                    lh = ui.text_size(status)[1]
-                    ui.at(sx, y + (hh - lh) // 2, max(0, x + w - tools_w - sx), lh)
-                    ui.label(status, {"tone": "dim"})
-            else:
-                cur = self._tabs.get(pane, 0)
-                if short:
-                    got = self._short_tabs(pid, pane, cur, x + 4 * u, y, hh, u)
-                else:
-                    items = [P.CONTENTS[c][0] for c in pane]
-                    ui.at(x + 4 * u, y + 2 * u, max(0, w - tools_w - 8 * u), hh - 4 * u)
-                    got = ui.tabs(pid, items, cur, {"id": pid})
-                if got != cur and got is not None and got >= 0:
-                    self._tabs[pane] = got
-                    if n == self._focus.get(self.key, 0):
-                        self.focus_pane(n)
-            ui.at(x + w - cell - 2 * u, y, cell, hh)
-            if ui.tool("maximize", "Grow\tCtrl+Shift+Enter", {"id": pid + " grow"}):
-                self.grow(pane)
-            tx = x + w - cell - 2 * u
-            if folded:
-                tx -= cell
-                ui.at(tx, y, cell, hh)
-                if ui.tool("more", "More", {"id": pid + " head more"}):
-                    self.part_state["head more"] = (tx, y + hh, cell, folded)
-                    self.ws.mark_dirty()
-            if c == "game":
-                tx -= cell
-                ui.at(tx, y, cell, hh)
-                if ui.tool("sleep", "Pause", {"id": pid + " pause", "current": self.paused,
-                                              "disabled": not self.ws.editor_app.playing()}):
-                    self.pause(not self.paused)
-            for icon, word, op in tools:
-                tx -= cell
-                ui.at(tx, y, cell, hh)
-                if ui.tool(icon, word, {"id": "%s %s" % (pid, op),
-                                        "current": self._tool_on(op)}):
-                    self._head_tool(op)
-            if c == "music":
-                tx = self.ws.music_ui.sound.header(self, pid, tx, y, hh, u)
-            elif c == "code" and len(pane) == 1:
-                tx = self._code_head(pid, x, y, hh, u, tx)
-            elif c == "sounds" and self.key == "sound":
-                tx -= cell
-                ui.at(tx, y, cell, hh)
-                if ui.tool("new", "New sound", {"id": pid + " new sound"}):
-                    Parts.new_sound(self)
-            self._tools_x[n] = tx
-            if c == "game":
-                self._still_tool(pid, u)
-        if self.part_state.get("code more") is not None:
-            self._code_more(u)
-        if self.part_state.get("head more") is not None:
-            self._head_more(u)
+            if not self._headless(pane):
+                if self.head(n).pop:
+                    self._draw_head(n, pane, r, u, dt)      # its menu over the panes
+                drawn |= 1 << n
+                due |= not self._heads[n]._host.still()
+        self._head_due = due
+        for n, h in self._heads.items():
+            if h.pop and not drawn >> n & 1:
+                h.close_pop()           # its pane left the workspace on show
         flash = self._flash
         if flash is not None and self._drag is not None:
             pane, why = flash
@@ -1268,64 +1216,126 @@ class EditorDesk(Layer):
                 if p == pane:
                     cv.rrect(r[0] - 2 * u, r[1] - 2 * u, r[2] + 4 * u, r[3] + 4 * u,
                              (P.RADIUS + 2) * u, None, th["value"])
-                    ui.at(r[0] + 8 * u, r[1] + r[3] - 28 * u, r[2] - 16 * u, 24 * u)
-                    ui.label(why, {"tone": "value"})
-        ui.end()
-        if host.owed or host.tap == 2:
-            self.ws.request_frame()     # the frame that shows what the pass answered
+                    _V.label(cv, (r[0] + 8 * u, r[1] + r[3] - 28 * u, r[2] - 16 * u, 24 * u),
+                             why, th["value"])
 
-    def _code_head(self, pid, x, y, hh, u, tx):
-        """The Code pane's header (EDITOR_LAYOUT.md): the cart's scripts as
-        tabs, the one shown current; find, go to definition and more."""
+    def head(self, n):
+        """The host of pane `n`'s header page, made at its first use."""
+        h = self._heads.get(n)
+        if h is None:
+            h = self._heads[n] = Heads.HeadHost(self, n)
+        return h
+
+    def _draw_head(self, n, pane, r, u, dt):
+        """Pane `n`'s header on its rect `r`: its focus shows where the keys
+        are in it (the Sound pane's, a more menu's)."""
+        h = self.head(n)
+        if h.pane != pane and h.pop:
+            h.close_pop()
+        keys = n == self._focus.get(self.key, 0) and (h.pop or self.tab_of(pane) == "music")
+        h.draw(pane, r, self._head_vals(n, pane, r, u), keys, dt)
+
+    def _head_vals(self, n, pane, r, u):
+        """Pane `n`'s header state (editor_head.sync): its kind, its words,
+        its tabs, the tools that fit and the more menu's rest, the Game's,
+        the Code pane's and the Sound pane's own, and its measures. The
+        tools keep right of the title or tabs; tabs that would not fit
+        labelled are short (the current one labelled, the others icons)."""
         ws = self.ws
+        x, _y, w, h = r
+        c = self.tab_of(pane)
         cell = 32 * u
-        cl = ws.code_layer
-        for icon, word, op in _CODE_TOOLS:
-            tx -= cell
-            ui.at(tx, y, cell, hh)
-            on = op == "find" and bool(getattr(cl, "_find_open", False))
-            if ui.tool(icon, word, {"id": "%s code %s" % (pid, op), "current": on}):
-                if op == "more":
-                    self.part_state["code more"] = (tx, y + hh, cell)
-                else:
-                    cl.jump_anchor = (tx, y, cell, hh) if op == "goto" else None
-                    cl._run_tool(op, ws.editor)
-                ws.mark_dirty()
-        name = ws.text.code_file_name() or ""
-        names = ws.text.code_sources() or [name]
-        cur = names.index(name) if name in names else 0
-        ui.at(x + 4 * u, y + 2 * u, max(0, tx - x - 8 * u), hh - 4 * u)
-        got = ui.tabs(pid + " files", names, cur, {"id": pid + " files"})
-        if got is not None and 0 <= got < len(names) and got != cur:
-            ws.text.open_code_file(names[got])
-        return tx
+        fs = ws.look.effective_font_scale()
+        fixed = (cell * (1 + (c == "game")) + 4 * u
+                 + (7 * cell if c == "music" else cell if c == "sounds" else 0))
+        short = len(pane) > 1 and self._tabs_w(pane, -1, u) > w - fixed - 8 * u
+        tools, folded = self._head_fit(pane, c, x, w, u, short)
+        cur = self._tabs.get(pane, 0)
+        icon = title = status = tab = file = ""
+        tabs = shorts = files = ()
+        find = fitted = False
+        cells = fixed + cell * (len(tools) + bool(folded))
+        if c == "code" and len(pane) == 1:
+            kind = "code"
+            name = ws.text.code_file_name() or ""
+            files = tuple(ws.text.code_sources() or [name])
+            file = name if name in files else files[0]
+            find = bool(getattr(ws.code_layer, "_find_open", False))
+            cells += 3 * cell
+        elif len(pane) == 1:
+            kind = "title"
+            label, icon, _tab, _m = P.CONTENTS[c]
+            title = self._title(c, label)
+            status = self._status(c)
+            # the title as wide as its words where they and the status fit
+            # beside the tools, else what the tools leave it (cut)
+            fitted = (22 * u + 22 * fs + self._tw(title) + 8 * fs
+                      + (self._tw(status) + 8 * fs if status else 0) + cells) <= w
+        elif short:
+            kind = "short"
+            shorts = tuple((str(j), P.CONTENTS[k][0], P.CONTENTS[k][1], j == cur)
+                           for j, k in enumerate(pane))
+        else:
+            kind = "tabs"
+            tabs = tuple(P.CONTENTS[k][0] for k in pane)
+            tab = str(cur)
+        self._tools_x[n] = x + w - 2 * u - cells + 4 * u
+        keys = _V.hint_kind() == "keys"
+        if self._code_rows[0] != keys:
+            self._code_rows = (keys, tuple((ic, _word(wd, keys), op) for ic, wd, op in _CODE_MORE))
+        snd = ws.music_ui.sound.head_vals(self) if c == "music" else (False, False, "", False, False)
+        return (kind, fitted, icon, title, status, tabs, tab, shorts,
+                tuple((ic, op, self._tool_on(op)) for ic, _wd, op in reversed(tools)),
+                tuple((ic, _word(wd, keys), op) for ic, wd, op in folded),
+                (c == "game", self.paused, ws.editor_app.playing()), files, file, find, snd,
+                c == "sounds" and self.key == "sound",
+                (cell, 2 * u, 20 * u, max(1, h - P.HEADER * u), min(w - 16 * u, 160 * u * fs),
+                 min(w - 16 * u, 200 * u * fs), self._code_rows[1]))
+
+    def head_act(self, head, verb, *args):
+        """What pane header `head`'s buttons ask: Grow, a tab, a tool (its
+        more menu's too), Pause, a Code file or tool, a new sound, the Sound
+        pane's tools; a more menu opened or closed."""
+        ws = self.ws
+        pane = head.pane
+        if pane is None:
+            return
+        if verb == "grow":
+            self.grow(pane)
+        elif verb == "tab":
+            j = args[0]
+            if 0 <= j < len(pane) and j != self._tabs.get(pane, 0):
+                self._tabs[pane] = j
+                if head.n == self._focus.get(self.key, 0):
+                    self.focus_pane(head.n)
+        elif verb == "tool":
+            self._head_tool(args[0])
+        elif verb == "pause":
+            self.pause(not self.paused)
+        elif verb == "file":
+            if args[0] and args[0] != ws.text.code_file_name():
+                ws.text.open_code_file(args[0])
+        elif verb == "code":
+            cl = ws.code_layer
+            cl.jump_anchor = head.rect_of("goto") if args[0] == "goto" else None
+            cl._run_tool(args[0], ws.editor)
+        elif verb == "new_sound":
+            Parts.new_sound(self)
+        elif verb == "sound":
+            ws.music_ui.sound.head_act(self, args[0])
+        ws.mark_dirty()
 
     def _tabs_w(self, pane, cur, u):
         """The width a pane's header tabs take: every one labelled, or with
         `cur` an index, short -- that one labelled, the others icons."""
         if cur == -1:
-            return sum(ui.text_size(P.CONTENTS[k][0])[0] + _TAB_PAD * u for k in pane)
+            return sum(self._tw(P.CONTENTS[k][0]) + _TAB_PAD * u for k in pane)
         return (32 * u * (len(pane) - 1) + (_TAB_PAD + _TAB_LEAD) * u
-                + ui.text_size(P.CONTENTS[pane[cur]][0])[0])
+                + self._tw(P.CONTENTS[pane[cur]][0]))
 
-    def _short_tabs(self, pid, pane, cur, x, y, hh, u):
-        """A short pane's tabs (EDITOR_LAYOUT.md): the current one labelled,
-        the others as icons in tool cells, in the tabs' order. The tab tapped
-        or None."""
-        got = None
-        for j, k in enumerate(pane):
-            label, icon = P.CONTENTS[k][0], P.CONTENTS[k][1]
-            if j == cur:
-                tw = ui.text_size(label)[0] + (_TAB_PAD + _TAB_LEAD) * u
-                ui.at(x, y + 2 * u, tw, hh - 4 * u)
-                ui.tabs(pid, [label], 0, {"id": pid})
-                x += tw
-            else:
-                ui.at(x, y, 32 * u, hh)
-                if ui.tool(icon, label, {"id": "%s tab %s" % (pid, k)}):
-                    got = j
-                x += 32 * u
-        return got
+    def _tw(self, text):
+        """The pixels a header's `text` takes, in the UI face at the font scale."""
+        return _V.text_w(text, self.ws.look.effective_font_scale())
 
     def _head_fit(self, pane, c, x, w, u, short=False):
         """The header tools a pane shows and the ones its more menu holds:
@@ -1336,7 +1346,7 @@ class EditorDesk(Layer):
             return tools, ()
         cell = 32 * u
         if len(pane) == 1:
-            lead = 8 * u + 28 * u + ui.text_size(self._title(c, P.CONTENTS[c][0]))[0]
+            lead = 8 * u + 28 * u + self._tw(self._title(c, P.CONTENTS[c][0]))
         else:
             lead = 4 * u + self._tabs_w(pane, self._tabs.get(pane, 0) if short else -1, u)
         room = (w - lead - 2 * u - cell - 4 * u) // cell
@@ -1345,59 +1355,17 @@ class EditorDesk(Layer):
         k = max(0, room - 1)
         return tools[:k], tools[k:]
 
-    def _head_more(self, u):
-        """A pane header's more menu, hung under its tool: the tools that
-        did not fit."""
-        ws = self.ws
-        tx, ty, cell, ops = self.part_state["head more"]
-        w = 160 * u
-        ui.at(max(0, tx + cell - w), ty, w, 0)
-        if not ui.popover("head more", w):
-            self.part_state["head more"] = None
-            ui.popover()
-            ws.mark_dirty()
-            return
-        got = ui.menu("", [o[1] for o in ops], [o[0] for o in ops])
-        ui.popover()
-        if got is not None and 0 <= got < len(ops):
-            self.part_state["head more"] = None
-            self._head_tool(ops[got][2])
-            ws.mark_dirty()
+    def _head_open(self):
+        """The header whose more menu is open, or None."""
+        for h in self._heads.values():
+            if h.pop:
+                return h
+        return None
 
     def _menu_open(self):
         """Whether a header's more menu is open (it takes the keys and the
         pointer)."""
-        ps = self.part_state
-        return ps.get("code more") is not None or ps.get("head more") is not None
-
-    def _code_more(self, u):
-        """The Code pane's more menu, hung under its tool: the Code tab's other
-        tools."""
-        ws = self.ws
-        tx, ty, cell = self.part_state["code more"]
-        w = 200 * u
-        ui.at(max(0, tx + cell - w), ty, w, 0)
-        if not ui.popover("code more", w):
-            self.part_state["code more"] = None
-            ui.popover()
-            ws.mark_dirty()
-            return
-        got = ui.menu("", [m[1] for m in _CODE_MORE], [m[0] for m in _CODE_MORE])
-        ui.popover()
-        if got is not None and 0 <= got < len(_CODE_MORE):
-            self.part_state["code more"] = None
-            ws.code_layer._run_tool(_CODE_MORE[got][2], ws.editor)
-            ws.mark_dirty()
-
-    def _still_tool(self, pid, u):
-        """Play over the Run slot's still frame."""
-        if self._still is None:
-            return
-        gx, gy, gw, gh = self._still
-        d = 48 * u
-        ui.at(gx + (gw - d) // 2, gy + (gh - d) // 2, d, d)
-        if ui.tool("play", "Play\tCtrl+Enter", {"id": pid + " play"}):
-            self._play_slot()
+        return self._head_open() is not None
 
     def _play_slot(self):
         """The still frame's Play: the paused playtest goes on, else Play."""
@@ -1559,6 +1527,9 @@ class EditorDesk(Layer):
             cv.tint565(dim, gc._buf, gc.w, 0, 0, gc.w, gc.h, th["panel"], 140)
             cv.blit565_resize(dim, gc.w, gc.h, gx, gy, gw, gh)
             moybuf.free(dim)
+        if not live:
+            d = 48 * u                  # Play over the still (a tap on the slot plays)
+            _V.glyph(cv, "run", (gx + (gw - d) // 2, gy + (gh - d) // 2, d, d), th["ink"], u)
         cv.clip()
         self._still = None if live else (gx, gy, gw, gh)
         self._still_at = (gx, gy, gw, gh)
@@ -1624,9 +1595,9 @@ class EditorDesk(Layer):
         if self._view_wheel(i):
             self._acts += 1
             return True
-        if self._menu_open():
-            if self._host.keys(i):
-                ws.mark_dirty()
+        h = self._head_open()
+        if h is not None:
+            h._page().keys(i)           # (its page's damage marks what the keys moved)
             self._acts += 1
             return True
         got = self._prompt()
@@ -1648,8 +1619,8 @@ class EditorDesk(Layer):
                 self._in_pane(tab, self._body(r, self._unit(), pane), snd.page_keys, i)
             elif snd.keys(self, i, self._fresh):
                 i.spend_edges()                 # a held arrow keeps its repeats
-            elif self._host.keys(i):
-                ws.mark_dirty()
+            else:
+                self.head(self._focus.get(self.key, 0))._page().keys(i)
             return True
         if tab is not None:
             layer = ws.layer_of(tab)
@@ -1753,13 +1724,6 @@ class EditorDesk(Layer):
         ws.mark_dirty()
         return True
 
-    def _part_focused(self):
-        """Whether the keys are in the desk's own stops: a header's more
-        menu, the Sound pane's header."""
-        if self._menu_open():
-            return True
-        return self.tab_of(self.focused()[0]) == "music"
-
     def caret_keys(self):
         """Whether the arrows are a caret's: off the desk's workspaces, or
         while the focused pane is the Code tab or theme Config (another pane
@@ -1849,7 +1813,7 @@ class EditorDesk(Layer):
             return True
         for name, dx, dy in _PAD_DIRS:
             if i.pressed(name):
-                # the pane that way of the splits' (`ui.split`'s focus)
+                # the pane that way, of the splits' panes (their focus)
                 b = self._box
                 f = self.focused()[1] if self.alone() is None else self._area()
                 if self._host.split_toward(f[0] + f[2] // 2, f[1] + f[3] // 2, dx, dy, b):
@@ -1925,9 +1889,13 @@ class EditorDesk(Layer):
                     if n != self._focus.get(self.key, 0):
                         self.focus_pane(n)
                     break
-        if self._menu_open():
-            if self._host.point(px, py, click, down):
-                ws.mark_dirty()
+        h = self._head_open()
+        if h is not None:
+            r = h._rect
+            if click and r is not None and not (r[0] <= px < r[0] + r[2] and r[1] <= py < r[1] + r[3]):
+                h.close_pop()           # a press off its pane closes its menu
+            else:
+                h.handle_pointer(px, py, click)     # (its page's damage marks what moved)
             return True
         p = self._press
         if p is None:
@@ -1939,10 +1907,14 @@ class EditorDesk(Layer):
             if self._double(("head", pane), _ticks_ms()):
                 self.grow(pane)
                 return True
-        host = self._host
-        if py < r[1] + head or click is False and host.hold:
-            if host.point(px, py, click, down):
-                ws.mark_dirty()
+        if click and py < r[1] + head:
+            self._head_down = n         # its drag and release are the header's too
+        if py < r[1] + head or self._head_down == n:
+            if not down and not click:
+                self._head_down = None
+            if click or down or self._head_down is not None:
+                self._head_due = True   # the header's pass answers it: a whole frame
+            self.head(n).handle_pointer(px, py, click)
             return True
         c = self.tab_of(pane)
         body = self._body(r, u, pane)

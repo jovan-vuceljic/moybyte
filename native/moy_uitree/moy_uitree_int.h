@@ -230,6 +230,7 @@ typedef struct {
     uint8_t depth, ghost, arranging;
     uint8_t path[PN_DEPTH];
     int16_t root, alone;        // the outermost panes this pass; the pane the placement stood alone
+    int16_t alone_r[4];         // ...and the rect it stood alone over (the outermost panes')
     int16_t least[2];           // the outermost panes' least size, gutters in
     uint32_t tap_key, tap_at;   // the last tap on a divider (its split's id hashed, its index) and when
     int32_t writes;             // held sizes written or put back since the host last asked
