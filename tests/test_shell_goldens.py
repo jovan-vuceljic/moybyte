@@ -1448,7 +1448,7 @@ def _status_plan(ws, cfg):
         bl = ws.bar_layer
         items = bl.focus_items("home")
         k = [j for j, it in enumerate(items) if it[2] == "cluster"][0]
-        assert bl.focus_enter("home", "row", k=k)
+        assert bl.focus_enter("home", k=k)
 
     def cc():
         ws.bar_layer.focus_leave()

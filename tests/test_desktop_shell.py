@@ -18,6 +18,7 @@ from ws_helpers import build_ws as _ws
 import pytest
 from ws_helpers import boot_on_fixture, use_theme
 from tools.board_config import runtime_file
+from ws_helpers import hint_rects
 
 @pytest.fixture(autouse=True)
 def _on_the_night_fixture(monkeypatch):
@@ -56,9 +57,9 @@ def test_tap_schedules_the_run_behind_a_loading_paint(tmp_path):
             ws.launcher.sel = i
             break
     home = ws.launcher_layer
-    chips = home._zone_action_rects(ws.layout.zone_left)
+    chips = hint_rects(home)
     x, y, w, h = chips["play"]
-    assert home.zone_tap(x + 1, y + 1, ws.layout.zone_left)
+    assert home._hint_tap(x + 1, y + 1)
     assert ws.screen == "launcher"       # the tap only SCHEDULED the start
     assert ws.deferred                  # ...which is queued for the frame
     ws.frame(1 / 30)
@@ -549,7 +550,7 @@ def test_the_make_tabs_new_card_starts_a_project(tmp_path):
     from runtime import host_app
     ws = _ws(tmp_path)
     drv = host_app.ConsoleDriver(ws)
-    r = next(r for tid, r, _on in ws.launcher_layer.tab_rects() if tid == "make")
+    r = ws.launcher_layer.tab_box("make")
     drv.click(r[0] + r[2] // 2, r[1] + r[3] // 2)
     drv.frame(1 / 30)
     assert ws.launcher.tab == "make"
@@ -573,8 +574,7 @@ def test_play_reaches_the_tabbed_home_in_console_mode(tmp_path):
     ws.home.open_library()                           # the desk's PLAY
     drv.frame(1 / 30)
     assert ws.wm.mode == "console" and ws.screen == "launcher"
-    assert [tid for tid, _r, _on in ws.launcher_layer.tab_rects()] == [
-        "games", "mine", "apps", "make"]
+    assert all(ws.launcher_layer.tab_box(t) is not None for t in ("games", "mine", "apps", "make"))
     assert ws.launcher.tab == "games"
     assert all(c.get("type") != "app" for c in ws.launcher.items)
     ws.home.set_home_tab("apps")
@@ -852,7 +852,7 @@ def test_tool_bar_does_not_lend_a_zone_during_play(tmp_path):
     owner's draw_zone and drive the tool through several frames; none may fire."""
     ws, drv = _make_tool_ws(tmp_path)
     calls = []
-    for owner in (ws.launcher_layer, ws.settings_layer, ws.editor_app.bar_zone):
+    for owner in (ws.launcher_layer.bar_zone, ws.settings_layer, ws.editor_app.bar_zone):
         orig = owner.draw_zone
 
         def spy(cv, rect, _orig=orig, _owner=owner):

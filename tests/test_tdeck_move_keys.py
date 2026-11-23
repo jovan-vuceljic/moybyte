@@ -133,7 +133,7 @@ def test_d_and_a_glide_the_homes_carousel(tmp_path):
     t.key("a")
     assert ws.launcher.sel == 1
     t.key("w")
-    assert ws.launcher_layer._tab_focus, "W from the carousel takes the tab row"
+    assert ws.bar_layer.focus_where == "home", "W from the carousel takes the bar's tabs"
 
 
 def test_s_and_w_step_settings_rows(tmp_path):
