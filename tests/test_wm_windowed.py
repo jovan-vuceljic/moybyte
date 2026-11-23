@@ -3746,29 +3746,54 @@ def test_a_desk_tile_draws_its_apps_icon_from_the_set(tmp_path):
         drawn.append((kind, rect[2], real(kind, rect, ink, cv))), drawn[-1][2])[1]
     ws.wm._backdrop_layer._draw_desk_icons()
     keys = [r[0] for r in ws.wm._backdrop_layer._icon_rects()]
-    assert [d[0] for d in drawn] == keys
+    assert sorted(d[0] for d in drawn) == sorted(keys)      # (the current tile's last)
     assert all(size == 24 and ok for _k, size, ok in drawn)
     from runtime import iconsets
     assert iconsets._pick("default", 24)[1] == 24
 
 
+def _label_words(ws):
+    """The colour words the desk's labels' bands hold, each band's set."""
+    cv = ws.sys_canvas
+    out = []
+    for _key, _box, band, _label, _cart in ws.wm._backdrop_layer._icon_rects():
+        out.append({_px(cv, x, y) for y in range(band[1], band[1] + band[3])
+                    for x in range(band[0], band[0] + band[2])})
+    return out
+
+
+def _shadowed(words, bg):
+    """Whether a band's words hold a shadow's: a grey darker than two
+    thirds of the backdrop `bg`."""
+    def rgb(w):
+        return (w >> 11 & 31) << 3, (w >> 5 & 63) << 2, (w & 31) << 3
+
+    def lum(c):
+        return c[0] * 299 + c[1] * 587 + c[2] * 114
+    b = lum(rgb(bg))
+    return any(max(c) - min(c) < 24 and lum(c) * 3 < b * 2 for c in map(rgb, words))
+
+
+def _word(v):
+    """Look colour `v`'s RGB565 word as the labels draw it (its MOY64 nearest)."""
+    from runtime import ui_draw
+    return ui_draw._C.theme_rgb(ui_draw._C.theme_rgb(v)[2])[0]
+
+
 def test_a_desk_label_over_a_wallpaper_is_white_over_a_shadow(tmp_path, monkeypatch):
     """Over the theme's backdrop a label takes the ink; over a wallpaper,
     whose pixels the theme does not know, white over a black shadow."""
-    from runtime import ui_draw
     ws = _moy_desk(tmp_path)
-    got = []
-    real = ui_draw.label
-    monkeypatch.setattr(ui_draw, "label", lambda cv, r, t, ink, align=0, bg=None,
-                        shadow=None: (got.append((t, ink, shadow)),
-                                      real(cv, r, t, ink, align, bg, shadow))[1])
-    ws.wm._backdrop_layer._draw_desk_icons()
-    assert got and all(ink == ws.theme_colors["ink"] and sh is None for _t, ink, sh in got)
-    got.clear()
+    desk = ws.wm._backdrop_layer
+    from runtime import ui_draw
+    ink = ui_draw._C.theme_rgb(ws.theme_colors["ink"])[0]
+    bg = ui_draw._C.theme_rgb(ws.theme_colors["desktop"])[0]
+    words = _label_words(ws)
+    assert words and all(ink in w for w in words)
     monkeypatch.setattr(ws.look, "wallpaper_id", ws.look.PICTURE)
-    ws.wm._backdrop_layer._draw_desk_icons()
-    black, white = ws.look.live.fixed[2:]
-    assert got and all(ink == white and sh[0] == black for _t, ink, sh in got)
+    desk._draw_desk_icons()
+    words = _label_words(ws)
+    assert words and all(_word(0x1FFFFFF) in w and _shadowed(w, bg) for w in words)
 
 
 def test_blocks_tiles_are_each_apps_colour_and_their_icons_the_tile_ink(tmp_path):
@@ -3817,15 +3842,10 @@ def test_a_looks_label_ink_and_shadow_draw_the_desk_labels(tmp_path, monkeypatch
         ws.look.set_theme("lb", persist=False, variant="light")
         ws.home.open_desk()
         _quiesce(ws)
-        got = []
-        real = ui_draw.label
-        monkeypatch.setattr(ui_draw, "label", lambda cv, r, t, ink, align=0, bg=None,
-                            shadow=None: (got.append((ink, shadow)),
-                                          real(cv, r, t, ink, align, bg, shadow))[1])
-        ws.wm._backdrop_layer._draw_desk_icons()
-        leaves = ws.look.live.look[0]
-        assert got and set(got) == {(leaves["label.ink"],
-                                     (leaves["label.shadow.c"], 128, 2, 1))}
+        ws.frame(1 / 30)
+        bg = ui_draw._C.theme_rgb(ws.theme_colors["desktop"])[0]
+        words = _label_words(ws)
+        assert words and all(_word(0x1FF0000) in w and _shadowed(w, bg) for w in words)
     finally:
         _uninstall()
 

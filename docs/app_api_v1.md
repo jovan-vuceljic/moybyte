@@ -433,7 +433,7 @@ Python's alone.
 | kind | is | key props |
 |---|---|---|
 | `rows(model)` | a model's rows, each drawing the body (Python `with`, Lua the function) | `cur=` the `row_of` focus writes, `current=` the row marked, `check=`, `empty=`, `by=` with cases, `filter=`, `group=` |
-| `cards(model)`, `card(action)` | rows as cards; `card` is the body | `cur=`, `current=`, `w=`, `h=`, `cols=`, `flow=`, `look=` (`carousel`, `shelf`, `icons`); a card's `label=`, `sub=`, `image=`, `badge=` |
+| `cards(model)`, `card(action)` | rows as cards; `card` is the body | `cur=`, `current=`, `w=`, `h=`, `cols=`, `flow=`, `look=` (`carousel`, `shelf`, `icons`, `column`); a card's `label=`, `sub=`, `image=`, `badge=`, `fill=` |
 | `table(model)`, `col(text)` | rows as a table, one `col` a column | `cols=` the header, `cur=`, `on=`, `empty=`; `row=` with one canvas child that draws each row |
 
 **Over the page**
@@ -586,7 +586,16 @@ it).
   down, each named under it on the desk and, on the handheld, the current
   card named with its `sub=`'s items in a caption band along the foot.
 
-In a shelf or icons grid the arrows step the current card across it and the
+- `look="column"`: tiles `w=` a side on rows `h=` apart (in pixels; the
+  class's desk tile where unset) down the room's left edge, column after
+  column, each named under it, the columns as wide as the widest name and
+  the tiles shrinking an eighth at a time until every card shows (the
+  windowed desk's apps). A card's `fill=` (a theme role or `#RRGGBB`, a
+  template; empty for the theme's) is its tile's colour, its picture stands
+  on the tile, 24 of its 44 across, and its name is in the theme's desk
+  label ink over the theme's label shadow (with `tone=`, over a black one).
+
+In a shelf, icons or column grid the arrows step the current card across it and the
 view lands where it shows that card with its margin, the wheel's notches
 step it down (Shift's across), a drag scrolls the view and a release flings
 it, a tap on a card makes it current and fires its action as Enter does, the

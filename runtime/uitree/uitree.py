@@ -2047,7 +2047,7 @@ SCHEMA = {
                   changed="action1", group="lit", pad="int", flow="lit", look="lit", tone="text",
                   label="text"),
     "card": dict(_C, label="text", sub="text", badge="text", label_icon="text", image="image",
-                 icon="text", tone="text"),
+                 icon="text", tone="text", fill="text"),
     # G9, G13: a picture of its own (an image state, its fallback icon), a
     # progress bar (max= is required), a page that says why there is nothing
     "picture": dict(_C, image="image", icon="text", side="int", tone="text", on="action0", look="lit"),
@@ -2673,7 +2673,10 @@ def cards(model_name, **p):
     """A model's rows as cards, each its picture and label: a region of their
     own that takes the rest of the page's room, or with `flow=True` a grid in
     the page's flow (in a group, between its caption and its rows) that
-    scrolls with the page."""
+    scrolls with the page. look="column" lays them as tiles down the room's
+    left edge, column after column, shrinking until they fit: `w=` the
+    tiles' side and `h=` their rows' pitch in pixels, each card's `fill=`
+    its tile's colour."""
     if "paint" in p:
         raise UIError("N04", "cards paint= is retired (G9)", where=_caller(),
                       fix="give the rows an image field (image pic) and the card image=.pic")

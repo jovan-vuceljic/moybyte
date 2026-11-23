@@ -529,7 +529,8 @@ typedef struct {
 // or MOY_UI_LOOK_SHELF or _ICONS, moy_ui_api_cells_grid): its geometry (moy_ui_api_carousel_geom's or
 // moy_ui_api_cells_geom's), its band, and the row its app holds current. MOY_UI_LOOK_DESK is
 // the carousel look on the desk class: its shelf (moy_ui_api_desk_shelf_geom's), drawn as cells.
-enum { MOY_UI_LOOK_CAROUSEL = 1, MOY_UI_LOOK_SHELF, MOY_UI_LOOK_ICONS, MOY_UI_LOOK_DESK };
+// MOY_UI_LOOK_COLUMN is the column look's (moy_ui_api_column_geom's), drawn as cells.
+enum { MOY_UI_LOOK_CAROUSEL = 1, MOY_UI_LOOK_SHELF, MOY_UI_LOOK_ICONS, MOY_UI_LOOK_DESK, MOY_UI_LOOK_COLUMN };
 #define MOY_UI_CELLS_G 16
 typedef struct {
     int8_t on;
@@ -1307,6 +1308,19 @@ enum { MOY_UI_CELLS_SIDE, MOY_UI_CELLS_R, MOY_UI_CELLS_X0, MOY_UI_CELLS_Y0, MOY_
 // band's height over the caption; ACROSS 1 where the cells scroll across.)
 void moy_ui_api_cells_geom(int look, int fs, int desk, int u, const int32_t b[4],
                            int32_t out[MOY_UI_CELLS_G]);
+// The column look's geometry (ui.cards look "column", MOY_UI_LOOK_COLUMN) in band `b` at font
+// scale `fs` for `n` cards whose widest title is `title_w` pixels: tiles `side` across on rows
+// `pitch` apart (or further, where a tile, its title's line and 6 of the 44 under it need
+// more), down the band's left edge from 18 of the 44 under its top (12 of 40 on the handheld) and
+// on into further columns, each title under
+// its tile 2 of the 44 below it, the columns as wide as the widest title (as wide as the band
+// leaves them, the titles cut to it) and their centres 54 of the 44 in from the band's edge or
+// further where a title needs it. Where the columns would run past the band's right edge the
+// tiles shrink, an eighth at a time and the rows and margins with them, until they fit or
+// reach MOY_UI_COLUMN_MIN. out[MOY_UI_CELLS_*], ACROSS 1.
+#define MOY_UI_COLUMN_MIN 12
+void moy_ui_api_column_geom(int fs, int desk, int side, int pitch, int title_w, int n, const int32_t b[4],
+                            int32_t out[MOY_UI_CELLS_G]);
 // The cells' content along their scroll for `n` cards (its margins either side), and the
 // scroll that keeps card `i` with its margin in view from scroll `off`.
 int32_t moy_ui_api_cells_extent(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int n);
@@ -1332,7 +1346,12 @@ void moy_ui_api_cells_grid(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_
 // A card of the cells (box `t`, under `clip`): where `focus`, the theme's focus mark round it,
 // flat; then its title under it (`title`, at g's TITLE_DY, cut to TITLE_W) in the ui face,
 // bold where `focus`, in `ink` over a black shadow where it names one (an override's colour,
-// MOY_UI_O_NONE the theme's ink).
+// MOY_UI_O_NONE the theme's ink). The column look's title: in `ink` over a black shadow at
+// 80%, else in the look's label ink over its label shadow (`label.ink`, `label.shadow`).
+// The column look's tile (moy_ui_api_cells_plate): a desk icon's tile (moy_ui_bar_tile) at box
+// `t` under `clip`, filled with `fill` (an override's colour, MOY_UI_O_NONE the tile's own).
+void moy_ui_api_cells_plate(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4],
+                            const int32_t clip[4], int32_t fill);
 void moy_ui_api_cells_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t g[MOY_UI_CELLS_G],
                            const int32_t t[4], const int32_t clip[4], int focus, moy_ui_span_t title,
                            int32_t ink);

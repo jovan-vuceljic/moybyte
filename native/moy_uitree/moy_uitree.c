@@ -1154,7 +1154,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
               (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              (kind == UIT_LINK && !strcmp(name, "swatch")) ||
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
-             (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon"))) || (kind == UIT_CARDS && (!strcmp(name, "pad") || !strcmp(name, "tone") || !strcmp(name, "label"))) ||
+             (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon") || !strcmp(name, "fill"))) || (kind == UIT_CARDS && (!strcmp(name, "pad") || !strcmp(name, "tone") || !strcmp(name, "label"))) ||
              (kind == UIT_CELLS && (!strcmp(name, "first") || !strcmp(name, "count") || !strcmp(name, "cols") ||
                                     !strcmp(name, "side") || !strcmp(name, "gap")))) {
         // templates the draw finds among its props by name (uit_tmpl_prop); signal=, a month's
@@ -1735,11 +1735,13 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     if (!strcmp(name, "look") && kind == UIT_CARDS) {
         // "carousel": one row of tiles that snaps, its centre card's words under it (CD_CAROUSEL);
         // "shelf": cards in the rows the band holds, scrolling across (CD_SHELF); "icons": tiles
-        // in the columns it holds, scrolling down (CD_ICONS)
+        // in the columns it holds, scrolling down (CD_ICONS); "column": tiles down the left edge,
+        // column after column, shrinking until they fit (CD_COLUMN)
         int lk = !strcmp(src, "carousel") ? CD_CAROUSEL : !strcmp(src, "shelf") ? CD_SHELF
-                 : !strcmp(src, "icons") ? CD_ICONS : 0;
+                 : !strcmp(src, "icons") ? CD_ICONS : !strcmp(src, "column") ? CD_COLUMN : 0;
         if (!lk)
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("cards look=%s: carousel, shelf, icons", "cards look=%s"), src);
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("cards look=%s: carousel, shelf, icons, column", "cards look=%s"),
+                            src);
         N->lit |= (uint8_t)lk;
         return add_prop(e, node, name, src, repr, PK_LIT, lk);
     }

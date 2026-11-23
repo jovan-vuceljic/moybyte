@@ -192,6 +192,13 @@ why  = """
 See `wm_desk.py` above: the strip's page, imported only by `wm_strip.py`."""
 
 [[modules.shared.deny]]
+file = "desk_ui.py"
+kind = "tier"
+why  = """
+See `wm_desk.py` above: the desk's icon column's page, imported only by
+`wm_desk.py`."""
+
+[[modules.shared.deny]]
 file = "wm_parts.py"
 kind = "tier"
 why  = """

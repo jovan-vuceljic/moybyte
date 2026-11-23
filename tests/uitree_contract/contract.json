@@ -2169,7 +2169,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:carousel,shelf,icons",
+     "type": "word:carousel,shelf,icons,column",
      "level": 2
     },
     "tone": {
@@ -2212,6 +2212,10 @@
      "level": 2
     },
     "tone": {
+     "type": "tpl",
+     "level": 2
+    },
+    "fill": {
      "type": "tpl",
      "level": 2
     }

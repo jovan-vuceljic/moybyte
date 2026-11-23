@@ -26,7 +26,7 @@ static int gen_ok(const uit_t *e)
 // Whether node `k` is a carousel (`ui.cards(look="carousel")`); whether it is a cards list of a
 // look that is one stop, its key the id (a carousel, a shelf, icons).
 #define IS_CAROUSEL(k) (NODE(k)->kind == UIT_CARDS && (NODE(k)->lit & CD_CAROUSEL))
-#define IS_ONE_STOP(k) (NODE(k)->kind == UIT_CARDS && (NODE(k)->lit & (CD_CAROUSEL | CD_SHELF | CD_ICONS)))
+#define IS_ONE_STOP(k) (NODE(k)->kind == UIT_CARDS && (NODE(k)->lit & (CD_CAROUSEL | CD_SHELF | CD_ICONS | CD_COLUMN)))
 
 // A carousel's card: its first `ui.card`, -1 none.
 static int carousel_card(uit_t *e, int k)
@@ -1777,7 +1777,10 @@ static void draw_carousel(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
 // icons' caption band naming the current card and its sub line). In tone= (a theme role or
 // "#RRGGBB") its labels lie over a black shadow and no fade hides what is under the band.
 // Opening a card fires its card's action; cur= follows the card the keys are on. The page's
-// cells as the frame left them are the front end's to ask after (uit_cells).
+// cells as the frame left them are the front end's to ask after (uit_cells). The column look
+// (`look="column"`): its tiles `w=` across on rows `h=` apart (in pixels; the class's desk
+// tile where unset), each its card's `fill=` (a theme role or "#RRGGBB", a template; empty the
+// tile's own) under its picture, 24 of the tile's 44 across, centred, and its label under it.
 static void cells_pic(uit_t *e, int cd, int m, int r, const int32_t t[4], const int32_t *Q, int flags,
                       int corners, int side)
 {
@@ -1789,10 +1792,33 @@ static void cells_pic(uit_t *e, int cd, int m, int r, const int32_t t[4], const 
     e->scratch.n = mark;
 }
 
+// The column look's geometry (cards list `k`, its card `cd`) in band `b` at font scale `fs`
+// (moy_ui_api_column_geom), its tiles `w=` and rows `h=` apart, its widest label measured.
+static void column_geom(uit_t *e, int k, int cd, const int32_t b[4], int fs, int desk,
+                        int32_t g[MOY_UI_CELLS_G])
+{
+    const uit_node_t *N = NODE(k);
+    int m = N->slot, n = e->slots[m].nrows, u = desk ? moy_ui_render_scale() : 1;
+    int32_t side = int_of(e, N->t_value, -1, -1, 0), pitch = int_of(e, N->t_aux, -1, -1, 0);
+    side = side > 0 ? side : desk ? 44 / u : 40 * fs;
+    pitch = pitch > 0 ? pitch : desk ? 74 / u : 62 * fs;
+    moy_font_info_t uf;
+    uint32_t fid = moy_ui_font(0, MOY_UI_FONT_UI, &uf);
+    int most = 0;
+    for (int r = 0; r < n && cd >= 0; r++) {
+        uint32_t mark = e->scratch.n, n1, a1 = text(e, cd, 0, m, r, &n1);
+        int w = moy_text_width(fid, (const uint8_t *)e->scratch.p + a1, n1, fs);
+        most = w > most ? w : most;
+        e->scratch.n = mark;
+    }
+    moy_ui_api_column_geom(fs, desk, side, pitch, most, n, b, g);
+}
+
 static void draw_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
 {
     const uit_node_t *N = NODE(k);
     int m = N->slot, n = e->slots[m].nrows, cd = carousel_card(e, k);
+    int column = (N->lit & CD_COLUMN) != 0;
     int look = (N->lit & CD_SHELF) ? MOY_UI_LOOK_SHELF : MOY_UI_LOOK_ICONS;
     const char *key = uit_str(e, N->key);
     uit_after_removal(e, k);
@@ -1804,7 +1830,11 @@ static void draw_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     moy_ui_api_space(c, band[3]);
     int desk = (e->flags & UIT_F_DESK) != 0;
     int32_t g[MOY_UI_CELLS_G];
-    moy_ui_api_cells_geom(look, e->fs, desk, desk ? moy_ui_render_scale() : 1, band, g);
+    if (column) {
+        column_geom(e, k, cd, band, e->fs, desk, g);
+    } else {
+        moy_ui_api_cells_geom(look, e->fs, desk, desk ? moy_ui_render_scale() : 1, band, g);
+    }
     int across = (int)g[MOY_UI_CELLS_ACROSS];
     int per = (int)(across ? g[MOY_UI_CELLS_ROWS] : g[MOY_UI_CELLS_COLS]);
     per = per < 1 ? 1 : per > 16 ? 16 : per;
@@ -1879,7 +1909,18 @@ static void draw_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
                 moy_ui_api_cells_tile(g, band, off, r, t);
                 int gg = on ? gr : 0;
                 int32_t pt[4] = {t[0] - gg, t[1] - gg, t[2] + 2 * gg, t[3] + 2 * gg};
-                cells_pic(e, cd, m, r, pt, V, 16 | on, cr ? cr + gg : 0, side);
+                if (column) {
+                    // its tile in its fill, its picture 24 of the tile's 44 on it
+                    uint32_t fmark = e->scratch.n, fn = 0, fa = cd >= 0 ? prop_text(e, cd, "fill", m, r, &fn) : 0;
+                    int32_t fill = fn ? button_ink(e->scratch.p + fa, fn) : -1;
+                    e->scratch.n = fmark;
+                    moy_ui_api_cells_plate(c, s, t, V, fill >= 0 ? fill : MOY_UI_O_NONE);
+                    int32_t is = t[2] * 24 / 44;
+                    int32_t it[4] = {t[0] + (t[2] - is) / 2, t[1] + (t[3] - is) / 2, is, is};
+                    cells_pic(e, cd, m, r, it, V, 16 | on, 0, is);
+                } else {
+                    cells_pic(e, cd, m, r, pt, V, 16 | on, cr ? cr + gg : 0, side);
+                }
                 uint32_t mark = e->scratch.n, n1;
                 uint32_t a1 = cd >= 0 ? text(e, cd, 0, m, r, &n1) : 0;
                 if (cd < 0)
@@ -2066,8 +2107,12 @@ int uit_cells_at(const uit_t *e, int x, int y)
 int uit_cells_geom(uit_t *e, const int32_t b[4], int fs, int desk, int32_t out[16])
 {
     for (int k = 0; k < (int)e->nnodes; k++) {
-        if (NODE(k)->kind != UIT_CARDS || !(NODE(k)->lit & (CD_SHELF | CD_ICONS)))
+        if (NODE(k)->kind != UIT_CARDS || !(NODE(k)->lit & (CD_SHELF | CD_ICONS | CD_COLUMN)))
             continue;
+        if (NODE(k)->lit & CD_COLUMN) {
+            column_geom(e, k, carousel_card(e, k), b, fs, desk, out);
+            return 1;
+        }
         moy_ui_api_cells_geom((NODE(k)->lit & CD_SHELF) ? MOY_UI_LOOK_SHELF : MOY_UI_LOOK_ICONS, fs, desk,
                               desk ? moy_ui_render_scale() : 1, b, out);
         return 1;
@@ -4240,7 +4285,7 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     case UIT_CARDS:
         if (NODE(k)->lit & CD_CAROUSEL)
             draw_carousel(e, c, s, k);
-        else if (NODE(k)->lit & (CD_SHELF | CD_ICONS))
+        else if (NODE(k)->lit & (CD_SHELF | CD_ICONS | CD_COLUMN))
             draw_cells(e, c, s, k);
         else
             draw_cards(e, c, s, k);

@@ -365,6 +365,11 @@ typedef struct {
     uint8_t tile_r;
     int16_t tile_line_w;
     int32_t tile_fill, tile_line_c;
+    // Their labels (`label.ink`, `label.shadow`): the ink, and the shadow's
+    // look colour (MOY_THEME_NONE: none), alpha (1..255) and offset.
+    int32_t label_ink, label_sh_c;
+    int16_t label_sh_a;
+    int8_t label_sh_dx, label_sh_dy;
     // A group card's frame (`card.frame`): its width (0: the depth's own
     // rule) and look colour.
     int16_t card_line;

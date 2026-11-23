@@ -7,20 +7,20 @@ and hands it the cache state; the layer decides per frame whether to render
 live, blit the cache, or skip the restore outright.
 """
 
+from array import array
+
 from layers import Layer
-from widgets import _in, _ticks_ms
-import ui_draw as _ui_draw        # the desk's tiles and labels
+from widgets import _ticks_ms
+import ui as _ui
+import ui_draw as _ui_draw
 from bar_layer import glyph as _bar_glyph
 import layout_base as _layout_base
 import iconsets as _iconsets
 from status_items import ITEMS as _ITEMS
 
-# A desk label over a wallpaper (a picture or a cart, pixels the theme does
-# not know): white over a black shadow (chrome.FIXED's), 80% and one pixel
-# down and right.
-_WALL_SHADOW_A = 204
 _NONE = -2147483648
-_TILE_MIN = 12              # the smallest a desk tile shrinks to (`_look_rects`)
+# The column's geometry words (moy_ui_api.h's MOY_UI_CELLS_*)
+_G_SIDE, _G_X0, _G_Y0, _G_PX, _G_PY, _G_ROWS, _G_TITLE_DY = 0, 2, 3, 4, 5, 6, 8
 
 
 def _set(v):
@@ -37,12 +37,18 @@ def _tile_fill(tiles, key):
     return v if _set(v) else None
 
 
-def _icon_box(box):
-    """The square a desk tile's icon is drawn in: 24 of the tile's 44, centred,
-    the set's 24-pixel masks, whose line art spans about 20 (owner,
-    2026-10-19: the dock's glyphs at 20, their 20-pixel masks' 14 read thin)."""
-    s = box[2] * 24 // 44
-    return (box[0] + (box[2] - s) // 2, box[1] + (box[3] - s) // 2, s, s)
+def _hex(v):
+    """Look colour `v` as "#RRGGBB" (its RGB565 word widened)."""
+    w = _ui_draw._C.theme_rgb(v)[0]
+    r, g, b = w >> 11 & 31, w >> 5 & 63, w & 31
+    return "#%02X%02X%02X" % (r << 3 | r >> 2, g << 2 | g >> 4, b << 3 | b >> 2)
+
+
+class _NoDamage:
+    """The column page's damage: the desk draws it whole whenever it draws."""
+
+    def all(self):
+        pass
 
 
 class _BackdropLayer(Layer):
@@ -70,17 +76,29 @@ class _BackdropLayer(Layer):
         self._cat_at = [None, None, None]  # what `_cat_sig` was made at (`_column_sig`)
         self._cat_sig = None
         self._catalog = None          # the `_icon_catalog` `_cat_sig` was made of
-        # The column's rects (`_icon_rects`), their icons' squares, the
-        # quiet rectangles and the tiles' look, each kept while what it was
-        # made from stands: a live desk draws the column every frame.
+        # The column's rects (`_icon_rects`), the quiet rectangles and the
+        # tiles' look, each kept while what it was made from stands: a live
+        # desk draws the column every frame.
         self._rects_at = [None, None, None]
         self._rects = None
-        self._iboxes = None
         self._quiet_at = [None, None]
         self._quiet = None
-        self._style_at = [None, None, None, None, None]
-        self._style = None
-        self._sig_keys = [None] * 11  # `_desk_sig`'s values, compared in place
+        self._style_at = [None, None, None]
+        self._tink = 0                # the tiles' icons' ink (`_draw_look_icons`)
+        # The column's page (`desk_ui.tiles`) on its own app host, what its
+        # rows were last put from, its pictures' keys, its geometry's words
+        # and the count its input and its motion move (`_desk_sig`).
+        self._page = None
+        self._host = None
+        self._put_at = [None, None, None, None, None]
+        self._pic_ix = {}
+        self._g = array("i", [0] * 16)
+        self._band = array("i", [0] * 4)
+        self._gcv = None
+        self._box = [0, 0, 0, 0]      # a tile's icon square (`_tile_picture`)
+        self._open_fn = self._tile_open   # (bound once: a frame allocates none)
+        self._fed = 0
+        self._sig_keys = [None] * 12  # `_desk_sig`'s values, compared in place
         self._sig_gen = 0             # ...and the count that moves with them
 
     def draw(self, dt):
@@ -240,6 +258,8 @@ class _BackdropLayer(Layer):
 
         The apps' status items are in its bar (their `gen`).
 
+        The column page's input and motion are in it (`_fed`).
+
         Deliberately NOT the clock (repainted over the cache instead) and NOT
         ws.covers.gen: a cover landing in the picker would otherwise invalidate
         the desk on the very frames a scroll is trying to stay cheap. Cheap to
@@ -252,7 +272,8 @@ class _BackdropLayer(Layer):
         if (k[0] != cv.w or k[1] != cv.h or k[2] != look.look_gen
                 or k[3] != look.effective_font_scale() or k[4] != look.wallpaper_id
                 or k[5] != self._column_sig() or k[6] != lay.cx or k[7] != lay.cy
-                or k[8] != lay.cw or k[9] != lay.ch or k[10] != _ITEMS.gen):
+                or k[8] != lay.cw or k[9] != lay.ch or k[10] != _ITEMS.gen
+                or k[11] != self._fed):
             k[0] = cv.w
             k[1] = cv.h
             k[2] = look.look_gen
@@ -264,6 +285,7 @@ class _BackdropLayer(Layer):
             k[8] = lay.cw
             k[9] = lay.ch
             k[10] = _ITEMS.gen
+            k[11] = self._fed
             # the WM's one count: a new layer never repeats an old one's
             self.wm._desk_count += 1
             self._sig_gen = self.wm._desk_count
@@ -325,13 +347,10 @@ class _BackdropLayer(Layer):
     # A static v1 column: PLAY (console mode, over the home), PROJECTS (the
     # home in a window, on Make), then the home's Apps tab: every registered
     # app (minus HIDDEN_APPS), then the installed app- and tool-typed carts no
-    # app claims (Notes; a kid's installed app). Geometry is deterministic
-    # (the chip_rects pattern -- computed per call, no stored state), so draw
-    # and hit-test can never disagree, and the icons render before the drag
-    # backdrop capture, so the drag cache carries them for free. Under a
-    # theme's look the column is the look's (docs/history/look_2026-10.md step 25:
-    # `_look_rects`, `_draw_look_icons`); without one, tiles and label pills
-    # in the theme's shape.
+    # app claims (Notes; a kid's installed app). The column is a page of the
+    # engine's (`desk_ui.tiles`, `ui.cards(look="column")`), which lays it
+    # out, draws it and takes its keys and taps; the icons render before the
+    # drag backdrop capture, so the drag cache carries them for free.
 
     ICON_GLYPHS = {"play": "run", "projects": "edit"}
 
@@ -370,8 +389,9 @@ class _BackdropLayer(Layer):
         return out
 
     def _icon_rects(self):
-        """[(key, box_rect, label_rect, label, cart), ...] -- a left-edge column
-        wrapping into further columns, laid out again when the column
+        """[(key, box_rect, label_rect, label, cart), ...] -- the engine's
+        column of tiles (`desk_ui.tiles`, `ui.cards(look="column")`) as its
+        geometry lays them out, laid out again when the column
         (`_column_sig`), the font scale or the desk's rect moves; callers
         read it and never change it."""
         ws = self.ws
@@ -384,124 +404,174 @@ class _BackdropLayer(Layer):
         at[0] = sig
         at[1] = fs
         at[2] = d
-        box = _layout_base.metric("tile", fs)
-        self._rects = self._look_rects(self._catalog, box, fs, d[0], d[1], d[2], d[3])
-        self._iboxes = [_icon_box(e[1]) for e in self._rects]
-        return self._rects
-
-    def _look_rects(self, catalog, box, fs, dx, dy, dw, dh):
-        """The column under a look (docs/history/look_2026-10.md step 25): `box`
-        tiles on the class's pitch, or further apart where the tile, its
-        label's line at the font scale and 6 of the 44 under it need more,
-        their centres 54 of the tile's 44 in from the desk's edge or further
-        where a label needs it, each label under its tile, 2 of the 44 below
-        it, as wide as the column: nearer its own tile than the next one
-        down. A label longer than the columns leave
-        room for is cut to its band. Where the columns would still run past
-        the desk's right edge (more apps than the class's tiles hold at this
-        font scale), the tiles shrink, an eighth at a time, the cell and
-        margins with them and the labels kept a line, until they fit: every
-        app keeps a tile on the desk, however many there are."""
-        b = box
-        while True:
-            out, right = self._look_grid(catalog, b, box, fs, dx, dy, dh, dw)
-            if right <= dx + dw or b <= _TILE_MIN:
-                return out
-            b -= max(1, b // 8)
-
-    def _look_grid(self, catalog, b, box, fs, dx, dy, dh, dw):
-        """`_look_rects`' columns of tiles `b` across (`box` the class's),
-        and the rightmost pixel they reach."""
-        k = b / 44
-        gap = int(2 * k)
-        line = _ui_draw.font("ui")[2] * fs
-        cell_h = max(_layout_base.metric("tile_cell", fs) * b // box,
-                     b + gap + line + int(6 * k))
-        y0 = dy + _layout_base.metric("tile_top", fs)
-        bottom = dy + dh - int(6 * k)
-        maxw = max((_ui_draw.text_width(label, fs, "ui") for _k, label, _c in catalog),
-                   default=0)
-        rows = max(1, (bottom - y0 - b - gap - line) // cell_h + 1)
-        cols = max(1, (len(catalog) + rows - 1) // rows)
-        maxw = min(maxw, (dw - int(54 * k)) * 2 // (2 * cols - 1) - int(20 * k))
-        pitch = max(b + int(20 * k), maxw + int(20 * k))
-        cx = dx + max(int(54 * k), (maxw + 1) // 2 + int(10 * k))
-        y = y0
+        pg = self._tiles_page()
+        self._tiles_put(ws)
+        band = self._band
+        for i in range(4):
+            band[i] = d[i]
+        g = self._g
         out = []
-        right = dx
-        for key, label, cart in catalog:
-            if y + b + gap + line > bottom and y > y0:
-                y = y0
-                cx += pitch
-            out.append((key,
-                        (cx - b // 2, y, b, b),
-                        (cx - pitch // 2, y + b + gap, pitch, line),
-                        label, cart))
-            right = max(right, cx - b // 2 + b, cx - pitch // 2 + pitch)
-            y += cell_h
-        return out, right
+        if pg.cells_geom(band, fs, _layout_base.metric_class() == _layout_base.DESK, g):
+            side, px, py, rows = g[_G_SIDE], g[_G_PX], g[_G_PY], max(1, g[_G_ROWS])
+            line = _ui_draw.font("ui")[2] * fs
+            i = 0
+            for key, label, cart in self._catalog:
+                x = g[_G_X0] + i // rows * px
+                y = g[_G_Y0] + i % rows * py
+                out.append((key, (x, y, side, side),
+                            (x + side // 2 - px // 2, y + g[_G_TITLE_DY], px, line), label, cart))
+                i += 1
+        self._rects = out
+        return out
+
+    def _tiles_page(self):
+        """The column's page (`desk_ui.tiles`) on its app host, made at its
+        first use, its pictures the tiles' icons (`_tile_picture`)."""
+        pg = self._page
+        if pg is None:
+            import uitree_app
+            import desk_ui
+            self._host = _ui_draw.AppHost()
+            pg = uitree_app.hosted_page(desk_ui.tiles, self._host, _NoDamage())
+            pg.bare = True
+            pg.band = False
+            pg.pictures = self._tile_picture
+            pg.open()
+            self._page = pg
+        return pg
+
+    def _tiles_put(self, ws):
+        """The page's rows, its tiles' size and its labels' ink, written
+        where what they are made from moved: the column, the look, the
+        wallpaper and the font scale."""
+        import desk_ui
+        look = ws.look.live.look
+        fs = ws.look.effective_font_scale()
+        on = ws.look.wallpaper_id is not None
+        sig = self._column_sig()
+        at = self._put_at
+        gen = ws.look.look_gen
+        if at[0] is sig and at[1] is look and at[2] == on and at[3] == gen and at[4] == fs:
+            return
+        at[0] = sig
+        at[1] = look
+        at[2] = on
+        at[3] = gen
+        at[4] = fs
+        desk_ui.PUT[0] = self._put_rows
+        try:
+            self._page.run(desk_ui.put, action="put")
+        finally:
+            desk_ui.PUT[0] = None
+        desk_ui.ui.commit(self._page)
+
+    def _put_rows(self, s):
+        """The column page's rows (desk_ui's `put`): a tile an entry of the
+        column, and the tiles' size and their labels' ink."""
+        import desk_ui
+        ws = self.ws
+        look = ws.look.live.look
+        fs = ws.look.effective_font_scale()
+        tiles = dict(look[2]) if len(look) > 2 else {}
+        rows = []
+        ix = {}
+        for key, label, cart in self._catalog:
+            pic = desk_ui.ui.image.own(key)
+            ix[repr(pic)] = (key, cart)
+            v = _tile_fill(tiles, key)
+            rows.append(dict(k=key, label=label, fill="" if v is None else _hex(v), pic=pic))
+        s.tiles = rows
+        s.tone = "#FFFFFF" if ws.look.wallpaper_id is not None else ""
+        s.side = _layout_base.metric("tile", fs)
+        s.pitch = _layout_base.metric("tile_cell", fs)
+        self._pic_ix = ix
+
+    def _tile_picture(self, node, pic, r):
+        """A tile's icon (the engine's picture call, `r` its square -- 24 of
+        the tile's 44 -- and its clip): its app's icon from the theme's set
+        in the tiles' ink, else its cart's own art, else the desk's glyph."""
+        if r is None:
+            return True
+        e = self._pic_ix.get(pic)
+        cv = self._gcv
+        if e is None or cv is None:
+            return False
+        key = e[0]
+        cart = e[1]
+        box = self._box
+        box[0] = r[0]
+        box[1] = r[1]
+        box[2] = r[2]
+        box[3] = r[3]
+        cv.clip(r[4], r[5], r[6], r[7])
+        tink = self._tink
+        if not self.ws.draw_icon(key, box, tink, cv):
+            img = self.ws.covers.icon_sheet_for(cart) if cart is not None else None
+            if img is not None:
+                sc = max(1, r[2] // 16)
+                cv.spr(img, r[0] + (r[2] - 16 * sc) // 2, r[1] + (r[3] - 16 * sc) // 2, sc)
+            else:
+                _bar_glyph(self.ICON_GLYPHS.get(key, "app"), box, tink, cv)
+        cv.clip()
+        return True
 
     def _draw_look_icons(self, ws, cv, th):
-        """Each tile as the look's part (`ui.bar_part`'s BAR_TILE) in its
-        app's colour of the look's `tiles` where it names one, its app's
-        icon from the theme's set at the 24-pixel size in `tile_ink` (else
-        the ink; the app's own art where the set has none), its label in
-        `label.ink` (else the ink) over the theme's backdrop with no plate
-        and `label.shadow` under it where the look sets one; over a
-        wallpaper, white over a shadow."""
+        """The column's page (`desk_ui.tiles`) painted on its app host, the
+        keys its own while the desk holds them: each tile the look's part
+        (`ui.bar_part`'s BAR_TILE) in its app's colour of the look's
+        `tiles` where it names one, its app's icon (`_tile_picture`) in
+        `tile_ink` (else the ink), its label in `label.ink` (else the ink)
+        over `label.shadow` where the look sets one; over a wallpaper,
+        white over a shadow. A tile opened opens its app after the frame."""
+        import desk_ui
         look = ws.look.live.look
-        fixed = ws.look.live.fixed
-        on = ws.look.wallpaper_id is not None
         at = self._style_at
         gen = ws.look.look_gen
-        if (at[0] is look and at[1] is fixed and at[2] is th and at[3] == on
-                and at[4] == gen):
-            tiles, tink, lab, shadow = self._style
-        else:
+        if at[0] is not look or at[1] is not th or at[2] != gen:
             at[0] = look
-            at[1] = fixed
-            at[2] = th
-            at[3] = on
-            at[4] = gen
-            tiles, tink, lab, shadow = self._style = self._tile_style(look, fixed, th, on)
-        rects = self._icon_rects()
-        boxes = self._iboxes
-        i = 0
-        for key, box, band, label, cart in rects:
-            ibox = boxes[i]
-            i += 1
-            _ui_draw.bar_part(cv, th, _ui_draw.BAR_TILE, box, 0, _tile_fill(tiles, key))
-            if not ws.draw_icon(key, ibox, tink, cv):
-                img = ws.covers.icon_sheet_for(cart) if cart is not None else None
-                if img is not None:
-                    sc = max(1, (box[2] * 24 // 44) // 16)
-                    cv.spr(img, box[0] + (box[2] - 16 * sc) // 2,
-                           box[1] + (box[3] - 16 * sc) // 2, sc)
-                else:
-                    _bar_glyph(self.ICON_GLYPHS.get(key, "app"), ibox, tink, cv)
-            _ui_draw.label(cv, band, label, lab, _ui_draw.ALIGN_CENTER, None, shadow)
+            at[1] = th
+            at[2] = gen
+            tink = look[0].get("tile_ink")
+            self._tink = tink if _set(tink) else th.get("ink", 0)
+        self._icon_rects()                  # (the page made)
+        self._tiles_put(ws)
+        pg = self._page
+        host = self._host
+        rect = self.wm.desk_rect()
+        desk = _layout_base.metric_class() == _layout_base.DESK
+        t = _ui_draw.UI_TARGET
+        was = self._was
+        was[0] = t[0]
+        was[1] = t[1]
+        was[2] = t[2]
+        was[3] = t[3]
+        try:
+            host.whole()
+            host.begin(cv, th, rect, desk, False, self.wm.focus_key is not None)
+            self._gcv = cv
+            desk_ui.OPEN[0] = self._open_fn
+            pg.paint(0, cv, th, rect, desk)
+            _ui.end()
+        finally:
+            desk_ui.OPEN[0] = None
+            self._gcv = None
+            t[0] = was[0]
+            t[1] = was[1]
+            t[2] = was[2]
+            t[3] = was[3]
+        if host.moving:
+            self._fed += 1                  # (it moves on: the next frame draws it again)
+            ws.request_frame()
 
-    def _tile_style(self, look, fixed, th, on):
-        """(tiles, the icons' ink, the labels' ink, their shadow) of the
-        column under `look`, over a wallpaper where `on`."""
-        leaves = look[0]
-        ink = th.get("ink", 0)
-        tiles = dict(look[2]) if len(look) > 2 else {}
-        tink = leaves.get("tile_ink")
-        tink = tink if _set(tink) else ink
-        if on:
-            black, white = fixed[2:]
-            lab, shadow = white, (black, _WALL_SHADOW_A, 1, 1)
-        else:
-            lab = leaves.get("label.ink")
-            lab = lab if _set(lab) else ink
-            shadow = None
-            sc = leaves.get("label.shadow.c")
-            if _set(sc):
-                a, dx, dy = (leaves.get("label.shadow." + f) for f in ("alpha", "dx", "dy"))
-                shadow = (sc, (a * 255 + 50) // 100 if _set(a) else 255,
-                          dx if _set(dx) else 1, dy if _set(dy) else 1)
-        return tiles, tink, lab, shadow
+    _was = [None, None, None, None]
+
+    def _tile_open(self, key):
+        """The page's tile `key` opened (Enter, a tap): its app opens after
+        the frame that showed the tap."""
+        for k, _label, cart in self._catalog:
+            if k == key:
+                self.ws.defer(lambda: self._open_icon(key, cart), toast=False)
+                return
 
     def _draw_desk_icons(self):
         ws = self.ws
@@ -523,15 +593,20 @@ class _BackdropLayer(Layer):
                 ws.open(cart)
 
     def handle_input(self, i):
+        """The desk's keys (no window holds them): the column page's, its
+        tiles stepped and opened by its cards."""
+        h = self._host
+        if h is not None and h.keys(i):
+            self._fed += 1
+            self.ws.mark_dirty()
         return True
 
     def handle_pointer(self, px, py, click):
-        if click:
-            if self.ws.bar_layer.bar_at("desk", px, py):
-                self.ws.bar_layer.handle_bar_tap("desk", px, py)
-                return True
-            for key, box, pill, _label, cart in self._icon_rects():
-                if _in(px, py, box) or _in(px, py, pill):
-                    self._open_icon(key, cart)
-                    return True
+        if click and self.ws.bar_layer.bar_at("desk", px, py):
+            self.ws.bar_layer.handle_bar_tap("desk", px, py)
+            return True
+        h = self._host
+        if h is not None and h.point(px, py, click, self.ws.pointer.down):
+            self._fed += 1
+            self.ws.mark_dirty()
         return True

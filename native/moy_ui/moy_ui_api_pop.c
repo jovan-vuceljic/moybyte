@@ -1731,6 +1731,55 @@ void moy_ui_api_cells_geom(int look, int fs, int desk, int u, const int32_t b[4]
     out[MOY_UI_CELLS_LOOK] = look;
 }
 
+void moy_ui_api_column_geom(int fs, int desk, int side, int pitch, int title_w, int n, const int32_t b[4],
+                            int32_t out[MOY_UI_CELLS_G]) {
+    moy_font_info_t uf;
+    moy_ui_font(0, MOY_UI_FONT_UI, &uf);
+    memset(out, 0, MOY_UI_CELLS_G * sizeof out[0]);
+    int line = uf.line * fs, box = side > 0 ? side : 1, t = box;
+    int top = desk ? box * 18 / 44 : box * 12 / 40;     // (the class's, under the band's top)
+    int dx = (int)b[0], dw = (int)b[2], dh = (int)b[3] - top;
+    int gap, cell, rows, cols, w, px, cx;
+    for (;;) {
+        // its margins in 44ths of the tile
+        gap = 2 * t / 44;
+        int m6 = 6 * t / 44, m10 = 10 * t / 44, m20 = 20 * t / 44, m54 = 54 * t / 44;
+        int need = t + gap + line + m6;
+        cell = pitch * t / box;
+        cell = cell > need ? cell : need;
+        rows = floor_div(dh - m6 - t - gap - line, cell) + 1;
+        rows = rows > 1 ? rows : 1;
+        cols = n > 0 ? (n + rows - 1) / rows : 1;
+        int most = floor_div((dw - m54) * 2, 2 * cols - 1) - m20;
+        w = title_w < most ? title_w : most;
+        px = t > w ? t + m20 : w + m20;
+        int half = floor_div(w + 1, 2) + m10;
+        cx = dx + (m54 > half ? m54 : half);
+        int last = cx + (cols - 1) * px;
+        int right = last - t / 2 + t, lr = last - px / 2 + px;
+        right = n > 0 ? (right > lr ? right : lr) : dx;
+        if (right <= dx + dw || t <= MOY_UI_COLUMN_MIN) {
+            break;
+        }
+        t -= t / 8 > 1 ? t / 8 : 1;
+    }
+    int r = moy_ui_fdiv(moy_ui_depth()->tile_r * t + 22, 44);
+    out[MOY_UI_CELLS_SIDE] = t;
+    out[MOY_UI_CELLS_R] = r < t / 2 ? r : t / 2;
+    out[MOY_UI_CELLS_X0] = cx - t / 2;
+    out[MOY_UI_CELLS_Y0] = b[1] + top;
+    out[MOY_UI_CELLS_PX] = px;
+    out[MOY_UI_CELLS_PY] = cell;
+    out[MOY_UI_CELLS_ROWS] = rows;
+    out[MOY_UI_CELLS_COLS] = cols;
+    out[MOY_UI_CELLS_TITLE_DY] = t + gap;
+    out[MOY_UI_CELLS_TITLE_W] = px;
+    out[MOY_UI_CELLS_VIEW_H] = b[3];
+    out[MOY_UI_CELLS_ACROSS] = 1;
+    out[MOY_UI_CELLS_DESK] = desk != 0;
+    out[MOY_UI_CELLS_LOOK] = MOY_UI_LOOK_COLUMN;
+}
+
 // The cards a row of the table holds (a shelf's column, a row of icons).
 static int cells_per(const int32_t g[MOY_UI_CELLS_G]) {
     int per = (int)(g[MOY_UI_CELLS_ACROSS] ? g[MOY_UI_CELLS_ROWS] : g[MOY_UI_CELLS_COLS]);
@@ -1743,6 +1792,11 @@ static int32_t cells_extent(const int32_t g[MOY_UI_CELLS_G], int n) {
         return 0;
     }
     int last = (n - 1) / cells_per(g);
+    if (g[MOY_UI_CELLS_LOOK] == MOY_UI_LOOK_COLUMN) {
+        // to the last column's right edge: its title's or its tile's
+        int32_t px = g[MOY_UI_CELLS_PX], side = g[MOY_UI_CELLS_SIDE];
+        return g[MOY_UI_CELLS_X0] + side / 2 + last * px + (px > side ? px - px / 2 : side - side / 2);
+    }
     if (g[MOY_UI_CELLS_ACROSS]) {
         return 2 * g[MOY_UI_CELLS_X0] + last * g[MOY_UI_CELLS_PX] + g[MOY_UI_CELLS_SIDE];
     }
@@ -1818,7 +1872,7 @@ int moy_ui_api_cells_at(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int
         int32_t t[4];
         moy_ui_api_cells_tile(g, b, off, i, t);
         int hx = (int)t[0], hw = side, hh = across ? py : (g[MOY_UI_CELLS_DESK] ? py : side);
-        if (!across) {
+        if (!across || g[MOY_UI_CELLS_LOOK] == MOY_UI_LOOK_COLUMN) {
             hx -= (px - side) / 2;
             hw = px;
         }
@@ -1848,7 +1902,9 @@ void moy_ui_api_cells_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_
             // focus (drawn twice a pixel apart), over a black shadow in an ink of its own
             moy_font_info_t uf;
             uint32_t fid = moy_ui_font(0, MOY_UI_FONT_UI, &uf);
-            int w = (int)g[MOY_UI_CELLS_TITLE_W], bold = focus && ink == MOY_UI_O_NONE;
+            // (the column's bold only where the focus mark draws)
+            int w = (int)g[MOY_UI_CELLS_TITLE_W], bold = focus && ink == MOY_UI_O_NONE
+                    && (g[MOY_UI_CELLS_LOOK] != MOY_UI_LOOK_COLUMN || moy_ui_sink_marks(s));
             // cut to the title width (a pixel less where bold) with the font's ellipsis
             uint8_t buf[CELLS_TITLE_MAX + 3];
             int ell = 0;
@@ -1864,7 +1920,21 @@ void moy_ui_api_cells_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_
                                (int16_t)w, (int16_t)(uf.line * fs)};
             moy_ui_label_paint_t lp = {-1, -1, 0, 0, 0};
             int ci;
-            if (ink == MOY_UI_O_NONE) {
+            const moy_ui_depth_t *dp = moy_ui_depth();
+            if (g[MOY_UI_CELLS_LOOK] == MOY_UI_LOOK_COLUMN && ink == MOY_UI_O_NONE) {
+                // the look's label ink over its label shadow
+                int32_t v = dp->label_ink, sc = dp->label_sh_c;
+                ci = v == MOY_THEME_NONE || v == MOY_THEME_OFF ? moy_ui_token(s->look, MOY_UI_T_INK)
+                     : v >= 0 && v < 128 ? (int)v : moy_theme_nearest(v);
+                if (sc != MOY_THEME_NONE && sc != MOY_THEME_OFF) {
+                    lp = (moy_ui_label_paint_t){-1, (int16_t)(sc >= 0 && sc < 128 ? sc : moy_theme_nearest(sc)),
+                                                dp->label_sh_a, dp->label_sh_dx, dp->label_sh_dy};
+                }
+            } else if (g[MOY_UI_CELLS_LOOK] == MOY_UI_LOOK_COLUMN) {
+                ci = ink >= MOY_UI_O_ROLE ? moy_ui_token(s->look, ink - MOY_UI_O_ROLE)
+                                          : moy_theme_nearest(MOY_THEME_RGB | (ink & 0xffffff));
+                lp = (moy_ui_label_paint_t){-1, (int16_t)moy_theme_nearest(MOY_THEME_RGB | 0x000000), 204, 1, 1};
+            } else if (ink == MOY_UI_O_NONE) {
                 ci = moy_ui_token(s->look, MOY_UI_T_INK);
             } else {
                 ci = ink >= MOY_UI_O_ROLE ? moy_ui_token(s->look, ink - MOY_UI_O_ROLE)
@@ -1883,6 +1953,20 @@ void moy_ui_api_cells_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_
     mua_clip_out(&k);
 }
 
+void moy_ui_api_cells_plate(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4],
+                            const int32_t clip[4], int32_t fill) {
+    (void)c;
+    clip_t k;
+    moy_ui_box_t q = {(int16_t)clip[0], (int16_t)clip[1], (int16_t)clip[2], (int16_t)clip[3]};
+    if (mua_clip_in(&k, s, q)) {
+        int32_t v = fill == MOY_UI_O_NONE ? MOY_THEME_NONE
+                    : fill >= MOY_UI_O_ROLE ? moy_ui_token(s->look, fill - MOY_UI_O_ROLE)
+                                            : MOY_THEME_RGB | (fill & 0xffffff);
+        moy_ui_bar_tile(s, (moy_ui_box_t){(int16_t)t[0], (int16_t)t[1], (int16_t)t[2], (int16_t)t[3]}, v);
+    }
+    mua_clip_out(&k);
+}
+
 void moy_ui_api_cells_foot(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t g[MOY_UI_CELLS_G],
                            const int32_t b[4], const int32_t clip[4], int fade, moy_ui_span_t title,
                            moy_ui_span_t sub) {
@@ -1894,7 +1978,7 @@ void moy_ui_api_cells_foot(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_
         return;
     }
     if (g[MOY_UI_CELLS_ACROSS]) {
-        if (fade && !g[MOY_UI_CELLS_DESK]) {
+        if (fade && !g[MOY_UI_CELLS_DESK] && g[MOY_UI_CELLS_LOOK] == MOY_UI_LOOK_SHELF) {
             int h = CELLS_FADE * fs;
             moy_ui_fade(s, (moy_ui_box_t){(int16_t)b[0], (int16_t)(b[1] + b[3] - h), (int16_t)b[2], (int16_t)h},
                         moy_ui_token(s->look, MOY_UI_T_DESKTOP), 0, fs, 0);
