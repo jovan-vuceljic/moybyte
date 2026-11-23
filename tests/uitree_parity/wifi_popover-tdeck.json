@@ -1,7 +1,7 @@
 {
  "surface": "wifi_popover",
  "config": "tdeck_320x240_fs1_dark",
- "commit": "f326b655a",
+ "commit": "6cfd85991",
  "script": [
   "k:down",
   "k:a",
@@ -16,39 +16,39 @@
  "frames": [
   [
    "(open)",
-   "d7899a23ecd93491e83451f3b561c1c4adc4e7bde6c42b2e1ade976a1ba8b24d"
+   "e71a5a77f7d30c293cd127415b2ce9de5638650282c32a0918f84e1a028024c1"
   ],
   [
    "k:down",
-   "8dc10543b76a9dc674f2efbe30407e2d902c1b37279aca4b491c4da2b34b2a91"
+   "1c1919812fe2ab9640812700beb8c4212bf50ecd3356cc1599f0e7c422d5ecf8"
   ],
   [
    "k:a",
-   "ff6eb4e52bfa30b35f8c484eb5ad3946a4c518219aed6b3a443777f674a69076"
+   "879c17229e6b8b4e93985d1e1924c567b5ce9a206c7bd1d3c744867cc0a6e317"
   ],
   [
    "f:2",
-   "ff6eb4e52bfa30b35f8c484eb5ad3946a4c518219aed6b3a443777f674a69076"
+   "879c17229e6b8b4e93985d1e1924c567b5ce9a206c7bd1d3c744867cc0a6e317"
   ],
   [
    "k:down",
-   "84a3240c629e8bf1545bbb63e8de1f6a5742cbf5c35bc1e723ffcd174a18b737"
+   "de7b6f94bd5d0757946c98702c776014aafe0d9837050e2b911acafd1a7e2632"
   ],
   [
    "k:a",
-   "10a3e7d420c009eefef609150047fd1ea95360d579bb353909deb49f8a71194b"
+   "be18094f4377f141d10388539cd36dca374075827ef224dac090c2a8ecd3ab00"
   ],
   [
    "t:abc",
-   "6bdaef9373adc5c733e6a87ee4eeecaada592056bc88b892b9df7d486e5ace27"
+   "a268dec4186dde176d26f53e94f4b0386f0c29fd3c258cdbd38f2314bb791e91"
   ],
   [
    "enter",
-   "a56022b52815fefe0e24afc072cdb187f3e45335902756c900953513657dd52e"
+   "50f0d2bbd59a5448ffcef42af8fa8ef9bd6789b8f8d5c83fcd3a3e523487cf91"
   ],
   [
    "f:2",
-   "a56022b52815fefe0e24afc072cdb187f3e45335902756c900953513657dd52e"
+   "50f0d2bbd59a5448ffcef42af8fa8ef9bd6789b8f8d5c83fcd3a3e523487cf91"
   ],
   [
    "back",
