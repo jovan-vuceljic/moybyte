@@ -1792,6 +1792,13 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
             lyr = ws.layer_of(k)
             if lyr is not None and lyr.moved():
                 return True             # a window's surface moved on its own
+        order = self.z_order
+        for i in range(max(self.full_cover(), 0), len(order)):
+            win = self.windows[order[i]]
+            lyr = ws.layer_of(order[i])
+            if (lyr is not None and not win.minimized
+                    and getattr(lyr, "landed", 0) != win._landed):
+                return True             # a picture landed in a window the glass shows
         return (self.stack.has("desktop") and ws.cart_error is None
                 and not ws.run.player.pace.paused
                 and (ws.run.player.update is not None or ws.run.player.draw is not None)

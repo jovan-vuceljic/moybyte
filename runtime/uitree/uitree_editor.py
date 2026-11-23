@@ -148,8 +148,8 @@ class Engine(uitree_app.Engine):
 
     def idle_step(self):
         if self.legacy_moved():
-            self._damage.all()
-            return True
+            self._damage.all()      # its surface draws again; no picture landed
+            return False
         return uitree_app.Engine.idle_step(self)
 
     #
