@@ -1428,6 +1428,21 @@ static int col_h(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
 }
 
 static void walk(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
+// Node `k`'s scroll region opened (`ui.scroll`'s, a placed rows list's): its gen counts what it
+// reads, so its scroll takes shift frames; `follow` keeps its foot in view.
+static void scroll_open(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int follow)
+{
+    const char *key = uit_str(e, NODE(k)->key);
+    int32_t one = 1, gen = (e->flags & UIT_F_GEN) && gen_ok(e) ? uit_cell_gen(e, k) : -1;
+    moy_ui_over_t o;
+    moy_ui_over_none(&o);
+    if (follow)
+        moy_ui_over_put(&o, MOY_UI_OV_FOLLOW, &one);
+    if (gen >= 0)
+        moy_ui_over_put(&o, MOY_UI_OV_GEN, &gen);
+    moy_ui_api_scroll(c, s, span_of(key, strlen(key)), &o);
+}
+
 static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
 
 // An int prop's value (template `t`, `dflt` where none is given).
@@ -3266,11 +3281,12 @@ static int32_t button_h(uit_t *e, int k, int32_t h)
     return (NODE(k)->btn & BT_LARGE) ? h * 3 / 2 : h;
 }
 
-// An empty page's line onto `b`, broken at word breaks into lines of its column (the page's
-// width less its margins, at most 420 on the desk), NUL-separated.
-static void empty_line(uit_t *e, const moy_ui_sink_t *s, uit_buf_t *b, const char *p, uint32_t n)
+// An empty's line onto `b`, broken at word breaks into lines of its column (the width `w` it
+// is drawn in, a page or a cell, less its margins, at most 420 on the desk), NUL-separated.
+static void empty_line(uit_t *e, const moy_ui_sink_t *s, uit_buf_t *b, const char *p, uint32_t n,
+                       int32_t w)
 {
-    int32_t room = e->pw - 32 * e->fs;
+    int32_t room = w - 32 * e->fs;
     if ((e->flags & UIT_F_DESK) && room > 420)
         room = 420;
     uint32_t start = 0, brk = 0;
@@ -4337,20 +4353,11 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     case UIT_POPOVER:
         draw_popover(e, c, s, k, model, row);
         break;
-    case UIT_SCROLL: {
-        // a region of its own: its gen counts what it reads, so its scroll takes shift frames
-        const char *key = uit_str(e, N->key);
-        int32_t one = 1, gen = (e->flags & UIT_F_GEN) && gen_ok(e) ? uit_cell_gen(e, k) : -1;
-        moy_ui_over_none(&o);
-        if (N->lit)
-            moy_ui_over_put(&o, MOY_UI_OV_FOLLOW, &one);
-        if (gen >= 0)
-            moy_ui_over_put(&o, MOY_UI_OV_GEN, &gen);
-        moy_ui_api_scroll(c, s, span_of(key, strlen(key)), &o);
+    case UIT_SCROLL:
+        scroll_open(e, c, s, k, N->lit);
         walk(e, c, s, k, model, row);
         moy_ui_api_scroll(c, s, span_of("", 0), NULL);
         break;
-    }
     case UIT_PROGRESS: {
         uint32_t vn, hn, va = uit_tmpl_render(e, N->t_value, model, row, &vn);
         int32_t v = (int32_t)strtol(e->scratch.p + va, NULL, 10);
@@ -4481,7 +4488,7 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
                 continue;
             if (any++)
                 uit_buf_printf(&lines, "%c", 0);
-            empty_line(e, s, &lines, e->scratch.p + at, n);
+            empty_line(e, s, &lines, e->scratch.p + at, n, c->has_at ? c->at.w : c->page.w);
         }
         int32_t m[4] = {c->has_at ? c->at.x : c->page.x, 0, c->has_at ? c->at.w : c->page.w, 0};
         // on the desk a sixth of the page down, as its column of words, as far as the room under
@@ -4952,6 +4959,7 @@ static int32_t fixed_h(uit_t *e, int k)
         return N->t_aux >= 0 ? len_of(e, N->t_aux, -1, -1, 0) : -1;
     case UIT_STATUS:
         return status_h(e);
+    case UIT_ROWS:                      // a rows list: what its stack leaves, its rows scrolled in it
     case UIT_HINTS:                     // a hints row: a fill of its stack
     case UIT_EMPTY:                     // an empty: what its stack leaves, its words in it
         return -1;
@@ -5659,6 +5667,12 @@ static void place_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, i
             return;
         }
         break;
+    case UIT_ROWS:                      // a rows list in a stack: a scroll region of its own
+        moy_ui_api_at(c, r[0], r[1], r[2], r[3]);
+        scroll_open(e, c, s, k, 0);
+        draw(e, c, s, k, model, row);
+        moy_ui_api_scroll(c, s, span_of("", 0), NULL);
+        return;
     case UIT_TEXT_EDITOR: {
         // its document is the front end's: it draws the editor's rows in the rect, under the
         // node's id (a stop)

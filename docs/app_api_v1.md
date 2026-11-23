@@ -405,7 +405,7 @@ Python's alone.
 | `status(text)` | a status line, cut at its `" · "` fields (no Lua) | |
 | `rule()` | a divider | |
 | `note(lines)` | a card in the page's flow | `icon=` (`"warn"` in the danger tone) |
-| `empty(title)` | what a page with nothing on it says; controls built in it stand under it; where its disc would push them past its room (its view, a placed page's stack), its words stand without it | `icon=`, `lines=` |
+| `empty(title)` | what a page with nothing on it says; controls built in it stand under it; its lines wrap at word breaks to the column it stands in (a page, a cell); where its disc would push them past its room (its view, a placed page's stack), its words stand without it | `icon=`, `lines=` |
 | `toast(text)` | a pill over the page's foot | `icon=` |
 | `bubble(text)` | a chat message, a stop | `side="in"`/`"out"`, `head=`, `status=`, `signal=`, `tone="failed"`, `lines=`, `on=`, `cut=` |
 | `text_view(name)` | read-only lines of a text state or a model | `wrap=`, `follow=`, `syntax=`, `face=`, `look="well"`, `gutter=` |
@@ -500,7 +500,9 @@ caption), on a flowing page and a placed one.
 
 **A placed page** gives each region a rect by the engine's one layout rule:
 a container gives each shown child its rect, fixed rows their height and
-the fills sharing the rest, a text editor whole lines. A Python app whose
+the fills sharing the rest, a text editor whole lines. A `rows` list
+standing in a placed stack (no `scroll` round it) is a fill that scrolls
+its rows, as a table is. A Python app whose
 state holds a `ui.doc` runs on the Editor's kinds (`text_editor`, `panes`),
 and its pages are placed; `split` and `grid` place their cells on any page.
 

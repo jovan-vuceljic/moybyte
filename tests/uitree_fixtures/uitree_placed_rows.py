@@ -1,6 +1,7 @@
 """Pages on the Editor's placed kinds and a flowing one: a placed page's
 rows lists whose bodies are rows (a rows' body and a by= case), a placed
-row of two groups, and a flowing page with a split among its rows."""
+row of two groups, a rows list standing in the page's stack over a button,
+and a flowing page with a split among its rows."""
 import uitree as ui
 
 s = ui.state(items=ui.model(key="k", k="", name=""), cur=ui.row_of("items"),
@@ -39,6 +40,13 @@ def rows_page():
                     ui.button("go", label="Go")
             ui.label("By kind")
             ui.rows("kinds", by="kind", cases={"x": _x, "y": _y})
+
+
+def bare_page():
+    with ui.page(""):
+        with ui.rows("items", cur="cur"):
+            ui.button("go", label="{.name}")
+        ui.button("after", label="After")
 
 
 def groups_page():

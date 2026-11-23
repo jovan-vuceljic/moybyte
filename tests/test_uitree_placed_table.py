@@ -174,6 +174,16 @@ def test_a_placed_rows_body_and_by_case_draw_their_rows(tmp_path):
     assert p and r and c[1] < p[1] < r[1], got
 
 
+def test_a_rows_list_in_a_placed_stack_scrolls_in_what_the_stack_leaves(tmp_path):
+    """A ui.rows standing in a placed page's stack (no ui.scroll round it)
+    is a region of its own: its rows one under the other, the button after
+    it under them all, every one inside the page."""
+    e, got = _boxes(tmp_path, "bare_page", ("a/go", "b/go", "c/go", "after"))
+    a, b, c, after = (got[k] for k in ("a/go", "b/go", "c/go", "after"))
+    assert a[1] + a[3] <= b[1] and b[1] + b[3] <= c[1], got
+    assert c[1] + c[3] <= after[1] <= e.rect[1] + e.rect[3] - after[3], (got, e.rect)
+
+
 def test_groups_in_a_placed_row_stand_side_by_side(tmp_path):
     _e, got = _boxes(tmp_path, "groups_page", ("left", "right"))
     left, right = got["left"], got["right"]
