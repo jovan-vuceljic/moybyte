@@ -221,20 +221,35 @@ def test_make_leads_with_change_and_keeps_every_card_verb(tmp_path, size):
 def test_wrapped_buttons_take_up_and_down_between_their_rows(tmp_path):
     """Where the buttons wrap, up and down move between their rows before
     the keys go on to the tabs or back to the shelf."""
+    from runtime import host_app
     ws = _ws(tmp_path)
     win, grid = _projects(ws, (360, 534))
     _own(ws, grid)
+    _frame(ws)
+    drv = host_app.ConsoleDriver(ws)
+    home = ws.projects_layer
     ws.wm.install_window(win.ctx)
     try:
-        home = ws.projects_layer
         buttons = home._desk_buttons()
-        top = buttons[0][1][1]
-        assert len({r[1] for _v, r, _k in buttons}) > 1, "the narrow pane wraps"
-        up, down = home._button_rows_apart(buttons, 0)
-        assert up is None and buttons[down][1][1] > top, (up, down, buttons)
-        assert buttons[home._button_rows_apart(buttons, down)[0]][1][1] == top
     finally:
         ws.wm.install_window(ws.wm.root_ctx)
+    top = buttons[0][1][1]
+    assert len({r[1] for _v, r, _k in buttons}) > 1, "the narrow pane wraps"
+
+    def key(name):
+        drv.press(name)
+        drv.frame(g._DT)
+        drv.frame(g._DT)
+    key("up")
+    assert home._button_focus == 0
+    key("down")
+    k = home._button_focus
+    assert k is not None and buttons[k][1][1] > top, (k, buttons)
+    key("up")
+    k = home._button_focus
+    assert k is not None and buttons[k][1][1] == top, (k, buttons)
+    key("up")
+    assert home._button_focus is None and home._tab_focus
 
 
 def test_delete_stands_last_in_the_danger_look(tmp_path):

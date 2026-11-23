@@ -2049,7 +2049,7 @@ SCHEMA = {
                  icon="text", tone="text"),
     # G9, G13: a picture of its own (an image state, its fallback icon), a
     # progress bar (max= is required), a page that says why there is nothing
-    "picture": dict(_C, image="image", icon="text", side="int", tone="text"),
+    "picture": dict(_C, image="image", icon="text", side="int", tone="text", on="action0", look="lit"),
     "progress": dict(_C, label="text", value="int", max="int", look="lit"),
     "empty": dict(_C, icon="text", title="text", lines="texts"),
     "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit", look="lit"),

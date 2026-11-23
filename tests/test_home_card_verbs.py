@@ -344,8 +344,9 @@ def _marks(ws):
 def test_up_from_the_desk_shelf_reaches_its_buttons(tmp_path):
     """On the desk home the keys and a gamepad reach the details pane's
     buttons (R3-16): up from the shelf puts the focus mark on the first,
-    left and right move along them, confirm presses one; up again goes on
-    to the tabs, down comes back to the shelf. One focus mark a screen."""
+    left and right move along them (the pane's page's, in the frame that
+    draws it), confirm presses one; up again goes on to the tabs, down
+    comes back to the shelf. One focus mark a screen."""
     ws = _ws(tmp_path, CONSOLE)
     ws.launcher_layer._lib_unsupported = True
     _select(ws, "games", "cart")
@@ -353,28 +354,34 @@ def test_up_from_the_desk_shelf_reaches_its_buttons(tmp_path):
     verbs = [v for v, _r, _k in home._desk_buttons()]
     assert verbs[:2] == ["play", "change"]
     assert _marks(ws) == 1
-    home.handle_input(_Pad("up"))
+
+    def key(name):
+        home.handle_input(_Pad(name))
+        for _ in range(2):           # (a step past the buttons hands the keys on the next frame)
+            ws.mark_dirty()
+            ws.frame(g._DT)
+    key("up")
     assert home._button_focus == 0 and not home._tab_focus
     assert _marks(ws) == 1, "the button's mark, the card's gone"
-    home.handle_input(_Pad("right"))
+    key("right")
     assert home._button_focus == 1
     for kind in ("pad", "keys"):
         ui_draw.input_kind(kind)
         items, _verbs = home._hint_groups()
         assert items[:2] == ["confirm", "Change"], "%s: confirm names the button" % kind
-    home.handle_input(_Pad("up"))
+    key("up")
     assert home._tab_focus and home._button_focus is None
-    home.handle_input(_Pad("down"))
-    home.handle_input(_Pad("up"))
-    home.handle_input(_Pad("right"))
-    home.handle_input(_Pad("down"))
+    key("down")
+    key("up")
+    key("right")
+    key("down")
     assert home._button_focus is None and not home._tab_focus
     assert _marks(ws) == 1, "the card's mark back"
-    home.handle_input(_Pad("up"))
-    home.handle_input(_Pad("right"))
+    key("up")
+    key("right")
     done = []
     home._do_verb = done.append
-    home.handle_input(_Pad("a"))
+    key("a")
     assert done == ["change"]
 
 @pytest.mark.parametrize("config", [HANDHELD, CONSOLE])

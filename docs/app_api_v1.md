@@ -327,7 +327,11 @@ current and fires its action as Enter does, the current card grows and
 wears the focus mark flat while the cards hold the keys, its label bold,
 and up from the top row leaves the grid; `tone=` inks the labels over a
 black shadow and `cur=` follows the current card (a value the app writes
-there lands the view on it); a link's
+there lands the view on it); `ui.picture(..., look="tile")` draws the
+picture as a carousel's tile of its own at its place, `side=` across, its
+shadow round it and its corners those of a carousel's centre card (the
+desk home's hero), and `ui.picture(..., on=)` makes a picture a stop that
+a tap or Enter fires `on=` from; a link's
 `swatch="#RRGGBB"` (a template, empty for none) draws a chip of that colour
 before its value; a
 card's `badge=` marks its picture and its `label_icon=` stands an icon

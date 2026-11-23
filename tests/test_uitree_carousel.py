@@ -331,3 +331,61 @@ def test_a_desk_shelfs_caption_is_its_label_and_its_count(tmp_path):
     bare = rows(games, bare)
     assert bare and moved[0] - 4 <= bare[0] and bare[-1] <= moved[-1] + 4, (
         "no label: the count alone, on the caption's rows", bare, moved)
+
+
+_LUA_TILE = """
+ui.app("Lua Tile", { icon = "games" })
+local s = ui.state { side = 96 }
+ui.action("play", "Play", function() moybyte.log(6, "played the tile") end)
+ui.page("tile", function()
+  ui.picture({ icon = "games", side = "{side}", %(look)s on = "play" })
+end, { title = "Lua Tile" })
+"""
+
+
+def _lua_tile(tmp_path, look):
+    """A desk workstation with a Lua app whose page is one picture of look
+    `look` that plays on=, open and drawn: its driver and a frame function
+    answering the glass's bytes."""
+    import json
+    from runtime import host_app
+    from ws_helpers import open_cart
+    carts = tmp_path / "carts"
+    cart = carts / "lua_tile.moy"
+    cart.mkdir(parents=True)
+    (cart / "manifest.json").write_text(json.dumps({
+        "format": "moy-1", "title": "Lua Tile", "runtime": "lua", "main": "main.lua",
+        "extensions": ["moybyte.ui", "moybyte.uitree"],
+        "moybyte": {"type": "app", "permissions": []}}))
+    (cart / "main.lua").write_text(_LUA_TILE % dict(look='look = "%s",' % look if look else ""))
+    ws = host_app.build_workstation(str(carts), **_DESK)
+    ws.pointer.visible = False
+    drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)
+    open_cart(ws, "Lua Tile")
+
+    def frame():
+        ws.mark_dirty()
+        drv.frame(1 / 30)
+        return bytes(ws.wm.root_canvas._buf)
+    for _ in range(10):
+        frame()
+    return ws, drv, frame
+
+
+def test_a_lua_picture_tile_is_a_stop_its_on_fires_from(tmp_path):
+    """The Lua front takes ui.picture: look="tile" draws it as a carousel's
+    tile of its own (not the plain picture's card), and with on= it is a
+    stop, so Enter on it fires on=."""
+    from runtime.host import moy_log
+    _ws, _drv, frame = _lua_tile(tmp_path / "card", "")
+    card = frame()
+    _ws, drv, frame = _lua_tile(tmp_path / "tile", "tile")
+    tile = frame()
+    assert tile != card, "the tile look draws its own"
+    seq = moy_log.next()
+    drv.press("a")
+    for _ in range(3):
+        frame()
+    played = [r[4] for r in moy_log.read(seq, 400) if "played " in r[4]]
+    assert played and played[-1].endswith("played the tile"), played

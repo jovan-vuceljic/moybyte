@@ -1674,6 +1674,19 @@ function T.month(o)
   return n
 end
 
+-- a picture at its own place: its icon on a tinted tile; look="tile" a carousel's tile of its own,
+-- its shadow round it; on= the action a tap on it or Enter fires, which makes it a stop
+function T.picture(o, extra)
+  local at = where()
+  local n = node("picture", at)
+  if type(o) ~= "table" or extra ~= nil then
+    fail("N01", at, "ui.picture takes its props alone", "ui.picture({ icon = \"games\", side = 64 })", describe(o))
+  end
+  n.o = check_opts("picture", o, at)
+  if n.o.on then use_action(n.o.on, "none", at, "ui.picture's on", true) end
+  return n
+end
+
 local function leaf(kind)
   return function(text, o, extra)
     local at = where()

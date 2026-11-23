@@ -755,12 +755,13 @@ def test_the_details_buttons_are_the_tabs_verbs_and_the_hero_plays(tmp_path):
     n = len(ws.carts.all)
     _v, (x, y, w, h), _k = home._desk_buttons()[2]
     drv.click(x + w // 2, y + h // 2)
-    drv.frame(1 / 30)
+    for _ in range(3):
+        drv.frame(1 / 30)
     assert len(ws.carts.all) == n + 1                 # COPY made the kid's own
     hx, hy, hs, _ = ws.launcher.hero_rect()
     drv.click(hx + hs // 2, hy + hs // 2)
-    drv.frame(1 / 30)
-    drv.frame(1 / 30)
+    for _ in range(3):
+        drv.frame(1 / 30)
     assert ws.screen == "desktop"                     # the hero's tap ran it
 
 

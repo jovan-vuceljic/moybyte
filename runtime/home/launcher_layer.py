@@ -260,84 +260,6 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             g.tab_focus = on or self._tab_keys or getattr(self, "_btn", None) is not None
         self.ws.mark_dirty()
 
-    @property
-    def _button_focus(self):
-        """The desk home's button the keys are on (up from the shelf), an
-        index into `_desk_buttons`, or None: the shelf's card has them."""
-        return getattr(self, "_btn", None)
-
-    @_button_focus.setter
-    def _button_focus(self, k):
-        # one focus mark a screen: the button's takes it from the card
-        if k != getattr(self, "_btn", None):
-            self._zone_bump = getattr(self, "_zone_bump", 0) + 1
-        self._btn = k
-        if k is not None:
-            self._tab_keys = False
-        g = self._grid_or_none()
-        if g is not None:
-            g.tab_focus = (k is not None or bool(getattr(self, "_tab_keys", False))
-                           or getattr(self, "_on_bar", False))
-        self.ws.mark_dirty()
-
-    @staticmethod
-    def _button_rows_apart(buttons, k):
-        """(the button over `k`, the button under it) where the pane's
-        buttons wrap to rows, each the nearest in its row; None for none."""
-        r = buttons[k][1]
-        mid = r[0] + r[2] // 2
-        out = []
-        for above in (True, False):
-            ys = [b[1][1] for b in buttons if (b[1][1] < r[1]) == above and b[1][1] != r[1]]
-            if not ys:
-                out.append(None)
-                continue
-            y = max(ys) if above else min(ys)
-            row = [j for j, b in enumerate(buttons) if b[1][1] == y]
-            out.append(min(row, key=lambda j: abs(buttons[j][1][0] + buttons[j][1][2] // 2
-                                                   - mid)))
-        return out[0], out[1]
-
-    def _button_keys(self, i):
-        """The keys on the desk home's buttons: left and right move along
-        them, confirm presses one, up and down move between their rows where
-        they wrap, up from the first row goes on to the tabs, down from the
-        last and B back to the shelf. False where no button has them, or for another key."""
-        k = self._button_focus
-        if k is None:
-            return False
-        ws = self.ws
-        buttons = self._desk_buttons()
-        if not buttons:
-            self._button_focus = None
-            return False
-        k = min(k, len(buttons) - 1)
-        if not (i.steps("left") or i.steps("right") or i.steps("up") or i.steps("down")
-                or i.pressed("a") or i.pressed("run") or i.pressed("b")
-                or i.pressed("home")):
-            return False                     # the strip's letters still act
-        up, down = self._button_rows_apart(buttons, k)
-        if i.steps("left"):
-            self._button_focus = max(0, k - 1)
-        elif i.steps("right"):
-            self._button_focus = min(len(buttons) - 1, k + 1)
-        elif i.steps("up") and up is not None:
-            self._button_focus = up
-        elif i.steps("up"):
-            self._tab_focus = True
-        elif i.steps("down") and down is not None:
-            self._button_focus = down
-        elif i.steps("down") or (i.pressed("b") and ws.ach_ui._konami_pos == 0):
-            self._button_focus = None
-        elif i.pressed("a") or i.pressed("run"):
-            v = buttons[k][0]
-            if v != "delete":                # the confirm's Cancel comes back to DEL
-                self._button_focus = None
-            self._do_verb(v)
-        elif i.pressed("home"):
-            ws.home.home_key()
-        return True
-
     def _statics_key(self, cv):
         """Everything the home frame's STATIC chrome (wallpaper backdrop +
         Library panel fill/header/footer) is a pure function of: the shared
@@ -775,7 +697,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         sel = g.statics_sel()
         return (base,
                 (g.tab, sel, it, it and it.get("title"), it and it.get("description"),
-                 gen, rows, self._button_focus, g.today()),
+                 gen, rows, self._dgen, g.today()),
                 (g.tab, sel, gen, self._lhover, tuple(i.get("title") for i in items),
                  rows, g.scroll, g.moving and ws.frame_state.frames_drawn, g.tab_focus))
 
@@ -996,7 +918,6 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             laid.append(r)
             self._fill_around_hero(cv, r, fill)
             cv.clip(r[0], r[1], r[2], r[3])
-            g._paint_details(cv)
             self._draw_details(cv)
             cv.clip()
             wm.hand_content_damage(cv, r[0], r[1], r[2], r[3])
@@ -1046,6 +967,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         carousel = self._carousel()
         if carousel:
             self.grid.dim = _dim_of(ws)
+            self.details_owed()
         if self.grid.on_open is not self._on_open:
             self.grid.on_open = self._on_open
         self.grid.wall_ink = self._wall()
@@ -1242,7 +1164,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             elif i.pressed("home"):
                 ws.home.home_key()
             return True
-        if self._button_keys(i):
+        if self._pane_keys(i):
             return True
         if self._hint_keys(i):
             return True
@@ -1380,8 +1302,8 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             if frect is not None and _in(px, py, frect):
                 self.toggle_favourite()
                 return True
-            if self._carousel() and grid.desk() and self._details_tap(px, py):
-                return True
+        if self._carousel() and grid.desk() and self._pane_point(px, py, click, down):
+            return True
         if self._long_press(px, py, click, down):
             return True
         if not self._carousel():
@@ -1561,6 +1483,7 @@ class HomeWindowLayer(LauncherHomeLayer):
         grid.dim = None if dim is None else (th["panel"], dim[1])
         grid.wall_ink = None
         grid.anim_frame(dt)
+        self.details_owed()
         if grid.flinging:
             ws.request_frame()
         if self._try_band_frame(cv, dt):    # drag-scroll fast path (#113)

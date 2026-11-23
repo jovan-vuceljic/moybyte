@@ -1,28 +1,32 @@
 # Map (grep -n a name to jump there):
 #   HomeDetails                   the mixin the home's details and desk buttons live on
 #   HomeDetails.card_verbs        the selected card's verbs, its menu's rows
+#   HomeDetails._button_focus     the desk pane's button the keys are on
+#   HomeDetails._pane_keys        the keys on the desk pane's buttons, its page's
+#   HomeDetails._pane_point       the pointer on the desk's hero and pane, their pages'
+#   HomeDetails.details_owed      a frame the pane's page owes moves what it shows
 #   HomeDetails._desk_buttons     the desk pane's verb buttons, where the page drew them
-#   HomeDetails._draw_details     the desk hero's details: the page in the pane
-#   HomeDetails.details_put       what the page shows of the selected card
-#   HomeDetails._details_tap      a tap on the desk pane's buttons
-"""The home's DETAILS: what the desk home says of the selected card beside
-its hero -- the title, the metadata, the description, the facts (`_facts`:
-plays, the last day, the maker) and the verb buttons
-(docs/theme_and_shell_2026-11.md §8.10), a `uitree` page (`home_ui.page`)
-laid in the pane on a host of its own -- with the buttons' tap, and the
-card's verbs a card's menu lists (`card_verbs`). A mixin over
-`LauncherHomeLayer`, after `HomeHints` among its bases: the details are drawn
-on the desk home's painted frames, never on a band frame. The keys stay the
-layer's: the button they are on (`_button_focus`) is handed to the page's
-host as its focus, and with them on the shelf the page shows none.
+#   HomeDetails._draw_details     the desk hero and its details: their pages
+#   HomeDetails.details_put       what the pages show of the selected card
+"""The home's DETAILS: the desk home's hero -- the selected card's picture,
+a tap on it the tab's tap -- and what it says of the card beside it -- the
+title, the metadata, the description, the facts (`_facts`: plays, the last
+day, the maker) and the verb buttons (docs/theme_and_shell_2026-11.md
+§8.10) -- two `uitree` pages (`home_ui.hero`, `home_ui.page`), each laid in
+its rect of the desk's geometry on a host of its own; and the card's verbs a
+card's menu lists (`card_verbs`). A mixin over `LauncherHomeLayer`, after
+`HomeHints` among its bases: the hero and the details are drawn on the desk
+home's painted frames, never on a band frame. Up from the shelf hands the
+pane's page the keys (`_button_focus`): its buttons take them, and the page's
+edge hands them on, up to the tabs and down to the shelf.
 """
 
 import ui as _ui
 import ui_draw as _ui_draw
-from home_grid import day_words, NEW_TILE_TYPE, PSEUDO_TILE_TYPES, _VERB_HINT
+from home_grid import button_kind, day_words, NEW_TILE_TYPE, PSEUDO_TILE_TYPES, _VERB_HINT
 _in = _ui.rect_in   # one hit-test (ui.rect_in)
+_EDGE_UP, _EDGE_DOWN = 1, 2     # uitree_app's EDGE_UP and EDGE_DOWN
 
-_PRIMARY = ("play", "open", "new", "change")    # a first button that is the tab's tap
 _PLAYS = ("play", "open", "window")             # a button that wears the Play glyph
 _BUTTON_IDS = ("press/0", "press/1", "press/2", "press/3")   # home_ui's buttons' stops
 _NO_RECT = (0, 0, 0, 0)     # a button the page has not drawn yet
@@ -35,19 +39,21 @@ def times_words(n):
     return "Not yet" if not n else ("Once" if n == 1 else "%d times" % n)
 
 
-def _kind(k, verb):
-    """The look of the pane's `k`th button, `verb`'s."""
-    return "primary" if k == 0 and verb in _PRIMARY else ("danger" if verb == "delete" else "normal")
-
-
 class HomeDetails:
     """The desk hero's details, its verb buttons and the card's verbs of
     `LauncherHomeLayer`."""
 
     _dpage = None       # the details pane's page and its host, made at the first desk paint
     _dhost = None
-    _dkey = None        # what the page shows was put at (`_draw_details`)
-    _dput = None        # ...and what `details_put` hands it
+    _hpage = None       # ...and the hero's
+    _hhost = None
+    _dkey = None        # what the pages show was put at (`_draw_details`)
+    _dput = None        # ...and what `details_put` hands them
+    _btn = None         # True while the pane's buttons hold the keys
+    _dgen = 0           # moves with the input the hero's and the pane's pages take
+    _dptr = None        # the host a press on the hero or the pane went to
+    _dlag = False       # the pane's page owes the next frame (`details_owed`)
+    _dedge = 0          # ...and the edge its keys went past (EDGE_UP, EDGE_DOWN)
 
     def card_verbs(self):
         """The selected card's verbs beyond its tap, the ONE list every
@@ -88,8 +94,9 @@ class HomeDetails:
         return out
 
     def _details_page(self):
-        """The details pane's page (`home_ui.page`) on its own host, made at
-        the first desk paint: a handheld never makes one."""
+        """The details pane's page (`home_ui.page`) and the hero's
+        (`home_ui.hero`), each on its own host, made at the first desk paint:
+        a handheld never makes them."""
         pg = self._dpage
         if pg is None:
             import ui_host
@@ -97,10 +104,114 @@ class HomeDetails:
             import home_ui
             self._dhost = ui_host.AppHost()
             pg = self._dpage = uitree_app.hosted_page(home_ui.page, self._dhost, self, env=self)
-            pg.bare = True                   # the home's ground is its ground
-            pg.band = False                  # the hint strip names its keys
-            pg.open()
+            self._hhost = ui_host.AppHost()
+            hp = self._hpage = uitree_app.hosted_page(home_ui.hero, self._hhost, self, env=self)
+            hp.pictures = self.grid.hero_picture
+            for p in (pg, hp):
+                p.bare = True                # the home's ground is its ground
+                p.band = False               # the hint strip names its keys
+                p.open()
         return pg
+
+    @property
+    def _button_focus(self):
+        """The desk home's button the keys are on (up from the shelf), an
+        index into `_desk_buttons` (the pane's page's focus), or None: the
+        shelf's card has them."""
+        if self._btn is None:
+            return None
+        f = self._dpage.focused_id() if self._dpage is not None else None
+        return _BUTTON_IDS.index(f) if f in _BUTTON_IDS else 0
+
+    @_button_focus.setter
+    def _button_focus(self, k):
+        # one focus mark a screen: the button's takes it from the card
+        if (k is None) != (self._btn is None):
+            self._zone_bump = getattr(self, "_zone_bump", 0) + 1
+        self._btn = None if k is None else True
+        if k is not None:
+            self._tab_keys = False
+            self._details_page()
+            self._dhost.focus(_BUTTON_IDS[k])
+        self._dgen += 1
+        g = self._grid_or_none()
+        if g is not None:
+            g.tab_focus = (k is not None or bool(getattr(self, "_tab_keys", False))
+                           or getattr(self, "_on_bar", False))
+        self.ws.mark_dirty()
+
+    def _pane_keys(self, i):
+        """The keys on the desk home's buttons, the pane's page's: the
+        arrows move along them and between their rows where they wrap,
+        confirm presses one, B goes back to the shelf; the page's edge hands
+        them on (`_draw_details`). False where no button has them, or for
+        another key (the strip's letters still act)."""
+        if self._btn is None:
+            return False
+        ws = self.ws
+        if not self._desk_verbs():
+            self._button_focus = None
+            return False
+        if i.pressed("b") and ws.ach_ui._konami_pos == 0:
+            self._button_focus = None
+            return True
+        if i.pressed("home"):
+            ws.home.home_key()
+            return True
+        if not (i.steps("left") or i.steps("right") or i.steps("up") or i.steps("down")
+                or i.pressed("a") or i.pressed("run")):
+            return False
+        self._dhost.keys(i)
+        self._dgen += 1
+        ws.mark_dirty()
+        return True
+
+    def _pane_point(self, px, py, click, down):
+        """A pointer sample on the desk home's hero or its pane: a press in
+        either goes to its page's host (a tap on the hero is the tab's tap,
+        on a button its verb), and its release after it, where a press let
+        go off its stop taps nothing; the moves between are no drag's.
+        False where neither has it."""
+        if click:
+            self._dptr = None
+            if self._dpage is not None and self.grid.items:
+                dk = self.grid._geom()[9]
+                if _in(px, py, dk[0]):
+                    self._dptr = self._hhost
+                elif _in(px, py, (dk[1], dk[6], dk[2], dk[5][5])):
+                    self._dptr = self._dhost
+        h = self._dptr
+        if h is None:
+            return False
+        if click:
+            self._tab_focus = False
+        elif down:
+            return True                      # (the pages are no drag's: it moves nothing)
+        h.point(px, py, click, down)
+        if not down:
+            self._dptr = None
+        self._dgen += 1
+        self.ws.mark_dirty()
+        return True
+
+    def details_owed(self):
+        """At a frame's start, before its parts are keyed: the pane's page
+        owes this frame (a press it showed settles), so what it shows moves
+        (`_dgen`); a step past its buttons hands the keys on, up to the tabs
+        and down to the shelf."""
+        if self._dlag:
+            self._dlag = False
+            self._dgen += 1
+        e = self._dedge
+        if e:
+            self._dedge = 0
+            if e & _EDGE_UP:
+                self._tab_focus = True
+            self._button_focus = None
+
+    def hero_press(self):
+        """The hero's page's tap: the active tab's tap."""
+        self.ws.defer(self._launch)          # #184: start behind the paint
 
     def all(self):
         """The page's damage: the home draws again."""
@@ -118,31 +229,17 @@ class HomeDetails:
         out = []
         for k, v in enumerate(verbs):
             r = box(_BUTTON_IDS[k]) if box is not None else None
-            out.append((v, r if r is not None else _NO_RECT, _kind(k, v)))
+            out.append((v, r if r is not None else _NO_RECT, button_kind(k, v)))
         return out
 
-    def _details_tap(self, px, py):
-        """A press on the desk home's hero (the active tab's tap) or one of
-        its buttons."""
-        g = self.grid
-        if not g.items:
-            return False
-        if _in(px, py, g.hero_rect()):
-            self._tab_focus = False
-            self.ws.defer(self._launch)          # #184: start behind the paint
-            return True
-        for v, r, _k in self._desk_buttons():
-            if _in(px, py, r):
-                self._do_verb(v)
-                return True
-        return False
-
     def _draw_details(self, cv):
-        """The desk home's details pane beside the hero (step 18), the page
-        laid in the pane: the selected card's title in the `title` face at
-        the pane's scale, its metadata, its description, its facts (how
-        often and when it was played, the play record's; who made it, its
-        id's), then its buttons, the one the keys are on marked."""
+        """The desk home's hero and its details pane beside it (step 18),
+        each page in its rect of the desk's geometry: the selected card's
+        picture; its title in the `title` face at the pane's scale, its
+        metadata, its description, its facts (how often and when it was
+        played, the play record's; who made it, its id's), then its
+        buttons, the one the keys are on marked. A step past the pane's
+        buttons hands the keys on: up to the tabs, down to the shelf."""
         ws = self.ws
         g = self.grid
         if not g.items:
@@ -150,27 +247,39 @@ class HomeDetails:
         pg = self._details_page()
         dk = g._geom()[9]
         rect = (dk[1], dk[6], dk[2], dk[5][5])
-        it = g.items[g.nearest()]
+        i = g.nearest()
+        it = g.items[i]
         verbs = self._desk_verbs()
-        key = (it, g.tab, tuple(verbs), dk[5][0], dk[7], g.played(it), g.today())
+        key = (it, g.tab, tuple(verbs), dk[5][0], dk[7], g.played(it), g.today(), dk[0][2], i)
         if key != self._dkey:
             self._dkey = key
-            self._dput = (it, verbs, dk)
+            self._dput = (it, verbs, dk, i)
             import home_ui
-            pg.run(home_ui.put, action="put")
-            home_ui.ui.commit(pg)
-        on = self._button_focus
-        host = self._dhost
-        if on is not None and verbs:
-            host.focus(_BUTTON_IDS[min(on, len(verbs) - 1)])
-        host.begin(cv, ws.theme_colors, rect, True, elsewhere=on is None)
-        pg.paint(0.0, cv, ws.theme_colors, rect, True)
+            for p in (pg, self._hpage):
+                p.run(home_ui.put, action="put")
+                home_ui.ui.commit(p)
+        th = ws.theme_colors
+        self._hhost.begin(cv, th, dk[0], True, elsewhere=True)
+        g.paint_hero(self._hpage, cv, th, dk[0])
+        on = self._btn is not None
+        if not self._dhost.begin(cv, th, rect, True, elsewhere=not on) or self._dptr is not None:
+            self._dlag = True                # (a frame owed: the press it shows settles)
+            ws.request_frame()
+        pg.paint(0.0, cv, th, rect, True)
+        e = pg.edge() if on else 0
+        if e & (_EDGE_UP | _EDGE_DOWN):
+            if e & _EDGE_UP:
+                _ui_draw.edge_take()         # (the tab row's, not the shell's bar's)
+            self._dedge = e                  # (handed on at the next frame's start)
+            ws.request_frame()
 
     def details_put(self, s):
         """What the details pane shows of the selected card (home_ui's `put`)."""
         import home_ui
-        it, verbs, dk = self._dput
+        it, verbs, dk, i = self._dput
         g = self.grid
+        s.hero = home_ui.ui.image.own(str(i))
+        s.hero_side = dk[0][2]
         pseudo = it.get("type") in PSEUDO_TILE_TYPES
         s.title = "New" if it.get("type") == NEW_TILE_TYPE else str(it.get("title") or "")
         ts, ms, _ks, _vs, bh, pane, _u = dk[5]
@@ -201,13 +310,21 @@ class HomeDetails:
             if v is not None:
                 setattr(s, home_ui.LABELS[k], _VERB_HINT[v][1])
                 setattr(s, home_ui.ICONS[k], "play" if v in _PLAYS else "")
-                setattr(s, home_ui.KINDS[k], _kind(k, v))
+                setattr(s, home_ui.KINDS[k], button_kind(k, v))
 
     def details_press(self, k):
-        """The page's button `k` pressed: its verb."""
+        """The page's button `k` pressed: its verb, behind the paint, the
+        keys back on the shelf but for DEL's (its confirm's Cancel comes
+        back to it)."""
         verbs = self._desk_verbs()
         if k < len(verbs):
-            self._do_verb(verbs[k])
+            self.ws.defer(lambda: self._press_verb(verbs[k]), toast=False)   # (a launch's pill its own)
+
+    def _press_verb(self, v):
+        """A pane button's verb, behind the frame that pressed it."""
+        if v != "delete" and self._btn is not None:
+            self._button_focus = None
+        self._do_verb(v)
 
     def _facts(self, it):
         """The details pane's facts of a cart: (caption, value) pairs."""

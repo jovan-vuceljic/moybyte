@@ -68,7 +68,7 @@ _SIGS = (
     ("uit_cells_tile", [_P, _I, _P], _I),
     ("uit_cells_at", [_P, _I, _I], _I),
     ("uit_cells_geom", [_P, _P, _I, _I, _P], _I),
-    ("uit_carousel_desk", [_P, _I, _I, _I, _P], None),
+    ("uit_carousel_desk", [_P, _I, _I, _I, _P, _P, _P, _P], _I),
     ("uit_build_end", [_P], _I),
     ("uit_open", [_P], None),
     ("uit_close", [_P], None),
@@ -475,10 +475,20 @@ class Engine:
         return bool(self._L.uit_cells_geom(self._e, _addr(band, 4), fs, 1 if desk else 0,
                                            _addr(out, 16)))
 
-    def carousel_desk(self, band, fs, keys, brows, out):
+    def carousel_desk(self, band, fs, keys, sets, out):
         """The desk home's geometry in content rect `band` (an array('i')
-        of 4) into `out`, an array('i') of 24 (uit_carousel_desk)."""
-        self._L.uit_carousel_desk(_addr(band, 4), fs, 1 if keys else 0, brows, _addr(out, 24))
+        of 4) into `out`, an array('i') of 25 (uit_carousel_desk), the
+        details pane keeping room for `sets`, a tuple of button sets, each
+        a tuple of (label, kind) pairs. ValueError for a set it cannot
+        take."""
+        btns = [b for st in sets for b in st]
+        counts = (c.c_int32 * max(1, len(sets)))(*[len(st) for st in sets])
+        labels = (c.c_char_p * max(1, len(btns)))(*[b[0].encode() for b in btns])
+        kinds = (c.c_char_p * max(1, len(btns)))(*[b[1].encode() for b in btns])
+        if any(len(b) != 2 for b in btns) or self._L.uit_carousel_desk(
+                _addr(band, 4), fs, 1 if keys else 0, len(sets), counts, labels, kinds,
+                _addr(out, 25)) < 0:
+            raise ValueError("carousel_desk: a button set it cannot take")
 
     def next(self):
         """The next event: (kind, a, b, c, text), or None."""

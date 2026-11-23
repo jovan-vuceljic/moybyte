@@ -262,6 +262,7 @@ def test_the_desk_projects_windows_delete_asks(tmp_path):
         home.handle_pointer(r[0] + r[2] // 2, r[1] + r[3] // 2, True)
     finally:
         ws.wm.install_window(ws.wm.root_ctx)
+    _frames(drv)                     # (the tap's press and release frames, its verb behind them)
     c = _asked(ws, drv)
     _press(drv, "a")
     assert not c.open and _there(ws)
