@@ -280,6 +280,28 @@ in that origin's storage:
 - *Edit on the PC*: File System Access has no change notification, so the
   sync back is a press (or a poll while the window is open), never a watch.
 
+**The site's window lends the console what only a secure context has**
+(#254, later). Web Serial, WebUSB, Web Bluetooth, Web MIDI and
+`getUserMedia` exist only in a secure context, and the console on the
+board's origin is plain http. The site's window is https, so it can hold
+the device and carry its traffic over the link: a `device` kind family
+the board's end lists in `hello`, behind each device API the boards offer
+(the lease or `class` row an app asks for), so one app runs on both. Link
+v1 ships none, and its envelope needs no change for them. Two things
+follow: a lent device lives as long as the site's window, so closing My
+consoles ends it and the console reports the device gone (`None`, never a
+stale read); and a grant is a real click in the site's window, never in
+the console's.
+
+**The live socket stays the console's** (#256). The console runs on the
+board's origin, so its WebSocket to its board is `ws://` from an http page,
+as today. An https page cannot open `ws://`, so the site's window, and the
+direct path of §10, never carry the socket; the link carries what the site
+needs. The loader also takes the pack off the board's serving: a C3 sends a
+few KB at a page load, not the pack. #256's in-frame serving still applies to
+the loader and `/sync`, so phase 1 measures a page load's frame stall on
+the C3 and writes it to #256.
+
 ## 6. Integrity, signing, provenance
 
 The chain of trust runs through the image:
@@ -494,6 +516,7 @@ Tests:
   poisoned cache entry refused and fetched again, the source order, and
   eviction.
 - The loader's gzipped size stays under its budget.
+- On glass, a page load's frame stall on the C3, written to #256.
 - A host test that the digests `gen_web_blob` names are the pack's.
 - A deploy check that every digest an index names has its file on
   os.moybyte.com, served with `Access-Control-Allow-Origin`.
