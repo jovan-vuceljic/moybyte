@@ -2012,8 +2012,8 @@ class CEditorPage(CEditorEngine, _ed.Page):
     """`uitree_editor.Page` (a page on the Editor's kinds a surface hosts)
     on `CEditorEngine`."""
 
-    def __init__(self, build, host, damage, files=None, close=None, gen=False):
-        _ed.Page.__init__(self, build, host, damage, files, close, gen)
+    def __init__(self, build, host, damage, files=None, close=None, gen=False, env=None):
+        _ed.Page.__init__(self, build, host, damage, files, close, gen, env)
         self._c_init()
         self._te_rect = [0, 0, 0, 0]
         self._te_drawn = {}

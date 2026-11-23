@@ -6,13 +6,13 @@
 #   HomeHints._hint_tap      a tap on a hint
 #   HomeHints._hint_keys     a verb's letter, the star's, from a keyboard
 """The home's HINT STRIP: the keycap hints along the home's foot -- the
-selected card's verbs and its star, the tab row's keys while it has them, a
+selected card's verbs and its star, the bar's keys while it has them, a
 system modal's while one holds them (`modal_keys`) -- fitted to the strip,
 drawn on the wallpaper's ink, and their taps and their letters on a
 keyboard. A mixin over `LauncherHomeLayer`, its FIRST base: a band frame
 draws the strip beside the band (`_beside`) on every moving frame, and on
 MicroPython a method the class lacks is looked up through its bases in
-order. The tab row's focus and the selection it names are the layer's;
+order. The selection it names is the layer's;
 its own state is the strip as it was laid out last (`_hint_laid_out`), so
 a full paint of the home -- every frame over a live wallpaper -- draws it
 with nothing made.
@@ -25,7 +25,7 @@ from home_grid import _VERB_HINT
 _in = _ui.rect_in   # one hit-test (ui.rect_in)
 
 # The strip's words and keys: the star's, the verbs' letters, the strips'
-# keys a modal or the tab row names, the strip's lead.
+# keys a modal or the bar names, the strip's lead.
 _UNFAVOURITE = "Remove favourite"   # the star's words on a card that wears it
 _VERB_KEY = {"c": "change", "/": "search", "n": "new", "y": "copy", "x": "delete",
              "p": "window"}
@@ -37,9 +37,6 @@ _HINT_LEAD = 8       # the handheld's margin ui.hints leads with, at the font
                      # scale (MOY_UI_HINT_LEAD)
 _HINT_LEAD_DESK = 8  # the desk's
 _MENU_KEYS = ("back", "Close")   # the strip under the system menu
-# The strip while the keys are on the tab row: left and right move the focus
-# along it, confirm opens the tab it is on, back comes off the row.
-_TAB_ROW_KEYS = ("change", "Move", "confirm", "Open", "back", "Back")
 _CONFIRM_KEYS = ("confirm", "Choose", "back", "Cancel")   # under the delete confirm
 
 
@@ -177,7 +174,7 @@ class HomeHints:
     # What the strip was laid out from (`_hint_reads`), and how:
     # (desk, the verbs' band, their keycaps' line or None, the search's
     # place, the tab keys' band or None, their line).
-    _HINT_READS = 18
+    _HINT_READS = 17
     _hint_k = None
     _hint_v = None
     _hint_laid = None
@@ -209,11 +206,10 @@ class HomeHints:
         v[10] = ws.system.gen()
         v[11] = _ui_draw.hint_kind()
         v[12] = self._button_focus
-        v[13] = self._tab_keys
-        v[14] = modal_keys(ws)
-        v[15] = getattr(ws, "search_query", "")
-        v[16] = getattr(ws, "search_typing", False)
-        v[17] = getattr(ws, "can_manage", True)
+        v[13] = modal_keys(ws)
+        v[14] = getattr(ws, "search_query", "")
+        v[15] = getattr(ws, "search_typing", False)
+        v[16] = getattr(ws, "can_manage", True)
         i = 0
         while i < n and (v[i] is k[i] or v[i] == k[i]):
             i += 1
@@ -229,8 +225,6 @@ class HomeHints:
     def _hint_lay(self, cv, th):
         desk = self.grid.desk()
         keys = modal_keys(self.ws)
-        if keys is None and self._tab_keys:
-            keys = _TAB_ROW_KEYS
         if keys is not None:
             # the system menu's card or the delete confirm is up over the
             # home: the keys it takes, never the home's verbs
@@ -306,9 +300,6 @@ class HomeHints:
         ch = chr(k).lower()
         if ch in ("q", "e"):
             self.ws.home.step_home_tab(-1 if ch == "q" else 1, self.grid)
-            if self._tab_keys:
-                self._tab_at = self.grid.tab
-                self._zone_bump += 1
             return True
         if ch == _FAVOURITE_KEY:
             return self.toggle_favourite()

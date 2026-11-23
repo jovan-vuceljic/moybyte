@@ -18,7 +18,8 @@ card's menu lists (`card_verbs`). A mixin over `LauncherHomeLayer`, after
 `HomeHints` among its bases: the hero and the details are drawn on the desk
 home's painted frames, never on a band frame. Up from the shelf hands the
 pane's page the keys (`_button_focus`): its buttons take them, and the page's
-edge hands them on, up to the tabs and down to the shelf.
+edge hands them on, up to the bar (the shell's, as any page's edge) and down
+to the shelf.
 """
 
 import ui as _ui
@@ -130,14 +131,12 @@ class HomeDetails:
             self._zone_bump = getattr(self, "_zone_bump", 0) + 1
         self._btn = None if k is None else True
         if k is not None:
-            self._tab_keys = False
             self._details_page()
             self._dhost.focus(_BUTTON_IDS[k])
         self._dgen += 1
         g = self._grid_or_none()
         if g is not None:
-            g.tab_focus = (k is not None or bool(getattr(self, "_tab_keys", False))
-                           or getattr(self, "_on_bar", False))
+            g.tab_focus = k is not None or getattr(self, "_on_bar", False)
         self.ws.mark_dirty()
 
     def _pane_keys(self, i):
@@ -183,9 +182,7 @@ class HomeDetails:
         h = self._dptr
         if h is None:
             return False
-        if click:
-            self._tab_focus = False
-        elif down:
+        if not click and down:
             return True                      # (the pages are no drag's: it moves nothing)
         h.point(px, py, click, down)
         if not down:
@@ -197,16 +194,15 @@ class HomeDetails:
     def details_owed(self):
         """At a frame's start, before its parts are keyed: the pane's page
         owes this frame (a press it showed settles), so what it shows moves
-        (`_dgen`); a step past its buttons hands the keys on, up to the tabs
-        and down to the shelf."""
+        (`_dgen`); a step past its buttons takes the keys off them: up the
+        page's edge takes them on to the bar (the router's), down to the
+        shelf."""
         if self._dlag:
             self._dlag = False
             self._dgen += 1
         e = self._dedge
         if e:
             self._dedge = 0
-            if e & _EDGE_UP:
-                self._tab_focus = True
             self._button_focus = None
 
     def hero_press(self):
@@ -268,8 +264,6 @@ class HomeDetails:
         pg.paint(0.0, cv, th, rect, True)
         e = pg.edge() if on else 0
         if e & (_EDGE_UP | _EDGE_DOWN):
-            if e & _EDGE_UP:
-                _ui_draw.edge_take()         # (the tab row's, not the shell's bar's)
             self._dedge = e                  # (handed on at the next frame's start)
             ws.request_frame()
 

@@ -338,7 +338,7 @@ def _bar_focus(name):
         items = ws.bar_layer.focus_items("home")
         names = [i[2] for i in items]
         k = names.index(name) if name in names else 0
-        ws.bar_layer.focus_enter("home", "row", k=k)
+        ws.bar_layer.focus_enter("home", k=k)
     return setup
 
 

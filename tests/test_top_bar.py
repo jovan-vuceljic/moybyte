@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 import canvas_probe as probe  # noqa: E402  (pixel-width-agnostic "it drew" probes)
 from ws_helpers import build_ws as _build_ws, use_theme  # noqa: E402
+from ws_helpers import hint_rects
 
 
 def _ws(tmp_path, **kw):
@@ -179,7 +180,7 @@ def test_launcher_bar_menu_opens_settings(tmp_path):
 # through the bar.
 
 def _make_chip(ws, verb):
-    return _center(ws.launcher_layer._zone_action_rects(ws.layout.zone_left)[verb])
+    return _center(hint_rects(ws.launcher_layer)[verb])
 
 
 def test_make_tab_copy_and_delete_through_the_bar(tmp_path):
@@ -1020,7 +1021,7 @@ def test_draw_zone_never_invoked_while_player_is_top_of_stack(tmp_path):
     ws = _ws(tmp_path)
     drv = host_app.ConsoleDriver(ws)
     calls = []
-    for owner in (ws.launcher_layer, ws.settings_layer, ws.editor_app.bar_zone):
+    for owner in (ws.launcher_layer.bar_zone, ws.settings_layer, ws.editor_app.bar_zone):
         orig = owner.draw_zone
 
         def spy(cv, rect, _orig=orig, _owner=owner):

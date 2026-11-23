@@ -108,7 +108,7 @@ def test_the_handheld_cluster_is_one_stop_that_opens_the_control_center(tmp_path
     assert "wifi" not in names and "battery" not in names and "status" not in names
     drv = make_drv(ws)
     k = names.index("cluster")
-    assert ws.bar_layer.focus_enter("home", "row", k=k)
+    assert ws.bar_layer.focus_enter("home", k=k)
     drv.press("a")
     drv.frame(1 / 30)
     assert ws.sysmenu.open and ws.sysmenu.widget == "battery"

@@ -261,7 +261,6 @@ class Home:
             g.button_sets = PROJECTS_BUTTON_SETS   # Make's Play, its pane's rows
         else:
             self.set_home_tab("make", g)
-        ws.projects_layer._tab_focus = False
         ws.wm.activate("projects")
 
     def new_cart_and_edit(self, grid=None):

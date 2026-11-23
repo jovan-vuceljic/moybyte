@@ -16,6 +16,7 @@ from runtime import host_app, ui_draw
 from runtime import home_grid
 from runtime.cover_cache import BASE, HALF
 from ws_helpers import build_ws_with_shelf, shelf
+from test_home_tab_row import focused_tab, tab_rects
 
 
 @pytest.fixture(autouse=True)
@@ -243,14 +244,13 @@ def test_focus_is_flat_and_the_focused_title_bold(tmp_path, monkeypatch):
 @pytest.mark.parametrize("arrangement", ("grid", "icons"))
 def test_the_tabs_are_the_bars_one_row(tmp_path, arrangement):
     ws, drv = _home(tmp_path, arrangement)
-    ll = ws.launcher_layer
-    assert ll.tabs_in_bar(), "the tabs sit in the bar's zone"
+    assert tab_rects(ws.launcher_layer), "the tabs sit in the bar's zone"
     _press(drv, "up")                                       # the top row: the tabs
-    assert ll.focused_tab() == "games"
+    assert focused_tab(ws) == "games"
     _press(drv, "right")
-    assert ll.focused_tab() == "mine" and ws.launcher.tab == "games"
+    assert focused_tab(ws) == "mine" and ws.launcher.tab == "games"
     _press(drv, "run")
-    assert ws.launcher.tab == "mine" and not ll._tab_focus
+    assert ws.launcher.tab == "mine" and ws.bar_layer.focus is None
 
 
 @pytest.mark.parametrize("size, tile, cols", ((None, 40, 5), ((1024, 600), 64, 10)))
