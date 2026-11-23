@@ -396,15 +396,15 @@ def test_row_pad_right_frees_a_narrow_rows_value_column():
     """The achievements badge: one number did both insets, so a deep LEFT pad
     inside a narrow rect truncated the text to nothing."""
     both = SystemCanvas(120, 30)
-    ui_draw.row(both, TH, (0, 0, 60, 16), "NAME", pad=24, value="9")
+    ui_draw.row(both, TH, (0, 0, 76, 16), "NAME", pad=24, value="9")
     split = SystemCanvas(120, 30)
-    ui_draw.row(split, TH, (0, 0, 60, 16), "NAME", pad=24, pad_right=2, value="9")
+    ui_draw.row(split, TH, (0, 0, 76, 16), "NAME", pad=24, pad_right=2, value="9")
     assert bytes(both._buf) != bytes(split._buf)
     ink = ui_draw.state_colors(TH, "row", ui_draw.REST)[1]
-    painted = sum(1 for x in range(60) for y in range(16)
+    painted = sum(1 for x in range(76) for y in range(16)
                   if split.pix(x, y) == ink)
     assert painted > 0
-    assert sum(1 for x in range(60) for y in range(16)
+    assert sum(1 for x in range(76) for y in range(16)
                if both.pix(x, y) == ink) < painted
 
 

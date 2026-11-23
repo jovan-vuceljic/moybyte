@@ -494,6 +494,10 @@ LOG_BACK_BAND = ("the old System log filled its page by hand (`ui.at`) and drew 
 WIFI_OWN_HINT = ("the old Wi-Fi panel's band said Connect (Join in the popover) whatever was focused; "
                  "the port's names what the focused row does: Scan again, Forget")
 
+WIFI_PROMPT_ABOVE_BAND = ("the password prompt stood centred on the whole surface, its foot over the hints "
+                          "band on the T-Deck; a dialog now centres in the room above the band "
+                          "(moy_ui_api_table.c's dlg_card)")
+
 WIFI_DIALOG_BAND = ("under the password dialog the old popover's band still named the list's keys "
                     "(Join, Close); the port's names the dialog's (Connect, Cancel), as Settings' "
                     "page always did")
@@ -574,10 +578,10 @@ RUNS = (
     ("settings_wifi-tdeck", "settings_wifi", "tdeck_320x240_fs1_dark",
      ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abd", "enter", "f:2", "k:a", "back", "k:a",
       "t:abc", "enter", "f:2", "k:down", "k:a", "f:2", "k:down", "k:a", "f:2", "back"],
-     dict.fromkeys(range(15, 21), WIFI_OWN_HINT)),
+     {**dict.fromkeys((5, 6, 9, 11, 12), WIFI_PROMPT_ABOVE_BAND), **dict.fromkeys(range(15, 21), WIFI_OWN_HINT)}),
     ("settings_wifi-desk", "settings_wifi", "p4_1024x600_fs2_windowed",
      ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abc", "enter", "f:2", "k:down", "k:down",
-      "k:a", "f:2", "back"]),
+      "k:a", "f:2", "back"], dict.fromkeys((5, 6), WIFI_PROMPT_ABOVE_BAND)),
     ("settings_wifi_none-big", "settings_wifi_none", "big_800x480_fs3_dark", ["k:down", "k:a", "f:2"],
      dict.fromkeys(range(4), WIFI_OWN_HINT)),
     # the bar's Wi-Fi popover: an open network joined, a locked one's

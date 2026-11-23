@@ -1165,7 +1165,13 @@ def blit_glyph(cv, kind, rect, c, scale=None):
 def label(cv, rect, text, ink, align=0):
     x, y, w, h = rect
     adv = 8 * _fs(cv)
-    b = fit_bytes(str(text).encode('utf-8'), max(0, w // adv)) if text else b''
+    t = str(text).encode('utf-8') if text else b''
+    b = fit_bytes(t, max(0, w // adv))
+    # Edited with the toolkit's cut (moy_ui_cut_text): petme128 has no U+2026,
+    # so a text wider than its box is cut with "..." after it, and none of it
+    # shows where not even the dots fit.
+    if len(b) < len(t):
+        b = fit_bytes(t, (w - 3 * adv) // adv).rstrip(b' ') + b'...' if w >= 3 * adv else b''
     tw = len(b) * adv
     if align == ALIGN_CENTER:
         x += (w - tw) // 2

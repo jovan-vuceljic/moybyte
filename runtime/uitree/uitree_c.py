@@ -1153,6 +1153,24 @@ class CEngine(Engine):
             out[got[1]] = _KIND_NAMES[got[0]]
             i += 1
 
+    def over_stops(self):
+        """The ids of the last frame's stops that lie in a dialog or a
+        popover, over the page: the engine's."""
+        out, i = set(), 0
+        if not self._visiting():
+            return out
+        while True:
+            got = self._x.stop(i)
+            if got is None:
+                return out
+            if self._x.stop_over(i):
+                out.add(got[1])
+            i += 1
+
+    def band_rect(self):
+        """(x, y, w, h) of the hints band the last frame drew, or None: the engine's."""
+        return self._x.band() if self._visiting() else None
+
     def gens(self):
         """The gens the page's regions drew under (the page's, then each
         cards list's, scroll region's and split group's), or None where the page carries none: the engine's."""
@@ -1243,6 +1261,21 @@ class CEngine(Engine):
         if damage and (took or self.q) or self.q:
             self._damage.all()
         return True
+
+    def fits(self):
+        """The texts the last frame drew, as the toolkit measured and fitted
+        them (`uit_fits`, armed by `_x.fits_on`): one (id, kind, how, x, y,
+        w, room, text) a text, `id` the node's ("" the page's own), `how`
+        moy_ui.h's MOY_UI_FIT_* (0 whole, 1 cut with an ellipsis, 2 cut bare)
+        and `room` -1 where the toolkit fitted it to none."""
+        if not self._visiting():
+            return []
+        out = []
+        for r in self._x.fits().split("\x1e")[:-1]:
+            f = r.split("\x1f", 7)
+            out.append((f[0], _KIND_NAMES[int(f[1])] if f[1] != "0" else "page", int(f[2]), int(f[3]),
+                        int(f[4]), int(f[5]), int(f[6]), f[7]))
+        return out
 
     def dump(self):
         """The tree as the engine holds it (the dump's grammar, uitree.py's)."""

@@ -58,11 +58,11 @@
     "usb_on_2": "88f3906567ef67c94c30f54670c74987366451a30269dfe0bb6a0d7868f0a5f0",
     "usb_on_3": "1bccf16596a0cedc9bcab1a3c97ba514a62d0467d30cf60b65817f990a18ba0c",
     "usb_refused": "7f5e01e83604a09b6bc2e975fcabe77aed998a05061277d1a1df1c720ffa8d95",
-    "wifi_list_0": "96b05a08635202d50fdfdc9e64f03f6d7ef1f604c6b971ce11361ed3f6f336a9",
+    "wifi_list_0": "7dea59ae7492604a46df561e8ac5e1ee8088ae1753f744a737952fcec2e39a76",
     "wifi_list_1": "c7f41ac93db057b14370b0aeb233e7a1d0252adeae99c5d7dd7334dc11a3fedb",
     "wifi_list_2": "8827ce1f534fa0f257ea05abb1d5f1adb03571fb2fa292097212084128bfbe72",
     "wifi_offline": "cb8a04754477bd5bb7a69beaa3e4b3c5766019463e5bb20996465f6052f15731",
-    "wifi_password": "e9dd3b76cd90e4d7cd8f396ca7749780184d042ee85cdf329f9d7751448a3c86"
+    "wifi_password": "e3cdcb60ee9ee6121548f35596a1ad20b6869c85a65e9459660e382efc003c76"
   },
   "guition_480x320_fs1_dark": {
     "about": "96703e9c6e925dc6293b97c4acf59505bf919966150dc9713581713f0b3580ff",
@@ -127,7 +127,7 @@
     "wifi_list_1": "2837adc199a1f145db832f3f1301c1c3a9d55c489a367e3999d0393738940b71",
     "wifi_list_2": "156134a7b9b509ca5ecfd1440a621326e02fd229707cff128a5a3d3f34f32a8e",
     "wifi_offline": "1dcfe4536e0544b7a4693362cc3620ab0ea36e5521ef117e934a7996cbb6b034",
-    "wifi_password": "6896a540ce839fc89211af9a7dd10e252f566dcf03959b6692fd3e7b9729f344"
+    "wifi_password": "2a71f3b987168321c4935e802d763979f3a9373faea9930a8a98d6dedf3630e6"
   },
   "guition_p4_1280x800_windowed": {
     "about": "1744ee066f640cc228ec97ce8c7a21f90a097fc5df9b2803ce8979f4072b465a",
@@ -192,7 +192,7 @@
     "wifi_list_1": "dded9517b24512d70d4923b8b556b3512e1292660f779a7160e60e63e1d2e92e",
     "wifi_list_2": "b92ea7d8cf9ef1858289ecb006f5c9b91110f768ae37e73b4ad602b5a471d569",
     "wifi_offline": "4a74205aaac0e975caf4d8bc467fee51a3cd083822eb250a764d3771ab028bd5",
-    "wifi_password": "023737a5788bff3c5980f007ae592eb0063bd775a2495510be705f9c86bfecf1"
+    "wifi_password": "a25d847f2b3c4205920eec6d0a8a7739077df39d43267a72b29fb3dafdc7a99e"
   },
   "guition_tapfloor_dark": {
     "about": "5c1f9b88fc7e799e6d4be03a2113b70a8e3edc832613562fbdc955ab123508fe",
@@ -257,7 +257,7 @@
     "wifi_list_1": "5be18a6f977084a51b768873ee46cec860d50980d9a815c5a2c33779e5deb0e4",
     "wifi_list_2": "a1a66b5b1ea7ec703b1220e0786ab831997ca0311694cd605f1d3a49b41ade42",
     "wifi_offline": "3b12b0a71cfdbdb02ebf4ae96d13399521c40d1aad977078858c2bb8fdd7d646",
-    "wifi_password": "84eaac953c6cdb01224167d080d27ef806ae7547c665b65337abd63bb65603e7"
+    "wifi_password": "d0113e57fa5ec2bb795fb92ebfa98d39556a90bc7616f3a36a679bafdfadd1d1"
   },
   "p4_1024x600_cs2_fs1_blocks": {
     "about": "dad3438b014ee1849d74b682fb15c91733983499543ce300c704bb8a009cf89d",
@@ -322,7 +322,7 @@
     "wifi_list_1": "cce3a8a00989ec405ed94f8fa6dac3a0a198cfca156a1a896003ad1ff6f0fe65",
     "wifi_list_2": "5499739f06348a9bd880231d31b454e86be3d3bf41e8f3462a0d1098423d0d5a",
     "wifi_offline": "e172adc3d873ef84f10c48fbfc1111f2797825269c8ae1bd09924ceac6d0bcce",
-    "wifi_password": "d375e64fd3e5c95ca808b1ba8fbaf89124382bbb271be56bc013969bfc06d17f"
+    "wifi_password": "a45d40f128461bf8dd90c3cc814019b10aa56f00ffdd9dab769fc8603b3cdfcb"
   },
   "p4_1024x600_cs2_fs1_console": {
     "about": "77e4bc813ddc52e151671f92bf2b7860efe31fe954a1646e1df7ada805a314c3",
@@ -387,7 +387,7 @@
     "wifi_list_1": "ee6854ae97f40e0f1de126b1507d0eff0502a3c4ab606fabb3ed7ee39a0bf6d8",
     "wifi_list_2": "beb1dc36bdb058fbbcfa83c2f1ed5369ae03e1b4d8898bb36cd690f398782afc",
     "wifi_offline": "e37df4554c3dfce1a3a1ecd95c5f3df600690bdc50ef44fc3dbf52226de984ed",
-    "wifi_password": "4da3990a726a3e97790debf16fec06f9a39fc8cd06ec40fa0a25f63fc16e6c58"
+    "wifi_password": "d694cf80ff1bfbbec33213b60fe2f6c1d6f27f4a3a8fa481336fdf1a5d213077"
   },
   "p4_1024x600_cs2_fs1_contrast_light": {
     "about": "dad3438b014ee1849d74b682fb15c91733983499543ce300c704bb8a009cf89d",
@@ -452,7 +452,7 @@
     "wifi_list_1": "cce3a8a00989ec405ed94f8fa6dac3a0a198cfca156a1a896003ad1ff6f0fe65",
     "wifi_list_2": "5499739f06348a9bd880231d31b454e86be3d3bf41e8f3462a0d1098423d0d5a",
     "wifi_offline": "e172adc3d873ef84f10c48fbfc1111f2797825269c8ae1bd09924ceac6d0bcce",
-    "wifi_password": "d375e64fd3e5c95ca808b1ba8fbaf89124382bbb271be56bc013969bfc06d17f"
+    "wifi_password": "a45d40f128461bf8dd90c3cc814019b10aa56f00ffdd9dab769fc8603b3cdfcb"
   },
   "p4_1024x600_cs2_fs1_gnomebar": {
     "about": "77e4bc813ddc52e151671f92bf2b7860efe31fe954a1646e1df7ada805a314c3",
@@ -518,7 +518,7 @@
     "wifi_list_1": "7a16f9867edd87cbe5d529675b50f56f4bec8c78980d2eed863300888ed7a121",
     "wifi_list_2": "195ef35d17431be47a7a68ffe0d77d45429aeb7946ca16b0e631eb249ce355cd",
     "wifi_offline": "1a46eff3fa95fc4e1342d490120185c55f7bdade8c2c9436e1ce4aa260844244",
-    "wifi_password": "54d9f76cff4c0e5ee9cba38cada960d1568bd4e51e8a72b0f4d027f63807ce7a"
+    "wifi_password": "7827f59a1574560e00f3ebe3647c4fc2d25a66a9919a01a499ce9a17121dd20d"
   },
   "p4_1024x600_cs2_fs1_moy_day": {
     "about": "dad3438b014ee1849d74b682fb15c91733983499543ce300c704bb8a009cf89d",
@@ -583,7 +583,7 @@
     "wifi_list_1": "cce3a8a00989ec405ed94f8fa6dac3a0a198cfca156a1a896003ad1ff6f0fe65",
     "wifi_list_2": "5499739f06348a9bd880231d31b454e86be3d3bf41e8f3462a0d1098423d0d5a",
     "wifi_offline": "e172adc3d873ef84f10c48fbfc1111f2797825269c8ae1bd09924ceac6d0bcce",
-    "wifi_password": "d375e64fd3e5c95ca808b1ba8fbaf89124382bbb271be56bc013969bfc06d17f"
+    "wifi_password": "a45d40f128461bf8dd90c3cc814019b10aa56f00ffdd9dab769fc8603b3cdfcb"
   },
   "p4_1024x600_cs2_fs1_moy_night": {
     "about": "77e4bc813ddc52e151671f92bf2b7860efe31fe954a1646e1df7ada805a314c3",
@@ -648,7 +648,7 @@
     "wifi_list_1": "7a16f9867edd87cbe5d529675b50f56f4bec8c78980d2eed863300888ed7a121",
     "wifi_list_2": "195ef35d17431be47a7a68ffe0d77d45429aeb7946ca16b0e631eb249ce355cd",
     "wifi_offline": "1a46eff3fa95fc4e1342d490120185c55f7bdade8c2c9436e1ce4aa260844244",
-    "wifi_password": "54d9f76cff4c0e5ee9cba38cada960d1568bd4e51e8a72b0f4d027f63807ce7a"
+    "wifi_password": "7827f59a1574560e00f3ebe3647c4fc2d25a66a9919a01a499ce9a17121dd20d"
   },
   "p4_1024x600_cs2_fs1_twobars": {
     "about": "b4e8ec8b234c6daf6700df8f29d37487f1cd49186b4668aeecc50c4edfefe843",
@@ -714,7 +714,7 @@
     "wifi_list_1": "7a16f9867edd87cbe5d529675b50f56f4bec8c78980d2eed863300888ed7a121",
     "wifi_list_2": "195ef35d17431be47a7a68ffe0d77d45429aeb7946ca16b0e631eb249ce355cd",
     "wifi_offline": "1a46eff3fa95fc4e1342d490120185c55f7bdade8c2c9436e1ce4aa260844244",
-    "wifi_password": "54d9f76cff4c0e5ee9cba38cada960d1568bd4e51e8a72b0f4d027f63807ce7a"
+    "wifi_password": "7827f59a1574560e00f3ebe3647c4fc2d25a66a9919a01a499ce9a17121dd20d"
   },
   "p4_1024x600_cs2_fs1_win95bar": {
     "about": "bede6ff958aef37a3f0058c9bf76bbde96cc0f5467032a44b7bd3bd2a7522152",
@@ -780,7 +780,7 @@
     "wifi_list_1": "7a16f9867edd87cbe5d529675b50f56f4bec8c78980d2eed863300888ed7a121",
     "wifi_list_2": "195ef35d17431be47a7a68ffe0d77d45429aeb7946ca16b0e631eb249ce355cd",
     "wifi_offline": "1a46eff3fa95fc4e1342d490120185c55f7bdade8c2c9436e1ce4aa260844244",
-    "wifi_password": "54d9f76cff4c0e5ee9cba38cada960d1568bd4e51e8a72b0f4d027f63807ce7a"
+    "wifi_password": "7827f59a1574560e00f3ebe3647c4fc2d25a66a9919a01a499ce9a17121dd20d"
   },
   "p4_1024x600_cs2_fs1_windowed": {
     "about": "77e4bc813ddc52e151671f92bf2b7860efe31fe954a1646e1df7ada805a314c3",
@@ -845,7 +845,7 @@
     "wifi_list_1": "7a16f9867edd87cbe5d529675b50f56f4bec8c78980d2eed863300888ed7a121",
     "wifi_list_2": "195ef35d17431be47a7a68ffe0d77d45429aeb7946ca16b0e631eb249ce355cd",
     "wifi_offline": "1a46eff3fa95fc4e1342d490120185c55f7bdade8c2c9436e1ce4aa260844244",
-    "wifi_password": "54d9f76cff4c0e5ee9cba38cada960d1568bd4e51e8a72b0f4d027f63807ce7a"
+    "wifi_password": "7827f59a1574560e00f3ebe3647c4fc2d25a66a9919a01a499ce9a17121dd20d"
   },
   "p4_1024x600_fs2_windowed": {
     "about": "318dd39d0cde00587e45613247994503d11363faaa08697e8981baadceb3d0e7",
@@ -910,7 +910,7 @@
     "wifi_list_1": "a12a7f5a99aa157f67327706a4af71dd6c19005a47d6351028940fb49a0b0c83",
     "wifi_list_2": "8eb6701ecfc4da0a63df3180e02ae4c48caaadb4ec81733e9d8ceb530b3596a9",
     "wifi_offline": "a6c730a6b457d508d8c8b281b83cc07ec1c84ebef5aaf59c928a99f03a8b1131",
-    "wifi_password": "7b23faf20dfb848df0387b4d390e5574259abf932c22a339504d680c51d3ba74"
+    "wifi_password": "68e83fd9c052598ec447266b09d09eddc8c69a177417dd174a3402038727e302"
   },
   "p4_1024x600_fs2_windowed_light": {
     "about": "185f8b704c9ddc693a27ef82e4e1d93e241885f9426af039888c0be4e50b43bb",
@@ -975,7 +975,7 @@
     "wifi_list_1": "c1558b2d3f854dd558c3451d37e6256683bb6b22ba2725e9e0be117dbc5b74a2",
     "wifi_list_2": "f4fbdeff378302129a0ed0bb55514eadd427738567018586db0c322b02354442",
     "wifi_offline": "2ebe2c9747e08858366965b1b34bd8bb7e5e1173bd8ee7a0670f6947e31fd9b1",
-    "wifi_password": "dac196705289df6cebb8ec580ae9b8ce4fb719a8550367ac99d619917a28eb00"
+    "wifi_password": "1fd0f7048cbe4cd97b43d4453695e62f0f85c99631a86a6b42082ca3f718042d"
   },
   "tdeck_320x240_fs1_blocks": {
     "about": "7733f2cb239000aa9f1e81da1c3d72a50996eab4d9fd8eed5d4736d663dcac68",
@@ -1040,7 +1040,7 @@
     "wifi_list_1": "bd9414c8854b3ee505bbe4eb9b1319b286a3308c100d2f2415dfa2cbc8548b24",
     "wifi_list_2": "9fc1fe0781bbf5f93bc7c7b842807d4ed4a9e92b5be8b00de9b7528fa86c697b",
     "wifi_offline": "2257939d42509272dc073844789107252168463fe802443900a26bc5f72b4e02",
-    "wifi_password": "b377b189884e2dd00e419a6a12d82ace2538c058c5a02400834be772441da41a"
+    "wifi_password": "54b52e55363097c5f17cec44991fe1fac4b19cc3b033b67e2858c578bd73e892"
   },
   "tdeck_320x240_fs1_bottombar": {
     "about": "6042b34ecb9cc411f99d61b76ad15e87bf2cf0683859849709f56b09ecffce47",
@@ -1106,7 +1106,7 @@
     "wifi_list_1": "336f351a5bb2d75916ec1d5bc60b04117bf1569d6d0ca5ee7686be0df4d7eb3b",
     "wifi_list_2": "63c156ebca9d1608fae4ef89e79fce4e1c4025c8aeccc0c131686e40b4a18409",
     "wifi_offline": "a5da5c2e8e7354863a42ee26261c2cf1ad4fe63b0006575653ab1269574d50cf",
-    "wifi_password": "ba66fa9a54baca2a16b21559918ce2f436511b9bbb59a994bbb9be7c8a181b27"
+    "wifi_password": "cf28e3268c09c4af92d7c4d680e3cfbeba409b351bae5fbb00b4be08106525c1"
   },
   "tdeck_320x240_fs1_dark": {
     "about": "2028a8ee93be1f268af290c66ba1c1d1e1a3818167c304a357be0de118358d9c",
@@ -1171,7 +1171,7 @@
     "wifi_list_1": "354dc4be0fe27316f1f0e4ef701ee38eb2695a7dc868bd4c7aa402e2f1cb693e",
     "wifi_list_2": "9c4f5502753b072711f4a3209f3d0985af1c62de97d10831344ffc7000f96e23",
     "wifi_offline": "bd6b048feb920a71fab4b8c40e8810c26fac16da4de149df7ab9b01fe341e852",
-    "wifi_password": "e647375a3f9437196f59c4ddd93c5fba58b5101e410fbf2c685a5e528827a12b"
+    "wifi_password": "6cc3ff9a11e6dbf5cb260d813f9c4a6505ccdf678d7259b4b676363a3fcac111"
   },
   "tdeck_320x240_fs1_light": {
     "about": "7733f2cb239000aa9f1e81da1c3d72a50996eab4d9fd8eed5d4736d663dcac68",
@@ -1236,7 +1236,7 @@
     "wifi_list_1": "bd9414c8854b3ee505bbe4eb9b1319b286a3308c100d2f2415dfa2cbc8548b24",
     "wifi_list_2": "9fc1fe0781bbf5f93bc7c7b842807d4ed4a9e92b5be8b00de9b7528fa86c697b",
     "wifi_offline": "2257939d42509272dc073844789107252168463fe802443900a26bc5f72b4e02",
-    "wifi_password": "b377b189884e2dd00e419a6a12d82ace2538c058c5a02400834be772441da41a"
+    "wifi_password": "54b52e55363097c5f17cec44991fe1fac4b19cc3b033b67e2858c578bd73e892"
   },
   "tdeck_320x240_fs1_moy_day": {
     "about": "7733f2cb239000aa9f1e81da1c3d72a50996eab4d9fd8eed5d4736d663dcac68",
@@ -1301,7 +1301,7 @@
     "wifi_list_1": "bd9414c8854b3ee505bbe4eb9b1319b286a3308c100d2f2415dfa2cbc8548b24",
     "wifi_list_2": "9fc1fe0781bbf5f93bc7c7b842807d4ed4a9e92b5be8b00de9b7528fa86c697b",
     "wifi_offline": "2257939d42509272dc073844789107252168463fe802443900a26bc5f72b4e02",
-    "wifi_password": "b377b189884e2dd00e419a6a12d82ace2538c058c5a02400834be772441da41a"
+    "wifi_password": "54b52e55363097c5f17cec44991fe1fac4b19cc3b033b67e2858c578bd73e892"
   },
   "tdeck_320x240_fs1_moy_night": {
     "about": "2028a8ee93be1f268af290c66ba1c1d1e1a3818167c304a357be0de118358d9c",
@@ -1366,6 +1366,6 @@
     "wifi_list_1": "354dc4be0fe27316f1f0e4ef701ee38eb2695a7dc868bd4c7aa402e2f1cb693e",
     "wifi_list_2": "9c4f5502753b072711f4a3209f3d0985af1c62de97d10831344ffc7000f96e23",
     "wifi_offline": "bd6b048feb920a71fab4b8c40e8810c26fac16da4de149df7ab9b01fe341e852",
-    "wifi_password": "e647375a3f9437196f59c4ddd93c5fba58b5101e410fbf2c685a5e528827a12b"
+    "wifi_password": "6cc3ff9a11e6dbf5cb260d813f9c4a6505ccdf678d7259b4b676363a3fcac111"
   }
 }

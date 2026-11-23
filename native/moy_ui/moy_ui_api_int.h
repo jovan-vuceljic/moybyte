@@ -202,6 +202,9 @@ void mua_kept_table(moy_ui_ctx_t *c, kept_ring_t *r, const moy_ui_over_t *o, uin
 // moy_ui_api_table.c
 void mua_parts_close(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
 void mua_wash(const moy_ui_ctx_t *c, const moy_ui_sink_t *s);
+// A frame that closed a dialog owes the next, whose begin hands its focus back to the stop the
+// dialog took it from.
+void mua_dialog_gone(moy_ui_ctx_t *c);
 // A dim over the whole surface drawn (moy_ui_api_dims): noted where it
 // runs to the surface's foot, no hint band left lit under it.
 void mua_dims(const moy_ui_ctx_t *c);

@@ -128,8 +128,10 @@ _KEY_OPS = {
 # menu's last. With a selection, clear takes shift's place.
 _HINTS = ("flip", "Flip", "rotate", "Rotate", "shift", "Shift", "more", "More")
 _HINTS_SEL = ("flip", "Flip", "rotate", "Rotate", "clear", "Clear", "more", "More")
-# The desk Editor's Sprite pane: its sprite keys, the more menu, the next pane.
+# The desk Editor's Sprite pane: its sprite keys, the more menu, the next pane;
+# an input with no Q, W or F6 names only the more menu.
 _HINTS_PANE = ("Q W", "Sprite", "more", "More", "F6", "Next pane")
+_HINTS_PANE_PAD = ("more", "More")
 # While a popover is open its keys alone: what closes it.
 _HINTS_POP = ("back", "Close")
 # The pickers' sizes, PaintEditor.SIZES's order.
@@ -215,8 +217,12 @@ class PaintLayout(LayoutBase):
         self.spr_next = (gx + cell + nw, y, cell, cell)
         sx = gx + 2 * cell + nw + 12
         self.size_xy = (sx, y + (cell - line) // 2)
-        self.size_btn = (sx - 4, y, 56, cell)
-        self.pal_chip = (self.sw_x0, y, 2 * sw, cell)
+        tw = _ui_draw.print_width("24\u00d724", self.fs) + 8
+        self.size_btn = (sx - 4, y, tw, cell)
+        # the palette's chip under its columns, or past the size where that
+        # reaches them (a render scale's narrow pane)
+        cw_ = max(2 * sw, _ui_draw.print_width("64", self.fs) + 16)
+        self.pal_chip = (max(self.sw_x0, sx - 4 + tw + gap), y, cw_, cell)
         y += cell + 8
         fw = _ui_draw.print_width("Flags", self.fs) + 12
         fp = max(16, min(cell, (cw - 2 * pad - fw) // 8))
@@ -1157,7 +1163,7 @@ class PaintLayer(Layer):
         elif self._pop:
             items = _HINTS_POP
         elif pe.sel is None and lay.pane:
-            items = _HINTS_PANE
+            items = _HINTS_PANE if _ui_draw.hint_kind() == "keys" else _HINTS_PANE_PAD
         else:
             items = _HINTS_SEL if pe.sel is not None else _HINTS
         x, y, w, h = lay.hints

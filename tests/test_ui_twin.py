@@ -239,11 +239,11 @@ def _b_button(m, cv, th):
 
 
 def _b_button_icon(m, cv, th):
-    m.button(cv, th, (8, 14, 90, 22), "ICON", icon_img=IMG)
+    m.button(cv, th, (8, 14, 160, 22), "ICON", icon_img=IMG)
 
 
 def _b_button_glyph(m, cv, th):
-    m.button(cv, th, (8, 14, 90, 22), "GLYPH", glyph="run",
+    m.button(cv, th, (8, 14, 160, 22), "GLYPH", glyph="run",
              glyph_draw=_glyph_draw)
 
 

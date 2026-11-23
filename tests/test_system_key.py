@@ -452,9 +452,13 @@ def test_the_look_card_takes_taps_on_its_rows_and_closes_outside(tmp_path):
     _frames(drv)
     drv.system_key()
     _frames(drv, 3)
-    b = ws.menu_ui._host.box("Settings")
-    card = ws.menu_ui.look_card()
-    drv.click(b[0] + b[2] // 2, (b[1] + min(b[1] + b[3], card[1] + card[3])) // 2)   # what shows of it
+    host = ws.menu_ui._host
+    for _ in range(len(ws.sysmenu.items)):      # the keys bring Settings into the card's view
+        b = ui_draw._C.api_hit_box(host.ctx, "Settings")
+        if b is not None and b[3] > 0:
+            break
+        _key(drv, "down")
+    drv.click(b[0] + b[2] // 2, b[1] + b[3] // 2)    # where it shows
     _frames(drv, 2)
     assert not ws.sysmenu.open and ws.screen == "settings"
     drv.system_key()

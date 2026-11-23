@@ -57,6 +57,8 @@ SHARED = {
     ("moy_ui_api.c", "s_main"): "the main instance itself",
     ("moy_ui_api.c", "said"): "a host test's tap (moy_ui_api_said), set and cleared around its "
                               "frames; never set on a board",
+    ("moy_ui_draw.c", "fit"): "the fit tap (moy_ui_fit_tap): the engine's fit report a host test "
+                              "turns on, set and cleared around one frame; never set on a board",
     ("moy_ui.c", "s_ui"): BLOCK,
     ("moy_ui.c", "s_disabled"): BLOCK,
     ("moy_ui.c", "s_danger_ink"): BLOCK,
