@@ -14,7 +14,7 @@ local I = ui._in
 ui._in = nil
 local NEW = __moy_uitree
 __moy_uitree = nil
-local E, V, VER, DECL, ACTIONS, ACTION_ORDER = I.E, I.V, I.VER, I.DECL, I.ACTIONS, I.ACTION_ORDER
+local V, VER, DECL, ACTIONS, ACTION_ORDER = I.V, I.VER, I.DECL, I.ACTIONS, I.ACTION_ORDER
 local LABELS, KEYMAP, DERIVED, stack, R = I.LABELS, I.KEYMAP, I.DERIVED, I.stack, I.R
 local fail, q, trace, frozen, fire, fire_fn = I.fail, I.q, I.trace, I.frozen, I.fire, I.fire_fn
 local fire_placed, event = I.fire_placed, I.event
@@ -24,7 +24,7 @@ local reading = I.reading
 -- the engine's numbers (native/moy_uitree/moy_uitree.h)
 local BOOL, INT, NUM, TEXT, ENUM, ROWOF, MODEL = 1, 2, 3, 4, 5, 6, 7
 local EV_ACTION, EV_WRITE, EV_CELL = 1, 2, 3
-local F_BAND, F_TRACE, F_PAGES = 4, 16, 256
+local F_BAND, F_TRACE, F_PAGES, F_BACK = 4, 16, 256, 65536
 local A_HOOK, A_ROLE_CONFIRM, A_ROLE_BACK = 1, 2, 4
 local E_CHECK = -6
 local KINDS = { page = 1, group = 2, label = 3, info = 4, link = 5, button = 6, toggle = 7, rows = 8, dialog = 9,
@@ -456,8 +456,9 @@ local function made()
   return X
 end
 
--- Back on the bar: a shown dialog's first button, a shown popover's close=,
--- the page under this one, else the app's back role
+-- The host's back (the bar's chevron, Esc, B), which the frame before offered
+-- (F_BACK): a shown dialog's first button, a shown popover's close=, the page
+-- under this one, else the app's back role
 local function back()
   if X:dialog() >= 0 then
     local a, key = X:back_dialog()
@@ -472,10 +473,6 @@ local function back()
   if #stack > 1 then fire_fn(T.pop, "back", "the bar's back") return end
   local name = KEYMAP["role:back"]
   if name and X:can(AIDX[name], -1) then fire(name, "role back") end
-end
-
-local function wants_back()
-  return #stack > 1 or X:dialog() >= 0 or X:popover() ~= nil or KEYMAP["role:back"] ~= nil
 end
 
 -- A canvas with pointer= is handed down, drag and up in its own coordinates,
@@ -551,10 +548,9 @@ I.BACK.frame = function(p)
     end
     check(X:want_focus(pf.key), "ui.focus(" .. q(pf.key) .. ")", pf.at)
   end
-  -- the bar's title is the app's (its window's): the page's title is the page's to draw
-  if E.bar("", {}, {}, wants_back()) == -1 then back() end
+  if X:backed() then back() end
   FRAMES = FRAMES + 1
-  local r = X:frame(F_BAND | F_TRACE | math.min(255, #stack) * F_PAGES)
+  local r = X:frame(F_BAND | F_TRACE | F_BACK | math.min(255, #stack) * F_PAGES)
   if r < 0 then fail("X01", "frame", "the C engine's frame found no run open", "a run", "none") end
   drain()
   R.focused = X:focused()

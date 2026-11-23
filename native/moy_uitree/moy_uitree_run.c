@@ -29,3 +29,8 @@ int uit_run_frame(uit_t *e, void *target, int flags)
     run_frame_t a = {e, flags};
     return moy_ui_run_with(target, frame_on_run, &a);
 }
+
+int uit_run_backed(void)
+{
+    return moy_ui_run_way_taken();
+}

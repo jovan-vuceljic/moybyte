@@ -1256,6 +1256,7 @@ static void pass_clear(moy_ui_ctx_t *c) {
     c->tip_at.w = 0;
     c->tip_shown = 0;
     c->bar.seen = 0;
+    c->way_on = 0;
     c->page_title[0] = 0;
     c->kf.k = 0;                        // (a host's begin says what its canvas keeps)
     c->kf.n = c->kf.i = c->kf.copy = c->kf.took = c->kf.ci = 0;

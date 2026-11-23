@@ -1254,6 +1254,12 @@ int moy_ui_api_back(moy_ui_ctx_t *c, int take) {
     if (moy_ui_api_cancel(c, take)) {
         return 1;
     }
+    if (c->way_on) {
+        if (take) {
+            c->way_taken = 1;
+        }
+        return 1;
+    }
     if (c->bar.seen && c->bar.back) {
         if (take) {
             c->bar.act = MOY_UI_BAR_UP;
@@ -1261,6 +1267,16 @@ int moy_ui_api_back(moy_ui_ctx_t *c, int take) {
         return 1;
     }
     return 0;
+}
+
+void moy_ui_api_way(moy_ui_ctx_t *c, int on) {
+    c->way_on = (uint8_t)(on != 0);
+}
+
+int moy_ui_api_way_taken(moy_ui_ctx_t *c) {
+    int took = c->way_taken;
+    c->way_taken = 0;
+    return took;
 }
 
 int moy_ui_api_owes(const moy_ui_ctx_t *c) {

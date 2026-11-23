@@ -18,6 +18,8 @@
  *   e:node_action(node, a) e:build_end()
  *   e:open() e:close() e:want_focus(key)
  *   e:frame(flags)              -> uit_run_frame over the run's canvas
+ *   e:backed()                  -> whether the host took the way back the frame
+ *                               drawn last offered (uit_run_backed), once
  *   e:on_draw(fn)               a canvas's draw, fn(node, x, y, w, h, row), called
  *                               inside the frame; what it raises the frame raises
  *   e:next()                    -> kind, a, b, c, text; nil where none waits
@@ -353,6 +355,13 @@ static int l_uit_frame(lua_State *L)
     return 1;
 }
 
+static int l_uit_backed(lua_State *L)
+{
+    (void)moycore_uit(L);
+    lua_pushboolean(L, uit_run_backed());
+    return 1;
+}
+
 static int l_uit_next(lua_State *L)
 {
     uit_t *e = moycore_uit(L);
@@ -501,7 +510,7 @@ static void moycore_uitree_open(lua_State *L)
         {"build_begin", l_uit_build_begin}, {"node", l_uit_node}, {"prop", l_uit_prop},
         {"node_action", l_uit_node_action}, {"build_end", l_uit_build_end},
         {"open", l_uit_open}, {"close", l_uit_close}, {"want_focus", l_uit_want_focus},
-        {"frame", l_uit_frame}, {"on_draw", l_uit_on_draw}, {"next", l_uit_next}, {"trace_next", l_uit_trace_next},
+        {"frame", l_uit_frame}, {"backed", l_uit_backed}, {"on_draw", l_uit_on_draw}, {"next", l_uit_next}, {"trace_next", l_uit_trace_next},
         {"can", l_uit_can}, {"letter", l_uit_letter}, {"dialog", l_uit_dialog},
         {"unfocused", l_uit_unfocused}, {"back_dialog", l_uit_back_dialog},
         {"back_popover", l_uit_back_popover}, {"focused", l_uit_focused},

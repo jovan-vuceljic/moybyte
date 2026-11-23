@@ -7051,6 +7051,9 @@ ids:;
     e->still_ok = !owe;
     if (e->fits_on)
         moy_ui_fit_tap(NULL, NULL);
+    if (flags & UIT_F_BACK)             // the way back the host's back takes (uit_run_backed)
+        moy_ui_api_way(c, pages > 1 || uit_dialog(e) >= 0 || popover_of(e) >= 0 ||
+                              role_action(e, UIT_A_ROLE_BACK) >= 0);
     return (e->nevs - e->evat) | (owe ? 1 << 16 : 0);
 }
 

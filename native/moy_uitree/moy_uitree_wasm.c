@@ -657,8 +657,9 @@ static void more(app_t *a, const int32_t *snap) {
     }
 }
 
-// Back on the bar: a shown dialog's first button, a shown popover's close=,
-// the page under this one, else the app's back role.
+// The host's back (the bar's chevron, Esc, B), which the frame before offered
+// (UIT_F_BACK): a shown dialog's first button, a shown popover's close=, the
+// page under this one, else the app's back role.
 static void back(app_t *a) {
     char key[64], src[96];
     int act;
@@ -704,20 +705,14 @@ int32_t moy_uitree_wasm_frame(void *x, int32_t flags) {
         pointers(a, snap);
         keys(a, snap);
     }
-    // the bar's title is the app's (its window's): the page's title is the page's to draw
-    int32_t got = -1;
-    char pk[48];
-    int wants = a->depth > 1 || uit_dialog(a->e) >= 0 || uit_popover(a->e, pk, sizeof pk) > 0 ||
-                with_flag(a, UIT_A_ROLE_BACK) >= 0;
-    if (target != NULL && moy_ui_run_bar(target, moy_ui_span_of((const uint8_t *)"", 0), NULL, 0, wants ? MOY_UI_BAR_BACK : 0u,
-                                         &got) == 0 && got == MOY_UI_BAR_UP) {
+    if (target != NULL && uit_run_backed()) {
         back(a);
     }
     a->handler = -1;
     a->frames++;
     a->trapped = 0;
     int depth = a->depth < 1 ? 1 : a->depth > 255 ? 255 : a->depth;
-    int r = uit_run_frame(a->e, target, UIT_F_BAND | UIT_F_TRACE | depth << UIT_F_PAGES_SHIFT);
+    int r = uit_run_frame(a->e, target, UIT_F_BAND | UIT_F_TRACE | UIT_F_BACK | depth << UIT_F_PAGES_SHIFT);
     if (r < 0) {
         return refuse(a, r, "frame", "", "no compiled run is open");
     }
