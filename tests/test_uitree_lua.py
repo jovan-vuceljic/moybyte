@@ -269,6 +269,36 @@ def test_a_foot_that_shares_its_width_and_a_slider_icon_draw(tmp_path):
     assert shots["Shared"] != shots["Plain"] and shots["Iconed"] != shots["Plain"]
 
 
+def test_a_slider_in_a_narrow_row_keeps_its_label(tmp_path):
+    """A slider's row too narrow for its label, its value and its whole
+    track: the track gives way, so the label still draws (it drew nothing,
+    and the value stood past the row's start)."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    body = ('ui.app("%s", { icon = "calc" })\n'
+            'local s = ui.state { v = 130 }\n'
+            'ui.page("p", function()\n'
+            '  ui.split({ dir = "row", sizes = { 3, 2 } }, function()\n'
+            '    ui.label("one")\n'
+            '    ui.slider("v", { label = "%s", lo = 0, hi = 999 })\n'
+            '  end)\n'
+            'end)\n')
+    for name, label in (("Named", "Stars fall at"), ("Bare", "")):
+        _cart(carts, name, body % (name, label))
+    ws, drv, frame, open_cart = _console(carts)
+    shots = {}
+    for name in ("Named", "Bare"):
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        assert ws.run.player.cart_error is None, (name, ws.run.player.cart_error)
+        top = 3 * ws.sys_canvas.w * ws.layout.cy      # the page's, under the bar's title
+        shots[name] = bytes(drv.rgb888())[top:]
+        ws.spine.exit_to_caller()
+    assert shots["Named"] != shots["Bare"]
+
+
 def test_a_split_a_grid_and_a_panel_draw_on_the_c_engine(tmp_path):
     """The placing kinds only the C engine draws: a split's parts, a grid's
     cells and a panel each move the pixels."""

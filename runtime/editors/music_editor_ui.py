@@ -604,12 +604,24 @@ class SoundPane:
             n = me.step_count()
             page = me.step // PAGE
             vals = (False, rows, str(self.brush), editor_sound.WAVE_WORDS[self.brush],
-                    "Oct %d" % (self.low(me) // 12),
+                    self._oct_word(self.low(me) // 12),
                     "%d–%d" % (page * PAGE + 1, min(n, page * PAGE + PAGE)), n > PAGE,
                     self._roomy())
         if vals != self._shown:
             self._shown = vals
             self.run("sync", vals)
+
+    def _oct_word(self, n):
+        """The octave stepper's value: "Oct n", or the number alone where
+        its row (as the last frame laid it out) leaves the words no room
+        beside its chevrons."""
+        word = "Oct %d" % n
+        r = self.page.rect_of("oct_step") if self.page is not None else None
+        fs = self.ws.look.effective_font_scale()
+        # (the row's pads, 8 a side, and the chevrons' 12 at the scale)
+        if r is None or _ui_draw.text_width(word, fs, "ui") + 16 + 12 * fs <= r[2]:
+            return word
+        return str(n)
 
     def _roomy(self):
         """Whether the ops row holds both steppers past its ops."""

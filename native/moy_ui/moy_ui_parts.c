@@ -570,6 +570,21 @@ typedef struct {
     moy_ui_box_t track;
 } vgeo_t;
 
+// The width of integer v's digits (and its sign) in font f.
+static int num_w(const pf_t *f, int32_t v, int sc) {
+    char t[12];
+    int n = 0;
+    uint32_t u = v < 0 ? (uint32_t)(-(int64_t)v) : (uint32_t)v;
+    do {
+        t[n++] = (char)('0' + u % 10u);
+        u /= 10u;
+    } while (u);
+    if (v < 0) {
+        t[n++] = '-';
+    }
+    return tw(f, (const uint8_t *)t, (size_t)n, sc);
+}
+
 static void geo(const pd_t *d, moy_ui_box_t b, const moy_ui_vrow_t *r, int kind, vgeo_t *g) {
     g->right = b.x + b.w - pad_of(d, r);
     g->gap = pm(d, MOY_UI_M_VALUE_ROW_SEG, 1);
@@ -601,6 +616,24 @@ static void geo(const pd_t *d, moy_ui_box_t b, const moy_ui_vrow_t *r, int kind,
         }
     }
     int tw_ = pm(d, MOY_UI_M_VALUE_ROW_TRACK, 1);
+    if ((kind == MOY_UI_V_SLIDER && r->steps != 2) || kind == MOY_UI_V_PROGRESS) {
+        // a row too narrow for its label, its value and the whole track:
+        // the track gives way, to 24 units of the scale at least
+        pf_t fl = font_of(d, MOY_UI_FONT_UI), fv = font_of(d, MOY_UI_FONT_CAPTION);
+        int gap = pm(d, MOY_UI_M_VALUE_ROW_GAP, 1), sc = tscale(d->s), vw = 0, kw = 0;
+        int lx = b.x + pad_of(d, r) + (r->icon_slot >= 0 || r->icon_glyph >= 0 ? 16 * d->fs + gap : 0);
+        if (kind == MOY_UI_V_PROGRESS) {
+            vw = tw(&fv, (const uint8_t *)"100%", 4, sc) + gap;
+        } else if (!r->steps) {
+            int a = num_w(&fv, r->lo, sc), z = num_w(&fv, r->hi, sc);
+            kw = 7 * d->fs;
+            vw = (a > z ? a : z) + gap + kw / 2;
+        }
+        int room = g->right - lx - (r->label.n ? tw(&fl, r->label.p, r->label.n, sc) + gap : 0) - vw;
+        if (room < tw_) {
+            tw_ = room > 24 * d->fs ? room : 24 * d->fs;
+        }
+    }
     g->track = (moy_ui_box_t){(int16_t)(g->right - tw_), (int16_t)(b.y + b.h / 2 - d->fs),
                               (int16_t)tw_, (int16_t)(3 * d->fs)};
     if (kind == MOY_UI_V_SLIDER && r->steps == 2) {

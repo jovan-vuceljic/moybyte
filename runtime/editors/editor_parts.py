@@ -317,7 +317,18 @@ class PartHost(PageHost):
         note = ("Every script starts with one: they head the Blocks pane" if not items
                 else "This cart is code now: its blocks only read" if bu.blk_graduated else "")
         rh = self._row_h()
-        return (True, cat, 6 * rh + 12 * d._unit(), rh, 0 if note else len(items), note)
+        fold = self._cats_fold(self._rect[2] if self._rect is not None else 0)
+        return (True, cat, 6 * rh + 12 * d._unit(), fold, rh, 0 if note else len(items), note)
+
+    def _cats_fold(self, w):
+        """Whether the categories fold into a cycle of them on a page `w`
+        wide: where a name would not fit its half of two columns beside
+        its colour (`draw_cats`)."""
+        import editor_part
+        u = self.desk._unit()
+        fs = self.ws.look.effective_font_scale()
+        need = 20 * u + max(_V.text_w(label, fs) for _k, label in editor_part.CATS)
+        return bool(w) and 2 * need + 16 * u > w
 
     def _row_h(self):
         """A list's row: 28 desk units, taller where the text is (Large and

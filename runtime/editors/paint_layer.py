@@ -140,7 +140,10 @@ class PaintLayout(LayoutBase):
             cell = 36 if self.tall else 24
             self.pad, self.gap = 14, 8
             self.pitch = cell + 4
-            self.flags_h = cell + 4
+            # the flags' row: its discs' cell, and its word's line at the
+            # scale, which may reach into the rows' gap either side
+            self.flag_cell = cell
+            self.flags_h = max(cell + 4, _ui_draw.font("ui")[2] * fs - self.gap)
             self.preview_h = 34 + 4 if self.tall else 0
             hroom = ch - 2 * row - self.flags_h - self.preview_h - band
             wroom = (cw - 2 * self.pad - self.gap) * 4 // 5
@@ -149,7 +152,7 @@ class PaintLayout(LayoutBase):
             col = 300 if desk else 120 * fs       # the map's least width
             hroom = ch - 2 * row - band
             wroom = (cw - 2 * self.pad - 2 * self.gap - col) * 144 // 166
-            self.flags_h = self.preview_h = 0
+            self.flags_h = self.preview_h = self.flag_cell = 0
         span = max(48, 48 * (min(hroom, wroom) // 48))
         self.span = span
         # ...on either side, and over and under it as far as its room
@@ -980,7 +983,7 @@ class PaintLayer(Layer):
     def _flag_pitch(self, w):
         lay = self.layout
         fw = _ui_draw.print_width("Flags", lay.fs) + 12
-        return max(16, min(lay.flags_h - 4, (w - fw) // 8))
+        return max(16, min(lay.flag_cell, (w - fw) // 8))
 
     def draw_flags(self, cv, x, y, w, h):
         """The sprite's eight flags as toggles (Q-03): a disc in its colour
@@ -994,21 +997,22 @@ class PaintLayer(Layer):
         self._flags_w = w
         flags = ws.run.project.flags
         v = flags[pe.n] if flags is not None and pe.n < len(flags) else 0
-        cell = self.layout.flags_h - 4
+        cell = self.layout.flag_cell
+        row = self.layout.flags_h - 4
         fp = self._flag_pitch(w)
         focused = self._keys() and self.page is not None and self.page._focus_key() == "flags"
         for k in range(8):
             fx = x + k * fp
             d = max(8, min(fp, cell) - (14 if cell >= 36 else 8))
-            ox, oy = fx + (fp - d) // 2, y + (cell - d) // 2
+            ox, oy = fx + (fp - d) // 2, y + (row - d) // 2
             if v >> k & 1:
                 cv.rrect(ox, oy, d, d, d // 2, _FLAG_INKS[k])
             else:
                 cv.rrect(ox, oy, d, d, d // 2, None, th["ink_dim"])
             if focused and k == self._flag:
-                _ui_draw.focus(cv, th, (fx, y, fp, cell), "cell", ring=True)
+                _ui_draw.focus(cv, th, (fx, y + (row - cell) // 2, fp, cell), "cell", ring=True)
         line = _ui_draw.font("ui")[2] * self.layout.fs
-        cv.print("Flags", x + 8 * fp + 12, y + (cell - line) // 2, th["ink_dim"], 1)
+        cv.print("Flags", x + 8 * fp + 12, y + (row - line) // 2, th["ink_dim"], 1)
 
     def flag_tap(self, x):
         """A tap on the flags, in their coordinates: the flag under it flips."""

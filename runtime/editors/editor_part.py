@@ -34,8 +34,10 @@ s = ui.state(
                  "song", "maps", "log", init="actor"),
     picked=False, tag="", tags=ui.model(key="k", k=""), tag_at=ui.row_of("tags"), many=False,
     flip=False, place="", stamp="thing", call="", made="", roomy=True,
-    # the palette: the categories in two columns, the current one's blocks or why there are none
-    blocks=False, cat="", cats_h=168,
+    # the palette: the categories in two columns (where a name would not fit its half, a cycle
+    # of them), the current one's blocks or why there are none
+    blocks=False, cat="", cats_h=168, cats=ui.model(key="k", k="", label=""), cat_at=ui.row_of("cats"),
+    cats_fold=False,
     items=ui.model(key="k", k=""), item=ui.row_of("items"), note="",
     # the sounds (the Sound workspace's list, the Reference's) and the song
     row_h=28, bank=False, snds=ui.model(key="k", k="", on=False), snd=ui.row_of("snds"), song_line="", del_ok=False, playing=False, many_songs=False,
@@ -77,10 +79,14 @@ def _made_sync(vals):
 
 
 def _palette_sync(vals):
-    """A program opened, the current category, the categories' height,
-    a row's, the count of the category's blocks and the note standing in for them
-    ("" none)."""
-    s.blocks, s.cat, s.cats_h, s.row_h, items, s.note = vals
+    """A program opened, the current category, the categories' height
+    and whether they fold into a cycle, a row's, the count of the
+    category's blocks and the note standing in for them ("" none)."""
+    s.blocks, s.cat, s.cats_h, s.cats_fold, s.row_h, items, s.note = vals
+    if not s.cats:
+        s.cats = [dict(k=k, label=label) for k, label in CATS]
+    if s.cat_at != s.cat:
+        s.cat_at = s.cat
     s.items = [dict(k=str(n)) for n in range(items)]
 
 
@@ -123,7 +129,7 @@ def home():
     elif s.part == "song":
         ui.focus("slots")
     elif s.part == "palette":
-        ui.focus("cats")
+        ui.focus("cat_at" if s.cats_fold else "cats")
 
 
 def _act(verb, *args):
@@ -249,6 +255,7 @@ ui.action("back_i", "Back", lambda: _act("back"), icon="to_back")
 ui.action("remove", "Remove", lambda: _act("remove"))
 ui.action("remove_i", "Remove", lambda: _act("remove"), icon="trash")
 ui.action("insert", "Insert", lambda: _act("insert"))
+ui.action("cat_set", "Category", lambda: _act("cat", s.cat_at))
 ui.action("goto", "Go to", _err, takes="row")
 # the Song's line, left to right as it stands
 SONG_TOOLS = (("song_prev", "Previous song", "back", "song-"), ("song_next", "Next song", "forward", "song+"),
@@ -314,7 +321,9 @@ def _made():
 def _palette():
     ui.empty("No blocks", icon="blocks", lines=["This cart's blocks did not open"], shown="!blocks")
     ui.canvas("cats", _draw_cats, h="{cats_h}", keys=cats_keys, pointer="cats_press", mark=False,
-              shown="blocks", hint="Open")
+              shown="blocks && !cats_fold", hint="Open")
+    with ui.row("cats_row", pad=6, shown="blocks && cats_fold"):
+        ui.seg("", "cat_at", text="{.label}", look="cycle", on="cat_set")
     ui.rule(shown="blocks")
     with ui.row("note_row", pad=10, shown="blocks && note"):
         ui.label("{note}", tone="dim", wrap="word", lines=4)

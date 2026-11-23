@@ -1172,6 +1172,29 @@ def test_the_palettes_categories_pick_their_blocks(blocks_desk):
     assert Parts.palette_items(None, "events") == []
 
 
+def test_large_text_folds_the_palettes_categories_into_a_cycle(tmp_path):
+    """Where a category's name would not fit its half of the two columns
+    (Large text on a 1024 desk), the categories are one cycle of their
+    words, which a tap on its chevron steps, and no name is cut."""
+    ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=(1024, 600),
+                                    panel_diagonal_in=7.0, font_scale=2, windowed=True)
+    ws.home.open_desk()
+    ws.open_in_editor(next(c for c in ws.carts.all if c.get("title") == "Coin Quest"))
+    drv = host_app.ConsoleDriver(ws)
+    for _ in range(3):
+        drv.frame(DT)
+    _tap(drv, ord("2"), 1)
+    d = ws.editor_desk
+    part = d.part("palette")
+    for _ in range(3):
+        drv.frame(DT)
+    assert part.rect_of("cats") is None and part.rect_of("cat_at") is not None
+    was = d.part_state.get("block cat", "actors")
+    bx, by, bw, bh = part.rect_of("cat_at")
+    _click(drv, bx + bw - 6, by + bh // 2)       # its right chevron: the next category
+    assert d.part_state["block cat"] != was
+
+
 def test_the_palette_by_keys_alone(blocks_desk):
     """The arrows across the palette's two columns open the next category;
     down past them reaches its blocks, whose A puts one at the cursor."""
@@ -1952,7 +1975,7 @@ def test_a_pane_headers_name_is_never_cut_at_large_text(tmp_path, size, fs):
     drv = host_app.ConsoleDriver(ws)
     d = ws.editor_desk
     forms = set()
-    for key in ("code", "art", "world", "sound"):
+    for key in ("settings", "code", "art", "world", "sound"):
         d.switch(key)
         for _ in range(3):
             ws.mark_dirty()
