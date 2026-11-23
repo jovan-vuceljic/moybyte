@@ -76,6 +76,17 @@ class _Damage:
         self.ws.mark_dirty()
 
 
+class _Surface:
+    """What the page's host reads of the tab's surface: the console's
+    pointer, whether it is held (a finger's drag scrolls the steps)."""
+
+    def __init__(self, ws):
+        self.ws = ws
+
+    def pointer(self):
+        return self.ws.pointer
+
+
 class MusicLayout(LayoutBase):
     """The Music tab's geometry: the content rect, which the handheld page
     (`editor_music.music_page`) fills."""
@@ -98,7 +109,7 @@ class MusicEditorUI:
         self.musicedit = None         # MusicEditor while menu_view == "music"
         self.music_preview = None     # ("sfx", n) | ("song", track) | None (preview)
         self.page = None              # the handheld page's engine (editor_music.py), made at its first use
-        self._host = _ui_draw.AppHost("editor_music")
+        self._host = _ui_draw.AppHost("editor_music", _Surface(ws))
         self._shown = None            # what `_sync` wrote last
         self._rows = ([], None)       # (the rows, what they were made from)
         self._sound = None            # the desk's Sound pane, made at its first use

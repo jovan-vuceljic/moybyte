@@ -77,6 +77,37 @@ def test_the_music_pad_edits_the_step_under_the_cursor(hh):
     assert me.step == 0
 
 
+def test_a_finger_drag_scrolls_the_steps(hh):
+    """A press held and dragged up the steps scrolls them (the page's host
+    reads the console's pointer as held), and moves no cursor."""
+    ws, drv, mu, page = _music(hh)
+    me = mu.musicedit
+    while me.step_count() * 17 < 2 * page.rect_of("steps")[3]:
+        me.add_step()
+    me.step = 0
+    for _ in range(3):
+        ws.mark_dirty()
+        drv.frame(DT)
+    step = me.step
+    top = []
+    draw = mu.draw_row
+    mu.draw_row = lambda cv, i, x, y, w, h: (top.append(i), draw(cv, i, x, y, w, h))
+    x, y, w, h = page.rect_of("steps")
+    x, y = x + w // 2, y + h - 4
+    drv.touch(x, y)
+    drv.frame(DT)
+    for _ in range(12):
+        y -= 8
+        drv.touch_drag(x, y)
+        drv.frame(DT)
+    drv.touch_up()
+    top.clear()
+    ws.mark_dirty()
+    drv.frame(DT)
+    assert min(top) > 0, "the steps did not scroll under the finger"
+    assert me.step == step, "a drag moved the cursor"
+
+
 def test_the_music_tabs_chevrons_and_hear(hh):
     ws, drv, mu, page = _music(hh)
     me = mu.musicedit
