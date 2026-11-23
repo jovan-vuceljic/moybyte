@@ -302,7 +302,16 @@ between each two, under the row in `tone=` (a theme role or `#RRGGBB`, a
 template, empty for the theme's ink) over a black shadow; Enter or a tap
 on the centre card at rest fires its card's action, a tap on another card
 glides it to the centre, and `cur=` follows the card the row comes to rest
-on (a value the app writes there while the row rests moves it there);
+on (a value the app writes there while the row rests moves it there).
+On the desk class the same carousel is the desk home's shelf: one row of
+cards all `w=` a side (glass pixels), captioned over them with its
+`label=` (a template) and the count of its cards, apart by a dot; the
+arrows (the wheel's notches too) make the next card current in the frame
+they are pressed and the shelf glides to show it with two cards before
+it, a tap on a card makes it current and a tap on the current card at
+rest or Enter fires its action, the current card wearing the focus mark
+while the cards hold the keys and a current mark otherwise, and the
+cards scrolled past the shelf's margin are cut there;
 `look="shelf"` lays the cards in the rows its room holds, in columns that
 scroll across (cards of the clean side a carousel's neighbour takes, the
 desk's a whole cover, the columns spaced so the last on the glass stands

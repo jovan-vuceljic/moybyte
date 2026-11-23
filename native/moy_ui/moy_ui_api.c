@@ -1475,7 +1475,7 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
         int dir = (sx < 0 ? MOY_UI_B_LEFT : sx > 0 ? MOY_UI_B_RIGHT : 0)
                   | (sy < 0 ? MOY_UI_B_UP : sy > 0 ? MOY_UI_B_DOWN : 0);
         const moy_ui_keep_t *fck = f != NULL ? mua_keep_of(c, f->id) : NULL;
-        if (fck != NULL && fck->car == MOY_UI_LOOK_CAROUSEL) {
+        if (fck != NULL && (fck->car == MOY_UI_LOOK_CAROUSEL || fck->car == MOY_UI_LOOK_DESK)) {
             // a carousel's: the wheel's notches, across or down, step it as its arrows do
             sx += in[MOY_UI_IN_WHEEL_X] + in[MOY_UI_IN_WHEEL_Y];
             dir = (dir & ~(MOY_UI_B_LEFT | MOY_UI_B_RIGHT))

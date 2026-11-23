@@ -688,7 +688,7 @@ def test_a_card_without_a_cover_wears_its_generated_cover(tmp_path):
     w = h = 120
     cv = SystemCanvas(320, 240)
     cv.cls(th["desktop"])
-    lw._draw_home_card(cv, it, (20, 20, w, h), False, None)
+    lw._draw_picture(cv, it, (20, 20, w, h), False)
     px = indices_of(cv, strict=False)            # the card's corners anti-alias
     block, ink_i = ui_draw.initial_block("PIN")
     assert px[(20 + h // 2) * 320 + 20 + 2] == block              # the block

@@ -523,8 +523,9 @@ typedef struct {
 
 // The cards look the table drawn next is (`on` 0: none; MOY_UI_LOOK_CAROUSEL, moy_ui_api_carousel,
 // or MOY_UI_LOOK_SHELF or _ICONS, moy_ui_api_cells_grid): its geometry (moy_ui_api_carousel_geom's or
-// moy_ui_api_cells_geom's), its band, and the row its app holds current.
-enum { MOY_UI_LOOK_CAROUSEL = 1, MOY_UI_LOOK_SHELF, MOY_UI_LOOK_ICONS };
+// moy_ui_api_cells_geom's), its band, and the row its app holds current. MOY_UI_LOOK_DESK is
+// the carousel look on the desk class: its shelf (moy_ui_api_desk_shelf_geom's), drawn as cells.
+enum { MOY_UI_LOOK_CAROUSEL = 1, MOY_UI_LOOK_SHELF, MOY_UI_LOOK_ICONS, MOY_UI_LOOK_DESK };
 #define MOY_UI_CELLS_G 16
 typedef struct {
     int8_t on;
@@ -1324,6 +1325,39 @@ void moy_ui_api_cells_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_
 void moy_ui_api_cells_foot(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t g[MOY_UI_CELLS_G],
                            const int32_t b[4], const int32_t clip[4], int fade, moy_ui_span_t title,
                            moy_ui_span_t sub);
+// The carousel look on the desk class (the desk home): laid out in content rect `b` (x, y, w,
+// h, down to its hint strip) at font scale `fs`, `u` glass pixels a pixel, the hero at its top
+// left, the details pane beside it (or under it where the pane beside would be narrower than
+// 280 px), the shelf under them bleeding off the right edge, its caption over it. The hero is
+// the largest whole multiple of the cover's side a quarter of the width holds with the shelf
+// under it, else half the cover's side, and a shelf card is half the hero; the pane is as tall
+// as the hero, or as its type needs (the title at TS, a line each at MS, KS and VS, a button
+// BH tall and `brows` px of buttons' rows under the first) where that is more. A short band
+// drops the pane's facts, then its metadata (FACTS, META 0), and halves the hero down to an
+// eighth of the cover. The shelf's caption stands 42 px under the details and what height is
+// left goes under the shelf; with no `keys` (touch: no hint strip) the shelf keeps at most
+// its margin under it. out[MOY_UI_DESK_*]: the hero's box, the pane's (x, y, w, h), the
+// shelf's band (its caption, its cards, their lift and their shadows), a shelf card's side,
+// the shelf's top, its margin, the pane's type scales, the button height, the rows shown, the
+// focus mark's reach and the shelf's gap.
+enum { MOY_UI_DESK_HERO = 0, MOY_UI_DESK_PANE = 4, MOY_UI_DESK_BAND = 8, MOY_UI_DESK_SIDE = 12,
+       MOY_UI_DESK_SHELF_Y, MOY_UI_DESK_PAD, MOY_UI_DESK_TS, MOY_UI_DESK_MS, MOY_UI_DESK_KS,
+       MOY_UI_DESK_VS, MOY_UI_DESK_BH, MOY_UI_DESK_FACTS, MOY_UI_DESK_META, MOY_UI_DESK_RING,
+       MOY_UI_DESK_GAP, MOY_UI_DESK_G };
+void moy_ui_api_carousel_desk(int fs, int u, int keys, int brows, const int32_t b[4],
+                              int32_t out[MOY_UI_DESK_G]);
+// The desk carousel's shelf in its band `b` (moy_ui_api_carousel_desk's band), its cards
+// `side` px: one row of them its margin in, 20 px apart, under its caption (TITLE_DY the
+// caption's scale), as cells geometry (MOY_UI_LOOK_DESK) the cells' extent, tile and hit
+// answer for.
+void moy_ui_api_desk_shelf_geom(int fs, int u, const int32_t b[4], int side, int32_t out[MOY_UI_CELLS_G]);
+// The shelf card that holds (x, y), a card scrolled across its margin cut there; -1 none.
+int moy_ui_api_desk_at(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int32_t off, int n, int x,
+                       int y);
+// The shelf's caption over its first card, inside `clip`: `label` and the count `n`, apart by
+// a dot, in the dim ink at the caption's scale.
+void moy_ui_api_desk_caption(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t g[MOY_UI_CELLS_G],
+                             const int32_t b[4], const int32_t clip[4], moy_ui_span_t label, int n);
 // The largest side at most `limit` that shows a whole 128 px cover at a clean scale: a whole
 // multiple of it, else its half, quarter or eighth.
 int moy_ui_api_clean_side(int limit);
@@ -1331,11 +1365,13 @@ int moy_ui_api_clean_side(int limit);
 // moy_ui_api_table_part's), the theme's card shadow, the smaller one off the `centre`.
 void moy_ui_api_tile_cast(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4],
                           const int32_t clip[4], int centre);
-// A carousel tile in a row whose tiles rest at `card` px: where `mark`, its focus mark (its
-// box first shrunk by as much as the theme's mark grows a card, so a lifted card keeps its
-// side, raised). out[0..3] the box its picture takes, out[4] that box's corner radius (the
-// depth's card radius on a tile larger than `card`, 7/10 of it on the others), out[5..8] the
-// mark's box and out[9] 1 where it drew one: moy_ui_api_tile_end's.
+// A carousel tile in a row whose tiles rest at `card` px (-`card` on the desk's): where `mark`,
+// its focus mark, the selected card's current mark where it is 2 (its box first shrunk by as
+// much as the theme's mark grows a card, so a lifted card keeps its side, raised). out[0..3] the box its picture takes, out[4] that box's corner radius (the
+// depth's card radius on a tile larger than `card`, 7/10 of it on the others; on the desk's
+// that radius on a tile `-card` across, 7/5 of it on a larger one), out[5..8] the mark's box
+// and out[9] the mark it drew (1 the focus mark, 2 the current one, 0 none):
+// moy_ui_api_tile_end's.
 void moy_ui_api_tile(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4],
                      const int32_t clip[4], int card, int mark, int32_t out[10]);
 // The corner radius of a carousel tile `side` px across in a row whose tiles rest at `card`

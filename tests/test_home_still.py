@@ -15,19 +15,6 @@ from runtime import host_app
 from ws_helpers import no_unlock_banner, quiesce
 
 
-class _Key:
-    last_key = 0
-
-    def __init__(self, n):
-        self.n = n
-
-    def steps(self, n):
-        return int(bool(self.pressed(n)))
-
-    def pressed(self, n):
-        return n == self.n
-
-
 def _home(tmp_path, monkeypatch, bufs, ref, theme=None):
     from runtime import launcher_layer
     if ref:
@@ -89,14 +76,14 @@ def _session(ws, drv, frame):
 
     home = ws.launcher_layer
     for k in range(8):
-        home.handle_input(_Key("right"))
+        drv.press("right")
         ws.mark_dirty()
         run(3 if k % 2 else 1)
     run(20)
     ws.bar_layer.clock_text = lambda: "10:31"   # the bar moves, the parts do not
     ws.mark_dirty()
     run(6)
-    home.handle_input(_Key("left"))
+    drv.press("left")
     ws.mark_dirty()
     run(6)
     for t in ("mine", "apps", "make", "games"):
@@ -112,7 +99,7 @@ def _session(ws, drv, frame):
     drv.touch_up()
     run(40)
     for k in ("left", "left", "down", "right", "right", "up"):
-        home.handle_input(_Key(k))
+        drv.press(k)
         ws.mark_dirty()
         run(2)
     run(10)
@@ -210,7 +197,7 @@ def test_the_retained_frame_waits_for_an_idle_frame(tmp_path, monkeypatch, bufs)
     monkeypatch.setattr(home, "_capture_retained",
                         lambda cv, dt, parts=None: caps.append(1) or real(cv, dt, parts))
     for _ in range(2):
-        home.handle_input(_Key("right"))
+        drv.press("right")
         ws.mark_dirty()
         shots = [frame() for _ in range(bufs)]
         assert None not in shots and caps == []
@@ -237,6 +224,6 @@ def test_coming_back_settles_every_buffer(tmp_path, monkeypatch, bufs):
     still = []
     real = home._try_still_frame
     home._try_still_frame = lambda cv, dt: still.append(real(cv, dt)) or still[-1]
-    home.handle_input(_Key("right"))
+    drv.press("right")
     ws.mark_dirty()
     assert frame() is not None and still == [True]

@@ -605,11 +605,12 @@ class Launcher:
 
     def begin_band_host(self, cv):
         """Begin this painted frame's paint on the band's host, drawing
-        nothing: the parts the home names there (`ui.held`) are then
-        asked for, the band's pass beginning it again."""
+        nothing, its keys the cards' where they hold them (as the band's
+        pass begins it): the parts the home names there (`ui.held`) are
+        then asked for, the band's pass resuming it."""
         host = self._band_host()
         host.whole()
-        host.begin(cv, self.theme, self.band_rect(), self.desk(), False, True)
+        host.begin(cv, self.theme, self.band_rect(), self.desk(), False, self.tab_focus)
 
     def resume_band_host(self, cv):
         """Point the verbs at the band's host again, beginning nothing:
@@ -618,12 +619,13 @@ class Launcher:
 
     def _begin_band(self, cv, b, desk, key, need, over=None, keys=False):
         """Begin the band's frame on its host, the keys its own where `keys`
-        (the handheld's carousel, the grid and the icons; else the home's):
-        whether the buffer this frame paints holds the band as a frame drew
-        it under `key` (`ui.held`); None, with the frame ended, where `need`
-        asks for that and it does not."""
+        (the cards hold them, not the tab row or the desk's buttons): whether
+        the buffer this frame paints holds the band as a frame drew it under
+        `key` (`ui.held`); None, with the frame ended, where `need` asks for
+        that and it does not. A frame begun on it already (`begin_band_host`,
+        an earlier pass) resumes: its page's motion steps once a frame."""
         host = self._band_host()
-        if keys and host.begun():
+        if host.begun():
             host.resume(cv, self.theme)     # (its keys and its clock the frame's first pass's)
         else:
             host.whole()
@@ -777,7 +779,7 @@ class Launcher:
             home_ui.ui.commit(pg)
             put = True
         q = self._set
-        if q is None or q[0] != self._sel or q[1] is not self.wall_ink:
+        if q is None or q[0] != self._sel or q[1] is not self.wall_ink or self._set_more(q):
             import home_ui
             pg = self._bpage
             pg.run(home_ui.band_set, action="band_set")
@@ -819,6 +821,11 @@ class Launcher:
         self._fnames = names
         self._covs = [None] * len(items)
         self._put = (items, recs)
+
+    def _set_more(self, q):
+        """Whether what the band's words were set from moved beside its
+        current card and its ink."""
+        return False
 
     def band_set(self, s):
         """The band's current card, the one a selection made from outside

@@ -1,10 +1,9 @@
 # Map (grep -n a name to jump there):
 #   Carousel                    the home's row: the centre card scaled by its distance
 #   Carousel._geom              its geometry: the handheld's row or the desk's hero and shelf
-#   Carousel.anim_frame         the desk shelf's fling and glide
-#   Carousel.band_pass          the row: the handheld's the engine's carousel, the desk's shelf a table of parts
-#   Carousel._band_picture      a handheld card's picture, the engine's picture call
-#   Carousel._paint_details     the desk's hero and its details
+#   Carousel.band_pass          the row: the engine's carousel, the handheld's row or the desk's shelf
+#   Carousel._band_picture      a card's picture, the engine's picture call
+#   Carousel._paint_details     the desk's hero
 """The home's CAROUSEL (docs/theme_and_shell_2026-11.md §8.10): the `carousel`
 arrangement, the default (the layout's `home`), and the home window's,
 always. On the handheld one row of square cover cards slides sideways, the
@@ -15,13 +14,14 @@ model, its own geometry, motion and draw. Its instances are ws.launcher in
 the `carousel` arrangement and ws.projects_grid.
 """
 
+from array import array
+
 import ui as _ui
 import ui_draw as _ui_draw
 import layout_base as _lb
-from home_grid import (_COVER_BASE, _COVER_SIDE, desk_button_span,
-                       _DESK_VERB_SETS, DETAILS_MIN, _dot_top, _draw_broken_badge,
-                       _draw_star_badge, _hint_strip, _in, Launcher, _NO_KEYS, _PART,
-                       _PART_COL, PSEUDO_TILE_TYPES, SHELF_GAP, _TAB_NAME, text_scale)
+from home_grid import (_COVER_BASE, _COVER_SIDE, desk_button_span, _DESK_VERB_SETS,
+                       _draw_broken_badge, _draw_star_badge, _hint_strip, Launcher, _NO_KEYS,
+                       PSEUDO_TILE_TYPES, _TAB_NAME)
 
 _G_PASS = [None, None]   # the row a band pass runs on and its geometry (`_geom`)
 _PK = [None, None]       # the row whose paint key was answered last, and the key (`paint_key`)
@@ -29,7 +29,15 @@ _PK = [None, None]       # the row whose paint key was answered last, and the ke
 # uit_carousel): its scroll, its motion (drag, fling, glide bits), the card nearest the
 # centre, the card it rests on, whether it held the keys
 _W_SCROLL, _W_MOTION, _W_NEAR, _W_REST, _W_FOCUS = 14, 15, 16, 17, 19
+# ...and of the desk's shelf (uit_cells): its scroll, its motion, its current card, whether
+# it held the keys
+_D_SCROLL, _D_MOTION, _D_CUR, _D_FOCUS = 20, 21, 22, 24
 _DRAG, _ON_ITS_OWN = 1, 6
+# The desk's geometry words (moy_ui_api.h's MOY_UI_DESK_*): a shelf card's side, the shelf's
+# top, its margin, the pane's first type scale (four, then the button height), the facts' row
+# shown (the metadata's after it), the focus mark's reach, the shelf's gap
+(_D_SIDE, _D_SHELF_Y, _D_PAD, _D_TS) = (12, 13, 14, 15)
+_D_FACTS, _D_RING, _D_GAP = 20, 22, 23
 
 
 class Carousel(Launcher):
@@ -55,36 +63,29 @@ class Carousel(Launcher):
     the handheld the band is the engine's carousel (`ui.cards(look=
     "carousel")`, `home_ui.band`) on the band's host: its geometry, its
     keys, its pointer, its motion and its settle are the engine's, its
-    cards' pictures and the ground under the band the home's (`_hh_pass`),
-    and the class reads the row back as the band's last frame left it."""
+    cards' pictures and the ground under the band the home's (`_page_pass`),
+    and the class reads the row back as the band's last frame left it. On
+    the desk the band is the same page's shelf (the carousel look on the
+    desk class): its geometry beside the hero, its keys, its pointer and
+    its glide the engine's too."""
 
     arrangement = "carousel"
     page_fn = "band"                # its handheld band's page (home_ui)
     verb_sets = _DESK_VERB_SETS     # the buttons its desk pane keeps rows for
 
     def __init__(self, items, layout=None, names=None):
-        self._was_drag = False
         self._g_lay = None            # the layout _g was computed for
         self._g_reach = 0
         self._g_keys = True
         self._g = None
         self.layout = None
-        # the desk's shelf: `_scroll` (raw px) is the state of record, clamped
-        # LAZILY against the live layout (the `scroll` property), so a layout
-        # swap never destroys a position; `_region` is the touch model,
-        # synced from it whenever a drag is not active
+        # the handheld row's offset before its band's first frame (`scroll`)
         self._scroll = 0
-        self._region = _ui_draw.ScrollRegion(horizontal=True)
-        self._taps = _ui_draw.DragTap(self._region)
         self._quiet_for = None        # the geometry `quiet` was computed for
         self._quiet_q = ()
-        self._vis_g = None            # the geometry and key `_vis` was laid out for
-        self._vis_key = [None] * 3    # (scroll, selected, count)
-        self._vis = None
-        self._shows = bytearray()     # the cards the engine says show (the desk's shelf)
-        self._bo = {"id": "band", "part": [0, 0], "axis": "x", "snap": False, "offset": 0,
-                    "spill": 0, "gen": 0, "current": False, "mark": False, "shift": False,
-                    "fade": 0}
+        self._dg = array("i", [0] * 24)     # the desk's geometry words (`_geom_desk_at`)
+        self.keyed = False            # input that may move the selection waits on a pass
+        self._down = False            # ...the pointer was down at its last sample
         Launcher.__init__(self, items, layout, names)
 
     # -- geometry ------------------------------------------------------------
@@ -103,7 +104,7 @@ class Carousel(Launcher):
         if self._g_lay is lay and self._g_reach == reach and self._g_keys == keys:
             return self._g
         self._g = (self._geom_hh(lay, keys) if _lb.metric_class() == _lb.HANDHELD
-                   else self._geom_desk(lay, reach, keys))
+                   else self._geom_desk(lay, keys))
         self._g_lay = lay
         self._g_reach = reach
         self._g_keys = keys
@@ -128,14 +129,14 @@ class Carousel(Launcher):
         return (None, band, card, pitch, g[9], pitch - card, 0, g[2],
                 (g[3], g[4], g[5], g[6], g[7], hints), None)
 
-    def _geom_desk(self, lay, reach, keys=True):
+    def _geom_desk(self, lay, keys=True):
         """The desk home's geometry (`_geom_desk_at`) with room in its pane
         for as many rows of buttons as its width wraps them to
         (`desk_button_span`): a pane narrowed by a smaller hero is laid out
         again, the rows it then needs kept."""
         span = 0
         for _ in range(3):
-            g = self._geom_desk_at(lay, reach, keys, span)
+            g = self._geom_desk_at(lay, keys, span)
             dk = g[9]
             got = desk_button_span(dk[2], lay.fs, dk[5][6], dk[5][4], self.verb_sets)
             if got <= span:
@@ -143,98 +144,29 @@ class Carousel(Launcher):
             span = got
         return g
 
-    def _geom_desk_at(self, lay, reach, keys, brows):
-        """The desk home's geometry (docs/history/look_2026-10.md step 18), the same
-        tuple with its foot (the hint strip) and the desk's own: the hero at
-        the top left, the details pane beside it, the shelf under them
-        bleeding off the right edge, its caption over it. The desk lays out
-        in glass pixels (the target's 1x), its type at whole scales of the
-        face no smaller than the font scale. The hero is the largest whole
-        multiple of the cover's side a quarter of the width holds with the
-        shelf under it, else half the cover's side, and a shelf card is half
-        the hero, so every card shows its whole cover at a clean scale; the pane
-        is as tall as the hero, or as its type needs where that is more.
-        Where the pane would be narrower than `DETAILS_MIN` (a narrow
-        window, the desk's PROJECTS) the hero stands over it instead, the
-        largest clean side the height holds with the pane and the shelf,
-        and the pane takes the width -- where that hero is no smaller than
-        the one beside it; else the pane stays beside, its buttons as many
-        as it holds. The margins narrow with the width, to a twentieth of
-        it. Where the height cannot hold the pane over a half-cover shelf,
-        the pane drops its facts, then its metadata (the desk's `rows`), and
-        the hero halves down to an eighth of the cover. The shelf's caption
-        stands `SHELF_GAP` under the details and what height is left goes
-        under the shelf (design review R5-08), but under touch (no hint
-        strip, no `keys`) the shelf keeps at most the side margin under it,
-        the rest over its caption (R3-07). The
-        tuple's band is the shelf's: its caption, its cards, their lift
-        and their shadows; the desk's own ends with the pane's top and the
-        pixels its rows of buttons take under their first, `brows`
-        (`desk_button_span`)."""
-        fs = lay.fs
-        cx, cy, cw = lay.cx, lay.cy, lay.cw
-        u = _lb.render_scale()
+    def _geom_desk_at(self, lay, keys, brows):
+        """The desk home's geometry, the engine's (the carousel look on the
+        desk class, moy_ui_api_carousel_desk): the hero at the top left, the
+        details pane beside it (or under it in a narrow window), the shelf
+        under them bleeding off the right edge, its caption over it, the
+        hint strip `_hint_strip` along the foot. The tuple's band is the
+        shelf's (its caption, its cards, their lift and their shadows); the
+        desk's own is (the hero, the pane's x, its width, the shelf's top,
+        its margin, (the pane's title, metadata, fact caption and value
+        scales, a button's height, the pane's height, the render scale),
+        the pane's y, (facts, metadata) shown, `brows`)."""
         hints = _hint_strip(lay, keys, True)
-        pad = min(48 // u, max(12 // u, cw // 20))
-        top, gap, apart = 24 // u, 20 // u, 32 // u
-        ring = max(2 * fs + 2, reach)
-        lh, tl = _ui_draw.font()[2], _ui_draw.font("title")[2]
-        ts, ms = text_scale(40 // u, fs, "title"), text_scale(14 // u, fs)
-        ks, vs = text_scale(13 // u, fs), text_scale(15 // u, fs)
-        bh = max(42 // u, 20 * fs)
-        need = tl * ts + lh * (ms + ks + vs) + bh + 60 // u + brows
-        cap_h = lh * ms + 8 // u
-        room = hints[1] - cy - top - cap_h - 72 // u
-        # A short window gives up, in turn, most of the slack round the
-        # shelf's caption, the facts' row and the metadata's line.
-        rows = [True, True]                  # (facts, metadata) shown
-        least = _COVER_SIDE // 2
-        if max(least, need) + least // 2 > room:
-            room += 48 // u
-        for k, h in ((0, lh * (ks + vs) + 22 // u), (1, lh * ms + 14 // u)):
-            if max(least, need) + least // 2 > room:
-                rows[k] = False
-                need -= h
-        hero = cw // 4 // _COVER_SIDE * _COVER_SIDE
-        while hero > _COVER_SIDE and max(hero, need) + hero // 2 > room:
-            hero -= _COVER_SIDE
-        if hero < _COVER_SIDE or max(hero, need) + hero // 2 > room:
-            hero = least
-        while hero > _COVER_SIDE // 8 and max(hero, need) + hero // 2 > room:
-            hero //= 2
-        hx, hy = cx + pad, cy + top
-        dx, dy, pane = hx + hero + apart, hy, max(hero, need)
-        block = pane
-        if cx + cw - pad - dx < DETAILS_MIN // u:
-            # too narrow for the pane beside the hero: the hero over the
-            # pane where the height holds both at a hero no smaller
-            up = _COVER_SIDE
-            while up > hero and up + apart + need + up // 2 > room:
-                up //= 2
-            if up >= hero and up + apart + need + up // 2 <= room:
-                hero = up
-                dx, dy, pane = hx, hy + hero + apart, need
-                block = hero + apart + need
-        shelf = hero // 2
-        spare = max(0, hints[1] - cy - top - block - cap_h - shelf)
-        d = _ui_draw.depth()
-        blur = d[8] if d[5] else 0
-        down = max(ring, blur + d[10])
-        # the caption SHELF_GAP under the details, the spare height under the
-        # shelf; a height short of that splits what it has, keeping the
-        # shelf's lift and shadow off the strip
-        cap_y = hy + block + min(SHELF_GAP // u,
-                                 max(spare // 2, spare - max(down, 20 // u)))
-        if not keys:
-            # no strip under touch: the shelf stands at most the side margin
-            # off the glass's foot, and the strip's room goes over its caption
-            cap_y = max(cap_y, hints[1] - pad - shelf - cap_h)
-        shelf_y = cap_y + cap_h
-        band = (cx, cap_y, cw, max(0, min(hints[1], shelf_y + shelf + down) - cap_y))
-        desk = ((hx, hy, hero, hero), dx, max(0, cx + cw - pad - dx), shelf_y, pad,
-                (ts, ms, ks, vs, bh, pane, u), dy, tuple(rows), brows)
-        return (None, band, shelf, shelf + gap, ring, gap, 0, shelf_y + shelf // 2,
-                (0, 0, 0, 0, 0, hints), desk)
+        q = self._cq
+        q[0], q[1], q[2], q[3] = lay.cx, lay.cy, lay.cw, hints[1] - lay.cy
+        d = self._dg
+        self._band_page().carousel_desk(q, lay.fs, keys, brows, d)
+        shelf, shelf_y = d[_D_SIDE], d[_D_SHELF_Y]
+        desk = ((d[0], d[1], d[2], d[3]), d[4], d[6], shelf_y, d[_D_PAD],
+                (d[_D_TS], d[_D_TS + 1], d[_D_TS + 2], d[_D_TS + 3], d[_D_TS + 4], d[7],
+                 _lb.render_scale()),
+                d[5], (d[_D_FACTS] != 0, d[_D_FACTS + 1] != 0), brows)
+        return (None, (d[8], d[9], d[10], d[11]), shelf, shelf + d[_D_GAP], d[_D_RING],
+                d[_D_GAP], 0, shelf_y + shelf // 2, (0, 0, 0, 0, 0, hints), desk)
 
     def handheld(self):
         """Whether the home is the handheld's (step 17): its tabs in the bar,
@@ -306,6 +238,14 @@ class Carousel(Launcher):
             return None
         return self._cw
 
+    def _dw(self):
+        """The desk's shelf as its page's last frame left it (`_cw`,
+        moy_uitree.h's uit_cells, read once a pass), else None: on the
+        handheld, or before the shelf's first frame."""
+        if not self._cw_ok or self._geom()[9] is None:
+            return None
+        return self._cw
+
     @property
     def sel(self):
         return self._sel
@@ -323,11 +263,8 @@ class Carousel(Launcher):
             self._scroll = self._rest_of(value)
 
     def _rest_of(self, i):
-        """The offset the row rests at with card `i` selected: at the centre,
-        or on the desk's shelf with two cards before it where the shelf has
-        them."""
-        if self.desk():
-            return max(0, min((i - 2) * self.pitch(), self.max_scroll()))
+        """The offset the handheld's row rests at with card `i` at the
+        centre (the desk's shelf lands itself)."""
         return max(0, i) * self.pitch()
 
     @property
@@ -337,13 +274,14 @@ class Carousel(Launcher):
         w = self._hh()
         if w is not None:
             return w[_W_SCROLL]
+        w = self._dw()
+        if w is not None:
+            return w[_D_SCROLL]
         return max(0, min(self._scroll, self.max_scroll()))
 
     @scroll.setter
     def scroll(self, value):
         self._scroll = max(0, min(int(value), self.max_scroll()))
-        if self._region.animating:
-            self._region.stop()     # a programmatic scroll cancels a fling
 
     @property
     def dragging(self):
@@ -351,7 +289,8 @@ class Carousel(Launcher):
         w = self._hh()
         if w is not None:
             return w[_W_MOTION] & _DRAG != 0
-        return self._taps.dragging
+        w = self._dw()
+        return w is not None and w[_D_MOTION] & _DRAG != 0
 
     @property
     def flinging(self):
@@ -361,14 +300,16 @@ class Carousel(Launcher):
         w = self._hh()
         if w is not None:
             return w[_W_MOTION] & _ON_ITS_OWN != 0
-        return self._region.animating
+        w = self._dw()
+        return w is not None and w[_D_MOTION] & _ON_ITS_OWN != 0
 
     @property
     def moving(self):
         w = self._hh()
         if w is not None:
             return w[_W_MOTION] != 0
-        return self._taps.dragging or self._region.animating
+        w = self._dw()
+        return w is not None and w[_D_MOTION] != 0
 
     def max_scroll(self):
         g = self._geom()
@@ -397,147 +338,36 @@ class Carousel(Launcher):
         g = (min(self._scroll, n * g) + g // 2) // g
         return 0 if g < 0 else n if g > n else g
 
-    def set_items(self, items):
-        self._region.stop()
-        self._region.invalidate()   # the pixels no longer match any recorded paint
-        Launcher.set_items(self, items)
-
-    def _scroll_to_sel(self):
-        self._region.stop()
-        self._scroll = max(0, min(self._rest_of(self.sel), self.max_scroll()))
-
-    def _scroll_region(self):
-        band = self.band_rect()
-        self._region.set(band, self.max_scroll() + band[2])
-        if not (self._region.drag_active or self._region.animating):
-            self._region.offset = self.scroll
-        return self._region
-
-    def glide_to(self, i):
-        """The desk: select card `i` at once and glide the shelf to show it,
-        frame by frame (`anim_frame`). The handheld's row moves itself
-        (`band_keys`)."""
-        n = len(self.items)
-        if not n or not self.desk():
-            return
-        self._region.stop()
-        region = self._scroll_region()
-        i = max(0, min(n - 1, i))
-        if i != self._sel:
-            self.zone_gen += 1
-            self._sel = i
-        region.glide_to(self._rest_of(i))
-
-    def nav2d(self, dx, dy):
-        """Left/right move the desk's selection by a card, the shelf
-        gliding to show it."""
-        if self.items and dx:
-            self.glide_to(self._sel + dx)
-
-    def anim_frame(self, dt):
-        """Advance the desk shelf's fling or glide one frame (dt in
-        SECONDS). True when the view moved."""
-        region = self._region
-        if not region.animating:
-            return False
-        fling = region.flinging
-        was = self._scroll
-        self._scroll_region()
-        if region.tick(dt * 1000.0):
-            self._scroll = region.offset   # direct: the setter would stop it
-            return fling or self._scroll != was
-        return False
-
-    def scroll_cols(self, d):
-        self.nav2d(d, 0)
-
-    def pointer_frame(self, px, py, click, down, dt_ms=None):
-        """One pointer sample over the desk's shelf through ui.DragTap: the
-        tapped card on a clean release (press and release on it with no drag
-        travel), else None, so a scroll gesture never launches a cart.
-        `dt_ms` feeds the fling."""
-        region = self._scroll_region()
-        press = self._taps.frame(px, py, click, down,
-                                 slop=4 * self.layout.fs + 2, dt_ms=dt_ms)
-        if self._taps.dragging:
-            self._scroll = region.offset       # the cards follow the finger
-        if press is None:
-            return None
-        i = self.tile_at(press[0], press[1])
-        if i is not None and i == self.tile_at(px, py):
-            return i
-        return None
-
     # -- cards -----------------------------------------------------------------
 
-    def _rect_at(self, i):
-        return self._rect_of(i, self._geom(), self.scroll)
-
-    def _rect_of(self, i, g, s):
-        """The desk shelf's card `i` at offset `s` under geometry `g`."""
-        return (g[1][0] + g[9][4] + i * g[3] - s, g[9][3], g[2], g[2])
-
     def _visible(self):
-        """(index, rect) for every card in the band, the selected one last
-        -- the order they paint in: on the handheld the engine's tiles as
-        its last frame laid them out; on the desk the shelf's, kept for the
-        offset and selection it was laid out at, so a frame's restore and
-        its paint lay the row out once. Callers read it and never change
-        it."""
-        n = len(self.items)
-        if not n:
-            return []
-        if self.handheld():
-            c = self.nearest()
-            out = [(i, r) for i, r in ((i, self.tile_rect(i)) for i in range(n)) if r is not None]
-            out.sort(key=lambda e: e[0] == c)
-            return out
-        g = self._geom()
-        s = self.scroll
+        """(index, rect) of every card in the band as its last frame laid
+        them out (the engine's tiles), the selected one last -- the order
+        they paint in."""
         c = self.nearest()
-        key = self._vis_key
-        if self._vis_g is g and key[0] == s and key[1] == c and key[2] == n:
-            return self._vis
-        bx, _by, bw, _bh = g[1]
-        pitch = g[3]
-        i0 = max(0, s // pitch - 1)
-        i1 = min(n - 1, (s + bw) // pitch + 1)
-        out = []
-        for i in range(i0, i1 + 1):
-            r = self._rect_of(i, g, s)
-            if r[0] + r[2] > bx and r[0] < bx + bw:
-                out.append((i, r))
+        out = [(i, r) for i, r in ((i, self.tile_rect(i)) for i in range(len(self.items)))
+               if r is not None]
         out.sort(key=lambda e: e[0] == c)
-        key[0], key[1], key[2] = s, c, n
-        self._vis_g, self._vis = g, out
         return out
 
     def tile_rect(self, i):
-        if not (0 <= i < len(self.items)):
+        """Card `i`'s box as the band's last frame laid it out (the
+        handheld's tile, the desk shelf's card), or None where it lies
+        outside the band."""
+        pg = self._bpage
+        if not (0 <= i < len(self.items)) or pg is None:
             return None
-        if self.handheld():
-            t = self._ct
-            pg = self._bpage
-            return (t[0], t[1], t[2], t[3]) if pg is not None and pg.carousel_tile(i, t) else None
-        r = self._rect_at(i)
-        bx, _by, bw, _bh = self.band_rect()
-        if r[0] + r[2] <= bx or r[0] >= bx + bw:
+        t = self._ct
+        if not (pg.carousel_tile(i, t) if self.handheld() else pg.cells_tile(i, t)):
             return None
-        return r
+        return (t[0], t[1], t[2], t[3])
 
     def tile_at(self, px, py):
-        bx, by, bw, bh = self.band_rect()
-        if not (bx <= px < bx + bw):
+        pg = self._bpage
+        if pg is None:
             return None
-        if self.handheld():
-            pg = self._bpage
-            i = pg.carousel_at(px, py) if pg is not None else -1
-            return None if i < 0 else i
-        vis = self._visible()
-        for k in range(len(vis) - 1, -1, -1):
-            if _in(px, py, vis[k][1]):
-                return vis[k][0]
-        return None
+        i = pg.carousel_at(px, py) if self.handheld() else pg.cells_at(px, py)
+        return i if 0 <= i < len(self.items) else None
 
     def plate_rect(self):
         """The handheld's title and metadata lines across the band; on the
@@ -597,9 +427,10 @@ class Carousel(Launcher):
         return out
 
     def draw(self, cv, sheet_for=None, key=_NO_KEYS, over=None, beside=None):
+        end = self.band_pass(cv, sheet_for, None, key, True, over, beside)
         if self.desk():
-            self._paint_details(cv)
-        return self.band_pass(cv, sheet_for, None, key, True, over, beside)
+            self._paint_details(cv)          # (the hero the pass's selection)
+        return end
 
     def repaint_band(self, cv, sheet_for, fill, key=_NO_KEYS, over=None, beside=None, need=False,
                      marks=False, whole=False):
@@ -613,82 +444,36 @@ class Carousel(Launcher):
 
     def band_pass(self, cv, sheet_for, fill, key=_NO_KEYS, whole=True, over=None, beside=None,
                   need=False, marks=False, note=False):
-        """The row, on the band's own app host: on the handheld the engine's
-        carousel (`_hh_pass`); on the desk the shelf as a table of parts
-        side by side that keeps them (`ui.table` with `o.axis` "x" and
-        `o.keep`), the scroll the home's (`o.offset`), its cards one size
-        from its margin. What the centre card shows is in `key`
-        (`band_key`), so the engine's floor is the band whole or what was
-        drawn over it (`over`, the cursor), or nothing. In each floor rect
-        the ground goes back round the cards (`fill`; None: a full paint
-        drew it) and the cards the engine says show draw in the order the
-        row paints them (`_paint`). `beside`, `note` and the answer are
-        `Launcher.band_pass`'s. The pass draws under the geometry it
-        begins with (`_geom`)."""
+        """The row, on the band's own app host: the band's page
+        (`_band_page`, the engine's carousel: on the handheld its row, on
+        the desk its shelf) drawn in the band, moving itself (its keys and
+        its pointer the host's: `band_keys`, `band_point`) and marking its
+        centre at rest while the cards hold the keys (not the tab row's),
+        its caption white over black on a wallpaper (`wall_ink`). It keeps
+        no tiles: a pass that draws the band draws it whole, over the
+        ground `fill` puts back there first (None: a full paint drew it),
+        and names what it drew (`ui.held`) so the floor's end says whether
+        every buffer holds it. A pass that finds the buffer holding the band
+        as it stands (nothing moving, nothing to take) and a `note` pass,
+        the band lying there by other means, draw none of it and name it,
+        its page standing as it was (`AppHost.stand`). `beside` draws
+        first. The pass draws under the geometry it begins with (`_geom`)."""
         g = _G_PASS[1] = self._geom()
         _G_PASS[0] = self
         try:
-            if g[9] is None:
-                return self._hh_pass(cv, g, fill, key, whole, over, beside, need, note)
-            band = g[1]
-            n = len(self.items)
-            held = self._begin_band(cv, band, g[9] is not None, key, need, over)
-            if held is None:
-                return None
-            _ui.at(band[0], band[1], band[2], band[3])
-            o = self._bo
-            p = o["part"]
-            p[0] = g[3]
-            p[1] = 0
-            o["axis"] = "x"
-            o["snap"] = False
-            o["offset"] = self.scroll - g[9][4]
-            o["spill"] = g[3]
-            o["keep"] = key[1]
-            o["whole"] = whole or not held
-            o["over"] = over
-            _ui.table("", _PART_COL, self._band_rows(n), self.nearest(), o)
-            if beside is not None:
-                beside(cv, whole or not held)
-            end = self.band_floor(cv, None, not note)
-            if note:
-                del self.floor[:]
-            shows = self._shows
-            if len(shows) != n:
-                shows = self._shows = bytearray(n)
-            else:
-                for k in range(n):
-                    shows[k] = 0
-            r = _PART
-            i = _ui.table_part(r)
-            while i >= 0:
-                shows[i] = 1
-                i = _ui.table_part(r)
-            for q in self.floor:
-                if fill is not None:
-                    self._fill_around_cards(cv, fill, q, marks)
-                self._paint(cv, sheet_for, q)
-            _ui.end()
-            return end
+            return self._page_pass(cv, g, fill, key, whole, over, beside, need, note)
         finally:
             _G_PASS[0] = _G_PASS[1] = None
 
-    def _hh_pass(self, cv, g, fill, key, whole, over, beside, need, note):
-        """The handheld's band pass: the band's page (`_band_page`) drawn
-        on the band's host in the band, its carousel moving itself (its
-        keys and its pointer the host's: `band_keys`, `band_point`) and
-        marking its centre at rest while the cards hold the keys (not the
-        tab row's), its caption white over black on a wallpaper
-        (`wall_ink`). It keeps no tiles: a pass that draws the band draws
-        it whole, over the ground `fill` puts back there first (None: a
-        full paint drew it), and names what it drew (`ui.held`) so the floor's end
-        says whether every buffer holds it. A pass that finds the buffer
-        holding the band as it stands (nothing moving, nothing to take) and
-        a `note` pass, the band lying there by other means, draw none of it
-        and name it, its page standing as it was (`AppHost.stand`). `beside`
-        draws first."""
+    def _page_pass(self, cv, g, fill, key, whole, over, beside, need, note):
+        """The band pass (`band_pass`) under geometry `g`: the band's page
+        painted in the band on the class in force, the words it left read
+        back (the handheld's carousel, `_hh`; the desk's shelf, `_dw`) and
+        the selection taken from them: the card the handheld's row settled
+        on, the desk shelf's current card."""
+        desk = g[9] is not None
         host = self._band_host()
-        held = self._begin_band(cv, g[1], False, key, need, over, not self.tab_focus)
+        held = self._begin_band(cv, g[1], desk, key, need, over, not self.tab_focus)
         if held is None:
             return None
         if key[0] < 0:
@@ -704,28 +489,39 @@ class Carousel(Launcher):
         del self.copied[:]
         pg = self._band_page()
         puts = not note and self._band_cards()
-        w = self._hh()
-        if (not note and not whole and not puts and not host.owed and w is not None
-                and not w[_W_MOTION] and w[_W_FOCUS] != self.tab_focus
-                and _ui.held("cards", self._cards_key(key, w))):
+        w = self._dw() if desk else self._hh()
+        if desk:
+            wm, wf, kf = _D_MOTION, _D_FOCUS, self._cells_key
+        else:
+            wm, wf, kf = _W_MOTION, _W_FOCUS, self._cards_key
+        if (not note and not whole and not puts and not host.owed and not self._fed
+                and w is not None and not w[wm] and w[wf] != self.tab_focus
+                and _ui.held("cards", kf(key, w))):
             note = True                     # (the buffer holds it as it stands)
+        self._fed = False
         if note:
             host.stand()                    # (where no pass of this frame draws the page)
         else:
+            self.keyed = False
             if fill is not None:
                 fill(cv, g[1])
             self._gcv = cv
             self.floor.append(g[1])
-            pg.paint(0, cv, self.theme, g[1], False)
+            pg.paint(0, cv, self.theme, g[1], desk)
             self._gcv = None
-            self._cw_ok = pg.carousel(self._cw)
-            w = self._hh()
+            if desk:
+                self._cw_ok = pg.cells(self._cw)
+                w = self._dw()
+            else:
+                self._cw_ok = pg.carousel(self._cw)
+                w = self._hh()
         if w is not None:
-            if w[_W_REST] != self._sel and w[_W_REST] < len(self.items):
+            got = w[_D_CUR] if desk else w[_W_REST]
+            if got != self._sel and got < len(self.items):
                 self.zone_gen += 1
-                self._sel = w[_W_REST]      # the row settled on a card
+                self._sel = got             # the row settled, the shelf's card moved
             # what the band shows, under its key: each buffer that drew it so holds it
-            _ui.held("cards", self._cards_key(key, w))
+            _ui.held("cards", kf(key, w))
         end = 0 if _ui.held_all() else -1
         _ui.end()
         return end
@@ -742,6 +538,36 @@ class Carousel(Launcher):
         k = ((k & 0x3fffff) * 31 + w[_W_SCROLL]) & 0x3fffff
         k = ((k * 31 + w[_W_NEAR]) & 0x3fffff) * 31 + w[_W_MOTION]
         return (k & 0x3fffff) * 2 + w[_W_FOCUS]
+
+    def band_keys(self, i):
+        """The band host's keys (`Launcher.band_keys`); a step, a notch or
+        Enter may move or open the selection (`keyed`)."""
+        if (i.steps("left") or i.steps("right") or i.pressed("a") or i.pressed("run")
+                or getattr(i, "wheel_x", 0) or getattr(i, "wheel_y", 0)):
+            self.keyed = True
+        return Launcher.band_keys(self, i)
+
+    def band_point(self, px, py, click, down):
+        """The band host's pointer (`Launcher.band_point`); a release may
+        tap a card current (`keyed`)."""
+        if self._down and not down:
+            self.keyed = True
+        self._down = down
+        return Launcher.band_point(self, px, py, click, down)
+
+    def _set_more(self, q):
+        """Whether the desk shelf's card side or its caption moved."""
+        return len(q) < 4 or q[2] != self._geom()[2] or q[3] != self.tab
+
+    def band_set(self, s):
+        """The band's current card and its words' ink (`Launcher.band_set`),
+        and on the desk its shelf's card side and caption (the tab's name)."""
+        Launcher.band_set(self, s)
+        g = self._geom()
+        desk = g[9] is not None
+        s.side = g[2] if desk else 64
+        s.caption = _TAB_NAME.get(self.tab, "") if desk else ""
+        self._set = (self._sel, self.wall_ink, g[2], self.tab)
 
     def _put_more(self, p):
         """Whether what the rows were put from moved beside the items: the
@@ -783,48 +609,6 @@ class Carousel(Launcher):
         cv.clip()
         return True
 
-    def _fill_around_cards(self, cv, fill, r, marks=False):
-        """Restore rect `r`'s backdrop except where a card lies: every card
-        paints its whole square opaque, so the backdrop is owed only around
-        them -- on a big panel most of the band's pixels are the cards'.
-        The focus mark's rounded ring blends over the corner rows of the card
-        it lies on, past the card's own corner: the selected card's rows
-        are restored that far, and with `marks` (the buffer may hold the
-        mark on another card) every card's."""
-        if self.restore_whole:
-            fill(cv, r)
-            return
-        x0, y0, x1, y1 = r[0], r[1], r[0] + r[2], r[1] + r[3]
-        x = x0
-        reach = _ui_draw.mark_reach("card") + 1
-        on = -1 if marks else self.nearest()
-        lim, vis = self._shelf()
-        for i, c in sorted(vis, key=lambda e: e[1][0]):
-            cx0 = max(c[0], x, lim)
-            cx1 = min(c[0] + c[2], x1)
-            if cx1 <= cx0:
-                continue
-            if cx0 > x:
-                fill(cv, (x, y0, cx0 - x, y1 - y0))
-            ct = max(c[1], y0)
-            cb = min(c[1] + c[3], y1)
-            k = self._corner_r(c[2])
-            if k and (on < 0 or i == on):
-                k += reach
-            k = min(k, (cb - ct) // 2)
-            if k > 0:
-                # rounded cards leave their corners' pixels to the backdrop:
-                # the rows the corners span are restored too
-                ct += k
-                cb -= k
-            if ct > y0:
-                fill(cv, (cx0, y0, cx1 - cx0, ct - y0))
-            if cb < y1:
-                fill(cv, (cx0, cb, cx1 - cx0, y1 - cb))
-            x = cx1
-        if x < x1:
-            fill(cv, (x, y0, x1 - x, y1 - y0))
-
     def _corner_r(self, side):
         """The corner radius of a card `side` across under the theme's depth:
         on the handheld its `card_r` on the hero and 7/10 of it on a
@@ -835,74 +619,6 @@ class Carousel(Launcher):
         if g[9] is not None:              # the desk's
             return r * 7 // 5 if side > g[2] else r
         return r if side > g[2] else r * 7 // 10
-
-    def _paint(self, cv, sheet_for, r):
-        """The desk's shelf, clipped to rect `r`: its caption, every card's
-        shadow (the theme's depth, `ui.cast`; a moving card keeps its own),
-        the cards, the selected one last and at rest under the theme's
-        focus mark."""
-        left, vis = self._shelf()
-        shows = self._shows
-        if r[0] < left:
-            r = (left, r[1], max(0, r[0] + r[2] - left), r[3])
-        clip = getattr(cv, "clip", None)
-        if clip is not None:
-            self._card_clip = r
-            clip(*r)
-        self._draw_shelf_caption(cv)
-        c = self.nearest()
-        for i, t in vis:
-            if shows[i]:
-                _ui_draw.cast(cv, self.theme, t, _ui_draw.CAST_CARD, _ui_draw.UNDER_SMALL)
-        for i, t in vis:
-            if shows[i]:
-                self._draw_home_card(cv, self.items[i], t, i == c, sheet_for)
-        if clip is not None:
-            self._card_clip = None
-            clip()
-
-    def _face(self, cv, it, pic, r, cover):
-        """A shelf card's face on the desk (`_draw_home_card`'s away from
-        the selection's mark): its picture, framed where its corners are
-        square."""
-        self._face_picture(cv, it, pic, r, cover)
-        if not r:
-            self._card_frame(cv, pic)
-
-    def _face_div(self, n):
-        return _COVER_BASE
-
-    def _face_ring(self):
-        return None
-
-    def _shelf(self):
-        """(left, cards) of the desk's shelf: it starts at its margin
-        `left`, where a card scrolled across it is cut, moving or at rest,
-        as the band's right edge cuts one; `cards` the (index, rect) it
-        shows."""
-        g = self._geom()
-        left = g[1][0] + g[9][4] - g[5]
-        return left, [e for e in self._visible() if e[1][0] + e[1][2] > left]
-
-    def _draw_shelf_caption(self, cv):
-        """The shelf's caption over its first card: the tab and its count,
-        apart by a dot, in the dim ink on the home's ground."""
-        th = self.theme or {}
-        fs = self.layout.fs
-        dk = self._geom()[9]
-        sc = dk[5][1]
-        lh = _ui_draw.font()[2] * sc
-        x = self.band_rect()[0] + dk[4]
-        y = dk[3] - 8 // dk[5][6] - lh
-        name = _TAB_NAME.get(self.tab, "")
-        count = str(len(self.items))
-        sep = 6 * fs
-        nw = _ui_draw.print_width(name, sc)
-        dim = th.get("ink_dim", 6)
-        cv.print_scaled(name, x, y, dim, sc)
-        x += nw + sep
-        cv.rect(x, _dot_top(y, sc, sc), sc, sc, dim)
-        cv.print_scaled(count, x + sc + sep, y, dim, sc)
 
     def _paint_details(self, cv):
         """The desk home's hero (a full paint's): its shadow, the
@@ -932,48 +648,3 @@ class Carousel(Launcher):
         if centre or self.dim is None or not self.handheld():
             return None
         return self.dim
-
-    def _mark_rect(self, cv, at, selected=False):
-        """The rect a card at `at` hands its focus mark: `at` shrunk by as
-        much as the theme's mark grows a card (a lift's `grow`, read off the
-        canvas's edge, where it draws nothing), so the mark's box is the
-        card's own side, raised where it lifts. The cover keeps its clean
-        scale (owner call 2026-10-17) and the lift's rim hugs it, with no
-        plate between (design review R3-05): a picture card lifts by its
-        rise and its shadow alone. `selected`: the mark is the selected
-        card's current lift (`ui_draw.focus`)."""
-        w, h = at[2], at[3]
-        _ink, box = _ui_draw.focus(cv, self.theme, (-4 * w - 64, -4 * h - 64, w, h),
-                                   item="card", after=True, selected=selected)
-        g = (box[2] - w) // 2
-        if g <= 0:
-            return at
-        return (at[0] + g, at[1] + g, w - 2 * g, h - 2 * g)
-
-    def _draw_home_card(self, cv, it, rect, centre, sheet_for):
-        NAMES = self._NAMES
-        # The centre card at rest takes the theme's focus mark (ui.focus; a
-        # lifted card draws raised, `_mark_rect`).
-        rest = centre and not self.moving
-        mark = rest and not self.tab_focus
-        # On the desk the selected card is the one the details pane
-        # describes: under touch, and while the tabs or the pane's buttons
-        # hold the focus, it keeps its lift as a current mark (design review
-        # R4-09); the theme's focus mark is the shelf's own focus.
-        sel = rest and self.desk() and (self.tab_focus or _ui_draw.input_kind() == "touch"
-                                        or not _ui_draw.marks()[0])
-        at = rect
-        if mark or sel:
-            at = self._mark_rect(cv, rect, sel)
-            _ink, rect = _ui_draw.focus(cv, self.theme, at, item="card",
-                                        r=self._corner_r(rect[2]), selected=sel)
-        cr = self._corner_r(rect[2])
-        self._draw_picture(cv, it, rect, centre, sheet_for, cr)
-        if self.is_broken(it):
-            _draw_broken_badge(cv, NAMES, self.theme or {},
-                               self._broken_badge_geom(rect))
-        if not cr:
-            self._card_frame(cv, rect)
-        if mark or sel:
-            _ui_draw.focus(cv, self.theme, at, item="card", r=cr,
-                           after=True, selected=sel)
