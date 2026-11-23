@@ -1,6 +1,6 @@
 {
- "bar/big_800x480_fs3_dark": "sha256:f554d35ebba4047eacbdf46537bcd4c56b9bafa4e73fb04561316c1f61f485f3",
- "bar/p4_1024x600_cs2_fs1_windowed": "sha256:3ed6344adbb43c5717a3fc4a10c5d294bda069c47a9b6e01428ebb1d8403c54c",
- "bar/p4_1024x600_fs2_windowed": "sha256:4964c8ccbabe37d432d667c95895418128365918c80d03df55b56a8890ad55ad",
- "bar/tdeck_320x240_fs1_dark": "sha256:07d3cac4ccfff4cfd48ac7816d483bf6c475cd9669353d2bfed0faf833e0525a"
+ "bar/big_800x480_fs3_dark": "sha256:08a26cfb1bcd7d40d3445eabe3474328f3e0f5e5f52d1753df99f36e8796d4e3",
+ "bar/p4_1024x600_cs2_fs1_windowed": "sha256:4af0d48059f64e72cb457b7dceb6033cf6e463ba9e15b00de5e1d6e6e8ebb1e9",
+ "bar/p4_1024x600_fs2_windowed": "sha256:280257bc113c4b65aa986d58097c143a13ca5ae7a34e8c8bbeafd1d2b6fb243c",
+ "bar/tdeck_320x240_fs1_dark": "sha256:4fdab3b52f2a3aa3b30a7b24d5c25fbe10900b34327d87310ea70a1e5b7c1155"
 }
