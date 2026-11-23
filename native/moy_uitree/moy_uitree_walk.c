@@ -3503,9 +3503,10 @@ static void draw_flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
     int32_t rest = flow_rest(e, c, s, k, model, row);
     if (rest < 0)
         return;
+    // the rest's rows each count the gap after them, as the page's do: the rows end at the
+    // page's foot, which a page that fills its room never scrolls past
     moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, out);
-    int32_t step_gap = out[4] - out[3] > 0 ? out[4] - out[3] : 0;
-    int32_t room = c->page.y + c->page.h - out[1] - (rest > 0 ? rest - step_gap : 0);
+    int32_t room = c->page.y + c->page.h - out[1] - rest;
     moy_ui_api_space(c, room > 0 ? room : 0);
 }
 

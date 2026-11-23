@@ -1039,6 +1039,12 @@ static void tip_draw(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
 
 void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     if (c->n_nest == 0) {
+        moy_ui_keep_t *k = mua_page_keep(c);
+        if (k != NULL && !c->no_foot) {
+            // a page whose rows run past it: its thumb, as a scroll region's (mua_nest_close)
+            mua_thumb_track(c, k, c->page, k->rows, c->scroll);
+            mua_thumb(c, s, c->page, k->rows, c->scroll);
+        }
         mua_page_close(c, s);
         tip_draw(c, s);
         mua_dialog_gone(c);

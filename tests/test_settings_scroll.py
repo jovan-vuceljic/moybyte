@@ -12,9 +12,13 @@ ROOT = Path(__file__).resolve().parent.parent
 _DT = 1 / 30
 
 
-def _ws(tmp_path, **kw):
+def _ws(tmp_path, ota=False, **kw):
+    """Settings open on a fresh console; `ota`: with the update rows, which
+    the page holds from its first frame."""
     from runtime import host_app
     ws = host_app.build_workstation(str(tmp_path / "carts"), **kw)
+    if ota:
+        _force_ota_rows(ws)
     ws.open_settings()
     return ws
 
@@ -78,8 +82,7 @@ def _settle(ws, drv, most=60):
 def test_every_row_is_reachable_by_keyboard(tmp_path):
     """Walking down reaches the page's last stop, scrolled into view, and
     walking back up reaches the first with the page back at its top."""
-    ws = _ws(tmp_path)
-    _force_ota_rows(ws)
+    ws = _ws(tmp_path, ota=True)
     drv = _drv(ws)
     sl = ws.settings_layer
     top = _band(ws)
@@ -116,8 +119,7 @@ def test_set_msel_reads_and_moves_the_focused_row(tmp_path):
 
 
 def test_a_drag_scrolls_the_page_and_is_no_tap(tmp_path):
-    ws = _ws(tmp_path)
-    _force_ota_rows(ws)
+    ws = _ws(tmp_path, ota=True)
     drv = _drv(ws)
     sl = ws.settings_layer
     lay = ws.layout
@@ -138,8 +140,7 @@ def test_a_fling_coasts_the_page_and_the_gate_recloses(tmp_path):
     """A drag let go at speed flings the page on (the engine's fling, every
     verbs page's): it keeps moving with no input, comes to rest, and then
     the console paints nothing more."""
-    ws = _ws(tmp_path)
-    _force_ota_rows(ws)
+    ws = _ws(tmp_path, ota=True)
     drv = _drv(ws)
     sl = ws.settings_layer
     lay = ws.layout
@@ -244,8 +245,7 @@ def test_a_key_step_paints_once(tmp_path):
     that scrolls paints the glide's frames and rests when it lands
     (docs/history/scroll_and_text_2026-10.md §7)."""
     import moy_ui
-    ws = _ws(tmp_path)
-    _force_ota_rows(ws)
+    ws = _ws(tmp_path, ota=True)
     drv = _drv(ws)
     sl = ws.settings_layer
     lay = ws.layout
