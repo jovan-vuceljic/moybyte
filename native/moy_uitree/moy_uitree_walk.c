@@ -3503,6 +3503,18 @@ static int32_t draw_wrap_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, 
     return top - y + step_gap;
 }
 
+// A row's rule at (x, y, w, h), inside the view its cells end at (moy_ui_api_cut).
+static void rule_in(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    if (c->cut_on) {
+        int32_t y1 = y + h < c->cut.y + c->cut.h ? y + h : c->cut.y + c->cut.h;
+        y = y > c->cut.y ? y : c->cut.y;
+        h = y1 - y;
+    }
+    if (h > 0)
+        fill_token(s, x, y, w, h, MOY_UI_T_BORDER);
+}
+
 // A row of a flowing page: its cells across, drawn, or with `dry` only measured. Answers the
 // height it moves the page's rows down by, its gap under it taken.
 static int32_t flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row, int dry)
@@ -3520,8 +3532,13 @@ static int32_t flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
     int32_t step_gap = out[4] - out[3] > 0 ? out[4] - out[3] : 0, used = 0;
     int32_t pad = len_of(e, NODE(k)->t_aux, model, row, 0);     // pad=: in from either side
     x += pad, room -= 2 * pad;
-    if (NODE(k)->lit & RW_WRAP)
-        return draw_wrap_row(e, c, s, model, row, kids, n, x, y, room, gap, step_gap, dry);
+    if (NODE(k)->lit & RW_WRAP) {
+        int cut = dry ? 0 : moy_ui_api_cut(c, !e->placed && !e->in_foot);  // as below
+        int32_t h = draw_wrap_row(e, c, s, model, row, kids, n, x, y, room, gap, step_gap, dry);
+        if (!dry)
+            moy_ui_api_cut(c, cut);
+        return h;
+    }
     for (int i = 0; i < n; i++) {
         const uit_node_t *G = NODE(kids[i]);
         if ((G->kind == UIT_BUTTON || G->kind == UIT_STEPPER) && (G->btn & BT_GROW))
@@ -3576,6 +3593,8 @@ static int32_t flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
     if (dry)
         return rh + step_gap;
     int grouped = moy_ui_api_group_row(c, s, rh);     // a row of an open group: its rule
+    // its cells scroll with the page: what they place ends at its view, as a stacked row does
+    int cut = moy_ui_api_cut(c, !e->placed && !e->in_foot);
     cx = at;
     for (int i = 0; i < n; i++) {
         int kind = NODE(kids[i])->kind;
@@ -3583,11 +3602,12 @@ static int32_t flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
         int32_t top = kind == UIT_GROUP || kind == UIT_PICTURE ? y : y + (rh - hs[i]) / 2;
         int32_t cell[4] = {cx + px, top, ws[i] - px, hs[i]};
         if (kind == UIT_RULE)
-            fill_token(s, cx, y, ws[i], rh, MOY_UI_T_BORDER);   // a rule between its neighbours
+            rule_in(c, s, cx, y, ws[i], rh);     // a rule between its neighbours
         else
             flow_draw(e, c, s, kids[i], model, row, cell);
         cx += ws[i] + gap;
     }
+    moy_ui_api_cut(c, cut);
     if (!grouped && !e->in_flow)
         moy_ui_api_space(c, rh + step_gap);
     return rh + step_gap;

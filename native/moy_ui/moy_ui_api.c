@@ -1289,6 +1289,8 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     c->fl.top = c->fl.mute = 0;
     c->typed_box.w = 0;
     c->hint_band.h = 0;
+    c->over_band.w = 0;
+    c->cut_on = 0;
     c->tip_at.w = 0;
     c->tip_shown = 0;
     c->bar.seen = 0;
@@ -2353,6 +2355,20 @@ static int clip_piece(clip_t *k) {
     return 0;
 }
 
+// Notes a page's draw of b that shows over the hints band: b inside `in` where it stacks, inside
+// the clip the canvas holds (moy_ui_api_over_band).
+static void over_band(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_box_t b, int stacked,
+                      moy_ui_box_t in) {
+    const int32_t *st = ((const moy_canvas_row_t *)s->dst)->st;
+    rc_t r = mua_rc_of(b);
+    rc_t clip = {st[MOY_ST_CX0] + st[MOY_ST_CAM_X], st[MOY_ST_CY0] + st[MOY_ST_CAM_Y],
+                 st[MOY_ST_CX1] + st[MOY_ST_CAM_X], st[MOY_ST_CY1] + st[MOY_ST_CAM_Y]};
+    if ((!stacked || mua_rc_cut(&r, mua_rc_of(in))) && mua_rc_cut(&r, clip)
+        && mua_rc_cut(&r, mua_rc_of(c->hint_band))) {
+        c->over_band = mua_box_of(r);
+    }
+}
+
 // Clip a box's draw to `in` when it stacks; answers whether any of it
 // shows. On a shift frame it answers once per piece the box reaches (with
 // what draws past its edges -- a mark's reach, a card's shadow), and
@@ -2367,8 +2383,20 @@ int mua_clip_row(moy_ui_ctx_t *c, clip_t *k, const moy_ui_sink_t *s, moy_ui_box_
     if (c->pop.hide) {
         return 0;                   // a popover sizing itself draws nothing
     }
+    if (!stacked && c->cut_on && c->n_nest == c->cut_nest) {
+        rc_t v = mua_rc_of(in);     // a flowing row's placed cell: clipped to its view, as the row
+        if (!mua_rc_cut(&v, mua_rc_of(c->cut))) {
+            return 0;
+        }
+        in = mua_box_of(v);
+        stacked = 1;
+    }
     if (stacked && (b.y + b.h <= in.y || b.y >= in.y + in.h || c->snap.out)) {
         return 0;
+    }
+    if (c->n_nest == 0 && c->hint_band.h > 0 && c->over_band.w == 0
+        && memcmp(&b, &c->hint_band, sizeof b) != 0) {
+        over_band(c, s, b, stacked, in);
     }
     if (!mua_armed(c)) {
         return stacked ? mua_clip_in(k, s, in) : 1;
@@ -4854,6 +4882,19 @@ void moy_ui_api_at(moy_ui_ctx_t *c, int x, int y, int w, int h) {
     c->at.h = (int16_t)(h > 0 ? h : 0);
     c->at_view = c->page;
     c->has_at = 1;
+}
+
+int moy_ui_api_cut(moy_ui_ctx_t *c, int on) {
+    int was = c->cut_on;
+    c->cut_on = (uint8_t)(on != 0);
+    c->cut = c->page;
+    c->cut_nest = c->n_nest;
+    return was;
+}
+
+int moy_ui_api_over_band(const moy_ui_ctx_t *c, int32_t out[4]) {
+    out[0] = c->over_band.x, out[1] = c->over_band.y, out[2] = c->over_band.w, out[3] = c->over_band.h;
+    return c->over_band.w > 0;
 }
 
 int moy_ui_api_box(const moy_ui_ctx_t *c, moy_ui_span_t id, int32_t out[4]) {

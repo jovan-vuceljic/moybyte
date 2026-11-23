@@ -690,6 +690,9 @@ typedef struct {
     moy_ui_box_t page;              // the content rect rows stack in
     moy_ui_box_t at;
     moy_ui_box_t at_view;           // the view ui.at's rect lay in: a scroll's, else the page
+    moy_ui_box_t cut;               // the view placed draws clip to while cut_on (moy_ui_api_cut)
+    uint8_t cut_on, cut_nest;       // cut_nest: the nest that view is of
+    moy_ui_box_t over_band;         // the first page draw this frame that met the hints band, w 0 none
     int16_t y;                      // the row cursor, in content coordinates
     int16_t scroll;                 // the page's scroll
     int8_t page_keep;               // the page's kept state, or -1
@@ -1769,6 +1772,13 @@ void moy_ui_api_enter(moy_ui_ctx_t *c, int dir);
 // that has not become a page's drag (nor caught a fling, which taps nothing).
 int moy_ui_api_tap_armed(const moy_ui_ctx_t *c);
 void moy_ui_api_at(moy_ui_ctx_t *c, int x, int y, int w, int h);
+// While `on`, what a ui.at rect places draws clipped to the view the rows stack in now, as a
+// stacked row's does: a flowing row's cells scroll with its page and end at its view. Answers
+// whether it was on.
+int moy_ui_api_cut(moy_ui_ctx_t *c, int on);
+// The first draw of the page's (not a dialog's or a popover's) this frame that met the hints
+// band, where it showed: 1 with its box at out, else 0. The UI checks' (tests/ui_checks.py).
+int moy_ui_api_over_band(const moy_ui_ctx_t *c, int32_t out[4]);
 // Where stop `id` drew in the frame drawn last (the host's: a popover beside
 // a row, a test's tap), or the card of the popover `id` drawn then, or of
 // the dialog titled `id`, or the button labelled `id` at that dialog's foot,

@@ -279,7 +279,7 @@ sets its children side by side on one row of the stack (a button at its
 natural width unless `grow=True`, a picture beside a `ui.group` column of
 labels, a `ui.rule()` a line down the row between its neighbours, a label
 after the row's filler at its end; children all at their own widths are
-centred). `ui.foot()` (the end look) sets its buttons at
+centred; what they draw ends at the view, as a stacked row's does). `ui.foot()` (the end look) sets its buttons at
 their natural widths at its end with a status label before them;
 `look="share"` shares its width among them. `ui.toast(text, icon=)` is a
 pill over the page above its foot; `ui.group("", look="card")` lays its
