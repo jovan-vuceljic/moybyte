@@ -2302,6 +2302,12 @@ int moy_wasi_main(moy_wasi_t *w, wasm_exec_env_t env, char *err, size_t errlen) 
         snprintf(err, errlen, "not a command: it exports no _start");
         return MOY_WASI_NOT_COMMAND;
     }
+    // The call below hands WAMR no cells, and WAMR writes a callee's results
+    // back through them: only a `_start` of WASI's type, () -> (), is run.
+    if (wasm_func_get_param_count(start, inst) != 0 || wasm_func_get_result_count(start, inst) != 0) {
+        snprintf(err, errlen, "not a command: its _start is not () -> ()");
+        return MOY_WASI_NOT_COMMAND;
+    }
     wasm_runtime_set_user_data(env, w);
     w->inst = inst;
     bool ok = wasm_runtime_call_wasm(env, start, 0, NULL);

@@ -597,23 +597,11 @@ def _ib_focus(tab):
     ws.mark_dirty()
 
 def _ib_picker():
-    # the sheet where the open pickers' body shows it, in the content's
-    # pixels: offset by the desk pane's body the Sprite tab draws in
+    # the sheet where the open pickers show it, in the content's pixels:
+    # offset by the desk pane's body the Sprite tab draws in
     _pl = ws.paint_layer
-    if not _pl._pop or _pl._host is None:
-        return None
-    _s = getattr(_pl, 'sheet_shown', 0)
-    if _s == 0:
-        # an image before the pickers kept it: the part inside the card's
-        # inset (the value row's, moy_ui_modal_band)
-        _c = _pl._host.box('Sprites')
-        _p = _pl._host.box('Sheet')
-        if _c is None or _p is None:
-            return None
-        _m = (18 if _pl.layout.desk else 10) * max(1, getattr(ws.sys_canvas, 'font_scale', 1))
-        _s = (max(_c[0], _p[0]), max(_c[1] + _m, _p[1]), min(_c[0] + _c[2], _p[0] + _p[2]),
-              min(_c[1] + _c[3] - _m, _p[1] + _p[3]))
-    if _s is None or _s[2] <= _s[0] or _s[3] <= _s[1]:
+    _s = _pl._pop == "pickers" and _pl.sheet_shown
+    if not _s or _s[2] <= _s[0] or _s[3] <= _s[1]:
         return None
     _d = getattr(ws, 'editor_desk', None)
     _o = _d._own_pane() if _d is not None and _d.active() else None

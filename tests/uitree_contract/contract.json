@@ -1662,6 +1662,10 @@
      "type": "bool",
      "level": 2
     },
+    "gutter": {
+     "type": "bool",
+     "level": 2
+    },
     "syntax": {
      "type": "word:plain,sgr,python,lua,json,markdown",
      "level": 2
@@ -2009,6 +2013,10 @@
      "type": "table",
      "level": 2
     },
+    "text": {
+     "type": "tpl",
+     "level": 2
+    },
     "on": {
      "type": "action|hook",
      "level": 2
@@ -2032,6 +2040,10 @@
    "level": 2,
    "section": "7.3",
    "props": {
+    "clear": {
+     "type": "int",
+     "level": 2
+    },
     "count": {
      "type": "int",
      "level": 2

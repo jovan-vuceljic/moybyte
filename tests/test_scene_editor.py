@@ -150,15 +150,15 @@ def test_scene_layout_reflows_bigger_panel():
     from runtime import layout_base
     lay = SU.SceneLayout(1024, 600, 1)
     assert lay.verbs and not lay.pane
-    assert lay.sv_avail_w >= 320 and lay.sv_avail_h >= 240
-    assert lay.sv_x0 + lay.sv_avail_w <= lay.tp_x0 - 4
+    assert lay.view_w >= 320 and lay.view_h >= 240
+    assert lay.view_x0 + lay.view_w <= lay.cx + lay.cw - 96
     layout_base.in_pane(True)
     try:
         lay = SU.SceneLayout(442, 384, 1)
     finally:
         layout_base.in_pane(False)
     assert lay.pane and not lay.verbs
-    assert (lay.sv_avail_w, lay.sv_avail_h) == (lay.cw - 4, lay.ch - 4)
+    assert (lay.view_w, lay.view_h) == (lay.cw, lay.ch)
 
 
 # -- the tab through the real Workstation (headless, host == device code) -----
@@ -178,6 +178,7 @@ def _open_ws(tmp_path, scenes=None, src="def _draw():\n    cls(0)\n"):
 def _tap(ws, px, py):
     """One full press+release tap through the scene layer's pointer facet."""
     layer = ws._content_layers["scene"]
+    ws.frame(0.016)                                  # the page placed the view
     ws.pointer.down = True
     layer.handle_pointer(px, py, True)
     ws.pointer.down = False
@@ -201,7 +202,7 @@ def test_tab_ladder_and_router_carry_the_scene_tab(tmp_path):
 def test_tap_places_selects_and_drag_moves(tmp_path):
     ws = _open_ws(tmp_path, scenes={"main": MAIN_SCENE})
     ws.text.open_scene()
-    ws.scene_ui.page().set_tool("stamp")
+    ws.scene_ui.set_tool("stamp")
     se = ws.scene_ui.sceneedit
     x0, y0, scale, vw, vh = ws.scene_ui._sv_metrics()
     # Tap empty world at view (100, 100) -> place a snapped actor there.
@@ -231,6 +232,7 @@ def test_drag_on_empty_world_pans_and_never_places(tmp_path):
     se = ws.scene_ui.sceneedit
     count = len(se.rows)
     layer = ws._content_layers["scene"]
+    ws.frame(0.016)                                  # the page placed the view
     x0, y0, scale, vw, vh = ws.scene_ui._sv_metrics()
     ws.pointer.down = True
     layer.handle_pointer(x0 + 150, y0 + 100, True)
@@ -256,7 +258,7 @@ def test_committed_gestures_reach_the_next_play_and_persist(tmp_path):
         "def _draw():\n    cls(0)\n"))
     assert ws.ns["n"] == 2
     ws.text.open_scene()
-    ws.scene_ui.page().set_tool("stamp")
+    ws.scene_ui.set_tool("stamp")
     x0, y0, scale, vw, vh = ws.scene_ui._sv_metrics()
     _tap(ws, x0 + 120, y0 + 40)                       # place actor #3
     ws.text.leave_menu()                                  # PLAY re-runs _init AND commits
@@ -292,25 +294,23 @@ def test_props_row_tag_typing_and_flip(tmp_path):
     ws.text.open_scene()
     ui = ws.scene_ui
     se = ui.sceneedit
-    page = ui.page()
     x0, y0, scale, vw, vh = ui._sv_metrics()
     _tap(ws, x0 + 44, y0 + 60)                        # select the coin
     # Tag opens its popover pre-filled with the current tag; the typed "gem"
     # is committed as one undo step (the typing itself, and the keyboard's
     # text mode while its field has focus, are tests/test_editor_hh_tabs.py's).
-    page.act("Tag")
-    assert page.pop == "tag"
-    assert page.text == "coin"
-    page.text = "gem"
-    page.commit()
-    assert page.pop is None
+    import editor_scene
+    ui.act("tag")
+    assert ui.popover() and editor_scene.s.tag_text == "coin"
+    ui.tagged("gem")
+    assert not ui.popover()
     assert se.selected()["tag"] == "gem"
     assert se.undo() and se.selected()["tag"] == "coin"
     # Flip, then Remove takes the actor away.
-    page.act("Flip")
+    ui.act("flip")
     assert se.selected().get("flip") == 1
     count = len(se.rows)
-    page.act("Remove")
+    ui.act("remove")
     assert len(se.rows) == count - 1 and se.sel is None
 
 
@@ -332,15 +332,15 @@ def test_zoom_cycles_and_camera_clamps(tmp_path):
     ws.text.open_scene()
     ui = ws.scene_ui
     assert ui._sv_metrics()[2] == 1
-    ui._cycle_zoom()
+    ui.cycle_zoom()
     assert ui._sv_metrics()[2] == 2
-    ui._pan(10000, 10000)                             # clamped to the world extents
+    ui.pan(10000, 10000)                             # clamped to the world extents
     se = ui.sceneedit
     ww, wh = se.world_size(ws.run.project.tilemap)
     x0, y0, scale, vw, vh = ui._sv_metrics()
     assert se.cam_x == ww - vw and se.cam_y == wh - vh
-    ui._cycle_zoom()
-    ui._cycle_zoom()                                  # wraps back to 1x, re-clamps
+    ui.cycle_zoom()
+    ui.cycle_zoom()                                  # wraps back to 1x, re-clamps
     assert ui._sv_metrics()[2] == 1
 
 

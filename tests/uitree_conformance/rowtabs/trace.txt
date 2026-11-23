@@ -1,0 +1,14 @@
+state objs [3 rows] +3 -0 ~0 moved 0 (in opened)
+build build page (builds 1)
+state obj '' -> '0' (from tabs 'obj')
+action chose from tabs 'obj' on 'Tabs'
+state said '' -> 'On 0' (in chose)
+drew label '{said}' -> 'On 0'
+state obj '0' -> '1' (from tabs 'obj')
+action chose from tabs 'obj' on 'Tabs'
+state said 'On 0' -> 'On 1' (in chose)
+drew label '{said}' -> 'On 1'
+state obj '1' -> '0' (from tabs 'obj')
+action chose from tabs 'obj' on 'Tabs'
+state said 'On 1' -> 'On 0' (in chose)
+drew label '{said}' -> 'On 0'

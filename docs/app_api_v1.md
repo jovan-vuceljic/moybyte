@@ -400,15 +400,15 @@ Python's alone.
 
 | kind | is | key props |
 |---|---|---|
-| `label(text)` | a line of text | `face=`, `tone=`, `icon=`, `wrap="word"` with `lines=`, `size="fit"`, `align=`, `scale=`, `w=` |
+| `label(text)` | a line of text | `face=`, `tone=`, `icon=`, `wrap="word"` with `lines=`, `size="fit"`, `size="text"` (in a placed row, as wide as its text and its icon), `align=`, `scale=`, `w=` |
 | `info(label, value)` | a label and its value on one row | `icon=`, `tag=` a pill, `signal=` 0 to 4 bars, `tone=` |
 | `status(text)` | a status line, cut at its `" · "` fields (no Lua) | |
 | `rule()` | a divider | |
 | `note(lines)` | a card in the page's flow | `icon=` (`"warn"` in the danger tone) |
-| `empty(title)` | what a page with nothing on it says; controls built in it stand under it | `icon=`, `lines=` |
+| `empty(title)` | what a page with nothing on it says; controls built in it stand under it; its lines wrap at word breaks to the column it stands in (a page, a cell); where its disc would push them past its room (its view, a placed page's stack), its words stand without it | `icon=`, `lines=` |
 | `toast(text)` | a pill over the page's foot, or a banner | `icon=`, `sub=`, `burst=`, `look="flat"`, `key=` the name a host's `rect_of` asks by |
 | `bubble(text)` | a chat message, a stop | `side="in"`/`"out"`, `head=`, `status=`, `signal=`, `tone="failed"`, `lines=`, `on=`, `cut=` |
-| `text_view(name)` | read-only lines of a text state or a model | `wrap=`, `follow=`, `syntax=`, `face=`, `look="well"` |
+| `text_view(name)` | read-only lines of a text state or a model | `wrap=`, `follow=`, `syntax=`, `face=`, `look="well"`, `gutter=` |
 | `picture(image)` | one picture | `side=`, `icon=`, `tone=`, `look="tile"`, `on=` makes it a stop |
 | `progress(value)` | a bar of an int state | `max=` (required), `label=`, `look="count"` |
 | `month()` | a month's calendar | `year=`, `month=`, `today=`, `prev=`, `next=` |
@@ -424,17 +424,17 @@ Python's alone.
 | `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=` |
 | `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `secret=`, `grow=`, `on=`, `changed=`, `when=` |
 | `seg(label, name)` | one of an enum's values, or of a model's rows | `labels=`, `text=`, `look=` (`seg`, `cycle`, `swatches`, `pictures`), `on=` |
-| `tabs(name, labels)` | a tab strip over an enum; a `switch` on the same name is its body | `icons=`, `offered=`, `hint=` |
+| `tabs(name, labels)` | a tab strip over an enum, or over a `row_of` a tab a row; a `switch` on the same name is its body | `icons=`, `offered=`, `hint=`, `text=` |
 | `stepper(value, prev, next)` | "‹ value ›", its chevrons two actions | `tone="dim"`, `grow=` |
-| `cells(name)` | a palette's colour cells over an int state | `count=`, `first=`, `cols=`, `side=`, `gap=`, `edge=`, `pick=` |
+| `cells(name)` | a palette's colour cells over an int state | `count=`, `first=`, `cols=`, `side=`, `gap=`, `clear=`, `edge=`, `pick=` |
 
 **Lists of rows**
 
 | kind | is | key props |
 |---|---|---|
-| `rows(model)` | a model's rows, each drawing the body (Python `with`, Lua the function) | `cur=` the `row_of` focus writes, `current=` the row marked, `check=`, `empty=`, `by=` with cases, `filter=`, `group=` |
+| `rows(model)` | a model's rows, each drawing the body (Python `with`, Lua the function) | `cur=` the `row_of` focus writes, `changed=` run with the row where the user moves it from one row to another (focus arriving from elsewhere writes `cur=` alone), `current=` the row marked, `check=`, `empty=`, `by=` with cases, `filter=`, `group=` |
 | `cards(model)`, `card(action)` | rows as cards; `card` is the body | `cur=`, `current=`, `w=`, `h=`, `cols=`, `flow=`, `look=` (`carousel`, `shelf`, `icons`, `column`); a card's `label=`, `sub=`, `image=`, `badge=`, `fill=` |
-| `table(model)`, `col(text)` | rows as a table, one `col` a column | `cols=` the header, `cur=`, `on=`, `empty=`; `row=` with one canvas child that draws each row |
+| `table(model)`, `col(text)` | rows as a table, one `col` a column | `cols=` the header, `cur=`, `changed=` (as a rows' list's), `on=`, `empty=`; `row=` (a height, or an int state holding one) with one canvas child that draws each row and, with `pointer=`, takes the press on its row (`ev.row`) |
 
 **Over the page**
 
@@ -468,7 +468,8 @@ path of its own (owner, 2026-10-29). A long document is a `text_view` or a
 - a button at its natural width unless `grow=True`, a field growing, a
   picture beside a `group` column of labels, a `rule()` a line down the row
   between its neighbours, a label after the row's filler at its end;
-  children all at their own widths are centred;
+  children all at their own widths are centred; what they draw ends at
+  the page's view, as a stacked row's does;
 - `wrap=True` packs its children from its start at their natural widths (a
   group as wide as its widest child), one that does not fit starting a line
   under them (the desk home's buttons); in a group's column the row stands
@@ -487,7 +488,9 @@ page, `text` over the `sub` line, `burst=` (0..255) its confetti; a dialog
 lies over the page.
 `ui.page(title, status=)` leads the hints band with its words (a page laid
 out in a split, its own or one in a switch's shown case, has the band cut
-from its room).
+from its room). A split among a page's other rows, or in a group or a
+scroll, stands where they flow instead, as tall as its tallest cell (a
+column split its cells' sum), each cell a column.
 
 **Groups and splits.** `ui.group("", look="card")` lays its rows on a card
 (as a split's cell, the cell is the card), and `look="rules"` parts its rows
@@ -496,10 +499,19 @@ with a rule as a captioned group's are (a `row` among them one of its rows);
 draws a rule between its cells; a row split's fixed sizes that its width
 cannot hold share it by their sizes, and a cell that is a row, a group or a
 seg widens to what it needs, its neighbours giving up at most half theirs.
+Groups in a `row` stand side by side, each a column of its rows (no
+caption), on a flowing page and a placed one.
+
+A column split's cells that run past its height take the overrun from its
+palettes (`ui.cells`), whose cells fit the room left them down to a third
+of their side (8 px at least); past that the column scrolls, its cells at
+their spans.
 
 **A placed page** gives each region a rect by the engine's one layout rule:
 a container gives each shown child its rect, fixed rows their height and
-the fills sharing the rest, a text editor whole lines. A Python app whose
+the fills sharing the rest, a text editor whole lines. A `rows` list
+standing in a placed stack (no `scroll` round it) is a fill that scrolls
+its rows, as a table is. A Python app whose
 state holds a `ui.doc` runs on the Editor's kinds (`text_editor`, `panes`),
 and its pages are placed; `split` and `grid` place their cells on any page.
 
@@ -507,7 +519,8 @@ and its pages are placed; `split` and `grid` place their cells on any page.
 
 - `label(..., scale=)` draws its face at that whole scale (a display line,
   never under the page's), and `w=` keeps its text that wide at most (a
-  measure of prose); `text_view(..., look="well")` lays its prose on a well.
+  measure of prose); `text_view(..., look="well")` lays its prose on a well,
+  and `gutter=True` numbers its lines in a gutter before them.
 - `button(..., kind="bar")` alone is a flat icon, narrower than a button's,
   the largest its row holds (in the shell's bar every icon alone draws at
   its zone's size, 16 units at the page's scale, centred in its cell), and
@@ -533,6 +546,11 @@ and its pages are placed; `split` and `grid` place their cells on any page.
   its label on a line of its own over the tiles where they would cut it;
   `ui.pictures.put(key, render=..., clear=True)` leaves a drawn picture's
   corner colour out, the tile showing there.
+- `tabs(name, text=)` bound to a `row_of` is a tab a row of its model, each
+  worded by the row template `text=` (the Editor's Blocks objects).
+- `cells(name, ..., clear=N)` shows colour N as clear, transparency's grey
+  checker under a white stroke corner to corner (the sprite editor's
+  colour 0).
 - `hints(MODEL, keys=, label=, tail=, drop=, on=)`: one keycap hint a row,
   no stop; the rows `tail=` holds stand at the row's end, the rest from its
   start in order, and where they run into the end the rows `drop=` holds go
@@ -663,8 +681,8 @@ A canvas in a rows' body, or a table's child that draws the table's rows
 | prop | does |
 |---|---|
 | `reads=` | the states its draw reads; the page's shift frames count them, and a read of another state is R01. A canvas that names none draws the frame after it whole |
-| `pointer=` | an action or hook `takes="pointer"`, handed a press and its drag and release in the canvas's own coordinates (`ev.kind` `"down"`, `"drag"`, `"up"`; `ev.x`, `ev.y`; `ev.row`). C reads `ut_point()` |
-| `keys=` | Python: `keys(i)` (`keys(i, row)` in a table) is handed the input while the canvas holds focus, and answers True for a key it took |
+| `pointer=` | an action or hook `takes="pointer"`, handed a press and its drag and release in the canvas's own coordinates (`ev.kind` `"down"`, `"drag"`, `"up"`; `ev.x`, `ev.y`; `ev.row`); while a popover or a dialog is open only a canvas inside it takes a press. C reads `ut_point()` |
+| `keys=` | Python: `keys(i)` (`keys(i, row)` in a table) is handed the input while the canvas holds focus, and answers True for a key it took; a canvas with no `keys=` is no stop |
 | `hint=` | the band's confirm word while it holds focus |
 | `h=`, `w=` | its size (a template); `ground=` the theme role painted under it |
 

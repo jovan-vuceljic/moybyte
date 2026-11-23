@@ -520,7 +520,8 @@ def _memo_put(items, kind, b, copy):
     _memo_k[i] = items
     _memo_c[i] = copy
     _memo_v[i] = (kind, b)
-    return b
+    _memo_hint[kind] = i                # its kind's first hint lands here, with the put's own
+    return b                            # allocation, not on the first lookup that hits it
 
 
 def _opts(items):

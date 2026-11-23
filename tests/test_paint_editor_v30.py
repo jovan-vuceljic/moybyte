@@ -23,21 +23,25 @@ def _on_the_night_fixture(monkeypatch):
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def _cell_center(C, lx, ly, dim):
+def _cell_center(ws, lx, ly, dim):
     """Screen pixel at the centre of grid cell (lx, ly) for an editor of side
-    `dim` pixels -- mirrors console._paint_grid_cell's inverse mapping."""
-    cell = C._PG_SPAN // dim
-    return (C._PG_X0 + lx * cell + cell // 2,
-            C._PG_Y0 + ly * cell + cell // 2)
+    `dim` pixels, where the last frame placed the grid."""
+    pl = ws.paint_layer
+    cell = pl.layout.span // dim
+    gx, gy = pl.grid_at()
+    return (gx + lx * cell + cell // 2, gy + ly * cell + cell // 2)
 
 
 def _open_paint(ws):
-    from runtime import host_app  # noqa: F401
     # Open the first cart that has a sheet, then the paint editor.
     ws.launcher.sel = 0
     ws.open()
     ws.text.open_paint()
     assert ws.menu_view == "paint"
+    from runtime import ui_draw
+    ui_draw.input_kind("touch")     # the presses that follow: touch's layout
+    ws.mark_dirty()
+    ws.frame(1 / 30)                # the page placed: its rects
 
 
 # -- Part B: larger sprites (PaintEditor logic) ------------------------------
@@ -146,14 +150,13 @@ def test_spr_with_wh_span_blits_a_16x16_image():
 # -- Part A: drag-to-draw through the pointer path ---------------------------
 
 def test_tap_paints_one_pixel(tmp_path):
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_paint(ws)
     drv = host_app.ConsoleDriver(ws)
     ws.paint.color = 11
-    x, y = _cell_center(C, 3, 4, ws.paint.dim)
+    x, y = _cell_center(ws, 3, 4, ws.paint.dim)
     drv.touch(x, y)
     drv.frame(1 / 30)
     drv.touch_up()
@@ -165,7 +168,6 @@ def test_tap_paints_one_pixel(tmp_path):
 def test_drag_paints_a_continuous_stroke_no_gaps(tmp_path):
     # Press on cell (0,0), drag to (7,0) sampling only the endpoints (a fast drag):
     # every cell on the line must be painted -- the line-fill closes the gaps.
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -174,10 +176,10 @@ def test_drag_paints_a_continuous_stroke_no_gaps(tmp_path):
     ws.paint.color = 12
     dim = ws.paint.dim
 
-    x0, y0 = _cell_center(C, 0, 0, dim)
+    x0, y0 = _cell_center(ws, 0, 0, dim)
     drv.touch(x0, y0)
     drv.frame(1 / 30)                              # press paints the first cell
-    x1, y1 = _cell_center(C, 7, 0, dim)
+    x1, y1 = _cell_center(ws, 7, 0, dim)
     drv.touch_drag(x1, y1)                          # jump straight to the far cell
     drv.frame(1 / 30)
     drv.touch_up()
@@ -189,7 +191,6 @@ def test_drag_paints_a_continuous_stroke_no_gaps(tmp_path):
 
 
 def test_drag_paints_a_diagonal_run(tmp_path):
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -198,10 +199,10 @@ def test_drag_paints_a_diagonal_run(tmp_path):
     ws.paint.color = 8
     dim = ws.paint.dim
 
-    x0, y0 = _cell_center(C, 0, 0, dim)
+    x0, y0 = _cell_center(ws, 0, 0, dim)
     drv.touch(x0, y0)
     drv.frame(1 / 30)
-    x1, y1 = _cell_center(C, 7, 7, dim)
+    x1, y1 = _cell_center(ws, 7, 7, dim)
     drv.touch_drag(x1, y1)
     drv.frame(1 / 30)
     drv.touch_up()
@@ -215,7 +216,6 @@ def test_drag_paints_a_diagonal_run(tmp_path):
 def test_release_resets_stroke_so_taps_dont_connect(tmp_path):
     # Tap (0,0), lift, tap (7,7): the two separate taps must NOT be joined by a line
     # (the gap between them stays blank). This guards the stroke-origin reset.
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -227,7 +227,7 @@ def test_release_resets_stroke_so_taps_dont_connect(tmp_path):
     mid_before = ws.sheet.pget(ox + 3, oy + 3)     # seed art may live here; capture it
 
     for (lx, ly) in ((0, 0), (7, 7)):
-        x, y = _cell_center(C, lx, ly, dim)
+        x, y = _cell_center(ws, lx, ly, dim)
         drv.touch(x, y)
         drv.frame(1 / 30)
         drv.touch_up()
@@ -293,13 +293,13 @@ def _map_cell_center(ws, cx, cy):
 def test_map_tap_paints_one_cell(tmp_path):
     # In the map editor a tap (press + release in place) stamps the brush into the
     # single cell under it -- the drag gesture is reserved for panning (#37).
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_map_cart(ws)
     assert ws.menu_view == "map"
     drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                  # the page placed: its view takes the presses
     me = ws.map_ui.mapedit
     me.n = 4                                       # a recognizable brush tile id
     cells_before = bytes(ws.run.project.tilemap.cells)
@@ -332,6 +332,7 @@ def test_map_drag_pans_view_while_tap_still_paints(tmp_path):
     _open_map_cart(ws)
     assert ws.menu_view == "map"
     drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                  # the page placed: its view takes the presses
     me = ws.map_ui.mapedit
     me.n = 4
     # Zoom all the way IN so the map is bigger than the view and a pan has room to
@@ -380,6 +381,7 @@ def test_map_drag_with_size_brush_reverts_the_whole_block(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_map_cart(ws)
     drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                  # the page placed: its view takes the presses
     me = ws.map_ui.mapedit
     me.n = 4
     me.size = 2
@@ -412,6 +414,7 @@ def test_map_empty_sky_tile_is_selectable_and_clears_a_cell(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_map_cart(ws)
     drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                  # the page placed: its view takes the presses
 
     # First fill a cell with a real tile.
     ws.map_ui.mapedit.n = 4
@@ -451,7 +454,9 @@ def _open_map(tmp_path):
     from runtime import host_app
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_map_cart(ws)
-    return ws, host_app.ConsoleDriver(ws)
+    drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                  # the page placed: its view takes the presses
+    return ws, drv
 
 
 def _tap(drv, x, y):
@@ -465,7 +470,9 @@ def _stop(ws, drv, stop):
     """The centre of the handheld Map page's stop `stop`, drawn afresh."""
     ws.mark_dirty()
     drv.frame(1 / 30)
-    return _btn_center(ws.map_ui.page().host.box(stop))
+    mu = ws.map_ui
+    r = mu.rect_of(stop)
+    return _btn_center(r if r is not None else mu._host.box(stop))
 
 
 def _blank_map(ws):
@@ -520,7 +527,7 @@ def test_map_rect_tool_fills_dragged_rectangle_as_one_step(tmp_path):
     _blank_map(ws)
     me = ws.map_ui.mapedit
     me.n = 5
-    _tap(drv, *_stop(ws, drv, "Tool Box"))
+    _tap(drv, *_stop(ws, drv, "box"))
     assert ws.map_ui.map_tool == "rect"
 
     x0, y0 = _map_cell_center(ws, 1, 1)
@@ -550,7 +557,7 @@ def test_map_flood_tool_taps_one_committed_step(tmp_path):
     _blank_map(ws)
     me = ws.map_ui.mapedit
     me.n = 7
-    _tap(drv, *_stop(ws, drv, "Tool Fill"))
+    _tap(drv, *_stop(ws, drv, "fill"))
     assert ws.map_ui.map_tool == "flood"
 
     cell = (me.cam_x + 2, me.cam_y + 2)
@@ -567,23 +574,24 @@ def test_map_resize_panel_grows_and_shrinks(tmp_path):
     tm.mset(0, 0, 3)                               # a top-left marker to preserve
     w0, h0 = tm.w, tm.h
 
-    page = ws.map_ui.page()
-    _tap(drv, *_stop(ws, drv, "Resize"))
-    assert page.pop == "resize"
-    drv.frame(1 / 30)                # the card's first frame measures its row
+    mu = ws.map_ui
+    _tap(drv, *_stop(ws, drv, "resize"))
+    assert mu._pop
+    drv.frame(1 / 30)                # the card's first frames measure its rows
+    drv.frame(1 / 30)
 
-    _tap(drv, *_stop(ws, drv, "Wider"))            # +1 column
-    _tap(drv, *_stop(ws, drv, "Taller"))           # +1 row
+    _tap(drv, *_stop(ws, drv, "wider"))            # +1 column
+    _tap(drv, *_stop(ws, drv, "taller"))           # +1 row
     assert ws.run.project.tilemap.w == w0 + 1 and ws.run.project.tilemap.h == h0 + 1
     assert ws.run.project.tilemap.mget(0, 0) == 3             # content preserved through resize
 
-    _tap(drv, *_stop(ws, drv, "Narrower"))         # -1 column
+    _tap(drv, *_stop(ws, drv, "narrower"))         # -1 column
     assert ws.run.project.tilemap.w == w0
     assert ws.run.project.tilemap.mget(0, 0) == 3
 
     drv.press("b")
     drv.frame(1 / 30)
-    assert page.pop is None
+    assert not mu._pop
 
     # The resized map serializes at the new dims and round-trips through map.moymap
     # (SAVE writes exactly this blob), so a cart reloads the grown grid + content.

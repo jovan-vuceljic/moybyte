@@ -1133,11 +1133,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not a text", "%s %s %s %s"),
                                   uit_kind_names[kind], name, src, uit_type_name(e->tmpls[t].type));
         return add_prop(e, node, name, src, repr, PK_TMPL, t);
-    } else if (kind == UIT_SEG && !strcmp(name, "text")) {
-        // a seg over a row_of: each row's word, a template over its model's rows; a seg
-        // bound to a row's field: its items, one a line, a template over that row
+    } else if ((kind == UIT_SEG || kind == UIT_TABS) && !strcmp(name, "text")) {
+        // a seg or tabs over a row_of: each row's word, a template over its model's rows; a
+        // seg bound to a row's field: its items, one a line, a template over that row
         if (!(N->lit & NL_FIELD) && (N->slot < 0 || e->slots[N->slot].type != UIT_ROWOF))
-            return uit_fail(e, UIT_E_ARG, UIT_MSG("seg text=%s before its row_of", "%s"), src);
+            return uit_fail(e, UIT_E_ARG, UIT_MSG("%s text=%s before its row_of", "%s %s"),
+                            uit_kind_names[kind], src);
         if (!(N->lit & NL_FIELD))
             model = e->slots[N->slot].model;
         tslot = &N->t_value;
@@ -1156,7 +1157,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
              (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon") || !strcmp(name, "fill"))) || (kind == UIT_CARDS && (!strcmp(name, "pad") || !strcmp(name, "tone") || !strcmp(name, "label"))) ||
              (kind == UIT_CELLS && (!strcmp(name, "first") || !strcmp(name, "count") || !strcmp(name, "cols") ||
-                                    !strcmp(name, "side") || !strcmp(name, "gap")))) {
+                                    !strcmp(name, "side") || !strcmp(name, "gap") || !strcmp(name, "clear")))) {
         // templates the draw finds among its props by name (uit_tmpl_prop); signal=, a month's
         // year=, month= and today= and a cards list's pad= ints; a carousel's tone= its caption's
         // ink, and label= its desk shelf's caption
@@ -1229,7 +1230,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             if (T->type != UIT_INT && !lit_int)
                 return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not an int", "%s %s %s %s"), uit_kind_names[kind], name, src,
                                       uit_type_name(T->type));
-        } else if (!(kind == UIT_SEG && !strcmp(name, "text"))) {      // a seg's row words: any type
+        } else if (!((kind == UIT_SEG || kind == UIT_TABS) && !strcmp(name, "text"))) {      // row words: any type
             if (T->type == UIT_BOOL || T->type == UIT_MODEL)
                 return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not a text", "%s %s %s %s"), uit_kind_names[kind], name, src,
                                       uit_type_name(T->type));
@@ -1324,6 +1325,17 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         if (src[0] == 'F' || src[0] == '0')
             N->lit |= CV_NOMARK;
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & CV_NOMARK) == 0);
+    }
+    if (kind == UIT_TABLE && !strcmp(name, "row") && src[0] == '{') {
+        // row= an int state: a row's height in pixels as the host measured it (the text's)
+        int t = uit_tmpl_compile(e, src, model);
+        if (t < 0)
+            return t;
+        if (e->tmpls[t].type != UIT_INT)
+            return uit_check_fail(e, "T03", UIT_MSG("table row=%s is a %s, not an int", "%s %s"), src,
+                                  uit_type_name(e->tmpls[t].type));
+        N->btn = 0;
+        return add_prop(e, node, name, src, repr, PK_TMPL, t);
     }
     if (kind == UIT_TABLE && !strcmp(name, "row")) {
         // row=: a row's height in the page's unit where a canvas child draws its rows
@@ -1557,7 +1569,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         int s = uit_slot_find(e, src, strlen(src));
         int t = s < 0 ? 0 : e->slots[s].type;
         int ok = kind == UIT_TOGGLE ? t == UIT_BOOL : UIT_IS_LIST(kind) || kind == UIT_HINTS ? t == UIT_MODEL
-                 : kind == UIT_TABS ? t == UIT_ENUM
+                 : kind == UIT_TABS ? t == UIT_ENUM || t == UIT_ROWOF
                  : kind == UIT_SEG ? t == UIT_ENUM || t == UIT_ROWOF : kind == UIT_SLIDER || kind == UIT_CELLS ? t == UIT_INT
                  : kind == UIT_FIELD ? t == UIT_TEXT : kind == UIT_TEXT_VIEW ? t == UIT_TEXT || t == UIT_MODEL : 0;
         if (!ok)
@@ -1644,6 +1656,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         // flow=True: its grid in the page's flow, scrolling with the page (CD_FLOW)
         N->lit = (uint8_t)((N->lit & ~CD_FLOW) | (src[0] == 'T' || src[0] == '1' ? CD_FLOW : 0));
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & CD_FLOW) != 0);
+    }
+    if (kind == UIT_TEXT_VIEW && !strcmp(name, "gutter")) {
+        // gutter=True: each line's number in a gutter before it (TV_GUTTER)
+        N->lit = (uint8_t)((N->lit & ~TV_GUTTER) | (!strcmp(src, "True") ? TV_GUTTER : 0));
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & TV_GUTTER) != 0);
     }
     if (kind == UIT_TEXT_VIEW && !strcmp(name, "look")) {
         // "well": its prose on a part's well (TV_WELL)
@@ -2032,6 +2049,14 @@ void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud)
 {
     e->draw_fn = fn;
     e->draw_ud = ud;
+}
+
+int uit_draw_clip(const uit_t *e, int32_t out[4])
+{
+    if (!e->draw_clip_on)
+        return 0;
+    memcpy(out, e->draw_clip, sizeof e->draw_clip);
+    return 1;
 }
 
 void uit_on_pic(uit_t *e, uit_pic_fn fn, void *ud)

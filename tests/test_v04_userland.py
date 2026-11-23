@@ -830,13 +830,19 @@ def test_host_console_paint_via_mouse(tmp_path):
     ws.text.open_paint()                                     # the Editor's PAINT, over the run
     drv.frame(1 / 30)
     assert ws.menu_view == "paint" and ws.paint is not None
-    lay = ws.paint_layer.layout
-    sx = lay.sw_x0 + (12 % lay.sw_cols) * lay.sw        # palette swatch for color 12
-    sy = lay.sw_y0 + (12 // lay.sw_cols) * lay.sw
-    drv.click(sx + 2, sy + 2)
+    from runtime import ui_draw
+    ui_draw.input_kind("touch")                         # the clicks that follow: touch's layout
+    ws.mark_dirty()
     drv.frame(1 / 30)
+    pl = ws.paint_layer
+    px, py, _pw, _ph = pl.rect_of("color")
+    sw = pl.layout.sw
+    drv.click(px + (12 % 2) * sw + 2, py + (12 // 2) * sw + 2)   # palette swatch for color 12
+    drv.frame(1 / 30)
+    drv.frame(1 / 30)                                   # (the cell's on= runs the frame after)
     assert ws.paint.color == 12
-    drv.click(lay.pg_x0 + 2, lay.pg_y0 + 2)             # paint sprite 0, pixel (0,0)
+    gx, gy = pl.grid_at()
+    drv.click(gx + 2, gy + 2)                           # paint sprite 0, pixel (0,0)
     drv.frame(1 / 30)
     assert ws.sheet.tget(0, 0, 0) == 12
 
@@ -1314,7 +1320,7 @@ def _map_tap(ws, drv, stop):
     """Tap stop `stop` of the handheld Map page where it drew last."""
     ws.mark_dirty()
     drv.frame(1 / 30)
-    x, y, w, h = ws.map_ui.page().host.box(stop)
+    x, y, w, h = ws.map_ui.rect_of(stop)
     drv.click(x + w // 2, y + h // 2)
     drv.frame(1 / 30)
     drv.frame(1 / 30)
@@ -1336,7 +1342,7 @@ def test_host_console_map_size_brush_stamps_block_via_taps(tmp_path):
     assert ws.menu_view == "map"
     drv = host_app.ConsoleDriver(ws)
     me = ws.map_ui.mapedit
-    _map_tap(ws, drv, "Brush size")
+    _map_tap(ws, drv, "size")
     assert me.size == 2
     mx, my = _mv0(ws)
     me.n = 5
@@ -1347,7 +1353,7 @@ def test_host_console_map_size_brush_stamps_block_via_taps(tmp_path):
     assert ws.run.project.tilemap.mget(cx, cy) == 5 and ws.run.project.tilemap.mget(cx + 1, cy) == 6
     assert ws.run.project.tilemap.mget(cx, cy + 1) == 5 + cols
     assert ws.run.project.tilemap.mget(cx + 1, cy + 1) == 6 + cols
-    _map_tap(ws, drv, "Tool Erase")
+    _map_tap(ws, drv, "erase")
     drv.click(mx + 2, my + 2)                # the eraser clears the whole block
     drv.frame(1 / 30)
     for dy in range(2):
@@ -1368,13 +1374,13 @@ def test_host_console_map_open_place_and_render(tmp_path):
     drv.frame(1 / 30)
     assert ws.menu_view == "map" and ws.map_ui.mapedit is not None
     # pick the 2nd palette tile (id == map_page + 1) ...
-    lay = ws.map_ui.layout
-    from runtime import editor_map
-    px = lay.tp_x0 + 1 * editor_map.CELL
-    py = lay.tp_y0
+    from runtime import view_host as map_editor_ui
+    bx, by, _w, _h = ws.map_ui.rect_of("brushes")
+    px = bx + (map_editor_ui.BRUSH_PAD + map_editor_ui.CELL) * ws.map_ui.layout.unit
+    py = by + map_editor_ui.BRUSH_PAD * ws.map_ui.layout.unit
     drv.click(px + 2, py + 2)
     drv.frame(1 / 30)
-    assert ws.map_ui.mapedit.n == ws.map_ui.map_page + 1
+    assert ws.map_ui.mapedit.n == ws.map_ui.brush_page + 1
     # ... then stamp it onto the top-left visible map cell and confirm mget reflects it
     mx, my = _mv0(ws)
     drv.click(mx + 2, my + 2)
@@ -1394,11 +1400,12 @@ def test_host_console_map_erase_and_pan(tmp_path):
     drv.frame(1 / 30)                   # (the home's row lands on it)
     drv.press("run"); drv.frame(1 / 30)
     ws.text.open_map()                                       # the Editor's MAP, over the run
+    drv.frame(1 / 30)                                        # the page placed
     ws.map_ui.mapedit.n = 3
     mx, my = _mv0(ws)
     drv.click(mx + 2, my + 2); drv.frame(1 / 30)               # stamp tile 3 at (0,0)
     assert ws.run.project.tilemap.mget(0, 0) == 3
-    _map_tap(ws, drv, "Tool Erase")                            # ERASE on
+    _map_tap(ws, drv, "erase")                            # ERASE on
     assert ws.map_ui.map_erase
     drv.click(mx + 2, my + 2); drv.frame(1 / 30)               # now a tap erases
     assert ws.run.project.tilemap.mget(0, 0) == TileMap.EMPTY
@@ -1422,6 +1429,7 @@ def test_host_console_map_save_roundtrips(tmp_path):
     drv.press("run"); drv.frame(1 / 30)
     cart_path = ws.cart["path"]
     ws.text.open_map()                                       # the Editor's MAP, over the run
+    drv.frame(1 / 30)                                        # the page placed
     ws.map_ui.mapedit.n = 6
     mx, my = _mv0(ws)
     drv.click(mx + 2, my + 2); drv.frame(1 / 30)               # stamp tile 6 at (0,0)
@@ -1447,6 +1455,7 @@ def test_map_edit_seen_by_running_cart_via_gen(tmp_path):
     tm = ws.run.project.tilemap
     before = tm.gen
     ws.text.open_map()                                       # the Editor's MAP, over the run
+    drv.frame(1 / 30)                                        # the page placed
     mx, my = _mv0(ws)
     drv.click(mx + 2, my + 2); drv.frame(1 / 30)               # stamp a cell
     assert tm.gen > before                                # mset bumped gen (live pickup)
@@ -1474,7 +1483,9 @@ def _open_cart_map(tmp_path, cart_name):
     ws.open()
     ws.text.open_map()
     assert ws.menu_view == "map" and ws.map_ui.mapedit is not None
-    return C, ws, host_app.ConsoleDriver(ws)
+    drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)                  # the page placed: its view takes the presses and keys
+    return C, ws, drv
 
 
 def test_map_default_zoom_fits_whole_shipped_maps(tmp_path):
@@ -1526,7 +1537,7 @@ def test_map_cycle_zoom_increases_cell_then_lands_on_overview(tmp_path):
         x0, y0, cell, cols, rows = ws.map_ui._mv_metrics()
         seen.append((ws.map_ui.map_zoom, cell, cols * rows,
                      ws.map_ui._mv_overview()))
-        _map_tap(ws, drv, "Zoom")                        # tap ZOOM -> next rung
+        _map_tap(ws, drv, "zoom")                        # tap ZOOM -> next rung
     # Back to the default after a full cycle.
     assert ws.map_ui.map_zoom == 0
     detail = [s for s in seen if not s[3]]
@@ -1558,7 +1569,7 @@ def test_map_tap_and_sky_hit_right_cell_after_zoom(tmp_path):
     assert ws.run.project.tilemap.mget(2, 1) == 5
     # The eraser, then a tap on the same cell -> it clears to EMPTY (the right cell,
     # at zoom).
-    _map_tap(ws, drv, "Tool Erase")
+    _map_tap(ws, drv, "erase")
     assert ws.map_ui.map_erase
     drv.touch(px, py); drv.frame(1 / 30); drv.touch_up(); drv.frame(1 / 30)
     assert ws.run.project.tilemap.mget(2, 1) == ws.run.project.tilemap.EMPTY

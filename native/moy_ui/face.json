@@ -26,6 +26,7 @@
       {"api": "icon", "ret": "bool", "run": "draw"},
       {"api": "box", "out": {"out": 4}, "ret": "if"},
       {"api": "hit_box", "out": {"out": 4}, "ret": "if", "doc": "The part of a stop's box a press takes (moy_ui_api_hit_box): its box inside its page's view at out, else 0."},
+      {"api": "over_band", "out": {"out": 4}, "ret": "if", "doc": "The first page draw of the frame that met the hints band (moy_ui_api_over_band): where it showed at out, else 0."},
       {"api": "progress", "run": "draw"},
       {"api": "list", "opts": ["items"], "run": "draw"},
       {"api": "part", "out": {"out": 5}, "run": "draw"},

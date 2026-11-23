@@ -18,8 +18,9 @@ import uitree_reference as R  # noqa: E402
 CONFIGS = ("tdeck_320x240_fs1_dark", "p4_1024x600_fs2_windowed", "big_800x480_fs3_dark",
            "p4_1024x600_cs2_fs1_windowed")
 KEYS = ("bar", "logo", "flip", "meter", "bump", "body", "left", "switch:mode", "note", "side", "foot")
-# focus walks the bar; Flip turns the switch to its other case and back; Bump counts
-SCRIPT = ["k:right", "k:a", "k:right", "k:a", "k:down", "k:a", "k:up", "k:left", "k:a"]
+# focus walks the bar from Flip (its canvases take no keys); Flip turns the switch to its
+# other case and back; Bump counts
+SCRIPT = ["k:a", "k:right", "k:a", "k:down", "k:a", "k:up", "k:left", "k:a"]
 
 
 def _run(engine, config):

@@ -2138,8 +2138,11 @@ function T.table(name, o, body)
   local ok, err = pcall(run_body, c, body)
   ROWCTX = sr
   if not ok then error(err, 0) end
-  for _, k in ipairs(c.kids) do
-    if k.kind ~= "col" then fail("N03", k.at, "ui." .. k.kind .. " in a ui.table", "ui.col, one a column", "ui." .. k.kind) end
+  local parts = n.o.row ~= nil and #c.kids == 1 and c.kids[1].kind == "canvas"
+  for _, k in ipairs(c.kids) do       -- (with row=, one canvas that draws each row)
+    if k.kind ~= "col" and not parts then
+      fail("N03", k.at, "ui." .. k.kind .. " in a ui.table", "ui.col, one a column, or with row= one ui.canvas", "ui." .. k.kind)
+    end
   end
   if n.o.cols and #n.o.cols ~= #c.kids then
     fail("N01", at, "ui.table(" .. q(name) .. ") has " .. #n.o.cols .. " headers and " .. #c.kids .. " columns", "one header a column", tostring(#c.kids))
@@ -2162,9 +2165,25 @@ function T.tabs(name, o, extra)
   local at = where()
   local n = node("tabs", at)
   if extra ~= nil then fail("N01", at, "ui.tabs takes its state and its props", "ui.tabs(NAME, { labels = \"TABLE\" })", describe(extra)) end
-  local ty = head_state("tabs", name, { "enum" }, at)
+  local ty = head_state("tabs", name, { "enum", "rowof" }, at)
   n.a[2] = name
+  if ty.t == "rowof" then
+    local m = DECL[ty.model]
+    local ctx = { fields = m.fields, order = m.order, name = ty.model }
+    local sr = ROWCTX
+    ROWCTX = ctx
+    local ok, err = pcall(check_opts, "tabs", o, at)
+    ROWCTX = sr
+    if not ok then error(err, 0) end
+    n.o = err
+    if n.o.text == nil or n.o.labels ~= nil or n.o.icons ~= nil or n.o.offered ~= nil then
+      fail("N01", at, "ui.tabs(" .. q(name) .. ") over a row_of words each row with text", "text = \"{.FIELD}\"", n.o.labels and "labels" or "none")
+    end
+    if n.o.on ~= nil then use_action(n.o.on, "none", at, "ui.tabs' on", false) end
+    return n
+  end
   n.o = check_opts("tabs", o, at)
+  if n.o.text ~= nil then fail("N01", at, "ui.tabs(" .. q(name) .. "): text words a row_of's rows", "labels = \"TABLE\" for an enum", "text") end
   for _, p in ipairs({ "labels", "icons" }) do
     local tn = n.o[p]
     if tn == nil and p == "labels" then
@@ -2333,7 +2352,7 @@ T.on = not_here("ui.on", "the handler is the third argument of ui.action or the 
 local function ident(k)
   if k.o.key then return k.o.key end
   if k.kind == "item" then return k.action end
-  if k.kind == "seg" or k.kind == "text_view" then return k.a[2] end
+  if k.kind == "seg" or k.kind == "text_view" or k.kind == "tabs" then return k.a[2] end
   if k.kind == "table" then return k.a[1] end
   if k.kind == "button" or k.kind == "link" then return k.action end
   if k.kind == "toggle" or k.kind == "slider" or k.kind == "field" then return k.a[2] end
@@ -2401,13 +2420,15 @@ local function page_def(name, at)
 end
 
 -- the event a canvas's pointer handler is handed: kind ("down", "drag",
--- "up"), x and y in the canvas, source ("touch"); read-only
+-- "up"), x and y in the canvas, source ("touch"), row (the list row it
+-- stands in, else nil); read-only
 local EvMT = { __newindex = function(_, k)
   fail("S03", where(), "an event is read-only (ev." .. tostring(k) .. " = ...)", "a read", "a write",
        "a canvas handler reads the event; it writes state")
 end }
-local function event(kind, x, y, source)
-  return setmetatable({}, { __index = { kind = kind, x = x, y = y, source = source }, __newindex = EvMT.__newindex })
+local function event(kind, x, y, source, row)
+  return setmetatable({}, { __index = { kind = kind, x = x, y = y, source = source, row = row },
+                            __newindex = EvMT.__newindex })
 end
 
 local function fire(name, from, ...)

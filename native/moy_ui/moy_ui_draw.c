@@ -443,8 +443,24 @@ int moy_ui_sink_glyph(const moy_ui_sink_t *s, int g, int x, int y, int w, int h,
     return MOY_UI_OK;
 }
 
+// A clear colour's cell at (x, y), `t` across: the grey checker in squares of `q`, its first
+// light, then the white stroke from its top right corner to its bottom left.
+static void clear_cell(draw_t *d, int x, int y, int t, int q) {
+    int dark = moy_theme_fixed(MOY_THEME_FIXED_DARK), white = moy_theme_fixed(MOY_THEME_FIXED_WHITE);
+    fill(d, x, y, t, t, moy_theme_fixed(MOY_THEME_FIXED_LIGHT));
+    for (int j = 0; j * q < t; j++) {
+        for (int i = (j & 1) ? 0 : 1; i * q < t; i += 2) {
+            int w = t - i * q < q ? t - i * q : q, h = t - j * q < q ? t - j * q : q;
+            fill(d, x + i * q, y + j * q, w, h, dark);
+        }
+    }
+    for (int k = 0; k < t; k++) {
+        fill(d, x + t - 1 - k, y + k, 1, 1, white);
+    }
+}
+
 int moy_ui_cells_draw(const moy_ui_sink_t *s, int x, int y, int first, int count, int cols,
-                      int side, int gap, int cur, int ring, int edge) {
+                      int side, int gap, int cur, int ring, int edge, int clear) {
     draw_t d;
     open_draw(s, &d);
     int t = side - gap;
@@ -452,8 +468,14 @@ int moy_ui_cells_draw(const moy_ui_sink_t *s, int x, int y, int first, int count
         return MOY_UI_OK;
     }
     int rows = (count + cols - 1) / cols;
+    int fs = s->fs > 0 ? s->fs : 1, q = t / 4 > 3 * fs ? t / 4 : 3 * fs;
     for (int i = 0; i < count; i++) {
-        fill(&d, x + (i % cols) * side, y + (i / cols) * side, t, t, (first + i) & 63);
+        int cx = x + (i % cols) * side, cy = y + (i / cols) * side;
+        if (first + i == clear) {
+            clear_cell(&d, cx, cy, t, q);
+        } else {
+            fill(&d, cx, cy, t, t, (first + i) & 63);
+        }
     }
     int sf = moy_ui_token(d.look, MOY_UI_T_SURFACE);
     if (edge) {

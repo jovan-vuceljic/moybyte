@@ -25,7 +25,7 @@ import pytest
 
 import uitree_conf as C
 
-NAMES = ("counter", "list", "pages", "gates", "kinds", "lists", "pictures")
+NAMES = ("counter", "list", "pages", "gates", "kinds", "lists", "pictures", "rowtabs")
 SMALL, DESK = C.CONFIGS
 
 # the rows of the glass outside the page's content: the bar, the hints band
@@ -71,7 +71,7 @@ LUA_DUMP = ("the dump's grammar is open (F-30); Lua keys nodes by kind (`info`),
 KNOWN = {
     ("dump", "counter", None): LUA_DUMP, ("dump", "list", None): LUA_DUMP,
     ("dump", "pages", None): LUA_DUMP, ("dump", "gates", None): LUA_DUMP, ("dump", "kinds", None): LUA_DUMP,
-    ("dump", "lists", None): LUA_DUMP, ("dump", "pictures", None): LUA_DUMP,
+    ("dump", "lists", None): LUA_DUMP, ("dump", "pictures", None): LUA_DUMP, ("dump", "rowtabs", None): LUA_DUMP,
 }
 for _n in NAMES:
     KNOWN[("content", _n, DESK)] = LUA_SCALE

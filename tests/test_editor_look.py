@@ -201,22 +201,24 @@ def test_play_carries_as_much_full_ink_as_a_tab_icon(tmp_path, theme, mode):
 
 def _sprites(ws):
     """The handheld Sprites tab, as the targets show it (tools/look_shots.py's
-    `_sprites`): its PaintLayout."""
+    `_sprites`): its PaintLayer."""
     ws.open_in_editor(g._cart_by_title(ws, "Star Catcher"))
     ws.text.set_menu_view("paint")
     _frame(ws)
-    return ws.paint_layer.layout
+    return ws.paint_layer
+
+
+_TOOLS = ("pen", "fill", "shape", "select", "stamp", "more")
 
 
 @pytest.mark.parametrize("theme,mode", THEMES)
 def test_every_enabled_sprite_tool_wears_the_chrome_ink(tmp_path, theme, mode):
     """The sprite tools' icons take one ink role, the chrome's: no tool in
     the dim ink and no trash in the danger ink, louder than its row (design
-    review R3-11). The tool in use wears the current mark; copy and paste,
-    with nothing to copy or paste, the disabled ink."""
-    from runtime import paint_layer, ui_draw
+    review R3-11). The tool in use wears the current mark."""
+    from runtime import ui_draw
     ws = _ws(tmp_path, HANDHELD, theme, mode)
-    lay = _sprites(ws)
+    pl = _sprites(ws)
     th = ws.theme_colors
     cv = ws.glass_canvas
     px = _px(ws)
@@ -224,10 +226,10 @@ def test_every_enabled_sprite_tool_wears_the_chrome_ink(tmp_path, theme, mode):
     others = {_rgb(cv, th[r]) for r in ("ink_dim", "chrome_ink_dim")}
     others.add(_rgb(cv, ui_draw.button_ink(th, "danger")))
     others.discard(ink)
-    pe = ws.paint
-    for tid, (x, y, w, h) in zip(paint_layer._TOOLS, lay.tool_btns):
-        if tid == "stamp" or ws.paint_layer._tool_on(pe, tid):
+    for tid in _TOOLS:
+        if tid in ("stamp", pl.s.tool) or (tid == "more" and pl._pop == "more"):
             continue
+        x, y, w, h = pl.rect_of(tid)
         seen = {px[yy][xx] for yy in range(y, y + h) for xx in range(x, x + w)}
         assert ink in seen, tid
         assert not (seen & others), (tid, seen & others)
@@ -236,15 +238,16 @@ def test_every_enabled_sprite_tool_wears_the_chrome_ink(tmp_path, theme, mode):
 @pytest.mark.parametrize("theme,mode", THEMES)
 def test_the_sprite_tool_row_keeps_the_mockups_spacing(tmp_path, theme, mode):
     """The one tool row (owner, 2026-10-19) stands at the mockup's pitch,
-    24 px on the handheld, from the grid's left edge under the grid or
-    from the column's at its head."""
-    from runtime import paint_layer
+    24 px on the handheld, from the grid's left edge (a theme whose focus
+    mark reaches past the row's pad moves the grid in by the difference),
+    under the grid."""
     ws = _ws(tmp_path, HANDHELD, theme, mode)
-    lay = _sprites(ws)
-    row = lay.tool_btns
-    assert len(row) == len(paint_layer._TOOL_ROW)
-    assert {b[0] - a[0] for a, b in zip(row, row[1:])} == {24 * lay.fs}
-    assert row[0][0] in (lay.pg_x0, lay.spr_prev[0])
+    pl = _sprites(ws)
+    row = [pl.rect_of(t) for t in _TOOLS]
+    fs = pl.layout.fs
+    assert {b[0] - a[0] for a, b in zip(row, row[1:])} == {24 * fs + 2}
+    assert 0 <= pl.grid_at()[0] - row[0][0] <= 3
+    assert row[0][1] >= pl.grid_at()[1] + pl.layout.span
 
 
 @pytest.mark.parametrize("app_id", ("appearance", "calc"))

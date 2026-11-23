@@ -70,7 +70,7 @@ enum {
     UIT_F_DESK = 1, UIT_F_ON_BAR = 2, UIT_F_BAND = 4, UIT_F_BARE = 8, UIT_F_TRACE = 16,
     UIT_F_UP = 32, UIT_F_DOWN = 64,
     UIT_F_GEN = 128,        // the host draws shift frames: the page carries its gen where it may
-    UIT_F_BAR = 1 << 16,    // the page is a bar: every icon alone in it draws at one size, the zone's
+    UIT_F_BAR = 1 << 17,    // the page is a bar: every icon alone in it draws at one size, the zone's
 };
 // The frame flags' bits 8..15: the pages on the stack (the band's Back).
 #define UIT_F_PAGES_SHIFT 8
@@ -307,6 +307,9 @@ int uit_still(uit_t *e, const moy_ui_ctx_t *c, int x, int y, int w, int h, int f
 // one, C).
 typedef void (*uit_draw_fn)(void *ud, int node, int model, int row, int x, int y, int w, int h);
 void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud);
+// Inside a canvas's draw: what shows of its rect (x, y, w, h into out) where the walk draws it
+// as a table's part, the view cutting the rows at its edges; 0 and out untouched elsewhere.
+int uit_draw_clip(const uit_t *e, int32_t out[4]);
 // A card's or a picture's image (`image=`, its template's text `pic`, n bytes; never empty): the
 // front end finds, decodes and draws it. With `r` NULL it answers 0 where it does not hold the
 // picture, else a positive number that moves with the picture's pixels (the card then draws no icon

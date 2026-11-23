@@ -302,7 +302,7 @@ carries one, `main.wasm` on the interpreter otherwise or when that one is
 refused for anything but tamper evidence, `device/moycore_glue.py`'s
 `WasmRuntime`), registers the WASI table when the runtime is up, refuses a
 module importing anything but WASI, `moybyte.term` and `moybyte.os` or exporting no
-`_start` once it is loaded, begins its call into `_start` on the session's
+`_start` of WASI's type, () -> (), once it is loaded, begins its call into `_start` on the session's
 thread and answers at once, making whichever session was current current
 again. The run then goes in steps (`moy_wasi.h`, "IN STEPS"): each
 `command_step()` serves the natives' bodies, which hop from the session's

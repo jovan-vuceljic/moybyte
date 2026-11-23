@@ -150,7 +150,7 @@ enum { TS_FLAT = 1 };
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.
 enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 // A text view's options (`lit`); its syntax's index in `btn` (ui.py's _SYNTAXES).
-enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8 };
+enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8, TV_GUTTER = 16 };
 // A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large"
 // (`btn`).
 enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4 };
@@ -234,6 +234,7 @@ typedef struct {
     uint8_t depth, ghost, arranging;
     uint8_t path[PN_DEPTH];
     int16_t root, alone;        // the outermost panes this pass; the pane the placement stood alone
+    int16_t alone_r[4];         // ...and the rect it stood alone over (the outermost panes')
     int16_t least[2];           // the outermost panes' least size, gutters in
     uint32_t tap_key, tap_at;   // the last tap on a divider (its split's id hashed, its index) and when
     int32_t writes;             // held sizes written or put back since the host last asked
@@ -381,6 +382,8 @@ struct uit {
     const char *tvl_s;
     uit_draw_fn draw_fn;        // a canvas's draw, the front end's
     void *draw_ud;
+    int32_t draw_clip[4];       // a table part's clip while its canvas draws (`uit_draw_clip`)
+    uint8_t draw_clip_on;
     uit_pic_fn pic_fn;          // a card's or a picture's image, the front end's
     void *pic_ud;
     // The page's carousel as the last frame drew it (uit_carousel's words), its node + 1 (0: none
@@ -495,7 +498,7 @@ const char *uit_label_word(const uit_t *e, int table, const char *key, size_t n)
 // moy_uitree_walk.c
 int uit_act_can(uit_t *e, int a, int model, int row);
 int uit_shown(uit_t *e, int node, int model, int row);
-void uit_cur_moved(uit_t *e, int node, const char *v, size_t n, const char *why);
+void uit_cur_moved(uit_t *e, int node, const char *v, size_t n, const char *why, int user);
 int uit_model_of(uit_t *e, int node);
 // The rows node `node` is in (itself included), or -1.
 int uit_list_of(const uit_t *e, int node);

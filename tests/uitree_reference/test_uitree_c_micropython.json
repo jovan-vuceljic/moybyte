@@ -178,19 +178,31 @@
  "conf/across": [
   [
    "build build page (builds 1)",
-   "action flip from button 'flip' on ''",
-   "state mode 'words' -> 'rows' (in flip)",
-   "drew status 'Line {n} \u00b7 {mode} \u00b7 all fine \u00b7 the last field' -> 'Line 0 \u00b7 rows \u00b7 all fine \u00b7 the last field'"
+   "action bump from button 'bump' on ''",
+   "state n 0 -> 1 (in bump)",
+   "drew status 'Line {n} \u00b7 {mode} \u00b7 all fine \u00b7 the last field' -> 'Line 1 \u00b7 words \u00b7 all fine \u00b7 the last field'",
+   "drew label '{n} bumps' -> '1 bumps'",
+   "drew status '{n} bumped' -> '1 bumped'",
+   "action bump from button 'bump' on ''",
+   "state n 1 -> 2 (in bump)",
+   "drew status 'Line {n} \u00b7 {mode} \u00b7 all fine \u00b7 the last field' -> 'Line 2 \u00b7 words \u00b7 all fine \u00b7 the last field'",
+   "drew label '{n} bumps' -> '2 bumps'",
+   "drew status '{n} bumped' -> '2 bumped'",
+   "action bump from button 'bump' on ''",
+   "state n 2 -> 3 (in bump)",
+   "drew status 'Line {n} \u00b7 {mode} \u00b7 all fine \u00b7 the last field' -> 'Line 3 \u00b7 words \u00b7 all fine \u00b7 the last field'",
+   "drew label '{n} bumps' -> '3 bumps'",
+   "drew status '{n} bumped' -> '3 bumped'"
   ],
   [
-   "53fb873f2471ac7b2c5065b18b4bf17a1382091557cef79b24968dcdc9ab159d",
-   "9fd095e2f81bcfdadbb4cd118561abe4fd5da34cb2bb9b1eac870d5c252cf707",
-   "b4bec49581d2d9c3e906c85681f6f49b63ea421bd1e2bcda36005120c4dfb380",
-   "aa928ddfa50e8d3bcfa77280cf73ca39447d652ec8b4622364e6a5ac6eb1a0b5",
-   "580dab49b9efc1bf7d583e39efb2f1bac4b1815bc6ad093813a2c34f48bec121",
-   "fcf98c74d1175ff416e6f888c50ee1bada1592b1aa5b710611ff35ae41584f0a",
-   "fcf98c74d1175ff416e6f888c50ee1bada1592b1aa5b710611ff35ae41584f0a",
-   "580dab49b9efc1bf7d583e39efb2f1bac4b1815bc6ad093813a2c34f48bec121"
+   "c603dfa395fbdc20d97c12cd8de591bd8274888026d6f346616906a606aec29f",
+   "3ea7ac83667216f3a49f127c76074307c833bf2902d7002525b5a55b798af7fa",
+   "37d39763104480048def47818a01aff1153aa3bf8cab2aee1bca529fb7746428",
+   "37adb9bcd462d722a33966d763189b0308d945d457ac350ec28ac5282789d208",
+   "37adb9bcd462d722a33966d763189b0308d945d457ac350ec28ac5282789d208",
+   "3cb1c10e491833ed373d510818b74d4cf979a5559f50edf736ccf7ad0d6f5e05",
+   "3cb1c10e491833ed373d510818b74d4cf979a5559f50edf736ccf7ad0d6f5e05",
+   "4ce02097a3862891edc5e277e961cc1cc37510d5205ffe1839bed01806e22788"
   ]
  ],
  "conf/across_bar": [
@@ -199,16 +211,24 @@
    "action bump from button 'bump' on ''",
    "state n 0 -> 1 (in bump)",
    "state cw 40 -> 52 (in bump)",
-   "state sg 6 -> 9 (in bump)"
+   "state sg 6 -> 9 (in bump)",
+   "action flip from button 'flip' on ''",
+   "state n 1 -> 2 (in flip)",
+   "state cw 52 -> 64 (in flip)",
+   "state sg 9 -> 12 (in flip)",
+   "action bump from button 'bump' on ''",
+   "state n 2 -> 3 (in bump)",
+   "state cw 64 -> 76 (in bump)",
+   "state sg 12 -> 15 (in bump)"
   ],
   [
    "f17a0bb006639f07200bfab29239f5d80fb4cb2b38512934e7c7d094526b1a54",
    "d95dc256f976eec45bfa93960a438696d39a727f56f218174138d3477a748395",
-   "56116a7631ed2c78374f0e46d887aeebfa3d0378423c7f7c0d0e054c476cd694",
-   "88dac2622cbc8c22995c1cd0c2f6b84a7c442930f4b95014bdddcf565bb7f183",
-   "13a8338412f1aa6ce52304a0ca26d21636e391ab8f8a8533dfc03488c3783da6",
-   "bb0f66736bdb9ef3194373570c2b256882eba1cbd2641892963619d1f980eba4",
-   "bb0f66736bdb9ef3194373570c2b256882eba1cbd2641892963619d1f980eba4"
+   "2c7908b6083f21cba951e5d20d81c15b978d51678a0b0571a05026322a528793",
+   "5c1532986d748bb59aef9304181246d2ffdba7a885fcaa9f89bf84ed21d20fd9",
+   "003f484dd4a4848225b342614965affcec704824d93dda922d266d3caa47e653",
+   "4b361e8235665637324678cd90e08fbb46c6320cf67424e3ea17ed4a932509ca",
+   "3a929f947a105b3f765293b80ce9fe5c1b0f50b94ba3c9f2345de53f8952c049"
   ]
  ],
  "conf/bar_look": [
@@ -220,18 +240,21 @@
    "action tick from button 'tick' on ''",
    "state clock '9:41' -> '10:41' (in tick)",
    "state cw 40 -> 52 (in tick)",
-   "drew button '{clock}' -> '10:41'"
+   "drew button '{clock}' -> '10:41'",
+   "action battery from button 'battery' on ''",
+   "state clock '10:41' -> '9:41' (in battery)",
+   "state cw 52 -> 40 (in battery)"
   ],
   [
    "40da6816607a4fb11cb38f89a89ba8e0180732ca78bc56851f6c41a7d63bc14f",
    "c929ffc905744279e9a6ede974ab1da2d968248d2a3c361117fb757f76c5e75b",
-   "e28910e856c2814f82348986b2bbf6b0aac9602b90c4ed9f44d0ee9e7e703332",
-   "53b862928887ae4b131b78b050fb24db8fb4463c335f6360eeadf1dc456ee4f6",
+   "23808a5f43ada0bfe1eea949985f257f00258a2e252ce66a2aa55cbfab2b75a3",
    "daf27e4d1745172a2c01b3a776d861d5d1af73207527465efae0d659b6049bc2",
    "312931cd8340676112ad066b67927201dbdddff0085d3c12e6475a625d7219d9",
    "036b9b365b4f6e63a7ebaa41f1c0e56da73a81952a51a59cbaa139ec62fb9212",
-   "917a368a41be4839276e743221216f388f632f95a47f0fea20efbff69581dec8",
-   "2a956b673b94aa9009a8669319155c4bee3778adf3ed6ae8ae6c4211c3e6d416"
+   "036b9b365b4f6e63a7ebaa41f1c0e56da73a81952a51a59cbaa139ec62fb9212",
+   "411256c34afacd8a974d2b6c7a5bf17ecf26f133663ea4a900977406b27925cf",
+   "63df7ffdcd9c1884b015b8a54f09607863c06265015bf8a162c07da299d866b1"
   ]
  ],
  "conf/counter": [
@@ -356,19 +379,23 @@
    "action add from button 'add' on ''",
    "state n 4 -> 6 (in add)",
    "state wins [6 rows] +2 -0 ~0 moved 0 (in add)",
-   "action chip from button 'w3/chip' on ''",
+   "action chip from button 'w0/chip' on ''",
+   "state wins [6 rows] +0 -0 ~2 moved 0 (in chip)",
+   "action chip from button 'w1/chip' on ''",
+   "state wins [6 rows] +0 -0 ~2 moved 0 (in chip)",
+   "action chip from button 'w0/chip' on ''",
    "state wins [6 rows] +0 -0 ~2 moved 0 (in chip)"
   ],
   [
    "cd488ebd42b03ca544d4d1db3581bc95dbb9f54856ea18195cf1c4892af6f8c9",
    "9de48047bf4bc80652590bdc3f1fd7cb306e155c03b800d3ce444ac81e1e8092",
    "ff7724f568685bff30359b5a6a8b19f57464f4aa8b5e03d3a6acef537808c6d9",
-   "b13971b24fdacabf83196ae83e06aee8827909f9699192ea9e03927a1e7fa054",
-   "6eeac59075d9d60e7ea14645e1f4a82389a30be3fe3de495546ea54110c3956c",
-   "1988a76ffd7949367cf2b1e57971e222e7ce3074f1a34dc3cc1ea481ca1ad8bc",
-   "357aec83adf1db4e4c3db3a40960074b59c754490ddebffc8a9bacb50e6d3c50",
-   "ac77fcf51097260b38364dfa25030c3771e3b730501c5b7543651d9a01e2c636",
-   "de2621854683c61e779997bd794fc412ccf281de3a38b0dd8c2584c8dae6fbe3"
+   "94266894a3cc908cd1519c656c8f192c6fdbbfe61a94001cda59eeb926abeb6f",
+   "dc7858ba46c1f5b74f3c5d0c6d0c5a854bfd2158dcc1d39bd718c1eea2f2a4b8",
+   "9e6bf78ab91b442c18e3cc2d26e17d0c08b57e1b3bcd3eddda514086ecd5dd8e",
+   "9e6bf78ab91b442c18e3cc2d26e17d0c08b57e1b3bcd3eddda514086ecd5dd8e",
+   "dc7858ba46c1f5b74f3c5d0c6d0c5a854bfd2158dcc1d39bd718c1eea2f2a4b8",
+   "dc7858ba46c1f5b74f3c5d0c6d0c5a854bfd2158dcc1d39bd718c1eea2f2a4b8"
   ]
  ],
  "conf/pages": [

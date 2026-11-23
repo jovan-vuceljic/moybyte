@@ -259,9 +259,13 @@ def _painted(ws, drv, n=4):
 def test_a_clean_switch_paints_once_and_a_commit_paints_again(desk):
     """The owed commit rides the frame's tail and shows nothing: a switch
     away from a clean tab paints the destination once; a tab that wrote
-    paints once more, since a commit may move what the Editor shows."""
+    paints once more, since a commit may move what the Editor shows. (A
+    tab's page's first frame owes the next, which places its focus: each
+    tab is shown once before, as is the pane beside each, a page of its own.)"""
     ws, drv = desk
-    _painted(ws, drv)
+    for tab in ("code", "paint", "cards"):
+        ws.editor_app.set_tab(tab)
+        _painted(ws, drv)
     ws.editor_app.set_tab("code")
     assert _painted(ws, drv) == 1
     ws.editor_app.set_tab("paint")
@@ -322,10 +326,9 @@ def _shows_what_a_whole_repaint_shows(ws, drv):
 
 @pytest.mark.parametrize("fast", (False, True), ids=("press-then-release", "one-frame-click"))
 def test_a_header_tools_tap_shows_with_no_input_after_it(desk, fast):
-    """The panes' headers are the desk's verbs pass, drawn after the panes'
-    bodies: a tap a header answers (a tab, a tool, Grow) changes what the
-    bodies drew, and the pass owes the frame that shows it (the AppHost's
-    `owed`), never the next input."""
+    """The panes' headers are their pages, drawn after the panes' bodies: a
+    tap a header answers (a tab, a tool, Grow) changes what the bodies drew,
+    and the frame that shows it is owed, never the next input."""
     ws, drv = desk
     d = ws.editor_desk
     _tap(drv, ord("4"), 1)                       # World: the Scene's zoom in its header
@@ -333,7 +336,7 @@ def test_a_header_tools_tap_shows_with_no_input_after_it(desk, fast):
     for _ in range(3):
         drv.frame(DT)
     zoom = ws.scene_ui.scene_zoom
-    bx, by, bw, bh = d._host.box("pane %d scene:zoom" % n)
+    bx, by, bw, bh = d.head(n).rect_of("scene:zoom/tool")
     drv.touch(bx + bw // 2, by + bh // 2)
     if not fast:
         drv.frame(DT)
@@ -341,7 +344,7 @@ def test_a_header_tools_tap_shows_with_no_input_after_it(desk, fast):
     drv.frame(DT)
     shows = _shows_what_a_whole_repaint_shows(ws, drv)
     assert ws.scene_ui.scene_zoom != zoom and shows
-    bx, by, bw, bh = d._host.box("pane %d grow" % n)
+    bx, by, bw, bh = d.head(n).rect_of("grow")
     drv.touch(bx + bw // 2, by + bh // 2)
     if not fast:
         drv.frame(DT)
@@ -378,12 +381,21 @@ def test_a_grown_pane_takes_the_workspace_and_esc_gives_it_back(desk):
     assert d.grown is None
 
 
+def _sheet_page(d, part):
+    """The first sheet page pane `part`'s canvas drew, in the desk's
+    coordinates."""
+    host = d.part(part)
+    x, y = host._cv_xy
+    g = host._sheet_at
+    return (x + g[0], y + g[1], g[2], g[3])
+
+
 def test_a_sheet_pick_sets_the_sprite_and_the_brush_and_a_slide_previews(desk):
     ws, drv = desk
     d = ws.editor_desk
     _tap(drv, ord("3"), 1)
     drv.frame(DT)
-    (pg, (x, y, w, h)), _second = d._sheet_rects
+    x, y, w, h = _sheet_page(d, "sheet")
     tw = w // 16
     drv.touch(x + 3 * tw + 1, y + 1)
     drv.frame(DT)
@@ -724,12 +736,63 @@ def test_the_actor_pane_flips_and_removes_the_picked_actor(desk):
     n = len(se.rows)
     ws.mark_dirty()
     drv.frame(DT)
-    box = d._host.box("actor flip")
+    part = d.part("actor")
+    box = part.rect_of("flip")
     _click(drv, box[0] + box[2] - 8, box[1] + box[3] // 2)
     assert bool(se.rows[0].get("flip")) != flip
-    box = d._host.box("actor remove")
+    box = part.rect_of("remove")
     _click(drv, box[0] + box[2] // 2, box[1] + box[3] // 2)
     assert len(se.rows) == n - 1
+
+
+def _arrow(drv, k, n=1):
+    for _ in range(n):
+        drv.press(k)
+        drv.frame(DT)
+        drv.frame(DT)
+
+
+def test_the_actor_pane_by_keys_alone(desk):
+    """The arrows walk the Actor pane's stops from its tag field down to
+    Remove, whose A removes the picked actor."""
+    ws, drv = desk
+    d = ws.editor_desk
+    _tap(drv, ord("4"), 1)                       # World
+    se = ws.scene_ui.sceneedit
+    se.sel = 0
+    n = len(se.rows)
+    d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("actor"))
+    ws.mark_dirty()
+    drv.frame(DT)
+    pg = d.part("actor").page
+    assert pg._focus_key() == "tag"
+    for _ in range(8):
+        if pg._focus_key() == "remove":
+            break
+        _arrow(drv, "down")
+    for _ in range(4):
+        if pg._focus_key() == "remove":
+            break
+        _arrow(drv, "right")
+    assert pg._focus_key() == "remove"
+    _arrow(drv, "a")
+    assert len(se.rows) == n - 1
+
+
+def test_the_sheet_by_keys_alone(desk):
+    """The Sheet's arrows pick the next sprite, a row's step down the
+    next row's; the Sprite pane and the map's brush follow."""
+    ws, drv = desk
+    d = ws.editor_desk
+    _tap(drv, ord("3"), 1)                       # Art
+    d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("sheet"))
+    ws.mark_dirty()
+    drv.frame(DT)
+    n = ws.paint.n
+    _arrow(drv, "right")
+    assert ws.paint.n == n + 1
+    _arrow(drv, "down")
+    assert ws.paint.n == n + 17 and ws.map_ui.mapedit.n == n + 17
 
 
 def test_the_sounds_list_picks_a_sound_and_the_song(desk):
@@ -739,15 +802,13 @@ def test_the_sounds_list_picks_a_sound_and_the_song(desk):
     drv.frame(DT)
     me = ws.music_ui.musicedit
     assert len(me.bank.sfx) >= 2
-    x, y, w, h = _pane(d, "sounds")
-    body_y = y + P.HEADER
-    rows = [b for b in (d._host.box("Sound 1"),) if b]
-    if rows:
-        bx, by, bw, bh = rows[0]
-    else:                                        # the list's rows from its top
-        bx, by, bw, bh = x + 10, body_y + 10 + 2 * 28, w - 20, 28
-    _click(drv, bx + bw // 2, by + bh // 2)
+    part = d.part("sounds")
+    bx, by, bw, _bh = part.rect_of("snds_view")
+    rh = part._row_h()
+    _click(drv, bx + bw // 3, by + 2 * rh + rh // 2)     # the Song, then sounds 0 and 1
     assert me.view == me.SFX_VIEW and me.sfx_idx == 1
+    _click(drv, bx + bw // 3, by + rh // 2)
+    assert me.view == me.SONG_VIEW
 
 
 def test_a_stamp_pick_sets_the_scenes_brush(desk):
@@ -758,7 +819,7 @@ def test_a_stamp_pick_sets_the_scenes_brush(desk):
     d._tabs[pane] = 1
     ws.mark_dirty()
     drv.frame(DT)
-    (_pg, (x, y, w, h)) = d._sheet_rects[0]
+    x, y, w, h = _sheet_page(d, "stamps")
     tw = w // 16
     _click(drv, x + 6 * tw + 1, y + 1)
     assert ws.scene_ui.sceneedit.n == 6
@@ -787,14 +848,14 @@ def test_a_reference_pick_inserts_its_call_at_the_caret(desk):
     _tap(drv, ord("2"), 1)                       # Code: the Reference's Sprites
     ws.mark_dirty()
     drv.frame(DT)
-    (_pg, (x, y, w, h)) = d._sheet_rects[0]
+    x, y, w, h = _sheet_page(d, "sprites")
     tw = w // 16
     _click(drv, x + 6 * tw + 1, y + 1)
     assert d._cur_sprite() == 6
     ws.editor.row, ws.editor.col = 0, 0
     ws.mark_dirty()
     drv.frame(DT)
-    bx, by, bw, bh = d._host.box("insert call")
+    bx, by, bw, bh = d.part("sprites").rect_of("insert")
     _click(drv, bx + bw // 2, by + bh // 2)
     assert ws.editor.text().startswith("spr(6, x, y)")
 
@@ -937,7 +998,7 @@ def test_a_sound_is_renamed_and_its_name_saved_with_the_bank(desk):
 def test_the_sounds_list_adds_a_sound_and_plays_one(desk):
     ws, drv, d, me, snd = _sound(desk)
     n = len(me.bank.sfx)
-    bx, by, bw, bh = d._host.box("pane 0 new sound")
+    bx, by, bw, bh = d.head(0).rect_of("new_sound")
     _click(drv, bx + bw // 2, by + bh // 2)
     assert len(me.bank.sfx) == n + 1 and me.sfx_idx == n
 
@@ -952,25 +1013,32 @@ def test_the_song_pane_edits_the_songs_slots_and_plays_it(desk):
     pat = me.cur_track().pattern
     n = len(pat)
 
+    part = d.part("song")
+
     def press(id):
-        bx, by, bw, bh = d._host.box(id)
+        bx, by, bw, bh = part.rect_of(id)
         _click(drv, bx + bw // 2, by + bh // 2)
 
-    assert all(d._host.box("slot %d" % k) is not None for k in range(min(n, 8)))
-    press("slot 0")
+    def slot(k):
+        sx, sy, _sw, _sh = part.rect_of("slots")
+        x0, y0, cw, ch, gap, first, last = part._slots_at
+        assert first <= k < last, "slot %d shows" % k
+        _click(drv, sx + x0 + (k % 4) * (cw + gap) + cw // 2, sy + y0 + (k - first) // 4 * (ch + 8) + ch // 2)
+
+    slot(0)
     assert me.view == me.SONG_VIEW and me.slot == 0
-    press("song add")
+    press("slot_add")
     assert len(pat) == n + 1 and me.slot == 1
     was = pat[1]
     hi = len(me.bank.sfx) - 1
-    press("song slot+" if was < hi else "song slot-")
+    press("slot_next" if was < hi else "slot_prev")
     assert pat[1] == (was + 1 if was < hi else was - 1), "the slot's sound stepped"
-    assert d._host.box("slot 1") is not None, "the new slot shows"
-    press("song del")
+    assert part._slots_at[6] > 1, "the new slot shows"
+    press("slot_del")
     assert len(pat) == n
-    press("song play")
+    press("song_play")
     assert ws.music_ui.music_preview == ("song", me.track_idx)
-    press("song play")
+    press("song_play")
     assert ws.music_ui.music_preview is None
     me.undo()                                    # the delete
     me.undo()                                    # the sound's step
@@ -1015,27 +1083,28 @@ def test_a_blocks_carts_code_workspace_shows_the_palette_and_the_made_code(block
     from runtime import blocks as B, editor_parts as Parts
     be = ws.block_ui.blocks_ed
     assert Parts.made_lines(be) == B.compile_blocks(be.program).rstrip("\n").split("\n")
-    assert d._host.box("palette blocks") is not None
+    assert d.part("palette").rect_of("items_view") is not None
 
 
 def test_the_made_code_is_a_text_view_the_wheel_scrolls(blocks_desk):
-    """The made code draws through `ui.text_view` on the desk's verbs: its
-    rows answer a hit test, and the wheel over it scrolls it by pixels."""
+    """The made code is its page's `ui.text_view`: its rows answer a hit
+    test, and the wheel over it scrolls it by pixels."""
     from runtime import ui_draw, editor_parts as Parts
     ws, drv = blocks_desk
     d = ws.editor_desk
     lines = len(Parts.made_lines(ws.block_ui.blocks_ed))
     pane, r = next((p, r) for p, r, _p in d.panes() if p == ("made",))
     x, y, w, h = d._body(r, d._unit(), pane)
-    px, py = x + 60, y + 20
-    first = ui_draw.text_at(d._host, "made", px, py)
+    px, py = x + 60, y + 6
+    host = d.part("made")._host
+    first = ui_draw.text_at(host, "made", px, py)
     assert first is not None and first[0] == 0
     ox, oy = d._origin()
     drv.hover(ox + px, oy + py)
     drv.wheel(0, 3)
     for _ in range(20):
         drv.frame(DT)
-    got = ui_draw.text_at(d._host, "made", px, py)
+    got = ui_draw.text_at(host, "made", px, py)
     assert lines > h // ws.code_layout.lh, "the made code fits its pane: nothing to scroll"
     assert got[0] > 0, "the wheel did not scroll the made code"
 
@@ -1050,7 +1119,7 @@ def test_a_palette_pick_puts_its_block_at_the_cursor_and_the_made_code_follows(b
     ws.mark_dirty()
     drv.frame(DT)
     items = Parts.palette_items(be, "looks")
-    bx, by, bw, bh = d._host.box("palette blocks")
+    bx, by, bw, bh = d.part("palette").rect_of("items_view")
     _click(drv, bx + 20, by + 14)                # the category's first block
     assert items[0][0] in repr(be.program)
     assert Parts.made_lines(be) != before
@@ -1060,11 +1129,83 @@ def test_a_palette_pick_puts_its_block_at_the_cursor_and_the_made_code_follows(b
 def test_the_palettes_categories_pick_their_blocks(blocks_desk):
     ws, drv = blocks_desk
     d = ws.editor_desk
-    bx, by, bw, bh = d._host.box("block categories 0")
-    _click(drv, bx + bw // 2, by + 28 + 14)      # the second row: Draw
+    part = d.part("palette")
+    bx, by, bw, bh = part.rect_of("cats")
+    x0, y0, cw, rh = part._cats_at
+    _click(drv, bx + x0 + cw // 2, by + y0 + rh + rh // 2)     # the second row's first: Draw
     assert d.part_state["block cat"] == "draw"
+    _click(drv, bx + bw - x0 - cw // 2, by + y0 + rh // 2)     # the first row's second: Control
+    assert d.part_state["block cat"] == "control"
     from runtime import editor_parts as Parts
     assert Parts.palette_items(None, "events") == []
+
+
+def test_the_palette_by_keys_alone(blocks_desk):
+    """The arrows across the palette's two columns open the next category;
+    down past them reaches its blocks, whose A puts one at the cursor."""
+    ws, drv = blocks_desk
+    d = ws.editor_desk
+    be = ws.block_ui.blocks_ed
+    d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("palette"))
+    d.part_state["block cat"] = "events"
+    ws.mark_dirty()
+    drv.frame(DT)
+    _arrow(drv, "right")
+    assert d.part_state["block cat"] == "control"
+    _arrow(drv, "down")
+    assert d.part_state["block cat"] == "input"
+    _arrow(drv, "left")
+    assert d.part_state["block cat"] == "draw"
+    from runtime import editor_parts as Parts
+    first = Parts.palette_items(be, "draw")[0][0]
+    pg = d.part("palette").page
+    for _ in range(8):
+        if pg._focus_key().endswith("/item"):
+            break
+        _arrow(drv, "down")
+    assert pg._focus_key() == "0/item"
+    _arrow(drv, "a")
+    assert first in repr(be.program)
+
+
+def test_the_sounds_and_the_song_by_keys_alone(desk):
+    """The Sounds list's arrows pick the sound or the Song they move onto,
+    and the keys arriving on the list pick nothing; the Song's arrows move
+    along its slots."""
+    ws, drv, d, me, snd = _sound(desk)
+    was = (me.view, me.sfx_idx)
+    d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("sounds"))
+    ws.mark_dirty()
+    drv.frame(DT)
+    drv.frame(DT)
+    assert (me.view, me.sfx_idx) == was
+    pg = d.part("sounds").page
+    for _ in range(4):
+        if pg._focus_key() == "1/snd":
+            break
+        _arrow(drv, "down")
+    assert me.view == me.SFX_VIEW and me.sfx_idx == 1
+    for _ in range(4):
+        _arrow(drv, "up")
+    assert me.view == me.SONG_VIEW
+    me.add_slot()
+    me.select_cursor(0)
+    d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("song"))
+    ws.mark_dirty()
+    drv.frame(DT)
+    _arrow(drv, "right")
+    assert me.slot == 1
+
+
+def test_the_reference_map_by_keys_alone(desk):
+    ws, drv, d = _reference(desk, "maps")
+    d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("maps"))
+    ws.mark_dirty()
+    drv.frame(DT)
+    cx, cy = d.part_state["ref cell"]
+    _arrow(drv, "right")
+    _arrow(drv, "down")
+    assert d.part_state["ref cell"] == (cx + 1, cy + 1)
 
 
 def test_a_blocks_carts_panes_hide_the_cards_body_too(blocks_desk, monkeypatch):
@@ -1123,31 +1264,41 @@ def _reference(desk, tab):
     return ws, drv, d
 
 
-def _press(drv, d, id):
-    bx, by, bw, bh = d._host.box(id)
+def _press(drv, d, id, part=None):
+    bx, by, bw, bh = d._host.box(id) if part is None else d.part(part).rect_of(id)
+    _click(drv, bx + bw // 2, by + bh // 2)
+
+
+def _hpress(drv, d, n, key):
+    """A click on pane `n`'s header node `key` (editor_head.py's page; a
+    model row's "ROWKEY/KEY", a menu row's its words)."""
+    h = d.head(n)
+    bx, by, bw, bh = h.rect_of(key) or h.box(key)
     _click(drv, bx + bw // 2, by + bh // 2)
 
 
 def test_a_reference_sound_pick_inserts_its_sfx_call(desk):
     ws, drv, d = _reference(desk, "sounds")
-    bx, by, bw, bh = d._host.box("ref sounds")
-    _click(drv, bx + 20, by + 28 + 14)           # sound 1
+    part = d.part("sounds")
+    bx, by, bw, bh = part.rect_of("snds_view")
+    rh = part._row_h()
+    _click(drv, bx + 20, by + rh + rh // 2)      # sound 1
     assert d.part_state["ref sound"] == 1
     ws.editor.row, ws.editor.col = 0, 0
-    _press(drv, d, "insert sfx")
+    _press(drv, d, "insert", "sounds")
     assert ws.editor.text().startswith("sfx(1)")
 
 
 def test_a_reference_map_pick_inserts_its_mget_call(desk):
     ws, drv, d = _reference(desk, "maps")
-    from runtime import editor_parts as Parts
-    body = d._body(_pane(d, "maps"), 1)
-    (mx, my, _mw, _mh), _c, _r, tw = Parts._map_rect(d, body, 1)
+    part = d.part("maps")
+    cx, cy, _cw, _ch = part.rect_of("map")
+    x0, y0, _cols, _rows, tw = part._map_at
     vx, vy = d.part_state["ref view"]
-    _click(drv, mx + 3 * tw + 1, my + 2 * tw + 1)
+    _click(drv, cx + x0 + 3 * tw + 1, cy + y0 + 2 * tw + 1)
     assert d.part_state["ref cell"] == (vx + 3, vy + 2)
     ws.editor.row, ws.editor.col = 0, 0
-    _press(drv, d, "insert mget")
+    _press(drv, d, "insert", "maps")
     assert ws.editor.text().startswith("mget(%d, %d)" % (vx + 3, vy + 2))
 
 
@@ -1157,7 +1308,7 @@ def test_the_log_names_an_error_and_takes_the_caret_to_its_line(desk):
     ws.run.player.crash_line = 12
     ws.mark_dirty()
     drv.frame(DT)
-    bx, by, bw, bh = d._host.box("log")
+    bx, by, bw, bh = d.part("log").rect_of("errs_view")
     _click(drv, bx + 20, by + 14)
     assert ws.editor.row == 11
     assert d.tab_of(d.focused()[0]) == "code"
@@ -1185,25 +1336,25 @@ def test_the_code_panes_header_finds_jumps_and_opens_its_more_menu(desk):
     d = ws.editor_desk
     _tap(drv, ord("2"), 1)
     cl = ws.code_layer
-    assert d._host.box("pane 0 files") is not None
-    _press(drv, d, "pane 0 code find")
+    assert d.head(0).rect_of("file") is not None
+    _hpress(drv, d, 0, "find")
     assert cl._find_open
-    _press(drv, d, "pane 0 code find")
+    _hpress(drv, d, 0, "find")
     assert not cl._find_open
-    _press(drv, d, "pane 0 code goto")
+    _hpress(drv, d, 0, "goto")
     assert cl._jump_open
     cl.run("overlay_close")
     gutter = cl._gutter
-    _press(drv, d, "pane 0 code more")
-    assert d.part_state["code more"] is not None
+    _hpress(drv, d, 0, "code_more")
+    assert d.head(0).pop
     drv.frame(DT)
-    _press(drv, d, "Line numbers")
+    _hpress(drv, d, 0, "Line numbers")
     assert cl._gutter != gutter
-    assert d.part_state["code more"] is None
-    _press(drv, d, "pane 0 code more")
+    assert not d.head(0).pop
+    _hpress(drv, d, 0, "code_more")
     drv.frame(DT)
     _click(drv, 900, 500)                        # outside the card: dismissed
-    assert d.part_state["code more"] is None
+    assert not d.head(0).pop
 
 
 def test_the_code_panes_file_tabs_switch_the_script(desk, monkeypatch):
@@ -1215,7 +1366,7 @@ def test_the_code_panes_file_tabs_switch_the_script(desk, monkeypatch):
     monkeypatch.setattr(ws.text, "open_code_file", lambda name: opened.append(name) or True)
     ws.mark_dirty()
     drv.frame(DT)
-    bx, by, bw, bh = d._host.box("pane 0 files")
+    bx, by, bw, bh = d.head(0).rect_of("file")
     _click(drv, bx + 110, by + bh // 2)          # the second tab
     assert opened == ["enemies.py"]
 
@@ -1224,7 +1375,7 @@ def test_a_settled_code_pane_paints_nothing_with_its_more_menu_open(desk):
     ws, drv = desk
     d = ws.editor_desk
     _tap(drv, ord("2"), 1)
-    _press(drv, d, "pane 0 code more")
+    _hpress(drv, d, 0, "code_more")
     ws.pointer.visible = False
     settle_badges(ws)
     ws.toast_until = 0
@@ -1265,6 +1416,27 @@ def test_a_drag_in_the_code_pane_draws_the_pane_alone(desk):
     drv.touch_up()
     drv.frame(DT)
     assert got == [list(pane)] * len(got)
+
+
+def test_a_grown_code_pane_draws_its_key_frames_alone(desk):
+    """A pane grown over the workspace is a split of one (the workspace
+    page's `draw_splits`), which names it as the pane the keys reach: a key
+    frame of the grown Code pane draws that pane alone."""
+    ws, drv = desk
+    d, _pane = _code_ready(ws, drv)
+    d.grow(d.focused()[0])
+    for _ in range(4):
+        ws.mark_dirty()
+        drv.frame(DT)
+    assert d.alone() is not None
+    b = d._own_pane()[4]
+    _tap(drv, ord("a"))
+    for code in (ord("b"), ord("c")):
+        drv.key_down(code)
+        drv.frame(DT)
+        assert d.changed() == [b[0], b[1], b[0] + b[2], b[1] + b[3]]
+        drv.key_up(code)
+        drv.frame(DT)
 
 
 def test_a_key_in_the_code_pane_draws_straight_to_the_glass(desk):
@@ -1364,7 +1536,7 @@ def test_at_800_the_sound_panes_menu_picks_a_sound(tmp_path):
     d = ws.editor_desk
     me = ws.music_ui.musicedit
     snd = ws.music_ui.sound
-    _press(drv, d, "pane 0 sound menu")
+    _hpress(drv, d, 0, "sounds")
     drv.frame(DT)
     assert snd.s.asking == "menu"
     _press_sound(drv, d, snd, "1")
@@ -1448,7 +1620,7 @@ def test_the_run_slots_pause_holds_the_run_and_shows_its_still(desk):
     _tap(drv, ord("2"), 1)                       # Code: the Run slot
     _play(drv)
     win = ws.wm.windows["desktop"]
-    _press(drv, d, "pane 1 pause")
+    _hpress(drv, d, 1, "pause")
     drv.frame(DT)
     assert d.paused and ws.run.player.pace.paused and win.minimized
     assert d._still is not None                  # the still, dimmed under Play
@@ -1491,7 +1663,7 @@ def test_a_press_held_on_the_sheet_shows_its_tile_in_a_3x_loupe(desk):
     d = ws.editor_desk
     _tap(drv, ord("3"), 1)                       # Art: the Sheet under the Map
     drv.frame(DT)
-    (_pg, (x, y, w, h)) = d._sheet_rects[0]
+    x, y, w, h = _sheet_page(d, "sheet")
     tw = w // 16
     drv.touch(x + 3 * tw + 2, y + 2)
     drv.frame(DT)
@@ -1522,15 +1694,17 @@ def test_a_press_held_on_the_sheet_shows_its_tile_in_a_3x_loupe(desk):
     assert d._loupe is None and ws.paint.n == 3
 
 
-def test_the_sprite_panes_palette_wears_its_64_chip(desk):
+def test_the_sprite_panes_steppers_and_64_stand_under_the_palette(desk):
+    """The Sprite pane's ‹ n ›, its size and the "64" (MOY64) chip share
+    one row under the grid and the palette."""
     ws, drv = desk
     _tap(drv, ord("3"), 1)
-    lay = ws.editor_desk._pane_layout("paint", ws.editor_desk._body(
-        _pane(ws.editor_desk, "paint"), 1))
-    x, y, w, h = lay.pal_chip
-    assert (x, w) == (lay.sw_x0, 2 * lay.sw) and h >= 32
-    assert y > lay.sw_y0 + 8 * lay.sw            # under the palette, beside the steppers
-    assert y == lay.spr_prev[1]
+    ws.mark_dirty()
+    drv.frame(DT)
+    pl = ws.paint_layer
+    nav, col, grid, size = (pl.rect_of(k) for k in ("nav", "color", "grid", "pickers"))
+    assert nav[1] >= max(col[1] + col[3], grid[1] + grid[3])
+    assert nav[1] <= size[1] and size[1] + size[3] <= nav[1] + nav[3]
 
 
 # -- a header's tools that do not fit -----------------------------------------------------
@@ -1553,12 +1727,12 @@ def test_a_narrow_headers_tools_fold_into_its_more_menu(blocks_desk):
     se = ws.scene_ui.sceneedit
     se.sel = 0
     flip = bool(se.selected().get("flip"))
-    _press(drv, d, "pane %d head more" % n)
+    _hpress(drv, d, n, "more")
     drv.frame(DT)
     assert "Flip" in [f[1] for f in folded]
-    _press(drv, d, "Flip")
+    _hpress(drv, d, n, "Flip")
     assert bool(se.rows[0].get("flip")) != flip
-    assert d.part_state.get("head more") is None
+    assert not d.head(n).pop
     for _n, (pane, r, _p) in enumerate(d.panes()):    # a wide header folds nothing
         if pane != ("scene", "game"):
             for c in pane:
@@ -1584,8 +1758,8 @@ def test_a_short_panes_tabs_are_its_current_one_labelled_and_icons(tmp_path, mon
     d = ws.editor_desk
     drawn = []                                   # the panes the window's frame draws
     frame = d._frame
-    monkeypatch.setattr(d, "_frame", lambda cv, th, shown, u: (
-        drawn.append(list(shown)), frame(cv, th, shown, u)))
+    monkeypatch.setattr(d, "_frame", lambda cv, th, shown, u, dt: (
+        drawn.append(list(shown)), frame(cv, th, shown, u, dt)))
     for _ in range(3):
         ws.mark_dirty()
         drv.frame(DT)
@@ -1595,7 +1769,7 @@ def test_a_short_panes_tabs_are_its_current_one_labelled_and_icons(tmp_path, mon
     cur = d._tabs.get(pane, 0)
     assert x + 4 + d._tabs_w(pane, cur, 1) <= d._tools_x[n]
     other = next(j for j, k in enumerate(pane) if j != cur)
-    bx, by, bw, bh = d._host.box("pane %d tab %s" % (n, pane[other]))
+    bx, by, bw, bh = d.head(n).rect_of("%d/short" % other)
     cx, cy = ws.wm.windows["menu"].content_rect()[:2]   # the window's, on the glass
     _click(drv, cx + bx + bw // 2, cy + by + bh // 2)
     ws.mark_dirty()
@@ -1607,8 +1781,9 @@ def test_a_short_panes_tabs_are_its_current_one_labelled_and_icons(tmp_path, mon
 def test_a_settled_header_more_menu_paints_nothing(blocks_desk):
     ws, drv = blocks_desk
     d = ws.editor_desk
-    _press(drv, d, "pane %d head more" % _scene_game(d))
-    assert d.part_state.get("head more") is not None
+    n = _scene_game(d)
+    _hpress(drv, d, n, "more")
+    assert d.head(n).pop
     ws.pointer.visible = False
     settle_badges(ws)
     ws.toast_until = 0

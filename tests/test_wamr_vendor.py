@@ -119,3 +119,38 @@ def test_the_copy_is_the_fork_at_the_pinned_commit(manifest):
         assert hashlib.sha256(data).hexdigest() == sha256(os.path.join(ROOT, rel)), (
             "%s differs from the fork's %s at %s -- fix it in the fork and "
             "re-run `make vendor-wamr`" % (rel, fork_rel, commit[:12]))
+
+
+def test_what_the_advisory_acknowledgements_rest_on(manifest):
+    """tools/vendor_advisories_ack.json acknowledges WAMR advisories on the
+    grounds held here: the features they live in are built out of the
+    boards' runtime and the host's, and no code of ours reaches the
+    module-exported malloc path."""
+    copied = " ".join(manifest["files"])
+    for lib in ("/libc-wasi/", "/libc-builtin/", "/lib-wasi-threads/", "/lib-pthread/"):
+        assert lib not in copied, lib
+    cmake = open(os.path.join(MODULE, "micropython.cmake"), encoding="utf-8").read()
+    for flag in ("LIBC_BUILTIN", "LIBC_WASI", "THREAD_MGR", "SHARED_MEMORY",
+                 "EXTENDED_CONST_EXPR"):
+        assert re.search(r"^\s*WASM_ENABLE_%s=0$" % flag, cmake, re.M), flag
+    for flag in ("MEMORY64", "LIB_WASI_THREADS", "LIB_PTHREAD"):
+        assert not re.search(r"WASM_ENABLE_%s=[1-9]" % flag, cmake), flag
+    from runtime import wasm_binding
+    host = " ".join(wasm_binding.WAMR_CMAKE)
+    for flag in ("LIBC_BUILTIN", "LIBC_WASI"):
+        assert "-DWAMR_BUILD_%s=0" % flag in host, flag
+    for flag in ("MEMORY64", "EXTENDED_CONST_EXPR", "LIB_WASI_THREADS", "LIB_PTHREAD",
+                 "SHARED_MEMORY", "THREAD_MGR"):
+        assert not re.search(r"-DWAMR_BUILD_%s=[1-9]" % flag, host), flag
+    callers = []
+    for top in ("native", os.path.join("runtime", "host")):
+        for dirpath, dirs, names in os.walk(os.path.join(ROOT, top)):
+            dirs[:] = [d for d in dirs if d not in ("wamr", ".staged")]
+            for name in names:
+                if not name.endswith((".c", ".h")):
+                    continue
+                path = os.path.join(dirpath, name)
+                text = open(path, encoding="utf-8", errors="replace").read()
+                if re.search(r"wasm_runtime_module_(malloc|realloc|dup_data)\b", text):
+                    callers.append(os.path.relpath(path, ROOT))
+    assert callers == [], callers

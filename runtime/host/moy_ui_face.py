@@ -355,6 +355,7 @@ SIGS = (
     ("moy_ui_api_icon", [c.c_void_p, moy_ui_span_t], c.c_int),
     ("moy_ui_api_box", [c.c_void_p, moy_ui_span_t, c.c_void_p], c.c_int),
     ("moy_ui_api_hit_box", [c.c_void_p, moy_ui_span_t, c.c_void_p], c.c_int),
+    ("moy_ui_api_over_band", [c.c_void_p, c.c_void_p], c.c_int),
     ("moy_ui_api_progress", [c.c_void_p, c.POINTER(moy_ui_sink_t), moy_ui_span_t, c.c_int32,
      c.c_int32, c.c_void_p], None),
     ("moy_ui_api_list", [c.c_void_p, c.POINTER(moy_ui_sink_t), moy_ui_span_t, c.c_char_p,
@@ -559,6 +560,13 @@ def install(m, lib, ctx_, sink, span0, over, box_of):
             return None
         return tuple(out_w)
     m.api_hit_box = api_hit_box
+    def api_over_band(ctx):
+        p_, k_ = ctx_(ctx)
+        out_w = (c.c_int32 * 4)()
+        if not lib.moy_ui_api_over_band(p_, out_w):
+            return None
+        return tuple(out_w)
+    m.api_over_band = api_over_band
     def api_progress(ctx, cv, look, label, v, hi, o):
         p_, k_ = ctx_(ctx)
         label_t, label_k = span0(label)

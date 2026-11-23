@@ -4,7 +4,8 @@ popover (native/moy_uitree's `draw` of a seg, `row_cells`, `menu_rows`;
 a row, each row's word its colour, and a tap on one writes its key; an
 icon button of its own w= in a placed row stands square, centred down the
 row; a popover's list of links is a menu whose rows carry their link's
-icon; and a canvas under a shown popover takes no press."""
+icon; a canvas under a shown popover takes no press; and a canvas with
+no keys= is no stop the arrows land on (`draw_canvas_at`)."""
 import sys
 from pathlib import Path
 
@@ -94,3 +95,17 @@ def test_a_canvas_under_a_shown_popover_takes_no_press(tmp_path):
     assert y <= a[1] < y + h, "the menu hangs over the canvas"
     _tap(ws, drv, a[0] + a[2] // 2, a[1] + a[3] // 2)
     assert e.s.presses == 1 and e.s.took == "b"
+
+
+
+def test_the_arrows_pass_a_canvas_that_takes_no_keys(tmp_path):
+    """A placed canvas with no keys= is no stop: down from the seg lands
+    on the row under the canvas, and up comes back to the seg."""
+    ws, drv, e, host = _live(tmp_path)
+    assert e._focus_key() == "dot"
+    seen = []
+    for k in ("down", "up"):
+        drv.press(k)
+        _settle(ws, drv)
+        seen.append(e._focus_key())
+    assert seen[0] in ("one", "two", "open_pop") and seen[1] == "dot", seen

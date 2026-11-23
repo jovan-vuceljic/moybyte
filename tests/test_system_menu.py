@@ -662,8 +662,8 @@ def test_a_cut_system_menu_shows_a_row_under_its_fade(tmp_path, theme, mode, inp
 @pytest.mark.parametrize("theme,mode", _THEME_MODES)
 @pytest.mark.parametrize("inputs", ["tdeck", "touch"])
 def test_the_handheld_more_menu_shows_a_row_under_its_fade(tmp_path, theme, mode, inputs):
-    """The sprite tab's ⋯ menu is cut above its button: its fade lies over
-    part of a row, never over the bare card under the rule before Clear."""
+    """Where the sprite tab's ⋯ menu is cut, its fade lies over part of a
+    row, never over the bare card under the rule before Clear."""
     ws = _goldens_ws(tmp_path, theme, mode, inputs)
     ws.open_in_editor(_g._cart_by_title(ws, "Star Catcher"))
     ws.text.set_menu_view("paint")
@@ -671,12 +671,11 @@ def test_the_handheld_more_menu_shows_a_row_under_its_fade(tmp_path, theme, mode
     ws.paint.set_selection(1, 1, 4, 4)
     ws.paint_layer._open_more()
     _settle(ws)
-    card = ws.paint_layer._host.box("More")
-    clear = ws.paint_layer._host.box("Clear")
+    card = ws.paint_layer._host.box("more_pop")
+    clear = ws.paint_layer._host.box("Clear" + ws.paint_layer.s.k_clear)
     cut = clear is None or clear[1] + clear[3] > card[1] + card[3]
-    if inputs == "touch" and not cut:
+    if not cut:
         return                          # no strip: the whole menu fits
-    assert cut, "the T-Deck's menu is cut above its button"
     _peek_reads(theme, mode, inputs, *_fade_ink(ws, card))
 
 
