@@ -27,7 +27,6 @@ True while typed keys are its own (B and ESC are then the text field's);
 `closed()` on every close, a tap outside included.
 """
 
-import ui as _ui
 import ui_draw as _ui_draw
 import layout_base as _lb
 from status_items import ITEMS as _ITEMS, CAP as _CAP
@@ -103,7 +102,7 @@ class MonthView:
         desk = _desk()
         fs = ws.layout.fs
         self._sync()
-        h = _ui.month_h(self.y, self.m, fs, desk) if self.y else 6 * 21 * fs
+        h = _ui_draw.month_h(self.y, self.m, fs, desk) if self.y else 6 * 21 * fs
         return ((264 if desk else 200) * fs, 2 * _pad(ws) + h + (_foot(fs) if desk else 0))
 
     def month(self):
@@ -629,7 +628,7 @@ class StatusMenu(_Rows):
     def size(self):
         fs = self.ws.layout.fs
         # under touch alone there are no hints, and no room kept for them
-        foot = 0 if _ui.input_kind() == "touch" else _foot(fs)
+        foot = 0 if _ui_draw.input_kind() == "touch" else _foot(fs)
         it = self.item
         h = _item_h(it, fs, True) if it is not None and it.pid else 0
         return (404 * fs, 2 * _pad(self.ws) + h + foot)

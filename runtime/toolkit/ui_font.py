@@ -30,6 +30,16 @@ def print_width(s, scale=1):
     return _C.text_width(s, scale, _C.print_font())
 
 
+def print_ellipsis(s, maxw, scale=1):
+    """`s` as a canvas's `print` shows it in a box `maxw` pixels wide at
+    `scale`: whole where it fits, else cut at a codepoint with the font's
+    ellipsis after it, three full stops where it has none (moy_ui_cut_text,
+    the cut a label and a table cell take)."""
+    if type(s) is not str:
+        s = str(s)
+    return _C.text_cut(s, maxw, scale, _C.print_font())
+
+
 def print_size(s, scale=1):
     """`(w, h)`: the pixels `s` covers through a canvas's `print` now, at
     the whole-number `scale` -- `h` is the print font's line."""

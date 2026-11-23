@@ -200,6 +200,11 @@ class AppHost:
                 self.tap = 2            # (a press no frame took yet: it, then the release)
         return True
 
+    def focused(self):
+        """The id of the stop that holds focus in the frame drawn last, None
+        with none."""
+        return _C.api_focus(self.ctx, None)
+
     def focus(self, id):
         """Move focus to `id` ahead of the next frame, so that frame's keys
         act on it and its begin shows it (`ui.focus` inside a frame moves it
@@ -279,8 +284,8 @@ class AppHost:
     def resume(self, cv, th):
         """Point the verbs at this context again, on `cv` under theme `th`,
         beginning no frame: what its last frame left -- focus, stops, the
-        bar it lent -- stands, and a verb that only draws (`ui.cursor`) draws
-        as it did. A frame that paints a part of its page again (Paint's
+        bar it lent -- stands, and a draw under the frame's theme
+        (`ui_draw.cursor`) draws as it did. A frame that paints a part of its page again (Paint's
         stroke frame) draws through it."""
         t = UI_TARGET
         t[0] = self.ctx

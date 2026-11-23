@@ -110,6 +110,33 @@ def wrap_px(text, maxw, scale=1):
     return _C.wrap(text, max(1, maxw // max(1, scale)), _C.print_font())
 
 
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August",
+          "September", "October", "November", "December")
+_MDAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+_DOW = (0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4)
+
+
+def weekday(y, m, d):
+    """0 for Monday .. 6 for Sunday (Sakamoto's rule: no datetime on a board)."""
+    if m < 3:
+        y -= 1
+    return (y + y // 4 - y // 100 + y // 400 + _DOW[m - 1] + d + 6) % 7
+
+
+def month_days(y, m):
+    """The days month `m` of year `y` has."""
+    if m == 2 and y % 4 == 0 and (y % 100 != 0 or y % 400 == 0):
+        return 29
+    return _MDAYS[m - 1]
+
+
+def month_h(year, mon, fs=1, desk=False):
+    """The height a month's calendar (moy_ui_api_month) takes at font scale
+    `fs` in the desk's class or the handheld's."""
+    return _C.month_h((weekday(year, mon, 1) + month_days(year, mon) + 6) // 7, fs,
+                      1 if desk else 0)
+
+
 def print_fit(s, maxw, scale=1):
     """The longest prefix of `s` that draws in at most `maxw` pixels at
     `scale` through a canvas's `print`, cut at a codepoint."""
@@ -121,16 +148,6 @@ def print_fit(s, maxw, scale=1):
     while n > 0 and _C.text_width(s[:n], scale, _C.print_font()) > maxw:
         n -= 1
     return s[:n]
-
-
-def print_ellipsis(s, maxw, scale=1):
-    """`s` as a canvas's `print` shows it in a box `maxw` pixels wide at
-    `scale`: whole where it fits, else cut at a codepoint with the font's
-    ellipsis after it, three full stops where it has none (moy_ui_cut_text,
-    the cut a label and a table cell take)."""
-    if type(s) is not str:
-        s = str(s)
-    return _C.text_cut(s, maxw, scale, _C.print_font())
 
 
 def text_width(s, scale=1, role=None):
@@ -2199,7 +2216,8 @@ def fill_uncovered(cv, inner, outer, col):
 # The scrolling, the coverless cart's cover, an app's host and the print font
 # live in modules of their own; their names are this module's too. Imported here, at the foot,
 # because ui_scroll and ui_host take their share of this module's state from it.
-from ui_font import print_face, print_font, print_size, print_symbols, print_width, face_draws
+from ui_font import (print_face, print_font, print_size, print_symbols, print_width, face_draws,
+                     print_ellipsis)
 from ui_scroll import drag_steps, PaintRing, ScrollRegion, DragTap
 from ui_cover import initial_block, initial_cover, initial_parts
 from ui_host import (AppHost, wash_page, NO_WASH, HOLD_PUT, HOLD_LAST, HOLD_DRAW,

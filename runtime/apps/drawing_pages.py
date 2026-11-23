@@ -10,7 +10,7 @@ APPS_RESTYLE.md), `uitree` pages each app hosts in its frame
 (`uitree_app.hosted_page`). A page answers the frame after its row or card
 is chosen (`SendPage.draw`)."""
 
-import ui as _v
+import ui_cover as _ui_cover
 import ui_font as _ui_font
 import uitree as ui
 import uitree_app
@@ -187,10 +187,16 @@ class GamePage(SendPage):
         if cover:
             cv.cover(cover.pix, cover.w, 0, 0, cover.w, cover.h, px, py, side, side, side // 4, False)
         else:
-            _v.initial((px, py, side, side), cart.get("title") or "", side // 4)
-        tx = px + side           # the label keeps its own lead
-        _v.at(tx, y, max(0, x + w - tx - 8 * fs), h)
-        _v.label(cart.get("title") or "")
+            _ui_cover.initial_cover(cv, (px, py, side, side), side // 4, cart.get("title") or "")
+        # its title in the UI face after a label's lead, cut as a label's
+        lead = (12 if h >= 28 * fs else 10) * fs      # (a desk's row is 28 tall)
+        tx = px + side + lead
+        room = max(0, x + w - 8 * fs - tx)
+        was = _ui_font.print_face("ui")
+        t = _ui_font.print_ellipsis(cart.get("title") or "", room, fs)
+        cv.print_scaled(t, tx, y + (h - _ui_font.print_size(t, fs)[1]) // 2, th["ink"], fs)
+        if was is not None:
+            _ui_font.print_font(was)
 
 
 class StoryPage(SendPage):

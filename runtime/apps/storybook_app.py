@@ -40,7 +40,6 @@ the pictures it uses. A story whose document does not read (another format,
 an old story cart's deck) is not listed: it reads as absent.
 """
 
-import ui as _v
 import ui_font as _ui_font
 import uitree as ui
 import uitree_app

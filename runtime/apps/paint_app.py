@@ -43,7 +43,6 @@ Autosave (#108): a drawing persists on an idle debounce, a kid never saves;
 the first save of a new drawing says its name in a toast.
 """
 
-import ui as _v
 import ui_font as _ui_font
 import uitree as ui
 import uitree_app
@@ -1482,7 +1481,7 @@ class PaintAppLayer(PaintDraw, uitree_app.app_layer("artwork", "Paint", build)):
         eng.hosted(dt, cv, th, content, lay.desk)
         eng._ui.begin(cv, th, content, lay.desk, lay.windowed)
         if self._touch is None:
-            self._touch = _v.hints_width(("back", "Back")) == 0
+            self._touch = eng.input_now() == "touch"
             # the page this frame paints is the first a stroke frame may
             # follow: one more frame begins bringing every buffer to it
             self._damage.again()

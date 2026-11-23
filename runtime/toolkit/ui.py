@@ -1278,31 +1278,8 @@ def note(icon, lines):
     # END GENERATED
 
 
-MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August",
-          "September", "October", "November", "December")
-_MDAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-_DOW = (0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4)
-
-
-def weekday(y, m, d):
-    """0 for Monday .. 6 for Sunday (Sakamoto's rule: no datetime on a board)."""
-    if m < 3:
-        y -= 1
-    return (y + y // 4 - y // 100 + y // 400 + _DOW[m - 1] + d + 6) % 7
-
-
-def month_days(y, m):
-    """The days month `m` of year `y` has."""
-    if m == 2 and y % 4 == 0 and (y % 100 != 0 or y % 400 == 0):
-        return 29
-    return _MDAYS[m - 1]
-
-
-def month_h(year, mon, fs=1, desk=False):
-    """The height `month(year, mon)` takes at font scale `fs` in the desk's
-    class or the handheld's."""
-    return _C.month_h((weekday(year, mon, 1) + month_days(year, mon) + 6) // 7, fs,
-                      1 if desk else 0)
+# The calendar's names and measures are the engine layer's (ui_draw).
+MONTHS, weekday, month_days, month_h = _D.MONTHS, _D.weekday, _D.month_days, _D.month_h
 
 
 def month(year, mon, today=0):

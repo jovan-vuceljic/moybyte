@@ -1017,6 +1017,12 @@ class CEngine(Engine):
 
     # -- the frame -------------------------------------------------------------------
 
+    def input_now(self):
+        """The input in use ("keys", "tdeck", "pad" or "touch"): what the
+        frame painted next reads as @input."""
+        kind = _D.input_kind()
+        return kind if kind in S.INPUTS else "keys"
+
     def paint(self, dt, cv, th, content, desk):
         self._bind()
         if not self._started:
@@ -1037,8 +1043,7 @@ class CEngine(Engine):
             if x.want_focus(w) < 0:
                 self._fail(E_CHECK, "ui.focus(%r)" % w, at)
         self._live_units()
-        kind = _D.input_kind()
-        self.input = kind if kind in S.INPUTS else "keys"
+        self.input = self.input_now()
         cb = (4 if desk else 0) | (2 if content[2] * 3 > content[3] * 4 else 0) | (1 if self.input == "touch" else 0)
         if cb != self._classes_b:
             self._classes_b, self.classes = cb, _CLASSES[cb]

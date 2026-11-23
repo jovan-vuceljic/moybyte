@@ -18,7 +18,7 @@ binding them, so either may load first. MicroPython-safe; a frame allocates
 nothing here that it did not before.
 """
 
-import ui
+import ui_draw as _ui_draw
 import ui_font as _ui_font
 from artwork import colour_name
 try:
@@ -134,7 +134,7 @@ class PaintDraw:
         g = self._cursor_at()
         if g is not None:
             cv.clip(vx, vy, vw, vh)
-            ui.cursor(g[0], g[1], g[2], g[2])
+            _ui_draw.cursor(cv, (g[0], g[1], g[2], g[2]))
             cv.clip()
 
     def _cursor_at(self):
@@ -294,7 +294,7 @@ class PaintDraw:
                 # the toolkit's verbs on this page's context, its frame not
                 # begun again: the ring is drawn as a whole frame draws it
                 self._ui.resume(cv, th)
-                ui.cursor(g[0], g[1], g[2], g[2])
+                _ui_draw.cursor(cv, (g[0], g[1], g[2], g[2]))
             cv.clip()
             self._clip_r = None
         return True

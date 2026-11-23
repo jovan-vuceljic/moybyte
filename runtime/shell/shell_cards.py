@@ -14,7 +14,6 @@ cards (`PauseMenu`), the delete confirm (`DeleteConfirm`), the system menu
 from widgets import DANGER_ICON as _DANGER_ICON
 import chrome_ops as _ch
 import ui_draw as _ui_draw
-import ui as _ui
 import layout_base as _lb
 import shell_layout as _shell_layout
 import app_perms as _perms
@@ -805,7 +804,7 @@ class DeleteConfirm:
         self._host.begin(cv, ws.theme_colors, rect, desk)
         self._page.paint(0.0, cv, ws.theme_colors, rect, desk)
         self._unwash_strip(cv)
-        self.focused = _ui.focus()
+        self.focused = self._host.focused()
         if self.open and self._host.due():
             ws.request_frame()
 
