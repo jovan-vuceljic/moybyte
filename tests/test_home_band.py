@@ -152,17 +152,17 @@ def _session(ws, drv, frame):
     g = ws.launcher
     fwd, back = ("down", "up") if not g.horizontal else ("right", "left")
     for k in range(12):
-        home.handle_input(_Key(fwd))
+        drv.press(fwd)
         ws.mark_dirty()
         run(3 if k % 3 == 0 else 1)
     run(12)
     for _ in range(3):                     # a held key: the repeats a frame carries
-        home.handle_input(_Key(fwd, 2))
+        drv.press(fwd)
         ws.mark_dirty()
         run(1)
     run(6)
     for k in ("down", "up", "down", "right", "left") if g.horizontal else ("right", "left"):
-        home.handle_input(_Key(k))
+        drv.press(k)
         ws.mark_dirty()
         run(2)
     home.toggle_favourite()
@@ -184,7 +184,7 @@ def _session(ws, drv, frame):
     drv.touch_up()
     run(40)
     for _ in range(6):
-        home.handle_input(_Key(back))
+        drv.press(back)
         ws.mark_dirty()
         run(2)
     run(10)
@@ -204,12 +204,11 @@ def _edits(ws, drv, frame):
             if s is not None:
                 shots.append(s)
 
-    home = ws.launcher_layer
     g = ws.launcher
     fwd, back = ("down", "up") if not g.horizontal else ("right", "left")
 
     def step(k, n=2):
-        home.handle_input(_Key(k))
+        drv.press(k)
         ws.mark_dirty()
         run(n)
 
@@ -353,7 +352,7 @@ def test_kept_faces_are_released(tmp_path, monkeypatch):
     lay = g._face_lay
     assert ws.launcher_layer.release_retained()
     assert g._face_lay is None and len(lay._buf) == 2   # (the released view)
-    ws.launcher_layer.handle_input(_Key("down"))
+    drv.press("down")
     ws.mark_dirty()
     assert frame() is not None
     assert g.faces_bytes() > 0
@@ -369,7 +368,7 @@ def test_idle_frames_draw_the_next_rows_faces(tmp_path, monkeypatch, arrangement
     ws, drv, frame, _ = _home(tmp_path, monkeypatch, "handheld", arrangement, "blocks", 2,
                               False)
     g = ws.launcher
-    shown = {i for i, _r in g._visible()}
+    shown = {i for i in range(len(g.items)) if g.tile_rect(i) is not None}
     for _ in range(12):
         drv.frame(1 / 30)
     assert _kept(g) - shown, (sorted(shown), sorted(_kept(g)))
@@ -391,7 +390,7 @@ def test_a_round_with_every_face_drawn_ends_the_asking(tmp_path, monkeypatch, ar
     real = ui.slot_next
     monkeypatch.setattr(ui, "slot_next", lambda: asked.append(1) or real())
     assert not g.mint_faces() and not asked
-    ws.launcher_layer.handle_input(_Key("right"))
+    drv.press("right")
     ws.mark_dirty()
     frame()
     g.mint_faces()
@@ -436,7 +435,7 @@ def test_a_paint_draws_no_face(tmp_path, monkeypatch, arrangement):
     monkeypatch.setattr(L, "band_pass", band_pass)
     monkeypatch.setattr(L, "_draw_face", draw_face)
     for _ in range(30):
-        ws.launcher_layer.handle_input(_Key("down"))
+        drv.press("down")
         ws.mark_dirty()
         frame()
         for _ in range(3):
@@ -473,35 +472,11 @@ def test_a_cover_landing_keeps_the_frames_damage(tmp_path, monkeypatch, arrangem
                                                        real_ask()))
     land[0] = True
     del hits[:]
-    ws.launcher_layer.handle_input(_Key("down"))
+    drv.press("down")
     ws.mark_dirty()
     frame()
     assert hits, "the frame's drawn rects were not handed as damage"
     assert asked[0] > 0
-
-
-def test_a_steps_lagging_buffer_is_paid_on_an_idle_frame(tmp_path, monkeypatch):
-    """A step that drew its cells alone leaves the other buffer behind and
-    asks for no frame from inside its draw (a rolling ball's next step
-    would wait on it): the frame is owed to an idle frame, which asks for
-    it, and that frame brings the buffer level by copying the cards the
-    step drew out of the buffer it drew them in (`ui.table_copy`)."""
-    ws, drv, frame, _ = _home(tmp_path, monkeypatch, "handheld", "grid", "blocks", 2, False)
-    layer = ws.launcher_layer
-    ws.launcher_layer.handle_input(_Key("down"))
-    ws.mark_dirty()
-    n = ws.frame_state.frames_drawn
-    drv.frame(1 / 30)
-    assert ws.frame_state.frames_drawn == n + 1
-    assert layer._debt_owed + 1 == ws.frame_state.frames_drawn
-    assert not ws.frame_requested
-    drew = list(ws.launcher.floor)
-    assert drew and not ws.launcher.copied
-    for _ in range(6):
-        drv.frame(1 / 30)
-    assert layer._debt_owed is None
-    assert ws.frame_state.frames_drawn == n + 2       # the owed frame, then quiet
-    assert ws.launcher.floor == [] and sorted(ws.launcher.copied) == sorted(drew)
 
 
 # The names the home reads on every frame it paints or moves: its draw, the

@@ -62,6 +62,8 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_SWATCHES "swatches"
 #define UT_LOOK_PICTURES "pictures"
 #define UT_LOOK_CAROUSEL "carousel"
+#define UT_LOOK_SHELF "shelf"
+#define UT_LOOK_ICONS "icons"
 #define UT_LOOK_KEYS "keys"
 #define UT_MKIND_DANGER "danger"
 #define UT_NAV_OFF "off"

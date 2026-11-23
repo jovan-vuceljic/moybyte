@@ -481,6 +481,7 @@ class Home:
         # The "+ New" card draws the live icon set's plus (iconsets.plus).
         g.icon_spec = ws.icon_spec
         g.cover_for = ws.covers.cover_for
+        g.covers = ws.covers
         g.cover_ready = ws.covers.ready_for
         g.tinted_for = ws.covers.tinted
         # The favorite-star badge on the selected card (#105).

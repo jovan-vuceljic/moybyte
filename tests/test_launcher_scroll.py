@@ -482,7 +482,6 @@ def test_cursor_delta_is_faster_and_accelerates():
 def test_the_handheld_hero_keeps_its_gap_to_the_neighbours(tmp_path):
     """A hero twice its neighbours, every gap the same, the card half the
     cover's side; the title and the hint strip under the band."""
-    from runtime import home_grid as ll
 
     ws = _ws_with_carts(tmp_path, 10)
     lz = ws.launcher
@@ -490,7 +489,7 @@ def test_the_handheld_hero_keeps_its_gap_to_the_neighbours(tmp_path):
     lz.sel = 3
     _frame(ws)
     card = lz.card_side()
-    assert card == ll._HH_CARD * ws.layout.fs
+    assert card == 64 * ws.layout.fs            # (half the cover's side)
     left, hero, right, far = (lz.tile_rect(i) for i in (2, 3, 4, 5))
     gap = 14 * ws.layout.fs                     # (moy_ui_api_pop.c's CAROUSEL_GAP)
     assert hero[2] == 2 * card and left[2] == right[2] == card
@@ -664,10 +663,7 @@ def test_a_card_shows_its_whole_cover_at_a_clean_scale(tmp_path, monkeypatch):
     """Every home card draws the WHOLE 128x128 cover (owner call 2026-10-17),
     and a card side is only ever a whole multiple of the cover's or its half,
     quarter or eighth -- never a ratio like 1.5x."""
-    from runtime import home_grid as ll
 
-    assert [ll._clean_side(n) for n in (400, 320, 256, 200, 128, 112, 64, 50, 20)] \
-        == [384, 256, 256, 128, 128, 64, 64, 32, 16]
     ws = _ws_with_carts(tmp_path, 10)
     lz = ws.launcher
     drawn = []
@@ -713,14 +709,13 @@ def test_the_desk_home_lays_out_the_hero_its_details_and_the_shelf(tmp_path):
     pane beside it, the shelf under them at half its scale with the
     selected card two in, bleeding off the right edge, the hint strip
     along the foot."""
-    from runtime import home_grid as ll
 
     ws, drv = _desk_home(tmp_path)
     lz = ws.launcher
     assert lz.desk() and not lz.handheld()
     hx, hy, hs, _ = lz.hero_rect()
     card = lz.card_side()
-    assert hs % ll._COVER_SIDE == 0 and card == hs // 2
+    assert hs % 128 == 0 and card == hs // 2           # (a whole cover at a clean scale)
     px, py, pw, ph = lz.plate_rect()
     assert px > hx + hs and py == hy
     assert len(lz.items) > 7

@@ -2141,7 +2141,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:carousel",
+     "type": "word:carousel,shelf,icons",
      "level": 2
     },
     "tone": {

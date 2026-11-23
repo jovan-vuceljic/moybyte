@@ -198,8 +198,9 @@ door — no setting, no mode:
 - **Scrolling is KINETIC** (#113, 2026-07-22): a fast release FLINGS the row,
   which coasts with friction and hard-stops at the ends; a slow or held release
   is a plain stop, and a touch mid-coast CATCHES it (that catching tap never
-  activates a card). The physics lives in the shared `ui.ScrollRegion`, so the
-  grid and the icons fling identically; a scroll, fling or step frame is the
+  activates a card). The physics lives in the engine's scroll
+  (`moy_ui_scroll_t`), so the carousel, the grid and the icons fling
+  identically; a scroll, fling or step frame is the
   band's alone (`home_band._band_frame`): the backdrop goes back under
   the band and the band draws as the engine's table of parts
   (`Launcher.band_pass`), with the hint strip where a step moved focus.

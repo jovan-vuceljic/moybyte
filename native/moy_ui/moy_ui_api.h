@@ -326,7 +326,9 @@ typedef struct {
     uint8_t cancel;
     // A carousel's page (moy_ui_api_carousel): the row its keys and taps carry to the centre,
     // the row it rests on as the app was told, and a fling that came to rest at this frame's
-    // begin (its glide to the nearest row starts unticked, as the frame after a fling's).
+    // begin (its glide to the nearest row starts unticked, as the frame after a fling's). `car`
+    // its look (MOY_UI_LOOK_*); a shelf's or icons' page (moy_ui_api_cells_grid) keeps the card its
+    // keys are on as car_set.
     uint8_t car, car_fling;
     int16_t car_row, car_set;
     uint32_t thumb;                 // a page or placed table: its thumb as it drew last, 0 none
@@ -519,12 +521,15 @@ typedef struct {
     moy_ui_tops_t tops[MOY_UI_API_SNAPS];
 } moy_ui_snap_t;
 
-// The carousel the table drawn next is (moy_ui_api_carousel; `on` 0: none): its geometry
-// (moy_ui_api_carousel_geom's), its band, and the row its app holds current.
+// The cards look the table drawn next is (`on` 0: none; MOY_UI_LOOK_CAROUSEL, moy_ui_api_carousel,
+// or MOY_UI_LOOK_SHELF or _ICONS, moy_ui_api_cells_grid): its geometry (moy_ui_api_carousel_geom's or
+// moy_ui_api_cells_geom's), its band, and the row its app holds current.
+enum { MOY_UI_LOOK_CAROUSEL = 1, MOY_UI_LOOK_SHELF, MOY_UI_LOOK_ICONS };
+#define MOY_UI_CELLS_G 16
 typedef struct {
     int8_t on;
-    int16_t app;
-    int32_t g[10], band[4];
+    int16_t app, app_n;             // (app_n: a shelf's or icons' cards)
+    int32_t g[MOY_UI_CELLS_G], band[4];
 } moy_ui_car_t;
 
 // ui.popover's: moy_ui_ctx_t's `pop`, owned by moy_ui_api_pop.c.
@@ -1266,6 +1271,58 @@ int moy_ui_api_carousel_at(const int32_t g[10], const int32_t b[4], int32_t offs
 void moy_ui_api_carousel(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, const int32_t b[4],
                          const int32_t g[10], const uint8_t *cells, size_t cells_n, int32_t cur,
                          int32_t out[5]);
+// A home grid of cards (ui.cards look "shelf" or "icons", MOY_UI_LOOK_SHELF or _ICONS): its
+// geometry in band `b` (x, y, w, h) at font scale `fs`, on the desk's metrics where `desk`,
+// `u` glass pixels a pixel (a doubled desk's 2). A shelf: cards of the clean side a
+// carousel neighbour takes (the desk's: the whole cover) in the rows the band holds, in
+// columns that scroll across, spaced so the last column on the glass stands cut by a third or
+// more, each card's title under it. Icons: tiles in as many columns as the band holds, in
+// rows that scroll down; on the desk each named under it, on the handheld the card the keys
+// are on named in a caption band along the band's foot. out[MOY_UI_CELLS_*].
+enum { MOY_UI_CELLS_SIDE, MOY_UI_CELLS_R, MOY_UI_CELLS_X0, MOY_UI_CELLS_Y0, MOY_UI_CELLS_PX,
+       MOY_UI_CELLS_PY, MOY_UI_CELLS_ROWS, MOY_UI_CELLS_COLS, MOY_UI_CELLS_TITLE_DY,
+       MOY_UI_CELLS_TITLE_W, MOY_UI_CELLS_GROW, MOY_UI_CELLS_CAP_H, MOY_UI_CELLS_VIEW_H,
+       MOY_UI_CELLS_ACROSS, MOY_UI_CELLS_DESK, MOY_UI_CELLS_LOOK };
+// (TITLE_DY 0: no title under a card; CAP_H the caption band's height, 0 none; VIEW_H the
+// band's height over the caption; ACROSS 1 where the cells scroll across.)
+void moy_ui_api_cells_geom(int look, int fs, int desk, int u, const int32_t b[4],
+                           int32_t out[MOY_UI_CELLS_G]);
+// The cells' content along their scroll for `n` cards (its margins either side), and the
+// scroll that keeps card `i` with its margin in view from scroll `off`.
+int32_t moy_ui_api_cells_extent(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int n);
+int32_t moy_ui_api_cells_reveal(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int n, int i,
+                                int32_t off);
+// Card `i`'s box at scroll `off` (x, y, w, h); the card whose box or title holds (x, y), -1
+// none.
+void moy_ui_api_cells_tile(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int32_t off, int i,
+                           int32_t out[4]);
+int moy_ui_api_cells_at(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int32_t off, int n,
+                        int x, int y);
+// The cells' `n` cards (cells: each card's key, NUL after each, the table's rows a shelf's
+// columns or the icons' rows, its last row's cards to come empty), one stop: the arrows step the card the keys are on across the grid and the
+// view lands where it shows it with its margin, the wheel's notches step it too (Shift's
+// across), a drag past the slop scrolls the view and a release flings it, a tap on a card
+// makes it current and opens it, Enter opens the current card. `cur` the card the app holds
+// current, which the view lands on where the app moves it. out[0] the current card, out[1]
+// 1 where it opened it, out[2] the scroll, out[3] the motion (MOY_UI_SCROLL_DRAG, _FLING),
+// out[4] 1 where it holds the focus. Its parts answer as a table's.
+void moy_ui_api_cells_grid(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id,
+                           const int32_t b[4], const int32_t g[MOY_UI_CELLS_G], const uint8_t *cells,
+                           size_t cells_n, int n, int32_t cur, int32_t out[5]);
+// A card of the cells (box `t`, under `clip`): where `focus`, the theme's focus mark round it,
+// flat; then its title under it (`title`, at g's TITLE_DY, cut to TITLE_W) in the ui face,
+// bold where `focus`, in `ink` over a black shadow where it names one (an override's colour,
+// MOY_UI_O_NONE the theme's ink).
+void moy_ui_api_cells_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t g[MOY_UI_CELLS_G],
+                           const int32_t t[4], const int32_t clip[4], int focus, moy_ui_span_t title,
+                           int32_t ink);
+// The cells' foot: on the handheld shelf, where `fade`, its last rows dissolving into the
+// ground; the icons' caption band along the band's foot under a hairline,
+// the current card's `title` in the title face from the first column's left and `sub`'s
+// items (apart by tabs) after it in the dim ink, a dot between each two.
+void moy_ui_api_cells_foot(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t g[MOY_UI_CELLS_G],
+                           const int32_t b[4], const int32_t clip[4], int fade, moy_ui_span_t title,
+                           moy_ui_span_t sub);
 // The largest side at most `limit` that shows a whole 128 px cover at a clean scale: a whole
 // multiple of it, else its half, quarter or eighth.
 int moy_ui_api_clean_side(int limit);

@@ -2,9 +2,8 @@
 #   Carousel                    the home's row: the centre card scaled by its distance
 #   Carousel._geom              its geometry: the handheld's row or the desk's hero and shelf
 #   Carousel.anim_frame         the desk shelf's fling and glide
-#   Carousel.band_keys          the handheld's keys and pointer: its band page's, whose carousel moves itself
 #   Carousel.band_pass          the row: the handheld's the engine's carousel, the desk's shelf a table of parts
-#   Carousel.band_put           the handheld band's cards as its page's rows
+#   Carousel._band_picture      a handheld card's picture, the engine's picture call
 #   Carousel._paint_details     the desk's hero and its details
 """The home's CAROUSEL (docs/theme_and_shell_2026-11.md §8.10): the `carousel`
 arrangement, the default (the layout's `home`), and the home window's,
@@ -16,14 +15,12 @@ model, its own geometry, motion and draw. Its instances are ws.launcher in
 the `carousel` arrangement and ws.projects_grid.
 """
 
-from array import array
-
 import ui as _ui
 import ui_draw as _ui_draw
 import layout_base as _lb
 from home_grid import (_COVER_BASE, _COVER_SIDE, desk_button_span,
                        _DESK_VERB_SETS, DETAILS_MIN, _dot_top, _draw_broken_badge,
-                       _draw_star_badge, _hint_strip, _in, Launcher, NEW_TILE_TYPE, _NO_KEYS, _PART,
+                       _draw_star_badge, _hint_strip, _in, Launcher, _NO_KEYS, _PART,
                        _PART_COL, PSEUDO_TILE_TYPES, SHELF_GAP, _TAB_NAME, text_scale)
 
 _G_PASS = [None, None]   # the row a band pass runs on and its geometry (`_geom`)
@@ -62,6 +59,7 @@ class Carousel(Launcher):
     and the class reads the row back as the band's last frame left it."""
 
     arrangement = "carousel"
+    page_fn = "band"                # its handheld band's page (home_ui)
     verb_sets = _DESK_VERB_SETS     # the buttons its desk pane keeps rows for
 
     def __init__(self, items, layout=None, names=None):
@@ -71,26 +69,22 @@ class Carousel(Launcher):
         self._g_keys = True
         self._g = None
         self.layout = None
-        self.own_for = None           # optional cart -> bool (ws.carts.is_own)
-        self.plays_for = None         # optional cart -> its play record (ws.carts.plays)
-        self.today_for = None         # optional () -> today as YYYYMMDD, 0 unknown
-        self._bpage = None            # the handheld band's page (`_band_page`)
-        self._cw = array("i", [0] * 20)     # its carousel as its last frame left it (`_hh`)
-        self._cw_ok = False           # ...where a pass drew it
-        self._cq = array("i", [0] * 4)      # a band (`_geom_hh`)
-        self._cg = array("i", [0] * 10)     # ...and the carousel's geometry in it
-        self._ct = array("i", [0] * 4)      # a tile (`tile_rect`)
-        self._put = None              # what its rows were put from: (items, their play records)
-        self._set = None              # ...and its current card and caption's ink (`band_set`)
-        self._pic_ix = {}             # a card's picture name -> its item
-        self._gcv = None              # the canvas a handheld pass draws on
-        self.on_open = None           # () -> the band's card opened (Enter, a tap on the centre)
-        self.wall_ink = None          # (white, black) over a wallpaper (_wall_ink)
+        # the desk's shelf: `_scroll` (raw px) is the state of record, clamped
+        # LAZILY against the live layout (the `scroll` property), so a layout
+        # swap never destroys a position; `_region` is the touch model,
+        # synced from it whenever a drag is not active
+        self._scroll = 0
+        self._region = _ui_draw.ScrollRegion(horizontal=True)
+        self._taps = _ui_draw.DragTap(self._region)
         self._quiet_for = None        # the geometry `quiet` was computed for
         self._quiet_q = ()
         self._vis_g = None            # the geometry and key `_vis` was laid out for
         self._vis_key = [None] * 3    # (scroll, selected, count)
         self._vis = None
+        self._shows = bytearray()     # the cards the engine says show (the desk's shelf)
+        self._bo = {"id": "band", "part": [0, 0], "axis": "x", "snap": False, "offset": 0,
+                    "spill": 0, "gen": 0, "current": False, "mark": False, "shift": False,
+                    "fade": 0}
         Launcher.__init__(self, items, layout, names)
 
     # -- geometry ------------------------------------------------------------
@@ -405,6 +399,7 @@ class Carousel(Launcher):
 
     def set_items(self, items):
         self._region.stop()
+        self._region.invalidate()   # the pixels no longer match any recorded paint
         Launcher.set_items(self, items)
 
     def _scroll_to_sel(self):
@@ -456,24 +451,22 @@ class Carousel(Launcher):
     def scroll_cols(self, d):
         self.nav2d(d, 0)
 
-    # -- the handheld's keys and pointer ----------------------------------------
-
-    def band_keys(self, i):
-        """The handheld's keys this frame, its band page's (its carousel
-        steps, glides and opens itself): whether a frame is owed."""
-        return self._band_host().keys(i)
-
-    def band_point(self, px, py, click, down):
-        """A pointer sample on the handheld, its band host's (a drag moves
-        the row and a release flings it, a tap slides a card to the centre
-        or opens the centre's): whether it is the band's, or the band owes
-        a frame (a release, the motion a tap started)."""
-        h = self._band_host()
-        return h.point(px, py, click, down) or h.owed
-
-    def band_cancel(self):
-        """The gesture on the band ends untapped (a long press took it)."""
-        self._band_host().clear()
+    def pointer_frame(self, px, py, click, down, dt_ms=None):
+        """One pointer sample over the desk's shelf through ui.DragTap: the
+        tapped card on a clean release (press and release on it with no drag
+        travel), else None, so a scroll gesture never launches a cart.
+        `dt_ms` feeds the fling."""
+        region = self._scroll_region()
+        press = self._taps.frame(px, py, click, down,
+                                 slop=4 * self.layout.fs + 2, dt_ms=dt_ms)
+        if self._taps.dragging:
+            self._scroll = region.offset       # the cards follow the finger
+        if press is None:
+            return None
+        i = self.tile_at(press[0], press[1])
+        if i is not None and i == self.tile_at(px, py):
+            return i
+        return None
 
     # -- cards -----------------------------------------------------------------
 
@@ -750,84 +743,11 @@ class Carousel(Launcher):
         k = ((k * 31 + w[_W_NEAR]) & 0x3fffff) * 31 + w[_W_MOTION]
         return (k & 0x3fffff) * 2 + w[_W_FOCUS]
 
-    def _band_page(self):
-        """The handheld band's page (`home_ui.band`) on the band's host,
-        made at the first handheld pass: on the home's ground, its
-        pictures the home's."""
-        pg = self._bpage
-        if pg is None:
-            import uitree_app
-            import home_ui
-            pg = uitree_app.hosted_page(home_ui.band, self._band_host(), self, env=self)
-            pg.bare = True
-            pg.band = False
-            pg.pictures = self._band_picture
-            pg.open()
-            self._bpage = pg
-        return pg
-
-    def all(self):
-        """The band page's damage: the home paints its band when it moves."""
-
-    def _band_cards(self):
-        """Put the band page's rows (`band_put`) where what they show moved:
-        the items, or the centre card's play record; and its current card
-        and its caption's ink (`band_set`) where the home moved them:
-        whether it put either."""
-        items = self.items
-        p = self._put
+    def _put_more(self, p):
+        """Whether what the rows were put from moved beside the items: the
+        centre card's play record, which its caption says."""
         c = self.nearest()
-        put = False
-        if p is None or p[0] is not items or (c < len(p[1]) and p[1][c] != self.played(items[c])):
-            import home_ui
-            pg = self._bpage
-            pg.run(home_ui.band_put, action="band_put")
-            home_ui.ui.commit(pg)
-            put = True
-        q = self._set
-        if q is None or q[0] != self._sel or q[1] is not self.wall_ink:
-            import home_ui
-            pg = self._bpage
-            pg.run(home_ui.band_set, action="band_set")
-            home_ui.ui.commit(pg)
-            put = True
-        return put
-
-    def band_put(self, s):
-        """The band's cards as its page's rows (home_ui's `band_put`): each
-        card's title ("New" on the "+ New" card), its metadata (`_meta`),
-        apart by tabs, and its picture, which the home draws
-        (`_band_picture`)."""
-        import home_ui
-        items = self.items
-        rows = []
-        ix = {}
-        recs = []
-        for i in range(len(items)):
-            it = items[i]
-            k = str(i)
-            name = "New" if it.get("type") == NEW_TILE_TYPE else str(it.get("title") or "")
-            pic = home_ui.ui.image.own(k)
-            ix[repr(pic)] = i
-            recs.append(self.played(it))
-            rows.append(dict(id=k, name=name, sub="\t".join(self._meta(it)), pic=pic))
-        s.cards = rows
-        self._pic_ix = ix
-        self._put = (items, recs)
-
-    def band_set(self, s):
-        """The band's current card, the one a selection made from outside
-        lands the row on, and its caption's ink: white (over black) on a
-        wallpaper (`wall_ink`), else the theme's (home_ui's `band_set`)."""
-        s.sel = str(self._sel)
-        s.tone = "" if self.wall_ink is None else "#FFFFFF"
-        self._set = (self._sel, self.wall_ink)
-
-    def band_open(self, row):
-        """The band page's card action (Enter, or a tap on the centre card
-        at rest): the home's `on_open`."""
-        if self.on_open is not None:
-            self.on_open()
+        return c < len(p[1]) and p[1][c] != self.played(self.items[c])
 
     def _band_picture(self, node, pic, r):
         """A card of the band's page (the engine's picture call, `r` its
@@ -846,7 +766,8 @@ class Carousel(Launcher):
         pseudo = it.get("type") in PSEUDO_TILE_TYPES
         cr = r[9]
         # (a cover's draw reads the tile by index, so `r` serves; the rest take it whole)
-        self._draw_picture(cv, it, (r[0], r[1], r[2], r[3]) if pseudo else r, r[8] & 4 != 0, None, cr)
+        self._draw_picture(cv, it, (r[0], r[1], r[2], r[3]) if pseudo else r, r[8] & 4 != 0, None, cr,
+                           _COVER_BASE, i)
         star = r[8] & 8 and self.favorite_for is not None and it.get("path") and not pseudo
         broken = self.is_broken(it)
         if star or broken or not cr:

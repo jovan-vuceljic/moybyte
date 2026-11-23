@@ -15,7 +15,7 @@
 moy_ui_ctx_t *moy_ui_mp_ctx(mp_obj_t ctx);
 void moy_ui_mp_sink(moy_ui_sink_t *s, mp_obj_t cv, mp_obj_t look);
 
-enum { PIC_NAMES = 16, PIC_R = 12 };
+enum { PIC_NAMES = 96, PIC_R = 12 };
 
 typedef struct {
     mp_obj_base_t base;
@@ -562,7 +562,8 @@ static mp_obj_t eng_on_draw(mp_obj_t self, mp_obj_t fn)
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eng_on_draw_obj, eng_on_draw);
 
-// A picture's name as a str: the engine's few recent ones kept, so a frame allocates none.
+// A picture's name as a str: the engine's recent ones kept, as many as a grid of cards
+// draws a frame (the desk's icons), so a frame allocates none.
 static mp_obj_t pic_name(eng_obj_t *o, const char *p, size_t n)
 {
     int at = PIC_NAMES - 1;
@@ -672,6 +673,38 @@ static mp_obj_t eng_carousel_geom(size_t n, const mp_obj_t *a)
                                              mp_obj_is_true(a[3]), words_of(a[4], 10)));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_carousel_geom_obj, 5, 5, eng_carousel_geom);
+
+// cells(out) (uit_cells): the page's shelf or icons as the last frame drew them into out, an
+// array('i') of 25; whether they drew.
+static mp_obj_t eng_cells(mp_obj_t self, mp_obj_t out)
+{
+    return mp_obj_new_bool(uit_cells(eng(self), words_of(out, UIT_CELLS_WORDS)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_cells_obj, eng_cells);
+
+// cells_tile(i, out) (uit_cells_tile): card i's box into out, an array('i') of 4; whether it shows.
+static mp_obj_t eng_cells_tile(mp_obj_t self, mp_obj_t i, mp_obj_t out)
+{
+    return mp_obj_new_bool(uit_cells_tile(eng(self), mp_obj_get_int(i), words_of(out, 4)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(eng_cells_tile_obj, eng_cells_tile);
+
+// cells_at(x, y) (uit_cells_at): the card whose box or title holds the point, -1 none.
+static mp_obj_t eng_cells_at(mp_obj_t self, mp_obj_t x, mp_obj_t y)
+{
+    return MP_OBJ_NEW_SMALL_INT(uit_cells_at(eng(self), mp_obj_get_int(x), mp_obj_get_int(y)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(eng_cells_at_obj, eng_cells_at);
+
+// cells_geom(band, fs, desk, out) (uit_cells_geom): band an array('i') of 4, out of 16; whether
+// the page has a shelf or icons.
+static mp_obj_t eng_cells_geom(size_t n, const mp_obj_t *a)
+{
+    (void)n;
+    return mp_obj_new_bool(uit_cells_geom(eng(a[0]), words_of(a[1], 4), mp_obj_get_int(a[2]),
+                                          mp_obj_is_true(a[3]), words_of(a[4], 16)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_cells_geom_obj, 5, 5, eng_cells_geom);
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_frame_obj, 11, 11, eng_frame);
 
 // still(ctx, x, y, w, h, flags, fs, input) -> whether the frame drawn last is what a frame now draws
@@ -927,6 +960,10 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_carousel_tile), MP_ROM_PTR(&eng_carousel_tile_obj) },
     { MP_ROM_QSTR(MP_QSTR_carousel_at), MP_ROM_PTR(&eng_carousel_at_obj) },
     { MP_ROM_QSTR(MP_QSTR_carousel_geom), MP_ROM_PTR(&eng_carousel_geom_obj) },
+    { MP_ROM_QSTR(MP_QSTR_cells), MP_ROM_PTR(&eng_cells_obj) },
+    { MP_ROM_QSTR(MP_QSTR_cells_tile), MP_ROM_PTR(&eng_cells_tile_obj) },
+    { MP_ROM_QSTR(MP_QSTR_cells_at), MP_ROM_PTR(&eng_cells_at_obj) },
+    { MP_ROM_QSTR(MP_QSTR_cells_geom), MP_ROM_PTR(&eng_cells_geom_obj) },
     { MP_ROM_QSTR(MP_QSTR_build_end), MP_ROM_PTR(&eng_build_end_obj) },
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&eng_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&eng_close_obj) },

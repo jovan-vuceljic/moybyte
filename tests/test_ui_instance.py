@@ -73,6 +73,7 @@ SHARED = {
     ("moy_ui.c", "s_readers"): "the pulls copying the block, an atomic count a write waits on",
     ("moy_ui_depth.c", "s_depth"): BLOCK,
     ("moy_ui_depth.c", "s_paint"): BLOCK,
+    ("moy_ui_depth.c", "s_render"): BLOCK,
     ("moy_ui_depth.c", "s_paints"): BLOCK,
     ("moy_ui_depth.c", "s_marks"): BLOCK,
     ("moy_ui_depth.c", "s_km"): BLOCK,

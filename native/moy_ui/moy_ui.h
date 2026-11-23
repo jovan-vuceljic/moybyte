@@ -402,6 +402,9 @@ enum {
 // installs the default's.
 void moy_ui_depth_use(const char *name, size_t n, int light);
 const moy_ui_depth_t *moy_ui_depth(void);
+// The theme's render.scale, as moy_ui_depth_use resolved it: the glass pixels a pixel of a
+// desk laid out at its glass metrics on a half-size surface (2), else 1.
+int moy_ui_render_scale(void);
 // A shadow's size: the theme's, a smaller one (a quarter of the blur, half the
 // offset: a window being dragged), or none.
 enum { MOY_UI_UNDER_FULL = 0, MOY_UI_UNDER_SMALL = 1, MOY_UI_UNDER_NONE = 2 };
