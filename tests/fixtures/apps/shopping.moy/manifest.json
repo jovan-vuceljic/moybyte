@@ -4,5 +4,6 @@
   "id": "local.shopping",
   "runtime": "python",
   "main": "main.py",
+  "extensions": ["moybyte.uitree"],
   "moybyte": {"type": "app", "permissions": ["prefs"], "required": ["prefs"]}
 }
