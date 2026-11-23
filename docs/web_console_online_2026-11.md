@@ -295,8 +295,8 @@ the console's.
 
 **The live socket stays the console's** (#256). The console runs on the
 board's origin, so its WebSocket to its board is `ws://` from an http page,
-as today. An https page cannot open `ws://`, so the site's window, and the
-direct path of §10, never carry the socket; the link carries what the site
+as today. An https page cannot open `ws://`, so the site's window never
+carries the socket; the link carries what the site
 needs. The loader also takes the pack off the board's serving: a C3 sends a
 few KB at a page load, not the pack. #256's in-frame serving still applies to
 the loader and `/sync`, so phase 1 measures a page load's frame stall on
@@ -458,12 +458,11 @@ decides where its carts live**, not where its bytes came from.
 No crossover is added. Phase 1 rewrites the rule's "serving host" in
 `.claude/rules/web.md` as "the origin it runs under".
 
-**Local Network Access is an optional extra path**, never a requirement. On
-Chrome, with the user's permission, the site could reach the board directly
-(`fetch` with `targetAddressSpace: "local"`) as a paired browser of its own,
-with its own key, and do flow 3's work with no second window. It would never
-run the console against the board, so the mode rule is untouched. Only
-Chromium has it, so the link stays the path every browser gets.
+**No direct path from the site (owner, 2026-11-23).** On Chrome, Local
+Network Access would let os.moybyte.com reach the board itself as a paired
+browser, with no second window. It is dropped: only Chromium has it, and an
+https page cannot open the console's `ws://` socket (#256), so it would be a
+second, weaker way to a board beside the link every browser gets.
 
 **Big boards keep their copy, and everything boots one way.** Phase 4 makes
 the loader the only boot path, on every board, with the board's copy as one
@@ -593,13 +592,7 @@ Tests:
 - A store cart whose bytes the site altered is refused by the board.
 - A kind refused before the consent.
 
-**Phase 6, optional: the direct path.** Local Network Access on Chromium
-(§10).
-
-Tests: its prompt and its refusal, and the link still used where the
-permission is denied.
-
-**Phase 7: the field mode.** A board serves the loader on its own access
+**Phase 6: the field mode.** A board serves the loader on its own access
 point (§12), and My consoles opens it at the access point's address.
 
 Tests: a C3 on its access point booting the console a phone's offline
@@ -612,7 +605,7 @@ phones' "no internet" handling of that network, on Android and iPhone.
    the one way a browser that never saw os.moybyte.com starts a console on a
    LAN with no internet.
 2. **A board serves the console on its own access point**, a field mode
-   with no router (phase 7). A C3 needs no copy for it: a phone that has
+   with no router (phase 6). A C3 needs no copy for it: a phone that has
    opened os.moybyte.com before hands its cached pack to the board's window,
    and a board with room serves its own.
 3. **os.moybyte.com keeps every stable pack and the `dev` packs of the last
