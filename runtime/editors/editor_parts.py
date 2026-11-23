@@ -1,16 +1,16 @@
 # Map (grep -n a name to jump there):
-#   PAGES           the panes that are a page of their own (editor_part.py)
-#   PartHost        such a pane's host: its page's state, the sheet, the actor's verbs
-#   PARTS           the panes the desk Editor draws on the verbs
+#   PartHost        the host of a pane that is a page of its own (editor_part.py)
+#   draw            a pane the desk Editor draws on the verbs (`PARTS`)
 #   sounds          the Sound workspace's list: the song, then a row a sound
 #   song            the Song pane: its verbs, then its slots, the current one marked
 #   song_do         a Song verb on the core: a slot's sound, add, delete, play
 #   palette         the Blocks workspace's palette: the categories, then their blocks
-#   made            the code the blocks make, read only
+#   made_lines      the code the blocks make, as the made pane's lines
 #   ref_sounds      the Reference's Sounds: a pick puts its sfx() at the caret
 #   map_view        the Reference's Map: a pick puts its mget() at the caret
 #   log             the Reference's Log: the run's and the code's errors, to their line
-#   pointer, keys   a press on the map, the arrows over it
+#   pointer         a press on the Reference's map
+#   keys            the arrows over the Reference's map
 """The desk Editor's own panes (docs/media/look_2026-10/EDITOR_LAYOUT.md's
 World, Art, Code and Sound workspaces), over the editor cores the handheld
 tabs edit (`SceneEditor`, `MusicEditor`): the Actor, the Sheet, the
