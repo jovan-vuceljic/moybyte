@@ -45,6 +45,7 @@ def _page():
     if p is None:
         import uitree_editor
         p = _PAGE[0] = uitree_editor.page(bar_ui.bar, None, None)
+        p.bar = True            # (its tray's icons the zone's size)
         forget()                # (a new page's store holds none of them)
     return p
 

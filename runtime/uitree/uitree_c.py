@@ -89,6 +89,7 @@ BOOL, INT, NUM, TEXT, ENUM, ROWOF, MODEL = 1, 2, 3, 4, 5, 6, 7
 EV_NONE, EV_ACTION, EV_WRITE, EV_CELL = 0, 1, 2, 3
 F_DESK, F_ON_BAR, F_BAND, F_BARE, F_TRACE, F_UP, F_DOWN, F_GEN = 1, 2, 4, 8, 16, 32, 64, 128
 F_PAGES_SHIFT = 8
+F_BAR = 1 << 16          # the page is a bar (`Page.bar`): one icon size across it
 OWE = 1 << 16
 A_HOOK, A_ROLE_CONFIRM, A_ROLE_BACK, A_SHIFT_ENTER, A_ARROWS_V, A_ARROWS_H, A_APP_BACK = 1, 2, 4, 16, 64, 128, 256
 INPUTS = ("keys", "tdeck", "pad", "touch")
@@ -1076,6 +1077,7 @@ class CEngine(Engine):
         return ((F_DESK if desk else 0) | (F_ON_BAR if _D._ON_BAR[0] else 0)
                 | (F_BAND if self.band else 0) | (F_BARE if self.bare else 0) | (F_GEN if self._gen_on else 0)
                 | (F_TRACE if S.TRACING else 0) | (F_UP if b & 4 else 0) | (F_DOWN if b & 8 else 0)
+                | (F_BAR if self.bar else 0)
                 | (min(255, len(self.pages)) << F_PAGES_SHIFT))
 
     def still(self, content, desk):

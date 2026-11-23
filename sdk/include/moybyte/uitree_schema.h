@@ -57,7 +57,6 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_COUNT "count"
 #define UT_LOOK_WELL "well"
 #define UT_LOOK_LARGE "large"
-#define UT_LOOK_SMALL "small"
 #define UT_LOOK_BAR "bar"
 #define UT_LOOK_STEPS "steps"
 #define UT_LOOK_BLOCKS "blocks"

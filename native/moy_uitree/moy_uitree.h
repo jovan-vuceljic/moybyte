@@ -70,6 +70,7 @@ enum {
     UIT_F_DESK = 1, UIT_F_ON_BAR = 2, UIT_F_BAND = 4, UIT_F_BARE = 8, UIT_F_TRACE = 16,
     UIT_F_UP = 32, UIT_F_DOWN = 64,
     UIT_F_GEN = 128,        // the host draws shift frames: the page carries its gen where it may
+    UIT_F_BAR = 1 << 16,    // the page is a bar: every icon alone in it draws at one size, the zone's
 };
 // The frame flags' bits 8..15: the pages on the stack (the band's Back).
 #define UIT_F_PAGES_SHIFT 8

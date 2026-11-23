@@ -4060,7 +4060,7 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     case UIT_BUTTON:
         a1 = text(e, k, 0, model, row, &n1);
         over_for(e, k, model, row, c, &o, id);
-        o.small = (N->btn & BT_SMALL) != 0;
+        o.small = (e->flags & UIT_F_BAR) && (N->btn & BT_ALONE);    // one bar, one icon size
         if (e->in_cell) {
             int32_t one = 1;
             moy_ui_over_put(&o, MOY_UI_OV_FIT, &one);

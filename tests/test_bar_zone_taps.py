@@ -346,3 +346,48 @@ def test_a_desk_window_zone_is_tapped_on_the_rect_it_is_drawn_on(tmp_path, monke
         drv.click(cx + bar[0] + px, cy + bar[1] + y + h // 2)
         _frames(ws, drv, 2)
         assert tapped == [drew[-1]], (px, tapped, drew[-1])
+
+
+@pytest.mark.parametrize("config", [TAPFLOOR, DESK])
+def test_a_bar_draws_one_icon_size_across_its_tray_and_zone(tmp_path, config):
+    """Where the chrome scale is above the font scale (the tap-floored
+    Guition, a P4 desk at chrome size 2 and font scale 1) the bar's cells are
+    the chrome scale's, but every icon alone in it -- the tray's Wi-Fi and
+    battery -- draws at its zone's size (16 units at the zone's scale),
+    centred in its cell, which keeps the chrome scale's tap."""
+    from runtime import bar_engine
+    ws, drv = _ws(tmp_path, config, "moy", "touch")
+    if config in DESKS:
+        ws.home.open_desk()
+    _frames(ws, drv)
+    zs = max(1, ws.layout.fs)                       # the zone's scale (`_ZoneSink.zone_scale`)
+    side = 16 * zs
+    assert zs < ws.layout.cs, "the chrome scale is the font's: nothing to pin"
+    cv = ws.sys_canvas
+    page = bar_engine._page()
+    seen = 0
+    for name in ("wifi", "battery"):
+        r = page.rect_of(name)
+        if r is None:
+            continue
+        x, y, w, h = r
+        assert h >= 2 * side, (name, r, side)          # the cell is the chrome scale's
+        ink = [(px, py) for py in range(y, y + h) for px in range(x, x + w)
+               if _diff(cv, px, py, x, py)]
+        assert ink, name
+        xs = [p[0] for p in ink]
+        ys = [p[1] for p in ink]
+        iw, ih = max(xs) - min(xs) + 1, max(ys) - min(ys) + 1
+        assert iw <= side and ih <= side, (name, iw, ih, side)
+        cy = (min(ys) + max(ys) + 1) / 2
+        assert abs(cy - (y + h / 2)) <= side / 4, (name, cy, r)
+        seen += 1
+    assert seen, "the bar drew no tray"
+
+
+def _diff(cv, x, y, x0, y0):
+    """Whether pixel (x, y) differs from the ground at (x0, y0) by more
+    than a shade."""
+    a = cv._buf[(y * cv.w + x) * 2] << 8 | cv._buf[(y * cv.w + x) * 2 + 1]
+    b = cv._buf[(y0 * cv.w + x0) * 2] << 8 | cv._buf[(y0 * cv.w + x0) * 2 + 1]
+    return sum(abs((a >> s & m) - (b >> s & m)) for s, m in ((11, 31), (5, 63), (0, 31))) > 6

@@ -236,8 +236,8 @@ typedef struct {
     // keys past the first word's read.
     int32_t flags2;
     // A bar item's icon alone at 16 units at the scale, centred in its box (its cell and its
-    // tap the box's), as a labelled one's (the UI tree's look="small"); else the largest its
-    // box's height holds.
+    // tap the box's), as a labelled one's (the UI tree's on a page that is a bar, Moy's tile
+    // apart); else the largest its box's height holds.
     int8_t small;
 } moy_ui_over_t;
 

@@ -1445,12 +1445,10 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (!strcmp(name, "look") && kind == UIT_BUTTON) {
-        // look="large" (BT_LARGE): half again a row's height, twice the pads, a wider least width;
-        // look="small" (BT_SMALL): a bar item's icon alone at 16 units at the scale, as a labelled
-        // one's, where its row is taller
-        if (strcmp(src, "large") && strcmp(src, "small"))
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("button look=%s: \"large\" or \"small\"", "button look=%s"), src);
-        N->btn |= src[0] == 'l' ? BT_LARGE : BT_SMALL;
+        // look="large" (BT_LARGE): half again a row's height, twice the pads, a wider least width
+        if (strcmp(src, "large"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("button look=%s: \"large\"", "button look=%s"), src);
+        N->btn |= BT_LARGE;
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (kind == UIT_STEPPER && (!strcmp(name, "grow") || !strcmp(name, "tone"))) {

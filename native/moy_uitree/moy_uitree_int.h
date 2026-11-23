@@ -151,9 +151,9 @@ enum { TS_FLAT = 1 };
 enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 // A text view's options (`lit`); its syntax's index in `btn` (ui.py's _SYNTAXES).
 enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8 };
-// A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large",
-// look="small" (a bar item's icon alone at 16 units at the scale) (`btn`).
-enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4, BT_SMALL = 8 };
+// A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large"
+// (`btn`).
+enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4 };
 enum { RW_MID = 1, RW_GROW = 2, RW_WRAP = 4 };   // a row's lit: centred on the row it is a cell of; a fill of
                                                 // its stack; its cells packed from its start, wrapping
 enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4, CV_READS = 8 };  // a canvas's lit: a fill along a row, its w= a

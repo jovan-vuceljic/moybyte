@@ -418,7 +418,7 @@ Python's alone.
 
 | kind | is | key props |
 |---|---|---|
-| `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look=` (`large`, `small`), `w=` |
+| `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look="large"`, `w=` |
 | `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=` |
 | `toggle(label, name)` | a bool | `on=`, `hint=` |
 | `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=` |
@@ -509,8 +509,9 @@ and its pages are placed; `split` and `grid` place their cells on any page.
   never under the page's), and `w=` keeps its text that wide at most (a
   measure of prose); `text_view(..., look="well")` lays its prose on a well.
 - `button(..., kind="bar")` alone is a flat icon, narrower than a button's,
-  the largest its row holds (`look="small"`: 16 units at the page's scale,
-  as beside a label), and a button's `kind=` may be a template;
+  the largest its row holds (in the shell's bar every icon alone draws at
+  its zone's size, 16 units at the page's scale, centred in its cell), and
+  a button's `kind=` may be a template;
   `look="large"` is half again a row's height with twice the pads, on a
   flowing page. On the desk a
   popover anchored at a button or a link hangs under it.
