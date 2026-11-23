@@ -1032,19 +1032,11 @@ static void tip_draw(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     }
 }
 
-// A frame that closed a dialog owes the next, whose begin hands its focus back to the stop the
-// dialog took it from.
-static void dialog_gone(moy_ui_ctx_t *c) {
-    if (c->modal_from && c->dw.id != 0 && c->dlg.id == 0) {
-        c->owe = 1;
-    }
-}
-
 void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     if (c->n_nest == 0) {
         mua_page_close(c, s);
         tip_draw(c, s);
-        dialog_gone(c);
+        mua_dialog_gone(c);
     }
 }
 
@@ -1055,7 +1047,7 @@ void moy_ui_api_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
         mua_foot_fade(c, s);
         mua_page_close(c, s);
         tip_draw(c, s);
-        dialog_gone(c);
+        mua_dialog_gone(c);
     }
 }
 

@@ -333,6 +333,7 @@ struct uit {
     uit_id_t focused;
     int has_focused;
     char focus_key[UIT_ID_MAX + 1];
+    char lost[UIT_ID_MAX + 1];      // the focus key a frame drew no stop for and owed the next for
     // events and trace
     uit_ev_t *evs;
     int nevs, cevs, evat;

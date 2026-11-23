@@ -6001,13 +6001,20 @@ ids:;
     int owe = 0;
     if (e->arr && e->arr->owe)
         owe = 1, e->arr->owe = 0;       // a divider's let-go wrote held sizes
+    int32_t fb[4];
+    if (e->focus_key[0] && !moy_ui_api_hit_box(c, span_of(e->focus_key, strlen(e->focus_key)), fb)) {
+        if (strcmp(e->lost, e->focus_key))      // focus on a stop the frame drew none of: the
+            owe = 1;                            // next begin passes it on (once for each)
+        snprintf(e->lost, sizeof e->lost, "%s", e->focus_key);
+    } else
+        e->lost[0] = 0;
     if (had != e->has_focused || (had && (was.node != e->focused.node || was.gen != e->focused.gen))) {
         uit_buf_t hb2 = {0};
         if (e->placed)
             placed_hints(e, &hb2, pages ? pages : 1);
         else
             hints(e, &hb2, pages ? pages : 1);
-        owe = hb2.n != hb.n || (hb.n && memcmp(hb.p, hb2.p, hb.n));
+        owe |= hb2.n != hb.n || (hb.n && memcmp(hb.p, hb2.p, hb.n));
         uit_buf_free(&hb2);
     }
     uit_buf_free(&hb);

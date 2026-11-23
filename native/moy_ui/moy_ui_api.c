@@ -468,12 +468,13 @@ int mua_find(const moy_ui_stop_t *v, int n, uint32_t id) {
     return -1;
 }
 
-// Whether stop i is clipped to its page's view: a page's stop to its page,
-// a dialog's to its body (a page of its own); a dialog's or a popover's
-// over a page lies over every page's view.
+// Whether stop i is clipped to its page's view: a page's stacked stop to its
+// page, a dialog's to its body (a page of its own); one placed by ui.at (a
+// foot's button in the page's dock) stands where it was placed, and a
+// dialog's or a popover's over a page lies over every page's view.
 static int clipped(const moy_ui_stop_t *v, int n, int i) {
     int p = v[i].page;
-    return !(v[i].flags & STOP_PAGE) && p != NO_PAGE && p < n
+    return !(v[i].flags & (STOP_PAGE | STOP_AT)) && p != NO_PAGE && p < n
            && (!(v[i].flags & STOP_MODAL) || (v[p].flags & STOP_MODAL));
 }
 

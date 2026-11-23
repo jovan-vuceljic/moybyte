@@ -1081,6 +1081,12 @@ moy_ui_box_t moy_ui_api_wash_box(const moy_ui_ctx_t *c) {
     return sf;
 }
 
+void mua_dialog_gone(moy_ui_ctx_t *c) {
+    if (c->modal_from && c->dw.id != 0 && c->dlg.id == 0) {
+        c->owe = 1;
+    }
+}
+
 void mua_dims(const moy_ui_ctx_t *c) {
     moy_ui_box_t b = moy_ui_api_wash_box(c);
     if (b.y + b.h >= c->surface.y + c->surface.h) {
