@@ -359,23 +359,27 @@ cp "${SCRIPT_DIR}/shims/zlib.py" "${STAGE_DIR}/modules/zlib.py"
 # uitree_pages.py: the console's pages compiled ahead of time for the C engine
 # (tools/uitree_compile.py --staged, the step every console board's build
 # takes, moybyte_stage_uitree_pages). The browser shows the desk as well as the
-# handheld, so it keeps the pages only a desk opens. A host that cannot make
-# the compiler's library leaves the file out (every page then builds in the
-# browser), except under CI, where that is a failure.
-UITREE_ARGS=(--staged "${STAGE_DIR}/modules")
+# handheld, so it keeps the pages only a desk opens. It keeps each blob bare
+# (--bare): the wasm is served gzipped whole, which compresses the blobs
+# together smaller than each packed alone, and its size is the add-on's. A
+# host that cannot make the compiler's library leaves the file out (every
+# page then builds in the browser), except under CI, where that is a failure.
+UITREE_ARGS=(--staged "${STAGE_DIR}/modules" --bare)
 if [ -n "${CI:-}" ] || [ "${MOYBYTE_REQUIRE_UITREE_PAGES:-0}" = "1" ]; then
   UITREE_ARGS+=(--require)
 fi
 UITREE_RC=0
 "${PY}" "${REPO_ROOT}/tools/uitree_compile.py" "${UITREE_ARGS[@]}" || UITREE_RC=$?
-if [ "${UITREE_RC}" -ne 0 ] && { [ "${UITREE_RC}" -ne 3 ] || [ "${#UITREE_ARGS[@]}" -gt 2 ]; }; then
+if [ "${UITREE_RC}" -ne 0 ] && { [ "${UITREE_RC}" -ne 3 ] || [ "${#UITREE_ARGS[@]}" -gt 3 ]; }; then
   exit 1
 fi
 
-# uitree_lua.py: the UI tree API's Lua layer, deflated (tools/uitree_lua_freeze.py,
-# the step every console board's build takes, moybyte_stage_uitree_lua), which a
-# Lua app that declares `moybyte.uitree` runs ahead of its own scripts.
-"${PY}" "${REPO_ROOT}/tools/uitree_lua_freeze.py" "${STAGE_DIR}/modules"
+# uitree_lua.py: the UI tree API's Lua layer (tools/uitree_lua_freeze.py, the
+# step every console board's build takes, moybyte_stage_uitree_lua), which a
+# Lua app that declares `moybyte.uitree` runs ahead of its own scripts. The
+# browser's keeps it as text (--text): the gzip the wasm is served in
+# compresses it smaller than a board's small deflate window does.
+"${PY}" "${REPO_ROOT}/tools/uitree_lua_freeze.py" "${STAGE_DIR}/modules" --text
 
 # ---------------------------------------------------------------------------
 # 3. The cart bundle: the runner's shelf roster packed as one JSON

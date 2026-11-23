@@ -23,6 +23,11 @@ import zlib
 # 30 passes: 15 -> 30 -> 60 moved the five assets by well under 0.1% in total,
 # while the compress time of micropython.wasm (95% of the work) went 4s -> 6s -> 10s.
 ITERATIONS = 30
+# No cap on the blocks a stream is split into (zopfli's default is 15): each
+# block has its own Huffman codes, and micropython.wasm runs code, frozen
+# bytecode, fonts and glyph masks past each other, so splitting it where
+# they change makes its stream smaller, at a few times the compress time.
+SPLITS = 0
 
 
 def gz(data):
@@ -32,21 +37,22 @@ def gz(data):
     except ImportError:
         sys.exit("zopfli_gz: the `zopfli` package is missing; "
                  "`pip install 'zopfli==0.4.3'` (or `make setup`)")
-    out = zopfli.gzip.compress(data, numiterations=ITERATIONS)
+    out = zopfli.gzip.compress(data, numiterations=ITERATIONS, blocksplittingmax=SPLITS)
     # The whole contract is "a gzip that inflates to the input"; check it.
     assert gzip.decompress(out) == data, "zopfli produced a stream that does not inflate to its input"
     return out
 
 
 def cache_key(raw):
-    """What a stream is a function of: the input, the passes, the compressor."""
+    """What a stream is a function of: the input, the passes, the splits,
+    the compressor."""
     try:
         from importlib.metadata import version
         ver = version("zopfli")
     except Exception:  # noqa: BLE001 -- an unknown version keys as one
         ver = "?"
     h = hashlib.sha256(raw)
-    h.update(("|zopfli %s|%d" % (ver, ITERATIONS)).encode())
+    h.update(("|zopfli %s|%d|%d" % (ver, ITERATIONS, SPLITS)).encode())
     return h.hexdigest()
 
 

@@ -98,7 +98,7 @@ def _idle_search(ws):
 
 
 def _idle_tab_row(ws):
-    ws.launcher_layer._tab_focus = True
+    assert ws.bar_layer.focus_enter("home", ws.router.bar_open_x("home"))
     return ws.launcher_layer
 
 
@@ -138,7 +138,7 @@ _IDLE = {
     "launcher": _idle_launcher,
     "projects": _idle_projects,
     "launcher in a typed search": _idle_search,
-    "launcher on its tab row": _idle_tab_row,
+    "launcher with the keys on its tabs": _idle_tab_row,
     "update": _idle_update,
     "desktop": _idle_player,
     "theme_sprites": _idle_sprites,

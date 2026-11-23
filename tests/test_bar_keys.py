@@ -15,6 +15,7 @@ import pytest
 
 from runtime import bar_layer, host_app, theme_editor, ui_draw
 from test_v04_userland import select_first_game
+from test_home_tab_row import focused_tab
 
 
 @pytest.fixture(autouse=True)
@@ -67,9 +68,9 @@ def test_the_homes_row_walks_onto_the_bar_and_opens_a_widget(tmp_path):
     ws, drv = _home(tmp_path)
     bl = ws.bar_layer
     _press(drv, "up")
-    assert ws.launcher_layer._tab_focus and bl.focus is None
+    assert focused_tab(ws) == "games", "up lands on the open tab"
     _press(drv, "left")
-    assert bl.focus == 0 and not ws.launcher_layer._tab_focus, \
+    assert bl.focus == 0 and focused_tab(ws) is None, \
         "left off the first tab is the item left of the tabs"
     _walk_to(ws, drv, "cluster")
     k = bl.focus
@@ -82,8 +83,7 @@ def test_the_homes_row_walks_onto_the_bar_and_opens_a_widget(tmp_path):
     _press(drv, "b")
     assert not ws.sysmenu.open and bl.focus is not None, "the popover closes onto the bar"
     _press(drv, "down")
-    assert bl.focus is None and not ws.launcher_layer._tab_focus, \
-        "down comes off the row to the cards"
+    assert bl.focus is None, "down comes off the row to the cards"
     assert ws.launcher.tab == "games"
 
 
@@ -466,7 +466,7 @@ def test_a_bandless_bar_keeps_its_status_while_the_keys_walk(tmp_path):
                         for r in range(h))
     shown = cell()
     _press(drv, "up")
-    assert ws.launcher_layer._tab_focus
+    assert focused_tab(ws) == "games"
     assert cell() == shown, "the tab row's focus leaves the battery drawn"
     _press(drv, "left")
     assert bl.focus is not None

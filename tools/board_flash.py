@@ -58,7 +58,8 @@ says why.
 
 THE BROWSER CONSOLE ADD-ON. A board that declares `[flash] addon` (the carts
 folder, on a board that speaks a bare REPL: the two Zeros) has the add-on cart
-that fits the image just written installed into its store after the flash,
+that fits the image just written installed into its store after the flash
+(but where board.toml's `[web] console` is "online", the C3's: none),
 over that REPL (`install_addon`), with the add-on folders that fit other
 images taken off, and a removal of the console its store recorded dropped.
 Either Zero also fetches the one that fits from its release by itself when
@@ -333,7 +334,11 @@ def flash(board_dir, port, verify=True):
     rc = _esptool(chip, port, baud, *args, stub=stub)
     if rc == 0 and fl.get("addon"):
         _let_boot(port)
-        rc = install_addon(board_dir, port, reset=False) or install_carts(board_dir, port)
+        if board_config.web_console(board_dir) == "online":
+            print("+ the browser console is online ([web] console): no add-on to install")
+        else:
+            rc = install_addon(board_dir, port, reset=False)
+        rc = rc or install_carts(board_dir, port)
     return rc
 
 

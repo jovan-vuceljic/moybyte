@@ -4,7 +4,7 @@
 "A compiled page").
 
     tools/uitree_compile.py MODULE... [--out FILE]
-    tools/uitree_compile.py --staged MODULES_DIR [--board BOARD_DIR] [--require]
+    tools/uitree_compile.py --staged MODULES_DIR [--board BOARD_DIR] [--require] [--bare]
 
 Each module is checked as tools/uitree_check.py checks it (every reference
 check); each of its page functions is then built on the C engine through the
@@ -19,7 +19,8 @@ change, and the same sources always give the same bytes.
 that the image stages into MODULES_DIR/uitree_pages.py, then checks the
 blobs against the staged copies (`stale`); `--board` names the board, and
 one with no desk (`has_desk`) carries no page only a desk opens
-(`desk_pages`). Where the host library cannot be
+(`desk_pages`); `--bare` holds each blob unpacked, for the browser's wasm,
+which is served gzipped whole. Where the host library cannot be
 made (no C compiler), it removes that file, says so in one line and exits
 CANNOT_RUN: the image then carries no compiled page and every page builds on
 the device. `--require` makes that a failure.
@@ -53,9 +54,10 @@ SYSTEM = ("settings_rows", "settings_ui", "wifi_ui", "update_ui", "log_ui", "per
           "wm_strip_ui", "cc_ui", "calc_app", "getcarts_app", "files_app", "music_app", "music_card",
           "storybook_app", "myart_app", "drawing_pages", "paint_app", "appearance_app", "month_ui",
           "confirm_ui", "pause_ui", "sysmenu_ui", "editor_settings", "editor_music", "editor_sound",
-          "home_ui")
+          "home_ui", "home_bar_ui")
 # ...of which the placed ones: laid out by the engine's layout rule (`uitree_c.CEditorEngine`)
-PLACED = ("editor_ui", "code_ui", "bar_ui", "wm_strip_ui", "editor_music", "editor_sound")
+PLACED = ("editor_ui", "code_ui", "bar_ui", "wm_strip_ui", "editor_music", "editor_sound",
+          "home_bar_ui")
 
 CANNOT_RUN = 3
 
@@ -134,11 +136,11 @@ def stale(pages, paths=None):
     return out
 
 
-def module_text(c):
+def module_text(c, packed=True):
     lines = ['"""Pages compiled ahead of time by tools/uitree_compile.py: generated, never edited."""',
              "", "PAGES = {"]
     for k in sorted(c.pages):
-        lines.append("    %r: %r," % (k, uitree_aot.entry(c.pages[k])))
+        lines.append("    %r: %r," % (k, uitree_aot.entry(c.pages[k], packed)))
     lines.append("}")
     return "\n".join(lines) + "\n"
 
@@ -183,10 +185,11 @@ def desk_pages():
     return set(uitree_aot.key(f) for m in SYSTEM for f in getattr(__import__(m), "DESK_PAGES", ()))
 
 
-def stage(modules_dir, require=False, desk=True):
+def stage(modules_dir, require=False, desk=True, packed=True):
     """Compile SYSTEM's modules staged in `modules_dir` into its
     uitree_pages.py; the build's step. With no `desk`, the pages only a
-    desk opens (`desk_pages`) are left out."""
+    desk opens (`desk_pages`) are left out; with no `packed`, each blob is
+    held bare (`uitree_aot.entry`)."""
     out = os.path.join(modules_dir, "uitree_pages.py")
     if UNABLE:
         if os.path.exists(out):
@@ -204,7 +207,7 @@ def stage(modules_dir, require=False, desk=True):
     if late:
         raise SystemExit("uitree pages: staged modules differ from the sources compiled: %s"
                          % ", ".join(late))
-    write(out, module_text(c))
+    write(out, module_text(c, packed))
     print("uitree pages: %d compiled from %d staged modules%s, %d B of blobs, into %s%s" % (
         len(c.pages), len(staged), "" if desk else " (no desk: no desk page)",
         sum(len(b) for b in c.pages.values()), out,
@@ -223,11 +226,14 @@ def main(argv):
                          "(has_desk) carries no desk page")
     ap.add_argument("--require", action="store_true",
                     help="with --staged: a host that cannot compile fails")
+    ap.add_argument("--bare", action="store_true",
+                    help="with --staged: hold each blob bare, not packed, for an image "
+                         "served compressed whole (the browser's wasm)")
     a = ap.parse_args(argv)
     if a.staged:
         if a.modules or a.out:
             ap.error("--staged takes no MODULE and no --out")
-        return stage(a.staged, a.require, has_desk(a.board) if a.board else True)
+        return stage(a.staged, a.require, has_desk(a.board) if a.board else True, not a.bare)
     if not a.modules:
         ap.error("name a MODULE, or --staged")
     if UNABLE:

@@ -361,8 +361,9 @@ jobs:
 
       # The website's install of this board (tools/store_image.py): the
       # merged image, then the internal store holding the browser console
-      # add-on that fits it, as `<stem>_install.bin` beside the image, which
-      # the collect below carries. `make setup`'s venv has littlefs-python.
+      # add-on that fits it (an empty one where board.toml's `[web] console`
+      # is "online", the C3 Zero's), as `<stem>_install.bin` beside the image,
+      # which the collect below carries. `make setup`'s venv has littlefs-python.
       - name: The website's install image
         if: steps.gate.outputs.run == 'true'
         run: .venv/bin/python tools/store_image.py ${{ matrix.dir }}

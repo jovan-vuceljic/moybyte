@@ -33,23 +33,28 @@ file is what the chip changes.
   and the store (`boards/MOYBYTE_C3_ZERO/partitions-moybyte-c3-zero.csv`).
   The updater reports itself unavailable (`moy_ota.OtaUpdater.available()`),
   so the console's update screen shows no update to offer, and a new image
-  goes on by cable. The store is the space after the slot, and holds the
-  browser console: the add-on cart whose digest the image names
-  (`native/moy_net/moy_page.h`), which the cable flash installs into it over
-  the REPL (`[flash] addon`, `tools/board_flash.py`) and the website's
-  install writes into the store it lays down (`tools/store_image.py`). The
-  website's card offers that install and, as the C3's only update, the
-  merged image as it is, which keeps the store. Like the XIAO, a C3 whose
-  store holds no add-on fetches one from its release unless its owner
-  removed it (`zero_host.make_addon`, `way_back`), with buffers made for the
-  fetch and freed after.
+  goes on by cable. The store is the space after the slot. The website's
+  card offers the install, the merged image and an empty store
+  (`tools/store_image.py`), and, as the C3's only update, the merged image
+  as it is, which keeps the store.
+- **The browser console is not in its install** (owner, 2026-11-23): the
+  add-on cart outgrew this store, so board.toml declares the console online
+  (`[web] console = "online"`): the website's install lays down an empty
+  store and the cable flash installs no add-on (`tools/board_flash.py`),
+  and `tools/store_image.py --check` holds the store to the first boot's
+  carts and the seed's reserve instead. Its console pack comes from a
+  mirror by digest, not from its store (`docs/web_console_online_2026-11.md`).
+  The image still names an add-on
+  (`native/moy_net/moy_page.h`) and, like the XIAO, asks its release for
+  the one that fits where its store holds none and its owner did not remove
+  it (`zero_host.make_addon`, `way_back`), with buffers made for the fetch
+  and freed after; this store has no room for it.
 - **The image carries the core carts alone** (owner, 2026-11-17;
   `moy_seed.CORE`, board.toml's `[roster] image`), under the XIAO's seed
   rule (`zero_host.seed_carts`). The release publishes the other system carts, all
   but the test fixtures, as official carts in `carts-c3_zero.json`. A new store gets Pin Light beside
   the core (2026-11-18, board.toml's `[roster] install`), the cart that drives
-  this board's pins from a browser: next to the add-on the rest of its little
-  room is the kid's. With no OTA, a
+  this board's pins from a browser: the rest of its little room is the kid's. With no OTA, a
   cable flash brings every official cart a store holds to the image's
   release (`tools/board_flash.py`'s `install_carts`; the core carts are the
   image's seed's). The page this board
