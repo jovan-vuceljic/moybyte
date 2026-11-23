@@ -2027,9 +2027,30 @@ int uit_cells_geom(uit_t *e, const int32_t b[4], int fs, int desk, int32_t out[1
     return 0;
 }
 
-void uit_carousel_desk(const int32_t b[4], int fs, int keys, int brows, int32_t out[UIT_DESK_WORDS])
+int uit_carousel_desk(const int32_t b[4], int fs, int keys, int nsets, const int32_t *counts,
+                      const char *const *labels, const char *const *kinds, int32_t out[UIT_DESK_WORDS])
 {
-    moy_ui_api_carousel_desk(fs, moy_ui_render_scale(), keys, brows, b, out);
+    moy_ui_desk_sets_t sets;
+    if (nsets < 0 || nsets > MOY_UI_DESK_SETS)
+        return -1;
+    sets.n = nsets;
+    for (int k = 0, at = 0; k < nsets; k++) {
+        if (counts[k] < 0 || counts[k] > MOY_UI_DESK_SET_MAX)
+            return -1;
+        sets.count[k] = (uint8_t)counts[k];
+        for (int i = 0; i < counts[k]; i++, at++) {
+            int kind = -1;
+            for (int j = 0; j <= 3; j++)                // normal, primary, tonal, danger
+                if (!strcmp(kinds[at], moy_ui_button_kinds[j][0]))
+                    kind = j;
+            if (kind < 0)
+                return -1;
+            sets.kind[k][i] = (uint8_t)kind;
+            sets.label[k][i] = (moy_ui_span_t){(const uint8_t *)labels[at], (uint16_t)strlen(labels[at])};
+        }
+    }
+    moy_ui_api_carousel_desk(fs, moy_ui_render_scale(), keys, &sets, b, out);
+    return 0;
 }
 
 int uit_carousel(const uit_t *e, int32_t out[UIT_CAROUSEL_WORDS])

@@ -21,7 +21,7 @@ console.py.
 from home_icons import IconHome
 from home_carousel import Carousel
 from home_grid import (Launcher, new_tile, NEW_TILE_TYPE, PSEUDO_TILE_TYPES,
-                       HOME_TABS, tab_count_title, PROJECTS_VERB_SETS)
+                       HOME_TABS, tab_count_title, PROJECTS_BUTTON_SETS)
 from project import Project
 from chrome import NAMES
 import scheduler as _scheduler
@@ -258,7 +258,7 @@ class Home:
             g = ws.projects_grid = self._home_grid(
                 "carousel", self.launcher_items(ws.carts.all, "make"))
             g.tab = "make"
-            g.verb_sets = PROJECTS_VERB_SETS   # Make's Play, its pane's rows
+            g.button_sets = PROJECTS_BUTTON_SETS   # Make's Play, its pane's rows
         else:
             self.set_home_tab("make", g)
         ws.projects_layer._tab_focus = False

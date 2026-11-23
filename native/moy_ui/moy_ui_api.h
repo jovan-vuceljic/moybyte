@@ -1332,19 +1332,34 @@ void moy_ui_api_cells_foot(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_
 // the largest whole multiple of the cover's side a quarter of the width holds with the shelf
 // under it, else half the cover's side, and a shelf card is half the hero; the pane is as tall
 // as the hero, or as its type needs (the title at TS, a line each at MS, KS and VS, a button
-// BH tall and `brows` px of buttons' rows under the first) where that is more. A short band
+// BH tall and the rows of buttons under the first, BROWS px) where that is more. BROWS is the
+// room the widest of `sets` wraps to in the pane, so the shelf stays put as the selection
+// moves: each button as wide as its label in the print font at `fs` and its inset (a primary
+// 148 px at the least, another 112, none wider than the pane), left to right 14 px apart, a
+// danger three gaps apart, one that does not fit starting the next row; where a set wraps,
+// every button the widest one's width, and a danger starting a row a row's gap (8 px) lower.
+// A pane narrowed by a smaller hero is laid out again, three times at the most. A short band
 // drops the pane's facts, then its metadata (FACTS, META 0), and halves the hero down to an
 // eighth of the cover. The shelf's caption stands 42 px under the details and what height is
 // left goes under the shelf; with no `keys` (touch: no hint strip) the shelf keeps at most
 // its margin under it. out[MOY_UI_DESK_*]: the hero's box, the pane's (x, y, w, h), the
 // shelf's band (its caption, its cards, their lift and their shadows), a shelf card's side,
 // the shelf's top, its margin, the pane's type scales, the button height, the rows shown, the
-// focus mark's reach and the shelf's gap.
+// focus mark's reach, the shelf's gap and BROWS.
 enum { MOY_UI_DESK_HERO = 0, MOY_UI_DESK_PANE = 4, MOY_UI_DESK_BAND = 8, MOY_UI_DESK_SIDE = 12,
        MOY_UI_DESK_SHELF_Y, MOY_UI_DESK_PAD, MOY_UI_DESK_TS, MOY_UI_DESK_MS, MOY_UI_DESK_KS,
        MOY_UI_DESK_VS, MOY_UI_DESK_BH, MOY_UI_DESK_FACTS, MOY_UI_DESK_META, MOY_UI_DESK_RING,
-       MOY_UI_DESK_GAP, MOY_UI_DESK_G };
-void moy_ui_api_carousel_desk(int fs, int u, int keys, int brows, const int32_t b[4],
+       MOY_UI_DESK_GAP, MOY_UI_DESK_BROWS, MOY_UI_DESK_G };
+// The desk pane's button sets (moy_ui_api_carousel_desk's `sets`): `n` sets, set k `count[k]`
+// buttons, each its label and its kind (an index of moy_ui_button_kinds).
+enum { MOY_UI_DESK_SETS = 4, MOY_UI_DESK_SET_MAX = 4 };
+typedef struct {
+    int n;
+    uint8_t count[MOY_UI_DESK_SETS];
+    uint8_t kind[MOY_UI_DESK_SETS][MOY_UI_DESK_SET_MAX];
+    moy_ui_span_t label[MOY_UI_DESK_SETS][MOY_UI_DESK_SET_MAX];
+} moy_ui_desk_sets_t;
+void moy_ui_api_carousel_desk(int fs, int u, int keys, const moy_ui_desk_sets_t *sets, const int32_t b[4],
                               int32_t out[MOY_UI_DESK_G]);
 // The desk carousel's shelf in its band `b` (moy_ui_api_carousel_desk's band), its cards
 // `side` px: one row of them its margin in, 20 px apart, under its caption (TITLE_DY the

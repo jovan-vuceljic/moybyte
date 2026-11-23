@@ -19,7 +19,7 @@ from array import array
 import ui as _ui
 import ui_draw as _ui_draw
 import layout_base as _lb
-from home_grid import (_COVER_BASE, _COVER_SIDE, desk_button_span, _DESK_VERB_SETS,
+from home_grid import (_COVER_BASE, _COVER_SIDE, DESK_BUTTON_SETS,
                        _draw_broken_badge, _draw_star_badge, _hint_strip, Launcher, _NO_KEYS,
                        PSEUDO_TILE_TYPES, _TAB_NAME)
 
@@ -35,9 +35,10 @@ _D_SCROLL, _D_MOTION, _D_CUR, _D_FOCUS = 20, 21, 22, 24
 _DRAG, _ON_ITS_OWN = 1, 6
 # The desk's geometry words (moy_ui_api.h's MOY_UI_DESK_*): a shelf card's side, the shelf's
 # top, its margin, the pane's first type scale (four, then the button height), the facts' row
-# shown (the metadata's after it), the focus mark's reach, the shelf's gap
+# shown (the metadata's after it), the focus mark's reach, the shelf's gap, the pane's rows of
+# buttons under their first
 (_D_SIDE, _D_SHELF_Y, _D_PAD, _D_TS) = (12, 13, 14, 15)
-_D_FACTS, _D_RING, _D_GAP = 20, 22, 23
+_D_FACTS, _D_RING, _D_GAP, _D_BROWS = 20, 22, 23, 24
 
 
 class Carousel(Launcher):
@@ -71,7 +72,7 @@ class Carousel(Launcher):
 
     arrangement = "carousel"
     page_fn = "band"                # its handheld band's page (home_ui)
-    verb_sets = _DESK_VERB_SETS     # the buttons its desk pane keeps rows for
+    button_sets = DESK_BUTTON_SETS  # the buttons its desk pane keeps rows for
 
     def __init__(self, items, layout=None, names=None):
         self._g_lay = None            # the layout _g was computed for
@@ -83,7 +84,7 @@ class Carousel(Launcher):
         self._scroll = 0
         self._quiet_for = None        # the geometry `quiet` was computed for
         self._quiet_q = ()
-        self._dg = array("i", [0] * 24)     # the desk's geometry words (`_geom_desk_at`)
+        self._dg = array("i", [0] * 25)     # the desk's geometry words (`_geom_desk`)
         self.keyed = False            # input that may move the selection waits on a pass
         self._down = False            # ...the pointer was down at its last sample
         Launcher.__init__(self, items, layout, names)
@@ -130,41 +131,28 @@ class Carousel(Launcher):
                 (g[3], g[4], g[5], g[6], g[7], hints), None)
 
     def _geom_desk(self, lay, keys=True):
-        """The desk home's geometry (`_geom_desk_at`) with room in its pane
-        for as many rows of buttons as its width wraps them to
-        (`desk_button_span`): a pane narrowed by a smaller hero is laid out
-        again, the rows it then needs kept."""
-        span = 0
-        for _ in range(3):
-            g = self._geom_desk_at(lay, keys, span)
-            dk = g[9]
-            got = desk_button_span(dk[2], lay.fs, dk[5][6], dk[5][4], self.verb_sets)
-            if got <= span:
-                break
-            span = got
-        return g
-
-    def _geom_desk_at(self, lay, keys, brows):
         """The desk home's geometry, the engine's (the carousel look on the
         desk class, moy_ui_api_carousel_desk): the hero at the top left, the
-        details pane beside it (or under it in a narrow window), the shelf
-        under them bleeding off the right edge, its caption over it, the
-        hint strip `_hint_strip` along the foot. The tuple's band is the
+        details pane beside it (or under it in a narrow window), keeping
+        room for the rows the widest of its `button_sets` wraps to, the
+        shelf under them bleeding off the right edge, its caption over it,
+        the hint strip `_hint_strip` along the foot. The tuple's band is the
         shelf's (its caption, its cards, their lift and their shadows); the
         desk's own is (the hero, the pane's x, its width, the shelf's top,
         its margin, (the pane's title, metadata, fact caption and value
         scales, a button's height, the pane's height, the render scale),
-        the pane's y, (facts, metadata) shown, `brows`)."""
+        the pane's y, (facts, metadata) shown, the pixels of its buttons'
+        rows under their first)."""
         hints = _hint_strip(lay, keys, True)
         q = self._cq
         q[0], q[1], q[2], q[3] = lay.cx, lay.cy, lay.cw, hints[1] - lay.cy
         d = self._dg
-        self._band_page().carousel_desk(q, lay.fs, keys, brows, d)
+        self._band_page().carousel_desk(q, lay.fs, keys, self.button_sets, d)
         shelf, shelf_y = d[_D_SIDE], d[_D_SHELF_Y]
         desk = ((d[0], d[1], d[2], d[3]), d[4], d[6], shelf_y, d[_D_PAD],
                 (d[_D_TS], d[_D_TS + 1], d[_D_TS + 2], d[_D_TS + 3], d[_D_TS + 4], d[7],
                  _lb.render_scale()),
-                d[5], (d[_D_FACTS] != 0, d[_D_FACTS + 1] != 0), brows)
+                d[5], (d[_D_FACTS] != 0, d[_D_FACTS + 1] != 0), d[_D_BROWS])
         return (None, (d[8], d[9], d[10], d[11]), shelf, shelf + d[_D_GAP], d[_D_RING],
                 d[_D_GAP], 0, shelf_y + shelf // 2, (0, 0, 0, 0, 0, hints), desk)
 

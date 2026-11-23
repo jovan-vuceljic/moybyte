@@ -23,11 +23,10 @@ edge hands them on, up to the tabs and down to the shelf.
 
 import ui as _ui
 import ui_draw as _ui_draw
-from home_grid import day_words, NEW_TILE_TYPE, PSEUDO_TILE_TYPES, _VERB_HINT
+from home_grid import button_kind, day_words, NEW_TILE_TYPE, PSEUDO_TILE_TYPES, _VERB_HINT
 _in = _ui.rect_in   # one hit-test (ui.rect_in)
 _EDGE_UP, _EDGE_DOWN = 1, 2     # uitree_app's EDGE_UP and EDGE_DOWN
 
-_PRIMARY = ("play", "open", "new", "change")    # a first button that is the tab's tap
 _PLAYS = ("play", "open", "window")             # a button that wears the Play glyph
 _BUTTON_IDS = ("press/0", "press/1", "press/2", "press/3")   # home_ui's buttons' stops
 _NO_RECT = (0, 0, 0, 0)     # a button the page has not drawn yet
@@ -38,11 +37,6 @@ DESC_EMS = 48               # the description's measure, this many n's: about 60
 def times_words(n):
     """A play count as the home says it."""
     return "Not yet" if not n else ("Once" if n == 1 else "%d times" % n)
-
-
-def _kind(k, verb):
-    """The look of the pane's `k`th button, `verb`'s."""
-    return "primary" if k == 0 and verb in _PRIMARY else ("danger" if verb == "delete" else "normal")
 
 
 class HomeDetails:
@@ -235,7 +229,7 @@ class HomeDetails:
         out = []
         for k, v in enumerate(verbs):
             r = box(_BUTTON_IDS[k]) if box is not None else None
-            out.append((v, r if r is not None else _NO_RECT, _kind(k, v)))
+            out.append((v, r if r is not None else _NO_RECT, button_kind(k, v)))
         return out
 
     def _draw_details(self, cv):
@@ -316,7 +310,7 @@ class HomeDetails:
             if v is not None:
                 setattr(s, home_ui.LABELS[k], _VERB_HINT[v][1])
                 setattr(s, home_ui.ICONS[k], "play" if v in _PLAYS else "")
-                setattr(s, home_ui.KINDS[k], _kind(k, v))
+                setattr(s, home_ui.KINDS[k], button_kind(k, v))
 
     def details_press(self, k):
         """The page's button `k` pressed: its verb, behind the paint, the
