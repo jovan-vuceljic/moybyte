@@ -103,8 +103,12 @@ _SIGS = (
     ("uit_still", [_P, _P, _I, _I, _I, _I, _I, _I, _I], _I),
     ("uit_dump", [_P, c.c_char_p, _Z], _I),
     ("uit_hints", [_P, c.c_char_p, _Z], _I),
+    ("uit_fits_on", [_P, _I], None),
+    ("uit_fits", [_P, c.c_char_p, _Z], _I),
     ("uit_gens", [_P, c.POINTER(c.c_int32), _I], _I),
     ("uit_page_rects", [_P, c.POINTER(c.c_int32)], _I),
+    ("uit_band", [_P, c.POINTER(c.c_int32)], _I),
+    ("uit_stop_over", [_P, _I], _I),
     ("uit_row_stop", [_P, c.c_char_p, c.c_char_p, c.c_char_p, _Z], _I),
     ("uit_popover", [_P, c.c_char_p, _Z], _I),
     ("uit_stats", [_P, _I32], _I),
@@ -584,6 +588,13 @@ class Engine:
         foot = self._L.uit_page_rects(self._e, r)
         return tuple(r[:4]), tuple(r[4:]) if foot else None
 
+    def band(self):
+        r = (c.c_int32 * 4)()
+        return tuple(r) if self._L.uit_band(self._e, r) else None
+
+    def stop_over(self, i):
+        return self._L.uit_stop_over(self._e, i) == 1
+
     def gens(self):
         g = (c.c_int32 * 16)()
         n = self._L.uit_gens(self._e, g, 16)
@@ -594,6 +605,15 @@ class Engine:
         buf = c.create_string_buffer(n + 1)
         self._L.uit_hints(self._e, buf, n)
         return buf.raw[:n].decode("utf-8")
+
+    def fits_on(self, on):
+        self._L.uit_fits_on(self._e, 1 if on else 0)
+
+    def fits(self):
+        n = self._L.uit_fits(self._e, None, 0)
+        buf = c.create_string_buffer(n + 1)
+        self._L.uit_fits(self._e, buf, n)
+        return buf.raw[:n].decode("utf-8", "replace")
 
     def dump(self):
         n = self._L.uit_dump(self._e, None, 0)

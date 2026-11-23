@@ -85,6 +85,8 @@ TARGETS = {
                 "run_desktop"),
     "guition_p4": ("firmware/guition_jc8012p4a1c/modules/moy_runtime.py",
                    "run_desktop"),
+    "elecrow_p4": ("firmware/elecrow_crowpanel_p4_10_1/modules/moy_runtime.py",
+                   "run_desktop"),
     "host": ("runtime/host/host_app.py", "build_workstation"),
     # The wasm head is the third tier and wires the same console (moycore stage
     # 4), so it belongs in the table: it is the target most likely to be handed
@@ -790,7 +792,7 @@ def test_the_four_boards_wire_one_service_set():
     on that board names the lever it lacks. So the four boards' injected sets
     agree on everything the spine wires unconditionally, and disagree only
     where a row above says why."""
-    boards = ("tdeck", "p4", "guition", "guition_p4")
+    boards = ("tdeck", "p4", "guition", "guition_p4", "elecrow_p4")
     sets = {b: set(injections(b)) for b in boards}
     common = set.intersection(*sets.values())
     for svc in sorted(set.union(*sets.values()) - common):
@@ -916,6 +918,11 @@ LIFECYCLE = {
         ("link", "poll"): _LINK_POLL,
     },
 }
+
+
+# The Elecrow P4 wires the Guition P4's services, over the same shared spine.
+WIRING["elecrow_p4"] = WIRING["guition_p4"]
+LIFECYCLE["elecrow_p4"] = LIFECYCLE["guition_p4"]
 
 
 # -- extraction ---------------------------------------------------------------

@@ -47,6 +47,17 @@ doubling to RETRY_MAX_MS (`due`, which the console's frame polls; a Zero's
 serving loop asks again itself). A boot's confirm starts it, a WiFi join
 (`nudge`) and the update screen's exit start it again.
 
+A STORE TOO SMALL FOR THE ADD-ON is found out once, and not a failure: the
+index names the pack's size, and where it does not fit the store's free space
+(`inst.free()`, the cart index's `need_bytes` and `room_why`) the step records
+the page digest and the bytes it needs in `system/addon_room`, lets the radio
+go and ends with no back-off. From then on `short` answers it before anything
+else: a boot's or a join's start holds no radio, fetches no index and waits for
+the free space to reach the record, which a mounted card or deleted carts do
+(`short` reads the space again when the screen opens, on a person's press and
+every few seconds while the screen asks). The console's screen says what the
+add-on needs (`short_text`) and offers no Update meanwhile.
+
 WITH `carts` (the XIAO Zero, which updates over the air) the same step
 brings the OFFICIAL carts the store holds to the release: every official
 entry of the index (cart_index.parse_index, the console's own index with its
@@ -131,6 +142,8 @@ def _now():
     return _ci._ticks_ms()
 
 
+ROOM_STAMP = "system/addon_room"     # beside the carts folder: the page this store had no room for, and what it needs
+ROOM_RECHECK_MS = 5000               # `short` reads the store's free space again no sooner than this
 OFFICIAL_STAMP = "system/official"   # beside the carts folder: the page the official carts are at
 
 
@@ -144,6 +157,20 @@ def official_stamp(root):
 def save_official_stamp(root, want):
     _mkdir(_sibling_path(root, "system"))
     _write_atomic(_sibling_path(root, OFFICIAL_STAMP), want + "\n")
+
+
+def room_stamp(root):
+    """(page digest, bytes) of the add-on a step found no room for, or None."""
+    try:
+        want, need = _read(_sibling_path(root, ROOM_STAMP)).split()
+        return want, int(need)
+    except (OSError, ValueError):
+        return None
+
+
+def save_room_stamp(root, want, need):
+    _mkdir(_sibling_path(root, "system"))
+    _write_atomic(_sibling_path(root, ROOM_STAMP), "%s %d\n" % (want, need))
 
 
 def official_behind(root, carts):
@@ -183,7 +210,11 @@ class AddonStep:
         self._queue = []
         self._addon = False
         self._stamp = False           # the official stamp, once read (False: unread)
-        self._fitless = False         # the release lists no add-on for this image
+        self._fitless = False         # asking again changes nothing: the release lists
+        #                               no add-on for this image, or the store has no room
+        self._addon_short = False     # this attempt found the add-on does not fit
+        self._room = False            # `short`'s answer (False: unread)
+        self._room_at = 0
         self.phase = None
         self.error = None
         self.wake = None              # called when a step starts: tick me each frame
@@ -208,6 +239,7 @@ class AddonStep:
         if again or not self._pointed:
             self._pointed = True
             self._removed = None
+            self._room = False
             point(self.inst.root())
 
     def removed(self):
@@ -241,6 +273,42 @@ class AddonStep:
         `carts`, the official carts were last brought to another release."""
         self.point()
         return self._addon_wanted() or self._behind()
+
+    def short(self):
+        """(bytes needed, bytes free) while the add-on this image names is
+        recorded as not fitting the store's free space, else None: the first
+        attempt that found no room wrote the record (`system/addon_room`, the
+        page digest and the bytes), and the step starts nothing, holds no
+        radio and asks no index again until the free space reaches it, which
+        a mounted card or deleted carts do. Read again at a `point(again=True)`,
+        a `nudge` or a person's start, and otherwise no more often than
+        ROOM_RECHECK_MS."""
+        now = _now()
+        if self._room is not False and _ci._ticks_diff(now, self._room_at) < ROOM_RECHECK_MS:
+            return self._room
+        self._room_at = now
+        self._room = self._short()
+        return self._room
+
+    def _short(self):
+        want = _ci.page_want()
+        if not want or not self._addon_wanted():
+            return None
+        root = self.inst.root()
+        rec = self.inst.op(lambda: room_stamp(root))
+        free = self._ask("free")
+        if rec is None or rec[0] != want or free is None or free[0] >= rec[1]:
+            return None
+        return rec[1], free[0]
+
+    def short_text(self):
+        """`short` as one line for the screen, or None."""
+        got = self.short()
+        if got is None:
+            return None
+        return ("The browser console needs %s and this console has %s free. "
+                "Free some space or insert a card." % (_ci.size_text(got[0]),
+                                                       _ci.size_text(got[1]) if got[1] > 0 else "nothing"))
 
     def tidy(self):
         """The image has confirmed itself (call it no sooner): once a boot,
@@ -306,6 +374,7 @@ class AddonStep:
         self._ended = None
         self._wait = RETRY_MS
         self._fitless = False
+        self._room = False
         self.due = None
         return self.start()
 
@@ -341,6 +410,11 @@ class AddonStep:
             return False
         if self._ask("configured") is False or not self.wanted():
             return False
+        if not retry:
+            self._room = False          # a person's press or a boot looks again
+        addon = self._addon_wanted() and self.short() is None
+        if not addon and not self._behind():
+            return False                # the add-on has no room, the carts nothing to do
         if self._ask("playing"):
             self._put_off(RETRY_MS)
             return False
@@ -355,7 +429,7 @@ class AddonStep:
         if not self._held:
             self._held = True
             self.inst.hold()
-        self._addon = self._addon_wanted()
+        self._addon = addon
         _ci._log("release: bringing %s to this firmware"
                  % ("the browser console add-on" if self._addon else "the official carts"))
         if self.wake is not None:
@@ -419,6 +493,7 @@ class AddonStep:
         data, self._fetch = self._fetch.data, None
         carts = _ci.fitting(_ci.parse_index(data, self._url, self._url))
         self._queue = []
+        self._addon_short = False
         if self._addon:
             fits = [c for c in carts if c.get("runtime") == "web"]
             if not fits:
@@ -427,13 +502,40 @@ class AddonStep:
                 # minute for nothing.
                 self._fitless = True
                 return self._end("no browser console for this firmware")
-            self._keep = fits[0]["folder"]
-            self._queue.append(fits[0])
+            short = self._fits_room(fits[0])
+            if short is None:
+                self._keep = fits[0]["folder"]
+                self._queue.append(fits[0])
+            else:
+                self._addon = False
         if self.carts:
             root = self.inst.root()
             self._queue += self.inst.op(lambda: official_behind(root, carts))
+        if self._addon_short and not self._queue:
+            return self._end(None, short=True)
         self.phase = "install"
         return self._next_job()
+
+    def _fits_room(self, cart):
+        """None when `cart`, the add-on, fits the store's free space (or the
+        store cannot say), else (bytes needed, bytes free), recorded
+        in the store: nothing asks for the add-on again until the room is
+        there (`short`)."""
+        free = self._ask("free")
+        if free is None:
+            return None
+        chip, fmt = self.inst.chip()
+        ranges = bool(getattr(self.inst.net(), "ranges", False))
+        need = _ci.need_bytes(_ci.plan(cart, chip, fmt, ranges), free[1])
+        if _ci.room_why(need, free[0]) is None:
+            return None
+        root, want = self.inst.root(), _ci.page_want()
+        if want:
+            self.inst.op(lambda: save_room_stamp(root, want, need))
+        self._room, self._room_at = (need, free[0]), _now()
+        self._fitless = True
+        self._addon_short = True
+        return need, free[0]
 
     def _next_job(self):
         """The next cart of the queue's install started: False when none is
@@ -492,14 +594,18 @@ class AddonStep:
         self.phase = None
         return False
 
-    def _end(self, error):
+    def _end(self, error, short=False):
         self.phase = None
         self.error = error
         if error is None:
             self._ended = None
             self._wait = RETRY_MS
-            _ci._log("release: this firmware's browser console add-on and official "
-                     "carts are installed")
+            if short:
+                _ci._log("release: the browser console add-on does not fit the "
+                         "store's free space: not fetched until there is room")
+            else:
+                _ci._log("release: this firmware's browser console add-on and official "
+                         "carts are installed")
         else:
             if self._ended is not None:
                 self._wait = min(self._wait * 2, RETRY_MAX_MS)

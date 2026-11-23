@@ -336,11 +336,16 @@ struct uit {
     uit_id_t focused;
     int has_focused;
     char focus_key[UIT_ID_MAX + 1];
+    char lost[UIT_ID_MAX + 1];      // the focus key a frame drew no stop for and owed the next for
     // events and trace
     uit_ev_t *evs;
     int nevs, cevs, evat;
     uit_buf_t evtext;
     uit_buf_t trace;
+    // the fit report (`uit_fits`): armed, the node a text draws for, the last frame's records
+    uint8_t fits_on;
+    int16_t fit_k, fit_model, fit_row;
+    uit_buf_t fits;
     uint32_t trace_at;
     uit_drew_t *drew;
     int ndrew, cdrew;
@@ -371,6 +376,8 @@ struct uit {
     int16_t cel_node;
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
     int32_t band_h;             // a flowing page's hints band, docked at its foot: its pictures end over it
+    uint8_t menu_keys;          // the last menu drawn showed its items' letters (`draw_menu`)
+    int16_t band[4];            // the hints band the toolkit drew last frame (`uit_band`), h 0 none
     uint8_t in_cell;            // drawing a split's column: a button takes its natural width
     uint8_t tv_stop, tv_stop_now;   // a text view that runs on drew last frame / this frame (the band's PgUp PgDn)
     int16_t page_tabs, page_tabs_now;   // the tabs node the band names (hint=) drawn last frame / this frame, else -1

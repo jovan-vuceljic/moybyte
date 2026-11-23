@@ -379,6 +379,11 @@ int uit_row_stop(uit_t *e, const char *cur, const char *rowkey, char *buf, size_
 // The last frame's page rect into out[0..3] and its shown foot's into out[4..7]:
 // whether a foot was shown.
 int uit_page_rects(const uit_t *e, int32_t out[8]);
+// The hints band the last frame drew, on the glass: 1 and its rect into out, else 0.
+int uit_band(const uit_t *e, int32_t out[4]);
+// Whether stop `i` (`uit_stop`) lies in a dialog or a popover (a menu's
+// items among them), over the page: 1, else 0 (-1 no such stop).
+int uit_stop_over(const uit_t *e, int i);
 // The gens a gen-carrying page's regions draw under: the last frame's page's, then each cards
 // list's, scroll region's and split group's now, in node order, into out (at most cap): their count, 0 where the page carries none.
 int uit_gens(uit_t *e, int32_t *out, int cap);
@@ -393,6 +398,16 @@ int uit_leave(uit_t *e);
 // The tree as text (the reference's snapshot): its length; at most cap-1
 // bytes are written.
 int uit_dump(uit_t *e, char *buf, size_t cap);
+// The fit report: with `on` each frame after records every text its walk draws through the
+// toolkit (moy_ui_fit_tap), as the toolkit measured and fitted it; off (the default) a frame
+// records nothing and costs nothing.
+void uit_fits_on(uit_t *e, int on);
+// The last frame's records, each the id of the node the text drew for ("" the page's own: its
+// title, its band), that node's kind (0 the page's), how the toolkit fitted it
+// (MOY_UI_FIT_*), where it drew (x, y), its measured width, its room (-1: fitted to none) and
+// its text, in decimal and 0x1F-separated, each record ended by 0x1E. Answers the bytes; `buf`
+// takes them where `cap` holds them all.
+int uit_fits(uit_t *e, char *buf, size_t cap);
 // Bytes the store holds: nodes, templates, ops, the pool, state.
 int uit_stats(const uit_t *e, int32_t out[8]);
 

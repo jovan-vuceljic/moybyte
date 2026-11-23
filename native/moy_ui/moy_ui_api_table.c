@@ -1278,6 +1278,12 @@ moy_ui_box_t moy_ui_api_wash_box(const moy_ui_ctx_t *c) {
     return sf;
 }
 
+void mua_dialog_gone(moy_ui_ctx_t *c) {
+    if (c->modal_from && c->dw.id != 0 && c->dlg.id == 0) {
+        c->owe = 1;
+    }
+}
+
 void mua_dims(const moy_ui_ctx_t *c) {
     moy_ui_box_t b = moy_ui_api_wash_box(c);
     if (b.y + b.h >= c->surface.y + c->surface.h) {
@@ -1296,11 +1302,12 @@ void moy_ui_api_wash(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
 }
 
 // A dialog's card `w` wide, its title band `top` high and its foot `foot`,
-// for a body `body` high: centred on the surface, the body cut to the room
-// the surface leaves it (never under one row), its height in *bh.
+// for a body `body` high: centred on the surface above its hint band (the
+// wash's box), the body cut to the room that leaves it (never under one
+// row), its height in *bh.
 static moy_ui_box_t dlg_card(const moy_ui_ctx_t *c, int w, int top, int foot, int body,
                              int *bh_out) {
-    moy_ui_box_t sf = c->surface;
+    moy_ui_box_t sf = moy_ui_api_wash_box(c);
     int pad = moy_ui_modal_band(c->fs, c->cls), rh = mua_row_h(c);
     int bh = body;
     if (top + bh + foot > sf.h - 2 * pad) {

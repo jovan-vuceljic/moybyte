@@ -556,9 +556,11 @@ def _calls_on(fn, receiver):
 
 GUITION = ROOT / "firmware" / "guition_jc3248w535" / "modules"
 GUITION_P4 = ROOT / "firmware" / "guition_jc8012p4a1c" / "modules"
+ELECROW_P4 = ROOT / "firmware" / "elecrow_crowpanel_p4_10_1" / "modules"
 BOARDS = {"tdeck": TDECK / "moy_runtime.py", "p4": P4 / "moy_runtime.py",
           "guition": GUITION / "moy_runtime.py",
-          "guition_p4": GUITION_P4 / "moy_runtime.py"}
+          "guition_p4": GUITION_P4 / "moy_runtime.py",
+          "elecrow_p4": ELECROW_P4 / "moy_runtime.py"}
 SPINE = ROOT / "device" / "desktop_spine.py"
 
 
@@ -713,6 +715,7 @@ PERF_BOARDS = {
     "p4": (P4, True),
     "guition": (ROOT / "firmware" / "guition_jc3248w535" / "modules", False),
     "guition_p4": (GUITION_P4, True),
+    "elecrow_p4": (ELECROW_P4, True),
 }
 
 # The console meters + loop accumulators one sample was taken from, per board,

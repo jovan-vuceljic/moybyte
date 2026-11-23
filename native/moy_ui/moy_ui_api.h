@@ -727,6 +727,7 @@ typedef struct {
     uint8_t edge, enter;
     moy_ui_dlg_t dlg;
     uint32_t modal_from;            // the focus a dialog took
+    uint32_t away;                  // the focus the page held when the keys went elsewhere
     int32_t typed;                  // the key a focused field takes this frame, 0 none
     int32_t typed_n;                // ...and how many times (a held key's repeats)
     // Q (-1) or E (1) pressed this frame outside a field: the tab row drawn
@@ -1588,10 +1589,12 @@ int moy_ui_api_part_at(const moy_ui_ctx_t *c, int32_t out[2]);
 // its row's.
 // MOY_UI_MEASURE_LINK: a link row, `text` its label and its value joined by
 // a tab; w the width that draws both whole (its pads, an icon before it, the
-// chevron: moy_ui_vrow_w), at most the row's, h its row's. 1, or 0 for an
-// unknown kind.
+// chevron: moy_ui_vrow_w), at most the row's, h its row's.
+// MOY_UI_MEASURE_SEG: a seg row (ui.choice's MOY_UI_V_SEG), `text` its label
+// and its options (NUL-separated, as ui.choice takes them) joined by a tab;
+// w and h as a link row's. 1, or 0 for an unknown kind.
 enum { MOY_UI_MEASURE_LABEL = 0, MOY_UI_MEASURE_BUTTON = 1, MOY_UI_MEASURE_PROGRESS = 2,
-       MOY_UI_MEASURE_LINK = 3 };
+       MOY_UI_MEASURE_LINK = 3, MOY_UI_MEASURE_SEG = 4 };
 int moy_ui_api_measure(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui_span_t text,
                        const moy_ui_over_t *o, int32_t out[5]);
 // ui.space(h): the stack moves `h` pixels down (0 or less: none), as a row
@@ -1713,6 +1716,11 @@ void moy_ui_api_at(moy_ui_ctx_t *c, int x, int y, int w, int h);
 // or the view of the scroll region `id`: its box into out, 1; 0 where it
 // drew no such stop, popover, dialog or region.
 int moy_ui_api_box(const moy_ui_ctx_t *c, moy_ui_span_t id, int32_t out[4]);
+// The part of stop `id`'s box the last frame drew that a press takes: its
+// box inside its page's view (a dialog's inside its body; all of a
+// popover's over a page), 0 wide where none of it shows; or the view of the scroll region
+// or text view `id`. 1, or 0 where it drew no such stop or view.
+int moy_ui_api_hit_box(const moy_ui_ctx_t *c, moy_ui_span_t id, int32_t out[4]);
 // A duplicate id drawn this frame, its text, once per id (NULL none).
 const char *moy_ui_api_dup(moy_ui_ctx_t *c);
 // The stops the frame drew past the MOY_UI_API_STOPS it records (each drawn,

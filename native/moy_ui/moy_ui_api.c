@@ -468,10 +468,27 @@ int mua_find(const moy_ui_stop_t *v, int n, uint32_t id) {
     return -1;
 }
 
+// Whether stop i is clipped to its page's view: a page's stacked stop to its
+// page, a dialog's to its body (a page of its own); one placed by ui.at (a
+// foot's button in the page's dock) stands where it was placed, and a
+// dialog's or a popover's over a page lies over every page's view.
+static int clipped(const moy_ui_stop_t *v, int n, int i) {
+    int p = v[i].page;
+    return !(v[i].flags & (STOP_PAGE | STOP_AT)) && p != NO_PAGE && p < n
+           && (!(v[i].flags & STOP_MODAL) || (v[p].flags & STOP_MODAL));
+}
+
+// Whether (x, y) lies where stop i shows: inside its page's view where it is
+// clipped to it (a row scrolled under the page's tabs or past its foot, or
+// past a dialog's body, is not there to press).
+static int in_view(const moy_ui_stop_t *v, int n, int i, int x, int y) {
+    return !clipped(v, n, i) || mua_inside(v[v[i].page].b, x, y);
+}
+
 // The stop under (x, y), the last drawn winning (it is on top).
 static int stop_at(const moy_ui_stop_t *v, int n, int x, int y) {
     for (int i = n - 1; i >= 0; i--) {
-        if (!(v[i].flags & STOP_PAGE) && mua_inside(v[i].b, x, y)) {
+        if (!(v[i].flags & STOP_PAGE) && mua_inside(v[i].b, x, y) && in_view(v, n, i, x, y)) {
             return i;
         }
     }
@@ -1189,7 +1206,20 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     c->tp.open = 0;
     c->scope = 0;
     if (c->elsewhere) {
+        // the keys another surface's (the shell's bar): no stop holds focus, and the one that
+        // held it takes it back when they come back while it still draws
+        if (c->focus) {
+            c->away = c->focus;
+        }
         c->focus = 0;
+    } else if (c->away) {
+        int i = c->focus == 0 ? mua_find(c->prev, c->n_prev, c->away) : -1;
+        if (i >= 0) {
+            c->focus = c->away;
+            c->focus_box = c->prev[i].b;
+            c->focus_name[0] = 0;
+        }
+        c->away = 0;
     }
     c->app = (uint8_t)((flags >> MOY_UI_APP_SHIFT) & 0xff);
     if (flags & MOY_UI_KEY_EDGE) {
@@ -3835,8 +3865,14 @@ int32_t moy_ui_api_pics(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t l
                         int32_t cur, const moy_ui_over_t *o, int32_t out[5]) {
     o = mua_over(o);
     n = n < 0 ? 0 : n > 255 ? 255 : n;
+    moy_ui_vrow_t r;
+    mua_vrow_init(c, &r, label);
+    r.n = (int16_t)n;
+    // a label the tiles would cut: on a line of its own over them
+    r.two = (int16_t)(!c->has_at && moy_ui_pics_two(s, stack_row(c), &r));
     int stacked;
-    moy_ui_box_t b = mua_place(c, moy_ui_pics_h(mua_ground_of(c), c->fs), &stacked);
+    moy_ui_box_t b = mua_place(c, moy_ui_pics_h(mua_ground_of(c), c->fs) + (r.two ? mua_row_h(c) : 0),
+                               &stacked);
     int st = 0, moved = 0;
     if (o->disabled != 1) {
         st = mua_stop(c, mua_id_of(c, o, label), b, STOP_KEEP_LR, mua_name_of(o, label));
@@ -3845,9 +3881,6 @@ int32_t moy_ui_api_pics(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t l
         }
         st = st < 0 ? 0 : st;
     }
-    moy_ui_vrow_t r;
-    mua_vrow_init(c, &r, label);
-    r.n = (int16_t)n;
     if (n > 0) {
         // left and right step it while focused, wrapping; activation takes the next, a tap
         // the tile tapped
@@ -4314,7 +4347,7 @@ int moy_ui_api_measure(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui
     } else if (kind == MOY_UI_MEASURE_PROGRESS) {
         h = moy_ui_vrow_tall_h(c->cls, c->fs);
         w = r.w;
-    } else if (kind == MOY_UI_MEASURE_LINK) {
+    } else if (kind == MOY_UI_MEASURE_LINK || kind == MOY_UI_MEASURE_SEG) {
         moy_ui_span_t label = text, value = {text.p, 0};
         for (uint16_t i = 0; i < text.n; i++) {
             if (text.p[i] == '\t') {
@@ -4330,7 +4363,15 @@ int moy_ui_api_measure(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui
         v.icon_glyph = c->icon_glyph;
         v.value = value;
         h = vrow_h(c);
-        w = moy_ui_vrow_w(s, MOY_UI_V_LINK, &v);
+        if (kind == MOY_UI_MEASURE_SEG) {
+            v.icon_slot = c->row_slot;      // as ui.choice's (mua_vrow_init)
+            v.icon_glyph = c->row_glyph;
+            for (uint16_t i = 0; i < value.n; i++) {
+                v.n += value.p[i] == 0;
+            }
+            v.n += value.n && value.p[value.n - 1] != 0;     // as ui.choice counts them
+        }
+        w = moy_ui_vrow_w(s, kind == MOY_UI_MEASURE_SEG ? MOY_UI_V_SEG : MOY_UI_V_LINK, &v);
     } else {
         return 0;
     }
@@ -4822,6 +4863,34 @@ int moy_ui_api_box(const moy_ui_ctx_t *c, moy_ui_span_t id, int32_t out[4]) {
     out[1] = c->cur[i].b.y;
     out[2] = c->cur[i].b.w;
     out[3] = c->cur[i].b.h;
+    return 1;
+}
+
+int moy_ui_api_hit_box(const moy_ui_ctx_t *c, moy_ui_span_t id, int32_t out[4]) {
+    int i = mua_find(c->cur, c->n_cur, mua_hash(id.p, id.n, 0));
+    if (i < 0 && c->dlg.id != 0) {
+        i = mua_find(c->cur, c->n_cur, mua_hash(id.p, id.n, c->dlg.id));   // a button at its foot
+    }
+    uint32_t hs = mua_hash(id.p, id.n, SCROLL_SALT), ht = mua_hash(id.p, id.n, TEXT_SALT);
+    for (int j = 0; i < 0 && j < c->n_cur; j++) {
+        if ((c->cur[j].id == hs || c->cur[j].id == ht) && (c->cur[j].flags & STOP_PAGE)) {
+            i = j;                      // a scroll region's or a text view's view
+        }
+    }
+    if (i < 0) {
+        return 0;
+    }
+    moy_ui_box_t b = c->cur[i].b;
+    int p = c->cur[i].page;
+    if (clipped(c->cur, c->n_cur, i)) {
+        moy_ui_box_t w = c->cur[p].b;
+        int x0 = b.x > w.x ? b.x : w.x, y0 = b.y > w.y ? b.y : w.y;
+        int x1 = b.x + b.w < w.x + w.w ? b.x + b.w : w.x + w.w;
+        int y1 = b.y + b.h < w.y + w.h ? b.y + b.h : w.y + w.h;
+        b.x = (int16_t)x0, b.y = (int16_t)y0;
+        b.w = (int16_t)(x1 > x0 ? x1 - x0 : 0), b.h = (int16_t)(y1 > y0 ? y1 - y0 : 0);
+    }
+    out[0] = b.x, out[1] = b.y, out[2] = b.w, out[3] = b.h;
     return 1;
 }
 

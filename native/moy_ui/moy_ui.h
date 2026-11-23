@@ -924,13 +924,16 @@ typedef struct {
                                     // lit bars + 1 (0: none)
     int16_t check;                  // link: a pick, no chevron: 1 its place blank, 2 a check
                                     // there (the current pick)
+    int16_t two;                    // pics: its label on a line of its own over the tiles
+                                    // (moy_ui_pics_two), the row a line taller
 } moy_ui_vrow_t;
 enum { MOY_UI_VROW_PLAIN = 0, MOY_UI_VROW_DANGER = 1 };
 int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                 const moy_ui_vrow_t *r);
-// The width an info or a link row (`kind`) needs to draw its label and its
-// value whole: its pads, its icon, the two texts, a link's chevron, the gaps
-// between them. A row narrower cuts its label with an ellipsis.
+// The width an info, a link or a seg row (`kind`) needs to draw its label
+// and its value whole: its pads, its icon, the two texts (a seg's options,
+// `n` of them), a link's chevron, the gaps between them. A row narrower cuts
+// its label with an ellipsis.
 int moy_ui_vrow_w(const moy_ui_sink_t *s, int kind, const moy_ui_vrow_t *r);
 // The height a progress row given it draws tall at: its label and percent
 // on a line, its bar under them.
@@ -939,9 +942,13 @@ int moy_ui_vrow_tall_h(int desk, int fs);
 // radius 4 units, the current one's the selection's colour and the rest surface_alt's, the
 // pictures in them the caller's. Its height, and tile i's box in row box b: side, gap and right
 // pad 48, 12 and 16 px times `fs` on the desk (`desk` holds MOY_UI_DESK), 32, 8 and 10 units on
-// a handheld; the row is 64 px times `fs` tall on the desk, 44 units on a handheld.
+// a handheld; the row is 64 px times `fs` tall on the desk, 44 units on a handheld, the tiles
+// centred down its last that many (a row with its label on a line of its own is a line taller).
 int moy_ui_pics_h(int desk, int fs);
 moy_ui_box_t moy_ui_pics_tile(moy_ui_box_t b, int desk, int fs, int n, int i);
+// Whether pics row `r` in row box `b` cannot draw its label whole beside its tiles: it takes a
+// line of its own over them (`two`).
+int moy_ui_pics_two(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_vrow_t *r);
 // What x on row box b picks: a seg's, a swatch picker's, a pictures row's or a tab row's
 // option (-1 none), a slider's value (lo..hi), -1 for another kind.
 int32_t moy_ui_vrow_at(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, const moy_ui_vrow_t *r,
@@ -970,7 +977,7 @@ int moy_ui_table_geo(const moy_ui_sink_t *s, moy_ui_box_t b, const uint8_t *cols
 // icon by name (moy_ui_icon_slot, else the glyph table's; none with F_PART,
 // where the column is the app's part), with F_BAR the cursor bar (the
 // `value` token, 2 px of the scale) at the row's left, the first text
-// column cut with an ellipsis where the font has one.
+// column cut with an ellipsis ("..." in a font with none).
 int moy_ui_table_head(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_tgeo_t *g,
                       const uint8_t *cols, size_t cols_n, int fs, int desk);
 int moy_ui_table_row(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_tgeo_t *g,
@@ -1317,6 +1324,29 @@ int moy_ui_hints_status(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t t,
 // is the string table's (moy_str.h), else a caller's. Answers its width.
 int moy_ui_text_in(const moy_ui_sink_t *s, uint32_t font, int table, moy_ui_span_t t, int x,
                    int y, uint16_t col);
+// The bytes of `p` that go before an ellipsis in `maxw` pixels at `scale` in
+// `font`: moy_text_cut_px, and where the font has no U+2026 the prefix "..."
+// follows in that font (*ell 2); none of it (0, *ell 0) where not even the
+// ellipsis fits. moy_ui_dots(*ell) is the ellipsis' bytes: none, "…" or "...".
+size_t moy_ui_cut_text(uint32_t font, const uint8_t *p, size_t n, int maxw, int scale, int *ell);
+moy_ui_span_t moy_ui_dots(int ell);
+// The bytes of `t` a primitive draws in `maxw` pixels at `scale` in `font`:
+// with `ell` NULL the longest prefix that fits (moy_text_fit_px), else the
+// prefix an ellipsis follows where the whole does not fit (moy_ui_cut_text).
+// Under the fit tap the cut is what the next text drawn from those
+// bytes reports.
+size_t moy_ui_fit(uint32_t font, moy_ui_span_t t, int maxw, int scale, int *ell);
+// The fit tap: each text a primitive draws, as the bytes it was given (a cut
+// text's whole), their width in the font and at the scale that draw it, the
+// room the primitive fitted it to (-1: it fitted it to none), where it drew
+// (x, y, the line's top left; 0, 0 for a text cut to nothing, which draws
+// none) and how (MOY_UI_FIT_*). Text from the string table and each copy a
+// text effect draws under its text report nothing. NULL, the default and a
+// board's only value, taps nothing; a host's checks set it around a frame.
+enum { MOY_UI_FIT_WHOLE = 0, MOY_UI_FIT_ELLIPSIS = 1, MOY_UI_FIT_CUT = 2 };
+typedef void (*moy_ui_fit_fn)(void *ud, const uint8_t *p, size_t n, int x, int y, int w, int room,
+                              int how);
+void moy_ui_fit_tap(moy_ui_fit_fn fn, void *ud);
 // The look's `keycap` fields (moy_ui_depth_use reads them): look colours,
 // MOY_THEME_NONE where silent; alpha 0..255.
 typedef struct {

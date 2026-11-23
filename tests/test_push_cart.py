@@ -42,6 +42,7 @@ BOARD_DIRS = {
     "tdeck": os.path.join(ROOT, "firmware", "lilygo_t_deck_plus_mainline"),
     "guition_s3": os.path.join(ROOT, "firmware", "guition_jc3248w535"),
     "guition_p4": os.path.join(ROOT, "firmware", "guition_jc8012p4a1c"),
+    "elecrow_p4": os.path.join(ROOT, "firmware", "elecrow_crowpanel_p4_10_1"),
 }
 
 
@@ -881,11 +882,12 @@ def test_a_board_that_cannot_switch_is_never_asked_to(tmp_path):
 
 
 def test_only_the_board_that_can_switch_declares_a_payload_rate():
-    """The rate is the Waveshare's alone: the other three carry their serial
-    on the SoC's USB, where a UART rate means nothing."""
+    """The rate is the UART boards' (the Waveshare's and the Elecrow's): the
+    others carry their serial on the SoC's USB, where a UART rate means
+    nothing."""
     rates = {name: push_cart.serial_cfg(name).get("recv_baud")
              for name in BOARD_DIRS}
-    assert {k for k, v in rates.items() if v} == {"p4"}
+    assert {k for k, v in rates.items() if v} == {"p4", "elecrow_p4"}
 
 
 # -- main: identity, the discovered store, and the whole walk -----------------

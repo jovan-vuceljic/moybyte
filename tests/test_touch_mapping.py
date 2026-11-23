@@ -27,6 +27,7 @@ BOARDS = {
     "guition_p4": ("guition_jc8012p4a1c", "MOYBYTE_GUITION_P4", 1280, 800),
     "tdeck": ("lilygo_t_deck_plus_mainline", "MOYBYTE_TDECK", 320, 240),
     "p4": ("esp32_p4_wifi6_touch_lcd_7b", "MOYBYTE_P4", 1024, 600),
+    "elecrow_p4": ("elecrow_crowpanel_p4_10_1", "MOYBYTE_ELECROW_P4", 1024, 600),
 }
 
 

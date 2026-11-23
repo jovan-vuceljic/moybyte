@@ -244,11 +244,12 @@ def test_a_card_that_mounts_but_cannot_be_seeded_falls_back_too(vfs, capsys):
     assert "SD carts unavailable" in out and "from flash" in out
 
 
-# -- the two P4 boards ---------------------------------------------------------
+# -- the P4 boards ---------------------------------------------------------
 
 P4_BOARDS = [
     ("esp32_p4_wifi6_touch_lcd_7b", "MOYBYTE_P4"),
     ("guition_jc8012p4a1c", "MOYBYTE_GUITION_P4"),
+    ("elecrow_crowpanel_p4_10_1", "MOYBYTE_ELECROW_P4"),
 ]
 
 

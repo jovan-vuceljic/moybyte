@@ -983,7 +983,7 @@ class SpritesLayer(Layer):
     def _foot(self, cv, th, lay, doc):
         if lay.desk:
             _ui_draw.status_row(cv, th, lay.status, ())
-            items = () if _ui_draw.hint_kind() == "touch" else ("Q W", "Icon", "F6", "Next pane")
+            items = ("Q W", "Icon", "F6", "Next pane") if _ui_draw.hint_kind() == "keys" else ()
             x, y, w, h = lay.status
             tx = x + 10
             spans = _ui_draw.hints(cv, th, (x, y, w - 8, h), items, True, draw=False) \

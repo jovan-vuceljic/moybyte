@@ -135,6 +135,18 @@ static mp_obj_t ui_api_box(mp_obj_t a0, mp_obj_t a1) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(ui_api_box_obj, ui_api_box);
 
+static mp_obj_t ui_api_hit_box(mp_obj_t a0, mp_obj_t a1) {
+    moy_ui_ctx_t *c = ctx_of(a0);
+    int32_t out[4];
+    if (!moy_ui_api_hit_box(c, span0_of(a1), out)) {
+        return mp_const_none;
+    }
+    mp_obj_t t_[4] = {mp_obj_new_int(out[0]), mp_obj_new_int(out[1]), mp_obj_new_int(out[2]),
+                      mp_obj_new_int(out[3])};
+    return ret_tuple(4, t_);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(ui_api_hit_box_obj, ui_api_hit_box);
+
 static mp_obj_t ui_api_progress(size_t n_args, const mp_obj_t *a) {
     (void)n_args;
     moy_ui_ctx_t *c = ctx_of(a[0]);
@@ -862,6 +874,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_lost_obj, ui_api_lost);
     { MP_ROM_QSTR(MP_QSTR_api_slider), MP_ROM_PTR(&ui_api_slider_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_icon), MP_ROM_PTR(&ui_api_icon_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_box), MP_ROM_PTR(&ui_api_box_obj) }, \
+    { MP_ROM_QSTR(MP_QSTR_api_hit_box), MP_ROM_PTR(&ui_api_hit_box_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_progress), MP_ROM_PTR(&ui_api_progress_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_list), MP_ROM_PTR(&ui_api_list_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_part), MP_ROM_PTR(&ui_api_part_obj) }, \
