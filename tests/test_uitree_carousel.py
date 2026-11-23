@@ -6,7 +6,9 @@ table of parts): left and right glide it a card, a drag carries it and a
 let-go settles on the nearest card, a tap on a neighbour glides it to the
 centre, and cur= follows the card it comes to rest on; the motion is one
 the frame gate sees, and a settled band draws no frame; Enter or a tap on
-the centre card fires its action."""
+the centre card fires its action. The built and the compiled page run in
+the Python front; a Lua app's carousel, the same engine's, glides, rests,
+plays and takes its caption's tone=."""
 
 import sys
 from pathlib import Path
@@ -194,3 +196,87 @@ def test_a_tap_on_a_neighbour_glides_it_in_and_a_tap_on_the_centre_plays(live):
     drv.touch_up()
     frames(3)
     assert e.s.played == "game 1", e.s.played
+
+
+# -- the Lua front ---------------------------------------------------------------
+
+_LUA_CAROUSEL = """
+ui.app("Lua Carousel", { icon = "games" })
+local s = ui.state { games = ui.model { key = "name", name = "", sub = "" },
+                     pick = ui.row_of("games") }
+ui.hook("opened", function()
+  local rows = {}
+  for i = 0, 6 do rows[#rows + 1] = { name = "game " .. i, sub = "Game\\tBuilt in" } end
+  s.games:set(rows)
+end)
+ui.action("play", "Play", function(row) moybyte.log(6, "played " .. row.name) end, { takes = "row" })
+ui.page("carousel", function()
+  ui.cards("games", { look = "carousel", cur = "pick", w = 32, tone = "%s" }, function()
+    ui.card("play", { label = "{.name}", sub = "{.sub}" })
+  end)
+end, { title = "Lua Carousel" })
+"""
+
+
+def _lua_carousel(tmp_path, tone):
+    """A workstation with a Lua app whose page is a carousel of seven cards
+    in caption ink `tone`, open and drawn: its driver and a frame function
+    answering the canvas's bytes."""
+    import json
+    from runtime import host_app
+    from ws_helpers import open_cart
+    carts = tmp_path / "carts"
+    cart = carts / "lua_carousel.moy"
+    cart.mkdir(parents=True)
+    (cart / "manifest.json").write_text(json.dumps({
+        "format": "moy-1", "title": "Lua Carousel", "runtime": "lua", "main": "main.lua",
+        "extensions": ["moybyte.ui", "moybyte.uitree"],
+        "moybyte": {"type": "app", "permissions": []}}))
+    (cart / "main.lua").write_text(_LUA_CAROUSEL % tone)
+    ws = host_app.build_workstation(str(carts))
+    ws.pointer.visible = False
+    drv = host_app.ConsoleDriver(ws)
+    drv.frame(1 / 30)
+    open_cart(ws, "Lua Carousel")
+
+    def frame():
+        ws.mark_dirty()
+        drv.frame(1 / 30)
+        return bytes(ws.sys_canvas._buf)
+    for _ in range(30):
+        frame()
+    return ws, drv, frame
+
+
+def test_a_lua_carousel_glides_a_card_rests_and_plays_the_card_it_rests_on(tmp_path):
+    """The Lua front takes the engine's carousel as it is: right glides the
+    row over frames that differ, it rests on the next card, and Enter plays
+    the card it rests on."""
+    from runtime.host import moy_log
+    ws, drv, frame = _lua_carousel(tmp_path, "")
+    rest = frame()
+    seq = moy_log.next()
+    drv.press("right")
+    moving = [frame() for _ in range(4)]
+    assert len(set(moving)) == 4 and rest not in moving, "the row glides"
+    for _ in range(20):
+        frame()
+    assert frame() == frame() != rest, "it rests, a card along"
+    drv.press("a")
+    for _ in range(3):
+        frame()
+    played = [r[4] for r in moy_log.read(seq, 400) if "played " in r[4]]
+    assert played and played[-1].endswith("played game 1"), played
+
+
+def test_a_lua_carousels_caption_takes_its_tone(tmp_path):
+    """tone= inks the caption under the row: the same carousel with the
+    theme's ink and with a colour differs in the caption's rows alone."""
+    _ws, _drv, frame = _lua_carousel(tmp_path / "ink", "")
+    ink = frame()
+    ws, _drv, frame = _lua_carousel(tmp_path / "red", "#FF0000")
+    red = frame()
+    span = 2 * ws.sys_canvas.w
+    rows = [r for r in range(ws.sys_canvas.h) if ink[r * span:(r + 1) * span] != red[r * span:(r + 1) * span]]
+    assert rows, "the tone changed nothing"
+    assert rows[-1] - rows[0] < ws.sys_canvas.h // 4, ("the caption's rows alone", rows)
