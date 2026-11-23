@@ -20,7 +20,7 @@ from array import array
 import sys
 
 from moy_input import SHIFT as _SHIFT
-import ui as _v
+import moy_ui as _C
 import ui_draw as _D
 import layout_base as _lb
 
@@ -887,7 +887,7 @@ class CEngine(Engine):
                 k[1] = y
                 k[2] = w
                 k[3] = h
-                _v.card_clip(k)
+                _C.api_card_clip(_D.UI_TARGET[0], k)
                 cv.clip(k[0], k[1], k[2], k[3])
                 if g:
                     cv.rect(x, y, w, h, self.th[g])
@@ -1035,7 +1035,7 @@ class CEngine(Engine):
             if x.want_focus(w) < 0:
                 self._fail(E_CHECK, "ui.focus(%r)" % w, at)
         self._live_units()
-        kind = _v.input_kind()
+        kind = _D.input_kind()
         self.input = kind if kind in S.INPUTS else "keys"
         cb = (4 if desk else 0) | (2 if content[2] * 3 > content[3] * 4 else 0) | (1 if self.input == "touch" else 0)
         if cb != self._classes_b:
@@ -1098,7 +1098,7 @@ class CEngine(Engine):
         if not self._visiting() or self.q or self.timers or self.decl.posts or self.want_focus is not None:
             return False
         self.committed()
-        kind = _v.input_kind()
+        kind = _D.input_kind()
         kind = kind if kind in S.INPUTS else "keys"
         fs = max(1, getattr(self.cv, "font_scale", 1)) if self.cv is not None else 1
         t = _D.UI_TARGET

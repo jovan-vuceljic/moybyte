@@ -19,6 +19,7 @@ nothing here that it did not before.
 """
 
 import ui
+import ui_font as _ui_font
 from artwork import colour_name
 try:
     import moy_loop as _loop
@@ -108,7 +109,7 @@ class PaintDraw:
             bmp = v.fit_bitmap()
             q = v.quarters()
             cap = ("%d \u00d7 %d, made on a desk%sshown at %s" % (v.W, v.H, _dot(), _zoom_word(q))
-                   if ui.has_symbols() else
+                   if _ui_font.print_symbols() else
                    "%dx%d, made on a desk - shown at %s" % (v.W, v.H, _zoom_word(q)))
             return (bmp.h if bmp is not None else lay.ch // 2) + 6 * u, cap
         return lay.ch - hint_h, ""

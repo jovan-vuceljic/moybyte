@@ -26,7 +26,7 @@ rows share.
 The page reaches the shell through its AppContext (`LicencesPage.NEEDS`).
 """
 
-import ui as _ui
+import ui_font as _ui_font
 import uitree as ui
 import uitree_app
 import layout_base as _lb
@@ -55,9 +55,8 @@ def version_words(updater, channel):
 def board_words(name):
     """A board's name as the ui face can draw it: its inch mark (″) a
     straight quote where the face has none."""
-    if name and "″" in name and not _ui.face("ui", name):
+    if name and "″" in name and not _ui_font.face_draws("ui", name):
         return name.replace("″", '"')
-    _ui.face()
     return name
 
 

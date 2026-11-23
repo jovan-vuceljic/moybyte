@@ -32,7 +32,7 @@ sprite dims, so every zoom level keeps whole on-screen pixels), the palette's si
 tools' pitch.
 """
 
-import ui as _ui              # frozen on device
+import ui_font as _ui_font
 import ui_draw as _ui_draw
 import uitree_editor
 import editor_sprite
@@ -332,7 +332,7 @@ class PaintLayer(Layer):
                     lay.pal[0], lay.pal[1], lay.pitch, lay.flags_h,
                     lay.preview_h, 64, lay.more_w, 200, self._keys_shown[1])
         else:
-            times = "×" if _ui.has_symbols() else "x"
+            times = "×" if _ui_font.print_symbols() else "x"
             tid = "other"
             if pe.tool in _SHAPES:
                 tid = "shape"
@@ -393,7 +393,7 @@ class PaintLayer(Layer):
             op = "sleft" if self._shifts else "copy"
             self.run("menu", _OP_WORDS[op] + self._keys_shown[1][_KEYED.index(op)])
         pg.paint(dt, cv, th, r, lay.desk)
-        _ui.end()
+        self._host.end()
         if not self._host.still():
             ws.request_frame()
 
@@ -1064,7 +1064,7 @@ class PaintLayer(Layer):
         pw = min(pe.size, (sheet.w - ox) // T) * T
         ph = min(pe.size, (sheet.h - oy) // T) * T
         x1 = x + w
-        times = "×" if _ui.has_symbols() else "x"
+        times = "×" if _ui_font.print_symbols() else "x"
         for z in (1, 2, 4):
             side = dim * z
             word = "%d%s" % (z, times)

@@ -165,12 +165,12 @@ def test_hover_is_additive_and_disabled_only_dims():
 def test_ui_stays_a_leaf():
     """The cycle ui -> chrome -> settings_layer -> ui must stay impossible.
     Checked on IMPORT STATEMENTS, not on substrings -- the module documents
-    the cycle in prose. ui_draw and its three halves (ui_scroll, ui_host,
-    ui_cover) are one leaf: they import each other and nothing of the shell."""
+    the cycle in prose. ui_draw and its halves (ui_scroll, ui_host, ui_cover,
+    ui_font) are one leaf: they import each other and nothing of the shell."""
     import ast
     import os
     here = os.path.dirname(ui_draw.__file__)
-    halves = ("ui_draw", "ui_scroll", "ui_host", "ui_cover")
+    halves = ("ui_draw", "ui_scroll", "ui_host", "ui_cover", "ui_font")
     names = []
     for mod in halves:
         tree = ast.parse(open(os.path.join(here, mod + ".py")).read())

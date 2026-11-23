@@ -34,7 +34,6 @@ grown one does, and the keys move it to the next. On a handheld the
 Editor is one tab at a time under its one bar (`EditorApp`)."""
 
 import moybuf
-import ui
 import editor_heads as Heads
 import editor_panes as P
 import editor_parts as Parts
@@ -1194,7 +1193,7 @@ class EditorDesk(Layer):
         host = self._host
         host.begin(cv, th, (0, 0, cv.w, cv.h), True, True, elsewhere=True)
         self._draw_splits(u)
-        ui.end()
+        host.end()
         if host.owed or host.tap == 2:
             self.ws.request_frame()     # the frame that shows what the pass answered
         drawn = 0

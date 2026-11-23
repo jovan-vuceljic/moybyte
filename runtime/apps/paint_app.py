@@ -44,6 +44,7 @@ the first save of a new drawing says its name in a toast.
 """
 
 import ui as _v
+import ui_font as _ui_font
 import uitree as ui
 import uitree_app
 from layout_base import bar_rows, content_of, ground_round, metric_class, window_foot, DESK
@@ -83,10 +84,10 @@ RETRY_S = 30.0                           # a failing store retries slowly, not h
 def _zoom_word(q):
     """A zoom in quarters as the bar and the seg say it."""
     if q == 1:
-        return "¼" if _v.has_symbols() else "1/4"
+        return "¼" if _ui_font.print_symbols() else "1/4"
     if q == 2:
-        return "½" if _v.has_symbols() else "1/2"
-    return "%d%s" % (q // 4, "×" if _v.has_symbols() else "x")
+        return "½" if _ui_font.print_symbols() else "1/2"
+    return "%d%s" % (q // 4, "×" if _ui_font.print_symbols() else "x")
 
 
 # -- the page ---------------------------------------------------------------------
@@ -1446,7 +1447,7 @@ class PaintAppLayer(PaintDraw, uitree_app.app_layer("artwork", "Paint", build)):
         if send is not None:
             self._ui.begin(cv, th, lay.page, lay.desk, lay.windowed)
             self._send_page(cv, th, dt)
-            _v.end()
+            self._ui.end()
             return
         # a whole frame: the view canvas draws again (its reads= state moves),
         # so it holds what the stroke frames after it repaint parts of

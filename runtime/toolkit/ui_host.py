@@ -301,6 +301,14 @@ class AppHost:
             self.tap = (3 if self.hold else 2) if t == 1 else 3 if t == 3 else 0
         return r
 
+    def end(self):
+        """End the frame `begin` (or `run`) began, after the page's last
+        row: where its rows run on below what shows, a fade at its foot;
+        over everything, the tooltip of a tool a resting pointer is over
+        (moy_ui_api_end)."""
+        t = UI_TARGET
+        _C.api_end(t[0], t[1], t[2])
+
     def run(self, cv, th, rect, a, desk=False, window=False, away=False, edge=False, tap=0,
             deaf=False):
         """Begin the frame on input `a` (the run snapshot's shape, its

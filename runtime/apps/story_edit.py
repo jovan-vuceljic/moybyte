@@ -29,6 +29,7 @@ apart from any drawing but the pasteboard's.
 """
 
 import ui
+import ui_font as _ui_font
 import story_doc as D
 import story_render as R
 from ticks import _ticks_ms, _ticks_diff
@@ -1170,7 +1171,7 @@ def card_id(i):
 
 
 def app_dot():
-    return " · " if ui.has_symbols() else " - "
+    return " · " if _ui_font.print_symbols() else " - "
 
 
 def D_DOT():

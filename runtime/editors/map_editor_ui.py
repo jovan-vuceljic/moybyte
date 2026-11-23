@@ -21,6 +21,7 @@ imported back from console.py, which would be a circular import.
 from array import array
 
 import ui as _ui              # frozen on device
+import ui_font as _ui_font
 _in = _ui.rect_in   # one hit-test (ui.rect_in)
 
 import editor_map
@@ -153,7 +154,7 @@ class MapEditorUI(ViewHost):
             if tool == "pen" and self.map_erase:
                 tool = "erase"
             cell = self._hover_cell
-            x = "\u00d7" if _ui.has_symbols() else "x"
+            x = "\u00d7" if _ui_font.print_symbols() else "x"
             dims = "%d%s%d" % (tm.w, x, tm.h)
             status = ""
             if lay.pane:
@@ -177,7 +178,7 @@ class MapEditorUI(ViewHost):
         """The zoom button's word: the tile's scale, or Fit for the overview."""
         if self._mv_overview():
             return "Fit"
-        x = "\u00d7" if _ui.has_symbols() else "x"
+        x = "\u00d7" if _ui_font.print_symbols() else "x"
         return "%d%s" % (max(1, self._mv_metrics()[2] // 8), x)
 
     def act(self, verb):

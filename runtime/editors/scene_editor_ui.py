@@ -33,6 +33,7 @@ write + the durable undo journal, Stage 1). The editor manages the cart's
 DEFAULT scene (multi-scene UX is a deferred follow-up, #85 decision log 4)."""
 
 import ui as _ui              # frozen on device
+import ui_font as _ui_font
 import ui_draw as _ui_draw
 _in = _ui.rect_in   # one hit-test (ui.rect_in)
 
@@ -105,7 +106,7 @@ class SceneEditorUI(ViewHost):
         self.push(vals)
 
     def zoom_word(self):
-        x = "\u00d7" if _ui.has_symbols() else "x"
+        x = "\u00d7" if _ui_font.print_symbols() else "x"
         return "%d%s" % (self._sv_metrics()[2], x)
 
     def set_tool(self, tool):

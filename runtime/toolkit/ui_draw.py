@@ -1,7 +1,7 @@
 # Map (grep -n a name to jump there):
 #   is_light                          the theme's tool-surface presentation class
 #   wrap_words                        the text path's wrap (C); wrap_px, print_fit, text_width beside it
-#   font                              the font each role's text draws in (C); use_font, print_font, cart_text beside it
+#   font                              the font each role's text draws in (C); use_font, cart_text beside it
 #   -- interaction state              widget_state
 #   -- the style                      metrics, state_colors (C)
 #   -- the theme's shape              use_shape, paint (C)
@@ -14,7 +14,7 @@
 #   -- the classic game-canvas button family  game_btn, mini_btn, toolbar
 #   ui_frame                          a host begins an app's frame of runtime/toolkit/ui.py's verbs
 #   text_words                        a text view's syntax words (C); text_tones, its code tones
-#   -- the halves re-exported         ui_scroll's ScrollRegion, ui_host's AppHost and Hold, ui_cover's covers
+#   -- the halves re-exported         ui_scroll's ScrollRegion, ui_host's AppHost and Hold, ui_cover's covers, ui_font's print font
 """The toolkit's engine layer: the rect-taking widgets under the public UI API.
 
 `runtime/toolkit/ui.py` is the public UI API (docs/ui_api_2026-10.md), the verbs every
@@ -185,17 +185,6 @@ def use_font(role, fid):
     return _C.use_font(role, fid)
 
 
-def print_font(fid=None):
-    """Draw a canvas's `print` in font `fid` (0 for petme128): the font the
-    shell's own text draws in. Answers the font it replaced, or None, and
-    installs nothing, for a font that is not loaded. While a cart's code
-    runs (`cart_text`) prints are petme128's and this names the font they
-    come back to. With no `fid`, the font prints draw in now."""
-    if fid is None:
-        return _C.print_font()
-    return _C.print_font(fid)
-
-
 def print_cut(s, maxw, scale=1):
     """`print_fit`, never empty for a non-empty `s`: a box too narrow for one
     character still shows the first."""
@@ -203,14 +192,6 @@ def print_cut(s, maxw, scale=1):
         s = str(s)
     got = print_fit(s, maxw, scale)
     return got if got or not s else s[:1]
-
-
-def print_width(s, scale=1):
-    """The pixels `s` draws at `scale` through a canvas's `print` now: in the
-    print font (`print_font`)."""
-    if type(s) is not str:
-        s = str(s)
-    return _C.text_width(s, scale, _C.print_font())
 
 
 CART_OFF, CART_ON, CART_APP = 0, 1, 2      # moy_ui.h's MOY_UI_CART_*
@@ -2203,9 +2184,10 @@ def fill_uncovered(cv, inner, outer, col):
 
 
 # -- the halves re-exported ----------------------------------------------------
-# The scrolling, the coverless cart's cover and an app's host live in modules
-# of their own; their names are this module's too. Imported here, at the foot,
+# The scrolling, the coverless cart's cover, an app's host and the print font
+# live in modules of their own; their names are this module's too. Imported here, at the foot,
 # because ui_scroll and ui_host take their share of this module's state from it.
+from ui_font import print_face, print_font, print_size, print_symbols, print_width, face_draws
 from ui_scroll import drag_steps, PaintRing, ScrollRegion, DragTap
 from ui_cover import initial_block, initial_cover, initial_parts
 from ui_host import (AppHost, wash_page, NO_WASH, HOLD_PUT, HOLD_LAST, HOLD_DRAW,
