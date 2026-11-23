@@ -280,7 +280,9 @@ after the row's filler at its end; children all at their own widths are
 centred). `ui.foot()` (the end look) sets its buttons at
 their natural widths at its end with a status label before them;
 `look="share"` shares its width among them. `ui.toast(text, icon=)` is a
-pill over the page above its foot; `ui.group("", look="card")` lays its
+pill over the page above its foot (`look="flat"` in flat fills, filling the
+page's room), and with `sub=` a banner: a card at the top centre of the
+page, `text` over the `sub` line, `burst=` (0..255) its confetti; `ui.group("", look="card")` lays its
 rows on a card (as a split's cell, the cell is the card), and
 `look="rules"` parts its rows with a rule as a captioned group's are (a
 `ui.row` among them one of its rows); `ui.text_view(..., look="well")` lays its prose on a

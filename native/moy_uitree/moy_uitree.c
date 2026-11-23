@@ -1194,11 +1194,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
              (kind == UIT_CANVAS && !strcmp(name, "w")) || (kind == UIT_ROW && !strcmp(name, "gap")) ||
              (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_PICTURE && !strcmp(name, "side")) || (kind == UIT_POPOVER && !strcmp(name, "anchor")) ||
              (kind == UIT_GRID && !strcmp(name, "w")) || (kind == UIT_LABEL && !strcmp(name, "scale")) ||
+             (kind == UIT_TOAST && !strcmp(name, "sub")) ||
              (kind == UIT_GROUP && !strcmp(name, "gap")))
         tslot = &N->t_value;
     else if ((kind == UIT_CARDS && !strcmp(name, "h")) || (kind == UIT_POPOVER && !strcmp(name, "w")) ||
              (kind == UIT_ROW && !strcmp(name, "pad")) || (kind == UIT_GRID && !strcmp(name, "h")) ||
-             (kind == UIT_LABEL && !strcmp(name, "w")) ||
+             (kind == UIT_LABEL && !strcmp(name, "w")) || (kind == UIT_TOAST && !strcmp(name, "burst")) ||
              ((kind == UIT_CARD || kind == UIT_PICTURE || kind == UIT_BUTTON) && !strcmp(name, "tone")))
         tslot = &N->t_aux;
     else if ((!strcmp(name, "empty") && UIT_IS_LIST(kind)) ||
@@ -1216,7 +1217,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             (kind == UIT_POPOVER && !strcmp(name, "w")) || (kind == UIT_CANVAS && !strcmp(name, "w")) ||
             (kind == UIT_BUTTON && !strcmp(name, "w")) || (kind == UIT_ROW && (!strcmp(name, "gap") || !strcmp(name, "pad"))) ||
             (kind == UIT_LABEL && (!strcmp(name, "scale") || !strcmp(name, "w"))) ||
-            (kind == UIT_GROUP && !strcmp(name, "gap")) ||
+            (kind == UIT_GROUP && !strcmp(name, "gap")) || (kind == UIT_TOAST && !strcmp(name, "burst")) ||
             (kind == UIT_GRID && name[1] == 0)) {
             // an int prop: an int template, or the int literal a number lowers to
             const char *d = src + (src[0] == '-');
@@ -1433,6 +1434,13 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         if (!strcmp(src, "True"))
             N->btn |= BT_ALONE;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    }
+    if (!strcmp(name, "look") && kind == UIT_TOAST) {
+        // look="flat" (TS_FLAT): the pill in flat fills, the page's room its own
+        if (strcmp(src, "flat"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("toast look=%s: \"flat\"", "toast look=%s"), src);
+        N->lit |= TS_FLAT;
+        return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (!strcmp(name, "look") && kind == UIT_BUTTON) {
         // look="large" (BT_LARGE): half again a row's height, twice the pads, a wider least width;

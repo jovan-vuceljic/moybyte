@@ -1557,6 +1557,18 @@
     "icon": {
      "type": "tpl",
      "level": 2
+    },
+    "sub": {
+     "type": "tpl",
+     "level": 2
+    },
+    "burst": {
+     "type": "int",
+     "level": 2
+    },
+    "look": {
+     "type": "word:flat",
+     "level": 2
     }
    }
   },

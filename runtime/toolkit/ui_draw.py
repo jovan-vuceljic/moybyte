@@ -1461,14 +1461,6 @@ def tile(cv, th, rect, icon, locked=False, r=8, desk=False):
             _DESK if desk else 0)
 
 
-def unlock(cv, th, cx, y, head, name, icon, burst=0, desk=False):
-    """The unlock banner (GAPS 47), centred on `cx` from `y`: the badge's
-    tile, `head` in `value` and its `name`; a secret's with confetti
-    `burst` (1..255) of the way out from its edges. Its card's rect."""
-    return _C.unlock(cv, _LOOK if th is _TH else _look(th), cx, y, head, name, icon, burst,
-                     _fs(cv), _DESK if desk else 0)
-
-
 def rec(cv, th, right, top, desk=False):
     """The recording indicator (moy_ui_rec), its top right corner at
     (`right`, `top`). Its box."""

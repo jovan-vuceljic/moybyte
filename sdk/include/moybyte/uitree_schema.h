@@ -52,6 +52,7 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_END "end"
 #define UT_LOOK_SHARE "share"
 #define UT_LOOK_BAND "band"
+#define UT_LOOK_FLAT "flat"
 #define UT_LOOK_TILE "tile"
 #define UT_LOOK_COUNT "count"
 #define UT_LOOK_WELL "well"
@@ -100,6 +101,7 @@ static inline int32_t ut_p_anchor(const char *v) { return ut_prop_("anchor", v);
 static inline int32_t ut_p_arg(const char *v) { return ut_prop_("arg", v); }
 static inline int32_t ut_p_at(const char *v) { return ut_prop_("at", v); }
 static inline int32_t ut_p_badge(const char *v) { return ut_prop_("badge", v); }
+static inline int32_t ut_p_burst(int32_t v) { return ut_prop_int_("burst", v); }
 static inline int32_t ut_p_buttons(const char *v) { return ut_prop_("buttons", v); }
 static inline int32_t ut_p_by(const char *v) { return ut_prop_("by", v); }
 static inline int32_t ut_p_capture(const char *v) { return ut_prop_("capture", v); }

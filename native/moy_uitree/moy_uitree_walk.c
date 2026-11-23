@@ -4295,14 +4295,34 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         break;
     }
     case UIT_TOAST: {
-        // its pill over the foot of the page's body, clear of its docked foot; its icon, else check
+        // its pill over the foot of the page's body, clear of its docked foot (look="flat": in
+        // flat fills, filling the page's room); its icon, else check. With sub=, the banner:
+        // its card centred at the top of the page's room, the icon's tile, the text in `value`
+        // over the sub line, a burst= of confetti from its edges (1..255 of the way out, 0
+        // none). Its rect is the pill's or the card's.
+        int desk = (e->flags & UIT_F_DESK) != 0, flat = (N->lit & TS_FLAT) != 0;
         uint32_t ni = 0, ai = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &ni) : 0;
-        int32_t out[4], lift = (e->flags & UIT_F_DESK) ? 12 : 6 * e->fs;
+        int32_t out[4], lift = flat ? 0 : desk ? 12 : 6 * e->fs;
         a1 = text(e, k, 0, model, row, &n1);
         if (!n1)
             break;
-        moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3] - lift);
-        moy_ui_api_toast(c, s, sspan(e, a1, n1), sspan(e, ai, ni), 0, out);
+        if (N->t_value >= 0) {
+            a2 = text(e, k, 1, model, row, &n2);
+            int32_t burst = N->t_aux >= 0 ? int_of(e, N->t_aux, model, row, 0) : 0;
+            static const uint8_t check[] = "check";
+            moy_ui_span_t ic = ni ? sspan(e, ai, ni) : (moy_ui_span_t){check, 5};
+            moy_ui_box_t b = {0, 0, 0, 0};
+            c->fl.dirty = 1;            // over the page, whole (as the pill)
+            c->fl.top = 1;
+            moy_ui_unlock(s, e->rect[0] + e->rect[2] / 2, e->rect[1], sspan(e, a1, n1), sspan(e, a2, n2),
+                          moy_ui_icon_slot(ic.p, ic.n), moy_ui_icon_glyph(ic.p, ic.n),
+                          burst < 0 ? 0 : burst > 255 ? 255 : burst, e->fs, desk, &b);
+            out[0] = b.x, out[1] = b.y, out[2] = b.w, out[3] = b.h;
+        } else {
+            moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3] - lift);
+            moy_ui_api_toast(c, s, sspan(e, a1, n1), sspan(e, ai, ni), flat, out);
+        }
+        put_rect(e, k, out);
         break;
     }
     case UIT_BUBBLE:

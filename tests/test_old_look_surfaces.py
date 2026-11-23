@@ -248,13 +248,13 @@ def test_the_loading_pill_says_what_opens_over_its_card(tmp_path, monkeypatch):
     ws = no_unlock_banner(build_ws(tmp_path))
     _frames(ws)
     sel = ws.launcher.selected()
+    import console_notices
     said = []
-    real = ui.toast
-    monkeypatch.setattr(ui, "toast", lambda t, k="check", o=None: (said.append((t, k, o)),
-                                                                   real(t, k, o))[1])
+    real = ws.notices.paint_banner
+    monkeypatch.setattr(ws.notices, "paint_banner", lambda *a: (said.append(a), real(*a))[1])
     ws._draw_loading_toast()
-    text, kind, o = said[-1]
-    assert text == "Opening %s…" % sel["title"] and o == {"flat": True}
+    which, _rect, text, _sub, _kind = said[-1]
+    assert which == console_notices.LOADING and text == "Opening %s…" % sel["title"]
     grid = ws.launcher_layer.grid
     card = grid.tile_rect(grid.sel)
     x, y, w, h = ws._loading_rect

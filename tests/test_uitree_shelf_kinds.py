@@ -456,3 +456,75 @@ def build():
     chip, _ = run(tmp_path, build.replace("SWATCH", 'swatch="#FF004D"'), config=DESK,
                   name="chip_on")
     assert plain[0].buf != chip[0].buf
+
+
+def test_a_toast_with_a_sub_line_is_a_banner_and_a_flat_one_fills_its_room(tmp_path):
+    """sub= draws the banner's card (its text over the sub line, a burst=
+    of confetti) where the pill drew; look="flat" draws the pill in flat
+    fills; neither takes the foot's stop."""
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        ui.label("{text}")
+        with ui.foot():
+            ui.button("flip")
+        ui.toast("Unlocked", sub="{text}", icon="check", burst="{n}", shown="on")
+        ui.toast("Opening", icon="play", look="flat", shown="!on")
+
+
+def more():
+    s.n = 128
+    s.text = "Two"
+
+
+ui.action("more", "More", more, keys=("m",))
+'''
+    fs, app = run(tmp_path, build, ["k:a", "key:m"], boxes=["flip"])
+    assert len({f.buf for f in fs}) == len(fs), "the flat pill, the banner, its burst and its words each draw"
+    assert fs[0].state == fs[1].state, [f.state for f in fs]
+    assert app.engine.focus_key == "flip"
+
+
+def test_a_toast_s_look_is_flat_alone(tmp_path):
+    import pytest
+    import uitree as S
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        ui.toast("Opening", look="round")
+'''
+    with pytest.raises(S.UIError):
+        run(tmp_path, build)
+
+
+LUA_BANNER = '''ui.app("Banner", { icon = "getcarts" })
+local s = ui.state({ on = false, n = 0, sub = "Line two" })
+ui.action("flip", "Flip", function() s.on = not s.on; s.n = 200 end)
+ui.page("Banner", function()
+  ui.label("Banner")
+  ui.foot(function() ui.button("flip") end)
+  ui.toast("Unlocked", { sub = "{sub}", icon = "check", burst = "{n}", shown = "on" })
+  ui.toast("Opening", { icon = "play", look = "flat", shown = "!on" })
+end)
+'''
+
+
+def test_the_lua_front_makes_a_banner_and_a_flat_toast(tmp_path):
+    """A Lua page's toast with sub=, burst= and look="flat": built, lowered
+    and drawn on the C engine; Flip swaps the flat pill for the banner."""
+    import test_uitree_lua as L
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    L._cart(carts, "Banner", LUA_BANNER)
+    ws, drv, frame, open_cart = L._console(carts)
+    open_cart(ws, "Banner")
+    for _ in range(4):
+        frame()
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    before = bytes(drv.rgb888())
+    drv.press("a")
+    for _ in range(4):
+        frame()
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    assert bytes(drv.rgb888()) != before
