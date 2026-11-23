@@ -179,7 +179,8 @@ class AppHost:
         moved = x != self.px or y != self.py
         self.px = x
         self.py = y
-        self.over = p is not None and bool(getattr(p, "hovers", False)) and not down
+        self.over = (p is not None and bool(getattr(p, "hovers", False)) and not down
+                     and bool(getattr(p, "touched", True)))     # (one nothing moved is nowhere)
         if self.over:
             self._gx = p.x              # where the console's pointer was as the page saw it
             self._gy = p.y
