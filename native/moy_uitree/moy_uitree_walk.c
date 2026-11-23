@@ -339,7 +339,9 @@ static void fire(uit_t *e, int a, int k, int model, int row, const char *how)
     uit_buf_free(&b);
 }
 
-void uit_cur_moved(uit_t *e, int node, const char *v, size_t n, const char *why)
+// A list's cur written to row key `v`; `user` where a user's move put it there (focus from one
+// of its rows to another, or the list's own keys or press), the one move its changed= runs on.
+void uit_cur_moved(uit_t *e, int node, const char *v, size_t n, const char *why, int user)
 {
     int ck = NODE(node)->cur;
     uit_slot_t *S = &e->slots[ck];
@@ -360,7 +362,7 @@ void uit_cur_moved(uit_t *e, int node, const char *v, size_t n, const char *why)
     uit_buf_free(&b);
     uit_event(e, UIT_EV_WRITE, ck, -1, -1, NULL, 0);
     int ch = NODE(node)->changed;
-    if (ch >= 0) {
+    if (ch >= 0 && user) {
         int m = NODE(node)->slot, r = uit_row_find(e, m, v, n);
         if (r >= 0) {
             uit_buf_t s = {0};
@@ -445,7 +447,7 @@ void uit_after_removal(uit_t *e, int node)
     uit_buf_repr(&q, cur, cn);
     snprintf(why, sizeof why, "removal of %s", q.p);
     uit_buf_free(&q);
-    uit_cur_moved(e, node, nxt ? nxt : "", nxt ? strlen(nxt) : 0, why);
+    uit_cur_moved(e, node, nxt ? nxt : "", nxt ? strlen(nxt) : 0, why, 0);
     UIT_FREE(e->slots[N->cur].sync);   // focus follows cur onto that row
     e->slots[N->cur].sync = NULL;
     e->slots[N->cur].sync_set = 1;
@@ -1753,7 +1755,7 @@ static void draw_carousel(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
     if (N->cur >= 0) {
         const uit_slot_t *C = &e->slots[N->cur];
         if (gn != C->sn || memcmp(gk, C->s ? C->s : "", gn))
-            uit_cur_moved(e, k, gk, gn, "carousel");
+            uit_cur_moved(e, k, gk, gn, "carousel", 1);
     }
     id_put(e, k, m, got, key);
     if (out[1] && cd >= 0 && NODE(cd)->act >= 0 && uit_act_can(e, NODE(cd)->act, m, got))
@@ -1894,7 +1896,7 @@ static void draw_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     if (N->cur >= 0) {
         const uit_slot_t *C = &e->slots[N->cur];
         if (gn != C->sn || memcmp(gk, C->s ? C->s : "", gn))
-            uit_cur_moved(e, k, gk, gn, "cells");
+            uit_cur_moved(e, k, gk, gn, "cells", 1);
     }
     id_put(e, k, m, sel, key);
     if (out[1] && cd >= 0 && NODE(cd)->act >= 0 && uit_act_can(e, NODE(cd)->act, m, sel))
@@ -2018,7 +2020,7 @@ static void draw_desk_shelf(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, i
     if (N->cur >= 0) {
         const uit_slot_t *C = &e->slots[N->cur];
         if (gn != C->sn || memcmp(gk, C->s ? C->s : "", gn))
-            uit_cur_moved(e, k, gk, gn, "carousel");
+            uit_cur_moved(e, k, gk, gn, "carousel", 1);
     }
     id_put(e, k, m, sel, key);
     if (out[1] && cd >= 0 && NODE(cd)->act >= 0 && uit_act_can(e, NODE(cd)->act, m, sel))
@@ -3016,7 +3018,7 @@ static void draw_table(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     if (N->cur >= 0) {
         const uit_slot_t *C = &e->slots[N->cur];
         if (gn != C->sn || memcmp(gk, C->s ? C->s : "", gn))
-            uit_cur_moved(e, k, gk, gn, "table");
+            uit_cur_moved(e, k, gk, gn, "table", 1);
     }
     id_put(e, k, m, got, key);
     if (out[1] && N->on >= 0)
@@ -4693,8 +4695,17 @@ static void focus_after(uit_t *e, moy_ui_ctx_t *c, int moved, const char *ahead,
         return;
     const char *v = I->row >= 0 ? row_key(e, m, I->row) : "";
     const uit_slot_t *S = &e->slots[NODE(lst)->cur];
-    if (strlen(v) != S->sn || memcmp(v, S->s ? S->s : "", S->sn))
-        uit_cur_moved(e, lst, v, strlen(v), "focus");
+    if (strlen(v) != S->sn || memcmp(v, S->s ? S->s : "", S->sn)) {
+        // focus arriving from outside the list writes its cur and is no move of it
+        int from = -1;
+        if (last && last->gen == e->gen && last->row >= 0)
+            for (int k = last->node; k >= 0 && k != (int)UIT_NONE; k = NODE(k)->parent)
+                if (UIT_IS_LIST(NODE(k)->kind)) {
+                    from = k;
+                    break;
+                }
+        uit_cur_moved(e, lst, v, strlen(v), "focus", from == lst);
+    }
 }
 
 // -- the frame ----------------------------------------------------------------------------

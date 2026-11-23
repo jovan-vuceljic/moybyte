@@ -853,3 +853,38 @@ def test_a_text_views_gutter_numbers_its_lines_on_the_c_engine(tmp_path):
         shots[name] = bytes(drv.rgb888())
         ws.spine.exit_to_caller()
     assert shots["Plain"] != shots["Numbered"]
+
+
+def test_a_lists_changed_runs_on_a_users_move_only_on_the_c_engine(tmp_path):
+    """A list's changed= runs where the user moves its cursor from one of
+    its rows to another, never where focus arrives on it from the button
+    above, as it does for a Python app."""
+    from runtime import host_app
+    from runtime.host import moy_log
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Moves", 'ui.app("Moves", { icon = "calc" })\n'
+          'local s = ui.state { items = ui.model { key = "id", id = "" }, cur = ui.row_of("items") }\n'
+          'ui.hook("opened", function() s.items:set({ { id = "a" }, { id = "b" }, { id = "c" } }) end)\n'
+          'ui.action("top", "Top", function() end)\n'
+          'ui.action("go", "Go", function(row) end, { takes = "row" })\n'
+          'ui.action("moved", "Moved", function(row) end, { takes = "row" })\n'
+          'ui.page("p", function()\n'
+          '  ui.button("top")\n'
+          '  ui.rows("items", { cur = "cur", changed = "moved" }, function() ui.link("go", { label = "{.id}" }) end)\n'
+          'end)\n')
+    ws, drv, frame, open_cart = _console(carts)
+    seq = moy_log.next()
+    open_cart(ws, "Moves")
+    for _ in range(4):
+        frame()
+    for k in ("down", "down", "up"):
+        drv.press(k)
+        frame()
+        frame()
+    assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    lines = [r[4].split("[trace] ", 1)[1] for r in moy_log.read(seq, 4000) if "[trace] " in r[4]]
+    seen = [" ".join(l.split()[1:]) for l in lines if l.split()[1:3] in (["action", "moved"], ["state", "cur"])]
+    assert seen == ["state cur '' -> 'a' (focus)",
+                    "state cur 'a' -> 'b' (focus)", "action moved from rows 'items' cur moved",
+                    "state cur 'b' -> 'a' (focus)", "action moved from rows 'items' cur moved"], lines

@@ -486,7 +486,7 @@ const char *uit_label_word(const uit_t *e, int table, const char *key, size_t n)
 // moy_uitree_walk.c
 int uit_act_can(uit_t *e, int a, int model, int row);
 int uit_shown(uit_t *e, int node, int model, int row);
-void uit_cur_moved(uit_t *e, int node, const char *v, size_t n, const char *why);
+void uit_cur_moved(uit_t *e, int node, const char *v, size_t n, const char *why, int user);
 int uit_model_of(uit_t *e, int node);
 // The rows node `node` is in (itself included), or -1.
 int uit_list_of(const uit_t *e, int node);

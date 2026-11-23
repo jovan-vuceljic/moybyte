@@ -1170,22 +1170,24 @@ def test_the_palette_by_keys_alone(blocks_desk):
 
 
 def test_the_sounds_and_the_song_by_keys_alone(desk):
-    """The Sounds list's arrows and A pick a sound or the Song; the Song's
-    arrows move along its slots."""
+    """The Sounds list's arrows pick the sound or the Song they move onto,
+    and the keys arriving on the list pick nothing; the Song's arrows move
+    along its slots."""
     ws, drv, d, me, snd = _sound(desk)
+    was = (me.view, me.sfx_idx)
     d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("sounds"))
     ws.mark_dirty()
     drv.frame(DT)
+    drv.frame(DT)
+    assert (me.view, me.sfx_idx) == was
     pg = d.part("sounds").page
     for _ in range(4):
         if pg._focus_key() == "1/snd":
             break
         _arrow(drv, "down")
-    _arrow(drv, "a")
     assert me.view == me.SFX_VIEW and me.sfx_idx == 1
     for _ in range(4):
         _arrow(drv, "up")
-    _arrow(drv, "a")
     assert me.view == me.SONG_VIEW
     me.add_slot()
     me.select_cursor(0)

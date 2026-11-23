@@ -150,6 +150,11 @@ def _draw_sheet(cv, x, y, w, h):
     uitree_app.env().draw_sheet(cv, x, y, w, h)
 
 
+def snd_moved(row):
+    """The keys moved onto a sounds row: it is picked."""
+    _act("sound", row.k)
+
+
 def snd_keys(i, row):
     """Enter on a sounds row picks it."""
     if i.pressed("a"):
@@ -231,6 +236,7 @@ ui.hook("sheet_press", sheet_press, takes="pointer")
 ui.hook("slots_press", slots_press, takes="pointer")
 ui.hook("map_press", map_press, takes="pointer")
 ui.hook("snd_press", snd_press, takes="pointer")
+ui.hook("snd_moved", snd_moved, takes="row")
 ui.hook("cats_press", cats_press, takes="pointer")
 ui.hook("item_press", item_press, takes="pointer")
 ui.action("tag_set", "Tag", tag_set)
@@ -321,7 +327,7 @@ def _palette():
 def _sounds():
     ui.empty("No sounds", icon="music", lines=["This cart has no sound bank"], shown="!bank")
     with ui.scroll("snds_view", shown="bank"):
-        with ui.rows("snds", cur="snd"):
+        with ui.rows("snds", cur="snd", changed="snd_moved"):
             ui.canvas("snd", _draw_snd, h="{row_h}", keys=snd_keys, pointer="snd_press", mark=False,
                       hint="Pick")
 

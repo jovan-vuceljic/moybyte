@@ -432,9 +432,9 @@ Python's alone.
 
 | kind | is | key props |
 |---|---|---|
-| `rows(model)` | a model's rows, each drawing the body (Python `with`, Lua the function) | `cur=` the `row_of` focus writes, `current=` the row marked, `check=`, `empty=`, `by=` with cases, `filter=`, `group=` |
+| `rows(model)` | a model's rows, each drawing the body (Python `with`, Lua the function) | `cur=` the `row_of` focus writes, `changed=` run with the row where the user moves it from one row to another (focus arriving from elsewhere writes `cur=` alone), `current=` the row marked, `check=`, `empty=`, `by=` with cases, `filter=`, `group=` |
 | `cards(model)`, `card(action)` | rows as cards; `card` is the body | `cur=`, `current=`, `w=`, `h=`, `cols=`, `flow=`, `look=` (`carousel`, `shelf`, `icons`); a card's `label=`, `sub=`, `image=`, `badge=` |
-| `table(model)`, `col(text)` | rows as a table, one `col` a column | `cols=` the header, `cur=`, `on=`, `empty=`; `row=` (a height, or an int state holding one) with one canvas child that draws each row |
+| `table(model)`, `col(text)` | rows as a table, one `col` a column | `cols=` the header, `cur=`, `changed=` (as a rows' list's), `on=`, `empty=`; `row=` (a height, or an int state holding one) with one canvas child that draws each row |
 
 **Over the page**
 
