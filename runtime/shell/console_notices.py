@@ -28,8 +28,10 @@ import achievements_ui as _ach_ui
 import achievements as _ach
 
 
-# The banners' pages (`Notices.paint_banner`): each its own, so each keeps its words.
-UNLOCK, NOTICE, NOTE, LOADING = 0, 1, 2, 3
+# The banners' pages (`Notices.paint_banner`) and the overlays' (`paint_overlay`):
+# each its own, so each keeps its words.
+UNLOCK, NOTICE, NOTE, LOADING, TIP, SAVER = 0, 1, 2, 3, 4, 5
+_PAGES = 6
 
 
 STOP_POLL_MS = 50               # how often Stop & play looks for the music's end
@@ -40,6 +42,15 @@ def _in_box(px, py, b):
     return b is not None and b[0] <= px < b[0] + b[2] and b[1] <= py < b[1] + b[3]
 
 
+def _put(st, name, v):
+    """State `st`'s `name` written where it is another value: whether it moved."""
+    if st._v[name] == v:
+        return False
+    st._v[name] = v
+    st._ver[name] += 1
+    return True
+
+
 def _desk_class():
     return _lb.metric_class() == _lb.DESK
 
@@ -48,11 +59,11 @@ class Notices:
 
     def __init__(self, ws):
         self.ws = ws
-        self._pages = [None, None, None, None]     # the banners' pages (`paint_banner`)
+        self._pages = [None] * _PAGES   # the banners' and the overlays' pages (`_page`)
         self._ctx = None                # their toolkit context
         self._was = [0, 0, 0, 0]        # the toolkit's target, given back after a paint
-        self._rects = [None, None, None, None]     # each banner's room, kept while it stands
-        self._cards = [None, None, None, None]     # ...and its card, kept while its words do
+        self._rects = [None] * _PAGES   # each page's room, kept while it stands
+        self._cards = [None] * _PAGES   # ...and its toast's rect, kept while its words do
 
     def load_achievements(self):
         """(Re)start the achievements process (runtime/system/achievements.py,
@@ -166,59 +177,41 @@ class Notices:
         return True
 
     def room(self, which, x, y, w, h):
-        """Banner `which`'s room (x, y, w, h), the tuple kept while it stands:
-        a frame under a banner allocates nothing."""
+        """Page `which`'s room (x, y, w, h), the tuple kept while it stands:
+        a frame under a banner or an overlay allocates nothing."""
         r = self._rects[which]
         if r is None or r[0] != x or r[1] != y or r[2] != w or r[3] != h:
             r = self._rects[which] = (x, y, w, h)
             self._cards[which] = None
         return r
 
-    def paint_banner(self, which, rect, head, sub="", icon="", burst=0):
-        """Banner `which` (UNLOCK, NOTICE, NOTE: `banner_ui.banner`; LOADING:
-        `banner_ui.loading`) painted on the system canvas in `rect`, its
-        words written where they are others: a banner's card at the top
-        centre of `rect`, the loading pill filling it. Its card's rect, or
-        None where it drew none."""
-        import banner_ui
-        ws = self.ws
+    def _page(self, which):
+        """Page `which`, made at its first paint: a banner's (`banner_ui`) or
+        an overlay's (`overlay_ui`), bare, with no keys (none is a stop)."""
         pg = self._pages[which]
         if pg is None:
             import uitree_editor
-            pg = uitree_editor.page(banner_ui.loading if which == LOADING else banner_ui.banner,
-                                    None, None)
-            pg._damage = banner_ui.NoDamage()
+            if which <= LOADING:
+                import banner_ui as m
+                build = m.loading if which == LOADING else m.banner
+            else:
+                import overlay_ui as m
+                build = m.tip if which == TIP else m.saver
+            pg = uitree_editor.page(build, None, None)
+            pg._damage = m.NoDamage()
             pg.bare = True
-            pg.band = False             # no keys: a banner is no stop
+            pg.band = False
             self._pages[which] = pg
         pg._bind()
-        v, ver = banner_ui.s._v, banner_ui.s._ver
-        moved = False
-        if v["head"] != head:
-            v["head"] = head
-            ver["head"] += 1
-            moved = True
-        if v["sub"] != sub:
-            v["sub"] = sub
-            ver["sub"] += 1
-            moved = True
-        if v["icon"] != icon:
-            v["icon"] = icon
-            ver["icon"] += 1
-            moved = True
-        if v["burst"] != burst:
-            v["burst"] = burst
-            ver["burst"] += 1
-            moved = True
-        if moved:
-            pg.committed()
-            self._cards[which] = None
-        cv = ws.sys_canvas
-        th = ws.theme_colors
-        desk = _desk_class()
+        return pg
+
+    def _paint(self, pg, cv, th, rect):
+        """Page `pg` painted on `cv` in `rect`, in theme colours `th`, the
+        toolkit's target given back after it."""
         ctx = self._ctx
         if ctx is None:
             ctx = self._ctx = _ui_draw.ui_context()
+        desk = _desk_class()
         t = _ui_draw.UI_TARGET
         was = self._was
         was[0] = t[0]                   # (one by one: a four-way unpack builds a tuple)
@@ -233,6 +226,47 @@ class Notices:
             t[1] = was[1]
             t[2] = was[2]
             t[3] = was[3]
+
+    def put_overlay(self, which, name, v):
+        """Overlay `which`'s word `name` (of `overlay_ui.s`) written where it
+        is another value."""
+        import overlay_ui
+        pg = self._page(which)          # (made first: a page made binds its state anew)
+        if _put(overlay_ui.s, name, v):
+            pg.committed()
+            self._cards[which] = None
+
+    def paint_overlay(self, which, cv, rect, th=None):
+        """Overlay `which` (TIP, SAVER: `overlay_ui`'s pages, their words
+        `put_overlay`'s) painted on `cv` in `rect` in theme colours `th` (the
+        theme's where None). Its toast's rect where it has one (TIP's), else
+        None."""
+        pg = self._page(which)
+        self._paint(pg, cv, th if th is not None else self.ws.theme_colors, rect)
+        if which != TIP:
+            return None
+        card = self._cards[which]
+        if card is None:
+            card = self._cards[which] = pg.rect_of("tip")
+        return card
+
+    def paint_banner(self, which, rect, head, sub="", icon="", burst=0):
+        """Banner `which` (UNLOCK, NOTICE, NOTE: `banner_ui.banner`; LOADING:
+        `banner_ui.loading`) painted on the system canvas in `rect`, its
+        words written where they are others: a banner's card at the top
+        centre of `rect`, the loading pill filling it. Its card's rect, or
+        None where it drew none."""
+        import banner_ui
+        pg = self._page(which)
+        st = banner_ui.s
+        moved = _put(st, "head", head)
+        moved = _put(st, "sub", sub) or moved
+        moved = _put(st, "icon", icon) or moved
+        moved = _put(st, "burst", burst) or moved
+        if moved:
+            pg.committed()
+            self._cards[which] = None
+        self._paint(pg, self.ws.sys_canvas, self.ws.theme_colors, rect)
         card = self._cards[which]
         if card is None:                # the page's toast, by its key
             card = self._cards[which] = pg.rect_of("banner")

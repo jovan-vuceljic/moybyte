@@ -86,6 +86,7 @@ PORTED = (
     "home_strip_ui",
     "popover_strip_ui",
     "banner_ui",
+    "overlay_ui",
 )
 
 
