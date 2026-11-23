@@ -4391,13 +4391,20 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
             empty_line(e, s, &lines, e->scratch.p + at, n);
         }
         int32_t m[4] = {c->has_at ? c->at.x : c->page.x, 0, c->has_at ? c->at.w : c->page.w, 0};
-        // on the desk a sixth of the page down, as its column of words
         // on the desk a sixth of the page down, as its column of words, as far as the room under
         // it holds what it says and its controls; where they run past the view even at the
         // top, no disc (an empty icon)
         int32_t ev[5];
         moy_ui_span_t icon = ni ? sspan(e, ai, ni) : span_of("warn", 4);
-        if (moy_ui_api_view(c, ev)) {
+        if (c->has_at) {
+            // placed at its rect: no disc where what it says and its controls would run past it
+            moy_ui_box_t mb = {0, 0, c->at.w, 0};
+            const uint8_t *lp = (const uint8_t *)(lines.p ? lines.p : "");
+            int desk = (e->flags & UIT_F_DESK) ? MOY_UI_DESK : 0;
+            if (moy_ui_empty(s, mb, 0, -1, sspan(e, a1, n1), lp, lines.n, e->fs, desk, 0) +
+                    empty_controls_h(e, k, model, row) > c->at.h)
+                icon = span_of("", 0);
+        } else if (moy_ui_api_view(c, ev)) {
             moy_ui_box_t mb = {0, 0, (int16_t)ev[3], 0};
             moy_ui_span_t t = sspan(e, a1, n1);
             const uint8_t *lp = (const uint8_t *)(lines.p ? lines.p : "");
@@ -4844,6 +4851,7 @@ static int32_t fixed_h(uit_t *e, int k)
     case UIT_STATUS:
         return status_h(e);
     case UIT_HINTS:                     // a hints row: a fill of its stack
+    case UIT_EMPTY:                     // an empty: what its stack leaves, its words in it
         return -1;
     case UIT_RULE:                      // a rule across: its line
         return (e->flags & UIT_F_DESK) ? 1 : e->fs;

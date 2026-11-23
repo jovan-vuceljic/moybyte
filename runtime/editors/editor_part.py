@@ -255,12 +255,7 @@ ui.action("song_play", "Play", lambda: _act("song", "play"), icon="run")
 
 
 def _none():
-    ui.empty("No actor picked", icon="scene", lines=["Tap one in the scene to change it"], shown="roomy")
-    with ui.row("none_title", pad=10, shown="!roomy"):
-        ui.label("No actor picked")
-        ui.row("none_gap", grow=True)
-    with ui.row("none_line", pad=10, shown="!roomy"):
-        ui.label("Tap one in the scene to change it", tone="dim", wrap="word", lines=3)
+    ui.empty("No actor picked", icon="scene", lines=["Tap one in the scene to change it"])
 
 
 def _picked():

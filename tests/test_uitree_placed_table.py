@@ -3,7 +3,8 @@
 canvas child draws each row in view, told its row; a grid takes its w= and
 h= at the top of its cell; a size="text" label is as wide as its text; a
 rule is its line; a popover hung from a node narrower than it hangs under
-that node, w= wide, inside the page."""
+that node, w= wide, inside the page; an empty fills its stack and drops its
+disc where it would run past it."""
 import ast
 import sys
 from pathlib import Path
@@ -89,3 +90,34 @@ def test_a_popover_hangs_under_the_narrow_node_it_names_inside_the_page(tmp_path
     assert card is not None, "the popover drew no card"
     assert card[1] >= b[1] + b[3] and card[2] >= 170, (card, b)
     assert card[0] + card[2] <= ws.sys_canvas.w, card
+
+
+def _empty_at(top):
+    """The page's room and the button's rect under a placed empty, the
+    canvas over it `top` pixels tall."""
+    import uitree_c
+    import uitree_placed_empty as F
+    F.TOP[0] = top
+    seen = {}
+    cls = F.layer(uitree_c.CEditorEngine)
+
+    def opened(ws):
+        seen["app"] = P.host(ws, cls)
+
+    def probe(ws):
+        e = seen["app"].engine
+        return repr((e.rect, e.rect_of("head"), e.rect_of("go")))
+    f = P.frames("p4_1024x600_fs2_windowed", P.Surface(opened, probe=probe), [])[0]
+    return ast.literal_eval(f.state)
+
+
+def test_a_placed_empty_fills_its_stack_and_drops_its_disc_where_it_would_run_past():
+    """With room the empty's disc stands over its words; where the disc
+    would push its button past the page, the disc goes and the button
+    stays inside."""
+    page, head, tall = _empty_at(1)
+    _page, head2, short = _empty_at(150)
+    bottom = page[1] + page[3]
+    assert tall[1] + tall[3] <= bottom and short[1] + short[3] <= bottom, (page, tall, short)
+    with_disc, without = tall[1] - (head[1] + head[3]), short[1] - (head2[1] + head2[3])
+    assert with_disc - without >= 48, (with_disc, without)

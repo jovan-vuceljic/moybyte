@@ -405,7 +405,7 @@ Python's alone.
 | `status(text)` | a status line, cut at its `" · "` fields (no Lua) | |
 | `rule()` | a divider | |
 | `note(lines)` | a card in the page's flow | `icon=` (`"warn"` in the danger tone) |
-| `empty(title)` | what a page with nothing on it says; controls built in it stand under it | `icon=`, `lines=` |
+| `empty(title)` | what a page with nothing on it says; controls built in it stand under it; where its disc would push them past its room (its view, a placed page's stack), its words stand without it | `icon=`, `lines=` |
 | `toast(text)` | a pill over the page's foot | `icon=` |
 | `bubble(text)` | a chat message, a stop | `side="in"`/`"out"`, `head=`, `status=`, `signal=`, `tone="failed"`, `lines=`, `on=`, `cut=` |
 | `text_view(name)` | read-only lines of a text state or a model | `wrap=`, `follow=`, `syntax=`, `face=`, `look="well"`, `gutter=` |
