@@ -538,6 +538,7 @@ class BarLayer:
         # strip draw and bar tap are no-ops.
         self.held = False
         self._lent_last = [None, None]  # ui_draw.bar_lent's last answer, and _lent's
+        self._app_zones = {}            # app id -> the row its page lends (`_app_zone`)
         self._k8 = [None, None, None, 0]   # key[8]'s title and lent, their pair, its count
         self._cr_last = None            # content_rect's last (x, y, w, h)
         self._cr_game = [0, 0, None, None]   # ...and a game zone's: w, h, bars, rect
@@ -692,8 +693,22 @@ class BarLayer:
         zone (its `bar_zone`, `uitree_editor.BarZone`), which replays it
         and takes its taps through the app's engine."""
         o = self._zone_app(where)
+        if where == "app" and o is not None:
+            return self._app_zone(o)
         z = getattr(o, "bar_zone", None)
         return o if z is None else z
+
+    def _app_zone(self, app):
+        """The zone of registered app `app`, whose page lends the bar a row
+        (`LENDS_BAR`): the shell's replay of it (`uitree_editor.BarZone`,
+        made at the first ask and kept), after the title the app names
+        (`bar_title`)."""
+        z = self._app_zones.get(app.id)
+        if z is None:
+            from uitree_editor import BarZone
+            z = self._app_zones[app.id] = BarZone(app.engine, ZoneLook(self.ws, "app"), host=app)
+        z.back_title = app.bar_title        # (a new one moves its zone_gen)
+        return z
 
     def _zone_app(self, where):
         ws = self.ws
@@ -703,6 +718,10 @@ class BarLayer:
             return ws.projects_layer
         if where == "menu":
             return ws.editor_app
+        if where == "app":
+            # a registered app whose page lends the bar a row (`_app_zone`)
+            app = ws.app(ws.wm.top_kind())
+            return app if getattr(app, "LENDS_BAR", False) else None
         if STRIP_OF.get(where) == where:  # a registered app's own strip
             return ws.app(where)          # (Settings', the task manager's)
         return None
@@ -1466,7 +1485,14 @@ class BarLayer:
         if zone is None or (only is not None and not _meets(zone, only)):
             return
         back = self.draws_back(where)
+        owner = self._zone_owner(where)
         if tool:
+            if back and owner is not None:
+                # the title, then the row the app's page lends (`BarZone`)
+                self._paint_back_title(cv, self._title_zone(where, zone), self._title(where),
+                                       bar, game)
+                owner.draw_zone(cv, self._row_zone(where, zone, bar, game))
+                return
             if back:
                 end = self._paint_back_title(cv, zone, self._title(where), bar, game)
                 self._paint_lent_tools(cv, where, end, bar, game)
@@ -1477,7 +1503,6 @@ class BarLayer:
             _ch.replay(mp.chrome_strip_cell("title", zone, 0, dy, self._title(where), False),
                        cv, ws)
             return
-        owner = self._zone_owner(where)
         if owner is not None:
             title = getattr(owner, "back_title", None) if back else None
             if title:
@@ -1910,6 +1935,28 @@ class BarLayer:
             _ui_draw.print_font(was)
         return end
 
+    # The room between an app's title and the row its page lends, at unit 1.
+    ROW_GAP = 10
+
+    def _title_zone(self, where, zone):
+        """The part of `where`'s zone the back chevron and the app's title
+        take when its page lends the bar a row: the zone less the room the
+        row needs as icons (`zone_need`), so the title is cut before a cell
+        of the row is."""
+        need = self._zone_owner(where).zone_need(zone[3])
+        if not need:
+            return zone
+        gap = self.ROW_GAP * _layout_base.unit()
+        return (zone[0], zone[1], max(0, zone[2] - need - gap), zone[3])
+
+    def _row_zone(self, where, zone, bar, game):
+        """Where the row an app's page lends the bar (its `BarZone`) stands,
+        in bar coordinates: after the back chevron's title, to the zone's
+        end. The draw, the key walk and a tap take it from here."""
+        tz = self._title_zone(where, zone)
+        x = self._title_end(where, tz, bar, game) + self.ROW_GAP * _layout_base.unit()
+        return (x, zone[1], max(0, zone[0] + zone[2] - x), zone[3])
+
     def _paint_cell(self, cv, mp, where, name, r, text, cs, dy, across, game):
         """One OS widget's cell, through the kernel's painter."""
         ws = self.ws
@@ -2205,6 +2252,11 @@ class BarLayer:
         `page_title()`), the running cart's or the open project's, else the
         surface's name."""
         ws = self.ws
+        if where == "app":
+            z = self._zone_owner(where)
+            t = z.back_title if z is not None else None
+            if t:
+                return t                    # the title its page's row stands after
         lent = self.lent(where)
         if lent is not None and lent[0]:
             return lent[0]
@@ -2529,7 +2581,11 @@ class BarLayer:
                 if back:
                     rects.append(((zone[0], zone[1], self._back_w(game), zone[3]), None))
                 if where in ("tool", "app"):
-                    if back:
+                    if back and owner is not None:
+                        box = (0, 0, bar[1][2], bar[1][3])
+                        for r in owner.zone_targets(self._row_zone(where, zone, box, game)):
+                            rects.append((r, None))
+                    elif back:
                         box = (0, 0, bar[1][2], bar[1][3])
                         end = self._title_end(where, zone, box, game)
                         for hit, _i, off, _name, _r in self._lent_rects(where, end, box, game):
@@ -2716,6 +2772,8 @@ class BarLayer:
                 self.go_back(where)
                 return True
             box = (0, 0, bar[1][2], bar[1][3])
+            if where in ("tool", "app") and owner is not None:
+                return bool(owner.zone_tap(px, py, self._row_zone(where, zone, box, game)))
             end = self._title_end(where, zone, box, game) if where in ("tool", "app") else 0
             for hit, i, off, _name, _r in self._lent_rects(where, end, box, game):
                 if _in(px, py, hit):

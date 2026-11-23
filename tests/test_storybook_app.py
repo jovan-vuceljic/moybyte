@@ -156,6 +156,25 @@ def test_a_handheld_views_a_story_and_does_not_edit_it(tmp_path):
         "the story's slide at a quarter"
 
 
+def test_a_viewed_storys_bar_names_it_and_its_play_presents(tmp_path):
+    """The view page lends the bar Present (`ui.tools("bar", lend="bar")`),
+    drawn after the story's title: a tap on it presents from the slide in
+    view."""
+    ws, app = _handheld(tmp_path)
+    _key(ws, app, 0, "a")
+    _key(ws, app, 0, "right")
+    bl = ws.bar_layer
+    assert bl._title("app") == "The Brave Dragon"
+    bar = bl._packed("app")[0]
+    rect = bar[1]
+    row = bl._row_zone("app", bl.lent_zone("app", bar), (0, 0, rect[2], rect[3]), False)
+    r = ws.bar_layer._zone_owner("app").box("present", zone=row)
+    assert r is not None and r[0] > bl._title_end("app", bl.lent_zone("app", bar), rect, False)
+    assert bl.handle_bar_tap("app", rect[0] + r[0] + r[2] // 2, rect[1] + r[1] + r[3] // 2)
+    _frames(ws, 2)
+    assert app.show is not None and app.show["i"] == 1, "presented from the slide in view"
+
+
 def test_present_takes_the_glass_and_steps_through_taps(tmp_path):
     ws, app = _handheld(tmp_path)
     _key(ws, app, 0, "a")

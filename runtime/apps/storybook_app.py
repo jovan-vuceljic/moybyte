@@ -736,6 +736,8 @@ def _view():
     ui.canvas("view", draw_view, h=152, ground="panel", reads=["view"])
     ui.stepper("{count_word}", "prev", "next")
     ui.label("Edit stories on a desk board or the web", tone="dim", align="center")
+    with ui.tools("bar", lend="bar"):
+        ui.button("present", icon="play", alone=True)
 
 
 # -- the desk's editor (runtime/apps/story_edit.py holds its state and verbs) ---------
@@ -1247,6 +1249,7 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is
 
     APP_TITLE = "Storybook"
     APP_FOLDER = "moybyte.storybook.moy"
+    LENDS_BAR = True
     domain = "system"
 
     def __init__(self, ctx, names=None):
@@ -1681,10 +1684,8 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is
             ui.commit(self.engine)
         # a desk window's band says the editor's keys; the stories' page has none
         self.engine.band = not self.desk or self.page in BANDED
+        self.bar_title = self.page_title()    # the row lent after it: `_view`'s
         super().draw(dt)
-        if self.page == "view" and self.story is not None:
-            if _v.bar(self.story.title() or "Untitled", ("play",), (), True) == 0:
-                self._start(self.cur)
 
     # -- Present ------------------------------------------------------------------------
 

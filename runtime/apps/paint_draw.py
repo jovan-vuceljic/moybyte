@@ -30,33 +30,16 @@ from drawing_pages import shown, dot as _dot
 class PaintDraw:
     """Paint's draw half, PaintAppLayer's first base (see above)."""
 
-    def _lend(self):
-        """The bar this frame: the drawing's title, and on a handheld undo,
-        redo and the zoom (a viewed drawing's zoom and More)."""
-        lay = self.layout
-        if self.page == "show":
-            return
-        v = self.viewer
-        if v is not None:
-            got = ui.bar(shown(v.name), (_zoom_word(v.quarters()), "more"), (False, False))
-            if got == 0:
-                self._verb("zoom")
-            elif got == 1:
-                self._open("more")
-        elif lay.desk:
-            got = ui.bar(self.doc_title())
+    def _name_bar(self):
+        """The bar's title after its back chevron (the page's row after it,
+        `build`'s `tools lend="bar"`): the drawing's on a desk and viewed,
+        the page a drawing is sent from, else "Paint"."""
+        if self.page in ("game", "story"):
+            self.bar_title = "Put in a game" if self.page == "game" else "Put in a story"
+        elif self.page != "show" and (self.viewer is not None or self.layout.desk):
+            self.bar_title = self.doc_title()
         else:
-            d = self.doc
-            got = ui.bar("Paint", ("undo", "redo", _zoom_word(self._quarters())),
-                         (not d.history, not d.future, False))
-            if got == 0:
-                self._verb("undo")
-            elif got == 1:
-                self._verb("redo")
-            elif got == 2:
-                self._verb("zoom")
-        if got == ui.UP:
-            self.back()
+            self.bar_title = "Paint"
 
     def _lead(self):
         """The band's words before its keys: the tool (Pick's with the
@@ -490,9 +473,6 @@ class PaintDraw:
         toast over the canvas."""
         lay = self.layout
         game = self.page == "game"
-        if ui.bar("Put in a game" if game else "Put in a story", (), (), True) == ui.UP:
-            self.back()
-            return
         send = self._sent()
         got = send.draw(cv, th, lay.page, lay.desk, dt)
         if got is None:
