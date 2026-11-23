@@ -12,9 +12,15 @@ static const moy_sh_app_ops_t *const APPS[] = {&moy_sh_remote_app};
 #else
 extern const moy_sh_app_ops_t moy_sh_edit_app;
 extern const moy_sh_app_ops_t moy_sh_top_app;
+// vi and its names: moy_sh_edit.c, over edit's buffer
+extern const moy_sh_app_ops_t moy_sh_vi_app, moy_sh_vim_app, moy_sh_view_app, moy_sh_less_app,
+    moy_sh_more_app;
 static const moy_sh_app_ops_t python_app;
 
-static const moy_sh_app_ops_t *const APPS[] = {&moy_sh_edit_app, &python_app, &moy_sh_top_app};
+static const moy_sh_app_ops_t *const APPS[] = {
+    &moy_sh_edit_app, &python_app, &moy_sh_top_app, &moy_sh_vi_app, &moy_sh_vim_app,
+    &moy_sh_view_app, &moy_sh_less_app, &moy_sh_more_app,
+};
 #endif
 #define NAPPS ((int)(sizeof APPS / sizeof APPS[0]))
 
@@ -50,6 +56,18 @@ static void t_free(void *ctx, void *p) {
     a->free(a->actx, p);
 }
 
+// An app the heap had no room for says so, rather than ending with a bare 1
+// (to a session's standard error; a link's open has no session).
+static moy_sh_app_t *no_room(moy_sh_t *s, const char *name) {
+    if (s == NULL) {
+        return NULL;
+    }
+    char b[48];
+    int m = snprintf(b, sizeof b, "%s: out of memory\n", name);
+    moy_sh_fd_write(s, 2, b, (size_t)m < sizeof b ? (size_t)m : sizeof b - 1);
+    return NULL;
+}
+
 moy_sh_app_t *moy_sh_app_new(moy_sh_t *s, const moy_sh_app_heap_t *h, int cols, int rows,
                              int ctrl, moy_sh_app_run_fn run, void *ctx, int argc, char **argv,
                              int *status) {
@@ -60,7 +78,7 @@ moy_sh_app_t *moy_sh_app_new(moy_sh_t *s, const moy_sh_app_heap_t *h, int cols, 
     }
     moy_sh_app_t *a = h->alloc(h->ctx, sizeof *a);
     if (a == NULL) {
-        return NULL;
+        return no_room(s, argv[0]);
     }
     memset(a, 0, sizeof *a);
     a->ops = ops;
@@ -76,7 +94,7 @@ moy_sh_app_t *moy_sh_app_new(moy_sh_t *s, const moy_sh_app_heap_t *h, int cols, 
     a->st = h->alloc(h->ctx, ops->state ? ops->state : 1);
     if (a->st == NULL) {
         h->free(h->ctx, a);
-        return NULL;
+        return no_room(s, argv[0]);
     }
     memset(a->st, 0, ops->state ? ops->state : 1);
     if (ops->full) {
@@ -84,7 +102,7 @@ moy_sh_app_t *moy_sh_app_new(moy_sh_t *s, const moy_sh_app_heap_t *h, int cols, 
         if (a->t == NULL) {
             h->free(h->ctx, a->st);
             h->free(h->ctx, a);
-            return NULL;
+            return no_room(s, argv[0]);
         }
     }
     int r = ops->open(a, a->st, argc, argv);
