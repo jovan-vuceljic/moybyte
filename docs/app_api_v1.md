@@ -658,8 +658,8 @@ What no kind draws, an app draws in a `ui.canvas`. Its draw paints the rect
 the engine laid out, inside the frame, and writes no state:
 
 - **Python:** `draw(cv, x, y, w, h)`, `cv` the canvas; `ui.colors()`
-  answers the theme's colours there and `ui.text_size(text, scale)` a
-  text's size.
+  answers the theme's colours there and `ui.text_size(text, scale)` the
+  size a text covers through the canvas's `print` at `scale`.
 - **Lua:** `draw = function(x, y, w, h) ... end` in the props, drawing with
   the cart's own verbs (`rect`, `print`).
 - **C:** `ut_canvas(key, draw, pointer)`, `draw(x, y, w, h)`.

@@ -17,6 +17,7 @@ the class a manifest names); `Page` is a build hosted by a surface still
 drawn with today's verbs. Both are made on the C engine."""
 
 import moy_ui as _C
+import ui_font as _ui_font
 from layers import AppLayer
 from layout_base import bar_rows, content_of, ground_round, metric_class, DESK
 
@@ -38,6 +39,14 @@ class Engine(S.Builder):
     bare = False        # True: the host painted the page's ground (a popover's card), the page paints none
 
     close_root = None       # what ui.pop() on the first page does: a hosted page's host closes it
+
+    def query(self, name, *a):
+        """What a handler or a canvas's draw asks: a text's size in the font
+        a canvas's print draws in now (`ui_font.print_size`); the rest the
+        Builder's."""
+        if name == "text_size":
+            return _ui_font.print_size(*a)
+        return S.Builder.query(self, name, *a)
 
     def __init__(self, decl, build, host, surface, damage, files=None, gen=False, env=None):
         self.decl = decl

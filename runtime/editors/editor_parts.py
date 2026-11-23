@@ -612,7 +612,8 @@ class PartHost(PageHost):
         th = self.ws.theme_colors
         u = self.desk._unit()
         pad = 10 * u
-        cw, ch = 72 * u, 56 * u
+        lh = max(20 * u, lh)            # the name's line, the sketch under it
+        cw, ch = 72 * u, lh + 36 * u
         gap = max(4 * u, (w - 2 * pad - 4 * cw) // 3)
         fit = max(1, (h - 4 * u + 8 * u) // (ch + 8 * u))
         on = me.view == me.SONG_VIEW
@@ -620,7 +621,6 @@ class PartHost(PageHost):
         first = max(0, cur // 4 - fit + 1) * 4
         x0, y0 = x + pad, y + 4 * u
         self._slots_at = (x0 - x, y0 - y, cw, ch, gap, first, min(len(pat), first + 4 * fit))
-        lh = max(20 * u, lh + 4)
         for k in range(first, min(len(pat), first + 4 * fit)):
             cx = x0 + (k % 4) * (cw + gap)
             cy = y0 + ((k - first) // 4) * (ch + 8 * u)
@@ -639,7 +639,8 @@ class PartHost(PageHost):
             return -1
         x0, y0, cw, ch, gap, first, last = g
         col, ax = (x - x0) // (cw + gap), (x - x0) % (cw + gap)
-        row, ay = (y - y0) // (ch + 8), (y - y0) % (ch + 8)
+        u = self.desk._unit()
+        row, ay = (y - y0) // (ch + 8 * u), (y - y0) % (ch + 8 * u)
         k = first + row * 4 + col
         if x < x0 or y < y0 or col > 3 or ax >= cw or ay >= ch or not first <= k < last:
             return -1
