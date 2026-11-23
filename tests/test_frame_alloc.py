@@ -1995,8 +1995,8 @@ def test_the_home_idle_paints_nothing_and_allocates_nothing(result):
 
 
 # What the T-Deck home's frame over a live wallpaper may allocate: every
-# frame is a full paint -- the wallpaper, its blit, the hint strip as it was
-# laid out (`HomeHints._hint_laid_out`) and the band's table pass. What is
+# frame is a full paint -- the wallpaper, its blit, the hint strip's page
+# over the rows put last (`HomeHints._hint_moved`) and the band's table pass. What is
 # left is the band pass's cards and caption, the path HOME_BAND_FRAME holds
 # a ceiling over (2026-11-18: 576 B, down from 3 KB).
 HOME_LIVE_FRAME = 640

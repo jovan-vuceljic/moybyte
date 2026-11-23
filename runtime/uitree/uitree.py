@@ -2026,6 +2026,7 @@ SCHEMA = {
     "cells": dict(_C, first="int", count="int", cols="int", side="int", gap="int", edge="lit",
                   on="action0", pick="action0", focus="cond"),
     "stepper": dict(_C, value="text", prev="action0", next="action0", tone="lit", grow="lit", focus="cond"),
+    "hints": dict(_C, keys="text", label="text", tail="cond", drop="cond", on="action1"),
     "info": dict(_C, label="text", value="text", icon="text", signal="int", tag="text", tone="text"),
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond", tag="text",
                  tone="text", swatch="text"),
@@ -2644,6 +2645,28 @@ def stepper(value, prev, next, **p):
     row it is as wide as its chevrons and value, `grow=True` a fill whose
     chevrons stand at its ends."""
     return _node("stepper", None, dict(p, value=value, prev=prev, next=next), _caller())
+
+
+def hints(model_name, **p):
+    """Keycap hints along a row (§7.2), one a row of model `model_name`:
+    `keys` its keys (an action -- confirm, back, tabs, search... -- drawn
+    as the input's own keys, or keys spelled out) and `label` what they do,
+    templates of the row; the rows `tail` holds stand at the row's end, the
+    rest from its start in order while they end short of them: where they
+    run in, the rows `drop` holds go first, the last first, then the
+    others, the last first. No stop: a press on one fires `on` with its
+    row."""
+    where = _caller()
+    _state_name(model_name, (Model,), "ui.hints", where)
+    b = _b()
+    ctx = b.ctx
+    b.ctx = Ctx(_st()._t[model_name])
+    try:
+        n = _node("hints", model_name, p, where)
+    finally:
+        b.ctx = ctx
+    n.l["model"] = model_name
+    return n
 
 
 def cards(model_name, **p):
@@ -3483,7 +3506,7 @@ def _collecting(fn, returns_node):
 NODE_CALLS = ("page", "group", "label", "info", "link", "button", "item", "card", "toggle", "slider",
               "field", "seg", "table", "col", "rows", "cards", "picture", "progress", "empty", "dialog",
               "popover", "menu", "split", "grid", "panel", "canvas", "foot", "scroll", "rule", "note",
-              "bubble", "month", "toast", "cells", "stepper", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
+              "bubble", "month", "toast", "cells", "stepper", "hints", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
               "legacy")
 DECL_CALLS = ("action", "hook", "labels", "work", "derive", "app")
 COMMAND_CALLS = ("push", "pop", "focus", "after", "post")

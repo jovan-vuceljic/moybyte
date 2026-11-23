@@ -186,20 +186,12 @@ def test_the_focused_tab_and_the_open_one_read_apart(tmp_path):
 
 def test_the_rows_strip_names_its_keys(tmp_path):
     ws, drv = _home(tmp_path)
-    seen = []
-    real = ui_draw.hints
-    # (the strip draws the line it laid out: `ui_draw.hint_line`'s bytes)
-    ui_draw.hints = lambda cv, th, rect, items, *a, **k: (
-        seen.append(tuple(items.decode().split("\0")) if type(items) is bytes
-                    else tuple(items)), real(cv, th, rect, items, *a, **k))[1]
-    try:
-        _press(drv, "up")
-        ws.launcher_layer._full_streak = 0
-        ws.mark_dirty()
-        drv.frame(1 / 30)
-    finally:
-        ui_draw.hints = real
-    assert ui_draw.BAR_KEYS in seen
+    _press(drv, "up")
+    ws.launcher_layer._full_streak = 0
+    ws.mark_dirty()
+    drv.frame(1 / 30)
+    # (the strip's rows as its page was last put: keys and words in turn)
+    assert tuple(w for r in ws.launcher_layer._hrows for w in r[1:3]) == ui_draw.BAR_KEYS
 
 
 def _stepped(ws):

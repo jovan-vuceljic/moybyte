@@ -171,7 +171,7 @@ typedef struct {
                                 // hint= and a slider's hi
     int16_t slot;               // a two-way control's state, a rows' model
     int16_t cur;                // a rows' cur= slot; a seg's label table; a toggle's row field (NL_FIELD,
-                                // `slot` then its list's model)
+                                // `slot` then its list's model); a hints row's drop= cond
     int16_t current;            // a rows' current= slot: the row whose key it holds is current
     int16_t changed;            // a rows' or a field's changed= action
     int16_t on;                 // a two-way control's on= action
@@ -181,7 +181,8 @@ typedef struct {
                                 // alone= in btn (BT_ALONE) and span= in nbtn; a grid's pad and
                                 // gap (GAP_*) in btn and nbtn, its cols and rows in lit's nibbles
     int16_t mark;               // a button's marked= cond: drawn current while it holds; a
-                                // field's when= cond: greyed (NL_HIDE: not shown) while it fails
+                                // field's when= cond: greyed (NL_HIDE: not shown) while it fails;
+                                // a hints row's tail= cond
 } uit_node_t;
 
 // The panes (`ui.panes`, `ui.pane`): a split's children are the layout rule's cells along its

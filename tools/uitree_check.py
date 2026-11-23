@@ -216,7 +216,8 @@ def dry(app):
 
         def walk(n, rows):
             nonlocal n_ok
-            for row in rows:
+            # (a hints row's props are templates of its own model's rows)
+            for row in (list(app.s._v[n.l["model"]]) if n.kind == "hints" else rows):
                 for g in n.p.values():
                     g(row)
                     n_ok += 1

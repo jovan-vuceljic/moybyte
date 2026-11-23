@@ -51,6 +51,7 @@ enum {
     UIT_TOAST,              // level 2: a toast over the page's body, above its foot; no stop
     UIT_CELLS,              // level 2: a palette's colours as square cells, a stop bound to an int
     UIT_STEPPER,            // level 2: a value between two chevrons that fire prev= and next=, a stop
+    UIT_HINTS,              // level 2: a model's rows as keycap hints, no stop; a press fires on= with its row
     UIT_KINDS
 };
 

@@ -210,13 +210,20 @@ def _draw_broken_badge(cv, names, th, rect):
         cv.rect(x + side - m - t - k, y + m + k, t, 1, red)
 
 
+# The value_row metrics' slots (MOY_UI_M_VALUE_ROW_*): the desk's key cap, and
+# the band of hints, the handheld's and the desk's.
+VR_KEY_DESK, VR_HINTS, VR_HINTS_DESK = 15, 16, 17
+
+
 def _hint_strip(lay, keys, desk):
     """The home's hint strip along the content's foot, (x, y, w, h): the
     handheld's 20 rows at the font scale, the desk's 34 glass pixels at the
-    target's 1x or 18 rows, none under touch (no `keys`), whose cards take
-    its height. Every arrangement's, so the strip stays put across them."""
+    target's 1x or its key caps' height at the font scale where they are
+    taller, none under touch (no `keys`), whose cards take its height.
+    Every arrangement's, so the strip stays put across them."""
     if desk:
-        h = max(34 // _lb.render_scale(), 18 * lay.fs) if keys else 0
+        cap = _ui_draw.metrics("value_row")[VR_KEY_DESK] * lay.fs
+        h = max(34 // _lb.render_scale(), cap) if keys else 0
     else:
         h = 20 * lay.fs if keys else 0
     return (lay.cx, lay.cy + lay.ch - h, lay.cw, h)

@@ -18,7 +18,7 @@ from ws_helpers import build_ws as _ws
 import pytest
 from ws_helpers import boot_on_fixture, use_theme
 from tools.board_config import runtime_file
-from ws_helpers import hint_rects
+from ws_helpers import hint_rects, hint_tap
 
 @pytest.fixture(autouse=True)
 def _on_the_night_fixture(monkeypatch):
@@ -59,7 +59,7 @@ def test_tap_schedules_the_run_behind_a_loading_paint(tmp_path):
     home = ws.launcher_layer
     chips = hint_rects(home)
     x, y, w, h = chips["play"]
-    assert home._hint_tap(x + 1, y + 1)
+    assert hint_tap(home, x + 1, y + 1)
     assert ws.screen == "launcher"       # the tap only SCHEDULED the start
     assert ws.deferred                  # ...which is queued for the frame
     ws.frame(1 / 30)

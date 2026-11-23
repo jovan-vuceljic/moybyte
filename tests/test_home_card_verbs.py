@@ -434,7 +434,9 @@ def test_the_make_strip_keeps_its_tab_keys(tmp_path, kind):
     ws.launcher.sel = next(i for i, it in enumerate(ws.launcher.items)
                            if it.get("path") and builtin_name(it["path"]) is None)
     ui_draw.input_kind(kind)
-    spans, _rect = ws.launcher_layer._hint_spans(ws.sys_canvas)
-    got = [v for v, _a, _b in spans]
+    layer = ws.launcher_layer
+    ws.mark_dirty()
+    _frames(drv)
+    got = [r[0] for r in layer._hrows if layer.hint_rect(r[0]) is not None]
     assert got[-1] == "tabs", got
     assert "change" in got or kind == "pad", got

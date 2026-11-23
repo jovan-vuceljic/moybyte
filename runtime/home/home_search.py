@@ -81,8 +81,8 @@ class HomeSearch:
         line = self._search_line()
         if line is None:
             return False
-        spans, _rect = self._hint_spans(self.ws.sys_canvas)
-        x1 = next((a for v, a, _b in spans if v == "tabs"), line[0] + line[2])
+        tabs = self.hint_rect("tabs")
+        x1 = tabs[0] if tabs is not None else line[0] + line[2]
         if not _in(px, py, (line[0], line[1], x1 - line[0], line[3])):
             return False
         self.ws.home.close_search(clear=True)

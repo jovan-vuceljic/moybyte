@@ -4004,6 +4004,113 @@ int moy_ui_api_hints_w(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const uint8_t *i
     return w ? w + MOY_UI_HINT_LEAD(c->cls) * c->fs : 0;
 }
 
+int moy_ui_api_hint_row(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const uint8_t *items, size_t len,
+                        int tail, uint32_t drop, int32_t *out, int cap) {
+    moy_ui_box_t b;
+    if (c->has_at) {
+        b = c->at;
+        c->has_at = 0;
+    } else {
+        int stacked;
+        b = mua_place(c, mua_kmetric(MOY_UI_K_VALUE_ROW, c->cls ? MOY_UI_M_VALUE_ROW_HINTS_DESK
+                                                                 : MOY_UI_M_VALUE_ROW_HINTS) * c->fs,
+                      &stacked);
+    }
+    // each field's start: a pair is two fields
+    enum { PAIRS = 16 };
+    uint16_t at[2 * PAIRS + 1];
+    int n = 0;
+    for (size_t i = 0; i < len && n < 2 * PAIRS; n++) {
+        at[n] = (uint16_t)i;
+        while (i < len && items[i] != 0) {
+            i++;
+        }
+        i++;
+    }
+    at[n] = (uint16_t)(len + 1);
+    int pairs = n / 2;
+    tail = tail < 0 ? 0 : tail > pairs ? pairs : tail;
+    int lead = pairs - tail, desk = mua_ground_of(c), lm = MOY_UI_HINT_LEAD(c->cls) * c->fs;
+    size_t mid = at[2 * lead];            // the tail's first byte (len + 1 where it has none)
+    moy_ui_box_t wide = {b.x, b.y, 0x3fff, b.h};
+    int16_t sp[2 * PAIRS];
+    // the tail at the row's end: its last pair's end a margin in from the row's
+    int dx = 0, tx = b.x + b.w - lm;
+    if (tail) {
+        int got = moy_ui_hints_at(s, wide, items + mid, len - mid, c->fs, desk, 0, sp, PAIRS);
+        if (got > 0) {
+            dx = b.x + b.w - lm - sp[2 * (got - 1) + 1];
+            tx = sp[0] + dx;
+        }
+    }
+    // the lead's pairs laid in a row: each one's start and width; the `drop` ones go first
+    // where they run into the tail, the last first, then the others, the last first
+    int16_t lx[PAIRS], lw[PAIRS];
+    int got = lead ? moy_ui_hints_at(s, wide, items, mid - 1, c->fs, desk, 0, sp, PAIRS) : 0;
+    got = got < lead ? got : lead;
+    uint32_t keep = got ? (uint32_t)((1u << got) - 1) : 0;
+    while (keep) {
+        int x = sp[0], end = x;
+        for (int k = 0; k < got; k++) {
+            if (keep & (1u << k)) {
+                lx[k] = (int16_t)x, lw[k] = (int16_t)(sp[2 * k + 1] - sp[2 * k]);
+                end = x + lw[k];
+                x += k + 1 < got ? sp[2 * k + 2] - sp[2 * k] : 0;
+            }
+        }
+        if (tail ? end < tx : end <= tx) {
+            break;
+        }
+        uint32_t from = keep & drop ? keep & drop : keep;
+        int top = 31;
+        while (!(from & (1u << top))) {
+            top--;
+        }
+        keep &= ~(1u << top);
+    }
+    moy_ui_box_t tb = {(int16_t)(b.x + dx), b.y, (int16_t)(0x3fff - dx), b.h};
+    int16_t ts[2 * PAIRS], one[2];
+    int nt = 0;
+    clip_t k;
+    EACH_PIECE(c, k, s, b) {
+        for (int i = 0; i < got; i++) {
+            if (keep & (1u << i)) {
+                moy_ui_box_t pb = {(int16_t)(lx[i] - lm), b.y, 0x3fff, b.h};
+                moy_ui_hints_at(s, pb, items + at[2 * i], at[2 * i + 2] - 1 - at[2 * i], c->fs, desk, 1,
+                                one, 1);
+            }
+        }
+        nt = tail ? moy_ui_hints_at(s, tb, items + mid, len - mid, c->fs, desk, 1, ts, PAIRS) : 0;
+    }
+    // where each pair drew: the row's box, then each pair's x0 and x1 (both 0: not drawn)
+    if (out != NULL && cap >= 4) {
+        out[0] = b.x, out[1] = b.y, out[2] = b.w, out[3] = b.h;
+        for (int i = 0; 4 + 2 * i + 1 < cap && i < pairs; i++) {
+            int at_l = i < got && (keep & (1u << i)), at_t = i >= lead && i - lead < nt;
+            out[4 + 2 * i] = at_l ? lx[i] : at_t ? ts[2 * (i - lead)] : 0;
+            out[5 + 2 * i] = at_l ? lx[i] + lw[i] : at_t ? ts[2 * (i - lead) + 1] : 0;
+        }
+    }
+    // a press on a pair: its index, the tail's counted after every lead pair
+    int p = c->in[MOY_UI_IN_PTR];
+    if ((p & MOY_UI_P_LIVE) && (p & MOY_UI_P_EDGE)) {
+        int x = c->in[MOY_UI_IN_X], y = c->in[MOY_UI_IN_Y];
+        if (mua_inside(b, x, y)) {
+            for (int i = 0; i < got; i++) {
+                if ((keep & (1u << i)) && lx[i] <= x && x < lx[i] + lw[i]) {
+                    return i;
+                }
+            }
+            for (int i = 0; i < nt; i++) {
+                if (ts[2 * i] <= x && x < ts[2 * i + 1]) {
+                    return lead + i;
+                }
+            }
+        }
+    }
+    return -1;
+}
+
 // The stop `id` just drew is a list's or a table's: its focused row and row
 // 0's top on screen, which a key step on its page reveals at the next begin.
 void mua_rows_note(moy_ui_ctx_t *c, uint32_t id, int row, int top) {

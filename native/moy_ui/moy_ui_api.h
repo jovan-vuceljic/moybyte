@@ -1061,6 +1061,16 @@ void moy_ui_api_hints(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const uint8_t *it
 // end included (0 under touch): what a band placed to end where they do is.
 int moy_ui_api_hints_w(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const uint8_t *items,
                        size_t len);
+// A row of keycap hints (moy_ui_hints' pairs, `items` NUL-separated) in ui.at's
+// rect, else a band at the row cursor: the last `tail` pairs at the row's end,
+// a margin in from it, the others laid from its start in order. Where they run
+// into the tail, the pairs whose bits `drop` holds go first, the last first,
+// then the others, the last first. No stops: answers the pair a press landed
+// on this frame (the tail's counted after every other pair), else -1.
+// out (`cap` words, NULL none): the row's box, then each pair's x0 and x1 in
+// that order (both 0 where it did not draw).
+int moy_ui_api_hint_row(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const uint8_t *items, size_t len,
+                        int tail, uint32_t drop, int32_t *out, int cap);
 // The next row (a label, info, link, cycle, seg, swatch picker, toggle,
 // slider or progress) draws icon `name` before its label: the live icon
 // set's slot of that name (moy_ui_icon_slot), else the glyph table's.
