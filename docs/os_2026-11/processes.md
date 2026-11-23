@@ -811,7 +811,8 @@ queued for the console, whose next frame takes it into the list and puts
 the banner up (`NOTES.drain`). Every notification's id, the console's own
 posts' too, comes from that queue's one counter.
 
-- **The banner** is the unlock banner's card (`moy_ui_unlock`): the posting
+- **The banner** is the unlock banner's card (a `ui.toast` with `sub=`,
+  `runtime/shell/banner_ui.py`): the posting
   app's title over the summary, on the icon's tile, at the top centre, under
   the bar where there is one and at the glass's top over a fullscreen game.
   It stays up `BANNER_MS` (5 s) at urgency 1 and `CRITICAL_MS` (10 s) at 2,

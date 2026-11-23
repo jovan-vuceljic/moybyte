@@ -1557,6 +1557,22 @@
     "icon": {
      "type": "tpl",
      "level": 2
+    },
+    "sub": {
+     "type": "tpl",
+     "level": 2
+    },
+    "burst": {
+     "type": "int",
+     "level": 2
+    },
+    "look": {
+     "type": "word:flat",
+     "level": 2
+    },
+    "key": {
+     "type": "key",
+     "level": 2
     }
    }
   },
@@ -1643,6 +1659,10 @@
      "level": 2
     },
     "follow": {
+     "type": "bool",
+     "level": 2
+    },
+    "gutter": {
      "type": "bool",
      "level": 2
     },
@@ -1733,7 +1753,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:large",
+     "type": "word:large,small",
      "level": 2
     }
    }
@@ -1993,6 +2013,10 @@
      "type": "table",
      "level": 2
     },
+    "text": {
+     "type": "tpl",
+     "level": 2
+    },
     "on": {
      "type": "action|hook",
      "level": 2
@@ -2016,6 +2040,10 @@
    "level": 2,
    "section": "7.3",
    "props": {
+    "clear": {
+     "type": "int",
+     "level": 2
+    },
     "count": {
      "type": "int",
      "level": 2

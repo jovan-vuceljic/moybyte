@@ -2,7 +2,8 @@
 toolkit's moy_ui_api_cells): a palette's colours as square cells, a stop
 bound to an int -- the arrows move the current cell a cell at a time,
 on= hears each move, Enter and a tap fire pick=, and a tap moves the
-current cell to the one under it first."""
+current cell to the one under it first; clear= shows its colour as the
+grey checker under a white stroke."""
 import os
 import sys
 
@@ -34,17 +35,17 @@ ui.action("on_pick", "Use", on_pick)
 def build():
     with ui.page("Cells"):
         ui.cells("c", first=0, count=64, cols=8, side=18, gap=2, edge=True, on="on_move",
-                 pick="on_pick")
+                 pick="on_pick"%s)
 '''
 
 
-def run(tmp_path, script):
+def run(tmp_path, script, clear=""):
     import uitree_app
     import uitree_c
     import uitree_conf as C
     app_py = tmp_path / "cells" / "app.py"
-    app_py.parent.mkdir()
-    app_py.write_text(APP)
+    app_py.parent.mkdir(parents=True)
+    app_py.write_text(APP % clear)
     mod = C._module(str(app_py))
     cls = uitree_app.app_layer("cells_c", "Cells", mod.build, engine=uitree_c.CEngine)
     seen = {}
@@ -73,6 +74,26 @@ def test_the_arrows_move_the_current_cell_and_enter_picks_it(tmp_path):
 def test_the_edges_hold_the_current_cell(tmp_path):
     fs = run(tmp_path, ["k:right"] * 5)
     assert [f.state[0] for f in fs] == [12, 13, 14, 15, 15, 15]
+
+
+def test_a_clear_colour_shows_the_checker_under_a_white_stroke(tmp_path):
+    """clear=0: colour 0's cell is transparency's grey checker, dark and
+    light (chrome.FIXED's, the colours the C draws it in), under a white
+    stroke; without it the cell is colour 0's black."""
+    import chrome
+
+    def count(buf, rgb):
+        w = ((rgb >> 8) & 0xf800) | ((rgb >> 5) & 0x07e0) | ((rgb >> 3) & 0x1f)
+        hi, lo = w >> 8, w & 0xff
+        return sum(1 for i in range(0, len(buf), 2) if buf[i] == hi and buf[i + 1] == lo)
+
+    plain = run(tmp_path / "plain", [])[-1].buf
+    clear = run(tmp_path / "clear", [], clear=", clear=0")[-1].buf
+    dark, light, _black, white = [v & 0xffffff for v in chrome.FIXED]
+    side = 16                                       # side= less gap= on the T-Deck's scale
+    for rgb in (dark, light):
+        assert count(clear, rgb) - count(plain, rgb) >= side * side // 4, hex(rgb)
+    assert count(clear, white) - count(plain, white) >= side - 2
 
 
 COLUMN = '''

@@ -360,13 +360,14 @@ class _WebConsoleLayer(Layer):
 
 class _MapLayer(Layer):
     """The map/tilemap editor (#32), SYSTEM-domain responsive (#39 step 3): the
-    handheld's Map page, or a desk pane's view (`map_editor_ui.py`). Tap = paint
-    one cell, drag = pan (#37); the d-pad pans the window.
+    Map page (`editor_map.py`, hosted by `map_editor_ui.MapEditorUI`), the
+    handheld's tab or a desk pane's view. Tap = paint one cell, drag = pan
+    (#37); the arrows pan the view.
 
     The frame draws the "menu" strip over it (`bar_layer.STRIP_OF`), the
     Editor's lent top-bar zone (the tab ladder + PLAY); handle_pointer routes a
-    tap through ws.bar_layer.handle_bar_tap("menu", ...) FIRST, before the map
-    click/pan."""
+    tap through ws.bar_layer.handle_bar_tap("menu", ...) FIRST, before the
+    page's."""
 
     id = "map"
     domain = "system"
@@ -377,14 +378,14 @@ class _MapLayer(Layer):
     def draw(self, dt):
         ws = self.ws
         ws.reset_canvas_state()          # game-canvas hygiene (degradation shares it)
-        ws.map_ui._draw_map()
+        ws.map_ui.draw(dt)
 
     def at_top(self):
         """Up goes on to the bar from the map's top row (InputRouter._bar_keys)."""
         return self.ws.map_ui.at_top()
 
     def handle_input(self, i):
-        self.ws.map_ui._map_input()
+        self.ws.map_ui.handle_input(i)
         return True
 
     def handle_pointer(self, px, py, click):
@@ -393,28 +394,21 @@ class _MapLayer(Layer):
         # native size, so it hit-tests the raw pointer -- no _game_xy translation.
         if click and ws.bar_layer.handle_bar_tap("menu", px, py):
             return True         # the Editor's lent zone (Stage 4) claimed the tap
-        if ws.map_ui.layout.verbs:
-            if ws.map_ui.pointer(px, py, click, ws.pointer.down):
-                ws.mark_dirty()
-        elif click:
-            ws.map_ui._map_click(px, py)
-        elif ws.pointer.down:
-            ws.map_ui._map_pan_drag(px, py)
-        else:
-            ws.map_ui._map_release(px, py)
+        ws.map_ui.handle_pointer(px, py, click)
         return True
 
 
 class _SceneLayer(Layer):
     """The scene placement editor (#85 Stage 2), SYSTEM-domain responsive (#39):
-    the handheld's Scene page, or a desk pane's world view
-    (scene_editor_ui.SceneEditorUI). Tap = place/select, drag = move an actor or
-    pan the world (the map editor's gesture grammar).
+    the Scene page (`editor_scene.py`, hosted by
+    `scene_editor_ui.SceneEditorUI`), the handheld's tab or a desk pane's
+    world view. Tap = pick or place, drag = move an actor or pan the world
+    (the map editor's gesture grammar).
 
     The frame draws the "menu" strip over it (`bar_layer.STRIP_OF`), the
     Editor's lent top-bar zone (the tab ladder + PLAY, no SAVE -- #111);
     handle_pointer routes a tap through ws.bar_layer.handle_bar_tap("menu", ...)
-    FIRST, before the placement click/pan -- the exact _MapLayer shape."""
+    FIRST, before the page's -- the exact _MapLayer shape."""
 
     id = "scene"
     domain = "system"
@@ -422,26 +416,32 @@ class _SceneLayer(Layer):
         """The trackball points at the placements."""
         return False
 
-    def ui_host(self):
-        """The handheld page's context, where its tag popover's field types."""
-        page = self.ws.scene_ui._page
-        return page.host if page is not None else None
+    def typing(self):
+        """A tag's popover types."""
+        return self.ws.scene_ui.popover()
 
-    def back(self):
-        """The tag popover closes."""
-        page = self.ws.scene_ui._page
-        if page is None or page.pop is None:
+    def cancel(self):
+        """Mic, Esc or B in a tag's popover: it closes."""
+        su = self.ws.scene_ui
+        if not su.popover():
             return False
-        page.close()
+        su.close_pop()
         return True
+
+    back = cancel
 
     def draw(self, dt):
         ws = self.ws
         ws.reset_canvas_state()          # game-canvas hygiene (degradation shares it)
-        ws.scene_ui._draw_scene()
+        ws.scene_ui.draw(dt)
+
+    def at_top(self):
+        """Up goes on to the bar from the world's top, nothing picked
+        (InputRouter._bar_keys)."""
+        return self.ws.scene_ui.at_top()
 
     def handle_input(self, i):
-        self.ws.scene_ui._scene_input()
+        self.ws.scene_ui.handle_input(i)
         return True
 
     def handle_pointer(self, px, py, click):
@@ -450,15 +450,7 @@ class _SceneLayer(Layer):
         # size, so it hit-tests the raw pointer -- no _game_xy translation.
         if click and ws.bar_layer.handle_bar_tap("menu", px, py):
             return True         # the Editor's lent zone (Stage 4) claimed the tap
-        if ws.scene_ui.layout.verbs:
-            if ws.scene_ui.pointer(px, py, click, ws.pointer.down):
-                ws.mark_dirty()
-        elif click:
-            ws.scene_ui._scene_click(px, py)
-        elif ws.pointer.down:
-            ws.scene_ui._scene_drag(px, py)
-        else:
-            ws.scene_ui._scene_release(px, py)
+        ws.scene_ui.handle_pointer(px, py, click)
         return True
 
 

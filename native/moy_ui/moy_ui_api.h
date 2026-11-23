@@ -235,6 +235,10 @@ typedef struct {
     // The block's second word of flags (MOY_UI_O_MORE; 0 none), which the
     // keys past the first word's read.
     int32_t flags2;
+    // A bar item's icon alone at 16 units at the scale, centred in its box (its cell and its
+    // tap the box's), as a labelled one's (the UI tree's look="small"); else the largest its
+    // box's height holds.
+    int8_t small;
 } moy_ui_over_t;
 
 // Every key absent.
@@ -2023,9 +2027,10 @@ uint32_t moy_ui_api_audit(moy_ui_inst_t *I, int on);
 // wears the current mark, and while focus is on them the keys' cursor; the
 // arrows move it a cell (up at the top row and down at the last go on to the
 // next stop). Enter, or a tap on a cell (which moves `cur` there), sets
-// `*picked`. Answers the new `cur`.
+// `*picked`. The colour `clear` (-1 none) shows as clear (moy_ui_cells_draw).
+// Answers the new `cur`.
 int32_t moy_ui_api_cells(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, int first,
-                         int count, int cols, int side, int gap, int32_t cur, int edge,
+                         int count, int cols, int side, int gap, int32_t cur, int edge, int clear,
                          const moy_ui_over_t *o, int *picked);
 
 #endif // MOY_UI_API_H

@@ -52,10 +52,12 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_END "end"
 #define UT_LOOK_SHARE "share"
 #define UT_LOOK_BAND "band"
+#define UT_LOOK_FLAT "flat"
 #define UT_LOOK_TILE "tile"
 #define UT_LOOK_COUNT "count"
 #define UT_LOOK_WELL "well"
 #define UT_LOOK_LARGE "large"
+#define UT_LOOK_SMALL "small"
 #define UT_LOOK_BAR "bar"
 #define UT_LOOK_STEPS "steps"
 #define UT_LOOK_BLOCKS "blocks"
@@ -99,11 +101,13 @@ static inline int32_t ut_p_anchor(const char *v) { return ut_prop_("anchor", v);
 static inline int32_t ut_p_arg(const char *v) { return ut_prop_("arg", v); }
 static inline int32_t ut_p_at(const char *v) { return ut_prop_("at", v); }
 static inline int32_t ut_p_badge(const char *v) { return ut_prop_("badge", v); }
+static inline int32_t ut_p_burst(int32_t v) { return ut_prop_int_("burst", v); }
 static inline int32_t ut_p_buttons(const char *v) { return ut_prop_("buttons", v); }
 static inline int32_t ut_p_by(const char *v) { return ut_prop_("by", v); }
 static inline int32_t ut_p_capture(const char *v) { return ut_prop_("capture", v); }
 static inline int32_t ut_p_changed(const char *v) { return ut_prop_("changed", v); }
 static inline int32_t ut_p_check(int v) { return ut_prop_("check", v ? "True" : "False"); }
+static inline int32_t ut_p_clear(int32_t v) { return ut_prop_int_("clear", v); }
 static inline int32_t ut_p_close(const char *v) { return ut_prop_("close", v); }
 static inline int32_t ut_p_cols(const char *v) { return ut_prop_("cols", v); }
 static inline int32_t ut_p_commit(int v) { return ut_prop_("commit", v ? "True" : "False"); }
@@ -143,6 +147,7 @@ static inline int32_t ut_p_icon(const char *v) { return ut_prop_("icon", v); }
 static inline int32_t ut_p_icons(const char *v) { return ut_prop_("icons", v); }
 static inline int32_t ut_p_image(const char *v) { return ut_prop_("image", v); }
 static inline int32_t ut_p_input(const char *v) { return ut_prop_("input", v); }
+static inline int32_t ut_p_key(const char *v) { return ut_prop_("key", v); }
 static inline int32_t ut_p_keys(const char *v) { return ut_prop_("keys", v); }
 static inline int32_t ut_p_kind(const char *v) { return ut_prop_("kind", v); }
 static inline int32_t ut_p_label(const char *v) { return ut_prop_("label", v); }

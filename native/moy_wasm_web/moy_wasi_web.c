@@ -324,6 +324,20 @@ wasm_function_inst_t wasm_runtime_lookup_function(wasm_module_inst_t inst, const
     return NULL;
 }
 
+// The page's engine calls `_start` from JavaScript, which passes no argument
+// cell in and takes no result cell back: as this side sees it, both counts are 0.
+uint32_t wasm_func_get_param_count(wasm_function_inst_t fn, wasm_module_inst_t inst) {
+    (void)fn;
+    (void)inst;
+    return 0;
+}
+
+uint32_t wasm_func_get_result_count(wasm_function_inst_t fn, wasm_module_inst_t inst) {
+    (void)fn;
+    (void)inst;
+    return 0;
+}
+
 // `_start` (the one function a command's run calls) to its end: false where
 // it trapped or a row unwound it, the reason its exception.
 bool wasm_runtime_call_wasm(wasm_exec_env_t env, wasm_function_inst_t fn, uint32_t argc,

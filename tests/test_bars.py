@@ -150,7 +150,7 @@ def test_every_layout_lays_out_inside_what_four_bars_leave(tmp_path):
         rb, cb = four[key]
         if not _inside(rb, cb):
             bad.append("%s.%s[%d] %r in %r" % (key + (rb, cb)))
-    assert checked > 30           # the layouts' rects (a uitree page lays out its own)
+    assert checked > 10           # the layouts' rects (a uitree page lays out its own)
     assert not bad, "outside the content rect under four bars: %s" % bad
 
 
@@ -303,11 +303,9 @@ def test_moys_bar_is_the_moy_button_then_status(tmp_path, desk):
     L = ws.layout
     assert L.status_h == (40 if desk else 28)
     names = _names_of(L.bars)[0]
-    # (a handheld's status cluster keeps its ring's room: a `status` cell
-    # ahead of the Wi-Fi, empty of items)
-    status = [] if desk else ["status"]
-    assert names[0] == "menu" and names[-4 - len(status):] == \
-        ["zone"] + status + ["wifi", "battery", "clock"]
+    # (a handheld's status cluster keeps its ring's room in the page's
+    # cluster row: no cell of its own)
+    assert names[0] == "menu" and names[-4:] == ["zone", "wifi", "battery", "clock"]
     assert ("chips" in names) == desk
     menu = L.bars[0][3][0][1]
     assert menu[0] == 2 * L.cs and menu[2] == layout_base.sys_tile(L.status_h)[2]

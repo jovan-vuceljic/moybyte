@@ -69,6 +69,8 @@ typedef struct {
     int nptr;
     int held;                   // the canvas a press started on (its `ptr`), held until release; -1 none
     int32_t hx, hy;             // ...the press's last point
+    int32_t hr[4];              // ...where it was drawn (its row's cell in a list)
+    int hm, hrow;               // ...the model and row it stands in (-1 none)
     int trapped;                // the app's draw trapped in this frame
     int draw_row;               // the model row the canvas being drawn stands in (draw_row()); -1 none
     owed_t *q;                  // the actions owed, [qat, qn)
@@ -567,14 +569,62 @@ static int with_flag(const app_t *a, int flag) {
 static void pointed(app_t *a, int i, int kind, int32_t x, int32_t y) {
     static const char *const what[] = {"", "down", "drag", "up"};
     char src[80];
-    int32_t pev[3] = {kind, x - a->ptr[i].r[0], y - a->ptr[i].r[1]};
+    int32_t pev[3] = {kind, x - a->hr[0], y - a->hr[1]};
     snprintf(src, sizeof src, "pointer %s on canvas '%s'", what[kind], a->ptr[i].key);
-    owe(a, a->ptr[i].act, -1, -1, pev, src, 1);
+    owe(a, a->ptr[i].act, a->hm, a->hrow, pev, src, 1);
+}
+
+// Where canvas `i` was drawn under (tx, ty) by the last frame, into a->hr, and the list row it
+// stands in (a rows list's body, a table's rows) into a->hm and a->hrow: whether it was.
+static int ptr_at(app_t *a, int i, int32_t tx, int32_t ty) {
+    const uit_t *e = a->e;
+    int m = -1, lst = -1;
+    for (int p = e->nodes[a->ptr[i].node].parent; p >= 0 && p != (int)UIT_NONE; p = e->nodes[p].parent) {
+        if (e->nodes[p].kind == UIT_ROWS || e->nodes[p].kind == UIT_TABLE) {
+            lst = p, m = e->nodes[p].slot;
+            break;
+        }
+    }
+    a->hm = a->hrow = -1;
+    if (m < 0) {
+        const int32_t *r = a->ptr[i].r;
+        if (a->ptr[i].frame != a->frames || tx < r[0] || tx >= r[0] + r[2] || ty < r[1] || ty >= r[1] + r[3]) {
+            return 0;
+        }
+        memcpy(a->hr, r, sizeof a->hr);
+        return 1;
+    }
+    int32_t v[4], c[4];
+    if (uit_rect(e, uit_str(e, e->nodes[lst].key), v) &&
+        (tx < v[0] || tx >= v[0] + v[2] || ty < v[1] || ty >= v[1] + v[3])) {
+        return 0;               // a row the list's view cuts takes no press past it
+    }
+    char id[UIT_ID_MAX + 1];
+    for (int r = 0; r < e->slots[m].nrows; r++) {
+        snprintf(id, sizeof id, "%s/%s", uit_cell(e, m, r, e->slots[m].key), a->ptr[i].key);
+        if (uit_rect(e, id, c) && tx >= c[0] && tx < c[0] + c[2] && ty >= c[1] && ty < c[1] + c[3]) {
+            memcpy(a->hr, c, sizeof a->hr);
+            a->hm = m, a->hrow = r;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// Whether node `k` stands in a popover or a dialog.
+static int in_modal(const uit_t *e, int k) {
+    for (int p = e->nodes[k].parent; p >= 0 && p != (int)UIT_NONE; p = e->nodes[p].parent) {
+        if (e->nodes[p].kind == UIT_POPOVER || e->nodes[p].kind == UIT_DIALOG) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 // The pointer before the keys: a canvas with pointer= is handed down, drag
 // and up in its own coordinates, at the rect the last frame drew it at; the
-// press that starts on it holds it until release.
+// press that starts on it holds it until release; while a popover or a dialog
+// is up, only a canvas in it takes a press.
 static void pointers(app_t *a, const int32_t *snap) {
     int st = snap[MOYCORE_UI_SNAP_PTR];
     int32_t tx = snap[MOYCORE_UI_SNAP_X], ty = snap[MOYCORE_UI_SNAP_Y];
@@ -594,9 +644,12 @@ static void pointers(app_t *a, const int32_t *snap) {
     if (!(st & 4)) {
         return;
     }
+    int up = uit_dialog(a->e) >= 0 || uit_back_popover(a->e, NULL, 0) != -2;
     for (int i = 0; i < a->nptr; i++) {
-        const int32_t *r = a->ptr[i].r;
-        if (a->ptr[i].frame == a->frames && tx >= r[0] && tx < r[0] + r[2] && ty >= r[1] && ty < r[1] + r[3]) {
+        if (up && !in_modal(a->e, a->ptr[i].node)) {
+            continue;
+        }
+        if (ptr_at(a, i, tx, ty)) {
             pointed(a, i, 1, tx, ty);
             if (st & 2) {
                 a->held = i, a->hx = tx, a->hy = ty;

@@ -159,12 +159,15 @@ def test_code_editor_font_scale_grows_text(tmp_path):
 
 def test_block_editor_shows_more_rows_and_wider_blocks(tmp_path):
     """At 960x600 the block outline shows MORE rows + a WIDER block area."""
-    from runtime.block_editor_ui import BlockLayout
+    from runtime import host_app
+    from runtime.block_editor_ui import ROW
     ws = _ws(tmp_path, sys_size=(960, 600))
+    drv = host_app.ConsoleDriver(ws)
     _enter(ws, "blocks")
-    base = BlockLayout(320, 240, 1)
-    assert ws.block_ui.block_layout.rows > base.rows
-    assert ws.block_ui.block_layout.outline_w > base.outline_w
+    drv.frame(1 / 30)
+    _x, _y, w, h = ws.block_ui.page().rect_of("lines")
+    assert h > 240 and h // ROW > 10        # past the T-Deck's whole glass
+    assert w > 320
 
 
 def test_code_editor_renders_without_error_on_large_canvas(tmp_path):
@@ -257,7 +260,7 @@ def test_block_editor_add_tool_tap_opens_menu(tmp_path):
     drv = host_app.ConsoleDriver(ws)
     _enter(ws, "blocks")
     drv.frame(1 / 30)
-    bx, by, bw, bh = ws.block_ui.page().host.box("Tool Add")
+    bx, by, bw, bh = ws.block_ui.page().rect_of("add")
     drv.click(bx + bw // 2, by + bh // 2)
     for _ in range(3):
         drv.frame(1 / 30)
@@ -429,13 +432,13 @@ def test_paint_editor_grid_grows_on_large_canvas(tmp_path):
     """At 960x600 the zoomed pixel grid grows (a multiple of 48px, so every sprite
     size still edits in whole on-screen pixels) and the editor renders valid pixels
     on the system canvas with no viewport bezel."""
-    from runtime import paint_layer as P
     from runtime import host_app
+    from runtime.paint_layer import PaintLayout
     ws = _ws(tmp_path, sys_size=(960, 600))
     drv = host_app.ConsoleDriver(ws)
     ws.text.open_paint()
     lay = ws.paint_layer.layout
-    assert lay.pg_span > P._PG_SPAN and lay.pg_span % 48 == 0
+    assert lay.span > PaintLayout(320, 240, 1).span and lay.span % 48 == 0
     drv.frame(1 / 30)
     buf = drv.rgb888()
     assert len(buf) == 960 * 600 * 3
@@ -451,15 +454,18 @@ def test_paint_editor_tap_paints_in_system_coords(tmp_path):
     ws.text.open_paint()
     drv.frame(1 / 30)
     pe = ws.paint
-    lay = ws.paint_layer.layout
-    # Pick color 12 from the swatch column.
-    sx = lay.sw_x0 + (12 % lay.sw_cols) * lay.sw + 1
-    sy = lay.sw_y0 + (12 // lay.sw_cols) * lay.sw + 1
-    drv.touch(sx, sy)
+    pl = ws.paint_layer
+    # Pick color 12 from the palette's two columns.
+    px, py, _pw, _ph = pl.rect_of("color")
+    sw = pl.layout.sw
+    drv.touch(px + (12 % 2) * sw + 1, py + (12 // 2) * sw + 1)
+    drv.frame(1 / 30)
+    drv.touch_up()
     drv.frame(1 / 30)
     assert pe.color == 12
     # Paint pixel (0, 0) of the tile via the top-left grid cell.
-    drv.touch(lay.pg_x0 + 2, lay.pg_y0 + 2)
+    gx, gy = pl.grid_at()
+    drv.touch(gx + 2, gy + 2)
     drv.frame(1 / 30)
     ox, oy = ws.run.project.sheet.tile_origin(pe.n)
     assert ws.run.project.sheet.pget(ox, oy) == 12
@@ -489,11 +495,11 @@ def test_map_editor_shows_more_cells_on_large_canvas(tmp_path):
     ws.text.open_map()
     lay = ws.map_ui.layout
     base = M.MapLayout(320, 240, 1)
-    assert lay.mv_avail_w > base.mv_avail_w and lay.mv_avail_h > base.mv_avail_h
+    assert lay.view_w > base.view_w and lay.view_h > base.view_h
     assert lay.zooms[0] == base.zooms[0]           # same field size on every tier
     x0, y0, cell, cols, rows = ws.map_ui._mv_metrics()
-    assert cols > base.mv_avail_w // base.zooms[0]   # ...so the bigger view shows more
-    assert rows > base.mv_avail_h // base.zooms[0]
+    assert cols > base.view_w // base.zooms[0]   # ...so the bigger view shows more
+    assert rows > base.view_h // base.zooms[0]
     drv.frame(1 / 30)
     buf = drv.rgb888()
     assert len(buf) == 960 * 600 * 3

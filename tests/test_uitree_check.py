@@ -41,7 +41,17 @@ PORTED = (
     "editor_settings",
     "editor_music",
     "editor_sound",
+    "editor_blocks",
+    "editor_sprite",
+    "editor_map",
+    "editor_scene",
+    "editor_theme",
+    "editor_part",
+    "editor_head",
     "uitree_placed_table",
+    "uitree_placed_empty",
+    "uitree_placed_parts",
+    "uitree_placed_rows",
     "uitree_placed_swatches",
     "uitree_stepper",
     "uitree_pictures",
@@ -84,6 +94,8 @@ PORTED = (
     "home_ui",
     "home_bar_ui",
     "home_strip_ui",
+    "popover_strip_ui",
+    "banner_ui",
 )
 
 

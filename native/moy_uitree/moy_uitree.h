@@ -312,6 +312,9 @@ int uit_still(uit_t *e, const moy_ui_ctx_t *c, int x, int y, int w, int h, int f
 // one, C).
 typedef void (*uit_draw_fn)(void *ud, int node, int model, int row, int x, int y, int w, int h);
 void uit_on_draw(uit_t *e, uit_draw_fn fn, void *ud);
+// Inside a canvas's draw: what shows of its rect (x, y, w, h into out) where the walk draws it
+// as a table's part, the view cutting the rows at its edges; 0 and out untouched elsewhere.
+int uit_draw_clip(const uit_t *e, int32_t out[4]);
 // A card's or a picture's image (`image=`, its template's text `pic`, n bytes; never empty): the
 // front end finds, decodes and draws it. With `r` NULL it answers 0 where it does not hold the
 // picture, else a positive number that moves with the picture's pixels (the card then draws no icon

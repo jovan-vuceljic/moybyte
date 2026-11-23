@@ -1,6 +1,6 @@
 {
- "model_row/big_800x480_fs3_dark": "sha256:32e32004632f8aa4222304590c581991f263c3a9d50c1dcb1b736919f6a9259d",
- "model_row/p4_1024x600_cs2_fs1_windowed": "sha256:e5b8329325ca8cb04bf96231f2e6f20c3fe63ba84cedc720a4a9ba78e36df5f1",
- "model_row/p4_1024x600_fs2_windowed": "sha256:6dbde060a3d41ab1d6feeb50a433893db0fdea2f31da347f5409150187cc2e41",
- "model_row/tdeck_320x240_fs1_dark": "sha256:fbd1061a820ebf88f7f3938a17e72eb51a11c77c4f1ed94372891eb11fbb4df6"
+ "model_row/big_800x480_fs3_dark": "sha256:2baf70aab6e6f6d2249b83a0296d0199a18d129abacebd0667645cde70e078a4",
+ "model_row/p4_1024x600_cs2_fs1_windowed": "sha256:a359df689dc3d779c86a45ab2fe657c215311b5ede3c4781e40ebebc1f802073",
+ "model_row/p4_1024x600_fs2_windowed": "sha256:c6734e87910d07e1faedc2b25dfc15f2f930c035e7c5468b47aea052ca911008",
+ "model_row/tdeck_320x240_fs1_dark": "sha256:41111df6b9c1cc0666981c0d047d44daec3bdf9fba421d6521670e3537c0dda4"
 }

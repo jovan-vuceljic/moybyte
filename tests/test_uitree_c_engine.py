@@ -336,6 +336,30 @@ def test_up_from_a_row_scrolled_away_from_the_view_takes_its_neighbour(tmp_path)
     assert frames[-1].state.split()[0] == "r58/go", [f.state for f in frames[-6:]]
 
 
+MOVED = LONG.replace('''def go(row):''', '''def moved(row):
+    s.got = s.got + "," + row.k
+
+
+def go(row):''').replace('''ui.action("go", "Open", go, takes="row")''', '''ui.action("go", "Open", go, takes="row")
+ui.action("moved", "Moved", moved, takes="row")''').replace(
+    '''with ui.rows("items", cur="cur"):''', '''with ui.rows("items", cur="cur", changed="moved"):''').replace(
+    '''ui.info("Opened", "{got}")''', '''ui.button("go_top", label="Top")''').replace(
+    '''ui.hook("opened", opened)''', '''ui.hook("opened", opened)
+ui.action("go_top", "Top", lambda: None)''')
+
+
+def test_a_lists_changed_runs_on_a_users_move_only(tmp_path):
+    """A list's changed= runs where the user moves its cursor from one of
+    its rows to another, never where focus arrives on it from outside: Down
+    from the button above lands on the first row and writes its cur alone,
+    the next Down and an Up are two moves."""
+    assert MOVED.count("moved") >= 3
+    frames = _long(tmp_path, "moved", 5, ["k:down", "k:down", "k:up"], app=MOVED)
+    got = [f.state.split()[1] if len(f.state.split()) > 1 else "" for f in frames]
+    assert [f.state.split()[0] for f in frames] == ["go_top", "r0/go", "r1/go", "r0/go"], got
+    assert got == ["", "", ",r1", ",r1,r0"], got
+
+
 ROW_CANVAS = '''
 import uitree as ui
 

@@ -36,7 +36,7 @@ local BASE = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = ENUM, r
 local FIELD = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = TEXT }
 -- a prop whose value is a literal the dump prints as one (its Python repr)
 local LIT = { kind = 1, wrap = 1, face = 1, size = 1, align = 1, alone = 1, span = 1, arg = 1, grow = 1, max = 1,
-              secret = 1, commit = 1, look = 1, cur = 1, current = 1, check = 1, follow = 1, filter = 1, dir = 1,
+              secret = 1, commit = 1, look = 1, cur = 1, current = 1, check = 1, follow = 1, gutter = 1, filter = 1, dir = 1,
               icons = 1, rule = 1, flow = 1 }
 local FIX = "leave it out of the page: the C engine refuses it by name"
 
@@ -51,7 +51,7 @@ local KEYS = {}                 -- the keys of the lowered page's nodes: a row's
 local ROW_ACT = {}              -- a row's node's key -> the action it fires
 local DRAWS = {}                -- a canvas's node -> its draw
 local ROWS = false              -- the lowered page lists rows (whose keys are data)
-local POINTERS = {}             -- each canvas of the lowered page a pointer is routed to: { node, key, its pointer= action }
+local POINTERS = {}             -- each canvas of the lowered page a pointer is routed to: { node, key, its pointer= action, in a popover or a dialog }
 local READS_OF = {}             -- a canvas's node -> the states its draw may read (reads=), a set
 local DRAWN = {}                -- a canvas's node -> { x, y, w, h, the frame that drew it there }
 local FRAMES = 0                -- the frames run
@@ -318,14 +318,15 @@ local SHAPE = {
   split = { takes = { "dir", "sizes" }, last = function(n) return { pair("dir", n.o.dir), pair("sizes", n.o.sizes) } end },
   grid = { takes = { "cols", "rows" }, last = function(n) return { pair("cols", n.o.cols), pair("rows", n.o.rows) } end },
   canvas = { takes = { "draw" }, last = function(n) return { pair("draw", "draw") } end },
-  tabs = { bind = true, takes = { "labels", "offered" }, last = function(n) return { pair("labels", n.o.labels) } end },
+  tabs = { bind = true, takes = { "labels", "offered", "text" },
+           last = function(n) return { pair("labels", n.o.labels), pair("text", n.o.text) } end },
   cards = { model = true },
   hints = { model = true },
 }
 -- a prop given as a list that is one prop: its values joined, as the Python layer joins a tuple
 local JOINED = { sizes = 1 }
 
-local function lower_node(n, parent, path, model)
+local function lower_node(n, parent, path, model, modal)
   local kind = KINDS[n.kind]
   if not kind then fail("E00", n.at, "the C engine does not draw ui." .. n.kind .. " yet", nil, nil, FIX) end
   local key = c_key(n)
@@ -380,7 +381,7 @@ local function lower_node(n, parent, path, model)
       for _, name in ipairs(n.o.reads) do r[name] = true end
       READS_OF[me] = r
     end
-    if n.o.pointer then POINTERS[#POINTERS + 1] = { me, key, n.o.pointer } end
+    if n.o.pointer then POINTERS[#POINTERS + 1] = { me, key, n.o.pointer, modal, model } end
   end
   if n.action then check(X:node_action(me, AIDX[n.action]), "ui." .. n.kind .. " " .. q(key) .. "'s action", n.at) end
   if n.kind == "dialog" then
@@ -391,11 +392,12 @@ local function lower_node(n, parent, path, model)
   end
   local kids = n.body and n.body.kids or n.kids
   model = shape.model and n.a[1] or model
-  for _, k in ipairs(kids) do lower_node(k, me, path .. "/" .. key, model) end
+  modal = modal or n.kind == "popover" or n.kind == "dialog"
+  for _, k in ipairs(kids) do lower_node(k, me, path .. "/" .. key, model, modal) end
   if n.cases then              -- rows by=: a case child a value, the row's value picking it
     for _, v in ipairs(DECL[n.a[1]].fields[n.o.by].values) do
       local cm = check(X:node(KINDS.case, "case:" .. v, me), "ui.rows case " .. q(v), n.at)
-      for _, k in ipairs(n.cases[v].kids) do lower_node(k, cm, path .. "/" .. v, model) end
+      for _, k in ipairs(n.cases[v].kids) do lower_node(k, cm, path .. "/" .. v, model, modal) end
     end
   end
   if n.built then
@@ -405,7 +407,7 @@ local function lower_node(n, parent, path, model)
       local c = n.built[v]
       local cv = v == "true" and "True" or v == "false" and "False" or v
       local cm = check(X:node(KINDS.case, "case:" .. cv, me), "ui.switch case " .. q(v), n.at)
-      for _, k in ipairs(c.kids) do lower_node(k, cm, path .. "/" .. v, model) end
+      for _, k in ipairs(c.kids) do lower_node(k, cm, path .. "/" .. v, model, modal) end
     end
   end
 end
@@ -475,9 +477,25 @@ local function back()
   if name and X:can(AIDX[name], -1) then fire(name, "role back") end
 end
 
+-- Where the last frame drew canvas KEY in the row of list MODEL (a rows list's
+-- body or a table's) under (tx, ty): its corner and the row, read-only; nil
+-- outside the list's view and its rows
+local function list_point(model, key, tx, ty)
+  local vx, vy, vw, vh = X:rect(model)
+  if vx and not (tx >= vx and tx < vx + vw and ty >= vy and ty < vy + vh) then return nil end
+  local m = V[model]
+  for _, row in ipairs(m.rows) do
+    local x, y, w, h = X:rect(tostring(row[m.key]) .. "/" .. key)
+    if x and tx >= x and tx < x + w and ty >= y and ty < y + h then
+      return x, y, frozen(row, "row " .. q(row[m.key]) .. " of " .. q(m.name), m.ty)
+    end
+  end
+end
+
 -- A canvas with pointer= is handed down, drag and up in its own coordinates,
 -- at the rect the last frame drew it at; the press that starts on it holds it
--- until release (uitree_c.py's CEditorPage.point)
+-- until release; while a popover or a dialog is up, only a canvas in it takes
+-- a press (uitree_c.py's CEditorPage.point)
 local function pointers()
   if #POINTERS == 0 and not HELD then return end
   local tx, ty, tapped, held = touch()
@@ -486,22 +504,31 @@ local function pointers()
     if tx ~= nil and held then
       if tx ~= h.px or ty ~= h.py then
         h.px, h.py = tx, ty
-        fire_placed(h.name, "pointer drag on canvas " .. q(h.key), event("drag", tx - h.x, ty - h.y, "touch"))
+        fire_placed(h.name, "pointer drag on canvas " .. q(h.key), event("drag", tx - h.x, ty - h.y, "touch", h.row))
       end
       return
     end
     HELD = nil
-    fire_placed(h.name, "pointer up on canvas " .. q(h.key), event("up", (tx or h.px) - h.x, (ty or h.py) - h.y, "touch"))
+    fire_placed(h.name, "pointer up on canvas " .. q(h.key), event("up", (tx or h.px) - h.x, (ty or h.py) - h.y, "touch", h.row))
     return
   end
   if not tapped then return end
+  local up = X:dialog() >= 0 or X:popover() ~= nil
   for _, p in ipairs(POINTERS) do
-    local r = DRAWN[p[1]]
-    if r and r[5] == FRAMES and tx >= r[1] and tx < r[1] + r[3] and ty >= r[2] and ty < r[2] + r[4] then
-      local key, name, x, y = p[2], p[3], r[1], r[2]
-      fire_placed(name, "pointer down on canvas " .. q(key), event("down", tx - x, ty - y, "touch"))
-      if held then HELD = { key = key, name = name, x = x, y = y, px = tx, py = ty }
-      else fire_placed(name, "pointer up on canvas " .. q(key), event("up", tx - x, ty - y, "touch")) end
+    local x, y, row
+    if p[5] then
+      x, y, row = list_point(p[5], p[2], tx, ty)
+    else
+      local r = DRAWN[p[1]]
+      if r and r[5] == FRAMES and tx >= r[1] and tx < r[1] + r[3] and ty >= r[2] and ty < r[2] + r[4] then
+        x, y = r[1], r[2]
+      end
+    end
+    if x and (p[4] or not up) then
+      local key, name = p[2], p[3]
+      fire_placed(name, "pointer down on canvas " .. q(key), event("down", tx - x, ty - y, "touch", row))
+      if held then HELD = { key = key, name = name, x = x, y = y, px = tx, py = ty, row = row }
+      else fire_placed(name, "pointer up on canvas " .. q(key), event("up", tx - x, ty - y, "touch", row)) end
       return
     end
   end

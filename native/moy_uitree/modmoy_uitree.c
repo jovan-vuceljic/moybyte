@@ -642,6 +642,14 @@ static int32_t *words_of(mp_obj_t a, size_t n)
     return bi.buf;
 }
 
+// draw_clip(out) (uit_draw_clip): inside a canvas's draw, what shows of its rect into out, an
+// array('i') of 4, where it is a table's part; whether it is.
+static mp_obj_t eng_draw_clip(mp_obj_t self, mp_obj_t out)
+{
+    return mp_obj_new_bool(uit_draw_clip(eng(self), words_of(out, 4)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_draw_clip_obj, eng_draw_clip);
+
 // carousel(out) (uit_carousel): the page's carousel as the last frame drew it into out, an
 // array('i') of 20; whether one drew.
 static mp_obj_t eng_carousel(mp_obj_t self, mp_obj_t out)
@@ -1032,6 +1040,7 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_on_pic), MP_ROM_PTR(&eng_on_pic_obj) },
     { MP_ROM_QSTR(MP_QSTR_pics_moved), MP_ROM_PTR(&eng_pics_moved_obj) },
     { MP_ROM_QSTR(MP_QSTR_carousel), MP_ROM_PTR(&eng_carousel_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_clip), MP_ROM_PTR(&eng_draw_clip_obj) },
     { MP_ROM_QSTR(MP_QSTR_carousel_tile), MP_ROM_PTR(&eng_carousel_tile_obj) },
     { MP_ROM_QSTR(MP_QSTR_carousel_at), MP_ROM_PTR(&eng_carousel_at_obj) },
     { MP_ROM_QSTR(MP_QSTR_carousel_geom), MP_ROM_PTR(&eng_carousel_geom_obj) },

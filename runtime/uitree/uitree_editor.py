@@ -581,10 +581,11 @@ class Page(Engine):
         self.close_root = close
 
 
-def page(build, host, damage, files=None, close=None, env=None):
-    """A page on the Editor's kinds: the C engine's `CEditorPage`, `env`
-    what its handlers' `uitree_app.env()` answers."""
-    return uitree_app._engine_class(True, True)(build, host, damage, files, close, env=env)
+def page(build, host, damage, files=None, close=None, gen=False, env=None):
+    """A page on the Editor's kinds: the C engine's `CEditorPage`; `gen`
+    where its host draws it on the frames its gen plans (shift frames),
+    `env` what its handlers' `uitree_app.env()` answers."""
+    return uitree_app._engine_class(True, True)(build, host, damage, files, close, gen, env)
 
 
 class BarZone:

@@ -2022,8 +2022,8 @@ SCHEMA = {
     "bubble": dict(_C, text="text", side="text", head="text", status="text", signal="int", tone="text",
                    max="lit", lines="lit", on="action1", cut="action1"),
     "month": dict(_C, year="int", month="int", today="int", prev="action0", next="action0"),
-    "toast": dict(_C, text="text", icon="text"),
-    "cells": dict(_C, first="int", count="int", cols="int", side="int", gap="int", edge="lit",
+    "toast": dict(_C, text="text", icon="text", sub="text", burst="int", look="lit", key="lit"),
+    "cells": dict(_C, first="int", count="int", cols="int", side="int", gap="int", clear="int", edge="lit",
                   on="action0", pick="action0", focus="cond"),
     "stepper": dict(_C, value="text", prev="action0", next="action0", tone="lit", grow="lit", focus="cond"),
     "hints": dict(_C, keys="text", label="text", tail="cond", drop="cond", on="action1"),
@@ -2041,7 +2041,7 @@ SCHEMA = {
     "rows": dict(_C, cur="lit", current="lit", empty="text", filter="lit", changed="action1", group="lit",
                  dir="lit", by="lit", check="lit"),
     "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond",
-                  row="lit"),
+                  row="int"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
                   changed="action1", group="lit", pad="int", flow="lit", look="lit", tone="text",
@@ -2053,7 +2053,7 @@ SCHEMA = {
     "picture": dict(_C, image="image", icon="text", side="int", tone="text", on="action0", look="lit"),
     "progress": dict(_C, label="text", value="int", max="int", look="lit"),
     "empty": dict(_C, icon="text", title="text", lines="texts"),
-    "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit", look="lit"),
+    "text_view": dict(_C, wrap="lit", follow="lit", syntax="lit", face="lit", look="lit", gutter="lit"),
     "dialog": dict(_C, title="text", buttons="lit", kind="lit", look="lit", labels="texts"),
     "popover": dict(_C, anchor="text", w="int", close="action0", wash="lit", at="text"),
     "menu": dict(_C, caption="text"),
@@ -2068,7 +2068,8 @@ SCHEMA = {
     "switch": dict(_C),
     "case": {},
     # EXT-4. The Editor's kinds (see the calls below)
-    "tabs": dict(_C, labels="lit", icons="lit", focus="cond", on="action0", offered="conds", hint="text"),
+    "tabs": dict(_C, labels="lit", icons="lit", focus="cond", on="action0", offered="conds", hint="text",
+                 text="text"),
     "panes": dict(_C, dir="choice", gap="lit", size="lit", start="lit", min="lit", grow="lit",
                   focused="lit", grown="lit"),
     "pane": dict(_C, title="text", icon="text", size="lit", start="lit", min="lit", grow="lit",
@@ -2309,7 +2310,7 @@ def group(caption="", **p):
 def label(text, **p):
     """A row of text (§7.2): `face=` a type role, `size="fit"` shrinks it to
     its width, `size="text"` makes its cell in a placed row its text's
-    width, `wrap="word"` breaks it at word breaks (at most `lines=`
+    width (and its icon's where it shows one), `wrap="word"` breaks it at word breaks (at most `lines=`
     lines, then an ellipsis), `align=`, `tone=`, `icon=` before it;
     `scale=` draws its face at that whole scale (a display line), `w=`
     keeps its text that wide at most (a measure of prose)."""
@@ -2334,7 +2335,8 @@ def text_view(name, **p):
     """A read-only lines view (§7.2) of a text state (its lines) or a model
     of lines (each row's first text field that is not its key): `wrap=`
     "cut" or "word", `follow=True` keeps a view at its foot there as lines
-    arrive, `syntax=` a terminal's colours ("sgr") or a source's; `face="ui"`
+    arrive, `syntax=` a terminal's colours ("sgr") or a source's, `gutter=True`
+    each line's number before it; `face="ui"`
     sets each line as a paragraph of prose in the ui face, half a line
     between paragraphs (no syntax); with `look="well"` its prose lies on a
     part's well, its paragraphs one under the next, its foot fading where
@@ -2560,8 +2562,9 @@ def _list(kind, model_name, p, where):
 
 def table(model_name, **p):
     """Rows as a table: a header of cols=, one `col` child per column; or,
-    with `row=` (a row's height) and one `canvas` child, each row drawn by
-    that canvas, `draw(cv, x, y, w, h, row)` handed its row."""
+    with `row=` (a row's height: a literal in the page's unit, or an int
+    state, pixels the host measured) and one `canvas` child, each row drawn
+    by that canvas, `draw(cv, x, y, w, h, row)` handed its row."""
     return _list("table", model_name, p, _caller())
 
 
@@ -2683,8 +2686,19 @@ def cards(model_name, **p):
 def toast(text, **p):
     """A toast (§7.2): `text` and its `icon` ("check" where it has none) in
     a pill over the foot of the page's body, above its docked foot; no stop.
-    It draws over what the page drew before it: declare it after them."""
-    return _node("toast", None, dict(p, text=text), _caller())
+    It draws over what the page drew before it: declare it after them.
+    look="flat" draws the pill in flat fills, filling the page's room. With
+    `sub` it is a banner: a card centred at the top of the page's room, the
+    icon on its tile, `text` over the `sub` line, and `burst` (an int,
+    1..255 of the way out, 0 none) confetti from its edges. `key` names it
+    (its kind and place where it has none), the name a host's `rect_of`
+    asks its rect by."""
+    where = _caller()
+    key = p.pop("key", None)
+    if key is not None and (not isinstance(key, str) or not key):
+        raise UIError("N01", "ui.toast key=%r" % (key,), where=where, found=repr(key),
+                      fix='key="NAME", a text')
+    return _node("toast", key, dict(p, text=text), where)
 
 
 def cells(name, **p):
@@ -2694,7 +2708,9 @@ def cells(name, **p):
     round them; in a split's cell, as tall as it holds their rows at most,
     and a third of `side` at least. The current cell wears the current mark and, focused, the
     keys' cursor; the arrows move it (on= hears it move), and Enter or a tap
-    on a cell (which moves it there) fires `pick=`."""
+    on a cell (which moves it there) fires `pick=`; `clear=` names the
+    colour shown as clear (transparency's grey checker under a white
+    stroke), none where it is not given."""
     where = _caller()
     return _node("cells", _state_name(name, (INT,), "ui.cells", where), p, where)
 
@@ -2833,15 +2849,32 @@ def switch(name, cases, **p):
 ANCHORS = {"text_editor": ("caret", "word"), "tabs": None, "pane": ("head",), "rows": ("cur",), "cards": ("cur",)}
 
 
-def tabs(name, labels, **p):
+def tabs(name, labels=None, text=None, **p):
     """A tab strip bound two-way to an enum: one tab per value, labelled by a
     label table that must cover every value. The body is a ui.switch on the
     same name, whose cases are built once and kept. `hint=` puts the tabs
     keys in the band with its words (a template), and the strip is then no
-    stop: those keys or a tap switch it."""
+    stop: those keys or a tap switch it. Bound to a `row_of`, one tab per
+    row of its model in order, each worded by the row template `text=`."""
     where = _caller()
-    _state_name(name, (Enum,), "ui.tabs", where)
+    _state_name(name, (Enum, RowOf), "ui.tabs", where)
     t = _st()._t[name]
+    if isinstance(t, RowOf):
+        if labels is not None or text is None or p.get("offered") or p.get("icons"):
+            raise UIError("N01", "ui.tabs(%r) over a row_of words each row with text=" % name, where=where,
+                          fix='text="{.FIELD}", a template over a row of %s (no labels=, icons= or offered=)'
+                          % t.model)
+        n = _node("tabs", name, p, where)
+        n.l["model"] = t.model
+        if _NOW.app.direct:
+            _direct_src("tabs", "text", text, "text", where)
+        else:
+            n.l["text"] = tmpl(text, Ctx(_st()._t[t.model]), where, "text").g
+        n.src["text"] = text
+        return n
+    if text is not None:
+        raise UIError("N01", "ui.tabs(%r): text= words a row_of's rows; an enum's words are a label table"
+                      % name, where=where, fix='labels="TABLE", declared with ui.labels')
     tab = _d().labels.get(labels)
     if tab is None:
         raise UIError("T02", "ui.tabs(%r): no label table %r" % (name, labels), where=where,
@@ -3279,6 +3312,8 @@ def snapshot(app):
                 bits.append("%s=%s" % (k, v.name))
             elif k in n.p and isinstance(src, str) and ("{" in src or SCHEMA[n.kind][k] == "cond"):
                 bits.append("%s=%r = %r" % (k, src, v))
+            elif callable(v):           # a row template (a seg's or tabs' text= over a row_of)
+                bits.append("%s=%r" % (k, src))
             else:
                 bits.append("%s=%r" % (k, v))
         if n.kind == "dialog":

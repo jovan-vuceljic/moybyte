@@ -721,8 +721,9 @@ class InputRouter:
         if not (dx or dy) or ws.pause.open or ws.confirm.open or ws.sysmenu.open \
                 or ws.wm.popover_takes_keys():
             return False
+        desk = ws.built_editor_desk
         if not ((ws.wm.top_is("menu") and ws.editor_app.tab in ("code", "theme_config")
-                 and ws.editor is not None)
+                 and ws.editor is not None and (desk is None or desk.caret_keys()))
                 or self.focused_cart_editor() is not None):
             return False
         self.nav(dx, dy)

@@ -483,7 +483,6 @@ def test_mirror_toggle_does_not_affect_shapes():
 
 
 def test_mirror_toggle_button(tmp_path):
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -496,7 +495,7 @@ def test_mirror_toggle_button(tmp_path):
     assert ws.paint.mirror is True
     assert ws.paint_layer._pop is False   # a pick closes the menu
 
-    cx, cy = _cell_center(C, 1, 2, ws.paint.dim)
+    cx, cy = _cell_center(ws, 1, 2, ws.paint.dim)
     drv.touch(cx, cy)
     drv.frame(1 / 30)
     drv.touch_up()
@@ -510,12 +509,14 @@ def test_mirror_toggle_button(tmp_path):
 
 def _pick_more(drv, ws, oid):
     """Open the more menu with its button and pick row `oid` with the keys:
-    focus opens on its first row, down walks it, enter activates."""
+    the first key lands on its first row (the rows wear their keys' words
+    once a key is used), down walks it, enter activates."""
     _tap_tool(drv, ws, "more")
     assert ws.paint_layer._pop == "more"
     drv.frame(1 / 30)
-    rows = [r[0] for r in ws.paint_layer._more_rows(ws.paint_layer.layout.desk)]
-    for _ in range(rows.index(oid)):
+    shifts = (["sleft", "sright", "sup", "sdown"] if ws.paint_layer.layout.desk else ["shifts"])
+    rows = ["copy", "fliph", "flipv", "rot"] + shifts + ["mirror", "clear"]
+    for _ in range(rows.index(oid) + 1):
         drv.press("down")
         drv.frame(1 / 30)
         drv.frame(1 / 30)               # the key comes up between presses
@@ -645,21 +646,22 @@ def test_an_operation_acts_on_the_selection_else_the_whole_sprite():
 # -- tool-row UI + keyboard shortcut (through the shared console) -------------
 
 def _open_paint(ws):
-    from runtime import host_app  # noqa: F401
     ws.launcher.sel = 0
     ws.open()
     ws.text.open_paint()
     assert ws.menu_view == "paint"
+    from runtime import ui_draw
+    ui_draw.input_kind("touch")     # the presses that follow: touch's layout
+    ws.mark_dirty()
+    ws.frame(1 / 30)                # the page placed: its rects
 
 
 def _tool_center(ws, tid):
-    from runtime import paint_layer as P
-    rect = ws.paint_layer.layout.tool_btns[P._TOOLS.index(tid)]
+    rect = ws.paint_layer.rect_of(tid)
     return (rect[0] + rect[2] // 2, rect[1] + rect[3] // 2)
 
 
 def test_fill_tool_button_toggles_and_fills(tmp_path):
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -678,7 +680,7 @@ def test_fill_tool_button_toggles_and_fills(tmp_path):
     assert ws.paint.tool == ws.paint.FILL
 
     # A grid tap now floods the whole 8x8 tile with the current color.
-    cx, cy = _cell_center(C, 3, 4, ws.paint.dim)
+    cx, cy = _cell_center(ws, 3, 4, ws.paint.dim)
     drv.touch(cx, cy)
     drv.frame(1 / 30)
     drv.touch_up()
@@ -695,7 +697,6 @@ def test_fill_fires_once_even_if_press_wobbles_off_the_grid(tmp_path):
     # (+ recorded a surprise extra undo step). The guard is a dedicated per-press
     # flag now, cleared only on pointer release: press in the grid -> drag out ->
     # drag back in over a DIFFERENT color region, all one press == exactly ONE fill.
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -715,12 +716,12 @@ def test_fill_fires_once_even_if_press_wobbles_off_the_grid(tmp_path):
     # FILL tool on, then one press: left region -> off the grid -> right region.
     ws.paint.tool = ws.paint.FILL
     ws.paint.color = 11
-    lx, ly = _cell_center(C, 1, 1, ws.paint.dim)
+    lx, ly = _cell_center(ws, 1, 1, ws.paint.dim)
     drv.touch(lx, ly)                  # press: floods the LEFT region
     drv.frame(1 / 30)
-    drv.touch_drag(C._PG_X0 - 6, ly)   # wobble off the grid's left edge (held)
+    drv.touch_drag(ws.paint_layer.grid_at()[0] - 6, ly)   # wobble off the grid's left edge (held)
     drv.frame(1 / 30)
-    rx, ry = _cell_center(C, 6, 1, ws.paint.dim)
+    rx, ry = _cell_center(ws, 6, 1, ws.paint.dim)
     drv.touch_drag(rx, ry)             # back in, over the RIGHT region (still held)
     drv.frame(1 / 30)
     drv.touch_up()
@@ -741,7 +742,6 @@ def test_fill_fires_once_even_if_press_wobbles_off_the_grid(tmp_path):
 def test_undo_redo_reverts_a_stroke(tmp_path):
     # #111: the paint toolbar's local UNDO/REDO buttons were removed -- the ONE bar
     # pair (ws.history.undo()/ws.history.redo(), routed to this editor's op-history) is now the undo.
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -751,7 +751,7 @@ def test_undo_redo_reverts_a_stroke(tmp_path):
     ox, oy = ws.sheet.tile_origin(ws.paint.n)
     before = ws.sheet.pget(ox + 2, oy + 2)
 
-    cx, cy = _cell_center(C, 2, 2, ws.paint.dim)
+    cx, cy = _cell_center(ws, 2, 2, ws.paint.dim)
     drv.touch(cx, cy)
     drv.frame(1 / 30)
     drv.touch_up()                     # release commits the stroke as one undo step
@@ -765,7 +765,6 @@ def test_undo_redo_reverts_a_stroke(tmp_path):
 
 
 def test_ctrl_z_y_keyboard_shortcut(tmp_path):
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -775,7 +774,7 @@ def test_ctrl_z_y_keyboard_shortcut(tmp_path):
     ox, oy = ws.sheet.tile_origin(ws.paint.n)
     before = ws.sheet.pget(ox + 5, oy + 5)   # seed art may already live here
 
-    cx, cy = _cell_center(C, 5, 5, ws.paint.dim)
+    cx, cy = _cell_center(ws, 5, 5, ws.paint.dim)
     drv.touch(cx, cy)
     drv.frame(1 / 30)
     drv.touch_up()
@@ -800,7 +799,6 @@ def _tap_tool(drv, ws, tid):
 
 
 def test_line_tool_button_and_grid_drag(tmp_path):
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -818,8 +816,8 @@ def test_line_tool_button_and_grid_drag(tmp_path):
     assert ws.paint.tool == ws.paint.LINE
 
     # Press-drag-release a horizontal line: press at (1,1), drag to (5,1), release.
-    x0, y0 = _cell_center(C, 1, 1, ws.paint.dim)
-    x1, y1 = _cell_center(C, 5, 1, ws.paint.dim)
+    x0, y0 = _cell_center(ws, 1, 1, ws.paint.dim)
+    x1, y1 = _cell_center(ws, 5, 1, ws.paint.dim)
     drv.touch(x0, y0)
     drv.frame(1 / 30)
     drv.touch_drag(x1, y1)
@@ -868,7 +866,6 @@ def test_the_operation_keys_act_on_the_sprite(tmp_path):
 
 
 def test_select_copy_paste_through_the_ui(tmp_path):
-    from runtime import console as C
     from runtime import host_app
 
     ws = host_app.build_workstation(str(tmp_path / "carts"))
@@ -886,8 +883,8 @@ def test_select_copy_paste_through_the_ui(tmp_path):
     # SELECT tool, drag a box over (1,1)-(2,1).
     _tap_tool(drv, ws, "select")
     assert ws.paint.tool == ws.paint.SELECT
-    a = _cell_center(C, 1, 1, ws.paint.dim)
-    b = _cell_center(C, 2, 1, ws.paint.dim)
+    a = _cell_center(ws, 1, 1, ws.paint.dim)
+    b = _cell_center(ws, 2, 1, ws.paint.dim)
     drv.touch(*a)
     drv.frame(1 / 30)
     drv.touch_drag(*b)
@@ -901,7 +898,7 @@ def test_select_copy_paste_through_the_ui(tmp_path):
     assert ws.paint.has_clip and ws.paint.clip[:2] == (2, 1)
 
     # A tap in SELECT mode (no drag) drops the selection.
-    dest = _cell_center(C, 4, 4, ws.paint.dim)
+    dest = _cell_center(ws, 4, 4, ws.paint.dim)
     drv.touch(*dest)
     drv.frame(1 / 30)
     drv.touch_up()
@@ -919,10 +916,11 @@ def test_select_copy_paste_through_the_ui(tmp_path):
     assert ws.sheet.pget(ox + 1, oy + 1) == 7   # source intact (copy, not cut)
 
 
-def _cell_center(C, lx, ly, dim):
-    cell = C._PG_SPAN // dim
-    return (C._PG_X0 + lx * cell + cell // 2,
-            C._PG_Y0 + ly * cell + cell // 2)
+def _cell_center(ws, lx, ly, dim):
+    pl = ws.paint_layer
+    cell = pl.layout.span // dim
+    gx, gy = pl.grid_at()
+    return (gx + lx * cell + cell // 2, gy + ly * cell + cell // 2)
 
 
 # -- ONE line walker (LINE tool == freehand drag stroke) ---------------------
@@ -981,33 +979,24 @@ def test_the_line_walker_is_integer_only():
 
 
 def test_clear_is_set_apart_and_the_keys_still_reach_it(tmp_path):
-    """Clear, the more menu's danger row, stands under a rule of its own
-    (design review R4-13), and focus walks down into it as into any row."""
-    from runtime import host_app, ui
+    """Clear, the more menu's danger row, stands in a menu of its own under
+    the operations' (design review R4-13), and focus walks down into it as
+    into any row."""
+    import inspect
+    from runtime import host_app, editor_sprite
+    src = inspect.getsource(editor_sprite.sprite_page)
+    assert ('with ui.menu("", shown="!shifting"):\n'
+            '                ui.item("clear", label="Clear{k_clear}", mkind="danger")\n'
+            '            with ui.menu(') in src
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_paint(ws)
     drv = host_app.ConsoleDriver(ws)
-    menus = []
-    real = ui.menu
-
-    def spy(label, items, icons=(), o=None, kinds=()):
-        menus.append((label, list(items), list(kinds)))
-        return real(label, items, icons, o, kinds)
-    ui.menu = spy
-    try:
-        pe = ws.paint
-        pe.color = 7
-        pe.paint(0, 0)
-        _pick_more(drv, ws, "clear")
-    finally:
-        ui.menu = real
+    pe = ws.paint
+    pe.color = 7
+    pe.paint(0, 0)
+    _pick_more(drv, ws, "clear")
     ox, oy = ws.sheet.tile_origin(pe.n)
     assert ws.sheet.pget(ox, oy) == 0
-    held = [m for m in menus if any(i.startswith("Clear") for i in m[1])]
-    assert held
-    for _label, items, kinds in held:
-        assert [i.split("\t")[0] for i in items] == ["Clear"] and kinds == ["danger"]
-
 
 
 def test_a_selection_shrinks_with_the_sprite_and_a_shift_stays_inside_it():

@@ -11,8 +11,9 @@ Sounds list shows (800 x 480) the sounds menu does.
 canvas's draw reach through `uitree_app.env()`: it writes the core's state
 into the page's (`sync`), draws the graph and answers the pointer on it,
 and does every verb over the `MusicEditor` core the handheld Music tab
-edits, each its own undo step. The pane's header tools and its keys are the
-desk's (`SoundPane.header`, `SoundPane.keys`)."""
+edits, each its own undo step. The pane's header tools are its header
+page's (editor_head.py, their state `SoundPane.head_vals`) and its keys the
+desk's (`SoundPane.keys`)."""
 import uitree as ui
 import uitree_app
 from audio import SFX_NAME_MAX

@@ -16,7 +16,7 @@ moved outside its floor."""
 
 import pytest
 
-from runtime import host_app, moy_input, ui, ui_draw
+from runtime import host_app, ui, ui_draw
 from ws_helpers import no_unlock_banner, quiesce
 
 _C = ui_draw._C
@@ -46,20 +46,12 @@ def _console(tmp_path, windowed):
 
 
 class Pair:
-    """The session on both consoles, frame by frame: `a` as it ships, `b`
-    drawing every dialog whole; `a`'s buffers presented in turn."""
+    """The session on two consoles, frame by frame: `a`'s buffers
+    presented in turn, each presented picture held to `b`'s."""
 
     def __init__(self, tmp_path, monkeypatch, bufs, windowed):
-        real = ui_draw.Hold.ok
         self.a = _console(tmp_path / "ships", windowed)
         self.b = _console(tmp_path / "whole", windowed)
-        b = self.b
-
-        def ok(rows, plan):
-            return False if rows.ws_of is b else real(rows, plan)
-        for ws in (self.a, self.b):
-            ws.block_ui._hold.ws_of = ws
-        monkeypatch.setattr(ui_draw.Hold, "ok", ok)
         self.da = host_app.ConsoleDriver(self.a)
         self.db = host_app.ConsoleDriver(self.b)
         self.bufs = bufs
@@ -146,48 +138,6 @@ def _editor(p, title, tab):
     p.run("ws.open_in_editor([c for c in ws.carts.all if c.get('title') == %r][0])\n"
           "ws.editor_app.set_tab(%r)" % (title, tab))
     p.frame(6, force=True)
-
-
-def _blocks_session(p):
-    """The Blocks number prompt typed into, a held digit, Backspace held, a
-    long value, Enter; the name prompt typed into, Tab to its buttons and
-    back, Escape."""
-    _editor(p, "Coin Quest", "blocks")
-    # on the desk, the keys on the palette's pane beside the Blocks pane, as
-    # a workspace opens
-    p.run("_d = ws.editor_desk\n_d is not None and _d.active() and _d.focus_pane(0)")
-    p.frame(3)
-    p.run("ws.block_ui._blk_open_kbd('num', cur=5, block={'t': 'set', 'p': {}}, "
-          "slot='value', allow_block=True)")
-    p.frame(4)
-    p.type("1234")
-    assert p.a.block_ui.blk_kbd["entry"].text == "1234"     # the prompt takes the keys
-    p.held_key(ord("7"))
-    p.held_key(_BS, 12)
-    p.type("98765432109876543210")      # past the field's width, up to its cap
-    p.key(_ENTER)
-    p.run("ws.block_ui._blk_open_kbd('var', var='score', slot_target=None)")
-    p.frame(4)
-    p.type("lives")
-    assert p.a.block_ui.blk_kbd["entry"].text == "lives"
-    p.key(_BS)
-    p.key(_TAB)
-    p.key(_TAB)
-    p.key(_TAB)
-    p.type("x")
-    p.key(_ESC)
-    p.frame(4)
-
-
-@pytest.mark.parametrize("bufs", (1, 2, 3))
-@pytest.mark.parametrize("windowed", (False, True))
-def test_the_blocks_prompts_draw_their_rows_alone(tmp_path, monkeypatch, bufs, windowed):
-    p = Pair(tmp_path, monkeypatch, bufs, windowed)
-    _blocks_session(p)
-    a, b = p.a.block_ui.blocks_ed, p.b.block_ui.blocks_ed
-    assert a.program == b.program
-    assert p.rows() >= 30, "the prompts drew their rows alone on %d frames: %r" % (
-        p.rows(), p.kinds)
 
 
 @pytest.mark.parametrize("bufs", (1, 2, 3))

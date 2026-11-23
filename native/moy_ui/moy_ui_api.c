@@ -143,6 +143,7 @@ void moy_ui_over_none(moy_ui_over_t *o) {
     o->has_part = 0;
     o->part_w = o->part_h = 0;
     o->bar = -1;
+    o->small = 0;
     o->axis_x = o->snap = o->has_offset = 0;
     o->offset = 0;
     o->spill = 0;
@@ -390,7 +391,7 @@ const moy_ui_over_t *mua_over(const moy_ui_over_t *o) {
                                        -1, -1, -1, -1, -1, {NULL, 0}, -1, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0,
                                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {NULL, 0},
                                        0, {NULL, 0}, {NULL, 0}, {NULL, 0}, {NULL, 0}, {NULL, 0},
-                                       0, {NULL, 0}, {NULL, 0}, 0};
+                                       0, {NULL, 0}, {NULL, 0}, 0, 0};
     return o != NULL ? o : &none;
 }
 
@@ -3665,7 +3666,14 @@ int moy_ui_api_button(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
             bt.glyph = c->row_glyph;
         }
         if (bar) {
-            moy_ui_bar_item(s, b, fl, &bt);
+            // look="small": its icon alone 16 units at the scale, as a labelled item's
+            moy_ui_box_t ib = b;
+            int side = 16 * c->fs;
+            if (o->small && !label.n && (fl & MOY_UI_F_ICON) && b.h >= 2 * side) {
+                ib.y = (int16_t)(b.y + (b.h - side) / 2);
+                ib.h = (int16_t)side;
+            }
+            moy_ui_bar_item(s, ib, fl, &bt);
         } else {
             moy_ui_button(s, b, kid, fl, mua_interact(st), &bt, MOY_UI_PHASE_ALL);
         }
@@ -5473,7 +5481,7 @@ int32_t moy_ui_api_scroll(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
 }
 
 int32_t moy_ui_api_cells(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, int first,
-                         int count, int cols, int side, int gap, int32_t cur, int edge,
+                         int count, int cols, int side, int gap, int32_t cur, int edge, int clear,
                          const moy_ui_over_t *o, int *picked) {
     o = mua_over(o);
     *picked = 0;
@@ -5539,7 +5547,7 @@ int32_t moy_ui_api_cells(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
     mua_band_mark(c, b, stacked, 0);
     EACH_ROW(c, k, s, b, stacked, c->page) {
         mua_band(c, s, b, stacked);
-        moy_ui_cells_draw(s, g.x, g.y, first, count, cols, side, gap, cur, ring, edge);
+        moy_ui_cells_draw(s, g.x, g.y, first, count, cols, side, gap, cur, ring, edge, clear);
         mua_clip_out(&k);
     }
     return cur;

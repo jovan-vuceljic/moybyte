@@ -893,8 +893,8 @@ int uit_tmpl_compile(uit_t *e, const char *src, int model)
     T.src = (uint16_t)sat;
     int r = tmpl_body(e, src, model, &T);
     if (r < 0) {
-        char was[160], code[4];
-        memcpy(was, e->err, sizeof was);
+        char was[UIT_ERR], code[4];
+        snprintf(was, sizeof was, "%s", uit_error(e));
         memcpy(code, e->code, sizeof code);
         if (r == UIT_E_CHECK)
             return uit_check_fail(e, code, UIT_MSG("template %s: %s", "template %s %s"), src, was);

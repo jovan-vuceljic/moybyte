@@ -26,6 +26,7 @@ void uit_mfree(void *p);
 #endif
 
 #define UIT_NONE 0xFFFFu
+#define UIT_ERR 160             // bytes of a failure's words
 #define UIT_ID_MAX 31           // bytes of a node id the toolkit keeps
 #define UIT_FIELDS 16
 
@@ -142,14 +143,17 @@ enum { DL_DANGER = 1, DL_KEYS = 2 };
 enum { CD_CAROUSEL = 1, CD_SHELF = 2, CD_ICONS = 4, CD_FLOW = 8 };
 // A picture's lit bits: look="tile" (a carousel's tile of its own, its shadow round it).
 enum { PC_TILE = 1 };
+// A toast's lit bits: look="flat" (its pill in flat fills, filling the page's room).
+enum { TS_FLAT = 1 };
 // A label's text options (`nbtn`): wrap= in bits 0-1 (LT_WORD, LT_CHAR), its face's
 // role + 1 in bits 2-4, the toolkit's `centre` for align= in bits 5-7, lines= given.
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.
 enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 // A text view's options (`lit`); its syntax's index in `btn` (ui.py's _SYNTAXES).
-enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8 };
-// A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large" (`btn`).
-enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4 };
+enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8, TV_GUTTER = 16 };
+// A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large",
+// look="small" (a bar item's icon alone at 16 units at the scale) (`btn`).
+enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4, BT_SMALL = 8 };
 enum { RW_MID = 1, RW_GROW = 2, RW_WRAP = 4 };   // a row's lit: centred on the row it is a cell of; a fill of
                                                 // its stack; its cells packed from its start, wrapping
 enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4, CV_READS = 8 };  // a canvas's lit: a fill along a row, its w= a
@@ -230,6 +234,7 @@ typedef struct {
     uint8_t depth, ghost, arranging;
     uint8_t path[PN_DEPTH];
     int16_t root, alone;        // the outermost panes this pass; the pane the placement stood alone
+    int16_t alone_r[4];         // ...and the rect it stood alone over (the outermost panes')
     int16_t least[2];           // the outermost panes' least size, gutters in
     uint32_t tap_key, tap_at;   // the last tap on a divider (its split's id hashed, its index) and when
     int32_t writes;             // held sizes written or put back since the host last asked
@@ -251,6 +256,13 @@ typedef struct {
     uint16_t cap, n;
     uint8_t has;
 } uit_draft_t;
+
+// A part's rect a front end placed this frame, by its name.
+#define UIT_ANCS 4
+typedef struct {
+    char name[UIT_ID_MAX + 1];
+    int16_t r[4];
+} uit_anc_t;
 
 // A focus id this frame drew, and what it names.
 typedef struct {
@@ -295,7 +307,7 @@ typedef struct {
 } uit_vrows_t;
 
 struct uit {
-    char err[160];
+    char *err;                  // the last failure's words: UIT_ERR bytes, made at the first
     char code[4];               // the spec's code of a UIT_E_CHECK error
     int ccur;                   // while a prop compiles: its list's current= slot, or -1
     uit_buf_t pool;
@@ -370,13 +382,16 @@ struct uit {
     const char *tvl_s;
     uit_draw_fn draw_fn;        // a canvas's draw, the front end's
     void *draw_ud;
+    int32_t draw_clip[4];       // a table part's clip while its canvas draws (`uit_draw_clip`)
+    uint8_t draw_clip_on;
     uit_pic_fn pic_fn;          // a card's or a picture's image, the front end's
     void *pic_ud;
     // The page's carousel as the last frame drew it (uit_carousel's words), its node + 1 (0: none
     // drawn since the page was built).
-    int32_t car[UIT_CAROUSEL_WORDS];
+    int32_t *car;               // UIT_CAROUSEL_WORDS, made at the first carousel drawn
     int16_t car_node;
-    int32_t cel[UIT_CELLS_WORDS];       // the page's shelf or icons as the last frame drew them
+    int32_t *cel;               // the page's shelf or icons as the last frame drew them: UIT_CELLS_WORDS,
+                                // made at the first drawn
     int16_t cel_node;
     int32_t rect[4];            // the page's room for its placed rows (`self.rect`)
     int32_t band_h;             // a flowing page's hints band, docked at its foot: its pictures end over it
@@ -408,7 +423,7 @@ struct uit {
     uint8_t nband_extra;
     int16_t *rects;
     int crects;
-    uit_mc_t mcells[UIT_MCELLS];   // a pass's model row cells (`put_cell`)
+    uit_mc_t *mcells;           // a pass's model row cells (`put_cell`): UIT_MCELLS, made at the first
     uint8_t nmcells;
     uit_arr_t *arr;             // the panes' answers (a page with panes or a hosted body)
     uint8_t has_panes;
@@ -418,8 +433,7 @@ struct uit {
     int16_t late[8];            // the popovers and dialogs a stack draws last, over it
     int nlate;
     // a part's rect a front end placed this frame, that a popover hangs from ("code.caret")
-    char anc_name[4][UIT_ID_MAX + 1];
-    int16_t anc[4][4];
+    uit_anc_t *anc;             // UIT_ANCS, made at the first
     int nanc;
     // the frame drawn last, for uit_still: the versions it read and its focus
     uint32_t still_ver;
@@ -484,7 +498,7 @@ const char *uit_label_word(const uit_t *e, int table, const char *key, size_t n)
 // moy_uitree_walk.c
 int uit_act_can(uit_t *e, int a, int model, int row);
 int uit_shown(uit_t *e, int node, int model, int row);
-void uit_cur_moved(uit_t *e, int node, const char *v, size_t n, const char *why);
+void uit_cur_moved(uit_t *e, int node, const char *v, size_t n, const char *why, int user);
 int uit_model_of(uit_t *e, int node);
 // The rows node `node` is in (itself included), or -1.
 int uit_list_of(const uit_t *e, int node);

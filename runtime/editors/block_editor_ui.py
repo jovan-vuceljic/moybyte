@@ -11,11 +11,12 @@ Two layers, the same split as the console's other sub-editors:
   * BlockEditor (runtime/editors/editors_block.py) -- the pure tree-edit core: flattens the
     program into cursor-addressable rows, inserts/deletes/moves blocks, sets
     slot values. No canvas, no input.
-  * BlockEditorUI (here) -- the UI: the outline's taps, drags and keys, the
-    menus' and the prompts' state, save and graduation. The page on the
-    verbs, `runtime/editors/editor_blocks.py`, draws the outline and the menus, on
-    the handheld and in a desk Editor's Blocks pane alike; the prompts are
-    drawn here over it.
+  * BlockEditorUI (here) -- the UI: the host of the `uitree` page
+    `runtime/editors/editor_blocks.py` (the handheld's tab and a desk Editor's
+    Blocks pane alike), which draws the outline, the menus and the prompts:
+    it writes the core's state into the page's, draws the outline's rows,
+    takes the outline's keys and does what the page's handlers ask --
+    the menus' and the prompts' state, save and graduation.
 
 One instance lives on Workstation (`ws.block_ui`), with a back-reference to
 it for the primitives it shares with the rest of the console (canvas, input,
@@ -27,8 +28,8 @@ circular import.
 
 import ui as _ui
 import ui_draw as _ui_draw
-_in = _ui.rect_in   # one hit-test (ui.rect_in)
-
+import uitree_editor
+import editor_blocks
 
 from editors_block import BlockEditor, _clone_tree
 from editors_base import (TextEntry, TE_COMMIT, TE_CANCEL,
@@ -38,43 +39,33 @@ from editors_base import (TextEntry, TE_COMMIT, TE_CANCEL,
 # host_app has aliased it on the host, or `runtime.blocks` when a test loads
 # this module directly without that alias.
 import blocks as _blocks_mod
-from widgets import arm_prompt as _arm_prompt
 from layout_base import LayoutBase, BASE_W as _BASE_W, BASE_H as _BASE_H
 import layout_base as _layout_base
 
-# The page (editor_blocks.py): the objects' tab row over the outline, a row's
-# pitch and a depth's indent, and the foot under it.
-HAND_HEAD = 28
-HAND_ROW = 22
-HAND_INDENT = 14
-HAND_FOOT = 34
-
+# An outline row's pitch and a depth's indent, at the font scale: the page's
+# table rows are ROW tall (`BlockEditorUI.row_h`), or the text's height.
+ROW = 22
+INDENT = 14
 
 # A block's label cells are the print font's glyph box, never under this.
 _FONT_W = 8
 
 # The insert menu (category list, then the block list for the chosen category,
-# then for some slots a small option picker), the page's popover; up/down + A
-# walk it, B backs out one level, scrolling by this many rows.
+# then for some slots a small option picker) is the page's popover, its keys the
+# engine's; B backs out one level.
 _BLK_MENU_ROWS = 10
-def _strip(ws, lay, keys, desk):
-    """`keys` on a band of their own at the foot of layout `lay`'s content,
-    over the page's foot (a dialog's keys; touch alone shows none)."""
-    if _ui_draw.hint_kind() == "touch":
-        return
-    b = _ui_draw.metrics("value_row")[17 if desk else 16] * lay.fs
-    ws.sys_canvas.rect(lay.cx, lay.cy + lay.ch - b, lay.cw, b, ws.theme_colors["panel"])
-    _ui.at(lay.cx, lay.cy + lay.ch - b, lay.cw, b)
-    _ui.hints(keys)
 
+# The menu's caption by its mode.
+MENU_TITLES = {"cat": "Pick a kind", "blk": "Pick a block", "dropdown": "Pick one",
+               "variable": "Pick a variable", "list": "Pick a list",
+               "expr": "Pick a value", "actions": "Block actions",
+               "proc": "Edit this block"}
 
-# The entry prompts (`_draw_blk_kbd`): their titles by kind, the line under a
-# name's, and the field's caption by kind (a number's is its slot's).
+# The entry prompts (the page's dialog): their titles by kind and the field's
+# caption by kind (a number's is its slot's); a name's says the rule for one.
 _KBD_TITLES = {"num": "Type a number", "text": "Type some text", "proc": "Name your block",
                "param": "Name an input"}
-_KBD_NAME_RULE = "Use letters, numbers and underscores."
 _KBD_CAPTIONS = {"text": "Text"}
-_KBD_SUB = {"tone": "dim", "wrap": True, "lines": 2}
 # In-row slot editing: tapping/right-step on a selected block cycles to its NEXT
 # editable slot; that slot is highlighted, and A opens its editor (number bump,
 # variable/dropdown picker, expr -> a nested expression insert).
@@ -167,30 +158,23 @@ _BLK_KBD_ALLOW = {"num": _blk_num_allow, "text": None}
 
 class BlockLayout(LayoutBase):
     """The block editor's geometry, from the SYSTEM canvas size (w, h) and
-    font scale: the page `editor_blocks.BlocksPage` draws, on the handheld
-    and in a desk Editor's Blocks pane alike -- the objects' tabs, the
-    outline under them (a row's pitch, a depth's indent, the visible rows)
-    and the foot under it. A block's label cells are the print font's glyph
-    box (a tap on a row finds its slot by them)."""
+    font scale: the content rect the page lays out in, on the handheld and
+    in a desk Editor's Blocks pane alike, and a block's label cells, the
+    print font's glyph box (a tap on a row finds its slot by them)."""
 
     def __init__(self, w=_BASE_W, h=_BASE_H, font_scale=1,
                  chrome_scale=None):
         LayoutBase.__init__(self, w, h, font_scale,
                             chrome_scale=chrome_scale)
-        cx, cy, cw, ch = self.cx, self.cy, self.cw, self.ch
         self.cell = max(_FONT_W, _ui_draw.font("ui")[1]) * self.fs
-        self.x0 = cx + 8
-        self.y0 = cy + HAND_HEAD
-        self.row_h = HAND_ROW
-        self.indent = HAND_INDENT
-        self.outline_w = cw - 16
-        self.bar_h = HAND_FOOT
-        self.bar_y = cy + ch - HAND_FOOT
-        self.rows = max(3, (self.bar_y - 2 - self.y0) // self.row_h)
-        self.menu_rows = _BLK_MENU_ROWS
 
-    def area(self):
-        return (self.x0, self.y0, self.outline_w, self.rows * self.row_h)
+
+class _Damage:
+    def __init__(self, ws):
+        self.ws = ws
+
+    def all(self):
+        self.ws.mark_dirty()
 
 
 class BlockEditorUI:
@@ -220,16 +204,43 @@ class BlockEditorUI:
         self.blk_graduated = False    # cart has GRADUATED (Stage 8): blocks read-only
         self.blk_kbd = None           # inline name-entry prompt state dict, or None
         self.block_layout = BlockLayout()
-        self._page = None             # the page on the verbs (editor_blocks.py)
-        self._hold = _ui_draw.Hold()      # the page under blk_kbd (`_draw_blk_kbd`)
-        self._kbd_gen = 0             # what the prompt draws besides its field's text
+        self._page = None             # the page's engine (editor_blocks.py), made at its first use
+        self._host = _ui_draw.AppHost("editor_blocks", self)
+        self._rect = None               # the page's rect, as the layout last placed it
+        self._kbd_gen = 0             # the prompts opened, each its number
+        self._asked = 0               # the prompt the page's dialog shows (0 none)
+        self._px = 0                  # the last press's x (a row's slot is found by it)
+        self._ox = 0                  # the outline's left, as its rows were last drawn
+        self._made = [None] * 13      # what the page's values were made from (`_sync`)
+        self._shown = None            # what `_sync` wrote last
+        self._at_shown = None         # the cursor's row and slot `_sync` wrote last
+        self._slot_shown = None
+        self._rows = []               # the outline's rows, made with `_made`
+        self._looks = []              # each row's look, made at its first draw
+        self._tags = []               # the objects' tabs after the Stage's: their tags
+        self._caret = [None, 0, 0, 0]     # (block, slot) -> its x off and width
 
     def page(self):
-        """The Blocks page on the verbs, built at its first use."""
+        """The page's engine, made and opened at its first use."""
         if self._page is None:
-            from editor_blocks import BlocksPage
-            self._page = BlocksPage(self, _ui_draw.AppHost("editor_blocks"))
+            self._page = uitree_editor.page(editor_blocks.blocks_page, self._host,
+                                            _Damage(self.ws), gen=True)
+            self._page.env = self           # what its handlers reach (`uitree_app.env()`)
+            self._page.band = False         # the keys are the host's: no hints band
+            self._page.open(hook="none")
         return self._page
+
+    @property
+    def s(self):
+        """The page's state."""
+        self.page()._bind()
+        return editor_blocks.s
+
+    def run(self, name, *args):
+        """Run the page's action or hook `name` now."""
+        pg = self.page()
+        pg._bind()
+        pg.run_action(pg.actions[name], args, "host")
 
     def relayout(self, w, h, fs, cs=None):
         """Rebuild the responsive layout from the live system-canvas size + the
@@ -534,14 +545,6 @@ class BlockEditorUI:
             return str(item)
         return str(item)
 
-    def _blk_menu_move(self, d):
-        m = self.blk_menu
-        if not m or not m["items"]:
-            return
-        m["sel"] = max(0, min(len(m["items"]) - 1, m["sel"] + d))
-        m["top"] = self._clamp_scroll(m["top"], m["sel"],
-                                      self.block_layout.menu_rows, len(m["items"]))
-
     def _blk_menu_select(self):
         """Activate the highlighted menu item (drill in or commit)."""
         m = self.blk_menu
@@ -711,18 +714,14 @@ class BlockEditorUI:
         """Open an entry prompt as `self.blk_kbd`: `kind` routes the keypad
         (num / text / var / list / proc / param) and picks which characters
         its TextEntry accepts; `fields` are the prompt's own facts (the slot or
-        variable it edits). Opened through widgets.arm_prompt (#29): the
-        tap/key that opened it is never its first keystroke."""
+        variable it edits). The page's dialog shows it, its field starting
+        empty (the key that opened it types nothing)."""
         entry = TextEntry(16, _BLK_KBD_ALLOW.get(kind, _blk_name_allow))
-        _arm_prompt(self.ws)
         entry.open(text)
-        host = _ui_draw.AppHost()
-        host.held = self._hold.ok
         self._kbd_gen += 1
         fields["gen"] = self._kbd_gen
         fields["kind"] = kind
         fields["entry"] = entry
-        fields["host"] = host
         self.blk_kbd = fields
 
     def cancel_prompt(self):
@@ -1015,42 +1014,24 @@ class BlockEditorUI:
 
     # -- block-editor input / pointer ----------------------------------------
     def _blocks_input(self):
-        """Keyboard/button input for the outline + insert menu. Mirrors the other
-        editors' edge-driven nav. The menu, when open, captures nav + A/B."""
+        """The outline's keys: up and down the cursor, right the slot, left a
+        number's nudge, A acts, Enter saves; while a block moves, A drops it
+        and B cancels. While the menu or a prompt is up the keys are the
+        page's (the engine's), B backing the menu out a level and the
+        console's cancel key closing a prompt."""
         ws = self.ws
         i = ws.input
-        page = self._page
-        if page is not None:
-            if page.owed():
-                ws.mark_dirty()
-            if self.blk_kbd is None and self.blk_menu is not None:
-                if page.keys(i):
-                    ws.mark_dirty()
-                if i.pressed("b"):
-                    self._blk_menu_back()
-                    ws.mark_dirty()
-                return
-        if self.blk_kbd is not None:
-            # The entry prompt owns input: its dialog's engine takes the typed
-            # bytes, the moves between its stops and Enter; Esc cancels (the
-            # T-Deck's Mic does through `InputPolicy.cancel`). The key that
-            # opened it types nothing (its host's seed, #29).
-            host = self.blk_kbd["host"]
-            if host.keys(i):
-                ws.mark_dirty()
-            if host.inp[5] == 27 or i.pressed("stop"):
-                host.inp[5] = 0
-                self._blk_kbd_cancel()
-            return
-        if self.blk_menu is not None:
-            if i.steps("up"):
-                self._blk_menu_move(-1)
-            if i.steps("down"):
-                self._blk_menu_move(1)
-            if i.pressed("a") or i.pressed("run"):
-                self._blk_menu_select()
-            elif i.pressed("b"):
+        if self.blk_menu is not None or self.blk_kbd is not None:
+            if self.blk_kbd is None and i.pressed("b"):
                 self._blk_menu_back()
+                ws.mark_dirty()
+                return
+            if self.blk_kbd is not None and i.pressed("stop"):
+                self._blk_kbd_cancel()
+                ws.mark_dirty()
+                return
+            self._sync()
+            self.page().keys(i)
             return
         be = self.blocks_ed
         if be is not None and be.moving():
@@ -1067,24 +1048,17 @@ class BlockEditorUI:
                 be.cancel_move()
                 self.blk_status = "MOVE OFF"
             return
-        moved = False
         if i.steps("up"):
             self._blk_move_cursor(-1)
-            moved = True
         if i.steps("down"):
             self._blk_move_cursor(1)
-            moved = True
         if i.steps("right"):
             self._blk_next_slot()                # step the highlighted slot
-            moved = True
         if i.steps("left"):
             # left on a number slot decrements it (a quick tweak without the menu)
             self._blk_left()
-            moved = True
         if i.pressed("a"):
             self._blk_a()
-            if self.blk_kbd is not None and not moved:
-                self._hold.opened(ws)            # a slot's prompt over the page as it was
         elif i.pressed("run"):
             self.save_blocks()
         else:
@@ -1112,18 +1086,19 @@ class BlockEditorUI:
                 self._blk_bump_number(b, slot["name"], -1)
 
     def _blocks_pointer(self, px, py, click):
-        """A pointer sample on the tab, in SYSTEM coords: a prompt's taps
-        are its own; the rest are the page's verbs (the bar's first), the
-        outline's drag and fling its table's and its taps `_blk_tap_row`."""
+        """A pointer sample on the tab, in SYSTEM coords: the bar's first,
+        then the page's (a row's tap finds its slot by the press's x)."""
         ws = self.ws
-        if self.blk_kbd is not None:
-            if self.blk_kbd["host"].point(px, py, click, ws.pointer.down):
-                ws.mark_dirty()
-            return
-        if click and ws.bar_layer.handle_bar_tap("menu", px, py):
-            return
-        if self.page().point(px, py, click, ws.pointer.down):
-            ws.mark_dirty()
+        if click:
+            self._px = px
+            if self.blk_kbd is None and ws.bar_layer.handle_bar_tap("menu", px, py):
+                return
+        self._sync()
+        self.page().point(px, py, click)
+
+    def pointer(self):
+        """The pointer, where the page's host reads whether it is held."""
+        return self.ws.pointer
 
     def _blk_tap_row(self, ridx, px, again):
         """A tap on outline row `ridx` at x `px` (the page's table answers
@@ -1132,7 +1107,6 @@ class BlockEditorUI:
         (insert / edit) -- the A action. While a block moves, a tap re-homes
         the cursor, and on an insert point drops the block there."""
         be = self.blocks_ed
-        lay = self.block_layout
         if be is None or not 0 <= ridx < len(be.rows):
             return
         row = be.rows[ridx]
@@ -1146,7 +1120,7 @@ class BlockEditorUI:
             be.cur = ridx
             self.blk_slot = 0
         if row.kind == "block" and not row.is_else:
-            si = self._blk_slot_at_x(row.block, lay.x0 + row.depth * lay.indent, px)
+            si = self._blk_slot_at_x(row.block, self._row_x(row), px)
             if si is not None:
                 self.blk_slot = si
         if again:
@@ -1164,102 +1138,103 @@ class BlockEditorUI:
         self.blk_kbd = None
         self._blk_open_expr_menu(block, name)
 
-    # -- block editor drawing (#29 Part 2) -----------------------------------
+    # -- the page ----------------------------------------------------------------
 
     def _draw_blocks(self, dt=0):
-        """The Blocks tab: the page (`editor_blocks.BlocksPage`) in the content
-        rect, the bar's strip, and an entry prompt over them."""
+        """The Blocks tab: the page in the content rect, no stop holding
+        focus but the menu's and a prompt's, and the bar's strip."""
         ws = self.ws
-        k = self.blk_kbd
-        hold = self._hold
-        if k is not None and self._page is not None:
-            self._page.forget()             # a prompt over the page: the next frame draws it whole
-        if k is not None and self.prompt_rows(dt):
-            return
-        how = hold.under(ws, None if k is None else self._held_key(k), self._page_rect(), dt)
-        if how == _ui_draw.HOLD_PUT:
-            ws.bar_layer.draw_status_strip("menu")
-            self._draw_blk_kbd(True, dt)
-            hold.note()
-            return
-        if how == _ui_draw.HOLD_DRAW:
-            self.page().draw(ws.sys_canvas, ws.theme_colors, self._page_rect(), False)
-        ws.bar_layer.draw_status_strip("menu")
-        if self.blk_kbd is not None:
-            self._draw_blk_kbd(False, dt)
-            hold.note()
-        else:
-            hold.shown(ws, ws.sys_canvas, self._page is None or self._page.host.still(), dt)
-
-    def prompt_host(self):
-        """The open prompt's host (`ui_draw.AppHost`), None where none is up."""
-        k = self.blk_kbd
-        return None if k is None else k["host"]
-
-    def prompt_rows(self, dt=0):
-        """Begin the open prompt's frame ahead of the page under it, once a
-        painted frame: where it is a dialog's rows frame (its field typed
-        into, its focus moved, the page held as the frames before left it:
-        `ui_draw.Hold.rows_frame`), draw the prompt's changed rows alone and
-        answer True; else the frame draws the page and the prompt as ever."""
-        k = self.blk_kbd
-        ws = self.ws
-        if k is None or not self._hold.rows_frame(
-                ws, self._held_key(k), k["gen"], k["host"], self._page_rect(),
-                _layout_base.metric_class() == _layout_base.DESK, dt):
-            return False
-        ws.bar_layer.draw_status_strip("menu")
-        self._draw_blk_kbd(True, dt)
-        self._hold.note()
-        return True
-
-    def _page_rect(self):
         lay = self.block_layout
-        return (lay.cx, lay.cy, lay.cw, lay.ch)
-
-    def _held_key(self, k):
-        """What the page under prompt `k` is a function of while it is up."""
-        ws = self.ws
-        return (k, ws.sys_canvas, self._page_rect(), ws.layout.fs, ws.look.look_gen)
-
-    def _draw_blk_kbd(self, held=False, dt=0):
-        """The entry prompt up (GAPS 52): `ui.dialog` with a captioned
-        `ui.field`, over the Blocks page dimmed -- "Name your variable" (a
-        block's, an input's) with the rule for a name, "Type some text", or
-        "Type a number" with the slot's value as its placeholder and Use a
-        block where the slot takes one. The keys type, so it has no DEL or
-        digit pad; the T-Deck's keys are its hint strip's, where a touch
-        glass and the desk add Cancel and OK. On the SYSTEM canvas: the
-        game canvas is a hidden buffer on a bigger glass (#85/#93). `held`:
-        the page under it was put back washed (`ui_draw.Hold`), else it was
-        drawn this frame and is washed and held here."""
-        ws = self.ws
-        k = self.blk_kbd
-        kind = k.get("kind")
-        entry = k["entry"]
-        host = k["host"]
+        r = self._rect
+        if r is None or r[0] != lay.cx or r[1] != lay.cy or r[2] != lay.cw or r[3] != lay.ch:
+            r = self._rect = (lay.cx, lay.cy, lay.cw, lay.ch)
         desk = _layout_base.metric_class() == _layout_base.DESK
+        cv = ws.sys_canvas
+        pg = self.page()
+        up = self.blk_menu is not None or self.blk_kbd is not None
+        pg.band = self.blk_kbd is not None          # a prompt's keys in the band
+        self._host.begin(cv, ws.theme_colors, r, desk, False, not up)
+        self._sync()
+        pg.paint(dt, cv, ws.theme_colors, r, desk)
+        _ui.end()
+        ws.bar_layer.draw_status_strip("menu")
+        if not self._host.still():
+            ws.request_frame()
+
+    def _sync(self):
+        """The core's state the page shows, handed to its `sync` hook where
+        it moved, and a prompt opened or closed by the host."""
+        be = self.blocks_ed
+        m = self.blk_menu
+        k = self.blk_kbd
+        if k is not None and k["gen"] != self._asked:
+            self._asked = k["gen"]
+            self.run("ask", self._ask_vals(k))
+        elif k is None and self._asked:
+            self._asked = 0
+            if self.s.asking:
+                self.run("asked")
+        if be is None:
+            vals = (True, False, "", [], "", [], "", False, False, "", [], 0, self.row_h())
+            if vals != self._shown:
+                self._shown = vals
+                self.run("sync", vals)
+            return
+        g = self._made
         lay = self.block_layout
-        self._hold.dialog(host, ws.sys_canvas, ws.theme_colors, self._page_rect(), desk)
-        num = kind == "num"
-        to_block = num and k.get("allow_block")
-        keys = (("confirm", "OK") + (("scroll", "Use a block") if to_block else ())
-                + ("cancel", "Cancel"))
-        _strip(ws, lay, keys, desk)
-        if not held:
-            self._hold.wash(ws, ws.sys_canvas, self._page_rect(), self._held_key(k),
-                            self._page is None or self._page.host.still(), dt)
-        tdeck = _ui.input_kind() == "tdeck"
-        o = k.get("o")
-        if o is None:
-            # the page under it washed already (held), and what it draws
-            # besides its field's text a function of the prompt alone
-            o = k["o"] = {"wash": False, "gen": k["gen"]}
-        pick = _ui.dialog(_KBD_TITLES.get(kind, "Name your variable"),
-                          () if tdeck else ("Cancel", "OK"), "primary", o)
-        if not num and kind != "text":
-            _ui.label(_KBD_NAME_RULE, _KBD_SUB)
-        if num:
+        st = self.blk_status
+        se = self.ws.scene_ui.sceneedit
+        sg = se._hist.gen if se is not None else -1
+        lg = self.ws.look.look_gen
+        mode = m["mode"] if m is not None else None
+        if not (g[0] is be and g[1] == be._hist.gen and g[2] == be.target and g[3] == len(be.rows)
+                and g[4] == be.moving() and g[5] is st and g[6] == self.blk_graduated
+                and g[7] is m and g[8] == mode and g[9] is se and g[10] == sg and g[11] == lg
+                and g[12] is lay):
+            g[0], g[1], g[2], g[3], g[4] = be, be._hist.gen, be.target, len(be.rows), be.moving()
+            g[5], g[6], g[7], g[8], g[9] = st, self.blk_graduated, m, mode, se
+            g[10], g[11], g[12] = sg, lg, lay
+            status = ""
+            if st:
+                status = st[:1].upper() + st[1:].lower()
+            objs, obj = self._objects(be, status)
+            lines = self._lines(be)
+            vals = (False, self.blk_graduated, status, objs, obj, lines, self._at(be),
+                    be.moving(), m is not None, MENU_TITLES.get(mode, "Pick") if m else "",
+                    [dict(k=str(i), label=self.menu_word(i)) for i in range(len(m["items"]))] if m else [],
+                    min(m["sel"], len(m["items"]) - 1) if m and m["items"] else 0, self.row_h())
+            if vals != self._shown:
+                was = self._shown or (None,) * 13
+                self._shown = vals
+                # the models the page holds already left out
+                self.run("sync", tuple(None if i in (3, 5, 10) and vals[i] == was[i] else vals[i]
+                                       for i in range(13)))
+                self._at_shown = None           # the rows made again: the cursor's marked anew
+        # a move of the cursor or its slot alone: the rows it left and it is on
+        at = self._at(be)
+        if at is not self._at_shown or self.blk_slot != self._slot_shown:
+            self.run("marked", (self._at_shown, at, self.blk_slot + 1))
+            self._at_shown = at
+            self._slot_shown = self.blk_slot
+
+    def row_h(self):
+        """An outline row's height in pixels: ROW in the page's unit (the
+        font scale on a handheld, 1 on the desk), taller where the text is
+        (a desk's Large and Largest)."""
+        fs = self.block_layout.fs
+        desk = _layout_base.metric_class() == _layout_base.DESK
+        return max(ROW * (1 if desk else fs), _ui_draw.font("ui")[3] * fs + 6)
+
+    def _at(self, be):
+        """The cursor's row's key, the one its row was made with."""
+        rows = self._rows
+        return rows[be.cur]["k"] if 0 <= be.cur < len(rows) else ""
+
+    def _ask_vals(self, k):
+        """The page's dialog for prompt `k`: (its title, the name rule
+        shown, the field's caption, its placeholder, Use a block offered)."""
+        kind = k.get("kind")
+        if kind == "num":
             cur = k.get("cur")
             hint = str(cur) if _blocks_mod.is_literal_value(cur) and cur is not None else "0"
             cap = str(k.get("slot") or "Number").replace("_", " ")
@@ -1267,26 +1242,220 @@ class BlockEditorUI:
         else:
             hint = "" if kind == "text" else str(k.get("var", ""))
             cap = _KBD_CAPTIONS.get(kind, "Name")
-        got, done = _ui.field(cap, entry.text, 24, {"id": "entry", "hint": hint[:24]})
-        if got != entry.text:
-            # what the kind takes of what was typed (a number's digits, a name's letters)
-            t = ""
-            for ch in got:
-                t, _ev = _text_key(t, ord(ch), entry.cap, entry.allow)
-            entry.text = t
-        used = False
-        if to_block:
-            _ui.icon("blocks")
-            used = _ui.button("Use a block")
-        _ui.dialog()
-        if used:
+        return (_KBD_TITLES.get(kind, "Name your variable"), kind not in ("num", "text"), cap,
+                hint[:24], bool(kind == "num" and k.get("allow_block")))
+
+    def _objects(self, be, status):
+        """The objects' tabs: the Stage, then each object with scripts or on
+        the stage while the head holds them beside the status word; and the
+        picked one's key (an index)."""
+        w = self.block_layout.cw
+        fs = self.block_layout.fs
+        _ui.face("ui")
+        sw = min(_ui.text_size(status, fs)[0] + 4 * fs, w // 2) if status else 0
+        room = w - 16 * fs - sw - 8 * fs - (_ui.text_size("Stage", fs)[0] + 20 * fs)
+        tags = self._tags
+        del tags[:]
+        cur = 0
+        for t in self._roster_tags():
+            tw = _ui.text_size(t, fs)[0] + 20 * fs
+            if tw > room:
+                break
+            room -= tw
+            tags.append(t)
+            if t == be.target:
+                cur = len(tags)
+        _ui.face()
+        objs = [dict(k="0", name="Stage")] + [dict(k=str(i + 1), name=t) for i, t in enumerate(tags)]
+        return objs, str(cur)
+
+    def _lines(self, be):
+        """The outline's rows: each its index and what it shows -- its kind,
+        depth and label -- so a frame draws the rows that changed."""
+        rows = []
+        for i in range(len(be.rows)):
+            row = be.rows[i]
+            if row.kind == "insert":
+                sig = "+%d" % row.depth
+            else:
+                sig = "%d %d %s" % (row.depth, row.is_else, self._blk_row_text(row.block, row.is_else))
+            rows.append(dict(k=str(i), sig=sig, on=0))
+        self._rows = rows
+        self._looks = [None] * len(rows)
+        return rows
+
+    def _row_x(self, row):
+        """Outline row `row`'s left edge on the canvas, by its depth."""
+        fs = self.block_layout.fs
+        return self._ox + 8 * fs + row.depth * INDENT * fs
+
+    def _look(self, i, row):
+        """Row `i`'s look, made at its first draw: [label, plate width,
+        fill, ink, hat, label height] (None for an insert point)."""
+        lk = self._looks[i]
+        if lk is None and row.kind != "insert":
+            b = row.block
+            fs = self.block_layout.fs
+            label = self._blk_row_text(b, row.is_else)
+            fill = self._cat_color("control" if row.is_else else self._blk_block_cat(b))
+            hat = not row.is_else and self._is_hat_block(b)
+            tw, lh = _ui.text_size(label, fs)
+            lk = self._looks[i] = [label, tw + (20 if hat else 22) * fs, fill,
+                                   self._blk_ink(fill) if hat else None, hat, lh]
+        return lk
+
+    def draw_row(self, cv, i, x, y, w, h):
+        """Outline row `i` in its part: a hat on its category's colour, a
+        statement on a plate with its category's bar (the cursor's slot
+        underlined), or an insert point (the cursor's as "add block")."""
+        be = self.blocks_ed
+        if be is None or not 0 <= i < len(be.rows) or i >= len(self._looks):
+            return
+        self._ox = x
+        th = self.ws.theme_colors
+        fs = self.block_layout.fs
+        row = be.rows[i]
+        cursor = i == be.cur
+        rx = self._row_x(row)
+        rw = x + w - 8 * fs - rx
+        _ui.face("ui")
+        look = self._look(i, row)
+        if look is None:
+            if cursor:
+                aw = _ui.text_size("add block", fs)[0] + 40 * fs
+                _ui_draw.button(cv, th, (rx, y + fs, min(rw, aw), h - 2 * fs), "add block",
+                                "tonal", glyph="plus", glyph_draw=self._add_icon)
+            else:
+                cv.rect(rx + 2 * fs, y + h // 2 - fs, 10 * fs, 2 * fs, th["border"])
+            _ui.face()
+            return
+        label, fill = look[0], look[2]
+        tw = min(rw, look[1])
+        ph = h - 2 * fs
+        py = y + fs
+        if look[4]:
+            cv.rrect(rx, py, tw, ph, 6 * fs, fill)
+            ink = look[3]
+            tx = rx + 10 * fs
+        else:
+            cv.rrect(rx, py, tw, ph, 5 * fs, th["surface_alt"])
+            cv.rrect(rx, py, 3 * fs, ph, fs, fill)
+            ink = th["ink"]
+            tx = rx + 9 * fs
+        ty = py + (ph - look[5]) // 2
+        cv.print(label, tx, ty, ink, 1)
+        if cursor and not row.is_else:
+            self._draw_caret(cv, th, row.block, label, tx, ty + look[5])
+        _ui.face()
+
+    def _add_icon(self, kind, rect, ink, cv):
+        """"add block"'s icon: the theme's icon set's `new`, else the plus glyph."""
+        if not self.ws.draw_icon("new", rect, ink, cv):
+            _ui_draw.glyph(cv, kind, rect, ink)
+
+    def _draw_caret(self, cv, th, b, label, tx, y):
+        """The selected slot's value underlined, what A and left and right
+        change."""
+        c = self._caret
+        if c[0] is not b or c[1] != self.blk_slot:
+            c[0] = b
+            c[1] = self.blk_slot
+            c[2] = None
+            slots = self.blocks_ed.slots(b)
+            if slots:
+                si = self.blk_slot % len(slots)
+                col = self._blk_slot_text_col(b, si)
+                if col is not None:
+                    val = self._blk_slot_display(b, slots[si])
+                    fs = self.block_layout.fs
+                    c[2] = _ui.text_size(label[:col], fs)[0]
+                    c[3] = max(4 * fs, _ui.text_size(val, fs)[0])
+        if c[2] is not None:
+            cv.rect(tx + c[2], y, c[3], 2 * self.block_layout.fs, th["value"])
+
+    def menu_word(self, k):
+        """The menu's row `k` as it reads: the item's label, a category's in
+        sentence case."""
+        word = self._blk_menu_label(k)
+        if word.isupper():
+            word = word[:1] + word[1:].lower()
+        return word
+
+    # -- the page's handlers -----------------------------------------------------------
+
+    def pick_row(self, i):
+        """A tap moved the outline's cursor to row `i`: it and the slot under
+        the press."""
+        self._blk_tap_row(i, self._px, False)
+
+    def open_row(self, i):
+        """A tap on the cursor's row: it acts (insert, edit its slot)."""
+        self._blk_tap_row(i, self._px, True)
+
+    def pick_object(self, key):
+        """An object's tab taken: its scripts."""
+        n = int(key) if key else 0
+        self._select_sprite(None if n == 0 or n > len(self._tags) else self._tags[n - 1])
+        self.blk_slot = 0
+        self.ws.mark_dirty()
+
+    def menu_pick(self, i):
+        m = self.blk_menu
+        if m is not None and 0 <= i < len(m["items"]):
+            m["sel"] = i
+            self._blk_menu_select()
+        self.ws.mark_dirty()
+
+    def menu_back(self):
+        self._blk_menu_back()
+        self.ws.mark_dirty()
+
+    def typed(self, text):
+        """What the open prompt takes of `text` (a number's digits, a name's
+        letters), its entry's text."""
+        k = self.blk_kbd
+        if k is None:
+            return text
+        entry = k["entry"]
+        t = ""
+        for ch in text:
+            t, _ev = _text_key(t, ord(ch), entry.cap, entry.allow)
+        entry.text = t
+        return t
+
+    def ask_done(self, how, text):
+        """The prompt's dialog let go: "ok" commits what was typed, "cancel"
+        drops it, "block" puts a reporter block in its slot instead."""
+        if self.blk_kbd is None:
+            return
+        self.typed(text)
+        self._asked = 0
+        if how == "block":
             self._blk_num_to_block()
-        elif pick == 1 or done:
+        elif how == "ok":
             self._blk_kbd_commit()
-        elif pick == 0:
+        else:
             self._blk_kbd_cancel()
-        if host.owed or host.tap == 2:
-            ws.request_frame()
+        self.ws.mark_dirty()
+
+    def act(self, verb):
+        """A foot tool's verb: add, delete, up, down, more, or code (See
+        code)."""
+        be = self.blocks_ed
+        if be is None:
+            return
+        if verb == "add":
+            self._blk_open_categories()
+        elif verb == "delete":
+            be.delete()
+            self.blk_slot = 0
+        elif verb in ("up", "down"):
+            be.move_block(-1 if verb == "up" else 1)
+        elif verb == "more":
+            self._blk_open_actions()
+        elif verb == "code":
+            self.ws.defer(self.graduate_to_code)
+        self.ws.mark_dirty()
 
     def _blk_ink(self, fill_idx):
         """Black or white text, whichever reads on the fill colour (luminance)."""

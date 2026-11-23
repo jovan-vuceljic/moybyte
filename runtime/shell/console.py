@@ -60,8 +60,7 @@ _LAZY_MODULES = {
     "map_editor_ui": ("MapEditorUI", "_MV_ZOOMS"),
     "scene_editor_ui": ("SceneEditorUI",),
     "music_editor_ui": ("MusicEditorUI",),
-    "paint_layer": ("PaintLayer", "_PG_X0", "_PG_Y0", "_PG_SPAN",
-                    "_SW_X0", "_SW_Y0", "_SW", "_SW_COLS"),
+    "paint_layer": ("PaintLayer",),
 }
 
 
@@ -319,12 +318,10 @@ _SYSMENU_LAYERS = ("sysmenu", "popover_over")
 NO_KEYBOARD_TEXT = "Pair a keyboard to type"
 
 import ui_draw as _ui_draw
-import ui as _uiv
 
 # The loading pill's icon by the kind of cart being opened (GAPS 51).
 _LOADING_ICON = {"game": "game", "app": "app", "tool": "app", "wallpaper": "wallpaper",
                  "theme": "palette"}
-_FLAT = {"flat": True}
 
 
 # Project (project.py): the open cart's DATA + commit_* verbs; its six data
@@ -404,7 +401,7 @@ from console_frame import FrameState
 from console_perf import PerfMeters, _ema
 from console_settings import SettingsToggles
 from console_saves import Saves
-from console_notices import Notices
+from console_notices import Notices, LOADING as _LOADING
 from console_intents import Intents
 from console_spine import Spine
 from moy_spine import AppRegistry, Returns
@@ -2864,7 +2861,7 @@ class Workstation:
 
     def _draw_loading_toast(self):
         """#184: the deferred-transition acknowledgment (GAPS 51) -- the
-        toast's pill in flat fills, painted once on the frame between a tap
+        flat toast's page (`banner_ui.loading`), painted once on the frame between a tap
         and its heavy transition, which the panel retains through the load:
         the cart's kind as an icon and what opens ("Opening Star Catcher..."),
         over the middle of the card being opened on a handheld and in the
@@ -2876,25 +2873,21 @@ class Workstation:
         title = str((cart or {}).get("title") or "").strip()
         label = ("Opening %s\u2026" % title) if title else "Opening\u2026"
         kind = _LOADING_ICON.get((cart or {}).get("type"), "play")
-        host = self._loading_host
-        if host is None:
-            host = self._loading_host = _ui_draw.AppHost()
-        host.begin(cv, self.theme_colors, (0, 0, cv.w, cv.h), desk)
         h = (30 if desk else 20 * lay.fs)
         if desk:
             bx, by, bw, bh = lay.bars[0][1] if lay.bars else (0, 0, cv.w, lay.cy)
-            _uiv.at(bx, by + (bh - h) // 2, bw, h)
+            rect = (bx, by + (bh - h) // 2, bw, h)
         else:
             r = None
             if self.screen == "launcher":
                 grid = self.launcher_layer.grid
                 r = grid.tile_rect(getattr(grid, "sel", 0))
             cy = r[1] + r[3] // 2 if r is not None else lay.cy + lay.ch // 2
-            _uiv.at(8 * lay.fs, cy - h // 2, cv.w - 16 * lay.fs, h)
+            rect = (8 * lay.fs, cy - h // 2, cv.w - 16 * lay.fs, h)
             strip = self.menu_ui.about._strip()
             if strip is not None:         # a load cannot be cancelled: no keys
                 cv.rect(strip[0], strip[1], strip[2], strip[3], self.theme_colors["panel"])
-        self._loading_rect = _uiv.toast(label, kind, _FLAT)
+        self._loading_rect = self.notices.paint_banner(_LOADING, rect, label, "", kind)
 
     def _disarm_fn(self):
         """The compositor's disarm_scale_fold, or None: probed once per

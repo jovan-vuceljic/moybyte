@@ -61,6 +61,7 @@ _SIGS = (
     ("uit_on_pic", [_P, _P, _P], None),
     ("uit_pics_moved", [_P], None),
     ("uit_carousel", [_P, _P], _I),
+    ("uit_draw_clip", [_P, _P], _I),
     ("uit_carousel_tile", [_P, _I, _P], _I),
     ("uit_carousel_at", [_P, _I, _I], _I),
     ("uit_carousel_geom", [_P, _P, _I, _I, _P], _I),
@@ -432,6 +433,11 @@ class Engine:
 
     def pics_moved(self):
         self._L.uit_pics_moved(self._e)
+
+    def draw_clip(self, out):
+        """Inside a canvas's draw, what shows of its rect into `out`, an
+        array('i') of 4, where it is a table's part (uit_draw_clip)."""
+        return bool(self._L.uit_draw_clip(self._e, _addr(out, 4)))
 
     def carousel(self, out):
         """The page's carousel as the last frame drew it (uit_carousel)
