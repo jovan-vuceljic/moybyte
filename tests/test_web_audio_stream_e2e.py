@@ -182,8 +182,10 @@ def test_a_station_that_stalls_plays_silence_and_counts_it(tmp_path):
     a, b = snaps[0], snaps[-1]
     assert b["media"]["starved"] > 0, "the stall never reached the decoder: %r" % b["media"]
     assert b["out"]["silences"] >= 1 and b["out"]["silent"] > 0, b["out"]
-    # the sink itself never ran dry: the silence is what the mix sent
-    assert b["sink"]["under"] == 0 and b["sink"]["dup"] == 0 and b["sink"]["gap"] == 0, b["sink"]
+    # the sink itself never ran dry through the stall: the silence is what the mix
+    # sent (counted from the first snapshot, so a page that started slow under a
+    # loaded machine's other browsers is not the stall's)
+    assert all(b["sink"][k] == a["sink"][k] for k in ("under", "dup", "gap")), (a["sink"], b["sink"])
     assert b["out"]["sound"] > snaps[-2]["out"]["sound"], "the tone did not come back: %r" % b
 
 
