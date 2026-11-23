@@ -315,8 +315,10 @@ def test_the_doc_table_lists_exactly_the_rows():
 
 BUDGETS = {
     "artwork": {"surface.canvas": 1, "surface.pointer": 1, "theme.colors": 25},
-    "appearance": {"surface.canvas": 1, "theme.colors": 3, "theme.gen": 1,
-                   "wallpaper.preview": 1, "wallpaper.title": 1},
+    # a uitree page's frame makes one picture its cards owe (the engine's
+    # idle step: a layer drawn, the page owed again) until it holds them all
+    "appearance": {"surface.canvas": 2, "surface.windowed": 1, "surface.chrome_scale": 1,
+                   "surface.font_scale": 1, "damage.all": 1, "theme.colors": 1, "theme.gen": 1},
     "storybook": {"surface.canvas": 1, "surface.windowed": 1, "surface.chrome_scale": 1,
                   "theme.colors": 2, "carts.all": 1},
     "files": {"surface.canvas": 1, "surface.windowed": 1, "surface.chrome_scale": 1, "theme.colors": 1},

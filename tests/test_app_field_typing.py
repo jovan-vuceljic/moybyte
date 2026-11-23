@@ -318,7 +318,7 @@ def _files_rename(ws):
 
 def _appearance_name(ws):
     app = ws.app("appearance")
-    app._open_name()
+    app.open_name()
     app.name_text = "bubble"
     app._damage.all()
     return lambda: app.name_text

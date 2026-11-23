@@ -120,6 +120,7 @@ class _Win:
                                       # (_content_static) may reuse it
         self._look_gen = -1           # the look buf's content was drawn under
         self._marked = False          # buf was drawn focused: it holds a focus mark
+        self._landed = 0              # its layer's pictures landed when buf was drawn behind
         # While buf is stale: [x0, y0, x1, y1, known], the part of it the
         # content changed since buf last held its page (known 0: unknown).
         self._lag = [0, 0, 0, 0, 0]

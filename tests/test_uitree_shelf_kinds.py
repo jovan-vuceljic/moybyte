@@ -1,6 +1,7 @@
 """The C engine's kinds and props a shelf of carts draws with (Get Carts'
 design), each held on a page of its own from the Python front: a card's
-badge= and tone=, a cards list's pad=, a group's look="card", the toast."""
+badge= and tone=, a cards list's pad= and flow=, a group's look="card",
+the toast."""
 import os
 import sys
 
@@ -84,6 +85,29 @@ def build():
     assert b[0][1] == b[1][1] == b[2][1] < b[3][1], b
     assert b[3][0] == b[0][0] and b[1][0] - b[0][0] == b[2][0] - b[1][0], b
     assert b[0][0] - 16 <= 8, b
+
+
+def test_a_cards_flow_lays_its_cards_between_a_groups_caption_and_its_rows(tmp_path):
+    """flow=True: the cards on the page's next rows inside the group, the
+    group's rows under them, each a stop of the page (a region of their own
+    would take the rest of the page, and the rows would not draw)."""
+    build = '''
+def build():
+    with ui.page("Shelf"):
+        with ui.group("Carts"):
+            with ui.cards("carts", w=48, h=36, flow=True):
+                ui.card("tap", label="{.name}")
+            ui.toggle("On", "on")
+            ui.button("flip")
+'''
+    ids = ["0/tap", "3/tap", "on", "flip"]
+    fs, app = run(tmp_path, build, boxes=ids)
+    b = fs[0].state
+    assert all(b), b
+    assert b[0][1] < b[2][1] and b[1][1] + b[1][3] <= b[2][1], b
+    assert b[2][1] < b[3][1], b
+    stops = list(app.engine.stop_kinds())
+    assert stops == ["0/tap", "1/tap", "2/tap", "3/tap", "on", "flip"], stops
 
 
 def test_a_cards_badge_and_tone_draw_on_the_card(tmp_path):

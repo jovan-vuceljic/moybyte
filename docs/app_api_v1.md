@@ -284,8 +284,11 @@ pill over the page above its foot; `ui.group("", look="card")` lays its
 rows on a card (as a split's cell, the cell is the card), and
 `look="rules"` parts its rows with a rule as a captioned group's are (a
 `ui.row` among them one of its rows); `ui.text_view(..., look="well")` lays its prose on a
-well; `ui.cards(..., pad=)` sets the gap its columns are counted at, and its
-`current=` marks the card whose key a state holds;
+well; `ui.cards(..., pad=)` sets the gap its columns are counted at, its
+`current=` marks the card whose key a state holds, and `flow=True` lays
+its cards in the page's flow (in a group, between its caption and its
+rows) where they scroll with the page, not in a region of their own that
+takes the rest of it;
 `ui.cards(..., look="carousel", cur=)` is the handheld home's band: from
 where the stack stands to the page's foot, one row of tiles at most `w=`
 a side (the largest that shows a whole cover at a clean scale and leaves

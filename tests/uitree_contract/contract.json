@@ -2140,6 +2140,10 @@
      "type": "tpl",
      "level": 2
     },
+    "flow": {
+     "type": "bool",
+     "level": 2
+    },
     "look": {
      "type": "word:carousel,shelf,icons",
      "level": 2

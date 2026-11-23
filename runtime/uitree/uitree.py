@@ -2043,7 +2043,7 @@ SCHEMA = {
                   row="lit"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
-                  changed="action1", group="lit", pad="int", look="lit", tone="text",
+                  changed="action1", group="lit", pad="int", flow="lit", look="lit", tone="text",
                   label="text"),
     "card": dict(_C, label="text", sub="text", badge="text", label_icon="text", image="image",
                  icon="text", tone="text"),
@@ -2647,6 +2647,10 @@ def stepper(value, prev, next, **p):
 
 
 def cards(model_name, **p):
+    """A model's rows as cards, each its picture and label: a region of their
+    own that takes the rest of the page's room, or with `flow=True` a grid in
+    the page's flow (in a group, between its caption and its rows) that
+    scrolls with the page."""
     if "paint" in p:
         raise UIError("N04", "cards paint= is retired (G9)", where=_caller(),
                       fix="give the rows an image field (image pic) and the card image=.pic")
@@ -3372,13 +3376,31 @@ class Pictures:
     layer of that size, which the engine keeps and releases when it lets the
     picture go; None where it cannot). A drawn picture put with `clear=True`
     is clear where it has its corner's colour: what lies under it shows
-    there (a sprite on a picker's tile). The engine holds them;
+    there (a sprite on a picker's tile). The engine holds them: a put
+    from a handler lands in the running engine's own sources, so two
+    consoles in one process each hold theirs and a console that goes takes
+    its drawers with it; one from outside a handler in the module's.
     `image.own(key)` names one."""
 
     def __init__(self):
-        self.src = {}
+        self.src = {}               # a key -> its source, put outside a handler
         self.gen = {}
         self.store_gen = {}         # a store path -> the times its file changed (`changed`)
+
+    def _held(self, app):
+        if app is None:
+            return self.src
+        own = getattr(app, "own_pics", None)
+        if own is None:
+            own = app.own_pics = {}
+        return own
+
+    def source(self, app, key):
+        """Own picture `key`'s source as engine `app` reads it: its own
+        put's, else the module's; None where none was put."""
+        own = getattr(app, "own_pics", None)
+        got = own.get(key) if own else None
+        return got if got is not None else self.src.get(key)
 
     def put(self, key, data=None, w=None, h=None, pixels=None, render=None, clear=False):
         if (data is not None) + (pixels is not None) + (render is not None) != 1:
@@ -3390,20 +3412,21 @@ class Pictures:
             if type(w) is not int or type(h) is not int or len(pixels) != w * h:
                 raise UIError("S02", "pictures.put(%r): pixels are w * h palette indices" % key,
                               found="w=%r h=%r %d bytes" % (w, h, len(pixels)), fix='pixels= holds w * h bytes')
-            self.src[key] = ("idx", w, h, bytes(pixels))
+            self._held(_NOW.app)[key] = ("idx", w, h, bytes(pixels))
         elif render is not None:
             if not callable(render):
                 raise UIError("S02", "pictures.put(%r): render= is a function of (w, h)" % key,
                               found=repr(render), fix='def render(w, h): ... return a w x h layer')
-            self.src[key] = ("render", render, clear)
+            self._held(_NOW.app)[key] = ("render", render, clear)
         else:
-            self.src[key] = ("bytes", bytes(data))
+            self._held(_NOW.app)[key] = ("bytes", bytes(data))
         self.gen[key] = self.gen.get(key, 0) + 1
         a = _NOW.app
         if a is not None and getattr(a, "pics", None) is not None and a.pics.forget_own(key):
             a.pics_let_go()
 
     def drop(self, key):
+        self._held(_NOW.app).pop(key, None)
         self.src.pop(key, None)
         self.gen[key] = self.gen.get(key, 0) + 1
 

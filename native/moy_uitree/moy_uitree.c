@@ -1596,6 +1596,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->cur = (int16_t)f;
         return 0;
     }
+    if (kind == UIT_CARDS && !strcmp(name, "flow")) {
+        // flow=True: its grid in the page's flow, scrolling with the page (CD_FLOW)
+        N->lit = (uint8_t)((N->lit & ~CD_FLOW) | (src[0] == 'T' || src[0] == '1' ? CD_FLOW : 0));
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & CD_FLOW) != 0);
+    }
     if (kind == UIT_TEXT_VIEW && !strcmp(name, "look")) {
         // "well": its prose on a part's well (TV_WELL)
         N->lit = (uint8_t)((N->lit & ~TV_WELL) | (!strcmp(src, "well") ? TV_WELL : 0));
@@ -1828,11 +1833,11 @@ static void mark_tree(const uit_t *e, int k, uint8_t *m, int cur, int hint_only)
         mark_tree(e, g, m, cur, hint_only);
 }
 
-// What lies outside the page's cells (a cards list each): each node's reads but a cur='s, and
+// What lies outside the page's cells (a cards list each, but one in the page's flow): each node's reads but a cur='s, and
 // every hint= inside a cell too.
 static void mark_rest(const uit_t *e, int k, uint8_t *m)
 {
-    if (e->nodes[k].kind == UIT_CARDS) {
+    if (e->nodes[k].kind == UIT_CARDS && !(e->nodes[k].lit & CD_FLOW)) {
         mark_tree(e, k, m, 0, 1);
         return;
     }
@@ -1846,7 +1851,7 @@ static void mark_rest(const uit_t *e, int k, uint8_t *m)
 
 static void mark_cells(const uit_t *e, int k, uint8_t *m)
 {
-    if (e->nodes[k].kind == UIT_CARDS || e->nodes[k].kind == UIT_TEXT_VIEW) {
+    if ((e->nodes[k].kind == UIT_CARDS && !(e->nodes[k].lit & CD_FLOW)) || e->nodes[k].kind == UIT_TEXT_VIEW) {
         mark_tree(e, k, m, 0, 0);
         return;
     }

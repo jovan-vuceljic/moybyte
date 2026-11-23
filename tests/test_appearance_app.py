@@ -1,8 +1,8 @@
-"""The Appearance page (docs/history/look_2026-10.md step 20), drawn with the public
-UI API's verbs: the theme cards and the rows, every row changed by keys
-alone and by a tap, the wallpapers' page (tabs over cards), NAME's dialog,
-the tap floor, the scroll to the focus, a settled page painting nothing, and
-the rows' writes."""
+"""The Appearance page (docs/history/look_2026-10.md step 20), a `uitree`
+page: the theme cards and the rows, every row changed by keys alone and by
+a tap, the wallpapers' page (tabs over cards), NAME's dialog, the tap
+floor, the scroll to the focus, a settled page painting nothing, and the
+rows' writes."""
 
 import json
 from pathlib import Path
@@ -82,11 +82,46 @@ def _type(ws, app, text):
         _frame(ws, 1)
 
 
+def _id(sid):
+    """A stop's id: a row's by the words it says (`page.ROWS`), a card's
+    "KEY/ACTION", as given."""
+    return page.ROWS.get(sid, sid)
+
+
+def _kinds(app):
+    """{stop id: kind} as the last frame drew the page."""
+    return app.engine.stop_kinds()
+
+
+def _rows(app):
+    """The rows' stops in order, the cards left out."""
+    return [k for k in _kinds(app) if "/" not in k]
+
+
+def _focused(app):
+    return app.engine.focused_id()
+
+
+def _state(app, name):
+    app.engine._bind()
+    return app.engine.s._v[name]
+
+
+def _walls(app):
+    """The wallpapers' page is open over the rows."""
+    return len(app.engine.pages) > 1
+
+
 def _focus(ws, app, sid):
     """Focus stop `sid` as of the next frame."""
-    app._ui.focus(sid)
+    app.focus_to = _id(sid)
+    app.fill_owed = True
     _frame(ws)
-    assert app._focused == sid
+    assert _focused(app) == _id(sid)
+
+
+def _box(app, sid):
+    return app.page_host().box(_id(sid))
 
 
 def _tap(ws, app, sid, dx=None):
@@ -95,7 +130,7 @@ def _tap(ws, app, sid, dx=None):
     takes a row only where the view shows it."""
     _focus(ws, app, sid)
     _frame(ws, 2)
-    x, y, w, h = app._ui.box(sid)
+    x, y, w, h = _box(app, sid)
     app.handle_pointer(x + (w // 2 if dx is None else dx), y + h // 2, True)
     _frame(ws, 3)
 
@@ -127,15 +162,15 @@ EDIT_THEME = "Edit theme\u2026"           # the door to the Editor's theme mode
 def test_the_cards_then_the_rows_on_the_handheld_and_the_desk(tmp_path):
     small = _open(_ws(tmp_path / "s"))
     rows = ["Mode", "Accent", "Tint", "Wallpaper", "Font", "Code font", EDIT_THEME]
-    assert [k for k in small._kinds if not k.startswith("theme ")] == rows
-    cards = [k[len("theme "):] for k in small._kinds if k.startswith("theme ")]
-    assert cards == small._themes() == ["moy", "blocks", "contrast"]
+    assert _rows(small) == [_id(r) for r in rows]
+    cards = [k.split("/")[0] for k in _kinds(small) if k.endswith("/use")]
+    assert cards == small.themes() == ["moy", "blocks", "contrast"]
     wide = _open(_ws(tmp_path / "w", **DESK))
-    assert [k for k in wide._kinds if not k.startswith("theme ")] == [
+    assert _rows(wide) == [_id(r) for r in (
         "Mode", "Accent", "Tint", "Wallpaper", "Window style", "Font", "Code font", "Chrome size",
-        EDIT_THEME]
+        EDIT_THEME)]
     sim = _open(_ws(tmp_path / "b", sys_size=(1024, 600), windowed=True))
-    assert "Chrome size" in sim._kinds          # the simulator's desk takes two
+    assert "chrome" in _kinds(sim)              # the simulator's desk takes two
 
 
 def test_contrast_offers_no_accent_picks(tmp_path):
@@ -144,16 +179,16 @@ def test_contrast_offers_no_accent_picks(tmp_path):
     ws = _ws(tmp_path)
     ws.look.set_theme("contrast", persist=False, variant="dark")
     app = _open(ws)
-    assert "Accent" not in app._kinds and "Tint" in app._kinds
+    assert "accent" not in _kinds(app) and "tint" in _kinds(app)
     ws.look.set_theme("moy", persist=False, variant="light")
     _frame(ws)
-    assert "Accent" in app._kinds
+    assert "accent" in _kinds(app)
 
 
 def test_focus_opens_on_the_theme_in_use(tmp_path):
     ws = _ws(tmp_path)
     app = _open(ws)
-    assert app._focused == "theme " + ws.look.theme_name
+    assert _focused(app) == ws.look.theme_name + "/use"
 
 
 @pytest.mark.parametrize("kw", [{}, DESK], ids=["320x240", "desk"])
@@ -181,7 +216,7 @@ def test_every_row_changes_by_keys_alone(tmp_path, kw):
     _focus(ws, app, "Tint")
     _press(ws, app, "right")
     assert look.custom_look()["tint"] == ui_draw.theme_tints()[0][0]
-    if app.layout.desk:
+    if app.desk:
         _focus(ws, app, "Window style")
         _press(ws, app, "right")
         assert app.choices()["frame"] == "tab"
@@ -191,14 +226,14 @@ def test_every_row_changes_by_keys_alone(tmp_path, kw):
     look.commit()
     pkg = _custom(tmp_path)
     assert pkg["fonts"]["ui"] == "petme128"
-    if app.layout.desk:
+    if app.desk:
         assert pkg["frame"] == {"style": "tab"}
     assert not (tmp_path / "carts" / "custom.moy" / "petme128").exists()   # reserved
     _press(ws, app, "left")
     assert app.choices()["font"] == "tiny5" and ui_draw.font("ui")[0] != 0
     # THEME: the arrows move between the cards, Enter uses one.
-    names = app._themes()
-    _focus(ws, app, "theme " + names[1])
+    names = app.themes()
+    _focus(ws, app, names[1] + "/use")
     _press(ws, app, "right", "a")
     assert look.theme_name == names[2]
 
@@ -238,7 +273,7 @@ def test_code_font_shows_only_where_the_image_draws_a_choice(tmp_path, monkeypat
     app = _open(ws)
     _frame(ws)
     assert app.choices()["code_fonts"] == ("petme128",)
-    assert "Code font" not in app._kinds and "Font" in app._kinds
+    assert "code" not in _kinds(app) and "font" in _kinds(app)
 
 
 def test_the_moy_seed_names_jetbrains_mono_for_the_code_tab(tmp_path):
@@ -350,44 +385,34 @@ def test_the_wallpapers_page_is_tabs_over_cards_and_b_comes_back(tmp_path):
     look = ws.look
     _focus(ws, app, "Wallpaper")
     _press(ws, app, "a")
-    assert app.view == "walls" and app.tab == 1            # the one shown is a cart
-    on = app._focused
-    assert on.startswith("Wallpaper ") and app._kinds[on] == "card"
+    assert _walls(app) and _state(app, "wtab") == "carts"   # the one shown is a cart
+    on = _focused(app)
+    assert on.startswith("cart:") and _kinds(app)[on] == "card"
     _press(ws, app, "b")
-    assert app.view == "rows" and app._focused == "Wallpaper"
+    assert not _walls(app) and _focused(app) == "wallpaper"
     assert look.theme_name == "night", "b changed nothing"
     _press(ws, app, "a")
-    _focus(ws, app, "Wallpapers")
+    _focus(ws, app, "wtab")
     _press(ws, app, "left")                                 # the tabs: Pictures
-    assert app.tab == 0
-    _focus(ws, app, "Wallpaper Backdrop")
+    assert _state(app, "wtab") == "pictures"
+    _focus(ws, app, "backdrop/use_wall")
     _press(ws, app, "a")
-    assert app.view == "rows" and look.wallpaper_id is None
-    assert app._focused == "Wallpaper" and look.theme_name == "custom"
+    assert not _walls(app) and look.wallpaper_id is None
+    assert _focused(app) == "wallpaper" and look.theme_name == "custom"
 
 
 @pytest.mark.parametrize("kw", [{}, DESK], ids=["320x240", "desk"])
-def test_back_is_hinted_where_it_goes_back(tmp_path, monkeypatch, kw):
-    """The navigation rule (owner, 2026-10-18): a window's root hints no
-    back, its title strip's X closes it; a page in it hints Back. The
-    handheld's root hints Back, the bar's chevron that goes home."""
+def test_back_is_hinted_where_it_goes_back(tmp_path, kw):
+    """The root hints Back, the bar's chevron (a window's X) that leaves the
+    app; the wallpapers' page hints Back, which comes back to the rows."""
     ws = _ws(tmp_path, **kw)
     app = _open(ws)
-    hinted = []
-    real = page.ui.hints
-    monkeypatch.setattr(page.ui, "hints",
-                        lambda items, o=None: (hinted.append(tuple(items)),
-                                               real(items, o))[1])
     _frame(ws)
-    root = hinted[-1]
-    if kw:
-        assert "back" not in root and "Close" not in root
-    else:
-        assert root[-2:] == ("back", "Back")
+    assert app.engine.hints()[-2:] == ("back", "Back")
     _focus(ws, app, "Wallpaper")
     _press(ws, app, "a")
-    assert app.view == "walls"
-    assert hinted[-1][-2:] == ("back", "Back")
+    assert _walls(app)
+    assert app.engine.hints()[-2:] == ("back", "Back")
 
 
 @pytest.mark.parametrize("kw", [{}, DESK], ids=["320x240", "desk"])
@@ -396,26 +421,24 @@ def test_every_row_answers_a_tap(tmp_path, kw):
     use_theme(ws, "night", "dark", store=True)
     app = _open(ws)
     look = ws.look
-    _tap(ws, app, "Mode", dx=app._ui.box("Mode")[2] - 60)   # the Light option
+    _tap(ws, app, "Mode", dx=_box(app, "Mode")[2] - 60)    # the Light option
     assert look.theme_variant == "light"
-    _tap(ws, app, "Accent", dx=app._ui.box("Accent")[2] - 12)  # the last dot
+    _tap(ws, app, "Accent", dx=_box(app, "Accent")[2] - 12)   # the last dot
     assert look.custom_look()["accent"] == _accent(page.OFFERED[-1])
     _tap(ws, app, "Tint")
     assert look.custom_look()["tint"] == ui_draw.theme_tints()[0][0]
     _tap(ws, app, "Font")
     assert app.choices()["font"] == "petme128"
     _tap(ws, app, "Wallpaper")
-    assert app.view == "walls"
-    _tap(ws, app, "Wallpapers", dx=24)                      # the Pictures tab
-    assert app.tab == 0
-    _tap(ws, app, "Wallpaper Backdrop")
-    assert app.view == "rows" and look.wallpaper_id is None
-    app._ui.focus("theme blocks")                           # scrolled into view
-    _frame(ws)
-    _tap(ws, app, "theme blocks")
+    assert _walls(app)
+    _tap(ws, app, "wtab", dx=24)                            # the Pictures tab
+    assert _state(app, "wtab") == "pictures"
+    _tap(ws, app, "backdrop/use_wall")
+    assert not _walls(app) and look.wallpaper_id is None
+    _focus(ws, app, "blocks/use")                           # scrolled into view
+    _tap(ws, app, "blocks/use")
     assert look.theme_name == "blocks"
-    app._ui.focus(EDIT_THEME)
-    _frame(ws)
+    _focus(ws, app, EDIT_THEME)
     _tap(ws, app, EDIT_THEME)
     assert ws.editor_app.theme is not None      # the Editor's theme mode holds it
 
@@ -425,9 +448,9 @@ def test_the_tap_floor_holds_at_320x240(tmp_path):
     pixels at the chrome scale."""
     ws = _ws(tmp_path)
     app = _open(ws)
-    floor = 16 * app.layout.cs
-    for sid in app._kinds:
-        box = app._ui.box(sid)
+    floor = 16 * ws.layout.cs
+    for sid in _kinds(app):
+        box = _box(app, sid)
         if box is not None:
             assert box[3] >= floor, (sid, box)
 
@@ -437,8 +460,8 @@ def test_rows_that_do_not_fit_scroll_to_the_focus(tmp_path):
     app = _open(ws)
     _focus(ws, app, EDIT_THEME)
     _frame(ws)
-    x, y, w, h = app._ui.box(EDIT_THEME)
-    bx, by, bw, bh = app.layout.body
+    x, y, w, h = _box(app, EDIT_THEME)
+    bx, by, bw, bh = app.engine.rect
     assert by <= y and y + h <= by + bh
 
 
@@ -599,8 +622,8 @@ def test_the_accent_row_is_eight_distinct_swatches(tmp_path):
         ws.look.set_theme("moy", persist=False, variant=variant)
         app = _open(ws)
         side = 3 if variant == "light" else 2
-        own = page._rgb(app._own_accent(app.choices()))
-        cols = [own] + [page._rgb(a[side]) for a in app._accents]
+        own = page._rgb(app.own_accent(app.choices()))
+        cols = [own] + [page._rgb(a[side]) for a in app.accents]
         assert len(cols) == 8
         rgb = [((c >> 16) & 255, (c >> 8) & 255, c & 255) for c in cols]
         for i in range(8):
@@ -634,8 +657,8 @@ def test_a_settled_page_shows_the_wallpaper_picture_of_a_store_theme(tmp_path):
     look.tick(0.0)
     app = _open(ws)
     assert app.choices()["picture"] == "theme"
-    assert app._wall_kind(app.choices()) == (0, "Theme's picture")
-    assert [w[2] for w in app._walls(0)][:2] == ["backdrop", "theirs"]
+    assert app.wall_now() == ("pictures", "theirs")
+    assert [r["id"] for r in app.wall_rows(app.choices())[0]][:2] == ["backdrop", "theirs"]
 
 
 # -- NAME ------------------------------------------------------------------------
@@ -650,17 +673,17 @@ def _name(ws, app):
     _focus(ws, app, "Name")
     _press(ws, app, "a")
     assert app.naming and ws.input.text_mode
-    assert app._focused == "Theme name"
+    assert _focused(app) == "name"
 
 
 @pytest.mark.parametrize("kw", [{}, DESK], ids=["320x240", "desk"])
 def test_name_shows_on_custom_only_and_keeps_it_by_keys(tmp_path, kw):
     ws = _ws(tmp_path, **kw)
     app = _open(ws)
-    assert "Name" not in app._kinds
+    assert "name_ask" not in _kinds(app)
     _to_custom(ws, app)
     _frame(ws)
-    assert list(app._kinds)[-2:] == ["Name", EDIT_THEME]
+    assert _rows(app)[-2:] == ["name_ask", "edit"]
     _name(ws, app)
     _type(ws, app, "BubbleGum!")                # capitals and ! are not the grammar
     assert app.name_text == "ubbleum"
@@ -670,8 +693,8 @@ def test_name_shows_on_custom_only_and_keeps_it_by_keys(tmp_path, kw):
     assert not app.naming and not ws.input.text_mode
     assert ws.look.theme_name == "bubblegum"
     _frame(ws)
-    assert "Name" not in app._kinds and app._focused == "theme bubblegum"
-    assert app._themes()[0] == "bubblegum" and "custom" not in app._themes()
+    assert "name_ask" not in _kinds(app) and _focused(app) == "bubblegum/use"
+    assert app.themes()[0] == "bubblegum" and "custom" not in app.themes()
     assert (tmp_path / "carts" / "bubblegum.moy" / "theme.json").exists()
     assert not (tmp_path / "carts" / "custom.moy").exists()
 
@@ -686,7 +709,7 @@ def test_a_theme_set_elsewhere_closes_name(tmp_path):
     ws.look.set_theme("moy")
     _frame(ws)
     assert not app.naming and not ws.input.text_mode
-    assert "Name" not in app._kinds
+    assert "name_ask" not in _kinds(app)
 
 
 def test_name_refuses_with_the_reason_and_arms_replace(tmp_path):
@@ -730,15 +753,17 @@ def test_a_single_mode_theme_offers_no_mode(tmp_path):
     ws = _ws(tmp_path)
     ws.look.set_theme("blocks", persist=False, variant="light")
     app = _open(ws)
-    assert app._modes("blocks") == ("Day",)
-    assert app._modes("moy") == ("Day", "Night")
-    assert app._modes("contrast") == ("Day", "Night")
-    assert "Mode" not in app._kinds and "Accent" in app._kinds
-    assert app._status(app.choices()).startswith("Blocks Day")
+    assert app.modes_of("blocks") == ("Day",)
+    assert app.modes_of("moy") == ("Day", "Night")
+    assert app.modes_of("contrast") == ("Day", "Night")
+    assert "mode" not in _kinds(app) and "accent" in _kinds(app)
+    assert app.status(app.choices()).startswith("Blocks Day")
 
 
-def test_the_desk_foots_status_column_is_the_rows_label_inset():
-    """AppearanceLayout.LABEL_X, where the desk foot's status starts, is
-    style.json's `group` `pad`: where a desk row's label starts (design
-    review R3-27)."""
-    assert page.AppearanceLayout.LABEL_X == ui_draw.metrics("group")[1]
+def test_the_desk_band_leads_with_the_theme_and_the_handheld_shows_none(tmp_path):
+    """The desk's band names the theme, its mode and where it comes from
+    before the hints; the handheld's band is the hints alone."""
+    desk = _open(_ws(tmp_path / "d", **DESK))
+    assert _state(desk, "status") == "Moy Day" + page.DOT + "built in"
+    small = _open(_ws(tmp_path / "s"))
+    assert _state(small, "status") == ""

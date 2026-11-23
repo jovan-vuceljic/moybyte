@@ -1208,10 +1208,7 @@ def _walls_page(ws):
     """The Appearance page's wallpapers (docs/history/look_2026-10.md step 20): the
     tabs over the cards, on the tab of the wallpaper in use."""
     def enter():
-        app = ws.app("appearance")
-        app.view = "walls"
-        app.tab, title = app._wall_kind(app.choices())
-        app._focus = "Wallpaper " + title
+        ws.app("appearance").open_walls()
     return enter
 
 
@@ -1223,8 +1220,7 @@ def _name_page(ws):
         ws.look.change("accent", _ui().theme_accents()[9][1])
         ws.look.tick(0.0)
         assert ws.look.theme_name == "custom"
-        app._refresh()
-        app._open_name()
+        app.open_name()
         app.name_text = "bubble"
     return enter
 
@@ -1235,14 +1231,11 @@ def _after_appearance(ws, enter):
     theme in use focused, as it opens."""
     def go():
         app = ws.app("appearance")
-        app.view = "rows"
-        app._close_name(acted=False)
         if ws.look.theme_name == "custom":
             ws.look.set_theme("moy")
             ws.carts_store.delete({"path": os.path.join(ws.carts_root,
                                                         "custom.moy")})
             ws.carts.rescan()
-            app._refresh()
         app.open()
         enter()
     return go
