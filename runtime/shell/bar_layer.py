@@ -592,13 +592,11 @@ class BarLayer:
         self._keys = {}
         self._blk = {}                # where -> its block of fields in the engine, by id
         # The keys on the bar (`focus_enter`): the `where` whose bar holds
-        # them, the item index, what the keys came from ("tabs": the home's
-        # tab row, "page": the surface under the bar) and the focused item
-        # as (bar index, rect in that bar's coordinates).
+        # them, the item index and the focused item as (bar index, rect in
+        # that bar's coordinates).
         self.focus = None
         self.focus_where = None
         self._page_at = [None, None, None]      # the bar the page draws: where, its rect, its cells
-        self.focus_from = None
         self.focus_item = None
         self._items_lgen = -1         # the status items' count the packing holds
         self._hooks = None            # the bar page's actions' ways out (`_page_draw`)
@@ -1368,8 +1366,7 @@ class BarLayer:
         button, as a status icon and a ring and a unit either side, as the
         clock's digits and a ring and a unit either side, inside the bar.
         On the zone's targets, the back chevron and the lent tools it is
-        their rect and a ring round it. The corners are the home's tabs'
-        (`LauncherHomeLayer._draw_zone_tabs`)."""
+        their rect and a ring round it."""
         _bi, r, name = item
         packed = self._packed(where)[i]
         bar = packed[1]
@@ -2487,11 +2484,10 @@ class BarLayer:
     #
     # Up past the top of the surface under a bar walks focus onto the bar:
     # left and right walk its items, confirm opens one as a tap on it does,
-    # down and back come off it. Where the bar holds the home's tabs (the
-    # handheld's), its items and the tabs are one row: left and right walk off
-    # the tabs' ends onto the items beside them and back (owner call
-    # 2026-10-27), and down and back go to the cards. A window's bar keeps
-    # the desk's own ways.
+    # down and back come off it. A lent row's cells are its items in their
+    # places (the home's tabs and the Editor's among the OS widgets, owner
+    # call 2026-10-27): the walk opens none, confirm opens one. A window's
+    # bar keeps the desk's own ways.
 
     def focus_items(self, where):
         """The items the keys walk on `where`'s bars, left to right, as
@@ -2549,12 +2545,10 @@ class BarLayer:
                 out.append((bi, r, name))
         return out
 
-    def focus_enter(self, where, came_from, at=None, k=None):
-        """The keys walk onto `where`'s bar from `came_from` ("tabs": up
-        from the home's tab row below the bar; "row": along the home's tab
-        row in the bar; "page"): onto item `k`, else the item `at` (a
-        bar-coordinate x the item spans), else the first. False where the
-        bar has no such item."""
+    def focus_enter(self, where, at=None, k=None):
+        """The keys walk onto `where`'s bar: onto item `k`, else the item
+        `at` (a bar-coordinate x the item spans), else the first. False
+        where the bar has no such item."""
         items = self.focus_items(where)
         if k is None:
             k = 0
@@ -2567,44 +2561,10 @@ class BarLayer:
         if not 0 <= k < len(items):
             return False
         self.focus_where = where
-        self.focus_from = came_from
-        if came_from in ("tabs", "row"):
-            self.ws.launcher_layer._tab_focus = False    # one focus mark a screen
         if where == "home":
             self.ws.launcher_layer.bar_focus(True)
         self._focus_on(items, k)
         return True
-
-    def _tabs_split(self, where, items):
-        """Where the home's tabs sit among `items` when the bar holds them
-        (the handheld's home, `LauncherHomeLayer.tabs_in_bar`): the index of
-        the first item right of them, so the bar's items and the tabs walk as
-        one row in screen order. None elsewhere."""
-        if where != "home":
-            return None
-        tabs = self.ws.launcher_layer.tabs_in_bar()
-        if not tabs:
-            return None
-        tx, ty = tabs[0][1][0], tabs[0][1][1]
-        rects = self.bar_rects(where)
-        n = 0
-        for bi, r, _name in items:
-            bx, by, _bw, bh = rects[bi]
-            if by + bh <= ty or (by <= ty and bx + r[0] < tx):
-                n += 1
-        return n
-
-    def focus_beside_tabs(self, d):
-        """The keys walk off an end of the home's tab row onto the bar item
-        beside it: `d` < 0 the one left of the tabs, else the one right.
-        False where there is none (the row stops there)."""
-        if self.ws.router.bar_where() != "home":
-            return False
-        items = self.focus_items("home")
-        split = self._tabs_split("home", items)
-        if split is None:
-            return False
-        return self.focus_enter("home", "row", k=split - 1 if d < 0 else split)
 
     def _focus_on(self, items, k):
         if not items:
@@ -2617,27 +2577,18 @@ class BarLayer:
         self.ws.mark_dirty()
 
     def focus_leave(self):
-        """The keys come off the bar, back where they came from."""
-        came, where = self.focus_from, self.focus_where
-        self.focus = self.focus_where = self.focus_from = self.focus_item = None
+        """The keys come off the bar, back to the surface under it."""
+        where = self.focus_where
+        self.focus = self.focus_where = self.focus_item = None
         _ui_draw.on_bar(False)
         ws = self.ws
         ws.mark_dirty()
         if where == "home":
             ws.launcher_layer.bar_focus(False)
-        if came == "tabs":
-            ws.launcher_layer._tab_focus = True
-
-    def _to_tabs(self, d):
-        """The keys walk from the bar onto the home's tab row beside it:
-        `d` < 0 onto its last tab, else its first."""
-        self.focus_leave()
-        self.ws.launcher_layer.tab_enter(-1 if d < 0 else 0)
 
     def focus_keys(self, i):
         """A frame's keys while they are on the bar: left and right walk
-        its items (and on to the home's tabs where they sit among them),
-        confirm opens the focused one (a tap at its middle) -- a zone's tab
+        its items, confirm opens the focused one (a tap at its middle) -- a zone's tab
         it opens takes the keys down into it (the owner's `zone_opened`) --
         down, back and stop come off it, up stays. True where they were the
         bar's."""
@@ -2646,17 +2597,10 @@ class BarLayer:
         if not items or self.ws.router.bar_where() != where:
             self.focus_leave()
             return False
-        split = self._tabs_split(where, items)
         if i.steps("left"):
-            if split is not None and self.focus == split:
-                self._to_tabs(-1)
-            else:
-                self._focus_on(items, self.focus - 1)
+            self._focus_on(items, self.focus - 1)
         elif i.steps("right"):
-            if split is not None and self.focus == split - 1:
-                self._to_tabs(1)
-            else:
-                self._focus_on(items, self.focus + 1)
+            self._focus_on(items, self.focus + 1)
         elif i.steps("down") or i.pressed("b") or i.pressed("stop"):
             self.focus_leave()
         elif i.pressed("a") or i.pressed("run"):
@@ -2672,8 +2616,7 @@ class BarLayer:
             ws.mark_dirty()
             if ws.router.bar_where() != where or getattr(owner, "zone_opened", False):
                 # the tap left the surface (back, a door), or opened one of
-                # the zone's tabs, which takes the keys down into it as the
-                # home's row does
+                # the zone's tabs, which takes the keys down into it
                 self.focus_leave()
             else:
                 # the item tapped (undo, a widget under its popover), the

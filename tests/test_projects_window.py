@@ -77,7 +77,7 @@ def test_the_window_draws_the_console_homes_design(tmp_path):
         assert grid.desk(), "the window lays out the desk home, not the handheld's"
         verbs = [v for v, _r, _k in ws.projects_layer._desk_buttons()]
         assert verbs[:2] == ["change", "copy"]
-        assert ws.bar_layer._zone_owner("projects") is ws.projects_layer
+        assert ws.bar_layer._zone_owner("projects") is ws.projects_layer.bar_zone
     finally:
         ws.wm.install_window(ws.wm.root_ctx)
 
@@ -220,7 +220,7 @@ def test_make_leads_with_change_and_keeps_every_card_verb(tmp_path, size):
 
 def test_wrapped_buttons_take_up_and_down_between_their_rows(tmp_path):
     """Where the buttons wrap, up and down move between their rows before
-    the keys go on to the tabs or back to the shelf."""
+    the keys go on to the desk's bar or back to the shelf."""
     from runtime import host_app
     ws = _ws(tmp_path)
     win, grid = _projects(ws, (360, 534))
@@ -249,7 +249,8 @@ def test_wrapped_buttons_take_up_and_down_between_their_rows(tmp_path):
     k = home._button_focus
     assert k is not None and buttons[k][1][1] == top, (k, buttons)
     key("up")
-    assert home._button_focus is None and home._tab_focus
+    assert home._button_focus is None and ws.bar_layer.focus_where == "desk", \
+        "up past the top row goes on to the desk's bar, as any window's page edge"
 
 
 def test_delete_stands_last_in_the_danger_look(tmp_path):

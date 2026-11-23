@@ -145,6 +145,22 @@ A device API's face (runtime/system/devices.py): the browser has no hardware
 of its own (docs/os_2026-11/hardware.md section 1) and its images compile no
 device driver, so `moybyte.camera` answers None there."""
 
+[[modules.shared.deny]]
+file = "web_addon.py"
+kind = "no-consumer"
+why  = """
+The browser console add-on's step and the Zeros' /official backend: a board's
+code that installs the page this build is, imported only by a board's
+wire_links and zero_host. The pack carries the wasm, so a module nothing in it
+imports is the add-on's bytes for nothing."""
+
+[[modules.shared.deny]]
+file = "perf_line.py"
+kind = "no-consumer"
+why  = """
+The reader of a board's serial PERF line, which only the host's tools import
+(tools/p4_perf.py and its kin): no browser writes or reads one."""
+
 # -- staged under another name -----------------------------------------------
 
 [[modules.shared.rename]]

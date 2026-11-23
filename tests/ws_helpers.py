@@ -467,3 +467,10 @@ def seed_stories(ws, n=14):
             for f in files:
                 os.utime(os.path.join(dirpath, f), (t, t))
             os.utime(dirpath, (t, t))
+
+
+def hint_rects(layer):
+    """{verb: rect on the glass} of a home layer's hint strip, its tabs'
+    keys left out: where a tap on the strip (`_hint_tap`) does each verb."""
+    spans, hr = layer._hint_spans(layer.ws.sys_canvas)
+    return {v: (x0, hr[1], x1 - x0, hr[3]) for v, x0, x1 in spans if v != "tabs"}

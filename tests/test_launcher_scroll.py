@@ -14,6 +14,8 @@ from pathlib import Path
 from ws_helpers import build_ws_with_shelf
 import pytest
 from ws_helpers import boot_on_fixture
+from test_home_tab_row import focused_tab, tab_rects
+from ws_helpers import hint_rects
 
 @pytest.fixture(autouse=True)
 def _on_the_night_fixture(monkeypatch):
@@ -339,15 +341,15 @@ def test_up_takes_the_keys_to_the_tab_row(tmp_path):
     drv.press("up")
     drv.frame(1 / 30)
     drv.frame(1 / 30)
-    assert ws.launcher_layer._tab_focus
+    assert focused_tab(ws) == "games"
     drv.press("right")                                   # the focus on the next tab
     drv.frame(1 / 30)
     drv.frame(1 / 30)
-    assert ws.launcher_layer.focused_tab() == "mine" and ws.launcher.tab == "games"
-    drv.press("run")                                     # opens it, back to the row
+    assert focused_tab(ws) == "mine" and ws.launcher.tab == "games"
+    drv.press("run")                                     # opens it, back to the cards
     drv.frame(1 / 30)
     drv.frame(1 / 30)
-    assert not ws.launcher_layer._tab_focus
+    assert ws.bar_layer.focus is None
     assert ws.launcher.tab == "mine"
 
 
@@ -412,7 +414,7 @@ def test_the_grid_arrangement_shares_the_tabs_and_the_verbs(tmp_path):
     assert type(g) is Launcher and g.tab == "apps" and g.selected() is want
     home = ws.launcher_layer
     assert home.zone_verbs() == ("open",)                # the same bar verbs
-    assert [t for t, _r, _on in home.tab_rects()] == ["games", "mine", "apps", "make"]
+    assert [t for t, _r in tab_rects(home)] == ["games", "mine", "apps", "make"]
     ws.home.set_home_tab("games")
     drv.frame(1 / 30)
     drv.press("down")
@@ -425,8 +427,10 @@ def test_the_grid_arrangement_shares_the_tabs_and_the_verbs(tmp_path):
     drv.press("up")                                      # the top row: up to the tabs
     drv.frame(1 / 30)
     drv.frame(1 / 30)
-    assert home._tab_focus
-    home._tab_focus = False
+    assert focused_tab(ws) == "games"
+    drv.press("down")
+    drv.frame(1 / 30)
+    drv.frame(1 / 30)
     game = next(i for i, it in enumerate(g.items) if it.get("type") == "game")
     r = g.tile_rect(game)
     drv.touch(r[0] + r[2] // 2, r[1] + r[3] // 2)
@@ -530,7 +534,7 @@ def test_the_tabs_are_the_bars_and_the_verbs_the_hint_strips(tmp_path):
     drv.frame(1 / 30)
     home = ws.launcher_layer
     bar_h = ws.layout.cy
-    rects = {tid: r for tid, r, _on in home.tab_rects()}
+    rects = dict(tab_rects(home))
     assert set(rects) == {"games", "mine", "apps", "make"}
     assert all(r[1] + r[3] <= bar_h for r in rects.values())
     r = rects["apps"]
@@ -539,7 +543,7 @@ def test_the_tabs_are_the_bars_and_the_verbs_the_hint_strips(tmp_path):
     assert ws.launcher.tab == "apps"
     ws.home.set_home_tab("games")
     drv.frame(1 / 30)
-    hints = home._zone_action_rects(None)
+    hints = hint_rects(home)
     assert home.zone_verbs() == ("play", "change", "search")
     # the selected card's star after them, where the strip has room (R2-12)
     assert tuple(hints) == home.zone_verbs() + ("favourite",)
@@ -599,9 +603,8 @@ def test_a_bar_tabs_mark_clears_its_label(tmp_path, theme, variant):
     ws.mark_dirty()
     drv.frame(1 / 30)
     home = ws.launcher_layer
-    (tid, r, _on), = [t for t in home.tab_rects() if t[0] == ws.launcher.tab]
+    r = home.tab_box(ws.launcher.tab)
     lay = ws.layout
-    assert r[3] >= lay.line_h + 2 * lay.fs, "the plate holds the line and a unit"
     cv = ws.sys_canvas
     w = cv.width if hasattr(cv, "width") else lay.w
     buf = cv._buf

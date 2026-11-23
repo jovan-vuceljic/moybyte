@@ -11,6 +11,7 @@ import pytest
 
 from runtime import host_app, moy_carts, ui_draw
 from ws_helpers import build_ws, shelf
+from ws_helpers import hint_rects
 
 
 @pytest.fixture(autouse=True)
@@ -87,8 +88,8 @@ class _Pad:
 
 def _verb_tap(ws, verb):
     layer = ws.launcher_layer
-    x, y, w, h = layer._zone_action_rects(ws.layout.zone_left)[verb]
-    return layer.zone_tap(x + w // 2, y + h // 2)
+    x, y, w, h = hint_rects(layer)[verb]
+    return layer._hint_tap(x + w // 2, y + h // 2)
 
 
 def test_make_x_asks_and_cancel_keeps_the_cart(tmp_path):

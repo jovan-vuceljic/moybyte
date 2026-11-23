@@ -82,6 +82,7 @@ PORTED = (
     "uitree_wrap_row",
     "uitree_sizes",
     "home_ui",
+    "home_bar_ui",
 )
 
 

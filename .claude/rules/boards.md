@@ -467,6 +467,8 @@ stages 1–6 all absent. Its README is the authority; what bites:
   paragraph). A block that lives for good is made at start, beside the
   others: one made mid-session splits the free heap for good. One factory
   slot and no OTA (owner, 2026-11-17): a new image goes on by cable, and the
-  flash installs the browser console add-on that fits it into the store
-  (`[flash] addon`, `tools/board_flash.py`); the website's card offers the
-  install and the app image as its update. Its README is the authority.
+  website's card offers the install and the app image as its update. Its
+  browser console is ONLINE (owner, 2026-11-23, board.toml's `[web]
+  console`): the add-on outgrew its store, so neither the install
+  (`tools/store_image.py`) nor the cable flash (`tools/board_flash.py`) puts
+  one in it. Its README is the authority.
