@@ -1733,7 +1733,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:large",
+     "type": "word:large,small",
      "level": 2
     }
    }

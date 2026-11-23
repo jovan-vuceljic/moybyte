@@ -190,11 +190,21 @@ int uit_grow(void **p, int *cap, int need, size_t size)
     return 0;
 }
 
+// The failure's words' buffer: the engine's own, made at its first failure (the
+// process's one where none can be made).
+static char *err_buf(uit_t *e)
+{
+    static char none[UIT_ERR];
+    if (!e->err)
+        e->err = UIT_MALLOC(UIT_ERR);
+    return e->err ? e->err : none;
+}
+
 int uit_fail(uit_t *e, int code, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(e->err, sizeof e->err, fmt, ap);
+    vsnprintf(err_buf(e), UIT_ERR, fmt, ap);
     va_end(ap);
     e->code[0] = 0;
     return code;
@@ -204,7 +214,7 @@ int uit_check_fail(uit_t *e, const char *code, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(e->err, sizeof e->err, fmt, ap);
+    vsnprintf(err_buf(e), UIT_ERR, fmt, ap);
     va_end(ap);
     memcpy(e->code, code, 3);
     e->code[3] = 0;
@@ -335,6 +345,15 @@ void uit_close(uit_t *e)
     e->cells_node = 0;
     e->car_node = 0;
     e->cel_node = 0;
+    UIT_FREE(e->car);
+    UIT_FREE(e->cel);
+    UIT_FREE(e->anc);
+    UIT_FREE(e->mcells);
+    e->car = e->cel = NULL;
+    e->anc = NULL;
+    e->mcells = NULL;
+    e->nmcells = 0;
+    e->nanc = 0;
     for (int i = 0; i < e->nvr; i++)
         UIT_FREE(e->vr[i].h);
     UIT_FREE(e->vr);
@@ -421,6 +440,7 @@ void uit_free(uit_t *e)
     UIT_FREE(e->btns); UIT_FREE(e->ids); UIT_FREE(e->prev); UIT_FREE(e->evs);
     UIT_FREE(e->drew); UIT_FREE(e->orders); UIT_FREE(e->want); UIT_FREE(e->drafts);
     UIT_FREE(e->labels); UIT_FREE(e->tvl); UIT_FREE(e->rects); UIT_FREE(e->arr);
+    UIT_FREE(e->car); UIT_FREE(e->cel); UIT_FREE(e->anc); UIT_FREE(e->mcells); UIT_FREE(e->err);
     uit_buf_free(&e->pool); uit_buf_free(&e->scratch); uit_buf_free(&e->evtext); uit_buf_free(&e->cells);
     uit_buf_free(&e->trace);
     uit_buf_free(&e->fits);
@@ -429,7 +449,7 @@ void uit_free(uit_t *e)
 
 const char *uit_error(const uit_t *e)
 {
-    return e->err;
+    return e->err ? e->err : "";
 }
 
 const char *uit_get_cell(const uit_t *e, int slot, int row, int f)
@@ -1415,10 +1435,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
     if (!strcmp(name, "look") && kind == UIT_BUTTON) {
-        // look="large" (BT_LARGE): half again a row's height, twice the pads, a wider least width
-        if (strcmp(src, "large"))
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("button look=%s: \"large\"", "button look=%s"), src);
-        N->btn |= BT_LARGE;
+        // look="large" (BT_LARGE): half again a row's height, twice the pads, a wider least width;
+        // look="small" (BT_SMALL): a bar item's icon alone at 16 units at the scale, as a labelled
+        // one's, where its row is taller
+        if (strcmp(src, "large") && strcmp(src, "small"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("button look=%s: \"large\" or \"small\"", "button look=%s"), src);
+        N->btn |= src[0] == 'l' ? BT_LARGE : BT_SMALL;
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (kind == UIT_STEPPER && (!strcmp(name, "grow") || !strcmp(name, "tone"))) {

@@ -235,8 +235,14 @@ static void id_put(uit_t *e, int k, int model, int row, const char *id)
     if (I) {
         I->dup |= I->node != k;
     } else {
-        if (uit_grow((void **)&e->ids, &e->cids, e->nids + 1, sizeof *e->ids))
-            return;
+        if (e->nids == e->cids) {       // from 4: a placed page draws a handful
+            int c = e->cids ? 2 * e->cids : 4;
+            uit_id_t *q = UIT_REALLOC(e->ids, (size_t)c * sizeof *q);
+            if (!q)
+                return;
+            e->ids = q;
+            e->cids = c;
+        }
         I = &e->ids[e->nids++];
         strcpy(I->id, id);
         I->dup = 0;
@@ -1633,6 +1639,8 @@ static void draw_carousel(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int
     int32_t most = (int32_t)(n - 1) * pitch;
     int near = n ? (int)((off < most ? off : most) + pitch / 2) / pitch : 0;
     near = near < 0 ? 0 : near > n - 1 ? n - 1 : near;
+    if (!e->car && !(e->car = UIT_MALLOC(UIT_CAROUSEL_WORDS * sizeof *e->car)))
+        return;
     int32_t *cw = e->car;
     memcpy(cw, band, 4 * sizeof band[0]);
     memcpy(cw + 4, g, sizeof g);
@@ -1792,6 +1800,8 @@ static void draw_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
                      cur, out);
     int32_t off = out[2];
     int focused = out[4], sel = out[0];
+    if (!e->cel && !(e->cel = UIT_MALLOC(UIT_CELLS_WORDS * sizeof *e->cel)))
+        return;
     int32_t *cw = e->cel;
     memcpy(cw, band, 4 * sizeof band[0]);
     memcpy(cw + 4, g, sizeof g);
@@ -1915,6 +1925,8 @@ static void draw_desk_shelf(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, i
                           cur, out);
     int32_t off = out[2];
     int focused = out[4], sel = out[0], moving = out[3] != 0;
+    if (!e->cel && !(e->cel = UIT_MALLOC(UIT_CELLS_WORDS * sizeof *e->cel)))
+        return;
     int32_t *cw = e->cel;
     memcpy(cw, band, 4 * sizeof band[0]);
     memcpy(cw + 4, g, sizeof g);
@@ -3963,6 +3975,7 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     case UIT_BUTTON:
         a1 = text(e, k, 0, model, row, &n1);
         over_for(e, k, model, row, c, &o, id);
+        o.small = (N->btn & BT_SMALL) != 0;
         if (e->in_cell) {
             int32_t one = 1;
             moy_ui_over_put(&o, MOY_UI_OV_FIT, &one);
@@ -5007,6 +5020,8 @@ static int32_t row_need(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
 // A model row's cell placed: kept for `uit_rect`'s ROWKEY/KEY (its node's own rect is one cell's).
 static void put_cell(uit_t *e, int k, int model, int row, const int32_t r[4])
 {
+    if (!e->mcells && !(e->mcells = UIT_MALLOC(UIT_MCELLS * sizeof *e->mcells)))
+        return;
     if (e->nmcells < UIT_MCELLS) {
         uit_mc_t *m = &e->mcells[e->nmcells++];
         m->node = (int16_t)k, m->model = (int16_t)model, m->row = (int16_t)row;
@@ -6214,10 +6229,13 @@ int uit_take_focused(uit_t *e)
 
 void uit_anchor(uit_t *e, const char *name, int x, int y, int w, int h)
 {
-    if (e->nanc >= 4)
+    if (e->nanc >= UIT_ANCS)
         return;
-    snprintf(e->anc_name[e->nanc], UIT_ID_MAX + 1, "%s", name);
-    int16_t *a = e->anc[e->nanc++];
+    if (!e->anc && !(e->anc = UIT_MALLOC(UIT_ANCS * sizeof *e->anc)))
+        return;
+    uit_anc_t *A = &e->anc[e->nanc++];
+    snprintf(A->name, UIT_ID_MAX + 1, "%s", name);
+    int16_t *a = A->r;
     a[0] = (int16_t)x, a[1] = (int16_t)y, a[2] = (int16_t)w, a[3] = (int16_t)h;
 }
 
@@ -6227,9 +6245,9 @@ void uit_anchor(uit_t *e, const char *name, int x, int y, int w, int h)
 static int anchor_rect(uit_t *e, const char *name, size_t n, int32_t out[4])
 {
     for (int i = 0; i < e->nanc; i++)
-        if (strlen(e->anc_name[i]) == n && !memcmp(e->anc_name[i], name, n)) {
+        if (strlen(e->anc[i].name) == n && !memcmp(e->anc[i].name, name, n)) {
             for (int j = 0; j < 4; j++)
-                out[j] = e->anc[i][j];
+                out[j] = e->anc[i].r[j];
             return 1;
         }
     if (n > 5 && !memcmp(name + n - 5, ".head", 5) && e->arr) {

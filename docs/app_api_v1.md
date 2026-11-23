@@ -333,7 +333,8 @@ a tap or Enter fires `on=` from; a link's
 before its value; a
 card's `badge=` marks its picture and its `label_icon=` stands an icon
 before its label; a button's `kind=` may be a template, and `kind="bar"`
-alone is a flat icon, narrower than a button's; on the desk a popover
+alone is a flat icon, narrower than a button's, the largest its row holds
+(`look="small"`: 16 units at the page's scale, as beside a label); on the desk a popover
 anchored at a button or a link hangs under it; a swatches row whose label
 its dots would cut moves them into its right pad where that makes it whole,
 else shrinks them, as far apart, until it is;

@@ -129,7 +129,7 @@ def _states(names, cs, fs, clock_w, sys_len, n_items, glyph=None, wins=None, clu
     (`names` the same list) writes nothing."""
     page = _page()
     page._bind()
-    n = min(n_items, _status.CAP)
+    n = min(n_items, _status.CAP) if "wifi" in names or "battery" in names else 0
     items = _items(n)
     L = _LAST
     if (L[0] is names and L[1] == cs and L[2] == fs and L[3] == clock_w and L[4] == sys_len
@@ -150,12 +150,11 @@ def _states(names, cs, fs, clock_w, sys_len, n_items, glyph=None, wins=None, clu
     _put("sg", sg)
     _put("cw", clock_w)
     _put("sys_w", sys_len or 16 * cs)
-    _put("status", bool(n) and ("wifi" in names or "battery" in names))
     # a handheld's cluster: RING_ROOM round it, CLOCK_CLEAR more before the clock
     ring = SL.RING_ROOM * fs if cluster else 0
     _put("ring", ring)
     _put("cg", SL.CLOCK_CLEAR * fs if cluster else sg)
-    _put("cluster", s._v["status"] or "wifi" in names or "battery" in names)
+    _put("cluster", "wifi" in names or "battery" in names)
     tray = False
     for nm, st in _SHOWN:
         _put(st, nm in names)
@@ -193,7 +192,7 @@ def pack(w, h, rows, cs, fs, clock_w, text_w=None, of=None, sys_len=0, cluster=N
         cells = []
         for name in LEFT + ("status",) + RIGHT:
             if name == "status":
-                r = _items_span(page, n_items) if s._v["status"] else None
+                r = _items_span(page, n_items) if s._v["items"] else None
             else:
                 r = page.rect_of("battery_st" if name == "battery" and s._v["batt_glyph"] else name)
             if r is None or (name != "status" and name not in names):
