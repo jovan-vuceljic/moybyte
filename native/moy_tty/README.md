@@ -100,4 +100,6 @@ Every console takes the module (a `[native.shared]` default, with `moy_sh`,
 which the face runs; `tests/test_board_toml.py` holds that a board with
 `moy_ssh` has both), and so does the Zero, whose browser is its only
 screen: with no frame loop it serves a face's hops from its poll loop
-(`moy_tty.tail()`, `zero_host.serve`).
+(`moy_tty.tail()`, `zero_host.serve`), which runs the kernel's loop jobs a
+console's frame tail runs too (`moy_loop_jobs`), so a shell job parked in a
+wait resumes.

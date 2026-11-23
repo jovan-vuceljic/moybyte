@@ -522,6 +522,21 @@ static int lines_opt(void) {
     return n;
 }
 
+// `-N`, the old spelling of `-n N`, which POSIX dropped and every Linux head
+// and tail still take: N, or -1 when argv[1] is not one.
+static int old_count(char **argv) {
+    const char *a = argv[1];
+    if (a == NULL || a[0] != '-' || a[1] < '0' || a[1] > '9') {
+        return -1;
+    }
+    for (const char *e = a + 1; *e; e++) {
+        if (*e < '0' || *e > '9') {
+            return -1;
+        }
+    }
+    return atoi(a + 1);
+}
+
 static int head_one(int fd, const char *name, void *arg) {
     int left = *(int *)arg;
     char buf[512];
@@ -544,13 +559,52 @@ static int head_one(int fd, const char *name, void *arg) {
 
 static int headcmd(int argc, char **argv) {
     (void)argc;
-    (void)argv;
-    int n = lines_opt();
+    int n = old_count(argv);
+    if (n >= 0) {
+        return each_input(argv + 2, head_one, &n);
+    }
+    n = lines_opt();
     return each_input(argptr, head_one, &n);
+}
+
+// A file's last `want` lines, read in two passes and never copied into the
+// session's arena, which is 12 KB where there is no PSRAM (MOY_SH_ARENA, the
+// C3 Zero's SSH face) while the open already holds the file. -1 for what
+// does not seek (a pipe), which tail_one copies whole.
+static int tail_seek(int fd, int want) {
+    if (lseek(fd, 0, SEEK_END) < 0 || lseek(fd, 0, SEEK_SET) < 0) {
+        return -1;
+    }
+    char buf[512];
+    long lines = 0;
+    int last_nl = 1;
+    ssize_t n;
+    while ((n = read(fd, buf, sizeof buf)) > 0) {
+        for (ssize_t i = 0; i < n; i++) {
+            lines += buf[i] == '\n';
+        }
+        last_nl = buf[n - 1] == '\n';
+    }
+    long total = lines + !last_nl;      // a last line with no newline counts
+    long skip = total > want ? total - want : 0, seen = 0;
+    lseek(fd, 0, SEEK_SET);
+    while ((n = read(fd, buf, sizeof buf)) > 0) {
+        ssize_t i = 0;
+        while (seen < skip && i < n) {
+            seen += buf[i++] == '\n';
+        }
+        if (seen >= skip && i < n) {
+            outmem(buf + i, (size_t)(n - i), out1);
+        }
+    }
+    return 0;
 }
 
 static int tail_one(int fd, const char *name, void *arg) {
     int want = *(int *)arg;
+    if (tail_seek(fd, want) == 0) {
+        return 0;
+    }
     char *text;
     size_t len = slurp(fd, &text);
     (void)name;
@@ -571,6 +625,16 @@ static int tail_one(int fd, const char *name, void *arg) {
 
 static int tail_bytes(int fd, const char *name, void *arg) {
     size_t want = (size_t)*(int *)arg;
+    off_t end = lseek(fd, 0, SEEK_END);
+    if (end >= 0) {                     // a file: its last bytes, read in place
+        char buf[512];
+        ssize_t n;
+        lseek(fd, (size_t)end > want ? end - (off_t)want : 0, SEEK_SET);
+        while ((n = read(fd, buf, sizeof buf)) > 0) {
+            outmem(buf, (size_t)n, out1);
+        }
+        return 0;
+    }
     char *text;
     size_t len = slurp(fd, &text);
     (void)name;
@@ -593,6 +657,10 @@ static int tailcmd(int argc, char **argv) {
             int n = atoi(a + 1);
             return each_input(argv + 2, tail_bytes, &n);
         }
+    }
+    int old = old_count(argv);
+    if (old >= 0) {
+        return each_input(argv + 2, tail_one, &old);
     }
     int n = 10, c, bytes = 0;
     while ((c = nextopt("n:c:")) != '\0') {
@@ -778,32 +846,54 @@ static int grep_has(const grep_t *g, const char *line, size_t n) {
     return 0;
 }
 
+// One line of grep's input, matched and, when it matches, printed.
+static void grep_line(grep_t *g, const char *name, const char *line, size_t n,
+                      unsigned long lineno, unsigned long *count) {
+    if (grep_has(g, line, n) == g->inv) {
+        return;
+    }
+    (*count)++;
+    g->matched = 1;
+    if (!g->count && !g->quiet) {
+        if (g->many) {
+            out1fmt("%s:", name);
+        }
+        if (g->num) {
+            out1fmt("%lu:", lineno);
+        }
+        outmem(line, n, out1);
+        outcslow('\n', out1);
+    }
+}
+
+// A line at a time, the input never copied into the session's arena, which
+// is 12 KB where there is no PSRAM (MOY_SH_ARENA, the C3 Zero's SSH face),
+// smaller than most logs. A line longer than GREP_LINE is matched and printed
+// on its first GREP_LINE bytes.
+#define GREP_LINE 1024
 static int grep_one(int fd, const char *name, void *arg) {
     grep_t *g = arg;
-    char *text;
-    size_t len = slurp(fd, &text);
+    char buf[512], line[GREP_LINE];
+    size_t ln = 0;
+    int open_line = 0;
     unsigned long count = 0, lineno = 0;
-    for (size_t at = 0; at < len;) {
-        size_t end = at;
-        while (end < len && text[end] != '\n') {
-            end++;
-        }
-        lineno++;
-        if (grep_has(g, text + at, end - at) != g->inv) {
-            count++;
-            g->matched = 1;
-            if (!g->count && !g->quiet) {
-                if (g->many) {
-                    out1fmt("%s:", name);
+    ssize_t n;
+    while ((n = read(fd, buf, sizeof buf)) > 0) {
+        for (ssize_t i = 0; i < n; i++) {
+            if (buf[i] == '\n') {
+                grep_line(g, name, line, ln, ++lineno, &count);
+                ln = 0;
+                open_line = 0;
+            } else {
+                if (ln < GREP_LINE) {
+                    line[ln++] = buf[i];
                 }
-                if (g->num) {
-                    out1fmt("%lu:", lineno);
-                }
-                outmem(text + at, end - at, out1);
-                outcslow('\n', out1);
+                open_line = 1;
             }
         }
-        at = end + 1;
+    }
+    if (open_line) {
+        grep_line(g, name, line, ln, ++lineno, &count);
     }
     if (g->count) {
         if (g->many) {

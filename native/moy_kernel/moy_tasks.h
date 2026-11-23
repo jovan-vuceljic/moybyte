@@ -32,7 +32,14 @@
 #define MOY_MEDIA_PRIO 3
 #define MOYCORE_SVC_STACK 12288u
 #define MOYCORE_SVC_PRIO 2
+#if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
+// a shell runner's on a board without PSRAM (the C3 Zero), the SSH face's
+// size there (native/moy_tty/moy_tty_sys.c, FACE_STACK): a job's runner and
+// its arena are internal SRAM, and a face running the same shell peaked at 5 KB
+#define MOY_SH_RUN_STACK (12u * 1024u)
+#else
 #define MOY_SH_RUN_STACK (24u * 1024u)      // a shell runner's (the SSH face's task's)
+#endif
 #define MOY_PAKE_STACK 8192
 #ifndef MOY_AUDIO_CORE
 #define MOY_AUDIO_CORE 1                    // the VM's, unless the board names one
