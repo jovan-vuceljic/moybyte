@@ -13,7 +13,9 @@
 """The website's install of a board: its merged image (bootloader, partition
 table, app) and, at the internal store's offset, a store holding the browser
 console add-on that fits the app (tools/web_pack.py), and nothing else -- the
-image seeds its own carts on its first boot.
+image seeds its own carts on its first boot. A board whose browser console is
+online (board.toml's `[web] console = "online"`) gets an empty store: its
+console pack comes from a mirror by digest, not from its store.
 
     python3 tools/store_image.py firmware/<board>        # dist/<board>/<stem>_install.bin
     python3 tools/store_image.py firmware/<board> --out x.bin
@@ -190,12 +192,13 @@ def addon_files(pack):
 
 def install_image(merged, offset, pack):
     """The install: `merged` (written at `offset`), 0xFF to the store, and the
-    store holding the add-on for `pack`. Raises ImageError, or web_pack's
+    store holding the add-on for `pack`, an empty one where `pack` is None (a
+    board whose console is online). Raises ImageError, or web_pack's
     PageError for a pack that is not one."""
     at, size = store_part(merged, offset)
     if at - offset < len(merged):
         raise ImageError("the merged image runs into the store at 0x%x" % at)
-    store = store_image(addon_files(pack), size // BLOCK)
+    store = store_image(addon_files(pack) if pack is not None else {}, size // BLOCK)
     return merged + b"\xff" * (at - offset - len(merged)) + store
 
 
@@ -247,10 +250,11 @@ def _used(files, blocks):
 def room(board_dir, pack):
     """(the store's blocks, the blocks the add-on for `pack` takes in it, the
     blocks it and the first boot's carts take, None where they do not fit) of
-    a board's store as its sources lay it. Raises ImageError where the
+    a board's store as its sources lay it; with `pack` None (a board whose
+    console is online) the add-on takes none. Raises ImageError where the
     add-on alone does not fit, as install_image does."""
     blocks = board_store(board_dir)[1] // BLOCK
-    addon = addon_files(pack)
+    addon = addon_files(pack) if pack is not None else {}
     alone = _used(addon, blocks)
     if alone is None:
         raise ImageError("%d B of files do not fit a store of %d blocks"
@@ -276,23 +280,28 @@ def check(pack, out=sys.stdout):
     """Each board's room for `pack` (bytes), a line each, and the boards
     that fail: every board's store must hold the add-on (the website's
     install), and a headless board's, its only store, the carts of its first
-    boot beside it and the seed's reserve free. A console board seeds its
-    carts on its card where one is in, so its line only says what a store
-    with no card leaves."""
+    boot beside it and the seed's reserve free. A board whose console is
+    online (`[web] console`) holds no add-on, so only its first boot is
+    checked. A console board seeds its carts on its card where one is in, so
+    its line only says what a store with no card leaves."""
     import board_config
     reserve = -(-seed_reserve() // BLOCK)
     bad = []
     for d in board_dirs():
         name = os.path.basename(d)
         headless = board_config.load(d)["board"].get("tier") == "headless"
+        online = board_config.web_console(d) == "online"
         try:
-            blocks, addon, both = room(d, pack)
+            blocks, addon, both = room(d, None if online else pack)
         except ImageError as exc:
             out.write("!! %-28s %s\n" % (name, exc))
             bad.append(name)
             continue
-        line = "store %4d blocks, the add-on %4d (%2d%% left)" % (
-            blocks, addon, 100 * (blocks - addon) // blocks)
+        if online:
+            line = "store %4d blocks, no add-on: its console is online ([web] console)" % blocks
+        else:
+            line = "store %4d blocks, the add-on %4d (%2d%% left)" % (
+                blocks, addon, 100 * (blocks - addon) // blocks)
         if both is None:
             short = True
             line += "; its first boot's carts do not fit beside it"
@@ -334,12 +343,15 @@ def main():
     flash = board_config.load(a.board_dir)["flash"]
     image = a.image or os.path.join(ROOT, flash["image"])
     offset = int(str(flash.get("offset", "0x0")), 0)
-    pack, _digest = web_pack.page_beside(image, board_config.load(a.board_dir)["board"]["ota"])
     with open(image, "rb") as f:
         merged = f.read()
-    with open(pack, "rb") as f:
-        body = f.read()
+    online = board_config.web_console(a.board_dir) == "online"
+    body = None
     try:
+        if not online:
+            pack, _digest = web_pack.page_beside(image, board_config.load(a.board_dir)["board"]["ota"])
+            with open(pack, "rb") as f:
+                body = f.read()
         out = install_image(merged, offset, body)
     except (ImageError, web_pack.PageError) as exc:
         print("!! %s: %s" % (a.board_dir, exc), file=sys.stderr)
@@ -349,8 +361,10 @@ def main():
         f.write(out)
     os.replace(dest + ".part", dest)
     at, size = store_part(merged, offset)
-    print("OK -> %s (%d B: the image, then the store at 0x%x of %d KB with the "
-          "browser console add-on)" % (dest, len(out), at, size >> 10))
+    print("OK -> %s (%d B: the image, then the store at 0x%x of %d KB %s)"
+          % (dest, len(out), at, size >> 10,
+             "empty: this board's browser console is online ([web] console), no add-on"
+             if online else "with the browser console add-on"))
     return 0
 
 

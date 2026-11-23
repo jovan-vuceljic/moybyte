@@ -315,6 +315,22 @@ def headroom_floor(board_dir):
     return ota, kib * 1024
 
 
+WEB_CONSOLES = ("addon", "online")
+
+
+def web_console(board_dir):
+    """Where the board's browser console comes from, `[web] console`:
+    "addon" (the default), the add-on cart in its store that its image names;
+    "online", its pack from a mirror by digest
+    (docs/web_console_online_2026-11.md), so its install and cable flash put
+    no add-on in its store."""
+    got = load(board_dir).get("web", {}).get("console", "addon")
+    if got not in WEB_CONSOLES:
+        raise ValueError('%s/board.toml: [web] console must be one of %s, got %r'
+                         % (board_dir, ", ".join(WEB_CONSOLES), got))
+    return got
+
+
 def core_carts(root=ROOT):
     """The core carts' ids, `moy_seed.CORE`, read from its source: the one
     place the set is written, which a tool reads without the store."""

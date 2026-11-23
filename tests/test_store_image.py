@@ -123,18 +123,45 @@ def test_the_check_fails_a_pack_that_outgrows_a_board_s_store():
     takes."""
     import io
     assert sorted(os.path.basename(d) for d in store_image.board_dirs()) == sorted(b[0] for b in BOARDS.values())
-    c3 = str(_board("c3_zero"))
-    blocks = store_image.board_store(c3)[1] // store_image.BLOCK
     out = io.StringIO()
     assert store_image.check(_wasm_pack(1 << 20), out) == [], out.getvalue()
+    p4 = str(_board("guition_p4"))
+    blocks = store_image.board_store(p4)[1] // store_image.BLOCK
     out = io.StringIO()
-    assert store_image.check(_wasm_pack((blocks + 1) * store_image.BLOCK), out) == ["esp32c3_zero"]
+    assert store_image.check(_wasm_pack((blocks + 1) * store_image.BLOCK), out) == [
+        "elecrow_crowpanel_p4_10_1", "guition_jc8012p4a1c"]
     assert "do not fit a store of %d blocks" % blocks in out.getvalue()
+    xiao = str(_board("xiao_zero"))
+    blocks = store_image.board_store(xiao)[1] // store_image.BLOCK
     fits = _wasm_pack((blocks - 24) * store_image.BLOCK)
-    _b, alone, both = store_image.room(c3, fits)
+    _b, alone, both = store_image.room(xiao, fits)
     assert alone <= blocks and (both is None or blocks - both < store_image.seed_reserve() // store_image.BLOCK)
     out = io.StringIO()
-    assert store_image.check(fits, out) == ["esp32c3_zero"], out.getvalue()
+    assert "seeed_xiao_esp32s3_zero" in store_image.check(fits, out), out.getvalue()
+
+
+def test_a_board_whose_console_is_online_gets_no_add_on(tmp_path):
+    """The C3 Zero's console is online (`[web] console`): its install's
+    store is empty, and the check holds its store to its first boot's carts
+    and the seed's reserve alone, whatever the pack."""
+    import io
+    c3 = _board("c3_zero")
+    assert board_config.web_console(c3) == "online"
+    assert set(board_config.web_console(_board(n)) for n in BOARDS if n != "c3_zero") == {"addon"}
+    toml = tmp_path / "board.toml"
+    toml.write_text('[web]\nconsole = "cloud"\n')
+    with pytest.raises(ValueError, match="console must be one of addon, online"):
+        board_config.web_console(tmp_path)
+    offset = int(str(board_config.load(c3)["flash"]["offset"]), 0)
+    merged = _merged(c3, offset)
+    out = store_image.install_image(merged, offset, None)
+    at, size = BOARDS["c3_zero"][1:]
+    assert out[:len(merged)] == merged and len(out) - (at - offset) <= 8 * store_image.BLOCK
+    blocks, addon, both = store_image.room(str(c3), None)
+    assert blocks - both >= store_image.seed_reserve() // store_image.BLOCK
+    text = io.StringIO()
+    assert "esp32c3_zero" not in store_image.check(_wasm_pack(size + 4096), text)
+    assert "esp32c3_zero                 store  544 blocks, no add-on: its console is online" in text.getvalue()
 
 
 @pytest.mark.parametrize("name", sorted(BOARDS))
