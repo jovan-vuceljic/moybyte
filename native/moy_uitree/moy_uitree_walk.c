@@ -5328,7 +5328,7 @@ static void draw_panel(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
 }
 
 // A canvas in a placed page: a part of its own the front end draws into (its clip and ground
-// the front end's).
+// the front end's); a stop only with keys=, as in a flowing page.
 static void draw_canvas_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     const char *key = uit_str(e, NODE(k)->key);
@@ -5340,7 +5340,10 @@ static void draw_canvas_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
         int32_t one = 1;
         moy_ui_over_put(&o, MOY_UI_OV_BARE, &one);       // a bare page's canvases, and a foot's, sink no well
     }
-    id_put(e, k, model, row, key);
+    if (NODE(k)->lit & CV_KEYS)
+        id_put(e, k, model, row, key);  // a stop while it takes the keys, as in a flowing page (`draw`)
+    else
+        moy_ui_over_put(&o, MOY_UI_OV_DISABLED, &(int32_t){1});
     moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, 0, &o, got);
     canvas_drew(e, k);
     if (e->draw_fn)
