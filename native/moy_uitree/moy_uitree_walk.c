@@ -2736,7 +2736,8 @@ static void flow_draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, 
 static void put_cell(uit_t *e, int k, int model, int row, const int32_t r[4]);
 
 // Whether split `k` stands among a flowing page's rows: in a group or a scroll, or beside a shown
-// row that is no region in its page, its case or its split's cell. A split alone there (or a
+// row that is no region in its page, its case or its split's cell (a tools row lent to a site
+// draws elsewhere, so it is none). A split alone there (or a
 // split's or a grid's cell) lays that room out in cells.
 static int split_flows(uit_t *e, int k)
 {
@@ -2754,7 +2755,8 @@ static int split_flows(uit_t *e, int k)
     KIDS(p, g) {
         int gk = NODE(g)->kind;
         if (g != k && gk != UIT_POPOVER && gk != UIT_DIALOG && gk != UIT_FOOT && gk != UIT_TOAST &&
-            gk != UIT_SPLIT && gk != UIT_GRID && uit_shown(e, g, -1, -1))
+            gk != UIT_SPLIT && gk != UIT_GRID && !(gk == UIT_TOOLS && (NODE(g)->lit & TL_LEND)) &&
+            uit_shown(e, g, -1, -1))
             return 1;
     }
     return 0;
