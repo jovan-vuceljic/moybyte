@@ -113,7 +113,7 @@ class CardsLayer(Layer):
         self._shown = None            # what `_sync` wrote last
         self._count = (None, 0)       # (the cart's path, its files)
         self._pics = (None, ())       # (what the pickers' pictures were drawn from, their puts)
-        self._band = None             # whether the page's band names F6 (a desk pane's)
+        self._band = None             # what the page's band adds: F6, a desk pane's
         sc = ws.sys_canvas
         self.layout = CardsLayout(sc.w, sc.h, getattr(sc, "font_scale", 1))
 
@@ -417,9 +417,11 @@ class CardsLayer(Layer):
         lay = self.layout
         r = (lay.cx, lay.cy, lay.cw, lay.ch)
         desk = _layout_base.metric_class() == _layout_base.DESK
-        if desk != self._band:          # a desk pane's band names the key to the next pane
-            self._band = desk
-            self.page.band_extra(("F6", "Next pane") if desk else ())
+        # a desk pane's band names the key to the next pane, where the input in use has it
+        band = ("F6", "Next pane") if desk and _ui_draw.hint_kind() == "keys" else ()
+        if band != self._band:
+            self._band = band
+            self.page.band_extra(band)
         cv = ws.sys_canvas
         self._host.begin(cv, ws.theme_colors, r, desk)
         self.page.paint(dt, cv, ws.theme_colors, r, desk)
