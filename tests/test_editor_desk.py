@@ -1904,3 +1904,40 @@ def test_quiet_frames_warm_the_other_workspaces_and_a_switch_draws_the_same(tmp_
         assert made == ([] if warm else ["code", "art", "world", "sound"])
     for key in ("code", "art", "world", "sound"):
         assert shots[(True, key)] == shots[(False, key)], key
+
+
+@pytest.mark.parametrize("size,fs", [((1024, 600), 2), ((800, 480), 2), ((800, 480), 3)])
+def test_a_pane_headers_name_is_never_cut_at_large_text(tmp_path, size, fs):
+    """At Large text no pane header cuts its name: where a name and its
+    tools do not fit, the status gives way, then the icon, then the words
+    (the pane's icon names it); the name stands left of every tool; and the
+    header is as tall as its words, so the body under it covers none."""
+    from runtime import ui_draw
+    ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=size,
+                                    panel_diagonal_in=7.0, font_scale=fs, windowed=True)
+    ws.home.open_desk()
+    ws.open_in_editor(install_shape(ws, "sky_run"))
+    drv = host_app.ConsoleDriver(ws)
+    d = ws.editor_desk
+    forms = set()
+    for key in ("code", "art", "world", "sound"):
+        d.switch(key)
+        for _ in range(3):
+            ws.mark_dirty()
+            drv.frame(DT)
+        for n, h in d._heads.items():
+            v = h.vals
+            if v is None or h.pane is None or v[0] != "title":
+                continue
+            forms.add(v[1])
+            head = h.page.rect_of("head")
+            assert head[3] >= ui_draw.font("ui")[2] * fs, (key, n, head)
+            # the name as the engine measures it (`natural`) in the room the
+            # page leaves it between its lead and its first tool
+            lead = h.page.rect_of("lead")
+            tools = [h.page.rect_of(k) for k in ("grow", "more", "pause", "new_sound", "rename", "sounds")]
+            left = min(r[0] for r in tools if r is not None and r[2] > 0)
+            words = d._tw(v[3]) if v[1] != "icon" else 0
+            need = words + 8 * fs + (22 * fs if v[1] != "words" else 0)
+            assert lead[0] + lead[2] + need <= left, (key, n, v[1], v[3], lead, need, left)
+    assert forms - {"named"}, forms         # some header gave way at this size

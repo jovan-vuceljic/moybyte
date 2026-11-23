@@ -73,11 +73,14 @@ holds and the picture shows the parts.
   spends the 44 px as `MAXIMISE_VARIANTS.md`'s "Where the 44 px go" says.
 - **Undo and redo** act on the focused pane's file.
 - **A pane** is a `surface` card (radius 8; Night adds its 1 px `line`) on
-  the Editor's `bg` ground, 6 px gutters, flat. Its 32 px header holds an
-  icon and a name (with a dim status after it), or its tabs, then its
-  tools in 32 × 32 cells (18 px glyphs), then grow. Tools that do not fit
-  take a second 32 px row. A short pane's tabs show the current one
-  labelled and the others as icons.
+  the Editor's `bg` ground, 6 px gutters, flat. Its 32 px header (taller
+  at Large text, as tall as its words) holds an icon and a name (with a
+  dim status after it), or its tabs, then its tools in 32 × 32 cells
+  (18 px glyphs), then grow. Tools that do not fit fold into a More menu.
+  A short pane's tabs show the current one labelled and the others as
+  icons. Nothing in a header is cut: where a name and its tools do not
+  fit, the status gives way, then the icon, then the words, the pane's
+  icon naming it as a short pane's tabs are their icons.
 - **The focused pane** takes the keys and wears the 3 px `value` edge
   along its top. Moving focus between panes never commits; commits ride
   the idle debounce, Play and exit, and a workspace switch commits only

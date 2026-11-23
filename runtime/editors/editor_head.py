@@ -1,7 +1,9 @@
 """A desk Editor pane's header as a placed `uitree` page, one page a shown
 pane (docs/media/look_2026-10/EDITOR_LAYOUT.md): the pane's icon and name
 over its dim status, or its tabs (short where they would not fit
-labelled: the current one labelled, the others their icons); the tools its
+labelled: the current one labelled, the others their icons); where the
+name and the tools do not fit, the status gives way, then the icon, then
+the words, the pane's icon naming it (`form`); the tools its
 content carries and the more menu of those that did not fit; the Game's
 Pause; the Code pane's file tabs, Find, Go to definition and its more
 menu; the Sound pane's play, speed, loop, rename and, where no Sounds list
@@ -17,7 +19,7 @@ import uitree_app
 
 s = ui.state(
     kind=ui.enum("title", "tabs", "short", "code", init="title"),
-    fitted=False, icon="", title="", status="",
+    form=ui.enum("named", "words", "icon", init="named"), icon="", title="", status="",
     tabs=ui.model(key="k", k="", label=""), tab=ui.row_of("tabs"),
     shorts=ui.model(key="k", k="", label="", icon="", cur=False),
     tools=ui.model(key="k", k="", icon="", on=False),
@@ -35,9 +37,9 @@ def sync(vals):
     """The host's values where they moved: the header's kind, its words,
     its tabs and tools, the Game's, the Code pane's and the Sound pane's
     own, and the measures (`HeadHost._vals`)."""
-    (kind, fitted, icon, title, status, tabs, tab, shorts, tools, folded, game, files, file, find,
+    (kind, form, icon, title, status, tabs, tab, shorts, tools, folded, game, files, file, find,
      sound, new_sound, measures) = vals
-    s.kind, s.fitted, s.icon, s.title, s.status = kind, fitted, icon, title, status
+    s.kind, s.form, s.icon, s.title, s.status = kind, form, icon, title, status
     s.tabs = [dict(k=str(i), label=t) for i, t in enumerate(tabs)]
     if s.tab != tab:
         s.tab = tab
@@ -128,9 +130,10 @@ def head_page():
     with ui.page(""):
         with ui.row("head", pad="{pad}", gap=0, grow=True):
             ui.canvas("lead", _nothing, w="{lead}", shown="kind=title")
-            ui.label("{title}", icon="{icon}", size="text", shown="kind=title && fitted")
-            ui.label("{status}", tone="dim", shown="kind=title && fitted")
-            ui.label("{title}", icon="{icon}", face="ui", shown="kind=title && !fitted")
+            ui.label("{title}", icon="{icon}", size="text", shown="kind=title && form=named")
+            ui.label("{title}", size="text", shown="kind=title && form=words")
+            ui.label("", icon="{icon}", size="text", shown="kind=title && form=icon")
+            ui.label("{status}", tone="dim", shown="kind=title")
             ui.tabs("tab", text="{.label}", on="chose_tab", shown="kind=tabs")
             with ui.rows("shorts", dir="row", shown="kind=short"):
                 ui.button("short_on", label="{.label}", icon="{.icon}", kind="bar", marked=".cur",

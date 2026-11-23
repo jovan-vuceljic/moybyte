@@ -825,12 +825,11 @@ class EditorDesk(Layer):
         return (lag[0] >= b[0] and lag[1] >= b[1] and lag[2] <= b[0] + b[2]
                 and lag[3] <= b[1] + b[3])
 
-    def _spills(self):
-        """Whether a pane header's words run past the header into the body
-        under it (a font scale over the chrome's): a pane's own rows
-        there are the header's too, so its frames draw whole."""
-        u = self._unit()
-        return _V.ui_line() * self.ws.look.effective_font_scale() > (P.HEADER - 4) * u
+    def _head_h(self, u):
+        """A pane header's height: its row (`P.HEADER` units), or where the
+        UI face's line at the font scale is taller (Large text), that line
+        and a margin, so its words never run into the body under it."""
+        return max(P.HEADER * u, _V.ui_face_line() * self.ws.look.effective_font_scale() + 4 * u)
 
     def changed(self):
         return self._changed
@@ -944,7 +943,7 @@ class EditorDesk(Layer):
         known = ret[0] != 0
         lag = ret[1:]
         still = not (data is False or app.playing() or ws.animating(dt, False)
-                     or self._spills() or self._loupe is not None
+                     or self._loupe is not None
                      or (c == "paint" and ws.paint_layer._host.tap == 2
                          and ws.paint_layer._host.tap_armed())
                      or (c != "paint" and self._sprite_owes()))
@@ -1158,7 +1157,7 @@ class EditorDesk(Layer):
             dock("desktop", None)
 
     def _body(self, r, u, pane=None):
-        h = 0 if pane is not None and self._headless(pane) else P.HEADER * u
+        h = 0 if pane is not None and self._headless(pane) else self._head_h(u)
         return (r[0], r[1] + h, r[2], max(0, r[3] - h))
 
     def _card(self, cv, th, r, focused, u, filled=0):
@@ -1252,7 +1251,8 @@ class EditorDesk(Layer):
         cur = self._tabs.get(pane, 0)
         icon = title = status = tab = file = ""
         tabs = shorts = files = ()
-        find = fitted = False
+        find = False
+        form, lead = "named", 20 * u
         cells = fixed + cell * (len(tools) + bool(folded))
         if c == "code" and len(pane) == 1:
             kind = "code"
@@ -1266,10 +1266,18 @@ class EditorDesk(Layer):
             label, icon, _tab, _m = P.CONTENTS[c]
             title = self._title(c, label)
             status = self._status(c)
-            # the title as wide as its words where they and the status fit
-            # beside the tools, else what the tools leave it (cut)
-            fitted = (22 * u + 22 * fs + self._tw(title) + 8 * fs
-                      + (self._tw(status) + 8 * fs if status else 0) + cells) <= w
+            # nothing is cut: where the name and the tools do not fit, the
+            # status gives way, then the icon, then the words (the pane's
+            # icon names it, as a short pane's tabs are their icons)
+            named = 22 * u + 22 * fs + self._tw(title) + 8 * fs + cells
+            if status and named + self._tw(status) + 8 * fs > w:
+                status = ""
+            if named > w:
+                status = ""
+                if 10 * u + self._tw(title) + 8 * fs + cells <= w:
+                    form, lead = "words", 8 * u
+                else:
+                    form = "icon"
         elif short:
             kind = "short"
             shorts = tuple((str(j), P.CONTENTS[k][0], P.CONTENTS[k][1], j == cur)
@@ -1283,12 +1291,12 @@ class EditorDesk(Layer):
         if self._code_rows[0] != keys:
             self._code_rows = (keys, tuple((ic, _word(wd, keys), op) for ic, wd, op in _CODE_MORE))
         snd = ws.music_ui.sound.head_vals(self) if c == "music" else (False, False, "", False, False)
-        return (kind, fitted, icon, title, status, tabs, tab, shorts,
+        return (kind, form, icon, title, status, tabs, tab, shorts,
                 tuple((ic, op, self._tool_on(op)) for ic, _wd, op in reversed(tools)),
                 tuple((ic, _word(wd, keys), op) for ic, wd, op in folded),
                 (c == "game", self.paused, ws.editor_app.playing()), files, file, find, snd,
                 c == "sounds" and self.key == "sound",
-                (cell, 2 * u, 20 * u, max(1, h - P.HEADER * u), min(w - 16 * u, 160 * u * fs),
+                (cell, 2 * u, lead, max(1, h - self._head_h(u)), min(w - 16 * u, 160 * u * fs),
                  min(w - 16 * u, 200 * u * fs), self._code_rows[1]))
 
     def head_act(self, head, verb, *args):
@@ -1326,10 +1334,13 @@ class EditorDesk(Layer):
 
     def _tabs_w(self, pane, cur, u):
         """The width a pane's header tabs take: every one labelled, or with
-        `cur` an index, short -- that one labelled, the others icons."""
+        `cur` an index, short -- that one labelled, the others icons. A
+        tab's room scales with the font where Large text outgrows the unit,
+        as the engine draws it (moy_ui_parts.c's `tab_box`)."""
+        k = max(u, self.ws.look.effective_font_scale())
         if cur == -1:
-            return sum(self._tw(P.CONTENTS[k][0]) + _TAB_PAD * u for k in pane)
-        return (32 * u * (len(pane) - 1) + (_TAB_PAD + _TAB_LEAD) * u
+            return sum(self._tw(P.CONTENTS[c][0]) + _TAB_PAD * k for c in pane)
+        return (32 * u * (len(pane) - 1) + (_TAB_PAD + _TAB_LEAD) * k
                 + self._tw(P.CONTENTS[pane[cur]][0]))
 
     def _tw(self, text):
@@ -1737,7 +1748,7 @@ class EditorDesk(Layer):
         """The header of the pane showing `content`, or None."""
         for _n, p, r in self._shown_panes():
             if self.tab_of(p) == content:
-                return (r[0], r[1], r[2], P.HEADER * self._unit())
+                return (r[0], r[1], r[2], self._head_h(self._unit()))
         return None
 
     def _owe_restart(self, tab):
@@ -1901,7 +1912,7 @@ class EditorDesk(Layer):
             return False
         n, pane, r = p
         u = self._unit()
-        head = 0 if self._headless(pane) else P.HEADER * u
+        head = 0 if self._headless(pane) else self._head_h(u)
         if click and py < r[1] + head and px < self._tools_x.get(n, r[0] + r[2]):
             if self._double(("head", pane), _ticks_ms()):
                 self.grow(pane)

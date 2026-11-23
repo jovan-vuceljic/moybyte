@@ -105,8 +105,13 @@ hint_kind = _ui_draw.hint_kind
 
 
 def ui_line():
-    """The UI face's line height at scale 1."""
+    """The UI face's ascent at scale 1."""
     return _ui_draw.font("ui")[3]
+
+
+def ui_face_line():
+    """The UI face's line, its leading included, at scale 1."""
+    return _ui_draw.font("ui")[2]
 
 
 def text_w(text, fs=1):
