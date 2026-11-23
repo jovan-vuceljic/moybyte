@@ -437,6 +437,10 @@ def frames(loop):
               ("licences", ws.open_settings, page("licences")), ("paired", ws.open_settings, page("paired")),
               ("achievements", ws.open_settings, page("achievements")),
               ("wifi", ws.open_settings, page("wifi")), ("tasks", None, ws.open_tasks), ("code", None, code)]
+    # the task manager's cpu and memory are measured live, so the rounds read them held
+    import tasks_ui
+    tasks_ui.cpu_text = lambda pm: "1%"
+    tasks_ui.mem_text = lambda b: "1 KB"
     steps(40)
     out = {"routes": [r[0] for r in routes], "moved": {}, "loads": {}}
     shots = {}
