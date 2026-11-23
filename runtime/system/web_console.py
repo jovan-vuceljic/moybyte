@@ -137,6 +137,9 @@ class WebConsole:
             return "Updating the browser console..."
         if why is None:
             return None
+        room = addon.short_text() if addon is not None else None
+        if room is not None:
+            return room
         if addon is not None and addon.error:
             return "Couldn't update the browser console: %s" % addon.error
         return why[:1].upper() + why[1:]
@@ -146,7 +149,8 @@ class WebConsole:
         another firmware, or none is and the console was not removed) and
         nothing is installing it: the screen offers Update."""
         addon = getattr(self.ws, "addon", None)
-        return addon is not None and not addon.busy() and addon.wanted()
+        return (addon is not None and not addon.busy() and addon.wanted()
+                and addon.short() is None)
 
     def update_page(self, retry=False):
         """Start the add-on's update (Update on the screen; turning the
