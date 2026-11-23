@@ -803,15 +803,13 @@ def test_the_sounds_list_picks_a_sound_and_the_song(desk):
     drv.frame(DT)
     me = ws.music_ui.musicedit
     assert len(me.bank.sfx) >= 2
-    x, y, w, h = _pane(d, "sounds")
-    body_y = y + P.HEADER
-    rows = [b for b in (d._host.box("Sound 1"),) if b]
-    if rows:
-        bx, by, bw, bh = rows[0]
-    else:                                        # the list's rows from its top
-        bx, by, bw, bh = x + 10, body_y + 10 + 2 * 28, w - 20, 28
-    _click(drv, bx + bw // 2, by + bh // 2)
+    part = d.part("sounds")
+    bx, by, bw, _bh = part.rect_of("snds_view")
+    rh = part._row_h()
+    _click(drv, bx + bw // 3, by + 2 * rh + rh // 2)     # the Song, then sounds 0 and 1
     assert me.view == me.SFX_VIEW and me.sfx_idx == 1
+    _click(drv, bx + bw // 3, by + rh // 2)
+    assert me.view == me.SONG_VIEW
 
 
 def test_a_stamp_pick_sets_the_scenes_brush(desk):
@@ -1016,25 +1014,32 @@ def test_the_song_pane_edits_the_songs_slots_and_plays_it(desk):
     pat = me.cur_track().pattern
     n = len(pat)
 
+    part = d.part("song")
+
     def press(id):
-        bx, by, bw, bh = d._host.box(id)
+        bx, by, bw, bh = part.rect_of(id)
         _click(drv, bx + bw // 2, by + bh // 2)
 
-    assert all(d._host.box("slot %d" % k) is not None for k in range(min(n, 8)))
-    press("slot 0")
+    def slot(k):
+        sx, sy, _sw, _sh = part.rect_of("slots")
+        x0, y0, cw, ch, gap, first, last = part._slots_at
+        assert first <= k < last, "slot %d shows" % k
+        _click(drv, sx + x0 + (k % 4) * (cw + gap) + cw // 2, sy + y0 + (k - first) // 4 * (ch + 8) + ch // 2)
+
+    slot(0)
     assert me.view == me.SONG_VIEW and me.slot == 0
-    press("song add")
+    press("slot_add")
     assert len(pat) == n + 1 and me.slot == 1
     was = pat[1]
     hi = len(me.bank.sfx) - 1
-    press("song slot+" if was < hi else "song slot-")
+    press("slot_next" if was < hi else "slot_prev")
     assert pat[1] == (was + 1 if was < hi else was - 1), "the slot's sound stepped"
-    assert d._host.box("slot 1") is not None, "the new slot shows"
-    press("song del")
+    assert part._slots_at[6] > 1, "the new slot shows"
+    press("slot_del")
     assert len(pat) == n
-    press("song play")
+    press("song_play")
     assert ws.music_ui.music_preview == ("song", me.track_idx)
-    press("song play")
+    press("song_play")
     assert ws.music_ui.music_preview is None
     me.undo()                                    # the delete
     me.undo()                                    # the sound's step
@@ -1079,7 +1084,7 @@ def test_a_blocks_carts_code_workspace_shows_the_palette_and_the_made_code(block
     from runtime import blocks as B, editor_parts as Parts
     be = ws.block_ui.blocks_ed
     assert Parts.made_lines(be) == B.compile_blocks(be.program).rstrip("\n").split("\n")
-    assert d._host.box("palette blocks") is not None
+    assert d.part("palette").rect_of("items_view") is not None
 
 
 def test_the_made_code_is_a_text_view_the_wheel_scrolls(blocks_desk):
@@ -1115,7 +1120,7 @@ def test_a_palette_pick_puts_its_block_at_the_cursor_and_the_made_code_follows(b
     ws.mark_dirty()
     drv.frame(DT)
     items = Parts.palette_items(be, "looks")
-    bx, by, bw, bh = d._host.box("palette blocks")
+    bx, by, bw, bh = d.part("palette").rect_of("items_view")
     _click(drv, bx + 20, by + 14)                # the category's first block
     assert items[0][0] in repr(be.program)
     assert Parts.made_lines(be) != before
@@ -1125,11 +1130,81 @@ def test_a_palette_pick_puts_its_block_at_the_cursor_and_the_made_code_follows(b
 def test_the_palettes_categories_pick_their_blocks(blocks_desk):
     ws, drv = blocks_desk
     d = ws.editor_desk
-    bx, by, bw, bh = d._host.box("block categories 0")
-    _click(drv, bx + bw // 2, by + 28 + 14)      # the second row: Draw
+    part = d.part("palette")
+    bx, by, bw, bh = part.rect_of("cats")
+    x0, y0, cw, rh = part._cats_at
+    _click(drv, bx + x0 + cw // 2, by + y0 + rh + rh // 2)     # the second row's first: Draw
     assert d.part_state["block cat"] == "draw"
+    _click(drv, bx + bw - x0 - cw // 2, by + y0 + rh // 2)     # the first row's second: Control
+    assert d.part_state["block cat"] == "control"
     from runtime import editor_parts as Parts
     assert Parts.palette_items(None, "events") == []
+
+
+def test_the_palette_by_keys_alone(blocks_desk):
+    """The arrows across the palette's two columns open the next category;
+    down past them reaches its blocks, whose A puts one at the cursor."""
+    ws, drv = blocks_desk
+    d = ws.editor_desk
+    be = ws.block_ui.blocks_ed
+    d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("palette"))
+    d.part_state["block cat"] = "events"
+    ws.mark_dirty()
+    drv.frame(DT)
+    _arrow(drv, "right")
+    assert d.part_state["block cat"] == "control"
+    _arrow(drv, "down")
+    assert d.part_state["block cat"] == "input"
+    _arrow(drv, "left")
+    assert d.part_state["block cat"] == "draw"
+    from runtime import editor_parts as Parts
+    first = Parts.palette_items(be, "draw")[0][0]
+    pg = d.part("palette").page
+    for _ in range(8):
+        if pg._focus_key().endswith("/item"):
+            break
+        _arrow(drv, "down")
+    assert pg._focus_key() == "0/item"
+    _arrow(drv, "a")
+    assert first in repr(be.program)
+
+
+def test_the_sounds_and_the_song_by_keys_alone(desk):
+    """The Sounds list's arrows and A pick a sound or the Song; the Song's
+    arrows move along its slots."""
+    ws, drv, d, me, snd = _sound(desk)
+    d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("sounds"))
+    ws.mark_dirty()
+    drv.frame(DT)
+    pg = d.part("sounds").page
+    for _ in range(4):
+        if pg._focus_key() == "1/snd":
+            break
+        _arrow(drv, "down")
+    _arrow(drv, "a")
+    assert me.view == me.SFX_VIEW and me.sfx_idx == 1
+    for _ in range(4):
+        _arrow(drv, "up")
+    _arrow(drv, "a")
+    assert me.view == me.SONG_VIEW
+    me.add_slot()
+    me.select_cursor(0)
+    d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("song"))
+    ws.mark_dirty()
+    drv.frame(DT)
+    _arrow(drv, "right")
+    assert me.slot == 1
+
+
+def test_the_reference_map_by_keys_alone(desk):
+    ws, drv, d = _reference(desk, "maps")
+    d.focus_pane([d.tab_of(p) for p, _r, _p in d.panes()].index("maps"))
+    ws.mark_dirty()
+    drv.frame(DT)
+    cx, cy = d.part_state["ref cell"]
+    _arrow(drv, "right")
+    _arrow(drv, "down")
+    assert d.part_state["ref cell"] == (cx + 1, cy + 1)
 
 
 def test_a_blocks_carts_panes_hide_the_cards_body_too(blocks_desk, monkeypatch):
@@ -1188,31 +1263,33 @@ def _reference(desk, tab):
     return ws, drv, d
 
 
-def _press(drv, d, id):
-    bx, by, bw, bh = d._host.box(id)
+def _press(drv, d, id, part=None):
+    bx, by, bw, bh = d._host.box(id) if part is None else d.part(part).rect_of(id)
     _click(drv, bx + bw // 2, by + bh // 2)
 
 
 def test_a_reference_sound_pick_inserts_its_sfx_call(desk):
     ws, drv, d = _reference(desk, "sounds")
-    bx, by, bw, bh = d._host.box("ref sounds")
-    _click(drv, bx + 20, by + 28 + 14)           # sound 1
+    part = d.part("sounds")
+    bx, by, bw, bh = part.rect_of("snds_view")
+    rh = part._row_h()
+    _click(drv, bx + 20, by + rh + rh // 2)      # sound 1
     assert d.part_state["ref sound"] == 1
     ws.editor.row, ws.editor.col = 0, 0
-    _press(drv, d, "insert sfx")
+    _press(drv, d, "insert", "sounds")
     assert ws.editor.text().startswith("sfx(1)")
 
 
 def test_a_reference_map_pick_inserts_its_mget_call(desk):
     ws, drv, d = _reference(desk, "maps")
-    from runtime import editor_parts as Parts
-    body = d._body(_pane(d, "maps"), 1)
-    (mx, my, _mw, _mh), _c, _r, tw = Parts._map_rect(d, body, 1)
+    part = d.part("maps")
+    cx, cy, _cw, _ch = part.rect_of("map")
+    x0, y0, _cols, _rows, tw = part._map_at
     vx, vy = d.part_state["ref view"]
-    _click(drv, mx + 3 * tw + 1, my + 2 * tw + 1)
+    _click(drv, cx + x0 + 3 * tw + 1, cy + y0 + 2 * tw + 1)
     assert d.part_state["ref cell"] == (vx + 3, vy + 2)
     ws.editor.row, ws.editor.col = 0, 0
-    _press(drv, d, "insert mget")
+    _press(drv, d, "insert", "maps")
     assert ws.editor.text().startswith("mget(%d, %d)" % (vx + 3, vy + 2))
 
 
@@ -1222,7 +1299,7 @@ def test_the_log_names_an_error_and_takes_the_caret_to_its_line(desk):
     ws.run.player.crash_line = 12
     ws.mark_dirty()
     drv.frame(DT)
-    bx, by, bw, bh = d._host.box("log")
+    bx, by, bw, bh = d.part("log").rect_of("errs_view")
     _click(drv, bx + 20, by + 14)
     assert ws.editor.row == 11
     assert d.tab_of(d.focused()[0]) == "code"

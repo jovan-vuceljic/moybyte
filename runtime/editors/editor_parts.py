@@ -1,59 +1,39 @@
 # Map (grep -n a name to jump there):
-#   PartHost        the host of a pane that is a page of its own (editor_part.py)
-#   draw            a pane the desk Editor draws on the verbs (`PARTS`)
-#   sounds          the Sound workspace's list: the song, then a row a sound
-#   song            the Song pane: its verbs, then its slots, the current one marked
+#   PartHost        the host of a desk pane's own page (editor_part.py)
+#   PartHost._sync  each part's state from the cores
+#   PartHost.act    what the page's handlers ask: a pick, a verb, Insert
 #   song_do         a Song verb on the core: a slot's sound, add, delete, play
-#   palette         the Blocks workspace's palette: the categories, then their blocks
+#   palette_items   a blocks category's rows in the palette
+#   add_block       a palette row activated: its block at the Blocks pane's cursor
 #   made_lines      the code the blocks make, as the made pane's lines
-#   ref_sounds      the Reference's Sounds: a pick puts its sfx() at the caret
-#   map_view        the Reference's Map: a pick puts its mget() at the caret
-#   log             the Reference's Log: the run's and the code's errors, to their line
-#   pointer         a press on the Reference's map
-#   keys            the arrows over the Reference's map
+#   log_rows        the Reference's Log: the run's and the code's errors, to their line
+#   goto            the Code pane on a file and line, with the keys
 """The desk Editor's own panes (docs/media/look_2026-10/EDITOR_LAYOUT.md's
 World, Art, Code and Sound workspaces), over the editor cores the handheld
-tabs edit (`SceneEditor`, `MusicEditor`): the Actor, the Sheet, the
-Reference's Sprites, the Stamps and the made code are a page each
-(editor_part.py, hosted by `PartHost` on the pane's body); the rest draw in
-their pane's body inside `EditorDesk`'s frame and answer its taps and keys
-through the verbs. A change is the core's own (its undo step), synced to
-the running game as the tab's is."""
+tabs edit (`SceneEditor`, `MusicEditor`, the blocks): each a part of
+editor_part.py's page, hosted by `PartHost` on the pane's body -- the
+Actor, the Sheet, the Reference's Sprites, Sounds, Map and Log, the
+Stamps, the made code, a blocks cart's palette, and the Sound workspace's
+list and Song. A change is the core's own (its undo step), synced to the
+running game as the tab's is."""
 
-import ui
 import editor_sound as Sound
 import blocks as B
+import view_host as _V
 from view_host import PageHost, cursor
 
-PAGES = ("actor", "sheet", "sprites", "stamps", "made")
-PARTS = ("sounds", "song", "log", "maps", "palette")
-
 _LIST_ROW = 28              # a list's row on the desk (style.json's stack_desk)
-_INK, _DIM = {"tone": "ink"}, {"tone": "dim"}
+
+# Pane contents that are a part of the page, and the part each shows (the
+# Sounds content is the Reference's outside the Sound workspace).
+PAGES = ("actor", "sheet", "sprites", "stamps", "made", "palette", "sounds", "song", "maps", "log")
 
 
-def draw(desk, c, r, u):
-    """Part `c` in body rect `r` (the frame is begun)."""
-    if c == "sounds":
-        if desk.key == "sound":
-            sounds(desk, r, u)
-        else:
-            ref_sounds(desk, r, u)
-    elif c == "song":
-        song(desk, r, u)
-    elif c == "palette":
-        palette(desk, r, u)
-    elif c == "maps":
-        map_foot(desk, r, u)
-    elif c == "log":
-        log(desk, r, u)
-
-
-def drawn_before(desk, c, cv, th, r, u):
-    """The parts drawn on the canvas before the frame begins: the
-    Reference's map."""
-    if c == "maps":
-        map_view(desk, cv, th, r, u)
+def part_of(desk, c):
+    """The part pane content `c` shows on `desk`."""
+    if c == "sounds" and desk.key != "sound":
+        return "ref_sounds"
+    return c
 
 
 def _music(desk):
@@ -61,61 +41,6 @@ def _music(desk):
     if mu.musicedit is None:
         mu.build()
     return mu, mu.musicedit
-
-
-def sounds(desk, r, u):
-    """The Sound workspace's list: the Song and its length, then a row a
-    sound, by its number and its name where it has one (moy-spec's optional
-    `name`), a sketch of its notes and its play tool."""
-    mu, me = _music(desk)
-    if me is None:
-        return
-    ws = desk.ws
-    th = ws.theme_colors
-    cv = ws.sys_canvas
-    items = ["Song"] + [Sound.row_label(me, k) for k in range(len(me.bank.sfx))]
-    song = me.view == me.SONG_VIEW
-    cur = 0 if song else me.sfx_idx + 1
-    x, y, w, h = r
-    pad = 6 * u
-    cell = 32 * u
-    rh = _LIST_ROW * u
-    lr = (x + pad, y + 4 * u, w - 2 * pad - cell, h - 8 * u)
-    ui.at(*lr)
-    got = ui.list("Sounds", items, cur, {"id": "sound list"})
-    if got is not None and got != cur and got >= 0:
-        if got == 0:
-            if not song:
-                me.toggle_view()
-        else:
-            if song:
-                me.toggle_view()
-            me.sfx_idx = got - 1
-            me.step = 0
-        ws.mark_dirty()
-    if len(items) * rh > lr[3]:
-        return                      # the list scrolls in its rect: no sketches over it
-    t = me.cur_track()
-    n = len(t.pattern) if t is not None else 0
-    slots = "1 slot" if n == 1 else "%d slots" % n
-    sw = ui.text_size(slots)[0] + 8 * u
-    ui.at(lr[0] + lr[2] - sw, lr[1], sw, rh)
-    ui.label(slots, {"tone": "dim"})
-    playing = mu.music_preview
-    for k, s in enumerate(me.bank.sfx):
-        ry = lr[1] + (k + 1) * rh
-        _sketch(cv, th, s, lr[0] + lr[2] - 52 * u, ry + 6 * u, 44 * u, rh - 12 * u, u)
-        ui.at(x + w - pad - cell, ry + (rh - cell) // 2, cell, cell)
-        on = playing is not None and playing == ("sfx", k)
-        if ui.tool("run", "Play", {"id": "sound play %d" % k, "current": on}):
-            if on:
-                mu._stop_music_preview()
-            else:
-                if me.view != me.SFX_VIEW:
-                    me.toggle_view()
-                me.sfx_idx = k
-                mu._play_music_preview()
-            ws.mark_dirty()
 
 
 def _sketch(cv, th, s, x, y, w, h, u):
@@ -135,82 +60,15 @@ def _sketch(cv, th, s, x, y, w, h, u):
             cv.rect(x + i * bw, y + h - bh, bw - 1 * u, bh, ink)
 
 
-def sounds_header(desk, pid, tx, y, hh, u):
+def new_sound(desk):
     """The Sounds pane's ＋: a new sound at the end of the bank."""
     _mu, me = _music(desk)
     if me is None:
-        return tx
-    cell = 32 * u
-    tx -= cell
-    ui.at(tx, y, cell, hh)
-    if ui.tool("new", "New sound", {"id": pid + " new sound"}):
-        if me.view != me.SFX_VIEW:
-            me.toggle_view()
-        me.select_sfx(len(me.bank.sfx) - me.sfx_idx)
-        desk.ws.mark_dirty()
-    return tx
-
-
-def song(desk, r, u):
-    """The Song (EDITOR_LAYOUT.md's Sound workspace): its line -- what a slot
-    is, the current slot's sound back and forward, add and delete a slot,
-    play the song -- then its slots four a row, each its sound's number and
-    name over a sketch of its notes, the current one on the current plate.
-    A tap on a slot edits the song there."""
-    mu, me = _music(desk)
-    if me is None:
         return
-    ws = desk.ws
-    x, y, w, h = r
-    pad = 10 * u
-    cell = 32 * u
-    t = me.cur_track()
-    pat = t.pattern if t is not None else ()
-    tracks = len(me.bank.music)
-    on = me.view == me.SONG_VIEW
-    playing = mu.music_preview is not None and mu.music_preview[0] == "song"
-    tools = [("run", "Stop" if playing else "Play", "play"),
-             ("del", "Delete slot", "del"), ("new", "Add slot", "add"),
-             ("forward", "Next sound", "slot+"), ("back", "Previous sound", "slot-")]
-    if tracks > 1:
-        tools += [("forward", "Next song", "song+"), ("back", "Previous song", "song-")]
-    tx = x + w - pad
-    ty = y + 4 * u
-    for icon, word, op in tools:
-        tx -= cell
-        ui.at(tx, ty, cell, cell)
-        if ui.tool(icon, word, {"id": "song " + op, "current": op == "play" and playing,
-                                "disabled": op == "del" and len(pat) <= 1}):
-            song_do(desk, op)
-    ui.at(x + pad, ty, max(0, tx - x - pad), cell)
-    ui.label("Song %d of %d" % (me.track_idx + 1, tracks) if tracks > 1
-             else "One sound a slot", _DIM)
-    if not pat:
-        return
-    cw, ch = 72 * u, 56 * u
-    gap = max(4 * u, (w - 2 * pad - 4 * cw) // 3)
-    gy = ty + cell + 6 * u
-    fit = max(1, (y + h - gy + 8 * u) // (ch + 8 * u))
-    cur = me.slot if 0 <= me.slot < len(pat) else 0
-    first = max(0, cur // 4 - fit + 1) * 4      # the rows that show the current slot
-    th = ws.theme_colors
-    cv = ws.sys_canvas
-    lh = max(20 * u, ui.text_size("0")[1] + 4)
-    for k in range(first, min(len(pat), first + 4 * fit)):
-        cx = x + pad + (k % 4) * (cw + gap)
-        cy = gy + ((k - first) // 4) * (ch + 8 * u)
-        sid = _slot_sound(pat[k])
-        ui.at(cx, cy, cw, ch)
-        if ui.button("", "normal", {"id": "slot %d" % k, "current": on and k == cur}):
-            if not on:
-                me.toggle_view()
-            me.select_cursor(k)
-            ws.mark_dirty()
-        heard = 0 <= sid < len(me.bank.sfx)
-        ui.at(cx + 6 * u, cy + 4 * u, cw - 12 * u, lh)
-        ui.label(Sound.row_label(me, sid) if heard else "-", _INK if heard else _DIM)
-        if heard:
-            _sketch(cv, th, me.bank.sfx[sid], cx + 6 * u, cy + ch - 22 * u, cw - 12 * u, 16 * u, u)
+    if me.view != me.SFX_VIEW:
+        me.toggle_view()
+    me.select_sfx(len(me.bank.sfx) - me.sfx_idx)
+    desk.ws.mark_dirty()
 
 
 def _slot_sound(row):
@@ -255,17 +113,6 @@ def song_do(desk, op):
 
 # -- the block palette ---------------------------------------------------------------
 
-# The palette's categories (the insert menu's, block_editor_ui._CAT_LABEL)
-# in the pictures' order, read across two columns, and the rows heading
-# three of them.
-_CATS = (("events", "When..."), ("control", "Control"), ("draw", "Draw"),
-         ("input", "Buttons"), ("variables", "Variables"), ("lists", "Lists"),
-         ("actors", "Sprite"), ("looks", "Looks"), ("operators", "Math"),
-         ("sound", "Sound"), ("myblocks", "My Blocks"))
-# The palette's two columns: the categories alternately (a board's MicroPython
-# slices with no step).
-_CAT_SIDES = (tuple(_CATS[i] for i in range(0, len(_CATS), 2)),
-              tuple(_CATS[i] for i in range(1, len(_CATS), 2)))
 _NEW = {"variables": ("\x00new_var", "+ new variable"),
         "lists": ("\x00new_list", "+ new list"),
         "myblocks": ("\x00new_proc", "+ new block")}
@@ -312,68 +159,6 @@ def _filled(d):
     return label.strip()
 
 
-def palette(desk, r, u):
-    """The Blocks workspace's palette (EDITOR_LAYOUT.md): the eleven
-    categories in two columns, each by its colour, then the current one's
-    blocks; activating a block puts it at the Blocks pane's cursor."""
-    ws = desk.ws
-    bu, be = _blocks(desk)
-    if be is None:
-        ui.at(*r)
-        ui.empty("blocks", "No blocks", ("This cart's blocks did not open",))
-        return
-    th = ws.theme_colors
-    cv = ws.sys_canvas
-    cols = ws.look.content_colors()
-    st = desk.part_state
-    cat = st.get("block cat", "actors")
-    x, y, w, h = r
-    pad = 6 * u
-    rh = _LIST_ROW * u
-    half = (w - 2 * pad - 4 * u) // 2
-    rows = (len(_CATS) + 1) // 2
-    for side in (0, 1):
-        part = _CAT_SIDES[side]
-        cx = x + pad + side * (half + 4 * u)
-        names = ["   " + label for _k, label in part]
-        cur = [k for k, _l in part].index(cat) if cat in [k for k, _l in part] else -1
-        ui.at(cx, y + 6 * u, half, rows * rh)
-        got = ui.list("block categories %d" % side, names, cur,
-                      {"id": "block categories %d" % side})
-        if got is not None and got >= 0 and got != cur:
-            cat = st["block cat"] = part[got][0]
-            ws.mark_dirty()
-        for k, (key, _l) in enumerate(part):
-            d = 8 * u
-            cv.rrect(cx + 5 * u, y + 6 * u + k * rh + (rh - d) // 2, d, d, 2 * u,
-                     cols.get("block_" + key, th["border"]))
-    top = y + 6 * u + rows * rh + 8 * u
-    ui.at(x + pad, top, w - 2 * pad, 1)
-    ui.rule()
-    top += 8 * u
-    items = palette_items(be, cat)
-    room = (y + h - pad) - top
-    if not items:
-        ui.at(x + pad, top, w - 2 * pad, room)
-        ui.label("Every script starts with one: they head the Blocks pane",
-                 {"tone": "dim", "wrap": True, "lines": 4})
-        return
-    if bu.blk_graduated:
-        ui.at(x + pad, top, w - 2 * pad, room)
-        ui.label("This cart is code now: its blocks only read",
-                 {"tone": "dim", "wrap": True, "lines": 4})
-        return
-    ui.at(x + pad, top, w - 2 * pad, room)
-    got = ui.list("blocks of " + cat, ["  " + label for _i, label in items], -1,
-                  {"id": "palette blocks"})
-    if got is not None and 0 <= got < len(items):
-        add_block(desk, items[got][0])
-    if len(items) * rh <= room:
-        ink = cols.get("block_" + cat, th["border"])
-        for k in range(len(items)):
-            cv.rect(x + pad + 2 * u, top + k * rh + 4 * u, 3 * u, rh - 8 * u, ink)
-
-
 def add_block(desk, item):
     """A palette row activated: the block at the Blocks pane's cursor (on a
     block, the next "+ add block" after it), or the category's make-one row."""
@@ -416,112 +201,7 @@ def made_lines(be):
     return _made[1]
 
 
-def scroll(desk, c, d):
-    """The wheel over a part that scrolls by rows: `d` notches."""
-    st = desk.part_state
-    if c == "maps":
-        vx, vy = st.get("ref view", (0, 0))
-        cx, cy = st.get("ref cell", (0, 0))
-        st["ref view"] = (vx, max(0, vy + 3 * d))
-        st["ref cell"] = (cx, max(0, cy + 3 * d))
-        desk.ws.mark_dirty()
-        return True
-    return False
-
-
 # -- the Reference (the Code workspace's context pane) ---------------------------------
-
-_FOOT = 40                      # a Reference tab's foot: the call a pick puts at the caret
-
-
-def _foot(desk, r, u, call, id):
-    """The call a pick puts at the Code pane's caret, and Insert."""
-    ws = desk.ws
-    x, y, w, h = r
-    row = 30 * u
-    ui.at(x + 10 * u, y + h - row - 4 * u, w - 110 * u, row)
-    ui.label(call, {"tone": "dim"})
-    ui.at(x + w - 96 * u, y + h - row - 4 * u, 88 * u, row)
-    if ui.button("Insert", "normal", {"id": id}) and ws.editor is not None:
-        ws.history.code_burst_open()
-        ws.editor.insert_text(call)
-        ws.mark_dirty()
-
-
-def ref_sounds(desk, r, u):
-    """The Reference's Sounds (EDITOR_LAYOUT.md): a row a sound, its number,
-    name, sketch and play tool; the picked one's `sfx(n)` goes at the caret."""
-    mu, me = _music(desk)
-    if me is None:
-        ui.at(*r)
-        ui.empty("music", "No sounds", ("This cart has no sound bank",))
-        return
-    ws = desk.ws
-    th = ws.theme_colors
-    cv = ws.sys_canvas
-    st = desk.part_state
-    n = len(me.bank.sfx)
-    cur = max(0, min(n - 1, st.get("ref sound", 0)))
-    x, y, w, h = r
-    pad = 6 * u
-    cell = 32 * u
-    rh = _LIST_ROW * u
-    lr = (x + pad, y + 4 * u, w - 2 * pad - cell, h - 8 * u - _FOOT * u)
-    ui.at(*lr)
-    got = ui.list("Sound calls", [Sound.row_label(me, k) for k in range(n)], cur,
-                  {"id": "ref sounds"})
-    if got is not None and 0 <= got < n and got != cur:
-        cur = st["ref sound"] = got
-        ws.mark_dirty()
-    if n * rh <= lr[3]:
-        playing = mu.music_preview
-        for k, s in enumerate(me.bank.sfx):
-            ry = lr[1] + k * rh
-            _sketch(cv, th, s, lr[0] + lr[2] - 52 * u, ry + 6 * u, 44 * u, rh - 12 * u, u)
-            ui.at(x + w - pad - cell, ry + (rh - cell) // 2, cell, cell)
-            on = playing is not None and playing == ("sfx", k)
-            if ui.tool("run", "Play", {"id": "ref play %d" % k, "current": on}):
-                if on:
-                    mu._stop_music_preview()
-                else:
-                    au = ws.run.audio
-                    if au is not None:
-                        au.focus()
-                        au.sound_stop()
-                        au.sfx(k)
-                        mu.music_preview = ("sfx", k)
-                ws.mark_dirty()
-    _foot(desk, r, u, "sfx(%d)" % cur, "insert sfx")
-
-
-def _map_rect(desk, r, u):
-    x, y, w, h = r
-    pad = 6 * u
-    tw = 8 * u
-    cols = max(1, (w - 2 * pad) // tw)
-    rows = max(1, (h - _FOOT * u - pad) // tw)
-    return (x + pad, y + pad, cols * tw, rows * tw), cols, rows, tw
-
-
-def _map_view_at(desk, cols, rows):
-    """The picked cell, and the view's corner kept round it."""
-    ws = desk.ws
-    tm = ws.run.project.tilemap
-    st = desk.part_state
-    if "ref cell" not in st:
-        st["ref cell"] = _first_cell(tm)
-    cx, cy = st["ref cell"]
-    cx = max(0, min(tm.w - 1, cx))
-    cy = max(0, min(tm.h - 1, cy))
-    vx, vy = st.get("ref view", (0, 0))
-    vx = max(min(vx, cx), cx - cols + 1)
-    vy = max(min(vy, cy), cy - rows + 1)
-    vx = max(0, min(vx, max(0, tm.w - cols)))
-    vy = max(0, min(vy, max(0, tm.h - rows)))
-    st["ref cell"] = (cx, cy)
-    st["ref view"] = (vx, vy)
-    return cx, cy, vx, vy
-
 
 def _first_cell(tm):
     """Where the Reference's map opens: the first cell holding a tile."""
@@ -530,38 +210,6 @@ def _first_cell(tm):
             if tm.mget(x, y):
                 return (x, y)
     return (0, 0)
-
-
-def map_view(desk, cv, th, r, u):
-    """The Reference's Map: the cart's map at 1x from the view's corner, the
-    picked cell under the cursor."""
-    ws = desk.ws
-    tm, sh = ws.run.project.tilemap, ws.sheet
-    if tm is None or sh is None:
-        return
-    (mx, my, mw, mh), cols, rows, tw = _map_rect(desk, r, u)
-    cx, cy, vx, vy = _map_view_at(desk, cols, rows)
-    cv.rect(mx, my, mw, mh, th["surface_alt"])
-    cv.clip(mx, my, mw, mh)
-    for row in range(min(rows, tm.h - vy)):
-        for col in range(min(cols, tm.w - vx)):
-            t = tm.mget(vx + col, vy + row)
-            if t:
-                img = sh.tile_image(t, 0)
-                if img is not None:
-                    cv.spr(img, mx + col * tw, my + row * tw, u)
-    cv.clip()
-    desk._cursors.append((mx + (cx - vx) * tw, my + (cy - vy) * tw, tw, tw))
-
-
-def map_foot(desk, r, u):
-    ws = desk.ws
-    if ws.run.project.tilemap is None:
-        ui.at(*r)
-        ui.empty("map", "No map", ("This cart has no map yet",))
-        return
-    cx, cy = desk.part_state.get("ref cell", (0, 0))
-    _foot(desk, r, u, "mget(%d, %d)" % (cx, cy), "insert mget")
 
 
 def log_rows(desk):
@@ -582,21 +230,6 @@ def log_rows(desk):
     return out
 
 
-def log(desk, r, u):
-    """The Reference's Log: each error with its file and line; activating one
-    puts the Code pane's caret there."""
-    rows = log_rows(desk)
-    if not rows:
-        ui.at(*r)
-        ui.empty("doc", "Nothing logged", ("Your game's errors show here, with their line",))
-        return
-    x, y, w, h = r
-    ui.at(x + 6 * u, y + 4 * u, w - 12 * u, h - 8 * u)
-    got = ui.list("Log", [t for t, _f, _r in rows], -1, {"id": "log"})
-    if got is not None and 0 <= got < len(rows):
-        goto(desk, rows[got][1], rows[got][2])
-
-
 def goto(desk, name, row):
     """The Code pane on file `name`, its caret on `row`, and the keys."""
     ws = desk.ws
@@ -613,86 +246,129 @@ def goto(desk, name, row):
     ws.mark_dirty()
 
 
-def pointer(desk, c, r, u, px, py, click, down):
-    """A press a part takes itself: a cell of the Reference's map. True
-    where it took it."""
-    if c != "maps" or desk.ws.run.project.tilemap is None or not (click or down):
-        return False
-    (mx, my, mw, mh), cols, rows, tw = _map_rect(desk, r, u)
-    if not (mx <= px < mx + mw and my <= py < my + mh):
-        return False
-    st = desk.part_state
-    vx, vy = st.get("ref view", (0, 0))
-    st["ref cell"] = (vx + (px - mx) // tw, vy + (py - my) // tw)
-    desk.ws.mark_dirty()
-    return True
-
-
-def keys(desk, c, i):
-    """The arrows over the Reference's map move its cell. True where they
-    acted."""
-    if c != "maps" or desk.ws.run.project.tilemap is None:
-        return False
-    dx = i.steps("right") - i.steps("left")
-    dy = i.steps("down") - i.steps("up")
-    if not (dx or dy):
-        return False
-    st = desk.part_state
-    cx, cy = st.get("ref cell", (0, 0))
-    st["ref cell"] = (cx + dx, cy + dy)
-    desk.ws.mark_dirty()
-    return True
-
-
 # -- the panes that are a page of their own ------------------------------------------
 
 _SHEET_COLS, _SHEET_ROWS = 16, 8    # a sheet page: 16 x 8 tiles
 
 
 class PartHost(PageHost):
-    """Pane content `part`'s page (editor_part.py, one of `PAGES`) on the
-    desk `desk`'s pane body: its state from the cores (`_sync`), the sheet
-    its canvas draws, picks from and moves along, and the verbs its
+    """Part `part`'s page (editor_part.py) on the desk `desk`'s pane body,
+    the pane showing content `c`: its state from the cores (`_sync`), the
+    canvases it draws, picks from and moves along (the sheet, the song's
+    slots, the Reference's map, a sound's sketch), and the verbs its rows and
     buttons ask for (`act`)."""
 
-    def __init__(self, desk, part):
+    def __init__(self, desk, c, part):
         import editor_part
         PageHost.__init__(self, desk.ws, None, part, editor_part.part_page)
         self.desk = desk
+        self.part = part
+        self.tab = c                    # the pane content: whether the keys are in it
         self._sheet_at = None           # the sheet's pages as drawn: (x0, y0, page w, page h,
                                         # caption, pages shown, the first, tile px) in its canvas
         self._cv_xy = (0, 0)            # the sheet canvas's corner, as drawn
+        self._slots_at = None           # the slots as drawn: (x0, y0, cell w, cell h, gap, first, n)
+        self._map_at = None             # the map as drawn: (x0, y0, cols, rows, tile px)
+        self._items = ()                # the palette's blocks: (item, label)
+        self._cats_at = None            # the categories as drawn: (x0, y0, cell w, row h)
+        self._snd_w = 0                 # a sounds row's width, as drawn
 
     def _sync(self):
+        part = self.part
+        fn = getattr(self, "_sync_" + part, None)
+        self.push((part, fn() if fn is not None else None))
+
+    def _sync_actor(self):
         ws = self.ws
-        part = self.tab
-        picked, tag, tags, at, flip, place, stamp, call, made = False, "", (), "", False, "", "thing", "", ""
         roomy = ws.look.effective_font_scale() < 2
-        se = ws.scene_ui.sceneedit if part in ("actor", "stamps") else None
-        if part == "actor" and se is not None:
-            a = se.selected()
-            if a is not None:
-                picked = True
-                tag = str(a.get("tag") or "")
-                got = []
-                for row in se.rows:
-                    t = row.get("tag")
-                    if t and str(t) not in got:
-                        got.append(str(t))
-                tags = tuple(got[:5])
-                at = tag if tag in tags else ""
-                flip = bool(a.get("flip"))
-                gap = "   " if roomy else "  "
-                place = gap.join(("Tile %d" % a.get("tile", 0), "x %d" % a.get("x", 0),
-                                  "y %d" % a.get("y", 0)))
-        elif part == "stamps" and se is not None:
-            stamp = getattr(se, "stamp_tag", None) or "thing"
-        elif part == "sprites":
-            call = "spr(%d, x, y)" % self.desk._cur_sprite()
-        elif part == "made":
-            _bu, be = _blocks(self.desk)
-            made = "\n".join(made_lines(be)) if be is not None else ""
-        self.push((part, picked, tag, tags, at, flip, place, stamp, call, made, roomy))
+        se = ws.scene_ui.sceneedit
+        a = se.selected() if se is not None else None
+        if a is None:
+            return (False, "", (), "", False, "", roomy)
+        tag = str(a.get("tag") or "")
+        got = []
+        for row in se.rows:
+            t = row.get("tag")
+            if t and str(t) not in got:
+                got.append(str(t))
+        tags = tuple(got[:5])
+        gap = "   " if roomy else "  "
+        place = gap.join(("Tile %d" % a.get("tile", 0), "x %d" % a.get("x", 0), "y %d" % a.get("y", 0)))
+        return (True, tag, tags, tag if tag in tags else "", bool(a.get("flip")), place, roomy)
+
+    def _sync_stamps(self):
+        se = self.ws.scene_ui.sceneedit
+        return (getattr(se, "stamp_tag", None) if se is not None else None) or "thing"
+
+    def _sync_sprites(self):
+        return "spr(%d, x, y)" % self.desk._cur_sprite()
+
+    def _sync_made(self):
+        _bu, be = _blocks(self.desk)
+        return "\n".join(made_lines(be)) if be is not None else ""
+
+    def _sync_palette(self):
+        d = self.desk
+        bu, be = _blocks(d)
+        if be is None:
+            return (False, "", (), (), (), "")
+        cat = d.part_state.get("block cat", "actors")
+        items = self._items = palette_items(be, cat)
+        note = ("Every script starts with one: they head the Blocks pane" if not items
+                else "This cart is code now: its blocks only read" if bu.blk_graduated else "")
+        rh = self._row_h()
+        return (True, cat, 6 * rh + 12 * d._unit(), rh, 0 if note else len(items), note)
+
+    def _row_h(self):
+        """A list's row: 28 desk units, taller where the text is (Large and
+        Largest)."""
+        fs = self.ws.look.effective_font_scale()
+        return max(_LIST_ROW * self.desk._unit(), _V.ui_line() * fs + 8)
+
+    def _snd_cur(self, me):
+        """The key of the sounds row that is current: the Song's or a sound's."""
+        if self.part == "ref_sounds":
+            return str(self.desk.part_state.get("ref sound", 0))
+        return "song" if me.view == me.SONG_VIEW else str(me.sfx_idx)
+
+    def _sync_sounds(self):
+        _mu, me = _music(self.desk)
+        if me is None:
+            return (False, 0, (), "", "")
+        cur = self._snd_cur(me)
+        rows = (("song", cur == "song"),) if self.part == "sounds" else ()
+        rows += tuple((str(k), cur == str(k)) for k in range(len(me.bank.sfx)))
+        return (True, self._row_h(), rows, cur, "")
+
+    def _sync_ref_sounds(self):
+        _mu, me = _music(self.desk)
+        if me is None:
+            return (False, 0, (), "", "")
+        st = self.desk.part_state
+        st["ref sound"] = max(0, min(len(me.bank.sfx) - 1, st.get("ref sound", 0)))
+        got = self._sync_sounds()
+        return got[:4] + ("sfx(%d)" % st["ref sound"],)
+
+    def _sync_song(self):
+        mu, me = _music(self.desk)
+        if me is None:
+            return (False, "", False, False, False, True)
+        t = me.cur_track()
+        pat = t.pattern if t is not None else ()
+        tracks = len(me.bank.music)
+        line = "Song %d of %d" % (me.track_idx + 1, tracks) if tracks > 1 else "One sound a slot"
+        playing = mu.music_preview is not None and mu.music_preview[0] == "song"
+        return (True, line, len(pat) > 1, playing, tracks > 1, self.ws.look.effective_font_scale() < 2)
+
+    def _sync_maps(self):
+        if self.ws.run.project.tilemap is None:
+            return (False, "")
+        self._map_view(1, 1)
+        cx, cy = self.desk.part_state["ref cell"]
+        return (True, "mget(%d, %d)" % (cx, cy))
+
+    def _sync_log(self):
+        return tuple(t for t, _f, _r in log_rows(self.desk))
 
     def draw(self, r, dt):
         """The page on body rect `r`, on the pane's card (its ground)."""
@@ -707,19 +383,39 @@ class PartHost(PageHost):
         self._host.begin(cv, th, r, True, False, away)
         self._sync()
         pg.paint(dt, cv, th, r, True)
-        ui.end()
+        self._end()
         if not self._host.still():
             ws.request_frame()
 
-    # -- the actor's verbs and the Reference's Insert
+    # -- what the handlers ask
 
     def act(self, verb, *args):
         ws = self.ws
+        d = self.desk
         if verb == "insert":
             if ws.editor is not None:
                 ws.history.code_burst_open()
-                ws.editor.insert_text("spr(%d, x, y)" % self.desk._cur_sprite())
+                ws.editor.insert_text(self._shown[1][-1] if self.part != "sprites" else self._shown[1])
                 ws.mark_dirty()
+            return
+        if verb == "cat":
+            d.part_state["block cat"] = args[0]
+            ws.mark_dirty()
+            return
+        if verb == "block":
+            if args[0].isdigit() and int(args[0]) < len(self._items):
+                add_block(d, self._items[int(args[0])][0])
+            return
+        if verb == "goto":
+            rows = log_rows(d)
+            if 0 <= args[0] < len(rows):
+                goto(d, rows[args[0]][1], rows[args[0]][2])
+            return
+        if verb in ("sound", "play"):
+            self._sound(verb, args[0])
+            return
+        if verb == "song":
+            song_do(d, args[0])
             return
         su = ws.scene_ui
         se = su.sceneedit
@@ -738,7 +434,337 @@ class PartHost(PageHost):
             se.delete_sel()
         su._sync_live()
         ws.mark_dirty()
-        self.desk._owe_restart("scene")
+        d._owe_restart("scene")
+
+    def _sound(self, verb, k):
+        """A sounds row picked (`sound`: the Song or a sound to edit; the
+        Reference's the one whose call Insert puts) or its play tool."""
+        ws = self.ws
+        mu, me = _music(self.desk)
+        if me is None:
+            return
+        if self.part == "ref_sounds":
+            if verb == "sound":
+                self.desk.part_state["ref sound"] = int(k)
+            elif mu.music_preview == ("sfx", int(k)):
+                mu._stop_music_preview()
+            else:
+                au = ws.run.audio
+                if au is not None:
+                    au.focus()
+                    au.sound_stop()
+                    au.sfx(int(k))
+                    mu.music_preview = ("sfx", int(k))
+            ws.mark_dirty()
+            return
+        if verb == "sound":
+            if k == "song":
+                if me.view != me.SONG_VIEW:
+                    me.toggle_view()
+            else:
+                if me.view == me.SONG_VIEW:
+                    me.toggle_view()
+                me.sfx_idx = int(k)
+                me.step = 0
+        elif mu.music_preview == ("sfx", int(k)):
+            mu._stop_music_preview()
+        else:
+            if me.view != me.SFX_VIEW:
+                me.toggle_view()
+            me.sfx_idx = int(k)
+            mu._play_music_preview()
+        ws.mark_dirty()
+
+    # -- the sounds' rows
+
+    def draw_snd(self, cv, x, y, w, h, k):
+        """Sounds row `k`: the Song and its length; a sound, its number and
+        its name where it has one (moy-spec's optional `name`), a sketch of
+        its notes and its play tool, marked while it plays."""
+        mu, me = _music(self.desk)
+        if me is None:
+            return
+        th = self.ws.theme_colors
+        u = self.desk._unit()
+        self._snd_w = w
+        ink = th["ink"]
+        if k == self._snd_cur(me):
+            got = _V.current(cv, th, (x, y, w, h), 4 * u, item="row")
+            ink = got if got is not None else ink
+        cell = 32 * u
+        if k == "song":
+            t = me.cur_track()
+            n = len(t.pattern) if t is not None else 0
+            right = "1 slot" if n == 1 else "%d slots" % n
+            _V.label(cv, (x + 10 * u, y, w - 20 * u, h), "Song", ink)
+            _V.label(cv, (x + 10 * u, y, w - 20 * u, h), right, th["ink_dim"], _V.ALIGN_RIGHT)
+            return
+        if not k.isdigit() or int(k) >= len(me.bank.sfx):
+            return
+        n = int(k)
+        _V.label(cv, (x + 10 * u, y, w - cell - 70 * u, h), Sound.row_label(me, n), ink)
+        _sketch(cv, th, me.bank.sfx[n], x + w - cell - 56 * u, y + 6 * u, 44 * u, h - 12 * u, u)
+        tr = (x + w - cell, y + (h - cell) // 2, cell, cell)
+        tink = th["ink"]
+        if mu.music_preview == ("sfx", n):
+            got = _V.current(cv, th, tr, 4 * u, item="cell")
+            tink = got if got is not None else tink
+        g = 18 * u
+        gr = (tr[0] + (cell - g) // 2, tr[1] + (cell - g) // 2, g, g)
+        if not self.ws.draw_icon("run", gr, tink, cv):
+            _V.glyph(cv, "run", gr, tink)
+
+    def snd_pointer(self, kind, x, y, k):
+        """A tap on a row picks it; on a sound's play tool, plays it or
+        stops it playing."""
+        if kind != "up":
+            return
+        if k.isdigit() and x >= self._snd_w - 32 * self.desk._unit():
+            self._sound("play", k)
+        else:
+            self._sound("sound", k)
+
+    # -- the palette
+
+    def draw_item(self, cv, x, y, w, h, k):
+        """A block of the palette's category: its category's bar, its label."""
+        if not k.isdigit() or int(k) >= len(self._items):
+            return
+        th = self.ws.theme_colors
+        u = self.desk._unit()
+        cat = self.desk.part_state.get("block cat", "actors")
+        ink = self.ws.look.content_colors().get("block_" + cat, th["border"])
+        cv.rect(x + 8 * u, y + 4 * u, 3 * u, h - 8 * u, ink)
+        _V.label(cv, (x + 18 * u, y, w - 26 * u, h), self._items[int(k)][1], th["ink"])
+
+    def draw_cats(self, cv, x, y, w, h):
+        """The eleven categories in two columns, each by its colour, the
+        current one marked."""
+        import editor_part
+        th = self.ws.theme_colors
+        u = self.desk._unit()
+        cols = self.ws.look.content_colors()
+        cat = self.desk.part_state.get("block cat", "actors")
+        pad = 6 * u
+        cw = (w - 2 * pad - 4 * u) // 2
+        rh = self._row_h()
+        self._cats_at = (pad, pad, cw, rh)
+        for n, (k, label) in enumerate(editor_part.CATS):
+            cx = x + pad + (n % 2) * (cw + 4 * u)
+            cy = y + pad + (n // 2) * rh
+            ink = th["ink"]
+            if k == cat:
+                got = _V.current(cv, th, (cx, cy, cw, rh), 4 * u, item="row")
+                ink = got if got is not None else ink
+            d = 8 * u
+            cv.rrect(cx + 5 * u, cy + (rh - d) // 2, d, d, 2 * u, cols.get("block_" + k, th["border"]))
+            _V.label(cv, (cx + 18 * u, cy, cw - 20 * u, rh), label, ink)
+
+    def _cat(self, n):
+        import editor_part
+        k = editor_part.CATS[n][0]
+        st = self.desk.part_state
+        if st.get("block cat") != k:
+            st["block cat"] = k
+            self.ws.mark_dirty()
+
+    def cats_pointer(self, kind, x, y):
+        """A press on a category opens its blocks."""
+        g = self._cats_at
+        if g is None or kind != "down":
+            return
+        x0, y0, cw, rh = g
+        col, row = (x - x0) // (cw + 4 * self.desk._unit()), (y - y0) // rh
+        if x >= x0 and y >= y0 and col < 2 and 0 <= row * 2 + col < 11:
+            self._cat(row * 2 + col)
+
+    def cats_keys(self, i):
+        """The arrows across the two columns open the next category; one
+        past the grid's edge is not taken."""
+        import editor_part
+        dx = i.steps("right") - i.steps("left")
+        dy = i.steps("down") - i.steps("up")
+        if not (dx or dy):
+            return False
+        keys = [k for k, _l in editor_part.CATS]
+        cur = self.desk.part_state.get("block cat", "actors")
+        n = keys.index(cur) if cur in keys else 0
+        m = n + dx + 2 * dy
+        if not 0 <= m < len(keys) or (dx and m // 2 != n // 2):
+            return False
+        self._cat(m)
+        return True
+
+    # -- the Song's slots
+
+    def draw_slots(self, cv, x, y, w, h, lh):
+        """The song's slots four a row, each its sound's number and name
+        over a sketch of its notes on a plate, the current one's on the
+        current plate; the rows that show the current slot."""
+        self._slots_at = None
+        mu, me = _music(self.desk)
+        if me is None:
+            return
+        t = me.cur_track()
+        pat = t.pattern if t is not None else ()
+        if not pat:
+            return
+        th = self.ws.theme_colors
+        u = self.desk._unit()
+        pad = 10 * u
+        cw, ch = 72 * u, 56 * u
+        gap = max(4 * u, (w - 2 * pad - 4 * cw) // 3)
+        fit = max(1, (h - 4 * u + 8 * u) // (ch + 8 * u))
+        on = me.view == me.SONG_VIEW
+        cur = me.slot if 0 <= me.slot < len(pat) else 0
+        first = max(0, cur // 4 - fit + 1) * 4
+        x0, y0 = x + pad, y + 4 * u
+        self._slots_at = (x0 - x, y0 - y, cw, ch, gap, first, min(len(pat), first + 4 * fit))
+        lh = max(20 * u, lh + 4)
+        for k in range(first, min(len(pat), first + 4 * fit)):
+            cx = x0 + (k % 4) * (cw + gap)
+            cy = y0 + ((k - first) // 4) * (ch + 8 * u)
+            sid = _slot_sound(pat[k])
+            _V.plate(cv, th, (cx, cy, cw, ch), "", "normal", on=on and k == cur)
+            heard = 0 <= sid < len(me.bank.sfx)
+            _V.label(cv, (cx + 6 * u, cy + 4 * u, cw - 12 * u, lh),
+                           Sound.row_label(me, sid) if heard else "-",
+                           th["ink"] if heard else th["ink_dim"])
+            if heard:
+                _sketch(cv, th, me.bank.sfx[sid], cx + 6 * u, cy + ch - 22 * u, cw - 12 * u, 16 * u, u)
+
+    def _slot_at(self, x, y):
+        g = self._slots_at
+        if g is None:
+            return -1
+        x0, y0, cw, ch, gap, first, last = g
+        col, ax = (x - x0) // (cw + gap), (x - x0) % (cw + gap)
+        row, ay = (y - y0) // (ch + 8), (y - y0) % (ch + 8)
+        k = first + row * 4 + col
+        if x < x0 or y < y0 or col > 3 or ax >= cw or ay >= ch or not first <= k < last:
+            return -1
+        return k
+
+    def _pick_slot(self, k):
+        mu, me = _music(self.desk)
+        if me is None:
+            return
+        if me.view != me.SONG_VIEW:
+            me.toggle_view()
+        me.select_cursor(k)
+        self.ws.mark_dirty()
+
+    def slots_pointer(self, kind, x, y):
+        """A tap on a slot edits the song there."""
+        if kind == "down":
+            k = self._slot_at(x, y)
+            if k >= 0:
+                self._pick_slot(k)
+
+    def slots_keys(self, i):
+        """The arrows along the slots, four a row; one past the song's end
+        is not taken."""
+        mu, me = _music(self.desk)
+        if me is None:
+            return False
+        t = me.cur_track()
+        n = len(t.pattern) if t is not None else 0
+        dx = i.steps("right") - i.steps("left")
+        dy = i.steps("down") - i.steps("up")
+        if not (dx or dy) or not n:
+            return False
+        cur = me.slot if 0 <= me.slot < n else 0
+        k = cur + dx + 4 * dy
+        if not 0 <= k < n or (dx and k // 4 != cur // 4):
+            return False
+        self._pick_slot(k)
+        return True
+
+    # -- the Reference's map
+
+    def _map_view(self, cols, rows):
+        """The picked cell, and the view's corner kept round it, `cols` x
+        `rows` cells shown."""
+        tm = self.ws.run.project.tilemap
+        st = self.desk.part_state
+        if "ref cell" not in st:
+            st["ref cell"] = _first_cell(tm)
+        cx, cy = st["ref cell"]
+        cx = max(0, min(tm.w - 1, cx))
+        cy = max(0, min(tm.h - 1, cy))
+        vx, vy = st.get("ref view", (0, 0))
+        vx = max(min(vx, cx), cx - cols + 1)
+        vy = max(min(vy, cy), cy - rows + 1)
+        vx = max(0, min(vx, max(0, tm.w - cols)))
+        vy = max(0, min(vy, max(0, tm.h - rows)))
+        st["ref cell"] = (cx, cy)
+        st["ref view"] = (vx, vy)
+        return cx, cy, vx, vy
+
+    def draw_map(self, cv, x, y, w, h):
+        """The Reference's Map: the cart's map at 1x from the view's corner,
+        the picked cell ringed."""
+        ws = self.ws
+        tm, sh = ws.run.project.tilemap, ws.sheet
+        self._map_at = None
+        if tm is None or sh is None:
+            return
+        th = ws.theme_colors
+        u = self.desk._unit()
+        pad = 6 * u
+        tw = 8 * u
+        cols = max(1, (w - 2 * pad) // tw)
+        rows = max(1, (h - pad) // tw)
+        mx, my, mw, mh = x + pad, y + pad, cols * tw, rows * tw
+        self._map_at = (pad, pad, cols, rows, tw)
+        cx, cy, vx, vy = self._map_view(cols, rows)
+        cv.rect(mx, my, mw, mh, th["surface_alt"])
+        cv.clip(mx, my, mw, mh)
+        for row in range(min(rows, tm.h - vy)):
+            for col in range(min(cols, tm.w - vx)):
+                t = tm.mget(vx + col, vy + row)
+                if t:
+                    img = sh.tile_image(t, 0)
+                    if img is not None:
+                        cv.spr(img, mx + col * tw, my + row * tw, u)
+        self.desk.unclip(cv)
+        cursor(cv, (mx + (cx - vx) * tw, my + (cy - vy) * tw, tw, tw))
+
+    def map_pointer(self, kind, x, y):
+        """A press on the map picks its cell."""
+        g = self._map_at
+        if g is None or kind == "up":
+            return
+        x0, y0, cols, rows, tw = g
+        if not (x0 <= x < x0 + cols * tw and y0 <= y < y0 + rows * tw):
+            return
+        st = self.desk.part_state
+        vx, vy = st.get("ref view", (0, 0))
+        st["ref cell"] = (vx + (x - x0) // tw, vy + (y - y0) // tw)
+        self.ws.mark_dirty()
+
+    def map_keys(self, i):
+        """The arrows move the map's cell."""
+        if self.ws.run.project.tilemap is None:
+            return False
+        dx = i.steps("right") - i.steps("left")
+        dy = i.steps("down") - i.steps("up")
+        if not (dx or dy):
+            return False
+        st = self.desk.part_state
+        cx, cy = st.get("ref cell", (0, 0))
+        st["ref cell"] = (cx + dx, cy + dy)
+        self.ws.mark_dirty()
+        return True
+
+    def map_wheel(self, d):
+        """The wheel over the map: `d` notches, three rows each."""
+        st = self.desk.part_state
+        vx, vy = st.get("ref view", (0, 0))
+        cx, cy = st.get("ref cell", (0, 0))
+        st["ref view"] = (vx, max(0, vy + 3 * d))
+        st["ref cell"] = (cx, max(0, cy + 3 * d))
+        self.ws.mark_dirty()
 
     # -- the sheet
 

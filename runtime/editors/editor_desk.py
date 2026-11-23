@@ -23,8 +23,8 @@ wears the `value` edge along its top. An Editor tab in a pane (Settings,
 Code, Blocks, Sprite, Map, Scene, Sound) is that tab's own surface laid
 out at the pane's size with no bar, drawn through a viewport on the
 window's canvas, and its taps translated into it; the panes the desk adds
-are the Run slot, drawn here, and pages of their own (the Actor, the Sheet,
-the Stamps, the Reference's Sprites and the made code: editor_part.py). Moving focus never commits; a
+are the Run slot, drawn here, and a page each of its own (editor_part.py,
+hosted by editor_parts.PartHost). Moving focus never commits; a
 workspace switch commits the panes it leaves that are dirty, through
 `EditorApp.commit_later`, as a tab switch does.
 
@@ -161,9 +161,9 @@ class EditorDesk(Layer):
         self._sheet_page = 0
         self._loupe = None              # (tile, x, y): a press held on the Sheet
         self._still = None
-        self._cursors = []
-        self.part_state = {}            # the verbs parts' kept state
-        self._parts = {}                # content -> its page's host (`Parts.PAGES`)
+        self.part_state = {}            # the parts' kept state (the palette's category, the
+                                        # Reference's sound and map cell) and the more menus
+        self._parts = {}                # part -> its page's host (`Parts.PAGES`)
         self._mid = None                # the middle button's last place, while held
         self._scale = 0                 # the Run slot's scale, last drawn
         self._still_at = None           # where the game stands on the surface
@@ -720,11 +720,12 @@ class EditorDesk(Layer):
         return ws.music_ui.sound if tab == "music" else ws.layer_of(tab)
 
     def part(self, c):
-        """The host of pane content `c`'s own page (`Parts.PAGES`), made at
-        its first use."""
-        got = self._parts.get(c)
+        """The host of the part pane content `c` shows (`Parts.PAGES`), made
+        at its first use."""
+        name = Parts.part_of(self, c)
+        got = self._parts.get(name)
         if got is None:
-            got = self._parts[c] = Parts.PartHost(self, c)
+            got = self._parts[name] = Parts.PartHost(self, c, name)
         return got
 
     def _tab_pane(self, tab, r, dt, own=False, moves=False):
@@ -971,7 +972,6 @@ class EditorDesk(Layer):
             pb = self._body(r, u, pane)
             self._card(cv, th, r, True, u)
             self._tab_pane(tab, pb, dt, True)
-            self._cursors = []
             self._clip = r
             cv.clip(*r)
             try:
@@ -1032,7 +1032,6 @@ class EditorDesk(Layer):
         alone = self.alone()
         self._ground(cv, th["panel"], lay, panes, divs, alone, u)
         shown = self._shown_panes()
-        self._cursors = []
         self._still_at = None
         for n, pane, r in shown:
             self.pane_body(n, pane, r, dt)
@@ -1047,7 +1046,7 @@ class EditorDesk(Layer):
 
     def pane_body(self, n, pane, r, dt):
         """Pane `n`'s body in its rect `r`: its card, then its tab's
-        surface, the Run slot or the Map's parts."""
+        surface, the Run slot or its part's page."""
         ws = self.ws
         cv = ws.sys_canvas
         th = ws.theme_colors
@@ -1063,8 +1062,6 @@ class EditorDesk(Layer):
             self._game(cv, th, body, u)
         elif c in Parts.PAGES:
             self.part(c).draw(body, dt)
-        elif c == "maps":
-            Parts.drawn_before(self, c, cv, th, body, u)
 
     def _ground(self, cv, col, lay, panes, divs, alone, u):
         """The Editor's ground where the cards leave it showing: the margin
@@ -1253,14 +1250,13 @@ class EditorDesk(Layer):
             elif c == "code" and len(pane) == 1:
                 tx = self._code_head(pid, x, y, hh, u, tx)
             elif c == "sounds" and self.key == "sound":
-                tx = Parts.sounds_header(self, pid, tx, y, hh, u)
+                tx -= cell
+                ui.at(tx, y, cell, hh)
+                if ui.tool("new", "New sound", {"id": pid + " new sound"}):
+                    Parts.new_sound(self)
             self._tools_x[n] = tx
             if c == "game":
                 self._still_tool(pid, u)
-            if c in Parts.PARTS:
-                Parts.draw(self, c, self._body(r, u, pane), u)
-        for r in self._cursors:
-            ui.cursor(*r)
         if self.part_state.get("code more") is not None:
             self._code_more(u)
         if self.part_state.get("head more") is not None:
@@ -1670,12 +1666,6 @@ class EditorDesk(Layer):
             if c == "actor":
                 self._owe_restart("scene")
             return True
-        if c in Parts.PARTS:
-            if Parts.keys(self, c, i):
-                i.spend_edges()
-            elif self._host.keys(i):
-                ws.mark_dirty()
-            return True
         return False
 
     def dock_keys(self, i):
@@ -1732,15 +1722,16 @@ class EditorDesk(Layer):
                 self._sheet_page = max(0, min(3, self._sheet_page + (1 if wy > 0 else -1)))
                 ws.mark_dirty()
                 return True
-            if tab is None and wy and self.tab_of(hit[0]) == "made":
-                # the made code's text view takes the wheel where it rests
-                host = self.part("made")._host
+            if tab is None and wy and self.tab_of(hit[0]) == "maps":
+                self.part("maps").map_wheel(1 if wy > 0 else -1)
+                return True
+            if tab is None and wy and self.tab_of(hit[0]) in Parts.PAGES:
+                # a part's list or text view takes the wheel where it rests
+                host = self.part(self.tab_of(hit[0]))._host
                 host.point(px, py, False)
                 if host.wheel(0, wy):
                     ws.mark_dirty()
                 return True
-            if tab is None and wy:
-                return Parts.scroll(self, self.tab_of(hit[0]), 1 if wy > 0 else -1)
             return False
         body = self._body(hit[1], self._unit())
         lx, ly = px - body[0], py - body[1]
@@ -1763,12 +1754,17 @@ class EditorDesk(Layer):
         return True
 
     def _part_focused(self):
-        """Whether the focused pane is one drawn on the verbs, whose stops
-        take the keys."""
+        """Whether the keys are in the desk's own stops: a header's more
+        menu, the Sound pane's header."""
         if self._menu_open():
             return True
-        c = self.tab_of(self.focused()[0])
-        return c in Parts.PARTS or c == "music"
+        return self.tab_of(self.focused()[0]) == "music"
+
+    def caret_keys(self):
+        """Whether the arrows are a caret's: off the desk's workspaces, or
+        while the focused pane is the Code tab or theme Config (another pane
+        takes its own arrows)."""
+        return not self.active() or self.tab_of(self.focused()[0]) in _TEXT_PANES
 
     def shows(self, content):
         """Whether a pane on show holds `content` as its open tab."""
@@ -1977,11 +1973,6 @@ class EditorDesk(Layer):
             ws.mark_dirty()
             if c == "actor":
                 self._owe_restart("scene")
-            return True
-        if c in Parts.PARTS:
-            if Parts.pointer(self, c, body, u, px, py, click, down) \
-                    or host.point(px, py, click, down):
-                ws.mark_dirty()
             return True
         return True
 

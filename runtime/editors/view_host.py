@@ -95,6 +95,18 @@ class ViewLayout(LayoutBase):
 
 # The ring a canvas draws round what it picked (the brushes', the desk Sheet's).
 cursor = _ui_draw.cursor
+# What the desk's own canvases draw in the theme (editor_parts.py): a label in
+# the UI face, the current mark under a row, a button's plate, a glyph.
+label = _ui_draw.label
+ALIGN_RIGHT = _ui_draw.ALIGN_RIGHT
+current = _ui_draw.current
+plate = _ui_draw.button
+glyph = _ui_draw.glyph
+
+
+def ui_line():
+    """The UI face's line height at scale 1."""
+    return _ui_draw.font("ui")[3]
 
 
 class _Damage:
@@ -185,9 +197,13 @@ class PageHost:
             self._due = None
             self.run(due)
         pg.paint(dt, cv, th, r, lay.desk)
-        _ui.end()
+        self._end()
         if not self._host.still():
             ws.request_frame()
+
+    def _end(self):
+        """The frame's end, after the page painted."""
+        _ui.end()
 
     def handle_pointer(self, px, py, click):
         """A pointer sample for the page; what a canvas's press does lands
