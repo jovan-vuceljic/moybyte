@@ -1170,6 +1170,106 @@ static void enter_land(moy_ui_ctx_t *c) {
     c->jump = 1;
 }
 
+// Focus on an id stops `v` (n of them) do not hold passes to the one of them nearest where it
+// drew, which the next begin keeps in view, else to none: the index it lands on, -1 none.
+static int focus_pass(moy_ui_ctx_t *c, const moy_ui_stop_t *v, int n) {
+    int best = -1;
+    int32_t bd = INT32_MAX;
+    moy_ui_box_t a = c->focus_box;
+    for (int i = 0; i < n; i++) {
+        if (v[i].flags & STOP_PAGE) {
+            continue;
+        }
+        int dx = (2 * v[i].b.x + v[i].b.w) - (2 * a.x + a.w);
+        int dy = (2 * v[i].b.y + v[i].b.h) - (2 * a.y + a.h);
+        int32_t d = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+        if (d < bd) {
+            bd = d;
+            best = i;
+        }
+    }
+    if (best < 0) {
+        c->focus = 0;
+        return -1;
+    }
+    c->focus = v[best].id;
+    c->focus_box = v[best].b;
+    c->focus_name[0] = 0;
+    c->reveal = 1;
+    return best;
+}
+
+// What a pass over the page builds from nothing: its row cursor, its nests and cells, the
+// input its stops take, and what its draws note for the host (the floor, the kept table, the
+// band, the bar it lends). A frame's begin clears it before it reads the input, and a page that
+// runs its pass again in the frame (moy_ui_api_page_again) clears it after the first.
+static void pass_clear(moy_ui_ctx_t *c) {
+    c->tp.id = 0;                       // the parts a last frame left open are done
+    c->tp.open = 0;
+    c->tp.keep = 0;
+    c->scope = 0;
+    c->y = 0;
+    c->scroll = 0;
+    c->has_at = 0;
+    c->page_keep = -1;
+    c->page_stop = NO_PAGE;
+    c->act = 0;
+    c->keys = 0;
+    c->edge = 0;
+    c->step_x = c->step_y = 0;
+    c->dup = 0;
+    c->lost = c->keep_lost = 0;
+    c->grp_open = c->grp_n = c->grp_any = 0;
+    c->icon_slot = c->icon_glyph = c->row_slot = c->row_glyph = -1;
+    c->n_nest = 0;
+    c->grid_open = 0;
+    c->fin_on = 0;
+    c->card_slot = c->card_glyph = c->card_blank = c->card_blank_glyph = -1;
+    c->card_lead = c->card_lead_glyph = -1;
+    c->card_tone = 0;
+    c->spread.cols = 0;
+    c->spread.foot = c->spread.top = c->spread.margin = 0;
+    c->txt.lines = c->txt.centre = c->txt.tone = c->txt.scale = 0;
+    c->txt.w = 0;
+    c->txt.role = -1;
+    c->dlg.pick = -1;
+    c->typed = 0;
+    c->paste_n = 0;
+    c->pop.card.w = 0;
+    c->pop.gone = 0;
+    c->pop.id = 0;
+    c->pop.hide = 0;
+    c->pa_box.w = 0;
+    c->pa_st = 0;
+    c->pa_none = 0;
+    c->sp_n = 0;
+    c->sp_pn = 0;
+    c->sp_cut = 0;
+    c->sp_cur = -1;
+    c->sp_held = 0;
+    c->dlg.id = 0;
+    c->dlg.held = 0;
+    c->typed_box.w = 0;
+    c->hint_band.h = 0;
+    c->over_band.w = 0;
+    c->cut_on = 0;
+    c->tip_at.w = 0;
+    c->tip_shown = 0;
+    c->bar.seen = 0;
+    c->page_title[0] = 0;
+    c->kf.k = 0;                        // (a host's begin says what its canvas keeps)
+    c->kf.n = c->kf.i = c->kf.copy = c->kf.took = c->kf.ci = 0;
+    c->kf.held = MOY_UI_KF_HELD;
+    c->fl.top = c->fl.mute = 0;
+    c->fl.on = c->fl.stage = c->fl.n = c->fl.unlike = c->fl.dirty = c->fl.susp = 0;
+    c->fl.lost = c->at_last = c->fl.cast = c->fl.early = 0;
+    c->fl.loose = (moy_ui_box_t){0, 0, 0, 0};
+    c->pic_clip = (moy_ui_box_t){0, 0, 0, 0};
+    c->pic_tbl = 0;
+    c->fl.pend = 0;
+    c->step_rev = 0;
+}
+
 int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, int flags,
                      int fs) {
     static const int32_t none[MOY_UI_IN_LEN] = {0};
@@ -1202,9 +1302,6 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     c->win = (uint8_t)((flags & MOY_UI_WINDOW) ? 1 : (flags & MOY_UI_PANEL) ? 2 : 0);
     c->elsewhere = (uint8_t)((flags & MOY_UI_ELSEWHERE) ? 1 : 0);
     c->tap = (uint8_t)((flags & MOY_UI_TAP) ? 1 : 0);
-    c->tp.id = 0;                       // the parts a last frame left open are done
-    c->tp.open = 0;
-    c->scope = 0;
     if (c->elsewhere) {
         // the keys another surface's (the shell's bar): no stop holds focus, and the one that
         // held it takes it back when they come back while it still draws
@@ -1226,53 +1323,11 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
         c->last_key = c->last_typed = 0;    // whatever came before, this key is a press
     }
     c->fs = (uint8_t)(fs > 0 ? fs : 1);
-    c->y = 0;
-    c->scroll = 0;
-    c->has_at = 0;
-    c->page_keep = -1;
-    c->page_stop = NO_PAGE;
-    c->act = 0;
-    c->keys = 0;
-    c->edge = 0;
-    if (c->enter && !c->elsewhere) {
-        enter_land(c);
-    }
-    c->enter = 0;
-    c->step_x = c->step_y = 0;
-    c->kv = c->kv_next & 0x7f;          // the key view PgUp and PgDn page this frame
-    c->kv_next = c->kv_n = 0;
-    c->dup = 0;
-    c->lost = c->keep_lost = 0;
-    c->grp_open = c->grp_n = c->grp_any = 0;
-    c->icon_slot = c->icon_glyph = c->row_slot = c->row_glyph = -1;
-    c->n_nest = 0;
-    c->grid_open = 0;
-    c->fin_on = 0;
-    c->card_slot = c->card_glyph = c->card_blank = c->card_blank_glyph = -1;
-    c->card_lead = c->card_lead_glyph = -1;
-    c->card_tone = 0;
-    c->spread.cols = 0;
-    c->spread.foot = c->spread.top = c->spread.margin = 0;
-    c->txt.lines = c->txt.centre = c->txt.tone = c->txt.scale = 0;
-    c->txt.w = 0;
-    c->txt.role = -1;
-    c->dlg.pick = -1;
-    c->typed = 0;
-    c->paste_n = 0;
-    c->pop.prev = c->pop.card;
-    c->pop.card.w = 0;
-    c->pop.gone = 0;
-    c->pop.id = 0;
-    c->pop.hide = 0;
-    mua_lent_drop(c);                   // a first frame's card its pass never closed
-    c->pa_box.w = 0;
-    c->pa_st = 0;
-    c->pa_none = 0;
-    c->sp_n = 0;
-    c->sp_pn = 0;
-    c->sp_cut = 0;
-    c->sp_cur = -1;
-    c->sp_held = 0;
+    int settled = 1;
+    int owed_last = c->owe;
+    int over_last = c->fl.dirty;
+    int moved = 0;
+    int dt = in[MOY_UI_IN_DT];
     // the dialog the last frame drew, for this frame's plan, and the frames
     // it has stood as it is
     int dw = c->dlg.id != 0 && c->dlg.held && !c->fl.top && !c->fl.mute;
@@ -1284,33 +1339,16 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     c->dw.card = c->dlg.card;
     c->dw.gen = c->dlg.gen;
     c->dw.btn = c->dlg.btn;
-    c->dlg.id = 0;
-    c->dlg.held = 0;
-    c->fl.top = c->fl.mute = 0;
-    c->typed_box.w = 0;
-    c->hint_band.h = 0;
-    c->over_band.w = 0;
-    c->cut_on = 0;
-    c->tip_at.w = 0;
-    c->tip_shown = 0;
-    c->bar.seen = 0;
-    c->page_title[0] = 0;
-    int settled = 1;
-    int owed_last = c->owe;
-    int over_last = c->fl.dirty;
-    int moved = 0;
-    int dt = in[MOY_UI_IN_DT];
+    c->pop.prev = c->pop.card;
+    mua_lent_drop(c);                   // a first frame's card its pass never closed
+    pass_clear(c);
+    if (c->enter && !c->elsewhere) {
+        enter_land(c);
+    }
+    c->enter = 0;
+    c->kv = c->kv_next & 0x7f;          // the key view PgUp and PgDn page this frame
+    c->kv_next = c->kv_n = 0;
     c->owe = 0;
-    c->kf.k = 0;                        // (a host's begin says what its canvas keeps)
-    c->kf.n = c->kf.i = c->tp.keep = c->kf.copy = c->kf.took = c->kf.ci = 0;
-    c->kf.held = MOY_UI_KF_HELD;
-    c->fl.on = c->fl.stage = c->fl.n = c->fl.unlike = c->fl.dirty = c->fl.susp = 0;
-    c->fl.lost = c->at_last = c->fl.cast = c->fl.early = 0;
-    c->fl.loose = (moy_ui_box_t){0, 0, 0, 0};
-    c->pic_clip = (moy_ui_box_t){0, 0, 0, 0};
-    c->pic_tbl = 0;
-    c->fl.pend = 0;
-    c->step_rev = 0;
     uint32_t focus0 = c->focus;
     moy_ui_stop_t *v = c->prev;
     int n = c->n_prev;
@@ -1372,33 +1410,8 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
 
     // Focus on an id no longer drawn passes to the nearest stop.
     int fi = c->focus ? mua_find(v, n, c->focus) : -1;
-    if (c->focus && fi < 0 && n) {
-        int best = -1;
-        int32_t bd = INT32_MAX;
-        moy_ui_box_t a = c->focus_box;
-        for (int i = 0; i < n; i++) {
-            if (v[i].flags & STOP_PAGE) {
-                continue;
-            }
-            int dx = (2 * v[i].b.x + v[i].b.w) - (2 * a.x + a.w);
-            int dy = (2 * v[i].b.y + v[i].b.h) - (2 * a.y + a.h);
-            int32_t d = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
-            if (d < bd) {
-                bd = d;
-                best = i;
-            }
-        }
-        if (best >= 0) {
-            c->focus = v[best].id;
-            c->focus_box = v[best].b;
-            c->focus_name[0] = 0;
-            c->reveal = 1;
-            fi = best;
-        } else {
-            c->focus = 0;
-        }
-    } else if (c->focus && fi < 0) {
-        c->focus = 0;
+    if (c->focus && fi < 0) {
+        fi = focus_pass(c, v, n);
     }
 
     // The keys, over the focused stop.
@@ -3316,6 +3329,66 @@ void moy_ui_api_page(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t titl
     if (content != NULL) {
         *content = ct;
     }
+}
+
+int moy_ui_api_page_again(moy_ui_ctx_t *c) {
+    moy_ui_keep_t *k = mua_page_keep(c);
+    if (c->n_nest != 0 || k == NULL || c->page_stop == NO_PAGE) {
+        return 0;
+    }
+    int again = 0;
+    if (c->scroll > 0) {
+        // where the next frame's page opens its scroll (open_page): the rows it holds now,
+        // less what shows of them (the page less what its docks took this pass, k->foot)
+        int32_t most = k->rows - c->cur[c->page_stop].b.h;
+        int glide = (k->sc.flags & MOY_UI_SCROLL_GLIDE) != 0;
+        most += k->scroll <= most && !glide ? 0 : k->over;
+        most = most > 0 ? most : 0;
+        if (c->scroll > most) {
+            if (k->scroll > most) {
+                k->scroll = most;
+            }
+            again = 1;
+        }
+    }
+    if (c->focus && !c->modal && !c->elsewhere && mua_find(c->cur, c->n_cur, c->focus) < 0) {
+        // focus on a stop of the page the last frame drew and this pass drew none of: it
+        // passes on now, as the next begin would pass it (where no dialog drew, whose
+        // first frame's begin lands focus on the stop it names)
+        int fi = mua_find(c->prev, c->n_prev, c->focus);
+        uint32_t pid = c->cur[c->page_stop].id;
+        int on = 0;
+        for (int j = fi >= 0 ? c->prev[fi].page : NO_PAGE, hop = 0;
+             j != NO_PAGE && j < c->n_prev && hop < MOY_UI_API_STOPS && !on; j = c->prev[j].page, hop++) {
+            on = c->prev[j].id == pid && (c->prev[j].flags & STOP_PAGE);
+        }
+        for (int i = 0; i < c->n_cur && on; i++) {
+            on = !(c->cur[i].flags & STOP_MODAL);   // a dialog drew: its begin lands focus
+        }
+        if (on) {
+            focus_pass(c, c->cur, c->n_cur);
+            again = 1;
+        }
+    }
+    if (!again) {
+        return 0;
+    }
+    c->n_cur = c->page_stop;
+    while (c->n_cap_cur > 0 && c->cap_cur[c->n_cap_cur - 1].page >= c->page_stop) {
+        c->n_cap_cur--;
+    }
+    // the input the first pass took is gone: the second draws, and no stop takes it again
+    pass_clear(c);
+    c->kv_next = c->kv_n = 0;
+    c->page_y = 0;
+    c->tab_step = 0;
+    c->typed_n = 0;
+    c->bar.act = -1;
+    c->in[MOY_UI_IN_BTNP] = c->in[MOY_UI_IN_KEY] = c->in[MOY_UI_IN_REP] = 0;
+    c->in[MOY_UI_IN_KEYREP] = c->in[MOY_UI_IN_WHEEL_X] = c->in[MOY_UI_IN_WHEEL_Y] = 0;
+    c->in[MOY_UI_IN_DT] = 0;
+    c->in[MOY_UI_IN_PTR] &= ~MOY_UI_P_EDGE;
+    return 1;
 }
 
 // A label's text options (moy_ui_api_text, moy_ui_api_text_size), taken

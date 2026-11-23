@@ -1542,6 +1542,15 @@ void moy_ui_api_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
 // next frame's plan, as ui.end and the next page keep it, and the tooltip a
 // resting pointer earned is drawn over it, as ui.end draws it.
 void moy_ui_api_page_done(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
+// The top page done (moy_ui_api_page_done) drew what the next frame's begin would change: it
+// closed short of its scroll (its rows end above what it showed: rows hidden, a glide past
+// them), or focus is on a stop of it the last frame drew and this pass drew none of (where no
+// dialog drew). Answers 1 with its scroll clamped, the focus passed to the nearest stop the
+// pass drew, and the frame ready for the page's pass to run again from moy_ui_api_page: its
+// stops back to the page's, the input the first pass took gone (no stop takes it twice), the
+// shift floor off (the second pass draws the page whole, and the frame is told the host as a
+// whole one). 0, and nothing changed, otherwise.
+int moy_ui_api_page_again(moy_ui_ctx_t *c);
 // A tool (§1): an icon button in ui.at's rect (else a row of the page),
 // flat but for its marks: the current mark where o->current, the focus mark
 // by its size, at half strength where o->disabled. `label` is its word,
