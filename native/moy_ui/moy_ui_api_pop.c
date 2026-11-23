@@ -1424,6 +1424,9 @@ int moy_ui_api_carousel_at(const int32_t g[10], const int32_t b[4], int32_t offs
 // hero, 7/10 of it on a neighbour.
 static int tile_r(int side, int card) {
     int r = moy_ui_depth()->card_r;
+    if (card < 0) {
+        return side > -card ? r * 7 / 5 : r;    // the desk's: a hero's 7/5 of a shelf card's
+    }
     return side > card ? r : r * 7 / 10;
 }
 
@@ -1457,14 +1460,16 @@ void moy_ui_api_tile(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t t[4]
         // keeps its side, raised where it lifts
         int w = rect.w, h = rect.h, ink;
         moy_ui_box_t off = {(int16_t)(-4 * w - 64), (int16_t)(-4 * h - 64), (int16_t)w, (int16_t)h}, box;
-        moy_ui_focus(s, off, MOY_UI_ITEM_CARD, 0, MOY_UI_MARK_AFTER, s->fs, &box, &ink);
+        moy_ui_focus(s, off, MOY_UI_ITEM_CARD, 0, MOY_UI_MARK_AFTER | (mark & 2 ? MOY_UI_MARK_SELECTED : 0),
+                     s->fs, &box, &ink);
         int g = floor_div(box.w - w, 2);
         if (g > 0) {
             at = (moy_ui_box_t){(int16_t)(rect.x + g), (int16_t)(rect.y + g), (int16_t)(w - 2 * g),
                                 (int16_t)(h - 2 * g)};
         }
-        moy_ui_focus(s, at, MOY_UI_ITEM_CARD, tile_r(rect.w, card), 0, s->fs, &rect, &ink);
-        out[9] = 1;
+        moy_ui_focus(s, at, MOY_UI_ITEM_CARD, tile_r(rect.w, card), mark & 2 ? MOY_UI_MARK_SELECTED : 0,
+                     s->fs, &rect, &ink);
+        out[9] = mark & 2 ? 2 : 1;
     }
     if (mark) {
         mua_clip_out(&k);
@@ -1505,7 +1510,8 @@ void moy_ui_api_tile_end(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t 
         moy_ui_box_t at = {(int16_t)tile[5], (int16_t)tile[6], (int16_t)tile[7], (int16_t)tile[8]};
         moy_ui_box_t box;
         int ink;
-        moy_ui_focus(s, at, MOY_UI_ITEM_CARD, (int)tile[4], MOY_UI_MARK_AFTER, s->fs, &box, &ink);
+        moy_ui_focus(s, at, MOY_UI_ITEM_CARD, (int)tile[4],
+                     MOY_UI_MARK_AFTER | (tile[9] == 2 ? MOY_UI_MARK_SELECTED : 0), s->fs, &box, &ink);
     }
     mua_clip_out(&k);
 }
@@ -1940,5 +1946,176 @@ void moy_ui_api_cells_foot(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_
         n++;
         a = i + 1;
     }
+    mua_clip_out(&k);
+}
+
+// -- the desk's carousel (ui.cards look "carousel" on the desk class) -------------------------
+//
+// The desk home (runtime/home/home_carousel.py): the selected card the hero beside its details,
+// over a shelf of one-size cards that bleeds off the right edge, its caption over it. Laid out
+// in glass pixels at the target's 1x (over `u` on a doubled desk), its type at whole scales of
+// the face no smaller than the font scale.
+#define DESK_DETAILS_MIN 280        // the narrowest details pane beside the hero
+#define DESK_SHELF_GAP 42           // the details block's foot to the shelf's caption
+
+static int imax(int a, int b) {
+    return a > b ? a : b;
+}
+
+static int imin(int a, int b) {
+    return a < b ? a : b;
+}
+
+// The whole scale a face whose line is `line` px draws a line about `px` px tall in, the font
+// scale `fs` at the least (`text_scale`).
+static int desk_scale(int px, int fs, int line) {
+    line = line > 0 ? line : 1;
+    return imax(fs, (px + line / 2) / line);
+}
+
+// The shelf's margin in from the band's edges: a twentieth of its width, 12 to 48 px.
+static int desk_pad(int w, int u) {
+    return imin(48 / u, imax(12 / u, w / 20));
+}
+
+void moy_ui_api_carousel_desk(int fs, int u, int keys, int brows, const int32_t b[4],
+                              int32_t out[MOY_UI_DESK_G]) {
+    moy_font_info_t tf, uf;
+    moy_ui_font(0, MOY_UI_FONT_TITLE, &tf);
+    moy_ui_font(0, MOY_UI_FONT_UI, &uf);
+    u = u > 1 ? u : 1;
+    int cx = (int)b[0], cy = (int)b[1], cw = (int)b[2], foot = (int)(b[1] + b[3]);
+    int pad = desk_pad(cw, u), top = 24 / u, apart = 32 / u;
+    int ring = imax(2 * fs + 2, moy_ui_mark_reach(MOY_UI_ITEM_CARD));
+    int lh = uf.line, tl = tf.line;
+    int ts = desk_scale(40 / u, fs, tl), ms = desk_scale(14 / u, fs, lh);
+    int ks = desk_scale(13 / u, fs, lh), vs = desk_scale(15 / u, fs, lh);
+    int bh = imax(42 / u, 20 * fs);
+    int need = tl * ts + lh * (ms + ks + vs) + bh + 60 / u + brows;
+    int cap_h = lh * ms + 8 / u;
+    int room = foot - cy - top - cap_h - 72 / u;
+    // a short band gives up, in turn, most of the slack round the shelf's caption, the facts'
+    // row and the metadata's line
+    int rows[2] = {1, 1}, cut[2] = {lh * (ks + vs) + 22 / u, lh * ms + 14 / u};
+    int least = CAROUSEL_COVER / 2;
+    if (imax(least, need) + least / 2 > room) {
+        room += 48 / u;
+    }
+    for (int k = 0; k < 2; k++) {
+        if (imax(least, need) + least / 2 > room) {
+            rows[k] = 0;
+            need -= cut[k];
+        }
+    }
+    int hero = cw / 4 / CAROUSEL_COVER * CAROUSEL_COVER;
+    while (hero > CAROUSEL_COVER && imax(hero, need) + hero / 2 > room) {
+        hero -= CAROUSEL_COVER;
+    }
+    if (hero < CAROUSEL_COVER || imax(hero, need) + hero / 2 > room) {
+        hero = least;
+    }
+    while (hero > CAROUSEL_COVER / 8 && imax(hero, need) + hero / 2 > room) {
+        hero /= 2;
+    }
+    int hx = cx + pad, hy = cy + top;
+    int dx = hx + hero + apart, dy = hy, pane = imax(hero, need), block = pane;
+    if (cx + cw - pad - dx < DESK_DETAILS_MIN / u) {
+        // too narrow for the pane beside the hero: the hero over the pane where the height
+        // holds both at a hero no smaller
+        int up = CAROUSEL_COVER;
+        while (up > hero && up + apart + need + up / 2 > room) {
+            up /= 2;
+        }
+        if (up >= hero && up + apart + need + up / 2 <= room) {
+            hero = up;
+            dx = hx;
+            dy = hy + hero + apart;
+            pane = need;
+            block = hero + apart + need;
+        }
+    }
+    int shelf = hero / 2;
+    int spare = imax(0, foot - cy - top - block - cap_h - shelf);
+    const moy_ui_depth_t *d = moy_ui_depth();
+    int down = imax(ring, (d->shadow ? d->blur : 0) + d->dy);
+    // the caption SHELF_GAP under the details, the spare height under the shelf; a height
+    // short of that splits what it has, keeping the shelf's lift and shadow off the strip
+    int cap_y = hy + block + imin(DESK_SHELF_GAP / u, imax(spare / 2, spare - imax(down, 20 / u)));
+    if (!keys) {
+        // no strip under touch: the shelf stands at most the side margin off the glass's foot
+        cap_y = imax(cap_y, foot - pad - shelf - cap_h);
+    }
+    int shelf_y = cap_y + cap_h;
+    int32_t o[MOY_UI_DESK_G] = {hx, hy, hero, hero, dx, dy, imax(0, cx + cw - pad - dx), pane,
+                                cx, cap_y, cw, imax(0, imin(foot, shelf_y + shelf + down) - cap_y),
+                                shelf, shelf_y, pad, ts, ms, ks, vs, bh, rows[0], rows[1], ring,
+                                20 / u};
+    memcpy(out, o, sizeof o);
+}
+
+void moy_ui_api_desk_shelf_geom(int fs, int u, const int32_t b[4], int side, int32_t out[MOY_UI_CELLS_G]) {
+    moy_font_info_t uf;
+    moy_ui_font(0, MOY_UI_FONT_UI, &uf);
+    u = u > 1 ? u : 1;
+    int ms = desk_scale(14 / u, fs, uf.line);
+    memset(out, 0, MOY_UI_CELLS_G * sizeof out[0]);
+    out[MOY_UI_CELLS_SIDE] = side;
+    out[MOY_UI_CELLS_R] = moy_ui_depth()->card_r;
+    out[MOY_UI_CELLS_X0] = b[0] + desk_pad((int)b[2], u);
+    out[MOY_UI_CELLS_Y0] = b[1] + uf.line * ms + 8 / u;
+    out[MOY_UI_CELLS_PX] = side + 20 / u;
+    out[MOY_UI_CELLS_PY] = side;
+    out[MOY_UI_CELLS_ROWS] = 1;
+    out[MOY_UI_CELLS_COLS] = 1;
+    out[MOY_UI_CELLS_TITLE_DY] = ms;            // (the caption's scale)
+    out[MOY_UI_CELLS_VIEW_H] = b[3];
+    out[MOY_UI_CELLS_ACROSS] = 1;
+    out[MOY_UI_CELLS_DESK] = 1;
+    out[MOY_UI_CELLS_LOOK] = MOY_UI_LOOK_DESK;
+}
+
+int moy_ui_api_desk_at(const int32_t g[MOY_UI_CELLS_G], const int32_t b[4], int32_t off, int n, int x,
+                       int y) {
+    int left = (int)(g[MOY_UI_CELLS_X0] + g[MOY_UI_CELLS_SIDE] - g[MOY_UI_CELLS_PX]);
+    return x < left ? -1 : moy_ui_api_cells_at(g, b, off, n, x, y);
+}
+
+void moy_ui_api_desk_caption(moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int32_t g[MOY_UI_CELLS_G],
+                             const int32_t b[4], const int32_t clip[4], moy_ui_span_t label, int n) {
+    clip_t k;
+    moy_ui_box_t q = {(int16_t)clip[0], (int16_t)clip[1], (int16_t)clip[2], (int16_t)clip[3]};
+    if (!mua_clip_in(&k, s, q)) {
+        mua_clip_out(&k);
+        return;
+    }
+    // the label and the count, apart by a dot, in the dim ink on the ground over the first card
+    moy_canvas_row_t *row = (moy_canvas_row_t *)s->dst;
+    const int32_t *st = row->st;
+    moy_text_target_t tg = {row->px, row->cap, (int)st[MOY_ST_W], (int)st[MOY_ST_CAM_X],
+                            (int)st[MOY_ST_CAM_Y], (int)st[MOY_ST_CX0], (int)st[MOY_ST_CY0],
+                            (int)st[MOY_ST_CX1], (int)st[MOY_ST_CY1]};
+    moy_font_info_t uf;
+    uint32_t uid = moy_ui_font(0, MOY_UI_FONT_UI, &uf);
+    int sc = (int)g[MOY_UI_CELLS_TITLE_DY], x = (int)g[MOY_UI_CELLS_X0], y = (int)b[1], sep = 6 * c->fs;
+    int di = moy_ui_token(s->look, MOY_UI_T_INK_DIM);
+    uint16_t ink = row->pal[moy_ui_pidx(s->cart, di)];
+    moy_text(&tg, uid, MOY_TEXT_DATA, label.p, label.n, x, y, ink, sc, 0, -1);
+    x += moy_text_width(uid, label.p, label.n, sc) + sep;
+    int dy;
+    if (!font_v2(uid, &uf)) {
+        dy = y + floor_div(uf.line * sc - sc, 2);
+    } else {
+        int asc = uf.ascent * sc;
+        dy = y + asc - floor_div(asc / 2 + sc, 2);
+    }
+    caption_dot(s, &tg, x, dy, sc, di);
+    uint8_t cnt[12];
+    size_t cn = sizeof cnt;
+    unsigned v = n > 0 ? (unsigned)n : 0u;
+    do {
+        cnt[--cn] = (uint8_t)('0' + v % 10u);
+        v /= 10u;
+    } while (v && cn);
+    moy_text(&tg, uid, MOY_TEXT_DATA, cnt + cn, sizeof cnt - cn, x + sc + sep, y, ink, sc, 0, -1);
     mua_clip_out(&k);
 }

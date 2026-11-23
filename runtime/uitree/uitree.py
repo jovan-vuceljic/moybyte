@@ -2043,7 +2043,8 @@ SCHEMA = {
                   row="lit"),
     "col": dict(_C, text="text"),
     "cards": dict(_C, cur="lit", current="lit", w="int", h="int", cols="int", new="action0",
-                  changed="action1", group="lit", pad="int", look="lit", tone="text"),
+                  changed="action1", group="lit", pad="int", look="lit", tone="text",
+                  label="text"),
     "card": dict(_C, label="text", sub="text", badge="text", label_icon="text", image="image",
                  icon="text", tone="text"),
     # G9, G13: a picture of its own (an image state, its fallback icon), a

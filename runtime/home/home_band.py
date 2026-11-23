@@ -97,10 +97,11 @@ def _band_alone(ws, dt, kind, calm=False):
     """Whether this frame leaves the home's band its own on the glass but
     for the cursor (the paint ring's stamp): the home on top in console
     mode, nothing animating, no overlay, splash or owed LOADING pill over
-    it. `calm`: the caller found it on top with nothing animating."""
+    it (its own band page moving on its own changes nothing outside the
+    band). `calm`: the caller found it on top with nothing animating."""
     wm = ws.wm
     if not calm:
-        if ws.animating(dt):
+        if ws.animating(dt, False):
             return False
         top = getattr(wm, "top_kind", None)
         if top is not None and top() != kind:

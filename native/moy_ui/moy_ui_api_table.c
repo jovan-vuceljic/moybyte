@@ -398,6 +398,9 @@ static int32_t cells_motion(moy_ui_ctx_t *c, moy_ui_keep_t *kp, int st, int focu
     return offset;
 }
 
+static int32_t desk_motion(moy_ui_ctx_t *c, moy_ui_keep_t *kp, int st, int focused, int count, int ext,
+                           int32_t offset, int32_t *cur, int *opened);
+
 void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label,
                       const uint8_t *cols, size_t cols_n, const uint8_t *cells, size_t cells_n,
                       int32_t cur, const moy_ui_over_t *o, int32_t out[2]) {
@@ -509,7 +512,9 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
     int flags = xa ? STOP_KEEP_LR
                    : STOP_KEEP_UD | (row <= 0 ? STOP_AT_TOP : 0)
                          | (row >= count - 1 ? STOP_AT_END : 0) | (placed ? 0 : STOP_ROWS);
-    if (cl) {
+    if (c->car.on == MOY_UI_LOOK_DESK) {
+        flags = STOP_KEEP_LR;           // the desk's shelf: left and right are its
+    } else if (cl) {
         // every arrow is the grid's; up leaves it from its top row
         int per = (int)(xa ? c->car.g[MOY_UI_CELLS_ROWS] : c->car.g[MOY_UI_CELLS_COLS]);
         int k = kp != NULL && kp->rh ? kp->car_set : c->car.app;
@@ -553,7 +558,10 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
     if ((focused || (st & MOY_UI_ST_ACTIVATED)) && !car) {
         cur = row;
     }
-    if (car && cl) {
+    if (car && c->car.on == MOY_UI_LOOK_DESK) {
+        kp->rows = content;
+        offset = desk_motion(c, kp, st, focused, c->car.app_n, ext, offset, &cur, &opened);
+    } else if (car && cl) {
         kp->rows = content;
         offset = cells_motion(c, kp, st, focused, c->car.app_n, offset, &cur, &opened);
         if (si >= 0 && c->cur[si].id == id) {
@@ -1551,6 +1559,77 @@ int32_t moy_ui_api_dialog(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
     return pick;
 }
 
+// The desk carousel's shelf's motion (moy_ui_api_cells_grid under MOY_UI_LOOK_DESK), on its
+// page's keep `kp` at scroll `offset` in a view `ext` wide: the card it holds current moves at
+// once -- left and right (a held key's repeats, the wheel's notches) a card, a tap to the card
+// it lands on -- and the shelf glides to show it two cards in where the shelf has them; a drag
+// scrolls the shelf alone and a release flings it. The card the app moved its current to
+// lands at once while the shelf rests. Answers the scroll; *cur the current card, *opened 1
+// where Enter, or a tap on the current card at rest, opened it.
+static int32_t desk_rest(const int32_t *g, int32_t most, int i) {
+    int32_t to = (int32_t)(i - 2) * g[MOY_UI_CELLS_PX];
+    return to < 0 ? 0 : to > most ? most : to;
+}
+
+static int32_t desk_motion(moy_ui_ctx_t *c, moy_ui_keep_t *kp, int st, int focused, int count, int ext,
+                           int32_t offset, int32_t *cur, int *opened) {
+    const int32_t *g = c->car.g, *b = c->car.band;
+    moy_ui_scroll_t *sc = &kp->sc;
+    kp->car = (uint8_t)c->car.on;
+    if (count <= 0) {
+        kp->car_row = kp->car_set = 0;
+        *cur = -1;
+        return 0;
+    }
+    int32_t most = kp->rows - ext > 0 ? kp->rows - ext : 0;
+    int app = c->car.app;
+    app = app < 0 ? 0 : app > count - 1 ? count - 1 : app;
+    int sel = kp->car_set < count ? kp->car_set : count - 1, to = -1;
+    if (kp->rh == 0 || app != kp->car_row) {
+        sel = app;                      // a first frame, or the app moved its current card
+        if (!(sc->flags & CAR_MOVING)) {
+            moy_ui_scroll_stop(sc);
+            offset = desk_rest(g, most, sel);
+        }
+    }
+    int step = focused ? c->step_x : 0;
+    if (step) {
+        sel += step;
+        sel = sel < 0 ? 0 : sel > count - 1 ? count - 1 : sel;
+        to = sel;
+    }
+    if (st & MOY_UI_ST_ACTIVATED) {
+        if (c->tap_y == INT16_MIN) {
+            *opened = 1;                // Enter: the current card
+        } else {
+            // a tap: a card under the press and the release alike
+            int i = moy_ui_api_desk_at(g, b, offset, count, c->tap_x, c->tap_y);
+            if (i >= 0 && i == moy_ui_api_desk_at(g, b, offset, count, c->press_x, c->press_y)) {
+                if (i == sel && !(sc->flags & CAR_MOVING)) {
+                    *opened = 1;
+                } else {
+                    sel = i;
+                    to = i;
+                }
+            }
+        }
+    }
+    if (to >= 0) {
+        int32_t off = offset;
+        moy_ui_scroll_stop(sc);
+        moy_ui_scroll_glide_to(sc, offset, desk_rest(g, most, to), 0, kp->rows, ext);
+        if (c->in[MOY_UI_IN_DT] <= 0) {
+            moy_ui_scroll_land(sc, &off);
+        } else {
+            moy_ui_scroll_tick(sc, (float)c->in[MOY_UI_IN_DT], &off, kp->rows, ext);
+        }
+        offset = off;
+    }
+    kp->car_set = kp->car_row = (int16_t)sel;
+    *cur = sel;
+    return offset;
+}
+
 void moy_ui_api_carousel(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, const int32_t b[4],
                          const int32_t g[10], const uint8_t *cells, size_t cells_n, int32_t cur,
                          int32_t out[5]) {
@@ -1593,7 +1672,9 @@ void moy_ui_api_cells_grid(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_
     moy_ui_over_text(&o, MOY_UI_OV_ID, id);
     int32_t part[2] = {across ? g[MOY_UI_CELLS_PX] : 0, across ? 0 : g[MOY_UI_CELLS_PY]};
     int32_t zero = 0, ax = across;
-    int32_t spill = g[MOY_UI_CELLS_GROW] + moy_ui_mark_reach(MOY_UI_ITEM_CARD) + 2;
+    int32_t spill = g[MOY_UI_CELLS_LOOK] == MOY_UI_LOOK_DESK  // (a desk card's lift and shadow)
+                        ? g[MOY_UI_CELLS_PX]
+                        : g[MOY_UI_CELLS_GROW] + moy_ui_mark_reach(MOY_UI_ITEM_CARD) + 2;
     int32_t a[2] = {across ? g[MOY_UI_CELLS_Y0] - b[1] : g[MOY_UI_CELLS_X0] - b[0],
                     across ? g[MOY_UI_CELLS_PY] : g[MOY_UI_CELLS_PX]};
     moy_ui_over_put(&o, MOY_UI_OV_PART, part);

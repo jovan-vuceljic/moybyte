@@ -705,6 +705,17 @@ static mp_obj_t eng_cells_geom(size_t n, const mp_obj_t *a)
                                           mp_obj_is_true(a[3]), words_of(a[4], 16)));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_cells_geom_obj, 5, 5, eng_cells_geom);
+
+// carousel_desk(band, fs, keys, brows, out) (uit_carousel_desk): band an array('i') of 4, out of
+// UIT_DESK_WORDS; the desk home's geometry.
+static mp_obj_t eng_carousel_desk(size_t n, const mp_obj_t *a)
+{
+    (void)n;
+    uit_carousel_desk(words_of(a[1], 4), mp_obj_get_int(a[2]), mp_obj_is_true(a[3]), mp_obj_get_int(a[4]),
+                      words_of(a[5], UIT_DESK_WORDS));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_carousel_desk_obj, 6, 6, eng_carousel_desk);
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_frame_obj, 11, 11, eng_frame);
 
 // still(ctx, x, y, w, h, flags, fs, input) -> whether the frame drawn last is what a frame now draws
@@ -1005,6 +1016,7 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_cells_tile), MP_ROM_PTR(&eng_cells_tile_obj) },
     { MP_ROM_QSTR(MP_QSTR_cells_at), MP_ROM_PTR(&eng_cells_at_obj) },
     { MP_ROM_QSTR(MP_QSTR_cells_geom), MP_ROM_PTR(&eng_cells_geom_obj) },
+    { MP_ROM_QSTR(MP_QSTR_carousel_desk), MP_ROM_PTR(&eng_carousel_desk_obj) },
     { MP_ROM_QSTR(MP_QSTR_build_end), MP_ROM_PTR(&eng_build_end_obj) },
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&eng_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&eng_close_obj) },

@@ -65,12 +65,10 @@ def test_the_hero_mark_lies_under_the_bar(tmp_path, monkeypatch, theme, mode):
     real = home_carousel.Carousel._band_picture
 
     def picture(self, node, pic, r):
-        # the engine's carousel lifted this tile (r[8] bit 1): its mark's box, the
-        # card's rest rect shrunk by what the lift grows (`_mark_rect`), and the
-        # box the mark drew it in
+        # the engine's carousel lifted this tile (r[8] bit 1): the box the
+        # mark drew it in
         if r is not None and r[8] & 1:
-            at = self._mark_rect(self._gcv, self.tile_rect(self.nearest()))
-            marks.append((at, tuple(r[:4])))
+            marks.append(tuple(r[:4]))
         return real(self, node, pic, r)
 
     monkeypatch.setattr(home_carousel.Carousel, "_band_picture", picture)
@@ -80,10 +78,10 @@ def test_the_hero_mark_lies_under_the_bar(tmp_path, monkeypatch, theme, mode):
     assert marks, "the hero drew no focus mark"
     band_top = ws.launcher.band_rect()[1]
     reach = ui_draw.mark_reach("card")
-    for at, box in marks:
-        # the mark's outer edge: the ring's outline, or the lift's rim one
-        # pixel round its grown box
-        top = min(at[1] - reach, box[1] - 1)
+    for box in marks:
+        # the mark's outer edge: the ring's outline round the card, or the
+        # lift's rim one pixel round it
+        top = min(box[1] - reach, box[1] - 1)
         assert top >= band_top, ("%s %s: the hero's mark starts at y %d, over "
                                  "the bar's line at %d" % (theme, mode, top, band_top))
 
@@ -298,25 +296,37 @@ def test_the_desk_shelf_marks_its_selected_card_under_every_input(tmp_path, monk
     keeps its card mark under touch and while the pane's buttons hold the
     focus, as under the keys (design review R4-09); only the keys' focus
     counts as a focus mark."""
+    got = None
+    real = home_carousel.Carousel._band_picture
+
+    def picture(self, node, pic, r):
+        # the engine's shelf hands its picture the lift's flag (r[8] bit 1)
+        if got is not None and r is not None and r[8] & 1:
+            got.append(r[0])
+        return real(self, node, pic, r)
+    monkeypatch.setattr(home_carousel.Carousel, "_band_picture", picture)
     ws = _ws(tmp_path, CONSOLE, theme, mode)
     _home(ws)
     _frame(ws, 2)
     home = ws.launcher_layer
-    real = launcher_layer._ui_draw.focus
+
+    def above(cv, r):
+        """The glass's rows just over a card's rest box: the lift or the
+        ring a mark draws there, else the ground alone."""
+        return [bytes(cv._buf[2 * (y * cv.w + r[0]):2 * (y * cv.w + r[0] + r[2])])
+                for y in range(r[1] - 3, r[1])]
 
     def marked():
-        """The x of the one shelf card that wears the card mark."""
+        """The x of the one shelf card that wears a card mark, drawn."""
+        nonlocal got
         got = []
-
-        def focus(cv, th, rect, item="cell", r=0, after=False, **kw):
-            if item == "card" and not after and rect[0] >= 0 and rect[2] < 200:
-                got.append(rect[0])
-            return real(cv, th, rect, item, r, after, **kw)
-        monkeypatch.setattr(launcher_layer._ui_draw, "focus", focus)
         ws.mark_dirty()
         _frame(ws, 1)
-        monkeypatch.setattr(launcher_layer._ui_draw, "focus", real)
         assert len(set(got)) == 1, "one card wears the mark: %s" % got
+        grid = ws.launcher
+        cv = ws.glass_canvas
+        sel, other = grid.tile_rect(grid.sel), grid.tile_rect(grid.sel + 1)
+        assert above(cv, sel) != above(cv, other), "the mark draws nothing"
         return got[0]
     keys = marked()
     ws.use_inputs([("local", "touch")])

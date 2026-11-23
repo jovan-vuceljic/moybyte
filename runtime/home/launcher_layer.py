@@ -604,7 +604,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             return False
         else:
             fill = self._backdrop_fill
-        if self._search_line() is not None:
+        if self._search_line() is not None or self._shelf_fed():
             return False
         steps = (bd is not None and not self._lib_unsupported
                  and not (self._carousel() and self.grid.desk()))
@@ -756,7 +756,8 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         """(backdrop, selection, band) keys of the desk home's frame: what
         everything outside the selection's rect and the band is a pure
         function of (the wallpaper's `restore_key` `bd` among it), what the
-        hero and its details are, and what the shelf's band is. None off
+        hero and its details are, and what the shelf's band is (each of
+        its moving frames another: its page moves in its pass). None off
         the desk, or where the backdrop cannot be put back."""
         g = self.grid
         if bd is None or not g.desk():
@@ -776,7 +777,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
                 (g.tab, sel, it, it and it.get("title"), it and it.get("description"),
                  gen, rows, self._button_focus, g.today()),
                 (g.tab, sel, gen, self._lhover, tuple(i.get("title") for i in items),
-                 rows, g.scroll, g.moving))
+                 rows, g.scroll, g.moving and ws.frame_state.frames_drawn, g.tab_focus))
 
     def _sel_rect(self):
         """The desk home's hero and details pane with all they cast (the
@@ -819,10 +820,11 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
 
     def _content_alone(self, dt):
         """Whether this frame's pixels are the home's alone: on top, nothing
-        animating, nothing drawn over it (`content_alone`)."""
+        animating (its own band page moving on its own draws in the band),
+        nothing drawn over it (`content_alone`)."""
         ws = self.ws
         wm = ws.wm
-        if ws.animating(dt):
+        if ws.animating(dt, False):
             return False
         top = getattr(wm, "top_kind", None)
         if top is not None and top() != self.id:
@@ -868,14 +870,28 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         kr = bar
         kh = self._hk.of(now[0])
         g = self.grid
+        fed = self._shelf_fed()
         g.begin_band_host(cv)
         if not _ui.held("still", kb):
             return False                 # (the buffer holds another backdrop)
+        laid = []
+        if fed:
+            # the shelf's input moves its selection in its pass: the band
+            # first, then the parts keyed on the card it made current (a
+            # backdrop that moved with it, the pane's rows, is a full paint's)
+            laid = self._lay_parts(cv, dt, False, True, True)
+            self._band_note(cv, dt)      # (under the keys of the card it made current)
+            parts = self._still_parts(cv, self._bd_now)
+            if self._stk.of(parts[0]) != kb:
+                return False
+            ks = self._slk.of(parts[1])
+            kd = self._shk.of(parts[2])
+            g.resume_band_host(cv)
         # what the buffer this frame paints lacks, and what the buffer the
         # last frame painted holds as this frame would draw it (§14.6),
         # asked before anything draws through another host
         sel_lag = not _ui.held("sel", ks)
-        band_lag = not _ui.held("shelf", kd)
+        band_lag = not _ui.held("shelf", kd) and not fed
         bar_lag = not _ui.held("bar", kr)
         hint_lag = not _ui.held("hint", kh)
         last = _ui.held_last("still", kb)
@@ -894,7 +910,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
                     break
             else:
                 bar_lag = False
-        laid = self._lay_parts(cv, dt, lay_sel, lay_band, sel_lag)
+        laid += self._lay_parts(cv, dt, lay_sel, lay_band, sel_lag)
         h = g.foot()[5]
         # the hint strip, where the buffer shows another selection's verbs:
         # copied where the last frame drew these, else drawn
@@ -905,7 +921,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             ws.wallpaper.restorer(cv, self._bd_now)(cv, h)
             self._draw_home_chrome(cv)
             wm.hand_content_damage(cv, h[0], h[1], h[2], h[3])
-        if not lay_band:
+        if not (lay_band or fed):
             self._band_note(cv, dt)      # (the buffer holds the band as it is)
         # A strip this buffer holds under this key stays, unless a part
         # above was put back over it.
@@ -920,6 +936,14 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         else:
             self._still_debt()
         return True
+
+    def _shelf_fed(self):
+        """Whether the desk carousel's shelf has input that may move its
+        selection waiting on its page's next pass (a key, a release): the
+        frame's band pass moves it before the hero and the details draw it
+        (a still frame lays the band first; the band frame and the retained
+        stamp, which draw no hero, decline the frame)."""
+        return self._carousel() and self.grid.keyed and self.grid.desk()
 
     def debt_due(self):
         """Ask, on an idle frame, for the frame a step owed (`_band_settle`)
@@ -1047,7 +1071,8 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         # matches a full paint exactly -- pixel-wise it IS one -- so the
         # band's record stays honest.
         # (under the menu's hold the retained frame is the one before it)
-        if not ws.menu_ui.holds_home() and self._try_stamp_retained(cv, dt):
+        if (not ws.menu_ui.holds_home() and not self._shelf_fed()
+                and self._try_stamp_retained(cv, dt)):
             if self._band_note(cv, dt) == -1 and self._band_owed():
                 self._still_debt()
             parts = self._still_now(cv, dt)
@@ -1222,43 +1247,25 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         if self._hint_keys(i):
             return True
         grid = self.grid
-        if grid is not None and not (self._carousel() and grid.desk()):
-            # The band page's keys (the handheld's carousel, §12, the grid,
-            # the icons): the arrows (a held key's repeats, the wheel's
-            # notches) step it, Enter opens its card (`_band_open`); up
-            # takes the keys to the tab row from the carousel, and from the
-            # grid's and the icons' top row.
-            top = self._carousel() or grid.top_row()
-            if grid.band_keys(i):
-                ws.mark_dirty()
-            if i.steps("up") and top:
-                self._tab_focus = True
-                ws.mark_dirty()
+        # The band page's keys (the carousel, §12, the grid, the icons): the
+        # arrows (a held key's repeats, the wheel's notches) step it, Enter
+        # opens its card (`_band_open`); up takes the keys to the tab row
+        # from the handheld's carousel, and from the grid's and the icons'
+        # top row, and on the desk's carousel to the details pane's buttons
+        # first.
+        if grid is None:
             self._card_keys(i)
             return True
-        # The desk's carousel: left/right glide the shelf by a card, a held
-        # key one motion, the wheel a card a notch; up takes the keys to the
-        # details pane's buttons first, then the tab row.
-        wy, wx = getattr(i, "wheel_y", 0), getattr(i, "wheel_x", 0)
-        if wy or wx:
-            grid.nav2d(wx + wy, 0)
+        desk = self._carousel() and grid.desk()
+        top = self._carousel() or grid.top_row()
+        if grid.band_keys(i):
             ws.mark_dirty()
-        # a step is a card: a frame's steps, a held key's repeats and a
-        # roll's, move as many
-        dx = i.steps("right") - i.steps("left")
-        if dx:
-            grid.nav2d(dx, 0)
-            ws.mark_dirty()
-        if i.steps("up"):
-            if self._desk_buttons():
+        if i.steps("up") and top:
+            if desk and self._desk_buttons():
                 self._button_focus = 0
             else:
                 self._tab_focus = True
             ws.mark_dirty()
-        if i.pressed("a") or i.pressed("run"):
-            # #184: DEFERRED -- the cart start runs behind the next painted
-            # frame (LOADING toast), never inside this input dispatch.
-            ws.defer(self._launch)           # the active tab's tap
         self._card_keys(i)
         return True
 
@@ -1379,29 +1386,14 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             return True
         if not self._carousel():
             return self._grid_pointer(px, py, click)
-        if grid.handheld():
-            # its band page's pointer: a drag moves the row and a release
-            # flings it, a tap slides a card to the centre or opens the
-            # centre's (`_band_open`)
-            if click and _in(px, py, grid.band_rect()):
-                self._tab_focus = False
-            if grid.band_point(px, py, click, down):
-                ws.mark_dirty()
-            if click or down:
-                self._lhover = (px, py)
-            return True
-        i = grid.pointer_frame(px, py, click, down, dt_ms=ws.frame_state.pointer_dt_ms)
-        if grid.moving:
-            ws.mark_dirty()
-        if i is not None:
+        # the carousel's band page's pointer: a drag moves the row (the
+        # desk's shelf) and a release flings it, a tap slides a card to the
+        # centre (on the desk makes it current) or opens the current one
+        # (`_band_open`)
+        if click and _in(px, py, grid.band_rect()):
             self._tab_focus = False
-            if i == grid.sel and not grid.moving:
-                # #184: the tap frame paints first; the start runs behind it.
-                ws.defer(self._launch)
-            else:
-                grid.glide_to(i)
-                ws.mark_dirty()
-            return True
+        if grid.band_point(px, py, click, down):
+            ws.mark_dirty()
         if click or down:
             self._lhover = (px, py)
         return True
@@ -1427,10 +1419,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         if h[3] < LONG_PRESS_MS:
             return False
         self._hold = None
-        if not (self._carousel() and grid.desk()):
-            grid.band_cancel()                         # the gesture ends untapped
-        else:
-            grid.pointer_frame(px, py, False, False)
+        grid.band_cancel()                             # the gesture ends untapped
         if h[0] != grid.sel and 0 <= h[0] < len(grid.items):
             grid.sel = h[0]
         self._tab_focus = False
