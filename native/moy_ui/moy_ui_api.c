@@ -474,7 +474,7 @@ int mua_find(const moy_ui_stop_t *v, int n, uint32_t id) {
 // dialog's or a popover's over a page lies over every page's view.
 static int clipped(const moy_ui_stop_t *v, int n, int i) {
     int p = v[i].page;
-    return !(v[i].flags & (STOP_PAGE | STOP_AT)) && p != NO_PAGE && p < n
+    return !(v[i].flags & STOP_PAGE) && (!(v[i].flags & STOP_AT) || v[i].cut) && p != NO_PAGE && p < n
            && (!(v[i].flags & STOP_MODAL) || (v[p].flags & STOP_MODAL));
 }
 
@@ -2655,6 +2655,7 @@ int mua_stop(moy_ui_ctx_t *c, uint32_t id, moy_ui_box_t b, int flags, moy_ui_spa
     s->b = b;
     s->flags = (uint16_t)((flags & 0xFFFF) | (dlg ? STOP_MODAL : 0) | (c->at_last ? STOP_AT : 0));
     s->page = c->page_stop;
+    s->cut = (uint8_t)(c->at_last && c->cut_on && c->n_nest == c->cut_nest);
     s->part = 0;
     s->row = -1;
     s->top = 0;

@@ -2633,37 +2633,56 @@ static void fit_heights(uit_t *e, const int *kids, int nk, int model, int row, i
 
 static int32_t h_row(const uit_t *e);
 
+// The least a palette of cells takes in a column: its rows, each a third of its side and 8 px at
+// least -- a square still told apart and pointed at.
+static int32_t cells_least(uit_t *e, int k, int model, int row)
+{
+    int32_t sc = (e->flags & UIT_F_DESK) ? 1 : e->fs;
+    int32_t count = prop_int(e, k, "count", model, row), cols = prop_int(e, k, "cols", model, row);
+    int32_t side = prop_int(e, k, "side", model, row) * sc, least;
+    count = count ? count : 64, cols = cols ? cols : 8, side = side ? side : 12 * sc;
+    least = (side + 2) / 3 > 8 ? (side + 2) / 3 : 8;
+    return (count + cols - 1) / cols * (least < side ? least : side);
+}
+
 // A column split whose cells run past its room (a window shorter than its design, a font
 // scale its sizes do not hold): the overrun -- what the last cell's room falls short of 0 --
-// given by the palettes of cells before it, which fit their cells to the room they get: down to
-// a row's height, each by its share of what lies above that, then as far as 8 px.
-static void fit_room(uit_t *e, const int *kids, int nk, int32_t *spans, int nz, int32_t span)
+// given by the palettes of cells before it, which fit their cells to the room they get, each by
+// its share of what lies above its least (cells_least). Answers what is left over where it holds
+// a palette: the column scrolls by that (draw_split).
+static int32_t fit_room(uit_t *e, const int *kids, int nk, int32_t *spans, int nz, int32_t span,
+                        int model, int row)
 {
     int last = (nk < nz ? nk : nz) - 1;
     int32_t over = -span;
     for (int i = 0; i < last; i++)
         over += spans[i];
-    for (int pass = 0; pass < 2 && over > 0; pass++) {
-        int32_t room[SPLIT_CELLS], all = 0, need = pass ? 8 : h_row(e);
-        for (int i = 0; i < last; i++) {
-            room[i] = NODE(kids[i])->kind == UIT_CELLS && spans[i] > need ? spans[i] - need : 0;
-            all += room[i];
-        }
-        if (!all)
-            continue;
-        int32_t take = over < all ? over : all, took = 0;
-        for (int i = 0; i < last; i++) {
-            int32_t give = (int32_t)((int64_t)room[i] * take / all);
-            spans[i] -= give, took += give;
-        }
-        for (int i = 0; i < last && took < take; i++)      // what the shares rounded off
-            if (room[i] > 0)
-                spans[i]--, took++;
-        over -= took;
+    int cells = 0;
+    for (int i = 0; i < last; i++)
+        cells |= NODE(kids[i])->kind == UIT_CELLS;
+    if (over <= 0 || !cells)
+        return 0;
+    int32_t room[SPLIT_CELLS], all = 0;
+    for (int i = 0; i < last; i++) {
+        int32_t least = NODE(kids[i])->kind == UIT_CELLS ? cells_least(e, kids[i], model, row) : spans[i];
+        room[i] = spans[i] > least ? spans[i] - least : 0;
+        all += room[i];
     }
+    if (!all)
+        return over;
+    int32_t take = over < all ? over : all, took = 0;
+    for (int i = 0; i < last; i++) {
+        int32_t give = (int32_t)((int64_t)room[i] * take / all);
+        spans[i] -= give, took += give;
+    }
+    for (int i = 0; i < last && took < take; i++)      // what the shares rounded off
+        if (room[i] > 0)
+            spans[i]--, took++;
+    return over - took;
 }
 
 static void fill_token(const moy_ui_sink_t *s, int32_t x, int32_t y, int32_t w, int32_t h, int token);
+static void rule_in(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int32_t x, int32_t y, int32_t w, int32_t h);
 static void put_rect(uit_t *e, int k, const int32_t r[4]);
 
 // A canvas's h=: its number, or its int template's value.
@@ -2690,24 +2709,44 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
     KIDS(k, g)
     if (nk < SPLIT_CELLS && uit_shown(e, g, model, row))
         kids[nk++] = g;
+    int32_t over = 0;
     if (across)
         fit_spans(e, c, s, kids, nk, model, row, spans, nz, r[3]);
     else
-        fit_heights(e, kids, nk, model, row, spans, nz), fit_room(e, kids, nk, spans, nz, span);
+        fit_heights(e, kids, nk, model, row, spans, nz), over = fit_room(e, kids, nk, spans, nz, span, model, row);
+    // a column its palettes could not fit: its cells at their spans in a region that scrolls, its
+    // last cell none, what they place ending at its view
+    int cut = 0;
+    char rid[UIT_ID_MAX + 1];
+    if (over > 0) {
+        snprintf(rid, sizeof rid, "split %s", uit_str(e, N->key));
+        moy_ui_api_at(c, r[0], r[1], r[2], r[3]);
+        moy_ui_api_scroll(c, s, span_of(rid, strlen(rid)), NULL);
+        cut = moy_ui_api_cut(c, 1);
+    }
     int32_t at = 0;
     for (int i = 0; i < nk && i < nz; i++) {
         int g = kids[i];
-        int32_t sz = i < nk - 1 ? spans[i] : span - at;
+        int32_t sz = i < nk - 1 ? spans[i] : span - at, y = r[1] + at;
+        if (over > 0) {
+            int32_t m[5];
+            sz = i < nk - 1 ? spans[i] : 0;
+            c->has_at = 0;
+            moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, m);
+            y = m[1];
+        }
         if (i && (N->lit & SP_RULE)) {
             int32_t mid = at - gap + gap / 2;
             if (across)
                 fill_token(s, r[0] + mid, r[1], 1, r[3], MOY_UI_T_BORDER);
             else
-                fill_token(s, r[0], r[1] + mid, r[2], 1, MOY_UI_T_BORDER);
+                rule_in(c, s, r[0], y - gap + gap / 2, r[2], 1);
         }
-        int32_t cell[4] = {across ? r[0] + at : r[0], across ? r[1] : r[1] + at, across ? sz : r[2],
+        int32_t cell[4] = {across ? r[0] + at : r[0], across ? r[1] : y, across ? sz : r[2],
                            across ? r[3] : sz};
         at += sz + gap;
+        if (over > 0)
+            moy_ui_api_space(c, sz + gap);
         if (NODE(g)->kind == UIT_CANVAS && (NODE(g)->lit & CV_KEYS)) {
             moy_ui_api_at(c, cell[0], cell[1], cell[2], cell[3]);  // a stop: drawn placed in its cell
             draw(e, c, s, g, model, row);
@@ -2761,6 +2800,13 @@ static void draw_split(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
         walk(e, c, s, g, model, row);
         e->in_cell = was;
         memcpy(e->rect, room, sizeof room);
+        moy_ui_api_end(c, s);
+        moy_ui_api_scroll(c, s, span_of("", 0), NULL);
+        moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3]);
+    }
+    if (over > 0) {
+        moy_ui_api_cut(c, cut);
+        c->has_at = 0;
         moy_ui_api_end(c, s);
         moy_ui_api_scroll(c, s, span_of("", 0), NULL);
         moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3]);

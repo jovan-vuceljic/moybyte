@@ -263,6 +263,7 @@ typedef struct {
     int16_t row, top;
     uint8_t st;                     // the state bits it drew with (MOY_UI_ST_*)
     uint8_t quiet;                  // a press or a hover on it draws no mark: a text view's
+    uint8_t cut;                    // placed while moy_ui_api_cut: inside its page's view, as stacked
     int32_t gen;                    // the app's generation for what it draws in it
     uint32_t sig;                   // its record (kind, text, value), under the audit
 } moy_ui_stop_t;
