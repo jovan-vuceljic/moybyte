@@ -677,12 +677,24 @@ class BarZone:
         self.site = site
         self.gen = 0
         self.zone_opened = False
-        self.back_title = None
+        self._title = None
         self._vers = -1
 
     @property
     def zone_gen(self):
         return self.gen + getattr(self.host, "zone_gen", 0)
+
+    @property
+    def back_title(self):
+        """The title the bar draws after its back chevron, the row after
+        it; None: the bar's own. A new one moves `zone_gen`."""
+        return self._title
+
+    @back_title.setter
+    def back_title(self, title):
+        if title != self._title:
+            self._title = title
+            self.gen += 1
 
     def _row(self):
         """The shown lender's cells, the states synced first: [kind, key,

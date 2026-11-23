@@ -116,7 +116,8 @@ _KINDS = {"page": 1, "group": 2, "label": 3, "info": 4, "link": 5, "button": 6, 
           "tools": 31, "row": 32, "status": 33, "text_editor": 34, "panes": 35, "pane": 36,
           "legacy": 37, "slot": 38, "panel": 39, "lent": 40, "rule": 41, "note": 42, "grid": 43,
           "bubble": 44, "month": 45, "toast": 46, "cells": 47, "stepper": 48, "hints": 49}
-# the placed kinds: a page the engine's layout places holds them (`CEditorPage`)
+# the placed kinds: a page the engine's layout places holds them (`CEditorPage`); a
+# `tools` that lends its row (`lend=`) stands on any page, drawn at the site it lends to
 _PLACED_KINDS = ("tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot", "panel", "lent")
 _PANE_KINDS = ("panes", "pane")
 _LEGACY_FNS = ("draw", "pointer", "keys", "hints", "gen")
@@ -649,7 +650,8 @@ class CEngine(Engine):
         def node(n, parent):
             nk, l = n.kind, n.l
             kind = kinds.get(nk)
-            if kind is None or (nk in placed_kinds and not placed and nk != "row"):
+            if kind is None or (nk in placed_kinds and not placed and nk != "row"
+                                and not (nk == "tools" and l and l.get("lend"))):
                 raise EngineGap("a %s node" % nk + ("" if placed or nk not in placed_kinds else
                                                      " outside a placed page"))
             field = l.get("field") if l and nk != "text_view" else None
@@ -1388,6 +1390,34 @@ class CEngine(Engine):
         return dict(zip(("nodes", "node_bytes", "tmpl_bytes", "cond_bytes", "pool_bytes", "prop_bytes",
                          "state_bytes", "engine_bytes"), self._made().stats()))
 
+    _LC_KINDS = ("tab", "button", "text")
+
+    def lent(self, site):
+        """The shown row lent to `site`, read from the store (`uit_lent`):
+        the cells, [kind, key, value, label, icon, flags,
+        action], None where none is lent."""
+        self._made()
+        if self._shut:
+            self._resume()
+        self._ready()
+        self.committed()
+        got = self._x.lent(site)
+        if got is None:
+            return None
+        if type(got) is int:
+            self._fail(got, "the row lent to %s" % site, None)
+        kinds, acts, out = self._LC_KINDS, self._acts, []
+        for kind, _node, _vi, flags, a, key, value, label, icon in got:
+            kind = kinds[kind]
+            out.append([kind, key, value if kind == "tab" else None,
+                        label if label or kind != "button" else None, icon or None, flags,
+                        acts[a] if a >= 0 else None])
+        return out
+
+    def lent_place(self, cells, x0, w, h, fs, pad):
+        """The lent row's rule in C (`uit_lent_place`)."""
+        return self._made().lent_place(cells, x0, w, h, fs, pad)
+
 
 class CPage(CEngine, Page):
     """`uitree_app.Page` (a page a surface on today's verbs hosts) with the
@@ -1964,34 +1994,6 @@ class CEditorEngine(CEngine, _ed.Engine):
         """Whether text editor `key` drew in the last frame painted (a
         frame's question: it builds nothing)."""
         return self._te_drawn.get(key, -1) == self.frame_no
-
-    _LC_KINDS = ("tab", "button", "text")
-
-    def lent(self, site):
-        """The shown row lent to `site`, read from the store (`uit_lent`):
-        the cells, [kind, key, value, label, icon, flags,
-        action], None where none is lent."""
-        self._made()
-        if self._shut:
-            self._resume()
-        self._ready()
-        self.committed()
-        got = self._x.lent(site)
-        if got is None:
-            return None
-        if type(got) is int:
-            self._fail(got, "the row lent to %s" % site, None)
-        kinds, acts, out = self._LC_KINDS, self._acts, []
-        for kind, _node, _vi, flags, a, key, value, label, icon in got:
-            kind = kinds[kind]
-            out.append([kind, key, value if kind == "tab" else None,
-                        label if label or kind != "button" else None, icon or None, flags,
-                        acts[a] if a >= 0 else None])
-        return out
-
-    def lent_place(self, cells, x0, w, h, fs, pad):
-        """The lent row's rule in C (`uit_lent_place`)."""
-        return self._made().lent_place(cells, x0, w, h, fs, pad)
 
     def _draw(self, node, model, row, x, y, w, h):
         """A canvas's draw in its rect, clipped to it, over its ground; a

@@ -394,7 +394,7 @@ Python's alone.
 | `switch(name, cases)` | one of several bodies by an enum's or a bool's value (`"_"` the rest) | |
 | `panes(dir)`, `pane(key)` | panes a person resizes by their dividers; one grows (no Lua) | `size=`, `start=`, `min=`, `grow=`; a pane's `tabs=`, `title=` |
 | `slot(name)` | a hole another process's window docks in (no Lua) | `min=` |
-| `tools(key)`, `lent(key)` | buttons a shown tab lends, and where they draw (no Lua) | `lend=` |
+| `tools(key)`, `lent(key)` | buttons a shown tab lends, and where they draw (no Lua); `lend="bar"` lends them to the shell's bar, after its title | `lend=` |
 
 **Words and pictures** (no stop, but where noted)
 

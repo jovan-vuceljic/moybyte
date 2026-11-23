@@ -28,7 +28,6 @@ apart from any drawing but the pasteboard's.
             baked beside it then.
 """
 
-import ui
 import ui_font as _ui_font
 import story_doc as D
 import story_render as R
@@ -639,7 +638,7 @@ class Editor:
         if down:
             if self._press is not None and _ticks_diff(now, self._press[0]) > LONG_MS \
                     and abs(px - self._press[1]) < 6 and abs(py - self._press[2]) < 6 \
-                    and ui.input_kind() == "touch":
+                    and self._touch():
                 self._press = None
                 self.drag = None
                 self.menu = "more"
@@ -660,6 +659,11 @@ class Editor:
         app._damage.all()
         return True
 
+    def _touch(self):
+        """Whether the input in use is a finger (the page's `@input`): a
+        handle's and a guide's reach are a finger's."""
+        return self.app.engine.input == "touch"
+
     def _hit(self, px, py, below=None):
         """The object under the screen point, topmost first (under `below`)."""
         objs = self._slide_doc()["objects"]
@@ -679,7 +683,7 @@ class Editor:
         o = self._obj()
         if o is None:
             return None
-        reach = (HANDLE_TOUCH if ui.input_kind() == "touch" else HANDLE_POINTER) // 2
+        reach = (HANDLE_TOUCH if self._touch() else HANDLE_POINTER) // 2
         for k, (hx, hy) in enumerate(self._handles(self._to_screen(self._bounds(o)))):
             if abs(px - hx) <= reach and abs(py - hy) <= reach:
                 return k
@@ -744,7 +748,7 @@ class Editor:
         if not self.snap:
             return x, y
         n, d = self.zoom
-        reach = (SNAP_TOUCH if ui.input_kind() == "touch" else SNAP_POINTER) * d // n
+        reach = (SNAP_TOUCH if self._touch() else SNAP_POINTER) * d // n
         xs = [(0, "the slide's edge"), (D.SW // 2, "the slide's middle"),
               (D.SW, "the slide's edge")]
         ys = [(0, "the slide's edge"), (D.SH // 2, "the slide's middle"),

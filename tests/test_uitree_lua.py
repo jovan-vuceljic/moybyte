@@ -554,6 +554,50 @@ def test_a_letter_key_and_the_confirm_role_fire_on_the_c_engine(tmp_path):
     assert acts == ["action save from key 's'", "action go from role confirm"], lines
 
 
+def test_the_hosts_back_steps_a_lua_apps_pages_through_the_engines_way_back(tmp_path):
+    """The engine offers the host's back a way back where the page has one
+    (`UIT_F_BACK`: a page under the top one, the back role) and answers a
+    taken one at the next frame (`e:backed()`): the pushed page goes, then
+    the back role's action runs, once each; with neither the host leaves."""
+    from runtime import host_app, ui_draw
+    from runtime.host import moy_log
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    pages = ('ui.action("go", "Go", function() ui.push("two") end, { keys = { "g" } })\n'
+             'ui.page("one", function() ui.label("one") end)\n'
+             'ui.page("two", function() ui.label("two") end)\n')
+    _cart(carts, "Plain", 'ui.app("Plain", { icon = "calc" })\n' + pages)
+    _cart(carts, "Role", 'ui.app("Role", { icon = "calc" })\n'
+          'ui.action("off", "Off", function() end, { keys = { "role:back" } })\n' + pages)
+    ws, drv, frame, open_cart = _console(carts)
+    seq = moy_log.next()
+    for name in ("Plain", "Role"):
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        face = ws.run.player.face
+        assert face.has_page() == (name == "Role"), (name, "the back role is a way back")
+        drv.type_char(ord("g"))
+        frame()
+        frame()
+        assert face.has_page(), (name, "the page under the pushed one")
+        lent = ui_draw.bar_lent(ui_draw.RUN_UI)
+        assert lent is None or not lent[3], "the way back is the engine's, no bar's"
+        assert face.back(), (name, "the pushed page is the app's to step out of")
+        frame()
+        frame()
+        assert face.has_page() == (name == "Role"), (name, "back on the first page")
+        assert face.back() == (name == "Role"), (name, "the back role's action, or the host's")
+        frame()
+        frame()
+        assert ws.run.player.cart_error is None, ws.run.player.cart_error
+        ws.spine.exit_to_caller()
+    lines = [r[4].split("[trace] ", 1)[1] for r in moy_log.read(seq, 8000) if "[trace] " in r[4]]
+    acts = [" ".join(l.split()[1:]) for l in lines if l.split()[1:2] == ["action"]]
+    assert acts == ["action go from key 'g'", "action go from key 'g'",
+                    "action off from role back on 'one'"], lines
+
+
 def test_a_typed_char_and_a_buttons_arg_reach_their_actions_on_the_c_engine(tmp_path):
     """An action's chars= is handed the character typed, as typed, and a
     button's arg= is handed to its action on a press, as uitree_c.py hands

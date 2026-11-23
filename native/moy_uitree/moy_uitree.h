@@ -70,6 +70,8 @@ enum {
     UIT_F_DESK = 1, UIT_F_ON_BAR = 2, UIT_F_BAND = 4, UIT_F_BARE = 8, UIT_F_TRACE = 16,
     UIT_F_UP = 32, UIT_F_DOWN = 64,
     UIT_F_GEN = 128,        // the host draws shift frames: the page carries its gen where it may
+    UIT_F_BACK = 1 << 16,   // the front takes the host's back through the toolkit: the frame
+                            // offers its way back there (moy_ui_api_way), `uit_run_backed` answers it
 };
 // The frame flags' bits 8..15: the pages on the stack (the band's Back).
 #define UIT_F_PAGES_SHIFT 8
@@ -289,6 +291,10 @@ int uit_frame(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int x, int y, i
 // bit the run's face word's (`flags`' own UIT_F_DESK is ignored). Answers as
 // uit_frame, or below 0 where no run is open.
 int uit_run_frame(uit_t *e, void *target, int flags);
+// Whether the host took the way back the run's frame drawn last offered
+// (UIT_F_BACK: a page under the top one, a dialog, a popover, the back
+// role): 1 once, then 0. The front steps back before its next frame.
+int uit_run_backed(void);
 // Whether the frame drawn last is what a frame now would draw, so a host
 // may leave its pixels and skip uit_frame: the same build, no state's
 // version and no draft moved, the same focus, no event, trace line or
