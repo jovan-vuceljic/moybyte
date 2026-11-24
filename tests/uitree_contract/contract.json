@@ -1143,32 +1143,87 @@
   "D03"
  ],
  "verbs": {
-  "app": 1,
-  "state": 1,
-  "enum": 1,
-  "record": 1,
-  "model": 1,
-  "row_of": 1,
-  "opt": 1,
-  "labels": 1,
-  "derive": 1,
-  "action": 1,
-  "hook": 1,
-  "page": 1,
-  "unit": 1,
-  "sys": 1,
-  "push": 1,
-  "pop": 1,
-  "focus": 1,
-  "after": 1,
-  "cancel": 1,
-  "post": 1,
-  "damage": 1,
-  "doc": 2,
-  "image": 2,
-  "load": 2,
-  "work": 2,
-  "pictures": 2
+  "app": {
+   "level": 1
+  },
+  "state": {
+   "level": 1
+  },
+  "enum": {
+   "level": 1
+  },
+  "record": {
+   "level": 1
+  },
+  "model": {
+   "level": 1
+  },
+  "row_of": {
+   "level": 1
+  },
+  "opt": {
+   "level": 1
+  },
+  "labels": {
+   "level": 1
+  },
+  "derive": {
+   "level": 1
+  },
+  "action": {
+   "level": 1
+  },
+  "hook": {
+   "level": 1
+  },
+  "page": {
+   "level": 1
+  },
+  "unit": {
+   "level": 1,
+   "designed": true
+  },
+  "sys": {
+   "level": 1
+  },
+  "push": {
+   "level": 1
+  },
+  "pop": {
+   "level": 1
+  },
+  "focus": {
+   "level": 1
+  },
+  "after": {
+   "level": 1
+  },
+  "cancel": {
+   "level": 1
+  },
+  "post": {
+   "level": 1
+  },
+  "damage": {
+   "level": 1,
+   "designed": true
+  },
+  "doc": {
+   "level": 2
+  },
+  "image": {
+   "level": 2
+  },
+  "load": {
+   "level": 2,
+   "designed": true
+  },
+  "work": {
+   "level": 2
+  },
+  "pictures": {
+   "level": 2
+  }
  },
  "queries": {
   "about": "what a handler or a canvas's draw asks the engine (a build that asks is B01): the Python reference's; Lua has no canvas and draws through moybyte.ui",

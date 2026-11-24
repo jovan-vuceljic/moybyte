@@ -123,7 +123,7 @@ def _uitree_moved(edit):
     ("an action prop", lambda d: d["action_props"].__setitem__("glow", {"type": "bool", "level": 2})),
     ("a role", lambda d: d["roles"].__setitem__("zoom", {"owner": "app", "level": 2})),
     ("a takes value", lambda d: d["takes"].__setitem__("drop", {"level": 2, "params": 1})),
-    ("a verb", lambda d: d["verbs"].__setitem__("glow", 2)),
+    ("a verb", lambda d: d["verbs"].__setitem__("glow", {"level": 2})),
     ("a retired name", lambda d: d["retired"]["props"].__setitem__("glow", "shine=")),
     ("a system value", lambda d: d["system_values"].__setitem__("dark", "bool")),
 ])
