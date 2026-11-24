@@ -57,6 +57,20 @@ CONFIG_HEAP_PLACE_FUNCTION_INTO_FLASH=y
 CONFIG_RINGBUF_PLACE_FUNCTIONS_INTO_FLASH=y
 CONFIG_LIBC_LOCKS_PLACE_IN_IRAM=n
 
+# TLS IN THE ONE HEAP. The kernel's client (native/moy_net/moy_net_port.c)
+# holds a connection's record buffers only while they are in use: the
+# in-buffer a server's records need is made for the handshake and shrunk
+# after it, the out-buffer is made per record, and the CA and config data go
+# once the chain verified (CONFIG_MBEDTLS_DYNAMIC_*). It keeps no peer
+# certificate after the handshake: its verify callback is the only reader.
+# The dynamic buffers exclude DTLS, which MicroPython's base turns on for its
+# ssl module and nothing in this image speaks.
+CONFIG_MBEDTLS_SSL_PROTO_DTLS=n
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_CA_CERT=y
+CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=n
+
 # --- Left out (the XIAO's reasons) -------------------------------------------
 CONFIG_LWIP_PPP_SUPPORT=n
 CONFIG_LWIP_PPP_PAP_SUPPORT=n
