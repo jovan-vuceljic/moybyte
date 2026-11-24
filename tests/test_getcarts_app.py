@@ -244,6 +244,23 @@ def test_the_desk_shows_the_focused_card_in_the_pane(tmp_path):
     assert host.box("check") is not None
 
 
+def test_a_needed_file_names_its_host_only_where_the_cart_does_not_say_it(tmp_path):
+    """A Needs fact from the host the From fact names is the file alone; one
+    from another host names that host too."""
+    repo = Repo("https://mit.example/carts", "Test carts")
+    for cid, name in (("dm", "Dungeon"), ("dx", "Dungeon X")):
+        repo.add(cid, name=name, runtime="lua", modules=(),
+                 external=[("game.wad", b"WAD!" * 3000, "pkg/game.wad")])
+    other = [c for c in repo.carts if c["id"] == "dx"][0]["external"][0]
+    other["archive"]["urls"] = ["https://files.example/game.tar.gz"]
+    repo.files["index.json"] = repo.index()
+    ws, app = _ws(tmp_path, MemNet(repo.routes()), [repo.url("index.json")])
+    _open(ws, app)
+    facts = {r["cart"]["id"]: dict(app._info(r, True)) for r in app.rows}
+    assert facts["dm"]["From"] == "mit.example" and facts["dm"]["Needs"] == "game.wad"
+    assert facts["dx"]["Needs"] == "game.wad from files.example"
+
+
 def test_enter_never_cancels_a_download_and_b_does(tmp_path):
     """A kid presses A at anything, and twice after Get: while the download
     runs no key but B (Esc) reaches Cancel, and the hint strip says so."""

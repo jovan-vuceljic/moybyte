@@ -1809,9 +1809,12 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         else:
             out.append(("Size", "%s here%s%s to fetch" % (_mb(p["store_bytes"]), dot,
                                                           _mb(p["download_bytes"]))))
-        out.append(("From", _host_of(c.get("index") or "")))
+        home = _host_of(c.get("index") or "")
+        out.append(("From", home))
         for e in p["external"]:
-            out.append(("Needs", "%s from %s" % (e["path"], _ext_host(c, e))))
+            # a file from the cart's own host names no host: the From row says it
+            there = _ext_host(c, e)
+            out.append(("Needs", e["path"] if there == home else "%s from %s" % (e["path"], there)))
         if p["slow"]:
             out.append(("Plays slowly on this console", ""))
         return out
