@@ -15,8 +15,9 @@
 // (native/moy_store/moy_fs.h's moy_fs_publish), as `settings set` writes.
 //
 // THE TEXT is a gap buffer from the host table's alloc (PSRAM on a board),
-// at most EDIT_MAX bytes; a file that does not exist opens empty and is made
-// at the first save.
+// at most EDIT_MAX bytes, the file read straight into its tail by the store's
+// crash-safe read (moy_fs_read_into), so an open holds one copy of it; a file
+// that does not exist opens empty and is made at the first save.
 
 #include <ctype.h>
 #include <errno.h>
@@ -231,7 +232,7 @@ typedef struct {
     const char *path;
     const char *text;
     size_t n;
-    moy_buf_t *b;
+    moy_fs_sink_t *k;
     int is_dir, exists, rc;
 } ed_io_t;
 
@@ -245,9 +246,42 @@ static void ed_load_here(void *arg) {
     moy_vol_stat_t vs;
     io->is_dir = moy_fs_stat(io->path, &vs) == 0 && vs.is_dir;
     if (!io->is_dir) {
-        io->rc = moy_fs_read(io->path, NULL, io->b);
+        io->rc = moy_fs_read_into(io->path, io->k);
         io->exists = io->rc == 0 || moy_fs_exists(io->path);
     }
+}
+
+// The read's sink: the file straight into the tail of a gap buffer of its
+// size and GROW, the one copy of it the open makes.
+typedef struct {
+    moy_fs_sink_t k;
+    moy_sh_app_t *a;
+    char *buf;
+    size_t cap, n, got;
+} ed_sink_t;
+
+static int sink_begin(moy_fs_sink_t *k, size_t n) {
+    ed_sink_t *s = (ed_sink_t *)k;
+    moy_sh_app_free(s->a, s->buf);
+    s->buf = NULL;
+    if (n > EDIT_MAX) {
+        return EFBIG;
+    }
+    s->cap = n + GROW;
+    s->n = n;
+    s->got = 0;
+    s->buf = moy_sh_app_alloc(s->a, s->cap);
+    return s->buf != NULL ? 0 : ENOMEM;
+}
+
+static char *sink_room(moy_fs_sink_t *k, size_t *n) {
+    ed_sink_t *s = (ed_sink_t *)k;
+    *n = s->n - s->got;
+    return *n ? s->buf + s->cap - s->n + s->got : NULL;
+}
+
+static void sink_took(moy_fs_sink_t *k, size_t n) {
+    ((ed_sink_t *)k)->got += n;
 }
 
 // The text into `path` (the file's own, or vi's `:w FILE`): 0 once saved.
@@ -297,45 +331,41 @@ static int say_err(moy_sh_t *s, const char *name, const char *why) {
 static const char *ed_load(moy_sh_app_t *a, ed_t *e, const char *name) {
     moy_sh_t *s = moy_sh_app_session(a);
     char path[PATH_CAP] = "";
-    moy_buf_t b = {0};
+    ed_sink_t k = { { sink_begin, sink_room, sink_took }, a, NULL, 0, 0, 0 };
     int rc = ENOENT;
     if (name != NULL) {
         int r = moy_sh_resolve(s, name, path, sizeof path);
         if (r != 0) {
             return r == ENOENT ? "not a file in the store" : strerror(r);
         }
-        ed_io_t io = { .path = path, .b = &b };
+        ed_io_t io = { .path = path, .k = &k.k };
         moy_sh_hop(s, ed_load_here, &io);
         if (io.is_dir) {
             return "is a folder";
         }
         rc = io.rc;
+        if (rc != 0) {
+            moy_sh_app_free(a, k.buf);
+            k.buf = NULL;
+        }
         if (rc != 0 && io.exists) {
-            return rc > 0 ? strerror(rc) : "cannot be read";
+            return rc == EFBIG ? "is too big to edit" : rc == ENOMEM ? "out of memory"
+                 : rc > 0 ? strerror(rc) : "cannot be read";
         }
     }
-    size_t n = rc == 0 ? b.n : 0;
-    if (n > EDIT_MAX) {
-        moy_buf_free(&b);
-        return "is too big to edit";
-    }
-    size_t cap = n + GROW;
-    char *buf = moy_sh_app_alloc(a, cap);
-    if (buf == NULL) {
-        moy_buf_free(&b);
+    if (k.buf == NULL && sink_begin(&k.k, 0) != 0) {
         return "out of memory";
     }
-    if (n) {
-        memcpy(buf + cap - n, b.p, n);
+    if (k.got < k.n) {                  // shorter than it said: the text ends the buffer
+        memmove(k.buf + k.cap - k.got, k.buf + k.cap - k.n, k.got);
     }
-    moy_buf_free(&b);
     if (e->buf != NULL) {
         moy_sh_app_free(a, e->buf);
     }
-    e->buf = buf;
-    e->cap = cap;
+    e->buf = k.buf;
+    e->cap = k.cap;
     e->g0 = 0;
-    e->g1 = cap - n;
+    e->g1 = k.cap - k.got;
     e->want = -1;
     e->top = 0;
     e->changed = 0;

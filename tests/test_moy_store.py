@@ -92,6 +92,7 @@ def _lib():
             ("moy_fs_publish", [c, c, sz], ctypes.c_int),
             ("moy_fs_read", [c, c, ctypes.POINTER(_Buf)], ctypes.c_int),
             ("moy_fs_read_stamped", [c, ctypes.POINTER(_Buf)], ctypes.c_int),
+            ("moy_fs_read_into", [c, ctypes.POINTER(_Sink)], ctypes.c_int),
             ("moy_fs_read_file", [c, sz, ctypes.POINTER(_Buf)], ctypes.c_int),
             ("moy_fs_write_bytes", [c, c, sz], ctypes.c_int),
             ("moy_fs_claim", [c, c, u32, u32], ctypes.c_int),
@@ -199,6 +200,168 @@ def test_the_c_store_answers_the_story_on_posix(tmp_path):
                  ("foreign", True, False), ("claim", True, True, False),
                  ("claim wrong stamp", False), ("legacy", "old text\n"), ("empty", None),
                  ("torn bak", None), ("missing", True, True), ("never", 2)]
+
+
+# -- the read into the caller's memory -----------------------------------------------
+
+
+class _Sink(ctypes.Structure):
+    pass
+
+
+_BEGIN = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.POINTER(_Sink), ctypes.c_size_t)
+_ROOM = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(_Sink), ctypes.POINTER(ctypes.c_size_t))
+_TOOK = ctypes.CFUNCTYPE(None, ctypes.POINTER(_Sink), ctypes.c_size_t)
+_Sink._fields_ = [("begin", _BEGIN), ("room", _ROOM), ("took", _TOOK)]
+
+
+def _read_into(lib, path, piece=7, refuse_begin=0, room_for=None):
+    """moy_fs_read_into with a sink that lends `piece` bytes at a time (a
+    piece edge inside every line, a character, a stamp), refusing the begin
+    with `refuse_begin` or room past `room_for` bytes: (rc, bytes), begins."""
+    got, begins = bytearray(), []
+    scratch = ctypes.create_string_buffer(piece)
+
+    def begin(_k, n):
+        begins.append(n)
+        got.clear()
+        return refuse_begin
+
+    def room(_k, n):
+        if room_for is not None and len(got) >= room_for:
+            return None
+        n[0] = piece
+        return ctypes.addressof(scratch)
+
+    def took(_k, n):
+        got.extend(scratch.raw[:n])
+
+    sink = _Sink(_BEGIN(begin), _ROOM(room), _TOOK(took))
+    rc = lib.moy_fs_read_into(path.encode(), ctypes.byref(sink))
+    return (rc, bytes(got) if rc == 0 else None), begins
+
+
+def _read_whole(lib, path):
+    b = _Buf()
+    rc = lib.moy_fs_read(path.encode(), None, ctypes.byref(b))
+    if rc:
+        return rc, None
+    try:
+        return 0, ctypes.string_at(b.p, b.n)
+    finally:
+        lib.moy_buf_free(ctypes.byref(b))
+
+
+V1, V2 = "print('é')\n" * 40, "draw()\n" * 90
+BIG = "".join("line %d of a file longer than a piece\n" % i for i in range(160))
+MULTI = "# café — über\nprint('✓')\n" * 30
+
+
+def _put(path, data):
+    with open(path, "wb") as f:
+        f.write(data.encode() if isinstance(data, str) else data)
+
+
+def _pub(lib, path, text):
+    data = text.encode()
+    assert lib.moy_fs_publish(path.encode(), data, len(data)) == 0
+
+
+def _bak(text):
+    return moy_fs._stamp_line(text) + text
+
+
+# Each state a cut or a foreign write leaves, built in folder `d` for the file
+# `p`: (whether `d` is a publish root, the build).
+READ_STATES = {
+    "published": (True, lambda lib, p: _pub(lib, p, V1)),
+    "published, no root": (False, lambda lib, p: _pub(lib, p, V1)),
+    "torn prefix": (True, lambda lib, p: (_pub(lib, p, V1), _pub(lib, p, V2), _put(p, V2[:100]))),
+    "torn at a piece's edge": (True, lambda lib, p: (_pub(lib, p, V1), _pub(lib, p, BIG),
+                                                    _put(p, BIG[:128]))),
+    "torn past a piece's edge": (True, lambda lib, p: (_pub(lib, p, V1), _pub(lib, p, BIG),
+                                                      _put(p, BIG[:2049]))),
+    "torn to nothing": (True, lambda lib, p: (_pub(lib, p, V1), _pub(lib, p, V2), _put(p, ""))),
+    "torn prefix, no root": (False, lambda lib, p: (_pub(lib, p, V2), _put(p, V2[:333]))),
+    "torn inside a character": (True, lambda lib, p: (_pub(lib, p, MULTI),
+                                                     _put(p, MULTI.encode()[:5]))),
+    "foreign, same length": (True, lambda lib, p: (_pub(lib, p, V2), _put(p, "x" * len(V2)))),
+    "foreign, longer": (False, lambda lib, p: (_pub(lib, p, V2), _put(p, V2 + "more\n"))),
+    "foreign, a prefix and then not": (True, lambda lib, p: (_pub(lib, p, BIG),
+                                                            _put(p, BIG[:300] + "Z"))),
+    "torn backup": (True, lambda lib, p: (_pub(lib, p, V1), _pub(lib, p, V2), _put(p, V1),
+                                          _put(p + ".bak", _bak(V2)[:-6]))),
+    "crash between the writes": (False, lambda lib, p: (_pub(lib, p, V1),
+                                                        _put(p + ".bak", _bak(V2)))),
+    "missing": (True, lambda lib, p: (_pub(lib, p, V1), os.remove(p))),
+    "missing, no root": (False, lambda lib, p: (_pub(lib, p, BIG), os.remove(p))),
+    "missing, torn backup": (False, lambda lib, p: (_pub(lib, p, V1), os.remove(p),
+                                                    _put(p + ".bak", _bak(V1)[:20]))),
+    "missing, legacy backup": (False, lambda lib, p: _put(p + ".bak", "old text\n")),
+    "missing, a line like a stamp": (False, lambda lib, p: _put(p + ".bak", "#moyfs1 nope\n" + V1)),
+    "missing, empty backup": (False, lambda lib, p: _put(p + ".bak", "")),
+    "never": (False, lambda lib, p: None),
+    "legacy backup beside the file": (False, lambda lib, p: (_put(p, V2), _put(p + ".bak", V1))),
+    "empty payload": (True, lambda lib, p: _pub(lib, p, "")),
+    "empty payload, missing": (False, lambda lib, p: (_pub(lib, p, ""), os.remove(p))),
+}
+
+
+def _state(lib, d, name):
+    rooted, build = READ_STATES[name]
+    os.makedirs(d)
+    lib.moy_fs_roots_clear()
+    if rooted:
+        lib.moy_fs_root(d.encode())
+    p = os.path.join(d, "main.py")
+    build(lib, p)
+    lib.moy_fs_roots_clear()                # a boot: the marker read from the medium
+    if rooted:
+        lib.moy_fs_root(d.encode())
+    return p
+
+
+def _tree(d):
+    out = {}
+    for name in sorted(os.listdir(d)):
+        with open(os.path.join(d, name), "rb") as f:
+            out[name] = f.read().replace(d.encode(), b"@")
+    return out
+
+
+@pytest.mark.parametrize("name", sorted(READ_STATES))
+def test_the_read_into_answers_as_the_whole_read_does(tmp_path, name):
+    """moy_fs_read_into is moy_fs_read without the store's copy: on every
+    state the story names it answers the same bytes or error, heals the same
+    way and leaves the same files, and so does the read after it."""
+    lib = _lib()
+    seen = {}
+    for kind in ("whole", "into"):
+        p = _state(lib, str(tmp_path / kind), name)
+        if kind == "whole":
+            first, second = _read_whole(lib, p), _read_whole(lib, p)
+        else:
+            (first, begins), (second, _b) = _read_into(lib, p), _read_into(lib, p)
+            assert len(begins) <= 2
+        seen[kind] = (first, second, _tree(str(tmp_path / kind)))
+    lib.moy_fs_roots_clear()
+    assert lib.moy_store_host_live() == 0
+    assert seen["into"] == seen["whole"]
+
+
+def test_a_refusing_sink_is_answered_and_heals_nothing(tmp_path):
+    lib = _lib()
+    p = _state(lib, str(tmp_path / "d"), "torn prefix")
+    (got, begins) = _read_into(lib, p, refuse_begin=27)
+    assert got == (27, None) and begins == [len(V2[:100])]
+    (got, _b) = _read_into(lib, p, room_for=10)
+    assert got == (12, None)
+    with open(p) as f:
+        assert f.read() == V2[:100]         # neither read took the file for unreadable
+    (got, begins) = _read_into(lib, p)
+    assert got == (0, V2.encode()) and begins == [100, len(V2)]
+    lib.moy_fs_roots_clear()
+    assert lib.moy_store_host_live() == 0
 
 
 # -- the desktop MicroPython over the native module ----------------------------------
