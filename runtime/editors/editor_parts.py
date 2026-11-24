@@ -20,6 +20,21 @@ running game as the tab's is."""
 import editor_sound as Sound
 import blocks as B
 import view_host as _V
+
+
+def _lines_of(text, w, fs):
+    """`text` in the lines it takes `w` wide in the UI face at `fs`,
+    broken at its words (a word wider than `w` alone on its line)."""
+    out, cur = [], ""
+    for word in text.split(" "):
+        t = word if not cur else cur + " " + word
+        if cur and _V.text_w(t, fs) > w:
+            out.append(cur)
+            cur = word
+        else:
+            cur = t
+    out.append(cur)
+    return out
 from view_host import PageHost, cursor
 
 _LIST_ROW = 28              # a list's row on the desk (style.json's stack_desk)
@@ -270,6 +285,8 @@ class PartHost(PageHost):
         self._slots_at = None           # the slots as drawn: (x0, y0, cell w, cell h, gap, first, n)
         self._map_at = None             # the map as drawn: (x0, y0, cols, rows, tile px)
         self._items = ()                # the palette's blocks: (item, label)
+        self._names = [None, 0, 0, ()]  # their names in lines: for the items, width, scale
+        self._item_w = 0                # the width a palette row last drew
         self._cats_at = None            # the categories as drawn: (x0, y0, cell w, row h)
         self._snd_w = 0                 # a sounds row's width, as drawn
 
@@ -311,14 +328,34 @@ class PartHost(PageHost):
         d = self.desk
         bu, be = _blocks(d)
         if be is None:
-            return (False, "", (), (), (), "")
+            return (False, "", 0, False, self._row_h(), 0, "")
         cat = d.part_state.get("block cat", "actors")
         items = self._items = palette_items(be, cat)
         note = ("Every script starts with one: they head the Blocks pane" if not items
                 else "This cart is code now: its blocks only read" if bu.blk_graduated else "")
         rh = self._row_h()
         fold = self._cats_fold(self._rect[2] if self._rect is not None else 0)
-        return (True, cat, 6 * rh + 12 * d._unit(), fold, rh, 0 if note else len(items), note)
+        u = d._unit()
+        w = self._item_w or ((self._rect[2] if self._rect is not None else 0) - 16 * u)
+        lines = max([len(n) for n in self._names_in(w - 26 * u)] or [1])
+        ih = rh if lines < 2 else max(rh, lines * self._line_h() + 8 * u)
+        return (True, cat, 6 * rh + 12 * u, fold, ih, 0 if note else len(items), note)
+
+    def _line_h(self):
+        """A wrapped palette name's line pitch: the UI face's ascent at the
+        scale and a gap."""
+        return _V.ui_line() * self.ws.look.effective_font_scale() + 2 * self.desk._unit()
+
+    def _names_in(self, w):
+        """The palette's names, each in the lines it takes `w` wide in the
+        UI face: a name too long for one row wraps at its words. Kept while
+        the names, `w` and the scale stand."""
+        fs = self.ws.look.effective_font_scale()
+        k = self._names
+        if k[0] is not self._items or k[1] != w or k[2] != fs:
+            k[0], k[1], k[2] = self._items, w, fs
+            k[3] = [_lines_of(label, w, fs) for _i, label in self._items]
+        return k[3]
 
     def _cats_fold(self, w):
         """Whether the categories fold into a cycle of them on a page `w`
@@ -546,7 +583,14 @@ class PartHost(PageHost):
         cat = self.desk.part_state.get("block cat", "actors")
         ink = self.ws.look.content_colors().get("block_" + cat, th["border"])
         cv.rect(x + 8 * u, y + 4 * u, 3 * u, h - 8 * u, ink)
-        _V.label(cv, (x + 18 * u, y, w - 26 * u, h), self._items[int(k)][1], th["ink"])
+        if w != self._item_w:
+            self._item_w = w                # the next sync's rows take its lines
+            self.ws.mark_dirty()
+        lines = self._names_in(w - 26 * u)[int(k)]
+        lh = self._line_h()
+        ly = y + (h - len(lines) * lh) // 2
+        for i in range(len(lines)):
+            _V.label(cv, (x + 18 * u, ly + i * lh, w - 26 * u, lh), lines[i], th["ink"])
 
     def draw_cats(self, cv, x, y, w, h):
         """The eleven categories in two columns, each by its colour, the
