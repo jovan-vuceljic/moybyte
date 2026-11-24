@@ -6,9 +6,12 @@
 #   /console/  My consoles and the pack store (tools/os_site.py,
 #              docs/web_console_online_2026-11.md §4, §8): every pack the
 #              firmware-latest release names and firmware-beta's of the last
-#              30 days, which the boards' loaders fetch. One store serves
-#              both channels; it holds no console, so it shares the origin
-#              with the players without sharing their storage.
+#              30 days, which the boards' loaders fetch, and both releases'
+#              carts-<board>.json under releases/<tag>/, which a page on a
+#              board's origin reads its console's release from (a release
+#              download sends no CORS header). One store serves both
+#              channels; it holds no console, so it shares the origin with
+#              the players without sharing their storage.
 #
 # Pages publishes the WHOLE site per deploy, so every run builds both trees,
 # whichever branch triggered it: master checked out at the workspace root, dev
