@@ -847,12 +847,25 @@ static uint16_t up(int k)
     return k < 0 ? UIT_NONE : (uint16_t)k;
 }
 
+static int check_fail(uit_t *e, const char *code, char *out);
+
+void uit_set_app(uit_t *e, int app)
+{
+    e->app = (uint8_t)(app != 0);
+}
+
 int uit_node(uit_t *e, int kind, const char *key, int parent)
 {
     if (kind < UIT_PAGE || kind >= UIT_KINDS)
         return uit_fail(e, UIT_E_KIND, UIT_MSG("no kind %d", "%d"), kind);
     if ((parent < 0) != (kind == UIT_PAGE) || parent >= e->nnodes)
         return uit_fail(e, UIT_E_ARG, UIT_MSG("node %s: parent %d", "node %s %d"), key, parent);
+    if (e->app) {
+        char out[200];
+        int r = check_fail(e, uit_check_prop(uit_kind_names[kind], "", UIT_VC_APP, NULL, out, sizeof out), out);
+        if (r)
+            return r;
+    }
     if (UIT_GROW(e, nodes, nnodes, cnodes))
         return UIT_E_NOMEM;
     int k = pool_puts(e, key);
@@ -1048,11 +1061,26 @@ static int pane_prop(uit_t *e, int node, const char *name, const char *src, cons
     return add_prop(e, node, name, src, repr, PK_LIT, -1);
 }
 
+// The check's refusal (`uit_check_prop`'s `out`) as the store's error: 0 where it took the name, or
+// where the kind is the store's own (switch, case, row, panel), which the check has no row for.
+static int check_fail(uit_t *e, const char *code, char *out)
+{
+    if (!code || !strncmp(out, "no kind", 7))
+        return 0;
+    char *what = out, *expected = strchr(what, '\x1f');
+    *expected++ = 0;
+    char *fix = strchr(expected, '\x1f');
+    *fix++ = 0;
+    fix[strcspn(fix, "\x1f")] = 0;
+    return uit_check_fail(e, code, UIT_MSG("%s; fix: %s%s%s%s", "%s%.0s%.0s%.0s%.0s"), what, fix,
+                          expected[0] ? " (expected " : "", expected, expected[0] ? ")" : "");
+}
+
 // The API's check at lowering, so a front that carries no check (a compiled app's) is held to the
-// contract's table as the others are: a prop name no kind takes, a retired one, a word not the prop's,
-// one the spec designs and no engine builds. What a kind does not take by name in the API is the
-// store's own: a node's binding (`bind`, `field`) and the head of the kinds whose head the store
-// keeps by name (HEADS), which the API gives by position.
+// contract's table as the others are: a prop name no kind takes, a retired one, a word not the
+// prop's, and in an app's store (`uit_set_app`) the shell's own. What a kind does not take by name
+// in the API is the store's own: a node's binding (`bind`, `field`) and the head of the kinds whose
+// head the store keeps by name (HEADS), which the API gives by position.
 static int api_check(uit_t *e, int kind, const char *name, const char *src)
 {
     static const struct {
@@ -1071,16 +1099,7 @@ static int api_check(uit_t *e, int kind, const char *name, const char *src)
                 return 0;
     }
     char out[600];
-    const char *code = uit_check_prop(kn, name, UIT_VC_ANY, src, out, sizeof out);
-    if (!code || !strncmp(out, "no kind", 7))
-        return 0;           // a kind of the store's own (switch, case, row, panel) checks nothing here
-    char *what = out, *expected = strchr(what, '\x1f');
-    *expected++ = 0;
-    char *fix = strchr(expected, '\x1f');
-    *fix++ = 0;
-    fix[strcspn(fix, "\x1f")] = 0;
-    return uit_check_fail(e, code, UIT_MSG("%s; fix: %s%s%s%s", "%s%.0s%.0s%.0s%.0s"), what, fix,
-                          expected[0] ? " (expected " : "", expected, expected[0] ? ")" : "");
+    return check_fail(e, uit_check_prop(kn, name, e->app ? UIT_VC_APP : UIT_VC_ANY, src, out, sizeof out), out);
 }
 
 int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *repr)

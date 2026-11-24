@@ -3,7 +3,7 @@
 grid of cards the engine lays out and moves, the arrows stepping the
 current card across it, Enter and a tap on a card firing its action, cur=
 following the current card. A Lua app's shelf, icons and column, the same
-engine's, step and play; a column's tiles wear their cards' fill=."""
+engine's, step and play; a column and a card's fill= are the shell's own (N09)."""
 
 import json
 
@@ -11,23 +11,23 @@ import pytest
 
 _LUA_CELLS = """
 ui.app("Lua Cells", { icon = "games" })
-local s = ui.state { games = ui.model { key = "name", name = "", sub = "", fill = "" },
+local s = ui.state { games = ui.model { key = "name", name = "", sub = "" },
                      pick = ui.row_of("games") }
 ui.hook("opened", function()
   local rows = {}
-  for i = 0, 11 do rows[#rows + 1] = { name = "game " .. i, sub = "Game\\tBuilt in", fill = "%s" } end
+  for i = 0, 11 do rows[#rows + 1] = { name = "game " .. i, sub = "Game\\tBuilt in" } end
   s.games:set(rows)
 end)
 ui.action("play", "Play", function(row) moybyte.log(6, "played " .. row.name) end, { takes = "row" })
 ui.page("cells", function()
   ui.cards("games", { look = "%s", cur = "pick" }, function()
-    ui.card("play", { label = "{.name}", sub = "{.sub}", fill = "{.fill}" })
+    ui.card("play", { label = "{.name}", sub = "{.sub}" })
   end)
 end, { title = "Lua Cells" })
 """
 
 
-def _lua_cells(tmp_path, look, fill=""):
+def _lua_cells(tmp_path, look):
     """A workstation with a Lua app whose page is a `look` grid of twelve
     cards, open and drawn: its driver and a frame function answering the
     canvas's bytes."""
@@ -40,7 +40,7 @@ def _lua_cells(tmp_path, look, fill=""):
         "format": "moy-1", "title": "Lua Cells", "runtime": "lua", "main": "main.lua",
         "extensions": ["moybyte.uitree"],
         "moybyte": {"type": "app", "permissions": []}}))
-    (cart / "main.lua").write_text(_LUA_CELLS % (fill, look))
+    (cart / "main.lua").write_text(_LUA_CELLS % look)
     ws = host_app.build_workstation(str(carts))
     ws.pointer.visible = False
     drv = host_app.ConsoleDriver(ws)
@@ -61,7 +61,7 @@ def _played(seq):
     return [r[4] for r in moy_log.read(seq, 400) if "played " in r[4]]
 
 
-@pytest.mark.parametrize("look,key", [("shelf", "down"), ("icons", "right"), ("column", "down")])
+@pytest.mark.parametrize("look,key", [("shelf", "down"), ("icons", "right")])
 def test_a_lua_grid_steps_its_current_card_and_enter_plays_it(tmp_path, look, key):
     """The Lua front takes the engine's shelf and icons as they are: the
     arrow along a column of the shelf (along a row of the icons) moves the
@@ -80,7 +80,7 @@ def test_a_lua_grid_steps_its_current_card_and_enter_plays_it(tmp_path, look, ke
     assert played and played[-1].endswith("played game 1"), played
 
 
-@pytest.mark.parametrize("look", ["shelf", "icons", "column"])
+@pytest.mark.parametrize("look", ["shelf", "icons"])
 def test_a_tap_on_a_lua_grids_card_plays_it(tmp_path, look):
     """A tap on a card (its press and its release on it) makes it current
     and plays it: down the page's left edge, the first card a tap lands on
@@ -98,16 +98,9 @@ def test_a_tap_on_a_lua_grids_card_plays_it(tmp_path, look):
     assert played and played[0].endswith("played game 0"), played
 
 
-def test_a_lua_columns_tiles_wear_their_cards_fill(tmp_path):
-    """A column's card fill= colours its tile: the same column with each
-    card's fill "#FF0000" draws red where the tile's own fill drew none."""
-    _ws, _drv, frame = _lua_cells(tmp_path / "own", "column")
-    own = frame()
-    _ws, _drv, frame = _lua_cells(tmp_path / "red", "column", fill="#FF0000")
-    red = frame()
-    assert own != red
-
-    def reds(buf):
-        return sum(1 for i in range(0, len(buf) - 1, 2)
-                   if buf[i] | buf[i + 1] << 8 in (0xF800, 0x00F8))
-    assert reds(red) > reds(own) + 12 * 100, (reds(own), reds(red))
+def test_a_lua_app_is_refused_the_column_look(tmp_path):
+    """The column (the desk's tiles) is the shell's own look: a Lua app that
+    names it stops at its load with N09."""
+    ws, _drv, _frame = _lua_cells(tmp_path, "column")
+    err = str(ws.run.player.cart_error or "")
+    assert "N09" in err, err

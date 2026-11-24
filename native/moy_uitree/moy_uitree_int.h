@@ -419,6 +419,7 @@ struct uit {
     int nvr, cvr;
     // the placed layout: each node's rect as the last pass placed it (w -1: not placed)
     uint8_t placed, placing;
+    uint8_t app;                // an app's store: the shell's own names are refused (`uit_set_app`)
     int16_t ground[4];
     char band_extra[48];        // the items its host adds to the band before Back, NUL-separated
     uint8_t nband_extra;

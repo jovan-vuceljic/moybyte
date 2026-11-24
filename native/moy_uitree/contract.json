@@ -421,7 +421,7 @@
     "lua": "as Python",
     "c": "as Python"
    },
-   "as_run": "O03 for `disabled=`, N01 for `current=` on a tool"
+   "as_run": "O03 for `disabled=`"
   },
   "N06": {
    "stage": [
@@ -459,6 +459,18 @@
     "c": "as Python"
    },
    "as_run": "F01 (units run)"
+  },
+  "N09": {
+   "stage": [
+    "build"
+   ],
+   "meaning": "an app names a kind, prop, word or app field the contract marks the shell's (`slot`, `status`, `lent`, `tools lend=`, `card fill=`, `cards look=\"column\"`, `ui.app slots=`)",
+   "fix": {
+    "python": "an app's own: `ui.label` for a status line, `cards look=\"icons\"`",
+    "lua": "as Python",
+    "c": "as Python"
+   },
+   "as_run": ""
   },
   "O01": {
    "stage": [
@@ -1175,7 +1187,8 @@
    "props": {
     "lend": {
      "type": "name",
-     "level": 2
+     "level": 2,
+     "owner": "shell"
     }
    }
   },
@@ -1183,6 +1196,7 @@
    "head": "name",
    "level": 2,
    "section": "7.1",
+   "owner": "shell",
    "props": {}
   },
   "label": {
@@ -1265,6 +1279,7 @@
    "head": "tpl",
    "level": 2,
    "section": "7.2",
+   "owner": "shell",
    "props": {}
   },
   "note": {
@@ -1928,7 +1943,10 @@
     },
     "look": {
      "type": "word:carousel,shelf,icons,column",
-     "level": 2
+     "level": 2,
+     "shell_words": [
+      "column"
+     ]
     },
     "tone": {
      "type": "tpl",
@@ -1975,7 +1993,8 @@
     },
     "fill": {
      "type": "tpl",
-     "level": 2
+     "level": 2,
+     "owner": "shell"
     }
    }
   },
@@ -2252,6 +2271,7 @@
    "head": "name",
    "level": 2,
    "section": "7.6",
+   "owner": "shell",
    "props": {
     "min": {
      "type": "list",
@@ -2499,12 +2519,25 @@
   }
  },
  "app_fields": {
-  "icon": 1,
-  "size": 1,
-  "min": 1,
-  "back": 1,
-  "glass": 2,
-  "slots": 2
+  "icon": {
+   "level": 1
+  },
+  "size": {
+   "level": 1
+  },
+  "min": {
+   "level": 1
+  },
+  "back": {
+   "level": 1
+  },
+  "glass": {
+   "level": 2
+  },
+  "slots": {
+   "level": 2,
+   "owner": "shell"
+  }
  },
  "system_values": {
   "desk": "bool",

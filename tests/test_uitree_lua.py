@@ -822,6 +822,14 @@ CASES = {
     "H03": (APP + 'ui.hook("tick", function() end, { hint = "Tick" })' + PAGE, 2, None),
     "I02": (APP + 'ui.action("go", "Go", function() end, { icon = "{n}" })' + PAGE, 2, None),
     "K01": (APP + 'ui.action("go", "Go", function() end, { keys = { "role:home" } })' + PAGE, 2, None),
+    "N09": ('ui.app("T", { icon = "calc", slots = { "run" } })' + PAGE, 1, None),
+    "N09 column": (APP + 'local s = ui.state { items = ui.model { key = "id", id = "" } }\n'
+                   'ui.page("p", function() ui.cards("items", { look = "column" }, function()\n'
+                   '  ui.card("pick", { label = "{.id}" }) end) end)\n', 3, None),
+    "N09 fill": (APP + 'local s = ui.state { items = ui.model { key = "id", id = "" } }\n'
+                 'ui.action("pick", "Pick", function(row) end, { takes = "row" })\n'
+                 'ui.page("p", function() ui.cards("items", {}, function()\n'
+                 '  ui.card("pick", { label = "{.id}", fill = "{.id}" }) end) end)\n', 5, None),
     "K02": (APP + 'ui.action("go", "Go", function() end, { keys = { "s" } })\n'
             'ui.action("stop", "Stop", function() end, { keys = { "s" } })' + PAGE, 3, None),
     "K03": (APP + 'ui.action("go", "Go", function() end, { keys = { "alt+x" } })' + PAGE, 2, None),

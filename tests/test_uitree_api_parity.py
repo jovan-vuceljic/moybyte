@@ -251,3 +251,67 @@ def test_compiled_rows_refuse_what_no_engine_draws_on_the_kind(kind, name, src, 
         assert says in r.read("error", cap=400)[1], r.read("error", cap=400)[1]
     finally:
         r.close()
+
+
+# the shell's own names (the contract's `"owner": "shell"` and `shell_words`): an app is refused
+# each, N09, on every front, and the shell's pages keep them
+SHELL_PY = ("import uitree as ui\n"
+            "s = ui.state(m=ui.model(key=\"k\", k=\"\"), n=0)\n"
+            "ui.action(\"open\", \"Open\", lambda row: None, takes=\"row\")\n"
+            "def build():\n"
+            "    with ui.page(\"P\"):\n"
+            "        %s\n")
+
+
+@pytest.mark.parametrize("node", [
+    'ui.status("{n}")',
+    'ui.slot("run")',
+    'ui.tools("bar", lend="bar")',
+    'ui.cards("m", look="column")',
+])
+def test_a_python_cart_is_refused_the_shell_s_own_and_the_shell_keeps_it(node, tmp_path, monkeypatch):
+    import uitree_check
+    src = SHELL_PY % node
+    (tmp_path / "shellish.py").write_text(src)
+    got = [(e.code, e.where[1]) for e in uitree_check.check(str(tmp_path / "shellish.py")).errors]
+    assert ("N09", 6) in got, got
+    monkeypatch.syspath_prepend(str(tmp_path))
+    kept = [e.code for e in uitree_check.check("shellish").errors]   # a module of the shell's
+    assert "N09" not in kept, kept
+
+
+def test_a_python_cart_is_refused_a_shell_prop_and_app_field(tmp_path):
+    import uitree_check
+    (tmp_path / "fill.py").write_text(
+        SHELL_PY.replace("def build", "ui.app(\"A\", slots=[\"run\"])\ndef build") %
+        'with ui.cards("m"):\n            ui.card("open", label="{.k}", fill="{.k}")')
+    got = [(e.code, e.where[1]) for e in uitree_check.check(str(tmp_path / "fill.py")).errors]
+    assert ("N09", 4) in got and ("N09", 8) in got, got
+
+
+@pytest.mark.parametrize("kind, name, src", [
+    ("status", None, None),
+    ("slot", None, None),
+    ("lent", None, None),
+    ("cards", "look", "column"),
+    ("card", "fill", "{.k}"),
+    ("tools", "lend", "bar"),
+])
+def test_compiled_rows_refuse_the_shell_s_own(kind, name, src):
+    """A compiled app's store is an app's: the engine refuses a shell kind at
+    its node and a shell prop or word at its prop, as the Lua and Python
+    fronts do at the call."""
+    from test_uitree_wasm import Rows, PAGE, E_CHECK
+    import uitree_c
+    r = Rows()
+    try:
+        r.build("1 page")
+        page = r.node(PAGE, "page", -1)
+        n = r.node(uitree_c._KINDS[kind], "n", page)
+        if name is None:
+            assert n == E_CHECK
+        else:
+            assert n >= 0 and r.prop(n, name, src) == E_CHECK
+        assert "N09" in r.read("error", cap=400)[1], r.read("error", cap=400)[1]
+    finally:
+        r.close()

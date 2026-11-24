@@ -188,7 +188,8 @@ def test_a_mistake_raises_its_code_on_the_direct_build(case, tmp_path):
 def _build_stage():
     import test_uitree_contract as K
     import test_uitree_mistakes as M
-    return sorted(code for code in M.PY if "build" in K.TABLE["codes"][code]["stage"])
+    # N09 is an app's (a cart's) alone: the direct build loads a module of the shell's
+    return sorted(code for code in M.PY if "build" in K.TABLE["codes"][code]["stage"] and code != "N09")
 
 
 @pytest.mark.parametrize("code", _build_stage())

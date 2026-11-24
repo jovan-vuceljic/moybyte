@@ -103,26 +103,35 @@ def lua_facts():
     stubs = set(re.findall(r"^T\.(\w+) = (?:retired|not_here)\(", src, re.M))
     f["verbs"] -= stubs
     # the layer checks its props against the table (the C check), so what it builds is the table's
-    # kinds and props, a verb's each, but where its OWN says it does not build one
+    # kinds and props, a verb's each, but where its OWN says it does not build one, and none of
+    # the shell's own (every Lua page is an app's: the check refuses them, N09)
     for k, d in TABLE["kinds"].items():
-        if k in f["verbs"] or "made_by" in d:
-            f["kinds"][k] = {p for p in d["props"] if own.get("%s.%s" % (k, p), True)}
+        if (k in f["verbs"] or "made_by" in d) and not _shell(d):
+            f["kinds"][k] = {p for p, pd in d["props"].items() if own.get("%s.%s" % (k, p), True) and not _shell(pd)}
     f["kinds"]["page"] = f["page"]
     f["codes"] = _codes(LUA_FILES)
     f["retired_live"] = {v for v in TABLE["retired"]["verbs"] if v in f["verbs"]}
     return f
 
 
+def _shell(d):
+    return d.get("owner") == "shell"
+
+
 def differences(f, lang):
-    """Every way the layer's facts differ from the table, one line each."""
+    """Every way the layer's facts differ from the table, one line each: the Lua layer's against
+    an app's names alone, every Lua page being an app's."""
     out = []
+
+    def ours(d):
+        return lang == "python" or not _shell(d)
     codes = TABLE["codes"]
     mine = {c for c, d in codes.items() if d["fix"][lang] != "—"}
     for c in sorted(f["codes"] - set(codes)):
         out.append("code reserved, raised: %s" % c if c in TABLE["reserved_codes"] else "code not in the table: %s" % c)
     for c in sorted(mine - f["codes"]):
         out.append("code never raised: %s" % c)
-    kinds = TABLE["kinds"]
+    kinds = {k: d for k, d in TABLE["kinds"].items() if ours(d)}
     common = set(TABLE["common_props"])
     for k in sorted(set(f["kinds"]) - set(kinds)):
         why = " (retired: %s)" % TABLE["retired"]["kinds"][k] if k in TABLE["retired"]["kinds"] else ""
@@ -133,7 +142,7 @@ def differences(f, lang):
     for p in sorted(f["common"] - common):
         out.append("prop on every kind, not in the table: %s" % p)
     for k in sorted(set(kinds) & set(f["kinds"])):
-        want = set(kinds[k]["props"])
+        want = {p for p, pd in kinds[k]["props"].items() if ours(pd)}
         have = f["kinds"][k] | f["common"]
         for p in sorted(have - want - f["common"] - child):
             out.append("prop not in the table: %s.%s" % (k, p))
@@ -147,7 +156,7 @@ def differences(f, lang):
         for p in sorted(want - f[name]):
             out.append("%s prop missing: %s" % (name, p))
     if f["app"] is not None:
-        for p in sorted(f["app"] ^ set(TABLE["app_fields"])):
+        for p in sorted(f["app"] ^ {p for p, d in TABLE["app_fields"].items() if ours(d)}):
             out.append("app field %s: %s" % ("not in the table" if p in f["app"] else "missing", p))
     takes = TABLE["takes"]
     for t in sorted(f["takes"] - set(takes)):
@@ -187,7 +196,7 @@ def _held(lang, facts):
 
 def test_the_table_is_whole():
     codes = TABLE["codes"]
-    assert len(codes) == 68
+    assert len(codes) == 69
     for c, d in codes.items():
         assert re.fullmatch(r"[A-Z][0-9]{2}", c)
         assert d["meaning"] and d["stage"] and d["fix"]["python"] and d["fix"]["lua"], c

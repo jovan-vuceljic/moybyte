@@ -821,6 +821,7 @@ Python and once in Lua.
 | N06 | an anchor naming no node, a part the node lacks, or a tab its enum lacks | `anchor="msgs.cur"` |
 | N07 | `split`: no weight, or a bare `0`; `panes`: not exactly one child grows | `sizes=[112, "1*"]` |
 | N08 | `focus(KEY)` names no node, or more than one, in the handler's unit | a key the unit's nodes have |
+| N09 | an app names a kind, prop, word or app field the contract marks the shell's (`slot`, `status`, `lent`, `tools lend=`, `card fill=`, `cards look="column"`, `ui.app slots=`) | an app's own: `ui.label` for a status line, `cards look="icons"` |
 | O01 | an action or a control that can be off (`when=` or `row=`) with no `off=` | `off="hide"` |
 | O02 | `off=` with neither `when=` nor `row=` | drop `off=` |
 | O04 | `when=` or `off=` on a node that is neither an action's site nor a two-way control | `when=` on the action |
@@ -992,12 +993,10 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 | `foot` | 1 | none | `look` `"end"` `"share"` `"band"` |
 | `switch` | 1 | state | none |
 | `case` | 1 | lit, made by its parent | none |
-| `tools` | 2 | key | `lend` name |
-| `lent` | 2 | name | none |
+| `tools` | 2 | key | none |
 | `label` | 1 | tpl | `tone` tpl, `icon` tpl, `face` `"ui"` `"title"` `"mono"` `"caption"` `"result"`, `size` `"fit"` `"text"`, `wrap` `"cut"` `"word"` `"char"`, `lines` int, `align` `"start"` `"center"` `"end"`, `scale` int, `w` int |
 | `rule` | 1 | none | none |
 | `info` | 1 | tpl | `value` tpl, `icon` tpl, `signal` int, `tag` tpl, `tone` tpl |
-| `status` | 2 | tpl | none |
 | `note` | 1 | none | `icon` tpl, `lines` list of tpl |
 | `empty` | 1 | tpl | `icon` tpl, `lines` list of tpl |
 | `bubble` | 1 | tpl | `side` tpl, `head` tpl, `status` tpl, `signal` int, `tone` tpl, `max` int, `lines` int, `on` action, `cut` action |
@@ -1016,8 +1015,8 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 | `tabs` | 2 | state | `labels` table, `icons` table, `text` tpl, `on` action or hook, `focus` cond, `offered` conds, `hint` tpl |
 | `cells` | 2 | state | `clear` int, `count` int, `first` int, `cols` int, `side` int, `gap` int, `edge` bool, `on` action or hook, `pick` action or hook, `focus` cond |
 | `rows` | 1 | model | `cur` name, `current` name, `check` bool, `empty` tpl, `by` name, `filter` name, `changed` hook, `group` tpl, `dir` `"row"` `"col"` |
-| `cards` | 2 | model | `cur` name, `current` name, `w` int, `h` int, `cols` int, `new` action, `changed` hook, `pad` int, `group` tpl, `flow` bool, `look` `"carousel"` `"shelf"` `"icons"` `"column"`, `tone` tpl, `label` tpl |
-| `card` | 2 | action | `label` tpl, `sub` tpl, `badge` tpl, `label_icon` tpl, `image` name, `icon` tpl, `tone` tpl, `fill` tpl |
+| `cards` | 2 | model | `cur` name, `current` name, `w` int, `h` int, `cols` int, `new` action, `changed` hook, `pad` int, `group` tpl, `flow` bool, `look` `"carousel"` `"shelf"` `"icons"`, `tone` tpl, `label` tpl |
+| `card` | 2 | action | `label` tpl, `sub` tpl, `badge` tpl, `label_icon` tpl, `image` name, `icon` tpl, `tone` tpl |
 | `table` | 2 | model | `cols` list, `cur` name, `on` action or hook, `changed` hook, `empty` tpl, `focus` cond, `hint` tpl, `row` int |
 | `col` | 2 | tpl | none |
 | `dialog` | 1 | tpl | `buttons` list of action, `kind` `"primary"` `"danger"`, `look` `"keys"`, `labels` list of tpl |
@@ -1028,7 +1027,6 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 | `grid` | 1 | none | `cols` int, `rows` int, `gap` `"s"` `"m"` `"l"` `"0"`, `pad` `"s"` `"m"` `"l"` `"0"`, `w` int, `h` int |
 | `panes` | 2 | key | `dir` `"row"` `"col"`, `size` name, `start` int or name, `min` list, `grow` bool, `gap` int, `focused` name, `grown` name |
 | `pane` | 2 | key | `title` tpl, `icon` tpl, `tabs` name, `labels` table, `size` name, `start` int or name, `grow` bool, `min` list or conds, `head` bool, `offered` conds |
-| `slot` | 2 | name | `min` list |
 | `text_editor` | 2 | state | `find` name, `find_on` cond, `marks` name, `gutter` cond, `focus` cond |
 | `canvas` | 1 | key | `draw` fn, `reads` list, `pointer` action or hook, `keys` fn, `mark` lit, `hint` tpl, `focus` cond, `h` int, `ground` name, `w` int |
 | `hints` | 2 | model | `keys` tpl, `label` tpl, `tail` cond, `drop` cond, `on` action or hook |
@@ -1036,10 +1034,11 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 - **Every node but the page:** `shown` cond. **A child of a row or a grid:** `span`, `grow`.
 - **An action:** `hint` tpl, `when` cond, `off` `"hide"` `"grey"`, `takes` takes, `row` name, `chars` text, `keys` list, `icon` name, `push` name, `unit` name. **A hook:** `takes` takes, `unit` name.
 - **`takes=`:** `none`, `row`, `arg`, `char`, `pointer`. **`off=`:** `hide`, `grey`.
-- **Roles an app's keys name:** `confirm`, `back`, `more`, `left`, `right`, `up`, `down`, `search`, `goto`, `complete`, `undo`, `redo`, `play`, `tools`; the shell's own: `home`, `full`, `system`.
+- **Roles an app's keys name:** `confirm`, `back`, `more`, `left`, `right`, `up`, `down`, `search`, `goto`, `complete`, `undo`, `redo`, `play`, `tools`.
 - **Verbs** (besides a kind's, its name): `app`, `state`, `enum`, `record`, `model`, `row_of`, `opt`, `labels`, `derive`, `action`, `hook`, `page`, `sys`, `push`, `pop`, `focus`, `after`, `cancel`, `post`, `doc`, `image`, `work`, `pictures`. **Queries:** `about`, `text_size`, `colors`, `fade`.
-- **App fields (`ui.app`):** `icon`, `size`, `min`, `back`, `glass`, `slots`. **System values (`@NAME`):** `desk` bool, `handheld` bool, `wide` bool, `tall` bool, `touch` bool, `input` enum, `focus` text, `current` bool.
-- **Error codes:** A01, A02, A03, A07, A08, A09, A10, B01, B02, B03, C01, C02, C03, D01, D02, D04, E00, E01, E02, E03, G01, H01, H03, I02, K01, K02, K03, L03, N01, N02, N03, N04, N06, N07, N08, O01, O02, O04, P01, P02, P03, P04, P05, Q01, R01, S01, S02, S03, S04, S05, S06, S07, S08, S09, S11, S12, S13, T01, T02, T03, T04, T05, T06, U02, U08, W01, W02, X01.
+- **App fields (`ui.app`):** `icon`, `size`, `min`, `back`, `glass`. **System values (`@NAME`):** `desk` bool, `handheld` bool, `wide` bool, `tall` bool, `touch` bool, `input` enum, `focus` text, `current` bool.
+- **The shell's own**, kept on the shell's pages: `tools lend=`, kind `lent`, kind `status`, `cards look="column"`, `card fill=`, kind `slot`, app field `slots`, refused in an app (N09); roles `home`, `full`, `system` (K01).
+- **Error codes:** A01, A02, A03, A07, A08, A09, A10, B01, B02, B03, C01, C02, C03, D01, D02, D04, E00, E01, E02, E03, G01, H01, H03, I02, K01, K02, K03, L03, N01, N02, N03, N04, N06, N07, N08, N09, O01, O02, O04, P01, P02, P03, P04, P05, Q01, R01, S01, S02, S03, S04, S05, S06, S07, S08, S09, S11, S12, S13, T01, T02, T03, T04, T05, T06, U02, U08, W01, W02, X01.
 - **Reserved codes**, never raised: A04, A05, A06, D03, D05, D06, F01, F02, F03, F04, F05, F06, F07, F08, I01, L01, L02, M01, M02, M03, M04, O03, S10, U01, U03, U04, U05, U06, U07, U10, V01, V02, Y01, Y02, Y03, Y04, Y05, Y06.
 - **Retired names**, each refused with its replacement (N04): verbs `at`, `cell`, `fmt`, `has_symbols`, `head`, `key`, `peek`, `per`, `rebuild`, `ref`, `scope`; kinds `cell`, `text`; props `below@scroll`, `disabled`, `does@action`, `fixed@split`, `ink`, `key@action`, `keyname@item`, `lit`, `mkind@item`, `paint@cards`, `tools@app`; takes `change`; system values `fs`, `h`, `symbols`, `w`.
 

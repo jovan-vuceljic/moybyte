@@ -93,6 +93,7 @@ static int l_uit_new(lua_State *L)
     u->L = NULL;
     u->draw = u->raised = LUA_NOREF;
     if (u->e == NULL) return luaL_error(L, "no memory for a UI tree store");
+    uit_set_app(u->e, 1);
     luaL_setmetatable(L, MOYCORE_UIT_MT);
     return 1;
 }

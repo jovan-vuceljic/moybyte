@@ -151,6 +151,10 @@ const char *uit_get_cell(const uit_t *e, int slot, int row, int f);
 // -- the build (each page) -------------------------------------------------
 // A fresh tree; `page_id` the toolkit id of the page (its build and level).
 void uit_build_begin(uit_t *e, const char *page_id);
+// The store is an app's (1) or the shell's (0, a new store's): an app's refuses, at the node and
+// the prop that names it, every kind, prop and word the contract marks the shell's own (N09).
+// Every Lua and compiled store is an app's; a Python store is where its page is a cart's.
+void uit_set_app(uit_t *e, int app);
 // A node of `kind` keyed `key` under `parent` (-1 for the page): its index.
 int uit_node(uit_t *e, int kind, const char *key, int parent);
 // A prop, in the order the build gave them. The engine decides from the kind

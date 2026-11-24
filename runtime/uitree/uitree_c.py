@@ -251,6 +251,7 @@ class CEngine(Engine):
         x = self._x
         if x is None:
             self._x = x = _New()
+            x.set_app(S._is_cart(self.decl.module))
             if self.PLACED:
                 x.set_placed(1)
             if self._band_extra:

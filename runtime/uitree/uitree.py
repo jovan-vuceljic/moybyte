@@ -1119,6 +1119,8 @@ def app(title, **fields):
         raise UIError("D01", "a second ui.app declaration", where=where,
                       found="the first at %s:%s" % d.app.where, fix="one ui.app(...) an app")
     for k in fields:
+        if k == "slots" and _is_cart(d.module):
+            raise UIError("N09", "ui.app slots= is the shell's own, not an app's", where=where, fix="drop it")
         if k not in APP_FIELDS:
             raise UIError("D01", "ui.app has no field %r" % k, where=where, expected=", ".join(APP_FIELDS),
                           fix="drop it: where a window stands is the console's" if k in (
@@ -2092,6 +2094,24 @@ def _vclass(v):
         4 if t is tuple or t is list else 5 if t is dict else 6 if callable(v) else 0
 
 
+_VC_APP = 16            # moy_uitree_check.h's UIT_VC_APP: the call is an app's
+
+
+def _is_cart(module):
+    """Whether declarations under `module` are an app's: a cart's (`player_tree`), not the shell's."""
+    return str(module).startswith("cart:")
+
+
+def _shell_refused(kind, props, where):
+    """N09 at the call's line where an app's node names what the contract marks the shell's own:
+    the kind, a prop, or a prop's word."""
+    for k, v in [("", None)] + [(k, v) for k, v in props.items() if v is not None]:
+        bad = _check_prop(kind, k, _VC_APP | _vclass(v), v if type(v) is str else None)
+        if bad is not None and bad[0] == "N09":
+            code, what, expected, fix = bad
+            raise UIError(code, what, fix=fix, where=where)
+
+
 def _checked(kind, k, v, where):
     """The contract's check of prop `k` of a `kind` node, its value's class included: N01, N04
     or T03 at the call's line."""
@@ -2115,6 +2135,9 @@ def _node(kind, key, props, where, act=None):
         raise UIError("B03", "ui.%s outside a page" % kind, where=where,
                       fix="put it inside `with ui.page(title):`")
     schema = SCHEMA[kind]
+    d = getattr(b, "decl", None)
+    if _check_prop and d is not None and _is_cart(d.module):
+        _shell_refused(kind, props, where)
     n = Node(kind, key, where)
     n.act = act
     n.ctx = b.ctx

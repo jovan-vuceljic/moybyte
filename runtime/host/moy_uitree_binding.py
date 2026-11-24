@@ -89,6 +89,7 @@ _SIGS = (
     ("uit_frame", [_P, _P, _P, _I, _I, _I, _I, _I, _I, _I], _I),
     ("uit_panes_set", [_P, _I, _S, _I, c.c_uint32], None),
     ("uit_set_unit", [_P, _I], None),
+    ("uit_set_app", [_P, _I], None),
     ("uit_panes", [_P, _I32, _I], _I),
     ("uit_splits", [_P, _P, _P, _I, _I32], _I),
     ("uit_split_held", [_P, _I32], None),
@@ -348,6 +349,9 @@ class Engine:
 
     def set_unit(self, unit):
         self._L.uit_set_unit(self._e, int(unit or 0))
+
+    def set_app(self, app):
+        self._L.uit_set_app(self._e, 1 if app else 0)
 
     def panes_set(self, du, pane_cur, mouse, clock):
         self._L.uit_panes_set(self._e, du, b(pane_cur or ""), 1 if mouse else 0, clock & 0xffffffff)

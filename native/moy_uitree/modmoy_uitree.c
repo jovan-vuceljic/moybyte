@@ -467,6 +467,14 @@ static mp_obj_t eng_set_unit(mp_obj_t self, mp_obj_t u)
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eng_set_unit_obj, eng_set_unit);
 
+// set_app(app)
+static mp_obj_t eng_set_app(mp_obj_t self, mp_obj_t a)
+{
+    uit_set_app(eng(self), mp_obj_is_true(a));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eng_set_app_obj, eng_set_app);
+
 #define PANES_MAX 2048
 
 // panes() -> [ints]: the last pass's panes (uit_panes)
@@ -1050,6 +1058,7 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_place), MP_ROM_PTR(&eng_place_obj) },
     { MP_ROM_QSTR(MP_QSTR_panes_set), MP_ROM_PTR(&eng_panes_set_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_unit), MP_ROM_PTR(&eng_set_unit_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_app), MP_ROM_PTR(&eng_set_app_obj) },
     { MP_ROM_QSTR(MP_QSTR_panes), MP_ROM_PTR(&eng_panes_obj) },
     { MP_ROM_QSTR(MP_QSTR_splits), MP_ROM_PTR(&eng_splits_obj) },
     { MP_ROM_QSTR(MP_QSTR_split_held), MP_ROM_PTR(&eng_split_held_obj) },

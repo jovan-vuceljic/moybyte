@@ -141,6 +141,7 @@ static app_t *app(void) {
         if (a->e == NULL) {
             return NULL;
         }
+        uit_set_app(a->e, 1);
         a->live = 1;
         a->serial = serial;
         a->handler = -1;

@@ -11,6 +11,7 @@
 
 #define PNAME(P) (UIT_SSTR + (P)->name)
 #define PWORDS(P) ((P)->words ? UIT_SSTR + (P)->words : NULL)
+#define PSHELL(P) ((P)->shell ? UIT_SSTR + (P)->shell : NULL)
 #define NKINDS (sizeof UIT_SKINDS / sizeof UIT_SKINDS[0])
 #define NRETIRED (sizeof UIT_SRETIRED / sizeof UIT_SRETIRED[0])
 
@@ -177,11 +178,19 @@ static void class_fix(const char *prop, int type, char *fix, size_t n)
 const char *uit_check_prop(const char *kind, const char *prop, int vc, const char *word, char *out, size_t n)
 {
     char what[96], expected[400], fix[sizeof expected + 64];
+    int app = vc & UIT_VC_APP;
+    vc &= ~UIT_VC_APP;
     const uit_skind_t *K = kind_of(kind);
     if (!K) {
         snprintf(what, sizeof what, "no kind '%s'", kind);
         return say(out, n, "N01", what, "", "a kind of the UI API (\xc2\xa7" "7)");
     }
+    if (app && (K->flags & UIT_SF_SHELL)) {
+        snprintf(what, sizeof what, "ui.%s is the shell's own, not an app's", kind);
+        return say(out, n, "N09", what, "", "an app's own kind (a ui.label for a status line)");
+    }
+    if (!prop[0])
+        return NULL;
     const uit_sprop_t *P = prop_of(K, prop);
     if (!P) {
         const char *why = retired(kind, prop);
@@ -207,7 +216,15 @@ const char *uit_check_prop(const char *kind, const char *prop, int vc, const cha
         class_fix(prop, P->type, fix, sizeof fix);
         return say(out, n, "N01", what, "an int, or '{NAME}' of an int", fix);
     }
+    if (app && (P->flags & UIT_SF_SHELL)) {
+        snprintf(what, sizeof what, "ui.%s %s= is the shell's own, not an app's", kind, prop);
+        return say(out, n, "N09", what, "", "drop it");
+    }
     const char *words = PWORDS(P);
+    if (app && PSHELL(P) && word && word[0] != '{' && has_word(PSHELL(P), word)) {
+        snprintf(what, sizeof what, "ui.%s %s='%s' is the shell's own, not an app's", kind, prop, word);
+        return say(out, n, "N09", what, "", "another of its words");
+    }
     if (words && word && word[0] != '{' && !has_word(words, word)) {
         snprintf(what, sizeof what, "ui.%s %s='%s'", kind, prop, word);
         size_t i = 0;
