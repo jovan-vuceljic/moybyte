@@ -508,6 +508,7 @@ class SoundPane:
         self._host = _ui_draw.AppHost("editor_sound", self)
         self.page = None
         self._shown = None
+        self._rows_h = 0            # the brush and ops rows as the roomy form laid them out
         self.brush = 1              # the wave brush: a wave id
         self.octs = {}              # a sound -> the graph's lowest C, as the pane left it
         self._u = 1
@@ -636,6 +637,9 @@ class SoundPane:
         for k in ("brush", "ops"):
             r = pg.rect_of(k)
             rows += r[3] if r is not None else 0
+        if rows and (self._shown is None or not self._shown[-1]):
+            self._rows_h = rows             # (the roomy form's: scrolled, a row may lie out of view)
+        rows = self._rows_h or rows
         return least if self.mu.layout.ch - rows < least else 0
 
     def _roomy(self):
