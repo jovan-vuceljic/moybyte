@@ -34,10 +34,9 @@ FULL = bool(os.environ.get("MOYBYTE_MARKS_FULL"))
 TMS = [(t, m) for t, m in F.MODES]
 
 # surface -> the stops each is focused on (the sheets' own, keys-free)
-STOPS = {s: sorted({f for _st, f, keys, _p, _i in states
-                    if f is not None and f != "Other" and not keys})
+STOPS = {s: sorted({f for _st, f, _p, _i in states if f is not None and f != "other"})
          for s, states in F.SURFACES.items()}
-DANGER = {"Danger", "Delete cart", "Address"}
+DANGER = {"danger", "Delete cart"}
 SHEETS = ([(s, tag) for s in F.SURFACES for tag in ("tdeck", "desk")] if FULL
           else [("group", "tdeck"), ("buttons", "tdeck")])
 CONFIG = dict(F.SHEET_CONFIGS)
@@ -59,14 +58,13 @@ def _sheet(theme, mode, surface, tag, focus, touch):
     (which shows the input's own keys)."""
     key = (theme, mode, surface, tag, focus, touch)
     if key not in _CACHE:
-        from runtime import ui_draw
         apps = []
         img, _ok, _r = L.render(_g(), CONFIG[tag], theme, mode,
-                                F._sheet_setup(surface, focus, (), None, apps), False,
+                                F._sheet_setup(surface, focus, None, apps), False,
                                 "touch" if touch else None)
-        app = apps[-1]
+        ws, app = apps[-1]
         # a stop's box is the app canvas's: on the desk, its window's content
-        win = getattr(app.ws.wm, "windows", {}).get(app.id)
+        win = getattr(ws.wm, "windows", {}).get(app.id)
         ox, oy = win.content_rect()[:2] if win is not None else (0, 0)
         if win is not None:
             x, y, w, h = win.content_rect()
@@ -75,8 +73,8 @@ def _sheet(theme, mode, surface, tag, focus, touch):
             x0, y0, x1, y1 = F._content(img.size, CONFIG[tag])
             region = (x0, y0, x1, y1)
         boxes = {}
-        for s in STOPS[surface] + ["Rest", "Selected"]:
-            b = ui_draw._C.api_box(app.ctx, s)
+        for s in STOPS[surface] + ["rest/choose", "selected/choose"]:
+            b = F.box_of(app, s)
             boxes[s] = None if b is None else (b[0] + ox, b[1] + oy, b[2], b[3])
         _CACHE[key] = (img.convert("RGB"), boxes, region)
     return _CACHE[key]
@@ -190,7 +188,7 @@ def test_the_sheets_marks_read(theme, mode, surface, tag):
 def test_a_selected_row_reads_against_the_rest_row(theme, mode):
     """L3 on the group card: the selected row's mark covers a fifth of it in
     a colour 1.3:1 from the rest row's ground, under touch (no focus)."""
-    img, boxes, _r = _sheet(theme, mode, "group", "tdeck", "Rest", True)
+    img, boxes, _r = _sheet(theme, mode, "group", "tdeck", "rest/choose", True)
 
     def shares(box):
         x, y, w, h = box
@@ -199,9 +197,9 @@ def test_a_selected_row_reads_against_the_rest_row(theme, mode):
         for p in px:
             counts[p] = counts.get(p, 0) + 1
         return {c: n / len(px) for c, n in counts.items()}
-    rest = shares(boxes["Rest"])
+    rest = shares(boxes["rest/choose"])
     ground = max(rest, key=rest.get)
-    sel = shares(boxes["Selected"])
+    sel = shares(boxes["selected/choose"])
     marks = [c for c, s in sel.items() if s >= 0.2 and c != ground]
     assert marks and max(_cr(c, ground) for c in marks) >= 1.3, (theme, mode, ground, marks)
 
