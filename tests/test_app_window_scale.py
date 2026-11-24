@@ -43,4 +43,8 @@ def test_an_app_cart_s_window_draws_at_the_shell_s_font_scale(tmp_path):
         assert run.app_window_canvas and getattr(run.canvas, "font_scale", 1) == 1
         assert run.player.face.ui_face() >> _FACE_FS_SHIFT == 2
     finally:
+        from runtime import moy_lora, moybyte, scheduler
+        scheduler.SCHED.reset()     # opening Mesh started its service on the one scheduler
+        while moy_lora.owner():
+            moybyte.end(moy_lora.owner())
         lora_sim.remove()
