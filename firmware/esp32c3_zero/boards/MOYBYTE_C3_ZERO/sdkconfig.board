@@ -25,7 +25,7 @@ CONFIG_ESP_COREDUMP_ENABLE_TO_NONE=y
 # dynamic buffers each way) and CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC. The XIAO's
 # set is RAM-positive only because CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP moves
 # those buffers into PSRAM, and mbedTLS's external allocator is PSRAM's; this
-# chip has none, so every buffer is internal and ESP-IDF's defaults stand.
+# chip has none, so every buffer is internal (WIFI'S RECEIVE RING below).
 
 # THE USB CONSOLE: USB-Serial/JTAG as the PRIMARY console, which is what gives
 # esptool a reset it can use (the XIAO's reason, 2026-08-30).
@@ -81,6 +81,13 @@ CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_NONE=y
 CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE=y
 CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE_PATH="../../../../boards/MOYBYTE_C3_ZERO/ca_roots.pem"
+
+# WIFI'S RECEIVE RING: 4 static buffers where ESP-IDF's default is 10, each
+# held from the radio's start for good. The 802.11n reorder window (RX_BA_WIN,
+# ESP-IDF's 6) stays within twice their count, and the TCP window stays
+# ESP-IDF's four segments, so a burst still lands; the dynamic buffers that
+# carry a frame up are made per frame.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
 
 # --- Left out (the XIAO's reasons) -------------------------------------------
 CONFIG_LWIP_PPP_SUPPORT=n
