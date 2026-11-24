@@ -1889,8 +1889,8 @@ def render(g, config, theme, mode, setup, wallpaper, inputs=None):
         setup(g, ws)
         ws.bar_layer.invalidate()         # the probes see the bars drawn
         probe = Probe()
-        probe.install(ws)
         try:
+            probe.install(ws)
             settled = _settle(g, ws, probe=probe)
         finally:
             probe.remove()
@@ -2568,8 +2568,18 @@ class Probe:
         self.marks = max(self.marks, ui_draw.marks(None, False)[1])
 
     def install(self, ws):
-        """Wrap the verbs the probes read; `remove` puts them back."""
+        """Wrap the verbs the probes read; `remove` puts them back. A wrap
+        that fails puts back those made before it: a wrap left on a canvas
+        class keeps every canvas it saw, and fills the glass's table."""
+        try:
+            self._install(ws)
+        except BaseException:
+            self.remove()
+            raise
+
+    def _install(self, ws):
         from runtime import ui_draw, iconsets
+        from runtime import uitree_c
         self._ws = ws
         cur = self.cur
         blits = self._blits
@@ -2620,17 +2630,19 @@ class Probe:
                 return real(cv, th, part, rect, on, *a, **kw)
             return f
 
-        def hints(real):
-            def f(items, *a, **kw):
-                cur["hints"].append((None, tuple(items)))
-                return real(items, *a, **kw)
+        def paint(real):
+            def f(eng, *a, **kw):
+                out = real(eng, *a, **kw)
+                h = eng.hints()
+                if h:
+                    cur["hints"].append((None, h))
+                return out
             return f
         for mod in {ui_draw, sys.modules.get("ui_draw", ui_draw)}:
             patch(mod, "tab", tab)
             patch(mod, "bar_part", bar_part)
-        from runtime import ui as ui_api
-        for mod in {ui_api, sys.modules.get("ui", ui_api)}:
-            patch(mod, "hints", hints)
+        for mod in {uitree_c, sys.modules.get("uitree_c", uitree_c)}:
+            patch(mod.CEngine, "paint", paint)
         for mod in {iconsets, sys.modules.get("iconsets", iconsets)}:
             patch(mod, "draw", icon)
 
