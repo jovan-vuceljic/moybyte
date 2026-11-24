@@ -100,29 +100,30 @@
   ],
   [
    "line",
-   52
+   50
   ],
   [
    "tab",
    [
     0,
     0,
-    26,
+    44,
     20
    ],
    true,
-   "edit"
+   "One"
   ],
   [
-   "tab",
+   "icon",
    [
-    28,
+    54,
     0,
     20,
     20
    ],
-   false,
-   "code"
+   "more",
+   true,
+   false
   ],
   [
    "line",

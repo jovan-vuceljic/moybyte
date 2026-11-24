@@ -213,8 +213,9 @@ def _link_rows(label, value, ws):
 def test_a_link_rows_measure_is_the_width_that_draws_its_label_whole():
     """`measure("link", label + TAB + value)` answers the width that draws
     the label and the value whole: at that width the label's pixels are the
-    ones a wider row draws; a narrower row cuts its label, an ellipsis at
-    its cut."""
+    ones a wider row draws; a narrower row keeps its label whole and leaves
+    its value out (a link's value shows whole beside its whole label or not
+    at all)."""
     label, value = "The console", "FSL-1.1-MIT"
     r, seen = _link_rows(label, value, lambda w: (w + 60, w, w - 8))
     assert seen["w"] > seen["value"] > seen["none"] > 0
@@ -225,4 +226,9 @@ def test_a_link_rows_measure_is_the_width_that_draws_its_label_whole():
         y0 = 60 + i * 40
         return [[_px(r, x, y) for x in range(n)] for y in range(y0, y0 + seen["h"])]
     assert cols(1, lw) == cols(0, lw)
-    assert cols(2, lw) != cols(0, lw)
+    assert cols(2, lw) == cols(0, lw)
+
+    def tail(i):
+        y0 = 60 + i * 40
+        return [[_px(r, x, y) for x in range(lw, seen["w"] - 8)] for y in range(y0, y0 + seen["h"])]
+    assert tail(2) != tail(1)                            # the value, drawn at the width, left out under it
