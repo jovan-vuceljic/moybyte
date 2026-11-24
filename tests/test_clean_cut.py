@@ -13,7 +13,9 @@ out stays out.
     native module links, the WASI and ELF rows a linked toolkit pulled its
     theme and told its answers through, and the `moybyte.ui` extension;
   * the theme's shared-state machinery a linked copy pulled through goes with
-    it: no theme write bracket or its generation, no per-file record tables.
+    it: no theme write bracket or its generation, no per-file record tables;
+  * no tool or board script imports the `ui` module, its code run on a board
+    (a bench's snippet) included.
 """
 
 import json
@@ -159,5 +161,16 @@ def _sources(tops, ends):
 def test_no_theme_write_bracket_or_record_tables():
     found = [path for path, text in _sources(("native", "runtime", "device", "sdk", "tools"), (".c", ".h", ".py"))
              if re.search(r"moy_ui_theme_write\b|moy_ui_recs_\w+|\bmoy_ui_rec_t\b", text)]
+    assert not found, found
+
+
+def test_no_tool_or_board_script_imports_the_ui_module():
+    """A line of a tool, a board's script or the device tier, or of a snippet
+    a tool runs on a board, that imports `ui` (`import ui`, `import time, ui`,
+    `from ui import`): a board has no such module."""
+    pattern = re.compile(r"^\s*(import (\w+, )*ui(, \w+)*\s*$|from ui import)", re.M)
+    found = ["%s:%d" % (path, text.count("\n", 0, m.start()) + 1)
+             for path, text in _sources(("tools", "firmware", "device"), (".py", ".sh"))
+             for m in pattern.finditer(text)]
     assert not found, found
 
