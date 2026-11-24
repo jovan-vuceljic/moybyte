@@ -364,8 +364,9 @@ START_TRIES = 12
 # (a live change desyncs the ring for good); not the default 526 (64 of 200
 # messages arrived at the default while every send said True), and room for a
 # bound beam's whole window between two polls (MOY_MATCH_BEAM_DRAIN); RATE_54M
-# (a 48 KB payload went from 1680 ms to 65 ms); power save off only while
-# linked (it halves the latency tail and costs battery).
+# (a 48 KB payload went from 1680 ms to 65 ms). The station's power save is
+# none on every board and is the idle ladder's to rest (native/moy_net/
+# moy_net.h), never the link's.
 RXBUF = 163840
 DRAIN_MAX = 24
 
@@ -723,7 +724,6 @@ class EspNowLink:
         self.net = EspNowNet(self)
         self._m = None
         self._view = None
-        self._pm_was = None
         self._rate = None
         self._launch = launch
         self._ticks_ms = ticks_ms if ticks_ms is not None else _ticks()
@@ -834,11 +834,6 @@ class EspNowLink:
             # Every start: the radio lease stops the interface between matches.
             self.wlan.active(True)
             self.mac = self.wlan.config("mac")
-            try:
-                self._pm_was = self.wlan.config("pm")
-                self.wlan.config(pm=self.wlan.PM_NONE)
-            except Exception:  # noqa: BLE001 -- a port without pm still links
-                self._pm_was = None
             kernel = self.radio is None
             if kernel:
                 import moy_net
@@ -906,12 +901,6 @@ class EspNowLink:
                 self.radio.active(False)
             except Exception:  # noqa: BLE001
                 pass
-        if self.wlan is not None and self._pm_was is not None:
-            try:
-                self.wlan.config(pm=self._pm_was)
-            except Exception:  # noqa: BLE001
-                pass
-            self._pm_was = None
         if self._m is not None:
             self._m.stop()
 

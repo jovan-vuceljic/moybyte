@@ -580,11 +580,11 @@ static mp_obj_t mod_wifi_mac(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_wifi_mac_obj, mod_wifi_mac);
 
-static mp_obj_t mod_wifi_ps(size_t n_args, const mp_obj_t *args) {
-    int v = moy_wifi_ps(n_args > 0 ? (int)mp_obj_get_int(args[0]) : -1);
+static mp_obj_t mod_wifi_ps(void) {
+    int v = moy_wifi_ps();
     return v < 0 ? mp_const_none : MP_OBJ_NEW_SMALL_INT(v);
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_wifi_ps_obj, 0, 1, mod_wifi_ps);
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_wifi_ps_obj, mod_wifi_ps);
 
 #endif
 

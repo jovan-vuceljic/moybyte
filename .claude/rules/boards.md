@@ -214,6 +214,13 @@ ports, flash, push, reboot, screenshots — are the `on-glass` skill
   it outlives a soft reset, and a new VM puts it down unless the kernel's
   ESP-NOW link rides it. The Zero is outside this: WiFi is its only I/O, and
   it keeps the port's station for its setup access point.
+- **The station's power save is the idle ladder's alone (2026-11-24, #256)**:
+  `moy_wifi_on` starts every board's station with none, and the kernel's loop
+  rests it (modem sleep) only while the ladder has the panel dark
+  (`moy_wifi_rest`, `native/moy_net/moy_net.h`). No feature sets it: modem
+  sleep holds a frame for the station until the next beacon, and each
+  latency path that flipped it for itself (a match, the live socket) was a
+  holder fighting the others. The tests' stations refuse a `pm`.
 - **A process's devices are the kernel's handle table**
   (`native/moy_kernel/moy_dev.h`), answered on the calling program's own task:
   leases, pins (gpio, pins, uart, spi, i2c, pwm, adc), lora, mic, midi, http,

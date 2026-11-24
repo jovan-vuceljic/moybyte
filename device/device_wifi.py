@@ -85,8 +85,6 @@ class KernelWlan:
     the link were written against. Constructing one initialises nothing;
     active(True) is the driver's start, active(False) its stop."""
 
-    PM_NONE = 0
-
     def __init__(self):
         import moy_net
         self._n = moy_net
@@ -128,15 +126,10 @@ class KernelWlan:
         return (ip, "255.255.255.0", "0.0.0.0", "0.0.0.0")
 
     def config(self, key=None, **kw):
-        if "pm" in kw:
-            self._n.wifi_ps(kw["pm"])
-            return None
         if key == "essid":
             return self._n.wifi_status()[3] or ""
         if key == "mac":
             return self._n.wifi_mac()
-        if key == "pm":
-            return self._n.wifi_ps()
         raise ValueError(key)
 
 

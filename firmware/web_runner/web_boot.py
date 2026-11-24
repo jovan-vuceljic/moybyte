@@ -1593,8 +1593,6 @@ class _LiveWlan:
     (the /live probe's) is the page's address on the air, and its channel
     pinned (the 'H' state; 0 before the socket first opens)."""
 
-    PM_NONE = 0
-
     def __init__(self, mac):
         self.mac = mac
 

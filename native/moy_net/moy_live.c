@@ -22,9 +22,8 @@
 // protocol two consoles play (docs/netplay_v1.md). Up from the page:
 //
 //   'U'                       the radio up: ESP-NOW over the station
-//                             (moy_link_start, a ring of MOY_LIVE_RING) and
-//                             the station's power save off while it is
-//   'D'                       the radio down, power save as it was
+//                             (moy_link_start, a ring of MOY_LIVE_RING)
+//   'D'                       the radio down
 //   'P' mac(6)                a peer added (ESP-NOW sends a unicast only to one)
 //   'R' rate(1)               the PHY rate the frames leave at (wifi_phy_rate_t)
 //   'S' {len(2) mac(6) data}  frames to the air, in order (len little-endian)
@@ -63,7 +62,6 @@
 
 #ifdef ESP_PLATFORM
 #include "lwip/sockets.h"
-#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "moy_tasks.h"
@@ -112,9 +110,6 @@ typedef struct {
     volatile uint32_t heard;            // moy_net_ms of the page's last frame
     uint32_t said;                      // ...and of the board's
     int radio;                          // the radio up for the page
-#ifdef ESP_PLATFORM
-    wifi_ps_type_t ps_was;
-#endif
     bufs_t *b;
     moy_live_stats_t stats;
 } live_t;
@@ -172,10 +167,6 @@ static int radio_up(void) {
     }
     static const uint8_t bcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     moy_link_add_peer(bcast);
-#ifdef ESP_PLATFORM
-    esp_wifi_get_ps(&L->ps_was);
-    esp_wifi_set_ps(WIFI_PS_NONE);
-#endif
     L->radio = 1;
     L->stats.radio = 1;
     return 0;
@@ -186,9 +177,6 @@ static void radio_down(void) {
         return;
     }
     moy_link_stop();
-#ifdef ESP_PLATFORM
-    esp_wifi_set_ps(L->ps_was);
-#endif
     L->radio = 0;
     L->stats.radio = 0;
 }

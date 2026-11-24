@@ -292,8 +292,6 @@ class PageRadio:
 
 
 class PageWlan:
-    PM_NONE = 0
-
     def __init__(self, lib):
         self.lib = lib
 

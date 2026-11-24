@@ -89,12 +89,11 @@ class _FakeRadio:
 
 
 class _FakeWlan:
-    PM_NONE = 0
-    PM_PERFORMANCE = 1
+    """The station a link reads. It refuses a power-save mode: that is the
+    idle ladder's alone (native/moy_net/moy_net.h), never a match's."""
 
     def __init__(self, mac):
         self._mac = mac
-        self._pm = self.PM_PERFORMANCE
         self.ch = 1
         self.assoc = False              # associated: pinned to the AP's channel
 
@@ -105,9 +104,8 @@ class _FakeWlan:
         return self.assoc
 
     def config(self, *a, **kw):
+        assert "pm" not in kw and a[:1] != ("pm",), "a link sets no power save"
         if kw:
-            if "pm" in kw:
-                self._pm = kw["pm"]
             if "channel" in kw:
                 if self.assoc:
                     raise OSError("the station is associated")
@@ -117,8 +115,6 @@ class _FakeWlan:
             return self.ch
         if a and a[0] == "mac":
             return self._mac
-        if a and a[0] == "pm":
-            return self._pm
         return None
 
 
@@ -200,16 +196,6 @@ def test_start_applies_the_recipe_in_the_order_that_does_not_desync_the_ring():
         assert rate_at > first_active, "the rate is only settable once active"
     assert lk.radio.cfg["rxbuf"] == moy_espnow.RXBUF == 163840
     assert BROADCAST in lk.radio.peers, "broadcast must be a peer or discovery is mute"
-
-
-def test_the_session_disables_power_save_and_stop_puts_it_back():
-    """pm=PM_NONE halves the latency tail and costs battery, so it is a session
-    lever on a handheld, never a global one."""
-    air, clock = _Air(), _Clock()
-    lk = _link(air, clock, b"\x01" * 6)
-    assert lk.wlan.config("pm") == _FakeWlan.PM_NONE
-    lk.stop()
-    assert lk.wlan.config("pm") == _FakeWlan.PM_PERFORMANCE
 
 
 def test_a_board_with_no_radio_degrades_to_an_inactive_link():
