@@ -355,6 +355,26 @@ class ZoneLook:
             if marked:
                 self._mark(cv, x, y)
 
+    def open_more(self, rows, r):
+        """A lent row's More menu (`BarZone.open_more`): `rows` (word,
+        icon, take) as the system menu's card hung below cell `r`, the
+        zone's coordinates on the bar `where` names."""
+        ws = self.ws
+        bl = ws.bar_layer
+        ox = oy = 0
+        for bar in bl._packed(self.where):
+            if bl.lent_zone(self.where, bar) is not None:
+                ox, oy = bar[1][0], bar[1][1]
+                break
+        if bl._in_window(self.where):
+            kind = ws.wm.top_kind() if self.where == "app" else self.where
+            win = ws.wm.windows.get(kind)
+            if win is not None:
+                c = win.content_rect()
+                ox, oy = ox + c[0], oy + c[1]
+        items = [("item", word.upper(), take, icon, word) for word, icon, take in rows]
+        ws.menu_ui.open_at(items, (ox + r[0] + r[2] // 2, oy + r[1] + r[3]))
+
     def draw_text(self, cv, r, text):
         th = self.ws.theme_colors
         fs = self.zone_scale()
@@ -538,6 +558,7 @@ class BarLayer:
         self.held = False
         self._lent_last = [None, None]  # ui_draw.bar_lent's last answer, and _lent's
         self._app_zones = {}            # app id -> the row its page lends (`_app_zone`)
+        self._row_k = [None, -1, 0, 0]  # row_need's last: its zone, zone_gen, font scale, need
         self._k8 = [None, None, None, 0]   # key[8]'s title and lent, their pair, its count
         self._cr_last = None            # content_rect's last (x, y, w, h)
         self._cr_game = [0, 0, None, None]   # ...and a game zone's: w, h, bars, rect
@@ -968,6 +989,22 @@ class BarLayer:
                 if c[0] == name:
                     return b, c[1]
         return None
+
+    def row_need(self, where):
+        """The narrowest zone holding the row `where`'s page lends the bar
+        as icons (`BarZone.zone_need`) at its zone's height; 0 where it lends
+        none. Kept while the zone's generation and the font scale stand."""
+        z = self._zone_owner(where)
+        need = getattr(z, "zone_need", None)
+        if need is None:
+            return 0
+        k = self._row_k
+        g, fs = z.zone_gen, self.ws.layout.fs
+        if k[0] is not z or k[1] != g or k[2] != fs:
+            got = self.cell(where, "zone")
+            k[0], k[1], k[2] = z, g, fs
+            k[3] = need(got[1][3]) if got is not None else 0
+        return k[3]
 
     def zone_rect(self, where):
         """The rect LENT to `where`'s app for its draw_zone/zone_tap, in its

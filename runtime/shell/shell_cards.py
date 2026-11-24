@@ -826,6 +826,7 @@ class SystemMenuUI:
         self._tap = None            # the row a tap chose, run at the frame's tail
         self._painting = False      # inside the card's draw (`all`)
         self._card_at = (0, 0)      # where a card's menu hangs (`open_card`)
+        self._w_kept = [None, 0, False, 0]  # _look_w's last: its rows, scale, desk, width
         self._card_proj = False     # a card's menu hangs from PROJECTS' hero
         self.about = AboutCard(ws)
         # The handheld home under the card, washed (`put_home`), and the
@@ -931,23 +932,30 @@ class SystemMenuUI:
         rows = self.card_rows(home)
         if not rows:
             return False
+        # from the desk's PROJECTS window the menu hangs from its hero's
+        # cover, below or above it and inside the window (`_menu_cell`,
+        # `surface`), never over the cover it acts on
+        proj = self._projects() if home is self.ws.projects_layer else None
+        proj = proj is not None and proj[2] is not None
+        if proj:
+            hx, hy, hw, hh = self._projects()[2]
+            at = (hx + hw // 2, hy + hh)
+        self.open_at(rows, at, proj)
+        return True
+
+    def open_at(self, rows, at, proj=False):
+        """`rows` as a menu hung at `at` (x, y) on the glass: a card's
+        group, or a bar row's More (`ZoneLook.open_more`). `proj`: hung
+        from the desk's PROJECTS hero."""
         ws = self.ws
         m = ws.sysmenu
         m.fs = ws.look.effective_font_scale()
         m.cs = ws.layout.cs
         m.w = 0
-        # from the desk's PROJECTS window the menu hangs from its hero's
-        # cover, below or above it and inside the window (`_menu_cell`,
-        # `surface`), never over the cover it acts on
-        proj = self._projects() if home is ws.projects_layer else None
-        self._card_proj = proj is not None and proj[2] is not None
-        if self._card_proj:
-            hx, hy, hw, hh = proj[2]
-            at = (hx + hw // 2, hy + hh)
+        self._card_proj = proj
         self._card_at = at
         m.show(rows, widget="card")
         ws.popover_touch()
-        return True
 
     def _deletable(self, cart):
         """Whether the open cart is the store's to delete: a store that
@@ -1243,8 +1251,24 @@ class SystemMenuUI:
 
     def _look_w(self, desk):
         """The card's width (sysmenu_ui's popover's w=), what a point's
-        anchor spans."""
-        return 220 if desk else 150 * self.ws.layout.fs
+        anchor spans: the look's, wider where a row's or a caption's words
+        need it beside the icon and the card's pads (ROW_PADS at the font
+        scale). Kept while the menu holds the same rows."""
+        fs = self.ws.layout.fs
+        items = self.ws.sysmenu.items
+        k = self._w_kept
+        if k[0] is not items or k[1] != fs or k[2] != desk:
+            most = 0
+            for it in items:
+                if it[0] in ("item", "header") and it[4]:
+                    most = max(most, _ui_draw.print_width(it[4], fs))
+            k[0], k[1], k[2] = items, fs, desk
+            k[3] = max(220 if desk else 150 * fs, most + self.ROW_PADS * fs)
+        return k[3]
+
+    # The room a menu row takes beside its words, at font scale 1: its icon, the gap
+    # after it and the card's pads at each end.
+    ROW_PADS = 68
 
     def look_card(self):
         """The menu's card, (x, y, w, h), as the engine lays it out: what
@@ -1356,6 +1380,7 @@ class SystemMenuUI:
         own --, then the next group's."""
         m = self.ws.sysmenu
         s.at = "%d %d %d %d" % self._took[1]
+        s.w = self._look_w(_desk_class())
         caps, rows, ruled = [], [], False
         for it in m.items:
             if it[0] == "header":

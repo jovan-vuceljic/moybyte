@@ -2188,8 +2188,11 @@ the bar (runtime/editors/editor_ui.py, laid out by
 `uitree_editor.BarZone`): every label where the row holds them, the open
 tab on its plate; else icons with the open tab named where it fits at no
 gaps, on the theme's current mark as a pill in the mark's ink, as the home's
-bar tabs are (`EditorApp.draw_tab`); else icons alone. The T-Deck's bar
-names the open tab.
+bar tabs are (`EditorApp.draw_tab`); else icons alone; else the icons that
+fit beside a More whose menu holds the rest. The T-Deck's bar names the
+open tab. On the desk's full-screen row the window's title shows whole or
+not at all (its icon alone), and where the row needs the title's slot the
+zone starts after that icon (`WindowedWM._row_start`).
 
 **The home in a window.** The desk's PROJECTS opens the same component in a
 desktop-mode window (`HomeWindowLayer`, kind `projects`): on its Make tab

@@ -280,8 +280,10 @@ class WindowChrome:
 
     def _full_title(self, win):
         """A full-screen row's title: the Editor's names its cart alone
-        (EDITOR_LAYOUT.md's frame), cut to the title slot where the app's band
-        follows it."""
+        (EDITOR_LAYOUT.md's frame). Where the app's band follows it, the
+        title shows whole in the title slot or not at all, the head its icon
+        alone, as it is where the band's row needs the slot
+        (`WindowedWM._row_tight`)."""
         t = self._win_title(win)
         doc = self._theme_doc(win)
         if doc is not None:
@@ -292,11 +294,13 @@ class WindowChrome:
                 t = str(cart)
         if win.kind == "desktop" or win.row:
             return t
+        if self._row_tight(win):
+            return ""
         n = _layout_base.chrome_size(self._fs()) * 8 // _layout_base.render_scale()
         x = self._row_head(win)[0] + win.title_h // 2 + n + 2   # past the head's icon
         room = self._full_slot(win) - n - x
         fid = _ui_draw.font("title")[0]
-        return _ui_draw._C.text_cut(t, max(0, room), self._fs(), fid)
+        return t if _ui_draw._C.text_cut(t, max(0, room), self._fs(), fid) == t else ""
 
     def _theme_doc(self, win):
         """The theme the Editor's window holds in its theme mode, or None."""

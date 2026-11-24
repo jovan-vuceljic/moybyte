@@ -93,7 +93,23 @@ def test_a_wide_zone_shows_the_labels_a_narrow_one_icons():
     assert [d[0] for d in look.drawn][-2:] == ["icon", "icon"]
     look.drawn = []
     z.draw_zone(None, (0, 0, 80, 20))
-    assert [d[3] for d in look.drawn if d[0] == "tab"] == ["edit", "code"]
+    assert [d[3] for d in look.drawn if d[0] == "tab"] == ["One"]           # the current one named
+    assert look.drawn[-1][0] == "icon" and look.drawn[-1][2] == "more"     # the rest under More
+    assert [c[1] for c in z.folded] == ["tab", "undo", "play"]
+    assert look.drawn[-1][1][0] + 20 <= 80 - 6
+
+
+def test_a_more_menu_holds_what_the_zone_folded_and_takes_it_as_a_tap_does():
+    F, _page, look, z = _zone()
+    got = []
+    look.open_more = lambda rows, r: got.append((rows, r))
+    zone = (0, 0, 80, 20)
+    more = z.box("more", None, zone)
+    assert z.zone_tap(more[0] + 1, 5, zone)
+    rows, r = got[0]
+    assert r == more and [w for w, _i, _t in rows] == ["Two", "Undo", "Play"]
+    rows[0][2]()                                    # a tab taken from the menu opens it
+    assert (F.s.tab, F.s.opened) == ("two", 1)
 
 
 def test_between_the_two_the_buttons_keep_their_words_where_every_tab_holds_them():

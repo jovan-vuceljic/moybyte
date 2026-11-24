@@ -1276,7 +1276,7 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         if win.saved is None or self._is_game(win) \
                 or not (win.y <= py < win.y + self._row_h()):
             return False
-        return bool(win.row) or px < self._full_slot(win)
+        return bool(win.row) or px < self._row_start(win)
 
     def toggle_max(self, win):
         """Full screen <-> restored: the whole glass, remembering the rect a
@@ -1359,15 +1359,37 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         height, the window's width."""
         return (win.x, win.y, win.w, self._row_h())
 
+    def _row_end(self, win):
+        """Where a full-screen row's band zone ends: short of the corner's
+        controls."""
+        return win.corner - _layout_base.chrome_size(self._fs()) * 16 // _layout_base.render_scale()
+
+    def _row_tight(self, win):
+        """Whether the row `win`'s app lends its band, as icons, needs more
+        than the room from the title slot to the corner's controls: the
+        title then gives way, the head its icon alone, and the zone starts
+        after it (`_row_start`)."""
+        need = self.ws.bar_layer.row_need(win.kind)
+        return need > 0 and need > self._row_end(win) - self._full_slot(win)
+
+    def _row_start(self, win):
+        """Where a full-screen row's band zone starts: the title slot's end,
+        or past the head's icon where the row is tight."""
+        if not self._row_tight(win):
+            return self._full_slot(win)
+        a = self._row_args(win)
+        r = _strip.head(a[0], a[1], "", a[3], a[4], a[5], a[6])
+        return r[0] + r[2] + _strip.GAP * a[1]
+
     def band_span(self):
         """(x0, x1) the band's lent zone runs between in the window whose
         layouts are installed, where it is a full-screen row: from the title
-        slot to the corner's controls. None anywhere else."""
+        slot (or the head's icon, `_row_start`) to the corner's controls.
+        None anywhere else."""
         win = self._installed
         if win is None or win.saved is None or win.row:
             return None
-        n = _layout_base.chrome_size(self._fs()) * 16 // _layout_base.render_scale()
-        return (self._full_slot(win), win.corner - n)
+        return (self._row_start(win), self._row_end(win))
 
     def dock(self, kind, rect):
         """Stand window `kind` in `rect` (glass coordinates) with no frame and

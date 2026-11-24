@@ -20,6 +20,7 @@ import uitree_app
 
 s = ui.state(
     at="",
+    w=220,
     cap="",
     apart=False,
     more="",
@@ -46,7 +47,7 @@ ui.action("destroy", "Choose", _choose, takes="row")     # a danger row's: the s
 
 def page():
     with ui.page(""):
-        with ui.popover("System", w="{@desk?220:150}", at="{at}"):
+        with ui.popover("System", w="{w}", at="{at}"):
             with ui.menu("{cap}"):
                 with ui.rows("rows", cur="sel"):
                     ui.item("choose", label="{.id}", icon="{.icon}", shown=".grp=first")

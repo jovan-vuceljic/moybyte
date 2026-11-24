@@ -534,6 +534,16 @@ LC_KINDS = {"tab": 0, "button": 1, "text": 2}
 LC_ALONE, LC_CUR, LC_ON, LC_MARKED, LC_PRIMARY = 1, 2, 4, 8, 16
 
 
+class _Take:
+    """A More menu's row: its cell taken (`BarZone.activate`)."""
+
+    def __init__(self, zone, kind, key, value, act):
+        self.zone, self.kind, self.key, self.value, self.act = zone, kind, key, value, act
+
+    def __call__(self):
+        self.zone.activate(self.kind, self.key, self.value, self.act)
+
+
 def lent_place(cells, x0, w, h, fs, pad):
     """The lent row's rule (`BarZone`'s): `cells` (kind, flags, the width
     named: the look's with its label, 0 where it has none) each, in a zone
@@ -652,7 +662,9 @@ class BarZone:
     and the buttons' words, where that fits at no gaps whichever tab is
     current; else the same with the buttons as icons; else icons alone,
     LEAST apart. Gaps share the room left, up to GAP, the rest before the
-    end run.
+    end run. Where the icons alone do not fit, the row keeps the cells that
+    fit beside a More at its end, whose menu (`look.open_more`) holds the
+    rest, each taken there as a tap takes it.
 
     `zone_gen` moves when the host's own generation does (`host.zone_gen`:
     a tab opened, a cart opened) or when a handler moved the page's state
@@ -670,7 +682,11 @@ class BarZone:
     END = 6          # the room after the end run: with the bar's gap, its ink stands
                      # 10 px clear of the status widgets that follow (R4-26)
 
+    # The More a row too narrow for its icons ends with: a cell as `Engine.lent` answers one.
+    MORE = ("button", "more", None, "More", "more", LC_ALONE | LC_ON, None)
+
     def __init__(self, engine, look, site="bar", host=None):
+        self.folded = ()            # the cells the last layout put in the More's menu
         self.engine = engine
         self.look = look
         self.host = look if host is None else host
@@ -733,8 +749,20 @@ class BarZone:
         if not cells:
             return [], [], 0
         x0, y, w, h = rect
-        density, places, hair, _need = self.engine.lent_place(
-            self._spec(cells, h), x0, w, h, self.look.zone_scale(), self.look.tab_pad())
+        fs, pad = self.look.zone_scale(), self.look.tab_pad()
+        spec = self._spec(cells, h)
+        density, places, hair, _need = self.engine.lent_place(spec, x0, w, h, fs, pad)
+        self.folded = ()
+        if places and places[-1][1] < 0:
+            more = self._spec((self.MORE,), h)
+            k = len(cells)
+            while k > 0:
+                k -= 1
+                density, places, hair, _need = self.engine.lent_place(spec[:k] + more, x0, w, h, fs, pad)
+                if places[-1][1] >= 0:
+                    break
+            self.folded = cells[k:]
+            cells = cells[:k] + [self.MORE]
         out = []
         for c, (x, cw, labelled) in zip(cells, places):
             if cw < 0:
@@ -791,8 +819,21 @@ class BarZone:
                 break
         if hit is None or hit[1] == "text":
             return False
-        self.activate(hit[1], hit[2], hit[3], hit[8])
+        if hit[2] == "more" and hit[8] is None:
+            self.open_more(hit[0])
+        else:
+            self.activate(hit[1], hit[2], hit[3], hit[8])
         return True
+
+    def open_more(self, rect):
+        """The More's menu, hung from its cell `rect` (the zone's
+        coordinates): a row a folded cell, its name and icon, taken as a tap
+        on it takes it."""
+        rows = []
+        for kind, key, value, label, icon, _flags, act in self.folded:
+            if kind != "text":
+                rows.append((label, icon, _Take(self, kind, key, value, act)))
+        self.look.open_more(rows, rect)
 
     def activate(self, kind, key, value, act):
         """A cell taken (a tap, the bar's keys): a tab writes its value and

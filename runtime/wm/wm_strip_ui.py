@@ -1,6 +1,7 @@
 """A window's title strip as a placed page: the back chevron while its app
 has a page open, the window's icon and title (one bar item that takes what
-the buttons leave, its title cut with "…"), then minimise, maximise and
+the buttons leave, its title cut with "…"; with no title, the icon alone at
+the strip's start, the room after it empty), then minimise, maximise and
 close, every one a bar item (`button kind="bar"`) in the strip's ink
 (`tone`); on a full-screen window's row maximise shows restore
 (`max_icon`). The window manager places it on the strip of the frame it drew
@@ -18,7 +19,8 @@ import uitree as ui
 PAD = 8
 GAP = 10
 
-s = ui.state(title="", icon="app", tone="", back_on=False, pad=PAD, max_icon="maximize")
+s = ui.state(title="", icon="app", tone="", back_on=False, pad=PAD, max_icon="maximize",
+             titled=True)
 
 TAP = [None]        # the window manager's run of a strip button: f(name)
 
@@ -55,11 +57,22 @@ ui.action("max", "Maximise", _max, hint="Maximise")
 ui.action("close", "Close", _close, hint="Close")
 
 
+def _titled():
+    with ui.row("titled", grow=True):
+        ui.button("head", label="{title}", icon="{icon}", kind="bar", tone="{tone}", grow=True)
+
+
+def _bare():
+    with ui.row("bare", grow=True):
+        ui.button("head", icon="{icon}", alone=True, kind="bar", tone="{tone}")
+        ui.row("room")
+
+
 def strip():
     with ui.page(""):
         with ui.row("strip", pad="{pad}", gap=GAP, grow=True):
             ui.button("back", icon="back", alone=True, kind="bar", tone="{tone}", shown="back_on")
-            ui.button("head", label="{title}", icon="{icon}", kind="bar", tone="{tone}", grow=True)
+            ui.switch("titled", {True: _titled, False: _bare})
             ui.button("min", icon="minimize", alone=True, kind="bar", tone="{tone}")
             ui.button("max", icon="{max_icon}", alone=True, kind="bar", tone="{tone}")
             ui.button("close", icon="close", alone=True, kind="bar", tone="{tone}")

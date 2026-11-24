@@ -16,6 +16,7 @@ given back first."""
 import wm_strip_ui
 
 _PAD = wm_strip_ui.PAD
+GAP = wm_strip_ui.GAP
 
 s = wm_strip_ui.s
 _PAGE = [None]
@@ -51,6 +52,7 @@ def _states(title, icon, tone, back, unit, inset, full=False):
     page = _page()
     page._bind()
     _put("title", title)
+    _put("titled", bool(title))
     _put("icon", icon)
     _put("tone", tone)
     _put("back_on", back)
