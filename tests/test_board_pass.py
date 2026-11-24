@@ -32,24 +32,26 @@ def args(*argv):
 # -- the plan ----------------------------------------------------------------
 
 
-def test_every_console_board_has_a_suite_and_the_zero_has_none():
-    """The C3 Zero's suite boots its browser console through the loader
-    (docs/web_console_online_2026-11.md §11); the XIAO Zero has none."""
+ZEROS = ["c3_zero", "xiao_zero"]
+
+
+def test_every_board_has_a_suite_and_the_zeros_share_one():
+    """The two Zeros' suite names each as a (variable, board dir) row."""
     s = board_pass.suites(ROOT, DIRS)
-    assert sorted(s) == sorted(CONSOLES + ["c3_zero"])
+    assert sorted(s) == sorted(CONSOLES + ZEROS)
     for name, (path, var) in s.items():
         assert os.path.isfile(os.path.join(ROOT, path))
         assert var.startswith("MOYBYTE_") and var.endswith("_PORT")
         with open(os.path.join(ROOT, path)) as f:
             assert var in f.read()
-    assert "xiao_zero" not in s
+    assert s["xiao_zero"] == ("tests/test_zero_on_glass.py", "MOYBYTE_XIAO_ZERO_PORT")
+    assert s["c3_zero"] == ("tests/test_zero_on_glass.py", "MOYBYTE_C3_ZERO_PORT")
 
 
 @pytest.mark.parametrize("argv, says", [
     ((), "which boards"),
     (("tdeck", "--all"), "not both"),
     (("nope",), "no board 'nope'"),
-    (("xiao_zero",), "never passed"),
 ])
 def test_a_pass_that_cannot_start_says_why(argv, says):
     with pytest.raises(board_pass.PassError, match=says):
@@ -61,7 +63,13 @@ def test_all_is_every_console_board_and_never_the_zero():
 
 
 def test_a_headless_board_with_a_suite_is_passed_by_name():
-    assert board_pass.plan(args("c3_zero"), DIRS, False) == ["c3_zero"]
+    assert board_pass.plan(args("xiao_zero", "c3_zero"), DIRS, False) == ["xiao_zero", "c3_zero"]
+
+
+def test_a_headless_board_without_a_suite_is_never_passed(monkeypatch):
+    monkeypatch.setattr(board_pass, "suites", lambda root=None, dirs=None: {})
+    with pytest.raises(board_pass.PassError, match="never passed"):
+        board_pass.plan(args("c3_zero"), DIRS, main_checkout=False)
 
 
 def test_the_main_checkout_is_refused_for_a_build_and_says_why():
@@ -113,7 +121,10 @@ class FakeSteps:
         self.build_barrier = build_barrier
         self.web_rc = 0
         self.perf = {}                  # board -> the record its perf stage writes
+        self.zero_perf = {}             # board -> the record its suite writes
+        self.suite_at = {}              # board -> (start, end) of its suite
         self.perf_s = 0.0
+        self.suite_s = 0.0
         self.perf_live = self.perf_peak = 0
         self.live = {}
         self.peak = {}
@@ -171,9 +182,18 @@ class FakeSteps:
             return rc
         if "pytest" in cmd:
             xml = cmd[cmd.index("--junitxml") + 1]
-            failing = self.fail.get(env and next(
-                (n for n, (_p, v) in board_pass.suites(ROOT, DIRS).items()
-                 if v in env), None), ())
+            # a Zero's suite is given the T-Deck's port too: the Zero is its board
+            names = [n for n, (_p, v) in board_pass.suites(ROOT, DIRS).items()
+                     if env and v in env]
+            name = next((n for n in names if n != "tdeck"), names[0] if names else None)
+            t0 = time.monotonic()
+            time.sleep(self.suite_s)
+            self.suite_at[name] = (t0, time.monotonic())
+            rec = self.zero_perf.get(name)
+            if rec is not None and "MOYBYTE_ZERO_PERF_OUT" in env:
+                with open(env["MOYBYTE_ZERO_PERF_OUT"], "w") as f:
+                    json.dump(rec, f)
+            failing = self.fail.get(name, ())
             cases = ['<testcase classname="t" name="test_ok_%d"/>' % i
                      for i in range(3)]
             cases.append('<testcase classname="t" name="test_skip">'
@@ -241,16 +261,66 @@ def test_each_step_gets_the_resolved_port_and_the_suite_its_variable(bench):
     assert env["MOYBYTE_TDECK_PORT"] == "/dev/fake-tdeck"
 
 
-def test_a_headless_board_is_flashed_and_its_suite_run_and_nothing_else(bench):
-    """The C3 Zero answers no dev channel: no desk, add-on, reboot, perf or
-    shot, only the flash and its suite on the port it was given."""
+def test_a_headless_board_is_flashed_reset_and_its_suite_run_and_nothing_else(bench):
+    """A Zero answers no dev channel: no desk, add-on, perf stage or shot,
+    only the flash, the reset to its boot line and its suite on the port it
+    was given, told where to write its record and which image it holds."""
     steps = FakeSteps()
     assert run_pass(bench, steps, "c3_zero", "--shot") == 0
     verbs = [c[3] for c, _e in steps.cmds if c[1:2] == [board_pass.BOARD_PY]]
-    assert verbs == ["flash"]
+    assert verbs == ["flash", "reboot"]
+    assert not [c for c, _e in steps.cmds if c[1:2] == [board_pass.PERF_PY]]
     suite = [(c, e) for c, e in steps.cmds if "pytest" in c]
-    assert len(suite) == 1 and "tests/test_c3_zero_on_glass.py" in suite[0][0]
-    assert suite[0][1]["MOYBYTE_C3_ZERO_PORT"] == "/dev/fake-c3_zero"
+    assert len(suite) == 1 and "tests/test_zero_on_glass.py" in suite[0][0]
+    env = suite[0][1]
+    assert env["MOYBYTE_C3_ZERO_PORT"] == "/dev/fake-c3_zero"
+    assert env["MOYBYTE_ZERO_PERF_OUT"] == str(bench / "logs" / "c3_zero.perf.json")
+    assert env["MOYBYTE_ZERO_IMAGE"] == "c2d35a0c"
+
+
+def test_a_zero_s_record_is_its_suite_s_appended_and_printed(bench, capsys):
+    steps = FakeSteps()
+    steps.zero_perf["xiao_zero"] = perf_pass.record(
+        "xiao_zero", {"zero live rtt median": perf_pass.metric(6.0, "ms", "lower", [5, 6, 7])},
+        "c2d35a0c", protocol=perf_pass.protocol(perf_pass.AFTER_SUITE))
+    assert run_pass(bench, steps, "xiao_zero", "c3_zero") == 0
+    hist = perf_pass.history("xiao_zero")
+    assert [r["metrics"]["zero live rtt median"]["value"] for r in hist] == [6.0]
+    out = capsys.readouterr().out
+    assert "xiao_zero perf" in out and "zero live rtt median" in out
+    assert "c3_zero: the suite wrote no perf record" in out
+    assert perf_pass.history("c3_zero") == []
+
+
+def test_no_perf_tells_a_zero_s_suite_to_write_no_record(bench):
+    steps = FakeSteps()
+    assert run_pass(bench, steps, "c3_zero", "--no-perf") == 0
+    env = [e for c, e in steps.cmds if "pytest" in c][0]
+    assert "MOYBYTE_ZERO_PERF_OUT" not in env
+
+
+def test_zeros_with_the_tdeck_play_it_after_its_row_one_at_a_time(bench):
+    """The T-Deck's own suite and perf stage end before a Zero's suite
+    starts; the two Zeros take it in turn, each given its port."""
+    steps = FakeSteps()
+    steps.suite_s = 0.1
+    assert run_pass(bench, steps, "tdeck", "xiao_zero", "c3_zero") == 0
+    zeros = [(c, e) for c, e in steps.cmds if "pytest" in c and "test_zero_on_glass" in " ".join(c)]
+    assert len(zeros) == 2
+    for _c, e in zeros:
+        assert e["MOYBYTE_TDECK_PORT"] == "/dev/fake-tdeck"
+    deck_end = max(steps.suite_at["tdeck"])
+    (a0, a1), (b0, b1) = sorted(steps.suite_at[n] for n in ZEROS)
+    assert deck_end <= a0 and a1 <= b0
+
+
+def test_zeros_without_the_tdeck_are_given_no_port_of_it(bench, monkeypatch):
+    monkeypatch.delenv("MOYBYTE_TDECK_PORT", raising=False)
+    steps = FakeSteps()
+    assert run_pass(bench, steps, "xiao_zero", "c3_zero") == 0
+    for c, e in steps.cmds:
+        if "pytest" in c:
+            assert "MOYBYTE_TDECK_PORT" not in e
 
 
 def test_the_tdeck_is_put_at_volume_0_around_its_suite(bench):

@@ -135,9 +135,15 @@ from a worktree (`tools/worktree.py new NAME`): in the main checkout a build is
 refused without `--main`, because its `dist/` is what every other session
 flashes. It skips a board whose port is held, naming the holder, and leaves
 each board at its launcher, the T-Deck at volume 0. `--all` is the console
-boards; the C3 Zero is passed by name (`pass c3_zero`: build, flash and its
-suite, `tests/test_c3_zero_on_glass.py`, which boots its browser console
-through the loader in headless Chrome), and the XIAO Zero never. The
+boards; the two Zeros are passed by name (`pass xiao_zero c3_zero`: build,
+flash, a reset to the boot line, and their one suite,
+`tests/test_zero_on_glass.py`), whose numbers (internal RAM idle and with
+the live socket open, the echo's round trip, the Improv join, the page
+load) are the board's perf record, appended and printed as a console's
+stage's. With `tdeck` in the same pass each Zero's suite runs after the
+T-Deck's row, one Zero at a time, and plays a match against it from the
+page; export `MOYBYTE_BENCH_WIFI` (a wifi.json of the bench network) for
+the Improv join, which the suite otherwise skips. The
 `board-pass` agent (`.claude/agents/board-pass.md`) runs it and reports the
 table and the perf blocks.
 
@@ -206,7 +212,15 @@ MOYBYTE_GUITION_PORT=$(tools/board.py guition_s3 port) .venv/bin/python -m pytes
 MOYBYTE_P4_PORT=$(tools/board.py p4 port) .venv/bin/python -m pytest tests/test_p4_on_glass.py
 MOYBYTE_GUITION_P4_PORT=$(tools/board.py guition_p4 port) .venv/bin/python -m pytest tests/test_guition_p4_on_glass.py
 MOYBYTE_ELECROW_P4_PORT=$(tools/board.py elecrow_p4 port) .venv/bin/python -m pytest tests/test_elecrow_p4_on_glass.py
+MOYBYTE_C3_ZERO_PORT=$(tools/board.py c3_zero port) .venv/bin/python -m pytest tests/test_zero_on_glass.py
 ```
+
+The Zeros' suite reaches its board over Improv and the raw REPL (Ctrl-C
+stops the store host; the soft reset after starts it again) and gives the
+store back at its end: what it made goes, what it changed (the networks,
+the password, the paired browsers) is written back. A board with no
+password gets a bench one for the run; one with a password is signed into
+with `MOYBYTE_XIAO_ZERO_PASSWORD` / `MOYBYTE_C3_ZERO_PASSWORD`.
 
 The Waveshare's and the Elecrow's suites reset their boards at the start; the attach-only boards
 are attached to as they are, so their desk must be clean. Every suite gives the

@@ -144,7 +144,7 @@ the browser console its image names is that tree's own (`firmware/web_runner/`),
 which its loader fetches from that tree's `firmware/web_runner/serve.py` on
 this machine's LAN address (`tools/gen_web_blob.py`, THE MIRRORS): run it
 while a browser opens the board. `tools/board.py pass c3_zero` builds,
-flashes and runs `tests/test_c3_zero_on_glass.py`, which serves that pack
-and boots the console in headless Chrome. The
+flashes and runs both Zeros' suite, `tests/test_zero_on_glass.py`, which
+serves that pack and boots the console in headless Chrome. The
 build fails when the image outgrows the factory slot (the #168 guard reads the
 slot from this board's CSV). A flash that changes the table formats the store.
