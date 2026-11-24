@@ -66,6 +66,10 @@ name: Web console E2E
 #   tests/test_web_update_e2e.py   updating the board that serves the page:
 #                                  its strip and panel, for a headless board
 #                                  and for one with glass.
+#   tests/test_web_loader.py       the loader (docs/web_console_online_2026-11.md
+#                                  §3): serve.py's loader twin, an online
+#                                  board, boots the console from its mirror,
+#                                  then from the origin's cache.
 #
 # Every suite gated on MOYBYTE_WEB_E2E is named in the drive step below
 # (tests/test_preflight_web_filter.py), which is how first_run and
@@ -111,6 +115,7 @@ on:
       - "ports/jet/**"              # the Jet carts the wasm suite builds
       - "tools/jet_cart.py"
       - "tools/zopfli_gz.py"
+      - "tools/gen_web_blob.py"     # the loader page serve.py's loader twin serves
       - "tools/wasm_cart.py"
       - "tools/p8_import.py"        # the vendored converter the wasm freezes
       - "tools/p8_lua_port.py"      # ...the vendored PORTER, frozen beside it
@@ -134,6 +139,7 @@ on:
       - "ports/jet/**"
       - "tools/jet_cart.py"
       - "tools/zopfli_gz.py"
+      - "tools/gen_web_blob.py"     # the loader page serve.py's loader twin serves
       - "tools/wasm_cart.py"
       - "tools/p8_import.py"
       - "tools/p8_lua_port.py"
@@ -258,7 +264,7 @@ jobs:
             tests/test_web_store_e2e.py tests/test_web_wasm_e2e.py \
             tests/test_web_music_e2e.py tests/test_web_first_run_e2e.py \
             tests/test_web_audio_stream_e2e.py \
-            tests/test_web_desk_input_e2e.py \
+            tests/test_web_desk_input_e2e.py tests/test_web_loader.py \
             tests/test_web_fonts.py tests/test_web_look_parity.py \
             tests/test_editor_ladder_icons.py
 
