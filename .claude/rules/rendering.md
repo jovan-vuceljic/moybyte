@@ -1,7 +1,6 @@
 ---
 paths:
   - "runtime/**/*canvas*.py"
-  - "runtime/toolkit/ui.py"
   - "runtime/toolkit/ui_draw.py"
   - "runtime/shell/chrome.py"
   - "runtime/**/*_layer.py"

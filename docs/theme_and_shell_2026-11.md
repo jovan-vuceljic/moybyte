@@ -1064,8 +1064,8 @@ Ruled 2026-10-13 by step 3 (Tiny5 lands), each the pick that builds least:
     (its body, `_layout`, `_init`, `_update`, `_draw`; a wallpaper cart's
     frame), every role and the print font read petme128, and the shell's
     come back after. A responsive app's mode (`CART_APP`) keeps its print
-    and its colours inside while its `ui` verbs' sinks are outside. A
-    run's page on the RUN face draws as a cart's, petme128, unless its
+    and its colours inside while its UI tree's sinks are outside. A
+    run's page in the run's context draws as a cart's, petme128, unless its
     snapshot's face names the look (`moy_ui_run.h`).
     A built-in app cart (`system_carts/`, `system_api.draws_in_look`:
     Notes) runs outside it: its page is the UI tree engine's and its note

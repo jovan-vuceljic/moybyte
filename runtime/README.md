@@ -11,7 +11,7 @@ device required, so it is the fast dev loop.
 |---|---|
 | `shell/` | the console kernel: `console` and its `console_*` bases, `chrome`, the layer stack and the bars, the shell's stores and services, the input state |
 | `wm/` | the window managers: `wm` (the small screen's back stack), `wm_windowed` and its `wm_*` parts |
-| `toolkit/` | the draw toolkit: the public UI API (`ui`), `ui_draw` and its `ui_*` halves, widgets, layouts, fonts, icons, the clock (`ticks`) |
+| `toolkit/` | the draw toolkit: `ui_draw` and its `ui_*` halves, widgets, layouts, fonts, icons, the clock (`ticks`) |
 | `uitree/` | the UI tree API (`import uitree as ui`): typed state, named actions, pages as build functions, drawn by the C engine (native/moy_uitree) |
 | `home/` | the home: `launcher_layer` and its `home_*` parts |
 | `system/` | the system's own surfaces: Settings, the bar's popovers, the perf HUD, update, about, achievements, licences, the web console, the wallpaper, QR |
@@ -403,7 +403,7 @@ Content + tooling:
   `text_sig(src)` (the thumbnail model — an edit recomputes, a re-seed regenerates; no
   prebaked assets), so the page closes the redraw gate like any static UI.
   `system_carts/moybyte.notes.moy` (title: Notes) is the console's ONE text app and it
-  is a CART on the public UI API (`ui`): a vault table plus one note drawn through the
+  is a CART on the UI tree (`ui`): a vault table plus one note drawn through the
   editor handle (`runtime/editors/editor_handle.py`), holding no text of its own; a built-in,
   it draws in the look (`system_api.draws_in_look`), and on a desk its window is its
   surface (`Workstation.app_window_canvas`). Each note is a named
