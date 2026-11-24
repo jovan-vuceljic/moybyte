@@ -294,7 +294,7 @@ long moy_tty_in(moy_tty_t *f, void *buf, size_t n) {
             flush(f);
         }
         if (face && !readable(f, WAIT_MS)) {
-            if (f->interrupt) {
+            if (f->interrupt || f->hup) {
                 return -1;
             }
             continue;
