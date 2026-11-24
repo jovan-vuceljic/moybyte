@@ -1172,10 +1172,9 @@ MESH_NODES = {
 # The window's pages over its home, as its page stack holds them, and the Lua
 # that opens each: the surfaces after the home.
 MESH_PAGES = (
-    ("app_moymesh_thread", 'stack = {{kind="home"}, {kind="thread", key="ch0"}}'),
-    ("app_moymesh_details",
-     'stack[2].pop, stack[2].pop_fresh = threads.ch0.msgs[3], 2'),
-    ("app_moymesh_radio", 'stack = {{kind="home"}, {kind="radio"}}'),
+    ("app_moymesh_thread", 'ui._fire("open", {k = "ch0"})'),
+    ("app_moymesh_details", 'ui._fire("details", {n = 3, i = "m3"})'),
+    ("app_moymesh_radio", 'ui._fire("close_details"); ui.pop(); ui._fire("radio")'),
 )
 
 
@@ -1196,7 +1195,7 @@ def _mesh_installed(ws, desktop):
         pl.ns["prefs"].set("node", MESH_NODE)
         pl.ns["prefs"].set("log", MESH_LOG)
         pl.ns["prefs"].set("nodes", MESH_NODES)
-        wall = "wall = function() return %d, 0, true end; _reload()" % MESH_NOW
+        wall = "wall = function() return %d, 0, true end; ui._fire(\"tick\")" % MESH_NOW
         assert pl.lua.exec(wall, "golden") is None
     return run
 
@@ -1204,7 +1203,7 @@ def _mesh_installed(ws, desktop):
 def _mesh_page(ws, lua):
     def run():
         pl = ws.run.player
-        assert pl.lua.exec(lua + "; fresh = true; _reload()", "golden") is None
+        assert pl.lua.exec(lua, "golden") is None
     return run
 
 

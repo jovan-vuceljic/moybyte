@@ -1,5 +1,5 @@
--- Moy Mesh's Radio and Region pages (draw_radio and draw_region in
--- tests/fixtures/apps/moymesh.moy/main.lua) in the UI tree API.
+-- Moy Mesh's Radio and Region pages (tests/fixtures/apps/moymesh.moy/main.lua's)
+-- alone, over data.lua's prefs.
 
 ui.app("Moy Mesh", { icon = "bubble" })
 

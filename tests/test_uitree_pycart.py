@@ -13,7 +13,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path[:0] = [ROOT, HERE]
 
-import uitree_lua_parity as parity  # noqa: E402
+import uitree_lua_shots as shots  # noqa: E402
 
 PAGES = '''s = ui.state(n=0)
 ui.app("Two Pages", icon="calc")
@@ -79,7 +79,7 @@ def _run(tmp_path, title, main, ext=("moybyte.uitree",), perms=()):
     carts = str(tmp_path / "carts")
     host_app.moy_carts.ensure_dirs(carts)
     _cart(carts, title, main, ext, perms)
-    ws = host_app.build_workstation(carts, **parity.SIZES["320"])
+    ws = host_app.build_workstation(carts, **shots.SIZES["320"])
     drv = host_app.ConsoleDriver(ws)
     cart = next(c for c in ws.carts.all if c["title"] == title)
     ws.consent.record(app_perms.app_id(cart), list(perms))
@@ -88,7 +88,7 @@ def _run(tmp_path, title, main, ext=("moybyte.uitree",), perms=()):
     def frame():
         quiesce(ws)
         ws.mark_dirty()
-        drv.frame(parity.DT)
+        drv.frame(shots.DT)
     for _ in range(3):
         frame()
     return ws, drv, frame

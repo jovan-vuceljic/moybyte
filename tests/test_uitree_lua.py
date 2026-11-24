@@ -3,7 +3,7 @@
 - An app written in it opens, paints, takes input and closes beside today's.
 - Moy Mesh's thread and Radio ports draw their recorded frames through one
   input script, on the handheld and in a desk window
-  (tests/uitree_lua_parity.py, which also draws them beside the hand-written
+  (tests/uitree_lua_shots.py, which also draws them beside the hand-written
   pages they port).
 - The checker (tools/uitree_lua_check.py): one failing case per error code a
   Lua app can raise, each reported at its file and line.
@@ -21,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path[:0] = [ROOT, HERE, os.path.join(ROOT, "tools")]
 
-import uitree_lua_parity as parity  # noqa: E402
+import uitree_lua_shots as shots  # noqa: E402
 import uitree_lua_check as checker  # noqa: E402
 
 FIX = os.path.join(HERE, "fixtures", "uitree_lua")
@@ -48,14 +48,14 @@ def _cart(root, name, main, extra=None):
 def _console(carts, size="320"):
     from runtime import host_app
     from ws_helpers import open_cart, quiesce
-    ws = host_app.build_workstation(carts, **parity.SIZES[size])
+    ws = host_app.build_workstation(carts, **shots.SIZES[size])
     ws.look.set_theme("moy", persist=False, variant="dark")
     drv = host_app.ConsoleDriver(ws)
 
     def frame():
         quiesce(ws)
         ws.mark_dirty()
-        drv.frame(parity.DT)
+        drv.frame(shots.DT)
     return ws, drv, frame, open_cart
 
 
@@ -155,24 +155,24 @@ def test_a_deflated_chunk_has_one_window_on_every_tier():
     assert ring == 1 << freeze.WBITS == 1 << lua_binding.Z_WBITS
 
 
-@pytest.mark.parametrize("size", sorted(parity.SIZES))
-@pytest.mark.parametrize("pair", sorted(parity.PAIRS))
-def test_the_ports_draw_their_recorded_frames(pair, size, request):
-    """Each named shot of a port's script, pinned by its hash
+@pytest.mark.parametrize("size", sorted(shots.SIZES))
+@pytest.mark.parametrize("screen", sorted(shots.SCREENS))
+def test_the_mesh_screens_draw_their_recorded_frames(screen, size, request):
+    """Each named shot of a screen's script, pinned by its hash
     (tests/shell_goldens/uitree_mesh.json). Re-baseline as the shell goldens
     are, `MOYBYTE_UPDATE_GOLDENS=1` or `--update-goldens`, once
-    `tests/uitree_lua_parity.py OUT PAIR` shows what moved."""
+    `tests/uitree_lua_shots.py OUT SCREEN` shows what moved."""
     import hashlib
     import pixel_goldens
-    (_old, _), (port, extra), script = parity.PAIRS[pair]
-    (w, h), shots, errors, _logs = parity.play(port, extra, script, size)
+    cart, extra, script = shots.SCREENS[screen]
+    (w, h), got_shots, errors, _logs = shots.play(cart, extra, script, size)
     assert errors == []
     update = os.environ.get("MOYBYTE_UPDATE_GOLDENS") or request.config.getoption("--update-goldens", default=False)
     table = {}
     if os.path.isfile(MESH_GOLDENS):
         with open(MESH_GOLDENS) as f:
             table = json.load(f)
-    got = {"%s_%s_%s" % (pair, size, name): hashlib.sha256(img).hexdigest() for name, img in shots.items()}
+    got = {"%s_%s_%s" % (screen, size, name): hashlib.sha256(img).hexdigest() for name, img in got_shots.items()}
     if update:
         table.update(got)
         with open(MESH_GOLDENS, "w") as f:
@@ -180,7 +180,7 @@ def test_the_ports_draw_their_recorded_frames(pair, size, request):
             f.write("\n")
         return
     moved = [pixel_goldens.check(k, got[k], table.get(k), lambda img=img: [img[y * w * 3:(y + 1) * w * 3] for y in range(h)],
-                                 w, h) for k, img in zip(got, shots.values())]
+                                 w, h) for k, img in zip(got, got_shots.values())]
     assert not any(moved), "the shots %s moved%s" % ([k for k, m in zip(got, moved) if m], pixel_goldens.message(moved))
 
 
@@ -920,9 +920,9 @@ def test_the_checker_reports_each_code_at_its_line(case, tmp_path):
 @pytest.mark.parametrize("cart", ["counter", "mesh_thread", "mesh_radio"])
 def test_the_fixtures_check_clean(cart, tmp_path):
     d = os.path.join(str(tmp_path), cart + ".moy")
-    shutil.copytree(parity.fixture(cart), d)
+    shutil.copytree(shots.fixture(cart), d)
     for f in ("mesh.lua", "data.lua"):
-        src = os.path.join(parity.MESH, f) if f == "mesh.lua" else os.path.join(parity.fixture("mesh_thread"), f)
+        src = os.path.join(shots.MESH, f) if f == "mesh.lua" else os.path.join(shots.fixture("mesh_thread"), f)
         if not os.path.exists(os.path.join(d, f)):
             shutil.copy(src, d)
     assert checker.check(d) == []

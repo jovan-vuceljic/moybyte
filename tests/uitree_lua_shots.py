@@ -1,9 +1,10 @@
-"""Old against port: a hand-written Lua screen and its UI tree port on the C
-engine, staged side by side on the host console and driven by one input
-script, a shot at each named step. tests/test_uitree_lua.py pins the port's
-shots by their hashes; run this by hand to keep both halves' shots:
+"""Moy Mesh's thread and Radio screens as UI tree fixtures over a stand-in
+radio (tests/fixtures/uitree_lua/mesh_thread.part, mesh_radio.part), staged
+on the host console and driven by one input script, a shot at each named
+step. tests/test_uitree_lua.py pins the shots by their hashes; run this by
+hand to see them:
 
-    .venv/bin/python tests/uitree_lua_parity.py OUT_DIR [pair ...]
+    .venv/bin/python tests/uitree_lua_shots.py OUT_DIR [screen ...]
 """
 import os
 import shutil
@@ -20,7 +21,7 @@ FIX = os.path.join(HERE, "fixtures", "uitree_lua")
 
 def fixture(name):
     """A fixture's folder: NAME.moy is a whole cart; NAME.part is a cart's
-    half, staged with files from elsewhere (PAIRS), which no scan of
+    half, staged with files from elsewhere (SCREENS), which no scan of
     tests/**/*.moy may take for a cart."""
     whole = os.path.join(FIX, name + ".moy")
     return whole if os.path.isdir(whole) else os.path.join(FIX, name + ".part")
@@ -37,21 +38,18 @@ CLOCK = 1763553600 + 8 * 3600 + 20 * 60
 SIZES = {"320": dict(sys_size=None, font_scale=1, windowed=False),
          "1024": dict(sys_size=(1024, 600), font_scale=2, windowed=True)}
 
-# a pair: (old cart, its files from elsewhere), (port cart, its files), script.
-# A step is a key ("up", "a"), "type:TEXT", "enter", "key:CODE", "wait:N",
-# "tap:X,Y", "drag:X0,Y0,X1,Y1" or "shot:NAME"; DESK moves a 320 point into
-# the desk window.
+# a screen: (its cart, its files from elsewhere, script). A step is a key
+# ("up", "a"), "type:TEXT", "enter", "key:CODE", "wait:N", "tap:X,Y",
+# "drag:X0,Y0,X1,Y1" or "shot:NAME"; DESK moves a 320 point into the desk
+# window.
 THREAD_SCRIPT = ["shot:thread", "tap:150,206", "wait:2", "shot:field", "type:hello mesh", "shot:typed",
                  "enter", "wait:4", "shot:sent", "wait:40", "shot:failed", "up", "wait:20", "shot:up"] + \
                 ["drag:160,70,160,200"] * 4 + ["wait:30", "shot:top", "a", "wait:20", "shot:details"]
 RADIO_SCRIPT = ["shot:radio", "down", "wait:10", "shot:region_link", "a", "wait:10", "shot:region",
                 "down", "a", "wait:10", "shot:chosen", "b", "wait:10", "shot:back"]
-PAIRS = {
-    "radio": (("mesh_radio_old", [(MESH, "mesh.lua"), (MESH, "main.lua"), ("mesh_thread", "data.lua"),
-                                  ("mesh_old", "stub.lua")]),
-              ("mesh_radio", [(MESH, "mesh.lua"), ("mesh_thread", "data.lua")]), RADIO_SCRIPT),
-    "thread": (("mesh_old", [(MESH, "mesh.lua"), (MESH, "main.lua"), ("mesh_thread", "data.lua")]),
-               ("mesh_thread", [(MESH, "mesh.lua")]), THREAD_SCRIPT),
+SCREENS = {
+    "radio": ("mesh_radio", [(MESH, "mesh.lua"), ("mesh_thread", "data.lua")], RADIO_SCRIPT),
+    "thread": ("mesh_thread", [(MESH, "mesh.lua")], THREAD_SCRIPT),
 }
 DESK = {"drag:160,70,160,200": "drag:700,150,700,480", "tap:150,206": "tap:650,545"}
 
@@ -147,47 +145,18 @@ def play(name, extra, script, size, launch=None):
     return (cv.w, cv.h), shots, errors, logs
 
 
-def compare(pair, size):
-    """Both runs of `pair` at `size`: (glass size, old shots, port shots, the
-    errors of both, the port's log)."""
-    (old, oextra), (port, pextra), script = PAIRS[pair]
-    wh, a, ea, _ = play(old, oextra, script, size)
-    _, b, eb, logs = play(port, pextra, script, size)
-    return wh, a, b, ea + eb, logs
-
-
-def differing(wh, a, b, mask=()):
-    """The bounding box of the pixels that differ outside `mask` (x0, y0, x1,
-    y1 rects), and their count."""
-    w, h = wh
-    n, box = 0, None
-    for y in range(h):
-        row = y * w * 3
-        if a[row:row + w * 3] == b[row:row + w * 3]:
-            continue
-        for x in range(w):
-            i = row + x * 3
-            if a[i:i + 3] != b[i:i + 3] and not any(x0 <= x < x1 and y0 <= y < y1 for x0, y0, x1, y1 in mask):
-                n += 1
-                box = (x, y, x + 1, y + 1) if box is None else (min(box[0], x), min(box[1], y),
-                                                                 max(box[2], x + 1), max(box[3], y + 1))
-    return box, n
-
-
 def main():
     from PIL import Image
     out = sys.argv[1]
     os.makedirs(out, exist_ok=True)
-    for pair in sys.argv[2:] or sorted(PAIRS):
+    for name in sys.argv[2:] or sorted(SCREENS):
+        cart, extra, script = SCREENS[name]
         for size in SIZES:
-            wh, a, b, errs, logs = compare(pair, size)
-            for e in errs:
+            wh, shots, errors, _logs = play(cart, extra, script, size)
+            for e in errors:
                 print("  ERROR", e)
-            for name in a:
-                box, n = differing(wh, a[name], b[name])
-                print("%s %s %-16s %s" % (pair, size, name, "equal" if n == 0 else "%d px in %s" % (n, box)))
-                for tag, img in (("old", a[name]), ("port", b[name])):
-                    Image.frombytes("RGB", wh, img).save(os.path.join(out, "%s_%s_%s_%s.png" % (pair, size, name, tag)))
+            for shot, img in shots.items():
+                Image.frombytes("RGB", wh, img).save(os.path.join(out, "%s_%s_%s.png" % (name, size, shot)))
 
 
 if __name__ == "__main__":
