@@ -70,7 +70,7 @@
 #if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
 // a session's arena where there is no PSRAM (the C3 Zero): the SSH face's size
 // (native/moy_tty/moy_tty_sh.c, ARENA), so a job (cron, at, a service) fits
-// the one internal heap, whose largest free block is about 100 KB at rest
+// the one internal heap beside the rest (its sizes: #41)
 #define MOY_SH_ARENA (12u * 1024u)
 #else
 #define MOY_SH_ARENA (128u * 1024u)     // a session's arena

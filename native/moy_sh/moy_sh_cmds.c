@@ -877,14 +877,24 @@ static void grep_line(grep_t *g, const char *name, const char *line, size_t n,
 
 // A line at a time, the input never copied into the session's arena, which
 // is 12 KB where there is no PSRAM (MOY_SH_ARENA, the C3 Zero's SSH face),
-// smaller than most logs. A line longer than GREP_LINE is matched and printed
-// on its first GREP_LINE bytes.
-#define GREP_LINE 1024
+// smaller than most logs. The line's buffer is the session heap's, GREP_LINE
+// to start, doubled for a longer line up to GREP_LINE_MAX (so one line never
+// takes the console's heap); a line longer than the buffer the heap could
+// give is matched and printed on its first bytes, and with no buffer at all
+// on GREP_SMALL of the stack.
+#define GREP_LINE 1024u
+#define GREP_LINE_MAX (64u * 1024u)
+#define GREP_SMALL 128u
 static int grep_one(int fd, const char *name, void *arg) {
     grep_t *g = arg;
-    char buf[512], line[GREP_LINE];
-    size_t ln = 0;
-    int open_line = 0;
+    char buf[512], small[GREP_SMALL];
+    char *line = moy_sh_halloc(GREP_LINE);
+    size_t cap = GREP_LINE, ln = 0;
+    if (line == NULL) {
+        line = small;
+        cap = sizeof small;
+    }
+    int open_line = 0, full = line == small;   // full: this line grows no more
     unsigned long count = 0, lineno = 0;
     ssize_t n;
     while ((n = read(fd, buf, sizeof buf)) > 0) {
@@ -893,16 +903,31 @@ static int grep_one(int fd, const char *name, void *arg) {
                 grep_line(g, name, line, ln, ++lineno, &count);
                 ln = 0;
                 open_line = 0;
-            } else {
-                if (ln < GREP_LINE) {
-                    line[ln++] = buf[i];
-                }
-                open_line = 1;
+                full = line == small;
+                continue;
             }
+            if (ln == cap && !full) {
+                char *more = cap < GREP_LINE_MAX ? moy_sh_halloc(cap * 2u) : NULL;
+                if (more != NULL) {
+                    memcpy(more, line, ln);
+                    moy_sh_hfree(line);
+                    line = more;
+                    cap *= 2u;
+                } else {
+                    full = 1;
+                }
+            }
+            if (ln < cap) {
+                line[ln++] = buf[i];
+            }
+            open_line = 1;
         }
     }
     if (open_line) {
         grep_line(g, name, line, ln, ++lineno, &count);
+    }
+    if (line != small) {
+        moy_sh_hfree(line);
     }
     if (g->count) {
         if (g->many) {
