@@ -683,6 +683,40 @@ def test_edit_opens_full_screen_saves_and_gives_the_grid_back(term, tmp_path):
     assert plain(app)[-1] == "$ edit /sd/moybyte/system/settings"
 
 
+def test_vi_s_key_row_leaves_insert_saves_and_quits_on_the_tdeck(term, tmp_path):
+    """The T-Deck's keyboard has no Esc, so vi's key row carries it: Esc
+    leaves INSERT, Save writes from INSERT, and Quit gives the shell back;
+    view's row is Quit alone."""
+    from runtime import ui_draw
+    ws, app = term
+    kinds = ui_draw.input_kind(), ui_draw.hint_kind()
+    ui_draw.input_kind("tdeck")
+    ui_draw.hint_kind("tdeck")
+    try:
+        run(app, "mkdir -p /sd/moybyte")
+        run(app, "vi /sd/moybyte/v.txt")
+        _frame(ws)
+        assert app.face.app() == "vi"
+        _keys(app, b"ihi")
+        assert "-- INSERT --" in plain(app)[-1]
+        app.face.press("Esc")
+        assert "-- INSERT --" not in plain(app)[-1]
+        _keys(app, b"A there")
+        app.face.press("Save")
+        path = tmp_path / "sd" / "moybyte" / "v.txt"
+        assert path.read_text() == "hi there" and app.face.app() == "vi"
+        app.face.press("Quit")
+        assert app.face.app() is None
+        run(app, "view /sd/moybyte/v.txt")
+        _frame(ws)
+        assert app.face.app() == "view"
+        app.face.press("Quit")
+        assert app.face.app() is None
+    finally:
+        ui_draw.input_kind(kinds[0])
+        ui_draw.hint_kind(kinds[1])
+
+
 def test_python_is_a_line_app_over_the_prompt(term):
     """`python` with the terminal for its stdin keeps the prompt line, its
     prompt the REPL's: a line at a time into the console's VM, a block held

@@ -1597,10 +1597,15 @@ static void vi_close(moy_sh_app_t *a, void *st) {
     ed_close(a, st);
 }
 
-#define VI_APP(nm) { .name = nm, .state = sizeof(ed_t), .full = 1, .text = 1, .keys = NULL, \
-                     .open = vi_open, .keys_in = vi_keys, .draw = vi_draw, .close = vi_close }
-const moy_sh_app_ops_t moy_sh_vi_app = VI_APP("vi");
-const moy_sh_app_ops_t moy_sh_vim_app = VI_APP("vim");
-const moy_sh_app_ops_t moy_sh_view_app = VI_APP("view");
-const moy_sh_app_ops_t moy_sh_less_app = VI_APP("less");
-const moy_sh_app_ops_t moy_sh_more_app = VI_APP("more");
+// The key row a face draws for a console with no Esc key (the T-Deck's
+// keyboard, a touch screen): Esc, and :w and :q typed from whatever mode.
+static const char *const VI_KEYS[] = {"Esc", "\x1b", "Save", "\x1b:w\r", "Quit", "\x1b:q\r", NULL};
+static const char *const VI_RO_KEYS[] = {"Quit", "\x1bq", NULL};
+
+#define VI_APP(nm, k) { .name = nm, .state = sizeof(ed_t), .full = 1, .text = 1, .keys = k, \
+                        .open = vi_open, .keys_in = vi_keys, .draw = vi_draw, .close = vi_close }
+const moy_sh_app_ops_t moy_sh_vi_app = VI_APP("vi", VI_KEYS);
+const moy_sh_app_ops_t moy_sh_vim_app = VI_APP("vim", VI_KEYS);
+const moy_sh_app_ops_t moy_sh_view_app = VI_APP("view", VI_RO_KEYS);
+const moy_sh_app_ops_t moy_sh_less_app = VI_APP("less", VI_RO_KEYS);
+const moy_sh_app_ops_t moy_sh_more_app = VI_APP("more", VI_RO_KEYS);
