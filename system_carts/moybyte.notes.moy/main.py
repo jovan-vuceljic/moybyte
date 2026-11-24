@@ -295,7 +295,7 @@ def _note():
         ui.button("paste", icon="paste", alone=True)
         ui.button("follow", icon="forward", alone=True)
         ui.button("run", icon="run", alone=True)
-        ui.label("{status}", tone="dim", shown="status")
+        ui.status("{status}", shown="status")
 
 
 def _no_store():

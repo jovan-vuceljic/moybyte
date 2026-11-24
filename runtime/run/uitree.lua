@@ -1684,6 +1684,7 @@ local function leaf(kind)
 end
 T.label = leaf("label")
 T.info = leaf("info")
+T.status = leaf("status")
 
 function T.note(o, extra)
   local at = where()

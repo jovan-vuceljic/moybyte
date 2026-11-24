@@ -262,7 +262,6 @@ SHELL_PY = ("import uitree as ui\n"
 
 
 @pytest.mark.parametrize("node", [
-    'ui.status("{n}")',
     'ui.slot("run")',
     'ui.tools("bar", lend="bar")',
     'ui.cards("m", look="column")',
@@ -288,7 +287,6 @@ def test_a_python_cart_is_refused_a_shell_prop_and_app_field(tmp_path):
 
 
 @pytest.mark.parametrize("kind, name, src", [
-    ("status", None, None),
     ("slot", None, None),
     ("lent", None, None),
     ("cards", "look", "column"),
@@ -313,3 +311,23 @@ def test_compiled_rows_refuse_the_shell_s_own(kind, name, src):
         assert "N09" in r.read("error", cap=400)[1], r.read("error", cap=400)[1]
     finally:
         r.close()
+
+
+def test_compiled_a_status_line_is_an_app_s():
+    """A status line is an app's kind (a page's status strip): a compiled
+    app's store takes it, as Python's and Lua's fronts do."""
+    from test_uitree_wasm import Rows, PAGE
+    import uitree_c
+    r = Rows()
+    try:
+        r.build("1 page")
+        page = r.node(PAGE, "page", -1)
+        assert r.node(uitree_c._KINDS["status"], "s", page) >= 0, r.read("error", cap=400)[1]
+    finally:
+        r.close()
+
+
+def test_a_python_cart_s_status_line_checks_clean(tmp_path):
+    import uitree_check
+    (tmp_path / "strip.py").write_text(SHELL_PY % 'ui.status("{n} · ready")')
+    assert [e.code for e in uitree_check.check(str(tmp_path / "strip.py")).errors] == []

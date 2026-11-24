@@ -394,6 +394,27 @@ def test_a_split_a_grid_and_a_panel_draw_on_the_c_engine(tmp_path):
     assert shots["Split"] != shots["Plain"] and shots["Grid"] != shots["Plain"]
 
 
+def test_a_status_line_is_an_apps_and_draws_on_the_c_engine(tmp_path):
+    """ui.status, a page's status strip, is an app's kind: it lowers and draws."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    body = 'ui.app("%s", { icon = "calc" })\nui.page("p", function()\n%s\nend)\n'
+    pages = {"Bare": '  ui.label("one")', "Strip": '  ui.label("one")\n  ui.status("left · right")'}
+    for name, page in pages.items():
+        _cart(carts, name, body % (name, page))
+    ws, drv, frame, open_cart = _console(carts)
+    shots = {}
+    for name in pages:
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        assert ws.run.player.cart_error is None, (name, ws.run.player.cart_error)
+        shots[name] = bytes(drv.rgb888())
+        ws.spine.exit_to_caller()
+    assert shots["Strip"] != shots["Bare"]
+
+
 def test_the_props_only_the_c_engine_draws_lower_and_draw(tmp_path):
     """A button's marked, tone and w, a group's and a row's close, a row's
     gap, pad and mid, a slider's look and a rows' changed: each

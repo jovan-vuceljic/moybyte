@@ -422,7 +422,7 @@ Python's alone.
 |---|---|---|
 | `label(text)` | a line of text | `face=`, `tone=`, `icon=`, `wrap="word"` with `lines=`, `size="fit"`, `size="text"` (in a placed row, as wide as its text and its icon, in the ui face), `align=`, `scale=`, `w=` |
 | `info(label, value)` | a label and its value on one row | `icon=`, `tag=` a pill, `signal=` 0 to 4 bars, `tone=` |
-| `status(text)` | a status line, cut at its `" · "` fields (no Lua) | |
+| `status(text)` | a status line, cut at its `" · "` fields | |
 | `rule()` | a divider | |
 | `note(lines)` | a card in the page's flow | `icon=` (`"warn"` in the danger tone) |
 | `empty(title)` | what a page with nothing on it says; controls built in it stand under it; its lines wrap at word breaks to the column it stands in (a page, a cell); where its disc would push them past its room (its view, a placed page's stack), its words stand without it | `icon=`, `lines=` |
@@ -821,7 +821,7 @@ Python and once in Lua.
 | N06 | an anchor naming no node, a part the node lacks, or a tab its enum lacks | `anchor="msgs.cur"` |
 | N07 | `split`: no weight, or a bare `0`; `panes`: not exactly one child grows | `sizes=[112, "1*"]` |
 | N08 | `focus(KEY)` names no node, or more than one, in the handler's unit | a key the unit's nodes have |
-| N09 | an app names a kind, prop, word or app field the contract marks the shell's (`slot`, `status`, `lent`, `tools lend=`, `card fill=`, `cards look="column"`, `ui.app slots=`) | an app's own: `ui.label` for a status line, `cards look="icons"` |
+| N09 | an app names a kind, prop, word or app field the contract marks the shell's (`slot`, `lent`, `tools lend=`, `card fill=`, `cards look="column"`, `ui.app slots=`) | an app's own: `cards look="icons"` |
 | O01 | an action or a control that can be off (`when=` or `row=`) with no `off=` | `off="hide"` |
 | O02 | `off=` with neither `when=` nor `row=` | drop `off=` |
 | O04 | `when=` or `off=` on a node that is neither an action's site nor a two-way control | `when=` on the action |
@@ -997,6 +997,7 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 | `label` | 1 | tpl | `tone` tpl, `icon` tpl, `face` `"ui"` `"title"` `"mono"` `"caption"` `"result"`, `size` `"fit"` `"text"`, `wrap` `"cut"` `"word"` `"char"`, `lines` int, `align` `"start"` `"center"` `"end"`, `scale` int, `w` int |
 | `rule` | 1 | none | none |
 | `info` | 1 | tpl | `value` tpl, `icon` tpl, `signal` int, `tag` tpl, `tone` tpl |
+| `status` | 2 | tpl | none |
 | `note` | 1 | none | `icon` tpl, `lines` list of tpl |
 | `empty` | 1 | tpl | `icon` tpl, `lines` list of tpl |
 | `bubble` | 1 | tpl | `side` tpl, `head` tpl, `status` tpl, `signal` int, `tone` tpl, `max` int, `lines` int, `on` action, `cut` action |
@@ -1037,7 +1038,7 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 - **Roles an app's keys name:** `confirm`, `back`, `more`, `left`, `right`, `up`, `down`, `search`, `goto`, `complete`, `undo`, `redo`, `play`, `tools`.
 - **Verbs** (besides a kind's, its name): `app`, `state`, `enum`, `record`, `model`, `row_of`, `opt`, `labels`, `derive`, `action`, `hook`, `page`, `sys`, `push`, `pop`, `focus`, `after`, `cancel`, `post`, `doc`, `image`, `work`, `pictures`. **Queries:** `about`, `text_size`, `colors`, `fade`.
 - **App fields (`ui.app`):** `icon`, `size`, `min`, `back`, `glass`. **System values (`@NAME`):** `desk` bool, `handheld` bool, `wide` bool, `tall` bool, `touch` bool, `input` enum, `focus` text, `current` bool.
-- **The shell's own**, kept on the shell's pages: `tools lend=`, kind `lent`, kind `status`, `cards look="column"`, `card fill=`, kind `slot`, app field `slots`, refused in an app (N09); roles `home`, `full`, `system` (K01).
+- **The shell's own**, kept on the shell's pages: `tools lend=`, kind `lent`, `cards look="column"`, `card fill=`, kind `slot`, app field `slots`, refused in an app (N09); roles `home`, `full`, `system` (K01).
 - **Error codes:** A01, A02, A03, A07, A08, A09, A10, B01, B02, B03, C01, C02, C03, D01, D02, D04, E00, E01, E02, E03, G01, H01, H03, I02, K01, K02, K03, L03, N01, N02, N03, N04, N06, N07, N08, N09, O01, O02, O04, P01, P02, P03, P04, P05, Q01, R01, S01, S02, S03, S04, S05, S06, S07, S08, S09, S11, S12, S13, T01, T02, T03, T04, T05, T06, U02, U08, W01, W02, X01.
 - **Reserved codes**, never raised: A04, A05, A06, D03, D05, D06, F01, F02, F03, F04, F05, F06, F07, F08, I01, L01, L02, M01, M02, M03, M04, O03, S10, U01, U03, U04, U05, U06, U07, U10, V01, V02, Y01, Y02, Y03, Y04, Y05, Y06.
 - **Retired names**, each refused with its replacement (N04): verbs `at`, `cell`, `fmt`, `has_symbols`, `head`, `key`, `peek`, `per`, `rebuild`, `ref`, `scope`; kinds `cell`, `text`; props `below@scroll`, `disabled`, `does@action`, `fixed@split`, `ink`, `key@action`, `keyname@item`, `lit`, `mkind@item`, `paint@cards`, `tools@app`; takes `change`; system values `fs`, `h`, `symbols`, `w`.

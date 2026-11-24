@@ -31,7 +31,8 @@ local KINDS = { page = 1, group = 2, label = 3, info = 4, link = 5, button = 6, 
                 seg = 10, slider = 11, field = 12, empty = 13, progress = 14, text_view = 15, scroll = 16, menu = 17,
                 item = 18, split = 19, switch = 22, case = 23, table = 24, col = 25, foot = 26, popover = 30,
                 canvas = 20, tabs = 21, cards = 27, card = 28, picture = 29, row = 32, panel = 38, rule = 40, note = 41, grid = 42,
-                bubble = 43, month = 44, toast = 45, cells = 46, stepper = 47, hints = 48 }
+                bubble = 43, month = 44, toast = 45, cells = 46, stepper = 47, hints = 48,
+                status = 33 }
 local BASE = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = ENUM, rowof = ROWOF, model = MODEL }
 local FIELD = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = TEXT }
 -- a prop whose value is a literal the dump prints as one (its Python repr)
@@ -316,6 +317,7 @@ local SHAPE = {
   menu = { last = function(n) return { pair("caption", n.a[1]) } end },
   table = { model = true },
   col = { last = function(n) return { pair("text", n.a[1]) } end },
+  status = { last = function(n) return { pair("text", n.a[1]) } end },
   split = { takes = { "dir", "sizes" }, last = function(n) return { pair("dir", n.o.dir), pair("sizes", n.o.sizes) } end },
   grid = { takes = { "cols", "rows" }, last = function(n) return { pair("cols", n.o.cols), pair("rows", n.o.rows) } end },
   canvas = { takes = { "draw", "keys" }, last = function(n) return { pair("draw", "draw"), pair("keys", n.o.keys and "keys") } end },
