@@ -1,11 +1,13 @@
 // moy_sh_cmds: the shell's C core built-ins (docs/os_2026-11/system.md
-// section 1): the file commands over the store, and ps, free, df, log/dmesg,
-// reboot, date, sleep, clear and help over the host's tables. Each is one
-// function taking dash's (argc, argv), its options read with dash's nextopt,
-// writing through dash's output to the process's descriptors, so redirection
-// and pipes reach it as they reach any built-in. They keep working while the
-// VM is stopped: nothing here calls into Python.
+// section 1): the file commands over the store, the text tools (head, tail,
+// wc, grep, uniq, cut, tr and tee), and ps, free, df, log/dmesg, reboot,
+// date, sleep, clear and help over the host's tables. Each is one function
+// taking dash's (argc, argv), its options read with dash's nextopt, writing
+// through dash's output to the process's descriptors, so redirection and
+// pipes reach it as they reach any built-in. They keep working while the VM
+// is stopped: nothing here calls into Python.
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -167,6 +169,20 @@ static int each_input(char **args, int (*fn)(int fd, const char *name, void *arg
         }
     }
     return status;
+}
+
+// Ctrl-C: the command stops where it is, and its line with it (as sleep).
+static int stopped(void) {
+    if (!moy_sh_poll()) {
+        return 0;
+    }
+    moy_sh_cur->interrupt = 1;
+    return 1;
+}
+
+// A command's status at its end: Ctrl-C's over its own.
+static int stop_status(int status) {
+    return moy_sh_cur->interrupt ? MOY_PROC_INTERRUPTED : status;
 }
 
 // --- files ------------------------------------------------------------------
@@ -836,6 +852,539 @@ static int grepcmd(int argc, char **argv) {
     return err ? 2 : !g.matched;
 }
 
+// --- text ---------------------------------------------------------------------
+
+// A line at a time, the input never held whole (cut, uniq): the line's
+// buffer is the session heap's, TEXT_LINE to start, doubled for a longer
+// line up to TEXT_LINE_MAX (so one line never takes the console's heap); a
+// line longer than the buffer the heap could give is read on its first
+// bytes, and with no buffer at all on TEXT_SMALL of the reader's own.
+#define TEXT_LINE 256u
+#define TEXT_LINE_MAX (64u * 1024u)
+#define TEXT_SMALL 128u
+
+typedef struct {
+    int fd;
+    size_t at, n;                       // in[at, n): read, not yet taken
+    char *p;                            // the line, without its newline
+    size_t len, cap;
+    int full;                           // this line grows no more
+    char in[512];
+    char small[TEXT_SMALL];
+} lines_t;
+
+static void lines_open(lines_t *r, int fd) {
+    r->fd = fd;
+    r->at = r->n = 0;
+    r->p = moy_sh_halloc(TEXT_LINE);
+    r->cap = TEXT_LINE;
+    if (r->p == NULL) {
+        r->p = r->small;
+        r->cap = sizeof r->small;
+    }
+}
+
+static void lines_close(lines_t *r) {
+    if (r->p != r->small) {
+        moy_sh_hfree(r->p);
+    }
+}
+
+// n more bytes of the line, as many as its buffer holds.
+static void lines_add(lines_t *r, const char *p, size_t n) {
+    if (r->len + n > r->cap && !r->full) {
+        size_t cap = r->cap;
+        while (cap < r->len + n && cap < TEXT_LINE_MAX) {
+            cap *= 2u;
+        }
+        char *more = cap > r->cap ? moy_sh_halloc(cap) : NULL;
+        if (more != NULL) {
+            memcpy(more, r->p, r->len);
+            moy_sh_hfree(r->p);
+            r->p = more;
+            r->cap = cap;
+        } else {
+            r->full = 1;
+        }
+    }
+    if (n > r->cap - r->len) {
+        n = r->cap - r->len;
+    }
+    memcpy(r->p + r->len, p, n);
+    r->len += n;
+}
+
+// The next line into r->p (r->len bytes): 0 at the input's end, or at
+// Ctrl-C. A last line with no newline is a line.
+static int lines_next(lines_t *r) {
+    r->len = 0;
+    r->full = r->p == r->small;
+    for (;;) {
+        if (r->at == r->n) {
+            ssize_t n = stopped() ? 0 : read(r->fd, r->in, sizeof r->in);
+            if (n <= 0) {
+                return r->len > 0;
+            }
+            r->at = 0;
+            r->n = (size_t)n;
+        }
+        const char *s = r->in + r->at;
+        const char *e = memchr(s, '\n', r->n - r->at);
+        size_t k = e != NULL ? (size_t)(e - s) : r->n - r->at;
+        lines_add(r, s, k);
+        r->at += k;
+        if (e != NULL) {
+            r->at++;
+            return 1;
+        }
+    }
+}
+
+// stdin to stdout and to each FILE (-a: added to its end).
+static int teecmd(int argc, char **argv) {
+    int append = 0, c, n = 0, status = 0;
+    (void)argc;
+    (void)argv;
+    while ((c = nextopt("a")) != '\0') {
+        append = 1;
+    }
+    while (argptr[n] != NULL) {
+        n++;
+    }
+    int *fds = stalloc(((size_t)n + 1) * sizeof *fds);
+    for (int i = 0; i < n; i++) {
+        fds[i] = open(argptr[i], O_WRONLY | O_CREAT | (append ? O_APPEND : O_TRUNC), 0644);
+        if (fds[i] < 0) {
+            status = moy_sh_fail("tee: %s: %s", argptr[i], strerror(errno));
+        }
+    }
+    char buf[512];
+    ssize_t got;
+    while (!stopped() && (got = read(0, buf, sizeof buf)) > 0) {
+        outmem(buf, (size_t)got, out1);
+        for (int i = 0; i < n; i++) {
+            if (fds[i] >= 0 && write(fds[i], buf, (size_t)got) != got) {
+                status = moy_sh_fail("tee: %s: %s", argptr[i], strerror(errno));
+                close(fds[i]);
+                fds[i] = -1;
+            }
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        if (fds[i] >= 0) {
+            close(fds[i]);
+        }
+    }
+    return stop_status(status);
+}
+
+// A tr SET a byte at a time: its ranges (a-z) spelled out, its escapes read
+// (\n \t \r \\ \NNN ...), its classes ([:alpha:] ...) in byte order.
+typedef struct {
+    const char *p;                      // what is left of it
+    int at, hi;                         // a range running: its next byte and its last
+    int cls;                            // a class running (its index + 1), at its next byte
+    int bad;                            // a range runs backwards
+} set_t;
+
+static const char *const TR_CLASSES[] = {
+    "[:alnum:]", "[:alpha:]", "[:blank:]", "[:digit:]", "[:lower:]",
+    "[:punct:]", "[:space:]", "[:upper:]",
+};
+
+static int tr_in_class(int cls, int c) {
+    switch (cls) {
+        case 1: return isalnum(c);
+        case 2: return isalpha(c);
+        case 3: return c == ' ' || c == '\t';
+        case 4: return isdigit(c);
+        case 5: return islower(c);
+        case 6: return ispunct(c);
+        case 7: return isspace(c);
+        default: return isupper(c);
+    }
+}
+
+// One byte of a SET, an escape read, *pp moved past it.
+static int set_byte(const char **pp) {
+    const unsigned char *p = (const unsigned char *)*pp;
+    int c = *p++;
+    if (c == '\\' && *p != '\0') {
+        c = *p++;
+        switch (c) {
+            case 'a': c = '\a'; break;
+            case 'b': c = '\b'; break;
+            case 'f': c = '\f'; break;
+            case 'n': c = '\n'; break;
+            case 'r': c = '\r'; break;
+            case 't': c = '\t'; break;
+            case 'v': c = '\v'; break;
+            default:
+                if (c >= '0' && c <= '7') {
+                    c -= '0';
+                    for (int i = 0; i < 2 && *p >= '0' && *p <= '7' && c * 8 + (*p - '0') < 256; i++) {
+                        c = c * 8 + (*p++ - '0');
+                    }
+                }
+        }
+    }
+    *pp = (const char *)p;
+    return c;
+}
+
+// The SET's next byte, or -1 at its end.
+static int set_next(set_t *s) {
+    for (;;) {
+        if (s->cls) {
+            while (s->at < 256 && !tr_in_class(s->cls, s->at)) {
+                s->at++;
+            }
+            if (s->at < 256) {
+                return s->at++;
+            }
+            s->cls = 0;
+            s->hi = -1;
+        }
+        if (s->at <= s->hi) {
+            return s->at++;
+        }
+        if (*s->p == '\0') {
+            return -1;
+        }
+        for (int i = 0; i < (int)(sizeof TR_CLASSES / sizeof TR_CLASSES[0]); i++) {
+            size_t k = strlen(TR_CLASSES[i]);
+            if (!strncmp(s->p, TR_CLASSES[i], k)) {
+                s->p += k;
+                s->cls = i + 1;
+                s->at = 0;
+                break;
+            }
+        }
+        if (s->cls) {
+            continue;
+        }
+        int c = set_byte(&s->p);
+        if (s->p[0] == '-' && s->p[1] != '\0') {
+            const char *q = s->p + 1;
+            int d = set_byte(&q);
+            s->p = q;
+            s->bad |= d < c;
+            s->at = c;
+            s->hi = d;
+            continue;
+        }
+        return c;
+    }
+}
+
+static void set_open(set_t *s, const char *spec) {
+    s->p = spec;
+    s->at = 0;
+    s->hi = -1;
+    s->cls = 0;
+    s->bad = 0;
+}
+
+// Each byte of `spec` set in the bit set `bits`.
+static void set_bits(const char *spec, unsigned char *bits) {
+    set_t s;
+    int c;
+    set_open(&s, spec);
+    while ((c = set_next(&s)) >= 0) {
+        bits[c >> 3] |= (unsigned char)(1u << (c & 7));
+    }
+}
+
+#define TR_BIT(bits, c) ((bits)[(c) >> 3] & (1u << ((c) & 7)))
+
+// stdin to stdout with SET1's bytes turned into SET2's (the last of SET2
+// standing for those past its end), or deleted (-d); -s squeezes a run of
+// one byte of the last SET given into one.
+static int trcmd(int argc, char **argv) {
+    int del = 0, squeeze = 0, c, n = 0;
+    (void)argc;
+    (void)argv;
+    while ((c = nextopt("ds")) != '\0') {
+        del |= c == 'd';
+        squeeze |= c == 's';
+    }
+    while (argptr[n] != NULL) {
+        n++;
+    }
+    if (n < 1 || n > 2 || (del && n != 1 + squeeze) || (!del && !squeeze && n != 2)) {
+        return moy_sh_fail("usage: tr [-ds] SET1 [SET2]");
+    }
+    unsigned char map[256], gone[32] = { 0 }, once[32] = { 0 };
+    for (int i = 0; i < n; i++) {
+        set_t s;
+        set_open(&s, argptr[i]);
+        while (set_next(&s) >= 0) {
+        }
+        if (s.bad) {
+            return moy_sh_fail("tr: %s: a range in it runs backwards", argptr[i]);
+        }
+    }
+    for (int i = 0; i < 256; i++) {
+        map[i] = (unsigned char)i;
+    }
+    if (!del && n == 2) {
+        set_t a, b;
+        int x, y, last = -1;
+        set_open(&a, argptr[0]);
+        set_open(&b, argptr[1]);
+        while ((x = set_next(&a)) >= 0) {
+            if ((y = set_next(&b)) >= 0) {
+                last = y;
+            } else if (last < 0) {
+                return moy_sh_fail("tr: SET2 is empty");
+            }
+            map[x] = (unsigned char)last;
+        }
+    }
+    if (del) {
+        set_bits(argptr[0], gone);
+    }
+    if (squeeze) {
+        set_bits(argptr[n - 1], once);
+    }
+    char buf[512];
+    ssize_t got;
+    int prev = -1;
+    while (!stopped() && (got = read(0, buf, sizeof buf)) > 0) {
+        size_t k = 0;
+        for (ssize_t i = 0; i < got; i++) {
+            int ch = (unsigned char)buf[i];
+            if (TR_BIT(gone, ch)) {
+                continue;
+            }
+            ch = map[ch];
+            if (ch == prev && TR_BIT(once, ch)) {
+                continue;
+            }
+            buf[k++] = (char)ch;
+            prev = ch;
+        }
+        outmem(buf, k, out1);
+    }
+    return stop_status(0);
+}
+
+// cut's LIST: N, N-M, N- and -M, comma-separated, 1 the first.
+typedef struct {
+    unsigned long lo, hi;               // hi 0: to the end
+} span_t;
+
+typedef struct {
+    span_t *spans;
+    int nspans;
+    int fields, only;                   // -f (else -c, -b), -s
+    char delim;
+} cut_t;
+
+// A number of a LIST at *pp, moved past it; 0 where there is none.
+static unsigned long cut_num(const char **pp) {
+    unsigned long v = 0;
+    while (**pp >= '0' && **pp <= '9') {
+        if (v < 100000000ul) {
+            v = v * 10u + (unsigned long)(*(*pp)++ - '0');
+        } else {
+            (*pp)++;
+        }
+    }
+    return v;
+}
+
+static int cut_list(const char *s, cut_t *o) {
+    int n = 1;
+    for (const char *p = s; *p; p++) {
+        n += *p == ',';
+    }
+    o->spans = stalloc((size_t)n * sizeof *o->spans);
+    o->nspans = 0;
+    for (const char *p = s;;) {
+        const char *start = p;
+        unsigned long lo = cut_num(&p), hi = lo;
+        int has_lo = p != start, has_hi = has_lo;
+        if (*p == '-') {
+            p++;
+            start = p;
+            hi = cut_num(&p);
+            has_hi = p != start;
+            if (!has_lo) {
+                lo = 1;
+            }
+        }
+        if ((!has_lo && !has_hi) || lo == 0 || (has_hi && hi < lo)) {
+            return -1;
+        }
+        o->spans[o->nspans].lo = lo;
+        o->spans[o->nspans++].hi = has_hi ? hi : 0;
+        if (*p == '\0') {
+            return 0;
+        }
+        if (*p++ != ',') {
+            return -1;
+        }
+    }
+}
+
+static int cut_has(const cut_t *o, unsigned long i) {
+    for (int k = 0; k < o->nspans; k++) {
+        if (i >= o->spans[k].lo && (o->spans[k].hi == 0 || i <= o->spans[k].hi)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int cut_one(int fd, const char *name, void *arg) {
+    const cut_t *o = arg;
+    lines_t r;
+    (void)name;
+    lines_open(&r, fd);
+    while (lines_next(&r)) {
+        const char *p = r.p;
+        size_t n = r.len;
+        if (!o->fields) {
+            for (size_t i = 0; i < n; i++) {
+                if (cut_has(o, i + 1)) {
+                    out1c(p[i]);
+                }
+            }
+        } else if (memchr(p, o->delim, n) == NULL) {
+            if (o->only) {
+                continue;
+            }
+            outmem(p, n, out1);
+        } else {
+            int first = 1;
+            for (size_t at = 0, f = 1;; f++) {
+                const char *e = memchr(p + at, o->delim, n - at);
+                size_t end = e != NULL ? (size_t)(e - p) : n;
+                if (cut_has(o, f)) {
+                    if (!first) {
+                        out1c(o->delim);
+                    }
+                    outmem(p + at, end - at, out1);
+                    first = 0;
+                }
+                if (e == NULL) {
+                    break;
+                }
+                at = end + 1;
+            }
+        }
+        out1c('\n');
+    }
+    lines_close(&r);
+    return 0;
+}
+
+// Each line's fields (-f, split at -d's byte, a tab by default; -s: lines
+// with none left out) or bytes (-c, -b) that LIST names, in the line's order.
+static int cutcmd(int argc, char **argv) {
+    cut_t o = { NULL, 0, 0, 0, '\t' };
+    const char *list = NULL, *delim = "\t";
+    int c, kinds = 0;
+    (void)argc;
+    (void)argv;
+    while ((c = nextopt("b:c:d:f:s")) != '\0') {
+        if (c == 'b' || c == 'c' || c == 'f') {
+            list = optionarg;
+            kinds |= c == 'f' ? 2 : 1;
+        } else if (c == 'd') {
+            delim = optionarg;
+        } else {
+            o.only = 1;
+        }
+    }
+    if (list == NULL || kinds == 3) {
+        return moy_sh_fail("usage: cut -f LIST [-d C] [-s] [FILE...], or cut -c LIST [FILE...]");
+    }
+    if (strlen(delim) != 1) {
+        return moy_sh_fail("cut: the delimiter must be one character");
+    }
+    if (cut_list(list, &o) != 0) {
+        return moy_sh_fail("cut: %s: not a list of positions from 1", list);
+    }
+    o.fields = kinds == 2;
+    o.delim = delim[0];
+    return stop_status(each_input(argptr, cut_one, &o));
+}
+
+typedef struct {
+    int count, dups, uniq;
+    int status;
+} uniq_t;
+
+static void uniq_emit(const uniq_t *o, const char *p, size_t n, unsigned long k) {
+    if ((o->dups && k < 2) || (o->uniq && k > 1)) {
+        return;
+    }
+    if (o->count) {
+        out1fmt("%7lu ", k);
+    }
+    outmem(p, n, out1);
+    out1c('\n');
+}
+
+static int uniq_one(int fd, const char *name, void *arg) {
+    uniq_t *o = arg;
+    lines_t r;
+    char *held = NULL;
+    size_t hlen = 0, hcap = 0;
+    unsigned long k = 0;
+    (void)name;
+    lines_open(&r, fd);
+    while (lines_next(&r)) {
+        if (k > 0 && r.len == hlen && memcmp(r.p, held, hlen) == 0) {
+            k++;
+            continue;
+        }
+        if (k > 0) {
+            uniq_emit(o, held, hlen, k);
+        }
+        if (held == NULL || r.len > hcap) {
+            moy_sh_hfree(held);
+            hcap = r.len > TEXT_LINE ? r.len : TEXT_LINE;
+            held = moy_sh_halloc(hcap);
+            if (held == NULL) {
+                k = 0;
+                o->status = moy_sh_fail("uniq: out of memory");
+                break;
+            }
+        }
+        memcpy(held, r.p, r.len);
+        hlen = r.len;
+        k = 1;
+    }
+    if (k > 0) {
+        uniq_emit(o, held, hlen, k);
+    }
+    moy_sh_hfree(held);
+    lines_close(&r);
+    return 0;
+}
+
+// A run of one line, one after another, as one line (-c: counted; -d: only
+// the repeated; -u: only the unrepeated).
+static int uniqcmd(int argc, char **argv) {
+    uniq_t o = { 0, 0, 0, 0 };
+    int c;
+    (void)argc;
+    (void)argv;
+    while ((c = nextopt("cdu")) != '\0') {
+        o.count |= c == 'c';
+        o.dups |= c == 'd';
+        o.uniq |= c == 'u';
+    }
+    if (argptr[0] != NULL && argptr[1] != NULL) {
+        return moy_sh_fail("usage: uniq [-cdu] [FILE]");
+    }
+    int err = each_input(argptr, uniq_one, &o);
+    return stop_status(err | o.status);
+}
+
 // --- the system ---------------------------------------------------------------
 
 static int ps_row(void *arg, const moy_sh_ps_t *p) {
@@ -1379,6 +1928,7 @@ static const struct builtincmd core[] = {
     { "cat", catcmd, BUILTIN_REGULAR },
     { "clear", clearcmd, BUILTIN_REGULAR },
     { "cp", cpcmd, BUILTIN_REGULAR },
+    { "cut", cutcmd, BUILTIN_REGULAR },
     { "date", datecmd, BUILTIN_REGULAR },
     { "df", dfcmd, BUILTIN_REGULAR },
     { "dirname", dirnamecmd, BUILTIN_REGULAR },
@@ -1400,9 +1950,12 @@ static const struct builtincmd core[] = {
     { "sh", moy_sh_shcmd, BUILTIN_REGULAR },
     { "sleep", sleepcmd, BUILTIN_REGULAR },
     { "tail", tailcmd, BUILTIN_REGULAR },
+    { "tee", teecmd, BUILTIN_REGULAR },
     { "top", appcmd, BUILTIN_REGULAR },
     { "touch", touchcmd, BUILTIN_REGULAR },
+    { "tr", trcmd, BUILTIN_REGULAR },
     { "uname", unamecmd, BUILTIN_REGULAR },
+    { "uniq", uniqcmd, BUILTIN_REGULAR },
     { "wc", wccmd, BUILTIN_REGULAR },
 };
 
