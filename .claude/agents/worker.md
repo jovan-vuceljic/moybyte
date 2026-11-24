@@ -29,8 +29,11 @@ before every command, so a relative path or a bare `make`/`git`/build lands
 there: `cd <your worktree> && …` in the same command, or use absolute paths,
 every time, for edits, builds, tests and git alike. Before your first commit,
 check `git -C <main checkout> status` shows nothing of yours. Commit by
-pathspec, one commit per landed outcome. Push
-nothing, release nothing, create no repository, change no settings. No model
+pathspec, one commit per landed outcome. When the phase is done, push your
+branch and open a pull request to `dev` (`gh pr create --base dev`) whose body
+is your report; never merge it and never push `dev` or `master`: the main
+session lands pull requests in batches behind one preflight (owner,
+2026-11-24). Release nothing, create no repository, change no settings. No model
 identifiers in commits or files. Comments and docs state what IS; the story goes
 in the commit message.
 
@@ -40,6 +43,7 @@ print or copy the OTA signing key.
 
 Spawn no sub-agents.
 
-When the phase is done, or when you are blocked, stop and report: the commits, what
+When the phase is done, or when you are blocked, stop and report (and open the
+pull request when done): the commits, what
 you decided and why, test and preflight results, and what is left for the next
 phase, written so a fresh agent could pick it up from your report alone.
