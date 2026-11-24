@@ -614,9 +614,9 @@ def _code_overlay(which):
         elif which == "complete":
             ed.lines[41] = "    s[2] = _ba"
             ed.row, ed.col = 41, len(ed.lines[41])
-            cl._open_completion(ed)
+            cl.run("complete_open")
         elif which == "goto":
-            cl._open_jump(ed)
+            cl.run("goto_open")
         else:
             cl.open_scripts()
     return setup
@@ -3522,7 +3522,9 @@ def _selection_pairs(ws, img):
     if sel is None:
         return []
     lay, ox, oy = _editor_origin(ws, "paint_layout", ws.paint_layer.layout)
-    g = ws.paint_layer.grid_at()
+    r = ws.paint_layer.rect_of("grid")         # the grid's canvas; the grid sits inside its margins
+    pl = ws.paint_layer.layout
+    g = None if r is None else (r[0] + pl.gm, r[1] + pl.gmv)
     if lay is None or g is None:
         return []
     cell = lay.span // ws.paint.dim

@@ -57,40 +57,6 @@ from cart_verbs import CART_VERBS as _CART_VERBS
 # mode's, asked here rather than re-derived.
 import text_modes as _modes
 
-# The shared pre-literate glyph vocabulary (#89 icon pass): the TLS toggle + the tool
-# palette row draw a 12x12 glyph per button instead of the terse 2-3 char label.
-
-
-def _glyph_known(kind):
-    """True if `kind` is a known glyph (so a button draws the icon; else the
-    text label is the fallback)."""
-    return _ui_draw.glyph_id(kind) >= 0
-
-
-# The code editor draws its chrome in its OWN palette (`_tones`), not in the
-# theme's. The tone map therefore doubles as the `th` dict the toolkit reads, by
-# carrying the token names it looks up. Nothing is invented here: every alias
-# points at a role this surface already had, which is what lets the chips, the
-# find field, the symbol keys and the popup rows all draw as ordinary widget
-# kinds -- reachable by a theme -- instead of through `colors=` (#207).
-def _as_theme(t):
-    """Add the ui-toolkit token aliases to a tone map, in place."""
-    edge = t["sym_edge"]
-    t["panel"] = t["sym_bg"]        # chip/row/cell REST field
-    t["dim"] = edge                 # chip/row/cell REST edge
-    t["accent"] = edge              # chip ON field  (the `active` look)
-    t["edge"] = edge                # chip ON edge
-    t["title_ink"] = t["sym_ink"]   # chip/row/cell REST ink
-    return t
-
-
-def _chip_rect(r):
-    """The FIELD of a code-chrome chip: one pixel narrower and shorter than the
-    cell it is laid out in, so adjacent chips keep a 1px gutter. Frozen geometry
-    -- and the reason a chip's text label centres on the CELL (see `_btn_face`),
-    which is one pixel wider than the field it sits in."""
-    return (r[0], r[1], r[2] - 1, r[3] - 1)
-
 
 # -- code-editor geometry (single source; console.py imports these back) ------
 # The area/line-height feed console's CodeLayout (responsive) + the crash panel; the
@@ -126,26 +92,6 @@ _CODE_MARK = 3
 # face's line and 1px above and below; petme128's band is 12.
 _CODE_STATUS_H = 20
 _SYM_AREA = (0, _SYM_Y, _SYM_CELL * len(_CODE_SYMBOLS), _SYM_H)
-
-
-def _status_line(fields, room, fs):
-    """The status band's one line: `fields` joined by the home's separator,
-    the middle dot (a hyphen in a `ui` face without it), as many as fit
-    `room` less the band's pads at the `ui` face."""
-    fid = _ui_draw.font("ui")[0]
-    info = _ui_draw.font_info(fid) if fid else None
-    sep = "  \u00b7  " if info is not None and info[4] == 0 else " - "
-    was = _ui_draw.print_font(fid)
-    try:
-        room -= 2 * _ui_draw.metrics("status")[_ui_draw.ST_PAD] * fs
-        line = fields[0]
-        for f in fields[1:]:
-            if _ui_draw.print_width(line + sep + f, fs) > room:
-                break
-            line += sep + f
-    finally:
-        _ui_draw.print_font(was)
-    return line
 
 
 def symbols_for(lang):
@@ -463,14 +409,6 @@ class CodeLayer(Layer):
         """A tool of the touch row or the desk pane's menu, by its name."""
         if ed is not None:
             self.run(_TOOL_ACTION[name])
-
-    def _open_completion(self, ed):
-        if ed is not None:
-            self.run("complete_open")
-
-    def _open_jump(self, ed):
-        if ed is not None:
-            self.run("goto_open")
 
     def open_scripts(self):
         """The scripts menu (the bar's Code tab tapped again); a second tap

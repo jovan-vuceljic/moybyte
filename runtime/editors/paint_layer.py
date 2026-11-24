@@ -297,13 +297,6 @@ class PaintLayer(Layer):
         coords (None before it drew)."""
         return None if self.page is None else self.page.rect_of(key)
 
-    def grid_at(self):
-        """The grid's top-left in SYSTEM coords, where the last frame placed
-        its canvas (None before it drew)."""
-        r = self.rect_of("grid")
-        lay = self.layout
-        return None if r is None else (r[0] + lay.gm, r[1] + lay.gmv)
-
     def _sync(self):
         """The editor's state the page shows, handed to its `sync` hook
         where it moved."""

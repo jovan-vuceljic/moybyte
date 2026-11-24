@@ -524,12 +524,6 @@ class ConfigLayer(CodeLayer):
     def _recheck_err(self):
         self.ws.crash_popup = None
 
-    def _open_completion(self, ed):
-        pass
-
-    def _open_jump(self, ed):
-        pass
-
     def open_scripts(self):
         pass
 

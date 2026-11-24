@@ -10,7 +10,7 @@ real pointer/input dispatch the device loop uses.
 
 from pathlib import Path
 import pytest
-from ws_helpers import boot_on_fixture
+from ws_helpers import boot_on_fixture, paint_grid_at
 from tools.board_config import runtime_file
 
 @pytest.fixture(autouse=True)
@@ -719,7 +719,7 @@ def test_fill_fires_once_even_if_press_wobbles_off_the_grid(tmp_path):
     lx, ly = _cell_center(ws, 1, 1, ws.paint.dim)
     drv.touch(lx, ly)                  # press: floods the LEFT region
     drv.frame(1 / 30)
-    drv.touch_drag(ws.paint_layer.grid_at()[0] - 6, ly)   # wobble off the grid's left edge (held)
+    drv.touch_drag(paint_grid_at(ws.paint_layer)[0] - 6, ly)   # wobble off the grid's left edge (held)
     drv.frame(1 / 30)
     rx, ry = _cell_center(ws, 6, 1, ws.paint.dim)
     drv.touch_drag(rx, ry)             # back in, over the RIGHT region (still held)
@@ -919,7 +919,7 @@ def test_select_copy_paste_through_the_ui(tmp_path):
 def _cell_center(ws, lx, ly, dim):
     pl = ws.paint_layer
     cell = pl.layout.span // dim
-    gx, gy = pl.grid_at()
+    gx, gy = paint_grid_at(pl)
     return (gx + lx * cell + cell // 2, gy + ly * cell + cell // 2)
 
 

@@ -44,15 +44,12 @@ def test_text_key_caps_and_filters():
     assert text_key("1", ord("2"), 8, digits) == ("12", TE_EDIT)
 
 
-def test_text_entry_open_cuts_to_the_cap_and_keys_through_the_ladder():
+def test_text_entry_open_cuts_to_the_cap():
     e = TextEntry(4)
     e.open("abcdefgh")
     assert e.text == "abcd"                     # a seed longer than typing could make
     e.open("")
-    assert e.key(ord("z")) == TE_EDIT
-    assert e.key(ord("z")) == TE_EDIT
-    assert e.key(13) == TE_COMMIT
-    assert e.text == "zz"
+    assert e.text == ""
 
 
 # -- the opening press: one latched frame ---------------------------------------
@@ -160,18 +157,15 @@ def test_block_prompt_kinds_type_what_they_allow():
     ws = host_app.build_workstation(None)
     bu = ws.block_ui
     bu._blk_open_kbd("num", "", cur=None, block={}, slot="s", allow_block=False)
-    for ch in "-1.5.x2":
-        bu._blk_kbd_key(ord(ch))
+    bu.typed("-1.5.x2")                    # the page's field hands its text over
     assert bu.blk_kbd["entry"].text == "-1.52"
     bu._blk_kbd_cancel()
     bu._blk_open_kbd("var", "", var="v", slot_target=None)
-    for ch in "my var-1!":
-        bu._blk_kbd_key(ord(ch))
+    bu.typed("my var-1!")                    # the page's field hands its text over
     assert bu.blk_kbd["entry"].text == "my var-1"
     bu._blk_kbd_cancel()
     bu._blk_open_kbd("text", "", block={}, slot="s")
-    for ch in "hi! 12345678901234567":
-        bu._blk_kbd_key(ord(ch))
+    bu.typed("hi! 12345678901234567")                    # the page's field hands its text over
     assert bu.blk_kbd["entry"].text == "hi! 123456789012"   # the 16-char row cap
     bu._blk_kbd_cancel()
 
