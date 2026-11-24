@@ -58,7 +58,6 @@ PORTED = (
     "uitree_pictures",
     "editor_ui",
     "uitree_bar_row",
-    "uitree_legacy_app",
     "uitree_across",
     "uitree_across_bar",
     "uitree_bar_look",

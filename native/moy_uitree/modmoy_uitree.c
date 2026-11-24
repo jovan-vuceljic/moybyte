@@ -298,16 +298,6 @@ static mp_obj_t eng_ground(size_t n, const mp_obj_t *a)
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(eng_ground_obj, 5, 5, eng_ground);
 
-// legacy_hints(text): the band's hints while a legacy stop holds focus, NUL-separated
-static mp_obj_t eng_legacy_hints(mp_obj_t self, mp_obj_t t)
-{
-    size_t n;
-    const char *s = mp_obj_str_get_data(t, &n);
-    uit_set_legacy_hints(eng(self), s, n);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_2(eng_legacy_hints_obj, eng_legacy_hints);
-
 // band_extra(text): the items its host adds to the band before Back, NUL-separated
 static mp_obj_t eng_band_extra(mp_obj_t self, mp_obj_t t)
 {
@@ -1056,7 +1046,6 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_want_focus), MP_ROM_PTR(&eng_want_focus_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_placed), MP_ROM_PTR(&eng_set_placed_obj) },
     { MP_ROM_QSTR(MP_QSTR_ground), MP_ROM_PTR(&eng_ground_obj) },
-    { MP_ROM_QSTR(MP_QSTR_legacy_hints), MP_ROM_PTR(&eng_legacy_hints_obj) },
     { MP_ROM_QSTR(MP_QSTR_band_extra), MP_ROM_PTR(&eng_band_extra_obj) },
     { MP_ROM_QSTR(MP_QSTR_place), MP_ROM_PTR(&eng_place_obj) },
     { MP_ROM_QSTR(MP_QSTR_panes_set), MP_ROM_PTR(&eng_panes_set_obj) },

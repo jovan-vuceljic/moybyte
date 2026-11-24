@@ -46,12 +46,11 @@ ACT_BEYOND = {"pad": {"L", "R", "Y"}}
 # Stops that hold other stops: one's box over another's is nesting, not
 # overlap.
 HOLDERS = {"rows", "scroll", "text_view", "cards", "table", "panes", "pane", "split", "group",
-           "text_editor", "canvas", "legacy", "lent"}
+           "text_editor", "canvas", "lent"}
 
-# The surfaces not checked yet, each named with why: a page whose body is
-# still drawn by the toolkit's verbs beside the engine (a `legacy` or
-# `lent` node), whose texts and stops the engine does not report. The
-# clean cut empties it. Keyed by the app's module (`name`'s first word).
+# The surfaces not checked yet, each named with why: a page whose body the
+# engine does not report (its texts and stops). Keyed by the app's module
+# (`name`'s first word); empty, and a surface added here says why.
 EXEMPT = {}
 
 # The smallest stop a finger takes under touch, at the font scale: a

@@ -135,7 +135,7 @@ class Engine(S.Builder):
 
     @property
     def idle_owed(self):
-        return (self.pics is not None and self.pics.idle_owed) or self.legacy_moved()
+        return self.pics is not None and self.pics.idle_owed
 
     @property
     def view_owed(self):
@@ -143,11 +143,6 @@ class Engine(S.Builder):
         the frame paints (the console's), so the page is not quiet until it
         shows every picture it holds."""
         return self.pics is not None and self.pics.idle_owed
-
-    def legacy_moved(self):
-        """Whether a hosted surface's gen moved since it drew: a page with no
-        Editor's kinds hosts none."""
-        return False
 
     def pics_let_go(self):
         """A picture a card showed was let go: every gen moves (the card
@@ -284,11 +279,10 @@ class Engine(S.Builder):
 
     def hosted(self, dt, cv, th, content, desk):
         """The frame's first phase, which a host runs BEFORE it begins the
-        frame (`host.begin`): the surfaces the page hosts (`legacy`) drawn
-        each in its own verbs pass. A page with no Editor's kinds hosts none
-        (`uitree_c.CEditorEngine.hosted` draws them)."""
+        frame (`host.begin`): a page on the Editor's kinds starts its frame
+        there (`uitree_c.CEditorEngine.hosted`)."""
 
-    GEN_UNSAFE = ("canvas", "picture", "cards", "text_editor", "legacy")
+    GEN_UNSAFE = ("canvas", "picture", "cards", "text_editor")
 
     @staticmethod
     def _images(n):

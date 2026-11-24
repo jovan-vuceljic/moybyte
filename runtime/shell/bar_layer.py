@@ -280,9 +280,9 @@ class ZoneLook:
         self.where = where
 
     def zone_scale(self):
-        """The FONT scale, which `ui.tab_row`/`ui.button` read off the canvas
-        when they draw into the zone (a chip laid out at the chrome scale
-        and drawn at the font scale opens the wrong tab, #203)."""
+        """The FONT scale, which `ui_draw.tab`/`ui_draw.button` draw the
+        zone's cells at (a chip laid out at the chrome scale and drawn at
+        the font scale opens the wrong tab, #203)."""
         return max(1, self.ws.layout.fs)
 
     def tab_pad(self):

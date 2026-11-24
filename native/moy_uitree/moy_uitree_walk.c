@@ -5021,14 +5021,6 @@ void uit_set_band_extra(uit_t *e, const char *s, size_t n)
     e->nband_extra = (uint8_t)n;
 }
 
-void uit_set_legacy_hints(uit_t *e, const char *s, size_t n)
-{
-    if (n > sizeof e->legacy_hints)
-        n = 0;
-    memcpy(e->legacy_hints, s, n);
-    e->nlegacy_hints = (uint8_t)n;
-}
-
 static int32_t fdiv(int32_t a, int32_t b)
 {
     int32_t q = a / b;
@@ -5131,7 +5123,6 @@ static int32_t fixed_h(uit_t *e, int k)
     case UIT_TEXT_EDITOR:
     case UIT_SLOT:
     case UIT_PANEL:
-    case UIT_LEGACY:
     case UIT_SCROLL:                    // a scroll region: what its stack leaves, its rows scrolled in it
     case UIT_TABLE:                     // a table: what its stack leaves, its rows scrolled in it
     case UIT_TEXT_VIEW:                 // a text view: what its stack leaves, its lines scrolled in it
@@ -5849,7 +5840,6 @@ static void place_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, i
     switch (N->kind) {
     case UIT_PANES:
     case UIT_PANE:
-    case UIT_LEGACY:
         pn_draw(e, c, s, k, model, row, r);
         return;
     case UIT_CASE:
@@ -6395,27 +6385,6 @@ static void pane_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, in
     stack(e, c, s, k, model, row, body);
 }
 
-// A hosted body: placed, its rect the host's; in the pass, one stop over it that draws nothing.
-static void legacy_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
-                      const int32_t r[4])
-{
-    uit_arr_t *A = e->arr;
-    if (e->placing) {
-        if (A->nplaced < PN_MAX)
-            pn_rec(&A->placed[A->nplaced++], k, r, A);
-        return;
-    }
-    const char *key = uit_str(e, NODE(k)->key);
-    moy_ui_over_t o;
-    int32_t one = 1, got[5];
-    moy_ui_over_none(&o);
-    moy_ui_over_text(&o, MOY_UI_OV_ID, span_of(key, strlen(key)));
-    moy_ui_over_put(&o, MOY_UI_OV_BARE, &one);
-    moy_ui_api_at(c, r[0], r[1], r[2], r[3]);
-    moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, 0, &o, got);
-    id_put(e, k, model, row, key);
-}
-
 static void panes_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
                      const int32_t r[4])
 {
@@ -6462,9 +6431,6 @@ static void pn_draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, in
     case UIT_PANE:
         pane_at(e, c, s, k, model, row, r);
         return;
-    case UIT_LEGACY:
-        legacy_at(e, c, s, k, model, row, r);
-        return;
     }
     place_at(e, c, s, k, model, row, r);
 }
@@ -6486,8 +6452,6 @@ static int pn_pass(uit_t *e)
     A->root = -1;
     A->depth = A->ghost = 0;
     A->arranging = 1;
-    if (e->placing)
-        A->nplaced = 0;
     for (int i = 0; i < UIT_SP_N; i++)
         A->held[i] = -1;
     return 1;
@@ -6528,7 +6492,7 @@ int uit_panes(const uit_t *e, int32_t *out, int max)
     if (!A || max < UIT_PN_HEAD)
         return 0;
     out[0] = A->root, out[1] = A->alone, out[2] = A->least[0], out[3] = A->least[1];
-    out[4] = A->npanes, out[5] = A->ndivs, out[6] = A->nplaced, out[7] = A->norder, out[8] = A->nsplits;
+    out[4] = A->npanes, out[5] = A->ndivs, out[6] = A->norder, out[7] = A->nsplits;
     int at = UIT_PN_HEAD;
     for (int i = 0; i < A->npanes; i++)
         at = pn_put(out, at, max, &A->panes[i]);
@@ -6544,8 +6508,6 @@ int uit_panes(const uit_t *e, int32_t *out, int max)
         out[at + 9] = D->i, out[at + 10] = D->axis;
         at += 11;
     }
-    for (int i = 0; i < A->nplaced; i++)
-        at = pn_put(out, at, max, &A->placed[i]);
     for (int i = 0; i < A->norder; i++)
         at = pn_put(out, at, max, &A->order[i]);
     for (int i = 0; i < A->nsplits; i++) {
@@ -6920,10 +6882,7 @@ static void placed_hints(uit_t *e, uit_buf_t *b, int pages)
         return;
     int closer = pop >= 0 ? pop : closer_of(e, 0);
     if (closer < 0) {
-        if (e->has_focused && e->focused.kind == UIT_LEGACY) {
-            if (e->nlegacy_hints)
-                uit_buf_put(b, e->legacy_hints, e->nlegacy_hints - 1u);
-        } else if (e->has_focused && e->focused.kind != UIT_TEXT_EDITOR)
+        if (e->has_focused && e->focused.kind != UIT_TEXT_EDITOR)
             hints(e, b, pages);
         return;
     }

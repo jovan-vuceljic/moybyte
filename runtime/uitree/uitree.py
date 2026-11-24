@@ -2077,8 +2077,6 @@ SCHEMA = {
                  tabs="lit", labels="lit", offered="conds", head="lit"),
     "text_editor": dict(_C, find="lit", find_on="cond", marks="lit", gutter="cond", focus="cond"),
     "slot": dict(_C, min="lit"),
-    # §7.7's bridge: a surface still on today's verbs hosted in one node
-    "legacy": dict(_C, draw="fn", pointer="fn", keys="fn", hints="fn", gen="fn"),
     "row": dict(_C, close="action0", gap="int", pad="int", mid="lit", grow="lit", wrap="lit"),
     "tools": dict(_C, lend="lit"),
     "lent": dict(_C),
@@ -2086,12 +2084,7 @@ SCHEMA = {
 }
 TWO_WAY = ("toggle", "slider", "field", "tabs", "seg")
 # what a function prop takes, for its N01's fix
-_FN_FIX = {None: "%s=draw, where def draw(cv, x, y, w, h)",
-           ("legacy", "draw"): "%s=draw, where def draw(cv, th, x, y, w, h, focused, dt)",
-           ("legacy", "pointer"): "%s=pointer, where def pointer(x, y, click) returns whether it took it",
-           ("legacy", "keys"): "%s=keys, where def keys(i) returns whether it took the input",
-           ("legacy", "hints"): "%s=hints, where def hints() returns the band's hints",
-           ("legacy", "gen"): "%s=gen, where def gen() returns an int that moves with its pixels"}
+_FN_FIX = {None: "%s=draw, where def draw(cv, x, y, w, h)"}
 def _vclass(v):
     """A value's class as the contract's check names them (moy_uitree_check.h's UIT_VC_*)."""
     t = type(v)
@@ -3006,32 +2999,6 @@ def text_editor(name, **p):
     return _node("text_editor", name, p, where)
 
 
-LEGACY_IN = ("page", "panel", "case", "pane")
-
-
-def legacy(key, draw, **p):
-    """A surface still drawn with today's verbs, hosted in one node (§7.7,
-    the bridge): one focus stop over the rect the engine lays out for it.
-    `draw(cv, th, x, y, w, h, focused, dt)` draws the surface into that rect,
-    under the page's theme `th`,
-    BEFORE the page's own verbs pass (a hosted surface begins its own pass;
-    the page's overlays lie over it); `pointer(x, y, click)` is handed a
-    press in its own coordinates and what follows until the release, True
-    where it took it; `keys(i)` the frame's input while it holds focus,
-    True where it took it (else the page moves focus as from any stop);
-    `hints()` the hints the page's band shows while it holds focus; `gen()`
-    an int that moves whenever its pixels may, which an idle frame polls
-    (it asks for its own frames otherwise). Stands where a region stands:
-    in a page, a panel, a case or a pane. It goes with the old engine."""
-    where = _caller()
-    n = _node("legacy", key, dict(p, draw=draw), where)
-    if n.parent is not None and n.parent.kind not in LEGACY_IN:
-        raise UIError("N03", "ui.legacy(%r) in a %s" % (key, n.parent.kind), where=where,
-                      expected=", ".join(LEGACY_IN),
-                      fix="a hosted surface is a region: put it in a pane, a case or a panel")
-    return n
-
-
 def slot(name, **p):
     """A hole in the app's layout another process's window may be docked in
     (the desk handoff's ui.slot): the shell resolves its rect."""
@@ -3584,8 +3551,7 @@ def _collecting(fn, returns_node):
 NODE_CALLS = ("page", "group", "label", "info", "link", "button", "item", "card", "toggle", "slider",
               "field", "seg", "table", "col", "rows", "cards", "picture", "progress", "empty", "dialog",
               "popover", "menu", "split", "grid", "panel", "canvas", "foot", "scroll", "rule", "note",
-              "bubble", "month", "toast", "cells", "stepper", "hints", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
-              "legacy")
+              "bubble", "month", "toast", "cells", "stepper", "hints", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status")
 DECL_CALLS = ("action", "hook", "labels", "work", "derive", "app")
 COMMAND_CALLS = ("push", "pop", "focus", "after", "post")
 for _n in NODE_CALLS:

@@ -919,7 +919,7 @@ const char *const uit_kind_names[UIT_KINDS] = {"", "page", "group", "label", "in
                                                "item", "split", "canvas", "tabs", "switch", "case",
                                                "table", "col", "foot", "cards", "card", "picture",
                                                "popover", "tools", "row", "status", "text_editor",
-                                               "panes", "pane", "legacy", "slot", "panel", "lent",
+                                               "panes", "pane", "slot", "panel", "lent",
                                                "rule", "note", "grid", "bubble", "month", "toast", "cells",
                                                "stepper", "hints"};
 
@@ -1243,9 +1243,6 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         if (r != 1)
             return r;
     }
-    if (kind == UIT_LEGACY && (!strcmp(name, "draw") || !strcmp(name, "pointer") || !strcmp(name, "keys") ||
-                               !strcmp(name, "hints") || !strcmp(name, "gen")))
-        return add_prop(e, node, name, src, repr, PK_LIT, 0);     // the front end's functions
     if (!strcmp(name, "tone") && kind == UIT_LABEL && strchr(src, '{')) {
         // a templated tone: its word drawn each frame (ink, dim, value, danger; another is ink)
         int t = uit_tmpl_compile(e, src, model);
@@ -1954,8 +1951,8 @@ int32_t uit_cell_gen(uit_t *e, int k)
 // `uit_cell_gen`; a lines view's rows are its view record's, moy_ui_api_text_view) and
 // those only a list's
 // cur= names (focus, which the toolkit draws); and whether it may carry one: no text of the build
-// names an engine value and no legacy node draws what no state says (a canvas does too, but for
-// one that names its states, reads=: a frame after one drew carries none, `gen_ok`).
+// names an engine value (a canvas draws what no state says, but for one that names its states,
+// reads=: a frame after one drew carries none, `gen_ok`).
 static void gen_of_build(uit_t *e)
 {
     e->gen_safe = e->nslots <= UIT_GEN_SLOTS;
@@ -1964,9 +1961,6 @@ static void gen_of_build(uit_t *e)
         e->gen_vals |= (uint8_t)names_engine_value(uit_str(e, e->tmpls[t].src));
     for (int c = e->m_conds; c < e->nconds; c++)
         e->gen_vals |= (uint8_t)names_engine_value(uit_str(e, e->conds[c].src));
-    for (int k = 0; k < e->nnodes; k++)
-        if (e->nodes[k].kind == UIT_LEGACY)
-            e->gen_safe = 0;
     for (int i = 0; i < e->nslots; i++)
         e->slots[i].in_gen = 1;
     if (!e->gen_safe || !e->nnodes)
@@ -2023,7 +2017,7 @@ int uit_build_end(uit_t *e)
     }
     e->has_panes = 0;
     for (int k = 0; k < e->nnodes; k++) {
-        if (e->nodes[k].kind == UIT_PANES || e->nodes[k].kind == UIT_LEGACY)
+        if (e->nodes[k].kind == UIT_PANES)
             e->has_panes = 1;
         const uit_node_t *N = &e->nodes[k];
         if (N->kind == UIT_DIALOG) {    // labels=: one a button, or none

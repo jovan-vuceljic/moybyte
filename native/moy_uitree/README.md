@@ -61,9 +61,9 @@ states in slot order, `T` their type codes, `A` the actions in their order,
 `X` the rest of what the front end keeps beside the store once a page is
 lowered, as one literal (`uitree_c.CEngine.front`): each canvas's pointer
 action, each popover's list and whether a field of its own takes keys, the
-document fields the page reads, each text editor, and each panes, pane and
-legacy node's stand-in (its props, a function by its name in the page's
-module), and `O` what each state's slot keeps by index, in the store's
+document fields the page reads, each text editor, and each panes and pane
+node's stand-in (its props, a function by its name in the page's module),
+and `O` what each state's slot keeps by index, in the store's
 order (`uitree_aot.orders`): a model's fields (`Model.order`, sorted), a
 document's row's (`doc`, then `DOC_ORDER`, sorted), an enum's values, None
 for the rest. A document is its state's slot (a row_of) and its hidden

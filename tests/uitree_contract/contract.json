@@ -2632,33 +2632,6 @@
     }
    }
   },
-  "legacy": {
-   "head": "key",
-   "level": 1,
-   "section": "7.7",
-   "props": {
-    "draw": {
-     "type": "fn",
-     "level": 1
-    },
-    "pointer": {
-     "type": "fn",
-     "level": 1
-    },
-    "keys": {
-     "type": "fn",
-     "level": 1
-    },
-    "hints": {
-     "type": "fn",
-     "level": 1
-    },
-    "gen": {
-     "type": "fn",
-     "level": 1
-    }
-   }
-  },
   "hints": {
    "head": "model",
    "level": 2,

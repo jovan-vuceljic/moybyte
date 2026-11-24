@@ -450,7 +450,6 @@ Python's alone.
 |---|---|---|
 | `canvas(key, draw)` | a rect the app draws itself (Canvases, below) | `h=`, `w=`, `reads=`, `pointer=`, `keys=`, `hint=`, `focus=`, `mark=`, `ground=` |
 | `text_editor(name)` | the console's text editor over a `ui.doc` (no Lua) | `find=`, `marks=`, `gutter=`, `focus=` |
-| `legacy(key, draw)` | a surface drawn with the immediate verbs in one node (no Lua; it goes at the clean cut) | `pointer=`, `keys=`, `hints=`, `gen=` |
 
 ### Layout
 
@@ -962,8 +961,8 @@ focused field's edit, then a popover the last frame drew, then, while the
 app lends the bar its way back (`ui.bar`'s fourth argument), the next
 `ui.bar`, which answers it.
 
-Write an app on the UI tree: the immediate verbs, and the `legacy` node
-that hosts them in a tree, go at the clean cut of the OS work (#246).
+Write an app on the UI tree: the immediate verbs go at the clean cut of
+the OS work (#246).
 
 ## 4. Input
 

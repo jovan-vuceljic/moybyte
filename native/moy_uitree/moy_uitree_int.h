@@ -228,10 +228,9 @@ typedef struct {
 typedef struct {
     uit_pa_t panes[PN_MAX];     // the last placement's arrangement, even under a pane alone
     uit_pd_t divs[PN_MAX];
-    uit_pa_t placed[PN_MAX];    // each hosted body where the last placement put it
     uit_pa_t order[PN_MAX];     // the panes this pass drew
     uit_ps_t splits[PN_SPLITS]; // this pass's splits
-    uint8_t npanes, ndivs, nplaced, norder, nsplits;
+    uint8_t npanes, ndivs, norder, nsplits;
     uint8_t depth, ghost, arranging;
     uint8_t path[PN_DEPTH];
     int16_t root, alone;        // the outermost panes this pass; the pane the placement stood alone
@@ -371,7 +370,7 @@ struct uit {
     uit_draft_t *drafts;
     int ndrafts, cdrafts;
     uint32_t edits;             // drafts' edits: the page's gen moves with them
-    uint8_t gen_safe;           // the page may carry a gen: no legacy node, not too many states
+    uint8_t gen_safe;           // the page may carry a gen: not too many states
     uint8_t canvas_now, canvas_last;    // a canvas drew in this frame, in the last (`gen_ok`)
     uint8_t gen_vals;           // the engine values its text names, which its gens count (GV_*)
     uint32_t gv;                // what they are this frame, hashed (the focus at the frame's begin, the input)
@@ -418,8 +417,6 @@ struct uit {
     // the placed layout: each node's rect as the last pass placed it (w -1: not placed)
     uint8_t placed, placing;
     int16_t ground[4];
-    char legacy_hints[128];     // a focused legacy stop's band hints, NUL-separated (its host's)
-    uint8_t nlegacy_hints;
     char band_extra[48];        // the items its host adds to the band before Back, NUL-separated
     uint8_t nband_extra;
     int16_t *rects;

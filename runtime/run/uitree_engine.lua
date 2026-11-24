@@ -30,8 +30,8 @@ local E_CHECK = -6
 local KINDS = { page = 1, group = 2, label = 3, info = 4, link = 5, button = 6, toggle = 7, rows = 8, dialog = 9,
                 seg = 10, slider = 11, field = 12, empty = 13, progress = 14, text_view = 15, scroll = 16, menu = 17,
                 item = 18, split = 19, switch = 22, case = 23, table = 24, col = 25, foot = 26, popover = 30,
-                canvas = 20, tabs = 21, cards = 27, card = 28, picture = 29, row = 32, panel = 39, rule = 41, note = 42, grid = 43,
-                bubble = 44, month = 45, toast = 46, cells = 47, stepper = 48, hints = 49 }
+                canvas = 20, tabs = 21, cards = 27, card = 28, picture = 29, row = 32, panel = 38, rule = 40, note = 41, grid = 42,
+                bubble = 43, month = 44, toast = 45, cells = 46, stepper = 47, hints = 48 }
 local BASE = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = ENUM, rowof = ROWOF, model = MODEL }
 local FIELD = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = TEXT }
 -- a prop whose value is a literal the dump prints as one (its Python repr)
