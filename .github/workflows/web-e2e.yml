@@ -63,6 +63,9 @@ name: Web console E2E
 #                                  Sprite tab's keys, Shift+Tab, Super and
 #                                  F11, the wheel, and the Code tab's drag,
 #                                  word, Shift+click and middle autoscroll.
+#   tests/test_web_gamepad_e2e.py  #254: a stand-in Gamepad API pad alone
+#                                  drives the handheld (home, tabs, an app, a
+#                                  game and its pause card) and the desk.
 #   tests/test_web_update_e2e.py   updating the board that serves the page:
 #                                  its strip and panel, for a headless board
 #                                  and for one with glass.
@@ -277,7 +280,8 @@ jobs:
             tests/test_web_store_e2e.py tests/test_web_wasm_e2e.py \
             tests/test_web_music_e2e.py tests/test_web_first_run_e2e.py \
             tests/test_web_audio_stream_e2e.py \
-            tests/test_web_desk_input_e2e.py tests/test_web_loader.py \
+            tests/test_web_desk_input_e2e.py tests/test_web_gamepad_e2e.py \
+            tests/test_web_loader.py \
             tests/test_web_link_e2e.py tests/test_web_setup_e2e.py \
             tests/test_web_fonts.py tests/test_web_look_parity.py \
             tests/test_editor_ladder_icons.py

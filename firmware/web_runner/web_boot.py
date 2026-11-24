@@ -60,7 +60,7 @@ import moy_catalogue
 import web_canvas
 import web_input
 import web_vfs
-from input import InputState
+from moy_input import InputTable
 from audio_session import PcmPump
 
 _S = {}          # the runner singletons: ws / canvas / driver / sink
@@ -243,7 +243,8 @@ def _make_api(*a, **kw):
 # driver's "local" source; its on-screen gamepad, the "pad" source its holds
 # name (web_input.PAD_SOURCE); and on a coarse-pointer page (a phone, a tablet)
 # touch first, in use from boot, since a finger is what such a page is used
-# with; a fine pointer is a mouse, no finger, as on the host.
+# with; a fine pointer is a mouse, no finger, as on the host. A gamepad held
+# at the page joins them while one is connected (`_gamepad`).
 WEB_INPUTS = (("local", "keys"), ("pad", "pad"))
 WEB_TOUCH_INPUTS = (("touch", "touch"), ("local", "keys"), ("pad", "pad"))
 
@@ -301,7 +302,9 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
         # same way, for the same reason).
         width = max(320, int(width))
         height = max(240, int(height))
-    inp = InputState()
+    # The boards' table, all sixteen names: a gamepad held at the page
+    # presses what a board's does (web_input.BUTTON_NAMES).
+    inp = InputTable()
     if not font_scale:
         # 1x on BOTH tiers (owner call): at 1024x600 the 2x system font ate the
         # desktop's density for no legibility win on a real monitor. The page can
@@ -1152,6 +1155,23 @@ def _edit_state(ws):
     return out
 
 
+def _input_state(ws):
+    """Which input the console follows, for a harness that drives it with a
+    gamepad: the input in use and the one the hints draw the keys of
+    (`ui_draw.INPUTS`), the sources declared, the desk's focused tile, the
+    home's tab and selected card, and the pause card's rows and the one
+    focused while it is up."""
+    import ui_draw
+    p = ws.pause
+    desk = getattr(ws.wm, "desk_focus", None)
+    return {"desk_focus": desk() if desk is not None else None,
+            "kind": ui_draw.input_kind(), "hints": ui_draw.hint_kind(),
+            "sources": sorted(ws.input_kinds or ()),
+            "home_sel": getattr(ws.launcher, "sel", None),
+            "home_tab": getattr(ws.launcher, "tab", None),
+            "pause": list(p.rows) if p.open else None, "pause_sel": p.focused()}
+
+
 def state_json():
     """The console's `state`: the dev channel's one-line snapshot -- the keys
     every on-glass suite reads -- plus this page's sample stream
@@ -1176,6 +1196,7 @@ def state_json():
     st["sync"] = {"acked": _S.get("sync_acked", 0),
                   "busy": any(w.busy() for w in _watchers())}
     st["edit"] = _edit_state(_S["ws"])
+    st["input"] = _input_state(_S["ws"])
     term = getattr(_S["ws"].app("terminal"), "face", None)
     st["term"] = term.lines() if term is not None else None
     try:
@@ -1213,7 +1234,20 @@ def _apply(events):
         on_press=d.press, on_pan=d.pan, on_key=d.type_char,
         on_esc=d.escape, on_hold=d.hold, on_key_hold=d.key_hold,
         on_super=d.system_key, on_full=d.full_key, on_key_down=d.key_down,
-        on_key_up=d.key_up, on_mods=d.set_mods, on_wheel=d.wheel, on_middle=d.middle)
+        on_key_up=d.key_up, on_mods=d.set_mods, on_wheel=d.wheel, on_middle=d.middle,
+        on_gamepad=_gamepad)
+
+
+def _gamepad(on):
+    """A gamepad held at the page connected (`on`), or the last one left:
+    its source joins the console's inputs as the `pad` kind, the input in use
+    from then on so the focus and the pad's keys show at once, and leaves
+    them with nothing held."""
+    ws = _S["ws"]
+    if on:
+        ws.input_joined(web_input.GAMEPAD_SOURCE, "pad")
+    else:
+        ws.input_left(web_input.GAMEPAD_SOURCE)
 
 
 def store_mode(mode=None, seeded=None):

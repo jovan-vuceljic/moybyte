@@ -4944,3 +4944,24 @@ def test_an_idle_snapshot_mint_with_no_room_is_asked_once(tmp_path):
         _quiesce(ws)
         drv.frame(1 / 30)
     assert len(asks) == 2, asks
+
+
+def test_a_desk_tile_the_keys_moved_to_opens(tmp_path):
+    """The desk's column holds no current of its own, so the card its keys
+    moved to stays theirs: Down then A opens Projects, the second tile, not
+    Play, the first (moy_ui_api_table.c's cells motion lands the keys on the
+    app's current only where the app moved it)."""
+    ws = build_desktop_ws(tmp_path)
+    drv = _drv(ws)
+    ws.home.go_home()
+    for _ in range(5):
+        drv.frame(1 / 30)
+    assert ws.wm.desk_focus() == "play"
+    drv.press("down")
+    for _ in range(5):
+        drv.frame(1 / 30)
+    assert ws.wm.desk_focus() == "projects"
+    drv.press("a")
+    for _ in range(10):
+        drv.frame(1 / 30)
+    assert ws.wm.stack.kinds()[-1] == "projects", ws.wm.stack.kinds()
