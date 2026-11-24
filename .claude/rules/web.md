@@ -95,6 +95,19 @@ nor those docs will warn you about:
   pixel for pixel; `tests/test_web_fonts.py` names the face a seed theme lost.
   A web-only tweak to what the console draws (web_boot) is a divergence that
   test reports: the page's own chrome is the only look the browser owns.
+- **A gamepad held at the browser is a board's pad** (#254): the page polls
+  the Gamepad API once a frame (`page_tail.js`, `GP_BTN`: the standard
+  mapping by place, bottom A and right B) and holds buttons of its own
+  source, `gamepad`, which joins the console's inputs as the `pad` kind
+  while one is connected (`web_boot._gamepad`, `Workstation.input_joined`),
+  so its focus and its hints show from the moment it connects. So the
+  browser's table is the boards' sixteen-name `InputTable`, never the
+  simulator's eight: X, Y, Select and Start reach the shell as a board's
+  do, and the shoulders type Q and E, the T-Deck's L and R (none while a
+  field takes text or a game owns the keys). **A browser shows a pad only
+  to a secure context**: Firefox's `getGamepads()` answers none over plain
+  HTTP, so a board-served page may see no pad where the site (https) and
+  localhost do.
 - **The emscripten is PINNED: `EMSDK_VERSION` in build.sh, held by
   `tools/emsdk_tree.sh` on every full build** (a tree at the pin is a silent
   no-op, another version is moved to it, one that cannot be had fails the

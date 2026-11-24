@@ -306,8 +306,37 @@ window.__moyAttach=function(w){WORKER=w;w.onmessage=function(e){onWorker(e.data)
 // hide the pad for touch-only carts unless forced here.
 if(new URLSearchParams(location.search).get("pad")){
 document.getElementById("ctl").style.display="flex";}
+// ---- GAMEPAD (#254) -----------------------------------------------------------
+// A gamepad held at the browser presses the console's buttons as a board's
+// does, from its own source, "gamepad" (web_input.GAMEPAD_SOURCE), read once a
+// frame before the frame's events go. The Gamepad API's standard mapping: the
+// d-pad, and the left stick past GP_DZ, are the directions; the face buttons
+// by their place and the standard mapping's names, bottom A, right B, left X,
+// top Y; Back/Select is `select`, Start `start` (the console's key: the system
+// menu, the pause card over a game), the centre button `home`; the shoulders
+// type the tab keys Q and E, the T-Deck's L and R. A pad appearing makes it an
+// input (the `gamepad` event: its focus and its keys show), and the last one
+// leaving takes it away. A browser shows pads only to a secure context
+// (https, localhost), and only after a button of one is pressed on the page.
+var GP_BTN={0:"a",1:"b",2:"x",3:"y",8:"select",9:"start",12:"up",13:"down",
+14:"left",15:"right",16:"home"},GP_KEY={4:113,5:101},GP_DZ=0.5;
+var gpOn=false,gpHeld={},gpKeys={};
+function gpPoll(){var ps=navigator.getGamepads?navigator.getGamepads():null,
+now={},keys={},any=false,i,k,n;
+if(ps)for(i=0;i<ps.length;i++){var p=ps[i];if(!p||!p.connected)continue;any=true;
+var b=p.buttons||[],ax=p.axes||[],x=ax[0]||0,y=ax[1]||0;
+for(k in GP_BTN)if(b[k]&&b[k].pressed)now[GP_BTN[k]]=1;
+for(k in GP_KEY)if(b[k]&&b[k].pressed)keys[k]=1;
+if(x<-GP_DZ)now.left=1;if(x>GP_DZ)now.right=1;if(y<-GP_DZ)now.up=1;if(y>GP_DZ)now.down=1;}
+if(!any&&!gpOn)return;
+if(any&&!gpOn){gpOn=true;send({type:"gamepad",on:true});}
+for(n in gpHeld)if(!now[n]){delete gpHeld[n];send({type:"hold",name:n,down:false,src:"gamepad"});}
+for(n in now)if(!gpHeld[n]){gpHeld[n]=1;send({type:"hold",name:n,down:true,src:"gamepad"});}
+for(k in keys)if(!gpKeys[k])send({type:"key",code:GP_KEY[k],src:"gamepad"});
+gpKeys=keys;
+if(!any){gpOn=false;send({type:"gamepad",on:false});}}
 var panWas=false;
-function pump(){var v=pv();if(v[0]||v[1]){panWas=true;send({type:"pan",dx:v[0],dy:v[1]});}
+function pump(){gpPoll();var v=pv();if(v[0]||v[1]){panWas=true;send({type:"pan",dx:v[0],dy:v[1]});}
 else if(panWas){panWas=false;send({type:"pan",dx:0,dy:0});}
 if(!q.length||!WORKER)return;var b=q;q=[];
 WORKER.postMessage({t:"input",json:JSON.stringify({events:b})});}

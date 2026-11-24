@@ -177,23 +177,25 @@ def test_apply_events_gates_unknown_button_names():
 
 def test_button_names_pinned_to_the_shared_table():
     """Pin the ONE table every input consumer reads (runtime.web_input
-    .BUTTON_NAMES) -- the launcher-nav + gameplay logical names."""
-    assert set(web_input.BUTTON_NAMES) == {"left", "right", "up", "down", "a", "b",
-                                          "run", "home"}
+    .BUTTON_NAMES): the boards' sixteen names, since a gamepad held at the
+    page presses X, Y, Select and Start as a board's does."""
+    assert set(web_input.BUTTON_NAMES) == {
+        "left", "right", "up", "down", "a", "b", "run", "home",
+        "x", "y", "stop", "save", "share", "select", "start", "full"}
 
 
-def test_button_names_is_the_host_input_state_table_itself():
-    """Not a second copy of it. A ninth OS button added to InputState.BUTTONS
-    used to be dropped silently by the browser: apply_events gates `hold` events
-    on BUTTON_NAMES membership, so an unlisted name is discarded as junk with no
+def test_button_names_is_the_board_input_table_itself():
+    """Not a second copy of it. A button added to InputTable.BUTTONS used to
+    be dropped silently by the browser: apply_events gates `hold` events on
+    BUTTON_NAMES membership, so an unlisted name is discarded as junk with no
     error anywhere."""
-    from runtime.input import InputState
-    assert web_input.BUTTON_NAMES is InputState.BUTTONS
+    from runtime.moy_input import InputTable
+    assert web_input.BUTTON_NAMES is InputTable.BUTTONS
 
 
-def test_a_new_host_button_reaches_the_browser_decoder(monkeypatch):
-    from runtime.input import InputState
-    monkeypatch.setattr(InputState, "BUTTONS", InputState.BUTTONS + ("menu",))
+def test_a_new_board_button_reaches_the_browser_decoder(monkeypatch):
+    from runtime.moy_input import InputTable
+    monkeypatch.setattr(InputTable, "BUTTONS", InputTable.BUTTONS + ("menu",))
     import importlib
     importlib.reload(web_input)
     try:
@@ -207,13 +209,14 @@ def test_a_new_host_button_reaches_the_browser_decoder(monkeypatch):
                                Input(), object())
         assert held.get("menu") is True
     finally:
-        monkeypatch.undo()             # before the reload, or the 9th name sticks
+        monkeypatch.undo()             # before the reload, or the name sticks
         importlib.reload(web_input)
 
 
-def test_the_board_input_state_is_deliberately_not_this_table():
-    """The device tier's BUTTONS is 15 names in libmoy's enum order and asserting
-    the two tiers equal would be WRONG -- tests/test_moy_button_order.py is the
-    file that explains why. This pins that web_input took the HOST one."""
-    assert len(web_input.BUTTON_NAMES) == 8
-    assert web_input.BUTTON_NAMES[:4] == ("left", "right", "up", "down")
+def test_the_browser_table_is_the_boards_in_their_order():
+    """The browser's table is the boards' (web_boot builds an InputTable), in
+    libmoy's order, the host's eight its prefix
+    (tests/test_moy_button_order.py says why the order is libmoy's)."""
+    from runtime.moy_input import HOST_NAMES
+    assert len(web_input.BUTTON_NAMES) == 16
+    assert web_input.BUTTON_NAMES[:8] == HOST_NAMES

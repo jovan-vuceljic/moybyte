@@ -1873,6 +1873,29 @@ class Workstation:
             _ui_draw.input_kind(kinds[0][1])
             self.frame_state.dirty = True
 
+    def input_joined(self, source, kind):
+        """An input that comes and goes (a gamepad at the browser) arrived:
+        source `source` is an input of `kind` from now on, and the input in
+        use, so its focus and its keys show before its first press."""
+        kinds = dict(self.input_kinds or ())
+        kinds[source] = kind
+        self.input_kinds = kinds
+        self._news = getattr(self.input, "news", None)
+        self.input_used(source)
+
+    def input_left(self, source):
+        """Source `source` left: it holds nothing and is no input any more.
+        Were its kind the input in use, the board's first input is in use
+        again (`use_inputs`), until another one is used."""
+        kinds = self.input_kinds
+        if not kinds or source not in kinds:
+            return
+        self.input.source(source).release_all()
+        kind = kinds.pop(source)
+        if kind == _ui_draw.input_kind() and kinds:
+            _ui_draw.input_kind(next(iter(kinds.values())))
+            self.frame_state.dirty = True
+
     def input_used(self, source):
         """Input source `source` was used: the input in use becomes its kind
         (a source the board did not declare changes nothing), and a change

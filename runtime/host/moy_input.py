@@ -26,8 +26,10 @@ rest are runtime/host/moy_input_face.py's, generated.
                    own names after it; HOST_NAMES is the host's prefix of it
   InputTable       the merged input every surface reads, and the masks: all
                    sixteen names. HostInputTable is the same table over
-                   HOST_NAMES, the eight a keyboard, a mouse and the browser
-                   can press; a name outside a table's names is refused
+                   HOST_NAMES, the eight the simulator's keyboard and mouse
+                   can press (the browser's is InputTable: a gamepad at the
+                   page presses all sixteen); a name outside a table's names
+                   is refused
   InputSource      one producer's held set and key, a row of kind SRC
   Pointer          a screen-space cursor: trackball-relative, touch-absolute
   pointer_state    the pointer a CART sees, one answer for every tier

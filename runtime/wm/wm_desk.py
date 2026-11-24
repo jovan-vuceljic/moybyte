@@ -591,6 +591,12 @@ class _BackdropLayer(Layer):
             elif cart is not None:
                 ws.open(cart)
 
+    def focused(self):
+        """The id of the tile the keys are on in the frame drawn last, None
+        with none."""
+        h = self._host
+        return h.focused() if h is not None else None
+
     def handle_input(self, i):
         """The desk's keys (no window holds them): the column page's, its
         tiles stepped and opened by its cards."""

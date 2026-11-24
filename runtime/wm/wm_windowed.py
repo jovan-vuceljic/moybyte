@@ -577,6 +577,10 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
     def desk_open(self):
         return self.mode == "desktop"
 
+    def desk_focus(self):
+        """The id of the desk's tile the keys are on, None with none."""
+        return self._backdrop_layer.focused()
+
     def on_nav(self):
         FullscreenStackWM.on_nav(self)
         p = self.parked
