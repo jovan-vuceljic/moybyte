@@ -1737,10 +1737,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->lit = (uint8_t)(!strcmp(src, "share") ? 1 : !strcmp(src, "band") ? 2 : 0);
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
-    if (!strcmp(name, "follow") && kind == UIT_SCROLL) {
-        // follow=True: its first frame at its foot, a row that comes moving the view (lit 1)
-        N->lit = (uint8_t)!strcmp(src, "True");
-        return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
+    if ((!strcmp(name, "follow") || !strcmp(name, "snap")) && kind == UIT_SCROLL) {
+        // follow=True: its first frame at its foot, a row that comes moving the view (SC_FOLLOW);
+        // snap=True: whole units, the cues where some are left out above or below (SC_SNAP)
+        int bit = name[0] == 'f' ? SC_FOLLOW : SC_SNAP, on = !strcmp(src, "True");
+        N->lit = (uint8_t)((N->lit & ~bit) | (on ? bit : 0));
+        return add_prop(e, node, name, src, repr, PK_LIT, on);
     }
     if (!strcmp(name, "buttons") && kind == UIT_DIALOG)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);

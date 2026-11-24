@@ -386,7 +386,7 @@ Python's alone.
 | `page(title)` | a page: its title is the bar's | `status=` the hints band's lead words |
 | `group(caption)` | a captioned column of rows | `look="card"` on a card, `"rules"` a rule between rows; `gap=`; `close=` |
 | `row(key)` | children side by side | `wrap=`, `gap=`, `pad=`, `mid=`, `close=` what Back does while it shows |
-| `scroll(key)` | a region that scrolls its children | |
+| `scroll(key)` | a region that scrolls its children | Lua and C: `follow=` opens at its foot and keeps a new row in view; `snap=` shows whole rows, a "More below" cue where it leaves some out below and, following, an "Older messages" one above |
 | `foot()` | the page's docked foot: buttons at its end, a label before them | `look="share"` its buttons share its width, `"band"` an edge-to-edge strip |
 | `split(dir, sizes)` | cells along `"row"` or `"col"`, sized in units or weights (`"1*"`) | `gap=`, `pad=` (a spacing word: `"s"`, `"m"`, `"l"`, `"0"`), `align=`, `rule=` |
 | `grid(cols, rows)` | a fixed grid of cells | `gap=`, `pad=` (spacing words, as a split's), `w=`, `h=` |

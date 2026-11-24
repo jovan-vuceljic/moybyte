@@ -1437,15 +1437,18 @@ static int col_h(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
 
 static void walk(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
 // Node `k`'s scroll region opened (`ui.scroll`'s, a placed rows list's): its gen counts what it
-// reads, so its scroll takes shift frames; `follow` keeps its foot in view.
-static void scroll_open(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int follow)
+// reads, so its scroll takes shift frames; `lit`'s SC_FOLLOW keeps its foot in view, SC_SNAP
+// draws it in whole units.
+static void scroll_open(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int lit)
 {
     const char *key = uit_str(e, NODE(k)->key);
     int32_t one = 1, gen = (e->flags & UIT_F_GEN) && gen_ok(e) ? uit_cell_gen(e, k) : -1;
     moy_ui_over_t o;
     moy_ui_over_none(&o);
-    if (follow)
+    if (lit & SC_FOLLOW)
         moy_ui_over_put(&o, MOY_UI_OV_FOLLOW, &one);
+    if (lit & SC_SNAP)
+        moy_ui_over_put(&o, MOY_UI_OV_SNAP, &one);
     if (gen >= 0)
         moy_ui_over_put(&o, MOY_UI_OV_GEN, &gen);
     moy_ui_api_scroll(c, s, span_of(key, strlen(key)), &o);

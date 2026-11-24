@@ -1477,7 +1477,7 @@ end
 -- where this layer differs from the table: what the table only designs and the layer builds
 -- (true; a kind's every prop), and what the table has that the layer does not build yet (false)
 local OWN = { ["dialog.default"] = true, ["field.input"] = true, ["info.tag"] = true, ["info.tone"] = true,
-              ["link.tag"] = true, ["link.tone"] = true, ["scroll.new"] = true, ["scroll.follow"] = true,
+              ["link.tag"] = true, ["link.tone"] = true, ["scroll.new"] = true, ["scroll.follow"] = true, ["scroll.snap"] = true,
               ["slider.when"] = true, ["slider.off"] = true, ["toggle.when"] = true, ["toggle.off"] = true,
               ["card.image"] = false }
 -- a parent's prop the table lets every child carry: the one kind the layer builds it on
