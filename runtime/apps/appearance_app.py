@@ -38,7 +38,7 @@ import uitree as ui
 import uitree_app
 
 from layout_base import metric_class, DESK
-from moy_store_base import BUILTIN_NS, builtin_name
+from moy_store_base import BUILTIN_NS
 from chrome import (THEME_NAMES, theme_accents, theme_colors, theme_look, theme_modes,
                     theme_names, theme_presets, theme_tints, RGB, PAINT, LOOK_NONE,
                     rgb565_of, nearest_of)
@@ -357,20 +357,9 @@ def fill(lay):
         lay.focus_to = None
 
 
-def is_app(cart):
-    if (not cart or cart.get("title") != "Appearance"
-            or "appearance" not in (cart.get("permissions") or ())):
-        return False
-    path = cart.get("path")
-    if not path:
-        return int(cart.get("version", 0)) >= 1
-    return builtin_name(path) == "moybyte.appearance.moy"
-
-
 # -- the app --------------------------------------------------------------------------
 
-class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build, is_app,
-                                              needs=("wallpaper",))):
+class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build)):
     """The Appearance app: the page's engine handed this layer as what its
     handlers reach (`uitree_app.env()`), the choices read once per token
     generation, the changes, NAME, and the cards' pictures."""

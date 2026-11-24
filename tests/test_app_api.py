@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from runtime.layers import AppLayer
+from runtime.app_decls import APPS
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -42,7 +43,9 @@ def test_builtin_apps_are_registered(tmp_path):
     assert kinds == ["artwork", "myart", "appearance", "storybook",
                      "files", "calc", "getcarts", "jukebox", "terminal"]
     for kind in kinds:
-        assert ws._content_layers[kind] is not None       # router wired
+        assert ws.layer_of(kind) is None                   # nothing to route to until it is built
+        app = ws.app(kind)
+        assert ws.layer_of(kind) is app                    # router wired, built at its first ask
     assert ws.spine.app_min_size("artwork") == (310, 230)       # registered minimum
     assert ws.spine.app_min_size("calc") == (170, 190)          # its manifest's min_size
 
@@ -293,7 +296,8 @@ def test_calc_reflows_and_declares_minimum(tmp_path):
 
 
 def test_calc_is_app_rejects_lookalikes():
-    from runtime.calc_app import is_app
+    from runtime.app_slot import AppSlot
+    is_app = AppSlot(next(d for d in APPS if d["id"] == "calc")).is_app
     assert not is_app(None)
     assert not is_app({"title": "Calc", "permissions": ("graphics",), "path": "/x/moybyte.calc.moy"})
     assert not is_app({"title": "My Calc", "permissions": ("calc",), "path": "/x/moybyte.calc.moy"})

@@ -4,6 +4,7 @@
 #   Spine.play           show the front run's cart, recording its caller
 #   Spine.exit           the taskbar app's X: back toward the launcher
 #   Spine.register_app   a system app into the registry
+#   Spine.built          a registered app, built at its first ask
 #   Spine.open_app       the one app-launch dispatch
 #   Spine.wifi_hold      take a radio hold by tag (and pid)
 #   Spine.wifi_release   let a hold go
@@ -29,6 +30,7 @@ from ui_draw import AppHost
 from layers import Layer
 from achievements import is_proc as _is_ach_proc
 import moy_app as _moy_app
+from app_slot import AppSlot
 
 # The radio's holders: a process's tags, each held under its pid, and the
 # owner of the console's own (moy_lease.SHELL, the shell's pid).
@@ -360,43 +362,69 @@ class Spine:
             self._go_home_or_back()
 
     def _init_apps(self):
-        """Construct and register every SYSTEM APP from its declaration.
+        """Register every SYSTEM APP from its declaration, then the shell's
+        own two, which no cart is: Settings (its context carries the radios
+        and the USB drive) and the task manager.
 
         There is no per-app line in this file. `app_decls.APPS` is GENERATED
         from the `app` blocks in `system_carts/*/manifest.json`, so adding an
         app is a manifest plus a module -- never an edit here
-        (docs/app_api_v1.md). The shell addresses an app as `ws.app(id)`
+        (docs/app_api_v1.md). A boot imports no app's module: each registers
+        as its `AppSlot`, and is built when it first runs (`built`). A
+        declared service is built now, over the app's context, for the shell
+        reaches it before the app runs: Paint's document model is the
+        console's `ws.artwork` (the backdrop's My Art, the image door, the
+        Paint cart's identity). The shell addresses an app as `ws.app(id)`
         (`settings_layer` opens `ws.app("appearance")`).
 
         Declaration order IS dispatch precedence, which is why `order` lives in
         the manifest rather than being implied by a dict.
         """
-        for app, ms, cart in self._declared_apps():
-            self.register_app(app, min_size=ms, cart=cart)
-
-    def _declared_apps(self):
-        """(app, min_size, cart) for each declared app, built as it is
-        reached, then the shell's own two, which no cart is: Settings (its
-        context carries the radios and the USB drive) and the task manager."""
         ws = self.ws
         for d in APPS:
-            cls = _resolve_app_entry(d["entry"])
-            ctx = ws.app_context(d["id"], getattr(cls, "NEEDS", ()),
-                                   prefs_ns=getattr(cls, "PREFS_NS", None))
-            if getattr(cls, "UI", False):
-                # an app on the public UI API's verbs
-                ctx.ui = AppHost(d["id"], getattr(ctx, "surface", None))
-                ws._app_hosts[d["id"]] = ctx.ui
-            app = cls(ctx, NAMES)
-            # Paint's document model is the console's reach into Paint (the
-            # backdrop's My Art, the image door, the Paint cart's identity).
-            service = getattr(app, "service", None)
-            if service is not None:
-                ws.artwork = service
-            ms = d.get("min_size")
-            yield app, (tuple(ms) if ms else None), True
-        yield ws.settings_layer, None, False
-        yield ws.tasks_layer, None, False
+            ctx = service = None
+            if d.get("service"):
+                ctx = self._app_context(d)
+                service = ws.artwork = _resolve_app_entry(d["service"])(ctx)
+            slot = AppSlot(d, ctx, service)
+            ws.apps.register(slot.id, slot.TITLE, d.get("min_size"))
+            ws.app_layers.append(slot)
+            ws._apps_by_id[slot.id] = slot
+        for layer in (ws.settings_layer, ws.tasks_layer):
+            self.register_app(layer, cart=False)
+
+    def _app_context(self, d):
+        return self.ws.app_context(d["id"], d["needs"], prefs_ns=d.get("prefs_ns"))
+
+    def built(self, app):
+        """Registered app `app` (`ws.app(id)`), built where it is still its
+        `AppSlot`: its module imported, its context made with the roles its
+        declaration needs (a UI app's host with it), the app constructed and
+        put where the slot stood -- the router's table, `ws.app_layers` in
+        its place, `ws.app` -- and handed to the WM's layouts."""
+        if not isinstance(app, AppSlot):
+            return app
+        if app.app is not None:         # (a slot held from before its app was built)
+            return app.app
+        ws = self.ws
+        d = app.decl
+        cls = _resolve_app_entry(d["entry"])
+        ctx = app.ctx or self._app_context(d)
+        if getattr(cls, "UI", False):
+            # an app on the public UI API's verbs
+            ctx.ui = AppHost(d["id"], getattr(ctx, "surface", None))
+            ws._app_hosts[d["id"]] = ctx.ui
+        made = cls(ctx, NAMES) if app.service is None else cls(ctx, NAMES, app.service)
+        made.is_app = app.is_app
+        app.app = made
+        layers = ws.app_layers
+        layers[layers.index(app)] = made
+        ws._apps_by_id[made.id] = made
+        ws._content_layers[made.id] = made
+        hook = getattr(ws.wm, "on_app_registered", None)
+        if hook is not None:
+            hook(made)
+        return made
 
     def register_app(self, app, min_size=None, cart=True):
         """Register a SYSTEM APP (docs/app_api_v1.md). `app` is a content Layer
@@ -482,6 +510,7 @@ class Spine:
                     break
             if cart is None:
                 return False
+        app = self.built(app)
         if not ws.windowed_chrome:
             ws.leave_surface(ws.wm.top_kind())   # an app switch is an exit
         self.note_app_caller()        # a jump OUT of an app comes back to it

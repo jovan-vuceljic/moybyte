@@ -47,7 +47,7 @@ import ui_font as _ui_font
 import uitree as ui
 import uitree_app
 from layout_base import bar_rows, content_of, ground_round, metric_class, window_foot, DESK
-from artwork import ArtworkService, PaintDocument, DESK_W, DESK_H, GAME_W, GAME_H, colour_name
+from artwork import PaintDocument, DESK_W, DESK_H, GAME_W, GAME_H, colour_name
 from ticks import _ticks_ms, _ticks_diff
 from drawing_pages import GamePage, StoryPage, shown, stories_here, dot as _dot
 
@@ -606,20 +606,19 @@ class PaintAppLayer(PaintDraw, uitree_app.app_layer("artwork", "Paint", build)):
     id = "artwork"
     TITLE = "Paint"
     LENDS_BAR = True
-    # The shell roles this app uses (runtime/shell/app_context.py): its document
-    # model's (`ArtworkService`, built here), its copies' and My Art's door.
-    NEEDS = ("surface", "theme", "damage", "files", "carts", "wallpaper",
-             "prefs", "notify", "nav")
-    # The open picture's rows, `paint_doc` and `paint_doc_kind`, which the
-    # artwork role's C rows read (native/moy_app's MOY_APP_ARTWORK_NS).
-    PREFS_NS = "paint"
     # The WM's shown protocol (docs/surface_model_v1.md §14.3): `retained`
     # before a window draw, `changed` after it.
     HELD = True
     AUTOSAVE_S = AUTOSAVE_S
     RETRY_S = RETRY_S
 
-    def __init__(self, ctx, names):
+    def __init__(self, ctx, names, service):
+        """`ctx` carries the roles its declaration needs (its manifest's
+        `needs`: its document model's, its copies' and My Art's door) under
+        the prefs namespace `paint`, whose `paint_doc` and `paint_doc_kind`
+        rows the artwork role's C rows read (native/moy_app's
+        MOY_APP_ARTWORK_NS); `service` is its document model, the console's
+        (`ArtworkService`, built over `ctx` at boot)."""
         uitree_app.App.__init__(self, ctx, names)
         self.engine.env = self
         self.shown = {}               # each state as last written (`_set`)
@@ -628,7 +627,7 @@ class PaintAppLayer(PaintDraw, uitree_app.app_layer("artwork", "Paint", build)):
         self._damage = _Damage(ctx.damage, self)
         self._nav = ctx.nav
         self._ui = ctx.ui
-        self._art = self.service = ArtworkService(ctx)
+        self._art = self.service = service
         self._art.on_leave = self._leaving
         self.names = names
         cv = ctx.surface.canvas()
@@ -742,10 +741,6 @@ class PaintAppLayer(PaintDraw, uitree_app.app_layer("artwork", "Paint", build)):
     def size(self):
         s = self.sizes()
         return s[min(self.size_i, len(s) - 1)]
-
-    def is_app(self, cart):
-        """The app-API matcher (docs/app_api_v1.md)."""
-        return self._art.is_paint_app(cart)
 
     def relayout(self, w, h, fs, cs=None):
         self.layout = PaintAppLayout(w, h, fs, self._surf.windowed(), cs, bool(self._touch))

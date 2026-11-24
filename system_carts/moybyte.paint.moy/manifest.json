@@ -13,7 +13,12 @@
     "app": {
       "id": "artwork",
       "entry": "paint_app:PaintAppLayer",
-      "order": 10
+      "order": 10,
+      "needs": ["surface", "theme", "damage", "files", "carts", "wallpaper", "prefs", "notify", "nav"],
+      "prefs_ns": "paint",
+      "marker": "artwork",
+      "service": "artwork:ArtworkService",
+      "min_size": [310, 230]
     },
     "permissions": [
       "graphics",

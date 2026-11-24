@@ -18,7 +18,10 @@
     "app": {
       "id": "getcarts",
       "entry": "getcarts_app:GetCartsAppLayer",
-      "order": 80
+      "order": 80,
+      "name": "Get carts",
+      "needs": ["surface", "theme", "damage", "install", "nav", "carts"],
+      "marker": "getcarts"
     },
     "permissions": [
       "graphics",

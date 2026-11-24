@@ -68,7 +68,6 @@ class TerminalAppLayer(AppLayer):
     id = "terminal"
     domain = "system"
     TITLE = "Terminal"
-    NEEDS = ("surface", "theme", "damage", "install")
     UI = True
 
     def __init__(self, ctx, names):
@@ -85,17 +84,6 @@ class TerminalAppLayer(AppLayer):
                                      self._surf.windowed(), self._surf.chrome_scale())
 
     # -- the app protocol (docs/app_api_v1.md) ------------------------------------
-
-    @staticmethod
-    def is_app(cart):
-        if (not cart or cart.get("title") != "Terminal"
-                or "terminal" not in (cart.get("permissions") or ())):
-            return False
-        path = cart.get("path")
-        if not path:
-            return int(cart.get("version", 0)) >= 1
-        from moy_store_base import builtin_name
-        return builtin_name(path) == "moybyte.terminal.moy"
 
     def open(self):
         f = self.ensure()

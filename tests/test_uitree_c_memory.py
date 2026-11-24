@@ -131,6 +131,15 @@ def test_the_desk_loads_no_shaped_bar_page(result):
     assert "bar_shape_ui" not in result["mods"]
 
 
+def test_the_desk_imports_no_app_module(result):
+    """A boot registers each system app from its declaration
+    (`app_slot.AppSlot`): no app's module is imported, nor its context
+    and host made, until the app first runs."""
+    from runtime.app_decls import APPS
+    mods = set(d["entry"].partition(":")[0] for d in APPS)
+    assert mods and mods.isdisjoint(result["mods"]), sorted(mods & set(result["mods"]))
+
+
 def test_leaving_a_page_keeps_its_tree_and_nothing_grows(result):
     """Each round opens and leaves every page; the engine bytes at every
     round's end less the state values the stores hold are the same, and

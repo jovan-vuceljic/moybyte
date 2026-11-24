@@ -47,7 +47,8 @@ Phase 5, 2026-08-19). A system cart declares, in its own `manifest.json`'s
                                build.sh.
     "app": {...}            -- optional; a SYSTEM APP (docs/app_api_v1.md):
                                id / entry ("module:Class") / order
-                               (registration precedence) / min_size.
+                               (registration precedence) / needs / prefs_ns /
+                               name / marker / service / min_size.
     "fixture": true         -- optional; a TEST FIXTURE (the perf ledger's,
                                the on-glass suites', the tests'): the host
                                seeds it from this folder, but no console
@@ -254,6 +255,12 @@ def app_decls(system_carts_dir=None):
             "folder": folder,
             "title": man["title"],
         }
+        if not isinstance(app.get("needs"), list):
+            raise ValueError("%s.moy: app declaration needs a \"needs\" list" % folder)
+        decl["needs"] = tuple(str(v) for v in app["needs"])
+        for key in ("prefs_ns", "name", "marker", "service"):
+            if app.get(key):
+                decl[key] = str(app[key])
         if app.get("min_size"):
             decl["min_size"] = tuple(int(v) for v in app["min_size"])
         out.append(decl)
@@ -505,16 +512,24 @@ APP_DECLS_HEADER = (
     "This is the frozen tiers' copy of the declaration. The manifests are the\n"
     "source of truth, but a board and the wasm head have no `system_carts/` to\n"
     "read -- exactly as `carts_data.py` is the frozen copy of the cart bodies.\n"
-    "console.py loops over APPS to import, construct and register every system\n"
-    "app; there is no per-app line anywhere in the shell.\n"
+    "The console registers every system app from APPS at boot and imports and\n"
+    "constructs one when it first runs (app_slot.AppSlot); there is no\n"
+    "per-app line anywhere in the shell.\n"
     "\n"
     "  id         the process kind (router / back-stack / window key)\n"
     "  entry      \"module:Class\" -- a runtime/ module staged to every target\n"
     "  order      registration precedence (NOT the cart's shelf order)\n"
     "  folder     the identity cart it rides on, in system_carts/\n"
     "  title      that cart's title\n"
-    "  min_size   optional (w, h) windowed resize floor; omitted means the app's\n"
-    "             ui.app(min=), else its layout's MIN_W/MIN_H, at registration\n"
+    "  needs      the AppContext roles it is built with\n"
+    "  prefs_ns   optional; its prefs namespace, else its id\n"
+    "  name       optional; its window and taskbar title, else `title`\n"
+    "  marker     optional; the permission its identity cart carries, which the\n"
+    "             claim asks for beside the title and the folder\n"
+    "  service    optional; \"module:Class\" built at boot over its context\n"
+    "             (Paint's document model, the console's `ws.artwork`), handed\n"
+    "             to the app when it is built\n"
+    "  min_size   optional (w, h) windowed resize floor\n"
     '"""\n'
 )
 

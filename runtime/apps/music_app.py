@@ -40,7 +40,7 @@ import uitree as ui
 import uitree_app
 import ui_draw as _D
 import layout_base as _lb
-from moy_store_base import builtin_name, files_root
+from moy_store_base import files_root
 import moybyte as _moybyte
 import devices as _devices
 import status_items as _status
@@ -1247,28 +1247,14 @@ def build():
                 ui.button("main", "tonal", icon="{main_icon}", label="", w=42)
 
 
-def is_app(cart):
-    """The shipped Music identity cart: its title, its marker permission,
-    its folder."""
-    if (not cart or cart.get("title") != "Music"
-            or "music" not in (cart.get("permissions") or ())):
-        return False
-    path = cart.get("path")
-    if not path:
-        return int(cart.get("version", 0)) >= 1
-    return builtin_name(path) == "moybyte.music.moy"
-
-
 TITLES = {"now": "Now playing", "add": "Add a station"}
 
 
-class MusicAppLayer(uitree_app.app_layer("jukebox", "Music", build, is_app,
-                                         needs=("prefs", "install", "nav"))):
+class MusicAppLayer(uitree_app.app_layer("jukebox", "Music", build)):
     """The Music Layer: the page's engine handed this layer as what its
     handlers reach (`uitree_app.env()`), the stream's moves owing the page a
     fill, the music folder read off the draw (`idle_step`)."""
 
-    PREFS_NS = "music"          # its prefs, the stations it added: portable
     # Back on its first page leaves the app; on the desk it minimises the
     # window. Either way the stream plays on.
     BACK_MINIMISES = True

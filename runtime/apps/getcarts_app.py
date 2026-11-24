@@ -100,7 +100,6 @@ import json
 import uitree as ui
 import uitree_app
 from layout_base import metric_class, DESK
-from moy_store_base import builtin_name
 import app_perms as _perms
 import cart_index as _ci
 import cart_listing as _cl
@@ -612,20 +611,7 @@ def build():
             ui.field("Password", "password", 64, secret=True, on="install", shown="gated")
 
 
-def is_app(cart):
-    """The shipped Get Carts identity cart: its title, its marker
-    permission, its folder."""
-    if (not cart or cart.get("title") != "Get Carts"
-            or "getcarts" not in (cart.get("permissions") or ())):
-        return False
-    path = cart.get("path")
-    if not path:
-        return int(cart.get("version", 0)) >= 1
-    return builtin_name(path) == "moybyte.get_carts.moy"
-
-
-class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build, is_app,
-                                            needs=("install", "nav", "carts"))):
+class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
     """The Get Carts Layer: the page's engine handed this layer as what its
     handlers reach (`uitree_app.env()`), and the index, the covers and the
     install it steps a slice a frame (`_pump`)."""
