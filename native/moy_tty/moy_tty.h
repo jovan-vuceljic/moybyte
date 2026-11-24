@@ -129,8 +129,9 @@ int moy_tty_reap(int via, pid_t *pid, int *status);
 // Ctrl-C from the client (SIGINT), and its terminal's new size.
 int moy_tty_signal(pid_t pid, int sig);
 void moy_tty_winch(pid_t pid, int cols, int rows);
-// After a transport's session: wait up to `wait_ms` until its face has
-// ended, then free it.
+// After a transport's session: its face's running command stopped at its
+// next poll (the client is gone), then wait up to `wait_ms` until the face
+// has ended, and free it.
 void moy_tty_reap_all(int via, int wait_ms);
 
 // The shell's output (CR LF on a terminal), its raw bytes (a full-screen

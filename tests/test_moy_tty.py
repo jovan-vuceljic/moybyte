@@ -511,6 +511,26 @@ def test_a_face_another_transport_holds_refuses_the_page_busy(host):
     again.close()
 
 
+def test_a_command_whose_client_went_away_frees_the_face(host):
+    """`ssh host CMD` reads no terminal, so its face learns of a dropped
+    client from the transport alone: the session's end stops the running
+    command, and the next open finds the face free, not busy for good."""
+    host.say("ssh")
+    end = time.monotonic() + 5
+    while "SSH 0" not in host.log() and time.monotonic() < end:
+        time.sleep(0.05)
+    time.sleep(0.3)                     # the face is in its `sleep 30`
+    t0 = time.monotonic()
+    host.say("hangup")
+    end = time.monotonic() + 8
+    while "HANGUP" not in host.log() and time.monotonic() < end:
+        time.sleep(0.05)
+    assert "HANGUP" in host.log() and time.monotonic() - t0 < 3.0, host.log()[-400:]
+    ws = WS(host)
+    assert b"$ " in ws.read_until(b"$ ")
+    ws.close()
+
+
 def test_neofetch_twice_in_one_session_is_whole_both_times(host):
     """The spike's 379-byte stop: a hop's held output sent in pieces the
     loopback dropped. Both runs end at the prompt, the same length."""

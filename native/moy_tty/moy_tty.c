@@ -46,6 +46,7 @@ struct moy_tty {
     int secret;                 // the prompt is a secret question's: its answer is not echoed
     int once;                   // an exec answering its command's question: ends when none waits
     volatile int interrupt;     // a `signal` request (INT)
+    volatile int hup;           // the transport's session ended: every poll stops
     volatile int resized;       // a window-change request
     volatile int exited;        // the status is final: Dropbear may reap it
     volatile int done;          // set last by the face task: the rest is the reaper's
@@ -237,7 +238,7 @@ int moy_tty_poll(moy_tty_t *f) {
     if (f->on && on_face_task() && moy_tty_ms() - f->oat >= OUT_MS) {
         flush(f);
     }
-    if (f->interrupt) {
+    if (f->interrupt || f->hup) {
         f->interrupt = 0;
         return 1;
     }
@@ -1048,6 +1049,13 @@ void moy_tty_winch(pid_t pid, int cols, int rows) {
 
 void moy_tty_reap_all(int via, int wait_ms) {
     moy_tty_state_t *t = moy_tty_state();
+    moy_tty_t *g = t != NULL ? __atomic_load_n(&t->face, __ATOMIC_ACQUIRE) : NULL;
+    if (g != NULL && g->via == via) {
+        // its client is gone: a command still running stops at its next poll
+        // (one without a terminal reads no stream that would tell it), or it
+        // would hold the face, and every later open would find it busy
+        g->hup = 1;
+    }
     for (int ms = 0; t != NULL && ms < wait_ms; ms += 10) {
         moy_tty_t *f = __atomic_load_n(&t->face, __ATOMIC_ACQUIRE);
         if (f == NULL || f->via != via) {
