@@ -580,13 +580,15 @@ a page runs under", not "where it is served from".
 
 **My consoles' source is `site/os/`**, built by `tools/os_site.py` into
 `/console/` of the Pages site whose `/` and `/dev/` are the project site
-(`site/build.py`). It holds no console, no player and no carts, so it is in
+(`site/build.py`), and wears that site's look: its stylesheet, top bar,
+footer and scheme switch are `site/build.py`'s, taken from the tree that
+builds it. It holds no console, no player and no carts, so it is in
 neither web mode, and it shares the origin with the players without
 sharing their storage: the players keep OPFS (the dev one under
-`channel-dev/`) and the scheme switch's `moybyte-site-scheme`, and register
-no service worker and open no cache; My consoles keeps `moy.consoles` in
-`localStorage`, the `moy-packs` and `moy-app-*` caches, and a service
-worker whose scope is `/console/`. What the origin does share is the
+`channel-dev/`), and register no service worker and open no cache; My
+consoles keeps `moy.consoles` in `localStorage`, the `moy-packs` and
+`moy-app-*` caches, and a service worker whose scope is `/console/`. The
+scheme switch's `moybyte-site-scheme` is every page's. What the origin does share is the
 browser's account of it: a `persist()` grant, an eviction, Safari's 7-day
 cap and the quota cover the players' carts and My consoles' packs
 together. A board-mode console only ever runs on a board's origin.

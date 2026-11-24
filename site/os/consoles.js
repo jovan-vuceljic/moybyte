@@ -17,7 +17,8 @@ function write() {
 function say(t, cls) {
     const s = document.getElementById("said");
     s.textContent = t;
-    s.className = "note" + (cls ? " " + cls : "");
+    s.className = cls == "bad" ? "warnbox" : "notice";
+    s.hidden = !t;
 }
 function el(tag, cls, text) {
     const e = document.createElement(tag);
@@ -30,23 +31,28 @@ function render() {
     const list = document.getElementById("list");
     list.textContent = "";
     document.getElementById("empty").hidden = consoles.length > 0;
+    document.getElementById("more").hidden = consoles.length == 0;
     for (const c of consoles) {
-        const li = el("li"), open = el("button", "name", c.name);
+        const li = el("li"), open = el("button", "btn pri open", "Open");
         open.onclick = () => moyLink.open(c);
-        const st = el("div", "state"), s = shown.get(c.id);
+        const where = el("p", "where", moyKept.url(c));
+        if (c.local) where.append(el("span", "local", c.local));
+        const st = el("p", "state"), s = shown.get(c.id);
         if (s) {
             st.className = "state " + (s[1] || "");
             st.textContent = s[0];
             if (s[2]) { const a = el("a", "", s[2]); a.href = s[2]; a.target = "_blank"; st.append(" ", a); }
         }
-        const rename = el("button", "quiet", "Rename"), forget = el("button", "quiet", "Forget");
+        const rename = el("button", "btn quiet", "Rename"), forget = el("button", "btn quiet", "Forget");
         rename.onclick = () => renameConsole(c);
         forget.onclick = () => forgetConsole(c);
-        li.append(open, el("div", "addr", moyKept.url(c) + (c.local ? "  ·  " + c.local : "")),
-                  el("div", "reach", c.reached
+        const act = el("div", "act");
+        act.append(open, rename, forget);
+        li.append(el("h3", "name", c.name), where,
+                  el("p", c.reached ? "reach ok" : "reach", c.reached
                       ? "reached " + new Date(c.reached).toLocaleString() + "  ·  console " + c.page.slice(0, 12)
                       : "not reached yet"),
-                  st, rename, " ", forget);
+                  st, act);
         list.append(li);
     }
 }
@@ -119,7 +125,11 @@ if ("serial" in navigator) {
     cable.onclick = async () => {
         let port;
         try { port = await navigator.serial.requestPort(); }
-        catch (err) { say("No port chosen."); return; }
+        catch (err) {      // NotFoundError: the chooser was closed with no port
+            if (err.name != "NotFoundError") say("No port: " + err.message, "bad");
+            return;
+        }
+        say("");
         cable.disabled = true;
         try {
             await moySetup.run(document.getElementById("setup"), port, {
@@ -127,7 +137,7 @@ if ("serial" in navigator) {
                     consoles = moyKept.read();
                     render();
                     const k = consoles.find((x) => x.id === c.id) || c;
-                    const go = el("button", "", "Open " + k.name);
+                    const go = el("button", "btn pri", "Open " + k.name);
                     go.onclick = () => { moyLink.open(k, secret); go.remove(); };
                     document.getElementById("setup").append(go);
                 },

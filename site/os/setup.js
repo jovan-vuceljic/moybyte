@@ -22,7 +22,7 @@ self.moySetup = (() => {
     function line(box, text, cls) {
         let p = box.querySelector(".setup-said");
         if (!p) { p = el("p", { class: "setup-said" }); box.append(p); }
-        p.className = "setup-said" + (cls ? " " + cls : "");
+        p.className = "state setup-said" + (cls ? " " + cls : "");
         p.textContent = text;
     }
 
@@ -70,19 +70,19 @@ self.moySetup = (() => {
             const f = el("form", { class: "setup" });
             f.append(el("p", { class: "note" }, "Found " + (info.chip || "a board") + " running "
                 + (info.firmware || "Moybyte") + " " + info.version + "."));
-            const name = el("input", { name: "name", placeholder: "Name (kitchen)", autocomplete: "off",
+            const name = el("input", { class: "field", name: "name", placeholder: "Name (kitchen)", autocomplete: "off",
                                        maxlength: "24", required: "" });
             name.value = info.name && info.name != "moybyte-zero" ? info.name : "";
-            const pick = el("select", { name: "net" });
+            const pick = el("select", { class: "field", name: "net" });
             for (const n of nets) pick.append(el("option", { value: n.ssid }, n.ssid + (n.locked ? "" : " (open)")));
             pick.append(el("option", { value: "" }, "Another network..."));
-            const other = el("input", { name: "ssid", placeholder: "Network name", autocomplete: "off",
+            const other = el("input", { class: "field", name: "ssid", placeholder: "Network name", autocomplete: "off",
                                         maxlength: "32" });
             other.hidden = nets.length > 0;
             pick.onchange = () => { other.hidden = pick.value !== ""; };
-            const pw = el("input", { name: "wifi", type: "password", placeholder: "Wi-Fi password",
+            const pw = el("input", { class: "field", name: "wifi", type: "password", placeholder: "Wi-Fi password",
                                      autocomplete: "off" });
-            f.append(name, pick, other, pw, el("button", {}, "Connect it"));
+            f.append(name, pick, other, pw, el("button", { class: "btn pri" }, "Connect it"));
             f.onsubmit = (e) => {
                 e.preventDefault();
                 const ssid = pick.value || other.value.trim();
@@ -103,11 +103,11 @@ self.moySetup = (() => {
     function choose(box, name) {
         return new Promise((resolve) => {
             const f = el("form", { class: "setup" });
-            const a = el("input", { type: "password", placeholder: name + "'s password", autocomplete: "new-password" });
-            const b = el("input", { type: "password", placeholder: "Again", autocomplete: "new-password" });
+            const a = el("input", { class: "field", type: "password", placeholder: name + "'s password", autocomplete: "new-password" });
+            const b = el("input", { class: "field", type: "password", placeholder: "Again", autocomplete: "new-password" });
             f.append(el("p", { class: "note" }, name + " has no password yet. Choose one, "
                 + PW_MIN + " to " + PW_MAX + " characters: every browser pairs with it."), a, b,
-                el("button", {}, "Set it"));
+                el("button", { class: "btn pri" }, "Set it"));
             f.onsubmit = (e) => {
                 e.preventDefault();
                 if (a.value.length < PW_MIN || a.value.length > PW_MAX) { line(box, "A password is " + PW_MIN + " to " + PW_MAX + " characters.", "bad"); return; }

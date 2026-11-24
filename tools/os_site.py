@@ -12,14 +12,22 @@ worker's scope. The source is site/os/: the page (index.html, consoles.js),
 the packs it keeps (packs.js, shared with the service worker), the worker
 (sw.js) and the web app manifest; kept.js (the list), link.js (the link's
 site end), improv.js and setup.js (first setup over the cable) are the
-flasher's too, which site/build.py copies beside it. It runs no console and
-holds no carts: it
-hands a window on a board's origin the bytes of a pack, and that window's
-console keeps its carts on the board (§10, `.claude/rules/web.md`'s two
-modes). What a build writes into OUT/console/ (replaced):
+flasher's too, which site/build.py copies beside it. The page wears the
+project site's look: its top bar, footer, stylesheet, scheme switch and font
+are site/build.py's (SITE_CSS, site_nav, SITE_FOOTER, scheme_script), taken
+from the tree that builds it: a restyle of the site moves My consoles too, a
+page never mixes two trees' looks, and pages.yml builds it with master's
+tools once master has them, so it wears the stable site's. It runs no
+console and holds no carts: it hands a window on a board's origin the bytes
+of a pack, and that window's console keeps its carts on the board (§10,
+`.claude/rules/web.md`'s two modes). What a build writes into OUT/console/ (replaced):
 
     index.html consoles.js packs.js kept.js link.js improv.js setup.js
     manifest.webmanifest icon-*.png
+                    index.html and the manifest with their @MARKS@ filled:
+                    the site's top bar, footer and colours
+    site.css scheme.js petme128.woff2
+                    the site's stylesheet, scheme switch and display font
     sw.js           stamped with the build's version and the files it keeps
     packs.json      {"newest": [...]}: the body digests of the newest pack
                     of each release (and of each --pack), which the service
@@ -50,6 +58,7 @@ import http.server
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sys
 
@@ -62,9 +71,11 @@ SOURCE = os.path.join(ROOT, "site", "os")
 FILES = ("index.html", "consoles.js", "packs.js", "kept.js", "link.js", "improv.js", "setup.js",
          "manifest.webmanifest")
 ICONS = {"icon-192.png": 12, "icon-512.png": 32}    # the 16-pixel mascot, scaled
+LOOK = ("site.css", "scheme.js", "petme128.woff2")    # the project site's, from site/build.py
+STAMPED = ("index.html", "manifest.webmanifest")    # FILES whose @MARKS@ are filled
 # The files the service worker keeps, as it names them; "./" is index.html.
 SHELL = ["./", "consoles.js", "packs.js", "kept.js", "link.js", "improv.js", "setup.js",
-         "manifest.webmanifest", "packs.json"] + sorted(ICONS)
+         "manifest.webmanifest", "packs.json"] + sorted(ICONS) + list(LOOK)
 # What GitHub Pages sends with every file, which `serve` copies.
 PAGES_HEADERS = (("Access-Control-Allow-Origin", "*"), ("Cache-Control", "max-age=600"))
 
@@ -80,14 +91,35 @@ def newest(folder):
     return best and best[1]
 
 
-def _icons():
-    """{name: PNG bytes}: the Moy mascot as the project site draws it."""
+@functools.lru_cache(maxsize=None)
+def _site():
+    """This tree's site/build.py: the project site's look."""
     spec = importlib.util.spec_from_file_location("moy_site_build", os.path.join(ROOT, "site", "build.py"))
     site = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(site)
+    return site
+
+
+def _icons():
+    """{name: PNG bytes}: the Moy mascot as the project site draws it."""
+    site = _site()
     pal = site.palette()
     return {name: base64.b64decode(site.moy_mark(pal, scale).split(",", 1)[1])
             for name, scale in ICONS.items()}
+
+
+def _look(out):
+    """Write LOOK into `out`; returns the @MARKS@ the STAMPED files take."""
+    site = _site()
+    with open(os.path.join(out, "site.css"), "w", encoding="utf-8") as f:
+        f.write(site.site_css("petme128.woff2"))
+    with open(os.path.join(out, "scheme.js"), "w", encoding="utf-8") as f:
+        f.write(site.scheme_script())
+    shutil.copy(site.FONT, os.path.join(out, "petme128.woff2"))
+    return {"@NAV@": site.site_nav(site.palette(), home="/", here="/console/"),
+            "@FOOTER@": site.SITE_FOOTER,
+            "@NIGHT@": dict(site.theme_roles("dark"))["bg"],
+            "@DAY@": dict(site.theme_roles("light"))["bg"]}
 
 
 def build(out, stable=(), dev=(), packs=(), now=None):
@@ -108,15 +140,22 @@ def build(out, stable=(), dev=(), packs=(), now=None):
         held.add(digest)
         want.append(digest)
     want = [d for i, d in enumerate(want) if d in held and d not in want[:i]]
+    marks = _look(out)
     for name in FILES:
-        shutil.copy(os.path.join(SOURCE, name), os.path.join(out, name))
+        if name not in STAMPED:
+            shutil.copy(os.path.join(SOURCE, name), os.path.join(out, name))
+            continue
+        with open(os.path.join(SOURCE, name), encoding="utf-8") as f:
+            text = re.sub(r"@[A-Z]+@", lambda m: marks[m.group(0)], f.read())
+        with open(os.path.join(out, name), "w", encoding="utf-8") as f:
+            f.write(text)
     for name, png in _icons().items():
         with open(os.path.join(out, name), "wb") as f:
             f.write(png)
     with open(os.path.join(out, "packs.json"), "w") as f:
         json.dump({"newest": want}, f)
     h = hashlib.sha256()
-    for name in sorted(FILES) + sorted(ICONS) + ["packs.json"]:
+    for name in sorted(FILES) + sorted(ICONS) + sorted(LOOK) + ["packs.json"]:
         with open(os.path.join(out, name), "rb") as f:
             h.update(name.encode() + b"\0" + f.read())
     with open(os.path.join(SOURCE, "sw.js"), encoding="utf-8") as f:

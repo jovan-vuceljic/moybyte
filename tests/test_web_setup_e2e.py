@@ -148,7 +148,7 @@ def test_my_consoles_sets_a_board_up_by_cable_and_adds_one_by_hand(tmp_path):
             _add("x", "ftp://" + addr),
             _js("BAD", "document.getElementById('said').textContent"),
             _add("nobody", "127.0.0.1:9"),
-            {"press": "#list li:nth-child(2) button.name"},
+            {"press": "#list li:nth-child(2) button.open"},
             {"waitFor": "document.querySelector('#list li:nth-child(2) .state').textContent"
                         ".startsWith('not reached')", "timeout": 20000},
             _js("NOBODY", "[document.querySelector('#list li:nth-child(2) .state').textContent, "
