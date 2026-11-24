@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 from cart_store_fixtures import MemNet                       # noqa: E402
 from runtime import cart_index as ci, moy_carts, web_addon    # noqa: E402
-from test_official_carts import OWN, SEEDS, ZeroInst, _release  # noqa: E402
+from test_official_carts import BASE, OWN, SEEDS, ZeroInst, _release  # noqa: E402
 from test_ota_signing import TEST_KEYS                         # noqa: E402
 
 SOME = ("moybyte.files", "moybyte.harpoon_pop", "moybyte.tap_only_red", "moybyte.calc")
@@ -823,3 +823,80 @@ def test_a_console_with_glass_answers_official_and_installs_into_its_own_store(
     assert os.path.exists(root + "/" + HARPOON + "/manifest.json")
     assert any((c.get("path") or "").endswith(HARPOON) for c in ws.carts.all), \
         "the console's shelf has it"
+
+
+# -- the release's index mirror (cart_index.index_mirror) ------------------------------
+
+MIRROR = "http://pages.invalid/console/releases/"
+
+
+@pytest.fixture
+def mirrored(zero, monkeypatch):
+    """The release's index mirrored as os.moybyte.com mirrors it, the
+    release's own address its GitHub download's (BASE stands in for both)."""
+    monkeypatch.setattr(ci, "RELEASES", BASE.rsplit("/", 2)[0] + "/")
+    monkeypatch.setattr(ci, "RELEASE_MIRROR", MIRROR)
+    mirror = ci.index_mirror(OWN)
+    assert mirror == MIRROR + "firmware-beta/carts-tdeck.json"
+    return mirror
+
+
+def test_the_board_installs_from_the_mirror_first(zero, mirrored):
+    zero.net.routes[mirrored] = zero.net.routes[OWN]
+    moy_carts.note_removed(zero.root, HARPOON)
+    _post_run(zero, {"action": "install", "folder": HARPOON})
+    assert _call(zero, "POST", {"action": "agree"})[0] == 200
+    _run(zero)
+    assert _call(zero, "GET")[1]["state"] == "done"
+    got = zero.net.opened
+    assert got[0] == mirrored and OWN not in got, "the release's index read once, mirrored"
+    assert got[1].startswith(BASE + "moybyte.harpoon_pop-"), \
+        "its asset resolved against the release"
+
+
+@pytest.mark.parametrize("mirror", ["absent", "stale", "forged"])
+def test_a_mirror_that_cannot_serve_the_entry_hands_the_read_to_the_release(
+        zero, mirrored, mirror):
+    if mirror == "stale":
+        doc = json.loads(ci.split_signed(zero.net.routes[OWN])[0][len(ci.SIG_SCHEME):])
+        doc["carts"] = [c for c in doc["carts"] if c["folder"] != HARPOON]
+        from test_pkg import _sign
+        zero.net.routes[mirrored] = _sign(json.dumps(doc).encode())
+    elif mirror == "forged":
+        zero.net.routes[mirrored] = zero.net.routes[OWN].replace(b"Harpoon", b"Harpoom")
+    moy_carts.note_removed(zero.root, HARPOON)
+    doc = _post_run(zero, {"action": "install", "folder": HARPOON})
+    assert doc["state"] == "asking" and doc["manifest"]["title"] == "Harpoon Pop"
+    assert zero.net.opened[:2] == [mirrored, OWN]
+    assert _call(zero, "POST", {"action": "cancel"})[0] == 200
+
+
+def test_a_zero_s_page_lists_its_release_from_the_mirror(page, zero, mirrored, monkeypatch):
+    """The page reads the release's index from its mirror and checks the
+    signature with the keys the board named, by rsa_check's arithmetic as a
+    page has no kernel; the board fetches nothing and lists nothing."""
+    ws, app, worker, proot, _landed = page
+    monkeypatch.setattr(ci, "_native", lambda: None)
+    worker.readable[mirrored] = zero.net.routes[OWN]
+    zero.net.opened.clear()
+    ws.spine.open_app(app)
+    _frames(ws, worker, lambda: app.phase == "list")
+    rows = dict((r["cart"]["folder"], r["state"]) for r in app.rows)
+    assert rows[HARPOON] == "get" and rows["moybyte.files.moy"] == "installed"
+    assert mirrored in worker.fetched and OWN not in worker.fetched
+    assert ("POST", json.dumps({"action": "check", "index": OWN})) not in worker.asked, \
+        "the board lists not its release"
+    assert OWN not in zero.net.opened and mirrored not in zero.net.opened
+    harpoon, = [r["cart"] for r in app.rows if r["cart"]["folder"] == HARPOON]
+    assert harpoon["index"] == OWN, "an install names the release, which the board reads"
+
+
+def test_a_page_refuses_a_mirror_whose_signature_is_not_the_release_s(
+        page, zero, mirrored, monkeypatch):
+    ws, app, worker, proot, _landed = page
+    monkeypatch.setattr(ci, "_native", lambda: None)
+    worker.readable[mirrored] = zero.net.routes[OWN].replace(b"Harpoon", b"Harpoom")
+    ws.spine.open_app(app)
+    asked = ("POST", json.dumps({"action": "check", "index": OWN}))
+    _frames(ws, worker, lambda: asked in worker.asked)   # the board is asked instead
+    assert mirrored in worker.fetched
