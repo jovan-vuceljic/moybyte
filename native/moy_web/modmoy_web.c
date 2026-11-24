@@ -36,10 +36,19 @@ static mp_obj_t moy_web_want_fn(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(moy_web_want_obj, moy_web_want_fn);
 
+// online() -> True where board.toml's `[web] console` is "online": the board
+// keeps no add-on and its root serves the loader (native/moy_net/moy_page.h,
+// THE LOADER).
+static mp_obj_t moy_web_online_fn(void) {
+    return mp_obj_new_bool(moy_web_online);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(moy_web_online_obj, moy_web_online_fn);
+
 static const mp_rom_map_elem_t moy_web_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR_moy_web) },
     { MP_ROM_QSTR(MP_QSTR_stamp),    MP_ROM_PTR(&moy_web_stamp_obj) },
     { MP_ROM_QSTR(MP_QSTR_page_want), MP_ROM_PTR(&moy_web_want_obj) },
+    { MP_ROM_QSTR(MP_QSTR_online),   MP_ROM_PTR(&moy_web_online_obj) },
 };
 
 static MP_DEFINE_CONST_DICT(moy_web_globals, moy_web_globals_table);

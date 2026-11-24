@@ -1,0 +1,10 @@
+{"query": "?handheld=1&dev=1", "boot_ms": 60000, "steps": [
+  {"note": "the loader booted the console from a mirror: where, and what it cost"},
+  {"js": "JSON.stringify(window.moyBoot)"},
+  {"js": "document.getElementById('s').textContent"},
+  {"js": "location.reload(), 1"},
+  {"note": "a reload boots from this origin's cache, checked again"},
+  {"waitFor": "window.moyBoot && document.getElementById('s').textContent == 'live' && JSON.stringify(window.moyBoot)", "timeout": 60000},
+  {"wait": 1500},
+  {"shot": "loader"}
+]}

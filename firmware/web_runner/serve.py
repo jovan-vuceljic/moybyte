@@ -60,6 +60,22 @@ refuse for ES modules) and .wasm as application/wasm (streaming compile).
                                             # 404s and a system batch is
                                             # refused 400, as that firmware's
                                             # C refuses it ("bad batch").
+    python serve.py ... --carts D --loader  # ...as a board whose console is
+                                            # online: `/` is the loader
+                                            # (firmware/web_runner/loader.html)
+                                            # naming this server as its one
+                                            # mirror, and GET /sync names the
+                                            # pack's digests with `local` 0.
+                                            # The no-hardware way to boot the
+                                            # console through the loader.
+
+Every mode serves the pack of the bundle it serves (tools/gen_web_blob.py's,
+the one a board build of this tree names) at /console/<body digest>.pack with
+`Access-Control-Allow-Origin: *`, as os.moybyte.com serves the published ones
+(docs/web_console_online_2026-11.md §4): a board built here names this server
+on its LAN address (gen_web_blob.default_mirrors), so its loader reaches a
+pack no site publishes.
+
     python serve.py [port] [dir] --board HOST:PORT  # ...the bundle from
                                             # here and every other request,
                                             # bytes both ways, to a REAL C
@@ -81,6 +97,7 @@ by path re-resolves per request, so a rebuild mid-session is invisible.
 """
 
 import functools
+import hashlib
 import http.server
 import json
 import os
@@ -136,6 +153,11 @@ if one_link:
     args.remove("--one-link")
     if "--carts" not in sys.argv:
         raise SystemExit("--one-link needs --carts (it is part of the board twin)")
+loader_twin = "--loader" in args
+if loader_twin:
+    args.remove("--loader")
+    if "--carts" not in sys.argv:
+        raise SystemExit("--loader needs --carts (it is part of the board twin)")
 board_to = None
 if "--board" in args:
     i = args.index("--board")
@@ -160,9 +182,54 @@ http.server.SimpleHTTPRequestHandler.extensions_map[".mjs"] = "text/javascript"
 http.server.SimpleHTTPRequestHandler.extensions_map[".js"] = "text/javascript"
 http.server.SimpleHTTPRequestHandler.extensions_map[".wasm"] = "application/wasm"
 
+sys.path.insert(0, os.path.join(_here, "..", "..", "tools"))
+import gen_web_blob                                     # noqa: E402
+
+_pack = {"key": None}
+
+
+def dist_pack():
+    """(pack bytes, body hex, whole hex) of the bundle served here, packed as
+    a board build packs it, or None where the bundle is incomplete; made
+    again when an asset changes."""
+    assets, missing = gen_web_blob.collect(root)
+    if missing:
+        return None
+    key = tuple((a[1], os.path.getmtime(a[1])) for a in assets)
+    if _pack["key"] != key:
+        data, body = gen_web_blob.pack(assets)
+        _pack.update(key=key, got=(data, body.hex(),
+                                   hashlib.sha256(data).hexdigest()))
+    return _pack["got"]
+
+
+def serve_pack(h, path):
+    """Answer GET /console/<body digest>.pack on handler `h`: True when the
+    path is one, answered."""
+    if not (path.startswith("/console/") and path.endswith(".pack")):
+        return False
+    got = dist_pack()
+    hit = got is not None and path == "/console/%s.pack" % got[1]
+    body = got[0] if hit else b"not found"
+    h.send_response(200 if hit else 404)
+    h.send_header("Content-Type", "application/octet-stream" if hit else "text/plain")
+    h.send_header("Content-Length", str(len(body)))
+    h.send_header("Access-Control-Allow-Origin", "*")
+    h.send_header("Cache-Control", "public, max-age=31536000, immutable" if hit
+                  else "no-store")
+    h.end_headers()
+    h.wfile.write(body)
+    return True
+
+
+class Static(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if not serve_pack(self, self.path.split("?", 1)[0]):
+            super().do_GET()
+
+
 if carts_dir is None:
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler,
-                                directory=root)
+    handler = functools.partial(Static, directory=root)
 else:
     _repo = os.path.dirname(os.path.dirname(_here))
     sys.path.insert(0, _repo)
@@ -424,13 +491,23 @@ else:
             if self._closing():
                 return
             path = self.path.split("?", 1)[0]
+            if serve_pack(self, path):
+                return
             if path == "/sync":
                 # The MODE MARKER (#193): a host that answers this owns the
                 # carts, so the page keeps nothing locally. Static hosting
                 # 404s here, which is how moybyte.com gets a browser store.
                 # Open on a board too: it says a board lives here and nothing
                 # else, and the page decides its mode before it signs in.
-                self._send(200, b'{"sync":1}')
+                # As an online board, it names the digests the loader checks.
+                got = dist_pack() if loader_twin else None
+                self._send(200, json.dumps(
+                    {"sync": 1, "page": got[1], "pack": got[2], "local": 0}).encode()
+                    if got else b'{"sync":1}')
+                return
+            if loader_twin and path in ("/", "/index.html", "/loader.html"):
+                self._send(200, gen_web_blob.loader_page(["/console/"]).encode(),
+                           "text/html; charset=utf-8")
                 return
             if path == "/carts.json":
                 # The board's own packer, over a plain directory -- one body,
@@ -628,6 +705,8 @@ with server_class(("0.0.0.0", port), handler) as srv:
         note += " + /official from %s" % official_dir
     if one_link:
         note += " over one link at a time"
+    if loader_twin:
+        note += " + the loader at /"
     if board_to:
         note += " + the board at %s:%d" % board_to
     print("serving %s at http://127.0.0.1:%d/%s" % (root, port, note))

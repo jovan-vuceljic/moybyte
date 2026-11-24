@@ -797,6 +797,13 @@ moybyte_stage_native() {
     if [ -n "${CI:-}" ] || [ "${MOYBYTE_REQUIRE_WEB_BUNDLE:-0}" = "1" ]; then
       args+=(--require)
     fi
+    # A board whose console is online ([web] console) serves the loader at
+    # its root; the loader's mirrors are the build's (gen_web_blob.py, THE
+    # MIRRORS: a CI build names os.moybyte.com, a local one this machine's
+    # serve.py first).
+    if [ "$("${BUILD_PYTHON}" "${REPO_ROOT}/tools/board_config.py" web-console "${SCRIPT_DIR}")" = "online" ]; then
+      args+=(--online)
+    fi
     mkdir -p "${DIST_DIR}"
     args+=(--pack "${DIST_DIR}/moybyte_web.pack")
     moybyte_phase web-blob

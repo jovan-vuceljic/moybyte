@@ -1,0 +1,123 @@
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><title>Moybyte</title>
+<body style="font:16px system-ui,sans-serif;margin:2em;background:#1d2b53;color:#fff1e8"><p id=s>Loading the console...</p>
+<script>
+// The loader (docs/web_console_online_2026-11.md §3): the page a board's root
+// serves in place of the console. It asks the board which pack its image
+// names (GET /sync: `pack` the whole file's sha256, `page` the body's), takes
+// the first source whose bytes hash to `pack` (§4: this origin's IndexedDB,
+// the board's own copy where `local`, then the mirrors this build names), and
+// writes the pack's index.html over itself with the assets as Blob URLs
+// (self.moyAssets). A plain-http origin has no crypto.subtle, so the sha256 is
+// below, and every read is checked, the cache's too (§3, §6).
+// gen_web_blob.py substitutes the mirrors and ships this without its comment
+// lines and indentation.
+(async (MIRRORS) => {
+const S = document.getElementById("s"), T0 = performance.now(), why = [];
+const say = (t) => { S.textContent = t; };
+const hex = (u) => Array.from(u, (b) => b.toString(16).padStart(2, "0")).join("");
+function sha256(u) {
+const K = [], H = [], W = new Int32Array(64), r = (x, n) => x >>> n | x << 32 - n;
+for (let p = 2, n = 0; n < 64; p++) {
+let q = 1;
+for (let d = 2; d * d <= p; d++) if (p % d == 0) { q = 0; break; }
+if (q) { if (n < 8) H[n] = Math.sqrt(p) % 1 * 2 ** 32 | 0; K[n++] = Math.cbrt(p) % 1 * 2 ** 32 | 0; }
+}
+const L = u.length, N = L + 72 & ~63, b = new Uint8Array(N), v = new DataView(b.buffer);
+b.set(u); b[L] = 128;
+v.setUint32(N - 8, L / 2 ** 29 | 0); v.setUint32(N - 4, L * 8 >>> 0);
+for (let o = 0; o < N; o += 64) {
+for (let i = 0; i < 64; i++) {
+if (i < 16) W[i] = v.getInt32(o + 4 * i);
+else { const x = W[i - 15], y = W[i - 2];
+W[i] = (r(x, 7) ^ r(x, 18) ^ x >>> 3) + W[i - 7] + (r(y, 17) ^ r(y, 19) ^ y >>> 10) + W[i - 16] | 0; }
+}
+let [a, c, d, e, f, g, h, k] = H;
+for (let i = 0; i < 64; i++) {
+const t = k + (r(f, 6) ^ r(f, 11) ^ r(f, 25)) + (f & g ^ ~f & h) + K[i] + W[i] | 0;
+const s = (r(a, 2) ^ r(a, 13) ^ r(a, 22)) + (a & c ^ a & d ^ c & d) | 0;
+k = h; h = g; g = f; f = e + t | 0; e = d; d = c; c = a; a = t + s | 0;
+}
+[a, c, d, e, f, g, h, k].forEach((x, i) => { H[i] = H[i] + x | 0; });
+}
+return H.map((x) => (x >>> 0).toString(16).padStart(8, "0")).join("");
+}
+// The pack's assets as [name, bytes], or null where its head is not the
+// page's (native/moy_net/moy_page.h, THE PACK).
+function parse(buf, page) {
+const u = new Uint8Array(buf), v = new DataView(buf), n = v.getUint32(8, 1), out = [];
+const td = new TextDecoder();
+if (td.decode(u.subarray(0, 8)) != "MOYWEB01" || v.getUint32(12, 1) != u.length
+|| hex(u.subarray(16, 48)) != page || n > 12) return null;
+for (let i = 0; i < n; i++) {
+const o = 48 + 48 * i, at = v.getUint32(o + 40, 1), len = v.getUint32(o + 44, 1);
+if (at < 4096 || at + len > u.length) return null;
+out.push([td.decode(u.subarray(o, o + 40)).split("\0")[0], u.subarray(at, at + len)]);
+}
+return out;
+}
+// This origin's packs, keyed by `pack`, and "order": the one booted last and
+// the one before it, which eviction keeps. Best effort: any failure is a miss.
+let db = null;
+try {
+db = await new Promise((ok, no) => {
+const q = indexedDB.open("moy-loader", 1);
+q.onupgradeneeded = () => q.result.createObjectStore("packs");
+q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error);
+});
+} catch (e) { }
+const tx = (mode, f) => db ? new Promise((ok, no) => {
+const t = db.transaction("packs", mode), q = f(t.objectStore("packs"));
+t.oncomplete = () => ok(q && q.result); t.onerror = t.onabort = () => no(t.error);
+}).catch(() => null) : Promise.resolve(null);
+const get = async (url) => {
+try { const q = await fetch(url); if (q.ok) return q.arrayBuffer(); why.push(url + " " + q.status); }
+catch (e) { why.push(url + " unreachable"); }
+return null;
+};
+let s = null;
+try { s = await (await fetch("/sync", { cache: "no-store" })).json(); } catch (e) { }
+if (!s || !s.pack) {
+say(s ? "This board's firmware names no browser console." : "This board did not answer.");
+return;
+}
+const want = s.pack, page = s.page;
+const sources = [["cache", () => tx("readonly", (o) => o.get(want))]];
+if (s.local) sources.push(["board", () => get("/p/" + page.slice(0, 12) + "/moybyte_web.pack")]);
+for (const m of MIRRORS) sources.push([m, () => get(m + page + ".pack")]);
+for (const [from, fetchIt] of sources) {
+const t = performance.now(), buf = await fetchIt();
+if (!buf) continue;
+const t1 = performance.now(), ok = sha256(new Uint8Array(buf)) == want, t2 = performance.now();
+const items = ok && parse(buf, page);
+if (!items) {
+why.push(from + " had other bytes");
+if (from == "cache") await tx("readwrite", (o) => o.delete(want));
+continue;
+}
+if (from != "cache") await tx("readwrite", (o) => o.put(buf, want));
+const order = await tx("readonly", (o) => o.get("order")) || [];
+const keep = [want].concat(order.filter((d) => d != want)).slice(0, 2);
+await tx("readwrite", (o) => {
+o.put(keep, "order");
+const q = o.getAllKeys();
+q.onsuccess = () => q.result.forEach((k) => { if (k != "order" && !keep.includes(k)) o.delete(k); });
+});
+const A = {}, TYPE = { html: "text/html", js: "text/javascript", mjs: "text/javascript", wasm: "application/wasm" };
+for (const [name, bytes] of items) {
+const bare = name.replace(/\.gz$/, ""), type = TYPE[bare.split(".").pop()] || "application/octet-stream";
+let body = new Blob([bytes]);
+if (bare != name) body = await new Response(body.stream().pipeThrough(new DecompressionStream("gzip"))).blob();
+A[bare] = URL.createObjectURL(new Blob([body], { type }));
+}
+self.moyAssets = A;
+self.moyBoot = { from, fetch: t1 - t, hash: t2 - t1, total: performance.now() - T0 };
+const html = await (await fetch(A["index.html"])).text();
+document.open(); document.write(html); document.close();
+return;
+}
+say("The browser console could not be loaded (" + why.join("; ") + "). This board keeps no copy of it, "
++ "so a browser fetches it from os.moybyte.com the first time: connect this one to the internet and reload.");
+})(@MIRRORS@).catch((e) => {
+document.getElementById("s").textContent = "The browser console could not start: " + e;
+});
+</script>

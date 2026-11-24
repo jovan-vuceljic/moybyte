@@ -42,6 +42,7 @@ the spans the C returns. The rules each function keeps are moy_net.h's.
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import json
 import os
 import threading
@@ -114,7 +115,8 @@ _SIGS = (
     ("moy_web_stamp_text", [], _P),
     ("moy_net_free", [ctypes.c_void_p], None),
     ("moy_net_host_stamp", [_P], None),
-    ("moy_page_name", [ctypes.c_void_p], None),
+    ("moy_page_name", [ctypes.c_void_p, ctypes.c_void_p], None),
+    ("moy_net_host_loader", [ctypes.c_char_p, _Z, _I], None),
     ("moy_page_forget", [], None),
     ("moy_net_host_use_stored", [_Z, _Z], _I),
     ("moy_net_host_remember", [_I, _P, _Z, _P, _Z], _I),
@@ -816,10 +818,12 @@ def _bake(blobs, stamp="0 0 none", carts=None):
     d = _lib()
     d.moy_net_host_stamp(_bytes(stamp))
     if not blobs:
-        d.moy_page_name(None)
+        d.moy_page_name(None, None)
         return None
     data, want = gen_web_blob.pack_bytes(sorted(blobs.items()))
-    d.moy_page_name(ctypes.create_string_buffer(want, 32))
+    whole = hashlib.sha256(data).digest()
+    d.moy_page_name(ctypes.create_string_buffer(want, 32),
+                    ctypes.create_string_buffer(whole, 32))
     if carts is None:
         return None
     folder = os.path.join(str(carts), "web_console_%s.moy" % want.hex()[:12])
@@ -829,6 +833,12 @@ def _bake(blobs, stamp="0 0 none", carts=None):
         f.write(data)
     d.moy_page_forget()
     return path
+
+
+def _serve_loader(gz, online):
+    """Carry the loader `gz` (its gzipped bytes) the way an image does, its
+    console online or not (moy_page.h, THE LOADER)."""
+    _lib().moy_net_host_loader(gz, len(gz), 1 if online else 0)
 
 
 def _drains():
