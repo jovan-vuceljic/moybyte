@@ -6,6 +6,7 @@
 #   _statics_base    what the frame round the band is a function of
 #   _ground_of       the home's ground's colour
 #   _wall_ink        the text's ink over a wallpaper
+#   held             the part buffers: which buffer holds a part, the face slots, the kept table's floor
 """The home's BAND FRAME (#113, #58/#66): the frame whose change is the
 cards' band alone -- a drag, a fling, a step, a settle -- draws the band's
 kept table of parts over the ground and leaves every other pixel of the
@@ -14,9 +15,21 @@ home in a desk window (`HomeWindowLayer`), with the keys it trusts and the
 small reads of the look both homes and their arrangements share (the
 ground, the ink over a wallpaper, the dim, the cursor's stamp). A leaf: it
 reads the layer and the grid it is handed and imports no home module.
+
+The part buffers the bands draw through are here too: whether the buffer a
+frame paints holds a part as a frame drew it (`held`, `held_last`,
+`held_all`), the faces kept drawn in a layer's slots (`slots`, `slot`,
+`slot_next`), and the kept table's floor (`table_floor`, `table_copy`), each
+over the context the host began (`ui_draw.UI_TARGET`).
 """
 
+from array import array
+
+import moy_ui as _C
+import ui_draw as _D
 from chrome import _ticks_ms, _ticks_diff
+
+_T = _D.UI_TARGET
 
 _UNSET = -2147483648      # a look leaf the theme leaves silent
 
@@ -113,7 +126,7 @@ def _band_alone(ws, dt, kind, calm=False):
 
 class _Keyed:
     """An int that names a value a frame keys what it draws on (a kept
-    table's `o.keep`, a part `ui.held` names): the same while the value
+    table's `o.keep`, a part `held` names): the same while the value
     compares equal to the one before, another once it does not."""
 
     def __init__(self):
@@ -161,7 +174,7 @@ def _band_frame(layer, cv, dt, grid, kind, fill, strip, timed=False, steps=False
     alone -- its kept table of parts (`repaint_band`: the engine draws what
     the buffer this frame paints lacks of it, over the ground `fill(cv,
     rect)` puts back) -- and the bar strip, where that buffer holds the
-    band and the frame round it under this frame's key (`ui.held`).
+    band and the frame round it under this frame's key (`held`).
 
     Without `steps` only a drag or a fling takes the path (the home window,
     the desk's carousel, whose selection lies outside the band); with it any
@@ -229,3 +242,82 @@ def _band_frame(layer, cv, dt, grid, kind, fill, strip, timed=False, steps=False
     if steps and not moving:
         layer._band_settle(end, whole)
     return True
+
+
+# -- the part buffers ------------------------------------------------------------
+
+def held(id, key):
+    """Whether the buffer this frame paints holds part `id` of the page as
+    a frame drew it under `key` (an int); names `id` under `key` for this
+    frame, whose pass draws the part where it answers False."""
+    return _C.api_held(_T[0], id, key)
+
+
+def held_last(id, key):
+    """Whether the buffer the last frame painted holds part `id` as that
+    frame named it under `key`: for a part copied out of that buffer.
+    Names nothing."""
+    return _C.api_held_last(_T[0], id, key)
+
+
+def held_all():
+    """Whether every buffer the canvas presents holds every part this frame
+    named (`held`) as it names it. False where the canvas keeps nothing."""
+    return _C.api_held_all(_T[0])
+
+
+SLOT_MINT = 0x10000                     # `slot`'s answer: draw the face into the slot first
+
+
+def slots(cap, key):
+    """Keep the parts' faces drawn in `cap` square slots of a layer the app
+    owns, under `key` (another key or `cap` forgets every face). Answers the
+    slots kept (at most 128)."""
+    return _C.api_slots(_T[0], cap, key)
+
+
+def slot(name, gen=0, mint=False):
+    """The slot holding the face `name` and `gen` name, to stamp; else with
+    `mint` the slot to draw it into | `SLOT_MINT`; else -1, the part drawn
+    as it is."""
+    return _C.api_slot(_T[0], name, gen, mint)
+
+
+def slot_next():
+    """The next part whose face an idle frame draws (handed to `slot` with
+    `mint`); -1 after the last."""
+    return _C.api_slot_next(_T[0])
+
+
+_TF = array("i", [0] * 4)               # table_floor's and table_copy's answer
+
+
+def table_floor(r):
+    """The kept table's next floor rect this frame draws, written into `r`
+    (four words), 1, for the ground to go back there before its parts draw;
+    after the last, 0 where every buffer holds the table as this frame
+    draws it, -1 where one lags, -2 where they hold it but for what was
+    drawn over it."""
+    a = _TF
+    v = _C.api_table_floor(_T[0], a)
+    if v > 0:
+        r[0] = a[0]
+        r[1] = a[1]
+        r[2] = a[2]
+        r[3] = a[3]
+    return v
+
+
+def table_copy(r, back=False):
+    """Before `table_floor`: the next rect of the floor the buffer the last
+    frame painted holds as this frame draws it, written into `r`, 1, to copy
+    out of that buffer (the canvas's `copy_last`); 0 after the last. `back`
+    gives the rect answered last back to the floor and answers 0."""
+    a = _TF
+    v = _C.api_table_copy(_T[0], a, back)
+    if v > 0:
+        r[0] = a[0]
+        r[1] = a[1]
+        r[2] = a[2]
+        r[3] = a[3]
+    return v

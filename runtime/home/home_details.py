@@ -22,10 +22,9 @@ edge hands them on, up to the bar (the shell's, as any page's edge) and down
 to the shelf.
 """
 
-import ui as _ui
 import ui_draw as _ui_draw
 from home_grid import button_kind, day_words, NEW_TILE_TYPE, PSEUDO_TILE_TYPES, _VERB_HINT
-_in = _ui.rect_in   # one hit-test (ui.rect_in)
+from widgets import rect_in as _in   # one hit-test
 _EDGE_UP, _EDGE_DOWN = 1, 2     # uitree_app's EDGE_UP and EDGE_DOWN
 
 _PLAYS = ("play", "open", "window")             # a button that wears the Play glyph

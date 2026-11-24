@@ -14,8 +14,8 @@ picture, to the second's bytes."""
 
 import pytest
 
-from runtime import cover_cache, host_app, launcher_layer, moy_carts, ui, ui_draw
-from runtime import home_grid
+from runtime import cover_cache, host_app, launcher_layer, moy_carts, ui_draw
+from runtime import home_band, home_grid
 from ws_helpers import cover_bytes, no_unlock_banner, quiesce
 
 
@@ -322,15 +322,15 @@ def test_band_frames_follow_what_the_cards_show(tmp_path, monkeypatch, arrangeme
     """Through a rename, a cover landing, a theme change and the focus
     leaving the cards for the tab row, every picture byte-equal to whole
     repaints that draw every card, the cards out of their kept faces
-    (`ui.slot`)."""
+    (`home_band.slot`)."""
     hits = [0]
-    real = ui.slot
+    real = home_band.slot
 
     def slot(name, gen=0, mint=False):
         j = real(name, gen, mint)
-        hits[0] += 0 <= j < ui.SLOT_MINT
+        hits[0] += 0 <= j < home_band.SLOT_MINT
         return j
-    monkeypatch.setattr(launcher_layer._ui, "slot", slot)
+    monkeypatch.setattr(home_band, "slot", slot)
     ws, stats = _parity(tmp_path, monkeypatch, "handheld", arrangement, theme, bufs,
                         session=_edits)
     assert stats["band"] * 4 > stats["frames"], stats      # (a rescan paints whole)
@@ -387,8 +387,8 @@ def test_a_round_with_every_face_drawn_ends_the_asking(tmp_path, monkeypatch, ar
     while g.mint_faces(10 ** 6):
         pass
     asked = []
-    real = ui.slot_next
-    monkeypatch.setattr(ui, "slot_next", lambda: asked.append(1) or real())
+    real = home_band.slot_next
+    monkeypatch.setattr(home_band, "slot_next", lambda: asked.append(1) or real())
     assert not g.mint_faces() and not asked
     drv.press("right")
     ws.mark_dirty()
@@ -403,7 +403,7 @@ def _kept(g):
     out = set()
     for k, it in enumerate(g.items):
         cover = g.cover_ready(it, g._fdiv)
-        if cover is not False and ui.slot(g._face_name(k), 0 if cover is None else cover.serial,
+        if cover is not False and home_band.slot(g._face_name(k), 0 if cover is None else cover.serial,
                                           False) >= 0:
             out.add(k)
     return out

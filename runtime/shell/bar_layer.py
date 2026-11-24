@@ -119,9 +119,9 @@ LOW_BATTERY = 15
 
 
 from ticks import _ticks_ms, _ticks_diff
-from widgets import _in
+from widgets import rect_in as _in
 import chrome_ops as _ch
-import ui as _ui
+import moy_ui as _C
 import ui_draw as _ui_draw
 import layout_base as _layout_base
 import iconsets as _iconsets
@@ -234,6 +234,38 @@ STRIP_SELF = {
 # icon draws where it differs from the IconSheet's kind: the sliders for
 # Config (the gear is Settings', owner 2026-10-19) and the face for Sprites.
 SET_KIND = {"edit": "sliders", "paint": "sprite", "run": "play"}
+
+
+def _block_set(block, field, value):
+    """Field `field` (0 .. 31) of block `block` (a str, its id) set to
+    `value` through the engine -- an int as it is, None as a value of its
+    own, anything else by its hash: True where the field changed. A bar's
+    strip keys its parts on a block of the fields their state lies in."""
+    if value is None:
+        v = 0x3fffffff
+    elif isinstance(value, int):
+        v = value
+    else:
+        v = hash(value)
+    return _C.api_block_set(block, field, v)
+
+
+def _block_gen(block):
+    """Block `block`'s generation: moved by every change, 0 where no field
+    was ever set."""
+    return _C.api_block_gen(block)
+
+
+def _block_since(block, gen):
+    """The fields of block `block` set to another value after generation
+    `gen`, a bit each: what a part drawn at `gen` draws again."""
+    return _C.api_block_since(block, gen)
+
+
+def _block_key(block):
+    """What block `block`'s fields show, hashed: a key that matches again
+    once every field is back to a value it had."""
+    return _C.api_block_key(block)
 
 
 class ZoneLook:
@@ -1116,10 +1148,10 @@ class BarLayer:
 
     def shown_gen(self, where):
         """An int that moves whenever what `where`'s bars draw does: what
-        the fields of its block in the engine show, hashed (`ui.block_key`),
+        the fields of its block in the engine show, hashed (`_block_key`),
         the fields filled again on each ask as the bar's own draw fills
         them (`_fill_key`). The key a part named per buffer folds
-        (`ui.held`), and the key a cache over a whole frame that includes
+        (`home_band.held`), and the key a cache over a whole frame that includes
         the bar folds: a state left and come back to matches again."""
         return self._shown_now(where)
 
@@ -1128,9 +1160,9 @@ class BarLayer:
         return self._shown_now(where)
 
     def _block(self, where):
-        """`where`'s block of fields in the engine (`ui.block_set`), by
+        """`where`'s block of fields in the engine (`_block_set`), by
         its id: each field set as the bar fills it, so the engine says
-        which moved since a strip was drawn (`ui.block_since`)."""
+        which moved since a strip was drawn (`_block_since`)."""
         b = self._blk.get(where)
         if b is None:
             b = self._blk[where] = "bar." + where
@@ -1145,7 +1177,7 @@ class BarLayer:
             key = self._keys[where] = [None] * _KEY_N
         blk = self._block(where)
         self._fill_key(key, where, cv, self._shown(where), blk)
-        return _ui.block_key(blk)
+        return _block_key(blk)
 
     def _draw_bar(self, cv, slots, rect, key, fields, i):
         """Bar `i`'s strip at `rect` on `cv`, from the slot that holds it for
@@ -1202,12 +1234,12 @@ class BarLayer:
         blk = self._block(key[0])
         if not fresh:
             # the fields this bar shows set since the strip was drawn
-            # (`ui.block_since`): those drawn in a part of the bar draw
+            # (`_block_since`): those drawn in a part of the bar draw
             # that part again (`_render_cart_part`); any other, the strip
             m = 0
             for k in fields:
                 m |= 1 << k
-            part = _ui.block_since(blk, slot[1]) & m
+            part = _block_since(blk, slot[1]) & m
             if part & ~_KEY_PARTS:
                 fresh = True
                 part = 0
@@ -1229,7 +1261,7 @@ class BarLayer:
             self.ws.perf.note_cost("bar.strip.part")
             self._render_cart_part(strip, key, i, part, slot[3])
         if fresh or part:
-            slot[1] = _ui.block_gen(blk)
+            slot[1] = _block_gen(blk)
             slot[3] = key[12]
         cv.blit_strip(strip, bx, by)
         if fresh or part:
@@ -1259,7 +1291,7 @@ class BarLayer:
         draw, so a painted frame allocates no key and reads no state it does
         not show; a field it skips keeps the value no bar compares. Each
         field then goes to `blk`, `where`'s block in the engine
-        (`ui.block_set`), which knows the fields that moved since a strip
+        (`_block_set`), which knows the fields that moved since a strip
         drew them; None sets none (a key asked for alone)."""
         ws = self.ws
         key[0] = where
@@ -1303,7 +1335,7 @@ class BarLayer:
             for i in range(_KEY_N):
                 # (the title and what the app lent by the count of times the
                 # tuple was made: only where one of them is another object)
-                _ui.block_set(blk, i, self._k8[3] if i == 8 else key[i])
+                _block_set(blk, i, self._k8[3] if i == 8 else key[i])
 
     def _status_key(self):
         """Key field 13: the status items' generation, and which bar item is

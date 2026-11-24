@@ -126,9 +126,7 @@ def _te():
 
 from editor_panes import WORKSPACES as _WORKSPACES, HOME_TAB as _HOME_TAB
 import moy_carts as _carts
-import ui as _ui
 import ui_draw as _ui_draw
-_in = _ui.rect_in   # one hit-test (ui.rect_in)
 
 
 class _HeadDamage:

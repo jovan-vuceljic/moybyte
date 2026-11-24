@@ -1689,6 +1689,13 @@ _APP_SHIFT = 8                          # moy_ui_api.h's MOY_UI_APP_SHIFT
 UI_SIZE = _C.api_size()
 
 
+def page_end():
+    """The end of the page the frame drew, after its last row: where its rows
+    run on below what shows, a fade at its foot says there is more."""
+    t = UI_TARGET
+    _C.api_end(t[0], t[1], t[2])
+
+
 _WHOLE = [None]                         # ui_frame's last whole-canvas rect
 ui_owes = _C.api_owes      # (ctx) whether the frame it drew last owes the next
 ui_moving = _C.api_moving  # (ctx) whether a page of it flings or glides

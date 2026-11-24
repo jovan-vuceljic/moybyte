@@ -55,7 +55,7 @@ except ImportError:  # pragma: no cover - a port with only ustruct
     from ustruct import pack as _pack
 
 import ui_draw as _D
-from widgets import _in as rect_in
+from widgets import rect_in
 
 
 # --- rect algebra -------------------------------------------------------------

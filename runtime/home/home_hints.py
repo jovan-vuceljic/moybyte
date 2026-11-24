@@ -21,12 +21,11 @@ full paint of the home -- every frame over a live wallpaper -- draws it
 with nothing made.
 """
 
-import ui as _ui
 import ui_draw as _ui_draw
 import ui_host as _ui_host
 import layout_base as _lb
 from home_grid import _VERB_HINT, VR_HINTS, VR_HINTS_DESK
-_in = _ui.rect_in   # one hit-test (ui.rect_in)
+from widgets import rect_in as _in   # one hit-test
 
 # The strip's words and keys: the star's, the verbs' letters, the strips'
 # keys a modal or the bar names, the strip's lead.

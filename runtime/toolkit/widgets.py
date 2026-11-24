@@ -59,7 +59,8 @@ def _err_text(exc):
     return (name + ": " + msg) if msg else name
 
 
-def _in(px, py, rect):
+def rect_in(px, py, rect):
+    """Whether (px, py) lies in `rect` (x, y, w, h): the one rect hit-test."""
     x, y, w, h = rect
     return x <= px < x + w and y <= py < y + h
 

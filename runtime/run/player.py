@@ -177,7 +177,7 @@ def _python_files(cart):
 
 
 from ticks import _ticks_ms, _ticks_us, _ticks_diff
-from widgets import _err_text, _in
+from widgets import _err_text, rect_in as _in
 
 from ui_draw import cart_text as _cart_text      # the app-cart boundary (§4.7)
 import ui_draw as _ui_draw

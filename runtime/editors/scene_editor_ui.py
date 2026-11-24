@@ -32,10 +32,9 @@ TileMap gives the map tab. SAVE persists through Project.commit_scene (atomic
 write + the durable undo journal, Stage 1). The editor manages the cart's
 DEFAULT scene (multi-scene UX is a deferred follow-up, #85 decision log 4)."""
 
-import ui as _ui              # frozen on device
 import ui_font as _ui_font
 import ui_draw as _ui_draw
-_in = _ui.rect_in   # one hit-test (ui.rect_in)
+from widgets import rect_in as _in   # one hit-test
 
 import editor_scene
 from editors_scene import SceneEditor

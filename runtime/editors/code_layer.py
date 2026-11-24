@@ -35,11 +35,10 @@ import the constants back)."""
 from editors_code import CodeEditor
 from array import array as _array
 
-import ui as _ui
 import ui_draw as _ui_draw
 from layers import Layer
 import layout_base as _lb
-_in = _ui.rect_in   # one hit-test (ui.rect_in)
+from widgets import rect_in as _in   # one hit-test
 
 
 def _desk():

@@ -14,7 +14,7 @@ the focus it moves and the surface last handed a frame of no input are the
 WM's.
 """
 
-from widgets import _in
+from widgets import rect_in as _in
 from moy_input import PB_MIDDLE as _PB_MIDDLE
 
 _DRAG_MIN = 4                         # px of travel before a press becomes a drag
