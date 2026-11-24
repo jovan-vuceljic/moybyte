@@ -458,6 +458,7 @@ typedef struct {
     // screen. dw.*: the last frame's, and the frames it has stood as it is
     // (dw.n, a dialog's rows frame: moy_ui_api_shift_plan).
     uint32_t id;
+    uint32_t last;              // the last dialog drawn's id, kept past the frame (its buttons' key)
     uint32_t open;              // the button a dialog opens on (its `focus`; 0: its first stop)
     moy_ui_box_t card;
     uint8_t held;
@@ -678,6 +679,16 @@ typedef struct {
     uint8_t grp_open, grp_n, grp_any, grp_first;
     uint8_t grp_card;               // the open group is a desk's card (ui.group's `card`)
     moy_ui_box_t grp_last;
+    // A focused button in the open group (due 1), and the row placed flush
+    // under it (due 2, `cut`), which its ring's foot is drawn again over as the
+    // group closes (moy_ui_button_ring).
+    struct {
+        moy_ui_box_t b, cut;
+        moy_ui_button_t bt;
+        int16_t kind, flags;
+        int8_t interact;
+        uint8_t due;
+    } ring;
     // ui.icon's: the next row's icon, then the row's being drawn (an icon
     // set's slot and the glyph table's glyph, -1 none).
     int16_t icon_slot, icon_glyph, row_slot, row_glyph;

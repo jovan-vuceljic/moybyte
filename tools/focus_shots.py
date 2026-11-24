@@ -179,17 +179,21 @@ def dialog_page():
             ui.label("This can't be undone.", wrap="word")
 
 
+def _segments():
+    with ui.group("Segments"):
+        ui.seg("Mode", "mode", labels="modes")
+    _other()
+
+
 def tabs_page():
     with ui.page(""):
         ui.tabs("tab", labels="tabs")
-        with ui.group("Segments"):
-            ui.seg("Mode", "mode", labels="modes")
-        _other()
+        ui.switch("tab", {"_": _segments})
 
 
 def cells_page():
     with ui.page(""):
-        with ui.cards("cells", w=56, h=40, current="cell"):
+        with ui.cards("cells", w=56, h=40, current="cell", flow=True):
             ui.card("open", label="{.label}")
         with ui.row("tools", gap=4):
             ui.button("undo", kind="bar", icon="undo", alone=True)
@@ -234,7 +238,7 @@ def box_of(app, stop):
 
 
 # where the desk's sheet window stands, in glass pixels
-DESK_WIN = (112, 52, 560, 270)
+DESK_WIN = (112, 52, 560, 380)
 
 
 # surface -> [(state, focus stop or None, press stop, input)]

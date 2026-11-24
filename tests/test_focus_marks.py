@@ -37,6 +37,10 @@ TMS = [(t, m) for t, m in F.MODES]
 STOPS = {s: sorted({f for _st, f, _p, _i in states if f is not None and f != "other"})
          for s, states in F.SURFACES.items()}
 DANGER = {"danger", "Delete cart"}
+# a surface whose layout moves with the input: its reference is the keys' frame
+# with another of its stops focused (a dialog stands in the middle of the view
+# the hint band leaves, which touch, with no band, makes taller)
+KEYS_REF = {"dialog"}
 SHEETS = ([(s, tag) for s in F.SURFACES for tag in ("tdeck", "desk")] if FULL
           else [("group", "tdeck"), ("buttons", "tdeck")])
 CONFIG = dict(F.SHEET_CONFIGS)
@@ -129,10 +133,19 @@ def _reach():
     return max(ui_draw.mark_reach(k) for k in ("row", "cell", "card")) + 2
 
 
-def _focus_checks(kb, touch, box, fs, where, region, danger=False):
+def _focus_checks(kb, touch, box, fs, where, region, danger=False, other=None):
     """L1/L2, L5, L6 on one focused stop: `kb` drawn under the keys, `touch`
-    the same frame under touch (no focus drawn, L9), `box` the stop's."""
+    the same frame under touch (no focus drawn, L9), `box` the stop's; or,
+    where `other` is the box of the stop `touch` focuses under the keys
+    instead, that stop's mark left out."""
     d = _diff(kb, touch, region)
+    if other is not None:
+        r = _reach() * fs
+        o, mine = _grow(other, r), _grow(box, r)
+
+        def inside(p, g):
+            return g[0] <= p[0] < g[2] and g[1] <= p[1] < g[3]
+        d = {p: v for p, v in d.items() if not inside(p, o) or inside(p, mine)}
     clear = [p for p, (a, b) in d.items() if _cr(a, b) >= 3]
     if len(clear) < 24 * fs:
         # a mark under 3:1 on its ground reads by its edge: a keyline, or a
@@ -180,8 +193,13 @@ def test_the_sheets_marks_read(theme, mode, surface, tag):
                            for b in (boxes.get(stop), first.get(stops[0])))
             moved = [p for p in moved if not inside(p)]
         assert not moved, (where, stop, "L9: no focus under touch")
+        other = None
+        if surface in KEYS_REF:
+            ref = [s for s in stops if s != stop][0]
+            touch, _b, _r = _sheet(theme, mode, surface, tag, ref, False)
+            other = boxes.get(ref)
         _focus_checks(kb, touch, boxes.get(stop), fs, "%s %s" % (where, stop), region,
-                      danger=stop in DANGER)
+                      danger=stop in DANGER, other=other)
 
 
 @pytest.mark.parametrize("theme,mode", TMS, ids=["%s-%s" % tm for tm in TMS])

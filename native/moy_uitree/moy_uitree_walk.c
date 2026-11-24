@@ -3143,6 +3143,7 @@ static void draw_tabs(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     if (pad)
         moy_ui_inset32(band, 2 * pad, pad, band);
     tabs_in(e, c, s, k, band);
+    moy_ui_api_space(c, bh + 2 * pad);  // a flowing page's rows start under them
     // what follows them takes the rest, over a flowing page's hints band
     int32_t h = e->rect[3] > e->band_h ? e->rect[3] - e->band_h : 0;
     moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], h);
@@ -4916,6 +4917,28 @@ static void focus_to(moy_ui_ctx_t *c, const char *id)
     moy_ui_api_focus(c, span_of(id, strlen(id)), NULL, 0);
 }
 
+// The shown dialog's button `key` names (its action's name or its label): its label, the
+// toolkit's id for it, into out; 0 where no shown dialog has such a button.
+static int dialog_button(uit_t *e, const char *key, char out[UIT_ID_MAX + 1])
+{
+    int d = uit_dialog(e);
+    if (d < 0)
+        return 0;
+    const uit_node_t *N = NODE(d);
+    for (int i = 0; i < N->nbtn; i++) {
+        int a = e->btns[N->btn + i], t = dialog_label(e, d, i);
+        if (t >= 0) {
+            uint32_t ln, la = uit_tmpl_render(e, t, -1, -1, &ln);
+            snprintf(out, UIT_ID_MAX + 1, "%.*s", (int)ln, e->scratch.p + la);
+        } else {
+            snprintf(out, UIT_ID_MAX + 1, "%s", uit_str(e, e->acts[a].label));
+        }
+        if (!strcmp(key, uit_str(e, e->acts[a].name)) || !strcmp(key, out))
+            return 1;
+    }
+    return 0;
+}
+
 // `_land_focus`: (whether focus moved, a node foreseen into ahead).
 // Whether node k draws this frame: it and each node over it shown, each case its switch's pick.
 static int drawn_now(uit_t *e, int k)
@@ -4951,6 +4974,8 @@ static int land_focus(uit_t *e, moy_ui_ctx_t *c, char ahead[UIT_ID_MAX + 1])
         const char *key = e->want;
         if (id_find(e->prev, e->nprev, key))
             snprintf(fid, sizeof fid, "%s", key);
+        else if (dialog_button(e, key, fid))
+            ;
         else if (!id_in(e, key, fid)) {
             if (drawn_key(e, key, fid))
                 strcpy(ahead, fid);

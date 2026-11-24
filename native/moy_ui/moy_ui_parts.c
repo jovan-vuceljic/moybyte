@@ -1413,8 +1413,20 @@ int moy_ui_card(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_box_t pic, int lw
     }
     *content = pic;
     if ((flags & MOY_UI_F_FOCUS) && m->active) {
-        int mi = -1;
-        moy_ui_focus_in(s, pic, MOY_UI_ITEM_CARD, r, 0, d.fs, content, &mi, 0);
+        // on a solid ON plate its focus colour does not clear (Contrast Dark's yellow on
+        // white), the ring goes round the plate, on the ground
+        int mi = -1, fc = moy_ui_mark_colour(s, MOY_UI_ITEM_CARD, MOY_UI_MS_FOCUS);
+        int oc = moy_ui_mark_colour(s, MOY_UI_ITEM_CARD, MOY_UI_MS_ON);
+        int round = (flags & MOY_UI_F_ON) && solid && s->shown && oc >= 0 && fc >= 0;
+        if (round) {
+            int32_t la = moy_theme_lum_of(fc), lb = moy_theme_lum_of(oc);
+            round = (la > lb ? la : lb) + 500 < 3 * ((la > lb ? lb : la) + 500);
+        }
+        if (round) {
+            moy_ui_focus_in(s, b, MOY_UI_ITEM_CARD, pm(&d, MOY_UI_M_VALUE_ROW_PLATE_R, 1), 0, d.fs, NULL, &mi, 0);
+        } else {
+            moy_ui_focus_in(s, pic, MOY_UI_ITEM_CARD, r, 0, d.fs, content, &mi, 0);
+        }
     }
     *gnd = gc;
     // the title and the sub line, centred in the band under the picture

@@ -652,6 +652,10 @@ typedef struct {
 // label, for a caller's own.
 int moy_ui_button(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags, int interact,
                   const moy_ui_button_t *k, int phase);
+// Button b's focus ring alone, where its theme's focus mark is a ring (0 where
+// it is not): its foot drawn again over the row drawn flush under it.
+int moy_ui_button_ring(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags, int interact,
+                       const moy_ui_button_t *k);
 int moy_ui_button_x(moy_ui_box_t b, int flags, moy_ui_span_t label, int fs);
 // The shell's bar item on box b (a cell the bar's height across): no plate;
 // its icon (F_ICON, k->icon or k->glyph), its ink centred in the box, at the

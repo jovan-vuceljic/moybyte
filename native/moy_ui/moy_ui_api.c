@@ -1942,6 +1942,11 @@ moy_ui_box_t mua_place_row(moy_ui_ctx_t *c, int h, int *stacked, int row) {
     int gap = stack_gap(c);
     if (c->grp_open) {
         // a group's rows sit on its card, one under the next
+        if (c->ring.due == 1) {
+            c->ring.cut = b;            // the row under a focused button: its ring's foot is cut there
+            c->ring.cut.h = (int16_t)h;
+            c->ring.due = 2;
+        }
         c->grp_first = c->grp_n == 0;
         if (c->grp_n < 255) {
             c->grp_n++;
@@ -2420,6 +2425,8 @@ void mua_band(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_box_t b, int stack
     moy_ui_group_band(s, mua_card_of(c), b, c->grp_first || cut, c->fs, mua_card_flags(c));
 }
 
+static int ring_reach(const moy_ui_ctx_t *c);
+
 // The open group ends: its card's foot under its last row, and the gap the
 // next group's caption keeps.
 void mua_group_close(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
@@ -2437,6 +2444,22 @@ void mua_group_close(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
             mua_clip_out(&k);
         }
     }
+    if (c->ring.due == 2) {
+        // a focused button's ring over the row drawn flush under it, there alone
+        int reach = ring_reach(c);
+        moy_ui_box_t rb = c->ring.b, cut = c->ring.cut;
+        int y0 = rb.y + rb.h > cut.y ? rb.y + rb.h : cut.y, y1 = rb.y + rb.h + reach;
+        y1 = y1 < cut.y + cut.h ? y1 : cut.y + cut.h;
+        if (y1 > y0) {
+            moy_ui_box_t in = {(int16_t)(rb.x - reach), (int16_t)y0, (int16_t)(rb.w + 2 * reach), (int16_t)(y1 - y0)};
+            clip_t k;
+            EACH_ROW(c, k, s, in, 1, in) {
+                moy_ui_button_ring(s, rb, c->ring.kind, c->ring.flags, c->ring.interact, &c->ring.bt);
+                mua_clip_out(&k);
+            }
+        }
+    }
+    c->ring.due = 0;
     // a desk's card keeps its ring's foot below its last row
     c->y = (int16_t)(c->y + (mua_kmetric(MOY_UI_K_GROUP, MOY_UI_M_GROUP_GAP) + c->grp_card) * c->fs);
     c->grp_card = 0;
@@ -3579,7 +3602,15 @@ int moy_ui_api_button(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
         b.h = (int16_t)mua_row_h(c);
         b.w = (int16_t)(bw < rb.w - 2 * reach ? bw : rb.w - 2 * reach);
     } else {
-        b = mua_place(c, mua_row_h(c), &stacked);
+        rb = mua_place(c, mua_row_h(c), &stacked);
+        b = rb;
+        if (stacked) {
+            // a row of the stack: its focus ring's reach inside the page's edges
+            int reach = ring_reach(c), left = c->page.x + reach, right = c->page.x + c->page.w - reach;
+            int x0 = b.x > left ? b.x : left, x1 = b.x + b.w < right ? b.x + b.w : right;
+            b.x = (int16_t)x0;
+            b.w = (int16_t)(x1 > x0 ? x1 - x0 : 0);
+        }
     }
     if (rb.w == 0) {
         rb = b;
@@ -3618,6 +3649,16 @@ int moy_ui_api_button(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
             moy_ui_bar_item(s, ib, fl, &bt);
         } else {
             moy_ui_button(s, b, kid, fl, mua_interact(st), &bt, MOY_UI_PHASE_ALL);
+            if (stacked && c->grp_open && (fl & MOY_UI_F_FOCUS)) {
+                // the group's next row stands flush under it and is drawn after it: its
+                // ring's foot is drawn again over that row as the group closes
+                c->ring.b = b;
+                c->ring.kind = (int16_t)kid;
+                c->ring.flags = (int16_t)fl;
+                c->ring.interact = (int8_t)mua_interact(st);
+                c->ring.bt = bt;
+                c->ring.due = 1;
+            }
         }
         mua_clip_out(&k);
     }
@@ -3731,6 +3772,7 @@ void moy_ui_api_group_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     mua_group_close(c, s);
     c->has_at = 0;
     c->grp_open = 1;
+    c->ring.due = 0;
     c->grp_n = 0;
     // on the desk a card is a ring round its rows: its top's room above them
     c->grp_card = (uint8_t)(c->cls != 0);
@@ -3743,6 +3785,7 @@ void moy_ui_api_group_rules(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     mua_group_close(c, s);
     c->has_at = 0;
     c->grp_open = 1;
+    c->ring.due = 0;
     c->grp_n = 0;
     c->grp_top = c->y;
 }
@@ -3808,6 +3851,7 @@ void moy_ui_api_group(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t cap
     }
     c->snap.out = 0;
     c->grp_open = 1;
+    c->ring.due = 0;
     c->grp_n = 0;
     c->grp_top = c->y;
 }
@@ -4931,6 +4975,13 @@ int moy_ui_api_split_toward(const moy_ui_ctx_t *c, int x, int y, int dx, int dy,
 int moy_ui_api_focus(moy_ui_ctx_t *c, moy_ui_span_t id, char *buf, size_t cap) {
     if (id.p != NULL) {
         uint32_t h = mua_hash(id.p, id.n, 0);
+        if (c->modal || c->dlg.id != 0) {
+            // a shown dialog's button, by its name: its stop is keyed in its dialog
+            uint32_t in = mua_hash(id.p, id.n, c->dlg.id ? c->dlg.id : c->dlg.last);
+            if (mua_find(c->cur, c->n_cur, in) >= 0 || mua_find(c->prev, c->n_prev, in) >= 0) {
+                h = in;
+            }
+        }
         if (h != c->focus) {
             c->focus = h;
             c->reveal = 1;
