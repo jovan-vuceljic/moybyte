@@ -103,3 +103,17 @@ def test_the_text_size_row_offers_what_the_glass_does(tmp_path, size, diag, offe
             settings_rows.font_set()
         ws.settings_layer.rows.engine.run(pick, action="font_set")
         assert ws.look.font_scale == offered[-1]
+
+
+@pytest.mark.parametrize("size, diag, asked, floor", (((480, 320), 1.0, 2, 1),
+                                                      ((640, 480), 0.6, 4, 2)))
+def test_a_text_floor_lifts_only_to_an_offered_size(tmp_path, size, diag, asked, floor):
+    """A glass small for its pixels asks its `ui` font a floor
+    (`chrome.text_scale_floor`); the floor in force is never past the largest
+    size the glass offers, so the effective scale is always one the Text size
+    row could pick."""
+    ws = _ws(tmp_path, size, diag)
+    look = ws.look
+    assert look._floor_asked == asked
+    assert look.text_floor == floor == look.font_scales()[-1]
+    assert look.effective_font_scale() == floor and ws.layout.fs == floor

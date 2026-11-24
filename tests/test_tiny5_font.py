@@ -163,11 +163,12 @@ def test_a_theme_switch_installs_frees_and_relayouts(tmp_path):
 
 
 def test_the_floor_lifts_the_effective_font_scale(tmp_path):
-    """On a 3.0" 480x320, denser than any panel in the lineup, the `ui`
-    font's ascent needs scale 2: the shell lays out and draws at 2 while the
-    setting stays 1; a theme on petme128 drops it back."""
+    """On a 4.0" 640x480, denser than any panel in the lineup, the `ui`
+    font's ascent needs scale 2, a size the glass offers: the shell lays out
+    and draws at 2 while the setting stays 1; a theme on petme128 drops it
+    back."""
     from ws_helpers import build_ws, use_theme
-    ws = build_ws(tmp_path, sys_size=(480, 320), panel_diagonal_in=3.0)
+    ws = build_ws(tmp_path, sys_size=(640, 480), panel_diagonal_in=4.0)
     use_theme(ws, "night", "dark")                 # Tiny5's (tests/fixtures/themes/)
     assert ui_draw.font("ui")[1:] == (6, 8, 6)
     assert ws.look.font_scale == 1 and ws.look.effective_font_scale() == 2

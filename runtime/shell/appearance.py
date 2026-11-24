@@ -265,8 +265,11 @@ class Appearance:
         self.font_scale = max([f for f in offered if f <= max(1, int(font_scale))] or [1])
         # The text-size floor (chrome.text_scale_floor): the font scale the
         # theme's `ui` font needs on this board's glass, 1 for petme128. It
-        # lifts the effective scale, never the requested one.
+        # lifts the effective scale, never the requested one, and never past
+        # the largest scale the glass offers (`place_floor`): `_floor_asked`
+        # is what the font asks.
         self.text_floor = 1
+        self._floor_asked = 1
         # The REQUESTED chrome scale (Appearance -> CHROME SIZE, persisted), one
         # of `ws.chrome_scales` or 0 for the board's default. It lifts chrome
         # above the tap floor; it can never take it below.
@@ -1848,10 +1851,21 @@ class Appearance:
             panel = ws.glass_canvas
             floor = text_scale_floor(panel.w, panel.h, ws.panel_diagonal_in,
                                      _ui_draw.font("ui")[3] * ws.render_scale)
-        if floor != self.text_floor:
-            self.text_floor = floor
+        self._floor_asked = floor
+        if self.place_floor():
             changed = True
         return changed
+
+    def place_floor(self):
+        """The text floor in force: what the theme's `ui` font asks, never
+        past the largest font scale the glass offers (`font_scales`), so a
+        floor lifts the scale only to a size the Text size row could pick.
+        True when it moved."""
+        floor = min(self._floor_asked, self.font_scales()[-1])
+        if floor == self.text_floor:
+            return False
+        self.text_floor = floor
+        return True
 
     def _install_sheets(self, name):
         """Load theme `name`'s sheets (docs/theme_and_shell_2026-11.md §3.6): its

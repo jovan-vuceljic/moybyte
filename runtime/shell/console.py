@@ -1501,8 +1501,8 @@ class Workstation:
             p.y = min(p.y * was // n, root.h - 1)
         _layout_base.place_class(self.metric_class, n)
         look = self.look
-        if look.font_scale not in look.font_scales():
-            look.set_font_scale(look.font_scale, persist=False)     # its room shrank
+        if look.place_floor() or look.font_scale not in look.font_scales():
+            look.set_font_scale(look.font_scale, persist=False)     # its room moved
         bl = getattr(self, "bar_layer", None)
         if bl is not None:
             bl.invalidate()
