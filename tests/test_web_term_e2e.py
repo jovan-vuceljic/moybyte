@@ -76,11 +76,12 @@ def _board(tty_exe, root, password=None):
     return host
 
 
-def _serve(tmp_path, board_port, dist="dist"):
+def _serve(tmp_path, board_port, dist="dist", extra=()):
     web_e2e.warm_host_library()
     port = web_e2e.free_port()
     log = tmp_path / "serve.log"
-    args = [sys.executable, "serve.py", str(port), dist, "--board", "127.0.0.1:%d" % board_port]
+    args = [sys.executable, "serve.py", str(port), dist, "--board",
+            "127.0.0.1:%d" % board_port] + list(extra)
     p = subprocess.Popen(args, cwd=RUNNER, stdout=open(log, "w"), stderr=subprocess.STDOUT)
     base = "http://127.0.0.1:%d" % port
     for _ in range(50):

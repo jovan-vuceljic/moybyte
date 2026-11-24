@@ -1964,7 +1964,7 @@ async function liveOpen() {
         C.ws(1, C.seq());
         liveSealed = true;
     }
-    const u = new URL(target.slice(1), self.location.href);
+    const u = new URL(target.slice(1), BASE);
     u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
     let ws;
     try { ws = new WebSocket(u.href, "moy.live"); } catch (e) { liveLater(); return; }
