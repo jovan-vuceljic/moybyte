@@ -40,8 +40,10 @@
 //                             longest frame its radio carries
 //   'F' {len(2) mac(6) data}  frames heard, oldest first
 //
-// Nothing waits on the radio or the page: the bridge's task wakes on the
-// socket and every MOY_LIVE_WAIT_MS while the radio is up, takes what the
+// Nothing waits on the radio or the page: the bridge's task (one a page's
+// socket, made with its buffers when the webhost hands the socket over and
+// gone with them at its end) wakes on the socket and every MOY_LIVE_WAIT_MS
+// while the radio is up, takes what the
 // ring holds and sends it. A page that sends nothing for MOY_LIVE_IDLE_MS
 // (its beats included) is gone: the socket closes 1001 "idle". The radio
 // goes down with the socket, so a page that comes back says 'U' again; a
@@ -64,6 +66,7 @@
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "moy_tasks.h"
 #else
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -79,9 +82,6 @@
 #ifndef MOY_LIVE_RING
 #define MOY_LIVE_RING 8192              // the radio's receive ring, bytes (a board may say less)
 #endif
-#ifndef MOY_LIVE_STACK
-#define MOY_LIVE_STACK (4 * 1024)
-#endif
 #define MOY_LIVE_WAIT_MS 2              // the radio's ring is looked at this often while up
 #define MOY_LIVE_REST_MS 100            // ...and the socket's beat with the radio down
 #define MOY_LIVE_BEAT_MS 1000
@@ -95,8 +95,17 @@
 #define OUT_ALLOC (MOY_WS_HEAD + OUT_CAP + MOY_SEAL_TAG)
 #define BATCH 8                         // the ring's frames one pass takes, at most
 
+// One page's buffers, made when its socket is taken and given back when it
+// ends, as the task that serves it is: between pages the bridge holds only
+// `live_t`, which on a board without PSRAM (the C3) is the whole point.
 typedef struct {
-    volatile int fd;                    // the socket served or waiting, or -1
+    uint8_t in[IN_CAP];
+    char out[OUT_ALLOC];
+    uint8_t rx[MOY_LINK_MAX];
+} bufs_t;
+
+typedef struct {
+    volatile int fd;                    // the socket served, or -1
     moy_wa_seal_t seal;
     uint32_t up_i, down_i;              // the next frame's index each way
     volatile int cut;
@@ -104,28 +113,23 @@ typedef struct {
     uint32_t said;                      // ...and of the board's
     int radio;                          // the radio up for the page
 #ifdef ESP_PLATFORM
-    TaskHandle_t task;
     wifi_ps_type_t ps_was;
-#else
-    pthread_t task;
-    int has_task;
 #endif
-    uint8_t in[IN_CAP];
-    char out[OUT_ALLOC];
-    uint8_t rx[MOY_LINK_MAX];
+    bufs_t *b;
     moy_live_stats_t stats;
 } live_t;
 
-static live_t *L;
+static live_t S = {.fd = -1};
+static live_t *const L = &S;
 
 int moy_web_live_link(void) {
     return 1;
 }
 
-// The plaintext at L->out + MOY_WS_HEAD, `n` bytes, sealed and sent: 0, or
+// The plaintext at L->b->out + MOY_WS_HEAD, `n` bytes, sealed and sent: 0, or
 // -1 when the socket failed.
 static int say(int ws, size_t n) {
-    uint8_t *d = (uint8_t *)L->out + MOY_WS_HEAD;
+    uint8_t *d = (uint8_t *)L->b->out + MOY_WS_HEAD;
     if (L->seal.on) {
         if (moy_seal_ws(1, L->seal.kb, MOY_SEAL_DOWN, L->down_i++, L->seal.seq, d, n, d + n)
             != MOY_SEAL_OK) {
@@ -135,11 +139,11 @@ static int say(int ws, size_t n) {
     }
     L->stats.down++;
     L->said = moy_net_ms();
-    return moy_ws_out(ws, MOY_WS_BINARY, (const char *)d, n, L->out);
+    return moy_ws_out(ws, MOY_WS_BINARY, (const char *)d, n, L->b->out);
 }
 
 static int state(int ws, int err) {
-    uint8_t *p = (uint8_t *)L->out + MOY_WS_HEAD;
+    uint8_t *p = (uint8_t *)L->b->out + MOY_WS_HEAD;
     uint8_t mac[6] = {0};
     moy_link_mac(mac);
     int ch = moy_link_channel(0);
@@ -212,7 +216,7 @@ static int message(int ws, uint8_t *p, size_t n) {
     }
     if (p[0] == 'c') {
         if (p[1] == 'e' && n - 2 <= OUT_CAP - 2) {
-            uint8_t *o = (uint8_t *)L->out + MOY_WS_HEAD;
+            uint8_t *o = (uint8_t *)L->b->out + MOY_WS_HEAD;
             memmove(o + 2, p + 2, n - 2);
             o[0] = 'c';
             o[1] = 'E';
@@ -253,13 +257,13 @@ static int frames_in(int ws, size_t *n) {
     size_t at = 0;
     moy_ws_frame_t f;
     int k;
-    while ((k = moy_ws_next(L->in, *n, &at, IN_CAP, &f)) > 0) {
+    while ((k = moy_ws_next(L->b->in, *n, &at, IN_CAP, &f)) > 0) {
         if (f.op == MOY_WS_CLOSE) {
             moy_ws_close(ws, 1000, "");
             return -1;
         }
         if (f.op == MOY_WS_PING) {
-            moy_ws_out(ws, MOY_WS_PONG, (const char *)f.p, f.n < 125 ? f.n : 125, L->out);
+            moy_ws_out(ws, MOY_WS_PONG, (const char *)f.p, f.n < 125 ? f.n : 125, L->b->out);
             continue;
         }
         if (f.op != MOY_WS_BINARY) {
@@ -284,7 +288,7 @@ static int frames_in(int ws, size_t *n) {
         moy_ws_close(ws, 1009, "big");
         return -1;
     }
-    memmove(L->in, L->in + at, *n - at);
+    memmove(L->b->in, L->b->in + at, *n - at);
     *n -= at;
     return 0;
 }
@@ -292,13 +296,13 @@ static int frames_in(int ws, size_t *n) {
 // What the radio heard since the last pass, to the page: -1 when the socket
 // failed.
 static int heard(int ws) {
-    uint8_t *o = (uint8_t *)L->out + MOY_WS_HEAD;
+    uint8_t *o = (uint8_t *)L->b->out + MOY_WS_HEAD;
     size_t n = 2;
     o[0] = 'n';
     o[1] = 'F';
     for (int i = 0; i < BATCH * 4; i++) {
         uint8_t mac[6];
-        int len = moy_link_recv(mac, L->rx, sizeof L->rx);
+        int len = moy_link_recv(mac, L->b->rx, sizeof L->b->rx);
         if (len < 0) {
             break;
         }
@@ -312,14 +316,14 @@ static int heard(int ws) {
         o[n] = (uint8_t)len;
         o[n + 1] = (uint8_t)((unsigned)len >> 8);
         memcpy(o + n + 2, mac, 6);
-        memcpy(o + n + 8, L->rx, (size_t)len);
+        memcpy(o + n + 8, L->b->rx, (size_t)len);
         n += 8 + (size_t)len;
     }
     return n > 2 ? say(ws, n) : 0;
 }
 
 static int beat(int ws) {
-    uint8_t *o = (uint8_t *)L->out + MOY_WS_HEAD;
+    uint8_t *o = (uint8_t *)L->b->out + MOY_WS_HEAD;
     o[0] = 'c';
     o[1] = 'b';
     return say(ws, 2);
@@ -354,7 +358,7 @@ static void pump(int ws) {
             return;
         }
         if (k > 0 && FD_ISSET(ws, &r)) {
-            ssize_t m = recv(ws, L->in + n, IN_CAP - n, 0);
+            ssize_t m = recv(ws, L->b->in + n, IN_CAP - n, 0);
             if (m <= 0) {
                 return;
             }
@@ -381,32 +385,26 @@ static void serve(int ws) {
     radio_down();
 }
 
+// The task of one page's socket, to its end.
 static void bridge(void) {
-    for (;;) {
-        int ws = __atomic_load_n(&L->fd, __ATOMIC_ACQUIRE);
-        if (ws < 0) {
-#ifdef ESP_PLATFORM
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-#else
-            usleep(5000);
-#endif
-            continue;
-        }
-        L->stats.sessions++;
-        L->stats.live = 1;
-        serve(ws);
-        shutdown(ws, SHUT_WR);
-        close(ws);
-        L->stats.live = 0;
-        moy_seal_wipe(&L->seal, sizeof L->seal);
-        __atomic_store_n(&L->fd, -1, __ATOMIC_RELEASE);
-    }
+    int ws = __atomic_load_n(&L->fd, __ATOMIC_ACQUIRE);
+    L->stats.sessions++;
+    L->stats.live = 1;
+    serve(ws);
+    shutdown(ws, SHUT_WR);
+    close(ws);
+    L->stats.live = 0;
+    moy_net_free(L->b);
+    L->b = NULL;
+    moy_seal_wipe(&L->seal, sizeof L->seal);
+    __atomic_store_n(&L->fd, -1, __ATOMIC_RELEASE);
 }
 
 #ifdef ESP_PLATFORM
 static void bridge_task(void *arg) {
     (void)arg;
     bridge();
+    vTaskDelete(NULL);
 }
 #else
 static void *bridge_thread(void *arg) {
@@ -417,34 +415,14 @@ static void *bridge_thread(void *arg) {
 #endif
 
 int moy_web_live(int fd, const struct moy_wa_seal *seal) {
-    if (L == NULL) {
-        L = moy_net_alloc(sizeof *L);
-        if (L == NULL) {
-            return -1;
-        }
-        memset(L, 0, sizeof *L);
-        L->fd = -1;
-    }
     if (__atomic_load_n(&L->fd, __ATOMIC_ACQUIRE) >= 0) {
         L->stats.busy++;
         return -1;
     }
-#ifdef ESP_PLATFORM
-    if (L->task == NULL
-        && xTaskCreate(bridge_task, "moy_live", MOY_LIVE_STACK, NULL, tskIDLE_PRIORITY + 2,
-                       &L->task) != pdPASS) {
-        L->task = NULL;
+    L->b = moy_net_alloc(sizeof *L->b);
+    if (L->b == NULL) {
         return -1;
     }
-#else
-    if (!L->has_task) {
-        if (pthread_create(&L->task, NULL, bridge_thread, NULL) != 0) {
-            return -1;
-        }
-        pthread_detach(L->task);
-        L->has_task = 1;
-    }
-#endif
     if (seal != NULL) {
         L->seal = *seal;
     } else {
@@ -455,30 +433,37 @@ int moy_web_live(int fd, const struct moy_wa_seal *seal) {
     L->heard = L->said = moy_net_ms();
     __atomic_store_n(&L->fd, fd, __ATOMIC_RELEASE);
 #ifdef ESP_PLATFORM
-    xTaskNotifyGive(L->task);
+    if (moy_task_spawn(MOY_TASK_LIVE, bridge_task, NULL, NULL)) {
+        return 0;
+    }
+#else
+    pthread_t t;
+    if (pthread_create(&t, NULL, bridge_thread, NULL) == 0) {
+        pthread_detach(t);
+        return 0;
+    }
 #endif
-    return 0;
+    __atomic_store_n(&L->fd, -1, __ATOMIC_RELEASE);
+    moy_net_free(L->b);
+    L->b = NULL;
+    return -1;
 }
 
 uint32_t moy_web_live_idle_ms(void) {
-    if (L == NULL || __atomic_load_n(&L->fd, __ATOMIC_ACQUIRE) < 0) {
+    if (__atomic_load_n(&L->fd, __ATOMIC_ACQUIRE) < 0) {
         return UINT32_MAX;
     }
     return moy_net_ms() - L->heard;
 }
 
 void moy_web_live_cut(void) {
-    if (L != NULL && __atomic_load_n(&L->fd, __ATOMIC_ACQUIRE) >= 0) {
+    if (__atomic_load_n(&L->fd, __ATOMIC_ACQUIRE) >= 0) {
         L->cut = 1;
     }
 }
 
 void moy_live_stats(moy_live_stats_t *out) {
-    if (L == NULL) {
-        memset(out, 0, sizeof *out);
-    } else {
-        *out = L->stats;
-    }
+    *out = L->stats;
 }
 
 #endif
