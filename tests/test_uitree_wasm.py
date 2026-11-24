@@ -370,8 +370,30 @@ def test_the_on_glass_tree_app_builds_and_draws_its_page_alike_each_run():
     builds, runs its frames with no row refused and draws a page of the
     look's colours, the same crc on each run of a tier."""
     import on_glass
-    keys, desk = (("moy", "dark", 0), (320, 240, False)), (("moy", "light", 3), (1024, 600, True))
+    keys = (("moy", "dark", 0), (320, 240, False, 1, None))
+    desk = (("moy", "light", 3), (1024, 600, True, 1, 7.0))      # the Waveshare P4's
     pm, crc = on_glass.app_tree_host_page(*keys)
     assert pm[on_glass._UI_FRAMES] > 0 and pm[on_glass._UI_FAIL] == 0, pm[:10]
     assert on_glass.app_tree_host_page(*keys)[1] == crc
     assert on_glass.app_tree_host_page(*desk)[1] not in (crc, 0)
+
+
+def test_the_on_glass_page_crc_is_the_same_in_either_byte_order(monkeypatch):
+    """The page's crc (on_glass._RUN_CRC) sums RGB565 words high byte first
+    whatever order the canvas holds them in (device_canvas.WIRE_SWAPPED): a
+    P4's page, held low byte first, sums as the host's does."""
+    import types
+    import on_glass
+    from runtime.host_canvas import make_system_canvas  # noqa: F401 -- installs device_canvas
+    import device_canvas
+    w = 330
+    hi = bytearray((7 * i + i // 640) & 0xFF for i in range(2 * w * 170))
+    lo = bytearray(hi[i ^ 1] for i in range(len(hi)))
+
+    def crc(buf, swapped):
+        monkeypatch.setattr(device_canvas, "WIRE_SWAPPED", swapped)
+        ws = types.SimpleNamespace(run=types.SimpleNamespace(
+            canvas=types.SimpleNamespace(_buf=buf, w=w)))
+        return eval(on_glass._RUN_CRC, {"ws": ws})
+
+    assert crc(lo, False) == crc(hi, True) not in (0, crc(lo, True))
