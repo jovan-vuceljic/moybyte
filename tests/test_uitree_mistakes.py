@@ -6,7 +6,7 @@ The Lua halves are tests/test_uitree_lua.py's CASES (one per code the Lua
 layer raises); the Python halves are PY below. SHARED is every code of the
 contract table (tests/uitree_contract/contract.json) both layers' sources
 raise, and every one of them has a pair here, or is listed in NO_PAIR with
-the reason.
+the reason. PY_ONLY is one mistake per code the Python layer alone raises.
 """
 import re
 
@@ -133,3 +133,31 @@ def test_lua_reports_the_mistake_at_its_line(code, tmp_path):
     assert any(e.startswith("error[%s] %s:" % (code, where)) for e in errors), errors
     for e in errors:
         assert ONE_LINE.match(e), e
+
+
+# code: (app.py, the line its error names): the codes the Python layer alone raises (Lua has no
+# panes, docs, work or typed source to read), each at its line
+PY_ONLY = {
+    "A07": (H + "def go(row):\n    pass\n"
+            "s = ui.state(m=ui.model(key=\"id\", id=\"\"), n=ui.model(key=\"id\", id=\"\"), cur=ui.row_of(\"m\"))\n"
+            "ui.action(\"go\", \"Go\", go, takes=\"row\", row=\"cur\", off=\"grey\")\n" + PAGE
+            + "        with ui.rows(\"n\"):\n            ui.link(\"go\", label=\"{.id}\")\n", 9),
+    "N07": (H + "s = ui.state(d=ui.doc(\"\"))\n" + PAGE + "        with ui.panes(\"row\"):\n"
+            "            with ui.pane(\"a\", grow=True):\n                ui.text_editor(\"d\")\n"
+            "            with ui.pane(\"b\", grow=True):\n                ui.label(\"b\")\n", 5),
+    "S08": (H + "s = ui.state(n=0)\ndef go():\n    if s.n == None:\n        pass\nui.action(\"go\", \"Go\", go)\n", 4),
+    "S12": (H + "s = ui.state(d=ui.doc(\"\", lang=\"cobol\"))\n", 2),
+    "T06": (H + "s = ui.state(e=ui.enum(\"a\", \"b\", init=\"a\"))\ndef go():\n    if s.e:\n        pass\n"
+            "ui.action(\"go\", \"Go\", go)\n", 4),
+    "W02": (H + NOTHING + "s = ui.state(busy=False)\nui.work(\"w\", nothing, \"busy\", budget=99)\n", 5),
+}
+
+
+@pytest.mark.parametrize("code", sorted(PY_ONLY))
+def test_python_reports_its_own_mistake_at_its_line(code, tmp_path):
+    import uitree_check
+    src, line = PY_ONLY[code]
+    path = tmp_path / ("m_%s.py" % code.lower())
+    path.write_text(src)
+    got = [(e.code, e.where[1]) for e in uitree_check.check(str(path)).errors]
+    assert (code, line) in got, "%s:%d not in %r" % (code, line, got)
