@@ -12,7 +12,19 @@ from pathlib import Path
 import pytest
 
 from runtime import host_app
-from tests.test_ui_parts import _ratio
+
+
+def _ratio(a, b):
+    """The WCAG contrast of two RGB565 words."""
+    def lum(p):
+        out = []
+        for c in ((p >> 11) * 255 // 31, (p >> 5 & 63) * 255 // 63, (p & 31) * 255 // 31):
+            c /= 255
+            out.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+        return 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2]
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
 
 _DT = 1 / 30
 _FIVE = (("moy", "dark"), ("moy", "light"), ("blocks", "light"), ("contrast", "dark"),

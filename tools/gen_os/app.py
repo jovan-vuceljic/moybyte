@@ -1,8 +1,8 @@
-"""The app ABI: the C rows, the door's table, the wasm and ui imports."""
+"""The app ABI: the C rows, the door's table, the wasm imports."""
 
 
 from . import TableError
-from .table import FLOOR_ROLE, cap_packed, direct_native, door_rows, ident, params, role_of, roles, upper, verb_of, wasm_sig
+from .table import FLOOR_ROLE, cap_packed, direct_native, door_rows, ident, params, role_of, roles, upper, wasm_sig
 from .cproto import HEAD, c_decl, wrap
 
 
@@ -122,8 +122,8 @@ def gen_wasm_h(src):
          "// The moybyte.app imports (native/moy_app/moy_app_wasm.h): one native per\n"
          "// row with an import, named <role>_<verb> at its WAMR signature. A row the\n"
          "// adapter serves packs its fields for the ROLE door and runs as its how\n"
-         "// says (run(), moy_app_wasm.c); a toolkit row is native/moy_ui's own,\n"
-         "// weak here, so an image without the toolkit answers NULL for it.\n",
+         "// says (run(), moy_app_wasm.c); a direct row is the UI engine's own\n"
+         "// (native/moy_uitree), weak here, so an image without it answers NULL for it.\n",
          "#define MOY_APP_WASM_N %d" % len(rows), ""]
     for r in rows:
         if r["how"] != "direct":
@@ -168,24 +168,6 @@ def gen_wasm_h(src):
     o += ["};", "static const int16_t NATIVE_ROWS[MOY_APP_WASM_N] = {"]
     o += wrap(["MOY_T_%s" % upper(r["name"]) for r in wasm_natives(src)])
     o += ["};", ""]
-    return "\n".join(o)
-
-
-def gen_ui_h(src):
-    rows = [r for r in wasm_rows(src) if role_of(r) == "ui"]
-    o = [HEAD,
-         "// The toolkit's moybyte.app imports (native/moy_ui/moy_ui_wasm.h states each\n"
-         "// verb's contract): their count, each native's prototype, which must be\n"
-         "// moy_ui_wasm.h's, and the natives by import name, in the role table's order.\n",
-         "#ifndef MOY_UI_WASM_ROWS_H", "#define MOY_UI_WASM_ROWS_H", "",
-         "#include <stdint.h>", "",
-         "#define MOY_UI_WASM_ROWS %d" % len(rows), ""]
-    for r in rows:
-        o += c_decl("int32_t moy_ui_wasm_%s" % verb_of(r), ui_c_params(r).split(", "), ";")
-    o += ["", "#define MOY_UI_WASM_NATIVES { \\"]
-    for r in rows:
-        o.append('    { "%s", FN(moy_ui_wasm_%s) }, \\' % (ident(r["name"]), verb_of(r)))
-    o += ["}", "", "#endif // MOY_UI_WASM_ROWS_H", ""]
     return "\n".join(o)
 
 

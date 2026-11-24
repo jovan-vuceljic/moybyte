@@ -65,8 +65,8 @@ static moy_ui_span_t t_cut(const tfont_t *f, moy_ui_span_t t, int maxw, int scal
 // -- the sink --------------------------------------------------------------------
 //
 // Both sinks are a canvas row by the time a primitive draws: ROW's is the
-// glass's (moy_ui_sink.c), RUN's a row a compiled run's canvas lends
-// (moy_ui_wasm.c).
+// glass's (moy_ui_sink.c), RUN's a row a run's canvas lends
+// (moy_ui_run.c).
 
 typedef struct {
     moy_canvas_row_t *row;
@@ -1102,6 +1102,29 @@ static void label_font(draw_t *d, const moy_ui_btn_style_t *bs, moy_ui_span_t la
         && (t_w(&f, label.p, label.n, fs) <= w || !moy_text_covers(d->f.id, label.p, label.n))) {
         d->f = f;
     }
+}
+
+int moy_ui_button_ring(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags, int interact,
+                       const moy_ui_button_t *k) {
+    const moy_ui_marks_t *m = moy_ui_marks();
+    if (!(flags & MOY_UI_F_FOCUS) || !m->active
+        || moy_ui_mark_of(MOY_UI_ITEM_CELL, MOY_UI_MS_FOCUS)->mark != MOY_UI_MK_RING) {
+        return 0;
+    }
+    draw_t d;
+    open_draw(s, &d);
+    int w = b.w, h = b.h;
+    int state = moy_ui_state_of(mark_flags(flags & ~MOY_UI_F_HOT), interact);
+    moy_ui_btn_style_t bs;
+    moy_ui_button_style(d.look, kind, state, k->app, &bs);
+    int shaped = (bs.shape != BTN_SQUARE && bs.r > 0) || bs.shape == BTN_CIRCLE || bs.bevel > 0;
+    int br = !shaped ? 0 : bs.shape == BTN_CIRCLE ? (w < h ? w : h) / 2 : bs.r;
+    int danger = kind == MOY_UI_K_BUTTON_DANGER;
+    int mi = !danger ? -1 : k->colors[1] != MOY_UI_FROM_STYLE ? k->colors[1] : bs.c[1];
+    moy_ui_focus_in(s, b, MOY_UI_ITEM_CELL, br,
+                    ((flags & MOY_UI_F_ON) ? MOY_UI_MARK_BOTH : 0) | (danger ? MOY_UI_MARK_DANGER : 0),
+                    k->fs, NULL, &mi, 0);
+    return 1;
 }
 
 int moy_ui_button(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags, int interact,

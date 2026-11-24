@@ -68,29 +68,3 @@ def test_each_engine_file_reaches_only_its_groups_and_those_named():
              if gs - READS.get(f, set())}
     assert not extra, ("a file reaching into another file's group: move the code to the "
                        "owner, or name the read in READS: %s" % extra)
-
-
-LISTS = """
-LOST = 0
-
-
-def _draw():
-    global LOST
-    cls(0)
-    ui.page("Keep")
-    for i in range(16):
-        ui.at(0, 30 + i * 4, 60, 40)
-        ui.list("L%d" % i, ["a", "b"], 0)
-"""
-
-
-def test_seventeen_kept_ids_in_one_context_are_told(tmp_path, capsys):
-    """The page and sixteen lists ask for seventeen kept ids: the last is
-    drawn with none and counted, and the host says so once."""
-    from test_app_field_typing import _open
-    _ws, drv = _open(tmp_path, "Keep", LISTS, "python")
-    for _ in range(3):
-        drv.frame(1 / 30)
-    said = [ln for ln in capsys.readouterr().out.splitlines() if "kept state" in ln]
-    assert said and said[0].startswith("ui: 1 widgets past the kept ids"), said
-    assert len(said) == 1, "told once per count"

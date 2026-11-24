@@ -509,6 +509,9 @@ THUMB_UNDER_GEN = ("the old page's scroll ran under a gen and drew no thumb; eve
 PAGE_THUMB = ("the old flowing page drew no thumb where its rows ran past its room; the page "
               "draws its scrollbar's thumb there now, as a scroll region does (#1)")
 
+RING_ROOM = ("a button across the page's whole width stood with its focus ring past the page's edges, "
+             "cut there; a stacked button now stands its ring's reach in from them (moy_ui_api_button)")
+
 # The steps of a run that a page's thumb moves (PAGE_THUMB), by run.
 PAGE_THUMB_STEPS = {
     "settings_log-tdeck": (6,),
@@ -567,7 +570,7 @@ RUNS = (
      ["k:down", "k:a", "f:2", "k:down", "k:a", "f:2", "back"],
      {i: (NO_FALSE_HINT + "; " if i >= 5 else "") + CUT_ENDS_IN_ELLIPSIS for i in range(7)}),
     ("settings_paired-desk", "settings_paired", "p4_1024x600_fs2_windowed",
-     ["k:down", "k:down", "k:a", "f:2", "k:down", "k:a", "f:2"]),
+     ["k:down", "k:down", "k:a", "f:2", "k:down", "k:a", "f:2"], dict.fromkeys(range(6), RING_ROOM)),
     ("settings_paired_none-big", "settings_paired_none", "big_800x480_fs3_dark", ["k:down", "back"],
      {0: NO_FALSE_HINT, 1: NO_FALSE_HINT}),
     # the image on the card: A installs it a chunk a frame, B stops the
@@ -659,7 +662,8 @@ RUNS = (
      ["k:down", "k:down", "k:right", "k:down", "k:down", "k:down"]),
     ("settings_wifi-p4", "settings_wifi", "p4_1024x600_cs2_fs1_windowed", ["k:down", "k:a", "f:2", "k:down"]),
     ("settings_tz-p4", "settings_tz", "p4_1024x600_cs2_fs1_windowed", ["k:down", "k:down", "k:a", "f:2"]),
-    ("settings_paired-p4", "settings_paired", "p4_1024x600_cs2_fs1_windowed", ["k:down", "k:down"]),
+    ("settings_paired-p4", "settings_paired", "p4_1024x600_cs2_fs1_windowed", ["k:down", "k:down"],
+     dict.fromkeys(range(3), RING_ROOM)),
     ("tasks-p4", "tasks", "p4_1024x600_cs2_fs1_windowed", ["k:down", "k:up", "k:up", "k:right"]),
     ("update_sd-p4", "update_sd", "p4_1024x600_cs2_fs1_windowed", ["k:a", "f:3"]),
     # a finger's swipes, a frame a move at the parity's fixed dt: the drag and

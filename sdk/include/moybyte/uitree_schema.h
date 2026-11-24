@@ -10,8 +10,8 @@ enum {
     UT_SEG, UT_SLIDER, UT_FIELD, UT_EMPTY, UT_PROGRESS, UT_TEXT_VIEW, UT_SCROLL, UT_MENU,
     UT_ITEM, UT_SPLIT, UT_CANVAS, UT_TABS, UT_SWITCH, UT_CASE, UT_TABLE, UT_COL, UT_FOOT,
     UT_CARDS, UT_CARD, UT_PICTURE, UT_POPOVER, UT_TOOLS, UT_ROW, UT_STATUS, UT_TEXT_EDITOR,
-    UT_PANES, UT_PANE, UT_LEGACY, UT_SLOT, UT_PANEL, UT_LENT, UT_RULE, UT_NOTE, UT_GRID,
-    UT_BUBBLE, UT_MONTH, UT_TOAST, UT_CELLS, UT_STEPPER, UT_HINTS,
+    UT_PANES, UT_PANE, UT_SLOT, UT_PANEL, UT_LENT, UT_RULE, UT_NOTE, UT_GRID, UT_BUBBLE,
+    UT_MONTH, UT_TOAST, UT_CELLS, UT_STEPPER, UT_HINTS,
 };
 
 // Each kind's name by its number: an unkeyed node's key is its kind's name and its place.
@@ -19,9 +19,8 @@ static const char *const ut_kind_names_[] = {
     "", "page", "group", "label", "info", "link", "button", "toggle", "rows", "dialog", "seg",
     "slider", "field", "empty", "progress", "text_view", "scroll", "menu", "item", "split",
     "canvas", "tabs", "switch", "case", "table", "col", "foot", "cards", "card", "picture",
-    "popover", "tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot",
-    "panel", "lent", "rule", "note", "grid", "bubble", "month", "toast", "cells", "stepper",
-    "hints",
+    "popover", "tools", "row", "status", "text_editor", "panes", "pane", "slot", "panel",
+    "lent", "rule", "note", "grid", "bubble", "month", "toast", "cells", "stepper", "hints",
 };
 
 // A word prop's words (`off` takes the action's: "hide", "grey").
@@ -39,9 +38,6 @@ static const char *const ut_kind_names_[] = {
 #define UT_GAP_M "m"
 #define UT_GAP_L "l"
 #define UT_GAP_0 "0"
-#define UT_INPUT_TEXT "text"
-#define UT_INPUT_NUMBER "number"
-#define UT_INPUT_PASSWORD "password"
 #define UT_KIND_NORMAL "normal"
 #define UT_KIND_PRIMARY "primary"
 #define UT_KIND_DANGER "danger"
@@ -56,7 +52,7 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_TILE "tile"
 #define UT_LOOK_COUNT "count"
 #define UT_LOOK_WELL "well"
-#define UT_LOOK_LARGE "large"
+#define UT_LOOK_HERO "hero"
 #define UT_LOOK_BAR "bar"
 #define UT_LOOK_STEPS "steps"
 #define UT_LOOK_BLOCKS "blocks"
@@ -69,7 +65,6 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_ICONS "icons"
 #define UT_LOOK_COLUMN "column"
 #define UT_LOOK_KEYS "keys"
-#define UT_MKIND_DANGER "danger"
 #define UT_NAV_OFF "off"
 #define UT_PAD_S "s"
 #define UT_PAD_M "m"
@@ -111,7 +106,7 @@ static inline int32_t ut_p_clear(int32_t v) { return ut_prop_int_("clear", v); }
 static inline int32_t ut_p_close(const char *v) { return ut_prop_("close", v); }
 static inline int32_t ut_p_cols(const char *v) { return ut_prop_("cols", v); }
 static inline int32_t ut_p_commit(int v) { return ut_prop_("commit", v ? "True" : "False"); }
-static inline int32_t ut_p_count(int32_t v) { return ut_prop_int_("count", v); }
+static inline int32_t ut_p_count(const char *v) { return ut_prop_("count", v); }
 static inline int32_t ut_p_cur(const char *v) { return ut_prop_("cur", v); }
 static inline int32_t ut_p_current(const char *v) { return ut_prop_("current", v); }
 static inline int32_t ut_p_cut(const char *v) { return ut_prop_("cut", v); }
@@ -132,7 +127,6 @@ static inline int32_t ut_p_focus(const char *v) { return ut_prop_("focus", v); }
 static inline int32_t ut_p_focused(const char *v) { return ut_prop_("focused", v); }
 static inline int32_t ut_p_follow(int v) { return ut_prop_("follow", v ? "True" : "False"); }
 static inline int32_t ut_p_gap(const char *v) { return ut_prop_("gap", v); }
-static inline int32_t ut_p_gen(const char *v) { return ut_prop_("gen", v); }
 static inline int32_t ut_p_ground(const char *v) { return ut_prop_("ground", v); }
 static inline int32_t ut_p_group(const char *v) { return ut_prop_("group", v); }
 static inline int32_t ut_p_grow(int v) { return ut_prop_("grow", v ? "True" : "False"); }
@@ -142,11 +136,9 @@ static inline int32_t ut_p_h(int32_t v) { return ut_prop_int_("h", v); }
 static inline int32_t ut_p_head(const char *v) { return ut_prop_("head", v); }
 static inline int32_t ut_p_hi(int32_t v) { return ut_prop_int_("hi", v); }
 static inline int32_t ut_p_hint(const char *v) { return ut_prop_("hint", v); }
-static inline int32_t ut_p_hints(const char *v) { return ut_prop_("hints", v); }
 static inline int32_t ut_p_icon(const char *v) { return ut_prop_("icon", v); }
 static inline int32_t ut_p_icons(const char *v) { return ut_prop_("icons", v); }
 static inline int32_t ut_p_image(const char *v) { return ut_prop_("image", v); }
-static inline int32_t ut_p_input(const char *v) { return ut_prop_("input", v); }
 static inline int32_t ut_p_key(const char *v) { return ut_prop_("key", v); }
 static inline int32_t ut_p_keys(const char *v) { return ut_prop_("keys", v); }
 static inline int32_t ut_p_kind(const char *v) { return ut_prop_("kind", v); }
@@ -163,7 +155,6 @@ static inline int32_t ut_p_marks(const char *v) { return ut_prop_("marks", v); }
 static inline int32_t ut_p_max(int32_t v) { return ut_prop_int_("max", v); }
 static inline int32_t ut_p_mid(int v) { return ut_prop_("mid", v ? "True" : "False"); }
 static inline int32_t ut_p_min(const char *v) { return ut_prop_("min", v); }
-static inline int32_t ut_p_mkind(const char *v) { return ut_prop_("mkind", v); }
 static inline int32_t ut_p_month(int32_t v) { return ut_prop_int_("month", v); }
 static inline int32_t ut_p_nav(const char *v) { return ut_prop_("nav", v); }
 static inline int32_t ut_p_new(const char *v) { return ut_prop_("new", v); }

@@ -48,8 +48,7 @@ def _rows():
 
 def _verbs():
     """Each role's verbs but those of the roles no AppContext object serves:
-    the toolkit's (app_context.TOOLKIT; tests/test_app_ui.py compares the
-    tiers' pictures) and the console calls' (shell_servers.ConsoleCalls)."""
+    the UI engine's and the console calls' (shell_servers.ConsoleCalls)."""
     out = {}
     for r in _rows():
         if r["role"] not in _ac.ROLES:
@@ -105,7 +104,7 @@ def test_the_c_rows_are_native_moy_apps_in_the_tables_order():
     c_rows = [r["role"] + "." + r["verb"] for r in _rows() if r["server"] == "c"]
     assert c_rows == list(moy_app.rows())
     assert tuple(moy_app.roles()) == tuple(gen_os_table.roles(gen_os_table.load()))
-    assert _ac.TOOLKIT in moy_app.roles()
+    assert "ui" not in moy_app.roles()
 
 
 def test_the_import_adapter_is_the_tables_wasm_column():
@@ -117,23 +116,6 @@ def test_the_import_adapter_is_the_tables_wasm_column():
                    for i, r in enumerate(_rows()) if r["wasm"] is not None),
                   key=lambda t: t[0].encode())
     assert list(moy_app.wasm_rows()) == want
-
-
-def test_the_ui_fixture_imports_every_ui_row():
-    """tests/fixtures/wasm/app_ui.moy imports every `ui` row, at the table's
-    type: a step that adds a widget adds its row, and the fixture imports it
-    (docs/ui_api_2026-10.md §8)."""
-    src = (ROOT / "tests" / "fixtures" / "wasm" / "app_ui.moy" / "src" / "main.wat").read_text()
-    want = {"ui_" + r["verb"]: r["wasm"] for r in _rows() if r["role"] == _ac.TOOLKIT}
-    got = dict(re.findall(r'\(import "moybyte\.app" "(ui_\w+)" \(func \$\w+\s*'
-                          r'((?:\(param[^)]*\)\s*)?(?:\(result[^)]*\))?)', src))
-    assert set(got) == set(want)
-    for name, sig in want.items():
-        params = sig[1:sig.index(")")].replace("*~", "ii")
-        decl = got[name]
-        m = re.search(r"\(param ([^)]*)\)", decl)
-        assert len(m.group(1).split()) if m else 0 == len(params), name
-        assert ("(result i32)" in decl) == sig.endswith("i"), name
 
 
 def test_the_role_doors_table_is_the_tables_rows():

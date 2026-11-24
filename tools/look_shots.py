@@ -12,7 +12,7 @@
 
 usage: .venv/bin/python tools/look_shots.py OUT [FILTER ...] [--step N]
                                             [--theme NAME] [--variant MODE]
-                                            [--parts] [--input PROFILE]
+                                            [--input PROFILE]
                                             [--kit] [--profiles] [--only-kit]
                                             [--audit]
 
@@ -38,10 +38,7 @@ it in the default theme (`DEFAULT`).
 FILTER keeps the scene it names, else the scenes whose name contains it
 (shell globs work too);
 `--step N` keeps the scenes step N targets. `--theme`/`--variant` render
-every kept scene in that theme instead of its own. `--parts` draws the
-handheld Settings and Appearance scenes with the public UI API's parts sheet
-(tests/fixtures/ui_parts/parts_app.py, docs/history/look_2026-10.md step 12) in
-place of the shell's screens, which have not moved onto the verbs yet.
+every kept scene in that theme instead of its own.
 
 The handheld scenes draw the T-Deck's own keys (`HANDHELD_INPUT`), the desk
 ones the desk keyboard's; `--input PROFILE` (keys, tdeck, pad, touch) draws
@@ -50,8 +47,7 @@ every scene with that input's keys, touch with no hint strip at all.
 `--kit` adds the kit's own scenes, states no mockup draws, each in the five
 theme-modes of `KIT_MODES`: Settings with Volume (at `VOLUME_REST`),
 Brightness, a toggle On and Off and the empty Name field focused; the desk
-Appearance window with a cycler, the segments and the accents focused; the
-parts sheet with each of its parts focused; the Code tab with Undo enabled
+Appearance window with a cycler, the segments and the accents focused; the Code tab with Undo enabled
 and disabled and with the caret on the longest line; the sprite editor's
 palette; the system menu and the pause menu over focused content, the
 system menu over Make, over an open cart of the kid's own and with Sleep
@@ -614,9 +610,9 @@ def _code_overlay(which):
         elif which == "complete":
             ed.lines[41] = "    s[2] = _ba"
             ed.row, ed.col = 41, len(ed.lines[41])
-            cl._open_completion(ed)
+            cl.run("complete_open")
         elif which == "goto":
-            cl._open_jump(ed)
+            cl.run("goto_open")
         else:
             cl.open_scripts()
     return setup
@@ -1839,18 +1835,6 @@ def _image(ws):
     return Image.frombytes("RGB", (cv.w, cv.h), bytes(sw), "raw", "BGR;16")
 
 
-# The scenes the parts sheet stands in for (--parts): screen -> its page.
-PARTS = {"handheld_settings": "settings", "handheld_appearance": "appearance"}
-
-
-def _parts(page):
-    def setup(g, ws):
-        app = g.parts_app(ws, page)
-        app.open()
-        ws.wm.goto(app.id)
-    return setup
-
-
 def render(g, config, theme, mode, setup, wallpaper, inputs=None):
     """(image, settled, report) for one scene on a fresh workstation, its
     hint strips drawing input profile `inputs`' keys (default: the T-Deck's
@@ -1889,8 +1873,8 @@ def render(g, config, theme, mode, setup, wallpaper, inputs=None):
         setup(g, ws)
         ws.bar_layer.invalidate()         # the probes see the bars drawn
         probe = Probe()
-        probe.install(ws)
         try:
+            probe.install(ws)
             settled = _settle(g, ws, probe=probe)
         finally:
             probe.remove()
@@ -1942,7 +1926,7 @@ KIT_INPUT = {"handheld_home_long-press": "touch", "handheld_make_long-press": "t
              "handheld_make_own_long-press": "touch",
              "handheld_home_pad-x": "pad", "desktop_home_pad-up": "pad"}
 
-# The parts sheet's and the desk Appearance's stops by the part they draw,
+# The desk Appearance's stops by the part they draw,
 # where the audit measures a part its own way (`_row_pairs`).
 PART_KINDS = {"Mode": "seg", "Accent": "swatches", "Sound": "toggle", "Volume": "slider",
               "Tint": "cycle"}
@@ -2031,20 +2015,6 @@ def _desk_appearance_at(label):
             return "swatches" if f == "accent" else app.engine.stop_kinds().get(f)
         _FOCUSED[0] = box
         _FOCUSED_KIND[0] = kind
-    return setup
-
-
-def _parts_at(page, stop):
-    """The parts sheet's `page` with part `stop` focused."""
-    def setup(g, ws):
-        from runtime import ui_draw
-        app = g.parts_app(ws, page)
-        app.open()
-        ws.wm.goto(app.id)
-        _settle(g, ws, 2)
-        ui_draw._C.api_focus(app.ctx, stop)
-        _FOCUSED[0] = lambda: ui_draw._C.api_box(app.ctx, stop)
-        _FOCUSED_KIND[0] = lambda: PART_KINDS.get(stop)
     return setup
 
 
@@ -2448,13 +2418,6 @@ def _kit_table():
                                 "up from the desk home's shelf: the details pane's buttons"),
     }
     out = {k: v + ("theme",) for k, v in t.items()}
-    for page, stops in (("settings", ("Wi-Fi", "Appearance", "Text size")),
-                        ("appearance", ("Sound", "Volume", "Mode", "Accent", "Tint",
-                                        "Wallpaper"))):
-        for stop in stops:
-            out["handheld_parts-%s_focus-%s" % (page, stop.lower().replace(" ", "-"))] = (
-                HANDHELD, _parts_at(page, stop),
-                "the parts sheet's %s page, %s focused" % (page, stop), "theme")
     for screen, (config, setup, what) in {
             "handheld_home": (HANDHELD, _home, "home"),
             "handheld_make": (HANDHELD, _make, "the Make tab, a project selected"),
@@ -2568,8 +2531,18 @@ class Probe:
         self.marks = max(self.marks, ui_draw.marks(None, False)[1])
 
     def install(self, ws):
-        """Wrap the verbs the probes read; `remove` puts them back."""
+        """Wrap the verbs the probes read; `remove` puts them back. A wrap
+        that fails puts back those made before it: a wrap left on a canvas
+        class keeps every canvas it saw, and fills the glass's table."""
+        try:
+            self._install(ws)
+        except BaseException:
+            self.remove()
+            raise
+
+    def _install(self, ws):
         from runtime import ui_draw, iconsets
+        from runtime import uitree_c
         self._ws = ws
         cur = self.cur
         blits = self._blits
@@ -2620,17 +2593,19 @@ class Probe:
                 return real(cv, th, part, rect, on, *a, **kw)
             return f
 
-        def hints(real):
-            def f(items, *a, **kw):
-                cur["hints"].append((None, tuple(items)))
-                return real(items, *a, **kw)
+        def paint(real):
+            def f(eng, *a, **kw):
+                out = real(eng, *a, **kw)
+                h = eng.hints()
+                if h:
+                    cur["hints"].append((None, h))
+                return out
             return f
         for mod in {ui_draw, sys.modules.get("ui_draw", ui_draw)}:
             patch(mod, "tab", tab)
             patch(mod, "bar_part", bar_part)
-        from runtime import ui as ui_api
-        for mod in {ui_api, sys.modules.get("ui", ui_api)}:
-            patch(mod, "hints", hints)
+        for mod in {uitree_c, sys.modules.get("uitree_c", uitree_c)}:
+            patch(mod.CEngine, "paint", paint)
         for mod in {iconsets, sys.modules.get("iconsets", iconsets)}:
             patch(mod, "draw", icon)
 
@@ -3063,7 +3038,7 @@ def _row_pairs(ws, img, r, pair, kind=None, view=None):
 
 def _focused_box(ws):
     """The focused stop's rect on the glass, where a kit scene says how to
-    find it (Settings', the desk Appearance window's, the parts sheet's)."""
+    find it (Settings', the desk Appearance window's)."""
     f = _FOCUSED[0]
     return f() if f is not None else None
 
@@ -3522,7 +3497,9 @@ def _selection_pairs(ws, img):
     if sel is None:
         return []
     lay, ox, oy = _editor_origin(ws, "paint_layout", ws.paint_layer.layout)
-    g = ws.paint_layer.grid_at()
+    r = ws.paint_layer.rect_of("grid")         # the grid's canvas; the grid sits inside its margins
+    pl = ws.paint_layer.layout
+    g = None if r is None else (r[0] + pl.gm, r[1] + pl.gmv)
     if lay is None or g is None:
         return []
     cell = lay.span // ws.paint.dim
@@ -3829,7 +3806,7 @@ def pair(mockup, shot, built, scale=1):
     return out
 
 
-def run(out, filters=(), step=None, theme=None, variant=None, quiet=False, parts=False,
+def run(out, filters=(), step=None, theme=None, variant=None, quiet=False,
         inputs=None, kit=False, profiles=False, only_kit=False, audit_csv=False,
         failed=None, unheld=False):
     """Render, pair and index the kept scenes into `out`, and the kit's own
@@ -3848,7 +3825,7 @@ def run(out, filters=(), step=None, theme=None, variant=None, quiet=False, parts
     try:
         rows = []
         if not only_kit:
-            rows = _run(g, out, filters, step, theme, variant, quiet, parts, inputs,
+            rows = _run(g, out, filters, step, theme, variant, quiet, inputs,
                         audit_csv, fails, bars, unheld)
         if kit or profiles:
             rows += _run_kit(g, os.path.join(out, "kit"), filters, theme, variant, quiet,
@@ -3953,7 +3930,7 @@ def _run_kit(g, out, filters, theme, variant, quiet, kit, profiles, inputs, audi
     return rows
 
 
-def _run(g, out, filters, step, theme, variant, quiet, parts=False, inputs=None,
+def _run(g, out, filters, step, theme, variant, quiet, inputs=None,
          audit_csv=False, fails=None, bars=None, unheld=False):
     from PIL import Image
     table = _setup_table()
@@ -3970,9 +3947,6 @@ def _run(g, out, filters, step, theme, variant, quiet, parts=False, inputs=None,
     since = _AUDIT_COUNT[0]
     for name, what, want_theme, want_mode, size in scenes:
         config, _steps, wallpaper, setup, shows = table[screen_of(name)]
-        if parts and screen_of(name) in PARTS:
-            setup = _parts(PARTS[screen_of(name)])
-            shows = "the parts sheet's %s page" % PARTS[screen_of(name)]
         target_theme = theme or want_theme or DEFAULT
         mode = variant or want_mode or "dark"
         missing = []
@@ -4059,9 +4033,6 @@ def main(argv=None):
     ap.add_argument("--theme", help="render every scene in this theme")
     ap.add_argument("--variant", choices=("dark", "light"),
                     help="render every scene in this mode")
-    ap.add_argument("--parts", action="store_true",
-                    help="draw the handheld Settings and Appearance scenes "
-                    "with the parts sheet")
     ap.add_argument("--input", choices=PROFILES,
                     help="draw every scene's hints with this input's keys")
     ap.add_argument("--kit", action="store_true",
@@ -4078,7 +4049,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     failed = []
     rows = run(args.out, args.filters, args.step, args.theme, args.variant,
-               parts=args.parts, inputs=args.input, kit=args.kit, profiles=args.profiles,
+               inputs=args.input, kit=args.kit, profiles=args.profiles,
                only_kit=args.only_kit, audit_csv=args.audit, failed=failed,
                unheld=args.unheld)
     print("%d scenes, %d built -> %s" % (

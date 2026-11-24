@@ -45,7 +45,6 @@ import uitree as ui
 import uitree_app
 from layers import AppLayer
 from layout_base import bar_rows, content_of, metric_class, DESK
-from moy_store_base import builtin_name
 from ticks import _ticks_ms, _ticks_diff
 import story_doc as D
 import story_render as R
@@ -1191,7 +1190,7 @@ def _ed_menus():
             ui.item("more_centre", icon="align_c")
             ui.item("more_snap", icon="check", label="{snap_word}")
             ui.item("more_dup", icon="dup")
-            ui.item("more_del", icon="trash", mkind="danger")
+            ui.item("more_del", icon="trash", kind="danger")
     with ui.popover("slide_menu", anchor="slides.cur", shown="ed_menu=slide", close="menu_close",
                     w=260, wash="page"):
         with ui.menu("{slide_title}"):
@@ -1199,7 +1198,7 @@ def _ed_menus():
             ui.item("sl_dup", icon="dup")
             ui.item("sl_earlier", icon="arrow_left")
             ui.item("sl_later", icon="arrow_right")
-            ui.item("sl_del", icon="trash", mkind="danger")
+            ui.item("sl_del", icon="trash", kind="danger")
     for key, at in (("bg", "all_colours"), ("colour", "pick_colour"), ("fill", "pick_fill"),
                     ("line", "pick_line")):
         with ui.popover("colours_" + key, anchor=at, shown="ed_menu=colours && colour_for=" + key,
@@ -1217,7 +1216,7 @@ def build():
             with ui.menu("{menu_title}"):
                 ui.item("rename_ask", icon="pencil")
                 ui.item("duplicate", icon="dup")
-                ui.item("delete_ask", icon="trash", mkind="danger")
+                ui.item("delete_ask", icon="trash", kind="danger")
         with ui.dialog("Delete {del_title}?", ["cancel", "delete"], kind="danger",
                        shown="deleting"):
             ui.label("Its slides and pictures go to the Trash.", wrap="word", lines=3)
@@ -1228,27 +1227,12 @@ def build():
         ui.toast("{toast}", icon="{toast_icon}", shown="toasting")
 
 
-def is_app(cart):
-    """The shipped Storybook identity cart: its title, its marker
-    permission, its folder."""
-    if (not cart or cart.get("title") != "Storybook"
-            or "storybook" not in (cart.get("permissions") or ())):
-        return False
-    path = cart.get("path")
-    if not path:
-        return int(cart.get("version", 0)) >= 1
-    return builtin_name(path) == "moybyte.storybook.moy"
-
-
-class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is_app,
-                                             needs=("files", "nav"))):
+class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build)):
     """The Storybook Layer: the page's engine handed this layer as what its
     handlers reach (`uitree_app.env()`), the stories in the store, Present
     on the whole glass and the desk's editor's state and verbs
     (runtime/apps/story_edit.py)."""
 
-    APP_TITLE = "Storybook"
-    APP_FOLDER = "moybyte.storybook.moy"
     LENDS_BAR = True
     domain = "system"
 

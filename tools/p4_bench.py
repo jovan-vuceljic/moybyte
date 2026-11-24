@@ -516,7 +516,6 @@ SPRITE_FIXTURE = Path(__file__).resolve().parent.parent / "tests" / "fixtures" /
     "themes" / (SPRITE_THEME + ".moy")
 
 SPRITE_SETUP = """
-import ui
 import ui_draw
 def _sheet(on):
     ws.look._sheet_key = None
@@ -598,7 +597,7 @@ def bench_sprites(b, out_path):
 
 
 PAINTER_BENCH = """
-import time, ui, ui_draw, moy_ui, chrome
+import time, ui_draw, moy_ui, chrome
 def _pb(n, sheet):
     cv = (ws.sys_canvas or ws.run.canvas).new_layer(240, 120)
     try:
@@ -634,7 +633,7 @@ def _pb(n, sheet):
 # window frame drawn by the depth and what it leaves to the desk (its shadow
 # at each size and its fringe), a card's shadow, and the canvas verbs bare.
 SHAPES_BENCH = """
-import time, ui, ui_draw
+import time, ui_draw
 def _ps(n):
     cv = (ws.sys_canvas or ws.run.canvas).new_layer(320, 200)
     th = ws.theme_colors

@@ -13,7 +13,7 @@ moves (each such edit says so where it is).
 
 import re
 
-from runtime.widgets import _in as rect_in
+from runtime.widgets import rect_in
 
 _BLACK = 0
 _WHITE = 7

@@ -69,7 +69,6 @@ end
 for name, a in pairs(report.actions or {}) do
   print("ACTION " .. name .. " " .. a.takes .. " " .. (a.hook and "hook" or "action"))
 end
-for name in pairs(report.engine_owned or {}) do print("ENGINE " .. name) end
 for _, at in ipairs(report.state_at or {}) do print("STATEAT " .. at) end
 for name in pairs(report.labels or {}) do print("LABELS " .. name) end
 for _, name in ipairs(after or {}) do

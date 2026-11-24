@@ -13,7 +13,11 @@
     "app": {
       "id": "jukebox",
       "entry": "music_app:MusicAppLayer",
-      "order": 85
+      "order": 85,
+      "needs": ["surface", "theme", "damage", "prefs", "install", "nav"],
+      "prefs_ns": "music",
+      "marker": "music",
+      "min_size": [300, 220]
     },
     "permissions": [
       "graphics",

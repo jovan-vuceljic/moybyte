@@ -31,6 +31,14 @@ mk = blocks.make_block
 from blocks_helpers import run_cart as _run, go_to_insert  # noqa: E402
 
 
+
+def _type(ws, key):
+    """One key typed into the open prompt's field (8 its backspace), as the
+    page hands the field's text to `typed`."""
+    k = ws.block_ui.blk_kbd
+    text = k["entry"].text
+    ws.block_ui.typed(text[:-1] if key == 8 else text + chr(key))
+
 def _be():
     return BlockEditor(blocks)
 
@@ -503,9 +511,9 @@ def test_new_variable_entry_creates_names_and_is_usable(tmp_path):
     assert ws.block_ui.blk_kbd is not None
     # type a name: "lives" (each char is a keystroke; backspace + a digit too)
     for ch in "lives":
-        ws.block_ui._blk_kbd_key(ord(ch))
-    ws.block_ui._blk_kbd_key(ord("2"))                            # "lives2"
-    ws.block_ui._blk_kbd_key(8)                                   # backspace -> "lives"
+        _type(ws, ord(ch))
+    _type(ws, ord("2"))                            # "lives2"
+    _type(ws, 8)                                   # backspace -> "lives"
     ws.block_ui._blk_kbd_commit()
     assert ws.block_ui.blk_kbd is None
     assert "lives" in be.variables()
@@ -684,7 +692,7 @@ def test_type_a_literal_into_an_expr_slot_compiles_to_bare_value(tmp_path):
     slot = [s for s in be.slots(blk) if s["name"] == "value"][0]
     ws.block_ui._blk_edit_slot(blk, slot)
     # type "5" then OK
-    ws.block_ui._blk_kbd_key(ord("5"))
+    _type(ws, ord("5"))
     ws.block_ui._blk_kbd_commit()
     assert ws.block_ui.blk_kbd is None
     assert blk["p"]["value"] == 5 and isinstance(blk["p"]["value"], int)
@@ -708,11 +716,11 @@ def test_set_var_to_zero_and_three_roundtrip_and_execute(tmp_path):
     # type 0 into score's value, 3 into lives' value, both via the number pad
     s0 = [s for s in be.slots(b0) if s["name"] == "value"][0]
     ws.block_ui._blk_edit_slot(b0, s0)
-    ws.block_ui._blk_kbd_key(ord("0"))
+    _type(ws, ord("0"))
     ws.block_ui._blk_kbd_commit()
     s3 = [s for s in be.slots(b3) if s["name"] == "value"][0]
     ws.block_ui._blk_edit_slot(b3, s3)
-    ws.block_ui._blk_kbd_key(ord("3"))
+    _type(ws, ord("3"))
     ws.block_ui._blk_kbd_commit()
     src = blocks.compile_blocks(be.program)
     assert "score = 0" in src and "lives = 3" in src
@@ -732,10 +740,10 @@ def test_negative_and_decimal_literals_type_correctly(tmp_path):
     slot = [s for s in be.slots(blk) if s["name"] == "value"][0]
     ws.block_ui._blk_edit_slot(blk, slot)
     for ch in "-2":                              # type "-2"
-        ws.block_ui._blk_kbd_key(ord(ch))
+        _type(ws, ord(ch))
     # a stray second '-' and letters are filtered out of the buffer
-    ws.block_ui._blk_kbd_key(ord("-"))
-    ws.block_ui._blk_kbd_key(ord("x"))
+    _type(ws, ord("-"))
+    _type(ws, ord("x"))
     ws.block_ui._blk_kbd_commit()
     assert blk["p"]["value"] == -2
     src = blocks.compile_blocks(be.program)
@@ -755,7 +763,7 @@ def test_number_slot_is_typeable(tmp_path):
     assert ws.block_ui.blk_kbd is not None and ws.block_ui.blk_kbd["kind"] == "num"
     assert not ws.block_ui.blk_kbd.get("allow_block")     # a number slot can't hold a block
     for ch in "880":
-        ws.block_ui._blk_kbd_key(ord(ch))
+        _type(ws, ord(ch))
     ws.block_ui._blk_kbd_commit()
     assert blk["p"]["freq"] == 880
 

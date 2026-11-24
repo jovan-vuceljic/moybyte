@@ -135,7 +135,7 @@ class Engine(S.Builder):
 
     @property
     def idle_owed(self):
-        return (self.pics is not None and self.pics.idle_owed) or self.legacy_moved()
+        return self.pics is not None and self.pics.idle_owed
 
     @property
     def view_owed(self):
@@ -143,11 +143,6 @@ class Engine(S.Builder):
         the frame paints (the console's), so the page is not quiet until it
         shows every picture it holds."""
         return self.pics is not None and self.pics.idle_owed
-
-    def legacy_moved(self):
-        """Whether a hosted surface's gen moved since it drew: a page with no
-        Editor's kinds hosts none."""
-        return False
 
     def pics_let_go(self):
         """A picture a card showed was let go: every gen moves (the card
@@ -240,6 +235,7 @@ class Engine(S.Builder):
         self._bind()
         self.pages = self.pages[:1]
         self.openers = []
+        self.shown_due = False
         self._ui.reset()
         self.root = None
         self.want_focus = None          # a fresh visit: no focus, cur or row order carried over
@@ -284,11 +280,10 @@ class Engine(S.Builder):
 
     def hosted(self, dt, cv, th, content, desk):
         """The frame's first phase, which a host runs BEFORE it begins the
-        frame (`host.begin`): the surfaces the page hosts (`legacy`) drawn
-        each in its own verbs pass. A page with no Editor's kinds hosts none
-        (`uitree_c.CEditorEngine.hosted` draws them)."""
+        frame (`host.begin`): a page on the Editor's kinds starts its frame
+        there (`uitree_c.CEditorEngine.hosted`)."""
 
-    GEN_UNSAFE = ("canvas", "picture", "cards", "text_editor", "legacy")
+    GEN_UNSAFE = ("canvas", "picture", "cards", "text_editor")
 
     @staticmethod
     def _images(n):
@@ -427,7 +422,6 @@ class App(AppLayer):
     UI = True
     domain = "system"
     BUILD = None            # (build,): the app module's root page
-    IS_APP = None           # (is_app,): claims the app's identity cart
     ENGINE = None           # (Engine subclass,): uitree_editor.Engine for the Editor's kinds
     MIN = None              # (w, h): ui.app's min=, the window's least size in desk units
     LENDS_BAR = False       # its pages lend the shell's bar a row (`ui.tools(KEY, lend="bar")`)...
@@ -447,7 +441,9 @@ class App(AppLayer):
         self.landed = 0         # the pictures that landed (a window behind draws again at a new one)
 
     def is_app(self, cart):
-        return bool(self.IS_APP and self.IS_APP[0](cart))
+        """No cart: a shipped app claims what its declaration claims
+        (`app_slot.AppSlot.is_app`)."""
+        return False
 
     def open(self):
         self.engine.open()
@@ -517,7 +513,7 @@ def env():
     return a.env
 
 
-def app_layer(id, title, build, is_app=None, needs=(), engine=None):
+def app_layer(id, title, build, engine=None):
     """The AppLayer class of an app whose screen is `build` (the module's
     root page): what its manifest's `entry` names. Its title is the
     module's `ui.app(...)` declaration's (§19.1), else `title`. `engine=` is
@@ -539,10 +535,9 @@ def app_layer(id, title, build, is_app=None, needs=(), engine=None):
                             fix='declare ui.action(%r, ...), or back="pages"' % ad.back)
         title = ad.title()
     return type(title.replace(" ", "") + "App", (App,), {
-        "id": id, "TITLE": title, "BUILD": (build,), "IS_APP": (is_app,) if is_app else None,
+        "id": id, "TITLE": title, "BUILD": (build,),
         "ENGINE": (engine,) if engine is not None else None,
-        "MIN": tuple(ad.min) if ad is not None and ad.min is not None else None,
-        "NEEDS": App.NEEDS + tuple(needs)})
+        "MIN": tuple(ad.min) if ad is not None and ad.min is not None else None})
 
 
 class Page(Engine):

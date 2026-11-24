@@ -29,7 +29,7 @@ bare-or-package fallback as those modules.
 """
 
 from editors_sheet import IconSheet
-from widgets import _Blit, _in, _err_text
+from widgets import _Blit, rect_in as _in, _err_text
 
 # The toolkit's face: the display type's widths go through its text path.
 import ui_draw as _ui_draw

@@ -127,7 +127,7 @@ def page():
                 with ui.row("verbs", wrap=True, gap=14):
                     for k in range(BUTTONS):
                         ui.button("press", "{%s}" % KINDS[k], arg=ARGS[k], label="{%s}" % LABELS[k],
-                                  icon="{%s}" % ICONS[k], shown=SHOWN[k], look="large")
+                                  icon="{%s}" % ICONS[k], shown=SHOWN[k], look="hero")
 
 
 def hero():

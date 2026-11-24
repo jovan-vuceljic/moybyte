@@ -9,7 +9,7 @@ index -- `cv.pix(x, y)` reads an index back, and `canvas_probe` reads the buffer
 at the canvas's real pixel width."""
 
 from pathlib import Path
-from ws_helpers import shelf, select_on_home, step_card  # noqa: E402
+from ws_helpers import shelf, select_on_home, step_card, paint_grid_at  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -841,7 +841,7 @@ def test_host_console_paint_via_mouse(tmp_path):
     drv.frame(1 / 30)
     drv.frame(1 / 30)                                   # (the cell's on= runs the frame after)
     assert ws.paint.color == 12
-    gx, gy = pl.grid_at()
+    gx, gy = paint_grid_at(pl)
     drv.click(gx + 2, gy + 2)                           # paint sprite 0, pixel (0,0)
     drv.frame(1 / 30)
     assert ws.sheet.tget(0, 0, 0) == 12

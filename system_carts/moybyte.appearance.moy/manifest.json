@@ -13,7 +13,10 @@
     "app": {
       "id": "appearance",
       "entry": "appearance_app:AppearanceAppLayer",
-      "order": 20
+      "order": 20,
+      "needs": ["surface", "theme", "damage", "wallpaper"],
+      "marker": "appearance",
+      "min_size": [310, 230]
     },
     "permissions": [
       "graphics",

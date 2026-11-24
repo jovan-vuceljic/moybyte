@@ -68,20 +68,6 @@ def install(m, lib, h, counts, glyphs, kinds, states, tokens):
         ib = None if inp is None else _buf(inp)
         return bool(lib.moy_ui_api_begin(p, ib, box_of(rect), int(flags), int(fs)))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def api_table(ctx, cv, look, label, cols, cells, cur, o):
         p, _k = _ctx(ctx)
         s = sink(cv, look)
@@ -92,15 +78,6 @@ def install(m, lib, h, counts, glyphs, kinds, states, tokens):
         lib.moy_ui_api_table(p, c.byref(s), t, cb, len(cb), eb, len(eb), int(cur), ov, out)
         return int(out[0]), bool(out[1])
 
-
-
-
-
-
-
-
-
-
     def _span0(text):
         t, keep = span(text)
         if not t.n:
@@ -108,75 +85,9 @@ def install(m, lib, h, counts, glyphs, kinds, states, tokens):
             t = _Span(c.addressof(keep), 0)
         return t, keep
 
-
-
-
-
-
-
-
-
-
-    def api_bar(ctx, cv, look, title, tools, off, back=False):
-        p, _k = _ctx(ctx)
-        s = sink(cv, look)
-        t, keep = span(title)
-        if not t.n:
-            keep = c.create_string_buffer(b"", 1)
-            t = _Span(c.addressof(keep), 0)
-        b = bytes(tools)
-        off = (int(off) | (0x80000000 if back else 0)) & 0xFFFFFFFF
-        return int(lib.moy_ui_api_bar(p, c.byref(s), t, b, len(b), off))
-
-    def api_bar_lent(ctx):
-        p, _k = _ctx(ctx)
-        title = c.c_char_p()
-        slots = (c.c_int16 * 6)()
-        n = _I()
-        off = c.c_uint32()
-        if not lib.moy_ui_api_bar_lent(p, c.byref(title), slots, c.byref(n), c.byref(off)):
-            return None
-        at = _I()
-        chip = lib.moy_ui_api_bar_chip(p, c.byref(at))
-        return ((title.value or b"").decode("utf-8", "replace"),
-                tuple(slots[i] for i in range(n.value)), off.value,
-                (chip or b"").decode("utf-8", "replace"))
-
-
-
-
-
-
-
-    def api_run_bar_lent():
-        title = c.c_char_p()
-        slots = (c.c_int16 * 6)()
-        n = _I()
-        off = c.c_uint32()
-        chip = c.c_char_p()
-        if not lib.moy_ui_run_bar_lent(c.byref(title), slots, c.byref(n), c.byref(off),
-                                       c.byref(chip)):
-            return None
-        return ((title.value or b"").decode("utf-8", "replace"),
-                tuple(slots[i] for i in range(n.value)), off.value,
-                (chip.value or b"").decode("utf-8", "replace"))
-
-
-
-
-
-
-
-
-
     def api_busy(ctx):
         p, _k = _ctx(ctx)
         return bool(lib.moy_ui_api_owes(p) or lib.moy_ui_api_moving(p))
-
-
-
-
-
 
     def api_shift_drawn(ctx):
         p, _k = _ctx(ctx)
@@ -195,8 +106,6 @@ def install(m, lib, h, counts, glyphs, kinds, states, tokens):
         p, _k = _ctx(ctx)
         v = (c.c_int32 * 5)()
         return tuple(v) if lib.moy_ui_api_view(p, v) else None
-
-
 
     def api_lag_note(ctx, hist, bands, f, kind):
         p, _k = _ctx(ctx)
@@ -217,35 +126,11 @@ def install(m, lib, h, counts, glyphs, kinds, states, tokens):
                                              (c.c_int32 * len(pf)).from_buffer(pf),
                                              (c.c_int32 * len(hp)).from_buffer(hp)))
 
-
-
-
-
     def api_card_clip(ctx, r):
         p, _k = _ctx(ctx)
         v = (c.c_int32 * 4).from_buffer(r)
         lib.moy_ui_api_card_clip(p, c.addressof(v))
         return r
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     def api_table_rows(ctx):
         p, _k = _ctx(ctx)
@@ -253,9 +138,6 @@ def install(m, lib, h, counts, glyphs, kinds, states, tokens):
         if not lib.moy_ui_api_table_rows(p, v):
             return None
         return (v[0], v[1], (v[2], v[3], v[4], v[5]), v[6], v[7])
-
-
-
 
     def api_split(ctx, cv, look, id_, sizes, n, mins, opt, out):
         p, _k = _ctx(ctx)
@@ -275,8 +157,6 @@ def install(m, lib, h, counts, glyphs, kinds, states, tokens):
         return int(lib.moy_ui_api_split_frame(p, v[0], v[1], v[2], v[3],
                                               c.addressof(v) + 16,
                                               (c.c_int32 * 4).from_buffer(out)))
-
-
 
     def api_focus(ctx, id_=None):
         p, _k = _ctx(ctx)
@@ -339,9 +219,6 @@ def install(m, lib, h, counts, glyphs, kinds, states, tokens):
             return into
         return (out[0], out[1])
 
-
-
-
     def api_text_reveal(ctx, id_, lines, line, col):
         p, _k = _ctx(ctx)
         t, keep = span(id_)
@@ -383,8 +260,7 @@ def install(m, lib, h, counts, glyphs, kinds, states, tokens):
         setattr(m, f.__name__, f)
 
     for f in (api_begin, api_table, api_busy, api_shift_drawn, api_band, api_view, api_lag_note, api_lag,
-              api_host_begin, api_card_clip, api_table_rows, api_split, api_split_frame, api_bar,
-              api_bar_lent, api_run_bar_lent, api_focus):
+              api_host_begin, api_card_clip, api_table_rows, api_split, api_split_frame, api_focus):
         setattr(m, f.__name__, f)
     moy_ui_face.install(m, lib, _ctx, sink, _span0, _over, box_of)
     m.calls = lambda: lib.moy_ui_calls()

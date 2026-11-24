@@ -228,7 +228,7 @@ def sprite_page():
                 ui.item("sdown", label="Shift down{k_sdown}", shown="@desk")
                 ui.item("mirror", label="{mirrored?Turn off mirror:Turn on mirror}")
             with ui.menu("", shown="!shifting"):
-                ui.item("clear", label="Clear{k_clear}", mkind="danger")
+                ui.item("clear", label="Clear{k_clear}", kind="danger")
             with ui.menu("", shown="shifting"):
                 ui.item("sleft", label="Shift left{k_sleft}")
                 ui.item("sright", label="Shift right{k_sright}")

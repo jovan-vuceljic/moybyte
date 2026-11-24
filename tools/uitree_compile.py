@@ -17,7 +17,9 @@ change, and the same sources always give the same bytes.
 `--staged` is the board build's step (tools/esp32_build_lib.sh,
 `moybyte_stage_uitree_pages`): it compiles the console's pages (`SYSTEM`)
 that the image stages into MODULES_DIR/uitree_pages.py, then checks the
-blobs against the staged copies (`stale`); `--board` names the board, and
+blobs against the staged copies (`stale`) and leaves each staged page
+function no device builds a one-line body (`strip`, `built_on_device`);
+`--board` names the board, and
 one with no desk (`has_desk`) carries no page only a desk opens
 (`desk_pages`); `--bare` holds each blob unpacked, for the browser's wasm,
 which is served gzipped whole. Where the host library cannot be
@@ -188,6 +190,67 @@ def desk_pages():
     return set(uitree_aot.key(f) for m in SYSTEM for f in getattr(__import__(m), "DESK_PAGES", ()))
 
 
+def _pushed(trees):
+    """What a `ui.push(page)` reaches in `trees` ({module: its AST}): the
+    pages pushed ("module.function", a bare name its own module's) and the
+    modules that push one."""
+    pages, pushers = set(), set()
+    for mod, tree in trees.items():
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "push" and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in ("ui", "S", "uitree") and node.args):
+                pushers.add(mod)
+                a = node.args[0]
+                if isinstance(a, ast.Name):
+                    pages.add("%s.%s" % (mod, a.id))
+                elif isinstance(a, ast.Attribute) and isinstance(a.value, ast.Name):
+                    pages.add("%s.%s" % (a.value.id, a.attr))
+    return pages, pushers
+
+
+def built_on_device(pages, trees):
+    """Of the pages compiled (`pages`), the ones a device still builds
+    from their function: a page pushed over another (the engine loads a
+    blob for the first page alone, uitree_c.CEngine._load) and every page
+    of a module that pushes one (the first page is built again when the
+    pushed one pops)."""
+    pushed, pushers = _pushed(trees)
+    return set(k for k in pages if k in pushed or k.rpartition(".")[0] in pushers)
+
+
+STUB = "raise RuntimeError('compiled page')"
+
+
+def strip(modules_dir, pages, trees):
+    """Each staged module's page functions whose blob the image holds and
+    which no device builds (`built_on_device`) left with a body of one
+    line (`STUB`): the image carries the blob, and the host the function
+    it was compiled from. Returns the pages stubbed."""
+    keep = built_on_device(pages, trees)
+    mods = set(k.rpartition(".")[0] for k in pages)
+    out = []
+    for mod, tree in sorted(trees.items()):
+        if mod not in mods:
+            continue
+        path = os.path.join(modules_dir, mod + ".py")
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().split("\n")
+        cut = []
+        for node in tree.body:
+            k = "%s.%s" % (mod, getattr(node, "name", ""))
+            if isinstance(node, ast.FunctionDef) and k in pages and k not in keep:
+                cut.append(node)
+                out.append(k)
+        for node in reversed(cut):
+            first = node.body[0]
+            pad = lines[first.lineno - 1][:first.col_offset]
+            lines[first.lineno - 1:node.end_lineno] = [pad + STUB]
+        if cut:
+            write(path, "\n".join(lines))
+    return sorted(out)
+
+
 def stage(modules_dir, require=False, desk=True, packed=True):
     """Compile SYSTEM's modules staged in `modules_dir` into its
     uitree_pages.py; the build's step. With no `desk`, the pages only a
@@ -211,10 +274,17 @@ def stage(modules_dir, require=False, desk=True, packed=True):
         raise SystemExit("uitree pages: staged modules differ from the sources compiled: %s"
                          % ", ".join(late))
     write(out, module_text(c, packed))
-    print("uitree pages: %d compiled from %d staged modules%s, %d B of blobs, into %s%s" % (
-        len(c.pages), len(staged), "" if desk else " (no desk: no desk page)",
-        sum(len(b) for b in c.pages.values()), out,
-        "".join("; skipped %s (%s)" % s for s in c.skipped)))
+    trees = {}
+    for name in sorted(os.listdir(modules_dir)):
+        if name.endswith(".py") and name != "uitree_pages.py":
+            with open(os.path.join(modules_dir, name), encoding="utf-8") as f:
+                trees[name[:-3]] = ast.parse(f.read(), name)
+    cut = strip(modules_dir, c.pages, trees)
+    print("uitree pages: %d compiled from %d staged modules%s, %d B of blobs, into %s; %d page "
+          "functions left to the host%s" % (
+              len(c.pages), len(staged), "" if desk else " (no desk: no desk page)",
+              sum(len(b) for b in c.pages.values()), out, len(cut),
+              "".join("; skipped %s (%s)" % s for s in c.skipped)))
     return 0
 
 

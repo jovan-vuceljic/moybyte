@@ -58,6 +58,7 @@ typedef struct {
     int depth;                  // the page stack's depth: the leading number of the page's id
     char refocus[DEPTH][48];    // the key focused on each page as the next was pushed
     int refocus_due;            // build_end puts the focus back on this depth's key (-1 none)
+    int shown_due;              // the build is of a page pushed or shown again by Back: build_end owes its shown=
     char pname[48];             // the page's name (its id after the depth), for a role key's trace
     char title[64];             // the page's title, for a trace's "on 'TITLE'"
     struct {                    // each canvas of the page a pointer is routed to: its pointer= action,
@@ -399,10 +400,12 @@ int32_t moy_uitree_wasm_build(void *x, const uint8_t *page, uint32_t page_n) {
             f[0] = 0;
         }
         trace(a, "page", "push", "page %d%s%s%s", depth, f[0] ? ", opened from '" : "", f, f[0] ? "'" : "");
+        a->shown_due = 1;
     } else if (a->opened && depth < a->depth && depth >= 1) {
         const char *f = a->refocus[depth - 1];
         trace(a, "page", "back", "page %d%s%s%s", depth, f[0] ? ", focus back to '" : "", f, f[0] ? "'" : "");
         a->refocus_due = depth - 1;
+        a->shown_due = 1;
     }
     a->depth = depth;
     const char *nm = at(a, p);
@@ -443,6 +446,11 @@ int32_t moy_uitree_wasm_prop(void *x, int32_t node, const uint8_t *name, uint32_
     APP(a);
     TEXTS_BEGIN(a);
     int n = put(a, name, name_n), s = put(a, src, src_n);
+    if (node >= 0 && node < a->e->nnodes && a->e->nodes[node].kind == UIT_CANVAS && strcmp(at(a, n), "keys") == 0) {
+        char where[200];        // no row hands a canvas the keys: refused, never a stop that takes none
+        key_path(a, (int)node, where, sizeof where);
+        return refuse(a, UIT_E_KIND, "prop", where, "keys=: a compiled app's canvas takes no keys yet; leave it out");
+    }
     int r = uit_prop(a->e, (int)node, at(a, n), at(a, s), NULL);
     if (r >= 0 && node == a->page && strcmp(at(a, n), "title") == 0) {
         snprintf(a->title, sizeof a->title, "%s", at(a, s));
@@ -481,6 +489,8 @@ int32_t moy_uitree_wasm_node_action(void *x, int32_t node, int32_t act) {
     return r;
 }
 
+static owed_t *owe(app_t *a, int act, int m, int row, const int32_t *pev, const char *src, int placed);
+
 int32_t moy_uitree_wasm_build_end(void *x) {
     (void)x;
     APP(a);
@@ -490,6 +500,11 @@ int32_t moy_uitree_wasm_build_end(void *x) {
             uit_want_focus(a->e, a->refocus[a->refocus_due]);
         }
         a->refocus_due = -1;
+    }
+    int shown = r >= 0 && a->shown_due ? uit_page_shown(a->e) : -1;
+    a->shown_due = 0;
+    if (shown >= 0) {
+        owe(a, shown, -1, -1, NULL, "the page shown", 1);     // run before the frame that draws it
     }
     return r;
 }

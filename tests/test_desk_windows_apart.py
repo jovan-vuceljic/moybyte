@@ -1,13 +1,10 @@
 """Two windows on the desk keep apart: a window-bound app cart (Notes on a
 note page) and a shell app (the Terminal) over it. Each window's title strip
 shows its own title, icon and back, and its own pixels; the keyboard reaches
-the focused window alone -- typed text, an editor handle's keys, Q and E --
-and opening an app leaves the project another surface holds as it was."""
-
-import pytest
+the focused window alone -- typed text and an editor handle's keys -- and
+opening an app leaves the project another surface holds as it was."""
 
 from ws_helpers import build_desktop_ws, make_drv, open_cart, quiesce
-from test_app_ui import _open, _pmem
 
 DT = 1.0 / 30.0
 NOTE = ("story_ideas", "# Story ideas\n\n- [x] A dragon\n")
@@ -130,25 +127,3 @@ def test_opening_an_app_leaves_the_editors_project(tmp_path):
         _frame(drv)
     assert ws.editor_app.project.cart.get("title") == "Star Catcher"
     assert ws.wm._win_title(ws.wm.windows["menu"]) == "Editor · Star Catcher"
-
-
-@pytest.mark.parametrize("tier", ("python", "lua"))
-def test_q_and_e_step_the_tabs_of_the_focused_window_alone(tmp_path, tier):
-    ws = _open("tabs", tier, tmp_path, desk=True)
-    drv = make_drv(ws)
-    for _ in range(4):
-        _frame(drv)
-    assert _pmem(ws, 1) == [1]
-    term = ws.app("terminal")
-    ws.spine.open_app(term)
-    for _ in range(3):
-        _frame(drv)
-    _type(drv, "eeq")
-    assert term.face.line() == "eeq"
-    assert _pmem(ws, 1) == [1], "the Terminal's E stepped the app's tabs"
-    ws.wm.bring_to_front("desktop")
-    for _ in range(2):
-        _frame(drv)
-    _type(drv, "e")
-    assert _pmem(ws, 1) == [2]
-    assert term.face.line() == "eeq"

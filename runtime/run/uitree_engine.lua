@@ -30,13 +30,13 @@ local E_CHECK = -6
 local KINDS = { page = 1, group = 2, label = 3, info = 4, link = 5, button = 6, toggle = 7, rows = 8, dialog = 9,
                 seg = 10, slider = 11, field = 12, empty = 13, progress = 14, text_view = 15, scroll = 16, menu = 17,
                 item = 18, split = 19, switch = 22, case = 23, table = 24, col = 25, foot = 26, popover = 30,
-                canvas = 20, tabs = 21, cards = 27, card = 28, picture = 29, row = 32, panel = 39, rule = 41, note = 42, grid = 43,
-                bubble = 44, month = 45, toast = 46, cells = 47, stepper = 48, hints = 49 }
+                canvas = 20, tabs = 21, cards = 27, card = 28, picture = 29, row = 32, panel = 38, rule = 40, note = 41, grid = 42,
+                bubble = 43, month = 44, toast = 45, cells = 46, stepper = 47, hints = 48 }
 local BASE = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = ENUM, rowof = ROWOF, model = MODEL }
 local FIELD = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = TEXT }
 -- a prop whose value is a literal the dump prints as one (its Python repr)
 local LIT = { kind = 1, wrap = 1, face = 1, size = 1, align = 1, alone = 1, span = 1, arg = 1, grow = 1, max = 1,
-              secret = 1, commit = 1, look = 1, cur = 1, current = 1, check = 1, follow = 1, gutter = 1, filter = 1, dir = 1,
+              secret = 1, commit = 1, look = 1, cur = 1, current = 1, check = 1, follow = 1, snap = 1, gutter = 1, filter = 1, dir = 1,
               icons = 1, rule = 1, flow = 1 }
 local FIX = "leave it out of the page: the C engine refuses it by name"
 
@@ -50,6 +50,7 @@ local KEYS = {}                 -- the keys of the lowered page's nodes: a row's
                                 -- field "field", any other true
 local ROW_ACT = {}              -- a row's node's key -> the action it fires
 local DRAWS = {}                -- a canvas's node -> its draw
+local CANVAS_KEYS = {}          -- a canvas's key -> { its keys=, the model of the list it stands in or nil, its handler label }
 local ROWS = false              -- the lowered page lists rows (whose keys are data)
 local POINTERS = {}             -- each canvas of the lowered page a pointer is routed to: { node, key, its pointer= action, in a popover or a dialog }
 local READS_OF = {}             -- a canvas's node -> the states its draw may read (reads=), a set
@@ -317,7 +318,7 @@ local SHAPE = {
   col = { last = function(n) return { pair("text", n.a[1]) } end },
   split = { takes = { "dir", "sizes" }, last = function(n) return { pair("dir", n.o.dir), pair("sizes", n.o.sizes) } end },
   grid = { takes = { "cols", "rows" }, last = function(n) return { pair("cols", n.o.cols), pair("rows", n.o.rows) } end },
-  canvas = { takes = { "draw" }, last = function(n) return { pair("draw", "draw") } end },
+  canvas = { takes = { "draw", "keys" }, last = function(n) return { pair("draw", "draw"), pair("keys", n.o.keys and "keys") } end },
   tabs = { bind = true, takes = { "labels", "offered", "text" },
            last = function(n) return { pair("labels", n.o.labels), pair("text", n.o.text) } end },
   cards = { model = true },
@@ -376,6 +377,7 @@ local function lower_node(n, parent, path, model, modal)
   end
   if n.kind == "canvas" then
     DRAWS[me] = n.o.draw
+    if n.o.keys then CANVAS_KEYS[key] = { n.o.keys, model, "keys on canvas " .. q(key) } end
     if n.o.reads then
       local r = {}
       for _, name in ipairs(n.o.reads) do r[name] = true end
@@ -423,6 +425,7 @@ end
 
 local function lower(p)
   KEYS, ROW_ACT, ROWS, DRAWS, POINTERS, HELD, DRAWN, READS_OF = {}, {}, false, {}, {}, nil, {}, {}
+  CANVAS_KEYS = {}
   X:build_begin(string.format("%d %s", #stack, p.def.name):sub(1, 31))
   lower_node(p.root, -1, p.def.name)
   check(X:build_end(), "the page " .. q(p.def.name), p.def.at)
@@ -554,6 +557,35 @@ local function letters()
   end
 end
 
+-- The keys to the focused canvas's keys= (handed its row in a list's body, as
+-- its draw is), run as a handler: where it answers true it took them, and the
+-- page's frame and the actions' letters see none (uitree_c.py's _canvas_took)
+local function canvas_keys()
+  local f = R.focused
+  if not f or f == "" or not next(CANVAS_KEYS) then return false end
+  local got, rk = CANVAS_KEYS[f], nil
+  if not got then
+    local k
+    rk, k = f:match("^(.*)/([^/]*)$")
+    got = k and CANVAS_KEYS[k]
+  end
+  if not got then return false end
+  local fn, model, label, took = got[1], got[2], got[3], nil
+  if model then
+    local m = V[model]
+    for _, row in ipairs(m.rows) do
+      if tostring(row[m.key]) == rk then
+        took = I.as_handler(label, fn, frozen(row, "row " .. q(rk) .. " of " .. q(m.name), m.ty))
+      end
+    end
+  else
+    took = I.as_handler(label, fn)
+  end
+  if took ~= true then return false end
+  X:keys_taken()
+  return true
+end
+
 local ROLE_KEYS = { more = function() return btnp("y") or keyp(109) end }
 
 I.BACK.frame = function(p)
@@ -564,9 +596,10 @@ I.BACK.frame = function(p)
     LOWERED = p
     if p.refocus then X:want_focus(p.refocus); p.refocus = nil end
   end
+  local took = canvas_keys()
   committed()
   pointers()
-  letters()
+  if not took then letters() end
   local pf = R.pending_focus
   if pf then
     R.pending_focus = nil
@@ -581,12 +614,13 @@ I.BACK.frame = function(p)
   if r < 0 then fail("X01", "frame", "the C engine's frame found no run open", "a run", "none") end
   drain()
   R.focused = X:focused()
+  I.SYS.focus = R.focused or ""
   -- a role key: a row's action on the focused row that fires it, any other on the page; none
   -- while a field types
   local f = R.focused or ""
   for role, pressed in pairs(ROLE_KEYS) do
     local name = KEYMAP["role:" .. role]
-    if name and KEYS[f] ~= "field" and pressed() then
+    if name and not took and KEYS[f] ~= "field" and pressed() then
       local rk, nk = f:match("^(.*)/([^/]*)$")
       local m = ACTIONS[name].takes == "row" and nk and ROW_ACT[nk] == name and V[KEYS[nk]]
       if m then

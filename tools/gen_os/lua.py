@@ -54,11 +54,8 @@ def lua_fields(r):
 
 
 def check_lua(src):
-    """The door rows' Lua fields; a ui row's are the toolkit's Lua face's (gen_os
-    ui.py checks them)."""
+    """The door rows' Lua fields."""
     for r in src["rows"]:
-        if r["name"].startswith("ui."):
-            continue
         rets = r.get("lua_ret", {})
         rets = list(rets.values()) if isinstance(rets, dict) else [rets]
         if any(x not in LUA_RETS for x in rets) or r.get("out_shape", "names") not in OUT_SHAPES:

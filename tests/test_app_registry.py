@@ -85,10 +85,11 @@ def test_the_shell_registers_exactly_the_declared_apps(tmp_path):
     ws = build_ws(tmp_path)
     registered = [a.id for a in ws.app_layers]
     assert registered == [d["id"] for d in app_decls.APPS]
-    for d, app in zip(app_decls.APPS, ws.app_layers):
-        # `ws.app(id)`, how the shell and the tools address an app; no
-        # `<id>_app` attribute stands beside it
-        assert ws.app(d["id"]) is app
+    for i, d in enumerate(app_decls.APPS):
+        # `ws.app(id)`, how the shell and the tools address an app, builds
+        # it where its slot stood; no `<id>_app` attribute stands beside it
+        app = ws.app(d["id"])
+        assert ws.app_layers[i] is app and app.id == d["id"]
         assert not hasattr(ws, d["id"] + "_app")
 
 
@@ -169,3 +170,72 @@ def test_the_browser_shelf_is_the_boards():
     from its Appearance (Paint's wallpaper) with nothing failing; a cart that
     cannot run in a browser is a decision argued here, not a manifest line."""
     assert gdc.roster("web") == gdc.roster("device")
+
+
+# -- a boot builds no app: the declaration carries what it asks -------------
+
+def test_a_boot_builds_no_app_and_an_open_builds_the_one(tmp_path):
+    """Every declared app registers as its slot; the console's start builds
+    none, nor going home (which leaves every surface), Settings or the task
+    manager; opening one builds that one alone."""
+    from runtime.app_slot import AppSlot
+    from ws_helpers import device_frames
+    ws = build_ws(tmp_path)
+    device_frames(ws, 3)
+    for opener in (ws.open_settings, ws.open_tasks):
+        opener()
+        device_frames(ws, 3)
+        ws.home.go_home()
+        device_frames(ws, 2)
+    assert all(isinstance(a, AppSlot) for a in ws.app_layers)
+    ws.spine.open_app(ws.app_layers[[d["id"] for d in app_decls.APPS].index("calc")])
+    built = [a.id for a in ws.app_layers if not isinstance(a, AppSlot)]
+    assert built == ["calc"]
+
+
+def test_the_declaration_says_what_the_built_app_says(tmp_path):
+    """What boot reads off the declaration -- the title, the resize floor --
+    is what the app's class would give, so a declaration cannot drift from
+    its app."""
+    ws = build_ws(tmp_path)
+    for d in app_decls.APPS:
+        app = ws.app(d["id"])
+        assert app.TITLE == (d.get("name") or d["title"]), d["id"]
+        floor = getattr(app, "MIN", None)
+        if floor is None:
+            lay = getattr(app, "layout", None)
+            if getattr(lay, "MIN_W", None) is not None:
+                floor = (int(lay.MIN_W), int(lay.MIN_H))
+        if floor is not None:           # (else the declaration's is the only one: Calc's)
+            assert d.get("min_size") == tuple(floor), d["id"]
+
+
+def test_each_app_claims_its_own_seed_cart_alone(tmp_path):
+    ws = build_ws(tmp_path)
+    for d in app_decls.APPS:
+        app = ws.app_layers[[e["id"] for e in app_decls.APPS].index(d["id"])]
+        mine = [c for c in ws.carts.all if app.is_app(c)]
+        assert [c["title"] for c in mine] == [d["title"]], d["id"]
+        copy = dict(mine[0], path="/carts/local.copy.moy")
+        assert not app.is_app(copy)
+
+
+def test_a_boot_imports_no_app_module(tmp_path):
+    """The console's start on the host, in a process of its own: no app's
+    module is imported until the app first runs."""
+    import subprocess
+    mods = sorted(d["entry"].partition(":")[0] for d in app_decls.APPS)
+    code = (
+        "import sys, pathlib\n"
+        "sys.path[:0] = [%r, %r]\n"
+        "import conftest\n"
+        "from ws_helpers import build_ws, device_frames\n"
+        "ws = build_ws(pathlib.Path(%r), sys_size=(320, 240))\n"
+        "device_frames(ws, 5)\n"
+        "print(sorted(m.rpartition('.')[2] for m in sys.modules))\n"
+        % (os.path.join(ROOT, "tests"), ROOT, str(tmp_path)))
+    out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True,
+                         text=True, timeout=300)
+    assert out.returncode == 0, out.stderr[-3000:]
+    loaded = set(eval(out.stdout.strip().splitlines()[-1]))
+    assert loaded.isdisjoint(mods), sorted(loaded & set(mods))

@@ -35,7 +35,6 @@ Themes are the store's theme packages, whose rows open the Appearance app.
 
 import uitree as ui
 import uitree_app
-from moy_store_base import builtin_name
 from picture_copies import PictureCopies
 from app_shell import ListShellApp
 import text_modes as _modes
@@ -309,18 +308,6 @@ def files_page():
                 ui.link("resend", "{.note}", icon="game", label="{.label}")
 
 
-def is_app(cart):
-    """True only for the shipped Files identity, not a renamed or copied
-    cart."""
-    if (not cart or cart.get("title") != "Files"
-            or "files" not in (cart.get("permissions") or ())):
-        return False
-    path = cart.get("path")
-    if not path:                 # embedded fallback cart (no writable store)
-        return int(cart.get("version", 0)) >= 1
-    return builtin_name(path) == "moybyte.files.moy"
-
-
 def _inside(fn):
     """A method that writes the page's state: run in a handler's run, or in
     one of its own when the console asks (a test, the router)."""
@@ -329,16 +316,16 @@ def _inside(fn):
     return run
 
 
-# The shell roles this app uses (runtime/shell/app_context.py). `nav` carries
+# The shell roles this app uses, which its manifest's `needs` declares
+# (runtime/shell/app_context.py): `nav` carries
 # the app-to-app jumps the router takes (a drawing opens in Paint, a note on
 # the text page, a project in the Editor). WALL, GAME and USE copy a drawing
 # into the backdrop and into a project (`carts`, `wallpaper`:
 # runtime/apps/picture_copies.py), and `artwork` follows a renamed drawing
 # Paint has open.
-NEEDS = ("files", "nav", "artwork", "carts", "wallpaper")
 
 
-class FilesAppLayer(uitree_app.app_layer("files", "Files", files_page, is_app, needs=NEEDS),
+class FilesAppLayer(uitree_app.app_layer("files", "Files", files_page),
                     ListShellApp):
     """The Files app: the page's engine, and what its handlers ask of the
     console (the store, the router, the verbs)."""

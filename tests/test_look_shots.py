@@ -60,18 +60,6 @@ def test_a_run_puts_the_pins_back(tmp_path):
     assert (cover_cache._COVER_SLICE_MS, g._CLOCK) == before
 
 
-def test_parts_draws_the_settings_scenes_with_the_parts_sheet(tmp_path):
-    L.run(str(tmp_path / "shell"), ["moy-light_handheld_settings"], quiet=True)
-    L.run(str(tmp_path / "parts"), ["moy-light_handheld_settings"], quiet=True, parts=True)
-    index = (tmp_path / "parts" / "index.txt").read_text()
-    assert "the parts sheet's settings page" in index
-    a = Image.open(tmp_path / "shell" / "moy-light_handheld_settings.render.png")
-    b = Image.open(tmp_path / "parts" / "moy-light_handheld_settings.render.png")
-    assert a.tobytes() != b.tobytes(), "--parts draws the sheet, not the shell's screen"
-
-
-# -- the kit's own scenes, checks and audit (round 2) -------------------------------
-
 def test_every_kit_scene_has_a_config_and_a_kind():
     table = L._kit_table()
     assert table
@@ -217,18 +205,18 @@ def test_a_long_press_that_opens_nothing_fails_the_run(tmp_path, monkeypatch):
 
 def test_the_audit_measures_round_3s_pairs(tmp_path):
     """The pairs round 3 found by eye are measured in the scenes that show
-    them: the Mode segment on a focus plate (R3-04), the focused desk chip's
+    them: the desk Appearance's segments on a focus plate (R3-04), the focused desk chip's
     label as text (R3-06), the Name row's mark against the row (R3-03) and
     the desk Calc's backspace against a digit (R3-09); a row under its floor
     is a FLAG unless an open question owns it."""
-    L.run(str(tmp_path), ["contrast-dark_handheld_parts-appearance_focus-mode",
+    L.run(str(tmp_path), ["contrast-dark_desktop_appearance_focus-seg",
                           "moy-dark_desktop_calc", "moy-dark_handheld_settings_focus-name"],
           quiet=True, kit=True, only_kit=True, audit_csv=True)
     kit = tmp_path / "kit"
 
     def rows(name):
         return [ln.split(",") for ln in (kit / (name + ".audit.csv")).read_text().splitlines()[1:]]
-    for name, pair in (("contrast-dark_handheld_parts-appearance_focus-mode",
+    for name, pair in (("contrast-dark_desktop_appearance_focus-seg",
                         "focused row part vs plate"),
                        ("moy-dark_desktop_calc", "bar chip label vs plate"),
                        ("moy-dark_desktop_calc", "desk backspace ink height vs digit cap"),

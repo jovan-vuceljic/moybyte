@@ -414,13 +414,11 @@ SIGS = (
     ("moy_ui_api_tool", [c.c_void_p, c.POINTER(moy_ui_sink_t), moy_ui_span_t, moy_ui_span_t,
      c.c_void_p], c.c_int),
     ("moy_ui_api_page_title", [c.c_void_p], c.c_char_p),
-    ("moy_ui_api_bar_tap", [c.c_void_p, c.c_int], None),
     ("moy_ui_api_back", [c.c_void_p, c.c_int], c.c_int),
     ("moy_ui_api_cancel", [c.c_void_p, c.c_int], c.c_int),
     ("moy_ui_run_cancel", [c.c_int], c.c_int),
     ("moy_ui_run_back", [c.c_int], c.c_int),
     ("moy_ui_run_page_title", [], c.c_char_p),
-    ("moy_ui_run_bar_tap", [c.c_int], None),
     ("moy_ui_api_paste", [c.c_void_p, c.c_char_p, c.c_size_t], None),
     ("moy_ui_run_paste", [c.c_char_p, c.c_size_t], None),
     ("moy_ui_run_steps", [c.c_int32, c.c_int32], None),
@@ -802,10 +800,6 @@ def install(m, lib, ctx_, sink, span0, over, box_of):
         r_ = lib.moy_ui_api_page_title(p_)
         return None if r_ is None else r_.decode("utf-8", "replace")
     m.api_page_title = api_page_title
-    def api_bar_tap(ctx, i):
-        p_, k_ = ctx_(ctx)
-        lib.moy_ui_api_bar_tap(p_, int(i))
-    m.api_bar_tap = api_bar_tap
     def api_back(ctx, take):
         p_, k_ = ctx_(ctx)
         return bool(lib.moy_ui_api_back(p_, 1 if take else 0))
@@ -824,9 +818,6 @@ def install(m, lib, ctx_, sink, span0, over, box_of):
         r_ = lib.moy_ui_run_page_title()
         return None if r_ is None else r_.decode("utf-8", "replace")
     m.api_run_page_title = api_run_page_title
-    def api_run_bar_tap(i):
-        lib.moy_ui_run_bar_tap(int(i))
-    m.api_run_bar_tap = api_run_bar_tap
     def api_paste(ctx, text):
         p_, k_ = ctx_(ctx)
         text_b = bytes(text)

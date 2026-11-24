@@ -21,7 +21,7 @@
 #include "moy_theme.h"
 #include "moy_str.h"
 #include "moy_ui_text.h"
-#include "moy_ui_wasm.h"
+#include "moy_ui_run.h"
 
 #define NAMES_CAP (MOY_THEME_PARTS > MOY_THEME_ROLES ? MOY_THEME_PARTS : MOY_THEME_ROLES)
 
@@ -2822,90 +2822,6 @@ static mp_obj_t ui_text_tones(mp_obj_t tones) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(ui_text_tones_obj, ui_text_tones);
 
-// api_bar(ctx, cv, look, title, tools, off) -> the tool the host's bar
-// activated (from 0), -2 its way back, -1 none
-static mp_obj_t ui_api_bar(size_t n_args, const mp_obj_t *a) {
-    moy_ui_ctx_t *c = ctx_of(a[0]);
-    moy_ui_sink_t s;
-    sink_of(&s, a[1], a[2]);
-    mp_buffer_info_t b;
-    uint8_t ob[OPTS_BUF];
-    opts_of(a[4], ob, &b);
-    // `back` apart from the bits: MOY_UI_BAR_BACK is no small int on a board.
-    uint32_t off = (uint32_t)mp_obj_get_int_truncated(a[5]);
-    if (n_args > 6 && mp_obj_is_true(a[6])) {
-        off |= MOY_UI_BAR_BACK;
-    }
-    return mp_obj_new_int(moy_ui_api_bar(c, &s, span_of(a[3]), (const uint8_t *)b.buf, b.len,
-                                         off));
-}
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(ui_api_bar_obj, 6, 7, ui_api_bar);
-
-// A lent bar as api_bar_lent answers it.
-static mp_obj_t bar_lent_tuple(const char *title, const int16_t *slots, int n, uint32_t off,
-                               const char *chip) {
-    mp_obj_t sl[MOY_UI_API_BAR];
-    for (int i = 0; i < n; i++) {
-        sl[i] = MP_OBJ_NEW_SMALL_INT(slots[i]);
-    }
-    // The host's bar asks every frame it draws, and the bar lent is the last
-    // one's as a rule: the answer it had, where it says the same, allocates
-    // nothing.
-    mp_obj_t last = MP_STATE_VM(moy_ui_bar_last);
-    if (last != MP_OBJ_NULL && gc_nbytes(MP_OBJ_TO_PTR(last)) != 0
-            && mp_obj_is_type(last, &mp_type_tuple)) {
-        mp_obj_tuple_t *lt = MP_OBJ_TO_PTR(last);
-        if (lt->len == 4 && mp_obj_is_str(lt->items[0]) && mp_obj_is_str(lt->items[3])
-                && mp_obj_is_type(lt->items[1], &mp_type_tuple)
-                && strcmp(mp_obj_str_get_str(lt->items[0]), title) == 0
-                && strcmp(mp_obj_str_get_str(lt->items[3]), chip) == 0
-                && mp_obj_get_int_truncated(lt->items[2]) == (mp_int_t)off) {
-            mp_obj_tuple_t *ls = MP_OBJ_TO_PTR(lt->items[1]);
-            int k = 0;
-            while (k < n && (size_t)k < ls->len && ls->items[k] == sl[k]) {
-                k++;
-            }
-            if (k == n && ls->len == (size_t)n) {
-                return last;
-            }
-        }
-    }
-    mp_obj_t t[4] = {mp_obj_new_str(title, strlen(title)), mp_obj_new_tuple(n, sl),
-                     mp_obj_new_int_from_uint(off), mp_obj_new_str(chip, strlen(chip))};
-    last = mp_obj_new_tuple(4, t);
-    MP_STATE_VM(moy_ui_bar_last) = last;
-    return last;
-}
-
-// api_bar_lent(ctx) -> (title, slots, off, chip) the frame drawn last lent
-// its bar, or None
-static mp_obj_t ui_api_bar_lent(mp_obj_t ctx) {
-    const char *title = NULL;
-    int16_t slots[MOY_UI_API_BAR];
-    int n = 0;
-    uint32_t off = 0;
-    if (!moy_ui_api_bar_lent(ctx_of(ctx), &title, slots, &n, &off)) {
-        return mp_const_none;
-    }
-    int at = -1;
-    return bar_lent_tuple(title, slots, n, off, moy_ui_api_bar_chip(ctx_of(ctx), &at));
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_bar_lent_obj, ui_api_bar_lent);
-
-// api_run_bar_lent() -> api_bar_lent over the running cart's own context, a
-// Lua, compiled, WASI or native app's (moy_ui_run_bar_lent)
-static mp_obj_t ui_api_run_bar_lent(void) {
-    const char *title = NULL, *chip = "";
-    int16_t slots[MOY_UI_API_BAR];
-    int n = 0;
-    uint32_t off = 0;
-    if (!moy_ui_run_bar_lent(&title, slots, &n, &off, &chip)) {
-        return mp_const_none;
-    }
-    return bar_lent_tuple(title, slots, n, off, chip);
-}
-static MP_DEFINE_CONST_FUN_OBJ_0(ui_api_run_bar_lent_obj, ui_api_run_bar_lent);
-
 // api_busy(ctx) -> whether the frame drawn last owes the next or a page of
 // the context flings or glides: api_owes or api_moving, in one call
 static mp_obj_t ui_api_busy(mp_obj_t ctx) {
@@ -3076,18 +2992,6 @@ static mp_obj_t ui_text_runs(mp_obj_t line, mp_obj_t syn) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(ui_text_runs_obj, ui_text_runs);
 
-// wasm_rows() -> the public UI API's rows a compiled app imports ("ui_page", ...),
-// in the role table's order: what this image serves (moy_ui_wasm.h).
-static mp_obj_t ui_wasm_rows(void) {
-    mp_obj_t items[MOY_UI_WASM_ROWS];
-    for (int i = 0; i < MOY_UI_WASM_ROWS; i++) {
-        const char *n = moy_ui_wasm_name(i);
-        items[i] = mp_obj_new_str(n, strlen(n));
-    }
-    return mp_obj_new_tuple(MOY_UI_WASM_ROWS, items);
-}
-static MP_DEFINE_CONST_FUN_OBJ_0(ui_wasm_rows_obj, ui_wasm_rows);
-
 static mp_obj_t ui_calls(void) {
     return mp_obj_new_int_from_uint(moy_ui_calls());
 }
@@ -3177,7 +3081,6 @@ static const mp_rom_map_elem_t moy_ui_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_icons_use), MP_ROM_PTR(&ui_icons_use_obj) },
     { MP_ROM_QSTR(MP_QSTR_moy_use), MP_ROM_PTR(&ui_moy_use_obj) },
     { MP_ROM_QSTR(MP_QSTR_s), MP_ROM_PTR(&ui_s_obj) },
-    { MP_ROM_QSTR(MP_QSTR_wasm_rows), MP_ROM_PTR(&ui_wasm_rows_obj) },
     MOY_FACE_MOY_UI_ROWS
     { MP_ROM_QSTR(MP_QSTR_api_begin), MP_ROM_PTR(&ui_api_begin_obj) },
     { MP_ROM_QSTR(MP_QSTR_api_label), MP_ROM_PTR(&ui_api_label_obj) },
@@ -3186,9 +3089,6 @@ static const mp_rom_map_elem_t moy_ui_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_api_table), MP_ROM_PTR(&ui_api_table_obj) },
     { MP_ROM_QSTR(MP_QSTR_api_busy), MP_ROM_PTR(&ui_api_busy_obj) },
     { MP_ROM_QSTR(MP_QSTR_api_table_rows), MP_ROM_PTR(&ui_api_table_rows_obj) },
-    { MP_ROM_QSTR(MP_QSTR_api_bar), MP_ROM_PTR(&ui_api_bar_obj) },
-    { MP_ROM_QSTR(MP_QSTR_api_bar_lent), MP_ROM_PTR(&ui_api_bar_lent_obj) },
-    { MP_ROM_QSTR(MP_QSTR_api_run_bar_lent), MP_ROM_PTR(&ui_api_run_bar_lent_obj) },
     { MP_ROM_QSTR(MP_QSTR_api_focus), MP_ROM_PTR(&ui_api_focus_obj) },
     { MP_ROM_QSTR(MP_QSTR_api_shift_drawn), MP_ROM_PTR(&ui_api_shift_drawn_obj) },
     { MP_ROM_QSTR(MP_QSTR_api_band), MP_ROM_PTR(&ui_api_band_obj) },

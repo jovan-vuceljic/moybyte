@@ -267,10 +267,10 @@ typedef struct { const uint8_t *p; uint16_t n; } moy_ui_span_t;
 // A sink: where a primitive draws, always through a canvas row (`dst`). ROW:
 // a row drawn as the shell's apps draw, in the faces and icons of the look
 // -- a canvas row of the glass, named by its CANVAS handle (moy_ui_sink_row
-// checks it), or a responsive app's run canvas (moy_ui_wasm.h). RUN: a
+// checks it), or a responsive app's run canvas (moy_ui_run.h). RUN: a
 // run's libmoy canvas lent as a row of its own, drawn as a cart's (petme128,
-// no icon masks); the RUN face saves, resets and restores its draw state
-// around the call.
+// no icon masks); the run's context saves, resets and restores its draw
+// state around the frame.
 // `fs` is the scale text draws at; `look` the look its colours resolve in;
 // `cart` 1 inside the app-cart boundary (moy_ui_cart_text); `shown` the
 // focus word its marks draw under (moy_ui_marks_active: the console's for a
@@ -652,6 +652,10 @@ typedef struct {
 // label, for a caller's own.
 int moy_ui_button(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags, int interact,
                   const moy_ui_button_t *k, int phase);
+// Button b's focus ring alone, where its theme's focus mark is a ring (0 where
+// it is not): its foot drawn again over the row drawn flush under it.
+int moy_ui_button_ring(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags, int interact,
+                       const moy_ui_button_t *k);
 int moy_ui_button_x(moy_ui_box_t b, int flags, moy_ui_span_t label, int fs);
 // The shell's bar item on box b (a cell the bar's height across): no plate;
 // its icon (F_ICON, k->icon or k->glyph), its ink centred in the box, at the
@@ -866,7 +870,7 @@ int moy_ui_dragtap_frame(moy_ui_dragtap_t *t, moy_ui_scroll_t *s, const int32_t 
 
 // -- the parts (moy_ui_parts.c; docs/history/look_2026-10.md step 12) --------------------------
 //
-// The rows the public UI API's verbs draw (docs/ui_api_2026-10.md): a label
+// The rows the public UI API's verbs draw (docs/history/ui_api_2026-10.md): a label
 // and, at the right, a value of one KIND -- an info's text, a link's text and
 // chevron, a cycle's text between chevrons, a segmented control's options, a
 // swatch picker's dots, a toggle's On/Off word and switch, a slider's number
@@ -1268,7 +1272,7 @@ int moy_ui_caption(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t t, int 
 // A rule across band `b` (inside the group pad), one unit thick, centred in
 // its height: what parts a menu from the rows above it in a card.
 int moy_ui_rule(const moy_ui_sink_t *s, moy_ui_box_t b, int fs, int desk);
-// The input in use (docs/ui_api_2026-10.md, "Hints"): a desk keyboard, the
+// The input in use (docs/history/ui_api_2026-10.md, "Hints"): a desk keyboard, the
 // T-Deck's keyboard, a gamepad, or touch. The console sets it from the last
 // input used, among the inputs its board declares; it starts at the desk
 // keyboard. The hints draw the keys of the hint input: the input set, until a
@@ -1381,71 +1385,15 @@ const moy_ui_display_t *moy_ui_display(void);
 int moy_ui_well(const moy_ui_sink_t *s, moy_ui_box_t b, int flags, int fill, int fs,
                 int desk);
 
-// -- the theme as a block (a toolkit linked into a program) -------------------------
+// -- the console's fonts --------------------------------------------------------------
 //
-// What every instance reads and only the console writes -- the looks, the
-// shape and the button leaves, the depth, its marks and keycaps, the fonts
-// and icons, the keycaps' input, the text view's word table and tones, the
-// theme's block colours and role sheet -- as one block: a copy of the
-// toolkit linked into a program (a native module, a WASI one) holds none of
-// it until it installs one. A record is the state as the setters left it,
-// resolved, so a copy installs it with none of the theme packages it was
-// resolved from. Fonts and icon masks are moy_text ids, which name a font
-// only inside the image that loaded it.
-//
-// The console's setters move a generation around their writes
-// (moy_ui_theme_write: odd while one writes, even after), and a write waits
-// for the pulls copying when it begins, so a pull from another task copies
-// the records of one even generation or answers none. moy_ui_theme_pull writes the block into
-// `buf` and answers its generation where the theme is past `have`, else 0:
-// the theme has not moved, a setter was writing meanwhile (the next frame's
-// pull takes it), or `cap` is short of moy_ui_theme_size(). An instance
-// with a `pull` (moy_ui_api.h) asks it at each begin and installs what it
-// answers, so a theme change reaches its frames at the next begin, never
-// inside a frame.
-#define MOY_UI_THEME_MAGIC 0x3174756du     // "mut1"
-uint32_t moy_ui_theme_gen(void);
-size_t moy_ui_theme_size(void);
-uint32_t moy_ui_theme_pull(uint32_t have, void *buf, size_t cap);
-// A font the block names (a role's, an icon set's mask), console side: its
-// file's length, written into `buf` where `cap` holds it, while the theme
-// is at generation `gen` (no write runs while it copies, as a pull's); 0
-// for a font no slot holds or a theme that moved (the next generation's
-// pull asks again).
-uint32_t moy_ui_theme_font(uint32_t gen, uint32_t font, void *buf, size_t cap);
-// moy_font_free and moy_font_reset (moy_text.h) as a theme write: a pull or
-// a font's copy on another task is never reading the bytes they free. The
-// console frees its fonts through these.
+// moy_font_free and moy_font_reset (moy_text.h) as the toolkit's bindings
+// carry them: the console frees its fonts through these.
 int moy_ui_font_free(uint32_t font);
 void moy_ui_font_reset(void);
-// The words of the toolkit's records that hold font ids (each role's, then
-// the icon set's two masks), copy side: an install's fonts are the
-// console's ids, which a copy replaces with fonts of its own
-// (moy_ui_api.h's instance `font_pull`). Answers how many, into ids.
-#define MOY_UI_THEME_FONTS (MOY_UI_FONT_ROLES + 2)
-int moy_ui_theme_font_ids(uint32_t *ids[MOY_UI_THEME_FONTS]);
-// A block installed: MOY_UI_OK; MOY_UI_BAD for one cut short or of another
-// layout (a toolkit built otherwise), which installs nothing.
-int moy_ui_theme_put(const void *buf, size_t n);
 // The theme's block colours as a canvas row's entries 64..127 hold them
-// (moy_canvas.h, the build's wire order): what a copy's own surface row
-// takes after an install.
+// (moy_canvas.h, the build's wire order): what a run's surface row takes
+// (moy_ui_run.c).
 void moy_ui_theme_pal(uint16_t out[64]);
-// A setter of the shared state, around its writes: 1 before, 0 after; the
-// console's task alone writes, so they nest.
-void moy_ui_theme_write(int begin);
-// The block's records, each file's own: one at `p`, or the block a static
-// pointer (`heap`) holds (NULL there: none held), `n` bytes.
-typedef struct {
-    void *p;
-    void **heap;
-    uint32_t n;
-} moy_ui_rec_t;
-int moy_ui_recs_ui(moy_ui_rec_t *r);       // moy_ui.c
-int moy_ui_recs_depth(moy_ui_rec_t *r);    // moy_ui_depth.c
-int moy_ui_recs_parts(moy_ui_rec_t *r);    // moy_ui_parts.c
-int moy_ui_recs_text(moy_ui_rec_t *r);     // moy_ui_text.c
-int moy_ui_recs_tones(moy_ui_rec_t *r);    // moy_ui_api_text.c
-int moy_ui_recs_theme(moy_ui_rec_t *r);    // moy_theme.c
 
 #endif // MOY_UI_H

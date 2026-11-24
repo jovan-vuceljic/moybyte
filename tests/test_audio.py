@@ -425,7 +425,7 @@ def test_cart_without_audio_backend_still_runs(tmp_path, monkeypatch):
     # harmless no-ops, and the bank model is still there for the editor.
     from runtime import audio_session, console, moy_carts
     monkeypatch.setattr(audio_session, "_NA", [False])
-    from runtime.host_canvas import make_canvas as Canvas
+    from runtime.host_canvas import make_system_canvas as Canvas   # the system canvas a console draws on
     from runtime.input import InputState
     from runtime import host_app
     root = str(tmp_path / "carts")

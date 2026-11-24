@@ -1,6 +1,6 @@
 {
   "format": "moy-1",
-  "version": 2,
+  "version": 3,
   "title": "Moy Mesh",
   "id": "moymesh",
   "runtime": "lua",
@@ -8,6 +8,9 @@
   "sources": [
     "mesh.lua",
     "main.lua"
+  ],
+  "extensions": [
+    "moybyte.uitree"
   ],
   "description": "Text messages on the LoRa radio: Meshtastic's channels, and direct messages to a node under its key. Works with Meshtastic.",
   "moybyte": {

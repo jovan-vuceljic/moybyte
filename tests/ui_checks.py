@@ -22,7 +22,7 @@ WHOLE, ELLIPSIS, CUT = 0, 1, 2          # moy_ui.h's MOY_UI_FIT_*
 # moy_ui_hints): any key of the desk keyboard; the T-Deck's keyboard (its
 # letters, Shift, Sym, Alt, Mic, Del, Space, enter and the trackball); the
 # browser's on-screen gamepad (the stick, A, B and its menu key, Start;
-# docs/ui_api_2026-10.md, "Hints"). A hint that spells another out names a
+# docs/history/ui_api_2026-10.md, "Hints"). A hint that spells another out names a
 # key the board does not have.
 _TDECK = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") | {
     "Shift", "Sym", "Alt", "Mic", "Del", "Space", "space", "enter", "left", "right", "up", "down",
@@ -39,19 +39,18 @@ INPUTS = ("keys", "tdeck", "pad", "touch")     # moy_ui.h's MOY_UI_INPUT_*
 
 # The keys an action's row names that its input lacks, each with why: the
 # gamepad column is a physical pad's, whose shoulders (tabs) and Y (more)
-# the browser's on-screen pad has none of (docs/ui_api_2026-10.md, "Hints";
+# the browser's on-screen pad has none of (docs/history/ui_api_2026-10.md, "Hints";
 # no board declares a physical pad, #98).
 ACT_BEYOND = {"pad": {"L", "R", "Y"}}
 
 # Stops that hold other stops: one's box over another's is nesting, not
 # overlap.
 HOLDERS = {"rows", "scroll", "text_view", "cards", "table", "panes", "pane", "split", "group",
-           "text_editor", "canvas", "legacy", "lent"}
+           "text_editor", "canvas", "lent"}
 
-# The surfaces not checked yet, each named with why: a page whose body is
-# still drawn by the toolkit's verbs beside the engine (a `legacy` or
-# `lent` node), whose texts and stops the engine does not report. The
-# clean cut empties it. Keyed by the app's module (`name`'s first word).
+# The surfaces not checked yet, each named with why: a page whose body the
+# engine does not report (its texts and stops). Keyed by the app's module
+# (`name`'s first word); empty, and a surface added here says why.
 EXEMPT = {}
 
 # The smallest stop a finger takes under touch, at the font scale: a

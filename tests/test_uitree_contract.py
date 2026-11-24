@@ -71,11 +71,12 @@ def python_facts():
         if callable(fn) and "N04" not in inspect.getsource(fn):
             retired_live.add(v)
     verbs = {n for n in dir(U) if callable(getattr(U, n)) and not n.startswith("_")}
+    objects = {n for n in TABLE["verbs"] if hasattr(U, n)}        # a verb that is an object (ui.pictures)
     if hasattr(U, "sys"):
         verbs.add("sys")
     return {"codes": _codes(PY_FILES), "kinds": kinds, "common": {"shown"}, "action": action, "hook": hook,
             "page": kinds["page"], "takes": set(U.TAKES), "roles": set(U.ROLES), "shell_roles": set(),
-            "verbs": verbs, "retired_live": retired_live, "app": set(U.APP_FIELDS)}
+            "verbs": verbs, "objects": objects, "retired_live": retired_live, "app": set(U.APP_FIELDS)}
 
 
 def lua_facts():
@@ -160,7 +161,8 @@ def differences(f, lang):
         out.append("role not in the table: %s" % r)
     for r in sorted(app_roles - f["roles"]):
         out.append("role missing: L%s %s" % (roles[r]["level"], r))
-    verbs = dict(TABLE["verbs"], **{k: d["level"] for k, d in kinds.items() if "made_by" not in d})
+    verbs = dict({v: d["level"] for v, d in TABLE["verbs"].items()},
+                 **{k: d["level"] for k, d in kinds.items() if "made_by" not in d})
     for v in sorted(set(verbs) - f["verbs"]):
         out.append("verb missing: L%s %s" % (verbs[v], v))
     for v in sorted(f["retired_live"]):
@@ -219,6 +221,8 @@ def not_built_marks(f):
             mark("%s prop %s" % (name, p), pd, p in f[name])
     for t, d in TABLE["takes"].items():
         mark("takes " + t, d, t in f["takes"])
+    for v, d in TABLE["verbs"].items():
+        mark("verb " + v, d, v in f["verbs"] or v in f.get("objects", ()))
     for r, d in TABLE["roles"].items():
         if d["owner"] == "app":
             mark("role " + r, d, r in f["roles"])

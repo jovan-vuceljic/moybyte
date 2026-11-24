@@ -101,17 +101,18 @@ def test_every_settings_toggle_is_classified():
 
 
 def test_every_system_app_that_keeps_prefs_has_its_namespace_listed():
-    """A system app's prefs rows are `<ns>_<key>`, its ns its PREFS_NS or its
-    id: one that takes the prefs role must be named in SYSTEM_PREFS_NS, or its
-    rows stay on each console without anybody having decided so."""
-    import importlib
+    """A system app's prefs rows are `<ns>_<key>`, its ns its declaration's
+    prefs_ns or its id: one that takes the prefs role must be named in
+    SYSTEM_PREFS_NS, or its rows stay on each console without anybody having
+    decided so."""
     from runtime.app_decls import APPS
+    n = 0
     for app in APPS:
-        mod, cls = app["entry"].split(":")
-        k = getattr(importlib.import_module("runtime." + mod), cls)
-        if "prefs" in tuple(getattr(k, "NEEDS", ()) or ()):
-            ns = getattr(k, "PREFS_NS", None) or app["id"]
+        if "prefs" in app["needs"]:
+            n += 1
+            ns = app.get("prefs_ns") or app["id"]
             assert ns in moy_sync.SYSTEM_PREFS_NS, (app["id"], ns)
+    assert n
 
 
 # -- the pull ------------------------------------------------------------------

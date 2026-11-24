@@ -17,7 +17,7 @@
 #   -- the halves re-exported         ui_scroll's ScrollRegion, ui_host's AppHost and Hold, ui_cover's covers, ui_font's print font
 """The toolkit's engine layer: the rect-taking widgets under the public UI API.
 
-`runtime/toolkit/ui.py` is the public UI API (docs/ui_api_2026-10.md), the verbs every
+`runtime/toolkit/ui.py` is the public UI API (docs/history/ui_api_2026-10.md), the verbs every
 app and cart draws with; this module is what lies under them and what the
 chrome keeps (§7 there): the rect-taking widgets -- buttons, rows, cells, tab
 rows, status rows, panels -- the marks (`focus`, `current`), the theme's shape, depth and
@@ -538,8 +538,7 @@ def run_look(near, th):
     """Put `near`, the live theme's nearest MOY64 tokens, in a run's look, the
     one a game's or a fixed app's page draws in on a Lua, compiled, WASI or
     native run, and `th`, the live theme's own, in a responsive app's
-    (moy_ui.h's MOY_UI_LOOK_APP): the theme block carries both to a copy of
-    the toolkit linked into a program (moy_ui.h's moy_ui_theme_pull)."""
+    (moy_ui.h's MOY_UI_LOOK_APP)."""
     _C.look(_LOOK_RUN, _pack(near))
     _C.look(_LOOK_APP, _pack(th))
 
@@ -1670,7 +1669,7 @@ def mark_reach(item="cell"):
     return _C.mark_reach(_MARK_KIND[item])
 
 
-# -- the public UI API's host side (docs/ui_api_2026-10.md) ----------------------
+# -- the public UI API's host side (docs/history/ui_api_2026-10.md) ----------------------
 #
 # runtime/toolkit/ui.py's verbs draw into UI_TARGET: the running app's context (its
 # focus, the stops its last frame drew, each id's kept state: bytes it keeps
@@ -1687,6 +1686,13 @@ _KEY_EDGE = 16                          # ... and MOY_UI_KEY_EDGE
 _TAP = 8                                # ... and MOY_UI_TAP
 _APP_SHIFT = 8                          # moy_ui_api.h's MOY_UI_APP_SHIFT
 UI_SIZE = _C.api_size()
+
+
+def page_end():
+    """The end of the page the frame drew, after its last row: where its rows
+    run on below what shows, a fade at its foot says there is more."""
+    t = UI_TARGET
+    _C.api_end(t[0], t[1], t[2])
 
 
 _WHOLE = [None]                         # ui_frame's last whole-canvas rect
@@ -1868,6 +1874,21 @@ def ui_context():
     return bytearray(UI_SIZE)
 
 
+_PASSIVE = [None]               # the passive passes' one context (`passive_frame`)
+
+
+def passive_frame(cv, th, rect, desk):
+    """Begin a frame of a page drawn with no input and no focus (a
+    window's strip, the notices) on the one context such passes share. Its
+    begin keeps no stop, focus or kept state of a pass before it for the
+    next: a page that needs any (the bar's focus walk, a field's edit, a
+    host's buffers) holds a context of its own."""
+    ctx = _PASSIVE[0]
+    if ctx is None:
+        ctx = _PASSIVE[0] = ui_context()
+    return ui_frame(ctx, cv, th, rect=rect, desk=desk, elsewhere=True)
+
+
 def ui_frame(ctx, cv, th, rect=None, inp=None, desk=False, window=False, app=None,
              elsewhere=False, edge=False):
     """Begin context `ctx`'s frame on canvas `cv` under theme `th`: a page
@@ -1911,7 +1932,7 @@ def ui_frame(ctx, cv, th, rect=None, inp=None, desk=False, window=False, app=Non
 
 
 # The context of the running cart's own frames, a Lua, compiled, WASI or native
-# app's (native/moy_ui/moy_ui_run.c's), as `bar_lent` and `bar_tap` take it.
+# app's (native/moy_ui/moy_ui_run.c's), as `page_title` takes it.
 RUN_UI = "run"
 
 
@@ -1921,36 +1942,6 @@ def page_title(ctx):
     none."""
     got = _C.api_run_page_title() if ctx is RUN_UI else _C.api_page_title(ctx)
     return got or ""
-
-
-def bar_lent(ctx):
-    """What the app whose context is `ctx` (RUN_UI: the running cart's own)
-    lent its bar in the frame it drew last (`ui.bar`): (title, icon slots,
-    half-strength bits, back, chip), or None; `chip` the words of the tool
-    that names no icon (its slot -1), "" for none."""
-    got = _C.api_run_bar_lent() if ctx is RUN_UI else _C.api_bar_lent(ctx)
-    if got is None:
-        return None
-    last = _BAR_LENT
-    if last[0] is got:                  # the module's answer is the last one's
-        return last[1]
-    title, slots, off, chip = got
-    last[0] = got
-    last[1] = (title, slots, off & 0x3F, bool(off & 0x80000000), chip)
-    return last[1]
-
-
-_BAR_LENT = [None, None]                # the module's last answer, and ours to it
-
-
-def bar_tap(ctx, i):
-    """The host's bar activated tool `i` (-2: its way back) of the bar `ctx`
-    (RUN_UI: the running cart's own) lent; the app's next `ui.bar` answers
-    it."""
-    if ctx is RUN_UI:
-        _C.api_run_bar_tap(i)
-    else:
-        _C.api_bar_tap(ctx, i)
 
 
 # The console's Paste: the key Ctrl+V types (the desk's), and where the text

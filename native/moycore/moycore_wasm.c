@@ -1085,7 +1085,7 @@ int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t 
 }
 #endif
 
-// The canvas a compiled app's ui rows draw on (native/moy_ui/moy_ui_wasm.h):
+// The canvas a compiled app's page draws on (native/moy_ui/moy_ui_run.h):
 // the run's draw target, an owed or kept frame on the screen written in
 // first, as libmoy's own verbs settle it before they draw. NULL with no
 // compiled run, or inside one of par's items, which reach no import.

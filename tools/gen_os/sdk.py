@@ -2,9 +2,9 @@
 
 
 from . import header
-from .table import c_name, ident, params, perms_of, role_of, verb_of, wasi_name, wasi_rows
+from .table import c_name, ident, params, perms_of, wasi_name, wasi_rows
 from .cproto import HEAD, c_decl, parse
-from .app import ui_c_params, wasm_rows
+from .app import wasm_rows
 
 
 # A name a row hands a tier that is a moy-spec verb already (print draws, the
@@ -115,69 +115,6 @@ def gen_app_wasm_h(src):
         o += c_decl("int32_t %s" % ident(r["name"]), _app_c_params(r),
                      " MOYBYTE_APP_IMPORT(%s);" % ident(r["name"]))
     o += ["", "#ifdef __cplusplus", "}", "#endif", "", "#endif // MOYBYTE_APP_H", ""]
-    return "\n".join(o)
-
-
-def gen_sdk_ui_h(src):
-    rows = [r for r in wasm_rows(src) if role_of(r) == "ui"]
-    o = [HEAD,
-         "// The public UI API for a native app (docs/ui_api_2026-10.md): the toolkit\n"
-         "// linked into the module (sdk/src/moyui_link.c, native/moy_ui), drawing on\n"
-         "// the app's own RGB565 screen. Each ui row is app.h's, the same call a\n"
-         "// compiled app imports, answered inline by the copy's RUN face\n"
-         "// (native/moy_ui/moy_ui_run.h). A frame is moy_ui_link_frame, the rows,\n"
-         "// then moy_ui_link_show:\n"
-         "//\n"
-         "//     moy_frame_t f;\n"
-         "//     int32_t on = 1;\n"
-         "//     while (moy_ui_link_frame(&f)) {\n"
-         "//         ui_page(\"Settings\", 8, NULL, 0, NULL, 0);\n"
-         "//         on = ui_toggle(\"Sound\", 5, on, NULL, 0);\n"
-         "//         moy_ui_link_show();\n"
-         "//     }\n",
-         "#ifndef MOYBYTE_UI_H", "#define MOYBYTE_UI_H", "",
-         "#include <stdint.h>", "",
-         '#include "moybyte/frame.h"', "",
-         "#ifdef __cplusplus", 'extern "C" {', "#endif", "",
-         "// The copy opened on the program's screen (moy_screen) with the console's",
-         "// theme: 0, or -1 for no screen or no memory. The first frame opens it.",
-         "int moy_ui_link_open(void);",
-         "// The console's next frame into *f, its input the rows' and the theme",
-         "// pulled where it moved, after the app's `_layout` where the surface it",
-         "// lays out for moved: 1, or 0 once the app is stopped.",
-         "int moy_ui_link_frame(moy_frame_t *f);",
-         "// A responsive app's layout (docs/app_api_v1.md section 3): defined, the",
-         "// app draws on its window's or the whole screen's surface instead of the",
-         "// fixed raster, and moy_ui_link_frame calls it with that surface's size",
-         "// and the font scale before the first frame it reads and again whenever",
-         "// they change. Optional, so weak; exported, so the console finds it.",
-         "#if defined(__wasm__)",
-         '#define MOY_UI_LAYOUT __attribute__((weak, export_name("_layout")))',
-         "#else",
-         '#define MOY_UI_LAYOUT __attribute__((weak, visibility("default")))',
-         "#endif",
-         "void _layout(int32_t w, int32_t h, int32_t fs) MOY_UI_LAYOUT;",
-         "// The frame's screen handed to the console (moy_present): 0, or -1.",
-         "int moy_ui_link_show(void);",
-         "// The canvas the rows draw on (a libmoy moy_canvas), NULL before the open.",
-         "void *moy_ui_link_target(void);", ""]
-    for r in rows:
-        o += c_decl("int32_t moy_ui_wasm_%s" % verb_of(r), ui_c_params(r).split(", "), ";")
-    o.append("")
-    for r in rows:
-        args = ["moy_ui_link_target()"]
-        for n, t in params(r):
-            if t == "int":
-                args.append(n)
-            elif t == "out":
-                args += ["(uint8_t *)%s" % n, "%s_cap" % n]
-            else:
-                args += ["(const uint8_t *)%s" % n, "%s_n" % n]
-        o.append("// %s" % r["name"])
-        o += c_decl("static inline int32_t %s" % ident(r["name"]), _app_c_params(r), " {")
-        o += c_decl("    return moy_ui_wasm_%s" % verb_of(r), args, ";")
-        o.append("}")
-    o += ["", "#ifdef __cplusplus", "}", "#endif", "", "#endif // MOYBYTE_UI_H", ""]
     return "\n".join(o)
 
 

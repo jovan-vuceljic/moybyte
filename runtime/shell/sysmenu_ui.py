@@ -51,10 +51,10 @@ def page():
             with ui.menu("{cap}"):
                 with ui.rows("rows", cur="sel"):
                     ui.item("choose", label="{.id}", icon="{.icon}", shown=".grp=first")
-                    ui.item("destroy", label="{.id}", icon="{.icon}", mkind="danger", shown=".grp=danger")
+                    ui.item("destroy", label="{.id}", icon="{.icon}", kind="danger", shown=".grp=danger")
             with ui.menu("", shown="apart"):
                 with ui.rows("rows", cur="sel"):
-                    ui.item("choose", label="{.id}", icon="{.icon}", mkind="danger", shown=".grp=apart")
+                    ui.item("choose", label="{.id}", icon="{.icon}", kind="danger", shown=".grp=apart")
             with ui.menu("{more}", shown="more"):
                 with ui.rows("rows", cur="sel"):
                     ui.item("choose", label="{.id}", icon="{.icon}", shown=".grp=more")

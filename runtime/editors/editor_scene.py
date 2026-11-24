@@ -150,7 +150,7 @@ def _actor():
         ui.item("flip")
         ui.item("front")
         ui.item("back")
-        ui.item("remove", mkind="danger")
+        ui.item("remove", kind="danger")
     with ui.row("verbs", pad="{pad}", wrap=True, shown="!roomy"):
         ui.button("tag", kind="bar", alone=True, w="{pitch}")
         ui.button("flip", kind="bar", alone=True, w="{pitch}")

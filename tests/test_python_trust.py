@@ -354,25 +354,37 @@ def test_get_carts_asks_no_password_where_the_console_has_none(tmp_path):
 
 def test_a_secret_field_draws_a_star_a_character_and_answers_the_text(tmp_path):
     """The toolkit's one text field under `secret` (the prompt's password):
-    its pixels are a field holding as many `*`s, and what it answers is the
-    text itself."""
-    from runtime import ui, ui_draw
+    its pixels are a field holding as many `*`s, and its state holds the
+    text itself (a tree page on the C engine,
+    tests/uitree_fixtures/uitree_repeats.py)."""
+    import sys
+    from pathlib import Path
+    from runtime import ui_draw
     from runtime.host_canvas import make_system_canvas
     from ws_helpers import build_ws
+    import uitree as S
+    import uitree_c
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "uitree_fixtures"))
+    import uitree_repeats as F
     th = build_ws(tmp_path).theme_colors
 
-    def shot(text, o):
-        cv = make_system_canvas(320, 240)
-        host = ui_draw.AppHost()
-        got = None
-        for n in range(3):
-            ui_draw.paint_frame(n, False)
-            host.begin(cv, th, (0, 0, 320, 240))
-            ui.page("Probe")
-            got = ui.field("Password", text, 64, o)
-        return bytes(cv._buf), got
+    class Damage:
+        def all(self):
+            pass
 
-    masked, got = shot("hunter22", {"id": "pw", "secret": True})
-    assert got[0] == "hunter22"
-    assert masked == shot("********", {"id": "pw"})[0]
-    assert masked != shot("hunter22", {"id": "pw"})[0]
+    def shot(text, page):
+        cv = make_system_canvas(320, 240)
+        e = uitree_c.CEngine(S.decl_of(F.__name__), getattr(F, page), ui_draw.AppHost(), None,
+                             Damage())
+        e.open()
+        for key in [0, 0] + [ord(ch) for ch in text] + [0, 0]:
+            e._ui.inp[5] = key
+            e._ui.begin(cv, th, (0, 0, 320, 240))
+            e.paint(1 / 30, cv, th, (0, 0, 320, 240), False)
+            ui_draw.page_end()
+        return bytes(cv._buf), F.s.text
+
+    masked, got = shot("hunter22", "secret")
+    assert got == "hunter22"
+    assert masked == shot("********", "plain")[0]
+    assert masked != shot("hunter22", "plain")[0]

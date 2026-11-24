@@ -252,12 +252,12 @@ def _foot(ws, rows=16):
 def test_a_pages_strip_names_the_bars_keys_while_on_it(tmp_path, monkeypatch):
     """Settings' strip shows the bar's keys while the keys are on the bar
     and its own again after, on either engine: the reference's strip read
-    where it names its items (`ui._C.api_hints`), the C engine's (drawn in
+    where it names its items (`ui_draw._C.api_hints`), the C engine's (drawn in
     native/moy_uitree with its own BAR row) by its pixels."""
-    from runtime import ui
+    from runtime import ui_draw
     seen = []
-    real = ui._C.api_hints
-    monkeypatch.setattr(ui._C, "api_hints",
+    real = ui_draw._C.api_hints
+    monkeypatch.setattr(ui_draw._C, "api_hints",
                         lambda *a: (seen.append(a[3]), real(*a))[1])
     ws, drv = _home(tmp_path)
     ws.open_settings()

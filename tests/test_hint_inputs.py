@@ -1,10 +1,10 @@
 """The hints name ACTIONS and draw the keys of the input in use
-(docs/ui_api_2026-10.md, "Hints"; native/moy_ui/moy_ui.h, MOY_UI_INPUT_*):
+(docs/history/ui_api_2026-10.md, "Hints"; native/moy_ui/moy_ui.h, MOY_UI_INPUT_*):
 
 * each input draws its own keys for an action -- the desk keyboard's Esc, the
   T-Deck's K, a gamepad's B -- and a key spelled out draws as written on
   every input, so no caller spells out a key an action covers;
-* under touch alone (no keys used yet) no hint draws and `ui.hints` takes no
+* under touch alone (no keys used yet) no hint draws and the hints take no
   band, so the rows reach the page's foot; a touch after keys leaves the
   strips up on those keys (`ui_draw.hint_kind`), on every board and the
   browser alike;
@@ -18,12 +18,11 @@
 import ast
 import os
 import re
-from array import array
 from pathlib import Path
 
 import pytest
 
-from runtime import moy_input, ui, ui_draw
+from runtime import moy_input, ui_draw
 from runtime.host_canvas import make_system_canvas
 from ws_helpers import build_ws, make_drv
 
@@ -137,35 +136,6 @@ def test_touch_draws_no_hints(th):
     blank = bytes(make_system_canvas(320, 240)._buf)
     px, spans = _strip(th, ("confirm", "Open", "back", "Back"), "touch")
     assert spans == () and px == blank
-
-
-def test_under_touch_the_rows_take_the_hints_band(tmp_path):
-    ws = build_ws(Path(tmp_path))
-    ws.look.set_theme("moy", persist=False, variant="dark")
-    th = ws.theme_colors
-
-    def foot(kind):
-        """The colours in the hints' band, right of their caps."""
-        ui_draw.input_kind(kind)
-        cv = make_system_canvas(320, 240)
-        ctx = ui_draw.ui_context()
-        inp = array("i", [0] * ui_draw.UI_IN_LEN)
-        for _ in range(2):
-            ui_draw.ui_frame(ctx, cv, th, None, inp)
-            ui.page("")
-            ui.hints(["confirm", "Open", "back", "Back"])
-            ui.group("G")
-            for i in range(14):
-                ui.info("Row %d" % i, "x")
-            ui.group()
-
-        b = cv._buf
-        # the colours right of the caps, where a row's value would print
-        return {bytes(b[2 * (y * 320 + x):2 * (y * 320 + x) + 2])
-                for y in range(222, 238) for x in range(240, 320)}
-
-    assert len(foot("keys")) == 1, "under keys no row draws in the hints' band"
-    assert len(foot("touch")) > 1, "under touch a row's value prints in it"
 
 
 @pytest.mark.parametrize("config", ["tdeck_320x240_fs1_dark", "p4_1024x600_cs2_fs1_console"])

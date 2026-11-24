@@ -11,7 +11,7 @@ the page back on most of the session's frames, so it cannot silently stop."""
 
 import pytest
 
-from runtime import host_app, ui, ui_draw, ui_host
+from runtime import host_app, ui_draw, ui_host
 from ws_helpers import no_unlock_banner, open_cart, quiesce
 
 # A game whose frames are a function of its frame count alone.
@@ -78,13 +78,6 @@ def _console(tmp_path, monkeypatch, bufs, ref, windowed, force=True):
         # and draws whole on every frame
         monkeypatch.setattr(ui_host, "wash_page", lambda *a: (0, 0, 0, 0))
         monkeypatch.setattr(ui_host, "NO_WASH", None)
-        real_dialog = ui.dialog
-
-        def dialog(title=None, buttons=(), kind="primary", o=None):
-            if o is not None and o.get("wash") is False:
-                o = None
-            return real_dialog(title, buttons, kind, o)
-        monkeypatch.setattr(ui, "dialog", dialog)
         monkeypatch.setattr(ui_draw.Hold, "ok", lambda self, plan: False)
     carts = str(tmp_path / "carts")
     host_app.moy_carts.ensure_dirs(carts)

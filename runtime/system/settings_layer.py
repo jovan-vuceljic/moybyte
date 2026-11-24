@@ -44,7 +44,7 @@ verbs draw in is begun by the host side the console hands it
 pointer this layer is routed.
 """
 
-import ui as _ui
+from widgets import rect_in as _rect_in
 import layout_base as _lb
 from crash_guard import clear_core_dump, core_dump, crash_available, crash_lines, last_crash
 from achievements_ui import AchievementsPage
@@ -901,7 +901,7 @@ class SettingsLayer(Layer):
     def zone_tap(self, px, py, rect=None):
         """The zone past the chevron (the bar takes the chevron's tap,
         `back`), the title, knocks on the secret door (#21)."""
-        if rect is None or not _ui.rect_in(px, py, rect):
+        if rect is None or not _rect_in(px, py, rect):
             return False
         self.ws.ach_ui._tap_secret_door()
         return True

@@ -116,18 +116,31 @@ def _roles_named(cls_node, seen=None):
 def _used(mod_name, cls_name):
     """The roles the class reaches, with those of `uitree_app.App` for an app
     whose screen is a `uitree` page (the class `app_layer` made, or its
-    subclass)."""
+    subclass), and those of the service its declaration builds over its
+    context (Paint's `ArtworkService`)."""
     mod = __import__("runtime." + mod_name, None, None, (cls_name,))
     from runtime import uitree_app
     if issubclass(getattr(mod, cls_name), uitree_app.App):
         tree = ast.parse(runtime_file(mod_name + ".py").read_text(encoding="utf-8"))
         own = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == cls_name]
         used = _roles_named(own[0]) if own else set()
-        return used | _roles_named(_class_node("uitree_app", "App"))
-    return _roles_named(_class_node(mod_name, cls_name))
+        used |= _roles_named(_class_node("uitree_app", "App"))
+    else:
+        used = _roles_named(_class_node(mod_name, cls_name))
+    entry = "%s:%s" % (mod_name, cls_name)
+    for d in APPS:
+        if d["entry"] == entry and d.get("service"):
+            used |= _roles_named(_model_node(d["service"].partition(":")[2]))
+    return used
 
 
 def _declared(mod_name, cls_name):
+    """A declared app's roles are its declaration's (`needs`, from its
+    manifest), the shell's own Settings its class's `NEEDS`."""
+    entry = "%s:%s" % (mod_name, cls_name)
+    for d in APPS:
+        if d["entry"] == entry:
+            return tuple(d["needs"])
     mod = __import__("runtime." + mod_name, None, None, (cls_name,))
     return tuple(getattr(getattr(mod, cls_name), "NEEDS", ()))
 
@@ -170,8 +183,8 @@ def test_the_context_carries_only_the_declared_roles(tmp_path):
     ws = _ws(tmp_path)
     for _mod, cls in APP_TARGETS:
         kind = getattr(__import__("runtime." + _mod, None, None, (cls,)), cls)
-        app = next(a for a in list(ws.app_layers) + [ws.settings_layer]
-                   if type(a) is kind)
+        app = next(ws.spine.built(a) for a in list(ws.app_layers) + [ws.settings_layer]
+                   if type(ws.spine.built(a)) is kind)
         ctx = app.ctx
         declared = set(_declared(_mod, cls))
         for role in _ac.ROLES:
@@ -187,7 +200,8 @@ def test_an_app_on_the_verbs_gets_a_host_that_reads_its_pointer(tmp_path):
     `handle_pointer` that names no `down` still drags its pages and tables
     (the Music lists once took every drag as a tap)."""
     ws = _ws(tmp_path)
-    apps = [a for a in ws.app_layers if getattr(type(a), "UI", False)]
+    apps = [ws.spine.built(a) for a in list(ws.app_layers)]
+    apps = [a for a in apps if getattr(type(a), "UI", False)]
     assert len(apps) >= 9
     for app in apps:
         host = app.ctx.ui
@@ -879,7 +893,7 @@ def test_the_scoped_handle_degrades_to_NO_STORE_rather_than_raising(tmp_path):
 # manifest; nothing called them.
 
 def test_the_ungated_verbs_answer_for_every_app_cart(tmp_path):
-    """`ui`/`theme()`/`screen()`/`content_rect()`/`bar_h()` are published with
+    """`theme()`/`screen()`/`content_rect()`/`bar_h()` are published with
     no permission at all, because they are not capabilities -- they are how an
     app draws. `content_rect` and `bar_h` exist so a cart stops hardcoding 18
     (a documented defect in several seed carts), so they have to answer where
@@ -887,7 +901,7 @@ def test_the_ungated_verbs_answer_for_every_app_cart(tmp_path):
     ws = _ws(tmp_path)
     canvas = ws.sys_canvas
     ns = _api.make_system_api(ws.app_context, {"title": "Plain"}, canvas=canvas)
-    assert ns["ui"] is not None
+    assert "ui" not in ns              # a tree cart's ui is its Player's (player_tree)
     assert ns["screen"]() is canvas
     # The grant's surface row's bar: the host strip's rows, what the shell
     # draws, whichever the strip is now.
@@ -914,7 +928,7 @@ def test_the_appearance_grant_publishes_a_working_theme_picker(tmp_path):
     ns = _api.make_system_api(ws.app_context,
                               {"title": "Skinner", "permissions": ["appearance"]})
     assert sorted(ns) == ["bar_h", "content_rect", "screen", "set_theme", "theme",
-                          "themes", "ui"]
+                          "themes"]
     # NAMES, one per installed theme -- the round trip the docstring promises,
     # since `set_theme` takes a name and falls back to DEFAULT_THEME silently on
     # anything else. Feeding the picker's own output back is the case that used

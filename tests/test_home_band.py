@@ -14,8 +14,8 @@ picture, to the second's bytes."""
 
 import pytest
 
-from runtime import cover_cache, host_app, launcher_layer, moy_carts, ui, ui_draw
-from runtime import home_grid
+from runtime import cover_cache, host_app, launcher_layer, moy_carts, ui_draw
+from runtime import home_band, home_grid
 from ws_helpers import cover_bytes, no_unlock_banner, quiesce
 
 
@@ -322,15 +322,15 @@ def test_band_frames_follow_what_the_cards_show(tmp_path, monkeypatch, arrangeme
     """Through a rename, a cover landing, a theme change and the focus
     leaving the cards for the tab row, every picture byte-equal to whole
     repaints that draw every card, the cards out of their kept faces
-    (`ui.slot`)."""
+    (`home_band.slot`)."""
     hits = [0]
-    real = ui.slot
+    real = home_band.slot
 
     def slot(name, gen=0, mint=False):
         j = real(name, gen, mint)
-        hits[0] += 0 <= j < ui.SLOT_MINT
+        hits[0] += 0 <= j < home_band.SLOT_MINT
         return j
-    monkeypatch.setattr(launcher_layer._ui, "slot", slot)
+    monkeypatch.setattr(home_band, "slot", slot)
     ws, stats = _parity(tmp_path, monkeypatch, "handheld", arrangement, theme, bufs,
                         session=_edits)
     assert stats["band"] * 4 > stats["frames"], stats      # (a rescan paints whole)
@@ -387,8 +387,8 @@ def test_a_round_with_every_face_drawn_ends_the_asking(tmp_path, monkeypatch, ar
     while g.mint_faces(10 ** 6):
         pass
     asked = []
-    real = ui.slot_next
-    monkeypatch.setattr(ui, "slot_next", lambda: asked.append(1) or real())
+    real = home_band.slot_next
+    monkeypatch.setattr(home_band, "slot_next", lambda: asked.append(1) or real())
     assert not g.mint_faces() and not asked
     drv.press("right")
     ws.mark_dirty()
@@ -403,8 +403,7 @@ def _kept(g):
     out = set()
     for k, it in enumerate(g.items):
         cover = g.cover_ready(it, g._fdiv)
-        if cover is not False and ui.slot(g._face_name(k), 0 if cover is None else cover.serial,
-                                          False) >= 0:
+        if cover is not False and g._face_key(k, cover, False) >= 0:
             out.add(k)
     return out
 
@@ -500,3 +499,23 @@ def test_the_home_frame_path_is_found_on_the_class_or_its_first_base():
         far = [n for n in HOME_FRAME_PATH
                if n not in vars(cls) and n not in vars(home) and n not in vars(first)]
         assert not far, "%s reads these past the first base: %s" % (cls.__name__, far)
+
+
+@pytest.mark.parametrize("arrangement", ["grid", "icons"])
+def test_a_card_s_face_key_is_an_int_and_the_band_holds_no_string_a_card(
+        tmp_path, monkeypatch, arrangement):
+    """What a card's face is keyed by is its item's own path and one int of
+    an array (`_face_key`): the band keeps no string per card for its
+    faces."""
+    from array import array
+    ws, drv, frame, _ = _home(tmp_path, monkeypatch, "handheld", arrangement, "blocks", 2,
+                              False)
+    g = ws.launcher
+    for _ in range(4):
+        drv.frame(1 / 30)
+    n = len(g.items)
+    assert n > 4 and isinstance(g._fkeys, array) and len(g._fkeys) == n
+    assert len(set(it.get("path") or it.get("title") for it in g.items)) == n
+    for k, v in vars(g).items():
+        if isinstance(v, (list, tuple)) and len(v) == n:
+            assert not all(isinstance(e, str) for e in v), k

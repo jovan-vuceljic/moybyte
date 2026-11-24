@@ -919,7 +919,7 @@ const char *const uit_kind_names[UIT_KINDS] = {"", "page", "group", "label", "in
                                                "item", "split", "canvas", "tabs", "switch", "case",
                                                "table", "col", "foot", "cards", "card", "picture",
                                                "popover", "tools", "row", "status", "text_editor",
-                                               "panes", "pane", "legacy", "slot", "panel", "lent",
+                                               "panes", "pane", "slot", "panel", "lent",
                                                "rule", "note", "grid", "bubble", "month", "toast", "cells",
                                                "stepper", "hints"};
 
@@ -1049,20 +1049,29 @@ static int pane_prop(uit_t *e, int node, const char *name, const char *src, cons
 }
 
 // The API's check at lowering, so a front that carries no check (a compiled app's) is held to the
-// contract's table as the others are: a prop name no kind takes, a retired one, a word not the prop's.
-// What a kind does not take by name in the API is the store's own: a node's binding (`bind`, `field`)
-// and its head, which the API gives by position and the store by name. A prop the spec designs passes
-// here, so the engine draws it or refuses it as one it does not draw yet.
+// contract's table as the others are: a prop name no kind takes, a retired one, a word not the prop's,
+// one the spec designs and no engine builds. What a kind does not take by name in the API is the
+// store's own: a node's binding (`bind`, `field`) and the head of the kinds whose head the store
+// keeps by name (HEADS), which the API gives by position.
 static int api_check(uit_t *e, int kind, const char *name, const char *src)
 {
-    static const char *const OWN[] = {"bind", "field", "title", "caption", "text", "label", "value", "image"};
+    static const struct {
+        uint8_t kind;
+        const char *name;
+    } HEADS[] = {{UIT_PAGE, "title"}, {UIT_GROUP, "caption"}, {UIT_LABEL, "text"}, {UIT_DIALOG, "title"},
+                 {UIT_INFO, "label"}, {UIT_EMPTY, "title"}, {UIT_PICTURE, "image"}, {UIT_PROGRESS, "value"},
+                 {UIT_STATUS, "text"}, {UIT_COL, "text"}, {UIT_MENU, "caption"}, {UIT_BUBBLE, "text"},
+                 {UIT_TOAST, "text"}};
     const char *kn = uit_kind_names[kind];
-    if (!uit_prop_type(kn, name))
-        for (size_t i = 0; i < sizeof OWN / sizeof OWN[0]; i++)
-            if (!strcmp(name, OWN[i]))
+    if (!uit_prop_type(kn, name)) {
+        if (!strcmp(name, "bind") || !strcmp(name, "field"))
+            return 0;
+        for (size_t i = 0; i < sizeof HEADS / sizeof HEADS[0]; i++)
+            if (HEADS[i].kind == kind && !strcmp(name, HEADS[i].name))
                 return 0;
+    }
     char out[600];
-    const char *code = uit_check_prop(kn, name, UIT_VC_BUILDS, src, out, sizeof out);
+    const char *code = uit_check_prop(kn, name, UIT_VC_ANY, src, out, sizeof out);
     if (!code || !strncmp(out, "no kind", 7))
         return 0;           // a kind of the store's own (switch, case, row, panel) checks nothing here
     char *what = out, *expected = strchr(what, '\x1f');
@@ -1089,7 +1098,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     int16_t *tslot = NULL;
     int list = uit_list_of(e, node);
     e->ccur = list >= 0 && list != node ? e->nodes[list].current : -1;
-    if (!strcmp(name, "shown") || !strcmp(name, "focus")) {
+    if ((!strcmp(name, "shown") && kind != UIT_PAGE) || !strcmp(name, "focus")) {
         int c = uit_cond_compile(e, src, model);
         if (c < 0)
             return c;
@@ -1153,7 +1162,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     else if ((kind == UIT_BUBBLE && (!strcmp(name, "side") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              ((kind == UIT_INFO || kind == UIT_LINK) &&
               (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
-             (kind == UIT_LINK && !strcmp(name, "swatch")) ||
+             (kind == UIT_LINK && (!strcmp(name, "swatch") || !strcmp(name, "sub") || !strcmp(name, "count") ||
+                                   !strcmp(name, "mark"))) ||
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
              (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon") || !strcmp(name, "fill"))) || (kind == UIT_CARDS && (!strcmp(name, "pad") || !strcmp(name, "tone") || !strcmp(name, "label"))) ||
              (kind == UIT_CELLS && (!strcmp(name, "first") || !strcmp(name, "count") || !strcmp(name, "cols") ||
@@ -1243,9 +1253,6 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         if (r != 1)
             return r;
     }
-    if (kind == UIT_LEGACY && (!strcmp(name, "draw") || !strcmp(name, "pointer") || !strcmp(name, "keys") ||
-                               !strcmp(name, "hints") || !strcmp(name, "gen")))
-        return add_prop(e, node, name, src, repr, PK_LIT, 0);     // the front end's functions
     if (!strcmp(name, "tone") && kind == UIT_LABEL && strchr(src, '{')) {
         // a templated tone: its word drawn each frame (ink, dim, value, danger; another is ink)
         int t = uit_tmpl_compile(e, src, model);
@@ -1434,7 +1441,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= RS_COL;
         return add_prop(e, node, name, src, repr, PK_LIT, src[0] == 'r');
     }
-    if (!strcmp(name, "mkind") && kind == UIT_ITEM) {
+    if (!strcmp(name, "kind") && kind == UIT_ITEM) {
         N->lit = (uint8_t)!strcmp(src, "danger");
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
@@ -1460,10 +1467,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (!strcmp(name, "look") && kind == UIT_BUTTON) {
-        // look="large" (BT_LARGE): half again a row's height, twice the pads, a wider least width
-        if (strcmp(src, "large"))
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("button look=%s: \"large\"", "button look=%s"), src);
-        N->btn |= BT_LARGE;
+        // look="hero" (BT_HERO): the page's lead verb, half again a row's height, twice the pads, a
+        // wider least width
+        if (strcmp(src, "hero"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("button look=%s: \"hero\"", "button look=%s"), src);
+        N->btn |= BT_HERO;
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (kind == UIT_STEPPER && (!strcmp(name, "grow") || !strcmp(name, "tone"))) {
@@ -1485,9 +1493,10 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->btn |= BT_GROW;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
-    if (kind == UIT_FIELD && (!strcmp(name, "when") || !strcmp(name, "off") || !strcmp(name, "grow"))) {
-        // when=: greyed while it fails (`mark`), not shown where off="hide"; grow=: what a
-        // field in a row does already
+    if ((UIT_IS_TWO_WAY_OFF(kind) && (!strcmp(name, "when") || !strcmp(name, "off"))) ||
+        (kind == UIT_FIELD && !strcmp(name, "grow"))) {
+        // a field's, a toggle's or a slider's when=: greyed while it fails (`mark`), not shown
+        // where off="hide"; a field's grow=: what a field in a row does already
         if (name[0] == 'w') {
             int c = uit_cond_compile(e, src, model);
             if (c < 0)
@@ -1634,9 +1643,9 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         (!strcmp(name, "changed") && kind == UIT_FIELD) || (!strcmp(name, "cut") && kind == UIT_BUBBLE) ||
         (!strcmp(name, "close") && (kind == UIT_POPOVER || kind == UIT_ROW || kind == UIT_GROUP)) ||
         ((kind == UIT_MONTH || kind == UIT_STEPPER) && (!strcmp(name, "prev") || !strcmp(name, "next"))) ||
-        (kind == UIT_CELLS && !strcmp(name, "pick"))) {
-        // on= (and close=, a month's or a stepper's prev=) in `on`; changed= (cut=, next=, a cells' pick=) in
-        // `changed`
+        (kind == UIT_CELLS && !strcmp(name, "pick")) || (kind == UIT_PAGE && !strcmp(name, "shown"))) {
+        // on= (and close=, a month's or a stepper's prev=) in `on`; changed= (cut=, next=, a cells' pick=, a
+        // page's shown=) in `changed`
         for (int a = 0; a < e->nacts; a++)
             if (!strcmp(uit_str(e, e->acts[a].name), src)) {
                 if (name[0] == 'o' || (name[0] == 'c' && name[1] == 'l') || (name[0] == 'p' && name[1] == 'r'))
@@ -1739,10 +1748,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         N->lit = (uint8_t)(!strcmp(src, "share") ? 1 : !strcmp(src, "band") ? 2 : 0);
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
-    if (!strcmp(name, "follow") && kind == UIT_SCROLL) {
-        // follow=True: its first frame at its foot, a row that comes moving the view (lit 1)
-        N->lit = (uint8_t)!strcmp(src, "True");
-        return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
+    if ((!strcmp(name, "follow") || !strcmp(name, "snap")) && kind == UIT_SCROLL) {
+        // follow=True: its first frame at its foot, a row that comes moving the view (SC_FOLLOW);
+        // snap=True: whole units, the cues where some are left out above or below (SC_SNAP)
+        int bit = name[0] == 'f' ? SC_FOLLOW : SC_SNAP, on = !strcmp(src, "True");
+        N->lit = (uint8_t)((N->lit & ~bit) | (on ? bit : 0));
+        return add_prop(e, node, name, src, repr, PK_LIT, on);
     }
     if (!strcmp(name, "buttons") && kind == UIT_DIALOG)
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
@@ -1954,8 +1965,8 @@ int32_t uit_cell_gen(uit_t *e, int k)
 // `uit_cell_gen`; a lines view's rows are its view record's, moy_ui_api_text_view) and
 // those only a list's
 // cur= names (focus, which the toolkit draws); and whether it may carry one: no text of the build
-// names an engine value and no legacy node draws what no state says (a canvas does too, but for
-// one that names its states, reads=: a frame after one drew carries none, `gen_ok`).
+// names an engine value (a canvas draws what no state says, but for one that names its states,
+// reads=: a frame after one drew carries none, `gen_ok`).
 static void gen_of_build(uit_t *e)
 {
     e->gen_safe = e->nslots <= UIT_GEN_SLOTS;
@@ -1964,9 +1975,6 @@ static void gen_of_build(uit_t *e)
         e->gen_vals |= (uint8_t)names_engine_value(uit_str(e, e->tmpls[t].src));
     for (int c = e->m_conds; c < e->nconds; c++)
         e->gen_vals |= (uint8_t)names_engine_value(uit_str(e, e->conds[c].src));
-    for (int k = 0; k < e->nnodes; k++)
-        if (e->nodes[k].kind == UIT_LEGACY)
-            e->gen_safe = 0;
     for (int i = 0; i < e->nslots; i++)
         e->slots[i].in_gen = 1;
     if (!e->gen_safe || !e->nnodes)
@@ -2023,7 +2031,7 @@ int uit_build_end(uit_t *e)
     }
     e->has_panes = 0;
     for (int k = 0; k < e->nnodes; k++) {
-        if (e->nodes[k].kind == UIT_PANES || e->nodes[k].kind == UIT_LEGACY)
+        if (e->nodes[k].kind == UIT_PANES)
             e->has_panes = 1;
         const uit_node_t *N = &e->nodes[k];
         if (N->kind == UIT_DIALOG) {    // labels=: one a button, or none

@@ -43,7 +43,7 @@ this design extends its §4 and §14 (§14.3's shown ring, §14.5's held pages,
 §14.6's `copy_last`) and invents no second invalidation mechanism (§10
 argues it against §8's graveyard). The widget toolkit is `native/moy_ui`
 with `runtime/ui_draw.py` as its face and `runtime/ui.py` the public UI API
-(`docs/ui_api_2026-10.md`); the scroll physics are `native/moy_ui/moy_ui_interact.c`
+(`docs/history/ui_api_2026-10.md`); the scroll physics are `native/moy_ui/moy_ui_interact.c`
 (`docs/kernel_toolkit_2026-10.md` §3.4). The cart-facing verb table is
 moy-spec's and this design does not touch it (§16).
 
@@ -425,7 +425,7 @@ side. A skipped card still has a record: the app passes `ui.keep(id, h)`
 for it, which carries the stop's record forward with its height, so flow
 layout, focus and the structural check see it; a key step onto a kept stop
 finds it. Both are Moybyte-side verbs of the public UI API
-(`docs/ui_api_2026-10.md`), not moy-spec's. An app that reads neither pays
+(`docs/history/ui_api_2026-10.md`), not moy-spec's. An app that reads neither pays
 its loop's Python and is still correct.
 
 **Ops that ignore the clip** -- `cls` and the DMA fill, the PPA fill and
@@ -475,7 +475,7 @@ paint re-arms the ring.
 ## 5. Text editors: the edited line and the caret
 
 **One body: the text view**, `ui.text_view`, a verb of the C UI library (`native/moy_ui`) and
-part of the app-facing `ui` API (`docs/ui_api_2026-10.md`), not an Editor
+part of the app-facing `ui` API (`docs/history/ui_api_2026-10.md`), not an Editor
 helper: an app that wants a text area -- a chat log, a terminal -- calls the
 same verb in Python, Lua or a compiled app and gets the same rows, its look
 from the theme like every other part and changed per call through the
@@ -753,7 +753,7 @@ the panes otherwise.
 **The grid, icons and carousel arrangements** (`Launcher`, `IconHome`,
 `Carousel`) draw their band as an engine table of parts that keeps its
 parts (2026-10-30, #243 step 7; kept since 2026-10-31,
-`docs/ui_api_2026-10.md` §2, A kept table): `Launcher.band_pass` opens a
+`docs/history/ui_api_2026-10.md` §2, A kept table): `Launcher.band_pass` opens a
 `ui.table` with `o.part` over the band -- a row of cards side by side
 (`o.axis "x"`, the carousel's with `o.snap`) or the icons' rows -- hands
 it the scroll as `o.offset`, the cards' reach past their cells as
@@ -1160,7 +1160,7 @@ whose pass is shell code under the floor; the cart canvas verbs are
 unchanged (`scroll_rect`, `blit_indices`, `blit_indices_scale`, `shift_last`
 and `copy_last_into` are `moy_gfx`'s compositor and a canvas's, not
 SPEC.md's); `ui.band()`, `ui.keep()` and the kinetic `ui.scroll` are the
-public UI API, Moybyte's (`docs/ui_api_2026-10.md`), and an app on the
+public UI API, Moybyte's (`docs/history/ui_api_2026-10.md`), and an app on the
 verbs passes nothing new to get them. The physics' parameters are not a
 cart's to set.
 

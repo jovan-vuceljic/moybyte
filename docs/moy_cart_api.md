@@ -98,7 +98,7 @@ def _draw():                 # every frame; render here
 
 An app cart (`"type": "app"`) is the exception: it is drawn on change, its
 `_update` and `_draw` running while input or its page moves and not while it
-sits still (`docs/ui_api_2026-10.md`, "Drawn on change"), unless its
+sits still (`docs/history/ui_api_2026-10.md`, "Drawn on change"), unless its
 manifest says `"animates": true` (`docs/app_api_v1.md` §3).
 
 ## Writing a cart in Lua (#67)

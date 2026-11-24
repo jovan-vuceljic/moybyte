@@ -235,7 +235,7 @@ def _lua_carousel(tmp_path, tone, desk=False, label=""):
     cart.mkdir(parents=True)
     (cart / "manifest.json").write_text(json.dumps({
         "format": "moy-1", "title": "Lua Carousel", "runtime": "lua", "main": "main.lua",
-        "extensions": ["moybyte.ui", "moybyte.uitree"],
+        "extensions": ["moybyte.uitree"],
         "moybyte": {"type": "app", "permissions": []}}))
     (cart / "main.lua").write_text(_LUA_CAROUSEL % dict(tone=tone, label=label,
                                                        w=64 if desk else 32))
@@ -355,7 +355,7 @@ def _lua_tile(tmp_path, look):
     cart.mkdir(parents=True)
     (cart / "manifest.json").write_text(json.dumps({
         "format": "moy-1", "title": "Lua Tile", "runtime": "lua", "main": "main.lua",
-        "extensions": ["moybyte.ui", "moybyte.uitree"],
+        "extensions": ["moybyte.uitree"],
         "moybyte": {"type": "app", "permissions": []}}))
     (cart / "main.lua").write_text(_LUA_TILE % dict(look='look = "%s",' % look if look else ""))
     ws = host_app.build_workstation(str(carts), **_DESK)

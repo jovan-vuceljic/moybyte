@@ -3,86 +3,11 @@
 // The moybyte.app imports (native/moy_app/moy_app_wasm.h): one native per
 // row with an import, named <role>_<verb> at its WAMR signature. A row the
 // adapter serves packs its fields for the ROLE door and runs as its how
-// says (run(), moy_app_wasm.c); a toolkit row is native/moy_ui's own,
-// weak here, so an image without the toolkit answers NULL for it.
+// says (run(), moy_app_wasm.c); a direct row is the UI engine's own
+// (native/moy_uitree), weak here, so an image without it answers NULL for it.
 
-#define MOY_APP_WASM_N 144
+#define MOY_APP_WASM_N 98
 
-int32_t moy_ui_wasm_page(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t, uint8_t *,
-                         uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_label(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_button(void *, const uint8_t *, uint32_t, int32_t, const uint8_t *,
-                           uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_toggle(void *, const uint8_t *, uint32_t, int32_t, const uint8_t *,
-                           uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_slider(void *, const uint8_t *, uint32_t, int32_t, int32_t, int32_t,
-                           const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_list(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t, int32_t,
-                         const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_part(void *, const uint8_t *, uint32_t, int32_t, int32_t, const uint8_t *,
-                         uint32_t, uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_focus(void *, const uint8_t *, uint32_t, uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_keys_taken(void *) UI_WEAK;
-int32_t moy_ui_wasm_at(void *, int32_t, int32_t, int32_t, int32_t) UI_WEAK;
-int32_t moy_ui_wasm_group(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_info(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
-                         const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_link(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
-                         const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_cycle(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t, int32_t,
-                          const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_seg(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t, int32_t,
-                        const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_swatches(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
-                             int32_t, const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_hints(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_icon(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_progress(void *, const uint8_t *, uint32_t, int32_t, int32_t, const uint8_t *,
-                             uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_table(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
-                          const uint8_t *, uint32_t, int32_t, const uint8_t *, uint32_t,
-                          uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_scroll(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_field(void *, const uint8_t *, uint32_t, uint8_t *, uint32_t, int32_t,
-                          const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_dialog(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t, int32_t,
-                           const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_tabs(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t, int32_t,
-                         const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_grid(void *, const uint8_t *, uint32_t, int32_t, int32_t, const uint8_t *,
-                         uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_card(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
-                         const uint8_t *, uint32_t, uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_popover(void *, const uint8_t *, uint32_t, int32_t, const uint8_t *,
-                            uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_menu(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
-                         const uint8_t *, uint32_t, const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_tool(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
-                         const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_bar(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
-                        int32_t) UI_WEAK;
-int32_t moy_ui_wasm_rule(void *) UI_WEAK;
-int32_t moy_ui_wasm_text_view(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
-                              const uint8_t *, uint32_t, const uint8_t *, uint32_t, uint8_t *,
-                              uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_table_part(void *, uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_part_at(void *, uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_split(void *, const uint8_t *, uint32_t, uint8_t *, uint32_t, const uint8_t *,
-                          uint32_t, const uint8_t *, uint32_t, uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_table_dist(void *) UI_WEAK;
-int32_t moy_ui_wasm_table_floor(void *, uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_held(void *, const uint8_t *, uint32_t, int32_t) UI_WEAK;
-int32_t moy_ui_wasm_slots(void *, int32_t, int32_t) UI_WEAK;
-int32_t moy_ui_wasm_slot(void *, const uint8_t *, uint32_t, int32_t, int32_t) UI_WEAK;
-int32_t moy_ui_wasm_slot_next(void *) UI_WEAK;
-int32_t moy_ui_wasm_held_last(void *, const uint8_t *, uint32_t, int32_t) UI_WEAK;
-int32_t moy_ui_wasm_held_all(void *) UI_WEAK;
-int32_t moy_ui_wasm_empty(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
-                          const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_note(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_bubble(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
-                           const uint8_t *, uint32_t, const uint8_t *, uint32_t, const uint8_t *,
-                           uint32_t, uint8_t *, uint32_t) UI_WEAK;
 int32_t moy_uitree_wasm_state(void *, const uint8_t *, uint32_t, int32_t, const uint8_t *,
                               uint32_t) UI_WEAK;
 int32_t moy_uitree_wasm_model(void *, int32_t, const uint8_t *, uint32_t, const uint8_t *,
@@ -526,52 +451,6 @@ static const moy_app_native_t NATIVES[MOY_APP_WASM_N] = {
     { "theme_set_variant", FN(w_theme_set_variant), "(*~)i", NULL },
     { "theme_token", FN(w_theme_token), "(i)i", NULL },
     { "theme_variant", FN(w_theme_variant), "(*~)i", NULL },
-    { "ui_at", FN(moy_ui_wasm_at), "(iiii)i", NULL },
-    { "ui_bar", FN(moy_ui_wasm_bar), "(*~*~i)i", NULL },
-    { "ui_bubble", FN(moy_ui_wasm_bubble), "(*~*~*~*~*~*~)i", NULL },
-    { "ui_button", FN(moy_ui_wasm_button), "(*~i*~)i", NULL },
-    { "ui_card", FN(moy_ui_wasm_card), "(*~*~*~*~)i", NULL },
-    { "ui_cycle", FN(moy_ui_wasm_cycle), "(*~*~i*~)i", NULL },
-    { "ui_dialog", FN(moy_ui_wasm_dialog), "(*~*~i*~)i", NULL },
-    { "ui_empty", FN(moy_ui_wasm_empty), "(*~*~*~)i", NULL },
-    { "ui_field", FN(moy_ui_wasm_field), "(*~*~i*~)i", NULL },
-    { "ui_focus", FN(moy_ui_wasm_focus), "(*~*~)i", NULL },
-    { "ui_grid", FN(moy_ui_wasm_grid), "(*~ii*~)i", NULL },
-    { "ui_group", FN(moy_ui_wasm_group), "(*~*~)i", NULL },
-    { "ui_held", FN(moy_ui_wasm_held), "(*~i)i", NULL },
-    { "ui_held_all", FN(moy_ui_wasm_held_all), "()i", NULL },
-    { "ui_held_last", FN(moy_ui_wasm_held_last), "(*~i)i", NULL },
-    { "ui_hints", FN(moy_ui_wasm_hints), "(*~*~)i", NULL },
-    { "ui_icon", FN(moy_ui_wasm_icon), "(*~*~)i", NULL },
-    { "ui_info", FN(moy_ui_wasm_info), "(*~*~*~)i", NULL },
-    { "ui_keys_taken", FN(moy_ui_wasm_keys_taken), "()i", NULL },
-    { "ui_label", FN(moy_ui_wasm_label), "(*~*~)i", NULL },
-    { "ui_link", FN(moy_ui_wasm_link), "(*~*~*~)i", NULL },
-    { "ui_list", FN(moy_ui_wasm_list), "(*~*~i*~)i", NULL },
-    { "ui_menu", FN(moy_ui_wasm_menu), "(*~*~*~*~)i", NULL },
-    { "ui_note", FN(moy_ui_wasm_note), "(*~*~)i", NULL },
-    { "ui_page", FN(moy_ui_wasm_page), "(*~*~*~)i", NULL },
-    { "ui_part", FN(moy_ui_wasm_part), "(*~ii*~*~)i", NULL },
-    { "ui_part_at", FN(moy_ui_wasm_part_at), "(*~)i", NULL },
-    { "ui_popover", FN(moy_ui_wasm_popover), "(*~i*~)i", NULL },
-    { "ui_progress", FN(moy_ui_wasm_progress), "(*~ii*~)i", NULL },
-    { "ui_rule", FN(moy_ui_wasm_rule), "()i", NULL },
-    { "ui_scroll", FN(moy_ui_wasm_scroll), "(*~*~)i", NULL },
-    { "ui_seg", FN(moy_ui_wasm_seg), "(*~*~i*~)i", NULL },
-    { "ui_slider", FN(moy_ui_wasm_slider), "(*~iii*~)i", NULL },
-    { "ui_slot", FN(moy_ui_wasm_slot), "(*~ii)i", NULL },
-    { "ui_slot_next", FN(moy_ui_wasm_slot_next), "()i", NULL },
-    { "ui_slots", FN(moy_ui_wasm_slots), "(ii)i", NULL },
-    { "ui_split", FN(moy_ui_wasm_split), "(*~*~*~*~*~)i", NULL },
-    { "ui_swatches", FN(moy_ui_wasm_swatches), "(*~*~i*~)i", NULL },
-    { "ui_table", FN(moy_ui_wasm_table), "(*~*~*~i*~*~)i", NULL },
-    { "ui_table_dist", FN(moy_ui_wasm_table_dist), "()i", NULL },
-    { "ui_table_floor", FN(moy_ui_wasm_table_floor), "(*~)i", NULL },
-    { "ui_table_part", FN(moy_ui_wasm_table_part), "(*~)i", NULL },
-    { "ui_tabs", FN(moy_ui_wasm_tabs), "(*~*~i*~)i", NULL },
-    { "ui_text_view", FN(moy_ui_wasm_text_view), "(*~*~*~*~*~)i", NULL },
-    { "ui_toggle", FN(moy_ui_wasm_toggle), "(*~i*~)i", NULL },
-    { "ui_tool", FN(moy_ui_wasm_tool), "(*~*~*~)i", NULL },
     { "uitree_action", FN(moy_uitree_wasm_action), "(*~*~*~*~ii*~*~)i", NULL },
     { "uitree_action_chars", FN(moy_uitree_wasm_action_chars), "(i*~)i", NULL },
     { "uitree_action_row", FN(moy_uitree_wasm_action_row), "(ii)i", NULL },
@@ -622,21 +501,11 @@ static const int16_t NATIVE_ROWS[MOY_APP_WASM_N] = {
     MOY_T_NAV_OPEN_APP, MOY_T_PREFS_CLEAR, MOY_T_PREFS_GET, MOY_T_PREFS_SET,
     MOY_T_THEME_EDIT_FILE, MOY_T_THEME_GEN, MOY_T_THEME_LIGHT, MOY_T_THEME_NAME,
     MOY_T_THEME_SET, MOY_T_THEME_SET_VARIANT, MOY_T_THEME_TOKEN, MOY_T_THEME_VARIANT,
-    MOY_T_UI_AT, MOY_T_UI_BAR, MOY_T_UI_BUBBLE, MOY_T_UI_BUTTON, MOY_T_UI_CARD, MOY_T_UI_CYCLE,
-    MOY_T_UI_DIALOG, MOY_T_UI_EMPTY, MOY_T_UI_FIELD, MOY_T_UI_FOCUS, MOY_T_UI_GRID,
-    MOY_T_UI_GROUP, MOY_T_UI_HELD, MOY_T_UI_HELD_ALL, MOY_T_UI_HELD_LAST, MOY_T_UI_HINTS,
-    MOY_T_UI_ICON, MOY_T_UI_INFO, MOY_T_UI_KEYS_TAKEN, MOY_T_UI_LABEL, MOY_T_UI_LINK,
-    MOY_T_UI_LIST, MOY_T_UI_MENU, MOY_T_UI_NOTE, MOY_T_UI_PAGE, MOY_T_UI_PART,
-    MOY_T_UI_PART_AT, MOY_T_UI_POPOVER, MOY_T_UI_PROGRESS, MOY_T_UI_RULE, MOY_T_UI_SCROLL,
-    MOY_T_UI_SEG, MOY_T_UI_SLIDER, MOY_T_UI_SLOT, MOY_T_UI_SLOT_NEXT, MOY_T_UI_SLOTS,
-    MOY_T_UI_SPLIT, MOY_T_UI_SWATCHES, MOY_T_UI_TABLE, MOY_T_UI_TABLE_DIST,
-    MOY_T_UI_TABLE_FLOOR, MOY_T_UI_TABLE_PART, MOY_T_UI_TABS, MOY_T_UI_TEXT_VIEW,
-    MOY_T_UI_TOGGLE, MOY_T_UI_TOOL, MOY_T_UITREE_ACTION, MOY_T_UITREE_ACTION_CHARS,
-    MOY_T_UITREE_ACTION_ROW, MOY_T_UITREE_ARG, MOY_T_UITREE_BUILD, MOY_T_UITREE_BUILD_END,
-    MOY_T_UITREE_DRAW_ROW, MOY_T_UITREE_DUMP, MOY_T_UITREE_ERROR, MOY_T_UITREE_FIELD_ENUM,
-    MOY_T_UITREE_FOCUS, MOY_T_UITREE_FRAME, MOY_T_UITREE_GET_CELL, MOY_T_UITREE_GET_INT,
-    MOY_T_UITREE_GET_TEXT, MOY_T_UITREE_LABELS, MOY_T_UITREE_MODEL, MOY_T_UITREE_NEXT,
-    MOY_T_UITREE_NODE, MOY_T_UITREE_NODE_ACTION, MOY_T_UITREE_OPEN, MOY_T_UITREE_PROP,
-    MOY_T_UITREE_ROW_OF, MOY_T_UITREE_SET_ABSENT, MOY_T_UITREE_SET_INT, MOY_T_UITREE_SET_MODEL,
-    MOY_T_UITREE_SET_TEXT, MOY_T_UITREE_STATE,
+    MOY_T_UITREE_ACTION, MOY_T_UITREE_ACTION_CHARS, MOY_T_UITREE_ACTION_ROW, MOY_T_UITREE_ARG,
+    MOY_T_UITREE_BUILD, MOY_T_UITREE_BUILD_END, MOY_T_UITREE_DRAW_ROW, MOY_T_UITREE_DUMP,
+    MOY_T_UITREE_ERROR, MOY_T_UITREE_FIELD_ENUM, MOY_T_UITREE_FOCUS, MOY_T_UITREE_FRAME,
+    MOY_T_UITREE_GET_CELL, MOY_T_UITREE_GET_INT, MOY_T_UITREE_GET_TEXT, MOY_T_UITREE_LABELS,
+    MOY_T_UITREE_MODEL, MOY_T_UITREE_NEXT, MOY_T_UITREE_NODE, MOY_T_UITREE_NODE_ACTION,
+    MOY_T_UITREE_OPEN, MOY_T_UITREE_PROP, MOY_T_UITREE_ROW_OF, MOY_T_UITREE_SET_ABSENT,
+    MOY_T_UITREE_SET_INT, MOY_T_UITREE_SET_MODEL, MOY_T_UITREE_SET_TEXT, MOY_T_UITREE_STATE,
 };

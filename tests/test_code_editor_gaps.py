@@ -715,7 +715,7 @@ def test_completion_popup_renders_without_error(tmp_path):
     drv = _enter_code(ws)
     ws.editor.set_text("cir")
     ws.editor.row, ws.editor.col = 0, 3
-    ws.code_layer._open_completion(ws.editor)
+    ws.code_layer.run("complete_open")          # the completion popup's action
     drv.frame(DT)
     buf = ws.sys_canvas.to_rgb888()
     assert probe.distinct_pixels_in(buf, 3) > 4

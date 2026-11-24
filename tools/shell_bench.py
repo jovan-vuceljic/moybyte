@@ -5,7 +5,6 @@
 #   Run.editor         the Editor's tabs
 #   Run.editor_more    the Code scroll, the pickers, the desk's workspaces, the docked playtest
 #   Run.paint_more     Paint's window drag, the collector's stops under a long stroke
-#   Run.ui_page        the public UI API's fixture page: idle and a held arrow
 #   Run.dialogs        the Editor's dialogs: Cart info, Blocks' number and name prompts
 #   Run.pause          the pause menu over a running cart, and Resume; the stop card
 #   gate               one board's whole run, in order, into a directory
@@ -36,7 +35,6 @@ it, the collector's stops summed (`gc`). The groups, in the order they run:
               workspaces and its docked playtest
     myart     My Art as `apps` takes an app
     gc        the collector's stops under 27 s of Paint strokes
-    uipage    tests/fixtures/ui_page's carts (pushed by --gate): idle, a held arrow
     dialogs   the Editor's Cart info dialog and Blocks' number and name
               prompts: open, typed into (a key every 0.25 s), Cart info's
               fields moved
@@ -86,10 +84,8 @@ PERF_FIELDS = ("busy", "draw", "flush", "logic", "render", "chrome",
                "wmr", "wmw", "wms", "fence_ms", "gfence_ms")
 
 GROUPS = ("mem", "idle", "menu", "apps", "paint", "projects", "notes",
-          "editor", "more", "myart", "gc", "uipage", "dialogs", "pause")
+          "editor", "more", "myart", "gc", "dialogs", "pause")
 
-UI_PAGES = ("tests/fixtures/ui_page/page_py.moy",
-            "tests/fixtures/ui_page/page_lua.moy")
 
 REPAINT = "settings,files,calc,appearance,storybook,getcarts,artwork,myart,editor:code"
 
@@ -531,32 +527,6 @@ class Run:
     def myart(self):
         self.apps([("myart", "My Art", "v")])
 
-    def ui_page(self):
-        """The fixture page each runtime draws: settled, it paints nothing;
-        an arrow held 3 s moves the focus down the page."""
-        b = self.b
-        for title in ("UI Page Py", "UI Page Lua"):
-            self.home()
-            line = b.cmd("run %s" % title, wait_for="REMOTE run", timeout=20)
-            print("   run %s:" % title, line)
-            b.drain(3.0)
-            if not b.state().get("cart"):
-                self.rows.append({"name": "ui page: %s" % title,
-                                  "note": "did not run: %s" % line})
-                self.save()
-                continue
-            self.measure("ui page idle: %s" % title, self.idle(3.0))
-
-            def held():
-                self.ex("ws.input.source('local').set_button('down', True)")
-                b.drain(3.0)
-                self.ex("ws.input.source('local').set_button('down', False)")
-                b.drain(0.5)
-            self.measure("ui page held arrow: %s" % title, held)
-            b.leave_cart()
-            self.no_cart()
-        self.home()
-
     def pooled(self, name, setup, action, n=4, settle=1.0):
         """`n` repeats of `action` after an unmeasured `setup`, their
         painted frames pooled into one row."""
@@ -596,7 +566,8 @@ class Run:
                  "abcdefghij")):
             self.pooled("Blocks %s dialog open" % kind, lambda: self.ex(shut),
                         lambda opener=opener: self.ex(opener + "\nws.mark_dirty()"))
-            self.typed("Blocks %s dialog typing" % kind, "ws.block_ui._blk_kbd_key(%d)", text)
+            self.typed("Blocks %s dialog typing" % kind, ("ws.block_ui.typed(ws.block_ui.blk_kbd['entry'].text"
+                                                              " + chr(%d))"), text)
             self.ex(shut)
             b.drain(1.0)
         self.ex("ws.editor_app.set_tab('cards')\nws.mark_dirty()")
@@ -680,8 +651,6 @@ def run_groups(b, out, only):
         r.sysmenu_move()
     if want("paint"):
         r.paint_more()
-    if want("uipage"):
-        r.ui_page()
     if want("dialogs"):
         r.dialogs("Star Catcher")
     if want("pause"):
@@ -715,22 +684,10 @@ def gate(board, out, port):
     step("reboot", bp + ["reboot"], "%s_reboot.log" % board)
     step("wait", bp + ["wait"], "%s_wait.log" % board)
     time.sleep(20)
-    for cart in UI_PAGES:
-        step("push %s" % os.path.basename(cart), bp + ["push", cart],
-             "%s_push.log" % board)
     try:
         _gate_runs(board, out, py, tool, pa, bp, step)
     finally:
-        titles = [_title(c) for c in UI_PAGES]
-        step("remove the pages", bp + [
-            "py", "[ws.carts.delete(c) for c in list(ws.carts.all) "
-            "if c['title'] in %r] and 0" % (titles,)], "%s_remove.log" % board)
         step("desk", bp + ["desk"], "%s_desk.log" % board)
-
-
-def _title(cart):
-    with open(os.path.join(ROOT, cart, "manifest.json")) as f:
-        return json.load(f)["title"]
 
 
 def _gate_runs(board, out, py, tool, pa, bp, step):

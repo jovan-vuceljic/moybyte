@@ -42,7 +42,7 @@ enum {
     UIT_SCROLL, UIT_MENU, UIT_ITEM, UIT_SPLIT, UIT_CANVAS, UIT_TABS, UIT_SWITCH, UIT_CASE, UIT_TABLE,
     UIT_COL, UIT_FOOT, UIT_CARDS, UIT_CARD, UIT_PICTURE, UIT_POPOVER,
     // the placed kinds: a page placed by the engine's layout (uit_set_placed) holds them
-    UIT_TOOLS, UIT_ROW, UIT_STATUS, UIT_TEXT_EDITOR, UIT_PANES, UIT_PANE, UIT_LEGACY, UIT_SLOT,
+    UIT_TOOLS, UIT_ROW, UIT_STATUS, UIT_TEXT_EDITOR, UIT_PANES, UIT_PANE, UIT_SLOT,
     UIT_PANEL, UIT_LENT,
     UIT_RULE, UIT_NOTE,     // level 1: a divider, a note (no stop either)
     UIT_GRID,               // the page's room in cols x rows cells, a button a cell (or `span` of them)
@@ -178,9 +178,6 @@ void uit_set_placed(uit_t *e, int on);
 // The box the page's ground covers past its content (w 0: none): the
 // toolkit's page opens there and the page lays out in the content.
 void uit_set_ground(uit_t *e, int x, int y, int w, int h);
-// The band's hints while a legacy stop holds focus (its host's `hints()`),
-// NUL-separated, the last NUL in `n`; cut at 128 bytes.
-void uit_set_legacy_hints(uit_t *e, const char *s, size_t n);
 // The items its host adds to the page's band before its way back (a desk
 // pane's "F6 Next pane"), NUL-separated, the last NUL in `n`; cut at 48 bytes.
 void uit_set_band_extra(uit_t *e, const char *s, size_t n);
@@ -237,7 +234,7 @@ int uit_live(uit_t *e, const int16_t *units, int n, int *node);
 int uit_lent_place(int32_t *cells, int n, int32_t x0, int32_t w, int32_t h, int fs, int32_t pad,
                    int32_t *hair, int *nhair, int32_t *need);
 
-// -- the panes (`ui.panes`, `ui.pane`, `ui.legacy`) --------------------------------
+// -- the panes (`ui.panes`, `ui.pane`) ----------------------------------------------
 // What a place, a frame or uit_splits lays the panes out by: the desk unit
 // `du` (pixels), the pane the keys reach (its key, "" none), whether the
 // pointer hovers and the host's clock in ms (a divider's double tap).
@@ -247,14 +244,14 @@ void uit_panes_set(uit_t *e, int du, const char *pane_cur, int mouse, uint32_t c
 void uit_set_unit(uit_t *e, int unit);
 // The last pass's panes as ints into `out` (`max` at most): UIT_PN_HEAD
 // words (the outermost panes' node or -1, the pane the placement stood
-// alone or -1, the least size's w and h, then the counts of the four lists
+// alone or -1, the least size's w and h, then the counts of the three lists
 // and of the splits), then the last placement's panes arranged (node, x, y,
 // w, h, depth, path[4]), its dividers (x, y, w, h, depth, path[4], index,
-// axis), the bodies it placed and the panes this pass drew (as the panes),
+// axis) and the panes this pass drew (as the panes),
 // then each split of this pass (node, n, axis, gap, x, y, w, h, depth,
 // path[4], then node, size, minimum, held a child: -1 it grows). Answers
 // the words written.
-#define UIT_PN_HEAD 9
+#define UIT_PN_HEAD 8
 int uit_panes(const uit_t *e, int32_t *out, int max);
 // The last pass's splits' dividers drawn into a pass the host has open
 // (its own context and sink): a press holds one, a drag's let-go writes
@@ -296,6 +293,9 @@ int uit_run_frame(uit_t *e, void *target, int flags);
 // (UIT_F_BACK: a page under the top one, a dialog, a popover, the back
 // role): 1 once, then 0. The front steps back before its next frame.
 int uit_run_backed(void);
+// The front's canvas took this tick's keys (its keys= while it holds focus):
+// the run's next frame sees none of them (moy_ui_run_keys_taken).
+void uit_run_keys_taken(void);
 // Whether the frame drawn last is what a frame now would draw, so a host
 // may leave its pixels and skip uit_frame: the same build, no state's
 // version and no draft moved, the same focus, no event, trace line or
@@ -387,6 +387,9 @@ int uit_back_dialog(uit_t *e, char *buf, size_t cap);
 // Back on a shown popover: its close= action, -1 where it names none (Back
 // still closes nothing else), -2 where no popover shows; its key into buf.
 int uit_back_popover(uit_t *e, char *buf, size_t cap);
+// The page's shown= action, which its front runs when the page becomes the
+// top page by a push or by Back; -1 where it names none.
+int uit_page_shown(const uit_t *e);
 // Whether no node holds focus.
 int uit_unfocused(const uit_t *e);
 // The id focus is on after the last frame ("" none): its length.

@@ -1,10 +1,10 @@
 """The old look's last surfaces in the 2026-10 look (docs/history/look_2026-10.md
 step 33, GAPS 49-54): the stop card's rows by the run's kind, the month from
-a date, a dialog's captioned fields and its Enter, the flat toast and card,
-the loading pill, the bar widgets' popovers, the saver and the text console.
+a date, the flat card, the loading pill, the bar widgets' popovers, the saver
+and the text console.
 """
 
-from runtime import ui, ui_draw
+from runtime import ui_draw
 from ws_helpers import build_ws, build_ws_with_cart, no_unlock_banner
 
 DT = 1 / 30
@@ -93,12 +93,12 @@ def test_a_fresh_run_puts_a_stop_card_down(tmp_path):
 # -- the month (GAPS 53) ---------------------------------------------------------------
 
 def test_the_month_from_a_date():
-    assert ui.weekday(2026, 10, 1) == 3            # a Thursday
-    assert ui.weekday(2024, 2, 29) == 3
-    assert ui.month_days(2024, 2) == 29 and ui.month_days(2026, 2) == 28
-    assert ui.month_days(2026, 10) == 31
+    assert ui_draw.weekday(2026, 10, 1) == 3            # a Thursday
+    assert ui_draw.weekday(2024, 2, 29) == 3
+    assert ui_draw.month_days(2024, 2) == 29 and ui_draw.month_days(2026, 2) == 28
+    assert ui_draw.month_days(2026, 10) == 31
     # five weeks for October 2026, six for a month that starts on a Sunday
-    assert ui.month_h(2026, 3, 1, False) > ui.month_h(2026, 10, 1, False)
+    assert ui_draw.month_h(2026, 3, 1, False) > ui_draw.month_h(2026, 10, 1, False)
 
 
 def test_the_calendar_popover_pages_and_marks_today(tmp_path):
@@ -147,91 +147,11 @@ def test_the_power_popovers_sliders_change_the_volume(tmp_path):
     assert sl.level("volume")[0] == 4
 
 
-# -- a dialog's fields (GAPS 52) --------------------------------------------------------
-
-class _Page:
-    def __init__(self):
-        self.host = ui_draw.AppHost()
-        self.texts = ["Sky Run", ""]
-        self.done = False
-        self.pick = -1
-
-    def frame(self, cv, th, buttons=("Cancel", "Save")):
-        self.host.begin(cv, th, (0, 0, cv.w, cv.h))
-        self.pick = ui.dialog("Cart info", buttons)
-        for i, label in enumerate(("Title", "Made by")):
-            got, enter = ui.field(label, self.texts[i], 24, {"id": label})
-            self.texts[i] = got
-            self.done = self.done or enter
-        ui.dialog()
-
-
-def _typed(page, key):
-    a = page.host.inp
-    a[5] = key
-
-
-def test_a_dialogs_fields_are_captioned_the_first_focused_and_enter_its_last_button(tmp_path):
+def test_a_flat_card_touches_nothing_past_its_drop(tmp_path):
+    """The flat card: no soft shadow blends over what is under it -- a card
+    paints its rect and its 2 px drop."""
     ws = build_ws(tmp_path)
     cv, th = ws.sys_canvas, ws.theme_colors
-    page = _Page()
-    for _ in range(2):
-        page.frame(cv, th)
-    title, made = page.host.box("Title"), page.host.box("Made by")
-    assert title[1] + title[3] <= made[1]          # a field under the one before
-    # each stop holds its caption over its box: taller than a bare field row
-    assert title[3] >= 2 * ui_draw.metrics("value_row")[30] - 4
-    _typed(page, ord("!"))                         # the first field holds focus
-    page.frame(cv, th)
-    assert page.texts[0] == "Sky Run!"
-    _typed(page, 9)                                # Tab: the next field
-    page.frame(cv, th)
-    _typed(page, ord("A"))
-    page.frame(cv, th)
-    assert page.texts == ["Sky Run!", "A"]
-    _typed(page, 13)                               # Enter: the dialog's last button
-    page.frame(cv, th)
-    assert page.pick == 1
-
-
-def test_a_dialog_with_no_buttons_hands_enter_to_its_field(tmp_path):
-    ws = build_ws(tmp_path)
-    cv, th = ws.sys_canvas, ws.theme_colors
-    page = _Page()
-    for _ in range(2):
-        page.frame(cv, th, ())
-    assert page.host.box("Cancel") is None
-    _typed(page, 13)
-    page.frame(cv, th, ())
-    assert page.done and page.pick == -1
-
-
-# -- flat fills ---------------------------------------------------------------------
-
-def _pixels(cv, r):
-    x, y, w, h = r
-    b = cv._buf
-    return [bytes(b[2 * (yy * cv.w + x):2 * (yy * cv.w + x + w)]) for yy in range(y, y + h)]
-
-
-def test_a_flat_toast_and_a_card_touch_nothing_past_their_drop(tmp_path):
-    """GAPS 51 and the flat card: no soft shadow blends over what is under
-    them -- a toast's pill paints its own rect, a card its rect and its 2 px
-    drop."""
-    ws = build_ws(tmp_path)
-    cv, th = ws.sys_canvas, ws.theme_colors
-    cv.rect(0, 0, cv.w, cv.h, th["panel"])
-    before = bytes(cv._buf)
-    host = ui_draw.AppHost()
-    host.begin(cv, th, (0, 0, cv.w, cv.h))
-    ui.at(20, 60, cv.w - 40, 40)
-    x, y, w, h = ui.toast("Opening Sky Run…", "game", {"flat": True})
-    after = bytes(cv._buf)
-    for yy in range(cv.h):
-        for xx in (x - 3, x + w + 2):
-            if 0 <= xx < cv.w and not (y <= yy < y + h):
-                o = 2 * (yy * cv.w + xx)
-                assert after[o:o + 2] == before[o:o + 2]
     cv.rect(0, 0, cv.w, cv.h, th["panel"])
     before = bytes(cv._buf)
     ui_draw.modal(cv, th, (40, 40, 200, 100))

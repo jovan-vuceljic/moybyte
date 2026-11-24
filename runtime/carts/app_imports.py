@@ -2,11 +2,12 @@
 makes (docs/os_2026-11/processes.md §2).
 
 A Python cart runs in the console's one VM, where every module the console
-is built from can be imported by its name. Two of them are the app API
-(docs/app_api_v1.md): `moybyte`, the app's verbs and its device objects, and
-`ui`, the public UI API. The rest of the console is not, and a cart that
-imports it is refused at install, the module named. Beside the two, a cart
-imports the language's own library, the names in STANDARD.
+is built from can be imported by its name. One of them is the app API
+(docs/app_api_v1.md): `moybyte`, the app's verbs and its device objects; a
+cart on the UI tree is handed its `ui` in its namespace, not by an import.
+The rest of the console is not, and a cart that imports it is refused at
+install, the module named. Beside it, a cart imports the language's own
+library, the names in STANDARD.
 
 This is a statement of what the console will not rename under an app, not a
 boundary: Python is trusted, and `__import__`, `exec` or `getattr` walk past
@@ -17,7 +18,7 @@ module (tests/test_app_imports.py holds it to `ast` over the whole tree).
 """
 
 # The app API: the console's modules an app imports.
-PUBLIC = ("moybyte", "ui")
+PUBLIC = ("moybyte",)
 
 # The language's library, as MicroPython carries it (the `u` spellings
 # too), and the standard names the OS documents promise: `machine` for a

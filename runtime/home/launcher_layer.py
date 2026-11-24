@@ -45,7 +45,7 @@
 Boundary (single source of truth): ws.launcher (the instance) + ws.open() (open the
 selected cart -- lifecycle, pinned) + the cart store stay on Workstation. The card
 draw needs the palette -- `NAMES` is INJECTED at construction. The rect
-hit-test is `ui.rect_in`. No circular import: this module and the home_*
+hit-test is `widgets.rect_in`. No circular import: this module and the home_*
 modules it takes its arrangements and band frame from import no console
 module (the only console touch is Launcher's lazy Layout fallback for a bare
 Launcher() that no caller ever constructs).
@@ -61,9 +61,9 @@ every frame through the row. The grid's own
 
 from array import array
 
-import ui as _ui
+import home_band as _band
 import ui_draw as _ui_draw
-_in = _ui.rect_in   # one hit-test (ui.rect_in)
+from widgets import rect_in as _in   # one hit-test
 
 
 # The tick helpers feed the perf_capture-gated home-frame split (see draw below).
@@ -548,15 +548,15 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         if now is None:
             return
         kh = self._hk.of(now[0])
-        held = _ui.held("hint", kh)
+        held = _band.held("hint", kh)
         # where the last frame's buffer holds the frame round the band and
         # the part as this frame draws them, the part is copied out of it
         cl = (getattr(cv, "copy_last", None)
-              if draw and not whole and _ui.held_last("band", self._keys[0]) else None)
+              if draw and not whole and _band.held_last("band", self._keys[0]) else None)
         if draw and (whole or not held):
             h = g.foot()[5]
             if h[2] > 0 and h[3] > 0:
-                if not (cl is not None and _ui.held_last("hint", kh)
+                if not (cl is not None and _band.held_last("hint", kh)
                         and cl(h[0], h[1], h[2], h[3])):
                     self.ws.wallpaper.restorer(cv, self._bd_now)(cv, h)
                     self._draw_home_chrome(cv)
@@ -710,14 +710,14 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         if bar is None:
             bar = self.ws.bar_layer.shown_gen("home")
         self.grid.resume_band_host(cv)
-        _ui.held("still", self._stk.of(parts[0]))
-        _ui.held("sel", self._slk.of(parts[1]))
-        _ui.held("shelf", self._shk.of(parts[2]))
-        _ui.held("bar", bar)
+        _band.held("still", self._stk.of(parts[0]))
+        _band.held("sel", self._slk.of(parts[1]))
+        _band.held("shelf", self._shk.of(parts[2]))
+        _band.held("bar", bar)
         now = self._outside_key()
         if now is not None:
-            _ui.held("hint", self._hk.of(now[0]))
-        return _ui.held_all()
+            _band.held("hint", self._hk.of(now[0]))
+        return _band.held_all()
 
     def _try_still_frame(self, cv, dt):
         """The desk home's frame over its still backdrop: the parts this
@@ -741,7 +741,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         g = self.grid
         fed = self._shelf_fed()
         g.begin_band_host(cv)
-        if not _ui.held("still", kb):
+        if not _band.held("still", kb):
             return False                 # (the buffer holds another backdrop)
         laid = []
         if fed:
@@ -759,15 +759,15 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         # what the buffer this frame paints lacks, and what the buffer the
         # last frame painted holds as this frame would draw it (§14.6),
         # asked before anything draws through another host
-        sel_lag = not _ui.held("sel", ks)
-        band_lag = not _ui.held("shelf", kd) and not fed
-        bar_lag = not _ui.held("bar", kr)
-        hint_lag = not _ui.held("hint", kh)
-        last = _ui.held_last("still", kb)
-        rows = last and _ui.held_last("bar", kr)
-        sel_last = last and _ui.held_last("sel", ks)
-        band_last = last and _ui.held_last("shelf", kd)
-        hint_last = last and _ui.held_last("hint", kh)
+        sel_lag = not _band.held("sel", ks)
+        band_lag = not _band.held("shelf", kd) and not fed
+        bar_lag = not _band.held("bar", kr)
+        hint_lag = not _band.held("hint", kh)
+        last = _band.held_last("still", kb)
+        rows = last and _band.held_last("bar", kr)
+        sel_last = last and _band.held_last("sel", ks)
+        band_last = last and _band.held_last("shelf", kd)
+        hint_last = last and _band.held_last("hint", kh)
         wm = ws.wm
         # A part the last frame painted as this one would is copied out of
         # its buffer (§14.6): whole rows where the bar there is this one's.

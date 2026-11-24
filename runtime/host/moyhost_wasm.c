@@ -47,7 +47,7 @@
 #include "moycore_run.h"
 #include "moycore_lua.h"
 #include "moy_files.h"
-#include "moy_ui_wasm.h"
+#include "moy_ui_run.h"
 #include "moy_app_run.h"
 #include "moy_log.h"
 #include "moy_proc.h"
@@ -300,7 +300,7 @@ int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t 
     return wasm_runtime_call_wasm(r->env, fn, 5, argv) ? 1 : -1;
 }
 
-/* The canvas the ui rows draw on (native/moy_ui/moy_ui_run.h): the live
+/* The canvas a compiled app's page draws on (native/moy_ui/moy_ui_run.h): the live
  * run's draw target, an owed or kept frame written in first, as the board's
  * module does. */
 void *moycore_ui_target(void)

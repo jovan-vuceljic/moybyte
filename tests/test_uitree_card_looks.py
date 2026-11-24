@@ -38,7 +38,7 @@ def _lua_cells(tmp_path, look, fill=""):
     cart.mkdir(parents=True)
     (cart / "manifest.json").write_text(json.dumps({
         "format": "moy-1", "title": "Lua Cells", "runtime": "lua", "main": "main.lua",
-        "extensions": ["moybyte.ui", "moybyte.uitree"],
+        "extensions": ["moybyte.uitree"],
         "moybyte": {"type": "app", "permissions": []}}))
     (cart / "main.lua").write_text(_LUA_CELLS % (fill, look))
     ws = host_app.build_workstation(str(carts))

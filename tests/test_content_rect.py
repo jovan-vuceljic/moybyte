@@ -123,6 +123,8 @@ def _open_every_surface(ws):
         ws.text.set_menu_view(tab)
         ws.frame(DT)
     ws.home.go_home()
+    for slot in list(ws.app_layers):
+        ws.app(slot.id)                  # a declared app is built at its first ask
 
 
 def _layouts(ws):

@@ -313,7 +313,7 @@ def test_a_blob_made_before_its_module_changed_is_stale(compiled, tmp_path):
 def _staged(tmp_path):
     import importlib
     mods = tmp_path / "modules"
-    mods.mkdir()
+    mods.mkdir(parents=True)
     for m in MODULES:
         (mods / (m + ".py")).write_text(Path(importlib.import_module(m).__file__).read_text())
     return mods
@@ -329,13 +329,16 @@ def test_staging_compiles_the_staged_pages_and_names_a_stale_one(compiled, tmp_p
     assert set(blobs) == set(UC.compile_modules(MODULES).pages)
     # every entry a constant, so a board keeps it in flash and its heap only the dict of them
     assert [k for k, v in ns["PAGES"].items() if not uitree_aot.constant(v)] == []
-    paths = dict((m, str(mods / (m + ".py"))) for m in MODULES)
+    # the staged copies a build stages again (the stage leaves its page
+    # functions to the host: `strip`)
+    again = _staged(tmp_path / "again")
+    paths = dict((m, str(again / (m + ".py"))) for m in MODULES)
     assert UC.stale(blobs, paths) == []
-    with open(mods / "tasks_ui.py", "a") as f:
+    with open(again / "tasks_ui.py", "a") as f:
         f.write("\n# a change\n")
     assert UC.stale(blobs, paths) == ["tasks_ui.tasks_page"]
     with pytest.raises(SystemExit, match="tasks_ui"):
-        UC.stage(str(mods))
+        UC.stage(str(again))
 
 
 def test_a_board_with_no_desk_stages_no_desk_page(compiled, tmp_path, capsys):

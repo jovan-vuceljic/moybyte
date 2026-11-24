@@ -1,8 +1,0 @@
-{
-  "format": "moy-1",
-  "title": "Native page",
-  "id": "wasi.page",
-  "runtime": "wasm",
-  "main": "main.wasm",
-  "moybyte": {"type": "app", "wasi": true, "permissions": []}
-}

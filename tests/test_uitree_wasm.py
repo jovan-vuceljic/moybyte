@@ -261,6 +261,35 @@ def test_a_page_takes_a_row_and_the_app_moves_the_focus():
         "action open from link 'b/open' on 'Shelf'",
         "state sel '' -> 'b' (in open)",
         "page push page 2, opened from 'b/open'",
+        "action seen from the page shown",
+        "state seen_on '' -> 'b' (in seen)",
+        "page back page 1, focus back to 'b/open'"]
+
+
+def test_a_page_pushed_over_itself_with_another_row_gives_the_first_its_row_back():
+    """ut_push_row's page keeps the row it was pushed with: the details of
+    Bread pushed over by the details of Apples, Back sets the cursor to
+    Bread again as it builds the page under. The page's shown= hook runs at
+    each push and at the Back onto it, reading the row it shows, before the
+    next action."""
+    import uitree_conf as C
+    cart = os.path.join(ROOT, "tests", "fixtures", "uitree_rowpage_wasm.moy")
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "k:a", "k:a", "back", "back"], cart=cart)
+    assert trace[trace.index("action open from link 'b/open' on 'Shelf'"):] == [
+        "action open from link 'b/open' on 'Shelf'",
+        "state sel '' -> 'b' (in open)",
+        "page push page 2, opened from 'b/open'",
+        "action seen from the page shown",
+        "state seen_on '' -> 'b' (in seen)",
+        "action other from link 'other' on 'Details'",
+        "state sel 'b' -> 'a' (in other)",
+        "page push page 3, opened from 'other'",
+        "action seen from the page shown",
+        "state seen_on 'b' -> 'a' (in seen)",
+        "state sel 'a' -> 'b' (in the app)",
+        "page back page 2, focus back to 'other'",
+        "action seen from the page shown",
+        "state seen_on 'a' -> 'b' (in seen)",
         "page back page 1, focus back to 'b/open'"]
 
 
@@ -333,3 +362,16 @@ def test_a_carousel_is_a_cards_look_the_rows_take_and_another_look_is_refused():
                 assert "cards look='grid'" in r.read("error", cap=400)[1], r.read("error", cap=400)[1]
         finally:
             r.close()
+
+
+def test_the_on_glass_tree_app_builds_and_draws_its_page_alike_each_run():
+    """App Tree Wasm (tests/fixtures/wasm/app_tree.moy), which the boards'
+    suites hold to the host's run (on_glass.wasm_app_draws_the_toolkit),
+    builds, runs its frames with no row refused and draws a page of the
+    look's colours, the same crc on each run of a tier."""
+    import on_glass
+    keys, desk = (("moy", "dark", 0), (320, 240, False)), (("moy", "light", 3), (1024, 600, True))
+    pm, crc = on_glass.app_tree_host_page(*keys)
+    assert pm[on_glass._UI_FRAMES] > 0 and pm[on_glass._UI_FAIL] == 0, pm[:10]
+    assert on_glass.app_tree_host_page(*keys)[1] == crc
+    assert on_glass.app_tree_host_page(*desk)[1] not in (crc, 0)

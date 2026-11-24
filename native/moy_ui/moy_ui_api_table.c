@@ -1453,7 +1453,7 @@ int32_t moy_ui_api_dialog(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t
     EACH_PIECE(c, mk, s, cast) {
         moy_ui_modal(s, card, title, fs, c->cls, rh);
     }
-    c->dlg.id = id;
+    c->dlg.id = c->dlg.last = id;
     c->dlg.card = card;
     // the buttons at its foot, right-aligned, recorded left to right, a
     // focus ring's reach and 4 pixels clear between them
