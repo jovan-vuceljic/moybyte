@@ -240,12 +240,17 @@ def run_live(driver, dt, scale):
             return ord(ev.unicode)
         return None
 
+    ws = driver.ws
+    shown = None
+    exposed = False
     mouse_down = False
     running = True
     while running:
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
                 running = False
+            elif ev.type in (pygame.VIDEOEXPOSE, getattr(pygame, "WINDOWEXPOSED", -1)):
+                exposed = True
             elif ev.type in (pygame.KEYDOWN, pygame.KEYUP) and ev.key in mod_keys:
                 (held_mods.add if ev.type == pygame.KEYDOWN else held_mods.discard)(ev.key)
                 driver.set_mods(mods_now())
@@ -282,11 +287,36 @@ def run_live(driver, dt, scale):
         # (No trackball nudge: this tier's cursor IS the mouse. ConsoleDriver.pan
         # stays for backends that really have a trackball -- the T-Deck's own.)
         driver.frame(dt)
-        surf = pygame.image.frombuffer(driver.rgb888(), (cv.w, cv.h), "RGB")
-        screen.blit(pygame.transform.scale(surf, (cv.w * scale, cv.h * scale)), (0, 0))
-        pygame.display.flip()
+        # The window shows a frame the console painted, as a board's flush
+        # does (`frame_state.frames_drawn`, desktop_spine's signal), and keeps
+        # its picture on the frames that painted nothing.
+        drawn = ws.frame_state.frames_drawn
+        if drawn != shown:
+            shown = drawn
+            present(screen, ws.glass_canvas, scale)
+        elif exposed:
+            pygame.display.flip()
+        exposed = False
         clock.tick(int(1 / dt))
     pygame.quit()
+
+
+def present(screen, cv, scale):
+    """Show canvas `cv` on pygame's `screen`, `scale` times its size. Its
+    palette indices go to an 8-bit surface whose palette is their colours
+    (`to_indexed`), so SDL maps them in C; a surface with more words than a
+    palette holds is read through `to_rgb888`."""
+    import pygame
+    indexed = cv.to_indexed()
+    if indexed is None:
+        surf = pygame.image.frombuffer(cv.to_rgb888(), (cv.w, cv.h), "RGB")
+    else:
+        surf = pygame.image.frombuffer(indexed[0], (cv.w, cv.h), "P")
+        surf.set_palette(indexed[1])
+    if scale != 1:
+        surf = pygame.transform.scale(surf, (cv.w * scale, cv.h * scale))
+    screen.blit(surf, (0, 0))
+    pygame.display.flip()
 
 
 def _force_autoplay_on_open(ws):
