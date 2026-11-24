@@ -427,10 +427,16 @@ try {
   // The sign-in's input FIRST: a QR's token leaves the url before the worker
   // exists, and the keys this browser holds go with the init.
   const auth = window.__moySignIn();
-  const w = new Worker("worker.js?v=" + MOY_BUILD, { type: "module" });
+  // The pack's assets as Blob URLs where the loader (loader.html) booted this
+  // page; the worker then imports its modules and the wasm through them, and
+  // resolves its requests against this page's address.
+  const assets = window.moyAssets || null;
+  const w = new Worker(assets ? assets["worker.js"] : "worker.js?v=" + MOY_BUILD,
+                       { type: "module" });
   window.__moyAttach(w);
   // A coarse pointer is a finger: the console's hints start on touch.
   w.postMessage({ t: "init", search: location.search, channel: MOY_CHANNEL, auth: auth,
+                  assets: assets, base: location.href,
                   rate: actx ? actx.sampleRate : 0,
                   coarse: !!(window.matchMedia && matchMedia("(pointer: coarse)").matches),
                   scheme: moyScheme() });
