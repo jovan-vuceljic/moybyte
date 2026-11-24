@@ -592,7 +592,7 @@ class SoundPane:
     def _sync(self):
         me = self.mu.musicedit
         if me is None:
-            vals = (True, [], "", "", "", "", False, False)
+            vals = (True, [], "", "", "", "", False, False, 0)
         else:
             cur = me.cur_step()
             if cur is not None:
@@ -606,7 +606,7 @@ class SoundPane:
             vals = (False, rows, str(self.brush), editor_sound.WAVE_WORDS[self.brush],
                     self._oct_word(self.low(me) // 12),
                     "%d–%d" % (page * PAGE + 1, min(n, page * PAGE + PAGE)), n > PAGE,
-                    self._roomy())
+                    self._roomy(), self._graph_least())
         if vals != self._shown:
             self._shown = vals
             self.run("sync", vals)
@@ -622,6 +622,21 @@ class SoundPane:
         if r is None or _ui_draw.text_width(word, fs, "ui") + 16 + 12 * fs <= r[2]:
             return word
         return str(n)
+
+    def _graph_least(self):
+        """The graph's least height (`geometry`'s at its smallest semitone)
+        where the pane's body, less its brush and ops rows as the last frame
+        laid them out, is shorter than that; else 0, the graph taking the room."""
+        u = self._u
+        least = 4 * u + 4 * u + 20 * u + 8 * LEVELS * u + 8 * u + SPAN * 6 * u
+        pg = self.page
+        if pg is None:
+            return 0
+        rows = 0
+        for k in ("brush", "ops"):
+            r = pg.rect_of(k)
+            rows += r[3] if r is not None else 0
+        return least if self.mu.layout.ch - rows < least else 0
 
     def _roomy(self):
         """Whether the ops row holds both steppers past its ops."""

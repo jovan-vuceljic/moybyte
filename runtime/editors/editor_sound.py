@@ -48,7 +48,7 @@ s = ui.state(
     none=False,
     waves=ui.model(key="k", k="", rgb=0),
     brush=ui.row_of("waves"),
-    word="", oct="", span="", paged=False, roomy=False,
+    word="", oct="", span="", paged=False, roomy=False, tight=False, graph_h=0,
     asking=ui.enum("none", "name", "menu", init="none"),
     f_name="", name_at="", name_w=300, menu_at="", menu_w=220,
     sounds=ui.model(key="k", k="", label="", icon=""),
@@ -69,8 +69,11 @@ def row_label(me, k):
 def sync(vals):
     """The host's values: (no bank, the brush's swatches, the wave
     picked, its word, the octave's word, the page's span, whether the
-    sound runs past a page, whether the ops row holds both steppers)."""
-    s.none, rows, brush, s.word, s.oct, s.span, s.paged, s.roomy = vals
+    sound runs past a page, whether the ops row holds both steppers, and
+    the graph's least height where the pane is too short for it, 0 where
+    it is not)."""
+    s.none, rows, brush, s.word, s.oct, s.span, s.paged, s.roomy, s.graph_h = vals
+    s.tight = s.graph_h > 0
     if s.waves != rows:
         s.waves = rows
     if s.brush != brush:
@@ -136,19 +139,40 @@ def _draw_graph(cv, x, y, w, h):
     uitree_app.env().draw_graph(cv, x, y, w, h)
 
 
+def _brush():
+    with ui.row("brush", pad=12, shown="!none"):
+        ui.seg("Wave  {word}", "brush", text="{.rgb}", look="swatches", on="brushed")
+
+
+def _ops():
+    with ui.row("ops", pad=12, shown="!none"):
+        for icon, _w, op in OPS:
+            ui.button(op, icon=icon, alone=True, w=OP_W, kind="danger" if op == "del" else "normal")
+        with ui.row("oct_step", pad=8, shown="!paged || roomy"):
+            ui.stepper("{oct}", "oct_down", "oct_up", tone="dim", grow=True)
+        with ui.row("page_step", pad=8, shown="paged"):
+            ui.stepper("{span}", "page_down", "page_up", tone="dim", grow=True)
+
+
+def _roomy():
+    """The brush, the graph taking what the rows leave, the ops."""
+    _brush()
+    ui.canvas("graph", _draw_graph, pointer="graph", shown="!none")
+    _ops()
+
+
+def _tight():
+    """A pane too short for the graph: the three at their heights, scrolled."""
+    with ui.scroll("tight_view"):
+        _brush()
+        ui.canvas("graph", _draw_graph, pointer="graph", h="{graph_h}", shown="!none")
+        _ops()
+
+
 def sound_page():
     with ui.page(""):
         ui.empty("No sound", icon="music", lines=["This cart has no sound bank"], shown="none")
-        with ui.row("brush", pad=12, shown="!none"):
-            ui.seg("Wave  {word}", "brush", text="{.rgb}", look="swatches", on="brushed")
-        ui.canvas("graph", _draw_graph, pointer="graph", shown="!none")
-        with ui.row("ops", pad=12, shown="!none"):
-            for icon, _w, op in OPS:
-                ui.button(op, icon=icon, alone=True, w=OP_W, kind="danger" if op == "del" else "normal")
-            with ui.row("oct_step", pad=8, shown="!paged || roomy"):
-                ui.stepper("{oct}", "oct_down", "oct_up", tone="dim", grow=True)
-            with ui.row("page_step", pad=8, shown="paged"):
-                ui.stepper("{span}", "page_down", "page_up", tone="dim", grow=True)
+        ui.switch("tight", {False: _roomy, True: _tight})
         with ui.popover("sound_name", at="{name_at}", w="{name_w}", close="close", shown="asking=name"):
             ui.field("Name", "f_name", max=SFX_NAME_MAX, on="named", hint="no name")
         with ui.popover("sound_menu", at="{menu_at}", w="{menu_w}", close="close", shown="asking=menu"):
