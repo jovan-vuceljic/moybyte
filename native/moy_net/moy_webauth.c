@@ -88,6 +88,7 @@ uint32_t moy_web_live_idle_ms(void);
 
 #define KEYS_FILE "/webkeys"
 #define PW_FILE "/password"
+#define CLAIM_FILE "/claim"
 #define FILE_MAX 4096
 #define SEEN_EVERY_S 3600
 #define SALT_MAX 64
@@ -158,6 +159,8 @@ typedef struct {
     uintptr_t worker;
     char text[FILE_MAX];                // the keys file, read or being written
 } wa_t;
+
+static int s_cable;                     // moy_wa_cable: this board pairs over the cable
 
 static wa_t *A;
 
@@ -457,6 +460,54 @@ void moy_wa_note(uint32_t peer, int ok) {
     }
 }
 
+// -- the claim's file (THE CLAIM) --------------------------------------------------------
+
+static int has_password(void) {
+    uint32_t iter;
+    char salt[SALT_MAX];
+    uint8_t w0[32], l[MOY_SEAL_POINT];
+    int has = password(&iter, salt, w0, l);
+    moy_seal_wipe(w0, sizeof w0);
+    return has;
+}
+
+static void claim_drop(void) {
+    char path[MOY_WEB_PATH_MAX + 16];
+    moy_seal_wipe(A->claim, sizeof A->claim);
+    A->claim_on = 0;
+    path_of(path, sizeof path, CLAIM_FILE);
+    moy_vol_t v;
+    const char *rest;
+    int g = moy_vol_gate_enter(path);
+    if (moy_vol_at(path, &v, &rest) == 0) {
+        moy_vol_remove(&v, rest);
+    }
+    moy_vol_gate_leave(g);
+}
+
+static void claim_mint(void) {
+    moy_seal_random(A->claim, MOY_SEAL_RAND);
+    A->claim_on = 1;
+    moy_hex_encode(A->claim, MOY_SEAL_RAND, A->text);
+    A->text[2 * MOY_SEAL_RAND] = '\n';
+    write_text(CLAIM_FILE, 2 * MOY_SEAL_RAND + 1);
+    moy_seal_wipe(A->text, sizeof A->text);
+}
+
+// A board with no password takes back the claim it kept; one with a password
+// drops it, since a claim minted to replace a password lasts one boot.
+static void claim_load(void) {
+    int n = read_text(CLAIM_FILE);
+    int ok = n >= 2 * MOY_SEAL_RAND
+             && moy_hex_decode(A->text, 2 * MOY_SEAL_RAND, A->claim, MOY_SEAL_RAND);
+    moy_seal_wipe(A->text, sizeof A->text);
+    if (ok && !has_password()) {
+        A->claim_on = 1;
+    } else if (n >= 0) {
+        claim_drop();
+    }
+}
+
 // -- configuration ----------------------------------------------------------------------
 
 int moy_wa_config(const char *system_dir) {
@@ -488,6 +539,7 @@ int moy_wa_config(const char *system_dir) {
     A->claim_on = 0;
     A->on = 1;
     load();
+    claim_load();
     return 0;
 }
 
@@ -519,25 +571,27 @@ void moy_wa_token(char out[2 * MOY_SEAL_RAND + 1]) {
 }
 
 void moy_wa_claim(char out[2 * MOY_SEAL_RAND + 1]) {
-    uint32_t iter;
-    char salt[SALT_MAX];
-    uint8_t w0[32], l[MOY_SEAL_POINT];
+    out[0] = '\0';
+    if (A == NULL || !A->on || has_password()) {
+        return;
+    }
+    if (!A->claim_on) {
+        claim_mint();
+    }
+    moy_hex_encode(A->claim, MOY_SEAL_RAND, out);
+}
+
+void moy_wa_claim_new(char out[2 * MOY_SEAL_RAND + 1]) {
     out[0] = '\0';
     if (A == NULL || !A->on) {
         return;
     }
-    int has = password(&iter, salt, w0, l);
-    moy_seal_wipe(w0, sizeof w0);
-    if (has) {
-        moy_seal_wipe(A->claim, sizeof A->claim);
-        A->claim_on = 0;
-        return;
-    }
-    if (!A->claim_on) {
-        moy_seal_random(A->claim, MOY_SEAL_RAND);
-        A->claim_on = 1;
-    }
+    claim_mint();
     moy_hex_encode(A->claim, MOY_SEAL_RAND, out);
+}
+
+void moy_wa_cable(int on) {
+    s_cable = on != 0;
 }
 
 int moy_wa_paired(void) {
@@ -648,6 +702,9 @@ static int end_sessions(const uint8_t *kid) {
 int moy_wa_signout(void) {
     if (A == NULL || !A->on) {
         return 0;
+    }
+    if (A->claim_on) {
+        claim_drop();
     }
     return end_sessions(NULL);
 }
@@ -984,8 +1041,10 @@ static int hello(uint32_t peer, char *doc, size_t cap) {
     moy_hex_encode(A->id, MOY_SEAL_RAND, id);
     moy_hex_encode(c->nb, MOY_SEAL_RAND, nb);
     snprintf(doc, cap,
-             "{\"v\":1,\"id\":\"%s\",\"nb\":\"%s\",\"pw\":%s,\"salt\":\"%s\",\"iter\":%u}", id,
-             nb, pw ? "true" : "false", pw ? salt : "", pw ? (unsigned)iter : 0u);
+             "{\"v\":1,\"id\":\"%s\",\"nb\":\"%s\",\"pw\":%s,\"salt\":\"%s\",\"iter\":%u,"
+             "\"cable\":%s}",
+             id, nb, pw ? "true" : "false", pw ? salt : "", pw ? (unsigned)iter : 0u,
+             s_cable ? "true" : "false");
     return 200;
 }
 
@@ -998,29 +1057,34 @@ static int token_live(void) {
     return A->token_on;
 }
 
-// THE CLAIM (docs/os_2026-11/system.md section 3): the first password of a
-// board that has none, set by the browser the cable's Improv sent to it.
-// {"op":"claim","claim":<32 hex>,"record":<the record>}: the claim this
-// boot's Improv answer carried (moy_wa_claim), taken once, and the password's
-// record (moy_seal.h, THE PASSWORD) the browser made, which becomes
-// system/password. Refused 403 "claimed" once a password exists, 403 "claim"
-// for any other claim (a wrong credential to the backoff), 400 "record" for
-// a record that does not parse, which spends nothing.
+// THE CLAIM (docs/os_2026-11/system.md section 3): a board's password set by
+// the browser the cable sent to it. The claim is 128 random bits that only
+// ever leave the board over the cable, in Improv's answers: the board's own
+// while it has no password (moy_wa_claim, made at the first ask), or one
+// minted on the cable's request (moy_wa_claim_new), which may REPLACE a
+// password, physical access being the owner's proof. It is kept in
+// <system>/claim, so the link setup gave survives a reboot; it goes when it
+// is taken, when the password changes another way (moy_wa_signout), when a
+// newer one is minted, and at a boot that finds a password set.
+// {"op":"claim","claim":<32 hex>,"record":<the record>}: the claim, taken
+// once, and the password's record (moy_seal.h, THE PASSWORD) the browser
+// made, which becomes system/password and ends every session (a password
+// change, moy_wa_signout). Refused 403 "claimed" when the board has a
+// password and no claim, 403 "claim" for any other claim (a wrong
+// credential to the backoff), 400 "record" for a record that does not parse,
+// which spends nothing.
 static int claim(uint32_t peer, const char *o, const char *oe, char *doc, size_t cap) {
     uint32_t ms = wait_of(peer, 1);
     if (ms) {
         snprintf(doc, cap, "{\"error\":\"wait\",\"ms\":%u}", (unsigned)ms);
         return 429;
     }
+    if (!A->claim_on && has_password()) {
+        return refuse(doc, cap, 403, "claimed");
+    }
     uint32_t iter;
     char salt[SALT_MAX];
     uint8_t w0[32], l[MOY_SEAL_POINT];
-    if (password(&iter, salt, w0, l)) {
-        moy_seal_wipe(w0, sizeof w0);
-        moy_seal_wipe(A->claim, sizeof A->claim);
-        A->claim_on = 0;
-        return refuse(doc, cap, 403, "claimed");
-    }
     char rec[MOY_SEAL_PW_RECORD];
     int rn = str_of(o, oe, "record", rec, sizeof rec);
     int good = rn > 0 && memchr(rec, '\n', (size_t)rn) == NULL
@@ -1037,8 +1101,6 @@ static int claim(uint32_t peer, const char *o, const char *oe, char *doc, size_t
     if (!ok) {
         return refuse(doc, cap, 403, "claim");
     }
-    moy_seal_wipe(A->claim, sizeof A->claim);
-    A->claim_on = 0;
     memcpy(A->text, rec, (size_t)rn);
     A->text[rn] = '\n';
     int rc = write_text(PW_FILE, (size_t)rn + 1);
@@ -1046,6 +1108,8 @@ static int claim(uint32_t peer, const char *o, const char *oe, char *doc, size_t
     if (rc != 0) {
         return refuse(doc, cap, 500, "store");
     }
+    claim_drop();
+    end_sessions(NULL);
     snprintf(doc, cap, "{\"ok\":true}");
     return 200;
 }
