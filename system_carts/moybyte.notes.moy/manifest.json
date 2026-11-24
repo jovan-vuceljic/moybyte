@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 16,
+  "version": 17,
   "title": "Notes",
   "id": "moybyte.notes",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "Write notes and lists. Tick off boxes, link one note to another, and write and run little programs.",
   "extensions": [
     "moybyte.uitree"
   ],

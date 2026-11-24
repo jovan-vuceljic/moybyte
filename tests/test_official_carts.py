@@ -606,7 +606,7 @@ def test_a_console_board_s_step_is_the_add_on_s_alone(tmp_path, monkeypatch):
 # -- the cable install ------------------------------------------------------------
 
 
-def test_a_cable_flash_installs_a_new_store_s_set_and_updates_what_a_store_holds():
+def test_a_cable_flash_installs_the_roster_s_set_under_the_seed_s_rule():
     offered = {"moybyte.files.moy": 6, "moybyte.coin_quest.moy": 17,
                "moybyte.tap_only_red.moy": 11, "moybyte.letter_blitz.moy": 14}
     image = ("moybyte.files",)
@@ -615,8 +615,12 @@ def test_a_cable_flash_installs_a_new_store_s_set_and_updates_what_a_store_holds
     assert board_flash.carts_plan(new, offered, install, image) == [
         "moybyte.coin_quest.moy", "moybyte.tap_only_red.moy"]
     used = {"moybyte.files.moy": 5, "moybyte.coin_quest.moy": 16, "kids.moy": 1}
-    assert board_flash.carts_plan(used, offered, install, image) == ["moybyte.coin_quest.moy"], \
-        "a store in use gets the newer versions of what it holds and nothing it lacks"
+    assert board_flash.carts_plan(used, offered, install, image) == [
+        "moybyte.coin_quest.moy", "moybyte.tap_only_red.moy"], \
+        "a store in use gets the newer versions of what it holds and the set's carts it lacks"
+    assert board_flash.carts_plan(used, offered, install, image,
+                                  ["moybyte.tap_only_red.moy"]) == ["moybyte.coin_quest.moy"], \
+        "a removal the store recorded holds"
     assert board_flash.carts_plan(used, offered, (), image + install) == [], \
         "the image's own seed keeps the carts it carries"
     held = dict(used, **{"moybyte.letter_blitz.moy": 13})

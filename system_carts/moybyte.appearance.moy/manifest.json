@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 9,
+  "version": 10,
   "title": "Appearance",
   "id": "moybyte.appearance",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "Change how your console looks: its theme, colours, font and wallpaper.",
   "moybyte": {
     "type": "app",
     "system": true,

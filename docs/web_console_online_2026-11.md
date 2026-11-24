@@ -66,7 +66,9 @@ later sync their files.
   Zero's USB serial (§7), run by the flasher after a flash and by My
   consoles for a board already flashed, one client for both pages
   (`site/os/improv.js`, `setup.js`); a console with no password takes its
-  first by the claim, over the link. My consoles also adds a console by
+  first by the claim, over the link. A board already on a network is
+  managed over the same cable at any time ("Manage by cable", §7): its
+  Wi-Fi, its name and a new password. My consoles also adds a console by
   hand by its address, which its first open verifies.
 - **os.moybyte.com is GitHub Pages** (owner, 2026-11-24): one deploy
   (`.github/workflows/pages.yml`) on every `dev` and `master` push holds
@@ -107,7 +109,8 @@ the notes under each step point to where that is.
 4. The page offers "Open kitchen": the console's window opens over the
    link, takes the password by the board's claim and signs in.
 5. A board flashed before has the same setup in My consoles, "Set up a
-   board by cable".
+   board by cable"; one already on a network is managed there instead
+   (§7, "Manage by cable").
 6. Without Web Serial (an iPhone), flash from a computer, or use the board's
    setup hotspot and its form, then add the console by its address.
 
@@ -311,8 +314,8 @@ pack    site -> board   request: bytes, the pack (a transferred ArrayBuffer), or
                         the site keeps none; the reply says ok, true or false
 state   board -> site   state: booted | sign-in | signed-in | failed, and said: the sentence
 unknown                 the reply to a request of a kind its receiver does not serve
-claim   site -> board   request: claim, board (its id), password: the board's first
-                        password (§7); the reply says ok, and said: why not
+claim   site -> board   request: claim, board (its id), password: the password the
+                        cable's claim sets (§7); the reply says ok, and said: why not
 ```
 
 `hello` and `state` are notices, answered by nothing. The site answers a
@@ -324,7 +327,8 @@ only when it signs in. My consoles keys a console by the board's id where
 Improv reported it (§7) and by an id of its own for one added by hand; a
 `hello` is what marks a console reached, with the digests it named. The
 site sends `claim` once, when a console it holds a claim for says
-`sign-in`.
+`sign-in` or `signed-in` (a new password for a console this browser
+already pairs with), or at once to a window that said either before.
 
 **Both ends check the origin.** The board's end takes messages only from the
 window that opened it, and only at the origin of a mirror the image names
@@ -443,7 +447,12 @@ know:
   its URL twice, by IP and by `.local`, each carrying the board's id after
   its `#`, and its claim while it has no password:
   `http://192.168.1.57/#id=<32 hex>&claim=<32 hex>`. The fragment never
-  crosses the network.
+  crosses the network. A board already on a network joins another the same
+  way.
+- Moybyte's own command 0xF0 answers the same URLs with a FRESH claim,
+  minted whether or not the board has a password (Improv's spec reserves no
+  range for a device's own commands; its own count up from 0x01, so this
+  one sits at the top, and a client that never sends it never meets it).
 
 Any Improv client, such as ESP Web Tools or Home Assistant's, can set a
 Moybyte Zero up too: its "visit device" opens that URL, and the console
@@ -459,8 +468,11 @@ LAN got there first. So:
 1. Once the board answers a claim, the site asks for the console's
    password, and keeps it in memory only.
 2. The URL Improv returns carries a **claim**: a random token the board makes
-   at a boot with no password, holds in RAM, and only ever sends over the
-   cable.
+   while it has no password, or on 0xF0's request, and only ever sends over
+   the cable. It keeps it in `system/claim` until it is taken, so a reboot
+   does not end the link setup gave; a newer claim, a password set another
+   way (`passwd`, which signs out) and, for a claim minted over a password,
+   the next boot end it.
 3. When the site opens the console's first window, it sends the claim and
    the password over the link (`claim`, §5) once the console asks to sign
    in.
@@ -469,12 +481,41 @@ LAN got there first. So:
    record with the claim (`POST /auth`, `{"op": "claim"}`). The board takes
    it once and forgets the claim (`native/moy_net/moy_webauth.c`, THE
    CLAIM): a wrong claim counts with the sign-in's backoff, and a board with
-   a password refuses every claim.
+   a password and no claim refuses every claim. A failed claim says why in
+   the console's pairing prompt, its button live again (or over the link
+   alone, to a console that runs signed in).
 
 The password never crosses the network, and a copy of the record pairs no
 browser (`firmware/seeed_xiao_esp32s3_zero/README.md`, "The sign-in gates
 everything"). The browser that set the password pairs with it in the same
 step.
+
+**Manage by cable** (owner, 2026-11-24: "we should be able to set its
+wifi/password anytime using my console serial"). Each card in My consoles
+has "Manage by cable", and "Set up a board by cable" opens the same panel
+for a board already on a network (`site/os/setup.js`, `manage`). Over the
+port it offers:
+
+- **Wi-Fi**: Improv's join, which a board on a network takes too; the card
+  takes the address it answers. A card added by address becomes the
+  board's, under its id.
+- **Name**: Improv's name, the card's and the `.local` label.
+- **Password**: 0xF0's fresh claim, then the claim path above: the console's
+  window makes the record and the board takes it in place of the old one.
+  Physical access over the cable is the owner's proof, the same trust as
+  the first claim's, and the password crosses neither the cable nor the
+  network. The new password signs every browser out, as `passwd` does
+  (their keys are kept, so each signs in again), and this one pairs with
+  it.
+- **The board's log**, as in setup.
+
+A board with no screen pairs only this way or by its password, so the
+hello says so (`"cable": true`, which the Zeros' store host sets,
+`moy_wa_cable`) and the pairing prompt says "Pair this board by cable: plug
+it in and choose Manage by cable in My consoles" in place of the QR's
+words. Consoles with a screen run no Improv (its frame parser is built
+where a board defines `MOY_IMPROV`, the Zeros alone) and set all three in
+their own Settings.
 
 **The fallback is the AP and its form** (`device/zero_setup.py`), unchanged:
 for a phone that cannot speak Web Serial, a board that came pre-flashed, and
@@ -490,8 +531,8 @@ REPL's Ctrl-C, so no byte of a frame reaches the REPL; a header held for
 its next byte goes back to the REPL once it is 30 ms stale. The store host
 answers the frames from its loop (`device/zero_improv.py`), as it answers
 the setup form: a join from the access point ends the access point and the
-board serves from there without a reset, because the claim lives in its
-RAM. board.toml's `[serial]` says how the flasher opens the port without
+board serves from there without a reset, so the client waiting on the
+cable hears its answer. board.toml's `[serial]` says how the flasher opens the port without
 resetting the chip (the C3's lines idle HIGH), and the site's client keeps
 that line state (`site/os/improv.js`).
 

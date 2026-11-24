@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 6,
+  "version": 7,
   "title": "Space Desktop",
   "id": "moybyte.space_desktop",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "A moving wallpaper: stars fall through the sky while a frog or a robot walks along the ground.",
   "moybyte": {
     "type": "wallpaper",
     "system": true,

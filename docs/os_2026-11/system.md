@@ -356,11 +356,14 @@ host's and the wasm's the same release vendored (`native/moy_net/mbedtls/README.
   it can be guessed against at the record's PBKDF2 cost. With no
   password set a browser pairs by the QR alone; the Zero, with no screen,
   sets its password in its setup form, `provision.sh --password`, or by
-  its **claim** (2026-11-24): 128 random bits held in RAM and sent only
-  over the cable, which lets one browser send the board the password's
-  record it made in the wasm and then pair by that password
+  its **claim** (2026-11-24): 128 random bits kept in `system/claim` until
+  used and sent only over the cable, which lets one browser send the board
+  the password's record it made in the wasm and then pair by that password
   (`docs/web_console_online_2026-11.md` §7 is the flow, `moy_webauth.c`'s
-  THE CLAIM the rules). The record crosses the network, guessable only at
+  THE CLAIM the rules). The cable can ask for a fresh claim at any time
+  (My consoles' "Manage by cable"), which replaces a password set before
+  and signs every browser out, as `passwd` does: physical access is the
+  owner's proof. The record crosses the network, guessable only at
   its PBKDF2 cost; the password does not. A pairing
   mints a random 128-bit device key with an id and the browser's name, kept in
   `system/webkeys` (`/etc/webkeys`); the page keeps it per board id in its
@@ -579,7 +582,8 @@ installed from it.
 comments); absent or empty, the console reads moybyte-org/carts. A legacy
 `indexes.json` reads as absent. A page served from a static host writes the
 host's `indexes.json` there at boot. A board reads its own release's index
-last (`carts-<board>.json` beside its update manifest): the browser console
+last (`carts-<board>.json` beside its update manifest, which os.moybyte.com
+mirrors for a page to read: `cart_index.index_mirror`): the browser console
 add-on and every seed cart of that build but a test fixture as an OFFICIAL
 cart (`"moybyte": {"fixture": true}`, `docs/app_api_v1.md` §2), those no
 store is seeded with (`"seed": false`) among them, the one place

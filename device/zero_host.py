@@ -135,10 +135,13 @@ def identity():
 # -- the seed roster, carried by the image (2026-08-30) ----------------------
 #
 # The image carries its seed carts (board.toml's `[roster] image`: the XIAO's
-# the core carts, every app and five games; the C3's the core alone) as one
-# raw-deflate stream each, `carts_data.CARTS_Z`, and this function inflates
-# them, so a Zero flashed from the website's flasher (site/build.py's BOARDS)
-# has a working console with no second, cabled step. Every other system cart
+# the core carts, every app, five games and Pin Light; the C3's the core
+# alone) as one raw-deflate stream each, `carts_data.CARTS_Z`, and this
+# function inflates them, so a Zero flashed from the website's flasher
+# (site/build.py's BOARDS) has a working console with no second, cabled step.
+# The C3's store gets its apps and Brick Siege at flash time instead
+# (`[roster] install`: tools/store_image.py, tools/board_flash.py's
+# install_carts), which its image has no room to carry. Every other system cart
 # but a test fixture is an OFFICIAL cart its release publishes, which the page this board serves
 # installs (`/official`, make_official, beside the carts of moybyte-org/carts
 # or the board's `system/sources`) and a cable flash refreshes
@@ -923,8 +926,8 @@ class ImprovBoard:
         st = moy_net.wifi_status()
         return st[4] if st[2] and st[4] else None
 
-    def address(self):
-        return moy_net.web_auth(SYSTEM_DIR), moy_net.web_claim()
+    def address(self, fresh=False):
+        return moy_net.web_auth(SYSTEM_DIR), moy_net.web_claim(fresh)
 
 
 def make_improv():
@@ -1026,7 +1029,10 @@ def make_official(ota, addon=None):
     which the browser console this board serves lists in its Get Carts and
     asks this board to install or remove; the board fetches over its own
     network and writes its own store, its one writer, keeping SEED_RESERVE
-    free and refusing a cart that needs more. While
+    free and refusing a cart that needs more. It reads the one entry it
+    installs as its index streams and the members of the release asset it
+    keeps by range (CartNet's `ranges`), so neither index nor cart is ever
+    whole in its heap. While
     `addon`'s step brings the store to a new release it holds a request
     back. None where the image names no release index (no updater) or does
     not carry the install: the route is then absent, and the page says this
@@ -1041,7 +1047,8 @@ def make_official(ota, addon=None):
         print("ZERO carts: unavailable:", exc)
         return None
     busy = None if addon is None else addon.busy
-    return web_addon.OfficialCarts(_ZeroInstall(CartNet(_ZeroWifi())), ota.own_index,
+    return web_addon.OfficialCarts(_ZeroInstall(CartNet(_ZeroWifi(), ranges=True)),
+                                   ota.own_index,
                                    busy=busy, reserve=SEED_RESERVE,
                                    locked=_has_password, unlock=_is_password)
 
@@ -1120,6 +1127,8 @@ def serve():
     sweep_carts(CARTS_DIR)
     seed_carts(CARTS_DIR)
     improv = make_improv()
+    if improv is not None:
+        moy_net.web_cable(1)         # the hello tells a page this board pairs by cable
     me = identity()
     name = me.get("name") or HOSTNAME
     ip = connect(hostname=name)

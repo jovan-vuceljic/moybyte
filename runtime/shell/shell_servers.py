@@ -505,8 +505,9 @@ class InstallServer:
         return self.__ws.cart_home
 
     def board(self, g):
-        """The console with no screen that serves this page, asked to install
-        and remove its own official carts (`BoardCarts`), or None."""
+        """The console that serves this page, where it answers /official:
+        asked to install and remove carts in its own store (`BoardCarts`),
+        or None."""
         return self.__ws.cart_board
 
     def keep(self, g):

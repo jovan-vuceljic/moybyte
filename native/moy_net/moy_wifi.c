@@ -444,6 +444,13 @@ int moy_wifi_connect(const char *ssid, const char *password) {
     }
     if (busy) {
         esp_wifi_disconnect();
+        // The old network's address goes now, not at its disconnect event:
+        // a caller waiting for this network to answer must not read the
+        // last one's.
+        portENTER_CRITICAL(&s_latch);
+        s_st.connected = 0;
+        s_st.ip = 0;
+        portEXIT_CRITICAL(&s_latch);
     }
     e = esp_wifi_set_config(WIFI_IF_STA, &c);
     if (e != ESP_OK) {

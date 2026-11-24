@@ -134,7 +134,7 @@ int32_t moy_loop_role(uint32_t grant, uint32_t row, const uint8_t *arg, size_t n
 
 static const char *s_system, *s_carts, *s_files;
 static int s_port;
-static int s_cmd;                       // 1 token, 2 drop, 3 signout, 4 claim: the console's to run
+static int s_cmd;                       // 1 token, 2 drop, 3 signout, 4 claim, 5 a fresh claim: the console's to run
 
 
 static void *console(void *arg) {
@@ -169,9 +169,13 @@ static void *console(void *arg) {
         } else if (cmd == 3) {
             printf("SIGNEDOUT %d\n", moy_web_signout());
             fflush(stdout);
-        } else if (cmd == 4) {
+        } else if (cmd == 4 || cmd == 5) {
             char c[33], id[33];
-            moy_web_claim(c);
+            if (cmd == 5) {
+                moy_web_claim_new(c);
+            } else {
+                moy_web_claim(c);
+            }
             moy_web_board_id(id);
             printf("CLAIM %s %s\n", c[0] ? c : "-", id);
             fflush(stdout);
@@ -225,6 +229,10 @@ int main(int argc, char **argv) {
                 __atomic_store_n(&s_cmd, 3, __ATOMIC_RELEASE);
             } else if (strcmp(line, "claim") == 0) {
                 __atomic_store_n(&s_cmd, 4, __ATOMIC_RELEASE);
+            } else if (strcmp(line, "claim new") == 0) {
+                __atomic_store_n(&s_cmd, 5, __ATOMIC_RELEASE);
+            } else if (strcmp(line, "cable") == 0) {
+                moy_web_cable(1);
             } else if (strcmp(line, "ssh") == 0 && ssh_fd < 0) {
                 moy_tty_hold(MOY_TTY_SSH, 1);
                 int r = moy_tty_open(MOY_TTY_SSH, "sleep 30", 0, 80, 24, NULL, &ssh_fd, &pid);

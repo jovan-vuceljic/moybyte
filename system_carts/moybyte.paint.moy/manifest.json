@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 9,
+  "version": 10,
   "title": "Paint",
   "id": "moybyte.paint",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "Draw with pencils, brushes, spray and shapes, then make your picture the wallpaper or put it in a game.",
   "moybyte": {
     "type": "app",
     "system": true,
