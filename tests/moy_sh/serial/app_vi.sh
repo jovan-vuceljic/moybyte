@@ -14,6 +14,10 @@ vi /fresh.txt
 ihi^[
 :q^M
 :q!^M
+vi /nl.txt
+ihi^[
+:wq^M
+wc -c /nl.txt
 ls /
 view /notes.txt
 x

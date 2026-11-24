@@ -260,6 +260,9 @@ static int save_to(moy_sh_app_t *a, ed_t *e, const char *path) {
     }
     memcpy(text, e->buf, e->g0);
     memcpy(text + e->g0, e->buf + e->g1, tail);
+    if (e->vi && n > 0 && text[n - 1] != '\n') {
+        text[n++] = '\n';              // vi ends a file with a newline, as vi does
+    }
     ed_io_t io = { .path = path, .text = text, .n = n };
     moy_sh_hop(moy_sh_app_session(a), ed_save_here, &io);
     int rc = io.rc;

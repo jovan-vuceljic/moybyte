@@ -278,8 +278,65 @@ SH unsaved changes: :wq saves, :q! leaves them                                 1
 SH app vi
 > sh :q!^M
 SH end 0
+> sh vi /nl.txt
+SH 
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH a new file                                                                  1,1
+SH app vi
+> sh ihi^[
+SH hi
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "nl.txt" [+]                                                                1,2
+SH app vi
+> sh :wq^M
+SH end 0
+> sh wc -c /nl.txt
+SH 3 /nl.txt
+SH end 0
 > sh ls /
-SH bin/  dev/  etc  notes.txt  notes.txt.bak  proc/  sd
+SH bin/  dev/  etc  nl.txt  nl.txt.bak  notes.txt  notes.txt.bak  proc/  sd
 SH end 0
 > sh view /notes.txt
 SH three
