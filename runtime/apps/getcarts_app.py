@@ -481,7 +481,7 @@ ui.action("install", "Install", install)
 
 def _cards():
     with ui.cards("carts", cur="card", changed="follow", w="{@desk?128:64}", h="{@desk?128:64}",
-                  pad="{@desk?16:12}"):
+                  pad="{@desk?8:12}"):
         ui.card("open", label="{.name}", sub="{.sub}", icon="{.icon}", tone="{.tone}", badge="{.badge}")
     ui.label("No carts on the shelf yet", tone="dim", shown="none")
 
@@ -516,7 +516,7 @@ def _shelf():
 
 
 def _desk():
-    with ui.split("row", sizes=("1*", 274), pad="0", gap="m", rule=True):
+    with ui.split("row", sizes=("1*", 274), pad=0, gap=8, rule=True):
         with ui.group(""):
             with ui.row("caption", pad=24):
                 ui.label("{caption}", tone="dim", face="caption")
@@ -608,7 +608,7 @@ def build():
             with ui.rows("perms"):
                 ui.label("{.text}", tone="{.tone}", wrap="word", lines=3)
             ui.label("{pw_line}", tone="{pw_tone}", wrap="word", lines=2, shown="gated")
-            ui.field("Password", "password", 64, secret=True, on="install", shown="gated")
+            ui.field("Password", "password", 64, secret=True, on="install", shown="gated", edit="open")
 
 
 class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
@@ -1809,9 +1809,12 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         else:
             out.append(("Size", "%s here%s%s to fetch" % (_mb(p["store_bytes"]), dot,
                                                           _mb(p["download_bytes"]))))
-        out.append(("From", _host_of(c.get("index") or "")))
+        home = _host_of(c.get("index") or "")
+        out.append(("From", home))
         for e in p["external"]:
-            out.append(("Needs", "%s from %s" % (e["path"], _ext_host(c, e))))
+            # a file from the cart's own host names no host: the From row says it
+            there = _ext_host(c, e)
+            out.append(("Needs", e["path"] if there == home else "%s from %s" % (e["path"], there)))
         if p["slow"]:
             out.append(("Plays slowly on this console", ""))
         return out

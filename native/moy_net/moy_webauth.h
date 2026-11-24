@@ -66,6 +66,10 @@ int moy_wa_check(const char *method, size_t mn, const char *target, size_t tn, c
 // digits, valid MOY_WA_TOKEN_MS and once; "" while the sign-in is off.
 void moy_wa_token(char out[2 * MOY_SEAL_RAND + 1]);
 void moy_wa_board_id(char out[2 * MOY_SEAL_RAND + 1]);
+// This boot's claim (32 hex digits; moy_webauth.c, THE CLAIM), made at its
+// first ask while the board has no password; "" once it has one, or with
+// the sign-in off.
+void moy_wa_claim(char out[2 * MOY_SEAL_RAND + 1]);
 // The paired browsers, a line each: "KID CREATED SEEN NAME\n" (Unix
 // seconds). Its length (cut at cap).
 size_t moy_wa_keys(char *out, size_t cap);

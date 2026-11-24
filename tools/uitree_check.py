@@ -243,13 +243,14 @@ def _nodes(n):
 def _import(target):
     """The module, imported fresh in the checker's collecting run. A cart (a
     `.moy` folder, or its main script) names `ui` without importing it, as
-    the Player hands it the API (runtime/run/player_tree.py)."""
+    the Player hands it the API (runtime/run/player_tree.py), and is an
+    app's (`cart:NAME`): the shell's own names are refused it (N09)."""
     if os.path.isdir(target):
         with open(os.path.join(target, "manifest.json"), encoding="utf-8") as f:
             target = os.path.join(target, json.load(f).get("main") or "main.py")
     if target.endswith(".py") or os.sep in target:
         path = os.path.abspath(target)
-        name = os.path.basename(path)[:-3]
+        name = "cart:" + os.path.basename(path)[:-3]
         spec = importlib.util.spec_from_file_location(name, path)
         mod = importlib.util.module_from_spec(spec)
         mod.ui = S

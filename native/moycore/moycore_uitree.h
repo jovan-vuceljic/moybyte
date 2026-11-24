@@ -26,7 +26,7 @@
  *                               inside the frame; what it raises the frame raises
  *   e:next()                    -> kind, a, b, c, text; nil where none waits
  *   e:trace_next()              -> "KIND\1NAME\1TEXT", nil where none waits
- *   e:can(a, row) e:letter(ch) e:dialog() e:unfocused()
+ *   e:can(a, row) e:letter(ch) e:dialog() e:unfocused() e:editing()
  *   e:back_dialog() e:back_popover() -> action (-1 none, -2 no popover), key
  *   e:focused() e:popover() e:hints() e:leave() e:dump()
  *   e:error() e:error_code() e:free()
@@ -93,6 +93,7 @@ static int l_uit_new(lua_State *L)
     u->L = NULL;
     u->draw = u->raised = LUA_NOREF;
     if (u->e == NULL) return luaL_error(L, "no memory for a UI tree store");
+    uit_set_app(u->e, 1);
     luaL_setmetatable(L, MOYCORE_UIT_MT);
     return 1;
 }
@@ -426,6 +427,12 @@ static int l_uit_unfocused(lua_State *L)
     return 1;
 }
 
+static int l_uit_editing(lua_State *L)
+{
+    lua_pushboolean(L, uit_editing(moycore_uit(L)));
+    return 1;
+}
+
 static int l_uit_back_dialog(lua_State *L)
 {
     uit_t *e = moycore_uit(L);
@@ -532,7 +539,7 @@ static void moycore_uitree_open(lua_State *L)
         {"open", l_uit_open}, {"close", l_uit_close}, {"want_focus", l_uit_want_focus},
         {"frame", l_uit_frame}, {"backed", l_uit_backed}, {"keys_taken", l_uit_keys_taken}, {"on_draw", l_uit_on_draw}, {"next", l_uit_next}, {"trace_next", l_uit_trace_next},
         {"can", l_uit_can}, {"letter", l_uit_letter}, {"dialog", l_uit_dialog},
-        {"unfocused", l_uit_unfocused}, {"back_dialog", l_uit_back_dialog},
+        {"unfocused", l_uit_unfocused}, {"editing", l_uit_editing}, {"back_dialog", l_uit_back_dialog},
         {"back_popover", l_uit_back_popover}, {"focused", l_uit_focused},
         {"popover", l_uit_popover}, {"rect", l_uit_rect}, {"hints", l_uit_hints}, {"leave", l_uit_leave},
         {"dump", l_uit_dump}, {"error", l_uit_error}, {"error_code", l_uit_error_code},

@@ -53,7 +53,7 @@ pendingFrame=m.s;pendingFB=m.fb||null;}
 // devtools console) can read it -- console logs get trimmed by whatever is
 // capturing them, and this is the evidence that the store is being written.
 else if(m.t==="persist"){window.__moyPersist={mode:m.mode,s:m.s,d:m.d||"",n:m.n||0};
-pzMode(m.mode,m.s);}
+pzMode(m.mode,m.s);if(m.mode==="board")linkState("signed-in",m.s);}
 else if(m.t==="keep"){pzKeep();}
 else if(m.t==="carts"){pzFill(m.names);}
 else if(m.t==="exported"){pzDownload(m.name,m.buf);}
@@ -61,7 +61,8 @@ else if(m.t==="imported"){window.__moyImported=m.s;pzSay(m.s,!m.ok);if(m.ok)pzAs
 if(m.report)p8Report(m.report,m.ok,m.dir);}
 else if(m.t==="update"){updBound(m);}
 else if(m.t==="edited"){window.__moyEdited=m.s;pzSay(m.s,!m.ok);}
-else if(m.t==="pair"){pinAsk(m);}
+else if(m.t==="pair"){pinAsk(m);linkState("sign-in",m.wait||m.why||"");}
+else if(m.t==="claimed"){claimed(m);}
 else if(m.t==="key"){keyGot(m);}
 else if(m.t==="unkey"){keyDrop(m.id);}
 else if(m.t==="wait"){linkWait(m.s);}
@@ -81,7 +82,7 @@ else if(m.t==="wperf"){console.log("[moy worker] "+m.s);}
 // anything else is a restart somebody asked for.
 else if(m.t==="lost"){linkLost(m.kind||"lost",m.head||"the console is not answering",
 m.body||"",m.risk!==false);}
-else if(m.t==="error"){console.error("[moy]",m.s);
+else if(m.t==="error"){console.error("[moy]",m.s);linkState("failed","the console crashed");
 sEl.textContent="console crash (see devtools)";sEl.style.color="#ff004d";
 // Under the title: the message's tail (an abort's reason; a traceback's
 // raising line and exception), then the first frames that threw it.
@@ -105,6 +106,15 @@ var PINEL=document.getElementById("pin"),PINF=document.getElementById("pinf"),
 PINB=document.getElementById("pinb"),PINM=document.getElementById("pinm"),
 PINP=document.getElementById("pinp"),PINR=document.getElementById("pinr");
 var KEYS="moybyte.keys";
+// THE CLAIM (worker.js, THE SIGN-IN): a board with no password takes its
+// first from the browser holding the claim its Improv answer carried, here
+// from the url's # (the URL Improv answered, which any Improv client opens)
+// or from My consoles over the link (a `claim` request); `CHOOSE` while the
+// prompt asks for a new password rather than the console's.
+var CLAIM=null,CHOOSE=false,CLAIMQ=null;
+function claimed(m){if(m.ok)CLAIM=null;else if(PINM)PINM.textContent=m.why||"";
+if(CLAIMQ){try{CLAIMQ.w.postMessage({moylink:1,re:CLAIMQ.id,kind:"claim",ok:!!m.ok,
+said:m.why||""},CLAIMQ.o);}catch(e){}CLAIMQ=null;}}
 function keysStored(){try{return JSON.parse(localStorage.getItem(KEYS)||"{}")||{};}
 catch(e){return {};}}
 function keySave(id,kid,key){var k=keysStored();k[id]={kid:kid,key:key};
@@ -122,8 +132,9 @@ return o?b+" on "+o:b;}
 window.__moySignIn=function(){var tok=null,bid=null;
 try{var h=new URLSearchParams((location.hash||"").replace(/^#/,""));
 tok=h.get("t");bid=h.get("b");
+if(/^[0-9a-f]{32}$/.test(h.get("claim")||"")){CLAIM={claim:h.get("claim"),id:h.get("id")||""};}
 var q=new URLSearchParams(location.search);var had=q.has("pin");q.delete("pin");
-if(tok||had){var s=q.toString();
+if(tok||had||h.has("claim")||h.has("id")){var s=q.toString();
 history.replaceState(null,"",location.pathname+(s?"?"+s:""));}}
 catch(e){/* no history: the token is spent on its first use either way */}
 return {keys:keysStored(),token:tok,board:bid,name:browserName()};};
@@ -131,6 +142,10 @@ return {keys:keysStored(),token:tok,board:bid,name:browserName()};};
 // what went wrong last ("" the first time), `wait` the backoff's sentence.
 function pinAsk(m){if(!PINEL)return;
 PINM.textContent=m.wait||m.why||"";
+CHOOSE=!m.pw&&!!CLAIM;
+if(CHOOSE){PINP.textContent="Choose this console's password, 8 to 64 characters: "
++"every browser pairs with it.";PINR.style.display="";PINEL.style.display="flex";
+PINB.disabled=false;try{PINF.value="";PINF.focus();}catch(e){}return;}
 PINP.textContent=m.pw?"Scan the code on the console's WEB CONSOLE screen, or type the "
 +"console's password.":"Scan the code on the console's WEB CONSOLE screen. To type a "
 +"password instead, set one on the console (passwd).";
@@ -139,6 +154,10 @@ PINEL.style.display="flex";PINB.disabled=false;
 if(m.pw){try{PINF.value="";PINF.focus();}catch(e){}}}
 function pinSubmit(){var v=PINF.value||"";
 if(!v){PINM.textContent="type the console's password";return;}
+if(CHOOSE){if(v.length<8||v.length>64){PINM.textContent="a password is 8 to 64 characters";return;}
+PINM.textContent="setting the password...";PINB.disabled=true;
+WORKER.postMessage({t:"claim",claim:CLAIM.claim,id:CLAIM.id,pw:v,name:browserName()});
+PINF.value="";return;}
 PINM.textContent="pairing...";PINB.disabled=true;
 WORKER.postMessage({t:"password",pw:v,name:browserName()});PINF.value="";}
 // Paired: the key is this browser's from now on, and the page starts again
@@ -148,6 +167,29 @@ if(m.reload){PINM.textContent="paired";location.reload();}}
 if(PINB)PINB.addEventListener("click",pinSubmit);
 if(PINF)PINF.addEventListener("keydown",function(e){
 if(e.key==="Enter"){e.preventDefault();pinSubmit();}});
+// ---- the link (docs/web_console_online_2026-11.md §5) ---------------------
+// A console the loader booted in a window My consoles opened holds the link
+// from here: the loader's listener went with its document. It takes messages
+// only from its opener at the sites the loader named (window.moyLink), never
+// evaluates one, and answers every request: a pack is refused (the console
+// runs), a `claim` ({claim, board, password}) sets the board's first password
+// (THE CLAIM above) and is answered once the board took it or did not, and
+// any other kind is unknown. It tells the site its
+// `state`: booted, sign-in (with the prompt's sentence), signed-in (the
+// board's carts pulled), failed.
+var LINK=window.moyLink||null,LINKW=window.opener,linkN=1000;
+function linkState(st,said){if(!LINK||!LINKW)return;
+var m={moylink:1,id:++linkN,kind:"state",state:st,said:said||""};
+for(var i=0;i<LINK.length;i++){try{LINKW.postMessage(m,LINK[i]);}catch(e){}}}
+if(LINK&&LINKW){addEventListener("message",function(e){var m=e.data;
+if(e.source!==LINKW||LINK.indexOf(e.origin)<0||!m||m.moylink!==1||typeof m.id!=="number")return;
+if(m.kind==="claim"&&WORKER&&!CLAIMQ&&typeof m.claim==="string"&&typeof m.password==="string"){
+CLAIMQ={w:e.source,o:e.origin,id:m.id};
+WORKER.postMessage({t:"claim",claim:m.claim,id:typeof m.board==="string"?m.board:"",
+pw:m.password,name:browserName()});return;}
+e.source.postMessage(m.kind==="pack"?{moylink:1,re:m.id,kind:"pack",ok:false,
+said:"the console is running"}:{moylink:1,re:m.id,kind:"unknown"},e.origin);});
+linkState("booted","");}
 // ---- persistence row (#193) -------------------------------------------------
 // The worker decides the MODE (board vs browser-local) and this only reports it.
 // The row appears in EVERY mode, including board-served. It used to be hidden
@@ -427,10 +469,16 @@ try {
   // The sign-in's input FIRST: a QR's token leaves the url before the worker
   // exists, and the keys this browser holds go with the init.
   const auth = window.__moySignIn();
-  const w = new Worker("worker.js?v=" + MOY_BUILD, { type: "module" });
+  // The pack's assets as Blob URLs where the loader (loader.html) booted this
+  // page; the worker then imports its modules and the wasm through them, and
+  // resolves its requests against this page's address.
+  const assets = window.moyAssets || null;
+  const w = new Worker(assets ? assets["worker.js"] : "worker.js?v=" + MOY_BUILD,
+                       { type: "module" });
   window.__moyAttach(w);
   // A coarse pointer is a finger: the console's hints start on touch.
   w.postMessage({ t: "init", search: location.search, channel: MOY_CHANNEL, auth: auth,
+                  assets: assets, base: location.href,
                   rate: actx ? actx.sampleRate : 0,
                   coarse: !!(window.matchMedia && matchMedia("(pointer: coarse)").matches),
                   scheme: moyScheme() });

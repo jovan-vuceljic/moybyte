@@ -4,7 +4,7 @@ spec's one-line message (`error[CODE] FILE:LINE: WHAT; fix: FIX ...`, §25.1).
 
 The Lua halves are tests/test_uitree_lua.py's CASES (one per code the Lua
 layer raises); the Python halves are PY below. SHARED is every code of the
-contract table (tests/uitree_contract/contract.json) both layers' sources
+contract table (native/moy_uitree/contract.json) both layers' sources
 raise, and every one of them has a pair here, or is listed in NO_PAIR with
 the reason. PY_ONLY is one mistake per code the Python layer alone raises.
 """
@@ -30,6 +30,7 @@ PY = {
     "A08": (H + NOTHING + "s = ui.state(n=0)\nui.action(\"go\", \"\", nothing)\n", 5),
     "A10": (H + NOTHING + "s = ui.state(n=0)\nui.action(\"go\", \"Go\", nothing)\nui.after(100, \"go\")\n", 6),
     "B01": (H + "s = ui.state(n=\"\")\n" + PAGE + "        ui.label(s.n)\n", 5),
+    "N09": (H + "s = ui.state(n=0)\n" + PAGE + "        ui.slot(\"run\")\n", 5),
     "B02": (H + "s = ui.state(n=0)\n" + PAGE + "        s.n = 1\n", 5),
     "B03": (H + NOTHING + "s = ui.state(n=0)\n" + PAGE + "        ui.hook(\"late\", nothing)\n", 7),
     "C01": (H + "s = ui.state(n=0)\n" + PAGE + "        ui.label(\"x\", shown=\"{n}\")\n", 5),

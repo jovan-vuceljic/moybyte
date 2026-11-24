@@ -59,7 +59,8 @@ def sync(vals):
     width and height, a tool's pitch, the flags' and the preview's heights,
     the sheet's, the more menu's width and the pickers', and the
     operations' keys). A canvas's height, a button's width and a cell's side
-    are in the page's unit (the handheld's font scale), the rest in pixels."""
+    are in the page's unit (the handheld's font scale), its pads and gap at
+    1x (the engine scales them), the rest in pixels."""
     (s.none, s.pane, s.tall, s.n, s.size, s.status, tool, s.shape_icon, s.clip, s.mirrored, pop,
      s.shifting, color, sized, s.pad, s.mpad, s.gap, s.grid_w, s.grid_h, s.words, s.sw, s.pal_w, s.pal_h,
      s.pitch, s.flags_h, s.preview_h, s.sheet_h, s.more_w, s.pick_w, keys) = vals
@@ -182,23 +183,33 @@ def _tools():
     ui.button("more", kind="bar", alone=True, w="{pitch}", marked="pop=more")
 
 
+def _steps():
+    # the sprite before and after: under keys each its own stop, left and
+    # right walking them and the row's other parts, A stepping; under touch
+    # a stepper, its arrows the taps
+    ui.stepper("{n}", "prev", "next", shown="@touch")
+    ui.button("prev", icon="back", kind="bar", alone=True, shown="!@touch")
+    ui.label("{n}", size="text", align="center", shown="!@touch")
+    ui.button("next", icon="forward", kind="bar", alone=True, shown="!@touch")
+
+
 def sprite_page():
     with ui.page(""):
         ui.empty("No sprites", icon="art", lines=["This cart has no sprite sheet"], shown="none")
         with ui.row("head", pad="{pad}", gap="{gap}", shown="!none && !pane"):
             ui.label("Sprite {n}", tone="dim")
-            ui.stepper("{n}", "prev", "next")
+            _steps()
             ui.button("pickers", label="Size {size}", kind="bar", marked="pop=pickers")
         with ui.row("tools", pad="{pad}", gap=0, shown="!none && pane"):
             _tools()
         with ui.row("main", pad="{mpad}", gap="{gap}", shown="!none"):
             ui.canvas("grid", _draw_grid, w="{grid_w}", h="{grid_h}", keys=grid_keys, pointer="grid",
                       mark=False)
-            with ui.grid(1, 1, w="{pal_w}", h="{pal_h}", gap="0", pad="0"):
+            with ui.grid(1, 1, w="{pal_w}", h="{pal_h}", gap=0, pad=0):
                 ui.cells("color", first=0, count=16, cols=2, side="{sw}", clear=0, on="colored")
             ui.canvas("map", _draw_map, pointer="map_tap", shown="!pane")
         with ui.row("nav", pad="{pad}", gap="{gap}", shown="!none && pane"):
-            ui.stepper("{n}", "prev", "next")
+            _steps()
             ui.button("pickers", label="{size}", kind="bar", marked="pop=pickers")
             ui.label("64", align="end")
         ui.canvas("flags", _draw_flags, h="{flags_h}", keys=flags_keys, pointer="flags_tap",

@@ -56,7 +56,7 @@ class Layer:
     The INPUT PROTOCOL is what the console's input policy asks of the surface
     that holds the keys (runtime/shell/input_policy.py), each verb defaulted
     here: `ui_host` (the AppHost its pages draw through, which answers the
-    toolkit's half: a focused field types, Mic and back cancel its edit, back
+    toolkit's half: a field's open edit types, Mic and back cancel it, back
     dismisses a popover), `typing`, `cancel`, `back` and `has_page` (its own
     page step, after the toolkit's), `close` (leaving it, by any route),
     `page_title` and `ball_steps`. `B_BACK`: its B is the host's back, as

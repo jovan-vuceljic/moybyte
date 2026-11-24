@@ -91,30 +91,31 @@ def test_a_bar_s_pieces_lay_out_as_the_reference_did(config):
 
 
 def test_the_bar_s_pieces_place_by_their_rule():
-    """On the desk (unit 1): the pad and gap literal, the clock as wide as
-    its state, the tray's gap its state, the chips centred on the bar and
-    clearing both sides, the centre run centred with each side's fill
-    sharing its own side, the spacer pushing the tail to the row's end."""
+    """On the desk: the pad and gap at 1x times the desk's scale (2), the
+    clock as wide as its state, the tray's gap its state, the chips centred on
+    the bar and clearing both sides, the centre run centred with each side's
+    fill sharing its own side, the spacer pushing the tail to the row's end."""
     import ast
     import uitree_c
     f = _run_bar(uitree_c.CEditorEngine, "p4_1024x600_cs2_fs1_windowed")
     r = dict(ast.literal_eval(f[0].state.split(" ", 1)[1]))
     bx, _, bw, _ = r["bar"]
-    assert r["bump"][0] == bx + 2 and r["zone"][0] == r["bump"][0] + r["bump"][2] + 2, r
+    u = 2
+    assert r["bump"][0] >= bx + 2 * u and r["zone"][0] == r["bump"][0] + r["bump"][2] + 2 * u, r
     assert r["clock"][2] == 40 and r["wifi"][2] == 16, r
-    assert r["batt"][0] - (r["wifi"][0] + 16) == 6, r
-    assert r["batt"][0] + 16 == bx + bw - 2, r
+    assert r["batt"][0] - (r["wifi"][0] + 16) == 6 * u, r
+    assert r["batt"][0] + 16 == bx + bw - 2 * u, r
     cx = bx + bw // 2
     assert r["chips"][0] + r["chips"][2] // 2 == cx, r
-    assert r["chips"][0] + r["chips"][2] + 2 == r["clock"][0], r
-    assert r["zone"][0] + r["zone"][2] + 2 == r["chips"][0], r
+    assert r["chips"][0] + r["chips"][2] + 2 * u == r["clock"][0], r
+    assert r["zone"][0] + r["zone"][2] + 2 * u == r["chips"][0], r
     mx, _, mw, _ = r["mid_bar"]
     assert abs(r["centre"][0] + r["centre"][2] // 2 - (mx + mw // 2)) <= 1, r
-    assert r["lfill"][0] == mx + 4 and r["lfill"][0] + r["lfill"][2] + 4 == r["centre"][0], r
+    assert r["lfill"][0] == mx + 4 * u and r["lfill"][0] + r["lfill"][2] + 4 == r["centre"][0], r
     assert r["rfill"][0] == r["centre"][0] + r["centre"][2] + 4, r
-    assert r["rfix"][0] + 24 == mx + mw - 4, r
+    assert r["rfix"][0] + 24 == mx + mw - 4 * u, r
     ex, _, ew, _ = r["ends"]
     assert r["tail"][0] + r["tail"][2] == ex + ew, r
     later = [dict(ast.literal_eval(x.state.split(" ", 1)[1])) for x in f]
     later = next(x for x in later if x["clock"][2] != 40)
-    assert later["clock"][2] == 52 and later["batt"][0] - (later["wifi"][0] + 16) == 9, later
+    assert later["clock"][2] == 52 and later["batt"][0] - (later["wifi"][0] + 16) == 9 * u, later

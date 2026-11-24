@@ -20,8 +20,9 @@
 """cart_index -- the console's `moy install`: carts other people publish,
 browsed and installed over WiFi with no PC involved (#124).
 
-THE FORMAT IS moy-spec's (cartindex.py, index version 1), read as it is. A
-carts repository lists its carts in one index.json: id, name, version, licence,
+THE FORMAT IS the store's, index version 1: moybyte-org/carts writes it (its
+scripts/make_index.py), and moy-spec's `moy install` (cartindex.py) reads its
+common fields. A carts repository lists its carts in one index.json: id, name, version, licence,
 the release assets with every file's size and sha256, and any file a cart needs
 that is not in its release (an external file: Doom's WAD), with where to fetch
 it and under what licence. moybyte-org/carts is the first (DEFAULT_INDEXES).
@@ -145,7 +146,7 @@ without `ranges` makes.
 A transport with `cors` set (the browser's) can read only what a server lets
 another origin read. A GitHub release download is not that, so it reads an
 asset's `mirror` -- the same bytes beside the index on the repository's Pages
-site (moy-spec's cartindex.py says how a repository publishes one) -- before
+site (moybyte-org/carts' scripts/make_index.py says how a repository publishes one) -- before
 its release `url`; every other console reads the release first and falls back
 to the mirror. An external file's mirror is on that site too, so such a
 console reads it like any other; one it can read from neither the mirror nor

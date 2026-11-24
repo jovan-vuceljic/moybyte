@@ -185,6 +185,9 @@ void moy_ui_over_put(moy_ui_over_t *o, int k, const int32_t *v) {
         case MOY_UI_OV_BARE:
             o->flags2 = v[0] ? o->flags2 | MOY_UI_O2_BARE : o->flags2 & ~MOY_UI_O2_BARE;
             break;
+        case MOY_UI_OV_TYPING:
+            o->flags2 = v[0] ? o->flags2 | MOY_UI_O2_TYPING : o->flags2 & ~MOY_UI_O2_TYPING;
+            break;
         default: break;
     }
 }
@@ -1351,38 +1354,27 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     c->last_key = key;
     const moy_ui_stop_t *f = fi >= 0 ? &v[fi] : NULL;
     // A field's edit lasts while the field is drawn (its record); a cancel
-    // taken over the frame drawn last gives the focused field its text back
-    // this pass and steps focus off it: up, as Up would, where a stop lies
-    // above, else down (a dialog's field, its buttons under it), so the keys
-    // stop typing.
+    // taken over the frame drawn last ends the focused field's edit, giving
+    // it the text the edit began from this pass, and focus stays on it.
     moy_ui_keep_t *fk = f != NULL && (f->flags & STOP_FIELD) ? mua_keep_of(c, f->id) : NULL;
-    if (fk != NULL && fk->kind == MOY_UI_KEEP_FIELD && fk->cancel) {
-        fk->cancel = 0;
-        if (fk->live) {
-            fk->cancel = 2;             // this pass's field fk->id takes its text back
-            int t = nearest(v, n, f, MOY_UI_B_UP);
-            if (t < 0) {
-                t = nearest(v, n, f, MOY_UI_B_DOWN);
-            }
-            if (t >= 0) {
-                fi = t;
-                f = &v[t];
-                c->focus = f->id;
-                c->focus_box = f->b;
-                c->focus_name[0] = 0;
-                c->reveal = 1;
-            }
-            settled = 0;
-        }
+    fk = fk != NULL && fk->kind == MOY_UI_KEEP_FIELD ? fk : NULL;
+    if (fk != NULL && fk->cancel) {
+        fk->cancel = fk->live ? 2 : 0;  // 2: this pass's field fk->id takes its text back
+        fk->edit = 0;
+        settled = 0;
     }
     int off = f == NULL || (f->flags & STOP_HOLD)
               || (f->page != NO_PAGE && f->page < n && (v[f->page].flags & STOP_NAV_OFF));
-    int field = f != NULL && (f->flags & STOP_FIELD);
+    // a focused field is a stop the keys move past; they type in it while its edit is open
+    int field = f != NULL && mua_field_types(f, fk);
     // Q and E step the tabs wherever the keys do not type or belong to a
     // part of the app's, or to a dialog or a popover over the page
     c->tab_step = (int8_t)(field || c->modal || c->elsewhere || (f != NULL && (f->flags & STOP_HOLD))
                            ? 0 : qe);
     c->typed_n = 0;
+    // a typed Enter on a field whose edit is closed opens it, as `run` does
+    int enter = f != NULL && (f->flags & STOP_FIELD) && !field && (key == 13 || key == 10)
+                && key != c->last_typed;
     if (field && key != c->last_typed && key != 0 && key != MOY_UI_KEY_TAB) {
         c->typed = key;             // a typed key, once per press
         c->typed_n = 1;
@@ -1440,14 +1432,27 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
         sx = sx < -127 ? -127 : sx > 127 ? 127 : sx;
         sy = sy < -127 ? -127 : sy > 127 ? 127 : sy;
         int go = pressed & (field ? MOY_UI_B_RUN : (MOY_UI_B_A | MOY_UI_B_RUN));
-        if (field && (c->typed == 13 || c->typed == 10)) {
+        if ((field && (c->typed == 13 || c->typed == 10)) || enter) {
             go = MOY_UI_B_RUN;
         }
         if (dir || go || tab) {
             c->keys = 1;
         }
         int to = -1;
-        if (go) {
+        // Enter or A on a field begins its edit (its record made here where focus came onto it
+        // with no frame drawn since)
+        moy_ui_keep_t *ek = go && !field && f != NULL && (f->flags & STOP_FIELD)
+                            ? (fk != NULL ? fk : mua_keep(c, f->id, MOY_UI_KEEP_FIELD)) : NULL;
+        if (ek != NULL && ek->kind == MOY_UI_KEEP_FIELD) {
+            ek->edit = 1;
+            settled = 0;
+        } else if (field && dir && !tab && fk != NULL) {
+            // in an edit the directions move its caret
+            int cx = fk->cx + sx, cy = fk->cy + sy;
+            fk->cx = (int8_t)(cx < -127 ? -127 : cx > 127 ? 127 : cx);
+            fk->cy = (int8_t)(cy < -127 ? -127 : cy > 127 ? 127 : cy);
+            settled = 0;
+        } else if (go) {
             c->act = c->focus;
             if (field && (f->flags & STOP_MODAL)) {
                 // Enter in a dialog's field is its last button, where it has one
@@ -2645,6 +2650,7 @@ int mua_stop(moy_ui_ctx_t *c, uint32_t id, moy_ui_box_t b, int flags, moy_ui_spa
     }
     s->st = 0;
     s->quiet = (flags & STOP_QUIET) != 0;
+    s->open = 0;
     s->gen = 0;
     // (where its keys stop, STOP_AT_TOP and STOP_AT_END, draws nothing)
     s->sig = c->inst->audit_on
@@ -4997,6 +5003,10 @@ int moy_ui_api_focus(moy_ui_ctx_t *c, moy_ui_span_t id, char *buf, size_t cap) {
                 c->focus_box = c->cur[i].b;
             }
         }
+        moy_ui_keep_t *k = mua_keep_of(c, h);
+        if (k != NULL && k->kind == MOY_UI_KEEP_FIELD) {
+            k->opened = 0;              // an edit="open" field the app focuses begins its edit again
+        }
         name_copy(c->focus_name, id);
     }
     if (!c->focus) {
@@ -5024,20 +5034,56 @@ int moy_ui_api_keys_taken(const moy_ui_ctx_t *c) {
     return c->keys;
 }
 
-int moy_ui_api_typing(const moy_ui_ctx_t *c) {
+static int typing(const moy_ui_ctx_t *c, int drawing) {
     if (c->focus == 0 || c->elsewhere) {
         return 0;
     }
+    const moy_ui_stop_t *f = NULL;
     int i = mua_find(c->cur, c->n_cur, c->focus);
-    return i >= 0 && (c->cur[i].flags & STOP_FIELD) != 0;
+    if (i >= 0) {
+        f = &c->cur[i];
+    } else if (drawing && (i = mua_find(c->prev, c->n_prev, c->focus)) >= 0) {
+        f = &c->prev[i];
+    }
+    return f != NULL && mua_field_types(f, mua_keep_of((moy_ui_ctx_t *)c, c->focus));
+}
+
+int moy_ui_api_typing(const moy_ui_ctx_t *c) {
+    return typing(c, 0);
+}
+
+int moy_ui_api_typing_drawing(const moy_ui_ctx_t *c) {
+    return typing(c, 1);
+}
+
+int mua_field_types(const moy_ui_stop_t *f, const moy_ui_keep_t *k) {
+    if (!(f->flags & STOP_FIELD)) {
+        return 0;
+    }
+    if (k != NULL && k->kind == MOY_UI_KEEP_FIELD) {
+        return k->edit || (f->open && !k->opened);
+    }
+    return f->open;                     // focus came onto an open field after it drew
+}
+
+int moy_ui_api_edit_cancel(moy_ui_ctx_t *c, int take) {
+    moy_ui_keep_t *k = c->focus != 0 ? mua_keep_of(c, c->focus) : NULL;
+    if (k == NULL || k->kind != MOY_UI_KEEP_FIELD || !moy_ui_api_typing(c)) {
+        return 0;
+    }
+    // an edit="open" field's edit with nothing to give back is its page's: the key goes on
+    int i = mua_find(c->cur, c->n_cur, c->focus);
+    if (!k->live && i >= 0 && c->cur[i].open) {
+        return 0;
+    }
+    if (take) {
+        k->cancel = 1;
+    }
+    return 1;
 }
 
 int moy_ui_api_cancel(moy_ui_ctx_t *c, int take) {
-    moy_ui_keep_t *k = c->focus != 0 ? mua_keep_of(c, c->focus) : NULL;
-    if (k != NULL && k->kind == MOY_UI_KEEP_FIELD && k->live && moy_ui_api_typing(c)) {
-        if (take) {
-            k->cancel = 1;
-        }
+    if (moy_ui_api_edit_cancel(c, take)) {
         return 1;
     }
     if (c->pop.card.w > 0) {

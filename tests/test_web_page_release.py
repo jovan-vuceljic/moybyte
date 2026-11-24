@@ -108,6 +108,15 @@ def _addon(folder, board, index_url, digest):
     return ci.resolve(index_url, asset["url"]), [c["moybyte"]["fits"] for c in got]
 
 
+def test_the_board_chips_are_the_aot_keys_and_the_native_tools_boards():
+    """web_pack's chips are moy_wasm_key.h's, and they are every chip
+    tools/elf_cart.py builds a module for but the host."""
+    from tools import elf_cart, wasm_module
+    assert web_pack.BOARD_CHIPS == tuple(wasm_module.targets())
+    assert set(web_pack.BOARD_CHIPS) == set(elf_cart.CHIPS) - {"host"}
+    assert "host" not in web_pack.BOARD_CHIPS
+
+
 def test_the_build_writes_the_pack_the_publisher_reads():
     build = (ROOT / "tools" / "esp32_build_lib.sh").read_text()
     assert "${DIST_DIR}/%s" % web_pack.PACK_FILE in build

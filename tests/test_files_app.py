@@ -303,7 +303,7 @@ def test_gallery_lists_rename_copy_trash_restore(tmp_path):
     assert ("drawings", "dragon_tower") not in app.trash
 
 
-def test_rename_cancels_by_its_button_and_by_b(tmp_path):
+def test_rename_is_cancelled_by_b_with_or_without_an_edit(tmp_path):
     carts = str(tmp_path / "carts")
     ws = _ws(tmp_path)
     _seed_drawing(carts, "dragon")
@@ -312,9 +312,9 @@ def test_rename_cancels_by_its_button_and_by_b(tmp_path):
     app._act("NAME")
     _frames(drv)
     _type(drv, "xyz")
-    _press(drv, "down")                    # the field to the buttons: Cancel first
-    assert _focus(app) == "Cancel"
-    _press(drv, "a")
+    _press(drv, "down")                    # in the open edit: the caret to the end
+    assert _focus(app) != "Cancel"
+    _press(drv, "b")                       # the dialog's Back: its Cancel
     assert app.dialog is None and app.names_shown() == ["dragon"]
     assert _focus(app).endswith("/open"), "focus went back to the list"
     app._act("NAME")

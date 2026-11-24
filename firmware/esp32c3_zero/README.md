@@ -9,8 +9,10 @@ It is a **variant** of the XIAO Zero, not a second design. Both boards take
 the same store host (`device/zero_host.py`, `device/zero_setup.py`,
 `device/zero_shell.py`) and the same module sets, so how
 the Zero is set up, paired, synced and signed into is
-`firmware/seeed_xiao_esp32s3_zero/README.md`, and is not repeated here. This
-file is what the chip changes.
+`firmware/seeed_xiao_esp32s3_zero/README.md`, and is not repeated here:
+its first setup over the cable (Improv) included, which matters most here,
+where the cable is the only way an image goes on. This file is what the
+chip changes.
 
 ## What the chip changes
 
@@ -42,13 +44,15 @@ file is what the chip changes.
   (`[web] console = "online"`): the website's install lays down an empty
   store and the cable flash installs no add-on (`tools/board_flash.py`),
   and `tools/store_image.py --check` holds the store to the first boot's
-  carts and the seed's reserve instead. Its console pack comes from a
-  mirror by digest, not from its store (`docs/web_console_online_2026-11.md`).
-  The image still names an add-on
-  (`native/moy_net/moy_page.h`) and, like the XIAO, asks its release for
-  the one that fits where its store holds none and its owner did not remove
-  it (`zero_host.make_addon`, `way_back`), with buffers made for the fetch
-  and freed after; this store has no room for it.
+  carts and the seed's reserve instead, which keeps no room for an add-on
+  (`zero_host.addon_room`). Its root serves the loader
+  (`native/moy_net/moy_page.h`, THE LOADER;
+  `docs/web_console_online_2026-11.md` §3), a page of a few KB in the image
+  that boots the pack whose whole-file digest the image names, from the
+  browser's cache or a mirror (os.moybyte.com, and a worktree build's
+  `serve.py` first), so a page load costs the board the loader and `/sync`,
+  not the pack. The board asks its release for no add-on
+  (`zero_host.make_addon` is None where `moy_web.online()`).
 - **The image carries the core carts alone** (owner, 2026-11-17;
   `moy_seed.CORE`, board.toml's `[roster] image`), under the XIAO's seed
   rule (`zero_host.seed_carts`). The release publishes the other system carts, all
@@ -119,6 +123,10 @@ make firmware-monitor-c3-zero PORT=/dev/ttyACM0
 
 `build.sh` runs from a worktree like every board's (`tools/worktree.py`), and
 the browser console its image names is that tree's own (`firmware/web_runner/`),
-and the flash installs it. The
+which its loader fetches from that tree's `firmware/web_runner/serve.py` on
+this machine's LAN address (`tools/gen_web_blob.py`, THE MIRRORS): run it
+while a browser opens the board. `tools/board.py pass c3_zero` builds,
+flashes and runs `tests/test_c3_zero_on_glass.py`, which serves that pack
+and boots the console in headless Chrome. The
 build fails when the image outgrows the factory slot (the #168 guard reads the
 slot from this board's CSV). A flash that changes the table formats the store.

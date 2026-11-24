@@ -14,7 +14,7 @@ generated or held by code, this guide points at it rather than copying it:
 | what | its authority |
 |---|---|
 | every call an app reaches, on every tier | the call table (§10), written from `native/os_calls.json` |
-| the UI tree's kinds, props, verbs and error codes | `tests/uitree_contract/contract.json` (§3) |
+| the UI tree's kinds, props, verbs and error codes | `native/moy_uitree/contract.json` (§3) |
 | the immediate `ui` verbs | `docs/history/ui_api_2026-10.md` (§3, "The immediate API") |
 | Python's `moybyte` verbs, each with its signature | `runtime/system/moybyte.py`'s header |
 | a Python app's globals per permission | `runtime/shell/system_api.py` |
@@ -129,9 +129,8 @@ manifest with an `id` (§2). `--tier lua|wasm|wasi|c` writes the other tiers'
 `--service <tier>` an app's own service. `moy app check counter.moy` says
 what the console would refuse and which permissions the code uses that the
 manifest does not ask for (or asks for and never uses), `moy app build
-counter.moy` compiles a wasm or C program from its `src/` (`--chip
-esp32s3|esp32p4|host`, which a C program must name; Python and Lua have
-nothing to build), and `moy app stubs counter.moy` gives an editor the
+counter.moy` compiles a wasm or C program from its `src/` for every chip, or for those
+`--chip esp32s3|esp32p4|host` names (Python and Lua have nothing to build), and `moy app stubs counter.moy` gives an editor the
 tier's names. `moy app` is moy-spec's `moy` running Moybyte's plugin,
 `moy-app`, which `make setup` installs (`sdk/README.md`). The UI tree's own
 checks are `tools/uitree_check.py counter.moy` (Python) and
@@ -229,7 +228,7 @@ reach grows or changes: a row, role, permission or error code of
 compiled and WASI imports, the ELF table), a manifest field
 (`moy_store_base.VENDOR_FIELDS`), the moy-spec format level the console runs
 (`runtime/run/player_fit.py`'s `FORMAT_LEVEL`), or the UI tree's contract
-(`tests/uitree_contract/contract.json`, §3: a kind, prop, word, verb, role,
+(`native/moy_uitree/contract.json`, §3: a kind, prop, word, verb, role,
 `takes=` value, retired name or error code, and whether each is built; its
 prose is left out). `tools/api_level.py` pins a
 fingerprint of those tables on the line below the level, and
@@ -275,7 +274,7 @@ own spelling:
 | Lua | `ui` is the UI tree (`runtime/run/uitree.lua`) | `"extensions": ["moybyte.uitree"]` |
 | compiled (wasm) | `ut_*` over the `uitree_*` imports (`sdk/include/moybyte/uitree.h`) | `"extensions": ["moybyte.app"]` |
 
-`tests/uitree_contract/contract.json` is the authority on every kind, prop,
+`native/moy_uitree/contract.json` is the authority on every kind, prop,
 verb and error code below; `tests/uitree_contract/known.json` lists where a
 tier lacks one, and this guide names only what the Python tier builds.
 
@@ -408,8 +407,8 @@ Python's alone.
 | `row(key)` | children side by side | `wrap=`, `gap=`, `pad=`, `mid=`, `close=` what Back does while it shows |
 | `scroll(key)` | a region that scrolls its children | `follow=` opens at its foot and keeps a new row in view; `snap=` shows whole rows, a "More below" cue where it leaves some out below and, following, an "Older messages" one above |
 | `foot()` | the page's docked foot: buttons at its end, a label before them | `look="share"` its buttons share its width, `"band"` an edge-to-edge strip |
-| `split(dir, sizes)` | cells along `"row"` or `"col"`, sized in units or weights (`"1*"`) | `gap=`, `pad=` (a spacing word: `"s"`, `"m"`, `"l"`, `"0"`), `align=`, `rule=` |
-| `grid(cols, rows)` | a fixed grid of cells | `gap=`, `pad=` (spacing words, as a split's), `w=`, `h=` |
+| `split(dir, sizes)` | cells along `"row"` or `"col"`, sized in units or weights (`"1*"`) | `gap=`, `pad=` (ints at 1x, 8 each unless given), `align=`, `rule=` |
+| `grid(cols, rows)` | a fixed grid of cells | `gap=`, `pad=` (ints at 1x, 6 and 0 unless given), `w=`, `h=` |
 | `panel(key)` | a region of its own | |
 | `switch(name, cases)` | one of several bodies by an enum's or a bool's value (`"_"` the rest) | |
 | `panes(dir)`, `pane(key)` | panes a person resizes by their dividers; one grows (no Lua) | `size=`, `start=`, `min=`, `grow=`; a pane's `tabs=`, `title=` |
@@ -422,7 +421,7 @@ Python's alone.
 |---|---|---|
 | `label(text)` | a line of text | `face=`, `tone=`, `icon=`, `wrap="word"` with `lines=`, `size="fit"`, `size="text"` (in a placed row, as wide as its text and its icon, in the ui face), `align=`, `scale=`, `w=` |
 | `info(label, value)` | a label and its value on one row | `icon=`, `tag=` a pill, `signal=` 0 to 4 bars, `tone=` |
-| `status(text)` | a status line, cut at its `" · "` fields (no Lua) | |
+| `status(text)` | a status line, cut at its `" · "` fields | |
 | `rule()` | a divider | |
 | `note(lines)` | a card in the page's flow | `icon=` (`"warn"` in the danger tone) |
 | `empty(title)` | what a page with nothing on it says; controls built in it stand under it; its lines wrap at word breaks to the column it stands in (a page, a cell); where its disc would push them past its room (its view, a placed page's stack), its words stand without it | `icon=`, `lines=` |
@@ -442,7 +441,7 @@ Python's alone.
 | `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=`, `sub=`, `count=`, `mark=` |
 | `toggle(label, name)` | a bool | `on=`, `hint=`, `when=` with `off=` (below) |
 | `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=`, `when=` with `off=` (below) |
-| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `secret=`, `grow=`, `on=`, `changed=`, `when=` with `off=` (below) |
+| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `edit="open"` its edit open as focus comes onto it (§4), `keys="number"` the on-screen keyboard's layout (#239; draws nothing), `secret=`, `grow=`, `on=`, `changed=`, `when=` with `off=` (below) |
 | `seg(label, name)` | one of an enum's values, or of a model's rows | `labels=`, `text=`, `look=` (`seg`, `cycle`, `swatches`, `pictures`), `on=` |
 | `tabs(name, labels)` | a tab strip over an enum, or over a `row_of` a tab a row; a `switch` on the same name is its body | `icons=`, `offered=`, `hint=`, `text=` |
 | `stepper(value, prev, next)` | "‹ value ›", its chevrons two actions | `tone="dim"`, `grow=` |
@@ -520,9 +519,20 @@ with a rule as a captioned group's are (a `row` among them one of its rows);
 `gap=` sets its column's children that far apart. `ui.split(..., rule=True)`
 draws a rule between its cells; a row split's fixed sizes that its width
 cannot hold share it by their sizes, and a cell that is a row, a group or a
-seg widens to what it needs, its neighbours giving up at most half theirs.
+seg widens to what it needs, its neighbours giving up at most half theirs
+and never their least (a group's least is its links' labels and icons: a
+link's value gives way to its label).
 Groups in a `row` stand side by side, each a column of its rows (no
 caption), on a flowing page and a placed one.
+
+**Spacing is pixels at 1x (owner, 2026-11-24).** Every `gap=` and `pad=`
+(a group's, a row's, a split's, a grid's, cells', cards', panes') is a plain
+int, literal or bound, meaning pixels at scale 1. The engine multiplies it by
+the chrome scale in force (`layout_base.scale`): a handheld's font scale, its
+tap floor's where that stands over it, and the desk's unit, 2 at chrome size
+1. A page never scales a spacing itself: `tests/test_uitree_spacing.py`
+refuses one multiplied by a scale. Hairlines, borders and rules take no
+scale.
 
 A column split's cells that run past its height take the overrun from its
 palettes (`ui.cells`), whose cells fit the room left them down to a third
@@ -716,7 +726,7 @@ A canvas in a rows' body, or a table's child that draws the table's rows
 |---|---|
 | `reads=` | the states its draw reads; the page's shift frames count them, and a read of another state is R01. A canvas that names none draws the frame after it whole |
 | `pointer=` | an action or hook `takes="pointer"`, handed a press and its drag and release in the canvas's own coordinates (`ev.kind` `"down"`, `"drag"`, `"up"`; `ev.x`, `ev.y`; `ev.row`); while a popover or a dialog is open only a canvas inside it takes a press. C reads `ut_point()` |
-| `keys=` | handed the frame's keys while the canvas holds focus, run as a handler, and answers true for keys it took, which the page then never sees; a canvas with no `keys=` is no stop. Python: `keys(i)` (`keys(i, row)` in a list's body), `i` the input; Lua: `keys = function() ... end` (`function(row)` in a list's body), reading `btnp()` and `keyp()`. A compiled app's canvas takes no `keys=`: its row is refused |
+| `keys=` | handed the frame's keys while the canvas holds focus, run as a handler, and answers true for keys it took, which the page then never sees; a canvas with no `keys=` is no stop. Python: `keys(i)` (`keys(i, row)` in a list's body), `i` the input; Lua: `keys = function() ... end` (`function(row)` in a list's body), reading `btnp()` and `keyp()`; C: `ut_canvas_keys(keys)` after `ut_canvas`, `keys()` answering non-zero (its row `ut_canvas_row()`), the module's export `_uitree_keys` |
 | `hint=` | the band's confirm word while it holds focus |
 | `h=`, `w=` | its size (a template); `ground=` the theme role painted under it |
 
@@ -779,7 +789,7 @@ the handle.
 ### Errors
 
 Each code, what it means and its fix (Python's; Lua's or C's where Python
-has none), as `tests/uitree_contract/contract.json` holds them
+has none), as `native/moy_uitree/contract.json` holds them
 (`tests/test_app_guide.py` fails a row that differs).
 `tests/test_uitree_mistakes.py` makes each mistake both layers raise once in
 Python and once in Lua.
@@ -802,8 +812,6 @@ Python and once in Lua.
 | D01 | the `app` declaration: an unknown or placement field (`x`, `place`, `tools`...), or a second one | drop `place=`: the shell places windows |
 | D02 | `size=` or `min=` not `(w, h)` of desk units or fractions `"a/b"` with `0 < a ≤ b` | `size=("7/8", "9/10")` |
 | D04 | an app with no `app` declaration | `ui.app("Counter", icon="calc")` |
-| D05 | a `slot` not in `slots=`, or `slots=` naming a slot the tree lacks | `slots=["run"]` and `ui.slot("run")` |
-| D06 | the manifest's `"ui"` level is missing, or one this console does not run | `"ui": 1` in the manifest |
 | E00 | a kind, a prop or a form the C engine does not draw yet, by name (`uitree_c.EngineGap`), never drawn wrong | run the app on the reference (`uitree`), or build it from what the C engine draws |
 | E01 | an enum with no `init=` | `ui.enum("a", "b", init="a")` |
 | E02 | `init=` is not one of the enum's values | name one of them |
@@ -811,18 +819,11 @@ Python and once in Lua.
 | G01 | a derive cycle | compute one of them in a handler |
 | H01 | a hook where an action belongs (a button, link, tool, item, card, a dialog's `buttons=`) | `ui.action(NAME, "Label", fn)` |
 | H03 | a hook with a label, an icon, keys or `when=` | an action, if a person sees it |
-| I01 | a tool or a lent action with no icon from its action or its site, and no `fill=` | `icon="pencil"` on the action |
 | I02 | an action's `icon=` is a template | a site's `icon="{...}"`, or a name |
 | K01 | an app names a shell role (`home`, `full`, `system`) | a role of the app's (§13.1) |
 | K02 | two actions on one key live together in one unit, or an app action beside a unit action | one key, one action |
 | K03 | a bad key: a chord other than `ctrl+LETTER`, an unknown role | `keys=["ctrl+f", "role:search"]` |
-| L01 | a lender with no `lent` site, or a frame lending to itself | `ui.lent("bar")` in the frame |
-| L02 | two shown `lent` sites of one name in one size class | one site per class |
 | L03 | two shown lenders on one site | lend to two sites |
-| M01 | C: a handle that is not one | a handle the build returned |
-| M02 | C: a handed value read when none was handed, or a field of another model | read it in the handler it is handed to |
-| M03 | C: `put_*`, `put_row` or `rows_end` outside `rows_begin ... rows_end`, or a handle not a field of the model | `moy_ui_rows_begin(model)` first |
-| M04 | C: fields put after the last `put_row` | end with `moy_ui_put_row()` |
 | N01 | an unknown kind or prop, a bad prop value, a missing required prop (`progress` with no `max=`; a `derive` with neither or both of `cond=` and `text=`), a wrong count of arguments, a function given where its result belongs or the reverse | the near name the message offers |
 | N02 | two siblings with one key | a key of its own: `ui.row("find_strip")` |
 | N03 | a node or declaration where it may not stand (a `tools` in a `group`, a node after the page's `scroll` outside the `foot`, a label table declared on a unit) | move it: the message names where it may stand |
@@ -830,6 +831,7 @@ Python and once in Lua.
 | N06 | an anchor naming no node, a part the node lacks, or a tab its enum lacks | `anchor="msgs.cur"` |
 | N07 | `split`: no weight, or a bare `0`; `panes`: not exactly one child grows | `sizes=[112, "1*"]` |
 | N08 | `focus(KEY)` names no node, or more than one, in the handler's unit | a key the unit's nodes have |
+| N09 | an app names a kind, prop, word or app field the contract marks the shell's (`slot`, `lent`, `tools lend=`, `card fill=`, `cards look="column"`, `ui.app slots=`) | an app's own: `cards look="icons"` |
 | O01 | an action or a control that can be off (`when=` or `row=`) with no `off=` | `off="hide"` |
 | O02 | `off=` with neither `when=` nor `row=` | drop `off=` |
 | O04 | `when=` or `off=` on a node that is neither an action's site nor a two-way control | `when=` on the action |
@@ -849,7 +851,6 @@ Python and once in Lua.
 | S07 | a model with no key field, a key field not text or int, or a field named `key` | `ui.model(key="id", id="", ...)` |
 | S08 | Python: a typed name compared with None | `if s.pick:` |
 | S09 | a write to a derive | write the names it reads |
-| S10 | a write to a value the engine writes (`scroll new=`, `canvas size=`) | read it; the engine writes it |
 | S11 | a `row_of` naming no model | `ui.row_of("nets")` after `nets=ui.model(...)` |
 | S12 | a `doc` with an unknown `lang` | `lang="python"` |
 | S13 | a declaration whose initial value has no type: `None` or `nil`, a list, a function | `ui.opt(0)` for a value that may be absent |
@@ -860,21 +861,10 @@ Python and once in Lua.
 | T05 | `{.field}` or `@current` outside a row | `{sel.field}` |
 | T06 | Python: an enum used as a truth value | `if s.op != "none":` |
 | U02 | a name declared twice in one key space (two states; a state and an action; a unit and a document; two pages) | rename one |
-| U03 | a unit's action named outside every node bound to its unit | `unit=code` on the pane or case |
-| U05 | a dotted name names nothing in that unit | the near name |
-| U06 | a name a unit declares that the app also declares | rename one |
-| U07 | `unit=` on a node that cannot bind | a case, pane, popover or page |
 | U08 | two units answering one key that some size class shows together | give the key to one of them |
-| U10 | a unit declared on a unit | declare it on the app |
 | W01 | a two-way control's `on=` names an action or hook that does not take what the control hands (`none` for a state, `row` for a `.field`) | `takes="none"`, reading the state |
 | W02 | a `work` step's `budget=` is not an int of 1 to 16 ms | `budget=4` |
 | X01 | an internal assertion: the layer missed a check at build | report it: the layer missed a check |
-| Y01 | a process-1 word (`shell.*`, `geom`, `from_app`, `order`) in an app | an app's own kinds |
-| Y02 | `from_app` of an unknown field | a field of §19.1 |
-| Y03 | `shell.windows` over rows without `geom` `x y w h` | `x=shell.geom()` and the rest |
-| Y04 | `shell.zone` over rows without `from_app` | `title=shell.from_app("title")` |
-| Y05 | a dock into a slot its host does not declare | the host's `slots=` |
-| Y06 | after a handler, a model and its orders disagree | drop the key from every order with the row |
 
 ### One app per tier
 
@@ -983,7 +973,7 @@ boundary keeping only its `print` and its own colours), a Lua or compiled
 run's by the run's context over the word its snapshot carries
 (`AppFace.ui_face`, `moy_ui_run.h`'s `MOYCORE_UI_FACE_*`). A fixed app's
 page draws as a cart's. Back steps out of its views first there too (§4): a
-focused field's edit, then a popover the last frame drew.
+focused field's open edit, then a popover the last frame drew.
 
 Write an app on the UI tree: the immediate verbs go at the clean cut of
 the OS work (#246).
@@ -992,7 +982,7 @@ the OS work (#246).
 
 The UI tree API freezes with the rest of the console API (`API_FROZEN`, §2):
 `tools/api_level.py` fingerprints its contract,
-`tests/uitree_contract/contract.json`, and from the freeze on a kind, prop,
+`native/moy_uitree/contract.json`, and from the freeze on a kind, prop,
 word, verb, role, `takes=` value, retired name or error code that changes
 without a bump of the API level is red (`tests/test_api_level.py`). The list
 below is that contract's every name, generated from it by
@@ -1005,7 +995,7 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 
 | kind | level | head | props |
 |---|---|---|---|
-| `page` | 1 | python tpl, lua name, c name | `title` tpl, `status` tpl, `shown` action or hook |
+| `page` | 1 | python tpl, lua name, c name | `title` tpl, `arg` name, `status` tpl, `shown` action or hook |
 | `group` | 1 | tpl | `close` action or hook, `look` `"card"` `"rules"`, `gap` int |
 | `panel` | 1 | key | none |
 | `row` | 1 | key, optional | `close` action or hook, `pad` int, `gap` int, `mid` bool, `wrap` bool |
@@ -1013,8 +1003,7 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 | `foot` | 1 | none | `look` `"end"` `"share"` `"band"` |
 | `switch` | 1 | state | none |
 | `case` | 1 | lit, made by its parent | none |
-| `tools` | 2 | key | `lend` name |
-| `lent` | 2 | name | none |
+| `tools` | 2 | key | none |
 | `label` | 1 | tpl | `tone` tpl, `icon` tpl, `face` `"ui"` `"title"` `"mono"` `"caption"` `"result"`, `size` `"fit"` `"text"`, `wrap` `"cut"` `"word"` `"char"`, `lines` int, `align` `"start"` `"center"` `"end"`, `scale` int, `w` int |
 | `rule` | 1 | none | none |
 | `info` | 1 | tpl | `value` tpl, `icon` tpl, `signal` int, `tag` tpl, `tone` tpl |
@@ -1032,24 +1021,23 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 | `link` | 1 | action | `label` tpl, `value` tpl, `icon` tpl, `signal` int, `tag` tpl, `tone` tpl, `swatch` tpl, `sub` tpl, `count` tpl, `mark` tpl, `focus` cond |
 | `toggle` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `hint` tpl |
 | `slider` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `lo` int, `hi` int, `look` `"bar"` `"steps"` `"blocks"`, `icon` tpl |
-| `field` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `max` int, `secret` bool, `hint` tpl, `grow` bool, `commit` bool, `changed` hook |
+| `field` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `max` int, `secret` bool, `hint` tpl, `grow` bool, `commit` bool, `edit` `"open"` `"stop"`, `keys` `"text"` `"number"`, `changed` hook |
 | `seg` | 2 | state | `label` tpl, `labels` table, `on` action or hook, `focus` cond, `look` `"seg"` `"cycle"` `"swatches"` `"pictures"`, `text` tpl |
 | `tabs` | 2 | state | `labels` table, `icons` table, `text` tpl, `on` action or hook, `focus` cond, `offered` conds, `hint` tpl |
 | `cells` | 2 | state | `clear` int, `count` int, `first` int, `cols` int, `side` int, `gap` int, `edge` bool, `on` action or hook, `pick` action or hook, `focus` cond |
 | `rows` | 1 | model | `cur` name, `current` name, `check` bool, `empty` tpl, `by` name, `filter` name, `changed` hook, `group` tpl, `dir` `"row"` `"col"` |
-| `cards` | 2 | model | `cur` name, `current` name, `w` int, `h` int, `cols` int, `new` action, `changed` hook, `pad` int, `group` tpl, `flow` bool, `look` `"carousel"` `"shelf"` `"icons"` `"column"`, `tone` tpl, `label` tpl |
-| `card` | 2 | action | `label` tpl, `sub` tpl, `badge` tpl, `label_icon` tpl, `image` name, `icon` tpl, `tone` tpl, `fill` tpl |
+| `cards` | 2 | model | `cur` name, `current` name, `w` int, `h` int, `cols` int, `new` action, `changed` hook, `pad` int, `group` tpl, `flow` bool, `look` `"carousel"` `"shelf"` `"icons"`, `tone` tpl, `label` tpl |
+| `card` | 2 | action | `label` tpl, `sub` tpl, `badge` tpl, `label_icon` tpl, `image` name, `icon` tpl, `tone` tpl |
 | `table` | 2 | model | `cols` list, `cur` name, `on` action or hook, `changed` hook, `empty` tpl, `focus` cond, `hint` tpl, `row` int |
 | `col` | 2 | tpl | none |
 | `dialog` | 1 | tpl | `buttons` list of action, `kind` `"primary"` `"danger"`, `look` `"keys"`, `labels` list of tpl |
 | `popover` | 1 | key | `anchor` tpl, `w` int, `close` action or hook, `wash` `"page"` `"view"` `"none"`, `at` tpl |
 | `menu` | 2 | tpl, optional | none |
 | `item` | 2 | action | `icon` tpl, `label` tpl, `kind` `"danger"` |
-| `split` | 1 | none | `dir` `"row"` `"col"`, `sizes` list, `gap` `"s"` `"m"` `"l"` `"0"`, `pad` `"s"` `"m"` `"l"` `"0"`, `align` `"start"` `"center"` `"end"`, `rule` bool |
-| `grid` | 1 | none | `cols` int, `rows` int, `gap` `"s"` `"m"` `"l"` `"0"`, `pad` `"s"` `"m"` `"l"` `"0"`, `w` int, `h` int |
+| `split` | 1 | none | `dir` `"row"` `"col"`, `sizes` list, `gap` int, `pad` int, `align` `"start"` `"center"` `"end"`, `rule` bool |
+| `grid` | 1 | none | `cols` int, `rows` int, `gap` int, `pad` int, `w` int, `h` int |
 | `panes` | 2 | key | `dir` `"row"` `"col"`, `size` name, `start` int or name, `min` list, `grow` bool, `gap` int, `focused` name, `grown` name |
 | `pane` | 2 | key | `title` tpl, `icon` tpl, `tabs` name, `labels` table, `size` name, `start` int or name, `grow` bool, `min` list or conds, `head` bool, `offered` conds |
-| `slot` | 2 | name | `min` list |
 | `text_editor` | 2 | state | `find` name, `find_on` cond, `marks` name, `gutter` cond, `focus` cond |
 | `canvas` | 1 | key | `draw` fn, `reads` list, `pointer` action or hook, `keys` fn, `mark` lit, `hint` tpl, `focus` cond, `h` int, `ground` name, `w` int |
 | `hints` | 2 | model | `keys` tpl, `label` tpl, `tail` cond, `drop` cond, `on` action or hook |
@@ -1057,13 +1045,13 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 - **Every node but the page:** `shown` cond. **A child of a row or a grid:** `span`, `grow`.
 - **An action:** `hint` tpl, `when` cond, `off` `"hide"` `"grey"`, `takes` takes, `row` name, `chars` text, `keys` list, `icon` name, `push` name, `unit` name. **A hook:** `takes` takes, `unit` name.
 - **`takes=`:** `none`, `row`, `arg`, `char`, `pointer`. **`off=`:** `hide`, `grey`.
-- **Roles an app's keys name:** `confirm`, `back`, `more`, `left`, `right`, `up`, `down`, `search`, `goto`, `complete`, `undo`, `redo`, `play`, `tools`; the shell's own: `home`, `full`, `system`.
+- **Roles an app's keys name:** `confirm`, `back`, `more`, `left`, `right`, `up`, `down`, `search`, `goto`, `complete`, `undo`, `redo`, `play`, `tools`.
 - **Verbs** (besides a kind's, its name): `app`, `state`, `enum`, `record`, `model`, `row_of`, `opt`, `labels`, `derive`, `action`, `hook`, `page`, `sys`, `push`, `pop`, `focus`, `after`, `cancel`, `post`, `doc`, `image`, `work`, `pictures`. **Queries:** `about`, `text_size`, `colors`, `fade`.
-- **App fields (`ui.app`):** `icon`, `size`, `min`, `back`, `glass`, `slots`. **System values (`@NAME`):** `desk` bool, `handheld` bool, `wide` bool, `tall` bool, `touch` bool, `input` enum, `focus` text, `current` bool.
-- **Error codes:** A01, A02, A03, A07, A08, A09, A10, B01, B02, B03, C01, C02, C03, D01, D02, D04, D05, D06, E00, E01, E02, E03, G01, H01, H03, I01, I02, K01, K02, K03, L01, L02, L03, M01, M02, M03, M04, N01, N02, N03, N04, N06, N07, N08, O01, O02, O04, P01, P02, P03, P04, P05, Q01, R01, S01, S02, S03, S04, S05, S06, S07, S08, S09, S10, S11, S12, S13, T01, T02, T03, T04, T05, T06, U02, U03, U05, U06, U07, U08, U10, W01, W02, X01, Y01, Y02, Y03, Y04, Y05, Y06.
-- **Reserved codes**, never raised: A04, A05, A06, D03, F01, F02, F03, F04, F05, F06, F07, F08, O03, U01, U04, V01, V02.
-- **Retired names**, each refused with its replacement (N04): verbs `at`, `cell`, `fmt`, `has_symbols`, `head`, `key`, `peek`, `per`, `rebuild`, `ref`, `scope`; kinds `cell`, `text`; props `below@scroll`, `current@tool`, `disabled`, `does@action`, `fixed@split`, `ink`, `key@action`, `keyname@item`, `lit`, `mkind@item`, `paint@cards`, `tools@app`; takes `change`; system values `fs`, `h`, `symbols`, `w`.
-- **Named and not built** (`designed`: every front refuses each, N01): `page.arg`, `page.unit`, `page.nav`, `scroll.new`, `toast.anchor`, `tool`, `cells.face`, `cells.slide`, `dialog.default`, `popover.unit`, `pane.unit`, `canvas.size`, `canvas.sized`, `canvas.capture`, `canvas.text`, `canvas.actions`, `canvas.on`, `takes="row+arg"`, `takes="key"`, role `menu`, role `space`, verb `unit`, verb `damage`, verb `load`.
+- **App fields (`ui.app`):** `icon`, `size`, `min`, `back`, `glass`. **System values (`@NAME`):** `desk` bool, `handheld` bool, `wide` bool, `tall` bool, `touch` bool, `input` enum, `focus` text, `current` bool.
+- **The shell's own**, kept on the shell's pages: `tools lend=`, kind `lent`, `cards look="column"`, `card fill=`, kind `slot`, app field `slots`, refused in an app (N09); roles `home`, `full`, `system` (K01).
+- **Error codes:** A01, A02, A03, A07, A08, A09, A10, B01, B02, B03, C01, C02, C03, D01, D02, D04, E00, E01, E02, E03, G01, H01, H03, I02, K01, K02, K03, L03, N01, N02, N03, N04, N06, N07, N08, N09, O01, O02, O04, P01, P02, P03, P04, P05, Q01, R01, S01, S02, S03, S04, S05, S06, S07, S08, S09, S11, S12, S13, T01, T02, T03, T04, T05, T06, U02, U08, W01, W02, X01.
+- **Reserved codes**, never raised: A04, A05, A06, D03, D05, D06, F01, F02, F03, F04, F05, F06, F07, F08, I01, L01, L02, M01, M02, M03, M04, O03, S10, U01, U03, U04, U05, U06, U07, U10, V01, V02, Y01, Y02, Y03, Y04, Y05, Y06.
+- **Retired names**, each refused with its replacement (N04): verbs `at`, `cell`, `fmt`, `has_symbols`, `head`, `key`, `peek`, `per`, `rebuild`, `ref`, `scope`; kinds `cell`, `text`; props `below@scroll`, `disabled`, `does@action`, `fixed@split`, `ink`, `key@action`, `keyname@item`, `lit`, `mkind@item`, `paint@cards`, `tools@app`; takes `change`; system values `fs`, `h`, `symbols`, `w`.
 
 <!-- the freeze list ends -->
 
@@ -1076,13 +1064,31 @@ touch alone (#242, #239). The engine gives a UI tree page all three: arrows
 Enter, A or a tap fires the focused stop's action, a drag scrolls. The app
 writes no focus code: the engine moves focus into view, keeps it across
 frames and puts it back on the node that pushed a page when the page pops;
-a handler moves it with `ui.focus(key)`. A `ui.field` in focus takes the
-keyboard as text: on the T-Deck its WASD type there, and the trackball
-steps focus off it. Nothing sets the keyboard's mode by hand: the console's
-input policy (`runtime/shell/input_policy.py`) derives it from what the
-surface holding the keys has focused, and a menu over it is game mode. So
-every action is a stop (a button, a link, a list row, a menu item), and a
-key shortcut only ever doubles one.
+a handler moves it with `ui.focus(key)`. Nothing sets the keyboard's mode
+by hand: the console's input policy (`runtime/shell/input_policy.py`)
+derives it from what the surface holding the keys has focused, and a menu
+over it is game mode. So every action is a stop (a button, a link, a list
+row, a menu item), and a key shortcut only ever doubles one.
+
+**A field is edited only after Enter (owner, 2026-11-24).** A focused
+`ui.field` is a stop like any other: the arrows, WASD and the trackball move
+past it, typing nothing, and its hint is Enter's Edit in the input's own
+key. Enter, a tap, a click or a pad's A opens its edit, and while it is
+open the field takes the keyboard as text: every key types at its caret,
+WASD included, and the directions (the arrows, the trackball, a pad's
+d-pad, never WASD) move the caret, left and right a character, up and down
+to the line's start and end (a field is one line; `text_editor` is the many
+lines, with keys of its own). Enter, or the trackball's press, ends the edit
+and commits it (`on=` runs, a `commit=True` draft is written); Esc, B or
+the T-Deck's Mic end it and give back the text it began from. Focus stays
+on the field either way, and focus leaving it ends the edit too. A field
+with `edit="open"` is for a page that exists for typing (a search box a
+search key opens, the Terminal's line, a dialog that asks a name): focus
+coming onto it opens its edit, and so does `ui.focus` naming it; Enter
+commits with the edit going on (the Terminal's next line, the next find, a
+name the dialog refused); Esc gives back what was typed and ends the edit,
+and on one with nothing to give back it is its page's Back (the dialog,
+the popover, the strip closes).
 
 **Shortcuts are an action's `keys=`.** `ui.action("trash", "Move to Trash",
 trash, takes="row", row="cur", keys=("t",), ...)` fires on T wherever the
@@ -1099,8 +1105,8 @@ T-Deck's K (its B), the bar's back chevron and a desk window's are the
 console's way back; a page never reads them. Back steps out of the app's own
 views before it leaves the app, in this order:
 
-1. a focused `commit=True` field's draft is dropped (its Cancel), the state
-   keeping its text;
+1. a focused field's open edit ends and gives back the text it began from
+   (a `commit=True` field's draft is dropped, the state keeping its text);
 2. else a shown dialog takes its first button, and a shown popover its
    `close=`;
 3. else, on a placed page (§3, Layout), a shown row or group with `close=`
@@ -1136,7 +1142,7 @@ and is never yours.
 
 **Tabs switch themselves.** `ui.tabs("view", "VIEWS")` over an enum takes
 the `tabs` keys (Q and E on a keyboard) wherever the keys do not type into
-a field, left and right while it holds focus, and a tap; a `ui.switch` on
+a field's edit, left and right while it holds focus, and a tap; a `ui.switch` on
 the same name is its body. The app reads no key for it.
 
 **Hints name actions, not keys.** The band under the page names the focused
@@ -1154,7 +1160,7 @@ faces; the app's code is the same on every board (`docs/history/ui_api_2026-10.m
 the tap floor).
 
 **Paste is the console's.** The console's Paste (the desk's Ctrl+V) puts its
-clipboard into the focused field, as many whole characters as its `max`
+clipboard into the focused field's open edit, at its caret, as many whole characters as its `max`
 leaves room for: the app reads no clipboard and needs no `clipboard`
 permission for it, on every tier.
 
@@ -2249,8 +2255,8 @@ it paints the strip after `draw()` and routes a tap in its band before
   `leave_asked` (its own way out, taken as the bar's back), `BACK_MINIMISES`
   (a back on the first page minimises on the desk), `typing()` (True
   where the app types outside a `ui.field`, as the Terminal does; by
-  default a field in focus on its `ctx.ui` page), `cancel()` (the T-Deck's
-  Mic inside an open field; by default its `ctx.ui` context's,
+  default a field whose edit is open on its `ctx.ui` page), `cancel()` (the T-Deck's
+  Mic inside a field's open edit; by default its `ctx.ui` context's,
   `ui_draw.app_cancel`, so a `ui.field` it draws gives its draft back and
   a `ui.popover` it draws is dismissed),
   `DESK_TILE` (False: off the desk's column; an app no cart in the store

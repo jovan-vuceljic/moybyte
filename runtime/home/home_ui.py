@@ -112,19 +112,19 @@ def icons():
 def page():
     with ui.page(""):
         with ui.row("words", wrap=True):
-            with ui.group("", gap=12):
+            with ui.group("", gap="{@desk?6:12}"):
                 ui.label("{title}", face="title", scale="{title_scale}")
                 ui.label("{meta}", tone="dim", face="ui", shown="meta_on && meta")
                 ui.label("{desc}", tone="dim", face="ui", wrap="word", lines=2, w="{desc_w}", shown="desc")
         ui.row("fill", grow=True)                   # the facts and the buttons at the hero's foot
         with ui.row("foot", wrap=True):
-            with ui.group("", gap=16):
-                with ui.row("facts", wrap=True, gap=48, shown="facts_on && fk0"):
+            with ui.group("", gap="{@desk?8:16}"):
+                with ui.row("facts", wrap=True, gap="{@desk?24:48}", shown="facts_on && fk0"):
                     for k in range(FACTS):
-                        with ui.group("", gap=6, shown=FACT_KEYS[k]):
+                        with ui.group("", gap="{@desk?3:6}", shown=FACT_KEYS[k]):
                             ui.label("{%s}" % FACT_KEYS[k], tone="dim", face="ui")
                             ui.label("{%s}" % FACT_VALUES[k], face="ui")
-                with ui.row("verbs", wrap=True, gap=14):
+                with ui.row("verbs", wrap=True, gap="{@desk?7:14}"):
                     for k in range(BUTTONS):
                         ui.button("press", "{%s}" % KINDS[k], arg=ARGS[k], label="{%s}" % LABELS[k],
                                   icon="{%s}" % ICONS[k], shown=SHOWN[k], look="hero")

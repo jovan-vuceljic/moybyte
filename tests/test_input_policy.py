@@ -100,8 +100,12 @@ def test_a_shell_apps_field_types_and_mic_gives_it_back(tmp_path, app_id):
 
 
 def _focus_name(ws, drv):
+    """Settings' Name focused and its edit opened (Enter)."""
     ws.settings_layer._want = "name"
     ws.mark_dirty()                  # the next frame draws, and focuses it
+    _frames(drv)
+    assert not ws.input.text_mode, "a focused field is a stop until Enter"
+    drv.press("run")
     _frames(drv)
 
 

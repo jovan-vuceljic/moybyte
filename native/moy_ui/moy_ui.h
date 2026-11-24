@@ -1003,16 +1003,18 @@ int moy_ui_table_row(const moy_ui_sink_t *s, moy_ui_box_t b, const moy_ui_tgeo_t
 // where a solid current mark inks them for its fill.
 // `tone` (MOY_UI_TONE_*) is the sub line's ink: the dim ink, else `value`
 // or the danger ink. With F_WRAP a title wider than the band breaks at its
-// last word that fits onto a second line, where the card's foot holds it.
+// last word that fits onto a second line, and a sub line at its words onto
+// as many as it takes (four at most), where the card's foot holds them.
 // An icon `lead`/`lead_glyph` (-1 none) stands before the title's first line,
 // the two centred as one.
 int moy_ui_card(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_box_t pic, int lw,
                 moy_ui_span_t title, moy_ui_span_t sub, int flags, int fs, int desk, int tone,
                 int lead, int lead_glyph, moy_ui_box_t *content, uint16_t *gnd);
 // The pixels a card's label band `bw` wide adds under its picture for
-// `title`: the second line's step where F_WRAP breaks it, else 0. Measures,
-// draws nothing.
-int moy_ui_card_wrap(const moy_ui_sink_t *s, int bw, moy_ui_span_t title, int fs, int desk);
+// `title` and `sub`: the lines past each one's first where F_WRAP breaks it.
+// Measures, draws nothing.
+int moy_ui_card_wrap(const moy_ui_sink_t *s, int bw, moy_ui_span_t title, moy_ui_span_t sub,
+                     int fs, int desk);
 // After the app drew into `content`: its corners cut to the card radius over
 // `gnd` and its ring, then a lifted picture's rim (F_FOCUS) round `pic`.
 int moy_ui_card_end(const moy_ui_sink_t *s, moy_ui_box_t pic, moy_ui_box_t content, int flags,
@@ -1182,7 +1184,8 @@ int moy_ui_month(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t title,
                  moy_ui_span_t days, int first, int n, int today, int chevrons, int fs, int desk,
                  moy_ui_box_t chev[2]);
 // A text field row (ui.field): its label, then the field to the row's right
-// showing the text's tail and, focused (F_FOCUS), the caret. On a group's
+// showing the text's tail and, at byte `caret` of the text (-1 none: its edit
+// is not open), the caret, the text scrolled so it shows. On a group's
 // card (`card`) the label sits where a value row's does and the field is the
 // row's value, a slider's track wide at its right; elsewhere the field takes
 // the row from the label to its right. Focused, the row wears the focus mark
@@ -1194,7 +1197,7 @@ int moy_ui_month(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t title,
 // pixels at the scale inside it. `edge`, a colour index or -1, is
 // the box's border in place of its own (a field in error: the danger ink).
 int moy_ui_field(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t label, moy_ui_span_t text,
-                 moy_ui_span_t hint, int flags, int fs, int desk, int card, int first, int edge);
+                 moy_ui_span_t hint, int flags, int fs, int desk, int card, int first, int edge, int caret);
 // The height a field row takes outside a group (at least the stacked row's):
 // the field's box, its letters' ink with 3 pixels at the scale above and
 // below inside its ring, and room round it for its focus ring. In a group

@@ -11,11 +11,15 @@
 // with a Ctrl-C, and `hangup` as a client that went away (no signal);
 // `skew MS` moves the webhost's clock by MS (negative: back, so a lockout's
 // wait already running lasts that much longer). Each answers a line.
-// `token` prints `TOKEN <hex>`, a QR's token; `drop` forgets every paired
+// `token` prints `TOKEN <hex>`, a QR's token; `claim` prints `CLAIM <claim>
+// <board id>`, what a board with no password puts in its Improv answer
+// (moy_webauth.c, THE CLAIM); `drop` forgets every paired
 // browser, cutting a terminal one holds; `signout` ends every session as a
 // password change does (`SIGNEDOUT N`). They run on the console's thread,
 // whose state the sign-in is. SYSTEM_DIR `-` is the open host.
 // The main thread prints a STATS line when a figure moves.
+// MOY_TTY_PAGE="<body hex> <whole hex>" names a browser console's pack, as
+// an image does (GET /sync's digests, moy_page.h).
 // FILES_DIR, when given, is the webhost's files root (/files.json, /media).
 // Usage: tty_main PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]
 
@@ -30,9 +34,11 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "moy_codec.h"
 #include "moy_lease.h"
 #include "moy_loop.h"
 #include "moy_net.h"
+#include "moy_page.h"
 #include "moy_tty.h"
 
 extern const moy_tty_shell_t moy_tty_moy_sh;
@@ -123,7 +129,7 @@ int32_t moy_loop_role(uint32_t grant, uint32_t row, const uint8_t *arg, size_t n
 
 static const char *s_system, *s_carts, *s_files;
 static int s_port;
-static int s_cmd;                       // 1 token, 2 drop, 3 signout: the console's to run
+static int s_cmd;                       // 1 token, 2 drop, 3 signout, 4 claim: the console's to run
 
 
 static void *console(void *arg) {
@@ -158,6 +164,12 @@ static void *console(void *arg) {
         } else if (cmd == 3) {
             printf("SIGNEDOUT %d\n", moy_web_signout());
             fflush(stdout);
+        } else if (cmd == 4) {
+            char c[33], id[33];
+            moy_web_claim(c);
+            moy_web_board_id(id);
+            printf("CLAIM %s %s\n", c[0] ? c : "-", id);
+            fflush(stdout);
         }
         usleep(16000);
     }
@@ -174,6 +186,12 @@ int main(int argc, char **argv) {
     s_system = strcmp(argv[2], "-") ? argv[2] : NULL;
     s_carts = argv[3];
     s_files = argc == 5 ? argv[4] : NULL;
+    const char *named = getenv("MOY_TTY_PAGE");
+    uint8_t digest[2][32];
+    if (named != NULL && strlen(named) == 129 && moy_hex_decode(named, 64, digest[0], 32)
+        && moy_hex_decode(named + 65, 64, digest[1], 32)) {
+        moy_page_name(digest[0], digest[1]);
+    }
     pthread_t t;
     pthread_create(&t, NULL, console, NULL);
     fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);
@@ -200,6 +218,8 @@ int main(int argc, char **argv) {
                 __atomic_store_n(&s_cmd, 2, __ATOMIC_RELEASE);
             } else if (strcmp(line, "signout") == 0) {
                 __atomic_store_n(&s_cmd, 3, __ATOMIC_RELEASE);
+            } else if (strcmp(line, "claim") == 0) {
+                __atomic_store_n(&s_cmd, 4, __ATOMIC_RELEASE);
             } else if (strcmp(line, "ssh") == 0 && ssh_fd < 0) {
                 moy_tty_hold(MOY_TTY_SSH, 1);
                 int r = moy_tty_open(MOY_TTY_SSH, "sleep 30", 0, 80, 24, NULL, &ssh_fd, &pid);

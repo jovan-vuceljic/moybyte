@@ -203,7 +203,7 @@ def _grid():
         ui.label("{count}", tone="dim", face="caption")
         ui.label("{wall}", tone="dim", face="caption", align="end", shown="wall")
     with ui.cards("art", cur="cur", changed="moved", w="{@desk?152:88}", h="{@desk?114:66}",
-                  pad="{@desk?22:12}", shown="!none"):
+                  pad="{@desk?11:12}", shown="!none"):
         ui.card("open", label="{.label}", icon="{.icon}", tone="{.tone}", badge="{.badge}",
                 image=".pic")
     with ui.foot(shown="@desk && !none"):
@@ -236,7 +236,7 @@ def build():
             with ui.menu(""):
                 ui.item("trash", label="Move to Trash\tDel", kind="danger")
         with ui.dialog("{rn_title}", ["cancel", "rename"], shown="renaming"):
-            ui.field("Name", "name", 32, on="rename")
+            ui.field("Name", "name", 32, on="rename", edit="open")
         ui.toast("{toast}", icon="{toast_icon}", shown="toasting")
 
 

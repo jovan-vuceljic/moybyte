@@ -186,7 +186,7 @@ class AppFace:
         """Whether the run takes typed bytes, which the input policy puts the
         keyboard in text mode for while it holds the keys: the cart asked
         (`textmode()`, a script's console), an editor handle holds the
-        keyboard, or an app's page has a field in focus -- one rule for
+        keyboard, or an app's page has a field whose edit is open -- one rule for
         every runtime: the Python verbs' context, or the run face a Lua or
         compiled app draws through. On a T-Deck W A S D then type and press
         no direction (native/moy_input/moy_kbd.c)."""

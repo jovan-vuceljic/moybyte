@@ -559,6 +559,12 @@ static mp_obj_t ui_api_cancel(mp_obj_t a0, mp_obj_t a1) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(ui_api_cancel_obj, ui_api_cancel);
 
+static mp_obj_t ui_api_edit_cancel(mp_obj_t a0, mp_obj_t a1) {
+    moy_ui_ctx_t *c = ctx_of(a0);
+    return mp_obj_new_bool(moy_ui_api_edit_cancel(c, mp_obj_is_true(a1)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(ui_api_edit_cancel_obj, ui_api_edit_cancel);
+
 static mp_obj_t ui_api_run_cancel(mp_obj_t a0) {
     return mp_obj_new_bool(moy_ui_run_cancel(mp_obj_is_true(a0)));
 }
@@ -935,6 +941,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_lost_obj, ui_api_lost);
     { MP_ROM_QSTR(MP_QSTR_api_page_title), MP_ROM_PTR(&ui_api_page_title_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_back), MP_ROM_PTR(&ui_api_back_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_cancel), MP_ROM_PTR(&ui_api_cancel_obj) }, \
+    { MP_ROM_QSTR(MP_QSTR_api_edit_cancel), MP_ROM_PTR(&ui_api_edit_cancel_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_run_cancel), MP_ROM_PTR(&ui_api_run_cancel_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_run_back), MP_ROM_PTR(&ui_api_run_back_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_run_page_title), MP_ROM_PTR(&ui_api_run_page_title_obj) }, \

@@ -25,6 +25,7 @@ enum { LOG_ERR = 3, LOG_INFO = 6 };
 #pragma weak moycore_ui_target
 #pragma weak moycore_ui_snap
 #pragma weak moycore_ui_draw_call
+#pragma weak moycore_ui_keys_call
 
 #define DEPTH 8                 // the pages a stack remembers a focus for
 #define CANVASES 8              // the canvases of a page a pointer is routed to
@@ -68,6 +69,8 @@ typedef struct {
         char key[32];
     } ptr[CANVASES];
     int nptr;
+    int keyed[CANVASES];        // the page's canvases with a keys= (the module's `_uitree_keys`)
+    int nkeyed;
     int held;                   // the canvas a press started on (its `ptr`), held until release; -1 none
     int32_t hx, hy;             // ...the press's last point
     int32_t hr[4];              // ...where it was drawn (its row's cell in a list)
@@ -141,6 +144,7 @@ static app_t *app(void) {
         if (a->e == NULL) {
             return NULL;
         }
+        uit_set_app(a->e, 1);
         a->live = 1;
         a->serial = serial;
         a->handler = -1;
@@ -416,7 +420,7 @@ int32_t moy_uitree_wasm_build(void *x, const uint8_t *page, uint32_t page_n) {
     uit_build_begin(a->e, at(a, p));
     a->page = -1;
     a->title[0] = 0;
-    a->nptr = 0;
+    a->nptr = a->nkeyed = 0;
     a->held = -1;
     return 0;
 }
@@ -446,12 +450,15 @@ int32_t moy_uitree_wasm_prop(void *x, int32_t node, const uint8_t *name, uint32_
     APP(a);
     TEXTS_BEGIN(a);
     int n = put(a, name, name_n), s = put(a, src, src_n);
-    if (node >= 0 && node < a->e->nnodes && a->e->nodes[node].kind == UIT_CANVAS && strcmp(at(a, n), "keys") == 0) {
-        char where[200];        // no row hands a canvas the keys: refused, never a stop that takes none
-        key_path(a, (int)node, where, sizeof where);
-        return refuse(a, UIT_E_KIND, "prop", where, "keys=: a compiled app's canvas takes no keys yet; leave it out");
-    }
     int r = uit_prop(a->e, (int)node, at(a, n), at(a, s), NULL);
+    if (r >= 0 && a->e->nodes[node].kind == UIT_CANVAS && strcmp(at(a, n), "keys") == 0) {
+        if (a->nkeyed == CANVASES) {
+            char where[200];
+            key_path(a, (int)node, where, sizeof where);
+            return refuse(a, UIT_E_NOMEM, "prop", where, "keys=: a page holds 8 canvases with keys at most");
+        }
+        a->keyed[a->nkeyed++] = (int)node;
+    }
     if (r >= 0 && node == a->page && strcmp(at(a, n), "title") == 0) {
         snprintf(a->title, sizeof a->title, "%s", at(a, s));
     }
@@ -695,7 +702,7 @@ static void keys(app_t *a, const int32_t *snap) {
     }
 }
 
-// The more role's key (`m`), after the frame, where no field is focused: the
+// The more role's key (`m`), after the frame, where no field's edit is open: the
 // focused row's action when it is the role's, else the page's. An action that
 // hangs from a rows list's node takes a row and acts on no other.
 static void more(app_t *a, const int32_t *snap) {
@@ -706,7 +713,7 @@ static void more(app_t *a, const int32_t *snap) {
     const uit_id_t *F = &a->e->focused;
     int has = a->e->has_focused && F->gen == a->e->gen;
     char src[160], id[UIT_ID_MAX * 2 + 2];
-    if (has && F->kind == UIT_FIELD) {
+    if (has && F->kind == UIT_FIELD && a->e->editing) {
         return;
     }
     int row = 0;
@@ -723,6 +730,31 @@ static void more(app_t *a, const int32_t *snap) {
         snprintf(src, sizeof src, "key more on '%s'", a->pname);
         owe(a, act, -1, -1, NULL, src, 0);
     }
+}
+
+// The tick's keys to the focused canvas's keys= first: the module's `_uitree_keys(node)`, its row
+// what uitree_draw_row answers inside it. Where it answers non-zero it took them: the frame and
+// the page's letters see none (uit_run_keys_taken), as the Lua layer's canvas_keys. 1 taken, 0
+// not, -1 it trapped.
+static int canvas_keys(app_t *a) {
+    const uit_id_t *F = &a->e->focused;
+    if (!a->nkeyed || moycore_ui_keys_call == NULL || !a->e->has_focused || F->gen != a->e->gen) {
+        return 0;
+    }
+    int on = 0;
+    for (int i = 0; i < a->nkeyed && !on; i++) {
+        on = a->keyed[i] == F->node;
+    }
+    if (!on) {
+        return 0;
+    }
+    a->draw_row = F->row;
+    int took = moycore_ui_keys_call(F->node);
+    a->draw_row = -1;
+    if (took > 0) {
+        uit_run_keys_taken();
+    }
+    return took;
 }
 
 // The host's back (the bar's chevron, Esc, B), which the frame before offered
@@ -771,7 +803,13 @@ int32_t moy_uitree_wasm_frame(void *x, int32_t flags) {
     }
     if (snap != NULL) {
         pointers(a, snap);
-        keys(a, snap);
+        int took = canvas_keys(a);
+        if (took < 0) {
+            return refuse(a, UIT_E_ARG, "frame", "", "the app's _uitree_keys trapped");
+        }
+        if (!took) {
+            keys(a, snap);
+        }
     }
     if (target != NULL && uit_run_backed()) {
         back(a);

@@ -182,5 +182,5 @@ def blocks_page():
         with ui.dialog("{ask_title}", ["cancel", "ok"], kind="primary", look="keys", shown="asking"):
             ui.label("Use letters, numbers and underscores.", tone="dim", wrap="word", lines=2,
                      shown="ask_rule")
-            ui.field("{ask_cap}", "entry", max=24, on="ok", changed="typed", hint="{ask_hint}")
+            ui.field("{ask_cap}", "entry", max=24, on="ok", changed="typed", hint="{ask_hint}", edit="open")
             ui.button("use_block", icon="blocks", shown="to_block")

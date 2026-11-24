@@ -8,8 +8,8 @@ layer an app is written in.
     host and never by setting the input table or calling the engine:
     the T-Deck keyboard's matrix (native/moy_input/moy_kbd.c, over an I2C
     fake: typing, and its move keys), a BLE keyboard (moy_hid.c, over a fake
-    stack), the desk keyboard, the touchscreen, the trackball and a gamepad
-    (the host driver's entry points: runtime/run/host_api.py's
+    stack), the desk keyboard, the touchscreen, a mouse, the trackball and a
+    gamepad (the host driver's entry points: runtime/run/host_api.py's
     ConsoleDriver), Esc as the host delivers it, and the T-Deck's Mic key (the
     matrix). Every column runs on a board's input table (moy_input's
     InputTable), the one the boards' drivers write.
@@ -18,8 +18,8 @@ layer an app is written in.
     sdk/include/moybyte/uitree.h, built to WASI). An ELF app has no tree and
     is no layer.
 
-A cell is a gesture: what that input does to that widget (type into a
-field and cancel its edit, step a list, press a button, dismiss a popover,
+A cell is a gesture: what that input does to that widget (open a field's
+edit, type into it and cancel the edit, step a list, press a button, dismiss a popover,
 choose a dialog's button, drag a text view), and its effect read back from
 the app's state: the engine's store on the Python layers, the state table
 on the Lua layer, and the engine's trace of its state's changes on the
@@ -45,15 +45,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DT = 1.0 / 30.0
 
 ROWS = ("field", "list", "button", "popover", "dialog", "text_view")
-COLUMNS = ("kbd_text", "kbd_move", "ble_kbd", "desk_kbd", "touch", "trackball", "gamepad",
+COLUMNS = ("kbd_text", "kbd_move", "ble_kbd", "desk_kbd", "touch", "mouse", "trackball", "gamepad",
            "esc", "mic")
 LAYERS = ("py_shell", "py_app", "lua_app", "wasm_app")
 
 # What each input does to each widget: the gesture a cell runs. A widget an
-# input has no gesture for is no cell (a touchscreen types nothing).
+# input has no gesture for is no cell (a touchscreen types nothing). A field
+# is a stop until Enter, A, a tap, a click or the trackball's press opens its
+# edit: a key's gesture opens it first, and the T-Deck's move key crosses it
+# before (it types nothing there) and types once the edit is open.
 GESTURES = {
     "field": {"kbd_text": "type", "kbd_move": "type_move", "ble_kbd": "type",
-              "desk_kbd": "type", "esc": "cancel", "mic": "cancel"},
+              "desk_kbd": "type", "touch": "edit", "mouse": "edit", "trackball": "edit",
+              "gamepad": "edit", "esc": "cancel", "mic": "cancel"},
     "list": {"kbd_move": "next", "ble_kbd": "next", "desk_kbd": "next", "touch": "next",
              "trackball": "next", "gamepad": "next"},
     "button": {"kbd_text": "press", "kbd_move": "press", "ble_kbd": "press", "desk_kbd": "press",
@@ -68,10 +72,7 @@ GESTURES = {
 # such gesture: a dialog's Esc, B or Mic take its first button (Back's
 # order), and a text view's keys, pad and trackball step it as a stop.
 
-# A system app's Back is its engine's own (docs/app_api_v1.md section 4's
-# order), which gives back only a commit= field's draft: its Esc on a field
-# is no cancel. A cart app's Back steps out of a field's edit first (§3).
-NOT_CELLS = {("py_shell", "field", "esc")}
+NOT_CELLS = set()
 
 CELLS = [(layer, row, col) for layer in LAYERS for row in ROWS for col in COLUMNS
          if col in GESTURES[row] and (layer, row, col) not in NOT_CELLS]
@@ -499,6 +500,13 @@ class Rig:
         name = STATE[self.row]
         if name is None:
             return {"pic": self.shot()}
+        if self.row == "field":
+            got = self._state(name)
+            got["typing"] = int(bool(self.ws.input_policy.typing()))
+            return got
+        return self._state(name)
+
+    def _state(self, name):
         eng = self.engine()
         if eng is not None:
             return {name: _value(eng.s._v[name])}
@@ -529,7 +537,8 @@ class Rig:
         if got is None:
             ref = Rig(self.tmp / ("touch_" + kind), kind, self.row, self.monkeypatch, self.built)
             sx, sy, sw, sh = ref.ws.app_content_rect()
-            took = {"button": lambda s: s["n"] == 1, "list": lambda s: s["c"] == "two"}[self.row]
+            took = {"button": lambda s: s["n"] == 1, "list": lambda s: s["c"] == "two",
+                    "field": lambda s: s["typing"] == 1}[self.row]
             for y in range(sy + 2, sy + sh, 6):
                 ref.tap(sx + sw // 2, y)
                 if took(ref.state()):
@@ -581,6 +590,13 @@ class Rig:
         self.drv.click(int(x), int(y))
         self.frames(3)
 
+    def mouse_click(self, x, y):
+        """A mouse's: the cursor moved there, then its click."""
+        self.drv.hover(int(x), int(y))
+        self.frames(1)
+        self.drv.click(int(x), int(y))
+        self.frames(3)
+
     def drag(self, x, y, dy):
         self.drv.touch(int(x), int(y))
         self.frames(1)
@@ -601,9 +617,13 @@ def gesture(rig, col, what):
     if what == "choose":
         what = "press"              # the dialog's focused button, its first
     if col == "kbd_text":
+        if what == "type":
+            rig.kbd_key("\r")
         rig.kbd_key(TYPED if what == "type" else "\r")
     elif col == "kbd_move":
         if what == "type_move":
+            rig.kbd_key("s")            # a step past the field: no letter
+            rig.kbd_key("\r")
             rig.kbd_key("s")
         elif what == "press":
             rig.kbd_key("\r")
@@ -615,6 +635,7 @@ def gesture(rig, col, what):
                 rig.kbd_key("s")
     elif col == "ble_kbd":
         if what == "type":
+            rig.ble_key(ENTER)
             rig.ble_key(USAGE[TYPED])
         elif what == "press":
             rig.ble_key(ENTER)
@@ -628,6 +649,7 @@ def gesture(rig, col, what):
                 rig.ble_key(DOWN)
     elif col == "desk_kbd":
         if what == "type":
+            rig.desk_key(13)
             rig.desk_type(TYPED)
         elif what == "press":
             rig.desk_key(13)
@@ -639,18 +661,20 @@ def gesture(rig, col, what):
         else:
             for _ in range(3):
                 rig.desk_key(mi.KEY_DOWN)
+    elif col == "mouse":
+        rig.mouse_click(*rig.touch_point())
     elif col == "touch":
         if what == "dismiss":
             sx, sy, sw, sh = rig.ws.app_content_rect()
             rig.tap(sx + sw - 4, sy + sh - 4)
             return
-        if what in ("press", "next"):
+        if what in ("press", "next", "edit"):
             rig.tap(*rig.touch_point())
         else:
             sx, sy, sw, sh = rig.ws.app_content_rect()
             rig.drag(sx + sw // 2, sy + sh // 2 + 30, -60)
     elif col == "trackball":
-        if what == "press":
+        if what in ("press", "edit"):
             rig.drv.ball_click()
             rig.frames(3)
         elif what == "next":
@@ -660,7 +684,7 @@ def gesture(rig, col, what):
         else:
             rig.ball(3)
     elif col == "gamepad":
-        if what == "press":
+        if what in ("press", "edit"):
             rig.pad("a")
         elif what == "next":
             rig.pad("down")
@@ -672,11 +696,13 @@ def gesture(rig, col, what):
                 rig.pad("down")
     elif col == "esc":
         if what == "cancel":
+            rig.desk_key(13)
             rig.desk_type(TYPED)
         rig.drv.escape()
         rig.frames(3)
     elif col == "mic":
         if what == "cancel":
+            rig.kbd_key("\r")
             rig.desk_type(TYPED)
         rig.kbd_key(mic=True)
 
@@ -687,8 +713,10 @@ def effect(what, before, after):
         return after["t"] == TYPED
     if what == "type_move":
         return after["t"] == "s"
+    if what == "edit":
+        return after["typing"] == 1 and before["typing"] == 0
     if what == "cancel":
-        return after["t"] == ""
+        return after["t"] == "" and after["typing"] == 0
     if what == "next":
         return after["c"] != before["c"]
     if what == "press":
@@ -827,28 +855,33 @@ class _Stack:
 
 
 def test_a_stacked_fields_cancel_gives_each_field_its_own_text(tmp_path):
-    """A field with an edit in progress under a popover whose field takes an
-    edit of its own: each field's record keeps the text its edit began
-    from, so the popover's cancel gives its field its text, and the page's,
-    focused again, cancels to its own."""
-    from test_app_field_typing import _mic, _type
+    """A field edited under a popover whose field takes an edit of its own:
+    each field's record keeps the text its edit began from, so the popover's
+    cancel gives its field its text, and the page's, focused and edited
+    again, cancels to its own."""
+    from test_app_field_typing import _edit, _mic, _type
     from runtime import ui_draw
     was = ui_draw.input_kind()
     ui_draw.input_kind("tdeck")
     try:
         st = _Stack(tmp_path)
         st.run("focus_on", "a")
+        _edit(st.drv)
         _type(st.drv, "x")
         st.run("show", 1)
         st.run("focus_on", "b")
+        _edit(st.drv)
         _type(st.drv, "y")
         assert st.ab() == ("aax", "bby")
         _mic(st.ws, st.drv)
         assert st.ab() == ("aax", "bb")
         st.run("show", 0)
         st.run("focus_on", "a")
+        _edit(st.drv)
+        _type(st.drv, "z")
+        assert st.ab() == ("aaxz", "bb")
         _mic(st.ws, st.drv)
-        assert st.ab() == ("aa", "bb")
+        assert st.ab() == ("aax", "bb")
         assert not st.ws.sysmenu.open, "the page's field had its own edit to cancel"
     finally:
         ui_draw.input_kind(was)

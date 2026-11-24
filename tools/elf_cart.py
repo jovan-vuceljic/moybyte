@@ -147,8 +147,8 @@ def toolchain(chip):
     base = os.path.expanduser("~/.espressif/tools/%s" % spec["tools"])
     bins = sorted(glob.glob(os.path.join(base, "*", spec["tools"], "bin")))
     if not bins:
-        raise ToolError("no %s toolchain under %s (the ESP-IDF's install puts it there)"
-                        % (spec["tools"], base))
+        raise ToolError("no %s toolchain under %s: the ESP-IDF's `install.sh %s` installs it"
+                        % (spec["tools"], base, chip))
     b = bins[-1]
     return tuple(os.path.join(b, spec["prefix"] + t) for t in ("gcc", "ar", "strip"))
 

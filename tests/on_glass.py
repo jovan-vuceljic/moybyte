@@ -4428,13 +4428,25 @@ def wasm_app_reaches_its_roles(board, root):
 # App Tree Wasm's pmem slots (tests/fixtures/wasm/app_tree.moy/src/main.c).
 _UI_FRAMES, _UI_FAIL = 0, 8
 
-# The crc32 of the run canvas's rows 40 to 159, 320 wide, as RGB565 words: the
-# page the engine drew, read where the run draws (device/device_canvas.py, the
-# one canvas class, the host's and a board's). The run's own `pix` answers a
-# palette index, which no theme colour is.
-_RUN_CRC = ("(lambda cv: (lambda b, w, c: [c.append(__import__('binascii').crc32("
-            "b[2 * (y * w):2 * (y * w + 320)], c[-1])) for y in range(40, 160)] and c[-1])"
-            "(memoryview(cv._buf), cv.w, [0]))(ws.run.canvas)")
+# The crc32 of the run canvas's rows 40 to 159, 320 wide, as RGB565 words high
+# byte first: the page the engine drew, read where the run draws
+# (device/device_canvas.py, the one canvas class, the host's and a board's).
+# A canvas holds its words in its panel's order (`device_canvas.WIRE_SWAPPED`:
+# high byte first on the S3s and the host, low byte first on a P4's DPI), so
+# a row of a P4's is swapped before it is summed. The run's own `pix` answers
+# a palette index, which no theme colour is.
+_RUN_CRC = ("(lambda cv, sw: (lambda b, w, c: [c.append(__import__('binascii').crc32("
+            "(lambda r: r if sw else bytes(r[i ^ 1] for i in range(640)))"
+            "(bytes(b[2 * (y * w):2 * (y * w + 320)])), c[-1])) for y in range(40, 160)] and c[-1])"
+            "(memoryview(cv._buf), cv.w, [0]))"
+            "(ws.run.canvas, __import__('device_canvas').WIRE_SWAPPED)")
+
+# What a board's tier is to its page: the system canvas's w and h, whether the
+# desk is the windowed WM's, the system font scale and the glass's diagonal
+# (`panel_diagonal_in`, board.toml's [panel], which sizes the desk's chrome and
+# so the work area a windowed app's canvas spans).
+_TIER = ("(ws.sys_canvas.w, ws.sys_canvas.h, type(ws.wm).__name__ == 'WindowedWM', "
+         "ws.sys_canvas.font_scale, ws.panel_diagonal_in)")
 
 
 def app_tree_host_page(look, tier):
@@ -4453,7 +4465,8 @@ def app_tree_host_page(look, tier):
     host_app.moy_carts.ensure_dirs(root)
     wasm_cart.build(str(ROOT / "tests" / "fixtures" / "wasm" / "app_tree.moy"),
                     os.path.join(root, "app_tree.moy"))
-    ws = host_app.build_workstation(root, sys_size=(tier[0], tier[1]), windowed=tier[2])
+    ws = host_app.build_workstation(root, sys_size=(tier[0], tier[1]), windowed=tier[2],
+                                    font_scale=tier[3], panel_diagonal_in=tier[4])
     ws.pointer.visible = False
     ws.look.set_theme(look[0], persist=False, variant=look[1])
     from runtime import ui_draw
@@ -4486,9 +4499,7 @@ def wasm_app_draws_the_toolkit(board, root):
 def _wasm_app_draws_the_toolkit(board, root):
     _pm, host = app_tree_host_page(board.pyval(
         "(ws.look.theme_name, ws.look.theme_variant, __import__('moy_ui').input())",
-        strict=True), board.pyval(
-        "(ws.sys_canvas.w, ws.sys_canvas.h, type(ws.wm).__name__ == 'WindowedWM')",
-        strict=True))
+        strict=True), board.pyval(_TIER, strict=True))
     pm_expr = ("(lambda a: (__import__('moycore').pmem_image(a), list(a))[1])"
                "(__import__('array').array('i', bytearray(1024)))")
     line = board.cmd("run %s" % APP_TREE[1].lower(), wait_for="REMOTE run")

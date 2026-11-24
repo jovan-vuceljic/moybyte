@@ -99,7 +99,7 @@ ui.action("complete_close", "Close", complete_close)
 
 def code_body():
     with ui.row("find_strip", shown="finding", close="find_close"):
-        ui.field("", "find_q", 32, changed="find_live", on="find_next", hint="Find")
+        ui.field("", "find_q", 32, changed="find_live", on="find_next", hint="Find", edit="open")
         ui.status("{code.match} of {code.matches}", shown="find_q")
         ui.button("find_close", icon="close", alone=True)
     ui.text_editor("code", find="find_q", find_on="finding", marks="marks", gutter=True, focus=True)

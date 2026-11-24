@@ -30,7 +30,7 @@ ui.action("ping", "Ping", ping)
 
 def page():
     with ui.page(""):
-        with ui.split("col", sizes=(24, 24, "1*"), gap="s", pad="s"):
+        with ui.split("col", sizes=(24, 24, "1*"), gap=6, pad=6):
             ui.canvas("dot", draw_dot, pointer="dot_at")
             ui.button("ping")
             ui.label("")

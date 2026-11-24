@@ -542,6 +542,17 @@ moybyte_patch_usj_rx_init() {
   "${BUILD_PYTHON}" "${REPO_ROOT}/tools/patch_usj_rx_init.py" "${MPY_DIR}" || exit 1
 }
 
+# The USB-Serial/JTAG console hands its bytes to Improv's frame parser before
+# the REPL sees them (native/moy_kernel/moy_improv.h): an RPC frame's type
+# byte is 0x03, Ctrl-C to the REPL. tools/patch_usj_improv.py is the patch;
+# what it adds is under MOY_IMPROV, which the board's mpconfigboard.h
+# defines. All-or-nothing, idempotent. The Zeros take it: Improv is their
+# first setup over the cable (docs/web_console_online_2026-11.md §7).
+moybyte_patch_usj_improv() {
+  [ -n "${BUILD_PYTHON:-}" ] || moybyte_resolve_build_python
+  "${BUILD_PYTHON}" "${REPO_ROOT}/tools/patch_usj_improv.py" "${MPY_DIR}" || exit 1
+}
+
 # machine.PWM takes its LEDC channels and timers from the kernel's book
 # (native/moy_kernel/moy_ledc.h), which a compiled program's PWM handles and a
 # panel's backlight take theirs from too, so none drives another's, and
@@ -796,6 +807,13 @@ moybyte_stage_native() {
     local args=(--out "${staged}/moy_web/moy_web_blob.gen.c")
     if [ -n "${CI:-}" ] || [ "${MOYBYTE_REQUIRE_WEB_BUNDLE:-0}" = "1" ]; then
       args+=(--require)
+    fi
+    # A board whose console is online ([web] console) serves the loader at
+    # its root; the loader's mirrors are the build's (gen_web_blob.py, THE
+    # MIRRORS: a CI build names os.moybyte.com, a local one this machine's
+    # serve.py first).
+    if [ "$("${BUILD_PYTHON}" "${REPO_ROOT}/tools/board_config.py" web-console "${SCRIPT_DIR}")" = "online" ]; then
+      args+=(--online)
     fi
     mkdir -p "${DIST_DIR}"
     args+=(--pack "${DIST_DIR}/moybyte_web.pack")

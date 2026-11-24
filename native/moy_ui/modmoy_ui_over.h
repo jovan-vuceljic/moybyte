@@ -44,6 +44,7 @@ static int over_slot(qstr q) {
         case MP_QSTR_secret: return MOY_UI_OV_SECRET;
         case MP_QSTR_fit: return MOY_UI_OV_FIT;
         case MP_QSTR_bare: return MOY_UI_OV_BARE;
+        case MP_QSTR_typing: return MOY_UI_OV_TYPING;
         default: return -1;
     }
 }

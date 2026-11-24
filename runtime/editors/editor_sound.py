@@ -140,17 +140,17 @@ def _draw_graph(cv, x, y, w, h):
 
 
 def _brush():
-    with ui.row("brush", pad=12, shown="!none"):
+    with ui.row("brush", pad="{@desk?6:12}", shown="!none"):
         ui.seg("Wave  {word}", "brush", text="{.rgb}", look="swatches", on="brushed")
 
 
 def _ops():
-    with ui.row("ops", pad=12, shown="!none"):
+    with ui.row("ops", pad="{@desk?6:12}", shown="!none"):
         for icon, _w, op in OPS:
             ui.button(op, icon=icon, alone=True, w=OP_W, kind="danger" if op == "del" else "normal")
-        with ui.row("oct_step", pad=8, shown="!paged || roomy"):
+        with ui.row("oct_step", pad="{@desk?4:8}", shown="!paged || roomy"):
             ui.stepper("{oct}", "oct_down", "oct_up", tone="dim", grow=True)
-        with ui.row("page_step", pad=8, shown="paged"):
+        with ui.row("page_step", pad="{@desk?4:8}", shown="paged"):
             ui.stepper("{span}", "page_down", "page_up", tone="dim", grow=True)
 
 
@@ -174,7 +174,7 @@ def sound_page():
         ui.empty("No sound", icon="music", lines=["This cart has no sound bank"], shown="none")
         ui.switch("tight", {False: _roomy, True: _tight})
         with ui.popover("sound_name", at="{name_at}", w="{name_w}", close="close", shown="asking=name"):
-            ui.field("Name", "f_name", max=SFX_NAME_MAX, on="named", hint="no name")
+            ui.field("Name", "f_name", max=SFX_NAME_MAX, on="named", hint="no name", edit="open")
         with ui.popover("sound_menu", at="{menu_at}", w="{menu_w}", close="close", shown="asking=menu"):
             with ui.rows("sounds"):
                 ui.link("pick", label="{.label}", icon="{.icon}")

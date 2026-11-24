@@ -1,6 +1,6 @@
 {
  "model_row/big_800x480_fs3_dark": "sha256:a5b99523c219478cae2594fc9e901c84eefddefcb0c6f5d44b703f8f59e3ec77",
- "model_row/p4_1024x600_cs2_fs1_windowed": "sha256:dad2e5ac59bc1e78dc20f271c81947091219a797da65e106e30cabe7126ae3a1",
- "model_row/p4_1024x600_fs2_windowed": "sha256:3a6852dc21f00ca4379841188c513a855fbca42fa158ec91ce33e932c2712888",
+ "model_row/p4_1024x600_cs2_fs1_windowed": "sha256:d769011b165ee11af3abc424653b70fb2090999c7e5dffebaddea9b53303e600",
+ "model_row/p4_1024x600_fs2_windowed": "sha256:5e86f73e0c2ad840a96477b5722e147acbcfbfcda648bd6c95ff1efb8d70b547",
  "model_row/tdeck_320x240_fs1_dark": "sha256:41111df6b9c1cc0666981c0d047d44daec3bdf9fba421d6521670e3537c0dda4"
 }

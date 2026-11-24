@@ -469,7 +469,7 @@ keyboard's held key.
 **Guards.** Phase 4's matrix, with no failing cell left that names this
 phase. And `tests/test_input_policy.py`:
 - a table over every surface in `APPS`, Settings, the Editor's tabs and a
-  cart app: focusing a field types; Mic reverts and opens no menu; Esc, B and
+  cart app: a field's open edit types; Mic reverts and opens no menu; Esc, B and
   both chevrons end in one state; a menu over a field is game mode and typing
   again after; a pending edit survives every exit; on every Editor tab,
   Ctrl+Z after the tab's stack empties equals the bar's UNDO;

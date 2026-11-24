@@ -57,7 +57,7 @@ def build():
 def keypad():
     """A page placed by a grid, its cells stood in from its edges by pad=."""
     with ui.page("Pad"):
-        with ui.grid(1, 2, pad="m"):
+        with ui.grid(1, 2, pad=8):
             ui.button("mark")
             ui.button("grow")
 

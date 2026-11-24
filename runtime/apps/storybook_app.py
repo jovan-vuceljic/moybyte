@@ -1041,7 +1041,7 @@ ui.hook("pick_b", swatch_b)
 
 def _deck():
     """The sorter: its tools over a card a slide, New slide last."""
-    with ui.split("col", sizes=(32, "1*"), gap="s", pad="s", rule=True):
+    with ui.split("col", sizes=(32, "1*"), gap=5, pad=5, rule=True):
         with ui.row("deck_tools", pad=6, gap=8):
             ui.button("new_slide", icon="layout")
             ui.button("dup_slide", icon="dup")
@@ -1051,7 +1051,7 @@ def _deck():
             ui.button("redo", icon="redo", alone=True, kind="bar")
             ui.label("")
             ui.button("present_ed", "primary", icon="play")
-        with ui.cards("slides", cur="dcur", changed="deck_moved", w=256, h=150, pad=24):
+        with ui.cards("slides", cur="dcur", changed="deck_moved", w=256, h=150, pad=12):
             ui.card("edit_slide", label="{.num}", label_icon="{.trans}", icon="{.icon}",
                     tone="{.tone}", image=".pic")
 
@@ -1117,7 +1117,7 @@ def _panel_place():
 def _slide():
     """A slide: its tools over the slides column, the slide on its
     pasteboard and the style panel."""
-    with ui.split("col", sizes=(32, "1*"), gap="s", pad="s", rule=True):
+    with ui.split("col", sizes=(32, "1*"), gap=5, pad=5, rule=True):
         with ui.row("slide_tools", pad=6, gap=4):
             ui.button("add", icon="new")
             ui.rule()
@@ -1132,7 +1132,7 @@ def _slide():
             ui.label("")
             ui.stepper("{count_word}", "prev_slide", "next_slide")
             ui.button("present_ed", "primary", icon="play")
-        with ui.split("row", sizes=(88, "1*", 244), gap="s", pad="0", rule=True):
+        with ui.split("row", sizes=(88, "1*", 244), gap=5, pad=0, rule=True):
             with ui.cards("thumbs", current="here", w=72, h=42):
                 ui.card("goto_slide", label="{.num}", label_icon="{.trans}", image=".pic")
             ui.canvas("board", draw_board, pointer="board_at", keys=board_keys, reads=["board"],
@@ -1145,7 +1145,7 @@ def _slide():
 
 def _pictures():
     """Add a picture: My Art's drawings as cards, Add at the foot."""
-    with ui.split("col", sizes=(32, "1*"), gap="s", pad="s", rule=True):
+    with ui.split("col", sizes=(32, "1*"), gap=5, pad=5, rule=True):
         with ui.row("pic_tabs", pad=6):
             ui.tabs("pic_tab", labels="PIC_TABS")
             ui.label("")
@@ -1222,7 +1222,7 @@ def build():
             ui.label("Its slides and pictures go to the Trash.", wrap="word", lines=3)
         with ui.dialog("Rename the story", ["cancel", "rename"], kind="primary",
                        shown="renaming"):
-            ui.field("Name", "name", D.MAX_TITLE, hint="my story", on="rename")
+            ui.field("Name", "name", D.MAX_TITLE, hint="my story", on="rename", edit="open")
         _ed_menus()
         ui.toast("{toast}", icon="{toast_icon}", shown="toasting")
 
@@ -1425,7 +1425,7 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build)):
         return None
 
     def typing(self):
-        """A field in focus types (Rename's), and so do a slide's words
+        """A field's open edit types (Rename's), and so do a slide's words
         while the desk's editor writes them."""
         ed = self.ed
         if ed is not None and self.page in EDITOR:

@@ -56,8 +56,7 @@ def _states(title, icon, tone, back, unit, inset, full=False):
     _put("tone", tone)
     _put("back_on", back)
     _put("max_icon", "restore" if full else "maximize")
-    p = _PAD * unit             # a bound pad is pixels (a literal one is units)
-    _put("pad", p if p > inset else inset)
+    _put("pad", max(_PAD, -(-inset // unit)))     # at 1x: the inset's, where that is more
     if _DIRTY[0]:
         _DIRTY[0] = False
         pushed = getattr(page, "committed", None)
@@ -68,7 +67,7 @@ def _states(title, icon, tone, back, unit, inset, full=False):
 
 def _place(rect, unit, title, icon, tone, back, inset, full=False):
     page = _states(title, icon, tone, back, unit, inset, full)
-    page.unit = unit
+    page.unit = page.scale = unit
     _AT[2] = rect[2]
     _AT[3] = rect[3]
     page.place(_AT, desk=True)
@@ -228,7 +227,7 @@ def draw(cv, th, rect, unit, title, icon, tone, back, inset, full=False):
     a, b, c, d = t[0], t[1], t[2], t[3]
     try:
         D.passive_frame(cv, th, rect, True)
-        page.unit = unit
+        page.unit = page.scale = unit
         page.bare = True
         page.band = False
         page.paint(0, cv, th, rect, True)

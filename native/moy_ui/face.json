@@ -79,6 +79,7 @@
       {"api": "page_title", "doc": "The title of the top page the frame drawn last opened (moy_ui_api_page_title), \"\" for none."},
       {"api": "back", "flag": ["take"], "ret": "bool"},
       {"api": "cancel", "flag": ["take"], "ret": "bool"},
+      {"api": "edit_cancel", "flag": ["take"], "ret": "bool"},
       {"api": "run_cancel", "c": "moy_ui_run_cancel", "flag": ["take"], "ret": "bool"},
       {"api": "run_back", "c": "moy_ui_run_back", "flag": ["take"], "ret": "bool"},
       {"api": "run_page_title", "c": "moy_ui_run_page_title", "doc": "The title of the top page of the running cart's own frame drawn last (moy_ui_run_page_title), None with no run open."},

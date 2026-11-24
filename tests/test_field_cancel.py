@@ -1,10 +1,11 @@
-"""A text field's Done and Cancel (owner call, 2026-10-18): while a field is
-being typed into, Enter is Done -- the text kept, focus leaves the field --
-and Cancel puts back the text it had when typing began and leaves it. The
-T-Deck's Cancel is Mic, which never types (its K types a letter there);
-outside a field Mic stays the console's key. Esc and a pad's B cancel too,
-and the first back in Settings' Name field cancels it rather than leaving
-Settings with what was typed (design review N3-13)."""
+"""A text field's Done and Cancel (owner call, 2026-10-18): while a field's
+edit is open (Enter opened it, owner 2026-11-24), Enter is Done -- the text
+kept, the edit ended (Settings' Name moves focus on) -- and Cancel puts back
+the text it had when the edit began and ends it, focus staying on the
+field. The T-Deck's Cancel is Mic, which never types (its K types a letter
+there); outside an edit Mic stays the console's key. Esc and a pad's B
+cancel too, and the first back in Settings' Name field cancels it rather
+than leaving Settings with what was typed (design review N3-13)."""
 
 import pytest
 
@@ -30,6 +31,10 @@ def _name_field(tmp_path, stored="Ada"):
     sl = ws.settings_layer
     sl.show_row("name")
     for _ in range(3):
+        drv.frame(_DT)
+    assert not sl.typing(), "a focused field is a stop until Enter"
+    drv.press("run")
+    for _ in range(2):
         drv.frame(_DT)
     assert sl.typing() and ws.input.text_mode
     return ws, drv, sl

@@ -347,8 +347,11 @@ class Engine(S.Builder):
         """An arrow whose role an action answers (§13.1: left, right, up,
         down) fires that action on its press and on each repeat while the
         action is on, and the toolkit never sees it: the app owns the
-        arrow, focus stays. While the action is off the arrow moves focus."""
+        arrow, focus stays. While the action is off the arrow moves focus;
+        in a field's edit it moves the caret."""
         inp, fired = self._ui.inp, False
+        if self._x is not None and self._x.editing():
+            return False
         for bit in range(4):
             role = S.ARROWS[bit]
             a = self.role_action(role)

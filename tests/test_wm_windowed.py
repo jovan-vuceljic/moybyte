@@ -1315,7 +1315,7 @@ def test_game_keeps_running_under_settings_window(tmp_path):
 
 def _game_and_settings(tmp_path):
     """A desk with a running game's window and Settings' beside it, Settings
-    focused on its Name field with one letter typed."""
+    focused on its Name field, its edit open (Enter) and one letter typed."""
     ws = _ws(tmp_path)
     drv = _drv(ws)
     ws.open()
@@ -1329,6 +1329,10 @@ def _game_and_settings(tmp_path):
     drv.frame(1 / 30)
     drv.frame(1 / 30)
     assert ws.wm.focus_key == "settings" and sl._focused == "name"
+    assert not ws.input.text_mode, "a focused field is a stop until Enter"
+    drv.press("run")
+    drv.frame(1 / 30)
+    drv.frame(1 / 30)
     assert ws.input.text_mode
     drv.type_char(ord("K"))
     drv.frame(1 / 30)
@@ -1358,10 +1362,10 @@ def _stored_name(tmp_path):
 
 def test_text_mode_follows_the_focused_window(tmp_path):
     """The keyboard is in text mode only while the focused window's focused
-    stop is a text field: Settings' Name field keeps it only while Settings'
-    window has focus. Focus moving to the game's window puts the keyboard
-    back in button mode (and stores the Name typed); focus coming back to
-    Settings, still on the field, puts it in text mode again."""
+    stop is a field whose edit is open: Settings' Name keeps it only while
+    Settings' window has focus. Focus moving to the game's window puts the
+    keyboard back in button mode (and stores the Name typed); focus coming
+    back to Settings, its edit still open, puts it in text mode again."""
     ws, drv = _game_and_settings(tmp_path)
     ws.wm._move_window(ws.wm.windows["settings"], 300, 200)
     drv.frame(1 / 30)
@@ -1373,7 +1377,7 @@ def test_text_mode_follows_the_focused_window(tmp_path):
     _click_window(ws, drv, "settings")
     assert ws.wm.focus_key == "settings"
     assert ws.settings_layer._focused == "name"
-    assert ws.input.text_mode, "Settings' field has focus again: text mode"
+    assert ws.input.text_mode, "Settings' field's edit has focus again: text mode"
     ws.wm.chip_tap("desktop")                 # a chip moves focus the same way
     drv.frame(1 / 30)
     assert ws.wm.focus_key == "desktop" and not ws.input.text_mode

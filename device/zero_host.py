@@ -8,6 +8,7 @@
 #   make_addon                  the release's add-on (and the XIAO's official carts) brought to the store; tend_addon runs it, way_back undoes a removal
 #   make_official               /official: the page's Get Carts, this board installing from its shelves
 #   host_class                  the store host: the boards' WebHost
+#   ImprovBoard                 what Improv over the cable asks of this board; make_improv
 #   serve                       bring the store host up and pump it forever
 """The Zero: a pocketable cart-store the browser console pairs with (#41).
 
@@ -23,7 +24,9 @@ deliberately the smallest possible host of the 3.4 sync RPC:
 
     ...no joinable network
          -> zero_setup.run()  the SoftAP + form a first boot is configured
-                              through, which reboots back into the line above
+                              through, which reboots back into the line above,
+                              or Improv over the cable joins a network and
+                              the board serves from there (zero_improv)
 
 `moy_webhost` serves the wasm bundle, streams the store as carts.json, and
 applies POST /sync batches back into /moy/carts. A cart made in the browser
@@ -188,9 +191,24 @@ def _free_bytes(root):
     return st[0] * st[3]
 
 
+def console_online():
+    """True where this image's browser console is online (board.toml's `[web]
+    console`, moy_web.online): its store keeps no add-on, and the board's
+    root serves the loader, which fetches the pack by digest
+    (docs/web_console_online_2026-11.md §3)."""
+    try:
+        import moy_web
+        return bool(moy_web.online())
+    except (ImportError, AttributeError):
+        return False
+
+
 def addon_room(root):
     """The bytes the browser console add-on this image names needs in `root`,
-    0 while an add-on folder is there or the image names none."""
+    0 while an add-on folder is there, the image names none or its console is
+    online."""
+    if console_online():
+        return 0
     try:
         if any(n.startswith("web_console_") for n in os.listdir(root)):
             return 0
@@ -839,6 +857,84 @@ def host_class():
     return WebHost
 
 
+class ImprovBoard:
+    """What Improv over the cable asks of this board (zero_improv.Improv):
+    its name and firmware, the networks it sees, a join, the saved networks
+    and, while it serves, its address with the sign-in's id and claim."""
+
+    def info(self):
+        try:
+            import moy_ota
+            label = moy_ota.FIRMWARE_LABEL or "v%d" % moy_ota.FIRMWARE_VERSION
+        except ImportError:
+            label = ""
+        chip = os.uname().machine.rsplit(" with ", 1)[-1]
+        if chip.startswith("ESP32") and len(chip) > 5 and chip[5] != "-":
+            chip = "ESP32-" + chip[5:]
+        return label, chip
+
+    def name(self):
+        return identity().get("name") or HOSTNAME
+
+    def rename(self, raw):
+        from zero_setup import clean_name
+        from zero_improv import zero_doc_renamed
+        name = clean_name(raw)
+        if not name:
+            return None
+        with open(ZERO_STORE, "w") as f:
+            f.write(json.dumps(zero_doc_renamed(identity(), name)))
+        if self.ip():
+            moy_net.wifi_mdns(name)
+        return name
+
+    def scan(self):
+        return [(ssid.decode() if isinstance(ssid, bytes) else ssid, rssi, auth != 0)
+                for ssid, rssi, auth in moy_net.wifi_scan()]
+
+    def join(self, ssid, password, wait_ms=15000):
+        moy_net.wifi_on()
+        try:
+            moy_net.wifi_connect(ssid, password)
+        except OSError:
+            return None
+        for _ in range(wait_ms // 250):
+            st = moy_net.wifi_status()
+            if st[2] and st[4]:
+                print("ZERO improv: joined", ssid, st[4])
+                moy_net.wifi_mdns(self.name())
+                return st[4]
+            time.sleep_ms(250)
+        print("ZERO improv: no answer from", ssid)
+        connect(hostname=self.name())    # back onto a saved network, if one answers
+        return None
+
+    def save(self, ssid, password):
+        from zero_setup import merge_network
+        from zero_improv import read_json
+        _mkdir(ROOT)
+        with open(WIFI_STORE, "w") as f:
+            f.write(json.dumps(merge_network(read_json(WIFI_STORE), ssid, password)))
+
+    def ip(self):
+        st = moy_net.wifi_status()
+        return st[4] if st[2] and st[4] else None
+
+    def address(self):
+        return moy_net.web_auth(SYSTEM_DIR), moy_net.web_claim()
+
+
+def make_improv():
+    """Improv over the cable where the image takes it (MOY_IMPROV: the module
+    `moy_improv`), else None."""
+    try:
+        import moy_improv
+    except ImportError:
+        return None
+    from zero_improv import Improv
+    return Improv(moy_improv, ImprovBoard(), serving=False)
+
+
 def make_updater(me):
     """This board's OtaUpdater + the ZeroUpdate driving it, or (None, None).
 
@@ -906,8 +1002,9 @@ def make_addon(ota):
     carry, which the page installed (`carts`; the image's own are current by
     its seed). The C3, with no OTA slot, takes a new image by cable, and the
     flash brings its official carts (tools/board_flash.py). None where the
-    image names no release index (no updater)."""
-    if ota is None:
+    image names no release index (no updater) or its console is online
+    (console_online)."""
+    if ota is None or console_online():
         return None
     try:
         import web_addon
@@ -1019,17 +1116,22 @@ def serve():
     recover_installs(CARTS_DIR)
     sweep_carts(CARTS_DIR)
     seed_carts(CARTS_DIR)
+    improv = make_improv()
     me = identity()
     name = me.get("name") or HOSTNAME
     ip = connect(hostname=name)
     if ip is None:
-        # NO WAY IN: host the setup AP instead of printing and giving up. This
-        # is the one branch that never returns -- a filled-in form resets the
-        # board, and a board nobody fills in stays reachable until someone does.
+        # NO WAY IN: host the setup AP instead of printing and giving up. A
+        # filled-in form resets the board, and a board nobody fills in stays
+        # reachable until someone does; Improv over the cable is the one way
+        # back here, with the network it joined.
         print("ZERO no wifi -- hosting the setup AP")
         import zero_setup
-        zero_setup.run(WIFI_STORE, ZERO_STORE, SYSTEM_DIR)
-        return
+        ip = zero_setup.run(WIFI_STORE, ZERO_STORE, SYSTEM_DIR, improv=improv)
+        if ip is None:
+            return
+        me = identity()
+        name = me.get("name") or HOSTNAME
     _mkdir(SYSTEM_DIR)
     host = host_class()(CARTS_DIR, auth=SYSTEM_DIR)
     ota, task = make_updater(me)
@@ -1044,15 +1146,19 @@ def serve():
         # after an unattended update wants to see first.
         task.boot_check()
     host.start(ip)
+    if improv is not None:
+        improv.serving = True
+        improv.finish()              # a join from the setup AP, answered now it serves
     # Built by `url()` rather than reassembled here: that is the one body that
     # knows a port is spelled only when it is not 80. A browser pairs with the
-    # password the setup form set; with none, nothing can (no screen for a
-    # pairing code), so the line says so.
+    # password the setup form set; with none, only the browser the cable's
+    # Improv claim reaches can set one (zero_improv), so the line says so.
     has_pw = _has_password()
     print("ZERO serving %s  (mDNS %s.local)%s"
           % (host.url(), name,
-             "" if has_pw else "  [no password: no browser can pair -- run the setup "
-                               "form again, or provision.sh --password]"))
+             "" if has_pw else "  [no password: the first browser Improv's claim "
+                               "sends sets one (os.moybyte.com/console/), or the "
+                               "setup form, or provision.sh --password]"))
     if ota is not None:
         print("ZERO firmware %s (%s, %s)"
               % (ota.version_label(), ota.channel(), ota.slot()))
@@ -1076,6 +1182,8 @@ def serve():
         # a short sleep is its whole duty cycle. 10ms keeps a page load snappy
         # while idling at ~zero.
         host.poll()
+        if improv is not None:
+            improv.poll()
         if tail is not None:
             tail()
         if task is not None:

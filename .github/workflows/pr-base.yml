@@ -1,0 +1,73 @@
+name: PR base
+
+# A pull request's head must contain its base branch's current tip
+# (tools/pr_base_check.sh). A branch cut from an old dev fails the rest of CI
+# for changes it never made, and its red reads like a bug in the PR.
+#
+# GitHub sends a PR no event when its base branch moves, so a push to a base
+# branch re-runs the check of every open PR into it: the re-run checks out the
+# base as it is then, and the PR's check turns red the moment it falls behind.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: ["dev", "master"]
+
+jobs:
+  base-is-merged:
+    name: Branch contains its base's tip
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: pr-base-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      # The BASE branch's tree, so the script is the base's (a branch that is
+      # behind may predate it), with full history so both commits are here.
+      - name: Check out the base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      # refs/pull/N/head holds a fork's head too; the merge ref would not
+      # exist for a PR that conflicts with its base.
+      - name: Fetch the PR's head
+        run: git fetch -q --no-tags origin "+refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/pr/head"
+
+      - name: Check the branch contains the base's tip
+        env:
+          BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: tools/pr_base_check.sh "$BRANCH" "$(git rev-parse "origin/$BRANCH")" "$HEAD_SHA"
+
+  recheck-open-prs:
+    name: Re-run the base check of open PRs
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      pull-requests: read
+    steps:
+      - name: Re-run each open PR's latest base check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          gh pr list --base "$BRANCH" --state open --json number,headRefOid \
+            --jq '.[] | "\(.number) \(.headRefOid)"' |
+          while read -r pr sha; do
+            run="$(gh run list --workflow pr-base.yml --event pull_request \
+                     --commit "$sha" --limit 1 --json databaseId \
+                     --jq '.[0].databaseId // empty')"
+            if [ -z "$run" ]; then
+              echo "#$pr: no base check to re-run"
+            elif gh run rerun "$run"; then
+              echo "#$pr: re-ran run $run"
+            else
+              echo "#$pr: run $run did not re-run (still running?)"
+            fi
+          done

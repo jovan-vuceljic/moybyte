@@ -26,8 +26,12 @@
 //   frame(flags)  the frame as the Lua layer's back end runs it: a press on
 //                 a canvas with pointer= owes its action down, each drag and
 //                 up (in the canvas's coordinates, at the rect the last frame
-//                 drew it at; the press holds the canvas), a typed key an
-//                 action's chars= holds or a letter it declares (uit_letter,
+//                 drew it at; the press holds the canvas); the focused
+//                 canvas's keys= is handed the tick's keys first, the
+//                 module's export `_uitree_keys(node)` (moycore_ui_keys_call;
+//                 its row draw_row's), and where it answers non-zero they
+//                 are taken (uit_run_keys_taken) and none below sees them; a
+//                 typed key an action's chars= holds or a letter it declares (uit_letter,
 //                 the key its arg) and the confirm role's
 //                 key (A, Enter, with nothing focused and no dialog) owe
 //                 their actions; the host's bar is lent with no title, its

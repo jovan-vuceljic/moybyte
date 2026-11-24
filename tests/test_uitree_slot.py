@@ -66,9 +66,9 @@ def build_grown():
 def test_a_growing_bar_item_takes_what_the_row_leaves_as_the_reference_did():
     import uitree_editor
     p = uitree_editor.page(build_grown, None, None)
-    p.unit = 2
+    p.unit = p.scale = 2
     p.place((0, 0, 300, 40), desk=True)
     got = (p.rect_of("head"), p.rect_of("close"))
     R.held(__file__, "grown", got)
     (hx, _, hw, _), (cx, _, cw, _) = got
-    assert hx == 4 and cx + cw == 296 and hx + hw + 4 == cx       # pad and gap 2 units of 2: the head fills
+    assert hx == 4 and cx + cw == 296 and hx + hw + 4 == cx       # pad and gap 2 at a scale of 2: the head fills

@@ -161,7 +161,7 @@ def test_a_badge_opens_centred_across_the_page_over_what_it_covers_alone(tmp_pat
 def test_a_badge_s_card_stands_its_body_in_by_its_band_and_the_small_gap(tmp_path):
     """The card round a badge is light: its body (the picture's cell, 56
     and its 8, as tall as the words beside it on the handheld) stands in
-    by the popover's band and the split's small gap ("s", 6) at each side,
+    by the popover's band and the split's small gap (6 at 1x) at each side,
     the medium one ("m") left to splits on the page."""
     ws, drv, sl, pg = _page(tmp_path)
     cv = ws.glass_canvas

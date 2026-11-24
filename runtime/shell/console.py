@@ -1591,6 +1591,7 @@ class Workstation:
         self.surface_write()             # what the apps' relayouts read
         w, h, fs = self.sys_canvas.w, self.sys_canvas.h, self.look.effective_font_scale()
         cs = self.look.effective_chrome_scale()
+        _layout_base.set_scale(cs)       # what a UI spacing at 1x is multiplied by
         self.layout = Layout(w, h, fs, cs)
         self.launcher.set_layout(self.layout)
         self.relayout_code()             # editor layouts reflow too (#39 step 2)

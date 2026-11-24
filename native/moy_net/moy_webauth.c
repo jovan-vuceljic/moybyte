@@ -139,7 +139,8 @@ typedef struct {
     sess_t ss[MOY_WA_SESSIONS];
     uint8_t token[MOY_SEAL_RAND];
     uint64_t token_at;
-    uint8_t token_on, paired, term_on;
+    uint8_t claim[MOY_SEAL_RAND];
+    uint8_t token_on, claim_on, paired, term_on;
     uint8_t term_kid[MOY_SEAL_KID], term_sid[MOY_SEAL_SID];
     src_t src[MOY_WEB_AUTH_SOURCES];
     uint32_t all_fails;
@@ -227,9 +228,10 @@ static int read_text(const char *leaf) {
     return n;
 }
 
-static int write_text(size_t n) {
+// A->text's n bytes as the file at `leaf`, through a .tmp and a replace.
+static int write_text(const char *leaf, size_t n) {
     char path[MOY_WEB_PATH_MAX + 16], tmp[MOY_WEB_PATH_MAX + 20];
-    path_of(path, sizeof path, KEYS_FILE);
+    path_of(path, sizeof path, leaf);
     snprintf(tmp, sizeof tmp, "%s.tmp", path);
     if (moy_flush_drain != NULL) {
         moy_flush_drain();
@@ -256,7 +258,7 @@ static int write_text(size_t n) {
     }
     moy_vol_gate_leave(g);
     if (rc != 0) {
-        printf("WEBAUTH keys not saved: %d\n", rc);
+        printf("WEBAUTH %s not saved: %d\n", leaf + 1, rc);
     }
     return rc;
 }
@@ -279,7 +281,7 @@ static void save(void) {
                               k->name);
     }
     if (n < FILE_MAX) {
-        write_text(n);
+        write_text(KEYS_FILE, n);
     }
     moy_seal_wipe(A->text, sizeof A->text);
 }
@@ -473,6 +475,8 @@ int moy_wa_config(const char *system_dir) {
     A->all_last = A->all_until = 0;
     moy_seal_wipe(A->token, sizeof A->token);
     A->token_on = 0;
+    moy_seal_wipe(A->claim, sizeof A->claim);
+    A->claim_on = 0;
     A->on = 1;
     load();
     return 0;
@@ -503,6 +507,28 @@ void moy_wa_token(char out[2 * MOY_SEAL_RAND + 1]) {
     A->token_at = moy_net_ms64();
     A->token_on = 1;
     moy_hex_encode(A->token, MOY_SEAL_RAND, out);
+}
+
+void moy_wa_claim(char out[2 * MOY_SEAL_RAND + 1]) {
+    uint32_t iter;
+    char salt[SALT_MAX];
+    uint8_t w0[32], l[MOY_SEAL_POINT];
+    out[0] = '\0';
+    if (A == NULL || !A->on) {
+        return;
+    }
+    int has = password(&iter, salt, w0, l);
+    moy_seal_wipe(w0, sizeof w0);
+    if (has) {
+        moy_seal_wipe(A->claim, sizeof A->claim);
+        A->claim_on = 0;
+        return;
+    }
+    if (!A->claim_on) {
+        moy_seal_random(A->claim, MOY_SEAL_RAND);
+        A->claim_on = 1;
+    }
+    moy_hex_encode(A->claim, MOY_SEAL_RAND, out);
 }
 
 int moy_wa_paired(void) {
@@ -940,6 +966,58 @@ static int token_live(void) {
     return A->token_on;
 }
 
+// THE CLAIM (docs/os_2026-11/system.md section 3): the first password of a
+// board that has none, set by the browser the cable's Improv sent to it.
+// {"op":"claim","claim":<32 hex>,"record":<the record>}: the claim this
+// boot's Improv answer carried (moy_wa_claim), taken once, and the password's
+// record (moy_seal.h, THE PASSWORD) the browser made, which becomes
+// system/password. Refused 403 "claimed" once a password exists, 403 "claim"
+// for any other claim (a wrong credential to the backoff), 400 "record" for
+// a record that does not parse, which spends nothing.
+static int claim(uint32_t peer, const char *o, const char *oe, char *doc, size_t cap) {
+    uint32_t ms = wait_of(peer, 1);
+    if (ms) {
+        snprintf(doc, cap, "{\"error\":\"wait\",\"ms\":%u}", (unsigned)ms);
+        return 429;
+    }
+    uint32_t iter;
+    char salt[SALT_MAX];
+    uint8_t w0[32], l[MOY_SEAL_POINT];
+    if (password(&iter, salt, w0, l)) {
+        moy_seal_wipe(w0, sizeof w0);
+        moy_seal_wipe(A->claim, sizeof A->claim);
+        A->claim_on = 0;
+        return refuse(doc, cap, 403, "claimed");
+    }
+    char rec[MOY_SEAL_PW_RECORD];
+    int rn = str_of(o, oe, "record", rec, sizeof rec);
+    int good = rn > 0 && memchr(rec, '\n', (size_t)rn) == NULL
+               && moy_seal_pw_parse(rec, (size_t)rn, &iter, salt, SALT_MAX, w0, l);
+    moy_seal_wipe(w0, sizeof w0);
+    if (!good) {
+        return refuse(doc, cap, 400, "record");
+    }
+    uint8_t c[MOY_SEAL_RAND];
+    int ok = A->claim_on && hex_of(o, oe, "claim", c, MOY_SEAL_RAND)
+             && moy_seal_eq(c, A->claim, MOY_SEAL_RAND);
+    moy_seal_wipe(c, sizeof c);
+    moy_wa_note(peer, ok);
+    if (!ok) {
+        return refuse(doc, cap, 403, "claim");
+    }
+    moy_seal_wipe(A->claim, sizeof A->claim);
+    A->claim_on = 0;
+    memcpy(A->text, rec, (size_t)rn);
+    A->text[rn] = '\n';
+    int rc = write_text(PW_FILE, (size_t)rn + 1);
+    moy_seal_wipe(A->text, sizeof A->text);
+    if (rc != 0) {
+        return refuse(doc, cap, 500, "store");
+    }
+    snprintf(doc, cap, "{\"ok\":true}");
+    return 200;
+}
+
 static int nonce_gone(char *doc, size_t cap) {
     return refuse(doc, cap, 409, "nonce");
 }
@@ -963,6 +1041,9 @@ int moy_wa_auth(uint32_t peer, const char *body, size_t n, char *doc, size_t cap
     }
     int is_hello = strcmp(op, "hello") == 0, is_key = strcmp(op, "key") == 0;
     int is_confirm = strcmp(op, "confirm") == 0;
+    if (strcmp(op, "claim") == 0) {
+        return claim(peer, o, oe, doc, cap);
+    }
     if (!is_hello && !is_key && !is_confirm && strcmp(op, "token") != 0
         && strcmp(op, "pake") != 0) {
         return refuse(doc, cap, 400, "bad auth");

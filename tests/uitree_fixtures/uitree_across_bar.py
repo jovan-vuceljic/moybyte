@@ -1,5 +1,5 @@
-"""The rule along x's pieces a bar is made of: a row's pad= and gap= (a
-literal in the page's unit, an int state in pixels), a canvas's w= from an
+"""The rule along x's pieces a bar is made of: a row's pad= and gap= (ints at
+1x, a literal or a state, which the engine scales), a canvas's w= from an
 int state, a row in a row (its own gap; an empty one a spacer pushing what
 follows to the end), and a mid= row centred on its row, of fills (the
 widest span centred that clears both sides) or of fixed cells (each side's

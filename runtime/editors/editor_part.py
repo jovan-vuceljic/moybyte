@@ -272,20 +272,20 @@ def _none():
 
 
 def _picked():
-    with ui.row("tag_row", pad=10):
+    with ui.row("tag_row", pad="{@desk?5:10}"):
         ui.field("Tag", "tag", 16, commit=True, changed="tag_set", grow=True)
-    with ui.row("tags_head", pad=10, shown="many && !roomy"):
+    with ui.row("tags_head", pad="{@desk?5:10}", shown="many && !roomy"):
         ui.label("Tags")
         ui.row("tags_gap", grow=True)
-    with ui.row("tags_row", pad=10, shown="many"):
+    with ui.row("tags_row", pad="{@desk?5:10}", shown="many"):
         ui.seg("{roomy?Tags:}", "tag_at", text="{.k}", on="tag_pick")
-    with ui.row("verbs", pad=10, gap=8):
+    with ui.row("verbs", pad="{@desk?5:10}", gap="{@desk?4:8}"):
         ui.toggle("Flip", "flip", on="flip_set")
         ui.button("front", shown="roomy")
         ui.button("back", shown="roomy")
         ui.button("front_i", icon="to_front", kind="bar", alone=True, w=36, shown="!roomy")
         ui.button("back_i", icon="to_back", kind="bar", alone=True, w=36, shown="!roomy")
-    with ui.row("where", pad=10, gap=8):
+    with ui.row("where", pad="{@desk?5:10}", gap="{@desk?4:8}"):
         ui.label("{place}", tone="dim", wrap="word", lines=2)
         ui.button("remove", kind="danger", shown="roomy")
         ui.button("remove_i", icon="trash", kind="bar", alone=True, w=36, shown="!roomy")
@@ -301,7 +301,7 @@ def _sheet():
 
 def _sprites():
     _sheet()
-    with ui.row("call_row", pad=10, gap=8):
+    with ui.row("call_row", pad="{@desk?5:10}", gap="{@desk?4:8}"):
         ui.label("{call}", tone="dim", size="text")
         ui.row("call_gap", grow=True)
         ui.button("insert")
@@ -309,7 +309,7 @@ def _sprites():
 
 def _stamps():
     _sheet()
-    with ui.row("stamp_row", pad=10):
+    with ui.row("stamp_row", pad="{@desk?5:10}"):
         ui.label("A stamp makes a {stamp}", tone="dim")
 
 
@@ -321,10 +321,10 @@ def _palette():
     ui.empty("No blocks", icon="blocks", lines=["This cart's blocks did not open"], shown="!blocks")
     ui.canvas("cats", _draw_cats, h="{cats_h}", keys=cats_keys, pointer="cats_press", mark=False,
               shown="blocks && !cats_fold", hint="Open")
-    with ui.row("cats_row", pad=6, shown="blocks && cats_fold"):
+    with ui.row("cats_row", pad="{@desk?3:6}", shown="blocks && cats_fold"):
         ui.seg("", "cat_at", text="{.label}", look="cycle", on="cat_set")
     ui.rule(shown="blocks")
-    with ui.row("note_row", pad=10, shown="blocks && note"):
+    with ui.row("note_row", pad="{@desk?5:10}", shown="blocks && note"):
         ui.label("{note}", tone="dim", wrap="word", lines=4)
     with ui.scroll("items_view", shown="blocks && !note"):
         with ui.rows("items", cur="item"):
@@ -342,16 +342,16 @@ def _sounds():
 
 def _ref_sounds():
     _sounds()
-    with ui.row("snd_call", pad=10, gap=8, shown="bank"):
+    with ui.row("snd_call", pad="{@desk?5:10}", gap="{@desk?4:8}", shown="bank"):
         ui.label("{call}", tone="dim", size="text")
         ui.row("snd_call_gap", grow=True)
         ui.button("insert")
 
 
 def _song():
-    with ui.row("song_line_row", pad=10, shown="bank && !roomy"):
+    with ui.row("song_line_row", pad="{@desk?5:10}", shown="bank && !roomy"):
         ui.label("{song_line}", tone="dim", size="text")
-    with ui.row("song_head", pad=10, gap=0, shown="bank"):
+    with ui.row("song_head", pad="{@desk?5:10}", gap=0, shown="bank"):
         ui.label("{song_line}", tone="dim", size="text", shown="roomy")
         ui.row("song_gap", grow=True)
         for a, _w, icon, op in SONG_TOOLS:
@@ -365,7 +365,7 @@ def _song():
 def _maps():
     ui.empty("No map", icon="map", lines=["This cart has no map yet"], shown="!has_map")
     ui.canvas("map", _draw_map, keys=map_keys, pointer="map_press", mark=False, shown="has_map")
-    with ui.row("map_call", pad=10, gap=8, shown="has_map"):
+    with ui.row("map_call", pad="{@desk?5:10}", gap="{@desk?4:8}", shown="has_map"):
         ui.label("{call}", tone="dim", size="text")
         ui.row("map_call_gap", grow=True)
         ui.button("insert")

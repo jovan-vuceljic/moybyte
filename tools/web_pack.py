@@ -36,10 +36,10 @@ Beside every payload, whether or not any console has the add-on installed:
                                    indexes reference, now and before this
                                    publish (official_assets, the publisher's
                                    prune_carts)
-    carts-<board>.json             an index in moy-spec's format (cartindex.py,
-                                   version 1): an entry per official cart of
-                                   THIS build, naming its API level in
-                                   moybyte.api, then one per add-on ever
+    carts-<board>.json             an index in the store's format (version 1,
+                                   runtime/carts/cart_index.py): an entry per
+                                   official cart of THIS build, naming its API
+                                   level in moybyte.api, then one per add-on ever
                                    published for the board, newest first, each
                                    naming its page's digest in moybyte.fits;
                                    signed as a carts index is when the key is
@@ -89,6 +89,7 @@ import board_config  # noqa: E402
 import gen_device_carts  # noqa: E402
 import gen_web_blob as gwb  # noqa: E402
 from runtime.moy_store_base import API_LEVEL, api_above, api_of  # noqa: E402
+from tools import wasm_module  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PACK_FILE = "moybyte_web.pack"     # the build's pack beside its image, and in the cart
@@ -219,7 +220,9 @@ def seed_files(src):
     return out
 
 
-BOARD_CHIPS = ("esp32s3", "esp32p4")
+# The chips a console ships on: the ones a board's AOT module is keyed for
+# (native/moy_wasm/moy_wasm_key.h), the host left out.
+BOARD_CHIPS = tuple(wasm_module.targets())
 NATIVE_ASSET = "%s--%s"            # cart id, its module's file in the cart
 NATIVE_FILE = re.compile(r"^(?P<cid>[^/]+)--(?P<file>[A-Za-z0-9_]+\.(?P<chip>%s)\.elf)$"
                          % "|".join(BOARD_CHIPS))

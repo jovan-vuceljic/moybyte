@@ -300,6 +300,23 @@ int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t 
     return wasm_runtime_call_wasm(r->env, fn, 5, argv) ? 1 : -1;
 }
 
+/* A compiled app's canvas keys= (native/moy_uitree/moy_uitree_wasm.c): its
+ * exported `_uitree_keys(node)`, called before the frame while that canvas
+ * holds focus. 1 it took the keys, 0 it left them or exports none, -1 it
+ * trapped. moycore_wasm.c's is the boards' twin. */
+int moycore_ui_keys_call(int32_t node);
+int moycore_ui_keys_call(int32_t node)
+{
+    host_wasm *r = hw_current();
+    if (!r || !r->bound || r->dead || r->w.items) return 0;
+    wasm_function_inst_t fn = wasm_runtime_lookup_function(r->inst, "_uitree_keys");
+    if (!fn || wasm_func_get_param_count(fn, r->inst) != 1 || wasm_func_get_result_count(fn, r->inst) != 1)
+        return 0;
+    uint32_t argv[1] = {(uint32_t)node};
+    if (!wasm_runtime_call_wasm(r->env, fn, 1, argv)) return -1;
+    return argv[0] != 0;
+}
+
 /* The canvas a compiled app's page draws on (native/moy_ui/moy_ui_run.h): the live
  * run's draw target, an owed or kept frame written in first, as the board's
  * module does. */

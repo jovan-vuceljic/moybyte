@@ -151,6 +151,10 @@ const char *uit_get_cell(const uit_t *e, int slot, int row, int f);
 // -- the build (each page) -------------------------------------------------
 // A fresh tree; `page_id` the toolkit id of the page (its build and level).
 void uit_build_begin(uit_t *e, const char *page_id);
+// The store is an app's (1) or the shell's (0, a new store's): an app's refuses, at the node and
+// the prop that names it, every kind, prop and word the contract marks the shell's own (N09).
+// Every Lua and compiled store is an app's; a Python store is where its page is a cart's.
+void uit_set_app(uit_t *e, int app);
 // A node of `kind` keyed `key` under `parent` (-1 for the page): its index.
 int uit_node(uit_t *e, int kind, const char *key, int parent);
 // A prop, in the order the build gave them. The engine decides from the kind
@@ -242,6 +246,8 @@ void uit_panes_set(uit_t *e, int du, const char *pane_cur, int mouse, uint32_t c
 // A placed page's unit, which a row's literal gap=, pad= and a canvas's w= are in (0: the
 // engine's own, 1 on a desk and the font scale on a handheld).
 void uit_set_unit(uit_t *e, int unit);
+// The scale a spacing prop (an int at 1x) is multiplied by: the chrome scale in force.
+void uit_set_scale(uit_t *e, int scale);
 // The last pass's panes as ints into `out` (`max` at most): UIT_PN_HEAD
 // words (the outermost panes' node or -1, the pane the placement stood
 // alone or -1, the least size's w and h, then the counts of the three lists
@@ -392,6 +398,8 @@ int uit_back_popover(uit_t *e, char *buf, size_t cap);
 int uit_page_shown(const uit_t *e);
 // Whether no node holds focus.
 int uit_unfocused(const uit_t *e);
+// Whether the stop the last frame left focused is a field whose edit is open (its keys type).
+int uit_editing(const uit_t *e);
 // The id focus is on after the last frame ("" none): its length.
 int uit_focused(const uit_t *e, char *buf, size_t cap);
 // The last frame's stop `i` (from 0): its kind (UIT_SEG with the cycle look

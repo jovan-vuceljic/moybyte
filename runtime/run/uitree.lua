@@ -1183,7 +1183,7 @@ end
 
 -- -- actions and hooks ---------------------------------------------------------------
 
-local APP_ROLES = { confirm = 1, back = 1, more = 1, menu = 1, left = 1, right = 1, up = 1, down = 1, space = 1,
+local APP_ROLES = { confirm = 1, back = 1, more = 1, left = 1, right = 1, up = 1, down = 1,
                     search = 1, ["goto"] = 1, complete = 1, undo = 1, redo = 1, play = 1, tools = 1 }
 local SHELL_ROLES = { home = 1, full = 1, system = 1 }
 local TAKES_N = { none = 0, row = 1, arg = 1, char = 1, pointer = 1 }
@@ -1387,7 +1387,8 @@ end
 
 -- -- the app declaration and pages -------------------------------------------------------
 
-local APP_FIELDS = { icon = 1, size = 1, min = 1, back = 1, glass = 1, slots = 1 }
+local APP_FIELDS = { icon = 1, size = 1, min = 1, back = 1, glass = 1 }
+local SHELL_FIELDS = { slots = 1 }      -- the shell's own: a Lua page is always an app's
 function T.app(title, o)
   local at = where()
   no_build("ui.app", at)
@@ -1395,6 +1396,9 @@ function T.app(title, o)
   if type(title) ~= "string" then fail("N01", at, "ui.app's title is " .. describe(title), "a text", describe(title)) end
   o = o or {}
   for k, v in pairs(o) do
+    if SHELL_FIELDS[k] then
+      fail("N09", at, "ui.app " .. k .. "= is the shell's own, not an app's", "an app's own field", q(k), "drop it")
+    end
     if not APP_FIELDS[k] then
       fail("D01", at, "ui.app takes no field " .. q(k), "one of " .. table.concat(sorted_keys(APP_FIELDS), ", "), q(k),
            (k == "x" or k == "y" or k == "place") and "drop it: the shell places windows" or "drop it")
@@ -1470,12 +1474,11 @@ __moy_uitree_check = nil
 if CHECK == nil then
   fail("E00", "load", "the UI tree's checks are not in this build", "a build with native/moy_uitree", "none")
 end
--- where this layer differs from the table: what the table only designs and the layer builds
--- (true; a kind's every prop), and what the table has that the layer does not build yet (false)
+-- what the table has that this layer does not build yet
 local OWN = { ["card.image"] = false }
 -- a parent's prop the table lets every child carry: the one kind the layer builds it on
 local CHILD = { span = "button", grow = "field" }
-local BUILDS = 16
+local VC_APP = 16       -- moy_uitree_check.h's UIT_VC_APP: every Lua page is an app's
 local STOPS = { button = 1, link = 1, toggle = 1, slider = 1, field = 1, bubble = 1, rows = 1 }
 
 -- a value's class, as the table's check names them (moy_uitree_check.h's UIT_VC_*)
@@ -1499,14 +1502,11 @@ local function check_opts(kind, o, at)
          describe(o[1]), "name it: { value = ... }")
   end
   for k, v in pairs(o) do
-    local own = OWN[kind .. "." .. k]
-    if own == false or (CHILD[k] and CHILD[k] ~= kind) then
+    if OWN[kind .. "." .. k] == false or (CHILD[k] and CHILD[k] ~= kind) then
       fail("E00", at, "the Lua layer does not build ui." .. kind .. "'s " .. k .. " yet",
            CHILD[k] and "it on ui." .. CHILD[k] .. " alone" or "a prop this layer builds", q(k), "drop it")
     end
-    local vc = vclass(v)
-    if own or OWN[kind] then vc = vc | BUILDS end
-    local ty, code, what, expected, fix = CHECK(kind, k, vc, type(v) == "string" and v or nil)
+    local ty, code, what, expected, fix = CHECK(kind, k, vclass(v) | VC_APP, type(v) == "string" and v or nil)
     if code then
       if not ty and (k == "when" or k == "off") then
         fail("O04", at, "ui." .. kind .. " has " .. k .. ", and it is neither an action's site nor a two-way control",
@@ -1684,6 +1684,7 @@ local function leaf(kind)
 end
 T.label = leaf("label")
 T.info = leaf("info")
+T.status = leaf("status")
 
 function T.note(o, extra)
   local at = where()

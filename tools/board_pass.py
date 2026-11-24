@@ -63,7 +63,10 @@ four boards share one usb id.
 
 THE BOARD IS LEFT AT ITS LAUNCHER (`board.py desk` after the suite), the
 T-Deck at volume 0 (the dev channel's `vol 0`, before and after the suite).
-Only console boards are passed: the headless Zero is never touched. A port
+`--all` is the console boards. A headless board is passed only by name and
+only where it has a suite (the C3 Zero's, tests/test_c3_zero_on_glass.py):
+build, flash and its suite, nothing a console's dev channel answers (no desk,
+add-on, perf or shot); the XIAO Zero has none and is never passed. A port
 another process holds skips its board, naming the holder.
 """
 
@@ -209,7 +212,7 @@ def plan(a, dirs, main_checkout):
     for n in names:
         if n not in dirs:
             raise PassError("no board %r -- one of %s" % (n, ", ".join(consoles)))
-        if n not in consoles:
+        if n not in consoles and not (n in suites(dirs=dirs) and not a.all):
             raise PassError("%s has no on-glass suite and is never passed" % n)
     builds = not (a.skip_build or a.no_flash)
     if builds and main_checkout and not a.main:
@@ -393,8 +396,10 @@ def _run_board(row, a, ctx):
     t = time.monotonic()
     if board.holders(port):
         return stop("port held", path)
-    run(verb("desk"), path)
-    if not a.no_flash:
+    console = board.is_console(d)
+    if console:
+        run(verb("desk"), path)
+    if console and not a.no_flash:
         # The browser console add-on that fits the image just flashed, so the
         # suite's add-on check serves it (tests/on_glass.py), then a reboot:
         # the push's transfer keeps internal RAM for the boot, and the suite's
@@ -420,9 +425,9 @@ def _run_board(row, a, ctx):
         stop("suite did not run", path)
     else:
         row.passed, row.skipped, row.failed, row.failing = got
-        if not a.no_perf and not board.holders(port):
+        if console and not a.no_perf and not board.holders(port):
             perf_stage(row, a, ctx, log("perf"))
-    if not board.holders(port):
+    if console and not board.holders(port):
         run(verb("desk"), path)
         if name in QUIET:
             run(verb("tail", "1", "--send", "vol 0", "--grep", "REMOTE"), path)

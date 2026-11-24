@@ -201,6 +201,7 @@ class CEngine(Engine):
     _band_extra = ""        # the items its host adds to the band before Back, NUL-separated
     th = None               # the theme's colours the last frame drew in
     unit = 0                # a placed page's unit, the host's (0: the engine's own)
+    scale = 0               # the scale its spacing is drawn at, the host's (0: layout_base.scale's)
     # A host's own pictures: fn(node, pic, r), `_pic`'s contract, in place of the engine's
     # decoded ones (the console's home draws its covers so); set before the page opens.
     pictures = None
@@ -251,6 +252,7 @@ class CEngine(Engine):
         x = self._x
         if x is None:
             self._x = x = _New()
+            x.set_app(S._is_cart(self.decl.module))
             if self.PLACED:
                 x.set_placed(1)
             if self._band_extra:
@@ -1053,6 +1055,7 @@ class CEngine(Engine):
                 S._NOW.app = was
         t = _D.UI_TARGET
         x.set_unit(self.unit)
+        x.set_scale(self.scale or _lb.scale(fs))
         r = x.frame(t[0], cv, t[2], content[0], content[1], content[2], content[3], self._flags(desk), fs,
                     INPUTS.index(self.input))
         self._buttons = 0
@@ -1349,11 +1352,14 @@ class CEngine(Engine):
     snapshot = dump
 
     def _has_page(self):
-        return len(self.pages) > 1 or self.dialog_shown()
+        return len(self.pages) > 1 or self.dialog_shown() or (
+            self._visiting() and _C.api_edit_cancel(self._ui.ctx, False))
 
     def _back(self):
-        """Back: a shown dialog's first button (in C), else the page under this
-        one, else the app's back role or its declared back action."""
+        """Back: a shown dialog's first button (in C), else a shown popover's
+        close= (each takes a field's edit in it with it), else a field's open
+        edit ended, its text given back, else the page under this one, else
+        the app's back role or its declared back action."""
         self._bind()
         x = self._made()
         if self._visiting():
@@ -1369,6 +1375,9 @@ class CEngine(Engine):
                 if got != -1:
                     act = self._acts[got[0]]
                     self.q.append((act, self.args_for(act), "back on popover %r" % got[1]))
+                self._damage.all()
+                return True
+            if _C.api_edit_cancel(self._ui.ctx, True):
                 self._damage.all()
                 return True
         if len(self.pages) > 1:
@@ -1666,8 +1675,8 @@ class CEditorEngine(CEngine, _ed.Engine):
 
     def _back(self):
         """Back: a grown pane put back, else a shown popover's close= (in
-        C), else the innermost shown closer row's (`close=`, where it is on),
-        else the store's back."""
+        C), else the innermost shown closer row's (`close=`, where it is on;
+        each takes a field's edit in it with it), else the store's back."""
         self._bind()
         x = self._made()
         g = self._grown()
@@ -1824,6 +1833,7 @@ class CEditorEngine(CEngine, _ed.Engine):
         self.du = self.unit or max(1, _lb.chrome_size(getattr(self, "fs", 1)) // _lb.render_scale())
         self._x.panes_set(self.du, self.pane_cur, self._mouse(), self.clock)
         self._x.set_unit(self.unit)
+        self._x.set_scale(self.scale or _lb.scale(getattr(self, "fs", 1)))
 
     def _pane_read(self, placing=True):
         """The engine's panes (`uit_panes`) as `uitree_editor.Engine` keeps

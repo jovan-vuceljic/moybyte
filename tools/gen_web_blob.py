@@ -1,21 +1,33 @@
 #!/usr/bin/env python3
 """Pack `firmware/web_runner/dist` for the browser console add-on, and name it
-in the image.
+in the image beside the loader page.
 
 The browser console is not in the firmware: it is an add-on cart a console
 installs into its store (native/moy_net/moy_page.h), whose payload is the
 PACK this writes (native/moy_net/moy_page.h's layout: a 4 KiB head naming each asset,
 then the PRE-GZIPPED assets of the ASSETS table in
-native/moy_net/moy_webhost.c). The image carries only the sha256 of the
-pack's body, the page it fits, and the bundle's stamp, in the C file this
-emits; a release publishes the cart for that digest beside the payload
+native/moy_net/moy_webhost.c). The image carries the sha256 of the
+pack's body (the page it fits, the pack's identity), the sha256 of the whole
+pack file (what the loader checks), whether its console is online (board.toml's
+`[web] console`) and the bundle's stamp, in the C file this emits, with the
+loader (firmware/web_runner/loader.html, docs/web_console_online_2026-11.md
+§3) gzipped beside them: the page a board whose console is online serves at
+its root, which fetches the pack from the mirrors this build names (§4). A
+release publishes the cart for that digest beside the payload
 (tools/web_pack.py), and the console's webhost serves a pack only when its
 head names the same digest.
 
 Usage (every board's build.sh, through tools/esp32_build_lib.sh):
 
     tools/gen_web_blob.py --out <native>/moy_web/moy_web_blob.gen.c \
-        --pack dist/<board>/moybyte_web.pack [--require]
+        --pack dist/<board>/moybyte_web.pack [--require] [--online] [--mirror URL]...
+
+THE MIRRORS (§4, §8): where the loader fetches `<mirror><body digest>.pack`
+after this origin's cache and the board's own copy, in order. `--mirror`
+names them; with none, `MOYBYTE_WEB_MIRRORS` (space-separated) does, else a
+CI build names os.moybyte.com alone and any other build names this machine's
+`firmware/web_runner/serve.py` first (DEV_PORT on its LAN address), because a
+worktree's digest is published nowhere else.
 
 With no usable bundle it names no page and says so loudly, and `--require`
 (set by CI and by `MOYBYTE_REQUIRE_WEB_BUNDLE=1`) makes that a failure.
@@ -34,8 +46,10 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+import json
 import re
 import os
+import socket
 import struct
 import sys
 import zlib
@@ -51,6 +65,10 @@ PACK_MAGIC = b"MOYWEB01"           # moy_page.h's MOY_WEB_PACK_* and its head
 PACK_HEAD = 4096
 PACK_MAX = 12
 PACK_NAME = 40
+LOADER = os.path.join(WEB_RUNNER, "loader.html")
+LOADER_BUDGET = 4096               # gzipped (docs/web_console_online_2026-11.md §3)
+SITE_MIRROR = "https://os.moybyte.com/console/"
+DEV_PORT = 8321                    # serve.py's default port
 DEFAULT_OUT = os.path.join(
     ROOT, "native", "moy_web",
     "moy_web_blob.gen.c")
@@ -177,9 +195,59 @@ def pack(assets):
     return pack_bytes([(served, _read(path)) for served, path, _s, _h in assets])
 
 
-def render(assets, dist, want=None):
-    """The C file: the digest of the pack this image names and the stamp of
-    the bundle in it, or none of either when no bundle was built."""
+def lan_address():
+    """This machine's address on its LAN, or None: the source address of a
+    route out (a UDP connect sends nothing)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("192.0.2.1", 9))
+        ip = s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+    return None if ip.startswith("127.") or ip == "0.0.0.0" else ip
+
+
+def default_mirrors():
+    """The mirrors a build names when its command line names none (the
+    module docstring, THE MIRRORS)."""
+    env = os.environ.get("MOYBYTE_WEB_MIRRORS")
+    if env is not None:
+        return env.split()
+    if os.environ.get("CI"):
+        return [SITE_MIRROR]
+    ip = lan_address()
+    return (["http://%s:%d/console/" % (ip, DEV_PORT)] if ip else []) + [SITE_MIRROR]
+
+
+def loader_page(mirrors):
+    """The loader as the image serves it: loader.html with its mirrors
+    substituted and without its comment lines and indentation."""
+    with open(LOADER, encoding="utf-8") as f:
+        lines = [ln.strip() for ln in f.read().splitlines()]
+    text = "\n".join(ln for ln in lines if ln and not ln.startswith("//")) + "\n"
+    if text.count("@MIRRORS@") != 1:
+        raise SystemExit("gen_web_blob: loader.html must name @MIRRORS@ once")
+    return text.replace("@MIRRORS@", json.dumps(list(mirrors)))
+
+
+def loader_gz(mirrors):
+    """loader_page gzipped, byte for byte the same for the same mirrors."""
+    return gzip.compress(loader_page(mirrors).encode(), 9, mtime=0)
+
+
+def _bytes_c(name, data):
+    rows = [", ".join("0x%02x" % b for b in data[i:i + 16])
+            for i in range(0, len(data), 16)]
+    return ["const unsigned char %s[%d] = {" % (name, max(len(data), 1)),
+            "    " + ",\n    ".join(rows or ["0"]), "};"]
+
+
+def render(assets, dist, want=None, whole=None, online=False, mirrors=()):
+    """The C file: the digests of the pack this image names and the stamp of
+    the bundle in it, or none of them when no bundle was built, and the
+    loader with `mirrors`."""
     total = sum(a[2] for a in assets)
     L = []
     L.append("/* AUTO-GENERATED by tools/gen_web_blob.py -- do not edit, do")
@@ -190,6 +258,7 @@ def render(assets, dist, want=None):
     for served, _path, size, sha in assets:
         L.append(" *   %-20s %8d B  %s" % (served, size, sha[:16]))
     L.append(" *   %-20s %8d B  total" % ("", total))
+    L.append(" * Loader mirrors: %s" % (" ".join(mirrors) or "none"))
     L.append(" */")
     L.append('#include "moy_web_blob.h"')
     L.append("")
@@ -199,8 +268,14 @@ def render(assets, dist, want=None):
     L.append("const unsigned char moy_web_named = %du;" % (want is not None))
     hexes = ", ".join("0x%02x" % b for b in (want or bytes(32)))
     L.append("const unsigned char moy_web_want[32] = {%s};" % hexes)
+    L.append("const unsigned char moy_web_pack_sha[32] = {%s};"
+             % ", ".join("0x%02x" % b for b in (whole or bytes(32))))
     L.append('const char moy_web_stamp[] = "%s";'
              % (stamp_of(assets) if assets and want is not None else "0 0 none"))
+    L.append("const unsigned char moy_web_online = %du;" % bool(online))
+    gz = loader_gz(mirrors)
+    L.extend(_bytes_c("moy_web_loader", gz))
+    L.append("const unsigned int moy_web_loader_len = %du;" % len(gz))
     return "\n".join(L) + "\n"
 
 
@@ -288,6 +363,12 @@ def main(argv=None):
                     help="where to write the pack (the add-on cart's payload)")
     ap.add_argument("--require", action="store_true",
                     help="fail instead of emitting an empty bundle")
+    ap.add_argument("--online", action="store_true",
+                    help="the board's console is online (board.toml's [web] "
+                         "console): its root serves the loader")
+    ap.add_argument("--mirror", action="append", metavar="URL",
+                    help="a mirror the loader fetches <URL><body digest>.pack "
+                         "from, in order (default: default_mirrors())")
     ap.add_argument("--quiet", action="store_true",
                     help="no banner when there is no bundle -- for callers "
                          "that are not building a board image (the unix test "
@@ -323,9 +404,10 @@ def main(argv=None):
                 "!! ============================================================\n"
                 "\n" % msg)
 
-    want = None
+    want = whole = None
     if assets:
         data, want = pack(assets)
+        whole = hashlib.sha256(data).digest()
         if args.pack:
             os.makedirs(os.path.dirname(os.path.abspath(args.pack)), exist_ok=True)
             with open(args.pack, "wb") as f:
@@ -339,7 +421,9 @@ def main(argv=None):
                 "e.g.\n%s\n!! rebuild it (firmware/web_runner/build.sh) or "
                 "this image names a stale browser console\n"
                 % "\n".join("!!     " + s for s in stale))
-    write_if_changed(args.out, render(assets, args.dist, want))
+    mirrors = args.mirror if args.mirror is not None else default_mirrors()
+    write_if_changed(args.out, render(assets, args.dist, want, whole,
+                                      args.online, mirrors))
     return 0
 
 

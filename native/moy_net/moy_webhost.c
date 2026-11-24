@@ -1,7 +1,12 @@
 // The webhost (moy_net.h): the console served from the board.
 //
-//   GET  /, /index.html, the bundle's assets   open: the page must load to sign in
-//   GET  /sync                                 open: {"sync":1}, "a board lives here"
+//   GET  /, /index.html, the bundle's assets   open: the page must load to sign in;
+//        /loader.html, the whole pack          on a board whose console is online, `/`
+//                                              is the loader (moy_page.h, THE LOADER)
+//   GET  /sync                                 open: "a board lives here", with the
+//                                              digests the loader checks:
+//                                              {"sync":1,"page":<body sha256>,
+//                                              "pack":<whole sha256>,"local":0|1}
 //   POST /auth                                 open: the sign-in (moy_seal.h, moy_webauth.c)
 //   GET  /carts.json, /files.json, /apps.json  sealed: the store, streamed
 //   GET  /media                                sealed: the music folder's songs, the
@@ -36,8 +41,10 @@
 // browser in with its device key; "token" pairs a browser with the QR's
 // single-use token; "pake" and "confirm" pair one with the console's password
 // by SPAKE2+, its curve work on a worker while this poll goes on (the request
-// is held, `afd`, and answered at a later poll). docs/os_2026-11/system.md
-// section 3 is the threat model.
+// is held, `afd`, and answered at a later poll); "claim" sets the first
+// password of a board that has none, with the claim the cable's Improv
+// carried (moy_webauth.c, THE CLAIM). docs/os_2026-11/system.md section 3 is
+// the threat model.
 //
 // THE BACKOFF (moy_webauth.c): every credential the sign-in checks -- a
 // device key, a token, a password's PAKE -- counts. A source (the peer's IPv4
@@ -387,6 +394,10 @@ void moy_web_board_id(char out[33]) {
 
 void moy_web_token(char out[33]) {
     moy_wa_token(out);
+}
+
+void moy_web_claim(char out[33]) {
+    moy_wa_claim(out);
 }
 
 size_t moy_web_keys(char *out, size_t cap) {
@@ -1124,6 +1135,50 @@ static void asset(out_t *o, const char *name, const char *ctype) {
     moy_vol_gate_leave(gate);
 }
 
+// The loader (moy_page.h, THE LOADER), gzipped as the image carries it. It
+// changes with the image, so a browser asks again each time.
+static void loader(out_t *o) {
+    size_t n = 0;
+    const uint8_t *gz = moy_page_loader(&n);
+    if (gz == NULL) {
+        simple(o, 404, "text/plain; charset=utf-8", "this firmware carries no loader");
+        return;
+    }
+    char head[200];
+    int k = snprintf(head, sizeof(head),
+                     "HTTP/1.1 200 OK\r\n"
+                     "Content-Type: text/html; charset=utf-8\r\n"
+                     "Content-Length: %u\r\n"
+                     "Content-Encoding: gzip\r\n"
+                     "Cache-Control: no-cache\r\n"
+                     "Connection: close\r\n\r\n",
+                     (unsigned)n);
+    raw(o, head, (size_t)k);
+    raw(o, gz, n);
+}
+
+// GET /sync: the mode marker, and what the loader checks a pack against.
+static void sync_marker(out_t *o) {
+    static const char hex[] = "0123456789abcdef";
+    uint8_t d[2][32];
+    if (!moy_page_want(d[0]) || !moy_page_pack(d[1])) {
+        json(o, 200, "{\"sync\":1,\"page\":null,\"pack\":null,\"local\":0}");
+        return;
+    }
+    char x[2][65];
+    for (int j = 0; j < 2; j++) {
+        for (int i = 0; i < 32; i++) {
+            x[j][2 * i] = hex[d[j][i] >> 4];
+            x[j][2 * i + 1] = hex[d[j][i] & 15];
+        }
+        x[j][64] = '\0';
+    }
+    char doc[192];
+    snprintf(doc, sizeof(doc), "{\"sync\":1,\"page\":\"%s\",\"pack\":\"%s\",\"local\":%d}",
+             x[0], x[1], moy_page_state() == MOY_PAGE_READY);
+    json(o, 200, doc);
+}
+
 // The root's answer where the page is ABSENT on a board that offers the way
 // back (moy_page.h): why, and the link that asks for the console again; the
 // link followed is counted and answered with what happens next.
@@ -1479,15 +1534,25 @@ static int route(out_t *o, const char *m, size_t mn, const char *t, size_t tn,
         return ROUTE_DONE;
     }
     if (path_is(t, pn, "/sync")) {
-        json(o, 200, "{\"sync\":1}");
+        sync_marker(o);
         return ROUTE_DONE;
     }
     if (path_is(t, pn, "/") || path_is(t, pn, "/index.html")) {
         if (o->paged) {
             asset(o, "index.html", ASSETS[0].ctype);
+        } else if (moy_page_online()) {
+            loader(o);
         } else {
             page_root(o, t, tn);
         }
+        return ROUTE_DONE;
+    }
+    if (!o->paged && path_is(t, pn, MOY_PAGE_LOADER)) {
+        loader(o);
+        return ROUTE_DONE;
+    }
+    if (path_is(t, pn, "/" MOY_PAGE_FILE)) {
+        asset(o, MOY_PAGE_FILE, "application/octet-stream");
         return ROUTE_DONE;
     }
     for (size_t i = 0; i < sizeof(ASSETS) / sizeof(ASSETS[0]); i++) {

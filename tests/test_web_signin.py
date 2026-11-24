@@ -484,6 +484,56 @@ def test_with_no_password_a_browser_pairs_only_by_the_qr(tmp_path):
     assert (e.value.status, e.value.doc) == (403, {"error": "nopw"})
 
 
+def _claim(h, claim, record=None):
+    """POST /auth's claim: (status, doc)."""
+    body = {"op": "claim", "claim": claim,
+            "record": record or ssh_service.hashed(PASSWORD, "c1a1m")}
+    st, _h, b = split(h.handle_http("POST", "/auth", json.dumps(body).encode()))
+    return st, json.loads(b)
+
+
+def test_the_claim_sets_the_first_password_once_and_its_browser_pairs(tmp_path):
+    """Improv's claim (moy_webauth.c, THE CLAIM): the browser the cable sent
+    makes the record, the board takes it once, and that browser pairs by the
+    password in the same step; the record is the reference's form."""
+    h = _host(tmp_path)
+    claim = nb.web_claim()
+    assert len(claim) == 32 and nb.web_claim() == claim, "one claim a boot"
+    page = _page(h)
+    page.claim(claim, PASSWORD)
+    assert page.json("GET", "/carts.json")[0] == 200
+    rec = (tmp_path / "system" / "password").read_text()
+    assert rec.startswith("$moy2$") and rec.endswith("\n") and rec.count("\n") == 1
+    assert _page(h).hello()["pw"] is True
+    assert nb.web_claim() == "", "a board with a password has no claim"
+    _page(h).pair_password(PASSWORD)
+
+
+def test_the_claim_is_refused_twice_without_its_token_and_once_a_password_exists(tmp_path):
+    h = _host(tmp_path)
+    claim = nb.web_claim()
+    assert _claim(h, "00" * 16) == (403, {"error": "claim"})
+    assert _claim(h, "") == (403, {"error": "claim"})
+    assert _claim(h, claim, record="$moy2$1$x$00$00") == (400, {"error": "record"})
+    assert _claim(h, claim, record="no record") == (400, {"error": "record"})
+    assert _claim(h, claim) == (200, {"ok": True})
+    assert _claim(h, claim) == (403, {"error": "claimed"})          # twice
+    h2 = _host(tmp_path / "other", password=PASSWORD)
+    assert nb.web_claim() == ""
+    assert _claim(h2, claim) == (403, {"error": "claimed"})
+    assert (tmp_path / "other" / "system" / "password").read_text() == \
+        ssh_service.hashed(PASSWORD, "5a1t")
+
+
+def test_a_wrong_claim_counts_as_a_wrong_credential(tmp_path):
+    h = _host(tmp_path)
+    nb.web_claim()
+    for _ in range(FREE + 1):
+        assert _claim(h, "11" * 16)[0] == 403
+    st, d = _claim(h, nb.web_claim())
+    assert st == 429 and d["error"] == "wait"
+
+
 def test_a_recorded_sign_in_does_not_sign_in_again(tmp_path):
     """Every login answers a hello's fresh nonce, used once: a replay finds it
     gone (409, which counts nothing)."""
@@ -562,7 +612,7 @@ def test_the_bundle_and_the_marker_stay_open(tmp_path):
             r = h.handle_http("GET", loc[0].split(":", 1)[1].strip(), b"")
         assert status(r) == 200
         r = h.handle_http("GET", "/sync", b"")
-        assert (status(r), doc(r)) == (200, {"sync": 1})
+        assert status(r) == 200 and doc(r)["sync"] == 1 and doc(r)["local"] == 1
     finally:
         nb._bake({})
 

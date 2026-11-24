@@ -1,6 +1,6 @@
 {
  "spec": "ui_api_spec_2026-11.md revision 4",
- "about": "The UI API's contract as data: every error code (§25.2), node kind and prop (§7), takes= value (§5.4), role (§13.1), retired name (§7.9), app field (§19.1) and system value (§14). Both reference layers are tested against it (tests/test_uitree_contract.py). `designed: true` marks an entry the Python reference does not build (the spec's **not built**), held to the code by tests/test_uitree_contract.py; Lua's gaps are known.json's.",
+ "about": "The UI API's contract as data: every error code (§25.2), node kind and prop (§7), takes= value (§5.4), role (§13.1), retired name (§7.9), app field (§19.1) and system value (§14). Both reference layers are tested against it (tests/test_uitree_contract.py). Every entry is built; a layer's gaps are known.json's.",
  "types": {
   "tpl": "a template",
   "cond": "a condition",
@@ -229,30 +229,6 @@
    },
    "as_run": ""
   },
-  "D05": {
-   "stage": [
-    "tree"
-   ],
-   "meaning": "a `slot` not in `slots=`, or `slots=` naming a slot the tree lacks",
-   "fix": {
-    "python": "`slots=[\"run\"]` and `ui.slot(\"run\")`",
-    "lua": "as Python",
-    "c": "as Python"
-   },
-   "as_run": ""
-  },
-  "D06": {
-   "stage": [
-    "open"
-   ],
-   "meaning": "the manifest's `\"ui\"` level is missing, or one this console does not run",
-   "fix": {
-    "python": "`\"ui\": 1` in the manifest",
-    "lua": "as Python",
-    "c": "as Python"
-   },
-   "as_run": ""
-  },
   "E00": {
    "stage": [
     "build",
@@ -338,18 +314,6 @@
    },
    "as_run": ""
   },
-  "I01": {
-   "stage": [
-    "build"
-   ],
-   "meaning": "a tool or a lent action with no icon from its action or its site, and no `fill=`",
-   "fix": {
-    "python": "`icon=\"pencil\"` on the action",
-    "lua": "as Python",
-    "c": "`moy_ui_prop(\"icon\", \"pencil\")`"
-   },
-   "as_run": "D03"
-  },
   "I02": {
    "stage": [
     "build"
@@ -398,30 +362,6 @@
    },
    "as_run": "A03"
   },
-  "L01": {
-   "stage": [
-    "tree"
-   ],
-   "meaning": "a lender with no `lent` site, or a frame lending to itself",
-   "fix": {
-    "python": "`ui.lent(\"bar\")` in the frame",
-    "lua": "`ui.lent(\"bar\")`",
-    "c": "a `lent` node"
-   },
-   "as_run": ""
-  },
-  "L02": {
-   "stage": [
-    "tree"
-   ],
-   "meaning": "two shown `lent` sites of one name in one size class",
-   "fix": {
-    "python": "one site per class",
-    "lua": "as Python",
-    "c": "as Python"
-   },
-   "as_run": ""
-  },
   "L03": {
    "stage": [
     "tree"
@@ -433,55 +373,6 @@
     "c": "as Python"
    },
    "as_run": "U08"
-  },
-  "M01": {
-   "stage": [
-    "open",
-    "run"
-   ],
-   "meaning": "C: a handle that is not one",
-   "fix": {
-    "python": "—",
-    "lua": "—",
-    "c": "a handle the build returned"
-   },
-   "as_run": "H01 (data run)"
-  },
-  "M02": {
-   "stage": [
-    "run"
-   ],
-   "meaning": "C: a handed value read when none was handed, or a field of another model",
-   "fix": {
-    "python": "—",
-    "lua": "—",
-    "c": "read it in the handler it is handed to"
-   },
-   "as_run": "A07 (data run)"
-  },
-  "M03": {
-   "stage": [
-    "run"
-   ],
-   "meaning": "C: `put_*`, `put_row` or `rows_end` outside `rows_begin ... rows_end`, or a handle not a field of the model",
-   "fix": {
-    "python": "—",
-    "lua": "—",
-    "c": "`moy_ui_rows_begin(model)` first"
-   },
-   "as_run": "R02 (data run)"
-  },
-  "M04": {
-   "stage": [
-    "run"
-   ],
-   "meaning": "C: fields put after the last `put_row`",
-   "fix": {
-    "python": "—",
-    "lua": "—",
-    "c": "end with `moy_ui_put_row()`"
-   },
-   "as_run": "R03 (data run)"
   },
   "N01": {
    "stage": [
@@ -530,7 +421,7 @@
     "lua": "as Python",
     "c": "as Python"
    },
-   "as_run": "O03 for `disabled=`, N01 for `current=` on a tool"
+   "as_run": "O03 for `disabled=`"
   },
   "N06": {
    "stage": [
@@ -568,6 +459,18 @@
     "c": "as Python"
    },
    "as_run": "F01 (units run)"
+  },
+  "N09": {
+   "stage": [
+    "build"
+   ],
+   "meaning": "an app names a kind, prop, word or app field the contract marks the shell's (`slot`, `lent`, `tools lend=`, `card fill=`, `cards look=\"column\"`, `ui.app slots=`)",
+   "fix": {
+    "python": "an app's own: `cards look=\"icons\"`",
+    "lua": "as Python",
+    "c": "as Python"
+   },
+   "as_run": ""
   },
   "O01": {
    "stage": [
@@ -808,19 +711,6 @@
    },
    "as_run": ""
   },
-  "S10": {
-   "stage": [
-    "read",
-    "run"
-   ],
-   "meaning": "a write to a value the engine writes (`scroll new=`, `canvas size=`)",
-   "fix": {
-    "python": "read it; the engine writes it",
-    "lua": "as Python",
-    "c": "as Python"
-   },
-   "as_run": ""
-  },
   "S11": {
    "stage": [
     "build"
@@ -942,54 +832,6 @@
    },
    "as_run": "F04 (two pages, data run)"
   },
-  "U03": {
-   "stage": [
-    "build"
-   ],
-   "meaning": "a unit's action named outside every node bound to its unit",
-   "fix": {
-    "python": "`unit=code` on the pane or case",
-    "lua": "`{ unit = code }`",
-    "c": "`moy_ui_prop(\"unit\", \"code\")`"
-   },
-   "as_run": ""
-  },
-  "U05": {
-   "stage": [
-    "build"
-   ],
-   "meaning": "a dotted name names nothing in that unit",
-   "fix": {
-    "python": "the near name",
-    "lua": "as Python",
-    "c": "as Python"
-   },
-   "as_run": ""
-  },
-  "U06": {
-   "stage": [
-    "build"
-   ],
-   "meaning": "a name a unit declares that the app also declares",
-   "fix": {
-    "python": "rename one",
-    "lua": "as Python",
-    "c": "as Python"
-   },
-   "as_run": "U02"
-  },
-  "U07": {
-   "stage": [
-    "build"
-   ],
-   "meaning": "`unit=` on a node that cannot bind",
-   "fix": {
-    "python": "a case, pane, popover or page",
-    "lua": "as Python",
-    "c": "as Python"
-   },
-   "as_run": ""
-  },
   "U08": {
    "stage": [
     "tree"
@@ -997,18 +839,6 @@
    "meaning": "two units answering one key that some size class shows together",
    "fix": {
     "python": "give the key to one of them",
-    "lua": "as Python",
-    "c": "as Python"
-   },
-   "as_run": ""
-  },
-  "U10": {
-   "stage": [
-    "build"
-   ],
-   "meaning": "a unit declared on a unit",
-   "fix": {
-    "python": "declare it on the app",
     "lua": "as Python",
     "c": "as Python"
    },
@@ -1049,78 +879,6 @@
     "c": "—"
    },
    "as_run": ""
-  },
-  "Y01": {
-   "stage": [
-    "build"
-   ],
-   "meaning": "a process-1 word (`shell.*`, `geom`, `from_app`, `order`) in an app",
-   "fix": {
-    "python": "an app's own kinds",
-    "lua": "as Python",
-    "c": "as Python"
-   },
-   "as_run": "P01 (shell run)"
-  },
-  "Y02": {
-   "stage": [
-    "build"
-   ],
-   "meaning": "`from_app` of an unknown field",
-   "fix": {
-    "python": "a field of §19.1",
-    "lua": "as Python",
-    "c": "as Python"
-   },
-   "as_run": "P02 (shell run)"
-  },
-  "Y03": {
-   "stage": [
-    "build"
-   ],
-   "meaning": "`shell.windows` over rows without `geom` `x y w h`",
-   "fix": {
-    "python": "`x=shell.geom()` and the rest",
-    "lua": "—",
-    "c": "—"
-   },
-   "as_run": "P02 (shell run)"
-  },
-  "Y04": {
-   "stage": [
-    "build"
-   ],
-   "meaning": "`shell.zone` over rows without `from_app`",
-   "fix": {
-    "python": "`title=shell.from_app(\"title\")`",
-    "lua": "—",
-    "c": "—"
-   },
-   "as_run": "P02 (shell run)"
-  },
-  "Y05": {
-   "stage": [
-    "run"
-   ],
-   "meaning": "a dock into a slot its host does not declare",
-   "fix": {
-    "python": "the host's `slots=`",
-    "lua": "—",
-    "c": "—"
-   },
-   "as_run": "P03 (shell run)"
-  },
-  "Y06": {
-   "stage": [
-    "run"
-   ],
-   "meaning": "after a handler, a model and its orders disagree",
-   "fix": {
-    "python": "drop the key from every order with the row",
-    "lua": "—",
-    "c": "—"
-   },
-   "as_run": "P04 (shell run)"
   }
  },
  "reserved_codes": [
@@ -1140,7 +898,28 @@
   "V01",
   "V02",
   "O03",
-  "D03"
+  "D03",
+  "D05",
+  "D06",
+  "I01",
+  "L01",
+  "L02",
+  "M01",
+  "M02",
+  "M03",
+  "M04",
+  "S10",
+  "U03",
+  "U05",
+  "U06",
+  "U07",
+  "U10",
+  "Y01",
+  "Y02",
+  "Y03",
+  "Y04",
+  "Y05",
+  "Y06"
  ],
  "verbs": {
   "app": {
@@ -1179,10 +958,6 @@
   "page": {
    "level": 1
   },
-  "unit": {
-   "level": 1,
-   "designed": true
-  },
   "sys": {
    "level": 1
   },
@@ -1204,19 +979,11 @@
   "post": {
    "level": 1
   },
-  "damage": {
-   "level": 1,
-   "designed": true
-  },
   "doc": {
    "level": 2
   },
   "image": {
    "level": 2
-  },
-  "load": {
-   "level": 2,
-   "designed": true
   },
   "work": {
    "level": 2
@@ -1308,18 +1075,7 @@
     },
     "arg": {
      "type": "name",
-     "level": 1,
-     "designed": true
-    },
-    "unit": {
-     "type": "name",
-     "level": 1,
-     "designed": true
-    },
-    "nav": {
-     "type": "word:off",
-     "level": 2,
-     "designed": true
+     "level": 1
     },
     "status": {
      "type": "tpl",
@@ -1394,11 +1150,6 @@
      "type": "bool",
      "level": 1
     },
-    "new": {
-     "type": "name",
-     "level": 1,
-     "designed": true
-    },
     "snap": {
      "type": "bool",
      "level": 2
@@ -1436,7 +1187,8 @@
    "props": {
     "lend": {
      "type": "name",
-     "level": 2
+     "level": 2,
+     "owner": "shell"
     }
    }
   },
@@ -1444,6 +1196,7 @@
    "head": "name",
    "level": 2,
    "section": "7.1",
+   "owner": "shell",
    "props": {}
   },
   "label": {
@@ -1606,11 +1359,6 @@
    "level": 2,
    "section": "7.2",
    "props": {
-    "anchor": {
-     "type": "key",
-     "level": 2,
-     "designed": true
-    },
     "icon": {
      "type": "tpl",
      "level": 2
@@ -1866,44 +1614,6 @@
     }
    }
   },
-  "tool": {
-   "head": "action",
-   "level": 2,
-   "section": "7.3",
-   "props": {
-    "label": {
-     "type": "tpl",
-     "level": 2,
-     "designed": true
-    },
-    "icon": {
-     "type": "tpl",
-     "level": 2,
-     "designed": true
-    },
-    "arg": {
-     "type": "lit",
-     "level": 2,
-     "designed": true
-    },
-    "marked": {
-     "type": "cond",
-     "level": 2,
-     "designed": true
-    },
-    "fill": {
-     "type": "tpl",
-     "level": 2,
-     "designed": true
-    },
-    "focus": {
-     "type": "cond",
-     "level": 2,
-     "designed": true
-    }
-   },
-   "designed": true
-  },
   "toggle": {
    "head": "state",
    "level": 1,
@@ -2023,6 +1733,14 @@
      "type": "bool",
      "level": 1
     },
+    "edit": {
+     "type": "word:open,stop",
+     "level": 1
+    },
+    "keys": {
+     "type": "word:text,number",
+     "level": 1
+    },
     "changed": {
      "type": "hook",
      "level": 2
@@ -2123,16 +1841,6 @@
     "gap": {
      "type": "int",
      "level": 2
-    },
-    "face": {
-     "type": "name",
-     "level": 2,
-     "designed": true
-    },
-    "slide": {
-     "type": "bool",
-     "level": 2,
-     "designed": true
     },
     "edge": {
      "type": "bool",
@@ -2242,7 +1950,10 @@
     },
     "look": {
      "type": "word:carousel,shelf,icons,column",
-     "level": 2
+     "level": 2,
+     "shell_words": [
+      "column"
+     ]
     },
     "tone": {
      "type": "tpl",
@@ -2289,7 +2000,8 @@
     },
     "fill": {
      "type": "tpl",
-     "level": 2
+     "level": 2,
+     "owner": "shell"
     }
    }
   },
@@ -2351,11 +2063,6 @@
      "type": "word:primary,danger",
      "level": 1
     },
-    "default": {
-     "type": "action",
-     "level": 1,
-     "designed": true
-    },
     "look": {
      "type": "word:keys",
      "level": 1
@@ -2382,11 +2089,6 @@
     "close": {
      "type": "action|hook",
      "level": 1
-    },
-    "unit": {
-     "type": "name",
-     "level": 1,
-     "designed": true
     },
     "wash": {
      "type": "word:page,view,none",
@@ -2438,11 +2140,11 @@
      "level": 1
     },
     "gap": {
-     "type": "word:s,m,l,0",
+     "type": "int",
      "level": 1
     },
     "pad": {
-     "type": "word:s,m,l,0",
+     "type": "int",
      "level": 1
     },
     "align": {
@@ -2469,11 +2171,11 @@
      "level": 1
     },
     "gap": {
-     "type": "word:s,m,l,0",
+     "type": "int",
      "level": 1
     },
     "pad": {
-     "type": "word:s,m,l,0",
+     "type": "int",
      "level": 2
     },
     "w": {
@@ -2562,11 +2264,6 @@
      "type": "list|conds",
      "level": 2
     },
-    "unit": {
-     "type": "name",
-     "level": 2,
-     "designed": true
-    },
     "head": {
      "type": "bool",
      "level": 2
@@ -2581,6 +2278,7 @@
    "head": "name",
    "level": 2,
    "section": "7.6",
+   "owner": "shell",
    "props": {
     "min": {
      "type": "list",
@@ -2628,16 +2326,6 @@
      "type": "list",
      "level": 2
     },
-    "size": {
-     "type": "list",
-     "level": 2,
-     "designed": true
-    },
-    "sized": {
-     "type": "hook",
-     "level": 2,
-     "designed": true
-    },
     "pointer": {
      "type": "action|hook",
      "level": 2
@@ -2645,11 +2333,6 @@
     "keys": {
      "type": "fn",
      "level": 2
-    },
-    "capture": {
-     "type": "cond",
-     "level": 2,
-     "designed": true
     },
     "mark": {
      "type": "lit",
@@ -2666,21 +2349,6 @@
     "h": {
      "type": "int",
      "level": 2
-    },
-    "text": {
-     "type": "bool",
-     "level": 2,
-     "designed": true
-    },
-    "actions": {
-     "type": "list",
-     "level": 2,
-     "designed": true
-    },
-    "on": {
-     "type": "action",
-     "level": 2,
-     "designed": true
     },
     "ground": {
      "type": "name",
@@ -2737,19 +2405,9 @@
    "level": 1,
    "params": 1
   },
-  "row+arg": {
-   "level": 2,
-   "params": 2,
-   "designed": true
-  },
   "pointer": {
    "level": 2,
    "params": 1
-  },
-  "key": {
-   "level": 2,
-   "params": 1,
-   "designed": true
   }
  },
  "roles": {
@@ -2764,11 +2422,6 @@
   "more": {
    "owner": "app",
    "level": 1
-  },
-  "menu": {
-   "owner": "app",
-   "level": 2,
-   "designed": true
   },
   "left": {
    "owner": "app",
@@ -2785,11 +2438,6 @@
   "down": {
    "owner": "app",
    "level": 1
-  },
-  "space": {
-   "owner": "app",
-   "level": 2,
-   "designed": true
   },
   "search": {
    "owner": "app",
@@ -2857,7 +2505,6 @@
   "props": {
    "disabled": "when= on the action with off=\"grey\"",
    "lit": "marked= (on a tool)",
-   "current@tool": "marked=",
    "keyname@item": "the action's keys=",
    "key@action": "keys=[...]",
    "does@action": "hint=",
@@ -2879,12 +2526,25 @@
   }
  },
  "app_fields": {
-  "icon": 1,
-  "size": 1,
-  "min": 1,
-  "back": 1,
-  "glass": 2,
-  "slots": 2
+  "icon": {
+   "level": 1
+  },
+  "size": {
+   "level": 1
+  },
+  "min": {
+   "level": 1
+  },
+  "back": {
+   "level": 1
+  },
+  "glass": {
+   "level": 2
+  },
+  "slots": {
+   "level": 2,
+   "owner": "shell"
+  }
  },
  "system_values": {
   "desk": "bool",

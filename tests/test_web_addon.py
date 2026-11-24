@@ -92,7 +92,8 @@ def board(monkeypatch):
 def _names(digest, monkeypatch):
     nb._bake({"index.html.gz": b"\x1f\x8b"})            # the library up, a stamp
     import ctypes
-    nb._lib().moy_page_name(ctypes.create_string_buffer(bytes.fromhex(digest), 32))
+    nb._lib().moy_page_name(ctypes.create_string_buffer(bytes.fromhex(digest), 32),
+                            ctypes.create_string_buffer(bytes(32), 32))
     monkeypatch.setattr(ci, "page_want", lambda: digest)
 
 

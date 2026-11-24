@@ -2002,11 +2002,11 @@ def run_back(take=True):
 
 def app_cancel(ctx, take=True):
     """The host's cancel -- the T-Deck's Mic -- over the frame `ctx` drew
-    last: True where its focused field has an edit in progress (its text
-    other than when focus came onto it), which the next frame gives back,
-    focus stepping off the field (up, else down), or else where a popover
-    is open, which the next frame dismisses; False where neither is, and
-    the key keeps its own meaning. `take` False only asks."""
+    last: True where its focused field's edit is open (moy_ui_api_cancel),
+    which the next frame ends, giving back the text it began from, focus
+    staying on the field, or else where a popover is open, which the next
+    frame dismisses; False where neither is, and the key keeps its own
+    meaning. `take` False only asks."""
     return _C.api_cancel(ctx, take)
 
 
@@ -2016,7 +2016,7 @@ def run_cancel(take=True):
 
 
 def app_typing(ctx):
-    """Whether the frame `ctx` drew last has a field in focus: its surface
+    """Whether the frame `ctx` drew last has a field whose edit is open: its surface
     takes typed bytes, the keyboard in text mode (runtime/shell/input_policy.py)."""
     return bool(_C.api_typing(ctx))
 

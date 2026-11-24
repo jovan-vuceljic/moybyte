@@ -296,13 +296,16 @@ def test_a_page_pushed_over_itself_with_another_row_gives_the_first_its_row_back
 def test_more_role_runs_on_the_m_key():
     """The more role's key (m) runs the page's action where no field is
     focused and the focused row's action where it hangs from a row; a field
-    that holds focus takes the letter."""
+    whose edit is open takes the letter, and one that is only focused does
+    not."""
     import uitree_conf as C
     fx = os.path.join(ROOT, "tests", "fixtures")
-    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "t:m", "f:1", "k:down", "t:m"],
-                          cart=os.path.join(fx, "uitree_more_wasm.moy"))
+    cart = os.path.join(fx, "uitree_more_wasm.moy")
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "t:m", "f:1", "k:down", "k:a", "f:1", "t:m"], cart=cart)
     assert [l for l in trace if l.startswith("action more")] == [
         "action more from key more on 'tools' on 'Tools'"]
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "k:down", "f:1", "t:m"], cart=cart)
+    assert len([l for l in trace if l.startswith("action more")]) == 1, "a focused field's edit is closed"
     trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "t:m"], cart=os.path.join(fx, "uitree_morerow_wasm.moy"))
     assert [l for l in trace if l.startswith("action open from")] == [
         "action open from key more on 'b/open' on 'Shelf'"]
@@ -370,8 +373,30 @@ def test_the_on_glass_tree_app_builds_and_draws_its_page_alike_each_run():
     builds, runs its frames with no row refused and draws a page of the
     look's colours, the same crc on each run of a tier."""
     import on_glass
-    keys, desk = (("moy", "dark", 0), (320, 240, False)), (("moy", "light", 3), (1024, 600, True))
+    keys = (("moy", "dark", 0), (320, 240, False, 1, None))
+    desk = (("moy", "light", 3), (1024, 600, True, 1, 7.0))      # the Waveshare P4's
     pm, crc = on_glass.app_tree_host_page(*keys)
     assert pm[on_glass._UI_FRAMES] > 0 and pm[on_glass._UI_FAIL] == 0, pm[:10]
     assert on_glass.app_tree_host_page(*keys)[1] == crc
     assert on_glass.app_tree_host_page(*desk)[1] not in (crc, 0)
+
+
+def test_the_on_glass_page_crc_is_the_same_in_either_byte_order(monkeypatch):
+    """The page's crc (on_glass._RUN_CRC) sums RGB565 words high byte first
+    whatever order the canvas holds them in (device_canvas.WIRE_SWAPPED): a
+    P4's page, held low byte first, sums as the host's does."""
+    import types
+    import on_glass
+    from runtime.host_canvas import make_system_canvas  # noqa: F401 -- installs device_canvas
+    import device_canvas
+    w = 330
+    hi = bytearray((7 * i + i // 640) & 0xFF for i in range(2 * w * 170))
+    lo = bytearray(hi[i ^ 1] for i in range(len(hi)))
+
+    def crc(buf, swapped):
+        monkeypatch.setattr(device_canvas, "WIRE_SWAPPED", swapped)
+        ws = types.SimpleNamespace(run=types.SimpleNamespace(
+            canvas=types.SimpleNamespace(_buf=buf, w=w)))
+        return eval(on_glass._RUN_CRC, {"ws": ws})
+
+    assert crc(lo, False) == crc(hi, True) not in (0, crc(lo, True))

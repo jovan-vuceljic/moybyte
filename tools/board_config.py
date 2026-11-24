@@ -1243,6 +1243,9 @@ def main(argv):
     if len(argv) >= 3 and argv[1] == "native-dest":
         print(native_dest(argv[2]))
         return 0
+    if len(argv) >= 3 and argv[1] == "web-console":
+        print(web_console(argv[2]))
+        return 0
     if len(argv) >= 3 and argv[1] == "list":
         for name in sorted(staged_modules(argv[2])):
             print(name)
@@ -1280,7 +1283,7 @@ def main(argv):
     print(__doc__.strip().splitlines()[0], file=sys.stderr)
     print("usage: board_config.py stage|stage-native|list|list-native "
           "<board_dir>", file=sys.stderr)
-    print("       board_config.py native-dest|impls|headroom-floor <board_dir>",
+    print("       board_config.py native-dest|impls|headroom-floor|web-console <board_dir>",
           file=sys.stderr)
     print("       board_config.py mirror SRC DEST [--ignore PATTERN]...",
           file=sys.stderr)

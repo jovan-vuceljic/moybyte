@@ -495,6 +495,8 @@ def test_a_held_keys_repeats_type_into_a_field(th):
     for _ in range(3):
         frame()
     assert e.focus_key == "text"
+    frame(key=13)                         # Enter opens the field's edit
+    frame()
     frame(key=ord("a"))
     frame(keyrep=ord("a") | 3 << 16)
     assert s.text == "aaaa"

@@ -47,6 +47,11 @@ void *moycore_ui_target(void);
 // face calls it for each canvas the walk draws). 1 drawn, 0 the module exports
 // none, -1 it trapped.
 int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t h);
+// A compiled app's canvas keys=, from that module: its exported
+// `_uitree_keys(node)`, called before the frame while that canvas holds focus.
+// 1 it took the tick's keys, 0 it left them (or the module exports none), -1
+// it trapped.
+int moycore_ui_keys_call(int32_t node);
 
 // The run's snapshot (native/moycore/moycore_run.h: SNAP_LEN words, NULL
 // with no run), the tick it is of and the run's serial: moycore_run.c's.

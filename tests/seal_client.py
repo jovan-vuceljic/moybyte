@@ -22,6 +22,7 @@ _SIGS = (
     ("moy_sw_key", [_P, _P], _I),
     ("moy_sw_token", [_P, _P], _I),
     ("moy_sw_pake", [_P, _P], _I),
+    ("moy_sw_claim", [_P, _P], _I),
     ("moy_sw_confirm", [_Z], _I),
     ("moy_sw_done", [_Z], _I),
     ("moy_sw_kid", [], _P),
@@ -150,6 +151,13 @@ class Browser:
         if n < 0:
             raise AssertionError("the board's confirmation did not check")
         self._finish(got(n))
+
+    def claim(self, claim_hex, password):
+        """The board's first password by its Improv claim: the record made
+        here, then a pairing by that password, as the console's page does."""
+        n = lib().moy_sw_claim(claim_hex.encode(), password.encode())
+        self._auth(self._request(n))
+        self.pair_password(password)
 
     def seal(self, method, path, body=b""):
         """(target, sealed body, seq) of one request."""

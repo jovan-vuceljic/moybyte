@@ -110,6 +110,9 @@ moy_ui_keep_t *mua_keep(moy_ui_ctx_t *c, uint32_t id, int kind);
 // (id not 0) field id's (moy_ui_api_table.c).
 void mua_edits_drop(moy_ui_inst_t *I, const moy_ui_ctx_t *c, uint32_t id);
 moy_ui_keep_t *mua_keep_of(moy_ui_ctx_t *c, uint32_t id);
+// Whether the keys type in field stop `f` (its record `k`, or NULL): its edit is open, or it is an
+// edit="open" field whose edit opens as it draws.
+int mua_field_types(const moy_ui_stop_t *f, const moy_ui_keep_t *k);
 const moy_ui_stop_t *mua_page_of_keep(const moy_ui_stop_t *v, int n,
                                       const moy_ui_keep_t *k);
 int mua_aim(moy_ui_keep_t *k, const moy_ui_stop_t *p, int32_t to);

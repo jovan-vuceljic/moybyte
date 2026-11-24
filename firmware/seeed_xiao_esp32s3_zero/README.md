@@ -33,9 +33,14 @@ became the thing a kid's carts actually live on. Three properties a pushed tree
 cannot have started to matter:
 
 - **The browser console is the page the image names.** The image carries
-  the digest of the bundle it was built with, and the board serves only the
+  the digests of the pack it was built with, and the board serves only the
   add-on cart whose pack has that digest (`native/moy_net/moy_page.h`), so the
-  page a board serves cannot drift behind the board serving it. This board had
+  page a board serves cannot drift behind the board serving it. It keeps its
+  copy (`[web] console` unset), so `/` sends a browser to it, and
+  `/loader.html` serves the loader (`docs/web_console_online_2026-11.md` §3),
+  which boots the same pack from the browser's cache, this board's copy
+  (`/p/<12 hex>/moybyte_web.pack`, whole) or a mirror. It is the C3 Zero's root,
+  whose store holds no copy. This board had
   no image, so it was the last place the drift survived — its bundle was only
   ever a copy somebody pushed.
 - **A second app slot**, so the board can be updated by anyone who is not
@@ -43,7 +48,7 @@ cannot have started to matter:
 - **One declaration of what it runs.** The module set was a `cp` list in a shell
   script — the exact thing that falls behind the code it is a list of, which had
   already happened here once (`moy_store.mjs` became an asset the worker
-  statically imports and the hand-list missed it the same day, which is a
+  imports and the hand-list missed it the same day, which is a
   console that cannot boot). `board.toml` is the declaration now, and
   `tests/test_staging_closure.py` derives this board's frozen set from it and
   asserts every import of every staged module resolves on this target — the same
@@ -327,6 +332,16 @@ The board id inside a signed manifest is **`xiao_zero`**, which is also its CI
 matrix row and the `latest-xiao_zero.json` a device asks for. Channels are the
 repo's two: `dev` → beta/`unstable`, `master` → stable.
 
+## First setup over the cable: Improv (2026-11-24)
+
+The flasher on os.moybyte.com, My consoles or any other Improv Wi-Fi client
+names this board, puts it on a network and gets its address back over the
+USB cable; `docs/web_console_online_2026-11.md` §7 is the authority. What
+is this board's: `MOY_IMPROV` in its mpconfigboard.h, the store host's
+answers in `device/zero_improv.py` (from the setup access point too, which
+a join over the cable ends without a reset), and the REPL kept as the
+recovery console, Ctrl-C included.
+
 ## First-run setup, with no cable (`zero_setup.py`, #41)
 
 The radio is the kernel's WiFi driver (`native/moy_net/moy_wifi.c`): the
@@ -391,7 +406,8 @@ it, its keys file `/moy/system/webkeys`. What is true *here*:
 - **A browser pairs with the board's password.** A console pairs by its QR
   too; this board has no screen to draw one, so a board with no password pairs
   no browser. Setup's form takes one; `provision.sh --password` sets one for a
-  board that never saw that form. Pairing runs SPAKE2+ against the stored
+  board that never saw that form; and a board set up over the cable takes
+  its first from the browser its Improv answer's claim reaches (below). Pairing runs SPAKE2+ against the stored
   record, so the password never crosses the network, a copy of the record
   pairs no browser, and the browser keeps a key of its own from then on.
 - **Every route but the boot files and `GET /sync` is sealed** to a paired
@@ -403,7 +419,9 @@ it, its keys file `/moy/system/webkeys`. What is true *here*:
   the password forgets no browser.
 - **What stays open is the console's own boot files plus `GET /sync`.** A
   browser has to load the page before it can ask for anything, and the page has
-  to know a board is here before it knows to ask.
+  to know a board is here before it knows to ask. `/sync` also names the
+  pack's two digests and whether the board serves its copy, which the page's
+  own address already names to anyone who asks for `/`.
 
 ## The terminal (2026-11-07)
 

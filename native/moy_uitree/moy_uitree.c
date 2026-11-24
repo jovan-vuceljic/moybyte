@@ -847,12 +847,25 @@ static uint16_t up(int k)
     return k < 0 ? UIT_NONE : (uint16_t)k;
 }
 
+static int check_fail(uit_t *e, const char *code, char *out);
+
+void uit_set_app(uit_t *e, int app)
+{
+    e->app = (uint8_t)(app != 0);
+}
+
 int uit_node(uit_t *e, int kind, const char *key, int parent)
 {
     if (kind < UIT_PAGE || kind >= UIT_KINDS)
         return uit_fail(e, UIT_E_KIND, UIT_MSG("no kind %d", "%d"), kind);
     if ((parent < 0) != (kind == UIT_PAGE) || parent >= e->nnodes)
         return uit_fail(e, UIT_E_ARG, UIT_MSG("node %s: parent %d", "node %s %d"), key, parent);
+    if (e->app) {
+        char out[200];
+        int r = check_fail(e, uit_check_prop(uit_kind_names[kind], "", UIT_VC_APP, NULL, out, sizeof out), out);
+        if (r)
+            return r;
+    }
     if (UIT_GROW(e, nodes, nnodes, cnodes))
         return UIT_E_NOMEM;
     int k = pool_puts(e, key);
@@ -869,11 +882,11 @@ int uit_node(uit_t *e, int kind, const char *key, int parent)
     if (kind == UIT_FIELD)
         N.btn = 32;
     if (kind == UIT_SPLIT)
-        N.btn = N.nbtn = GAP_M, N.lit = 1;          // pad="m", gap="m", align="center"
+        N.btn = N.nbtn = 8, N.lit = 1;              // pad=8, gap=8, align="center"
     if (kind == UIT_BUBBLE)
         N.btn = 75, N.nbtn = 4;                     // max=0.75, lines=4
     if (kind == UIT_GRID)
-        N.btn = GAP_0, N.nbtn = GAP_S, N.lit = 0x11;  // no pad, gap="s", 1 x 1
+        N.btn = 0, N.nbtn = 6, N.lit = 0x11;        // pad=0, gap=6, 1 x 1
     if (kind == UIT_PANES)
         N.nbtn = 6;                                 // the gutter, desk units
     if (kind == UIT_SWITCH) {
@@ -1048,11 +1061,26 @@ static int pane_prop(uit_t *e, int node, const char *name, const char *src, cons
     return add_prop(e, node, name, src, repr, PK_LIT, -1);
 }
 
+// The check's refusal (`uit_check_prop`'s `out`) as the store's error: 0 where it took the name, or
+// where the kind is the store's own (switch, case, row, panel), which the check has no row for.
+static int check_fail(uit_t *e, const char *code, char *out)
+{
+    if (!code || !strncmp(out, "no kind", 7))
+        return 0;
+    char *what = out, *expected = strchr(what, '\x1f');
+    *expected++ = 0;
+    char *fix = strchr(expected, '\x1f');
+    *fix++ = 0;
+    fix[strcspn(fix, "\x1f")] = 0;
+    return uit_check_fail(e, code, UIT_MSG("%s; fix: %s%s%s%s", "%s%.0s%.0s%.0s%.0s"), what, fix,
+                          expected[0] ? " (expected " : "", expected, expected[0] ? ")" : "");
+}
+
 // The API's check at lowering, so a front that carries no check (a compiled app's) is held to the
-// contract's table as the others are: a prop name no kind takes, a retired one, a word not the prop's,
-// one the spec designs and no engine builds. What a kind does not take by name in the API is the
-// store's own: a node's binding (`bind`, `field`) and the head of the kinds whose head the store
-// keeps by name (HEADS), which the API gives by position.
+// contract's table as the others are: a prop name no kind takes, a retired one, a word not the
+// prop's, and in an app's store (`uit_set_app`) the shell's own. What a kind does not take by name
+// in the API is the store's own: a node's binding (`bind`, `field`) and the head of the kinds whose
+// head the store keeps by name (HEADS), which the API gives by position.
 static int api_check(uit_t *e, int kind, const char *name, const char *src)
 {
     static const struct {
@@ -1071,16 +1099,7 @@ static int api_check(uit_t *e, int kind, const char *name, const char *src)
                 return 0;
     }
     char out[600];
-    const char *code = uit_check_prop(kn, name, UIT_VC_ANY, src, out, sizeof out);
-    if (!code || !strncmp(out, "no kind", 7))
-        return 0;           // a kind of the store's own (switch, case, row, panel) checks nothing here
-    char *what = out, *expected = strchr(what, '\x1f');
-    *expected++ = 0;
-    char *fix = strchr(expected, '\x1f');
-    *fix++ = 0;
-    fix[strcspn(fix, "\x1f")] = 0;
-    return uit_check_fail(e, code, UIT_MSG("%s; fix: %s%s%s%s", "%s%.0s%.0s%.0s%.0s"), what, fix,
-                          expected[0] ? " (expected " : "", expected, expected[0] ? ")" : "");
+    return check_fail(e, uit_check_prop(kn, name, e->app ? UIT_VC_APP : UIT_VC_ANY, src, out, sizeof out), out);
 }
 
 int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *repr)
@@ -1368,17 +1387,29 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= bit;
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & bit) != 0);
     }
-    if (kind == UIT_SPLIT && (!strcmp(name, "pad") || !strcmp(name, "gap") || !strcmp(name, "align"))) {
-        static const char *const GAPS[] = {"s", "m", "l", "0"}, *const ALIGNS[] = {"start", "center", "end"};
-        int i = name[0] == 'a' ? lit_index(src, ALIGNS, 3) : lit_index(src, GAPS, 4);
+    if ((kind == UIT_SPLIT || kind == UIT_GRID) && (!strcmp(name, "pad") || !strcmp(name, "gap"))) {
+        // an int at 1x (the engine scales it), given as a literal
+        long v = -1;
+        if (*src >= '0' && *src <= '9') {
+            char *end;
+            v = strtol(src, &end, 10);
+            v = *end || v > 255 ? -1 : v;
+        }
+        if (v < 0)
+            return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is not an int from 0 to 255", "%s %s %s"),
+                                  uit_kind_names[kind], name, src);
+        if (name[0] == 'p')
+            N->btn = (uint16_t)v;
+        else
+            N->nbtn = (uint16_t)v;
+        return add_prop(e, node, name, src, repr, PK_LIT, (int32_t)v);
+    }
+    if (kind == UIT_SPLIT && !strcmp(name, "align")) {
+        static const char *const ALIGNS[] = {"start", "center", "end"};
+        int i = lit_index(src, ALIGNS, 3);
         if (i < 0)
             return uit_fail(e, UIT_E_KIND, UIT_MSG("split %s=%s", "%s %s"), name, src);
-        if (name[0] == 'p')
-            N->btn = (uint16_t)i;
-        else if (name[0] == 'g')
-            N->nbtn = (uint16_t)i;
-        else
-            N->lit = (uint8_t)((N->lit & SP_RULE) | i);
+        N->lit = (uint8_t)((N->lit & SP_RULE) | i);
         return add_prop(e, node, name, src, repr, PK_LIT, i);
     }
     if (kind == UIT_SPLIT && !strcmp(name, "rule")) {
@@ -1386,17 +1417,6 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         if (src[0] == 'T' || src[0] == '1')
             N->lit |= SP_RULE;
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & SP_RULE) != 0);
-    }
-    if (kind == UIT_GRID && (!strcmp(name, "pad") || !strcmp(name, "gap"))) {
-        static const char *const GAPS[] = {"s", "m", "l", "0"};
-        int i = lit_index(src, GAPS, 4);
-        if (i < 0)
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("grid %s=%s", "%s %s"), name, src);
-        if (name[0] == 'p')
-            N->btn = (uint16_t)i;
-        else
-            N->nbtn = (uint16_t)i;
-        return add_prop(e, node, name, src, repr, PK_LIT, i);
     }
     if (kind == UIT_GRID && (!strcmp(name, "cols") || !strcmp(name, "rows"))) {
         // cols in the lit's low nibble, rows in its high one
@@ -1630,6 +1650,15 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->btn = (uint16_t)strtol(src, NULL, 10);
         else if (!strcmp(src, "True"))
             N->lit |= name[0] == 'c' ? NL_COMMIT : NL_SECRET;
+        return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    }
+    if (kind == UIT_FIELD && (!strcmp(name, "edit") || !strcmp(name, "keys"))) {
+        // edit="open": focus coming onto it begins its edit; keys="number": the on-screen
+        // keyboard's layout for it (#239), which draws nothing (the contract checked the words)
+        if (!strcmp(src, "open"))
+            N->lit |= NL_OPEN;
+        else if (!strcmp(src, "number"))
+            N->lit |= NL_NUMBER;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
     if (kind == UIT_CELLS && !strcmp(name, "edge")) {

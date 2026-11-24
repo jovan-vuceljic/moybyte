@@ -135,7 +135,8 @@ typedef struct {
 
 // Node flags (`lit` of a two-way control).
 enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_SWATCH = 2, NL_BLOCKS = 2, NL_FIELD = 4,
-       NL_HIDE = 8, NL_PICS = 16, NL_EDGE = 16 };      // NL_EDGE: a cells' edge=True
+       NL_HIDE = 8, NL_PICS = 16, NL_EDGE = 16,         // NL_EDGE: a cells' edge=True
+       NL_OPEN = 16, NL_NUMBER = 32 };                  // a field's edit="open", keys="number"
 // A dialog's lit bits: kind="danger"; look="keys" (no button row on the T-Deck).
 enum { DL_DANGER = 1, DL_KEYS = 2 };
 // A cards list's lit bits: look="carousel" (one row of tiles, its centre's words under it),
@@ -148,7 +149,6 @@ enum { TS_FLAT = 1 };
 // A label's text options (`nbtn`): wrap= in bits 0-1 (LT_WORD, LT_CHAR), its face's
 // role + 1 in bits 2-4, the toolkit's `centre` for align= in bits 5-7, lines= given.
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.
-enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 // A text view's options (`lit`); its syntax's index in `btn` (ui.py's _SYNTAXES).
 enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8, TV_GUTTER = 16 };
 // a scroll node's lit: follow=, snap=
@@ -169,7 +169,7 @@ enum { LT_WORD = 1, LT_CHAR = 2, LT_WRAP = 3, LT_FACE_SHIFT = 2, LT_ALIGN_SHIFT 
 
 typedef struct {
     uint8_t kind, lit;          // a label's tone, a button's kind; a seg's cycle look, a slider's
-                                // steps, a field's commit, secret and off="hide" (NL_*)
+                                // steps, a field's commit, secret, off="hide", edit= and keys= (NL_*)
     uint16_t parent, kid, last, next;
     uint16_t key;               // pool
     int16_t act;
@@ -354,6 +354,7 @@ struct uit {
     int nids, nprev, cids, cprev;
     uit_id_t focused;
     int has_focused;
+    uint8_t editing;            // the focused stop is a field whose edit is open (moy_ui_api_typing)
     char focus_key[UIT_ID_MAX + 1];
     char lost[UIT_ID_MAX + 1];      // the focus key a frame drew no stop for and owed the next for
     // events and trace
@@ -419,6 +420,7 @@ struct uit {
     int nvr, cvr;
     // the placed layout: each node's rect as the last pass placed it (w -1: not placed)
     uint8_t placed, placing;
+    uint8_t app;                // an app's store: the shell's own names are refused (`uit_set_app`)
     int16_t ground[4];
     char band_extra[48];        // the items its host adds to the band before Back, NUL-separated
     uint8_t nband_extra;
@@ -430,6 +432,7 @@ struct uit {
     uint8_t has_panes;
     int16_t du;                 // the desk unit the host hands (`uit_panes_set`)
     int16_t unit;               // a placed row's unit the host hands (0: 1 on a desk, else fs)
+    int16_t sc;                 // the scale a 1x spacing is multiplied by (`uit_set_scale`; 0: 2 on a desk, else fs)
     int16_t pane_cur;           // the pane the keys reach, -1 none
     int16_t late[8];            // the popovers and dialogs a stack draws last, over it
     int nlate;

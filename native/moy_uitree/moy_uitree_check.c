@@ -11,6 +11,7 @@
 
 #define PNAME(P) (UIT_SSTR + (P)->name)
 #define PWORDS(P) ((P)->words ? UIT_SSTR + (P)->words : NULL)
+#define PSHELL(P) ((P)->shell ? UIT_SSTR + (P)->shell : NULL)
 #define NKINDS (sizeof UIT_SKINDS / sizeof UIT_SKINDS[0])
 #define NRETIRED (sizeof UIT_SRETIRED / sizeof UIT_SRETIRED[0])
 
@@ -75,8 +76,6 @@ static void near(const uit_skind_t *K, const char *word, char *out, size_t n)
     int score[2] = {-1, -1};
     for (int i = 0; i < K->n; i++) {
         const uit_sprop_t *P = &UIT_SPROPS[K->first + i];
-        if (P->flags & UIT_SF_DESIGNED)
-            continue;
         int s = ratio_x1000(PNAME(P), word);
         if (s < 600)
             continue;
@@ -103,8 +102,7 @@ static size_t takes(const uit_skind_t *K, char *out, size_t n)
     out[0] = 0;
     for (int i = 0; i < K->n && at < n; i++) {
         const uit_sprop_t *P = &UIT_SPROPS[K->first + i];
-        if (!(P->flags & UIT_SF_DESIGNED))
-            at += (size_t)snprintf(out + at, n - at, "%s%s", at ? ", " : "", PNAME(P));
+        at += (size_t)snprintf(out + at, n - at, "%s%s", at ? ", " : "", PNAME(P));
     }
     return at < n ? at : n - 1;
 }
@@ -180,17 +178,19 @@ static void class_fix(const char *prop, int type, char *fix, size_t n)
 const char *uit_check_prop(const char *kind, const char *prop, int vc, const char *word, char *out, size_t n)
 {
     char what[96], expected[400], fix[sizeof expected + 64];
-    int builds = vc & UIT_VC_BUILDS;
-    vc &= ~UIT_VC_BUILDS;
+    int app = vc & UIT_VC_APP;
+    vc &= ~UIT_VC_APP;
     const uit_skind_t *K = kind_of(kind);
     if (!K) {
         snprintf(what, sizeof what, "no kind '%s'", kind);
         return say(out, n, "N01", what, "", "a kind of the UI API (\xc2\xa7" "7)");
     }
-    if ((K->flags & UIT_SF_DESIGNED) && !builds) {
-        snprintf(what, sizeof what, "ui.%s is designed, not built yet", kind);
-        return say(out, n, "N01", what, "", "another kind, until it is built");
+    if (app && (K->flags & UIT_SF_SHELL)) {
+        snprintf(what, sizeof what, "ui.%s is the shell's own, not an app's", kind);
+        return say(out, n, "N09", what, "", "an app's own kind");
     }
+    if (!prop[0])
+        return NULL;
     const uit_sprop_t *P = prop_of(K, prop);
     if (!P) {
         const char *why = retired(kind, prop);
@@ -206,10 +206,6 @@ const char *uit_check_prop(const char *kind, const char *prop, int vc, const cha
             snprintf(fix, sizeof fix, "drop it; %s takes %s", kind, expected[0] ? expected : "none");
         return say(out, n, "N01", what, expected[0] ? expected : "(none)", fix);
     }
-    if ((P->flags & UIT_SF_DESIGNED) && !builds) {
-        snprintf(what, sizeof what, "ui.%s has no prop '%s' yet: the spec designs it", kind, prop);
-        return say(out, n, "N01", what, "", "drop it, until it is built");
-    }
     if (vc != UIT_VC_ANY && vc < (int)(sizeof VC_NAMES / sizeof VC_NAMES[0]) && !(classes(P->type) & (1u << vc))) {
         snprintf(what, sizeof what, "ui.%s %s= is %s", kind, prop, VC_NAMES[vc]);
         class_fix(prop, P->type, fix, sizeof fix);
@@ -220,7 +216,15 @@ const char *uit_check_prop(const char *kind, const char *prop, int vc, const cha
         class_fix(prop, P->type, fix, sizeof fix);
         return say(out, n, "N01", what, "an int, or '{NAME}' of an int", fix);
     }
+    if (app && (P->flags & UIT_SF_SHELL)) {
+        snprintf(what, sizeof what, "ui.%s %s= is the shell's own, not an app's", kind, prop);
+        return say(out, n, "N09", what, "", "drop it");
+    }
     const char *words = PWORDS(P);
+    if (app && P->shell && word && word[0] != '{' && has_word(PSHELL(P), word)) {
+        snprintf(what, sizeof what, "ui.%s %s='%s' is the shell's own, not an app's", kind, prop, word);
+        return say(out, n, "N09", what, "", "another of its words");
+    }
     if (words && word && word[0] != '{' && !has_word(words, word)) {
         snprintf(what, sizeof what, "ui.%s %s='%s'", kind, prop, word);
         size_t i = 0;

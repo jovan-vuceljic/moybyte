@@ -66,7 +66,7 @@ ui.action("pick_close", "Close", pick_close, hint="Close")
 def build():
     with ui.page(""):
         with ui.row("find_strip", shown="finding", close="find_close"):
-            ui.field("", "find_q", 32, hint="Find")
+            ui.field("", "find_q", 32, hint="Find", edit="open")
             ui.status("{code.match} of {code.matches}", shown="find_q")
         ui.text_editor("code", find="find_q", find_on="finding", marks="marks", gutter="gutter_on",
                        focus=True)

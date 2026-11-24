@@ -297,7 +297,7 @@ def files_page():
                     ui.button("empty", "danger", icon="trash", alone=True)
                 ui.button(field, _KINDS.get(v, "normal"), icon=_ICONS[v], alone=True)
         with ui.dialog("Rename", ["cancel", "rename_it"], shown="asking=rename"):
-            ui.field("Name", "typed", ListShellApp.RENAME_MAX, on="rename_it")
+            ui.field("Name", "typed", ListShellApp.RENAME_MAX, on="rename_it", edit="open")
         with ui.dialog("Empty the Trash?", ["cancel", "empty_it"], kind="danger", shown="asking=empty"):
             ui.label("{empty_line}", wrap="word")
         with ui.dialog("Use in a game", ["cancel", "add"], shown="asking=game"):

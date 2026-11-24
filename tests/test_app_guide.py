@@ -3,7 +3,7 @@
 for its leading comment (section 4's second page a run of one), the first
 app is what `moy app new` writes on each tier, and its error table is the
 contract's codes, each with its meaning and fix
-(tests/uitree_contract/contract.json)."""
+(native/moy_uitree/contract.json)."""
 
 import json
 import os
@@ -52,7 +52,7 @@ def block(rel):
 def error_rows():
     """The error table's rows: every code of the contract, its meaning and
     its fix (Python's, else Lua's, else C's)."""
-    with open(os.path.join(ROOT, "tests", "uitree_contract", "contract.json")) as f:
+    with open(os.path.join(ROOT, "native", "moy_uitree", "contract.json")) as f:
         codes = json.load(f)["codes"]
     rows = ["| code | the mistake | the fix |", "|---|---|---|"]
     for code in sorted(codes):

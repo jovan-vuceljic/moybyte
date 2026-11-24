@@ -1240,16 +1240,17 @@ class SettingsLayer(Layer):
         return None if self.wifi_pick is not None else self._input_host()
 
     def typing(self):
-        """A field on Settings has focus: the Name row, or the Wi-Fi password
-        prompt."""
+        """A field on Settings types: the Name row's open edit, or the Wi-Fi
+        password prompt."""
         if self.page == "wifi":
             return self.wifi_pick is not None
-        return self.page is None and self._focused == "name" and self.ws.text.can_type()
+        return (self.page is None and self._focused == "name" and self.ws.text.can_type()
+                and Layer.typing(self))
 
     def cancel(self):
-        """Mic in a field: the password prompt closes; the Name gets back the
-        text it had when typing began and focus steps up off it (the
-        toolkit's cancel)."""
+        """Mic in a field: the password prompt closes; the Name's open edit
+        ends with the text it began from, focus staying on it (the toolkit's
+        cancel)."""
         if self.page == "wifi":
             if self.wifi_pick is None:
                 return False
