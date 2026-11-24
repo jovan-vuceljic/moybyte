@@ -1,7 +1,7 @@
-"""The text view (native/moy_ui/moy_ui_text.h, `ui.text_view`;
-docs/history/scroll_and_text_2026-10.md §5): the Code tab's and theme Config's rows,
-the desk's made code and an app's terminal, drawn in C through the verb, and
-only the rows that changed.
+"""The text view (native/moy_ui/moy_ui_text.h;
+docs/history/scroll_and_text_2026-10.md §5): the Code tab's and theme Config's rows
+and the desk's made code, drawn in C through the verb, and only the rows
+that changed.
 
 Each Code session runs on two consoles fed the same input: one as it ships,
 and one whose Code tab draws every frame whole (its host never shifts) -- on
@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 import text_twin
-from runtime import appearance, code_layer, host_app, moy_input, ui, ui_draw
+from runtime import appearance, code_layer, host_app, moy_input, ui_draw
 from ws_helpers import no_unlock_banner, quiesce
 
 _C = ui_draw._C
@@ -26,32 +26,26 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_the_options_are_the_headers():
-    """ui.text_view's options and the host binding's defaults are
+    """The text view's options and the host binding's defaults are
     moy_ui_api.h's MOY_UI_TXO_*."""
     src = (ROOT / "native" / "moy_ui" / "moy_ui_api.h").read_text()
     body = src[src.index("MOY_UI_TXO_ROWS = 0"):src.index("MOY_UI_TXO_LEN")]
     names = re.findall(r"MOY_UI_TXO_([A-Z0-9_]+)", body)
     from runtime import moy_ui_binding
-    assert len(names) == moy_ui_binding._TXO_LEN == len(ui._TXO)
+    assert len(names) == moy_ui_binding._TXO_LEN
     words = re.search(r"#define MOY_UI_TXO_DEFAULTS \{([^}]*)\}", src).group(1).split(",")
     want = tuple(ui_draw.SYN_SGR if w.strip() == "MOY_UI_SYN_SGR" else int(w) for w in words)
     assert want == moy_ui_binding._TXO_DEFAULTS
 
 
 def test_the_syntaxes_are_named_alike_in_every_face():
-    """A syntax's name is its MOY_UI_SYN_* number's place among the names,
-    in the Python face, the Lua face and ui_draw's table alike."""
+    """A syntax's name is its MOY_UI_SYN_* number in ui_draw's table."""
     head = (ROOT / "native" / "moy_ui" / "moy_ui_text.h").read_text()
     body = head[head.index("MOY_UI_SYN_NONE = 0"):head.index("MOY_UI_SYN_N\n")]
     syns = re.findall(r"MOY_UI_SYN_([A-Z]+)", body)
-    lua = (ROOT / "native" / "moycore" / "moycore_ui.h").read_text()
-    names = re.search(r"syn\[\] = \{([^}]*)\}", lua).group(1)
-    names = tuple(n.strip().strip('"') for n in names.split(","))
-    assert names == ui._SYNTAXES
-    assert len(names) == len(syns)
-    for i, name in enumerate(names[1:], 1):
+    assert len(ui_draw.SYNTAX) == len(syns) - 1
+    for name, i in ui_draw.SYNTAX.items():
         assert syns[i] == name.upper()
-        assert ui_draw.SYNTAX[name] == i
 
 
 # -- the runs ------------------------------------------------------------------------
@@ -507,301 +501,3 @@ def test_theme_config_draws_the_pythons_pixels(tmp_path, bufs, windowed):
     p = Pair(tmp_path, bufs, windowed)
     _config_session(p)
     assert p.floors() >= 0.6 * len(p.kinds), p.kinds
-
-
-# -- the verb: ui.text_view as an app's terminal ---------------------------------------
-
-def _first_diff(a, b):
-    i = next(i for i in range(0, len(a), 2) if a[i:i + 2] != b[i:i + 2]) // 2
-    return (i % 320, i // 320)
-
-
-class Term:
-    """A terminal on the verb: a scrollback that follows its foot, names in
-    SGR colours, an input line with its caret."""
-
-    def __init__(self, n=3):
-        self.log = ["\x1b[36mmoy\x1b[0m: hello", "\x1b[32mana\x1b[0m: hi there",
-                    "\x1b[90m-- joined --\x1b[0m"][:n]
-        self.typed = "ls"
-        self.out = None
-
-    def add(self, k=1):
-        for _ in range(k):
-            n = len(self.log)
-            self.log.append("\x1b[3%dmuser%d\x1b[0m: line %d of the log, a little longer than "
-                            "most of them" % (1 + n % 6, n % 7, n))
-
-    def draw(self, cv):
-        ui.page("Term")
-        self.out = ui.text_view("log", self.log, {"rows": 9, "follow": True, "wrap": True})
-        ui.text_view("input", ["> " + self.typed], {"rows": 1, "syntax": "plain",
-                                                     "caret": (0, 2 + len(self.typed))})
-        ui.end()
-
-
-class TermRig:
-    """The terminal drawn twice a frame: on `bufs` buffers presented in turn,
-    its frames free to shift and draw rows, and on one buffer, whole."""
-
-    def __init__(self, th, bufs=1):
-        from runtime.host_canvas import make_system_canvas
-        self.th = th
-        self.app = Term()
-        self.bufs = bufs
-        self.cv = make_system_canvas(320, 240)
-        self.cv.RETAINED_FRAMES = bufs
-        self.ref = make_system_canvas(320, 240)
-        self.a = ui_draw.AppHost()
-        self.b = ui_draw.AppHost()
-        self.n = 0
-        self.held = [bytes(self.cv._buf)]
-        self.kinds = []
-        self.texts = []
-
-    def frame(self):
-        ui_draw.frame_dt(16)
-        for host, cv, alone in ((self.a, self.cv, True), (self.b, self.ref, False)):
-            ui_draw.paint_frame(self.n, alone)
-            cv.gate_counts_reset()
-            host.begin(cv, self.th, (0, 0, 320, 240))
-            self.app.draw(cv)
-            if alone:
-                self.kinds.append(ui_draw.change_take())
-                self.texts.append(cv.gate_counts()[1])
-        self.n += 1
-        shot, want = bytes(self.cv._buf), bytes(self.ref._buf)
-        assert shot == want, "frame %d (%s, %d buffers) differs from a whole draw at %s" % (
-            self.n, self.kinds[-1], self.bufs, _first_diff(shot, want))
-        self.held.append(shot)
-        if self.bufs > 1:
-            self.cv._comp.last = shot
-            self.cv._buf[:] = self.held[-self.bufs] if len(self.held) > self.bufs else self.held[0]
-        del self.held[:-self.bufs]
-
-    def point(self, x, y, click, down):
-        self.a.point(x, y, click, down)
-        self.b.point(x, y, click, down)
-
-
-@pytest.fixture
-def th(tmp_path):
-    from ws_helpers import build_ws
-    return build_ws(tmp_path).theme_colors
-
-
-@pytest.mark.parametrize("bufs", (1, 2, 3))
-def test_a_terminal_appends_follows_and_scrolls(th, bufs):
-    """Lines come while the view is at its foot: it glides down to the new
-    foot; a drag scrolls the scrollback up and its release coasts; typed
-    keys change the input line alone. Every frame is a whole draw's."""
-    r = TermRig(th, bufs)
-    for _ in range(3):
-        r.frame()
-    for _ in range(12):                 # lines come: the view follows its foot
-        r.app.add()
-        for _ in range(4):
-            r.frame()
-    top = r.app.out[0]
-    assert top > 0, "the view did not follow its foot"
-    r.point(160, 60, True, True)        # a drag down the scrollback: older lines
-    r.frame()
-    for y in range(70, 140, 10):
-        r.point(160, y, False, True)
-        r.frame()
-    r.point(160, 140, False, False)
-    for _ in range(30):
-        r.frame()
-    assert r.app.out[0] < top, "the drag did not scroll the scrollback"
-    for ch in "la":                     # typing on the input line
-        r.app.typed += ch
-        r.frame()
-    r.app.add(2)                        # lines come while scrolled up: it stays
-    held = r.app.out[0]
-    for _ in range(4):
-        r.frame()
-    assert r.app.out[0] == held
-    floors = sum(1 for k in r.kinds if k in ("rows", "shift"))
-    assert floors >= len(r.kinds) // 2, r.kinds
-
-
-def test_a_line_added_below_the_view_draws_no_history(th):
-    """While the view is scrolled up, a line added below it draws none of the
-    history the view shows: the frame's text is the page's title and the
-    input line, drawn every frame outside the region, and the rows under
-    the foot's fade, which the rows' growth moved -- two where the view
-    stands part way down a row, three colour runs each."""
-    r = TermRig(th, 1)
-    r.app.add(30)
-    for _ in range(40):
-        r.frame()
-    r.point(160, 60, True, True)
-    r.frame()
-    for y in range(80, 200, 20):
-        r.point(160, y, False, True)
-        r.frame()
-    r.point(160, 200, False, False)
-    for _ in range(60):
-        r.frame()
-    r.texts.clear()
-    r.app.add()
-    r.frame()
-    assert r.texts[-1] <= 2 + 2 * 3, r.texts
-
-
-def _cart_pixels(ws):
-    ns = ws.run.player.ns
-    cv = ns["screen"]()
-    x, y, w, h = ns["content_rect"]()
-    buf = cv._buf
-    out = bytearray()
-    for j in range(y, y + h):
-        out += buf[2 * (j * cv.w + x):2 * (j * cv.w + x + w)]
-    return bytes(out)
-
-
-def _cart_pmem(ws):
-    lua = getattr(ws.run.player, "lua", None)
-    if lua is not None and hasattr(lua._run, "pmem"):
-        return list(lua._run.pmem()[1])[:3]
-    if lua is not None:
-        import sys
-        from array import array
-        img = array("i", bytearray(4 * 256))
-        sys.modules[type(lua).__module__]._moycore.pmem_image(img)
-        return list(img)[:3]
-    pm = ws.run.player.ns["pmem"]
-    return [pm(i) for i in range(3)]
-
-
-def test_the_terminal_is_one_app_in_python_and_lua(tmp_path):
-    """tests/fixtures/ui_term's terminal, in Python and in Lua: lines come and
-    the view follows them, a drag scrolls it back; the two answer the same
-    lines shown every frame, and draw the same pixels wherever nothing
-    moves (a glide's or a coast's steps are each runtime's clock: the
-    Python app's the loop's tick, the Lua run's its logic ticks')."""
-    import shutil
-    from ws_helpers import make_drv, open_cart
-    root = str(tmp_path / "carts")
-    host_app.moy_carts.ensure_dirs(root)
-    for d in ("term_py.moy", "term_lua.moy"):
-        shutil.copytree(str(ROOT / "tests" / "fixtures" / "ui_term" / d),
-                        str(Path(root) / d))
-    runs = {}
-    for name, title in (("python", "UI Term Py"), ("lua", "UI Term Lua")):
-        ws = host_app.build_workstation(root)
-        ws.look.set_theme("moy", persist=False, variant="dark")
-        ws.pointer.visible = False
-        open_cart(ws, title)
-        drv = make_drv(ws)
-        shots = []
-        for k in range(130):
-            if k == 70:
-                drv.touch(160, 60)
-            elif 70 < k < 77:
-                drv.touch_drag(160, 60 + (k - 70) * 12)
-            elif k == 77:
-                drv.touch_up()
-            quiesce(ws)
-            ws.mark_dirty()
-            drv.frame(1 / 30)
-            assert ws.run.player.cart_error is None, (name, ws.run.player.cart_error)
-            shots.append((_cart_pixels(ws), _cart_pmem(ws)))
-        runs[name] = shots
-        ws.spine.exit()
-    py, lua = runs["python"], runs["lua"]
-    for k in range(len(py)):
-        assert py[k][1][0] == lua[k][1][0], (k, py[k][1], lua[k][1])
-    for k in list(range(6)) + [69, 129]:          # before the lines come; settled
-        assert py[k][1] == lua[k][1], (k, py[k][1], lua[k][1])
-        assert py[k][0] == lua[k][0], "frame %d: the Lua terminal drew other pixels" % k
-    assert py[69][1][1] > 0, "the view did not follow its lines"
-    assert py[129][1][1] < py[69][1][1], "the drag did not scroll it back"
-
-
-# -- a note's caret revealed (ui_draw.text_reveal, Notes' EditorHandle.aim) ----------
-
-
-class Note:
-    """A wrapped note on the verb, its caret where the test puts it."""
-
-    def __init__(self):
-        self.lines = ["Line %d of the note, with words enough to wrap past the edge" % i
-                      for i in range(40)]
-        self.caret = (0, 0)
-        self.out = None
-
-    def draw(self, cv):
-        ui.page("Note")
-        self.out = ui.text_view("note", self.lines, {"rows": 8, "wrap": True,
-                                                     "syntax": "plain", "caret": self.caret})
-        ui.end()
-
-
-class NoteRig(TermRig):
-    def __init__(self, th, bufs=1):
-        TermRig.__init__(self, th, bufs)
-        self.app = Note()
-
-    def reveal(self, line, col):
-        got = [ui_draw.text_reveal(h, "note", self.app.lines, line, col)
-               for h in (self.a, self.b)]
-        assert got[0] == got[1]
-        return got[0]
-
-    def ends(self):
-        """The (line, column) the view's top and foot pixel rows show, as
-        its last pass drew it."""
-        got = [ui_draw.text_at(self.a, "note", 40, y) for y in range(240)]
-        shown = [g for g in got if g is not None]
-        return shown[0], shown[-1]
-
-
-@pytest.mark.parametrize("bufs", (1, 2, 3))
-def test_a_caret_revealed_moves_the_view_only_as_far_as_its_row(th, bufs):
-    """A wrapped note's caret, put on a row under the view, brings the view
-    down until that row is its last, as the frame's shift; a caret it shows
-    already moves nothing; a line asked for first (col -1) shows its first
-    row at the top; and a caret above the view brings its row to the top.
-    Every frame is a whole draw's."""
-    r = NoteRig(th, bufs)
-    for _ in range(3):
-        r.frame()
-    assert r.app.out[0] == 0
-    n = len(r.app.lines[4])
-    r.app.caret = (4, n)                # the last row of line 4: just under the view
-    assert r.reveal(4, n)
-    r.frame()
-    assert r.kinds[-1] == "shift", r.kinds
-    top, foot = r.ends()
-    assert foot[0] == 4 and foot[1] > 40, "its row, line 4's second, is the view's last"
-    assert top[0] > 0
-    assert not r.reveal(4, n), "a caret the view shows moves nothing"
-    r.frame()
-    assert r.reveal(20, -1)             # line 20 first
-    r.frame()
-    assert r.ends()[0][0] == 20 and r.ends()[0][1] < 40 and r.app.out[0] == 20
-    assert r.reveal(2, 0)               # a caret above: its row at the top
-    r.frame()
-    assert r.ends()[0][0] == 2 and r.ends()[0][1] < 40
-
-
-def test_an_sgr_escape_mid_line_moves_no_glyph(th):
-    """A run after an escape draws at its own column, the escape's bytes
-    taking none: the line's ink lies where the plain line's does."""
-    from runtime.host_canvas import make_system_canvas
-
-    def ink(line):
-        cv = make_system_canvas(320, 240)
-        host = ui_draw.AppHost()
-        host.begin(cv, th, (0, 0, 320, 240))
-        ui.page("Ink")
-        ui.at(0, 40, 320, 40)
-        ui.text_view("ink", [line], {"rows": 1})
-        ui.end()
-        b = bytes(cv._buf)
-        ground = b[2 * (60 * 320 + 300):2 * (60 * 320 + 300) + 2]
-        return [x for x in range(320) if any(
-            b[2 * (y * 320 + x):2 * (y * 320 + x) + 2] != ground for y in range(44, 76))]
-
-    assert ink("\x1b[2m$ \x1b[0;36mls -l\x1b[0m /") == ink("$ ls -l /")
