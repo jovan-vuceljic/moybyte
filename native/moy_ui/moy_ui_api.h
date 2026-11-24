@@ -667,6 +667,7 @@ typedef struct {
     uint8_t drag_x;                 // the drag scrolls across (a table's rows side by side)
     int16_t last_x, last_y;         // the pointer last frame
     int8_t step_x, step_y;          // the steps a key the focused stop keeps makes, signed
+    int8_t carry_x, carry_y;        // a roll's steps past last frame's stops, walked next frame
     uint8_t keys, reveal, cls, fs;
     uint8_t win;                    // the page lies in a window's body (1), on a panel (2)
     uint8_t elsewhere;              // the keys are another surface's: no focus

@@ -460,6 +460,34 @@ def _tree(build, th):
     return e, F.s, frame
 
 
+def test_a_fast_roll_delivers_every_step_within_one_glide(th):
+    """A roll of 30 steps at two a frame (the REP word) moves the focus 30
+    stops down a gliding list, as a roll of one a frame does: the steps past
+    the rows the last frame laid out are walked as the view glides on, and
+    it rests on the 30th one glide after the roll's last frame."""
+    from runtime import ui_draw
+    a, sa, fa = _tree("rows", th)
+    b, sb, fb = _tree("rows", th)
+    for _ in range(3):
+        fa()
+        fb()
+    for _ in range(15):
+        fa(rep=2 << 24)
+    for _ in range(30):
+        fb(rep=1 << 24)
+    frames = 0
+    while a._ui.moving and frames < 200:
+        fa()
+        frames += 1
+    assert frames <= 12, "the view rests one glide after the roll: %d frames" % frames
+    while b._ui.moving:
+        fb()
+    fa()
+    fb()
+    assert a.focus_key == b.focus_key == "Row 30/pick", (a.focus_key, b.focus_key)
+    assert ui_draw._C.api_focus(a._ui.ctx, None) == ui_draw._C.api_focus(b._ui.ctx, None)
+
+
 def test_a_held_keys_repeats_type_into_a_field(th):
     """A field takes the typing repeats (the KEYREP word) as more of the
     key, Backspace's as more Backspaces; Enter's repeats type nothing."""

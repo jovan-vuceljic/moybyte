@@ -1480,13 +1480,16 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     if (field && c->typed) {
         c->typed_box = f->b;        // its row joins a shift frame's floor
     }
+    int carry_x = c->carry_x, carry_y = c->carry_y;
+    c->carry_x = c->carry_y = 0;
     if (!off) {
-        // the steps each direction makes: its press edge and its repeats
+        // the steps each direction makes: its press edge, its repeats and
+        // the steps last frame's roll had no stop for yet
         uint32_t rw = (uint32_t)in[MOY_UI_IN_REP];
         int sx = ((pressed & MOY_UI_B_RIGHT) ? 1 : 0) + (int)((rw >> 8) & 0xFFu)
-                 - ((pressed & MOY_UI_B_LEFT) ? 1 : 0) - (int)(rw & 0xFFu);
+                 - ((pressed & MOY_UI_B_LEFT) ? 1 : 0) - (int)(rw & 0xFFu) + carry_x;
         int sy = ((pressed & MOY_UI_B_DOWN) ? 1 : 0) + (int)((rw >> 24) & 0xFFu)
-                 - ((pressed & MOY_UI_B_UP) ? 1 : 0) - (int)((rw >> 16) & 0xFFu);
+                 - ((pressed & MOY_UI_B_UP) ? 1 : 0) - (int)((rw >> 16) & 0xFFu) + carry_y;
         int dir = (sx < 0 ? MOY_UI_B_LEFT : sx > 0 ? MOY_UI_B_RIGHT : 0)
                   | (sy < 0 ? MOY_UI_B_UP : sy > 0 ? MOY_UI_B_DOWN : 0);
         const moy_ui_keep_t *fck = f != NULL ? mua_keep_of(c, f->id) : NULL;
@@ -1553,7 +1556,20 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
                 to = t;
                 at = &v[t];
             }
-            if (to < 0 && !c->modal) {
+            // a roll faster than the view: the stops past the last one laid
+            // out (while a step landed, or the page still glides to them)
+            // are the next frame's, which walks the rest
+            int carry = k > 0 && (to >= 0 || (!c->modal && moy_ui_api_moving(c)));
+            if (carry) {
+                int8_t rest = (int8_t)((one & (MOY_UI_B_UP | MOY_UI_B_LEFT)) ? -k : k);
+                if (one & (MOY_UI_B_UP | MOY_UI_B_DOWN)) {
+                    c->carry_y = rest;
+                } else {
+                    c->carry_x = rest;
+                }
+                c->owe = 1;
+            }
+            if (to < 0 && !carry && !c->modal) {
                 c->edge = (uint8_t)(one == MOY_UI_B_UP ? MOY_UI_EDGE_UP : one == MOY_UI_B_DOWN ? MOY_UI_EDGE_DOWN
                                     : one == MOY_UI_B_LEFT ? MOY_UI_EDGE_LEFT : MOY_UI_EDGE_RIGHT);
             }
