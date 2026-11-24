@@ -61,12 +61,12 @@
 // are two halves of one decision.
 #define MICROPY_PY_BLUETOOTH                (0)
 
-// NO ESP-NOW and NO I2S: there is no second console to pair with (the link
-// the console boards bring up through native/moy_net) and no codec or
-// microphone on this board, and the audio module is denied in board.toml.
-// Both default to 1 on every esp32 target; the kernel's own ESP-NOW calls
-// (native/moy_kernel) are already behind MICROPY_PY_ESPNOW. ~25 KB of the
-// image with the IDF drivers they pull in (libespnow, esp_driver_i2s).
+// NO port `espnow` module and NO I2S: the radio is the kernel's link
+// (MOY_NET_LINK below), which no Python on this board drives, and there is
+// no codec or microphone on this board, and the audio module is denied in
+// board.toml. Both default to 1 on every esp32 target; the kernel's own
+// calls into the port's module (native/moy_kernel) are already behind
+// MICROPY_PY_ESPNOW.
 #define MICROPY_PY_ESPNOW                   (0)
 #define MICROPY_PY_MACHINE_I2S              (0)
 
@@ -123,6 +123,13 @@
 #define MOY_NET_WIFI                        (1)
 #define MOY_NET_WIFI_OWN                    (1)
 #define MOY_NET_MDNS                        (1)
+
+// The radio link (native/moy_net/moy_link.c) and the live socket that relays
+// it to the browser console this board serves (native/moy_net/moy_live.h):
+// the page plays a console's match on this board's ESP-NOW, and the board
+// runs no game of its own.
+#define MOY_NET_LINK                        (1)
+#define MOY_NET_LIVE                        (1)
 
 // THE /gpio ALLOWLIST (native/moy_net/moy_gpio.c): the pins a browser's cart may
 // drive or read, by GPIO number: board.toml's `gpio` lease row, which the

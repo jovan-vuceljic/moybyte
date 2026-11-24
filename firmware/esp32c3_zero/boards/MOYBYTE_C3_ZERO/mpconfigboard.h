@@ -67,6 +67,14 @@
 #define MOY_NET_WIFI_OWN                    (1)
 #define MOY_NET_MDNS                        (1)
 
+// The radio link and the live socket that relays it to the page (the XIAO's
+// reason), with buffers sized for no PSRAM: the radio's receive ring and the
+// page's frames waiting to be whole (native/moy_net/moy_live.c).
+#define MOY_NET_LINK                        (1)
+#define MOY_NET_LIVE                        (1)
+#define MOY_LIVE_RING                       (2048)
+#define MOY_LIVE_IN                         (2048)
+
 // THE /gpio ALLOWLIST (native/moy_net/moy_gpio.c): the pins a browser's cart
 // may drive or read, by GPIO number: board.toml's `gpio` lease row, which the
 // build emits as MOY_LEASE_GPIO_PINS; this board serves the route over it. A

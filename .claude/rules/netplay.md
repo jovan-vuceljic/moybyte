@@ -85,7 +85,9 @@ belongs here is only what a coder must not undo:
 - **A restart must not stop the radio** (`Player.release_world` stops the link
   only when `ws.netplay` is None) -- a forming match re-runs the cart, and the
   dying run used to kill the session that caused the restart.
-- **Board scope: EVERY console board** (a browser still has no radio); the P4
+- **Board scope: EVERY console board, and the browser a Zero serves** on
+  its board's radio (`docs/netplay_v1.md` §5: the board relays, the page
+  plays, and only its Lua carts, the float width being the contract); the P4
   joined on 2026-08-24. The morning of that day settled "the P4 cannot join" (the
   flag flip failed at link; ESP-Hosted's RPC carries no ESP-NOW; upstream
   esp-hosted-mcu #19 open and unshipped) -- and the rest of it un-settled the

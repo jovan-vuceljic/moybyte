@@ -362,6 +362,14 @@ nor those docs will warn you about:
   events → InputState/Pointer, which the sync RPC speaks). The recording-tier
   surface machinery in `wm_windowed` and the kernel's surface table were
   deleted on 2026-10-27 (`docs/surface_model_v1.md` §16).
+- **The live socket is a Zero's page's, and the worker's to move** (#256,
+  `native/moy_net/moy_live.h`): one sealed WebSocket to `GET /live` (seal
+  slot 1; the Terminal's is 0), multiplexed by its frames' first byte, served
+  on the board's own task. Its first channel relays the board's ESP-NOW, so
+  the page's link (`moy_link_web.c`, the kernel's Match over it) plays a
+  console's match. The worker moves its bytes between frames
+  (`liveStep`, `web_boot.live_*`), never inside a step, and reopens a dropped
+  socket itself; a console board builds no bridge and 404s the probe.
 - **WASM MODE IS A SWITCH, NOT A SESSION** (owner call): no heartbeat, no presence
   detection, no timeout. While WEB CONSOLE is ON the glass PARKS on a connection
   screen — which is how the two-writer collision is **designed out rather than

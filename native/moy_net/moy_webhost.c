@@ -1695,7 +1695,7 @@ static int stream(out_t *o, const moy_http_req_t *r, int which) {
         moy_wa_stream(which, o->seal);
         return 1;
     }
-    // the bridge serves another page: a close it can read
+    // the bridge serves another page, or has no room for one: a close it can read
     static const char busy[] = "\x88\x06\x03\xf5" "busy";
     moy_http_send(o->fd, busy, sizeof(busy) - 1);
     return 0;
