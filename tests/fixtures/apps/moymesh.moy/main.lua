@@ -16,7 +16,8 @@
 --   thread    one conversation: its channel row (a direct thread's header),
 --             the history (bubbles on a following scroll), the field and its
 --             send key; a bubble's details hang in a popover, a cut
---             message's are the message page
+--             message's are the message page; Message on a heard bubble's
+--             sender stacks that node's thread over it
 --   message   a cut message whole, and how it was heard
 --   nodes     the nodes heard, newest first: a row opens its direct thread
 --   radio     This node (the names), Mesh (preset, region), Channels
@@ -59,6 +60,7 @@ setup_now = nil
 me = ""
 now, zone, synced = 0, 0, false
 key = "ch0"                     -- the thread the thread page shows
+shaped = nil                    -- the thread whose messages and draft the thread page's state holds
 drafts = {}                     -- a thread's unsent text, by its key
 ci = 0                          -- the channel the channel page shows (from 0)
 old = ""                        -- the replaced channel the replaced page shows
@@ -84,6 +86,7 @@ local s = ui.state {
     state = ui.opt(ui.enum(table.unpack(STATE))),
   },
   draft = "",
+  conv = ui.row_of("convs"),      -- the thread the thread page shows: its push's row, again at a Back onto it
   pick = ui.opt(ui.record {
     i = 0, dir = ui.enum("in", "out", { init = "in" }), status = "", who = ui.opt(""), name = ui.opt(""),
     rssi = ui.opt(0), snr = ui.opt(0.0), bars = ui.opt(0), failed = false,
@@ -493,14 +496,11 @@ local function news()
   if on_thread() then mark_seen() end
 end
 
+-- Thread `k` opened over the page on top (a thread too: Message on a bubble's sender).
 local function open_thread(k)
-  drafts[key] = s.draft
   key = k
-  s.draft = drafts[k] or ""
-  s.pick = nil
-  _reload()
-  mark_seen()
-  ui.push("thread")
+  _reload()                     -- a direct thread with nothing in it yet is a row while it is `key`
+  ui.push("thread", k)
 end
 
 local function retune(st)
@@ -519,6 +519,17 @@ function _init()
 end
 
 ui.hook("opened", function() _reload() end)
+-- The thread page on top, pushed or shown again by Back: its messages and draft are its row's.
+ui.hook("thread_shown", function()
+  local k = s.conv.k
+  if k ~= shaped then
+    if shaped then drafts[shaped] = s.draft end
+    shaped, key = k, k
+    s.draft, s.pick = drafts[k] or "", nil
+    shape_thread()
+  end
+  mark_seen()
+end)
 ui.hook("news", news)
 ui.hook("tick", function() _reload() end)
 
@@ -591,7 +602,6 @@ end, { hint = "Channel" })
 ui.action("message_sender", "Message", function()
   local from = log[s.pick.i].from
   s.pick = nil
-  ui.pop()
   open_thread(from)
 end)
 
@@ -918,7 +928,7 @@ ui.page("thread", function()
       end,
     })
   end)
-end, { title = "" })
+end, { title = "", arg = "conv", shown = "thread_shown" })
 
 ui.page("message", function()
   ui.scroll("message", { snap = true }, function()

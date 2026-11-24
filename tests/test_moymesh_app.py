@@ -1291,6 +1291,38 @@ def test_a_heard_bubble_s_details_message_its_sender(window):
     assert window.where()[:2] == ("thread", ANA), "Message Ana Ridge opens her thread"
 
 
+def test_message_sender_stacks_a_thread_and_back_shows_the_first_with_its_draft(window):
+    """Message on a heard bubble's sender opens that node's thread over the
+    channel's; Back shows the channel again, its own messages and draft."""
+    now = _now()
+    hers = {"from": ANA, "dm": ANA, "text": "Tent is up", "rssi": -104, "snr": 2.0, "t": now - 200}
+    window.state(log=_chat(now)[:5] + [hers], nodes=_nodes(now))
+    window.go(THREAD("ch0"))
+    window.type("to the hill")
+    window.key("up")
+    assert window.where()[2].startswith("m5/")
+    window.key("run", "run")
+    assert window.where()[:2] == ("thread", ANA)
+    window.run("__R = #PAGES")
+    assert window.get("__R") == 3, "her thread stacks over the channel's"
+    window.type("to Ana")
+    window.key("up")                # off the field: the edit ends, its text kept
+    assert window.where()[2].startswith("m6/")
+    assert window.pl.face.back()    # the bar's back
+    window.frames()
+    assert window.where()[:2] == ("thread", "ch0"), "Back shows the channel's thread"
+    window.run("__R = #PAGES .. ' ' .. drafts[%s]" % json.dumps(ANA))
+    assert window.get("__R") == "2 to Ana", "her draft is kept"
+    window.run('__R = #threads.ch0.msgs .. " " .. threads[key].key')
+    assert window.get("__R") == "5 ch0"
+    window.key("down")
+    assert window.where()[2] == "draft"
+    window.type("\r")
+    window.frames(6)
+    assert _prefs(window.pl, "log")[-1]["text"] == "to the hill", "the channel's draft, sent on the channel"
+    assert not _prefs(window.pl, "log")[-1].get("dm")
+
+
 def test_a_failed_message_s_details_open_on_send_again(window):
     now = _now()
     log = _chat(now)[:5] + [{"from": "", "text": "Wait for me", "failed": True, "t": now - 60}]
