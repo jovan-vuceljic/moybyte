@@ -464,9 +464,9 @@
    "stage": [
     "build"
    ],
-   "meaning": "an app names a kind, prop, word or app field the contract marks the shell's (`slot`, `status`, `lent`, `tools lend=`, `card fill=`, `cards look=\"column\"`, `ui.app slots=`)",
+   "meaning": "an app names a kind, prop, word or app field the contract marks the shell's (`slot`, `lent`, `tools lend=`, `card fill=`, `cards look=\"column\"`, `ui.app slots=`)",
    "fix": {
-    "python": "an app's own: `ui.label` for a status line, `cards look=\"icons\"`",
+    "python": "an app's own: `cards look=\"icons\"`",
     "lua": "as Python",
     "c": "as Python"
    },

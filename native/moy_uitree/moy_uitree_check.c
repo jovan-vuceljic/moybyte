@@ -187,7 +187,7 @@ const char *uit_check_prop(const char *kind, const char *prop, int vc, const cha
     }
     if (app && (K->flags & UIT_SF_SHELL)) {
         snprintf(what, sizeof what, "ui.%s is the shell's own, not an app's", kind);
-        return say(out, n, "N09", what, "", "an app's own kind (a ui.label for a status line)");
+        return say(out, n, "N09", what, "", "an app's own kind");
     }
     if (!prop[0])
         return NULL;
