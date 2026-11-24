@@ -63,6 +63,17 @@ int moy_fs_rename(const char *src, const char *dst);
 // (another save of the same file between the two, or a reader that dropped
 // it as stale).
 int moy_fs_publish(const char *path, const char *data, size_t n);
+// moy_fs_publish of a text that is not one buffer (the shell's editor holds
+// its text in blocks): the same three writes, byte for byte, the stamp taken
+// a piece at a time. `next` gives the next piece (its bytes at *p, its length;
+// 0 after the last, so no piece is empty) and `rewind` starts it over, as the
+// save passes over the text three times: the stamp, the backup and the file.
+// moy_fs_publish is this over its one buffer.
+typedef struct moy_fs_src {
+    size_t (*next)(struct moy_fs_src *s, const char **p);
+    void (*rewind)(struct moy_fs_src *s);
+} moy_fs_src_t;
+int moy_fs_publish_from(const char *path, moy_fs_src_t *src);
 int moy_fs_publish_bak(const char *path, const char *data, size_t n);
 int moy_fs_publish_mark(const char *path, const char *data, size_t n);
 int moy_fs_read(const char *path, const char *at, moy_buf_t *out);

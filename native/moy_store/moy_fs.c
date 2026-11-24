@@ -295,8 +295,35 @@ static int read_head(const char *path, char *line, size_t *n) {
     return rc;
 }
 
-static int write_parts(const char *path, const void *a, size_t an,
-                       const void *b, size_t bn) {
+// One buffer as a source of one piece (moy_fs_publish_from's).
+typedef struct {
+    moy_fs_src_t s;
+    const char *p;
+    size_t n;
+    int given;
+} flat_t;
+
+static size_t flat_next(moy_fs_src_t *s, const char **p) {
+    flat_t *f = (flat_t *)s;
+    if (f->given) {
+        return 0;
+    }
+    f->given = 1;
+    *p = f->p;
+    return f->n;
+}
+
+static void flat_rewind(moy_fs_src_t *s) {
+    ((flat_t *)s)->given = 0;
+}
+
+static flat_t flat(const void *data, size_t n) {
+    flat_t f = { { flat_next, flat_rewind }, data, n, 0 };
+    return f;
+}
+
+// `head` (hn bytes) and then the source's pieces, as the file at `path`.
+static int write_src(const char *path, const char *head, size_t hn, moy_fs_src_t *src) {
     moy_vol_t v;
     const char *rest;
     moy_vol_file_t *f;
@@ -307,18 +334,22 @@ static int write_parts(const char *path, const void *a, size_t an,
     if (rc != 0) {
         return rc;
     }
-    if (an) {
-        rc = moy_vol_write(f, a, an);
+    if (hn) {
+        rc = moy_vol_write(f, head, hn);
     }
-    if (rc == 0 && bn) {
-        rc = moy_vol_write(f, b, bn);
+    src->rewind(src);
+    const char *p;
+    size_t n;
+    while (rc == 0 && (n = src->next(src, &p)) != 0) {
+        rc = moy_vol_write(f, p, n);
     }
     int crc_ = moy_vol_close(f);
     return rc ? rc : crc_;
 }
 
 int moy_fs_write(const char *path, const void *data, size_t n) {
-    return write_parts(path, data, n, NULL, 0);
+    flat_t f = flat(data, n);
+    return write_src(path, NULL, 0, &f.s);
 }
 
 int moy_fs_exists(const char *path) {
@@ -643,9 +674,20 @@ static void mark_publish(const char *path, size_t plen, uint32_t chars, uint32_t
     }
 }
 
-int moy_fs_publish_bak(const char *path, const char *data, size_t n) {
-    uint32_t chars, crc;
-    moy_fs_stamp(data, n, &chars, &crc);
+// The stamp of a source's text, a piece at a time.
+static void src_stamp(moy_fs_src_t *src, uint32_t *chars, uint32_t *crc) {
+    sum_t s = {0};
+    const char *p;
+    size_t n;
+    src->rewind(src);
+    while ((n = src->next(src, &p)) != 0) {
+        sum_add(&s, p, n);
+    }
+    *chars = s.chars;
+    *crc = s.crc;
+}
+
+static int publish_bak(const char *path, moy_fs_src_t *src, uint32_t chars, uint32_t crc) {
     size_t bn;
     char *bak = join(path, strlen(path), ".bak", &bn);
     if (bak == NULL) {
@@ -654,12 +696,19 @@ int moy_fs_publish_bak(const char *path, const char *data, size_t n) {
     char head[32];
     int hn = snprintf(head, sizeof head, STAMP "%lu %lu\n",
                       (unsigned long)chars, (unsigned long)crc);
-    int rc = write_parts(bak, head, (size_t)hn, data, n);
+    int rc = write_src(bak, head, (size_t)hn, src);
     if (rc != 0) {
         moy_fs_remove(bak);         // free the half-written backup
     }
     moy_store_free(bak, bn);
     return rc;
+}
+
+int moy_fs_publish_bak(const char *path, const char *data, size_t n) {
+    uint32_t chars, crc;
+    moy_fs_stamp(data, n, &chars, &crc);
+    flat_t f = flat(data, n);
+    return publish_bak(path, &f.s, chars, crc);
 }
 
 int moy_fs_publish_mark(const char *path, const char *data, size_t n) {
@@ -672,12 +721,17 @@ int moy_fs_publish_mark(const char *path, const char *data, size_t n) {
     return moy_fs_write(path, data, n);
 }
 
-int moy_fs_publish(const char *path, const char *data, size_t n) {
+int moy_fs_publish_from(const char *path, moy_fs_src_t *src) {
     uint32_t chars, crc;
-    moy_fs_stamp(data, n, &chars, &crc);
+    src_stamp(src, &chars, &crc);
     mark_publish(path, strlen(path), chars, crc);
-    int rc = moy_fs_publish_bak(path, data, n);
-    return rc != 0 ? rc : moy_fs_write(path, data, n);
+    int rc = publish_bak(path, src, chars, crc);
+    return rc != 0 ? rc : write_src(path, NULL, 0, src);
+}
+
+int moy_fs_publish(const char *path, const char *data, size_t n) {
+    flat_t f = flat(data, n);
+    return moy_fs_publish_from(path, &f.s);
 }
 
 static void heal(const char *path, const moy_buf_t *b) {
