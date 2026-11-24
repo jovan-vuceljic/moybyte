@@ -71,6 +71,17 @@ CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
 CONFIG_MBEDTLS_DYNAMIC_FREE_CA_CERT=y
 CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=n
 
+# THE CA BUNDLE: ca_roots.pem beside this file, the roots the hosts this
+# image fetches from chain to, with a backup per CA family (the file names the
+# hosts), not ESP-IDF's common bundle: the release's index and assets, the
+# moybyte-org/carts index and the site's mirror verify, and a host outside
+# those families fails its handshake. The path is from MicroPython's port
+# directory, where ESP-IDF resolves it.
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_NONE=y
+CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE_PATH="../../../../boards/MOYBYTE_C3_ZERO/ca_roots.pem"
+
 # --- Left out (the XIAO's reasons) -------------------------------------------
 CONFIG_LWIP_PPP_SUPPORT=n
 CONFIG_LWIP_PPP_PAP_SUPPORT=n
