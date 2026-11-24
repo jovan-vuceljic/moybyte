@@ -37,6 +37,7 @@ class Engine(S.Builder):
 
     band = True         # False: the host draws the page's keys (a handheld popover's strip), the page none
     bare = False        # True: the host painted the page's ground (a popover's card), the page paints none
+    bar = False         # True: the page is a bar, every icon alone in it at one size (the zone's)
 
     close_root = None       # what ui.pop() on the first page does: a hosted page's host closes it
 

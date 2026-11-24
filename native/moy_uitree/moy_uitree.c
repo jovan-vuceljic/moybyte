@@ -1155,7 +1155,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
               (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              (kind == UIT_LINK && !strcmp(name, "swatch")) ||
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
-             (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon"))) || (kind == UIT_CARDS && (!strcmp(name, "pad") || !strcmp(name, "tone") || !strcmp(name, "label"))) ||
+             (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon") || !strcmp(name, "fill"))) || (kind == UIT_CARDS && (!strcmp(name, "pad") || !strcmp(name, "tone") || !strcmp(name, "label"))) ||
              (kind == UIT_CELLS && (!strcmp(name, "first") || !strcmp(name, "count") || !strcmp(name, "cols") ||
                                     !strcmp(name, "side") || !strcmp(name, "gap") || !strcmp(name, "clear")))) {
         // templates the draw finds among its props by name (uit_tmpl_prop); signal=, a month's
@@ -1426,9 +1426,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, f);
     }
     if (kind == UIT_ROWS && !strcmp(name, "dir")) {
-        // dir="row": a row from a model, its cells along the placed row it stands in (row_kids)
+        // dir="row": a row from a model, its cells along the placed row it stands in (row_kids);
+        // dir="col": a column from a model, its cells down the placed stack it stands in (stack)
         if (strcmp(src, "row") && strcmp(src, "col"))
             return uit_fail(e, UIT_E_KIND, UIT_MSG("rows dir=%s: row or col", "rows dir=%s"), src);
+        if (src[0] == 'c')
+            N->lit |= RS_COL;
         return add_prop(e, node, name, src, repr, PK_LIT, src[0] == 'r');
     }
     if (!strcmp(name, "mkind") && kind == UIT_ITEM) {
@@ -1457,12 +1460,10 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (!strcmp(name, "look") && kind == UIT_BUTTON) {
-        // look="large" (BT_LARGE): half again a row's height, twice the pads, a wider least width;
-        // look="small" (BT_SMALL): a bar item's icon alone at 16 units at the scale, as a labelled
-        // one's, where its row is taller
-        if (strcmp(src, "large") && strcmp(src, "small"))
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("button look=%s: \"large\" or \"small\"", "button look=%s"), src);
-        N->btn |= src[0] == 'l' ? BT_LARGE : BT_SMALL;
+        // look="large" (BT_LARGE): half again a row's height, twice the pads, a wider least width
+        if (strcmp(src, "large"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("button look=%s: \"large\"", "button look=%s"), src);
+        N->btn |= BT_LARGE;
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (kind == UIT_STEPPER && (!strcmp(name, "grow") || !strcmp(name, "tone"))) {
@@ -1703,9 +1704,10 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, i);
     }
     if (!strcmp(name, "check") && kind == UIT_ROWS) {
-        // check=True: each row's link a pick, the current one's checked (lit 1)
-        N->lit = (uint8_t)!strcmp(src, "True");
-        return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
+        // check=True: each row's link a pick, the current one's checked (RS_CHECK)
+        if (!strcmp(src, "True"))
+            N->lit |= RS_CHECK;
+        return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & RS_CHECK) != 0);
     }
     if (!strcmp(name, "cur") && UIT_IS_LIST(kind)) {
         int s = uit_slot_find(e, src, strlen(src));
@@ -1752,11 +1754,13 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     if (!strcmp(name, "look") && kind == UIT_CARDS) {
         // "carousel": one row of tiles that snaps, its centre card's words under it (CD_CAROUSEL);
         // "shelf": cards in the rows the band holds, scrolling across (CD_SHELF); "icons": tiles
-        // in the columns it holds, scrolling down (CD_ICONS)
+        // in the columns it holds, scrolling down (CD_ICONS); "column": tiles down the left edge,
+        // column after column, shrinking until they fit (CD_COLUMN)
         int lk = !strcmp(src, "carousel") ? CD_CAROUSEL : !strcmp(src, "shelf") ? CD_SHELF
-                 : !strcmp(src, "icons") ? CD_ICONS : 0;
+                 : !strcmp(src, "icons") ? CD_ICONS : !strcmp(src, "column") ? CD_COLUMN : 0;
         if (!lk)
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("cards look=%s: carousel, shelf, icons", "cards look=%s"), src);
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("cards look=%s: carousel, shelf, icons, column", "cards look=%s"),
+                            src);
         N->lit |= (uint8_t)lk;
         return add_prop(e, node, name, src, repr, PK_LIT, lk);
     }

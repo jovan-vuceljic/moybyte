@@ -72,6 +72,7 @@ enum {
     UIT_F_GEN = 128,        // the host draws shift frames: the page carries its gen where it may
     UIT_F_BACK = 1 << 16,   // the front takes the host's back through the toolkit: the frame
                             // offers its way back there (moy_ui_api_way), `uit_run_backed` answers it
+    UIT_F_BAR = 1 << 17,    // the page is a bar: every icon alone in it draws at one size, the zone's
 };
 // The frame flags' bits 8..15: the pages on the stack (the band's Back).
 #define UIT_F_PAGES_SHIFT 8
@@ -350,15 +351,16 @@ int uit_carousel_geom(uit_t *e, const int32_t b[4], int fs, int desk, int32_t ou
 enum { UIT_DESK_WORDS = 25 };
 int uit_carousel_desk(const int32_t b[4], int fs, int keys, int nsets, const int32_t *counts,
                       const char *const *labels, const char *const *kinds, int32_t out[UIT_DESK_WORDS]);
-// The page's shelf or icons (ui.cards look="shelf" or "icons", and the carousel look's desk
-// shelf, geometry word MOY_UI_CELLS_LOOK MOY_UI_LOOK_DESK) as the last frame drew them:
+// The page's shelf, icons or column (ui.cards look="shelf", "icons" or "column", and the
+// carousel look's desk shelf, geometry word MOY_UI_CELLS_LOOK MOY_UI_LOOK_DESK) as the last
+// frame drew them:
 // out[0..3] their band, [4..19] their geometry (moy_ui_api_cells_geom's, MOY_UI_CELLS_*), [20]
 // their scroll, [21] their motion (MOY_UI_SCROLL_DRAG, _FLING), [22] the card the keys are on,
 // [23] their cards, [24] 1 where they held the focus; 0 where none drew since the page was
 // built. uit_cells_tile: card `i`'s box there (x, y, w, h), 0 where it lies outside the band;
 // uit_cells_at: the card whose box or title holds (x, y), -1 none. uit_cells_geom: the
-// geometry the page's shelf or icons lay out in band `b` at font scale `fs` (on the desk's
-// metrics where `desk`), outside a frame; 0 where the page has none.
+// geometry the page's shelf, icons or column lay out in band `b` at font scale `fs` (on the
+// desk's metrics where `desk`), outside a frame; 0 where the page has none.
 enum { UIT_CELLS_WORDS = 25 };
 int uit_cells(const uit_t *e, int32_t out[UIT_CELLS_WORDS]);
 int uit_cells_tile(const uit_t *e, int i, int32_t out[4]);

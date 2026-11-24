@@ -3666,10 +3666,11 @@ int moy_ui_api_button(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
             bt.glyph = c->row_glyph;
         }
         if (bar) {
-            // look="small": its icon alone 16 units at the scale, as a labelled item's
+            // in a bar: its icon alone 16 units at the scale, as a labelled item's (Moy's tile, the
+            // system button's, the largest its box holds)
             moy_ui_box_t ib = b;
             int side = 16 * c->fs;
-            if (o->small && !label.n && (fl & MOY_UI_F_ICON) && b.h >= 2 * side) {
+            if (o->small && !label.n && (fl & MOY_UI_F_ICON) && bt.icon != MOY_UI_ICON_MOY && b.h >= 2 * side) {
                 ib.y = (int16_t)(b.y + (b.h - side) / 2);
                 ib.h = (int16_t)side;
             }

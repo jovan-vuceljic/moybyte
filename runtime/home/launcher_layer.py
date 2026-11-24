@@ -107,6 +107,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         self._NAMES = names
         self._lhover = (-1, -1)       # the last pointer sample (a release is not a move)
         self._back_tip = False        # a mouse rests on the bar's way back to the desk
+        self._tip_at = [None, None, None]   # its pill's (w, h), and the layout and look it was laid out in
         self._hold = None             # a press on a card: [index, x, y, ms held]
         self._on_open = self._band_open     # the handheld band's card opened (`Carousel.on_open`)
         self._on_bar = False          # the keys are on the home's bar (BarLayer.focus_enter)
@@ -1000,21 +1001,27 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         return r is not None and _in(px, py, r)
 
     def _draw_back_tip(self, cv):
-        """The chevron's tooltip, `BACK_TIP` on a plate under it: where it
-        goes, which the bare chevron does not say (owner, 2026-10-19)."""
+        """The chevron's tooltip, `BACK_TIP` in the flat toast of
+        `overlay_ui.tip` under it, its left edge the chevron's: where it
+        goes, which the bare chevron does not say (owner, 2026-10-19). The
+        pill is laid out once out of sight for its size, again when the
+        layout or the look moves."""
         ws = self.ws
         r = ws.bar_layer.back_rect("home")
         if r is None:
             return
-        th = ws.theme_colors
-        fs = ws.layout.fs
+        import console_notices as _cn
+        n = ws.notices
+        n.put_overlay(_cn.TIP, "tip", BACK_TIP)
+        at = self._tip_at
+        look = ws.look.look_gen
+        if at[0] is None or at[1] is not ws.layout or at[2] != look:
+            at[1] = ws.layout
+            at[2] = look
+            got = n.paint_overlay(_cn.TIP, cv, n.room(_cn.TIP, -2 * cv.w, 0, cv.w, cv.h))
+            at[0] = (got[2], got[3])
         u = _lb.unit()
-        pad = 6 * u
-        tw = _ui_draw.print_width(BACK_TIP, fs)
-        h = ws.layout.line_h + pad
-        x, y = r[0], ws.layout.cy + 4 * u      # under the bar
-        cv.rrect(x, y, tw + 2 * pad, h, 4 * u, th["ink"])
-        cv.print(BACK_TIP, x + pad, y + (h - ws.layout.line_h) // 2, th["surface"], 1)
+        n.paint_overlay(_cn.TIP, cv, n.room(_cn.TIP, r[0], ws.layout.cy + 4 * u, at[0][0], at[0][1]))
 
     def _draw_home_chrome(self, cv):
         """The hint strip along the home's foot (its tabs are the bar's)."""

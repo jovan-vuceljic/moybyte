@@ -1,7 +1,7 @@
 {
  "surface": "settings_paired",
  "config": "p4_1024x600_cs2_fs1_windowed",
- "commit": "d46d59298",
+ "commit": "fe33deaea",
  "script": [
   "k:down",
   "k:down"
@@ -9,15 +9,15 @@
  "frames": [
   [
    "(open)",
-   "7885385906a26e8084e3f034022653df4b38214d594bce5925a77b7712b3d1c7"
+   "d8417e39deb3f2f8e62f39682b3cc8bfbd2bad88e47a27345fb96d2c6407de0b"
   ],
   [
    "k:down",
-   "f6077cfc42d47c202415d355592f0dce26e46e52ffced1808e03b04016d1d8e9"
+   "812e45a86d9f809a8e920fafbf9ce6c0ca2a7bc6a609887cf0592205684b8847"
   ],
   [
    "k:down",
-   "88c98e0e02ad474347e736d547db8027479eaf3290497fee501714b8b308523a"
+   "1c7adc9d6abe73fee32d42f3b35d386f2ccb65042f2aa475a7d93b3646f8bcb1"
   ]
  ]
 }

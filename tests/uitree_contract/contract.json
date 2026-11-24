@@ -1753,7 +1753,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:large,small",
+     "type": "word:large",
      "level": 2
     }
    }
@@ -2130,7 +2130,7 @@
      "level": 2
     },
     "dir": {
-     "type": "word:row",
+     "type": "word:row,col",
      "level": 2
     }
    }
@@ -2181,7 +2181,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:carousel,shelf,icons",
+     "type": "word:carousel,shelf,icons,column",
      "level": 2
     },
     "tone": {
@@ -2224,6 +2224,10 @@
      "level": 2
     },
     "tone": {
+     "type": "tpl",
+     "level": 2
+    },
+    "fill": {
      "type": "tpl",
      "level": 2
     }

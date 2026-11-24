@@ -15,7 +15,7 @@ import pytest
 import runtime  # noqa: F401  (registers the host's moy_ui)
 import moy_ui
 from runtime import bar_layer as BL
-from runtime import layout_base, shell_layout
+from runtime import bar_ui, layout_base, shell_layout
 from runtime.layout_base import DEFAULT_BARS, LayoutBase
 from test_content_rect import _inside, _layouts, _open_every_surface, _rect_map, _settle, _tap
 from ws_helpers import build_desktop_ws, build_ws
@@ -247,7 +247,7 @@ def test_the_desk_keeps_icons_windows_and_chips_off_a_side_bar(tmp_path):
     chips = wm.chip_rects()
     assert chips and all(_inside(r, lb[1]) and r[2] == r[3] for _k, r, _l in chips)
     key, r, label = chips[0]
-    assert len(label) == 1
+    assert label == "Calc"                                # (its icon alone draws; its title is whole)
     wm.focus_key = None
     _tap(ws, r[0] + 2, r[1] + 2)
     assert wm.focus_key == key
@@ -262,7 +262,7 @@ def test_a_taskbar_packs_its_chips_from_the_cell_start(tmp_path):
     ws.frame(DT)
     bar, cell = ws.bar_layer.cell("desk", "chips")
     (_k, r, _l), = ws.wm.chip_rects()
-    assert r[0] == bar[1][0] + cell[0] and _inside(r, bar[1])
+    assert r[0] == bar[1][0] + cell[0] + bar_ui.CHIP_PAD * ws.layout.cs and _inside(r, bar[1])
 
 
 def test_a_window_keeps_its_band_on_top_under_a_bottom_bar(tmp_path):
@@ -413,10 +413,7 @@ def test_the_status_clusters_ink_is_one_gap_apart(tmp_path, config, lo, hi, mode
             if len(run) < 3:
                 continue
             cluster = bl._cluster()
-            dx = bl._status_dx(cells, cluster) or {}
             inks = [bl._ink(n, r) for n, r, _t, _s in run]
-            inks = [(a + dx.get(n, 0), b + dx.get(n, 0))
-                    for (a, b), (n, _r, _t, _s) in zip(inks, run)]
             gaps = [inks[i + 1][0] - inks[i][1] - 1 for i in range(len(inks) - 1)]
             if cluster:
                 # a handheld's cluster keeps its ring's room before the

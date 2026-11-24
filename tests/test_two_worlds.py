@@ -414,12 +414,15 @@ def test_desk_icons_open_windows(tmp_path):
     ws.wm._backdrop_layer._open_icon("projects")
     drv.frame(1 / 30)
     assert ws.wm.z_order == ["files", "projects"]
-    # Pointer path: a tap on the PLAY icon box through the desk root layer.
+    # Pointer path: a tap on the PLAY icon box through the desk root layer,
+    # which the column page takes in the frames after it (its press, its
+    # release, the open deferred to the frame's tail).
     for key, box, _pill, _label, _cart in ws.wm._backdrop_layer._icon_rects():
         if key == "play":
             ws.wm._backdrop_layer.handle_pointer(box[0] + 2, box[1] + 2, True)
             break
-    drv.frame(1 / 30)
+    for _ in range(3):
+        drv.frame(1 / 30)
     assert ws.wm.stack.kinds() == ["launcher"]
 
 

@@ -497,6 +497,35 @@ def test_a_canvas_in_a_rows_body_is_handed_its_row(tmp_path):
     assert shots["Two"] != shots["Nobody"]
 
 
+def test_a_rows_list_takes_dir_col_and_refuses_another_word(tmp_path):
+    """`ui.rows(model, { dir = "col" })` reaches the engine from Lua: a
+    flowing page draws its rows as a list without it (the column from a
+    model is a placed column's), and a word but row or col stops the run."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    head = ('ui.app("%s", { icon = "calc" })\n'
+            'local s = ui.state { items = ui.model { key = "id", id = "" } }\n'
+            'ui.hook("opened", function() s.items:set({ { id = "one" }, { id = "two" } }) end)\n'
+            'ui.page("p", function()\n  ui.rows("items", %s, function() ui.label("{.id}") end)\nend)\n')
+    for name, opts in (("Plain", "{}"), ("Col", '{ dir = "col" }'), ("Diag", '{ dir = "diag" }')):
+        _cart(carts, name, head % (name, opts))
+    ws, drv, frame, open_cart = _console(carts)
+    shots, errors = {}, {}
+    for name in ("Plain", "Col", "Diag"):
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        errors[name] = ws.run.player.cart_error
+        _edge, bar, _dy, _cells = ws.layout.bars[0]
+        below = (bar[1] + bar[3]) * ws.sys_canvas.w * 3     # (the bar names the app)
+        shots[name] = bytes(drv.rgb888())[below:]
+        ws.spine.exit_to_caller()
+    assert errors["Plain"] is None and errors["Col"] is None, errors
+    assert shots["Col"] == shots["Plain"]
+    assert errors["Diag"] is not None and "dir" in str(errors["Diag"]), errors["Diag"]
+
+
 def test_a_canvas_pointer_hands_down_drag_and_up_in_its_own_coordinates(tmp_path):
     """A canvas with pointer= on the C engine: a press on it hands its action
     a read-only event (kind, x, y, source) at the canvas's own coordinates,

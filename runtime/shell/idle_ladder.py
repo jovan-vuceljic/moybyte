@@ -129,9 +129,10 @@ class IdleLadder:
         return secs
 
 
-# The saver's inks, the same in every theme: MOY64's white, light grey and
-# dark blue's frame.
-_INK, _DIM, _FRAME = 7, 6, 1
+# The saver's inks, the same in every theme: MOY64's black ground, white ink,
+# light grey dim and dark blue's frame.
+_GROUND, _INK, _DIM, _FRAME = 0, 7, 6, 1
+_ART_GAP = 8                    # the saver's room under the cover, over its title, in units
 
 
 class Saver:
@@ -146,6 +147,8 @@ class Saver:
         self.wallpaper = bool(getattr(ws.wm, "has_desk", False))
         self._i = -1
         self._next = None
+        self._cart = None               # the cart whose cover shows
+        self._th = None                 # the saver's inks over the theme's roles, made once
 
     def frame(self, dt):
         ws = self.ws
@@ -165,34 +168,54 @@ class Saver:
         return True
 
     def _cover(self, cv, cart):
-        """The saver in every theme (docs/history/look_2026-10.md step 33): on black,
-        the cart's cover at its largest whole scale in a 1 px frame, its
-        title in the title face under it, the clock small in the corner; a
-        cart with no cover is its title alone."""
+        """The saver in every theme (docs/history/look_2026-10.md step 33): on
+        black, the cart's cover at its largest whole scale, its title in the
+        title face under it, the clock small in the corner: `overlay_ui.saver`
+        in the saver's inks. A cart with no cover is its title alone."""
+        import console_notices as _cn
+        import overlay_ui
         ws = self.ws
+        n = ws.notices
         img = ws.covers.cover_for(cart)
-        w, h = cv.w, cv.h
         fs = getattr(cv, "font_scale", 1) or 1
-        fid, _fw, line, _asc = _ui_draw.font("title")
-        was = _ui_draw.print_font(fid)
-        try:
-            title_h = line * fs + 16 * fs
-            top = 30 * fs
-            if img is not None:
-                room = h - top - title_h - 12 * fs
-                s = max(1, min((w - 32 * fs) // img.w, room // img.h))
-                sw, sh = img.w * s, img.h * s
-                x, y = (w - sw) // 2, top + (room - sh) // 2
-                cv.blit565(img.pix, img.w, img.h, x, y, s)
-                cv.rectb(x - fs, y - fs, sw + 2 * fs, sh + 2 * fs, _FRAME)
-                ty = y + sh + 14 * fs
-            else:
-                ty = (h - line * fs) // 2
-            name = str(cart.get("title") or "?")
-            cv.print(name, max(0, (w - _ui_draw.text_width(name, fs, "title")) // 2), ty,
-                     _INK, 1)
-            _ui_draw.print_font(_ui_draw.font("ui")[0])
-            clock = ws.bar_layer.clock_text()
-            cv.print(clock, w - _ui_draw.text_width(clock, fs, "ui") - 10 * fs, 8 * fs, _DIM, 1)
-        finally:
-            _ui_draw.print_font(was)
+        self._cart = cart
+        side = 0
+        block = _ui_draw.font("title")[2] * fs + 12 * fs  # the title's row
+        if img is not None:
+            room = cv.h - 30 * fs - block - _ART_GAP * fs
+            s = max(1, min((cv.w - 32 * fs) // img.w, room // img.h))
+            side = img.w * s // fs
+            block += img.h * s + _ART_GAP * fs
+        n.put_overlay(_cn.SAVER, "title", str(cart.get("title") or "?"))
+        n.put_overlay(_cn.SAVER, "time", ws.bar_layer.clock_text())
+        n.put_overlay(_cn.SAVER, "covered", img is not None)
+        n.put_overlay(_cn.SAVER, "side", side + _ART_GAP if side else 0)
+        th = self._th
+        if th is None:
+            th = self._th = dict(ws.theme_colors)
+            for role in ("ground", "surface", "panel", "chrome"):
+                th[role] = _GROUND
+            for role in ("ink", "value", "chrome_ink"):
+                th[role] = _INK
+            for role in ("ink_dim", "chrome_ink_dim"):
+                th[role] = _DIM
+            th["line"] = _FRAME
+        overlay_ui.COVER[0] = self._art
+        # (the clock 10 units in from the corner; the page's foot where the
+        # cover and its title stand centred on the glass)
+        m = 10 * fs
+        n.paint_overlay(_cn.SAVER, cv, n.room(_cn.SAVER, m, m // 2, cv.w - 2 * m,
+                                              min(cv.h, (cv.h + block) // 2) - m // 2), th)
+
+    def _art(self, cv, x, y, w, h):
+        """The cover's canvas, the page's width: the cart's cover centred
+        across it at its whole scale in a 1 px frame, `_ART_GAP` under it."""
+        img = self.ws.covers.cover_for(self._cart) if self._cart is not None else None
+        if img is None:
+            return
+        fs = getattr(cv, "font_scale", 1) or 1
+        s = max(1, (h - _ART_GAP * fs) // img.h)
+        sw, sh = img.w * s, img.h * s
+        x += (w - sw) // 2
+        cv.blit565(img.pix, img.w, img.h, x, y, s)
+        cv.rectb(x - fs, y - fs, sw + 2 * fs, sh + 2 * fs, _FRAME)

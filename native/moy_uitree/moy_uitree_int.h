@@ -139,8 +139,8 @@ enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_SWATCH = 2, 
 // A dialog's lit bits: kind="danger"; look="keys" (no button row on the T-Deck).
 enum { DL_DANGER = 1, DL_KEYS = 2 };
 // A cards list's lit bits: look="carousel" (one row of tiles, its centre's words under it),
-// "shelf", "icons"; flow=True (its grid in the page's flow).
-enum { CD_CAROUSEL = 1, CD_SHELF = 2, CD_ICONS = 4, CD_FLOW = 8 };
+// "shelf", "icons", "column"; flow=True (its grid in the page's flow).
+enum { CD_CAROUSEL = 1, CD_SHELF = 2, CD_ICONS = 4, CD_FLOW = 8, CD_COLUMN = 16 };
 // A picture's lit bits: look="tile" (a carousel's tile of its own, its shadow round it).
 enum { PC_TILE = 1 };
 // A toast's lit bits: look="flat" (its pill in flat fills, filling the page's room).
@@ -151,9 +151,10 @@ enum { TS_FLAT = 1 };
 enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 // A text view's options (`lit`); its syntax's index in `btn` (ui.py's _SYNTAXES).
 enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8, TV_GUTTER = 16 };
-// A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large",
-// look="small" (a bar item's icon alone at 16 units at the scale) (`btn`).
-enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4, BT_SMALL = 8 };
+// A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large"
+// (`btn`).
+enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4 };
+enum { RS_CHECK = 1, RS_COL = 2 };    // a rows list's lit: check=True; dir="col", its cells down the stack
 enum { RW_MID = 1, RW_GROW = 2, RW_WRAP = 4 };   // a row's lit: centred on the row it is a cell of; a fill of
                                                 // its stack; its cells packed from its start, wrapping
 enum { CV_GROW = 1, CV_KEYS = 2, CV_NOMARK = 4, CV_READS = 8 };  // a canvas's lit: a fill along a row, its w= a
@@ -209,7 +210,7 @@ typedef struct {
     uint8_t depth, path[PN_DEPTH];
 } uit_pa_t;
 
-#define UIT_MCELLS 16           // the model row cells a pass records at most
+#define UIT_MCELLS 32           // the model row cells a pass records at most
 typedef struct {
     int16_t node, model, row, r[4];
 } uit_mc_t;                     // a row from a model: one row's cell                     // a pane arranged, a body placed, a pane drawn

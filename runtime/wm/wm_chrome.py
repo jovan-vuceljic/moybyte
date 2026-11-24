@@ -22,7 +22,6 @@ own.
 from chrome import NAMES, MIN_TAP_MM   # not palette: chrome is the device-safe home
 import layout_base as _layout_base
 import ui_draw as _ui_draw
-from bar_layer import glyph as _bar_glyph
 import iconsets as _iconsets
 from wm_parts import _set_rect
 import wm_strip as _strip
@@ -62,9 +61,6 @@ _ICON_SLOTS = {"menu": "code", "projects": "projects", "settings": "settings",
 # `win.header`'s `fill` (style.json's theme.look enum: plain, fill, bar, grad),
 # whose focused header is the `value` colour and its title and icon `value_ink`.
 _HEAD_FILL = 1
-# A look chip's room beside its label: the 12-pixel margin, the 18-pixel icon
-# and 8 to the label, 24 after it (the 2026-10 look's desk bar).
-_CHIP_PAD = 18 + 8 + 24
 
 
 def _title_sep():
@@ -781,7 +777,7 @@ class WindowChrome:
         self._cell_memo = (bars, got)
         return got
 
-    def _chips_same(self, m, side):
+    def _chips_same(self, m):
         """Whether the open windows and their chip titles are memo `m`'s,
         compared in place (`chip_rects`)."""
         kinds, titles = m[0], m[1]
@@ -792,19 +788,17 @@ class WindowChrome:
                 continue
             if j >= len(kinds) or kinds[j] != k:
                 return False
-            t = self._win_title(win) if side else self._chip_title(win)
+            t = self._chip_title(win)
             if titles[j] != t:
                 return False
             j += 1
         return j == len(kinds)
 
     def chip_rects(self):
-        """One chip per open window, in the `chips` widget's cell: across a
-        top or bottom bar a labelled chip each, packed from the cell's start
-        in a left slot, its end in a right one, and centred on the bar in the
-        centre slot (today's taskbar); down a side bar a square chip each
-        with the label's first letter. They stop short of the cell's end.
-        Returns [(kind, rect, label)] in the order the windows opened (the
+        """One chip per open window where the bar page places it in the
+        `chips` widget's cell: across a top or bottom bar a labelled chip
+        each, down a side bar its icon alone; a chip the cell cannot hold
+        is left out. Returns [(kind, rect, label)] in the order the windows opened (the
         back-stack's, never the z-order, so a chip never moves when the focus
         does), on the root canvas; deterministic, so draw + hit-test share it
         without stored state. The answer is kept while the windows, their
@@ -814,15 +808,13 @@ class WindowChrome:
         got = self._chips_cell()
         if got is None:
             return []
-        (edge, (bx, by, bw, bh), _dy, _cells), (_n, (cx, cy, cw, ch), _t, slot) = got
         lay = self.root_ctx.layout
         fs = lay.fs
-        side = edge == "left" or edge == "right"
         m = self._chip_memo
         if (m is not None and m[2] is got and m[3] == fs and m[4] == lay.cs
-                and self._chips_same(m, side)):
+                and self._chips_same(m)):
             return m[5]
-        return self._chips_made(got, lay, fs, side)
+        return self._chips_made(got, lay, fs)
 
     def chip_model(self):
         """The bar page's `wins` (bar_ui): a row per open window in the order
@@ -863,64 +855,20 @@ class WindowChrome:
         self._wins_rows = rows
         return rows
 
-    def _chips_made(self, got, lay, fs, side):
+    def _chips_made(self, got, lay, fs):
         """`chip_rects`' answer made again (its comprehensions' cells are
         made on every call of the function that holds them, so they live
-        here, where only a change runs): the bar page's where it draws the
-        bar (`BarLayer.page_chip_rects`), else the look's arithmetic below."""
-        (edge, (bx, by, bw, bh), _dy, _cells), (_n, (cx, cy, cw, ch), _t, slot) = got
+        here, where only a change runs): the bar page's
+        (`BarLayer.page_chip_rects`)."""
         kinds = tuple(k for k in self._kinds if k in self.windows)
         if not kinds:
             return []
-        if side:
-            titles = tuple(self._win_title(self.windows[k]) for k in kinds)
-        else:
-            titles = tuple(self._chip_title(self.windows[k]) for k in kinds)
+        titles = tuple(self._chip_title(self.windows[k]) for k in kinds)
         out = []
         self._chip_memo = (kinds, titles, got, fs, lay.cs, out)
-        paged = None if side else self.ws.bar_layer.page_chip_rects(got[0], [])
-        self.chips_paged = paged is not None
-        if paged is not None:
-            for k, r in paged:
-                out.append((k, r, titles[kinds.index(k)]))
-            return out
-        if side:
-            side = 16 * lay.cs
-            x = bx + (bw - side) // 2
-            y = by + cy
-            end = by + cy + ch - 4 * fs
-            for k, t in zip(kinds, titles):
-                if y + side > end:
-                    break                              # out of bar space -- stop
-                out.append((k, (x, y, side, side), t[:1]))
-                y += side + 2 * fs
-            return out
-        pad = _CHIP_PAD                    # the look's: icon slot and margins
-        gap = 6
-        room = cw - 4 * fs - (len(titles) - 1) * gap
-        cap = max(len(t) for t in titles)
-        while True:
-            labels = [t[:cap] for t in titles]
-            widths = [_ui_draw.text_width(lb, fs, "ui") + pad for lb in labels]
-            if sum(widths) <= room or cap <= 4:
-                break
-            cap -= 1                     # shorten the longest titles first
-        total = sum(widths) + (len(widths) - 1) * gap
-        if slot == 1:
-            x = max(cx, (bw - total) // 2)
-        elif slot == 2:
-            x = max(cx, cx + cw - total)
-        else:
-            x = cx
-        x += bx
-        h = min(bh * 28 // 40, bh - 8)
-        y = by + (bh - h) // 2
-        end = bx + cx + cw - 4 * fs
-        for i, k in enumerate(kinds):
-            if x + widths[i] > end:
-                break                                  # out of bar space -- stop
-            out.append((k, (x, y, widths[i], h), labels[i]))
-            x += widths[i] + gap
+        paged = self.ws.bar_layer.page_chip_rects(got[0], [])
+        for k, r in paged or ():
+            out.append((k, r, titles[kinds.index(k)]))
         return out
 
     def _draw_taskbar_chips(self, quiet=False):
@@ -930,30 +878,27 @@ class WindowChrome:
         # disturbance (desk repaint, drag, cursor, animation) makes `quiet` False
         # and restarts the streak, so both buffers refresh before skipping again.
         sc = self.root_canvas
-        fs = self._fs()
-        th = self.ws.theme_colors
         sig = self._chips_gen()
-        if sig != self._chip_sig:
+        changed = sig != self._chip_sig
+        if changed:
             # New chip pixels on the OS bar: the compositor's strip carries them.
             self._outside_f = self.ws.frame_state.frames_drawn
             got = self._chips_cell()
             if got is not None:
                 bx, by, bw, bh = got[0][1]
                 self.ws.bar_layer.strip_moved(sc, bx, by, bw, bh)
-        if not quiet or sig != self._chip_sig:
+        if not quiet or changed:
             self._chip_sig = sig
             self._chip_streak = 0
         elif self._chip_streak >= self.retained_n():
             return
         self._chip_streak += 1
+        if not changed and not self.chip_rects():
+            return                      # (no chips, and none to take away)
         # The chips blend (their labels' and plates' edges) over the bar's
-        # band, which the bar painted once: its ground goes down again first
-        # in the root's bar, so a chip repaint is a full repaint's pixels.
-        if self.chips_paged and self.ws.bar_layer.redraw_chips("desk"):
-            return
-        self.ws.bar_layer.repaint_cell("desk", "chips")
-        line_h = self.root_ctx.layout.line_h
-        self._draw_look_chips(sc, th, fs, line_h)
+        # band, which the bar painted once: the bar page draws them again
+        # over its ground (`BarLayer.redraw_chips`).
+        self.ws.bar_layer.redraw_chips("desk")
 
     def _chips_gen(self):
         """A count that moves whenever the chips' pixels would: each chip's
@@ -980,33 +925,6 @@ class WindowChrome:
         if moved:
             self._chip_gen += 1
         return self._chip_gen
-
-    def _draw_look_chips(self, sc, th, fs, line_h):
-        """The taskbar chips of a bar the bar page does not draw (a side
-        bar's, a centred slot's) as the look's tabs (docs/history/look_2026-10.md step 14):
-        the window's icon (its icon set slot, its app cart's sprite, else its
-        glyph) then its title, the
-        focused window's chip raised under the current mark, another open
-        window's in the dim ink. The focused chip's content takes the ink the
-        look gives current content (Moy's accent), the plate's second cue. A
-        minimized window's chip keeps the chrome's ink."""
-        current = _ui_draw.current_ink(sc, th) or th["chrome_ink"]
-        for key, (x, y, w, h), label in self.chip_rects():
-            win = self.windows[key]
-            focused = key == self.focus_key and not win.minimized
-            _ui_draw.bar_part(sc, th, _ui_draw.BAR_CHIP, (x, y, w, h), focused)
-            ink = (current if focused else
-                   th["chrome_ink"] if win.minimized else th["chrome_ink_dim"])
-            slot = (x + 12, y + (h - 18) // 2, 18, 18)
-            if not self.ws.draw_icon(self._icon_slot(win), slot, ink, sc):
-                img = self._win_icon_img(win)
-                if img is not None:
-                    iw = getattr(img, "w", 16) or 16
-                    s = max(1, 18 // iw)
-                    sc.spr(img, slot[0] + (18 - iw * s) // 2, slot[1] + (18 - iw * s) // 2, s)
-                else:
-                    _bar_glyph(_ICON_GLYPHS.get(win.kind, "app"), slot, ink, sc)
-            sc.print(label, x + 38, y + (h - line_h) // 2, ink, 1)
 
     def chip_tap(self, key):
         """Taskbar chip click -- pure FOCUS verbs, never a pop: restore a
