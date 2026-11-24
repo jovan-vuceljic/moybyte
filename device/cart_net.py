@@ -52,17 +52,24 @@ class CartNet:
                    while the dial runs (the first call dials), False once
                    its budget passed
         open(url)  GET with redirects followed (a GitHub release asset is a
-                   302 to its CDN)
+                   302 to its CDN); with `span=(start, n)` those `n` bytes
+                   asked for, which a server that honours it answers 206
 
     and `out_of_memory()`, which cart_index asks after a fetch fails, so a
     console whose internal RAM is spent says so. TLS verifies the server's
     certificate (native/moy_net/moy_ota.h), and cart_index checks every file
     against its index's sha256 besides. The radio is the
-    app's lease (`ws.spine.wifi_hold("carts")`), never this."""
+    app's lease (`ws.spine.wifi_hold("carts")`), never this.
 
-    def __init__(self, wifi, autoconnect=None):
+    With `ranges` it says it reads part of a file (cart_index's `ranges`), so
+    an install reads only the members of a release asset this board keeps
+    (cart_unpack._Ranged). A Zero's install runs with it; a console's, whose
+    ranged open would hold a frame on the VM's thread, without."""
+
+    def __init__(self, wifi, autoconnect=None, ranges=False):
         self.wifi = wifi
         self.autoconnect = autoconnect
+        self.ranges = ranges
         self._dialled = None        # ticks_ms of the dial ready() waits on
 
     def _up(self):
@@ -90,9 +97,12 @@ class CartNet:
             self._up, None if self.autoconnect is None else self._dial, self._dialled)
         return up
 
-    def open(self, url):
+    def open(self, url, span=None):
         import moy_net
-        h, status, length = moy_net.http_open(url, CARTS_AGENT)
+        if span is None:
+            h, status, length = moy_net.http_open(url, CARTS_AGENT)
+        else:
+            h, status, length = moy_net.http_open(url, CARTS_AGENT, span[0], span[1])
         return _Response(h, status, length)
 
     def out_of_memory(self):
