@@ -926,8 +926,8 @@ class ImprovBoard:
         st = moy_net.wifi_status()
         return st[4] if st[2] and st[4] else None
 
-    def address(self):
-        return moy_net.web_auth(SYSTEM_DIR), moy_net.web_claim()
+    def address(self, fresh=False):
+        return moy_net.web_auth(SYSTEM_DIR), moy_net.web_claim(fresh)
 
 
 def make_improv():
@@ -1127,6 +1127,8 @@ def serve():
     sweep_carts(CARTS_DIR)
     seed_carts(CARTS_DIR)
     improv = make_improv()
+    if improv is not None:
+        moy_net.web_cable(1)         # the hello tells a page this board pairs by cable
     me = identity()
     name = me.get("name") or HOSTNAME
     ip = connect(hostname=name)

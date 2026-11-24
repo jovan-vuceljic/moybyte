@@ -45,9 +45,10 @@
 //                        asked for ({t:"pick"}), TRANSFERRED; or
 //   {t:"picked", id, cancel}     ...the player closed the question
 //   {t:"pod", cart}      play `cart` on the serving board (POST /run)
-//   {t:"claim", claim, id, pw, name}  set a board's first password by the
-//                        claim its Improv answer carried, then pair by it
-//                        (THE SIGN-IN, the claim)
+//   {t:"claim", claim, id, pw, name}  set a board's password by the claim
+//                        its Improv answer carried (its first, or a new one
+//                        the cable asked for), then pair by it (THE SIGN-IN,
+//                        the claim)
 // worker -> main:
 //   {t:"status", s}      boot progress text
 //   {t:"assets", json}   the page's metadata payload (size/title/audio/input)
@@ -61,9 +62,11 @@
 //   {t:"keep"}           site mode: ask the browser to make this origin
 //                        durable. Sent to the PAGE because storage.persist()
 //                        is window-only -- a Worker cannot ask, only look.
-//   {t:"pair", pw, why, wait}  this board has not paired this browser, so the
-//                        boot stopped before the VM: the page asks. `pw` a
-//                        password can pair it (else only the QR can), `why`
+//   {t:"pair", pw, cable, why, wait}  this board has not paired this browser,
+//                        so the boot stopped before the VM: the page asks.
+//                        `pw` a password can pair it (else only the QR can),
+//                        `cable` the board pairs over the cable (a Zero: no
+//                        screen, so no QR; My consoles' Manage by cable), `why`
 //                        what failed last ("" the first time), `wait`
 //                        signInWaitSays' sentence while the board holds wrong
 //                        tries off, else ""
@@ -1116,12 +1119,15 @@ async function importP8(name, buf) {
 //   and the page stores it), or nothing -- the page asks to pair: by the
 //   console's password (SPAKE2+, `{t:"password"}`), or by scanning the code.
 //
-// THE CLAIM: a board with no password takes its first one from the browser
-// holding the claim its Improv answer carried over the cable (moy_webauth.c,
-// THE CLAIM): `{t:"claim"}`, from My consoles over the link or from the
-// pairing prompt of a page opened at the URL Improv answered. The record is
-// made here (moy_sw_claim), the password never leaves the browser, and the
-// same password pairs this browser at once.
+// THE CLAIM: a board takes its password from the browser holding the claim
+// its Improv answer carried over the cable (moy_webauth.c, THE CLAIM): its
+// first, or a new one replacing it when the cable asked for a fresh claim
+// (My consoles' Manage by cable). `{t:"claim"}` comes from My consoles over
+// the link or from the pairing prompt of a page opened at the URL Improv
+// answered. The record is made here (moy_sw_claim), the password never
+// leaves the browser, and the same password pairs this browser at once. A
+// claim that fails says why in the pairing prompt, or over the link alone
+// while the console runs signed in.
 //
 // A credential whose hello's nonce the board no longer holds is answered 409
 // {"error":"nonce"} (other hellos took its place, or it ran out): the page
@@ -1156,6 +1162,7 @@ let sealedOnce = false;         // this page has signed in: never plain again
 const NONCE_TRIES = 3;          // hellos a credential is sent after
 let signingIn = null;           // the sign-in in flight, which every caller shares
 let authNeed = null;            // why the last sign-in failed: {pw, wait, why}
+let authCable = false;          // the last hello's "cable": the board pairs over the cable
 let SW = null;                  // moy_seal_web.c's entry points
 const utf8 = new TextEncoder(), utf8d = new TextDecoder();
 
@@ -1230,6 +1237,7 @@ async function hello() {
     }
     if (r.status !== 200) return { r };
     if (sw().hello(swPut(utf8.encode(r.text))) !== 0) return { r: { status: 0, doc: {} } };
+    authCable = r.doc.cable === true;
     return { id: sw().M.UTF8ToString(sw().board()), pw: !!r.doc.pw };
 }
 
@@ -1350,7 +1358,6 @@ async function pairPassword(pw, name) {
 async function claimPassword(claim, id, pw, name) {
     const h = await hello();
     if (!h.id) { need(h.r, false); return { ok: false, why: (authNeed && (authNeed.wait || authNeed.why)) || "the console did not answer" }; }
-    if (h.pw) return { ok: false, why: "the console has a password already" };
     if (id && h.id !== id) return { ok: false, why: "that setup is another console's" };
     if (pw.length < 8 || pw.length > 64) return { ok: false, why: "a password is 8 to 64 characters" };
     const n = swCall(sw().claim, claim, pw);
@@ -1358,12 +1365,14 @@ async function claimPassword(claim, id, pw, name) {
     const r = await authPost(utf8d.decode(swGet(n)));
     if (r.status === 200) return { ok: true, why: "" };
     if (r.status === 429) return { ok: false, why: signInWaitSays(r.doc.ms | 0) };
-    if (r.doc.error === "claimed") return { ok: false, why: "the console has a password already" };
-    if (r.doc.error === "claim") return { ok: false, why: "that setup ran out: the console restarted since, so set it up again" };
+    const cable = "plug the console in and choose Manage by cable in My consoles";
+    if (r.doc.error === "claimed") return { ok: false, why: "the console has a password already: to set a new one, " + cable };
+    if (r.doc.error === "claim") return { ok: false, why: "that link has run out (it was used, or a newer one was made): " + cable };
     return { ok: false, why: "the console did not take the password (" + r.status + ")" };
 }
 function askToPair() {
-    self.postMessage(Object.assign({ t: "pair" }, authNeed || { pw: false, wait: "", why: "" }));
+    self.postMessage(Object.assign({ t: "pair" }, authNeed || { pw: false, wait: "", why: "" },
+                                   { cable: authCable }));
 }
 
 // A call to a sealed route: {status, text, wait}. `text` is the answer's
@@ -2715,7 +2724,14 @@ self.onmessage = async (ev) => {
             try { a = await claimPassword(String(m.claim || ""), String(m.id || ""), String(m.pw || ""), m.name); }
             catch (e) { a = { ok: false, why: "the console did not answer" }; }
             self.postMessage({ t: "claimed", ok: a.ok, why: a.why });
-            if (!a.ok || !(await pairPassword(m.pw, m.name))) askToPair();
+            if (!a.ok) {
+                // Signed in, the console runs on: the link's answer says why.
+                if (!signedIn) {
+                    authNeed = Object.assign({ pw: false, wait: "", ms: -1, gone: false }, authNeed,
+                                             { why: a.why });
+                    askToPair();
+                }
+            } else if (!(await pairPassword(m.pw, m.name))) askToPair();
         } else if (m.t === "password") {
             // The pairing prompt's password: a pairing reloads the page (its
             // {t:"key"}), anything else asks again with why.

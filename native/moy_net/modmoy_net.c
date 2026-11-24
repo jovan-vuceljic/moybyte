@@ -822,13 +822,18 @@ static mp_obj_t mod_web_auth(mp_obj_t system) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mod_web_auth_obj, mod_web_auth);
 
-// web_claim() -> this boot's claim (32 hex digits), "" once a password is set.
-static mp_obj_t mod_web_claim(void) {
+// web_claim(fresh=False) -> the board's claim (32 hex digits), "" once a
+// password is set; fresh: a new one, which may replace a password.
+static mp_obj_t mod_web_claim(size_t n_args, const mp_obj_t *args) {
     char c[33];
-    moy_web_claim(c);
+    if (n_args > 0 && mp_obj_is_true(args[0])) {
+        moy_web_claim_new(c);
+    } else {
+        moy_web_claim(c);
+    }
     return mp_obj_new_str(c, strlen(c));
 }
-static MP_DEFINE_CONST_FUN_OBJ_0(mod_web_claim_obj, mod_web_claim);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_web_claim_obj, 0, 1, mod_web_claim);
 
 // web_keys() -> [(kid, created, seen, name)], the paired browsers.
 static mp_obj_t mod_web_keys(void) {

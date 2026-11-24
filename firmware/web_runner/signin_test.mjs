@@ -97,7 +97,7 @@ function page(b, signin) {
     const store = { probeMode: async (f) => ((await f("sync")).status === 200 ? "board" : "site") };
     const make = new Function("mp", "fetch", "self", "store", SECTION + `
         return { signIn, sealed, pairPassword, claimPassword,
-                 state: () => ({ auth, authOpen, signedIn, authNeed }),
+                 state: () => ({ auth, authOpen, signedIn, authNeed, authCable }),
                  set: (a) => { auth = Object.assign(auth, JSON.parse(JSON.stringify(a))); } };`);
     const w = make(mp, b.fetch, self, store);
     if (signin) w.set(signin);
@@ -234,13 +234,22 @@ for (const st of [404, 405, 501]) {
     ok("...with the record made in the browser, never the password",
        !JSON.stringify(b.log).includes("kitchen-pass") && b.count.claim === 1);
     const no = await w.claimPassword("c2", "", "kitchen-pass", "x");
-    ok("a claim the board does not hold says the setup ran out", !no.ok && /ran out/.test(no.why), JSON.stringify(no));
+    ok("a claim the board does not hold says the link ran out, and how to get another",
+       !no.ok && /run out/.test(no.why) && /Manage by cable/.test(no.why), JSON.stringify(no));
+    ok("...and the hello said the board pairs over no cable", w.state().authCable === false);
 }
 {
-    const b = board((op) => op === "hello" ? Object.assign({}, HELLO, { body: Object.assign({}, HELLO.body, { pw: true }) }) : SIGNED);
+    const pw = Object.assign({}, HELLO, { body: Object.assign({}, HELLO.body, { pw: true, cable: true }) });
+    const b = board((op, d) => op === "hello" ? pw
+        : op === "claim" ? (d.claim === "c1" ? { status: 200, body: { ok: true } } : { status: 403, body: { error: "claimed" } })
+        : SIGNED);
     const w = page(b, null);
     const a = await w.claimPassword("c1", "", "kitchen-pass", "x");
-    ok("a board with a password is sent no claim", !a.ok && !b.count.claim && /already/.test(a.why));
+    ok("a board with a password takes the cable's claim: the board decides", a.ok && b.count.claim === 1, JSON.stringify(a));
+    ok("...and its hello says it pairs over the cable", w.state().authCable === true);
+    const no = await w.claimPassword("c2", "", "kitchen-pass", "x");
+    ok("a board with a password and no claim says how to set a new one",
+       !no.ok && /already/.test(no.why) && /Manage by cable/.test(no.why), JSON.stringify(no));
 }
 {
     const b = board((op) => op === "hello" ? HELLO : SIGNED);

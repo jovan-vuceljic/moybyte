@@ -534,6 +534,70 @@ def test_a_wrong_claim_counts_as_a_wrong_credential(tmp_path):
     assert st == 429 and d["error"] == "wait"
 
 
+def test_the_claim_outlives_a_restart_until_it_is_taken(tmp_path):
+    """The link setup gave survives a reboot: the claim sits in
+    system/claim until it is used, and a board with a password drops it."""
+    h = _host(tmp_path)
+    claim = nb.web_claim()
+    assert (tmp_path / "system" / "claim").read_text() == claim + "\n"
+    nb.web_auth(None)
+    nb.web_auth(str(tmp_path / "system"))
+    assert nb.web_claim() == claim, "a reboot keeps the claim"
+    assert _claim(h, claim) == (200, {"ok": True})
+    assert not (tmp_path / "system" / "claim").exists()
+    nb.web_auth(None)
+    nb.web_auth(str(tmp_path / "system"))
+    assert nb.web_claim() == ""
+
+
+def test_the_cable_s_fresh_claim_replaces_a_password_and_signs_everyone_out(tmp_path):
+    """A claim minted on the cable's request takes a board that has a
+    password: the new record replaces it, every session ends (the old
+    browsers sign in again by their keys), and the browser that sent it
+    pairs by the new password."""
+    h = _host(tmp_path, password=PASSWORD)
+    old = _page(h)
+    old.pair_password(PASSWORD)
+    assert old.json("GET", "/carts.json")[0] == 200
+    assert nb.web_claim() == "", "a password: no claim unless the cable asks"
+    stale = nb.web_claim(True)
+    claim = nb.web_claim(True)
+    assert len(claim) == 32 and claim != stale
+    assert _claim(h, stale) == (403, {"error": "claim"}), "a newer claim drops the last"
+    page = _page(h)
+    page.claim(claim, "a new one 42")
+    assert page.json("GET", "/carts.json")[0] == 200
+    assert nb.web_signout() == 1, "the old browser's session ended with the claim"
+    old.sign_in()
+    assert old.json("GET", "/carts.json")[0] == 200, "its key is kept"
+    with pytest.raises(AssertionError):
+        _page(h).pair_password(PASSWORD)
+    _page(h).pair_password("a new one 42")
+    assert _claim(h, claim) == (403, {"error": "claimed"}), "taken once"
+
+
+def test_a_cable_claim_lasts_one_boot_and_a_password_change_drops_it(tmp_path):
+    h = _host(tmp_path, password=PASSWORD)
+    claim = nb.web_claim(True)
+    nb.web_auth(None)
+    nb.web_auth(str(tmp_path / "system"))
+    assert _claim(h, claim) == (403, {"error": "claimed"})
+    assert not (tmp_path / "system" / "claim").exists()
+    claim = nb.web_claim(True)
+    nb.web_signout()                     # passwd: the password changed another way
+    assert _claim(h, claim) == (403, {"error": "claimed"})
+
+
+def test_the_hello_says_whether_the_board_pairs_by_cable(tmp_path):
+    h = _host(tmp_path)
+    assert _page(h).hello()["cable"] is False
+    nb.web_cable(1)
+    try:
+        assert _page(h).hello()["cable"] is True
+    finally:
+        nb.web_cable(0)
+
+
 def test_a_recorded_sign_in_does_not_sign_in_again(tmp_path):
     """Every login answers a hello's fresh nonce, used once: a replay finds it
     gone (409, which counts nothing)."""
