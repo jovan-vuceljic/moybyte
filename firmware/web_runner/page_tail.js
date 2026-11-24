@@ -106,8 +106,9 @@ var PINEL=document.getElementById("pin"),PINF=document.getElementById("pinf"),
 PINB=document.getElementById("pinb"),PINM=document.getElementById("pinm"),
 PINP=document.getElementById("pinp"),PINR=document.getElementById("pinr");
 var KEYS="moybyte.keys";
-// THE CLAIM (worker.js, THE SIGN-IN): a board with no password takes its
-// first from the browser holding the claim its Improv answer carried, here
+// THE CLAIM (worker.js, THE SIGN-IN): a board takes its password from the
+// browser holding the claim its Improv answer carried (its first, or a new
+// one the cable asked for), here
 // from the url's # (the URL Improv answered, which any Improv client opens)
 // or from My consoles over the link (a `claim` request); `CHOOSE` while the
 // prompt asks for a new password rather than the console's.
@@ -146,9 +147,11 @@ CHOOSE=!m.pw&&!!CLAIM;
 if(CHOOSE){PINP.textContent="Choose this console's password, 8 to 64 characters: "
 +"every browser pairs with it.";PINR.style.display="";PINEL.style.display="flex";
 PINB.disabled=false;try{PINF.value="";PINF.focus();}catch(e){}return;}
-PINP.textContent=m.pw?"Scan the code on the console's WEB CONSOLE screen, or type the "
-+"console's password.":"Scan the code on the console's WEB CONSOLE screen. To type a "
-+"password instead, set one on the console (passwd).";
+PINP.textContent=m.cable?(m.pw?"Type the console's password, or pair this board by cable: "
++"plug it in and choose Manage by cable in My consoles.":"Pair this board by cable: plug it "
++"in and choose Manage by cable in My consoles."):m.pw?"Scan the code on the console's WEB "
++"CONSOLE screen, or type the console's password.":"Scan the code on the console's WEB "
++"CONSOLE screen. To type a password instead, set one on the console (passwd).";
 PINR.style.display=m.pw?"":"none";
 PINEL.style.display="flex";PINB.disabled=false;
 if(m.pw){try{PINF.value="";PINF.focus();}catch(e){}}}
