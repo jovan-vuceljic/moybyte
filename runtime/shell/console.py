@@ -680,9 +680,10 @@ class Workstation:
         # windowed_chrome is a PROPERTY (mode-aware): it is True only in the
         # windowed WM's DESKTOP mode -- see the property below the screen
         # projection.
-        # The bars start as the default's until the theme's layout resolves
-        # (Appearance.apply_layout): they are one per process, as the glass is.
-        _layout_base.place_bars(_layout_base.DEFAULT_BARS)
+        # The bars start as the default theme's on this tier until the
+        # theme's layout resolves (Appearance.apply_layout): they are one per
+        # process, as the glass is.
+        _layout_base.place_bars(self.look.boot_bars())
         self.layout = Layout(self.sys_canvas.w, self.sys_canvas.h,
                              self.look.effective_font_scale(),
                              self.look.effective_chrome_scale())

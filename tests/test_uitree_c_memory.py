@@ -83,7 +83,8 @@ def mem(loop):
              ("achievements", ws.open_settings, page("achievements")),
              ("wifi", ws.open_settings, page("wifi")), ("tasks", None, ws.open_tasks)]
     steps(40)
-    out = {"desk": live(), "engines_at_desk": len(ALL), "rounds": [], "kept": {}, "calls": []}
+    out = {"desk": live(), "engines_at_desk": len(ALL), "rounds": [], "kept": {}, "calls": [],
+           "mods": sorted(__import__("sys").modules)}
     for r in range(ROUNDS):
         for name, prep, opener in pages:
             before = live()
@@ -120,6 +121,14 @@ def result(tmp_path_factory):
 def test_the_desk_holds_the_home_band_tabs_and_strip_alone_before_a_page_opens(result):
     assert result["engines_at_desk"] > 0, "the console made no page at boot: the pin measures nothing"
     assert 0 < result["desk"] <= DESK_MAX, result["desk"]
+
+
+def test_the_desk_loads_no_shaped_bar_page(result):
+    """The T-Deck's bar is the bar page's (`bar_engine.placed`): the shaped
+    pages (`bar_shape_ui`) load only for a bar of another shape, and the
+    console's first layout is the default theme's on its tier, not a
+    shaped bar its theme then replaces."""
+    assert "bar_shape_ui" not in result["mods"]
 
 
 def test_leaving_a_page_keeps_its_tree_and_nothing_grows(result):
