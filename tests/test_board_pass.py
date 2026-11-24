@@ -33,8 +33,10 @@ def args(*argv):
 
 
 def test_every_console_board_has_a_suite_and_the_zero_has_none():
+    """The C3 Zero's suite boots its browser console through the loader
+    (docs/web_console_online_2026-11.md §11); the XIAO Zero has none."""
     s = board_pass.suites(ROOT, DIRS)
-    assert sorted(s) == CONSOLES
+    assert sorted(s) == sorted(CONSOLES + ["c3_zero"])
     for name, (path, var) in s.items():
         assert os.path.isfile(os.path.join(ROOT, path))
         assert var.startswith("MOYBYTE_") and var.endswith("_PORT")
@@ -56,6 +58,10 @@ def test_a_pass_that_cannot_start_says_why(argv, says):
 
 def test_all_is_every_console_board_and_never_the_zero():
     assert board_pass.plan(args("--all"), DIRS, False) == CONSOLES
+
+
+def test_a_headless_board_with_a_suite_is_passed_by_name():
+    assert board_pass.plan(args("c3_zero"), DIRS, False) == ["c3_zero"]
 
 
 def test_the_main_checkout_is_refused_for_a_build_and_says_why():
@@ -233,6 +239,18 @@ def test_each_step_gets_the_resolved_port_and_the_suite_its_variable(bench):
     cmd, env = suite[0]
     assert "tests/test_tdeck_on_glass.py" in cmd and cmd[-2:] == ["-k", "wasm"]
     assert env["MOYBYTE_TDECK_PORT"] == "/dev/fake-tdeck"
+
+
+def test_a_headless_board_is_flashed_and_its_suite_run_and_nothing_else(bench):
+    """The C3 Zero answers no dev channel: no desk, add-on, reboot, perf or
+    shot, only the flash and its suite on the port it was given."""
+    steps = FakeSteps()
+    assert run_pass(bench, steps, "c3_zero", "--shot") == 0
+    verbs = [c[3] for c, _e in steps.cmds if c[1:2] == [board_pass.BOARD_PY]]
+    assert verbs == ["flash"]
+    suite = [(c, e) for c, e in steps.cmds if "pytest" in c]
+    assert len(suite) == 1 and "tests/test_c3_zero_on_glass.py" in suite[0][0]
+    assert suite[0][1]["MOYBYTE_C3_ZERO_PORT"] == "/dev/fake-c3_zero"
 
 
 def test_the_tdeck_is_put_at_volume_0_around_its_suite(bench):
