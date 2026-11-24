@@ -32,3 +32,13 @@ def rows():
     with ui.page("Rows"):
         with ui.rows("rows", cur="cur"):
             ui.link("pick", label="{.k}")
+
+
+def secret():
+    with ui.page("Probe"):
+        ui.field("Password", "text", 64, secret=True)
+
+
+def plain():
+    with ui.page("Probe"):
+        ui.field("Password", "text", 64)

@@ -25,7 +25,7 @@ ID_MAX = 63
 KEY_MAX = 127
 _ROLES = ("damage", "surface", "theme", "files", "carts", "nav", "prefs",
           "notify", "wallpaper", "artwork", "clipboard", "install", "wifi", "bt", "usb",
-          "ui", "moybyte", "uitree")
+          "moybyte", "uitree")
 # The roles every grant holds (moy_app.h's MOY_ROLE_FLOOR).
 _FLOOR = ("moybyte",)
 _ROWS = ("damage.all", "damage.again",
@@ -45,16 +45,6 @@ _ROWS = ("damage.all", "damage.again",
          "prefs.clear", "wallpaper.load_copy", "wallpaper.save_copy",
          "artwork.current", "artwork.follow", "clipboard.put_text", "clipboard.text",
          "clipboard.kind", "clipboard.seq",
-         # the toolkit's rows: a compiled app's, served by native/moy_ui and
-         # counted by nothing here
-         "ui.page", "ui.label", "ui.button", "ui.toggle", "ui.slider", "ui.list",
-         "ui.part", "ui.focus", "ui.keys_taken", "ui.at", "ui.group", "ui.info", "ui.link",
-         "ui.cycle", "ui.seg", "ui.swatches", "ui.hints", "ui.icon", "ui.progress",
-         "ui.table", "ui.scroll", "ui.field", "ui.dialog", "ui.tabs", "ui.grid", "ui.card", "ui.popover",
-         "ui.menu", "ui.tool", "ui.rule", "ui.text_view", "ui.table_part",
-         "ui.part_at", "ui.split", "ui.table_dist", "ui.table_floor", "ui.held",
-         "ui.slots", "ui.slot", "ui.slot_next", "ui.held_last",
-         "ui.held_all", "ui.empty", "ui.note", "ui.bubble",
          # the kernel's messages, notifications and badges, items handed,
          # timers, alarms and log (native/moy_kernel/moy_evq.h, moy_notes.h,
          # moy_items.h, moy_log.h) and

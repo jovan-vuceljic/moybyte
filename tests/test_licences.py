@@ -85,7 +85,7 @@ def test_the_page_lists_the_parts_and_opens_a_text(tmp_path):
 
 def test_the_texts_arrows_scroll_it_once_it_has_focus(tmp_path):
     """L7: the text is its own stop; Down there scrolls it a line."""
-    from runtime import ui, ui_host
+    from runtime import ui_host
     ws = build_ws(tmp_path)
     ws.open_settings()
     sl = ws.settings_layer
@@ -95,7 +95,7 @@ def test_the_texts_arrows_scroll_it_once_it_has_focus(tmp_path):
     for _ in range(2):
         ws.mark_dirty()
         ws.frame(1 / 30)
-    assert ui.focus() == "text"
+    assert ui_host._C.api_focus(sl._sub.ctx, None) == "text"
     x, y, w, h = sl._sub.box("text")
     off = lambda: ui_host._C.api_offset(sl._sub.ctx, x + 4, y + 4)   # noqa: E731
     assert off() == 0

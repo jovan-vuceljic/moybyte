@@ -1,18 +1,16 @@
 """The toolkit's generated verb faces (tools/gen_os/ui.py, from
-native/moy_ui/face.json's `api` rows and native/os_calls.json's `ui` rows)
-are one set of names and one set of answers on every face:
+native/moy_ui/face.json's `api` rows) are one set of names and one set of
+answers on every face:
 
   * names: every `api` row is the board module's `api_<verb>` and the
-    host's, and every `ui` row a Lua cart's `ui.<verb>`;
+    host's;
   * answers: one probe, generated from the rows (`probe_script`), calls each
     generated context-form row three frames running, and its answers on
     CPython over the ctypes face equal its answers on the desktop
     MicroPython in the boards' object model, over the module's C.
 
 The files themselves are tools/gen_os_table.py's outputs, which
-tests/test_os_table.py regenerates and compares; the RUN form and a
-compiled app's rows are held by the pages every tier draws alike
-(tests/test_ui_public.py, tests/test_app_ui.py)."""
+tests/test_os_table.py regenerates and compares."""
 
 import os
 import re
@@ -20,7 +18,6 @@ import subprocess
 import sys
 
 from tools.gen_os import ui as G
-from tools.gen_os.table import load
 from unix_mp import require_unix_mp, runtime_tree
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,7 +30,7 @@ sys.path.insert(0, %(rt)r)
 sys.path.insert(0, %(root)r + "/device")
 import moy_gfx
 import moy_ui as M
-import device_canvas, ui_draw, ui
+import device_canvas, ui_draw
 
 
 class Comp:
@@ -60,7 +57,7 @@ import sys
 from array import array
 sys.path.insert(0, %(root)r)
 import runtime
-from runtime import moy_ui as M, ui_draw, ui
+from runtime import moy_ui as M, ui_draw
 from runtime.host_canvas import make_system_canvas
 CV = make_system_canvas(240, 200)
 '''
@@ -68,7 +65,7 @@ CV = make_system_canvas(240, 200)
 COMMON = '''
 CTX = ui_draw.ui_context()
 INP = array("i", [0] * ui_draw.UI_IN_LEN)
-OV = ui._block({"id": "pid", "current": True, "hint": "h", "steps": True})
+OV = None
 
 
 def begin():
@@ -89,13 +86,6 @@ def test_every_api_row_is_a_name_on_both_faces():
     for v in VERBS:
         assert v.name in mp, v.name
         assert callable(getattr(moy_ui, v.name, None)), v.name
-
-
-def test_every_ui_row_is_a_lua_verb():
-    with open(G.LUA_H) as f:
-        reg = re.search(r"#define MOYCORE_UI_VERBS(.*?)\n\n", f.read(), re.S).group(1)
-    verbs = set(re.findall(r'\{"(\w+)", moycore_ui_\1\}', reg))
-    assert verbs == {r["name"][3:] for r in load()["rows"] if r["name"].startswith("ui.")}
 
 
 def test_the_context_form_answers_alike_on_cpython_and_the_boards_micropython():

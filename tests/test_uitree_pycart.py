@@ -124,12 +124,14 @@ def test_the_hosts_back_steps_the_carts_pages_then_leaves(tmp_path):
     assert pl.face.back() is False, "the first page's back is the host's: it leaves the app"
 
 
-def test_a_cart_without_the_extension_keeps_the_toolkit(tmp_path):
-    ws, _, _ = _run(tmp_path, "Old Ui", "def _draw():\n    ui.page('Old')\n    ui.label('hi')\n    ui.end()\n",
+def test_a_cart_without_the_extension_has_no_ui(tmp_path):
+    """The UI tree is the one ui: a cart that does not name moybyte.uitree is
+    handed no `ui`, and one that draws with it stops on the name."""
+    ws, _, _ = _run(tmp_path, "Old Ui", "def _draw():\n    ui.page('Old')\n    ui.label('hi')\n",
                     ext=())
     pl = ws.run.player
-    assert pl.cart_error is None, pl.cart_error
-    assert pl.tree is None and pl.ns["ui"].__name__.rpartition(".")[2] == "ui"
+    assert pl.tree is None and "ui" not in pl.ns
+    assert "name 'ui' is not defined" in (pl.cart_error or ""), pl.cart_error
 
 
 def test_a_text_editor_that_adopts_an_editor_handle_edits_its_document(tmp_path):
