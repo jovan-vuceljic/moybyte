@@ -386,7 +386,7 @@ ui.hook("symbol", symbol, takes="pointer")
 
 def _find_strip():
     with ui.row("find_strip", shown="finding", close="find_close"):
-        ui.field("", "find_q", 64, changed="find_live", on="find_next", hint="Find")
+        ui.field("", "find_q", 64, changed="find_live", on="find_next", hint="Find", edit="open")
         ui.status("{code.match} of {code.matches}", shown="find_q")
         ui.button("case", label="Aa", marked="!find_ci")
         ui.button("find_prev", icon="arrow_up", alone=True, shown="@desk")
@@ -434,7 +434,8 @@ def code_page():
                 ui.link("complete", "{.kind}", label="{.word}")
         with ui.popover("goto", anchor="{@desk?code.caret:code}", w="{@desk?420:228}", close="overlay_close",
                         shown="over=goto"):
-            ui.field("", "goto_q", 32, changed="goto_filter", on="goto_pick", hint="Go to a definition")
+            ui.field("", "goto_q", 32, changed="goto_filter", on="goto_pick", hint="Go to a definition",
+                     edit="open")
             with ui.rows("defs", cur="def_at"):
                 ui.link("goto", "line {.line}", label="{.name}")
         with ui.popover("scripts", anchor="code", w="{@desk?260:200}", close="overlay_close",

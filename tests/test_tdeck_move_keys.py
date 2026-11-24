@@ -207,6 +207,28 @@ def test_files_rows_step_and_its_rename_field_types(tmp_path):
     assert not ws.input.text_mode
 
 
+@pytest.mark.parametrize("runtime", ["lua", "python"])
+def test_wasd_crosses_a_field_until_enter_opens_its_edit(tmp_path, runtime):
+    """A field is a stop: S and W step past it and type nothing. Enter
+    opens its edit, where W types; Enter ends it and S steps on."""
+    from test_app_field_typing import LUA_EDIT, PY_EDIT, _focus, _name, _open
+    ws, drv = _open(tmp_path, "Edit App", LUA_EDIT if runtime == "lua" else PY_EDIT, runtime)
+    t = _TDeck(ws, drv)
+    assert _focus(ws) == "name" and not ws.input.text_mode
+    t.key("s", settle=3)
+    assert _focus(ws) == "save"
+    t.key("w", settle=3)
+    assert _focus(ws) == "name" and _name(ws) == "Srbija", "W and S crossed the field, typing nothing"
+    t.key("\r", settle=3)
+    assert ws.input.text_mode, "Enter opens the field's edit"
+    t.key("w", settle=3)
+    assert _name(ws) == "Srbijaw", "in the edit W types"
+    t.key("\r", settle=3)
+    assert not ws.input.text_mode and _focus(ws) == "name", "Enter ends the edit, focus stays"
+    t.key("s", settle=3)
+    assert _focus(ws) == "save" and _name(ws) == "Srbijaw"
+
+
 def test_a_and_d_step_the_delete_confirms_buttons(tmp_path):
     ws, _drv, t = _console(tmp_path)
     _make_card(ws, t)

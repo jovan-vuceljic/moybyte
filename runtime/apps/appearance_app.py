@@ -252,7 +252,7 @@ def build():
             ui.link("edit", "{edit_word}")
         with ui.dialog("Name your theme", ["cancel", "keep"], labels=["Cancel", "{armed?Replace:Keep}"],
                        shown="naming"):
-            ui.field("Name", "name", NAME_MAX, on="keep", changed="name_typed")
+            ui.field("Name", "name", NAME_MAX, on="keep", changed="name_typed", edit="open")
             ui.label("{name_note}")
 
 

@@ -153,8 +153,8 @@ ui.action("cancel", "Cancel", cancel)
 
 def _meta():
     with ui.dialog("Cart info", ["cancel", "save"], shown="asking=meta", look="keys"):
-        ui.field("Title", "f_title", max=24, on="save", changed="typed")
-        ui.field("Made by", "f_author", max=24, on="save", changed="typed",
+        ui.field("Title", "f_title", max=24, on="save", changed="typed", edit="open")
+        ui.field("Made by", "f_author", max=24, on="save", changed="typed", edit="open",
                  hint="Your name (you can leave it)")
         ui.label("{ask_msg}", tone="danger", wrap="word", lines=2, shown="ask_msg")
 
@@ -162,7 +162,7 @@ def _meta():
 def _newf():
     with ui.dialog("New script", ["cancel", "add"], shown="asking=newf", look="keys"):
         ui.label("{new_sub}", tone="dim", wrap="word", lines=2)
-        ui.field("Name", "f_name", max=24, on="add", changed="typed", hint="helpers")
+        ui.field("Name", "f_name", max=24, on="add", changed="typed", hint="helpers", edit="open")
         ui.label("{ask_msg}", tone="danger", wrap="word", lines=2, shown="ask_msg")
 
 

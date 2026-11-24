@@ -29,11 +29,15 @@ static const char *const ut_kind_names_[] = {
 #define UT_ALIGN_END "end"
 #define UT_DIR_ROW "row"
 #define UT_DIR_COL "col"
+#define UT_EDIT_OPEN "open"
+#define UT_EDIT_STOP "stop"
 #define UT_FACE_UI "ui"
 #define UT_FACE_TITLE "title"
 #define UT_FACE_MONO "mono"
 #define UT_FACE_CAPTION "caption"
 #define UT_FACE_RESULT "result"
+#define UT_KEYS_TEXT "text"
+#define UT_KEYS_NUMBER "number"
 #define UT_KIND_NORMAL "normal"
 #define UT_KIND_PRIMARY "primary"
 #define UT_KIND_DANGER "danger"
@@ -103,6 +107,7 @@ static inline int32_t ut_p_dir(const char *v) { return ut_prop_("dir", v); }
 static inline int32_t ut_p_draw(const char *v) { return ut_prop_("draw", v); }
 static inline int32_t ut_p_drop(const char *v) { return ut_prop_("drop", v); }
 static inline int32_t ut_p_edge(int v) { return ut_prop_("edge", v ? "True" : "False"); }
+static inline int32_t ut_p_edit(const char *v) { return ut_prop_("edit", v); }
 static inline int32_t ut_p_empty(const char *v) { return ut_prop_("empty", v); }
 static inline int32_t ut_p_face(const char *v) { return ut_prop_("face", v); }
 static inline int32_t ut_p_fill(const char *v) { return ut_prop_("fill", v); }

@@ -1222,7 +1222,7 @@ def build():
             ui.label("Its slides and pictures go to the Trash.", wrap="word", lines=3)
         with ui.dialog("Rename the story", ["cancel", "rename"], kind="primary",
                        shown="renaming"):
-            ui.field("Name", "name", D.MAX_TITLE, hint="my story", on="rename")
+            ui.field("Name", "name", D.MAX_TITLE, hint="my story", on="rename", edit="open")
         _ed_menus()
         ui.toast("{toast}", icon="{toast_icon}", shown="toasting")
 
@@ -1425,7 +1425,7 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build)):
         return None
 
     def typing(self):
-        """A field in focus types (Rename's), and so do a slide's words
+        """A field's open edit types (Rename's), and so do a slide's words
         while the desk's editor writes them."""
         ed = self.ed
         if ed is not None and self.page in EDITOR:

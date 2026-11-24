@@ -139,8 +139,8 @@ def test_a_focused_connect_shows_its_focus_over_its_fill(tmp_path, theme):
     x0, x1 = runs[1]
     box = [(x, y) for x in range(x0 - 3, x1 + 3) for y in range(top - 3, top + 30)]
     rest = [_px(ws)(x, y) for x, y in box]
-    for _ in range(3):                               # the field, then Cancel, then Connect
-        drv.press("down") if _ == 0 else drv.press("right")
+    for _ in range(3):              # the field (its edit open: Tab leaves it), then Cancel, then Connect
+        drv.type_char(9) if _ == 0 else drv.press("right")
         drv.frame(_DT)
         drv.frame(_DT)
         if sl._sub_focused == "Connect":

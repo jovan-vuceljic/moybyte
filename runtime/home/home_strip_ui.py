@@ -45,6 +45,6 @@ ui.action("done", "Done", _done)
 def strip():
     with ui.page(""):
         with ui.split("row", sizes=("1*", "1*"), gap=0, pad=0):
-            ui.field("Search", "query", max=24, changed="typed", on="done", hint="{search_hint}",
+            ui.field("Search", "query", max=24, changed="typed", on="done", hint="{search_hint}", edit="open",
                      shown="searching")
             ui.hints("hints", keys="{.keys}", label="{.words}", tail=".tail", drop=".spare", on="hint")

@@ -398,6 +398,8 @@ int uit_back_popover(uit_t *e, char *buf, size_t cap);
 int uit_page_shown(const uit_t *e);
 // Whether no node holds focus.
 int uit_unfocused(const uit_t *e);
+// Whether the stop the last frame left focused is a field whose edit is open (its keys type).
+int uit_editing(const uit_t *e);
 // The id focus is on after the last frame ("" none): its length.
 int uit_focused(const uit_t *e, char *buf, size_t cap);
 // The last frame's stop `i` (from 0): its kind (UIT_SEG with the cycle look

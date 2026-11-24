@@ -895,6 +895,11 @@ int uit_unfocused(const uit_t *e)
     return !e->has_focused;
 }
 
+int uit_editing(const uit_t *e)
+{
+    return e->editing;
+}
+
 int uit_back_dialog(uit_t *e, char *buf, size_t cap)
 {
     int d = uit_dialog(e);
@@ -1019,8 +1024,8 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
             hint_add(b, "scroll", 6);       // the arrows move between its fields
             hint_add(b, "Field", 5);
         }
-        // its first button's key: in a field the one that never types
-        int field = e->has_focused && e->focused.kind == UIT_FIELD;
+        // its first button's key: in a field's edit the one that never types
+        int field = e->editing;
         if (D->nbtn == 1) {
             hint_add(b, field ? "cancel" : "back", field ? 6 : 4);
             hint_button(e, b, d, 0);
@@ -1056,9 +1061,13 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
         const uit_id_t *F = &e->focused;
         int a = F->act;
         if (a < 0 && (F->kind == UIT_BUBBLE || F->kind == UIT_FIELD) && F->gen == e->gen)
-            a = NODE(F->node)->on;      // a bubble's press is its on=, Enter in a field its on=
+            a = NODE(F->node)->on;      // a bubble's press is its on=, Enter in a field's edit its on=
         int on = a >= 0 && uit_act_can(e, a, -1, -1);
-        if (F->kind == UIT_FIELD && F->gen == e->gen && (NODE(F->node)->lit & NL_COMMIT)) {
+        if (F->kind == UIT_FIELD && F->gen == e->gen && !e->editing) {
+            hint_add(b, "confirm", 7);  // a field is a stop until Enter opens its edit
+            hint_add(b, "Edit", 4);
+            on = 0;
+        } else if (F->kind == UIT_FIELD && F->gen == e->gen && (NODE(F->node)->lit & NL_COMMIT)) {
             static const char DONE[] = "confirm\0Done\0cancel\0Cancel";
             uit_buf_put(b, DONE, sizeof DONE - 1);
             return;
@@ -1138,9 +1147,9 @@ static void hints(uit_t *e, uit_buf_t *b, int pages)
     int a = pages == 1 ? role_action(e, UIT_A_ROLE_BACK) : -1;
     int app = pages == 1 && a < 0 ? role_action(e, UIT_A_APP_BACK) : -1;
     if (app >= 0 && uit_act_can(e, app, -1, -1)) {
-        // the app's back: its words; in a field the keys that never type
+        // the app's back: its words; in a field's edit the keys that never type
         uint32_t n, at = uit_tmpl_render(e, e->acts[app].hint, -1, -1, &n);
-        int field = e->has_focused && e->focused.kind == UIT_FIELD;
+        int field = e->editing;
         hint_add(b, field ? "cancel" : "back", field ? 6 : 4);
         hint_add(b, e->scratch.p + at, n);
         return;
@@ -1207,10 +1216,11 @@ static void draw_field(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
             len--;              // never half a character
     }
     memmove(D->buf, e->scratch.p + was, len);
-    if (N->lit & NL_SECRET) {
-        int32_t one = 1;
+    int32_t one = 1;
+    if (N->lit & NL_SECRET)
         moy_ui_over_put(&o, MOY_UI_OV_SECRET, &one);
-    }
+    if (N->lit & NL_OPEN)
+        moy_ui_over_put(&o, MOY_UI_OV_TYPING, &one);    // edit="open"
     if (N->t_aux >= 0)
         moy_ui_over_text(&o, MOY_UI_OV_HINT, sspan(e, ha, hn));
     int32_t r = moy_ui_api_field(c, s, sspan(e, la, ln), (uint8_t *)D->buf, max, len, &o);
@@ -6998,9 +7008,12 @@ static void placed_hints(uit_t *e, uit_buf_t *b, int pages)
     if (e->has_focused && e->focused.gen == e->gen) {
         const uit_id_t *F = &e->focused;
         int a = F->kind == UIT_FIELD ? NODE(F->node)->on : F->act;
-        if (a >= 0 && uit_act_can(e, a, -1, F->row))
+        if (F->kind == UIT_FIELD && !e->editing) {
+            static const char EDIT[] = "confirm\0Edit";   // a stop until Enter opens its edit
+            uit_buf_put(b, EDIT, sizeof EDIT - 1);
+        } else if (a >= 0 && uit_act_can(e, a, -1, F->row))
             hint_named(e, b, "confirm", a);
-        if (F->kind == UIT_FIELD)
+        if (F->kind == UIT_FIELD && e->editing)
             for (int s = 0; s < e->nacts; s++)
                 if (e->acts[s].flags & UIT_A_SHIFT_ENTER) {
                     if (uit_act_can(e, s, -1, -1))
@@ -7088,9 +7101,17 @@ int uit_hints(uit_t *e, char *buf, size_t cap)
     return n;
 }
 
+// Whether the focused stop is a field whose edit is open (mid-frame, a stop not drawn yet as
+// the frame before drew it): what its hints name.
+static void edit_sync(uit_t *e, moy_ui_ctx_t *c)
+{
+    e->editing = (uint8_t)(e->has_focused && e->focused.kind == UIT_FIELD && moy_ui_api_typing_drawing(c));
+}
+
 // A placed page's band: the page's last row, cut from its room, where it names anything.
 static void placed_band(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, uit_buf_t *hb, int pages)
 {
+    edit_sync(e, c);
     placed_hints(e, hb, pages);
     if (!hb->n)
         return;
@@ -7303,6 +7324,7 @@ again:;
     }
 band:
     // the hints band
+    edit_sync(e, c);
     hints(e, &hb, pages ? pages : 1);
     if (hb.n && (flags & UIT_F_BAND)) {
         static const char BAR[] = "change\0Move\0confirm\0Open\0back\0Back";
@@ -7414,9 +7436,10 @@ ids:;
     e->page_tabs = e->page_tabs_now;
     e->page_tabs_gen = e->gen;
     // after: what holds focus, and whether the band named another node's verbs
-    int had = e->has_focused;
+    int had = e->has_focused, was_editing = e->editing;
     uit_id_t was = e->focused;
     focus_after(e, c, moved, ahead, had_last ? &last : NULL);
+    edit_sync(e, c);
     int owe = 0;
     if (e->arr && e->arr->owe)
         owe = 1, e->arr->owe = 0;       // a divider's let-go wrote held sizes
@@ -7427,7 +7450,8 @@ ids:;
         snprintf(e->lost, sizeof e->lost, "%s", e->focus_key);
     } else
         e->lost[0] = 0;
-    if (had != e->has_focused || (had && (was.node != e->focused.node || was.gen != e->focused.gen))) {
+    if (had != e->has_focused || was_editing != e->editing ||
+        (had && (was.node != e->focused.node || was.gen != e->focused.gen))) {
         uit_buf_t hb2 = {0};
         if (e->placed)
             placed_hints(e, &hb2, pages ? pages : 1);

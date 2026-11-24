@@ -1164,30 +1164,77 @@ int32_t moy_ui_api_field(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
         }
         fk->cancel = 0;
     }
+    int open = (o->flags2 & MOY_UI_O2_TYPING) != 0;
+    if (at >= 0) {
+        c->cur[at].open = (uint8_t)open;
+    }
+    if (fk != NULL && !focused) {
+        fk->edit = fk->begun = fk->opened = 0;  // focus left it: its edit ends
+        fk->cx = fk->cy = 0;
+    } else if (fk != NULL) {
+        if (open && !fk->opened) {
+            fk->edit = fk->opened = 1;      // edit="open": focus coming onto it begins its edit
+        }
+        if ((st & MOY_UI_ST_ACTIVATED) && c->tap_y != INT16_MIN) {
+            fk->edit = 1;                   // a tap or a click begins it
+        }
+        if (fk->edit && !fk->begun) {
+            fk->begun = 1;                  // an edit begins here: its caret at the end
+            fk->tail = 0;
+            if (e != NULL && len <= MOY_UI_API_UNDO) {
+                memcpy(e->buf, buf, len);
+                e->n = (uint16_t)len;
+            }
+        } else if (!fk->edit) {
+            fk->begun = 0;
+        }
+    }
     if (focused && fk != NULL && e == NULL && len <= MOY_UI_API_UNDO) {
-        e = edit_of(I, c, id, 1);           // focus came onto it: an edit begins here
+        e = edit_of(I, c, id, 1);           // focus came onto it: the text an edit gives back
         if (e != NULL) {
             memcpy(e->buf, buf, len);
             e->n = (uint16_t)len;
         }
     }
-    if ((st & MOY_UI_ST_FOCUS) && c->typed) {
+    int editing = focused && fk != NULL && fk->edit;
+    // the caret, as the bytes after it (an edit the app's own text moved under keeps that many)
+    size_t ca = fk != NULL && fk->tail <= len ? len - fk->tail : len;
+    if (editing && (fk->cx || fk->cy)) {
+        for (int i = fk->cx; i < 0 && ca > 0; i++) {
+            do {
+                ca--;                       // left: a character back
+            } while (ca > 0 && (buf[ca] & 0xC0) == 0x80);
+        }
+        for (int i = fk->cx; i > 0 && ca < len; i--) {
+            do {
+                ca++;                       // right: a character on
+            } while (ca < len && (buf[ca] & 0xC0) == 0x80);
+        }
+        ca = fk->cy < 0 ? 0 : fk->cy > 0 ? len : ca;    // up and down: a line's start and end
+        fk->cx = fk->cy = 0;
+    }
+    if (editing && c->typed) {
         int k = c->typed;
         c->typed = 0;
         for (int i = c->typed_n > 0 ? c->typed_n : 1; i > 0; i--) {
-            if (k == 8) {           // Delete: the caret is the end, nothing after it
-                while (len > 0) {
-                    len--;
-                    if ((buf[len] & 0xC0) != 0x80) {
+            if (k == 8) {           // Delete: the character before the caret
+                size_t was = ca;
+                while (ca > 0) {
+                    ca--;
+                    if ((buf[ca] & 0xC0) != 0x80) {
                         break;
                     }
                 }
+                memmove(buf + ca, buf + was, len - was);
+                len -= was - ca;
             } else if (k >= 32 && k < 127 && len < cap) {
-                buf[len++] = (uint8_t)k;
+                memmove(buf + ca + 1, buf + ca, len - ca);
+                buf[ca++] = (uint8_t)k;
+                len++;
             }
         }
     }
-    if ((st & MOY_UI_ST_FOCUS) && c->paste_n) {
+    if (editing && c->paste_n) {
         // the console's paste: what the room holds, whole characters
         size_t n = c->paste_n;
         c->paste_n = 0;
@@ -1197,11 +1244,19 @@ int32_t moy_ui_api_field(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
                 n--;
             }
         }
-        memcpy(buf + len, c->paste, n);
+        memmove(buf + ca + n, buf + ca, len - ca);
+        memcpy(buf + ca, c->paste, n);
         len += n;
+        ca += n;
     }
-    if ((st & MOY_UI_ST_ACTIVATED) && c->tap_y == INT16_MIN) {
+    if (fk != NULL) {
+        fk->tail = (uint16_t)(len - ca);
+    }
+    if ((st & MOY_UI_ST_ACTIVATED) && c->tap_y == INT16_MIN && editing) {
         done = 1;
+        if (!open) {
+            fk->edit = fk->begun = 0;       // Enter ends the edit; an open field's goes on
+        }
     }
     if (fk != NULL) {
         if (e != NULL && done && len <= sizeof e->buf) {
@@ -1239,13 +1294,18 @@ int32_t moy_ui_api_field(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
     // `secret`: a `*` a character in place of the text (at most a box's worth)
     uint8_t dots[MOY_UI_SECRET_MAX];
     moy_ui_span_t t = {buf, (uint16_t)len};
+    int caret = editing && fk->edit ? (int)ca : -1;
     if (o->flags2 & MOY_UI_O2_SECRET) {
         size_t n = 0;
         for (size_t i = 0; i < len && n < sizeof dots; i++) {
+            if (i == ca && caret >= 0) {
+                caret = (int)n;
+            }
             if ((buf[i] & 0xC0) != 0x80) {
                 dots[n++] = '*';
             }
         }
+        caret = caret >= 0 && ca >= len ? (int)n : caret;
         t.p = dots;
         t.n = (uint16_t)n;
     }
@@ -1268,7 +1328,7 @@ int32_t moy_ui_api_field(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
         // bare, placed in a rect outside a group, the box fills it as a button does
         int fill = (o->flags2 & MOY_UI_O2_BARE) && !stacked && !c->grp_open && !caph ? MOY_UI_F_FILL : 0;
         moy_ui_field(s, fb, lb, t, o->hint, f | fill | (disabled ? MOY_UI_F_DISABLED : 0), c->fs,
-                     c->cls, c->grp_open, c->grp_open && c->grp_first, edge);
+                     c->cls, c->grp_open, c->grp_open && c->grp_first, edge, caret);
         mua_clip_out(&k);
     }
     return (int32_t)len | (done ? MOY_UI_FIELD_DONE : 0);

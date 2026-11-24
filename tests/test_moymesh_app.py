@@ -1266,13 +1266,15 @@ def test_a_draft_is_sent_by_enter_and_by_the_send_key(window):
     now = _now()
     window.state(log=_chat(now), nodes=_nodes(now))
     window.go(THREAD("ch0"))
-    window.type("hi\r")
+    window.type("\rhi\r")                # Enter opens the compose field's edit, Enter sends
     window.frames(6)
     assert [r["text"] for r in _prefs(window.pl, "log")][-1] == "hi"
     (packet, *_), = _sent(window.drv)
     assert _open(packet)[1][2] == [b"hi"]
-    window.type("by key")
+    window.type("\rby key")
     window.key("right")
+    assert window.where()[2] == "draft", "in the edit the arrows move the caret"
+    window.type("\t")
     assert window.where()[2] == "send"
     window.key("run")
     window.frames(6)
@@ -1298,15 +1300,15 @@ def test_message_sender_stacks_a_thread_and_back_shows_the_first_with_its_draft(
     hers = {"from": ANA, "dm": ANA, "text": "Tent is up", "rssi": -104, "snr": 2.0, "t": now - 200}
     window.state(log=_chat(now)[:5] + [hers], nodes=_nodes(now))
     window.go(THREAD("ch0"))
-    window.type("to the hill")
-    window.key("up")
+    window.type("\rto the hill\t")      # Tab leaves the edit for Send, the text kept
+    window.key("left", "up")
     assert window.where()[2].startswith("m5/")
     window.key("run", "run")
     assert window.where()[:2] == ("thread", ANA)
     window.run("__R = #PAGES")
     assert window.get("__R") == 3, "her thread stacks over the channel's"
-    window.type("to Ana")
-    window.key("up")                # off the field: the edit ends, its text kept
+    window.type("\rto Ana\t")
+    window.key("left", "up")        # off the field: the edit ended, its text kept
     assert window.where()[2].startswith("m6/")
     assert window.pl.face.back()    # the bar's back
     window.frames()
@@ -1317,7 +1319,7 @@ def test_message_sender_stacks_a_thread_and_back_shows_the_first_with_its_draft(
     assert window.get("__R") == "5 ch0"
     window.key("down")
     assert window.where()[2] == "draft"
-    window.type("\r")
+    window.type("\r\r")                  # the edit opened, then sent
     window.frames(6)
     assert _prefs(window.pl, "log")[-1]["text"] == "to the hill", "the channel's draft, sent on the channel"
     assert not _prefs(window.pl, "log")[-1].get("dm")
@@ -1372,7 +1374,7 @@ def test_a_cut_message_opens_on_its_own_page(window):
 def test_a_direct_thread_is_written_under_the_node_s_key(window):
     _introduce(window.drv, window.pl, num=int(ANA[1:], 16))
     window.go(THREAD(ANA))
-    window.type("Packed it\r")
+    window.type("\rPacked it\r")
     window.frames(6)
     rec = _prefs(window.pl, "log")[-1]
     assert (rec["dm"], rec["pki"], rec["state"]) == (ANA, True, "sent")
@@ -1384,7 +1386,7 @@ def test_a_node_without_a_key_takes_a_legacy_message_on_its_channel(window):
     window.go(THREAD(MILO))
     window.run("__R = key_state(%r)" % MILO)
     assert window.get("__R") == "none"
-    window.type("Is it open\r")
+    window.type("\rIs it open\r")
     window.frames(6)
     rec = _prefs(window.pl, "log")[-1]
     assert (rec["dm"], rec["pki"]) == (MILO, False)
@@ -1473,7 +1475,7 @@ def test_a_name_is_edited_in_place(window):
     window.go(RADIO)
     window.key("up", "up")
     assert window.where()[2] == "long"
-    window.type("\b" * 12 + "Trail Deck\r")
+    window.type("\r" + "\b" * 12 + "Trail Deck\r")
     window.frames(6)
     assert _prefs(window.pl, "long_name") == "Trail Deck"
     (packet, *_), = _sent(window.drv)
@@ -1508,6 +1510,7 @@ def test_a_pasted_link_is_read_by_enter(window):
     window.key("up", "up")
     assert window.where()[2] == "url"
     window.ws.clipboard.put_text(_url_of(window, SERBIA))
+    window.type("\r")                             # Enter opens the field's edit
     window.drv.type_char(0x16)                    # Ctrl+V
     window.frames(3)
     window.type("\r")
@@ -1630,10 +1633,10 @@ def test_a_page_with_fields_opens_off_them_so_k_goes_back(window, page, at):
 def test_mic_gives_a_channel_name_back(window):
     window.go(RADIO, CHANNEL(0))
     window.key("up")
-    assert window.where()[2] == "ch_name" and window.ws.input.text_mode
+    assert window.where()[2] == "ch_name" and not window.ws.input.text_mode, "a field is a stop"
     window.run("__R = setup().channels[1].name")
     name = window.get("__R")
-    window.type("xy")
+    window.type("\rxy")
     assert window.ws.input_policy.cancel(), "an edit in progress: Mic cancels it"
     window.frames()
     window.run("__R = setup().channels[1].name")

@@ -266,6 +266,7 @@ typedef struct {
     uint8_t st;                     // the state bits it drew with (MOY_UI_ST_*)
     uint8_t quiet;                  // a press or a hover on it draws no mark: a text view's
     uint8_t cut;                    // placed while moy_ui_api_cut: inside its page's view, as stacked
+    uint8_t open;                   // a field over O2_TYPING: focus coming onto it begins its edit
     int32_t gen;                    // the app's generation for what it draws in it
     uint32_t sig;                   // its record (kind, text, value), under the audit
 } moy_ui_stop_t;
@@ -327,6 +328,13 @@ typedef struct {
     int16_t rh;                     // a placed table: its row height as it drew
     uint8_t rest;                   // a page under `follow`: it rests on its foot
     uint8_t cancel;
+    // A field's edit mode: `edit` while its keys type, `begun` once its edit took the text it
+    // began from, `opened` once an edit="open" field began one for this focus; `tail` its caret,
+    // the bytes of its text after it; cx, cy the caret's steps the frame's keys owe it
+    // (characters across, lines down).
+    uint8_t edit, begun, opened;
+    int8_t cx, cy;
+    uint16_t tail;
     // A carousel's page (moy_ui_api_carousel): the row its keys and taps carry to the centre,
     // the row it rests on as the app was told, and a fling that came to rest at this frame's
     // begin (its glide to the nearest row starts unticked, as the frame after a fling's). `car`
@@ -1082,9 +1090,15 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
 // ends it. Answers 0, or MOY_UI_API_DEEP.
 int32_t moy_ui_api_scroll(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id,
                           const moy_ui_over_t *o);
-// A text field (§1) editing the `len` bytes at `buf` (`cap` its room) while
-// focused: answers the new length, plus MOY_UI_FIELD_DONE the frame Enter
-// is pressed in it.
+// A text field (§1) editing the `len` bytes at `buf` (`cap` its room): a
+// stop the keys move past until Enter, A, a tap or a click begins its edit
+// (over O2_TYPING, focus coming onto it, or the app's moy_ui_api_focus
+// naming it, begins one, and Enter leaves it open); while it edits every
+// key types at its caret, the directions move the caret (left and right a
+// character, up and down to the start and the end), Enter ends it (Esc,
+// moy_ui_api_cancel, gives back the text it began from) and focus stays.
+// Answers the new length, plus MOY_UI_FIELD_DONE the frame Enter is pressed
+// in it.
 #define MOY_UI_FIELD_DONE 0x10000
 int32_t moy_ui_api_field(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label,
                          uint8_t *buf, size_t cap, size_t len, const moy_ui_over_t *o);
@@ -1593,14 +1607,17 @@ void moy_ui_api_way(moy_ui_ctx_t *c, int on);
 // (moy_ui_api_back with `take`): 1 once, then 0.
 int moy_ui_api_way_taken(moy_ui_ctx_t *c);
 // The host's cancel (the T-Deck's Mic, and the back above) over the frame
-// drawn last: 1 where the focused field has an edit in progress -- its text
-// other than it was when focus came onto it, or Enter last left it -- and
-// then, with `take`, the next pass gives the field that text back (the
-// app's ui.field answers it) and focus steps off it, up as Up would where
-// a stop lies above, else down; else 1 where a popover is open, which the
+// drawn last: 1 where the focused field's edit is open (moy_ui_api_edit_cancel)
+// and then, with `take`, the next pass ends it, giving the field back the
+// text it began from (or Enter last left it; the app's ui.field answers it),
+// focus staying on the field; else 1 where a popover is open, which the
 // next frame dismisses (ui.popover answers false); 0 where neither is, so
 // the key keeps its own meaning.
 int moy_ui_api_cancel(moy_ui_ctx_t *c, int take);
+// moy_ui_api_cancel's field half: 1 where the focused field's edit is open,
+// but an edit="open" field's with nothing to give back (its page's Back
+// then goes on: the dialog, the popover, the strip it types in closes).
+int moy_ui_api_edit_cancel(moy_ui_ctx_t *c, int take);
 // Whether the frame drawn last owes the next though no input comes: a
 // dialog or a popover laid out from a stale measure, or a reveal its pass
 // set (a list's or a table's row stepped where begin could not reveal it, a
@@ -1742,7 +1759,8 @@ int moy_ui_api_split_frame(moy_ui_ctx_t *c, int32_t gen, int known, int still, i
 // its rect at out; 0 none (no pane holds (x, y), or none lies that way).
 int moy_ui_api_split_toward(const moy_ui_ctx_t *c, int x, int y, int dx, int dy,
                             int32_t out[4]);
-// Focus moved to `id` (id.p NULL: read only). The focused id's text into
+// Focus moved to `id` (id.p NULL: read only; a field over O2_TYPING it names
+// begins its edit, though focus is on it already). The focused id's text into
 // `buf` (NUL-terminated within `cap`); answers its length, -1 with none.
 int moy_ui_api_focus(moy_ui_ctx_t *c, moy_ui_span_t id, char *buf, size_t cap);
 // Focus moved to `id` ahead of the next frame, between frames (a host's):
@@ -1750,10 +1768,14 @@ int moy_ui_api_focus(moy_ui_ctx_t *c, moy_ui_span_t id, char *buf, size_t cap);
 // inside a pass does.
 void moy_ui_api_focus_ahead(moy_ui_ctx_t *c, moy_ui_span_t id);
 int moy_ui_api_keys_taken(const moy_ui_ctx_t *c);
-// Whether the stop holding focus in the frame drawn last is a field and the
-// keys are this page's: the page is being typed into, so its surface takes
-// the keyboard as text (a T-Deck's W A S D type there and step nothing).
+// Whether the stop holding focus in the frame drawn last is a field whose
+// edit is open and the keys are this page's: the page is being typed into,
+// so its surface takes the keyboard as text (a T-Deck's W A S D type there
+// and step nothing).
 int moy_ui_api_typing(const moy_ui_ctx_t *c);
+// The same asked while a frame draws: a stop it has not drawn yet is read as
+// the frame before drew it (what a band drawn before the field names).
+int moy_ui_api_typing_drawing(const moy_ui_ctx_t *c);
 // The keys another surface held when this frame began (MOY_UI_ELSEWHERE)
 // came back mid-frame, before the pass drew its stops (a cart's editor handle
 // let them go in its update): from here a stop takes the focus as on a frame

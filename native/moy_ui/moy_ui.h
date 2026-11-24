@@ -1182,7 +1182,8 @@ int moy_ui_month(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t title,
                  moy_ui_span_t days, int first, int n, int today, int chevrons, int fs, int desk,
                  moy_ui_box_t chev[2]);
 // A text field row (ui.field): its label, then the field to the row's right
-// showing the text's tail and, focused (F_FOCUS), the caret. On a group's
+// showing the text's tail and, at byte `caret` of the text (-1 none: its edit
+// is not open), the caret, the text scrolled so it shows. On a group's
 // card (`card`) the label sits where a value row's does and the field is the
 // row's value, a slider's track wide at its right; elsewhere the field takes
 // the row from the label to its right. Focused, the row wears the focus mark
@@ -1194,7 +1195,7 @@ int moy_ui_month(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t title,
 // pixels at the scale inside it. `edge`, a colour index or -1, is
 // the box's border in place of its own (a field in error: the danger ink).
 int moy_ui_field(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t label, moy_ui_span_t text,
-                 moy_ui_span_t hint, int flags, int fs, int desk, int card, int first, int edge);
+                 moy_ui_span_t hint, int flags, int fs, int desk, int card, int first, int edge, int caret);
 // The height a field row takes outside a group (at least the stacked row's):
 // the field's box, its letters' ink with 3 pixels at the scale above and
 // below inside its ring, and room round it for its focus ring. In a group

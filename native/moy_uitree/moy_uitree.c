@@ -1652,6 +1652,15 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= name[0] == 'c' ? NL_COMMIT : NL_SECRET;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
+    if (kind == UIT_FIELD && (!strcmp(name, "edit") || !strcmp(name, "keys"))) {
+        // edit="open": focus coming onto it begins its edit; keys="number": the on-screen
+        // keyboard's layout for it (#239), which draws nothing (the contract checked the words)
+        if (!strcmp(src, "open"))
+            N->lit |= NL_OPEN;
+        else if (!strcmp(src, "number"))
+            N->lit |= NL_NUMBER;
+        return add_prop(e, node, name, src, repr, PK_LIT, 0);
+    }
     if (kind == UIT_CELLS && !strcmp(name, "edge")) {
         if (!strcmp(src, "True"))
             N->lit |= NL_EDGE;

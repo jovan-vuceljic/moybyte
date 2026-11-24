@@ -608,7 +608,7 @@ def build():
             with ui.rows("perms"):
                 ui.label("{.text}", tone="{.tone}", wrap="word", lines=3)
             ui.label("{pw_line}", tone="{pw_tone}", wrap="word", lines=2, shown="gated")
-            ui.field("Password", "password", 64, secret=True, on="install", shown="gated")
+            ui.field("Password", "password", 64, secret=True, on="install", shown="gated", edit="open")
 
 
 class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):

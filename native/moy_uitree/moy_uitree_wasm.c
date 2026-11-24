@@ -702,7 +702,7 @@ static void keys(app_t *a, const int32_t *snap) {
     }
 }
 
-// The more role's key (`m`), after the frame, where no field is focused: the
+// The more role's key (`m`), after the frame, where no field's edit is open: the
 // focused row's action when it is the role's, else the page's. An action that
 // hangs from a rows list's node takes a row and acts on no other.
 static void more(app_t *a, const int32_t *snap) {
@@ -713,7 +713,7 @@ static void more(app_t *a, const int32_t *snap) {
     const uit_id_t *F = &a->e->focused;
     int has = a->e->has_focused && F->gen == a->e->gen;
     char src[160], id[UIT_ID_MAX * 2 + 2];
-    if (has && F->kind == UIT_FIELD) {
+    if (has && F->kind == UIT_FIELD && a->e->editing) {
         return;
     }
     int row = 0;

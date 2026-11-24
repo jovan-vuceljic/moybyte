@@ -377,7 +377,7 @@ def test_a_secret_field_draws_a_star_a_character_and_answers_the_text(tmp_path):
         e = uitree_c.CEngine(S.decl_of(F.__name__), getattr(F, page), ui_draw.AppHost(), None,
                              Damage())
         e.open()
-        for key in [0, 0] + [ord(ch) for ch in text] + [0, 0]:
+        for key in [0, 0, 13, 0] + [ord(ch) for ch in text] + [0, 0]:     # Enter opens its edit
             e._ui.inp[5] = key
             e._ui.begin(cv, th, (0, 0, 320, 240))
             e.paint(1 / 30, cv, th, (0, 0, 320, 240), False)

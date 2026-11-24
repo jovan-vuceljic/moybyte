@@ -141,7 +141,7 @@ ui.action("leave", "Back", leave, keys=("role:back",), hint="{pop?Close:Back}")
 
 def _password():
     with ui.dialog("{title}", ["cancel", "connect"], shown="asking && can_type"):
-        ui.field("Password", "password", max=WIFI_PW_MAX, on="connect", changed="typed")
+        ui.field("Password", "password", max=WIFI_PW_MAX, on="connect", changed="typed", edit="open")
     with ui.dialog("{title}", ["cancel"], shown="asking && !can_type"):
         ui.label("{no_keys}")
 

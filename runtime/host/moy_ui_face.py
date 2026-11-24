@@ -416,6 +416,7 @@ SIGS = (
     ("moy_ui_api_page_title", [c.c_void_p], c.c_char_p),
     ("moy_ui_api_back", [c.c_void_p, c.c_int], c.c_int),
     ("moy_ui_api_cancel", [c.c_void_p, c.c_int], c.c_int),
+    ("moy_ui_api_edit_cancel", [c.c_void_p, c.c_int], c.c_int),
     ("moy_ui_run_cancel", [c.c_int], c.c_int),
     ("moy_ui_run_back", [c.c_int], c.c_int),
     ("moy_ui_run_page_title", [], c.c_char_p),
@@ -808,6 +809,10 @@ def install(m, lib, ctx_, sink, span0, over, box_of):
         p_, k_ = ctx_(ctx)
         return bool(lib.moy_ui_api_cancel(p_, 1 if take else 0))
     m.api_cancel = api_cancel
+    def api_edit_cancel(ctx, take):
+        p_, k_ = ctx_(ctx)
+        return bool(lib.moy_ui_api_edit_cancel(p_, 1 if take else 0))
+    m.api_edit_cancel = api_edit_cancel
     def api_run_cancel(take):
         return bool(lib.moy_ui_run_cancel(1 if take else 0))
     m.api_run_cancel = api_run_cancel

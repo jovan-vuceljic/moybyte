@@ -296,13 +296,16 @@ def test_a_page_pushed_over_itself_with_another_row_gives_the_first_its_row_back
 def test_more_role_runs_on_the_m_key():
     """The more role's key (m) runs the page's action where no field is
     focused and the focused row's action where it hangs from a row; a field
-    that holds focus takes the letter."""
+    whose edit is open takes the letter, and one that is only focused does
+    not."""
     import uitree_conf as C
     fx = os.path.join(ROOT, "tests", "fixtures")
-    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "t:m", "f:1", "k:down", "t:m"],
-                          cart=os.path.join(fx, "uitree_more_wasm.moy"))
+    cart = os.path.join(fx, "uitree_more_wasm.moy")
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "t:m", "f:1", "k:down", "k:a", "f:1", "t:m"], cart=cart)
     assert [l for l in trace if l.startswith("action more")] == [
         "action more from key more on 'tools' on 'Tools'"]
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "k:down", "f:1", "t:m"], cart=cart)
+    assert len([l for l in trace if l.startswith("action more")]) == 1, "a focused field's edit is closed"
     trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "t:m"], cart=os.path.join(fx, "uitree_morerow_wasm.moy"))
     assert [l for l in trace if l.startswith("action open from")] == [
         "action open from key more on 'b/open' on 'Shelf'"]

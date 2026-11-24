@@ -359,9 +359,14 @@ def test_brightness_and_name_are_stored(tmp_path):
 
 
 def _type_name(ws, drv, text):
-    """Focus the Name row and type `text` into it, a frame pair a key."""
+    """Focus the Name row, open its edit (Enter) and type `text` into it, a
+    frame pair a key."""
     _focus_row(ws, drv, "name")
-    assert ws.settings_layer._focused == "name" and ws.input.text_mode
+    assert ws.settings_layer._focused == "name" and not ws.input.text_mode, "a field is a stop"
+    drv.press("run")
+    drv.frame(1 / 30)
+    drv.frame(1 / 30)
+    assert ws.input.text_mode
     for ch in text:
         drv.type_char(ord(ch))
         drv.frame(1 / 30)
@@ -394,9 +399,7 @@ def test_focus_leaving_the_name_field_stores_it(tmp_path):
     ws, drv = _settings_page(tmp_path)
     _type_name(ws, drv, "Rae")
     assert _stored_name(tmp_path) is None
-    drv.press("up")
-    drv.frame(1 / 30)
-    drv.frame(1 / 30)
+    _focus_row(ws, drv, "volume")
     assert ws.settings_layer._focused != "name"
     assert _stored_name(tmp_path) == "Rae"
     assert not ws.input.text_mode

@@ -1733,6 +1733,14 @@
      "type": "bool",
      "level": 1
     },
+    "edit": {
+     "type": "word:open,stop",
+     "level": 1
+    },
+    "keys": {
+     "type": "word:text,number",
+     "level": 1
+    },
     "changed": {
      "type": "hook",
      "level": 2

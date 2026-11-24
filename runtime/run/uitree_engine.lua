@@ -38,7 +38,7 @@ local FIELD = { bool = BOOL, int = INT, number = NUM, text = TEXT, enum = TEXT }
 -- a prop whose value is a literal the dump prints as one (its Python repr)
 local LIT = { kind = 1, wrap = 1, face = 1, size = 1, align = 1, alone = 1, span = 1, arg = 1, grow = 1, max = 1,
               secret = 1, commit = 1, look = 1, cur = 1, current = 1, check = 1, follow = 1, snap = 1, gutter = 1, filter = 1, dir = 1,
-              icons = 1, rule = 1, flow = 1 }
+              icons = 1, rule = 1, flow = 1, edit = 1 }
 local FIX = "leave it out of the page: the C engine refuses it by name"
 
 local X = nil                   -- the store, made at the first frame
@@ -300,8 +300,10 @@ local SHAPE = {
   cells = { bind = true },
   slider = { bind = true, takes = { "label", "lo", "hi" },
              last = function(n) return { pair("label", n.a[1]), pair("lo", n.o.lo), pair("hi", n.o.hi) } end },
-  field = { bind = true, takes = { "label", "max", "commit" },
-            last = function(n) return { pair("label", n.a[1]), pair("max", n.o.max or 32), pair("commit", n.o.commit or nil) } end },
+  field = { bind = true, takes = { "label", "max", "commit", "edit", "keys" },
+            last = function(n) return { pair("label", n.a[1]), pair("max", n.o.max or 32), pair("commit", n.o.commit or nil),
+                                        pair("edit", n.o.edit ~= "stop" and n.o.edit or nil),
+                                        pair("keys", n.o.keys ~= "text" and n.o.keys or nil) } end },
   rows = { model = true },
   bubble = { last = function(n) return { pair("text", n.a[1]) } end },
   empty = { last = function(n) return { pair("title", n.a[1]) } end },
@@ -352,7 +354,7 @@ local function lower_node(n, parent, path, model, modal)
       return
     end
     local src, islit = lit(v)
-    local rep = (islit or LIT[k]) and (type(v) == "string" and "'" .. v .. "'" or src) or nil
+    local rep = (islit or LIT[k] or (k == "keys" and n.kind == "field")) and (type(v) == "string" and "'" .. v .. "'" or src) or nil
     check(X:prop(me, k, src, rep), "ui." .. n.kind .. " " .. k .. "=" .. q(src), n.at)
   end
   local shape = SHAPE[n.kind] or {}
@@ -375,7 +377,7 @@ local function lower_node(n, parent, path, model, modal)
   end
   if shape.last then
     local h = shape.last(n)
-    for i = 1, 4 do if h[i] then prop(h[i][1], h[i][2]) end end
+    for i = 1, #h do prop(h[i][1], h[i][2]) end
   end
   if n.kind == "canvas" then
     DRAWS[me] = n.o.draw
@@ -618,11 +620,12 @@ I.BACK.frame = function(p)
   R.focused = X:focused()
   I.SYS.focus = R.focused or ""
   -- a role key: a row's action on the focused row that fires it, any other on the page; none
-  -- while a field types
+  -- while a field's edit is open
   local f = R.focused or ""
+  local typing = X:editing()
   for role, pressed in pairs(ROLE_KEYS) do
     local name = KEYMAP["role:" .. role]
-    if name and not took and KEYS[f] ~= "field" and pressed() then
+    if name and not took and not typing and pressed() then
       local rk, nk = f:match("^(.*)/([^/]*)$")
       local m = ACTIONS[name].takes == "row" and nk and ROW_ACT[nk] == name and V[KEYS[nk]]
       if m then

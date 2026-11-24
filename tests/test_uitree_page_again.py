@@ -116,6 +116,9 @@ def test_the_python_front_draws_the_shrunk_page_clamped_and_takes_the_key_once()
         _settled(ws, frame)
         e = app.engine
         assert e.focus_key == "draft", e.focus_key
+        drv.press("run")                # Enter opens the field's edit
+        frame()
+        frame()
         drv.type_char(ord("x"))
         frame()
         typed = bytes(ws.glass_canvas._buf)
@@ -142,6 +145,9 @@ def test_the_lua_front_draws_the_shrunk_page_clamped_and_takes_the_key_once(tmp_
     _walk(drv.press, frame)
     _settled(ws, frame)
     assert ws.run.player.cart_error is None, ws.run.player.cart_error
+    drv.press("run")                    # Enter opens the field's edit
+    frame()
+    frame()
     drv.type_char(ord("x"))
     frame()
     typed = bytes(ws.glass_canvas._buf)

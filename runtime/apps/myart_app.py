@@ -236,7 +236,7 @@ def build():
             with ui.menu(""):
                 ui.item("trash", label="Move to Trash\tDel", kind="danger")
         with ui.dialog("{rn_title}", ["cancel", "rename"], shown="renaming"):
-            ui.field("Name", "name", 32, on="rename")
+            ui.field("Name", "name", 32, on="rename", edit="open")
         ui.toast("{toast}", icon="{toast_icon}", shown="toasting")
 
 

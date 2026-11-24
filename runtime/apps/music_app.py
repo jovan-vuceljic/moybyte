@@ -1216,11 +1216,11 @@ def _add():
     with ui.split("col", sizes=("1*", 28), gap=8, pad=8):
         with ui.group(""):
             ui.label("Address", face="caption", tone="dim")
-            ui.field("", "url", URL_MAX, hint="http://", on="to_name", changed="url_moved")
+            ui.field("", "url", URL_MAX, hint="http://", on="to_name", changed="url_moved", edit="open")
             ui.label("{err}", tone="danger", wrap="word", lines=2, shown="err")
             ui.label(HELP_ADDRESS, tone="dim", shown="!err")
             ui.label("Name", face="caption", tone="dim")
-            ui.field("", "name", NAME_MAX, hint="Optional", on="add")
+            ui.field("", "name", NAME_MAX, hint="Optional", on="add", edit="open")
         with ui.split("row", sizes=("1*", 88, 8, 88), gap=0, pad=0):
             ui.label("")
             ui.button("cancel")

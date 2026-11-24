@@ -111,7 +111,7 @@ def console_page():
     with ui.page(""):
         ui.text_view("log", follow=True, syntax="sgr")
         with ui.foot():
-            ui.field("{ask}", "line", max=LINE_MAX, on="send", shown="!ended")
+            ui.field("{ask}", "line", max=LINE_MAX, on="send", shown="!ended", edit="open")
             ui.label(_ENDED, tone="dim", shown="ended")
             ui.button("again", shown="ended")
 

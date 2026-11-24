@@ -2039,7 +2039,8 @@ SCHEMA = {
     "slider": dict(_C, label="text", lo="int", hi="int", on="action0", focus="cond", look="lit",
                    icon="text", when="cond", off="lit"),
     "field": dict(_C, label="text", max="lit", on="action0", secret="lit", focus="cond",
-                  changed="action0", hint="text", commit="lit", when="cond", off="lit", grow="lit"),
+                  changed="action0", hint="text", commit="lit", when="cond", off="lit", grow="lit",
+                  edit="lit", keys="lit"),
     "seg": dict(_C, label="text", on="action0", focus="cond", look="lit", labels="lit", text="text"),
     "rows": dict(_C, cur="lit", current="lit", empty="text", filter="lit", changed="action1", group="lit",
                  dir="lit", by="lit", check="lit"),
@@ -2487,8 +2488,14 @@ def slider(label, name, lo, hi, look="bar", **p):
                  dict(p, label=label, lo=lo, hi=hi), where)
 
 
-def field(label, name, max=32, commit=False, **p):
+def field(label, name, max=32, commit=False, edit="stop", keys="text", **p):
     """A line of text bound to a text state. `hint=` is what it shows empty.
+    Focused it is a stop the keys move past; Enter, A, a tap or a click
+    begins its edit, where every key types and the directions move its
+    caret, and Enter (commit) or Esc (give back) ends it. `edit="open"`: its
+    page exists for typing, so focus coming onto it begins its edit and Enter
+    commits with the edit going on. `keys="number"`: the on-screen keyboard's layout
+    for it (#239); it draws nothing.
     `commit=True` holds the edit as a draft: the state is written when Enter
     is pressed in it or focus leaves it (`changed=` runs then), and its hints
     are Done and Cancel; without it every edit writes the state."""
@@ -2497,8 +2504,11 @@ def field(label, name, max=32, commit=False, **p):
     if commit not in (True, False):
         raise UIError("N01", "ui.field(%r) commit=%r" % (name, commit), where=where,
                       expected="True or False", fix="commit=True")
+    _checked("field", "edit", edit, where)
+    _checked("field", "keys", keys, where)
     n = _node("field", _state_name(name, (TEXT,), "ui.field", where),
-              dict(p, label=label, max=max, commit=commit or None), where)
+              dict(p, label=label, max=max, commit=commit or None, edit=None if edit == "stop" else edit,
+                   keys=None if keys == "text" else keys), where)
     return n
 
 

@@ -103,6 +103,7 @@ _SIGS = (
     ("uit_back_dialog", [_P, c.c_char_p, _Z], _I),
     ("uit_back_popover", [_P, c.c_char_p, _Z], _I),
     ("uit_unfocused", [_P], _I),
+    ("uit_editing", [_P], _I),
     ("uit_still", [_P, _P, _I, _I, _I, _I, _I, _I, _I], _I),
     ("uit_dump", [_P, c.c_char_p, _Z], _I),
     ("uit_hints", [_P, c.c_char_p, _Z], _I),
@@ -541,6 +542,9 @@ class Engine:
 
     def unfocused(self):
         return self._L.uit_unfocused(self._e)
+
+    def editing(self):
+        return self._L.uit_editing(self._e)
 
     def set_placed(self, on):
         self._L.uit_set_placed(self._e, 1 if on else 0)

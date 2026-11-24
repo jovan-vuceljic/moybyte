@@ -135,7 +135,8 @@ typedef struct {
 
 // Node flags (`lit` of a two-way control).
 enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_SWATCH = 2, NL_BLOCKS = 2, NL_FIELD = 4,
-       NL_HIDE = 8, NL_PICS = 16, NL_EDGE = 16 };      // NL_EDGE: a cells' edge=True
+       NL_HIDE = 8, NL_PICS = 16, NL_EDGE = 16,         // NL_EDGE: a cells' edge=True
+       NL_OPEN = 16, NL_NUMBER = 32 };                  // a field's edit="open", keys="number"
 // A dialog's lit bits: kind="danger"; look="keys" (no button row on the T-Deck).
 enum { DL_DANGER = 1, DL_KEYS = 2 };
 // A cards list's lit bits: look="carousel" (one row of tiles, its centre's words under it),
@@ -168,7 +169,7 @@ enum { LT_WORD = 1, LT_CHAR = 2, LT_WRAP = 3, LT_FACE_SHIFT = 2, LT_ALIGN_SHIFT 
 
 typedef struct {
     uint8_t kind, lit;          // a label's tone, a button's kind; a seg's cycle look, a slider's
-                                // steps, a field's commit, secret and off="hide" (NL_*)
+                                // steps, a field's commit, secret, off="hide", edit= and keys= (NL_*)
     uint16_t parent, kid, last, next;
     uint16_t key;               // pool
     int16_t act;
@@ -353,6 +354,7 @@ struct uit {
     int nids, nprev, cids, cprev;
     uit_id_t focused;
     int has_focused;
+    uint8_t editing;            // the focused stop is a field whose edit is open (moy_ui_api_typing)
     char focus_key[UIT_ID_MAX + 1];
     char lost[UIT_ID_MAX + 1];      // the focus key a frame drew no stop for and owed the next for
     // events and trace

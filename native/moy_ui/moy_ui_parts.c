@@ -3535,7 +3535,7 @@ int moy_ui_field_h(const moy_ui_sink_t *s, int fs, int desk) {
 }
 
 int moy_ui_field(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t label, moy_ui_span_t text_,
-                 moy_ui_span_t hint, int flags, int fs, int desk, int card, int first, int edge) {
+                 moy_ui_span_t hint, int flags, int fs, int desk, int card, int first, int edge, int caret) {
     pd_t d;
     open_pd(s, &d, fs, desk);
     int sc = tscale(s);
@@ -3631,28 +3631,38 @@ int moy_ui_field(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t label, mo
     }
     rrect(&d, f.x, f.y, f.w, f.h, r, 1, box, d.fs, edge >= 0 ? pal(&d, edge) : ring);
     // the text 8 pixels at the scale inside the box each side, the caret's
-    // room kept inside that on the right
+    // room kept inside that on the right while its edit is open
+    int editing = focused && caret >= 0;
+    size_t cend = editing && (size_t)caret < text_.n ? (size_t)caret : text_.n;
     int inner = 8 * d.fs;
     int tx = f.x + inner;
-    int room = f.x + f.w - inner - tx - (focused ? 2 * d.fs : 0);
+    int room = f.x + f.w - inner - tx - (editing ? 2 * d.fs : 0);
     uint16_t tink = pal(&d, disabled ? tok(&d, MOY_UI_T_INK_DIM, MOY_UI_T_CHROME_INK_DIM)
                                      : tok(&d, MOY_UI_T_INK, MOY_UI_T_CHROME_INK));
-    // the text's tail shows where it is wider than the field, led by an
-    // ellipsis, so the caret stays in view
+    // where the text is wider than the field it shows from as far along as
+    // keeps the caret in view (the tail, the caret at its end), led by an
+    // ellipsis
     size_t from = 0;
     int lead = 0;
     if (text_.n && tw(&fl, text_.p, text_.n, sc) > room) {
         moy_ui_span_t dots = moy_ui_dots(moy_text_covers(fl.id, (const uint8_t *)"\xe2\x80\xa6", 3) ? 1 : 2);
         lead = tw(&fl, dots.p, dots.n, sc);
-        while (from < text_.n && tw(&fl, text_.p + from, text_.n - from, sc) > room - lead) {
+        while (from < cend && tw(&fl, text_.p + from, cend - from, sc) > room - lead) {
             from++;
-            while (from < text_.n && (text_.p[from] & 0xC0) == 0x80) {
+            while (from < cend && (text_.p[from] & 0xC0) == 0x80) {
                 from++;
             }
         }
-        moy_ui_text_in(s, fl.id, 0, dots, tx, ty, tink);
+        if (from) {
+            moy_ui_text_in(s, fl.id, 0, dots, tx, ty, tink);
+        } else {
+            lead = 0;
+        }
     }
     moy_ui_span_t tt = {text_.p + from, (uint16_t)(text_.n - from)};
+    if (tt.n && tw(&fl, tt.p, tt.n, sc) > room - lead) {
+        tt.n = (uint16_t)moy_ui_fit(fl.id, tt, room - lead, sc, NULL);   // what lies past the caret
+    }
     int w = tt.n ? moy_ui_text_in(s, fl.id, 0, tt, tx + lead, ty, tink) + lead : 0;
     if (!tt.n && hint.n && room > 0) {
         // the placeholder, in the disabled ink (an off field's: the dim
@@ -3660,7 +3670,7 @@ int moy_ui_field(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t label, mo
         int hc = moy_ui_disabled() >= 0 && !disabled
                      ? moy_ui_disabled()
                      : tok(&d, MOY_UI_T_INK_DIM, MOY_UI_T_CHROME_INK_DIM);
-        int ell = 0, hx = tx + (focused ? 2 * d.fs : 0);
+        int ell = 0, hx = tx + (editing ? 2 * d.fs : 0);
         size_t hn = moy_ui_fit(fl.id, hint, room, sc, &ell);
         moy_ui_span_t ht = {hint.p, (uint16_t)hn};
         hx += moy_ui_text_in(s, fl.id, 0, ht, hx, ty, pal(&d, hc));
@@ -3668,9 +3678,13 @@ int moy_ui_field(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t label, mo
             moy_ui_text_in(s, fl.id, 0, moy_ui_dots(ell), hx, ty, pal(&d, hc));
         }
     }
-    if (focused) {
-        // the caret: a pixel at the scale past the text, from a pixel over
-        // the letters' ink to a pixel under it, never past the box's inside
+    if (editing) {
+        // the caret: a pixel at the scale past the text before it, from a
+        // pixel over the letters' ink to a pixel under it, never past the
+        // box's inside
+        if (cend < text_.n) {
+            w = lead + tw(&fl, text_.p + from, cend - from, sc);
+        }
         int cx = tx + w + d.fs, cmax = f.x + f.w - inner;
         cx = cx > cmax ? cmax : cx;
         fill(&d, cx, f.y + 3 * d.fs, d.fs, f.h - 6 * d.fs,

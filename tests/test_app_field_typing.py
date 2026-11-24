@@ -1,14 +1,16 @@
-"""A field an app's page focuses takes the keyboard (the engine's typing,
-applied by `Player._sync_typing`): while it holds focus the console is in
-text mode, so the T-Deck's W A S D type letters and press no direction
-(native/moy_input/moy_kbd.c, THE MOVE KEYS), and off it they step the page
-again. One rule for a tree app on every runtime, Python's and Lua's; a
-cart's own `textmode()` still holds when no field is focused. The trackball
-steps an app's page, as it does every surface that takes the keys
-(`Workstation.ball_steps`), and does not show the cursor. Mic (the T-Deck's
-cancel), Esc and B cancel a field's edit in progress: the field gets back
-the text the edit began from and focus steps off it (the engine's cancel,
-`face.cancel`); with no edit, Mic stays the console's key."""
+"""A field an app's page focuses is a stop until Enter opens its edit; while
+the edit is open the field takes the keyboard (the engine's typing, applied
+through the input policy): the console is in text mode, so the T-Deck's W A
+S D type letters and press no direction (native/moy_input/moy_kbd.c, THE
+MOVE KEYS), and the trackball moves the caret. Enter ends the edit, and the
+move keys step the page again. One rule for a tree app on every runtime,
+Python's and Lua's; a cart's own `textmode()` still holds when no field is
+focused. The trackball steps an app's page past a field, as it does every
+surface that takes the keys (`Workstation.ball_steps`), and does not show
+the cursor. Mic (the T-Deck's cancel), Esc and B end a field's edit: the
+field gets back the text the edit began from and focus stays on it (the
+engine's cancel, `face.cancel`); with no edit open, Mic stays the console's
+key."""
 
 import json
 from pathlib import Path
@@ -174,26 +176,88 @@ def _step(drv, button):
         drv.frame(DT)
 
 
+def _edit(drv):
+    """Enter on the focused field: its edit opens."""
+    _step(drv, "run")
+
+
+def _roll(ws, drv, dx, dy, notches=1):
+    """The trackball rolled `notches` steps (BALL_STEP pulses each, one a
+    frame)."""
+    for _ in range(notches):
+        ws._ball_axis_at -= ws.router.BALL_ROLLING_MS + 1
+        drv.pan(dx, dy)
+        for _ in range(ws.router.BALL_STEP):
+            drv.frame(DT)
+        drv.pan(0, 0)
+        for _ in range(2):
+            drv.frame(DT)
+
+
 @pytest.mark.parametrize("runtime", ["lua", "python"])
-def test_a_focused_field_holds_the_keyboard_in_text_mode(tmp_path, runtime):
+def test_a_field_holds_the_keyboard_in_text_mode_while_its_edit_is_open(tmp_path, runtime):
     ws, drv = _open(tmp_path, "Field App", LUA_APP if runtime == "lua" else PY_APP, runtime)
     assert _focus(ws) == "name"
-    assert ws.input.text_mode, "a focused field types: W A S D are letters there"
+    assert not ws.input.text_mode, "a focused field is a stop: the move keys step past it"
     _step(drv, "down")
     assert _focus(ws) == "save"
-    assert not ws.input.text_mode, "off the field the move keys step the page"
     _step(drv, "up")
-    assert _focus(ws) == "name" and ws.input.text_mode
+    assert _focus(ws) == "name" and not ws.input.text_mode
+    _edit(drv)
+    assert ws.input.text_mode, "Enter opens its edit: W A S D are letters there"
     for _ in range(10):
         drv.frame(DT)
     assert ws.input.text_mode, "a page drawn on change keeps its field's text mode"
+    _step(drv, "run")
+    assert _focus(ws) == "name" and not ws.input.text_mode, "Enter ends the edit, focus stays"
 
 
 @pytest.mark.parametrize("runtime", ["lua", "python"])
-def test_a_field_types_the_keys(tmp_path, runtime):
+def test_a_field_types_the_keys_only_while_its_edit_is_open(tmp_path, runtime):
     ws, drv = _open(tmp_path, "Field App", LUA_APP if runtime == "lua" else PY_APP, runtime)
+    _type(drv, "q")
+    assert _name(ws) == "", "a key on a field with no edit open types nothing"
+    _edit(drv)
     _type(drv, "wasd")
     assert _name(ws) == "wasd"
+    assert _focus(ws) == "name"
+
+
+@pytest.mark.parametrize("runtime", ["lua", "python"])
+def test_the_trackball_moves_the_caret_in_an_edit(tmp_path, runtime):
+    """Enter the field, roll left twice, type x: the x lands two characters
+    back. A roll up goes to the line's start, a press is Enter."""
+    ws, drv = _open(tmp_path, "Field App", LUA_APP if runtime == "lua" else PY_APP, runtime)
+    _edit(drv)
+    _type(drv, "abcd")
+    _roll(ws, drv, -1, 0, 2)
+    _type(drv, "x")
+    assert _name(ws) == "abxcd"
+    _roll(ws, drv, 0, -1)
+    _type(drv, "y")
+    assert _name(ws) == "yabxcd"
+    assert _focus(ws) == "name", "in an edit the roll moves the caret, not focus"
+    drv.ball_click()
+    for _ in range(3):
+        drv.frame(DT)
+    assert not ws.input.text_mode, "the trackball's press ends the edit as Enter does"
+    _roll(ws, drv, 0, 1)
+    assert _focus(ws) == "save", "with the edit ended the roll steps past the field"
+
+
+@pytest.mark.parametrize("runtime", ["lua", "python"])
+def test_the_pads_d_pad_moves_the_caret_in_an_edit(tmp_path, runtime):
+    ws, drv = _open(tmp_path, "Field App", LUA_APP if runtime == "lua" else PY_APP, runtime)
+    _step(drv, "a")
+    assert ws.input.text_mode, "A opens the edit"
+    _type(drv, "abc")
+    _step(drv, "left")
+    _step(drv, "left")
+    _type(drv, "x")
+    assert _name(ws) == "axbc"
+    _step(drv, "down")
+    _type(drv, "y")
+    assert _name(ws) == "axbcy", "down goes to the end of a one-line field"
     assert _focus(ws) == "name"
 
 
@@ -220,12 +284,13 @@ def test_the_trackball_steps_an_apps_page_and_shows_no_cursor(tmp_path, runtime)
 @pytest.mark.parametrize("runtime", ["lua", "python"])
 def test_mic_cancels_an_apps_field_edit(tmp_path, runtime):
     ws, drv = _open(tmp_path, "Edit App", LUA_EDIT if runtime == "lua" else PY_EDIT, runtime)
-    assert _focus(ws) == "name" and ws.input.text_mode
+    assert _focus(ws) == "name"
+    _edit(drv)
     _type(drv, "xy")
     assert _name(ws) == "Srbijaxy"
     _mic(ws, drv)
     assert _name(ws) == "Srbija", "Mic gives the field back the text the edit began from"
-    assert _focus(ws) == "top", "and focus steps up off the field"
+    assert _focus(ws) == "name", "and ends the edit, focus staying on the field"
     assert not ws.input.text_mode
     assert not ws.sysmenu.open, "a cancel is not the console's key"
 
@@ -235,25 +300,30 @@ def test_mic_on_a_field_with_no_edit_opens_the_menu(tmp_path, runtime):
     ws, drv = _open(tmp_path, "Edit App", LUA_EDIT if runtime == "lua" else PY_EDIT, runtime)
     assert _focus(ws) == "name"
     assert not ws.run.player.face.cancel()
+    _edit(drv)
     _type(drv, "x")
-    drv.type_char(8)                     # typed and deleted: nothing to give back
+    drv.type_char(8)                     # typed and deleted: the edit ends with its text
     for _ in range(2):
         drv.frame(DT)
+    _mic(ws, drv)
+    assert not ws.sysmenu.open and not ws.input.text_mode, "Mic ends an open edit"
     assert _name(ws) == "Srbija"
     _mic(ws, drv)
-    assert ws.sysmenu.open, "with no edit in progress Mic is the console's key"
+    assert ws.sysmenu.open, "with no edit open Mic is the console's key"
     assert _name(ws) == "Srbija"
 
 
 @pytest.mark.parametrize("runtime", ["lua", "python"])
 def test_enter_keeps_what_it_confirmed(tmp_path, runtime):
     ws, drv = _open(tmp_path, "Edit App", LUA_EDIT if runtime == "lua" else PY_EDIT, runtime)
+    _edit(drv)
     _type(drv, "1")
     drv.type_char(13)
     for _ in range(2):
         drv.frame(DT)
     assert _name(ws) == "Srbija1"
     assert not ws.run.player.face.cancel(), "Enter ends the edit: nothing to give back"
+    _edit(drv)
     _type(drv, "2")
     _mic(ws, drv)
     assert _name(ws) == "Srbija1"
@@ -277,6 +347,7 @@ def _stop(ws):
 @pytest.mark.parametrize("runtime", ["lua", "python"])
 def test_esc_cancels_a_field_edit_before_it_goes_back(tmp_path, how, runtime):
     ws, drv = _open(tmp_path, "Edit App", LUA_EDIT if runtime == "lua" else PY_EDIT, runtime)
+    _edit(drv)
     _type(drv, "xy")
     assert ws.run.player.face.has_page(), "an edit in progress is the app's to step out of"
     if how == "escape":
@@ -286,20 +357,22 @@ def test_esc_cancels_a_field_edit_before_it_goes_back(tmp_path, how, runtime):
     for _ in range(3):
         drv.frame(DT)
     assert _name(ws) == "Srbija"
-    assert _focus(ws) == "top"
+    assert _focus(ws) == "name"
     assert ws.screen == "desktop", "the first Esc cancels the edit, the app stays"
 
 
-def test_a_cancel_onto_the_field_above_gives_each_its_own_text(tmp_path):
-    """Focus steps up from the cancelled field onto another field: the one
-    it left gets its text back, the one it reaches keeps its own, and an
-    edit there cancels to that."""
+def test_each_fields_cancel_gives_it_its_own_text(tmp_path):
+    """A cancelled field gets its text back; the field above, edited next,
+    keeps its own, and an edit there cancels to that."""
     ws, drv = _open(tmp_path, "Two Fields", LUA_TWO, "lua")
     assert _focus(ws) == "second"
+    _edit(drv)
     _type(drv, "x")
     _mic(ws, drv)
     assert (_value(ws, "first"), _value(ws, "second")) == ("aa", "bb")
-    assert _focus(ws) == "first" and ws.input.text_mode
+    _step(drv, "up")
+    assert _focus(ws) == "first" and not ws.input.text_mode
+    _edit(drv)
     _type(drv, "y")
     assert _value(ws, "first") == "aay"
     _mic(ws, drv)
@@ -419,15 +492,17 @@ def test_a_uitree_apps_field_holds_text_mode_and_mic_cancels_its_edit(tmp_path):
     policy = ws.input_policy
     assert not policy.typing() and not ws.input.text_mode, "the page's first stop is no field"
     for _ in range(6):
-        if policy.typing():
+        if app.engine.focus_key == "name":
             break
         _step(drv, "down")
-    assert policy.typing() and ws.input.text_mode, "a focused field types: W A S D are letters there"
-    assert app.engine.has_page() is False
+    assert not policy.typing(), "a focused field is a stop until Enter"
+    _edit(drv)
+    assert policy.typing() and ws.input.text_mode, "an open edit types: W A S D are letters there"
+    assert app.engine.has_page() is True, "an open edit is the app's to step out of"
     _type(drv, "xy")
     assert C.s.name == "xy", app.engine.trace_text()
     _mic(ws, drv)
     assert C.s.name == "", "Mic gives the field back the text the edit began from"
-    assert not policy.typing() and not ws.input.text_mode, "and focus steps off it"
+    assert not policy.typing() and not ws.input.text_mode, "and ends the edit"
     assert not ws.sysmenu.open, "a cancel is not the console's key"
     assert ws.wm.top_kind() == app.id, "and the app stays"

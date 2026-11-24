@@ -190,7 +190,7 @@ def scene_page():
                 pass
             ui.label("{name}", tone="dim", align="end")
         with ui.popover("tag_pop", anchor="where", w="{pop_w}", close="close_pop", shown="pop=tag"):
-            ui.field("Tag", "tag_text", max=16, on="tag_ok", hint="coin")
+            ui.field("Tag", "tag_text", max=16, on="tag_ok", hint="coin", edit="open")
         with ui.popover("stamp_pop", anchor="stamp_tag", w="{pop_w}", close="close_pop",
                         shown="pop=stamp"):
-            ui.field("Tag", "stamp_text", max=16, on="stamp_ok", hint="coin")
+            ui.field("Tag", "stamp_text", max=16, on="stamp_ok", hint="coin", edit="open")

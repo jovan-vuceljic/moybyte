@@ -323,8 +323,8 @@ def build():
         ui.switch("view", {"nostore": _no_store, "empty": _no_notes, "list": _vault, "note": _note},
                   shown="!@desk")
         with ui.dialog("New note", ["cancel", "make"], shown="asking=new"):
-            ui.field("", "typed", NAME_MAX, on="make", hint="my note")
+            ui.field("", "typed", NAME_MAX, on="make", hint="my note", edit="open")
             ui.label("End the name with .py or .lua to make a program you can Run.", wrap="word",
                      tone="dim")
         with ui.dialog("Rename", ["cancel", "rename_it"], shown="asking=rename"):
-            ui.field("", "typed", NAME_MAX, on="rename_it", hint="my note")
+            ui.field("", "typed", NAME_MAX, on="rename_it", hint="my note", edit="open")

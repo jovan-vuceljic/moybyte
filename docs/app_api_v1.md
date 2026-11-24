@@ -442,7 +442,7 @@ Python's alone.
 | `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=`, `sub=`, `count=`, `mark=` |
 | `toggle(label, name)` | a bool | `on=`, `hint=`, `when=` with `off=` (below) |
 | `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=`, `when=` with `off=` (below) |
-| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `secret=`, `grow=`, `on=`, `changed=`, `when=` with `off=` (below) |
+| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `edit="open"` its edit open as focus comes onto it (§4), `keys="number"` the on-screen keyboard's layout (#239; draws nothing), `secret=`, `grow=`, `on=`, `changed=`, `when=` with `off=` (below) |
 | `seg(label, name)` | one of an enum's values, or of a model's rows | `labels=`, `text=`, `look=` (`seg`, `cycle`, `swatches`, `pictures`), `on=` |
 | `tabs(name, labels)` | a tab strip over an enum, or over a `row_of` a tab a row; a `switch` on the same name is its body | `icons=`, `offered=`, `hint=`, `text=` |
 | `stepper(value, prev, next)` | "‹ value ›", its chevrons two actions | `tone="dim"`, `grow=` |
@@ -972,7 +972,7 @@ boundary keeping only its `print` and its own colours), a Lua or compiled
 run's by the run's context over the word its snapshot carries
 (`AppFace.ui_face`, `moy_ui_run.h`'s `MOYCORE_UI_FACE_*`). A fixed app's
 page draws as a cart's. Back steps out of its views first there too (§4): a
-focused field's edit, then a popover the last frame drew.
+focused field's open edit, then a popover the last frame drew.
 
 Write an app on the UI tree: the immediate verbs go at the clean cut of
 the OS work (#246).
@@ -1020,7 +1020,7 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 | `link` | 1 | action | `label` tpl, `value` tpl, `icon` tpl, `signal` int, `tag` tpl, `tone` tpl, `swatch` tpl, `sub` tpl, `count` tpl, `mark` tpl, `focus` cond |
 | `toggle` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `hint` tpl |
 | `slider` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `lo` int, `hi` int, `look` `"bar"` `"steps"` `"blocks"`, `icon` tpl |
-| `field` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `max` int, `secret` bool, `hint` tpl, `grow` bool, `commit` bool, `changed` hook |
+| `field` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `max` int, `secret` bool, `hint` tpl, `grow` bool, `commit` bool, `edit` `"open"` `"stop"`, `keys` `"text"` `"number"`, `changed` hook |
 | `seg` | 2 | state | `label` tpl, `labels` table, `on` action or hook, `focus` cond, `look` `"seg"` `"cycle"` `"swatches"` `"pictures"`, `text` tpl |
 | `tabs` | 2 | state | `labels` table, `icons` table, `text` tpl, `on` action or hook, `focus` cond, `offered` conds, `hint` tpl |
 | `cells` | 2 | state | `clear` int, `count` int, `first` int, `cols` int, `side` int, `gap` int, `edge` bool, `on` action or hook, `pick` action or hook, `focus` cond |
@@ -1063,13 +1063,31 @@ touch alone (#242, #239). The engine gives a UI tree page all three: arrows
 Enter, A or a tap fires the focused stop's action, a drag scrolls. The app
 writes no focus code: the engine moves focus into view, keeps it across
 frames and puts it back on the node that pushed a page when the page pops;
-a handler moves it with `ui.focus(key)`. A `ui.field` in focus takes the
-keyboard as text: on the T-Deck its WASD type there, and the trackball
-steps focus off it. Nothing sets the keyboard's mode by hand: the console's
-input policy (`runtime/shell/input_policy.py`) derives it from what the
-surface holding the keys has focused, and a menu over it is game mode. So
-every action is a stop (a button, a link, a list row, a menu item), and a
-key shortcut only ever doubles one.
+a handler moves it with `ui.focus(key)`. Nothing sets the keyboard's mode
+by hand: the console's input policy (`runtime/shell/input_policy.py`)
+derives it from what the surface holding the keys has focused, and a menu
+over it is game mode. So every action is a stop (a button, a link, a list
+row, a menu item), and a key shortcut only ever doubles one.
+
+**A field is edited only after Enter (owner, 2026-11-24).** A focused
+`ui.field` is a stop like any other: the arrows, WASD and the trackball move
+past it, typing nothing, and its hint is Enter's Edit in the input's own
+key. Enter, a tap, a click or a pad's A opens its edit, and while it is
+open the field takes the keyboard as text: every key types at its caret,
+WASD included, and the directions (the arrows, the trackball, a pad's
+d-pad, never WASD) move the caret, left and right a character, up and down
+to the line's start and end (a field is one line; `text_editor` is the many
+lines, with keys of its own). Enter, or the trackball's press, ends the edit
+and commits it (`on=` runs, a `commit=True` draft is written); Esc, B or
+the T-Deck's Mic end it and give back the text it began from. Focus stays
+on the field either way, and focus leaving it ends the edit too. A field
+with `edit="open"` is for a page that exists for typing (a search box a
+search key opens, the Terminal's line, a dialog that asks a name): focus
+coming onto it opens its edit, and so does `ui.focus` naming it; Enter
+commits with the edit going on (the Terminal's next line, the next find, a
+name the dialog refused); Esc gives back what was typed and ends the edit,
+and on one with nothing to give back it is its page's Back (the dialog,
+the popover, the strip closes).
 
 **Shortcuts are an action's `keys=`.** `ui.action("trash", "Move to Trash",
 trash, takes="row", row="cur", keys=("t",), ...)` fires on T wherever the
@@ -1086,8 +1104,8 @@ T-Deck's K (its B), the bar's back chevron and a desk window's are the
 console's way back; a page never reads them. Back steps out of the app's own
 views before it leaves the app, in this order:
 
-1. a focused `commit=True` field's draft is dropped (its Cancel), the state
-   keeping its text;
+1. a focused field's open edit ends and gives back the text it began from
+   (a `commit=True` field's draft is dropped, the state keeping its text);
 2. else a shown dialog takes its first button, and a shown popover its
    `close=`;
 3. else, on a placed page (§3, Layout), a shown row or group with `close=`
@@ -1123,7 +1141,7 @@ and is never yours.
 
 **Tabs switch themselves.** `ui.tabs("view", "VIEWS")` over an enum takes
 the `tabs` keys (Q and E on a keyboard) wherever the keys do not type into
-a field, left and right while it holds focus, and a tap; a `ui.switch` on
+a field's edit, left and right while it holds focus, and a tap; a `ui.switch` on
 the same name is its body. The app reads no key for it.
 
 **Hints name actions, not keys.** The band under the page names the focused
@@ -1141,7 +1159,7 @@ faces; the app's code is the same on every board (`docs/history/ui_api_2026-10.m
 the tap floor).
 
 **Paste is the console's.** The console's Paste (the desk's Ctrl+V) puts its
-clipboard into the focused field, as many whole characters as its `max`
+clipboard into the focused field's open edit, at its caret, as many whole characters as its `max`
 leaves room for: the app reads no clipboard and needs no `clipboard`
 permission for it, on every tier.
 
@@ -2236,8 +2254,8 @@ it paints the strip after `draw()` and routes a tap in its band before
   `leave_asked` (its own way out, taken as the bar's back), `BACK_MINIMISES`
   (a back on the first page minimises on the desk), `typing()` (True
   where the app types outside a `ui.field`, as the Terminal does; by
-  default a field in focus on its `ctx.ui` page), `cancel()` (the T-Deck's
-  Mic inside an open field; by default its `ctx.ui` context's,
+  default a field whose edit is open on its `ctx.ui` page), `cancel()` (the T-Deck's
+  Mic inside a field's open edit; by default its `ctx.ui` context's,
   `ui_draw.app_cancel`, so a `ui.field` it draws gives its draft back and
   a `ui.popover` it draws is dismissed),
   `DESK_TILE` (False: off the desk's column; an app no cart in the store

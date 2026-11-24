@@ -847,6 +847,11 @@ static mp_obj_t eng_unfocused(mp_obj_t self)
     return MP_OBJ_NEW_SMALL_INT(uit_unfocused(eng(self)));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eng_unfocused_obj, eng_unfocused);
+static mp_obj_t eng_editing(mp_obj_t self)
+{
+    return MP_OBJ_NEW_SMALL_INT(uit_editing(eng(self)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(eng_editing_obj, eng_editing);
 
 static mp_obj_t eng_focused(mp_obj_t self)
 {
@@ -1089,6 +1094,7 @@ static const mp_rom_map_elem_t eng_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_can), MP_ROM_PTR(&eng_can_obj) },
     { MP_ROM_QSTR(MP_QSTR_dialog), MP_ROM_PTR(&eng_dialog_obj) },
     { MP_ROM_QSTR(MP_QSTR_unfocused), MP_ROM_PTR(&eng_unfocused_obj) },
+    { MP_ROM_QSTR(MP_QSTR_editing), MP_ROM_PTR(&eng_editing_obj) },
     { MP_ROM_QSTR(MP_QSTR_dump), MP_ROM_PTR(&eng_dump_obj) },
     { MP_ROM_QSTR(MP_QSTR_fits_on), MP_ROM_PTR(&eng_fits_on_obj) },
     { MP_ROM_QSTR(MP_QSTR_fits), MP_ROM_PTR(&eng_fits_obj) },

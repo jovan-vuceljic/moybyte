@@ -890,6 +890,8 @@ CASES = {
     "N01 labels": (APP + GO + 'ui.page("p", function()\n'
                    '  ui.dialog("D", { buttons = { "go" }, labels = { "A", "B" } }, function() end)\nend)\n', 4, None),
     "N01 signal": (APP + 'ui.page("p", function() ui.info("Signal", { signal = "3 bars" }) end)\n', 2, None),
+    "N01 edit word": (APP + 'local s = ui.state { t = "" }\nui.page("p", function() ui.field("t", { edit = "always" }) end)\n', 3, None),
+    "N01 keys word": (APP + 'local s = ui.state { t = "" }\nui.page("p", function() ui.field("t", { keys = "qwerty" }) end)\n', 3, None),
     "N01 gap word": (APP + 'ui.page("p", function() ui.split({ dir = "row", sizes = { 1, 1 }, gap = "s" }, function() end) end)\n', 2, None),
     "T04": (APP + 'local s = ui.state { e = ui.enum("a", "b", { init = "a" }) }\nui.labels("L", { a = "A" })\n'
             'ui.page("p", function() ui.label("{e|map L}") end)\n', 4, None),

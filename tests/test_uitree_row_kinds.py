@@ -120,7 +120,7 @@ def test_a_keys_dialog_draws_no_buttons_on_the_t_deck_and_names_its_fields(page)
     assert keys != tdeck                # the buttons' row is gone on the T-Deck
     h = page.hints()
     assert h[:2] == ("scroll", "Field"), h
-    assert "cancel" in h                # in a field the key that never types
+    assert "back" in h and "cancel" not in h, h     # a field's edit closed: its keys never type
 
 
 def test_a_dialogs_labels_name_its_buttons_in_the_band(page):

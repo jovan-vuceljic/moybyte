@@ -1352,11 +1352,14 @@ class CEngine(Engine):
     snapshot = dump
 
     def _has_page(self):
-        return len(self.pages) > 1 or self.dialog_shown()
+        return len(self.pages) > 1 or self.dialog_shown() or (
+            self._visiting() and _C.api_edit_cancel(self._ui.ctx, False))
 
     def _back(self):
-        """Back: a shown dialog's first button (in C), else the page under this
-        one, else the app's back role or its declared back action."""
+        """Back: a shown dialog's first button (in C), else a shown popover's
+        close= (each takes a field's edit in it with it), else a field's open
+        edit ended, its text given back, else the page under this one, else
+        the app's back role or its declared back action."""
         self._bind()
         x = self._made()
         if self._visiting():
@@ -1372,6 +1375,9 @@ class CEngine(Engine):
                 if got != -1:
                     act = self._acts[got[0]]
                     self.q.append((act, self.args_for(act), "back on popover %r" % got[1]))
+                self._damage.all()
+                return True
+            if _C.api_edit_cancel(self._ui.ctx, True):
                 self._damage.all()
                 return True
         if len(self.pages) > 1:
@@ -1669,8 +1675,8 @@ class CEditorEngine(CEngine, _ed.Engine):
 
     def _back(self):
         """Back: a grown pane put back, else a shown popover's close= (in
-        C), else the innermost shown closer row's (`close=`, where it is on),
-        else the store's back."""
+        C), else the innermost shown closer row's (`close=`, where it is on;
+        each takes a field's edit in it with it), else the store's back."""
         self._bind()
         x = self._made()
         g = self._grown()

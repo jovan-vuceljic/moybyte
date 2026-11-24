@@ -174,7 +174,7 @@ def sound_page():
         ui.empty("No sound", icon="music", lines=["This cart has no sound bank"], shown="none")
         ui.switch("tight", {False: _roomy, True: _tight})
         with ui.popover("sound_name", at="{name_at}", w="{name_w}", close="close", shown="asking=name"):
-            ui.field("Name", "f_name", max=SFX_NAME_MAX, on="named", hint="no name")
+            ui.field("Name", "f_name", max=SFX_NAME_MAX, on="named", hint="no name", edit="open")
         with ui.popover("sound_menu", at="{menu_at}", w="{menu_w}", close="close", shown="asking=menu"):
             with ui.rows("sounds"):
                 ui.link("pick", label="{.label}", icon="{.icon}")
