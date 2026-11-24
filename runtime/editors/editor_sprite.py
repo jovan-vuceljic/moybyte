@@ -184,11 +184,13 @@ def _tools():
 
 
 def _steps():
-    # the sprite before and after, each its own stop: left and right walk
-    # them and the row's other parts, A steps
-    ui.button("prev", icon="back", kind="bar", alone=True)
-    ui.label("{n}", size="text", align="center")
-    ui.button("next", icon="forward", kind="bar", alone=True)
+    # the sprite before and after: under keys each its own stop, left and
+    # right walking them and the row's other parts, A stepping; under touch
+    # a stepper, its arrows the taps
+    ui.stepper("{n}", "prev", "next", shown="@touch")
+    ui.button("prev", icon="back", kind="bar", alone=True, shown="!@touch")
+    ui.label("{n}", size="text", align="center", shown="!@touch")
+    ui.button("next", icon="forward", kind="bar", alone=True, shown="!@touch")
 
 
 def sprite_page():
