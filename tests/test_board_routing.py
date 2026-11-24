@@ -1061,3 +1061,20 @@ def test_the_vm_going_closes_an_open_lua_run():
     body = src.split("void moy_play_vm_stop(void) {", 1)[1].split("\n}\n", 1)[0]
     assert "moycore_vm_stop();" in body
     assert "void moycore_vm_stop(void)" in (NATIVE / "moycore" / "modmoycore.c").read_text()
+
+
+def test_every_tier_takes_one_libm_without_fused_multiply_adds():
+    """The kernel's float functions (native/moy_kernel/README.md, THE FLOAT
+    FUNCTIONS): the boards' cmake and the unix and wasm ports' make name the
+    same lib/libm files, and both compile them with -ffp-contract=off. The
+    answers are executed in tests/test_web_lockstep_floats.py (the R32 build
+    against the wasm) and on a T-Deck by tests/test_zero_on_glass.py."""
+    kernel = Path("native/moy_kernel")
+    mk = (kernel / "micropython.mk").read_text()
+    cmake = (kernel / "micropython.cmake").read_text()
+    make_list = re.search(r"^MOY_LIBM := (.*?[^\\])$", mk, re.M | re.S).group(1)
+    cmake_list = re.search(r"^set\(MOY_LIBM (.*?)\)", cmake, re.M | re.S).group(1)
+    names = make_list.replace("\\", " ").replace(".c", "").split()
+    assert names and names == cmake_list.split()
+    assert "-ffp-contract=off" in mk.split("MOY_LIBM_O):", 1)[1].splitlines()[0]
+    assert re.search(r"target_compile_options\(moy_libm PRIVATE[^)]*-ffp-contract=off", cmake)

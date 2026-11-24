@@ -74,4 +74,21 @@ target_compile_definitions(usermod_moy_kernel INTERFACE
 
 target_link_options(usermod_moy_kernel INTERFACE "-Wl,--wrap=esp_panic_handler")
 
+# The float functions every tier computes alike (README.md, THE FLOAT
+# FUNCTIONS): MicroPython's lib/libm in place of newlib's, a target of its own
+# so -ffp-contract=off reaches its objects alone (a usermod's sources are
+# compiled by the micropython.elf target, which no source property reaches).
+set(MOY_LIBM math atan2f atanf asinfacosf log1pf asinhf acoshf atanhf
+    sf_sin sf_cos sf_tan kf_sin kf_cos kf_tan ef_rem_pio2 kf_rem_pio2
+    sf_erf erf_lgamma wf_lgamma wf_tgamma)
+list(TRANSFORM MOY_LIBM PREPEND ${MICROPY_DIR}/lib/libm/)
+list(TRANSFORM MOY_LIBM APPEND .c)
+add_library(moy_libm STATIC ${MOY_LIBM})
+idf_build_get_property(_moy_libm_opts COMPILE_OPTIONS GENERATOR_EXPRESSION)
+idf_build_get_property(_moy_libm_copts C_COMPILE_OPTIONS GENERATOR_EXPRESSION)
+target_compile_options(moy_libm PRIVATE
+    "${_moy_libm_opts}" ${_moy_libm_copts} -ffp-contract=off -Wno-sign-compare
+    -Wno-maybe-uninitialized)
+target_link_libraries(usermod_moy_kernel INTERFACE moy_libm)
+
 target_link_libraries(usermod INTERFACE usermod_moy_kernel)

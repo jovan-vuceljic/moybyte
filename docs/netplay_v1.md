@@ -346,7 +346,10 @@ browser's wasm (`firmware/web_runner/variant/mpconfigvariant.h`: 32-bit words,
 REPR_C, single floats), so a page plays a console's Python cart;
 `tests/test_web_lockstep_floats.py` runs each two-player seed cart in the wasm
 and in the host's board-model MicroPython and holds every frame's world to
-agree. A board that cannot take it cannot join a match.
+agree. A board that cannot take it cannot join a match. The C libraries'
+float functions part too (a T-Deck's `atan2(1.0, 2.5)` was a bit away from
+the wasm's), so every tier computes `math` with the kernel's one set
+(`native/moy_kernel/README.md`, THE FLOAT FUNCTIONS).
 
 **Board scope is three consoles and the browser a Zero serves**: the
 T-Deck, the Guition S3, the Waveshare P4, and the page either Zero serves,
