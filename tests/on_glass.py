@@ -4432,8 +4432,8 @@ _UI_FRAMES, _UI_FAIL = 0, 8
 # page the engine drew, read where the run draws (device/device_canvas.py, the
 # one canvas class, the host's and a board's). The run's own `pix` answers a
 # palette index, which no theme colour is.
-_RUN_CRC = ("(lambda cv: (lambda b, w, c: [c.__setitem__(0, __import__('binascii').crc32("
-            "b[2 * (y * w):2 * (y * w + 320)], c[0])) for y in range(40, 160)] and c[0])"
+_RUN_CRC = ("(lambda cv: (lambda b, w, c: [c.append(__import__('binascii').crc32("
+            "b[2 * (y * w):2 * (y * w + 320)], c[-1])) for y in range(40, 160)] and c[-1])"
             "(memoryview(cv._buf), cv.w, [0]))(ws.run.canvas)")
 
 
