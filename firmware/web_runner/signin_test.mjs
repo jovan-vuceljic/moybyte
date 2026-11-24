@@ -42,6 +42,7 @@ function fakeModule() {
         _moy_sw_key: (kid, key) => put(JSON.stringify({ op: "key", nb: st.nb, kid: cstr(kid), mac: cstr(key) })),
         _moy_sw_token: (tok, name) => put(JSON.stringify({ op: "token", nb: st.nb, tok: cstr(tok) })),
         _moy_sw_pake: (pw) => put(JSON.stringify({ op: "pake", nb: st.nb, pw: cstr(pw) })),
+        _moy_sw_claim: (c, pw) => put(JSON.stringify({ op: "claim", claim: cstr(c), record: "$moy2$" + cstr(pw) })),
         _moy_sw_confirm: () => put(JSON.stringify({ op: "confirm", nb: st.nb })),
         _moy_sw_done: (n) => {
             const d = JSON.parse(read(n));
@@ -95,7 +96,7 @@ function page(b, signin) {
     const mp = { _module: fakeModule() };
     const store = { probeMode: async (f) => ((await f("sync")).status === 200 ? "board" : "site") };
     const make = new Function("mp", "fetch", "self", "store", SECTION + `
-        return { signIn, sealed, pairPassword,
+        return { signIn, sealed, pairPassword, claimPassword,
                  state: () => ({ auth, authOpen, signedIn, authNeed }),
                  set: (a) => { auth = Object.assign(auth, JSON.parse(JSON.stringify(a))); } };`);
     const w = make(mp, b.fetch, self, store);
@@ -221,6 +222,33 @@ for (const st of [404, 405, 501]) {
     const w = page(b, null);
     ok("a password pairing whose nonce keeps going says so", !(await w.pairPassword("correct horse", "x")));
     ok("...after a few hellos", b.count.hello === 3, "hellos " + b.count.hello);
+}
+
+{
+    const b = board((op, d) => op === "hello" ? HELLO
+        : op === "claim" ? (d.claim === "c1" ? { status: 200, body: { ok: true } } : { status: 403, body: { error: "claim" } })
+        : SIGNED);
+    const w = page(b, null);
+    const a = await w.claimPassword("c1", "b0a4d", "kitchen-pass", "x");
+    ok("a board with no password takes the claim", a.ok, JSON.stringify(a));
+    ok("...with the record made in the browser, never the password",
+       !JSON.stringify(b.log).includes("kitchen-pass") && b.count.claim === 1);
+    const no = await w.claimPassword("c2", "", "kitchen-pass", "x");
+    ok("a claim the board does not hold says the setup ran out", !no.ok && /ran out/.test(no.why), JSON.stringify(no));
+}
+{
+    const b = board((op) => op === "hello" ? Object.assign({}, HELLO, { body: Object.assign({}, HELLO.body, { pw: true }) }) : SIGNED);
+    const w = page(b, null);
+    const a = await w.claimPassword("c1", "", "kitchen-pass", "x");
+    ok("a board with a password is sent no claim", !a.ok && !b.count.claim && /already/.test(a.why));
+}
+{
+    const b = board((op) => op === "hello" ? HELLO : SIGNED);
+    const w = page(b, null);
+    const a = await w.claimPassword("c1", "0therb0ard", "kitchen-pass", "x");
+    ok("another board's claim is never spent here", !a.ok && !b.count.claim, JSON.stringify(a));
+    const s = await w.claimPassword("c1", "", "short", "x");
+    ok("a password under 8 characters is refused before the board sees it", !s.ok && !b.count.claim);
 }
 
 if (fail) { console.log(fail + " failed"); process.exit(1); }
