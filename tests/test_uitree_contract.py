@@ -188,7 +188,7 @@ def _held(lang, facts):
 
 def test_the_table_is_whole():
     codes = TABLE["codes"]
-    assert len(codes) == 89
+    assert len(codes) == 68
     for c, d in codes.items():
         assert re.fullmatch(r"[A-Z][0-9]{2}", c)
         assert d["meaning"] and d["stage"] and d["fix"]["python"] and d["fix"]["lua"], c

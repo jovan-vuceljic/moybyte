@@ -802,8 +802,6 @@ Python and once in Lua.
 | D01 | the `app` declaration: an unknown or placement field (`x`, `place`, `tools`...), or a second one | drop `place=`: the shell places windows |
 | D02 | `size=` or `min=` not `(w, h)` of desk units or fractions `"a/b"` with `0 < a ≤ b` | `size=("7/8", "9/10")` |
 | D04 | an app with no `app` declaration | `ui.app("Counter", icon="calc")` |
-| D05 | a `slot` not in `slots=`, or `slots=` naming a slot the tree lacks | `slots=["run"]` and `ui.slot("run")` |
-| D06 | the manifest's `"ui"` level is missing, or one this console does not run | `"ui": 1` in the manifest |
 | E00 | a kind, a prop or a form the C engine does not draw yet, by name (`uitree_c.EngineGap`), never drawn wrong | run the app on the reference (`uitree`), or build it from what the C engine draws |
 | E01 | an enum with no `init=` | `ui.enum("a", "b", init="a")` |
 | E02 | `init=` is not one of the enum's values | name one of them |
@@ -811,18 +809,11 @@ Python and once in Lua.
 | G01 | a derive cycle | compute one of them in a handler |
 | H01 | a hook where an action belongs (a button, link, tool, item, card, a dialog's `buttons=`) | `ui.action(NAME, "Label", fn)` |
 | H03 | a hook with a label, an icon, keys or `when=` | an action, if a person sees it |
-| I01 | a tool or a lent action with no icon from its action or its site, and no `fill=` | `icon="pencil"` on the action |
 | I02 | an action's `icon=` is a template | a site's `icon="{...}"`, or a name |
 | K01 | an app names a shell role (`home`, `full`, `system`) | a role of the app's (§13.1) |
 | K02 | two actions on one key live together in one unit, or an app action beside a unit action | one key, one action |
 | K03 | a bad key: a chord other than `ctrl+LETTER`, an unknown role | `keys=["ctrl+f", "role:search"]` |
-| L01 | a lender with no `lent` site, or a frame lending to itself | `ui.lent("bar")` in the frame |
-| L02 | two shown `lent` sites of one name in one size class | one site per class |
 | L03 | two shown lenders on one site | lend to two sites |
-| M01 | C: a handle that is not one | a handle the build returned |
-| M02 | C: a handed value read when none was handed, or a field of another model | read it in the handler it is handed to |
-| M03 | C: `put_*`, `put_row` or `rows_end` outside `rows_begin ... rows_end`, or a handle not a field of the model | `moy_ui_rows_begin(model)` first |
-| M04 | C: fields put after the last `put_row` | end with `moy_ui_put_row()` |
 | N01 | an unknown kind or prop, a bad prop value, a missing required prop (`progress` with no `max=`; a `derive` with neither or both of `cond=` and `text=`), a wrong count of arguments, a function given where its result belongs or the reverse | the near name the message offers |
 | N02 | two siblings with one key | a key of its own: `ui.row("find_strip")` |
 | N03 | a node or declaration where it may not stand (a `tools` in a `group`, a node after the page's `scroll` outside the `foot`, a label table declared on a unit) | move it: the message names where it may stand |
@@ -849,7 +840,6 @@ Python and once in Lua.
 | S07 | a model with no key field, a key field not text or int, or a field named `key` | `ui.model(key="id", id="", ...)` |
 | S08 | Python: a typed name compared with None | `if s.pick:` |
 | S09 | a write to a derive | write the names it reads |
-| S10 | a write to a value the engine writes (`scroll new=`, `canvas size=`) | read it; the engine writes it |
 | S11 | a `row_of` naming no model | `ui.row_of("nets")` after `nets=ui.model(...)` |
 | S12 | a `doc` with an unknown `lang` | `lang="python"` |
 | S13 | a declaration whose initial value has no type: `None` or `nil`, a list, a function | `ui.opt(0)` for a value that may be absent |
@@ -860,21 +850,10 @@ Python and once in Lua.
 | T05 | `{.field}` or `@current` outside a row | `{sel.field}` |
 | T06 | Python: an enum used as a truth value | `if s.op != "none":` |
 | U02 | a name declared twice in one key space (two states; a state and an action; a unit and a document; two pages) | rename one |
-| U03 | a unit's action named outside every node bound to its unit | `unit=code` on the pane or case |
-| U05 | a dotted name names nothing in that unit | the near name |
-| U06 | a name a unit declares that the app also declares | rename one |
-| U07 | `unit=` on a node that cannot bind | a case, pane, popover or page |
 | U08 | two units answering one key that some size class shows together | give the key to one of them |
-| U10 | a unit declared on a unit | declare it on the app |
 | W01 | a two-way control's `on=` names an action or hook that does not take what the control hands (`none` for a state, `row` for a `.field`) | `takes="none"`, reading the state |
 | W02 | a `work` step's `budget=` is not an int of 1 to 16 ms | `budget=4` |
 | X01 | an internal assertion: the layer missed a check at build | report it: the layer missed a check |
-| Y01 | a process-1 word (`shell.*`, `geom`, `from_app`, `order`) in an app | an app's own kinds |
-| Y02 | `from_app` of an unknown field | a field of §19.1 |
-| Y03 | `shell.windows` over rows without `geom` `x y w h` | `x=shell.geom()` and the rest |
-| Y04 | `shell.zone` over rows without `from_app` | `title=shell.from_app("title")` |
-| Y05 | a dock into a slot its host does not declare | the host's `slots=` |
-| Y06 | after a handler, a model and its orders disagree | drop the key from every order with the row |
 
 ### One app per tier
 
@@ -1060,8 +1039,8 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 - **Roles an app's keys name:** `confirm`, `back`, `more`, `left`, `right`, `up`, `down`, `search`, `goto`, `complete`, `undo`, `redo`, `play`, `tools`; the shell's own: `home`, `full`, `system`.
 - **Verbs** (besides a kind's, its name): `app`, `state`, `enum`, `record`, `model`, `row_of`, `opt`, `labels`, `derive`, `action`, `hook`, `page`, `sys`, `push`, `pop`, `focus`, `after`, `cancel`, `post`, `doc`, `image`, `work`, `pictures`. **Queries:** `about`, `text_size`, `colors`, `fade`.
 - **App fields (`ui.app`):** `icon`, `size`, `min`, `back`, `glass`, `slots`. **System values (`@NAME`):** `desk` bool, `handheld` bool, `wide` bool, `tall` bool, `touch` bool, `input` enum, `focus` text, `current` bool.
-- **Error codes:** A01, A02, A03, A07, A08, A09, A10, B01, B02, B03, C01, C02, C03, D01, D02, D04, D05, D06, E00, E01, E02, E03, G01, H01, H03, I01, I02, K01, K02, K03, L01, L02, L03, M01, M02, M03, M04, N01, N02, N03, N04, N06, N07, N08, O01, O02, O04, P01, P02, P03, P04, P05, Q01, R01, S01, S02, S03, S04, S05, S06, S07, S08, S09, S10, S11, S12, S13, T01, T02, T03, T04, T05, T06, U02, U03, U05, U06, U07, U08, U10, W01, W02, X01, Y01, Y02, Y03, Y04, Y05, Y06.
-- **Reserved codes**, never raised: A04, A05, A06, D03, F01, F02, F03, F04, F05, F06, F07, F08, O03, U01, U04, V01, V02.
+- **Error codes:** A01, A02, A03, A07, A08, A09, A10, B01, B02, B03, C01, C02, C03, D01, D02, D04, E00, E01, E02, E03, G01, H01, H03, I02, K01, K02, K03, L03, N01, N02, N03, N04, N06, N07, N08, O01, O02, O04, P01, P02, P03, P04, P05, Q01, R01, S01, S02, S03, S04, S05, S06, S07, S08, S09, S11, S12, S13, T01, T02, T03, T04, T05, T06, U02, U08, W01, W02, X01.
+- **Reserved codes**, never raised: A04, A05, A06, D03, D05, D06, F01, F02, F03, F04, F05, F06, F07, F08, I01, L01, L02, M01, M02, M03, M04, O03, S10, U01, U03, U04, U05, U06, U07, U10, V01, V02, Y01, Y02, Y03, Y04, Y05, Y06.
 - **Retired names**, each refused with its replacement (N04): verbs `at`, `cell`, `fmt`, `has_symbols`, `head`, `key`, `peek`, `per`, `rebuild`, `ref`, `scope`; kinds `cell`, `text`; props `below@scroll`, `current@tool`, `disabled`, `does@action`, `fixed@split`, `ink`, `key@action`, `keyname@item`, `lit`, `mkind@item`, `paint@cards`, `tools@app`; takes `change`; system values `fs`, `h`, `symbols`, `w`.
 - **Named and not built** (`designed`: every front refuses each, N01): `page.arg`, `page.unit`, `page.nav`, `scroll.new`, `toast.anchor`, `tool`, `cells.face`, `cells.slide`, `dialog.default`, `popover.unit`, `pane.unit`, `canvas.size`, `canvas.sized`, `canvas.capture`, `canvas.text`, `canvas.actions`, `canvas.on`, `takes="row+arg"`, `takes="key"`, role `menu`, role `space`, verb `unit`, verb `damage`, verb `load`.
 
