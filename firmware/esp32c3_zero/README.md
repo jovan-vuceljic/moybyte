@@ -9,8 +9,10 @@ It is a **variant** of the XIAO Zero, not a second design. Both boards take
 the same store host (`device/zero_host.py`, `device/zero_setup.py`,
 `device/zero_shell.py`) and the same module sets, so how
 the Zero is set up, paired, synced and signed into is
-`firmware/seeed_xiao_esp32s3_zero/README.md`, and is not repeated here. This
-file is what the chip changes.
+`firmware/seeed_xiao_esp32s3_zero/README.md`, and is not repeated here:
+its first setup over the cable (Improv) included, which matters most here,
+where the cable is the only way an image goes on. This file is what the
+chip changes.
 
 ## What the chip changes
 

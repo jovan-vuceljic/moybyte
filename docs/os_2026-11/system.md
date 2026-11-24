@@ -354,7 +354,13 @@ host's and the wasm's the same release vendored (`native/moy_net/mbedtls/README.
   copy of the record (whoever reads the card) cannot pair a browser, though
   it can be guessed against at the record's PBKDF2 cost. With no
   password set a browser pairs by the QR alone; the Zero, with no screen,
-  sets its password in its setup form or `provision.sh --password`. A pairing
+  sets its password in its setup form, `provision.sh --password`, or by
+  its **claim** (2026-11-24): 128 random bits held in RAM and sent only
+  over the cable, which lets one browser send the board the password's
+  record it made in the wasm and then pair by that password
+  (`docs/web_console_online_2026-11.md` §7 is the flow, `moy_webauth.c`'s
+  THE CLAIM the rules). The record crosses the network, guessable only at
+  its PBKDF2 cost; the password does not. A pairing
   mints a random 128-bit device key with an id and the browser's name, kept in
   `system/webkeys` (`/etc/webkeys`); the page keeps it per board id in its
   origin's storage.
