@@ -1,5 +1,5 @@
 """Sizes a flowing page sets: a label's scale= (a display line) and w= (a
-measure), a button's look="large", a group's gap=, a row in a group's
+measure), a button's look="hero", a group's gap=, a row in a group's
 column, and a grow= row that stands what follows it at the page's foot."""
 import uitree as ui
 
@@ -46,7 +46,7 @@ def page_foot():
             with ui.group("", gap=20):
                 ui.button("press", arg="0", label="Plain")
                 with ui.row("verbs", wrap=True, gap=14):
-                    ui.button("press", arg="1", label="Large", look="large")
+                    ui.button("press", arg="1", label="Large", look="hero")
                     ui.button("press", arg="2", label="Large")
 
 

@@ -156,7 +156,7 @@ def menu_page():
             ui.item("resume", icon="play")
             ui.item("restart", icon="undo")
             ui.item("settings", icon="gear")
-            ui.item("delete_cart", icon="trash", mkind="danger")
+            ui.item("delete_cart", icon="trash", kind="danger")
 
 
 def buttons_page():

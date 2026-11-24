@@ -2058,7 +2058,7 @@ SCHEMA = {
     "dialog": dict(_C, title="text", buttons="lit", kind="lit", look="lit", labels="texts"),
     "popover": dict(_C, anchor="text", w="int", close="action0", wash="lit", at="text"),
     "menu": dict(_C, caption="text"),
-    "item": dict(_C, label="text", icon="text", mkind="lit"),
+    "item": dict(_C, label="text", icon="text", kind="lit"),
     "split": dict(_C, dir="choice", sizes="ints", pad="lit", gap="lit", align="lit", rule="lit"),
     "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit", w="int", h="int"),
     "panel": dict(_C),

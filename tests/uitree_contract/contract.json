@@ -1755,7 +1755,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:large",
+     "type": "word:hero",
      "level": 2
     }
    }
@@ -2363,7 +2363,7 @@
      "type": "tpl",
      "level": 2
     },
-    "mkind": {
+    "kind": {
      "type": "word:danger",
      "level": 2
     }
@@ -2810,7 +2810,8 @@
    "paint@cards": "an image field",
    "below@scroll": "new=",
    "ink": "tone=",
-   "tools@app": "a tools node"
+   "tools@app": "a tools node",
+   "mkind@item": "kind="
   },
   "takes": {
    "change": "takes=\"none\", reading the state"

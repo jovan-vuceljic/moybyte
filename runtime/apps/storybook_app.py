@@ -1190,7 +1190,7 @@ def _ed_menus():
             ui.item("more_centre", icon="align_c")
             ui.item("more_snap", icon="check", label="{snap_word}")
             ui.item("more_dup", icon="dup")
-            ui.item("more_del", icon="trash", mkind="danger")
+            ui.item("more_del", icon="trash", kind="danger")
     with ui.popover("slide_menu", anchor="slides.cur", shown="ed_menu=slide", close="menu_close",
                     w=260, wash="page"):
         with ui.menu("{slide_title}"):
@@ -1198,7 +1198,7 @@ def _ed_menus():
             ui.item("sl_dup", icon="dup")
             ui.item("sl_earlier", icon="arrow_left")
             ui.item("sl_later", icon="arrow_right")
-            ui.item("sl_del", icon="trash", mkind="danger")
+            ui.item("sl_del", icon="trash", kind="danger")
     for key, at in (("bg", "all_colours"), ("colour", "pick_colour"), ("fill", "pick_fill"),
                     ("line", "pick_line")):
         with ui.popover("colours_" + key, anchor=at, shown="ed_menu=colours && colour_for=" + key,
@@ -1216,7 +1216,7 @@ def build():
             with ui.menu("{menu_title}"):
                 ui.item("rename_ask", icon="pencil")
                 ui.item("duplicate", icon="dup")
-                ui.item("delete_ask", icon="trash", mkind="danger")
+                ui.item("delete_ask", icon="trash", kind="danger")
         with ui.dialog("Delete {del_title}?", ["cancel", "delete"], kind="danger",
                        shown="deleting"):
             ui.label("Its slides and pictures go to the Trash.", wrap="word", lines=3)

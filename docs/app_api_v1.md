@@ -435,7 +435,7 @@ Python's alone.
 
 | kind | is | key props |
 |---|---|---|
-| `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look="large"`, `w=` |
+| `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look="hero"`, `w=` |
 | `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=`, `sub=`, `count=`, `mark=` |
 | `toggle(label, name)` | a bool | `on=`, `hint=`, `when=` with `off=` (below) |
 | `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=`, `when=` with `off=` (below) |
@@ -459,7 +459,7 @@ Python's alone.
 |---|---|---|
 | `dialog(title, buttons)` | a modal card; Back takes its first button | `shown=`, `kind=`, `labels=` its buttons' words, `look="keys"` no buttons on the T-Deck |
 | `popover(key)` | a card hung from a node | `anchor=`, `w=`, `close=` Back's action, `wash=` |
-| `menu(caption)`, `item(action)` | a menu and its items | an item's `icon=`, `label=`, `mkind="danger"` |
+| `menu(caption)`, `item(action)` | a menu and its items | an item's `icon=`, `label=`, `kind="danger"` |
 
 **Drawing and editing**
 
@@ -547,8 +547,8 @@ and its pages are placed; `split` and `grid` place their cells on any page.
   the largest its row holds (in the shell's bar every icon alone draws at
   its zone's size, 16 units at the page's scale, centred in its cell), and
   a button's `kind=` may be a template;
-  `look="large"` is half again a row's height with twice the pads, on a
-  flowing page. On the desk a
+  `look="hero"` is the page's lead verb (the desk home's), half again a
+  row's height with twice the pads, on a flowing page. On the desk a
   popover anchored at a button or a link hangs under it.
 - A link with `sub=` is a list's two-line row (a conversation, a contact):
   its `icon=` leads it (`"@NAME"`: the name's initials on a disc), its value

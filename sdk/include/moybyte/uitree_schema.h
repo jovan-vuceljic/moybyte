@@ -52,7 +52,7 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_TILE "tile"
 #define UT_LOOK_COUNT "count"
 #define UT_LOOK_WELL "well"
-#define UT_LOOK_LARGE "large"
+#define UT_LOOK_HERO "hero"
 #define UT_LOOK_BAR "bar"
 #define UT_LOOK_STEPS "steps"
 #define UT_LOOK_BLOCKS "blocks"
@@ -65,7 +65,6 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_ICONS "icons"
 #define UT_LOOK_COLUMN "column"
 #define UT_LOOK_KEYS "keys"
-#define UT_MKIND_DANGER "danger"
 #define UT_NAV_OFF "off"
 #define UT_PAD_S "s"
 #define UT_PAD_M "m"
@@ -156,7 +155,6 @@ static inline int32_t ut_p_marks(const char *v) { return ut_prop_("marks", v); }
 static inline int32_t ut_p_max(int32_t v) { return ut_prop_int_("max", v); }
 static inline int32_t ut_p_mid(int v) { return ut_prop_("mid", v ? "True" : "False"); }
 static inline int32_t ut_p_min(const char *v) { return ut_prop_("min", v); }
-static inline int32_t ut_p_mkind(const char *v) { return ut_prop_("mkind", v); }
 static inline int32_t ut_p_month(int32_t v) { return ut_prop_int_("month", v); }
 static inline int32_t ut_p_nav(const char *v) { return ut_prop_("nav", v); }
 static inline int32_t ut_p_new(const char *v) { return ut_prop_("new", v); }

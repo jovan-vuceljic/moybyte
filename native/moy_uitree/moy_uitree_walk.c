@@ -3410,8 +3410,8 @@ static int32_t button_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
     if (icon && (N->btn & BT_ALONE))    // a bar item's (flat, no plate) the narrower
         return desk ? (N->lit == 5 ? 28 : 36) : 26 * e->fs;
     int32_t w = out[2] + (icon ? (desk ? 20 : 14 * e->fs) : 0);
-    if (N->btn & BT_LARGE) {
-        // look="large": twice the pads, a least width half again the toolkit's
+    if (N->btn & BT_HERO) {
+        // look="hero": twice the pads, a least width half again the toolkit's
         int32_t least = desk ? 112 : 84 * e->fs;
         w += desk ? 32 : 24 * e->fs;
         w = w > least ? w : least;
@@ -3419,10 +3419,10 @@ static int32_t button_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
     return w;
 }
 
-// A button's height on a flowing page: the toolkit's, half again for look="large".
+// A button's height on a flowing page: the toolkit's, half again for look="hero".
 static int32_t button_h(uit_t *e, int k, int32_t h)
 {
-    return (NODE(k)->btn & BT_LARGE) ? h * 3 / 2 : h;
+    return (NODE(k)->btn & BT_HERO) ? h * 3 / 2 : h;
 }
 
 // An empty's line onto `b`, broken at word breaks into lines of its column (the width `w` it
@@ -4354,9 +4354,9 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         if ((N->btn & BT_ALONE) && (N->t_icon >= 0 || (N->act >= 0 && uit_str(e, e->acts[N->act].icon)[0])))
             n1 = 0;                 // its icon alone, its word its tooltip
         int32_t big[5] = {0};
-        if ((N->btn & BT_LARGE) && !e->in_flow && !e->in_cell && !e->in_foot && !e->placed &&
+        if ((N->btn & BT_HERO) && !e->in_flow && !e->in_cell && !e->in_foot && !e->placed &&
             moy_ui_api_measure(c, s, MOY_UI_MEASURE_BUTTON, sspan(e, a1, n1), NULL, big)) {
-            // a large button stacked on the page: its own width at the row's start, half again as tall
+            // a hero button stacked on the page: its own width at the row's start, half again as tall
             big[2] = button_w(e, c, s, k, model, row);
             moy_ui_api_at(c, big[0], big[1], big[2], button_h(e, k, big[3]));
         }

@@ -1432,7 +1432,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= RS_COL;
         return add_prop(e, node, name, src, repr, PK_LIT, src[0] == 'r');
     }
-    if (!strcmp(name, "mkind") && kind == UIT_ITEM) {
+    if (!strcmp(name, "kind") && kind == UIT_ITEM) {
         N->lit = (uint8_t)!strcmp(src, "danger");
         return add_prop(e, node, name, src, repr, PK_LIT, N->lit);
     }
@@ -1458,10 +1458,11 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (!strcmp(name, "look") && kind == UIT_BUTTON) {
-        // look="large" (BT_LARGE): half again a row's height, twice the pads, a wider least width
-        if (strcmp(src, "large"))
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("button look=%s: \"large\"", "button look=%s"), src);
-        N->btn |= BT_LARGE;
+        // look="hero" (BT_HERO): the page's lead verb, half again a row's height, twice the pads, a
+        // wider least width
+        if (strcmp(src, "hero"))
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("button look=%s: \"hero\"", "button look=%s"), src);
+        N->btn |= BT_HERO;
         return add_prop(e, node, name, src, repr, PK_LIT, 1);
     }
     if (kind == UIT_STEPPER && (!strcmp(name, "grow") || !strcmp(name, "tone"))) {

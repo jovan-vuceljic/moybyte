@@ -153,9 +153,9 @@ enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8, TV_GUTTER = 16 };
 // a scroll node's lit: follow=, snap=
 enum { SC_FOLLOW = 1, SC_SNAP = 2 };
-// A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large"
+// A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="hero"
 // (`btn`).
-enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4 };
+enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_HERO = 4 };
 enum { RS_CHECK = 1, RS_COL = 2 };    // a rows list's lit: check=True; dir="col", its cells down the stack
 enum { RW_MID = 1, RW_GROW = 2, RW_WRAP = 4 };   // a row's lit: centred on the row it is a cell of; a fill of
                                                 // its stack; its cells packed from its start, wrapping

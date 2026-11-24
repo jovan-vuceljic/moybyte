@@ -234,7 +234,7 @@ def build():
                 ui.item("rename_ask", label="Rename" + dots() + "\tR")
                 ui.item("dup", label="Duplicate\tCtrl D")
             with ui.menu(""):
-                ui.item("trash", label="Move to Trash\tDel", mkind="danger")
+                ui.item("trash", label="Move to Trash\tDel", kind="danger")
         with ui.dialog("{rn_title}", ["cancel", "rename"], shown="renaming"):
             ui.field("Name", "name", 32, on="rename")
         ui.toast("{toast}", icon="{toast_icon}", shown="toasting")

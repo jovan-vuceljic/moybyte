@@ -986,7 +986,7 @@ def test_clear_is_set_apart_and_the_keys_still_reach_it(tmp_path):
     from runtime import host_app, editor_sprite
     src = inspect.getsource(editor_sprite.sprite_page)
     assert ('with ui.menu("", shown="!shifting"):\n'
-            '                ui.item("clear", label="Clear{k_clear}", mkind="danger")\n'
+            '                ui.item("clear", label="Clear{k_clear}", kind="danger")\n'
             '            with ui.menu(') in src
     ws = host_app.build_workstation(str(tmp_path / "carts"))
     _open_paint(ws)
