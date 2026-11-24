@@ -329,6 +329,38 @@ def test_a_slider_in_a_narrow_row_keeps_its_label(tmp_path):
     assert shots["Named"] != shots["Bare"]
 
 
+def test_a_link_shows_its_value_whole_or_not_at_all(tmp_path):
+    """A link's value too wide for the room its label leaves is left out,
+    not cut to an ellipsis: the row draws as it does with no value; one
+    that fits draws."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    body = ('ui.app("%s", { icon = "calc" })\n'
+            'ui.action("open", "Cart info", function() end)\n'
+            'ui.page("p", function()\n'
+            '  ui.split({ dir = "row", sizes = { 3, 2 } }, function()\n'
+            '    ui.label("one")\n'
+            '    ui.link("open", { value = "%s" })\n'
+            '  end)\n'
+            'end)\n')
+    names = (("Long", "A title far too long for this"), ("None", ""), ("Short", "Ab"))
+    for name, value in names:
+        _cart(carts, name, body % (name, value))
+    ws, drv, frame, open_cart = _console(carts)
+    shots = {}
+    for name, _v in names:
+        open_cart(ws, name)
+        for _ in range(4):
+            frame()
+        assert ws.run.player.cart_error is None, (name, ws.run.player.cart_error)
+        top = 3 * ws.sys_canvas.w * ws.layout.cy      # the page's, under the bar's title
+        shots[name] = bytes(drv.rgb888())[top:]
+        ws.spine.exit_to_caller()
+    assert shots["Long"] == shots["None"]
+    assert shots["Short"] != shots["None"]
+
+
 def test_a_split_a_grid_and_a_panel_draw_on_the_c_engine(tmp_path):
     """The placing kinds only the C engine draws: a split's parts, a grid's
     cells and a panel each move the pixels."""

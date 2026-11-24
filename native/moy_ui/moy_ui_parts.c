@@ -674,7 +674,11 @@ static moy_ui_box_t seg_box(const pd_t *d, const pf_t *f, moy_ui_box_t b, const 
 static moy_ui_box_t tab_box(const pd_t *d, const pf_t *f, moy_ui_box_t b, const moy_ui_vrow_t *r,
                             const vgeo_t *g, int i, int scale) {
     int x = b.x + pad_of(d, r);
-    int ph = b.h - pm(d, MOY_UI_M_VALUE_ROW_TAB, 1);
+    // the row's height less the tab's inset, and never shorter than its words' line
+    int ph = b.h - pm(d, MOY_UI_M_VALUE_ROW_TAB, 1), line = f->line * scale;
+    if (ph < line) {
+        ph = line < b.h ? line : b.h;
+    }
     for (int j = 0; j < r->n; j++) {
         moy_ui_span_t o = option(r->value, j);
         int ow = tw(f, o.p, o.n, scale) + g->gap;
@@ -996,7 +1000,8 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
             } else {
                 // a value wider than the room its label leaves (the label
                 // keeps up to half the row) is cut with an ellipsis, and one
-                // that shows none of itself so is left out
+                // that shows none of itself so is left out; a link's, a
+                // glimpse of what it opens, shows whole or not at all
                 int iconed = r->icon_slot >= 0 || r->icon_glyph >= 0;
                 int lx = r->label.n || iconed ? b.x + pad + (iconed ? 16 * d.fs + gap : 0) : b.x;
                 int sig = 0;
@@ -1013,7 +1018,7 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                 if (vw <= vroom) {
                     x -= vw;
                     text(&d, &fl, r->value.p, r->value.n, x, b.y, b.h, vc, sc);
-                } else {
+                } else if (kind != MOY_UI_V_LINK) {
                     int ell = 0;
                     size_t k = moy_ui_cut_text(fl.id, r->value.p, r->value.n, vroom, sc, &ell);
                     if (k > 0) {
