@@ -54,6 +54,7 @@ from array import array
 
 import console
 import host_api
+import layout_base
 import moy_carts
 import moy_catalogue
 import web_canvas
@@ -246,14 +247,6 @@ def _make_api(*a, **kw):
 WEB_INPUTS = (("local", "keys"), ("pad", "pad"))
 WEB_TOUCH_INPUTS = (("touch", "touch"), ("local", "keys"), ("pad", "pad"))
 
-# The glass the desktop arrangement is: the Waveshare P4's 7-inch 1024x600
-# panel (firmware/esp32_p4_wifi6_touch_lcd_7b/board.toml [panel]), the board
-# whose arrangement it runs, so the desk lays out on the desk's metrics, faces
-# and icon sizes as that board's does (`layout_base.class_of`). The handheld
-# arrangement declares none, as the T-Deck declares none.
-# tests/test_web_look_parity.py holds the number to the board's.
-DESK_DIAGONAL_IN = 7.0
-
 
 def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
          windowed=False, font_scale=0, hud=True, coarse=False, scheme=None):
@@ -323,9 +316,11 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
         # rasterizer here was unaffordable at ~85ms/frame interpreted.
         sysc = web_canvas.make_canvas(width, height, font_scale=font_scale)
         game = web_canvas.WebSystemCanvas(web_canvas.compositor(320, 240))
+        # The desk declares the P4's glass at the P4's pixel density, so it
+        # lays out on the desk's metrics as that board does at any page size.
         ws = console.Workstation(host_api._NullComp(), game, inp, carts,
                                  sys_canvas=sysc, font_scale=font_scale,
-                                 panel_diagonal_in=DESK_DIAGONAL_IN)
+                                 panel_diagonal_in=layout_base.desk_diagonal_in(width, height))
     else:
         sysc = game = web_canvas.make_canvas(320, 240, font_scale=font_scale)
         ws = console.Workstation(host_api._NullComp(), game, inp, carts)

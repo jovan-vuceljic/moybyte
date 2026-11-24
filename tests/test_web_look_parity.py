@@ -5,7 +5,7 @@ and its icon set resolve in the wasm as they do on the glass.
 
 The handheld 320x240 is the T-Deck's (no glass declared, the handheld's
 class); the 1024x600 desk is the Waveshare P4's (its 7-inch glass, the desk's
-class: `web_boot.DESK_DIAGONAL_IN`). `tools/make_font.py module` writes each
+class: `layout_base.desk_diagonal_in`, the P4's glass at the P4's density). `tools/make_font.py module` writes each
 image's `fonts_data` from its board.toml (`font_tier`, else `tier`); the
 module the browser freezes is held here against each board's, and
 `iconsets.carried` -- what the bar, the Editor's ladder and the C parts draw
@@ -24,7 +24,6 @@ run the wasm too.
 import glob
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -50,10 +49,10 @@ CONSOLES = sorted(Path(p).parent for p in glob.glob(str(FW / "*" / "build.sh"))
                   and Path(p).parent != WEB)
 SEEDS = sorted(Path(p).stem for p in glob.glob(str(ROOT / "native" / "moy_ui" / "themes" / "*.json")))
 VARIANTS = ("dark", "light")
-# The browser's arrangements: (the board whose arrangement it is, the glass
-# web_boot declares for it, the font tier of its class).
-ARRANGEMENTS = {"handheld": (TDECK, None, "handheld"),
-                "desk": (P4, "DESK_DIAGONAL_IN", "desktop")}
+# The browser's arrangements: (the board whose arrangement it is, whether
+# web_boot declares a glass for it, the font tier of its class).
+ARRANGEMENTS = {"handheld": (TDECK, False, "handheld"),
+                "desk": (P4, True, "desktop")}
 
 
 def _image(board):
@@ -69,11 +68,9 @@ def _tiers(board):
     return (t,) if isinstance(t, str) else t
 
 
-def _web_glass(name):
-    """The number web_boot declares as the desk's glass."""
-    m = re.search(r"^%s = ([0-9.]+)$" % name, (WEB / "web_boot.py").read_text(), re.M)
-    assert m, "web_boot no longer declares %s" % name
-    return float(m.group(1))
+def _web_glass(w=1024, h=600):
+    """The diagonal web_boot declares for a `w` x `h` desk."""
+    return layout_base.desk_diagonal_in(w, h)
 
 
 def test_the_console_boards_are_found():
@@ -87,7 +84,7 @@ def test_the_console_boards_are_found():
 def test_each_arrangement_lays_out_on_its_boards_class(arrangement):
     board, const, tier = ARRANGEMENTS[arrangement]
     declared = board_config.load(board).get("panel", {}).get("diagonal_in")
-    glass = _web_glass(const) if const else None
+    glass = _web_glass() if const else None
     assert glass == declared, (arrangement, glass, declared)
     cls = layout_base.class_of(glass)
     assert cls == layout_base.class_of(declared)
@@ -98,8 +95,18 @@ def test_each_arrangement_lays_out_on_its_boards_class(arrangement):
 
 def test_the_desk_arrangement_declares_its_glass_to_the_workstation():
     src = (WEB / "web_boot.py").read_text()
-    assert "panel_diagonal_in=DESK_DIAGONAL_IN" in src
+    assert "panel_diagonal_in=layout_base.desk_diagonal_in(width, height)" in src
     assert src.count("panel_diagonal_in=") == 1, "only the desk declares a glass"
+
+
+def test_the_desk_keeps_the_p4s_density_at_any_size():
+    """1024x600 is the P4's own 7 inches; a bigger page is a bigger panel at
+    the same density, so its chrome is not lifted the way a 7-inch 1920x1080
+    panel's would be."""
+    from runtime import chrome
+    assert layout_base.desk_diagonal_in(1024, 600) == 7.0
+    for w, h in ((1024, 600), (1280, 800), (1920, 1080), (2560, 1440)):
+        assert chrome.chrome_scale_floor(w, h, layout_base.desk_diagonal_in(w, h)) == 1, (w, h)
 
 
 def test_the_browser_carries_what_its_boards_freeze():
@@ -236,7 +243,7 @@ def _host_frame(tmp_path, arrangement, src):
     from runtime import host_app
     from ws_helpers import device_frames, ship_shelf
     w, h = SIZES[arrangement]
-    glass = _web_glass("DESK_DIAGONAL_IN") if arrangement == "desk" else None
+    glass = _web_glass(w, h) if arrangement == "desk" else None
     ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=(w, h),
                                     windowed=arrangement == "desk",
                                     panel_diagonal_in=glass)

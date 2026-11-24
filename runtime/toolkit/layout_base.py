@@ -89,6 +89,25 @@ _render = 1
 _desk_glass = [False]          # the glass is a desk's at font scale 1 (`desk_glass`)
 
 
+# The glass a desk declares where the tier has none of its own (the browser's
+# desk, the host simulator's): the Waveshare P4's, 7 inches across 1024x600
+# (firmware/esp32_p4_wifi6_touch_lcd_7b/board.toml [panel]), the board whose
+# arrangement they run. tests/test_web_look_parity.py holds it to the board's.
+P4_GLASS_IN = 7.0
+P4_GLASS_WH = (1024, 600)
+
+
+def desk_diagonal_in(w, h):
+    """The diagonal a `w` x `h` desk glass declares on a tier without glass of
+    its own: the P4's, scaled to keep its pixel density, so the tap and text
+    floors (`chrome.chrome_scale_floor`, `chrome.text_scale_floor`) measure the
+    P4's millimetres at any window size. A fixed 7 inches would make a
+    1920x1080 window a 315-ppi panel whose chrome the tap floor doubles.
+    Exactly P4_GLASS_IN at P4_GLASS_WH."""
+    pw, ph = P4_GLASS_WH
+    return P4_GLASS_IN * ((w * w + h * h) / float(pw * pw + ph * ph)) ** 0.5
+
+
 def desk_room(w, h, fs):
     """Whether `w` x `h` glass pixels at font scale `fs` hold the windowed
     desk: their room over the scale is at least DESK_MIN_WH."""
