@@ -1,11 +1,11 @@
 // moy_sh_cmds: the shell's C core built-ins (docs/os_2026-11/system.md
 // section 1): the file commands over the store, the text tools (head, tail,
-// wc, grep, uniq, cut, tr and tee), and ps, free, df, log/dmesg, reboot,
-// date, sleep, clear and help over the host's tables. Each is one function
-// taking dash's (argc, argv), its options read with dash's nextopt, writing
-// through dash's output to the process's descriptors, so redirection and
-// pipes reach it as they reach any built-in. They keep working while the VM
-// is stopped: nothing here calls into Python.
+// wc, grep, uniq, cut, tr, tee, xxd, md5sum and sha256sum), and ps, free, df,
+// log/dmesg, reboot, date, sleep, clear and help over the host's tables. Each
+// is one function taking dash's (argc, argv), its options read with dash's
+// nextopt, writing through dash's output to the process's descriptors, so
+// redirection and pipes reach it as they reach any built-in. They keep
+// working while the VM is stopped: nothing here calls into Python.
 
 #include <ctype.h>
 #include <errno.h>
@@ -26,6 +26,12 @@
 #include "moy_sh_int.h"
 #include "../moy_kernel/moy_proc_exit.h"
 #include "moy_vol.h"
+
+// md5sum's and sha256sum's hashes: mbedTLS's, a board's the ESP-IDF's build
+// of it, the host's and the browser's the vendored copy of the same release
+// (native/moy_net/mbedtls/README.md)
+#include "mbedtls/md5.h"
+#include "mbedtls/sha256.h"
 
 #define CMD_BUF 4096
 
@@ -1385,6 +1391,118 @@ static int uniqcmd(int argc, char **argv) {
     return stop_status(err | o.status);
 }
 
+// A row of xxd's: its offset, 16 bytes as eight groups of four hex digits,
+// and as text ('.' for a byte that does not print).
+static void xxd_row(unsigned long off, const unsigned char *b, size_t n) {
+    static const char hex[] = "0123456789abcdef";
+    char line[80];
+    size_t k = (size_t)snprintf(line, sizeof line, "%08lx: ", off);
+    for (size_t i = 0; i < 16; i++) {
+        line[k++] = i < n ? hex[b[i] >> 4] : ' ';
+        line[k++] = i < n ? hex[b[i] & 15] : ' ';
+        if (i & 1) {
+            line[k++] = ' ';
+        }
+    }
+    line[k++] = ' ';
+    for (size_t i = 0; i < n; i++) {
+        line[k++] = b[i] >= 32 && b[i] < 127 ? (char)b[i] : '.';
+    }
+    line[k++] = '\n';
+    outmem(line, k, out1);
+}
+
+static int xxd_one(int fd, const char *name, void *arg) {
+    unsigned char row[16], buf[512];
+    size_t have = 0;
+    unsigned long off = 0;
+    ssize_t got;
+    (void)name;
+    (void)arg;
+    while (!stopped() && (got = read(fd, buf, sizeof buf)) > 0) {
+        for (ssize_t i = 0; i < got; i++) {
+            row[have++] = buf[i];
+            if (have == sizeof row) {
+                xxd_row(off, row, have);
+                off += have;
+                have = 0;
+            }
+        }
+    }
+    if (have > 0) {
+        xxd_row(off, row, have);
+    }
+    return 0;
+}
+
+// FILE's bytes (stdin's with none) in hex, as `xxd FILE` prints them.
+static int xxdcmd(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    while (nextopt("") != '\0') {
+    }
+    if (argptr[0] != NULL && argptr[1] != NULL) {
+        return moy_sh_fail("usage: xxd [FILE]");
+    }
+    return stop_status(each_input(argptr, xxd_one, NULL) ? 2 : 0);
+}
+
+// One input's digest as md5sum and sha256sum print it: the hex, two spaces,
+// the name (`-` for stdin).
+static int sum_one(int fd, const char *name, void *arg) {
+    int sha = *(const int *)arg;
+    union {
+        mbedtls_md5_context md5;
+        mbedtls_sha256_context sha256;
+    } c;
+    unsigned char d[32], buf[512];
+    char hex[2 * sizeof d];
+    ssize_t got;
+    int r;
+    if (sha) {
+        mbedtls_sha256_init(&c.sha256);
+        r = mbedtls_sha256_starts(&c.sha256, 0);
+    } else {
+        mbedtls_md5_init(&c.md5);
+        r = mbedtls_md5_starts(&c.md5);
+    }
+    while (r == 0 && !stopped() && (got = read(fd, buf, sizeof buf)) > 0) {
+        r = sha ? mbedtls_sha256_update(&c.sha256, buf, (size_t)got)
+                : mbedtls_md5_update(&c.md5, buf, (size_t)got);
+    }
+    if (r == 0) {
+        r = sha ? mbedtls_sha256_finish(&c.sha256, d) : mbedtls_md5_finish(&c.md5, d);
+    }
+    if (sha) {
+        mbedtls_sha256_free(&c.sha256);
+    } else {
+        mbedtls_md5_free(&c.md5);
+    }
+    if (moy_sh_cur->interrupt) {
+        return 0;
+    }
+    if (r != 0) {
+        return moy_sh_fail("%s: %s: no digest", commandname, name);
+    }
+    size_t n = sha ? 32u : 16u;
+    for (size_t i = 0; i < n; i++) {
+        hex[2 * i] = "0123456789abcdef"[d[i] >> 4];
+        hex[2 * i + 1] = "0123456789abcdef"[d[i] & 15];
+    }
+    outmem(hex, 2 * n, out1);
+    out1fmt("  %s\n", name);
+    return 0;
+}
+
+// md5sum and sha256sum: each FILE's digest (stdin's with none).
+static int sumcmd(int argc, char **argv) {
+    int sha = argv[0][0] == 's';
+    (void)argc;
+    while (nextopt("") != '\0') {
+    }
+    return stop_status(each_input(argptr, sum_one, &sha));
+}
+
 // --- the system ---------------------------------------------------------------
 
 static int ps_row(void *arg, const moy_sh_ps_t *p) {
@@ -1940,6 +2058,7 @@ static const struct builtincmd core[] = {
     { "help", helpcmd, BUILTIN_REGULAR },
     { "log", logcmd, BUILTIN_REGULAR },
     { "ls", lscmd, BUILTIN_REGULAR },
+    { "md5sum", sumcmd, BUILTIN_REGULAR },
     { "mkdir", mkdircmd, BUILTIN_REGULAR },
     { "mv", mvcmd, BUILTIN_REGULAR },
     { "neofetch", neofetchcmd, BUILTIN_REGULAR },
@@ -1948,6 +2067,7 @@ static const struct builtincmd core[] = {
     { "rm", rmcmd, BUILTIN_REGULAR },
     { "rmdir", rmdircmd, BUILTIN_REGULAR },
     { "sh", moy_sh_shcmd, BUILTIN_REGULAR },
+    { "sha256sum", sumcmd, BUILTIN_REGULAR },
     { "sleep", sleepcmd, BUILTIN_REGULAR },
     { "tail", tailcmd, BUILTIN_REGULAR },
     { "tee", teecmd, BUILTIN_REGULAR },
@@ -1957,6 +2077,7 @@ static const struct builtincmd core[] = {
     { "uname", unamecmd, BUILTIN_REGULAR },
     { "uniq", uniqcmd, BUILTIN_REGULAR },
     { "wc", wccmd, BUILTIN_REGULAR },
+    { "xxd", xxdcmd, BUILTIN_REGULAR },
 };
 
 #define NCORE ((int)(sizeof core / sizeof core[0]))

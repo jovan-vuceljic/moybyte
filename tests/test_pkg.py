@@ -278,7 +278,7 @@ def test_the_shells_own_names_are_the_c_tables():
     sh = ROOT / "native" / "moy_sh"
     dash = re.findall(r'\{\s*"([^"]+)",', (sh / "dash" / "builtins.c").read_text())
     core = (sh / "moy_sh_cmds.c").read_text()
-    core = re.findall(r'\{ "([a-z]+)", \w+, BUILTIN_REGULAR \}',
+    core = re.findall(r'\{ "([a-z0-9]+)", \w+, BUILTIN_REGULAR \}',
                       core[core.index("core[] = {"):])
     board = (sh / "moy_sh_board.c").read_text()
     table = board[board.index("ROLES[] = {"):]

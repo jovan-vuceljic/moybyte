@@ -1,0 +1,20 @@
+$ printf 'hello\n' | xxd
+00000000: 6865 6c6c 6f0a                           hello.
+$ printf '0123456789abcdefXYZ\000\377\177' > b
+$ xxd b
+00000000: 3031 3233 3435 3637 3839 6162 6364 6566  0123456789abcdef
+00000010: 5859 5a00 ff7f                           XYZ...
+$ xxd - < b | wc -l
+2
+$ printf '' | xxd; echo empty=$?
+empty=0
+$ xxd nosuch; echo missing=$?
+xxd: nosuch: No such file or directory
+missing=2
+$ xxd b b; echo usage=$?
+usage: xxd [FILE]
+usage=1
+$ xxd -z b; echo bad=$?
+sh: 1: xxd: Illegal option -z
+bad=2
+[exit 0]

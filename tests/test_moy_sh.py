@@ -22,6 +22,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
+from runtime.host import seal_binding
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SH = os.path.join(ROOT, "native", "moy_sh")
 DASH = os.path.join(SH, "dash")
@@ -32,6 +34,13 @@ SPINE = os.path.join(ROOT, "native", "moy_spine")
 # tables, which need nothing else of it
 UI_TABLES = os.path.join(ROOT, "native", "moy_ui", "moy_ui_tables.c")
 SCRIPTS = os.path.join(ROOT, "tests", "moy_sh")
+# md5sum's and sha256sum's hashes (moy_sh_cmds.c): the vendored mbedTLS the
+# host's library compiles (native/moy_net/mbedtls/README.md), its headers
+# under that library's config, its code the seal archive's
+# (runtime/host/seal_binding.py), which the harnesses link
+NET = os.path.join(ROOT, "native", "moy_net")
+MBEDTLS = ["-I", os.path.join(NET, "mbedtls", "include"), "-I", NET,
+           '-DMBEDTLS_CONFIG_FILE="moy_seal_mbedtls.h"']
 
 CFLAGS = ["-std=gnu99", "-g", "-O1", "-fsanitize=address,undefined",
           "-fno-sanitize-recover=all", "-Wall", "-Werror"]
@@ -59,7 +68,7 @@ UI_INCLUDES = [a for n in ("moy_ui", "moy_gfx", "moy_glass")
 
 def _objects(cc, out):
     dash_flags = CFLAGS + ["-include", os.path.join(SH, "dash_config.h"),
-                           "-I", SH, "-I", DASH, "-I", STORE]
+                           "-I", SH, "-I", DASH, "-I", STORE] + MBEDTLS
     jobs = [(src, dash_flags) for src in shell_sources()]
     jobs.append((os.path.join(SH, "moy_sh_arena.c"), CFLAGS + ["-I", SH]))
     jobs.append((os.path.join(SH, "moy_sh_fmt.c"), CFLAGS + ["-I", SH, "-I", SPINE]))
@@ -99,7 +108,8 @@ def harness(tmp_path_factory):
     cc = shutil.which(os.environ.get("CC", "cc"))
     if cc is None:
         pytest.skip("no C compiler")
-    h = hashlib.sha256()
+    seal = seal_binding.archive()
+    h = hashlib.sha256(seal.encode())
     for d in (SH, STORE, KERNEL, SPINE):
         for path in sorted(glob.glob(os.path.join(d, "**", "*.[ch]"), recursive=True)):
             h.update(path.encode())
@@ -119,7 +129,7 @@ def harness(tmp_path_factory):
             shared = [o for o in objs if o not in mains.values() and o not in board]
             for name, exe in exes.items():
                 own = [mains[name]] + (board if name == "board_main" else [])
-                r = subprocess.run([cc] + CFLAGS + shared + own + ["-o", exe + ".tmp"],
+                r = subprocess.run([cc] + CFLAGS + shared + own + [seal, "-o", exe + ".tmp"],
                                    capture_output=True, text=True)
                 assert r.returncode == 0, r.stderr[-4000:]
                 os.replace(exe + ".tmp", exe)
@@ -246,7 +256,7 @@ def test_every_core_builtin_has_its_script():
     """A C built-in is tested by tests/moy_sh/builtin_<name>.sh."""
     with open(os.path.join(SH, "moy_sh_cmds.c"), encoding="utf-8") as f:
         table = f.read().split("static const struct builtincmd core[] = {")[1].split("};")[0]
-    names = re.findall(r'\{ "([a-z]+)",', table)
+    names = re.findall(r'\{ "([a-z0-9]+)",', table)
     assert names == sorted(names), "the core table is searched by bisection: keep it sorted"
     aliases = {"dmesg": "log"}
     missing = [n for n in names if aliases.get(n, n) not in
@@ -266,7 +276,7 @@ def test_the_shell_keeps_no_writable_data_but_its_state_pointer(tmp_path):
     if cc is None or nm is None:
         pytest.skip("no C compiler or nm")
     flags = ["-std=gnu99", "-Os", "-fno-pic", "-fno-pie", "-fno-common",
-             "-include", os.path.join(SH, "dash_config.h"), "-I", SH, "-I", DASH, "-I", STORE]
+             "-include", os.path.join(SH, "dash_config.h"), "-I", SH, "-I", DASH, "-I", STORE] + MBEDTLS
     plain = ["-std=gnu99", "-Os", "-fno-pic", "-fno-pie", "-fno-common",
              "-I", SH, "-I", KERNEL, "-I", STORE, "-I", SPINE]
     writable = []
@@ -293,7 +303,7 @@ def test_no_shell_object_calls_the_c_library_s_descriptors(tmp_path):
     if cc is None or nm is None:
         pytest.skip("no C compiler or nm")
     flags = ["-std=gnu99", "-Os", "-include", os.path.join(SH, "dash_config.h"),
-             "-I", SH, "-I", DASH, "-I", STORE]
+             "-I", SH, "-I", DASH, "-I", STORE] + MBEDTLS
     raw = {"open", "read", "write", "close", "dup", "dup2", "fcntl", "pipe", "lseek",
            "open64", "stat", "fstat", "lstat"}
     calls = []
@@ -321,7 +331,7 @@ def test_every_source_keeps_the_const_a_c23_library_preserves(tmp_path):
     guard = ["-include", os.path.join(SCRIPTS, "c23_const.h")]
     base = ["-std=gnu99", "-fsyntax-only", "-Wall", "-Werror"] + guard
     dash = base + ["-include", os.path.join(SH, "dash_config.h"), "-I", SH, "-I", DASH,
-                   "-I", STORE]
+                   "-I", STORE] + MBEDTLS
     plain = base + ["-I", SH, "-I", KERNEL, "-I", STORE, "-I", SPINE]
     jobs = [(src, dash) for src in shell_sources()]
     jobs += [(os.path.join(SH, n), plain) for n in ("moy_sh_arena.c", "moy_sh_fmt.c", "moy_sh_cands.c",
