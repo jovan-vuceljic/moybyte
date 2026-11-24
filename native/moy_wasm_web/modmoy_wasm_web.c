@@ -135,6 +135,20 @@ int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t 
     return web_uitree_draw(node, x, y, w, h);
 }
 
+// A compiled app's canvas keys= (native/moy_uitree/moy_uitree_wasm.c): its
+// exported `_uitree_keys(node)`, called before the frame while that canvas
+// holds focus. 1 it took the keys, 0 it left them or exports none, -1 it
+// threw. moycore_wasm.c's is the boards' twin.
+EM_JS(int, web_uitree_keys, (int32_t node), {
+    return Module.moyEngine ? Module.moyEngine.keys(node) : 0;
+});
+
+int moycore_ui_keys_call(int32_t node);
+int moycore_ui_keys_call(int32_t node)
+{
+    return web_uitree_keys(node);
+}
+
 EM_JS(void, web_close, (void), {
     if (Module.moyEngine) Module.moyEngine.close();
 });

@@ -1083,6 +1083,22 @@ int moycore_ui_draw_call(int32_t node, int32_t x, int32_t y, int32_t w, int32_t 
     uint32_t argv[5] = {(uint32_t)node, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h};
     return wasm_runtime_call_wasm(WR->w.env, fn, 5, argv) ? 1 : -1;
 }
+
+// A compiled app's canvas keys= (native/moy_uitree/moy_uitree_wasm.c): its
+// exported `_uitree_keys(node)`, called before the frame while that canvas
+// holds focus. 1 it took the keys, 0 it left them or exports none, -1 it
+// trapped. runtime/host/moyhost_wasm.c's is the host's twin.
+int moycore_ui_keys_call(int32_t node);
+int moycore_ui_keys_call(int32_t node)
+{
+    if (!RUN.wasm || !WR || WR->w.items) return 0;
+    wasm_module_inst_t inst = WR->w.inst;
+    wasm_function_inst_t fn = wasm_runtime_lookup_function(inst, "_uitree_keys");
+    if (!fn || wasm_func_get_param_count(fn, inst) != 1 || wasm_func_get_result_count(fn, inst) != 1) return 0;
+    uint32_t argv[1] = {(uint32_t)node};
+    if (!wasm_runtime_call_wasm(WR->w.env, fn, 1, argv)) return -1;
+    return argv[0] != 0;
+}
 #endif
 
 // The canvas a compiled app's page draws on (native/moy_ui/moy_ui_run.h):

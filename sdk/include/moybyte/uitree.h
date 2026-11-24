@@ -77,6 +77,9 @@ typedef void (*ut_fn)(int32_t row);
 typedef void (*ut_page_fn)(void);
 // A canvas's draw, called inside the frame with the rect it draws in.
 typedef void (*ut_draw_fn)(int32_t x, int32_t y, int32_t w, int32_t h);
+// A canvas's keys=, called before the frame while it holds focus, reading btnp() and keyp():
+// non-zero where it took the tick's keys, which the page then never sees.
+typedef int32_t (*ut_keys_fn)(void);
 
 // The build's place and the handlers: one copy for every unit that includes this.
 struct ut_ {
@@ -92,6 +95,9 @@ struct ut_ {
     int32_t canvas[UT_CANVASES];            // the page's canvases with a draw, and each draw
     ut_draw_fn draws[UT_CANVASES];
     int32_t ncanvas;
+    int32_t keyed[UT_CANVASES];             // the page's canvases with a keys=, and each keys
+    ut_keys_fn keys[UT_CANVASES];
+    int32_t nkeyed;
     char arg[UT_ARG + 1];                   // the running handler's arg (ut_arg)
 };
 __attribute__((weak)) struct ut_ ut_;
@@ -104,6 +110,17 @@ __attribute__((weak, export_name("_uitree_draw"))) void ut_draw_(int32_t node, i
             ut_.draws[i](x, y, w, h);
         }
     }
+}
+
+// The module's `_uitree_keys` (the face calls it before the frame while a canvas with a keys=
+// holds focus): that canvas's keys, non-zero where it took the tick's keys.
+__attribute__((weak, export_name("_uitree_keys"))) int32_t ut_keys_(int32_t node) {
+    for (int32_t i = 0; i < ut_.nkeyed; i++) {
+        if (ut_.keyed[i] == node) {
+            return ut_.keys[i]() != 0;
+        }
+    }
+    return 0;
 }
 
 // A pointer action's event: down, drag or up, at x, y in its canvas.
@@ -367,7 +384,7 @@ static inline int ut_page_(const char *id, const char *title) {
     memcpy(e, id, n);
     uitree_build(b, (uint32_t)(e + n - b));
     ut_.depth = 0;
-    ut_.ncanvas = 0;
+    ut_.ncanvas = ut_.nkeyed = 0;
     ut_node(UT_PAGE, "page");
     if (title != NULL) {
         ut_prop_("title", title);
@@ -423,7 +440,7 @@ static inline int32_t ut_focus(const char *key) {
     return uitree_focus(key, ut_len_(key));
 }
 
-// In a canvas's draw: the model row it stands in (a table's row its canvas
+// In a canvas's draw or keys: the model row it stands in (a table's row its canvas
 // child draws, a row of a rows list's body), from 0; -1 for a canvas of its own.
 static inline int32_t ut_canvas_row(void) {
     return uitree_draw_row();
@@ -711,6 +728,18 @@ static inline int32_t ut_canvas(const char *key, ut_draw_fn draw, const char *po
         ut_prop_("pointer", pointer);
     }
     return n;
+}
+
+// The canvas made last takes the keys while it holds focus: `keys` is handed them before the
+// frame (its row, in a list's body, ut_canvas_row()) and answers non-zero for keys it took. A
+// canvas with keys is a stop.
+static inline int32_t ut_canvas_keys(ut_keys_fn keys) {
+    if (ut_.nkeyed == UT_CANVASES) {
+        return UT_E_NOMEM;
+    }
+    ut_.keyed[ut_.nkeyed] = ut_.last;
+    ut_.keys[ut_.nkeyed++] = keys;
+    return ut_prop_("keys", "keys");
 }
 
 #ifdef __cplusplus

@@ -214,21 +214,19 @@ def test_lua_a_canvas_takes_the_keys_while_it_holds_focus(tmp_path):
     ws.spine.exit_to_caller()
 
 
-def test_compiled_rows_refuse_a_canvas_keys_they_cannot_route():
-    """A compiled app's canvas has no keys= row: the prop is refused at its
-    row, never a stop that takes nothing."""
-    from test_uitree_wasm import Rows, PAGE, E_KIND
-    import uitree_c
-    r = Rows()
-    try:
-        r.build("1 page")
-        page = r.node(PAGE, "page", -1)
-        cv = r.node(uitree_c._KINDS["canvas"], "pad", page)
-        assert r.prop(cv, "draw", "draw") >= 0
-        assert r.prop(cv, "keys", "keys") == E_KIND
-        assert "takes no keys" in r.read("error", cap=400)[1], r.read("error", cap=400)[1]
-    finally:
-        r.close()
+def test_compiled_a_canvas_takes_the_keys_while_it_holds_focus():
+    """The Lua test above in C (tests/fixtures/uitree_keys_wasm.moy, its
+    `ut_canvas_keys`): the face hands the focused canvas's keys to the
+    module's `_uitree_keys` before the frame, and what it takes the page
+    never sees: A (+1), the first down (+10), A (+1), the second down moves
+    focus to Go, whose A adds 100."""
+    import uitree_conf as C
+    cart = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "uitree_keys_wasm.moy")
+    script = ["f:4"] + [x for k in ("a", "down", "a", "down", "a") for x in ("k:" + k, "f:2")]
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], script, cart=cart)
+    states = [l for l in trace if l.startswith("state n ")]
+    assert [l.split("-> ")[1].split()[0] for l in states] == ["'1'", "'11'", "'12'", "'112'"], trace
+    assert [l for l in trace if l.startswith("action go")] == ["action go from button 'go' on 'Keys'"], trace
 
 
 @pytest.mark.parametrize("kind, name, src, says", [

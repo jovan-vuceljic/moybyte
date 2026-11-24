@@ -559,6 +559,19 @@ export function installCartEngine(M) {
                 return -1;
             }
         },
+        // A compiled app's canvas keys=, its `_uitree_keys` (the C face's
+        // moycore_ui_keys_call): 1 it took the keys, 0 it left them or exports
+        // none, -1 it threw.
+        keys(node) {
+            const fn = instance && instance.exports._uitree_keys;
+            if (!fn) return 0;
+            try {
+                return fn(node) ? 1 : 0;
+            } catch (e) {
+                if (!(e instanceof Error)) throw e;
+                return -1;
+            }
+        },
         close() {
             instance = memory = null;
             w = 0;

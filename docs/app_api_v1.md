@@ -716,7 +716,7 @@ A canvas in a rows' body, or a table's child that draws the table's rows
 |---|---|
 | `reads=` | the states its draw reads; the page's shift frames count them, and a read of another state is R01. A canvas that names none draws the frame after it whole |
 | `pointer=` | an action or hook `takes="pointer"`, handed a press and its drag and release in the canvas's own coordinates (`ev.kind` `"down"`, `"drag"`, `"up"`; `ev.x`, `ev.y`; `ev.row`); while a popover or a dialog is open only a canvas inside it takes a press. C reads `ut_point()` |
-| `keys=` | handed the frame's keys while the canvas holds focus, run as a handler, and answers true for keys it took, which the page then never sees; a canvas with no `keys=` is no stop. Python: `keys(i)` (`keys(i, row)` in a list's body), `i` the input; Lua: `keys = function() ... end` (`function(row)` in a list's body), reading `btnp()` and `keyp()`. A compiled app's canvas takes no `keys=`: its row is refused |
+| `keys=` | handed the frame's keys while the canvas holds focus, run as a handler, and answers true for keys it took, which the page then never sees; a canvas with no `keys=` is no stop. Python: `keys(i)` (`keys(i, row)` in a list's body), `i` the input; Lua: `keys = function() ... end` (`function(row)` in a list's body), reading `btnp()` and `keyp()`; C: `ut_canvas_keys(keys)` after `ut_canvas`, `keys()` answering non-zero (its row `ut_canvas_row()`), the module's export `_uitree_keys` |
 | `hint=` | the band's confirm word while it holds focus |
 | `h=`, `w=` | its size (a template); `ground=` the theme role painted under it |
 
