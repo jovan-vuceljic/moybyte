@@ -17,6 +17,8 @@ the console, joins it, saves it under the board's id over the entry its
 address already had, asks for the console's password, and opening it hands
 the password over the link: the board takes it by its claim, the console
 pairs and signs in, and the list shows it reached and the pack it named.
+A join the board refuses opens the setup's "Board log" on the board's own
+lines, which never show the Wi-Fi password.
 
     MOYBYTE_WEB_E2E=1 .venv/bin/python -m pytest tests/test_web_setup_e2e.py
 """
@@ -47,10 +49,12 @@ PASSWORD = "kitchen-pass-1"
 CART = "moybyte.sakura.moy"
 
 # Web Serial with one port, a board that answers Improv (improv-wifi.com/
-# serial) as a Zero does, its join answering ADDR with ID and CLAIM.
+# serial) as a Zero does, its join answering ADDR with ID and CLAIM, or
+# refusing the network when FAIL. SAYS[cmd] is what it prints on the cable
+# before its answer to that command, as a board's log does.
 SERIAL = r"""
 (() => {
-    const ADDR = %s, ID = %s, CLAIM = %s;
+    const ADDR = %s, ID = %s, CLAIM = %s, FAIL = %s, SAYS = %s;
     const H = [73, 77, 80, 82, 79, 86], enc = new TextEncoder(), dec = new TextDecoder();
     const frame = (t, d) => { const b = [...H, 1, t, d.length, ...d];
         b.push(b.reduce((s, x) => s + x, 0) & 255, 10); return new Uint8Array(b); };
@@ -66,6 +70,7 @@ SERIAL = r"""
         if (cmd === 4) return [[2, [0]], [4, strs(4, "home", "-40", "YES")], [4, [4, 0]]];
         if (cmd === 6) { if (d.length) name = dec.decode(new Uint8Array(d.slice(1)));
                          return [[2, [0]], [4, strs(6, name)]]; }
+        if (cmd === 1 && FAIL) return [[2, [0]], [1, [3]], [2, [3]], [1, [2]]];
         if (cmd === 1) { const t = "#id=" + ID + "&claim=" + CLAIM;
                          return [[2, [0]], [1, [3]], [1, [4]], [4, strs(1, "http://" + ADDR + "/" + t)]]; }
         return [[2, [2]]];
@@ -78,7 +83,8 @@ SERIAL = r"""
                                return closed ? { done: true } : { value: q.shift(), done: false }; },
                 async cancel() { closed = true; if (wake) wake(); }, releaseLock() { } }) };
             port.writable = { getWriter: () => ({
-                async write(b) { const n = b[8], d = Array.from(b.slice(9, 9 + n)), out = [];
+                async write(b) { const n = b[8], d = Array.from(b.slice(9, 9 + n)),
+                                       out = [...enc.encode(SAYS[d[0]] || "")];
                     for (const [t, x] of answer(d[0], d.slice(2))) out.push(...frame(t, x));
                     q.push(new Uint8Array(out)); if (wake) { wake(); wake = null; } },
                 releaseLock() { } }) };
@@ -136,7 +142,7 @@ def test_my_consoles_sets_a_board_up_by_cable_and_adds_one_by_hand(tmp_path):
         kept = "JSON.parse(localStorage.getItem('moy.consoles') || '[]')"
         steps = [
             {"waitFor": "typeof render == 'function'", "timeout": 15000},
-            {"init": SERIAL % (json.dumps(addr), json.dumps(board_id), json.dumps(claim))},
+            {"init": SERIAL % (json.dumps(addr), json.dumps(board_id), json.dumps(claim), "false", "{}")},
             {"waitFor": "typeof render == 'function' && !document.getElementById('cable').hidden",
              "timeout": 15000},
             {"note": "by hand: an address with no name is its own name"},
@@ -205,3 +211,64 @@ def test_my_consoles_sets_a_board_up_by_cable_and_adds_one_by_hand(tmp_path):
         for p in procs:
             p.terminate()
         host.end()
+
+
+WIFI = "hunter2-wifi"
+BOARD_SAYS = {
+    2: "I (310) moybyte: zero serving improv\r\n",
+    1: ("I (5120) wifi: joining home with %s\r\n"
+        "\x1b[0;33mW (9120) wifi: disconnected, reason 2 (auth expired): "
+        "a weak antenna?\x1b[0m\r\nE (9121) improv: join failed" % WIFI),
+}
+
+
+def test_a_refused_join_opens_the_board_log_without_the_wifi_password(tmp_path):
+    web_e2e.require()
+    import os_site
+
+    os_site.build(str(tmp_path / "site"))
+    sport = web_e2e.free_port()
+    site = "http://localhost:%d" % sport
+    slog = tmp_path / "site.log"
+    sp = subprocess.Popen([sys.executable, str(ROOT / "tools" / "os_site.py"), "serve",
+                           str(tmp_path / "site"), "--port", str(sport)],
+                          stdout=open(slog, "w"), stderr=subprocess.STDOUT)
+    log = "document.querySelector('#setup details.boardlog')"
+    try:
+        _up(site + "/console/", sp, slog)
+        steps = [
+            {"waitFor": "typeof render == 'function'", "timeout": 15000},
+            {"init": SERIAL % ('"x"', '"x"', '"x"', "true", json.dumps(BOARD_SAYS))},
+            {"waitFor": "typeof render == 'function' && !document.getElementById('cable').hidden",
+             "timeout": 15000},
+            {"press": "#cable"},
+            {"waitFor": "document.querySelector('#setup form input[name=name]')", "timeout": 15000},
+            _js("CLOSED", "[%s.open, %s.querySelector('pre').textContent]" % (log, log)),
+            _field("#setup form input[name=name]", "Kitchen"),
+            _field("#setup form input[name=wifi]", WIFI),
+            {"js": "document.querySelector('#setup form').requestSubmit(), 1"},
+            {"waitFor": "%s.open" % log, "timeout": 15000},
+            _js("SAID", "document.querySelector('#setup .setup-said').textContent"),
+            _js("LOG", "%s.querySelector('pre').textContent" % log),
+            {"js": "navigator.clipboard.writeText = (t) => (window.__copied = t, Promise.resolve()), "
+                   "%s.querySelector('button').click(), 1" % log},
+            {"waitFor": "window.__copied !== undefined", "timeout": 5000},
+            _js("COPIED", "window.__copied"),
+            _js("PAGE", "document.body.innerHTML.includes(%s)" % json.dumps(WIFI)),
+        ]
+        out, js = web_e2e.run(tmp_path, "boardlog", "console/", steps, site, tmp_path / "chrome",
+                              boot_ms=1000)
+        tail = out[-3000:]
+        closed = _tagged(js, "CLOSED")
+        assert closed == [False, "I (310) moybyte: zero serving improv\n"], tail
+        assert "could not join" in _tagged(js, "SAID"), tail
+        lines = _tagged(js, "LOG").splitlines()
+        assert lines[-3:] == [
+            "I (5120) wifi: joining home with ********",
+            "W (9120) wifi: disconnected, reason 2 (auth expired): a weak antenna?",
+            "E (9121) improv: join failed"], tail
+        copied = _tagged(js, "COPIED")
+        assert "reason 2" in copied and WIFI not in copied and "\x1b" not in copied, tail
+        assert _tagged(js, "PAGE") is False, "the Wi-Fi password is on the page"
+    finally:
+        sp.terminate()

@@ -6,7 +6,10 @@
 // console's password, which it keeps in memory only and hands the console's
 // window over the link (link.js) when it opens. One body for both pages that
 // run it: My consoles ("Set up a board by cable") and the flasher, after a
-// flash, on the port it flashed through.
+// flash, on the port it flashed through. Under the steps, a "Board log"
+// panel shows what the board prints on the cable besides Improv, with the
+// Wi-Fi password blanked (moyImprov.Lines); it opens by itself when setup
+// stops, since a board says why it could not join only there.
 //
 //   moySetup.run(box, port, {lines, wait, done(c, secret)})   wait: ms a
 //   board just flashed may take to answer (its first boot seeds its store)
@@ -29,15 +32,18 @@ self.moySetup = (() => {
     async function run(box, port, opts = {}) {
         box.textContent = "";
         box.hidden = false;
-        const imp = new moyImprov.Client(port, { lines: opts.lines });
+        const log = boardLog();
+        const imp = new moyImprov.Client(port, { lines: opts.lines, log: (t) => log.lines.feed(t) });
         try {
             line(box, "Talking to the board...");
+            box.append(log.el);
             await imp.open();
             await imp.ready(opts.wait || 30000);
             const info = await imp.info();
             line(box, "Looking for Wi-Fi networks...");
             const nets = await imp.scan().catch(() => []);
             const got = await ask(box, info, nets);
+            log.lines.hide(got.password);
             line(box, "Naming it " + got.name + "...");
             const name = got.name ? await imp.name(got.name) : info.name;
             line(box, "Joining " + got.ssid + "...");
@@ -49,18 +55,49 @@ self.moySetup = (() => {
             delete c.secure;
             if (!moyKept.write(list)) line(box, "This browser keeps nothing for this site: the console is listed this visit only.", "bad");
             let secret = null;
-            if (where.claim) secret = { claim: where.claim, password: await choose(box, c.name) };
+            if (where.claim) {
+                secret = { claim: where.claim, password: await choose(box, c.name) };
+                log.lines.hide(secret.password);
+            }
             box.textContent = "";
             line(box, c.name + " is on the network at http://" + c.address + "/"
                  + (c.local ? " (" + c.local + ")" : "") + ".", "ok");
             if (opts.done) opts.done(c, secret);
+            box.append(log.el);
             return { c, secret };
         } catch (e) {
             line(box, "Setup stopped: " + (e && e.message || e), "bad");
+            log.lines.flush();
+            log.el.open = true;
+            log.end();
             throw e;
         } finally {
             await imp.close();
         }
+    }
+
+    // The board's lines as they come, the last 500, in a closed <details>:
+    // {el, lines (moyImprov.Lines), end() (scrolled to its last line)}.
+    function boardLog() {
+        const box = el("details", { class: "boardlog" });
+        const pre = el("pre");
+        const copy = el("button", { class: "btn", type: "button" }, "Copy");
+        box.append(el("summary", {}, "Board log"), pre, copy);
+        let n = 0;
+        const end = () => { pre.scrollTop = pre.scrollHeight; };
+        const lines = new moyImprov.Lines((l) => {
+            const pinned = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 4;
+            pre.append(l + "\n");
+            if (++n > lines.keep) { pre.firstChild.remove(); n--; }
+            if (pinned) end();
+        });
+        copy.onclick = async () => {
+            try { await navigator.clipboard.writeText(lines.text()); copy.textContent = "Copied"; }
+            catch (e) { copy.textContent = "Copy failed"; }
+            setTimeout(() => { copy.textContent = "Copy"; }, 1500);
+        };
+        box.ontoggle = end;
+        return { el: box, lines, end };
     }
 
     // The form: the console's name, a network the board sees (or one typed)

@@ -3,7 +3,8 @@
 // own example), a board that answers only after its boot is waited for, a
 // frame split across reads and the REPL's lines around frames are read, a
 // join answers the board's URLs with its id and claim, a refusal is the
-// board's sentence. Run from site/os: node improv_test.mjs
+// board's sentence; the board's log reaches a person as whole lines with
+// the Wi-Fi password blanked. Run from site/os: node improv_test.mjs
 import { createRequire } from "node:module";
 
 globalThis.self = globalThis;
@@ -128,6 +129,53 @@ const BOARD = (cmd, data) => {
     ok("a board still booting is asked again until it answers", st.state === imp.READY && p.writes.length === 4,
        p.writes.length + " writes in " + (Date.now() - t0) + " ms");
     await c.close();
+}
+{
+    const got = [];
+    const L = new imp.Lines((l) => got.push(l), 3);
+    L.feed("I (12) boot: ESP-IDF v5\r\nI (13) wi");
+    ok("the log is lines: a partial one is held until its end, CRs dropped",
+       got.length === 1 && got[0] === "I (12) boot: ESP-IDF v5", JSON.stringify(got));
+    L.feed("fi: start\n\x1b[0;33mW (40) wifi: reason 2\x1b[0m\n");
+    ok("...and ANSI colours are stripped", got[1] === "I (13) wifi: start" && got[2] === "W (40) wifi: reason 2",
+       JSON.stringify(got));
+    L.feed("a\nb\n");
+    ok("only the last `keep` are kept", L.text() === "W (40) wifi: reason 2\na\nb", JSON.stringify(L.text()));
+    L.feed("no end");
+    L.flush();
+    ok("a flush gives the held line", got[got.length - 1] === "no end" && L.part === "");
+}
+{
+    const got = [];
+    const L = new imp.Lines((l) => got.push(l));
+    L.hide("");
+    L.feed("open network\n");
+    ok("an empty password hides nothing", got[0] === "open network");
+    L.feed("join home pw=hunter2-before-hide\n");
+    L.hide("hunter2-before-hide");
+    L.hide("s3cret pass");
+    L.feed("join home pw=s3cr");
+    L.feed("et pass, again s3cret pass\n");
+    L.feed("\x1b[1ms3cret\x1b[0m pass\n");
+    ok("the password is blanked, cut across reads or wrapped in escapes",
+       got[2] === "join home pw=********, again ********" && got[3] === "********", JSON.stringify(got));
+    ok("...and a line logged before it was known is blanked when copied",
+       !L.text().includes("hunter2") && !L.text().includes("s3cret"), L.text());
+    L.feed("x".repeat(5000) + "s3cret pass" + "y".repeat(10));
+    ok("a line with no end goes out in pieces with the password still whole",
+       !got.join("").includes("s3cret") && (L.part + got.join("")).length > 5000, L.part.slice(-30));
+}
+{
+    const got = [];
+    const L = new imp.Lines((l) => got.push(l));
+    const p = port(BOARD, { chunk: 4, noise: "W (5) wifi:caf\u00e9 reason 2\r\n" });
+    const c = new imp.Client(p, { log: (t) => L.feed(t) });
+    await c.open();
+    await c.state();
+    await c.info();
+    await c.close();
+    ok("the board's lines between frames reach Lines whole, a character cut between reads too",
+       got.length === 2 && got.every((l) => l === "W (5) wifi:caf\u00e9 reason 2"), JSON.stringify(got));
 }
 ok("a URL with a password set carries no claim", (() => {
     const w = imp.found(["http://10.0.0.9/#id=" + ID]);
