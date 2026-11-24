@@ -8,16 +8,10 @@
 #include "moy_ui.h"
 #include "moy_theme.h"
 
-#ifdef MOY_ON_BOARD
-#define READERS_WAIT() vTaskDelay(1)
-#else
-#define READERS_WAIT() ((void)0)
-#endif
 
 #include "moy_kmem.h"
 
 #define UI_ALLOC(n) moy_kalloc((n), MOY_KMEM_PSRAM)
-#define REC_ALLOC(n) moy_kalloc((n), MOY_KMEM_PSRAM | MOY_KMEM_INTERNAL_OK)
 
 typedef struct {
     int32_t tok[MOY_UI_TOKENS];
@@ -829,7 +823,7 @@ uint32_t moy_ui_icon_font(int size24) {
     return s_icon_font[size24 ? 1 : 0];
 }
 
-// -- the theme as a block (moy_ui.h) ------------------------------------------------
+// -- the theme's writes (moy_ui.h) -------------------------------------------------
 
 int moy_ui_recs_ui(moy_ui_rec_t *r) {
     moy_ui_rec_t v[] = {
@@ -842,166 +836,13 @@ int moy_ui_recs_ui(moy_ui_rec_t *r) {
     return (int)(sizeof(v) / sizeof(v[0]));
 }
 
-#define THEME_RECS 32
-
-static int theme_recs(moy_ui_rec_t *r) {
-    int n = moy_ui_recs_ui(r);
-    n += moy_ui_recs_depth(r + n);
-    n += moy_ui_recs_parts(r + n);
-    n += moy_ui_recs_text(r + n);
-    n += moy_ui_recs_tones(r + n);
-    n += moy_ui_recs_theme(r + n);
-    return n;
-}
-
-// The block: magic, the layout (each record's size, hashed), its
-// generation and its record count; then each record as a word that says
-// whether it is held and its bytes, padded to a word.
-#define THEME_HEAD 4
-
-static uint32_t round4(uint32_t n) {
-    return (n + 3u) & ~3u;
-}
-
-static uint32_t theme_layout(const moy_ui_rec_t *r, int n) {
-    uint32_t h = 2166136261u;
-    for (int i = 0; i < n; i++) {
-        h = (h ^ r[i].n ^ (r[i].heap != NULL ? 0x80000000u : 0u)) * 16777619u;
-    }
-    return h;
-}
-
 static uint32_t s_gen = 2;              // even: settled; odd: a setter is writing
 static int s_writing;
-// The pulls copying the block now, from any task. A write begins by making
-// the generation odd and then waits for them, and a pull counts itself in
-// before it reads the generation, so no pull copies a record a write frees.
-static int s_readers;
-
-static int readers_in(void) {
-    __atomic_fetch_add(&s_readers, 1, __ATOMIC_SEQ_CST);
-    uint32_t g = __atomic_load_n(&s_gen, __ATOMIC_SEQ_CST);
-    if (g & 1u) {
-        __atomic_fetch_sub(&s_readers, 1, __ATOMIC_RELEASE);
-        return 0;
-    }
-    return 1;
-}
-
-static void readers_out(void) {
-    __atomic_fetch_sub(&s_readers, 1, __ATOMIC_RELEASE);
-}
 
 void moy_ui_theme_write(int begin) {
     if (begin ? s_writing++ == 0 : --s_writing == 0) {
-        if (begin) {
-            __atomic_fetch_add(&s_gen, 1u, __ATOMIC_SEQ_CST);
-            while (__atomic_load_n(&s_readers, __ATOMIC_SEQ_CST) != 0) {
-                READERS_WAIT();
-            }
-        } else {
-            __atomic_fetch_add(&s_gen, 1u, __ATOMIC_RELEASE);
-        }
+        __atomic_fetch_add(&s_gen, 1u, __ATOMIC_SEQ_CST);
     }
-}
-
-uint32_t moy_ui_theme_gen(void) {
-    return __atomic_load_n(&s_gen, __ATOMIC_ACQUIRE);
-}
-
-size_t moy_ui_theme_size(void) {
-    moy_ui_rec_t r[THEME_RECS];
-    int n = theme_recs(r);
-    size_t size = THEME_HEAD * sizeof(uint32_t);
-    for (int i = 0; i < n; i++) {
-        size += sizeof(uint32_t) + round4(r[i].n);
-    }
-    return size;
-}
-
-uint32_t moy_ui_theme_pull(uint32_t have, void *buf, size_t cap) {
-    uint32_t g = __atomic_load_n(&s_gen, __ATOMIC_ACQUIRE);
-    if (g == have || (g & 1u) || buf == NULL || cap < moy_ui_theme_size() || !readers_in()) {
-        return 0;
-    }
-    g = __atomic_load_n(&s_gen, __ATOMIC_RELAXED);
-    moy_ui_rec_t r[THEME_RECS];
-    int n = theme_recs(r);
-    uint32_t *w = (uint32_t *)buf;
-    w[0] = MOY_UI_THEME_MAGIC;
-    w[1] = theme_layout(r, n);
-    w[2] = g;
-    w[3] = (uint32_t)n;
-    uint8_t *at = (uint8_t *)buf + THEME_HEAD * sizeof(uint32_t);
-    for (int i = 0; i < n; i++) {
-        const void *src = r[i].heap != NULL ? *r[i].heap : r[i].p;
-        uint32_t held = src != NULL;
-        memcpy(at, &held, sizeof(held));
-        at += sizeof(held);
-        if (held) {
-            memcpy(at, src, r[i].n);
-        } else {
-            memset(at, 0, r[i].n);
-        }
-        memset(at + r[i].n, 0, round4(r[i].n) - r[i].n);
-        at += round4(r[i].n);
-    }
-    readers_out();
-    return g;
-}
-
-int moy_ui_theme_put(const void *buf, size_t size) {
-    moy_ui_rec_t r[THEME_RECS];
-    int n = theme_recs(r);
-    const uint32_t *w = (const uint32_t *)buf;
-    if (buf == NULL || size < moy_ui_theme_size() || w[0] != MOY_UI_THEME_MAGIC
-        || w[1] != theme_layout(r, n) || w[3] != (uint32_t)n) {
-        return MOY_UI_BAD;
-    }
-    moy_ui_theme_write(1);
-    int rc = MOY_UI_OK;
-    const uint8_t *at = (const uint8_t *)buf + THEME_HEAD * sizeof(uint32_t);
-    for (int i = 0; i < n; i++) {
-        uint32_t held;
-        memcpy(&held, at, sizeof(held));
-        at += sizeof(held);
-        void *dst = r[i].p;
-        if (r[i].heap != NULL) {
-            if (held && *r[i].heap == NULL) {
-                *r[i].heap = REC_ALLOC(r[i].n);
-            }
-            dst = *r[i].heap;
-            if (held && dst == NULL) {
-                rc = MOY_UI_NOMEM;
-            }
-        }
-        if (held && dst != NULL) {
-            memcpy(dst, at, r[i].n);
-        } else if (!held && r[i].heap != NULL && *r[i].heap != NULL) {
-            free(*r[i].heap);           // (the console holds none: neither does the copy)
-            *r[i].heap = NULL;
-        }
-        at += round4(r[i].n);
-    }
-    moy_ui_marks_refresh();             // the marks' `active` is this image's input's
-    moy_ui_theme_write(0);
-    return rc;
-}
-
-uint32_t moy_ui_theme_font(uint32_t gen, uint32_t font, void *buf, size_t cap) {
-    if ((gen & 1u) || !readers_in()) {
-        return 0;
-    }
-    size_t n = 0;
-    const uint8_t *src = NULL;
-    if (__atomic_load_n(&s_gen, __ATOMIC_RELAXED) == gen) {
-        src = moy_font_bytes(font, &n);
-    }
-    if (src != NULL && buf != NULL && cap >= n) {
-        memcpy(buf, src, n);
-    }
-    readers_out();
-    return src != NULL ? (uint32_t)n : 0;
 }
 
 int moy_ui_font_free(uint32_t font) {
@@ -1017,12 +858,3 @@ void moy_ui_font_reset(void) {
     moy_ui_theme_write(0);
 }
 
-int moy_ui_theme_font_ids(uint32_t *ids[MOY_UI_THEME_FONTS]) {
-    int n = 0;
-    for (int i = 0; i < MOY_UI_FONT_ROLES; i++) {
-        ids[n++] = &s_font[i];
-    }
-    ids[n++] = &s_icon_font[0];
-    ids[n++] = &s_icon_font[1];
-    return n;
-}

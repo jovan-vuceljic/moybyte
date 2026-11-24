@@ -538,8 +538,7 @@ def run_look(near, th):
     """Put `near`, the live theme's nearest MOY64 tokens, in a run's look, the
     one a game's or a fixed app's page draws in on a Lua, compiled, WASI or
     native run, and `th`, the live theme's own, in a responsive app's
-    (moy_ui.h's MOY_UI_LOOK_APP): the theme block carries both to a copy of
-    the toolkit linked into a program (moy_ui.h's moy_ui_theme_pull)."""
+    (moy_ui.h's MOY_UI_LOOK_APP)."""
     _C.look(_LOOK_RUN, _pack(near))
     _C.look(_LOOK_APP, _pack(th))
 

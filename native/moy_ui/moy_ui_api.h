@@ -366,18 +366,11 @@ typedef struct {
 // (moy_ui_inst_main), and a program that runs the toolkit on a task of its
 // own makes its own, so no two tasks' frames write the same bytes.
 //
-// An instance holds none of the theme (moy_ui.h's theme block): the looks,
-// the shape, the depth, the fonts and icons, the text view's word table and
-// tones and the keycaps' input are the console's, written on its task
-// between its frames. An instance in the console's image reads the live
-// ones, so a theme change shows from the next frame it begins. A copy of
-// the toolkit linked into a program holds the theme it installed: its
-// instance's `pull` (the theme row, moy_ui_theme_pull across the OS's door)
-// is asked at each begin with the generation installed last and answers a
-// newer block into `theme_buf` (moy_ui_theme_size() bytes, the program's),
-// which begin installs before the pass (moy_ui_theme_put; theme_puts counts
-// them), so a change reaches the copy's frames at its next begin. The
-// cart-text boundary is the sink's (moy_ui.h).
+// An instance holds none of the theme: the looks, the shape, the depth, the
+// fonts and icons, the text view's word table and tones and the keycaps'
+// input are the console's, written on its task between its frames, and
+// every instance reads the live ones, so a theme change shows from the next
+// frame it begins. The cart-text boundary is the sink's (moy_ui.h).
 struct moy_ui_inst {               // moy_ui_inst_t (moy_ui_text.h)
     struct mua_kept_mem *kept;      // the kept rings and the faces' record
     uint32_t fc_owner, fc_ids;      // the context holding the faces' ticket, the last given
@@ -386,17 +379,6 @@ struct moy_ui_inst {               // moy_ui_inst_t (moy_ui_text.h)
     uint32_t block_tick, block_gen;
     uint32_t fades;                 // moy_ui_api_fades's count
     uint32_t audit_on, audit_fail;  // moy_ui_api_audit's switch and failures
-    uint32_t (*pull)(uint32_t have, void *buf, size_t cap);    // NULL: the live theme
-    void *theme_buf;
-    size_t theme_cap;
-    uint32_t theme_gen, theme_puts;
-    // The fonts an install names, fetched (the font row, moy_ui_theme_font
-    // across the OS's door: NULL keeps the console's ids, which an instance in
-    // the console's image reads) and loaded as the copy's own, the ids they
-    // replaced in `font_from` and the copy's in `font_local` (0: none), freed
-    // at the next install.
-    uint32_t (*font_pull)(uint32_t gen, uint32_t font, void *buf, size_t cap);
-    uint32_t font_from[MOY_UI_THEME_FONTS], font_local[MOY_UI_THEME_FONTS];
     // The texts fields held when focus came onto them, or as Enter last
     // left them (moy_ui_api_cancel gives one back), each under its context
     // and its field's id: MOY_UI_API_EDITS at once (moy_ui_api_table.c).
@@ -416,15 +398,6 @@ struct moy_ui_inst {               // moy_ui_inst_t (moy_ui_text.h)
 // that takes an instance takes NULL as the main one.
 moy_ui_inst_t *moy_ui_inst_main(void);
 size_t moy_ui_inst_size(void);
-// An instance's theme taken from `pull` into `buf` (cap bytes) from its next
-// begin, its fonts from `font_pull`, nothing installed yet (NULL: the live
-// theme).
-void moy_ui_inst_pull(moy_ui_inst_t *I, uint32_t (*pull)(uint32_t have, void *buf, size_t cap),
-                      void *buf, size_t cap,
-                      uint32_t (*font_pull)(uint32_t gen, uint32_t font, void *buf, size_t cap));
-// The theme pulled where it moved and installed, its fonts with it: what
-// every begin over `I` does first.
-void moy_ui_inst_sync(moy_ui_inst_t *I);
 void moy_ui_inst_init(moy_ui_inst_t *I);
 void moy_ui_inst_free(moy_ui_inst_t *I);
 

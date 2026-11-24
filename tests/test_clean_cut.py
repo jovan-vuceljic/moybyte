@@ -99,6 +99,26 @@ def test_no_lua_wasm_wasi_or_native_tier_has_ui_verbs():
     assert not re.search(r"X\(ui_(tell|pull|font_pull)\b", rows)
 
 
+def test_no_toolkit_copy_pulls_the_theme():
+    """The theme block a toolkit linked into a program pulled across the OS's
+    door goes with the linked toolkit: no pull, install or font fetch, no
+    instance that syncs one, and no binding row for them."""
+    found = []
+    for top in ("native", "runtime", "device", "sdk", "tools"):
+        for base, dirs, files in os.walk(os.path.join(ROOT, top)):
+            dirs[:] = [d for d in dirs if d not in ("__pycache__", "wamr", "lua")]
+            for name in files:
+                if not name.endswith((".c", ".h", ".py", ".lua")):
+                    continue
+                path = os.path.join(base, name)
+                with open(path, errors="replace") as f:
+                    text = f.read()
+                if re.search(r"moy_ui_theme_(pull|put|font|font_ids|size|gen)\b|moy_ui_inst_(pull|sync)\b"
+                             r"|MOY_UI_THEME_(MAGIC|FONTS)\b|\bfont_pull\b|\btheme_puts\b", text):
+                    found.append(os.path.relpath(path, ROOT))
+    assert not found, found
+
+
 def test_the_moybyte_ui_extension_is_not_supported():
     from runtime import player
     assert "moybyte.ui" not in player.SUPPORTED_EXTENSIONS

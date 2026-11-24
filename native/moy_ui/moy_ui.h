@@ -1381,61 +1381,21 @@ const moy_ui_display_t *moy_ui_display(void);
 int moy_ui_well(const moy_ui_sink_t *s, moy_ui_box_t b, int flags, int fill, int fs,
                 int desk);
 
-// -- the theme as a block (a toolkit linked into a program) -------------------------
+// -- the theme's writes --------------------------------------------------------------
 //
-// What every instance reads and only the console writes -- the looks, the
-// shape and the button leaves, the depth, its marks and keycaps, the fonts
-// and icons, the keycaps' input, the text view's word table and tones, the
-// theme's block colours and role sheet -- as one block: a copy of the
-// toolkit linked into a program (a native module, a WASI one) holds none of
-// it until it installs one. A record is the state as the setters left it,
-// resolved, so a copy installs it with none of the theme packages it was
-// resolved from. Fonts and icon masks are moy_text ids, which name a font
-// only inside the image that loaded it.
-//
-// The console's setters move a generation around their writes
-// (moy_ui_theme_write: odd while one writes, even after), and a write waits
-// for the pulls copying when it begins, so a pull from another task copies
-// the records of one even generation or answers none. moy_ui_theme_pull writes the block into
-// `buf` and answers its generation where the theme is past `have`, else 0:
-// the theme has not moved, a setter was writing meanwhile (the next frame's
-// pull takes it), or `cap` is short of moy_ui_theme_size(). An instance
-// with a `pull` (moy_ui_api.h) asks it at each begin and installs what it
-// answers, so a theme change reaches its frames at the next begin, never
-// inside a frame.
-#define MOY_UI_THEME_MAGIC 0x3174756du     // "mut1"
-uint32_t moy_ui_theme_gen(void);
-size_t moy_ui_theme_size(void);
-uint32_t moy_ui_theme_pull(uint32_t have, void *buf, size_t cap);
-// A font the block names (a role's, an icon set's mask), console side: its
-// file's length, written into `buf` where `cap` holds it, while the theme
-// is at generation `gen` (no write runs while it copies, as a pull's); 0
-// for a font no slot holds or a theme that moved (the next generation's
-// pull asks again).
-uint32_t moy_ui_theme_font(uint32_t gen, uint32_t font, void *buf, size_t cap);
-// moy_font_free and moy_font_reset (moy_text.h) as a theme write: a pull or
-// a font's copy on another task is never reading the bytes they free. The
+// moy_font_free and moy_font_reset (moy_text.h) as a theme write. The
 // console frees its fonts through these.
 int moy_ui_font_free(uint32_t font);
 void moy_ui_font_reset(void);
-// The words of the toolkit's records that hold font ids (each role's, then
-// the icon set's two masks), copy side: an install's fonts are the
-// console's ids, which a copy replaces with fonts of its own
-// (moy_ui_api.h's instance `font_pull`). Answers how many, into ids.
-#define MOY_UI_THEME_FONTS (MOY_UI_FONT_ROLES + 2)
-int moy_ui_theme_font_ids(uint32_t *ids[MOY_UI_THEME_FONTS]);
-// A block installed: MOY_UI_OK; MOY_UI_BAD for one cut short or of another
-// layout (a toolkit built otherwise), which installs nothing.
-int moy_ui_theme_put(const void *buf, size_t n);
 // The theme's block colours as a canvas row's entries 64..127 hold them
-// (moy_canvas.h, the build's wire order): what a copy's own surface row
-// takes after an install.
+// (moy_canvas.h, the build's wire order): what a run's surface row takes
+// (moy_ui_run.c).
 void moy_ui_theme_pal(uint16_t out[64]);
 // A setter of the shared state, around its writes: 1 before, 0 after; the
 // console's task alone writes, so they nest.
 void moy_ui_theme_write(int begin);
-// The block's records, each file's own: one at `p`, or the block a static
-// pointer (`heap`) holds (NULL there: none held), `n` bytes.
+// The shared state's records, each file's own: one at `p`, or the block a
+// static pointer (`heap`) holds (NULL there: none held), `n` bytes.
 typedef struct {
     void *p;
     void **heap;
