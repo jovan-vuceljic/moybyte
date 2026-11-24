@@ -47,7 +47,7 @@ paths:
     (`tools/publish_firmware_release.py`, `tools/gen_ota_manifest.py`, both
     through `tools/web_pack.py`) put beside the payload the cart
     `moybyte_web-<digest>.moy.zip`, its licence, and `carts-<board>.json`: an
-    index in moy-spec's format (version 1, signed as a carts index is) with
+    index in the store's format (version 1, signed as a carts index is) with
     one entry per add-on ever published for the board, newest first. An
     index lists an id once, so an entry's id is `web_console_<12 hex of the
     digest>` and its `moybyte.fits` the whole digest; a console installs the

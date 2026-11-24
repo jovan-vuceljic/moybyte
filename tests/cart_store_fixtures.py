@@ -5,8 +5,8 @@ local HTTP server for the host's real urllib transport.
 
 `fixtures/carts/index.json` is a snapshot of moybyte-org/carts' index (its
 first: Doom, ESP 88 and Jet Teapot v4, 2026-10-03), so the console's reader is
-pinned to the format the repository actually publishes -- moy-spec's `moy
-index` writes it. `fixtures/carts/installed-v3.json` is the record a console
+pinned to the format the repository actually publishes -- its
+scripts/make_index.py writes it. `fixtures/carts/installed-v3.json` is the record a console
 of each chip kept after installing the three at v3 from the two indexes that
 came before it (gpl-carts and mit-carts)."""
 
@@ -63,7 +63,7 @@ def module_bytes(chip, fmt, tag=b""):
 class Repo:
     """One carts repository served under `base` (a URL). `files` maps a path
     under `base` to its bytes; `add` builds a cart's release asset and its
-    index entry the way moy-spec's `moy index` lays one out."""
+    index entry the way moybyte-org/carts' scripts/make_index.py lays one out."""
 
     def __init__(self, base, name="Test carts"):
         self.base = base.rstrip("/")
@@ -82,11 +82,12 @@ class Repo:
             release=None, mirror=False, files=None, moybyte=None):
         """`release` puts the release asset on another host (a GitHub release
         download's base URL) instead of under `base`; `mirror` serves a copy
-        under `base` too and names it in the index, the way moy-spec's
-        `moy index --mirror releases` does. Each of `external` is (path, data,
+        under `base` too and names it in the index, the way that index maker
+        does (releases/<tag>/<asset>). Each of `external` is (path, data,
         archive member), or with a fourth item True a file the repository
         also serves bare at files/<id>/<path>, named as its mirror. `moybyte`
-        is the manifest's Moybyte object (its permissions, say)."""
+        is the manifest's Moybyte object (its permissions, say), whose API
+        level the entry carries as the maker does."""
         folder = cid + ".moy"
         name = name or cid.replace("_", " ").title()
         if files is not None:
@@ -136,10 +137,12 @@ class Repo:
             "external": [],
             "build": {"commit": "0" * 40, "keys": {}, "modules": {}, "pins": {}},
         }
+        if moybyte is not None and "api" in moybyte:
+            entry["moybyte"] = {"api": moybyte["api"]}
         if mirror:
             entry["assets"][0]["mirror"] = rel
         if cover is not None:
-            # moy-spec's `moy index` (cartindex.with_cover): beside the licence,
+            # The index maker's with_cover: beside the licence,
             # served from the repository like it.
             self.files["carts/%s/cover.png" % cid] = cover
             ref = {"url": "carts/%s/cover.png" % cid, "size": len(cover),

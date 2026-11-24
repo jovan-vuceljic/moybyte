@@ -259,8 +259,8 @@ nor those docs will warn you about:
     page's memory -- and never through the 16 MB heap.
   - **A page cannot read a release download or Debian's archive** (neither
     sends a CORS header). It reads an asset's `mirror`, and an external
-    file's, on the carts repository's Pages site first (moy-spec's
-    cartindex.py). An external file it can read from neither is the player's
+    file's, on the carts repository's Pages site first (moybyte-org/carts'
+    scripts/make_index.py names them). An external file it can read from neither is the player's
     own copy, chosen through a REAL page control (the card under the canvas):
     a browser opens its file dialog only from a click on one, never from a tap
     the console relays a frame later.
