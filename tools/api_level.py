@@ -81,12 +81,40 @@ def format_table(text=None):
     return int(_FORMAT.search(_read(PLAYER_FIT) if text is None else text).group(1))
 
 
+UITREE = os.path.join(ROOT, "tests", "uitree_contract", "contract.json")
+
+
+def uitree_table(text=None):
+    """The UI tree API's contract (tests/uitree_contract/contract.json) as an
+    app sees it: every kind (its head, level and props), every prop's type
+    (a word prop's words with it) and level, the props every node, an action
+    and a hook take, the verbs, queries, takes= values, roles, off= words,
+    app fields and system values, every error code and reserved code, and
+    the retired names; whether each is built (`designed`) with it. Its prose
+    (what a code means and its fix, a section, a retired name's replacement)
+    is left out."""
+    c = json.loads(_read(UITREE) if text is None else text)
+    kinds = {}
+    for k, d in c["kinds"].items():
+        kinds[k] = {x: (True if x == "made_by" else v) for x, v in d.items() if x not in ("section", "heads", "about")}
+    return {
+        "kinds": kinds,
+        "common_props": c["common_props"], "child_props": sorted(c["child_props"]),
+        "action_props": c["action_props"], "hook_props": c["hook_props"],
+        "verbs": c["verbs"], "queries": sorted(c["queries"]), "takes": c["takes"], "roles": c["roles"],
+        "offs": c["offs"], "app_fields": c["app_fields"], "system_values": c["system_values"],
+        "codes": sorted(c["codes"]), "reserved_codes": sorted(c["reserved_codes"]),
+        "retired": {sec: sorted(names) for sec, names in c["retired"].items()},
+    }
+
+
 # The public tables, by name, in the fingerprint's order. A new app-facing
-# table joins here (the UI tree API's tables, when it lands).
+# table joins here.
 TABLES = (
     ("os_calls", os_calls_table),
     ("manifest", manifest_table),
     ("format", format_table),
+    ("uitree", uitree_table),
 )
 
 

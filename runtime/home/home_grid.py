@@ -33,14 +33,14 @@ leaf: it imports no home module.
 
 from array import array
 
-import ui as _ui
+import home_band as _band
 import ui_draw as _ui_draw
 import cart_listing as _cl
 import iconsets as _iconsets
 import layout_base as _lb
 from chrome import _ticks_ms, _ticks_diff
 from moy_store_base import builtin_name as _builtin_name
-_in = _ui.rect_in   # one hit-test (ui.rect_in)
+_KEY_MASK = 0x3FFFFFFF   # a face's gen under 2**30: a small int on a board (`_face_key`)
 
 
 
@@ -66,8 +66,8 @@ _PART_COL = ("",)
 _ROW_CELL = ("",)
 _PART = array("i", [0] * 4)
 _FLOOR = array("i", [0] * 4)            # a floor rect `table_floor` answers
-_FACE_GEN = [0]                         # the faces' keys (`ui.slots`), one per layer and look
-_FACE_SLOTS = 128                       # the slots the engine keeps at most (`ui.slots`)
+_FACE_GEN = [0]                         # the faces' keys (`home_band.slots`), one per layer and look
+_FACE_SLOTS = 128                       # the slots the engine keeps at most (`home_band.slots`)
 _FACES_BYTES = 192 << 10                # the faces' layer at most: the slots a board's cards fit
 _NO_KEYS = array("i", [-1, -1])         # a band paint that keeps nothing (`band_pass`)
 
@@ -357,7 +357,7 @@ class Launcher:
         self._put = None              # what its rows were put from: (items, their play records)
         self._set = None              # ...and its current card and words' ink (`band_set`)
         self._pic_ix = {}             # a card's picture name -> its item
-        self._fnames = ()             # each card's face's name (`_face_name`)
+        self._fkeys = array("i")      # each card's title and type, as its face's gen (`_face_key`)
         self._covs = []               # each card's cover as `cover_for` answered it (`_cover_of`)
         self._covs_at = (-1, 0)       # ...the cover cache's gen and the decode they hold
         self._gcv = None              # the canvas a pass draws on
@@ -616,7 +616,7 @@ class Launcher:
     def begin_band_host(self, cv):
         """Begin this painted frame's paint on the band's host, drawing
         nothing, its keys the cards' where they hold them (as the band's
-        pass begins it): the parts the home names there (`ui.held`) are
+        pass begins it): the parts the home names there (`home_band.held`) are
         then asked for, the band's pass resuming it."""
         host = self._band_host()
         host.whole()
@@ -631,7 +631,7 @@ class Launcher:
         """Begin the band's frame on its host, the keys its own where `keys`
         (the cards hold them, not the tab row or the desk's buttons): whether
         the buffer this frame paints holds the band as a frame drew it under
-        `key` (`ui.held`); None, with the frame ended, where `need` asks for
+        `key` (`home_band.held`); None, with the frame ended, where `need` asks for
         that and it does not. A frame begun on it already (`begin_band_host`,
         an earlier pass) resumes: its page's motion steps once a frame."""
         host = self._band_host()
@@ -642,7 +642,7 @@ class Launcher:
             host.begin(cv, self.theme, b, desk, False, not keys)
         # (a stamp drawn over the frame round the band: no later frame of
         # the band's puts that buffer's frame back)
-        held = _ui.held("band", key[0] if over is None or (
+        held = _band.held("band", key[0] if over is None or (
             b[0] <= over[0] and over[0] + over[2] <= b[0] + b[2]
             and b[1] <= over[1] and over[1] + over[3] <= b[1] + b[3]) else -1)
         if need and not held:
@@ -651,11 +651,11 @@ class Launcher:
         return held
 
     def band_floor(self, cv, fill, copy=True):
-        """The floor of the band's table (`ui.table_floor`): each rect the
+        """The floor of the band's table (`home_band.table_floor`): each rect the
         frame draws, kept in `floor`, its ground put back by `fill` where
         given; then the floor's end. With `copy`, first the rects the
         buffer the last frame painted holds as this frame draws them
-        (`ui.table_copy`), copied out of it (`copy_last`) into `copied`:
+        (`home_band.table_copy`), copied out of it (`copy_last`) into `copied`:
         the double buffer's catch-up of a step costs a copy, not its
         cards."""
         fl = self.floor
@@ -665,18 +665,18 @@ class Launcher:
         r = _FLOOR
         cl = getattr(cv, "copy_last", None) if copy else None
         if cl is not None:
-            while _ui.table_copy(r) > 0:
+            while _band.table_copy(r) > 0:
                 if not cl(r[0], r[1], r[2], r[3]):
-                    _ui.table_copy(r, True)  # (drawn: the floor answers it)
+                    _band.table_copy(r, True)  # (drawn: the floor answers it)
                     break
                 cp.append((r[0], r[1], r[2], r[3]))
-        v = _ui.table_floor(r)
+        v = _band.table_floor(r)
         while v > 0:
             q = (r[0], r[1], r[2], r[3])
             fl.append(q)
             if fill is not None:
                 fill(cv, q)
-            v = _ui.table_floor(r)
+            v = _band.table_floor(r)
         return v
 
     def band_pass(self, cv, sheet_for, fill, key=_NO_KEYS, whole=True, over=None, beside=None,
@@ -689,7 +689,7 @@ class Launcher:
         (`wall_ink`), every card's face the home's (`_band_picture`). It
         keeps no tiles: a pass that draws the band draws it whole, over the
         ground `fill` puts back there first (None: a full paint drew it),
-        and names what it drew (`ui.held`) so the floor's end says whether
+        and names what it drew (`home_band.held`) so the floor's end says whether
         every buffer holds it. A pass that finds the buffer holding the band
         as it stands (nothing moving, nothing to take) and a `note` pass,
         the band lying there by other means, draw none of it and name it,
@@ -718,7 +718,7 @@ class Launcher:
         w = self._words()
         if (not note and not whole and not puts and not host.owed and not self._fed
                 and w is not None and not w[_W_MOTION] and w[_W_FOCUS] != self.tab_focus
-                and _ui.held("cards", self._cells_key(key, w))):
+                and _band.held("cards", self._cells_key(key, w))):
             note = True                     # (the buffer holds it as it stands)
         self._fed = False
         if note:
@@ -737,8 +737,8 @@ class Launcher:
             if w[_W_CUR] != self._sel and w[_W_CUR] < len(self.items):
                 self.zone_gen += 1
                 self._sel = w[_W_CUR]       # the keys moved the selection
-            _ui.held("cards", self._cells_key(key, w))
-        end = 0 if _ui.held_all() else -1
+            _band.held("cards", self._cells_key(key, w))
+        end = 0 if _band.held_all() else -1
         host.end()
         return end
 
@@ -810,13 +810,14 @@ class Launcher:
         """The band's cards as its page's rows (home_ui's `band_put`): each
         card's title ("New" on the "+ New" card), its metadata (`_meta`),
         apart by tabs, and its picture, which the home draws
-        (`_band_picture`); and each card's face's name (`_face_name`)."""
+        (`_band_picture`); and what each card's face is keyed by beside its
+        path (`_face_key`)."""
         import home_ui
         items = self.items
         rows = []
         ix = {}
         recs = []
-        names = []
+        keys = array("i")
         for i in range(len(items)):
             it = items[i]
             k = str(i)
@@ -824,11 +825,11 @@ class Launcher:
             pic = home_ui.ui.image.own(k)
             ix[repr(pic)] = i
             recs.append(self.played(it))
-            names.append("%s\x1f%s\x1f%s" % (it.get("path"), it.get("title"), it.get("type")))
+            keys.append((hash(it.get("title")) ^ (hash(it.get("type")) << 15)) & _KEY_MASK)
             rows.append(dict(id=k, name=name, sub="\t".join(self._meta(it)), pic=pic))
         s.cards = rows
         self._pic_ix = ix
-        self._fnames = names
+        self._fkeys = keys
         self._covs = [None] * len(items)
         self._put = (items, recs)
 
@@ -890,7 +891,7 @@ class Launcher:
 
     def _faces_for(self, cv, side, r, cap):
         """Whether this paint stamps its cards from their kept faces
-        (`ui.slots` on the table just drawn: the engine keeps which card's
+        (`home_band.slots` on the table just drawn: the engine keeps which card's
         face each slot holds), `cap` of them on canvas `cv`, drawn for
         cards of `side` with corners `r`, where the home keeps them
         (`face_key`): the faces' layer made for them, each slot the card's
@@ -917,7 +918,7 @@ class Launcher:
             # (another layer or look: every face is drawn again)
             self._face_of = key
             _FACE_GEN[0] = self._fkey = (_FACE_GEN[0] + 1) & 0x3fffffff
-        _ui.slots(cap, self._fkey)
+        _band.slots(cap, self._fkey)
         self._faces_done = False         # (the table drawn: its rows to name again)
         # what every face of this paint is drawn with, read once a paint
         self._fdiv = self._face_div(side)
@@ -946,10 +947,15 @@ class Launcher:
         s = g[1] + 2 * g[2]
         return s * s * g[3] * 2
 
-    def _face_name(self, i):
-        """Card `i`'s face's name (`band_put`): what its face is drawn from
-        beside its cover."""
-        return self._fnames[i]
+    def _face_key(self, i, cover, mint):
+        """The slot of card `i`'s face (`home_band.slot`), keyed by what it is drawn
+        from: its path (its title where it has none), a string its item
+        holds, as the name; its title, type (an int `band_put` kept) and
+        cover's serial as the gen, all under 2**30, so a frame allocates
+        nothing."""
+        it = self.items[i]
+        gen = self._fkeys[i] ^ (0 if cover is None else cover.serial & _KEY_MASK)
+        return _band.slot(it.get("path") or it.get("title") or "", gen, mint)
 
     def _face_div(self, n):
         """The decode a card of side `n` draws its cover from."""
@@ -1012,7 +1018,7 @@ class Launcher:
 
     def _stamp_face(self, cv, it, i, t, r, plain=True):
         """Card `it` (index `i`) over `t` (the picture call's box and clip,
-        `_band_picture`'s), corners `r`, out of its kept face (`ui.slot`),
+        `_band_picture`'s), corners `r`, out of its kept face (`home_band.slot`),
         clipped to its clip: copied from the slot holding the card
         as it is now --
         whole on a plain ground, which the slot's corners were drawn over;
@@ -1027,7 +1033,7 @@ class Launcher:
         x, y, n = t[0], t[1], t[2]
         cover = self._cover_of(i, it, self._fdiv)
         new = it.get("type") in PSEUDO_TILE_TYPES
-        j = _ui.slot(self._face_name(i), 0 if cover is None else cover.serial, False)
+        j = self._face_key(i, cover, False)
         if j < 0:
             self._face(cv, it, t, r, cover)
             return
@@ -1097,7 +1103,7 @@ class Launcher:
 
     def mint_faces(self, ms=4):
         """On a frame nothing waits on: draw the faces the engine names
-        next (`ui.slot_next`: the cards the band shows, then the rows past
+        next (`home_band.slot_next`: the cards the band shows, then the rows past
         either end of it, nearest first) whose covers are decoded or known absent, for
         about `ms` -- a step then copies the row it brings in -- the walk
         itself held to `ms` too, the next such frame going on from where
@@ -1121,7 +1127,7 @@ class Launcher:
         t0 = _ticks_ms()
         done = 0
         owed = False                     # a part whose cover has yet to land
-        i = _ui.slot_next()
+        i = _band.slot_next()
         while i >= 0:
             if i < len(items) and i != sel:
                 it = items[i]
@@ -1130,14 +1136,13 @@ class Launcher:
                 if cover is False:       # (its cover lands first: the paint takes it)
                     owed = True
                 else:
-                    j = _ui.slot(self._face_name(i), 0 if cover is None else cover.serial,
-                                 True)
-                    if j >= _ui.SLOT_MINT:
-                        self._draw_face(j - _ui.SLOT_MINT, it, r, cover, new)
+                    j = self._face_key(i, cover, True)
+                    if j >= _band.SLOT_MINT:
+                        self._draw_face(j - _band.SLOT_MINT, it, r, cover, new)
                         done += 1
             if _ticks_diff(_ticks_ms(), t0) >= ms:
                 return done > 0          # (the round goes on from here next time)
-            i = _ui.slot_next()
+            i = _band.slot_next()
         if not done and not owed:
             self._faces_done = True
         return done > 0

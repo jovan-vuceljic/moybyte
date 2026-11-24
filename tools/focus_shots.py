@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Map (grep -n a name to jump there):
-#   Sheet               the state sheet: one surface a page, drawn with the ui verbs
+#   sheet               the state sheet: one surface a UI tree page
 #   _sheet_setup        a sheet frame's setup (SURFACES lists each page's frames)
 #   _cc                 the control center opened (SHELL lists the shell's screens)
 #   checks              the legibility checks on the declared marks
@@ -19,11 +19,11 @@ usage: .venv/bin/python tools/focus_shots.py OUT [FILTER ...] [--work DIR]
 
 Two kinds of render:
 
-- the STATE SHEET: an app drawing one surface a page with the public UI
-  API's verbs (a group card, a plain list, a table, a menu, buttons, a
-  dialog, tabs and segments, cards and tools, fields), each item labelled
-  with its state, drawn once per state -- the focus elsewhere, a stop
-  focused, a selected stop focused, a press held, the same under touch --
+- the STATE SHEET: a UI tree app showing one surface a page (a group
+  card, a plain list, a table, a menu, buttons, a dialog, tabs and
+  segments, cards and bar buttons, fields), drawn once per state -- the
+  focus elsewhere, a stop focused, a selected stop focused, a press held,
+  the same under touch --
   on the T-Deck (320x240) and in a window on the desk (1024x600);
 - the SHELL: the real screens (Settings, the home and its bar, the system
   menu, the control center, Files, Calc, the desk's PROJECTS window, the
@@ -49,14 +49,14 @@ import json
 import os
 import sys
 import tempfile
-from array import array
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import look_shots as L  # noqa: E402  -- the review kit's renderer
 sys.path.insert(0, ROOT)
-from runtime.layers import AppLayer  # noqa: E402  -- the sheet is an app
+import runtime  # noqa: E402,F401  -- the runtime's modules by their bare names (uitree)
+import uitree as ui  # noqa: E402  -- the sheet's pages
 
 MODES = L.KIT_MODES
 
@@ -65,242 +65,245 @@ MODES = L.KIT_MODES
 # --------------------------------------------------------------------------
 
 FILES = ("Beach trip", "Road trip mix", "Birthday song", "Dragon theme", "Sleepy time")
-COLS = ("Name", "Size")
 ROWS = (("Beach trip", "3 KB"), ("Road trip mix", "12 KB"), ("Birthday song", "2 KB"),
         ("Dragon theme", "4 KB"))
-MENU = ("Resume", "Restart", "Settings", "Delete cart")
 
-_BTN = {"left": 1, "right": 2, "up": 4, "down": 8, "a": 16, "b": 32}
+s = ui.state(on=True, live=False, toggle=True, level=3,
+             files=ui.model(key="k", k="", name=""), pick=ui.row_of("files"),
+             table=ui.model(key="k", k="", name="", size=""), trow=ui.row_of("table"),
+             tab=ui.enum("games", "make", "art", init="make"), mode=ui.enum("day", "night", init="day"),
+             cells=ui.model(key="k", k="", label="", icon="", locked=False, on=False),
+             field="", named="Star Catcher", bad="http", up=True,
+             choices=ui.model(key="k", k="", label="", value=""), chosen=ui.row_of("choices"),
+             cell=ui.row_of("cells"))
+ui.labels("tabs", {"games": "Games", "make": "Make", "art": "Art"})
+ui.labels("modes", {"day": "Day", "night": "Night"})
 
 
-class Sheet(AppLayer):
-    """A system app drawing one surface of the sheet (its `page`), each item
-    labelled with the state it is drawn in. `keys` are the buttons pressed
-    one a frame once focus is placed; `press` the stop a pointer holds."""
-    id = "focus_sheet"
-    domain = "system"
-    TITLE = "Focus"
+def _nothing():
+    pass
 
-    def __init__(self, ws, page):
-        from runtime import ui_draw
-        self.ws = ws
-        self.page = page
-        self.ctx = ui_draw.ui_context()
-        self.inp = array("i", [0] * ui_draw.UI_IN_LEN)
-        self.keys = []
-        self.press = None
-        self.pressing = 0
-        self.foot = 0
-        self.vals = {"tabs": 1, "seg": 0, "list": 1, "table": 1, "toggle": True,
-                     "field": "", "named": "Star Catcher", "bad": "http"}
 
-    def is_app(self, cart):
-        return False
+def _row(row):
+    pass
 
-    def open(self):
-        from runtime import ui_draw
-        self.ctx = ui_draw.ui_context()
 
-    def relayout(self, w, h, fs, cs=None):
-        pass
+def _opened():
+    s.files = [dict(k="f%d" % i, name=n) for i, n in enumerate(FILES)]
+    s.pick = "f1"
+    s.table = [dict(k="t%d" % i, name=n, size=z) for i, (n, z) in enumerate(ROWS)]
+    s.trow = "t1"
+    s.choices = [dict(k="rest", label="Rest", value="Home"), dict(k="selected", label="Selected", value="Night")]
+    s.chosen = "selected"
+    s.cell = "selected"
+    s.cells = [dict(k="rest", label="Rest", icon="play", locked=False, on=False),
+               dict(k="selected", label="Selected", icon="paint", locked=False, on=True),
+               dict(k="locked", label="Locked", icon="calc", locked=True, on=False)]
 
-    def handle_input(self, i):
-        return True
 
-    def handle_pointer(self, px, py, click):
-        return True
+def _focus(key):
+    ui.focus(key)
 
-    def _script(self):
-        from runtime import ui_draw
-        inp = self.inp
-        for k in range(len(inp)):
-            inp[k] = 0
-        if self.keys:
-            b = _BTN[self.keys.pop(0)]
-            inp[0] = inp[1] = b
-            self.ws.mark_dirty()
-        elif self.press is not None:
-            box = ui_draw._C.api_box(self.ctx, self.press)
-            if box is not None:
-                inp[2] = box[0] + box[2] // 2
-                inp[3] = box[1] + box[3] // 2
-                inp[4] = 1 | 2 | (4 if self.pressing == 0 else 0)
-                self.pressing += 1
 
-    def draw(self, dt):
-        from runtime import ui, ui_draw
-        ws = self.ws
-        cv = ws.sys_canvas
-        lay = ws.layout
-        rect = (lay.cx, lay.cy, lay.cw, lay.ch)
-        cv.cls(ws.theme_colors["panel"])
-        self._script()
-        ui_draw.ui_frame(self.ctx, cv, ws.theme_colors, rect, self.inp)
-        ui.page("")
-        last = ui_draw._C.api_box(self.ctx, LAST.get(self.page, ""))
-        self.foot = rect[1] + 120 * lay.fs if last is None else last[1] + last[3]
-        getattr(self, "_" + self.page)(ui, rect)
-        if self.page not in ("dialog", "menu"):
-            fs = lay.fs
-            ui.at(rect[0] + rect[2] - 62 * fs, self.foot + 6 * fs, 54 * fs, 20 * fs)
-            ui.button("Other")
+ui.hook("opened", _opened)
+ui.hook("focus", _focus, takes="arg")
+for _name, _label in (("other", "Other"),
+                      ("normal", "Normal"), ("primary", "Primary"), ("danger", "Danger"),
+                      ("tonal", "Tonal"), ("toggle_on", "Toggle on"), ("wide", "Wide button"),
+                      ("resume", "Resume"), ("restart", "Restart"), ("settings", "Settings"),
+                      ("delete_cart", "Delete cart"), ("cancel", "Cancel"), ("delete", "Delete"),
+                      ("undo", "Undo"), ("pen", "Pen")):
+    ui.action(_name, _label, _nothing)
+ui.action("disabled", "Disabled", _nothing, when="live", off="grey")
+ui.action("redo", "Redo", _nothing, when="live", off="grey")
+ui.action("open", "Open", _row, takes="row")
+ui.action("choose", "Choose", _row, takes="row")
 
-    # each page: one surface, every item named by its state
 
-    def _group(self, ui, rect):
-        ui.hints(("confirm", "Open", "back", "Back"))
-        ui.group("Group card")
-        ui.link("Rest", "Home")
-        ui.link("Selected", "Night", {"current": True})
-        ui.link("Disabled", "Off", {"disabled": True})
-        self.vals["toggle"] = ui.toggle("Toggle", self.vals["toggle"])
-        ui.slider("Slider", 3, 0, 7, {"steps": True})
-        ui.group()
+def _other():
+    ui.button("other")
 
-    def _list(self, ui, rect):
-        ui.hints(("confirm", "Open", "back", "Back"))
-        self.vals["list"] = ui.list("files", FILES, self.vals["list"])
 
-    def _table(self, ui, rect):
-        ui.hints(("confirm", "Open", "back", "Back"))
-        got = ui.table("", COLS, ROWS, self.vals["table"])
-        self.vals["table"] = got[0]
+def group_page():
+    with ui.page(""):
+        with ui.group("Group card"):
+            with ui.rows("choices", current="chosen"):
+                ui.link("choose", label="{.label}", value="{.value}")
+            ui.link("disabled", "Off")
+            ui.toggle("Toggle", "toggle")
+            ui.slider("Slider", "level", 0, 7, look="steps")
+        _other()
 
-    def _menu(self, ui, rect):
-        ui.hints(("confirm", "Choose", "back", "Back"))
-        ui.menu("", MENU, ("play", "undo", "gear", "trash"), None,
-                ("", "", "", "danger"))
 
-    def _buttons(self, ui, rect):
-        ui.hints(("confirm", "Press", "back", "Back"))
-        x, y, w, _h = rect
-        fs = self.ws.layout.fs
-        bw, bh, gap = 66 * fs, 24 * fs, 10 * fs
-        x0, y0 = x + 8 * fs, y + 10 * fs
-        names = (("Normal", "normal", None), ("Primary", "primary", None),
-                 ("Danger", "danger", None), ("Disabled", "normal", {"disabled": True}),
-                 ("Tonal", "tonal", None), ("Toggle on", "toggle", {"current": True}))
-        for i, (label, kind, o) in enumerate(names):
-            w2 = bw if i < 4 else bw * 3 // 2       # the second row's labels are longer
-            ui.at(x0 + (i % 4) * (w2 + gap), y0 + (i // 4) * (bh + 2 * gap), w2, bh)
-            ui.button(label, kind, o)
-        ui.at(x0, y0 + 2 * (bh + 2 * gap), 3 * bw, bh)
-        ui.button("Wide button")
+def list_page():
+    with ui.page(""):
+        with ui.rows("files", current="pick"):
+            ui.link("open", label="{.name}")
+        _other()
 
-    def _dialog(self, ui, rect):
-        ui.hints(("confirm", "Choose", "back", "Back"))
+
+def table_page():
+    with ui.page(""):
+        with ui.table("table", cols=["Name", "Size"], cur="trow"):
+            ui.col("{.name}")
+            ui.col("{.size}")
+        _other()
+
+
+def menu_page():
+    with ui.page(""):
+        with ui.menu(""):
+            ui.item("resume", icon="play")
+            ui.item("restart", icon="undo")
+            ui.item("settings", icon="gear")
+            ui.item("delete_cart", icon="trash", kind="danger")
+
+
+def buttons_page():
+    with ui.page(""):
+        with ui.group("Buttons"):
+            ui.button("normal")
+            ui.button("primary", kind="primary")
+            ui.button("disabled")
+            ui.button("tonal", kind="tonal")
+            ui.button("toggle_on", marked="on")
+            ui.button("wide")
+            ui.button("danger", kind="danger")
+        _other()
+
+
+def dialog_page():
+    with ui.page(""):
         ui.label("The page under the dialog")
-        ui.dialog("Delete Star Catcher?", ("Cancel", "Delete"), "danger")
-        ui.label("This can't be undone.", {"wrap": True})
-        ui.dialog()
-
-    def _tabs(self, ui, rect):
-        ui.hints(("change", "Change", "back", "Back"))
-        self.vals["tabs"] = ui.tabs("tabs", ("Games", "Make", "Art"), self.vals["tabs"])
-        ui.label(" ")
-        ui.group("Segments")
-        self.vals["seg"] = ui.seg("Mode", ("Day", "Night"), self.vals["seg"])
-        ui.group()
-
-    def _cells(self, ui, rect):
-        ui.hints(("confirm", "Open", "back", "Back"))
-        fs = self.ws.layout.fs
-        ui.grid("cards", 56 * fs, 40 * fs)
-        for name, o in (("Rest", {"icon": "play"}), ("Selected", {"icon": "paint",
-                                                                   "current": True}),
-                        ("Locked", {"icon": "calc", "locked": True})):
-            ui.card(name, "", o)
-        ui.grid()
-        x, y, w, h = rect
-        tx, ty = x + 8 * fs, y + 84 * fs
-        for i, (icon, label, o) in enumerate((("undo", "Undo", None),
-                                              ("pencil", "Pen", {"current": True}),
-                                              ("redo", "Redo", {"disabled": True}))):
-            ui.at(tx + i * 36 * fs, ty, 26 * fs, 26 * fs)
-            ui.tool(icon, label, o)
-
-    def _fields(self, ui, rect):
-        ui.hints(("back", "Back",))
-        ui.group("Fields")
-        self.vals["field"] = ui.field("Name", self.vals["field"], 16,
-                                      {"hint": "Your name"})[0]
-        self.vals["named"] = ui.field("Title", self.vals["named"], 16)[0]
-        self.vals["bad"] = ui.field("Address", self.vals["bad"], 32,
-                                    {"border": "danger"})[0]
-        ui.group()
+        with ui.dialog("Delete Star Catcher?", ["cancel", "delete"], kind="danger", shown="up"):
+            ui.label("This can't be undone.", wrap="word")
 
 
-# each page's last stop: the "Other" stop (the focus a rest frame holds)
-# stands under it
-LAST = {"group": "Slider", "list": "files", "table": "", "buttons": "Wide button",
-        "tabs": "Mode", "cells": "Redo", "fields": "Address"}
+def _segments():
+    with ui.group("Segments"):
+        ui.seg("Mode", "mode", labels="modes")
+    _other()
+
+
+def tabs_page():
+    with ui.page(""):
+        ui.tabs("tab", labels="tabs")
+        ui.switch("tab", {"_": _segments})
+
+
+def cells_page():
+    with ui.page(""):
+        with ui.cards("cells", w=56, h=40, current="cell", flow=True):
+            ui.card("open", label="{.label}")
+        with ui.row("tools", gap=4):
+            ui.button("undo", kind="bar", icon="undo", alone=True)
+            ui.button("pen", kind="bar", icon="pencil", alone=True, marked="on")
+            ui.button("redo", kind="bar", icon="redo", alone=True)
+        _other()
+
+
+def fields_page():
+    with ui.page(""):
+        with ui.group("Fields"):
+            ui.field("Name", "field", 16, hint="Your name")
+            ui.field("Title", "named", 16)
+            ui.field("Address", "bad", 32)
+        _other()
+
+
+PAGES = {"group": group_page, "list": list_page, "table": table_page, "menu": menu_page,
+         "buttons": buttons_page, "dialog": dialog_page, "tabs": tabs_page,
+         "cells": cells_page, "fields": fields_page}
+
+
+def sheet(ws, page):
+    """The sheet app showing `page`, registered and opened as the console
+    registers a system app: a UI tree App whose engine draws through its
+    AppHost, whose context answers its stops' boxes (`api_box`)."""
+    import uitree_app
+    from runtime.ui_draw import AppHost
+    cls = uitree_app.app_layer("focus_sheet", "Focus", PAGES[page])
+    ctx = ws.app_context(cls.id, cls.NEEDS)
+    ctx.ui = AppHost(cls.id, ctx.surface)
+    app = cls(ctx)
+    ws.spine.register_app(app)
+    app.open()
+    return app
+
+
+def box_of(app, stop):
+    """Stop `stop`'s box on the app's canvas, else None."""
+    from runtime import ui_draw
+    return ui_draw._C.api_box(app.page_host().ctx, stop)
+
 
 # where the desk's sheet window stands, in glass pixels
-DESK_WIN = (112, 52, 560, 270)
+DESK_WIN = (112, 52, 560, 380)
 
 
-# surface -> [(state, focus stop or None, keys, press stop, input)]
+# surface -> [(state, focus stop or None, press stop, input)]
 # A state's name says what the frame shows; an item's label says its own.
 SURFACES = {
-    "group": [("rest", "Other", (), None, None), ("focus-rest", "Rest", (), None, None),
-              ("focus-selected", "Selected", (), None, None),
-              ("focus-toggle", "Toggle", (), None, None),
-              ("focus-slider", "Slider", (), None, None),
-              ("pressed", None, (), "Rest", "touch"),
-              ("touch-focus", "Rest", (), None, "touch")],
-    "list": [("rest", "Other", (), None, None), ("focus-selected", "files", (), None, None),
-             ("focus-rest", "files", ("down",), None, None),
-             ("touch-focus", "files", ("down",), None, "touch")],
-    "table": [("rest", "Other", (), None, None), ("focus-selected", "", (), None, None),
-              ("focus-down", "", ("down",), None, None)],
-    "menu": [("focus-first", "Resume", (), None, None),
-             ("focus-danger", "Delete cart", (), None, None),
-             ("touch", "Resume", (), None, "touch")],
-    "buttons": [("rest", "Other", (), None, None), ("focus-normal", "Normal", (), None, None),
-                ("focus-primary", "Primary", (), None, None),
-                ("focus-danger", "Danger", (), None, None),
-                ("focus-toggle-on", "Toggle on", (), None, None),
-                ("focus-wide", "Wide button", (), None, None),
-                ("pressed", None, (), "Normal", "touch")],
-    "dialog": [("focus-cancel", "Cancel", (), None, None),
-               ("focus-verb", "Cancel", ("right",), None, None)],
-    "tabs": [("rest", "Other", (), None, None), ("focus-tabs", "tabs", (), None, None),
-             ("focus-seg", "Mode", (), None, None)],
-    "cells": [("rest", "Other", (), None, None), ("focus-rest", "Rest", (), None, None),
-              ("focus-selected", "Selected", (), None, None),
-              ("focus-tool", "Undo", (), None, None),
-              ("focus-tool-selected", "Pen", (), None, None)],
-    "fields": [("rest", "Other", (), None, None), ("focus-empty", "Name", (), None, None),
-               ("focus-filled", "Title", (), None, None),
-               ("focus-error", "Address", (), None, None)],
+    "group": [("rest", "other", None, None), ("focus-rest", "rest/choose", None, None),
+              ("focus-selected", "selected/choose", None, None),
+              ("focus-toggle", "toggle", None, None),
+              ("focus-slider", "level", None, None),
+              ("pressed", None, "rest/choose", "touch"),
+              ("touch-focus", "rest/choose", None, "touch")],
+    "list": [("rest", "other", None, None), ("focus-selected", "f1/open", None, None),
+             ("focus-rest", "f2/open", None, None),
+             ("touch-focus", "f2/open", None, "touch")],
+    "table": [("rest", "other", None, None), ("focus-selected", "table", None, None)],
+    "menu": [("focus-first", "Resume", None, None),
+             ("focus-danger", "Delete cart", None, None),
+             ("touch", "Resume", None, "touch")],
+    "buttons": [("rest", "other", None, None), ("focus-normal", "normal", None, None),
+                ("focus-primary", "primary", None, None),
+                ("focus-danger", "danger", None, None),
+                ("focus-toggle-on", "toggle_on", None, None),
+                ("focus-wide", "wide", None, None),
+                ("pressed", None, "normal", "touch")],
+    "dialog": [("focus-cancel", "Cancel", None, None),
+               ("focus-verb", "Delete", None, None)],
+    "tabs": [("rest", "other", None, None), ("focus-tabs", "tab", None, None),
+             ("focus-seg", "mode", None, None)],
+    "cells": [("rest", "other", None, None), ("focus-rest", "rest/open", None, None),
+              ("focus-selected", "selected/open", None, None),
+              ("focus-tool", "undo", None, None),
+              ("focus-tool-selected", "pen", None, None)],
+    "fields": [("rest", "other", None, None), ("focus-empty", "field", None, None),
+               ("focus-filled", "named", None, None),
+               ("focus-error", "bad", None, None)],
 }
 
 SHEET_CONFIGS = (("tdeck", L.HANDHELD), ("desk", L.DESK))
 
 
-def _sheet_setup(page, focus, keys, press, apps=None):
-    """A sheet frame's setup; `apps` (a list) gets the sheet app, whose
-    context answers its stops' boxes (`api_box`) once the frame is drawn."""
+def _sheet_setup(page, focus, press, apps=None):
+    """A sheet frame's setup: the page open, `focus` focused (the app's
+    own ui.focus) and `press` held under a touch; `apps` (a list) gets
+    (the workstation, the sheet app)."""
     def setup(g, ws):
-        from runtime import ui_draw
-        app = Sheet(ws, page)
+        app = sheet(ws, page)
         if apps is not None:
-            apps.append(app)
-        ws.spine.register_app(app)
-        app.open()
+            apps.append((ws, app))
         ws.wm.goto(app.id)
         L._settle(g, ws, 2)
         if app.id in getattr(ws.wm, "windows", {}):
             L._place(ws, app.id, *DESK_WIN)
             L._settle(g, ws, 2)
-        ui_draw._C.api_focus(app.ctx, focus)
-        app.keys = list(keys)
-        app.press = press
-        if keys or press:
-            for _ in range(len(keys) + 3):
-                L._settle(g, ws, 1)
+        if focus is not None:
+            app.engine.run_action(app.engine.actions["focus"], (focus,), "host")
+            ws.mark_dirty()
+            L._settle(g, ws, 2)
+        if press is not None:
+            from runtime import host_app
+            box = box_of(app, press)
+            win = getattr(ws.wm, "windows", {}).get(app.id)
+            ox, oy = win.content_rect()[:2] if win is not None else (0, 0)
+            host_app.ConsoleDriver(ws).touch(ox + box[0] + box[2] // 2, oy + box[1] + box[3] // 2)
+            L._settle(g, ws, 3)
     return setup
-
 
 
 # --------------------------------------------------------------------------
@@ -558,9 +561,9 @@ def shoot(out, filters=(), proposal=False, shell=True, sheets=True):
                     continue
                 for tag, config in SHEET_CONFIGS:
                     got = []
-                    for state, focus, keys, press, inputs in states:
+                    for state, focus, press, inputs in states:
                         img, _ok, _r = L.render(g, config, theme, mode,
-                                                _sheet_setup(surface, focus, keys, press),
+                                                _sheet_setup(surface, focus, press),
                                                 False, inputs)
                         got.append((state, img))
                     box = _content(got[0][1].size, config)

@@ -21,7 +21,6 @@ tape persist while the app stays open, and reset on a fresh open.
 
 import uitree as ui
 import uitree_app
-from moy_store_base import builtin_name
 
 # The keypad, 4 x 5, row by row; "0" spans two cells. A key is its
 # operation: digits, the operators, "C", "<" (backspace), "." and "=".
@@ -148,16 +147,4 @@ def calc_page():
                         ui.button("key", kind_of(key), arg=key, label=_sign(key), span=2 if key == "0" else 1)
 
 
-def is_app(cart):
-    """True only for the shipped Calc identity cart (the shipped-identity
-    pattern: title + a marker permission + the slug, never a renamed copy)."""
-    if (not cart or cart.get("title") != "Calc"
-            or "calc" not in (cart.get("permissions") or ())):
-        return False
-    path = cart.get("path")
-    if not path:                 # embedded fallback cart (no writable store)
-        return int(cart.get("version", 0)) >= 1
-    return builtin_name(path) == "moybyte.calc.moy"
-
-
-CalcAppLayer = uitree_app.app_layer("calc", "Calc", calc_page, is_app)
+CalcAppLayer = uitree_app.app_layer("calc", "Calc", calc_page)

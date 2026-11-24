@@ -21,7 +21,6 @@ GAP = wm_strip_ui.GAP
 s = wm_strip_ui.s
 _PAGE = [None]
 _DIRTY = [False]                # a state written since the page's store last took the writes
-_CTX = [None]                   # the strip's own toolkit context
 _D = [None]
 _AT = [0, 0, 0, 0]              # the page's area: the strip's size at 0, 0
 NAMES = ("back", "min", "max", "close")
@@ -207,11 +206,10 @@ def release(i=None):
 
 def reset():
     """Everything the strip keeps of a console given back: its layers, the
-    canvas it last stamped onto, its toolkit context and its page (a new
+    canvas it last stamped onto and its page (a new
     console, a console whose windows all went)."""
     release()
     _STAMPS[0] = None
-    _CTX[0] = None
     _PAGE[0] = None
 
 
@@ -226,13 +224,10 @@ def draw(cv, th, rect, unit, title, icon, tone, back, inset, full=False):
     if D is None:
         import ui_draw as D
         _D[0] = D
-    ctx = _CTX[0]
-    if ctx is None:
-        ctx = _CTX[0] = D.ui_context()
     t = D.UI_TARGET
     a, b, c, d = t[0], t[1], t[2], t[3]
     try:
-        D.ui_frame(ctx, cv, th, rect=rect, desk=True, elsewhere=True)
+        D.passive_frame(cv, th, rect, True)
         page.unit = unit
         page.bare = True
         page.band = False

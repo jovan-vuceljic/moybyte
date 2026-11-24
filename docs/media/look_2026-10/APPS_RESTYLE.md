@@ -5,7 +5,7 @@ Paint, My Art, Get Carts, Notes and Storybook in the 2026-10 look, drawn by
 `rounds/round15.py` (`index.txt` lists every picture, `moy-light_*` and
 `moy-dark_*`, handheld at 320×240 and @3x, desk windows at 900×536 on the
 1024×600 desk, a maximised app full screen at 1024×600). Each app becomes a page of the public verbs
-(`docs/ui_api_2026-10.md` §1); a part the verbs lack is marked **GAPS n**
+(`docs/history/ui_api_2026-10.md` §1); a part the verbs lack is marked **GAPS n**
 and specified in `GAPS.md`. The look is `DESIGN.md`'s. The design took a
 visual review and, for Storybook, a functional one (2026-10-21); where
 the two differed on Storybook, the functional one decided.

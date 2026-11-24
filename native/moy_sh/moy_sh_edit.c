@@ -1009,6 +1009,7 @@ static void vi_join(moy_sh_app_t *a, ed_t *e, int count) {
 }
 
 #define VI_VERT (-2)                    // a vertical move: the column aimed at stays
+#define VI_COUNT_MAX 99999              // a count's ceiling, its further digits dropped
 #define VI_DOT (-3)                     // `.`: the caller replays the last change
 
 // One key in NORMAL: MOY_SH_APP_END to leave.
@@ -1052,14 +1053,17 @@ static int vi_normal(moy_sh_app_t *a, ed_t *e, int k, int rows) {
         return MOY_SH_APP_GO;
     }
     if ((k >= '1' && k <= '9') || (k == '0' && e->count > 0)) {
-        e->count = e->count * 10 + (k - '0');
+        if (e->count <= (VI_COUNT_MAX - 9) / 10) {
+            e->count = e->count * 10 + (k - '0');
+        }
         return MOY_SH_APP_GO;
     }
     int cnt = e->count ? e->count : 1;
     if (e->op == 'd' || e->op == 'y' || e->op == 'c') {
         int op = e->op;
         e->op = 0;
-        cnt *= e->opcount ? e->opcount : 1;
+        long both = (long)cnt * (e->opcount ? e->opcount : 1);
+        cnt = both > VI_COUNT_MAX ? VI_COUNT_MAX : (int)both;
         e->count = e->opcount = 0;
         size_t from = e->g0, to = e->g0;
         if (k == op) {
@@ -1418,7 +1422,7 @@ static int vi_key(moy_sh_app_t *a, ed_t *e, int k, int rows) {
         vi_snap(a, e);
         e->recording = 1;
         e->rec_n = 0;
-        if (e->count > 0 && e->count < 100000) {
+        if (e->count > 0) {
             char d[8];
             int m = snprintf(d, sizeof d, "%d", e->count);
             for (int i = 0; i < m && e->rec_n < VI_REC; i++) {
@@ -1426,8 +1430,13 @@ static int vi_key(moy_sh_app_t *a, ed_t *e, int k, int rows) {
             }
         }
     }
-    if (e->recording && e->rec_n < VI_REC) {
-        e->rec[e->rec_n++] = k;
+    if (e->recording) {
+        if (e->rec_n < VI_REC) {
+            e->rec[e->rec_n++] = k;
+        } else {
+            e->recording = 0;           // too long to keep whole: `.` repeats nothing
+            e->dot_n = 0;
+        }
     }
     int r = MOY_SH_APP_GO;
     if (e->mode == VI_INSERT) {
@@ -1591,10 +1600,15 @@ static void vi_close(moy_sh_app_t *a, void *st) {
     ed_close(a, st);
 }
 
-#define VI_APP(nm) { .name = nm, .state = sizeof(ed_t), .full = 1, .text = 1, .keys = NULL, \
-                     .open = vi_open, .keys_in = vi_keys, .draw = vi_draw, .close = vi_close }
-const moy_sh_app_ops_t moy_sh_vi_app = VI_APP("vi");
-const moy_sh_app_ops_t moy_sh_vim_app = VI_APP("vim");
-const moy_sh_app_ops_t moy_sh_view_app = VI_APP("view");
-const moy_sh_app_ops_t moy_sh_less_app = VI_APP("less");
-const moy_sh_app_ops_t moy_sh_more_app = VI_APP("more");
+// The key row a face draws for a console with no Esc key (the T-Deck's
+// keyboard, a touch screen): Esc, and :w and :q typed from whatever mode.
+static const char *const VI_KEYS[] = {"Esc", "\x1b", "Save", "\x1b:w\r", "Quit", "\x1b:q\r", NULL};
+static const char *const VI_RO_KEYS[] = {"Quit", "\x1bq", NULL};
+
+#define VI_APP(nm, k) { .name = nm, .state = sizeof(ed_t), .full = 1, .text = 1, .keys = k, \
+                        .open = vi_open, .keys_in = vi_keys, .draw = vi_draw, .close = vi_close }
+const moy_sh_app_ops_t moy_sh_vi_app = VI_APP("vi", VI_KEYS);
+const moy_sh_app_ops_t moy_sh_vim_app = VI_APP("vim", VI_KEYS);
+const moy_sh_app_ops_t moy_sh_view_app = VI_APP("view", VI_RO_KEYS);
+const moy_sh_app_ops_t moy_sh_less_app = VI_APP("less", VI_RO_KEYS);
+const moy_sh_app_ops_t moy_sh_more_app = VI_APP("more", VI_RO_KEYS);

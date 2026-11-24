@@ -86,8 +86,8 @@ class AppFace:
         self._drew = False
 
     def bind(self, ns, cart):
-        """Give a Python app whose namespace has the `ui` verbs its frame of
-        them (`Player.ui`), and draw it on change unless it animates."""
+        """Give a Python app or script its frame (`Player.ui`), which its UI
+        tree page draws in, and draw it on change unless it animates."""
         pl = self.pl
         self._uh = _ui_draw.AppHost()
         pl.ui = [self._uh.ctx, _array("i", [0] * _UI_IN_LEN), pl.run.canvas]
@@ -95,7 +95,7 @@ class AppFace:
         # bound method every frame.
         self._masks = getattr(pl.ws.input, "button_masks", None)
         # An app on the verbs is drawn on change, as a shipped app is
-        # (docs/ui_api_2026-10.md, "Drawn on change"), unless its
+        # (docs/history/ui_api_2026-10.md, "Drawn on change"), unless its
         # manifest says it animates. One that plays sound keeps every
         # frame too: the frame is where the host and the browser pull
         # its mix (`audio_out.tick`), and a still frame pulls none.
@@ -160,17 +160,16 @@ class AppFace:
         fs = getattr(run.canvas, "font_scale", 1)
         return f | (fs if fs > 1 else 1) << _FACE_FS_SHIFT
 
-    def bar_ctx(self):
-        """The ui context whose `ui.bar` lends the host's bar: the Player's
+    def page_ctx(self):
+        """The ui context whose top page names the host's bar: the Player's
         for a Python app, the run's own (`ui_draw.RUN_UI`) for any other
         (a Lua or compiled app's); None for a game, before a frame, and for
-        an app linking a toolkit of its own (`own_ui`: a WASI or native
-        app), whose run the run's context (native/moy_ui/moy_ui_run.c) is
-        not: that answers for the last Lua or compiled run, which may still
-        be open."""
+        a WASI or native app, which draws its screen whole (`own_screen`):
+        the run's context (native/moy_ui/moy_ui_run.c) answers for the last
+        Lua or compiled run, which may still be open."""
         pl = self.pl
         if pl.lua is not None:
-            own = getattr(pl.lua, "own_ui", False)
+            own = getattr(pl.lua, "own_screen", False)
             return _ui_draw.RUN_UI if pl._tool and not own else None
         ui = pl.ui
         return ui[0] if ui else None
@@ -198,7 +197,7 @@ class AppFace:
             return False
         lua = pl.lua
         if lua is not None:
-            return lua.ui_typing() if getattr(lua, "own_ui", False) else _ui_draw.run_typing()
+            return not getattr(lua, "own_screen", False) and _ui_draw.run_typing()
         tree = pl.tree
         if tree is not None and tree.typing():
             return True
@@ -430,9 +429,9 @@ class AppFace:
     def has_page(self):
         """Whether the running app has a view of its own open, which the
         host's back steps out of before it leaves the app: a field's edit in
-        progress, a popover its last frame drew, or a page it lent `ui.bar`'s
-        way back for, on any tier (docs/app_api_v1.md section 4). False for a
-        game."""
+        progress, a popover its last frame drew, or a page with a way back
+        (a UI tree app's), on any tier (docs/app_api_v1.md section 4). False
+        for a game."""
         return self._app_back(False)
 
     def back(self):
@@ -460,7 +459,7 @@ class AppFace:
             return False
         lua = pl.lua
         if lua is not None:
-            took = lua.ui_cancel(True) if getattr(lua, "own_ui", False) else _ui_draw.run_cancel(True)
+            took = not getattr(lua, "own_screen", False) and _ui_draw.run_cancel(True)
         else:
             ui = pl.ui
             took = ui is not None and _ui_draw.app_cancel(ui[0], True)
@@ -475,14 +474,12 @@ class AppFace:
         if not pl._tool or pl.cart_error is not None:
             return False
         lua = pl.lua
-        if lua is not None:             # the run's own context, or the toolkit it links
-            if getattr(lua, "own_ui", False):
-                return lua.ui_back(take)
-            return bool(_ui_draw.run_back(take))
-        tree = pl.tree
-        if tree is not None:
-            return tree.back(take)
+        if lua is not None:             # the run's own context; a screen drawn whole takes none
+            return not getattr(lua, "own_screen", False) and bool(_ui_draw.run_back(take))
         ui = pl.ui
+        tree = pl.tree
+        if tree is not None:            # a field's edit first, as the run's context answers a Lua app's
+            return (ui is not None and _ui_draw.app_cancel(ui[0], take)) or tree.back(take)
         return ui is not None and bool(_ui_draw.app_back(ui[0], take))
 
     def animates(self):

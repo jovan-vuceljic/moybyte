@@ -1,4 +1,4 @@
-// The RUN face of the public UI API (moy_ui_run.h).
+// The run's context and its RUN sink (moy_ui_run.h).
 
 #include "moy_platform.h"
 
@@ -44,7 +44,7 @@ typedef struct {
     moy_canvas saved;
 } run_t;
 
-// The snapshot's face word (moy_ui_wasm.h's MOYCORE_UI_FACE_*), 0 with no run.
+// The snapshot's face word (MOYCORE_UI_FACE_*), 0 with no run.
 static int32_t run_face(void) {
     uint32_t tick = 0, serial = 0;
     const int32_t *snap = moycore_ui_snap(&tick, &serial);
@@ -128,11 +128,11 @@ static int close_run(run_t *r, int rc) {
 
 // -- the run's context ------------------------------------------------------------
 //
-// One run at a time, so one context: begun lazily by the first verb of each
+// One run at a time, so one context: begun lazily by the first frame of each
 // tick, over the run's snapshot, and reset when a new run opens. The first
-// verb any run calls allocates it (CTX_ALLOC: PSRAM where the board has it)
+// frame any run draws allocates it (CTX_ALLOC: PSRAM where the board has it)
 // and it is kept: a static would hold its size in internal SRAM from boot on
-// a console that never runs a cart on the API. NULL: none could be had.
+// a console that never runs an app on the UI tree. NULL: none could be had.
 
 static moy_ui_ctx_t *s_ctx;
 static uint32_t s_tick, s_serial;
@@ -140,6 +140,7 @@ static int s_live;
 static uint8_t s_paste[MOY_UI_API_PASTE];  // moy_ui_run_paste's, for the frame begun next
 static size_t s_paste_n;
 static int32_t s_rep, s_keyrep;            // moy_ui_run_steps', likewise
+static int s_taken;                        // moy_ui_run_keys_taken's, likewise
 
 static moy_ui_ctx_t *run_ctx(const void *target) {
     const moy_canvas *c = (const moy_canvas *)target;
@@ -173,6 +174,10 @@ static moy_ui_ctx_t *run_ctx(const void *target) {
         in[MOY_UI_IN_REP] = s_rep;
         in[MOY_UI_IN_KEYREP] = s_keyrep;
         s_rep = s_keyrep = 0;
+        if (s_taken) {                      // the app's canvas took them
+            in[MOY_UI_IN_BTNP] = in[MOY_UI_IN_KEY] = in[MOY_UI_IN_REP] = in[MOY_UI_IN_KEYREP] = 0;
+        }
+        s_taken = 0;
         in[MOY_UI_IN_DT] = moycore_ui_dt_take();   // the ticks' clock since the last frame
         // an app's frame is its content_rect() (the snapshot's room), a
         // game's the whole canvas
@@ -207,6 +212,10 @@ static moy_ui_ctx_t *run_ctx(const void *target) {
     return s_ctx;
 }
 
+void moy_ui_run_keys_taken(void) {
+    s_taken = 1;
+}
+
 void moy_ui_run_steps(int32_t rep, int32_t keyrep) {
     s_rep = rep;
     s_keyrep = keyrep;
@@ -238,8 +247,7 @@ int moy_ui_run_cancel(int take) {
     return s_ctx != NULL && s_live && serial == s_serial ? moy_ui_api_cancel(s_ctx, take) : 0;
 }
 
-// The run's context while the run that drew in it is the one open, else NULL
-// (a native or WASI app draws with a toolkit of its own, and no run is open).
+// The run's context while the run that drew in it is the one open, else NULL.
 static moy_ui_ctx_t *run_ctx_now(void) {
     uint32_t tick = 0, serial = 0;
     const int32_t *snap = moycore_ui_snap(&tick, &serial);
@@ -251,113 +259,28 @@ const char *moy_ui_run_page_title(void) {
     return c == NULL ? NULL : moy_ui_api_page_title(c);
 }
 
-int moy_ui_run_bar_lent(const char **title, int16_t *slots, int *n, uint32_t *off,
-                        const char **chip) {
-    moy_ui_ctx_t *c = run_ctx_now();
-    int at = -1;
-    if (c == NULL || !moy_ui_api_bar_lent(c, title, slots, n, off)) {
-        return 0;
-    }
-    *chip = moy_ui_api_bar_chip(c, &at);
-    return 1;
-}
-
-void moy_ui_run_bar_tap(int i) {
-    moy_ui_ctx_t *c = run_ctx_now();
-    if (c != NULL) {
-        moy_ui_api_bar_tap(c, i);
-    }
-}
-
-// What shows of the table's part open now (moy_ui_run_table_part), x0, y0,
-// x1, y1 on the canvas: every verb drawn while it is open draws inside it,
-// as the canvas's own verbs do.
-static int32_t s_tp_in[4];
-
-static void run_in_part(run_t *r, const moy_ui_ctx_t *c) {
-    if (c->tp.open) {
-        memcpy(&r->row.st[MOY_ST_CX0], s_tp_in, sizeof(s_tp_in));
-    }
-}
-
-// A row's drawing opens the sink over `target` and the run's context.
-#define OPEN(target)                                    \
-    run_t r;                                            \
-    moy_canvas *t_ = (moy_canvas *)(target);            \
-    if (t_ == NULL) {                                   \
-        return -MOY_UI_STALE;                           \
-    }                                                   \
-    int rc_ = open_run(&r, t_);                         \
-    if (rc_ != 0) {                                     \
-        return rc_;                                     \
-    }                                                   \
-    moy_ui_ctx_t *c = run_ctx(t_);                      \
-    if (c == NULL) {                                    \
-        return close_run(&r, MOY_UI_NOMEM);             \
-    }                                                   \
-    run_in_part(&r, c)
-
-int moy_ui_run_focus(void *target, moy_ui_span_t id, char *buf, size_t cap) {
-    moy_ui_ctx_t *c = run_ctx(target);
-    if (c == NULL) {
-        if (cap) {
-            buf[0] = 0;
-        }
-        return -1;
-    }
-    return moy_ui_api_focus(c, id, buf, cap);
-}
-
 int moy_ui_run_typing(void) {
     uint32_t tick = 0, serial = 0;
     (void)moycore_ui_snap(&tick, &serial);
     return s_ctx != NULL && s_live && serial == s_serial ? moy_ui_api_typing(s_ctx) : 0;
 }
 
-// The run's clip before the open part's, put back when it closes.
-static int s_tp_on, s_tp_clip[4];
-
-int moy_ui_run_table_part(void *target, int32_t out[8]) {
-    OPEN(target);
-    // the table's fades after its last part lie over the view, not the part
-    r.row.st[MOY_ST_CX0] = r.row.st[MOY_ST_CY0] = 0;
-    r.row.st[MOY_ST_CX1] = r.row.w;
-    r.row.st[MOY_ST_CY1] = r.row.h;
-    int32_t i = moy_ui_api_table_part(c, &r.s, out);
-    close_run(&r, MOY_UI_OK);
-    if (s_tp_on) {
-        t_->clip_x0 = s_tp_clip[0];
-        t_->clip_y0 = s_tp_clip[1];
-        t_->clip_x1 = s_tp_clip[2];
-        t_->clip_y1 = s_tp_clip[3];
-        s_tp_on = 0;
-    }
-    if (i >= 0) {
-        s_tp_clip[0] = t_->clip_x0;
-        s_tp_clip[1] = t_->clip_y0;
-        s_tp_clip[2] = t_->clip_x1;
-        s_tp_clip[3] = t_->clip_y1;
-        s_tp_on = 1;
-        moy_clip(t_, out[4], out[5], out[6], out[7]);
-        s_tp_in[0] = out[4];
-        s_tp_in[1] = out[5];
-        s_tp_in[2] = out[4] + out[6];
-        s_tp_in[3] = out[5] + out[7];
-    }
-    return i;
-}
-
+// A drawing over the run's frame: the RUN sink over `target` and the run's context.
 int moy_ui_run_with(void *target, moy_ui_run_fn fn, void *ud) {
-    OPEN(target);
+    run_t r;
+    moy_canvas *t = (moy_canvas *)target;
+    if (t == NULL) {
+        return -MOY_UI_STALE;
+    }
+    int rc = open_run(&r, t);
+    if (rc != 0) {
+        return rc;
+    }
+    moy_ui_ctx_t *c = run_ctx(t);
+    if (c == NULL) {
+        return close_run(&r, MOY_UI_NOMEM);
+    }
     int v = fn(ud, c, &r.s, c->surface, run_face());
     close_run(&r, MOY_UI_OK);
     return v;
 }
-
-// A verb that opens a nest: MOY_UI_DEEP where it answered MOY_UI_API_DEEP.
-static int nest_rc(int32_t v) {
-    return v == MOY_UI_API_DEEP ? MOY_UI_DEEP : MOY_UI_OK;
-}
-
-// The RUN form (tools/gen_os/ui.py, from face.json's `api` rows).
-#include "moy_ui_run_face.h"

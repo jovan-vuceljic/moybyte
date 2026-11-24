@@ -149,7 +149,7 @@ def test_title_change_invalidates(tmp_path):
 
 def test_foreign_paints_void_the_band(tmp_path):
     """After a visit elsewhere the retained buffers hold the OTHER screen: the
-    band's record (`ui.held`, its kept table) answers no buffer, so the
+    band's record (`home_band.held`, its kept table) answers no buffer, so the
     re-entry paints whole and a band frame comes only once the home's own
     paints fill the buffers again."""
     ws, drv = _settle_home(tmp_path)

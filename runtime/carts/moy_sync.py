@@ -890,7 +890,7 @@ SYSTEM_KEYS = {
 }
 
 # The app prefs namespaces (native/moy_app's `<ns>_<key>` rows) a page may
-# change: a system app's by its PREFS_NS (tests/test_moy_sync.py holds every
+# change: a system app's by its declaration's prefs_ns (tests/test_moy_sync.py holds every
 # app that takes the prefs role to this list), and any cart's, whose namespace
 # is its id and so carries a dot.
 SYSTEM_PREFS_NS = ("paint", "music")

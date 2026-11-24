@@ -16,7 +16,7 @@ the `carousel` arrangement and ws.projects_grid.
 
 from array import array
 
-import ui as _ui
+import home_band as _band
 import ui_draw as _ui_draw
 import layout_base as _lb
 from home_grid import (_COVER_BASE, _COVER_SIDE, DESK_BUTTON_SETS,
@@ -481,7 +481,7 @@ class Carousel(Launcher):
             wm, wf, kf = _W_MOTION, _W_FOCUS, self._cards_key
         if (not note and not whole and not puts and not host.owed and not self._fed
                 and w is not None and not w[wm] and w[wf] != self.tab_focus
-                and _ui.held("cards", kf(key, w))):
+                and _band.held("cards", kf(key, w))):
             note = True                     # (the buffer holds it as it stands)
         self._fed = False
         if note:
@@ -506,8 +506,8 @@ class Carousel(Launcher):
                 self.zone_gen += 1
                 self._sel = got             # the row settled, the shelf's card moved
             # what the band shows, under its key: each buffer that drew it so holds it
-            _ui.held("cards", kf(key, w))
-        end = 0 if _ui.held_all() else -1
+            _band.held("cards", kf(key, w))
+        end = 0 if _band.held_all() else -1
         host.end()
         return end
 

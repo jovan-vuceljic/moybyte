@@ -1361,14 +1361,7 @@ void moy_sh_board_runner_end(moy_sh_runner_t *r) {
         r->quit = 1;
 #ifdef MOY_ON_BOARD
         to_run(r);
-#ifdef MOY_HAS_PSRAM
-        vTaskDeleteWithCaps(r->task);
-#else
-        // made without caps where there is no PSRAM (moy_task_spawn): FreeRTOS
-        // owns its stack and TCB, which vTaskDeleteWithCaps freed a second time,
-        // and the heap's next free faulted (a cron job's end on a C3)
-        vTaskDelete(r->task);
-#endif
+        moy_task_delete(MOY_TASK_SH, r->task);
         vSemaphoreDelete(r->go);
         vSemaphoreDelete(r->back);
 #else

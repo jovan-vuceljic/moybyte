@@ -151,6 +151,63 @@ def test_a_pushed_page_opens_on_its_own_focus_node(tmp_path):
     assert [f.state for f in fs] == ["add", "more", "more"], [f.state for f in fs]
 
 
+SHOWN = '''
+import uitree as ui
+
+s = ui.state(n=0, seen="")
+
+
+def more():
+    s.n += 1
+    ui.push(details)
+
+
+def first_shown():
+    s.seen += "f"
+
+
+def details_shown():
+    s.seen += "d%d" % s.n
+
+
+ui.action("more", "Details", more)
+ui.hook("first_shown", first_shown)
+ui.hook("details_shown", details_shown)
+
+
+def build():
+    with ui.page("First", shown="first_shown"):
+        ui.info("Seen", "{seen}")
+        ui.link("more")
+
+
+def details():
+    with ui.page("Details", shown="details_shown"):
+        ui.info("Seen", "{seen}")
+        ui.link("more")
+'''
+
+
+def test_a_pages_shown_runs_as_a_push_or_back_makes_it_the_top_page(tmp_path):
+    """A page's shown= runs when the page becomes the top page, by a push
+    or by Back (not at the open, which is the opened hook's)."""
+    import uitree_app
+    import uitree_c
+    import uitree_parity as P
+    app_py = tmp_path / "shown" / "app.py"
+    app_py.parent.mkdir()
+    app_py.write_text(SHOWN)
+    mod = C._module(str(app_py))
+    cls = uitree_app.app_layer("shown_c", "Shown", mod.build, engine=uitree_c.CEngine)
+    seen = {}
+
+    def opened(ws):
+        seen["app"] = P.host(ws, cls)
+    probe = P.Surface(opened, probe=lambda ws: seen["app"].engine.s._v["seen"])
+    fs = P.frames(C.CONFIGS[0], probe, ["k:a", "k:a", "back", "back"])
+    assert [f.state for f in fs] == ["", "d1", "d1d2", "d1d2d2", "d1d2d2f"], [f.state for f in fs]
+
+
 def test_still_answers_a_frame_that_would_draw_what_the_last_drew(tmp_path, monkeypatch):
     """`uit_still`, asked inside each frame the host draws before the page's
     walk: False on the first frame, on a frame that took a key and on the

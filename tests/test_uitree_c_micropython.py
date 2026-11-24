@@ -151,10 +151,10 @@ def _digest(buf):
 
 
 def _frame(eng, host, cv, th, box):
-    import ui
+    import ui_draw
     host.begin(cv, th, box)
     eng.paint(0.033, cv, th, box, False)
-    ui.end()
+    ui_draw.page_end()
 
 
 def carousel(flow, cv, th, box):
@@ -191,6 +191,7 @@ def carousel(flow, cv, th, box):
 def conf(loop):
     import gc
     import time
+    import ui_draw
     import uitree as S
     import uitree_c
     ws = loop.ws
@@ -275,8 +276,7 @@ def conf(loop):
                 eng.paint(0.033, cv, th, box, False)
                 us.append(time.ticks_diff(time.ticks_us(), t0))
                 alloc.append(gc.mem_alloc() - a0)
-                import ui
-                ui.end()
+                ui_draw.page_end()
             us.sort()
             out["cost"]["%s_%s" % (name, tag)] = {
                 "open_us": opened, "first_frame_us": first, "open_first_frame_us": opened + first,
@@ -317,7 +317,6 @@ def _rows_frames(ws, sl, settings_rows, uitree_app, tag):
     frame after opening and after each key of the script."""
     import gc
     import time
-    import ui
     import ui_draw
     host = ui_draw.AppHost()
     cv, th = ws.sys_canvas, ws.theme_colors
@@ -333,7 +332,7 @@ def _rows_frames(ws, sl, settings_rows, uitree_app, tag):
         t1 = time.ticks_us()
         host.begin(cv, th, box)
         page.draw(cv, th, box, False, 0.033)
-        ui.end()
+        ui_draw.page_end()
         t2 = time.ticks_us()
         gc.collect()
         r = {"engine": type(page.engine).__name__, "open_us": time.ticks_diff(t1, t0),
@@ -345,7 +344,7 @@ def _rows_frames(ws, sl, settings_rows, uitree_app, tag):
         for _ in range(2):
             host.begin(cv, th, box)
             page.draw(cv, th, box, False, 0.033)
-            ui.end()
+            ui_draw.page_end()
         return bytes(cv._buf)
     out = [frame()]
     for k in SETTINGS_KEYS:

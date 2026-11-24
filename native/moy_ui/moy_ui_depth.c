@@ -232,9 +232,7 @@ static void moy_ui_depth_use_w(const char *name, size_t n, int light) {
 }
 
 void moy_ui_depth_use(const char *name, size_t n, int light) {
-    moy_ui_theme_write(1);
     moy_ui_depth_use_w(name, n, light);
-    moy_ui_theme_write(0);
 }
 
 static void depth_of(moy_ui_depth_t *d, moy_theme_look_t *lk, const char *name, size_t n,
@@ -1285,18 +1283,6 @@ int moy_ui_bar_tile(const moy_ui_sink_t *s, moy_ui_box_t b, int32_t fill) {
               dp->tile_line_w, val(&d, dp->tile_line_c), -1, NULL);
     }
     return 1;
-}
-
-int moy_ui_recs_depth(moy_ui_rec_t *r) {
-    moy_ui_rec_t v[] = {
-        {&s_depth, NULL, sizeof(s_depth)}, {s_paint, NULL, sizeof(s_paint)},
-        {&s_paints, NULL, sizeof(s_paints)}, {&s_marks, NULL, sizeof(s_marks)},
-        {NULL, (void **)&s_km, sizeof(kmarks_t)}, {&s_keycap, NULL, sizeof(s_keycap)},
-        {&s_display, NULL, sizeof(s_display)}, {&s_scrim_c, NULL, sizeof(s_scrim_c)},
-        {&s_scrim_a, NULL, sizeof(s_scrim_a)}, {&s_render, NULL, sizeof(s_render)},
-    };
-    memcpy(r, v, sizeof(v));
-    return (int)(sizeof(v) / sizeof(v[0]));
 }
 
 void moy_ui_theme_pal(uint16_t out[MOY_THEME_BLOCK]) {

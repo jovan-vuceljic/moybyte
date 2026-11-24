@@ -1,5 +1,5 @@
 """What a flowing page's sizes do on the C engine (tests/uitree_fixtures/uitree_sizes.py):
-a label's scale= and w=, a button's look="large", a group's gap=, a row in a group's
+a label's scale= and w=, a button's look="hero", a group's gap=, a row in a group's
 column, and a grow= row that stands what follows it at the page's foot."""
 
 import sys

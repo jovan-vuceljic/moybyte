@@ -18,7 +18,7 @@ The look itself — the marks, the type scale, each seed's fields — is
 `docs/media/look_2026-10/`: `DESIGN.md` is the look, `THEMES.md` the theme
 model and each theme's fields, `GAPS.md` what the engine lacked, and
 `EDITOR_LAYOUT.md` the Editor's rules. The public UI verbs are
-`docs/ui_api_2026-10.md`; the app contract
+`docs/history/ui_api_2026-10.md`; the app contract
 is `docs/app_api_v1.md`; the shell's process model is `docs/shell_ux_v1.md`;
 the dirty protocol every cache here obeys is `docs/surface_model_v1.md` §3,
 and its §14.6-§14.7 state the copy and shift frames §9 relies on. Numbers
@@ -154,7 +154,7 @@ Nothing is pending the owner.
 - **Theme colours are RGB** (2026-10-15, GAPS 1). This reverses theming's
   2026-09 decline of RGB (§12.1). A cart's colour stays `& 63`.
 - **The public UI API is built as the screens need it** (owner,
-  2026-10-15; `docs/ui_api_2026-10.md`'s decisions).
+  2026-10-15; `docs/history/ui_api_2026-10.md`'s decisions).
 - **The editors' review calls** (owner, 2026-10-19): the narrow bar keeps
   its icons with a group gap between the tabs and the actions (D-02); a
   line-number gutter on by default (D-03.1); the desk's code stays 11 px
@@ -192,7 +192,7 @@ Nothing is pending the owner.
     Blocks' `line`, Day's key borders and its keycaps' border), an Off
     track or a rest track held to 1.6:1 on the plate of a focused row too,
     and the empty Name field's "Your name" in the `disabled` ink (the
-    override block's `hint`, `docs/ui_api_2026-10.md` §3).
+    override block's `hint`, `docs/history/ui_api_2026-10.md` §3).
   - D-12: no rim on any cover, Contrast's included; none had one.
   - D-14: Contrast's selected cell is a fill of the ink with inverse text
     (`value_ink`) and its selected row the 3 px frame (§1.5, owner
@@ -1064,8 +1064,8 @@ Ruled 2026-10-13 by step 3 (Tiny5 lands), each the pick that builds least:
     (its body, `_layout`, `_init`, `_update`, `_draw`; a wallpaper cart's
     frame), every role and the print font read petme128, and the shell's
     come back after. A responsive app's mode (`CART_APP`) keeps its print
-    and its colours inside while its `ui` verbs' sinks are outside. A
-    run's page on the RUN face draws as a cart's, petme128, unless its
+    and its colours inside while its UI tree's sinks are outside. A
+    run's page in the run's context draws as a cart's, petme128, unless its
     snapshot's face names the look (`moy_ui_run.h`).
     A built-in app cart (`system_carts/`, `system_api.draws_in_look`:
     Notes) runs outside it: its page is the UI tree engine's and its note
@@ -2499,7 +2499,7 @@ default.
 | the Map's camera, the sprite pickers | `ScrollRegion` on two axes | as today | `step` |
 
 The Blocks outline is a table of parts
-(`docs/ui_api_2026-10.md` §2, A table of parts): the engine's region, drag, fling and
+(`docs/history/ui_api_2026-10.md` §2, A table of parts): the engine's region, drag, fling and
 reveal, its rows carried in C, and the page holding the table the
 region R its frames move the table inside. Music's steps are the same
 table on a `uitree` page (`runtime/editors/editor_music.py`), its canvas

@@ -1,8 +1,7 @@
 // A program's frame loop (native/moy_elf/moy_os.h, A GAME): moy_game_frame
 // waits on the event descriptor for the console's next frame message and
 // reads its buttons, and an app's input words after them. A native game
-// includes it through game.h; a native app drawing with the toolkit it links
-// (moybyte/ui.h) through ui.h.
+// includes it through game.h.
 
 #ifndef MOYBYTE_FRAME_H
 #define MOYBYTE_FRAME_H
@@ -19,18 +18,16 @@
 
 // An app's input words (moy_os.h's MOY_OS_FRAME_IN_*): the pointer's x and
 // y on the screen, its state (0 none), the key typed this frame (0 none),
-// how its ui frame draws (a word of flags and the font scale the toolkit it
-// links reads: a window's body, the desk's rows, the shell's look),
+// how its frame draws (a word of flags and the font scale: a window's body,
+// the desk's rows, the shell's look),
 // whether the console's RGB565 words
 // are byte-swapped, the rect its ui frame lies in (its content_rect():
 // the screen less the host's bars; a width of 0, the whole screen), and the
-// surface it lays out for, `_layout`'s (w, h, fs) (moybyte/ui.h; a width of
-// 0, none told), the frame's steps beyond its presses (a held direction's
+// surface it lays out for, `_layout`'s (w, h, fs) (a width of 0, none
+// told), and the frame's steps beyond its presses (a held direction's
 // repeats and the trackball's steps, four bytes: left, right, up, down; a
-// held key's typing repeats: the key, and their count << 16) and the
-// console's asks of the toolkit the app links (MOY_FRAME_ASK_*: its cancel
-// and its back, which the app's last moy_ui_tell said it would take). A
-// game's frames carry none: 0.
+// held key's typing repeats: the key, and their count << 16); word 15 is
+// 0. A game's frames carry none: 0.
 #define MOY_FRAME_IN 16
 #define MOY_FRAME_X 0
 #define MOY_FRAME_Y 1
@@ -47,14 +44,6 @@
 #define MOY_FRAME_LAYOUT_FS 12
 #define MOY_FRAME_REP 13
 #define MOY_FRAME_KEYREP 14
-#define MOY_FRAME_ASK 15
-#define MOY_FRAME_ASK_CANCEL 1
-#define MOY_FRAME_ASK_BACK 2
-// moy_ui_tell's answers (moybyte/os.h): a field in focus (the keyboard
-// types), a cancel the toolkit would take, a back it would take.
-#define MOY_FRAME_TOLD_TYPING 1
-#define MOY_FRAME_TOLD_CANCEL 2
-#define MOY_FRAME_TOLD_BACK 4
 
 // A frame: the buttons held and those pressed since the last frame, a bit
 // each in moy_button's order (MOY_BIT(MOY_BTN_A)), its milliseconds, and
@@ -133,8 +122,7 @@ static inline int moy_game_frame(moy_frame_t *f,
             memcpy(f->in, v + 3, sizeof f->in);
             got = 1;
             if (f->in[MOY_FRAME_KEY] != 0 || f->in[MOY_FRAME_PTR] != 0
-                || f->in[MOY_FRAME_REP] != 0 || f->in[MOY_FRAME_KEYREP] != 0
-                || f->in[MOY_FRAME_ASK] != 0) {
+                || f->in[MOY_FRAME_REP] != 0 || f->in[MOY_FRAME_KEYREP] != 0) {
                 f->pressed = pressed;
                 f->ms = ms;
                 return 1;

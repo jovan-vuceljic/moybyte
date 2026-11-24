@@ -166,9 +166,7 @@ static void moy_ui_text_words_reset_w(void) {
 }
 
 void moy_ui_text_words_reset(void) {
-    moy_ui_theme_write(1);
     moy_ui_text_words_reset_w();
-    moy_ui_theme_write(0);
 }
 
 static int moy_ui_text_words_w(int syntax, const uint8_t *words, size_t n, int tone) {
@@ -217,9 +215,7 @@ static int moy_ui_text_words_w(int syntax, const uint8_t *words, size_t n, int t
 }
 
 int moy_ui_text_words(int syntax, const uint8_t *words, size_t n, int tone) {
-    moy_ui_theme_write(1);
     int rc = moy_ui_text_words_w(syntax, words, n, tone);
-    moy_ui_theme_write(0);
     return rc;
 }
 
@@ -1426,7 +1422,3 @@ void moy_ui_text_note(moy_ui_text_t *t, int32_t *v, const moy_ui_trow_t *rows, i
     t->want = 0;
 }
 
-int moy_ui_recs_text(moy_ui_rec_t *r) {
-    r[0] = (moy_ui_rec_t){NULL, (void **)&s_words, sizeof(words_t)};
-    return 1;
-}

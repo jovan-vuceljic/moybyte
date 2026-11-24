@@ -16,7 +16,7 @@ Two halves, the spec's checker for Lua (its section 23):
 2. The read. What no run sees is read from the app's source: names nothing
    declares (Q01), a nil in a ui.state table (S13), literal ui.push,
    ui.after and ui.post names and whether a key is handed (P01, A01, A02),
-   writes to a derive (S09) or to a value the engine writes (S10), writes
+   writes to a derive (S09), writes
    into a record's field (S03) and reads of a field nothing declares (S04).
 
 Each error is one line, `error[CODE] FILE:LINE: ...`; the exit status is 1
@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
 LUA_STD = set("""assert collectgarbage error getmetatable ipairs load next pairs pcall print rawequal rawget
 rawlen rawset require select setmetatable tonumber tostring type xpcall _G _ENV _VERSION math string table
 utf8 coroutine os io debug""".split())
-APP_GLOBALS = set("""ui moybyte prefs _draw _init _update _layout UI_LAUNCH UI_MAIN W H self""".split())
+APP_GLOBALS = set("""ui moybyte prefs clipboard _draw _init _update _layout UI_LAUNCH UI_MAIN W H self""".split())
 KEYWORDS = set("""and break do else elseif end false for function goto if in local nil not or repeat return
 then true until while""".split())
 
@@ -215,7 +215,7 @@ def read_source(cart, facts):
     known = LUA_STD | APP_GLOBALS | set(cv.CART_VERBS)
     for n in names:
         known |= _declared(blanked[n][0])
-    pages, state, fields, actions, engine = facts["pages"], facts["state"], facts["fields"], facts["actions"], facts["engine"]
+    pages, state, fields, actions = facts["pages"], facts["state"], facts["fields"], facts["actions"]
     for n in names:
         b, strings = blanked[n]
         errors += _free_names(n, b, known)
@@ -266,7 +266,7 @@ def read_source(cart, facts):
                     errors.append(_err("A02", where, "ui.%s %s %r, which takes %r" % (verb, "hands a key to" if handed else "hands nothing to", name, a[0]),
                                        "{ takes = \"arg\" } on %s, or no key" % name if handed else "hand it its key",
                                        "a key" if a[0] == "arg" else "nothing", "a key" if handed else "nothing"))
-        # S09, S10, S03, S04: what a handler writes and reads through the state
+        # S09, S03, S04: what a handler writes and reads through the state
         for sv in svars:
             for m in re.finditer(r"\b%s\.([A-Za-z_]\w*)((?:\.[A-Za-z_]\w*)?)(\s*=(?!=))?" % re.escape(sv), b):
                 name, sub, write = m.group(1), m.group(2)[1:], bool(m.group(3))
@@ -276,9 +276,6 @@ def read_source(cart, facts):
                     continue
                 if write and not sub and ty[0] == "derive":
                     errors.append(_err("S09", where, "a write to the derive %r" % name, "write the names it reads",
-                                       "a read", "a write"))
-                elif write and not sub and name in engine:
-                    errors.append(_err("S10", where, "a write to %r, which the engine writes" % name, "read it; the engine writes it",
                                        "a read", "a write"))
                 elif sub and ty[0] in ("record", "rowof"):
                     if write:
@@ -295,7 +292,7 @@ def check(cart, snapshot=False, after=()):
     """Every error of `cart` (a .moy folder), as lines; with `snapshot` the
     built pages' snapshot lines follow them."""
     lines = run(cart, after)
-    facts = {"pages": [], "state": {}, "fields": {}, "actions": {}, "engine": set()}
+    facts = {"pages": [], "state": {}, "fields": {}, "actions": {}}
     errors, snap = [], []
     for l in lines:
         kind, _, rest = l.partition(" ")
@@ -312,8 +309,6 @@ def check(cart, snapshot=False, after=()):
         elif kind == "ACTION":
             a, takes, what = rest.split()
             facts["actions"][a] = (takes, what)
-        elif kind == "ENGINE":
-            facts["engine"].add(rest)
         elif kind == "SNAP":
             snap.append(rest)
     if not any(e.startswith("check:") for e in errors) and (facts["state"] or facts["actions"]):

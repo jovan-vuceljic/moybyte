@@ -4,6 +4,7 @@ the shell the goldens build: the marks a design review reads off a render
 here off the same frame (`tests/test_editor_look.py`'s fixtures)."""
 
 import pytest
+from ws_helpers import paint_grid_at  # noqa: E402
 
 import test_editor_look as el
 from test_editor_look import DESK, HANDHELD, THEMES
@@ -57,7 +58,7 @@ def test_the_selection_reads_against_the_grid_lines(tmp_path, theme, mode):
     px = el._px(ws)
     cv = ws.glass_canvas
     border = el._rgb(cv, ws.theme_colors["border"])
-    gx, gy = pl.grid_at()
+    gx, gy = paint_grid_at(pl)
     cell = pl.layout.span // ws.paint.dim
     x0 = ox + gx + cell                 # the selection's first column
     ys = range(oy + gy + 2 * cell, oy + gy + 4 * cell)
@@ -147,12 +148,12 @@ def test_the_grid_cursor_is_drawn_for_keys_and_not_for_touch(tmp_path):
     # the cursor cell's left line, the grid's own left edge: where it stands
     # in either layout (touch has no band, and so another grid margin)
     el._frame(ws)
-    gx, gy = pl.grid_at()
+    gx, gy = paint_grid_at(pl)
     assert el._px(ws)[oy + gy + 3][ox + gx - 1] == keyline
     ui_draw.input_kind("touch")
     el._frame(ws)
     el._frame(ws)
-    gx, gy = pl.grid_at()
+    gx, gy = paint_grid_at(pl)
     assert el._px(ws)[oy + gy + 3][ox + gx - 1] == border
 
 

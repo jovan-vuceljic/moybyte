@@ -12,9 +12,7 @@ static void moy_ui_text_tones_w(const int16_t tones[6]) {
 }
 
 void moy_ui_text_tones(const int16_t tones[6]) {
-    moy_ui_theme_write(1);
     moy_ui_text_tones_w(tones);
-    moy_ui_theme_write(0);
 }
 
 // Line i's rows at `cols` columns: its breaks into starts (the first
@@ -789,7 +787,3 @@ void moy_ui_api_text_cover(const moy_ui_ctx_t *c, moy_ui_span_t id, int y0, int 
     w->over1 = y1 > w->over1 ? y1 : w->over1;
 }
 
-int moy_ui_recs_tones(moy_ui_rec_t *r) {
-    r[0] = (moy_ui_rec_t){s_tones, NULL, sizeof(s_tones)};
-    return 1;
-}

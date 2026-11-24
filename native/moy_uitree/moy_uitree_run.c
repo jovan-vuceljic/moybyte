@@ -30,6 +30,11 @@ int uit_run_frame(uit_t *e, void *target, int flags)
     return moy_ui_run_with(target, frame_on_run, &a);
 }
 
+void uit_run_keys_taken(void)
+{
+    moy_ui_run_keys_taken();
+}
+
 int uit_run_backed(void)
 {
     return moy_ui_run_way_taken();

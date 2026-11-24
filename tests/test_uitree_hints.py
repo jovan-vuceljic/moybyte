@@ -44,7 +44,7 @@ def _lua_hints(tmp_path, copy="Duplicate", without=""):
     cart.mkdir(parents=True)
     (cart / "manifest.json").write_text(json.dumps({
         "format": "moy-1", "title": "Lua Hints", "runtime": "lua", "main": "main.lua",
-        "extensions": ["moybyte.ui", "moybyte.uitree"],
+        "extensions": ["moybyte.uitree"],
         "moybyte": {"type": "app", "permissions": []}}))
     (cart / "main.lua").write_text(_LUA % dict(copy=copy, without=without))
     ws = host_app.build_workstation(str(carts), **_DESK)

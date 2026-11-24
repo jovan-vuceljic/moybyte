@@ -115,13 +115,12 @@ _KINDS = {"page": 1, "group": 2, "label": 3, "info": 4, "link": 5, "button": 6, 
           "canvas": 20, "tabs": 21, "switch": 22, "case": 23, "table": 24, "col": 25, "foot": 26,
           "cards": 27, "card": 28, "picture": 29, "popover": 30,
           "tools": 31, "row": 32, "status": 33, "text_editor": 34, "panes": 35, "pane": 36,
-          "legacy": 37, "slot": 38, "panel": 39, "lent": 40, "rule": 41, "note": 42, "grid": 43,
-          "bubble": 44, "month": 45, "toast": 46, "cells": 47, "stepper": 48, "hints": 49}
+          "slot": 37, "panel": 38, "lent": 39, "rule": 40, "note": 41, "grid": 42,
+          "bubble": 43, "month": 44, "toast": 45, "cells": 46, "stepper": 47, "hints": 48}
 # the placed kinds: a page the engine's layout places holds them (`CEditorPage`); a
 # `tools` that lends its row (`lend=`) stands on any page, drawn at the site it lends to
-_PLACED_KINDS = ("tools", "row", "status", "text_editor", "panes", "pane", "legacy", "slot", "panel", "lent")
+_PLACED_KINDS = ("tools", "row", "status", "text_editor", "panes", "pane", "slot", "panel", "lent")
 _PANE_KINDS = ("panes", "pane")
-_LEGACY_FNS = ("draw", "pointer", "keys", "hints", "gen")
 _HEAD = {"rows": ("model",), "table": ("model",), "cards": ("model",), "dialog": ("buttons",)}
 _KIND_NAMES = dict((v, k) for k, v in _KINDS.items())
 _KIND_NAMES[len(_KINDS) + 1] = "cycle"          # UIT_KINDS: a seg of the cycle look
@@ -177,12 +176,12 @@ class _TextEditor:
 
 
 class _PaneNode(S.Node):
-    """A lowered panes, pane or legacy node: `aux` its node in the store."""
+    """A lowered panes or pane node: `aux` its node in the store."""
     __slots__ = ()
 
 
 def _pane_node(n, parent):
-    """A panes, pane or legacy node's stand-in once its page is lowered: its
+    """A panes or pane node's stand-in once its page is lowered: its
     key, props and the panes it holds, for what the Editor's front end asks
     of a pane (its tabs on offer, its name, its held size's state); the
     layout is the engine's."""
@@ -227,7 +226,6 @@ class CEngine(Engine):
         self._docs = {}         # a document's state -> what it was pushed at (`_push_doc`)
         self._doc_reads = {}    # ...and the fields of it the lowered page reads
         self._editors = {}      # a text editor's node -> its stand-in (`_TextEditor`)
-        self._legacy = {}       # a legacy node -> its stand-in (`_pane_node`), its functions in .l
         self._pn = {}           # a panes or pane node -> its stand-in (`_pane_node`)
         self._pn_roots = None   # ...the outermost panes' nodes, found at the first frame
         self._pointers = []     # (key, its pointer= action, the model of the list it stands in or None,
@@ -609,18 +607,23 @@ class CEngine(Engine):
         the store, and the Python tree let go: `root` is then `LOWERED`."""
         if self.root is None:
             self._made()
-            if self._lowered is not None and self._lowered is self.pages[0] and len(self.pages) == 1:
+            if self._lowered is not None and self._lowered is self.pages[0] and len(self.pages) == 1 \
+                    and not self.shown_due:
                 self.root = LOWERED         # the store holds the page from a compiled blob
         if self._loaded:            # the build a compiled page stands for, counted and traced as one
             self._loaded = False
             self._built_as_loaded()
-        if self.root is None:
+        while self.root is None:        # again where the shown= handler pushes or pops
             self._build()
+            shown = self.root.l.get("shown") if self.shown_due else None
+            self.shown_due = False
             self.lower(self.root)
             self.root = LOWERED
             self._lowered = self.pages[-1]
             for name in self._docs:
                 self._push_doc(name, self.s._v[name])     # the fields the lowered page reads
+            if shown is not None:       # a page pushed or shown again by Back: before the frame draws it
+                self.run_action(shown, (), "the page shown")
 
     def lower(self, root):
         """The checked tree into the store: one node call a node, one prop call
@@ -643,7 +646,6 @@ class CEngine(Engine):
         pop_fields = self._pop_fields = {}
         stand = self._pn = {}           # node -> a panes or pane's stand-in (`_pane_node`)
         self._pn_roots = None
-        legacies = self._legacy = {}    # node -> a legacy node's stand-in: its functions
         srcs = []
         units, lend_at = [], {}
         self._lend_at = lend_at
@@ -677,9 +679,9 @@ class CEngine(Engine):
                     r = cprop(me, "field", l["field"], None)       # a model's lines: this text field
                 if r < 0:
                     fail(r, "%s %s" % (nk, n.key), n.where)
-            if nk in _PANE_KINDS or nk == "legacy":
+            if nk in _PANE_KINDS:
                 m = _pane_node(n, stand.get(parent))
-                (legacies if nk == "legacy" else stand)[me] = m
+                stand[me] = m
                 m.aux = me
             if nk == "popover":
                 pop_fields[n.key] = any(k.kind == "field" for k in n.kids)
@@ -704,11 +706,6 @@ class CEngine(Engine):
             head = heads.get(nk, ())
             for k, src in n.src.items():
                 if k in head:
-                    continue
-                if nk == "legacy" and k in _LEGACY_FNS:     # the front end's functions
-                    r = cprop(me, k, getattr(src, "__name__", k), None)
-                    if r < 0:
-                        fail(r, "legacy %s %s=" % (n.key, k), n.where)
                     continue
                 if k == "min" and nk == "pane":             # one prop a pair: "w h", its tab the repr
                     pairs = src.items() if type(src) is dict else (("", src),)
@@ -811,7 +808,7 @@ class CEngine(Engine):
         canvas's pointer action and keys= function (with the list it stands
         in), each popover's list and whether a field of
         its own takes keys, the document fields the page reads, each text
-        editor, each pane, panes and legacy stand-in. A prop's value is kept
+        editor, each pane and panes stand-in. A prop's value is kept
         as itself (0), a dict as its items (1), a function as its name in
         the page's module (2); a dict of conditions is the store's alone."""
         mod = sys.modules[_aot._module(self.pages[0])]
@@ -834,7 +831,7 @@ class CEngine(Engine):
                 else:
                     out.append((k, v, 0))
             return tuple(out)
-        stand = list(self._pn.items()) + list(self._legacy.items())
+        stand = list(self._pn.items())
         stand.sort(key=lambda kv: kv[0])
         keys = []
         for k, (fn, m) in self._canvas_keys.items():
@@ -861,7 +858,7 @@ class CEngine(Engine):
         self._pop_fields = dict(f[2])
         self._doc_reads = dict(f[3])
         self._editors = dict((node, _TextEditor(self, node, key, dict(l), conds)) for node, key, l, conds in f[4])
-        pn, lg = self._pn, self._legacy = {}, {}
+        pn = self._pn = {}
         self._pn_roots = None
         for node, kind, key, parent, where, src, l in f[5]:
             m = _PaneNode(kind, key, where)
@@ -871,7 +868,7 @@ class CEngine(Engine):
                 m.parent = pn[parent]
                 m.parent.kids.append(m)
             m.aux = node
-            (lg if kind == "legacy" else pn)[node] = m
+            pn[node] = m
 
     def _draw(self, node, model, row, x, y, w, h):
         """A canvas's draw, called by the walk inside the frame at its rect;
@@ -1377,6 +1374,7 @@ class CEngine(Engine):
         if len(self.pages) > 1:
             self.pages.pop()
             self.root = None
+            self.shown_due = True
             back_to = self.openers.pop() if getattr(self, "openers", None) else None
             self.want_focus = back_to
             was, S._NOW.app = S._NOW.app, self
@@ -1467,16 +1465,11 @@ class CEditorEngine(CEngine, _ed.Engine):
             x.ground(g[0], g[1], g[2], g[3])        # no star call: a frame allocates nothing
         if self._docs:
             self._doc_moved()
-        if self._legacy:
-            n = self._legacy_focused() or next((m for m in self._legacy.values() if "hints" in m.l), None)
-            h = self._legacy_call(n, "hints") if n is not None and "hints" in n.l else ()
-            x.legacy_hints("".join(t + "\0" for t in h))
         framed = False
         if self._pn:
             roots = self._pn_roots
             if roots is None:
-                roots = self._pn_roots = tuple(k for k, m in self._pn.items()
-                                               if m.parent is None and m.kind != "legacy")
+                roots = self._pn_roots = tuple(k for k, m in self._pn.items() if m.parent is None)
             for i in range(len(roots)):
                 if self._x.pane_ask(roots[i], 0, 0) == 1:
                     framed = True       # a shown panes: its arrangement is the frame's to read
@@ -1613,82 +1606,26 @@ class CEditorEngine(CEngine, _ed.Engine):
         r = allv[nth]
         return r[0] + r[2] // 2, r[1] + r[3] // 2
 
-    # -- the bridge: each legacy body drawn before the frame, where the last frame laid it out
-
     def hosted(self, dt, cv, th, content, desk):
-        """The frame's first phase (`uitree_app.Engine.hosted`): each legacy
-        body where the last frame laid it out, the page's ground round them;
-        a body that moved is drawn again by the next frame."""
+        """The frame's first phase (`uitree_app.Engine.hosted`), which its
+        host runs before it begins the frame: the frame's start."""
         self._bind()
         self._start(dt)
         self._started = True
         if self._shut:
             self._resume()
         self._ready()
-        placed = self.placed = []
-        if not self._legacy:
-            return
-        rect, keys = self._x.rect, []
-        for m in self._legacy.values():
-            if m.key in keys:
-                continue            # one body a key: where the last frame laid out the shown one
-            keys.append(m.key)
-            r = rect(m.key)
-            if r is not None:
-                placed.append((m, None, r))
-        if len(placed) < len(keys):
-            self._damage.all()      # a body the last frame did not lay out: the next frame draws it
-        if placed:
-            self._hosted_no = self.frame_no
-            self.ground_round(cv, th, content)
-            self.draw_hosted(cv, th, dt)
-
-    def _legacy_focused(self):
-        """The legacy node's stand-in whose stop holds focus, else None."""
-        key = self._focus_key()
-        for m in self._legacy.values():
-            if m.key == key:
-                return m
-        return None
-
-    def _legacy_call(self, n, fn, *a):
-        was, S._NOW.app = S._NOW.app, self
-        try:
-            return n.l[fn](*a)
-        finally:
-            S._NOW.app = was
 
     def point(self, px, py, click):
         """A canvas with pointer= is handed down, drag and up in its own
         coordinates, at the rect the last frame placed it (while a popover
         shows, only one in it); the press that starts on it holds it until
-        release (`uitree_editor.Engine.point`).
-        A legacy body with pointer= is handed the press (its stop takes
-        focus) and what follows until the release, in its own coordinates."""
-        down = self.pointer_down()
-        hl = self.held_legacy
-        if hl is not None:
-            n, r = hl
-            self._legacy_call(n, "pointer", px - r[0], py - r[1], click)
-            if not down:
-                self.held_legacy = None
-            CEngine.point(self, px, py, click)
-            self._damage.all()
-            return True
+        release (`uitree_editor.Engine.point`)."""
         if click and self._framed:
             p = self._pane_at((px, py))
             if p is not None and p.key != self.pane_cur:
                 self.pane_cur = p.key       # a press in a pane gives it the keys
                 self._damage.all()
-        if click and self._visiting():
-            for n, _row, r in self.placed:
-                if "pointer" in n.l and r[0] <= px < r[0] + r[2] and r[1] <= py < r[1] + r[3]:
-                    CEngine.point(self, px, py, click)
-                    self._legacy_call(n, "pointer", px - r[0], py - r[1], click)
-                    if down:
-                        self.held_legacy = (n, r)
-                    self._damage.all()
-                    return True
         return CEngine.point(self, px, py, click)
 
     def step_rows(self, d):
@@ -1785,7 +1722,7 @@ class CEditorEngine(CEngine, _ed.Engine):
         ch = getattr(i, "typed", 0) & 0xFF
         was, S._NOW.app = S._NOW.app, self
         try:
-            if self._pane_keys(i) or self._chord(ch) or self._legacy_keys(i) or self._doc_keys(i, ch):
+            if self._pane_keys(i) or self._chord(ch) or self._doc_keys(i, ch):
                 return True
             if ch == 13 and self._visiting() and self._x.take_focused():
                 self._drain()           # Enter takes a popover's row, as A does
@@ -1815,18 +1752,6 @@ class CEditorEngine(CEngine, _ed.Engine):
             self.q.append((hit, self.args_for(hit), "key %r (unit %s)" % (key, hit.unit)))
         else:
             S._trace("off", hit.name, "key %r: %s" % (key, hit.when_src))
-        self._damage.all()
-        return True
-
-    def _legacy_keys(self, i):
-        """The frame's input to the focused legacy body with keys=, where
-        no popover shows: True where it took it (else focus moves on as
-        from any stop)."""
-        if not self._legacy or self.popover_shown():
-            return False
-        n = self._legacy_focused()
-        if n is None or "keys" not in n.l or not n.l["keys"](i):
-            return False
         self._damage.all()
         return True
 
@@ -1860,21 +1785,17 @@ class CEditorEngine(CEngine, _ed.Engine):
             self._damage.all()
         return moved
 
-    def _flags(self, desk):
-        f = CEngine._flags(self, desk)
-        return f | F_BARE if self._hosted_no == self.frame_no else f     # bare over hosted bodies
-
     # -- the panes: laid out by the engine's rule, read back for the host
 
     # what uitree_editor's pane helpers ask of a lowered pane, the engine answers
 
     def _shown(self, k, row):
-        if type(k) is _PaneNode and k.kind != "legacy":
+        if type(k) is _PaneNode:
             return self._x.pane_ask(k.aux, 0, 0) == 1
         return _ed.Engine._shown(self, k, row)
 
     def _min_of(self, k, axis):
-        if type(k) is _PaneNode and k.kind != "legacy":
+        if type(k) is _PaneNode:
             return self._x.pane_ask(k.aux, 1, axis)
         return _ed.Engine._min_of(self, k, axis)
 
@@ -1906,16 +1827,16 @@ class CEditorEngine(CEngine, _ed.Engine):
 
     def _pane_read(self, placing=True):
         """The engine's panes (`uit_panes`) as `uitree_editor.Engine` keeps
-        them: `arranged`, `least`, `alone_pane`, `placed` (a placement's),
-        `pane_order`, `splits` and `panes_root`, each pane its stand-in."""
+        them: `arranged`, `least`, `alone_pane`, `pane_order`, `splits` and
+        `panes_root`, each pane its stand-in."""
         w = self._x.panes()
         if not w:
             return
-        pn, lg = self._pn, self._legacy
+        pn = self._pn
         self.panes_root = pn.get(w[0])
         self.alone_pane = pn.get(w[1])
         self.least = (w[2], w[3])
-        at = 9
+        at = 8
 
         def path(i):
             return tuple(w[i + 1:i + 1 + w[i]])
@@ -1929,19 +1850,13 @@ class CEditorEngine(CEngine, _ed.Engine):
             divs.append((path(at + 4), w[at + 9], "v" if w[at + 10] else "h", tuple(w[at:at + 4])))
             at += 11
         self.arranged = (panes, divs)
-        if placing:
-            self.placed = []
-        for _ in range(w[6]):
-            if placing:
-                self.placed.append((lg[w[at]], None, tuple(w[at + 1:at + 5])))
-            at += 10
         self.pane_order = []
-        for _ in range(w[7]):
+        for _ in range(w[6]):
             self.pane_order.append((pn[w[at]], tuple(w[at + 1:at + 5])))
             at += 10
         self.splits = {}
         self._sids = []
-        for _ in range(w[8]):
+        for _ in range(w[7]):
             n, nk, axis, gap = pn[w[at]], w[at + 1], w[at + 2], w[at + 3]
             rect, base = tuple(w[at + 4:at + 8]), path(at + 8)
             at += 13
@@ -1958,14 +1873,13 @@ class CEditorEngine(CEngine, _ed.Engine):
 
     def place(self, area, desk=True):
         """The page's regions laid out over `area`, nothing drawn: each
-        one's rect for `rect_of`, its panes' arrangement and hosted bodies
+        one's rect for `rect_of` and its panes' arrangement
         (`uitree_editor.Engine.place`)."""
         self._bind()
         self.content = area
         self.desk = desk
         self._ready()
         self.committed()
-        self.placed = []
         self._pane_sync()
         self._live_units()
         self._x.place(area[0], area[1], area[2], area[3], self._flags(desk), max(1, getattr(self, "fs", 1)))

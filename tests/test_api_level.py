@@ -99,9 +99,56 @@ def test_every_public_table_moves_the_fingerprint_and_prose_does_not():
     assert api_level.fingerprint(_tables_with("os_calls", same)) == base
 
 
+def _uitree_doc():
+    with open(api_level.UITREE, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _uitree_moved(edit):
+    """The fingerprint with the UI tree contract edited by `edit(doc)`."""
+    doc = _uitree_doc()
+    edit(doc)
+    return api_level.fingerprint(_tables_with("uitree", api_level.uitree_table(json.dumps(doc))))
+
+
+@pytest.mark.parametrize("what, edit", [
+    ("a kind", lambda d: d["kinds"].__setitem__("knob", {"head": "state", "level": 2, "props": {}})),
+    ("a kind's head", lambda d: d["kinds"]["label"].__setitem__("head", "state")),
+    ("a prop", lambda d: d["kinds"]["label"]["props"].__setitem__("glow", {"type": "bool", "level": 2})),
+    ("a prop's type", lambda d: d["kinds"]["label"]["props"]["lines"].__setitem__("type", "tpl")),
+    ("a word", lambda d: d["kinds"]["button"]["props"]["look"].__setitem__("type", "word:hero,plain")),
+    ("a designed entry built", lambda d: d["kinds"]["dialog"]["props"]["default"].pop("designed")),
+    ("an error code", lambda d: d["codes"].__setitem__("Z01", d["codes"]["A01"])),
+    ("a reserved code", lambda d: d["reserved_codes"].append("Z02")),
+    ("an action prop", lambda d: d["action_props"].__setitem__("glow", {"type": "bool", "level": 2})),
+    ("a role", lambda d: d["roles"].__setitem__("zoom", {"owner": "app", "level": 2})),
+    ("a takes value", lambda d: d["takes"].__setitem__("drop", {"level": 2, "params": 1})),
+    ("a verb", lambda d: d["verbs"].__setitem__("glow", {"level": 2})),
+    ("a retired name", lambda d: d["retired"]["props"].__setitem__("glow", "shine=")),
+    ("a system value", lambda d: d["system_values"].__setitem__("dark", "bool")),
+])
+def test_the_ui_tree_contract_is_a_public_table_frozen_with_the_rest(what, edit):
+    """What an app of any front can say moves the fingerprint, and once the API
+    is frozen it is red without a bump."""
+    fp = _uitree_moved(edit)
+    assert fp != api_level.fingerprint(), what
+    why = api_level.check(_frozen_text(), fp)
+    assert why is not None and "bump the API level" in why, what
+
+
+def test_the_ui_tree_contracts_prose_moves_nothing():
+    def prose(d):
+        d["about"] = "other words"
+        d["codes"]["A01"]["meaning"] = "other words"
+        d["codes"]["A01"]["fix"]["python"] = "other words"
+        d["kinds"]["label"]["section"] = "9.9"
+        d["retired"]["props"]["ink"] = "other words"
+    assert _uitree_moved(prose) == api_level.fingerprint()
+
+
 def test_the_tables_are_the_ones_the_level_names():
     names = [n for n, _ in api_level.TABLES]
-    assert names == ["os_calls", "manifest", "format"]
+    assert names == ["os_calls", "manifest", "format", "uitree"]
     assert api_level.manifest_table() == sorted(moy_store_base.VENDOR_FIELDS)
     assert api_level.format_table() == player_fit.FORMAT_LEVEL
     assert "api" in moy_store_base.VENDOR_FIELDS

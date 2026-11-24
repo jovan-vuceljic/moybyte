@@ -3,7 +3,7 @@
 - An app written in it opens, paints, takes input and closes beside today's.
 - Moy Mesh's thread and Radio ports draw their recorded frames through one
   input script, on the handheld and in a desk window
-  (tests/uitree_lua_parity.py, which also draws them beside the hand-written
+  (tests/uitree_lua_shots.py, which also draws them beside the hand-written
   pages they port).
 - The checker (tools/uitree_lua_check.py): one failing case per error code a
   Lua app can raise, each reported at its file and line.
@@ -21,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path[:0] = [ROOT, HERE, os.path.join(ROOT, "tools")]
 
-import uitree_lua_parity as parity  # noqa: E402
+import uitree_lua_shots as shots  # noqa: E402
 import uitree_lua_check as checker  # noqa: E402
 
 FIX = os.path.join(HERE, "fixtures", "uitree_lua")
@@ -35,7 +35,7 @@ def _cart(root, name, main, extra=None):
     files["main.lua"] = main
     man = {"format": "moy-1", "title": name, "runtime": "lua", "main": "main.lua",
            "sources": [f for f in files if f not in ("fire.lua",)],
-           "extensions": ["moybyte.ui", "moybyte.uitree"], "moybyte": {"type": "app", "permissions": []}}
+           "extensions": ["moybyte.uitree"], "moybyte": {"type": "app", "permissions": []}}
     man["sources"].sort(key=lambda f: f == "main.lua")
     for f, text in files.items():
         with open(os.path.join(d, f), "w") as fh:
@@ -48,14 +48,14 @@ def _cart(root, name, main, extra=None):
 def _console(carts, size="320"):
     from runtime import host_app
     from ws_helpers import open_cart, quiesce
-    ws = host_app.build_workstation(carts, **parity.SIZES[size])
+    ws = host_app.build_workstation(carts, **shots.SIZES[size])
     ws.look.set_theme("moy", persist=False, variant="dark")
     drv = host_app.ConsoleDriver(ws)
 
     def frame():
         quiesce(ws)
         ws.mark_dirty()
-        drv.frame(parity.DT)
+        drv.frame(shots.DT)
     return ws, drv, frame, open_cart
 
 
@@ -155,24 +155,24 @@ def test_a_deflated_chunk_has_one_window_on_every_tier():
     assert ring == 1 << freeze.WBITS == 1 << lua_binding.Z_WBITS
 
 
-@pytest.mark.parametrize("size", sorted(parity.SIZES))
-@pytest.mark.parametrize("pair", sorted(parity.PAIRS))
-def test_the_ports_draw_their_recorded_frames(pair, size, request):
-    """Each named shot of a port's script, pinned by its hash
+@pytest.mark.parametrize("size", sorted(shots.SIZES))
+@pytest.mark.parametrize("screen", sorted(shots.SCREENS))
+def test_the_mesh_screens_draw_their_recorded_frames(screen, size, request):
+    """Each named shot of a screen's script, pinned by its hash
     (tests/shell_goldens/uitree_mesh.json). Re-baseline as the shell goldens
     are, `MOYBYTE_UPDATE_GOLDENS=1` or `--update-goldens`, once
-    `tests/uitree_lua_parity.py OUT PAIR` shows what moved."""
+    `tests/uitree_lua_shots.py OUT SCREEN` shows what moved."""
     import hashlib
     import pixel_goldens
-    (_old, _), (port, extra), script = parity.PAIRS[pair]
-    (w, h), shots, errors, _logs = parity.play(port, extra, script, size)
+    cart, extra, script = shots.SCREENS[screen]
+    (w, h), got_shots, errors, _logs = shots.play(cart, extra, script, size)
     assert errors == []
     update = os.environ.get("MOYBYTE_UPDATE_GOLDENS") or request.config.getoption("--update-goldens", default=False)
     table = {}
     if os.path.isfile(MESH_GOLDENS):
         with open(MESH_GOLDENS) as f:
             table = json.load(f)
-    got = {"%s_%s_%s" % (pair, size, name): hashlib.sha256(img).hexdigest() for name, img in shots.items()}
+    got = {"%s_%s_%s" % (screen, size, name): hashlib.sha256(img).hexdigest() for name, img in got_shots.items()}
     if update:
         table.update(got)
         with open(MESH_GOLDENS, "w") as f:
@@ -180,7 +180,7 @@ def test_the_ports_draw_their_recorded_frames(pair, size, request):
             f.write("\n")
         return
     moved = [pixel_goldens.check(k, got[k], table.get(k), lambda img=img: [img[y * w * 3:(y + 1) * w * 3] for y in range(h)],
-                                 w, h) for k, img in zip(got, shots.values())]
+                                 w, h) for k, img in zip(got, got_shots.values())]
     assert not any(moved), "the shots %s moved%s" % ([k for k, m in zip(got, moved) if m], pixel_goldens.message(moved))
 
 
@@ -684,7 +684,7 @@ def test_the_hosts_back_steps_a_lua_apps_pages_through_the_engines_way_back(tmp_
     (`UIT_F_BACK`: a page under the top one, the back role) and answers a
     taken one at the next frame (`e:backed()`): the pushed page goes, then
     the back role's action runs, once each; with neither the host leaves."""
-    from runtime import host_app, ui_draw
+    from runtime import host_app
     from runtime.host import moy_log
     carts = str(tmp_path / "carts")
     host_app.moy_carts.ensure_dirs(carts)
@@ -706,8 +706,6 @@ def test_the_hosts_back_steps_a_lua_apps_pages_through_the_engines_way_back(tmp_
         frame()
         frame()
         assert face.has_page(), (name, "the page under the pushed one")
-        lent = ui_draw.bar_lent(ui_draw.RUN_UI)
-        assert lent is None or not lent[3], "the way back is the engine's, no bar's"
         assert face.back(), (name, "the pushed page is the app's to step out of")
         frame()
         frame()
@@ -854,9 +852,6 @@ CASES = {
     "S07": (APP + 'local s = ui.state { m = ui.model { name = "" } }' + PAGE, 2, None),
     "S09": (APP + 'local s = ui.state { n = 0 }\nui.derive("big", { cond = "n>3" })\n'
             'ui.action("go", "Go", function()\n  s.big = true\nend)' + PAGE, 5, 'ui._fire("go")\n'),
-    "S10": (APP + 'local s = ui.state { unread = 0 }\nui.action("go", "Go", function()\n  s.unread = 0\nend)\n'
-            'ui.page("p", function() ui.scroll("list", { new = "unread" }, function() ui.label("x") end) end)\n', 4,
-            'ui._fire("go")\n'),
     "S11": (APP + 'local s = ui.state { r = ui.row_of(3) }' + PAGE, 2, None),
     "S13": (APP + 'local s = ui.state { x = print }' + PAGE, 2, None),
     "T01": (APP + 'local s = ui.state { n = 0 }\nui.page("p", function() ui.label("{n|nope}") end)\n', 3, None),
@@ -920,9 +915,9 @@ def test_the_checker_reports_each_code_at_its_line(case, tmp_path):
 @pytest.mark.parametrize("cart", ["counter", "mesh_thread", "mesh_radio"])
 def test_the_fixtures_check_clean(cart, tmp_path):
     d = os.path.join(str(tmp_path), cart + ".moy")
-    shutil.copytree(parity.fixture(cart), d)
+    shutil.copytree(shots.fixture(cart), d)
     for f in ("mesh.lua", "data.lua"):
-        src = os.path.join(parity.MESH, f) if f == "mesh.lua" else os.path.join(parity.fixture("mesh_thread"), f)
+        src = os.path.join(shots.MESH, f) if f == "mesh.lua" else os.path.join(shots.fixture("mesh_thread"), f)
         if not os.path.exists(os.path.join(d, f)):
             shutil.copy(src, d)
     assert checker.check(d) == []
@@ -1186,3 +1181,131 @@ def test_a_grids_spacing_is_a_word_and_an_int_stops_the_run_at_its_line(tmp_path
         ws.spine.exit_to_caller()
     assert got["Word"] is None, got["Word"]
     assert got["Int"] and "error[N01] main.lua:5:" in got["Int"], got["Int"]
+
+
+def test_a_page_pushed_over_itself_with_another_row_gives_the_first_its_row_back(tmp_path):
+    """A page that takes a row (arg=) keeps the row it was pushed with: pushed
+    over itself with another row, its Back shows the first row again, the
+    page under writing its arg back as it shows."""
+    from runtime import host_app
+    from runtime.host import moy_log
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Rows", '''ui.app("Rows", { icon = "list" })
+S = ui.state { items = ui.model { key = "id", id = "", name = "" }, sel = ui.row_of("items") }
+ui.hook("opened", function() S.items:set({ { id = "a", name = "Apples" }, { id = "b", name = "Bread" } }) end)
+ui.action("open", "Open", function(row) ui.push("details", row) end, { takes = "row" })
+ui.action("other", "Other", function() ui.push("details", "b") end, { keys = { "o" } })
+ui.page("shelf", function()
+  ui.rows("items", function() ui.link("open", { label = "{.name}" }) end)
+end, { title = "Shelf" })
+ui.page("details", function()
+  ui.label("{sel.name}")
+  ui.button("other")
+end, { title = "Details", arg = "sel" })
+''')
+    ws, drv, frame, open_cart = _console(carts)
+    seq = moy_log.next()
+    open_cart(ws, "Rows")
+    for _ in range(4):
+        frame()
+    pl = ws.run.player
+
+    def sel():
+        assert pl.lua.exec("__R = S.sel and S.sel.id or ''", "test") is None
+        return pl.lua.get_global("__R")
+    drv.press("a")                      # the first row, Apples
+    frame()
+    frame()
+    assert sel() == "a"
+    drv.type_char(ord("o"))             # the same page over it, on Bread
+    frame()
+    frame()
+    assert sel() == "b"
+    assert pl.face.back()
+    frame()
+    frame()
+    assert sel() == "a", "the page under shows the row it was pushed with"
+    assert pl.face.back()
+    frame()
+    frame()
+    assert pl.cart_error is None, pl.cart_error
+    lines = [r[4].split("[trace] ", 1)[1] for r in moy_log.read(seq, 8000) if "[trace] " in r[4]]
+    pages = [" ".join(l.split()[1:]) for l in lines if l.split()[1:2] == ["page"]]
+    assert pages == ["page push page 2, opened from 'a/open'", "page push page 3, opened from 'other'",
+                     "page back page 2, focus back to 'other'", "page back page 1, focus back to 'a/open'"], lines
+    ws.spine.exit_to_caller()
+
+
+def test_a_pages_shown_runs_at_its_push_and_at_the_back_onto_it(tmp_path):
+    """A page's shown= runs when the page becomes the top page, by a push
+    or by Back, after Back has written its arg= back and before the frame
+    that draws it; not at the open, which is the opened hook's."""
+    from runtime import host_app
+    from runtime.host import moy_log
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Rows", '''ui.app("Rows", { icon = "list" })
+S = ui.state { items = ui.model { key = "id", id = "", name = "" }, sel = ui.row_of("items") }
+seen = {}
+ui.hook("opened", function() S.items:set({ { id = "a", name = "Apples" }, { id = "b", name = "Bread" } }) end)
+ui.hook("shelf_shown", function() seen[#seen + 1] = "shelf" end)
+ui.hook("details_shown", function() seen[#seen + 1] = S.sel.id end)
+ui.action("open", "Open", function(row) ui.push("details", row) end, { takes = "row" })
+ui.action("other", "Other", function() ui.push("details", "b") end, { keys = { "o" } })
+ui.page("shelf", function()
+  ui.rows("items", function() ui.link("open", { label = "{.name}" }) end)
+end, { title = "Shelf", shown = "shelf_shown" })
+ui.page("details", function()
+  ui.label("{sel.name}")
+  ui.button("other")
+end, { title = "Details", arg = "sel", shown = "details_shown" })
+''')
+    ws, drv, frame, open_cart = _console(carts)
+    seq = moy_log.next()
+    open_cart(ws, "Rows")
+    for _ in range(4):
+        frame()
+    pl = ws.run.player
+
+    def seen():
+        assert pl.lua.exec("__R = table.concat(seen, ' ')", "test") is None
+        return pl.lua.get_global("__R")
+    assert seen() == ""
+    drv.press("a")
+    frame()
+    frame()
+    drv.type_char(ord("o"))
+    frame()
+    frame()
+    assert seen() == "a b"
+    assert pl.face.back()
+    frame()
+    frame()
+    assert seen() == "a b a", "Back onto the page runs its shown= on the row it was pushed with"
+    assert pl.face.back()
+    frame()
+    frame()
+    assert seen() == "a b a shelf"
+    assert pl.cart_error is None, pl.cart_error
+    lines = [r[4].split("[trace] ", 1)[1] for r in moy_log.read(seq, 8000) if "[trace] " in r[4]]
+    shown = [" ".join(l.split()[1:]) for l in lines if "the page shown" in l]
+    assert shown == ["action details_shown from the page shown"] * 3 + ["action shelf_shown from the page shown"], lines
+    ws.spine.exit_to_caller()
+
+
+def test_a_pages_shown_names_an_action_that_takes_nothing(tmp_path):
+    """shown= is checked where the pages are: a name no action has is A01."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Shown", '''ui.app("Shown", { icon = "list" })
+ui.page("home", function() ui.label("Hi") end, { title = "Home", shown = "nothing_here" })
+''')
+    ws, drv, frame, open_cart = _console(carts)
+    open_cart(ws, "Shown")
+    for _ in range(3):
+        frame()
+    err = ws.run.player.cart_error
+    assert err and "error[A01]" in err and "nothing_here" in err, err
+    ws.spine.exit_to_caller()

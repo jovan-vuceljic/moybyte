@@ -2014,7 +2014,7 @@ class Node:
 # contract's (`_check_prop`); this table only routes what that check let through.
 _C = {"shown": "cond"}
 SCHEMA = {
-    "page": {"title": "text", "status": "text"},
+    "page": {"title": "text", "status": "text", "shown": "action0"},
     "group": dict(_C, caption="text", close="action0", look="lit", gap="int"),
     "label": dict(_C, text="text", tone="text", wrap="lit", face="lit", size="lit", icon="text",
                   lines="lit", align="lit", scale="int", w="int"),
@@ -2030,12 +2030,12 @@ SCHEMA = {
     "hints": dict(_C, keys="text", label="text", tail="cond", drop="cond", on="action1"),
     "info": dict(_C, label="text", value="text", icon="text", signal="int", tag="text", tone="text"),
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond", tag="text",
-                 tone="text", swatch="text"),
+                 tone="text", swatch="text", sub="text", count="text", mark="text"),
     "button": dict(_C, kind="lit", label="text", icon="text", alone="lit", span="lit", arg="lit",
                    focus="cond", grow="lit", marked="cond", w="int", tone="text", look="lit"),
-    "toggle": dict(_C, label="text", on="action0", focus="cond", hint="text"),
+    "toggle": dict(_C, label="text", on="action0", focus="cond", hint="text", when="cond", off="lit"),
     "slider": dict(_C, label="text", lo="int", hi="int", on="action0", focus="cond", look="lit",
-                   icon="text"),
+                   icon="text", when="cond", off="lit"),
     "field": dict(_C, label="text", max="lit", on="action0", secret="lit", focus="cond",
                   changed="action0", hint="text", commit="lit", when="cond", off="lit", grow="lit"),
     "seg": dict(_C, label="text", on="action0", focus="cond", look="lit", labels="lit", text="text"),
@@ -2058,14 +2058,14 @@ SCHEMA = {
     "dialog": dict(_C, title="text", buttons="lit", kind="lit", look="lit", labels="texts"),
     "popover": dict(_C, anchor="text", w="int", close="action0", wash="lit", at="text"),
     "menu": dict(_C, caption="text"),
-    "item": dict(_C, label="text", icon="text", mkind="lit"),
+    "item": dict(_C, label="text", icon="text", kind="lit"),
     "split": dict(_C, dir="choice", sizes="ints", pad="lit", gap="lit", align="lit", rule="lit"),
     "grid": dict(_C, cols="lit", rows="lit", gap="lit", pad="lit", w="int", h="int"),
     "panel": dict(_C),
     "canvas": dict(_C, draw="fn", h="int", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit",
                    keys="fn", mark="lit", hint="text", reads="lit"),
     "foot": dict(_C, look="lit"),
-    "scroll": dict(_C),
+    "scroll": dict(_C, follow="lit", snap="lit"),
     "switch": dict(_C),
     "case": {},
     # EXT-4. The Editor's kinds (see the calls below)
@@ -2077,8 +2077,6 @@ SCHEMA = {
                  tabs="lit", labels="lit", offered="conds", head="lit"),
     "text_editor": dict(_C, find="lit", find_on="cond", marks="lit", gutter="cond", focus="cond"),
     "slot": dict(_C, min="lit"),
-    # §7.7's bridge: a surface still on today's verbs hosted in one node
-    "legacy": dict(_C, draw="fn", pointer="fn", keys="fn", hints="fn", gen="fn"),
     "row": dict(_C, close="action0", gap="int", pad="int", mid="lit", grow="lit", wrap="lit"),
     "tools": dict(_C, lend="lit"),
     "lent": dict(_C),
@@ -2086,12 +2084,7 @@ SCHEMA = {
 }
 TWO_WAY = ("toggle", "slider", "field", "tabs", "seg")
 # what a function prop takes, for its N01's fix
-_FN_FIX = {None: "%s=draw, where def draw(cv, x, y, w, h)",
-           ("legacy", "draw"): "%s=draw, where def draw(cv, th, x, y, w, h, focused, dt)",
-           ("legacy", "pointer"): "%s=pointer, where def pointer(x, y, click) returns whether it took it",
-           ("legacy", "keys"): "%s=keys, where def keys(i) returns whether it took the input",
-           ("legacy", "hints"): "%s=hints, where def hints() returns the band's hints",
-           ("legacy", "gen"): "%s=gen, where def gen() returns an int that moves with its pixels"}
+_FN_FIX = {None: "%s=draw, where def draw(cv, x, y, w, h)"}
 def _vclass(v):
     """A value's class as the contract's check names them (moy_uitree_check.h's UIT_VC_*)."""
     t = type(v)
@@ -2423,8 +2416,21 @@ def _row_field(kind, name, want, where):
     return f
 
 
+def _off_pair(kind, name, p, where):
+    """A two-way control's when= and off= come together, as an action's do:
+    O01 for a when= that says no off=, O02 for an off= with no when=."""
+    if p.get("when") is not None and p.get("off") is None:
+        raise UIError("O01", "ui.%s(%r) can be off (when=%r) and does not say how it looks then" % (
+            kind, name, p["when"]), where=where,
+            expected='off="hide" (it goes) or off="grey" (it stays, dimmed, not a stop)', fix='off="grey"')
+    if p.get("off") is not None and p.get("when") is None:
+        raise UIError("O02", "ui.%s(%r) off=%r: it is never off" % (kind, name, p["off"]), where=where,
+                      fix="drop off=, or give the condition: when=\"COND\"")
+
+
 def toggle(label, name, **p):
     where = _caller()
+    _off_pair("toggle", name, p, where)
     if isinstance(name, str) and name.startswith("."):
         f = _row_field("toggle", name, BOOL, where)
         on = p.pop("on", None)
@@ -2444,6 +2450,7 @@ def slider(label, name, lo, hi, look="bar", **p):
     before its label."""
     where = _caller()
     _checked("slider", "look", look, where)
+    _off_pair("slider", name, p, where)
     p = dict(p, look=look) if look != "bar" else p
     if isinstance(name, str) and name.startswith("."):
         f = _row_field("slider", name, INT, where)
@@ -2463,6 +2470,7 @@ def field(label, name, max=32, commit=False, **p):
     is pressed in it or focus leaves it (`changed=` runs then), and its hints
     are Done and Cancel; without it every edit writes the state."""
     where = _caller()
+    _off_pair("field", name, p, where)
     if commit not in (True, False):
         raise UIError("N01", "ui.field(%r) commit=%r" % (name, commit), where=where,
                       expected="True or False", fix="commit=True")
@@ -3006,32 +3014,6 @@ def text_editor(name, **p):
     return _node("text_editor", name, p, where)
 
 
-LEGACY_IN = ("page", "panel", "case", "pane")
-
-
-def legacy(key, draw, **p):
-    """A surface still drawn with today's verbs, hosted in one node (§7.7,
-    the bridge): one focus stop over the rect the engine lays out for it.
-    `draw(cv, th, x, y, w, h, focused, dt)` draws the surface into that rect,
-    under the page's theme `th`,
-    BEFORE the page's own verbs pass (a hosted surface begins its own pass;
-    the page's overlays lie over it); `pointer(x, y, click)` is handed a
-    press in its own coordinates and what follows until the release, True
-    where it took it; `keys(i)` the frame's input while it holds focus,
-    True where it took it (else the page moves focus as from any stop);
-    `hints()` the hints the page's band shows while it holds focus; `gen()`
-    an int that moves whenever its pixels may, which an idle frame polls
-    (it asks for its own frames otherwise). Stands where a region stands:
-    in a page, a panel, a case or a pane. It goes with the old engine."""
-    where = _caller()
-    n = _node("legacy", key, dict(p, draw=draw), where)
-    if n.parent is not None and n.parent.kind not in LEGACY_IN:
-        raise UIError("N03", "ui.legacy(%r) in a %s" % (key, n.parent.kind), where=where,
-                      expected=", ".join(LEGACY_IN),
-                      fix="a hosted surface is a region: put it in a pane, a case or a panel")
-    return n
-
-
 def slot(name, **p):
     """A hole in the app's layout another process's window may be docked in
     (the desk handoff's ui.slot): the shell resolves its rect."""
@@ -3131,6 +3113,7 @@ def push(build):
     a = _command("push")
     a.pages.append(build)
     a.openers = getattr(a, "openers", []) + [getattr(a, "fired_id", None)]
+    a.shown_due = True
     _trace("page", "push", "page %d, opened from %r" % (len(a.pages), a.openers[-1]))
     a.root = None
 
@@ -3143,6 +3126,7 @@ def pop():
     if len(a.pages) > 1:
         a.pages.pop()
         a.root = None
+        a.shown_due = True
         a.want_focus = a.openers.pop() if getattr(a, "openers", None) else None
         _trace("page", "pop", "page %d, focus back to %r" % (len(a.pages), a.want_focus))
         return
@@ -3219,6 +3203,7 @@ class Builder:
         self.s = s
         self.pages = [build]
         self.root = None
+        self.shown_due = False          # a push or a Back: the next build runs its page's shown=
         self.builds = 0
         self.clock = 0
         self.timers = []
@@ -3584,8 +3569,7 @@ def _collecting(fn, returns_node):
 NODE_CALLS = ("page", "group", "label", "info", "link", "button", "item", "card", "toggle", "slider",
               "field", "seg", "table", "col", "rows", "cards", "picture", "progress", "empty", "dialog",
               "popover", "menu", "split", "grid", "panel", "canvas", "foot", "scroll", "rule", "note",
-              "bubble", "month", "toast", "cells", "stepper", "hints", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status",
-              "legacy")
+              "bubble", "month", "toast", "cells", "stepper", "hints", "text_view", "switch", "tabs", "panes", "pane", "text_editor", "slot", "row", "tools", "lent", "status")
 DECL_CALLS = ("action", "hook", "labels", "work", "derive", "app")
 COMMAND_CALLS = ("push", "pop", "focus", "after", "post")
 for _n in NODE_CALLS:

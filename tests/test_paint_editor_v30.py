@@ -10,7 +10,7 @@ lives in runtime.editors_paint_map and runtime.editors_sheet, shared with the fr
 
 from pathlib import Path
 
-from ws_helpers import StubInput, select_on_home
+from ws_helpers import StubInput, select_on_home, paint_grid_at
 import pytest
 from ws_helpers import boot_on_fixture
 
@@ -28,7 +28,7 @@ def _cell_center(ws, lx, ly, dim):
     `dim` pixels, where the last frame placed the grid."""
     pl = ws.paint_layer
     cell = pl.layout.span // dim
-    gx, gy = pl.grid_at()
+    gx, gy = paint_grid_at(pl)
     return (gx + lx * cell + cell // 2, gy + ly * cell + cell // 2)
 
 

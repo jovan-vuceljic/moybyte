@@ -1,0 +1,140 @@
+> sh printf 'abcdef\nsecond\nthird\n' > /c.txt
+SH end 0
+> sh vi /c.txt
+SH abcdef
+SH second
+SH third
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "c.txt"                                                                     1,1
+SH app vi
+> sh 99999999999999x
+SH 
+SH second
+SH third
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "c.txt" [+]                                                                 1,1
+SH app vi
+> sh G3d99999999999w
+SH 
+SH second
+SH 
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "c.txt" [+]                                                                 3,1
+SH app vi
+> sh ggiThis insert is longer than the keys a dot keeps, so dot repeats nothing^[
+SH This insert is longer than the keys a dot keeps, so dot repeats nothing
+SH second
+SH 
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "c.txt" [+]                                                                1,71
+SH app vi
+> sh j.
+SH This insert is longer than the keys a dot keeps, so dot repeats nothing
+SH second
+SH 
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "c.txt" [+]                                                                 2,6
+SH app vi
+> sh :wq^M
+SH end 0
+> sh cat /c.txt
+SH This insert is longer than the keys a dot keeps, so dot repeats nothing
+SH second
+SH 
+SH end 0
+[exit 0]

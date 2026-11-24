@@ -47,7 +47,6 @@ def _session(glass, across, script):
     `across`, else one over the other; `script` the keys, each to the page
     holding them, an edge handing them on. Answers (frames, [(page holding
     the keys, each page's focus)] a step)."""
-    import ui
     import ui_draw
     import uitree as S
     import uitree_app
@@ -70,7 +69,7 @@ def _session(glass, across, script):
         for i, (e, box) in enumerate(zip(pages, boxes)):
             e._ui.begin(cv, th, box, elsewhere=i != owner[0])
             e.paint(DT, cv, th, box, False)
-            ui.end()
+            ui_draw.page_end()
         frames.append(bytes(cv._buf))
         seen.append((owner[0], pages[0].focus_key, pages[1].focus_key))
 

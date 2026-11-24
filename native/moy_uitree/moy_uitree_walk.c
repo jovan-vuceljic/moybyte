@@ -95,7 +95,7 @@ int uit_letter(uit_t *e, int ch)
 int uit_shown(uit_t *e, int node, int model, int row)
 {
     const uit_node_t *N = NODE(node);
-    if (N->kind == UIT_FIELD && (N->lit & NL_HIDE) && N->mark >= 0 && !uit_cond_eval(e, N->mark, model, row))
+    if (UIT_IS_TWO_WAY_OFF(N->kind) && (N->lit & NL_HIDE) && N->mark >= 0 && !uit_cond_eval(e, N->mark, model, row))
         return 0;
     return N->shown < 0 || uit_cond_eval(e, N->shown, model, row);
 }
@@ -299,7 +299,7 @@ static void over_for(uit_t *e, int k, int model, int row, moy_ui_ctx_t *c, moy_u
                 moy_ui_over_put(o, MOY_UI_OV_CHECK, &one);
         }
     }
-    if (N->mark >= 0 && N->kind == UIT_FIELD && !uit_cond_eval(e, N->mark, model, row)) {
+    if (N->mark >= 0 && UIT_IS_TWO_WAY_OFF(N->kind) && !uit_cond_eval(e, N->mark, model, row)) {
         int32_t one = 1;
         moy_ui_over_put(o, MOY_UI_OV_DISABLED, &one);
     } else if (N->mark >= 0 && N->kind == UIT_BUTTON) {
@@ -1437,15 +1437,18 @@ static int col_h(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
 
 static void walk(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row);
 // Node `k`'s scroll region opened (`ui.scroll`'s, a placed rows list's): its gen counts what it
-// reads, so its scroll takes shift frames; `follow` keeps its foot in view.
-static void scroll_open(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int follow)
+// reads, so its scroll takes shift frames; `lit`'s SC_FOLLOW keeps its foot in view, SC_SNAP
+// draws it in whole units.
+static void scroll_open(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int lit)
 {
     const char *key = uit_str(e, NODE(k)->key);
     int32_t one = 1, gen = (e->flags & UIT_F_GEN) && gen_ok(e) ? uit_cell_gen(e, k) : -1;
     moy_ui_over_t o;
     moy_ui_over_none(&o);
-    if (follow)
+    if (lit & SC_FOLLOW)
         moy_ui_over_put(&o, MOY_UI_OV_FOLLOW, &one);
+    if (lit & SC_SNAP)
+        moy_ui_over_put(&o, MOY_UI_OV_SNAP, &one);
     if (gen >= 0)
         moy_ui_over_put(&o, MOY_UI_OV_GEN, &gen);
     moy_ui_api_scroll(c, s, span_of(key, strlen(key)), &o);
@@ -3140,6 +3143,7 @@ static void draw_tabs(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     if (pad)
         moy_ui_inset32(band, 2 * pad, pad, band);
     tabs_in(e, c, s, k, band);
+    moy_ui_api_space(c, bh + 2 * pad);  // a flowing page's rows start under them
     // what follows them takes the rest, over a flowing page's hints band
     int32_t h = e->rect[3] > e->band_h ? e->rect[3] - e->band_h : 0;
     moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], h);
@@ -3406,8 +3410,8 @@ static int32_t button_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
     if (icon && (N->btn & BT_ALONE))    // a bar item's (flat, no plate) the narrower
         return desk ? (N->lit == 5 ? 28 : 36) : 26 * e->fs;
     int32_t w = out[2] + (icon ? (desk ? 20 : 14 * e->fs) : 0);
-    if (N->btn & BT_LARGE) {
-        // look="large": twice the pads, a least width half again the toolkit's
+    if (N->btn & BT_HERO) {
+        // look="hero": twice the pads, a least width half again the toolkit's
         int32_t least = desk ? 112 : 84 * e->fs;
         w += desk ? 32 : 24 * e->fs;
         w = w > least ? w : least;
@@ -3415,10 +3419,10 @@ static int32_t button_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
     return w;
 }
 
-// A button's height on a flowing page: the toolkit's, half again for look="large".
+// A button's height on a flowing page: the toolkit's, half again for look="hero".
 static int32_t button_h(uit_t *e, int k, int32_t h)
 {
-    return (NODE(k)->btn & BT_LARGE) ? h * 3 / 2 : h;
+    return (NODE(k)->btn & BT_HERO) ? h * 3 / 2 : h;
 }
 
 // An empty's line onto `b`, broken at word breaks into lines of its column (the width `w` it
@@ -4244,6 +4248,63 @@ static void draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int m
     e->fit_k = was[0], e->fit_model = was[1], e->fit_row = was[2];
 }
 
+// Note `k`'s icon ("info" where it has none) and each line's paragraph into `lines`,
+// NUL-separated, empty ones kept.
+static moy_ui_span_t note_of(uit_t *e, int k, int model, int row, uit_buf_t *lines)
+{
+    const uit_node_t *N = NODE(k);
+    uint32_t ni, ai = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &ni) : 0;
+    if (N->t_icon < 0 || !ni)
+        ai = 0, ni = 0;
+    int any = 0;
+    for (int p = N->props; p != (int)UIT_NONE; p = e->props[p].next) {
+        const uit_prop_t *P = &e->props[p];
+        if (strcmp(uit_str(e, P->name), "lines"))
+            continue;
+        uint32_t n, at = uit_tmpl_render(e, P->idx, model, row, &n);
+        if (any++)
+            uit_buf_printf(lines, "%c", 0);
+        uit_buf_printf(lines, "%.*s", (int)n, e->scratch.p + at);
+    }
+    return ni ? sspan(e, ai, ni) : span_of("info", 4);
+}
+
+// A link with sub=: a list's two-line row (moy_ui_api_value2), its icon= the lead ("@NAME" a
+// person's initials), its value at the right of its label, sub= under them, count= a badge at the
+// sub's right, tag= a pill or mark= an icon after the label.
+static void link_two(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+{
+    const uit_node_t *N = NODE(k);
+    moy_ui_over_t o;
+    char id[UIT_ID_MAX + 1];
+    uint32_t n[7] = {0}, a[7] = {0};
+    a[0] = text(e, k, 0, model, row, &n[0]);
+    a[1] = text(e, k, 1, model, row, &n[1]);
+    if (N->t_icon >= 0)
+        a[2] = uit_tmpl_render(e, N->t_icon, model, row, &n[2]);
+    a[3] = prop_text(e, k, "sub", model, row, &n[3]);
+    a[4] = prop_text(e, k, "count", model, row, &n[4]);
+    a[5] = prop_text(e, k, "tag", model, row, &n[5]);
+    a[6] = prop_text(e, k, "mark", model, row, &n[6]);
+    moy_ui_over_none(&o);
+    node_id(e, k, model, row, id);
+    id_put(e, k, model, row, id);
+    moy_ui_over_text(&o, MOY_UI_OV_ID, span_of(id, strlen(id)));
+    moy_ui_row2_t r2;
+    memset(&r2, 0, sizeof(r2));
+    r2.lead = sspan(e, a[2], n[2]);
+    r2.person = (int16_t)(n[2] > 0 && r2.lead.p[0] == '@');
+    if (r2.person)
+        r2.lead.p++, r2.lead.n--;
+    r2.value = sspan(e, a[1], n[1]);
+    r2.sub = sspan(e, a[3], n[3]);
+    r2.count = sspan(e, a[4], n[4]);
+    r2.tag = sspan(e, a[5], n[5]);
+    r2.mark = sspan(e, a[6], n[6]);
+    if (moy_ui_api_value2(c, s, sspan(e, a[0], n[0]), &r2, &o) && uit_act_can(e, N->act, model, row))
+        fire(e, N->act, k, model, row, NULL);
+}
+
 static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
 {
     const uit_node_t *N = NODE(k);
@@ -4265,8 +4326,13 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
     case UIT_LABEL:
         label_rows(e, c, s, k, model, row, NULL);
         break;
-    case UIT_INFO:
     case UIT_LINK:
+        if (uit_tmpl_prop(e, k, "sub") >= 0) {
+            link_two(e, c, s, k, model, row);
+            break;
+        }
+        // fall through
+    case UIT_INFO:
         a1 = text(e, k, 0, model, row, &n1);
         a2 = text(e, k, 1, model, row, &n2);
         over_for(e, k, model, row, c, &o, id);
@@ -4288,9 +4354,9 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         if ((N->btn & BT_ALONE) && (N->t_icon >= 0 || (N->act >= 0 && uit_str(e, e->acts[N->act].icon)[0])))
             n1 = 0;                 // its icon alone, its word its tooltip
         int32_t big[5] = {0};
-        if ((N->btn & BT_LARGE) && !e->in_flow && !e->in_cell && !e->in_foot && !e->placed &&
+        if ((N->btn & BT_HERO) && !e->in_flow && !e->in_cell && !e->in_foot && !e->placed &&
             moy_ui_api_measure(c, s, MOY_UI_MEASURE_BUTTON, sspan(e, a1, n1), NULL, big)) {
-            // a large button stacked on the page: its own width at the row's start, half again as tall
+            // a hero button stacked on the page: its own width at the row's start, half again as tall
             big[2] = button_w(e, c, s, k, model, row);
             moy_ui_api_at(c, big[0], big[1], big[2], button_h(e, k, big[3]));
         }
@@ -4633,23 +4699,9 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         draw_hints(e, c, s, k);
         break;
     case UIT_NOTE: {
-        // its icon ("info" where it has none) and each line's paragraph, empty ones kept
-        uint32_t ni, ai = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &ni) : 0;
-        if (N->t_icon < 0 || !ni)
-            ai = 0, ni = 0;
         uit_buf_t lines = {0};
-        int any = 0;
-        for (int p = N->props; p != (int)UIT_NONE; p = e->props[p].next) {
-            const uit_prop_t *P = &e->props[p];
-            if (strcmp(uit_str(e, P->name), "lines"))
-                continue;
-            uint32_t n, at = uit_tmpl_render(e, P->idx, model, row, &n);
-            if (any++)
-                uit_buf_printf(&lines, "%c", 0);
-            uit_buf_printf(&lines, "%.*s", (int)n, e->scratch.p + at);
-        }
-        moy_ui_api_note(c, s, ni ? sspan(e, ai, ni) : span_of("info", 4), (const uint8_t *)(lines.p ? lines.p : ""),
-                        lines.n);
+        moy_ui_span_t icon = note_of(e, k, model, row, &lines);
+        moy_ui_api_note(c, s, icon, (const uint8_t *)(lines.p ? lines.p : ""), lines.n);
         uit_buf_free(&lines);
         break;
     }
@@ -4865,6 +4917,28 @@ static void focus_to(moy_ui_ctx_t *c, const char *id)
     moy_ui_api_focus(c, span_of(id, strlen(id)), NULL, 0);
 }
 
+// The shown dialog's button `key` names (its action's name or its label): its label, the
+// toolkit's id for it, into out; 0 where no shown dialog has such a button.
+static int dialog_button(uit_t *e, const char *key, char out[UIT_ID_MAX + 1])
+{
+    int d = uit_dialog(e);
+    if (d < 0)
+        return 0;
+    const uit_node_t *N = NODE(d);
+    for (int i = 0; i < N->nbtn; i++) {
+        int a = e->btns[N->btn + i], t = dialog_label(e, d, i);
+        if (t >= 0) {
+            uint32_t ln, la = uit_tmpl_render(e, t, -1, -1, &ln);
+            snprintf(out, UIT_ID_MAX + 1, "%.*s", (int)ln, e->scratch.p + la);
+        } else {
+            snprintf(out, UIT_ID_MAX + 1, "%s", uit_str(e, e->acts[a].label));
+        }
+        if (!strcmp(key, uit_str(e, e->acts[a].name)) || !strcmp(key, out))
+            return 1;
+    }
+    return 0;
+}
+
 // `_land_focus`: (whether focus moved, a node foreseen into ahead).
 // Whether node k draws this frame: it and each node over it shown, each case its switch's pick.
 static int drawn_now(uit_t *e, int k)
@@ -4900,6 +4974,8 @@ static int land_focus(uit_t *e, moy_ui_ctx_t *c, char ahead[UIT_ID_MAX + 1])
         const char *key = e->want;
         if (id_find(e->prev, e->nprev, key))
             snprintf(fid, sizeof fid, "%s", key);
+        else if (dialog_button(e, key, fid))
+            ;
         else if (!id_in(e, key, fid)) {
             if (drawn_key(e, key, fid))
                 strcpy(ahead, fid);
@@ -5021,14 +5097,6 @@ void uit_set_band_extra(uit_t *e, const char *s, size_t n)
     e->nband_extra = (uint8_t)n;
 }
 
-void uit_set_legacy_hints(uit_t *e, const char *s, size_t n)
-{
-    if (n > sizeof e->legacy_hints)
-        n = 0;
-    memcpy(e->legacy_hints, s, n);
-    e->nlegacy_hints = (uint8_t)n;
-}
-
 static int32_t fdiv(int32_t a, int32_t b)
 {
     int32_t q = a / b;
@@ -5131,7 +5199,6 @@ static int32_t fixed_h(uit_t *e, int k)
     case UIT_TEXT_EDITOR:
     case UIT_SLOT:
     case UIT_PANEL:
-    case UIT_LEGACY:
     case UIT_SCROLL:                    // a scroll region: what its stack leaves, its rows scrolled in it
     case UIT_TABLE:                     // a table: what its stack leaves, its rows scrolled in it
     case UIT_TEXT_VIEW:                 // a text view: what its stack leaves, its lines scrolled in it
@@ -5146,6 +5213,8 @@ static int32_t fixed_h(uit_t *e, int k)
         return -1;
     case UIT_RULE:                      // a rule across: its line
         return (e->flags & UIT_F_DESK) ? 1 : e->fs;
+    case UIT_NOTE:                      // a note in a foot: as tall as its lines (uit_frame measures it)
+        return N->btn ? N->btn : h_row(e);
     case UIT_TOOLS:
         if ((N->lit & TL_LEND) || (N->parent != UIT_NONE && NODE(N->parent)->kind == UIT_PANE &&
                                    (e->flags & UIT_F_DESK)))
@@ -5849,7 +5918,6 @@ static void place_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, i
     switch (N->kind) {
     case UIT_PANES:
     case UIT_PANE:
-    case UIT_LEGACY:
         pn_draw(e, c, s, k, model, row, r);
         return;
     case UIT_CASE:
@@ -6395,27 +6463,6 @@ static void pane_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, in
     stack(e, c, s, k, model, row, body);
 }
 
-// A hosted body: placed, its rect the host's; in the pass, one stop over it that draws nothing.
-static void legacy_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
-                      const int32_t r[4])
-{
-    uit_arr_t *A = e->arr;
-    if (e->placing) {
-        if (A->nplaced < PN_MAX)
-            pn_rec(&A->placed[A->nplaced++], k, r, A);
-        return;
-    }
-    const char *key = uit_str(e, NODE(k)->key);
-    moy_ui_over_t o;
-    int32_t one = 1, got[5];
-    moy_ui_over_none(&o);
-    moy_ui_over_text(&o, MOY_UI_OV_ID, span_of(key, strlen(key)));
-    moy_ui_over_put(&o, MOY_UI_OV_BARE, &one);
-    moy_ui_api_at(c, r[0], r[1], r[2], r[3]);
-    moy_ui_api_part(c, s, span_of(key, strlen(key)), 0, 0, &o, got);
-    id_put(e, k, model, row, key);
-}
-
 static void panes_at(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
                      const int32_t r[4])
 {
@@ -6462,9 +6509,6 @@ static void pn_draw(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, in
     case UIT_PANE:
         pane_at(e, c, s, k, model, row, r);
         return;
-    case UIT_LEGACY:
-        legacy_at(e, c, s, k, model, row, r);
-        return;
     }
     place_at(e, c, s, k, model, row, r);
 }
@@ -6486,8 +6530,6 @@ static int pn_pass(uit_t *e)
     A->root = -1;
     A->depth = A->ghost = 0;
     A->arranging = 1;
-    if (e->placing)
-        A->nplaced = 0;
     for (int i = 0; i < UIT_SP_N; i++)
         A->held[i] = -1;
     return 1;
@@ -6528,7 +6570,7 @@ int uit_panes(const uit_t *e, int32_t *out, int max)
     if (!A || max < UIT_PN_HEAD)
         return 0;
     out[0] = A->root, out[1] = A->alone, out[2] = A->least[0], out[3] = A->least[1];
-    out[4] = A->npanes, out[5] = A->ndivs, out[6] = A->nplaced, out[7] = A->norder, out[8] = A->nsplits;
+    out[4] = A->npanes, out[5] = A->ndivs, out[6] = A->norder, out[7] = A->nsplits;
     int at = UIT_PN_HEAD;
     for (int i = 0; i < A->npanes; i++)
         at = pn_put(out, at, max, &A->panes[i]);
@@ -6544,8 +6586,6 @@ int uit_panes(const uit_t *e, int32_t *out, int max)
         out[at + 9] = D->i, out[at + 10] = D->axis;
         at += 11;
     }
-    for (int i = 0; i < A->nplaced; i++)
-        at = pn_put(out, at, max, &A->placed[i]);
     for (int i = 0; i < A->norder; i++)
         at = pn_put(out, at, max, &A->order[i]);
     for (int i = 0; i < A->nsplits; i++) {
@@ -6662,6 +6702,11 @@ static int closer_of(uit_t *e, int k)
             return got;
     }
     return (N->kind == UIT_ROW || N->kind == UIT_GROUP) && N->on >= 0 ? k : -1;
+}
+
+int uit_page_shown(const uit_t *e)
+{
+    return e->nnodes && NODE(0)->kind == UIT_PAGE ? NODE(0)->changed : -1;
 }
 
 int uit_back_closer(uit_t *e, char *buf, size_t cap)
@@ -6920,10 +6965,7 @@ static void placed_hints(uit_t *e, uit_buf_t *b, int pages)
         return;
     int closer = pop >= 0 ? pop : closer_of(e, 0);
     if (closer < 0) {
-        if (e->has_focused && e->focused.kind == UIT_LEGACY) {
-            if (e->nlegacy_hints)
-                uit_buf_put(b, e->legacy_hints, e->nlegacy_hints - 1u);
-        } else if (e->has_focused && e->focused.kind != UIT_TEXT_EDITOR)
+        if (e->has_focused && e->focused.kind != UIT_TEXT_EDITOR)
             hints(e, b, pages);
         return;
     }
@@ -7287,8 +7329,20 @@ band:
         }
     }
     if (e->foot >= 0) {
-        // the foot: docked above the band, on the page's ground
-        int32_t got[4];
+        // the foot: docked above the band, on the page's ground; a note in it as tall as its
+        // lines at the foot's width (fixed_h reads it)
+        int32_t got[4], lead = (flags & UIT_F_DESK) ? 16 : MOY_UI_HINT_LEAD(0) * fs;
+        KIDS(e->foot, g) {
+            if (NODE(g)->kind != UIT_NOTE)
+                continue;
+            uit_buf_t lines = {0};
+            uint32_t mark = e->scratch.n;
+            moy_ui_span_t icon = note_of(e, g, -1, -1, &lines);
+            NODE(g)->btn = (uint16_t)moy_ui_api_note_h(c, s, icon, (const uint8_t *)(lines.p ? lines.p : ""),
+                                                        lines.n, e->rect[2] - 2 * lead);
+            e->scratch.n = mark;
+            uit_buf_free(&lines);
+        }
         int32_t fh = foot_stacked(e, e->foot), desk = (flags & UIT_F_DESK) != 0;
         int32_t dh = fh ? fh + (NODE(e->foot)->lit == 2 ? 0 : desk ? 14 : 2 * fs)
                         : (desk ? 44 : 22 * fs) + foot_line(e, e->foot);

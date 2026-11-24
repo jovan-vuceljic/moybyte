@@ -1,4 +1,4 @@
-// The public UI API's engine (moy_ui_api.h; docs/ui_api_2026-10.md §2).
+// The public UI API's engine (moy_ui_api.h; docs/history/ui_api_2026-10.md §2).
 
 #include "moy_ui_api_int.h"
 
@@ -18,64 +18,7 @@ void moy_ui_inst_init(moy_ui_inst_t *I) {
     memset(I, 0, sizeof(*I));
 }
 
-void moy_ui_inst_pull(moy_ui_inst_t *I, uint32_t (*pull)(uint32_t have, void *buf, size_t cap),
-                      void *buf, size_t cap,
-                      uint32_t (*font_pull)(uint32_t gen, uint32_t font, void *buf, size_t cap)) {
-    if (I == NULL) {
-        I = &s_main;
-    }
-    I->font_pull = font_pull;
-    I->pull = pull;
-    I->theme_buf = buf;
-    I->theme_cap = cap;
-    I->theme_gen = 0;
-}
-
-// The fonts the last install loaded, freed.
-static void fonts_drop(moy_ui_inst_t *I) {
-    for (int i = 0; i < MOY_UI_THEME_FONTS; i++) {
-        if (I->font_local[i] != 0) {
-            moy_font_free(I->font_local[i]);
-        }
-        I->font_from[i] = I->font_local[i] = 0;
-    }
-}
-
-// An install's fonts made the copy's: each id the block names fetched once
-// (roles share fonts), loaded, and its word rewritten; a font that cannot
-// be had draws in petme128.
-static void fonts_take(moy_ui_inst_t *I, uint32_t gen) {
-    uint32_t *ids[MOY_UI_THEME_FONTS];
-    int n = moy_ui_theme_font_ids(ids);
-    for (int i = 0; i < n; i++) {
-        uint32_t from = *ids[i], got = 0;
-        if (from == 0) {
-            continue;
-        }
-        for (int j = 0; j < MOY_UI_THEME_FONTS; j++) {
-            if (I->font_from[j] == from && I->font_local[j] != 0) {
-                got = I->font_local[j];
-                break;
-            }
-        }
-        uint32_t len = got != 0 ? 0 : I->font_pull(gen, from, NULL, 0);
-        uint8_t *buf = len > 0 ? (uint8_t *)KEPT_ALLOC(len) : NULL;
-        if (buf != NULL) {
-            if (I->font_pull(gen, from, buf, len) == len
-                && moy_font_load(buf, len, &got) == MOY_FONT_OK) {
-                I->font_from[i] = from;
-                I->font_local[i] = got;
-            } else {
-                got = 0;
-            }
-            KEPT_FREE(buf);
-        }
-        *ids[i] = got;
-    }
-}
-
 void moy_ui_inst_free(moy_ui_inst_t *I) {
-    fonts_drop(I);
     KEPT_FREE(I->kept);
     KEPT_FREE(I->text);
     KEPT_FREE(I->blocks);
@@ -434,8 +377,6 @@ void moy_ui_api_reset_in(moy_ui_ctx_t *c, moy_ui_inst_t *I) {
     c->page_stop = NO_PAGE;
     c->icon_slot = c->icon_glyph = c->row_slot = c->row_glyph = -1;
     c->dlg.pick = -1;
-    c->bar.act = -1;
-    c->bar.chip_at = -1;
     c->snap.at = -1;
 }
 
@@ -1109,26 +1050,6 @@ static void dialog_plan(moy_ui_ctx_t *c, int owed, int same) {
     c->sh.plan = MOY_UI_SHIFT_ROWS;
 }
 
-void moy_ui_inst_sync(moy_ui_inst_t *I) {
-    if (I == NULL) {
-        I = &s_main;
-    }
-    if (I->pull == NULL) {
-        return;
-    }
-    uint32_t g = I->pull(I->theme_gen, I->theme_buf, I->theme_cap);
-    if (g != 0 && I->font_pull != NULL) {
-        fonts_drop(I);
-    }
-    if (g != 0 && moy_ui_theme_put(I->theme_buf, I->theme_cap) == MOY_UI_OK) {
-        if (I->font_pull != NULL) {
-            fonts_take(I, g);
-        }
-        I->theme_gen = g;
-        I->theme_puts++;
-    }
-}
-
 // The keys entering the page from a side (moy_ui_api_enter): focus on its stop nearest that
 // side, of the stops the last frame drew (a page that drew none keeps the first one drawn).
 static void enter_land(moy_ui_ctx_t *c) {
@@ -1256,7 +1177,6 @@ static void pass_clear(moy_ui_ctx_t *c) {
     c->cut_on = 0;
     c->tip_at.w = 0;
     c->tip_shown = 0;
-    c->bar.seen = 0;
     c->way_on = 0;
     c->page_title[0] = 0;
     c->kf.k = 0;                        // (a host's begin says what its canvas keeps)
@@ -1278,7 +1198,6 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     if (in == NULL) {
         in = none;
     }
-    moy_ui_inst_sync(c->inst);
     c->inst->dims |= MOY_UI_DIMS_BEGUN;
     int was_held = (c->last_ptr & MOY_UI_P_LIVE) && (c->last_ptr & MOY_UI_P_HELD);
     memcpy(c->in, in, sizeof(c->in));
@@ -1483,13 +1402,21 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
     if (field && c->typed) {
         c->typed_box = f->b;        // its row joins a shift frame's floor
     }
+    int carry_x = c->carry_x, carry_y = c->carry_y;
+    c->carry_x = c->carry_y = 0;
     if (!off) {
-        // the steps each direction makes: its press edge and its repeats
+        // the steps each direction makes: its press edge, its repeats and
+        // the steps last frame's roll had no stop for yet, which a step the
+        // other way drops
         uint32_t rw = (uint32_t)in[MOY_UI_IN_REP];
         int sx = ((pressed & MOY_UI_B_RIGHT) ? 1 : 0) + (int)((rw >> 8) & 0xFFu)
                  - ((pressed & MOY_UI_B_LEFT) ? 1 : 0) - (int)(rw & 0xFFu);
         int sy = ((pressed & MOY_UI_B_DOWN) ? 1 : 0) + (int)((rw >> 24) & 0xFFu)
                  - ((pressed & MOY_UI_B_UP) ? 1 : 0) - (int)((rw >> 16) & 0xFFu);
+        carry_x = (sx > 0 && carry_x < 0) || (sx < 0 && carry_x > 0) ? 0 : carry_x;
+        carry_y = (sy > 0 && carry_y < 0) || (sy < 0 && carry_y > 0) ? 0 : carry_y;
+        sx += carry_x;
+        sy += carry_y;
         int dir = (sx < 0 ? MOY_UI_B_LEFT : sx > 0 ? MOY_UI_B_RIGHT : 0)
                   | (sy < 0 ? MOY_UI_B_UP : sy > 0 ? MOY_UI_B_DOWN : 0);
         const moy_ui_keep_t *fck = f != NULL ? mua_keep_of(c, f->id) : NULL;
@@ -1556,7 +1483,22 @@ int moy_ui_api_begin(moy_ui_ctx_t *c, const int32_t *in, moy_ui_box_t surface, i
                 to = t;
                 at = &v[t];
             }
-            if (to < 0 && !c->modal) {
+            // a roll faster than the view: the stops past the last one laid
+            // out (while a step landed, or a roll's page still glides to
+            // them) are the next frame's, which walks the rest; a press
+            // that finds no stop is the page's edge
+            int rolling = rw != 0 || carry_x != 0 || carry_y != 0;
+            int carry = k > 0 && (to >= 0 || (rolling && !c->modal && moy_ui_api_moving(c)));
+            if (carry) {
+                int8_t rest = (int8_t)((one & (MOY_UI_B_UP | MOY_UI_B_LEFT)) ? -k : k);
+                if (one & (MOY_UI_B_UP | MOY_UI_B_DOWN)) {
+                    c->carry_y = rest;
+                } else {
+                    c->carry_x = rest;
+                }
+                c->owe = 1;
+            }
+            if (to < 0 && !carry && !c->modal) {
                 c->edge = (uint8_t)(one == MOY_UI_B_UP ? MOY_UI_EDGE_UP : one == MOY_UI_B_DOWN ? MOY_UI_EDGE_DOWN
                                     : one == MOY_UI_B_LEFT ? MOY_UI_EDGE_LEFT : MOY_UI_EDGE_RIGHT);
             }
@@ -2000,6 +1942,11 @@ moy_ui_box_t mua_place_row(moy_ui_ctx_t *c, int h, int *stacked, int row) {
     int gap = stack_gap(c);
     if (c->grp_open) {
         // a group's rows sit on its card, one under the next
+        if (c->ring.due == 1) {
+            c->ring.cut = b;            // the row under a focused button: its ring's foot is cut there
+            c->ring.cut.h = (int16_t)h;
+            c->ring.due = 2;
+        }
         c->grp_first = c->grp_n == 0;
         if (c->grp_n < 255) {
             c->grp_n++;
@@ -2478,6 +2425,8 @@ void mua_band(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_box_t b, int stack
     moy_ui_group_band(s, mua_card_of(c), b, c->grp_first || cut, c->fs, mua_card_flags(c));
 }
 
+static int ring_reach(const moy_ui_ctx_t *c);
+
 // The open group ends: its card's foot under its last row, and the gap the
 // next group's caption keeps.
 void mua_group_close(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
@@ -2495,6 +2444,22 @@ void mua_group_close(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
             mua_clip_out(&k);
         }
     }
+    if (c->ring.due == 2) {
+        // a focused button's ring over the row drawn flush under it, there alone
+        int reach = ring_reach(c);
+        moy_ui_box_t rb = c->ring.b, cut = c->ring.cut;
+        int y0 = rb.y + rb.h > cut.y ? rb.y + rb.h : cut.y, y1 = rb.y + rb.h + reach;
+        y1 = y1 < cut.y + cut.h ? y1 : cut.y + cut.h;
+        if (y1 > y0) {
+            moy_ui_box_t in = {(int16_t)(rb.x - reach), (int16_t)y0, (int16_t)(rb.w + 2 * reach), (int16_t)(y1 - y0)};
+            clip_t k;
+            EACH_ROW(c, k, s, in, 1, in) {
+                moy_ui_button_ring(s, rb, c->ring.kind, c->ring.flags, c->ring.interact, &c->ring.bt);
+                mua_clip_out(&k);
+            }
+        }
+    }
+    c->ring.due = 0;
     // a desk's card keeps its ring's foot below its last row
     c->y = (int16_t)(c->y + (mua_kmetric(MOY_UI_K_GROUP, MOY_UI_M_GROUP_GAP) + c->grp_card) * c->fs);
     c->grp_card = 0;
@@ -3385,7 +3350,6 @@ int moy_ui_api_page_again(moy_ui_ctx_t *c) {
     c->page_y = 0;
     c->tab_step = 0;
     c->typed_n = 0;
-    c->bar.act = -1;
     c->in[MOY_UI_IN_BTNP] = c->in[MOY_UI_IN_KEY] = c->in[MOY_UI_IN_REP] = 0;
     c->in[MOY_UI_IN_KEYREP] = c->in[MOY_UI_IN_WHEEL_X] = c->in[MOY_UI_IN_WHEEL_Y] = 0;
     c->in[MOY_UI_IN_DT] = 0;
@@ -3638,7 +3602,15 @@ int moy_ui_api_button(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
         b.h = (int16_t)mua_row_h(c);
         b.w = (int16_t)(bw < rb.w - 2 * reach ? bw : rb.w - 2 * reach);
     } else {
-        b = mua_place(c, mua_row_h(c), &stacked);
+        rb = mua_place(c, mua_row_h(c), &stacked);
+        b = rb;
+        if (stacked) {
+            // a row of the stack: its focus ring's reach inside the page's edges
+            int reach = ring_reach(c), left = c->page.x + reach, right = c->page.x + c->page.w - reach;
+            int x0 = b.x > left ? b.x : left, x1 = b.x + b.w < right ? b.x + b.w : right;
+            b.x = (int16_t)x0;
+            b.w = (int16_t)(x1 > x0 ? x1 - x0 : 0);
+        }
     }
     if (rb.w == 0) {
         rb = b;
@@ -3677,6 +3649,16 @@ int moy_ui_api_button(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
             moy_ui_bar_item(s, ib, fl, &bt);
         } else {
             moy_ui_button(s, b, kid, fl, mua_interact(st), &bt, MOY_UI_PHASE_ALL);
+            if (stacked && c->grp_open && (fl & MOY_UI_F_FOCUS)) {
+                // the group's next row stands flush under it and is drawn after it: its
+                // ring's foot is drawn again over that row as the group closes
+                c->ring.b = b;
+                c->ring.kind = (int16_t)kid;
+                c->ring.flags = (int16_t)fl;
+                c->ring.interact = (int8_t)mua_interact(st);
+                c->ring.bt = bt;
+                c->ring.due = 1;
+            }
         }
         mua_clip_out(&k);
     }
@@ -3790,6 +3772,7 @@ void moy_ui_api_group_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     mua_group_close(c, s);
     c->has_at = 0;
     c->grp_open = 1;
+    c->ring.due = 0;
     c->grp_n = 0;
     // on the desk a card is a ring round its rows: its top's room above them
     c->grp_card = (uint8_t)(c->cls != 0);
@@ -3802,6 +3785,7 @@ void moy_ui_api_group_rules(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
     mua_group_close(c, s);
     c->has_at = 0;
     c->grp_open = 1;
+    c->ring.due = 0;
     c->grp_n = 0;
     c->grp_top = c->y;
 }
@@ -3867,6 +3851,7 @@ void moy_ui_api_group(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t cap
     }
     c->snap.out = 0;
     c->grp_open = 1;
+    c->ring.due = 0;
     c->grp_n = 0;
     c->grp_top = c->y;
 }
@@ -4439,6 +4424,38 @@ int32_t moy_ui_api_list(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t l
     return cur < count ? cur : count - 1;
 }
 
+int moy_ui_api_value2(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label,
+                      const moy_ui_row2_t *two, const moy_ui_over_t *o) {
+    o = mua_over(o);
+    int pflags = mua_ground_of(c) | (c->tap ? MOY_UI_TAP : 0);
+    int rh = moy_ui_row2_h(c->fs, pflags);
+    if (c->tap && rh < MOY_UI_TAP_ROW) {
+        rh = MOY_UI_TAP_ROW;
+    }
+    int stacked;
+    moy_ui_box_t b = mua_place(c, rh, &stacked);
+    int st = mua_vrow_stop(c, mua_id_of(c, o, label), b, 0, o, label);
+    int f = MOY_UI_F_EDGE | mua_mark_flags(st, o) | (o->disabled == 1 ? MOY_UI_F_DISABLED : 0);
+    int ia = (st & MOY_UI_ST_PRESSED) ? MOY_UI_PRESSED : (st & MOY_UI_ST_HOVER) ? MOY_UI_HOVER : -1;
+    int16_t col[3];
+    colours(s, o, col);
+    moy_ui_row_t r;
+    row_init(&r, label, c->fs, col);
+    r.label.n = 0;
+    moy_ui_row2_t r2 = *two;
+    r2.title = label;
+    r2.pad = (int16_t)(mua_kmetric(MOY_UI_K_ROW, MOY_UI_M_ROW_PAD) * c->fs);
+    clip_t k;
+    mua_band_mark(c, b, stacked, f);
+    EACH_ROW(c, k, s, b, stacked, c->page) {
+        mua_band(c, s, b, stacked);
+        moy_ui_row(s, b, MOY_UI_K_ROW_LIST, f, ia, &r, MOY_UI_PHASE_ALL);
+        moy_ui_row2(s, b, &r2, c->fs, pflags);
+        mua_clip_out(&k);
+    }
+    return (st & MOY_UI_ST_ACTIVATED) != 0;
+}
+
 int moy_ui_api_icon(moy_ui_ctx_t *c, moy_ui_span_t name) {
     c->icon_slot = (int16_t)moy_ui_icon_slot(name.p, name.n);
     c->icon_glyph = (int16_t)moy_ui_icon_glyph(name.p, name.n);
@@ -4958,6 +4975,13 @@ int moy_ui_api_split_toward(const moy_ui_ctx_t *c, int x, int y, int dx, int dy,
 int moy_ui_api_focus(moy_ui_ctx_t *c, moy_ui_span_t id, char *buf, size_t cap) {
     if (id.p != NULL) {
         uint32_t h = mua_hash(id.p, id.n, 0);
+        if (c->modal || c->dlg.id != 0) {
+            // a shown dialog's button, by its name: its stop is keyed in its dialog
+            uint32_t in = mua_hash(id.p, id.n, c->dlg.id ? c->dlg.id : c->dlg.last);
+            if (mua_find(c->cur, c->n_cur, in) >= 0 || mua_find(c->prev, c->n_prev, in) >= 0) {
+                h = in;
+            }
+        }
         if (h != c->focus) {
             c->focus = h;
             c->reveal = 1;

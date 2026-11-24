@@ -870,7 +870,7 @@ def _remote_state(ws):
     except Exception as exc:  # noqa: BLE001
         st["stages_err"] = str(exc)
     try:
-        app = ws.app("appearance")
+        app = ws.registered_app("appearance")     # its claim, nothing built
         cart = None
         for c in ws.carts.all:
             if c.get("title") == "Appearance":

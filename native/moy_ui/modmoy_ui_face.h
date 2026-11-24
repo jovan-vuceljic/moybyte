@@ -547,13 +547,6 @@ static mp_obj_t ui_api_page_title(mp_obj_t a0) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_page_title_obj, ui_api_page_title);
 
-static mp_obj_t ui_api_bar_tap(mp_obj_t a0, mp_obj_t a1) {
-    moy_ui_ctx_t *c = ctx_of(a0);
-    moy_ui_api_bar_tap(c, num(a1));
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_2(ui_api_bar_tap_obj, ui_api_bar_tap);
-
 static mp_obj_t ui_api_back(mp_obj_t a0, mp_obj_t a1) {
     moy_ui_ctx_t *c = ctx_of(a0);
     return mp_obj_new_bool(moy_ui_api_back(c, mp_obj_is_true(a1)));
@@ -581,12 +574,6 @@ static mp_obj_t ui_api_run_page_title(void) {
     return r_ == NULL ? mp_const_none : ret_str(r_, strlen(r_));
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(ui_api_run_page_title_obj, ui_api_run_page_title);
-
-static mp_obj_t ui_api_run_bar_tap(mp_obj_t a0) {
-    moy_ui_run_bar_tap(num(a0));
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_run_bar_tap_obj, ui_api_run_bar_tap);
 
 static mp_obj_t ui_api_paste(mp_obj_t a0, mp_obj_t a1) {
     moy_ui_ctx_t *c = ctx_of(a0);
@@ -946,13 +933,11 @@ static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_lost_obj, ui_api_lost);
     { MP_ROM_QSTR(MP_QSTR_api_menu_danger), MP_ROM_PTR(&ui_api_menu_danger_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_tool), MP_ROM_PTR(&ui_api_tool_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_page_title), MP_ROM_PTR(&ui_api_page_title_obj) }, \
-    { MP_ROM_QSTR(MP_QSTR_api_bar_tap), MP_ROM_PTR(&ui_api_bar_tap_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_back), MP_ROM_PTR(&ui_api_back_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_cancel), MP_ROM_PTR(&ui_api_cancel_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_run_cancel), MP_ROM_PTR(&ui_api_run_cancel_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_run_back), MP_ROM_PTR(&ui_api_run_back_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_run_page_title), MP_ROM_PTR(&ui_api_run_page_title_obj) }, \
-    { MP_ROM_QSTR(MP_QSTR_api_run_bar_tap), MP_ROM_PTR(&ui_api_run_bar_tap_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_paste), MP_ROM_PTR(&ui_api_paste_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_run_paste), MP_ROM_PTR(&ui_api_run_paste_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_run_steps), MP_ROM_PTR(&ui_api_run_steps_obj) }, \

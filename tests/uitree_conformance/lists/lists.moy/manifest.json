@@ -3,6 +3,6 @@
   "title": "Lists",
   "runtime": "lua",
   "main": "main.lua",
-  "extensions": ["moybyte.ui", "moybyte.uitree"],
+  "extensions": ["moybyte.uitree"],
   "moybyte": {"type": "app", "permissions": []}
 }

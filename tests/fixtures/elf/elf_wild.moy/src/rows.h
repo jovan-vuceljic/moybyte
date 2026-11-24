@@ -113,8 +113,6 @@ static const wild_row_t WILD_ROWS[] = {
     { 115, "moy_status_panel", 2, { A_VAL, A_STR0 }, { -1, -1 } },
     { 117, "moy_screen", 2, { A_BUF0, A_BUF0 }, { -1, -1 } },
     { 118, "moy_present", 2, { A_BUF, A_VAL }, { 1, -1 } },
-    { 119, "moy_ui_pull", 3, { A_VAL, A_BUF, A_VAL }, { -1, 2, -1 } },
-    { 120, "moy_ui_font_pull", 4, { A_VAL, A_VAL, A_BUF0, A_VAL }, { -1, -1, 3, -1 } },
     { 121, "moy_aes_ctr", 6, { A_BUF, A_VAL, A_BUF, A_VAL, A_BUF, A_VAL }, { 1, -1, 3, -1, 5, -1 } },
     { 122, "moy_aes_ccm_seal", 7, { A_BUF, A_VAL, A_BUF, A_VAL, A_VAL, A_BUF, A_VAL }, { 1, -1, 3, -1, -1, 6, -1 } },
     { 123, "moy_aes_ccm_open", 7, { A_BUF, A_VAL, A_BUF, A_VAL, A_VAL, A_BUF, A_VAL }, { 1, -1, 3, -1, -1, 6, -1 } },

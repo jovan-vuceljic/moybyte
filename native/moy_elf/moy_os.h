@@ -198,19 +198,13 @@ moy_os_proc_t *moy_os_service(const moy_os_module_t *m, const moy_os_caps_t *cap
 // frame message, a bit each in libmoy's moy_button order, and the frame's
 // milliseconds, then the frame's input words where the console gives them
 // (an app's: MOY_OS_FRAME_IN_*). Its screen is w x h pixels of `depth`
-// bytes, row by row: palette indices (1, a game's) or RGB565 (2, an app's,
-// the surface a copy of the toolkit it links draws on). moy_screen answers
+// bytes, row by row: palette indices (1, a game's) or RGB565 (2, an app's).
+// moy_screen answers
 // its size, and moy_present copies a whole screen from the module into the
 // process's frame, which the console draws at its frame. Its stop
 // is a service's, the descriptor hung up. It has no process row of its own:
 // `pid` is its Player run's, and the scheduler never reaps or stops it.
 #define MOY_OS_FRAME "frame"
-// An app's queue hears the console's Paste too: the system's message
-// `paste`, its arguments a JSON array of one string (no escape but \" and
-// \\), posted ahead of the frame message carrying Ctrl+V
-// (runtime/run/elf_run.py's post_paste), which the toolkit it links inserts
-// into its focused field (sdk/src/moyui_link.c).
-#define MOY_OS_PASTE "paste"
 // `data` (n bytes, copied; NULL: none) is what moy_game_data reads: the
 // console's hand-over to a game built from a compiled cart's source
 // (sdk/include/moybyte/cart.h, sdk/src/moycart.c: its sprites, map, flags,
@@ -275,7 +269,7 @@ int moy_os_game_pmem(uint32_t pid, int32_t out[256]);
 #define MOY_OS_ENDED (-4)
 // An app's input words: the pointer's x and y on the screen, its state
 // (lua_ext.snap_shared's flags, 0 none), the key typed this frame (0 none),
-// how its ui frame draws (native/moy_ui/moy_ui_wasm.h's MOYCORE_UI_FACE_*:
+// how its ui frame draws (native/moy_ui/moy_ui_run.h's MOYCORE_UI_FACE_*:
 // a window's body, the desk's rows, the shell's look, the tap floor, the
 // font scale), whether the console's RGB565 words are byte-swapped (its canvas's swapped565), the rect its ui frame lies
 // in, its content_rect() (x, y, w, h: the screen less the host's bars), and
@@ -283,9 +277,7 @@ int moy_os_game_pmem(uint32_t pid, int32_t out[256]);
 // window's or the screen's size and the font scale (0, 0, 0 for a game);
 // then the frame's steps beyond its presses (moy_ui_api.h's MOY_UI_IN_REP,
 // a held direction's repeats and the trackball's steps, and MOY_UI_IN_KEYREP,
-// a held key's typing repeats) and the console's asks of the toolkit the app
-// links, MOY_OS_ASK_* (its cancel and its back, which the app's last
-// moy_ui_tell said it would take: moy_screen_slot.h, THE TOOLKIT'S ANSWERS).
+// a held key's typing repeats); word 15 is 0.
 #define MOY_OS_FRAME_IN 16
 #define MOY_OS_FRAME_IN_X 0
 #define MOY_OS_FRAME_IN_Y 1
@@ -302,15 +294,6 @@ int moy_os_game_pmem(uint32_t pid, int32_t out[256]);
 #define MOY_OS_FRAME_IN_LAYOUT_FS 12
 #define MOY_OS_FRAME_IN_REP 13
 #define MOY_OS_FRAME_IN_KEYREP 14
-#define MOY_OS_FRAME_IN_ASK 15
-#define MOY_OS_ASK_CANCEL 1
-#define MOY_OS_ASK_BACK 2
-// moy_ui_tell's answers: a field in focus (the keyboard types), a cancel
-// the toolkit would take (an edit in progress, else a popover open), a back
-// it would take.
-#define MOY_OS_TOLD_TYPING 1
-#define MOY_OS_TOLD_CANCEL 2
-#define MOY_OS_TOLD_BACK 4
 int moy_os_game_frame(uint32_t pid, uint32_t held, uint32_t pressed, uint32_t ms,
                       uint32_t max_us, const int32_t *in, int n_in);
 // Game `pid`'s frame, w x h pixels of `depth` bytes, for the game's life (a

@@ -1,6 +1,6 @@
 # UI building blocks (2026-10-29)
 
-What the public UI API (`docs/ui_api_2026-10.md`) needs so that every Moybyte
+What the public UI API (`docs/history/ui_api_2026-10.md`) needs so that every Moybyte
 surface, and a new app, is a COMPOSITION of engine blocks rather than a new
 element per screen, and how the boards' speed is won back once the
 surfaces are on them. The plan that moves the surfaces, and its state, is
@@ -14,7 +14,7 @@ surfaces are on them. The plan that moves the surfaces, and its state, is
   composes it, or the gap is fixed in a block. No verb is named after the
   screen that first needed it.
 - The blocks are C (`native/moy_ui/`), and a Python, Lua and compiled app call
-  the same ones (`docs/ui_api_2026-10.md` §1's three faces).
+  the same ones (`docs/history/ui_api_2026-10.md` §1's three faces).
 - **Move first, then one perf pass (owner, 2026-10-30).** Every surface
   moves onto the blocks on the host, held by its goldens, its allocation
   pins and its tests. Then one pass measures the boards with
@@ -75,7 +75,7 @@ So:
 
 ## 2. What already composes
 
-The verbs in `docs/ui_api_2026-10.md` §1 stay; their calls do not change.
+The verbs in `docs/history/ui_api_2026-10.md` §1 stay; their calls do not change.
 Most shipped apps are drawn by them already. Three of them already virtualize
 and are the model for anything new:
 
@@ -172,7 +172,7 @@ when one needs it.
 - a placed table has the shift-frame and floor support in `moy_ui_api.c`.
 
 The list block is `ui.table` with two additions, in every face
-(`docs/ui_api_2026-10.md` §2, A table of parts):
+(`docs/history/ui_api_2026-10.md` §2, A table of parts):
 - **a part column.** `o.part = (w, h)` makes column 0 a part the app draws
   into (a meter, a picture, a control), rows `h` tall. After the table,
   `ui.table_part(r)` answers the rows the frame draws, one a call, with
@@ -222,7 +222,7 @@ glides). Its frames draw the view whole (G3).
 `ui.split(id, dir, sizes, o, out)` answers one rect per pane, with focus
 moving between panes as between groups. With `o.drag` it adds a divider the
 engine keeps by id. A split with neither focus nor a divider stays the rect
-algebra (`hsplit`/`vsplit`). `docs/ui_api_2026-10.md` §5a says each answer;
+algebra (`hsplit`/`vsplit`). `docs/history/ui_api_2026-10.md` §5a says each answer;
 the Editor desk's dividers are splits.
 
 **The panes a pass cut are a record.** Each split with focus or a divider

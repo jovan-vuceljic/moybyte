@@ -11,7 +11,7 @@ stream from, before either is built:
   cluster, with the console's quick controls and then each app's card.
 
 **Every file is an engine render.** `experiments/music_mockups/music_mockups.py` draws each page
-with the public UI API's verbs (`docs/ui_api_2026-10.md`) on the
+with the public UI API's verbs (`docs/history/ui_api_2026-10.md`) on the
 shell-goldens workstation (`tests/test_shell_goldens.py`), at the board's
 real size, in Moy Night (`moy-dark_*`) and, for some scenes, Moy Day
 (`moy-light_*`). The media service's answers are faked. The status item and

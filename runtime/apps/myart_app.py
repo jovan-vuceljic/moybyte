@@ -28,7 +28,6 @@ import uitree as ui
 import uitree_app
 
 from layout_base import bar_rows, content_of, ground_round, metric_class, DESK
-from moy_store_base import builtin_name
 from artwork import picture_size, GAME_W, GAME_H
 from picture_copies import PictureCopies
 from drawing_pages import GamePage, shown, dot, dots
@@ -235,19 +234,10 @@ def build():
                 ui.item("rename_ask", label="Rename" + dots() + "\tR")
                 ui.item("dup", label="Duplicate\tCtrl D")
             with ui.menu(""):
-                ui.item("trash", label="Move to Trash\tDel", mkind="danger")
+                ui.item("trash", label="Move to Trash\tDel", kind="danger")
         with ui.dialog("{rn_title}", ["cancel", "rename"], shown="renaming"):
             ui.field("Name", "name", 32, on="rename")
         ui.toast("{toast}", icon="{toast_icon}", shown="toasting")
-
-
-def is_app(cart):
-    """True only for the shipped My Art identity, not a renamed or copied
-    cart."""
-    if not cart or cart.get("title") != "My Art":
-        return False
-    path = cart.get("path")
-    return not path or builtin_name(path) == "moybyte.my_art.moy"
 
 
 class _Owed:
@@ -281,9 +271,7 @@ def _check(lay, name):
         lay._damage.all()
 
 
-class MyArtAppLayer(uitree_app.app_layer("myart", "My Art", build, is_app,
-                                         needs=("files", "nav", "artwork", "carts",
-                                                "wallpaper"))):
+class MyArtAppLayer(uitree_app.app_layer("myart", "My Art", build)):
     """The My Art app: the page's engine handed this layer as what its
     handlers reach (`uitree_app.env()`), the drawings and their verbs, and
     Put in a game hosted over the page."""

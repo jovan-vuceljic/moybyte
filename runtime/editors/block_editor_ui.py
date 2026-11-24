@@ -32,8 +32,7 @@ import uitree_editor
 import editor_blocks
 
 from editors_block import BlockEditor, _clone_tree
-from editors_base import (TextEntry, TE_COMMIT, TE_CANCEL,
-                          text_key as _text_key)
+from editors_base import TextEntry, text_key as _text_key
 # The block vocabulary/compiler (#29). Mirrors console.py's own import (see its
 # comment there): bare `blocks` on the device (frozen top-level) and once
 # host_app has aliased it on the host, or `runtime.blocks` when a test loads
@@ -876,18 +875,6 @@ class BlockEditorUI:
             if bt is not None and bt[0] is not None:
                 be.set_slot(bt[1], k["var"], bt[0])
         self.blk_kbd = None
-
-    def _blk_kbd_key(self, ch):
-        """One typed byte into the open prompt (editors_base.text_key: trim,
-        commit, cancel, or append what the kind allows)."""
-        k = self.blk_kbd
-        if k is None:
-            return
-        ev = k["entry"].key(ch)
-        if ev == TE_COMMIT:
-            self._blk_kbd_commit()
-        elif ev == TE_CANCEL:
-            self._blk_kbd_cancel()
 
     def _blk_open_dropdown_picker(self, block, slot):
         opts = _blocks_mod.slot_options(slot)

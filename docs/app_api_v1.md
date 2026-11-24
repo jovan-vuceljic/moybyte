@@ -15,7 +15,7 @@ generated or held by code, this guide points at it rather than copying it:
 |---|---|
 | every call an app reaches, on every tier | the call table (§10), written from `native/os_calls.json` |
 | the UI tree's kinds, props, verbs and error codes | `tests/uitree_contract/contract.json` (§3) |
-| the immediate `ui` verbs | `docs/ui_api_2026-10.md` (§3, "The immediate API") |
+| the immediate `ui` verbs | `docs/history/ui_api_2026-10.md` (§3, "The immediate API") |
 | Python's `moybyte` verbs, each with its signature | `runtime/system/moybyte.py`'s header |
 | a Python app's globals per permission | `runtime/shell/system_api.py` |
 | how the OS runs processes, and why | `docs/os_2026-11/processes.md`, `tiers.md`, `between_apps.md` |
@@ -28,7 +28,7 @@ Python app on the UI tree with a list longer than the screen and prefs
 and a Lua service answering a message (`tests/fixtures/apps/echo_lua.moy`).
 `system_carts/moybyte.notes.moy` is the full-size app. Moy Mesh, an
 installable app in moybyte-org/carts (`carts/moymesh/`, `pkg install
-moymesh`), is the whole app in Lua: a window over a service that holds the
+moymesh`), is the whole app in Lua: a UI tree window over a service that holds the
 LoRa radio by handle and wakes on it, a Meshtastic node of its own (the
 channels and presets a Meshtastic setup names, its NodeInfo under the
 console's name from `moybyte.name()`, direct messages under the nodes' X25519
@@ -211,7 +211,7 @@ absent (`runtime/carts/moy_store_base.py`, `VENDOR_KEY`):
 | `entries` | the cart's entry points beside `main`: `{"service": file}`, its own service's program | §7 |
 | `achievements` | the badges a game declares | §9 |
 | `native` | the chips a C cart carries a module for (`["esp32s3", "esp32p4"]`) | §10 |
-| `wasi` | `true`: an app that is a WASI command the Player runs, drawing with the toolkit it links (`sdk/include/moybyte/ui.h`) | `runtime/run/wasi_run.py`, `docs/ui_api_2026-10.md` |
+| `wasi` | `true`: an app that is a WASI command the Player runs, drawing its screen whole (`moy_present`) | `runtime/run/wasi_run.py` |
 | `audio_ring` | a compiled cart's audio ring depth in frames | `docs/os_2026-11/hardware.md` §2 |
 | `config`, `edit` | the "Make it mine" values `cfg(key)` reads and the Editor's rows that change them | `runtime/carts/moy_carts.py`, `NEW_TEMPLATE` |
 | `assets` | a cart's scenes, in order | `docs/moy_cart_api.md`, Scenes |
@@ -227,8 +227,11 @@ The console API level is ONE integer, `API_LEVEL` in
 reach grows or changes: a row, role, permission or error code of
 `native/os_calls.json` (and with it every tier's names: Python, Lua, `ui`, the
 compiled and WASI imports, the ELF table), a manifest field
-(`moy_store_base.VENDOR_FIELDS`), or the moy-spec format level the console runs
-(`runtime/run/player_fit.py`'s `FORMAT_LEVEL`). `tools/api_level.py` pins a
+(`moy_store_base.VENDOR_FIELDS`), the moy-spec format level the console runs
+(`runtime/run/player_fit.py`'s `FORMAT_LEVEL`), or the UI tree's contract
+(`tests/uitree_contract/contract.json`, §3: a kind, prop, word, verb, role,
+`takes=` value, retired name or error code, and whether each is built; its
+prose is left out). `tools/api_level.py` pins a
 fingerprint of those tables on the line below the level, and
 `tests/test_api_level.py` fails a table that changes while the level stands; the
 fix it names is to bump `API_LEVEL` and re-pin with `tools/api_level.py`.
@@ -329,6 +332,23 @@ handler (a service's message, a callback), which it runs before the next
 frame. The hook named `opened` runs as the app opens: where an app fills its
 models and reads its prefs.
 
+A page that shows one row takes it as its argument: a Lua page declares
+`arg=` (a `row_of`) and is pushed with its row (`ui.push("thread", row)`), a
+compiled one by `ut_push_row`. The push writes the row into that state, and
+each page on the stack keeps the row it was pushed with: when the page over
+it pops, the state holds that row again (where it still stands), so a page
+pushed over itself on another row steps back to its own. A Python page is a
+function and carries its argument itself: `ui.push(lambda: thread(key))`.
+
+A page's `shown=` names an action or hook that takes nothing, which runs
+each time the page becomes the top page: at its push, and at the Back
+that pops the page over it (after its `arg=` holds its row again), before
+the frame that draws it; the first page at the open runs `opened` instead.
+It is where a page shapes what it shows from its argument, as Moy Mesh's
+thread does its messages and draft. Python and Lua pass it with the page
+(`ui.page(title, shown="name")`, Lua's `{ shown = "name" }`), a compiled
+page as its first prop (`ut_p_shown("name")` after `ut_page`).
+
 **Pages built once.** A page is a function that describes nodes and reads
 no state. Python's root page is the function named `build`, and a page opens
 `with ui.page(title):`, its containers `with` blocks. Lua registers each
@@ -383,10 +403,10 @@ Python's alone.
 
 | kind | is | key props |
 |---|---|---|
-| `page(title)` | a page: its title is the bar's | `status=` the hints band's lead words |
+| `page(title)` | a page: its title is the bar's | `status=` the hints band's lead words, `shown=` an action or hook run as it becomes the top page (the model, above) |
 | `group(caption)` | a captioned column of rows | `look="card"` on a card, `"rules"` a rule between rows; `gap=`; `close=` |
 | `row(key)` | children side by side | `wrap=`, `gap=`, `pad=`, `mid=`, `close=` what Back does while it shows |
-| `scroll(key)` | a region that scrolls its children | |
+| `scroll(key)` | a region that scrolls its children | `follow=` opens at its foot and keeps a new row in view; `snap=` shows whole rows, a "More below" cue where it leaves some out below and, following, an "Older messages" one above |
 | `foot()` | the page's docked foot: buttons at its end, a label before them | `look="share"` its buttons share its width, `"band"` an edge-to-edge strip |
 | `split(dir, sizes)` | cells along `"row"` or `"col"`, sized in units or weights (`"1*"`) | `gap=`, `pad=` (a spacing word: `"s"`, `"m"`, `"l"`, `"0"`), `align=`, `rule=` |
 | `grid(cols, rows)` | a fixed grid of cells | `gap=`, `pad=` (spacing words, as a split's), `w=`, `h=` |
@@ -418,11 +438,11 @@ Python's alone.
 
 | kind | is | key props |
 |---|---|---|
-| `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look="large"`, `w=` |
-| `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=` |
-| `toggle(label, name)` | a bool | `on=`, `hint=` |
-| `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=` |
-| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `secret=`, `grow=`, `on=`, `changed=`, `when=` |
+| `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look="hero"`, `w=` |
+| `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=`, `sub=`, `count=`, `mark=` |
+| `toggle(label, name)` | a bool | `on=`, `hint=`, `when=` with `off=` (below) |
+| `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=`, `when=` with `off=` (below) |
+| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `secret=`, `grow=`, `on=`, `changed=`, `when=` with `off=` (below) |
 | `seg(label, name)` | one of an enum's values, or of a model's rows | `labels=`, `text=`, `look=` (`seg`, `cycle`, `swatches`, `pictures`), `on=` |
 | `tabs(name, labels)` | a tab strip over an enum, or over a `row_of` a tab a row; a `switch` on the same name is its body | `icons=`, `offered=`, `hint=`, `text=` |
 | `stepper(value, prev, next)` | "‹ value ›", its chevrons two actions | `tone="dim"`, `grow=` |
@@ -442,7 +462,7 @@ Python's alone.
 |---|---|---|
 | `dialog(title, buttons)` | a modal card; Back takes its first button | `shown=`, `kind=`, `labels=` its buttons' words, `look="keys"` no buttons on the T-Deck |
 | `popover(key)` | a card hung from a node | `anchor=`, `w=`, `close=` Back's action, `wash=` |
-| `menu(caption)`, `item(action)` | a menu and its items | an item's `icon=`, `label=`, `mkind="danger"` |
+| `menu(caption)`, `item(action)` | a menu and its items | an item's `icon=`, `label=`, `kind="danger"` |
 
 **Drawing and editing**
 
@@ -450,7 +470,6 @@ Python's alone.
 |---|---|---|
 | `canvas(key, draw)` | a rect the app draws itself (Canvases, below) | `h=`, `w=`, `reads=`, `pointer=`, `keys=`, `hint=`, `focus=`, `mark=`, `ground=` |
 | `text_editor(name)` | the console's text editor over a `ui.doc` (no Lua) | `find=`, `marks=`, `gutter=`, `focus=` |
-| `legacy(key, draw)` | a surface drawn with the immediate verbs in one node (no Lua; it goes at the clean cut) | `pointer=`, `keys=`, `hints=`, `gen=` |
 
 ### Layout
 
@@ -531,15 +550,24 @@ and its pages are placed; `split` and `grid` place their cells on any page.
   the largest its row holds (in the shell's bar every icon alone draws at
   its zone's size, 16 units at the page's scale, centred in its cell), and
   a button's `kind=` may be a template;
-  `look="large"` is half again a row's height with twice the pads, on a
-  flowing page. On the desk a
+  `look="hero"` is the page's lead verb (the desk home's), half again a
+  row's height with twice the pads, on a flowing page. On the desk a
   popover anchored at a button or a link hangs under it.
+- A link with `sub=` is a list's two-line row (a conversation, a contact):
+  its `icon=` leads it (`"@NAME"`: the name's initials on a disc), its value
+  sits at the right of its label, `sub=` is the line under them with
+  `count=` a badge at its right, and `tag=` (a pill) or `mark=` (an icon)
+  follows the label; each a template, empty for none.
 - A link's `swatch="#RRGGBB"` (a template, empty for none) draws a chip of
   that colour before its value; a swatches row whose label its dots would
   cut moves them into its right pad where that makes it whole, else shrinks
   them, as far apart, until it is.
 - A slider's `look="blocks"` is a meter, its steps' blocks across the whole
   row (with no label, 10 units a step and 12 more wide in a row).
+- A field's, a toggle's or a slider's `when=` (a condition) comes with
+  `off=`, as an action's does: while the condition fails, `off="grey"` dims
+  the control and it is no stop, `off="hide"` takes it off the page; one
+  without the other is O01 or O02.
 - `stepper(value, prev, next)` is "‹ value ›", the bar's chevrons firing the
   two actions and greyed while either is off (its `when=`), one stop whose
   left and right step it, at its own width (centred where it is stacked) or
@@ -663,7 +691,7 @@ the cart runs (`Player._wants_layout`):
 | Python | a top-level `def _layout(w, h, fs)` | the source, at column 0 (`system_api.wants_layout`) | called by the Player |
 | Lua | a global `function _layout(w, h, fs)` (or `_layout = function`) | the scripts, at column 0 (`lua_ext.wants_layout`); called only where the global is a function, as `_init` is | called by the Player (moycore's `layout`) |
 | compiled (wasm) | an export `_layout` of three i32 and no result | the module's export section (`moycore_glue.wasm_exports`) | called by the Player (moycore's `layout`, the host's `hw_layout`) |
-| WASI and native apps | `void _layout(int32_t w, int32_t h, int32_t fs)`, which `moybyte/ui.h` declares weak and exported | the module's exports (WASI) or dynamic symbols (`elf_run.elf_defines`) | the frame message's layout words (`MOY_FRAME_LAYOUT_*`), on which the toolkit it links calls `_layout` before its loop sees the frame |
+| WASI and native apps | an exported `void _layout(int32_t w, int32_t h, int32_t fs)` | the module's exports (WASI) or dynamic symbols (`elf_run.elf_defines`) | the frame message's layout words (`MOY_FRAME_LAYOUT_*`), which its frame loop reads (`moybyte/frame.h`) |
 
 A Python, Lua or compiled app hears `_layout` before `_init`; a WASI or
 native app, which has no `_init`, before the first frame its loop reads.
@@ -688,7 +716,7 @@ A canvas in a rows' body, or a table's child that draws the table's rows
 |---|---|
 | `reads=` | the states its draw reads; the page's shift frames count them, and a read of another state is R01. A canvas that names none draws the frame after it whole |
 | `pointer=` | an action or hook `takes="pointer"`, handed a press and its drag and release in the canvas's own coordinates (`ev.kind` `"down"`, `"drag"`, `"up"`; `ev.x`, `ev.y`; `ev.row`); while a popover or a dialog is open only a canvas inside it takes a press. C reads `ut_point()` |
-| `keys=` | Python: `keys(i)` (`keys(i, row)` in a table) is handed the input while the canvas holds focus, and answers True for a key it took; a canvas with no `keys=` is no stop |
+| `keys=` | handed the frame's keys while the canvas holds focus, run as a handler, and answers true for keys it took, which the page then never sees; a canvas with no `keys=` is no stop. Python: `keys(i)` (`keys(i, row)` in a list's body), `i` the input; Lua: `keys = function() ... end` (`function(row)` in a list's body), reading `btnp()` and `keyp()`. A compiled app's canvas takes no `keys=`: its row is refused |
 | `hint=` | the band's confirm word while it holds focus |
 | `h=`, `w=` | its size (a template); `ground=` the theme role painted under it |
 
@@ -939,31 +967,105 @@ EXPORT(_update) void _update(float dt) {}
 EXPORT(_draw) void _draw(void) { ut_frame(); }
 ```
 
-### The immediate API (until the clean cut)
+### No immediate verbs
 
-Beside the UI tree, an app may still draw its interface itself: `ui.page`,
-`ui.list`, `ui.button` and the rest called in `_draw()` every frame, the
-script keeping its own values and the engine (`native/moy_ui`) keeping
-focus and scroll by id. `docs/ui_api_2026-10.md` lists those verbs. A
-compiled app reaches them as the `ui_*` imports (`native/moy_ui/moy_ui_wasm.h`),
-a WASI or native app through the toolkit it links (`sdk/include/moybyte/ui.h`),
-and the editor handle's drawing verbs (`ed.draw`, `ed.tap`, `ed.drag`,
-`ed.nav`, `ed.focus`, `ed.key`) are this API's.
+An app's interface is a UI tree page on every tier: the immediate verbs
+(`ui.page`, `ui.list`, `ui.button` and the rest, called in `_draw()` every
+frame) are gone from Python, Lua, compiled, WASI and native apps alike, and
+`docs/history/ui_api_2026-10.md` keeps what they were. A Python or Lua app
+declares the extension `moybyte.uitree` and is handed the tree as `ui`; a
+compiled app imports the `uitree_*` rows.
 
-A responsive app's verbs draw in the theme's faces, colours, row styles and
-selection marks, as a built-in app's do, at the font scale of the canvas it
-draws on, the same pixels on every tier (`tests/test_app_layout.py`): a
-Python app's frame by its Player (`ui_draw.CART_APP`, the boundary keeping
-only its `print` and its own colours), a Lua, compiled, WASI or native run's
-by the RUN face over the word its snapshot carries (`AppFace.ui_face`,
-`moy_ui_run.h`'s `MOYCORE_UI_FACE_*`). A game's `ui`, and a fixed app's,
-draws as a cart's. Back steps out of its views first there too (§4): a
-focused field's edit, then a popover the last frame drew, then, while the
-app lends the bar its way back (`ui.bar`'s fourth argument), the next
-`ui.bar`, which answers it.
+A responsive app's page draws in the theme's faces, colours, row styles and
+selection marks, as a built-in app's does, at the font scale of the canvas
+it draws on: a Python app's frame by its Player (`ui_draw.CART_APP`, the
+boundary keeping only its `print` and its own colours), a Lua or compiled
+run's by the run's context over the word its snapshot carries
+(`AppFace.ui_face`, `moy_ui_run.h`'s `MOYCORE_UI_FACE_*`). A fixed app's
+page draws as a cart's. Back steps out of its views first there too (§4): a
+focused field's edit, then a popover the last frame drew.
 
-Write an app on the UI tree: the immediate verbs, and the `legacy` node
-that hosts them in a tree, go at the clean cut of the OS work (#246).
+Write an app on the UI tree: the immediate verbs go at the clean cut of
+the OS work (#246).
+
+### Stability: what the freeze pins
+
+The UI tree API freezes with the rest of the console API (`API_FROZEN`, §2):
+`tools/api_level.py` fingerprints its contract,
+`tests/uitree_contract/contract.json`, and from the freeze on a kind, prop,
+word, verb, role, `takes=` value, retired name or error code that changes
+without a bump of the API level is red (`tests/test_api_level.py`). The list
+below is that contract's every name, generated from it by
+`tools/gen_uitree_schema.py` (`tests/test_uitree_schema.py` fails a stale
+one). A word prop is listed with its words; `tpl` is a template, `cond` a
+condition, `name` a declared name, `key` a node's key, `fn` a function of
+the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
+
+<!-- the freeze list: generated by tools/gen_uitree_schema.py from the contract; never edit it -->
+
+| kind | level | head | props |
+|---|---|---|---|
+| `page` | 1 | python tpl, lua name, c name | `title` tpl, `status` tpl, `shown` action or hook |
+| `group` | 1 | tpl | `close` action or hook, `look` `"card"` `"rules"`, `gap` int |
+| `panel` | 1 | key | none |
+| `row` | 1 | key, optional | `close` action or hook, `pad` int, `gap` int, `mid` bool, `wrap` bool |
+| `scroll` | 1 | key | `follow` bool, `snap` bool |
+| `foot` | 1 | none | `look` `"end"` `"share"` `"band"` |
+| `switch` | 1 | state | none |
+| `case` | 1 | lit, made by its parent | none |
+| `tools` | 2 | key | `lend` name |
+| `lent` | 2 | name | none |
+| `label` | 1 | tpl | `tone` tpl, `icon` tpl, `face` `"ui"` `"title"` `"mono"` `"caption"` `"result"`, `size` `"fit"` `"text"`, `wrap` `"cut"` `"word"` `"char"`, `lines` int, `align` `"start"` `"center"` `"end"`, `scale` int, `w` int |
+| `rule` | 1 | none | none |
+| `info` | 1 | tpl | `value` tpl, `icon` tpl, `signal` int, `tag` tpl, `tone` tpl |
+| `status` | 2 | tpl | none |
+| `note` | 1 | none | `icon` tpl, `lines` list of tpl |
+| `empty` | 1 | tpl | `icon` tpl, `lines` list of tpl |
+| `bubble` | 1 | tpl | `side` tpl, `head` tpl, `status` tpl, `signal` int, `tone` tpl, `max` int, `lines` int, `on` action, `cut` action |
+| `toast` | 2 | tpl | `icon` tpl, `sub` tpl, `burst` int, `look` `"flat"`, `key` key |
+| `stepper` | 2 | tpl | `value` tpl, `prev` action, `next` action, `tone` `"ink"` `"dim"`, `focus` cond |
+| `picture` | 2 | state | `side` int, `on` action, `look` `"tile"`, `icon` tpl, `tone` tpl |
+| `progress` | 2 | state | `max` int, `label` tpl, `look` `"count"` |
+| `text_view` | 2 | state | `wrap` `"cut"` `"word"`, `follow` bool, `gutter` bool, `syntax` `"plain"` `"sgr"` `"python"` `"lua"` `"json"` `"markdown"`, `face` `"ui"` `"title"` `"mono"` `"caption"` `"result"`, `look` `"well"` |
+| `month` | 2 | none | `year` int, `month` int, `today` int, `prev` action, `next` action |
+| `button` | 1 | action | `kind` `"normal"` `"primary"` `"danger"` `"tonal"` `"bar"`, `label` tpl, `icon` tpl, `arg` lit, `alone` bool, `span` int, `focus` cond, `marked` cond, `w` int, `tone` tpl, `look` `"hero"` |
+| `link` | 1 | action | `label` tpl, `value` tpl, `icon` tpl, `signal` int, `tag` tpl, `tone` tpl, `swatch` tpl, `sub` tpl, `count` tpl, `mark` tpl, `focus` cond |
+| `toggle` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `hint` tpl |
+| `slider` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `lo` int, `hi` int, `look` `"bar"` `"steps"` `"blocks"`, `icon` tpl |
+| `field` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `max` int, `secret` bool, `hint` tpl, `grow` bool, `commit` bool, `changed` hook |
+| `seg` | 2 | state | `label` tpl, `labels` table, `on` action or hook, `focus` cond, `look` `"seg"` `"cycle"` `"swatches"` `"pictures"`, `text` tpl |
+| `tabs` | 2 | state | `labels` table, `icons` table, `text` tpl, `on` action or hook, `focus` cond, `offered` conds, `hint` tpl |
+| `cells` | 2 | state | `clear` int, `count` int, `first` int, `cols` int, `side` int, `gap` int, `edge` bool, `on` action or hook, `pick` action or hook, `focus` cond |
+| `rows` | 1 | model | `cur` name, `current` name, `check` bool, `empty` tpl, `by` name, `filter` name, `changed` hook, `group` tpl, `dir` `"row"` `"col"` |
+| `cards` | 2 | model | `cur` name, `current` name, `w` int, `h` int, `cols` int, `new` action, `changed` hook, `pad` int, `group` tpl, `flow` bool, `look` `"carousel"` `"shelf"` `"icons"` `"column"`, `tone` tpl, `label` tpl |
+| `card` | 2 | action | `label` tpl, `sub` tpl, `badge` tpl, `label_icon` tpl, `image` name, `icon` tpl, `tone` tpl, `fill` tpl |
+| `table` | 2 | model | `cols` list, `cur` name, `on` action or hook, `changed` hook, `empty` tpl, `focus` cond, `hint` tpl, `row` int |
+| `col` | 2 | tpl | none |
+| `dialog` | 1 | tpl | `buttons` list of action, `kind` `"primary"` `"danger"`, `look` `"keys"`, `labels` list of tpl |
+| `popover` | 1 | key | `anchor` tpl, `w` int, `close` action or hook, `wash` `"page"` `"view"` `"none"`, `at` tpl |
+| `menu` | 2 | tpl, optional | none |
+| `item` | 2 | action | `icon` tpl, `label` tpl, `kind` `"danger"` |
+| `split` | 1 | none | `dir` `"row"` `"col"`, `sizes` list, `gap` `"s"` `"m"` `"l"` `"0"`, `pad` `"s"` `"m"` `"l"` `"0"`, `align` `"start"` `"center"` `"end"`, `rule` bool |
+| `grid` | 1 | none | `cols` int, `rows` int, `gap` `"s"` `"m"` `"l"` `"0"`, `pad` `"s"` `"m"` `"l"` `"0"`, `w` int, `h` int |
+| `panes` | 2 | key | `dir` `"row"` `"col"`, `size` name, `start` int or name, `min` list, `grow` bool, `gap` int, `focused` name, `grown` name |
+| `pane` | 2 | key | `title` tpl, `icon` tpl, `tabs` name, `labels` table, `size` name, `start` int or name, `grow` bool, `min` list or conds, `head` bool, `offered` conds |
+| `slot` | 2 | name | `min` list |
+| `text_editor` | 2 | state | `find` name, `find_on` cond, `marks` name, `gutter` cond, `focus` cond |
+| `canvas` | 1 | key | `draw` fn, `reads` list, `pointer` action or hook, `keys` fn, `mark` lit, `hint` tpl, `focus` cond, `h` int, `ground` name, `w` int |
+| `hints` | 2 | model | `keys` tpl, `label` tpl, `tail` cond, `drop` cond, `on` action or hook |
+
+- **Every node but the page:** `shown` cond. **A child of a row or a grid:** `span`, `grow`.
+- **An action:** `hint` tpl, `when` cond, `off` `"hide"` `"grey"`, `takes` takes, `row` name, `chars` text, `keys` list, `icon` name, `push` name, `unit` name. **A hook:** `takes` takes, `unit` name.
+- **`takes=`:** `none`, `row`, `arg`, `char`, `pointer`. **`off=`:** `hide`, `grey`.
+- **Roles an app's keys name:** `confirm`, `back`, `more`, `left`, `right`, `up`, `down`, `search`, `goto`, `complete`, `undo`, `redo`, `play`, `tools`; the shell's own: `home`, `full`, `system`.
+- **Verbs** (besides a kind's, its name): `app`, `state`, `enum`, `record`, `model`, `row_of`, `opt`, `labels`, `derive`, `action`, `hook`, `page`, `sys`, `push`, `pop`, `focus`, `after`, `cancel`, `post`, `doc`, `image`, `work`, `pictures`. **Queries:** `about`, `text_size`, `colors`, `fade`.
+- **App fields (`ui.app`):** `icon`, `size`, `min`, `back`, `glass`, `slots`. **System values (`@NAME`):** `desk` bool, `handheld` bool, `wide` bool, `tall` bool, `touch` bool, `input` enum, `focus` text, `current` bool.
+- **Error codes:** A01, A02, A03, A07, A08, A09, A10, B01, B02, B03, C01, C02, C03, D01, D02, D04, D05, D06, E00, E01, E02, E03, G01, H01, H03, I01, I02, K01, K02, K03, L01, L02, L03, M01, M02, M03, M04, N01, N02, N03, N04, N06, N07, N08, O01, O02, O04, P01, P02, P03, P04, P05, Q01, R01, S01, S02, S03, S04, S05, S06, S07, S08, S09, S10, S11, S12, S13, T01, T02, T03, T04, T05, T06, U02, U03, U05, U06, U07, U08, U10, W01, W02, X01, Y01, Y02, Y03, Y04, Y05, Y06.
+- **Reserved codes**, never raised: A04, A05, A06, D03, F01, F02, F03, F04, F05, F06, F07, F08, O03, U01, U04, V01, V02.
+- **Retired names**, each refused with its replacement (N04): verbs `at`, `cell`, `fmt`, `has_symbols`, `head`, `key`, `peek`, `per`, `rebuild`, `ref`, `scope`; kinds `cell`, `text`; props `below@scroll`, `current@tool`, `disabled`, `does@action`, `fixed@split`, `ink`, `key@action`, `keyname@item`, `lit`, `mkind@item`, `paint@cards`, `tools@app`; takes `change`; system values `fs`, `h`, `symbols`, `w`.
+- **Named and not built** (`designed`: every front refuses each, N01): `page.arg`, `page.unit`, `page.nav`, `scroll.new`, `toast.anchor`, `tool`, `cells.face`, `cells.slide`, `dialog.default`, `popover.unit`, `pane.unit`, `canvas.size`, `canvas.sized`, `canvas.capture`, `canvas.text`, `canvas.actions`, `canvas.on`, `takes="row+arg"`, `takes="key"`, role `menu`, role `space`, verb `unit`, verb `damage`, verb `load`.
+
+<!-- the freeze list ends -->
 
 ## 4. Input
 
@@ -1048,7 +1150,7 @@ there.
 **A finger's rows come by themselves.** On a board whose tap floor stands
 (the Guition S3's 3.5-inch glass), a list row and an info, link, toggle,
 slider, seg or tabs row are 36 px tall and a bubble takes larger pads and
-faces; the app's code is the same on every board (`docs/ui_api_2026-10.md`,
+faces; the app's code is the same on every board (`docs/history/ui_api_2026-10.md`,
 the tap floor).
 
 **Paste is the console's.** The console's Paste (the desk's Ctrl+V) puts its
@@ -1614,9 +1716,6 @@ rows are §3's, every app's with no permission):
 | `moybyte.status_remove` | none |  | `moybyte.status_remove` | `moybyte_status_remove`, `moybyte.os.status_remove` | `moy_status_remove` |
 | `moy_screen` | none |  |  | `moybyte.os.screen` | `moy_screen` |
 | `moy_present` | none |  |  | `moybyte.os.present` | `moy_present` |
-| `moy_ui_pull` | none |  |  | `moybyte.os.ui_pull` | `moy_ui_pull` |
-| `moy_ui_font_pull` | none |  |  | `moybyte.os.ui_font_pull` | `moy_ui_font_pull` |
-| `moy_ui_tell` | none |  |  | `moybyte.os.ui_tell` | `moy_ui_tell` |
 | `moy_game_data` | none |  |  |  | `moy_game_data` |
 | `moy_game_sound` | none |  |  |  | `moy_game_sound` |
 | `moy_game_snd` | none |  |  |  | `moy_game_snd` |
@@ -1713,8 +1812,7 @@ reads are every app's; an import from a role its permissions do not name is
 refused at load, the import named. Its page is the UI tree's `uitree_*`
 rows (`native/moy_uitree/moy_uitree_wasm.h`; `sdk/include/moybyte/uitree.h`
 is its header, §3), the engine a Python and a Lua app draw with, every
-compiled app's; the immediate API's `ui_*` rows (`native/moy_ui/moy_ui_wasm.h`)
-are too, and `tests/fixtures/wasm/app_ui.moy` imports every one. The console calls
+compiled app's. The console calls
 (`moybyte_notify`, `open_with`, `share`, `pick`, `send`, `award`,
 `progress`, `on`, `at`, `every`, `after`, `cancel`, `log`) are every
 compiled app's to import, each
@@ -2015,7 +2113,7 @@ Everything above is a USER app: a cart, editable on Make. A SHIPPED app
 in `runtime/`, frozen into the firmware and registered from a manifest; only
 the console's own apps take this path. **Calc** (`runtime/apps/calc_app.py`,
 `system_carts/moybyte.calc.moy`) is the reference: its screen is one
-`uitree` page, and `uitree_app.app_layer(id, title, build, is_app)` makes
+`uitree` page, and `uitree_app.app_layer(id, title, build)` makes
 the Layer class below from it, which its manifest's `entry` names.
 
 **The two files.** An identity cart, `system_carts/moybyte.<slug>.moy`,
@@ -2037,21 +2135,29 @@ user cart with its own grant key (`tests/test_user_apps.py`):
 
 ```json
 "moybyte": { "app": { "id": "myapp", "entry": "myapp_app:MyAppLayer",
-                      "order": 80 } }
+                      "order": 80, "needs": ["surface", "theme", "damage"],
+                      "marker": "myapp", "min_size": [200, 120] } }
 ```
 
 then `python tools/gen_device_carts.py --app-decls` regenerates the frozen
-copy. The Layer:
+copy (`runtime/shell/app_decls.py`, whose header names every key). The
+declaration is what a boot reads: the console registers each app from it
+(`app_slot.AppSlot`) and imports the app's module, makes its context
+with the roles `needs` names (under `prefs_ns`, else its id) and constructs
+it when the app first runs, so a boot holds no app. It claims the identity
+cart by its title, the `marker` permission and its folder; its window title
+is `name`, else the cart's title; `min_size` is its resize floor; a
+`service` (`"module:Class"`) is built at boot over the app's context and
+handed to the app as its constructor's third argument (Paint's
+`ArtworkService`, the console's `ws.artwork`). The Layer:
 
 ```python
 class MyAppLayer(AppLayer):      # from layers import AppLayer
     id = "myapp"          # process kind: router, back-stack, window key
     domain = "system"     # draws on the responsive system canvas
-    TITLE = "MY APP"      # the windowed WM's title strip
-    NEEDS = ("surface", "theme", "damage")   # the roles it uses
+    TITLE = "MY APP"      # the windowed WM's title strip: the declaration's `name`
 
     def __init__(self, ctx, names): ...   # ctx: its AppContext
-    def is_app(self, cart): ...   # claim the identity cart (title, marker permission, slug)
     def open(self): ...           # (re)enter on every launch
     def relayout(self, w, h, fs): ...
     def close(self): ...          # optional: it is leaving the screen
@@ -2061,9 +2167,8 @@ class MyAppLayer(AppLayer):      # from layers import AppLayer
 ```
 
 That is the whole list: the console registers it from the declaration
-(`ws.spine.register_app`), and the launcher's claim, the router, the back-stack,
-the window and its chip, the resize floor (`min_size`, else `ui.app(min=)`,
-else the layout's `MIN_W`/`MIN_H`), text mode (what its page has focused) and the exitable
+(`app_slot.AppSlot`, built at its first run by `ws.spine.built`), and the launcher's claim, the router, the back-stack,
+the window and its chip, the resize floor (`min_size`), text mode (what its page has focused) and the exitable
 bar all follow; a new `runtime/`
 module reaches every board unless a `board.toml` denies it (#161). The shell's
 own two, Settings and the task manager, register through the same call with
@@ -2074,13 +2179,13 @@ no cart as their identity: they join the router, the app table and
 `tests/test_app_api.py` holds the Calc set.
 
 **The AppContext** (`runtime/shell/app_context.py`) carries only the roles
-`NEEDS` declares:
+a declaration's `needs` names (a shell surface's, its class's `NEEDS`):
 
 <!-- GENERATED by tools/gen_os_table.py from native/os_calls.json: the roles. Do not edit. -->
 | role | what it is | granted by | verbs |
 |---|---|---|---|
 | `ctx.damage` | whole-surface invalidation: repaint next frame, or ask for one more frame from inside `draw()`; the kernel's flags, folded by the frame gate where it folds the console's dirty flag | the shell | `all()`, `again()` |
-| `ctx.surface` | the grant's surface row, which the shell writes wherever it changes (on the desk, the window the app is in): the canvas the app draws on, its size, its scales, the window flag, the content rect the host's exitable strip leaves a running app (`content_rect()`, `(x, y, w, h)`, and `bar_h()`, its `y` -- what a user app's ungated `content_rect()` and `bar_h()` read), the pointer in the surface's coordinates (`x`, `y`, `down`, `click`, `visible`). A glyph is `ui`'s (`ui.glyph`), not this role's | the shell | `canvas()`, `size()`, `font_scale()`, `chrome_scale()`, `windowed()`, `bar_h()`, `content_rect()`, `pointer()` |
+| `ctx.surface` | the grant's surface row, which the shell writes wherever it changes (on the desk, the window the app is in): the canvas the app draws on, its size, its scales, the window flag, the content rect the host's exitable strip leaves a running app (`content_rect()`, `(x, y, w, h)`, and `bar_h()`, its `y` -- what a user app's ungated `content_rect()` and `bar_h()` read), the pointer in the surface's coordinates (`x`, `y`, `down`, `click`, `visible`). | the shell | `canvas()`, `size()`, `font_scale()`, `chrome_scale()`, `windowed()`, `bar_h()`, `content_rect()`, `pointer()` |
 | `ctx.theme` | the live token table the look writes at every switch, under a generation: the token dict (rebuilt only when the generation moves), one token by its role id, the generation, the light flag, the theme's and variant's names (the reads every app is given, the floor); the verbs that change the look; and the Appearance page's (`docs/history/theming_2026-09.md` §9 phase 6 step 7): a change to the theme (landing in `custom`), what its rows show, CHROME SIZE, EDIT FILE, and NAME… (step 8: `custom` renamed into a theme of its own, and why a name will not do) | `appearance` | `colors()`, `token()`, `gen()`, `light()`, `name()`, `variant()`, `set()`, `set_variant()`, `change()`, `choices()`, `set_chrome_scale()`, `edit_file()`, `name_custom()`, `name_check()` |
 | `ctx.files` | the USER-FILES store (#108), C rows over the layer in `native/moy_store/moy_ufiles.h`: named documents (`docs` is plain Markdown — `files/Documents/<name>.md`, the file's body IS the document), the trash, history sidecars, the image, cover and text codecs, provenance stamps; a grant made for a shared folder (a user app's) reaches the kinds in that folder alone | `files` | `readable()`, `ready()`, `begin()`, `end()`, `list()`, `count()`, `load()`, `save()`, `delete()`, `duplicate()`, `rename()`, `new_name()`, `trash_list()`, `restore()`, `empty_trash()`, `history()`, `history_ops()`, `history_commit()`, `encode_image()`, `decode_image()`, `decode_cover()`, `encode_cover()`, `sig()`, `stamp()`, `encode_text()`, `decode_text()`, `provenance()` |
 | `ctx.carts` | the CART store: the live cart list, a new cart, a project's undo journal and its images | the shell | `readable()`, `ready()`, `begin()`, `end()`, `all()`, `can_journal()`, `slug()`, `create()`, `journal()`, `rescan()`, `hydrate()`, `images()`, `save_image()`, `encode_image()` |
@@ -2104,7 +2209,7 @@ the console registers for the role (`runtime/shell/shell_servers.py`).
 A user app's globals (§6) are a filter over the same contexts
 (`make_system_api`, `runtime/shell/system_api.py`). Four rules hold:
 
-- **`NEEDS` is a filter.** Reaching an undeclared role raises;
+- **`needs` is a filter.** Reaching an undeclared role raises;
   `tests/test_app_context.py` fails a role named and not declared, and one
   declared and not named.
 - **Roles expose methods, never properties**: a descriptor was measured far
@@ -2119,11 +2224,10 @@ No role hands out the console: `tests/test_app_context.py` fails an app
 module that names the Workstation.
 
 **What it draws with.** Its UI tree page (§3; `uitree_app.app_layer`, as
-Calc's above), or the immediate `ui` verbs, into the frame its host,
-`ctx.ui` (`ui_host.AppHost`), begins, with `UI = True`; its handlers hand
-the host the input (`keys`, `point`). The engine under them,
-`runtime/toolkit/ui_draw.py`, is the chrome's; a shipped app not yet moved
-onto the verbs draws there, pinned by `tests/test_ui_public.py`.
+Calc's above), into the frame its host, `ctx.ui` (`ui_host.AppHost`),
+begins, with `UI = True`; its handlers hand the host the input (`keys`,
+`point`). The engine under it, `runtime/toolkit/ui_draw.py`, is the
+chrome's.
 
 **The bar contract is the router's** (`runtime/shell/console.py`, `_app_bar_route`):
 it paints the strip after `draw()` and routes a tap in its band before

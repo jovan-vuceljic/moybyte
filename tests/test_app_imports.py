@@ -167,7 +167,7 @@ def test_the_installer_refuses_an_app_that_imports_the_console(tmp_path):
 def test_the_installer_takes_an_app_that_imports_the_app_api(tmp_path):
     root = _store(tmp_path)
     repo = Repo(BASE)
-    _py_cart(repo, "x.fine", b"import moybyte, ui\nfrom math import pi\n")
+    _py_cart(repo, "x.fine", b"import moybyte\nfrom math import pi\n")
     job = _install(repo, "x.fine", root)
     assert job.error is None, job.detail
     assert (Path(root) / "x.fine.moy" / "main.py").is_file()

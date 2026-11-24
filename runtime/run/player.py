@@ -121,8 +121,7 @@ SUPPORTED_EXTENSIONS = (
     "moybyte.net",        # #65: net.send / on_net (also permission-gated)
     "moybyte.wifi",       # #38: the injected wifi service (permission-gated)
     "moybyte.app",        # #224: a compiled app's role imports (native/moy_app/moy_app_wasm.h)
-    "moybyte.ui",         # the public UI API, a Lua cart's `ui` (native/moycore/moycore_ui.h)
-    "moybyte.uitree",     # the UI tree API over it, Lua (runtime/run/uitree.lua)
+    "moybyte.uitree",     # the UI tree API, Lua (runtime/run/uitree.lua)
     "moybyte.mouse",      # a compiled cart's mouse import (native/moycore/moycore_wasm_ext.h)
     "moybyte.prefs",      # a compiled game's prefs imports (native/moycore/moycore_wasm_ext.h)
 )
@@ -177,7 +176,7 @@ def _python_files(cart):
 
 
 from ticks import _ticks_ms, _ticks_us, _ticks_diff
-from widgets import _err_text, _in
+from widgets import _err_text, rect_in as _in
 
 from ui_draw import cart_text as _cart_text      # the app-cart boundary (§4.7)
 import ui_draw as _ui_draw
@@ -1371,10 +1370,9 @@ class Player(PlayerDiag):
                                       request=ws.take_text_request(),
                                       keep=self._keep_grant, perms=self.granted,
                                       owner=self.pid))
-            if "ui" in ns:
-                self.face.bind(ns, cart)
-                if _tree.wants(cart):
-                    _tree.namespace(ns, cart)
+            self.face.bind(ns, cart)
+            if _tree.wants(cart):
+                _tree.namespace(ns, cart)
         elif _game(cart, ws.spine):
             perms = _game_perms(cart, self.granted)
             ctx = make_run_grant(ws.app_context, cart, keep=self._keep_grant,
@@ -1845,14 +1843,14 @@ class Player(PlayerDiag):
                 # #172 hunting the shell for a regression that was never there.
                 lua = getattr(self, "lua", None)
                 if (self._tool and lua is not None and not (self.deaf or self.detached)
-                        and not getattr(lua, "own_ui", False)):
+                        and not getattr(lua, "own_screen", False)):
                     s = _RUN_STEPS              # into the run face's frame begun next
                     _steps(ws.input, s, 0)
                     _ui_draw._C.api_run_steps(s[0], s[1])
                 if self.ui is not None and lua is None:
                     self._ui_begin(ws, render)
                 elif (lua is not None and getattr(ws.input, "last_key", 0) == _ui_draw.KEY_PASTE
-                        and not getattr(lua, "own_ui", False)):
+                        and not getattr(lua, "own_screen", False)):
                     t = _ui_draw.paste_text()   # the console's Paste, into the run's next frame
                     if t:
                         _ui_draw.paste(_ui_draw.RUN_UI, t)

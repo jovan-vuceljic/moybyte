@@ -14,8 +14,7 @@ of its own: the query is the console's (`ws.search_query`,
 `ws.search_typing`).
 """
 
-import ui as _ui
-_in = _ui.rect_in   # one hit-test (ui.rect_in)
+from widgets import rect_in as _in   # one hit-test
 
 
 class HomeSearch:

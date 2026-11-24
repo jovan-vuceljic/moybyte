@@ -192,9 +192,7 @@ Closes X4, L1, L2/T8, N3, L3, F1, F2.
   fuzz lane.
 - **N3.** One wire-order call (`moy_gfx_wire`) sets text, shape and path
   together; the three setters and their partial callers go. The copied
-  `can()` and `isqrt64` fold. `tests/test_ui_instance.py`'s scan covers
-  `native/moy_gfx`, with each file-scope name's reason, which records why
-  L3 is not a bug.
+  `can()` and `isqrt64` fold.
 
 - **F1, F2.** The gate runs every board suite, so its tests have to be
   deterministic first. On the Guition S3, `test_a_stuck_run_with_the_vm_down_is_ended`
@@ -647,13 +645,10 @@ stacked over another gives back that field's own text, and a popover's
 first shown frame is at its settled size. A stored golden is a settled
 frame, so none should move; one that does is reviewed under this name.
 
-**Check.** Host suite; `tests/test_app_ui.py`; `tests/test_frame_alloc.py`
-and `tests/test_ui_opts_seq.py` (the boards' dict path still allocates
-nothing). T-Deck and P4 pass. Goldens unchanged, which here is the proof.
+**Check.** Host suite; `tests/test_frame_alloc.py`. T-Deck and P4 pass. Goldens unchanged, which here is the proof.
 
 **Guards.** `tests/test_ui_ctx_groups.py`: each engine file touches only
-the sub-struct it owns, and 17 kept ids in one context raise `keep_lost`.
-`tests/test_ui_opts_seq.py` drives every key of `over.json`. T3 and the
+the sub-struct it owns. T3 and the
 parity test hold the names. Phase 4's matrix has no failing cell left, and
 gains two assertions: a stacked field's cancel, and a popover's box equal on
 its first shown frame and the one after.

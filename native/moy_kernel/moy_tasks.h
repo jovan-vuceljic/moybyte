@@ -1,6 +1,6 @@
 // moy_tasks: every task the native tier starts, in one table -- its name,
 // stack, priority, core and where its stack lives -- and the one call that
-// starts one (moy_tasks.c). The threading model, what each may touch and
+// starts one and the one that deletes it (moy_tasks.c). The threading model, what each may touch and
 // through which lock, is native/moy_kernel/README.md's.
 //
 // THE TABLE (MOY_TASKS, board only): X(id, name, stack bytes, priority, core,
@@ -118,6 +118,11 @@ bool moy_task_spawn_as(moy_task_id_t id, const char *name, uint32_t stack, int p
 // The row's task over the spawner's stack (the row's size) and control block.
 TaskHandle_t moy_task_spawn_static(moy_task_id_t id, TaskFunction_t fn, void *arg,
                                    StackType_t *stack, StaticTask_t *tcb);
+// A task moy_task_spawn or moy_task_spawn_as made for the row, deleted as it
+// was made: with its caps where the spawn put its stack in PSRAM, plainly
+// where FreeRTOS owns its stack and control block (a row without PSRAM, or a
+// board without it, where a delete with caps frees them twice).
+void moy_task_delete(moy_task_id_t id, TaskHandle_t task);
 #endif
 
 #endif // MOY_TASKS_H

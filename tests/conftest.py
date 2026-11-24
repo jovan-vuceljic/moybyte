@@ -505,8 +505,7 @@ def _processes_fresh():
 #
 # `ui_checks.check` runs after each frame a C engine page draws (`CEngine.paint`), with the
 # engine's fit report armed, and a finding fails the test that drew the frame. A finding is a
-# bug in the surface: fix it there (a page still drawn beside the engine, `legacy` or `lent`,
-# goes in `ui_checks.EXEMPT` with why until the clean cut).
+# bug in the surface: fix it there.
 # MOYBYTE_UI_CHECKS=log writes the findings to MOYBYTE_UI_CHECKS_LOG instead (a triage run).
 
 _UI_FOUND = []

@@ -527,7 +527,7 @@ def test_the_hand_rolled_row_idiom_is_gone(tmp_path):
 
 
 def test_a_settled_settings_page_paints_nothing(tmp_path):
-    """The page's settled answer (docs/ui_api_2026-10.md §2), end to end: with
+    """The page's settled answer (docs/history/ui_api_2026-10.md §2), end to end: with
     no input the redraw gate draws no frame, a press that moves nothing draws
     one frame of the same pixels, and no frame asks for another after it."""
     from runtime import host_app

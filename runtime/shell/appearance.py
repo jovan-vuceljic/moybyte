@@ -1688,6 +1688,18 @@ class Appearance:
             self.effective_chrome_scale(), wm.layout_catalogue(), wm.LAYOUT_EDGES,
             _ui_text_w, notes)
 
+    def boot_bars(self):
+        """The default theme's bars resolved for this tier's WM: the bars a
+        console starts with, before its settings name a theme and
+        `apply_layout` resolves that theme's."""
+        ws = self.ws
+        wm = ws.wm
+        bars = self._theme_layout(DEFAULT_THEME)[1]
+        root = getattr(wm, "root_canvas", None) or ws.sys_canvas
+        return _shell_layout.resolve(
+            bars, bars, root.w, root.h, self.effective_chrome_scale(), wm.layout_catalogue(),
+            wm.LAYOUT_EDGES, _ui_text_w, ())[0]
+
     def apply_layout(self):
         """Resolve `layout()` and put the host's bars where it says
         (`Workstation.place_bars`, which relayouts). Runs at a theme switch,

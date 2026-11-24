@@ -11,7 +11,6 @@ from array import array
 
 from layers import Layer
 from widgets import _ticks_ms
-import ui as _ui
 import ui_draw as _ui_draw
 import chrome_ops as _ch_ops
 import layout_base as _layout_base
@@ -384,7 +383,7 @@ class _BackdropLayer(Layer):
         for c in ws.home.unclaimed_apps(carts):
             cid = str(c.get("id") or c.get("title") or "")
             tail = cid.rsplit(".", 1)[-1]
-            key = tail if tail in _iconsets.SLOT and ws.app(tail) is None else cid
+            key = tail if tail in _iconsets.SLOT and ws.registered_app(tail) is None else cid
             out.append((key, str(c.get("title") or tail), c))
         return out
 
@@ -551,7 +550,7 @@ class _BackdropLayer(Layer):
             self._gcv = cv
             desk_ui.OPEN[0] = self._open_fn
             pg.paint(0, cv, th, rect, desk)
-            _ui.end()
+            _ui_draw.page_end()
         finally:
             desk_ui.OPEN[0] = None
             self._gcv = None

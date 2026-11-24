@@ -20,9 +20,8 @@ imported back from console.py, which would be a circular import.
 
 from array import array
 
-import ui as _ui              # frozen on device
 import ui_font as _ui_font
-_in = _ui.rect_in   # one hit-test (ui.rect_in)
+from widgets import rect_in as _in   # one hit-test
 
 import editor_map
 from editors_paint_map import MapEditor

@@ -47,17 +47,10 @@ frame (the edit itself handed in between frames, as shell_bench types), the
 frame each key paints allocates nothing either -- the verbs, the editor
 handle's draw, the host's bar and the Player's app frame included.
 
-Then it opens the shell's restyled apps on the public UI API -- Appearance,
+Then it opens the shell's restyled apps on the UI tree -- Appearance,
 Storybook, Get Carts over an in-memory shelf, My Art -- each idle and with its
 content dragged, three swipes through the real pointer path. Idle, an app
-allocates nothing. A drag frame allocates nothing of its own: what it may
-allocate is the answers whose values the drag moved -- each card's (x, y, w,
-h, state), a tuple a frame whose y differs from every recent answer
-(modmoy_ui.c's ret_tuple ring keeps the ones that repeat), and the moving
-finger's: the app's read of it (surface.pointer()), the game pointer the
-console publishes while it is down, and the state the frame keeps to compare
-the next with. So a drag frame is held to one answer a card it drew and four
-more; the bar's clock turning its minute is an event of its own, one frame.
+allocates nothing, and My Art's drag frames are the engine's shift frames.
 
 Then Settings' Achievements page (docs/history/look_2026-10.md step 32), idle at its
 top and idle again swiped to its end: it allocates nothing either way.
@@ -437,8 +430,6 @@ def measure(loop):
     achievements(loop, info)
     home(loop, info)
     editor(loop, info)
-    panes(loop, info)
-    row_of_parts(loop, info)
     status_panel(loop, info)
     status_page(loop, info)
     popovers(loop, info)
@@ -529,9 +520,12 @@ class _Face:
 
 
 def music(loop, info):
-    """The play frame again with Music's station playing on behind it: its
-    poll every POLL_MS finds the stamp still."""
+    """The play frame again with Music's station playing on behind it, Music
+    having played it (the app built, as its first run builds it, so the
+    stream's section and status item are the app's): its poll every
+    POLL_MS finds the stamp still."""
     import music_app
+    loop.ws.app("jukebox")
     s = music_app.STREAM
     f = _Face()
     s.face = f
@@ -908,23 +902,14 @@ APPS = ("appearance", "storybook", "getcarts", "myart")
 
 def apps(loop, info):
     """Each restyled app open, idle, then its content swiped: what each
-    frame allocates, and how many cards each drag frame drew."""
+    frame allocates, and which drag frames shifted."""
     import moy_loop
-    import ui
     from gc import mem_alloc
     ws = loop.ws
     ws.spine.exit()
     for _ in range(30):
         loop.step()
     ws.cart_net = _Net(json.load(open(ROOT + "/net/routes.json")))
-    cards = [0]
-    card = ui.card
-
-    def counted(title, sub="", o=None):
-        cards[0] += 1
-        return card(title, sub, o)
-
-    ui.card = counted
     W, H = ws.sys_canvas.w, ws.sys_canvas.h
     for app in APPS:
         a = ws.app(app)
@@ -968,22 +953,20 @@ def apps(loop, info):
             gc.collect()
             gc.disable()
             for _ in range(30):
-                cards[0] = 0
                 d0 = ws.frame_state.frames_drawn
                 m = mem_alloc()
                 loop.step()
-                drag.append((mem_alloc() - m, ws.frame_state.frames_drawn - d0, cards[0],
+                drag.append((mem_alloc() - m, ws.frame_state.frames_drawn - d0,
                              ws.frame_change == "shift"))
             gc.enable()
         info[app + "_drag"] = drag
         ws.spine.exit()
         for _ in range(30):
             loop.step()
-    ui.card = card
 
 
 def editor(loop, info):
-    """The Editor's table of parts (docs/ui_api_2026-10.md section 2):
+    """The Editor's table of parts (docs/history/ui_api_2026-10.md section 2):
     the Blocks outline grown to 40 rows, its cursor walked a row a frame
     (the move handed in between frames, as a key's edit is) and its rows
     swiped and coasting: what each frame and the page's draw allocate."""
@@ -1048,55 +1031,6 @@ def editor(loop, info):
         info[tab + "_banner"] = ws.toast_until != banner
     ws.spine.exit()
     for _ in range(30):
-        loop.step()
-
-
-def panes(loop, info):
-    """ui.split's moving frames (docs/ui_api_2026-10.md section 5a): on
-    an app host of its own, a divider pressed, dragged 40 px and let go, then
-    a tap on a part in the second pane (ui.part_at): what the split
-    allocates each frame, and what part_at does."""
-    from gc import mem_alloc
-    from array import array
-    import ui
-    import ui_draw
-    ws = loop.ws
-    cv = ws.sys_canvas
-    th = ws.theme_colors
-    W = cv.w
-    host = ui_draw.AppHost()
-    sizes = array("i", [100, 0])
-    out = array("i", [0] * 12)
-    o = {"drag": True, "focus": 0, "gap": 6, "mins": (40, 40)}
-    steps = ([(None, 0, False, False)] * 3 + [(103, 50, True, True)]
-             + [(103 + 2 * k, 50, False, True) for k in range(1, 21)]
-             + [(143, 50, False, False)] + [(None, 0, False, False)] * 2
-             + [(200, 50, True, True), (200, 50, False, False), (None, 0, False, False)])
-    split = []
-    at = []
-    gc.collect()
-    gc.disable()
-    for x, y, click, down in steps:
-        if x is not None:
-            host.point(x, y, click, down)
-        host.begin(cv, th, (0, 0, W, 100))
-        ui.at(0, 0, W, 100)
-        m = mem_alloc()
-        o["focus"] = ui.split("panes", "x", sizes, o, out)
-        split.append(mem_alloc() - m)
-        ui.at(out[4], out[5], out[6], out[7])
-        st = ui.part("cell")[4]
-        m = mem_alloc()
-        got = ui.part_at()
-        at.append((mem_alloc() - m, st & ui.ACTIVATED != 0, got is not None))
-        ui.end()
-    gc.enable()
-    info["split"] = split
-    info["split_sizes"] = list(sizes)
-    info["split_focus"] = o["focus"]
-    info["part_at"] = at
-    ws.mark_dirty()
-    for _ in range(10):
         loop.step()
 
 
@@ -1228,54 +1162,6 @@ def popovers(loop, info):
         ws.close_popover()
         for _ in range(30):
             loop.step()
-
-def row_of_parts(loop, info):
-    """A table of parts side by side under snap (docs/ui_api_2026-10.md
-    section 2): on an app host of its own, a drag across it, its fling
-    and its glide to a part's centre, each part drawn at its distance
-    (ui.table_dist): what the table, its parts and their distances
-    allocate each frame."""
-    from gc import mem_alloc
-    from array import array
-    import ui
-    import ui_draw
-    ws = loop.ws
-    cv = ws.sys_canvas
-    th = ws.theme_colors
-    W = cv.w
-    host = ui_draw.AppHost()
-    rows = [["a"], ["b"], ["c"], ["d"], ["e"], ["f"], ["g"]]
-    o = {"id": "row", "part": (60, 60), "axis": "x", "snap": True}
-    r = array("i", [0] * 4)
-    steps = ([(None, 0, False, False)] * 3 + [(W - 40, 40, True, True)]
-             + [(W - 40 - 12 * k, 40, False, True) for k in range(1, 16)]
-             + [(W - 220, 40, False, False)] + [(None, 0, False, False)] * 40)
-    row = []
-    cur = 0
-    gc.collect()
-    gc.disable()
-    for x, y, click, down in steps:
-        if x is not None:
-            host.point(x, y, click, down)
-        host.begin(cv, th, (0, 0, W, 100))
-        m = mem_alloc()
-        ui.at(0, 0, W, 100)
-        was = cur
-        cur = ui.table("", ("",), rows, cur, o)[0]
-        i = ui.table_part(r)
-        while i >= 0:
-            d = ui.table_dist()
-            cv.rect(r[0] + 2, r[1] + 2, r[2] - 4, r[3] - 4 - ((d * d) >> 16), 9 + i)
-            i = ui.table_part(r)
-        row.append((mem_alloc() - m, cur != was))
-        ui.end()
-    gc.enable()
-    info["row_of_parts"] = row
-    info["row_of_parts_cur"] = cur
-    ws.mark_dirty()
-    for _ in range(10):
-        loop.step()
-
 
 def achievements(loop, info):
     """Settings' Achievements page, idle at its top, then swiped to its end
@@ -2119,7 +2005,7 @@ def test_an_app_drag_is_shift_frames(result, app):
     slots and the floor's rects are kept."""
     info, text = result
     drawn = [d for d in info[app + "_drag"] if d[1]]
-    shifted = [d for d in drawn if d[3]]
+    shifted = [d for d in drawn if d[2]]
     assert len(shifted) > len(drawn) // 2, (app, len(shifted), len(drawn))
 
 
@@ -2248,19 +2134,6 @@ def test_the_blocks_outlines_moving_frames_allocate_nothing(result):
     assert len(over) <= 1, (tab, over)
 
 
-def test_a_row_of_parts_allocates_nothing(result):
-    """A table of parts side by side under snap (docs/ui_api_2026-10.md
-    section 2): no frame of a drag across it, its fling and its glide to a
-    part's centre allocates, its parts and their distances included, past
-    the first, which makes its rows' cells once, but the answer of a frame
-    whose current row moved."""
-    info, text = result
-    assert info.get("row_of_parts_cur", 0) > 0, text[-3000:]
-    row = info["row_of_parts"][1:]
-    assert all(b == 0 for b, moved in row if not moved), info["row_of_parts"]
-    assert all(b <= ANSWER for b, moved in row if moved), info["row_of_parts"]
-
-
 # What a frame that draws the control center's page again may allocate: the
 # page's run of its poll hook, its commit and its paint.
 STATUS_REDRAW = 512
@@ -2288,21 +2161,6 @@ def test_a_page_status_section_draws_within_its_ceiling(result):
     drawn = info.get("status_page")
     assert drawn and len(drawn) == 9 and info["status_page_slot"], text[-3000:]
     assert max(drawn[1:]) <= STATUS_PAGE_REDRAW, drawn
-
-
-def test_a_splits_divider_drag_allocates_nothing(result):
-    """ui.split (docs/ui_api_2026-10.md section 5a): no frame of a
-    divider's press, drag and let-go allocates, the drag lands in `sizes`,
-    and ui.part_at answers a tap on a part in a pane, allocating its
-    answer alone on the frame it answers."""
-    info, text = result
-    assert info.get("split_sizes") == [140, info["split_sizes"][1]], text[-3000:]
-    assert info["split"] == [0] * len(info["split"]), info["split"]
-    assert info["split_focus"] == 1, "the tap in the second pane focused it"
-    at = info["part_at"]
-    assert any(act and got for _b, act, got in at), at
-    assert all(b == 0 for b, _act, got in at if not got), at
-    assert all(b <= ANSWER for b, _act, got in at if got), at
 
 
 # -- a window dragged on the desk ---------------------------------------------

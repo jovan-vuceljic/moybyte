@@ -13,7 +13,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path[:0] = [ROOT, HERE]
 
-import uitree_lua_parity as parity  # noqa: E402
+import uitree_lua_shots as shots  # noqa: E402
 
 PAGES = '''s = ui.state(n=0)
 ui.app("Two Pages", icon="calc")
@@ -79,7 +79,7 @@ def _run(tmp_path, title, main, ext=("moybyte.uitree",), perms=()):
     carts = str(tmp_path / "carts")
     host_app.moy_carts.ensure_dirs(carts)
     _cart(carts, title, main, ext, perms)
-    ws = host_app.build_workstation(carts, **parity.SIZES["320"])
+    ws = host_app.build_workstation(carts, **shots.SIZES["320"])
     drv = host_app.ConsoleDriver(ws)
     cart = next(c for c in ws.carts.all if c["title"] == title)
     ws.consent.record(app_perms.app_id(cart), list(perms))
@@ -88,7 +88,7 @@ def _run(tmp_path, title, main, ext=("moybyte.uitree",), perms=()):
     def frame():
         quiesce(ws)
         ws.mark_dirty()
-        drv.frame(parity.DT)
+        drv.frame(shots.DT)
     for _ in range(3):
         frame()
     return ws, drv, frame
@@ -124,12 +124,14 @@ def test_the_hosts_back_steps_the_carts_pages_then_leaves(tmp_path):
     assert pl.face.back() is False, "the first page's back is the host's: it leaves the app"
 
 
-def test_a_cart_without_the_extension_keeps_the_toolkit(tmp_path):
-    ws, _, _ = _run(tmp_path, "Old Ui", "def _draw():\n    ui.page('Old')\n    ui.label('hi')\n    ui.end()\n",
+def test_a_cart_without_the_extension_has_no_ui(tmp_path):
+    """The UI tree is the one ui: a cart that does not name moybyte.uitree is
+    handed no `ui`, and one that draws with it stops on the name."""
+    ws, _, _ = _run(tmp_path, "Old Ui", "def _draw():\n    ui.page('Old')\n    ui.label('hi')\n",
                     ext=())
     pl = ws.run.player
-    assert pl.cart_error is None, pl.cart_error
-    assert pl.tree is None and pl.ns["ui"].__name__.rpartition(".")[2] == "ui"
+    assert pl.tree is None and "ui" not in pl.ns
+    assert "name 'ui' is not defined" in (pl.cart_error or ""), pl.cart_error
 
 
 def test_a_text_editor_that_adopts_an_editor_handle_edits_its_document(tmp_path):

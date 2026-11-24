@@ -13,7 +13,7 @@ sys.path.insert(0, ROOT)
 
 from runtime import editor_panes as P      # noqa: E402
 from runtime import host_app                # noqa: E402
-from runtime import ui                      # noqa: E402
+from runtime import ui_draw                 # noqa: E402
 from ws_helpers import install_shape, quiesce, settle_badges  # noqa: E402
 
 FULL_1024 = (6, 46, 1012, 548)              # full screen: the row is the top 40 px
@@ -1777,7 +1777,7 @@ def test_a_narrow_headers_tools_fold_into_its_more_menu(blocks_desk):
     shown, folded = d._head_fit(pane, "scene", x, w, 1)
     assert folded and len(shown) + len(folded) == 6
     tx = d._tools_x[n]
-    tabs_right = x + 4 + sum(ui.text_size(word)[0] + 28 for word in ("Scene", "Game"))
+    tabs_right = x + 4 + sum(ui_draw._C.text_width(word, 1, ui_draw._C.print_font()) + 28 for word in ("Scene", "Game"))
     assert tx >= tabs_right                      # no tool over the tabs
     se = ws.scene_ui.sceneedit
     se.sel = 0

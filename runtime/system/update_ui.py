@@ -44,19 +44,18 @@ Dependency profile (the facade lens, runtime/shell/system_api.py) -- through its
 
 `err_text` is injected at construction (same circular-import
 reason as BlockEditorUI: console.py builds the one UpdateUI a Workstation holds);
-the rect hit-test is `ui.rect_in`, imported directly.
+the rect hit-test is `widgets.rect_in`, imported directly.
 `_ticks_ms` / `_ticks_diff` are duplicated here (they only wrap `time`; the same
 foundational-helper duplication BlockEditorUI's layout constants use), so the
 method bodies stay byte-for-byte identical to the pre-extraction versions.
 """
 
 
-import ui as _ui
 import uitree as ui
 import layout_base as _lb
 from ui_draw import AppHost
 from bar_layer import mini_btn as _bar_mini_btn
-_in = _ui.rect_in   # one hit-test (ui.rect_in)
+from widgets import rect_in as _in   # one hit-test
 
 from ticks import _ticks_ms, _ticks_diff
 

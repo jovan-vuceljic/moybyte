@@ -20,6 +20,8 @@
  *   e:frame(flags)              -> uit_run_frame over the run's canvas
  *   e:backed()                  -> whether the host took the way back the frame
  *                               drawn last offered (uit_run_backed), once
+ *   e:keys_taken()              the front's canvas took this tick's keys: the
+ *                               next frame sees none (uit_run_keys_taken)
  *   e:on_draw(fn)               a canvas's draw, fn(node, x, y, w, h, row), called
  *                               inside the frame; what it raises the frame raises
  *   e:next()                    -> kind, a, b, c, text; nil where none waits
@@ -29,9 +31,9 @@
  *   e:focused() e:popover() e:hints() e:leave() e:dump()
  *   e:error() e:error_code() e:free()
  *
- * Included by native/moycore/moycore_lua.c and opened beside the UI API's
- * face when the build has native/moy_uitree (MOYCORE_UITREE), with the prop
- * check's global beside it (moycore_uitree_check.h). */
+ * Included by native/moycore/moycore_lua.c and opened when the build has
+ * native/moy_uitree (MOYCORE_UITREE), with the prop check's global beside it
+ * (moycore_uitree_check.h). */
 #ifndef MOYCORE_UITREE_H
 #define MOYCORE_UITREE_H
 
@@ -343,7 +345,7 @@ static int l_uit_frame(lua_State *L)
     moycore_uit_t *u = moycore_uit_of(L);
     int flags = moycore_uit_int(L, 2);
     u->L = L;
-    int r = uit_run_frame(u->e, moycore_ui_canvas(), flags);
+    int r = uit_run_frame(u->e, moycore_RUN.c.con.canvas, flags);
     u->L = NULL;
     if (u->raised != LUA_NOREF) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, u->raised);
@@ -360,6 +362,13 @@ static int l_uit_backed(lua_State *L)
     (void)moycore_uit(L);
     lua_pushboolean(L, uit_run_backed());
     return 1;
+}
+
+static int l_uit_keys_taken(lua_State *L)
+{
+    (void)moycore_uit(L);
+    uit_run_keys_taken();
+    return 0;
 }
 
 static int l_uit_next(lua_State *L)
@@ -521,7 +530,7 @@ static void moycore_uitree_open(lua_State *L)
         {"build_begin", l_uit_build_begin}, {"node", l_uit_node}, {"prop", l_uit_prop},
         {"node_action", l_uit_node_action}, {"build_end", l_uit_build_end},
         {"open", l_uit_open}, {"close", l_uit_close}, {"want_focus", l_uit_want_focus},
-        {"frame", l_uit_frame}, {"backed", l_uit_backed}, {"on_draw", l_uit_on_draw}, {"next", l_uit_next}, {"trace_next", l_uit_trace_next},
+        {"frame", l_uit_frame}, {"backed", l_uit_backed}, {"keys_taken", l_uit_keys_taken}, {"on_draw", l_uit_on_draw}, {"next", l_uit_next}, {"trace_next", l_uit_trace_next},
         {"can", l_uit_can}, {"letter", l_uit_letter}, {"dialog", l_uit_dialog},
         {"unfocused", l_uit_unfocused}, {"back_dialog", l_uit_back_dialog},
         {"back_popover", l_uit_back_popover}, {"focused", l_uit_focused},

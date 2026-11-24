@@ -67,8 +67,9 @@ the cart can never NAME a kind -- it gets the one it was granted, or the one
 the console was already asked to open (the Files router's door). The engine
 behind it stays in the shell; `runtime/editors/editor_handle.py` is the whole of it.
 
-Every `type: "app"` cart also gets `ui`, `theme()`, `screen()`,
-`content_rect()` and `bar_h()` -- see UNGATED below. Everything else a
+Every `type: "app"` cart also gets `theme()`, `screen()`,
+`content_rect()` and `bar_h()` -- see UNGATED below -- and one declaring the
+extension `moybyte.uitree` the UI tree API as `ui` (runtime/run/player_tree.py). Everything else a
 manifest lists (`"graphics"`, `"input"`, `"audio"`, an app's own marker
 permission like `"calc"`) is not a grant here and is silently ignored, which
 is correct: the kid API is already the ungated floor.
@@ -103,15 +104,11 @@ lost feature rather than a granted capability.)
   * Firmware update and reboot are not roles at all -- they live on
     `ws.updater` / `machine`, and no role hands out the console.
 
-## UNGATED: `ui`, `theme()`, `screen()`, `content_rect()`, `bar_h()`
+## UNGATED: `theme()`, `screen()`, `content_rect()`, `bar_h()`
 
-These five are published to every `type: "app"` cart with no permission,
+These four are published to every `type: "app"` cart with no permission,
 because they are not capabilities -- they are how an app draws.
 
-  * `ui` is `runtime/toolkit/ui.py`, the public UI API (docs/ui_api_2026-10.md): its
-    verbs and rect algebra, the calls a Lua cart and a compiled app make. The
-    Player begins each frame of them (`AppFace.begin`). It imports
-    nothing from the shell.
   * `screen()` returns the canvas the cart is drawing on. It is the SAME
     surface the kid API's `rect`/`print` already write to, so it grants no
     new reach; it just names the object.
@@ -138,7 +135,6 @@ must not be able to crash on a missing SD card, and a `try/except` around every
 save is not a thing to teach.
 """
 
-import ui
 from app_context import NO_STORE
 from moy_store_base import builtin_name as _builtin_name
 
@@ -167,7 +163,7 @@ def is_text_app(cart):
 def draws_in_look(cart):
     """True for a built-in app cart (system_carts/, its folder `moybyte.*`):
     its code runs outside the app-cart boundary (docs/theme_and_shell_2026-11.md
-    §3.7), so its `ui` page and its editor handle draw in the theme's
+    §3.7), so its UI tree page and its editor handle draw in the theme's
     colours and faces as the shell's own apps do. A copy is a kid's cart,
     inside the boundary like any other."""
     if not cart or cart.get("type") != "app":
@@ -325,7 +321,7 @@ def make_system_api(ctx_factory, cart, canvas=None,
     app_id = _moy_app.id_for(cart.get("id") if cart else None,
                              cart.get("title") if cart else None)
 
-    ns = {"ui": ui}
+    ns = {}
 
     # -- UNGATED: how an app draws -------------------------------------------
     theme = ctx.theme

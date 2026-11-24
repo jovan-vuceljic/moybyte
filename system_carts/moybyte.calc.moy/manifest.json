@@ -14,7 +14,9 @@
       "id": "calc",
       "entry": "calc_app:CalcAppLayer",
       "order": 70,
-      "min_size": [170, 190]
+      "min_size": [170, 190],
+      "needs": ["surface", "theme", "damage"],
+      "marker": "calc"
     },
     "permissions": [
       "graphics",

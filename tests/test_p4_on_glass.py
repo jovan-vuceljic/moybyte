@@ -113,9 +113,10 @@ TF_CARD_SRAM = 844
 # by the link map.
 KERNEL_SRAM = 1288 + 48 + 40 + 56 + 304 + 1455 + 4 + 5 + 38 + 4 + 8 + 4 + 756 - 312 + 16 + 270 + 4 - 640
 # And less TEXT_SRAM, the text view's statics (native/moy_ui/moy_ui_text.c,
-# moy_ui_api_text.c, moy_ui_wasm.c, modmoy_ui.c: the code tones, the compiled
-# face's line cursor and the pointers to the block the views share, which
-# is PSRAM): 44 bytes of .bss and .data by the objects' sizes, 2026-10-28.
+# moy_ui_api_text.c, modmoy_ui.c: the code tones and the pointers to the
+# block the views share, which is PSRAM, with the compiled face's line
+# cursor, whose moy_ui_wasm.c the clean cut removed): 44 bytes of .bss and
+# .data by the objects' sizes, 2026-10-28.
 TEXT_SRAM = 44
 # And less LATE_SRAM, the statics that landed while this guard was skipped
 # (from 2026-11-06 a password on the card served SSH, which held the radio at

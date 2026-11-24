@@ -9,18 +9,17 @@
 -- hands back what the user did.
 --
 -- The Player loads this chunk, then the back end, ahead of a cart that
--- declares the extension "moybyte.uitree" (runtime/run/lua_ext.py); it takes
--- the engine's `ui` as E and installs its own. tools/uitree_lua_check.py runs
+-- declares the extension "moybyte.uitree" (runtime/run/lua_ext.py) and
+-- installs its `ui`. tools/uitree_lua_check.py runs
 -- it alone over a stub engine in a host Lua with `debug`, where `ui._check`
 -- builds every page.
 
-local E = ui
 local T = {}
 local HAS_DEBUG = type(debug) == "table" and type(debug.getinfo) == "function"
 
 local DECL, V, NAMES, LABELS, ACTIONS, PAGES, PAGE_ORDER = {}, {}, {}, {}, {}, {}, {}
 local ACTION_ORDER = {}     -- the actions' and hooks' names in the order they are declared
-local DERIVES, DERIVED, ENGINE_OWNED, KEYMAP = {}, {}, {}, {}
+local DERIVES, DERIVED, KEYMAP = {}, {}, {}
 local SYS = { desk = false, handheld = true, tall = false, wide = false, focus = "" }
 local APP = nil
 local stack, queue, timers, posted = {}, {}, {}, {}
@@ -73,7 +72,7 @@ local FIXES = {
   P05 = "Back leaves the app; ui.pop() closes a page ui.push() opened", S01 = "declare it in ui.state",
   S02 = "a value of the field's type", S03 = "replace the whole value", S04 = "a declared field",
   S05 = "a table of the declared fields", S06 = "write state in a handler", S07 = "ui.model { key = \"id\", id = \"\", ... }",
-  S09 = "write the names the derive reads", S10 = "read it; the engine writes it", S11 = "ui.row_of(\"MODEL\")",
+  S09 = "write the names the derive reads", S11 = "ui.row_of(\"MODEL\")",
   S13 = "ui.opt(...) for a value that may be absent", T01 = "a transform the template language has",
   T02 = "a system value: @desk, @handheld, @tall, @wide or @focus", T03 = "read a field of a record or a row_of",
   T04 = "a label for every value", T05 = "a row's field inside the rows' body", U02 = "rename one",
@@ -389,10 +388,6 @@ local function setv(k, v, why, at)
   if ty.derived then
     fail("S09", at, q(k) .. " is a derive, and nobody writes it", "a write to a name it reads", "a write",
          "write the names it reads: " .. ty.derived)
-  end
-  if ENGINE_OWNED[k] then
-    fail("S10", at, q(k) .. " is written by the engine (" .. ENGINE_OWNED[k] .. ")", "a read", "a write",
-         "read it; the engine writes it")
   end
   if building then
     fail("B02", at, "the build of " .. q(building) .. " writes " .. q(k), "a build that only describes",
@@ -1417,7 +1412,7 @@ function T.app(title, o)
   APP = { title = title, o = o, at = at }
 end
 
-local PAGE_OPTS = { title = 1, arg = 1, status = 1 }
+local PAGE_OPTS = { title = 1, arg = 1, status = 1, shown = 1 }
 function T.page(name, build, o)
   local at = where()
   no_build("ui.page", at)
@@ -1431,11 +1426,11 @@ function T.page(name, build, o)
   end
   o = o or {}
   for k in pairs(o) do
-    if not PAGE_OPTS[k] then fail("N01", at, "ui.page takes no option " .. q(k), "title, arg", q(k)) end
+    if not PAGE_OPTS[k] then fail("N01", at, "ui.page takes no option " .. q(k), "title, arg, status, shown", q(k)) end
   end
   if o.title ~= nil and type(o.title) ~= "string" then fail("N01", at, "the page " .. q(name) .. "'s title is " .. describe(o.title), "a template", describe(o.title)) end
   if o.status ~= nil and type(o.status) ~= "string" then fail("N01", at, "the page " .. q(name) .. "'s status is " .. describe(o.status), "a template", describe(o.status)) end
-  PAGES[name] = { name = name, fn = build, title = o.title or "", status = o.status, arg = o.arg, at = at }
+  PAGES[name] = { name = name, fn = build, title = o.title or "", status = o.status, arg = o.arg, shown = o.shown, at = at }
   PAGE_ORDER[#PAGE_ORDER + 1] = name
 end
 
@@ -1455,6 +1450,7 @@ local function seal()
              ty and tname(ty) or "undeclared")
       end
     end
+    if p.shown ~= nil then use_action(p.shown, "none", p.at, "the page " .. q(name) .. "'s shown") end
   end
   for name, a in pairs(ACTIONS) do
     if a.push and not PAGES[a.push] then
@@ -1476,10 +1472,7 @@ if CHECK == nil then
 end
 -- where this layer differs from the table: what the table only designs and the layer builds
 -- (true; a kind's every prop), and what the table has that the layer does not build yet (false)
-local OWN = { ["dialog.default"] = true, ["field.input"] = true, ["info.tag"] = true, ["info.tone"] = true,
-              ["link.tag"] = true, ["link.tone"] = true, ["scroll.new"] = true, ["scroll.follow"] = true,
-              ["slider.when"] = true, ["slider.off"] = true, ["toggle.when"] = true, ["toggle.off"] = true,
-              ["card.image"] = false }
+local OWN = { ["card.image"] = false }
 -- a parent's prop the table lets every child carry: the one kind the layer builds it on
 local CHILD = { span = "button", grow = "field" }
 local BUILDS = 16
@@ -1645,14 +1638,6 @@ function T.scroll(key, ...)
   local o, body = tail("scroll", table.pack(...), 1, at)
   n.o = check_opts("scroll", o, at)
   n.o.key = key
-  if n.o.new ~= nil then
-    local b = n.o.new
-    local ty = DECL[b]
-    if not ty or ty.t ~= "int" or ty.derived or ty.opt then
-      fail("T03", at, "ui.scroll's new " .. describe(b), "an int state the engine writes", ty and tname(ty) or "undeclared")
-    end
-    ENGINE_OWNED[b] = "the scroll's new="
-  end
   run_body(n, body)
   return n
 end
@@ -2007,11 +1992,6 @@ function T.dialog(title, o, body)
     fail("N01", at, "ui.dialog has " .. #n.o.labels .. " labels for its " .. #buttons .. " buttons",
          "one label a button, in the buttons' order, or no labels (each its action's label)", describe(n.o.labels))
   end
-  if n.o.default ~= nil then
-    local ok = false
-    for _, b in ipairs(buttons) do if b == n.o.default then ok = true end end
-    if not ok then fail("N01", at, "ui.dialog's default " .. q(n.o.default), "one of its buttons", q(n.o.default)) end
-  end
   run_body(n, body)
   return n
 end
@@ -2320,6 +2300,10 @@ function T.canvas(key, o)
   n.o = check_opts("canvas", o, at)
   if n.o.draw == nil then fail("N01", at, "ui.canvas(" .. q(key) .. ") has no draw", "draw = function(x, y, w, h) ... end", "none") end
   if n.o.pointer ~= nil then use_action(n.o.pointer, "pointer", at, "ui.canvas(" .. q(key) .. ")'s pointer", false) end
+  if n.o.keys ~= nil and type(n.o.keys) ~= "function" then
+    fail("N01", at, "ui.canvas(" .. q(key) .. ")'s keys is " .. describe(n.o.keys),
+         "keys = function() ... return took end, reading btnp() and keyp()", describe(n.o.keys))
+  end
   n.o.key = key
   return n
 end
@@ -2463,6 +2447,7 @@ function T.push(name, row)
            "a row of " .. q(m.name), describe(row))
     end
     setv(p.arg, key, "push " .. name, at)
+    row = key
   elseif row ~= nil then
     fail("P04", at, "the page " .. q(name) .. " takes no argument", "ui.push(\"" .. name .. "\")", describe(row),
          "arg = \"A_ROW_OF\" on ui.page")
@@ -2471,17 +2456,24 @@ function T.push(name, row)
   local name = R.focused
   if name == "" then name = nil end
   if top then top.refocus, top.refocus_name = R.focused, name end
-  stack[#stack + 1] = { def = p, fresh = 1 }
+  stack[#stack + 1] = { def = p, fresh = 1, arg = row }   -- the row its arg= holds while it shows
+  if p.shown then fire(p.shown, "the page shown") end      -- run before the frame that draws it
   GEN = GEN + 1
   trace("page", "push", "page " .. #stack .. (name and ", opened from " .. q(name) or ""))
 end
 function T.pop()
-  no_command_in_build("ui.pop", where())
+  local at = where()
+  no_command_in_build("ui.pop", at)
   if #stack > 1 then
     local under = stack[#stack - 1]
     trace("page", "back", "page " .. (#stack - 1) .. (under.refocus_name and ", focus back to " .. q(under.refocus_name) or ""))
     stack[#stack] = nil
-    stack[#stack].fresh = 1
+    under.fresh = 1
+    local arg = under.def.arg                         -- the page under shows the row it was pushed with,
+    if arg and under.arg ~= nil and model_of(DECL[arg].model).index[under.arg] then   -- while it stands
+      setv(arg, under.arg, "back", at)
+    end
+    if under.def.shown then fire(under.def.shown, "the page shown") end
     GEN = GEN + 1
   else
     fail("P05", where(), "ui.pop() on the app's first page", "a page ui.push opened", "the first page")
@@ -2593,37 +2585,39 @@ local function where_on(from)
 end
 
 local function run_queue()
-  local q_ = queue
-  queue = {}
-  for _, h in ipairs(q_) do
-    T.stats.handlers = T.stats.handlers + 1
-    if h.a then
-      local a = h.a
-      if a.row and h.args.n == 0 then
-        local m = model_of(DECL[a.row].model)
-        local key = V[a.row]
-        if key ~= nil then h.args = table.pack(frozen(m.rows[m.index[key]], "row " .. q(key) .. " of " .. q(m.name), m.ty)) end
-      end
-      if a.takes == "none" then h.args = { n = 0 } end
-      if a.when and not cond(a.when) then
-        trace("skip", a.name, "from " .. h.from .. " (when " .. a.when .. " is false)")
-      elseif a.row and h.args.n == 0 then
-        trace("skip", a.name, "from " .. h.from .. " (" .. a.row .. " holds no row)")
-      elseif a.push then
-        trace("action", a.name, "from " .. h.from .. (h.placed and "" or where_on(h.from)))
-        in_handler = a.name
-        T.push(a.push)
-        in_handler = nil
+  while queue[1] do               -- again for what the batch queued: a page's shown=
+    local q_ = queue
+    queue = {}
+    for _, h in ipairs(q_) do
+      T.stats.handlers = T.stats.handlers + 1
+      if h.a then
+        local a = h.a
+        if a.row and h.args.n == 0 then
+          local m = model_of(DECL[a.row].model)
+          local key = V[a.row]
+          if key ~= nil then h.args = table.pack(frozen(m.rows[m.index[key]], "row " .. q(key) .. " of " .. q(m.name), m.ty)) end
+        end
+        if a.takes == "none" then h.args = { n = 0 } end
+        if a.when and not cond(a.when) then
+          trace("skip", a.name, "from " .. h.from .. " (when " .. a.when .. " is false)")
+        elseif a.row and h.args.n == 0 then
+          trace("skip", a.name, "from " .. h.from .. " (" .. a.row .. " holds no row)")
+        elseif a.push then
+          trace("action", a.name, "from " .. h.from .. (h.placed and "" or where_on(h.from)))
+          in_handler = a.name
+          T.push(a.push)
+          in_handler = nil
+        else
+          trace("action", a.name, "from " .. h.from .. (h.placed and "" or where_on(h.from)))
+          in_handler = a.name
+          a.fn(table.unpack(h.args, 1, h.args.n))
+          in_handler = nil
+        end
       else
-        trace("action", a.name, "from " .. h.from .. (h.placed and "" or where_on(h.from)))
-        in_handler = a.name
-        a.fn(table.unpack(h.args, 1, h.args.n))
+        in_handler = h.label
+        h.fn()
         in_handler = nil
       end
-    else
-      in_handler = h.label
-      h.fn()
-      in_handler = nil
     end
   end
 end
@@ -2701,7 +2695,7 @@ function T._check()
     if ok2 then report.pages[name] = p.root else err(e2) end
   end
   report.uses, report.actions, report.state_at, report.decl, report.page_order = USES, ACTIONS, STATE_AT, DECL, PAGE_ORDER
-  report.labels, report.engine_owned = LABELS, ENGINE_OWNED
+  report.labels = LABELS
   return report
 end
 
@@ -2741,13 +2735,21 @@ end
 -- what a back end reads and writes of the layer; it takes the table and
 -- clears it before a cart's own scripts run
 T._in = {
-  E = E, T = T, V = V, VER = VER, DECL = DECL, ACTIONS = ACTIONS, ACTION_ORDER = ACTION_ORDER, LABELS = LABELS,
-  KEYMAP = KEYMAP, SYS = SYS, STOPS = STOPS, DERIVED = DERIVED, ENGINE_OWNED = ENGINE_OWNED, stack = stack, R = R,
+  T = T, V = V, VER = VER, DECL = DECL, ACTIONS = ACTIONS, ACTION_ORDER = ACTION_ORDER, LABELS = LABELS,
+  KEYMAP = KEYMAP, SYS = SYS, STOPS = STOPS, DERIVED = DERIVED, stack = stack, R = R,
   BACK = BACK, ModelMT = ModelMT,
   fail = fail, q = q, show = show, trace = trace, lookup = lookup, render = render, cond = cond, truthy = truthy,
   frozen = frozen, event = event, setv = setv, fire = fire, fire_placed = fire_placed, fire_fn = fire_fn, build_page = build_page, page_title = page_title,
   model_of = model_of, touched = touched, bump = function() GEN = GEN + 1 end,
   reading = function(r) READS = r end,
+  -- fn(...) run as a handler named `label` (its writes allowed), its answer returned
+  as_handler = function(label, fn, ...)
+    in_handler = label
+    local ok, r = pcall(fn, ...)
+    in_handler = nil
+    if not ok then error(r, 0) end
+    return r
+  end,
 }
 
 ui = T

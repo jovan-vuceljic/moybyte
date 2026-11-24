@@ -1,6 +1,6 @@
--- The data both Moy Mesh threads read, the hand-written one and its UI tree
--- port: the nodes heard, a channel's log of 40 messages over two days, and the
--- prefs and clock the console would hand Moy Mesh's window. No radio, no store.
+-- The data the Moy Mesh screens read (tests/uitree_lua_shots.py): the nodes
+-- heard, a channel's log of 40 messages over two days, and the prefs and
+-- clock the console would hand Moy Mesh's window. No radio, no store.
 
 NOW = 1763553600 + 12 * 3600          -- Wed 19 Nov 2025, noon UTC
 NODES = {

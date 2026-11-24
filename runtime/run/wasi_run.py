@@ -1,7 +1,6 @@
 """A WASI app in the Player: a compiled cart whose manifest says `"wasi": true`
 (`"moybyte": {"type": "app", "wasi": true}`) is a WASI command
-(native/moy_wasm/moy_wasi.h) drawing with the toolkit it links
-(sdk/include/moybyte/ui.h) on a screen of its own, instead of exporting a
+(native/moy_wasm/moy_wasi.h) drawing a screen of its own whole, instead of exporting a
 cart's loop. The wasm runtime (`ws.runtimes["wasm"]`,
 runtime/host/wasm_host.py on the host, device/moycore_glue.py on a board)
 answers such a cart with a WasiApp.
@@ -21,17 +20,17 @@ from array import array
 
 import moy_evq as _E
 import moybyte as _moybyte
-from elf_run import IN_WORDS, LinkedUi, key_ring, key_sent, sent
+from elf_run import IN_WORDS, RunInput, key_ring, key_sent, sent
 
 # The longest a tick waits for a present (elf_run.WAIT_US_MAX's).
 WAIT_MS_MAX = 50
 SENT, SHOWN = 1, 2                      # moy_screen_slot.h's MOY_SCREEN_SLOT_*
 
 
-class WasiApp(LinkedUi):
+class WasiApp(RunInput):
     """A WASI app's run in the Player (this module's head)."""
 
-    own_ui = True                       # its toolkit is its own: a paste is its message
+    own_screen = True                   # it draws its screen whole: no run face, no field, no back
 
     def __init__(self, rt, ws, cart, run, lay=None):
         self._rt = rt
@@ -47,7 +46,6 @@ class WasiApp(LinkedUi):
             else:
                 _E.open(pid, cart.get("id") or "")
         _E.listen(pid, "frame", True)
-        _E.listen(pid, "paste", True)       # the console's Paste (elf_run.post_paste)
         if _E.screen_open(pid, self._w, self._h, 2) != 0:
             self._release()
             raise RuntimeError("no screen for it")

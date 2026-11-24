@@ -56,10 +56,6 @@ int moy_ui_icon_slot(const uint8_t *name, size_t n) {
     return -1;
 }
 
-void moy_ui_theme_write(int begin) {
-    (void)begin;
-}
-
 // -- one package ---------------------------------------------------------------------
 
 static unsigned long installed;     // the packages that installed and were resolved

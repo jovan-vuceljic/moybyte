@@ -12,14 +12,14 @@ enum {
     MOY_ROLE_DAMAGE = 0, MOY_ROLE_SURFACE, MOY_ROLE_THEME, MOY_ROLE_FILES, MOY_ROLE_CARTS,
     MOY_ROLE_NAV, MOY_ROLE_PREFS, MOY_ROLE_NOTIFY, MOY_ROLE_WALLPAPER, MOY_ROLE_ARTWORK,
     MOY_ROLE_CLIPBOARD, MOY_ROLE_INSTALL, MOY_ROLE_WIFI, MOY_ROLE_BT, MOY_ROLE_USB,
-    MOY_ROLE_UI, MOY_ROLE_MOYBYTE, MOY_ROLE_UITREE, MOY_ROLE_N,
+    MOY_ROLE_MOYBYTE, MOY_ROLE_UITREE, MOY_ROLE_N,
 };
 // The roles every grant holds: the console calls, which the console answers
 // under the permission each names.
 #define MOY_ROLE_FLOOR ((1u << MOY_ROLE_MOYBYTE))
 #define MOY_ROLE_NAMES { \
     "damage", "surface", "theme", "files", "carts", "nav", "prefs", "notify", "wallpaper", \
-    "artwork", "clipboard", "install", "wifi", "bt", "usb", "ui", "moybyte", "uitree", \
+    "artwork", "clipboard", "install", "wifi", "bt", "usb", "moybyte", "uitree", \
 }
 
 // The rows served in C: what moy_app_count counts.
@@ -39,17 +39,7 @@ enum {
     MOY_ROW_FILES_DECODE_TEXT, MOY_ROW_FILES_PROVENANCE, MOY_ROW_PREFS_GET, MOY_ROW_PREFS_SET,
     MOY_ROW_PREFS_CLEAR, MOY_ROW_WALLPAPER_LOAD_COPY, MOY_ROW_WALLPAPER_SAVE_COPY,
     MOY_ROW_ARTWORK_CURRENT, MOY_ROW_ARTWORK_FOLLOW, MOY_ROW_CLIPBOARD_PUT_TEXT,
-    MOY_ROW_CLIPBOARD_TEXT, MOY_ROW_CLIPBOARD_KIND, MOY_ROW_CLIPBOARD_SEQ, MOY_ROW_UI_PAGE,
-    MOY_ROW_UI_LABEL, MOY_ROW_UI_BUTTON, MOY_ROW_UI_TOGGLE, MOY_ROW_UI_SLIDER, MOY_ROW_UI_LIST,
-    MOY_ROW_UI_PART, MOY_ROW_UI_FOCUS, MOY_ROW_UI_KEYS_TAKEN, MOY_ROW_UI_AT, MOY_ROW_UI_GROUP,
-    MOY_ROW_UI_INFO, MOY_ROW_UI_LINK, MOY_ROW_UI_CYCLE, MOY_ROW_UI_SEG, MOY_ROW_UI_SWATCHES,
-    MOY_ROW_UI_HINTS, MOY_ROW_UI_ICON, MOY_ROW_UI_PROGRESS, MOY_ROW_UI_TABLE,
-    MOY_ROW_UI_SCROLL, MOY_ROW_UI_FIELD, MOY_ROW_UI_DIALOG, MOY_ROW_UI_TABS, MOY_ROW_UI_GRID,
-    MOY_ROW_UI_CARD, MOY_ROW_UI_POPOVER, MOY_ROW_UI_MENU, MOY_ROW_UI_TOOL, MOY_ROW_UI_BAR,
-    MOY_ROW_UI_RULE, MOY_ROW_UI_TEXT_VIEW, MOY_ROW_UI_TABLE_PART, MOY_ROW_UI_PART_AT,
-    MOY_ROW_UI_SPLIT, MOY_ROW_UI_TABLE_DIST, MOY_ROW_UI_TABLE_FLOOR, MOY_ROW_UI_HELD,
-    MOY_ROW_UI_SLOTS, MOY_ROW_UI_SLOT, MOY_ROW_UI_SLOT_NEXT, MOY_ROW_UI_HELD_LAST,
-    MOY_ROW_UI_HELD_ALL, MOY_ROW_UI_EMPTY, MOY_ROW_UI_NOTE, MOY_ROW_UI_BUBBLE,
+    MOY_ROW_CLIPBOARD_TEXT, MOY_ROW_CLIPBOARD_KIND, MOY_ROW_CLIPBOARD_SEQ,
     MOY_ROW_MOYBYTE_NOTIFY, MOY_ROW_MOYBYTE_SEND, MOY_ROW_MOYBYTE_AWARD,
     MOY_ROW_MOYBYTE_PROGRESS, MOY_ROW_MOYBYTE_ON, MOY_ROW_MOYBYTE_EVERY, MOY_ROW_MOYBYTE_AFTER,
     MOY_ROW_MOYBYTE_CANCEL, MOY_ROW_MOYBYTE_LOG, MOY_ROW_MOYBYTE_RECV,
@@ -86,16 +76,9 @@ enum {
     "files.encode_text", "files.decode_text", "files.provenance", "prefs.get", "prefs.set", \
     "prefs.clear", "wallpaper.load_copy", "wallpaper.save_copy", "artwork.current", \
     "artwork.follow", "clipboard.put_text", "clipboard.text", "clipboard.kind", \
-    "clipboard.seq", "ui.page", "ui.label", "ui.button", "ui.toggle", "ui.slider", \
-    "ui.list", "ui.part", "ui.focus", "ui.keys_taken", "ui.at", "ui.group", "ui.info", \
-    "ui.link", "ui.cycle", "ui.seg", "ui.swatches", "ui.hints", "ui.icon", "ui.progress", \
-    "ui.table", "ui.scroll", "ui.field", "ui.dialog", "ui.tabs", "ui.grid", "ui.card", \
-    "ui.popover", "ui.menu", "ui.tool", "ui.bar", "ui.rule", "ui.text_view", \
-    "ui.table_part", "ui.part_at", "ui.split", "ui.table_dist", "ui.table_floor", \
-    "ui.held", "ui.slots", "ui.slot", "ui.slot_next", "ui.held_last", "ui.held_all", \
-    "ui.empty", "ui.note", "ui.bubble", "moybyte.notify", "moybyte.send", "moybyte.award", \
-    "moybyte.progress", "moybyte.on", "moybyte.every", "moybyte.after", "moybyte.cancel", \
-    "moybyte.log", "moybyte.recv", "moybyte.item_read", "moybyte.item_write", "moybyte.at", \
+    "clipboard.seq", "moybyte.notify", "moybyte.send", "moybyte.award", "moybyte.progress", \
+    "moybyte.on", "moybyte.every", "moybyte.after", "moybyte.cancel", "moybyte.log", \
+    "moybyte.recv", "moybyte.item_read", "moybyte.item_write", "moybyte.at", \
     "moybyte.service_stop", "moybyte.service_running", "moybyte.random", "moybyte.sha256", \
     "moybyte.hmac_sha256", "moybyte.aes_gcm_seal", "moybyte.aes_gcm_open", \
     "moybyte.x25519", "moybyte.dev_open", "moybyte.dev_close", "moybyte.dev_read", \
@@ -146,20 +129,11 @@ enum {
     MOY_T_INSTALL_FREE, MOY_T_INSTALL_FIND, MOY_T_INSTALL_NET, MOY_T_INSTALL_KEEP,
     MOY_T_INSTALL_WIFI, MOY_T_INSTALL_WIFI_OPEN, MOY_T_INSTALL_CONSENT, MOY_T_WIFI_HOLD,
     MOY_T_WIFI_RELEASE, MOY_T_WIFI_STATION, MOY_T_BT_KEYBOARD, MOY_T_USB_DRIVE,
-    MOY_T_USB_TURN_ON, MOY_T_USB_TURN_OFF, MOY_T_USB_POLL, MOY_T_UI_PAGE, MOY_T_UI_LABEL,
-    MOY_T_UI_BUTTON, MOY_T_UI_TOGGLE, MOY_T_UI_SLIDER, MOY_T_UI_LIST, MOY_T_UI_PART,
-    MOY_T_UI_FOCUS, MOY_T_UI_KEYS_TAKEN, MOY_T_UI_AT, MOY_T_UI_GROUP, MOY_T_UI_INFO,
-    MOY_T_UI_LINK, MOY_T_UI_CYCLE, MOY_T_UI_SEG, MOY_T_UI_SWATCHES, MOY_T_UI_HINTS,
-    MOY_T_UI_ICON, MOY_T_UI_PROGRESS, MOY_T_UI_TABLE, MOY_T_UI_SCROLL, MOY_T_UI_FIELD,
-    MOY_T_UI_DIALOG, MOY_T_UI_TABS, MOY_T_UI_GRID, MOY_T_UI_CARD, MOY_T_UI_POPOVER,
-    MOY_T_UI_MENU, MOY_T_UI_TOOL, MOY_T_UI_BAR, MOY_T_UI_RULE, MOY_T_UI_TEXT_VIEW,
-    MOY_T_UI_TABLE_PART, MOY_T_UI_PART_AT, MOY_T_UI_SPLIT, MOY_T_UI_TABLE_DIST,
-    MOY_T_UI_TABLE_FLOOR, MOY_T_UI_HELD, MOY_T_UI_SLOTS, MOY_T_UI_SLOT, MOY_T_UI_SLOT_NEXT,
-    MOY_T_UI_HELD_LAST, MOY_T_UI_HELD_ALL, MOY_T_UI_EMPTY, MOY_T_UI_NOTE, MOY_T_UI_BUBBLE,
-    MOY_T_MOYBYTE_NOTIFY, MOY_T_MOYBYTE_OPEN_WITH, MOY_T_MOYBYTE_SHARE, MOY_T_MOYBYTE_SEND,
-    MOY_T_MOYBYTE_AWARD, MOY_T_MOYBYTE_PROGRESS, MOY_T_MOYBYTE_ON, MOY_T_MOYBYTE_EVERY,
-    MOY_T_MOYBYTE_AFTER, MOY_T_MOYBYTE_CANCEL, MOY_T_MOYBYTE_PICK, MOY_T_MOYBYTE_LOG,
-    MOY_T_MOYBYTE_RECV, MOY_T_MOYBYTE_ITEM_READ, MOY_T_MOYBYTE_ITEM_WRITE, MOY_T_MOYBYTE_AT,
+    MOY_T_USB_TURN_ON, MOY_T_USB_TURN_OFF, MOY_T_USB_POLL, MOY_T_MOYBYTE_NOTIFY,
+    MOY_T_MOYBYTE_OPEN_WITH, MOY_T_MOYBYTE_SHARE, MOY_T_MOYBYTE_SEND, MOY_T_MOYBYTE_AWARD,
+    MOY_T_MOYBYTE_PROGRESS, MOY_T_MOYBYTE_ON, MOY_T_MOYBYTE_EVERY, MOY_T_MOYBYTE_AFTER,
+    MOY_T_MOYBYTE_CANCEL, MOY_T_MOYBYTE_PICK, MOY_T_MOYBYTE_LOG, MOY_T_MOYBYTE_RECV,
+    MOY_T_MOYBYTE_ITEM_READ, MOY_T_MOYBYTE_ITEM_WRITE, MOY_T_MOYBYTE_AT,
     MOY_T_MOYBYTE_SERVICE_START, MOY_T_MOYBYTE_SERVICE_STOP, MOY_T_MOYBYTE_SERVICE_RUNNING,
     MOY_T_MOYBYTE_RANDOM, MOY_T_MOYBYTE_SHA256, MOY_T_MOYBYTE_HMAC_SHA256,
     MOY_T_MOYBYTE_AES_GCM_SEAL, MOY_T_MOYBYTE_AES_GCM_OPEN, MOY_T_MOYBYTE_X25519,
@@ -180,7 +154,7 @@ enum {
     MOY_T_UITREE_ERROR, MOY_T_UITREE_DUMP, MOY_T_UITREE_ACTION_CHARS, MOY_T_UITREE_ARG,
     MOY_T_UITREE_DRAW_ROW,
 };
-#define MOY_APP_TABLE_N 250u
+#define MOY_APP_TABLE_N 204u
 // Each row's "role.verb", its role and its C row (-1: the Python console
 // serves it).
 #define MOY_APP_TABLE_ROWS { \
@@ -309,52 +283,6 @@ enum {
     { "usb.turn_on", MOY_ROLE_USB, -1 }, \
     { "usb.turn_off", MOY_ROLE_USB, -1 }, \
     { "usb.poll", MOY_ROLE_USB, -1 }, \
-    { "ui.page", MOY_ROLE_UI, MOY_ROW_UI_PAGE }, \
-    { "ui.label", MOY_ROLE_UI, MOY_ROW_UI_LABEL }, \
-    { "ui.button", MOY_ROLE_UI, MOY_ROW_UI_BUTTON }, \
-    { "ui.toggle", MOY_ROLE_UI, MOY_ROW_UI_TOGGLE }, \
-    { "ui.slider", MOY_ROLE_UI, MOY_ROW_UI_SLIDER }, \
-    { "ui.list", MOY_ROLE_UI, MOY_ROW_UI_LIST }, \
-    { "ui.part", MOY_ROLE_UI, MOY_ROW_UI_PART }, \
-    { "ui.focus", MOY_ROLE_UI, MOY_ROW_UI_FOCUS }, \
-    { "ui.keys_taken", MOY_ROLE_UI, MOY_ROW_UI_KEYS_TAKEN }, \
-    { "ui.at", MOY_ROLE_UI, MOY_ROW_UI_AT }, \
-    { "ui.group", MOY_ROLE_UI, MOY_ROW_UI_GROUP }, \
-    { "ui.info", MOY_ROLE_UI, MOY_ROW_UI_INFO }, \
-    { "ui.link", MOY_ROLE_UI, MOY_ROW_UI_LINK }, \
-    { "ui.cycle", MOY_ROLE_UI, MOY_ROW_UI_CYCLE }, \
-    { "ui.seg", MOY_ROLE_UI, MOY_ROW_UI_SEG }, \
-    { "ui.swatches", MOY_ROLE_UI, MOY_ROW_UI_SWATCHES }, \
-    { "ui.hints", MOY_ROLE_UI, MOY_ROW_UI_HINTS }, \
-    { "ui.icon", MOY_ROLE_UI, MOY_ROW_UI_ICON }, \
-    { "ui.progress", MOY_ROLE_UI, MOY_ROW_UI_PROGRESS }, \
-    { "ui.table", MOY_ROLE_UI, MOY_ROW_UI_TABLE }, \
-    { "ui.scroll", MOY_ROLE_UI, MOY_ROW_UI_SCROLL }, \
-    { "ui.field", MOY_ROLE_UI, MOY_ROW_UI_FIELD }, \
-    { "ui.dialog", MOY_ROLE_UI, MOY_ROW_UI_DIALOG }, \
-    { "ui.tabs", MOY_ROLE_UI, MOY_ROW_UI_TABS }, \
-    { "ui.grid", MOY_ROLE_UI, MOY_ROW_UI_GRID }, \
-    { "ui.card", MOY_ROLE_UI, MOY_ROW_UI_CARD }, \
-    { "ui.popover", MOY_ROLE_UI, MOY_ROW_UI_POPOVER }, \
-    { "ui.menu", MOY_ROLE_UI, MOY_ROW_UI_MENU }, \
-    { "ui.tool", MOY_ROLE_UI, MOY_ROW_UI_TOOL }, \
-    { "ui.bar", MOY_ROLE_UI, MOY_ROW_UI_BAR }, \
-    { "ui.rule", MOY_ROLE_UI, MOY_ROW_UI_RULE }, \
-    { "ui.text_view", MOY_ROLE_UI, MOY_ROW_UI_TEXT_VIEW }, \
-    { "ui.table_part", MOY_ROLE_UI, MOY_ROW_UI_TABLE_PART }, \
-    { "ui.part_at", MOY_ROLE_UI, MOY_ROW_UI_PART_AT }, \
-    { "ui.split", MOY_ROLE_UI, MOY_ROW_UI_SPLIT }, \
-    { "ui.table_dist", MOY_ROLE_UI, MOY_ROW_UI_TABLE_DIST }, \
-    { "ui.table_floor", MOY_ROLE_UI, MOY_ROW_UI_TABLE_FLOOR }, \
-    { "ui.held", MOY_ROLE_UI, MOY_ROW_UI_HELD }, \
-    { "ui.slots", MOY_ROLE_UI, MOY_ROW_UI_SLOTS }, \
-    { "ui.slot", MOY_ROLE_UI, MOY_ROW_UI_SLOT }, \
-    { "ui.slot_next", MOY_ROLE_UI, MOY_ROW_UI_SLOT_NEXT }, \
-    { "ui.held_last", MOY_ROLE_UI, MOY_ROW_UI_HELD_LAST }, \
-    { "ui.held_all", MOY_ROLE_UI, MOY_ROW_UI_HELD_ALL }, \
-    { "ui.empty", MOY_ROLE_UI, MOY_ROW_UI_EMPTY }, \
-    { "ui.note", MOY_ROLE_UI, MOY_ROW_UI_NOTE }, \
-    { "ui.bubble", MOY_ROLE_UI, MOY_ROW_UI_BUBBLE }, \
     { "moybyte.notify", MOY_ROLE_MOYBYTE, MOY_ROW_MOYBYTE_NOTIFY }, \
     { "moybyte.open_with", MOY_ROLE_MOYBYTE, -1 }, \
     { "moybyte.share", MOY_ROLE_MOYBYTE, -1 }, \

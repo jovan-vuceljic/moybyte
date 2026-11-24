@@ -1,7 +1,7 @@
--- Moy Mesh's thread (draw_thread, draw_message and their helpers in
--- tests/fixtures/apps/moymesh.moy/main.lua) in the UI tree API. The pages
--- describe; the handlers shape what the service keeps into rows and answer
--- what the radio posts.
+-- Moy Mesh's thread and message pages (tests/fixtures/apps/moymesh.moy/main.lua's)
+-- alone, over data.lua and a stand-in radio (radio.lua) in place of its
+-- service. The pages describe; the handlers shape what the service keeps into
+-- rows and answer what the radio posts.
 
 ui.app("Moy Mesh", { icon = "bubble" })
 

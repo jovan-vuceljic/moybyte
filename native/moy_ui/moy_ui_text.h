@@ -1,5 +1,5 @@
 // A text view: a text area in visual rows (docs/history/scroll_and_text_2026-10.md §5,
-// docs/ui_api_2026-10.md's `ui.text_view`). One body for every text area
+// docs/history/ui_api_2026-10.md's `ui.text_view`). One body for every text area
 // that draws through the public UI API's verb (moy_ui_api_text_view: Python,
 // Lua and a compiled app): the shell's Code tab and theme Config, the desk's
 // made code, the text console's log, and an app's.

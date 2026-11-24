@@ -151,9 +151,11 @@ enum { TS_FLAT = 1 };
 enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 // A text view's options (`lit`); its syntax's index in `btn` (ui.py's _SYNTAXES).
 enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8, TV_GUTTER = 16 };
-// A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="large"
+// a scroll node's lit: follow=, snap=
+enum { SC_FOLLOW = 1, SC_SNAP = 2 };
+// A tools row lent to a site (`lit`); a button drawn as its icon alone, a fill, look="hero"
 // (`btn`).
-enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_LARGE = 4 };
+enum { TL_LEND = 1, BT_ALONE = 1, BT_GROW = 2, BT_HERO = 4 };
 enum { RS_CHECK = 1, RS_COL = 2 };    // a rows list's lit: check=True; dir="col", its cells down the stack
 enum { RW_MID = 1, RW_GROW = 2, RW_WRAP = 4 };   // a row's lit: centred on the row it is a cell of; a fill of
                                                 // its stack; its cells packed from its start, wrapping
@@ -187,7 +189,8 @@ typedef struct {
                                 // alone= in btn (BT_ALONE) and span= in nbtn; a grid's pad and
                                 // gap (GAP_*) in btn and nbtn, its cols and rows in lit's nibbles
     int16_t mark;               // a button's marked= cond: drawn current while it holds; a
-                                // field's when= cond: greyed (NL_HIDE: not shown) while it fails;
+                                // field's, a toggle's or a slider's when= cond: greyed (NL_HIDE:
+                                // not shown) while it fails;
                                 // a hints row's tail= cond
 } uit_node_t;
 
@@ -228,10 +231,9 @@ typedef struct {
 typedef struct {
     uit_pa_t panes[PN_MAX];     // the last placement's arrangement, even under a pane alone
     uit_pd_t divs[PN_MAX];
-    uit_pa_t placed[PN_MAX];    // each hosted body where the last placement put it
     uit_pa_t order[PN_MAX];     // the panes this pass drew
     uit_ps_t splits[PN_SPLITS]; // this pass's splits
-    uint8_t npanes, ndivs, nplaced, norder, nsplits;
+    uint8_t npanes, ndivs, norder, nsplits;
     uint8_t depth, ghost, arranging;
     uint8_t path[PN_DEPTH];
     int16_t root, alone;        // the outermost panes this pass; the pane the placement stood alone
@@ -371,7 +373,7 @@ struct uit {
     uit_draft_t *drafts;
     int ndrafts, cdrafts;
     uint32_t edits;             // drafts' edits: the page's gen moves with them
-    uint8_t gen_safe;           // the page may carry a gen: no legacy node, not too many states
+    uint8_t gen_safe;           // the page may carry a gen: not too many states
     uint8_t canvas_now, canvas_last;    // a canvas drew in this frame, in the last (`gen_ok`)
     uint8_t gen_vals;           // the engine values its text names, which its gens count (GV_*)
     uint32_t gv;                // what they are this frame, hashed (the focus at the frame's begin, the input)
@@ -418,8 +420,6 @@ struct uit {
     // the placed layout: each node's rect as the last pass placed it (w -1: not placed)
     uint8_t placed, placing;
     int16_t ground[4];
-    char legacy_hints[128];     // a focused legacy stop's band hints, NUL-separated (its host's)
-    uint8_t nlegacy_hints;
     char band_extra[48];        // the items its host adds to the band before Back, NUL-separated
     uint8_t nband_extra;
     int16_t *rects;
@@ -447,6 +447,8 @@ enum { GV_FOCUS = 1, GV_INPUT = 2 };
 
 // A list: rows and a table keep a model, a cur= and a removal order.
 #define UIT_IS_LIST(kind) ((kind) == UIT_ROWS || (kind) == UIT_TABLE || (kind) == UIT_CARDS)
+// The two-way controls that take when= and off=: greyed (or hidden) while the condition fails.
+#define UIT_IS_TWO_WAY_OFF(kind) ((kind) == UIT_FIELD || (kind) == UIT_TOGGLE || (kind) == UIT_SLIDER)
 // The states a page's gen can count (more: it carries none).
 #define UIT_GEN_SLOTS 128
 // A region's gen (a cards list's, a scroll region's, a split group's) (`_cell_gens`): the builds and edits, and the versions of what its

@@ -35,6 +35,17 @@ bool moy_task_spawn_as(moy_task_id_t id, const char *name, uint32_t stack, int p
     return xTaskCreatePinnedToCore(fn, n, depth, arg, p, out, c) == pdPASS;
 }
 
+void moy_task_delete(moy_task_id_t id, TaskHandle_t task) {
+    #ifdef MOY_HAS_PSRAM
+    if (s_rows[id].psram) {
+        vTaskDeleteWithCaps(task);
+        return;
+    }
+    #endif
+    (void)id;
+    vTaskDelete(task);
+}
+
 bool moy_task_spawn(moy_task_id_t id, TaskFunction_t fn, void *arg, TaskHandle_t *out) {
     return moy_task_spawn_as(id, NULL, 0, 0, 0, fn, arg, out);
 }

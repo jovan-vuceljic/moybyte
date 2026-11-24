@@ -457,7 +457,11 @@ static void hist_load_here(void *arg) {
 
 static void hist_save_here(void *arg) {
     moy_tty_t *f = arg;
-    char *t = moy_tty_calloc(1, (size_t)f->nhist * HIST_LINE + 1);
+    size_t total = 0;
+    for (int i = 0; i < f->nhist; i++) {
+        total += strlen(f->hist[i]) + 1;
+    }
+    char *t = moy_tty_calloc(1, total + 1);
     if (t == NULL) {
         return;
     }
@@ -863,7 +867,7 @@ static void face_run(moy_tty_t *f) {
         } else {
             f->hist_path[0] = 0;
         }
-        static const char profile[] = "[ -r /etc/profile ] && . /etc/profile\n";
+        static const char profile[] = "if [ -r /etc/profile ]; then . /etc/profile; fi\n";
         shell()->run(f->sh, profile, sizeof profile - 1);
     }
     settle(f);
