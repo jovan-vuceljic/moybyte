@@ -217,3 +217,22 @@ def test_legacy_records_enter_the_ledger_of_their_inferred_protocol(tmp_path):
     assert "`aaaa1111`" in text and "`cccc3333`" not in text
     _, text = write(d, tmp_path, "--protocol", "fresh")
     assert "`bbbb2222`" in text and "`cccc3333`" not in text
+
+
+def test_a_zero_is_a_row_of_the_zeros_tables_only(records, tmp_path):
+    """A Zero's record (its suite's `zero ...` numbers) sits in its own
+    section, never in the carts' or the desk's, and a number it did not take
+    is a dash with its reason under the table."""
+    pp.append(rec("c3_zero", "bbbb2222", "2026-11-15T12:00:00",
+                  errors={"zero improv join": "not taken (its test did not run)"},
+                  **{"zero live rtt median": ms(6.0), "zero internal free idle": kib(104.3),
+                     "zero improv join": pp.metric(None, "ms", pp.LOWER)}),
+              str(records / "c3_zero.jsonl"))
+    _, text = write(records, tmp_path)
+    assert "### c3_zero" not in text.split("## The Zeros", 1)[0]
+    rows = {r[0]: r for r in table(text, "The Zeros", "c3_zero")[2:]}
+    assert rows["zero live rtt median"][1:] == ["ms", "6.0"]
+    assert rows["zero internal free idle"][2] == "104"
+    assert rows["zero improv join"][2] == "-"
+    assert "zero improv join: not taken" in text.split("## The Zeros", 1)[1]
+    assert "### tdeck" in text.split("## The Zeros", 1)[0]
