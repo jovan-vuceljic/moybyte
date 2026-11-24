@@ -61,9 +61,9 @@ HANDHELD = "handheld"
 DESK = "desk"
 CLASSES = {
     HANDHELD: {"unit": 1, "bar": BAR_ROWS, "row": 20, "place": 34, "title": 18,
-               "tile": 40, "tile_cell": 62, "tile_top": 12, "clock": 35},
+               "tile": 40, "tile_cell": 62, "clock": 35},
     DESK: {"unit": 2, "bar": 40, "row": 28, "place": 34, "title": 44,
-           "tile": 44, "tile_cell": 74, "tile_top": 18, "clock": 44},
+           "tile": 44, "tile_cell": 74, "clock": 44},
 }
 DESK_MIN_IN = 5.0
 # The bar heights a theme's look sets per class (`hhbar.h`, `bar.h`; the

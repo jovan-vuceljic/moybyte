@@ -61,9 +61,16 @@ def test_the_engine_places_the_themes_bar_where_pack_does():
     R.held(__file__, "packs", _packs())
 
 
-def test_a_layout_the_page_does_not_hold_is_pack_s():
+def test_a_layout_the_page_does_not_hold_is_its_shaped_page_s():
+    """A bar the themes' page does not place keeps `shell_layout.pack`'s
+    widgets, slots and order, each where its shaped page puts it: in order
+    along the bar and inside it."""
     import bar_engine
     a = (1024, 600, 40, 2, 1, 40)
-    assert bar_engine.pack(*a, of=LB.DEFAULT_BARS, cluster=False, items=0) == \
-        SL.pack(*a, of=LB.DEFAULT_BARS, cluster=False, items=0)
+    (edge, rect, _dy, got), = bar_engine.pack(*a, of=LB.DEFAULT_BARS, cluster=False, items=0)
+    (_e, want_rect, _d, want), = SL.pack(*a, of=LB.DEFAULT_BARS, cluster=False, items=0)
+    assert (edge, rect) == ("top", want_rect)
+    assert [(c[0], c[3]) for c in got] == [(c[0], c[3]) for c in want]
+    xs = [c[1][0] for c in got if c[1][2]]
+    assert xs == sorted(xs) and all(0 <= c[1][0] and c[1][0] + c[1][2] <= rect[2] for c in got)
     assert not bar_engine.placed(LB.DEFAULT_BARS[0]) and bar_engine.placed(THEMES[0])

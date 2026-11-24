@@ -16,9 +16,9 @@ menu shows), the bar layer draws at its rect before the page paints. The
 items, Wi-Fi and the battery stand in one row, `cluster`: a handheld's
 status cluster, one stop of the bar's keys, keeps its focus ring's room
 round it (`ring`) and before the clock (`cg`), and the bar layer draws that
-ring (`BarLayer._cluster_box`). Their icons are `look="small"`, the size the
-zone's and the chips' icons draw at, in cells the chrome scale's row
-sizes. The canvases are drawn by the bar layer
+ring (`BarLayer._cluster_box`). The bar holds the zone, so the engine draws
+every icon alone in it at the zone's and the chips' size, centred in cells
+the chrome scale's row sizes. The canvases are drawn by the bar layer
 (`PAINT`), each for its reason: the battery's low and charging states are
 drawn by hand (no icon set has them); the zone is its owner's, drawn after
 the page."""
@@ -103,9 +103,8 @@ def bar():
                 with ui.row("cluster", pad="{ring}", gap="{sg}", shown="cluster"):
                     with ui.rows("items", dir="row"):
                         ui.button("item", icon="{.icon}", alone=True, kind="bar", marked=".on",
-                                  tone="{.tone}", look="small")
-                    ui.button("wifi", icon="{wicon}", alone=True, kind="bar", shown="wifi_on", look="small")
-                    ui.button("battery", icon="battery", alone=True, kind="bar", shown="batt_icon",
-                              look="small")
+                                  tone="{.tone}")
+                    ui.button("wifi", icon="{wicon}", alone=True, kind="bar", shown="wifi_on")
+                    ui.button("battery", icon="battery", alone=True, kind="bar", shown="batt_icon")
                     ui.canvas("battery_st", battery_cell, w=16, shown="batt_glyph")
                 ui.button("clock", label="{time}", kind="bar", w="{cw}", shown="clock_on")

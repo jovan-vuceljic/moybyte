@@ -1224,7 +1224,8 @@ def test_a_chip_names_its_window_whole_while_the_bar_has_room(tmp_path):
     ws.wm._win_title = lambda win: "A VERY LONG WINDOW TITLE INDEED " * 2
     chips = ws.wm.chip_rects()
     assert len(chips) == 3
-    assert all(len(lb) < 64 for _k, _r, lb in chips)
+    # the three cut to one width, each still wider than its icon alone
+    assert len({r[2] for _k, r, _l in chips}) == 1 and all(r[2] > r[3] for _k, r, _l in chips)
     assert all(bx + cx <= r[0] and r[0] + r[2] <= bx + cx + cw for _k, r, _l in chips)
 
 
@@ -2505,8 +2506,8 @@ def test_a_dead_window_releases_its_buffer_and_the_backdrop_survives_a_relayout(
 # installs each window's layout context: a row the console shared, or one read
 # from the last window installed, lays an app out at the other window's size.
 TWO_WINDOWS = (
-    "d670aaf3ebe719006d2543c4262030528a3fb031afe397cf08f9a054a3c4616f",
-    "10cccabbef46a441eb29e6ddf7adafd0c45ec07712c1ab59afe23ea84fc0ad52",
+    "722e0daf48595a1c228a07eafc84b76a9e9b4966c65893155c56640f36e873ab",
+    "253bd8860e8eb40386aa6a64289759b2d0dba727448a52442b2437eb88e904be",
 )
 
 
@@ -3746,29 +3747,54 @@ def test_a_desk_tile_draws_its_apps_icon_from_the_set(tmp_path):
         drawn.append((kind, rect[2], real(kind, rect, ink, cv))), drawn[-1][2])[1]
     ws.wm._backdrop_layer._draw_desk_icons()
     keys = [r[0] for r in ws.wm._backdrop_layer._icon_rects()]
-    assert [d[0] for d in drawn] == keys
+    assert sorted(d[0] for d in drawn) == sorted(keys)      # (the current tile's last)
     assert all(size == 24 and ok for _k, size, ok in drawn)
     from runtime import iconsets
     assert iconsets._pick("default", 24)[1] == 24
 
 
+def _label_words(ws):
+    """The colour words the desk's labels' bands hold, each band's set."""
+    cv = ws.sys_canvas
+    out = []
+    for _key, _box, band, _label, _cart in ws.wm._backdrop_layer._icon_rects():
+        out.append({_px(cv, x, y) for y in range(band[1], band[1] + band[3])
+                    for x in range(band[0], band[0] + band[2])})
+    return out
+
+
+def _shadowed(words, bg):
+    """Whether a band's words hold a shadow's: a grey darker than two
+    thirds of the backdrop `bg`."""
+    def rgb(w):
+        return (w >> 11 & 31) << 3, (w >> 5 & 63) << 2, (w & 31) << 3
+
+    def lum(c):
+        return c[0] * 299 + c[1] * 587 + c[2] * 114
+    b = lum(rgb(bg))
+    return any(max(c) - min(c) < 24 and lum(c) * 3 < b * 2 for c in map(rgb, words))
+
+
+def _word(v):
+    """Look colour `v`'s RGB565 word as the labels draw it (its MOY64 nearest)."""
+    from runtime import ui_draw
+    return ui_draw._C.theme_rgb(ui_draw._C.theme_rgb(v)[2])[0]
+
+
 def test_a_desk_label_over_a_wallpaper_is_white_over_a_shadow(tmp_path, monkeypatch):
     """Over the theme's backdrop a label takes the ink; over a wallpaper,
     whose pixels the theme does not know, white over a black shadow."""
-    from runtime import ui_draw
     ws = _moy_desk(tmp_path)
-    got = []
-    real = ui_draw.label
-    monkeypatch.setattr(ui_draw, "label", lambda cv, r, t, ink, align=0, bg=None,
-                        shadow=None: (got.append((t, ink, shadow)),
-                                      real(cv, r, t, ink, align, bg, shadow))[1])
-    ws.wm._backdrop_layer._draw_desk_icons()
-    assert got and all(ink == ws.theme_colors["ink"] and sh is None for _t, ink, sh in got)
-    got.clear()
+    desk = ws.wm._backdrop_layer
+    from runtime import ui_draw
+    ink = ui_draw._C.theme_rgb(ws.theme_colors["ink"])[0]
+    bg = ui_draw._C.theme_rgb(ws.theme_colors["desktop"])[0]
+    words = _label_words(ws)
+    assert words and all(ink in w for w in words)
     monkeypatch.setattr(ws.look, "wallpaper_id", ws.look.PICTURE)
-    ws.wm._backdrop_layer._draw_desk_icons()
-    black, white = ws.look.live.fixed[2:]
-    assert got and all(ink == white and sh[0] == black for _t, ink, sh in got)
+    desk._draw_desk_icons()
+    words = _label_words(ws)
+    assert words and all(_word(0x1FFFFFF) in w and _shadowed(w, bg) for w in words)
 
 
 def test_blocks_tiles_are_each_apps_colour_and_their_icons_the_tile_ink(tmp_path):
@@ -3817,15 +3843,10 @@ def test_a_looks_label_ink_and_shadow_draw_the_desk_labels(tmp_path, monkeypatch
         ws.look.set_theme("lb", persist=False, variant="light")
         ws.home.open_desk()
         _quiesce(ws)
-        got = []
-        real = ui_draw.label
-        monkeypatch.setattr(ui_draw, "label", lambda cv, r, t, ink, align=0, bg=None,
-                            shadow=None: (got.append((ink, shadow)),
-                                          real(cv, r, t, ink, align, bg, shadow))[1])
-        ws.wm._backdrop_layer._draw_desk_icons()
-        leaves = ws.look.live.look[0]
-        assert got and set(got) == {(leaves["label.ink"],
-                                     (leaves["label.shadow.c"], 128, 2, 1))}
+        ws.frame(1 / 30)
+        bg = ui_draw._C.theme_rgb(ws.theme_colors["desktop"])[0]
+        words = _label_words(ws)
+        assert words and all(_word(0x1FF0000) in w and _shadowed(w, bg) for w in words)
     finally:
         _uninstall()
 
@@ -3840,15 +3861,10 @@ def test_a_window_under_the_look_is_titled_and_drawn_whole(tmp_path):
     wm = ws.wm
     win = wm.windows["calc"]
     assert wm._win_title(win) == "Calc"
-    drawn = []
-    real = ws.draw_icon
-    ws.draw_icon = lambda kind, rect, ink, cv=None: (
-        drawn.append(kind), real(kind, rect, ink, cv))[1]
     grips = []
     real_fill = wm.root_canvas.rect
     assert wm._strip_icon(win) == "calc"
-    wm._draw_look_chips(wm.root_canvas, ws.theme_colors, 1, wm.root_ctx.layout.line_h)
-    assert drawn == ["calc"]
+    assert [r["icon"] for r in wm.chip_model()] == ["calc"]
     gx, gy, gw, gh = wm._grip_rect(win)
     wm.root_canvas.rect = lambda *a: (grips.append(a), real_fill(*a))[1]
     try:
@@ -3900,29 +3916,18 @@ def test_the_root_takes_back_its_marks_after_the_windows_draw(tmp_path, held):
 
 @pytest.mark.parametrize("theme", ["moy", "contrast"])
 def test_the_focused_chip_prints_in_the_current_ink(tmp_path, theme):
-    """The focused window's chip is current content: its icon and title take
-    the ink the look gives that (Moy's accent, beside the raised plate;
-    Contrast's `value_ink`, on its solid ink plate, D-14); the others the
-    dim ink."""
+    """The focused window's chip is current content: its bar item is marked
+    and takes the ink its mark gives (no tone of its own); the others the
+    dim chrome ink."""
     ws = _moy_desk(tmp_path)
     if theme != "moy":
         ws.look.set_theme(theme, persist=False, variant="light")
     for app in ("files", "calc"):
         ws.spine.open_app(ws.app(app))
         ws.frame(1 / 30)
-    wm = ws.wm
-    sc, th = wm.root_canvas, ws.theme_colors
-    inks = {}
-    real = sc.print
-    sc.print = lambda text, x, y, c=None, *a: (inks.__setitem__(text, c),
-                                               real(text, x, y, c, *a))[1]
-    try:
-        wm._draw_look_chips(sc, th, 1, wm.root_ctx.layout.line_h)
-    finally:
-        sc.print = real
-    want = th["ink_accent"] if theme == "moy" else th["value_ink"]
-    assert inks["Calc"] == want
-    assert inks["Files"] == th["chrome_ink_dim"]
+    rows = dict((r["title"], r) for r in ws.wm.chip_model())
+    assert rows["Calc"]["on"] and rows["Calc"]["tone"] == ""
+    assert not rows["Files"]["on"] and rows["Files"]["tone"] == "chrome_ink_dim"
 
 
 # -- the wallpaper's subject (docs/history/look_2026-10.md step 28) -------------------

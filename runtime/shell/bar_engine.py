@@ -1,9 +1,14 @@
-"""The bars' packing and drawing from the bar page (`bar_ui`): `pack`
-answers what `shell_layout.pack` answers, from the page's rects, for every
-bar of a layout of the page's shape (`placed`), a handheld's status cluster
-keeping its ring room (`shell_layout.RING_ROOM`); any other layout is
-`shell_layout.pack`'s. `draw` is a frame of the page onto a bar's strip."""
+"""The bars' packing and drawing from the bar pages (`bar_ui`,
+`bar_shape_ui`): `pack`
+answers what `shell_layout.pack` answers, from the pages' rects: a bar of
+the themes' shape (`placed`) the bar page's, a handheld's status cluster
+keeping its ring room (`shell_layout.RING_ROOM`); any other bar a shaped
+page's (`bar_shape_ui.strip` along a top or bottom bar, `side` down a left
+or right one), its widgets the model of `shell_layout.pack`'s cells in the theme's
+order. `draw` is a frame of the bar page onto a bar's strip, `draw_shaped`
+of a shaped page."""
 
+import bar_shape_ui
 import bar_ui
 import iconsets as _iconsets
 import layout_base as LB
@@ -12,6 +17,7 @@ import status_items as _status
 import uitree as S
 
 s = bar_ui.s
+ss = bar_shape_ui.s
 LEFT = ("menu", "chips", "zone")
 RIGHT = ("wifi", "battery", "clock")
 _PAGE = [None]
@@ -45,6 +51,7 @@ def _page():
     if p is None:
         import uitree_editor
         p = _PAGE[0] = uitree_editor.page(bar_ui.bar, None, None)
+        p.bar = True            # (its tray's icons the zone's size)
         forget()                # (a new page's store holds none of them)
     return p
 
@@ -53,16 +60,18 @@ def forget():
     """What the page was last handed, forgotten: the next draw writes every
     state again. A new page and a new console's bar start here."""
     _WINS[0] = _ITEMS_W[0] = _ITEMS[0] = None
+    _SH_MEMO.clear()
     for i in range(len(_LAST)):
         _LAST[i] = None
     _DIRTY[0] = True
 
 
-def _put(nm, v):
-    """The host's write of what the bar shows (the placement pushes it)."""
-    if s._v[nm] != v:
-        s._v[nm] = v
-        s._ver[nm] += 1
+def _put(nm, v, st=s):
+    """The host's write of what a bar shows into state `st` (the bar
+    page's by default; the placement pushes it)."""
+    if st._v[nm] != v:
+        st._v[nm] = v
+        st._ver[nm] += 1
         _DIRTY[0] = True
 
 
@@ -71,12 +80,13 @@ def _cluster():
     return LB.metric_class() != LB.DESK
 
 
-def _row(rect, cs, cluster):
-    """Where the page lies in a bar at `rect`, in the bar's coordinates: a
-    desk's bar whole; a handheld's icon row, BAR_ROWS units across its
-    middle, so an item's icon is the chrome scale's (a bar item's icon is
-    the largest multiple of 16 its row holds)."""
-    if not cluster:
+def _row(rect, cs, row):
+    """Where a page lies in a bar at `rect`, in the bar's coordinates: the
+    bar whole (the themes' bar on a desk), or its icon row (`row`: a
+    handheld's, and any strip's), BAR_ROWS units across its middle, so an
+    item's icon and the system button are the chrome scale's (a bar item's
+    icon is the largest multiple of 16 its row holds)."""
+    if not row:
         return (0, 0, rect[2], rect[3])
     h = min(rect[3], LB.BAR_ROWS * cs)
     return (0, (rect[3] - h) // 2, rect[2], h)
@@ -179,12 +189,21 @@ def pack(w, h, rows, cs, fs, clock_w, text_w=None, of=None, sys_len=0, cluster=N
     n_items = SL.ITEMS[0] if items is None else items
     if cluster is None:
         cluster = _cluster()
-    if not all(placed(b) for b in of):
-        return SL.pack(w, h, rows, cs, fs, clock_w, text_w, of, sys_len, cluster, items)
+    packed = None
+    for b in of:
+        if not placed(b):
+            packed = SL.pack(w, h, rows, cs, fs, clock_w, text_w, of, sys_len, cluster, items)
+            break
     rects = LB.bar_rects_of(w, h, rows, of)
     ic = 16 * cs
     out = []
-    for bar, rect in zip(of, rects):
+    used = []
+    for i in range(len(of)):
+        bar, rect = of[i], rects[i]
+        if not placed(bar):
+            used.append(shaped(packed[i][0], packed[i][3]))
+            out.append(_shaped_bar(packed[i], cs, fs, clock_w, sys_len, n_items))
+            continue
         names = bar[2] + bar[4]
         page = _place(rect, names, cs, fs, clock_w, sys_len, n_items, cluster)
         thick = rect[3]
@@ -205,6 +224,10 @@ def pack(w, h, rows, cs, fs, clock_w, text_w=None, of=None, sys_len=0, cluster=N
             slot = 0 if name in LEFT else 2
             cells.append((name, r, n_items if name == "status" else None, slot))
         out.append((bar[0], rect, (thick - LB.BAR_ROWS * fs) // 2, tuple(cells)))
+    for sh in list(_SHAPED):
+        if sh not in used:
+            _SHAPED.pop(sh).forget()        # (a shaped page no bar of these draws holds no store)
+            _SH_MEMO.pop(sh, None)
     return tuple(out)
 
 
@@ -335,9 +358,17 @@ def draw(cv, th, rect, names, cs, fs, clock_w, sys_len, n_items, wicon, time, gl
     _put("time", time)
     if _DIRTY[0]:
         _DIRTY[0] = False
-        pushed = getattr(page, "committed", None)
-        if pushed is not None:
-            pushed()            # the C engine's store takes the writes
+        _commit(page)
+    return _frame(page, cv, th, rect, oy, cs, clip, focus)
+
+
+def _commit(page):
+    pushed = getattr(page, "committed", None)
+    if pushed is not None:
+        pushed()                # the C engine's store takes the writes
+
+
+def _frame(page, cv, th, rect, oy, cs, clip, focus):
     if page._damage is None:
         page._damage = _NoDamage()
     D = _ui_draw()
@@ -363,3 +394,232 @@ def draw(cv, th, rect, names, cs, fs, clock_w, sys_len, n_items, wicon, time, gl
         if clip is not None:
             cv.clip(clip[0], clip[1], clip[2], clip[3])
     return page
+
+
+# -- a bar of any other shape (`bar_shape_ui.strip`, `bar_shape_ui.side`) --------------
+#
+# Its widgets are the packed cells' (shell_layout.pack's names, slots and
+# texts, in the theme's order), each slot a model's rows; where they lie is
+# the page's, which `pack` reads back into the cells.
+
+_SHAPED = {}                    # "strip" / "side": its page
+_SH_ROW_AT = [0, 0, None, 0]    # a strip's scale and height, its icon row's rect, its offset
+_SH_MEMO = {}                   # "strip" / "side": the cells, the `wins` and the `items` rows its store took
+_SH_KEYS = tuple(tuple("%d.%d" % (j, i) for i in range(16)) for j in range(3))
+_SLOTS = ("lead", "mid", "tail")
+SHOW_X = _SHOW_X = [True]       # whether the shaped page's close widget shows its X
+_ICON = ("menu", "close", "wifi", "battery")
+_SIDE_FILLS = ("zone", "chips", "spacer")     # the widgets that fill down a side bar (its title a line)
+# A widget's node on the shaped page: its bar item's (`widget`) where not this
+_NODE = {"chips": "chips", "zone": "zone", "spacer": "spacer", "close": "close_x",
+         "title": "label#0", "text": "label#0", "separator": "rule#0"}
+
+
+def shaped(edge, cells):
+    """Which shaped page draws a packed bar: "side" a left or right bar,
+    "strip" a top or bottom bar the themes' page does not draw (`placed`),
+    None that page's."""
+    if edge in ("left", "right"):
+        return "side"
+    side = 0
+    zone = False
+    for name, _r, _t, slot in cells:
+        if name in LEFT:
+            if slot != 0 or side:
+                return "strip"
+            zone = zone or name == "zone"
+        elif name in RIGHT or name == "status":
+            if slot != 2:
+                return "strip"
+            side = 1
+        else:
+            return "strip"
+    return None if zone else "strip"
+
+
+def _shaped_page(sh):
+    p = _SHAPED.get(sh)
+    if p is None:
+        import uitree_editor
+        p = _SHAPED[sh] = uitree_editor.page(bar_shape_ui.side if sh == "side" else bar_shape_ui.strip, None, None)
+        p.bar = True
+        _SH_MEMO.pop(sh, None)
+    return p
+
+
+def _slot_row(k, kind, text):
+    return {"k": k, "kind": kind, "text": text}
+
+
+def _shaped_states(sh, cells, rect, cs, fs, clock_w, sys_len, n_items, glyph=None, wins=None):
+    """The shaped page `sh` with its states written for packed `cells` on
+    a bar at `rect` (kept while the same cells, items, windows and
+    battery stand). Down a side bar the system button's cell is its tile's
+    height (`layout_base.sys_tile`)."""
+    page = _shaped_page(sh)
+    page._bind()
+    items = _items(0 if sh == "side" else min(n_items, _status.CAP))
+    L = _SH_MEMO.get(sh)
+    if L is None:
+        L = _SH_MEMO[sh] = [None, None, None]
+    if wins is not None and wins is not L[1]:
+        L[1] = wins
+        ss._v["wins"] = S._check(ss._t["wins"], wins, "s.wins")
+        ss._ver["wins"] += 1
+    if items is not L[2]:
+        L[2] = items
+        ss._v["items"] = S._check(ss._t["items"], items, "s.items")
+        ss._ver["items"] += 1
+    if L[0] is not cells:
+        slots = ([], [], [])
+        n = [0, 0, 0]
+        for name, _r, text, slot in cells:
+            if name == "status":
+                if items:
+                    slots[slot].append(_slot_row("st", "status", ""))
+                continue
+            slots[slot].append(_slot_row(_SH_KEYS[slot][min(n[slot], 15)], name, text or ""))
+            n[slot] += 1
+        # a strip's middle centred on it; the fills between the ends where
+        # nothing else fills (and down a side bar either side of a middle
+        # holding a fixed widget)
+        fills = _SIDE_FILLS if sh == "side" else SL.FLEX
+        gaps = True
+        for row in slots[0] + slots[1] + slots[2]:
+            gaps = gaps and row["kind"] not in fills
+        if sh == "side":
+            for row in slots[1]:
+                gaps = gaps or row["kind"] not in fills
+        else:
+            gaps = gaps and not slots[1]
+        _put("gaps", gaps, ss)
+        _put("middle", bool(slots[1]), ss)
+        for j in range(3):
+            nm = _SLOTS[j]
+            ss._v[nm] = S._check(ss._t[nm], slots[j], "s." + nm)
+            ss._ver[nm] += 1
+        L[0] = cells
+    sg = max(6 * cs, 4 * fs)
+    _put("sg", sg, ss)
+    _put("cw", clock_w, ss)
+    if sh == "side":
+        sys_len = LB.sys_tile(rect[2])[1]
+    _put("sys_w", sys_len or 16 * cs, ss)
+    if glyph is not None:
+        _put("batt_icon", not glyph, ss)
+        _put("batt_glyph", bool(glyph), ss)
+    page.unit = cs
+    return page
+
+
+def _cell_rect(page, sh, name, key, r, thick, cs):
+    """A packed cell's rect read off shaped page `page` (bar coordinates),
+    across the bar as `shell_layout.pack` sets it; `r` (its packing's)
+    where the page places none of it."""
+    side = sh == "side"
+    if name == "battery":
+        got = page.rect_of(key + "/widget") or page.rect_of(key + "/battery_st")
+    elif name == "status":
+        got = _items_span(page, len(ss._v["items"]))
+    elif name == "chips" and side:
+        got = None
+        for row in ss._v["wins"]:
+            c = page.rect_of(row.k + "/chip")
+            if c is not None:
+                got = c if got is None else (got[0], got[1], got[2], c[1] + c[3] - got[1])
+        if got is None:
+            return (r[0], r[1], r[2], 0)
+    else:
+        got = page.rect_of(key + "/" + _NODE.get(name, "widget"))
+    if got is None:
+        return r if name == "zone" else (r[0], r[1], 0, 0)
+    ic = 16 * cs
+    x, y, w, h = got
+    if side:
+        if name in _ICON:
+            return ((thick - ic) // 2, y + (h - ic) // 2, ic, ic)
+        return (0, y, thick, h)
+    if name in _ICON or name in ("zone", "title", "separator", "status"):
+        return (x, 1 + (thick - LB.BAR_ROWS * cs) // 2, w, ic)
+    return (x, 0, w, thick)
+
+
+def _shaped_bar(packed, cs, fs, clock_w, sys_len, n_items):
+    """Packed bar `packed` (shell_layout.pack's) with its cells where the
+    shaped page places them."""
+    edge, rect, dy, cells = packed
+    sh = shaped(edge, cells)
+    page = _shaped_states(sh, cells, rect, cs, fs, clock_w, sys_len, n_items)
+    _commit(page)
+    page.place(_row(rect, cs, sh == "strip"), desk=True)
+    thick = rect[2] if sh == "side" else rect[3]
+    out = []
+    n = [0, 0, 0]
+    for name, r, text, slot in cells:
+        if name == "status":
+            key = ""
+        else:
+            key = _SH_KEYS[slot][min(n[slot], 15)]
+            n[slot] += 1
+        out.append((name, _cell_rect(page, sh, name, key, r, thick, cs), text, slot))
+    return (edge, rect, dy, tuple(out))
+
+
+def draw_shaped(cv, th, rect, edge, cells, cs, fs, clock_w, sys_len, n_items, wicon, time, glyph,
+                title, show_x, clip=None, wins=None):
+    """A frame of the shaped page that draws packed bar `cells` (`shaped`)
+    onto `cv` at `rect`, as `draw` draws the bar page; `title` its title
+    widget's words, `show_x` whether its close widget shows its X
+    (`bar_ui.PAINT`'s to draw)."""
+    _SHOW_X[0] = show_x
+    sh = shaped(edge, cells)
+    page = _shaped_states(sh, cells, rect, cs, fs, clock_w, sys_len, n_items,
+                          glyph, wins)
+    _put("wicon", wicon, ss)
+    _put("time", time, ss)
+    _put("title", title, ss)
+    _commit(page)
+    oy = 0
+    if sh == "strip":
+        m = _SH_ROW_AT
+        k = m[2]
+        if k is None or m[0] != cs or m[1] != rect[3] or k[0] != rect[0] or k[2] != rect[2] \
+                or k[1] - m[3] != rect[1]:
+            row = _row(rect, cs, True)
+            m[0], m[1], m[3] = cs, rect[3], row[1]
+            m[2] = (rect[0], rect[1] + row[1], rect[2], row[3])
+        rect, oy = m[2], m[3]       # (kept while the bar's place stands)
+    return _frame(page, cv, th, rect, oy, cs, clip, None)
+
+
+def shaped_item_rects(rect, edge, cells, cs, fs, clock_w, sys_len, n_items, out):
+    """The status items of shaped packed bar `cells` at `rect`: their
+    rects in its bar's coordinates into `out` (cleared), in their order."""
+    sh = shaped(edge, cells)
+    page = _shaped_states(sh, cells, rect, cs, fs, clock_w, sys_len, n_items)
+    _commit(page)
+    page.place(_row(rect, cs, edge in ("top", "bottom")), desk=True)
+    del out[:]
+    for k in range(min(n_items, _status.CAP)):
+        r = page.rect_of(_KEYS[k] + "/item")
+        if r is not None:
+            out.append(r)
+    return out
+
+
+def shaped_chip_rects(rect, edge, cells, cs, fs, clock_w, sys_len, n_items, wins, out):
+    """The chips of shaped packed bar `cells` at `rect` for the window
+    manager's rows `wins`: [(kind, rect)] into `out` (cleared) on the
+    canvas the bar lies on, a chip the fit rule dropped left out."""
+    sh = shaped(edge, cells)
+    page = _shaped_states(sh, cells, rect, cs, fs, clock_w, sys_len, n_items,
+                          wins=wins)
+    _commit(page)
+    page.place(_row(rect, cs, edge in ("top", "bottom")), desk=True)
+    del out[:]
+    for row in wins:
+        k = row["k"]
+        r = page.rect_of(k + "/chip")
+        if r is not None:
+            out.append((k, (rect[0] + r[0], rect[1] + r[1], r[2], r[3])))
+    return out

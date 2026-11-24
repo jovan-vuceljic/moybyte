@@ -1,6 +1,6 @@
 {
- "bar/big_800x480_fs3_dark": "sha256:08a26cfb1bcd7d40d3445eabe3474328f3e0f5e5f52d1753df99f36e8796d4e3",
- "bar/p4_1024x600_cs2_fs1_windowed": "sha256:4af0d48059f64e72cb457b7dceb6033cf6e463ba9e15b00de5e1d6e6e8ebb1e9",
- "bar/p4_1024x600_fs2_windowed": "sha256:280257bc113c4b65aa986d58097c143a13ca5ae7a34e8c8bbeafd1d2b6fb243c",
+ "bar/big_800x480_fs3_dark": "sha256:8a19b97acdae0eaebb3ec654b424881a292b937a7bb95f3a9a2ca4a50b2e46e2",
+ "bar/p4_1024x600_cs2_fs1_windowed": "sha256:92784576338735db5bfce231cf129649a25a686372ee67be08878ae97f4ea377",
+ "bar/p4_1024x600_fs2_windowed": "sha256:ec722d60406a8aea6a976e5772d9dcfa2444ea5cf5c8cb4cf606b4f29e0c69cc",
  "bar/tdeck_320x240_fs1_dark": "sha256:4fdab3b52f2a3aa3b30a7b24d5c25fbe10900b34327d87310ea70a1e5b7c1155"
 }

@@ -304,6 +304,11 @@ static void depth_of(moy_ui_depth_t *d, moy_theme_look_t *lk, const char *name, 
     d->tile_fill = paint_leaf(lk, "tile_fill");
     d->tile_line_w = whole(lk, "tile_outline.w", 0);
     d->tile_line_c = leaf(lk, "tile_outline.c");
+    d->label_ink = leaf(lk, "label.ink");
+    d->label_sh_c = leaf(lk, "label.shadow.c");
+    d->label_sh_a = (int16_t)((num(leaf(lk, "label.shadow.alpha"), 100) * 255 + 50) / 100);
+    d->label_sh_dx = (int8_t)num(leaf(lk, "label.shadow.dx"), 1);
+    d->label_sh_dy = (int8_t)num(leaf(lk, "label.shadow.dy"), 1);
     d->sys_line_w = whole(lk, "bar.sys_line.w", 0);
     d->sys_line_c = leaf(lk, "bar.sys_line.c");
 }

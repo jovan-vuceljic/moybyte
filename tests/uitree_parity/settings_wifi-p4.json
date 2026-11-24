@@ -1,7 +1,7 @@
 {
  "surface": "settings_wifi",
  "config": "p4_1024x600_cs2_fs1_windowed",
- "commit": "d46d59298",
+ "commit": "fe33deaea",
  "script": [
   "k:down",
   "k:a",
@@ -11,23 +11,23 @@
  "frames": [
   [
    "(open)",
-   "6087a2e09fb0ed17978c30557b7d61a4f0d452f17ccf7797c043d5a1e7b8d07e"
+   "f06018f251b95bfba91bbc171259374ff2062a215614f403d2e74954c4dbf2f6"
   ],
   [
    "k:down",
-   "de6935a0b60118a092dc49183a00ce8317e8ae4d05c26c7713e5c06c2bfcd6b9"
+   "43fccf37f2f27ffe49a3760512cac46926d9acf98807850e54ab2cce2e706aad"
   ],
   [
    "k:a",
-   "1b492b7a2f864204d175b5868a8820cea8005c6a0f08df60ecde2b38bb7a6da9"
+   "b46c87afc25adb2c7dd6c9120843a0c5d388ff1e16bccce43b8605d6ca8971ec"
   ],
   [
    "f:2",
-   "1b492b7a2f864204d175b5868a8820cea8005c6a0f08df60ecde2b38bb7a6da9"
+   "b46c87afc25adb2c7dd6c9120843a0c5d388ff1e16bccce43b8605d6ca8971ec"
   ],
   [
    "k:down",
-   "36cd997216a3496a6130ce9936b8a0bdf2a4ab4de813dad24c51b72a50eb63a9"
+   "52292a9c1bbb12fcea5d3cbb065580e1a1fab45fc308451b16cbdb41c9deed9f"
   ]
  ]
 }

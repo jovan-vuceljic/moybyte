@@ -1,7 +1,7 @@
 {
  "surface": "tasks",
  "config": "p4_1024x600_cs2_fs1_windowed",
- "commit": "bb7e2ad7b",
+ "commit": "fe33deaea",
  "script": [
   "k:down",
   "k:up",
@@ -11,23 +11,23 @@
  "frames": [
   [
    "(open)",
-   "eefdc83fea08f2384741cdb58b1bf571a1b547d27b688936005518bb68ba1351"
+   "126421626264070aa7a8ed3670b05ad44bc018e2d42b888844ef7a3f46527691"
   ],
   [
    "k:down",
-   "9e733b904be4a0d8babc8ab2f8ba8d01b3878b5e815d6fd8e8890a08338d2515"
+   "35be38b16c53faec00312d945271eb8ba5301f42bc4c1a09e5d4c314f9ac591b"
   ],
   [
    "k:up",
-   "eefdc83fea08f2384741cdb58b1bf571a1b547d27b688936005518bb68ba1351"
+   "126421626264070aa7a8ed3670b05ad44bc018e2d42b888844ef7a3f46527691"
   ],
   [
    "k:up",
-   "8d2b7e04a3b422c25c631409bc635ba588500dd7ea9a9fce906d29875103da7d"
+   "8e87c9ce6d8569c318e54e50f3efda75780aa87be7bf5d1f1b841344048ddd47"
   ],
   [
    "k:right",
-   "cca5e149c83f609e2205817b52dbaf50029399aaf44c404c462feea40355ce24"
+   "6d92443926a05558ce20c9585e0ec8b451edea7f6f49735d8991b63223829c57"
   ]
  ]
 }

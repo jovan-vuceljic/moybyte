@@ -418,7 +418,7 @@ Python's alone.
 
 | kind | is | key props |
 |---|---|---|
-| `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look=` (`large`, `small`), `w=` |
+| `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look="large"`, `w=` |
 | `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=` |
 | `toggle(label, name)` | a bool | `on=`, `hint=` |
 | `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=` |
@@ -433,7 +433,7 @@ Python's alone.
 | kind | is | key props |
 |---|---|---|
 | `rows(model)` | a model's rows, each drawing the body (Python `with`, Lua the function) | `cur=` the `row_of` focus writes, `changed=` run with the row where the user moves it from one row to another (focus arriving from elsewhere writes `cur=` alone), `current=` the row marked, `check=`, `empty=`, `by=` with cases, `filter=`, `group=` |
-| `cards(model)`, `card(action)` | rows as cards; `card` is the body | `cur=`, `current=`, `w=`, `h=`, `cols=`, `flow=`, `look=` (`carousel`, `shelf`, `icons`); a card's `label=`, `sub=`, `image=`, `badge=` |
+| `cards(model)`, `card(action)` | rows as cards; `card` is the body | `cur=`, `current=`, `w=`, `h=`, `cols=`, `flow=`, `look=` (`carousel`, `shelf`, `icons`, `column`); a card's `label=`, `sub=`, `image=`, `badge=`, `fill=` |
 | `table(model)`, `col(text)` | rows as a table, one `col` a column | `cols=` the header, `cur=`, `changed=` (as a rows' list's), `on=`, `empty=`; `row=` (a height, or an int state holding one) with one canvas child that draws each row and, with `pointer=`, takes the press on its row (`ev.row`) |
 
 **Over the page**
@@ -476,6 +476,9 @@ path of its own (owner, 2026-10-29). A long document is a `text_view` or a
   at its cell;
 - a row of buttons wider than its room closes its gaps, then stands its
   labelled icon buttons as their icons alone, from the end, until it fits;
+  a row from a model's cells (`ui.rows(dir="row")`) keep their labels and
+  are cut, the widest first, to one width, and dropped from the end where
+  even that does not fit;
 - `ui.row(key, grow=True)` on a flowing page fills its stack, so the rows
   after it stand at the page's foot and the page fits its room.
 
@@ -511,7 +514,10 @@ their spans.
 a container gives each shown child its rect, fixed rows their height and
 the fills sharing the rest, a text editor whole lines. A `rows` list
 standing in a placed stack (no `scroll` round it) is a fill that scrolls
-its rows, as a table is. A Python app whose
+its rows, as a table is; with `dir="col"` its rows' cells stand down the
+stack instead, as `dir="row"` stands them along a placed row: a button its
+`w=` down the stack, else a square of the stack's width, and a labelled bar
+item its own width, centred across. A Python app whose
 state holds a `ui.doc` runs on the Editor's kinds (`text_editor`, `panes`),
 and its pages are placed; `split` and `grid` place their cells on any page.
 
@@ -522,8 +528,9 @@ and its pages are placed; `split` and `grid` place their cells on any page.
   measure of prose); `text_view(..., look="well")` lays its prose on a well,
   and `gutter=True` numbers its lines in a gutter before them.
 - `button(..., kind="bar")` alone is a flat icon, narrower than a button's,
-  the largest its row holds (`look="small"`: 16 units at the page's scale,
-  as beside a label), and a button's `kind=` may be a template;
+  the largest its row holds (in the shell's bar every icon alone draws at
+  its zone's size, 16 units at the page's scale, centred in its cell), and
+  a button's `kind=` may be a template;
   `look="large"` is half again a row's height with twice the pads, on a
   flowing page. On the desk a
   popover anchored at a button or a link hangs under it.
@@ -604,7 +611,16 @@ it).
   down, each named under it on the desk and, on the handheld, the current
   card named with its `sub=`'s items in a caption band along the foot.
 
-In a shelf or icons grid the arrows step the current card across it and the
+- `look="column"`: tiles `w=` a side on rows `h=` apart (in pixels; the
+  class's desk tile where unset) down the room's left edge, column after
+  column, each named under it, the columns as wide as the widest name and
+  the tiles shrinking an eighth at a time until every card shows (the
+  windowed desk's apps). A card's `fill=` (a theme role or `#RRGGBB`, a
+  template; empty for the theme's) is its tile's colour, its picture stands
+  on the tile, 24 of its 44 across, and its name is in the theme's desk
+  label ink over the theme's label shadow (with `tone=`, over a black one).
+
+In a shelf, icons or column grid the arrows step the current card across it and the
 view lands where it shows that card with its margin, the wheel's notches
 step it down (Shift's across), a drag scrolls the view and a release flings
 it, a tap on a card makes it current and fires its action as Enter does, the

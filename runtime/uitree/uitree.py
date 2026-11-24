@@ -1987,12 +1987,13 @@ def focus(key=None):
 # -- the tree -----------------------------------------------------------------
 
 class Node:
-    __slots__ = ("kind", "key", "p", "l", "src", "kids", "parent", "act", "where", "ctx", "aux", "unit")
+    __slots__ = ("kind", "key", "p", "l", "src", "kids", "parent", "act", "where", "ctx", "aux", "unit", "was")
 
     def __init__(self, kind, key, where):
         self.kind, self.key, self.where = kind, key, where
         self.p, self.l, self.src, self.kids = {}, {}, {}, []
         self.parent = self.act = self.ctx = self.aux = self.unit = None
+        self.was = None             # a list's: the rows' context round it (a list in a list's row)
 
     def __enter__(self):
         b = _NOW.app
@@ -2005,7 +2006,7 @@ class Node:
         b = _NOW.app
         b.stack.pop()
         if self.kind in ("rows", "cards", "table"):
-            b.ctx = Ctx()
+            b.ctx = self.was or Ctx()
 
 
 # how the Builder keeps each prop of a kind: text, int, cond, choice, lit, fn, action0/1/p (none,
@@ -2047,7 +2048,7 @@ SCHEMA = {
                   changed="action1", group="lit", pad="int", flow="lit", look="lit", tone="text",
                   label="text"),
     "card": dict(_C, label="text", sub="text", badge="text", label_icon="text", image="image",
-                 icon="text", tone="text"),
+                 icon="text", tone="text", fill="text"),
     # G9, G13: a picture of its own (an image state, its fallback icon), a
     # progress bar (max= is required), a page that says why there is nothing
     "picture": dict(_C, image="image", icon="text", side="int", tone="text", on="action0", look="lit"),
@@ -2169,6 +2170,9 @@ def _node(kind, key, props, where, act=None):
     if kind == "rows" and n.l.get("dir") == "row" and parent.kind != "row":
         raise UIError("B03", 'ui.rows dir="row" outside a placed row', where=where,
                       fix='put it in `with ui.row(KEY):` on a placed page, its cells along the row; or drop dir=')
+    if kind == "rows" and n.l.get("dir") == "col" and parent.kind == "row":
+        raise UIError("B03", 'ui.rows dir="col" in a row', where=where,
+                      fix='put it in a placed page\'s column, its cells down it; or dir="row" along the row')
     if n.key is None:
         n.key = "%s#%d" % (kind, len(parent.kids))
     for k in parent.kids:
@@ -2548,6 +2552,7 @@ def _list(kind, model_name, p, where):
                           where=where, fix="filter matches the model's key field, a text")
     group = p.pop("group", None)
     n = _node(kind, model_name, p, where)
+    n.was = b.ctx
     n.ctx = Ctx(mt, p.get("current"))
     n.l["model"] = model_name
     if group is not None:           # a caption drawn where its value changes from the row before
@@ -2620,7 +2625,7 @@ def rows(model_name, cases=None, **p):
                 b.stack.pop()
     finally:
         b.stack.pop()
-        b.ctx = Ctx()
+        b.ctx = n.was or Ctx()
     return n
 
 
@@ -2676,7 +2681,10 @@ def cards(model_name, **p):
     """A model's rows as cards, each its picture and label: a region of their
     own that takes the rest of the page's room, or with `flow=True` a grid in
     the page's flow (in a group, between its caption and its rows) that
-    scrolls with the page."""
+    scrolls with the page. look="column" lays them as tiles down the room's
+    left edge, column after column, shrinking until they fit: `w=` the
+    tiles' side and `h=` their rows' pitch in pixels, each card's `fill=`
+    its tile's colour."""
     if "paint" in p:
         raise UIError("N04", "cards paint= is retired (G9)", where=_caller(),
                       fix="give the rows an image field (image pic) and the card image=.pic")
