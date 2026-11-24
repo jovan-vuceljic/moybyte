@@ -129,9 +129,8 @@ manifest with an `id` (§2). `--tier lua|wasm|wasi|c` writes the other tiers'
 `--service <tier>` an app's own service. `moy app check counter.moy` says
 what the console would refuse and which permissions the code uses that the
 manifest does not ask for (or asks for and never uses), `moy app build
-counter.moy` compiles a wasm or C program from its `src/` (`--chip
-esp32s3|esp32p4|host`, which a C program must name; Python and Lua have
-nothing to build), and `moy app stubs counter.moy` gives an editor the
+counter.moy` compiles a wasm or C program from its `src/` for every chip, or for those
+`--chip esp32s3|esp32p4|host` names (Python and Lua have nothing to build), and `moy app stubs counter.moy` gives an editor the
 tier's names. `moy app` is moy-spec's `moy` running Moybyte's plugin,
 `moy-app`, which `make setup` installs (`sdk/README.md`). The UI tree's own
 checks are `tools/uitree_check.py counter.moy` (Python) and

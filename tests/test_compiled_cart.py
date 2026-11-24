@@ -322,7 +322,7 @@ def test_moy_app_build_writes_both_and_check_reads_a_wasm_cart(tmp_path):
     cart = str(tmp_path / "dual.moy")
     shutil.copytree(DUAL, cart)
     try:
-        built = dict(cli.build_cart(cart, ["host"], signed=False))
+        built = dict(cli.build_cart(cart, ["host"], signed=False)[0])
     except cli.Refused as exc:
         pytest.skip(str(exc))
     assert set(built) >= {"main", "host"}

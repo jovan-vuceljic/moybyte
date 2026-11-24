@@ -89,6 +89,7 @@ import board_config  # noqa: E402
 import gen_device_carts  # noqa: E402
 import gen_web_blob as gwb  # noqa: E402
 from runtime.moy_store_base import API_LEVEL, api_above, api_of  # noqa: E402
+from tools import wasm_module  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PACK_FILE = "moybyte_web.pack"     # the build's pack beside its image, and in the cart
@@ -219,7 +220,9 @@ def seed_files(src):
     return out
 
 
-BOARD_CHIPS = ("esp32s3", "esp32p4")
+# The chips a console ships on: the ones a board's AOT module is keyed for
+# (native/moy_wasm/moy_wasm_key.h), the host left out.
+BOARD_CHIPS = tuple(wasm_module.targets())
 NATIVE_ASSET = "%s--%s"            # cart id, its module's file in the cart
 NATIVE_FILE = re.compile(r"^(?P<cid>[^/]+)--(?P<file>[A-Za-z0-9_]+\.(?P<chip>%s)\.elf)$"
                          % "|".join(BOARD_CHIPS))
