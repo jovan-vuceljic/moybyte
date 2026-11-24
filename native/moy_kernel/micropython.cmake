@@ -12,7 +12,9 @@
 # takes (moy_lock.c), and the process table
 # (moy_proc.c, the Player's rows), and the service model's event queues,
 # supervisor and VM call queue (moy_evq.c, moy_super.c, moy_vmq.c, the module
-# `moy_evq`). A board TAKES it in
+# `moy_evq`), and Improv Wi-Fi's frames on the USB-Serial/JTAG console
+# (moy_improv.c, the module `moy_improv`, built where the board's
+# mpconfigboard.h defines MOY_IMPROV). A board TAKES it in
 # board.toml ([[native.shared.take]]), and taking it is what makes the kernel
 # own app_main.
 #
@@ -60,6 +62,8 @@ target_sources(usermod_moy_kernel INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/moy_notes.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_items.c
     ${CMAKE_CURRENT_LIST_DIR}/modmoy_evq.c
+    ${CMAKE_CURRENT_LIST_DIR}/moy_improv.c
+    ${CMAKE_CURRENT_LIST_DIR}/modmoy_improv.c
 )
 
 target_include_directories(usermod_moy_kernel INTERFACE ${CMAKE_CURRENT_LIST_DIR})

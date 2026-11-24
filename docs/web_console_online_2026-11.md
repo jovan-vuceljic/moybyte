@@ -62,6 +62,12 @@ later sync their files.
   `/console/` folder, My consoles beside the pack store's packs (§4); the
   link's board end is the loader's and then the console page's
   (`page_tail.js`), §5.
+- **First setup over the cable is built** (phase 3, §11): Improv on a
+  Zero's USB serial (§7), run by the flasher after a flash and by My
+  consoles for a board already flashed, one client for both pages
+  (`site/os/improv.js`, `setup.js`); a console with no password takes its
+  first by the claim, over the link. My consoles also adds a console by
+  hand by its address, which its first open verifies.
 - **os.moybyte.com is GitHub Pages** (owner, 2026-11-24): one deploy
   (`.github/workflows/pages.yml`) on every `dev` and `master` push holds
   the project site at `/`, the dev site at `/dev/` and `/console/`.
@@ -86,20 +92,35 @@ later sync their files.
 What the person does. The rest of the doc is what makes each step work, and
 the notes under each step point to where that is.
 
-**Flow 1: first setup, once.**
+**Flow 1: first setup, once.** Flash, set up and use are one path.
 
 1. On os.moybyte.com, "Get a console": plug the board in by USB and press
-   Install. The site flashes it from the browser.
-2. Over the same cable, pick the Wi-Fi, type its password, and name the
-   console (`kitchen`). This is Improv (§7).
+   Install. The site flashes it from the browser (`site/flash.js`).
+2. The flash ends with "Connect it to Wi-Fi", on the port it flashed
+   through: pick the Wi-Fi, type its password, and name the console
+   (`kitchen`). This is Improv (§7), and its form is My consoles' own
+   (`site/os/setup.js`).
 3. The board joins the network and reports its address over the cable. The
-   site saves the name and the address under **My consoles**.
-4. Without Web Serial (an iPhone), flash from a computer, or use the board's
-   setup hotspot and its form.
+   site saves the console under **My consoles**, by the board's id. A board
+   with no password yet asks for one next (§7), which the page keeps in
+   memory only.
+4. The page offers "Open kitchen": the console's window opens over the
+   link, takes the password by the board's claim and signs in.
+5. A board flashed before has the same setup in My consoles, "Set up a
+   board by cable".
+6. Without Web Serial (an iPhone), flash from a computer, or use the board's
+   setup hotspot and its form, then add the console by its address.
 
-*Note:* the flow as decided sets no password for the board, and a board
-with no password pairs no browser. §7 puts the password in step 2's form and
-explains how it reaches the board without crossing the network.
+**Adding a console by hand**, for a console that never ran the setup here
+(a phone's My consoles, a console with a screen): its address, as an IP, a
+host name or a `.local` name, with or without `http://` and a port, and a
+name or none (the address is the name then). The address is trimmed and
+must be http(s) with nothing after the host but `/`; an address the list
+has updates that console instead of adding a second. The site cannot check
+it (an https page cannot reach an http board), so the first open does: the
+board's loader says hello over the link, and the list shows the console
+reached and the console its board named, or "not reached yet" with the
+address to open by hand.
 
 **Flow 2: every day.**
 
@@ -111,8 +132,13 @@ explains how it reaches the board without crossing the network.
 - **The other entry** is typing `http://kitchen.local` or the IP. The loader
   gets the pack from its own cache (IndexedDB), from os.moybyte.com, or from the
   board's own copy on a board that keeps one (§4).
-- The site keeps the address it learned, because `.local` does not resolve
-  on some Android phones.
+- The site keeps both addresses Improv reported, the IP and `.local`, and
+  opens the IP (2026-11-24): every browser reaches it, where `.local` does
+  not resolve on some Android phones, and a console's window keeps one
+  origin, so its paired key and its cached pack stay where it found them.
+  The `.local` name is shown beside it. A board whose IP changed is set up
+  again over the cable, which updates its entry by its id. The device
+  checklist (§11) decides whether `.local` should be the one opened.
 
 *Note:* on iOS and Android, an INSTALLED web app cannot open that window
 with the link intact (§9). There the main entry runs from os.moybyte.com in a
@@ -285,7 +311,8 @@ pack    site -> board   request: bytes, the pack (a transferred ArrayBuffer), or
                         the site keeps none; the reply says ok, true or false
 state   board -> site   state: booted | sign-in | signed-in | failed, and said: the sentence
 unknown                 the reply to a request of a kind its receiver does not serve
-claim   site -> board   the claim token and the new password, once (§7, phase 3)
+claim   site -> board   request: claim, board (its id), password: the board's first
+                        password (§7); the reply says ok, and said: why not
 ```
 
 `hello` and `state` are notices, answered by nothing. The site answers a
@@ -293,14 +320,18 @@ claim   site -> board   the claim token and the new password, once (§7, phase 3
 to 4 s for one before its next source: that wait is only ever spent on an
 opener that is not a site. A second `pack` is refused. `hello` carries no
 board id and no name: `/sync` names neither, and the console learns the id
-only when it signs in. My consoles keys a console by the address and the
-name its person gave it, and phase 3's Improv reports the device's own.
+only when it signs in. My consoles keys a console by the board's id where
+Improv reported it (§7) and by an id of its own for one added by hand; a
+`hello` is what marks a console reached, with the digests it named. The
+site sends `claim` once, when a console it holds a claim for says
+`sign-in`.
 
 **Both ends check the origin.** The board's end takes messages only from the
 window that opened it, and only at the origin of a mirror the image names
 (§4): the site that hands a pack is the one that publishes it, so the image
 names it once. It posts `hello` and `state` to each of those origins, so a
-window another page opened hears nothing. My consoles (`site/os/consoles.js`)
+window another page opened hears nothing. The site's end (`site/os/link.js`,
+My consoles' and the flasher's)
 takes messages only from a window it opened, at the origin it opened it at.
 Neither end ever evaluates a message; what My consoles shows of one is text.
 A `pack` is bytes the loader checks like any source's, and a pack the loader
@@ -310,8 +341,9 @@ refuses is one the site drops from its cache.
 other kind before the boot (`loader.html`). After the boot, the console page
 (`page_tail.js`) holds the link, because `document.open` erased the loader's
 listener; the loader leaves it the origins (`window.moyLink`), the window
-keeps its opener, and in version 1 it refuses a `pack`, answers every other
-kind as unknown, and sends `state`. Every request
+keeps its opener, and in version 1 it refuses a `pack`, takes a `claim`
+(the worker makes the record and pairs, `worker.js`'s THE CLAIM), answers
+every other kind as unknown, and sends `state`. Every request
 that touches the store goes through the console in that window: it runs in
 the VM like every rule (`.claude/rules/web.md`), and it travels over the
 sync RPC the page already uses. The site never reaches the board itself.
@@ -403,31 +435,41 @@ already holds the port. Step 2 of flow 1 runs over that same port using
 **Improv Wi-Fi's serial protocol**, the one ESP Web Tools and its users
 know:
 
-- The board reports its state, its device info and the networks it can see.
-- It takes the network and the console's name (Improv's RPC 0x01, 0x03,
-  0x04, 0x06).
-- It joins the network and answers with the URL to open, which carries the
-  address for My consoles.
+- The board reports its state, its device info ("Moybyte", the firmware's
+  label, the chip, its name) and the networks it can see (0x02, 0x03,
+  0x04), its network state (0x07), and takes a name (0x06; 0x05, the
+  hostname, is the same mDNS label).
+- It joins a network (0x01), saves it first in `wifi.json` and answers with
+  its URL twice, by IP and by `.local`, each carrying the board's id after
+  its `#`, and its claim while it has no password:
+  `http://192.168.1.57/#id=<32 hex>&claim=<32 hex>`. The fragment never
+  crosses the network.
 
 Any Improv client, such as ESP Web Tools or Home Assistant's, can set a
-Moybyte Zero up too. If the address changes later, the site asks again over
-the cable (Improv's current state carries the URL), or learns the new
-address from `kitchen.local` where that resolves.
+Moybyte Zero up too: its "visit device" opens that URL, and the console
+page there asks for the console's first password with the claim
+(`page_tail.js`). If the address changes later, the site asks again over
+the cable (Improv's current state carries the URL), which updates the
+console by its id.
 
 **The password.** Improv carries no board password, and typing one into the
 first console that reaches the board would hand the board to whoever on the
 LAN got there first. So:
 
-1. Step 2's form also asks for the console's password, and the site keeps it
-   in memory only.
+1. Once the board answers a claim, the site asks for the console's
+   password, and keeps it in memory only.
 2. The URL Improv returns carries a **claim**: a random token the board makes
    at a boot with no password, holds in RAM, and only ever sends over the
    cable.
 3. When the site opens the console's first window, it sends the claim and
-   the password over the link.
+   the password over the link (`claim`, §5) once the console asks to sign
+   in.
 4. The console in that window makes the SPAKE2+ record
-   (`native/moy_net/moy_seal.h`) and sends the board the record with the
-   claim. The board takes it once and forgets the claim.
+   (`native/moy_net/moy_seal.h`, `moy_sw_claim`) and sends the board the
+   record with the claim (`POST /auth`, `{"op": "claim"}`). The board takes
+   it once and forgets the claim (`native/moy_net/moy_webauth.c`, THE
+   CLAIM): a wrong claim counts with the sign-in's backoff, and a board with
+   a password refuses every claim.
 
 The password never crosses the network, and a copy of the record pairs no
 browser (`firmware/seeed_xiao_esp32s3_zero/README.md`, "The sign-in gates
@@ -441,9 +483,17 @@ by its address.
 
 **In the firmware**, Improv belongs to the kernel: a frame parser on the
 USB-Serial/JTAG console's receive path takes `IMPROV` frames and leaves
-every other byte to the REPL, which stays the recovery console. board.toml's
-`[serial]` says how the flasher opens the port without resetting the chip
-(the C3's lines idle HIGH).
+every other byte to the REPL, which stays the recovery console
+(`native/moy_kernel/moy_improv.h`, routed by `tools/patch_usj_improv.py`
+where a board defines `MOY_IMPROV`: both Zeros). An RPC's type byte is the
+REPL's Ctrl-C, so no byte of a frame reaches the REPL; a header held for
+its next byte goes back to the REPL once it is 30 ms stale. The store host
+answers the frames from its loop (`device/zero_improv.py`), as it answers
+the setup form: a join from the access point ends the access point and the
+board serves from there without a reset, because the claim lives in its
+RAM. board.toml's `[serial]` says how the flasher opens the port without
+resetting the chip (the C3's lines idle HIGH), and the site's client keeps
+that line state (`site/os/improv.js`).
 
 **Consoles with a screen** set their Wi-Fi on glass, show their address in
 Settings, and join My consoles when you type that address.
@@ -679,9 +729,9 @@ Tests:
 
   Depends on its outcome: §9's last column and what My consoles offers in
   an installed app on each platform (today: a window where `window.open`
-  gives one, else the address as a link); whether `.local` or the IP is
-  what step 1 of flow 1 saves (phase 3); and the loader's 4 s wait for an
-  opener, if a phone's site answers slower.
+  gives one, else the address as a link); whether My consoles opens the
+  IP or `.local` (it saves both and opens the IP, §2); and the loader's 4 s
+  wait for an opener, if a phone's site answers slower.
 
 **Hosting: GitHub Pages** (owner, 2026-11-24). `pages.yml` fetches
 firmware-latest and firmware-beta (`tools/pack_store.py fetch`), runs
@@ -702,24 +752,69 @@ serves it. What Pages sets for us:
   size of the add-on, and the workflow prints `/console/`'s size and the
   whole site's at every deploy.
 
-**Phase 3: first setup by cable.**
+**Phase 3: first setup by cable.** Built on the host and on the XIAO Zero;
+the real-device checklist below is the owner's to run.
 
-- Improv serial in the kernel.
-- The flasher moves to os.moybyte.com and runs Improv after the flash.
-- The claim and the browser-made record (`docs/os_2026-11/system.md` §3
-  gains it).
-- My consoles saves what Improv reported.
+- Improv serial in the kernel (`native/moy_kernel/moy_improv.h`, both
+  Zeros), answered by the store host (`device/zero_improv.py`), on its
+  access point and while it serves (§7).
+- The flasher (os.moybyte.com's `/`, `site/flash.js`) runs Improv after
+  the flash on a board that answers it (`site/build.py`'s
+  `improv_boards`), saves the console into My consoles and offers to open
+  it; My consoles runs the same setup for a board already flashed. One
+  client and one form for both (`site/os/improv.js`, `setup.js`), one list
+  (`kept.js`) and one link end (`link.js`). The project site's navigation
+  links My consoles.
+- The claim and the browser-made record (`moy_webauth.c`, THE CLAIM;
+  `docs/os_2026-11/system.md` §3).
+- My consoles saves what Improv reported, keyed by the board's id, and
+  adds a console by hand by its address, verified by its first open (§2).
 
 Tests:
 
-- The frame parser in a host harness: every command, a frame split across
-  reads, and REPL bytes passed through untouched.
+- The frame parser in a host harness (`tests/test_improv.py`): every
+  command, a frame split at every point and byte by byte, REPL bytes passed
+  through untouched and in order, a held header given back when stale, a
+  frame cut short dropped, a bad checksum handed on.
+- The board's answers through that parser (`tests/test_zero_improv.py`):
+  each command, a join while serving and from the access point (answered
+  once the board serves), a network that does not answer, the name and
+  hostname, bad frames; the setup loop handing a join to the serving board
+  with no reset.
 - The claim refused twice, refused without the token, and refused once a
-  password exists.
-- A node test of the flasher's Improv step against a scripted port.
-- ESP Web Tools sets up a C3.
-- On the bench: a Chrome flash of a C3 that ends in a signed-in console
-  opened from My consoles.
+  password exists, a wrong one counted by the backoff, and the browser's
+  claim pairing in the same step (`tests/test_web_signin.py`); the worker's
+  end in node (`signin_test.mjs`).
+- A node test of the site's Improv client against a scripted port, and of
+  the addresses a person may type (`site/os/improv_test.mjs`).
+- In Chrome (`tests/test_web_setup_e2e.py`, under `MOYBYTE_WEB_E2E`), Web
+  Serial a stand-in in the page: added by hand, a bad address refused, a
+  duplicate updated, an unreached one said so; set up by cable, saved
+  under the board's id, opened, the password taken by the real webhost's
+  claim, signed in, and the list showing it reached.
+- On the XIAO Zero over its USB serial (2026-11-24, a script): the state,
+  info, scan, name, a join from the access point and the claim taken over
+  HTTP, timed.
+- ESP Web Tools sets up a C3 (checklist below).
+- **On real devices, for the owner**, a C3 or a XIAO Zero, a desktop
+  Chrome and a phone, against a deployed site:
+  1. Flash from os.moybyte.com's card: does "Connect it to Wi-Fi" appear,
+     answer within its wait (a fresh store seeds first), and list the
+     networks?
+  2. Name it and join: does it say where it is (by IP and `.local`), ask
+     for a password, and save the console in My consoles under that name?
+  3. "Open <name>": does the window boot, say "setting its password..."
+     then "signed in", without typing anything in the console's window?
+  4. Reload My consoles: the console shows "reached" and its console's
+     digest; open it again from there: signed in by its key?
+  5. My consoles' "Set up a board by cable" on a board already flashed:
+     the same, and a second run moves its entry, not a second entry?
+  6. ESP Web Tools (or Home Assistant) sets the board up: does "Visit
+     device" open a console that asks to choose its password?
+  7. Add by address on a phone: the IP, then `<name>.local`, then
+     `http://<ip>:80`, with and without a name. Is a duplicate updated,
+     and does the first tap mark it reached (or "not reached yet" with
+     the address as a link where nothing answers)? Which name resolves?
 
 **Phase 4: one boot path.**
 

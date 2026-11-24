@@ -16,7 +16,11 @@ h1 { font-size: 1.4em; }
 ul { list-style: none; padding: 0; }
 li { background: var(--row); border-radius: 8px; padding: .75em; margin: .5em 0; }
 li .name { font-size: 1.2em; font-weight: 600; }
-li .addr, .note { color: var(--dim); font-size: .9em; }
+li .addr, li .reach, .note { color: var(--dim); font-size: .9em; }
+.note.bad, .setup-said.bad { color: var(--bad); }
+.setup-said.ok { color: var(--ok); }
+#setup { background: var(--row); border-radius: 8px; padding: .75em; margin: 1em 0; }
+select { font: inherit; border-radius: 6px; border: 0; padding: .4em; flex: 1 1 10em; min-width: 0; }
 li .state { min-height: 1.4em; }
 li .state.bad { color: var(--bad); }
 li .state.ok { color: var(--ok); }
@@ -31,16 +35,22 @@ a { color: var(--fg); }
 <body>
 <main>
 <h1>My consoles</h1>
-<p class="note" id="empty">No consoles yet. Add one by the name you gave it and the address it shows in Settings.</p>
+<p class="note" id="empty">No consoles yet. Set a board up over its USB cable, or add a console by the address it shows in Settings.</p>
 <ul id="list"></ul>
+<button id="cable" hidden>Set up a board by cable</button>
+<div id="setup" hidden></div>
 <form id="add">
-<input id="name" placeholder="Name (kitchen)" autocomplete="off" required>
 <input id="address" placeholder="Address (kitchen.local or 192.168.1.57)" autocomplete="off" autocapitalize="off" required>
+<input id="name" placeholder="Name (optional)" autocomplete="off">
 <button>Add</button>
 </form>
 <p class="note" id="said"></p>
 </main>
 <script src="packs.js"></script>
+<script src="kept.js"></script>
+<script src="link.js"></script>
+<script src="improv.js"></script>
+<script src="setup.js"></script>
 <script src="consoles.js"></script>
 </body>
 </html>

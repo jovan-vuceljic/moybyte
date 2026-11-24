@@ -752,6 +752,14 @@ static mp_obj_t mod_web_auth(mp_obj_t system) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mod_web_auth_obj, mod_web_auth);
 
+// web_claim() -> this boot's claim (32 hex digits), "" once a password is set.
+static mp_obj_t mod_web_claim(void) {
+    char c[33];
+    moy_web_claim(c);
+    return mp_obj_new_str(c, strlen(c));
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_web_claim_obj, mod_web_claim);
+
 // web_keys() -> [(kid, created, seen, name)], the paired browsers.
 static mp_obj_t mod_web_keys(void) {
     char *b = m_new(char, 2048);
@@ -1070,6 +1078,7 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_wifi_remember), MP_ROM_PTR(&mod_wifi_remember_obj)},
     {MP_ROM_QSTR(MP_QSTR_web_start), MP_ROM_PTR(&mod_web_start_obj)},
     {MP_ROM_QSTR(MP_QSTR_web_auth), MP_ROM_PTR(&mod_web_auth_obj)},
+    {MP_ROM_QSTR(MP_QSTR_web_claim), MP_ROM_PTR(&mod_web_claim_obj)},
     {MP_ROM_QSTR(MP_QSTR_web_keys), MP_ROM_PTR(&mod_web_keys_obj)},
     {MP_ROM_QSTR(MP_QSTR_web_shelf), MP_ROM_PTR(&mod_web_shelf_obj)},
     {MP_ROM_QSTR(MP_QSTR_web_take), MP_ROM_PTR(&mod_web_take_obj)},

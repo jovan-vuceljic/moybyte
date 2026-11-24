@@ -81,6 +81,9 @@ moybyte_patch_native_code_free
 # host sent during the bootloader, instead of leaving it in the FIFO for a
 # whole boot (tools/patch_usj_rx_init.py).
 moybyte_patch_usj_rx_init
+# DECLINED moybyte_patch_usj_improv -- Improv's frames off the console: a
+# console with a screen sets its Wi-Fi on glass
+# (docs/web_console_online_2026-11.md §7).
 
 # machine.PWM takes its LEDC channels and timers from the kernel's book,
 # as the compiled programs' PWM handles and the backlight do

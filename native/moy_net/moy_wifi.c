@@ -463,6 +463,10 @@ int moy_wifi_ap(const char *ssid, uint32_t *ip) {
     if (e != ESP_OK) {
         return e;
     }
+    *ip = 0;
+    if (ssid[0] == '\0') {
+        return esp_wifi_set_mode(WIFI_MODE_STA);    // the access point ends, the station stays
+    }
     if (s_ap == NULL) {
         s_ap = esp_netif_create_default_wifi_ap();
     }

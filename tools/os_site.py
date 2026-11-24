@@ -10,12 +10,16 @@ share it, so the address the images name as their mirror
 (gen_web_blob.SITE_MIRROR) is the page's own folder and its service
 worker's scope. The source is site/os/: the page (index.html, consoles.js),
 the packs it keeps (packs.js, shared with the service worker), the worker
-(sw.js) and the web app manifest. It runs no console and holds no carts: it
+(sw.js) and the web app manifest; kept.js (the list), link.js (the link's
+site end), improv.js and setup.js (first setup over the cable) are the
+flasher's too, which site/build.py copies beside it. It runs no console and
+holds no carts: it
 hands a window on a board's origin the bytes of a pack, and that window's
 console keeps its carts on the board (§10, `.claude/rules/web.md`'s two
 modes). What a build writes into OUT/console/ (replaced):
 
-    index.html consoles.js packs.js manifest.webmanifest icon-*.png
+    index.html consoles.js packs.js kept.js link.js improv.js setup.js
+    manifest.webmanifest icon-*.png
     sw.js           stamped with the build's version and the files it keeps
     packs.json      {"newest": [...]}: the body digests of the newest pack
                     of each release (and of each --pack), which the service
@@ -55,10 +59,12 @@ import web_pack  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE = os.path.join(ROOT, "site", "os")
-FILES = ("index.html", "consoles.js", "packs.js", "manifest.webmanifest")
+FILES = ("index.html", "consoles.js", "packs.js", "kept.js", "link.js", "improv.js", "setup.js",
+         "manifest.webmanifest")
 ICONS = {"icon-192.png": 12, "icon-512.png": 32}    # the 16-pixel mascot, scaled
 # The files the service worker keeps, as it names them; "./" is index.html.
-SHELL = ["./", "consoles.js", "packs.js", "manifest.webmanifest", "packs.json"] + sorted(ICONS)
+SHELL = ["./", "consoles.js", "packs.js", "kept.js", "link.js", "improv.js", "setup.js",
+         "manifest.webmanifest", "packs.json"] + sorted(ICONS)
 # What GitHub Pages sends with every file, which `serve` copies.
 PAGES_HEADERS = (("Access-Control-Allow-Origin", "*"), ("Cache-Control", "max-age=600"))
 

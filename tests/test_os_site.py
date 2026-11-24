@@ -92,10 +92,30 @@ def test_the_page_never_asks_for_a_browsing_context_of_its_own():
 
 def test_the_site_never_evaluates_what_a_window_sends():
     """What a console's window posts is data: shown as text, never run."""
-    for name in ("consoles.js", "packs.js", "sw.js"):
+    for name in ("consoles.js", "packs.js", "sw.js", "kept.js", "link.js", "improv.js", "setup.js"):
         src = open(os.path.join(os_site.SOURCE, name)).read()
         for bad in ("eval(", "innerHTML", "new Function", "insertAdjacentHTML", "document.write"):
             assert bad not in src, (name, bad)
+
+
+def test_the_improv_client_and_the_list_s_addresses_in_node():
+    """site/os/improv_test.mjs: the site's one Improv client against a
+    scripted port (the spec's frames, a board that answers after its boot, a
+    frame split across reads, a join's URLs, a refusal) and the addresses a
+    person may type into My consoles."""
+    p = subprocess.run(["node", "improv_test.mjs"], cwd=os_site.SOURCE,
+                       capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0 and "all ok" in p.stdout, p.stdout + p.stderr
+
+
+def test_the_flasher_runs_my_consoles_own_setup():
+    """One Improv client and one list for both pages: the flasher's copies
+    are site/os/'s files, and the board records say which boards take it."""
+    sys.path.insert(0, os.path.join(ROOT, "site"))
+    import build as site_build
+    assert site_build.improv_boards() == {"xiao_zero", "c3_zero"}
+    for js in site_build.SETUP_JS:
+        assert js in os_site.FILES and js in os_site.SHELL
 
 
 def test_a_pack_that_is_none_is_refused(tmp_path):

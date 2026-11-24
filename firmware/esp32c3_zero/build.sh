@@ -53,6 +53,10 @@ moybyte_patch_import_cache
 # machine.PWM takes its LEDC channels and timers from the kernel's book: every
 # board that links moy_kernel takes it.
 moybyte_patch_pwm_ledc_book
+# Improv's setup over the USB-Serial/JTAG console, and the console taking what
+# a host sent while the board booted (the XIAO's reasons).
+moybyte_patch_usj_rx_init
+moybyte_patch_usj_improv
 # The split heap's growth keeps MOYBYTE_GC_SPLIT_RESERVE (mpconfigboard.h) of
 # the internal heap outside the Python heap. With no PSRAM that heap is also
 # WiFi's, lwIP's and the native tier's, and stock growth takes it to the last
@@ -93,8 +97,6 @@ moybyte_patch_gc_split_reserve
 # DECLINED moybyte_patch_lfs_sizes -- measured on the P4s' flash only (the
 #    XIAO's reason).
 # DECLINED moybyte_patch_sdcard_runs -- no card.
-# DECLINED moybyte_patch_usj_rx_init -- nothing writes to a Zero while it boots
-#    (the XIAO's reason).
 # DECLINED moybyte_patch_stdin_ring -- USB-Serial/JTAG backpressures (the XIAO's
 #    reason).
 

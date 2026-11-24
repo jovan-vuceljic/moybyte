@@ -62,6 +62,7 @@ if(m.report)p8Report(m.report,m.ok,m.dir);}
 else if(m.t==="update"){updBound(m);}
 else if(m.t==="edited"){window.__moyEdited=m.s;pzSay(m.s,!m.ok);}
 else if(m.t==="pair"){pinAsk(m);linkState("sign-in",m.wait||m.why||"");}
+else if(m.t==="claimed"){claimed(m);}
 else if(m.t==="key"){keyGot(m);}
 else if(m.t==="unkey"){keyDrop(m.id);}
 else if(m.t==="wait"){linkWait(m.s);}
@@ -105,6 +106,15 @@ var PINEL=document.getElementById("pin"),PINF=document.getElementById("pinf"),
 PINB=document.getElementById("pinb"),PINM=document.getElementById("pinm"),
 PINP=document.getElementById("pinp"),PINR=document.getElementById("pinr");
 var KEYS="moybyte.keys";
+// THE CLAIM (worker.js, THE SIGN-IN): a board with no password takes its
+// first from the browser holding the claim its Improv answer carried, here
+// from the url's # (the URL Improv answered, which any Improv client opens)
+// or from My consoles over the link (a `claim` request); `CHOOSE` while the
+// prompt asks for a new password rather than the console's.
+var CLAIM=null,CHOOSE=false,CLAIMQ=null;
+function claimed(m){if(m.ok)CLAIM=null;else if(PINM)PINM.textContent=m.why||"";
+if(CLAIMQ){try{CLAIMQ.w.postMessage({moylink:1,re:CLAIMQ.id,kind:"claim",ok:!!m.ok,
+said:m.why||""},CLAIMQ.o);}catch(e){}CLAIMQ=null;}}
 function keysStored(){try{return JSON.parse(localStorage.getItem(KEYS)||"{}")||{};}
 catch(e){return {};}}
 function keySave(id,kid,key){var k=keysStored();k[id]={kid:kid,key:key};
@@ -122,8 +132,9 @@ return o?b+" on "+o:b;}
 window.__moySignIn=function(){var tok=null,bid=null;
 try{var h=new URLSearchParams((location.hash||"").replace(/^#/,""));
 tok=h.get("t");bid=h.get("b");
+if(/^[0-9a-f]{32}$/.test(h.get("claim")||"")){CLAIM={claim:h.get("claim"),id:h.get("id")||""};}
 var q=new URLSearchParams(location.search);var had=q.has("pin");q.delete("pin");
-if(tok||had){var s=q.toString();
+if(tok||had||h.has("claim")||h.has("id")){var s=q.toString();
 history.replaceState(null,"",location.pathname+(s?"?"+s:""));}}
 catch(e){/* no history: the token is spent on its first use either way */}
 return {keys:keysStored(),token:tok,board:bid,name:browserName()};};
@@ -131,6 +142,10 @@ return {keys:keysStored(),token:tok,board:bid,name:browserName()};};
 // what went wrong last ("" the first time), `wait` the backoff's sentence.
 function pinAsk(m){if(!PINEL)return;
 PINM.textContent=m.wait||m.why||"";
+CHOOSE=!m.pw&&!!CLAIM;
+if(CHOOSE){PINP.textContent="Choose this console's password, 8 to 64 characters: "
++"every browser pairs with it.";PINR.style.display="";PINEL.style.display="flex";
+PINB.disabled=false;try{PINF.value="";PINF.focus();}catch(e){}return;}
 PINP.textContent=m.pw?"Scan the code on the console's WEB CONSOLE screen, or type the "
 +"console's password.":"Scan the code on the console's WEB CONSOLE screen. To type a "
 +"password instead, set one on the console (passwd).";
@@ -139,6 +154,10 @@ PINEL.style.display="flex";PINB.disabled=false;
 if(m.pw){try{PINF.value="";PINF.focus();}catch(e){}}}
 function pinSubmit(){var v=PINF.value||"";
 if(!v){PINM.textContent="type the console's password";return;}
+if(CHOOSE){if(v.length<8||v.length>64){PINM.textContent="a password is 8 to 64 characters";return;}
+PINM.textContent="setting the password...";PINB.disabled=true;
+WORKER.postMessage({t:"claim",claim:CLAIM.claim,id:CLAIM.id,pw:v,name:browserName()});
+PINF.value="";return;}
 PINM.textContent="pairing...";PINB.disabled=true;
 WORKER.postMessage({t:"password",pw:v,name:browserName()});PINF.value="";}
 // Paired: the key is this browser's from now on, and the page starts again
@@ -152,8 +171,10 @@ if(e.key==="Enter"){e.preventDefault();pinSubmit();}});
 // A console the loader booted in a window My consoles opened holds the link
 // from here: the loader's listener went with its document. It takes messages
 // only from its opener at the sites the loader named (window.moyLink), never
-// evaluates one, and answers every request; v1 serves none past the boot, so
-// a pack is refused and any other kind is unknown. It tells the site its
+// evaluates one, and answers every request: a pack is refused (the console
+// runs), a `claim` ({claim, board, password}) sets the board's first password
+// (THE CLAIM above) and is answered once the board took it or did not, and
+// any other kind is unknown. It tells the site its
 // `state`: booted, sign-in (with the prompt's sentence), signed-in (the
 // board's carts pulled), failed.
 var LINK=window.moyLink||null,LINKW=window.opener,linkN=1000;
@@ -162,6 +183,10 @@ var m={moylink:1,id:++linkN,kind:"state",state:st,said:said||""};
 for(var i=0;i<LINK.length;i++){try{LINKW.postMessage(m,LINK[i]);}catch(e){}}}
 if(LINK&&LINKW){addEventListener("message",function(e){var m=e.data;
 if(e.source!==LINKW||LINK.indexOf(e.origin)<0||!m||m.moylink!==1||typeof m.id!=="number")return;
+if(m.kind==="claim"&&WORKER&&!CLAIMQ&&typeof m.claim==="string"&&typeof m.password==="string"){
+CLAIMQ={w:e.source,o:e.origin,id:m.id};
+WORKER.postMessage({t:"claim",claim:m.claim,id:typeof m.board==="string"?m.board:"",
+pw:m.password,name:browserName()});return;}
 e.source.postMessage(m.kind==="pack"?{moylink:1,re:m.id,kind:"pack",ok:false,
 said:"the console is running"}:{moylink:1,re:m.id,kind:"unknown"},e.origin);});
 linkState("booted","");}

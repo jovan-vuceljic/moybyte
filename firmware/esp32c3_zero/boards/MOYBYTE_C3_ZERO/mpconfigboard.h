@@ -76,3 +76,6 @@
 //   20, 21    UART0, the REPL that recovers a wedged USB image;
 //   11-17     the in-package flash and its VDD_SPI; 18, 19 the USB.
 #define MOY_NET_GPIO_ROUTE                  (1)
+
+// Improv Wi-Fi over the USB-Serial/JTAG console (the XIAO's reason).
+#define MOY_IMPROV                          (1)

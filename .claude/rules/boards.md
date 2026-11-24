@@ -442,9 +442,13 @@ stages 1–6 all absent. Its README is the authority; what bites:
   (`way_back`, `moy_page_say`), the page being a Zero's only face. The cable
   install (`tools/board_flash.py`) gives each `mpremote` call a deadline,
   because a wedged USB-Serial/JTAG never answers an open.
-- Its patch ladder is two patches, the kernel entry's `moybyte_patch_native_code_free`
-  and the VM's `moybyte_patch_slice_store` that every board takes, and every
-  other one says why not (`# DECLINED <fn>`). Do not give it the
+- Its patch ladder is the kernel entry's `moybyte_patch_native_code_free`,
+  the ones every board takes (`slice_store`, `import_cache`,
+  `pwm_ledc_book`) and the console's two for Improv over the cable
+  (`usj_rx_init`, since a browser writes to it while it boots, and
+  `usj_improv`, which keeps Improv's frames from the REPL where
+  mpconfigboard.h defines `MOY_IMPROV`); every other one says why not
+  (`# DECLINED <fn>`). Do not give it the
   #169 retune without the 120 MHz profile; the spike suite refuses the pairing.
 - USB-Serial/JTAG since 2026-08-30: opens like the console S3s, reaches the ROM
   loader through esptool's default reset and leaves it with `hard_reset`

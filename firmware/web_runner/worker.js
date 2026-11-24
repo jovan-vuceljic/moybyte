@@ -45,6 +45,9 @@
 //                        asked for ({t:"pick"}), TRANSFERRED; or
 //   {t:"picked", id, cancel}     ...the player closed the question
 //   {t:"pod", cart}      play `cart` on the serving board (POST /run)
+//   {t:"claim", claim, id, pw, name}  set a board's first password by the
+//                        claim its Improv answer carried, then pair by it
+//                        (THE SIGN-IN, the claim)
 // worker -> main:
 //   {t:"status", s}      boot progress text
 //   {t:"assets", json}   the page's metadata payload (size/title/audio/input)
@@ -67,6 +70,8 @@
 //   {t:"key", id, kid, key, reload}  a pairing's new device key for board `id`:
 //                        the page keeps it (and with `reload`, loads again)
 //   {t:"unkey", id}      board `id` refused this browser's key: the page drops it
+//   {t:"claimed", ok, why}  the answer to {t:"claim"}: the password set (a
+//                        pairing's {t:"key"} follows), or why not
 //   {t:"wait", s}        the sync push meets a sign-in wait: the link panel says
 //                        `s`, and "" (a push landed) takes it down
 //   {t:"pod", s}         the play-on-device link's text after {t:"pod"}
@@ -1110,6 +1115,13 @@ async function importP8(name, buf) {
 //   and the page stores it), or nothing -- the page asks to pair: by the
 //   console's password (SPAKE2+, `{t:"password"}`), or by scanning the code.
 //
+// THE CLAIM: a board with no password takes its first one from the browser
+// holding the claim its Improv answer carried over the cable (moy_webauth.c,
+// THE CLAIM): `{t:"claim"}`, from My consoles over the link or from the
+// pairing prompt of a page opened at the URL Improv answered. The record is
+// made here (moy_sw_claim), the password never leaves the browser, and the
+// same password pairs this browser at once.
+//
 // A credential whose hello's nonce the board no longer holds is answered 409
 // {"error":"nonce"} (other hellos took its place, or it ran out): the page
 // asks again, a few times, and nothing it holds is spent. A key the board
@@ -1151,7 +1163,7 @@ function sw() {
     const M = mp._module;
     const f = (n) => M["_moy_sw_" + n];
     SW = { M, buf: f("buf"), hello: f("hello"), board: f("board"), key: f("key"),
-           token: f("token"), pake: f("pake"), confirm: f("confirm"), done: f("done"),
+           token: f("token"), pake: f("pake"), claim: f("claim"), confirm: f("confirm"), done: f("done"),
            kid: f("kid"), devkey: f("device_key"), seal: f("seal"), target: f("target"),
            seq: f("seq"), open: f("open"), ws: f("ws"), up: f("ws_up"), down: f("ws_down"),
            reset: f("reset") };
@@ -1331,6 +1343,23 @@ async function pairPassword(pw, name) {
         }
     } catch (e) { why = "the console did not answer"; }
     return need(null, true, why || "the console did not answer");
+}
+// The claim's {t:"claim"}: {ok, why}. `id`, when given, is the board the
+// claim was made by, held against the hello's before the claim is spent.
+async function claimPassword(claim, id, pw, name) {
+    const h = await hello();
+    if (!h.id) { need(h.r, false); return { ok: false, why: (authNeed && (authNeed.wait || authNeed.why)) || "the console did not answer" }; }
+    if (h.pw) return { ok: false, why: "the console has a password already" };
+    if (id && h.id !== id) return { ok: false, why: "that setup is another console's" };
+    if (pw.length < 8 || pw.length > 64) return { ok: false, why: "a password is 8 to 64 characters" };
+    const n = swCall(sw().claim, claim, pw);
+    if (n < 0) return { ok: false, why: "that setup is not this console's" };
+    const r = await authPost(utf8d.decode(swGet(n)));
+    if (r.status === 200) return { ok: true, why: "" };
+    if (r.status === 429) return { ok: false, why: signInWaitSays(r.doc.ms | 0) };
+    if (r.doc.error === "claimed") return { ok: false, why: "the console has a password already" };
+    if (r.doc.error === "claim") return { ok: false, why: "that setup ran out: the console restarted since, so set it up again" };
+    return { ok: false, why: "the console did not take the password (" + r.status + ")" };
 }
 function askToPair() {
     self.postMessage(Object.assign({ t: "pair" }, authNeed || { pw: false, wait: "", why: "" }));
@@ -2519,6 +2548,12 @@ self.onmessage = async (ev) => {
             ASSETS_IN = m.assets || null;
             if (m.base) BASE = m.base;
             await init(m.search, !!m.coarse, m.channel || "", m.scheme, m.auth, +m.rate || 0);
+        } else if (m.t === "claim") {
+            let a;
+            try { a = await claimPassword(String(m.claim || ""), String(m.id || ""), String(m.pw || ""), m.name); }
+            catch (e) { a = { ok: false, why: "the console did not answer" }; }
+            self.postMessage({ t: "claimed", ok: a.ok, why: a.why });
+            if (!a.ok || !(await pairPassword(m.pw, m.name))) askToPair();
         } else if (m.t === "password") {
             // The pairing prompt's password: a pairing reloads the page (its
             // {t:"key"}), anything else asks again with why.

@@ -77,6 +77,17 @@ moybyte_patch_import_cache
 # (tools/patch_pwm_ledc_book.py).
 moybyte_patch_pwm_ledc_book
 
+# The console is the SoC's USB-Serial/JTAG, and Improv's setup (below) writes
+# to it while the board boots, right after a flash: it takes what arrived
+# during the bootloader instead of leaving it in the FIFO, where a close and
+# reopen turns the host's line-state request into a Ctrl-C to the boot
+# (tools/patch_usj_rx_init.py).
+moybyte_patch_usj_rx_init
+# Improv Wi-Fi's frames off the console before the REPL sees them: first
+# setup over the cable (native/moy_kernel/moy_improv.h, MOY_IMPROV in
+# mpconfigboard.h; tools/patch_usj_improv.py).
+moybyte_patch_usj_improv
+
 # DECLINED moybyte_patch_thread_state_tls -- the VM's thread state as a
 # `__thread` variable. Measured on the P4s (RISC-V), where the TLS slot's
 # lookup was ~5% of an Editor frame; on this Xtensa board it is unmeasured,
@@ -166,11 +177,6 @@ moybyte_patch_pwm_ledc_book
 #
 # DECLINED moybyte_patch_sdcard_runs -- machine.SDCard in multi-block runs.
 #    This board has no card: its store is the internal flash VFS.
-#
-# DECLINED moybyte_patch_usj_rx_init -- the USB-Serial/JTAG console taking
-#    what a host sent during the bootloader. Nothing writes to this board
-#    while it boots: it has no dev channel, and the tools know it by its USB
-#    serial number without opening it.
 #
 # DECLINED moybyte_patch_stdin_ring -- the 4 KB stdin ring for a UART console.
 #    This board speaks USB-Serial/JTAG, which backpressures: its ISR takes only

@@ -41,8 +41,10 @@
 // browser in with its device key; "token" pairs a browser with the QR's
 // single-use token; "pake" and "confirm" pair one with the console's password
 // by SPAKE2+, its curve work on a worker while this poll goes on (the request
-// is held, `afd`, and answered at a later poll). docs/os_2026-11/system.md
-// section 3 is the threat model.
+// is held, `afd`, and answered at a later poll); "claim" sets the first
+// password of a board that has none, with the claim the cable's Improv
+// carried (moy_webauth.c, THE CLAIM). docs/os_2026-11/system.md section 3 is
+// the threat model.
 //
 // THE BACKOFF (moy_webauth.c): every credential the sign-in checks -- a
 // device key, a token, a password's PAKE -- counts. A source (the peer's IPv4
@@ -392,6 +394,10 @@ void moy_web_board_id(char out[33]) {
 
 void moy_web_token(char out[33]) {
     moy_wa_token(out);
+}
+
+void moy_web_claim(char out[33]) {
+    moy_wa_claim(out);
 }
 
 size_t moy_web_keys(char *out, size_t cap) {

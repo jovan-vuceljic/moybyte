@@ -332,6 +332,16 @@ The board id inside a signed manifest is **`xiao_zero`**, which is also its CI
 matrix row and the `latest-xiao_zero.json` a device asks for. Channels are the
 repo's two: `dev` → beta/`unstable`, `master` → stable.
 
+## First setup over the cable: Improv (2026-11-24)
+
+The flasher on os.moybyte.com, My consoles or any other Improv Wi-Fi client
+names this board, puts it on a network and gets its address back over the
+USB cable; `docs/web_console_online_2026-11.md` §7 is the authority. What
+is this board's: `MOY_IMPROV` in its mpconfigboard.h, the store host's
+answers in `device/zero_improv.py` (from the setup access point too, which
+a join over the cable ends without a reset), and the REPL kept as the
+recovery console, Ctrl-C included.
+
 ## First-run setup, with no cable (`zero_setup.py`, #41)
 
 The radio is the kernel's WiFi driver (`native/moy_net/moy_wifi.c`): the
@@ -396,7 +406,8 @@ it, its keys file `/moy/system/webkeys`. What is true *here*:
 - **A browser pairs with the board's password.** A console pairs by its QR
   too; this board has no screen to draw one, so a board with no password pairs
   no browser. Setup's form takes one; `provision.sh --password` sets one for a
-  board that never saw that form. Pairing runs SPAKE2+ against the stored
+  board that never saw that form; and a board set up over the cable takes
+  its first from the browser its Improv answer's claim reaches (below). Pairing runs SPAKE2+ against the stored
   record, so the password never crosses the network, a copy of the record
   pairs no browser, and the browser keeps a key of its own from then on.
 - **Every route but the boot files and `GET /sync` is sealed** to a paired

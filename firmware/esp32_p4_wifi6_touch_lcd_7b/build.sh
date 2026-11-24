@@ -149,6 +149,9 @@ moybyte_patch_stdin_ring
 # (tools/patch_pwm_ledc_book.py).
 moybyte_patch_pwm_ledc_book
 
+# DECLINED moybyte_patch_usj_improv -- Improv's frames off the USB-Serial/JTAG
+# console: a console with a screen sets its Wi-Fi on glass
+# (docs/web_console_online_2026-11.md §7).
 # DECLINED moybyte_patch_usj_rx_init -- the USB-Serial/JTAG console's start.
 # This board's console is the CH343's UART, whose ISR is installed with the
 # port and takes every byte as it arrives.
