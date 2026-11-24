@@ -852,7 +852,7 @@ static void row_free(uint32_t slot) {
     row_put(slot, NULL);
     #if MOY_TASK_SVC_PSRAM
     if (s->task != NULL) {
-        vTaskDeleteWithCaps(s->task);
+        moy_task_delete(MOY_TASK_SVC, s->task);
     }
     #endif
     free(s);

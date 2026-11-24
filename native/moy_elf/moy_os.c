@@ -520,7 +520,7 @@ int moy_os_thr_spawn(thr_t *t) {
 void moy_os_thr_reap(thr_t *t) {
     moy_os_self_clear(t);
 #ifdef MOY_ON_BOARD
-    vTaskDeleteWithCaps(t->task);
+    moy_task_delete(MOY_TASK_ELF, t->task);
 #endif
 #ifdef MOY_OS_UMODE
     moy_os_u_thread_end(t);
