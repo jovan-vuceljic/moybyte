@@ -497,3 +497,10 @@ def hint_tap(layer, x, y):
     ws.pointer.down = False
     layer.handle_pointer(x, y, False)
     return took
+
+
+def paint_grid_at(pl):
+    """The Sprites tab's grid top-left in SYSTEM coords: its canvas where the
+    last frame placed it, inside the layout's margins (None before it drew)."""
+    r = pl.rect_of("grid")
+    return None if r is None else (r[0] + pl.layout.gm, r[1] + pl.layout.gmv)

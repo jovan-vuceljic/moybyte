@@ -10,7 +10,11 @@ from pathlib import Path
 from runtime import host_app, moy_carts
 from runtime import story_doc as D
 from runtime import story_render as R
-from runtime.storybook_app import StorybookAppLayer, is_app, zoom_fit
+from runtime.app_decls import APPS
+from runtime.app_slot import AppSlot
+from runtime.storybook_app import StorybookAppLayer, zoom_fit
+
+is_app = AppSlot(next(d for d in APPS if d["id"] == "storybook")).is_app
 from runtime.story_edit import card_id
 
 ROOT = Path(__file__).resolve().parent.parent

@@ -60,7 +60,6 @@ class Notices:
     def __init__(self, ws):
         self.ws = ws
         self._pages = [None] * _PAGES   # the banners' and the overlays' pages (`_page`)
-        self._ctx = None                # their toolkit context
         self._was = [0, 0, 0, 0]        # the toolkit's target, given back after a paint
         self._rects = [None] * _PAGES   # each page's room, kept while it stands
         self._cards = [None] * _PAGES   # ...and its toast's rect, kept while its words do
@@ -208,9 +207,6 @@ class Notices:
     def _paint(self, pg, cv, th, rect):
         """Page `pg` painted on `cv` in `rect`, in theme colours `th`, the
         toolkit's target given back after it."""
-        ctx = self._ctx
-        if ctx is None:
-            ctx = self._ctx = _ui_draw.ui_context()
         desk = _desk_class()
         t = _ui_draw.UI_TARGET
         was = self._was
@@ -219,7 +215,7 @@ class Notices:
         was[2] = t[2]
         was[3] = t[3]
         try:
-            _ui_draw.ui_frame(ctx, cv, th, rect=rect, desk=desk, elsewhere=True)
+            _ui_draw.passive_frame(cv, th, rect, desk)
             pg.paint(0, cv, th, rect, desk)
         finally:
             t[0] = was[0]

@@ -4,6 +4,7 @@ configs and pinning): the measurements a design review takes off a render,
 taken here off the same frame."""
 
 import pytest
+from ws_helpers import paint_grid_at  # noqa: E402
 
 import test_shell_goldens as g
 
@@ -246,8 +247,9 @@ def test_the_sprite_tool_row_keeps_the_mockups_spacing(tmp_path, theme, mode):
     row = [pl.rect_of(t) for t in _TOOLS]
     fs = pl.layout.fs
     assert {b[0] - a[0] for a, b in zip(row, row[1:])} == {24 * fs + 2}
-    assert 0 <= pl.grid_at()[0] - row[0][0] <= 3
-    assert row[0][1] >= pl.grid_at()[1] + pl.layout.span
+    gx, gy = paint_grid_at(pl)
+    assert 0 <= gx - row[0][0] <= 3
+    assert row[0][1] >= gy + pl.layout.span
 
 
 @pytest.mark.parametrize("app_id", ("appearance", "calc"))

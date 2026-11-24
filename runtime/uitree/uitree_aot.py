@@ -10,7 +10,9 @@ function of its module's code alone, and the variant key is empty (`VARIANT`).
 
 `BLOBS` maps a page ("module.function") to its blob: the image's frozen
 `uitree_pages` module where one was staged, else none, and a page with no
-blob builds on the device as before. The frozen module holds each blob with
+blob builds on the device as before (an image leaves out the function of a
+page whose blob it holds and no device builds: `tools/uitree_compile.py`'s
+`strip`). The frozen module holds each blob with
 its front already read (`entry`), every part of it a constant: a frozen
 constant is ROM on a board, where reading the blob's front would allocate
 a string a name, and the dicts a load binds by are made by the load. A

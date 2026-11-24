@@ -8,7 +8,6 @@ or right one), its widgets the model of `shell_layout.pack`'s cells in the theme
 order. `draw` is a frame of the bar page onto a bar's strip, `draw_shaped`
 of a shaped page."""
 
-import bar_shape_ui
 import bar_ui
 import iconsets as _iconsets
 import layout_base as LB
@@ -17,7 +16,7 @@ import status_items as _status
 import uitree as S
 
 s = bar_ui.s
-ss = bar_shape_ui.s
+ss = None                       # bar_shape_ui.s, once a shaped page is made (`_shaped_page`)
 LEFT = ("menu", "chips", "zone")
 RIGHT = ("wifi", "battery", "clock")
 _PAGE = [None]
@@ -405,7 +404,7 @@ def _frame(page, cv, th, rect, oy, cs, clip, focus):
 _SHAPED = {}                    # "strip" / "side": its page
 _SH_ROW_AT = [0, 0, None, 0]    # a strip's scale and height, its icon row's rect, its offset
 _SH_MEMO = {}                   # "strip" / "side": the cells, the `wins` and the `items` rows its store took
-_SH_KEYS = tuple(tuple("%d.%d" % (j, i) for i in range(16)) for j in range(3))
+_SH_KEYS = None                 # a slot's widgets' row keys, made with the first shaped page
 _SLOTS = ("lead", "mid", "tail")
 SHOW_X = _SHOW_X = [True]       # whether the shaped page's close widget shows its X
 _ICON = ("menu", "close", "wifi", "battery")
@@ -438,9 +437,17 @@ def shaped(edge, cells):
 
 
 def _shaped_page(sh):
+    """Shaped page `sh`, made at its first ask: the default desk's bar is
+    the bar page's, so `bar_shape_ui` loads only when a bar of another
+    shape is drawn."""
+    global ss, _SH_KEYS
     p = _SHAPED.get(sh)
     if p is None:
+        import bar_shape_ui
         import uitree_editor
+        if ss is None:
+            ss = bar_shape_ui.s
+            _SH_KEYS = tuple(tuple("%d.%d" % (j, i) for i in range(16)) for j in range(3))
         p = _SHAPED[sh] = uitree_editor.page(bar_shape_ui.side if sh == "side" else bar_shape_ui.strip, None, None)
         p.bar = True
         _SH_MEMO.pop(sh, None)

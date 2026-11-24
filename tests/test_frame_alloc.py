@@ -520,9 +520,12 @@ class _Face:
 
 
 def music(loop, info):
-    """The play frame again with Music's station playing on behind it: its
-    poll every POLL_MS finds the stamp still."""
+    """The play frame again with Music's station playing on behind it, Music
+    having played it (the app built, as its first run builds it, so the
+    stream's section and status item are the app's): its poll every
+    POLL_MS finds the stamp still."""
     import music_app
+    loop.ws.app("jukebox")
     s = music_app.STREAM
     f = _Face()
     s.face = f

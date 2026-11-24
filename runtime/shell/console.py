@@ -680,9 +680,10 @@ class Workstation:
         # windowed_chrome is a PROPERTY (mode-aware): it is True only in the
         # windowed WM's DESKTOP mode -- see the property below the screen
         # projection.
-        # The bars start as the default's until the theme's layout resolves
-        # (Appearance.apply_layout): they are one per process, as the glass is.
-        _layout_base.place_bars(_layout_base.DEFAULT_BARS)
+        # The bars start as the default theme's on this tier until the
+        # theme's layout resolves (Appearance.apply_layout): they are one per
+        # process, as the glass is.
+        _layout_base.place_bars(self.look.boot_bars())
         self.layout = Layout(self.sys_canvas.w, self.sys_canvas.h,
                              self.look.effective_font_scale(),
                              self.look.effective_chrome_scale())
@@ -1322,7 +1323,9 @@ class Workstation:
 
     def layer_of(self, key):
         """The content layer for router key `key`, None for none. The paint and
-        theme surfaces join the table at their first use."""
+        theme surfaces join the table at their first use; a declared system
+        app joins it when it is built (`Spine.built`), so an app that never
+        ran has none to draw, route to or close."""
         layer = self._content_layers.get(key)
         if layer is None and key in ("paint", "theme_config", "theme_sprites"):
             layer = self._content_layers[key] = getattr(self, key + "_layer")
@@ -3012,7 +3015,14 @@ class Workstation:
         self.frame_requested = True
 
     def app(self, app_id):
-        """The registered system app `app_id` (app_decls.APPS), or None."""
+        """The registered system app `app_id` (app_decls.APPS), built at its
+        first ask (`Spine.built`), or None."""
+        app = self._apps_by_id.get(app_id)
+        return None if app is None else self.spine.built(app)
+
+    def registered_app(self, app_id):
+        """The registered system app `app_id` as it stands, nothing built:
+        its `AppSlot` until it first runs; None for none."""
         return self._apps_by_id.get(app_id)
 
     def mark_dirty(self):

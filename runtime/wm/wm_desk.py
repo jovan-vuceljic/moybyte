@@ -383,7 +383,7 @@ class _BackdropLayer(Layer):
         for c in ws.home.unclaimed_apps(carts):
             cid = str(c.get("id") or c.get("title") or "")
             tail = cid.rsplit(".", 1)[-1]
-            key = tail if tail in _iconsets.SLOT and ws.app(tail) is None else cid
+            key = tail if tail in _iconsets.SLOT and ws.registered_app(tail) is None else cid
             out.append((key, str(c.get("title") or tail), c))
         return out
 

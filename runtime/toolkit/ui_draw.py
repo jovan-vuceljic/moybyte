@@ -1874,6 +1874,21 @@ def ui_context():
     return bytearray(UI_SIZE)
 
 
+_PASSIVE = [None]               # the passive passes' one context (`passive_frame`)
+
+
+def passive_frame(cv, th, rect, desk):
+    """Begin a frame of a page drawn with no input and no focus (a
+    window's strip, the notices) on the one context such passes share. Its
+    begin keeps no stop, focus or kept state of a pass before it for the
+    next: a page that needs any (the bar's focus walk, a field's edit, a
+    host's buffers) holds a context of its own."""
+    ctx = _PASSIVE[0]
+    if ctx is None:
+        ctx = _PASSIVE[0] = ui_context()
+    return ui_frame(ctx, cv, th, rect=rect, desk=desk, elsewhere=True)
+
+
 def ui_frame(ctx, cv, th, rect=None, inp=None, desk=False, window=False, app=None,
              elsewhere=False, edge=False):
     """Begin context `ctx`'s frame on canvas `cv` under theme `th`: a page

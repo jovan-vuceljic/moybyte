@@ -40,6 +40,7 @@ import iconsets as _iconsets
 import layout_base as _lb
 from chrome import _ticks_ms, _ticks_diff
 from moy_store_base import builtin_name as _builtin_name
+_KEY_MASK = 0x3FFFFFFF   # a face's gen under 2**30: a small int on a board (`_face_key`)
 
 
 
@@ -356,7 +357,7 @@ class Launcher:
         self._put = None              # what its rows were put from: (items, their play records)
         self._set = None              # ...and its current card and words' ink (`band_set`)
         self._pic_ix = {}             # a card's picture name -> its item
-        self._fnames = ()             # each card's face's name (`_face_name`)
+        self._fkeys = array("i")      # each card's title and type, as its face's gen (`_face_key`)
         self._covs = []               # each card's cover as `cover_for` answered it (`_cover_of`)
         self._covs_at = (-1, 0)       # ...the cover cache's gen and the decode they hold
         self._gcv = None              # the canvas a pass draws on
@@ -809,13 +810,14 @@ class Launcher:
         """The band's cards as its page's rows (home_ui's `band_put`): each
         card's title ("New" on the "+ New" card), its metadata (`_meta`),
         apart by tabs, and its picture, which the home draws
-        (`_band_picture`); and each card's face's name (`_face_name`)."""
+        (`_band_picture`); and what each card's face is keyed by beside its
+        path (`_face_key`)."""
         import home_ui
         items = self.items
         rows = []
         ix = {}
         recs = []
-        names = []
+        keys = array("i")
         for i in range(len(items)):
             it = items[i]
             k = str(i)
@@ -823,11 +825,11 @@ class Launcher:
             pic = home_ui.ui.image.own(k)
             ix[repr(pic)] = i
             recs.append(self.played(it))
-            names.append("%s\x1f%s\x1f%s" % (it.get("path"), it.get("title"), it.get("type")))
+            keys.append((hash(it.get("title")) ^ (hash(it.get("type")) << 15)) & _KEY_MASK)
             rows.append(dict(id=k, name=name, sub="\t".join(self._meta(it)), pic=pic))
         s.cards = rows
         self._pic_ix = ix
-        self._fnames = names
+        self._fkeys = keys
         self._covs = [None] * len(items)
         self._put = (items, recs)
 
@@ -945,10 +947,15 @@ class Launcher:
         s = g[1] + 2 * g[2]
         return s * s * g[3] * 2
 
-    def _face_name(self, i):
-        """Card `i`'s face's name (`band_put`): what its face is drawn from
-        beside its cover."""
-        return self._fnames[i]
+    def _face_key(self, i, cover, mint):
+        """The slot of card `i`'s face (`home_band.slot`), keyed by what it is drawn
+        from: its path (its title where it has none), a string its item
+        holds, as the name; its title, type (an int `band_put` kept) and
+        cover's serial as the gen, all under 2**30, so a frame allocates
+        nothing."""
+        it = self.items[i]
+        gen = self._fkeys[i] ^ (0 if cover is None else cover.serial & _KEY_MASK)
+        return _band.slot(it.get("path") or it.get("title") or "", gen, mint)
 
     def _face_div(self, n):
         """The decode a card of side `n` draws its cover from."""
@@ -1026,7 +1033,7 @@ class Launcher:
         x, y, n = t[0], t[1], t[2]
         cover = self._cover_of(i, it, self._fdiv)
         new = it.get("type") in PSEUDO_TILE_TYPES
-        j = _band.slot(self._face_name(i), 0 if cover is None else cover.serial, False)
+        j = self._face_key(i, cover, False)
         if j < 0:
             self._face(cv, it, t, r, cover)
             return
@@ -1129,8 +1136,7 @@ class Launcher:
                 if cover is False:       # (its cover lands first: the paint takes it)
                     owed = True
                 else:
-                    j = _band.slot(self._face_name(i), 0 if cover is None else cover.serial,
-                                 True)
+                    j = self._face_key(i, cover, True)
                     if j >= _band.SLOT_MINT:
                         self._draw_face(j - _band.SLOT_MINT, it, r, cover, new)
                         done += 1

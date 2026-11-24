@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 import canvas_probe as probe  # noqa: E402  (pixel-width-agnostic "it drew" probes)
-from ws_helpers import select_first_game  # noqa: E402
+from ws_helpers import select_first_game, paint_grid_at  # noqa: E402
 import pytest
 from ws_helpers import boot_on_fixture, settle_badges
 
@@ -464,7 +464,7 @@ def test_paint_editor_tap_paints_in_system_coords(tmp_path):
     drv.frame(1 / 30)
     assert pe.color == 12
     # Paint pixel (0, 0) of the tile via the top-left grid cell.
-    gx, gy = pl.grid_at()
+    gx, gy = paint_grid_at(pl)
     drv.touch(gx + 2, gy + 2)
     drv.frame(1 / 30)
     ox, oy = ws.run.project.sheet.tile_origin(pe.n)

@@ -10,26 +10,34 @@ and tests/test_app_registry.py fails until you do.
 This is the frozen tiers' copy of the declaration. The manifests are the
 source of truth, but a board and the wasm head have no `system_carts/` to
 read -- exactly as `carts_data.py` is the frozen copy of the cart bodies.
-console.py loops over APPS to import, construct and register every system
-app; there is no per-app line anywhere in the shell.
+The console registers every system app from APPS at boot and imports and
+constructs one when it first runs (app_slot.AppSlot); there is no
+per-app line anywhere in the shell.
 
   id         the process kind (router / back-stack / window key)
   entry      "module:Class" -- a runtime/ module staged to every target
   order      registration precedence (NOT the cart's shelf order)
   folder     the identity cart it rides on, in system_carts/
   title      that cart's title
-  min_size   optional (w, h) windowed resize floor; omitted means the app's
-             ui.app(min=), else its layout's MIN_W/MIN_H, at registration
+  needs      the AppContext roles it is built with
+  prefs_ns   optional; its prefs namespace, else its id
+  name       optional; its window and taskbar title, else `title`
+  marker     optional; the permission its identity cart carries, which the
+             claim asks for beside the title and the folder
+  service    optional; "module:Class" built at boot over its context
+             (Paint's document model, the console's `ws.artwork`), handed
+             to the app when it is built
+  min_size   optional (w, h) windowed resize floor
 """
 
 APPS = [
-    {'id': 'artwork', 'entry': 'paint_app:PaintAppLayer', 'order': 10, 'folder': 'moybyte.paint', 'title': 'Paint'},
-    {'id': 'myart', 'entry': 'myart_app:MyArtAppLayer', 'order': 15, 'folder': 'moybyte.my_art', 'title': 'My Art'},
-    {'id': 'appearance', 'entry': 'appearance_app:AppearanceAppLayer', 'order': 20, 'folder': 'moybyte.appearance', 'title': 'Appearance'},
-    {'id': 'storybook', 'entry': 'storybook_app:StorybookAppLayer', 'order': 40, 'folder': 'moybyte.storybook', 'title': 'Storybook'},
-    {'id': 'files', 'entry': 'files_app:FilesAppLayer', 'order': 60, 'folder': 'moybyte.files', 'title': 'Files'},
-    {'id': 'calc', 'entry': 'calc_app:CalcAppLayer', 'order': 70, 'folder': 'moybyte.calc', 'title': 'Calc', 'min_size': (170, 190)},
-    {'id': 'getcarts', 'entry': 'getcarts_app:GetCartsAppLayer', 'order': 80, 'folder': 'moybyte.get_carts', 'title': 'Get Carts'},
-    {'id': 'jukebox', 'entry': 'music_app:MusicAppLayer', 'order': 85, 'folder': 'moybyte.music', 'title': 'Music'},
-    {'id': 'terminal', 'entry': 'terminal_app:TerminalAppLayer', 'order': 90, 'folder': 'moybyte.terminal', 'title': 'Terminal'},
+    {'id': 'artwork', 'entry': 'paint_app:PaintAppLayer', 'order': 10, 'folder': 'moybyte.paint', 'title': 'Paint', 'needs': ('surface', 'theme', 'damage', 'files', 'carts', 'wallpaper', 'prefs', 'notify', 'nav'), 'prefs_ns': 'paint', 'marker': 'artwork', 'service': 'artwork:ArtworkService', 'min_size': (310, 230)},
+    {'id': 'myart', 'entry': 'myart_app:MyArtAppLayer', 'order': 15, 'folder': 'moybyte.my_art', 'title': 'My Art', 'needs': ('surface', 'theme', 'damage', 'files', 'nav', 'artwork', 'carts', 'wallpaper')},
+    {'id': 'appearance', 'entry': 'appearance_app:AppearanceAppLayer', 'order': 20, 'folder': 'moybyte.appearance', 'title': 'Appearance', 'needs': ('surface', 'theme', 'damage', 'wallpaper'), 'marker': 'appearance', 'min_size': (310, 230)},
+    {'id': 'storybook', 'entry': 'storybook_app:StorybookAppLayer', 'order': 40, 'folder': 'moybyte.storybook', 'title': 'Storybook', 'needs': ('surface', 'theme', 'damage', 'files', 'nav'), 'marker': 'storybook'},
+    {'id': 'files', 'entry': 'files_app:FilesAppLayer', 'order': 60, 'folder': 'moybyte.files', 'title': 'Files', 'needs': ('surface', 'theme', 'damage', 'files', 'nav', 'artwork', 'carts', 'wallpaper'), 'marker': 'files'},
+    {'id': 'calc', 'entry': 'calc_app:CalcAppLayer', 'order': 70, 'folder': 'moybyte.calc', 'title': 'Calc', 'needs': ('surface', 'theme', 'damage'), 'marker': 'calc', 'min_size': (170, 190)},
+    {'id': 'getcarts', 'entry': 'getcarts_app:GetCartsAppLayer', 'order': 80, 'folder': 'moybyte.get_carts', 'title': 'Get Carts', 'needs': ('surface', 'theme', 'damage', 'install', 'nav', 'carts'), 'name': 'Get carts', 'marker': 'getcarts'},
+    {'id': 'jukebox', 'entry': 'music_app:MusicAppLayer', 'order': 85, 'folder': 'moybyte.music', 'title': 'Music', 'needs': ('surface', 'theme', 'damage', 'prefs', 'install', 'nav'), 'prefs_ns': 'music', 'marker': 'music', 'min_size': (300, 220)},
+    {'id': 'terminal', 'entry': 'terminal_app:TerminalAppLayer', 'order': 90, 'folder': 'moybyte.terminal', 'title': 'Terminal', 'needs': ('surface', 'theme', 'damage', 'install'), 'marker': 'terminal', 'min_size': (200, 120)},
 ]

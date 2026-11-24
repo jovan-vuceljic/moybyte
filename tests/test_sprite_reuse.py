@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 from runtime.editors_sheet import SpriteSheet  # noqa: E402
 from runtime import moy_carts  # noqa: E402
 import pytest
-from ws_helpers import boot_on_fixture
+from ws_helpers import boot_on_fixture, paint_grid_at
 
 @pytest.fixture(autouse=True)
 def _on_the_night_fixture(monkeypatch):
@@ -265,7 +265,7 @@ def _tap_at(drv, x, y):
 
 def _cell(pl, pe, lx, ly):
     """Grid cell (lx, ly)'s top-left and its side, in SYSTEM coords."""
-    gx, gy = pl.grid_at()
+    gx, gy = paint_grid_at(pl)
     cell = pl.layout.span // pe.dim
     return gx + lx * cell, gy + ly * cell, cell
 
@@ -279,7 +279,7 @@ def test_the_sprite_tab_takes_the_looks_layout(tmp_path):
     ws, drv, _c = _look_tab(tmp_path)
     pl = ws.paint_layer
     assert pl.layout.span == 144, "the grid is the largest 48 that fits"
-    gx, gy = pl.grid_at()
+    gx, gy = paint_grid_at(pl)
     assert pl.rect_of("color")[0] >= gx + 144, "the palette lies beside the grid"
     for key in ("pen", "more", "files"):
         r = pl.rect_of(key)
@@ -431,7 +431,7 @@ def test_the_caption_the_column_and_the_tool_row_keep_their_room(tmp_path, theme
     pl = ws.paint_layer
     lay = pl.layout
     fs = lay.fs
-    gx, gy = pl.grid_at()
+    gx, gy = paint_grid_at(pl)
     head = pl.rect_of("head")
     assert gy >= head[1] + head[3] and lay.span == 144
     assert pl.rect_of("pickers")[0] > pl.rect_of("prev")[0] if pl.rect_of("prev") else True
@@ -533,7 +533,7 @@ def test_a_press_outside_the_pickers_or_esc_closes_them(tmp_path):
     n = pe.n
     _tap_stop(drv, "pickers")
     _frames(drv, 2)
-    gx, gy = pl.grid_at()
+    gx, gy = paint_grid_at(pl)
     ox, oy = pe.sheet.tile_origin(pe.n)
     pixel = pe.sheet.pget(ox, oy)
     _tap_at(drv, gx + 2, gy + 2)

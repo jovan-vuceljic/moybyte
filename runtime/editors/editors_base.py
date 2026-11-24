@@ -41,8 +41,3 @@ class TextEntry:
         """Start editing `text`, cut to the cap, so what is shown is what
         typing could reproduce."""
         self.text = text[:self.cap]
-
-    def key(self, ch):
-        """Apply one byte; returns its event (see text_key)."""
-        self.text, ev = text_key(self.text, ch, self.cap, self.allow)
-        return ev

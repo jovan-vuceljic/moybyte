@@ -566,7 +566,8 @@ class Run:
                  "abcdefghij")):
             self.pooled("Blocks %s dialog open" % kind, lambda: self.ex(shut),
                         lambda opener=opener: self.ex(opener + "\nws.mark_dirty()"))
-            self.typed("Blocks %s dialog typing" % kind, "ws.block_ui._blk_kbd_key(%d)", text)
+            self.typed("Blocks %s dialog typing" % kind, ("ws.block_ui.typed(ws.block_ui.blk_kbd['entry'].text"
+                                                              " + chr(%d))"), text)
             self.ex(shut)
             b.drain(1.0)
         self.ex("ws.editor_app.set_tab('cards')\nws.mark_dirty()")

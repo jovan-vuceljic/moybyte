@@ -45,7 +45,6 @@ import uitree as ui
 import uitree_app
 from layers import AppLayer
 from layout_base import bar_rows, content_of, metric_class, DESK
-from moy_store_base import builtin_name
 from ticks import _ticks_ms, _ticks_diff
 import story_doc as D
 import story_render as R
@@ -1228,27 +1227,12 @@ def build():
         ui.toast("{toast}", icon="{toast_icon}", shown="toasting")
 
 
-def is_app(cart):
-    """The shipped Storybook identity cart: its title, its marker
-    permission, its folder."""
-    if (not cart or cart.get("title") != "Storybook"
-            or "storybook" not in (cart.get("permissions") or ())):
-        return False
-    path = cart.get("path")
-    if not path:
-        return int(cart.get("version", 0)) >= 1
-    return builtin_name(path) == "moybyte.storybook.moy"
-
-
-class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build, is_app,
-                                             needs=("files", "nav"))):
+class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build)):
     """The Storybook Layer: the page's engine handed this layer as what its
     handlers reach (`uitree_app.env()`), the stories in the store, Present
     on the whole glass and the desk's editor's state and verbs
     (runtime/apps/story_edit.py)."""
 
-    APP_TITLE = "Storybook"
-    APP_FOLDER = "moybyte.storybook.moy"
     LENDS_BAR = True
     domain = "system"
 

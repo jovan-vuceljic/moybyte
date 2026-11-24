@@ -13,7 +13,9 @@
     "app": {
       "id": "files",
       "entry": "files_app:FilesAppLayer",
-      "order": 60
+      "order": 60,
+      "needs": ["surface", "theme", "damage", "files", "nav", "artwork", "carts", "wallpaper"],
+      "marker": "files"
     },
     "permissions": [
       "graphics",

@@ -579,7 +579,7 @@ class WindowChrome:
                 return t[:at]                     # an app's chip names the app
             if at > 0 and win.kind == "desktop":
                 return t[at + len(sep):]          # a playtest's chip names the cart
-            if at > 0 and (win.kind == "menu" or self.ws.app(win.kind) is not None):
+            if at > 0 and (win.kind == "menu" or self.ws.registered_app(win.kind) is not None):
                 return t[:at]                     # the Editor's, an app's: the app
         return t
 
