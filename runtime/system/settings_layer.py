@@ -502,6 +502,14 @@ class SettingsLayer(Layer):
             self._want = rows[i % len(rows)][0]
             self.ws.mark_dirty()
 
+    def focus_row(self, key):
+        """Put the focus on row `key` where the page has it."""
+        rows = self._settings_rows()
+        for i in range(len(rows)):
+            if rows[i][0] == key:
+                self.set_msel = i
+                return
+
     # -- BLUETOOTH KEYBOARD panel (capability-gated) ------------------------------
 
     def _bt_service(self):

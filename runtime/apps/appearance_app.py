@@ -37,7 +37,6 @@ import moy_ui as _C
 import uitree as ui
 import uitree_app
 
-from layout_base import metric_class, DESK
 from moy_store_base import BUILTIN_NS
 from chrome import (THEME_NAMES, theme_accents, theme_colors, theme_look, theme_modes,
                     theme_names, theme_presets, theme_tints, RGB, PAINT, LOOK_NONE,
@@ -375,7 +374,6 @@ class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build)
         self.engine.env = self
         self._wall = ctx.wallpaper
         self.names = names
-        self.desk = metric_class() == DESK
         self.shown = {}             # each state as last written (`_set`)
         self.fill_owed = True
         self.naming = False         # NAME's dialog is open

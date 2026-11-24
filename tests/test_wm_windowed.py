@@ -205,10 +205,12 @@ def test_the_wasm_head_shares_the_same_two_meanings(tmp_path):
     assert sc.pix(199, 119) == 12 and sc.pix(199, 0) == 12
 
 
-# Every place a tier is chosen, and what it owes the flag. A file that builds a
-# WindowedWM either clears `letterbox_composite` in the same branch or carries a
-# reason it need not -- and the discovery test below fails on a fourth tier, so
-# the next presentation cannot inherit the black desk by saying nothing.
+# Every place a tier is chosen, and what it owes the flag. A file that names
+# WindowedWM as its windowed tier either leaves it to `Workstation.place_tier`,
+# the one body that builds it and clears `letterbox_composite` in the branch
+# that does, or carries a reason the flag never reaches a fill -- and the
+# discovery test below fails on a fourth tier, so the next presentation cannot
+# inherit the black desk by saying nothing.
 _CLEARS = True
 WINDOWED_INSTALLERS = {
     "runtime/host/host_app.py": _CLEARS,
@@ -260,13 +262,21 @@ def _windowed_install_sites():
                     except SyntaxError:
                         continue
                     for node in ast.walk(tree):
-                        # Constructed here, or NAMED as the tier a shared
-                        # spine installs (`wm=WindowedWM`): either way this
-                        # is the module that decided the board runs windowed.
-                        if isinstance(node, ast.Call) and any(
-                                isinstance(f, ast.Name) and f.id == "WindowedWM"
-                                for f in [node.func]
-                                + [k.value for k in node.keywords]):
+                        # Constructed here, NAMED as the tier a shared spine
+                        # installs (`wm=WindowedWM`) or as the console's
+                        # windowed tier (`ws.windowed_wm = WindowedWM`):
+                        # either way this is the module that decided the
+                        # board runs windowed.
+                        named = isinstance(node, ast.Call) and any(
+                            isinstance(f, ast.Name) and f.id == "WindowedWM"
+                            for f in [node.func] + [k.value for k in node.keywords])
+                        named = named or (
+                            isinstance(node, ast.Assign)
+                            and isinstance(node.value, ast.Name)
+                            and node.value.id == "WindowedWM"
+                            and any(isinstance(t, ast.Attribute) and t.attr == "windowed_wm"
+                                    for t in node.targets))
+                        if named:
                             found[path.relative_to(ROOT).as_posix()] = (path,
                                                                         tree)
     return found
@@ -282,26 +292,33 @@ def test_every_windowed_tier_answers_for_the_letterbox_flag():
     for rel, verdict in WINDOWED_INSTALLERS.items():
         if verdict is not _CLEARS:
             assert isinstance(verdict, str) and verdict.strip(), rel
-            continue
-        import ast
-        _path, tree = found[rel]
-        # The clear must sit in the SAME branch that installs the WM: a clear
-        # somewhere else in the file is a clear that a future refactor drops.
-        branches = [n for n in ast.walk(tree)
-                    if isinstance(n, ast.If)
-                    and "WindowedWM" in ast.dump(n)]
-        assert branches, rel
-        inner = min(branches, key=lambda n: len(ast.dump(n)))
-        cleared = [
-            n for n in ast.walk(inner)
-            if isinstance(n, ast.Assign)
-            and any(isinstance(t, ast.Attribute)
-                    and t.attr == "letterbox_composite" for t in n.targets)
-            and isinstance(n.value, ast.Constant) and n.value.value is False
-        ]
-        assert cleared, (
-            rel + ": installs WindowedWM without clearing letterbox_composite "
-            "-- the desk goes black behind the first game window")
+    import ast
+    from tools.board_config import runtime_file
+    with open(runtime_file("console.py"), encoding="utf-8") as f:
+        tree = ast.parse(f.read())
+    place = next(n for n in ast.walk(tree)
+                 if isinstance(n, ast.FunctionDef) and n.name == "place_tier")
+    # The clear must sit in the SAME branch that builds the WM: a clear
+    # somewhere else is a clear that a future refactor drops.
+    branches = [n for n in ast.walk(place)
+                if isinstance(n, ast.If) and any(
+                    isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+                    and c.func.attr == "windowed_wm" for c in ast.walk(n))]
+    assert branches, "place_tier builds no windowed tier"
+    inner = min(branches, key=lambda n: len(ast.dump(n)))
+    built = next(b for b in (inner.body, inner.orelse) if any(
+        isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+        and c.func.attr == "windowed_wm" for st in b for c in ast.walk(st)))
+    cleared = [
+        n for st in built for n in ast.walk(st)
+        if isinstance(n, ast.Assign)
+        and any(isinstance(t, ast.Attribute)
+                and t.attr == "letterbox_composite" for t in n.targets)
+        and isinstance(n.value, ast.Constant) and n.value.value is False
+    ]
+    assert cleared, (
+        "Workstation.place_tier installs WindowedWM without clearing "
+        "letterbox_composite -- the desk goes black behind the first game window")
 
 
 # ---------------------------------------------------------------------------

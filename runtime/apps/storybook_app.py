@@ -1246,7 +1246,6 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build)):
         cv = self._surf.canvas()
         self.layout = StorybookLayout(cv.w, cv.h, self._surf.font_scale(),
                                       self._surf.windowed(), self._surf.chrome_scale())
-        self.desk = self.layout.desk
         self.engine.band = not self.desk      # a desk's window shows no hints band
         self.page = "stories"
         self.stories = []             # [{"name", "doc"}], newest first
@@ -1371,6 +1370,7 @@ class StorybookAppLayer(uitree_app.app_layer("storybook", "Storybook", build)):
     def relayout(self, w, h, fs, cs=None):
         super().relayout(w, h, fs, cs)
         self.layout = StorybookLayout(w, h, fs, self._surf.windowed(), cs)
+        self.engine.band = not self.desk
         if self.ed is not None:
             self.ed.relayout()
 

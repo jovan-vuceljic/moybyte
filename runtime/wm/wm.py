@@ -60,7 +60,7 @@ class FullscreenStackWM:
     # the frame before. The windowed WM's shown ring is its windows' voucher.
     CONTENT_RING = True
 
-    def __init__(self, ws):
+    def __init__(self, ws, stack=None):
         self.ws = ws
         # The process back-stack (Stage 6b): launcher root -> spawned app -> Player/tool,
         # as kinds (the vocabulary the flat `screen` attribute used: "launcher" | "menu" |
@@ -71,7 +71,9 @@ class FullscreenStackWM:
         # The spine owns it; every navigation goes through `goto` here, so the WM sees
         # each change it has to rebuild for.
         kt = getattr(ws, "kernel_tables", None)
-        self.stack = kt[1] if kt is not None else BackStack()
+        # A tier swapped in live (`Workstation.place_tier`) takes the one it
+        # replaces.
+        self.stack = stack if stack is not None else kt[1] if kt is not None else BackStack()
         # Content-change generation (Stage 6c): bumped whenever the top-of-stack kind
         # actually changes, so the memoized layer stack knows to rebuild. (menu_view tab
         # switches bump it via EditorApp.tab; overlay-gate changes are caught separately

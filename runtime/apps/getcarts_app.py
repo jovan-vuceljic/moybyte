@@ -99,7 +99,6 @@ import json
 
 import uitree as ui
 import uitree_app
-from layout_base import metric_class, DESK
 import app_perms as _perms
 import cart_index as _ci
 import cart_listing as _cl
@@ -625,7 +624,6 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         self._nav = ctx.nav
         self._carts_role = ctx.carts
         self.names = names
-        self.desk = metric_class() == DESK
         self.models = {}              # each model's rows as last written
         self.owed = False             # the last frame's press moved the page
         self.fill_owed = True         # the page's states owe a fill (`_Owed`, a handler's `_lay`)

@@ -563,6 +563,9 @@ class Workstation:
     # The board's inputs as the hints know them (`use_inputs`): None until a
     # board declares them, and then the source names' kinds.
     input_kinds = None
+    # The windowed tier's class where the board has one (its boot names it
+    # before `place_tier`), else None: every tier stands full-screen.
+    windowed_wm = None
     # The battery's gauge (device/battery.py): None until a board that reads
     # one sets it.
     battery = None
@@ -1371,9 +1374,10 @@ class Workstation:
 
     def place_metric_class(self):
         """The metric class for the font scale in force (`layout_base.class_of`
-        over the panel), the layouts redone where it moved. The boot calls it
-        once the stored font scale is applied, before the tier goes in: the
-        windowed tier stands only on a desk."""
+        over the panel), the theme applied again where it moved: its faces,
+        bars and render scale are the class's. `place_tier` calls it, at the
+        boot once the stored font scale is applied and before the tier goes
+        in: the windowed tier stands only on a desk."""
         cls = _layout_base.class_of(self.panel_diagonal_in, self.panel_wh[0], self.panel_wh[1],
                                     self.look.effective_font_scale())
         if cls == self.metric_class:
@@ -1382,17 +1386,79 @@ class Workstation:
         _layout_base.place_class(cls, self.render_scale)
         self.chrome_scales = chrome_scale_choices(
             self.panel_wh[0] // _layout_base.CLASSES[cls]["unit"], self.chrome_floor)
-        self.look.chrome_scale = self.look.valid_chrome_scale(self.look.chrome_scale)
+        look = self.look
+        look.chrome_scale = look.valid_chrome_scale(look.chrome_scale)
+        look.set_theme(look.theme_name, persist=False)
         self.relayout()
 
     def desk_fits(self):
         """Whether the windowed tier may stand here: a system canvas of its own
         whose glass holds the desk at the font scale in force
-        (`layout_base.desk_room`). Every tier that installs `WindowedWM` asks
-        this first; elsewhere the full-screen tier stays."""
+        (`layout_base.desk_room`), which `place_tier` asks."""
         return (self.bound_sys_canvas is not None
                 and _layout_base.desk_room(self.panel_wh[0], self.panel_wh[1],
                                            self.look.effective_font_scale()))
+
+    def tier_moved(self):
+        """Whether the font scale in force asks another tier than the one
+        standing: another metric class, or the windowed tier where the board
+        has one (`windowed_wm`) and the desk's fit moved (`place_tier`)."""
+        if _layout_base.class_of(self.panel_diagonal_in, self.panel_wh[0], self.panel_wh[1],
+                                 self.look.effective_font_scale()) != self.metric_class:
+            return True
+        return (self.windowed_wm is not None
+                and self.desk_fits() != bool(getattr(self.wm, "has_desk", False)))
+
+    def place_tier(self):
+        """Stand the tier the font scale in force asks for: its metric class
+        (`place_metric_class`) and, where the board has a windowed tier
+        (`windowed_wm`, the class its boot names), that tier where the desk
+        fits (`desk_fits`) and the full-screen stack elsewhere. The boot
+        calls it once the stored scale is applied; a frame calls it where a
+        relayout found the tier moved (`tier_moved`: a text size, a theme's
+        text floor), before it draws, so the frame after the change is
+        already the other tier's. The swap closes what stood above the home,
+        each surface persisted as the home key leaves it, and lands where a
+        boot at the scale lands; Settings, open where the change was made,
+        opens again on its Text size row."""
+        self.frame_state.tier_due = False
+        wm = self.wm
+        desk = self.windowed_wm is not None and self.desk_fits()
+        if desk == bool(getattr(wm, "has_desk", False)):
+            self.place_metric_class()
+            return
+        sl = self.settings_layer
+        settings = wm.stack.has(sl.id)
+        glass = self.glass_canvas
+        if not desk:
+            if wm.mode == "console":
+                wm.leave_console()          # the parked windows back...
+            self.home.go_home()             # ...and closed with the rest, each persisted
+            wm.enter_console()              # the route at the home
+            wm.drop_windows()
+            self.set_render_scale(1)
+            glass.letterbox_composite = True
+            self.wm = FullscreenStackWM(self, wm.stack)
+            self.place_metric_class()
+        else:
+            if wm.stack.depth() > 1:
+                self.home.go_home()
+            self.place_metric_class()
+            # A windowed composite must NOT letterbox: `blit_game` puts a
+            # cart inside a WINDOW here, and the full-screen meaning of the
+            # same verb would paint black over the desk and every other
+            # window (DeviceCanvas.letterbox_composite).
+            glass.letterbox_composite = False
+            self.set_render_scale(self.look.render_scale())
+            self.bound_sys_canvas.letterbox_composite = False
+            self.wm = self.windowed_wm(self, wm.stack)
+            self.home.open_desk()
+        self.launcher.set_items(self.home.launcher_view_items())
+        self.relayout()
+        self.mark_dirty()
+        if settings:
+            self.open_settings()
+            sl.focus_row("font_scale")
 
     def set_render_scale(self, n):
         """Draw the shell on a surface 1/`n` of the glass, doubled onto it at
@@ -1651,6 +1717,8 @@ class Workstation:
         _hook = getattr(self.wm, "on_relayout", None) if hasattr(self, "wm") else None
         if _hook is not None:
             _hook()
+        if self.tier_moved():
+            self.frame_state.tier_due = True        # the next frame stands it (place_tier)
 
     def relayout_code(self):
         """Rebuild the Code tab's geometry and let an open editor adopt it live (so a
@@ -3262,6 +3330,8 @@ class Workstation:
         # frame: it holds no gate, so this is bookkeeping, never a flush held
         # off (native/moy_app/README.md).
         fs = self.frame_state
+        if fs.tier_due:
+            self.place_tier()
         if self._services_due and fs.frames_drawn:
             self._services_due = False
             self.boot_services()

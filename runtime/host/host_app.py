@@ -220,11 +220,11 @@ def build_workstation(carts_dir=None, sys_size=None, font_scale=1,
     desktop is pixel-identical to today. `font_scale` (1/2/3) is the initial
     system-UI font size (the persisted system/settings value overrides it on load).
 
-    `windowed=True` installs the Picotron-style windowed WM (wm_windowed.py --
-    the big-screen / P4 presentation, #73/#58): the launcher is the desktop and
-    every pushed app is a floating window. Needs a distinct big `sys_size` and a
-    glass that is a desk at the font scale in force (`Workstation.desk_fits`);
-    elsewhere the full-screen tier stays.
+    `windowed=True` names the Picotron-style windowed WM (wm_windowed.py --
+    the big-screen / P4 presentation, #73/#58) as this console's windowed tier:
+    the desk is the root and every pushed app is a floating window, wherever a
+    distinct big `sys_size` holds the desk at the font scale in force, and the
+    full-screen tier elsewhere (`Workstation.place_tier`).
 
     `panel_diagonal_in` is the board fact a BOARD declares in its board.toml
     (#203): the glass's diagonal in inches, from which the chrome tap-target
@@ -320,19 +320,10 @@ def build_workstation(carts_dir=None, sys_size=None, font_scale=1,
     # solo desktop has no second console) -> send() drops; a test link()s two. The
     # PlayerRouter (extra controller slots) is attached to inp by wire_workstation_core.
     ws.net = _players.LoopbackNet()
-    # The Picotron-style windowed WM (#73): swap the presentation tier in before
-    # the first frame. Only meaningful with a distinct (big) system canvas.
-    if windowed and ws.bound_sys_canvas is not None and ws.desk_fits():
+    # The Picotron-style windowed WM (#73): the tier this console stands
+    # where the desk fits, before the first frame (Workstation.place_tier).
+    if windowed:
         from runtime.wm_windowed import WindowedWM
-        # A windowed composite must NOT letterbox: `blit_game` is asked to put a
-        # cart inside a WINDOW here, and the fullscreen meaning of the same verb
-        # (fill everything outside the game rect black) would paint over the
-        # desk, its icons, the bar and every other window. See
-        # DeviceCanvas.letterbox_composite (the flag is on the shared class, so
-        # the wasm head's twin of this line -- web_boot.boot -- clears the same
-        # one) -- the tier is chosen here, so this is where the canvas is told
-        # which meaning it serves.
-        ws.bound_sys_canvas.letterbox_composite = False
-        ws.wm = WindowedWM(ws)
-        ws.home.open_desk()                 # boot onto the DESK (desktop mode)
+        ws.windowed_wm = WindowedWM
+        ws.place_tier()
     return ws

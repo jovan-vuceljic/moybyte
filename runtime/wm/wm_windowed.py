@@ -129,10 +129,11 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
     small tiers (the home and everything opened from it own the whole
     screen) while the desk's windows wait in `parked`. Boot lands on the
     desk; the desk's PLAY enters console mode (`enter_console`), the
-    home's X leaves it (`leave_console`). Install with
-    `ws.wm = WindowedWM(ws)` right after construction
-    (host_app.build_workstation(windowed=True)); requires a DISTINCT system
-    canvas bigger than the 320x240 game canvas."""
+    home's X leaves it (`leave_console`). A board names it as its
+    `ws.windowed_wm` and `Workstation.place_tier` installs it where the desk
+    fits at the font scale in force, and takes it down where it stops
+    fitting; it requires a DISTINCT system canvas bigger than the 320x240
+    game canvas."""
 
     has_desk = True
     # One voucher per region: the shown ring (`_shown`) speaks for a
@@ -156,8 +157,8 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
     _edge = 0                         # _frame_edge's answer...
     _edge_gen = -1                    # ...and the look it was read under
 
-    def __init__(self, ws):
-        FullscreenStackWM.__init__(self, ws)
+    def __init__(self, ws, stack=None):
+        FullscreenStackWM.__init__(self, ws, stack)
         _strip.reset()                # (what another console's windows kept)
         if ws.bound_sys_canvas is None:
             raise ValueError("WindowedWM needs a distinct (big) system canvas")
@@ -647,6 +648,17 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         self.stack.goto("launcher")
         self.on_nav()
         ws.mark_dirty()
+
+    def drop_windows(self):
+        """Release every window's buffer, a parked one's too, and the drag
+        backdrop: this tier is going (`Workstation.place_tier`)."""
+        p = self.parked
+        if p is not None:
+            for win in p.wins.values():
+                self._drop_win(win)
+            self.parked = None
+        self._drop_wins()
+        self.drop_backdrop()
 
     def leave_console(self, game=False):
         """The home's X: put the parked kinds back above the desk with the

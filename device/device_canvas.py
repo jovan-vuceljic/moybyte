@@ -1397,12 +1397,12 @@ class DeviceCanvas:
     # through `pageshot.mjs` before it was fixed.
     #
     # So the flag lives HERE, on the class every tier's system canvas descends
-    # from, rather than being re-expressed per tier: `host_app.build_workstation`
-    # and `web_boot.boot` clear it exactly where they install `WindowedWM` --
-    # the tier is chosen there, so that is where the canvas is told which
-    # meaning it serves. (The P4 overrides `blit_game` outright for its PPA
-    # path and paints no bands, so the flag is moot there and it only ever runs
-    # the windowed WM anyway.)
+    # from, rather than being re-expressed per tier: `Workstation.place_tier`
+    # clears it where it installs `WindowedWM` and sets it where it puts the
+    # full-screen stack back -- the tier is chosen there, so that is where the
+    # canvas is told which meaning it serves. (The P4 overrides `blit_game`
+    # outright for its PPA path and paints no bands, so the flag is moot
+    # there.)
     letterbox_composite = True
 
     def front_scratch(self, gw, gh):

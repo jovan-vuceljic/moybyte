@@ -401,24 +401,14 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     # real trackball-style pan on a system surface re-shows it, a mouse/touch
     # place() keeps it hidden as always.
     ws.pointer.visible = False
-    if windowed and ws.bound_sys_canvas is not None and ws.desk_fits():
-        # A windowed composite must NOT letterbox. `blit_game` means two things
-        # -- fill everything outside the game rect black (this canvas IS the
-        # glass, the handheld tier below) versus put a cart inside a WINDOW --
-        # and the shared `DeviceCanvas.blit_game` defaults to the first. Left
-        # set, the desk, its icon column, the OS bar and every other window go
-        # black behind the first game window opened. This build shipped exactly
-        # that until 2026-08-15; see DeviceCanvas.letterbox_composite. The tier
-        # is chosen HERE, so this is where the canvas is told which meaning it
-        # serves -- the same line, in the same place, as
-        # host_app.build_workstation.
-        ws.bound_sys_canvas.letterbox_composite = False
+    if windowed:
         # Installed LAST so it anchors its root context -- and its per-window
-        # content buffers, via root.new_layer -- to the system canvas. Two
-        # worlds (#105): boot onto the desk.
+        # content buffers, via root.new_layer -- to the system canvas, where
+        # the desk fits (Workstation.place_tier). Two worlds (#105): boot onto
+        # the desk.
         from wm_windowed import WindowedWM
-        ws.wm = WindowedWM(ws)
-        ws.home.open_desk()
+        ws.windowed_wm = WindowedWM
+        ws.place_tier()
     # HUD (perf_hud.PerfHud): the bottom-right FPS chip draws onto the GAME
     # canvas, so on the handheld tier -- where the system canvas IS the game
     # canvas -- it lands inside the cart's own 320x240 raster and ships in the

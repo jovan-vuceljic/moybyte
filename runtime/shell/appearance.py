@@ -1331,6 +1331,11 @@ class Appearance:
         if persist:
             self.ws.system.set("chrome_scale", self.chrome_scale)
 
+    def render_scale(self):
+        """The render scale the theme's look asks (`render.scale`), which a
+        desk takes (`Workstation.set_render_scale`)."""
+        return self.live.look[0].get("render.scale", 1)
+
     def font_scales(self):
         """The font scales this glass offers (`layout_base.font_scales`): each
         whose room, the panel over the render scale and the font scale, holds
@@ -1449,7 +1454,7 @@ class Appearance:
             _keep_splash(ws.theme_colors)
         self._layouts = {}
         self._choices = None
-        ws.set_render_scale(self.live.look[0].get("render.scale", 1))
+        ws.set_render_scale(self.render_scale())
         if not self.apply_layout() and self._bars_moved \
                 and getattr(ws, "layout", None) is not None:
             ws.relayout()
