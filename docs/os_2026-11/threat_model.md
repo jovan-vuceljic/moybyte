@@ -113,14 +113,23 @@ rounds a guess, which a GPU does fast.
 **The webhost and the sync RPC.** The web console is a Settings switch, off
 at boot (`runtime/system/web_console.py`). A browser pairs once, by the
 console's QR or by the password, and signs in with its device key from then
-on; the page may reach unsealed only the bundle and a marker, and a
+on; the page may reach unsealed only the bundle, the loader and a marker
+(`GET /sync`, which names the pack's digests), and a
 per-source backoff counts every credential (`native/moy_net/moy_webauth.c`,
 `native/moy_net/moy_seal.h`; `system.md` §3 has the protocol and its own
 "What it does not stop"). The password pairs by SPAKE2+ (RFC 9383): the board
 holds the record's w0 and L, never w1, so a copy of the record can run the
 exchange but never finish it, and the password never crosses the network.
 Its limits in short: the page itself crosses plain HTTP, so an active attacker on the LAN can serve a page that captures what is
-typed into it; a paired browser can write and run any cart, one that arrives as files
+typed into it. Where the loader boots the console
+(`docs/web_console_online_2026-11.md` §3, §6) the pack's bytes may come from
+the browser's cache, a mirror or os.moybyte.com, and the loader runs only
+bytes whose sha256 is the digest the board's `/sync` names, checked on every
+read: a mirror or a cache can fail to deliver but cannot substitute, and a
+device that later answers at the board's address and wrote that origin's
+cache leaves nothing the next genuine board's loader runs. The digest itself
+crosses plain HTTP with the loader, so the active attacker above is not
+stopped by it. A paired browser can write and run any cart, one that arrives as files
 being asked on the glass at its first run (§3); the password pairs against the record's PBKDF2 cost
 (above) and the backoff. The Zero's setup network is open whenever
 no saved network answers, and on a board that already has a password its form

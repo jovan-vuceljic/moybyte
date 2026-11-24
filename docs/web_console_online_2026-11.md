@@ -40,10 +40,16 @@ later sync their files.
 
 - **The image names its page by digest.** Every board's build packs the
   bundle (`tools/gen_web_blob.py --pack`); the image carries the pack body's
-  sha256 alone (`moy_web_want`, `native/moy_web/moy_web_blob.h`).
+  sha256 (`moy_web_want`, `native/moy_web/moy_web_blob.h`), the whole
+  file's (`moy_web_pack_sha`) and the loader (§3, `moy_web_loader`).
   The webhost serves a pack only when its head names that digest, from
-  `/p/<12 hex>/`, its assets `immutable`; `/` is a 302 there, or the sentence
+  `/p/<12 hex>/`, its assets `immutable` and the whole file at
+  `/p/<12 hex>/moybyte_web.pack`; `/` is a 302 there, or the sentence
   saying why there is none (`page_root`, `native/moy_net/moy_webhost.c`).
+- **The loader is built** (phase 1, §11): a board whose console is online
+  (the C3 Zero) serves it at `/`, every board at `/loader.html`, and `GET
+  /sync` names both digests and `local` (`native/moy_net/moy_page.h`, THE
+  LOADER). The C3 asks its release for no add-on (`zero_host.make_addon`).
 - **The release publishes every add-on ever made** as
   `moybyte_web-<digest>.moy.zip` beside the payload, listed in the board's
   signed carts index (`tools/web_pack.py`). A board installs the one that
@@ -134,7 +140,14 @@ GET /sync   {"sync":1, "page": <body digest>, "pack": <whole-pack digest>, "loca
 ```
 
 That reveals nothing new: the page's `/p/<12 hex>/` address already names
-the build to anybody who asks for `/`.
+the build to anybody who asks for `/`. An image that names no page answers
+`"page": null, "pack": null`, and the loader says so. `local` is 1 while the
+board's add-on is the one that fits (`MOY_PAGE_READY`).
+
+**Where it is served.** On a board whose console is online `/` is the loader;
+every board also serves it at `/loader.html`, which is how a board that
+keeps its copy boots through the loader before phase 4 makes it the root of
+every board, and how its boot is timed against the store-served one.
 
 **What a plain-http origin denies it.** The board is `http://`, so the
 loader runs in an insecure context. It has no service worker, no Cache API,
@@ -192,7 +205,8 @@ ways, on a phone and on a PC.
 
 **Eviction.** After a boot, the loader keeps the pack it booted and the one
 before it (a rollback names the previous image's digest) and deletes the
-rest.
+rest. Its IndexedDB (`moy-loader`, store `packs`) holds each pack under its
+whole-file digest and the two kept digests, newest first, under `order`.
 
 ## 4. Where the bytes come from
 
@@ -202,7 +216,8 @@ The loader tries these in order and runs only bytes whose digest matches:
 2. **IndexedDB** on this origin.
 3. **The board's own copy**, on a board whose store or card has room for it
    (`[web] console` unset: the add-on as today, `AddonStep` and all). It is
-   served whole as one asset and checked like the rest. It is the only way
+   served whole as one asset, `/p/<12 hex>/moybyte_web.pack`, and checked
+   like the rest. It is the only way
    a browser that never saw the site starts a console on a LAN without
    internet.
 4. **os.moybyte.com by CORS**, at `/console/<body digest>.pack`: the pack file
@@ -212,7 +227,12 @@ The loader tries these in order and runs only bytes whose digest matches:
    never a LAN page reaching the internet. A worktree build's list names the
    developer's own `firmware/web_runner/serve.py`, served with CORS, so
    `tools/board.py` and `tools/web.py shot` reach a C3 whose digest no site
-   publishes.
+   publishes. The list is the build's (`tools/gen_web_blob.py`, THE
+   MIRRORS): a CI build names os.moybyte.com alone; any other build names
+   `http://<its LAN address>:8321/console/` (serve.py's port) and then the
+   site; `MOYBYTE_WEB_MIRRORS` or `--mirror` overrides both. serve.py serves
+   the pack of the bundle it serves at `/console/<body digest>.pack` in every
+   mode, and its `--loader` twin is a board whose console is online.
 
 What a pack passed through decides nothing: the digest does. A LAN mirror
 can be added without touching the trust model.
@@ -221,7 +241,13 @@ can be added without touching the trust model.
 headers: `Access-Control-Allow-Origin: *`, and `immutable` on a name that is
 a digest. Its deploy publishes every pack named by an add-on in the two
 rolling releases' indexes, taken from the same assets the boards install
-from.
+from. `tools/pack_store.py` is that deploy short of the upload: `fetch` takes
+a release's indexes and add-on carts, `build` writes the tree
+(`console/<body digest>.pack` and a `_headers` file in the Cloudflare Pages
+and Netlify format), keeping every pack of the stable release's and the
+beta's of the last 30 days (§12), each checked against its index entry and
+its digest, and `check` asks a host for every digest the indexes name, as a
+board's origin, and reads the pack back.
 
 ## 5. The link between the windows
 
@@ -455,8 +481,8 @@ decides where its carts live**, not where its bytes came from.
 - The site's own player stays a static-host console on the browser's OPFS.
   That needs a secure context, which a board's origin never is.
 
-No crossover is added. Phase 1 rewrites the rule's "serving host" in
-`.claude/rules/web.md` as "the origin it runs under".
+No crossover is added. The rule in `.claude/rules/web.md` says "the origin
+a page runs under", not "where it is served from".
 
 **No direct path from the site (owner, 2026-11-23).** On Chrome, Local
 Network Access would let os.moybyte.com reach the board itself as a paired
@@ -494,8 +520,10 @@ and its loader goes online. The add-on machinery stays (§12).
 
 **Phase 1: the loader.** The other entry works, and a C3 has a console.
 
-- The loader page (`+firmware/web_runner/loader.html`), built into every
-  image; on a board whose console is online it is what `/` serves.
+- The loader page (`firmware/web_runner/loader.html`), built into every
+  image; on a board whose console is online it is what `/` serves, and
+  every board serves it at `/loader.html` (§3).
+- A board that keeps its copy serves the pack whole (§4, source 3).
 - `gen_web_blob` names the whole pack's digest, and `GET /sync` carries both
   digests and `local`.
 - The page and the worker take the asset map (§3).
@@ -510,18 +538,24 @@ and its loader goes online. The add-on machinery stays (§12).
 
 Tests:
 
-- A node test of the loader (`+firmware/web_runner/loader_test.mjs`, in the
-  harness's style): a wrong digest refused, a tampered head refused, a
+- A node test of the loader (`firmware/web_runner/loader_test.mjs`, in the
+  harness's style, run by `tests/test_web_loader.py`): a wrong digest refused, a tampered head refused, a
   poisoned cache entry refused and fetched again, the source order, and
   eviction.
 - The loader's gzipped size stays under its budget.
-- On glass, a page load's frame stall on the C3, written to #256.
+- On glass, a page load's frame stall on the C3, written to #256. A Zero
+  draws no frames: its serving loop serves a request whole, so the stall is
+  the time it takes to serve the loader and `/sync`
+  (`tests/test_c3_zero_on_glass.py` prints both).
 - A host test that the digests `gen_web_blob` names are the pack's.
 - A deploy check that every digest an index names has its file on
   os.moybyte.com, served with `Access-Control-Allow-Origin`.
-- On glass: `tools/board.py pass c3_zero`, then a headless Chrome
-  (`browsershot.mjs`) that boots the C3's console from a worktree mirror,
-  signs in and syncs a cart.
+- On glass: `tools/board.py pass c3_zero` builds, flashes and runs
+  `tests/test_c3_zero_on_glass.py`, whose headless Chrome (`browsershot.mjs`)
+  boots the C3's console from a worktree mirror, signs in and syncs a cart.
+- In Chrome with no board: serve.py's `--loader` twin boots the console
+  through the loader, then from the cache (`tests/test_web_loader.py`,
+  under `MOYBYTE_WEB_E2E`).
 - The boot's cost goes to the issue: cached against store-served, and on
   `.local` against an IP.
 
@@ -571,7 +605,6 @@ Tests:
 **Phase 4: one boot path.**
 
 - Every board's root serves the loader.
-- A board that keeps its copy serves the pack whole.
 - The per-asset routes and the "needs its page updated" page go.
 
 Tests:
