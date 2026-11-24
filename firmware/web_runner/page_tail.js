@@ -70,7 +70,7 @@ else if(m.t==="pick"){pkAsk(m);}
 else if(m.t==="unpick"){pkDone(m.id);}
 else if(m.t==="installed"){window.__moyInstalled=m.folder;}
 else if(m.t==="state"){var sw=stateWait;stateWait=[];
-var so=JSON.parse(m.json);if(so&&typeof so==="object"){so.sink=m.sink||null;so.loop=m.loop||null;}
+var so=JSON.parse(m.json);if(so&&typeof so==="object"){so.sink=m.sink||null;so.loop=m.loop||null;so.live=m.live||null;}
 for(var si=0;si<sw.length;si++)sw[si](so);}
 else if(m.t==="pcm"){playPCM(m);}
 else if(m.t==="wperf"){console.log("[moy worker] "+m.s);}
@@ -257,7 +257,12 @@ PKI.value="";});
 if(PKX)PKX.addEventListener("click",function(){if(!WORKER||pkId===null)return;var id=pkId;
 pkDone(id);WORKER.postMessage({t:"picked",id:id,cancel:1});});
 // The loader module hands the worker over once constructed.
-window.__moyAttach=function(w){WORKER=w;w.onmessage=function(e){onWorker(e.data);};audioSink(w);};
+window.__moyAttach=function(w){WORKER=w;w.onmessage=function(e){onWorker(e.data);};audioSink(w);
+w.postMessage({t:"vis",hidden:document.hidden?1:0});};
+// Whether this tab is hidden, for the live socket's match (worker.js): a
+// match the tab's throttled frames held up says so when it moves again.
+document.addEventListener("visibilitychange",function(){
+if(WORKER)WORKER.postMessage({t:"vis",hidden:document.hidden?1:0});});
 // ?pad=1 forces the touch controls on ANY device (desktop demos, touch laptops).
 // Phones show them automatically -- the core's media query hides them only on
 // hover-capable fine-pointer (i.e. mouse) devices; per-cart input hints still

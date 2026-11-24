@@ -20,7 +20,7 @@
 #define MOY_WA_TOKEN_MS 600000u         // a QR's token
 #define MOY_WA_WINDOW 64                // a session's sequence numbers taken out of order
 
-// The answer a sealed request gets, and the stream a /term upgrade carries.
+// The answer a sealed request gets, and the stream an upgrade carries.
 typedef struct moy_wa_seal {
     uint8_t on;                         // 0: the open host, nothing sealed
     uint64_t seq;
@@ -83,8 +83,13 @@ int moy_wa_signout(void);
 void moy_wa_poll(void);
 // A browser paired since the last call: 1, and the flag cleared.
 int moy_wa_paired(void);
-// The /term upgrade's session: its key dropped, the session's end (unused,
-// evicted, signed out) cuts the terminal.
-void moy_wa_term(const moy_wa_seal_t *s);
+// An upgraded stream's session: its key dropped, the session's end (unused,
+// evicted, signed out) cuts the stream. One of each at a time.
+enum {
+    MOY_WA_TERM = 0,                    // GET /term, the web terminal
+    MOY_WA_LIVE = 1,                    // GET /live, the live socket (moy_live.h)
+    MOY_WA_STREAMS = 2,
+};
+void moy_wa_stream(int which, const moy_wa_seal_t *s);
 
 #endif // MOY_WEBAUTH_H

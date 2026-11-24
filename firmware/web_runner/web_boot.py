@@ -1573,6 +1573,144 @@ def term_state(state, n=0):
     return ""
 
 
+# -- the live socket's radio link ----------------------------------------------------
+#
+# A page served by a board that relays its radio (a Zero: GET /live answers
+# {"link":1}, native/moy_net/moy_live.c) has a link as a console board does:
+# `ws.link` is players.EspNowLink over the kernel's Match, whose radio is the
+# page's half of the link channel (native/moy_net/moy_link_web.c), so a
+# match here is a console's match, its inputs riding the socket to the board
+# and its radio. The worker owns the socket and calls live_pump between
+# frames: what the board sent goes into the link, the link's poll runs (its
+# beacon, a START or a BYE), and what it queued goes back out. Nothing here
+# waits on the socket.
+
+_LIVE_GAP_MS = 250                      # a frame gap a live match says it waited through
+
+
+class _LiveWlan:
+    """The station `EspNowLink` reads, which is the page's board's: its MAC
+    is the page's address on the air and its channel pinned (the 'H' state)."""
+
+    PM_NONE = 0
+
+    def active(self, on=None):
+        return True
+
+    def isconnected(self):
+        return True
+
+    def config(self, *a, **kw):
+        if kw or not a:
+            return None
+        import moy_net
+        info = moy_net.live_info()
+        if a[0] == "mac":
+            if not info[3]:
+                raise OSError(107)      # no word from the board yet: no address
+            return info[6]
+        if a[0] == "channel":
+            return abs(info[5])
+        return 0
+
+
+def live_enable(on):
+    """The board answered the /live probe with its radio: the console gains
+    a link, as a console board wires one (device/wire_links.py)."""
+    ws = _S.get("ws")
+    if not on or ws is None:
+        return ""
+    try:
+        import moy_net
+        if not hasattr(moy_net, "live_take"):
+            return ""
+        from players import EspNowLink, launch_cart
+        ws.link = EspNowLink(board="web", name="Browser", wlan=_LiveWlan(), launch=launch_cart)
+        ws.link.tiers = ("lua",)
+        ws.net = ws.link.net
+        _S["live"] = {"open": False, "said": None, "hidden": False, "gap": False}
+    except Exception as exc:         # noqa: BLE001 -- never block a boot
+        print("live link unavailable:", exc)
+    return ""
+
+
+def _live_say(ws, key):
+    notice = getattr(getattr(ws, "notices", None), "notice", None)
+    if notice is None:
+        return
+    try:
+        import ui_draw as _ud
+        notice(_ud.s("notice." + key), _ud.s("notice." + key + "_why"), "warn")
+    except Exception as exc:         # noqa: BLE001 -- a notice must never kill a frame
+        print("live notice failed:", exc)
+
+
+def live_state(open_, why=""):
+    """The socket opened (1) or closed (0). A drop while the radio is held
+    is said on the screen, and so is its return: the match waits meanwhile,
+    as it does for a lost input."""
+    st = _S.get("live")
+    ws = _S.get("ws")
+    if st is None or ws is None:
+        return ""
+    import moy_net
+    on = bool(int(open_))
+    moy_net.live_open(on)
+    held = moy_net.live_info()[1]
+    if on != st["open"]:
+        print("[live] socket %s%s" % ("open" if on else "closed", (": " + why) if why else ""))
+        if held:
+            _live_say(ws, "link_back" if on else "link_lost")
+    st["open"] = on
+    return ""
+
+
+def live_feed(b64):
+    """Plaintexts of the link channel the board sent, each behind its 2-byte
+    length, base64 as the worker carries them, into the link."""
+    if _S.get("live") is None:
+        return ""
+    import binascii
+    import moy_net
+    data = binascii.a2b_base64(b64)
+    at = 0
+    while at + 2 <= len(data):
+        n = data[at] | data[at + 1] << 8
+        moy_net.live_give(data[at + 2:at + 2 + n])
+        at += 2 + n
+    return ""
+
+
+def live_pump(gap_ms=0, hidden=0):
+    """Between frames: the link's poll, then what it queued for the board,
+    base64 (each plaintext behind its length), or "". `gap_ms` is the time
+    since the frame before, `hidden` whether the page's tab is hidden: a
+    live match that waited through a gap says so once it moves again."""
+    st = _S.get("live")
+    ws = _S.get("ws")
+    if st is None or ws is None:
+        return ""
+    lk = getattr(ws, "link", None)
+    if lk is not None:
+        lk.poll()
+    if getattr(ws, "netplay", None) is not None:
+        if int(hidden):
+            st["hidden"] = True
+        if int(gap_ms) > _LIVE_GAP_MS and st["hidden"]:
+            st["gap"] = True
+        if st["gap"] and not int(hidden):
+            st["gap"] = st["hidden"] = False
+            _live_say(ws, "match_waited")
+    else:
+        st["gap"] = st["hidden"] = False
+    import moy_net
+    out = moy_net.live_take()
+    if not out:
+        return ""
+    import binascii
+    return binascii.b2a_base64(out).decode().strip()
+
+
 def idle_collect():
     """Run the deferred split-heap collect NOW -- called by the worker on a
     quiet streak, so the full mark+sweep lands on an idle frame instead of

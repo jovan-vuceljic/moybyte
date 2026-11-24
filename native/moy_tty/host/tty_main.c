@@ -14,7 +14,9 @@
 // browser, cutting a terminal one holds; `signout` ends every session as a
 // password change does (`SIGNEDOUT N`). They run on the console's thread,
 // whose state the sign-in is. SYSTEM_DIR `-` is the open host.
-// The main thread prints a STATS line when a figure moves.
+// The main thread prints a STATS line when a figure moves. Built with
+// MOY_NET_LIVE and the host's radio (moy_link_host.c), the webhost serves
+// GET /live too, and a LIVE line follows the live socket's figures.
 // FILES_DIR, when given, is the webhost's files root (/files.json, /media).
 // Usage: tty_main PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]
 
@@ -33,6 +35,9 @@
 #include "moy_loop.h"
 #include "moy_net.h"
 #include "moy_tty.h"
+#if defined(MOY_NET_LIVE) && MOY_NET_LIVE
+#include "moy_live.h"
+#endif
 
 extern const moy_tty_shell_t moy_tty_moy_sh;
 extern uint64_t moy_net_ms_skew;
@@ -230,6 +235,18 @@ int main(int argc, char **argv) {
                    w.frames_out, w.live, s.faces, s.busy, s.arena_peak);
             fflush(stdout);
         }
+#if defined(MOY_NET_LIVE) && MOY_NET_LIVE
+        static moy_live_stats_t lv_last;
+        moy_live_stats_t lv;
+        moy_live_stats(&lv);
+        if (memcmp(&lv, &lv_last, sizeof lv) != 0) {
+            lv_last = lv;
+            printf("LIVE sessions=%u busy=%u up=%u down=%u air_out=%u air_in=%u refused=%u "
+                   "echoes=%u live=%u radio=%u\n", lv.sessions, lv.busy, lv.up, lv.down,
+                   lv.air_out, lv.air_in, lv.refused, lv.echoes, lv.live, lv.radio);
+            fflush(stdout);
+        }
+#endif
         usleep(10000);
     }
 }

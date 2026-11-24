@@ -780,6 +780,16 @@ class EspNowLink:
             return 0 if m is None else getattr(m, name)
         raise AttributeError(name)
 
+    # The tiers whose matches this console keeps in step with a board's
+    # (`plays`): None, every tier. A browser's VM computes in doubles where
+    # a board's REPR_C computes in 30-bit floats (docs/netplay_v1.md section
+    # 5), so the page a Zero serves plays its Lua carts, whose numbers are
+    # moycore's C floats on every tier, and runs its Python ones solo.
+    tiers = None
+
+    def plays(self, tier):
+        return self.tiers is None or tier in self.tiers
+
     _game = False                       # the game in front holds the radio
     _beaming = False                    # ...and a beam (link_beam.Beam)
     _beam = None

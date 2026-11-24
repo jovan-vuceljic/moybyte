@@ -91,6 +91,12 @@
     "ui.on": "On",
     "ui.off": "Off",
     "ui.more_below": "More below",
-    "ui.older": "Older messages"
+    "ui.older": "Older messages",
+    "notice.match_waited": "The match waited",
+    "notice.match_waited_why": "This tab was in the background",
+    "notice.link_lost": "Lost the link to the board",
+    "notice.link_lost_why": "Reconnecting; the match waits",
+    "notice.link_back": "The link to the board is back",
+    "notice.link_back_why": "The match carries on"
   }
 }

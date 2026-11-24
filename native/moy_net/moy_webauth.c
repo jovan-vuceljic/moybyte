@@ -22,8 +22,9 @@
 // THE SESSIONS: MOY_WA_SESSIONS, each the keys of one sign-in, ended by
 // MOY_WA_SESSION_MS unused, by a newer sign-in needing its slot (the least
 // recently used goes), by its browser's key being dropped, or, every one, by
-// the password changing. A web terminal ends with its session; its frames
-// from the page count as the session's use. A request's
+// the password changing. An upgraded stream (the web terminal, the live
+// socket: MOY_WA_TERM, MOY_WA_LIVE) ends with its session; its frames from
+// the page count as the session's use. A request's
 // sequence number is taken once: above the highest seen, or within
 // MOY_WA_WINDOW below it and not yet taken (a page's parallel requests can
 // arrive out of order; none arrives twice).
@@ -79,6 +80,11 @@ uint32_t moy_web_term_idle_ms(void);
 #endif
 #pragma weak moy_web_term_cut
 #pragma weak moy_web_term_idle_ms
+// The live socket's (moy_live.c), the same two.
+void moy_web_live_cut(void);
+uint32_t moy_web_live_idle_ms(void);
+#pragma weak moy_web_live_cut
+#pragma weak moy_web_live_idle_ms
 
 #define KEYS_FILE "/webkeys"
 #define PW_FILE "/password"
@@ -139,8 +145,11 @@ typedef struct {
     sess_t ss[MOY_WA_SESSIONS];
     uint8_t token[MOY_SEAL_RAND];
     uint64_t token_at;
-    uint8_t token_on, paired, term_on;
-    uint8_t term_kid[MOY_SEAL_KID], term_sid[MOY_SEAL_SID];
+    uint8_t token_on, paired;
+    struct {
+        uint8_t on;
+        uint8_t kid[MOY_SEAL_KID], sid[MOY_SEAL_SID];
+    } st[MOY_WA_STREAMS];
     src_t src[MOY_WEB_AUTH_SOURCES];
     uint32_t all_fails;
     uint64_t all_last, all_until;
@@ -536,25 +545,36 @@ size_t moy_wa_keys(char *out, size_t cap) {
     return n;
 }
 
-static void term_cut(void) {
-    A->term_on = 0;
-    moy_seal_wipe(A->term_sid, sizeof A->term_sid);
-    if (moy_web_term_cut != NULL) {
-        moy_web_term_cut();
+// An upgraded stream's end and its page's idle time (UINT32_MAX with none),
+// where the image has the stream.
+static void stream_cut_fn(int w) {
+    if (w == MOY_WA_TERM ? moy_web_term_cut != NULL : moy_web_live_cut != NULL) {
+        (w == MOY_WA_TERM ? moy_web_term_cut : moy_web_live_cut)();
     }
 }
 
-// The web terminal's session, when it is still one: its frames from the page
-// counted as its use first.
-static sess_t *term_session(void) {
+static uint32_t stream_idle(int w) {
+    if (w == MOY_WA_TERM ? moy_web_term_idle_ms == NULL : moy_web_live_idle_ms == NULL) {
+        return UINT32_MAX;
+    }
+    return (w == MOY_WA_TERM ? moy_web_term_idle_ms : moy_web_live_idle_ms)();
+}
+
+static void stream_cut(int w) {
+    A->st[w].on = 0;
+    moy_seal_wipe(A->st[w].sid, sizeof A->st[w].sid);
+    stream_cut_fn(w);
+}
+
+// An upgraded stream's session, when it is still one: its frames from the
+// page counted as its use first.
+static sess_t *stream_session(int w) {
     for (int i = 0; i < MOY_WA_SESSIONS; i++) {
         sess_t *s = &A->ss[i];
-        if (s->used && memcmp(s->sid, A->term_sid, MOY_SEAL_SID) == 0) {
-            if (moy_web_term_idle_ms != NULL) {
-                uint64_t now = moy_net_ms64(), idle = moy_web_term_idle_ms();
-                if (idle < 0x80000000u && idle <= now && now - idle > s->at) {
-                    s->at = now - idle;
-                }
+        if (s->used && memcmp(s->sid, A->st[w].sid, MOY_SEAL_SID) == 0) {
+            uint64_t now = moy_net_ms64(), idle = stream_idle(w);
+            if (idle < 0x80000000u && idle <= now && now - idle > s->at) {
+                s->at = now - idle;
             }
             return s;
         }
@@ -562,11 +582,13 @@ static sess_t *term_session(void) {
     return NULL;
 }
 
-// Sessions unused past MOY_WA_SESSION_MS ended, and a web terminal whose
-// session is gone (expired, evicted, ended) cut.
+// Sessions unused past MOY_WA_SESSION_MS ended, and a stream whose session
+// is gone (expired, evicted, ended) cut.
 static void sweep_sessions(void) {
-    if (A->term_on) {
-        term_session();
+    for (int w = 0; w < MOY_WA_STREAMS; w++) {
+        if (A->st[w].on) {
+            stream_session(w);
+        }
     }
     for (int i = 0; i < MOY_WA_SESSIONS; i++) {
         sess_t *s = &A->ss[i];
@@ -574,8 +596,10 @@ static void sweep_sessions(void) {
             moy_seal_wipe(s, sizeof *s);
         }
     }
-    if (A->term_on && term_session() == NULL) {
-        term_cut();
+    for (int w = 0; w < MOY_WA_STREAMS; w++) {
+        if (A->st[w].on && stream_session(w) == NULL) {
+            stream_cut(w);
+        }
     }
 }
 
@@ -587,8 +611,10 @@ static int end_sessions(const uint8_t *kid) {
             n++;
         }
     }
-    if (A->term_on && (kid == NULL || memcmp(A->term_kid, kid, MOY_SEAL_KID) == 0)) {
-        term_cut();
+    for (int w = 0; w < MOY_WA_STREAMS; w++) {
+        if (A->st[w].on && (kid == NULL || memcmp(A->st[w].kid, kid, MOY_SEAL_KID) == 0)) {
+            stream_cut(w);
+        }
     }
     return n;
 }
@@ -629,14 +655,14 @@ int moy_wa_drop(const char *kid) {
     return gone;
 }
 
-void moy_wa_term(const moy_wa_seal_t *s) {
-    if (A == NULL) {
+void moy_wa_stream(int w, const moy_wa_seal_t *s) {
+    if (A == NULL || w < 0 || w >= MOY_WA_STREAMS) {
         return;
     }
-    A->term_on = s != NULL && s->on;
-    if (A->term_on) {
-        memcpy(A->term_kid, s->kid, MOY_SEAL_KID);
-        memcpy(A->term_sid, s->sid, MOY_SEAL_SID);
+    A->st[w].on = s != NULL && s->on;
+    if (A->st[w].on) {
+        memcpy(A->st[w].kid, s->kid, MOY_SEAL_KID);
+        memcpy(A->st[w].sid, s->sid, MOY_SEAL_SID);
     }
 }
 
@@ -722,7 +748,7 @@ static wkey_t *key_new(const char *name) {
 }
 
 // A slot for a new session: a free one, else the least recently used one's,
-// whose web terminal is then cut.
+// whose streams are then cut.
 static sess_t *session_new(void) {
     sweep_sessions();
     sess_t *best = NULL;
@@ -732,10 +758,16 @@ static sess_t *session_new(void) {
             best = s;
         }
     }
-    int term = A->term_on && best->used && memcmp(best->sid, A->term_sid, MOY_SEAL_SID) == 0;
+    int cut[MOY_WA_STREAMS];
+    for (int w = 0; w < MOY_WA_STREAMS; w++) {
+        cut[w] = A->st[w].on && best->used
+                 && memcmp(best->sid, A->st[w].sid, MOY_SEAL_SID) == 0;
+    }
     moy_seal_wipe(best, sizeof *best);
-    if (term) {
-        term_cut();
+    for (int w = 0; w < MOY_WA_STREAMS; w++) {
+        if (cut[w]) {
+            stream_cut(w);
+        }
     }
     return best;
 }
