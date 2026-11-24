@@ -2015,7 +2015,11 @@ function liveFeedAll(parts) {
     }
     try { liveFeed(termB64(b)); } catch (e) { }
 }
-function liveStep(gap) {
+// What the socket brought since the last frame, into the VM before the
+// frame runs: the match drains the link before it decides whether its tick
+// can advance (runtime/run/player.py, the pre-tick drain), so a peer's input
+// fed after the frame would wait a whole frame more.
+function liveIn() {
     if (!livePump) return;
     let parts = [];
     while (liveQ.length) {
@@ -2026,6 +2030,10 @@ function liveStep(gap) {
         try { liveState(q.s, q.why || ""); } catch (e) { }
     }
     liveFeedAll(parts);
+}
+// ...and after it, the link's poll and what the frame queued for the board.
+function liveStep(gap) {
+    if (!livePump) return;
     let out = "";
     try { out = livePump(Math.round(gap), liveHidden || liveWasHidden); } catch (e) { return; }
     if (!liveHidden) liveWasHidden = 0;
@@ -2663,6 +2671,7 @@ function loop() {
             }
             WP.inp += performance.now() - _i0; WP.inpN++;
         }
+        liveIn();
         const _t0 = performance.now();
         const s = step(dt, played);
         const _d = performance.now() - _t0;

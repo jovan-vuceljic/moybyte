@@ -1607,10 +1607,10 @@ def term_state(state, n=0):
 # `ws.link` is players.EspNowLink over the kernel's Match, whose radio is the
 # page's half of the link channel (native/moy_net/moy_link_web.c), so a
 # match here is a console's match, its inputs riding the socket to the board
-# and its radio. The worker owns the socket and calls live_pump between
-# frames: what the board sent goes into the link, the link's poll runs (its
-# beacon, a START or a BYE), and what it queued goes back out. Nothing here
-# waits on the socket.
+# and its radio. The worker owns the socket: what the board sent goes into
+# the link before each frame (live_feed), so the frame's match finds it, and
+# after the frame live_pump runs the link's poll (its beacon, a START or a
+# BYE) and hands back what it queued. Nothing here waits on the socket.
 
 _LIVE_GAP_MS = 250                      # a frame gap a live match says it waited through
 
