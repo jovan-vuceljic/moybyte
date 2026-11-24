@@ -25,12 +25,16 @@ be tried on a real board before it is anyone's default. GitHub still shows
 
 - **Bugs / small fixes:** open an issue or a PR directly.
 - **Features:** open an issue first. The console is deliberately small and
-  opinionated (see `moybyte_console_plan_2026-07.md` §2 — "learn to make"); a
-  quick design conversation saves you from building something we can't merge.
+  opinionated ("learn to make", not "learn to use": `docs/os_2026-11.md` §2);
+  a quick design conversation saves you from building something we can't
+  merge.
 - **Carts:** carts you author are **yours** — license them however you like.
   To offer one for the console, see
-  [moybyte-org/carts](https://github.com/moybyte-org/carts) (#230); a store for
-  user carts is #122.
+  [moybyte-org/carts](https://github.com/moybyte-org/carts); a store for
+  user carts is #122. A game needs only the cart API (moy-spec's SPEC.md,
+  Moybyte's page of it `docs/moy_cart_api.md`); an app for the console is
+  written against `docs/app_api_v1.md`, whose UI tree is the one way an app
+  draws its interface.
 
 ## Developer Certificate of Origin (DCO)
 
@@ -50,47 +54,54 @@ commercial licensing. PRs without sign-off can't be merged.
 
 ## Development
 
-Python 3.10+ is all you need for the host side — no toolchain, no device.
-
 ```bash
 make setup          # .venv + editable install (the dev + sim extras)
-make test           # pytest — the fast loop
-make preflight      # what CI runs, in CI's order — the gate before you push
-
+make test           # pytest, the fast loop
+make preflight      # what CI runs, in CI's order: the gate before you push
 .venv/bin/python tools/simulate_desktop.py   # the console itself, on your PC
-make doctor         # environment sanity check, if something looks off
 ```
 
-`make test` is the part of CI that needs nothing but the venv. The steps
-`make preflight` adds are the ones that compare a **derived artifact** against
-the sources it was built from — the web console's pack, the desktop MicroPython
-the parity checks run under, the paths the docs claim — so they are exactly the
-steps a source change invalidates without anything going red locally. Run
-preflight before pushing; `tools/preflight.sh`'s header says why its order
-matters, and `make preflight-web` adds the browser suites in real Chrome.
-Preflight runs the host suite in CI's OS, an ubuntu 26.04 container
-(`tools/ci_image/run.sh`), so it needs Docker; `tools/preflight.sh --native`
-runs it on your own OS instead.
+The host side needs Python 3.10 or 3.11 (CI tests both), a C compiler and git:
+the simulator runs the boards' C library, and `make test` builds a desktop
+MicroPython. `make preflight` runs `tools/preflight.sh`, which needs Docker: it
+runs the host suite in CI's own image (ubuntu 26.04, Python 3.11,
+`tools/ci_image/`), and `--native` runs it on your OS instead. It adds the
+browser lane when your change reaches the web console and every board's image
+when it reaches firmware; its header lists the lanes and why their order
+matters. `make test` alone is not the CI job.
 
-`make setup` installs everything the tests and the simulator need. Flashing a
-board needs more: `.venv/bin/python -m pip install -e '.[device]'` (esptool,
-pyserial, mpremote) and, for any of the five board images, the ESP-IDF 5.5
-toolchain — see the per-board READMEs under `firmware/`.
+`CLAUDE.md` is the map of the repository (for people as much as for AI tools):
+which doc is the authority for what you are about to touch, and the rules that
+bite there. Three of them catch newcomers:
 
-- Working orientation for the codebase lives in `CLAUDE.md` (humans: it's the
-  best map of the repo, not just for AI tools).
-- **Host == device:** the console UI in `runtime/` runs on both the PC
-  simulator and the device (the firmware build stages copies). Changes to
-  drawing/canvas APIs must land in **both** backends and keep the API
-  identical (one class: `device_canvas.DeviceCanvas`, built for the host by
-  `runtime/host/host_canvas.py`).
-- Firmware-touching changes: note in the PR whether you tested on hardware —
-  untested-on-glass is fine, just say so (the maintainers flash and verify).
-- Match the surrounding code's style; tests go in `tests/`.
+- **Host and device are one codebase.** Every tier draws through one canvas
+  class, `device_canvas.DeviceCanvas` (`device/device_canvas.py`), which the
+  host runs through `runtime/host/host_canvas.py`. A drawing change lands
+  there, or one cart stops looking the same everywhere.
+- **Docs say what IS**, in the present tense, and change with the behaviour
+  they describe. A measured number lives in an issue or a generated ledger
+  under `docs/perf/`, never in prose. `make test` runs `tools/check_docs.py`.
+- **Boards:** each lives in its own directory under `firmware/`, whose README
+  is the authority on its hardware, build and flashing. Flashing needs
+  `.venv/bin/python -m pip install -e '.[device]'` (esptool, pyserial); a
+  board image needs ESP-IDF, which each board's build fetches at its pinned
+  version. Untested on a board is fine for a change that reaches firmware;
+  say so in the PR and the maintainers flash and verify.
+
+Match the surrounding code's style; tests go in `tests/`.
+
+## Opening the PR
+
+Branch off `dev`, merge the current `dev` in before you open the PR
+(`git fetch origin && git merge origin/dev`; in a fork, the remote that points
+here), and fill in the checklist of the
+[pull request template](.github/pull_request_template.md). CI's "PR base" check
+fails a branch that does not contain `dev`'s tip, because everything else in CI
+then tests a tree that is not the one being merged.
 
 ## What we're unlikely to merge
 
-Features that fight the pillars (§2.4–2.5 of the plan): open-internet access
-in child mode, accounts/telemetry, media-consumption features, or anything
-that breaks the 320×240 MOY64 cart contract that lets one cart run on every
-tier.
+Features that fight the positioning (`docs/os_2026-11.md` §2): an account
+for local use, a console whose point is consuming rather than making, or
+anything that breaks the fixed 320×240 indexed game canvas that lets one cart
+run on every tier.
