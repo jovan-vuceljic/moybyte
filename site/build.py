@@ -1143,6 +1143,13 @@ button.btn:disabled{opacity:.45;cursor:default;filter:none}
 form.setup{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
 form.setup .note{flex:1 0 100%%;margin:0;font-size:14px;color:var(--muted)}
 form.setup .field{flex:1 1 12rem}
+details.boardlog{margin:14px 0 0}
+details.boardlog summary{cursor:pointer;width:max-content;font:12px/1.6 var(--mono);
+  letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+details.boardlog summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+details.boardlog pre{margin:8px 0 0;padding:10px 12px;max-height:18rem;overflow-y:auto;
+  font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+details.boardlog .btn{margin:8px 0 0;padding:5px 12px;font-size:13px}
 pre{background:var(--surface);border:1px solid var(--line);padding:16px 18px;
   overflow-x:auto;font:13px/1.7 var(--mono);color:var(--ink);margin:20px 0 0}
 pre .c{color:var(--muted)}
