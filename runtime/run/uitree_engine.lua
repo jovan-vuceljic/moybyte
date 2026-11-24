@@ -50,7 +50,7 @@ local KEYS = {}                 -- the keys of the lowered page's nodes: a row's
                                 -- field "field", any other true
 local ROW_ACT = {}              -- a row's node's key -> the action it fires
 local DRAWS = {}                -- a canvas's node -> its draw
-local CANVAS_KEYS = {}          -- a canvas's key -> { its keys=, the model of the list it stands in or nil }
+local CANVAS_KEYS = {}          -- a canvas's key -> { its keys=, the model of the list it stands in or nil, its handler label }
 local ROWS = false              -- the lowered page lists rows (whose keys are data)
 local POINTERS = {}             -- each canvas of the lowered page a pointer is routed to: { node, key, its pointer= action, in a popover or a dialog }
 local READS_OF = {}             -- a canvas's node -> the states its draw may read (reads=), a set
@@ -377,7 +377,7 @@ local function lower_node(n, parent, path, model, modal)
   end
   if n.kind == "canvas" then
     DRAWS[me] = n.o.draw
-    if n.o.keys then CANVAS_KEYS[key] = { n.o.keys, model } end
+    if n.o.keys then CANVAS_KEYS[key] = { n.o.keys, model, "keys on canvas " .. q(key) } end
     if n.o.reads then
       local r = {}
       for _, name in ipairs(n.o.reads) do r[name] = true end
@@ -570,8 +570,7 @@ local function canvas_keys()
     got = k and CANVAS_KEYS[k]
   end
   if not got then return false end
-  local fn, model, took = got[1], got[2], nil
-  local label = "keys on canvas " .. q(f)
+  local fn, model, label, took = got[1], got[2], got[3], nil
   if model then
     local m = V[model]
     for _, row in ipairs(m.rows) do
