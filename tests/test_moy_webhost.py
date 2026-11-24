@@ -13,6 +13,8 @@ network reaching a file that is none of the browser's business.
 """
 
 import base64
+import gzip
+import hashlib
 import json
 import os
 from tests import journal_files as jf
@@ -1809,7 +1811,59 @@ def test_get_sync_is_the_capability_marker(tmp_path):
     h = _host(tmp_path)
     r = h.handle_http("GET", "/sync", b"")
     assert b"200" in h_status(r)
-    assert json.loads(r.split(b"\r\n\r\n", 1)[1]) == {"sync": 1}
+    assert json.loads(r.split(b"\r\n\r\n", 1)[1]) == {
+        "sync": 1, "page": None, "pack": None, "local": 0}
+
+
+def test_get_sync_names_the_digests_the_loader_checks(tmp_path, baked):
+    """The loader (docs/web_console_online_2026-11.md §3) runs only bytes whose
+    sha256 is `pack`, the whole file the image names; `page` is the body's,
+    the pack's identity, and `local` says the board serves its own copy."""
+    path = baked({"index.html.gz": b"\x1f\x8bpage"})
+    data = open(path, "rb").read()
+    h = _host(tmp_path)
+    doc = _json(h.handle_http("GET", "/sync", b""))
+    assert doc == {"sync": 1, "page": hashlib.sha256(data[4096:]).hexdigest(),
+                   "pack": hashlib.sha256(data).hexdigest(), "local": 1}
+    os.remove(path)
+    h.handle_http("GET", "/", b"")             # the root reads the store again
+    assert _json(h.handle_http("GET", "/sync", b""))["local"] == 0
+
+
+def test_the_whole_pack_is_served_under_the_page_s_prefix(tmp_path, baked):
+    """The board's own copy, one of the loader's sources (§4): the file as
+    the add-on holds it, kept for good under the page's digest."""
+    path = baked({"index.html.gz": b"\x1f\x8bpage", "worker.js.gz": b"\x1f\x8bw"})
+    data = open(path, "rb").read()
+    tag = os.path.basename(os.path.dirname(path))[len("web_console_"):-len(".moy")]
+    r = _host(tmp_path).handle_http("GET", "/p/%s/moybyte_web.pack" % tag, b"")
+    assert b"200" in h_status(r) and "immutable" in _head(r)
+    assert "Content-Encoding" not in _head(r)
+    assert r.split(b"\r\n\r\n", 1)[1] == data
+
+
+@pytest.mark.parametrize("online", [True, False])
+def test_the_loader_is_the_root_of_a_board_whose_console_is_online(tmp_path, baked,
+                                                                    online):
+    """An online board's `/` is the loader, gzipped and asked for again each
+    time; every board serves it at /loader.html, and a board that keeps its
+    copy still sends `/` to the page's own address."""
+    baked({"index.html.gz": b"\x1f\x8bpage"})
+    gz = gzip.compress(b"<!doctype html>loader")
+    nb._serve_loader(gz, online)
+    try:
+        h = _host(tmp_path)
+        paths = ("/loader.html", "/", "/?x=1") if online else ("/loader.html",)
+        for path in paths:
+            r = h.handle_http("GET", path, b"")
+            assert b"200" in h_status(r), path
+            head = _head(r)
+            assert "Content-Encoding: gzip" in head and "no-cache" in head
+            assert r.split(b"\r\n\r\n", 1)[1] == gz
+        if not online:
+            assert b"302" in h_status(h.handle_http("GET", "/", b""))
+    finally:
+        nb._serve_loader(b"", False)
 
 
 def test_the_405_still_names_where_writes_go(tmp_path):

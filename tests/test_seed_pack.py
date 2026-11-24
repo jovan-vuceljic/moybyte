@@ -670,3 +670,22 @@ def test_the_zeros_seed_leaves_the_add_on_its_room(tmp_path, monkeypatch):
     assert zero_host.addon_room(root) == 0
     web.page_want = lambda: None
     assert zero_host.addon_room(str(tmp_path / "empty")) == 0
+
+
+def test_a_zero_whose_console_is_online_keeps_no_room_and_fetches_no_add_on(
+        tmp_path, monkeypatch):
+    """The C3 (`[web] console = "online"`): its loader fetches the pack by
+    digest (docs/web_console_online_2026-11.md §3), so its seed keeps no room
+    for an add-on and its serving loop installs none."""
+    import types
+    zero_host = _zero_host(tmp_path, monkeypatch)
+    root = str(tmp_path / "carts")
+    os.makedirs(root)
+    web = types.ModuleType("moy_web")
+    web.stamp = lambda: "5 1900000 0123456789ab"
+    web.page_want = lambda: "ab" * 32
+    web.online = lambda: True
+    monkeypatch.setitem(sys.modules, "moy_web", web)
+    assert zero_host.console_online()
+    assert zero_host.addon_room(root) == 0
+    assert zero_host.make_addon(object()) is None

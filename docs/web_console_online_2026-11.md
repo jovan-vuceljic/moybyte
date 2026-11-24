@@ -40,10 +40,16 @@ later sync their files.
 
 - **The image names its page by digest.** Every board's build packs the
   bundle (`tools/gen_web_blob.py --pack`); the image carries the pack body's
-  sha256 alone (`moy_web_want`, `native/moy_web/moy_web_blob.h`).
+  sha256 (`moy_web_want`, `native/moy_web/moy_web_blob.h`), the whole
+  file's (`moy_web_pack_sha`) and the loader (§3, `moy_web_loader`).
   The webhost serves a pack only when its head names that digest, from
-  `/p/<12 hex>/`, its assets `immutable`; `/` is a 302 there, or the sentence
+  `/p/<12 hex>/`, its assets `immutable` and the whole file at
+  `/p/<12 hex>/moybyte_web.pack`; `/` is a 302 there, or the sentence
   saying why there is none (`page_root`, `native/moy_net/moy_webhost.c`).
+- **The loader is built** (phase 1, §11): a board whose console is online
+  (the C3 Zero) serves it at `/`, every board at `/loader.html`, and `GET
+  /sync` names both digests and `local` (`native/moy_net/moy_page.h`, THE
+  LOADER). The C3 asks its release for no add-on (`zero_host.make_addon`).
 - **The release publishes every add-on ever made** as
   `moybyte_web-<digest>.moy.zip` beside the payload, listed in the board's
   signed carts index (`tools/web_pack.py`). A board installs the one that
@@ -51,8 +57,16 @@ later sync their files.
   index (`runtime/carts/web_addon.py`'s `AddonStep`; on a Zero
   `device/zero_host.py`). Those assets are GitHub release downloads, which
   carry no CORS header, so no page can fetch them.
-- **The project site** (`site/build.py`, `.github/workflows/pages.yml`) is
-  GitHub Pages. It hosts the site's own player (a `--site` build,
+- **My consoles and the link are built** (phase 2, §11): the source is
+  `site/os/`, and `tools/os_site.py build` writes os.moybyte.com's
+  `/console/` folder, My consoles beside the pack store's packs (§4); the
+  link's board end is the loader's and then the console page's
+  (`page_tail.js`), §5.
+- **os.moybyte.com is GitHub Pages** (owner, 2026-11-24): one deploy
+  (`.github/workflows/pages.yml`) on every `dev` and `master` push holds
+  the project site at `/`, the dev site at `/dev/` and `/console/`.
+  moybyte-org.github.io/moybyte/ redirects there.
+- **The project site** (`site/build.py`) hosts the site's own player (a `--site` build,
   `dist_site`, which is not the boards' pack) and the flasher
   (`site/flash.js`, esptool-js over Web Serial). The flasher writes each
   board's install: the merged image, plus a store holding the add-on that
@@ -134,7 +148,14 @@ GET /sync   {"sync":1, "page": <body digest>, "pack": <whole-pack digest>, "loca
 ```
 
 That reveals nothing new: the page's `/p/<12 hex>/` address already names
-the build to anybody who asks for `/`.
+the build to anybody who asks for `/`. An image that names no page answers
+`"page": null, "pack": null`, and the loader says so. `local` is 1 while the
+board's add-on is the one that fits (`MOY_PAGE_READY`).
+
+**Where it is served.** On a board whose console is online `/` is the loader;
+every board also serves it at `/loader.html`, which is how a board that
+keeps its copy boots through the loader before phase 4 makes it the root of
+every board, and how its boot is timed against the store-served one.
 
 **What a plain-http origin denies it.** The board is `http://`, so the
 loader runs in an insecure context. It has no service worker, no Cache API,
@@ -192,7 +213,8 @@ ways, on a phone and on a PC.
 
 **Eviction.** After a boot, the loader keeps the pack it booted and the one
 before it (a rollback names the previous image's digest) and deletes the
-rest.
+rest. Its IndexedDB (`moy-loader`, store `packs`) holds each pack under its
+whole-file digest and the two kept digests, newest first, under `order`.
 
 ## 4. Where the bytes come from
 
@@ -202,7 +224,8 @@ The loader tries these in order and runs only bytes whose digest matches:
 2. **IndexedDB** on this origin.
 3. **The board's own copy**, on a board whose store or card has room for it
    (`[web] console` unset: the add-on as today, `AddonStep` and all). It is
-   served whole as one asset and checked like the rest. It is the only way
+   served whole as one asset, `/p/<12 hex>/moybyte_web.pack`, and checked
+   like the rest. It is the only way
    a browser that never saw the site starts a console on a LAN without
    internet.
 4. **os.moybyte.com by CORS**, at `/console/<body digest>.pack`: the pack file
@@ -212,16 +235,32 @@ The loader tries these in order and runs only bytes whose digest matches:
    never a LAN page reaching the internet. A worktree build's list names the
    developer's own `firmware/web_runner/serve.py`, served with CORS, so
    `tools/board.py` and `tools/web.py shot` reach a C3 whose digest no site
-   publishes.
+   publishes. The list is the build's (`tools/gen_web_blob.py`, THE
+   MIRRORS): a CI build names os.moybyte.com alone; any other build names
+   `http://<its LAN address>:8321/console/` (serve.py's port) and then the
+   site; `MOYBYTE_WEB_MIRRORS` or `--mirror` overrides both. serve.py serves
+   the pack of the bundle it serves at `/console/<body digest>.pack` in every
+   mode, and its `--loader` twin is a board whose console is online.
 
 What a pack passed through decides nothing: the digest does. A LAN mirror
 can be added without touching the trust model.
 
-**The packs live on os.moybyte.com** (owner, 2026-11-23), where we set the
-headers: `Access-Control-Allow-Origin: *`, and `immutable` on a name that is
-a digest. Its deploy publishes every pack named by an add-on in the two
-rolling releases' indexes, taken from the same assets the boards install
-from.
+**The packs live on os.moybyte.com** (owner, 2026-11-23), which is GitHub
+Pages (owner, 2026-11-24). Pages takes no header file: it sends every file
+with `Access-Control-Allow-Origin: *`, which is all the loader needs, and
+`max-age=600`, which costs nothing, because the loader keeps a pack under
+its digest and asks for it only when its cache has none. Every `dev` and
+`master` push publishes, in the same Pages deploy as the project site,
+every pack named by an add-on in the two rolling releases' indexes, taken
+from the same assets the boards install from (`pages.yml`, "Assemble My
+consoles and the console's packs"). `tools/pack_store.py` is the store:
+`fetch` takes a release's indexes and add-on carts, `build` writes
+`console/<body digest>.pack`, keeping every pack of the stable release's
+and the beta's of the last 30 days (§12), each checked against its index
+entry and its digest, and `check` asks a host for every digest the indexes
+name, as a board's origin, and reads the pack back. `tools/os_site.py
+build` runs that `build` and puts My consoles beside the packs, so the
+mirror the images name is My consoles' own folder.
 
 ## 5. The link between the windows
 
@@ -236,27 +275,54 @@ no popup blocker stops it. The two windows then talk by `postMessage`:
 - The bytes cross with their buffer transferred, not copied.
 
 **One envelope, versioned**, so that flow 3 adds message kinds and changes
-nothing:
+nothing. Version 1 is built:
 
 ```
-{moylink: 1, id, kind, ...}     a request; its reply carries the same id
-hello   board -> site   the board id, the name, the digests /sync gave, the link kinds it serves
-pack    site -> board   the pack's bytes (a transferred ArrayBuffer)
-claim   site -> board   the claim token and the new password, once (§7)
-state   board -> site   booted / signed in / failed, with the sentence the page shows
+{moylink: 1, id, kind, ...}      a message; `id` a number its sender picks
+{moylink: 1, re: id, kind, ...}  the reply to the request `id`
+hello   board -> site   page, pack: the digests /sync gave; local; kinds: the kinds it serves
+pack    site -> board   request: bytes, the pack (a transferred ArrayBuffer), or null where
+                        the site keeps none; the reply says ok, true or false
+state   board -> site   state: booted | sign-in | signed-in | failed, and said: the sentence
+unknown                 the reply to a request of a kind its receiver does not serve
+claim   site -> board   the claim token and the new password, once (§7, phase 3)
 ```
+
+`hello` and `state` are notices, answered by nothing. The site answers a
+`hello` at once with a `pack`, so the loader, which has an opener, waits up
+to 4 s for one before its next source: that wait is only ever spent on an
+opener that is not a site. A second `pack` is refused. `hello` carries no
+board id and no name: `/sync` names neither, and the console learns the id
+only when it signs in. My consoles keys a console by the address and the
+name its person gave it, and phase 3's Improv reports the device's own.
 
 **Both ends check the origin.** The board's end takes messages only from the
-site's origin, which the image names. The site's end takes them only from
-the origin it opened. Neither end ever evaluates a message. A `pack` is bytes
-the loader checks like any source's.
+window that opened it, and only at the origin of a mirror the image names
+(§4): the site that hands a pack is the one that publishes it, so the image
+names it once. It posts `hello` and `state` to each of those origins, so a
+window another page opened hears nothing. My consoles (`site/os/consoles.js`)
+takes messages only from a window it opened, at the origin it opened it at.
+Neither end ever evaluates a message; what My consoles shows of one is text.
+A `pack` is bytes the loader checks like any source's, and a pack the loader
+refuses is one the site drops from its cache.
 
-**The board's end is the console page.** The loader answers `hello`/`pack`
-before the boot. After the boot, the console page (`page_tail.js`) holds the
-link, because `document.open` erased the loader's listener. Every request
+**The board's end is the console page.** The loader answers `pack` and any
+other kind before the boot (`loader.html`). After the boot, the console page
+(`page_tail.js`) holds the link, because `document.open` erased the loader's
+listener; the loader leaves it the origins (`window.moyLink`), the window
+keeps its opener, and in version 1 it refuses a `pack`, answers every other
+kind as unknown, and sends `state`. Every request
 that touches the store goes through the console in that window: it runs in
 the VM like every rule (`.claude/rules/web.md`), and it travels over the
 sync RPC the page already uses. The site never reaches the board itself.
+Neither the site nor a board's page may send `Cross-Origin-Opener-Policy`,
+which would leave the window with no opener.
+
+**My consoles' window.** A tap opens `http://<address>/` named for that
+console; a tap on a console whose window is still open brings it forward
+and never loads it again, because its tab may hold work it has not synced.
+Where the browser opens no window (`window.open` returns null, as an
+installed app on iOS does), My consoles shows the address as a link.
 
 **Flow 3 on top of the link** (later). Each item becomes a set of link
 kinds the board's end lists in `hello`, behind a consent the board's
@@ -389,9 +455,13 @@ Settings, and join My consoles when you type that address.
   answers. A browser no longer sees "this console needs its page updated"; the
   loader just goes to its next source.
 - **A rollback** names the previous digest, which the eviction rule keeps.
-- **For offline use, the site keeps** in its service worker's cache the pack
-  of every image it flashed and the last digest each saved console
-  reported, plus the newest stable and beta packs.
+- **For offline use, the site keeps** the site itself and, in one cache
+  (`site/os/packs.js`), the newest pack of the stable and the beta release
+  (`packs.json`, which the service worker keeps at install) and the last
+  pack each saved console's `hello` named, fetched the first time the site
+  has none, each put there only when its body hashes to its name. A pack
+  the loader refuses is dropped; any other is pruned. The pack of every
+  image the site flashed joins them with phase 3.
 - **An image older than the loader** serves its own add-on as it does now and
   never asks the site for anything. The pack store starts with the first
   loader image's digest.
@@ -455,8 +525,21 @@ decides where its carts live**, not where its bytes came from.
 - The site's own player stays a static-host console on the browser's OPFS.
   That needs a secure context, which a board's origin never is.
 
-No crossover is added. Phase 1 rewrites the rule's "serving host" in
-`.claude/rules/web.md` as "the origin it runs under".
+No crossover is added. The rule in `.claude/rules/web.md` says "the origin
+a page runs under", not "where it is served from".
+
+**My consoles' source is `site/os/`**, built by `tools/os_site.py` into
+`/console/` of the Pages site whose `/` and `/dev/` are the project site
+(`site/build.py`). It holds no console, no player and no carts, so it is in
+neither web mode, and it shares the origin with the players without
+sharing their storage: the players keep OPFS (the dev one under
+`channel-dev/`) and the scheme switch's `moybyte-site-scheme`, and register
+no service worker and open no cache; My consoles keeps `moy.consoles` in
+`localStorage`, the `moy-packs` and `moy-app-*` caches, and a service
+worker whose scope is `/console/`. What the origin does share is the
+browser's account of it: a `persist()` grant, an eviction, Safari's 7-day
+cap and the quota cover the players' carts and My consoles' packs
+together. A board-mode console only ever runs on a board's origin.
 
 **No direct path from the site (owner, 2026-11-23).** On Chrome, Local
 Network Access would let os.moybyte.com reach the board itself as a paired
@@ -494,8 +577,10 @@ and its loader goes online. The add-on machinery stays (§12).
 
 **Phase 1: the loader.** The other entry works, and a C3 has a console.
 
-- The loader page (`+firmware/web_runner/loader.html`), built into every
-  image; on a board whose console is online it is what `/` serves.
+- The loader page (`firmware/web_runner/loader.html`), built into every
+  image; on a board whose console is online it is what `/` serves, and
+  every board serves it at `/loader.html` (§3).
+- A board that keeps its copy serves the pack whole (§4, source 3).
 - `gen_web_blob` names the whole pack's digest, and `GET /sync` carries both
   digests and `local`.
 - The page and the worker take the asset map (§3).
@@ -510,44 +595,112 @@ and its loader goes online. The add-on machinery stays (§12).
 
 Tests:
 
-- A node test of the loader (`+firmware/web_runner/loader_test.mjs`, in the
-  harness's style): a wrong digest refused, a tampered head refused, a
+- A node test of the loader (`firmware/web_runner/loader_test.mjs`, in the
+  harness's style, run by `tests/test_web_loader.py`): a wrong digest refused, a tampered head refused, a
   poisoned cache entry refused and fetched again, the source order, and
   eviction.
 - The loader's gzipped size stays under its budget.
-- On glass, a page load's frame stall on the C3, written to #256.
+- On glass, a page load's frame stall on the C3, written to #256. A Zero
+  draws no frames: its serving loop serves a request whole, so the stall is
+  the time it takes to serve the loader and `/sync`
+  (`tests/test_c3_zero_on_glass.py` prints both).
 - A host test that the digests `gen_web_blob` names are the pack's.
 - A deploy check that every digest an index names has its file on
   os.moybyte.com, served with `Access-Control-Allow-Origin`.
-- On glass: `tools/board.py pass c3_zero`, then a headless Chrome
-  (`browsershot.mjs`) that boots the C3's console from a worktree mirror,
-  signs in and syncs a cart.
+- On glass: `tools/board.py pass c3_zero` builds, flashes and runs
+  `tests/test_c3_zero_on_glass.py`, whose headless Chrome (`browsershot.mjs`)
+  boots the C3's console from a worktree mirror, signs in and syncs a cart.
+- In Chrome with no board: serve.py's `--loader` twin boots the console
+  through the loader, then from the cache (`tests/test_web_loader.py`,
+  under `MOYBYTE_WEB_E2E`).
 - The boot's cost goes to the issue: cached against store-served, and on
   `.local` against an IP.
 
-**Phase 2: My consoles and the link.** The main entry works.
+**Phase 2: My consoles and the link.** The main entry works. Built on the
+host; the real-device matrix below is the owner's to run.
 
-- os.moybyte.com gains:
-  - My consoles: the saved names and addresses, and open, rename and forget
-  - a service worker that keeps the site and the packs of §8
+- os.moybyte.com/console/, as files (`site/os/`, `tools/os_site.py build`):
+  - My consoles (`consoles.js`): the saved names and addresses, kept in the
+    site's `localStorage`, and open, rename and forget
+  - a service worker (`sw.js`) that keeps the site and the packs of §8
+    (`packs.js`)
   - the link's site end
-- The link's board end, in the loader and the console page, version 1:
-  `hello`, `pack`, `state`.
+- The link's board end, version 1 (§5): `hello`, `pack`, `state` in the
+  loader (`loader.html`) and the console page (`page_tail.js`).
 
 Tests:
 
-- A two-origin headless test. The site runs on `localhost`, a secure
-  context; the board is `serve.py`'s board twin on `http://127.0.0.1`. It
-  checks that:
-  - the hand-off boots the console with the network off
-  - a message from another origin is ignored
-  - wrong bytes are refused
+- A two-origin headless test (`tests/test_web_link_e2e.py`, under
+  `MOYBYTE_WEB_E2E`). The site is `tools/os_site.py serve` on `localhost`, a
+  secure context; the board is the real C webhost with its sign-in (the
+  terminal's host harness, naming this tree's pack) behind `serve.py --board
+  --loader` on `http://127.0.0.1`, the site its one mirror. It checks that:
+  - the hand-off boots the console with the network off: the site is
+    stopped, My consoles opens from its service worker, and the loader
+    boots from the link
+  - a message from another origin is ignored: the same site at
+    `127.0.0.1` opens the board, hears nothing, and gets no answer
+  - wrong bytes are refused: the site's cached copy is spoiled, the
+    loader answers `ok: false` and boots from its cache, and the site
+    drops the copy
   - an unknown kind is answered as unknown
-  - the console signs in and syncs over the link's window
-- On real devices, both entries, offline and online: desktop Chrome in a
-  tab and installed; Android Chrome in a tab and installed; an iPhone in
-  Safari and from the home screen. This matrix decides what the site offers
-  on each platform (§9).
+  - the console signs in by its password and syncs over the link's
+    window: a cart it imports lands in the board's store
+- `firmware/web_runner/loader_test.mjs` drives the loader's end in node:
+  the hello reaches only the sites, a handed pack boots with nothing
+  fetched, other bytes are refused and told, a site with none hands on at
+  once, an unknown kind, a second pack, another origin and another window.
+- `tests/test_os_site.py`: the `/console/` folder beside the rest of the
+  site, the files its service worker keeps, the mirror the images name
+  being that folder, and that it evaluates nothing a window sends.
+- **On real devices, for the owner.** Each of desktop Chrome (a tab, and
+  installed), Android Chrome (a tab, and installed from the menu) and an
+  iPhone (Safari, and added to the home screen), against a deployed site
+  and a C3 Zero on the LAN:
+  1. My consoles opens; add the console by its IP, and again by
+     `<name>.local`. Which name resolves?
+  2. Online, tap it: does a window open on `http://<address>/`, without a
+     Local Network Access prompt (Chrome: note the version)? Does the
+     console boot, and does the list say "handed it its console" (the
+     hand-off taken), then "asks for its password" and, after it, "signed
+     in" (the link's `state` reached the site)?
+  3. Tap it again while its window is open: brought forward, not
+     reloaded?
+  4. Offline: the LAN with no internet (the router's uplink unplugged; on
+     a phone, mobile data off). Does My consoles open, and does a tap boot
+     the console with "handed it its console"?
+  5. Installed: does a tap open a window that keeps its opener (the states
+     in step 2 appear), or does the list offer the address as a link
+     (`window.open` returned null)? Where a link: does following it boot
+     the console, and from which source?
+  6. Rename and forget, then reload: the list is as left.
+  7. Seven days without a visit on the iPhone (§9, Safari's cap), then
+     offline: what is left?
+
+  Depends on its outcome: §9's last column and what My consoles offers in
+  an installed app on each platform (today: a window where `window.open`
+  gives one, else the address as a link); whether `.local` or the IP is
+  what step 1 of flow 1 saves (phase 3); and the loader's 4 s wait for an
+  opener, if a phone's site answers slower.
+
+**Hosting: GitHub Pages** (owner, 2026-11-24). `pages.yml` fetches
+firmware-latest and firmware-beta (`tools/pack_store.py fetch`), runs
+`tools/os_site.py build _site`, and deploys `/console/` with the rest of the
+site; `tools/pack_store.py check https://os.moybyte.com` with both
+releases' indexes says whether the deploy holds every pack they name, and
+`tools/os_site.py serve` serves a built site on `localhost` as Pages
+serves it. What Pages sets for us:
+
+- every file `max-age=600`: the loader's cache is by digest, and the
+  service worker fetches its own files with `cache: "reload"`, so a new
+  worker is never built from stale ones;
+- no response headers of ours, so My consoles' content security policy is
+  a `<meta>` tag, which cannot carry `frame-ancestors`;
+- a published site of about 1 GB and about 100 GB a month of traffic,
+  which the project site, both players and the packs share. The store
+  keeps every stable pack for good and 30 days of beta packs, each the
+  size of the add-on, and the workflow prints `/console/`'s size and the
+  whole site's at every deploy.
 
 **Phase 3: first setup by cable.**
 
@@ -571,7 +724,6 @@ Tests:
 **Phase 4: one boot path.**
 
 - Every board's root serves the loader.
-- A board that keeps its copy serves the pack whole.
 - The per-asset routes and the "needs its page updated" page go.
 
 Tests:

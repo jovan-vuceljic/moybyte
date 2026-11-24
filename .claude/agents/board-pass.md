@@ -30,4 +30,4 @@ Report: the table and the perf blocks exactly as printed (name every
 the assertion or exception line. Nothing else.
 
 You change no files, commit nothing, open no port by hand, spawn no
-sub-agents. Never touch the Zero. Never print or copy the OTA signing key.
+sub-agents. Never print or copy the OTA signing key.

@@ -188,9 +188,24 @@ def _free_bytes(root):
     return st[0] * st[3]
 
 
+def console_online():
+    """True where this image's browser console is online (board.toml's `[web]
+    console`, moy_web.online): its store keeps no add-on, and the board's
+    root serves the loader, which fetches the pack by digest
+    (docs/web_console_online_2026-11.md §3)."""
+    try:
+        import moy_web
+        return bool(moy_web.online())
+    except (ImportError, AttributeError):
+        return False
+
+
 def addon_room(root):
     """The bytes the browser console add-on this image names needs in `root`,
-    0 while an add-on folder is there or the image names none."""
+    0 while an add-on folder is there, the image names none or its console is
+    online."""
+    if console_online():
+        return 0
     try:
         if any(n.startswith("web_console_") for n in os.listdir(root)):
             return 0
@@ -906,8 +921,9 @@ def make_addon(ota):
     carry, which the page installed (`carts`; the image's own are current by
     its seed). The C3, with no OTA slot, takes a new image by cable, and the
     flash brings its official carts (tools/board_flash.py). None where the
-    image names no release index (no updater)."""
-    if ota is None:
+    image names no release index (no updater) or its console is online
+    (console_online)."""
+    if ota is None or console_online():
         return None
     try:
         import web_addon

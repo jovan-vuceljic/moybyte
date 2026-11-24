@@ -133,8 +133,11 @@ a pass that flashes installs the add-on that fits (`tools/board.py BOARD
 addon`). Run it
 from a worktree (`tools/worktree.py new NAME`): in the main checkout a build is
 refused without `--main`, because its `dist/` is what every other session
-flashes. It skips a board whose port is held, naming the holder, never touches
-the Zero, and leaves each board at its launcher, the T-Deck at volume 0. The
+flashes. It skips a board whose port is held, naming the holder, and leaves
+each board at its launcher, the T-Deck at volume 0. `--all` is the console
+boards; the C3 Zero is passed by name (`pass c3_zero`: build, flash and its
+suite, `tests/test_c3_zero_on_glass.py`, which boots its browser console
+through the loader in headless Chrome), and the XIAO Zero never. The
 `board-pass` agent (`.claude/agents/board-pass.md`) runs it and reports the
 table and the perf blocks.
 

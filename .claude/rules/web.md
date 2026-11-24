@@ -5,6 +5,8 @@ paths:
   - "runtime/**/web_*.py"
   - "device/moy_web*.py"
   - "tools/*web*.py"
+  - "site/os/**"
+  - "tools/os_site.py"
 ---
 
 <!-- The wasm console, the sync RPC, and the two web modes. -->
@@ -22,15 +24,23 @@ nor those docs will warn you about:
   565 system canvas** — `wallpaper._backdrop_blit` probes for it and otherwise
   expands a palette-INDEX buffer that does not exist, drawing nothing: a black
   desk with correct chrome on top, which is exactly what the first build did.
-- **A board serves the bundle from the browser console ADD-ON CART, and only
-  the one its image names** (2026-11-17; `native/moy_net/moy_page.h` is the
-  authority). Every board's build packs the bundle (`moybyte_web.pack`,
-  `tools/gen_web_blob.py --pack`) and bakes into the image only the sha256 of
-  the pack's body; the release publishes the cart beside the payload
-  (`.claude/rules/ota.md`). EVERY BOARD HAS IT BY DEFAULT (owner,
-  2026-11-17) but one whose board.toml declares its console online (`[web]
-  console`, the C3 Zero's since 2026-11-23, whose store the add-on
-  outgrew): the website's install writes it into the board's internal
+- **A board serves the bundle from the browser console ADD-ON CART, or
+  boots it through the LOADER, and only the pack its image names**
+  (2026-11-17; `native/moy_net/moy_page.h` is the authority). Every board's
+  build packs the bundle (`moybyte_web.pack`, `tools/gen_web_blob.py
+  --pack`) and bakes into the image two sha256s of the pack, its body's
+  (its identity) and the whole file's, and the loader page
+  (`firmware/web_runner/loader.html`); the release publishes the cart beside
+  the payload (`.claude/rules/ota.md`). A board whose board.toml declares its
+  console online (`[web] console`, the C3 Zero's since 2026-11-23, whose
+  store the add-on outgrew) keeps no add-on and its `/` is the loader;
+  every board's `/loader.html` is too. `docs/web_console_online_2026-11.md`
+  §3 and §4 are how it picks a source; what bites is that it runs nothing
+  whose sha256 is not the whole-file digest `GET /sync` names, a read from
+  its own cache included, and that a worktree image's mirror is this
+  machine's `serve.py`, which must be serving that tree's dist/ while a
+  browser opens the board. EVERY OTHER BOARD HAS THE ADD-ON BY DEFAULT
+  (owner, 2026-11-17): the website's install writes it into the board's internal
   store (`tools/store_image.py`; a board on a card moves it there on its
   first boot, `moy_seed.bring_addon`, which takes other pages' add-ons off
   both stores), and `runtime/carts/web_addon.py`'s
@@ -93,12 +103,28 @@ nor those docs will warn you about:
   made two machines' bundles differ. The pin is the version moy-spec's preflight builds
   its player in; bump the two together. A move shares its emsdk with every
   worktree (`tools/worktree.py` links it).
-- **`worker.js` STATICALLY imports `moy_store.mjs`**, so it must be in
-  the webhost's ASSETS table (`native/moy_net/moy_webhost.c`): a board that
-  does not serve it serves a console that cannot boot.
-- **TWO WEB MODES, TOTAL, NO CROSSOVER.** Where a page is SERVED from decides
-  where its carts live — a board-served page edits the BOARD's store, a page on
-  a static host keeps them in the browser. **The mode is decided ONCE at boot,
+- **`worker.js` imports `micropython.mjs` and `moy_store.mjs` BY NAME**:
+  from the loader's Blob URLs (init's `assets`, the wasm's URL too) where a
+  loader booted the page, else beside itself, and it resolves its own
+  requests against the page's address (init's `base`), because a Blob URL
+  resolves no relative name. Both must be in the webhost's ASSETS table
+  (`native/moy_net/moy_webhost.c`), which is also what the pack holds: a
+  board that does not serve one serves a console that cannot boot.
+- **THE LINK between the windows** (`docs/web_console_online_2026-11.md`
+  §5): My consoles (`site/os/`, os.moybyte.com, built by
+  `tools/os_site.py`) opens a board's origin in a window and hands its
+  loader the pack by `postMessage`. What bites: the loader's listener dies
+  with `document.open`, so `page_tail.js` takes it over from
+  `window.moyLink`; the board's end hears only its OPENER at a MIRROR's
+  origin, so a site that speaks the link must be one of the build's
+  mirrors (serve.py `--loader --mirror`); a `Cross-Origin-Opener-Policy` on
+  either page takes the opener, and the link with it; and the site runs no
+  console, so it is in neither web mode. `tests/test_web_link_e2e.py`
+  drives both ends across two origins.
+- **TWO WEB MODES, TOTAL, NO CROSSOVER.** The ORIGIN a page runs under,
+  never the host its bytes came from, says where its carts live — a page on a
+  board's origin edits the BOARD's store (the loader's too, whatever source
+  its pack came from), a page on a static host keeps them in the browser. **The mode is decided ONCE at boot,
   BEFORE the VFS is seeded, because it decides what the VFS is seeded FROM.**
   `GET /sync` is the marker a board serves, and a GET miss falls through to an
   EMPTY-batch POST — because a board running firmware older than that marker
@@ -128,9 +154,12 @@ nor those docs will warn you about:
   before a system cart shipped would ever see it; without the second, an app
   kept from an older console runs its old manifest on the new one (Notes'
   `files:docs` after the folders took their names: no `files`, a NameError).
-- **A channel's site keeps its own storage.** The stable site (`/moybyte/`)
-  and the dev site (`/moybyte/dev/`, both from `.github/workflows/pages.yml`)
-  share the origin moybyte-org.github.io, so they share its OPFS.
+- **A channel's site keeps its own storage.** The stable site (`/`) and the
+  dev site (`/dev/`, both from `.github/workflows/pages.yml`) share the
+  origin os.moybyte.com, so they share its OPFS. So does My consoles
+  (`/console/`), which runs no console and touches none of it: its storage
+  is its own names (`moy.consoles`, the `moy-packs` and `moy-app-*`
+  caches) and a service worker scoped to `/console/`.
   `site/build.py --channel dev` stamps page_tail.js's `MOY_CHANNEL` into the
   dev player, and the worker opens every store through `moy_store.channelNav`,
   which roots it under `channel-dev/`, so a dev store format never touches the

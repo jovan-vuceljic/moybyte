@@ -174,21 +174,22 @@ def test_an_import_stays_pending_but_a_reload_rebases():
 
 
 def test_the_store_module_reaches_every_host_that_serves_the_console():
-    """worker.js STATICALLY imports moy_store.mjs, so any host that serves the
-    console must serve it too -- a board included, where the asset list is a
-    fixed allowlist and a miss is a console that cannot boot at all."""
+    """worker.js imports moy_store.mjs by name (beside itself, or the
+    loader's Blob URL), so any host that serves the console must serve it
+    too -- a board included, where the asset list is a fixed allowlist and a
+    miss is a console that cannot boot at all."""
     import sys
     sys.path.insert(0, os.path.join(_ROOT, "tools"))
     import gen_web_blob
 
     worker = _read("firmware", "web_runner", "worker.js")
     build = _read("firmware", "web_runner", "build.sh")
-    assert 'from "./moy_store.mjs"' in worker
+    assert 'at("moy_store.mjs", "./moy_store.mjs")' in worker
     assert "moy_store.mjs" in gen_web_blob.asset_names()
     # ...built into dist/, and pre-gzipped like every other served asset.
     assert 'cp "${SCRIPT_DIR}/moy_store.mjs"' in build
     assert re.search(r"for f in .*moy_store\.mjs.*; do", build)
-    # ...and cache-busted WITH the worker: a static import specifier is a url a
+    # ...and cache-busted WITH the worker: an import specifier is a url a
     # browser caches exactly as hard as the worker's own.
     assert "moy_store.mjs?v=" in build
     assert "moy_store.mjs" in build[build.index("MOY_BUILD=\""):

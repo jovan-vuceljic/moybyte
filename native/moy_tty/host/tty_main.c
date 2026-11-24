@@ -15,6 +15,8 @@
 // password change does (`SIGNEDOUT N`). They run on the console's thread,
 // whose state the sign-in is. SYSTEM_DIR `-` is the open host.
 // The main thread prints a STATS line when a figure moves.
+// MOY_TTY_PAGE="<body hex> <whole hex>" names a browser console's pack, as
+// an image does (GET /sync's digests, moy_page.h).
 // FILES_DIR, when given, is the webhost's files root (/files.json, /media).
 // Usage: tty_main PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]
 
@@ -29,9 +31,11 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "moy_codec.h"
 #include "moy_lease.h"
 #include "moy_loop.h"
 #include "moy_net.h"
+#include "moy_page.h"
 #include "moy_tty.h"
 
 extern const moy_tty_shell_t moy_tty_moy_sh;
@@ -173,6 +177,12 @@ int main(int argc, char **argv) {
     s_system = strcmp(argv[2], "-") ? argv[2] : NULL;
     s_carts = argv[3];
     s_files = argc == 5 ? argv[4] : NULL;
+    const char *named = getenv("MOY_TTY_PAGE");
+    uint8_t digest[2][32];
+    if (named != NULL && strlen(named) == 129 && moy_hex_decode(named, 64, digest[0], 32)
+        && moy_hex_decode(named + 65, 64, digest[1], 32)) {
+        moy_page_name(digest[0], digest[1]);
+    }
     pthread_t t;
     pthread_create(&t, NULL, console, NULL);
     fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);

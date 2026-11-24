@@ -701,7 +701,7 @@ def test_sync_push_writes_the_store_and_the_shelf_follows(board):
                                        timeout=60)
             assert "pytest_sync.moy/main.py" in _json.loads(r.read())
             r = urllib.request.urlopen(url + "/sync", timeout=15)
-            assert _json.loads(r.read()) == {"sync": 1}, \
+            assert _json.loads(r.read())["sync"] == 1, \
                 "the capability marker must stay open, or no page finds a board"
         board.drain(0.5)
         line = board.cmd(

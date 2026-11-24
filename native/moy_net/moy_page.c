@@ -13,16 +13,25 @@
 #else
 extern const unsigned char moy_web_named;
 extern const unsigned char moy_web_want[32];
+extern const unsigned char moy_web_pack_sha[32];
+extern const unsigned char moy_web_online;
+extern const unsigned char moy_web_loader[];
+extern const unsigned int moy_web_loader_len;
 #endif
 #pragma weak moy_web_named
 #pragma weak moy_web_want
+#pragma weak moy_web_pack_sha
+#pragma weak moy_web_online
+#pragma weak moy_web_loader
+#pragma weak moy_web_loader_len
 
 // The page's state, off the internal heap (moy_net_alloc) on its first use:
 // the boards' internal SRAM is the idle desk's to keep.
 typedef struct {
     char root[MOY_WEB_PATH_MAX];        // the carts root the add-on is looked for in
     char path[MOY_WEB_PATH_MAX + 64];   // the pack that fits this image, under it
-    uint8_t name[32];                   // a test's digest (moy_page_name)
+    uint8_t name[32];                   // a test's digests (moy_page_name)
+    uint8_t whole[32];
     char say[160];                      // ABSENT's sentence (moy_page_say), "" for the default
     uint8_t offer;                      // the root links MOY_PAGE_ASK
     moy_web_pack_head_t head;           // the pack's head, while READY
@@ -41,10 +50,11 @@ static page_t *page(void) {
     return s_p;
 }
 
-void moy_page_name(const uint8_t *digest) {
-    s_named = digest != NULL && page() != NULL;
+void moy_page_name(const uint8_t *digest, const uint8_t *whole) {
+    s_named = digest != NULL && whole != NULL && page() != NULL;
     if (s_named) {
         memcpy(s_p->name, digest, 32);
+        memcpy(s_p->whole, whole, 32);
     }
     s_read = 0;
 }
@@ -61,6 +71,28 @@ int moy_page_want(uint8_t out[32]) {
     }
     memcpy(out, moy_web_want, 32);
     return 1;
+}
+
+int moy_page_pack(uint8_t out[32]) {
+    uint8_t body[32];
+    if (!moy_page_want(body)) {
+        return 0;
+    }
+    memcpy(out, s_named >= 0 ? s_p->whole : moy_web_pack_sha, 32);
+    return 1;
+}
+
+int moy_page_online(void) {
+    return &moy_web_online != NULL && moy_web_online;
+}
+
+const uint8_t *moy_page_loader(size_t *n) {
+    if (&moy_web_loader_len == NULL || moy_web_loader_len == 0) {
+        *n = 0;
+        return NULL;
+    }
+    *n = moy_web_loader_len;
+    return moy_web_loader;
 }
 
 void moy_page_forget(void) {
@@ -221,6 +253,11 @@ const char *moy_page_why(void) {
 int moy_page_find(const char *name, uint32_t *off, uint32_t *len) {
     if (moy_page_state() != MOY_PAGE_READY) {
         return -ENOENT;
+    }
+    if (strcmp(name, MOY_PAGE_FILE) == 0) {
+        *off = 0;
+        *len = s_p->head.bytes;
+        return 0;
     }
     for (uint32_t i = 0; i < s_p->head.count; i++) {
         if (strcmp(s_p->head.entry[i].name, name) == 0) {

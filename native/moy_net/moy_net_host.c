@@ -16,15 +16,28 @@ int moy_net_host_remember(int ok, const char *password, size_t password_n,
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 // What native/moy_web generates for an image (moy_web_blob.h): the host names no
-// page unless a test does (moy_page_name), and its stamp is a test's.
+// page unless a test does (moy_page_name), and its stamp, its loader and
+// whether its console is online are a test's.
 const unsigned char moy_web_named;
 const unsigned char moy_web_want[32];
+const unsigned char moy_web_pack_sha[32];
 char moy_web_stamp[64];
+unsigned char moy_web_online;
+unsigned char moy_web_loader[8192];
+unsigned int moy_web_loader_len;
 
 void moy_net_host_stamp(const char *stamp) {
     snprintf(moy_web_stamp, sizeof(moy_web_stamp), "%s", stamp ? stamp : "");
+}
+
+void moy_net_host_loader(const unsigned char *gz, size_t n, int online) {
+    n = n < sizeof(moy_web_loader) ? n : 0;
+    memcpy(moy_web_loader, gz, n);
+    moy_web_loader_len = (unsigned int)n;
+    moy_web_online = online != 0;
 }
 
 // The panel feeder's drain (native/moy_flush), counted: every store touch the

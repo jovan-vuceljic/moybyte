@@ -53,7 +53,7 @@ pendingFrame=m.s;pendingFB=m.fb||null;}
 // devtools console) can read it -- console logs get trimmed by whatever is
 // capturing them, and this is the evidence that the store is being written.
 else if(m.t==="persist"){window.__moyPersist={mode:m.mode,s:m.s,d:m.d||"",n:m.n||0};
-pzMode(m.mode,m.s);}
+pzMode(m.mode,m.s);if(m.mode==="board")linkState("signed-in",m.s);}
 else if(m.t==="keep"){pzKeep();}
 else if(m.t==="carts"){pzFill(m.names);}
 else if(m.t==="exported"){pzDownload(m.name,m.buf);}
@@ -61,7 +61,7 @@ else if(m.t==="imported"){window.__moyImported=m.s;pzSay(m.s,!m.ok);if(m.ok)pzAs
 if(m.report)p8Report(m.report,m.ok,m.dir);}
 else if(m.t==="update"){updBound(m);}
 else if(m.t==="edited"){window.__moyEdited=m.s;pzSay(m.s,!m.ok);}
-else if(m.t==="pair"){pinAsk(m);}
+else if(m.t==="pair"){pinAsk(m);linkState("sign-in",m.wait||m.why||"");}
 else if(m.t==="key"){keyGot(m);}
 else if(m.t==="unkey"){keyDrop(m.id);}
 else if(m.t==="wait"){linkWait(m.s);}
@@ -81,7 +81,7 @@ else if(m.t==="wperf"){console.log("[moy worker] "+m.s);}
 // anything else is a restart somebody asked for.
 else if(m.t==="lost"){linkLost(m.kind||"lost",m.head||"the console is not answering",
 m.body||"",m.risk!==false);}
-else if(m.t==="error"){console.error("[moy]",m.s);
+else if(m.t==="error"){console.error("[moy]",m.s);linkState("failed","the console crashed");
 sEl.textContent="console crash (see devtools)";sEl.style.color="#ff004d";
 // Under the title: the message's tail (an abort's reason; a traceback's
 // raising line and exception), then the first frames that threw it.
@@ -148,6 +148,23 @@ if(m.reload){PINM.textContent="paired";location.reload();}}
 if(PINB)PINB.addEventListener("click",pinSubmit);
 if(PINF)PINF.addEventListener("keydown",function(e){
 if(e.key==="Enter"){e.preventDefault();pinSubmit();}});
+// ---- the link (docs/web_console_online_2026-11.md §5) ---------------------
+// A console the loader booted in a window My consoles opened holds the link
+// from here: the loader's listener went with its document. It takes messages
+// only from its opener at the sites the loader named (window.moyLink), never
+// evaluates one, and answers every request; v1 serves none past the boot, so
+// a pack is refused and any other kind is unknown. It tells the site its
+// `state`: booted, sign-in (with the prompt's sentence), signed-in (the
+// board's carts pulled), failed.
+var LINK=window.moyLink||null,LINKW=window.opener,linkN=1000;
+function linkState(st,said){if(!LINK||!LINKW)return;
+var m={moylink:1,id:++linkN,kind:"state",state:st,said:said||""};
+for(var i=0;i<LINK.length;i++){try{LINKW.postMessage(m,LINK[i]);}catch(e){}}}
+if(LINK&&LINKW){addEventListener("message",function(e){var m=e.data;
+if(e.source!==LINKW||LINK.indexOf(e.origin)<0||!m||m.moylink!==1||typeof m.id!=="number")return;
+e.source.postMessage(m.kind==="pack"?{moylink:1,re:m.id,kind:"pack",ok:false,
+said:"the console is running"}:{moylink:1,re:m.id,kind:"unknown"},e.origin);});
+linkState("booted","");}
 // ---- persistence row (#193) -------------------------------------------------
 // The worker decides the MODE (board vs browser-local) and this only reports it.
 // The row appears in EVERY mode, including board-served. It used to be hidden
@@ -427,10 +444,16 @@ try {
   // The sign-in's input FIRST: a QR's token leaves the url before the worker
   // exists, and the keys this browser holds go with the init.
   const auth = window.__moySignIn();
-  const w = new Worker("worker.js?v=" + MOY_BUILD, { type: "module" });
+  // The pack's assets as Blob URLs where the loader (loader.html) booted this
+  // page; the worker then imports its modules and the wasm through them, and
+  // resolves its requests against this page's address.
+  const assets = window.moyAssets || null;
+  const w = new Worker(assets ? assets["worker.js"] : "worker.js?v=" + MOY_BUILD,
+                       { type: "module" });
   window.__moyAttach(w);
   // A coarse pointer is a finger: the console's hints start on touch.
   w.postMessage({ t: "init", search: location.search, channel: MOY_CHANNEL, auth: auth,
+                  assets: assets, base: location.href,
                   rate: actx ? actx.sampleRate : 0,
                   coarse: !!(window.matchMedia && matchMedia("(pointer: coarse)").matches),
                   scheme: moyScheme() });

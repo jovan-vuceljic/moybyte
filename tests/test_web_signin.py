@@ -562,7 +562,7 @@ def test_the_bundle_and_the_marker_stay_open(tmp_path):
             r = h.handle_http("GET", loc[0].split(":", 1)[1].strip(), b"")
         assert status(r) == 200
         r = h.handle_http("GET", "/sync", b"")
-        assert (status(r), doc(r)) == (200, {"sync": 1})
+        assert status(r) == 200 and doc(r)["sync"] == 1 and doc(r)["local"] == 1
     finally:
         nb._bake({})
 

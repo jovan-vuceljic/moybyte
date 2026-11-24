@@ -1,5 +1,5 @@
 // The browser console's page: the add-on cart's pack (THE PACK, below), which
-// the webhost serves.
+// the webhost serves, and the loader that boots it from elsewhere (THE LOADER).
 //
 // THE ADD-ON. The browser console is not in the firmware. It is a cart, one
 // per page: `web_console_<12 hex>.moy` ("runtime": "web", "moybyte":
@@ -19,6 +19,16 @@
 //           (runtime/carts/web_addon.py's AddonStep does it after an update,
 //           a cable flash on a board with no OTA: tools/board_flash.py)
 //   READY   the head names this image's digest: its assets are served
+//
+// THE LOADER (docs/web_console_online_2026-11.md §3): the image also names the
+// sha256 of the whole pack file (moy_page_pack), and carries the loader page
+// gzipped (moy_page_loader). A board whose console is online
+// (moy_page_online, board.toml's `[web] console`) serves the loader at its
+// root, and every board serves it at MOY_PAGE_LOADER; the loader runs the
+// first pack whose bytes hash to that digest, from the browser's cache, from
+// the board's own copy where it is READY (the whole file, MOY_PAGE_FILE under
+// the page's prefix), or from the mirrors its build names. GET /sync tells it
+// both digests and whether the board serves a copy.
 //
 // The head is read when the page's root is asked for and kept for the assets
 // that follow. The body is trusted as the head describes it: an install checks
@@ -78,12 +88,20 @@ void moy_page_at(const char *root);
 const char *moy_page_path(void);
 // The 32 bytes of the pack body this image names: 1, or 0 where it names none.
 int moy_page_want(uint8_t out[32]);
-// The host's tests name a digest the way an image does; NULL forgets it.
-void moy_page_name(const uint8_t *digest);
+// The sha256 of the whole pack file this image names: 1, or 0 where it names none.
+int moy_page_pack(uint8_t out[32]);
+// The host's tests name the digests the way an image does; NULL forgets them.
+void moy_page_name(const uint8_t *digest, const uint8_t *whole);
+// 1 where this image's console is online: its root serves the loader.
+int moy_page_online(void);
+// The loader page, gzipped, and its length; NULL where the image carries none.
+const uint8_t *moy_page_loader(size_t *n);
+#define MOY_PAGE_LOADER "/loader.html"
 int moy_page_state(void);
 // NULL when READY, else the sentence a browser gets.
 const char *moy_page_why(void);
-// Asset `name` of a READY pack: 0 with its offset and length, else -ENOENT.
+// Asset `name` of a READY pack, or MOY_PAGE_FILE for the whole file: 0 with
+// its offset and length, else -ENOENT.
 int moy_page_find(const char *name, uint32_t *off, uint32_t *len);
 // The i-th asset's name of a READY pack, or NULL past the last.
 const char *moy_page_asset(unsigned i, uint32_t *len);

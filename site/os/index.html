@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<title>My consoles</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1d2b53">
+<style>
+:root { color-scheme: dark; --bg: #1d2b53; --fg: #fff1e8; --dim: #c2c3c7; --row: #29366f; --ok: #00e436; --bad: #ff004d; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.4 system-ui, sans-serif; }
+main { max-width: 36em; margin: 0 auto; padding: 1em; }
+h1 { font-size: 1.4em; }
+ul { list-style: none; padding: 0; }
+li { background: var(--row); border-radius: 8px; padding: .75em; margin: .5em 0; }
+li .name { font-size: 1.2em; font-weight: 600; }
+li .addr, .note { color: var(--dim); font-size: .9em; }
+li .state { min-height: 1.4em; }
+li .state.bad { color: var(--bad); }
+li .state.ok { color: var(--ok); }
+button, input { font: inherit; border-radius: 6px; border: 0; padding: .4em .8em; }
+button { background: var(--fg); color: var(--bg); cursor: pointer; }
+button.quiet { background: transparent; color: var(--fg); border: 1px solid var(--dim); }
+form { display: flex; flex-wrap: wrap; gap: .5em; margin-top: 1em; }
+form input { flex: 1 1 10em; min-width: 0; }
+a { color: var(--fg); }
+</style>
+</head>
+<body>
+<main>
+<h1>My consoles</h1>
+<p class="note" id="empty">No consoles yet. Add one by the name you gave it and the address it shows in Settings.</p>
+<ul id="list"></ul>
+<form id="add">
+<input id="name" placeholder="Name (kitchen)" autocomplete="off" required>
+<input id="address" placeholder="Address (kitchen.local or 192.168.1.57)" autocomplete="off" autocapitalize="off" required>
+<button>Add</button>
+</form>
+<p class="note" id="said"></p>
+</main>
+<script src="packs.js"></script>
+<script src="consoles.js"></script>
+</body>
+</html>

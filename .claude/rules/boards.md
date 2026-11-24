@@ -435,8 +435,8 @@ stages 1–6 all absent. Its README is the authority; what bites:
   (or its `system/sources`), each refused with the sizes where its store
   has no room. Its README says which carts each Zero
   carries and how a cable flash, provisioning and an update bring the rest.
-- With no browser console add-on in its store a Zero fetches the one that
-  fits from its release (`zero_host.make_addon`, `tend_addon`), unless its
+- With no browser console add-on in its store a Zero whose console is not
+  online (the XIAO's) fetches the one that fits from its release (`zero_host.make_addon`, `tend_addon`), unless its
   owner removed it (`system/removed`'s console line): its root then says so
   and links `/?console=install`, which drops the record and fetches it
   (`way_back`, `moy_page_say`), the page being a Zero's only face. The cable
@@ -471,4 +471,7 @@ stages 1–6 all absent. Its README is the authority; what bites:
   browser console is ONLINE (owner, 2026-11-23, board.toml's `[web]
   console`): the add-on outgrew its store, so neither the install
   (`tools/store_image.py`) nor the cable flash (`tools/board_flash.py`) puts
-  one in it. Its README is the authority.
+  one in it, the board asks its release for none, and its root serves the
+  loader (`native/moy_net/moy_page.h`, THE LOADER), which boots the pack its
+  image names from the browser's cache or a mirror. Its README is the
+  authority.
