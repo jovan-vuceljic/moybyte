@@ -16,6 +16,7 @@
 
 #include "moy_platform.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -631,7 +632,11 @@ int moy_wifi_mdns(const char *host);
 int moy_wifi_scan_poll(moy_wifi_ap_t *out, int max);
 int moy_wifi_scan(moy_wifi_ap_t *out, int max);
 int moy_wifi_mac(uint8_t mac[6]);
-// The power-save mode, set first when `set` is 0 or more; -1 before the driver.
-int moy_wifi_ps(int set);
+// The station's power-save mode (wifi_ps_type_t), -1 before the driver. It is
+// none from the station's start (moy_wifi_on) and modem sleep while the idle
+// ladder rests it: moy_wifi_rest, which the kernel's loop alone calls, as its
+// panel goes dark and wakes (native/moy_kernel/moy_loop.c). No feature sets it.
+int moy_wifi_ps(void);
+void moy_wifi_rest(bool rest);
 
 #endif // MOY_NET_H

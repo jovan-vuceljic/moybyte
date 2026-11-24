@@ -79,8 +79,7 @@ def wire_links(ws, link_id, update_dir, carts_root, with_sd, c6_updater, log,
     stage meter."""
     # THE RADIO LINK (#7/#65): the console's one ESP-NOW owner. Built here,
     # INERT until a cart with the "multiplayer" permission runs (ws.link_arm
-    # starts the radio; pm=PM_NONE costs power and a console on its shelf has
-    # nobody to talk to).
+    # starts the radio: a console on its shelf has nobody to talk to).
     try:
         from players import make_link
         from ssh_service import name as console_name

@@ -471,8 +471,11 @@ why = "No card: the store is the internal flash, and USB is the board's link."
 [[native.shared.deny]]
 module = "moy_play"
 why = """
-The kernel's Player (docs/history/kernel_cartpath_2026-10.md). This board runs no
-carts: the browser it serves plays them."""
+The kernel's Player and the match (docs/history/kernel_cartpath_2026-10.md,
+native/moy_play/moy_match.c). This board runs no carts and no game: the
+browser it serves plays them, a match included, whose frames this board's
+radio carries unchanged through the live socket (native/moy_net/moy_live.h,
+in moy_net below; docs/netplay_v1.md section 5)."""
 
 [[native.shared.deny]]
 module = "moy_app"
@@ -611,7 +614,10 @@ browser takes is the browser's."""
 module = "moy_net"
 why = """
 The links (docs/history/kernel_survival_2026-10.md section 6): the webhost and the sync
-RPC this board serves are what the module is for. It is the batch codec and
+RPC this board serves are what the module is for, and the live socket
+(moy_live.h) that relays this board's ESP-NOW link to the page it serves, so
+a browser here plays a console's match (mpconfigboard.h's MOY_NET_LINK and
+MOY_NET_LIVE). It is the batch codec and
 the HTTP parser and response writer the webserver, the sync stack and the GPIO
 routes import; its JSON scanner is moy_store's, which this board takes."""
 

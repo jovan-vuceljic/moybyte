@@ -91,6 +91,7 @@ static struct {
     bool slept;
     // the frame
     bool lit, capture, health_armed, measuring;
+    bool dark;                  // the ladder's panel dark: the station rests
     int light_top;              // the full rung's light, 1..255 (Brightness)
     uint32_t frames, drawn, started_at;
     uint32_t front_drawn;           // frames a kernel run in front drew
@@ -770,6 +771,11 @@ bool moy_play_front_live(void);
 void moy_match_kernel_perf(void *v, uint32_t now);
 #endif
 #pragma weak moy_match_kernel_perf
+// The station's power save is the idle ladder's alone (native/moy_net/
+// moy_net.h): modem sleep while the panel is dark, none awake. Weak, so an
+// image without the kernel's WiFi driver rests nothing.
+void moy_wifi_rest(bool rest);
+#pragma weak moy_wifi_rest
 
 static void account(uint32_t elapsed) {
     if (L.heavy == NULL) {
@@ -870,6 +876,11 @@ int moy_loop_step(void) {
         moy_loop_say("Moybyte power save: %s (idle %us)", moy_idle_name(L.idle.state),
                      (unsigned)moy_idle_get(&L.idle, L.idle.state));
     }
+    bool dark = L.idle.state >= MOY_IDLE_BLANK;
+    if (dark != L.dark && moy_wifi_rest != NULL) {
+        moy_wifi_rest(dark);
+    }
+    L.dark = dark;
     mark(MOY_ST_IDLE);
     if (ops->pointer != NULL) {
         ops->pointer(now, click, io.swallow);

@@ -91,6 +91,11 @@ static void h_landed(void) {
     tok("landed");
 }
 
+// The station's rest, as the idle ladder asks for it (moy_loop.c).
+void moy_wifi_rest(bool rest) {
+    tok(rest ? "radio=rest" : "radio=awake");
+}
+
 static bool h_backlight(int level) {
     char b[24];
     snprintf(b, sizeof(b), "light=%d", level);

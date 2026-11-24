@@ -198,9 +198,10 @@ them back on the next visit — but anything that existed *only* here is.
 - **The shared C modules are the store, the kernel's floor, the links,
   `moy_web` and the terminal (`moy_sh`, `moy_tty`, `moy_ssh`).** Every other one is denied with the hardware or the workload that
   is missing. The driver halves with no caller here are off in the board's own
-  files: wired Ethernet, WPA-Enterprise, ESP-NOW and I2S (`sdkconfig.board`,
-  `mpconfigboard.h`), because every slot byte comes off the store twice and
-  the headroom floor is not the lever.
+  files: wired Ethernet, WPA-Enterprise, the port's `espnow` module and I2S
+  (`sdkconfig.board`, `mpconfigboard.h`), because every slot byte comes off
+  the store twice and the headroom floor is not the lever. The radio's
+  ESP-NOW is the kernel's link, which the live socket relays (below).
 
 ## Provisioning (the store, not the modules)
 
@@ -459,6 +460,30 @@ scp file moybyte-zero.local:/moy/ # scp -s before OpenSSH 9.0
 - **No palette**: the toolkit's colours are not in this image, so `neofetch`
   draws plain and a full-screen app's colours reach the client as its own base
   colours.
+
+## Local multiplayer (2026-11-24)
+
+The browser console this board serves plays a match with a console, or with
+the page another Zero serves, on this board's radio (`docs/netplay_v1.md`
+section 5). The page runs the cart and the match; this board runs no game.
+It keeps one sealed WebSocket from the page (`GET /live`, the live socket of
+#256, `native/moy_net/moy_live.h`), served on a task of its own, and moves
+the link channel's frames between it and its ESP-NOW unchanged.
+
+- **The radio is up while the page holds it**: a match's run brings it up
+  over the station and its end, or the socket's, takes it down. The station
+  runs with no power save from its start (`native/moy_net/moy_wifi.c`), as
+  every board's does; a board with a screen rests it only while its idle
+  ladder has the panel dark, and a Zero has no ladder. Modem sleep is what
+  held a page's frames to the router's beacons. The station stays associated, so the match plays on the
+  router's channel, where a free console finds it by its probes.
+- **The page's address on the air is this board's MAC.**
+- **Python carts play matches here as Lua carts do**: the browser's VM
+  computes floats as the consoles' does (REPR_C singles), which the netplay
+  doc makes part of the lockstep contract.
+- **One page at a time**: a second tab's socket is refused `busy`.
+- What a match costs this board (internal RAM, the largest block, the
+  round trip with power save and without) is on #256.
 
 ## Pins (`native/moy_net/moy_gpio.c`, #9)
 

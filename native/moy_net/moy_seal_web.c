@@ -27,6 +27,7 @@
 
 #define NAME_MAX_BYTES 63
 #define TARGET_MAX 1024
+#define MOY_SW_STREAMS 2                // the upgraded streams a page holds: /term, /live
 
 static struct {
     char *buf;
@@ -46,8 +47,8 @@ static struct {
     moy_seal_keys_t k;
     uint64_t seq;
     char target[TARGET_MAX];
-    uint64_t wseq;
-    uint32_t up, down;
+    uint64_t wseq[MOY_SW_STREAMS];
+    uint32_t wup[MOY_SW_STREAMS], wdown[MOY_SW_STREAMS];
     char out[2 * MOY_SEAL_RAND + 1];
 } C;
 
@@ -378,17 +379,20 @@ KEEP int moy_sw_open(double seq, int status, size_t n) {
     }
 }
 
-// The /term upgrade's stream: its frames each way from 0 under request `seq`.
-KEEP void moy_sw_ws(double seq) {
-    C.wseq = (uint64_t)seq;
-    C.up = C.down = 0;
+// An upgraded stream's frames each way from 0 under request `seq`: slot 0
+// the terminal's (GET /term), 1 the live socket's (GET /live).
+KEEP void moy_sw_ws(int slot, double seq) {
+    if (slot < 0 || slot >= MOY_SW_STREAMS) {
+        return;
+    }
+    C.wseq[slot] = (uint64_t)seq;
+    C.wup[slot] = C.wdown[slot] = 0;
 }
 
-// A frame up: the plaintext (its kind's byte first) sealed in place, its
-// length with the tag.
-KEEP int moy_sw_ws_up(size_t n) {
-    if (!C.in || moy_sw_buf(n + MOY_SEAL_TAG) == NULL
-        || moy_seal_ws(1, C.k.kc, MOY_SEAL_UP, C.up++, C.wseq, (uint8_t *)C.buf, n,
+// A frame up: the plaintext sealed in place, its length with the tag.
+KEEP int moy_sw_ws_up(int slot, size_t n) {
+    if (!C.in || slot < 0 || slot >= MOY_SW_STREAMS || moy_sw_buf(n + MOY_SEAL_TAG) == NULL
+        || moy_seal_ws(1, C.k.kc, MOY_SEAL_UP, C.wup[slot]++, C.wseq[slot], (uint8_t *)C.buf, n,
                        (uint8_t *)C.buf + n) != MOY_SEAL_OK) {
         return -1;
     }
@@ -396,10 +400,12 @@ KEEP int moy_sw_ws_up(size_t n) {
 }
 
 // A frame down opened in place: its plaintext's length, or -1.
-KEEP int moy_sw_ws_down(size_t n) {
-    if (!C.in || C.buf == NULL || n < MOY_SEAL_TAG || n > C.cap
-        || moy_seal_ws(0, C.k.kb, MOY_SEAL_DOWN, C.down++, C.wseq, (uint8_t *)C.buf,
-                       n - MOY_SEAL_TAG, (uint8_t *)C.buf + n - MOY_SEAL_TAG) != MOY_SEAL_OK) {
+KEEP int moy_sw_ws_down(int slot, size_t n) {
+    if (!C.in || slot < 0 || slot >= MOY_SW_STREAMS || C.buf == NULL || n < MOY_SEAL_TAG
+        || n > C.cap
+        || moy_seal_ws(0, C.k.kb, MOY_SEAL_DOWN, C.wdown[slot]++, C.wseq[slot],
+                       (uint8_t *)C.buf, n - MOY_SEAL_TAG,
+                       (uint8_t *)C.buf + n - MOY_SEAL_TAG) != MOY_SEAL_OK) {
         return -1;
     }
     return (int)(n - MOY_SEAL_TAG);

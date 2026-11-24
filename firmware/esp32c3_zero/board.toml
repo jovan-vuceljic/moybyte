@@ -242,7 +242,7 @@ why = "No card: the store is the internal flash (the XIAO's reason)."
 
 [[native.shared.deny]]
 module = "moy_play"
-why = "No carts run here: the browser plays them (the XIAO's reason)."
+why = "No carts and no game run here: the browser plays them, a match included, on this board's radio through the live socket in moy_net (the XIAO's reason)."
 
 [[native.shared.deny]]
 module = "moy_app"
@@ -314,7 +314,7 @@ why = "No input device (the XIAO's reason)."
 
 [[native.shared.take]]
 module = "moy_net"
-why = "The links: the webhost, the sync RPC's batch codec and the HTTP parser this board serves through (the XIAO's reason)."
+why = "The links: the webhost, the sync RPC's batch codec, the HTTP parser this board serves through, and the live socket that relays its ESP-NOW link to the page (the XIAO's reason; README's local multiplayer for what it costs here)."
 
 [[native.shared.take]]
 module = "moy_sh"

@@ -334,6 +334,18 @@ static void driver_end(void) {
     #endif
 }
 
+// The station's power save: none, unless the idle ladder rests it. Every
+// interactive path rides this station (the terminal, the web console, the
+// live socket, a match's radio), and modem sleep holds a frame meant for
+// the station until the next beacon it wakes for: a page's round trip to a
+// Zero measured a median of ~100 ms with it and ~9 ms without (#256).
+// ESP-IDF's default, WIFI_PS_MIN_MODEM, was never a decision here.
+static bool s_rest;
+
+static wifi_ps_type_t ps_mode(void) {
+    return s_rest ? WIFI_PS_MIN_MODEM : WIFI_PS_NONE;
+}
+
 int moy_wifi_on(void) {
     int e = driver();
     if (e != ESP_OK) {
@@ -342,8 +354,16 @@ int moy_wifi_on(void) {
     e = esp_wifi_start();
     if (e == ESP_OK) {
         s_st.on = 1;
+        esp_wifi_set_ps(ps_mode());
     }
     return e;
+}
+
+void moy_wifi_rest(bool rest) {
+    s_rest = rest;
+    if (s_st.driver && s_st.on) {
+        esp_wifi_set_ps(ps_mode());
+    }
 }
 
 void moy_wifi_off(void) {
@@ -709,12 +729,9 @@ int moy_wifi_mac(uint8_t mac[6]) {
     return e != ESP_OK ? e : esp_wifi_get_mac(WIFI_IF_STA, mac);
 }
 
-int moy_wifi_ps(int set) {
+int moy_wifi_ps(void) {
     if (!s_st.driver) {
         return -1;
-    }
-    if (set >= 0) {
-        esp_wifi_set_ps((wifi_ps_type_t)set);
     }
     wifi_ps_type_t ps;
     return esp_wifi_get_ps(&ps) == ESP_OK ? (int)ps : -1;

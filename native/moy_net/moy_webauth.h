@@ -20,7 +20,7 @@
 #define MOY_WA_TOKEN_MS 600000u         // a QR's token
 #define MOY_WA_WINDOW 64                // a session's sequence numbers taken out of order
 
-// The answer a sealed request gets, and the stream a /term upgrade carries.
+// The answer a sealed request gets, and the stream an upgrade carries.
 typedef struct moy_wa_seal {
     uint8_t on;                         // 0: the open host, nothing sealed
     uint64_t seq;
@@ -77,18 +77,23 @@ size_t moy_wa_keys(char *out, size_t cap);
 // where NAME starts: 1, or 0 when either is missing.
 int moy_wa_scan_times(const char *p, long long *a, long long *b, const char **rest);
 // Forget one browser (16 hex digits) or every one ("all"): how many went.
-// Its sessions end, and a web terminal it holds is cut.
+// Its sessions end, and a stream it holds (MOY_WA_TERM, MOY_WA_LIVE) is cut.
 int moy_wa_drop(const char *kid);
-// Every session ended and a web terminal cut, the keys kept (a password
+// Every session ended and every stream cut, the keys kept (a password
 // changed or removed): how many sessions went.
 int moy_wa_signout(void);
-// The webhost's poll: sessions unused past MOY_WA_SESSION_MS end, and a web
-// terminal whose session is gone is cut.
+// The webhost's poll: sessions unused past MOY_WA_SESSION_MS end, and a
+// stream whose session is gone is cut.
 void moy_wa_poll(void);
 // A browser paired since the last call: 1, and the flag cleared.
 int moy_wa_paired(void);
-// The /term upgrade's session: its key dropped, the session's end (unused,
-// evicted, signed out) cuts the terminal.
-void moy_wa_term(const moy_wa_seal_t *s);
+// An upgraded stream's session: its key dropped, the session's end (unused,
+// evicted, signed out) cuts the stream. One of each at a time.
+enum {
+    MOY_WA_TERM = 0,                    // GET /term, the web terminal
+    MOY_WA_LIVE = 1,                    // GET /live, the live socket (moy_live.h)
+    MOY_WA_STREAMS = 2,
+};
+void moy_wa_stream(int which, const moy_wa_seal_t *s);
 
 #endif // MOY_WEBAUTH_H

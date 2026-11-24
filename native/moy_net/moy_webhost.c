@@ -21,6 +21,11 @@
 //                                              {"term":1}: the session is good and a shell is
 //                                              here (the page asks it why a socket failed,
 //                                              which a WebSocket never says)
+//   GET  /live (Upgrade: websocket)            sealed: the live socket, handed to its bridge
+//                                              (moy_live.h) with the session's keys;
+//                                              without the upgrade, {"live":1,"link":0|1}
+//                                              (the probe: whether this board relays its
+//                                              radio to the page)
 //   anything in the configured `defer`         sealed, then parked for the VM (/run, /update,
 //                                              /console.json; "*": every path)
 //
@@ -138,6 +143,11 @@ int moy_web_term(int fd, int cols, int rows, const struct moy_wa_seal *seal);
 // What a builder here grows in: the store's call scratch.
 static const moy_htab_mem_t STORE_MEM = { moy_store_alloc, moy_store_free };
 #pragma weak moy_web_term
+// The live socket's bridge (moy_live.c), where the image builds it, with
+// the same answer.
+#include "moy_live.h"
+#pragma weak moy_web_live
+#pragma weak moy_web_live_link
 
 #define CHUNK_MIN 8192
 #define CHUNK_HEAD 8
@@ -1454,6 +1464,7 @@ static int gated(int post, int get, const char *p, size_t pn) {
     }
     return (post && path_is(p, pn, "/sync"))
            || (get && (path_is(p, pn, "/carts.json") || path_is(p, pn, "/term")
+                       || path_is(p, pn, "/live")
                        || ((path_is(p, pn, "/files.json") || path_is(p, pn, "/media"))
                            && W->has_files)
                        || (path_is(p, pn, "/apps.json") && W->has_apps)))
@@ -1675,26 +1686,10 @@ static int query_int(const char *t, size_t tn, const char *name, int dflt) {
     return vn && x > 0 && x < 1000 ? x : dflt;
 }
 
-// GET /term. 1 when the socket was handed to the bridge (the caller neither
-// answers nor closes it), 0 when the request was answered here.
-static int term(out_t *o, const moy_http_req_t *r) {
-    if (moy_web_term == NULL) {
-        simple(o, 404, "text/plain; charset=utf-8", "not found");
-        return 0;
-    }
-    if (!signed_in(o, r->method, r->method_n, r->target, r->target_n, NULL, 0)) {
-        return 0;
-    }
-    size_t kn, pn = 0;
-    const char *key = header(W->req, r->head_end, "Sec-WebSocket-Key", &kn);
-    if (key == NULL) {
-        json(o, 200, "{\"term\":1}");
-        return 0;
-    }
-    if (kn == 0 || kn > 64) {
-        json(o, 400, "{\"error\":\"key\"}");
-        return 0;
-    }
+// The upgrade's answer to its key and subprotocol `proto`, which it echoes
+// when the page asks for it: 0 when sent.
+static int upgrade(out_t *o, const moy_http_req_t *r, const char *key, size_t kn,
+                   const char *proto) {
     char cat[64 + 36];
     memcpy(cat, key, kn);
     memcpy(cat + kn, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11", 36);
@@ -1702,24 +1697,70 @@ static int term(out_t *o, const moy_http_req_t *r) {
     sha1(cat, kn + 36, dg);
     char acc[32];
     size_t an = moy_b64_encode(dg, 20, acc, 0);
-    const char *proto = header(W->req, r->head_end, "Sec-WebSocket-Protocol", &pn);
-    int sh = proto != NULL && pn >= 6 && strstr(proto, "moy.sh") != NULL
-             && (size_t)(strstr(proto, "moy.sh") - proto) + 6 <= pn;
+    size_t pn = 0, want = strlen(proto);
+    const char *asked = header(W->req, r->head_end, "Sec-WebSocket-Protocol", &pn);
+    const char *at = asked != NULL && pn >= want ? strstr(asked, proto) : NULL;
+    int echo = at != NULL && (size_t)(at - asked) + want <= pn;
     char head[200];
     int hn = snprintf(head, sizeof(head),
                       "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
-                      "Connection: Upgrade\r\nSec-WebSocket-Accept: %.*s\r\n%s\r\n",
-                      (int)an, acc, sh ? "Sec-WebSocket-Protocol: moy.sh\r\n" : "");
-    if (moy_http_send(o->fd, head, (size_t)hn) < 0) {
+                      "Connection: Upgrade\r\nSec-WebSocket-Accept: %.*s\r\n%s%s%s\r\n",
+                      (int)an, acc, echo ? "Sec-WebSocket-Protocol: " : "",
+                      echo ? proto : "", echo ? "\r\n" : "");
+    return moy_http_send(o->fd, head, (size_t)hn) < 0 ? -1 : 0;
+}
+
+// GET /term and GET /live. 1 when the socket was handed to its bridge (the
+// caller neither answers nor closes it), 0 when the request was answered
+// here.
+static int stream(out_t *o, const moy_http_req_t *r, int which) {
+    int have = which == MOY_WA_TERM ? moy_web_term != NULL : moy_web_live != NULL;
+    if (!have) {
+        simple(o, 404, "text/plain; charset=utf-8", "not found");
         return 0;
     }
-    int cols = query_int(r->target, r->target_n, "cols", 80);
-    int rows = query_int(r->target, r->target_n, "rows", 24);
-    if (moy_web_term(o->fd, cols, rows, o->seal) == 0) {
-        moy_wa_term(o->seal);
+    if (!signed_in(o, r->method, r->method_n, r->target, r->target_n, NULL, 0)) {
+        return 0;
+    }
+    size_t kn;
+    const char *key = header(W->req, r->head_end, "Sec-WebSocket-Key", &kn);
+    if (key == NULL) {
+        if (which == MOY_WA_TERM) {
+            json(o, 200, "{\"term\":1}");
+        } else {
+            uint8_t m[6];
+            if (moy_web_live_link == NULL || !moy_web_live_link(m)) {
+                json(o, 200, "{\"live\":1,\"link\":0}");
+            } else {
+                char d[64];
+                snprintf(d, sizeof d,
+                         "{\"live\":1,\"link\":1,\"mac\":\"%02x%02x%02x%02x%02x%02x\"}",
+                         m[0], m[1], m[2], m[3], m[4], m[5]);
+                json(o, 200, d);
+            }
+        }
+        return 0;
+    }
+    if (kn == 0 || kn > 64) {
+        json(o, 400, "{\"error\":\"key\"}");
+        return 0;
+    }
+    if (upgrade(o, r, key, kn, which == MOY_WA_TERM ? "moy.sh" : "moy.live") != 0) {
+        return 0;
+    }
+    int took;
+    if (which == MOY_WA_TERM) {
+        int cols = query_int(r->target, r->target_n, "cols", 80);
+        int rows = query_int(r->target, r->target_n, "rows", 24);
+        took = moy_web_term(o->fd, cols, rows, o->seal) == 0;
+    } else {
+        took = moy_web_live(o->fd, o->seal) == 0;
+    }
+    if (took) {
+        moy_wa_stream(which, o->seal);
         return 1;
     }
-    // the bridge serves another page: a close it can read
+    // the bridge serves another page, or has no room for one: a close it can read
     static const char busy[] = "\x88\x06\x03\xf5" "busy";
     moy_http_send(o->fd, busy, sizeof(busy) - 1);
     return 0;
@@ -1779,9 +1820,11 @@ static void serve(int fd) {
     unprefix(&o, &r.target, &r.target_n);
     const char *q = memchr(r.target, '?', r.target_n);
     size_t pn = q ? (size_t)(q - r.target) : r.target_n;
-    if (!W->closing && path_is(r.method, r.method_n, "GET") && path_is(r.target, pn, "/term")) {
+    int live = path_is(r.target, pn, "/live");
+    if (!W->closing && path_is(r.method, r.method_n, "GET")
+            && (live || path_is(r.target, pn, "/term"))) {
         W->cur = fd;
-        int kept = term(&o, &r);
+        int kept = stream(&o, &r, live ? MOY_WA_LIVE : MOY_WA_TERM);
         W->cur = -1;
         req_done();
         if (!kept) {

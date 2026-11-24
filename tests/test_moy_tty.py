@@ -57,15 +57,18 @@ NET_SOURCES.append(os.path.join(STORE, "moy_journal.c"))
 pytestmark = pytest.mark.skipif(shutil.which("cc") is None, reason="needs a C compiler")
 
 
-def _build(out):
+def _build(out, extra=(), defines=()):
+    """The harness (tty_main) over the webhost; `extra` sources and
+    `defines` build a variant (tests/test_live_link.py's board twin)."""
     cc = shutil.which("cc")
     shell = [o for o in SH._objects(cc, str(out))
              if os.path.basename(o) not in ("sh_main.o", "board_main.o")]
     inc = ["-I" + d for d in (TTY, NET, STORE, SPINE, WEB, SH.SH, SH.KERNEL)]
     flags = ["-std=gnu99", "-g", "-O1", "-fsanitize=address,undefined", "-w",
-             "-D_GNU_SOURCE"] + inc
+             "-D_GNU_SOURCE"] + ["-D" + d for d in defines] + inc
     objs, procs = [], []
-    for i, src in enumerate([os.path.join(TTY, n) for n in TTY_SOURCES] + NET_SOURCES):
+    for i, src in enumerate([os.path.join(TTY, n) for n in TTY_SOURCES] + NET_SOURCES
+                            + list(extra)):
         obj = str(out / ("tty%d.o" % i))
         procs.append((src, subprocess.Popen([cc] + flags + ["-c", src, "-o", obj],
                                             stderr=subprocess.PIPE)))
@@ -220,7 +223,7 @@ class WS:
         path = "/term?cols=%d&rows=%d" % (cols, rows)
         if self.sealed:
             path, _body, seq = self.page.seal("GET", path)
-            seal_client.lib().moy_sw_ws(seq)
+            seal_client.lib().moy_sw_ws(0, seq)
         elif target is not None:
             path = target
         self.c = socket.create_connection(("127.0.0.1", h.port), timeout=5)
@@ -258,7 +261,7 @@ class WS:
         if isinstance(data, str):
             data = data.encode()
         if self.sealed and op in (1, 2):
-            n = seal_client.lib().moy_sw_ws_up(seal_client.put((b"s" if op == 1 else b"k") + data))
+            n = seal_client.lib().moy_sw_ws_up(0, seal_client.put((b"s" if op == 1 else b"k") + data))
             data, op = seal_client.got(n), 2
             self.last_up = data
         self.raw(data, op)
@@ -304,7 +307,7 @@ class WS:
             if op == 2:
                 self.frames += 1
                 if self.sealed:
-                    n = seal_client.lib().moy_sw_ws_down(seal_client.put(pl))
+                    n = seal_client.lib().moy_sw_ws_down(0, seal_client.put(pl))
                     assert n >= 0, "a frame down that does not open"
                     pl = seal_client.got(n)
                 got += pl
@@ -350,7 +353,7 @@ def test_an_upgrade_with_no_session_is_refused_before_it_upgrades(host):
 
 def test_a_replayed_upgrade_is_refused(host):
     path, _b, seq = host.page.seal("GET", "/term?cols=80&rows=24")
-    seal_client.lib().moy_sw_ws(seq)
+    seal_client.lib().moy_sw_ws(0, seq)
     first = WS(host, target=path)
     assert first.status == 101
     first.close()
