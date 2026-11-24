@@ -33,15 +33,20 @@ gallery. No device needed. Drive it live (pygame) or headlessly via a script.
   # launch a single cartridge directly (skip the launcher)
   python tools/simulate_desktop.py --cart system_carts/moybyte.star_catcher.moy
 
-  # a roomy responsive desktop at a larger SYSTEM canvas (#39): the desktop reflows
-  # to fill it; the game stays a fixed 320x240, composited as a centered viewport.
+  # the handheld's full-screen pages on a larger SYSTEM canvas (#39): they reflow
+  # to fill it; the game stays a fixed 320x240, composited as a centered
+  # viewport. A font scale is offered where the canvas over it still holds
+  # 320x240 (960x600 at 2 is a 480x300 room).
   python tools/simulate_desktop.py --size 960x600
   python tools/simulate_desktop.py --size 960x600 --font-scale 2
 
-  # the Picotron-style windowed desktop (#73 -- the P4 "One" presentation):
-  # launcher = the desktop, apps open as draggable windows, a playtest runs in a
-  # window beside the editor.
-  python tools/simulate_desktop.py --size 1024x600 --font-scale 2 --windowed
+  # the desk (#73, the P4's arrangement): apps open as draggable windows, a
+  # playtest runs in a window beside the editor. It stands where the canvas over
+  # the font scale is at least 1024x600 (the Text size Settings stored
+  # counts); under it the same console shows the handheld's full-screen pages.
+  # The glass declared is the P4's at its pixel density (`--diagonal` sets one).
+  python tools/simulate_desktop.py --size 1024x600 --windowed
+  python tools/simulate_desktop.py --size 1920x1080 --scale 1 --windowed
 """
 
 import argparse
@@ -50,7 +55,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from runtime import host_app  # noqa: E402  (runs the SHARED console.Workstation)
+from runtime import host_app, layout_base  # noqa: E402  (runs the SHARED console.Workstation)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SYSTEM_CARTS = os.path.join(ROOT, "system_carts")
@@ -83,8 +88,8 @@ def _require(module, package, what, extra, hint=""):
 
 def parse_size(text):
     """Parse a '--size WxH' string into (w, h). The SYSTEM canvas size (#39): the
-    desktop renders here, responsive; the game stays a fixed 320x240 viewport. The
-    default (320x240) is exactly today (the T-Deck panel)."""
+    console renders here, responsive; the game stays a fixed 320x240 viewport. The
+    default (320x240) is the T-Deck's panel."""
     w, _, h = text.lower().partition("x")
     return (int(w), int(h))
 
@@ -302,7 +307,7 @@ def _force_autoplay_on_open(ws):
     ws.open = _open
 
 
-def main():
+def parse_args(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--cart", help="launch a single .moy directly (skip the launcher)")
     ap.add_argument("--gif", metavar="PATH")
@@ -319,25 +324,46 @@ def main():
     ap.add_argument("--save-dir", default=DEFAULT_SAVE_DIR)
     ap.add_argument("--scale", type=int, default=2)
     ap.add_argument("--fps", type=int, default=30)
-    # Two-domain seam (#39): the SYSTEM canvas size. Default 320x240 = today (the
-    # T-Deck panel); a larger size opens a roomy responsive desktop with the game
+    # Two-domain seam (#39): the SYSTEM canvas size. Default 320x240, the T-Deck's
+    # panel; a larger one lays the console out to fill it, with the game
     # composited as a centered viewport.
     ap.add_argument("--size", default="320x240", metavar="WxH",
                     help="system canvas size (default 320x240 = the T-Deck panel)")
     ap.add_argument("--font-scale", type=int, default=1, choices=(1, 2, 3),
                     help="initial system-UI font scale 1/2/3 (system/settings overrides)")
-    # The Picotron-style windowed WM (#73, the P4 "One" presentation tier): the
-    # launcher is the desktop and every app opens as a draggable window. Needs a
-    # big --size (ignored at 320x240).
+    # The windowed tier (#73, the P4's arrangement): the desk is the root and
+    # every app opens as a draggable window, where the desk fits the --size at
+    # the font scale in force (`Workstation.desk_fits`).
     ap.add_argument("--windowed", action="store_true",
-                    help="windowed desktop WM (Picotron-style; needs a big --size)")
-    args = ap.parse_args()
+                    help="the desk's windows (P4-style; needs a --size of at least "
+                         "1024x600 over the font scale)")
+    ap.add_argument("--diagonal", type=float, default=None, metavar="IN",
+                    help="the glass's diagonal in inches (default with --windowed: the "
+                         "P4's 7 inches at 1024x600, scaled to keep its pixel density; "
+                         "without: none, the handheld's)")
+    return ap.parse_args(argv)
 
-    dt = 1.0 / args.fps
+
+def build_workstation(args):
+    """The console `args` describe. The desk's metrics need a declared glass
+    (`layout_base.class_of`): one that declares none lays out as the handheld
+    at any size. The windowed tier is the P4's arrangement, so it declares
+    the P4's glass at the P4's density, as the browser's desk does
+    (`layout_base.desk_diagonal_in`); `--diagonal` declares another."""
     sys_size = parse_size(args.size)
-    ws = host_app.build_workstation(args.save_dir, sys_size=sys_size,
-                                    font_scale=args.font_scale,
-                                    windowed=args.windowed, kernel_input=True)
+    diagonal = args.diagonal
+    if diagonal is None and args.windowed:
+        diagonal = layout_base.desk_diagonal_in(*sys_size)
+    return host_app.build_workstation(args.save_dir, sys_size=sys_size,
+                                      font_scale=args.font_scale,
+                                      windowed=args.windowed, kernel_input=True,
+                                      panel_diagonal_in=diagonal)
+
+
+def main():
+    args = parse_args()
+    dt = 1.0 / args.fps
+    ws = build_workstation(args)
     # Live windowed run -> the mix to the speakers (#16). Headless / scripted
     # runs pull it and discard it, so they stay deterministic + device-free.
     if not args.demo and args.script is None:
