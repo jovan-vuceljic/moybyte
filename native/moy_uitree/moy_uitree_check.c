@@ -221,7 +221,7 @@ const char *uit_check_prop(const char *kind, const char *prop, int vc, const cha
         return say(out, n, "N09", what, "", "drop it");
     }
     const char *words = PWORDS(P);
-    if (app && PSHELL(P) && word && word[0] != '{' && has_word(PSHELL(P), word)) {
+    if (app && P->shell && word && word[0] != '{' && has_word(PSHELL(P), word)) {
         snprintf(what, sizeof what, "ui.%s %s='%s' is the shell's own, not an app's", kind, prop, word);
         return say(out, n, "N09", what, "", "another of its words");
     }
