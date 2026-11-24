@@ -269,16 +269,17 @@ function longest(k, ms) {
 // A frame's samples, read out of the wasm heap where the pull rendered them,
 // to the sink: step_frame_json leaves their count, the first's index, whether
 // they start a stream and their address at `pcmAt` (web_boot._PCM, four
-// doubles), so a frame that only moves samples crosses back with no string.
+// 64-bit integers), so a frame that only moves samples crosses back with no
+// string.
 // Answers whether there were any.
 let pcmAt = 0;
 function shipPCM() {
     const heap = mp._module.HEAPU8;
-    const r = new Float64Array(heap.buffer, pcmAt, 4);
-    const n = r[0];
+    const r = new BigInt64Array(heap.buffer, pcmAt, 4);
+    const n = Number(r[0]);
     if (!n) return false;
     if (!sink) return true;
-    const at = r[1], fresh = r[2], pa = r[3], b = new Int16Array(n);
+    const at = Number(r[1]), fresh = Number(r[2]), pa = Number(r[3]), b = new Int16Array(n);
     new Uint8Array(b.buffer).set(heap.subarray(pa, pa + 2 * n));
     const c = { p: b, at: at, fresh: fresh }, now = performance.now();
     if (fresh) LOOP = { frame: 0, frameAt: 0, step: 0, stepAt: 0, gc: 0, gcAt: 0,

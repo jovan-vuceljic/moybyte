@@ -165,7 +165,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(eng_set_int_obj, eng_set_int);
 static mp_obj_t eng_set_num(mp_obj_t self, mp_obj_t slot, mp_obj_t v)
 {
 #if MICROPY_PY_BUILTINS_FLOAT
-    return MP_OBJ_NEW_SMALL_INT(uit_set_num(eng(self), mp_obj_get_int(slot), mp_obj_get_float(v)));
+    return MP_OBJ_NEW_SMALL_INT(uit_set_num(eng(self), mp_obj_get_int(slot), mp_obj_get_float_to_d(v)));
 #else
     return MP_OBJ_NEW_SMALL_INT(uit_set_num(eng(self), mp_obj_get_int(slot), mp_obj_get_int(v)));
 #endif

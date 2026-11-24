@@ -1107,9 +1107,10 @@ def _step(dt, played):
 
 # This frame's samples, as step_frame_json leaves them for the worker: their
 # count (0: none), the first's index in the stream, 1 where they start one,
-# and the heap address they wait at (_RunnerPump._buf). Doubles, so a count
-# of samples past 2**31 reads true.
-_PCM = array("d", (0, 0, 0, 0))
+# and the heap address they wait at (_RunnerPump._buf). 64-bit integers, so a
+# count of samples past 2**31 reads true and none passes through the VM's
+# single-precision float.
+_PCM = array("q", (0, 0, 0, 0))
 
 
 def pcm_addr():

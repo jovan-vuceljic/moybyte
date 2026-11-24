@@ -207,9 +207,9 @@ def test_a_page_sink_starved_on_purpose_plays_silence_and_counts_the_underrun(tm
 # The VM heap's allocation while the station plays on behind the desk, as the
 # page meters it (?meter=1, web_boot.step_frame_json). A frame's step (the
 # console's frame, the pull, the media face's pump) keeps what the boards'
-# own frame keeps nothing of: the browser's VM boxes every float, the face's
-# status is a tuple each pump, and the key and pointer routing over the desk's
-# windows answers in objects. The worker's loop around the steps is the
+# own frame keeps nothing of: the face's status is a tuple each pump, and the
+# key and pointer routing over the desk's windows answers in objects. The
+# worker's loop around the steps is the
 # store's sweep once a second (moy_sync.StoreWatcher.sweep: every file's name
 # and stat, its bytes read only where they changed) and what its pumps hand
 # across. The bounds keep the VM's 4 MB collect threshold half a minute away.
