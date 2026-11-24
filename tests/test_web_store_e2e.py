@@ -387,6 +387,15 @@ def test_a_board_with_a_big_store_serves_a_page_that_boots(tmp_path):
         (d / "main.lua").write_text("function _draw() cls(1) end\n" + "\n".join(lines))
     site = _console(tmp_path, "http://127.0.0.1:9/index.json")
     port = web_e2e.free_port()
+    from cart_store_fixtures import Repo
+    shelf = Repo("http://127.0.0.1:%d/shelf" % port, "A shelf on the page's origin")
+    shelf.add("kite", name="Kite", runtime="lua", modules=())
+    for url, data in shelf.routes().items():
+        path = site / url.split("/", 3)[3]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    (tmp_path / "system").mkdir(exist_ok=True)
+    (tmp_path / "system" / "sources").write_text(shelf.url("index.json") + "\n")
     p = subprocess.Popen([sys.executable, "serve.py", str(port), str(site),
                           "--carts", str(store), "--update", "glass", "--one-link"],
                          cwd=RUNNER, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
@@ -427,10 +436,12 @@ def test_a_board_with_a_big_store_serves_a_page_that_boots(tmp_path):
 
 
 def test_a_zero_s_page_asks_the_board_for_an_official_cart(tmp_path):
-    """A Zero's page: Get Carts lists the official carts of the BOARD's
-    release (serve.py's twin runs the board's own /official backend over its
-    store) and Get asks the board, which fetches from its release and writes
-    its own store; the page then has the board's copy and plays it."""
+    """A Zero's page: Get Carts lists the carts of the BOARD's shelves --
+    one the page fetches and lists itself (a shelf on this origin, which the
+    twin's network cannot reach), and the board's release, which the board
+    lists (serve.py's twin runs the board's own /official backend over its
+    store) -- and Get asks the board, which fetches from its release and
+    writes its own store; the page then has the board's copy and plays it."""
     web_e2e.require("store", "carts", "official")
     sys.path.insert(0, str(ROOT / "tests"))
     sys.path.insert(0, str(ROOT / "tools"))
@@ -455,13 +466,22 @@ def test_a_zero_s_page_asks_the_board_for_an_official_cart(tmp_path):
         shutil.copytree(ROOT / "system_carts" / (cid + ".moy"), store / (cid + ".moy"))
     site = _console(tmp_path, "http://127.0.0.1:9/index.json")
     port = web_e2e.free_port()
+    from cart_store_fixtures import Repo
+    shelf = Repo("http://127.0.0.1:%d/shelf" % port, "A shelf on the page's origin")
+    shelf.add("kite", name="Kite", runtime="lua", modules=())
+    for url, data in shelf.routes().items():
+        path = site / url.split("/", 3)[3]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    (tmp_path / "system").mkdir(exist_ok=True)
+    (tmp_path / "system" / "sources").write_text(shelf.url("index.json") + "\n")
     p = subprocess.Popen([sys.executable, "serve.py", str(port), str(site),
                           "--carts", str(store), "--update", "headless",
                           "--official", str(release)],
                          cwd=RUNNER, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     base = "http://127.0.0.1:%d" % port
     state = "__moyState().then(s => JSON.stringify({cart: s.cart, err: s.cart_error}))"
-    at = web_e2e.get_carts_taps(2)
+    at = web_e2e.get_carts_taps(3)
     try:
         for _ in range(50):
             try:
@@ -473,7 +493,8 @@ def test_a_zero_s_page_asks_the_board_for_an_official_cart(tmp_path):
             {"note": "Get Carts asks the board for its list", "wait": 4000},
             {"js": "JSON.stringify((window.__moyUpdate || {}).services || null)"},
             {"shot": "list"},
-            {"note": "Tap Only Red: on the release, not on the board", "click": at["cards"][1]},
+            {"note": "Tap Only Red, after the page's own shelf's Kite: on the release, "
+                     "not on the board", "click": at["cards"][2]},
             {"wait": 800}, {"shot": "tap_only_red"},
             {"click": at["verb"]},
             {"note": "the board installs it, then the page pulls its copy", "wait": 8000},

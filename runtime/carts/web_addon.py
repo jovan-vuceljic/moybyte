@@ -621,37 +621,6 @@ class AddonStep:
         return False
 
 
-def listing(c, state=None, had=None):
-    """Index entry `c` as a page lists it: what its row and page show and
-    what its install takes in the store, without the asset urls and digests
-    only the board's install reads; with `state` (cart_index.cart_state's
-    word, as the board's own store has it) and `had` (the version its record
-    holds). Its `moybyte.api` stays, so the page says when it needs a newer
-    firmware."""
-    out = {}
-    for key in ("id", "name", "version", "folder", "runtime", "description", "genre",
-                "tags", "memory", "depends", "index", "shelf", "external", "revoked"):
-        if key in c:
-            out[key] = c[key]
-    lic = c.get("licence") or {}
-    out["licence"] = dict((k, lic[k]) for k in ("spdx", "name") if k in lic)
-    out["official"] = _ci.is_official(c)
-    out["reviewed"] = _ci.is_reviewed(c)
-    out["core"] = bool((c.get("moybyte") or {}).get("core"))
-    if _ci.api_level(c) is not None:
-        out["moybyte"] = {"api": _ci.api_level(c)}
-    out["assets"] = [{"size": a["size"],
-                      "files": dict((fn, {"size": m["size"]}) for fn, m in a["files"].items())}
-                     for a in c["assets"]]
-    cover = c.get("cover")
-    if cover is not None:
-        out["cover"] = {"size": cover["size"], "sha256": cover["sha256"]}
-    if state is not None:
-        out["state"] = state
-        out["had"] = had
-    return out
-
-
 ASK_MS = 600000                 # an install prompt no page answers is cancelled after this
 WRONG_PASSWORD = "That isn't the console's password."
 
@@ -667,13 +636,21 @@ class OfficialCarts:
     zero_host.ZeroUpdate updates its firmware: a POST queues and answers at
     once (`request`), a GET reads where it stands (`answer`).
 
-      check    every index fetched (its signature checked, as a console's
-               Get Carts reads it) and its entries that fit this image
-               listed (`listing`) but the browser console add-on, which
-               the board keeps itself (AddonStep), each with where it stands in this store,
-               with the store's room, the indexes not reached and whether
-               this board has a password (`locked`):
-               "listed", handed to the next GET once, then "idle"
+      check    the shelves this board reads, answered at once with no
+               fetch (`shelves`): their urls, its own release's (`own`), its
+               install record (`record`), its chip, format and ranged reads
+               (`chip`, `fmt`, `ranges`), the store's room (`free`) and
+               whether it has a password (`locked`). The page fetches each
+               index and lists it by the VM's own rules
+               (carts_link.BoardCheck), the board's heap holding none of it.
+               With `index`, one of those shelves the page cannot read
+               itself: that index fetched (its signature checked, as a
+               console's Get Carts reads it) and its entries that fit this
+               image listed (cart_index.listing) but the browser console add-on,
+               which the board keeps itself (AddonStep), each with where it
+               stands in this store, with the store's room, whether it was
+               reached and `locked`. Either is "listed", handed to the next
+               GET once, then "idle"
       licence  the licence of the external file `path` of the entry
                `folder` (and `id`) of the index `index` fetched and checked:
                "listed" with its `text`, likewise
@@ -783,8 +760,14 @@ class OfficialCarts:
             self._gone = self._removal(root, folder)
             return True, "queued"
         urls = self._indexes()
+        if action == "check" and doc.get("index") is None:
+            self._listed = self._shelves(root, urls)
+            self.state = "listed"
+            return True, "listed"
         if action == "check":
-            self._urls = urls
+            if doc["index"] not in urls:
+                return False, "it isn't on a shelf this console reads"
+            self._urls = [doc["index"]]
         else:
             url = doc.get("index") or self._own()
             if not url or url not in urls:
@@ -808,6 +791,18 @@ class OfficialCarts:
             self._held = True
             self.inst.hold()
         return True, "queued"
+
+    def _shelves(self, root, urls):
+        """The `shelves` document a check answers with (the class's
+        docstring): what a page needs to list this board's shelves itself."""
+        chip, fmt = self.inst.chip()
+        return json.dumps({
+            "shelves": urls, "own": self._own(),
+            "record": self.inst.op(lambda: _ci.load_record(root)),
+            "chip": chip, "fmt": fmt,
+            "ranges": bool(getattr(self.inst.net(), "ranges", False)),
+            "free": self.inst.op(lambda: _room(root, self.reserve)),
+            "locked": self._locked()})
 
     def _cancel(self):
         job = self._job
@@ -932,7 +927,7 @@ class OfficialCarts:
         return True
 
     def _listings(self, carts):
-        """`carts` as the page lists them (`listing`), each with where it
+        """`carts` as the page lists them (cart_index.listing), each with where it
         stands in this store: one JSON text, so the index's entries go."""
         root = self.inst.root()
         chip, fmt = self.inst.chip()
@@ -953,7 +948,7 @@ class OfficialCarts:
                         man = json.loads(_read(folder + "/manifest.json"))
                     except (OSError, ValueError):
                         man = None
-                out.append(json.dumps(listing(c, _ci.cart_state(c, p, entry, present, man),
+                out.append(json.dumps(_ci.listing(c, _ci.cart_state(c, p, entry, present, man),
                                               entry.get("version") if entry else None)))
             return out
         return ", ".join(self.inst.op(_scan))

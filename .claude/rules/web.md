@@ -257,7 +257,9 @@ nor those docs will warn you about:
   (`carts_link.BoardCarts`, which boot binds when the worker's probe of the
   sealed `/official` answered, `web_boot.official_enable`): Get Carts lists the
   carts of the board's indexes (its `system/sources`, else moybyte-org/carts,
-  and its own release's) and a licence, Get or Remove asks the board
+  and its own release's), the board naming them and the page fetching and
+  reading each by the VM's rules (`carts_link.BoardCheck`; the board lists one
+  the page cannot read, its release's), and a licence, Get or Remove asks the board
   (`runtime/carts/web_addon.py`'s `OfficialCarts`, a slice per poll like
   `/update`), which fetches and writes its own store, the page answering the
   install prompt over the manifest the board checked; once
