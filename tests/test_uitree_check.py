@@ -32,6 +32,7 @@ PORTED = (
     "pause_ui",
     "sysmenu_ui",
     "uitree_popover_at",
+    "uitree_repeats",
     "uitree_row_kinds",
     "tasks_ui",
     "achievements_ui",

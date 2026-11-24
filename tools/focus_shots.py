@@ -221,7 +221,6 @@ def sheet(ws, page):
     cls = uitree_app.app_layer("focus_sheet", "Focus", PAGES[page])
     ctx = ws.app_context(cls.id, cls.NEEDS)
     ctx.ui = AppHost(cls.id, ctx.surface)
-    ws._app_hosts[cls.id] = ctx.ui
     app = cls(ctx)
     ws.spine.register_app(app)
     app.open()

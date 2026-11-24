@@ -41,7 +41,8 @@ def test_the_legacy_kind_is_no_kind_of_any_front():
 
 
 def test_no_runtime_module_imports_an_immediate_toolkit():
-    assert not os.path.exists(os.path.join(ROOT, "runtime", "toolkit", "ui.py"))
+    import glob
+    assert not glob.glob(os.path.join(ROOT, "runtime", "**", "ui.py"), recursive=True)
     found = []
     for base, _dirs, files in os.walk(os.path.join(ROOT, "runtime")):
         for name in files:
