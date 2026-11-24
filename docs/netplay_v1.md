@@ -1,6 +1,6 @@
 # Netplay v1 — the two-console lockstep contract
 
-**Status: SHIPPED and BINDING (last amended 2026-11-18).** Two kids open the
+**Status: SHIPPED and BINDING (last amended 2026-11-24).** Two kids open the
 same cart on their own consoles; the boards hear each other over ESP-NOW inside
 a second and simulate one game on two screens from a shared 30 or 60 Hz tape of button
 masks. Being in the same room is the pairing ceremony.
@@ -25,7 +25,8 @@ session's player slots, the cart it asks the console to open.
 `runtime/run/player.py` adopts a session, feeds it and lets go; a Lua run's
 lockstep frame is the kernel Player's (`moy_play_lockstep`). The same link
 beams a cart from one console to another (§7); `runtime/run/link_beam.py` is
-the console's half of that.
+the console's half of that. The browser a Zero serves runs the same link over
+its board's radio (§5).
 
 ## 2. Lockstep: what crosses the air, and when a console may simulate
 
@@ -340,12 +341,17 @@ printing `0.21666668` on the T-Deck against `0.216666668` on the P4. The S3s run
 REPR_C's 30-bit truncated floats, the P4 ran REPR_A's boxed singles — one
 arithmetic at two precisions, which chaos amplifies into flipped branches in
 seconds. The P4 took `moybyte_patch_repr_c` and the probe re-read **1106 of 1106
-bit-identical**. Every board that can hold a link runs REPR_C; one that cannot
-take it cannot join a match.
+bit-identical**. Every board that can hold a link runs REPR_C, and so does the
+browser's wasm (`firmware/web_runner/variant/mpconfigvariant.h`: 32-bit words,
+REPR_C, single floats), so a page plays a console's Python cart;
+`tests/test_web_lockstep_floats.py` runs each two-player seed cart in the wasm
+and in the host's board-model MicroPython and holds every frame's world to
+agree. A board that cannot take it cannot join a match.
 
-**Board scope is three consoles**: the T-Deck, the Guition S3 and the
-Waveshare P4. The browser has no radio and is out, and the Guition P4's C6 runs
-Guition's factory slave with no ESP-NOW shim, so its link comes up inactive (its
+**Board scope is three consoles and the browser a Zero serves**: the
+T-Deck, the Guition S3, the Waveshare P4, and the page either Zero serves,
+which plays on its board's radio (below). The Guition P4's C6 runs Guition's
+factory slave with no ESP-NOW shim, so its link comes up inactive (its
 README). The S3 pair talks to its own silicon. The Waveshare P4 has none of its
 own and reaches the C6 over ESP-Hosted 2.12.12's custom RPC through
 `native/p4/moy_c6` — seventeen
@@ -356,6 +362,24 @@ before the radio, because the C6's radio starts with the host's WLAN. Its send
 began as a synchronous RPC costing **10.2 ms blocked on the VM core per send**
 against ~60 µs on an S3; a 12-deep TX queue plus sender task took that to **20
 µs**, and the pair to 0.7–2.8% at 29.6 ticks/s.
+
+**The browser a Zero serves plays on its board's radio** (owner,
+2026-11-24). The page runs the cart and the match as a console does: its
+link is the kernel's `moy_match` over `native/moy_net/moy_link_web.c`, and
+its frames ride the live socket's link channel (`native/moy_net/moy_live.h`,
+#256) to the board, which sends them on its ESP-NOW and returns what it
+hears, unchanged; the board runs no game. The page's address on the air is
+its board's MAC, and its channel the board's station's, always pinned (a
+Zero serves its page on that channel), so a free console finds it by the
+probes above. The socket is served on a task of the board's own and moved
+between the page's frames, so neither side's frame waits on it. A socket
+that drops takes the board's radio down with it; the page reopens it and
+says so, and the match waits meanwhile, as it does for a lost input. A
+page whose frames stop (a tab the browser throttles in the background) is
+a peer whose inputs stop: the other side stalls, and the page says the
+match waited once its frames run again. It plays a Python cart's match as
+a Lua one's: its VM computes floats as a board's (the paragraph above). What
+the C3 Zero can afford of it is its README's.
 
 ## 6. One cart API — over the radio, or over a second keyboard
 

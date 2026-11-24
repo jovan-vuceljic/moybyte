@@ -56,7 +56,8 @@ BAR_ROWS = 18
 # themes' faces on the class, so the bar packs alike in every mode. `unit` is what every OTHER logical size of the chrome
 # (an icon, a margin, a menu row) is multiplied by on that class: the desk
 # draws the handheld's 16-pixel icons at 32. A board is a desk when its
-# declared glass is at least DESK_MIN_IN across (`class_of`).
+# declared glass is at least DESK_MIN_IN across and, at its font scale, still
+# holds the desk's smallest glass (`class_of`).
 HANDHELD = "handheld"
 DESK = "desk"
 CLASSES = {
@@ -66,6 +67,16 @@ CLASSES = {
            "tile": 44, "tile_cell": 74, "clock": 44},
 }
 DESK_MIN_IN = 5.0
+# The smallest glass the desk is designed for, in glass pixels at font scale 1:
+# DESIGN.md's "The sizes" draws it at 1024x600 and 1280x800, and under it the
+# desk's panes run out of room (an 800x480 desk cut the Editor's pane labels).
+# A glass whose width and height over the font scale fall under it lays out
+# as a handheld: full-screen pages, no windows.
+DESK_MIN_WH = (1024, 600)
+# The font scales the shell draws at, and the smallest room it is designed
+# for: the handheld's, the T-Deck's 320x240 (`font_scales`).
+FONT_SCALES = (1, 2, 3)
+HANDHELD_MIN_WH = (BASE_W, BASE_H)
 # The bar heights a theme's look sets per class (`hhbar.h`, `bar.h`; the
 # 2026-10 look's THEMES.md), in place of the class's `bar` (`place_bar_h`).
 _bar_h = {}
@@ -75,12 +86,53 @@ _bar_h = {}
 RENDER_SCALES = (1, 2)
 _class = HANDHELD
 _render = 1
+_desk_glass = [False]          # the glass is a desk's at font scale 1 (`desk_glass`)
 
 
-def class_of(diagonal_in):
+# The glass a desk declares where the tier has none of its own (the browser's
+# desk, the host simulator's): the Waveshare P4's, 7 inches across 1024x600
+# (firmware/esp32_p4_wifi6_touch_lcd_7b/board.toml [panel]), the board whose
+# arrangement they run. tests/test_web_look_parity.py holds it to the board's.
+P4_GLASS_IN = 7.0
+P4_GLASS_WH = (1024, 600)
+
+
+def desk_diagonal_in(w, h):
+    """The diagonal a `w` x `h` desk glass declares on a tier without glass of
+    its own: the P4's, scaled to keep its pixel density, so the tap and text
+    floors (`chrome.chrome_scale_floor`, `chrome.text_scale_floor`) measure the
+    P4's millimetres at any window size. A fixed 7 inches would make a
+    1920x1080 window a 315-ppi panel whose chrome the tap floor doubles.
+    Exactly P4_GLASS_IN at P4_GLASS_WH."""
+    pw, ph = P4_GLASS_WH
+    return P4_GLASS_IN * ((w * w + h * h) / float(pw * pw + ph * ph)) ** 0.5
+
+
+def desk_room(w, h, fs):
+    """Whether `w` x `h` glass pixels at font scale `fs` hold the windowed
+    desk: their room over the scale is at least DESK_MIN_WH."""
+    return w // fs >= DESK_MIN_WH[0] and h // fs >= DESK_MIN_WH[1]
+
+
+def class_of(diagonal_in, w=None, h=None, fs=1):
     """The metric class of a glass `diagonal_in` inches across (None: the
-    handheld's, which is every tier that does not declare its glass)."""
-    return DESK if diagonal_in and float(diagonal_in) >= DESK_MIN_IN else HANDHELD
+    handheld's, which is every tier that does not declare its glass) and,
+    where given, `w` x `h` glass pixels at font scale `fs`: a desk's glass
+    without the desk's room at `fs` (`desk_room`) is a handheld's."""
+    if not diagonal_in or float(diagonal_in) < DESK_MIN_IN:
+        return HANDHELD
+    if w is not None and not desk_room(w, h, fs):
+        return HANDHELD
+    return DESK
+
+
+def font_scales(w, h, render=1):
+    """The font scales a glass of `w` x `h` pixels, drawn at `render`, offers:
+    each whose room (the glass over the render scale and the font scale)
+    still holds the handheld's smallest layout, HANDHELD_MIN_WH; 1 always."""
+    return tuple(f for f in FONT_SCALES
+                 if f == 1 or (w // (render * f) >= HANDHELD_MIN_WH[0]
+                               and h // (render * f) >= HANDHELD_MIN_WH[1]))
 
 
 def place_class(name, render=1):
@@ -126,6 +178,18 @@ def sys_tile(thick):
 
 def metric_class():
     return _class
+
+
+def place_desk_glass(desk):
+    """Say whether the glass in force is a desk's at font scale 1: the
+    console's, once, from its panel (`class_of`)."""
+    _desk_glass[0] = bool(desk)
+
+
+def desk_glass():
+    """Whether the glass in force is a desk's at font scale 1, so a text
+    size that lays it out as a handheld has a smaller one that is the desk."""
+    return _desk_glass[0]
 
 
 def render_scale():

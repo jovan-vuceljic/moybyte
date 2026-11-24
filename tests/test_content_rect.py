@@ -30,11 +30,11 @@ def _on_the_night_fixture(monkeypatch):
 DT = 1.0 / 30.0
 
 # The fullscreen tiers: the T-Deck, the Guition S3's tap floor (chrome scale 2
-# over font scale 1) and a big font-scale-3 canvas.
+# over font scale 1) and the smallest canvas that offers font scale 3.
 SIZES = {
     "tdeck": {},
     "guition_s3": {"sys_size": (480, 320), "panel_diagonal_in": 3.5},
-    "big_fs3": {"sys_size": (800, 480), "font_scale": 3},
+    "big_fs3": {"sys_size": (960, 720), "font_scale": 3},
 }
 
 # Fields of chrome.Layout that are BAR rects, in bar coordinates.
@@ -147,8 +147,7 @@ def _layouts(ws):
 def test_every_layout_lays_out_inside_the_content_rect(tmp_path, size):
     """Every rect a layout holds that sits inside its content rect under the
     top bar sits inside it under the bottom bar too. (A rect already outside
-    under the top bar -- font scale 3's overflow on an 800x480 canvas -- is no
-    bar's doing and is not this test's.)"""
+    under the top bar is no bar's doing and is not this test's.)"""
     ws = build_ws(tmp_path, **SIZES[size])
     _open_every_surface(ws)
     names = {n for n, _l in _layouts(ws)}

@@ -254,9 +254,9 @@ def test_settings_opened_over_a_cart_resumes_it(tmp_path, way):
     assert ws.screen == "desktop" and ws.run.player.ns is run
 
 
-def _settings_page(tmp_path):
+def _settings_page(tmp_path, **kw):
     from runtime import host_app
-    ws = _ws(tmp_path)
+    ws = _ws(tmp_path, **kw)
     drv = host_app.ConsoleDriver(ws)
     ws.open_settings()
     drv.frame(1 / 30)
@@ -273,8 +273,9 @@ def _focus_row(ws, drv, key):
 
 def test_settings_shows_volume_brightness_and_name(tmp_path):
     """Volume and Brightness are sliders and Name a text field, in General
-    after Text size (owner call 2026-10-17: the rows stay on the page)."""
-    ws, drv = _settings_page(tmp_path)
+    after Text size (owner call 2026-10-17: the rows stay on the page), on a
+    glass that offers more than one size (on the T-Deck the row is hidden)."""
+    ws, drv = _settings_page(tmp_path, sys_size=(640, 480))
     sl = ws.settings_layer
     from ui_said import said
     with said() as got:
@@ -505,7 +506,7 @@ def test_settings_panel_keeps_the_freed_dock_band_as_its_bottom_inset(tmp_path):
     dock's own. (The launcher grid, which DID reclaim its share, is pinned by
     test_launcher_grid_runs_to_the_canvas_floor below.)"""
     from runtime import host_app
-    for size, fs in (((480, 320), 1), ((800, 480), 3)):
+    for size, fs in (((480, 320), 1), ((960, 720), 3)):
         ws = host_app.build_workstation(str(tmp_path / ("c%dx%d" % size)),
                                         sys_size=size, font_scale=fs)
         lay = ws.layout

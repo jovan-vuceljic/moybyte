@@ -1,6 +1,6 @@
 {
  "surface": "update_c6",
- "config": "p4_1024x600_fs2_windowed",
+ "config": "p4_1024x600_cs2_fs1_windowed",
  "commit": "d46d59298",
  "script": [
   "k:b"
@@ -8,11 +8,11 @@
  "frames": [
   [
    "(open)",
-   "ca9628a57f6a7658ded9beeb07c4aab823285b95540c9ed2f8b4a957eff67b51"
+   "cfd786fa71d820751a520c3bd13076e2143423406612e0b733a66b39a2e34625"
   ],
   [
    "k:b",
-   "d698065d802d3ca3148ce045cd62a9a3963051d795c6477e5b976210cd60d9a0"
+   "3d79a863ace7bf0d72c4de4ba90032d4ba6a44a4808cdefd6aa3c486c9d316d5"
   ]
  ]
 }

@@ -61,7 +61,7 @@ _STORE = os.path.join(native_build.ROOT, "native", "moy_store")
 _WEB = os.path.join(native_build.ROOT, "native", "moy_web")
 _SHIM = os.path.join(_NET, "moy_net_host.c")
 _SOURCES = ("moy_net.h", "moy_http.c", "moy_net_port.c","moy_sync.c", "moy_sync_apply.c",
-            "moy_webhost.c", "moy_seal.h", "moy_webauth.h", "moy_webauth.c", "moy_seal_web.c",
+            "moy_webhost.c", "moy_live.h", "moy_seal.h", "moy_webauth.h", "moy_webauth.c", "moy_seal_web.c",
             "moy_ota.h", "moy_ota.c", "moy_webconsole.c", "moy_gpio.c", "moy_dns.c", "moy_json.h", "moy_json.c", "moy_vol.h",
             "moy_vol.c", "moy_fs.h", "moy_fs.c", "moy_arena.h",
             "moy_journal.h", "moy_journal.c", "moy_removed.h", "moy_removed.c", "moy_core.h",
@@ -121,6 +121,11 @@ _SIGS = (
     ("moy_page_forget", [], None),
     ("moy_net_host_use_stored", [_Z, _Z], _I),
     ("moy_net_host_remember", [_I, _P, _Z, _P, _Z], _I),
+    ("moy_net_host_txp_start", [ctypes.c_uint], ctypes.c_uint),
+    ("moy_net_host_txp_next", [_I, ctypes.c_uint, _I, _I], ctypes.c_uint),
+    ("moy_net_host_txp_table_size", [], _Z),
+    ("moy_net_host_txp_recall", [ctypes.c_void_p, _P], ctypes.c_uint),
+    ("moy_net_host_txp_learn", [ctypes.c_void_p, _P, ctypes.c_uint], _I),
     ("moy_ota_keys", [], _I),
     ("moy_ota_key_hex", [_P, _Z, ctypes.c_void_p], _I),
     ("moy_ota_key", [_I], ctypes.c_void_p),

@@ -293,16 +293,17 @@ function longest(k, ms) {
 // A frame's samples, read out of the wasm heap where the pull rendered them,
 // to the sink: step_frame_json leaves their count, the first's index, whether
 // they start a stream and their address at `pcmAt` (web_boot._PCM, four
-// doubles), so a frame that only moves samples crosses back with no string.
+// 64-bit integers), so a frame that only moves samples crosses back with no
+// string.
 // Answers whether there were any.
 let pcmAt = 0;
 function shipPCM() {
     const heap = mp._module.HEAPU8;
-    const r = new Float64Array(heap.buffer, pcmAt, 4);
-    const n = r[0];
+    const r = new BigInt64Array(heap.buffer, pcmAt, 4);
+    const n = Number(r[0]);
     if (!n) return false;
     if (!sink) return true;
-    const at = r[1], fresh = r[2], pa = r[3], b = new Int16Array(n);
+    const at = Number(r[1]), fresh = Number(r[2]), pa = Number(r[3]), b = new Int16Array(n);
     new Uint8Array(b.buffer).set(heap.subarray(pa, pa + 2 * n));
     const c = { p: b, at: at, fresh: fresh }, now = performance.now();
     if (fresh) LOOP = { frame: 0, frameAt: 0, step: 0, stepAt: 0, gc: 0, gcAt: 0,
@@ -1499,6 +1500,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     const gpioPins = await probeGpio();
     const updateDoc = await probeUpdate();
     const official = mode === "board" && await probeOfficial();
+    const liveLink = mode === "board" ? await probeLive() : null;
     mp.runPython("import web_boot\n"
         // BEFORE boot(): the mode is what decides whether the carts watcher
         // sweeps the journal, and boot() is where that watcher is built.
@@ -1526,6 +1528,10 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         // live Workstation, which boot() is what creates.
         + (updateDoc ? "web_boot.update_enable("
             + JSON.stringify(JSON.stringify(updateDoc)) + ")\n" : "")
+        // The board's radio, a link on the live Workstation: after boot(),
+        // which creates it, and before the address's cart starts, whose
+        // launch grants "multiplayer" only where the console has a link.
+        + (liveLink ? "web_boot.live_enable(" + JSON.stringify(liveLink) + ")\n" : "")
         // What the address starts it on (web_boot.page_start).
         + "web_boot.page_start()\n"
         + "from web_boot import assets_json, step_frame_json, apply_events_json, "
@@ -1536,7 +1542,8 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + "services_json, carts_poll_json, carts_event_json, "
         + "import_p8_json, import_archive_json, export_cart, drop_kind, "
         + "edit_cart, open_cart, state_json, pcm_addr, "
-        + "term_enable, term_poll_json, term_feed, term_state");
+        + "term_enable, term_poll_json, term_feed, term_state, "
+        + "live_pump, live_feed, live_state");
     step = mp.globals.get("step_frame_json");
     pcmAt = mp.globals.get("pcm_addr")();
     applyEvents = mp.globals.get("apply_events_json");
@@ -1565,6 +1572,13 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         termPoll = mp.globals.get("term_poll_json");
         termFeed = mp.globals.get("term_feed");
         termState = mp.globals.get("term_state");
+    }
+    if (liveLink) {
+        livePump = mp.globals.get("live_pump");
+        liveFeed = mp.globals.get("live_feed");
+        liveState = mp.globals.get("live_state");
+        liveOn = true;
+        liveOpen();
     }
     if (gpioPins) {
         gpioPoll = mp.globals.get("gpio_poll_json");
@@ -1636,6 +1650,19 @@ function shipFrame(s) {
 // not served by anything with pins" -- a static host (moybyte.com, an export),
 // a console board that spends its GPIOs on a panel, or a Zero this page is not
 // signed in to. All four are the same answer to a cart: no verbs.
+// The board's address on the air where it relays its radio on the live
+// socket (GET /live without the upgrade, native/moy_net/moy_live.h), else
+// null. A board without the socket 404s it.
+async function probeLive() {
+    try {
+        const r = await sealed("GET", "/live");
+        const d = r.status === 200 ? sealedJson(r) : null;
+        return d && d.live && d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : null;
+    } catch (e) {
+        return null;
+    }
+}
+
 async function probeGpio() {
     try {
         const r = await sealed("POST", "/gpio", JSON.stringify({ v: 1, ops: [] }));
@@ -1811,7 +1838,7 @@ function termSend(ws, kind, u8) {
     const raw = new Uint8Array(u8.length + 1);
     raw[0] = kind.charCodeAt(0);
     raw.set(u8, 1);
-    const n = sw().up(swPut(raw));
+    const n = sw().up(0, swPut(raw));
     if (n > 0) ws.send(swGet(n));
 }
 async function termOpen(cols, rows) {
@@ -1832,7 +1859,7 @@ async function termOpen(cols, rows) {
             return;
         }
         target = C.M.UTF8ToString(C.target());
-        C.ws(C.seq());
+        C.ws(0, C.seq());
         termSealed = true;
     }
     const u = new URL(target.slice(1), BASE);
@@ -1850,7 +1877,7 @@ async function termOpen(cols, rows) {
         if (termWs !== ws || typeof m.data === "string") return;
         let u8 = new Uint8Array(m.data);
         if (termSealed) {
-            const n = sw().down(swPut(u8));
+            const n = sw().down(0, swPut(u8));
             if (n < 0) {                 // a frame that does not open: the session is over
                 termWs = null;
                 try { ws.close(1000); } catch (e) { }
@@ -1888,6 +1915,139 @@ function termPump() {
     while (termQ.length) {
         const q = termQ.shift();
         try { if (q.d !== undefined) termFeed(q.d); else termState(q.s, q.n); } catch (e) { }
+    }
+}
+
+// THE LIVE SOCKET (#256; native/moy_net/moy_live.h is the wire) on a page
+// whose board relays its radio: one WebSocket to GET /live, sealed as the
+// terminal's is (seal slot 1), its frames' first byte their channel. The
+// worker opens it at boot, keeps it beating, reopens a dropped one after
+// LIVE_RETRY_MS, and moves the link channel ('n') between the socket and
+// the VM between frames (web_boot's live_*), never inside one: the console
+// runs a console's match over it (native/moy_net/moy_link_web.c). Every
+// beat is an echo ('c' 'e', answered 'E'), the page's round trip to its
+// board, which a harness reads in `__moyState().live`.
+const LIVE_BEAT_MS = 1000, LIVE_LOST_MS = 3000;
+const LIVE_RETRY_MS = [250, 500, 1000, 2000, 5000];
+let livePump = null, liveFeed = null, liveState = null, liveOn = false;
+let liveWs = null, liveSealed = false, liveRetry = 0, liveHidden = 0, liveWasHidden = 0;
+let liveHeard = 0, liveSaid = 0;
+const liveQ = [];
+const LIVE = { opens: 0, drops: 0, up: 0, down: 0, rtt: [] };
+function liveSend(ws, pl) {
+    if (!liveSealed) { ws.send(pl); return; }
+    const n = sw().up(1, swPut(pl));
+    if (n > 0) ws.send(swGet(n));
+}
+function liveLater() {
+    if (!liveOn) return;
+    const ms = LIVE_RETRY_MS[Math.min(liveRetry++, LIVE_RETRY_MS.length - 1)];
+    setTimeout(liveOpen, ms);
+}
+function liveDrop(ws, why) {
+    if (liveWs !== ws) return;
+    liveWs = null;
+    try { ws.close(1000); } catch (e) { }
+    LIVE.drops++;
+    liveQ.push({ s: 0, why: why });
+    liveLater();
+}
+async function liveOpen() {
+    if (liveWs || !liveOn) return;
+    let target = "/live";
+    liveSealed = false;
+    if (!(await signIn())) { liveLater(); return; }
+    if (!authOpen) {
+        const C = sw();
+        if (swCall((m, p) => C.seal(m, p, 0), "GET", target) < 0) { liveLater(); return; }
+        target = C.M.UTF8ToString(C.target());
+        C.ws(1, C.seq());
+        liveSealed = true;
+    }
+    const u = new URL(target.slice(1), self.location.href);
+    u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+    let ws;
+    try { ws = new WebSocket(u.href, "moy.live"); } catch (e) { liveLater(); return; }
+    ws.binaryType = "arraybuffer";
+    liveWs = ws;
+    ws.onopen = () => {
+        if (liveWs !== ws) return;
+        liveRetry = 0;
+        LIVE.opens++;
+        liveHeard = liveSaid = performance.now();
+        liveQ.push({ s: 1 });
+    };
+    ws.onmessage = (m) => {
+        if (liveWs !== ws || typeof m.data === "string") return;
+        let u8 = new Uint8Array(m.data);
+        if (liveSealed) {
+            const n = sw().down(1, swPut(u8));
+            if (n < 0) { liveDrop(ws, "seal"); return; }
+            u8 = swGet(n);
+        }
+        liveHeard = performance.now();
+        LIVE.down++;
+        if (u8[0] === 0x6e) liveQ.push({ d: u8 });
+        else if (u8[0] === 0x63 && u8[1] === 0x45 && u8.length === 10) {
+            const t = new Float64Array(u8.slice(2).buffer)[0];
+            LIVE.rtt.push(performance.now() - t);
+            if (LIVE.rtt.length > 512) LIVE.rtt.shift();
+        }
+    };
+    ws.onclose = (c) => {
+        if (liveWs !== ws) return;
+        liveWs = null;
+        LIVE.drops++;
+        liveQ.push({ s: 0, why: c.code + (c.reason ? " " + c.reason : "") });
+        liveLater();
+    };
+}
+function liveFeedAll(parts) {
+    if (!parts.length) return;
+    let n = 0;
+    for (const p of parts) n += 2 + p.length;
+    const b = new Uint8Array(n);
+    let at = 0;
+    for (const p of parts) {
+        b[at] = p.length & 255; b[at + 1] = p.length >> 8;
+        b.set(p, at + 2);
+        at += 2 + p.length;
+    }
+    try { liveFeed(termB64(b)); } catch (e) { }
+}
+function liveStep(gap) {
+    if (!livePump) return;
+    let parts = [];
+    while (liveQ.length) {
+        const q = liveQ.shift();
+        if (q.d) { parts.push(q.d); continue; }
+        liveFeedAll(parts);
+        parts = [];
+        try { liveState(q.s, q.why || ""); } catch (e) { }
+    }
+    liveFeedAll(parts);
+    let out = "";
+    try { out = livePump(Math.round(gap), liveHidden || liveWasHidden); } catch (e) { return; }
+    if (!liveHidden) liveWasHidden = 0;
+    const ws = liveWs;
+    if (!ws || ws.readyState !== 1) return;
+    if (out) {
+        const b = Uint8Array.from(atob(out), (c) => c.charCodeAt(0));
+        for (let at = 0; at + 2 <= b.length;) {
+            const n = b[at] | (b[at + 1] << 8);
+            liveSend(ws, b.slice(at + 2, at + 2 + n));
+            LIVE.up++;
+            at += 2 + n;
+        }
+    }
+    const now = performance.now();
+    if (now - liveHeard > LIVE_LOST_MS) { liveDrop(ws, "silent"); return; }
+    if (now - liveSaid >= LIVE_BEAT_MS) {
+        liveSaid = now;
+        const e = new Uint8Array(10);
+        e[0] = 0x63; e[1] = 0x65;
+        e.set(new Uint8Array(new Float64Array([now]).buffer), 2);
+        liveSend(ws, e);
     }
 }
 
@@ -2473,6 +2633,7 @@ function loop() {
     // however long the last step took, so measuring deadline->now overstated dt by
     // that lateness EVERY frame and the game ran fast (~1.5x with an 8ms step).
     // Real elapsed is correct by construction: simulated time tracks the clock.
+    const gap = lastStep ? now - lastStep : 0;
     const dt = lastStep ? Math.min(0.1, (now - lastStep) / 1000) : 1 / 60;
     if (LOOP && lastStep) longest("frame", now - lastStep);
     lastStep = now;
@@ -2531,6 +2692,7 @@ function loop() {
         syncPump();
         gpioPump();
         termPump();
+        liveStep(gap);
         updatePump();
         cartsPump();
     } catch (e) {
@@ -2564,9 +2726,12 @@ self.onmessage = async (ev) => {
             sinkSet(m.port, m.rate);
         } else if (m.t === "played") {
             sinkHeard(m.s);
+        } else if (m.t === "vis") {
+            liveHidden = m.hidden ? 1 : 0;
+            if (liveHidden) liveWasHidden = 1;
         } else if (m.t === "state") {
             self.postMessage({ t: "state", json: stateJson ? stateJson() : "null", sink: sinkStats,
-                               loop: LOOP });
+                               loop: LOOP, live: liveOn ? LIVE : null });
         } else if (m.t === "run") {
             // lastStep too: a (re)start must begin with a clean 1/60 dt, not a
             // clamped jump measured from whenever the loop last ran.

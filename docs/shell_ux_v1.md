@@ -48,6 +48,19 @@ presentation; CLAUDE.md lists the boards:
 | browser | `firmware/web_runner/` | the handheld's or the desk's arrangement, whichever fits the viewport |
 | headless | `xiao_zero` | no screen (#41) |
 
+The screen settles what a desktop board shows (`runtime/toolkit/layout_base.py`):
+its room is its glass pixels over the font scale. A room of at least 1024×600, the smallest glass the desk is designed for (the 2026-10 look's
+DESIGN.md, "The sizes"), gets windows; a smaller one gets the handheld's
+presentation, full-screen pages at that scale, as a 1024×600 glass does at
+font scale 2 (owner, 2026-11-24). Settings' Text size offers a scale only where
+the glass over the render scale and that font scale still holds the handheld's
+320×240: the T-Deck and a 480×320 glass
+offer one size and hide the row, a 1024×600 offers Normal and Large, and a
+1280×800 Larger too. The tier follows the scale live: the frame after a
+change of text size that crosses the line is drawn on the other tier, Settings
+open on its Text size row (`Workstation.place_tier`), as a boot at that scale
+draws it.
+
 No tier has its own shell logic. This is the existing host == device discipline
 plus the #39 responsive-layout discipline, extended one level up: not just "the
 same pixels reflow," but "the same *apps* present differently." A kid who learns

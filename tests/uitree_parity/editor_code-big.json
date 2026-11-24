@@ -1,6 +1,6 @@
 {
  "surface": "editor_code",
- "config": "big_800x480_fs3_dark",
+ "config": "big_960x720_fs3_dark",
  "commit": "da328c772",
  "script": [
   "k:down",

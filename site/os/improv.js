@@ -12,7 +12,7 @@ self.moyImprov = (() => {
     const SAYS = {
         1: "the board did not understand the request",
         2: "the board does not know that request",
-        3: "the board could not join that network: check its name and password",
+        3: "the board could not join that network: check its name and password, and if they are right, move the board closer to the router",
         5: "that is not a name a network can carry",
         255: "the board failed",
     };
@@ -66,6 +66,7 @@ self.moyImprov = (() => {
             this.port = port;
             this.lines = opts.lines || { dtr: true, rts: true };
             this.log = opts.log || (() => { });
+            this.text = new TextDecoder();
             this.buf = [];
             this.frames = [];
             this.wake = null;
@@ -98,6 +99,11 @@ self.moyImprov = (() => {
                 }
             } catch (e) { this.log("the port closed: " + e.message); }
         }
+        // The board's own bytes between frames, to `log` as text (a character
+        // cut between reads is held for the next).
+        said(bytes) {
+            this.log(this.text.decode(new Uint8Array(bytes), { stream: true }));
+        }
         parse() {
             for (;;) {
                 let at = -1;
@@ -106,11 +112,11 @@ self.moyImprov = (() => {
                 }
                 if (at < 0) {
                     const keep = Math.min(this.buf.length, 5);
-                    if (this.buf.length > keep) this.log(dec.decode(new Uint8Array(this.buf.slice(0, -keep))));
+                    if (this.buf.length > keep) this.said(this.buf.slice(0, -keep));
                     this.buf = this.buf.slice(-keep);
                     return;
                 }
-                if (at > 0) this.log(dec.decode(new Uint8Array(this.buf.slice(0, at))));
+                if (at > 0) this.said(this.buf.slice(0, at));
                 this.buf = this.buf.slice(at);
                 if (this.buf.length < 9) return;
                 const n = this.buf[8];
@@ -191,6 +197,58 @@ self.moyImprov = (() => {
             return strings(got.find((f) => f.type === RESULT).data);
         }
     }
-    return { Client, found, frame, rpc, strings, READY, PROVISIONED };
+    // The board's log as lines, for a person to read: `feed` takes what
+    // Client hands `log`, a partial line is held until its end, ANSI escapes
+    // and other control characters are stripped, and every string given to
+    // `hide` is blanked in each line before `each(line)` sees it or `text()`
+    // copies it. Blank lines are dropped; the last `keep` lines are kept.
+    const ANSI = /\x1b(?:\[[0-?]*[ -\/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)?|[@-_])/g;
+    const BLANK = "********", LONG = 4096;
+    class Lines {
+        constructor(each = () => { }, keep = 500) {
+            this.each = each;
+            this.keep = keep;
+            this.lines = [];
+            this.part = "";
+            this.secrets = [];
+        }
+        hide(secret) {
+            if (secret && !this.secrets.includes(secret)) this.secrets.push(secret);
+        }
+        clean(line) {
+            line = line.replace(ANSI, "").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
+            for (const s of this.secrets) line = line.split(s).join(BLANK);
+            return line;
+        }
+        feed(text) {
+            const cut = (this.part + text).split("\n");
+            this.part = cut.pop();
+            for (const l of cut) this.add(l);
+            if (this.part.length > LONG) {
+                // A line with no end in sight goes out but for a tail that a
+                // secret could still be cut across.
+                const hold = Math.max(0, ...this.secrets.map((s) => s.length - 1));
+                this.add(this.part.slice(0, this.part.length - hold));
+                this.part = this.part.slice(this.part.length - hold);
+            }
+        }
+        // The held partial line, as a line: what a board said last before it
+        // stopped answering.
+        flush() {
+            if (this.part) this.add(this.part);
+            this.part = "";
+        }
+        add(raw) {
+            const line = this.clean(raw);
+            if (!line.trim()) return;      // a frame's own newline, a blank
+            this.lines.push(line);
+            if (this.lines.length > this.keep) this.lines.shift();
+            this.each(line);
+        }
+        text() {
+            return this.lines.map((l) => this.clean(l)).join("\n");
+        }
+    }
+    return { Client, Lines, found, frame, rpc, strings, READY, PROVISIONED };
 })();
 if (typeof module != "undefined") module.exports = self.moyImprov;

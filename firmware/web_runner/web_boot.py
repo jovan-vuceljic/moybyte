@@ -54,12 +54,13 @@ from array import array
 
 import console
 import host_api
+import layout_base
 import moy_carts
 import moy_catalogue
 import web_canvas
 import web_input
 import web_vfs
-from input import InputState
+from moy_input import InputTable
 from audio_session import PcmPump
 
 _S = {}          # the runner singletons: ws / canvas / driver / sink
@@ -242,17 +243,10 @@ def _make_api(*a, **kw):
 # driver's "local" source; its on-screen gamepad, the "pad" source its holds
 # name (web_input.PAD_SOURCE); and on a coarse-pointer page (a phone, a tablet)
 # touch first, in use from boot, since a finger is what such a page is used
-# with; a fine pointer is a mouse, no finger, as on the host.
+# with; a fine pointer is a mouse, no finger, as on the host. A gamepad held
+# at the page joins them while one is connected (`_gamepad`).
 WEB_INPUTS = (("local", "keys"), ("pad", "pad"))
 WEB_TOUCH_INPUTS = (("touch", "touch"), ("local", "keys"), ("pad", "pad"))
-
-# The glass the desktop arrangement is: the Waveshare P4's 7-inch 1024x600
-# panel (firmware/esp32_p4_wifi6_touch_lcd_7b/board.toml [panel]), the board
-# whose arrangement it runs, so the desk lays out on the desk's metrics, faces
-# and icon sizes as that board's does (`layout_base.class_of`). The handheld
-# arrangement declares none, as the T-Deck declares none.
-# tests/test_web_look_parity.py holds the number to the board's.
-DESK_DIAGONAL_IN = 7.0
 
 
 def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
@@ -308,7 +302,9 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
         # same way, for the same reason).
         width = max(320, int(width))
         height = max(240, int(height))
-    inp = InputState()
+    # The boards' table, all sixteen names: a gamepad held at the page
+    # presses what a board's does (web_input.BUTTON_NAMES).
+    inp = InputTable()
     if not font_scale:
         # 1x on BOTH tiers (owner call): at 1024x600 the 2x system font ate the
         # desktop's density for no legibility win on a real monitor. The page can
@@ -323,9 +319,11 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
         # rasterizer here was unaffordable at ~85ms/frame interpreted.
         sysc = web_canvas.make_canvas(width, height, font_scale=font_scale)
         game = web_canvas.WebSystemCanvas(web_canvas.compositor(320, 240))
+        # The desk declares the P4's glass at the P4's pixel density, so it
+        # lays out on the desk's metrics as that board does at any page size.
         ws = console.Workstation(host_api._NullComp(), game, inp, carts,
                                  sys_canvas=sysc, font_scale=font_scale,
-                                 panel_diagonal_in=DESK_DIAGONAL_IN)
+                                 panel_diagonal_in=layout_base.desk_diagonal_in(width, height))
     else:
         sysc = game = web_canvas.make_canvas(320, 240, font_scale=font_scale)
         ws = console.Workstation(host_api._NullComp(), game, inp, carts)
@@ -401,24 +399,14 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     # real trackball-style pan on a system surface re-shows it, a mouse/touch
     # place() keeps it hidden as always.
     ws.pointer.visible = False
-    if windowed and ws.bound_sys_canvas is not None:
-        # A windowed composite must NOT letterbox. `blit_game` means two things
-        # -- fill everything outside the game rect black (this canvas IS the
-        # glass, the handheld tier below) versus put a cart inside a WINDOW --
-        # and the shared `DeviceCanvas.blit_game` defaults to the first. Left
-        # set, the desk, its icon column, the OS bar and every other window go
-        # black behind the first game window opened. This build shipped exactly
-        # that until 2026-08-15; see DeviceCanvas.letterbox_composite. The tier
-        # is chosen HERE, so this is where the canvas is told which meaning it
-        # serves -- the same line, in the same place, as
-        # host_app.build_workstation.
-        ws.bound_sys_canvas.letterbox_composite = False
+    if windowed:
         # Installed LAST so it anchors its root context -- and its per-window
-        # content buffers, via root.new_layer -- to the system canvas. Two
-        # worlds (#105): boot onto the desk.
+        # content buffers, via root.new_layer -- to the system canvas, where
+        # the desk fits (Workstation.place_tier). Two worlds (#105): boot onto
+        # the desk.
         from wm_windowed import WindowedWM
-        ws.wm = WindowedWM(ws)
-        ws.home.open_desk()
+        ws.windowed_wm = WindowedWM
+        ws.place_tier()
     # HUD (perf_hud.PerfHud): the bottom-right FPS chip draws onto the GAME
     # canvas, so on the handheld tier -- where the system canvas IS the game
     # canvas -- it lands inside the cart's own 320x240 raster and ships in the
@@ -1107,9 +1095,10 @@ def _step(dt, played):
 
 # This frame's samples, as step_frame_json leaves them for the worker: their
 # count (0: none), the first's index in the stream, 1 where they start one,
-# and the heap address they wait at (_RunnerPump._buf). Doubles, so a count
-# of samples past 2**31 reads true.
-_PCM = array("d", (0, 0, 0, 0))
+# and the heap address they wait at (_RunnerPump._buf). 64-bit integers, so a
+# count of samples past 2**31 reads true and none passes through the VM's
+# single-precision float.
+_PCM = array("q", (0, 0, 0, 0))
 
 
 def pcm_addr():
@@ -1167,6 +1156,23 @@ def _edit_state(ws):
     return out
 
 
+def _input_state(ws):
+    """Which input the console follows, for a harness that drives it with a
+    gamepad: the input in use and the one the hints draw the keys of
+    (`ui_draw.INPUTS`), the sources declared, the desk's focused tile, the
+    home's tab and selected card, and the pause card's rows and the one
+    focused while it is up."""
+    import ui_draw
+    p = ws.pause
+    desk = getattr(ws.wm, "desk_focus", None)
+    return {"desk_focus": desk() if desk is not None else None,
+            "kind": ui_draw.input_kind(), "hints": ui_draw.hint_kind(),
+            "sources": sorted(ws.input_kinds or ()),
+            "home_sel": getattr(ws.launcher, "sel", None),
+            "home_tab": getattr(ws.launcher, "tab", None),
+            "pause": list(p.rows) if p.open else None, "pause_sel": p.focused()}
+
+
 def state_json():
     """The console's `state`: the dev channel's one-line snapshot -- the keys
     every on-glass suite reads -- plus this page's sample stream
@@ -1191,6 +1197,7 @@ def state_json():
     st["sync"] = {"acked": _S.get("sync_acked", 0),
                   "busy": any(w.busy() for w in _watchers())}
     st["edit"] = _edit_state(_S["ws"])
+    st["input"] = _input_state(_S["ws"])
     term = getattr(_S["ws"].app("terminal"), "face", None)
     st["term"] = term.lines() if term is not None else None
     try:
@@ -1228,7 +1235,20 @@ def _apply(events):
         on_press=d.press, on_pan=d.pan, on_key=d.type_char,
         on_esc=d.escape, on_hold=d.hold, on_key_hold=d.key_hold,
         on_super=d.system_key, on_full=d.full_key, on_key_down=d.key_down,
-        on_key_up=d.key_up, on_mods=d.set_mods, on_wheel=d.wheel, on_middle=d.middle)
+        on_key_up=d.key_up, on_mods=d.set_mods, on_wheel=d.wheel, on_middle=d.middle,
+        on_gamepad=_gamepad)
+
+
+def _gamepad(on):
+    """A gamepad held at the page connected (`on`), or the last one left:
+    its source joins the console's inputs as the `pad` kind, the input in use
+    from then on so the focus and the pad's keys show at once, and leaves
+    them with nothing held."""
+    ws = _S["ws"]
+    if on:
+        ws.input_joined(web_input.GAMEPAD_SOURCE, "pad")
+    else:
+        ws.input_left(web_input.GAMEPAD_SOURCE)
 
 
 def store_mode(mode=None, seeded=None):
@@ -1571,6 +1591,145 @@ def term_state(state, n=0):
         _S["term_rest"] = b""
         sh.link_state(int(state), int(n))
     return ""
+
+
+# -- the live socket's radio link ----------------------------------------------------
+#
+# A page served by a board that relays its radio (a Zero: GET /live answers
+# {"link":1}, native/moy_net/moy_live.c) has a link as a console board does:
+# `ws.link` is players.EspNowLink over the kernel's Match, whose radio is the
+# page's half of the link channel (native/moy_net/moy_link_web.c), so a
+# match here is a console's match, its inputs riding the socket to the board
+# and its radio. The worker owns the socket and calls live_pump between
+# frames: what the board sent goes into the link, the link's poll runs (its
+# beacon, a START or a BYE), and what it queued goes back out. Nothing here
+# waits on the socket.
+
+_LIVE_GAP_MS = 250                      # a frame gap a live match says it waited through
+
+
+class _LiveWlan:
+    """The station `EspNowLink` reads, which is the page's board's: its MAC
+    (the /live probe's) is the page's address on the air, and its channel
+    pinned (the 'H' state; 0 before the socket first opens)."""
+
+    def __init__(self, mac):
+        self.mac = mac
+
+    def active(self, on=None):
+        return True
+
+    def isconnected(self):
+        return True
+
+    def config(self, *a, **kw):
+        if kw or not a:
+            return None
+        if a[0] == "mac":
+            return self.mac
+        if a[0] == "channel":
+            import moy_net
+            return abs(moy_net.live_info()[5])
+        return 0
+
+
+def live_enable(mac):
+    """The board answered the /live probe with its radio and its address
+    (`mac`, hex): the console gains a link, as a console board wires one
+    (device/wire_links.py), before the address's cart starts."""
+    ws = _S.get("ws")
+    if ws is None:
+        return ""
+    try:
+        import binascii
+        import moy_net
+        if not hasattr(moy_net, "live_take"):
+            return ""
+        from players import EspNowLink, launch_cart
+        ws.link = EspNowLink(board="web", name="Browser", wlan=_LiveWlan(binascii.unhexlify(mac)),
+                             launch=launch_cart)
+        ws.net = ws.link.net
+        _S["live"] = {"open": False, "said": None, "hidden": False, "gap": False}
+    except Exception as exc:         # noqa: BLE001 -- never block a boot
+        print("live link unavailable:", exc)
+    return ""
+
+
+def _live_say(ws, key):
+    notice = getattr(getattr(ws, "notices", None), "notice", None)
+    if notice is None:
+        return
+    try:
+        import ui_draw as _ud
+        notice(_ud.s("notice." + key), _ud.s("notice." + key + "_why"), "warn")
+    except Exception as exc:         # noqa: BLE001 -- a notice must never kill a frame
+        print("live notice failed:", exc)
+
+
+def live_state(open_, why=""):
+    """The socket opened (1) or closed (0). A drop while the radio is held
+    is said on the screen, and so is its return: the match waits meanwhile,
+    as it does for a lost input."""
+    st = _S.get("live")
+    ws = _S.get("ws")
+    if st is None or ws is None:
+        return ""
+    import moy_net
+    on = bool(int(open_))
+    moy_net.live_open(on)
+    held = moy_net.live_info()[1]
+    if on != st["open"]:
+        print("[live] socket %s%s" % ("open" if on else "closed", (": " + why) if why else ""))
+        if held:
+            _live_say(ws, "link_back" if on else "link_lost")
+    st["open"] = on
+    return ""
+
+
+def live_feed(b64):
+    """Plaintexts of the link channel the board sent, each behind its 2-byte
+    length, base64 as the worker carries them, into the link."""
+    if _S.get("live") is None:
+        return ""
+    import binascii
+    import moy_net
+    data = binascii.a2b_base64(b64)
+    at = 0
+    while at + 2 <= len(data):
+        n = data[at] | data[at + 1] << 8
+        moy_net.live_give(data[at + 2:at + 2 + n])
+        at += 2 + n
+    return ""
+
+
+def live_pump(gap_ms=0, hidden=0):
+    """Between frames: the link's poll, then what it queued for the board,
+    base64 (each plaintext behind its length), or "". `gap_ms` is the time
+    since the frame before, `hidden` whether the page's tab is hidden: a
+    live match that waited through a gap says so once it moves again."""
+    st = _S.get("live")
+    ws = _S.get("ws")
+    if st is None or ws is None:
+        return ""
+    lk = getattr(ws, "link", None)
+    if lk is not None:
+        lk.poll()
+    if getattr(ws, "netplay", None) is not None:
+        if int(hidden):
+            st["hidden"] = True
+        if int(gap_ms) > _LIVE_GAP_MS and st["hidden"]:
+            st["gap"] = True
+        if st["gap"] and not int(hidden):
+            st["gap"] = st["hidden"] = False
+            _live_say(ws, "match_waited")
+    else:
+        st["gap"] = st["hidden"] = False
+    import moy_net
+    out = moy_net.live_take()
+    if not out:
+        return ""
+    import binascii
+    return binascii.b2a_base64(out).decode().strip()
 
 
 def idle_collect():

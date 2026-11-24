@@ -12,19 +12,19 @@ plain typed 0x08; the console's key is the `super` event.
 
 import json
 
-# `runtime` first, NOT the usual device-name-first ladder: there are TWO input
-# modules and `input` is the frozen name of BOTH (the boards' 15-name
-# moybyte.input outranks this one on the semantic-trace harness's sys.path).
-# web_input decodes into the HOST class, so it must name it unambiguously; the
-# bare-name branch is for the wasm head, which stages runtime/shell/input.py as `input`
-# and has no `runtime` package.
-from input import InputState
+from moy_input import InputTable
 
-# The console's button set, as the wire names them.
-BUTTON_NAMES = InputState.BUTTONS
+# The console's button set, as the wire names them: the board's table, all
+# sixteen, since a gamepad held at the page presses X, Y, Select and Start
+# as a board's does.
+BUTTON_NAMES = InputTable.BUTTONS
 # The input source a page's on-screen gamepad writes (a hold's "src"); every
 # other hold is the page keyboard's, the table's "local".
 PAD_SOURCE = "pad"
+# The source a gamepad held at the browser writes (the Gamepad API): it is
+# an input while one is connected (the `gamepad` event).
+GAMEPAD_SOURCE = "gamepad"
+PAD_SOURCES = (PAD_SOURCE, GAMEPAD_SOURCE)
 
 
 def apply_ws_text(payload, apply):
@@ -51,8 +51,11 @@ def frame_cut(events):
     drag's last place is never seen held -- so the frame stops before a
     second press, before a move after its press (the press keeps its own
     place), and before a release after a move; the rest waits for the next
-    frame. A press and its release together stay one frame: a click."""
+    frame. A press and its release together stay one frame: a click. A held
+    button is a level the frame reads, so the frame also stops before a
+    button's release whose press it took: the press is seen."""
     pressed = moved = False
+    downs = None
     i = 0
     for ev in events:
         t = ev.get("type") if isinstance(ev, dict) else None
@@ -66,6 +69,12 @@ def frame_cut(events):
             moved = True
         elif t == "up" and moved:
             return i
+        elif t == "hold":
+            k = (ev.get("name"), ev.get("src"))
+            if ev.get("down"):
+                downs = [k] if downs is None else downs + [k]
+            elif downs is not None and k in downs:
+                return i
         i += 1
     return i
 
@@ -73,7 +82,7 @@ def frame_cut(events):
 def apply_events(events, input, pointer, on_press=None, on_pan=None,
                  on_key=None, on_esc=None, on_hold=None, on_key_hold=None,
                  on_super=None, on_full=None, on_key_down=None, on_key_up=None,
-                 on_mods=None, on_wheel=None, on_middle=None):
+                 on_mods=None, on_wheel=None, on_middle=None, on_gamepad=None):
     """Inject a batch of browser events into an InputState + Pointer. Each event is fully
     guarded (a malformed one is skipped, never raised) so a buggy client can't crash the loop.
 
@@ -83,8 +92,10 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
       {"type":"pan","dx":..,"dy":..} -> trackball nudge (on_pan)
       {"type":"press","name":..}     -> one-shot button press (on_press)
       {"type":"hold","name":..,"down":bool} -> held button (on_hold, else input.set_button)
-      {"type":"hold",...,"src":"pad"} -> the same from the page's gamepad,
-                                        written to the "pad" source
+      {"type":"hold",...,"src":"pad"} -> the same from the page's on-screen
+                                        gamepad, written to the "pad" source;
+                                        "src":"gamepad" from a gamepad held at
+                                        the browser, to that source
       {"type":"kd","code":..,"mods":..} -> a desk keyboard's key down: its
                                         code and modifiers (on_key_down)
       {"type":"ku","code":..,"mods":..} -> ...and up (on_key_up)
@@ -93,6 +104,12 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
       {"type":"mdown"|"mup","x":..,"y":..} -> the middle button (on_middle)
       a "down" with "mods" says the modifiers held as it went down
       {"type":"key","code":<ascii>}  -> typed key (on_key)
+      {"type":"key",...,"src":"gamepad"} -> a key the pad types (its
+                                        shoulders' Q and E) into that source;
+                                        none while a field takes text or a
+                                        game owns the keys
+      {"type":"gamepad","on":bool}   -> a gamepad connected, or the last one
+                                        gone (on_gamepad)
       {"type":"esc"}                 -> Esc (on_esc): a menu closes, a page
                                         steps back, a fullscreen game pauses
       {"type":"full"}                -> F11 (on_full): a desk window full
@@ -136,10 +153,11 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
                 if name in BUTTON_NAMES:
                     # Route to on_hold when wired (the device's keyboard.poll clears buttons,
                     # so a hold must be re-asserted AFTER the poll); else a direct set.
-                    # A hold from the page's gamepad names its source, so the pad,
+                    # A hold from a gamepad names its source, so the pad,
                     # not the keyboard, becomes the input in use.
                     down = bool(ev.get("down"))
-                    src = PAD_SOURCE if ev.get("src") == PAD_SOURCE else None
+                    src = ev.get("src")
+                    src = src if src in PAD_SOURCES else None
                     if on_hold is not None:
                         if src is None:
                             on_hold(name, down)
@@ -151,8 +169,18 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
                         input.set_button(name, down)
             elif t == "key":
                 code = ev.get("code")
-                if isinstance(code, int) and 0 <= code <= 0xFF and on_key is not None:
+                src = ev.get("src")
+                if not (isinstance(code, int) and 0 <= code <= 0xFF):
+                    pass
+                elif src in PAD_SOURCES:
+                    if not (getattr(input, "text_mode", False)
+                            or getattr(input, "cart_keys", False)):
+                        input.source(src).key(code)
+                elif on_key is not None:
                     on_key(code)
+            elif t == "gamepad":
+                if on_gamepad is not None:
+                    on_gamepad(bool(ev.get("on")))
             elif t == "kd" or t == "ku":
                 code = ev.get("code")
                 mods = ev.get("mods", 0)

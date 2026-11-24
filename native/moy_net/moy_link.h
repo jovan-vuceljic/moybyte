@@ -4,8 +4,10 @@
 // what it writes into.
 //
 // The ring is pure and builds on every tier (fuzz_net.c drives it); the radio
-// half compiles where a board defines MOY_NET_LINK: on-die on the S3 consoles,
-// and on the P4s through native/p4/moy_c6's esp_now_* shim over the C6.
+// half compiles where a board defines MOY_NET_LINK: on-die on the S3 consoles
+// and the Zeros, on the P4s through native/p4/moy_c6's esp_now_* shim over
+// the C6, in the browser console over its board's radio (moy_link_web.c,
+// MOY_NET_LIVE_PAGE) and in a host twin over a test's air (moy_link_host.c).
 
 #ifndef MOY_LINK_H
 #define MOY_LINK_H
@@ -114,6 +116,8 @@ int moy_link_rate(int rate);
 // the radio cannot say.
 int moy_link_channel(int set);
 int moy_link_add_peer(const uint8_t mac[6]);
+// The station's MAC, the address the link's frames leave from.
+void moy_link_mac(uint8_t mac[6]);
 int moy_link_send(const uint8_t mac[6], const uint8_t *data, size_t len);
 // The longest frame this board's radio sends and takes: ESP-NOW v2's where
 // the radio is the chip's own, 250 (v1) through the Waveshare and Guition
@@ -122,6 +126,26 @@ int moy_link_send(const uint8_t mac[6], const uint8_t *data, size_t len);
 uint32_t moy_link_frame_max(void);
 int moy_link_recv(uint8_t mac[6], uint8_t *data, uint32_t cap);
 void moy_link_stats(moy_link_stats_t *s);
+
+#if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
+// The page's link (moy_link_web.c): what the worker moves over the live
+// socket between frames.
+#define MOY_LINK_WEB_DOWN 107           // ENOTCONN: a send with no socket
+typedef struct {
+    uint8_t open, held, board_up, state;
+    int err, ch;
+    uint8_t mac[6];
+    uint32_t sent, refused, rx, drops, opens, states;
+} moy_link_web_info_t;
+// The plaintexts queued since the last take, each behind its 2-byte
+// little-endian length, into `out`: the bytes, 0 when none (or `cap` short).
+size_t moy_link_web_take(uint8_t *out, size_t cap);
+// One plaintext the board sent on the link channel ('n' first).
+void moy_link_web_give(const uint8_t *p, size_t n);
+// The socket opened (1) or closed (0).
+void moy_link_web_open(int on);
+void moy_link_web_info(moy_link_web_info_t *out);
+#endif
 
 #endif
 

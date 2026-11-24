@@ -195,35 +195,40 @@ def test_persist_false_writes_nothing(tmp_path):
 # -- font scale ---------------------------------------------------------------
 
 def test_set_font_scale_clamps_relays_and_relayouts(tmp_path):
-    ws = build_desktop_ws(tmp_path)
+    ws = build_desktop_ws(tmp_path, sys_size=(1280, 800), font_scale=1)
+    assert ws.look.font_scales() == (1, 2, 3)
     was = ws.layout
     ws.look.set_font_scale(3)
     assert ws.look.font_scale == 3
     assert ws.sys_canvas.font_scale == 3
     assert ws.layout is not was and ws.layout.fs == 3    # the kernel cascade ran
     assert _stored(ws)["font_scale"] == 3
-    ws.look.set_font_scale(9, persist=False)             # not in FONT_SCALES
-    assert ws.look.font_scale == 1
+    ws.look.set_font_scale(9, persist=False)             # past the offered: the largest
+    assert ws.look.font_scale == 3
     ws.look.set_font_scale("two", persist=False)         # not an int at all
     assert ws.look.font_scale == 1
 
 
-def test_cycle_font_scale_wraps_through_the_ladder_and_persists(tmp_path):
-    ws = build_desktop_ws(tmp_path)
-    ws.look.set_font_scale(3, persist=False)
+def test_cycle_font_scale_wraps_through_the_offered_and_persists(tmp_path):
+    ws = build_desktop_ws(tmp_path, sys_size=(1024, 600), font_scale=1)
+    assert ws.look.font_scales() == (1, 2)
+    ws.look.cycle_font_scale(1)
+    assert ws.look.font_scale == 2
     ws.look.cycle_font_scale(1)
     assert ws.look.font_scale == 1
     assert _stored(ws)["font_scale"] == 1
 
 
-def test_the_effective_scale_degrades_on_a_shared_canvas(tmp_path):
-    """A T-Deck-shaped console remembers the choice and applies 1, so the chrome
-    geometry matches the 8px text framebuf actually draws."""
+def test_a_shared_canvas_offers_1_alone(tmp_path):
+    """A T-Deck-shaped console's text does not scale: it offers 1 alone, and
+    a scale asked of it is 1, so the chrome geometry matches the 8px text
+    framebuf actually draws."""
     ws = build_ws(tmp_path)                               # 320x240, one canvas
     assert ws.bound_sys_canvas is None
+    assert ws.look.font_scales() == (1,)
     ws.look.set_font_scale(3, persist=False)
-    assert ws.look.font_scale == 3                        # remembered...
-    assert ws.look.effective_font_scale() == 1            # ...not applied
+    assert ws.look.font_scale == 1
+    assert ws.look.effective_font_scale() == 1
     assert ws.layout.fs == 1
 
 
@@ -242,11 +247,11 @@ def test_the_font_scale_lands_on_the_root_canvas_not_a_window_buffer(tmp_path):
     assert buf is not root
     ws.bound_sys_canvas = buf                        # a window's content is installed
     try:
-        ws.look.set_font_scale(3, persist=False)
+        ws.look.set_font_scale(2, persist=False)
     finally:
         ws.bound_sys_canvas = root
-    assert root.font_scale == 3, "the scale went to the window buffer"
-    assert ws.look.effective_font_scale() == 3
+    assert root.font_scale == 2, "the scale went to the window buffer"
+    assert ws.look.effective_font_scale() == 2
 
 
 # -- wallpaper: the theme's (D6, docs/theme_and_shell_2026-11.md §3.9) ---------------
@@ -1111,11 +1116,11 @@ def test_a_reboot_re_applies_every_persisted_look_setting(tmp_path):
     """End to end through the store, which is what `load_system`'s cascade is
     for -- and the only test here that would catch the cascade calling a verb
     that no longer exists."""
-    ws = build_ws(tmp_path)
+    ws = build_ws(tmp_path, sys_size=(640, 480))
     ws.look.set_theme("contrast", variant="light")
     ws.look.set_font_scale(2)
     try:
-        ws2 = build_ws(tmp_path)
+        ws2 = build_ws(tmp_path, sys_size=(640, 480))
         assert (ws2.look.theme_name, ws2.look.theme_variant) == ("contrast", "light")
         assert ws2.look.font_scale == 2
         assert ws2.look.wallpaper_id is None         # contrast: its fill

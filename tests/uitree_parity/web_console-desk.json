@@ -1,6 +1,6 @@
 {
  "surface": "web_console",
- "config": "p4_1024x600_fs2_windowed",
+ "config": "p4_1024x600_cs2_fs1_windowed",
  "commit": "fe33deaea",
  "script": [
   "f:2",
@@ -10,19 +10,19 @@
  "frames": [
   [
    "(open)",
-   "79f6a324c407ca186e73b93c6786630ba3603b2eb75eb32fc52514c39597c538"
+   "0c0be9c21c014fb78363b11c6f892adc6a7ac16f7e723efbe9f30a42c4edd153"
   ],
   [
    "f:2",
-   "79f6a324c407ca186e73b93c6786630ba3603b2eb75eb32fc52514c39597c538"
+   "0c0be9c21c014fb78363b11c6f892adc6a7ac16f7e723efbe9f30a42c4edd153"
   ],
   [
    "k:down",
-   "79f6a324c407ca186e73b93c6786630ba3603b2eb75eb32fc52514c39597c538"
+   "0c0be9c21c014fb78363b11c6f892adc6a7ac16f7e723efbe9f30a42c4edd153"
   ],
   [
    "k:up",
-   "79f6a324c407ca186e73b93c6786630ba3603b2eb75eb32fc52514c39597c538"
+   "0c0be9c21c014fb78363b11c6f892adc6a7ac16f7e723efbe9f30a42c4edd153"
   ]
  ]
 }

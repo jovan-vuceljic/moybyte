@@ -11,7 +11,7 @@ sys.path[:0] = [HERE, os.path.join(HERE, "uitree_fixtures")]
 import uitree_parity as P  # noqa: E402
 
 TDECK = "tdeck_320x240_fs1_dark"
-DESK = "p4_1024x600_fs2_windowed"
+DESK = "p4_1024x600_cs2_fs1_windowed"
 
 HEAD = '''
 import uitree as ui

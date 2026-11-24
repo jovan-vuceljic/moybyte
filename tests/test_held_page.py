@@ -224,7 +224,7 @@ def test_the_desk_root_reads_no_last_buffer_as_the_desk_boards_do(tmp_path):
         assert getattr(comp, "copy_last", None) is not None
         assert getattr(comp, "last_buffer", None) is None
     desk = host_app.build_workstation(str(tmp_path / "desk"), sys_size=(1024, 600),
-                                      font_scale=2, windowed=True)
+                                      font_scale=1, windowed=True)
     root = desk.wm.root_canvas
     assert getattr(root, "last_buffer", None) is None
     assert getattr(root, "copy_last", None) is not None

@@ -33,7 +33,7 @@ CHROME = {SMALL: ((0, 28), (220, 240))}
 
 # (check, fixture, layer or config): why it does not hold, and who the spec sides with
 LUA_SCALE = ("the Lua half is an app cart, and an app cart's desk window (every tier's, tests/test_app_layout.py) "
-             "is the player's window, its canvas at font scale 1 (ui_face reads the canvas's) and its content "
+             "is the player's window, its canvas at the shell's font scale, 1 on the desk (ui_face), and its content "
              "rect 22 px narrower, where the Python half is a system app's window at the desk's scale 2; the "
              "spec's sizes scale with the text scale (§15): the spec sides with Python; the console's app "
              "window, not the engine (open)")

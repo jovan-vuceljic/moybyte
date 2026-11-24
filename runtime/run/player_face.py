@@ -143,8 +143,11 @@ class AppFace:
         body, whether the frame lays out on the desk's rows, whether it is a
         responsive app's (the shell's look, its faces and colours), whether
         the board's tap floor stands (`ui_draw.tap_floor`), and the font
-        scale of the canvas it draws on. A game's is its window bit
-        alone: the cart's look at scale 1."""
+        scale: the shell's where the app owns a surface of its own (the
+        system canvas, or the canvas a window lends it, which carries no
+        scale of its own), as `Player._layout_args` tells it; else the
+        canvas's. A game's is its window bit alone: the cart's look at
+        scale 1."""
         pl = self.pl
         ws = pl.ws
         f = _FACE_WINDOW if ws.windowed_chrome else 0
@@ -157,7 +160,8 @@ class AppFace:
             f |= _FACE_LOOK
         if _ui_draw.tap_floor():
             f |= _FACE_TAP
-        fs = getattr(run.canvas, "font_scale", 1)
+        fs = (ws.look.effective_font_scale() if run.app_full_canvas
+              else getattr(run.canvas, "font_scale", 1))
         return f | (fs if fs > 1 else 1) << _FACE_FS_SHIFT
 
     def page_ctx(self):

@@ -44,7 +44,7 @@ arguments; the boot body is the shared spine's `build_desktop`
 tier body (`device/p4_desktop.py`) first. Every link is read, and a link's
 assignment onto `ws` or argument to `wire_workstation_core` counts for THIS
 target only if the parameters it is built from were supplied down the chain:
-`ws.wm = wm(ws)` is the P4's, because only the P4 tier hands the spine a `wm`;
+`ws.windowed_wm = wm` is the P4's, because only the P4 tier hands the spine a `wm`;
 `ws.ble_keyboard = ble_keyboard` is the T-Deck's. A parameter left at its
 default, or supplied as a literal None, is the tree's way of saying a tier
 lacks the lever, and it is read that way here.
@@ -143,7 +143,8 @@ SERVICES = {
     "net": "the #65 multiplayer transport behind net.* in a cart",
     "gpio": "the #9 physical-pin backend behind pin_write/pin_read in a cart",
     "link": "the #7 ESP-NOW radio: discovery, pairing and the two-console lockstep link",
-    "wm": "the presentation tier: windowed desktop vs the fullscreen stack",
+    "windowed_wm": "the windowed tier a board names, which Workstation.place_tier "
+                   "installs where the desk fits (else the fullscreen stack)",
     "perf_capture": "per-frame timing measured without drawing the HUD",
 }
 
@@ -192,7 +193,7 @@ WIRING = {
                 "itself, so there is no wire to reach a peripheral over. The\n"
                 "verbs stay ABSENT rather than stubbed.",
         "link": INJECTED,
-        "wm": "the fullscreen tier (#73). Workstation.__init__ already installs "
+        "windowed_wm": "the fullscreen tier (#73). Workstation.__init__ already installs "
               "FullscreenStackWM, and wm_windowed.py is deliberately NOT staged "
               "into this build -- a 320x240 panel has no desktop to window",
         "perf_capture": INJECTED,
@@ -237,7 +238,7 @@ WIRING = {
         "gpio": "same as the T-Deck: this board's pins are the panel, touch and\n"
                 "the C6, and a cart runs locally. Nothing to expose.",
         "link": INJECTED,
-        "wm": INJECTED,
+        "windowed_wm": INJECTED,
         "perf_capture": INJECTED,
     },
     # The Guition P4 is the Waveshare's row: same silicon, same services,
@@ -281,7 +282,7 @@ WIRING = {
         "gpio": "same as the T-Deck: this board's pins are the panel, touch and\n"
                 "the C6, and a cart runs locally. Nothing to expose.",
         "link": INJECTED,
-        "wm": INJECTED,
+        "windowed_wm": INJECTED,
         "perf_capture": INJECTED,
     },
     "guition": {
@@ -326,7 +327,7 @@ WIRING = {
         "gpio": "same as the T-Deck: a smart display spends its pins on the\n"
                 "panel and touch.",
         "link": INJECTED,
-        "wm": "the fullscreen tier, same as the T-Deck: Workstation.__init__ "
+        "windowed_wm": "the fullscreen tier, same as the T-Deck: Workstation.__init__ "
               "already installs FullscreenStackWM, and wm_windowed.py is "
               "deliberately not staged into this build",
         "perf_capture": INJECTED,
@@ -381,7 +382,7 @@ WIRING = {
                 "slot instead (players.PlayerRouter.add_player), which is the same\n"
                 "seam a radio fills -- so a two-player cart is testable here with\n"
                 "no hardware at all",
-        "wm": INJECTED,
+        "windowed_wm": INJECTED,
         "perf_capture": "no serial PERF sampler here. On the host the timing "
                         "meters are driven by the perf HUD and the Settings "
                         "PERF DIAG toggle, which set the flag at runtime",
@@ -436,7 +437,7 @@ WIRING = {
         "link": "a wasm sandbox has no radio, and never will. The browser's "
                 "route to a second player is a controller over the page, not "
                 "ESP-NOW",
-        "wm": INJECTED,
+        "windowed_wm": INJECTED,
         "perf_capture": "no serial sampler; the page's own harness times whole "
                         "frames from outside (pageshot/browsershot)",
     },
@@ -612,7 +613,7 @@ def _resolved(target):
 def _from_dead(value, dead):
     """Is this value BUILT FROM a parameter the target never supplied -- the
     parameter itself (`ws.ble_keyboard = ble_keyboard`) or a call on it
-    (`ws.wm = wm(ws)`)? An unsupplied parameter passed as one optional
+    (`ws.svc = make(ws)`)? An unsupplied parameter passed as one optional
     argument among others (`make_webhost(..., with_sd=with_sd)`) is a lever
     the service lacks, not a service the target lacks."""
     if isinstance(value, ast.Name):
@@ -637,7 +638,7 @@ def _boot_assignments(fn, dead=frozenset()):
     every sense that matters.
 
     An assignment built from a parameter this target left unsupplied
-    (`ws.wm = wm(ws)` on a board that handed the spine no `wm`) is not this
+    (`ws.windowed_wm = wm` on a board that handed the spine no `wm`) is not this
     target's -- see _from_dead for exactly what "built from" means.
     """
     out = {}

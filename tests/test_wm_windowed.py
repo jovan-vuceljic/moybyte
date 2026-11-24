@@ -84,7 +84,7 @@ def test_a_game_window_does_not_black_out_the_desk(tmp_path):
     only runs this WM; the host runs both tiers, so `build_workstation` tells
     the canvas which meaning it serves.
     """
-    ws = _ws(tmp_path)
+    ws = _ws(tmp_path, sys_size=_BIG, font_scale=2)
     install_shape(ws, "night_glass")
     ws.look.select_wallpaper("night_glass", persist=False)
     drv = _drv(ws)
@@ -205,10 +205,12 @@ def test_the_wasm_head_shares_the_same_two_meanings(tmp_path):
     assert sc.pix(199, 119) == 12 and sc.pix(199, 0) == 12
 
 
-# Every place a tier is chosen, and what it owes the flag. A file that builds a
-# WindowedWM either clears `letterbox_composite` in the same branch or carries a
-# reason it need not -- and the discovery test below fails on a fourth tier, so
-# the next presentation cannot inherit the black desk by saying nothing.
+# Every place a tier is chosen, and what it owes the flag. A file that names
+# WindowedWM as its windowed tier either leaves it to `Workstation.place_tier`,
+# the one body that builds it and clears `letterbox_composite` in the branch
+# that does, or carries a reason the flag never reaches a fill -- and the
+# discovery test below fails on a fourth tier, so the next presentation cannot
+# inherit the black desk by saying nothing.
 _CLEARS = True
 WINDOWED_INSTALLERS = {
     "runtime/host/host_app.py": _CLEARS,
@@ -260,13 +262,21 @@ def _windowed_install_sites():
                     except SyntaxError:
                         continue
                     for node in ast.walk(tree):
-                        # Constructed here, or NAMED as the tier a shared
-                        # spine installs (`wm=WindowedWM`): either way this
-                        # is the module that decided the board runs windowed.
-                        if isinstance(node, ast.Call) and any(
-                                isinstance(f, ast.Name) and f.id == "WindowedWM"
-                                for f in [node.func]
-                                + [k.value for k in node.keywords]):
+                        # Constructed here, NAMED as the tier a shared spine
+                        # installs (`wm=WindowedWM`) or as the console's
+                        # windowed tier (`ws.windowed_wm = WindowedWM`):
+                        # either way this is the module that decided the
+                        # board runs windowed.
+                        named = isinstance(node, ast.Call) and any(
+                            isinstance(f, ast.Name) and f.id == "WindowedWM"
+                            for f in [node.func] + [k.value for k in node.keywords])
+                        named = named or (
+                            isinstance(node, ast.Assign)
+                            and isinstance(node.value, ast.Name)
+                            and node.value.id == "WindowedWM"
+                            and any(isinstance(t, ast.Attribute) and t.attr == "windowed_wm"
+                                    for t in node.targets))
+                        if named:
                             found[path.relative_to(ROOT).as_posix()] = (path,
                                                                         tree)
     return found
@@ -282,26 +292,33 @@ def test_every_windowed_tier_answers_for_the_letterbox_flag():
     for rel, verdict in WINDOWED_INSTALLERS.items():
         if verdict is not _CLEARS:
             assert isinstance(verdict, str) and verdict.strip(), rel
-            continue
-        import ast
-        _path, tree = found[rel]
-        # The clear must sit in the SAME branch that installs the WM: a clear
-        # somewhere else in the file is a clear that a future refactor drops.
-        branches = [n for n in ast.walk(tree)
-                    if isinstance(n, ast.If)
-                    and "WindowedWM" in ast.dump(n)]
-        assert branches, rel
-        inner = min(branches, key=lambda n: len(ast.dump(n)))
-        cleared = [
-            n for n in ast.walk(inner)
-            if isinstance(n, ast.Assign)
-            and any(isinstance(t, ast.Attribute)
-                    and t.attr == "letterbox_composite" for t in n.targets)
-            and isinstance(n.value, ast.Constant) and n.value.value is False
-        ]
-        assert cleared, (
-            rel + ": installs WindowedWM without clearing letterbox_composite "
-            "-- the desk goes black behind the first game window")
+    import ast
+    from tools.board_config import runtime_file
+    with open(runtime_file("console.py"), encoding="utf-8") as f:
+        tree = ast.parse(f.read())
+    place = next(n for n in ast.walk(tree)
+                 if isinstance(n, ast.FunctionDef) and n.name == "place_tier")
+    # The clear must sit in the SAME branch that builds the WM: a clear
+    # somewhere else is a clear that a future refactor drops.
+    branches = [n for n in ast.walk(place)
+                if isinstance(n, ast.If) and any(
+                    isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+                    and c.func.attr == "windowed_wm" for c in ast.walk(n))]
+    assert branches, "place_tier builds no windowed tier"
+    inner = min(branches, key=lambda n: len(ast.dump(n)))
+    built = next(b for b in (inner.body, inner.orelse) if any(
+        isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+        and c.func.attr == "windowed_wm" for st in b for c in ast.walk(st)))
+    cleared = [
+        n for st in built for n in ast.walk(st)
+        if isinstance(n, ast.Assign)
+        and any(isinstance(t, ast.Attribute)
+                and t.attr == "letterbox_composite" for t in n.targets)
+        and isinstance(n.value, ast.Constant) and n.value.value is False
+    ]
+    assert cleared, (
+        "Workstation.place_tier installs WindowedWM without clearing "
+        "letterbox_composite -- the desk goes black behind the first game window")
 
 
 # ---------------------------------------------------------------------------
@@ -469,12 +486,41 @@ def test_editor_playtest_opens_at_2x_over_the_editor(tmp_path):
     assert ws.wm.windows["desktop"].w == play.w
 
 
+@pytest.fixture(autouse=True)
+def _no_half_theme():
+    yield
+    if _HALF[0]:
+        _HALF[0] = False
+        from runtime import ui_draw
+        ui_draw._C.theme_uninstall()
+
+
+_HALF = [False]
+
+
+def _half_desk(tmp_path):
+    """A 1024x600 desk under a `render.scale: 2` theme over `moy`: a 512x300
+    surface, a desk where the dev playtest's 2x does not fit."""
+    import json
+    from runtime import ui_draw
+    ws = _ws(tmp_path, panel_diagonal_in=7.0)
+    rc, _notes = ui_draw._C.theme_install(json.dumps(
+        {"format": 2, "name": "moy-x2", "inherits": "moy",
+         "look": {"render": {"scale": 2}}}).encode())
+    assert rc == 0
+    _HALF[0] = True
+    ws.look.set_theme("moy-x2", persist=False, variant="dark")
+    assert ws.render_scale == 2 and ws.wm.root_canvas.w == 512
+    return ws
+
+
 def test_dev_playtest_is_2x_where_it_fits_else_native(tmp_path):
     """The dev playtest is 2x where the desk holds it and native cart pixels
     where it does not; a play run still grows with the desktop."""
     from runtime import wm_windowed
-    for i, sys_size in enumerate(((640, 480), (1024, 600), (1440, 900))):
-        ws = _ws(tmp_path / str(i), sys_size=sys_size, font_scale=1)
+    for i, sys_size in enumerate(((512, 300), (1024, 600), (1440, 900))):
+        ws = (_half_desk(tmp_path / str(i)) if sys_size == (512, 300)
+              else _ws(tmp_path / str(i), sys_size=sys_size, font_scale=1))
         full = ws.wm.root_canvas
         ws.wm.set_play_intent("dev")
         dev = ws.wm._win_size("desktop", full, 1)
@@ -482,14 +528,15 @@ def test_dev_playtest_is_2x_where_it_fits_else_native(tmp_path):
         play = ws.wm._win_size("desktop", full, 1)
         assert play[0] >= dev[0]
         s = (dev[0] - 2) // ws.run.canvas.w
-        assert s == (wm_windowed._DEV_SCALE if sys_size != (640, 480) else 1), sys_size
-        assert dev == (ws.run.canvas.w * s + 2, ws.run.canvas.h * s + 2 + 18)
+        assert s == (wm_windowed._DEV_SCALE if sys_size != (512, 300) else 1), sys_size
+        if sys_size != (512, 300):      # (the half desk's chrome is the desk class's)
+            assert dev == (ws.run.canvas.w * s + 2, ws.run.canvas.h * s + 2 + 18)
 
 
 def test_a_native_playtest_opens_clear_of_the_editors_symbol_keys(tmp_path):
     """Where 2x does not fit, the playtest opens at native size at the
     Editor's top right, clear of the symbol keys along its foot (D-03.4)."""
-    ws = _ws(tmp_path, sys_size=(640, 480), font_scale=1)
+    ws = _half_desk(tmp_path)
     drv = _drv(ws)
     _open_editor(ws)
     drv.frame(1 / 30)
@@ -1316,7 +1363,7 @@ def test_game_keeps_running_under_settings_window(tmp_path):
 def _game_and_settings(tmp_path):
     """A desk with a running game's window and Settings' beside it, Settings
     focused on its Name field, its edit open (Enter) and one letter typed."""
-    ws = _ws(tmp_path)
+    ws = _ws(tmp_path, sys_size=_BIG, font_scale=2)
     drv = _drv(ws)
     ws.open()
     ws.wm.play_in_window()
@@ -1390,7 +1437,7 @@ def test_a_cart_keeps_its_own_text_mode_across_focus(tmp_path):
     """A running cart's own textmode(True) is its window's: focus going to
     Settings (no field focused) is button mode, and back to the cart is its
     text mode again."""
-    ws = _ws(tmp_path)
+    ws = _ws(tmp_path, sys_size=_BIG, font_scale=2)
     drv = _drv(ws)
     ws.open()
     ws.wm.play_in_window()
@@ -2011,6 +2058,12 @@ def test_taskbar_chips_freeze_and_refresh_on_focus_change(tmp_path):
 
 # -- changing the font scale from inside a window (#155) ---------------------
 
+# A glass that holds the desk at font scale 2 (layout_base.desk_room): the
+# tier is chosen at boot, so a live change keeps the desk only where both
+# scales hold it.
+_BIG = (2048, 1200)
+
+
 def test_font_scale_change_from_a_window_reaches_the_root_canvas(tmp_path):
     """Changing FONT SIZE in Settings must resize the console for real.
 
@@ -2022,7 +2075,7 @@ def test_font_scale_change_from_a_window_reaches_the_root_canvas(tmp_path):
     font_scale from the root) kept rendering text at the old one. Owner, on
     glass 2026-07-26: "changing it while running messes it up, if I change and
     reboot it looks great"."""
-    ws = _ws(tmp_path, font_scale=2)
+    ws = _ws(tmp_path, sys_size=_BIG, font_scale=2)
     drv = _drv(ws)
     ws.open_settings()
     drv.frame(1 / 30)
@@ -2052,7 +2105,7 @@ def _pin_clock(ws):
 def test_font_scale_change_matches_booting_at_that_scale(tmp_path):
     """The pixel contract: switching at runtime must render EXACTLY what booting
     at that scale renders -- the mismatch is what read as 'bunched up'."""
-    ws_boot = _ws(tmp_path, font_scale=1)
+    ws_boot = _ws(tmp_path, sys_size=_BIG, font_scale=1)
     drv_boot = _drv(ws_boot)
     _pin_clock(ws_boot)
     ws_boot.open_settings()
@@ -2061,7 +2114,7 @@ def test_font_scale_change_matches_booting_at_that_scale(tmp_path):
         drv_boot.frame(1 / 30)
     reference = bytes(ws_boot.sys_canvas._buf)
 
-    ws = _ws(tmp_path, font_scale=2)
+    ws = _ws(tmp_path, sys_size=_BIG, font_scale=2)
     drv = _drv(ws)
     _pin_clock(ws)
     ws.open_settings()
@@ -2085,7 +2138,7 @@ def test_new_window_buffers_adopt_the_changed_font_scale(tmp_path):
     """A window opened AFTER the change must render at the new scale too --
     new_layer clones font_scale from the root, so this is the same bug seen from
     the other end."""
-    ws = _ws(tmp_path, font_scale=2)
+    ws = _ws(tmp_path, sys_size=_BIG, font_scale=2)
     drv = _drv(ws)
     ws.open_settings()
     drv.frame(1 / 30)
@@ -2510,8 +2563,8 @@ def test_a_dead_window_releases_its_buffer_and_the_backdrop_survives_a_relayout(
 # installs each window's layout context: a row the console shared, or one read
 # from the last window installed, lays an app out at the other window's size.
 TWO_WINDOWS = (
-    "722e0daf48595a1c228a07eafc84b76a9e9b4966c65893155c56640f36e873ab",
-    "253bd8860e8eb40386aa6a64289759b2d0dba727448a52442b2437eb88e904be",
+    "e09077a633fd0fad1dd5dcdf6f2260805cd64b071ed98c9cc6d004611b15f3be",
+    "a22f8d0f06e396b344a1b632753f6e314c5045f8aa9a2442d07490f32302ddda",
 )
 
 
@@ -2528,7 +2581,6 @@ def _off_desk(ws):
 
 
 @pytest.mark.parametrize("config", ("p4_1024x600_cs2_fs1_windowed",
-                                    "p4_1024x600_fs2_windowed",
                                     "guition_p4_1280x800_windowed"))
 def test_every_app_and_a_cascade_open_whole_on_the_glass(tmp_path, config):
     """A window opens with all of it on the glass, beside the desk's whole
@@ -3145,7 +3197,8 @@ class _Ring:
 
 
 def _popover_desk(tmp_path, game=False, fs=1):
-    ws = build_desktop_ws(tmp_path, font_scale=fs, panel_diagonal_in=7.0)
+    ws = build_desktop_ws(tmp_path, font_scale=fs, panel_diagonal_in=7.0,
+                          sys_size=(1024 * fs, 600 * fs))     # the desk at fs (desk_room)
     use_theme(ws, "night", "dark")
     drv = _drv(ws)
     ws.bar_layer.clock_text = lambda: "00:00"
@@ -4891,3 +4944,24 @@ def test_an_idle_snapshot_mint_with_no_room_is_asked_once(tmp_path):
         _quiesce(ws)
         drv.frame(1 / 30)
     assert len(asks) == 2, asks
+
+
+def test_a_desk_tile_the_keys_moved_to_opens(tmp_path):
+    """The desk's column holds no current of its own, so the card its keys
+    moved to stays theirs: Down then A opens Projects, the second tile, not
+    Play, the first (moy_ui_api_table.c's cells motion lands the keys on the
+    app's current only where the app moved it)."""
+    ws = build_desktop_ws(tmp_path)
+    drv = _drv(ws)
+    ws.home.go_home()
+    for _ in range(5):
+        drv.frame(1 / 30)
+    assert ws.wm.desk_focus() == "play"
+    drv.press("down")
+    for _ in range(5):
+        drv.frame(1 / 30)
+    assert ws.wm.desk_focus() == "projects"
+    drv.press("a")
+    for _ in range(10):
+        drv.frame(1 / 30)
+    assert ws.wm.stack.kinds()[-1] == "projects", ws.wm.stack.kinds()

@@ -82,9 +82,9 @@ nor those docs will warn you about:
 - **The browser draws what its boards draw: each arrangement on its board's
   metric class, in the theme's fonts and icon set** (owner, 2026-10-20: the
   browser and the boards never diverge). The handheld 320x240 declares no
-  glass, as the T-Deck declares none; the 1024x600 desk declares the P4's
-  (`web_boot.DESK_DIAGONAL_IN`), so it lays out on the desk's metrics as that
-  board does. `build.sh` generates `fonts_data` (`tools/make_font.py module`)
+  glass, as the T-Deck declares none; the desk declares the P4's at the P4's
+  pixel density at any page size (`layout_base.desk_diagonal_in`), so it lays
+  out on the desk's metrics and tap floor as that board does. `build.sh` generates `fonts_data` (`tools/make_font.py module`)
   for board.toml's `font_tier` -- both tiers -- and freezes it into the wasm,
   faces and icon masks together, so they ride the compressed
   `micropython.wasm` in the add-on's pack.
@@ -95,6 +95,19 @@ nor those docs will warn you about:
   pixel for pixel; `tests/test_web_fonts.py` names the face a seed theme lost.
   A web-only tweak to what the console draws (web_boot) is a divergence that
   test reports: the page's own chrome is the only look the browser owns.
+- **A gamepad held at the browser is a board's pad** (#254): the page polls
+  the Gamepad API once a frame (`page_tail.js`, `GP_BTN`: the standard
+  mapping by place, bottom A and right B) and holds buttons of its own
+  source, `gamepad`, which joins the console's inputs as the `pad` kind
+  while one is connected (`web_boot._gamepad`, `Workstation.input_joined`),
+  so its focus and its hints show from the moment it connects. So the
+  browser's table is the boards' sixteen-name `InputTable`, never the
+  simulator's eight: X, Y, Select and Start reach the shell as a board's
+  do, and the shoulders type Q and E, the T-Deck's L and R (none while a
+  field takes text or a game owns the keys). **A browser shows a pad only
+  to a secure context**: Firefox's `getGamepads()` answers none over plain
+  HTTP, so a board-served page may see no pad where the site (https) and
+  localhost do.
 - **The emscripten is PINNED: `EMSDK_VERSION` in build.sh, held by
   `tools/emsdk_tree.sh` on every full build** (a tree at the pin is a silent
   no-op, another version is moved to it, one that cannot be had fails the
@@ -340,8 +353,7 @@ nor those docs will warn you about:
     the step leaves the frame's samples as four numbers at `pcm_addr()`
     (`web_boot._PCM`) and returns "" unless it painted, the pull and the
     media face's feed reuse their buffers, and the page's reader finds a
-    segment's growth by reading it, not by a stat. The browser's VM boxes
-    every float, which a board's does not. `?meter=1` counts the heap's
+    segment's growth by reading it, not by a stat. `?meter=1` counts the heap's
     allocation each frame (`__moyState().alloc`), and
     `tests/test_web_audio_stream_e2e.py` holds a station's frames and the
     loop around them to a stated bound.
@@ -399,6 +411,20 @@ nor those docs will warn you about:
   events → InputState/Pointer, which the sync RPC speaks). The recording-tier
   surface machinery in `wm_windowed` and the kernel's surface table were
   deleted on 2026-10-27 (`docs/surface_model_v1.md` §16).
+- **The live socket is a Zero's page's, and the worker's to move** (#256,
+  `native/moy_net/moy_live.h`): one sealed WebSocket to `GET /live` (seal
+  slot 1; the Terminal's is 0), multiplexed by its frames' first byte, served
+  on the board's own task. Its first channel relays the board's ESP-NOW, so
+  the page's link (`moy_link_web.c`, the kernel's Match over it) plays a
+  console's match, a Python cart's as a Lua one's: the wasm computes floats
+  as the boards' do (REPR_C over 32-bit words, single precision,
+  `variant/mpconfigvariant.h`), which the lockstep contract requires
+  (`docs/netplay_v1.md` §5). So a count, an address or a time the page and
+  the VM exchange rides an integer, never a float, which keeps 22 bits:
+  `web_boot._PCM` is 64-bit integers, and `time.time()` is whole seconds
+  as on a board. The worker moves its bytes between frames
+  (`liveStep`, `web_boot.live_*`), never inside a step, and reopens a dropped
+  socket itself; a console board builds no bridge and 404s the probe.
 - **WASM MODE IS A SWITCH, NOT A SESSION** (owner call): no heartbeat, no presence
   detection, no timeout. While WEB CONSOLE is ON the glass PARKS on a connection
   screen — which is how the two-writer collision is **designed out rather than

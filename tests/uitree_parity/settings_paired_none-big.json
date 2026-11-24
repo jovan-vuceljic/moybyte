@@ -1,6 +1,6 @@
 {
  "surface": "settings_paired_none",
- "config": "big_800x480_fs3_dark",
+ "config": "big_960x720_fs3_dark",
  "commit": "30d44f7de",
  "script": [
   "k:down",

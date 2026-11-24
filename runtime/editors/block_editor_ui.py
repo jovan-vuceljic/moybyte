@@ -1207,7 +1207,7 @@ class BlockEditorUI:
     def row_h(self):
         """An outline row's height in pixels: ROW in the page's unit (the
         font scale on a handheld, 1 on the desk), taller where the text is
-        (a desk's Large and Largest)."""
+        (a desk's Large and Larger)."""
         fs = self.block_layout.fs
         desk = _layout_base.metric_class() == _layout_base.DESK
         return max(ROW * (1 if desk else fs), _ui_draw.font("ui")[3] * fs + 6)

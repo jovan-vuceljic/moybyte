@@ -29,6 +29,7 @@ call its text a "same glyphs" fallback.
 
 from __future__ import annotations
 
+import codecs
 import os
 import sys
 
@@ -245,6 +246,10 @@ class _Rgb888Lut(dict):
 
 
 _SYSTEM_CLS = [None]
+# The buffer's words in this machine's order, one UTF-16 code unit each
+# (`HostSystemCanvas.to_indexed`).
+_UTF16_DECODE = codecs.utf_16_le_decode if sys.byteorder == "little" else codecs.utf_16_be_decode
+_UTF32_DECODE = codecs.utf_32_le_decode if sys.byteorder == "little" else codecs.utf_32_be_decode
 
 
 def _system_canvas_class():
@@ -276,7 +281,7 @@ def _system_canvas_class():
         genuinely the host's stays here: the no-kernel fallbacks a clean
         checkout needs (`moy_font` is a gitignored build artefact, so the
         kernel text op can be absent), and -- host only, because only the host
-        has a screen to hand to pygame or a GIF -- an RGB888 readout.
+        has a screen to hand to pygame or a GIF -- the RGB888 and indexed readouts.
         """
 
         # NOT the class default 2. That describes the P4's DPI buffer rotation;
@@ -288,6 +293,8 @@ def _system_canvas_class():
 
         def __init__(self, comp, font_scale=1):
             self._rgb888_cache = None     # (wire table, _Rgb888Lut) -- see to_rgb888
+            self._indexed = None          # [wire table, words, encoding map, colours] -- see to_indexed
+            self._wide = None             # to_indexed's UTF-32 copy of the words
             SystemCanvas.__init__(self, comp, font_scale=font_scale)
 
         # NO `blit_game` OVERRIDE, and no `letterbox_composite` of its own.
@@ -332,6 +339,58 @@ def _system_canvas_class():
                 s = (self._oy + row) * stride + self._ox
                 rows.append(b"".join(map(get, mv[s:s + w])))
             return b"".join(rows)
+
+        def to_indexed(self):
+            """The surface as (indices, colours): w*h bytes, one an index into
+            `colours`, a list of each index's three RGB bytes, the ones
+            `to_rgb888` gives its word -- so a screen that maps indices to
+            colours itself (pygame's 8-bit surface) shows `to_rgb888`'s pixels
+            without the per-pixel Python that costs. None where that cannot
+            be: more than 256 distinct words, or a viewport canvas; to_rgb888
+            answers then.
+
+            The words map to indices in C: decoded as UTF-16, each word is one
+            character, which a charmap codec encodes to its byte. A high and a
+            low surrogate word side by side decode to ONE character, so such a
+            surface is widened to UTF-32 first, where no two words pair."""
+            self.flush_batch()
+            w, h = self.w, self.h
+            if self._ox or self._oy or self._stride != w:
+                return None
+            n = w * h
+            raw = memoryview(self._buf)[:n * 2]
+            text = _UTF16_DECODE(raw, "surrogatepass", True)[0]
+            if len(text) != n:
+                wide = self._wide
+                if wide is None or len(wide) != n * 4:
+                    wide = self._wide = memoryview(bytearray(n * 4))
+                lo = 0 if sys.byteorder == "little" else 2
+                wide[lo::4] = raw[0::2]
+                wide[lo + 1::4] = raw[1::2]
+                text = _UTF32_DECODE(wide, "surrogatepass", True)[0]
+            wire = self._wire
+            kept = self._indexed
+            if kept is None or kept[0] is not wire:
+                kept = self._indexed = [wire, "", None, None]
+            if kept[2] is not None:
+                try:
+                    return codecs.charmap_encode(text, "strict", kept[2])[0], kept[3]
+                except UnicodeEncodeError:
+                    pass                 # a word the map has not met yet
+            words = kept[1]
+            new = set(text).difference(words)
+            if len(words) + len(new) > 256:
+                words = ""
+                new = set(text)
+                if len(new) > 256:
+                    return None
+            words += "".join(sorted(new))
+            get = self._rgb888_lut().__getitem__
+            kept[1:] = [words, codecs.charmap_build(words), [get(ord(c)) for c in words]]
+            try:
+                return codecs.charmap_encode(text, "strict", kept[2])[0], kept[3]
+            except UnicodeEncodeError:
+                return None              # U+FFFE, which a charmap cannot carry
 
         def _rgb888_lut(self):
             # Rebuilt only when the wire table changes identity, which is

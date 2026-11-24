@@ -107,7 +107,7 @@ def _empty_at(top):
     def probe(ws):
         e = seen["app"].engine
         return repr((e.rect, e.rect_of("head"), e.rect_of("go")))
-    f = P.frames("p4_1024x600_fs2_windowed", P.Surface(opened, probe=probe), [])[0]
+    f = P.frames("p4_1024x600_cs2_fs1_windowed", P.Surface(opened, probe=probe), [])[0]
     return ast.literal_eval(f.state)
 
 
@@ -116,7 +116,7 @@ def test_a_placed_empty_fills_its_stack_and_drops_its_disc_where_it_would_run_pa
     would push its button past the page, the disc goes and the button
     stays inside."""
     page, head, tall = _empty_at(1)
-    _page, head2, short = _empty_at(150)
+    _page, head2, short = _empty_at(140)
     bottom = page[1] + page[3]
     assert tall[1] + tall[3] <= bottom and short[1] + short[3] <= bottom, (page, tall, short)
     with_disc, without = tall[1] - (head[1] + head[3]), short[1] - (head2[1] + head2[3])
@@ -215,7 +215,7 @@ def test_a_size_text_label_draws_as_measured_and_an_icon_alone_draws(tmp_path):
     import uitree_c
     import uitree_placed_label as F
     from runtime import host_app
-    for config in ({}, dict(sys_size=(800, 480), font_scale=3)):
+    for config in ({}, dict(sys_size=(960, 720), font_scale=3)):
         ws = host_app.build_workstation(str(tmp_path / ("carts%d" % len(config))), **config)
         ws.pointer.visible = False
         app = P.host(ws, F.layer(uitree_c.CEditorEngine))

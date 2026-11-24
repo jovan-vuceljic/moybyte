@@ -29,7 +29,6 @@ TOGGLES = tuple((t[0], say(t[1]), t[3]) for t in SETTINGS_TOGGLES)    # (state, 
 GATED = tuple(t[0] for t in SETTINGS_TOGGLES if t[4] is not None)
 PLAY = ("two_player", "steady", "crisp_pixels", "show_fps")
 HOMES = ("theme", "carousel", "grid", "icons")
-SCALES = tuple(str(f) for f in sorted(_SIZES))
 CHANNELS = ("stable", "beta")
 IDLE = tuple((key, say(text)) for key, _rung, text, _d in IDLE_ROWS)
 STEP_WORDS = tuple(str(t) for t in IDLE_STEPS)
@@ -41,7 +40,9 @@ CAPS = ("bluetooth", "layout_theme", "crash", "usb_drive", "webhost", "update", 
 s = ui.state(
     wifi_word="", bt_word="", theme_title="", tz_place="", crash_word="", web_word="",
     paired_words="", ach_words="",
-    font_scale=ui.enum(*SCALES, init=SCALES[0]),
+    sizes=ui.model(key="v", v="", word=""),
+    font_scale=ui.row_of("sizes"),
+    has_sizes=False,
     layouts=ui.model(key="v", v="", word=""),
     layout_theme=ui.row_of("layouts"),
     home_style=ui.enum(*HOMES, init="theme"),
@@ -56,7 +57,6 @@ s = ui.state(
            + [(k, ui.enum(*STEP_WORDS, init=STEP_WORDS[0])) for k, _l in IDLE]))
 
 
-ui.labels("sizes", dict((str(f), w) for f, w in _SIZES.items()))
 ui.labels("homes", dict(zip(HOMES, _HOME_WORDS)))
 ui.labels("channels", dict(zip(CHANNELS, _STABLE_BETA)))
 ui.labels("idle", dict((str(t), _idle_word(t)) for t in IDLE_STEPS))
@@ -140,7 +140,12 @@ def rows_poll():
     for name, _label, _verb in TOGGLES:
         setattr(s, name, bool(getattr(ws, name, False)))
     look = ws.look
-    s.font_scale = _SCALE_WORD.get(look.font_scale, SCALES[0])
+    offered = look.font_scales()                # the sizes this glass fits, one rule's
+    if kept.get("sizes") is not offered:
+        kept["sizes"] = offered
+        _model("sizes", tuple((("v", str(f)), ("word", _SIZES[f])) for f in offered))
+        s.has_sizes = len(offered) > 1
+    s.font_scale = _SCALE_WORD.get(look.font_scale, "1")
     if s.has_layout_theme:
         pick = look.layout_theme()
         if kept.get("lgen", -1) != look.layout_gen or kept.get("lpick", ()) != pick:
@@ -215,9 +220,7 @@ def ach_open():
 
 def font_set():
     look = uitree_app.env().ws.look
-    scales = look.FONT_SCALES
-    cur = scales.index(look.font_scale) if look.font_scale in scales else 0
-    look.cycle_font_scale(scales.index(int(s.font_scale)) - cur)
+    look.set_font_scale(int(s.font_scale))
 
 
 def layout_set():
@@ -312,7 +315,8 @@ def rows_page():
             ui.link("wifi", "{wifi_word}")
             ui.link("bluetooth", "{bt_word}", shown="has_bluetooth")
             ui.link("appearance", "{theme_title}")
-            ui.seg("Text size", "font_scale", labels="sizes", look="cycle", on="font_set")
+            ui.seg("Text size", "font_scale", text="{.word}", look="cycle", on="font_set",
+                   shown="has_sizes")
             ui.seg("Layout", "layout_theme", text="{.word}", look="cycle", on="layout_set",
                    shown="has_layout_theme")
             ui.seg("Home style", "home_style", labels="homes", look="cycle", on="home_set")

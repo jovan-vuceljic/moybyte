@@ -122,7 +122,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         self._hk = _Keyed()
         self._beside_drew = []
         # what the hint strip's key was made of, and the key (`_outside_key`)
-        self._ok = [None, None, None, None, None, None, None, None, None, None]
+        self._ok = [None, None, None, None, None, None, None, None, None, None, None]
         self._st_parts = [None] * 16  # the statics key's parts (`_statics_key`)
         # Retained WHOLE-frame cache (2026-07-27, the damage-model doctrine at
         # shelf granularity): the last full home frame, captured at the END of
@@ -507,7 +507,8 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         hint strip's is made again only where what it is made of moved: the
         grid's selection or items (its `zone_gen`), its tab, the favourites
         (the settings rows' generation), the keys on the bar, the store's
-        `can_manage` and the pointer samples the strip took (`_sgen`)."""
+        `can_manage`, the pointer samples the strip took (`_sgen`) and the
+        input whose keys it names (a gamepad connecting changes them)."""
         g = self.grid
         ws = self.ws
         m = self._ok
@@ -516,10 +517,11 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
         tk = self._on_bar
         cm = getattr(ws, "can_manage", True)
         pg = self._sgen
+        hk = _ui_draw.hint_kind()
         if not (m[1] == zg and m[0] is g and m[2] == g.tab and m[3] == sg and m[4] == tk
-                and m[5] == cm and m[6] is g.favorite_for and m[9] == pg):
+                and m[5] == cm and m[6] is g.favorite_for and m[9] == pg and m[10] == hk):
             it = self.favourable()
-            m[7] = (self.zone_verbs(), it is not None and ws.carts.is_favorite(it), tk, pg)
+            m[7] = (self.zone_verbs(), it is not None and ws.carts.is_favorite(it), tk, pg, hk)
             m[0] = g
             m[1] = zg
             m[2] = g.tab
@@ -528,6 +530,7 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             m[5] = cm
             m[6] = g.favorite_for
             m[9] = pg
+            m[10] = hk
         hint = m[7]
         now = m[8]
         if now is None or now[0] is not hint:

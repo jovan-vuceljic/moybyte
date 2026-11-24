@@ -338,8 +338,10 @@ typedef struct {
     // A carousel's page (moy_ui_api_carousel): the row its keys and taps carry to the centre,
     // the row it rests on as the app was told, and a fling that came to rest at this frame's
     // begin (its glide to the nearest row starts unticked, as the frame after a fling's). `car`
-    // its look (MOY_UI_LOOK_*); a shelf's or icons' page (moy_ui_api_cells_grid) keeps the card its
-    // keys are on as car_set.
+    // its look (MOY_UI_LOOK_*); a shelf's, icons' or desk shelf's page (moy_ui_api_cells_grid)
+    // keeps the card its keys are on as car_set and the card the app held current at its last
+    // frame as car_row: only a move of the app's own current lands the keys there, so a page
+    // whose app holds none keeps the card its keys moved to.
     uint8_t car, car_fling;
     int16_t car_row, car_set;
     uint32_t thumb;                 // a page or placed table: its thumb as it drew last, 0 none

@@ -1172,13 +1172,13 @@ def test_the_palettes_categories_pick_their_blocks(blocks_desk):
     assert Parts.palette_items(None, "events") == []
 
 
-def test_large_text_folds_the_palettes_categories_into_a_cycle(tmp_path):
+def test_largest_text_folds_the_palettes_categories_into_a_cycle(tmp_path):
     """Where a category's name would not fit its half of the two columns
-    (Large text on a 1024 desk), the categories are one cycle of their
-    words, which a tap on its chevron steps, and no name is cut."""
-    ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=(1024, 600),
-                                    panel_diagonal_in=7.0, font_scale=2, windowed=True)
-    ws.home.open_desk()
+    (Larger text on a 3072x1800 desk, whose room at the scale is the desk's
+    1024x600), the categories are one cycle of their words, which a tap on
+    its chevron steps, and no name is cut."""
+    ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=(3072, 1800),
+                                    panel_diagonal_in=7.0, font_scale=3, windowed=True)
     ws.open_in_editor(next(c for c in ws.carts.all if c.get("title") == "Coin Quest"))
     drv = host_app.ConsoleDriver(ws)
     for _ in range(3):
@@ -1193,6 +1193,16 @@ def test_large_text_folds_the_palettes_categories_into_a_cycle(tmp_path):
     bx, by, bw, bh = part.rect_of("cat_at")
     _click(drv, bx + bw - 6, by + bh // 2)       # its right chevron: the next category
     assert d.part_state["block cat"] != was
+
+
+def _editor_in(tmp_path, fs, cart):
+    """The desk Editor at font scale `fs`, on a glass that holds the desk at
+    `fs` (`layout_base.desk_room`)."""
+    ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=(1024 * fs, 600 * fs),
+                                    panel_diagonal_in=7.0, font_scale=fs, windowed=True)
+    ws.home.open_desk()
+    ws.open_in_editor(cart(ws))
+    return ws
 
 
 def test_the_palette_by_keys_alone(blocks_desk):
@@ -1579,25 +1589,6 @@ def test_typing_on_a_root_of_two_buffers_draws_the_pane_alone_after_a_whole_fram
     assert moved and max(moved[-4:]) <= 2 * a.code_layout.lh, moved
 
 
-def test_at_800_the_sound_panes_menu_picks_a_sound(tmp_path):
-    ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=(800, 480),
-                                    panel_diagonal_in=7.0, font_scale=1, windowed=True)
-    ws.home.open_desk()
-    ws.open_in_editor(install_shape(ws, "sky_run"))
-    drv = host_app.ConsoleDriver(ws)
-    for _ in range(3):
-        drv.frame(DT)
-    _tap(drv, ord("5"), 1)
-    d = ws.editor_desk
-    me = ws.music_ui.musicedit
-    snd = ws.music_ui.sound
-    _hpress(drv, d, 0, "sounds")
-    drv.frame(DT)
-    assert snd.s.asking == "menu"
-    _press_sound(drv, d, snd, "1")
-    assert me.sfx_idx == 1 and snd.s.asking == "none"
-
-
 def test_the_waves_swatches_are_their_moy64_inks():
     from runtime import editor_sound as S
     from runtime.gfx_binding import moy64
@@ -1961,17 +1952,14 @@ def test_quiet_frames_warm_the_other_workspaces_and_a_switch_draws_the_same(tmp_
         assert shots[(True, key)] == shots[(False, key)], key
 
 
-@pytest.mark.parametrize("size,fs", [((1024, 600), 2), ((800, 480), 2), ((800, 480), 3)])
-def test_a_pane_headers_name_is_never_cut_at_large_text(tmp_path, size, fs):
+@pytest.mark.parametrize("fs", [2, 3])
+def test_a_pane_headers_name_is_never_cut_at_large_text(tmp_path, fs):
     """At Large text no pane header cuts its name: where a name and its
     tools do not fit, the status gives way, then the icon, then the words
     (the pane's icon names it); the name stands left of every tool; and the
     header is as tall as its words, so the body under it covers none."""
     from runtime import ui_draw
-    ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=size,
-                                    panel_diagonal_in=7.0, font_scale=fs, windowed=True)
-    ws.home.open_desk()
-    ws.open_in_editor(install_shape(ws, "sky_run"))
+    ws = _editor_in(tmp_path, fs, lambda ws: install_shape(ws, "sky_run"))
     drv = host_app.ConsoleDriver(ws)
     d = ws.editor_desk
     forms = set()

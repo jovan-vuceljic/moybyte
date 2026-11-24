@@ -71,7 +71,7 @@ else if(m.t==="pick"){pkAsk(m);}
 else if(m.t==="unpick"){pkDone(m.id);}
 else if(m.t==="installed"){window.__moyInstalled=m.folder;}
 else if(m.t==="state"){var sw=stateWait;stateWait=[];
-var so=JSON.parse(m.json);if(so&&typeof so==="object"){so.sink=m.sink||null;so.loop=m.loop||null;}
+var so=JSON.parse(m.json);if(so&&typeof so==="object"){so.sink=m.sink||null;so.loop=m.loop||null;so.live=m.live||null;}
 for(var si=0;si<sw.length;si++)sw[si](so);}
 else if(m.t==="pcm"){playPCM(m);}
 else if(m.t==="wperf"){console.log("[moy worker] "+m.s);}
@@ -299,15 +299,49 @@ PKI.value="";});
 if(PKX)PKX.addEventListener("click",function(){if(!WORKER||pkId===null)return;var id=pkId;
 pkDone(id);WORKER.postMessage({t:"picked",id:id,cancel:1});});
 // The loader module hands the worker over once constructed.
-window.__moyAttach=function(w){WORKER=w;w.onmessage=function(e){onWorker(e.data);};audioSink(w);};
+window.__moyAttach=function(w){WORKER=w;w.onmessage=function(e){onWorker(e.data);};audioSink(w);
+w.postMessage({t:"vis",hidden:document.hidden?1:0});};
+// Whether this tab is hidden, for the live socket's match (worker.js): a
+// match the tab's throttled frames held up says so when it moves again.
+document.addEventListener("visibilitychange",function(){
+if(WORKER)WORKER.postMessage({t:"vis",hidden:document.hidden?1:0});});
 // ?pad=1 forces the touch controls on ANY device (desktop demos, touch laptops).
 // Phones show them automatically -- the core's media query hides them only on
 // hover-capable fine-pointer (i.e. mouse) devices; per-cart input hints still
 // hide the pad for touch-only carts unless forced here.
 if(new URLSearchParams(location.search).get("pad")){
 document.getElementById("ctl").style.display="flex";}
+// ---- GAMEPAD (#254) -----------------------------------------------------------
+// A gamepad held at the browser presses the console's buttons as a board's
+// does, from its own source, "gamepad" (web_input.GAMEPAD_SOURCE), read once a
+// frame before the frame's events go. The Gamepad API's standard mapping: the
+// d-pad, and the left stick past GP_DZ, are the directions; the face buttons
+// by their place and the standard mapping's names, bottom A, right B, left X,
+// top Y; Back/Select is `select`, Start `start` (the console's key: the system
+// menu, the pause card over a game), the centre button `home`; the shoulders
+// type the tab keys Q and E, the T-Deck's L and R. A pad appearing makes it an
+// input (the `gamepad` event: its focus and its keys show), and the last one
+// leaving takes it away. A browser shows pads only to a secure context
+// (https, localhost), and only after a button of one is pressed on the page.
+var GP_BTN={0:"a",1:"b",2:"x",3:"y",8:"select",9:"start",12:"up",13:"down",
+14:"left",15:"right",16:"home"},GP_KEY={4:113,5:101},GP_DZ=0.5;
+var gpOn=false,gpHeld={},gpKeys={};
+function gpPoll(){var ps=navigator.getGamepads?navigator.getGamepads():null,
+now={},keys={},any=false,i,k,n;
+if(ps)for(i=0;i<ps.length;i++){var p=ps[i];if(!p||!p.connected)continue;any=true;
+var b=p.buttons||[],ax=p.axes||[],x=ax[0]||0,y=ax[1]||0;
+for(k in GP_BTN)if(b[k]&&b[k].pressed)now[GP_BTN[k]]=1;
+for(k in GP_KEY)if(b[k]&&b[k].pressed)keys[k]=1;
+if(x<-GP_DZ)now.left=1;if(x>GP_DZ)now.right=1;if(y<-GP_DZ)now.up=1;if(y>GP_DZ)now.down=1;}
+if(!any&&!gpOn)return;
+if(any&&!gpOn){gpOn=true;send({type:"gamepad",on:true});}
+for(n in gpHeld)if(!now[n]){delete gpHeld[n];send({type:"hold",name:n,down:false,src:"gamepad"});}
+for(n in now)if(!gpHeld[n]){gpHeld[n]=1;send({type:"hold",name:n,down:true,src:"gamepad"});}
+for(k in keys)if(!gpKeys[k])send({type:"key",code:GP_KEY[k],src:"gamepad"});
+gpKeys=keys;
+if(!any){gpOn=false;send({type:"gamepad",on:false});}}
 var panWas=false;
-function pump(){var v=pv();if(v[0]||v[1]){panWas=true;send({type:"pan",dx:v[0],dy:v[1]});}
+function pump(){gpPoll();var v=pv();if(v[0]||v[1]){panWas=true;send({type:"pan",dx:v[0],dy:v[1]});}
 else if(panWas){panWas=false;send({type:"pan",dx:0,dy:0});}
 if(!q.length||!WORKER)return;var b=q;q=[];
 WORKER.postMessage({t:"input",json:JSON.stringify({events:b})});}

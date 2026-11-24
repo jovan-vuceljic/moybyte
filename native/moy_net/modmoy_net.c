@@ -243,7 +243,14 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mod_wifi_remember_obj, mod_wifi_remember);
 
 #if defined(MOY_NET_LINK) && MOY_NET_LINK
 
+#ifdef ESP_PLATFORM
 #include "esp_wifi.h"
+#else
+// The ESP-IDF's wifi_phy_rate_t values the page's link forwards to its
+// board's radio (moy_link_web.c).
+#define WIFI_PHY_RATE_12M 0x0A
+#define WIFI_PHY_RATE_54M 0x0C
+#endif
 #include "moy_link.h"
 
 // moy_net.Link: the radio link's face for a VM, the subset of the port's
@@ -402,6 +409,69 @@ static MP_DEFINE_CONST_DICT(link_locals, link_locals_table);
 MP_DEFINE_CONST_OBJ_TYPE(moy_net_link_type, MP_QSTR_Link, MP_TYPE_FLAG_NONE,
                          make_new, link_make_new, locals_dict, &link_locals);
 
+#if defined(MOY_NET_LIVE) && MOY_NET_LIVE
+#include "moy_live.h"
+// live_stats() -> (sessions, busy, up, down, air_out, air_in, refused,
+// echoes, live, radio): the live socket's figures (moy_live.h), which a
+// Zero's `mem` and its bench read. The name is also what links the bridge
+// into the image: the webhost reaches it weakly.
+static mp_obj_t mod_live_stats(void) {
+    moy_live_stats_t l;
+    moy_live_stats(&l);
+    uint32_t v[10] = {l.sessions, l.busy, l.up, l.down, l.air_out, l.air_in, l.refused,
+                      l.echoes, l.live, l.radio};
+    mp_obj_t t[10];
+    for (int i = 0; i < 10; i++) {
+        t[i] = mp_obj_new_int_from_uint(v[i]);
+    }
+    return mp_obj_new_tuple(10, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_stats_obj, mod_live_stats);
+#endif
+
+#if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
+// The page's link over the live socket (moy_link_web.c), as the worker moves
+// it between frames (firmware/web_runner/web_boot.py's live_*):
+//   live_take() -> bytes          the plaintexts queued, each behind its length
+//   live_give(plaintext)          one the board sent on the link channel
+//   live_open(on)                 the socket opened or closed
+//   live_info() -> (open, held, board_up, state, err, ch, mac, sent, refused,
+//                   rx, drops, opens)
+static mp_obj_t mod_live_take(void) {
+    static uint8_t buf[8192];
+    size_t n = moy_link_web_take(buf, sizeof buf);
+    return n ? mp_obj_new_bytes(buf, n) : mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_take_obj, mod_live_take);
+
+static mp_obj_t mod_live_give(mp_obj_t data) {
+    mp_buffer_info_t b;
+    mp_get_buffer_raise(data, &b, MP_BUFFER_READ);
+    moy_link_web_give(b.buf, b.len);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mod_live_give_obj, mod_live_give);
+
+static mp_obj_t mod_live_open(mp_obj_t on) {
+    moy_link_web_open(mp_obj_is_true(on));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mod_live_open_obj, mod_live_open);
+
+static mp_obj_t mod_live_info(void) {
+    moy_link_web_info_t i;
+    moy_link_web_info(&i);
+    mp_obj_t t[12] = {mp_obj_new_bool(i.open), mp_obj_new_bool(i.held),
+                      mp_obj_new_bool(i.board_up), mp_obj_new_bool(i.state),
+                      MP_OBJ_NEW_SMALL_INT(i.err), MP_OBJ_NEW_SMALL_INT(i.ch),
+                      mp_obj_new_bytes(i.mac, 6), mp_obj_new_int_from_uint(i.sent),
+                      mp_obj_new_int_from_uint(i.refused), mp_obj_new_int_from_uint(i.rx),
+                      mp_obj_new_int_from_uint(i.drops), mp_obj_new_int_from_uint(i.opens)};
+    return mp_obj_new_tuple(12, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_info_obj, mod_live_info);
+#endif
+
 #endif
 
 
@@ -510,11 +580,11 @@ static mp_obj_t mod_wifi_mac(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_wifi_mac_obj, mod_wifi_mac);
 
-static mp_obj_t mod_wifi_ps(size_t n_args, const mp_obj_t *args) {
-    int v = moy_wifi_ps(n_args > 0 ? (int)mp_obj_get_int(args[0]) : -1);
+static mp_obj_t mod_wifi_ps(void) {
+    int v = moy_wifi_ps();
     return v < 0 ? mp_const_none : MP_OBJ_NEW_SMALL_INT(v);
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_wifi_ps_obj, 0, 1, mod_wifi_ps);
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_wifi_ps_obj, mod_wifi_ps);
 
 #endif
 
@@ -1120,6 +1190,15 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_Link), MP_ROM_PTR(&moy_net_link_type)},
     {MP_ROM_QSTR(MP_QSTR_RATE_54M), MP_ROM_INT(WIFI_PHY_RATE_54M)},
     {MP_ROM_QSTR(MP_QSTR_RATE_12M), MP_ROM_INT(WIFI_PHY_RATE_12M)},
+    #if defined(MOY_NET_LIVE) && MOY_NET_LIVE
+    {MP_ROM_QSTR(MP_QSTR_live_stats), MP_ROM_PTR(&mod_live_stats_obj)},
+    #endif
+    #if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
+    {MP_ROM_QSTR(MP_QSTR_live_take), MP_ROM_PTR(&mod_live_take_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_give), MP_ROM_PTR(&mod_live_give_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_open), MP_ROM_PTR(&mod_live_open_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_info), MP_ROM_PTR(&mod_live_info_obj)},
+    #endif
     #endif
 };
 static MP_DEFINE_CONST_DICT(moy_net_globals, moy_net_globals_table);

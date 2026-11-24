@@ -228,7 +228,7 @@ def test_a_splits_column_centres_and_its_button_takes_its_natural_width(tmp_path
     """L8: a row split's column shorter than its cell stands centred on the
     cross axis; a button in it is as wide as its label needs, not the
     column."""
-    K, fs, eng = _split(tmp_path, "p4_1024x600_fs2_windowed")
+    K, fs, eng = _split(tmp_path, "p4_1024x600_cs2_fs1_windowed")
     cx, cy, cw, ch = K.DRAWN[-1]                # the canvas's cell: the column's height beside it
     bx, by, bw, bh = eng._ui.box("mark")
     assert by > cy + ch // 3, (by, cy, ch)      # pushed down from the cell's top
@@ -255,14 +255,14 @@ def test_a_splits_column_centres_in_the_frame_it_first_draws(tmp_path):
             if box is not None:
                 tops.append(box[1])
         eng.paint = logged
-    P.frames("p4_1024x600_fs2_windowed", opened, ["f:2"], str(tmp_path / "carts"))
+    P.frames("p4_1024x600_cs2_fs1_windowed", opened, ["f:2"], str(tmp_path / "carts"))
     assert len(tops) > 1 and len(set(tops)) == 1, tops
 
 
 def test_a_placed_page_on_the_desk_names_its_keys(tmp_path, monkeypatch):
     """A split page on the desk draws the band of what its keys do, as a
     page of rows does (the handheld cuts its band from the page)."""
-    K, fs, eng = _split(tmp_path, "p4_1024x600_fs2_windowed")
+    K, fs, eng = _split(tmp_path, "p4_1024x600_cs2_fs1_windowed")
     said = eng.hints()
     assert "back" in said, said
     x, y, w, h = eng.content
@@ -284,7 +284,7 @@ def _foot(tmp_path, config, script=("f:2",)):
     return fs, seen["app"].engine
 
 
-@pytest.mark.parametrize("config", ("tdeck_320x240_fs1_dark", "p4_1024x600_fs2_windowed"))
+@pytest.mark.parametrize("config", ("tdeck_320x240_fs1_dark", "p4_1024x600_cs2_fs1_windowed"))
 def test_a_shared_foot_splits_its_width_under_its_line(tmp_path, config):
     """F-13 `foot look="share"`: its buttons are equally wide across the
     foot, its label on a line of its own above them; the keys band stays

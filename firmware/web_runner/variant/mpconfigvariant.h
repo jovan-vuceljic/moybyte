@@ -10,3 +10,11 @@
 #define MICROPY_GC_SPLIT_HEAP_AUTO              (1)
 #define MICROPY_PY_WEAKREF                      (1)
 #define MICROPY_VARIANT_ENABLE_JS_HOOK          (0)
+// The object model every board that can hold a link runs (#256): REPR_C over
+// wasm32's 32-bit word with single-precision floats, so a float is folded into
+// the object word as the boards fold it and a page computes the same 30-bit
+// results a board does. Float width is part of the lockstep contract
+// (docs/netplay_v1.md section 5). The port states its float width unguarded;
+// build.sh puts that line under #ifndef so this one decides.
+#define MICROPY_OBJ_REPR                        (MICROPY_OBJ_REPR_C)
+#define MICROPY_FLOAT_IMPL                      (MICROPY_FLOAT_IMPL_FLOAT)

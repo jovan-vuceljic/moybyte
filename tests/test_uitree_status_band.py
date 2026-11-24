@@ -28,12 +28,15 @@ def _tools_row_drawn(p):
     """The tools row's buttons are on the glass: the strip they stand in is
     not one flat colour."""
     c = p.a.sys_canvas
-    w, h = c.w, c.h
+    w = c.w
+    x, top, cw, h = 0, 0, w, c.h
+    if p.desk:                      # the cart's window
+        win = p.a.wm.windows["desktop"]
+        x, top, cw, h = win.x, win.y, win.w, win.h
     buf = bytes(c._buf)
-    y0, y1 = (h - 30, h - 4) if not p.desk else (h - 40, h - 8)
     cols = set()
-    for y in range(y0, y1):
-        cols.update(buf[(y * w) * 2:(y * w + w // 2) * 2:2])
+    for y in range(top + h - 30, top + h - 4):
+        cols.update(buf[(y * w + x) * 2:(y * w + x + cw // 2) * 2:2])
     return len(cols) > 2
 
 

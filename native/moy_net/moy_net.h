@@ -16,6 +16,7 @@
 
 #include "moy_platform.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -556,6 +557,121 @@ static inline int moy_wifi_remember(int ok, const char *password,
            || memcmp(password, stored, password_n) != 0;
 }
 
+// -- the station's transmit power ----------------------------------------------
+
+// The power a join asks the radio for, in esp_wifi_set_max_tx_power's quarter
+// dBm. Full power is the first try; a board whose antenna is mismatched (the
+// ESP32-C3 SuperMini's) garbles its own frames there and the access point
+// never answers its authentication, so a join refused that way is retried a
+// step lower, down to the floor and round again to full. The power that got
+// an address is remembered per network (moy_wifi_txp_learn) and a later join
+// starts there; a join that fails at a remembered lower power walks back up
+// to full first, so a remembered power is never a trap.
+#define MOY_WIFI_TXP_FULL 80u       // 20 dBm
+#define MOY_WIFI_TXP_MID 60u        // 15 dBm
+#define MOY_WIFI_TXP_FLOOR 34u      // 8.5 dBm
+
+// A refusal a garbled handshake gives: the access point never answered the
+// authentication (2) or the 4-way handshake ran out (15, 204, 205). A wrong
+// password gives 15 and 204 too; the walk costs it a round of attempts and
+// remembers nothing, since only an address is learned.
+static inline int moy_wifi_txp_garbled(int reason) {
+    return reason == 2 || reason == 15 || reason == 204 || reason == 205;
+}
+
+// A refusal a weak link gives: a garbled one, or a lost beacon (200) or a
+// network the scan did not find (201).
+static inline int moy_wifi_txp_weak(int reason) {
+    return moy_wifi_txp_garbled(reason) || reason == 200 || reason == 201;
+}
+
+// The power a join starts at: the one remembered for the network, else full.
+static inline unsigned moy_wifi_txp_start(unsigned kept) {
+    return kept != 0u ? kept : MOY_WIFI_TXP_FULL;
+}
+
+// The power the next attempt asks for, after one at `cur` was refused with
+// `reason`. `first`: the attempt was the first at a power that was known to
+// work (the remembered one, or the one that held the address just lost).
+// `search`: this network has needed less than full power, or this join met a
+// garbled refusal. Full power steps down only on a garbled refusal, or on any
+// weak one while searching (a mismatched antenna at full power also loses
+// the network's probe answers, 201): a board that never needed less stays at
+// full, since a network out of reach at full is out of reach lower too. Below
+// full, a weak refusal at a known power goes back to full, and any other
+// steps down, the floor wrapping to full.
+static inline unsigned moy_wifi_txp_next(int reason, unsigned cur, int first,
+                                         int search) {
+    if (cur >= MOY_WIFI_TXP_FULL) {
+        int step = moy_wifi_txp_garbled(reason) || (search && moy_wifi_txp_weak(reason));
+        return step ? MOY_WIFI_TXP_MID : MOY_WIFI_TXP_FULL;
+    }
+    if (!moy_wifi_txp_weak(reason)) {
+        return cur;
+    }
+    if (first || cur <= MOY_WIFI_TXP_FLOOR) {
+        return MOY_WIFI_TXP_FULL;
+    }
+    return cur > MOY_WIFI_TXP_MID ? MOY_WIFI_TXP_MID : MOY_WIFI_TXP_FLOOR;
+}
+
+// The powers remembered per network, most recent first, kept as one NVS blob
+// (moy_wifi.c). A network that works at full power has no slot.
+#define MOY_WIFI_TXP_SLOTS 4
+
+typedef struct {
+    char ssid[33];
+    uint8_t txp;
+} moy_wifi_txp_slot_t;
+
+static inline unsigned moy_wifi_txp_recall(const moy_wifi_txp_slot_t *t,
+                                           const char *ssid) {
+    for (int i = 0; i < MOY_WIFI_TXP_SLOTS; i++) {
+        if (t[i].txp != 0u && strncmp(t[i].ssid, ssid, sizeof(t[i].ssid)) == 0) {
+            return t[i].txp;
+        }
+    }
+    return 0u;
+}
+
+// Remember that `ssid` got an address at `txp`: its slot moves to the front,
+// or leaves the table at full power. 1 when the table changed.
+static inline int moy_wifi_txp_learn(moy_wifi_txp_slot_t *t, const char *ssid,
+                                     unsigned txp) {
+    size_t n = strlen(ssid);
+    if (n == 0u || n >= sizeof(t[0].ssid)) {
+        return 0;
+    }
+    int at = MOY_WIFI_TXP_SLOTS - 1;
+    for (int i = 0; i < MOY_WIFI_TXP_SLOTS; i++) {
+        if (t[i].txp != 0u && strcmp(t[i].ssid, ssid) == 0) {
+            at = i;
+            break;
+        }
+    }
+    int had = t[at].txp != 0u && strcmp(t[at].ssid, ssid) == 0;
+    if (txp >= MOY_WIFI_TXP_FULL) {
+        if (!had) {
+            return 0;
+        }
+        for (int i = at; i + 1 < MOY_WIFI_TXP_SLOTS; i++) {
+            t[i] = t[i + 1];
+        }
+        memset(&t[MOY_WIFI_TXP_SLOTS - 1], 0, sizeof(t[0]));
+        return 1;
+    }
+    if (had && at == 0 && t[0].txp == txp) {
+        return 0;
+    }
+    for (int i = at; i > 0; i--) {
+        t[i] = t[i - 1];
+    }
+    memset(&t[0], 0, sizeof(t[0]));
+    memcpy(t[0].ssid, ssid, n);
+    t[0].txp = (uint8_t)txp;
+    return 1;
+}
+
 // -- the WiFi driver (a board that defines MOY_NET_WIFI) -------------------------
 
 #if defined(MOY_ON_BOARD) && __has_include("py/mpconfig.h")
@@ -631,7 +747,11 @@ int moy_wifi_mdns(const char *host);
 int moy_wifi_scan_poll(moy_wifi_ap_t *out, int max);
 int moy_wifi_scan(moy_wifi_ap_t *out, int max);
 int moy_wifi_mac(uint8_t mac[6]);
-// The power-save mode, set first when `set` is 0 or more; -1 before the driver.
-int moy_wifi_ps(int set);
+// The station's power-save mode (wifi_ps_type_t), -1 before the driver. It is
+// none from the station's start (moy_wifi_on) and modem sleep while the idle
+// ladder rests it: moy_wifi_rest, which the kernel's loop alone calls, as its
+// panel goes dark and wakes (native/moy_kernel/moy_loop.c). No feature sets it.
+int moy_wifi_ps(void);
+void moy_wifi_rest(bool rest);
 
 #endif // MOY_NET_H

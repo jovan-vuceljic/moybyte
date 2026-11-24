@@ -674,7 +674,7 @@ class Player(PlayerDiag):
         (docs/history/kernel_cartpath_2026-10.md section 5.4), whose run ended in the
         kernel with no VM to run this teardown: the leases are the kernel's
         table, which the stop keeps."""
-        # Nobody to talk to, and power save back on. UNLESS a session is already arranged for the run about to
+        # Nobody to talk to. UNLESS a session is already arranged for the run about to
         # start -- which is not a hypothetical: the way a match forms is that the
         # peer's invite arrives while this console is already playing, sets
         # ws.netplay, and re-runs the cart from frame zero. The dying run tears
@@ -911,9 +911,8 @@ class Player(PlayerDiag):
         link = getattr(ws, "link", None)
         if net is not None and link is not None:
             # ARM the radio here and nowhere earlier. It is only up while a game
-            # that could use it is running, because disabling power save (which
-            # is what buys the latency tail) costs battery on a handheld, and a
-            # console on a shelf has nobody to talk to. Announcing the cart is
+            # that could use it is running: a console on a shelf has nobody to
+            # talk to. Announcing the cart is
             # what lets a peer recognise "we are both in the same game".
             try:
                 ws.spine.wifi_hold("link")   # the STA up, owned by the wifi service, BEFORE the radio

@@ -198,7 +198,7 @@ def test_a_picked_layout_survives_two_theme_switches(tmp_path):
     ws.look.set_theme("moy", persist=False)    # the cache folds the install
     assert ws.look.layout_choices() == ("dock",)
     rows = _rows(ws)
-    assert rows[rows.index("font_scale") + 1] == "layout_theme"
+    assert rows[rows.index("appearance") + 1] == "layout_theme"     # the T-Deck: no Text size
     ws.look.cycle_layout_theme(1)
     assert ws.system.get("layout_theme") == "dock"
     assert layout_base.bar_edge() == "bottom"

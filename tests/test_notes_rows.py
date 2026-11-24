@@ -73,7 +73,7 @@ def audit():
 
 def _console(tmp_path, name, ships, desk, **look):
     root = tmp_path / name
-    kw = dict({"sys_size": (1024, 600), "font_scale": 2, "windowed": True}, **look) if desk else {}
+    kw = dict({"sys_size": (1024, 600), "font_scale": 1, "windowed": True}, **look) if desk else {}
     ws = host_app.build_workstation(str(root / "carts"), **kw)
     ws.bar_layer.clock_text = lambda: "10:30"
     ws.show_fps = False
@@ -347,7 +347,7 @@ def test_an_idle_note_paints_nothing_on_any_tier(tmp_path, size, closed):
     desk, the full-screen console and the handheld's 320x240 -- paints no
     frame and runs no pass: the caret is steady, nothing shown moves on its
     own, and a closed note's handle owes no frame (`EditorHandle.owes`)."""
-    kw = {"sys_size": size, "font_scale": 2, "windowed": True} if size == (1024, 600) else (
+    kw = {"sys_size": size, "font_scale": 1, "windowed": True} if size == (1024, 600) else (
         {"sys_size": size} if size else {})
     ws = host_app.build_workstation(str(tmp_path / "carts"), **kw)
     no_unlock_banner(ws)

@@ -1,6 +1,6 @@
 {
  "surface": "update_sd",
- "config": "p4_1024x600_fs2_windowed",
+ "config": "p4_1024x600_cs2_fs1_windowed",
  "commit": "d46d59298",
  "script": [
   "k:a",
@@ -10,19 +10,19 @@
  "frames": [
   [
    "(open)",
-   "284cbbf30a0f6cdefbc50f7e9264c38b147465fa81a3eb7a6fa7da52f3805d9d"
+   "c49d918a265024655c363cf0f94cc0d36baf45ba21c8094baec248842ca0e642"
   ],
   [
    "k:a",
-   "bb83da2230217a596adf6f2a64569b6e87038493990e9a7607002ef71d964fd0"
+   "c60fadf7a1c2befa53a39513d46ad872bd1ef1d1ca03ab3db788efebe80e95c9"
   ],
   [
    "f:3",
-   "22fccab99d560d56f4bc53db02809c8451082cab76761041e1a16258f541aec3"
+   "8a4f91d53d007ca6c615248f2888234de962ba8b2b88ed9c0d49678a3188be01"
   ],
   [
    "k:b",
-   "d698065d802d3ca3148ce045cd62a9a3963051d795c6477e5b976210cd60d9a0"
+   "3d79a863ace7bf0d72c4de4ba90032d4ba6a44a4808cdefd6aa3c486c9d316d5"
   ]
  ]
 }

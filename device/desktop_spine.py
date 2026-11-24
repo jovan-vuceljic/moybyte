@@ -37,7 +37,8 @@ arguments and hooks:
   before_slim          board glue between the store hookup and the cart diet
   after_services       board glue once every shared service is wired
   wm                   the presentation tier to install over the fullscreen
-                       stack, where the glass has room for windows
+                       stack, where the glass is a desk at its font scale
+                       (`Workstation.place_tier`)
   c6_updater           the companion radio's updater class, where there is one
   extras / serial      the dev channel's board-only commands, and whether the
                        channel is built at all
@@ -484,8 +485,8 @@ def build_desktop(name, link_id, comp, sys_canvas, set_backlight, inp, inputs,
         # The windowed tier (#73): installed AFTER the boot loads (the same
         # order as host build_workstation) so the persisted font scale is
         # applied before the root layout context is captured.
-        ws.wm = wm(ws)
-        ws.home.open_desk()
+        ws.windowed_wm = wm
+        ws.place_tier()
         _census("wm")
     wire_input.start_keyboards(ws, keyboard, ble_keyboard, _census)
     # A soft reset under a serving web console leaves the kernel's webhost up

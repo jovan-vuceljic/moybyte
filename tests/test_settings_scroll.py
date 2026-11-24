@@ -112,10 +112,10 @@ def test_set_msel_reads_and_moves_the_focused_row(tmp_path):
     drv = _drv(ws)
     sl = ws.settings_layer
     rows = sl._settings_rows()
-    i = [r[0] for r in rows].index("font_scale")
+    i = [r[0] for r in rows].index("volume")
     sl.set_msel = i
     drv.frame(_DT)
-    assert sl._focused == "font_scale" and sl.set_msel == i
+    assert sl._focused == "volume" and sl.set_msel == i
 
 
 def test_a_drag_scrolls_the_page_and_is_no_tap(tmp_path):
@@ -175,7 +175,7 @@ def test_a_tap_on_a_row_activates_it(tmp_path):
 def test_the_windowed_page_scrolls(tmp_path):
     """The same drag inside the desk's Settings WINDOW (window-local coords
     under the window's own layout)."""
-    ws = _ws(tmp_path, sys_size=(1024, 600), font_scale=2, windowed=True)
+    ws = _ws(tmp_path, sys_size=(2048, 1200), font_scale=2, windowed=True)
     _force_ota_rows(ws)
     drv = _drv(ws)
     win = ws.wm.windows["settings"]

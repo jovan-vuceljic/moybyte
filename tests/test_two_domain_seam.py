@@ -152,7 +152,9 @@ def test_running_cart_is_a_centered_integer_viewport(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_font_scale_cycles_through_1_2_3(tmp_path):
-    ws = _ws(tmp_path, sys_size=(640, 480))
+    """960x720 is the smallest glass that offers all three sizes: its room at
+    font scale 3 is the T-Deck's 320x240 (`layout_base.font_scales`)."""
+    ws = _ws(tmp_path, sys_size=(960, 720))
     assert ws.look.font_scale == 1
     ws.look.cycle_font_scale(1)
     assert ws.look.font_scale == 2
@@ -231,21 +233,23 @@ def test_settings_font_row_renders(tmp_path):
     assert probe.distinct_pixels_in(drv.rgb888(), 3) > 4
 
 
-def test_font_scale_is_inert_without_a_system_canvas(tmp_path):
-    """In the degradation case (no distinct system canvas -- the T-Deck, whose
-    framebuf text can't scale), setting the font scale is remembered + persisted but
-    the EFFECTIVE layout scale stays 1, so the chrome geometry keeps matching the 8px
-    text actually drawn (no mis-laid-out desktop)."""
+def test_the_t_deck_offers_one_font_scale(tmp_path):
+    """Without a distinct system canvas (the T-Deck, whose framebuf text can't
+    scale) the glass offers font scale 1 alone: a scale asked for is 1, so the
+    chrome geometry keeps matching the 8px text actually drawn, and a scale
+    stored elsewhere stays stored for a bigger panel."""
     from runtime import host_app, moy_carts
     carts_dir = str(tmp_path / "carts")
     ws = host_app.build_workstation(carts_dir)         # default 320x240, shared canvas
     assert ws.bound_sys_canvas is None
-    ws.look.set_font_scale(3)
-    assert ws.look.font_scale == 3                            # remembered
-    assert ws.look.effective_font_scale() == 1              # but not applied (can't scale)
+    assert ws.look.font_scales() == (1,)
+    ws.system.set("font_scale", 3)
+    ws.look.set_font_scale(3, persist=False)
+    assert ws.look.font_scale == 1
+    assert ws.look.effective_font_scale() == 1
     assert ws.layout.fs == 1                             # layout stays the baseline
     assert (ws.layout.w, ws.layout.h) == (320, 240)      # the T-Deck's geometry
-    assert moy_carts.load_system(carts_dir).get("font_scale") == 3   # persisted
+    assert moy_carts.load_system(carts_dir).get("font_scale") == 3   # still stored
     # It renders without error and the desktop is still the 320x240 baseline
     # shelf (3 columns at the small tier's card proportions).
     drv = host_app.ConsoleDriver(ws)

@@ -31,9 +31,9 @@ _SIGS = (
     ("moy_sw_target", [], _P),
     ("moy_sw_seq", [], _D),
     ("moy_sw_open", [_D, _I, _Z], _I),
-    ("moy_sw_ws", [_D], None),
-    ("moy_sw_ws_up", [_Z], _I),
-    ("moy_sw_ws_down", [_Z], _I),
+    ("moy_sw_ws", [_I, _D], None),
+    ("moy_sw_ws_up", [_I, _Z], _I),
+    ("moy_sw_ws_down", [_I, _Z], _I),
     ("moy_sw_reset", [], None),
 )
 

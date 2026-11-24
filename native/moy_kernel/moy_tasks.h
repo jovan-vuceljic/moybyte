@@ -41,6 +41,9 @@
 #define MOY_SH_RUN_STACK (24u * 1024u)      // a shell runner's (the SSH face's task's)
 #endif
 #define MOY_PAKE_STACK 8192
+#ifndef MOY_LIVE_STACK
+#define MOY_LIVE_STACK 4096                 // the live socket's bridge (native/moy_net/moy_live.c)
+#endif
 #ifndef MOY_AUDIO_CORE
 #define MOY_AUDIO_CORE 1                    // the VM's, unless the board names one
 #endif
@@ -89,6 +92,7 @@
     X(SH, "moy_sh", MOY_SH_RUN_STACK, MOY_TASK_CALLER, MOY_TASK_CALLER, 1) \
     X(TTY, NULL, MOY_TASK_GIVEN, 1, 0, 1) \
     X(PAKE, "moy_pake", MOY_PAKE_STACK, 1, 0, 1) \
+    X(LIVE, "moy_live", MOY_LIVE_STACK, 2, 0, 0) \
     X(ELF, "moy_elf", MOY_TASK_GIVEN, MOY_TASK_GIVEN, MOY_TASK_GIVEN, 1) \
     X(SAVE, "moy_save", 6144, ESP_TASK_PRIO_MIN + 1, 0, 1)
 

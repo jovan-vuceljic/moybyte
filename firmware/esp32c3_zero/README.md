@@ -86,6 +86,20 @@ chip changes.
   buffers do not fit beside a session, and a client reports a refusal where
   running out would cut a transfer short. While a session runs, an upload
   that finds no room is answered 503 and the page sends it again.
+- **Local multiplayer, as the XIAO's** (2026-11-24, its README's section):
+  the page this board serves plays a match on its radio through the live
+  socket (`native/moy_net/moy_live.h`), sized for no PSRAM
+  (`boards/MOYBYTE_C3_ZERO/mpconfigboard.h`). Between pages the bridge holds
+  only its statics: its task and its buffers (the page's frames waiting to
+  be whole, `MOY_LIVE_IN`, half the XIAO's; one frame down; one radio frame)
+  are made when the webhost hands it a page's socket and given back at its
+  end. The radio's receive ring (`MOY_LIVE_RING`, a quarter of the XIAO's)
+  is the kernel link's, made at the first match and kept, as the link keeps
+  it on every board (`native/moy_net/moy_link.c`). A socket whose buffers do
+  not fit is refused like a second page's, and the page tries again. The
+  whole protocol is wired; what the C3 leaves out is room, not a feature: a
+  match beside an SSH session competes for the internal heap that session
+  leaves (#276). What a match costs here is on #256.
 - **Single core, RISC-V.** Every task the native tier starts runs on core 0
   (`native/moy_kernel/moy_tasks.h`).
 - **One I2C controller.** The kernel's device bus takes port 0, so this board
@@ -104,6 +118,13 @@ chip changes.
 - The UART0 REPL (TX GPIO21, RX GPIO20) stays on as the recovery console for
   an image whose USB has wedged.
 - On a Super Mini the LED is GPIO8 (active LOW), a strapping pin.
+- **A Super Mini's antenna is mismatched on many boards**: at full transmit
+  power the access point never answers its authentication, and a join fails
+  with reason 2 (`AUTH_EXPIRE`) where a lower power joins. The kernel's WiFi
+  driver steps the power down by itself after such a refusal and remembers,
+  per network, the power that got an address, so a board pays the search once
+  (`native/moy_net/moy_net.h`, the station's transmit power). A board whose
+  antenna is fine joins at full power as any other does.
 
 ## Free pins
 

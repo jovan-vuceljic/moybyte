@@ -896,16 +896,19 @@ class ImprovBoard:
         moy_net.wifi_on()
         try:
             moy_net.wifi_connect(ssid, password)
-        except OSError:
+        except OSError as e:
+            print("ZERO improv: the radio refused to join", ssid, e)
             return None
+        t0 = time.ticks_ms()
         for _ in range(wait_ms // 250):
             st = moy_net.wifi_status()
             if st[2] and st[4]:
-                print("ZERO improv: joined", ssid, st[4])
+                print("ZERO improv: joined", ssid, st[4], "in",
+                      time.ticks_diff(time.ticks_ms(), t0), "ms")
                 moy_net.wifi_mdns(self.name())
                 return st[4]
             time.sleep_ms(250)
-        print("ZERO improv: no answer from", ssid)
+        print("ZERO improv: no answer from", ssid, "reason", moy_net.wifi_status()[5])
         connect(hostname=self.name())    # back onto a saved network, if one answers
         return None
 

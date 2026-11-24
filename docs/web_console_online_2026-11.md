@@ -495,6 +495,14 @@ RAM. board.toml's `[serial]` says how the flasher opens the port without
 resetting the chip (the C3's lines idle HIGH), and the site's client keeps
 that line state (`site/os/improv.js`).
 
+**The board's log.** What a board prints on the cable besides Improv's
+frames shows in the setup's "Board log" panel (`site/os/setup.js`): whole
+lines, ANSI escapes stripped, the last 500, with a Copy button. The Wi-Fi
+password, which the page knows, is blanked in every line it shows or
+copies. Improv's errors say only that a join failed; the reason (Wi-Fi's
+reason code, a weak antenna) is in the log, so the panel opens by itself
+when setup stops.
+
 **Consoles with a screen** set their Wi-Fi on glass, show their address in
 Settings, and join My consoles when you type that address.
 
@@ -787,13 +795,16 @@ Tests:
   password exists, a wrong one counted by the backoff, and the browser's
   claim pairing in the same step (`tests/test_web_signin.py`); the worker's
   end in node (`signin_test.mjs`).
-- A node test of the site's Improv client against a scripted port, and of
-  the addresses a person may type (`site/os/improv_test.mjs`).
+- A node test of the site's Improv client against a scripted port, of the
+  board's log as lines with the Wi-Fi password blanked, and of the
+  addresses a person may type (`site/os/improv_test.mjs`).
 - In Chrome (`tests/test_web_setup_e2e.py`, under `MOYBYTE_WEB_E2E`), Web
   Serial a stand-in in the page: added by hand, a bad address refused, a
   duplicate updated, an unreached one said so; set up by cable, saved
   under the board's id, opened, the password taken by the real webhost's
-  claim, signed in, and the list showing it reached.
+  claim, signed in, and the list showing it reached; a join the board
+  refuses opening the Board log on the board's lines, the Wi-Fi password
+  on neither the page nor what Copy copies.
 - On the XIAO Zero over its USB serial (2026-11-24, a script): the state,
   info, scan, name, a join from the access point and the claim taken over
   HTTP, timed.

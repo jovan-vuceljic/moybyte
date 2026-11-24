@@ -19,6 +19,7 @@ class FrameState:
         self.dirty = True
         self.dirty_in = True        # a change reported before this input (handle_input)
         self.frames_drawn = 0       # frames that drew and flushed (test witness)
+        self.tier_due = False       # a relayout found the tier moved (Workstation.place_tier)
         self.since_draw = 0.0       # seconds since the last drawn frame
         self.fps = 0.0              # smoothed frames/sec DRAWN (EMA, #217)
         self.frame_dt_ms = 33.0     # last loop tick in ms (kinetic velocity, #113)

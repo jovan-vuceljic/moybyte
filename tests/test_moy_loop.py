@@ -310,6 +310,17 @@ def test_the_touch_that_wakes_a_saver_or_a_dark_panel_is_swallowed():
         L.unregister()
 
 
+def test_the_station_rests_only_while_the_ladder_has_the_panel_dark():
+    """Power save is the idle ladder's alone (native/moy_net/moy_net.h): modem
+    sleep from the blank rung until the input that wakes it, none otherwise;
+    the dim and saver rungs keep the station awake."""
+    ladder(dim=1, saver=2, blank=3)
+    radio = [(t, tok) for t, _s, log in walk(1000, 5500, active_at=(5500,))
+             for tok in log.split() if tok.startswith("radio=")]
+    assert radio == [(4000, "radio=rest"), (5500, "radio=awake")]
+    L.unregister()
+
+
 def test_a_tap_on_a_dimmed_screen_is_a_tap():
     ladder(dim=1)
     rows = walk(1000, 2500, active_at=(2500,))

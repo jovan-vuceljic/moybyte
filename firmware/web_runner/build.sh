@@ -35,12 +35,17 @@
 #     emscripten_scan_registers dependency -> NO -s ASYNCIFY (it instruments every
 #     wasm function; dropping it halves the .wasm and speeds the whole VM).
 #   - no periodic mp_js_hook (node REPL Ctrl-C plumbing; costs a call / 10 VM ops).
+#   - the boards' object model: REPR_C over wasm32's 32-bit word, single
+#     floats, so a page's Python computes a lockstep match as a board's does.
 # Port patches applied idempotently below (upstream MicroPython vs emscripten 6.x):
 #   - Makefile: two -Wno-* (new clang warnings tripping -Werror) + -Os on the
 #     LINK step (emcc defaults the JS glue to -O0 + ASSERTIONS, and the
 #     assertions abort on the port's own patterns).
 #   - library.js: mp_hal_get_interrupt_char ccall passed 1 arg to a 0-arg C
 #     function (node-only path; assertions abort).
+#   - mpconfigport.h: its double float width under #ifndef, so the variant's
+#     singles stand; proxy_c.c widens a float to the double it stores, and
+#     modtime.c's time.time() is whole seconds, an int, as on every board.
 #   - py/obj.h: an equal-length slice store moves no tail
 #     (tools/patch_slice_store.py, the VM patch every board takes).
 #   - py/map.c: a hash map grows at three quarters full
@@ -145,10 +150,46 @@ good = '"mp_hal_get_interrupt_char",\n                "number",\n               
 if bad in src:
     open(p, "w").write(src.replace(bad, good))
 PYEOF
+  # Two port lines that assume double floats (the variant's are the boards'
+  # singles): the JS proxy's float, widened to the double it stores, and
+  # time.time(), which counts whole seconds as an int as every board's does --
+  # a REPR_C float cannot hold today's Unix seconds to the minute.
+  "${PY}" - "${PORT_DIR}" <<'PYEOF'
+import sys
+port = sys.argv[1]
+for name, old, new in (
+    ("proxy_c.c", "*(double *)&out[1] = mp_obj_get_float(obj);",
+     "*(double *)&out[1] = mp_obj_get_float_to_d(obj);"),
+    ("modtime.c", "// Returns the number of seconds, as a float, since the Epoch.\n"
+     "static mp_obj_t mp_time_time_get(void) {\n"
+     "    return mp_obj_new_float((mp_float_t)mp_hal_time_ms() / 1000);",
+     "// Returns the number of whole seconds since the Epoch.\n"
+     "static mp_obj_t mp_time_time_get(void) {\n"
+     "    return mp_obj_new_int_from_ull(mp_hal_time_ms() / 1000);"),
+):
+    p = port + "/" + name
+    src = open(p).read()
+    if new in src:
+        continue
+    if src.count(old) != 1:
+        sys.exit("!! %s changed shape: the single-float patch did not apply" % name)
+    open(p, "w").write(src.replace(old, new))
+PYEOF
   # The VM patch every board takes: an equal-length slice store moves no tail.
   "${PY}" "${REPO_ROOT}/tools/patch_slice_store.py" "${MPY_DIR}"
   # A hash map grows at three quarters full, as on every console board.
   "${PY}" "${REPO_ROOT}/tools/patch_map_load.py" "${MPY_DIR}"
+  # The port's float width yields to the variant's (variant/mpconfigvariant.h:
+  # the boards' REPR_C singles). Guarded, so a port line that changed shape
+  # stops the build here, by name.
+  CFG="${PORT_DIR}/mpconfigport.h"
+  if ! grep -q 'moybyte: the variant decides' "${CFG}"; then
+    sed -i 's|^#define MICROPY_FLOAT_IMPL  *(MICROPY_FLOAT_IMPL_DOUBLE)$|#ifndef MICROPY_FLOAT_IMPL // moybyte: the variant decides\n&\n#endif|' "${CFG}"
+    grep -q 'moybyte: the variant decides' "${CFG}" || {
+      echo "!! float-width patch did not apply -- mpconfigport.h's MICROPY_FLOAT_IMPL line changed shape" >&2
+      exit 1
+    }
+  fi
 
   # The moybyte variant (canonical copy lives in variant/, re-staged every build).
   mkdir -p "${PORT_DIR}/variants/moybyte"

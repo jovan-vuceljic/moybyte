@@ -27,7 +27,7 @@ import ui_font as _ui_font
 import uitree as ui
 import uitree_app
 
-from layout_base import bar_rows, content_of, ground_round, metric_class, DESK
+from layout_base import bar_rows, content_of, ground_round
 from artwork import picture_size, GAME_W, GAME_H
 from picture_copies import PictureCopies
 from drawing_pages import GamePage, shown, dot, dots
@@ -288,7 +288,6 @@ class MyArtAppLayer(uitree_app.app_layer("myart", "My Art", build)):
         self._ui = ctx.ui
         self.copies = PictureCopies(ctx)
         self.names = names
-        self.desk = metric_class() == DESK
         self._damage = _Owed(self._damage, self)
         self.shown = {}               # each state as last written (`_set`)
         self.fill_owed = True

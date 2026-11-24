@@ -512,6 +512,21 @@ def test_the_stamp_answers_which_console_this_board_serves(tmp_path, baked):
     assert "names no browser console" in host.source_note()
 
 
+def test_an_online_console_says_it_serves_the_loader(tmp_path, baked):
+    """A board whose console is online (the C3 Zero's) keeps no add-on: its
+    boot line names the loader its root serves, never an install it cannot
+    take."""
+    baked({})
+    host = _host(tmp_path)
+    nb._serve_loader(gzip.compress(b"<!doctype html>loader"), True)
+    try:
+        note = host.source_note()
+        assert "loader" in note and "Get Carts" not in note, note
+    finally:
+        nb._serve_loader(b"", False)
+    assert "loader" not in host.source_note()
+
+
 @pytest.mark.parametrize("name", _assets())
 def test_every_allowlisted_asset_has_a_sane_content_type(tmp_path, baked, name):
     """A wrong type on `micropython.wasm` is the difference between the console

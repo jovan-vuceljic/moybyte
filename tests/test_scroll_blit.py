@@ -368,7 +368,7 @@ def test_a_window_drag_takes_the_band_frame(tmp_path):
     ws = _ws_with_carts(tmp_path, 14)
     del ws                                   # rebuild windowed, same cart dir
     ws = host_app.build_workstation(str(tmp_path / "carts"),
-                                    sys_size=(1024, 600), font_scale=2,
+                                    sys_size=(1024, 600), font_scale=1,
                                     windowed=True)
     drv = host_app.ConsoleDriver(ws)
     ws.home.open_projects()

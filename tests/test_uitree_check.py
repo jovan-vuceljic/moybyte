@@ -73,6 +73,7 @@ PORTED = (
     "uitree_grid",
     "uitree_model_row",
     "uitree_cards_pics",
+    "uitree_card_gap",
     "uitree_carousel",
     "uitree_cards_drawn",
     "uitree_foot_grey",

@@ -443,6 +443,12 @@ class App(AppLayer):
                           getattr(ctx, "files", None), gen=not eng.PLACED, env=ctx)
         self.landed = 0         # the pictures that landed (a window behind draws again at a new one)
 
+    @property
+    def desk(self):
+        """Whether the desk's metric class is in force, read as it stands: a
+        text size moves it under a built app (`Workstation.place_tier`)."""
+        return metric_class() == DESK
+
     def is_app(self, cart):
         """No cart: a shipped app claims what its declaration claims
         (`app_slot.AppSlot.is_app`)."""

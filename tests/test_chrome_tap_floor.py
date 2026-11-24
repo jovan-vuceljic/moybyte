@@ -197,10 +197,10 @@ def test_the_console_resolves_the_floor_from_the_panel_not_a_setting(tmp_path):
     PERSISTED, so a scale chosen in a constructor is not what a device with a
     store runs. The floor is resolved from the board's declared glass at
     construction and re-applied by every relayout, so cycling the font size
-    cannot lose it."""
+    cannot lose it. A 640x480 glass 4.5" across offers font scale 2."""
     ws = host_app.build_workstation(
-        str(tmp_path / "carts"), sys_size=(480, 320), font_scale=1,
-        panel_diagonal_in=3.5)
+        str(tmp_path / "carts"), sys_size=(640, 480), font_scale=1,
+        panel_diagonal_in=4.5)
     assert ws.chrome_floor == 2
     assert ws.layout.cs == 2 and ws.layout.fs == 1
     ws.look.set_font_scale(2, persist=False)
@@ -209,7 +209,7 @@ def test_the_console_resolves_the_floor_from_the_panel_not_a_setting(tmp_path):
     assert ws.layout.fs == 1 and ws.layout.cs == 2
 
     bare = host_app.build_workstation(
-        str(tmp_path / "carts2"), sys_size=(480, 320), font_scale=1)
+        str(tmp_path / "carts2"), sys_size=(640, 480), font_scale=1)
     assert bare.chrome_floor == 1
     assert bare.layout.cs == bare.layout.fs == 1
 

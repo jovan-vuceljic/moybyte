@@ -92,6 +92,12 @@ int moy_link_channel(int set) {
     return assoc ? -(int)ch : (int)ch;
 }
 
+void moy_link_mac(uint8_t mac[6]) {
+    if (esp_wifi_get_mac(WIFI_IF_STA, mac) != ESP_OK) {
+        memset(mac, 0, 6);
+    }
+}
+
 int moy_link_add_peer(const uint8_t mac[6]) {
     if (esp_now_is_peer_exist(mac)) {
         return ESP_OK;

@@ -111,7 +111,7 @@ def _console(tmp_path, app, ships, desk=False, chip=False, big=False):
         ws = host_app.build_workstation(str(root / "carts"), sys_size=(1024, 600),
                                         windowed=True)
     elif big:
-        ws = host_app.build_workstation(str(root / "carts"), sys_size=(800, 480), font_scale=3)
+        ws = host_app.build_workstation(str(root / "carts"), sys_size=(960, 720), font_scale=3)
     else:
         ws = host_app.build_workstation(str(root / "carts"))
     ws.bar_layer.clock_text = lambda: "10:30"

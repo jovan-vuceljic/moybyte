@@ -94,6 +94,12 @@ const char *const moy_str_ids[MOY_STRINGS] = {
     "ui.off",
     "ui.more_below",
     "ui.older",
+    "notice.match_waited",
+    "notice.match_waited_why",
+    "notice.link_lost",
+    "notice.link_lost_why",
+    "notice.link_back",
+    "notice.link_back_why",
 };
 
 const char *const moy_str_en[MOY_STRINGS] = {
@@ -188,4 +194,10 @@ const char *const moy_str_en[MOY_STRINGS] = {
     "Off",
     "More below",
     "Older messages",
+    "The match waited",
+    "This tab was in the background",
+    "Lost the link to the board",
+    "Reconnecting; the match waits",
+    "The link to the board is back",
+    "The match carries on",
 };

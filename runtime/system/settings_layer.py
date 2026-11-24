@@ -189,8 +189,8 @@ def say(label):
     return s
 
 
-# The text sizes the Text size row names, by font scale (appearance FONT_SCALES).
-_SIZES = {1: "Medium", 2: "Large", 3: "Largest"}
+# The text sizes the Text size row names, by font scale (layout_base.FONT_SCALES).
+_SIZES = {1: "Normal", 2: "Large", 3: "Larger"}
 _STABLE_BETA = ("Stable", "Beta")
 # The Home style row's words: THEME (the layout's `home`), then each of the
 # home's arrangements (appearance HOME_STYLES).
@@ -337,6 +337,7 @@ class SettingsLayer(Layer):
         self._rows_usb = False
         self._rows_idle = None
         self._rows_lgen = -1
+        self._rows_sizes = None
         self._rows_tog = None
         # _toggle_rows' own memo: the registry block, plus the gate answers
         # it was built from in a PREALLOCATED list compared element-wise.
@@ -500,6 +501,14 @@ class SettingsLayer(Layer):
         if rows:
             self._want = rows[i % len(rows)][0]
             self.ws.mark_dirty()
+
+    def focus_row(self, key):
+        """Put the focus on row `key` where the page has it."""
+        rows = self._settings_rows()
+        for i in range(len(rows)):
+            if rows[i][0] == key:
+                self.set_msel = i
+                return
 
     # -- BLUETOOTH KEYBOARD panel (capability-gated) ------------------------------
 
@@ -966,7 +975,9 @@ class SettingsLayer(Layer):
         idle = getattr(ws, "idle_ladder", None)
         tog = self._toggle_rows()
         lgen = ws.look.layout_gen
+        sizes = ws.look.font_scales()
         if (self._rows_cache is not None and lgen == self._rows_lgen
+                and sizes is self._rows_sizes
                 and bt == self._rows_bt
                 and upd == self._rows_upd and onl == self._rows_onl
                 and web == self._rows_web and c6u == self._rows_c6
@@ -981,6 +992,10 @@ class SettingsLayer(Layer):
             # only where a package's layout differs from the theme's.
             i = rows.index(("font_scale", "FONT SIZE", "font")) + 1
             rows = rows[:i] + (("layout_theme", "LAYOUT", "layout"),) + rows[i:]
+        if len(sizes) < 2:
+            # TEXT SIZE only where the glass offers more than one
+            # (`Appearance.font_scales`)
+            rows = tuple(r for r in rows if r[0] != "font_scale")
         if bt:
             # Keep network/input together. Dynamic capability gating preserves
             # the non-P4 Settings row indices.
@@ -1027,6 +1042,7 @@ class SettingsLayer(Layer):
         self._rows_usb = usb
         self._rows_idle = idle
         self._rows_lgen = lgen
+        self._rows_sizes = sizes
         self._rows_tog = tog
         self._rows_cache = rows
         return rows

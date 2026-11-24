@@ -141,7 +141,7 @@ def test_the_home_style_row_steps_through_auto_and_the_arrangements(tmp_path):
     sl = ws.settings_layer
     rows = [r[0] for r in sl._settings_rows()]
     sl.set_msel = rows.index("home_style")
-    assert rows[rows.index("font_scale") + 1] == "home_style"
+    assert "font_scale" not in rows             # the T-Deck offers one text size
     assert ws.look.home_style() is None
     steps = (("carousel", Carousel), ("grid", Launcher), ("icons", IconHome),
              (None, Carousel))
