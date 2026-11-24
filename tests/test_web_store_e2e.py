@@ -4,7 +4,7 @@ Two local servers stand in for the two kinds of host a carts index names:
 
   * PAGES -- the carts repository's Pages site, which answers every file with
     `Access-Control-Allow-Origin: *`: index.json, the licence texts, the
-    MIRROR of each release asset (moy-spec's `moy index --mirror`), and the
+    MIRROR of each release asset (the repository's index maker names it), and the
     mirror of an external file the repository gives away itself;
   * RELEASES -- a GitHub release download and Debian's archive, neither of
     which sends a CORS header, so a page may ask and may not read.

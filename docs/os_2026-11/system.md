@@ -539,8 +539,12 @@ needs …, … free.", `cart_index.room_why`), and a version its index revoked.
 A Python cart from an index that is not reviewed lands only on a yes that
 carries the board's password (`OfficialCarts`' `agree`).
 
-**The index** is moy-spec's (its `cartindex` module, version 1), read as it is, with
-three additions read here: an entry's `depends`, a list of cart ids; the
+**The index** is Moybyte's store format, version 1 (owner, 2026-11-24):
+moybyte-org/carts writes it with its `scripts/make_index.py`, and moy-spec's `moy
+install` (its `cartindex` module) reads its common fields and no more. Its Moybyte
+fields are an entry's `runtime` beyond moy's (a theme, a Python app, the browser
+console's `web`), its `chips`, and `moybyte.api` and `moybyte.fits`; three more are
+read here: an entry's `depends`, a list of cart ids; the
 document's `revoked`, `{"<id>": [<version>, ...]}`, the versions it withdrew
 (a malformed one reads as none); and the signature. **An index is signed as OTA manifests are** (the same keys,
 RSA-2048 PKCS#1 v1.5 over SHA-256): `tools/ota_sign.py sign-index` appends

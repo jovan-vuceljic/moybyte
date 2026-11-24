@@ -36,10 +36,10 @@ Beside every payload, whether or not any console has the add-on installed:
                                    indexes reference, now and before this
                                    publish (official_assets, the publisher's
                                    prune_carts)
-    carts-<board>.json             an index in moy-spec's format (cartindex.py,
-                                   version 1): an entry per official cart of
-                                   THIS build, naming its API level in
-                                   moybyte.api, then one per add-on ever
+    carts-<board>.json             an index in the store's format (version 1,
+                                   runtime/carts/cart_index.py): an entry per
+                                   official cart of THIS build, naming its API
+                                   level in moybyte.api, then one per add-on ever
                                    published for the board, newest first, each
                                    naming its page's digest in moybyte.fits;
                                    signed as a carts index is when the key is
