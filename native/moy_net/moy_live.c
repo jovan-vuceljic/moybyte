@@ -122,7 +122,8 @@ typedef struct {
 static live_t S = {.fd = -1};
 static live_t *const L = &S;
 
-int moy_web_live_link(void) {
+int moy_web_live_link(uint8_t mac[6]) {
+    moy_link_mac(mac);
     return 1;
 }
 

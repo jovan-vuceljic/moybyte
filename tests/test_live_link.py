@@ -423,9 +423,9 @@ def two_pages(twin_exe, page_so, tmp_path, monkeypatch, air):
 
 # -- the socket ----------------------------------------------------------------
 
-def test_the_probe_says_the_board_relays_its_radio(two_pages):
+def test_the_probe_says_the_board_relays_its_radio_and_its_address(two_pages):
     ha, hb, pa, pb, air = two_pages
-    assert ha.page.json("GET", "/live") == (200, {"live": 1, "link": 1})
+    assert ha.page.json("GET", "/live") == (200, {"live": 1, "link": 1, "mac": MAC_A.hex()})
     assert "Sec-WebSocket-Protocol: moy.live" in pa.head
 
 
@@ -526,3 +526,24 @@ def test_a_dropped_socket_reconnects_and_the_match_carries_on(two_pages):
         assert ws.netplay.desync < 0
     assert "sessions=2" in [ln for ln in ha.log().splitlines() if ln.startswith("LIVE")][-1]
 
+
+
+def test_a_link_held_before_the_socket_opens_brings_the_radio_up_when_it_does(
+        twin_exe, page_so, tmp_path, monkeypatch, air):
+    """The page's cart starts from its address at boot, before the worker's
+    socket is open: the hold is kept and said when the socket opens."""
+    ha = _twin(twin_exe, tmp_path, monkeypatch, air, MAC_A, sealed=True)
+    try:
+        lib = _page_lib(page_so, "early", str(tmp_path))
+        assert lib.moy_link_start(0) == 0, "a hold with no socket yet is taken"
+        assert not PageRadio(lib).send(BCAST, b"x"), "and a send before it opens refused"
+        page = Page(ha, lib, True).open()
+        for _ in range(200):
+            page.pump()
+            if any("radio=1" in ln for ln in ha.log().splitlines() if ln.startswith("LIVE")):
+                break
+            time.sleep(0.01)
+        assert any("radio=1" in ln for ln in ha.log().splitlines() if ln.startswith("LIVE")), \
+            "the board's radio came up when the socket opened"
+    finally:
+        ha.end()

@@ -12,7 +12,8 @@
 // the peer's input as it does for a lost frame, and a socket that comes back
 // with the radio held says 'U' again, its rate and its peers with it.
 //
-// The page's address on the air is its board's (the 'H' state), and its
+// The page's address on the air is its board's (the 'H' state; the /live
+// probe tells the page's Python before the socket opens), and its
 // channel the board's, always pinned: a Zero serves its page on its
 // station's channel, so the link never tunes.
 
@@ -80,18 +81,19 @@ static void again(void) {
     }
 }
 
+// A hold taken before the socket opened is said when it does: the page's
+// cart can start (at boot, from its address) before the board answered.
 int moy_link_start(uint32_t rxbuf) {
     (void)rxbuf;
-    if (!P.open || !P.state) {
-        return MOY_LINK_WEB_DOWN;
-    }
     if (P.ring.buf == NULL) {
         moy_link_ring_init(&P.ring, P.buf, RING);
     }
     if (!P.want) {
         P.want = 1;
         P.npeers = 0;
-        say('U', NULL, 0);
+        if (P.open) {
+            say('U', NULL, 0);
+        }
     }
     return 0;
 }

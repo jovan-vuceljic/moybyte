@@ -1437,7 +1437,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     const gpioPins = await probeGpio();
     const updateDoc = await probeUpdate();
     const official = mode === "board" && await probeOfficial();
-    const liveLink = mode === "board" && await probeLive();
+    const liveLink = mode === "board" ? await probeLive() : null;
     mp.runPython("import web_boot\n"
         // BEFORE boot(): the mode is what decides whether the carts watcher
         // sweeps the journal, and boot() is where that watcher is built.
@@ -1465,6 +1465,10 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         // live Workstation, which boot() is what creates.
         + (updateDoc ? "web_boot.update_enable("
             + JSON.stringify(JSON.stringify(updateDoc)) + ")\n" : "")
+        // The board's radio, a link on the live Workstation: after boot(),
+        // which creates it, and before the address's cart starts, whose
+        // launch grants "multiplayer" only where the console has a link.
+        + (liveLink ? "web_boot.live_enable(" + JSON.stringify(liveLink) + ")\n" : "")
         // What the address starts it on (web_boot.page_start).
         + "web_boot.page_start()\n"
         + "from web_boot import assets_json, step_frame_json, apply_events_json, "
@@ -1476,7 +1480,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + "import_p8_json, import_archive_json, export_cart, drop_kind, "
         + "edit_cart, open_cart, state_json, pcm_addr, "
         + "term_enable, term_poll_json, term_feed, term_state, "
-        + "live_enable, live_pump, live_feed, live_state");
+        + "live_pump, live_feed, live_state");
     step = mp.globals.get("step_frame_json");
     pcmAt = mp.globals.get("pcm_addr")();
     applyEvents = mp.globals.get("apply_events_json");
@@ -1507,7 +1511,6 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         termState = mp.globals.get("term_state");
     }
     if (liveLink) {
-        mp.globals.get("live_enable")(true);
         livePump = mp.globals.get("live_pump");
         liveFeed = mp.globals.get("live_feed");
         liveState = mp.globals.get("live_state");
@@ -1584,15 +1587,16 @@ function shipFrame(s) {
 // not served by anything with pins" -- a static host (moybyte.com, an export),
 // a console board that spends its GPIOs on a panel, or a Zero this page is not
 // signed in to. All four are the same answer to a cart: no verbs.
-// Does the board relay its radio on the live socket (GET /live without the
-// upgrade, native/moy_net/moy_live.h)? A board without the socket 404s it.
+// The board's address on the air where it relays its radio on the live
+// socket (GET /live without the upgrade, native/moy_net/moy_live.h), else
+// null. A board without the socket 404s it.
 async function probeLive() {
     try {
         const r = await sealed("GET", "/live");
         const d = r.status === 200 ? sealedJson(r) : null;
-        return !!(d && d.live && d.link);
+        return d && d.live && d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : null;
     } catch (e) {
-        return false;
+        return null;
     }
 }
 

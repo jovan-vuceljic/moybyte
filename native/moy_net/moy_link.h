@@ -130,7 +130,7 @@ void moy_link_stats(moy_link_stats_t *s);
 #if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
 // The page's link (moy_link_web.c): what the worker moves over the live
 // socket between frames.
-#define MOY_LINK_WEB_DOWN 107           // ENOTCONN: no socket, or no board state yet
+#define MOY_LINK_WEB_DOWN 107           // ENOTCONN: a send with no socket
 typedef struct {
     uint8_t open, held, board_up, state;
     int err, ch;

@@ -1663,8 +1663,16 @@ static int stream(out_t *o, const moy_http_req_t *r, int which) {
         if (which == MOY_WA_TERM) {
             json(o, 200, "{\"term\":1}");
         } else {
-            json(o, 200, moy_web_live_link() ? "{\"live\":1,\"link\":1}"
-                                             : "{\"live\":1,\"link\":0}");
+            uint8_t m[6];
+            if (moy_web_live_link == NULL || !moy_web_live_link(m)) {
+                json(o, 200, "{\"live\":1,\"link\":0}");
+            } else {
+                char d[64];
+                snprintf(d, sizeof d,
+                         "{\"live\":1,\"link\":1,\"mac\":\"%02x%02x%02x%02x%02x%02x\"}",
+                         m[0], m[1], m[2], m[3], m[4], m[5]);
+                json(o, 200, d);
+            }
         }
         return 0;
     }

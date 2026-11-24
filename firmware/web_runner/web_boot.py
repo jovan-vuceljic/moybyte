@@ -1590,9 +1590,13 @@ _LIVE_GAP_MS = 250                      # a frame gap a live match says it waite
 
 class _LiveWlan:
     """The station `EspNowLink` reads, which is the page's board's: its MAC
-    is the page's address on the air and its channel pinned (the 'H' state)."""
+    (the /live probe's) is the page's address on the air, and its channel
+    pinned (the 'H' state; 0 before the socket first opens)."""
 
     PM_NONE = 0
+
+    def __init__(self, mac):
+        self.mac = mac
 
     def active(self, on=None):
         return True
@@ -1603,29 +1607,29 @@ class _LiveWlan:
     def config(self, *a, **kw):
         if kw or not a:
             return None
-        import moy_net
-        info = moy_net.live_info()
         if a[0] == "mac":
-            if not info[3]:
-                raise OSError(107)      # no word from the board yet: no address
-            return info[6]
+            return self.mac
         if a[0] == "channel":
-            return abs(info[5])
+            import moy_net
+            return abs(moy_net.live_info()[5])
         return 0
 
 
-def live_enable(on):
-    """The board answered the /live probe with its radio: the console gains
-    a link, as a console board wires one (device/wire_links.py)."""
+def live_enable(mac):
+    """The board answered the /live probe with its radio and its address
+    (`mac`, hex): the console gains a link, as a console board wires one
+    (device/wire_links.py), before the address's cart starts."""
     ws = _S.get("ws")
-    if not on or ws is None:
+    if ws is None:
         return ""
     try:
+        import binascii
         import moy_net
         if not hasattr(moy_net, "live_take"):
             return ""
         from players import EspNowLink, launch_cart
-        ws.link = EspNowLink(board="web", name="Browser", wlan=_LiveWlan(), launch=launch_cart)
+        ws.link = EspNowLink(board="web", name="Browser", wlan=_LiveWlan(binascii.unhexlify(mac)),
+                             launch=launch_cart)
         ws.link.tiers = ("lua",)
         ws.net = ws.link.net
         _S["live"] = {"open": False, "said": None, "hidden": False, "gap": False}

@@ -20,8 +20,10 @@ struct moy_wa_seal;
 // The upgraded socket `fd` taken, under the session's `seal` (NULL on the
 // open host): 0, else nonzero (another page's socket is live, or no memory).
 int moy_web_live(int fd, const struct moy_wa_seal *seal);
-// 1 where the board relays its radio on the link channel.
-int moy_web_live_link(void);
+// 1 where the board relays its radio on the link channel, with its address
+// on the air (the page's, which its Python reads from the /live probe before
+// the socket opens) into `mac`.
+int moy_web_live_link(uint8_t mac[6]);
 // The webhost's (moy_webauth.c): how long since the page last sent a frame
 // (UINT32_MAX with none), and the page's session ending.
 uint32_t moy_web_live_idle_ms(void);
