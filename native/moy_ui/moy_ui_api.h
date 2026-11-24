@@ -1048,6 +1048,11 @@ void moy_ui_api_group(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t cap
 // MOY_UI_V_LINK, which answers true the frame it is activated.
 int moy_ui_api_value(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy_ui_span_t label,
                      moy_ui_span_t value, const moy_ui_over_t *o);
+// A link as a list's two-line row (moy_ui_row2: `two`'s lead, tag, mark,
+// value, sub and count; its title `label`), a stop of its own: true the
+// frame it is activated.
+int moy_ui_api_value2(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label,
+                      const moy_ui_row2_t *two, const moy_ui_over_t *o);
 // A choice of `n` options with `cur` (from 0, -1 none) current: `kind`
 // MOY_UI_V_CYCLE, MOY_UI_V_SEG and MOY_UI_V_TABS (a tab row: its options
 // from the left, its label only its id) take `opts` NUL-separated,
@@ -1208,6 +1213,9 @@ void moy_ui_api_card_at(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
 // danger label tone. The y under it.
 int moy_ui_api_note(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t icon,
                     const uint8_t *lines, size_t n);
+// The height a note of `lines` (as moy_ui_api_note takes them) takes at width `w`.
+int moy_ui_api_note_h(const moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t icon,
+                      const uint8_t *lines, size_t n, int w);
 int moy_ui_api_empty(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t icon,
                      moy_ui_span_t title, const uint8_t *lines, size_t n);
 // A chat's bubble (ui.bubble, moy_ui.h's moy_ui_bubble) at `at`'s rect's

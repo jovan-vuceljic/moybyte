@@ -654,6 +654,15 @@ int moy_ui_api_note(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t icon,
     return b.y + h;
 }
 
+int moy_ui_api_note_h(const moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t icon,
+                      const uint8_t *lines, size_t n, int w) {
+    int slot = moy_ui_icon_slot(icon.p, icon.n), glyph = moy_ui_icon_glyph(icon.p, icon.n);
+    int warn = icon.n == 4 && memcmp(icon.p, "warn", 4) == 0;
+    int pf = mua_ground_of(c) | (c->tap ? MOY_UI_TAP : 0);
+    moy_ui_box_t m = {0, 0, (int16_t)w, 0};
+    return moy_ui_note(s, m, slot, glyph, warn, lines, n, c->fs, pf, 0);
+}
+
 int moy_ui_api_empty(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t icon,
                      moy_ui_span_t title, const uint8_t *lines, size_t n) {
     mua_grid_end(c, s);

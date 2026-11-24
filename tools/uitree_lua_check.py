@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
 LUA_STD = set("""assert collectgarbage error getmetatable ipairs load next pairs pcall print rawequal rawget
 rawlen rawset require select setmetatable tonumber tostring type xpcall _G _ENV _VERSION math string table
 utf8 coroutine os io debug""".split())
-APP_GLOBALS = set("""ui moybyte prefs _draw _init _update _layout UI_LAUNCH UI_MAIN W H self""".split())
+APP_GLOBALS = set("""ui moybyte prefs clipboard _draw _init _update _layout UI_LAUNCH UI_MAIN W H self""".split())
 KEYWORDS = set("""and break do else elseif end false for function goto if in local nil not or repeat return
 then true until while""".split())
 

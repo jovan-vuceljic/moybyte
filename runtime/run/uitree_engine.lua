@@ -581,6 +581,7 @@ I.BACK.frame = function(p)
   if r < 0 then fail("X01", "frame", "the C engine's frame found no run open", "a run", "none") end
   drain()
   R.focused = X:focused()
+  I.SYS.focus = R.focused or ""
   -- a role key: a row's action on the focused row that fires it, any other on the page; none
   -- while a field types
   local f = R.focused or ""

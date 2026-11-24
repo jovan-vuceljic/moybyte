@@ -1791,6 +1791,18 @@
      "type": "tpl",
      "level": 2
     },
+    "sub": {
+     "type": "tpl",
+     "level": 2
+    },
+    "count": {
+     "type": "tpl",
+     "level": 2
+    },
+    "mark": {
+     "type": "tpl",
+     "level": 2
+    },
     "focus": {
      "type": "cond",
      "level": 1

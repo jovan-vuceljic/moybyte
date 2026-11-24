@@ -110,7 +110,7 @@ static inline int32_t ut_p_clear(int32_t v) { return ut_prop_int_("clear", v); }
 static inline int32_t ut_p_close(const char *v) { return ut_prop_("close", v); }
 static inline int32_t ut_p_cols(const char *v) { return ut_prop_("cols", v); }
 static inline int32_t ut_p_commit(int v) { return ut_prop_("commit", v ? "True" : "False"); }
-static inline int32_t ut_p_count(int32_t v) { return ut_prop_int_("count", v); }
+static inline int32_t ut_p_count(const char *v) { return ut_prop_("count", v); }
 static inline int32_t ut_p_cur(const char *v) { return ut_prop_("cur", v); }
 static inline int32_t ut_p_current(const char *v) { return ut_prop_("current", v); }
 static inline int32_t ut_p_cut(const char *v) { return ut_prop_("cut", v); }

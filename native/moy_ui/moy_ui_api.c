@@ -4439,6 +4439,38 @@ int32_t moy_ui_api_list(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t l
     return cur < count ? cur : count - 1;
 }
 
+int moy_ui_api_value2(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label,
+                      const moy_ui_row2_t *two, const moy_ui_over_t *o) {
+    o = mua_over(o);
+    int pflags = mua_ground_of(c) | (c->tap ? MOY_UI_TAP : 0);
+    int rh = moy_ui_row2_h(c->fs, pflags);
+    if (c->tap && rh < MOY_UI_TAP_ROW) {
+        rh = MOY_UI_TAP_ROW;
+    }
+    int stacked;
+    moy_ui_box_t b = mua_place(c, rh, &stacked);
+    int st = mua_vrow_stop(c, mua_id_of(c, o, label), b, 0, o, label);
+    int f = MOY_UI_F_EDGE | mua_mark_flags(st, o) | (o->disabled == 1 ? MOY_UI_F_DISABLED : 0);
+    int ia = (st & MOY_UI_ST_PRESSED) ? MOY_UI_PRESSED : (st & MOY_UI_ST_HOVER) ? MOY_UI_HOVER : -1;
+    int16_t col[3];
+    colours(s, o, col);
+    moy_ui_row_t r;
+    row_init(&r, label, c->fs, col);
+    r.label.n = 0;
+    moy_ui_row2_t r2 = *two;
+    r2.title = label;
+    r2.pad = (int16_t)(mua_kmetric(MOY_UI_K_ROW, MOY_UI_M_ROW_PAD) * c->fs);
+    clip_t k;
+    mua_band_mark(c, b, stacked, f);
+    EACH_ROW(c, k, s, b, stacked, c->page) {
+        mua_band(c, s, b, stacked);
+        moy_ui_row(s, b, MOY_UI_K_ROW_LIST, f, ia, &r, MOY_UI_PHASE_ALL);
+        moy_ui_row2(s, b, &r2, c->fs, pflags);
+        mua_clip_out(&k);
+    }
+    return (st & MOY_UI_ST_ACTIVATED) != 0;
+}
+
 int moy_ui_api_icon(moy_ui_ctx_t *c, moy_ui_span_t name) {
     c->icon_slot = (int16_t)moy_ui_icon_slot(name.p, name.n);
     c->icon_glyph = (int16_t)moy_ui_icon_glyph(name.p, name.n);

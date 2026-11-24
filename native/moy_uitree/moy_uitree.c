@@ -1153,7 +1153,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     else if ((kind == UIT_BUBBLE && (!strcmp(name, "side") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
              ((kind == UIT_INFO || kind == UIT_LINK) &&
               (!strcmp(name, "tag") || !strcmp(name, "tone") || !strcmp(name, "signal"))) ||
-             (kind == UIT_LINK && !strcmp(name, "swatch")) ||
+             (kind == UIT_LINK && (!strcmp(name, "swatch") || !strcmp(name, "sub") || !strcmp(name, "count") ||
+                                   !strcmp(name, "mark"))) ||
              (kind == UIT_MONTH && (!strcmp(name, "year") || !strcmp(name, "month") || !strcmp(name, "today"))) ||
              (kind == UIT_CARD && (!strcmp(name, "badge") || !strcmp(name, "label_icon") || !strcmp(name, "fill"))) || (kind == UIT_CARDS && (!strcmp(name, "pad") || !strcmp(name, "tone") || !strcmp(name, "label"))) ||
              (kind == UIT_CELLS && (!strcmp(name, "first") || !strcmp(name, "count") || !strcmp(name, "cols") ||

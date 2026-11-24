@@ -2030,7 +2030,7 @@ SCHEMA = {
     "hints": dict(_C, keys="text", label="text", tail="cond", drop="cond", on="action1"),
     "info": dict(_C, label="text", value="text", icon="text", signal="int", tag="text", tone="text"),
     "link": dict(_C, value="text", label="text", icon="text", signal="int", focus="cond", tag="text",
-                 tone="text", swatch="text"),
+                 tone="text", swatch="text", sub="text", count="text", mark="text"),
     "button": dict(_C, kind="lit", label="text", icon="text", alone="lit", span="lit", arg="lit",
                    focus="cond", grow="lit", marked="cond", w="int", tone="text", look="lit"),
     "toggle": dict(_C, label="text", on="action0", focus="cond", hint="text"),

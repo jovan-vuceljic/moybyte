@@ -28,7 +28,7 @@ Python app on the UI tree with a list longer than the screen and prefs
 and a Lua service answering a message (`tests/fixtures/apps/echo_lua.moy`).
 `system_carts/moybyte.notes.moy` is the full-size app. Moy Mesh, an
 installable app in moybyte-org/carts (`carts/moymesh/`, `pkg install
-moymesh`), is the whole app in Lua: a window over a service that holds the
+moymesh`), is the whole app in Lua: a UI tree window over a service that holds the
 LoRa radio by handle and wakes on it, a Meshtastic node of its own (the
 channels and presets a Meshtastic setup names, its NodeInfo under the
 console's name from `moybyte.name()`, direct messages under the nodes' X25519
@@ -419,7 +419,7 @@ Python's alone.
 | kind | is | key props |
 |---|---|---|
 | `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look="large"`, `w=` |
-| `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=` |
+| `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=`, `sub=`, `count=`, `mark=` |
 | `toggle(label, name)` | a bool | `on=`, `hint=` |
 | `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=` |
 | `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `secret=`, `grow=`, `on=`, `changed=`, `when=` |
@@ -533,6 +533,11 @@ and its pages are placed; `split` and `grid` place their cells on any page.
   `look="large"` is half again a row's height with twice the pads, on a
   flowing page. On the desk a
   popover anchored at a button or a link hangs under it.
+- A link with `sub=` is a list's two-line row (a conversation, a contact):
+  its `icon=` leads it (`"@NAME"`: the name's initials on a disc), its value
+  sits at the right of its label, `sub=` is the line under them with
+  `count=` a badge at its right, and `tag=` (a pill) or `mark=` (an icon)
+  follows the label; each a template, empty for none.
 - A link's `swatch="#RRGGBB"` (a template, empty for none) draws a chip of
   that colour before its value; a swatches row whose label its dots would
   cut moves them into its right pad where that makes it whole, else shrinks
