@@ -2462,6 +2462,7 @@ function T.push(name, row)
            "a row of " .. q(m.name), describe(row))
     end
     setv(p.arg, key, "push " .. name, at)
+    row = key
   elseif row ~= nil then
     fail("P04", at, "the page " .. q(name) .. " takes no argument", "ui.push(\"" .. name .. "\")", describe(row),
          "arg = \"A_ROW_OF\" on ui.page")
@@ -2470,17 +2471,22 @@ function T.push(name, row)
   local name = R.focused
   if name == "" then name = nil end
   if top then top.refocus, top.refocus_name = R.focused, name end
-  stack[#stack + 1] = { def = p, fresh = 1 }
+  stack[#stack + 1] = { def = p, fresh = 1, arg = row }   -- the row its arg= holds while it shows
   GEN = GEN + 1
   trace("page", "push", "page " .. #stack .. (name and ", opened from " .. q(name) or ""))
 end
 function T.pop()
-  no_command_in_build("ui.pop", where())
+  local at = where()
+  no_command_in_build("ui.pop", at)
   if #stack > 1 then
     local under = stack[#stack - 1]
     trace("page", "back", "page " .. (#stack - 1) .. (under.refocus_name and ", focus back to " .. q(under.refocus_name) or ""))
     stack[#stack] = nil
-    stack[#stack].fresh = 1
+    under.fresh = 1
+    local arg = under.def.arg                         -- the page under shows the row it was pushed with,
+    if arg and under.arg ~= nil and model_of(DECL[arg].model).index[under.arg] then   -- while it stands
+      setv(arg, under.arg, "back", at)
+    end
     GEN = GEN + 1
   else
     fail("P05", where(), "ui.pop() on the app's first page", "a page ui.push opened", "the first page")

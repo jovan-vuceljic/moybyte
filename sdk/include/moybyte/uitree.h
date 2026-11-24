@@ -23,7 +23,8 @@
 //     EXPORT(_draw) void _draw(void) { ut_frame(); }
 //
 // A page is a function: ut_push(fn) from a handler builds it over this one,
-// and the bar's Back (or ut_pop) builds the one under it again.
+// and the bar's Back (or ut_pop) builds the one under it again. A page that
+// takes a row (ut_push_row) keeps it: the Back onto it sets its cursor again.
 //
 // A node goes under the open container (ut_page, ut_group, ut_rows, ut_in);
 // one with no key of its own is keyed by its kind and its place among its
@@ -82,6 +83,8 @@ struct ut_ {
     const char *names[UT_ACTIONS];          // each action's name and handler, by its index
     ut_fn fns[UT_ACTIONS];
     ut_page_fn pages[UT_PAGES];             // the page stack, its top last
+    int32_t cursors[UT_PAGES];              // ...each page's cursor (ut_push_row), -1 none
+    char rows[UT_PAGES][UT_ARG + 1];        // ...and the key of the row it was pushed with
     int32_t npages;
     int32_t ev[5];                          // the running action's model slot, row, and a pointer's kind, x, y
     int32_t canvas[UT_CANVASES];            // the page's canvases with a draw, and each draw
@@ -383,26 +386,34 @@ static inline int ut_page_end_(void) {
 // The app's first page, built by `page`, and the visit opened.
 static inline int32_t ut_open(ut_page_fn page) {
     ut_.pages[0] = page;
+    ut_.cursors[0] = -1;
     ut_.npages = 1;
     page();
     return uitree_open();
 }
 
-// From a handler: the page `page` pushed (built) over this one, which Back pops.
-static inline void ut_push(ut_page_fn page) {
+static inline void ut_push_(ut_page_fn page, int32_t cursor) {
     if (ut_.npages < UT_PAGES) {
+        ut_.cursors[ut_.npages] = cursor;
         ut_.pages[ut_.npages++] = page;
         page();
     }
 }
 
+// From a handler: the page `page` pushed (built) over this one, which Back pops.
+static inline void ut_push(ut_page_fn page) {
+    ut_push_(page, -1);
+}
+
 // ...a page that takes a row: the cursor `cursor` (a row_of over the model
-// at slot `model`, whose key is field `key`) set to row `row` first.
+// at slot `model`, whose key is field `key`) set to row `row` first, and
+// set to it again when a page over this one pops.
 static inline void ut_push_row(ut_page_fn page, int32_t cursor, int32_t model, int32_t key, int32_t row) {
-    char k[64];
-    ut_get_cell(model, row, key, k, sizeof k);
+    char full[UT_ARG + 1];
+    char *k = ut_.npages < UT_PAGES ? ut_.rows[ut_.npages] : full;
+    ut_get_cell(model, row, key, k, sizeof full);
     ut_set_text(cursor, k);
-    ut_push(page);
+    ut_push_(page, cursor);
 }
 
 // The focus put on the node keyed `key` (a row's part: "ROWKEY/KEY") at the next frame.
@@ -416,11 +427,15 @@ static inline int32_t ut_canvas_row(void) {
     return uitree_draw_row();
 }
 
-// The page under this one built again, the focus back where it was.
+// The page under this one built again on the row it was pushed with, the
+// focus back where it was.
 static inline void ut_pop(void) {
     if (ut_.npages > 1) {
-        ut_.npages--;
-        ut_.pages[ut_.npages - 1]();
+        int32_t at = --ut_.npages - 1;
+        if (ut_.cursors[at] >= 0) {
+            ut_set_text(ut_.cursors[at], ut_.rows[at]);
+        }
+        ut_.pages[at]();
     }
 }
 

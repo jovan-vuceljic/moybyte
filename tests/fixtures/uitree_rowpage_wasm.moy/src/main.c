@@ -1,6 +1,7 @@
 // A compiled app's page that takes a row (tests/test_uitree_wasm.py): a
 // row's link pushes the details of its row, which the cursor names, and
-// focus is moved by the app.
+// focus is moved by the app. Other pushes the details of the first row over
+// them, and Back shows the row they were pushed with again.
 #include "moybyte/uitree.h"
 
 #define EXPORT(name) __attribute__((export_name(#name)))
@@ -9,7 +10,10 @@ enum { F_ID, F_NAME };
 static int32_t s_items, s_sel;
 
 static void details(void) {
-    ut_page("details", "Details") ut_label("{sel.name}");
+    ut_page("details", "Details") {
+        ut_link("other", NULL);
+        ut_label("{sel.name}");
+    }
 }
 
 static void opened(int32_t row) {
@@ -19,6 +23,8 @@ static void opened(int32_t row) {
 }
 
 static void open_(int32_t row) { ut_push_row(details, s_sel, s_items, F_ID, row); }
+
+static void other(int32_t row) { ut_push_row(details, s_sel, s_items, F_ID, 0); }
 
 static void page(void) {
     ut_page("shelf", "Shelf") {
@@ -31,6 +37,7 @@ EXPORT(_init) void _init(void) {
     s_sel = ut_row_of("sel", s_items);
     ut_hook("opened", opened);
     ut_action("open", "Open", open_);
+    ut_action("other", "Other", other);
     ut_open(page);
 }
 

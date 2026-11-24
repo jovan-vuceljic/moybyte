@@ -329,6 +329,14 @@ handler (a service's message, a callback), which it runs before the next
 frame. The hook named `opened` runs as the app opens: where an app fills its
 models and reads its prefs.
 
+A page that shows one row takes it as its argument: a Lua page declares
+`arg=` (a `row_of`) and is pushed with its row (`ui.push("thread", row)`), a
+compiled one by `ut_push_row`. The push writes the row into that state, and
+each page on the stack keeps the row it was pushed with: when the page over
+it pops, the state holds that row again (where it still stands), so a page
+pushed over itself on another row steps back to its own. A Python page is a
+function and carries its argument itself: `ui.push(lambda: thread(key))`.
+
 **Pages built once.** A page is a function that describes nodes and reads
 no state. Python's root page is the function named `build`, and a page opens
 `with ui.page(title):`, its containers `with` blocks. Lua registers each

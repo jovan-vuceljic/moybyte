@@ -264,6 +264,25 @@ def test_a_page_takes_a_row_and_the_app_moves_the_focus():
         "page back page 1, focus back to 'b/open'"]
 
 
+def test_a_page_pushed_over_itself_with_another_row_gives_the_first_its_row_back():
+    """ut_push_row's page keeps the row it was pushed with: the details of
+    Bread pushed over by the details of Apples, Back sets the cursor to
+    Bread again as it builds the page under."""
+    import uitree_conf as C
+    cart = os.path.join(ROOT, "tests", "fixtures", "uitree_rowpage_wasm.moy")
+    trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "k:a", "k:a", "back", "back"], cart=cart)
+    assert trace[trace.index("action open from link 'b/open' on 'Shelf'"):] == [
+        "action open from link 'b/open' on 'Shelf'",
+        "state sel '' -> 'b' (in open)",
+        "page push page 2, opened from 'b/open'",
+        "action other from link 'other' on 'Details'",
+        "state sel 'b' -> 'a' (in other)",
+        "page push page 3, opened from 'other'",
+        "state sel 'a' -> 'b' (in the app)",
+        "page back page 2, focus back to 'other'",
+        "page back page 1, focus back to 'b/open'"]
+
+
 def test_more_role_runs_on_the_m_key():
     """The more role's key (m) runs the page's action where no field is
     focused and the focused row's action where it hangs from a row; a field

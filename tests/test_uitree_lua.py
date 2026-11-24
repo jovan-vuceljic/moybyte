@@ -1184,3 +1184,57 @@ def test_a_grids_spacing_is_a_word_and_an_int_stops_the_run_at_its_line(tmp_path
         ws.spine.exit_to_caller()
     assert got["Word"] is None, got["Word"]
     assert got["Int"] and "error[N01] main.lua:5:" in got["Int"], got["Int"]
+
+
+def test_a_page_pushed_over_itself_with_another_row_gives_the_first_its_row_back(tmp_path):
+    """A page that takes a row (arg=) keeps the row it was pushed with: pushed
+    over itself with another row, its Back shows the first row again, the
+    page under writing its arg back as it shows."""
+    from runtime import host_app
+    from runtime.host import moy_log
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Rows", '''ui.app("Rows", { icon = "list" })
+S = ui.state { items = ui.model { key = "id", id = "", name = "" }, sel = ui.row_of("items") }
+ui.hook("opened", function() S.items:set({ { id = "a", name = "Apples" }, { id = "b", name = "Bread" } }) end)
+ui.action("open", "Open", function(row) ui.push("details", row) end, { takes = "row" })
+ui.action("other", "Other", function() ui.push("details", "b") end, { keys = { "o" } })
+ui.page("shelf", function()
+  ui.rows("items", function() ui.link("open", { label = "{.name}" }) end)
+end, { title = "Shelf" })
+ui.page("details", function()
+  ui.label("{sel.name}")
+  ui.button("other")
+end, { title = "Details", arg = "sel" })
+''')
+    ws, drv, frame, open_cart = _console(carts)
+    seq = moy_log.next()
+    open_cart(ws, "Rows")
+    for _ in range(4):
+        frame()
+    pl = ws.run.player
+
+    def sel():
+        assert pl.lua.exec("__R = S.sel and S.sel.id or ''", "test") is None
+        return pl.lua.get_global("__R")
+    drv.press("a")                      # the first row, Apples
+    frame()
+    frame()
+    assert sel() == "a"
+    drv.type_char(ord("o"))             # the same page over it, on Bread
+    frame()
+    frame()
+    assert sel() == "b"
+    assert pl.face.back()
+    frame()
+    frame()
+    assert sel() == "a", "the page under shows the row it was pushed with"
+    assert pl.face.back()
+    frame()
+    frame()
+    assert pl.cart_error is None, pl.cart_error
+    lines = [r[4].split("[trace] ", 1)[1] for r in moy_log.read(seq, 8000) if "[trace] " in r[4]]
+    pages = [" ".join(l.split()[1:]) for l in lines if l.split()[1:2] == ["page"]]
+    assert pages == ["page push page 2, opened from 'a/open'", "page push page 3, opened from 'other'",
+                     "page back page 2, focus back to 'other'", "page back page 1, focus back to 'a/open'"], lines
+    ws.spine.exit_to_caller()
