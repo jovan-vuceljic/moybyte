@@ -85,7 +85,8 @@ def test_the_workflow_runs_the_script_on_every_pr_and_rechecks_on_a_base_push():
     assert "gh run rerun" in wf and "--workflow pr-base.yml" in wf
 
 
-@pytest.mark.parametrize("rel", [".github/pull_request_template.md"])
+@pytest.mark.parametrize("rel", ["CONTRIBUTING.md",
+                                 ".github/pull_request_template.md"])
 def test_the_contributor_docs_give_the_command_the_check_prints(rel):
     with open(os.path.join(ROOT, rel)) as f:
         assert MERGE in f.read()
