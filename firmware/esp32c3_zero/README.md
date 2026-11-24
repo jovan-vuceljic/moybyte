@@ -115,6 +115,13 @@ chip changes.
 - The UART0 REPL (TX GPIO21, RX GPIO20) stays on as the recovery console for
   an image whose USB has wedged.
 - On a Super Mini the LED is GPIO8 (active LOW), a strapping pin.
+- **A Super Mini's antenna is mismatched on many boards**: at full transmit
+  power the access point never answers its authentication, and a join fails
+  with reason 2 (`AUTH_EXPIRE`) where a lower power joins. The kernel's WiFi
+  driver steps the power down by itself after such a refusal and remembers,
+  per network, the power that got an address, so a board pays the search once
+  (`native/moy_net/moy_net.h`, the station's transmit power). A board whose
+  antenna is fine joins at full power as any other does.
 
 ## Free pins
 

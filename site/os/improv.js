@@ -12,7 +12,7 @@ self.moyImprov = (() => {
     const SAYS = {
         1: "the board did not understand the request",
         2: "the board does not know that request",
-        3: "the board could not join that network: check its name and password",
+        3: "the board could not join that network: check its name and password, and if they are right, move the board closer to the router",
         5: "that is not a name a network can carry",
         255: "the board failed",
     };

@@ -986,6 +986,64 @@ def test_a_board_at_the_repl_is_named_as_one(monkeypatch):
     assert "REPL" in str(exc.value) and "reboot --soft" in str(exc.value)
 
 
+class _ZeroLog:
+    """A Zero's serial after a reset: its boot lines, half a second apart."""
+
+    def __init__(self, lines):
+        self.lines, self.left, self.closed = [], list(lines), 0
+
+    def __call__(self, port, board_dir=None, log=None):
+        return self
+
+    def drain(self, secs):
+        got = self.left[:1]
+        del self.left[:1]
+        self.lines += got
+        return got
+
+    def close(self):
+        self.closed += 1
+
+
+@pytest.mark.parametrize("name", ["c3_zero", "xiao_zero"])
+@pytest.mark.parametrize("last", [
+    "ZERO serving http://192.168.1.2/  (mDNS moy.local)",
+    "ZERO SETUP  join 'moybyte-zero-e55d' (open) and the form opens itself"])
+def test_a_zero_reboots_through_esptool_and_waits_for_its_boot_line(
+        monkeypatch, name, last):
+    """A Zero has no dev channel: `reboot` resets it through esptool (its
+    [flash] facts) and waits for the line its store host ends a boot with,
+    never for a desk's `state`."""
+    did = []
+    log = _ZeroLog(["Moybyte Zero boot", "ZERO wifi: home 192.168.1.2", last,
+                    "ZERO firmware 0.8"])
+    monkeypatch.setattr(board, "P4Board", log)
+    monkeypatch.setattr(board, "stable", lambda p: p)
+    monkeypatch.setattr(board, "refuse_if_held", lambda p: None)
+    monkeypatch.setattr(board, "esptool_reset", lambda n, d, p: did.append(("reset", n, p)))
+    monkeypatch.setattr(board, "wait_for_desk", lambda *a, **k: pytest.fail("a desk wait"))
+    a = argparse.Namespace(port="/dev/zero_port", force=False, soft=False, timeout=30)
+    assert board.cmd_reboot(name, DIRS, a) == 0
+    assert did == [("reset", name, "/dev/zero_port")]
+    assert log.lines[-1] == last and log.closed == 1
+
+
+def test_a_zero_that_never_ends_its_boot_names_its_last_line(monkeypatch):
+    clock = [0.0]
+    _virtual_time(monkeypatch, clock)
+    log = _ZeroLog(["Moybyte Zero (C3) boot"])
+    real = log.drain
+
+    def drain(secs):
+        clock[0] += secs
+        return real(secs)
+    log.drain = drain
+    monkeypatch.setattr(board, "P4Board", log)
+    with pytest.raises(board.BoardError) as exc:
+        board.wait_for_zero("c3_zero", DIRS, "/dev/zero_port", timeout=5)
+    assert "Moybyte Zero (C3) boot" in str(exc.value)
+
+
 def test_sh_interrupt_sends_the_channels_line_not_a_raw_ctrl_c(clock):
     """Ctrl-C in `board.py sh` is the dev channel's `sh ^C` line: a raw 0x03
     reaches a board's MicroPython REPL instead of the shell."""

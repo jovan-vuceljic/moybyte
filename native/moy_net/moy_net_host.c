@@ -12,6 +12,27 @@ int moy_net_host_remember(int ok, const char *password, size_t password_n,
     return moy_wifi_remember(ok, password, password_n, stored, stored_n);
 }
 
+unsigned moy_net_host_txp_start(unsigned kept) {
+    return moy_wifi_txp_start(kept);
+}
+
+unsigned moy_net_host_txp_next(int reason, unsigned cur, int first, int search) {
+    return moy_wifi_txp_next(reason, cur, first, search);
+}
+
+// The per-network table as the bytes a test holds (MOY_WIFI_TXP_SLOTS slots).
+size_t moy_net_host_txp_table_size(void) {
+    return sizeof(moy_wifi_txp_slot_t) * MOY_WIFI_TXP_SLOTS;
+}
+
+unsigned moy_net_host_txp_recall(const void *t, const char *ssid) {
+    return moy_wifi_txp_recall((const moy_wifi_txp_slot_t *)t, ssid);
+}
+
+int moy_net_host_txp_learn(void *t, const char *ssid, unsigned txp) {
+    return moy_wifi_txp_learn((moy_wifi_txp_slot_t *)t, ssid, txp);
+}
+
 // -- what the image links beside the webhost, standing in for its tests ----------
 
 #include <stdbool.h>

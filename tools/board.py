@@ -895,11 +895,42 @@ def esptool_reset(name, dirs, port):
         raise BoardError("esptool could not reach %s on %s" % (name, port))
 
 
+# A Zero has no dev channel to answer `state`: its boot is over at the line its
+# store host prints once it serves, on a network (device/zero_host.py) or from
+# its setup access point (device/zero_setup.py).
+ZERO_UP = ("ZERO serving ", "ZERO SETUP  join ")
+
+
+def wait_for_zero(name, dirs, port, timeout=WAIT_S, b=None):
+    """Read a just-reset Zero's log until its boot is over, on `b` when the
+    reset was sent through it; returns that line."""
+    end = time.time() + timeout
+    seen = []
+    own = b is None
+    b = P4Board(port, board_dir=dirs[name]) if own else b
+    try:
+        while time.time() < end:
+            for line in b.drain(0.5):
+                seen.append(line)
+                if any(n in line for n in ZERO_UP):
+                    print("%s is up on %s: %s" % (name, port, line.strip()))
+                    return line
+    finally:
+        if own:
+            b.close()
+    raise BoardError("%s did not end its boot within %.0fs (its last line: %s)"
+                     % (name, timeout, seen[-1].strip() if seen else "none"))
+
+
 def cmd_reboot(name, dirs, a):
     port = stable(a.port or resolve(name, dirs)[0])
     if not a.force:
         refuse_if_held(port)
     decl = pa.declared_serial(dirs[name])
+    if not is_console(dirs[name]) and not a.soft:
+        esptool_reset(name, dirs, port)
+        wait_for_zero(name, dirs, port, a.timeout)
+        return 0
     if a.soft:
         # Ctrl-C to reach >>>, then Ctrl-D: a soft reset re-runs main.py without
         # re-enumerating USB. Sent before >>> appears, the Ctrl-D is swallowed.
@@ -908,6 +939,9 @@ def cmd_reboot(name, dirs, a):
             b.ser.write(b"\r\x03")
             b.wait_line(">>>", timeout=3.0)
             b.ser.write(b"\x04")
+            if not is_console(dirs[name]):
+                wait_for_zero(name, dirs, port, a.timeout, b=b)
+                return 0
             b.drain(1.0)
         finally:
             b.close()
