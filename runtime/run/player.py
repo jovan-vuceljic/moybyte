@@ -1843,14 +1843,14 @@ class Player(PlayerDiag):
                 # #172 hunting the shell for a regression that was never there.
                 lua = getattr(self, "lua", None)
                 if (self._tool and lua is not None and not (self.deaf or self.detached)
-                        and not getattr(lua, "own_ui", False)):
+                        and not getattr(lua, "own_screen", False)):
                     s = _RUN_STEPS              # into the run face's frame begun next
                     _steps(ws.input, s, 0)
                     _ui_draw._C.api_run_steps(s[0], s[1])
                 if self.ui is not None and lua is None:
                     self._ui_begin(ws, render)
                 elif (lua is not None and getattr(ws.input, "last_key", 0) == _ui_draw.KEY_PASTE
-                        and not getattr(lua, "own_ui", False)):
+                        and not getattr(lua, "own_screen", False)):
                     t = _ui_draw.paste_text()   # the console's Paste, into the run's next frame
                     if t:
                         _ui_draw.paste(_ui_draw.RUN_UI, t)

@@ -76,13 +76,4 @@ void moy_screen_slot_kick(uint32_t pid);
 // for none.
 const uint8_t *moy_screen_slot_pixels(uint32_t pid, int *w, int *h, int *depth);
 
-// THE TOOLKIT'S ANSWERS. An app drawing with the toolkit it links tells,
-// after each frame it draws, what the console's input owner asks a run's
-// toolkit (moy_ui_wasm.h's MOY_UI_TOLD_*: a field in focus, a cancel or a
-// back it would take); the console reads the last told, and its cancel and
-// back go in by the next frame message's MOY_OS_FRAME_IN_ASK word.
-// Tell: the program's thread, 0 or -ENODEV. Told: any task, 0 for no slot.
-int moy_screen_slot_tell(uint32_t pid, uint32_t answers);
-uint32_t moy_screen_slot_told(uint32_t pid);
-
 #endif // MOY_SCREEN_SLOT_H

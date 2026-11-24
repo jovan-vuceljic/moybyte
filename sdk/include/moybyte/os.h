@@ -705,39 +705,6 @@ static inline int moy_present(const void *px, size_t n) {
     return (int)r;
 }
 
-int32_t __moy_os_ui_pull(uint32_t have, void *buf, size_t cap)
-    __attribute__((import_module("moybyte.os"), import_name("ui_pull")));
-static inline uint32_t moy_ui_pull(uint32_t have, void *buf, size_t cap) {
-    int32_t r = __moy_os_ui_pull(have, buf, cap);
-    if (r < 0) {
-        errno = (int)-r;
-        return 0;
-    }
-    return (uint32_t)r;
-}
-
-int32_t __moy_os_ui_font_pull(uint32_t gen, uint32_t font, void *buf, size_t cap)
-    __attribute__((import_module("moybyte.os"), import_name("ui_font_pull")));
-static inline uint32_t moy_ui_font_pull(uint32_t gen, uint32_t font, void *buf, size_t cap) {
-    int32_t r = __moy_os_ui_font_pull(gen, font, buf, cap);
-    if (r < 0) {
-        errno = (int)-r;
-        return 0;
-    }
-    return (uint32_t)r;
-}
-
-int32_t __moy_os_ui_tell(uint32_t answers)
-    __attribute__((import_module("moybyte.os"), import_name("ui_tell")));
-static inline int moy_ui_tell(uint32_t answers) {
-    int32_t r = __moy_os_ui_tell(answers);
-    if (r < 0) {
-        errno = (int)-r;
-        return -1;
-    }
-    return (int)r;
-}
-
 int32_t __moy_os_aes_ctr(const void *key, size_t key_len, const void *data, size_t data_len, void *text, size_t text_cap)
     __attribute__((import_module("moybyte.os"), import_name("aes_ctr")));
 static inline int32_t moy_aes_ctr(const void *key, size_t key_len, const void *data, size_t data_len, void *text, size_t text_cap) {
@@ -808,9 +775,6 @@ int moy_send(const char *app, const char *name, const char *args);
 int moy_on(const char *name, int on);
 int moy_screen(int *w, int *h);
 int moy_present(const void *px, size_t n);
-uint32_t moy_ui_pull(uint32_t have, void *buf, size_t cap);
-uint32_t moy_ui_font_pull(uint32_t gen, uint32_t font, void *buf, size_t cap);
-int moy_ui_tell(uint32_t answers);
 int moy_game_data(size_t off, void *dst, size_t n);
 int moy_game_sound(int op, int a, int b);
 int moy_game_snd(const int16_t *pcm, size_t n);

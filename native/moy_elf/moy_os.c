@@ -1224,8 +1224,7 @@ int moy_os_moy_term_size(int *cols, int *rows) {
 //
 // A game's screen is its pid's slot (native/moy_kernel/moy_screen_slot.h),
 // opened with the game and closed at its stop: moy_present copies the
-// module's pixels in, waiting while the console holds the last frame, and
-// moy_ui_tell leaves the toolkit's answers beside them.
+// module's pixels in, waiting while the console holds the last frame.
 
 int moy_os_moy_screen(int *w, int *h) {
     thr_t *t = moy_os_enter();
@@ -1434,52 +1433,6 @@ int moy_os_moy_game_erase(const char *path, size_t n) {
 
 int moy_os_moy_game_list(const char *prefix, size_t n, uint32_t index, void *dst, size_t cap) {
     return game_file(GF_LIST, prefix, n, index, dst, cap);
-}
-
-// The toolkit's answers after a frame (moy_screen_slot.h, THE TOOLKIT'S
-// ANSWERS), into the game's slot for the console's input owner to read.
-int moy_os_moy_ui_tell(uint32_t answers) {
-    thr_t *t = moy_os_enter();
-    int r = t != NULL && t->p->game ? moy_screen_slot_tell(t->p->pid, answers) : -ENODEV;
-    if (r != 0) {
-        moy_os_errno_set(ENODEV);
-        r = -1;
-    }
-    moy_os_leave(t);
-    return r;
-}
-
-// The toolkit's theme as a block (moy_ui.h's moy_ui_theme_pull), which a copy
-// of the toolkit a module links installs; weak, so an image without the
-// toolkit answers none.
-#if __has_include("moy_ui.h")
-#include "moy_ui.h"
-#else
-uint32_t moy_ui_theme_pull(uint32_t have, void *buf, size_t cap);
-#endif
-#pragma weak moy_ui_theme_pull
-
-uint32_t moy_os_moy_ui_pull(uint32_t have, void *buf, size_t cap) {
-    thr_t *t = moy_os_enter();
-    uint32_t g = moy_ui_theme_pull != NULL ? moy_ui_theme_pull(have, buf, cap) : 0;
-    moy_os_leave(t);
-    return g;
-}
-
-// A font the toolkit's theme names (moy_ui.h's moy_ui_theme_font): the bytes
-// a copy loads as its own.
-#if __has_include("moy_ui.h")
-#include "moy_ui.h"
-#else
-uint32_t moy_ui_theme_font(uint32_t gen, uint32_t font, void *buf, size_t cap);
-#endif
-#pragma weak moy_ui_theme_font
-
-uint32_t moy_os_moy_ui_font_pull(uint32_t gen, uint32_t font, void *buf, size_t cap) {
-    thr_t *t = moy_os_enter();
-    uint32_t n = moy_ui_theme_font != NULL ? moy_ui_theme_font(gen, font, buf, cap) : 0;
-    moy_os_leave(t);
-    return n;
 }
 
 // -- the rows: the event descriptor ------------------------------------------------

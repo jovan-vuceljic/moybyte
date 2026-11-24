@@ -172,9 +172,6 @@ WASM_OS = {
     'status_remove': (),
     'status_show': (),
     'status_state': (),
-    'ui_font_pull': (),
-    'ui_pull': (),
-    'ui_tell': (),
     'x25519': (),
 }
 
@@ -296,14 +293,11 @@ ELF = {
     116: ('moy_status_remove', ()),
     117: ('moy_screen', ()),
     118: ('moy_present', ()),
-    119: ('moy_ui_pull', ()),
-    120: ('moy_ui_font_pull', ()),
     121: ('moy_aes_ctr', ()),
     122: ('moy_aes_ccm_seal', ()),
     123: ('moy_aes_ccm_open', ()),
     124: ('moy_name', ()),
     125: ('moy_clock', ()),
-    126: ('moy_ui_tell', ()),
     127: ('moy_game_data', ()),
     128: ('moy_game_sound', ()),
     129: ('moy_game_snd', ()),
@@ -315,7 +309,7 @@ ELF = {
 }
 
 # the ordinals of the retired rows, which no module built now calls
-RETIRED = (38, 39, 40)
+RETIRED = (38, 39, 40, 119, 120, 126)
 
 # the names a Python app reaches
 PY = {

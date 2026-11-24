@@ -211,7 +211,7 @@ absent (`runtime/carts/moy_store_base.py`, `VENDOR_KEY`):
 | `entries` | the cart's entry points beside `main`: `{"service": file}`, its own service's program | §7 |
 | `achievements` | the badges a game declares | §9 |
 | `native` | the chips a C cart carries a module for (`["esp32s3", "esp32p4"]`) | §10 |
-| `wasi` | `true`: an app that is a WASI command the Player runs, drawing with the toolkit it links (`sdk/include/moybyte/ui.h`) | `runtime/run/wasi_run.py`, `docs/history/ui_api_2026-10.md` |
+| `wasi` | `true`: an app that is a WASI command the Player runs, drawing its screen whole (`moy_present`) | `runtime/run/wasi_run.py` |
 | `audio_ring` | a compiled cart's audio ring depth in frames | `docs/os_2026-11/hardware.md` §2 |
 | `config`, `edit` | the "Make it mine" values `cfg(key)` reads and the Editor's rows that change them | `runtime/carts/moy_carts.py`, `NEW_TEMPLATE` |
 | `assets` | a cart's scenes, in order | `docs/moy_cart_api.md`, Scenes |
@@ -667,7 +667,7 @@ the cart runs (`Player._wants_layout`):
 | Python | a top-level `def _layout(w, h, fs)` | the source, at column 0 (`system_api.wants_layout`) | called by the Player |
 | Lua | a global `function _layout(w, h, fs)` (or `_layout = function`) | the scripts, at column 0 (`lua_ext.wants_layout`); called only where the global is a function, as `_init` is | called by the Player (moycore's `layout`) |
 | compiled (wasm) | an export `_layout` of three i32 and no result | the module's export section (`moycore_glue.wasm_exports`) | called by the Player (moycore's `layout`, the host's `hw_layout`) |
-| WASI and native apps | `void _layout(int32_t w, int32_t h, int32_t fs)`, which `moybyte/ui.h` declares weak and exported | the module's exports (WASI) or dynamic symbols (`elf_run.elf_defines`) | the frame message's layout words (`MOY_FRAME_LAYOUT_*`), on which the toolkit it links calls `_layout` before its loop sees the frame |
+| WASI and native apps | an exported `void _layout(int32_t w, int32_t h, int32_t fs)` | the module's exports (WASI) or dynamic symbols (`elf_run.elf_defines`) | the frame message's layout words (`MOY_FRAME_LAYOUT_*`), which its frame loop reads (`moybyte/frame.h`) |
 
 A Python, Lua or compiled app hears `_layout` before `_init`; a WASI or
 native app, which has no `_init`, before the first frame its loop reads.
@@ -1613,9 +1613,6 @@ rows are §3's, every app's with no permission):
 | `moybyte.status_remove` | none |  | `moybyte.status_remove` | `moybyte_status_remove`, `moybyte.os.status_remove` | `moy_status_remove` |
 | `moy_screen` | none |  |  | `moybyte.os.screen` | `moy_screen` |
 | `moy_present` | none |  |  | `moybyte.os.present` | `moy_present` |
-| `moy_ui_pull` | none |  |  | `moybyte.os.ui_pull` | `moy_ui_pull` |
-| `moy_ui_font_pull` | none |  |  | `moybyte.os.ui_font_pull` | `moy_ui_font_pull` |
-| `moy_ui_tell` | none |  |  | `moybyte.os.ui_tell` | `moy_ui_tell` |
 | `moy_game_data` | none |  |  |  | `moy_game_data` |
 | `moy_game_sound` | none |  |  |  | `moy_game_sound` |
 | `moy_game_snd` | none |  |  |  | `moy_game_snd` |

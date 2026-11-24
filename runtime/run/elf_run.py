@@ -5,9 +5,8 @@
 #   elf_defines                       whether a module defines a dynamic symbol
 #   read_buttons                      the frame's held and pressed button masks
 #   key_ring                          the typed keys a run has not yet been sent
-#   post_paste                        the clipboard into a native app's queue
 #   fill_words                        an app's input words for this frame
-#   LinkedUi                          what the Player asks of a toolkit the app links
+#   RunInput                          the buttons and input words a run's frame message carries
 #   stop_text                         a run's end code and fault as a sentence
 #   ElfRuntime                        ws.runtimes["elf"]: commands, services and games
 #   make_elf_runtime                  the native tier, or None when the image carries none
@@ -88,8 +87,6 @@ WHAT = {4: "an illegal instruction", 5: "a breakpoint", 7: "a misaligned access"
 
 from lua_ext import MOY_BUTTONS, cfg_blob, drain_audio, put_scenes, run_face, run_room, wasm_exts
 from moy_input import pointer_state
-from ui_draw import KEY_PASTE, paste_text
-import moy_evq as _E
 import os_log as _os_log
 
 from array import array
@@ -98,12 +95,8 @@ from array import array
 IN_X, IN_Y, IN_PTR, IN_KEY, IN_FACE, IN_SWAP = range(6)
 IN_ROOM_X, IN_ROOM_Y, IN_ROOM_W, IN_ROOM_H = range(6, 10)
 IN_LAYOUT_W, IN_LAYOUT_H, IN_LAYOUT_FS = range(10, 13)
-IN_REP, IN_KEYREP, IN_ASK = range(13, 16)
+IN_REP, IN_KEYREP = range(13, 15)
 IN_WORDS = 16
-# moy_os.h's MOY_OS_ASK_* (the ask word's bits) and MOY_OS_TOLD_* (what the
-# toolkit an app links told after its last frame: moy_ui_tell).
-ASK_CANCEL, ASK_BACK = 1, 2
-TOLD_TYPING, TOLD_CANCEL, TOLD_BACK = 1, 2, 4
 
 
 # The data a compiled cart's native module reads at its start (moy_game_data;
@@ -312,42 +305,13 @@ def key_sent(ring):
         ring[1] -= 1
 
 
-# The "paste" message's arguments at most: a JSON array of one string, which
-# the linked toolkit reads into a frame record of 256 bytes.
-PASTE_ARGS = 250
-
-
-def post_paste(pid):
-    """The console's Paste for the app `pid` drawing with the toolkit it
-    links (sdk/src/moyui_link.c): the clipboard's text as the system's
-    "paste" message, posted ahead of the frame message carrying Ctrl+V, its
-    field inserting it. A string of no escapes but a quote's and a
-    backslash's (a control byte is a space), cut at a character boundary."""
-    t = paste_text()
-    if not t:
-        return
-    b = bytes(c if c >= 32 else 32 for c in t).replace(b"\\", b"\\\\").replace(b'"', b'\\"')
-    cut = len(b)
-    if cut > PASTE_ARGS - 4:
-        cut = PASTE_ARGS - 4
-        while cut and b[cut] & 0xC0 == 0x80:
-            cut -= 1
-        k = cut
-        while k and b[k - 1] == 0x5C:
-            k -= 1
-        if (cut - k) & 1:
-            cut -= 1                    # never half an escape
-    _E.post(pid, 0, "paste", b'["' + b[:cut] + b'"]')
-
-
-def fill_words(ws, words, ptr, ring, lay=None, pid=0, quiet=False):
+def fill_words(ws, words, ptr, ring, lay=None, quiet=False):
     """An app's input words for this frame (IN_*), into the array('i')
     `words`; `ptr` a four-item list pointer_state fills, `ring` the keys
     typed and not yet sent (key_ring): this frame's joins it, and the
     oldest is the word; `lay` the (w, h, fs) its `_layout` was last told
-    (the Player's), None for none. A Ctrl+V typed posts app `pid` the
-    console's Paste (`post_paste`) as it joins the ring. `quiet` (a run
-    held aside) reads no pointer, key or step."""
+    (the Player's), None for none. `quiet` (a run held aside) reads no
+    pointer, key or step."""
     inp = ws.input
     try:
         if quiet:
@@ -363,8 +327,6 @@ def fill_words(ws, words, ptr, ring, lay=None, pid=0, quiet=False):
     if key and ring[1] < KEYS_HELD:
         ring[2 + (ring[0] + ring[1]) % KEYS_HELD] = key
         ring[1] += 1
-        if key == KEY_PASTE and pid:
-            post_paste(pid)
     words[IN_KEY] = ring[2 + ring[0]] if ring[1] else 0
     words[IN_FACE] = run_face(ws)
     words[IN_SWAP] = 1 if getattr(ws.run.canvas, "swapped565", False) else 0
@@ -401,8 +363,8 @@ def add_steps(inp, words):
 
 
 def sent(words):
-    """A posted frame message carried the steps and the asks."""
-    words[IN_REP] = words[IN_KEYREP] = words[IN_ASK] = 0
+    """A posted frame message carried the steps."""
+    words[IN_REP] = words[IN_KEYREP] = 0
 
 
 # Why a native cart did not run here, as the shell says it: in words a kid
@@ -410,12 +372,8 @@ def sent(words):
 NO_MODULE = "it was built for another kind of console (it has no %s module)"
 
 
-class LinkedUi:
-    """What the Player asks a run's toolkit (ui_draw.run_typing, run_cancel,
-    run_back), asked of an app drawing with the toolkit it links
-    (sdk/src/moyui_link.c): what its last frame told (moy_ui_tell, TOLD_*),
-    a cancel or a back taken going in on the next frame message (ASK_*).
-    And the input its frame message carries, which a run held aside
+class RunInput:
+    """The input a run's frame message carries, which a run held aside
     (`mute`, runtime/shell/procs.py) does not read."""
 
     _muted = False
@@ -435,26 +393,8 @@ class LinkedUi:
             read_buttons(self._ws.input, self._mask_of, out)
         self._pressed |= out[1]
         if self._words is not None:
-            fill_words(self._ws, self._words, self._ptr, self._keys, self._lay, self.pid,
-                       self._muted)
+            fill_words(self._ws, self._words, self._ptr, self._keys, self._lay, self._muted)
         return out
-
-    def _ask(self, told, ask, take):
-        words = self._words
-        if not self._live or words is None or not _E.screen_told(self.pid) & told:
-            return False
-        if take:
-            words[IN_ASK] |= ask
-        return True
-
-    def ui_typing(self):
-        return self._ask(TOLD_TYPING, 0, False)
-
-    def ui_cancel(self, take=True):
-        return self._ask(TOLD_CANCEL, ASK_CANCEL, take)
-
-    def ui_back(self, take=True):
-        return self._ask(TOLD_BACK, ASK_BACK, take)
 
 
 def stop_text(code, fault=None):
@@ -656,10 +596,10 @@ def make_elf_runtime(ws):
     return ElfRuntime(ws, moy_elf)
 
 
-class ElfGame(LinkedUi):
+class ElfGame(RunInput):
     """A native game's run in the Player (A GAME in this module's head)."""
 
-    own_ui = True                       # an app's toolkit is its own: a paste is its message
+    own_screen = True                   # it draws its screen whole: no run face, no field, no back
     _dual = _snd = _direct = False      # a compiled cart's module: its channels
     _sound = _pmem = None
 
@@ -678,8 +618,7 @@ class ElfGame(LinkedUi):
         self._app = cart.get("type") == "app"
         dual = is_cart(cart)
         self._words = array("i", bytes(4 * IN_WORDS)) if self._app or dual else None
-        # A responsive app's surface rides its frame words: the toolkit it
-        # links calls its `_layout` when they change (sdk/src/moyui_link.c).
+        # A responsive app's surface rides its frame words (IN_LAYOUT_*).
         self._lay = list(lay) if lay is not None and self._app else None
         self._ptr = [0, 0, 0, 0]
         self._keys = key_ring()

@@ -450,6 +450,32 @@ static int moy_os_retired_moy_events(uint32_t kinds) {
     return -1;
 }
 
+// Retired 2026-11-24: the immediate ui surface is gone (docs/app_api_v1.md, No immediate verbs): no program links a toolkit of its own to pull a theme or a font into, or to tell its answers from.
+static uint32_t moy_os_retired_moy_ui_pull(uint32_t have, void *buf, size_t cap) {
+    (void)have;
+    (void)buf;
+    (void)cap;
+    moy_os_errno_set(ENOSYS);
+    return 0;
+}
+
+// Retired 2026-11-24: the immediate ui surface is gone (docs/app_api_v1.md, No immediate verbs): no program links a toolkit of its own to pull a theme or a font into, or to tell its answers from.
+static uint32_t moy_os_retired_moy_ui_font_pull(uint32_t gen, uint32_t font, void *buf, size_t cap) {
+    (void)gen;
+    (void)font;
+    (void)buf;
+    (void)cap;
+    moy_os_errno_set(ENOSYS);
+    return 0;
+}
+
+// Retired 2026-11-24: the immediate ui surface is gone (docs/app_api_v1.md, No immediate verbs): no program links a toolkit of its own to pull a theme or a font into, or to tell its answers from.
+static int moy_os_retired_moy_ui_tell(uint32_t answers) {
+    (void)answers;
+    moy_os_errno_set(ENOSYS);
+    return -1;
+}
+
 const moy_os_table_t moy_os_table = {
     MOY_OS_VERSION, MOY_OS_ROWS, {
         (void *)moy_os_open,
@@ -571,14 +597,14 @@ const moy_os_table_t moy_os_table = {
         (void *)moy_os_moy_status_remove,
         (void *)moy_os_moy_screen,
         (void *)moy_os_moy_present,
-        (void *)moy_os_moy_ui_pull,
-        (void *)moy_os_moy_ui_font_pull,
+        (void *)moy_os_retired_moy_ui_pull,
+        (void *)moy_os_retired_moy_ui_font_pull,
         (void *)moy_os_moy_aes_ctr,
         (void *)moy_os_moy_aes_ccm_seal,
         (void *)moy_os_moy_aes_ccm_open,
         (void *)moy_os_moy_name,
         (void *)moy_os_moy_clock,
-        (void *)moy_os_moy_ui_tell,
+        (void *)moy_os_retired_moy_ui_tell,
         (void *)moy_os_moy_game_data,
         (void *)moy_os_moy_game_sound,
         (void *)moy_os_moy_game_snd,

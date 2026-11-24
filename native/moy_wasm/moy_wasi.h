@@ -4,7 +4,7 @@
 // lacks: `moybyte.term`'s `term_size`, and `moybyte.os`'s `send`, `on`,
 // `log`, `notify`, `award`, `progress`, `every`, `after`, `cancel`, `at`,
 // `open_with`, `pick`, a Player app's `screen` and `present` (its slot,
-// moy_screen_slot.h) and the toolkit's `ui_pull` and `ui_font_pull`, and the
+// moy_screen_slot.h), and the
 // files, nav, prefs, clipboard, device and item rows and `share`, the rows of native/os_calls.json a WASI program shares
 // with an ELF module (moy_wasi_os_rows.h, generated; sdk/include/moybyte/os.h
 // declares them under their C names, moy_send and the rest; the console

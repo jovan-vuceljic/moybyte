@@ -1217,25 +1217,9 @@ int moy_present(const void *px, size_t n)
 }
 #endif
 
-#if MOY_OS_ROW(119)
-#include "moybyte/os.h"
-typedef uint32_t moy_os_fn_moy_ui_pull(uint32_t have, void *buf, size_t cap);
-MOY_OS_USED(119);
-uint32_t moy_ui_pull(uint32_t have, void *buf, size_t cap)
-{
-    return ((moy_os_fn_moy_ui_pull *)__moy_os->fn[119])(have, buf, cap);
-}
-#endif
+// 119 moy_ui_pull: retired 2026-11-24
 
-#if MOY_OS_ROW(120)
-#include "moybyte/os.h"
-typedef uint32_t moy_os_fn_moy_ui_font_pull(uint32_t gen, uint32_t font, void *buf, size_t cap);
-MOY_OS_USED(120);
-uint32_t moy_ui_font_pull(uint32_t gen, uint32_t font, void *buf, size_t cap)
-{
-    return ((moy_os_fn_moy_ui_font_pull *)__moy_os->fn[120])(gen, font, buf, cap);
-}
-#endif
+// 120 moy_ui_font_pull: retired 2026-11-24
 
 #if MOY_OS_ROW(121)
 #include "moybyte/os.h"
@@ -1287,15 +1271,7 @@ int32_t moy_clock(int32_t local)
 }
 #endif
 
-#if MOY_OS_ROW(126)
-#include "moybyte/os.h"
-typedef int moy_os_fn_moy_ui_tell(uint32_t answers);
-MOY_OS_USED(126);
-int moy_ui_tell(uint32_t answers)
-{
-    return ((moy_os_fn_moy_ui_tell *)__moy_os->fn[126])(answers);
-}
-#endif
+// 126 moy_ui_tell: retired 2026-11-24
 
 #if MOY_OS_ROW(127)
 #include "moybyte/os.h"
