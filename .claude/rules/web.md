@@ -261,9 +261,13 @@ nor those docs will warn you about:
   serves, so the board is its store's one writer. Get Carts lists the carts
   of the board's indexes (its `system/sources`, else moybyte-org/carts, and
   its own release's): the board names them and the page fetches and reads
-  each by the VM's rules (`carts_link.BoardCheck`; the board lists one the
-  page cannot read, its release's). A licence, Get or Remove asks the board
-  (a slice per poll like `/update`), which fetches and writes its own store,
+  each by the VM's rules (`carts_link.BoardCheck`): its release's from the
+  mirror os.moybyte.com keeps of it (`cart_index.index_mirror`), checked
+  with the keys the board names, and the board lists one the page cannot
+  read or check. A licence, Get or Remove asks the board (a slice per poll
+  like `/update`), which reads the one entry as its index streams
+  (`cart_index.EntryRead`, so no index is ever whole in a board's heap) and
+  fetches and writes its own store,
   the page answering the install prompt over the manifest the board
   checked; once it has, the worker pulls the board's carts again and
   replaces the page's copy of that one folder in one turn of its thread,
@@ -279,7 +283,10 @@ nor those docs will warn you about:
   - **A page cannot read a release download or Debian's archive** (neither
     sends a CORS header). It reads an asset's `mirror`, and an external
     file's, on the carts repository's Pages site first (moybyte-org/carts'
-    scripts/make_index.py names them). An external file it can read from neither is the player's
+    scripts/make_index.py names them), and a firmware release's
+    `carts-<board>.json` where the Pages deploy mirrors it
+    (`tools/pack_store.py`), which is the release's only when its signature
+    verifies. An external file it can read from neither is the player's
     own copy, chosen through a REAL page control (the card under the canvas):
     a browser opens its file dialog only from a click on one, never from a tap
     the console relays a frame later.

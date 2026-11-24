@@ -2,7 +2,7 @@
 #   InstallError                a failure: the kid's text and serial's detail
 #   -- references               is_url, resolve, plain_name, mirror_ok
 #   -- the sources              parse_sources, sources_text, load_indexes, save_sources
-#   -- the signature            split_signed, check_signature
+#   -- the signature            split_signed, check_signature, index_keys, index_mirror
 #   -- the index                check_cart, cover_ref, parse_index (_read_listing, _revocations); is_reviewed, is_revoked, publisher
 #   -- depends                  needs
 #   -- what this console takes  plan, need_bytes
@@ -10,6 +10,7 @@
 #   -- fetching                 Worker, Fetch, Reach, FileCheck, index_fetch, cover_fetch
 #   Worker                      a transport with the http worker: documents whole, downloads streamed
 #   Fetch                       one small document, whole
+#   EntryRead                   one cart's entry of an index, read as it streams (_Scan)
 #   Reach                       which of a cart's URLs this console can read
 #   FileCheck                   a file the player supplied, held to the index
 #   -- the streaming install    a download checked as it streams (_Fetched)
@@ -544,7 +545,7 @@ def _revocations(index, url):
     return out
 
 
-def parse_index(data, url, own=None, revoked=None):
+def parse_index(data, url, own=None, revoked=None, keys=None):
     """The carts in an index document, each stamped with the index it came
     from (`index`), that index's name (`shelf`), whether it is reviewed
     (`reviewed`) and the versions of it the index withdrew (`revoked`, when
@@ -557,16 +558,25 @@ def parse_index(data, url, own=None, revoked=None):
     `own` is the index this console's release publishes (load_indexes). Read
     from there with its signature verified, an entry in the built-ins'
     namespace is OFFICIAL (stamped `official`): a seed cart of this release
-    (tools/web_pack.py), which installs as the image's seed would."""
+    (tools/web_pack.py), which installs as the image's seed would. `keys` are
+    the ones a page checks the signature against (check_signature).
+
+    EntryRead reads one entry of an index as it streams, by these rules."""
     if isinstance(data, str):
         data = data.encode()
-    signed = check_signature(data, url)
-    trusted = own is not None and url == own and signed is True
-    reviewed = signed is True or (signed is None and url in DEFAULT_INDEXES)
+    signed = check_signature(data, url, keys)
     try:
         index = json.loads(data.decode())
     except (ValueError, UnicodeError) as exc:
         raise InstallError(UNREACHABLE, "%s is not JSON: %s" % (url, exc))
+    return _entries(index, url, own, signed, revoked)
+
+
+def _entries(index, url, own, signed, revoked=None):
+    """parse_index's carts of the document `index` (its `carts` and the
+    members beside them), its signature's verdict `signed`."""
+    trusted = own is not None and url == own and signed is True
+    reviewed = signed is True or (signed is None and url in DEFAULT_INDEXES)
     if not isinstance(index, dict) or index.get("version") != INDEX_VERSION:
         raise InstallError(UNREACHABLE, "%s is not a version %d index"
                            % (url, INDEX_VERSION))
@@ -743,35 +753,87 @@ def split_signed(data):
     return SIG_SCHEME + data[:at] + b"}", sig.decode()
 
 
-def _verifier():
+def _native():
+    """The kernel's moy_net (a board) or its ctypes twin (the host), None in
+    the browser."""
     try:
         import moy_net
+        return moy_net
     except ImportError:
         try:
-            from runtime import net_binding as moy_net
+            from runtime import net_binding
+            return net_binding
         except ImportError:  # the browser: its fetch checks the certificate
             return None
-    return getattr(moy_net, "ota_verify", None)
 
 
-def check_signature(data, url):
-    """True for an index whose signature verifies (the image's keys, or the
-    review keys), False for an unsigned one, None for a signed one where
-    nothing can verify it (the browser). An InstallError for a signature that
-    does not verify."""
-    got = split_signed(data)
-    if got is None:
-        return False
-    verify = _verifier()
-    if verify is None:
+def _verify_digest(digest, sig, url, keys=None):
+    """check_signature's verdict over the SHA-256 `digest` of what a
+    signature covers: True, an InstallError for one that does not verify,
+    None where nothing can verify it. The kernel verifies where there is one
+    (the image's keys, or INDEX_KEYS), and `keys` -- the keys a console's
+    /official answer names (index_keys) -- are checked by rsa_check's
+    arithmetic where there is none (a page); REVIEW_KEYS besides either."""
+    net = _native()
+    verify = getattr(net, "ota_verify_digest", None)
+    if verify is not None:
+        ok = verify(digest, sig) if INDEX_KEYS is None else verify(digest, sig, INDEX_KEYS)
+        if not ok and REVIEW_KEYS:
+            ok = verify(digest, sig, REVIEW_KEYS)
+    elif keys:
+        from rsa_check import verify_digest
+        ok = verify_digest(digest, sig, tuple(keys) + REVIEW_KEYS)
+    else:
         return None
-    ok = verify(got[0], got[1]) if INDEX_KEYS is None \
-        else verify(got[0], got[1], INDEX_KEYS)
-    if not ok and REVIEW_KEYS:
-        ok = verify(got[0], got[1], REVIEW_KEYS)
     if not ok:
         raise InstallError(BAD_SIGNATURE, "%s: its signature does not verify" % url)
     return True
+
+
+def check_signature(data, url, keys=None):
+    """True for an index whose signature verifies (the image's keys, or the
+    review keys, or `keys` in a page: _verify_digest), False for an unsigned
+    one, None for a signed one where nothing can verify it (the browser with
+    no `keys`). An InstallError for a signature that does not verify."""
+    got = split_signed(data)
+    if got is None:
+        return False
+    return _verify_digest(hashlib.sha256(got[0]).digest(), got[1], url, keys)
+
+
+def index_keys():
+    """The keys this console verifies an index against, as
+    ((modulus_hex, exponent), ...): INDEX_KEYS, else the image's (the
+    kernel's moy_ota_keys, all RSA-2048 with exponent 65537); None where
+    there is no kernel. A console's /official answer names them, so the page
+    it serves checks a mirrored index as the console would."""
+    if INDEX_KEYS is not None:
+        return INDEX_KEYS
+    keys = getattr(_native(), "ota_keys", None)
+    if keys is None:
+        return None
+    return tuple((_hex(k), 65537) for k in keys())
+
+
+# A release's own index (moy_ota.OtaUpdater.own_index) as GitHub serves it,
+# which sends no CORS header, and where os.moybyte.com mirrors it, which does
+# (tools/pack_store.py writes the mirror). The two hold the same signed bytes.
+RELEASES = "https://github.com/moybyte-org/moybyte/releases/download/"
+RELEASE_MIRROR = "https://os.moybyte.com/console/releases/"
+
+
+def index_mirror(url):
+    """Where os.moybyte.com mirrors the release index `url`, or None for an
+    index it does not mirror. A page reads its console's release from there,
+    and a console reads it there first; the signature is what makes the copy
+    the release's, wherever it was read (parse_index)."""
+    if not isinstance(url, str) or not url.startswith(RELEASES):
+        return None
+    rest = url[len(RELEASES):]
+    parts = rest.split("/")
+    if len(parts) != 2 or not all(plain_name(p) for p in parts):
+        return None
+    return RELEASE_MIRROR + rest
 
 
 # -- depends ----------------------------------------------------------------------
@@ -1384,6 +1446,324 @@ def index_fetch(net, url):
     return Fetch(net, url, INDEX_LIMIT)
 
 
+# EntryRead's knobs: the most of one entry (or of a member beside the carts)
+# held at once, the piece an index is read in, and the end of the document
+# kept back from the digest until the end shows whether it is the `sig`
+# member (a 4096-bit key's 1024 hex digits and the closing brace fit).
+ENTRY_MAX = 16384
+INDEX_READ = 1024
+_SIG_HOLD = 1100
+_TOP = (b"version", b"name", b"revoked")
+
+
+def _wants(folder, ident):
+    """_Scan's `tag` and `want` for the entry of `folder` (and id `ident`,
+    when given): only an entry whose bytes hold the tag is parsed at all."""
+    def want(c):
+        return isinstance(c, dict) and c.get("folder") == folder \
+            and (ident is None or c.get("id") == ident)
+    return b'"' + folder.encode() + b'"', want
+
+
+class _Scan:
+    """An index document fed a piece at a time (`feed`), never held whole:
+    the members beside its carts kept (_TOP), each entry of its `carts` read
+    into one buffer reused entry after entry and parsed only when it holds
+    `tag` and then kept when `want(entry)` says so (`found`), and the bytes
+    its signature covers hashed as they pass, all but the last _SIG_HOLD,
+    which `finish` reads for the `sig` member (split_signed)."""
+
+    def __init__(self, tag, want):
+        self.tag = tag
+        self.want = want
+        self.h = hashlib.sha256(SIG_SCHEME)
+        self.hold = (bytearray(_SIG_HOLD), bytearray(_SIG_HOLD))
+        self.held = 0             # bytes of hold[0] not yet hashed: the document's end
+        self.size = 0
+        self.depth = 0
+        self.opened = False
+        self.in_str = False
+        self.esc = False
+        self.expect_key = False
+        self.key = None
+        self.what = None          # what `cap` holds: "key", "value" or "entry"
+        self.cap = bytearray(INDEX_READ)
+        self.cn = 0               # its length; -1 past ENTRY_MAX
+        self.hit = False          # the entry being read holds `tag`
+        self.carts_next = False
+        self.in_carts = False
+        self.sig = False
+        self.top = {}
+        self.found = []
+        self.big = 0              # entries past ENTRY_MAX, never read
+
+    def feed(self, b):
+        n = len(b)
+        self.size += n
+        a, other = self.hold
+        held = self.held
+        mb = memoryview(b)
+        if n >= _SIG_HOLD:
+            self.h.update(memoryview(a)[:held])
+            self.h.update(mb[:n - _SIG_HOLD])
+            memoryview(a)[:_SIG_HOLD] = mb[n - _SIG_HOLD:]
+            self.held = _SIG_HOLD
+        else:
+            over = held + n - _SIG_HOLD
+            if over > 0:
+                self.h.update(memoryview(a)[:over])
+            else:
+                over = 0
+            keep = held - over
+            mo = memoryview(other)
+            mo[:keep] = memoryview(a)[over:held]
+            mo[keep:keep + n] = mb
+            self.hold = (other, a)
+            self.held = keep + n
+        self._scan(b)
+
+    def _take(self, b, start, end):
+        """`b[start:end]` onto the capture, which notes whether the entry
+        now holds the tag (across the seam with what it held too)."""
+        cn = self.cn
+        if cn < 0 or end <= start:
+            return
+        k = end - start
+        if cn + k > ENTRY_MAX:
+            self.cn = -1
+            return
+        cap = self.cap
+        if cn + k > len(cap):
+            grown = bytearray(max(2 * len(cap), cn + k))
+            memoryview(grown)[:cn] = memoryview(cap)[:cn]
+            self.cap = cap = grown
+        if self.what == "entry" and not self.hit:
+            t = len(self.tag)
+            if b.find(self.tag, start, end) >= 0:
+                self.hit = True
+            elif cn:
+                lo = cn - t + 1 if cn > t else 0
+                seam = bytes(memoryview(cap)[lo:cn]) + b[start:min(end, start + t - 1)]
+                self.hit = self.tag in seam
+        memoryview(cap)[cn:cn + k] = memoryview(b)[start:end]
+        self.cn = cn + k
+
+    def _begin(self, what):
+        self.what = what
+        self.cn = 0
+        self.hit = False
+
+    def _end(self, read=True):
+        """The capture's bytes (None past ENTRY_MAX, or unless `read`), ended."""
+        cn = self.cn
+        self.what = None
+        self.cn = 0
+        return None if cn < 0 or not read else bytes(memoryview(self.cap)[:cn])
+
+    def _scan(self, b):
+        i = 0
+        n = len(b)
+        start = 0                 # where the capture's bytes begin in `b`
+        while i < n:
+            if self.in_str:
+                if self.esc:
+                    self.esc = False
+                    i += 1
+                    continue
+                q = b.find(b'"', i)
+                e = b.find(b"\\", i)
+                if e >= 0 and (q < 0 or e < q):
+                    self.esc = True
+                    i = e + 1
+                    continue
+                if q < 0:
+                    break
+                self.in_str = False
+                if self.what == "key":
+                    self._take(b, start, q)
+                    self.key = self._end()
+                    self.expect_key = False
+                    if self.key == b"sig":
+                        self.sig = True
+                i = q + 1
+                continue
+            c = b[i]
+            d = self.depth
+            if c == 34:                               # "
+                self.in_str = True
+                if d == 1 and self.expect_key:
+                    self._begin("key")
+                    start = i + 1
+            elif c == 123 or c == 91:                 # { [
+                d += 1
+                self.depth = d
+                if d == 1:
+                    if c != 123 or self.opened:
+                        raise InstallError(UNREACHABLE, "not one JSON object")
+                    self.opened = True
+                    self.expect_key = True
+                elif d == 2 and self.carts_next:
+                    self.carts_next = False
+                    self.in_carts = c == 91
+                elif d == 3 and self.in_carts and c == 123:
+                    self._begin("entry")
+                    start = i
+            elif c == 125 or c == 93:                 # } ]
+                if d == 3 and self.what == "entry":
+                    self._take(b, start, i + 1)
+                    self._entry()
+                elif d == 2 and self.in_carts:
+                    self.in_carts = False
+                elif d == 1 and self.what == "value":
+                    self._take(b, start, i)
+                    self._value()
+                elif d < 1:
+                    raise InstallError(UNREACHABLE, "a bracket that closes nothing")
+                self.depth = d - 1
+            elif c == 44 and d == 1:                  # ,
+                if self.what == "value":
+                    self._take(b, start, i)
+                    self._value()
+                self.expect_key = True
+            elif c == 58 and d == 1:                  # :
+                if self.key in _TOP:
+                    self._begin("value")
+                    start = i + 1
+                elif self.key == b"carts":
+                    self.carts_next = True
+            i += 1
+        if self.what is not None:
+            self._take(b, start, n)
+
+    def _entry(self):
+        if self.cn < 0:
+            self.big += 1
+        if self.cn < 0 or not self.hit:
+            self._end(False)
+            return
+        raw = self._end()
+        try:
+            c = json.loads(raw.decode())
+        except (ValueError, UnicodeError):
+            return
+        if self.want(c):
+            self.found.append(c)
+
+    def _value(self):
+        key = self.key.decode()
+        raw = self._end()
+        if raw is None:
+            raise InstallError(UNREACHABLE, "its %s member is larger than %d bytes"
+                               % (key, ENTRY_MAX))
+        self.top[key] = raw
+
+    def finish(self, url, keys=None):
+        """(the document parse_index's checks read -- the kept members, the
+        entries kept as its `carts` -- and its signature's verdict)."""
+        if not self.opened or self.depth or self.in_str:
+            raise InstallError(UNREACHABLE, "%s is not JSON: it ends early" % url)
+        self.cap = None
+        signed = False
+        tail = bytes(memoryview(self.hold[0])[:self.held])
+        self.hold = None
+        got = split_signed(tail)
+        if got is not None:
+            self.h.update(got[0][len(SIG_SCHEME):])
+            signed = _verify_digest(self.h.digest(), got[1], url, keys)
+        index = {"carts": self.found}
+        for key, raw in self.top.items():
+            try:
+                index[key] = json.loads(raw.decode())
+            except (ValueError, UnicodeError) as exc:
+                raise InstallError(UNREACHABLE, "%s: its %s is not JSON: %s"
+                                   % (url, key, exc))
+        if self.sig:
+            index["sig"] = True
+        if self.big:
+            _log("%s: %d entries larger than %d bytes not read" % (url, self.big, ENTRY_MAX))
+        return index, signed
+
+
+class EntryRead:
+    """One cart's entry of the index `url` -- the entry of `folder` (and id
+    `ident`) -- read as the index streams, so no console holds a whole
+    index: a piece at a time (INDEX_READ), each entry on its own and parsed
+    only when it names the folder, the signature checked over a digest of
+    what it covers (_Scan). `step(budget_ms)` is True while it reads, and
+    raises an InstallError as parse_index would; then `carts` holds what
+    parse_index answers for that one entry (none, or more when an index
+    lists the folder twice). `read_from` is where the bytes come from when
+    it is not `url` (the index's mirror, index_mirror): the entries are
+    stamped with `url` all the same, their assets resolved against it."""
+
+    def __init__(self, net, url, folder, ident=None, own=None, read_from=None):
+        self.net = net
+        self.url = url
+        self.own = own
+        self.src = read_from or url
+        self.carts = None
+        tag, want = _wants(folder, ident)
+        self._scan = _Scan(tag, want)
+        self._buf = bytearray(INDEX_READ)
+        try:
+            self._resp = _request(net, self.src)
+        except Exception as exc:  # noqa: BLE001 -- every transport error is "unreachable"
+            raise InstallError(net_text(net, UNREACHABLE), "%s: %s" % (self.src, exc))
+
+    def step(self, budget_ms=STEP_MS):
+        resp = self._resp
+        if resp is None:
+            return False
+        t = _ticks_ms()
+        try:
+            if resp.status is None and hasattr(resp, "poll"):
+                try:
+                    resp.poll()
+                except Exception as exc:  # noqa: BLE001 -- no response is "unreachable"
+                    raise InstallError(net_text(self.net, UNREACHABLE), "%s: %s"
+                                       % (self.src, exc))
+            if resp.status is None:
+                return True
+            if resp.status != 200:
+                raise InstallError(UNREACHABLE, "%s: HTTP %d" % (self.src, resp.status))
+            ready = getattr(resp, "ready", None)
+            mv = memoryview(self._buf)
+            while True:
+                if ready is not None and not ready(1):
+                    return True
+                if _ticks_diff(_ticks_ms(), t) > budget_ms:
+                    return True
+                try:
+                    n = resp.readinto(mv)
+                except Exception as exc:  # noqa: BLE001
+                    raise InstallError(net_text(self.net, STOPPED), "%s: %s"
+                                       % (self.src, exc))
+                if not n:
+                    break
+                self._scan.feed(bytes(mv[:n]))
+                if self._scan.size > INDEX_LIMIT:
+                    raise InstallError(MISMATCH, "%s is larger than %d bytes"
+                                       % (self.src, INDEX_LIMIT))
+        except InstallError:
+            self.close()
+            raise
+        self.close()
+        scan, self._scan = self._scan, None
+        index, signed = scan.finish(self.src)
+        scan = None
+        self.carts = _entries(index, self.url, self.own, signed)
+        return False
+
+    def close(self):
+        resp, self._resp = self._resp, None
+        self._buf = None
+        if resp is not None:
+            try:
+                resp.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
 def cover_fetch(net, cart):
     """The cover.png `cart`'s index entry names (`cover_ref`), to be checked
     against its size and sha256."""
@@ -1653,7 +2033,8 @@ class Install:
     comes, whether or not anybody is still stepping it."""
 
     def __init__(self, cart, p, net, root, session, accepted=(), chunk=None,
-                 step_ms=None, archive="ram", supplied=None, keep=None, ask=None):
+                 step_ms=None, archive="ram", supplied=None, keep=None, ask=None,
+                 read=None):
         self.cart = cart
         self.ask = ask
         self.asking = None
@@ -1689,7 +2070,7 @@ class Install:
         self.t_net = 0
         self.t_store = 0
         self.t_all = 0
-        self.scratch = bytearray(READ_CHUNK)
+        self.scratch = bytearray(READ_CHUNK if read is None else read)
         self.scratch_mv = memoryview(self.scratch)
         self.sink = _Sink(self, WRITE_CHUNK if chunk is None else chunk)
         self.written = {}

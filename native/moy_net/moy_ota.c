@@ -377,6 +377,13 @@ static const uint8_t SHA256_DER[19] = {
 
 int moy_ota_verify(const void *payload, size_t n, const char *sig_hex,
                    size_t sig_n, const moy_ota_key_t *keys, int nkeys) {
+    uint8_t digest[32];
+    moy_net_sha256(payload, n, digest);
+    return moy_ota_verify_digest(digest, sig_hex, sig_n, keys, nkeys);
+}
+
+int moy_ota_verify_digest(const uint8_t digest[32], const char *sig_hex, size_t sig_n,
+                          const moy_ota_key_t *keys, int nkeys) {
     if (keys == NULL) {
         nkeys = moy_ota_keys();
     }
@@ -390,16 +397,13 @@ int moy_ota_verify(const void *payload, size_t n, const char *sig_hex,
     uint8_t *sig = b, *want = b + MOY_OTA_KEY_BYTES, *got = b + 2 * MOY_OTA_KEY_BYTES;
     int ok = 0;
     if (hex_to(sig_hex, sig_n, sig, MOY_OTA_KEY_BYTES) == 0) {
-        moy_sha256_t h;
-        moy_sha256_init(&h);
-        moy_sha256_update(&h, payload, n);
         size_t k = MOY_OTA_KEY_BYTES, tail = sizeof(SHA256_DER) + 32u;
         want[0] = 0x00;
         want[1] = 0x01;
         memset(want + 2, 0xff, k - tail - 3u);
         want[k - tail - 1u] = 0x00;
         memcpy(want + k - tail, SHA256_DER, sizeof(SHA256_DER));
-        moy_sha256_final(&h, want + k - 32u);
+        memcpy(want + k - 32u, digest, 32u);
         for (int i = 0; i < nkeys && !ok; i++) {
             const moy_ota_key_t *key = keys != NULL ? &keys[i] : moy_ota_key(i);
             if (key != NULL && rsa_public(key->n, sig, got) == 0 && memcmp(got, want, k) == 0) {
@@ -697,7 +701,7 @@ static void client_drop(client_t *c) {
 
 // One GET: the connection open with its head read into c->head. 0, or -errno.
 static int get_once(client_t *c, const char *url, const char *agent, uint32_t flags,
-                    moy_http_resp_t *r) {
+                    const char *range, moy_http_resp_t *r) {
     char host[MOY_URL_HOST_MAX];
     int tls;
     uint16_t port;
@@ -716,8 +720,9 @@ static int get_once(client_t *c, const char *url, const char *agent, uint32_t fl
         return rc;
     }
     int k = snprintf(c->head, MOY_HTTPC_HEAD_MAX,
-                     "GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: %s\r\n%sConnection: close\r\n\r\n",
-                     path, host, agent, (flags & MOY_HTTPC_ICY) ? "Icy-MetaData: 1\r\n" : "");
+                     "GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: %s\r\n%s%sConnection: close\r\n\r\n",
+                     path, host, agent, (flags & MOY_HTTPC_ICY) ? "Icy-MetaData: 1\r\n" : "",
+                     range);
     if (k <= 0 || k >= MOY_HTTPC_HEAD_MAX) {
         return -EINVAL_;
     }
@@ -764,8 +769,27 @@ int moy_httpc_open(const char *url, const char *agent, int *status,
     return moy_httpc_open_ex(url, agent, 0, status, clen);
 }
 
+static int open_with(const char *url, const char *agent, uint32_t flags, const char *range,
+                     int *status, uint32_t *clen);
+
 int moy_httpc_open_ex(const char *url, const char *agent, uint32_t flags, int *status,
                       uint32_t *clen) {
+    return open_with(url, agent, flags, "", status, clen);
+}
+
+int moy_httpc_open_range(const char *url, const char *agent, uint32_t start, uint32_t n,
+                         int *status, uint32_t *clen) {
+    char range[48];
+    if (n == 0 || (uint64_t)start + n - 1u > 0xffffffffu) {
+        return -EINVAL_;
+    }
+    snprintf(range, sizeof(range), "Range: bytes=%lu-%lu\r\n", (unsigned long)start,
+             (unsigned long)(start + n - 1u));
+    return open_with(url, agent, 0, range, status, clen);
+}
+
+static int open_with(const char *url, const char *agent, uint32_t flags, const char *range,
+                     int *status, uint32_t *clen) {
     if (moy_httpc_init() != 0) {
         return -ENOMEM_;
     }
@@ -792,7 +816,7 @@ int moy_httpc_open_ex(const char *url, const char *agent, uint32_t flags, int *s
     int rc;
     for (int hop = 0;; hop++) {
         moy_http_resp_t r;
-        rc = get_once(c, cur, agent, flags, &r);
+        rc = get_once(c, cur, agent, flags, range, &r);
         if (rc != 0) {
             break;
         }

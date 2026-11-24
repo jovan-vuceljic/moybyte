@@ -1029,7 +1029,10 @@ def make_official(ota, addon=None):
     which the browser console this board serves lists in its Get Carts and
     asks this board to install or remove; the board fetches over its own
     network and writes its own store, its one writer, keeping SEED_RESERVE
-    free and refusing a cart that needs more. While
+    free and refusing a cart that needs more. It reads the one entry it
+    installs as its index streams and the members of the release asset it
+    keeps by range (CartNet's `ranges`), so neither index nor cart is ever
+    whole in its heap. While
     `addon`'s step brings the store to a new release it holds a request
     back. None where the image names no release index (no updater) or does
     not carry the install: the route is then absent, and the page says this
@@ -1044,7 +1047,8 @@ def make_official(ota, addon=None):
         print("ZERO carts: unavailable:", exc)
         return None
     busy = None if addon is None else addon.busy
-    return web_addon.OfficialCarts(_ZeroInstall(CartNet(_ZeroWifi())), ota.own_index,
+    return web_addon.OfficialCarts(_ZeroInstall(CartNet(_ZeroWifi(), ranges=True)),
+                                   ota.own_index,
                                    busy=busy, reserve=SEED_RESERVE,
                                    locked=_has_password, unlock=_is_password)
 

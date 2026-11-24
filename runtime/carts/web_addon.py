@@ -639,12 +639,15 @@ class OfficialCarts:
     once (`request`), a GET reads where it stands (`answer`).
 
       check    the shelves this board reads, answered at once with no
-               fetch (`shelves`): their urls, its own release's (`own`), its
-               install record (`record`), its chip, format and ranged reads
-               (`chip`, `fmt`, `ranges`), the store's room (`free`) and
-               whether it has a password (`locked`). The page fetches each
-               index and lists it by the VM's own rules
-               (carts_link.BoardCheck), the board's heap holding none of it.
+               fetch (`shelves`): their urls, its own release's (`own`), the
+               keys it checks an index's signature with (`keys`,
+               cart_index.index_keys), its install record (`record`), its
+               chip, format and ranged reads (`chip`, `fmt`, `ranges`), the
+               store's room (`free`) and whether it has a password
+               (`locked`). The page fetches each index and lists it by the
+               VM's own rules (carts_link.BoardCheck), the board's heap
+               holding none of it; its own release's from the mirror
+               (cart_index.index_mirror), checked with `keys`.
                With `index`, one of those shelves the page cannot read
                itself: that index fetched (its signature checked, as a
                console's Get Carts reads it) and its entries that fit this
@@ -654,10 +657,12 @@ class OfficialCarts:
                reached and `locked`. Either is "listed", handed to the next
                GET once, then "idle"
       licence  the licence of the external file `path` of the entry
-               `folder` (and `id`) of the index `index` fetched and checked:
+               `folder` (and `id`) of the index `index`, read as `install`
+               reads it:
                "listed" with its `text`, likewise
-      install  that index fetched again and the entry installed through
-               cart_index.Install (its saves and an edited config carried,
+      install  that index's entry read as the index streams
+               (cart_index.EntryRead; the release's from its mirror first,
+               then the release) and installed through cart_index.Install (its saves and an edited config carried,
                the external files the page `accepted` the licence of), once
                the store has room for it: the checked build's manifest is
                handed to the page ("asking", `manifest`) for the install
@@ -682,7 +687,8 @@ class OfficialCarts:
 
     Everything a request makes -- the indexes, the list, the install's
     buffers -- is made for it and let go when it ends, so an idle board
-    holds none of it. `busy()` (the release's own AddonStep) holds a request
+    holds none of it. An install holds one entry of its index, never the
+    index, and its buffers are sized to the heap it finds (install_chunk). `busy()` (the release's own AddonStep) holds a request
     back: two installs never write one store. `sources(root, own)` answers
     the indexes (cart_index.load_indexes)."""
 
@@ -702,6 +708,7 @@ class OfficialCarts:
         self._listed = None
         self._phase = None
         self._urls = None
+        self._from = None
         self._want = None
         self._fetch = None
         self._found = None
@@ -782,6 +789,8 @@ class OfficialCarts:
             if action == "licence" and not isinstance(path, str):
                 return False, "no external file named"
             self._urls = [url]
+            mirror = _ci.index_mirror(url) if url == self._own() else None
+            self._from = [mirror, None] if mirror else [None]
             self._want = (doc.get("id"), tuple(accepted), path,
                           "It isn't in this console's release." if url == self._own()
                           else "It isn't on that shelf.")
@@ -799,7 +808,7 @@ class OfficialCarts:
         docstring): what a page needs to list this board's shelves itself."""
         chip, fmt = self.inst.chip()
         return json.dumps({
-            "shelves": urls, "own": self._own(),
+            "shelves": urls, "own": self._own(), "keys": _ci.index_keys(),
             "record": self.inst.op(lambda: _ci.load_record(root)),
             "chip": chip, "fmt": fmt,
             "ranges": bool(getattr(self.inst.net(), "ranges", False)),
@@ -895,8 +904,10 @@ class OfficialCarts:
         self._phase = "index"
         return True
 
-    def _index(self, _budget):
+    def _index(self, budget):
         """The next index fetched and read, a fetch's step a poll."""
+        if self.action != "check":
+            return self._entry(budget)
         if self._fetch is None:
             if not self._urls:
                 return self._indexed()
@@ -919,13 +930,36 @@ class OfficialCarts:
             _ci._log(exc.detail)
             return True
         data = None
-        if self.action == "check":
-            self._found.append(self._listings(got))
+        self._found.append(self._listings(got))
+        return True
+
+    def _entry(self, budget):
+        """The entry asked for read as its index streams, from the release's
+        mirror first where it has one: a mirror that cannot be read, or
+        does not list the entry, hands the read to the release."""
+        if self._fetch is None and not self._urls:
+            return self._indexed()
+        url = self._urls[0]
+        if self._fetch is None:
+            self._fetch = _ci.EntryRead(self.inst.net(), url, self.folder, self._want[0],
+                                        self._own(), self._from[0])
+        try:
+            if self._fetch.step(budget):
+                return True
+            got = [c for c in _ci.fitting(self._fetch.carts) if c["runtime"] != "web"]
+        except _ci.InstallError as exc:
+            self._fetch = None
+            if len(self._from) == 1:
+                raise
+            _ci._log("official: %s; the release instead" % exc.detail)
+            self._from.pop(0)
             return True
-        want = self._want[0]
-        for c in got:
-            if c["folder"] == self.folder and (want is None or c["id"] == want):
-                self._found.append(c)
+        self._fetch = None
+        if not got and len(self._from) > 1:
+            self._from.pop(0)
+            return True
+        self._found.extend(got)
+        self._urls.pop(0)
         return True
 
     def _listings(self, carts):
@@ -1004,8 +1038,9 @@ class OfficialCarts:
                                room[0])
             if why is not None:
                 return self._end(why)
+        read, chunk = install_chunk()
         self._job = _ci.Install(cart, p, self.inst.net(), root, self.inst.op, accepted,
-                                archive=keep, ask=_manifest_of)
+                                chunk=chunk, read=read, archive=keep, ask=_manifest_of)
         self._phase = "install"
         return True
 
@@ -1073,6 +1108,26 @@ class OfficialCarts:
 
 
 ARCHIVE_RAM_SHARE = 4           # an external archive kept in RAM below this share of the free heap
+
+
+# An install's buffers on a heap that cannot hold cart_index's own
+# (READ_CHUNK, WRITE_CHUNK) eight times over: a C3 Zero's, whose Python heap is
+# smaller than one WRITE_CHUNK.
+SMALL_CHUNK = 4096
+
+
+def install_chunk():
+    """(read, write): the buffer sizes an install takes on the heap free
+    now, cart_index's own where it holds them eight times over, else
+    SMALL_CHUNK each."""
+    try:
+        import gc
+        free = gc.mem_free()
+    except (ImportError, AttributeError):
+        return _ci.READ_CHUNK, _ci.WRITE_CHUNK
+    if free >= 8 * (_ci.READ_CHUNK + _ci.WRITE_CHUNK):
+        return _ci.READ_CHUNK, _ci.WRITE_CHUNK
+    return SMALL_CHUNK, SMALL_CHUNK
 
 
 def _archive_keep(p):

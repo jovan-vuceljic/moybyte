@@ -80,14 +80,16 @@ why = "The SSH server's Python side, which zero_shell hands its console, as on t
 
 [[modules.shared.group]]
 files = ["web_addon.py", "cart_index.py", "cart_unpack.py", "cart_files.py",
-         "app_imports.py"]
+         "app_imports.py", "rsa_check.py"]
 why = """
 The install the browser console's Get Carts asks this board for: the carts of
 its release and of moybyte-org/carts (or its system/sources), fetched over its
 own network and checked file by file before they land (web_addon.OfficialCarts
 over cart_index, as on the XIAO).
 With no OTA slot the image never runs the add-on's step, which the cable flash
-does for it."""
+does for it.
+rsa_check is the signature arithmetic where there is no kernel, which the
+board never runs (moy_net verifies) but cart_index and moy_ota name."""
 
 [[modules.shared.lazy]]
 module = "blocks"

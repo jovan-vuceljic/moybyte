@@ -395,9 +395,12 @@ class BoardCheck:
     with no fetch), and this page fetches each index itself and lists it by
     the VM's own rules (cart_index.parse_index, fitting, plan, cart_state
     and listing), so the index never sits in the board's
-    heap. An index this page cannot read (a GitHub release download sends
-    no CORS header, and the console's own release index is one) the console
-    is asked to list (`check` with that `index`); one neither reaches is
+    heap. The console's own release index, a GitHub release download that
+    sends no CORS header, is read from its mirror on os.moybyte.com
+    (cart_index.index_mirror) and is the release's when its signature
+    verifies under the keys the console named (`keys`), as the console
+    would check it. An index this page cannot read or check the console is
+    asked to list (`check` with that `index`); one neither reaches is
     counted unreached. The face BoardAsk shows: `step()` True while it runs,
     then `doc` ({"carts", "free", "unreached", "locked"}) or `error`."""
 
@@ -468,8 +471,10 @@ class BoardCheck:
             if not self._urls:
                 return self._listed()
             self._url = self._urls.pop(0)
+            own = self._shelves.get("own")
+            mirror = _ci.index_mirror(self._url) if self._url == own else None
             try:
-                self._fetch = _ci.index_fetch(self._net, self._url)
+                self._fetch = _ci.index_fetch(self._net, mirror or self._url)
             except _ci.InstallError as exc:
                 return self._board_reads(exc)
         try:
@@ -477,7 +482,8 @@ class BoardCheck:
                 return True
             data, self._fetch = self._fetch.data, None
             got = [c for c in _ci.fitting(_ci.parse_index(data, self._url,
-                                                          self._shelves.get("own")))
+                                                          self._shelves.get("own"),
+                                                          keys=self._keys()))
                    if c["runtime"] != "web"]
         except _ci.InstallError as exc:
             self._fetch = None
@@ -485,6 +491,15 @@ class BoardCheck:
         data = None
         self._found.extend(self._listings(got))
         return True
+
+    def _keys(self):
+        """The keys the console checks an index with, as it named them."""
+        keys = self._shelves.get("keys")
+        if not isinstance(keys, list):
+            return None
+        return tuple((k[0], k[1]) for k in keys
+                     if isinstance(k, list) and len(k) == 2 and isinstance(k[0], str)
+                     and isinstance(k[1], int))
 
     def _board_reads(self, exc):
         """An index this page could not read or check, asked of the console."""

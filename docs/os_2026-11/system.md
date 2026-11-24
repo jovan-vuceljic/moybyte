@@ -578,7 +578,8 @@ installed from it.
 comments); absent or empty, the console reads moybyte-org/carts. A legacy
 `indexes.json` reads as absent. A page served from a static host writes the
 host's `indexes.json` there at boot. A board reads its own release's index
-last (`carts-<board>.json` beside its update manifest): the browser console
+last (`carts-<board>.json` beside its update manifest, which os.moybyte.com
+mirrors for a page to read: `cart_index.index_mirror`): the browser console
 add-on and every seed cart of that build but a test fixture as an OFFICIAL
 cart (`"moybyte": {"fixture": true}`, `docs/app_api_v1.md` §2), those no
 store is seeded with (`"seed": false`) among them, the one place

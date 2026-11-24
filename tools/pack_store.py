@@ -17,13 +17,24 @@ the boards install, each checked against its index entry and its digest:
 every one of the stable release's, and the beta release's published in the
 last DEV_DAYS days (§12: a dev board older than that updates its firmware).
 
+Beside them it mirrors each release's indexes whole, at
+`console/releases/<tag>/carts-<board>.json` (cart_index.index_mirror names
+the address), because a page on a board's origin cannot read a release
+download: the page lists its console's release from there. The copy is the
+release's bytes, its signature with them, and a page and a board alike take
+it only once that signature verifies (cart_index.parse_index,
+cart_index.EntryRead). `fetch` writes the tag it read into the folder
+(TAG_FILE), so `build` knows where each folder's indexes go.
+
     tools/pack_store.py fetch TAG DIR       a release's indexes and add-on
                                             carts into DIR, each file dated
                                             as the release published it (gh)
     tools/pack_store.py build OUT --stable DIR... [--dev DIR...]
                                             OUT/console/ (replaced) from
                                             fetched (or locally published)
-                                            folders
+                                            folders: the packs, and the
+                                            indexes of each folder that
+                                            names its tag
     tools/pack_store.py check BASE INDEX... every digest the indexes (files
                                             or URLs) name has its pack at
                                             BASE/console/, served with
@@ -56,6 +67,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import web_pack  # noqa: E402
 
 DEV_DAYS = 30
+TAG_FILE = "release-tag"         # in a fetched folder: the release it holds
 # The origin a check's requests name: a board's, which is what the loader runs under.
 CHECK_ORIGIN = "http://192.168.4.1"
 
@@ -134,7 +146,33 @@ def build(out, stable=(), dev=(), days=DEV_DAYS, now=None):
     for digest, data in packs.items():
         with open(os.path.join(folder, digest + ".pack"), "wb") as f:
             f.write(data)
+    for src in list(stable) + list(dev):
+        mirror_indexes(src, folder)
     return sorted(packs)
+
+
+def release_tag(folder):
+    """The release tag `fetch` recorded in `folder`, or None."""
+    try:
+        with open(os.path.join(folder, TAG_FILE)) as f:
+            tag = f.read().strip()
+    except OSError:
+        return None
+    return tag if tag and "/" not in tag and not tag.startswith(".") else None
+
+
+def mirror_indexes(src, console):
+    """`src`'s indexes, byte for byte, into `console`/releases/<its tag>/;
+    none where the folder names no tag. Returns the names written."""
+    tag = release_tag(src)
+    if tag is None:
+        return []
+    dest = os.path.join(console, "releases", tag)
+    os.makedirs(dest, exist_ok=True)
+    names = _indexes(src)
+    for name in names:
+        shutil.copyfile(os.path.join(src, name), os.path.join(dest, name))
+    return names
 
 
 def _read(where):
@@ -187,6 +225,8 @@ def fetch(tag, dest):
     file's mtime the asset's publication date (for build's `dev` cut)."""
     assets = {a["name"]: a for a in _gh_json("release", "view", tag, "--json", "assets")["assets"]}
     os.makedirs(dest, exist_ok=True)
+    with open(os.path.join(dest, TAG_FILE), "w") as f:
+        f.write(tag + "\n")
     names = [n for n in assets if n.startswith("carts-") and n.endswith(".json")]
     with tempfile.TemporaryDirectory() as tmp:
         for name in names:
