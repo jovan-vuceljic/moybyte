@@ -49,6 +49,8 @@ def shell_sources():
 # serial face, the screen face and its grid.
 BOARD_SOURCES = ("moy_sh_board.c", "moy_sh_screen.c", "moy_sh_store.c", "moy_term.c",
                  "moy_sh_app.c", "moy_sh_edit.c", "moy_sh_top.c")
+# What the text apps' harness (host/app_main.c) links of them: the apps alone.
+APP_SOURCES = ("moy_term.c", "moy_sh_app.c", "moy_sh_edit.c", "moy_sh_top.c")
 # The Terminal's face and the recovery floor's screen over it draw through the
 # toolkit's engine, so they compile against native/moy_ui and the harnesses,
 # which have no toolkit, leave them out.
@@ -109,16 +111,24 @@ def harness(tmp_path_factory):
         h.update(f.read())
     base = tmp_path_factory.getbasetemp().parent / "moy_sh_host" / h.hexdigest()[:16]
     base.mkdir(parents=True, exist_ok=True)
-    exes = {name: str(base / name) for name in ("sh_main", "board_main")}
+    exes = {name: str(base / name) for name in ("sh_main", "board_main", "app_main")}
     with open(base / "lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if not all(os.path.exists(e) for e in exes.values()):
             objs = _objects(cc, str(base))
+            # the text apps' harness, which _objects leaves out (test_moy_tty links
+            # its objects but the harnesses' mains)
+            app = os.path.join(str(base), "app_main.o")
+            r = subprocess.run([cc] + CFLAGS + ["-I", SH, "-I", KERNEL, "-I", STORE, "-c",
+                                                os.path.join(SH, "host", "app_main.c"), "-o", app],
+                               capture_output=True, text=True)
+            assert r.returncode == 0, r.stderr[-4000:]
             mains = {name: os.path.join(str(base), name + ".o") for name in exes}
             board = [os.path.join(str(base), n[:-2] + ".o") for n in BOARD_SOURCES]
+            apps = [os.path.join(str(base), n[:-2] + ".o") for n in APP_SOURCES]
             shared = [o for o in objs if o not in mains.values() and o not in board]
             for name, exe in exes.items():
-                own = [mains[name]] + (board if name == "board_main" else [])
+                own = [mains[name]] + {"board_main": board, "app_main": apps}.get(name, [])
                 r = subprocess.run([cc] + CFLAGS + shared + own + ["-o", exe + ".tmp"],
                                    capture_output=True, text=True)
                 assert r.returncode == 0, r.stderr[-4000:]
@@ -242,6 +252,84 @@ def test_the_screen_face_replays_the_serial_transcript(harness, tmp_path, path):
     assert screen.split("\n") == want
 
 
+# -- the text apps' memory (host/app_main.c) -----------------------------------------
+
+EDIT_BLOCK = 1024       # moy_sh_edit.c's BLK: the most any request for text may be
+
+
+def _lines(n):
+    """`n` bytes of lines of 31 to 70 characters, a newline ending them."""
+    out, size, i = [], 0, 0
+    while size < n:
+        ln = ("%05d " % i + "the quick brown fox jumps over the lazy dog and on" * 2)[:31 + (i * 7) % 40]
+        out.append(ln.rstrip() + "\n")
+        size += len(out[-1])
+        i += 1
+    return "".join(out)[:n - 1] + "\n"
+
+
+def _line_at(text, ln):
+    return sum(len(x) for x in text.splitlines(keepends=True)[:ln])
+
+
+def _edit_session(text, rows):
+    """edit's keys: down five lines, a line of 1500 characters typed (past a
+    block, into blocks of its own), a page down, a word typed and twenty
+    characters deleted there, saved and closed; and the file it leaves."""
+    typed = "abcdefghij" * 150
+    keys = ["^[[B" * 5, typed + "^M", "^[[6~", "tail", "^[[H", "^[[3~" * 20, "^S", "%meter", "^X"]
+    p = _line_at(text, 5)
+    t = text[:p] + typed + "\n" + text[p:]
+    q = _line_at(t, 6 + rows - 3)
+    t = t[:q] + "tail" + t[q:]
+    return keys, t[:q] + t[q + 20:]
+
+
+def _vi_session(text, rows):
+    """vi's keys: every line yanked (a register as big as the file) and put
+    after the last, undone and done again (the undo step a copy of it), a
+    line deleted and a character, saved and closed; and the file it leaves."""
+    keys = ["1G", "%dyy" % text.count("\n"), "G", "p", "u", "^R", "5G", "dd", "x", ":w^M",
+            "%meter", ":q^M"]
+    ls = (text + text).splitlines(keepends=True)
+    del ls[4]
+    ls[4] = ls[4][1:]
+    return keys, "".join(ls)
+
+
+@pytest.mark.parametrize("size", (4096, 8192, 16384))
+@pytest.mark.parametrize("app", ("edit", "vi"))
+def test_the_editor_asks_for_no_text_bigger_than_a_block(harness, tmp_path, app, size):
+    """#276: a board without PSRAM has its free memory in pieces, so `edit`
+    and `vi` hold their text in blocks and no request they make for it, at
+    the open, a growth, a register, an undo step or the save, is bigger than
+    one block. The app heap here refuses any bigger one, as a heap whose
+    largest free piece is a block refuses it; the app's own record and
+    screen (moy_sh_app_new's, made before the file is read) are not text.
+    A file of 4 to 16 KB opens, grows past a block, saves and reads back
+    as written, and the store holds no copy of it on the way."""
+    rows = 12
+    root = tmp_path / "root"
+    root.mkdir()
+    text = _lines(size)
+    (root / "f.txt").write_text(text)
+    keys, want = (_edit_session if app == "edit" else _vi_session)(text, rows)
+    script = tmp_path / "keys"
+    script.write_text("\n".join(["%%size 40 %d" % rows, "%s /f.txt" % app] + keys) + "\n")
+    r = subprocess.run([harness["app_main"], str(root), str(script)], stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, timeout=60,
+                       env=dict(os.environ, TZ="UTC", MOY_SH_APP_ALLOC_MAX=str(EDIT_BLOCK)))
+    out = r.stdout.decode("utf-8", "replace")
+    assert "Sanitizer" not in out and "runtime error" not in out, out
+    assert r.returncode == 0 and "out of memory" not in out, out
+    assert re.search(r"^\| saved, %d bytes " % len(want), out, re.M), out
+    m = re.search(r"meter largest (\d+) most \d+ live \d+ refused (\d+) store largest (\d+)", out)
+    assert m and int(m.group(2)) == 0 and int(m.group(1)) <= EDIT_BLOCK, out
+    assert int(m.group(3)) < 2048, out          # the store's own scratch, never the text
+    assert out.endswith("end\n"), out
+    assert (root / "f.txt").read_text() == want
+
+
 def test_every_core_builtin_has_its_script():
     """A C built-in is tested by tests/moy_sh/builtin_<name>.sh."""
     with open(os.path.join(SH, "moy_sh_cmds.c"), encoding="utf-8") as f:
@@ -325,7 +413,8 @@ def test_every_source_keeps_the_const_a_c23_library_preserves(tmp_path):
     plain = base + ["-I", SH, "-I", KERNEL, "-I", STORE, "-I", SPINE]
     jobs = [(src, dash) for src in shell_sources()]
     jobs += [(os.path.join(SH, n), plain) for n in ("moy_sh_arena.c", "moy_sh_fmt.c", "moy_sh_cands.c",
-                                                     "host/sh_main.c", "host/board_main.c")
+                                                     "host/sh_main.c", "host/board_main.c",
+                                                     "host/app_main.c")
              + BOARD_SOURCES]
     jobs += [(os.path.join(SH, n), plain + UI_INCLUDES) for n in FACE_SOURCES]
 
