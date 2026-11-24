@@ -46,6 +46,17 @@ CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=
 # NTP asks the moment the station has an address (the XIAO's reason).
 CONFIG_LWIP_SNTP_STARTUP_DELAY=n
 
+# IRAM TO FLASH. On this chip IRAM and DRAM split one SRAM at link time, so
+# code kept out of IRAM is heap. FreeRTOS's, the heap's and the ring buffer's
+# non-ISR functions and newlib's locks run from flash: nothing in this image
+# calls them from an ISR while the cache is off (the kernel's own IRAM code is
+# its panic handler, which calls none). ESP-IDF's ISR halves stay in IRAM, and
+# the image gets smaller, not larger (#276 has the numbers).
+CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH=y
+CONFIG_HEAP_PLACE_FUNCTION_INTO_FLASH=y
+CONFIG_RINGBUF_PLACE_FUNCTIONS_INTO_FLASH=y
+CONFIG_LIBC_LOCKS_PLACE_IN_IRAM=n
+
 # --- Left out (the XIAO's reasons) -------------------------------------------
 CONFIG_LWIP_PPP_SUPPORT=n
 CONFIG_LWIP_PPP_PAP_SUPPORT=n
