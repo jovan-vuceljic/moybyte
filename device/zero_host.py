@@ -135,10 +135,13 @@ def identity():
 # -- the seed roster, carried by the image (2026-08-30) ----------------------
 #
 # The image carries its seed carts (board.toml's `[roster] image`: the XIAO's
-# the core carts, every app and five games; the C3's the core alone) as one
-# raw-deflate stream each, `carts_data.CARTS_Z`, and this function inflates
-# them, so a Zero flashed from the website's flasher (site/build.py's BOARDS)
-# has a working console with no second, cabled step. Every other system cart
+# the core carts, every app, five games and Pin Light; the C3's the core
+# alone) as one raw-deflate stream each, `carts_data.CARTS_Z`, and this
+# function inflates them, so a Zero flashed from the website's flasher
+# (site/build.py's BOARDS) has a working console with no second, cabled step.
+# The C3's store gets its apps and Brick Siege at flash time instead
+# (`[roster] install`: tools/store_image.py, tools/board_flash.py's
+# install_carts), which its image has no room to carry. Every other system cart
 # but a test fixture is an OFFICIAL cart its release publishes, which the page this board serves
 # installs (`/official`, make_official, beside the carts of moybyte-org/carts
 # or the board's `system/sources`) and a cable flash refreshes

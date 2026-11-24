@@ -142,8 +142,8 @@ def test_the_check_fails_a_pack_that_outgrows_a_board_s_store():
 
 def test_a_board_whose_console_is_online_gets_no_add_on(tmp_path):
     """The C3 Zero's console is online (`[web] console`): its install's
-    store is empty, and the check holds its store to its first boot's carts
-    and the seed's reserve alone, whatever the pack."""
+    store holds no add-on, and the check holds its store to its first boot's
+    carts and the seed's reserve alone, whatever the pack."""
     import io
     c3 = _board("c3_zero")
     assert board_config.web_console(c3) == "online"
@@ -162,6 +162,35 @@ def test_a_board_whose_console_is_online_gets_no_add_on(tmp_path):
     text = io.StringIO()
     assert "esp32c3_zero" not in store_image.check(_wasm_pack(size + 4096), text)
     assert "esp32c3_zero                 store  544 blocks, no add-on: its console is online" in text.getvalue()
+
+
+def test_the_c3_s_install_holds_its_roster_s_carts_and_no_pin_light():
+    """The C3's install writes `[roster] install` into its new store (the
+    apps and Brick Siege its image has no room for), each folder as an
+    official entry installs it, and no Pin Light (owner, 2026-11-24)."""
+    from littlefs import LittleFS
+    c3 = _board("c3_zero")
+    offset = int(str(board_config.load(c3)["flash"]["offset"]), 0)
+    merged = _merged(c3, offset)
+    carts = store_image.installs(c3)
+    out = store_image.install_image(merged, offset, None, carts)
+    at, size = BOARDS["c3_zero"][1:]
+    store = out[at - offset:]
+    fs = LittleFS(block_size=store_image.BLOCK, block_count=size // store_image.BLOCK,
+                  read_size=store_image.READ, prog_size=store_image.PROG,
+                  lookahead_size=store_image.LOOKAHEAD, cache_size=store_image.CACHE,
+                  block_cycles=store_image.CYCLES, mount=False)
+    fs.context.buffer = bytearray(store) + bytearray(b"\xff" * (size - len(store)))
+    fs.mount()
+    want = ["moybyte.%s.moy" % c for c in
+            ("brick_siege", "calc", "music", "my_art", "notes", "terminal")]
+    assert sorted(fs.listdir(store_image.CARTS)) == want
+    for folder in want:
+        src = ROOT / "system_carts" / folder / "manifest.json"
+        with fs.open("%s/%s/manifest.json" % (store_image.CARTS, folder), "rb") as f:
+            assert f.read() == src.read_bytes()
+    blocks, _addon, both = store_image.room(str(c3), None)
+    assert blocks - both >= store_image.seed_reserve() // store_image.BLOCK
 
 
 @pytest.mark.parametrize("name", sorted(BOARDS))

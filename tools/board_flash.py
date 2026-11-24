@@ -69,14 +69,15 @@ no release publishes, gets its page. The console boards install it through
 their dev channel (`tools/board.py BOARD addon`, which a board pass runs).
 
 THE OFFICIAL CARTS. On the same boards the image seeds the carts board.toml's
-`[roster] image` names (the XIAO's the core carts, every app and five games;
-the C3's the core alone); the flash then installs the other official carts
+`[roster] image` names (the XIAO's the core carts, every app, five games and
+Pin Light; the C3's the core alone); the flash then installs the other official carts
 from this tree's system_carts/, the bytes its release publishes
-(`install_carts`): into a NEW store -- one holding nothing but the image's
-carts and add-ons -- the set board.toml's `[roster] install` names (empty on
-both Zeros today), and into any store every official cart it holds at an older version
-that the image does not carry, replaced with the kid's saves and config kept
-(the seed's own rule, #47). Each is copied beside the carts folder and moved
+(`install_carts`): the set board.toml's `[roster] install` names (the C3's
+apps and Brick Siege, which its image has no room to carry) where the store
+lacks one and its removal is not recorded (`system/removed`), and every
+official cart the store holds at an older version that the image does not
+carry, replaced with the kid's saves and config kept -- the seed's own rule
+(#47). Each is copied beside the carts folder and moved
 in by one rename, and the store's reserve (zero_host.SEED_RESERVE) is kept.
 The XIAO brings them to a new release by itself after an update
 (runtime/carts/web_addon.py); the C3, with no OTA, by this.
@@ -506,18 +507,18 @@ def offered_carts(seeds=SEED_DIR):
     return out
 
 
-def carts_plan(have, offered, install, image):
+def carts_plan(have, offered, install, image, removed=()):
     """The official carts to write into a store holding `have` ({folder:
     manifest version}, every cart folder in it), of `offered` (offered_carts),
     leaving out the ones the image carries (`image`, ids), which its own seed
-    keeps: each one the store holds at an older version, and into a NEW store
-    -- one holding nothing but the image's carts and add-ons -- each of
-    `install` (ids) it lacks. In `offered`'s order."""
+    keeps: each one the store holds at an older version, and each of
+    `install` (ids) it lacks unless its removal is recorded (`removed`, the
+    folders of the store's `system/removed`) -- the seed's own rule. In
+    `offered`'s order."""
     image = set(c + ".moy" for c in image)
-    want = set(c + ".moy" for c in install)
-    new = all(f in image or f.startswith("web_console_") for f in have)
+    want = set(c + ".moy" for c in install) - set(removed)
     return [f for f, v in offered.items() if f not in image and (
-        (f in have and have[f] < v) or (f not in have and new and f in want))]
+        (f in have and have[f] < v) or (f not in have and f in want))]
 
 
 def _cart_bytes(src, block):
@@ -540,8 +541,9 @@ def _reserve():
 @_answered
 def install_carts(board_dir, port, reset=True, seeds=SEED_DIR):
     """The official carts this tree publishes into `[flash] addon`, the carts
-    folder, over the board's REPL (carts_plan: a new store's `[roster]
-    install`, and every one the store holds at an older version), each copied
+    folder, over the board's REPL (carts_plan: the `[roster] install` the
+    store lacks and did not remove, and every one it holds at an older
+    version), each copied
     beside the carts folder and moved in by one rename with its saves and
     config kept, the store's reserve kept free; then with `reset` a reset. 0,
     or 1 with what went wrong."""
@@ -559,9 +561,14 @@ def install_carts(board_dir, port, reset=True, seeds=SEED_DIR):
             "            h[n] = int(json.load(open(%r + '/' + n + '/manifest.json')).get('version', 0))\n"
             "        except Exception:\n"
             "            h[n] = 0\n"
+            "try:\n"
+            "    import moy_store\n"
+            "    r = moy_store.removed_load(%r).split()\n"
+            "except Exception:\n"
+            "    r = []\n"
             "s = os.statvfs(%r)\n"
-            "print('MOYCARTS', json.dumps({'have': h, 'block': s[0], 'free': s[0] * s[3]}))\n"
-            % (root, root, root))
+            "print('MOYCARTS', json.dumps({'have': h, 'removed': r, 'block': s[0], 'free': s[0] * s[3]}))\n"
+            % (root, root, root, root))
     r = _mpremote(port, "exec", look)
     line = [ln for ln in r.stdout.splitlines() if ln.startswith("MOYCARTS ")]
     if r.returncode != 0 or not line:
@@ -570,7 +577,8 @@ def install_carts(board_dir, port, reset=True, seeds=SEED_DIR):
     got = json.loads(line[-1].split(" ", 1)[1])
     offered = offered_carts(seeds)
     image = board_config.roster_only(board_dir) or tuple(f[:-4] for f in offered)
-    plan = carts_plan(got["have"], offered, board_config.roster_install(board_dir), image)
+    plan = carts_plan(got["have"], offered, board_config.roster_install(board_dir), image,
+                      got.get("removed") or ())
     free, reserve = got["free"], _reserve()
     rm = ("import os\n"
           "def rm(p):\n"
