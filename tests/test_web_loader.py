@@ -9,6 +9,8 @@ console from a pack it checks against the digest the image names.
 - The digests gen_web_blob names are the pack's, and the loader it carries
   is loader.html with the build's mirrors.
 - serve.py serves this tree's pack by its digest, with CORS.
+- tools/pack_store.py builds the store from a release's add-on carts, and
+  its deploy check passes against a local serve.py serving this tree's pack.
 - Under MOYBYTE_WEB_E2E, Chrome boots the console through the loader from
   serve.py's loader twin, then again from its cache.
 """
@@ -31,6 +33,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNNER = os.path.join(ROOT, "firmware", "web_runner")
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import gen_web_blob  # noqa: E402
+import pack_store  # noqa: E402
 import web_pack  # noqa: E402
 
 DIST = os.path.join(RUNNER, "dist")
@@ -123,6 +126,47 @@ def test_a_ci_build_names_the_site_alone_and_a_local_one_its_serve_py_first(monk
     assert gen_web_blob.default_mirrors() == ["http://a/console/", "http://b/console/"]
 
 
+def _published(folder, items, board="c3_zero"):
+    """A release folder as tools/web_pack.py publishes one: the add-on cart
+    of the pack of `items` and the board's index naming it."""
+    os.makedirs(folder, exist_ok=True)
+    data, digest = gen_web_blob.pack_bytes(items)
+    pack = os.path.join(folder, "build", web_pack.PACK_FILE)
+    os.makedirs(os.path.dirname(pack))
+    with open(pack, "wb") as f:
+        f.write(data)
+    shutil.copy(web_pack.LICENCE_SRC, os.path.join(folder, web_pack.LICENCE_NAME))
+    cart = web_pack.publish_cart((pack, digest.hex()), folder)
+    entry = web_pack.index_entry(digest.hex(), 7, cart, folder)
+    with open(os.path.join(folder, "carts-%s.json" % board), "wb") as f:
+        f.write(web_pack.index_doc(board, entry))
+    return data, digest.hex(), os.path.join(folder, cart[0])
+
+
+def test_the_store_holds_every_stable_pack_and_the_recent_dev_ones(tmp_path):
+    stable_data, stable, _ = _published(str(tmp_path / "latest"), [("index.html", b"s")])
+    dev_data, dev, _ = _published(str(tmp_path / "beta"), [("index.html", b"d")])
+    _old_data, old, old_cart = _published(str(tmp_path / "beta_old"), [("index.html", b"o")])
+    long_ago = time.time() - 40 * 86400
+    os.utime(old_cart, (long_ago, long_ago))
+    out = str(tmp_path / "store")
+    got = pack_store.build(out, stable=[str(tmp_path / "latest")],
+                           dev=[str(tmp_path / "beta"), str(tmp_path / "beta_old")])
+    assert got == sorted([stable, dev]) and old not in got
+    assert open(os.path.join(out, "console", stable + ".pack"), "rb").read() == stable_data
+    assert open(os.path.join(out, "console", dev + ".pack"), "rb").read() == dev_data
+    headers = open(os.path.join(out, "_headers")).read()
+    assert "Access-Control-Allow-Origin: *" in headers and "immutable" in headers
+
+
+def test_the_store_refuses_a_cart_its_index_does_not_name(tmp_path):
+    _data, _digest, cart = _published(str(tmp_path / "latest"), [("index.html", b"s")])
+    with open(cart, "ab") as f:
+        f.write(b"x")
+    with pytest.raises(pack_store.StoreError):
+        pack_store.build(str(tmp_path / "store"), stable=[str(tmp_path / "latest")])
+
+
 @contextlib.contextmanager
 def _serve(*extra):
     """firmware/web_runner/serve.py over this tree's dist/, up and answering."""
@@ -160,6 +204,31 @@ def test_serve_py_serves_this_tree_s_pack_by_its_digest_with_cors():
         with pytest.raises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(base + "/console/%s.pack" % ("ab" * 32))
         assert e.value.code == 404
+
+
+@pytest.mark.skipif(not _have_dist(), reason="web_runner dist/ not built")
+def test_the_deploy_check_passes_against_serve_py_and_names_what_is_missing(tmp_path):
+    """§11's deploy check, against a local serve.py: every digest an index
+    names is served, whole, to a board's origin, with
+    Access-Control-Allow-Origin."""
+    data, here = gen_web_blob.pack(gen_web_blob.collect(DIST)[0])
+    index = tmp_path / "carts-c3_zero.json"
+
+    def entry(digest):
+        return {"id": web_pack.cart_id(digest), "runtime": web_pack.CART_RUNTIME,
+                "assets": [{"name": "x", "url": "x"}], "moybyte": {"fits": digest}}
+    index.write_text(json.dumps({"version": 1, "carts": [entry(here.hex())]}))
+    with _serve() as base:
+        assert pack_store.check(base, [str(index)]) == []
+        req = urllib.request.Request(base + "/console/%s.pack" % here.hex())
+        with urllib.request.urlopen(req) as r:
+            assert r.headers["Access-Control-Allow-Origin"] == "*"
+            assert "immutable" in r.headers["Cache-Control"]
+            assert r.read() == data
+        index.write_text(json.dumps({"version": 1, "carts": [entry(here.hex()),
+                                                             entry("ab" * 32)]}))
+        problems = pack_store.check(base, [str(index)])
+    assert len(problems) == 1 and "ab" * 32 in problems[0], problems
 
 
 @pytest.mark.skipif(not os.environ.get("MOYBYTE_WEB_E2E"),
