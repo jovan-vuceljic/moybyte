@@ -1,6 +1,6 @@
 // moy_sh_cmds: the shell's C core built-ins (docs/os_2026-11/system.md
 // section 1): the file commands over the store (find and du among them), the
-// text tools (head, tail, wc, grep, uniq, cut, tr, tee, xxd, md5sum and
+// text tools (head, tail, wc, grep, sort, uniq, cut, tr, tee, xxd, md5sum and
 // sha256sum), and ps, free, df, log/dmesg, reboot, date, sleep, clear and
 // help over the host's tables. Each is one function taking dash's (argc,
 // argv), its options read with dash's nextopt, writing through dash's output
@@ -1697,6 +1697,275 @@ static int uniqcmd(int argc, char **argv) {
     return stop_status(err | o.status);
 }
 
+// sort's lines are held whole: their bytes in blocks of SORT_BLOCK (a longer
+// line's its own) and a pointer to each, all the session heap's, and of it
+// at most the size of the session's arena (mem_n; MOY_SH_ARENA on a board),
+// past which sort says it is out of memory.
+#define SORT_BLOCK 4096u
+
+typedef struct sort_block {
+    struct sort_block *next;
+    size_t used, cap;
+    char text[];
+} sort_block_t;
+
+typedef struct {
+    const char *p;
+    size_t n;
+} sort_line_t;
+
+typedef struct {
+    int rev, num, uniq;
+    int full;                           // the bound or the heap refused
+    size_t taken, bound;
+    sort_block_t *blocks;               // the newest first
+    size_t at;                          // where the line being read starts in it
+    sort_line_t *lines;
+    size_t n, cap;
+} sort_t;
+
+static void *sort_take(sort_t *o, size_t n) {
+    void *p = o->taken + n <= o->bound ? moy_sh_halloc(n) : NULL;
+    if (p == NULL) {
+        o->full = 1;
+        return NULL;
+    }
+    o->taken += n;
+    return p;
+}
+
+static void sort_give(sort_t *o, void *p, size_t n) {
+    if (p != NULL) {
+        moy_sh_hfree(p);
+        o->taken -= n;
+    }
+}
+
+// k more bytes of the line being read, which stays in one block.
+static int sort_add(sort_t *o, const char *p, size_t k) {
+    sort_block_t *b = o->blocks;
+    if (b == NULL || b->cap - b->used < k) {
+        size_t len = b != NULL ? b->used - o->at : 0, cap = SORT_BLOCK;
+        while (cap < 2u * (len + k)) {
+            cap *= 2u;
+        }
+        sort_block_t *nb = sort_take(o, sizeof *nb + cap);
+        if (nb == NULL) {
+            return -1;
+        }
+        nb->cap = cap;
+        nb->used = len;
+        nb->next = b;
+        if (b != NULL) {
+            memcpy(nb->text, b->text + o->at, len);
+            b->used = o->at;
+            if (b->used == 0) {         // it held only this line
+                nb->next = b->next;
+                sort_give(o, b, sizeof *b + b->cap);
+            }
+        }
+        o->blocks = b = nb;
+        o->at = 0;
+    }
+    memcpy(b->text + b->used, p, k);
+    b->used += k;
+    return 0;
+}
+
+// The line read so far is one.
+static int sort_push(sort_t *o) {
+    if (o->n == o->cap) {
+        size_t cap = o->cap ? o->cap * 2u : 64u;
+        sort_line_t *v = sort_take(o, cap * sizeof *v);
+        if (v == NULL) {
+            return -1;
+        }
+        if (o->n) {
+            memcpy(v, o->lines, o->n * sizeof *v);
+        }
+        sort_give(o, o->lines, o->cap * sizeof *v);
+        o->lines = v;
+        o->cap = cap;
+    }
+    sort_block_t *b = o->blocks;
+    size_t len = b != NULL ? b->used - o->at : 0;
+    o->lines[o->n].p = len ? b->text + o->at : "";
+    o->lines[o->n++].n = len;
+    if (b != NULL) {
+        o->at = b->used;
+    }
+    return 0;
+}
+
+static int sort_read(int fd, const char *name, void *arg) {
+    sort_t *o = arg;
+    char buf[512];
+    ssize_t got;
+    int open_line = 0;
+    (void)name;
+    while (!o->full && !stopped() && (got = read(fd, buf, sizeof buf)) > 0) {
+        for (size_t at = 0; at < (size_t)got;) {
+            const char *e = memchr(buf + at, '\n', (size_t)got - at);
+            size_t k = e != NULL ? (size_t)(e - (buf + at)) : (size_t)got - at;
+            if (k > 0 && sort_add(o, buf + at, k) != 0) {
+                return 0;
+            }
+            open_line |= k > 0;
+            at += k;
+            if (e != NULL) {
+                at++;
+                if (sort_push(o) != 0) {
+                    return 0;
+                }
+                open_line = 0;
+            }
+        }
+    }
+    if (open_line && !o->full) {
+        sort_push(o);
+    }
+    return 0;
+}
+
+// -n's key: the number a line starts with (blanks, a '-', digits, a '.' and
+// digits), 0 where it starts with none, compared by its digits, as GNU sort
+// compares it, never through a float.
+typedef struct {
+    const char *i, *f;                  // the whole part's digits, the fraction's
+    size_t il, fl;
+    int neg;
+} sort_num_t;
+
+static void sort_num(const char *p, size_t n, sort_num_t *v) {
+    size_t k = 0;
+    while (k < n && (p[k] == ' ' || p[k] == '\t')) {
+        k++;
+    }
+    v->neg = k < n && p[k] == '-';
+    k += (size_t)v->neg;
+    while (k < n && p[k] == '0') {
+        k++;
+    }
+    v->i = p + k;
+    while (k < n && isdigit((unsigned char)p[k])) {
+        k++;
+    }
+    v->il = (size_t)(p + k - v->i);
+    v->f = p + k;
+    v->fl = 0;
+    if (k < n && p[k] == '.') {
+        v->f = p + ++k;
+        while (k < n && isdigit((unsigned char)p[k])) {
+            k++;
+        }
+        v->fl = (size_t)(p + k - v->f);
+        while (v->fl > 0 && v->f[v->fl - 1] == '0') {
+            v->fl--;
+        }
+    }
+    if (v->il == 0 && v->fl == 0) {
+        v->neg = 0;                     // -0 is 0
+    }
+}
+
+static int sort_numcmp(const sort_line_t *a, const sort_line_t *b) {
+    sort_num_t x, y;
+    sort_num(a->p, a->n, &x);
+    sort_num(b->p, b->n, &y);
+    if (x.neg != y.neg) {
+        return x.neg ? -1 : 1;
+    }
+    int c = x.il != y.il ? (x.il < y.il ? -1 : 1) : memcmp(x.i, y.i, x.il);
+    for (size_t k = 0; c == 0 && (k < x.fl || k < y.fl); k++) {
+        c = (k < x.fl ? x.f[k] : '0') - (k < y.fl ? y.f[k] : '0');
+    }
+    c = (c > 0) - (c < 0);
+    return x.neg ? -c : c;
+}
+
+// Below 0 where a goes before b: by -n's number, then (but for -n -u, whose
+// equal numbers are one line) by the bytes; -r turns it round.
+static int sort_cmp(const sort_t *o, const sort_line_t *a, const sort_line_t *b) {
+    int c = o->num ? sort_numcmp(a, b) : 0;
+    if (c == 0 && !(o->num && o->uniq)) {
+        c = memcmp(a->p, b->p, a->n < b->n ? a->n : b->n);
+        if (c == 0) {
+            c = (a->n > b->n) - (a->n < b->n);
+        }
+    }
+    return o->rev ? -c : c;
+}
+
+// A merge sort, bottom up: stable, so -u keeps the first of equal lines.
+static void sort_lines(const sort_t *o, sort_line_t *v, sort_line_t *tmp, size_t n) {
+    sort_line_t *from = v, *to = tmp;
+    for (size_t w = 1; w < n; w *= 2u) {
+        for (size_t lo = 0; lo < n; lo += 2u * w) {
+            size_t mid = lo + w < n ? lo + w : n, hi = lo + 2u * w < n ? lo + 2u * w : n;
+            size_t i = lo, j = mid, k = lo;
+            while (i < mid && j < hi) {
+                to[k++] = sort_cmp(o, &from[j], &from[i]) < 0 ? from[j++] : from[i++];
+            }
+            while (i < mid) {
+                to[k++] = from[i++];
+            }
+            while (j < hi) {
+                to[k++] = from[j++];
+            }
+        }
+        sort_line_t *t = from;
+        from = to;
+        to = t;
+    }
+    if (from != v) {
+        memcpy(v, from, n * sizeof *v);
+    }
+}
+
+// The lines of each FILE (stdin with none) in byte order (-n: by the number
+// each starts with; -r: reversed; -u: each once).
+static int sortcmd(int argc, char **argv) {
+    sort_t o;
+    int c;
+    (void)argc;
+    (void)argv;
+    memset(&o, 0, sizeof o);
+    while ((c = nextopt("nru")) != '\0') {
+        o.num |= c == 'n';
+        o.rev |= c == 'r';
+        o.uniq |= c == 'u';
+    }
+    o.bound = moy_sh_cur->mem_n;
+    int status = each_input(argptr, sort_read, &o) ? 2 : 0;
+    sort_line_t *tmp = NULL;
+    if (!o.full && status == 0 && o.n > 1) {
+        tmp = sort_take(&o, o.n * sizeof *tmp);
+    }
+    if (o.full) {
+        moy_sh_fail("sort: out of memory");
+        status = 2;
+    } else if (status == 0 && !moy_sh_cur->interrupt) {
+        if (tmp != NULL) {
+            sort_lines(&o, o.lines, tmp, o.n);
+        }
+        for (size_t i = 0; i < o.n && ((i & 255u) != 0 || !stopped()); i++) {
+            if (o.uniq && i > 0 && sort_cmp(&o, &o.lines[i - 1], &o.lines[i]) == 0) {
+                continue;
+            }
+            outmem(o.lines[i].p, o.lines[i].n, out1);
+            out1c('\n');
+        }
+    }
+    sort_give(&o, tmp, o.n * sizeof *tmp);
+    sort_give(&o, o.lines, o.cap * sizeof *o.lines);
+    while (o.blocks != NULL) {
+        sort_block_t *b = o.blocks;
+        o.blocks = b->next;
+        sort_give(&o, b, sizeof *b + b->cap);
+    }
+    return stop_status(status);
+}
+
 // A row of xxd's: its offset, 16 bytes as eight groups of four hex digits,
 // and as text ('.' for a byte that does not print).
 static void xxd_row(unsigned long off, const unsigned char *b, size_t n) {
@@ -2377,6 +2646,7 @@ static const struct builtincmd core[] = {
     { "sh", moy_sh_shcmd, BUILTIN_REGULAR },
     { "sha256sum", sumcmd, BUILTIN_REGULAR },
     { "sleep", sleepcmd, BUILTIN_REGULAR },
+    { "sort", sortcmd, BUILTIN_REGULAR },
     { "tail", tailcmd, BUILTIN_REGULAR },
     { "tee", teecmd, BUILTIN_REGULAR },
     { "top", appcmd, BUILTIN_REGULAR },

@@ -119,8 +119,8 @@ SHELL_NAMES = (
     "exec", "exit", "export", "false", "fg", "find", "free", "getopts", "grep", "hash", "head",
     "help", "jobs", "kill", "local", "log", "ls", "md5sum", "mkdir", "mv", "neofetch", "printf",
     "ps", "pwd", "read", "readonly", "reboot", "return", "rm", "rmdir", "set", "sh", "sha256sum",
-    "shift", "sleep", "tail", "tee", "test", "top", "touch", "tr", "trap", "true", "type", "umask",
-    "unalias", "uname", "uniq", "unset", "wait", "wc", "xxd",
+    "shift", "sleep", "sort", "tail", "tee", "test", "top", "touch", "tr", "trap", "true", "type",
+    "umask", "unalias", "uname", "uniq", "unset", "wait", "wc", "xxd",
     # the role commands (runtime/shell/sh_roles.py)
     "at", "ble", "cron", "http", "lease", "lora", "media", "mic", "midi", "notify",
     "passwd", "perm", "pkg", "python", "service", "settings", "snd", "usb",
