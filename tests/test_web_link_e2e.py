@@ -1,8 +1,9 @@
 """The link between the windows (docs/web_console_online_2026-11.md §5, §11
 phase 2), across two origins in a real Chrome.
 
-The site is My consoles as tools/os_site.py builds it, served on
-`localhost` (a secure context, so its service worker runs). The board is
+The site is My consoles as tools/os_site.py builds it, at /console/ on
+`localhost` as Pages serves it (a secure context, so its service worker
+runs). The board is
 the real C webhost with its sign-in (native/moy_tty's host harness, which
 names this tree's pack) behind serve.py's `--board --loader` on
 `http://127.0.0.1`: its root is the loader, whose one mirror is the site.
@@ -138,7 +139,7 @@ def test_my_consoles_hands_a_board_its_console_over_the_link(tmp_path):
                                "--loader", "--mirror", site + "/console/"],
                               cwd=str(RUNNER), stdout=open(blog, "w"), stderr=subprocess.STDOUT)
         procs.append(bp)
-        _up(other + "/packs.json", sp, slog)
+        _up(other + "/console/packs.json", sp, slog)
         _up(board + "/sync", bp, blog)
         doc = json.loads(urllib.request.urlopen(board + "/sync").read())
         assert doc["page"] == body.hex() and doc["local"] == 0, doc
@@ -151,7 +152,7 @@ def test_my_consoles_hands_a_board_its_console_over_the_link(tmp_path):
                         ".then((c) => c.keys()).then((k) => k.length)", "timeout": 60000},
             _js("KEPT", "caches.open('moy-packs').then((c) => c.keys()).then((k) => k.length)"),
             {"note": "the same site on another origin opens the board"},
-            {"open": other + "/"},
+            {"open": other + "/console/"},
             {"waitFor": "document.getElementById('add')", "timeout": 15000},
             _add("elsewhere", "127.0.0.1:%d" % bport),
             {"press": "#list li button.name"},
@@ -164,7 +165,7 @@ def test_my_consoles_hands_a_board_its_console_over_the_link(tmp_path):
             _js("OTHERGOT", "window.__got"),
             _js("OTHERSTATE", _STATE),
         ]
-        out, js = web_e2e.run(tmp_path, "online", "", steps, site, profile, boot_ms=1000)
+        out, js = web_e2e.run(tmp_path, "online", "console/", steps, site, profile, boot_ms=1000)
         assert _tagged(js, "KEPT") == 1, out[-3000:]
         assert _tagged(js, "OTHERBOOT") == site + "/console/", out[-3000:]
         assert _tagged(js, "OTHERGOT") == [], out[-3000:]
@@ -172,7 +173,7 @@ def test_my_consoles_hands_a_board_its_console_over_the_link(tmp_path):
 
         sp.terminate()
         sp.wait(timeout=10)
-        assert _down(site + "/"), "the site is still up"
+        assert _down(site + "/console/"), "the site is still up"
 
         password = ("document.getElementById('pinf').value = %s, "
                     "document.getElementById('pinb').click(), 1" % json.dumps(PASSWORD))
@@ -231,7 +232,7 @@ def test_my_consoles_hands_a_board_its_console_over_the_link(tmp_path):
             _js("REFUSED", "window.__packs"),
             _js("DROPPED", "caches.open('moy-packs').then((c) => c.keys()).then((k) => k.length)"),
         ]
-        out, js = web_e2e.run(tmp_path, "offline", "", steps, site, profile, boot_ms=1000)
+        out, js = web_e2e.run(tmp_path, "offline", "console/", steps, site, profile, boot_ms=1000)
         tail = out[-4000:] + "\n-- board --\n" + host.log()[-1500:]
         assert _tagged(js, "BOOT1") == "link", tail
         assert _tagged(js, "STATE1").startswith("asks for its password"), tail

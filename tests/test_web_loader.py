@@ -155,8 +155,6 @@ def test_the_store_holds_every_stable_pack_and_the_recent_dev_ones(tmp_path):
     assert got == sorted([stable, dev]) and old not in got
     assert open(os.path.join(out, "console", stable + ".pack"), "rb").read() == stable_data
     assert open(os.path.join(out, "console", dev + ".pack"), "rb").read() == dev_data
-    headers = open(os.path.join(out, "_headers")).read()
-    assert "Access-Control-Allow-Origin: *" in headers and "immutable" in headers
 
 
 def test_the_store_refuses_a_cart_its_index_does_not_name(tmp_path):

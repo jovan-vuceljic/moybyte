@@ -1,8 +1,14 @@
-# The project site (GitHub Pages): the README's claims, plus the console itself
-# running in the page. TWO sites in one deploy:
+# os.moybyte.com (GitHub Pages): the README's claims, plus the console itself
+# running in the page. TWO sites in one deploy, and the console's folder:
 #
-#   /moybyte/      master's tree -- the stable site
-#   /moybyte/dev/  dev's tree    -- the latest dev, marked as such
+#   /          master's tree -- the stable site
+#   /dev/      dev's tree    -- the latest dev, marked as such
+#   /console/  My consoles and the pack store (tools/os_site.py,
+#              docs/web_console_online_2026-11.md §4, §8): every pack the
+#              firmware-latest release names and firmware-beta's of the last
+#              30 days, which the boards' loaders fetch. One store serves
+#              both channels; it holds no console, so it shares the origin
+#              with the players without sharing their storage.
 #
 # Pages publishes the WHOLE site per deploy, so every run builds both trees,
 # whichever branch triggered it: master checked out at the workspace root, dev
@@ -57,6 +63,8 @@ on:
       - "firmware/web_runner/**"
       - "tools/zopfli_gz.py"
       - "tools/fetch_ci_firmware.py"
+      - "tools/os_site.py"
+      - "tools/pack_store.py"
       - "README.md"
       - ".github/workflows/pages.yml"
   # A finished firmware build is new content for this site, so republish around
@@ -225,6 +233,31 @@ jobs:
       - name: Drop a half-assembled dev site
         if: steps.site_dev.outcome == 'failure'
         run: rm -rf _site/dev
+
+      # Built by master's tools once master has them, else dev's: the store is
+      # one for both channels, and the link it speaks is versioned (§5).
+      - name: Assemble My consoles and the console's packs
+        id: console
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tree=.; [ -f tools/os_site.py ] || tree=_dev
+          python3 "$tree/tools/pack_store.py" fetch firmware-latest dist/packs/stable
+          dev=()
+          if python3 "$tree/tools/pack_store.py" fetch firmware-beta dist/packs/beta; then
+            dev=(--dev dist/packs/beta)
+          else
+            echo "::warning::no beta packs -- the store holds the stable release's alone"
+          fi
+          python3 "$tree/tools/os_site.py" build _site --stable dist/packs/stable "${dev[@]}"
+          echo "::notice::/console/ is $(du -sh _site/console | cut -f1), the whole site $(du -sh _site | cut -f1)"
+
+      - name: Drop a half-assembled console folder
+        if: steps.console.outcome == 'failure'
+        run: |
+          rm -rf _site/console
+          echo "::warning::My consoles and the packs did not assemble -- the deploy goes out without /console/"
 
       - name: Note a missing player
         if: steps.player.outcome == 'failure'

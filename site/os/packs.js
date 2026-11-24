@@ -1,11 +1,12 @@
 // The packs this browser keeps for its consoles (docs/web_console_online_2026-11.md
 // §8), shared by the page and its service worker: one cache, each pack under
-// the address the site serves it at, `console/<body digest>.pack`, and put
+// the address the site serves it at, `<body digest>.pack` beside the page
+// (os.moybyte.com/console/, the mirror the images name), and put
 // there only when its body hashes to that digest. The loader on the board's
 // origin checks the whole file again before it runs a byte.
 self.moyPacks = (() => {
     const CACHE = "moy-packs", HEAD = 4096, DIGEST = /^[0-9a-f]{64}$/;
-    const url = (d) => new URL("console/" + d + ".pack", self.registration
+    const url = (d) => new URL(d + ".pack", self.registration
         ? self.registration.scope : document.baseURI).href;
     const hex = (b) => Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, "0")).join("");
     // The body digest of `bytes`, or null where they are no pack.

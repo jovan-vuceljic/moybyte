@@ -1,42 +1,49 @@
 #!/usr/bin/env python3
-"""os.moybyte.com as static files: My consoles, its service worker and the
-pack store (docs/web_console_online_2026-11.md §2's flow 2, §4, §5, §8).
+"""os.moybyte.com's console folder as static files: My consoles, its service
+worker and the pack store (docs/web_console_online_2026-11.md §2's flow 2,
+§4, §5, §8).
 
-The site's source is site/os/: the page (index.html, consoles.js), the
-packs it keeps (packs.js, shared with the service worker), the worker
+os.moybyte.com is GitHub Pages (owner, 2026-11-24), and this is one folder
+of the site .github/workflows/pages.yml assembles, beside the project site
+(site/build.py's flasher and player): /console/. My consoles and the packs
+share it, so the address the images name as their mirror
+(gen_web_blob.SITE_MIRROR) is the page's own folder and its service
+worker's scope. The source is site/os/: the page (index.html, consoles.js),
+the packs it keeps (packs.js, shared with the service worker), the worker
 (sw.js) and the web app manifest. It runs no console and holds no carts: it
 hands a window on a board's origin the bytes of a pack, and that window's
 console keeps its carts on the board (§10, `.claude/rules/web.md`'s two
-modes). The tree a build writes:
+modes). What a build writes into OUT/console/ (replaced):
 
     index.html consoles.js packs.js manifest.webmanifest icon-*.png
     sw.js           stamped with the build's version and the files it keeps
     packs.json      {"newest": [...]}: the body digests of the newest pack
                     of each release (and of each --pack), which the service
                     worker keeps at install
-    console/<body digest>.pack    tools/pack_store.py's tree
-    _headers        the pack store's, then the site's: its files `no-cache`
-                    (a new build is a new service worker, which fetches them
-                    again), and the page's content security policy. It is
-                    Cloudflare Pages' and Netlify's format; no
-                    Cross-Origin-Opener-Policy, which would cut the window
-                    the link talks to off from its opener.
+    <body digest>.pack            tools/pack_store.py's
+
+Pages sends every file with `Access-Control-Allow-Origin: *` and
+`max-age=600` and takes no header file, so none is written: the loader
+keeps a pack under its digest, and the service worker fetches its own files
+with `cache: "reload"`. No page here may ever send
+Cross-Origin-Opener-Policy, which would cut the window the link talks to off
+from its opener.
 
     tools/os_site.py build OUT [--stable DIR]... [--dev DIR]... [--pack FILE]...
-                        the tree, from release folders as tools/pack_store.py
+                        the folder, from release folders as tools/pack_store.py
                         fetches them, and any pack files (a worktree's)
     tools/os_site.py serve DIR [--port N]
-                        a built tree served as its host serves it, _headers
-                        applied, on localhost (a secure context, so its
-                        service worker runs)
+                        a built site served as Pages serves it, on localhost
+                        (a secure context, so its service worker runs): My
+                        consoles at /console/
 """
 
 import argparse
+import base64
 import functools
 import hashlib
 import http.server
 import importlib.util
-import base64
 import json
 import os
 import shutil
@@ -52,11 +59,8 @@ FILES = ("index.html", "consoles.js", "packs.js", "manifest.webmanifest")
 ICONS = {"icon-192.png": 12, "icon-512.png": 32}    # the 16-pixel mascot, scaled
 # The files the service worker keeps, as it names them; "./" is index.html.
 SHELL = ["./", "consoles.js", "packs.js", "manifest.webmanifest", "packs.json"] + sorted(ICONS)
-HEADERS = """/*
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
-"""
+# What GitHub Pages sends with every file, which `serve` copies.
+PAGES_HEADERS = (("Access-Control-Allow-Origin", "*"), ("Cache-Control", "max-age=600"))
 
 
 def newest(folder):
@@ -81,9 +85,10 @@ def _icons():
 
 
 def build(out, stable=(), dev=(), packs=(), now=None):
-    """Write the site's tree into `out` (replaced). Returns the digests of
-    the packs it holds."""
+    """Write the console folder into `out`/console/ (replaced; the rest of
+    `out` is left as it is). Returns the digests of the packs it holds."""
     held = set(pack_store.build(out, stable=stable, dev=dev, now=now))
+    out = os.path.join(out, "console")
     want = [newest(f) for f in list(stable) + list(dev)]
     for path in packs:
         with open(path, "rb") as f:
@@ -92,7 +97,7 @@ def build(out, stable=(), dev=(), packs=(), now=None):
             digest = web_pack.digest_of(data)
         except web_pack.PageError as e:
             raise pack_store.StoreError("%s: %s" % (path, e))
-        with open(os.path.join(out, "console", digest + ".pack"), "wb") as f:
+        with open(os.path.join(out, digest + ".pack"), "wb") as f:
             f.write(data)
         held.add(digest)
         want.append(digest)
@@ -114,84 +119,43 @@ def build(out, stable=(), dev=(), packs=(), now=None):
         raise SystemExit("os_site: sw.js must name @VERSION@ and @SHELL@ once each")
     with open(os.path.join(out, "sw.js"), "w", encoding="utf-8") as f:
         f.write(sw.replace("@VERSION@", h.hexdigest()[:16]).replace("@SHELL@", json.dumps(SHELL)))
-    with open(os.path.join(out, "_headers"), "a") as f:
-        f.write(HEADERS)
-        for name in ["/", "/index.html", "/sw.js"] + ["/" + s for s in SHELL[1:]]:
-            f.write("%s\n  Cache-Control: no-cache\n" % name)
     return sorted(held)
 
 
-def read_headers(path):
-    """[(pattern, [(name, value)])] of a _headers file."""
-    rules = []
-    with open(path) as f:
-        for line in f:
-            if not line.strip() or line.lstrip().startswith("#"):
-                continue
-            if not line[0].isspace():
-                rules.append((line.strip(), []))
-            elif rules:
-                name, _, value = line.strip().partition(":")
-                rules[-1][1].append((name.strip(), value.strip()))
-    return rules
-
-
-def headers_for(rules, path):
-    """The headers every rule matching `path` names, in order."""
-    out = []
-    for pattern, hs in rules:
-        if pattern == path or (pattern.endswith("*") and path.startswith(pattern[:-1])):
-            out += hs
-    return out
-
-
-class Host(http.server.SimpleHTTPRequestHandler):
-    """A built tree as a static host serves it: `/` is index.html, and every
-    response carries the headers _headers names for its path."""
+class Pages(http.server.SimpleHTTPRequestHandler):
+    """A built site as GitHub Pages serves it: a folder's index.html at its
+    address, and PAGES_HEADERS on every response."""
 
     extensions_map = dict(http.server.SimpleHTTPRequestHandler.extensions_map,
                           **{".js": "text/javascript", ".webmanifest": "application/manifest+json",
-                             ".json": "application/json"})
-
-    def __init__(self, *a, rules=(), **kw):
-        self.rules = rules
-        super().__init__(*a, **kw)
+                             ".json": "application/json", ".pack": "application/octet-stream"})
 
     def log_message(self, *a):
         pass
 
     def end_headers(self):
-        path = self.path.split("?", 1)[0]
-        named = headers_for(self.rules, path)
-        for name, value in named:
+        for name, value in PAGES_HEADERS:
             self.send_header(name, value)
-        if not any(n.lower() == "cache-control" for n, _ in named):
-            self.send_header("Cache-Control", "no-cache")
         super().end_headers()
-
-    def guess_type(self, path):
-        if path.endswith(".pack"):
-            return "application/octet-stream"
-        return super().guess_type(path)
 
 
 def serve(folder, port, host="127.0.0.1"):
-    rules = read_headers(os.path.join(folder, "_headers"))
-    handler = functools.partial(Host, directory=folder, rules=rules)
+    handler = functools.partial(Pages, directory=folder)
     srv = http.server.ThreadingHTTPServer((host, port), handler)
-    print("serving %s at http://localhost:%d/" % (folder, srv.server_address[1]), flush=True)
+    print("serving %s: My consoles at http://localhost:%d/console/" % (folder, srv.server_address[1]),
+          flush=True)
     srv.serve_forever()
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    b = sub.add_parser("build", help="the tree to deploy")
+    b = sub.add_parser("build", help="OUT/console/, to deploy")
     b.add_argument("out")
     b.add_argument("--stable", action="append", default=[], metavar="DIR")
     b.add_argument("--dev", action="append", default=[], metavar="DIR")
     b.add_argument("--pack", action="append", default=[], metavar="FILE")
-    s = sub.add_parser("serve", help="a built tree, served as its host would")
+    s = sub.add_parser("serve", help="a built site, served as Pages serves it")
     s.add_argument("folder")
     s.add_argument("--port", type=int, default=8322)
     args = ap.parse_args(argv)
@@ -203,7 +167,7 @@ def main(argv=None):
     except pack_store.StoreError as e:
         print("os_site: %s" % e, file=sys.stderr)
         return 1
-    print("os_site: %s holds the site and %d pack(s)" % (args.out, len(held)))
+    print("os_site: %s/console/ holds My consoles and %d pack(s)" % (args.out, len(held)))
     return 0
 
 

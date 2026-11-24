@@ -4,14 +4,12 @@ to the loader (docs/web_console_online_2026-11.md §4, §8, §12).
 
 The loader on a board's origin fetches `<mirror><body digest>.pack` and runs
 it only when its bytes hash to the digest the board's image names (§3, §6),
-so the store carries the packs and decides nothing. Its tree:
-
-    console/<body digest>.pack   the pack file as the add-on cart holds it
-                                 (tools/gen_web_blob.py's, moybyte_web.pack)
-    _headers                     every pack `Access-Control-Allow-Origin: *`
-                                 and `immutable`: a name that is a digest
-                                 never changes (Cloudflare Pages' and
-                                 Netlify's format)
+so the store carries the packs and decides nothing. Its tree is
+`console/<body digest>.pack`, the pack file as the add-on cart holds it
+(tools/gen_web_blob.py's, moybyte_web.pack). os.moybyte.com is GitHub Pages
+(owner, 2026-11-24), which sends `Access-Control-Allow-Origin: *` on every
+file, so the loader on a board's origin can read it; a name that is a
+digest never changes, and the loader keeps what it read under it.
 
 Its packs are those the add-on entries of the rolling releases' indexes name
 (`carts-<board>.json`, tools/web_pack.py), taken from the same add-on carts
@@ -23,8 +21,9 @@ last DEV_DAYS days (§12: a dev board older than that updates its firmware).
                                             carts into DIR, each file dated
                                             as the release published it (gh)
     tools/pack_store.py build OUT --stable DIR... [--dev DIR...]
-                                            the tree to deploy, from fetched
-                                            (or locally published) folders
+                                            OUT/console/ (replaced) from
+                                            fetched (or locally published)
+                                            folders
     tools/pack_store.py check BASE INDEX... every digest the indexes (files
                                             or URLs) name has its pack at
                                             BASE/console/, served with
@@ -32,10 +31,11 @@ last DEV_DAYS days (§12: a dev board older than that updates its firmware).
                                             may be a local serve.py
                                             (firmware/web_runner/serve.py)
 
-The deploy is `fetch` of firmware-latest and firmware-beta,
-`tools/os_site.py build` (this `build` with My consoles around it), an
-upload of its OUT to the host os.moybyte.com is served from, then `check`
-against it with both releases' indexes.
+The deploy is .github/workflows/pages.yml's: `fetch` of firmware-latest and
+firmware-beta, `tools/os_site.py build` (this `build` with My consoles
+beside the packs) into the Pages site it assembles, and the upload. `check`
+against https://os.moybyte.com with both releases' indexes says whether it
+holds every pack they name.
 """
 
 import argparse
@@ -56,11 +56,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import web_pack  # noqa: E402
 
 DEV_DAYS = 30
-HEADERS = """/console/*
-  Access-Control-Allow-Origin: *
-  Cache-Control: public, max-age=31536000, immutable
-  Content-Type: application/octet-stream
-"""
 # The origin a check's requests name: a board's, which is what the loader runs under.
 CHECK_ORIGIN = "http://192.168.4.1"
 
@@ -122,9 +117,9 @@ def wanted(folder, since=None):
 
 
 def build(out, stable=(), dev=(), days=DEV_DAYS, now=None):
-    """Write the store's tree into `out` (replaced): every pack the `stable`
-    folders' indexes name, and the `dev` folders' of the last `days` days.
-    Returns the digests it holds."""
+    """Write the store into `out`/console/ (replaced; the rest of `out` is
+    left as it is): every pack the `stable` folders' indexes name, and the
+    `dev` folders' of the last `days` days. Returns the digests it holds."""
     since = (now if now is not None else time.time()) - days * 86400
     picks = [(folder, None) for folder in stable] + [(folder, since) for folder in dev]
     packs = {}
@@ -132,14 +127,13 @@ def build(out, stable=(), dev=(), days=DEV_DAYS, now=None):
         for digest, asset in wanted(folder, cut).items():
             if digest not in packs:
                 packs[digest] = pack_of(folder, digest, asset)
-    if os.path.exists(out):
-        shutil.rmtree(out)
-    os.makedirs(os.path.join(out, "console"))
+    folder = os.path.join(out, "console")
+    if os.path.exists(folder):
+        shutil.rmtree(folder)
+    os.makedirs(folder)
     for digest, data in packs.items():
-        with open(os.path.join(out, "console", digest + ".pack"), "wb") as f:
+        with open(os.path.join(folder, digest + ".pack"), "wb") as f:
             f.write(data)
-    with open(os.path.join(out, "_headers"), "w") as f:
-        f.write(HEADERS)
     return sorted(packs)
 
 

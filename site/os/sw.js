@@ -1,5 +1,6 @@
-// The service worker of os.moybyte.com (docs/web_console_online_2026-11.md §8):
-// it keeps the site, so My consoles opens offline, and answers a pack from
+// My consoles' service worker (docs/web_console_online_2026-11.md §8), whose
+// scope is os.moybyte.com/console/ and nothing else on the origin: it keeps
+// the page, so My consoles opens offline, and answers a pack from
 // what this browser keeps before the network. tools/os_site.py stamps the
 // build's version and the files it keeps; a new build is a new worker.
 importScripts("packs.js");
