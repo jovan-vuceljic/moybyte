@@ -938,7 +938,13 @@ void moy_ui_api_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t titl
     int y = stacked ? c->page.y + c->grid_y - c->scroll : c->grid_y;
     moy_ui_box_t pic = {(int16_t)(c->grid_x + col * c->grid_pitch), (int16_t)(y + top), c->grid_w,
                         c->grid_h};
-    moy_ui_box_t b = {(int16_t)(pic.x - pad), (int16_t)y, (int16_t)(pic.w + 2 * pad),
+    // the card's box, the picture and its pad either side: a pad no wider than
+    // half the gap between two columns, so neighbouring boxes never overlap
+    int gap = c->grid_pitch - c->grid_w, bp = pad;
+    if (c->grid_cols > 1 && 2 * bp > gap) {
+        bp = gap > 0 ? gap / 2 : 0;
+    }
+    moy_ui_box_t b = {(int16_t)(pic.x - bp), (int16_t)y, (int16_t)(pic.w + 2 * bp),
                       (int16_t)(c->grid_row + tall - mua_pmetric(c, MOY_UI_M_VALUE_ROW_GRID_GAP))};
     int st = 0, moved = 0;
     c->at_last = (uint8_t)!stacked;
