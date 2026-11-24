@@ -87,7 +87,7 @@ belongs here is only what a coder must not undo:
   dying run used to kill the session that caused the restart.
 - **Board scope: EVERY console board, and the browser a Zero serves** on
   its board's radio (`docs/netplay_v1.md` §5: the board relays, the page
-  plays, and only its Lua carts, the float width being the contract); the P4
+  plays any cart with the permission, Python or Lua); the P4
   joined on 2026-08-24. The morning of that day settled "the P4 cannot join" (the
   flag flip failed at link; ESP-Hosted's RPC carries no ESP-NOW; upstream
   esp-hosted-mcu #19 open and unshipped) -- and the rest of it un-settled the
@@ -109,7 +109,8 @@ belongs here is only what a coder must not undo:
   and REPR_C's 30-bit floats against boxed 32-bit singles diverge the worlds
   by construction -- 0/1105 world checksums agreeing before the P4 took
   `moybyte_patch_repr_c`, 1106/1106 after. Every board that can hold a link
-  runs REPR_C; a board that cannot take it cannot join a match. Found the same day, unrelated to the radio: the P4's WiFi
+  runs REPR_C, the browser's wasm with them (`tests/test_web_lockstep_floats.py`);
+  a board that cannot take it cannot join a match. Found the same day, unrelated to the radio: the P4's WiFi
   buffer set had silently never applied -- `esp_wifi_remote` renames every
   `CONFIG_ESP_WIFI_*` to `CONFIG_WIFI_RMT_*`, so upstream's own fragment asked
   with a dead name and the build carried 10/32/32/6/6 against a 65534 TCP

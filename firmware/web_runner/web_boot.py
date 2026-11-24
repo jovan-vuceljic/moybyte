@@ -1629,7 +1629,6 @@ def live_enable(mac):
         from players import EspNowLink, launch_cart
         ws.link = EspNowLink(board="web", name="Browser", wlan=_LiveWlan(binascii.unhexlify(mac)),
                              launch=launch_cart)
-        ws.link.tiers = ("lua",)
         ws.net = ws.link.net
         _S["live"] = {"open": False, "said": None, "hidden": False, "gap": False}
     except Exception as exc:         # noqa: BLE001 -- never block a boot

@@ -303,8 +303,7 @@ nor those docs will warn you about:
     the step leaves the frame's samples as four numbers at `pcm_addr()`
     (`web_boot._PCM`) and returns "" unless it painted, the pull and the
     media face's feed reuse their buffers, and the page's reader finds a
-    segment's growth by reading it, not by a stat. The browser's VM boxes
-    every float, which a board's does not. `?meter=1` counts the heap's
+    segment's growth by reading it, not by a stat. `?meter=1` counts the heap's
     allocation each frame (`__moyState().alloc`), and
     `tests/test_web_audio_stream_e2e.py` holds a station's frames and the
     loop around them to a stated bound.
@@ -367,7 +366,13 @@ nor those docs will warn you about:
   slot 1; the Terminal's is 0), multiplexed by its frames' first byte, served
   on the board's own task. Its first channel relays the board's ESP-NOW, so
   the page's link (`moy_link_web.c`, the kernel's Match over it) plays a
-  console's match. The worker moves its bytes between frames
+  console's match, a Python cart's as a Lua one's: the wasm computes floats
+  as the boards' do (REPR_C over 32-bit words, single precision,
+  `variant/mpconfigvariant.h`), which the lockstep contract requires
+  (`docs/netplay_v1.md` §5). So a count, an address or a time the page and
+  the VM exchange rides an integer, never a float, which keeps 22 bits:
+  `web_boot._PCM` is 64-bit integers, and `time.time()` is whole seconds
+  as on a board. The worker moves its bytes between frames
   (`liveStep`, `web_boot.live_*`), never inside a step, and reopens a dropped
   socket itself; a console board builds no bridge and 404s the probe.
 - **WASM MODE IS A SWITCH, NOT A SESSION** (owner call): no heartbeat, no presence

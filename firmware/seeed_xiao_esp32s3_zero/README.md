@@ -460,9 +460,9 @@ the link channel's frames between it and its ESP-NOW unchanged.
   held a page's frames to the router's beacons. The station stays associated, so the match plays on the
   router's channel, where a free console finds it by its probes.
 - **The page's address on the air is this board's MAC.**
-- **Only Lua carts play matches here**: the browser's VM computes in
-  doubles where the consoles' computes in 30-bit floats, and the netplay
-  doc makes that a desync. A Python cart with `multiplayer` runs solo.
+- **Python carts play matches here as Lua carts do**: the browser's VM
+  computes floats as the consoles' does (REPR_C singles), which the netplay
+  doc makes part of the lockstep contract.
 - **One page at a time**: a second tab's socket is refused `busy`.
 - What a match costs this board (internal RAM, the largest block, the
   round trip with power save and without) is on #256.

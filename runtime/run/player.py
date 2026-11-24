@@ -910,10 +910,6 @@ class Player(PlayerDiag):
         # been handed a session by its radio (link._on_start), so it just finds
         # ws.netplay set; the host side offers here and becomes player 0.
         link = getattr(ws, "link", None)
-        # A link that keeps only some tiers in step (EspNowLink.tiers: the
-        # browser's) leaves a run of another tier solo.
-        if link is not None and not getattr(link, "plays", lambda t: True)(_rt):
-            link = None
         if net is not None and link is not None:
             # ARM the radio here and nowhere earlier. It is only up while a game
             # that could use it is running: a console on a shelf has nobody to

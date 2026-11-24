@@ -6,7 +6,8 @@ serve.py --board serves the bundle in front of it. The console is
 test_espnow_link's on the same air, in real time on a thread of its own: it
 announces the cart, offers, and simulates each frame the match lets it. The
 page opens the cart, its Player brings the board's radio up through the live
-socket, and both sides simulate one match.
+socket, and both sides simulate one match, a Lua cart's and a Python one's
+(the page's Python computes as a board's: tests/test_web_lockstep_floats.py).
 
     MOYBYTE_WEB_E2E=1 .venv/bin/python -m pytest tests/test_web_live_e2e.py
 """
@@ -29,7 +30,7 @@ pytestmark = pytest.mark.skipif(
     not os.environ.get("MOYBYTE_WEB_E2E"),
     reason="MOYBYTE_WEB_E2E not set (spawns headless Chrome)")
 
-CART = "Brick Siege Lua"
+CARTS = ("Brick Siege Lua", "Brick Siege")
 
 
 @pytest.fixture(scope="module")
@@ -43,10 +44,10 @@ def live_exe(tmp_path_factory):
 
 
 class Console:
-    """A console on the air, playing CART: test_espnow_link's link, polled
+    """A console on the air, playing `cart`: test_espnow_link's link, polled
     and advanced every 16 ms with random held buttons."""
 
-    def __init__(self, air):
+    def __init__(self, air, cart):
         import test_espnow_link as E
         from runtime.run import players as P
         self.P = P
@@ -56,6 +57,7 @@ class Console:
         self.link = P.EspNowLink(board="tdeck", name="Deck", radio=radio, wlan=wlan,
                                  launch=lambda ws, title: True)
         self.ws = E._Ws()
+        self.cart = cart
         self.alive = True
         self.frames = 0
         self.stalls = 0
@@ -64,12 +66,12 @@ class Console:
     def _run(self):
         P, lk, ws = self.P, self.link, self.ws
         lk.start()
-        lk.announce(CART, 1)
+        lk.announce(self.cart, 1)
         rng = random.Random(5)
         while self.alive:
             lk.poll(ws)
             if ws.netplay is None and lk.peers:
-                lk.offer(ws, CART)
+                lk.offer(ws, self.cart)
             np = ws.netplay
             if np is not None:
                 ws.input.down = {b for b in ("left", "right", "a") if rng.random() < 0.3}
@@ -85,7 +87,8 @@ class Console:
         self.t.join(2)
 
 
-def test_a_page_a_zero_serves_plays_a_console(live_exe, tmp_path, monkeypatch):
+@pytest.mark.parametrize("cart", CARTS)
+def test_a_page_a_zero_serves_plays_a_console(cart, live_exe, tmp_path, monkeypatch):
     import test_live_link as L
     import test_moy_tty as T
     import test_web_term_e2e as W
@@ -95,23 +98,23 @@ def test_a_page_a_zero_serves_plays_a_console(live_exe, tmp_path, monkeypatch):
     root = W.tempfile.mkdtemp(prefix="moyl")
     host = T.Host(live_exe, W.pathlib.Path(root))
     store = host.tree / "sd" / "moybyte" / "carts"
-    for cart in sorted((ROOT / "system_carts").glob("*.moy")):
-        shutil.copytree(cart, store / cart.name)
+    for src in sorted((ROOT / "system_carts").glob("*.moy")):
+        shutil.copytree(src, store / src.name)
     server, base = W._serve(tmp_path, host.port)
-    console = Console(air)
+    console = Console(air, cart)
     console.t.start()
     st = ("window.__moyState().then(s => '%s ' + JSON.stringify({link: s.link, "
           "cart: s.cart, notice: s.notice, live: s.live && {opens: s.live.opens, "
           "drops: s.live.drops, up: s.live.up, down: s.live.down}}))")
     try:
-        steps = [{"waitFor": "window.__moyState().then(s => s.cart === %r)" % CART,
+        steps = [{"waitFor": "window.__moyState().then(s => s.cart === %r)" % cart,
                   "timeout": 30000},
                  {"js": st % "OPEN"},
                  {"waitFor": "window.__moyState().then(s => s.link && s.link[2])",
                   "timeout": 30000},
                  {"wait": 4000},
                  {"js": st % "PLAYED"}]
-        query = "?dev=1&desktop=1&cart=" + CART.replace(" ", "%20") + W._qr_fragment(host)
+        query = "?dev=1&desktop=1&cart=" + cart.replace(" ", "%20") + W._qr_fragment(host)
         out, js = web_e2e.run(tmp_path, "live_match", query, steps, base,
                               tmp_path / "chrome", boot_ms=30000)
         played = W._tagged(js, "PLAYED")

@@ -341,8 +341,12 @@ printing `0.21666668` on the T-Deck against `0.216666668` on the P4. The S3s run
 REPR_C's 30-bit truncated floats, the P4 ran REPR_A's boxed singles — one
 arithmetic at two precisions, which chaos amplifies into flipped branches in
 seconds. The P4 took `moybyte_patch_repr_c` and the probe re-read **1106 of 1106
-bit-identical**. Every board that can hold a link runs REPR_C; one that cannot
-take it cannot join a match.
+bit-identical**. Every board that can hold a link runs REPR_C, and so does the
+browser's wasm (`firmware/web_runner/variant/mpconfigvariant.h`: 32-bit words,
+REPR_C, single floats), so a page plays a console's Python cart;
+`tests/test_web_lockstep_floats.py` runs each two-player seed cart in the wasm
+and in the host's board-model MicroPython and holds every frame's world to
+agree. A board that cannot take it cannot join a match.
 
 **Board scope is three consoles and the browser a Zero serves**: the
 T-Deck, the Guition S3, the Waveshare P4, and the page either Zero serves,
@@ -373,12 +377,9 @@ that drops takes the board's radio down with it; the page reopens it and
 says so, and the match waits meanwhile, as it does for a lost input. A
 page whose frames stop (a tab the browser throttles in the background) is
 a peer whose inputs stop: the other side stalls, and the page says the
-match waited once its frames run again. The page keeps only its Lua carts
-in step (`EspNowLink.tiers`): its VM computes in doubles where a board's
-REPR_C computes in 30-bit floats, which the paragraph above makes a
-desync, while a Lua cart's numbers are moycore's C floats on every tier, so
-a Python cart with the `multiplayer` permission runs solo there. What the C3
-Zero can afford of it is its README's.
+match waited once its frames run again. It plays a Python cart's match as
+a Lua one's: its VM computes floats as a board's (the paragraph above). What
+the C3 Zero can afford of it is its README's.
 
 ## 6. One cart API — over the radio, or over a second keyboard
 
