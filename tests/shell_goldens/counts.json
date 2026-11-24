@@ -1086,14 +1086,6 @@
     "music_radio": [31, 33],
     "music_radio_connecting": [30, 33]
   },
-  "tdeck_320x240_fs1_parts_day": {
-    "parts_appearance": [50, 21],
-    "parts_settings": [30, 19]
-  },
-  "tdeck_320x240_fs1_parts_night": {
-    "parts_appearance": [48, 21],
-    "parts_settings": [30, 19]
-  },
   "tdeck_320x240_fs1_status": {
     "status_bar_focus": [0, 0],
     "status_bar_music": [0, 0],
@@ -1112,9 +1104,6 @@
     "tasks_empty": [8, 15],
     "tasks_notes": [10, 16],
     "tasks_two_games": [9, 24]
-  },
-  "tdeck_320x240_fs1_ui_page": {
-    "ui_page": [18, 10]
   },
   "tdeck_320x240_fs1_widget_pages": {
     "page_battery": [0, 0],

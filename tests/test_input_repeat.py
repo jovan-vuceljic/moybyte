@@ -14,6 +14,7 @@ keyboard's held key.
 """
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -428,65 +429,52 @@ def th(tmp_path):
     return build_ws(Path(tmp_path)).theme_colors
 
 
-@pytest.mark.parametrize("kind", ("page", "table"))
-def test_a_fast_roll_delivers_every_step_within_one_glide(th, kind):
-    """A roll of 30 steps at two a frame (the REP word, `add_steps`) moves
-    the focus 30 stops, as 30 presses do, and the view rests on it one glide
-    after the roll's last frame."""
-    from test_verbs_motion import _DOWN, _ready, Page
+def _tree(build, th):
+    """Page `build` of tests/uitree_fixtures/uitree_repeats.py on the C
+    engine over a host of its own, and its frame: the key typed and the
+    words beyond the presses put in the host's input, then a paint."""
     from runtime import ui_draw
-    a = _ready(Page(th, kind, dt=33))
-    b = _ready(Page(th, kind, dt=0))
-    a.frame(_DOWN)
-    b.frame(_DOWN)
-    for _ in range(15):
-        a.host.inp[ui_draw._IN_REP] = 2 << 24
-        a.frame()
-    a.host.inp[ui_draw._IN_REP] = 0
-    for _ in range(30):
-        b.frame(_DOWN)
-    frames = a.settle()
-    assert frames <= 12, "the view rests one glide after the roll: %d frames" % frames
-    focus = ui_draw._C.api_focus
-    assert focus(a.host.ctx, None) == focus(b.host.ctx, None)
-    if kind == "table":
-        assert a.cur == b.cur and a.cur >= 30
-    a.frame()
-    b.frame()
-    assert a.offset() == b.offset() > 0
-    assert a.pixels() == b.pixels(), "30 steps at rest are 30 presses at rest"
+    from runtime.host_canvas import make_system_canvas
+    import uitree as S
+    import uitree_c
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "uitree_fixtures"))
+    import uitree_repeats as F
+
+    class Damage:
+        def all(self):
+            pass
+
+    cv = make_system_canvas(320, 240)
+    e = uitree_c.CEngine(S.decl_of(F.__name__), getattr(F, build), ui_draw.AppHost(), None, Damage())
+    e.open()
+
+    def frame(key=0, keyrep=0, rep=0):
+        ui_draw.frame_dt(33)
+        inp = e._ui.inp
+        inp[5] = key
+        inp[ui_draw._IN_KEYREP] = keyrep
+        inp[ui_draw._IN_REP] = rep
+        e._ui.begin(cv, th, (0, 0, 320, 240))
+        e.paint(1 / 30, cv, th, (0, 0, 320, 240), False)
+        ui_draw.page_end()
+    return e, F.s, frame
 
 
 def test_a_held_keys_repeats_type_into_a_field(th):
     """A field takes the typing repeats (the KEYREP word) as more of the
-    key; Enter's repeats commit nothing."""
-    from runtime import ui, ui_draw
-    from runtime.host_canvas import make_system_canvas
-    cv = make_system_canvas(320, 240)
-    h = ui_draw.AppHost()
-    state = {"text": "", "done": 0}
-
-    def frame(key=0, rep=0):
-        ui_draw.frame_dt(33)
-        h.inp[5] = key
-        h.inp[ui_draw._IN_KEYREP] = rep
-        h.begin(cv, th, (0, 0, 320, 240))
-        ui.page("Field")
-        state["text"], done = ui.field("name", state["text"])
-        state["done"] += done
-        ui.end()
-
+    key, Backspace's as more Backspaces; Enter's repeats type nothing."""
+    e, s, frame = _tree("field", th)
     for _ in range(3):
         frame()
-    ui_draw._C.api_focus(h.ctx, "name")
-    frame()
+    assert e.focus_key == "text"
     frame(key=ord("a"))
-    frame(rep=ord("a") | 3 << 16)
-    assert state["text"] == "aaaa"
-    frame(rep=8 | 2 << 16)
-    assert state["text"] == "aa"
-    frame(rep=13 | 5 << 16)
-    assert state["done"] == 0, "a held Enter commits nothing on its repeats"
+    frame(keyrep=ord("a") | 3 << 16)
+    assert s.text == "aaaa"
+    frame(keyrep=8 | 2 << 16)
+    assert s.text == "aa"
+    done = s.done
+    frame(keyrep=13 | 5 << 16)
+    assert s.text == "aa" and s.done == done, "a held Enter's repeats type nothing"
 
 
 def test_ball_coast_ships_off_and_carries_a_fast_roll_on_when_set(tmp_path, monkeypatch):

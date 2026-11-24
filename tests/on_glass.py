@@ -536,7 +536,6 @@ def sprite_host_frames():
     fixture sheet under a theme that names no font, surface or depth."""
     import runtime  # noqa: F401  (registers the host's moy_ui)
     import moy_ui
-    from runtime import ui
     from runtime import ui_draw
     from runtime.chrome import theme_colors
     from runtime.host_canvas import indices_of, make_system_canvas

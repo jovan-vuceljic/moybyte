@@ -1086,14 +1086,6 @@
     "music_radio": "61ecace33779188da77f9422d7d6e5acde83d520445a5068cba9eaccba16a2f7",
     "music_radio_connecting": "217d059e59de02c7ee8ba5133586d825c90b53577277c8113c0598bd2de5059c"
   },
-  "tdeck_320x240_fs1_parts_day": {
-    "parts_appearance": "97f3ec1715cf13abe4a8772a1b8171743d13d105586cf9bfe8c630333c271dde",
-    "parts_settings": "785bc001158501a7f75f413dea02cf1b6f989ebb0f591120341786c0dd35901c"
-  },
-  "tdeck_320x240_fs1_parts_night": {
-    "parts_appearance": "1d7cf1e549059dfc6d5409cac10df6469681a697cb5477e0e30c1dababa9078e",
-    "parts_settings": "3c05cd3b38fadefc30817af2518cd8096b7c0ba9ecbcbdd9091288628138b7cd"
-  },
   "tdeck_320x240_fs1_status": {
     "status_bar_focus": "5d19ac1f1e657dc44d7bc4875766ad1ce01e65b94925de9e0c72718c6765221f",
     "status_bar_music": "2e517c067fd2b3f0889f787917d810fc1b75f09c44b8f5e08b8bb4172c280e63",
@@ -1112,9 +1104,6 @@
     "tasks_empty": "8d810363be0c45b63314ffa87e0303c619a6ef0187802376c0f68ccb0a0d3e8a",
     "tasks_notes": "5e69dff0ca7d8be889639d17a9d6c249794df61a918f59e6279f25411495d219",
     "tasks_two_games": "db00e825c41e738526444781f9f923cff445346c66076af2aab66ae5a1fee0d6"
-  },
-  "tdeck_320x240_fs1_ui_page": {
-    "ui_page": "393952f286e136509ab0b7c9133e563b4b1fd7e706c6a82192b3f6491505255d"
   },
   "tdeck_320x240_fs1_widget_pages": {
     "page_battery": "9eb82a3522d6e6b7bd8815cbc02178c27b44a8cee3a33370ab33a5fb57a3ea26",

@@ -85,13 +85,6 @@ keeps the matrix a clean product instead of a pile of special cases.
                            shipped: Atkinson, the sunflower home, the Bauhaus
                            desk and its per-app tiles. One axis (theme) from
                            each row in the light variant.
-  tdeck_320x240_fs1_parts_day, tdeck_320x240_fs1_parts_night
-                           the public UI API's parts sheet
-                           (docs/history/look_2026-10.md step 12): a system app
-                           (tests/fixtures/ui_parts/parts_app.py) drawing the
-                           Settings and Appearance targets' rows with the
-                           verbs, in the `moy` seed's Day and Night, and only
-                           those surfaces (a config's `plan`).
   tdeck_320x240_fs1_moy_menus, p4_1024x600_cs2_fs1_moy_menus
                            the system menu and the pause menu
                            (docs/history/look_2026-10.md step 25a) in the `moy` seed's
@@ -314,17 +307,6 @@ APP_CARTS = (("notes", "Notes"),)
 # so every surface before it draws the seed set alone.
 MESH_APP = str(Path(__file__).resolve().parent / "fixtures" / "apps" / "moymesh.moy")
 
-# The public UI API's fixture page (docs/history/ui_api_2026-10.md), the Python app's
-# (tests/test_ui_public.py holds the Lua and compiled ones to its pixels): its
-# config's one surface.
-UI_PAGE = (str(Path(__file__).resolve().parent / "fixtures" / "ui_page" / "page_py.moy"),
-           "UI Page Py")
-
-# The public UI API's parts sheet (docs/history/look_2026-10.md step 12): a system
-# app registered for the `parts` configs, its pages their surfaces.
-PARTS_APP = Path(__file__).resolve().parent / "fixtures" / "ui_parts" / "parts_app.py"
-PARTS_PAGES = ("settings", "appearance")
-
 # The WEB CONSOLE connection screen (#197) is rendered LAST, and with a fake
 # service, for two reasons that are both about not moving the other 87 hashes:
 # injecting `ws.webhost` makes the Settings row appear, and parking the glass
@@ -514,15 +496,6 @@ CONFIGS = {
     "guition_p4_1280x800_windowed": dict(
         sys_size=(1280, 800), font_scale=1, windowed=True, variant="dark",
         diagonal_in=10.1),
-    "tdeck_320x240_fs1_parts_day": dict(
-        sys_size=None, font_scale=1, windowed=False, variant="light",
-        diagonal_in=None, theme="moy", plan="parts"),
-    "tdeck_320x240_fs1_parts_night": dict(
-        sys_size=None, font_scale=1, windowed=False, variant="dark",
-        diagonal_in=None, theme="moy", plan="parts"),
-    "tdeck_320x240_fs1_ui_page": dict(
-        sys_size=None, font_scale=1, windowed=False, variant="dark",
-        diagonal_in=None, plan="ui_page"),
     "p4_1024x600_render2_moy_day": dict(
         sys_size=(1024, 600), font_scale=1, windowed=True, variant="light",
         diagonal_in=7.0, theme="moy", render=2),
@@ -652,9 +625,6 @@ def _build(cfg, carts_dir):
     for it in ITEMS.slots:              # no app's status item outlives its config
         if it.pid:
             ITEMS._free(it)
-    if cfg.get("plan") == "ui_page":
-        host_app.moy_carts.ensure_dirs(str(carts_dir))
-        shutil.copytree(UI_PAGE[0], os.path.join(str(carts_dir), os.path.basename(UI_PAGE[0])))
     ws = host_app.build_workstation(
         str(carts_dir), sys_size=cfg["sys_size"],
         font_scale=cfg["font_scale"], windowed=cfg["windowed"],
@@ -713,10 +683,6 @@ def _surface_plan(ws, cfg):
         return _widget_page_plan(ws)
     if cfg.get("plan") == "home":
         return _home_plan(ws, cfg)
-    if cfg.get("plan") == "ui_page":
-        return [("ui_page", lambda: open_cart(ws, UI_PAGE[1]))]
-    if cfg.get("plan") == "parts":
-        return _parts_plan(ws)
     if cfg.get("plan") == "menus":
         return _menus_plan(ws, cfg)
     if cfg.get("plan") == "procs":
@@ -1905,30 +1871,6 @@ def _home_plan(ws, cfg):
             for t in HOME_TAB_IDS]
 
 
-def parts_app(ws, page):
-    """The parts sheet's app on `ws`, registered, drawing `page`."""
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("parts_app", str(PARTS_APP))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    app = mod.PartsApp(ws, page)
-    ws.spine.register_app(app)
-    return app
-
-
-def _parts_plan(ws):
-    """Each page of the parts sheet, its app opened fresh (its focus set)."""
-    app = parts_app(ws, PARTS_PAGES[0])
-
-    def enter(page):
-        def go():
-            app.page = page
-            app.open()
-            ws.wm.goto(app.id)
-        return go
-    return [("parts_" + p, enter(p)) for p in PARTS_PAGES]
-
-
 def _widget_page_plan(ws):
     """Console mode's container for each widget, entered from the home: the
     calendar's own page, Settings at the WIFI panel, Settings at VOLUME, and
@@ -1990,10 +1932,6 @@ def surface_names(config_name):
         return ["page_" + w for w in WIDGETS]
     if cfg.get("plan") == "home":
         return ["launcher" if t == "games" else "launcher_" + t for t in HOME_TAB_IDS]
-    if cfg.get("plan") == "ui_page":
-        return ["ui_page"]
-    if cfg.get("plan") == "parts":
-        return ["parts_" + p for p in PARTS_PAGES]
     if cfg.get("plan") == "menus":
         return list(MENU_SURFACES)
     if cfg.get("plan") == "procs":
@@ -2156,7 +2094,6 @@ def test_every_cover_builds_in_its_own_frame_under_test():
 @pytest.mark.parametrize("config_name", sorted(CONFIGS))
 def test_shell_surfaces_match_goldens(config_name, tmp_path, request,
                                      monkeypatch):
-    from runtime import ui
     from runtime import ui_draw
     del ui_draw.primary_warnings[:]
     ui_draw._PRIMARY_WARNED.clear()
@@ -2237,7 +2174,7 @@ def test_goldens_do_not_read_the_wall_clock(tmp_path, request, monkeypatch):
         now[0] += 2 * moy_input.POINTER_LINGER_MS
         return now[0]
     monkeypatch.setattr(moy_input, "_ticks_ms", jumping)
-    name = "tdeck_320x240_fs1_ui_page"
+    name = "tdeck_320x240_fs1_moy_menus"
     got = capture(name, tmp_path / "carts")
     golden = _load_goldens()[name]
     moved = sorted(s for s in set(got) | set(golden) if got.get(s) != golden.get(s))

@@ -477,9 +477,8 @@ def test_the_look_card_follows_the_menus_keys(tmp_path):
     _frames(drv, 3)
     _key(drv, "down")
     drv.frame(_DT)
-    from runtime import ui
     ui_draw.ui_frame(ws.menu_ui._host.ctx, ws.sys_canvas, ws.theme_colors)
-    assert ui.focus() == ws.sysmenu.items[ws.sysmenu.sel][4]
+    assert ui_draw._C.api_focus(ui_draw.UI_TARGET[0], None) == ws.sysmenu.items[ws.sysmenu.sel][4]
 
 
 @pytest.mark.parametrize("desk", [False, True])

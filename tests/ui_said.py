@@ -1,6 +1,5 @@
-"""What the toolkit's verbs are asked to say while a block runs, on either
-engine: both reach the toolkit's C verbs, and `moy_ui_api_said` taps them
-there (the reference engine through `ui`, the C engine directly).
+"""What the toolkit's C verbs are asked to say while a block runs:
+`moy_ui_api_said` taps them where the engine calls them.
 
     with said() as got:
         drv.frame(dt)
@@ -21,7 +20,7 @@ _VERBS = {1: "label", 2: "info", 3: "link", 4: "group", 5: "button", 6: "hints",
 
 @contextlib.contextmanager
 def said():
-    from runtime import ui
+    from runtime import ui_draw
     got = []
 
     def tap(verb, a, b, role):
@@ -42,8 +41,8 @@ def said():
             got.append((v, a, b))
         else:
             got.append((v, a))
-    ui._C.said_tap(tap)
+    ui_draw._C.said_tap(tap)
     try:
         yield got
     finally:
-        ui._C.said_tap(None)
+        ui_draw._C.said_tap(None)
