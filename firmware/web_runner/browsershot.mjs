@@ -22,6 +22,14 @@
 //                                           truthy) instead of guessing how
 //                                           long it takes; `timeout` is the
 //                                           ceiling, not the wait
+//   {"press":"<css selector>"}              a real click on that element's
+//                                           centre: a user gesture, as a tap
+//   {"open":"<url>"}                        a new tab there, which the steps
+//                                           after it drive
+//   {"tab":"<url prefix>","timeout":ms}     the steps after it drive the page
+//                                           whose address starts so (a window
+//                                           the page opened, or the first
+//                                           again), once there is one
 // -- with coordinates in CANVAS pixels (the page's own 1024x600-style space);
 // they are mapped through the canvas's on-screen rect for you.
 //
@@ -149,11 +157,32 @@ function send(method, params = {}, sessionId = undefined) {
     });
 }
 
-const { targetId } = await send("Target.createTarget", { url: "about:blank" });
-const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
+// The page the steps drive: the first tab, until a `tab` or `open` step
+// moves them to another.
+let sessionId = null;
+const sessions = new Map();
 const cdp = (method, params) => send(method, params, sessionId);
-await cdp("Page.enable");
-await cdp("Runtime.enable");
+async function attach(targetId) {
+    if (!sessions.has(targetId)) {
+        sessions.set(targetId, (await send("Target.attachToTarget", { targetId, flatten: true })).sessionId);
+        sessionId = sessions.get(targetId);
+        await cdp("Page.enable");
+        await cdp("Runtime.enable");
+    }
+    sessionId = sessions.get(targetId);
+    await send("Target.activateTarget", { targetId });
+}
+async function useTab(prefix, timeoutMs) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        const { targetInfos } = await send("Target.getTargets");
+        const t = targetInfos.find((i) => i.type === "page" && i.url.startsWith(prefix));
+        if (t) return attach(t.targetId);
+        if (Date.now() > deadline) throw new Error("no tab at " + prefix);
+        await new Promise((ok) => setTimeout(ok, 100));
+    }
+}
+await attach((await send("Target.createTarget", { url: "about:blank" })).targetId);
 const logs = [];
 ws.addEventListener("message", (ev) => {
     const m = JSON.parse(ev.data);
@@ -279,6 +308,18 @@ for (const step of scenario.steps || []) {
         if (step.waitFor != null) {
             const got = await waitForExpr(step.waitFor, step.timeout || 10000);
             console.log("   waitFor ->", JSON.stringify(got));
+        }
+        if (step.open) await attach((await send("Target.createTarget", { url: step.open })).targetId);
+        if (step.tab != null) await useTab(step.tab, step.timeout || 15000);
+        if (step.press) {
+            const p = await evaluate(`(function(){var e=document.querySelector(${JSON.stringify(step.press)});
+                if(!e)return null;var r=e.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+            if (!p) throw new Error("nothing at " + step.press);
+            for (const type of ["mousePressed", "mouseReleased"]) {
+                await cdp("Input.dispatchMouseEvent", { type, x: p.x, y: p.y, button: "left",
+                                                        clickCount: 1, buttons: type === "mousePressed" ? 1 : 0 });
+            }
+            await sleep(step.settle ?? 200);
         }
         if (step.move) { await mouse("mouseMoved", step.move[0], step.move[1]); await sleep(60); }
         if (step.click) {

@@ -15,6 +15,8 @@
 // password change does (`SIGNEDOUT N`). They run on the console's thread,
 // whose state the sign-in is. SYSTEM_DIR `-` is the open host.
 // The main thread prints a STATS line when a figure moves.
+// MOY_TTY_PAGE="<body hex> <whole hex>" names a browser console's pack, as
+// an image does (GET /sync's digests, moy_page.h).
 // FILES_DIR, when given, is the webhost's files root (/files.json, /media).
 // Usage: tty_main PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]
 
@@ -32,6 +34,7 @@
 #include "moy_lease.h"
 #include "moy_loop.h"
 #include "moy_net.h"
+#include "moy_page.h"
 #include "moy_tty.h"
 
 extern const moy_tty_shell_t moy_tty_moy_sh;
@@ -163,6 +166,18 @@ static void *console(void *arg) {
     return NULL;
 }
 
+// 64 hex digits at `s` into `out`: 1, else 0.
+static int unhex32(const char *s, uint8_t out[32]) {
+    for (int i = 0; i < 32; i++) {
+        unsigned v;
+        if (sscanf(s + 2 * i, "%2x", &v) != 1) {
+            return 0;
+        }
+        out[i] = (uint8_t)v;
+    }
+    return 1;
+}
+
 int main(int argc, char **argv) {
     if (argc != 4 && argc != 5) {
         fprintf(stderr, "usage: %s PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]\n", argv[0]);
@@ -173,6 +188,12 @@ int main(int argc, char **argv) {
     s_system = strcmp(argv[2], "-") ? argv[2] : NULL;
     s_carts = argv[3];
     s_files = argc == 5 ? argv[4] : NULL;
+    const char *named = getenv("MOY_TTY_PAGE");
+    uint8_t digest[2][32];
+    if (named != NULL && strlen(named) == 129 && unhex32(named, digest[0])
+        && unhex32(named + 65, digest[1])) {
+        moy_page_name(digest[0], digest[1]);
+    }
     pthread_t t;
     pthread_create(&t, NULL, console, NULL);
     fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);

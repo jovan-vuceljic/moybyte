@@ -68,6 +68,12 @@ refuse for ES modules) and .wasm as application/wasm (streaming compile).
                                             # pack's digests with `local` 0.
                                             # The no-hardware way to boot the
                                             # console through the loader.
+    python serve.py ... --loader --mirror URL...  # ...naming URL as its
+                                            # mirrors instead, whose origins
+                                            # are the sites its link takes
+                                            # (docs/web_console_online_2026-11.md
+                                            # §5): My consoles on a local
+                                            # tools/os_site.py serve.
 
 Every mode serves the pack of the bundle it serves (tools/gen_web_blob.py's,
 the one a board build of this tree names) at /console/<body digest>.pack with
@@ -88,6 +94,10 @@ pack no site publishes.
                                             # no system folder is); the sign-in
                                             # is driven here, against the
                                             # board's own C, never a copy.
+                                            # With --loader, `/` is the
+                                            # loader, and the board names
+                                            # the pack (the harness's
+                                            # MOY_TTY_PAGE).
 
 Bind the directory by PATH, never by chdir. Every build here REPLACES its output
 folder (build.sh and site/build.py both remove and recreate it), and a server
@@ -156,8 +166,16 @@ if one_link:
 loader_twin = "--loader" in args
 if loader_twin:
     args.remove("--loader")
-    if "--carts" not in sys.argv:
-        raise SystemExit("--loader needs --carts (it is part of the board twin)")
+    if "--carts" not in sys.argv and "--board" not in sys.argv:
+        raise SystemExit("--loader needs --carts or --board (it is part of a board)")
+mirrors = []
+while "--mirror" in args:
+    i = args.index("--mirror")
+    mirrors.append(args[i + 1])
+    del args[i:i + 2]
+if mirrors and not loader_twin:
+    raise SystemExit("--mirror needs --loader (it names the loader's mirrors)")
+mirrors = mirrors or ["/console/"]
 board_to = None
 if "--board" in args:
     i = args.index("--board")
@@ -217,6 +235,21 @@ def serve_pack(h, path):
     h.send_header("Access-Control-Allow-Origin", "*")
     h.send_header("Cache-Control", "public, max-age=31536000, immutable" if hit
                   else "no-store")
+    h.end_headers()
+    h.wfile.write(body)
+    return True
+
+
+def serve_loader(h, path):
+    """Answer the loader's paths on handler `h` as a board whose console is
+    online does: True when the path is one, answered."""
+    if not (loader_twin and path in ("/", "/index.html", "/loader.html")):
+        return False
+    body = gen_web_blob.loader_page(mirrors).encode()
+    h.send_response(200)
+    h.send_header("Content-Type", "text/html; charset=utf-8")
+    h.send_header("Content-Length", str(len(body)))
+    h.send_header("Cache-Control", "no-cache")
     h.end_headers()
     h.wfile.write(body)
     return True
@@ -505,9 +538,7 @@ else:
                     {"sync": 1, "page": got[1], "pack": got[2], "local": 0}).encode()
                     if got else b'{"sync":1}')
                 return
-            if loader_twin and path in ("/", "/index.html", "/loader.html"):
-                self._send(200, gen_web_blob.loader_page(["/console/"]).encode(),
-                           "text/html; charset=utf-8")
+            if serve_loader(self, path):
                 return
             if path == "/carts.json":
                 # The board's own packer, over a plain directory -- one body,
@@ -649,6 +680,9 @@ if board_to is not None:
             return path == "/" or os.path.isfile(local)
 
         def do_GET(self):
+            path = self.path.split("?", 1)[0]
+            if serve_pack(self, path) or serve_loader(self, path):
+                return
             if self._asset():
                 super().do_GET()
             else:
