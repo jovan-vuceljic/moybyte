@@ -862,7 +862,7 @@ static void face_run(moy_tty_t *f) {
         } else {
             f->hist_path[0] = 0;
         }
-        static const char profile[] = "[ -r /etc/profile ] && . /etc/profile\n";
+        static const char profile[] = "if [ -r /etc/profile ]; then . /etc/profile; fi\n";
         shell()->run(f->sh, profile, sizeof profile - 1);
     }
     settle(f);

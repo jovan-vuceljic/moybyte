@@ -581,3 +581,13 @@ def test_a_terminal_ends_when_newer_sign_ins_take_its_session(host):
     ws.read_until(b"\xff", 3.0)
     assert ws.closed == (1008, "revoked"), ws.closed
     wait_stat(host, "live", 0)
+
+
+def test_a_login_with_no_profile_starts_at_status_0(host):
+    """A store with no /etc/profile: the login's first `$?` is 0, not the
+    failed test that looked for the profile."""
+    ws = WS(host)
+    ws.read_until(b"$ ")
+    ws.send(b"echo st=$?\r")
+    assert b"st=0" in ws.read_until(b"st=", 5.0) + ws.read_until(b"$ ", 5.0)
+    ws.close()
