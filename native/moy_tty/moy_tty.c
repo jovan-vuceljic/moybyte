@@ -456,7 +456,11 @@ static void hist_load_here(void *arg) {
 
 static void hist_save_here(void *arg) {
     moy_tty_t *f = arg;
-    char *t = moy_tty_calloc(1, (size_t)f->nhist * HIST_LINE + 1);
+    size_t total = 0;
+    for (int i = 0; i < f->nhist; i++) {
+        total += strlen(f->hist[i]) + 1;
+    }
+    char *t = moy_tty_calloc(1, total + 1);
     if (t == NULL) {
         return;
     }
