@@ -1388,6 +1388,37 @@ static void card_title(pd_t *d, const pf_t *f, moy_ui_span_t t, int x, int w, in
     }
 }
 
+// Where a card's line `t`, wider than `room`, breaks: at its last word that fits (the space's
+// index), 0 where it fits whole or no word does.
+static size_t card_break(const pf_t *f, moy_ui_span_t t, int room, int sc) {
+    size_t at = 0;
+    if (t.n && tw(f, t.p, t.n, sc) > room) {
+        for (size_t i = 1; i < t.n; i++) {
+            if (t.p[i] == ' ' && tw(f, t.p, i, sc) <= room) {
+                at = i;
+            }
+        }
+    }
+    return at;
+}
+
+// A card's sub line holds this many lines at most, broken at its words.
+#define CARD_SUB_LINES 4
+
+// Line `t` broken at its words into the lines `room` holds, at most `most`: each line's end
+// into `ends` (a space's index, the last line's `t.n`); how many lines.
+static int card_lines(const pf_t *f, moy_ui_span_t t, int room, int sc, uint16_t *ends, int most) {
+    int n = 0;
+    size_t from = 0, at;
+    while (n < most - 1
+           && (at = card_break(f, (moy_ui_span_t){t.p + from, (uint16_t)(t.n - from)}, room, sc))) {
+        ends[n++] = (uint16_t)(from + at);
+        from += at + 1;
+    }
+    ends[n++] = t.n;
+    return n;
+}
+
 int moy_ui_card(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_box_t pic, int lw,
                 moy_ui_span_t title, moy_ui_span_t sub, int flags, int fs, int desk, int tone,
                 int lead, int lead_glyph, moy_ui_box_t *content, uint16_t *gnd) {
@@ -1458,12 +1489,7 @@ int moy_ui_card(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_box_t pic, int lw
     int tl = th - (d.desk ? 4 : 2) * d.fs;   // the second line's step
     if ((flags & MOY_UI_F_WRAP) && title.n && room > 0 && tw(&ft, title.p, title.n, sc) > room
         && sy + tl + (sub.n ? 2 * d.fs + fsub.ascent * sc : 0) <= b.y + b.h) {
-        head = 0;
-        for (size_t i = 1; i < title.n; i++) {
-            if (title.p[i] == ' ' && tw(&ft, title.p, i, sc) <= room) {
-                head = i;
-            }
-        }
+        head = card_break(&ft, title, room, sc);
     }
     if (head > 0 && head < title.n) {
         moy_ui_span_t a = {title.p, (uint16_t)head};
@@ -1475,26 +1501,38 @@ int moy_ui_card(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_box_t pic, int lw
         card_title(&d, &ft, title, b.x, b.w, y, th, room, pal(&d, ink), sc, lead, lead_glyph, dim);
     }
     if (sub.n && room > 0 && sy + 2 * d.fs + fsub.ascent * sc <= b.y + b.h) {  // where the foot holds it
-        centred_cut(&d, &fsub, sub, b.x, b.w, sy, sh, room, pal(&d, dim), sc);
+        // a sub line wider than the band breaks at its words, line under line, where the foot
+        // holds them all
+        uint16_t ends[CARD_SUB_LINES];
+        int n = flags & MOY_UI_F_WRAP ? card_lines(&fsub, sub, room, sc, ends, CARD_SUB_LINES) : 1;
+        int sl = fsub.line * sc;
+        if (n == 1 || sy + (n - 1) * sl + 2 * d.fs + fsub.ascent * sc > b.y + b.h) {
+            centred_cut(&d, &fsub, sub, b.x, b.w, sy, sh, room, pal(&d, dim), sc);
+        } else {
+            for (int i = 0, from = 0; i < n; from = ends[i++] + 1) {
+                moy_ui_span_t l = {sub.p + from, (uint16_t)(ends[i] - from)};
+                centred_cut(&d, &fsub, l, b.x, b.w, sy + i * sl, sh, room, pal(&d, dim), sc);
+            }
+        }
     }
     return MOY_UI_OK;
 }
 
-int moy_ui_card_wrap(const moy_ui_sink_t *s, int bw, moy_ui_span_t title, int fs, int desk) {
+int moy_ui_card_wrap(const moy_ui_sink_t *s, int bw, moy_ui_span_t title, moy_ui_span_t sub,
+                     int fs, int desk) {
     pd_t d;
     fill_pd(s, &d, fs, desk);
     int sc = tscale(s);
-    pf_t ft = font_of(&d, MOY_UI_FONT_UI);
+    pf_t ft = font_of(&d, MOY_UI_FONT_UI), fsub = font_of(&d, MOY_UI_FONT_CAPTION);
     int room = bw - 2 * d.fs;
-    if (!title.n || room <= 0 || tw(&ft, title.p, title.n, sc) <= room) {
+    if (room <= 0) {
         return 0;
     }
-    for (size_t i = 1; i < title.n; i++) {
-        if (title.p[i] == ' ' && tw(&ft, title.p, i, sc) <= room) {
-            return pm(&d, MOY_UI_M_VALUE_ROW_CARD_TITLE, 1) - (d.desk ? 4 : 2) * d.fs;
-        }
-    }
-    return 0;
+    int tall = card_break(&ft, title, room, sc)
+                   ? pm(&d, MOY_UI_M_VALUE_ROW_CARD_TITLE, 1) - (d.desk ? 4 : 2) * d.fs : 0;
+    uint16_t ends[CARD_SUB_LINES];
+    int lines = sub.n ? card_lines(&fsub, sub, room, sc, ends, CARD_SUB_LINES) : 1;
+    return tall + (lines - 1) * fsub.line * sc;
 }
 
 // The integer square root of v.

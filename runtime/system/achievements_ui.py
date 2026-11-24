@@ -176,7 +176,7 @@ def achievements_page():
         ui.progress("found", max="{total}", look="count",
                     label=COUNT_LINE)
         ui.label(NONE_LINE, tone="dim", wrap="word", shown="none")
-        with ui.cards("badges", cur="cur", w="{@desk?92:76}", h="{@desk?68:56}", group="{.group}"):
+        with ui.cards("badges", cur="cur", w="{@desk?120:76}", h="{@desk?88:56}", group="{.group}"):
             ui.card("open", label="{.title}", sub="{.sub}", icon="{.icon}", tone="{.tone}")
         with ui.foot(shown="@desk"):
             ui.label("{cur.title} · {cur.how} · {cur.got?found:not found yet}", tone="dim")
