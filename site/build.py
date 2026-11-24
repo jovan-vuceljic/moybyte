@@ -385,6 +385,27 @@ def declared_boards():
     return out
 
 
+# site/os/'s first setup over the cable, which the flasher runs after a flash.
+SETUP_JS = ("kept.js", "link.js", "improv.js", "setup.js")
+
+
+def improv_boards():
+    """The `[board] ota` ids whose image answers Improv Wi-Fi over its USB
+    serial: the board's mpconfigboard.h defines MOY_IMPROV (the build routes
+    the console through it where it does, tests/test_board_routing.py). The
+    flasher runs the first setup on those after the flash
+    (site/os/setup.js; docs/web_console_online_2026-11.md §2)."""
+    from tools import board_config
+    out = set()
+    for path in sorted(glob.glob(os.path.join(ROOT, "firmware", "*", "board.toml"))):
+        d = os.path.dirname(path)
+        ota = (board_config.load(d).get("board") or {}).get("ota")
+        for h in glob.glob(os.path.join(d, "boards", "*", "mpconfigboard.h")):
+            if ota and re.search(r"^#define MOY_IMPROV\s+\(1\)", open(h, encoding="utf-8").read(), re.M):
+                out.add(ota)
+    return out
+
+
 def reset_facts(cfg):
     """How the page resets one board, from its board.toml. -> dict.
 
@@ -430,7 +451,9 @@ def downloads(board):
 
 
 _DECLARED = declared_boards()
+_IMPROV = improv_boards()
 for _board in BOARDS:
+    _board["improv"] = _board["id"] in _IMPROV
     # A card for a board that declares no cable flash at all gets the reading
     # that touches nothing -- the human does both ends -- rather than a guess.
     _board.update(reset_facts(_DECLARED.get(_board["id"])))
@@ -609,6 +632,7 @@ def publish_image(board, folder, out, variant, vlabel):
             "after_lines": board["after_lines"],
             "rest": board["rest"],
             "done": board["done"],
+            "improv": board["improv"],
             # Provenance: the page states which build it is about to write, so
             # "the latest build" is checkable rather than a claim.
             "commit": source.get("commit", ""),
@@ -1063,6 +1087,8 @@ def page(pal, has_player, cards, channel=None, stills=False):
     if published:
         flash_js = (
             '<script type="application/json" id="fw-manifest">%s</script>\n'
+            '<script src="kept.js"></script>\n<script src="link.js"></script>\n'
+            '<script src="improv.js"></script>\n<script src="setup.js"></script>\n'
             '<script type="module" src="flash.js"></script>'
             % json.dumps({"boards": published}))
     return """<!doctype html>
@@ -1325,6 +1351,7 @@ footer a{margin-right:4px}
   <span class="sp"></span>
   <a class="l" href="#console">Try it</a>
   <a class="l" href="#flash">Flash a board</a>
+  <a class="l" href="/console/">My consoles</a>
   <a class="l" href="#in">What's in it</a>
   <a class="l" href="#runs">Runs on</a>
   <a class="l" href="#build">Build</a>
@@ -1624,6 +1651,10 @@ def main():
             f.write("\n")
         for js in ("flash.js", "flash_reset.js"):
             shutil.copyfile(os.path.join(HERE, js), os.path.join(out, js))
+        # The first setup after a flash is My consoles' own (site/os/): the
+        # list, the link and the Improv client, one body for both pages.
+        for js in SETUP_JS:
+            shutil.copyfile(os.path.join(HERE, "os", js), os.path.join(out, js))
         shutil.copytree(VENDOR_SRC, os.path.join(out, "vendor"))
     else:
         print("!! no firmware images under %s -- the page will say so "
