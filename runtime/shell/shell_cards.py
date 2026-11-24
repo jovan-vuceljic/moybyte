@@ -1251,9 +1251,10 @@ class SystemMenuUI:
 
     def _look_w(self, desk):
         """The card's width (sysmenu_ui's popover's w=), what a point's
-        anchor spans: the look's, wider where a row's or a caption's words
-        need it beside the icon and the card's pads (ROW_PADS at the font
-        scale). Kept while the menu holds the same rows."""
+        anchor spans: the look's; on a desk, whose card does not grow with
+        the font scale, wider where a row's or a caption's words need it
+        beside the icon and the card's pads (ROW_PADS at the font scale).
+        Kept while the menu holds the same rows."""
         fs = self.ws.layout.fs
         items = self.ws.sysmenu.items
         k = self._w_kept
@@ -1263,11 +1264,11 @@ class SystemMenuUI:
                 if it[0] in ("item", "header") and it[4]:
                     most = max(most, _ui_draw.print_width(it[4], fs))
             k[0], k[1], k[2] = items, fs, desk
-            k[3] = max(220 if desk else 150 * fs, most + self.ROW_PADS * fs)
+            k[3] = max(220, most + self.ROW_PADS * fs) if desk else 150 * fs
         return k[3]
 
-    # The room a menu row takes beside its words, at font scale 1: its icon, the gap
-    # after it and the card's pads at each end.
+    # The room a desk menu row takes beside its words, at font scale 1: its icon, the
+    # gap after it and the card's pads at each end.
     ROW_PADS = 68
 
     def look_card(self):
