@@ -212,8 +212,8 @@ ports, flash, push, reboot, screenshots — are the `on-glass` skill
   station is the kernel's driver (`native/moy_net/moy_wifi.c`, reached through
   `device_wifi.kernel_wlan`; Python never constructs the port's `network.WLAN`),
   it outlives a soft reset, and a new VM puts it down unless the kernel's
-  ESP-NOW link rides it. The Zero is outside this: WiFi is its only I/O, and
-  it keeps the port's station for its setup access point.
+  ESP-NOW link rides it. The Zeros use the same driver through `moy_net.wifi_*`
+  (`device/zero_host.py`); WiFi is their only I/O.
 - **The station's power save is the idle ladder's alone (2026-11-24, #256)**:
   `moy_wifi_on` starts every board's station with none, and the kernel's loop
   rests it (modem sleep) only while the ladder has the panel dark
