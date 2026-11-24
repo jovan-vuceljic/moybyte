@@ -1001,7 +1001,8 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                 // a value wider than the room its label leaves (the label
                 // keeps up to half the row) is cut with an ellipsis, and one
                 // that shows none of itself so is left out; a link's, a
-                // glimpse of what it opens, shows whole or not at all
+                // glimpse of what it opens, shows whole beside its whole
+                // label or not at all
                 int iconed = r->icon_slot >= 0 || r->icon_glyph >= 0;
                 int lx = r->label.n || iconed ? b.x + pad + (iconed ? 16 * d.fs + gap : 0) : b.x;
                 int sig = 0;
@@ -1015,7 +1016,7 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                 int vroom = all - (lw < all / 2 ? lw : all / 2);
                 int vw = tw(&fl, r->value.p, r->value.n, sc);
                 uint16_t vc = kind == MOY_UI_V_CYCLE ? cink : cdim;
-                if (vw <= vroom) {
+                if (vw <= vroom && (kind != MOY_UI_V_LINK || lw + vw <= all)) {
                     x -= vw;
                     text(&d, &fl, r->value.p, r->value.n, x, b.y, b.h, vc, sc);
                 } else if (kind != MOY_UI_V_LINK) {

@@ -331,8 +331,9 @@ def test_a_slider_in_a_narrow_row_keeps_its_label(tmp_path):
 
 def test_a_link_shows_its_value_whole_or_not_at_all(tmp_path):
     """A link's value too wide for the room its label leaves is left out,
-    not cut to an ellipsis: the row draws as it does with no value; one
-    that fits draws."""
+    not cut to an ellipsis, and so is one that would cut its label: the
+    row draws as it does with no value; one that fits beside the whole
+    label draws."""
     from runtime import host_app
     carts = str(tmp_path / "carts")
     host_app.moy_carts.ensure_dirs(carts)
@@ -341,15 +342,17 @@ def test_a_link_shows_its_value_whole_or_not_at_all(tmp_path):
             'ui.page("p", function()\n'
             '  ui.split({ dir = "row", sizes = { 3, 2 } }, function()\n'
             '    ui.label("one")\n'
-            '    ui.link("open", { value = "%s" })\n'
+            '    ui.link("open", { label = "%s", value = "%s" })\n'
             '  end)\n'
             'end)\n')
-    names = (("Long", "A title far too long for this"), ("None", ""), ("Short", "Ab"))
-    for name, value in names:
-        _cart(carts, name, body % (name, value))
+    names = (("Long", "Cart info", "A title far too long for this"), ("None", "Cart info", ""),
+             ("Short", "Cart info", "Ab"), ("Crowd", "Cart informations", "Abc"),
+             ("Alone", "Cart informations", ""))
+    for name, label, value in names:
+        _cart(carts, name, body % (name, label, value))
     ws, drv, frame, open_cart = _console(carts)
     shots = {}
-    for name, _v in names:
+    for name, _l, _v in names:
         open_cart(ws, name)
         for _ in range(4):
             frame()
@@ -359,6 +362,7 @@ def test_a_link_shows_its_value_whole_or_not_at_all(tmp_path):
         ws.spine.exit_to_caller()
     assert shots["Long"] == shots["None"]
     assert shots["Short"] != shots["None"]
+    assert shots["Crowd"] == shots["Alone"]
 
 
 def test_a_split_a_grid_and_a_panel_draw_on_the_c_engine(tmp_path):
