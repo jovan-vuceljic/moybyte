@@ -4320,15 +4320,15 @@ def _elf_nc_both_ways(board):
 APP_ROLES = ("app_roles", "App Roles Wasm")
 APP_SHORT = ("app_short", "App Short Wasm")
 APP_SHELL = ("app_shell", "App Shell Wasm")
-APP_UI = ("app_ui", "App UI Wasm")
+APP_TREE = ("app_tree", "App Tree Wasm")
 
 
 def wasm_app_push(board, board_dir):
     """The compiled app fixtures (docs/history/kernel_appabi_2026-10.md section 4),
     built for this board's chip and pushed as wasm_<name>.moy: App Roles Wasm,
     the same module with no permission (App Short Wasm), and App Shell Wasm,
-    which imports a shell-served row, and App UI Wasm, which draws the
-    toolkit's widgets through the `ui` rows. Returns the carts root."""
+    which imports a shell-served row, and App Tree Wasm, whose UI tree page
+    the engine draws in the toolkit's widgets. Returns the carts root."""
     import json
     import tempfile
     from tools import wasm_cart
@@ -4338,7 +4338,7 @@ def wasm_app_push(board, board_dir):
     tmp = tempfile.mkdtemp(prefix="moy_wasm_app_")
     fixtures = ROOT / "tests" / "fixtures" / "wasm"
     for name, src in (("app_roles", "app_roles"), ("app_short", "app_roles"),
-                      ("app_shell", "app_shell"), ("app_ui", "app_ui")):
+                      ("app_shell", "app_shell"), ("app_tree", "app_tree")):
         out = os.path.join(tmp, name + ".moy")
         wasm_cart.build(str(fixtures / (src + ".moy")), out, chips=(chip,))
         if name == "app_short":
@@ -4353,7 +4353,7 @@ def wasm_app_push(board, board_dir):
     board.pyval(RESCAN, timeout=60)
     # Pushed code is fixed code: the strikes an earlier run of these left
     # (the crash guard, #160) are forgiven, as a commit forgives them.
-    for title in (APP_ROLES[1], APP_SHORT[1], APP_SHELL[1], APP_UI[1]):
+    for title in (APP_ROLES[1], APP_SHORT[1], APP_SHELL[1], APP_TREE[1]):
         board.pyval("ws.app_guard.forgive(ws.spine.app_cart_id(next(c for c in "
                     "ws.carts.all if c['title'] == %r))) or 1" % title, strict=True)
     return root
@@ -4373,7 +4373,7 @@ def remove_carts(board, titles):
     assert not left, "still on the board after the delete: %r" % left
 
 
-WASM_APPS = (APP_ROLES[1], APP_SHORT[1], APP_SHELL[1], APP_UI[1])
+WASM_APPS = (APP_ROLES[1], APP_SHORT[1], APP_SHELL[1], APP_TREE[1])
 
 
 def wasm_app_reaches_its_roles(board, root):
@@ -4425,34 +4425,40 @@ def wasm_app_reaches_its_roles(board, root):
     assert list(census) == ["wasm", True, "free"], census
 
 
-# App UI Wasm's pmem slots (tests/fixtures/wasm/app_ui.moy/src/main.wat).
-_UI_FRAMES, _UI_FAIL, _UI_HASH = 0, 8, 9
+# App Tree Wasm's pmem slots (tests/fixtures/wasm/app_tree.moy/src/main.c).
+_UI_FRAMES, _UI_FAIL = 0, 8
+
+# The crc32 of the run canvas's rows 40 to 159, 320 wide, as RGB565 words: the
+# page the engine drew, read where the run draws (device/device_canvas.py, the
+# one canvas class, the host's and a board's). The run's own `pix` answers a
+# palette index, which no theme colour is.
+_RUN_CRC = ("(lambda cv: (lambda b, w, c: [c.__setitem__(0, __import__('binascii').crc32("
+            "b[2 * (y * w):2 * (y * w + 320)], c[0])) for y in range(40, 160)] and c[0])"
+            "(memoryview(cv._buf), cv.w, [0]))(ws.run.canvas)")
 
 
-def _app_ui_host_pmem(look, tier):
-    """The fixture's pmem after its first frames on the host's WAMR in the
-    board's look (theme, variant), its input in use (moy_ui.input(): the
-    hints draw that input's keys) and its tier (the system canvas's w and h,
-    whether the desk is the windowed WM's: where the game canvas is the
-    system's, the bar over the app is the system layout's, sized for that
-    input; on a desk it is the game canvas's 18 rows): the page's pixel hash
-    the board's must equal."""
+def app_tree_host_page(look, tier):
+    """The fixture's pmem and its page's crc (_RUN_CRC) after its first frames
+    on the host's WAMR in the board's look (theme, variant), its input in use
+    (moy_ui.input(): the hints draw that input's keys) and its tier (the
+    system canvas's w and h, whether the desk is the windowed WM's): the
+    page the board's must equal."""
     import tempfile
     from runtime import host_app, wasm_host
     from tools import wasm_cart
     from ws_helpers import make_drv, open_cart, quiesce
     if not wasm_host.available():
         pytest.skip("no host wasm binding to hold the board's page to")
-    root = os.path.join(tempfile.mkdtemp(prefix="moy_app_ui_"), "carts")
+    root = os.path.join(tempfile.mkdtemp(prefix="moy_app_tree_"), "carts")
     host_app.moy_carts.ensure_dirs(root)
-    wasm_cart.build(str(ROOT / "tests" / "fixtures" / "wasm" / "app_ui.moy"),
-                    os.path.join(root, "app_ui.moy"))
+    wasm_cart.build(str(ROOT / "tests" / "fixtures" / "wasm" / "app_tree.moy"),
+                    os.path.join(root, "app_tree.moy"))
     ws = host_app.build_workstation(root, sys_size=(tier[0], tier[1]), windowed=tier[2])
     ws.pointer.visible = False
     ws.look.set_theme(look[0], persist=False, variant=look[1])
     from runtime import ui_draw
     ws.use_inputs((("local", ui_draw.INPUTS[look[2]]),))
-    open_cart(ws, APP_UI[1])
+    open_cart(ws, APP_TREE[1])
     drv = make_drv(ws)              # each frame's input edges begin and end, as on a board
     ws.pointer.place(319, 239)      # the host's mouse rests on no stop: no hover
     for _ in range(9):
@@ -4460,49 +4466,50 @@ def _app_ui_host_pmem(look, tier):
         ws.mark_dirty()
         drv.frame(1.0 / 30.0)
     pm = list(ws.run.player.lua._run.pmem()[1])
+    crc = eval(_RUN_CRC, {"ws": ws})
     ws.spine.exit()
     ui_draw.input_kind("keys")      # the host's own again
-    return pm
+    return pm, crc
 
 
 def wasm_app_draws_the_toolkit(board, root):
-    """App UI Wasm draws the public UI API's fixture page through the `ui`
-    rows (docs/history/ui_api_2026-10.md): no row fails, the page's pixel hash is the
-    host's run's, the run crosses into Python for nothing but the console's
-    frame and the census keeps it VM-free. Leaves the desk and the look as it
-    found them: the page runs under `known_look`, since the host's side is a
-    seeded theme's and a saved `custom` is the board's own."""
+    """App Tree Wasm's UI tree page is drawn by the engine in the toolkit's
+    widgets (sdk/include/moybyte/uitree.h): no row fails, the page's pixels
+    are the host's run's, the run crosses into Python for nothing but the
+    console's frame and the census keeps it VM-free. Leaves the desk and the
+    look as it found them: the page runs under `known_look`, since the host's
+    side is a seeded theme's and a saved `custom` is the board's own."""
     with known_look(board):
         _wasm_app_draws_the_toolkit(board, root)
 
 
 def _wasm_app_draws_the_toolkit(board, root):
-    host = _app_ui_host_pmem(board.pyval(
+    _pm, host = app_tree_host_page(board.pyval(
         "(ws.look.theme_name, ws.look.theme_variant, __import__('moy_ui').input())",
         strict=True), board.pyval(
         "(ws.sys_canvas.w, ws.sys_canvas.h, type(ws.wm).__name__ == 'WindowedWM')",
         strict=True))
     pm_expr = ("(lambda a: (__import__('moycore').pmem_image(a), list(a))[1])"
                "(__import__('array').array('i', bytearray(1024)))")
-    line = board.cmd("run %s" % APP_UI[1].lower(), wait_for="REMOTE run")
+    line = board.cmd("run %s" % APP_TREE[1].lower(), wait_for="REMOTE run")
     assert line is not None and "no cart match" not in line, line
     try:
         board.drain(2.5)
         st = board.state()
-        assert st.get("cart") == APP_UI[1], st.get("cart")
+        assert st.get("cart") == APP_TREE[1], st.get("cart")
         assert not st.get("cart_error"), st["cart_error"]
         play = st.get("play")
         assert play is not None and play["upcalls"][1:] == [0, 0, 0, 0, 0], play
         pm = board.pyval(pm_expr, timeout=30, strict=True)
-        assert pm[_UI_FAIL] == 0, "a ui row answered -%d" % pm[_UI_FAIL]
+        assert pm[_UI_FAIL] == 0, "a uitree row answered -%d" % pm[_UI_FAIL]
         assert pm[_UI_FRAMES] > 0, pm
-        assert pm[_UI_HASH] == host[_UI_HASH], (
-            "the page's hash %r, the host's %r" % (pm[_UI_HASH], host[_UI_HASH]))
+        got = board.pyval(_RUN_CRC, timeout=30, strict=True)
+        assert got == host, "the page's crc %r, the host's %r" % (got, host)
         assert not board.state().get("cart_error")
     finally:
         board.leave_cart()
         board.drain(1.0)
-    census = board.pyval("__import__('moy_play').census(%r)" % (root + "/wasm_app_ui.moy"),
+    census = board.pyval("__import__('moy_play').census(%r)" % (root + "/wasm_app_tree.moy"),
                          strict=True)
     assert list(census) == ["wasm", True, "free"], census
 

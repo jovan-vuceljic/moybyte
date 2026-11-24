@@ -20,8 +20,8 @@ codes a face's text names), nothing, or a value in one form (text and bytes
 alike, a JSON text read as its value, a NUL-joined list as its items). A row
 whose tiers disagree is a finding, fixed where it differs.
 
-The UI toolkit's rows are not here: their answer is a picture, and
-tests/test_app_ui.py compares the tiers' pictures of the features it draws.
+The UI tree's rows are not here: their answer is a picture, which the
+uitree tests hold each front to (tests/test_uitree_wasm.py and its kin).
 The rows with no tier-neutral parameters (an AppContext's own objects) are
 the roles trace's (tests/test_semantic_traces.py).
 """

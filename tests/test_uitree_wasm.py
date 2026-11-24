@@ -362,3 +362,16 @@ def test_a_carousel_is_a_cards_look_the_rows_take_and_another_look_is_refused():
                 assert "cards look='grid'" in r.read("error", cap=400)[1], r.read("error", cap=400)[1]
         finally:
             r.close()
+
+
+def test_the_on_glass_tree_app_builds_and_draws_its_page_alike_each_run():
+    """App Tree Wasm (tests/fixtures/wasm/app_tree.moy), which the boards'
+    suites hold to the host's run (on_glass.wasm_app_draws_the_toolkit),
+    builds, runs its frames with no row refused and draws a page of the
+    look's colours, the same crc on each run of a tier."""
+    import on_glass
+    keys, desk = (("moy", "dark", 0), (320, 240, False)), (("moy", "light", 3), (1024, 600, True))
+    pm, crc = on_glass.app_tree_host_page(*keys)
+    assert pm[on_glass._UI_FRAMES] > 0 and pm[on_glass._UI_FAIL] == 0, pm[:10]
+    assert on_glass.app_tree_host_page(*keys)[1] == crc
+    assert on_glass.app_tree_host_page(*desk)[1] not in (crc, 0)
