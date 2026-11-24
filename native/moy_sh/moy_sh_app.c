@@ -56,15 +56,20 @@ static void t_free(void *ctx, void *p) {
     a->free(a->actx, p);
 }
 
-// An app the heap had no room for says so, rather than ending with a bare 1
-// (to a session's standard error; a link's open has no session).
+// An app the heap had no room for says so, rather than ending with a bare 1,
+// to its session's standard error (a link's open has no session, and its
+// image no shell to write through).
 static moy_sh_app_t *no_room(moy_sh_t *s, const char *name) {
-    if (s == NULL) {
-        return NULL;
+#if MOY_SH_LINK
+    (void)s;
+    (void)name;
+#else
+    if (s != NULL) {
+        char b[48];
+        int m = snprintf(b, sizeof b, "%s: out of memory\n", name);
+        moy_sh_fd_write(s, 2, b, (size_t)m < sizeof b ? (size_t)m : sizeof b - 1);
     }
-    char b[48];
-    int m = snprintf(b, sizeof b, "%s: out of memory\n", name);
-    moy_sh_fd_write(s, 2, b, (size_t)m < sizeof b ? (size_t)m : sizeof b - 1);
+#endif
     return NULL;
 }
 
