@@ -243,9 +243,15 @@ UNIX_MP_R32 := $(UNIX_MP_SRC)/ports/unix/build-moybyte-board/micropython
 # lock (native/moy_store/moy_vol.h, THE STORE'S LOCK), and it changes FATFS.
 UNIX_MP_CFLAGS := -DMICROPY_PY_DEFLATE_COMPRESS=1 -ffp-contract=off -DMICROPY_ENABLE_VM_ABORT=1 \
 	-DMICROPY_FATFS_REENTRANT=1 -DMICROPY_FATFS_SYNC_T=uintptr_t -DMICROPY_FATFS_ENABLE_LFN=2
+# Its floats are computed in SSE registers, at single precision as a board's
+# FPU and the browser's wasm compute them: 32-bit x86 otherwise computes them
+# on the x87 at extended precision, which rounds the same single arithmetic
+# the same way but prints some values differently (9999999.0 as itself, where
+# the wasm prints 9999996.0), and a match's world digest is printed floats.
 UNIX_MP_R32_CFLAGS := $(UNIX_MP_CFLAGS) \
 	-DMICROPY_OBJ_REPR=MICROPY_OBJ_REPR_C \
-	-DMICROPY_FLOAT_IMPL=MICROPY_FLOAT_IMPL_FLOAT
+	-DMICROPY_FLOAT_IMPL=MICROPY_FLOAT_IMPL_FLOAT \
+	-msse2 -mfpmath=sse
 UNIX_MP_NATIVE := native
 # Every native module that ships a Makefile fragment. moy_alloc/moy_sd have
 # none (ESP-IDF only) and are skipped by the port's own discovery anyway.
@@ -306,8 +312,9 @@ unix-micropython:
 # cost a confused half hour when moy_web landed with a `names()` verb.
 # Regenerating is ~5s and only happens when a usermod source actually changed.
 	@for b in build-moybyte build-moybyte-board; do \
-	  c=$(UNIX_MP_SRC)/ports/unix/$$b/moy_cflags; \
-	  if [ -d "$$(dirname $$c)" ] && [ "$$(cat $$c 2>/dev/null)" != "$(UNIX_MP_CFLAGS)" ]; then \
+	  c=$(UNIX_MP_SRC)/ports/unix/$$b/moy_cflags; want="$(UNIX_MP_CFLAGS)"; \
+	  if [ $$b = build-moybyte-board ]; then want="$(UNIX_MP_R32_CFLAGS)"; fi; \
+	  if [ -d "$$(dirname $$c)" ] && [ "$$(cat $$c 2>/dev/null)" != "$$want" ]; then \
 	    rm -rf $(UNIX_MP_SRC)/ports/unix/$$b; fi; \
 	  s=$(UNIX_MP_SRC)/ports/unix/$$b/moy_index_impl; \
 	  if [ -d "$$(dirname $$s)" ] && [ "$$(cat $$s 2>/dev/null || echo c)" != "$(UNIX_MP_INDEX)" ]; then \
@@ -332,7 +339,7 @@ unix-micropython:
 	    MOY_INDEX_IMPL=$(UNIX_MP_INDEX) \
 	    USER_C_MODULES=$(abspath $(UNIX_MP_USERMODS)) -j$(UNIX_MP_JOBS) && \
 	  echo "$(UNIX_MP_INDEX)" > $(UNIX_MP_SRC)/ports/unix/build-moybyte-board/moy_index_impl && \
-	  echo "$(UNIX_MP_CFLAGS)" > $(UNIX_MP_SRC)/ports/unix/build-moybyte-board/moy_cflags && \
+	  echo "$(UNIX_MP_R32_CFLAGS)" > $(UNIX_MP_SRC)/ports/unix/build-moybyte-board/moy_cflags && \
 	  echo "...and in the boards' object model (32-bit, REPR_C, one GIL): $(UNIX_MP_R32)"; \
 	else \
 	  echo "no 32-bit C toolchain (gcc-multilib): the boards' object-model build is skipped"; \
