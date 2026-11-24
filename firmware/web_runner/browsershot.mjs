@@ -30,6 +30,10 @@
 //                                           whose address starts so (a window
 //                                           the page opened, or the first
 //                                           again), once there is one
+//   {"init":"<js>"}                         run before every document the
+//                                           driven tab loads from then on (a
+//                                           stand-in for a device API), then
+//                                           reload it
 // -- with coordinates in CANVAS pixels (the page's own 1024x600-style space);
 // they are mapped through the canvas's on-screen rect for you.
 //
@@ -311,6 +315,11 @@ for (const step of scenario.steps || []) {
         }
         if (step.open) await attach((await send("Target.createTarget", { url: step.open })).targetId);
         if (step.tab != null) await useTab(step.tab, step.timeout || 15000);
+        if (step.init) {
+            await cdp("Page.addScriptToEvaluateOnNewDocument", { source: step.init });
+            await cdp("Page.reload", {});
+            await sleep(500);
+        }
         if (step.press) {
             const p = await evaluate(`(function(){var e=document.querySelector(${JSON.stringify(step.press)});
                 if(!e)return null;var r=e.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);

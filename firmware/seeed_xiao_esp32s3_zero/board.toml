@@ -228,10 +228,10 @@ freeze it whole because they all construct an InputState. This board never
 does -- its inputs arrive as HTTP requests."""
 
 [[modules.device.group]]
-files = ["zero_host.py", "zero_setup.py", "zero_shell.py"]
+files = ["zero_host.py", "zero_setup.py", "zero_shell.py", "zero_improv.py"]
 why = """
-The Zero's own three: the store host main.py serves, its first-boot setup
-access point and its terminal. They are in device/ because both Zero boards
+The Zero's own four: the store host main.py serves, its first-boot setup
+access point, its first setup over the cable (Improv) and its terminal. They are in device/ because both Zero boards
 take them (this one and firmware/esp32c3_zero/), and nothing else does."""
 
 [[modules.device.group]]

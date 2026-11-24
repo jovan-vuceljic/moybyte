@@ -185,7 +185,7 @@ class Card {
   async flash() {
     if (busy) return;
     const b = this.build();
-    let port, transport, loader;
+    let port, transport, loader, written = false;
     try {
       // Must be the first thing after the click: requestPort() needs the user
       // activation, and an await before it can spend it.
@@ -272,6 +272,7 @@ class Card {
       this.finished(manual && b.after_lines
         ? "Written. Press the board&rsquo;s <b>reset</b> button to start it."
         : b.done);
+      written = true;
     } catch (err) {
       const msg = err && err.message ? err.message : String(err);
       this.say("failed: " + msg);
@@ -287,6 +288,47 @@ class Card {
         try { await transport.disconnect(); } catch (e) { /* gone already */ }
       }
     }
+    if (written && b.improv) this.offerSetup(port, b);
+  }
+
+  // Flash, set up, use, as one path (docs/web_console_online_2026-11.md §2,
+  // flow 1): on a board that answers Improv, the port it was flashed through
+  // carries its Wi-Fi and its name (site/os/setup.js, My consoles' own), the
+  // console goes into My consoles, and the page offers to open it.
+  offerSetup(port, b) {
+    const box = document.createElement("div");
+    box.className = "setup";
+    const go = document.createElement("button");
+    go.className = "go";
+    go.textContent = "Connect it to Wi-Fi";
+    box.append(go);
+    this.el.append(box);
+    go.onclick = async () => {
+      go.remove();
+      try {
+        await self.moySetup.run(box, port, {
+          lines: b.rest,
+          wait: 120000,
+          done: (c, secret) => {
+            self.moyLink.init({ show: (_c, text, cls, link) => {
+              said.textContent = text + (link ? " " : "");
+              said.className = "state" + (cls ? " " + cls : "");
+              if (link) { const a = document.createElement("a"); a.href = link; a.target = "_blank"; a.textContent = link; said.append(a); }
+            } });
+            const open = document.createElement("button");
+            open.className = "go";
+            open.textContent = "Open " + c.name;
+            open.onclick = () => self.moyLink.open(c, secret);
+            const mine = document.createElement("a");
+            mine.href = "/console/";
+            mine.textContent = "My consoles";
+            const said = document.createElement("p");
+            said.className = "state";
+            box.append(open, " ", mine, said);
+          },
+        });
+      } catch (e) { /* setup said why */ }
+    };
   }
 }
 

@@ -73,6 +73,10 @@ name: Web console E2E
 #   tests/test_web_link_e2e.py     the link (§5) across two origins: My
 #                                  consoles offline hands a board its
 #                                  console, which signs in and syncs.
+#   tests/test_web_setup_e2e.py    first setup (§7): My consoles sets a board
+#                                  up over Improv, opens it, and the board
+#                                  takes its first password by its claim;
+#                                  a console added by hand by its address.
 #
 # Every suite gated on MOYBYTE_WEB_E2E is named in the drive step below
 # (tests/test_preflight_web_filter.py), which is how first_run and
@@ -274,7 +278,7 @@ jobs:
             tests/test_web_music_e2e.py tests/test_web_first_run_e2e.py \
             tests/test_web_audio_stream_e2e.py \
             tests/test_web_desk_input_e2e.py tests/test_web_loader.py \
-            tests/test_web_link_e2e.py \
+            tests/test_web_link_e2e.py tests/test_web_setup_e2e.py \
             tests/test_web_fonts.py tests/test_web_look_parity.py \
             tests/test_editor_ladder_icons.py
 

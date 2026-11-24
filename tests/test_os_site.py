@@ -47,7 +47,7 @@ def test_the_site_holds_my_consoles_and_the_packs_and_keeps_the_newest(tmp_path)
     assert held == sorted([stable, old, local])
     folder = out / "console"
     assert (folder / (local + ".pack")).read_bytes() == data
-    for name in os_site.FILES + tuple(os_site.ICONS) + ("sw.js", "packs.json"):
+    for name in os_site.FILES + tuple(os_site.ICONS) + os_site.LOOK + ("sw.js", "packs.json"):
         assert (folder / name).is_file(), name
     assert json.loads((folder / "packs.json").read_text()) == {"newest": [stable, old, local]}
     assert (folder / "icon-512.png").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
@@ -75,6 +75,32 @@ def test_the_service_worker_keeps_every_file_of_the_site_and_changes_with_it(tmp
         (tmp_path / "b" / "console" / "sw.js").read_text()).group(1)
 
 
+def test_my_consoles_wears_the_project_site_s_look(tmp_path):
+    """One look for the site: My consoles' top bar, footer, stylesheet and
+    scheme switch are site/build.py's own, with My consoles the current
+    page, and the policy that runs no inline script holds."""
+    sys.path.insert(0, os.path.join(ROOT, "site"))
+    import build as site_build
+    os_site.build(str(tmp_path))
+    folder = tmp_path / "console"
+    page = (folder / "index.html").read_text()
+    assert not re.search(r"@[A-Z]+@", page + (folder / "manifest.webmanifest").read_text())
+    assert site_build.SITE_FOOTER in page
+    nav = page[page.index("<nav>"):page.index("</nav>")]
+    assert '<a class="l" href="./" aria-current="page">My consoles</a>' in nav
+    assert 'href="/#flash"' in nav and 'id="scheme"' in nav
+    assert (folder / "site.css").read_text() == site_build.site_css("petme128.woff2")
+    assert "url(petme128.woff2)" in (folder / "site.css").read_text()
+    assert (folder / "petme128.woff2").read_bytes() == open(site_build.FONT, "rb").read()
+    assert (folder / "scheme.js").read_text() == site_build.scheme_script()
+    head = page[:page.index("</head>")]
+    assert '<link rel="stylesheet" href="site.css">' in head and '<script src="scheme.js">' in head
+    assert not re.search(r"<script(?![^>]*\bsrc=)", page), "an inline script the policy refuses"
+    home = site_build.page(site_build.palette(), False, [])
+    assert site_build.site_css() in home and site_build.SITE_FOOTER in home
+    assert site_build.site_nav(site_build.palette()) in home
+
+
 def test_my_consoles_is_where_the_images_fetch_their_packs():
     """The mirror an image names is My consoles' own folder, so the pack it
     fetches is one the page's service worker can keep."""
@@ -92,10 +118,30 @@ def test_the_page_never_asks_for_a_browsing_context_of_its_own():
 
 def test_the_site_never_evaluates_what_a_window_sends():
     """What a console's window posts is data: shown as text, never run."""
-    for name in ("consoles.js", "packs.js", "sw.js"):
+    for name in ("consoles.js", "packs.js", "sw.js", "kept.js", "link.js", "improv.js", "setup.js"):
         src = open(os.path.join(os_site.SOURCE, name)).read()
         for bad in ("eval(", "innerHTML", "new Function", "insertAdjacentHTML", "document.write"):
             assert bad not in src, (name, bad)
+
+
+def test_the_improv_client_and_the_list_s_addresses_in_node():
+    """site/os/improv_test.mjs: the site's one Improv client against a
+    scripted port (the spec's frames, a board that answers after its boot, a
+    frame split across reads, a join's URLs, a refusal) and the addresses a
+    person may type into My consoles."""
+    p = subprocess.run(["node", "improv_test.mjs"], cwd=os_site.SOURCE,
+                       capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0 and "all ok" in p.stdout, p.stdout + p.stderr
+
+
+def test_the_flasher_runs_my_consoles_own_setup():
+    """One Improv client and one list for both pages: the flasher's copies
+    are site/os/'s files, and the board records say which boards take it."""
+    sys.path.insert(0, os.path.join(ROOT, "site"))
+    import build as site_build
+    assert site_build.improv_boards() == {"xiao_zero", "c3_zero"}
+    for js in site_build.SETUP_JS:
+        assert js in os_site.FILES and js in os_site.SHELL
 
 
 def test_a_pack_that_is_none_is_refused(tmp_path):

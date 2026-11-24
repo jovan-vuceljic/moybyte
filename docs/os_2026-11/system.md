@@ -354,7 +354,13 @@ host's and the wasm's the same release vendored (`native/moy_net/mbedtls/README.
   copy of the record (whoever reads the card) cannot pair a browser, though
   it can be guessed against at the record's PBKDF2 cost. With no
   password set a browser pairs by the QR alone; the Zero, with no screen,
-  sets its password in its setup form or `provision.sh --password`. A pairing
+  sets its password in its setup form, `provision.sh --password`, or by
+  its **claim** (2026-11-24): 128 random bits held in RAM and sent only
+  over the cable, which lets one browser send the board the password's
+  record it made in the wasm and then pair by that password
+  (`docs/web_console_online_2026-11.md` §7 is the flow, `moy_webauth.c`'s
+  THE CLAIM the rules). The record crosses the network, guessable only at
+  its PBKDF2 cost; the password does not. A pairing
   mints a random 128-bit device key with an id and the browser's name, kept in
   `system/webkeys` (`/etc/webkeys`); the page keeps it per board id in its
   origin's storage.
@@ -533,8 +539,12 @@ needs …, … free.", `cart_index.room_why`), and a version its index revoked.
 A Python cart from an index that is not reviewed lands only on a yes that
 carries the board's password (`OfficialCarts`' `agree`).
 
-**The index** is moy-spec's (its `cartindex` module, version 1), read as it is, with
-three additions read here: an entry's `depends`, a list of cart ids; the
+**The index** is Moybyte's store format, version 1 (owner, 2026-11-24):
+moybyte-org/carts writes it with its `scripts/make_index.py`, and moy-spec's `moy
+install` (its `cartindex` module) reads its common fields and no more. Its Moybyte
+fields are an entry's `runtime` beyond moy's (a theme, a Python app, the browser
+console's `web`), its `chips`, and `moybyte.api` and `moybyte.fits`; three more are
+read here: an entry's `depends`, a list of cart ids; the
 document's `revoked`, `{"<id>": [<version>, ...]}`, the versions it withdrew
 (a malformed one reads as none); and the signature. **An index is signed as OTA manifests are** (the same keys,
 RSA-2048 PKCS#1 v1.5 over SHA-256): `tools/ota_sign.py sign-index` appends

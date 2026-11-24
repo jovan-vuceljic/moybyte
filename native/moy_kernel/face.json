@@ -165,6 +165,11 @@
     "about": "a Python callback run under the scheduler's slice and stopped when it never returns",
     "host": null
   },
+  "moy_improv": {
+    "about": "Improv Wi-Fi's frames on the USB-Serial/JTAG console, where a board defines MOY_IMPROV",
+    "host": null,
+    "c": "modmoy_improv.c"
+  },
   "moy_kernel": {
     "about": "the kernel's small bindings: the boot's verdict, the watchdog, the VM's stop",
     "host": null,

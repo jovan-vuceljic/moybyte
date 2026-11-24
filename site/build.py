@@ -146,9 +146,8 @@ NIGHT_ROLES = (
 )
 
 
-def moy_roles(mode, roles=SITE_ROLES):
-    """The `:root` variable declarations for Moy's `mode` ("dark" is Night,
-    "light" is Day), as CSS."""
+def theme_roles(mode, roles=SITE_ROLES):
+    """[(variable, colour)] of Moy's `mode` ("dark" is Night, "light" is Day)."""
     with open(os.path.join(ROOT, "native", "moy_ui", "themes", "moy.json")) as f:
         theme = json.load(f)
     out = []
@@ -156,8 +155,13 @@ def moy_roles(mode, roles=SITE_ROLES):
         node = theme[top][mode]
         for key in path:
             node = node[key]
-        out.append("--%s:%s;" % (var, node))
-    return " ".join(out)
+        out.append((var, node))
+    return out
+
+
+def moy_roles(mode, roles=SITE_ROLES):
+    """The `:root` variable declarations for Moy's `mode`, as CSS."""
+    return " ".join("--%s:%s;" % r for r in theme_roles(mode, roles))
 
 
 def palette():
@@ -385,6 +389,27 @@ def declared_boards():
     return out
 
 
+# site/os/'s first setup over the cable, which the flasher runs after a flash.
+SETUP_JS = ("kept.js", "link.js", "improv.js", "setup.js")
+
+
+def improv_boards():
+    """The `[board] ota` ids whose image answers Improv Wi-Fi over its USB
+    serial: the board's mpconfigboard.h defines MOY_IMPROV (the build routes
+    the console through it where it does, tests/test_board_routing.py). The
+    flasher runs the first setup on those after the flash
+    (site/os/setup.js; docs/web_console_online_2026-11.md §2)."""
+    from tools import board_config
+    out = set()
+    for path in sorted(glob.glob(os.path.join(ROOT, "firmware", "*", "board.toml"))):
+        d = os.path.dirname(path)
+        ota = (board_config.load(d).get("board") or {}).get("ota")
+        for h in glob.glob(os.path.join(d, "boards", "*", "mpconfigboard.h")):
+            if ota and re.search(r"^#define MOY_IMPROV\s+\(1\)", open(h, encoding="utf-8").read(), re.M):
+                out.add(ota)
+    return out
+
+
 def reset_facts(cfg):
     """How the page resets one board, from its board.toml. -> dict.
 
@@ -430,7 +455,9 @@ def downloads(board):
 
 
 _DECLARED = declared_boards()
+_IMPROV = improv_boards()
 for _board in BOARDS:
+    _board["improv"] = _board["id"] in _IMPROV
     # A card for a board that declares no cable flash at all gets the reading
     # that touches nothing -- the human does both ends -- rather than a guess.
     _board.update(reset_facts(_DECLARED.get(_board["id"])))
@@ -609,6 +636,7 @@ def publish_image(board, folder, out, variant, vlabel):
             "after_lines": board["after_lines"],
             "rest": board["rest"],
             "done": board["done"],
+            "improv": board["improv"],
             # Provenance: the page states which build it is about to write, so
             # "the latest build" is checkable rather than a claim.
             "commit": source.get("commit", ""),
@@ -672,17 +700,21 @@ def size_mb(n):
     return "%.1f MB" % (n / 1048576.0)
 
 
-def font_face():
-    """The system's own font as the display face. site/petme128.woff2 is the
-    petme128 8x8 glyph set (MicroPython, MIT -- THIRD_PARTY.md) rendered as a
-    webfont; inlined so the page stays one self-contained file."""
+FONT = os.path.join(HERE, "petme128.woff2")
+
+
+def font_face(url=None):
+    """The system's own font as the display face. site/petme128.woff2 (FONT)
+    is the petme128 8x8 glyph set (MicroPython, MIT -- THIRD_PARTY.md)
+    rendered as a webfont; inlined so the page stays one self-contained file,
+    or at `url` for a page that keeps it beside itself."""
     import base64
-    blob = os.path.join(HERE, "petme128.woff2")
-    if not os.path.exists(blob):
+    if not os.path.exists(FONT):
         return ""
-    b64 = base64.b64encode(open(blob, "rb").read()).decode("ascii")
+    if url is None:
+        url = "data:font/woff2;base64," + base64.b64encode(open(FONT, "rb").read()).decode("ascii")
     return ("@font-face{font-family:'Petme128';font-display:swap;"
-            "src:url(data:font/woff2;base64,%s) format('woff2')}" % b64)
+            "src:url(%s) format('woff2')}" % url)
 
 
 # The at-a-glance list beside the hero. Dots are role colours (ok / wip / warn).
@@ -819,16 +851,15 @@ def channel_banner(channel):
 # script the CSS and the <picture> follow the system's scheme alone. SCHEME_HEAD
 # runs before the first paint, so a remembered Day never flashes Night.
 SCHEME_KEY = "moybyte-site-scheme"
-SCHEME_HEAD = r"""<script>
-(function () {
+SCHEME_HEAD_JS = r"""(function () {
   var s = null;
   try { s = localStorage.getItem("%s"); } catch (e) {}
   if (s !== "dark" && s !== "light")
     s = window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches
       ? "light" : "dark";
   document.documentElement.dataset.scheme = s;
-})();
-</script>""" % SCHEME_KEY
+})();""" % SCHEME_KEY
+SCHEME_HEAD = "<script>\n%s\n</script>" % SCHEME_HEAD_JS
 
 # The switch in the top bar: it names the scheme it switches to. A flip back to
 # the system's scheme forgets the choice, so the page follows the system again.
@@ -869,6 +900,14 @@ if (systemLight && systemLight.addEventListener)
 schemeBtn.hidden = false;
 showScheme();
 """ % (SCHEME_KEY, SCHEME_KEY, SCHEME_KEY)
+
+
+def scheme_script():
+    """The scheme as one script file, for a page whose policy runs no inline
+    script: loaded in its <head>, it sets the scheme before the first paint
+    and wires the switch once the top bar is there."""
+    return '%s\ndocument.addEventListener("DOMContentLoaded", function () {\n%s});\n' % (
+        SCHEME_HEAD_JS, SCHEME_JS)
 
 
 # The script that runs the console in the hero; emitted only when there is a
@@ -1008,6 +1047,154 @@ STILL_ALT = ("The Moybyte desktop with Star Catcher open in the editor's window,
              "its code beside the game playing")
 
 
+# The stylesheet every page of the site shares (the home page, the dev site and
+# My consoles, tools/os_site.py): the colours, the type, the top bar, buttons,
+# fields, cards, notices and the footer. A page adds only its own parts.
+SITE_CSS = """/* Every colour below is a role of the OS's Moy theme, read from
+   native/moy_ui/themes/moy.json: Night (dark) is the default, Day (light) is
+   html[data-scheme=light] (SCHEME_HEAD in site/build.py), or the system's
+   light scheme where no script set the attribute. See SITE_ROLES. */
+:root{%(roles_dark)s
+  %(night)s
+  --w:70rem;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-scheme]){%(roles_light)s}
+}
+:root[data-scheme="light"]{%(roles_light)s}
+%(font)s
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html{-webkit-text-size-adjust:100%%;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--body);font:16px/1.62 var(--sans)}
+.wrap{width:100%%;max-width:var(--w);margin:0 auto;padding:0 24px}
+a{color:var(--link);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3{color:var(--ink);line-height:1.25}
+/* --- pixel-native display type: the system's own font ---------------------- */
+.px{font-family:'Petme128',var(--mono);letter-spacing:.02em}
+/* --- top bar --------------------------------------------------------------- */
+nav{position:sticky;top:0;z-index:9;background:var(--bg);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:18px;height:52px}
+nav .brand{font-size:19px;color:var(--ink);text-decoration:none}
+nav .brand em{font-style:normal;color:var(--accent)}
+nav .sp{flex:1}
+nav a.l{color:var(--body);text-decoration:none;font-size:14px}
+nav a.l:hover{color:var(--accent)}
+nav .scheme{appearance:none;border:1px solid var(--line);background:var(--surface);
+  color:var(--ink);font:14px/1 var(--sans);padding:6px 10px;cursor:pointer;white-space:nowrap}
+nav .scheme:hover{border-color:var(--accent);color:var(--accent)}
+nav .scheme:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+nav .brand,nav a.l{white-space:nowrap}
+nav a.l[aria-current]{color:var(--accent)}
+/* Narrow: the section anchors are one scroll away anyway, and keeping them
+   pushed the GitHub link off the edge. On a page of its own the bar names that
+   page in GitHub's place, and on a phone's width the brand alone. */
+@media (max-width:640px){
+  nav .wrap{gap:12px}
+  nav .brand{font-size:16px}
+  nav a.l:not(:last-of-type):not([aria-current]),nav a.l[aria-current] ~ a.l{display:none}
+}
+@media (max-width:380px){.wrap{padding:0 16px} nav a.l[aria-current]{display:none}}
+.eyebrow{font:12px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 14px}
+h1{margin:0;font-size:clamp(24px,3.2vw,36px);line-height:1.35}
+h1 em{font-style:normal;color:var(--accent)}
+.btns{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0 0}
+.btn{display:inline-block;padding:9px 16px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink);text-decoration:none;font-size:15px}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--pri-ink);font-weight:600}
+.btn.pri:hover{filter:brightness(1.08);color:var(--pri-ink)}
+/* --- the mascot ------------------------------------------------------------ */
+.moy{image-rendering:pixelated;vertical-align:-4px}
+nav .moy{width:22px;height:22px;margin-right:9px}
+.k{font:12px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 12px}
+/* --- sections -------------------------------------------------------------- */
+section{padding:52px 0 0}
+section > .wrap > h2{margin:0;font-size:clamp(22px,3vw,30px)}
+.slead{margin:10px 0 0;max-width:60ch;color:var(--muted)}
+.chbar{background:var(--warn);color:var(--pri-ink);font-size:14px}
+.chbar .wrap{display:flex;flex-wrap:wrap;gap:4px 18px;justify-content:space-between;padding:8px 24px}
+.chbar a{color:inherit;font-weight:600}
+.warnbox,.notice{color:var(--warn);border:1px solid var(--warn);padding:10px 14px;margin:12px 0 0}
+.notice{color:var(--ink);border-color:var(--line);background:var(--surface)}
+/* --- card grids ------------------------------------------------------------ */
+.cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+  margin:24px 0 0;padding:0;list-style:none}
+.cards li{background:var(--surface);border:1px solid var(--line);padding:16px 18px}
+.cards h3{margin:0 0 7px;font-size:15px;color:var(--accent)}
+.cards p{margin:0;font-size:14px;color:var(--body)}
+.cards .chip{display:inline-block;margin:0 0 7px;padding:2px 8px;font:11px/1.5 var(--mono);
+  letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+  background:var(--bg);border:1px solid var(--line)}
+.act{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+.act .btn{font-size:14px;padding:7px 13px}
+button.btn{appearance:none;cursor:pointer;font-family:inherit}
+button.btn:disabled{opacity:.45;cursor:default;filter:none}
+.state{margin:11px 0 0;font-size:13px;color:var(--ink);min-height:1.3em}
+.state.ok{color:var(--ok)} .state.warn,.state.bad{color:var(--warn)} .state.wip{color:var(--wip)}
+/* --- fields, and the first setup's forms (site/os/setup.js) ---------------- */
+.field{font:15px var(--sans);color:var(--ink);background:var(--surface);
+  border:1px solid var(--field);border-radius:0;padding:8px 10px;min-width:0}
+.field:focus-visible{outline:2px solid var(--accent);outline-offset:-1px}
+form.setup{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
+form.setup .note{flex:1 0 100%%;margin:0;font-size:14px;color:var(--muted)}
+form.setup .field{flex:1 1 12rem}
+pre{background:var(--surface);border:1px solid var(--line);padding:16px 18px;
+  overflow-x:auto;font:13px/1.7 var(--mono);color:var(--ink);margin:20px 0 0}
+pre .c{color:var(--muted)}
+code{font:.92em var(--mono);background:var(--surface);border:1px solid var(--line);padding:1px 5px}
+footer{margin:64px 0 0;border-top:1px solid var(--line);padding:24px 0 44px;
+  color:var(--muted);font-size:13px}
+footer a{margin-right:4px}
+"""
+
+
+def site_css(font_url=None):
+    """SITE_CSS with the theme's roles and the display font, which is inlined
+    unless `font_url` names a file beside the page."""
+    return SITE_CSS % {"roles_dark": moy_roles("dark"), "roles_light": moy_roles("light"),
+                       "night": moy_roles("dark", NIGHT_ROLES), "font": font_face(font_url)}
+
+
+# The top bar's links: an anchor of the home page, or a page of its own.
+NAV = (("#console", "Try it"), ("#flash", "Flash a board"), ("/console/", "My consoles"),
+       ("#in", "What's in it"), ("#runs", "Runs on"), ("#build", "Build"))
+
+
+def site_nav(pal, home="", here=None):
+    """The top bar every page opens with. `home` is the way to the home page
+    from this one ("" on it), `here` the NAV link that is this page."""
+    links = "\n".join(
+        '  <a class="l" href="./" aria-current="page">%s</a>' % label if href == here else
+        '  <a class="l" href="%s">%s</a>' % (home + href if href[0] == "#" else href, label)
+        for href, label in NAV)
+    return ('<nav><div class="wrap">\n'
+            '  <a class="brand px" href="%s#top"><img class="moy" src="%s" alt="">moy<em>byte</em></a>\n'
+            '  <span class="sp"></span>\n%s\n'
+            '  <a class="l" href="%s">GitHub &#8599;</a>\n'
+            '  <button class="scheme" id="scheme" type="button" hidden></button>\n'
+            '</div></nav>' % (home, moy_mark(pal), links, REPO))
+
+
+SITE_FOOTER = """  <footer>
+    <a href="https://github.com/moybyte-org/moybyte">Source</a> &middot;
+    <a href="https://github.com/moybyte-org/moy-spec">The cartridge spec (moy core 0.4)</a> &middot;
+    <a href="https://github.com/moybyte-org/moybyte/blob/master/docs/moy_cart_api.md">Cart API</a> &middot;
+    <a href="https://github.com/moybyte-org/moy-spec">Compiled carts</a> &middot;
+    <a href="https://github.com/moybyte-org/carts">Get Carts</a> &middot;
+    <a href="https://github.com/moybyte-org/moybyte/issues">Issues</a>
+    <br><br>
+    Source-available (FSL-1.1-MIT): free to run, modify, teach with, and to make
+    and sell carts. Selling hardware built on Moybyte needs a commercial licence;
+    each release becomes MIT two years after it is published. The page for kids
+    and parents is <a href="https://moybyte.com">moybyte.com</a>.
+  </footer>"""
+
+
 def page(pal, has_player, cards, channel=None, stills=False):
     still_html = (
         '<picture><source id="still-night" media="(prefers-color-scheme: dark)" '
@@ -1063,6 +1250,8 @@ def page(pal, has_player, cards, channel=None, stills=False):
     if published:
         flash_js = (
             '<script type="application/json" id="fw-manifest">%s</script>\n'
+            '<script src="kept.js"></script>\n<script src="link.js"></script>\n'
+            '<script src="improv.js"></script>\n<script src="setup.js"></script>\n'
             '<script type="module" src="flash.js"></script>'
             % json.dumps({"boards": published}))
     return """<!doctype html>
@@ -1076,61 +1265,12 @@ def page(pal, has_player, cards, channel=None, stills=False):
 <meta name="description" content="A small operating system for ESP32 boards. Its software is cartridges you can open, change and run on the board itself. Try it in the browser.">
 %(scheme_head)s
 <style>
-/* Every colour below is a role of the OS's Moy theme, read from
-   native/moy_ui/themes/moy.json: Night (dark) is the default, Day (light) is
-   html[data-scheme=light] (SCHEME_HEAD in site/build.py), or the system's
-   light scheme where no script set the attribute. See SITE_ROLES. */
-:root{%(roles_dark)s
-  %(night)s
-  --w:70rem;
-  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
-}
-@media (prefers-color-scheme: light){
-  :root:not([data-scheme]){%(roles_light)s}
-}
-:root[data-scheme="light"]{%(roles_light)s}
-%(font)s
-*{box-sizing:border-box}
-[hidden]{display:none !important}
-html{-webkit-text-size-adjust:100%%;scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--body);font:16px/1.62 var(--sans)}
-.wrap{width:100%%;max-width:var(--w);margin:0 auto;padding:0 24px}
-a{color:var(--link);text-decoration-thickness:1px;text-underline-offset:2px}
-h1,h2,h3{color:var(--ink);line-height:1.25}
-/* --- pixel-native display type: the system's own font ---------------------- */
-.px{font-family:'Petme128',var(--mono);letter-spacing:.02em}
-/* --- top bar --------------------------------------------------------------- */
-nav{position:sticky;top:0;z-index:9;background:var(--bg);border-bottom:1px solid var(--line)}
-nav .wrap{display:flex;align-items:center;gap:18px;height:52px}
-nav .brand{font-size:19px;color:var(--ink);text-decoration:none}
-nav .brand em{font-style:normal;color:var(--accent)}
-nav .sp{flex:1}
-nav a.l{color:var(--body);text-decoration:none;font-size:14px}
-nav a.l:hover{color:var(--accent)}
-nav .scheme{appearance:none;border:1px solid var(--line);background:var(--surface);
-  color:var(--ink);font:14px/1 var(--sans);padding:6px 10px;cursor:pointer;white-space:nowrap}
-nav .scheme:hover{border-color:var(--accent);color:var(--accent)}
-nav .scheme:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-/* Narrow: the section anchors are one scroll away anyway, and keeping them
-   pushed the GitHub link off the edge. */
-@media (max-width:640px){nav a.l:not(:last-of-type){display:none}}
-/* --- hero ------------------------------------------------------------------ */
+%(site_css)s/* --- hero ------------------------------------------------------------------ */
 .hero{display:grid;grid-template-columns:1.3fr .7fr;gap:44px;
   align-items:start;padding:52px 0 8px}
 @media (max-width:900px){.hero{grid-template-columns:1fr;gap:28px;padding-top:34px}}
-.eyebrow{font:12px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
-  color:var(--muted);margin:0 0 14px}
-h1{margin:0;font-size:clamp(24px,3.2vw,36px);line-height:1.35}
-h1 em{font-style:normal;color:var(--accent)}
 .lead{font-size:19px;color:var(--ink);margin:18px 0 0;max-width:36em}
 .sub{margin:14px 0 0;max-width:38em}
-.btns{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0 0}
-.btn{display:inline-block;padding:9px 16px;border:1px solid var(--line);
-  background:var(--surface);color:var(--ink);text-decoration:none;font-size:15px}
-.btn:hover{border-color:var(--accent);color:var(--accent)}
-.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--pri-ink);font-weight:600}
-.btn.pri:hover{filter:brightness(1.08);color:var(--pri-ink)}
 /* --- the console in the hero ----------------------------------------------- */
 .console{margin:40px 0 0}
 .console .slead{margin:0 0 4px;max-width:none}
@@ -1166,12 +1306,7 @@ h1 em{font-style:normal;color:var(--accent)}
   background:var(--night-accent);animation:boot 1.1s steps(14) infinite}
 @keyframes boot{from{transform:translateX(-100%%)}to{transform:translateX(340%%)}}
 @media (prefers-reduced-motion:reduce){.boot i::after{animation:none;width:100%%;opacity:.6}}
-/* --- the mascot ------------------------------------------------------------ */
-.moy{image-rendering:pixelated;vertical-align:-4px}
-nav .moy{width:22px;height:22px;margin-right:9px}
 /* --- status: a column beside the hero copy --------------------------------- */
-.k{font:12px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
-  color:var(--muted);margin:0 0 12px}
 .status{display:flex;flex-direction:column;gap:8px;list-style:none;padding:0;margin:0}
 @media (max-width:900px){.status{flex-direction:row;flex-wrap:wrap}}
 .status li{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);
@@ -1180,10 +1315,6 @@ nav .moy{width:22px;height:22px;margin-right:9px}
 .status i{flex:0 0 7px;width:7px;height:7px;display:inline-block}
 .status .ok{background:var(--ok)} .status .wip{background:var(--wip)}
 .status .warn{background:var(--warn)}
-/* --- sections -------------------------------------------------------------- */
-section{padding:52px 0 0}
-section > .wrap > h2{margin:0;font-size:clamp(22px,3vw,30px)}
-.slead{margin:10px 0 0;max-width:60ch;color:var(--muted)}
 /* --- the player ------------------------------------------------------------ */
 .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0 0}
 .tab{appearance:none;cursor:pointer;text-align:left;font:inherit;padding:9px 15px;
@@ -1221,16 +1352,6 @@ body.noscroll{overflow:hidden}
 }
 .hint{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;
   color:var(--muted);font-size:13px;margin:10px 0 0}
-.chbar{background:var(--warn);color:var(--pri-ink);font-size:14px}
-.chbar .wrap{display:flex;flex-wrap:wrap;gap:4px 18px;justify-content:space-between;padding:8px 24px}
-.chbar a{color:inherit;font-weight:600}
-.warnbox{color:var(--warn);border:1px solid var(--warn);padding:10px 14px;margin:12px 0 0}
-/* --- card grids ------------------------------------------------------------ */
-.cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
-  margin:24px 0 0;padding:0;list-style:none}
-.cards li{background:var(--surface);border:1px solid var(--line);padding:16px 18px}
-.cards h3{margin:0 0 7px;font-size:15px;color:var(--accent)}
-.cards p{margin:0;font-size:14px;color:var(--body)}
 /* --- feature tiles: one-colour mask sheets, stepped through by CSS ---------- */
 /* Each sheet is drawn at its display size, so nothing is resampled, and its
    colour is the accent, so it follows the theme. A tapped tile shows its text
@@ -1260,9 +1381,6 @@ body.noscroll{overflow:hidden}
 .feats details > p{position:absolute;left:20px;right:20px;top:16px;height:192px;margin:0;
   display:flex;align-items:center;font-size:15px;color:var(--ink);pointer-events:none}
 .feats details[open] .art{opacity:.05}
-.cards .chip{display:inline-block;margin:0 0 7px;padding:2px 8px;font:11px/1.5 var(--mono);
-  letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
-  background:var(--bg);border:1px solid var(--line)}
 /* --- the flasher ----------------------------------------------------------- */
 /* One card per board: what CI built, how to get the board into the loader, and
    the button that writes it. Everything below the button is progress reporting,
@@ -1295,42 +1413,19 @@ body.noscroll{overflow:hidden}
 .older summary{cursor:pointer}
 .older p{margin:8px 0 0}
 .older input{margin:8px 0 0;font-size:11px;color:var(--muted);max-width:100%%}
-.act{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
-.act .btn{font-size:14px;padding:7px 13px}
-button.btn{appearance:none;cursor:pointer;font-family:inherit}
-button.btn:disabled{opacity:.45;cursor:default;filter:none}
 .erase{display:flex;gap:8px;align-items:flex-start;margin:12px 0 0;
   font-size:12px;color:var(--muted);cursor:pointer}
 .erase input{margin:3px 0 0;flex:0 0 auto}
-.state{margin:11px 0 0;font-size:13px;color:var(--ink);min-height:1.3em}
-.state.ok{color:var(--ok)} .state.warn{color:var(--warn)} .state.wip{color:var(--wip)}
 .prog{height:6px;margin:9px 0 0;background:var(--bg);border:1px solid var(--line)}
 .prog i{display:block;height:100%%;width:0;background:var(--accent);
   transition:width .12s linear}
 .log{max-height:9.5em;overflow:auto;margin:9px 0 0;padding:8px 10px;
   white-space:pre-wrap;font:11px/1.55 var(--mono);color:var(--muted);
   background:var(--bg);border:1px solid var(--line)}
-pre{background:var(--surface);border:1px solid var(--line);padding:16px 18px;
-  overflow-x:auto;font:13px/1.7 var(--mono);color:var(--ink);margin:20px 0 0}
-pre .c{color:var(--muted)}
-code{font:.92em var(--mono);background:var(--surface);border:1px solid var(--line);padding:1px 5px}
-footer{margin:64px 0 0;border-top:1px solid var(--line);padding:24px 0 44px;
-  color:var(--muted);font-size:13px}
-footer a{margin-right:4px}
 </style>
 </head>
 <body>
-%(chbar)s<nav><div class="wrap">
-  <a class="brand px" href="#top"><img class="moy" src="%(mark)s" alt="">moy<em>byte</em></a>
-  <span class="sp"></span>
-  <a class="l" href="#console">Try it</a>
-  <a class="l" href="#flash">Flash a board</a>
-  <a class="l" href="#in">What's in it</a>
-  <a class="l" href="#runs">Runs on</a>
-  <a class="l" href="#build">Build</a>
-  <a class="l" href="https://github.com/moybyte-org/moybyte">GitHub &#8599;</a>
-  <button class="scheme" id="scheme" type="button" hidden></button>
-</div></nav>
+%(chbar)s%(nav)s
 
 <div class="wrap" id="top">
   <div class="hero">
@@ -1419,19 +1514,7 @@ make firmware-flash-tdeck-mainline PORT=/dev/ttyACM0
 
 <span class="c"># this page's player, from source</span>
 firmware/web_runner/build.sh &amp;&amp; make site</pre>
-  <footer>
-    <a href="https://github.com/moybyte-org/moybyte">Source</a> &middot;
-    <a href="https://github.com/moybyte-org/moy-spec">The cartridge spec (moy core 0.4)</a> &middot;
-    <a href="https://github.com/moybyte-org/moybyte/blob/master/docs/moy_cart_api.md">Cart API</a> &middot;
-    <a href="https://github.com/moybyte-org/moy-spec">Compiled carts</a> &middot;
-    <a href="https://github.com/moybyte-org/carts">Get Carts</a> &middot;
-    <a href="https://github.com/moybyte-org/moybyte/issues">Issues</a>
-    <br><br>
-    Source-available (FSL-1.1-MIT): free to run, modify, teach with, and to make
-    and sell carts. Selling hardware built on Moybyte needs a commercial licence;
-    each release becomes MIT two years after it is published. The page for kids
-    and parents is <a href="https://moybyte.com">moybyte.com</a>.
-  </footer>
+%(footer)s
 </div></section>
 <script>
 %(scheme_js)s
@@ -1452,9 +1535,8 @@ pickDevice();
 </body>
 </html>
 """ % {
-        "roles_dark": moy_roles("dark"), "roles_light": moy_roles("light"),
-        "night": moy_roles("dark", NIGHT_ROLES), "font": font_face(), "tabs": tabs, "missing": missing,
-        "status": status, "features": features, "mark": moy_mark(pal),
+        "site_css": site_css(), "nav": site_nav(pal), "footer": SITE_FOOTER, "tabs": tabs,
+        "missing": missing, "status": status, "features": features,
         "targets": targets, "boards": boards, "device_options": device_options, "flash_js": flash_js,
         "flash_hint": flash_hint, "stage": stage,
         "console_js": CONSOLE_JS if has_player else "",
@@ -1624,6 +1706,10 @@ def main():
             f.write("\n")
         for js in ("flash.js", "flash_reset.js"):
             shutil.copyfile(os.path.join(HERE, js), os.path.join(out, js))
+        # The first setup after a flash is My consoles' own (site/os/): the
+        # list, the link and the Improv client, one body for both pages.
+        for js in SETUP_JS:
+            shutil.copyfile(os.path.join(HERE, "os", js), os.path.join(out, js))
         shutil.copytree(VENDOR_SRC, os.path.join(out, "vendor"))
     else:
         print("!! no firmware images under %s -- the page will say so "
