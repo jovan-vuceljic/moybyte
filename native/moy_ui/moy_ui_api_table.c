@@ -393,7 +393,8 @@ static int32_t cells_motion(moy_ui_ctx_t *c, moy_ui_keep_t *kp, int st, int focu
             offset = to;
         }
     }
-    kp->car_set = kp->car_row = (int16_t)sel;
+    kp->car_set = (int16_t)sel;
+    kp->car_row = (int16_t)app;
     *cur = sel;
     return offset;
 }
@@ -1694,7 +1695,8 @@ static int32_t desk_motion(moy_ui_ctx_t *c, moy_ui_keep_t *kp, int st, int focus
         }
         offset = off;
     }
-    kp->car_set = kp->car_row = (int16_t)sel;
+    kp->car_set = (int16_t)sel;
+    kp->car_row = (int16_t)app;
     *cur = sel;
     return offset;
 }

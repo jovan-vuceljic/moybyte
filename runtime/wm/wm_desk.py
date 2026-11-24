@@ -93,6 +93,7 @@ class _BackdropLayer(Layer):
         self._pic_ix = {}
         self._g = array("i", [0] * 16)
         self._band = array("i", [0] * 4)
+        self._cells = array("i", [0] * 25)   # the column as it drew (`focused`)
         self._gcv = None
         self._box = [0, 0, 0, 0]      # a tile's icon square (`_tile_picture`)
         self._open_fn = self._tile_open   # (bound once: a frame allocates none)
@@ -592,10 +593,13 @@ class _BackdropLayer(Layer):
                 ws.open(cart)
 
     def focused(self):
-        """The id of the tile the keys are on in the frame drawn last, None
-        with none."""
-        h = self._host
-        return h.focused() if h is not None else None
+        """The key of the tile the keys are on as the last frame drew the
+        column (uit_cells), None where the column does not hold the focus."""
+        pg, cat, w = self._page, self._catalog, self._cells
+        if pg is None or not cat or not pg.cells(w) or not w[24]:
+            return None
+        i = w[22]
+        return cat[i][0] if 0 <= i < len(cat) else None
 
     def handle_input(self, i):
         """The desk's keys (no window holds them): the column page's, its

@@ -6,9 +6,9 @@ steps press. With the pad's buttons alone: the pad's focus and keys show
 the moment it connects, the d-pad moves the home's selection, R steps the
 tabs and L steps back, A opens an app and B leaves it, A plays a game and
 Start's pause card quits it; the pad leaving gives the keyboard back, and
-coming back takes over again. On the desk the pad's focus is on the tiles,
-A on Play opens the console-mode home and B comes back, and Start opens
-and closes the system menu. The mapping and the console's half are
+coming back takes over again. On the desk Down moves the focus to
+Projects, A opens its window and B closes it, and Start opens and closes
+the system menu. The mapping and the console's half are
 tests/test_web_gamepad.py's.
 
     MOYBYTE_WEB_E2E=1 .venv/bin/python -m pytest tests/test_web_gamepad_e2e.py
@@ -161,15 +161,14 @@ def test_a_gamepad_alone_drives_the_handheld(tmp_path, base):
 
 
 def test_a_gamepad_alone_drives_the_desk(tmp_path, base):
-    """The 1024x600 desk: the focus on its tiles, A on Play opening the
-    console-mode home and B coming back to the desk, and Start's system
-    menu."""
+    """The 1024x600 desk: Down moves the focus from Play to Projects, A
+    opens the Projects window and B closes it, and Start opens and closes
+    the system menu."""
     tail, got = _run(tmp_path, base, "pad_desk", "?dev=1", [
         {"note": "the console up", "wait": 5000},
         *_connect("CONNECTED"),
         *_tap(DOWN, 800), _probe("MOVED"),
         {"shot": "pad_desk_focus"},
-        *_tap(UP, 800),
         *_tap(A, 2500), _probe("OPENED"),
         *_tap(B, 1200), _probe("CLOSED"),
         *_tap(START, 800), _probe("MENU"),
@@ -177,8 +176,9 @@ def test_a_gamepad_alone_drives_the_desk(tmp_path, base):
     ])
     con = got["CONNECTED"]
     assert con["screen"] == "desk" and con["input"]["kind"] == "pad", tail
-    assert got["MOVED"]["input"]["desk_focus"] == "tiles", "no focus on the desk's tiles"
-    assert got["OPENED"]["stack"] == ["launcher"], "A on Play opened no home: %s" % got
-    assert got["CLOSED"]["stack"] == con["stack"], "B came back to no desk: %s" % got["CLOSED"]
+    assert con["input"]["desk_focus"] == "play", con
+    assert got["MOVED"]["input"]["desk_focus"] == "projects", got["MOVED"]
+    assert "projects" in got["OPENED"]["order"], "A opened no Projects window: %s" % got["OPENED"]
+    assert got["CLOSED"]["order"] == con["order"], "B closed no window: %s" % got["CLOSED"]
     assert got["MENU"]["sysmenu"], "Start opened no system menu"
     assert not got["MENU_SHUT"]["sysmenu"], "Start did not close it"

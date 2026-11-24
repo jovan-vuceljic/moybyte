@@ -578,7 +578,8 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         return self.mode == "desktop"
 
     def desk_focus(self):
-        """The id of the desk's tile the keys are on, None with none."""
+        """The key of the desk's tile the keys are on ("play", "projects",
+        an app's), None where the desk does not hold the focus."""
         return self._backdrop_layer.focused()
 
     def on_nav(self):
