@@ -5,9 +5,13 @@ out stays out.
   * the `legacy` kind -- a surface on the immediate verbs hosted in one node
     of a tree -- is no kind of any front: not the Python API's, not the
     contract's, not the C engine's;
-  * the shell draws on the engine, not the immediate toolkit: no runtime
-    module but `shell/system_api.py` (a Python app cart's `ui`) imports
-    runtime/toolkit/ui.py.
+  * the immediate `ui` surface is gone from every tier, and a test here
+    fails the day any part of it returns: the os_calls `ui` rows and role,
+    the RUN form (face.json's `run` keys and its generated rows), the Python
+    toolkit (runtime/toolkit/ui.py and any import of it), the Lua and wasm
+    verbs (moycore_ui, moy_ui_wasm), the SDK's ui.h and the toolkit a
+    native module links, the WASI and ELF rows a linked toolkit pulled its
+    theme and told its answers through, and the `moybyte.ui` extension.
 """
 
 import json
@@ -36,21 +40,69 @@ def test_the_legacy_kind_is_no_kind_of_any_front():
         assert not re.search(r"UIT_LEGACY|UT_LEGACY|legacy_hints|\"legacy\"", text), path
 
 
-def test_no_shell_module_draws_with_the_immediate_toolkit():
+def test_no_runtime_module_imports_an_immediate_toolkit():
+    assert not os.path.exists(os.path.join(ROOT, "runtime", "toolkit", "ui.py"))
     found = []
     for base, _dirs, files in os.walk(os.path.join(ROOT, "runtime")):
         for name in files:
             if not name.endswith(".py"):
                 continue
             path = os.path.join(base, name)
-            rel = os.path.relpath(path, ROOT)
-            if rel in ("runtime/toolkit/ui.py", "runtime/shell/system_api.py"):
-                continue
             with open(path) as f:
                 for n, line in enumerate(f, 1):
-                    if re.match(r"\s*(import ui\b(?!_)|from ui import)", line):
-                        found.append("%s:%d" % (rel, n))
+                    if re.match(r"\s*(import ui\b(?!_)|from ui import|from runtime import (.*, )?ui\b(?!_))",
+                                line):
+                        found.append("%s:%d" % (os.path.relpath(path, ROOT), n))
     assert not found, found
+
+
+def test_the_os_calls_carry_no_ui_rows_and_no_ui_role():
+    calls = json.loads(_read("native", "os_calls.json"))
+    assert "ui" not in [r["role"] for r in calls["roles"]]
+    assert not [r["name"] for r in calls["rows"] if r["name"].startswith("ui.")]
+    for name in ("moy_ui_pull", "moy_ui_font_pull", "moy_ui_tell"):
+        row = next(r for r in calls["rows"] if r["name"] == name)
+        assert row.get("retired") and not row.get("wasi"), row
+    from runtime import app_imports
+    assert "ui" not in app_imports.PUBLIC
+
+
+def test_the_run_form_is_no_face_of_the_toolkit():
+    face = json.loads(_read("native", "moy_ui", "face.json"))["moy_ui"]
+    for row in face["api"]:
+        assert not set(row) & {"run", "run_ret", "run_fix"}, row
+    for gone in ("moy_ui_run_rows.h", "moy_ui_run_face.h"):
+        assert not os.path.exists(os.path.join(ROOT, "native", "moy_ui", gone)), gone
+
+
+def test_no_lua_wasm_wasi_or_native_tier_has_ui_verbs():
+    gone = [("native", "moycore", "moycore_ui.h"), ("native", "moycore", "moycore_ui_rows.h"),
+            ("native", "moy_ui", "moy_ui_wasm.c"), ("native", "moy_ui", "moy_ui_wasm.h"),
+            ("native", "moy_ui", "moy_ui_wasm_face.h"), ("native", "moy_ui", "moy_ui_wasm_rows.h"),
+            ("sdk", "include", "moybyte", "ui.h"), ("sdk", "src", "moyui_link.c")]
+    assert not [p for p in gone if os.path.exists(os.path.join(ROOT, *p))]
+    found = []
+    for top in ("native", "runtime", "device", "sdk", "tools"):
+        for base, dirs, files in os.walk(os.path.join(ROOT, top)):
+            dirs[:] = [d for d in dirs if d not in ("__pycache__", "wamr", "lua")]
+            for name in files:
+                if not name.endswith((".c", ".h", ".py", ".lua")):
+                    continue
+                path = os.path.join(base, name)
+                with open(path, errors="replace") as f:
+                    text = f.read()
+                if re.search(r"MOYCORE_UI_VERBS|moycore_ui_rows|moy_ui_wasm|import_module\(\"moybyte\.ui\"\)"
+                             r"|moy_ui_link_frame|moy_screen_slot_tell", text):
+                    found.append(os.path.relpath(path, ROOT))
+    assert not found, found
+    rows = _read("native", "moy_wasm", "moy_wasi_os_rows.h")
+    assert not re.search(r"X\(ui_(tell|pull|font_pull)\b", rows)
+
+
+def test_the_moybyte_ui_extension_is_not_supported():
+    from runtime import player
+    assert "moybyte.ui" not in player.SUPPORTED_EXTENSIONS
+    assert "moybyte.uitree" in player.SUPPORTED_EXTENSIONS
 
 
 def test_every_front_numbers_the_kinds_as_the_engine_does():
