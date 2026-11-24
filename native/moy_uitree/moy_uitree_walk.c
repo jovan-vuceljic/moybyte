@@ -2585,28 +2585,48 @@ static void draw_popover(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int 
 // A split (not in a popover): its cells across the page's room in by its pad, each a fixed size
 // in desk units or a weight of what is left ("N*"; with none, every size a weight); a group cell
 // its own scrolled column, any other kind drawn as it stands.
-// The width a link row `k` needs to draw its label and its value whole (the
-// toolkit's MOY_UI_MEASURE_LINK), 0 where it is not shown.
-static int32_t link_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+// The width a link row `k` needs to draw its icon, its label and, with `value`, its value
+// whole (the toolkit's MOY_UI_MEASURE_LINK; without, its least, as its value gives way to its
+// label), 0 where it is not shown.
+static int32_t link_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
+                      int value)
 {
     if (!uit_shown(e, k, model, row))
         return 0;
     char t[256];
     uint32_t n1, a1 = text(e, k, 0, model, row, &n1);
-    size_t m = n1 < sizeof t - 1 ? n1 : sizeof t - 1;
+    size_t m = n1 < sizeof t - 1 ? n1 : sizeof t - 1, v = 0;
     memcpy(t, e->scratch.p + a1, m);
-    t[m++] = '\t';
-    uint32_t n2, a2 = text(e, k, 1, model, row, &n2);
-    size_t v = n2 < sizeof t - m ? n2 : sizeof t - m;
-    memcpy(t + m, e->scratch.p + a2, v);
+    if (value) {
+        t[m++] = '\t';
+        uint32_t n2, a2 = text(e, k, 1, model, row, &n2);
+        v = n2 < sizeof t - m ? n2 : sizeof t - m;
+        memcpy(t + m, e->scratch.p + a2, v);
+    }
+    // measured with its icon, as it draws (`over_for`)
+    const uit_node_t *N = NODE(k);
+    int16_t slot = c->icon_slot, glyph = c->icon_glyph;
+    uint32_t mark = e->scratch.n, n = 0, at = 0;
+    const char *ic = NULL;
+    if (N->t_icon >= 0)
+        at = uit_tmpl_render(e, N->t_icon, model, row, &n), ic = e->scratch.p + at;
+    else if (N->act >= 0)
+        ic = uit_str(e, e->acts[N->act].icon), n = (uint32_t)strlen(ic);
+    if (n) {
+        c->icon_slot = (int16_t)moy_ui_icon_slot((const uint8_t *)ic, n);
+        c->icon_glyph = (int16_t)moy_ui_icon_glyph((const uint8_t *)ic, n);
+    }
+    e->scratch.n = mark;
     int32_t out[5];
     moy_ui_api_measure(c, s, MOY_UI_MEASURE_LINK, span_of(t, m + v), NULL, out);
+    c->icon_slot = slot, c->icon_glyph = glyph;
     return out[2];
 }
 
 // The widest link row in region `k` (`_row_w`): every row of a rows' model, a group's own, a
-// scroll's and its switch's shown case's.
-static int32_t row_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row)
+// scroll's and its switch's shown case's; with `value` their values whole, without their least.
+static int32_t row_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int model, int row,
+                     int value)
 {
     int32_t w = 0, x;
     KIDS(k, g) {
@@ -2615,17 +2635,17 @@ static int32_t row_w(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, i
             for (int r = 0, b; r < e->slots[N->slot].nrows; r++)
                 if ((b = uit_row_body(e, g, r)) >= 0)
                     KIDS(b, kk)
-                    if (NODE(kk)->kind == UIT_LINK && (x = link_w(e, c, s, kk, N->slot, r)) > w)
+                    if (NODE(kk)->kind == UIT_LINK && (x = link_w(e, c, s, kk, N->slot, r, value)) > w)
                     w = x;
         } else if (N->kind == UIT_LINK) {
-            if ((x = link_w(e, c, s, g, model, row)) > w)
+            if ((x = link_w(e, c, s, g, model, row, value)) > w)
                 w = x;
         } else if (N->kind == UIT_GROUP || N->kind == UIT_SCROLL || N->kind == UIT_CASE) {
-            if ((x = row_w(e, c, s, g, model, row)) > w)
+            if ((x = row_w(e, c, s, g, model, row, value)) > w)
                 w = x;
         } else if (N->kind == UIT_SWITCH) {
             int cs = uit_case_of(e, g);
-            if (cs >= 0 && (x = row_w(e, c, s, cs, model, row)) > w)
+            if (cs >= 0 && (x = row_w(e, c, s, cs, model, row, value)) > w)
                 w = x;
         }
     }
@@ -2662,7 +2682,8 @@ static int32_t seg_need(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
 
 // A row split's widths (`_fit_spans`): each group cell whose link rows need more than its size,
 // and each row whose cells' natural widths do, gives it widened to that need, the cells beside
-// it giving up at most half their share, down to their needs (a row's least: `row_need`).
+// it giving up at most half their share, down to their needs (a row's least: `row_need`; a
+// group's, its links' labels, whose values give way).
 static void fit_spans(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, const int *kids, int nk,
                       int model, int row, int32_t *spans, int nz, int32_t h)
 {
@@ -2670,7 +2691,7 @@ static void fit_spans(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, const i
     int any = 0;
     for (int i = 0; i < nk && i < nz; i++)
         if (NODE(kids[i])->kind == UIT_GROUP)
-            any |= (need[i] = row_w(e, c, s, kids[i], model, row)) > 0;
+            any |= (need[i] = row_w(e, c, s, kids[i], model, row, 1)) > 0;
         else if (NODE(kids[i])->kind == UIT_ROW)
             any |= (need[i] = row_need(e, c, s, kids[i], model, row, h, 0)) > 0;
         else if (NODE(kids[i])->kind == UIT_SEG)
@@ -2678,8 +2699,10 @@ static void fit_spans(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, const i
     if (!any)
         return;
     for (int j = 0; j < nz; j++) {
-        int32_t least = j < nk && NODE(kids[j])->kind == UIT_ROW
-                            ? row_need(e, c, s, kids[j], model, row, h, 1) : need[j];
+        int32_t least = j >= nk ? need[j]
+                        : NODE(kids[j])->kind == UIT_ROW ? row_need(e, c, s, kids[j], model, row, h, 1)
+                        : NODE(kids[j])->kind == UIT_GROUP ? row_w(e, c, s, kids[j], model, row, 0)
+                        : need[j];
         floor[j] = spans[j] / 2 > least ? spans[j] / 2 : least;
     }
     for (int i = 0; i < nk && i < nz; i++) {
