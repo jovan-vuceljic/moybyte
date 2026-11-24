@@ -53,6 +53,12 @@ static volatile uint8_t s_keep;         // an address came: keep the network
 static volatile uint8_t s_scan;         // SCAN_IDLE, _ASKING, _RUNNING or _DONE
 static uint32_t s_scan_ms;              // since when it is asked for, or runs
 static uint32_t s_ask_ms;               // the last ask of the driver
+static volatile uint8_t s_txp = MOY_WIFI_TXP_FULL;  // the max TX power the next attempt asks for
+static uint8_t s_txp_set = MOY_WIFI_TXP_FULL;      // the power the started driver holds, 0 unknown
+static uint8_t s_txp_lowered;           // a power below full was asked for this boot
+static volatile uint8_t s_txp_first;    // the next refusal is the first at a known power
+static volatile uint8_t s_txp_ok;       // the power the last address came at
+static volatile uint8_t s_txp_search;   // a lower power is searched for (moy_wifi_txp_next)
 
 // A scan the driver refused (a station still starting or associating) is
 // asked again every SCAN_ASK_MS until MOY_WIFI_SCAN_MS has passed.
@@ -77,6 +83,7 @@ enum { SCAN_IDLE, SCAN_ASKING, SCAN_RUNNING, SCAN_DONE };
 #define STALL_MS 15000u
 
 static void connect_now(void);
+static unsigned txp_recall(const char *ssid);
 static esp_netif_t *s_ap;           // the provisioning access point (moy_wifi_ap)
 
 static void schedule_retry(void) {
@@ -103,8 +110,15 @@ static void retry(void *arg) {
     connect_now();
 }
 
-// One attempt, its deadline armed; a refused ask is retried after the backoff.
+// One attempt at the power the walk asks for (moy_net.h, the station's
+// transmit power), its deadline armed; a refused ask is retried after the
+// backoff.
 static void connect_now(void) {
+    uint8_t txp = s_txp;
+    if (txp != s_txp_set && esp_wifi_set_max_tx_power((int8_t)txp) == ESP_OK) {
+        s_txp_set = txp;
+        s_txp_lowered |= txp != MOY_WIFI_TXP_FULL;
+    }
     if (esp_wifi_connect() != ESP_OK) {
         schedule_retry();
         return;
@@ -253,6 +267,14 @@ static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data) {
         portEXIT_CRITICAL(&s_latch);
         radio(false, d ? d->reason : 0);
         if (s_want) {
+            int why = d ? d->reason : 0;
+            s_txp_search |= moy_wifi_txp_garbled(why);
+            uint8_t txp = (uint8_t)moy_wifi_txp_next(why, s_txp, s_txp_first, s_txp_search);
+            s_txp_first = 0;
+            if (txp != s_txp) {
+                s_txp = txp;
+                s_backoff = 0;          // another power is a new try, not a retry
+            }
             schedule_retry();
         }
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
@@ -264,6 +286,9 @@ static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data) {
         portEXIT_CRITICAL(&s_latch);
         s_backoff = 0;
         s_keep = 1;
+        s_txp_ok = s_txp;
+        s_txp_first = 1;
+        s_txp_search = s_txp != MOY_WIFI_TXP_FULL;
         if (s_stall && s_retry != NULL) {
             s_stall = 0;
             esp_timer_stop(s_retry);
@@ -342,6 +367,10 @@ int moy_wifi_on(void) {
     e = esp_wifi_start();
     if (e == ESP_OK) {
         s_st.on = 1;
+        // A driver that was never asked for less is at its own maximum, and
+        // full power asks it for nothing; after a lower ask its power is
+        // not known across a stop, and the next attempt sets it.
+        s_txp_set = s_txp_lowered ? 0u : MOY_WIFI_TXP_FULL;
     }
     return e;
 }
@@ -384,6 +413,9 @@ int moy_wifi_connect(const char *ssid, const char *password) {
     }
     memcpy(c.sta.ssid, ssid, n);
     memcpy(c.sta.password, password, p);
+    s_txp = (uint8_t)moy_wifi_txp_start(txp_recall(ssid));
+    s_txp_first = s_txp != MOY_WIFI_TXP_FULL;
+    s_txp_search = s_txp_first;
     int busy = s_want || s_st.connected;
     s_want = 0;
     s_backoff = 0;
@@ -432,6 +464,41 @@ typedef struct {
     char pass[65];
 } kept_t;
 
+// The powers remembered per network (moy_net.h's moy_wifi_txp_slot_t), one
+// blob beside it.
+#define TXP_KEY "txp"
+
+static void txp_load(nvs_handle_t h, moy_wifi_txp_slot_t *t) {
+    size_t n = sizeof(moy_wifi_txp_slot_t) * MOY_WIFI_TXP_SLOTS;
+    if (nvs_get_blob(h, TXP_KEY, t, &n) != ESP_OK
+        || n != sizeof(moy_wifi_txp_slot_t) * MOY_WIFI_TXP_SLOTS) {
+        memset(t, 0, sizeof(moy_wifi_txp_slot_t) * MOY_WIFI_TXP_SLOTS);
+    }
+    for (int i = 0; i < MOY_WIFI_TXP_SLOTS; i++) {
+        t[i].ssid[sizeof(t[i].ssid) - 1u] = '\0';
+    }
+}
+
+static unsigned txp_recall(const char *ssid) {
+    moy_wifi_txp_slot_t t[MOY_WIFI_TXP_SLOTS];
+    nvs_handle_t h;
+    if (nvs_open(KEEP_NS, NVS_READONLY, &h) != ESP_OK) {
+        return 0u;
+    }
+    txp_load(h, t);
+    nvs_close(h);
+    return moy_wifi_txp_recall(t, ssid);
+}
+
+static void txp_learn(nvs_handle_t h, const char *ssid, unsigned txp) {
+    moy_wifi_txp_slot_t t[MOY_WIFI_TXP_SLOTS];
+    txp_load(h, t);
+    if (moy_wifi_txp_learn(t, ssid, txp)) {
+        nvs_set_blob(h, TXP_KEY, t, sizeof(t));
+        nvs_commit(h);
+    }
+}
+
 static void keep_now(void) {
     s_keep = 0;
     wifi_config_t c;
@@ -452,6 +519,7 @@ static void keep_now(void) {
         nvs_set_blob(h, KEEP_KEY, &k, sizeof(k));
         nvs_commit(h);
     }
+    txp_learn(h, k.ssid, s_txp_ok);
     nvs_close(h);
 }
 
