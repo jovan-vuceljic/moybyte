@@ -1049,20 +1049,29 @@ static int pane_prop(uit_t *e, int node, const char *name, const char *src, cons
 }
 
 // The API's check at lowering, so a front that carries no check (a compiled app's) is held to the
-// contract's table as the others are: a prop name no kind takes, a retired one, a word not the prop's.
-// What a kind does not take by name in the API is the store's own: a node's binding (`bind`, `field`)
-// and its head, which the API gives by position and the store by name. A prop the spec designs passes
-// here, so the engine draws it or refuses it as one it does not draw yet.
+// contract's table as the others are: a prop name no kind takes, a retired one, a word not the prop's,
+// one the spec designs and no engine builds. What a kind does not take by name in the API is the
+// store's own: a node's binding (`bind`, `field`) and the head of the kinds whose head the store
+// keeps by name (HEADS), which the API gives by position.
 static int api_check(uit_t *e, int kind, const char *name, const char *src)
 {
-    static const char *const OWN[] = {"bind", "field", "title", "caption", "text", "label", "value", "image"};
+    static const struct {
+        uint8_t kind;
+        const char *name;
+    } HEADS[] = {{UIT_PAGE, "title"}, {UIT_GROUP, "caption"}, {UIT_LABEL, "text"}, {UIT_DIALOG, "title"},
+                 {UIT_INFO, "label"}, {UIT_EMPTY, "title"}, {UIT_PICTURE, "image"}, {UIT_PROGRESS, "value"},
+                 {UIT_STATUS, "text"}, {UIT_COL, "text"}, {UIT_MENU, "caption"}, {UIT_BUBBLE, "text"},
+                 {UIT_TOAST, "text"}};
     const char *kn = uit_kind_names[kind];
-    if (!uit_prop_type(kn, name))
-        for (size_t i = 0; i < sizeof OWN / sizeof OWN[0]; i++)
-            if (!strcmp(name, OWN[i]))
+    if (!uit_prop_type(kn, name)) {
+        if (!strcmp(name, "bind") || !strcmp(name, "field"))
+            return 0;
+        for (size_t i = 0; i < sizeof HEADS / sizeof HEADS[0]; i++)
+            if (HEADS[i].kind == kind && !strcmp(name, HEADS[i].name))
                 return 0;
+    }
     char out[600];
-    const char *code = uit_check_prop(kn, name, UIT_VC_BUILDS, src, out, sizeof out);
+    const char *code = uit_check_prop(kn, name, UIT_VC_ANY, src, out, sizeof out);
     if (!code || !strncmp(out, "no kind", 7))
         return 0;           // a kind of the store's own (switch, case, row, panel) checks nothing here
     char *what = out, *expected = strchr(what, '\x1f');

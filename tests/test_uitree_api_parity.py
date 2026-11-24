@@ -229,3 +229,25 @@ def test_compiled_rows_refuse_a_canvas_keys_they_cannot_route():
         assert "takes no keys" in r.read("error", cap=400)[1], r.read("error", cap=400)[1]
     finally:
         r.close()
+
+
+@pytest.mark.parametrize("kind, name, src, says", [
+    ("canvas", "text", "True", "the spec designs it"),      # designed: no engine builds it
+    ("rule", "label", "x", "no prop 'label'"),              # a head name on a kind whose head it is not
+    ("canvas", "caption", "x", "no prop 'caption'"),
+])
+def test_compiled_rows_refuse_what_no_engine_draws_on_the_kind(kind, name, src, says):
+    """The engine's check at lowering takes a store head name only on the
+    kind whose head it is, and refuses a designed prop: a compiled app can
+    name nothing that silently draws nothing."""
+    from test_uitree_wasm import Rows, PAGE, E_CHECK
+    import uitree_c
+    r = Rows()
+    try:
+        r.build("1 page")
+        page = r.node(PAGE, "page", -1)
+        n = r.node(uitree_c._KINDS[kind], "n", page)
+        assert r.prop(n, name, src) == E_CHECK
+        assert says in r.read("error", cap=400)[1], r.read("error", cap=400)[1]
+    finally:
+        r.close()
