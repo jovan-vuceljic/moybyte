@@ -95,7 +95,7 @@ int uit_letter(uit_t *e, int ch)
 int uit_shown(uit_t *e, int node, int model, int row)
 {
     const uit_node_t *N = NODE(node);
-    if (N->kind == UIT_FIELD && (N->lit & NL_HIDE) && N->mark >= 0 && !uit_cond_eval(e, N->mark, model, row))
+    if (UIT_IS_TWO_WAY_OFF(N->kind) && (N->lit & NL_HIDE) && N->mark >= 0 && !uit_cond_eval(e, N->mark, model, row))
         return 0;
     return N->shown < 0 || uit_cond_eval(e, N->shown, model, row);
 }
@@ -299,7 +299,7 @@ static void over_for(uit_t *e, int k, int model, int row, moy_ui_ctx_t *c, moy_u
                 moy_ui_over_put(o, MOY_UI_OV_CHECK, &one);
         }
     }
-    if (N->mark >= 0 && N->kind == UIT_FIELD && !uit_cond_eval(e, N->mark, model, row)) {
+    if (N->mark >= 0 && UIT_IS_TWO_WAY_OFF(N->kind) && !uit_cond_eval(e, N->mark, model, row)) {
         int32_t one = 1;
         moy_ui_over_put(o, MOY_UI_OV_DISABLED, &one);
     } else if (N->mark >= 0 && N->kind == UIT_BUTTON) {

@@ -852,9 +852,6 @@ CASES = {
     "S07": (APP + 'local s = ui.state { m = ui.model { name = "" } }' + PAGE, 2, None),
     "S09": (APP + 'local s = ui.state { n = 0 }\nui.derive("big", { cond = "n>3" })\n'
             'ui.action("go", "Go", function()\n  s.big = true\nend)' + PAGE, 5, 'ui._fire("go")\n'),
-    "S10": (APP + 'local s = ui.state { unread = 0 }\nui.action("go", "Go", function()\n  s.unread = 0\nend)\n'
-            'ui.page("p", function() ui.scroll("list", { new = "unread" }, function() ui.label("x") end) end)\n', 4,
-            'ui._fire("go")\n'),
     "S11": (APP + 'local s = ui.state { r = ui.row_of(3) }' + PAGE, 2, None),
     "S13": (APP + 'local s = ui.state { x = print }' + PAGE, 2, None),
     "T01": (APP + 'local s = ui.state { n = 0 }\nui.page("p", function() ui.label("{n|nope}") end)\n', 3, None),

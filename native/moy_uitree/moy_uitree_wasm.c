@@ -446,6 +446,11 @@ int32_t moy_uitree_wasm_prop(void *x, int32_t node, const uint8_t *name, uint32_
     APP(a);
     TEXTS_BEGIN(a);
     int n = put(a, name, name_n), s = put(a, src, src_n);
+    if (node >= 0 && node < a->e->nnodes && a->e->nodes[node].kind == UIT_CANVAS && strcmp(at(a, n), "keys") == 0) {
+        char where[200];        // no row hands a canvas the keys: refused, never a stop that takes none
+        key_path(a, (int)node, where, sizeof where);
+        return refuse(a, UIT_E_KIND, "prop", where, "keys=: a compiled app's canvas takes no keys yet; leave it out");
+    }
     int r = uit_prop(a->e, (int)node, at(a, n), at(a, s), NULL);
     if (r >= 0 && node == a->page && strcmp(at(a, n), "title") == 0) {
         snprintf(a->title, sizeof a->title, "%s", at(a, s));

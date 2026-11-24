@@ -189,7 +189,8 @@ typedef struct {
                                 // alone= in btn (BT_ALONE) and span= in nbtn; a grid's pad and
                                 // gap (GAP_*) in btn and nbtn, its cols and rows in lit's nibbles
     int16_t mark;               // a button's marked= cond: drawn current while it holds; a
-                                // field's when= cond: greyed (NL_HIDE: not shown) while it fails;
+                                // field's, a toggle's or a slider's when= cond: greyed (NL_HIDE:
+                                // not shown) while it fails;
                                 // a hints row's tail= cond
 } uit_node_t;
 
@@ -446,6 +447,8 @@ enum { GV_FOCUS = 1, GV_INPUT = 2 };
 
 // A list: rows and a table keep a model, a cur= and a removal order.
 #define UIT_IS_LIST(kind) ((kind) == UIT_ROWS || (kind) == UIT_TABLE || (kind) == UIT_CARDS)
+// The two-way controls that take when= and off=: greyed (or hidden) while the condition fails.
+#define UIT_IS_TWO_WAY_OFF(kind) ((kind) == UIT_FIELD || (kind) == UIT_TOGGLE || (kind) == UIT_SLIDER)
 // The states a page's gen can count (more: it carries none).
 #define UIT_GEN_SLOTS 128
 // A region's gen (a cards list's, a scroll region's, a split group's) (`_cell_gens`): the builds and edits, and the versions of what its

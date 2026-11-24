@@ -1337,8 +1337,7 @@
    "props": {
     "follow": {
      "type": "bool",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "new": {
      "type": "name",
@@ -1347,8 +1346,7 @@
     },
     "snap": {
      "type": "bool",
-     "level": 2,
-     "designed": true
+     "level": 2
     }
    }
   },
@@ -1866,13 +1864,11 @@
     },
     "when": {
      "type": "cond",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "off": {
      "type": "word:hide,grey",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "label": {
      "type": "tpl",
@@ -1899,13 +1895,11 @@
     },
     "when": {
      "type": "cond",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "off": {
      "type": "word:hide,grey",
-     "level": 1,
-     "designed": true
+     "level": 1
     },
     "label": {
      "type": "tpl",
@@ -1977,11 +1971,6 @@
     "changed": {
      "type": "hook",
      "level": 2
-    },
-    "input": {
-     "type": "word:text,number,password",
-     "level": 1,
-     "designed": true
     }
    }
   },

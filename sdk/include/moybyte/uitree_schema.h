@@ -38,9 +38,6 @@ static const char *const ut_kind_names_[] = {
 #define UT_GAP_M "m"
 #define UT_GAP_L "l"
 #define UT_GAP_0 "0"
-#define UT_INPUT_TEXT "text"
-#define UT_INPUT_NUMBER "number"
-#define UT_INPUT_PASSWORD "password"
 #define UT_KIND_NORMAL "normal"
 #define UT_KIND_PRIMARY "primary"
 #define UT_KIND_DANGER "danger"
@@ -143,7 +140,6 @@ static inline int32_t ut_p_hint(const char *v) { return ut_prop_("hint", v); }
 static inline int32_t ut_p_icon(const char *v) { return ut_prop_("icon", v); }
 static inline int32_t ut_p_icons(const char *v) { return ut_prop_("icons", v); }
 static inline int32_t ut_p_image(const char *v) { return ut_prop_("image", v); }
-static inline int32_t ut_p_input(const char *v) { return ut_prop_("input", v); }
 static inline int32_t ut_p_key(const char *v) { return ut_prop_("key", v); }
 static inline int32_t ut_p_keys(const char *v) { return ut_prop_("keys", v); }
 static inline int32_t ut_p_kind(const char *v) { return ut_prop_("kind", v); }

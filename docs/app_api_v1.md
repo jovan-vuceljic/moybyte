@@ -403,7 +403,7 @@ Python's alone.
 | `page(title)` | a page: its title is the bar's | `status=` the hints band's lead words, `shown=` an action or hook run as it becomes the top page (the model, above) |
 | `group(caption)` | a captioned column of rows | `look="card"` on a card, `"rules"` a rule between rows; `gap=`; `close=` |
 | `row(key)` | children side by side | `wrap=`, `gap=`, `pad=`, `mid=`, `close=` what Back does while it shows |
-| `scroll(key)` | a region that scrolls its children | Lua and C: `follow=` opens at its foot and keeps a new row in view; `snap=` shows whole rows, a "More below" cue where it leaves some out below and, following, an "Older messages" one above |
+| `scroll(key)` | a region that scrolls its children | `follow=` opens at its foot and keeps a new row in view; `snap=` shows whole rows, a "More below" cue where it leaves some out below and, following, an "Older messages" one above |
 | `foot()` | the page's docked foot: buttons at its end, a label before them | `look="share"` its buttons share its width, `"band"` an edge-to-edge strip |
 | `split(dir, sizes)` | cells along `"row"` or `"col"`, sized in units or weights (`"1*"`) | `gap=`, `pad=` (a spacing word: `"s"`, `"m"`, `"l"`, `"0"`), `align=`, `rule=` |
 | `grid(cols, rows)` | a fixed grid of cells | `gap=`, `pad=` (spacing words, as a split's), `w=`, `h=` |
@@ -437,9 +437,9 @@ Python's alone.
 |---|---|---|
 | `button(action)` | a button | `kind=` (`normal`, `primary`, `danger`, `tonal`, `bar`), `label=`, `icon=`, `alone=` icon only, `arg=`, `marked=`, `look="large"`, `w=` |
 | `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=`, `sub=`, `count=`, `mark=` |
-| `toggle(label, name)` | a bool | `on=`, `hint=` |
-| `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=` |
-| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `secret=`, `grow=`, `on=`, `changed=`, `when=` |
+| `toggle(label, name)` | a bool | `on=`, `hint=`, `when=` with `off=` (below) |
+| `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=`, `when=` with `off=` (below) |
+| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `secret=`, `grow=`, `on=`, `changed=`, `when=` with `off=` (below) |
 | `seg(label, name)` | one of an enum's values, or of a model's rows | `labels=`, `text=`, `look=` (`seg`, `cycle`, `swatches`, `pictures`), `on=` |
 | `tabs(name, labels)` | a tab strip over an enum, or over a `row_of` a tab a row; a `switch` on the same name is its body | `icons=`, `offered=`, `hint=`, `text=` |
 | `stepper(value, prev, next)` | "‹ value ›", its chevrons two actions | `tone="dim"`, `grow=` |
@@ -561,6 +561,10 @@ and its pages are placed; `split` and `grid` place their cells on any page.
   them, as far apart, until it is.
 - A slider's `look="blocks"` is a meter, its steps' blocks across the whole
   row (with no label, 10 units a step and 12 more wide in a row).
+- A field's, a toggle's or a slider's `when=` (a condition) comes with
+  `off=`, as an action's does: while the condition fails, `off="grey"` dims
+  the control and it is no stop, `off="hide"` takes it off the page; one
+  without the other is O01 or O02.
 - `stepper(value, prev, next)` is "‹ value ›", the bar's chevrons firing the
   two actions and greyed while either is off (its `when=`), one stop whose
   left and right step it, at its own width (centred where it is stacked) or
@@ -709,7 +713,7 @@ A canvas in a rows' body, or a table's child that draws the table's rows
 |---|---|
 | `reads=` | the states its draw reads; the page's shift frames count them, and a read of another state is R01. A canvas that names none draws the frame after it whole |
 | `pointer=` | an action or hook `takes="pointer"`, handed a press and its drag and release in the canvas's own coordinates (`ev.kind` `"down"`, `"drag"`, `"up"`; `ev.x`, `ev.y`; `ev.row`); while a popover or a dialog is open only a canvas inside it takes a press. C reads `ut_point()` |
-| `keys=` | Python: `keys(i)` (`keys(i, row)` in a table) is handed the input while the canvas holds focus, and answers True for a key it took; a canvas with no `keys=` is no stop |
+| `keys=` | handed the frame's keys while the canvas holds focus, run as a handler, and answers true for keys it took, which the page then never sees; a canvas with no `keys=` is no stop. Python: `keys(i)` (`keys(i, row)` in a list's body), `i` the input; Lua: `keys = function() ... end` (`function(row)` in a list's body), reading `btnp()` and `keyp()`. A compiled app's canvas takes no `keys=`: its row is refused |
 | `hint=` | the band's confirm word while it holds focus |
 | `h=`, `w=` | its size (a template); `ground=` the theme role painted under it |
 

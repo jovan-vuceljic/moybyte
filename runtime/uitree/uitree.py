@@ -2033,9 +2033,9 @@ SCHEMA = {
                  tone="text", swatch="text", sub="text", count="text", mark="text"),
     "button": dict(_C, kind="lit", label="text", icon="text", alone="lit", span="lit", arg="lit",
                    focus="cond", grow="lit", marked="cond", w="int", tone="text", look="lit"),
-    "toggle": dict(_C, label="text", on="action0", focus="cond", hint="text"),
+    "toggle": dict(_C, label="text", on="action0", focus="cond", hint="text", when="cond", off="lit"),
     "slider": dict(_C, label="text", lo="int", hi="int", on="action0", focus="cond", look="lit",
-                   icon="text"),
+                   icon="text", when="cond", off="lit"),
     "field": dict(_C, label="text", max="lit", on="action0", secret="lit", focus="cond",
                   changed="action0", hint="text", commit="lit", when="cond", off="lit", grow="lit"),
     "seg": dict(_C, label="text", on="action0", focus="cond", look="lit", labels="lit", text="text"),
@@ -2065,7 +2065,7 @@ SCHEMA = {
     "canvas": dict(_C, draw="fn", h="int", w="int", grow="lit", pointer="actionp", focus="cond", ground="lit",
                    keys="fn", mark="lit", hint="text", reads="lit"),
     "foot": dict(_C, look="lit"),
-    "scroll": dict(_C),
+    "scroll": dict(_C, follow="lit", snap="lit"),
     "switch": dict(_C),
     "case": {},
     # EXT-4. The Editor's kinds (see the calls below)
@@ -2416,8 +2416,21 @@ def _row_field(kind, name, want, where):
     return f
 
 
+def _off_pair(kind, name, p, where):
+    """A two-way control's when= and off= come together, as an action's do:
+    O01 for a when= that says no off=, O02 for an off= with no when=."""
+    if p.get("when") is not None and p.get("off") is None:
+        raise UIError("O01", "ui.%s(%r) can be off (when=%r) and does not say how it looks then" % (
+            kind, name, p["when"]), where=where,
+            expected='off="hide" (it goes) or off="grey" (it stays, dimmed, not a stop)', fix='off="grey"')
+    if p.get("off") is not None and p.get("when") is None:
+        raise UIError("O02", "ui.%s(%r) off=%r: it is never off" % (kind, name, p["off"]), where=where,
+                      fix="drop off=, or give the condition: when=\"COND\"")
+
+
 def toggle(label, name, **p):
     where = _caller()
+    _off_pair("toggle", name, p, where)
     if isinstance(name, str) and name.startswith("."):
         f = _row_field("toggle", name, BOOL, where)
         on = p.pop("on", None)
@@ -2437,6 +2450,7 @@ def slider(label, name, lo, hi, look="bar", **p):
     before its label."""
     where = _caller()
     _checked("slider", "look", look, where)
+    _off_pair("slider", name, p, where)
     p = dict(p, look=look) if look != "bar" else p
     if isinstance(name, str) and name.startswith("."):
         f = _row_field("slider", name, INT, where)
@@ -2456,6 +2470,7 @@ def field(label, name, max=32, commit=False, **p):
     is pressed in it or focus leaves it (`changed=` runs then), and its hints
     are Done and Cancel; without it every edit writes the state."""
     where = _caller()
+    _off_pair("field", name, p, where)
     if commit not in (True, False):
         raise UIError("N01", "ui.field(%r) commit=%r" % (name, commit), where=where,
                       expected="True or False", fix="commit=True")

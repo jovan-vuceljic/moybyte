@@ -1483,9 +1483,10 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->btn |= BT_GROW;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
-    if (kind == UIT_FIELD && (!strcmp(name, "when") || !strcmp(name, "off") || !strcmp(name, "grow"))) {
-        // when=: greyed while it fails (`mark`), not shown where off="hide"; grow=: what a
-        // field in a row does already
+    if ((UIT_IS_TWO_WAY_OFF(kind) && (!strcmp(name, "when") || !strcmp(name, "off"))) ||
+        (kind == UIT_FIELD && !strcmp(name, "grow"))) {
+        // a field's, a toggle's or a slider's when=: greyed while it fails (`mark`), not shown
+        // where off="hide"; a field's grow=: what a field in a row does already
         if (name[0] == 'w') {
             int c = uit_cond_compile(e, src, model);
             if (c < 0)

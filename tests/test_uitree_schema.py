@@ -107,8 +107,8 @@ def test_an_int_takes_a_template_a_text_takes_no_int_and_a_front_may_build_a_des
     assert m.check_prop("pane", "min", DICT, None) is None              # (w, h), or one a tab
     assert m.check_prop("pane", "min", LIST, None) is None
     assert m.check_prop("text_editor", "gutter", TEXT, "lines") is None  # a condition
-    assert m.check_prop("scroll", "snap", BOOL, None)[0] == "N01"       # designed
-    assert m.check_prop("scroll", "snap", BOOL | BUILDS, None) is None
+    assert m.check_prop("dialog", "default", TEXT, "ok")[0] == "N01"    # designed
+    assert m.check_prop("dialog", "default", TEXT | BUILDS, "ok") is None
     assert m.check_prop("bubble", "side", TEXT | BUILDS, "{s}") is None
 
 

@@ -140,6 +140,7 @@ static int s_live;
 static uint8_t s_paste[MOY_UI_API_PASTE];  // moy_ui_run_paste's, for the frame begun next
 static size_t s_paste_n;
 static int32_t s_rep, s_keyrep;            // moy_ui_run_steps', likewise
+static int s_taken;                        // moy_ui_run_keys_taken's, likewise
 
 static moy_ui_ctx_t *run_ctx(const void *target) {
     const moy_canvas *c = (const moy_canvas *)target;
@@ -173,6 +174,10 @@ static moy_ui_ctx_t *run_ctx(const void *target) {
         in[MOY_UI_IN_REP] = s_rep;
         in[MOY_UI_IN_KEYREP] = s_keyrep;
         s_rep = s_keyrep = 0;
+        if (s_taken) {                      // the app's canvas took them
+            in[MOY_UI_IN_BTNP] = in[MOY_UI_IN_KEY] = in[MOY_UI_IN_REP] = in[MOY_UI_IN_KEYREP] = 0;
+        }
+        s_taken = 0;
         in[MOY_UI_IN_DT] = moycore_ui_dt_take();   // the ticks' clock since the last frame
         // an app's frame is its content_rect() (the snapshot's room), a
         // game's the whole canvas
@@ -205,6 +210,10 @@ static moy_ui_ctx_t *run_ctx(const void *target) {
         s_tick = tick;
     }
     return s_ctx;
+}
+
+void moy_ui_run_keys_taken(void) {
+    s_taken = 1;
 }
 
 void moy_ui_run_steps(int32_t rep, int32_t keyrep) {

@@ -293,6 +293,9 @@ int uit_run_frame(uit_t *e, void *target, int flags);
 // (UIT_F_BACK: a page under the top one, a dialog, a popover, the back
 // role): 1 once, then 0. The front steps back before its next frame.
 int uit_run_backed(void);
+// The front's canvas took this tick's keys (its keys= while it holds focus):
+// the run's next frame sees none of them (moy_ui_run_keys_taken).
+void uit_run_keys_taken(void);
 // Whether the frame drawn last is what a frame now would draw, so a host
 // may leave its pixels and skip uit_frame: the same build, no state's
 // version and no draft moved, the same focus, no event, trace line or

@@ -95,6 +95,9 @@ void moy_ui_run_paste(const uint8_t *text, size_t n);
 // the trackball's steps, a held key's typing): the console's host calls it
 // each frame of a Lua or compiled app, as an app's own host fills them.
 void moy_ui_run_steps(int32_t rep, int32_t keyrep);
+// The app took this tick's keys (a canvas's keys= while it holds focus): the
+// run's frame begun next sees no press, typed key or step, its pointer as it is.
+void moy_ui_run_keys_taken(void);
 
 // A drawing of the caller's over the run's frame, as a row draws: `fn` is
 // called with the run's context (begun for this tick), the RUN sink over
