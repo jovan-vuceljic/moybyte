@@ -227,8 +227,11 @@ The console API level is ONE integer, `API_LEVEL` in
 reach grows or changes: a row, role, permission or error code of
 `native/os_calls.json` (and with it every tier's names: Python, Lua, `ui`, the
 compiled and WASI imports, the ELF table), a manifest field
-(`moy_store_base.VENDOR_FIELDS`), or the moy-spec format level the console runs
-(`runtime/run/player_fit.py`'s `FORMAT_LEVEL`). `tools/api_level.py` pins a
+(`moy_store_base.VENDOR_FIELDS`), the moy-spec format level the console runs
+(`runtime/run/player_fit.py`'s `FORMAT_LEVEL`), or the UI tree's contract
+(`tests/uitree_contract/contract.json`, §3: a kind, prop, word, verb, role,
+`takes=` value, retired name or error code, and whether each is built; its
+prose is left out). `tools/api_level.py` pins a
 fingerprint of those tables on the line below the level, and
 `tests/test_api_level.py` fails a table that changes while the level stands; the
 fix it names is to bump `API_LEVEL` and re-pin with `tools/api_level.py`.
