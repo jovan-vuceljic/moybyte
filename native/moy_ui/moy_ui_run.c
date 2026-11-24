@@ -251,24 +251,6 @@ const char *moy_ui_run_page_title(void) {
     return c == NULL ? NULL : moy_ui_api_page_title(c);
 }
 
-int moy_ui_run_bar_lent(const char **title, int16_t *slots, int *n, uint32_t *off,
-                        const char **chip) {
-    moy_ui_ctx_t *c = run_ctx_now();
-    int at = -1;
-    if (c == NULL || !moy_ui_api_bar_lent(c, title, slots, n, off)) {
-        return 0;
-    }
-    *chip = moy_ui_api_bar_chip(c, &at);
-    return 1;
-}
-
-void moy_ui_run_bar_tap(int i) {
-    moy_ui_ctx_t *c = run_ctx_now();
-    if (c != NULL) {
-        moy_ui_api_bar_tap(c, i);
-    }
-}
-
 // What shows of the table's part open now (moy_ui_run_table_part), x0, y0,
 // x1, y1 on the canvas: every verb drawn while it is open draws inside it,
 // as the canvas's own verbs do.

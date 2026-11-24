@@ -2589,21 +2589,6 @@ def test_a_resting_pointer_on_a_desk_tool_shows_its_word_and_key_at_the_end():
     assert any(under), "the tooltip under the tool"
 
 
-def test_a_bar_not_lent_this_frame_is_none():
-    st = {"lend": True}
-
-    def draw():
-        ui.page("")
-        if st["lend"]:
-            ui.bar("Here")
-    r = _Run(draw)
-    r.frame()
-    assert ui_draw.bar_lent(r.ctx) is not None
-    st["lend"] = False
-    r.frame()
-    assert ui_draw.bar_lent(r.ctx) is None
-
-
 def test_a_rule_is_a_line_across_or_down_ats_rect():
     def draw():
         ui.page("")
@@ -2671,7 +2656,7 @@ def test_a_table_in_a_group_draws_its_rows_as_the_groups():
 # -- the restyle's page in every runtime ---------------------------------------------------
 
 WASM_RESTYLE = os.path.join(ROOT, "tests", "fixtures", "wasm", "app_restyle.moy")
-R_FRAMES, R_MAKES, R_TOOLS, R_BAR, _R4, R_FOCUS, R_FAIL = range(7)
+R_FRAMES, R_MAKES, R_TOOLS, _R3, _R4, R_FOCUS, R_FAIL = range(7)
 RESTYLE_SCRIPT = ("a", "down", "a", "right", "a")
 
 
@@ -2725,4 +2710,3 @@ def test_the_restyle_page_answers_its_script(restyle_runs):
     assert s[0][R_FOCUS] == len("Make")
     assert s[1][R_MAKES] == 1, "a activates the verb"
     assert s[3][R_TOOLS] in (1, 10), "a tool under it activates"
-    assert all(p[R_BAR] == 0 for p in s), "no host tapped the bar"

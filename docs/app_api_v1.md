@@ -962,9 +962,7 @@ only its `print` and its own colours), a Lua, compiled, WASI or native run's
 by the RUN face over the word its snapshot carries (`AppFace.ui_face`,
 `moy_ui_run.h`'s `MOYCORE_UI_FACE_*`). A game's `ui`, and a fixed app's,
 draws as a cart's. Back steps out of its views first there too (§4): a
-focused field's edit, then a popover the last frame drew, then, while the
-app lends the bar its way back (`ui.bar`'s fourth argument), the next
-`ui.bar`, which answers it.
+focused field's edit, then a popover the last frame drew.
 
 Write an app on the UI tree: the immediate verbs go at the clean cut of
 the OS work (#246).

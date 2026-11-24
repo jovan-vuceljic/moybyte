@@ -1,15 +1,13 @@
 ;; App Restyle Wasm: the public UI API's restyle verbs (docs/history/look_2026-10.md
 ;; step 31) as a compiled app, through the `ui` rows it imports from module
-;; "moybyte.app": a verb, three tools (one current, one disabled), a rule and
-;; the bar's title and tools.
+;; "moybyte.app": a verb, three tools (one current, one disabled) and a rule.
 ;; tests/fixtures/ui_parts/restyle_py.moy and restyle_lua.moy draw the same
 ;; page with the same calls, and tests/test_ui_parts.py holds the three to the
 ;; same pixels.
 ;;
 ;; This file is the cart's SOURCE; main.wasm is built from it with
 ;; tools/wasm_cart.py and never committed. Into pmem: 0 frames, 1 the verb's
-;; activations, 2 the tools' (Select 1, Cut 10), 3 the bar's answer + 1, 5
-;; the focused id's length, 6 the last row answer that failed, negated (0:
+;; activations, 2 the tools' (Select 1, Cut 10), 5 the focused id's length, 6 the last row answer that failed, negated (0:
 ;; none).
 (module
   (import "moy" "pmem" (func $pmem (param i32 i32 i32) (result i32)))
@@ -22,7 +20,6 @@
   (import "moybyte.app" "ui_rule" (func $ui_rule (result i32)))
   (import "moybyte.app" "ui_tool" (func $ui_tool
     (param i32 i32 i32 i32 i32 i32) (result i32)))
-  (import "moybyte.app" "ui_bar" (func $ui_bar (param i32 i32 i32 i32 i32) (result i32)))
   (import "moybyte.app" "ui_focus" (func $ui_focus (param i32 i32 i32 i32) (result i32)))
 
   (memory (export "memory") 1 1)
@@ -35,8 +32,6 @@
   (data (i32.const 1124) "Copy\09Ctrl+C")
   (data (i32.const 1136) "cut")
   (data (i32.const 1140) "Cut")
-  (data (i32.const 1144) "Title")
-  (data (i32.const 1152) "undo\00redo")
   ;; the override blocks (moy_ui_api.h): current and disabled
   (data (i32.const 1200) "\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\01\00\00\00\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff")
   (data (i32.const 1240) "\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\01\00\00\00\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff")
@@ -58,7 +53,7 @@
   (func (export "_update") (param $dt f32))
 
   (func (export "_draw")
-    (local $b i32) (local $f i32)
+    (local $f i32)
     (drop (call $ok (call $ui_page (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)
                                    (i32.const 2048) (i32.const 16))))
     (drop (call $ok (call $ui_at (i32.const 98) (i32.const 120) (i32.const 124)
@@ -80,12 +75,9 @@
     (if (call $ok (call $ui_tool (i32.const 1136) (i32.const 3) (i32.const 1140) (i32.const 3)
                                  (i32.const 0) (i32.const 0)))
       (then (global.set $tools (i32.add (global.get $tools) (i32.const 10)))))
-    (local.set $b (call $ui_bar (i32.const 1144) (i32.const 5) (i32.const 1152) (i32.const 9)
-                                (i32.const 2)))
     (local.set $f (call $ui_focus (i32.const 0) (i32.const 0) (i32.const 2096) (i32.const 32)))
     (global.set $frames (i32.add (global.get $frames) (i32.const 1)))
     (drop (call $pmem (i32.const 0) (global.get $frames) (i32.const 1)))
     (drop (call $pmem (i32.const 1) (global.get $makes) (i32.const 1)))
     (drop (call $pmem (i32.const 2) (global.get $tools) (i32.const 1)))
-    (drop (call $pmem (i32.const 3) (i32.add (local.get $b) (i32.const 1)) (i32.const 1)))
     (drop (call $pmem (i32.const 5) (local.get $f) (i32.const 1)))))

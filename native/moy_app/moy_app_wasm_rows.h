@@ -6,7 +6,7 @@
 // says (run(), moy_app_wasm.c); a toolkit row is native/moy_ui's own,
 // weak here, so an image without the toolkit answers NULL for it.
 
-#define MOY_APP_WASM_N 144
+#define MOY_APP_WASM_N 143
 
 int32_t moy_ui_wasm_page(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t, uint8_t *,
                          uint32_t) UI_WEAK;
@@ -59,8 +59,6 @@ int32_t moy_ui_wasm_menu(void *, const uint8_t *, uint32_t, const uint8_t *, uin
                          const uint8_t *, uint32_t, const uint8_t *, uint32_t) UI_WEAK;
 int32_t moy_ui_wasm_tool(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
                          const uint8_t *, uint32_t) UI_WEAK;
-int32_t moy_ui_wasm_bar(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
-                        int32_t) UI_WEAK;
 int32_t moy_ui_wasm_rule(void *) UI_WEAK;
 int32_t moy_ui_wasm_text_view(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
                               const uint8_t *, uint32_t, const uint8_t *, uint32_t, uint8_t *,
@@ -527,7 +525,6 @@ static const moy_app_native_t NATIVES[MOY_APP_WASM_N] = {
     { "theme_token", FN(w_theme_token), "(i)i", NULL },
     { "theme_variant", FN(w_theme_variant), "(*~)i", NULL },
     { "ui_at", FN(moy_ui_wasm_at), "(iiii)i", NULL },
-    { "ui_bar", FN(moy_ui_wasm_bar), "(*~*~i)i", NULL },
     { "ui_bubble", FN(moy_ui_wasm_bubble), "(*~*~*~*~*~*~)i", NULL },
     { "ui_button", FN(moy_ui_wasm_button), "(*~i*~)i", NULL },
     { "ui_card", FN(moy_ui_wasm_card), "(*~*~*~*~)i", NULL },
@@ -622,7 +619,7 @@ static const int16_t NATIVE_ROWS[MOY_APP_WASM_N] = {
     MOY_T_NAV_OPEN_APP, MOY_T_PREFS_CLEAR, MOY_T_PREFS_GET, MOY_T_PREFS_SET,
     MOY_T_THEME_EDIT_FILE, MOY_T_THEME_GEN, MOY_T_THEME_LIGHT, MOY_T_THEME_NAME,
     MOY_T_THEME_SET, MOY_T_THEME_SET_VARIANT, MOY_T_THEME_TOKEN, MOY_T_THEME_VARIANT,
-    MOY_T_UI_AT, MOY_T_UI_BAR, MOY_T_UI_BUBBLE, MOY_T_UI_BUTTON, MOY_T_UI_CARD, MOY_T_UI_CYCLE,
+    MOY_T_UI_AT, MOY_T_UI_BUBBLE, MOY_T_UI_BUTTON, MOY_T_UI_CARD, MOY_T_UI_CYCLE,
     MOY_T_UI_DIALOG, MOY_T_UI_EMPTY, MOY_T_UI_FIELD, MOY_T_UI_FOCUS, MOY_T_UI_GRID,
     MOY_T_UI_GROUP, MOY_T_UI_HELD, MOY_T_UI_HELD_ALL, MOY_T_UI_HELD_LAST, MOY_T_UI_HINTS,
     MOY_T_UI_ICON, MOY_T_UI_INFO, MOY_T_UI_KEYS_TAKEN, MOY_T_UI_LABEL, MOY_T_UI_LINK,

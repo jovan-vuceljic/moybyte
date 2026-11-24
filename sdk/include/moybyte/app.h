@@ -175,9 +175,6 @@ int32_t ui_menu(const char *label, uint32_t label_n, const char *items, uint32_t
 // ui.tool
 int32_t ui_tool(const char *icon, uint32_t icon_n, const char *label, uint32_t label_n,
                 const void *o, uint32_t o_n) MOYBYTE_APP_IMPORT(ui_tool);
-// ui.bar
-int32_t ui_bar(const char *title, uint32_t title_n, const char *tools, uint32_t tools_n,
-               int32_t off) MOYBYTE_APP_IMPORT(ui_bar);
 // ui.rule
 int32_t ui_rule(void) MOYBYTE_APP_IMPORT(ui_rule);
 // ui.text_view

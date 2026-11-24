@@ -684,7 +684,7 @@ def test_the_hosts_back_steps_a_lua_apps_pages_through_the_engines_way_back(tmp_
     (`UIT_F_BACK`: a page under the top one, the back role) and answers a
     taken one at the next frame (`e:backed()`): the pushed page goes, then
     the back role's action runs, once each; with neither the host leaves."""
-    from runtime import host_app, ui_draw
+    from runtime import host_app
     from runtime.host import moy_log
     carts = str(tmp_path / "carts")
     host_app.moy_carts.ensure_dirs(carts)
@@ -706,8 +706,6 @@ def test_the_hosts_back_steps_a_lua_apps_pages_through_the_engines_way_back(tmp_
         frame()
         frame()
         assert face.has_page(), (name, "the page under the pushed one")
-        lent = ui_draw.bar_lent(ui_draw.RUN_UI)
-        assert lent is None or not lent[3], "the way back is the engine's, no bar's"
         assert face.back(), (name, "the pushed page is the app's to step out of")
         frame()
         frame()

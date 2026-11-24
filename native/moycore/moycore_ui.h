@@ -470,26 +470,6 @@ static int moycore_ui_popover(lua_State *L)
     return 1;
 }
 
-static int moycore_ui_bar(lua_State *L)
-{
-    size_t len = 0;
-    const char *tools = lua_isnoneornil(L, 2) ? "" : moycore_ui_items(L, 2, &len);
-    uint32_t off = 0;
-    if (lua_type(L, 3) == LUA_TTABLE) {
-        for (int i = 0; i < MOY_UI_API_BAR; i++) {
-            lua_rawgeti(L, 3, i + 1);
-            if (lua_toboolean(L, -1)) off |= 1u << i;
-            lua_pop(L, 1);
-        }
-    }
-    if (lua_toboolean(L, 4)) off |= MOY_UI_BAR_BACK;
-    int32_t v = -1;
-    moy_ui_run_bar(moycore_ui_canvas(), moycore_ui_span(L, 1), (const uint8_t *)tools, len, off,
-                   &v);
-    lua_pushinteger(L, v == MOY_UI_BAR_UP ? -1 : (lua_Integer)v + 1);
-    return 1;
-}
-
 // ui.bubble(text, side, o): o.head, o.signal, o.tone, o.max, o.lines,
 // o.anchor and o.status beside the override keys.
 static int moycore_ui_bubble(lua_State *L)

@@ -1918,7 +1918,7 @@ def ui_frame(ctx, cv, th, rect=None, inp=None, desk=False, window=False, app=Non
 
 
 # The context of the running cart's own frames, a Lua, compiled, WASI or native
-# app's (native/moy_ui/moy_ui_run.c's), as `bar_lent` and `bar_tap` take it.
+# app's (native/moy_ui/moy_ui_run.c's), as `page_title` takes it.
 RUN_UI = "run"
 
 
@@ -1928,36 +1928,6 @@ def page_title(ctx):
     none."""
     got = _C.api_run_page_title() if ctx is RUN_UI else _C.api_page_title(ctx)
     return got or ""
-
-
-def bar_lent(ctx):
-    """What the app whose context is `ctx` (RUN_UI: the running cart's own)
-    lent its bar in the frame it drew last (`ui.bar`): (title, icon slots,
-    half-strength bits, back, chip), or None; `chip` the words of the tool
-    that names no icon (its slot -1), "" for none."""
-    got = _C.api_run_bar_lent() if ctx is RUN_UI else _C.api_bar_lent(ctx)
-    if got is None:
-        return None
-    last = _BAR_LENT
-    if last[0] is got:                  # the module's answer is the last one's
-        return last[1]
-    title, slots, off, chip = got
-    last[0] = got
-    last[1] = (title, slots, off & 0x3F, bool(off & 0x80000000), chip)
-    return last[1]
-
-
-_BAR_LENT = [None, None]                # the module's last answer, and ours to it
-
-
-def bar_tap(ctx, i):
-    """The host's bar activated tool `i` (-2: its way back) of the bar `ctx`
-    (RUN_UI: the running cart's own) lent; the app's next `ui.bar` answers
-    it."""
-    if ctx is RUN_UI:
-        _C.api_run_bar_tap(i)
-    else:
-        _C.api_bar_tap(ctx, i)
 
 
 # The console's Paste: the key Ctrl+V types (the desk's), and where the text

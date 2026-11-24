@@ -98,7 +98,6 @@ int32_t moy_ui_wasm_menu(void *, const uint8_t *, uint32_t, const uint8_t *, uin
                          const uint8_t *, uint32_t, const uint8_t *, uint32_t);
 int32_t moy_ui_wasm_tool(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
                          const uint8_t *, uint32_t);
-int32_t moy_ui_wasm_bar(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t, int32_t);
 int32_t moy_ui_wasm_rule(void *);
 int32_t moy_ui_wasm_text_view(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
                               const uint8_t *, uint32_t, const uint8_t *, uint32_t, uint8_t *,
@@ -292,12 +291,6 @@ static inline int32_t ui_tool(const char *icon, uint32_t icon_n, const char *lab
                               uint32_t label_n, const void *o, uint32_t o_n) {
     return moy_ui_wasm_tool(moy_ui_link_target(), (const uint8_t *)icon, icon_n,
                             (const uint8_t *)label, label_n, (const uint8_t *)o, o_n);
-}
-// ui.bar
-static inline int32_t ui_bar(const char *title, uint32_t title_n, const char *tools,
-                             uint32_t tools_n, int32_t off) {
-    return moy_ui_wasm_bar(moy_ui_link_target(), (const uint8_t *)title, title_n,
-                           (const uint8_t *)tools, tools_n, off);
 }
 // ui.rule
 static inline int32_t ui_rule(void) {

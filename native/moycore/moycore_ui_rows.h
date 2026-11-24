@@ -361,7 +361,6 @@ static int moycore_ui_note(lua_State *L)
     {"popover", moycore_ui_popover}, \
     {"menu", moycore_ui_menu}, \
     {"tool", moycore_ui_tool}, \
-    {"bar", moycore_ui_bar}, \
     {"rule", moycore_ui_rule}, \
     {"text_view", moycore_ui_text_view}, \
     {"table_part", moycore_ui_table_part}, \

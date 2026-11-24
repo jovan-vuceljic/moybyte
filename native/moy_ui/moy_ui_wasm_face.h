@@ -238,15 +238,6 @@ int32_t moy_ui_wasm_tool(void *e, const uint8_t *icon, uint32_t icon_n, const ui
     return rc != 0 ? rc : got;
 }
 
-int32_t moy_ui_wasm_bar(void *e, const uint8_t *title, uint32_t title_n, const uint8_t *tools,
-                        uint32_t tools_n, int32_t off) {
-    (void)e;
-    int32_t got = -1;
-    int rc = moy_ui_run_bar(wasm_target(), moy_ui_span_of(title, title_n), tools, tools_n, off,
-                            &got);
-    return rc != 0 ? rc : got;
-}
-
 int32_t moy_ui_wasm_rule(void *e) {
     (void)e;
     return moy_ui_run_rule(wasm_target());

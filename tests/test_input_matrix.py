@@ -653,7 +653,7 @@ def test_a_linked_toolkit_lends_no_bar_beside_an_open_lua_run(tmp_path, monkeypa
         if isinstance(built[(layer, "button")], Exception):
             continue
         rig = Rig(tmp_path / layer, layer, "button", monkeypatch, built)
-        assert rig.ws.run.player.face.bar_ctx() is None, layer
+        assert rig.ws.run.player.face.page_ctx() is None, layer
         rig.ws.spine.exit()
         ran += 1
     if not ran:

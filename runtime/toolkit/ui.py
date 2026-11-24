@@ -1337,23 +1337,6 @@ def tool(icon, label, o=None):
     # END GENERATED
 
 
-def bar(title, tools=(), off=(), back=False):
-    """Lend the host's bar this frame's `title` and `tools` (icon names, at
-    most six), drawn after the title in the bar's ink, a tool whose place in
-    `off` is true at half strength: on the handheld its bar after the way
-    back; on the desk the window's title after the app's ("Notes · Story
-    ideas"), and the tools are the app's own row there. `back`: the app has
-    a page to step back from, so the bar's way back is the app's. The tool
-    the bar activated since the last frame (from 0), UP its way back, -1
-    none."""
-    t = _T
-    bits = 0
-    for i in range(min(len(off), 6)):
-        if off[i]:
-            bits |= 1 << i
-    return _C.api_bar(t[0], t[1], t[2], title, _opts(tools), bits, back)
-
-
 def rule(o=None):
     """A rule: a line in the structure colour across `at`'s rect (down it
     where the rect is taller than wide: a split's divider), else a row of
@@ -1458,7 +1441,6 @@ def part_at():
 
 
 FOCUS, ACTIVATED, PRESSED, HOVER = 1, 2, 4, 8
-UP = -2                                 # ui.bar's answer: the bar's way back
 
 
 def band(r=None):

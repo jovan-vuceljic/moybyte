@@ -434,8 +434,6 @@ void moy_ui_api_reset_in(moy_ui_ctx_t *c, moy_ui_inst_t *I) {
     c->page_stop = NO_PAGE;
     c->icon_slot = c->icon_glyph = c->row_slot = c->row_glyph = -1;
     c->dlg.pick = -1;
-    c->bar.act = -1;
-    c->bar.chip_at = -1;
     c->snap.at = -1;
 }
 
@@ -1256,7 +1254,6 @@ static void pass_clear(moy_ui_ctx_t *c) {
     c->cut_on = 0;
     c->tip_at.w = 0;
     c->tip_shown = 0;
-    c->bar.seen = 0;
     c->way_on = 0;
     c->page_title[0] = 0;
     c->kf.k = 0;                        // (a host's begin says what its canvas keeps)
@@ -3385,7 +3382,6 @@ int moy_ui_api_page_again(moy_ui_ctx_t *c) {
     c->page_y = 0;
     c->tab_step = 0;
     c->typed_n = 0;
-    c->bar.act = -1;
     c->in[MOY_UI_IN_BTNP] = c->in[MOY_UI_IN_KEY] = c->in[MOY_UI_IN_REP] = 0;
     c->in[MOY_UI_IN_KEYREP] = c->in[MOY_UI_IN_WHEEL_X] = c->in[MOY_UI_IN_WHEEL_Y] = 0;
     c->in[MOY_UI_IN_DT] = 0;

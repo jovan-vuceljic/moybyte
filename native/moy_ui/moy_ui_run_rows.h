@@ -71,8 +71,6 @@ int moy_ui_run_menu(void *target, moy_ui_span_t label, const uint8_t *items, siz
                     const uint8_t *icons, size_t ilen, const moy_ui_over_t *o, int32_t *out);
 int moy_ui_run_tool(void *target, moy_ui_span_t icon, moy_ui_span_t label, const moy_ui_over_t *o,
                     int32_t *out);
-int moy_ui_run_bar(void *target, moy_ui_span_t title, const uint8_t *tools, size_t len,
-                   uint32_t off, int32_t *out);
 int moy_ui_run_rule(void *target);
 // An empty page's head (moy_ui_api_empty): *out the y under it.
 int moy_ui_run_empty(void *target, moy_ui_span_t icon, moy_ui_span_t title, const uint8_t *lines,

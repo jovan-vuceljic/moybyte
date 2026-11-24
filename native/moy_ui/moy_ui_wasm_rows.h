@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-#define MOY_UI_WASM_ROWS 46
+#define MOY_UI_WASM_ROWS 45
 
 int32_t moy_ui_wasm_page(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t, uint8_t *,
                          uint32_t);
@@ -60,7 +60,6 @@ int32_t moy_ui_wasm_menu(void *, const uint8_t *, uint32_t, const uint8_t *, uin
                          const uint8_t *, uint32_t, const uint8_t *, uint32_t);
 int32_t moy_ui_wasm_tool(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
                          const uint8_t *, uint32_t);
-int32_t moy_ui_wasm_bar(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t, int32_t);
 int32_t moy_ui_wasm_rule(void *);
 int32_t moy_ui_wasm_text_view(void *, const uint8_t *, uint32_t, const uint8_t *, uint32_t,
                               const uint8_t *, uint32_t, const uint8_t *, uint32_t, uint8_t *,
@@ -114,7 +113,6 @@ int32_t moy_ui_wasm_bubble(void *, const uint8_t *, uint32_t, const uint8_t *, u
     { "ui_popover", FN(moy_ui_wasm_popover) }, \
     { "ui_menu", FN(moy_ui_wasm_menu) }, \
     { "ui_tool", FN(moy_ui_wasm_tool) }, \
-    { "ui_bar", FN(moy_ui_wasm_bar) }, \
     { "ui_rule", FN(moy_ui_wasm_rule) }, \
     { "ui_text_view", FN(moy_ui_wasm_text_view) }, \
     { "ui_table_part", FN(moy_ui_wasm_table_part) }, \

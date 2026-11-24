@@ -564,10 +564,9 @@ class BarLayer:
         # (runtime/editors/editor_desk.py): the pane takes no bar, and the tab's own
         # strip draw and bar tap are no-ops.
         self.held = False
-        self._lent_last = [None, None]  # ui_draw.bar_lent's last answer, and _lent's
         self._app_zones = {}            # app id -> the row its page lends (`_app_zone`)
         self._row_k = [None, -1, 0, 0]  # row_need's last: its zone, zone_gen, font scale, need
-        self._k8 = [None, None, None, 0]   # key[8]'s title and lent, their pair, its count
+        self._k8 = [None, 0]            # key[8]'s title, and the times it moved
         self._cr_last = None            # content_rect's last (x, y, w, h)
         self._cr_game = [0, 0, None, None]   # ...and a game zone's: w, h, bars, rect
         # Cached top bar (#43, generalized in Stage 4 to every `where`): rendered
@@ -1309,17 +1308,13 @@ class BarLayer:
         if need & 128:
             key[7] = ws.wifi_icon_kind()      # the wifi status glyph
         if need & 256:
-            # the tool bar's title (a registered app's: its top page's), and
-            # what the running app lent it (ui.bar)
+            # the tool bar's title (a registered app's: its top page's)
             t = self._title(where) if ws.cart else self.page_named(key[0])
-            lent = self.lent(key[0])
             k8 = self._k8
-            if k8[0] != t or k8[1] is not lent:
+            if k8[0] != t:
                 k8[0] = t
-                k8[1] = lent
-                k8[2] = (t, lent)
-                k8[3] = (k8[3] + 1) & 0x3fffffff   # (the block's field: made again)
-            key[8] = k8[2]
+                k8[1] = (k8[1] + 1) & 0x3fffffff   # (the block's field: made again)
+            key[8] = t
         if need & _KEY_UNDO:
             # #111: the local op-history dim state (RAM-only; journal flips
             # invalidate explicitly)
@@ -1333,9 +1328,8 @@ class BarLayer:
             key[13] = self._status_key()
         if blk is not None:
             for i in range(_KEY_N):
-                # (the title and what the app lent by the count of times the
-                # tuple was made: only where one of them is another object)
-                _block_set(blk, i, self._k8[3] if i == 8 else key[i])
+                # (the title by the count of times it moved)
+                _block_set(blk, i, self._k8[1] if i == 8 else key[i])
 
     def _status_key(self):
         """Key field 13: the status items' generation, and which bar item is
@@ -1429,7 +1423,7 @@ class BarLayer:
         across the bar: as wide as the tile and its ring on the system
         button, as a status icon and a ring and a unit either side, as the
         clock's digits and a ring and a unit either side, inside the bar.
-        On the zone's targets, the back chevron and the lent tools it is
+        On the zone's targets, the back chevron and the row it is
         their rect and a ring round it."""
         _bi, r, name = item
         packed = self._packed(where)[i]
@@ -1529,8 +1523,7 @@ class BarLayer:
                 owner.draw_zone(cv, self._row_zone(where, zone, bar, game))
                 return
             if back:
-                end = self._paint_back_title(cv, zone, self._title(where), bar, game)
-                self._paint_lent_tools(cv, where, end, bar, game)
+                self._paint_back_title(cv, zone, self._title(where), bar, game)
                 return
             _ch.replay(mp.chrome_strip_cell("title", zone, 0, dy, self._title(where), False),
                        cv, ws)
@@ -1882,14 +1875,14 @@ class BarLayer:
             _ui_draw.print_font(was)
         return end
 
-    # -- what a running app lends its bar (ui.bar) -----------------------------
+    # -- the title the app's top page names -----------------------------------
 
     def _page_ctx(self, where):
         """The ui context whose top page names `where`'s bar: the running app
         cart's ("tool"), the registered app's on top ("app"), else None."""
         ws = self.ws
         if where == "tool":
-            return ws.run.player.face.bar_ctx()
+            return ws.run.player.face.page_ctx()
         if where == "app":
             app = ws.app(ws.wm.top_kind())
             return app.page_ctx() if getattr(app, "UI", False) else None
@@ -1901,85 +1894,9 @@ class BarLayer:
         ctx = self._page_ctx(where)
         return _ui_draw.page_title(ctx) if ctx is not None else ""
 
-    def _lent_ctx(self, where):
-        """The ui context whose `ui.bar` lends `where`'s bar: an immediate
-        app cart's ("tool"), else None."""
-        return self.ws.run.player.face.bar_ctx() if where == "tool" else None
-
-    def lent(self, where):
-        """(title, icon names, half-strength bits, back, chip) the running
-        app lent `where`'s bar in its last frame (`ui.bar`), or None; a
-        tool that names no icon is "" among the names, and `chip` its words."""
-        ctx = self._lent_ctx(where)
-        if ctx is None:
-            return None
-        got = _ui_draw.bar_lent(ctx)
-        if got is None:
-            return None
-        last = self._lent_last
-        if last[0] is got:              # the same bar as the last frame lent
-            return last[1]
-        title, slots, off, back, chip = got
-        names = tuple(_iconsets.SLOTS[s] if 0 <= s < len(_iconsets.SLOTS) else "" for s in slots)
-        last[0] = got
-        last[1] = (title, names, off, back, chip)
-        return last[1]
-
-    def _lent_rects(self, where, end, bar, game):
-        """The lent tools' boxes in bar coordinates after a title ending at
-        `end`: (rect, index, off) each, 16-pixel icons at a 22-pixel pitch
-        from 12 past the title (DESIGN, the bar's tools)."""
-        lent = self.lent(where)
-        if lent is None or not lent[1]:
-            return ()
-        u = 1 if game else _layout_base.unit()
-        side = 16 * u
-        y = (bar[3] - side) // 2
-        x = end + 12 * u
-        out = []
-        for i in range(len(lent[1])):
-            if not lent[1][i] and lent[4]:
-                # a chip of words (a compact cycle: Paint's zoom), 18 tall
-                if i == 0:
-                    x -= 2 * u
-                cw = _ui_draw.text_width(lent[4], u, "caption") + 14 * u
-                ch = 18 * u
-                out.append(((x, 0, cw, bar[3]), i, bool(lent[2] >> i & 1), lent[4],
-                            (x, (bar[3] - ch) // 2, cw, ch)))
-                x += cw + 8 * u
-                continue
-            out.append(((x - 3 * u, 0, side + 6 * u, bar[3]), i, bool(lent[2] >> i & 1),
-                        lent[1][i], (x, y, side, side)))
-            x += 22 * u
-        return out
-
-    def _paint_lent_tools(self, cv, where, end, bar, game):
-        """The tools the running app lent the bar, after its title: in the
-        chrome ink, a tool with nothing to do at half strength."""
-        ws = self.ws
-        th = ws.theme_colors
-        lent = self.lent(where)
-        chip = lent[4] if lent is not None else ""
-        u = 1 if game else _layout_base.unit()
-        for _hit, i, off, name, r in self._lent_rects(where, end, bar, game):
-            ink = _ui_draw.disabled_ink(th) if off else th["chrome_ink"]
-            if chip and name == chip and not lent[1][i]:
-                x, y, w, h = r
-                cv.rrect(x, y, w, h, 5 * u, th.get("raised", th["panel"]),
-                         ring=th["border"], line=u)
-                f = _ui_draw.font("caption")
-                was = _ui_draw.print_font(f[0])
-                cv.print_scaled(chip, x + (w - _ui_draw.text_width(chip, u, "caption")) // 2,
-                                y + (h - f[2] * u) // 2, ink, u)
-                if was is not None:
-                    _ui_draw.print_font(was)
-                continue
-            if not ws.draw_icon(name, r, ink, cv):
-                _ch.glyph(cv, name, r, ink)
-
     def _title_end(self, where, zone, bar, game):
         """Where the back chevron's title ends in bar coordinates: what the
-        lent tools follow."""
+        row a page lends the bar follows."""
         ws = self.ws
         u = 1 if game else _layout_base.unit()
         tf = _ui_draw.font("title")
@@ -2200,9 +2117,6 @@ class BarLayer:
             t = z.back_title if z is not None else None
             if t:
                 return t                    # the title its page's row stands after
-        lent = self.lent(where)
-        if lent is not None and lent[0]:
-            return lent[0]                  # the title an immediate app's ui.bar names
         t = self.page_named(where)
         if t:
             return t                        # its top page's
@@ -2531,12 +2445,6 @@ class BarLayer:
                         box = (0, 0, bar[1][2], bar[1][3])
                         for r in owner.zone_targets(self._row_zone(where, zone, box, game)):
                             rects.append((r, None))
-                    elif back:
-                        box = (0, 0, bar[1][2], bar[1][3])
-                        end = self._title_end(where, zone, box, game)
-                        for hit, _i, off, _name, _r in self._lent_rects(where, end, box, game):
-                            if not off:
-                                rects.append((hit, None))
                 elif owner is not None and not (back and getattr(owner, "back_title", None)):
                     targets = getattr(owner, "zone_targets", None)
                     if targets is not None:
@@ -2726,13 +2634,6 @@ class BarLayer:
             box = (0, 0, bar[1][2], bar[1][3])
             if where in ("tool", "app") and owner is not None:
                 return bool(owner.zone_tap(px, py, self._row_zone(where, zone, box, game)))
-            end = self._title_end(where, zone, box, game) if where in ("tool", "app") else 0
-            for hit, i, off, _name, _r in self._lent_rects(where, end, box, game):
-                if _in(px, py, hit):
-                    if not off:
-                        _ui_draw.bar_tap(self._lent_ctx(where), i)
-                        ws.mark_dirty()
-                    return True
             if owner is not None and not getattr(owner, "back_title", None):
                 zone = self.past_back(zone, game)
         # Pass the SAME lent rect the draw used, in the bar coordinates (px, py) are

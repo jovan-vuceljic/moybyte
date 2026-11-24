@@ -160,8 +160,8 @@ class AppFace:
         fs = getattr(run.canvas, "font_scale", 1)
         return f | (fs if fs > 1 else 1) << _FACE_FS_SHIFT
 
-    def bar_ctx(self):
-        """The ui context whose `ui.bar` lends the host's bar: the Player's
+    def page_ctx(self):
+        """The ui context whose top page names the host's bar: the Player's
         for a Python app, the run's own (`ui_draw.RUN_UI`) for any other
         (a Lua or compiled app's); None for a game, before a frame, and for
         an app linking a toolkit of its own (`own_ui`: a WASI or native
@@ -430,9 +430,9 @@ class AppFace:
     def has_page(self):
         """Whether the running app has a view of its own open, which the
         host's back steps out of before it leaves the app: a field's edit in
-        progress, a popover its last frame drew, or a page it lent `ui.bar`'s
-        way back for, on any tier (docs/app_api_v1.md section 4). False for a
-        game."""
+        progress, a popover its last frame drew, or a page with a way back
+        (a UI tree app's), on any tier (docs/app_api_v1.md section 4). False
+        for a game."""
         return self._app_back(False)
 
     def back(self):

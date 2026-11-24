@@ -8,11 +8,7 @@ fixture app per tier in tests/fixtures/app_ui/ running on the T-Deck's
     over what lies above or below the table;
   * tabs_*.moy -- ui.tabs takes Q and E itself, wherever the keys do not
     type into a field, so an app reads no key for its tabs and its frames
-    settle;
-  * back_*.moy -- the host's back (B, the T-Deck's K, Esc, the bar's
-    chevron, a desk window's) steps out of the app's own views before it
-    leaves the app: a popover it drew, then the page it lent `ui.bar`'s way
-    back for.
+    settle.
 """
 
 import os
@@ -214,62 +210,3 @@ def test_the_tabs_draw_the_same_pixels_on_every_tier(tabs):
 
 
 # -- back steps out of an app's own views first ----------------------------------
-
-
-def _back(ws, drv, how):
-    """One back by `how`: B (the T-Deck's K is B), Esc as the host's keyboard
-    sends it, or a tap on the chevron (the handheld bar's, a desk window's
-    title strip's)."""
-    if how == "b":
-        _press(drv, "b")
-        return
-    if how == "esc":
-        drv.escape()
-    elif ws.windowed_chrome:
-        win = ws.wm.windows["desktop"]
-        rect = dict(ws.wm._strip_buttons(win)).get("back")
-        if rect is None:                # no chevron: the window's close leaves
-            ws.wm._close_window("desktop")
-        else:
-            drv.click(rect[0] + rect[2] // 2, rect[1] + rect[3] // 2)
-    else:
-        ws.bar_layer.go_back("tool")
-    _frame(drv)
-    _frame(drv)
-
-
-def _state(ws):
-    """(page, popover shown, ways back the app heard, a chevron shows), or
-    None once the app has been left."""
-    if ws.wm.top_kind() != "desktop" or ws.run.player.ns is None:
-        return None
-    m = _pmem(ws, 3)
-    if ws.windowed_chrome:
-        shows = "back" in dict(ws.wm._strip_buttons(ws.wm.windows["desktop"]))
-    else:
-        shows = ws.run.player.face.has_page()
-    return (m[0], m[1], m[2], shows)
-
-
-@pytest.mark.parametrize("desk", (False, True), ids=("tdeck", "desk"))
-@pytest.mark.parametrize("how", ("b", "esc", "chevron"))
-@pytest.mark.parametrize("tier", TIERS)
-def test_back_steps_out_of_the_apps_views_before_it_leaves(tmp_path, tier, how, desk):
-    """Details opens the second page, More its popover. Back dismisses the
-    popover, then steps the page back (ui.bar answers its way back), then,
-    with no view of the app's open, the chevron leaves the app and the keys
-    stay the app's own."""
-    ws = _open("back", tier, tmp_path, desk)
-    drv = make_drv(ws)
-    for _ in range(3):
-        _frame(drv)
-    _press(drv, "a")                    # Details
-    _press(drv, "a")                    # More
-    got = [_state(ws)]
-    for _ in range(3):
-        _back(ws, drv, how)
-        got.append(_state(ws))
-    first = (1, 0, 1, False)
-    assert got[:3] == [(2, 1, 0, True), (2, 0, 0, True), first], (tier, how, got)
-    assert got[3] == (None if how == "chevron" else first), (tier, how, got)
-    ws.spine.exit()

@@ -261,13 +261,6 @@ _DRAW_SIGS = (
     ("moy_ui_text_words_reset", [], None),
     ("moy_ui_text_runs", [c.c_char_p, c.c_size_t, _I, c.c_void_p, _I], _I),
     ("moy_ui_api_table_rows", [c.c_void_p, c.c_void_p], _I),
-    ("moy_ui_api_bar", [c.c_void_p, c.POINTER(_Sink), _Span, c.c_char_p, _Z, c.c_uint32],
-     c.c_int32),
-    ("moy_ui_api_bar_lent", [c.c_void_p, c.POINTER(c.c_char_p), c.POINTER(c.c_int16),
-                             c.POINTER(_I), c.POINTER(c.c_uint32)], _I),
-    ("moy_ui_run_bar_lent", [c.POINTER(c.c_char_p), c.POINTER(c.c_int16), c.POINTER(_I),
-                             c.POINTER(c.c_uint32), c.POINTER(c.c_char_p)], _I),
-    ("moy_ui_api_bar_chip", [c.c_void_p, c.POINTER(_I)], c.c_char_p),
     ("moy_ui_api_focus", [c.c_void_p, _Span, c.c_char_p, c.c_size_t], _I),
     ("moy_ui_over_size", [], c.c_size_t),
 )

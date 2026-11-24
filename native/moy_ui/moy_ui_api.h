@@ -32,9 +32,7 @@
 #define MOY_UI_API_KEEP 16          // the ids whose state is kept
 #define MOY_UI_API_CAPS 16          // the group captions one frame records
 #define MOY_UI_API_NAME 32          // the focused id's text, NUL-terminated
-#define MOY_UI_API_TIP 48           // a tooltip's or a lent title's text, NUL-terminated
-#define MOY_UI_API_CHIP 12          // a lent chip's words (ui.bar), NUL-terminated
-#define MOY_UI_API_BAR 6            // the tools an app lends its bar
+#define MOY_UI_API_TIP 48           // a tooltip's text, NUL-terminated
 #define MOY_UI_API_FLOOR 24         // the rects a shift frame's floor holds
 #define MOY_UI_API_DIVS 8           // the dividers one frame's splits record (moy_ui_api_split_at)
 #define MOY_UI_API_PANES 16         // the panes one pass's splits record (moy_ui_api_split_frame)
@@ -559,17 +557,6 @@ typedef struct {
     uint8_t hide;
 } moy_ui_pop_t;
 
-// ui.bar's: moy_ui_ctx_t's `bar`, owned by moy_ui_api_pop.c.
-typedef struct {
-    char title[MOY_UI_API_TIP];
-    int16_t slot[MOY_UI_API_BAR];
-    uint8_t n, off, seen, back;
-    int8_t act;
-    // the one tool lent as words, not an icon (Paint's zoom chip), and its place
-    char chip[MOY_UI_API_CHIP];
-    int8_t chip_at;
-} moy_ui_bar_t;
-
 // The next grid's spread: moy_ui_ctx_t's `spread`, owned by moy_ui_api_pop.c.
 typedef struct {
     uint8_t cols, wrap;
@@ -799,10 +786,6 @@ typedef struct {
     // its words, drawn over the page at ui.end.
     moy_ui_box_t tip_at;
     char tip[MOY_UI_API_TIP];
-    // ui.bar's: the title and tools the app lends its host's bar, the frame
-    // that lent them (bar.seen), and the tool the host's bar activated for
-    // the next ui.bar to answer (-1 none).
-    moy_ui_bar_t bar;
     // The way back the frame drawn last offers a front that takes the
     // host's back through the toolkit (moy_ui_api_way), and whether the
     // host took it since (moy_ui_api_way_taken answers it once).
@@ -1599,18 +1582,6 @@ int moy_ui_api_tool(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t icon,
 // tool's tooltip (drawn at ui.end) while a resting pointer is over it on the
 // desk: a button drawn as its icon alone keeps its word this way.
 void moy_ui_api_tip(moy_ui_ctx_t *c, const moy_ui_over_t *o, moy_ui_span_t label);
-// The app's bar (§1): `title` and the tools (`tools` NUL-separated icon slot
-// names -- one that names no icon is a chip of those words, `len` bytes, at most MOY_UI_API_BAR; bit i of `off` the tool i drawn
-// at half strength, which nothing activates) lent to the host's bar for this
-// frame; the host draws them (moy_ui_api_bar_lent) and taps them
-// (moy_ui_api_bar_tap). MOY_UI_BAR_BACK in `off`: the app has a page to step
-// back from, so the bar's way back is the app's. Answers the tool the host's
-// bar activated since the last frame (from 0), MOY_UI_BAR_UP its way back,
-// -1 none.
-#define MOY_UI_BAR_BACK 0x80000000u
-#define MOY_UI_BAR_UP (-2)
-int32_t moy_ui_api_bar(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t title,
-                       const uint8_t *tools, size_t len, uint32_t off);
 // An empty status band filling box b: drawn through the pass's floor, as a
 // row's cells are, where a direct moy_ui_status would paint over the pixels a
 // rows frame keeps.
@@ -1622,24 +1593,11 @@ void moy_ui_api_rule(moy_ui_ctx_t *c, const moy_ui_sink_t *s);
 // The title of the top page the frame drawn last opened (ui.page's), "" for
 // none: what the host's bar and a desk window's title name the page by.
 const char *moy_ui_api_page_title(const moy_ui_ctx_t *c);
-// The host's side of ui.bar: whether the frame drawn last lent a bar (or a
-// top page with a title, which lends that title alone), its title then (the
-// page's where ui.bar named none), its tools' slots into `slots` (room for MOY_UI_API_BAR) and
-// their count into *n, the half-strength bits and MOY_UI_BAR_BACK into *off.
-int moy_ui_api_bar_lent(const moy_ui_ctx_t *c, const char **title, int16_t *slots, int *n,
-                        uint32_t *off);
-// The words of the one tool the bar lent last that names no icon (a compact
-// cycle's chip, Paint's zoom), "" for none; its place among the tools at *at.
-const char *moy_ui_api_bar_chip(const moy_ui_ctx_t *c, int *at);
-// The host's bar activated tool `i` of the bar lent last (MOY_UI_BAR_UP its
-// way back); the next ui.bar answers it.
-void moy_ui_api_bar_tap(moy_ui_ctx_t *c, int i);
 // The host's back (the bar's chevron, a window's, Esc, B and the T-Deck's
 // K) over the frame drawn last: 1 where the app takes it -- a field's edit
 // is cancelled or a popover it drew dismissed (moy_ui_api_cancel), else the
-// frame's way back is taken (moy_ui_api_way), else the bar it lent with
-// MOY_UI_BAR_BACK answers MOY_UI_BAR_UP -- and 0 where it has no view to
-// step out of, so the host leaves the app. `take` 0 only asks.
+// frame's way back is taken (moy_ui_api_way) -- and 0 where it has no view
+// to step out of, so the host leaves the app. `take` 0 only asks.
 int moy_ui_api_back(moy_ui_ctx_t *c, int take);
 // This frame's page has a way back (`on`: a page under it, a dialog, a
 // popover, a back role) that its front takes when the host's back comes

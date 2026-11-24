@@ -215,13 +215,6 @@ int moy_ui_run_tool(void *target, moy_ui_span_t icon, moy_ui_span_t label, const
     return close_run(&r, MOY_UI_OK);
 }
 
-int moy_ui_run_bar(void *target, moy_ui_span_t title, const uint8_t *tools, size_t len,
-                   uint32_t off, int32_t *out) {
-    OPEN(target);
-    *out = moy_ui_api_bar(c, &r.s, title, tools, len, off);
-    return close_run(&r, MOY_UI_OK);
-}
-
 int moy_ui_run_rule(void *target) {
     OPEN(target);
     moy_ui_api_rule(c, &r.s);

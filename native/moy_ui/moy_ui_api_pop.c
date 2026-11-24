@@ -1140,43 +1140,6 @@ void moy_ui_api_tip(moy_ui_ctx_t *c, const moy_ui_over_t *o, moy_ui_span_t label
     }
 }
 
-int32_t moy_ui_api_bar(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t title,
-                       const uint8_t *tools, size_t len, uint32_t off) {
-    (void)s;
-    size_t n = title.n < MOY_UI_API_TIP - 1 ? title.n : MOY_UI_API_TIP - 1;
-    if (n) {
-        memcpy(c->bar.title, title.p, n);
-    }
-    c->bar.title[n] = 0;
-    int k = moy_ui_fields(tools, len);
-    k = k < MOY_UI_API_BAR ? k : MOY_UI_API_BAR;
-    c->bar.chip[0] = 0;
-    c->bar.chip_at = -1;
-    for (int i = 0; i < k; i++) {
-        moy_ui_span_t t = field_at(tools, len, i);
-        c->bar.slot[i] = (int16_t)moy_ui_icon_slot(t.p, t.n);
-        if (c->bar.slot[i] < 0 && t.n) {
-            size_t m = t.n < MOY_UI_API_CHIP - 1 ? t.n : MOY_UI_API_CHIP - 1;
-            memcpy(c->bar.chip, t.p, m);
-            c->bar.chip[m] = 0;
-            c->bar.chip_at = (int8_t)i;
-        }
-    }
-    c->bar.n = (uint8_t)k;
-    c->bar.off = (uint8_t)(off & ((1u << MOY_UI_API_BAR) - 1u));
-    c->bar.back = (off & MOY_UI_BAR_BACK) != 0;
-    c->bar.seen = 1;
-    int32_t got = c->bar.act;
-    c->bar.act = -1;
-    if (got == MOY_UI_BAR_UP) {
-        return c->bar.back ? got : -1;
-    }
-    if (got >= k || (got >= 0 && (c->bar.off >> got) & 1u)) {
-        got = -1;
-    }
-    return got;
-}
-
 void moy_ui_api_status_band(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_box_t b) {
     clip_t k;
     EACH_PIECE(c, k, s, b) {
@@ -1234,35 +1197,6 @@ const char *moy_ui_api_page_title(const moy_ui_ctx_t *c) {
     return c->page_title;
 }
 
-int moy_ui_api_bar_lent(const moy_ui_ctx_t *c, const char **title, int16_t *slots, int *n,
-                        uint32_t *off) {
-    if (!c->bar.seen) {
-        if (!c->page_title[0]) {
-            return 0;
-        }
-        *title = c->page_title;     // a page's title, with nothing more lent
-        *n = 0;
-        *off = 0;
-        return 1;
-    }
-    *title = c->bar.title[0] ? c->bar.title : c->page_title;
-    for (int i = 0; i < c->bar.n; i++) {
-        slots[i] = c->bar.slot[i];
-    }
-    *n = c->bar.n;
-    *off = c->bar.off | (c->bar.back ? MOY_UI_BAR_BACK : 0u);
-    return 1;
-}
-
-const char *moy_ui_api_bar_chip(const moy_ui_ctx_t *c, int *at) {
-    *at = c->bar.seen ? c->bar.chip_at : -1;
-    return *at >= 0 ? c->bar.chip : "";
-}
-
-void moy_ui_api_bar_tap(moy_ui_ctx_t *c, int i) {
-    c->bar.act = (int8_t)((i >= 0 && i < MOY_UI_API_BAR) || i == MOY_UI_BAR_UP ? i : -1);
-}
-
 int moy_ui_api_back(moy_ui_ctx_t *c, int take) {
     if (moy_ui_api_cancel(c, take)) {
         return 1;
@@ -1270,12 +1204,6 @@ int moy_ui_api_back(moy_ui_ctx_t *c, int take) {
     if (c->way_on) {
         if (take) {
             c->way_taken = 1;
-        }
-        return 1;
-    }
-    if (c->bar.seen && c->bar.back) {
-        if (take) {
-            c->bar.act = MOY_UI_BAR_UP;
         }
         return 1;
     }
