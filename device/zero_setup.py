@@ -7,6 +7,7 @@
 #   SetupServer                 the setup form over the kernel's webhost
 #   save_setup                  persist one accepted form
 #   run                         host the setup AP and serve the form until it is filled in
+#                               or Improv joins a network over the cable
 """First-run setup: the AP a Zero hosts when it has no way onto a network (#41).
 
 A headless board has one honest failure mode and this is it -- no screen to
@@ -721,11 +722,14 @@ def _scan():
             for ssid, rssi, auth in moy_net.wifi_scan()]
 
 
-def run(wifi_store, zero_store, system_dir, port=SETUP_PORT, sleep_ms=10):
-    """Host the setup AP and serve the form until it is filled in. Never
-    returns: a good POST resets the board into STA. The access point is the
-    kernel's WiFi driver's provisioning mode, the station beside it up for
-    the form's scans and never connecting."""
+def run(wifi_store, zero_store, system_dir, port=SETUP_PORT, sleep_ms=10, improv=None):
+    """Host the setup AP and serve the form until it is filled in: a good POST
+    resets the board into STA. The access point is the kernel's WiFi
+    driver's provisioning mode, the station beside it up for the form's scans.
+    `improv` (zero_improv.Improv) answers the cable meanwhile; a network it
+    joins ends the access point and returns the station's IP, the board
+    serving from there without a reset, since this boot's claim lives in its
+    RAM (zero_improv's module docstring)."""
     import machine
     import time
 
@@ -745,6 +749,14 @@ def run(wifi_store, zero_store, system_dir, port=SETUP_PORT, sleep_ms=10):
     while True:
         srv.poll()
         dns.poll()
+        if improv is not None:
+            improv.poll()
+            if improv.joined is not None:
+                srv.stop()
+                dns.stop()
+                moy_net.wifi_ap("")
+                print("ZERO SETUP joined over the cable -- serving")
+                return improv.joined[0]
         if srv.due():
             srv.stop()
             dns.stop()
