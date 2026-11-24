@@ -1917,8 +1917,10 @@ in (`cc_ui`, §1.5).
 **The keys reach the bar** (owner call 2026-10-26), in console mode on every
 board and the browser. Up past the top of the surface under a bar -- a
 page's first row (`ui_draw.edge_take`, the engine's `api_edge`), the
-Editor's list, outline, step, map or sprite grid at its top, the home's
-cards at theirs (`at_top`) -- puts focus on the bar's items
+Editor's list, outline, step or map at its top, a canvas tab's page past
+its first row (Sprites', Map's, Scene's, the theme mode's Sprites: their
+own page's `api_edge`), the home's cards at theirs (`at_top`) -- puts
+focus on the bar's items
 (`BarLayer.focus_items`): the OS widgets, the back chevron, a running app's
 lent tools and the zone's targets (the Editor's tabs, undo, redo and Play,
 the home's tabs, `zone_targets`), the Editor and the home landing on their

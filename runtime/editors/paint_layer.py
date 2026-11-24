@@ -38,7 +38,7 @@ import layout_base as _lb
 import uitree_editor
 import editor_sprite
 from layers import Layer
-from view_host import checker as _checker, checker_quads as _checker_quads
+from view_host import checker as _checker, checker_quads as _checker_quads, went_up as _went_up
 from editors_paint_map import PaintEditor, _pe_line
 from array import array
 
@@ -405,11 +405,9 @@ class PaintLayer(Layer):
         return bool(self._pop)
 
     def at_top(self):
-        """Up goes on to the bar from the head row's stops, where the
-        page's keys leave it (InputRouter._bar_keys)."""
-        if self._pop or self.page is None or self.ws.paint is None or self.layout.pane:
-            return False
-        return self.page._focus_key() in ("pickers", "prev", "next", "{n}")
+        """The page's keys went past its top, no popover open and not a desk's
+        pane: an up goes on to the bar (InputRouter._bar_keys)."""
+        return not self._pop and not self.layout.pane and _went_up(self.page)
 
     def handle_input(self, i):
         if not self._pop:
@@ -417,8 +415,19 @@ class PaintLayer(Layer):
             if i.pressed("y") and self.ws.paint is not None:
                 self._open_more()      # a gamepad's more menu
                 return True
+        elif i.pressed("b"):
+            # B steps back: the shifts' page to the more menu, a popover shut
+            if self._shifts:
+                self._shifts = self._menu_top = False
+            else:
+                self.act("close")
+            self.ws.mark_dirty()
+            return True
         self._sync()
+        pop = self._pop
         self._page().keys(i)          # (the page's damage marks what the keys moved)
+        if not pop:
+            self.ws.home.leave_or_home(self.ws.spine.exit)  # B leaves, as on every tab
         return True
 
     def handle_key(self, i):

@@ -660,11 +660,10 @@ class InputRouter:
         layer = ws.pause if where == "pause" else self._keys_layer()
         if layer is None:
             return False
-        if edge and where != "pause":
-            # a page's: not a canvas's or a caret's, whose own popovers draw pages
-            if not layer.ball_steps():
-                return False
-        else:
+        # A page whose keys step its stops went past its top; a canvas's or a
+        # caret's surface, whose own popovers draw pages, says where it is at
+        # its top, its page's edge among them (its `at_top`).
+        if not (edge and where != "pause" and layer.ball_steps()):
             top = getattr(layer, "at_top", None)
             if top is None or not top():
                 return False

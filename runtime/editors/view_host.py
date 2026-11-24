@@ -30,6 +30,7 @@ gestures and the brush (`brush`, `set_brush`)."""
 from array import array
 
 import ui_draw as _ui_draw
+import uitree_app
 import uitree_editor
 from layout_base import (LayoutBase, BASE_W as _BASE_W, BASE_H as _BASE_H, pane as _in_pane,
                          metric_class as _metric_class, DESK as _DESK)
@@ -127,6 +128,12 @@ class _Damage:
         self.ws.mark_dirty()
 
 
+def went_up(page):
+    """Whether the last frame's up press on placed page `page` found no
+    stop above its focus (the engine's `edge`): the keys went past its top."""
+    return page is not None and bool(page.edge() & uitree_app.EDGE_UP)
+
+
 class PageHost:
     """A placed page an Editor tab draws on the content rect, hosted over
     `ws`: `tab` the tab it is (a desk pane the keys are not in shows no
@@ -211,6 +218,15 @@ class PageHost:
         if not self._host.still():
             ws.request_frame()
 
+    def at_top(self):
+        """The page's keys went past its top, no popover open: an up goes
+        on to the bar (InputRouter._bar_keys)."""
+        return not self.popover() and went_up(self.page)
+
+    def popover(self):
+        """Whether a popover of the page's is open."""
+        return False
+
     def handle_pointer(self, px, py, click):
         """A pointer sample for the page; what a canvas's press does lands
         with the input, where a desk's frame sees what it changed."""
@@ -260,10 +276,12 @@ class ViewHost(PageHost):
         self.ws.home.leave_or_home(self.ws.spine.exit)
 
     def at_top(self):
-        """The view holding the keys at its top (`view_top`), no popover
-        open: an up goes on to the bar (InputRouter._bar_keys)."""
+        """The view holding the keys at its top (`view_top`), or the page's
+        keys past its top, no popover open: an up goes on to the bar
+        (InputRouter._bar_keys)."""
         return (self.page is not None and not self.popover()
-                and self.page._focus_key() == "view" and self.view_top())
+                and (self.page._focus_key() == "view" and self.view_top()
+                     or went_up(self.page)))
 
     # -- the view --------------------------------------------------------------
 
@@ -441,10 +459,6 @@ class ViewHost(PageHost):
             _ui_draw.cursor(cv, (x0 + (k % 4) * c, y0 + (k // 4) * c, s, s))
 
     # -- the subclass's ----------------------------------------------------------
-
-    def popover(self):
-        """Whether a popover of the page's is open."""
-        return False
 
     def close_pop(self):
         """The open popover closed."""

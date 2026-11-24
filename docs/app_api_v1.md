@@ -520,7 +520,9 @@ with a rule as a captioned group's are (a `row` among them one of its rows);
 `gap=` sets its column's children that far apart. `ui.split(..., rule=True)`
 draws a rule between its cells; a row split's fixed sizes that its width
 cannot hold share it by their sizes, and a cell that is a row, a group or a
-seg widens to what it needs, its neighbours giving up at most half theirs.
+seg widens to what it needs, its neighbours giving up at most half theirs
+and never their least (a group's least is its links' labels and icons: a
+link's value gives way to its label).
 Groups in a `row` stand side by side, each a column of its rows (no
 caption), on a flowing page and a placed one.
 

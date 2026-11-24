@@ -916,9 +916,9 @@ void moy_ui_api_card(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t titl
     // shadow's 8 px at the scale, mua_clip_row); never narrower than the card
     int lw = c->grid_pitch - 2 * pad, most = c->grid_w + 2 * pad + 16 * c->fs;
     lw = lw > most ? most : lw < c->grid_w + 2 * pad ? c->grid_w + 2 * pad : lw;
-    // a fitted grid's row is as tall as its tallest card: a title broken
-    // onto a second line grows its card and its row by that line
-    int tall = c->grid_wrap == 2 ? moy_ui_card_wrap(s, lw, title, c->fs, mua_ground_of(c)) : 0;
+    // a fitted grid's row is as tall as its tallest card: a title or a sub
+    // line broken onto more lines grows its card and its row by them
+    int tall = c->grid_wrap == 2 ? moy_ui_card_wrap(s, lw, title, sub, c->fs, mua_ground_of(c)) : 0;
     int grew = tall > c->grid_tall;
     if (grew) {
         c->grid_tall = (uint8_t)(tall > 255 ? 255 : tall);

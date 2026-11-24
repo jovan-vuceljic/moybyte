@@ -183,12 +183,22 @@ def _tools():
     ui.button("more", kind="bar", alone=True, w="{pitch}", marked="pop=more")
 
 
+def _steps():
+    # the sprite before and after: under keys each its own stop, left and
+    # right walking them and the row's other parts, A stepping; under touch
+    # a stepper, its arrows the taps
+    ui.stepper("{n}", "prev", "next", shown="@touch")
+    ui.button("prev", icon="back", kind="bar", alone=True, shown="!@touch")
+    ui.label("{n}", size="text", align="center", shown="!@touch")
+    ui.button("next", icon="forward", kind="bar", alone=True, shown="!@touch")
+
+
 def sprite_page():
     with ui.page(""):
         ui.empty("No sprites", icon="art", lines=["This cart has no sprite sheet"], shown="none")
         with ui.row("head", pad="{pad}", gap="{gap}", shown="!none && !pane"):
             ui.label("Sprite {n}", tone="dim")
-            ui.stepper("{n}", "prev", "next")
+            _steps()
             ui.button("pickers", label="Size {size}", kind="bar", marked="pop=pickers")
         with ui.row("tools", pad="{pad}", gap=0, shown="!none && pane"):
             _tools()
@@ -199,7 +209,7 @@ def sprite_page():
                 ui.cells("color", first=0, count=16, cols=2, side="{sw}", clear=0, on="colored")
             ui.canvas("map", _draw_map, pointer="map_tap", shown="!pane")
         with ui.row("nav", pad="{pad}", gap="{gap}", shown="!none && pane"):
-            ui.stepper("{n}", "prev", "next")
+            _steps()
             ui.button("pickers", label="{size}", kind="bar", marked="pop=pickers")
             ui.label("64", align="end")
         ui.canvas("flags", _draw_flags, h="{flags_h}", keys=flags_keys, pointer="flags_tap",
