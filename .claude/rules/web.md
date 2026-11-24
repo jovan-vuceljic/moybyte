@@ -5,6 +5,8 @@ paths:
   - "runtime/**/web_*.py"
   - "device/moy_web*.py"
   - "tools/*web*.py"
+  - "site/os/**"
+  - "tools/os_site.py"
 ---
 
 <!-- The wasm console, the sync RPC, and the two web modes. -->
@@ -108,6 +110,17 @@ nor those docs will warn you about:
   resolves no relative name. Both must be in the webhost's ASSETS table
   (`native/moy_net/moy_webhost.c`), which is also what the pack holds: a
   board that does not serve one serves a console that cannot boot.
+- **THE LINK between the windows** (`docs/web_console_online_2026-11.md`
+  §5): My consoles (`site/os/`, os.moybyte.com, built by
+  `tools/os_site.py`) opens a board's origin in a window and hands its
+  loader the pack by `postMessage`. What bites: the loader's listener dies
+  with `document.open`, so `page_tail.js` takes it over from
+  `window.moyLink`; the board's end hears only its OPENER at a MIRROR's
+  origin, so a site that speaks the link must be one of the build's
+  mirrors (serve.py `--loader --mirror`); a `Cross-Origin-Opener-Policy` on
+  either page takes the opener, and the link with it; and the site runs no
+  console, so it is in neither web mode. `tests/test_web_link_e2e.py`
+  drives both ends across two origins.
 - **TWO WEB MODES, TOTAL, NO CROSSOVER.** The ORIGIN a page runs under,
   never the host its bytes came from, says where its carts live — a page on a
   board's origin edits the BOARD's store (the loader's too, whatever source

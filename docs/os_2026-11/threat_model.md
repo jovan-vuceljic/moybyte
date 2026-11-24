@@ -123,13 +123,17 @@ exchange but never finish it, and the password never crosses the network.
 Its limits in short: the page itself crosses plain HTTP, so an active attacker on the LAN can serve a page that captures what is
 typed into it. Where the loader boots the console
 (`docs/web_console_online_2026-11.md` §3, §6) the pack's bytes may come from
-the browser's cache, a mirror or os.moybyte.com, and the loader runs only
+the browser's cache, a mirror, os.moybyte.com or the My consoles window
+that opened it (the link, §5), and the loader runs only
 bytes whose sha256 is the digest the board's `/sync` names, checked on every
 read: a mirror or a cache can fail to deliver but cannot substitute, and a
 device that later answers at the board's address and wrote that origin's
 cache leaves nothing the next genuine board's loader runs. The digest itself
 crosses plain HTTP with the loader, so the active attacker above is not
-stopped by it. A paired browser can write and run any cart, one that arrives as files
+stopped by it. The link takes messages only from the window that opened the
+board's and only at a mirror's origin, evaluates none, and in its first
+version carries a pack and the console's state: what My consoles learns is
+the digests and whether the console signed in, never a cart. A paired browser can write and run any cart, one that arrives as files
 being asked on the glass at its first run (§3); the password pairs against the record's PBKDF2 cost
 (above) and the backoff. The Zero's setup network is open whenever
 no saved network answers, and on a board that already has a password its form
