@@ -10,12 +10,9 @@
 // against: no engine is needed, so a front checks at the call that names the
 // prop and raises at that call's line. A value's class as its front sees it:
 enum { UIT_VC_ANY = 0, UIT_VC_TEXT, UIT_VC_INT, UIT_VC_BOOL, UIT_VC_LIST, UIT_VC_DICT, UIT_VC_FN, UIT_VC_NUM };
-// or'ed into a class: the front builds this kind or prop although the spec
-// only designs it, so it is checked as a built one
-#define UIT_VC_BUILDS 0x10
 // NULL where kind `kind` takes prop `prop` with a value of class `vc`
 // (UIT_VC_ANY: not checked) whose text is `word` (NULL: not a text). Else the
-// spec's code ("N01" no such kind or prop, a designed one, a word not the
+// spec's code ("N01" no such kind or prop, a word not the
 // prop's, a value of a class its type does not take, a text that is no
 // template given to an int; "N04" a retired prop; "T03" an int prop given
 // another class), with `out` holding WHAT, EXPECTED and FIX, each ended by a

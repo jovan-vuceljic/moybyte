@@ -984,7 +984,7 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 
 | kind | level | head | props |
 |---|---|---|---|
-| `page` | 1 | python tpl, lua name, c name | `title` tpl, `status` tpl, `shown` action or hook |
+| `page` | 1 | python tpl, lua name, c name | `title` tpl, `arg` name, `status` tpl, `shown` action or hook |
 | `group` | 1 | tpl | `close` action or hook, `look` `"card"` `"rules"`, `gap` int |
 | `panel` | 1 | key | none |
 | `row` | 1 | key, optional | `close` action or hook, `pad` int, `gap` int, `mid` bool, `wrap` bool |
@@ -1041,8 +1041,7 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 - **App fields (`ui.app`):** `icon`, `size`, `min`, `back`, `glass`, `slots`. **System values (`@NAME`):** `desk` bool, `handheld` bool, `wide` bool, `tall` bool, `touch` bool, `input` enum, `focus` text, `current` bool.
 - **Error codes:** A01, A02, A03, A07, A08, A09, A10, B01, B02, B03, C01, C02, C03, D01, D02, D04, E00, E01, E02, E03, G01, H01, H03, I02, K01, K02, K03, L03, N01, N02, N03, N04, N06, N07, N08, O01, O02, O04, P01, P02, P03, P04, P05, Q01, R01, S01, S02, S03, S04, S05, S06, S07, S08, S09, S11, S12, S13, T01, T02, T03, T04, T05, T06, U02, U08, W01, W02, X01.
 - **Reserved codes**, never raised: A04, A05, A06, D03, D05, D06, F01, F02, F03, F04, F05, F06, F07, F08, I01, L01, L02, M01, M02, M03, M04, O03, S10, U01, U03, U04, U05, U06, U07, U10, V01, V02, Y01, Y02, Y03, Y04, Y05, Y06.
-- **Retired names**, each refused with its replacement (N04): verbs `at`, `cell`, `fmt`, `has_symbols`, `head`, `key`, `peek`, `per`, `rebuild`, `ref`, `scope`; kinds `cell`, `text`; props `below@scroll`, `current@tool`, `disabled`, `does@action`, `fixed@split`, `ink`, `key@action`, `keyname@item`, `lit`, `mkind@item`, `paint@cards`, `tools@app`; takes `change`; system values `fs`, `h`, `symbols`, `w`.
-- **Named and not built** (`designed`: every front refuses each, N01): `page.arg`, `page.unit`, `page.nav`, `scroll.new`, `toast.anchor`, `tool`, `cells.face`, `cells.slide`, `dialog.default`, `popover.unit`, `pane.unit`, `canvas.size`, `canvas.sized`, `canvas.capture`, `canvas.text`, `canvas.actions`, `canvas.on`, `takes="row+arg"`, `takes="key"`, role `menu`, role `space`, verb `unit`, verb `damage`, verb `load`.
+- **Retired names**, each refused with its replacement (N04): verbs `at`, `cell`, `fmt`, `has_symbols`, `head`, `key`, `peek`, `per`, `rebuild`, `ref`, `scope`; kinds `cell`, `text`; props `below@scroll`, `disabled`, `does@action`, `fixed@split`, `ink`, `key@action`, `keyname@item`, `lit`, `mkind@item`, `paint@cards`, `tools@app`; takes `change`; system values `fs`, `h`, `symbols`, `w`.
 
 <!-- the freeze list ends -->
 

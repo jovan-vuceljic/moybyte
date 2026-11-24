@@ -90,7 +90,7 @@ def uitree_table(text=None):
     (a word prop's words with it) and level, the props every node, an action
     and a hook take, the verbs, queries, takes= values, roles, off= words,
     app fields and system values, every error code and reserved code, and
-    the retired names; whether each is built (`designed`) with it. Its prose
+    the retired names. Its prose
     (what a code means and its fix, a section, a retired name's replacement)
     is left out."""
     c = json.loads(_read(UITREE) if text is None else text)

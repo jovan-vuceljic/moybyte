@@ -117,7 +117,7 @@ def _uitree_moved(edit):
     ("a prop", lambda d: d["kinds"]["label"]["props"].__setitem__("glow", {"type": "bool", "level": 2})),
     ("a prop's type", lambda d: d["kinds"]["label"]["props"]["lines"].__setitem__("type", "tpl")),
     ("a word", lambda d: d["kinds"]["button"]["props"]["look"].__setitem__("type", "word:hero,plain")),
-    ("a designed entry built", lambda d: d["kinds"]["dialog"]["props"]["default"].pop("designed")),
+    ("a prop's level", lambda d: d["kinds"]["label"]["props"]["lines"].__setitem__("level", 2)),
     ("an error code", lambda d: d["codes"].__setitem__("Z01", d["codes"]["A01"])),
     ("a reserved code", lambda d: d["reserved_codes"].append("Z02")),
     ("an action prop", lambda d: d["action_props"].__setitem__("glow", {"type": "bool", "level": 2})),

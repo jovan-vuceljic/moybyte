@@ -17,7 +17,6 @@ import test_uitree_contract as K
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KINDS = K.TABLE["kinds"]
 ANY, TEXT, INT, BOOL, LIST, DICT, FN, NUM = range(8)
-BUILDS = 16      # the front builds what the spec only designs
 
 
 @pytest.fixture(scope="module")
@@ -33,27 +32,12 @@ def test_the_header_is_the_contract_s():
     assert r.returncode == 0, r.stdout + r.stderr
 
 
-def _built(k):
-    return [p for p, d in KINDS[k].get("props", {}).items() if not d.get("designed")]
-
-
-def test_every_built_prop_of_every_built_kind_passes(m):
+def test_every_prop_of_every_kind_passes(m):
     for k, d in KINDS.items():
-        if d.get("designed"):
-            assert m.check_prop(k, "shown", ANY, None)[0] == "N01", k
-            continue
         extra = [] if k == "page" else [p for p in list(K.TABLE["common_props"]) + list(K.TABLE["child_props"])
                                         if p not in d.get("props", {})]     # a kind's own prop of that name wins
-        for p in _built(k) + extra:
+        for p in list(d.get("props", {})) + extra:
             assert m.check_prop(k, p, ANY, None) is None, (k, p)
-
-
-def test_a_designed_prop_is_refused_as_not_built(m):
-    for k, d in KINDS.items():
-        for p, pd in d.get("props", {}).items():
-            if pd.get("designed") and not d.get("designed"):
-                code, what, _, _ = m.check_prop(k, p, ANY, None)
-                assert code == "N01" and "designs it" in what, (k, p)
 
 
 def test_a_retired_prop_names_its_replacement(m):
@@ -63,7 +47,7 @@ def test_a_retired_prop_names_its_replacement(m):
             continue                # an action's and the app's: not a node's prop
         kinds = [kind] if kind else list(KINDS)
         for k in kinds:
-            if p in KINDS[k].get("props", {}) or KINDS[k].get("designed"):
+            if p in KINDS[k].get("props", {}):
                 continue
             assert m.check_prop(k, p, ANY, None) == ("N04", "ui.%s %s= is retired" % (k, p), "", why), (k, p)
 
@@ -72,7 +56,7 @@ def test_a_word_prop_takes_its_words_alone(m):
     for k, d in KINDS.items():
         for p, pd in d.get("props", {}).items():
             t = pd["type"]
-            if not t.startswith("word:") or pd.get("designed") or d.get("designed"):
+            if not t.startswith("word:"):
                 continue
             words = t[5:].split(",")
             assert m.prop_words(k, p) == t[5:]
@@ -96,7 +80,7 @@ def test_a_value_of_a_class_its_type_does_not_take(m):
     assert m.check_prop("button", "arg", DICT, None) is None          # a literal: any value
 
 
-def test_an_int_takes_a_template_a_text_takes_no_int_and_a_front_may_build_a_designed_entry(m):
+def test_an_int_takes_a_template_and_a_text_takes_no_int(m):
     assert m.check_prop("label", "lines", TEXT, "{n}") is None
     assert m.check_prop("label", "lines", TEXT, "two")[:2] == ("N01", "ui.label lines='two' is a text, not an int")
     assert m.check_prop("label", "lines", NUM, None)[0] == "T03"
@@ -108,15 +92,11 @@ def test_an_int_takes_a_template_a_text_takes_no_int_and_a_front_may_build_a_des
     assert m.check_prop("pane", "min", DICT, None) is None              # (w, h), or one a tab
     assert m.check_prop("pane", "min", LIST, None) is None
     assert m.check_prop("text_editor", "gutter", TEXT, "lines") is None  # a condition
-    assert m.check_prop("dialog", "default", TEXT, "ok")[0] == "N01"    # designed
-    assert m.check_prop("dialog", "default", TEXT | BUILDS, "ok") is None
-    assert m.check_prop("bubble", "side", TEXT | BUILDS, "{s}") is None
+    assert m.check_prop("dialog", "default", TEXT, "ok")[0] == "N01"    # no such prop
 
 
 def test_an_unknown_prop_gets_difflib_s_near_names(m):
     for k, d in KINDS.items():
-        if d.get("designed"):
-            continue
         names = m.check_prop(k, "zzzz", ANY, None)[2]
         names = [] if names == "(none)" else names.split(", ")
         for p in names:

@@ -10,7 +10,7 @@
  *                                       "" where the message has none
  *
  * TYPE is the contract's name of the prop's type ("tpl", "cond", "int",
- * "word", "list:tpl", ...), vc a UIT_VC_* class (or'ed with UIT_VC_BUILDS),
+ * "word", "list:tpl", ...), vc a UIT_VC_* class,
  * word the value where it is a text (nil otherwise).
  *
  * Needs only lua.h and moy_uitree.h, so the host checker's bare Lua

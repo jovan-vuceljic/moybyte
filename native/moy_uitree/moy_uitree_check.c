@@ -75,8 +75,6 @@ static void near(const uit_skind_t *K, const char *word, char *out, size_t n)
     int score[2] = {-1, -1};
     for (int i = 0; i < K->n; i++) {
         const uit_sprop_t *P = &UIT_SPROPS[K->first + i];
-        if (P->flags & UIT_SF_DESIGNED)
-            continue;
         int s = ratio_x1000(PNAME(P), word);
         if (s < 600)
             continue;
@@ -103,8 +101,7 @@ static size_t takes(const uit_skind_t *K, char *out, size_t n)
     out[0] = 0;
     for (int i = 0; i < K->n && at < n; i++) {
         const uit_sprop_t *P = &UIT_SPROPS[K->first + i];
-        if (!(P->flags & UIT_SF_DESIGNED))
-            at += (size_t)snprintf(out + at, n - at, "%s%s", at ? ", " : "", PNAME(P));
+        at += (size_t)snprintf(out + at, n - at, "%s%s", at ? ", " : "", PNAME(P));
     }
     return at < n ? at : n - 1;
 }
@@ -180,16 +177,10 @@ static void class_fix(const char *prop, int type, char *fix, size_t n)
 const char *uit_check_prop(const char *kind, const char *prop, int vc, const char *word, char *out, size_t n)
 {
     char what[96], expected[400], fix[sizeof expected + 64];
-    int builds = vc & UIT_VC_BUILDS;
-    vc &= ~UIT_VC_BUILDS;
     const uit_skind_t *K = kind_of(kind);
     if (!K) {
         snprintf(what, sizeof what, "no kind '%s'", kind);
         return say(out, n, "N01", what, "", "a kind of the UI API (\xc2\xa7" "7)");
-    }
-    if ((K->flags & UIT_SF_DESIGNED) && !builds) {
-        snprintf(what, sizeof what, "ui.%s is designed, not built yet", kind);
-        return say(out, n, "N01", what, "", "another kind, until it is built");
     }
     const uit_sprop_t *P = prop_of(K, prop);
     if (!P) {
@@ -205,10 +196,6 @@ const char *uit_check_prop(const char *kind, const char *prop, int vc, const cha
         else
             snprintf(fix, sizeof fix, "drop it; %s takes %s", kind, expected[0] ? expected : "none");
         return say(out, n, "N01", what, expected[0] ? expected : "(none)", fix);
-    }
-    if ((P->flags & UIT_SF_DESIGNED) && !builds) {
-        snprintf(what, sizeof what, "ui.%s has no prop '%s' yet: the spec designs it", kind, prop);
-        return say(out, n, "N01", what, "", "drop it, until it is built");
     }
     if (vc != UIT_VC_ANY && vc < (int)(sizeof VC_NAMES / sizeof VC_NAMES[0]) && !(classes(P->type) & (1u << vc))) {
         snprintf(what, sizeof what, "ui.%s %s= is %s", kind, prop, VC_NAMES[vc]);

@@ -103,11 +103,10 @@ def lua_facts():
     stubs = set(re.findall(r"^T\.(\w+) = (?:retired|not_here)\(", src, re.M))
     f["verbs"] -= stubs
     # the layer checks its props against the table (the C check), so what it builds is the table's
-    # built kinds and props, a verb's each, but where its OWN says it differs
+    # kinds and props, a verb's each, but where its OWN says it does not build one
     for k, d in TABLE["kinds"].items():
-        if (k in f["verbs"] or "made_by" in d) and (not d.get("designed") or own.get(k)):
-            f["kinds"][k] = {p for p, pd in d["props"].items()
-                             if own.get("%s.%s" % (k, p), not pd.get("designed") or own.get(k))}
+        if k in f["verbs"] or "made_by" in d:
+            f["kinds"][k] = {p for p in d["props"] if own.get("%s.%s" % (k, p), True)}
     f["kinds"]["page"] = f["page"]
     f["codes"] = _codes(LUA_FILES)
     f["retired_live"] = {v for v in TABLE["retired"]["verbs"] if v in f["verbs"]}
@@ -200,38 +199,8 @@ def test_the_table_is_whole():
             assert p not in TABLE["retired"]["props"], (k, p)
     for k in TABLE["retired"]["kinds"]:
         assert k not in TABLE["kinds"]
-
-
-def not_built_marks(f):
-    """Every entry whose `designed` mark disagrees with the Python reference:
-    `designed: true` is exactly what the reference does not build."""
-    out = []
-
-    def mark(what, d, built):
-        if bool(d.get("designed")) == built:
-            out.append("%s is %s, marked %s" % (what, "built" if built else "not built",
-                                                 "designed" if built else "built"))
-    for k, d in TABLE["kinds"].items():
-        built = k in f["kinds"]
-        mark("kind " + k, d, built)
-        for p, pd in d["props"].items():
-            mark("prop %s.%s" % (k, p), pd, built and (p in f["kinds"][k] or p in f["common"]))
-    for name, table in (("action", "action_props"), ("hook", "hook_props")):
-        for p, pd in TABLE[table].items():
-            mark("%s prop %s" % (name, p), pd, p in f[name])
-    for t, d in TABLE["takes"].items():
-        mark("takes " + t, d, t in f["takes"])
-    for v, d in TABLE["verbs"].items():
-        mark("verb " + v, d, v in f["verbs"] or v in f.get("objects", ()))
-    for r, d in TABLE["roles"].items():
-        if d["owner"] == "app":
-            mark("role " + r, d, r in f["roles"])
-    return out
-
-
-def test_the_not_built_marks_are_the_python_layer_s():
-    wrong = not_built_marks(python_facts())
-    assert not wrong, "set or drop `designed` in native/moy_uitree/contract.json:\n  " + "\n  ".join(wrong)
+    # every entry is built: a name the spec only designs waits outside the table (it is add-only)
+    assert '"designed"' not in json.dumps(TABLE)
 
 
 def test_the_python_layer_holds_to_the_table():

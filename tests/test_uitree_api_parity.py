@@ -232,13 +232,13 @@ def test_compiled_rows_refuse_a_canvas_keys_they_cannot_route():
 
 
 @pytest.mark.parametrize("kind, name, src, says", [
-    ("canvas", "text", "True", "the spec designs it"),      # designed: no engine builds it
+    ("canvas", "text", "True", "no prop 'text'"),           # a name the spec only designs
     ("rule", "label", "x", "no prop 'label'"),              # a head name on a kind whose head it is not
     ("canvas", "caption", "x", "no prop 'caption'"),
 ])
 def test_compiled_rows_refuse_what_no_engine_draws_on_the_kind(kind, name, src, says):
     """The engine's check at lowering takes a store head name only on the
-    kind whose head it is, and refuses a designed prop: a compiled app can
+    kind whose head it is, and refuses a name it does not hold: a compiled app can
     name nothing that silently draws nothing."""
     from test_uitree_wasm import Rows, PAGE, E_CHECK
     import uitree_c

@@ -65,7 +65,6 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_ICONS "icons"
 #define UT_LOOK_COLUMN "column"
 #define UT_LOOK_KEYS "keys"
-#define UT_NAV_OFF "off"
 #define UT_PAD_S "s"
 #define UT_PAD_M "m"
 #define UT_PAD_L "l"
@@ -89,7 +88,6 @@ static const char *const ut_kind_names_[] = {
 
 // Each prop of the node made last, by its contract type: an int, a bool, else its
 // source (a list prop's items one call each). A prop a kind lacks is refused at its call.
-static inline int32_t ut_p_actions(const char *v) { return ut_prop_("actions", v); }
 static inline int32_t ut_p_align(const char *v) { return ut_prop_("align", v); }
 static inline int32_t ut_p_alone(int v) { return ut_prop_("alone", v ? "True" : "False"); }
 static inline int32_t ut_p_anchor(const char *v) { return ut_prop_("anchor", v); }
@@ -99,7 +97,6 @@ static inline int32_t ut_p_badge(const char *v) { return ut_prop_("badge", v); }
 static inline int32_t ut_p_burst(int32_t v) { return ut_prop_int_("burst", v); }
 static inline int32_t ut_p_buttons(const char *v) { return ut_prop_("buttons", v); }
 static inline int32_t ut_p_by(const char *v) { return ut_prop_("by", v); }
-static inline int32_t ut_p_capture(const char *v) { return ut_prop_("capture", v); }
 static inline int32_t ut_p_changed(const char *v) { return ut_prop_("changed", v); }
 static inline int32_t ut_p_check(int v) { return ut_prop_("check", v ? "True" : "False"); }
 static inline int32_t ut_p_clear(int32_t v) { return ut_prop_int_("clear", v); }
@@ -110,7 +107,6 @@ static inline int32_t ut_p_count(const char *v) { return ut_prop_("count", v); }
 static inline int32_t ut_p_cur(const char *v) { return ut_prop_("cur", v); }
 static inline int32_t ut_p_current(const char *v) { return ut_prop_("current", v); }
 static inline int32_t ut_p_cut(const char *v) { return ut_prop_("cut", v); }
-static inline int32_t ut_p_default(const char *v) { return ut_prop_("default", v); }
 static inline int32_t ut_p_dir(const char *v) { return ut_prop_("dir", v); }
 static inline int32_t ut_p_draw(const char *v) { return ut_prop_("draw", v); }
 static inline int32_t ut_p_drop(const char *v) { return ut_prop_("drop", v); }
@@ -156,7 +152,6 @@ static inline int32_t ut_p_max(int32_t v) { return ut_prop_int_("max", v); }
 static inline int32_t ut_p_mid(int v) { return ut_prop_("mid", v ? "True" : "False"); }
 static inline int32_t ut_p_min(const char *v) { return ut_prop_("min", v); }
 static inline int32_t ut_p_month(int32_t v) { return ut_prop_int_("month", v); }
-static inline int32_t ut_p_nav(const char *v) { return ut_prop_("nav", v); }
 static inline int32_t ut_p_new(const char *v) { return ut_prop_("new", v); }
 static inline int32_t ut_p_next(const char *v) { return ut_prop_("next", v); }
 static inline int32_t ut_p_off(const char *v) { return ut_prop_("off", v); }
@@ -176,9 +171,7 @@ static inline int32_t ut_p_shown(const char *v) { return ut_prop_("shown", v); }
 static inline int32_t ut_p_side(const char *v) { return ut_prop_("side", v); }
 static inline int32_t ut_p_signal(int32_t v) { return ut_prop_int_("signal", v); }
 static inline int32_t ut_p_size(const char *v) { return ut_prop_("size", v); }
-static inline int32_t ut_p_sized(const char *v) { return ut_prop_("sized", v); }
 static inline int32_t ut_p_sizes(const char *v) { return ut_prop_("sizes", v); }
-static inline int32_t ut_p_slide(int v) { return ut_prop_("slide", v ? "True" : "False"); }
 static inline int32_t ut_p_snap(int v) { return ut_prop_("snap", v ? "True" : "False"); }
 static inline int32_t ut_p_span(int32_t v) { return ut_prop_int_("span", v); }
 static inline int32_t ut_p_start(const char *v) { return ut_prop_("start", v); }
@@ -193,7 +186,6 @@ static inline int32_t ut_p_text(const char *v) { return ut_prop_("text", v); }
 static inline int32_t ut_p_title(const char *v) { return ut_prop_("title", v); }
 static inline int32_t ut_p_today(int32_t v) { return ut_prop_int_("today", v); }
 static inline int32_t ut_p_tone(const char *v) { return ut_prop_("tone", v); }
-static inline int32_t ut_p_unit(const char *v) { return ut_prop_("unit", v); }
 static inline int32_t ut_p_value(const char *v) { return ut_prop_("value", v); }
 static inline int32_t ut_p_w(int32_t v) { return ut_prop_int_("w", v); }
 static inline int32_t ut_p_wash(const char *v) { return ut_prop_("wash", v); }

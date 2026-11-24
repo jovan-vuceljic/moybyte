@@ -1,6 +1,6 @@
 {
  "spec": "ui_api_spec_2026-11.md revision 4",
- "about": "The UI API's contract as data: every error code (§25.2), node kind and prop (§7), takes= value (§5.4), role (§13.1), retired name (§7.9), app field (§19.1) and system value (§14). Both reference layers are tested against it (tests/test_uitree_contract.py). `designed: true` marks an entry the Python reference does not build (the spec's **not built**), held to the code by tests/test_uitree_contract.py; Lua's gaps are known.json's.",
+ "about": "The UI API's contract as data: every error code (§25.2), node kind and prop (§7), takes= value (§5.4), role (§13.1), retired name (§7.9), app field (§19.1) and system value (§14). Both reference layers are tested against it (tests/test_uitree_contract.py). Every entry is built; a layer's gaps are known.json's.",
  "types": {
   "tpl": "a template",
   "cond": "a condition",
@@ -946,10 +946,6 @@
   "page": {
    "level": 1
   },
-  "unit": {
-   "level": 1,
-   "designed": true
-  },
   "sys": {
    "level": 1
   },
@@ -971,19 +967,11 @@
   "post": {
    "level": 1
   },
-  "damage": {
-   "level": 1,
-   "designed": true
-  },
   "doc": {
    "level": 2
   },
   "image": {
    "level": 2
-  },
-  "load": {
-   "level": 2,
-   "designed": true
   },
   "work": {
    "level": 2
@@ -1075,18 +1063,7 @@
     },
     "arg": {
      "type": "name",
-     "level": 1,
-     "designed": true
-    },
-    "unit": {
-     "type": "name",
-     "level": 1,
-     "designed": true
-    },
-    "nav": {
-     "type": "word:off",
-     "level": 2,
-     "designed": true
+     "level": 1
     },
     "status": {
      "type": "tpl",
@@ -1160,11 +1137,6 @@
     "follow": {
      "type": "bool",
      "level": 1
-    },
-    "new": {
-     "type": "name",
-     "level": 1,
-     "designed": true
     },
     "snap": {
      "type": "bool",
@@ -1373,11 +1345,6 @@
    "level": 2,
    "section": "7.2",
    "props": {
-    "anchor": {
-     "type": "key",
-     "level": 2,
-     "designed": true
-    },
     "icon": {
      "type": "tpl",
      "level": 2
@@ -1633,44 +1600,6 @@
     }
    }
   },
-  "tool": {
-   "head": "action",
-   "level": 2,
-   "section": "7.3",
-   "props": {
-    "label": {
-     "type": "tpl",
-     "level": 2,
-     "designed": true
-    },
-    "icon": {
-     "type": "tpl",
-     "level": 2,
-     "designed": true
-    },
-    "arg": {
-     "type": "lit",
-     "level": 2,
-     "designed": true
-    },
-    "marked": {
-     "type": "cond",
-     "level": 2,
-     "designed": true
-    },
-    "fill": {
-     "type": "tpl",
-     "level": 2,
-     "designed": true
-    },
-    "focus": {
-     "type": "cond",
-     "level": 2,
-     "designed": true
-    }
-   },
-   "designed": true
-  },
   "toggle": {
    "head": "state",
    "level": 1,
@@ -1891,16 +1820,6 @@
      "type": "int",
      "level": 2
     },
-    "face": {
-     "type": "name",
-     "level": 2,
-     "designed": true
-    },
-    "slide": {
-     "type": "bool",
-     "level": 2,
-     "designed": true
-    },
     "edge": {
      "type": "bool",
      "level": 2
@@ -2118,11 +2037,6 @@
      "type": "word:primary,danger",
      "level": 1
     },
-    "default": {
-     "type": "action",
-     "level": 1,
-     "designed": true
-    },
     "look": {
      "type": "word:keys",
      "level": 1
@@ -2149,11 +2063,6 @@
     "close": {
      "type": "action|hook",
      "level": 1
-    },
-    "unit": {
-     "type": "name",
-     "level": 1,
-     "designed": true
     },
     "wash": {
      "type": "word:page,view,none",
@@ -2329,11 +2238,6 @@
      "type": "list|conds",
      "level": 2
     },
-    "unit": {
-     "type": "name",
-     "level": 2,
-     "designed": true
-    },
     "head": {
      "type": "bool",
      "level": 2
@@ -2395,16 +2299,6 @@
      "type": "list",
      "level": 2
     },
-    "size": {
-     "type": "list",
-     "level": 2,
-     "designed": true
-    },
-    "sized": {
-     "type": "hook",
-     "level": 2,
-     "designed": true
-    },
     "pointer": {
      "type": "action|hook",
      "level": 2
@@ -2412,11 +2306,6 @@
     "keys": {
      "type": "fn",
      "level": 2
-    },
-    "capture": {
-     "type": "cond",
-     "level": 2,
-     "designed": true
     },
     "mark": {
      "type": "lit",
@@ -2433,21 +2322,6 @@
     "h": {
      "type": "int",
      "level": 2
-    },
-    "text": {
-     "type": "bool",
-     "level": 2,
-     "designed": true
-    },
-    "actions": {
-     "type": "list",
-     "level": 2,
-     "designed": true
-    },
-    "on": {
-     "type": "action",
-     "level": 2,
-     "designed": true
     },
     "ground": {
      "type": "name",
@@ -2504,19 +2378,9 @@
    "level": 1,
    "params": 1
   },
-  "row+arg": {
-   "level": 2,
-   "params": 2,
-   "designed": true
-  },
   "pointer": {
    "level": 2,
    "params": 1
-  },
-  "key": {
-   "level": 2,
-   "params": 1,
-   "designed": true
   }
  },
  "roles": {
@@ -2531,11 +2395,6 @@
   "more": {
    "owner": "app",
    "level": 1
-  },
-  "menu": {
-   "owner": "app",
-   "level": 2,
-   "designed": true
   },
   "left": {
    "owner": "app",
@@ -2552,11 +2411,6 @@
   "down": {
    "owner": "app",
    "level": 1
-  },
-  "space": {
-   "owner": "app",
-   "level": 2,
-   "designed": true
   },
   "search": {
    "owner": "app",
@@ -2624,7 +2478,6 @@
   "props": {
    "disabled": "when= on the action with off=\"grey\"",
    "lit": "marked= (on a tool)",
-   "current@tool": "marked=",
    "keyname@item": "the action's keys=",
    "key@action": "keys=[...]",
    "does@action": "hint=",
