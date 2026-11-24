@@ -25,7 +25,7 @@ CONFIG_ESP_COREDUMP_ENABLE_TO_NONE=y
 # dynamic buffers each way) and CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC. The XIAO's
 # set is RAM-positive only because CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP moves
 # those buffers into PSRAM, and mbedTLS's external allocator is PSRAM's; this
-# chip has none, so every buffer is internal and ESP-IDF's defaults stand.
+# chip has none, so every buffer is internal (WIFI'S RECEIVE RING below).
 
 # THE USB CONSOLE: USB-Serial/JTAG as the PRIMARY console, which is what gives
 # esptool a reset it can use (the XIAO's reason, 2026-08-30).
@@ -45,6 +45,59 @@ CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=
 
 # NTP asks the moment the station has an address (the XIAO's reason).
 CONFIG_LWIP_SNTP_STARTUP_DELAY=n
+
+# IRAM TO FLASH. On this chip IRAM and DRAM split one SRAM at link time, so
+# code kept out of IRAM is heap. FreeRTOS's, the heap's and the ring buffer's
+# non-ISR functions and newlib's locks run from flash: nothing in this image
+# calls them from an ISR while the cache is off (the kernel's own IRAM code is
+# its panic handler, which calls none). ESP-IDF's ISR halves stay in IRAM, and
+# the image gets smaller, not larger (#276 has the numbers).
+CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH=y
+CONFIG_HEAP_PLACE_FUNCTION_INTO_FLASH=y
+CONFIG_RINGBUF_PLACE_FUNCTIONS_INTO_FLASH=y
+CONFIG_LIBC_LOCKS_PLACE_IN_IRAM=n
+
+# TLS IN THE ONE HEAP. The kernel's client (native/moy_net/moy_net_port.c)
+# holds a connection's record buffers only while they are in use: the
+# in-buffer a server's records need is made for the handshake and shrunk
+# after it, the out-buffer is made per record, and the CA and config data go
+# once the chain verified (CONFIG_MBEDTLS_DYNAMIC_*). It keeps no peer
+# certificate after the handshake: its verify callback is the only reader.
+# The dynamic buffers exclude DTLS, which MicroPython's base turns on for its
+# ssl module and nothing in this image speaks.
+CONFIG_MBEDTLS_SSL_PROTO_DTLS=n
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_CA_CERT=y
+CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=n
+
+# THE CA BUNDLE: ca_roots.pem beside this file, the roots the hosts this
+# image fetches from chain to, with a backup per CA family (the file names the
+# hosts), not ESP-IDF's common bundle: the release's index and assets, the
+# moybyte-org/carts index and the site's mirror verify, and a host outside
+# those families fails its handshake. The path is from MicroPython's port
+# directory, where ESP-IDF resolves it.
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_NONE=y
+CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE_PATH="../../../../boards/MOYBYTE_C3_ZERO/ca_roots.pem"
+
+# WIFI'S RECEIVE RING: 4 static buffers where ESP-IDF's default is 10, each
+# held from the radio's start for good. The 802.11n reorder window (RX_BA_WIN,
+# ESP-IDF's 6) stays within twice their count, and the TCP window stays
+# ESP-IDF's four segments, so a burst still lands; the dynamic buffers that
+# carry a frame up are made per frame.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
+
+# SYSTEM TASK STACKS: esp_timer's, FreeRTOS's timer service's, the idle
+# task's and mDNS's, each sized to its high-water mark under #276's session
+# with at least three quarters of a KB over it, and more than twice it (#276
+# has both). The event loop's, lwIP's and the WiFi driver's stay ESP-IDF's:
+# the station's handler writes NVS on the first.
+CONFIG_ESP_TIMER_TASK_STACK_SIZE=2560
+CONFIG_FREERTOS_TIMER_TASK_STACK_DEPTH=1536
+CONFIG_FREERTOS_IDLE_TASK_STACKSIZE=1024
+CONFIG_MDNS_TASK_STACK_SIZE=3072
 
 # --- Left out (the XIAO's reasons) -------------------------------------------
 CONFIG_LWIP_PPP_SUPPORT=n

@@ -71,15 +71,16 @@ chip changes.
   names them and the page fetches and reads each index
   (`carts_link.BoardCheck`), since a Python heap that cannot grow past its
   reserve has no room to parse one; the board lists only an index the page
-  cannot read, its release's. An install's buffers (the cart's index read
-  whole, and its download) are made for it and given back when it ends,
-  and a cart its store has no room for is refused with the sizes before
-  anything is fetched. Its image carries no CA bundle (the XIAO's
-  `sdkconfig.board` does), so the kernel's client refuses every https
-  fetch but a signed one (`moy_conn_verifies`), and the board's own
-  fetches -- the release's index on GitHub, moybyte-org/carts on GitHub
-  Pages, their carts -- are https: its page lists moybyte-org/carts, counts
-  the release's shelf unreached, and a Get finds the shelf away.
+  cannot read. An install reads only its cart's own entry from the streamed
+  index (`cart_index.EntryRead`); its buffers are made for it and given back
+  when it ends, and a cart its store has no room for is refused with the
+  sizes before anything is fetched. Those fetches are https, and its image
+  carries a CA bundle of its own (`boards/MOYBYTE_C3_ZERO/ca_roots.pem`)
+  where the XIAO takes ESP-IDF's common one: the roots the hosts it fetches
+  from chain to (the release's index and assets on GitHub, moybyte-org/carts
+  on GitHub Pages, the site's mirror), with a backup per CA family. An https
+  host outside those families fails its handshake; its root goes in that
+  file.
 - **SSH, without SFTP.** The server and the shell's face run in the same
   internal heap, so a build without PSRAM sizes them to what a session was
   measured to use there: the server's and the face's stacks, the session's
@@ -155,7 +156,7 @@ the browser console its image names is that tree's own (`firmware/web_runner/`),
 which its loader fetches from that tree's `firmware/web_runner/serve.py` on
 this machine's LAN address (`tools/gen_web_blob.py`, THE MIRRORS): run it
 while a browser opens the board. `tools/board.py pass c3_zero` builds,
-flashes and runs `tests/test_c3_zero_on_glass.py`, which serves that pack
-and boots the console in headless Chrome. The
+flashes and runs both Zeros' suite, `tests/test_zero_on_glass.py`, which
+serves that pack and boots the console in headless Chrome. The
 build fails when the image outgrows the factory slot (the #168 guard reads the
 slot from this board's CSV). A flash that changes the table formats the store.

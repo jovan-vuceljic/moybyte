@@ -64,9 +64,14 @@ four boards share one usb id.
 THE BOARD IS LEFT AT ITS LAUNCHER (`board.py desk` after the suite), the
 T-Deck at volume 0 (the dev channel's `vol 0`, before and after the suite).
 `--all` is the console boards. A headless board is passed only by name and
-only where it has a suite (the C3 Zero's, tests/test_c3_zero_on_glass.py):
-build, flash and its suite, nothing a console's dev channel answers (no desk,
-add-on, perf or shot); the XIAO Zero has none and is never passed. A port
+only where it has a suite (both Zeros', tests/test_zero_on_glass.py): build,
+flash, a reset through esptool to its boot line, and its suite, nothing a
+console's dev channel answers (no desk, add-on or shot). Its perf numbers
+are its suite's: the suite writes them as one record where the pass says
+(MOYBYTE_ZERO_PERF_OUT), and the pass appends it to the board's history and
+prints its block as the consoles' stage's. With the T-Deck in the same pass,
+each Zero's suite runs after the T-Deck's row, one Zero at a time, given the
+T-Deck's port (MOYBYTE_TDECK_PORT) for the match its page plays. A port
 another process holds skips its board, naming the holder.
 """
 
@@ -113,6 +118,14 @@ HEADROOM_RE = re.compile(r"App image: \d+ bytes of a \d+-byte \S+ slot -- "
                          r"(-?\d+) bytes headroom")
 GATE_RE = re.compile(r"""on_glass\.gate\(\s*["'](MOYBYTE_\w+_PORT)["']""")
 DIR_RE = re.compile(r"""ROOT\s*/\s*["']firmware["']\s*/\s*["'](\w+)["']""")
+# A suite of several boards names each as a row: its port variable, then its
+# board dir (tests/test_zero_on_glass.py's BOARDS).
+ROW_RE = re.compile(r"""\(\s*["'](MOYBYTE_\w+_PORT)["']\s*,\s*"""
+                    r"""ROOT\s*/\s*["']firmware["']\s*/\s*["'](\w+)["']\s*\)""")
+# The console whose port a Zero's suite takes for its match, when it is in the
+# same pass (after that console's own row), and the variable it reads.
+MATCH_CONSOLE = "tdeck"
+MATCH_VAR = "MOYBYTE_TDECK_PORT"
 
 
 class PassError(RuntimeError):
@@ -179,7 +192,8 @@ def in_main_checkout(root=ROOT):
 def suites(root=ROOT, dirs=None):
     """{board: (suite path relative to root, the port variable it is gated
     on)}, read from each `tests/test_*_on_glass.py`: the variable its
-    `on_glass.gate(...)` names and the board dir its session opens."""
+    `on_glass.gate(...)` names and the board dir its session opens, or, in
+    a suite of several boards, each (variable, board dir) row it names."""
     dirs = board.boards(root) if dirs is None else dirs
     by_dir = {os.path.basename(d): name for name, d in dirs.items()}
     out = {}
@@ -189,8 +203,12 @@ def suites(root=ROOT, dirs=None):
             continue
         with open(os.path.join(tests, f)) as fh:
             src = fh.read()
+        rows = ROW_RE.findall(src)
+        for var, bdir in rows:
+            if bdir in by_dir:
+                out[by_dir[bdir]] = ("tests/" + f, var)
         gate, bdir = GATE_RE.search(src), DIR_RE.search(src)
-        if gate and bdir and bdir.group(1) in by_dir:
+        if not rows and gate and bdir and bdir.group(1) in by_dir:
             out[by_dir[bdir.group(1)]] = ("tests/" + f, gate.group(1))
     return out
 
@@ -329,6 +347,9 @@ def run_board(name, a, ctx):
         _run_board(row, a, ctx)
     except Exception as exc:  # noqa: BLE001 -- one board's crash is its row
         row.note = "pass error: %s" % (str(exc).splitlines() or [repr(exc)])[0]
+    finally:
+        if name == MATCH_CONSOLE and ctx.get("match_done") is not None:
+            ctx["match_done"].set()
     row.times["total"] = time.monotonic() - t0
     return row
 
@@ -399,6 +420,10 @@ def _run_board(row, a, ctx):
     console = board.is_console(d)
     if console:
         run(verb("desk"), path)
+    if not console and not a.no_flash:
+        # The flash's installs reset the board through its REPL; a reset
+        # through esptool and its boot line put it where the suite attaches.
+        run(verb("reboot"), path)
     if console and not a.no_flash:
         # The browser console add-on that fits the image just flashed, so the
         # suite's add-on check serves it (tests/on_glass.py), then a reboot:
@@ -418,7 +443,10 @@ def _run_board(row, a, ctx):
     env = dict(os.environ, **{var: port})
     if os.path.exists(xml):
         os.remove(xml)
-    run(cmd, path, env=env)
+    if console:
+        run(cmd, path, env=env)
+    else:
+        zero_suite(row, a, ctx, cmd, path, env)
     row.times["suite"] = time.monotonic() - t
     got = junit_counts(xml)
     if got is None:
@@ -434,6 +462,39 @@ def _run_board(row, a, ctx):
         if a.shot:
             run(verb("shot", os.path.join(logs, "%s.png" % name)), path)
     return row
+
+
+def zero_suite(row, a, ctx, cmd, path, env):
+    """A Zero's suite, whose numbers are its perf record: written where the
+    suite is told (MOYBYTE_ZERO_PERF_OUT), appended to the board's history
+    and read back into the row. With the match's console in this pass, the
+    suite runs after that console's row and holds it (one Zero at a time),
+    its port given as the variable the suite's match reads."""
+    out = os.path.join(ctx["logdir"], "%s.perf.json" % row.name)
+    if os.path.exists(out):
+        os.remove(out)
+    if not a.no_perf:
+        env["MOYBYTE_ZERO_PERF_OUT"] = out
+        if not a.no_flash and row.image not in ("-", "?"):
+            env["MOYBYTE_ZERO_IMAGE"] = row.image
+    match = ctx.get("match_done")
+    if match is None:
+        ctx["run"](cmd, path, env=env)
+    else:
+        match.wait()
+        with ctx["match_lock"]:
+            env[MATCH_VAR] = ctx["ports"][MATCH_CONSOLE]
+            ctx["run"](cmd, path, env=env)
+    if a.no_perf:
+        return
+    try:
+        with open(out) as f:
+            row.perf = json.load(f)
+    except (OSError, ValueError):
+        row.perf_note = "%s: the suite wrote no perf record (%s)" % (
+            row.name, os.path.basename(path))
+        return
+    perf_pass.append(row.perf)
 
 
 def perf_stage(row, a, ctx, path):
@@ -586,6 +647,10 @@ def main(argv=None, run=run_logged, dirs=None, main_checkout=None):
            "perf_lock": threading.Lock(),
            "suites": suites(ROOT, dirs)}
     todo = [n for n in names if n in ports]
+    if MATCH_CONSOLE in todo and any(not board.is_console(dirs[n]) for n in todo) \
+            and not a.build_only:
+        ctx["match_done"] = threading.Event()
+        ctx["match_lock"] = threading.Lock()
     rows = {r.name: r for r in stopped}
     web = None
     if todo and not (a.skip_build or a.no_flash):
