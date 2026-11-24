@@ -97,9 +97,32 @@ function fakeIDB(rows = new Map()) {
 
 const buf = (u) => u.slice().buffer;
 
+// The window that opened the loader's, at `origin`: a message the loader
+// posts reaches it only when its target is that origin, as a browser
+// delivers one, and `answer(m, send)` replies through `send(data, from)`,
+// `from` the origin and source the loader sees (this window's by default).
+// A pack's bytes arrive as an ArrayBuffer of the loader's realm, as a
+// browser's structured clone delivers them.
+function opener(origin, answer = () => { }) {
+    const w = { got: [], dropped: [], listeners: [] };
+    w.send = (data, from = {}) => setTimeout(() => {
+        if (data.bytes) data = Object.assign({}, data, { bytes: w.clone(new Uint8Array(data.bytes)) });
+        w.listeners.forEach((f) => f({ data, origin: from.origin || origin, source: from.source || w.win }));
+    }, 0);
+    w.win = {
+        postMessage(m, target) {
+            if (target != origin) { w.dropped.push(target); return; }
+            w.got.push(m);
+            answer(m, w.send);
+        },
+    };
+    return w;
+}
+
 // One page load: `sync` is the board's /sync, `net` {url: bytes or status},
-// `idb` the origin's store. Returns what the loader did.
-async function load({ sync, net = {}, idb = fakeIDB(), mirrors = [DEV, SITE] }) {
+// `idb` the origin's store, `site` the opener (opener()). Returns what the
+// loader did.
+async function load({ sync, net = {}, idb = fakeIDB(), mirrors = [DEV, SITE], site = null }) {
     const asked = [], status = { textContent: "" };
     let written = null;
     const fetch = async (url) => {
@@ -117,10 +140,15 @@ async function load({ sync, net = {}, idb = fakeIDB(), mirrors = [DEV, SITE] }) 
         write(h) { written = h; },
     };
     const ctx = vm.createContext({ document, fetch, indexedDB: idb, performance, console,
-        DecompressionStream, Response, Blob, TextDecoder, URL, setTimeout });
-    ctx.self = ctx;
+        DecompressionStream, Response, Blob, TextDecoder, URL, setTimeout,
+        location: { href: "http://192.168.1.57/" },
+        addEventListener: (t, f) => { if (t == "message" && site) site.listeners.push(f); } });
+    ctx.self = ctx.window = ctx;
+    ctx.opener = site ? site.win : null;
+    if (site) site.clone = vm.runInContext("(u) => new Uint8Array(u).buffer", ctx);
     await vm.runInContext(SCRIPT.replace("@MIRRORS@", JSON.stringify(mirrors)), ctx);
-    return { asked, written, said: status.textContent, assets: ctx.moyAssets, boot: ctx.moyBoot, idb };
+    return { asked, written, said: status.textContent, assets: ctx.moyAssets, boot: ctx.moyBoot, idb,
+             link: ctx.moyLink };
 }
 
 const syncOf = (p, local = 0) => ({ sync: 1, page: p.page, pack: p.pack, local });
@@ -217,6 +245,80 @@ function ok(name, cond, extra = "") {
     await load({ sync: syncOf(b), net: {}, idb });
     ok("a rollback boots the pack before from the cache",
        idb.rows.get("order").join() == [b.pack, good.pack].join() && idb.rows.has(good.pack));
+}
+
+// The link (§5): My consoles opened this window and hands it the pack.
+const SITE_ORIGIN = "https://os.example";
+const handing = (bytes) => (m, send) => {
+    if (m.kind == "hello") send({ moylink: 1, id: 7, kind: "pack", bytes });
+};
+{
+    const site = opener(SITE_ORIGIN, handing(buf(good.data)));
+    const r = await load({ sync: syncOf(good, 1), site });
+    const hello = site.got.find((m) => m.kind == "hello");
+    ok("the hello reaches the site, and names the digests and the kinds",
+       hello && hello.moylink == 1 && hello.page == good.page && hello.pack == good.pack
+       && hello.kinds.join() == "hello,pack,state", JSON.stringify(hello));
+    ok("...posted to no other origin's window", site.dropped.join() == "http://192.168.1.9:8321",
+       site.dropped.join());
+    ok("the site's pack boots the console, and nothing is fetched",
+       r.written == PAGE && r.boot.from == "link" && r.asked.join() == "/sync", r.asked.join());
+    ok("...its bytes are answered as taken", site.got.some((m) => m.re == 7 && m.kind == "pack" && m.ok));
+    ok("...and kept under their digest", r.idb.rows.has(good.pack));
+    ok("the console page holds the link to the sites the build names",
+       r.link && r.link.join() == ["http://192.168.1.9:8321", SITE_ORIGIN].join());
+}
+{
+    const site = opener(SITE_ORIGIN, handing(buf(other.data)));
+    const r = await load({ sync: syncOf(good), net: { [SITE + good.page + ".pack"]: good.data }, site });
+    ok("bytes of another digest from the site are refused, and it is told",
+       site.got.some((m) => m.re == 7 && m.kind == "pack" && m.ok === false), JSON.stringify(site.got));
+    ok("...and the next source boots the console", r.boot.from == SITE && r.written == PAGE);
+}
+{
+    const site = opener(SITE_ORIGIN, handing(null));
+    const t = Date.now();
+    const r = await load({ sync: syncOf(good), net: { [SITE + good.page + ".pack"]: good.data }, site });
+    ok("a site that keeps no pack hands on at once", r.boot.from == SITE && Date.now() - t < 2000);
+}
+{
+    const site = opener(SITE_ORIGIN, (m, send) => {
+        if (m.kind != "hello") return;
+        send({ moylink: 1, id: 3, kind: "backup" });
+        send({ moylink: 1, id: 4, kind: "pack", bytes: buf(good.data) });
+        send({ moylink: 1, id: 5, kind: "pack", bytes: buf(good.data) });
+    });
+    await load({ sync: syncOf(good), site });
+    ok("an unknown kind is answered as unknown", site.got.some((m) => m.re == 3 && m.kind == "unknown"));
+    ok("a second pack is refused", site.got.some((m) => m.re == 5 && m.kind == "pack" && m.ok === false));
+}
+{
+    // Another origin's window opened this one: it hears nothing, and what it
+    // sends, a good pack among it, is neither taken nor answered.
+    const evil = opener("https://evil.example");
+    const site = opener(SITE_ORIGIN);
+    const t0 = Date.now();
+    setTimeout(() => evil.send({ moylink: 1, id: 1, kind: "pack", bytes: buf(good.data) }), 50);
+    let r = await load({ sync: syncOf(good), net: { [SITE + good.page + ".pack"]: good.data }, site: evil });
+    ok("another origin's window hears no hello", evil.got.length == 0 && evil.dropped.length == 2);
+    evil.send({ moylink: 1, id: 2, kind: "backup" });
+    await new Promise((f) => setTimeout(f, 10));
+    ok("...its messages are not answered, and the console boots from a mirror",
+       evil.got.length == 0 && r.boot.from == SITE, r.boot && r.boot.from);
+    ok("...after the link's wait", Date.now() - t0 >= 3900);
+    // The site's origin from a window that is not the opener is ignored too.
+    r = await load({ sync: syncOf(good), net: { [SITE + good.page + ".pack"]: good.data },
+                    site: opener(SITE_ORIGIN, (m, send) => {
+                        if (m.kind == "hello") send({ moylink: 1, id: 1, kind: "pack", bytes: buf(good.data) },
+                                                    { source: site.win });
+                    }) });
+    ok("a message from a window other than the opener is ignored", r.boot.from == SITE);
+}
+{
+    const site = opener(SITE_ORIGIN);
+    await load({ sync: null, site });
+    ok("a board with no answer tells the site it failed",
+       site.got.some((m) => m.kind == "state" && m.state == "failed" && /did not answer/.test(m.said)));
 }
 
 // A board that names no console, and one that does not answer.

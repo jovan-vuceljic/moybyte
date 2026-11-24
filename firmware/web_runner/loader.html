@@ -9,6 +9,7 @@
 // writes the pack's index.html over itself with the assets as Blob URLs
 // (self.moyAssets). A plain-http origin has no crypto.subtle, so the sha256 is
 // below, and every read is checked, the cache's too (§3, §6).
+// Opened by My consoles, it speaks the link (§5) with its opener first.
 // gen_web_blob.py substitutes the mirrors and ships this without its comment
 // lines and indentation.
 (async (MIRRORS) => {
@@ -74,14 +75,35 @@ try { const q = await fetch(url); if (q.ok) return q.arrayBuffer(); why.push(url
 catch (e) { why.push(url + " unreachable"); }
 return null;
 };
+// The link (§5): the window that opened this one, when it is a site this
+// build names, which is a mirror's origin. A message from anything else is
+// ignored, and none is ever evaluated: a pack is bytes checked like any
+// source's, and an unknown kind is answered as unknown. The console page
+// holds the link after the boot (self.moyLink, page_tail.js).
+const O = window.opener, SITES = [...new Set(MIRRORS.map((m) => new URL(m, location.href).origin))];
+let n = 0, handed = null;
+const tell = (m) => { m = Object.assign({ moylink: 1, id: ++n }, m); if (O) for (const o of SITES) try { O.postMessage(m, o); } catch (e) { } };
+const fail = (t) => { say(t); tell({ kind: "state", state: "failed", said: t }); };
 let s = null;
 try { s = await (await fetch("/sync", { cache: "no-store" })).json(); } catch (e) { }
 if (!s || !s.pack) {
-say(s ? "This board's firmware names no browser console." : "This board did not answer.");
+fail(s ? "This board's firmware names no browser console." : "This board did not answer.");
 return;
 }
 const want = s.pack, page = s.page;
-const sources = [["cache", () => tx("readonly", (o) => o.get(want))]];
+const linked = O && new Promise((ok) => {
+setTimeout(ok, 4000);
+addEventListener("message", (e) => {
+const m = e.data, back = (r) => e.source.postMessage(Object.assign({ moylink: 1, re: m.id }, r), e.origin);
+if (e.source != O || !SITES.includes(e.origin) || !m || m.moylink != 1 || typeof m.id != "number") return;
+if (m.kind != "pack") back({ kind: "unknown" });
+else if (handed) back({ kind: "pack", ok: false, said: "a pack was handed already" });
+else { handed = { back }; ok(m.bytes instanceof ArrayBuffer ? m.bytes : null); }
+});
+self.moyLink = SITES;
+tell({ kind: "hello", page, pack: want, local: s.local, kinds: ["hello", "pack", "state"] });
+});
+const sources = [["link", () => linked], ["cache", () => tx("readonly", (o) => o.get(want))]];
 if (s.local) sources.push(["board", () => get("/p/" + page.slice(0, 12) + "/moybyte_web.pack")]);
 for (const m of MIRRORS) sources.push([m, () => get(m + page + ".pack")]);
 for (const [from, fetchIt] of sources) {
@@ -89,6 +111,7 @@ const t = performance.now(), buf = await fetchIt();
 if (!buf) continue;
 const t1 = performance.now(), ok = sha256(new Uint8Array(buf)) == want, t2 = performance.now();
 const items = ok && parse(buf, page);
+if (from == "link") handed.back({ kind: "pack", ok: !!items });
 if (!items) {
 why.push(from + " had other bytes");
 if (from == "cache") await tx("readwrite", (o) => o.delete(want));
@@ -115,7 +138,7 @@ const html = await (await fetch(A["index.html"])).text();
 document.open(); document.write(html); document.close();
 return;
 }
-say("The browser console could not be loaded (" + why.join("; ") + "). This board keeps no copy of it, "
+fail("The browser console could not be loaded (" + why.join("; ") + "). This board keeps no copy of it, "
 + "so a browser fetches it from os.moybyte.com the first time: connect this one to the internet and reload.");
 })(@MIRRORS@).catch((e) => {
 document.getElementById("s").textContent = "The browser console could not start: " + e;
