@@ -84,10 +84,8 @@
 // on a board without PSRAM, where the channel's buffer of that size, made at
 // the client's first bytes, is a block of the internal heap a session has
 // little of (the C3 Zero's interactive session ended at its first key).
-#ifdef ESP_PLATFORM
-#include "sdkconfig.h"
-#endif
-#if defined(ESP_PLATFORM) && !CONFIG_SPIRAM
+#include "moy_platform.h"
+#if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
 #define DEFAULT_RECV_WINDOW 2048
 #else
 #define DEFAULT_RECV_WINDOW 8192
