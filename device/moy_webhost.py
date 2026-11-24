@@ -428,10 +428,14 @@ class WebHost:
 
     def source_note(self):
         """One line naming the bundle this board serves: the browser console
-        add-on cart that fits this image, or why there is none."""
+        add-on cart that fits this image, the loader of an online console
+        (moy_page.h, THE LOADER), or why there is neither."""
         stamp = baked_stamp()
         if stamp:
             return "serving the browser console add-on (%s)" % stamp
+        online = getattr(moy_net, "page_online", None)
+        if online is not None and online():
+            return "serving the online browser console's loader"
         why = getattr(moy_net, "page_why", None)
         return "serving no browser console -- %s" % (
             (why() if why is not None else None) or "this image names none")
