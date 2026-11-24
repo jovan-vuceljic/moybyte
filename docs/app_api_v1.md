@@ -2114,11 +2114,10 @@ No role hands out the console: `tests/test_app_context.py` fails an app
 module that names the Workstation.
 
 **What it draws with.** Its UI tree page (§3; `uitree_app.app_layer`, as
-Calc's above), or the immediate `ui` verbs, into the frame its host,
-`ctx.ui` (`ui_host.AppHost`), begins, with `UI = True`; its handlers hand
-the host the input (`keys`, `point`). The engine under them,
-`runtime/toolkit/ui_draw.py`, is the chrome's; a shipped app not yet moved
-onto the verbs draws there, pinned by `tests/test_ui_public.py`.
+Calc's above), into the frame its host, `ctx.ui` (`ui_host.AppHost`),
+begins, with `UI = True`; its handlers hand the host the input (`keys`,
+`point`). The engine under it, `runtime/toolkit/ui_draw.py`, is the
+chrome's.
 
 **The bar contract is the router's** (`runtime/shell/console.py`, `_app_bar_route`):
 it paints the strip after `draw()` and routes a tap in its band before

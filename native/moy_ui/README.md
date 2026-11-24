@@ -79,5 +79,6 @@ its interaction and its public UI API are set on it by
 A console takes the module in its `board.toml`; the Zero, which runs no apps,
 denies it.
 
-The oracle is `tests/ui_twin.py`, the toolkit's Python as it was before the
-crossing; `tests/test_ui_twin.py` fuzzes every widget against it.
+`tests/ui_twin.py` is the toolkit's Python as it was before the crossing:
+the oracle `tests/test_text_path.py`, `tests/test_chrome_glyphs.py` and
+`tests/test_ui_style_data.py` hold the C to.

@@ -134,8 +134,8 @@ left:
   `paint_doc` is the real key in kids' `system/settings` since #108.
 - **Style is data** — `native/moy_ui/style.json`, resolved by `native/moy_ui`'s
   C, with `runtime/toolkit/ui_draw.py` its face (sprint 6, `docs/history/kernel_toolkit_2026-10.md`);
-  `runtime/toolkit/ui.py` is the public UI API over it (`docs/history/ui_api_2026-10.md`), and
-  an app on the verbs passes no colour (`tests/test_ui_public.py`).
+  the UI tree (`docs/app_api_v1.md`) is the one app UI over it, and an app
+  passes no colour.
   A data edit is the JSON plus `tools/gen_os_table.py`'s committed output
   (`tests/test_ui_tables.py` fails a stale one). There is no skin: what a look
   changes beyond colours is its theme's shape (surfaces, frame, metrics, text

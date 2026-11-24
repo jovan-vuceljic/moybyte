@@ -1136,20 +1136,15 @@ still the gate's, the gens', §14.1's freeze's and the Class B declaration's
 (a moving page is `api_moving`); the record only says, for a frame that IS
 painting, what its buffer lacks, and `shift_last` replaces the drawing of
 what it moved, as `copy_last` does a whole frame. The one ring body is a
-grep. Pinned by `tests/test_shift_frames.py` (the engine: drags, flings,
-glides, every move size, the clamps, a gen moving mid-fling, a cover landing,
-overlays, a theme change, a gap, a deferred copy landing at the fence),
-`tests/test_shift_apps.py` (Settings and its pages, My Art, Get Carts,
+grep. Pinned by `tests/test_shift_apps.py` (Settings and its pages, My Art, Get Carts,
 Files, Storybook and Appearance on the full-screen console, a declared copy
 cost, and a change to what a page shows made with no mark of the app's),
 `tests/test_wm_records.py` (every app on the verbs in a desk window, the
 Waveshare P4's desk, windows overlapping, a focus change and a move
 mid-coast, a popover and the system menu's scrim over a glide, and each
 change Files, Storybook and Appearance must move their gens for),
-`tests/test_home_band.py` (the home's band: grid, icons and carousel,
-handheld and desk, on plain, backdrop and picture themes) and
-`tests/test_dialog_rows.py` (the Editor's dialogs typed into and moved
-through, on the handheld and the desk, and Settings' Name field), each
+and `tests/test_home_band.py` (the home's band: grid, icons and carousel,
+handheld and desk, on plain, backdrop and picture themes), each
 presented frame, with up to three buffers taking
 turns, byte-equal to whole repaints, the share of shift frames held above a floor,
 and the engine's record audit failing any shift frame whose stops moved

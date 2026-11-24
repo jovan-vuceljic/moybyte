@@ -33,7 +33,7 @@ The override table (`o`, about 30 keys: `moy_ui_api.h:180-300`) is encoded or de
 - `moy_ui_over_block` in C, used by wasm and the host;
 - the bit list in `moy_ui_api.h` itself.
 
-The host never runs the boards' dict decoder (`ui.py:178` `_OVER_DICT = getattr(_C, "over_dict", False)`), and the boards never run `_block`. One unix-MicroPython page covers the crossing (`tests/test_ui_opts_seq.py`). That covers only the keys that page uses.
+The host never runs the boards' dict decoder (`ui.py:178` `_OVER_DICT = getattr(_C, "over_dict", False)`), and the boards never run `_block`. One unix-MicroPython page covered the crossing (`test_ui_opts_seq.py`, deleted 2026-11-24 with the immediate surface). That covered only the keys that page used.
 
 App-ABI rows (crypto, clipboard, theme, files) have the same shape: `modmoy_app.c:2170` `mod_sha256`, `moy_app_binding.py:312` `sha256`, `moy_app_lua.c:832` `l_moybyte_sha256`. Only the wasm and WASI projections go through the generated, generic door.
 
@@ -84,7 +84,7 @@ App-ABI rows (crypto, clipboard, theme, files) have the same shape: `modmoy_app.
    - **errors**: `err: errno|app|bool|none|<table>`, a name in one error table (finding T5) mapping each code to its exception on Python and MicroPython and its message on Lua;
    - **constants**: `consts: ["MOY_LOG_TEXT_MAX as TEXT_MAX", "MOY_LOG_EMERG..DEBUG"]`. Python then stops restating `TEXT_MAX = 2048` (`runtime/host/moy_log.py:18`) and `range(8)`;
    - **optional arguments and defaults**: `"read(seq=0, n=32)"`;
-   - **`noalloc: true`**: a frame-path row whose MicroPython face may allocate nothing. The generator uses stack buffers, and the parity test asserts `gc.mem_alloc()` stays flat, as `test_ui_opts_seq.py` does;
+   - **`noalloc: true`**: a frame-path row whose MicroPython face may allocate nothing. The generator uses stack buffers, and the parity test asserts `gc.mem_alloc()` stays flat, as `test_ui_opts_seq.py` did before it was deleted;
    - **`targets`**: where the row exists, for example `moy_wasm.service_*` is absent on `moy_wasm_web`. The absence is declared, not discovered (`modmoy_wasm_web.c` registers a subset under the same module name).
 
 **Callbacks** (`moy_evq` handlers, `moycore.register`, `moy_input` sinks) are rows marked `hand: true`. The generator only checks that the hand function exists in both faces.
@@ -179,7 +179,7 @@ So the console demonstrably runs off-board on MicroPython.
 - **Evidence:**
   - `native/*/modmoy_*.c`: 41 files, 31,329 lines, 1,425 functions, 893 of them 8 lines or fewer (4.2k lines), plus ~2.8k lines of `MP_DEFINE_*`/table rows.
   - `runtime/host/*`: ~19k lines. 23 files carry the `for name, args, res in _SIGS: fn.argtypes = …` loader (for example `moy_log.py:53-61`, `moy_lease.py:83-95`).
-  - Name drift is unguarded for every module but `moycore` (`tests/test_moycore_glue.py:105`). For example, `moy_ui`'s host has `api_floor` (`moy_ui_api_binding.py:443`, used only by `tests/test_shift_frames.py`) and the board has no such name, and no test notices either way.
+  - Name drift is unguarded for every module but `moycore` (`tests/test_moycore_glue.py:105`). For example, `moy_ui`'s host has `api_floor` (`moy_ui_api_binding.py:443`, used only by `test_shift_frames.py`, deleted 2026-11-24) and the board has no such name, and no test notices either way.
 - **Do:** §2.2–2.5.
 - **Lines:** about −6k to −8k net. About 9–11k hand lines become ~1.5k generator, ~3k of table JSON and ~0.6k of converters. The bigger gain is that a new verb is one table row plus the engine.
 - **Risk:** medium.
@@ -216,7 +216,7 @@ So the console demonstrably runs off-board on MicroPython.
   - `tests/test_semantic_traces.py:2065-2370` (the roles trace) drives every role row through a Python `AppContext`, on CPython and on the board model. Nothing does the same for a Lua run's names, the wasm imports or the WASI imports. Its docstring points the toolkit rows to tests/test_ui_wasm.py (`:2357`), a file that does not exist.
   - `tests/test_roles.py:183` checks only that the `py` names are callable on `moybyte`.
   - Nothing references `LUA_RUN_CALLS`/`RUN_VERBS`/`LUA_OWN` in `tests/`.
-  - `tests/test_app_ui.py` compares tiers' pixels for three features (clip, tabs, back), not per row.
+  - `test_app_ui.py` (deleted 2026-11-24 with the immediate surface) compared tiers' pixels for three features (clip, tabs, back), not per row.
 - **Do:** `tests/test_every_row.py`, table-driven:
   - for each row with a tier projection, a probe built from its `example` (§2.2);
   - the probe apps are generated, never hand-kept:
@@ -449,7 +449,7 @@ So the console demonstrably runs off-board on MicroPython.
 
   Delete it. `make unix-micropython` plus `tests/test_frame_alloc.py` is its replacement.
 - `tests/test_semantic_traces.py:2357` docstring cites tests/test_ui_wasm.py, which does not exist. Point it at T3's test when T3 lands, or at what drives the ui imports today.
-- `api_floor` (`runtime/host/moy_ui_api_binding.py:443`) is a host-only name that only `tests/test_shift_frames.py` uses. Either give the board face the name (it is a read of engine state) or move it to a test helper. T1's parity test will flag it.
+- `api_floor` (`runtime/host/moy_ui_api_binding.py:443`) is a host-only name that only `test_shift_frames.py` used (deleted 2026-11-24). Either give the board face the name (it is a read of engine state) or move it to a test helper. T1's parity test will flag it.
 - The music mockup generator (1,688 lines) is referenced only by `docs/media/music_2026-11/README.md`. A one-off mockup generator for a shipped design: it moves to `experiments/music_mockups/music_mockups.py`.
 - **Risk:** low.
 - **Guard:** a `tools/` reference ratchet. `tests/test_tools_smoke.py` already holds the board tools; extend it to fail a `tools/*.py` that nothing (Makefile, tests, skills, docs, other tools) names.
