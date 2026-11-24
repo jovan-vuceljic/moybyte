@@ -210,6 +210,31 @@ KEEP int moy_sw_pake(const char *password, const char *name) {
                quoted(q, sizeof q), "", "");
 }
 
+// The first password of a board that has none, by the claim its Improv
+// answer carried (moy_webauth.c, THE CLAIM): {"op":"claim"} with the record
+// made here, over a fresh salt, so the password itself never leaves the
+// browser. -1 for a claim that is not 32 hex digits or a password the
+// record cannot take.
+KEEP int moy_sw_claim(const char *claim_hex, const char *password) {
+    uint8_t c[MOY_SEAL_RAND], raw[16];
+    if (!moy_hex_decode(claim_hex, strlen(claim_hex), c, MOY_SEAL_RAND)) {
+        return -1;
+    }
+    char salt[2 * sizeof raw + 1], rec[MOY_SEAL_PW_RECORD];
+    moy_seal_random(raw, sizeof raw);
+    moy_hex_encode(raw, sizeof raw, salt);
+    int rn = moy_seal_pw_record(password, strlen(password), salt, strlen(salt),
+                                MOY_SEAL_PW_ITER, rec, sizeof rec);
+    if (rn <= 0 || moy_sw_buf((size_t)rn + 128) == NULL) {
+        moy_seal_wipe(rec, sizeof rec);
+        return -1;
+    }
+    int n = snprintf(C.buf, C.cap, "{\"op\":\"claim\",\"claim\":\"%s\",\"record\":\"%.*s\"}",
+                     claim_hex, rn, rec);
+    moy_seal_wipe(rec, sizeof rec);
+    return n;
+}
+
 // The board's {"Y","cB"}: its confirmation checked, ours {"op":"confirm"}.
 KEEP int moy_sw_confirm(size_t n) {
     const char *o, *oe;

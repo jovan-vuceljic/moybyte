@@ -92,6 +92,7 @@ _SIGS = (
     ("moy_web_signout", [], _I),
     ("moy_web_board_id", [ctypes.c_void_p], None),
     ("moy_web_token", [ctypes.c_void_p], None),
+    ("moy_web_claim", [ctypes.c_void_p], None),
     ("moy_web_keys", [ctypes.c_void_p, _Z], _Z),
     ("moy_web_key_drop", [_P], _I),
     ("moy_seal_pw_record", [_P, _Z, _P, _Z, ctypes.c_uint32, ctypes.c_char_p, _Z], _I),
@@ -431,6 +432,14 @@ def web_auth(system):
         raise OSError(rc, os.strerror(rc))
     out = ctypes.create_string_buffer(33)
     _lib().moy_web_board_id(out)
+    return out.value.decode()
+
+
+def web_claim():
+    """This boot's claim (32 hex digits), made at the first ask while the
+    board has no password; "" once it has one, or with the sign-in off."""
+    out = ctypes.create_string_buffer(33)
+    _lib().moy_web_claim(out)
     return out.value.decode()
 
 
