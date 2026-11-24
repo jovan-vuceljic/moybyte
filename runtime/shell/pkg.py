@@ -115,11 +115,11 @@ ARCHIVE_RAM_SHARE = 4         # an external archive kept in RAM below this share
 # them to the C tables and to sh_roles.
 SHELL_NAMES = (
     ".", ":", "[", "alias", "basename", "bg", "break", "cat", "cd", "chdir", "clear", "command",
-    "continue", "cp", "cut", "date", "df", "dirname", "dmesg", "echo", "edit", "eval", "exec",
-    "exit", "export", "false", "fg", "free", "getopts", "grep", "hash", "head", "help", "jobs",
-    "kill", "local", "log", "ls", "md5sum", "mkdir", "mv", "neofetch", "printf", "ps", "pwd",
-    "read", "readonly", "reboot", "return", "rm", "rmdir", "set", "sh", "sha256sum", "shift",
-    "sleep", "tail", "tee", "test", "top", "touch", "tr", "trap", "true", "type", "umask",
+    "continue", "cp", "cut", "date", "df", "dirname", "dmesg", "du", "echo", "edit", "eval",
+    "exec", "exit", "export", "false", "fg", "find", "free", "getopts", "grep", "hash", "head",
+    "help", "jobs", "kill", "local", "log", "ls", "md5sum", "mkdir", "mv", "neofetch", "printf",
+    "ps", "pwd", "read", "readonly", "reboot", "return", "rm", "rmdir", "set", "sh", "sha256sum",
+    "shift", "sleep", "tail", "tee", "test", "top", "touch", "tr", "trap", "true", "type", "umask",
     "unalias", "uname", "uniq", "unset", "wait", "wc", "xxd",
     # the role commands (runtime/shell/sh_roles.py)
     "at", "ble", "cron", "http", "lease", "lora", "media", "mic", "midi", "notify",

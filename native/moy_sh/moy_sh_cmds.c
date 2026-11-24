@@ -1,11 +1,12 @@
 // moy_sh_cmds: the shell's C core built-ins (docs/os_2026-11/system.md
-// section 1): the file commands over the store, the text tools (head, tail,
-// wc, grep, uniq, cut, tr, tee, xxd, md5sum and sha256sum), and ps, free, df,
-// log/dmesg, reboot, date, sleep, clear and help over the host's tables. Each
-// is one function taking dash's (argc, argv), its options read with dash's
-// nextopt, writing through dash's output to the process's descriptors, so
-// redirection and pipes reach it as they reach any built-in. They keep
-// working while the VM is stopped: nothing here calls into Python.
+// section 1): the file commands over the store (find and du among them), the
+// text tools (head, tail, wc, grep, uniq, cut, tr, tee, xxd, md5sum and
+// sha256sum), and ps, free, df, log/dmesg, reboot, date, sleep, clear and
+// help over the host's tables. Each is one function taking dash's (argc,
+// argv), its options read with dash's nextopt, writing through dash's output
+// to the process's descriptors, so redirection and pipes reach it as they
+// reach any built-in. They keep working while the VM is stopped: nothing here
+// calls into Python.
 
 #include <ctype.h>
 #include <errno.h>
@@ -533,6 +534,311 @@ static int touchcmd(int argc, char **argv) {
         }
     }
     return status;
+}
+
+// --- walks --------------------------------------------------------------------
+
+// What `path` is: 1 a folder, 0 a file (its bytes in *size), -1 neither
+// (errno says why).
+static int kind_of(const char *path, uint64_t *size) {
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        return -1;
+    }
+    *size = (uint64_t)st.st_size;
+    return S_ISDIR(st.st_mode) ? 1 : 0;
+}
+
+static int name_cmp(const void *a, const void *b) {
+    return strcmp(*(char *const *)a, *(char *const *)b);
+}
+
+// Folder `path`'s names in order, on the shell's stack (the caller's mark
+// takes them back): their count, -1 where it does not open.
+static int dir_names(const char *path, char ***out) {
+    DIR *d = opendir(path);
+    struct dirent *de;
+    if (d == NULL) {
+        return -1;
+    }
+    char *p;
+    size_t len = 0;
+    int n = 0;
+    STARTSTACKSTR(p);
+    while ((de = readdir(d)) != NULL) {
+        if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) {
+            continue;
+        }
+        size_t k = strlen(de->d_name) + 1;
+        p = stnputs(de->d_name, k, p);
+        len += k;
+        n++;
+    }
+    closedir(d);
+    char *names = grabstackstr(p);
+    char **v = stalloc(((size_t)n + 1) * sizeof *v);
+    for (size_t at = 0, i = 0; at < len; at += strlen(names + at) + 1) {
+        v[i++] = names + at;
+    }
+    qsort(v, (size_t)n, sizeof *v, name_cmp);
+    *out = v;
+    return n;
+}
+
+// `name` joined to the path in `path` (`n` bytes, MOY_SH_PATH_MAX its
+// room): its new length, 0 where it does not fit.
+static size_t path_join(char *path, size_t n, const char *name) {
+    size_t sep = n > 0 && path[n - 1] != '/', m = strlen(name);
+    if (n + sep + m >= MOY_SH_PATH_MAX) {
+        return 0;
+    }
+    path[n] = '/';
+    memcpy(path + n + sep, name, m + 1);
+    return n + sep + m;
+}
+
+// One pattern element of a glob (`?`, a `[...]` set, a `\`-quoted or plain
+// byte) against `c`, *pp moved past it.
+static int glob_one(const char **pp, unsigned char c) {
+    const char *p = *pp, *end = NULL;
+    int ok = 0, neg = p[0] == '[' && (p[1] == '!' || p[1] == '^');
+    if (*p == '[' && p[1 + neg] != '\0') {
+        end = strchr(p + 2 + neg, ']');  // a ']' first in the set is one of it
+    }
+    if (*p == '?') {
+        ok = 1;
+        p++;
+    } else if (end != NULL) {
+        for (p += 1 + neg; p < end;) {
+            unsigned char lo = (unsigned char)*p++, hi = lo;
+            if (p[0] == '-' && p + 1 < end) {
+                hi = (unsigned char)p[1];
+                p += 2;
+            }
+            ok |= c >= lo && c <= hi;
+        }
+        p = end + 1;
+        ok ^= neg;
+    } else {
+        if (*p == '\\' && p[1] != '\0') {
+            p++;
+        }
+        ok = (unsigned char)*p++ == c;
+    }
+    *pp = p;
+    return ok;
+}
+
+// `s`'s n bytes against a glob: `*`, `?`, `[a-z]` (`[!...]` the others), `\`.
+static int glob_match(const char *pat, const char *s, size_t n) {
+    const char *star = NULL;
+    size_t at = 0, back = 0;
+    for (;;) {
+        if (*pat == '*') {
+            while (*pat == '*') {
+                pat++;
+            }
+            star = pat;
+            back = at;
+            continue;
+        }
+        if (at == n && *pat == '\0') {
+            return 1;
+        }
+        if (at < n && *pat != '\0') {
+            const char *q = pat;
+            if (glob_one(&q, (unsigned char)s[at])) {
+                pat = q;
+                at++;
+                continue;
+            }
+        }
+        if (star == NULL || back >= n) {
+            return 0;
+        }
+        pat = star;
+        at = ++back;
+    }
+}
+
+typedef struct {
+    const char *name;                   // -name's glob, or NULL
+    int type;                           // -type's 'f' or 'd', or 0
+    int status;
+} find_t;
+
+// `path` (n bytes) and what is under it, a folder's names in order, each
+// printed that passes the tests.
+static void find_at(find_t *o, char *path, size_t n) {
+    uint64_t size;
+    if (stopped()) {
+        return;
+    }
+    int dir = kind_of(path, &size);
+    if (dir < 0) {
+        o->status = moy_sh_fail("find: %s: %s", path, strerror(errno));
+        return;
+    }
+    size_t end = n, at;
+    while (end > 1 && path[end - 1] == '/') {
+        end--;
+    }
+    for (at = end; at > 0 && path[at - 1] != '/'; at--) {
+    }
+    if ((o->type == 0 || o->type == (dir ? 'd' : 'f')) &&
+        (o->name == NULL || glob_match(o->name, path + at, end - at))) {
+        outmem(path, n, out1);
+        out1c('\n');
+    }
+    if (!dir) {
+        return;
+    }
+    struct stackmark mark;
+    char **names;
+    setstackmark(&mark);
+    int k = dir_names(path, &names);
+    if (k < 0) {
+        o->status = moy_sh_fail("find: %s: %s", path, strerror(errno));
+    }
+    for (int i = 0; i < k && !moy_sh_cur->interrupt; i++) {
+        size_t m = path_join(path, n, names[i]);
+        if (m == 0) {
+            o->status = moy_sh_fail("find: %s/%s: %s", path, names[i], strerror(ENAMETOOLONG));
+            continue;
+        }
+        find_at(o, path, m);
+        path[n] = '\0';
+    }
+    popstackmark(&mark);
+}
+
+// PATH... (`.` with none) and what is under each, in order, those that pass
+// -name GLOB (the last part of the path) and -type f|d.
+static int findcmd(int argc, char **argv) {
+    find_t o = { NULL, 0, 0 };
+    int paths = 1;
+    while (paths < argc && argv[paths][0] != '-') {
+        paths++;
+    }
+    for (int i = paths; i < argc; i += 2) {
+        const char *v = i + 1 < argc ? argv[i + 1] : NULL;
+        if (v != NULL && !strcmp(argv[i], "-name")) {
+            o.name = v;
+        } else if (v != NULL && !strcmp(argv[i], "-type") && (!strcmp(v, "f") || !strcmp(v, "d"))) {
+            o.type = v[0];
+        } else {
+            return moy_sh_fail("usage: find [PATH...] [-name GLOB] [-type f|d]");
+        }
+    }
+    char path[MOY_SH_PATH_MAX];
+    int roots = paths - 1;
+    for (int i = 0; i < (roots > 0 ? roots : 1) && !moy_sh_cur->interrupt; i++) {
+        const char *root = roots > 0 ? argv[1 + i] : ".";
+        size_t n = strlen(root);
+        if (n >= sizeof path) {
+            o.status = moy_sh_fail("find: %s: %s", root, strerror(ENAMETOOLONG));
+            continue;
+        }
+        memcpy(path, root, n + 1);
+        find_at(&o, path, n);
+    }
+    return stop_status(o.status);
+}
+
+typedef struct {
+    int sum, human, status;
+} du_t;
+
+// du's size: 1K blocks, rounded up (-h: bytes under 1K, then K, M, G and T,
+// one decimal below 10, rounded up, as GNU du prints them).
+static void du_print(const du_t *o, uint64_t n, const char *path) {
+    char v[24];
+    if (!o->human) {
+        snprintf(v, sizeof v, "%llu", (unsigned long long)((n + 1023u) / 1024u));
+    } else if (n < 1024u) {
+        snprintf(v, sizeof v, "%llu", (unsigned long long)n);
+    } else {
+        uint64_t u = 1024u;
+        int k = 0;
+        while (k < 3 && (n + u - 1u) / u >= 1024u) {
+            u *= 1024u;
+            k++;
+        }
+        uint64_t tenths = (n * 10u + u - 1u) / u;
+        if (tenths < 100u) {
+            snprintf(v, sizeof v, "%llu.%llu%c", (unsigned long long)(tenths / 10u),
+                     (unsigned long long)(tenths % 10u), "KMGT"[k]);
+        } else {
+            snprintf(v, sizeof v, "%llu%c", (unsigned long long)((n + u - 1u) / u), "KMGT"[k]);
+        }
+    }
+    out1fmt("%s\t%s\n", v, path);
+}
+
+// The bytes of the files under `path` (n bytes), each folder printed after
+// what is in it (-s: the operand alone).
+static uint64_t du_at(du_t *o, char *path, size_t n, int top) {
+    uint64_t size = 0, total = 0;
+    if (stopped()) {
+        return 0;
+    }
+    int dir = kind_of(path, &size);
+    if (dir < 0) {
+        o->status = moy_sh_fail("du: %s: %s", path, strerror(errno));
+        return 0;
+    }
+    if (!dir) {
+        if (top) {
+            du_print(o, size, path);
+        }
+        return size;
+    }
+    struct stackmark mark;
+    char **names;
+    setstackmark(&mark);
+    int k = dir_names(path, &names);
+    if (k < 0) {
+        o->status = moy_sh_fail("du: %s: %s", path, strerror(errno));
+    }
+    for (int i = 0; i < k && !moy_sh_cur->interrupt; i++) {
+        size_t m = path_join(path, n, names[i]);
+        if (m == 0) {
+            o->status = moy_sh_fail("du: %s/%s: %s", path, names[i], strerror(ENAMETOOLONG));
+            continue;
+        }
+        total += du_at(o, path, m, 0);
+        path[n] = '\0';
+    }
+    popstackmark(&mark);
+    if ((top || !o->sum) && !moy_sh_cur->interrupt) {
+        du_print(o, total, path);
+    }
+    return total;
+}
+
+// The bytes the files under each PATH (`.` with none) hold.
+static int ducmd(int argc, char **argv) {
+    du_t o = { 0, 0, 0 };
+    int c;
+    (void)argc;
+    (void)argv;
+    while ((c = nextopt("hs")) != '\0') {
+        o.human |= c == 'h';
+        o.sum |= c == 's';
+    }
+    const char *one[2] = { ".", NULL };
+    char **args = *argptr != NULL ? argptr : (char **)one;
+    char path[MOY_SH_PATH_MAX];
+    for (; *args && !moy_sh_cur->interrupt; args++) {
+        size_t n = strlen(*args);
+        if (n >= sizeof path) {
+            o.status = moy_sh_fail("du: %s: %s", *args, strerror(ENAMETOOLONG));
+            continue;
+        }
+        memcpy(path, *args, n + 1);
+        du_at(&o, path, n, 1);
+    }
+    return stop_status(o.status);
 }
 
 // head and tail: -n N lines (default 10).
@@ -2051,7 +2357,9 @@ static const struct builtincmd core[] = {
     { "df", dfcmd, BUILTIN_REGULAR },
     { "dirname", dirnamecmd, BUILTIN_REGULAR },
     { "dmesg", logcmd, BUILTIN_REGULAR },
+    { "du", ducmd, BUILTIN_REGULAR },
     { "edit", appcmd, BUILTIN_REGULAR },
+    { "find", findcmd, BUILTIN_REGULAR },
     { "free", freecmd, BUILTIN_REGULAR },
     { "grep", grepcmd, BUILTIN_REGULAR },
     { "head", headcmd, BUILTIN_REGULAR },
