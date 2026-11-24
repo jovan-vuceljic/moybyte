@@ -6,8 +6,7 @@
 #   DnsRedirect                 the responder on :53 that serves dns_reply
 #   SetupServer                 the setup form over the kernel's webhost
 #   save_setup                  persist one accepted form
-#   run                         host the setup AP and serve the form until it is filled in
-#                               or Improv joins a network over the cable
+#   run                         host the setup AP and serve the form until it is filled in or Improv joins a network
 """First-run setup: the AP a Zero hosts when it has no way onto a network (#41).
 
 A headless board has one honest failure mode and this is it -- no screen to

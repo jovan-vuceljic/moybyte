@@ -23,7 +23,7 @@
 
 #include "py/mphal.h"
 #include "py/ringbuf.h"
-#include "esp_timer.h"
+#include "moy_platform.h"
 #include "freertos/FreeRTOS.h"
 #include "usb_serial_jtag.h"
 
@@ -43,7 +43,7 @@ static volatile uint8_t s_head, s_count;
 static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static uint32_t now_ms(void) {
-    return (uint32_t)(esp_timer_get_time() / 1000);
+    return (uint32_t)moy_now_ms();
 }
 
 static void lock(void) {
