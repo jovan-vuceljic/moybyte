@@ -32,9 +32,10 @@ last DEV_DAYS days (§12: a dev board older than that updates its firmware).
                                             may be a local serve.py
                                             (firmware/web_runner/serve.py)
 
-The deploy is `fetch` of firmware-latest and firmware-beta, `build`, an
-upload of OUT to the host os.moybyte.com is served from, then `check` against
-it with both releases' indexes.
+The deploy is `fetch` of firmware-latest and firmware-beta,
+`tools/os_site.py build` (this `build` with My consoles around it), an
+upload of its OUT to the host os.moybyte.com is served from, then `check`
+against it with both releases' indexes.
 """
 
 import argparse
