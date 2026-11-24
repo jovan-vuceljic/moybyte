@@ -1019,6 +1019,37 @@ def cart_state(cart, p, entry, present, manifest=None):
     return "taken"
 
 
+def listing(c, state=None, had=None):
+    """Index entry `c` as a page lists it: what its row and page show and
+    what its install takes in the store, without the asset urls and digests
+    only the board's install reads; with `state` (cart_index.cart_state's
+    word, as the board's own store has it) and `had` (the version its record
+    holds). Its `moybyte.api` stays, so the page says when it needs a newer
+    firmware."""
+    out = {}
+    for key in ("id", "name", "version", "folder", "runtime", "description", "genre",
+                "tags", "memory", "depends", "index", "shelf", "external", "revoked"):
+        if key in c:
+            out[key] = c[key]
+    lic = c.get("licence") or {}
+    out["licence"] = dict((k, lic[k]) for k in ("spdx", "name") if k in lic)
+    out["official"] = is_official(c)
+    out["reviewed"] = is_reviewed(c)
+    out["core"] = bool((c.get("moybyte") or {}).get("core"))
+    if api_level(c) is not None:
+        out["moybyte"] = {"api": api_level(c)}
+    out["assets"] = [{"size": a["size"],
+                      "files": dict((fn, {"size": m["size"]}) for fn, m in a["files"].items())}
+                     for a in c["assets"]]
+    cover = c.get("cover")
+    if cover is not None:
+        out["cover"] = {"size": cover["size"], "sha256": cover["sha256"]}
+    if state is not None:
+        out["state"] = state
+        out["had"] = had
+    return out
+
+
 def _moy_carts():
     import moy_carts
     return moy_carts

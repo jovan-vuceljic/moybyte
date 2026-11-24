@@ -132,18 +132,25 @@ updater's available() is False, and /update says so."""
 
 [roster]
 # The image carries only the CORE carts (moy_seed.CORE: Get Carts, Files,
-# Appearance, Achievements and the Wallpaper slot), which zero_host.seed_carts seeds as a console seeds its own
-# (present unless the kid removed one), and a new store gets nothing more
-# (owner, 2026-11-17): beside the browser console add-on the store has little
-# room above zero_host.SEED_RESERVE, and that room is the kid's. Every other
-# system cart but a test fixture is an official cart the release publishes in
-# carts-<board>.json, which the page this board serves adds and removes
-# (`/official`, beside moybyte-org/carts'). With no OTA, a cable flash brings
-# the official carts the store holds to the image's release. A cable flash or
-# a provisioning installs Pin Light into a new store (2026-11-18), the cart
-# that drives this board's pins from a browser.
+# Appearance, Achievements and the Wallpaper slot), which zero_host.seed_carts
+# seeds as a console seeds its own (present unless the kid removed one): the
+# app slot has no room for more. The store gets the apps (Terminal, Notes,
+# Calc, Music, My Art) and Brick Siege at flash time instead (owner,
+# 2026-11-24; the core-only store of 2026-11-17 kept room for the browser
+# console add-on, which this board no longer holds, `[web]`): the website's
+# install writes them into its new store (tools/store_image.py), and a cable
+# flash into a store that lacks one whose removal it did not record, under
+# the seed's rule (tools/board_flash.py's install_carts). Pin Light is not
+# among them (owner, 2026-11-24). Every other system cart but a test fixture
+# is an official cart the release publishes in carts-<board>.json, which the
+# page this board serves adds and removes (`/official`, beside
+# moybyte-org/carts'). With no OTA, a cable flash brings the official carts
+# the store holds to the image's release.
 image = "core"
-install = ["moybyte.pin_light"]
+install = [
+  "moybyte.terminal", "moybyte.notes", "moybyte.calc", "moybyte.music",
+  "moybyte.my_art", "moybyte.brick_siege",
+]
 
 [web]
 # This board's browser console pack comes from a mirror by digest

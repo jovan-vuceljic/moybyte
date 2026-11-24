@@ -247,24 +247,30 @@ nor those docs will warn you about:
   bites is that `Root.site` is False, so the worker's `initStore` and
   `web_boot._build_watchers` both skip it in site mode, where the keeper owns
   OPFS `apps/`.
-- **Get Carts installs in a page that keeps its own carts (#124), and in no
-  other; a page a board with no screen serves ASKS that board.**
-  In site mode `carts_link.py` gives the console the page's fetch
-  (`ws.cart_net`), an OPFS keeper (`ws.cart_keep`) and the page's file picker
-  (`ws.cart_pick`); a board-served page gets `ws.cart_home` instead and the app
-  says the board gets its own carts -- the two-writer rule again, and the sync
-  wire could not carry a module anyway. A Zero's page also gets `ws.cart_board`
-  (`carts_link.BoardCarts`, which boot binds when the worker's probe of the
-  sealed `/official` answered, `web_boot.official_enable`): Get Carts lists the
-  carts of the board's indexes (its `system/sources`, else moybyte-org/carts,
-  and its own release's) and a licence, Get or Remove asks the board
-  (`runtime/carts/web_addon.py`'s `OfficialCarts`, a slice per poll like
-  `/update`), which fetches and writes its own store, the page answering the
-  install prompt over the manifest the board checked; once
-  it has, the worker pulls the board's carts again and replaces the page's
-  copy of that one folder in one turn of its thread, and the watcher adopts
-  it, so nothing the board wrote travels back as an edit. A board with glass
-  answers no `/official`: its own Get Carts installs. What bites:
+- **Get Carts installs in a page that keeps its own carts (#124); a page a
+  board serves ASKS that board, which installs into its own store (owner,
+  2026-11-24).** In site mode `carts_link.py` gives the console the page's
+  fetch (`ws.cart_net`), an OPFS keeper (`ws.cart_keep`) and the page's file
+  picker (`ws.cart_pick`). A board-served page gets `ws.cart_home`, and
+  `ws.cart_board` (`carts_link.BoardCarts`) where the worker's probe of the
+  sealed `/official` answered (`web_boot.official_enable`) -- keyed on that
+  answer, never on the board's kind: every board's webhost answers it (a
+  Zero's `zero_host.make_official`, a console's
+  `moy_webhost.console_official`, both `runtime/carts/web_addon.py`'s
+  `OfficialCarts`), and the console's glass is parked while its web console
+  serves, so the board is its store's one writer. Get Carts lists the carts
+  of the board's indexes (its `system/sources`, else moybyte-org/carts, and
+  its own release's): the board names them and the page fetches and reads
+  each by the VM's rules (`carts_link.BoardCheck`; the board lists one the
+  page cannot read, its release's). A licence, Get or Remove asks the board
+  (a slice per poll like `/update`), which fetches and writes its own store,
+  the page answering the install prompt over the manifest the board
+  checked; once it has, the worker pulls the board's carts again and
+  replaces the page's copy of that one folder in one turn of its thread,
+  and the watcher adopts it, so nothing the board wrote travels back as an
+  edit. Only a board that answers no `/official` (an older image) leaves the
+  page saying the board gets its own carts. A console's on-screen Get Carts
+  installs as it always has. What bites:
   - **Nothing may wait for the network inside a step.** The VM has no
     ASYNCIFY and the worker delivers bytes only between frames, so every fetch
     is a `cart_index` job that gives the frame back; a Python loop waiting for

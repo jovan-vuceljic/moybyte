@@ -1513,8 +1513,8 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + (shelves ? "web_boot.site_sources(" + JSON.stringify(VFS.carts) + ", "
             + JSON.stringify(JSON.stringify(shelves)) + ")\n" : "")
         + (gpioPins ? "web_boot.gpio_enable(" + JSON.stringify(JSON.stringify(gpioPins)) + ")\n" : "")
-        // A console with no screen that installs its own official carts when
-        // this page asks: BEFORE boot(), which hands Get Carts the asking.
+        // A console that installs carts into its own store when this page
+        // asks (it answers /official): BEFORE boot(), which hands Get Carts the asking.
         + (official ? "web_boot.official_enable()\n" : "")
         // The console this page's address asks for: its tier, size and cart
         // (web_boot.page_boot), on the page's pointer and colour scheme
@@ -1693,7 +1693,7 @@ async function probeUpdate() {
 }
 
 // Does the console that served this page install carts when the page asks
-// (a console with no screen)? One GET, before the console
+// (it answers /official)? One GET, before the console
 // exists, so Get Carts either asks it or says the console gets its own.
 async function probeOfficial() {
     try {
@@ -2166,7 +2166,7 @@ async function cartsGet(j) {
     }
 }
 
-// Get Carts on a page a console with no screen serves (carts_link.BoardCarts):
+// Get Carts on a page a console that answers /official serves (carts_link.BoardCarts):
 // its sealed /official asked, a POST of `body` or a GET, the answer's text in
 // the job's spool.
 async function cartsOfficial(j) {

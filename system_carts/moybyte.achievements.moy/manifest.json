@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 5,
+  "version": 6,
   "title": "Achievements",
   "id": "moybyte.achievements",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "Keeps the badges you win in your games, and tells you when you find a new one.",
   "moybyte": {
     "type": "service",
     "system": true,

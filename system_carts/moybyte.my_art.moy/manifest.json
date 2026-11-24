@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 6,
+  "version": 7,
   "title": "My Art",
   "id": "moybyte.my_art",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "All your drawings in one place. Open one in Paint, or make it your wallpaper or part of a game.",
   "moybyte": {
     "type": "app",
     "system": true,

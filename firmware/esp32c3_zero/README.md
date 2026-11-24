@@ -55,23 +55,31 @@ chip changes.
   (`zero_host.make_addon` is None where `moy_web.online()`).
 - **The image carries the core carts alone** (owner, 2026-11-17;
   `moy_seed.CORE`, board.toml's `[roster] image`), under the XIAO's seed
-  rule (`zero_host.seed_carts`). The release publishes the other system carts, all
-  but the test fixtures, as official carts in `carts-c3_zero.json`. A new store gets Pin Light beside
-  the core (2026-11-18, board.toml's `[roster] install`), the cart that drives
-  this board's pins from a browser: the rest of its little room is the kid's. With no OTA, a
-  cable flash brings every official cart a store holds to the image's
-  release (`tools/board_flash.py`'s `install_carts`; the core carts are the
-  image's seed's). The page this board
+  rule (`zero_host.seed_carts`): the app slot has no room for more. The
+  store gets the apps (Terminal, Notes, Calc, Music, My Art) and Brick Siege
+  at flash time instead (owner, 2026-11-24; board.toml's `[roster]
+  install`): the website's install writes them into its new store
+  (`tools/store_image.py`), and a cable flash into a store that lacks one
+  whose removal it did not record (`tools/board_flash.py`'s `install_carts`),
+  which also brings every official cart the store holds to the image's
+  release, as this board has no OTA. Pin Light is not among them. The
+  release publishes the other system carts, all but the test fixtures, as
+  official carts in `carts-c3_zero.json`. The page this board
   serves adds and removes the rest, and the carts of moybyte-org/carts (or
   of its `system/sources`), as the XIAO's does (its README), the install's
-  modules frozen here for it; each request's buffers (each index read whole,
-  one at a time, and the cart's download) are made for it and given back
-  when it ends, and a cart its store has no room for is refused with the
-  sizes before anything is fetched. Its image carries no CA bundle (the
-  XIAO's `sdkconfig.board` does), so the kernel's client refuses every https
-  fetch but a signed one (`moy_conn_verifies`), and those fetches -- the
-  release's index on GitHub, moybyte-org/carts on GitHub Pages -- are
-  https: its page's Get Carts finds every shelf away.
+  modules frozen here for it. The page lists the shelves itself: the board
+  names them and the page fetches and reads each index
+  (`carts_link.BoardCheck`), since a Python heap that cannot grow past its
+  reserve has no room to parse one; the board lists only an index the page
+  cannot read, its release's. An install's buffers (the cart's index read
+  whole, and its download) are made for it and given back when it ends,
+  and a cart its store has no room for is refused with the sizes before
+  anything is fetched. Its image carries no CA bundle (the XIAO's
+  `sdkconfig.board` does), so the kernel's client refuses every https
+  fetch but a signed one (`moy_conn_verifies`), and the board's own
+  fetches -- the release's index on GitHub, moybyte-org/carts on GitHub
+  Pages, their carts -- are https: its page lists moybyte-org/carts, counts
+  the release's shelf unreached, and a Get finds the shelf away.
 - **SSH, without SFTP.** The server and the shell's face run in the same
   internal heap, so a build without PSRAM sizes them to what a session was
   measured to use there: the server's and the face's stacks and the session's
