@@ -1,0 +1,21 @@
+$ vi a b
+vi: needs a screen
+$ echo "status $?"
+status 1
+$ vim /proc
+vim: needs a screen
+$ echo "status $?"
+status 1
+$ view
+view: needs a screen
+$ echo "status $?"
+status 1
+$ less /none.txt
+less: needs a screen
+$ echo "status $?"
+status 1
+$ more a b
+more: needs a screen
+$ echo "status $?"
+status 1
+[exit 0]

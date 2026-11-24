@@ -7,7 +7,8 @@
 // the VM's NEEDS_VM but the console's rows. The face's pair is a socketpair.
 //
 // Standard input takes a line at a time: `ssh` opens a face as SSH does
-// (a `sleep 30`), so the page finds the face another's; `nossh` ends it;
+// (a `sleep 30`), so the page finds the face another's; `nossh` ends it
+// with a Ctrl-C, and `hangup` as a client that went away (no signal);
 // `skew MS` moves the webhost's clock by MS (negative: back, so a lockout's
 // wait already running lasts that much longer). Each answers a line.
 // `token` prints `TOKEN <hex>`, a QR's token; `claim` prints `CLAIM <claim>
@@ -244,6 +245,14 @@ int main(int argc, char **argv) {
                 moy_tty_reap_all(MOY_TTY_SSH, 5000);
                 moy_tty_hold(MOY_TTY_SSH, 0);
                 printf("NOSSH\n");
+                fflush(stdout);
+            } else if (strcmp(line, "hangup") == 0 && ssh_fd >= 0) {
+                // the client gone as SSH sees it: no signal, its end closed
+                close(ssh_fd);
+                ssh_fd = -1;
+                moy_tty_reap_all(MOY_TTY_SSH, 5000);
+                moy_tty_hold(MOY_TTY_SSH, 0);
+                printf("HANGUP\n");
                 fflush(stdout);
             } else if (strncmp(line, "skew ", 5) == 0) {
                 moy_net_ms_skew += (uint64_t)strtoll(line + 5, NULL, 10);

@@ -1,6 +1,6 @@
 // moy_tasks: every task the native tier starts, in one table -- its name,
 // stack, priority, core and where its stack lives -- and the one call that
-// starts one (moy_tasks.c). The threading model, what each may touch and
+// starts one and the one that deletes it (moy_tasks.c). The threading model, what each may touch and
 // through which lock, is native/moy_kernel/README.md's.
 //
 // THE TABLE (MOY_TASKS, board only): X(id, name, stack bytes, priority, core,
@@ -32,7 +32,14 @@
 #define MOY_MEDIA_PRIO 3
 #define MOYCORE_SVC_STACK 12288u
 #define MOYCORE_SVC_PRIO 2
+#if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
+// a shell runner's on a board without PSRAM (the C3 Zero), the SSH face's
+// size there (native/moy_tty/moy_tty_sys.c, FACE_STACK): a job's runner and
+// its arena are internal SRAM, and a face running the same shell peaked at 5 KB
+#define MOY_SH_RUN_STACK (12u * 1024u)
+#else
 #define MOY_SH_RUN_STACK (24u * 1024u)      // a shell runner's (the SSH face's task's)
+#endif
 #define MOY_PAKE_STACK 8192
 #ifndef MOY_LIVE_STACK
 #define MOY_LIVE_STACK 4096                 // the live socket's bridge (native/moy_net/moy_live.c)
@@ -115,6 +122,11 @@ bool moy_task_spawn_as(moy_task_id_t id, const char *name, uint32_t stack, int p
 // The row's task over the spawner's stack (the row's size) and control block.
 TaskHandle_t moy_task_spawn_static(moy_task_id_t id, TaskFunction_t fn, void *arg,
                                    StackType_t *stack, StaticTask_t *tcb);
+// A task moy_task_spawn or moy_task_spawn_as made for the row, deleted as it
+// was made: with its caps where the spawn put its stack in PSRAM, plainly
+// where FreeRTOS owns its stack and control block (a row without PSRAM, or a
+// board without it, where a delete with caps frees them twice).
+void moy_task_delete(moy_task_id_t id, TaskHandle_t task);
 #endif
 
 #endif // MOY_TASKS_H

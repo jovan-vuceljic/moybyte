@@ -464,6 +464,27 @@ def test_ctrl_c_ends_a_command_and_exit_closes_with_its_status(host):
     wait_stat(host, "live", 0)
 
 
+def test_a_login_runs_the_profile_and_its_lines_come_back_to_the_next(host):
+    """A login sources /etc/profile before its first prompt, and the lines it
+    ran are $HOME/.sh_history at its end, which Up walks in the next login."""
+    system = host.tree / "sd" / "moybyte" / "system"
+    (system / "profile").write_text("echo profile-ran\n")
+    ws = WS(host)
+    assert b"profile-ran" in ws.read_until(b"$ ")
+    ws.send(b"echo kept-line\r")
+    ws.read_until(b"$ ")
+    ws.send(b"exit\r")
+    ws.read_until(b"\xff", 5.0)
+    wait_stat(host, "live", 0)
+    hist = host.tree / "sd" / "moybyte" / "files" / ".sh_history"
+    assert hist.read_text() == "echo kept-line\nexit\n"
+    again = WS(host)
+    again.read_until(b"$ ")
+    again.send(b"\x1b[A\x1b[A")
+    assert b"echo kept-line" in again.read_until(b"kept-line", 5.0)
+    again.close()
+
+
 def test_a_page_that_closes_frees_the_session_for_the_next(host):
     ws = WS(host)
     ws.read_until(b"$ ")
@@ -493,6 +514,26 @@ def test_a_face_another_transport_holds_refuses_the_page_busy(host):
     again = WS(host)
     assert b"$ " in again.read_until(b"$ ")
     again.close()
+
+
+def test_a_command_whose_client_went_away_frees_the_face(host):
+    """`ssh host CMD` reads no terminal, so its face learns of a dropped
+    client from the transport alone: the session's end stops the running
+    command, and the next open finds the face free, not busy for good."""
+    host.say("ssh")
+    end = time.monotonic() + 5
+    while "SSH 0" not in host.log() and time.monotonic() < end:
+        time.sleep(0.05)
+    time.sleep(0.3)                     # the face is in its `sleep 30`
+    t0 = time.monotonic()
+    host.say("hangup")
+    end = time.monotonic() + 8
+    while "HANGUP" not in host.log() and time.monotonic() < end:
+        time.sleep(0.05)
+    assert "HANGUP" in host.log() and time.monotonic() - t0 < 3.0, host.log()[-400:]
+    ws = WS(host)
+    assert b"$ " in ws.read_until(b"$ ")
+    ws.close()
 
 
 def test_neofetch_twice_in_one_session_is_whole_both_times(host):
@@ -565,3 +606,13 @@ def test_a_terminal_ends_when_newer_sign_ins_take_its_session(host):
     ws.read_until(b"\xff", 3.0)
     assert ws.closed == (1008, "revoked"), ws.closed
     wait_stat(host, "live", 0)
+
+
+def test_a_login_with_no_profile_starts_at_status_0(host):
+    """A store with no /etc/profile: the login's first `$?` is 0, not the
+    failed test that looked for the profile."""
+    ws = WS(host)
+    ws.read_until(b"$ ")
+    ws.send(b"echo st=$?\r")
+    assert b"st=0" in ws.read_until(b"st=", 5.0) + ws.read_until(b"$ ", 5.0)
+    ws.close()

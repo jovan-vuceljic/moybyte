@@ -82,9 +82,12 @@ chip changes.
   the release's shelf unreached, and a Get finds the shelf away.
 - **SSH, without SFTP.** The server and the shell's face run in the same
   internal heap, so a build without PSRAM sizes them to what a session was
-  measured to use there: the server's and the face's stacks and the session's
+  measured to use there: the server's and the face's stacks, the session's
   arena (`native/moy_ssh/moy_ssh_run.c`, `native/moy_tty/moy_tty_sys.c`,
-  `native/moy_tty/moy_tty_sh.c`). The face task is made when the server
+  `native/moy_tty/moy_tty_sh.c`) and the channel's receive window
+  (`native/moy_ssh/port/localoptions.h`), whose buffer is made whole at the
+  client's first key. A full-screen text app (`edit`, `vi`, `top`) finds no
+  room beside a session and says so (`native/moy_sh/moy_sh_app.c`). The face task is made when the server
   starts, beside the other long-lived blocks, because made at a session's
   start it stayed in the middle of the free heap and cut the block an upload
   needs. The `sftp` subsystem is refused (`native/moy_ssh/moy_ssh.c`): its

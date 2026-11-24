@@ -7,3 +7,6 @@ printf 'key\n' > k
 printf 'key' > j
 tail -1c j; echo
 tail -c 3 n
+tail -2 n
+printf 'a\nb\nc' > m
+tail -n 2 m; echo

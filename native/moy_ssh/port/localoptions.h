@@ -80,8 +80,18 @@
 #define DEFAULT_PATH "/bin"
 #define DEFAULT_ROOT_PATH "/bin"
 
-// The session's buffers: a window of 8 KB the client may send ahead.
+// The session's buffers: a window of 8 KB the client may send ahead, and 2 KB
+// on a board without PSRAM, where the channel's buffer of that size, made at
+// the client's first bytes, is a block of the internal heap a session has
+// little of (the C3 Zero's interactive session ended at its first key).
+#ifdef ESP_PLATFORM
+#include "sdkconfig.h"
+#endif
+#if defined(ESP_PLATFORM) && !CONFIG_SPIRAM
+#define DEFAULT_RECV_WINDOW 2048
+#else
 #define DEFAULT_RECV_WINDOW 8192
+#endif
 
 // The port's names for what a POSIX system has (port/moy_ssh_port.c).
 #include "moy_ssh_port.h"

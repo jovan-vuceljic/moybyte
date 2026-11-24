@@ -63,10 +63,18 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "moy_platform.h"
 #include "moy_sh.h"
 
 #define MOY_SH_DOOR 0x7368u             // the ROLE door's row the shell crosses
+#if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
+// a session's arena where there is no PSRAM (the C3 Zero): the SSH face's size
+// (native/moy_tty/moy_tty_sh.c, ARENA), so a job (cron, at, a service) fits
+// the one internal heap, whose largest free block is about 100 KB at rest
+#define MOY_SH_ARENA (12u * 1024u)
+#else
 #define MOY_SH_ARENA (128u * 1024u)     // a session's arena
+#endif
 #define MOY_SH_SERIAL_LINE 240u         // an `SH` line's bytes, longer ones wrap
 #define MOY_SH_SERIAL_COLS 80           // a text app's screen on the serial face
 #define MOY_SH_SERIAL_ROWS 24

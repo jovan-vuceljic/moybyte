@@ -118,8 +118,9 @@ console: `settings reload` (it applies the file), the other `pkg` verbs,
 `perm`, `notify`, `service`, `lease`, `python`, the device faces, the
 installed commands, `df` and the console's /proc, /dev and /bin rows.
 
-**The text apps** (`native/moy_sh/moy_sh_app.h`): `edit FILE` (#117), `top`
-and the interactive `python`, each one C implementation that every face
+**The text apps** (`native/moy_sh/moy_sh_app.h`): `edit FILE` (#117), `vi`
+(and `vim`, and read-only `view`, `less` and `more`, over the editor's buffer),
+`top` and the interactive `python`, each one C implementation that every face
 hosts the same way: the Terminal's face, the recovery console's (the same
 face) and the serial face. The command asks its face to put the app in
 front, and the app takes the face when the line's run ends. A full-screen

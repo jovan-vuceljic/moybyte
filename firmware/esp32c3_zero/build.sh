@@ -82,7 +82,10 @@ moybyte_patch_gc_split_reserve
 #    the C3 has no USB OTG for TinyUSB at all.
 # DECLINED moybyte_patch_psram_retune -- the S3's MSPI timing for PSRAM; no PSRAM.
 # DECLINED moybyte_patch_gc_grow_step -- a console's canvas and layers sharing
-#    PSRAM with the heap; headless and without PSRAM.
+#    PSRAM with the heap; headless and without PSRAM. Tried at 16 KB steps
+#    (2026-11-24) and not taken: a heap grown that slowly met
+#    MOYBYTE_GC_SPLIT_RESERVE before it held the boot's release fetch, which
+#    raised MemoryError.
 # DECLINED moybyte_patch_p4_dsi_underrun -- an ESP32-P4 silicon patch.
 # DECLINED moybyte_patch_p4_ppa_srm_mb_order -- an ESP32-P4 silicon patch.
 # DECLINED moybyte_patch_p4_coredump_dram -- an ESP32-P4 linker patch: the

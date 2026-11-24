@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "moy_fs.h"
 #include "moy_proc_exit.h"
 #include "moy_tty.h"
 #include "moy_tty_int.h"
@@ -17,6 +18,7 @@
 #define AHEAD_BYTES 256
 #define HIST_LINES 16                   // the lines Up walks back through
 #define HIST_LINE 256                   // a longer line is not kept
+#define HIST_PATH 128                   // the history file's store path
 #define PEND_MAX 16                     // an escape a full-screen app waits for the rest of
 #define PEND_MS 500                     // how long it waits (readline's keyseq-timeout)
 #define HELD_MAX (256u * 1024u)         // what a hop may write before the rest is dropped
@@ -44,6 +46,7 @@ struct moy_tty {
     int secret;                 // the prompt is a secret question's: its answer is not echoed
     int once;                   // an exec answering its command's question: ends when none waits
     volatile int interrupt;     // a `signal` request (INT)
+    volatile int hup;           // the transport's session ended: every poll stops
     volatile int resized;       // a window-change request
     volatile int exited;        // the status is final: Dropbear may reap it
     volatile int done;          // set last by the face task: the rest is the reaper's
@@ -59,6 +62,7 @@ struct moy_tty {
     char ahead[AHEAD_BYTES];    // bytes a poll read that were not Ctrl-C
     char hist[HIST_LINES][HIST_LINE];   // the lines run, oldest first
     int nhist, hi;                      // how many; the one Up/Down shows (nhist: none)
+    char hist_path[HIST_PATH];          // a login's history file ("": none kept)
     char pend[PEND_MAX];                // a full-screen app's escape, its rest to come
     size_t pend_n;
     uint32_t pend_at;
@@ -234,7 +238,7 @@ int moy_tty_poll(moy_tty_t *f) {
     if (f->on && on_face_task() && moy_tty_ms() - f->oat >= OUT_MS) {
         flush(f);
     }
-    if (f->interrupt) {
+    if (f->interrupt || f->hup) {
         f->interrupt = 0;
         return 1;
     }
@@ -290,7 +294,7 @@ long moy_tty_in(moy_tty_t *f, void *buf, size_t n) {
             flush(f);
         }
         if (face && !readable(f, WAIT_MS)) {
-            if (f->interrupt) {
+            if (f->interrupt || f->hup) {
                 return -1;
             }
             continue;
@@ -349,8 +353,13 @@ static void drain(moy_tty_t *f) {
 // EOF and must find the exit there, or the channel never closes. The socket
 // closes after the drain: lwIP answers a close with bytes unread with a
 // reset, and a reset drops the output the face has not yet sent.
+static void hist_save_here(void *arg);
+
 static void finish(moy_tty_t *f, int status) {
     f->status = status;
+    if (f->hist_path[0] != 0 && f->nhist > 0) {
+        moy_tty_face_hop(f, hist_save_here, f);
+    }
     if (f->sh != NULL) {
         shell()->close(f->sh);
         f->sh = NULL;
@@ -415,6 +424,56 @@ static void remember(moy_tty_t *f) {
     memcpy(f->hist[f->nhist], f->line, f->n);
     f->hist[f->nhist][f->n] = 0;
     f->hi = ++f->nhist;
+}
+
+// THE HISTORY ACROSS SESSIONS: a login's lines are read from the file the
+// shell names (its `history`) at its start and written back at its end, a
+// line each, oldest first, through the store on the console's task (a hop).
+
+static void hist_load_here(void *arg) {
+    moy_tty_t *f = arg;
+    moy_buf_t b = { NULL, 0 };
+    if (moy_fs_read_file(f->hist_path, (size_t)HIST_LINES * HIST_LINE, &b) != 0) {
+        return;
+    }
+    const char *p = b.p, *end = b.p + b.n;
+    while (p < end) {
+        const char *nl = memchr(p, '\n', (size_t)(end - p));
+        size_t n = (size_t)((nl != NULL ? nl : end) - p);
+        if (n > 0 && n < HIST_LINE) {
+            if (f->nhist == HIST_LINES) {
+                memmove(f->hist[0], f->hist[1], sizeof f->hist[0] * (HIST_LINES - 1));
+                f->nhist--;
+            }
+            memcpy(f->hist[f->nhist], p, n);
+            f->hist[f->nhist][n] = 0;
+            f->nhist++;
+        }
+        p = nl != NULL ? nl + 1 : end;
+    }
+    f->hi = f->nhist;
+    moy_buf_free(&b);
+}
+
+static void hist_save_here(void *arg) {
+    moy_tty_t *f = arg;
+    size_t total = 0;
+    for (int i = 0; i < f->nhist; i++) {
+        total += strlen(f->hist[i]) + 1;
+    }
+    char *t = moy_tty_calloc(1, total + 1);
+    if (t == NULL) {
+        return;
+    }
+    size_t n = 0;
+    for (int i = 0; i < f->nhist; i++) {
+        size_t k = strlen(f->hist[i]);
+        memcpy(t + n, f->hist[i], k);
+        n += k;
+        t[n++] = '\n';
+    }
+    moy_fs_write(f->hist_path, t, n);
+    moy_tty_free(t);
 }
 
 // The terminal's caret `n` columns left.
@@ -799,6 +858,17 @@ static void face_run(moy_tty_t *f) {
             return;
         }
         f->once = 1;
+    } else {
+        // a login: its history from the last one, then the profile, before
+        // the first prompt (/etc is the sign-in's folder)
+        if (shell()->history != NULL
+            && shell()->history(f->sh, f->hist_path, sizeof f->hist_path) == 0) {
+            moy_tty_face_hop(f, hist_load_here, f);
+        } else {
+            f->hist_path[0] = 0;
+        }
+        static const char profile[] = "if [ -r /etc/profile ]; then . /etc/profile; fi\n";
+        shell()->run(f->sh, profile, sizeof profile - 1);
     }
     settle(f);
     for (;;) {
@@ -983,6 +1053,13 @@ void moy_tty_winch(pid_t pid, int cols, int rows) {
 
 void moy_tty_reap_all(int via, int wait_ms) {
     moy_tty_state_t *t = moy_tty_state();
+    moy_tty_t *g = t != NULL ? __atomic_load_n(&t->face, __ATOMIC_ACQUIRE) : NULL;
+    if (g != NULL && g->via == via) {
+        // its client is gone: a command still running stops at its next poll
+        // (one without a terminal reads no stream that would tell it), or it
+        // would hold the face, and every later open would find it busy
+        g->hup = 1;
+    }
     for (int ms = 0; t != NULL && ms < wait_ms; ms += 10) {
         moy_tty_t *f = __atomic_load_n(&t->face, __ATOMIC_ACQUIRE);
         if (f == NULL || f->via != via) {

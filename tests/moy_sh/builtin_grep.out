@@ -14,4 +14,7 @@ none=1
 $ grep; echo usage=$?
 usage: grep [-ivncq] TEXT [FILE...]
 usage=2
+$ printf 'x\nan apple' > g
+$ grep apple g
+an apple
 [exit 0]

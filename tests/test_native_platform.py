@@ -5,7 +5,7 @@ starts a task and names an optional symbol through one owner each:
 
   native/moy_kernel/moy_platform.[ch]  the board probe and what it has, the clock, the mutex
   native/moy_kernel/moy_kmem.[ch]   every allocation, its placement in its flags
-  native/moy_kernel/moy_tasks.[ch]  every task, one table and one spawn
+  native/moy_kernel/moy_tasks.[ch]  every task, one table, one spawn and its delete
   the owning module's header        an optional symbol's declaration; the
                                     consumer writes `#pragma weak X`
 
@@ -33,7 +33,7 @@ RULES = {
     "mutex": re.compile(r"\b(xSemaphoreCreate\w*|pthread_mutex_init|sem_init)\s*\("),
     "alloc": re.compile(r"\b(heap_caps_(?!get_)\w*alloc\w*|malloc|calloc|realloc|aligned_alloc)"
                         r"\s*\("),
-    "task": re.compile(r"\bxTaskCreate\w*\s*\("),
+    "task": re.compile(r"\bxTaskCreate\w*\s*\(|\bvTaskDeleteWithCaps\s*\("),
     # The caps of "internal SRAM" spelled out: on a P4 they reach the LP SRAM
     # too (moy_kmem.h's MOY_KMEM_SRAM_CAPS).
     "sram": re.compile(r"MALLOC_CAP_INTERNAL\s*\|\s*MALLOC_CAP_8BIT"

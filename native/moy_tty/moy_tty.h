@@ -16,7 +16,9 @@
 // run before (an arrow as ESC [ or ESC O, however the reads split it), and Tab
 // completes the word left of the caret as the Terminal's face does
 // (moy_sh_cands: a command's name, a path's from its folder; several names
-// complete to what they share and a second Tab lists them). While the prompt
+// complete to what they share and a second Tab lists them). A login (no CMD)
+// sources /etc/profile before its first prompt, and Up reaches the lines of
+// the logins before it (the shell's `history` file). While the prompt
 // is a secret question's (the console's password: moy_sh.h's moy_sh_ask,
 // MOY_SH_ASK_SECRET) it echoes nothing of the line typed -- no key, no
 // erase, no redraw -- its arrows and Tab do nothing, and the line is kept
@@ -90,6 +92,10 @@ typedef struct {
     // it is a question's at all (may be NULL: never).
     int (*secret)(void *sh);
     int (*asking)(void *sh);
+    // The store's path of the session's history file ($HOME/.sh_history),
+    // which a login reads at its start and writes at its end: 0, or an errno
+    // (may be NULL: no history kept).
+    int (*history)(void *sh, char *out, size_t cap);
 } moy_tty_shell_t;
 
 void moy_tty_set_shell(const moy_tty_shell_t *shell);
@@ -123,8 +129,9 @@ int moy_tty_reap(int via, pid_t *pid, int *status);
 // Ctrl-C from the client (SIGINT), and its terminal's new size.
 int moy_tty_signal(pid_t pid, int sig);
 void moy_tty_winch(pid_t pid, int cols, int rows);
-// After a transport's session: wait up to `wait_ms` until its face has
-// ended, then free it.
+// After a transport's session: its face's running command stopped at its
+// next poll (the client is gone), then wait up to `wait_ms` until the face
+// has ended, and free it.
 void moy_tty_reap_all(int via, int wait_ms);
 
 // The shell's output (CR LF on a terminal), its raw bytes (a full-screen
