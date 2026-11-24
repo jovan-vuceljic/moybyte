@@ -496,3 +496,19 @@ def test_a_press_and_drag_on_the_pasteboard_reach_the_slide(tmp_path):
     _frames(ws, 1)
     assert st.slides[1]["objects"][1]["x"] == 608 + 20 * d // n
     assert len(st.hist._undo) == 1
+
+
+def test_a_desk_glass_at_large_text_makes_stories_at_a_smaller_size(tmp_path):
+    """Large text lays a 1024x600 desk out as a handheld: its Storybook says
+    stories are made on the desk at a smaller text size, where the T-Deck's
+    says a desk board or the web build (`layout_base.desk_glass`)."""
+    from runtime import storybook_app as SB
+    ws = host_app.build_workstation(str(tmp_path / "large"), sys_size=(1024, 600),
+                                    panel_diagonal_in=7.0, font_scale=2, windowed=True)
+    app = ws.app("storybook")
+    ws.spine.open_app(app)
+    _frames(ws, 3)
+    assert not app.desk
+    assert (SB.s.made_on, SB.s.made_how) == SB.MADE_SMALLER[:2]
+    _handheld(tmp_path / "tdeck", seed=False)
+    assert (SB.s.made_on, SB.s.made_how) == SB.MADE_ELSEWHERE[:2]

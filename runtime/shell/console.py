@@ -625,6 +625,8 @@ class Workstation:
         self.metric_class = _layout_base.class_of(panel_diagonal_in, _panel.w, _panel.h,
                                                   max(1, int(font_scale)))
         _layout_base.place_class(self.metric_class)
+        _layout_base.place_desk_glass(
+            _layout_base.class_of(panel_diagonal_in, _panel.w, _panel.h) == _layout_base.DESK)
         # The hints draw the desk keyboard's keys until the board declares its
         # inputs (`use_inputs`). One per process, as the metric class is.
         _ui_draw.input_kind("keys")

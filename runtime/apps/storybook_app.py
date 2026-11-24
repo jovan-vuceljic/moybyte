@@ -44,7 +44,7 @@ import ui_font as _ui_font
 import uitree as ui
 import uitree_app
 from layers import AppLayer
-from layout_base import bar_rows, content_of, metric_class, DESK
+from layout_base import bar_rows, content_of, desk_glass, metric_class, DESK
 from ticks import _ticks_ms, _ticks_diff
 import story_doc as D
 import story_render as R
@@ -69,6 +69,12 @@ CARD = "/edit_slide"            # a sorter card's id after its row's (story_edit
 STRIPS = ("none",) + tuple("c%d" % i for i in range(16))     # a text's strip behind: none, a colour
 POINTS = ("r", "l", "ur", "ul")                             # a line's way: right, left, up right, up left
 SCALE_KEYS = ("s0", "s1", "s2", "s3", "s4")                 # a picture's size, story_doc.SCALES
+# Where a handheld's Storybook says stories are made: the empty page's two
+# lines and the view's words.
+MADE_ELSEWHERE = ("Stories are made on a desk board", "or in the web build.",
+                  "on a desk board or the web")
+MADE_SMALLER = ("Stories are made on the desk,", "at a smaller text size.",
+                "at a smaller text size")
 EDITOR = ("deck", "slide", "pictures")     # the desk editor's pages (runtime/apps/story_edit.py)
 BANDED = ("deck", "slide")                  # ...those whose desk window shows the hints band
 
@@ -221,6 +227,8 @@ s = ui.state(
     cur=ui.row_of("stories"),
     count="",                   # "3 stories", over the cards
     none=False,                 # no story on a handheld
+    made_on="", made_how="",    # where stories are made, where they are not
+    made_on_short="",
     status="",                  # the desk foot's words: the focused story's
     picked=False,               # a story is focused: Present and Open act on it
     menu=False,                 # the focused story's menu
@@ -353,6 +361,14 @@ def fill(lay):
     n = len(lay.stories)
     _set(lay, "count", "%d stor%s" % (n, "y" if n == 1 else "ies"))
     _set(lay, "none", not n and not lay.desk)
+    if not lay.desk:
+        # A desk's glass at a text size too large for the desk makes them
+        # at a smaller one (layout_base.desk_glass); any other, on a desk
+        # board or in the browser.
+        where = MADE_SMALLER if desk_glass() else MADE_ELSEWHERE
+        _set(lay, "made_on", where[0])
+        _set(lay, "made_how", where[1])
+        _set(lay, "made_on_short", where[2])
     if lay.focus_to is not None:
         s.cur = lay.focus_to
         ui.focus(lay.focus_to + "/open")
@@ -724,7 +740,7 @@ def _stories():
         ui.card("open", label="{.title}", sub="{.sub}", icon="{.icon}", tone="{.tone}",
                 image=".pic")
     ui.empty("No stories yet", icon="storybook", shown="none",
-             lines=["Stories are made on a desk board", "or in the web build."])
+             lines=["{made_on}", "{made_how}"])
     with ui.foot(shown="@desk"):
         ui.label("{status}", tone="dim", face="caption")
         ui.button("present", icon="play")
@@ -734,7 +750,7 @@ def _stories():
 def _view():
     ui.canvas("view", draw_view, h=152, ground="panel", reads=["view"])
     ui.stepper("{count_word}", "prev", "next")
-    ui.label("Edit stories on a desk board or the web", tone="dim", align="center")
+    ui.label("Edit stories {made_on_short}", tone="dim", align="center")
     with ui.tools("bar", lend="bar"):
         ui.button("present", icon="play", alone=True)
 

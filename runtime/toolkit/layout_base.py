@@ -86,6 +86,7 @@ _bar_h = {}
 RENDER_SCALES = (1, 2)
 _class = HANDHELD
 _render = 1
+_desk_glass = [False]          # the glass is a desk's at font scale 1 (`desk_glass`)
 
 
 def desk_room(w, h, fs):
@@ -158,6 +159,18 @@ def sys_tile(thick):
 
 def metric_class():
     return _class
+
+
+def place_desk_glass(desk):
+    """Say whether the glass in force is a desk's at font scale 1: the
+    console's, once, from its panel (`class_of`)."""
+    _desk_glass[0] = bool(desk)
+
+
+def desk_glass():
+    """Whether the glass in force is a desk's at font scale 1, so a text
+    size that lays it out as a handheld has a smaller one that is the desk."""
+    return _desk_glass[0]
 
 
 def render_scale():

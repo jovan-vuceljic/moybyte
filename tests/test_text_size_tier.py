@@ -96,8 +96,9 @@ def test_a_size_the_desk_still_fits_keeps_the_windows(tmp_path):
 
 def test_an_app_built_on_the_desk_follows_the_tier(tmp_path):
     """Storybook, built and open in a desk window, is closed by the swap to
-    Large and opens again as the handheld's; back at Normal it opens as the
-    desk's, its editor with it."""
+    Large and opens again as the handheld's, saying where stories are made;
+    back at Normal it opens as the desk's, its editor with it."""
+    from runtime import storybook_app as SB
     ws, drv = _boot(tmp_path, 1)
     app = ws.app("storybook")
     ws.spine.open_app(app)
@@ -110,6 +111,7 @@ def test_an_app_built_on_the_desk_follows_the_tier(tmp_path):
     ws.spine.open_app(app)
     _frames(ws, drv)
     assert ws.wm.top_kind() == "storybook" and app.engine.band
+    assert (SB.s.made_on, SB.s.made_how) == SB.MADE_SMALLER[:2]
     ws.look.cycle_font_scale(-1)
     _frames(ws, drv)
     ws.spine.open_app(app)
