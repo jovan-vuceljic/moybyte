@@ -98,6 +98,9 @@ console behind the door. Every serial and suite script replays through the
 screen face too, and its grid's lines must be the serial face's output.
 An `app_` script drives a text app over the serial face and replays
 through no other face, since the screen face draws the app on a screen of
-its own. `tests/test_moy_term.py` holds the grid's escapes,
+its own. `host/app_main.c` runs a text app on an app heap that refuses
+any request over a cap, and `test_the_editor_asks_for_no_text_bigger_than_a_block`
+opens, grows, undoes and saves files many blocks long in `edit` and `vi`
+under a cap of one block. `tests/test_moy_term.py` holds the grid's escapes,
 `tests/test_terminal.py` the Terminal app and its text apps over the host
 binding, `tests/test_recovery_floor.py` the editor on the floor.
