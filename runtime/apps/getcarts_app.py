@@ -70,11 +70,13 @@ The screens, in the order a kid meets them:
   WI-FI IS OFF, SHELF AWAY, MEMORY FULL, NO INTERNET  why there is no shelf,
              and Try again; with Wi-Fi off, Wi-Fi opens the Wi-Fi page and
              coming back from it checks again at once.
-  ON THE CONSOLE  a page a board serves: the carts it shows are the board's,
-             and the board gets its own, so this one fetches nothing.
-  A ZERO'S PAGE  a page a console with no screen serves (`install.board()`,
-             its sealed /official): the shelf is the carts of that
-             console's shelves (its sources and its own release), each
+  ON THE CONSOLE  a page a board serves that answers no /official (an
+             older image): the carts it shows are the board's, and the
+             board gets its own, so this one fetches nothing.
+  A BOARD'S PAGE  a page a console serves that answers /official
+             (`install.board()`): the shelf is the carts of that console's
+             shelves (its sources and its own release), which this page
+             fetches and reads itself (carts_link.BoardCheck), each
              where it stands in that console's store, its room the
              console's, and a licence, Get and Remove ASK it -- it fetches
              and checks, the page shows the licence and the install prompt

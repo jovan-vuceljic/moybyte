@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 4,
+  "version": 5,
   "title": "Get Carts",
   "id": "moybyte.get_carts",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "Find carts other people have made and install them over WiFi.",
   "moybyte": {
     "type": "app",
     "system": true,

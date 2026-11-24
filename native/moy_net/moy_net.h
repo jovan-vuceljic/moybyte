@@ -375,8 +375,10 @@ size_t moy_web_shelf(char *out, size_t cap);
 
 // The sign-in's state, kept in `system` (moy_webauth.h): the sign-in set up
 // over that folder (it need not serve), the board's id and a fresh QR token
-// (32 hex digits, "" while the sign-in is off), this boot's claim (the
-// same, "" too once a password is set: moy_webauth.c, THE CLAIM), the paired browsers ("KID
+// (32 hex digits, "" while the sign-in is off), the board's claim (the
+// same, "" too once a password is set: moy_webauth.c, THE CLAIM) or a fresh
+// one that may replace a password (the cable's), whether the board pairs
+// over the cable (the hello's "cable"), the paired browsers ("KID
 // CREATED SEEN NAME" a line) and dropping one ("all": every one). A password
 // changed or removed signs every browser out: its sessions end and a web
 // terminal is cut, its key kept (moy_web_signout: how many sessions went).
@@ -384,6 +386,8 @@ int moy_web_auth(const char *system);
 void moy_web_board_id(char out[33]);
 void moy_web_token(char out[33]);
 void moy_web_claim(char out[33]);
+void moy_web_claim_new(char out[33]);
+void moy_web_cable(int on);
 size_t moy_web_keys(char *out, size_t cap);
 int moy_web_key_drop(const char *kid);
 int moy_web_signout(void);

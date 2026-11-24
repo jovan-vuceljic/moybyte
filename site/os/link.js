@@ -2,13 +2,15 @@
 // consoles and the flasher's first setup: a console opened in a window on
 // its own origin, the pack its board names handed from what this browser
 // keeps (packs.js, where the page loads it), the window's `state` shown, and
-// a board's first password sent over the link (`claim`, §7) once its console
-// asks to sign in. Messages are taken only from a window this page opened,
+// a board's password sent over the link (`claim`, §7) once its console asks
+// to sign in, or at once to one already signed in (a new password set by
+// cable, which replaces the old). Messages are taken only from a window this page opened,
 // at the origin it opened it at; what one says is shown as text, never
 // evaluated.
 //
 //   moyLink.init({show(c, sentence, cls, link), hello(c, hello)})
-//   moyLink.open(c, secret)   `secret` {claim, password} for a board with none
+//   moyLink.open(c, secret)   `secret` {claim, password}: the password the
+//                             cable's claim sets
 self.moyLink = (() => {
     const wins = new Map();      // console id -> {w, origin, c, heard, secret}
     const asked = new Map();     // a request's id -> {id, kind, page}
@@ -25,7 +27,10 @@ self.moyLink = (() => {
     function open(c, secret) {
         const had = wins.get(c.id);
         if (had && !had.w.closed) {
-            if (secret) had.secret = secret;
+            if (secret) {
+                had.secret = secret;
+                if (had.state == "sign-in" || had.state == "signed-in") claim(had);
+            }
             had.w.focus();
             return true;
         }
@@ -92,16 +97,19 @@ self.moyLink = (() => {
             show(c, m.ok ? "password set; pairing..." : "the password was not set: " + said, m.ok ? "" : "bad");
         }
     }
+    function claim(x) {
+        const id = send(x, "claim", { claim: x.secret.claim, board: x.c.id, password: x.secret.password });
+        asked.set(id, { id: x.c.id, kind: "claim" });
+        x.secret = null;
+        show(x.c, "setting its password...");
+    }
     function state(x, m) {
         const c = x.c, said = typeof m.said == "string" ? m.said.slice(0, 300) : "";
-        if (m.state == "failed") show(c, said || "it stopped", "bad");
+        x.state = m.state;
+        if ((m.state == "sign-in" || m.state == "signed-in") && x.secret) claim(x);
+        else if (m.state == "failed") show(c, said || "it stopped", "bad");
         else if (m.state == "signed-in") show(c, "signed in", "ok");
-        else if (m.state == "sign-in" && x.secret) {
-            const id = send(x, "claim", { claim: x.secret.claim, board: c.id, password: x.secret.password });
-            asked.set(id, { id: c.id, kind: "claim" });
-            x.secret = null;
-            show(c, "setting its password...");
-        } else if (m.state == "sign-in") show(c, "asks for its password" + (said ? ": " + said : ""));
+        else if (m.state == "sign-in") show(c, "asks for its password" + (said ? ": " + said : ""));
         else if (m.state == "booted") show(c, "running");
     }
     function forget(c) { wins.delete(c.id); }

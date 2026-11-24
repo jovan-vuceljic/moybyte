@@ -84,7 +84,7 @@ def test_the_browser_reviews_moybyte_org_by_its_url_alone(monkeypatch):
     """No verifier (the browser): a signed index from moybyte-org/carts'
     url is reviewed, its fetch having checked the certificate; one from
     anywhere else is not."""
-    monkeypatch.setattr(ci, "_verifier", lambda: None)
+    monkeypatch.setattr(ci, "_native", lambda: None)
     repo = _python_repo()
     data = _sign(repo.index())
     assert _by_id(ci.parse_index(data, ci.DEFAULT_INDEXES[0]))["snake"]["reviewed"]

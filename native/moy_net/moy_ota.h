@@ -70,6 +70,10 @@ int moy_ota_key_hex(const char *hex, size_t n, moy_ota_key_t *out);
 // ones). The whole decrypted block is compared, never parsed.
 int moy_ota_verify(const void *payload, size_t n, const char *sig_hex,
                    size_t sig_n, const moy_ota_key_t *keys, int nkeys);
+// The same over the SHA-256 `digest` of the payload, which its reader hashed
+// as it streamed by (a carts index, runtime/carts/cart_index.py's EntryRead).
+int moy_ota_verify_digest(const uint8_t digest[32], const char *sig_hex, size_t sig_n,
+                          const moy_ota_key_t *keys, int nkeys);
 
 // A compiled module's ADMISSION, every tier's: an AOT module
 // (native/moy_wasm/moy_wasm_key.h) and a native one (native/moy_elf/moy_elf.h)
@@ -152,6 +156,11 @@ int moy_httpc_read_wait(int h, void *buf, size_t n, uint32_t ms);
 // the head has none.
 int moy_httpc_header(int h, const char *name, char *out, size_t cap);
 void moy_httpc_close(int h);
+// The same asking for the `n` bytes from `start` (a Range header on every hop):
+// a server that honours it answers 206 with those bytes, one that does not 200
+// with the whole file.
+int moy_httpc_open_range(const char *url, const char *agent, uint32_t start, uint32_t n,
+                         int *status, uint32_t *clen);
 // The same with MOY_HTTPC_* `flags`; the client table made by moy_httpc_init
 // (0, or -ENOMEM), which a thread other than the VM's calls before its first
 // open.

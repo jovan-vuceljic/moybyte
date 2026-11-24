@@ -19,13 +19,19 @@ host's.
     0x05  the hostname, which on a Zero is its name (an mDNS label)
     0x06  the name, cleaned into a label (zero_setup.clean_name)
     0x07  the network state: the flags, and the addresses while online
+    0xF0  Moybyte's own: the address with a FRESH claim, minted whether or not
+          the board has a password, so the browser the cable sent sets a new
+          one (My consoles' "Manage by cable")
 
 THE ADDRESS a joined board answers is its URL twice, by IP first (what every
 browser opens) and by its `.local` name second, each carrying after its `#`
 the board's id (the sign-in's, 32 hex digits) and, while the board has no
-password, this boot's claim (moy_webauth.c, THE CLAIM): `#id=<id>&claim=<c>`.
+password, its claim (moy_webauth.c, THE CLAIM): `#id=<id>&claim=<c>`.
 The fragment never crosses the network. A browser that opens the URL sets
-the board's first password with the claim and pairs with it at once.
+the board's first password with the claim and pairs with it at once. 0xF0's
+claim replaces a password the same way: the cable is the owner's proof.
+Improv's spec reserves no range for a device's own commands; its own count
+up from 0x01, so this one sits at the top.
 
 A join from the setup access point is the store host's to finish: the board
 leaves the access point and starts serving, and only then answers (`finish`),
@@ -38,6 +44,7 @@ READY, PROVISIONING, PROVISIONED = 0x02, 0x03, 0x04
 NO_ERROR, INVALID, UNKNOWN_RPC, UNABLE, BAD_HOSTNAME = 0x00, 0x01, 0x02, 0x03, 0x05
 STATE, ERROR, RPC, RESULT, BAD = 0x01, 0x02, 0x03, 0x04, -1
 WIFI, CURRENT, INFO, SCAN, HOSTNAME, NAME, NETWORK = 1, 2, 3, 4, 5, 6, 7
+CLAIM = 0xF0
 SCAN_MAX = 16
 FRAMES_A_POLL = 4
 
@@ -93,7 +100,9 @@ class Improv:
         board.join(ssid, pw)     -> the IP joined, or None
         board.save(ssid, pw)     the network, first in wifi.json
         board.ip()               -> the IP while serving, else None
-        board.address()          -> (board id, claim) while serving
+        board.address(fresh)     -> (board id, claim) while serving: the
+                                    board's claim ("" with a password), or
+                                    with `fresh` a new one that may replace it
 
     `serving` is False while the setup access point is up; a join then leaves
     `joined` set for the loop that hosts the AP, and `finish()` answers it
@@ -114,11 +123,11 @@ class Improv:
     def result(self, cmd, strings):
         self.port.send(RESULT, rpc_result(cmd, strings))
 
-    def addresses(self):
+    def addresses(self, fresh=False):
         ip = self.board.ip() if self.serving else None
         if not ip:
             return []
-        board_id, claim = self.board.address()
+        board_id, claim = self.board.address(fresh)
         return urls(ip, self.board.name(), board_id, claim)
 
     def poll(self):
@@ -161,6 +170,8 @@ class Improv:
             self.scan(cmd)
         elif cmd in (HOSTNAME, NAME):
             self.name(cmd, fields)
+        elif cmd == CLAIM:
+            self.result(cmd, self.addresses(fresh=True))
         elif cmd == NETWORK:
             urls_ = self.addresses()
             self.result(cmd, [str(0x02 | (0x01 if urls_ else 0))] + urls_)

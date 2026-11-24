@@ -149,14 +149,16 @@ went with it -- the RPC it was kept for shipped as plain HTTP."""
 
 [[modules.shared.group]]
 files = ["web_addon.py", "cart_index.py", "cart_unpack.py", "cart_files.py",
-         "app_imports.py"]
+         "app_imports.py", "rsa_check.py"]
 why = """
 The browser console is an add-on cart (runtime/carts/web_addon.py), and on
 this board it is the whole use: provisioning installs the one that fits the
 image (provision.sh), and after an update the image installs the one that
 fits it from its release's own signed index, through the console's one
 install (cart_index, which every file of the cart is checked by before it
-lands, and the modules it imports)."""
+lands, and the modules it imports).
+rsa_check is the signature arithmetic where there is no kernel, which the
+board never runs (moy_net verifies) but cart_index and moy_ota name."""
 
 [[modules.shared.group]]
 files = ["ssh_service.py"]

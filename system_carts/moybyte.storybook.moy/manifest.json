@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 6,
+  "version": 7,
   "title": "Storybook",
   "id": "moybyte.storybook",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "Make stories from slides of words, shapes and pictures, and show them one slide at a time.",
   "moybyte": {
     "type": "app",
     "system": true,

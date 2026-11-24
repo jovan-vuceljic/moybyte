@@ -178,3 +178,26 @@ def test_serve_answers_as_pages_does(tmp_path):
     finally:
         p.terminate()
         p.wait(timeout=10)
+
+
+def test_the_site_mirrors_each_release_s_indexes_where_a_page_reads_them(tmp_path):
+    """A page on a board's origin cannot read a release download, so the
+    site holds each release's indexes byte for byte at the address
+    cart_index.index_mirror names for it; a folder that names no tag (a
+    worktree's own) mirrors nothing."""
+    from runtime import cart_index as ci
+    _published(str(tmp_path / "latest"), [("index.html", b"s")])
+    _published(str(tmp_path / "beta"), [("index.html", b"o")])
+    (tmp_path / "latest" / pack_store.TAG_FILE).write_text("firmware-latest\n")
+    out = tmp_path / "site"
+    os_site.build(str(out), stable=[str(tmp_path / "latest")], dev=[str(tmp_path / "beta")])
+    names = sorted(n for n in os.listdir(tmp_path / "latest") if n.startswith("carts-"))
+    assert names
+    rel = out / "console" / "releases"
+    assert os.listdir(rel) == ["firmware-latest"]
+    for name in names:
+        assert (rel / "firmware-latest" / name).read_bytes() == \
+            (tmp_path / "latest" / name).read_bytes()
+        url = ci.RELEASES + "firmware-latest/" + name
+        assert ci.index_mirror(url) == "https://os.moybyte.com/console/releases/firmware-latest/" + name
+    assert gen_web_blob.SITE_MIRROR.rstrip("/") + "/releases/" == ci.RELEASE_MIRROR

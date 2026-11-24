@@ -48,6 +48,11 @@ function render() {
         forget.onclick = () => forgetConsole(c);
         const act = el("div", "act");
         act.append(open, rename, forget);
+        if ("serial" in navigator) {
+            const manage = el("button", "btn quiet manage", "Manage by cable");
+            manage.onclick = () => byCable(c);
+            act.append(manage);
+        }
         li.append(el("h3", "name", c.name), where,
                   el("p", c.reached ? "reach ok" : "reach", c.reached
                       ? "reached " + new Date(c.reached).toLocaleString() + "  ·  console " + c.page.slice(0, 12)
@@ -118,33 +123,44 @@ document.getElementById("add").addEventListener("submit", (e) => {
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
 });
 
-// By cable: a board just plugged in, set up over Improv (setup.js).
+// By cable (setup.js): a board just plugged in is set up over Improv, and
+// one already on a network is managed, as any card's "Manage by cable" does
+// at any time: its Wi-Fi, its name, its password.
 const cable = document.getElementById("cable");
+let cabled = false;
+async function byCable(card) {
+    if (cabled) return;
+    let port;
+    try { port = await navigator.serial.requestPort(); }
+    catch (err) {      // NotFoundError: the chooser was closed with no port
+        if (err.name != "NotFoundError") say("No port: " + err.message, "bad");
+        return;
+    }
+    say("");
+    cabled = cable.disabled = true;
+    const box = document.getElementById("setup");
+    box.scrollIntoView({ block: "nearest" });
+    const opts = {
+        c: card,
+        changed() { consoles = moyKept.read(); render(); },
+        done(c, secret) {
+            consoles = moyKept.read();
+            render();
+            const k = consoles.find((x) => x.id === c.id) || c;
+            for (const b of box.querySelectorAll("button.opener")) b.remove();
+            const go = el("button", "btn pri opener", "Open " + k.name);
+            go.onclick = () => { moyLink.open(k, secret); go.remove(); };
+            box.append(go);
+            go.scrollIntoView({ block: "nearest", behavior: "instant" });
+        },
+    };
+    try { await (card ? moySetup.manage(box, port, opts) : moySetup.run(box, port, opts)); }
+    catch (err) { /* setup said why */ }
+    cabled = cable.disabled = false;
+}
 if ("serial" in navigator) {
     cable.hidden = false;
-    cable.onclick = async () => {
-        let port;
-        try { port = await navigator.serial.requestPort(); }
-        catch (err) {      // NotFoundError: the chooser was closed with no port
-            if (err.name != "NotFoundError") say("No port: " + err.message, "bad");
-            return;
-        }
-        say("");
-        cable.disabled = true;
-        try {
-            await moySetup.run(document.getElementById("setup"), port, {
-                done(c, secret) {
-                    consoles = moyKept.read();
-                    render();
-                    const k = consoles.find((x) => x.id === c.id) || c;
-                    const go = el("button", "btn pri", "Open " + k.name);
-                    go.onclick = () => { moyLink.open(k, secret); go.remove(); };
-                    document.getElementById("setup").append(go);
-                },
-            });
-        } catch (err) { /* setup said why */ }
-        cable.disabled = false;
-    };
+    cable.onclick = () => byCable(null);
 }
 
 render();

@@ -28,6 +28,13 @@ static mp_obj_t face_moy_net_web_stop(size_t n_args, const mp_obj_t *argv) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(face_moy_net_web_stop_obj, 0, 1, face_moy_net_web_stop);
 
+static mp_obj_t face_moy_net_web_cable(mp_obj_t a0) {
+    int on = (int)mp_obj_get_int(a0);
+    moy_web_cable(on);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(face_moy_net_web_cable_obj, face_moy_net_web_cable);
+
 static mp_obj_t face_moy_net_web_key_drop(mp_obj_t a0) {
     const char *kid = mp_obj_str_get_str(a0);
     return mp_obj_new_int(moy_web_key_drop(kid));
@@ -214,6 +221,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(face_moy_net_http_close_obj, face_moy_net_http_
 
 #define MOY_FACE_MOY_NET_ROWS_SERVE \
     { MP_ROM_QSTR(MP_QSTR_web_stop), MP_ROM_PTR(&face_moy_net_web_stop_obj) }, \
+    { MP_ROM_QSTR(MP_QSTR_web_cable), MP_ROM_PTR(&face_moy_net_web_cable_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_web_key_drop), MP_ROM_PTR(&face_moy_net_web_key_drop_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_web_signout), MP_ROM_PTR(&face_moy_net_web_signout_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_web_poll), MP_ROM_PTR(&face_moy_net_web_poll_obj) }, \

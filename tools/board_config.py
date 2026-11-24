@@ -367,8 +367,11 @@ def roster_only(board_dir):
 
 
 def roster_install(board_dir):
-    """The official carts a cable flash or a provisioning installs into a
-    new store beside the image's, `[roster] install` (cart ids); ()."""
+    """The official carts a board's store gets at flash time beside the
+    image's, `[roster] install` (cart ids): the website's install writes
+    them into its new store (tools/store_image.py), and a cable flash into a
+    store that lacks one whose removal it did not record
+    (tools/board_flash.py's install_carts); ()."""
     got = _roster(board_dir).get("install", [])
     if not isinstance(got, list) or not all(isinstance(s, str) for s in got):
         raise ValueError("%s/board.toml: [roster] install must be a list of cart ids"

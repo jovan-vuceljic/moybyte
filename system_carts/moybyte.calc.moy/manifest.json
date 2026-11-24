@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 7,
+  "version": 8,
   "title": "Calc",
   "id": "moybyte.calc",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "A calculator for whole numbers. It keeps a list of your sums while it is open.",
   "moybyte": {
     "type": "app",
     "system": true,
