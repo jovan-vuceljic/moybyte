@@ -23,6 +23,7 @@
 
 #include "moy_sh_int.h"
 #include "../moy_kernel/moy_proc_exit.h"
+#include "moy_fs.h"
 #include "moy_vol.h"
 
 #define CMD_BUF 4096
@@ -81,6 +82,11 @@ static void vol_here(void *arg) {
             case MOY_SH_V_RMDIR:
             case MOY_SH_V_REMOVE:
                 r = moy_vol_remove(&v, rest);
+                if (r == 0 && op == MOY_SH_V_REMOVE) {
+                    // a crash-safe save's backup (edit's, vi's) would read the
+                    // file back at its next open
+                    moy_fs_forget_bak(p);
+                }
                 break;
             case MOY_SH_V_RENAME: {
                 if (q == NULL) {
@@ -93,6 +99,9 @@ static void vol_here(void *arg) {
                 }
                 if (r == 0) {
                     r = moy_vol_rename(&v, rest, rest2);
+                }
+                if (r == 0) {
+                    moy_fs_forget_bak(p);   // the backup does not follow it
                 }
                 break;
             }

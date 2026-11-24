@@ -19,6 +19,10 @@ ihi^[
 :wq^M
 wc -c /nl.txt
 ls /
+rm /nl.txt
+vi /nl.txt
+:q^M
+ls /
 view /notes.txt
 x
 q
