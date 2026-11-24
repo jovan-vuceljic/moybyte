@@ -228,7 +228,9 @@ def test_build_leaves_a_template_nothing_to_build(tmp_path, tier, service):
     if "wasi" in (tier, service) or tier == "wasm":
         _wasi_sdk_or_skip()
     cart = _new(tmp_path, "b", tier=tier, service=service)
-    built = dict(cli.build_cart(cart, ["host"]))
+    built, skipped = cli.build_cart(cart, ["host"])
+    built = dict(built)
+    assert skipped == []
     for path in built.values():
         assert os.path.dirname(path) == cart and os.path.getsize(path) > 0
     if tier == "c":
@@ -251,7 +253,7 @@ def test_a_new_compiled_game_builds_wasm_and_a_module_per_chip(tmp_path, capsys)
                      "--dir", str(tmp_path)]) == 0
     cart = str(tmp_path / "my_game.moy")
     hint = capsys.readouterr().out
-    assert "--chip esp32s3 --chip esp32p4" in hint
+    assert "build %s\n" % cart in hint and "--chip" not in hint
     man = cli.read_manifest(cart)
     assert man["runtime"] == "wasm" and man["moybyte"]["native"] == []
     assert cli.tier_of(man, cart) == "wasm"
@@ -268,16 +270,106 @@ def test_a_new_compiled_game_builds_wasm_and_a_module_per_chip(tmp_path, capsys)
     assert errors == [] and warnings == []
 
 
-def test_build_has_nothing_for_a_script_and_needs_a_chip_for_a_module(tmp_path, capsys):
+def test_build_has_nothing_for_a_script(tmp_path, capsys):
     cart = _new(tmp_path, "s", tier="lua")
-    assert cli.build_cart(cart) == []
+    assert cli.build_cart(cart) == ([], [])
     assert cli.main(["build", cart]) == 0
     assert "runs from its source: nothing to build" in capsys.readouterr().out
+
+
+def _fake_modules(monkeypatch):
+    """Every chip's toolchain present and each module a stub: the chips a
+    build asked tools/elf_cart.py for, in order."""
+    from tools import elf_cart
+    made = []
+
+    def build_module(sources, chip, out, signed=True, sign_with=None, ui=False, cart=False):
+        made.append((chip, signed))
+        with open(out, "wb") as f:
+            f.write(b"\x7fELF" + chip.encode())
+        return out
+    monkeypatch.setattr(elf_cart, "toolchain", lambda chip: ("cc", "ar", "strip"))
+    monkeypatch.setattr(elf_cart, "build_module", build_module)
+    return made
+
+
+def test_build_with_no_chip_builds_every_chip_s_module(tmp_path, monkeypatch, capsys):
+    from tools import elf_cart
+    made = _fake_modules(monkeypatch)
     native = _new(tmp_path, "n", tier="c")
-    with pytest.raises(cli.Refused, match="--chip"):
-        cli.build_cart(native)
-    assert cli.main(["build", native]) == 1
-    assert not glob.glob(os.path.join(native, "*.elf"))
+    assert cli.main(["build", native, "--unsigned"]) == 0
+    assert made == [(c, False) for c in elf_cart.CHIPS]
+    assert cli.read_manifest(native)["moybyte"]["native"] == list(elf_cart.CHIPS)
+    out = capsys.readouterr().out.splitlines()
+    for c in elf_cart.CHIPS:
+        path = os.path.join(native, "main.%s.elf" % c)
+        assert "%-16s %s (%d bytes)" % (c, path, os.path.getsize(path)) in out
+
+
+def test_build_with_a_chip_builds_that_one(tmp_path, monkeypatch):
+    made = _fake_modules(monkeypatch)
+    native = _new(tmp_path, "n", tier="c")
+    built, skipped = cli.build_cart(native, ["esp32p4"])
+    assert made == [("esp32p4", True)] and skipped == []
+    assert built == [("esp32p4", os.path.join(native, "main.esp32p4.elf"))]
+    assert cli.read_manifest(native)["moybyte"]["native"] == ["esp32p4"]
+
+
+def test_a_chip_whose_toolchain_is_missing_is_skipped_with_its_line(tmp_path, monkeypatch,
+                                                                     capsys):
+    from tools import elf_cart
+    made = _fake_modules(monkeypatch)
+    missing = {c: elf_cart.CHIPS[c]["tools"] for c in elf_cart.CHIPS if c != "host"}
+
+    def toolchain(chip):
+        if chip in missing:
+            raise elf_cart.ToolError("no %s toolchain under ~/.espressif: the ESP-IDF's "
+                                     "`install.sh %s` installs it" % (missing[chip], chip))
+        return ("cc", "ar", "strip")
+    monkeypatch.setattr(elf_cart, "toolchain", toolchain)
+    native = _new(tmp_path, "n", tier="c")
+    assert cli.main(["build", native, "--unsigned"]) == 0
+    assert made == [("host", False)]
+    out = capsys.readouterr().out
+    for chip, tools in missing.items():
+        line = ("skipped %s native module: no %s toolchain under ~/.espressif: the ESP-IDF's "
+                "`install.sh %s` installs it" % (chip, tools, chip))
+        assert out.count(line + "\n") == 1, out
+    # the only chip asked for, skipped, is a build that made nothing
+    other = _new(tmp_path, "o", tier="c")
+    assert cli.main(["build", other, "--chip", "esp32s3"]) == 1
+    assert "install.sh esp32s3" in capsys.readouterr().err
+    assert not glob.glob(os.path.join(other, "*.elf"))
+
+
+def test_a_wasm_cart_builds_an_aot_module_per_board_chip_less_a_missing_compiler(
+        tmp_path, monkeypatch, capsys):
+    from tools import wasm_cart, wasm_module
+    cart = str(tmp_path / "hello.moy")
+    shutil.copytree(os.path.join(ROOT, "tests", "fixtures", "wasm", "hello.moy"), cart)
+    made = []
+
+    def build(blob, chip, out, signed=True):
+        made.append((chip, signed))
+        with open(out, "wb") as f:
+            f.write(b"aot " + chip.encode())
+
+    def compiler(target, fetch=True):
+        if target == "riscv32":
+            raise wasm_module.ToolError("no wamrc-riscv32 here")
+        return "wamrc"
+    monkeypatch.setattr(wasm_module, "build", build)
+    monkeypatch.setattr(wasm_module, "compiler", compiler)
+    assert list(wasm_module.targets()) == ["esp32s3", "esp32p4"]
+    assert cli.main(["build", cart, "--unsigned"]) == 0
+    assert made == [("esp32s3", False)]
+    out = capsys.readouterr().out
+    assert os.path.getsize(os.path.join(cart, "main.wasm")) > 0
+    assert os.path.isfile(os.path.join(cart, wasm_cart.aot_name("main.wasm", "esp32s3")))
+    assert ("skipped esp32p4 AOT module: no wamrc-riscv32 here "
+            "(`python3 tools/wasm_module.py compilers` fetches it)\n") in out
+    assert cli.main(["build", cart, "--chip", "esp32p4"]) == 1
+    assert "nothing built" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("tier,service", [("python", None), ("lua", None), ("wasm", None),

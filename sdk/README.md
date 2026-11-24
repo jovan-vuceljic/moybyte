@@ -24,7 +24,7 @@ moy app coredump <board> [--gdb] [--port PORT] [--elf ELF] [--symbols DIR]
 
 - `new` writes `<name>.moy` from a template per tier (`sdk/moybyte_sdk/templates.py`;
   `wasm` is an app compiled to wasm, and with `--type game` a compiled cart,
-  which `build` makes into main.wasm and a native module per `--chip` (below,
+  which `build` makes into main.wasm and a native module per chip (below,
   "A compiled cart"); `wasi` a WASI command or service, `c` a native module),
   its manifest carrying Moybyte's fields, and with `--service` the app's own
   service as its `entries`.
@@ -42,12 +42,19 @@ moy app coredump <board> [--gdb] [--port PORT] [--elf ELF] [--symbols DIR]
   not built yet is read from its C source.
 - `build` compiles the cart's programs from its `src/` into its own folder:
   a wasm main or service by `tools/wasm_cart.py` (the portable `.wasm`, and
-  with a board's `--chip` that chip's AOT module), a native main or service
-  by `tools/elf_cart.py` (a module per `--chip`, which a native cart must
-  name; `host` is the host's, for its tests and terminal), and a compiled
-  cart's both (below, "A compiled cart"). Modules are
-  signed as those tools sign them; `--unsigned` leaves it off. A Python or
-  Lua cart runs from its source and has nothing to build.
+  an AOT module per board chip), a native main or service by
+  `tools/elf_cart.py` (a module per chip; `host` is the host's, for its tests
+  and terminal), and a compiled cart's both (below, "A compiled cart").
+  **Decision (owner, 2026-11-24): with no `--chip` it builds for every
+  chip**: the AOT chips `tools/wasm_module.py` keys and the native chips
+  `tools/elf_cart.py` has a toolchain table for; `--chip` builds just those
+  it names. A chip whose toolchain this machine lacks is skipped with a line
+  saying which and how to get it (the ESP-IDF's `install.sh <chip>`,
+  `tools/wasm_module.py compilers`); the build fails only when that leaves
+  no module of the chips `--chip` named, or nothing at all. It prints a line
+  per artifact with its size. Modules are signed as those tools sign them;
+  `--unsigned` leaves it off. A Python or Lua cart runs from its source and
+  has nothing to build.
 - `stubs` copies what the cart's tier compiles or edits against into it:
   `include/moybyte/os.h`, `app.h` and `cart.h` with a `compile_flags.txt` for C (a
   native cart's with `game.h` and libmoy's `moy.h`),
@@ -173,7 +180,7 @@ library dynamically behind the SDK's own.
 **Decision (owner, 2026-11-18, #261): one source, two targets.** A compiled
 cart in C (`"runtime": "wasm"`, a game or a wallpaper) includes one header,
 `include/moybyte/cart.h`, and `moy app build` builds it to `main.wasm` and to
-`main.<chip>.elf` for each `--chip`, in one `.moy`:
+`main.<chip>.elf` for each chip, in one `.moy`:
 
 ```json
 {"format": "moy-1", "runtime": "wasm", "main": "main.wasm", "memory": 2,
