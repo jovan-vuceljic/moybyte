@@ -64,6 +64,8 @@ HAND_WRITTEN = {
                "only",
     "moy_web": "answers the baked console's assets as memoryviews over the "
                "image; board only",
+    "moy_improv": "Improv's frames off the USB-Serial/JTAG console's ISR, a ring "
+                  "the receive path fills; board only (MOY_IMPROV)",
     "moy_prof": "starts a timer ISR's sampler and answers its tables; board only; "
                 "every name is a `hand` row of its face",
     # -- devices and streams, not yet converted -------------------------------

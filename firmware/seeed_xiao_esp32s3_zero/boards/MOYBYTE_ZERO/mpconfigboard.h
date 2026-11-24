@@ -144,3 +144,10 @@
 //                  loader);
 //   26..37         SPI flash and the octal PSRAM: driving one stops the machine.
 #define MOY_NET_GPIO_ROUTE                  (1)
+
+// IMPROV WI-FI over the USB-Serial/JTAG console (native/moy_kernel/
+// moy_improv.h, the module `moy_improv`): first setup over the cable that
+// flashed the board (docs/web_console_online_2026-11.md §7), answered by the
+// store host (device/zero_improv.py). tools/patch_usj_improv.py routes the
+// console's bytes through it.
+#define MOY_IMPROV                          (1)

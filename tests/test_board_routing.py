@@ -698,6 +698,21 @@ def test_the_gc_split_reserve_call_and_the_board_define_agree():
             "MOYBYTE_GC_SPLIT_RESERVE = %r" % (build, called, defined))
 
 
+def test_the_improv_call_and_the_board_define_agree():
+    """Improv's frames leave the console only where the patch routes them AND
+    the board defines MOY_IMPROV (native/moy_kernel/moy_improv.h): a call
+    without the define compiles the stock path, and a define without the call
+    builds a module whose frames never arrive. Both ways, like the reserve."""
+    for build in _esp32_builds():
+        called = _opts_in(build, "moybyte_patch_usj_improv")
+        hdr = board_config.sdkconfig_path(build.parent).parent / "mpconfigboard.h"
+        defined = re.search(r"^#define MOY_IMPROV\s+\(1\)",
+                            hdr.read_text(encoding="utf-8"), re.M) is not None
+        assert called == defined, (
+            "%s: calls the Improv patch = %r but defines MOY_IMPROV = %r"
+            % (build, called, defined))
+
+
 def test_the_gc_grow_step_call_and_the_board_define_agree():
     """The growth-step patch caps nothing without MOYBYTE_GC_GROW_MAX, so a
     board that calls it and defines nothing is the stock doubling under a
