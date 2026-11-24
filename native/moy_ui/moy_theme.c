@@ -2580,9 +2580,7 @@ static int moy_theme_sheet_load_w(const uint8_t *src, size_t n) {
 }
 
 int moy_theme_sheet_load(const uint8_t *src, size_t n) {
-    moy_ui_theme_write(1);
     int rc = moy_theme_sheet_load_w(src, n);
-    moy_ui_theme_write(0);
     return rc;
 }
 
@@ -2591,9 +2589,7 @@ static void moy_theme_sheet_clear_w(void) {
 }
 
 void moy_theme_sheet_clear(void) {
-    moy_ui_theme_write(1);
     moy_theme_sheet_clear_w();
-    moy_ui_theme_write(0);
 }
 
 const uint8_t *moy_theme_sheet(void) {
@@ -3115,9 +3111,7 @@ static void moy_theme_block_use_w(const uint16_t block[MOY_THEME_BLOCK], int use
 }
 
 void moy_theme_block_use(const uint16_t block[MOY_THEME_BLOCK], int used) {
-    moy_ui_theme_write(1);
     moy_theme_block_use_w(block, used);
-    moy_ui_theme_write(0);
 }
 
 // The look: each package's entries into out, nearest first, a package's
@@ -4576,13 +4570,3 @@ const int moy_theme_custom_dims[5] = {
     MOY_THEME_ACCENTS, MOY_THEME_TINTS, MOY_THEME_RAMP_MAX, MOY_THEME_BYTES, MOY_THEME_PRESETS,
 };
 
-int moy_ui_recs_theme(moy_ui_rec_t *r) {
-    moy_ui_rec_t v[] = {
-        {s_live, NULL, sizeof(s_live)}, {&s_live_n, NULL, sizeof(s_live_n)},
-        {s_live_near, NULL, sizeof(s_live_near)},
-        {NULL, (void **)&s_sheet, (uint32_t)MOY_THEME_SHEET_W * MOY_THEME_SPRITE_ROWS},
-        {&s_sheet_on, NULL, sizeof(s_sheet_on)}, {s_cell_set, NULL, sizeof(s_cell_set)},
-    };
-    memcpy(r, v, sizeof(v));
-    return (int)(sizeof(v) / sizeof(v[0]));
-}

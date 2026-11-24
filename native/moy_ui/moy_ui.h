@@ -1385,31 +1385,15 @@ const moy_ui_display_t *moy_ui_display(void);
 int moy_ui_well(const moy_ui_sink_t *s, moy_ui_box_t b, int flags, int fill, int fs,
                 int desk);
 
-// -- the theme's writes --------------------------------------------------------------
+// -- the console's fonts --------------------------------------------------------------
 //
-// moy_font_free and moy_font_reset (moy_text.h) as a theme write. The
-// console frees its fonts through these.
+// moy_font_free and moy_font_reset (moy_text.h) as the toolkit's bindings
+// carry them: the console frees its fonts through these.
 int moy_ui_font_free(uint32_t font);
 void moy_ui_font_reset(void);
 // The theme's block colours as a canvas row's entries 64..127 hold them
 // (moy_canvas.h, the build's wire order): what a run's surface row takes
 // (moy_ui_run.c).
 void moy_ui_theme_pal(uint16_t out[64]);
-// A setter of the shared state, around its writes: 1 before, 0 after; the
-// console's task alone writes, so they nest.
-void moy_ui_theme_write(int begin);
-// The shared state's records, each file's own: one at `p`, or the block a
-// static pointer (`heap`) holds (NULL there: none held), `n` bytes.
-typedef struct {
-    void *p;
-    void **heap;
-    uint32_t n;
-} moy_ui_rec_t;
-int moy_ui_recs_ui(moy_ui_rec_t *r);       // moy_ui.c
-int moy_ui_recs_depth(moy_ui_rec_t *r);    // moy_ui_depth.c
-int moy_ui_recs_parts(moy_ui_rec_t *r);    // moy_ui_parts.c
-int moy_ui_recs_text(moy_ui_rec_t *r);     // moy_ui_text.c
-int moy_ui_recs_tones(moy_ui_rec_t *r);    // moy_ui_api_text.c
-int moy_ui_recs_theme(moy_ui_rec_t *r);    // moy_theme.c
 
 #endif // MOY_UI_H

@@ -2959,9 +2959,7 @@ void moy_ui_set_input(int input) {
         moy_ui_marks_refresh();
         return;                         // (no move: an instance pulls nothing)
     }
-    moy_ui_theme_write(1);
     moy_ui_set_input_w(input);
-    moy_ui_theme_write(0);
 }
 
 int moy_ui_input(void) {
@@ -2976,9 +2974,7 @@ void moy_ui_set_hint_input(int input) {
     if ((input >= 0 && input < MOY_UI_INPUTS ? input : MOY_UI_INPUT_KEYS) == s_keys) {
         return;
     }
-    moy_ui_theme_write(1);
     moy_ui_set_hint_input_w(input);
-    moy_ui_theme_write(0);
 }
 
 int moy_ui_hint_input(void) {
@@ -3848,8 +3844,3 @@ int moy_ui_tip_draw(const moy_ui_sink_t *s, moy_ui_box_t at, moy_ui_span_t t, mo
     return MOY_UI_OK;
 }
 
-int moy_ui_recs_parts(moy_ui_rec_t *r) {
-    r[0] = (moy_ui_rec_t){&s_input, NULL, sizeof(s_input)};
-    r[1] = (moy_ui_rec_t){&s_keys, NULL, sizeof(s_keys)};
-    return 2;
-}

@@ -11,7 +11,9 @@ out stays out.
     toolkit (runtime/toolkit/ui.py and any import of it), the Lua and wasm
     verbs (moycore_ui, moy_ui_wasm), the SDK's ui.h and the toolkit a
     native module links, the WASI and ELF rows a linked toolkit pulled its
-    theme and told its answers through, and the `moybyte.ui` extension.
+    theme and told its answers through, and the `moybyte.ui` extension;
+  * the theme's shared-state machinery a linked copy pulled through goes with
+    it: no theme write bracket or its generation, no per-file record tables.
 """
 
 import json
@@ -141,3 +143,21 @@ def test_every_front_numbers_the_kinds_as_the_engine_does():
     table = re.search(r"local KINDS = \{(.*?)\}", lua, re.S).group(1)
     got = {k: int(v) for k, v in re.findall(r"(\w+) = (\d+)", table)}
     assert got and all(engine[k] == v for k, v in got.items()), got
+
+
+def _sources(tops, ends):
+    for top in tops:
+        for base, dirs, files in os.walk(os.path.join(ROOT, top)):
+            dirs[:] = [d for d in dirs if d not in ("__pycache__", "wamr", "lua", ".build")]
+            for name in files:
+                if name.endswith(ends):
+                    path = os.path.join(base, name)
+                    with open(path, errors="replace") as f:
+                        yield os.path.relpath(path, ROOT), f.read()
+
+
+def test_no_theme_write_bracket_or_record_tables():
+    found = [path for path, text in _sources(("native", "runtime", "device", "sdk", "tools"), (".c", ".h", ".py"))
+             if re.search(r"moy_ui_theme_write\b|moy_ui_recs_\w+|\bmoy_ui_rec_t\b", text)]
+    assert not found, found
+

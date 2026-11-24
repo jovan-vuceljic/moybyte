@@ -136,9 +136,7 @@ static int moy_ui_look_set_w(int look, const int32_t tokens[MOY_UI_TOKENS]) {
 }
 
 int moy_ui_look_set(int look, const int32_t tokens[MOY_UI_TOKENS]) {
-    moy_ui_theme_write(1);
     int rc = moy_ui_look_set_w(look, tokens);
-    moy_ui_theme_write(0);
     return rc;
 }
 
@@ -234,9 +232,7 @@ static void moy_ui_set_disabled_w(int32_t v) {
 }
 
 void moy_ui_set_disabled(int32_t v) {
-    moy_ui_theme_write(1);
     moy_ui_set_disabled_w(v);
-    moy_ui_theme_write(0);
 }
 
 int moy_ui_disabled(void) {
@@ -251,9 +247,7 @@ static void moy_ui_set_danger_ink_w(int32_t v) {
 }
 
 void moy_ui_set_danger_ink(int32_t v) {
-    moy_ui_theme_write(1);
     moy_ui_set_danger_ink_w(v);
-    moy_ui_theme_write(0);
 }
 
 int moy_ui_danger_ink(void) {
@@ -308,9 +302,7 @@ static void moy_ui_buttons_clear_w(void) {
 }
 
 void moy_ui_buttons_clear(void) {
-    moy_ui_theme_write(1);
     moy_ui_buttons_clear_w();
-    moy_ui_theme_write(0);
 }
 
 static int moy_ui_buttons_app_w(const char *name, size_t n) {
@@ -327,9 +319,7 @@ static int moy_ui_buttons_app_w(const char *name, size_t n) {
 }
 
 int moy_ui_buttons_app(const char *name, size_t n) {
-    moy_ui_theme_write(1);
     int rc = moy_ui_buttons_app_w(name, n);
-    moy_ui_theme_write(0);
     return rc;
 }
 
@@ -363,9 +353,7 @@ static int moy_ui_buttons_set_w(const char *app, size_t n, int bkind,
 
 int moy_ui_buttons_set(const char *app, size_t n, int bkind,
                        const int32_t leaves[MOY_THEME_BTN_LEAVES]) {
-    moy_ui_theme_write(1);
     int rc = moy_ui_buttons_set_w(app, n, bkind, leaves);
-    moy_ui_theme_write(0);
     return rc;
 }
 
@@ -523,9 +511,7 @@ static int moy_ui_shape_use_w(const moy_ui_shape_t *sh) {
 }
 
 int moy_ui_shape_use(const moy_ui_shape_t *sh) {
-    moy_ui_theme_write(1);
     int rc = moy_ui_shape_use_w(sh);
-    moy_ui_theme_write(0);
     return rc;
 }
 
@@ -548,9 +534,7 @@ static int moy_ui_font_use_w(int role, uint32_t font) {
 }
 
 int moy_ui_font_use(int role, uint32_t font) {
-    moy_ui_theme_write(1);
     int rc = moy_ui_font_use_w(role, font);
-    moy_ui_theme_write(0);
     return rc;
 }
 
@@ -727,9 +711,7 @@ static void moy_ui_icons_use_w(uint32_t f16, uint32_t f24) {
 }
 
 void moy_ui_icons_use(uint32_t f16, uint32_t f24) {
-    moy_ui_theme_write(1);
     moy_ui_icons_use_w(f16, f24);
-    moy_ui_theme_write(0);
 }
 
 // Moy, slot 0: pixel art in every theme, not a mask (runtime/toolkit/iconsets.py).
@@ -746,9 +728,7 @@ static void moy_ui_moy_use_w(const uint8_t px[256], int clear) {
 }
 
 void moy_ui_moy_use(const uint8_t px[256], int clear) {
-    moy_ui_theme_write(1);
     moy_ui_moy_use_w(px, clear);
-    moy_ui_theme_write(0);
 }
 
 const uint8_t *moy_ui_moy(int *clear) {
@@ -823,38 +803,13 @@ uint32_t moy_ui_icon_font(int size24) {
     return s_icon_font[size24 ? 1 : 0];
 }
 
-// -- the theme's writes (moy_ui.h) -------------------------------------------------
-
-int moy_ui_recs_ui(moy_ui_rec_t *r) {
-    moy_ui_rec_t v[] = {
-        {NULL, (void **)&s_ui, sizeof(ui_t)}, {&s_disabled, NULL, sizeof(s_disabled)},
-        {&s_danger_ink, NULL, sizeof(s_danger_ink)}, {s_font, NULL, sizeof(s_font)},
-        {s_icon_font, NULL, sizeof(s_icon_font)},
-        {s_moy, NULL, sizeof(s_moy)}, {&s_moy_clear, NULL, sizeof(s_moy_clear)},
-    };
-    memcpy(r, v, sizeof(v));
-    return (int)(sizeof(v) / sizeof(v[0]));
-}
-
-static uint32_t s_gen = 2;              // even: settled; odd: a setter is writing
-static int s_writing;
-
-void moy_ui_theme_write(int begin) {
-    if (begin ? s_writing++ == 0 : --s_writing == 0) {
-        __atomic_fetch_add(&s_gen, 1u, __ATOMIC_SEQ_CST);
-    }
-}
+// -- the console's fonts (moy_ui.h) -------------------------------------------------
 
 int moy_ui_font_free(uint32_t font) {
-    moy_ui_theme_write(1);
-    int rc = moy_font_free(font);
-    moy_ui_theme_write(0);
-    return rc;
+    return moy_font_free(font);
 }
 
 void moy_ui_font_reset(void) {
-    moy_ui_theme_write(1);
     moy_font_reset();
-    moy_ui_theme_write(0);
 }
 
