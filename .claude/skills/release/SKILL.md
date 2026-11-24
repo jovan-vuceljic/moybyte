@@ -13,8 +13,9 @@ board can run is ever pushed straight to master.
 (channel `unstable` → the `firmware-beta` release); a push to `master` builds a
 stable (→ `firmware-latest`, which the site's flasher writes and the stable OTA
 offers). Host CI runs on both. The project site is two pages in one deploy
-(`.github/workflows/pages.yml`): master's tree at `/moybyte/`, dev's at
-`/moybyte/dev/`, and a push to either branch rebuilds both. Firmware
+(`.github/workflows/pages.yml`) on os.moybyte.com: master's tree at `/`,
+dev's at `/dev/`, My consoles and the console's packs at `/console/`, and a
+push to either branch rebuilds all three. Firmware
 builds are path-filtered, and the workflow's per-ref `cancel-in-progress`
 collapses a burst of dev pushes into one build of the last commit.
 

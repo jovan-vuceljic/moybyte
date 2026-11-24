@@ -57,13 +57,16 @@ later sync their files.
   index (`runtime/carts/web_addon.py`'s `AddonStep`; on a Zero
   `device/zero_host.py`). Those assets are GitHub release downloads, which
   carry no CORS header, so no page can fetch them.
-- **My consoles and the link are built** (phase 2, §11): os.moybyte.com's
-  source is `site/os/`, and `tools/os_site.py build` writes the whole site
-  as static files, the pack store's tree among them (§4); the link's board
-  end is the loader's and then the console page's (`page_tail.js`), §5.
-  Nothing is deployed: the owner picks the host (§11, "Hosting").
-- **The project site** (`site/build.py`, `.github/workflows/pages.yml`) is
-  GitHub Pages. It hosts the site's own player (a `--site` build,
+- **My consoles and the link are built** (phase 2, §11): the source is
+  `site/os/`, and `tools/os_site.py build` writes os.moybyte.com's
+  `/console/` folder, My consoles beside the pack store's packs (§4); the
+  link's board end is the loader's and then the console page's
+  (`page_tail.js`), §5.
+- **os.moybyte.com is GitHub Pages** (owner, 2026-11-24): one deploy
+  (`.github/workflows/pages.yml`) on every `dev` and `master` push holds
+  the project site at `/`, the dev site at `/dev/` and `/console/`.
+  moybyte-org.github.io/moybyte/ redirects there.
+- **The project site** (`site/build.py`) hosts the site's own player (a `--site` build,
   `dist_site`, which is not the boards' pack) and the flasher
   (`site/flash.js`, esptool-js over Web Serial). The flasher writes each
   board's install: the merged image, plus a store holding the add-on that
@@ -242,18 +245,22 @@ The loader tries these in order and runs only bytes whose digest matches:
 What a pack passed through decides nothing: the digest does. A LAN mirror
 can be added without touching the trust model.
 
-**The packs live on os.moybyte.com** (owner, 2026-11-23), where we set the
-headers: `Access-Control-Allow-Origin: *`, and `immutable` on a name that is
-a digest. Its deploy publishes every pack named by an add-on in the two
-rolling releases' indexes, taken from the same assets the boards install
-from. `tools/pack_store.py` is that deploy short of the upload: `fetch` takes
-a release's indexes and add-on carts, `build` writes the tree
-(`console/<body digest>.pack` and a `_headers` file in the Cloudflare Pages
-and Netlify format), keeping every pack of the stable release's and the
-beta's of the last 30 days (§12), each checked against its index entry and
-its digest, and `check` asks a host for every digest the indexes name, as a
-board's origin, and reads the pack back. `tools/os_site.py build` runs
-that `build` and adds My consoles around it, so its OUT is the whole site.
+**The packs live on os.moybyte.com** (owner, 2026-11-23), which is GitHub
+Pages (owner, 2026-11-24). Pages takes no header file: it sends every file
+with `Access-Control-Allow-Origin: *`, which is all the loader needs, and
+`max-age=600`, which costs nothing, because the loader keeps a pack under
+its digest and asks for it only when its cache has none. Every `dev` and
+`master` push publishes, in the same Pages deploy as the project site,
+every pack named by an add-on in the two rolling releases' indexes, taken
+from the same assets the boards install from (`pages.yml`, "Assemble My
+consoles and the console's packs"). `tools/pack_store.py` is the store:
+`fetch` takes a release's indexes and add-on carts, `build` writes
+`console/<body digest>.pack`, keeping every pack of the stable release's
+and the beta's of the last 30 days (§12), each checked against its index
+entry and its digest, and `check` asks a host for every digest the indexes
+name, as a board's origin, and reads the pack back. `tools/os_site.py
+build` runs that `build` and puts My consoles beside the packs, so the
+mirror the images name is My consoles' own folder.
 
 ## 5. The link between the windows
 
@@ -521,11 +528,18 @@ decides where its carts live**, not where its bytes came from.
 No crossover is added. The rule in `.claude/rules/web.md` says "the origin
 a page runs under", not "where it is served from".
 
-**The site's source is `site/os/`**, built by `tools/os_site.py`, beside the
-project site (`site/build.py`) whose flasher phase 3 moves there. It holds
-no console, no player and no carts, so it is in neither web mode: the
-project site keeps the site-mode player on its own origin, and a board-mode
-console only ever runs on a board's.
+**My consoles' source is `site/os/`**, built by `tools/os_site.py` into
+`/console/` of the Pages site whose `/` and `/dev/` are the project site
+(`site/build.py`). It holds no console, no player and no carts, so it is in
+neither web mode, and it shares the origin with the players without
+sharing their storage: the players keep OPFS (the dev one under
+`channel-dev/`) and the scheme switch's `moybyte-site-scheme`, and register
+no service worker and open no cache; My consoles keeps `moy.consoles` in
+`localStorage`, the `moy-packs` and `moy-app-*` caches, and a service
+worker whose scope is `/console/`. What the origin does share is the
+browser's account of it: a `persist()` grant, an eviction, Safari's 7-day
+cap and the quota cover the players' carts and My consoles' packs
+together. A board-mode console only ever runs on a board's origin.
 
 **No direct path from the site (owner, 2026-11-23).** On Chrome, Local
 Network Access would let os.moybyte.com reach the board itself as a paired
@@ -605,7 +619,7 @@ Tests:
 **Phase 2: My consoles and the link.** The main entry works. Built on the
 host; the real-device matrix below is the owner's to run.
 
-- os.moybyte.com, as files (`site/os/`, `tools/os_site.py build`):
+- os.moybyte.com/console/, as files (`site/os/`, `tools/os_site.py build`):
   - My consoles (`consoles.js`): the saved names and addresses, kept in the
     site's `localStorage`, and open, rename and forget
   - a service worker (`sw.js`) that keeps the site and the packs of §8
@@ -636,8 +650,9 @@ Tests:
   the hello reaches only the sites, a handed pack boots with nothing
   fetched, other bytes are refused and told, a site with none hands on at
   once, an unknown kind, a second pack, another origin and another window.
-- `tests/test_os_site.py`: the site's tree, the files its service worker
-  keeps, its headers, and that it evaluates nothing a window sends.
+- `tests/test_os_site.py`: the `/console/` folder beside the rest of the
+  site, the files its service worker keeps, the mirror the images name
+  being that folder, and that it evaluates nothing a window sends.
 - **On real devices, for the owner.** Each of desktop Chrome (a tab, and
   installed), Android Chrome (a tab, and installed from the menu) and an
   iPhone (Safari, and added to the home screen), against a deployed site
@@ -668,24 +683,24 @@ Tests:
   what step 1 of flow 1 saves (phase 3); and the loader's 4 s wait for an
   opener, if a phone's site answers slower.
 
-**Hosting.** Nothing is deployed and no host is chosen. The site is static
-files: `tools/os_site.py build OUT --stable <firmware-latest> --dev
-<firmware-beta>` (folders as `tools/pack_store.py fetch` writes them), an
-upload of OUT, then `tools/pack_store.py check https://os.moybyte.com`
-with both releases' indexes. `_headers` is Cloudflare Pages' and Netlify's
-format; either serves it as written, over HTTPS on the custom domain.
-GitHub Pages reads no `_headers`. It already sends
-`Access-Control-Allow-Origin: *` on every file, so the loader can fetch
-from it, but it loses:
+**Hosting: GitHub Pages** (owner, 2026-11-24). `pages.yml` fetches
+firmware-latest and firmware-beta (`tools/pack_store.py fetch`), runs
+`tools/os_site.py build _site`, and deploys `/console/` with the rest of the
+site; `tools/pack_store.py check https://os.moybyte.com` with both
+releases' indexes says whether the deploy holds every pack they name, and
+`tools/os_site.py serve` serves a built site on `localhost` as Pages
+serves it. What Pages sets for us:
 
-- `immutable` and the year's max-age on the packs: every file is
-  `max-age=600`, so a browser asks again every ten minutes;
-- `no-cache` on the site's files: an update reaches the service worker
-  only when the old copy expires (the worker fetches its own files with
-  `cache: "reload"`, so a new worker is never built from stale ones);
-- the content security policy, whose `frame-ancestors` no `<meta>` can set;
-- room: a published site of at most 1 GB and a soft 100 GB a month, while
-  the store keeps every stable pack for good.
+- every file `max-age=600`: the loader's cache is by digest, and the
+  service worker fetches its own files with `cache: "reload"`, so a new
+  worker is never built from stale ones;
+- no response headers of ours, so My consoles' content security policy is
+  a `<meta>` tag, which cannot carry `frame-ancestors`;
+- a published site of about 1 GB and about 100 GB a month of traffic,
+  which the project site, both players and the packs share. The store
+  keeps every stable pack for good and 30 days of beta packs, each the
+  size of the add-on, and the workflow prints `/console/`'s size and the
+  whole site's at every deploy.
 
 **Phase 3: first setup by cable.**
 

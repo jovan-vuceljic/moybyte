@@ -154,9 +154,12 @@ nor those docs will warn you about:
   before a system cart shipped would ever see it; without the second, an app
   kept from an older console runs its old manifest on the new one (Notes'
   `files:docs` after the folders took their names: no `files`, a NameError).
-- **A channel's site keeps its own storage.** The stable site (`/moybyte/`)
-  and the dev site (`/moybyte/dev/`, both from `.github/workflows/pages.yml`)
-  share the origin moybyte-org.github.io, so they share its OPFS.
+- **A channel's site keeps its own storage.** The stable site (`/`) and the
+  dev site (`/dev/`, both from `.github/workflows/pages.yml`) share the
+  origin os.moybyte.com, so they share its OPFS. So does My consoles
+  (`/console/`), which runs no console and touches none of it: its storage
+  is its own names (`moy.consoles`, the `moy-packs` and `moy-app-*`
+  caches) and a service worker scoped to `/console/`.
   `site/build.py --channel dev` stamps page_tail.js's `MOY_CHANNEL` into the
   dev player, and the worker opens every store through `moy_store.channelNav`,
   which roots it under `channel-dev/`, so a dev store format never touches the

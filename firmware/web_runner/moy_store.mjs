@@ -222,8 +222,7 @@ const enc = new TextEncoder();
 const strict = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 // THE CHANNEL'S STORAGE ROOT. Pages that share an origin share its OPFS: the
-// stable site (/moybyte/) and the dev site (/moybyte/dev/) both live on
-// moybyte-org.github.io. A page published for a channel (site/build.py
+// stable site (/) and the dev site (/dev/) both live on os.moybyte.com. A page published for a channel (site/build.py
 // --channel, which stamps page_tail.js's MOY_CHANNEL) keeps every store under
 // its own top-level directory, so a dev store format never reads or writes the
 // stable site's carts. The worker opens every store through what this returns;
