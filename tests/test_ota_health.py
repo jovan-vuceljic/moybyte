@@ -474,7 +474,7 @@ def test_the_banner_draws_at_both_tiers(tmp_path):
     # 320x240 at 1x and a big windowed desktop: the banner is sized off `layout`
     # precisely so the second one doesn't render a 320-wide strip in a corner.
     from runtime import host_app
-    for kw in ({}, {"sys_size": (1024, 600), "font_scale": 2, "windowed": True}):
+    for kw in ({}, {"sys_size": (1024, 600), "font_scale": 1, "windowed": True}):
         ws = host_app.build_workstation(str(tmp_path / "carts"), **kw)
         ws.updater = _StubUpdater(("ok", "v2 -> v3"))
         drv = host_app.ConsoleDriver(ws)

@@ -21,7 +21,7 @@ DT = 1 / 30
 
 def test_a_press_from_the_page_released_over_the_outline_lets_the_desk_rest(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=(1024, 600),
-                                    font_scale=2, windowed=True, panel_diagonal_in=7.0)
+                                    font_scale=1, windowed=True, panel_diagonal_in=7.0)
     ws.home.open_desk()
     no_unlock_banner(ws)
     quiesce(ws)

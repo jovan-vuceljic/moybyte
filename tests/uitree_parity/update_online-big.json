@@ -1,6 +1,6 @@
 {
  "surface": "update_online",
- "config": "big_800x480_fs3_dark",
+ "config": "big_960x720_fs3_dark",
  "commit": "cca7d4717",
  "script": [
   "k:a",
@@ -9,15 +9,15 @@
  "frames": [
   [
    "(open)",
-   "cbbe429eda039636eeefb05c55000f1009613a20e6e6f153e6781a464c0c708e"
+   "be8f5dcedc18be33b71f5c9198a01fb368979ad4d6df175fc53142cd8d160b14"
   ],
   [
    "k:a",
-   "5fd9fc6d1c8649622b385db79b925420fead03e3352d5fc2204430af65d38c9d"
+   "47f20de4b859cec9f8accbff85a4bb64b6ede110e3478a45cddc027556359d9e"
   ],
   [
    "k:b",
-   "9f1398cdbfabcdbc9a2d1968f2a6458284771f260531fd3948c8dd6b6c4bdc36"
+   "0e3354bfcd14860ca6091c9a415a42119313cff04960788bfcdef92b3743b5c6"
   ]
  ]
 }

@@ -1621,7 +1621,7 @@ def test_the_app_draws_at_every_shell_size(tmp_path):
     every screen draws with nothing escaping its rect."""
     from runtime import host_app
     for kw in ({}, {"sys_size": (480, 320), "panel_diagonal_in": 3.5},
-               {"sys_size": (1024, 600), "font_scale": 2, "windowed": True}):
+               {"sys_size": (1024, 600), "font_scale": 1, "windowed": True}):
         gpl, mit, net = _shelves(tmp_path)
         d = tmp_path / ("s%d" % len(kw))
         d.mkdir()

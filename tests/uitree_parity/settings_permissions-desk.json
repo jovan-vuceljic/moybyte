@@ -1,6 +1,6 @@
 {
  "surface": "settings_permissions",
- "config": "p4_1024x600_fs2_windowed",
+ "config": "p4_1024x600_cs2_fs1_windowed",
  "commit": "d46d59298",
  "script": [
   "k:down",
@@ -17,47 +17,47 @@
  "frames": [
   [
    "(open)",
-   "34e833006c43129af4b2ed947aae8e2de7a55da28861265dfc00a0a4c2ced647"
+   "a3beb14c1ad77b70f9d796ff2428272cd696d8915b86a2da2b5d96227367949c"
   ],
   [
    "k:down",
-   "630cd3c1c808131d14ec6a21ccb04bd01f59aacb2436335be3e62e7121e790bd"
+   "2b428cd41ca387a5916f3928f9e08ffbbc08a8c5a9c1934b624458e496ba8fea"
   ],
   [
    "k:a",
-   "fe5f3a0c684c6201a26f23ac6d5faa5a3190458378b6fcfe781323bee7ae0018"
+   "df3135a13a8ab157b0e8b735053e9c100e13b1804e079a6bf86d1e33ac97ac25"
   ],
   [
    "k:down",
-   "62fe0c66cd9946ddc0536a14cb2ef41589d1536ad2c045a46bc5970c9d65c6c1"
+   "bfc6bb6f32ca65ad8acb270ad29cf8b459b20a94c5cf3108cddf5fa20173a1a0"
   ],
   [
    "k:down",
-   "dd3477ae3efcff4e9db0104fb68f562e03ca8da1ca3abc582c828364dc97d076"
+   "f91380a86bf9ed9359b95febffa1a2a5512869da7e33df71fde1c477271f74d0"
   ],
   [
    "k:a",
-   "941e38a427aa3fabcaadf05512cd3c65b3414c34c4c1f93e53fc13ae8f5ec6fd"
+   "c789ead6248001494224524cad504921c3db35e6851534349b991aebd6f5480b"
   ],
   [
    "k:down",
-   "ff1df48f55fef64cde1116f6c84744c5f81f3960f0d8be267ef98869b76cc707"
+   "a0f88b0572dce089361e32e465cbee1edac12e50795f5ccd3843970800de3745"
   ],
   [
    "k:down",
-   "dc2df678f06c094ec5571e3b0a96b8403d4bb1d6652db38656ecfd2be93202ab"
+   "b4b5927d7c720267ddd292fbb0ced566a4e94ecb0980ff76b8d290c15b57c467"
   ],
   [
    "k:down",
-   "a9f02b9f280e72f8da1ff98368208d9c1aa599f910f5351be07b0dc534d1a6c5"
+   "ebbca28c1e0b3a1b36101091f0c98972e0f4adc0a875378df30c8e565cd1131d"
   ],
   [
    "k:down",
-   "f4cd73791ae4b2cdaa649772aa8cf325d15e1252dbb9938d79da221c1b3916c2"
+   "82be9d070a157cc2ef7b927aedadd1e1c1de3cd6d5ce3219fc70b5852930d190"
   ],
   [
    "k:a",
-   "3a6bceadb804e10dd7424f36433c2fb9a17d2647497bf4548a1ed93b3b354dac"
+   "387d0dd5b5451c40f59374ca7d53691f6d417e48591ac276b0aec7025f50e7ca"
   ]
  ]
 }

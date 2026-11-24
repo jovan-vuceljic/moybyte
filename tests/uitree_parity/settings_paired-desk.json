@@ -1,6 +1,6 @@
 {
  "surface": "settings_paired",
- "config": "p4_1024x600_fs2_windowed",
+ "config": "p4_1024x600_cs2_fs1_windowed",
  "commit": "fe33deaea",
  "script": [
   "k:down",
@@ -14,35 +14,35 @@
  "frames": [
   [
    "(open)",
-   "27a9574cd8085b756b82e1c614f47e70e0cda8b6577726b16eaec8b5e8a90b3a"
+   "d8417e39deb3f2f8e62f39682b3cc8bfbd2bad88e47a27345fb96d2c6407de0b"
   ],
   [
    "k:down",
-   "e1bc673bdf4fe93d2fdcc9fe01cc545c63f99fa6a9df776ef2bc8f4b9cd546cc"
+   "812e45a86d9f809a8e920fafbf9ce6c0ca2a7bc6a609887cf0592205684b8847"
   ],
   [
    "k:down",
-   "a1b9b2a3c4bd279b5ee434c4940b5c9f4bb1854c5c729c488cddfb60c2ec2a74"
+   "1c7adc9d6abe73fee32d42f3b35d386f2ccb65042f2aa475a7d93b3646f8bcb1"
   ],
   [
    "k:a",
-   "a9343c6660051e6cbc0b4cda89680360872aee5dc2f5e7efd29493c936062f46"
+   "c1eeacb982297d58d9e1d921b5b0dc9339da7692f53b7473d4a1ee0feee8aa73"
   ],
   [
    "f:2",
-   "a9343c6660051e6cbc0b4cda89680360872aee5dc2f5e7efd29493c936062f46"
+   "c1eeacb982297d58d9e1d921b5b0dc9339da7692f53b7473d4a1ee0feee8aa73"
   ],
   [
    "k:down",
-   "a9343c6660051e6cbc0b4cda89680360872aee5dc2f5e7efd29493c936062f46"
+   "c1eeacb982297d58d9e1d921b5b0dc9339da7692f53b7473d4a1ee0feee8aa73"
   ],
   [
    "k:a",
-   "4000e551c34c025edc3673da473a97fa1c302e00f91154fc9682dab08bfced97"
+   "487ea190427e35822a8832853e5c716f7e4788fdcdd6dea5f5b65cece3f7957c"
   ],
   [
    "f:2",
-   "4000e551c34c025edc3673da473a97fa1c302e00f91154fc9682dab08bfced97"
+   "487ea190427e35822a8832853e5c716f7e4788fdcdd6dea5f5b65cece3f7957c"
   ]
  ]
 }

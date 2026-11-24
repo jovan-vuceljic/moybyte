@@ -614,9 +614,13 @@ class Workstation:
         self.panel_diagonal_in = panel_diagonal_in
         _panel = sys_canvas if sys_canvas is not None else canvas
         # The metric class the glass lays out on (layout_base.class_of): a
-        # declared glass of a desk's size is a desk, every other a handheld.
-        # One per process, as the bars are.
-        self.metric_class = _layout_base.class_of(panel_diagonal_in)
+        # declared glass of a desk's size that holds the desk at its font
+        # scale is a desk, every other a handheld. One per process, as the
+        # bars are: the boot's stored font scale settles it
+        # (`place_metric_class`) before the tier is installed over it.
+        self.panel_wh = (_panel.w, _panel.h)
+        self.metric_class = _layout_base.class_of(panel_diagonal_in, _panel.w, _panel.h,
+                                                  max(1, int(font_scale)))
         _layout_base.place_class(self.metric_class)
         # The hints draw the desk keyboard's keys until the board declares its
         # inputs (`use_inputs`). One per process, as the metric class is.
@@ -1365,6 +1369,31 @@ class Workstation:
         glass itself."""
         return self.glass if self.glass is not None else self.sys_canvas
 
+    def place_metric_class(self):
+        """The metric class for the font scale in force (`layout_base.class_of`
+        over the panel), the layouts redone where it moved. The boot calls it
+        once the stored font scale is applied, before the tier goes in: the
+        windowed tier stands only on a desk."""
+        cls = _layout_base.class_of(self.panel_diagonal_in, self.panel_wh[0], self.panel_wh[1],
+                                    self.look.effective_font_scale())
+        if cls == self.metric_class:
+            return
+        self.metric_class = cls
+        _layout_base.place_class(cls, self.render_scale)
+        self.chrome_scales = chrome_scale_choices(
+            self.panel_wh[0] // _layout_base.CLASSES[cls]["unit"], self.chrome_floor)
+        self.look.chrome_scale = self.look.valid_chrome_scale(self.look.chrome_scale)
+        self.relayout()
+
+    def desk_fits(self):
+        """Whether the windowed tier may stand here: a system canvas of its own
+        whose glass holds the desk at the font scale in force
+        (`layout_base.desk_room`). Every tier that installs `WindowedWM` asks
+        this first; elsewhere the full-screen tier stays."""
+        return (self.bound_sys_canvas is not None
+                and _layout_base.desk_room(self.panel_wh[0], self.panel_wh[1],
+                                           self.look.effective_font_scale()))
+
     def set_render_scale(self, n):
         """Draw the shell on a surface 1/`n` of the glass, doubled onto it at
         the end of every drawn frame (`render.scale`, the 2026-10 look's
@@ -1405,6 +1434,9 @@ class Workstation:
             p.x = min(p.x * was // n, root.w - 1)
             p.y = min(p.y * was // n, root.h - 1)
         _layout_base.place_class(self.metric_class, n)
+        look = self.look
+        if look.font_scale not in look.font_scales():
+            look.set_font_scale(look.font_scale, persist=False)     # its room shrank
         bl = getattr(self, "bar_layer", None)
         if bl is not None:
             bl.invalidate()

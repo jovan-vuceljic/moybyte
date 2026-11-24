@@ -369,7 +369,7 @@ class PartHost(PageHost):
 
     def _row_h(self):
         """A list's row: 28 desk units, taller where the text is (Large and
-        Largest)."""
+        Larger)."""
         fs = self.ws.look.effective_font_scale()
         return max(_LIST_ROW * self.desk._unit(), _V.ui_line() * fs + 8)
 

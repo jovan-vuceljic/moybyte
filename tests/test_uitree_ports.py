@@ -556,34 +556,34 @@ RUNS = (
     ("settings_permissions-tdeck", "settings_permissions", "tdeck_320x240_fs1_dark",
      ["k:down", "k:a", "k:down", "k:down", "k:a", "k:a", "k:down", "k:down", "k:down", "k:down", "k:down",
       "k:a", "k:up"]),
-    ("settings_permissions-desk", "settings_permissions", "p4_1024x600_fs2_windowed",
+    ("settings_permissions-desk", "settings_permissions", "p4_1024x600_cs2_fs1_windowed",
      ["k:down", "k:a", "k:down", "k:down", "k:a", "k:down", "k:down", "k:down", "k:down", "k:a"]),
     # the picker opens on the zone in force; one chosen sets it and goes back
     # to Time zone's row, which opens the picker again on it
     ("settings_tz-tdeck", "settings_tz", "tdeck_320x240_fs1_dark",
      ["k:down", "k:down", "k:up", "k:a", "f:2", "k:a", "k:up", "k:up", "back"]),
-    ("settings_tz-desk", "settings_tz", "p4_1024x600_fs2_windowed",
+    ("settings_tz-desk", "settings_tz", "p4_1024x600_cs2_fs1_windowed",
      ["k:down", "k:down", "k:down", "k:a", "f:2", "k:a", "back"]),
     # each browser by name and day, one forgotten, then Remove all; the host
     # key's fingerprint cut to the page's width
     ("settings_paired-tdeck", "settings_paired", "tdeck_320x240_fs1_dark",
      ["k:down", "k:a", "f:2", "k:down", "k:a", "f:2", "back"],
      {i: (NO_FALSE_HINT + "; " if i >= 5 else "") + CUT_ENDS_IN_ELLIPSIS for i in range(7)}),
-    ("settings_paired-desk", "settings_paired", "p4_1024x600_fs2_windowed",
+    ("settings_paired-desk", "settings_paired", "p4_1024x600_cs2_fs1_windowed",
      ["k:down", "k:down", "k:a", "f:2", "k:down", "k:a", "f:2"], dict.fromkeys(range(6), RING_ROOM)),
-    ("settings_paired_none-big", "settings_paired_none", "big_800x480_fs3_dark", ["k:down", "back"],
+    ("settings_paired_none-big", "settings_paired_none", "big_960x720_fs3_dark", ["k:down", "back"],
      {0: NO_FALSE_HINT, 1: NO_FALSE_HINT}),
     # the image on the card: A installs it a chunk a frame, B stops the
     # flash and goes back to Settings
     ("update_sd-tdeck", "update_sd", "tdeck_320x240_fs1_dark", ["k:a", "f:3", "k:b"]),
-    ("update_sd-desk", "update_sd", "p4_1024x600_fs2_windowed", ["k:a", "f:3", "k:b"]),
+    ("update_sd-desk", "update_sd", "p4_1024x600_cs2_fs1_windowed", ["k:a", "f:3", "k:b"]),
     # none on the card: the error, which A leaves as B does
     ("update_sd_none-tdeck", "update_sd_none", "tdeck_320x240_fs1_dark", ["k:a"]),
     # the check finds one: A downloads it, B cancels
     ("update_online-tdeck", "update_online", "tdeck_320x240_fs1_dark", ["k:a", "f:2", "k:b"]),
-    ("update_online-big", "update_online", "big_800x480_fs3_dark", ["k:a", "k:b"]),
+    ("update_online-big", "update_online", "big_960x720_fs3_dark", ["k:a", "k:b"]),
     # the C6's offer, which B declines
-    ("update_c6-desk", "update_c6", "p4_1024x600_fs2_windowed", ["k:b"]),
+    ("update_c6-desk", "update_c6", "p4_1024x600_cs2_fs1_windowed", ["k:b"]),
     # every kind of row: a link, Text size and Home style cycled there and
     # back, Volume down to its mute and up, the Name typed and stored by
     # Enter (focus goes to the row above) and by leaving it, a toggle turned
@@ -595,7 +595,7 @@ RUNS = (
       "t:Bo", "enter", "k:down", "t:x", "k:down", "k:a", "k:a", "k:down", "k:down", "k:down",
       "k:down", "k:down", "k:down", "k:a", "f:2", "back", "k:up", "k:up"],
      {24: STALE_TOGGLE_HINT, 25: STALE_TOGGLE_HINT, 32: LICENCES_K5, 33: LICENCES_K5}),
-    ("settings_rows-desk", "settings_rows", "p4_1024x600_fs2_windowed",
+    ("settings_rows-desk", "settings_rows", "p4_1024x600_cs2_fs1_windowed",
      ["k:down", "k:down", "k:right", "k:down", "k:down", "k:left", "k:down", "k:down", "k:down",
       "t:Al", "k:down", "k:a", "k:down", "k:down", "k:down", "k:down", "k:down", "k:down", "k:down"]),
     # the Layout row a theme package adds, stepped there and back
@@ -604,12 +604,12 @@ RUNS = (
     # every board-only row, and the read-only Name with its note
     ("settings_rows_full-tdeck", "settings_rows_full", "tdeck_320x240_fs1_dark",
      ["k:down"] * 24 + ["k:right", "k:up", "k:up"]),
-    ("settings_rows_full-desk", "settings_rows_full", "p4_1024x600_fs2_windowed",
+    ("settings_rows_full-desk", "settings_rows_full", "p4_1024x600_cs2_fs1_windowed",
      ["k:down"] * 22 + ["k:a", "k:down", "k:right"], dict.fromkeys(range(23, 26), THUMB_UNDER_GEN)),
     # the ring at its foot, scrolled up and down again, and closed
     ("settings_log-tdeck", "settings_log", "tdeck_320x240_fs1_dark",
      ["f:2", "k:up", "k:up", "k:up", "k:down", "back"], dict.fromkeys(range(6), LOG_BACK_BAND)),
-    ("settings_log-desk", "settings_log", "p4_1024x600_fs2_windowed", ["f:2", "k:up", "k:down"],
+    ("settings_log-desk", "settings_log", "p4_1024x600_cs2_fs1_windowed", ["f:2", "k:up", "k:down"],
      dict.fromkeys(range(4), LOG_BACK_BAND)),
     # the networks: an open one joined, a locked one's password typed wrong
     # then right, the prompt cancelled by back, Scan again, the network
@@ -618,14 +618,14 @@ RUNS = (
      ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abd", "enter", "f:2", "k:a", "back", "k:a",
       "t:abc", "enter", "f:2", "k:down", "k:a", "f:2", "k:down", "k:a", "f:2", "back"],
      {**dict.fromkeys((5, 6, 9, 11, 12), WIFI_PROMPT_ABOVE_BAND), **dict.fromkeys(range(15, 21), WIFI_OWN_HINT)}),
-    ("settings_wifi-desk", "settings_wifi", "p4_1024x600_fs2_windowed",
+    ("settings_wifi-desk", "settings_wifi", "p4_1024x600_cs2_fs1_windowed",
      ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abc", "enter", "f:2", "k:down", "k:down",
       "k:a", "f:2", "back"], dict.fromkeys((5, 6), WIFI_PROMPT_ABOVE_BAND)),
-    ("settings_wifi_none-big", "settings_wifi_none", "big_800x480_fs3_dark", ["k:down", "k:a", "f:2"],
+    ("settings_wifi_none-big", "settings_wifi_none", "big_960x720_fs3_dark", ["k:down", "k:a", "f:2"],
      dict.fromkeys(range(4), WIFI_OWN_HINT)),
     # the bar's Wi-Fi popover: an open network joined, a locked one's
     # password typed, then closed
-    ("wifi_popover-desk", "wifi_popover", "p4_1024x600_fs2_windowed",
+    ("wifi_popover-desk", "wifi_popover", "p4_1024x600_cs2_fs1_windowed",
      ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abc", "enter", "f:2", "k:down", "k:a", "f:2", "back"]),
     ("wifi_popover-tdeck", "wifi_popover", "tdeck_320x240_fs1_dark",
      ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abc", "enter", "f:2", "back"],
@@ -633,12 +633,12 @@ RUNS = (
     # the web console's page: the QR its canvas draws beside the address, the
     # keys stepped over it (Turn off on a desk, where it is a button)
     ("web_console-tdeck", "web_console", "tdeck_320x240_fs1_dark", ["f:2", "k:down"]),
-    ("web_console-desk", "web_console", "p4_1024x600_fs2_windowed", ["f:2", "k:down", "k:up"]),
+    ("web_console-desk", "web_console", "p4_1024x600_cs2_fs1_windowed", ["f:2", "k:down", "k:up"]),
     # the task manager: a row stepped, the tab strip's next tab, its list
     # stepped, a notification cleared from the foot that shares its width
     ("tasks-tdeck", "tasks", "tdeck_320x240_fs1_dark",
      ["k:down", "k:up", "k:up", "k:right", "k:down", "k:down", "k:down", "k:a", "f:2"]),
-    ("tasks-desk", "tasks", "p4_1024x600_fs2_windowed",
+    ("tasks-desk", "tasks", "p4_1024x600_cs2_fs1_windowed",
      ["k:down", "k:up", "k:up", "k:right", "k:down", "k:down", "k:down", "k:right", "k:a", "f:2"]),
     # Achievements: a badge's popover opened and closed by Back, the cards
     # stepped down their groups (a wrapping title, a locked badge), and a
@@ -646,7 +646,7 @@ RUNS = (
     ("achievements-tdeck", "achievements", "tdeck_320x240_fs1_dark",
      ["k:right", "k:a", "back", "k:down", "k:down", "k:a", "back", "f:2"],
      dict.fromkeys(range(9), THUMB_UNDER_GEN)),
-    ("achievements-desk", "achievements", "p4_1024x600_fs2_windowed",
+    ("achievements-desk", "achievements", "p4_1024x600_cs2_fs1_windowed",
      ["k:right", "k:a", "back", "k:down", "k:down", "k:down", "k:a", "back"],
      dict.fromkeys(range(9), THUMB_UNDER_GEN)),
     # The P4 as it ships (font scale 1 on the desk's unit of 2), the window
@@ -678,10 +678,10 @@ RUNS = (
     ("settings_permissions_seed-p4", "settings_permissions_seed", "p4_1024x600_cs2_fs1_windowed",
      ["k:down", "k:down", "k:down"]),
     ("editor_code-tdeck", "editor_code", "tdeck_320x240_fs1_dark", CODE_SCRIPT, P.BEHAVIOUR),
-    ("editor_code-desk", "editor_code", "p4_1024x600_fs2_windowed", CODE_DESK_SCRIPT, P.BEHAVIOUR),
-    ("editor_code-big", "editor_code", "big_800x480_fs3_dark", CODE_SCRIPT, P.BEHAVIOUR),
+    ("editor_code-desk", "editor_code", "p4_1024x600_cs2_fs1_windowed", CODE_DESK_SCRIPT, P.BEHAVIOUR),
+    ("editor_code-big", "editor_code", "big_960x720_fs3_dark", CODE_SCRIPT, P.BEHAVIOUR),
     ("editor_frame-tdeck", "editor_frame", "tdeck_320x240_fs1_dark", FRAME_SCRIPT, P.BEHAVIOUR),
-    ("editor_frame-big", "editor_frame", "big_800x480_fs3_dark", FRAME_SCRIPT, P.BEHAVIOUR),
+    ("editor_frame-big", "editor_frame", "big_960x720_fs3_dark", FRAME_SCRIPT, P.BEHAVIOUR),
     ("editor_desk_row", "editor_desk_row", "p4_1024x600_cs2_fs1_windowed", FRAME_DESK_SCRIPT,
      P.BEHAVIOUR),
     ("editor_desk_panes", "editor_desk_panes", "p4_1024x600_cs2_fs1_windowed", FRAME_PANES_SCRIPT,

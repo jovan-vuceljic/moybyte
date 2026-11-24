@@ -60,7 +60,7 @@ class FakeBluetoothKeyboard:
 def _ws(tmp_path):
     from runtime import host_app
     ws = host_app.build_workstation(str(tmp_path / "carts"),
-                                    sys_size=(1024, 600), font_scale=2,
+                                    sys_size=(1024, 600), font_scale=1,
                                     windowed=True)
     ws.keyboard = FakeBluetoothKeyboard()
     ws.open_settings()

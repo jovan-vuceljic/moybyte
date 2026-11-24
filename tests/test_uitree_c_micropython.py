@@ -429,7 +429,7 @@ def settings(loop):
 SETTINGS_RUNS = ("c", "c_checked")
 
 # each a step of Settings' rows on the T-Deck, every change undone (Volume starts at its top)
-SETTINGS_KEYS = ["down", "down", "right", "left", "down", "right", "left", "down", "left", "left",
+SETTINGS_KEYS = ["down", "down", "right", "left", "down", "left", "left",
                  "right", "right", "down", "down", "down", "up", "up", "up"]
 
 

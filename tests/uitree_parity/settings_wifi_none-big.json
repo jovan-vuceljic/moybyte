@@ -1,6 +1,6 @@
 {
  "surface": "settings_wifi_none",
- "config": "big_800x480_fs3_dark",
+ "config": "big_960x720_fs3_dark",
  "commit": "0d7aedb1b",
  "script": [
   "k:down",

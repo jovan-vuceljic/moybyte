@@ -456,7 +456,8 @@ def test_the_tap_floor_holds_at_320x240(tmp_path):
 
 
 def test_rows_that_do_not_fit_scroll_to_the_focus(tmp_path):
-    ws = _ws(tmp_path, sys_size=(800, 480), font_scale=3)
+    ws = _ws(tmp_path, sys_size=(960, 720), font_scale=3)
+    assert ws.look.font_scale == 3
     app = _open(ws)
     _focus(ws, app, EDIT_THEME)
     _frame(ws)

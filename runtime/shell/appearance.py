@@ -243,25 +243,26 @@ class Appearance:
 
     # -- system font scale (#39) ---------------------------------------------
     #
-    # The system-UI font is settings-resizable (petme128 nearest-neighbor x1/x2/x3),
-    # persisted in system/settings and applied live.
-    # The GAME canvas keeps plain 8x8 text regardless -- scaling lives in the system
-    # canvas + the responsive Layout, so a cart is never affected.
+    # The system-UI font is settings-resizable (nearest-neighbor x1/x2/x3, each
+    # where the glass offers it: `font_scales`), persisted in system/settings and
+    # applied live. The GAME canvas keeps plain 8x8 text regardless -- scaling
+    # lives in the system canvas + the responsive Layout, so a cart is never
+    # affected.
 
-    FONT_SCALES = (1, 2, 3)
     # The home's arrangements (console_home._HOME_CLASSES), in the order the
     # Settings HOME STYLE row steps through them after THEME.
     HOME_STYLES = ("carousel", "grid", "icons")
 
     def __init__(self, ws, font_scale=1):
         self.ws = ws
-        # `font_scale` is the REQUESTED system-UI scale (persisted). It only takes
-        # visible effect on a distinct SYSTEM canvas that can render scaled text; in
-        # the degradation case (no system canvas -- e.g. the T-Deck, whose framebuf
-        # text can't scale) the effective scale is 1, so the chrome layout matches the
-        # 8px text actually drawn. The requested value is still kept + persisted, so a
+        # `font_scale` is the system-UI scale in force, one this glass offers
+        # (`font_scales`: 1 alone on the T-Deck, whose shared canvas's text does
+        # not scale). A stored request it does not offer stays stored, so a
         # bigger panel later honours it.
-        self.font_scale = max(1, int(font_scale))
+        self.font_scale = 1
+        self._scales = None             # (what they were read for, the offered scales)
+        offered = self.font_scales()
+        self.font_scale = max([f for f in offered if f <= max(1, int(font_scale))] or [1])
         # The text-size floor (chrome.text_scale_floor): the font scale the
         # theme's `ui` font needs on this board's glass, 1 for petme128. It
         # lifts the effective scale, never the requested one.
@@ -1277,13 +1278,9 @@ class Appearance:
     # -- system font scale (#39) ---------------------------------------------
 
     def effective_font_scale(self):
-        """The scale actually applied to the system canvas + layout. It is the
-        requested font_scale ONLY when a distinct system canvas exists (one that can
-        render scaled text); in the degradation case (the T-Deck / a shared 320x240
-        canvas, whose framebuf text can't scale) it is 1, so the chrome geometry
-        always matches the 8px text actually drawn -- no mis-laid-out desktop."""
-        if self.ws.bound_sys_canvas is None:
-            return 1
+        """The scale actually applied to the system canvas + layout: the font
+        scale in force, which is always one the glass offers (`font_scales`),
+        lifted to the theme's text floor."""
         return self.font_scale if self.font_scale > self.text_floor else self.text_floor
 
     def effective_chrome_scale(self):
@@ -1334,18 +1331,32 @@ class Appearance:
         if persist:
             self.ws.system.set("chrome_scale", self.chrome_scale)
 
+    def font_scales(self):
+        """The font scales this glass offers (`layout_base.font_scales`): each
+        whose room, the panel over the render scale and the font scale, holds
+        the handheld's smallest layout; 1 alone without a distinct system
+        canvas, whose text does not scale."""
+        ws = self.ws
+        key = (ws.bound_sys_canvas is None, ws.render_scale)
+        kept = self._scales
+        if kept is None or kept[0] != key:
+            w, h = ws.panel_wh
+            kept = self._scales = (key, (1,) if key[0] else _layout_base.font_scales(w, h, key[1]))
+        return kept[1]
+
     def set_font_scale(self, scale, persist=True):
-        """Set the system-UI font scale (clamped to FONT_SCALES), relay the effective
-        scale into the system canvas + relayout the desktop, and (by default) persist
-        it. The game canvas text is always 8px; the effective scale is 1 without a
-        distinct system canvas (so the choice is remembered but only shows on a panel
-        that can render it)."""
+        """Set the system-UI font scale, relay the effective scale into the system
+        canvas + relayout the desktop, and (by default) persist it. A scale the
+        glass does not offer (`font_scales`: one stored on another glass, under
+        another render scale) is the largest it does; what is no scale at all is
+        1. The game canvas text is always 8px."""
         try:
             scale = int(scale)
         except (TypeError, ValueError):
             scale = 1
-        if scale not in self.FONT_SCALES:
-            scale = self.FONT_SCALES[0]
+        offered = self.font_scales()
+        if scale not in offered:
+            scale = max([f for f in offered if f <= scale] or [1])
         self.font_scale = scale
         target = self._font_scale_canvas()
         if target is not None:
@@ -1383,9 +1394,10 @@ class Appearance:
         return root if root is not None else ws.bound_sys_canvas
 
     def cycle_font_scale(self, d):
-        """Step the font scale by d through FONT_SCALES (Settings < / > stepper);
-        applies + persists immediately so the desktop text resizes live."""
-        scales = self.FONT_SCALES
+        """Step the font scale by d through the offered scales (`font_scales`,
+        the Settings < / > stepper); applies + persists immediately so the
+        desktop text resizes live."""
+        scales = self.font_scales()
         cur = self.font_scale if self.font_scale in scales else scales[0]
         nxt = scales[(scales.index(cur) + d) % len(scales)]
         self.set_font_scale(nxt, persist=True)

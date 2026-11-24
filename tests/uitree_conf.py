@@ -27,7 +27,7 @@ import runtime  # noqa: E402,F401  -- the flat module namespace
 
 FIX = os.path.join(HERE, "uitree_conformance")
 # one configuration per size: the console's 320x240 and a desk window
-CONFIGS = ("tdeck_320x240_fs1_dark", "p4_1024x600_fs2_windowed")
+CONFIGS = ("tdeck_320x240_fs1_dark", "p4_1024x600_cs2_fs1_windowed")
 
 
 def fixture(name):

@@ -1,5 +1,5 @@
 {
- "glass/counter/p4_1024x600_fs2_windowed": [
+ "glass/counter/p4_1024x600_cs2_fs1_windowed": [
   [
    "build build page (builds 1)",
    "state loud False -> True (from toggle 'loud')",
@@ -20,52 +20,52 @@
   [
    [
     "(open)",
-    "14d6f2cafeda751690cc2bc86191cb6d330892c194fa9bd20a3f87616310f940",
+    "8eb5138d5d4777254ba1b868dbea8fcbaea38d9b2a4cf99a19bf554196b94924",
     ""
    ],
    [
     "k:a",
-    "9a211cfe606f4182a30812fbb7c5ee92468838c2292b8e94981f8d80ec50f71f",
+    "caf1a45f62ae1d87200d578f57cf73ee1ba432cda1a665b635942d4079fd277d",
     ""
    ],
    [
     "k:a",
-    "14d6f2cafeda751690cc2bc86191cb6d330892c194fa9bd20a3f87616310f940",
+    "8eb5138d5d4777254ba1b868dbea8fcbaea38d9b2a4cf99a19bf554196b94924",
     ""
    ],
    [
     "k:down",
-    "bd70f18d050163cee611b473d794d51148e85b7287c62c457ad55520ec8da2b4",
+    "4a859304bd2c4aeb1119fae26c81128c6b3b330e3bef5caa36280f16452e8051",
     ""
    ],
    [
     "k:down",
-    "bd70f18d050163cee611b473d794d51148e85b7287c62c457ad55520ec8da2b4",
+    "4a859304bd2c4aeb1119fae26c81128c6b3b330e3bef5caa36280f16452e8051",
     ""
    ],
    [
     "k:a",
-    "21f3b7826dc174ce3f729abe3c42e93fd6ab095abf3a41de591ddd3745081fb3",
+    "27b46fff3da7f33b40626ae4a313da629cd1e3de2df3401334b9958f008ddedd",
     ""
    ],
    [
     "k:down",
-    "71ad90a0cf6a95de13cf70a5634369787dc7ae084893ab6277f55b2abf9652d7",
+    "e76cd05df90bcdd04fe7e945dc18251208701e5114b5395d39984618353399f6",
     ""
    ],
    [
     "k:a",
-    "bd70f18d050163cee611b473d794d51148e85b7287c62c457ad55520ec8da2b4",
+    "4a859304bd2c4aeb1119fae26c81128c6b3b330e3bef5caa36280f16452e8051",
     ""
    ],
    [
     "k:up",
-    "14d6f2cafeda751690cc2bc86191cb6d330892c194fa9bd20a3f87616310f940",
+    "8eb5138d5d4777254ba1b868dbea8fcbaea38d9b2a4cf99a19bf554196b94924",
     ""
    ],
    [
     "k:a",
-    "9a211cfe606f4182a30812fbb7c5ee92468838c2292b8e94981f8d80ec50f71f",
+    "caf1a45f62ae1d87200d578f57cf73ee1ba432cda1a665b635942d4079fd277d",
     ""
    ]
   ]
@@ -141,7 +141,7 @@
    ]
   ]
  ],
- "glass/gates/p4_1024x600_fs2_windowed": [
+ "glass/gates/p4_1024x600_cs2_fs1_windowed": [
   [
    "build build page (builds 1)",
    "state open False -> True (from toggle 'open')",
@@ -159,52 +159,52 @@
   [
    [
     "(open)",
-    "6591cc36f30c6ce49b7f7aa96e1329e7d6a68465b604a3c2390f10f3636b290c",
+    "df70e4bf2c76fddfe245af8866e6e5fa173b2bc6f46bae95aa17142e1256cb14",
     ""
    ],
    [
     "k:a",
-    "866866bdc653979e713a8972c755ba2816f1b101014169ac642bb14be6b06985",
+    "bdadc71d550d9fc3dc3d23edf091293f43cea28eaad37d0731145c32ec7d7a6d",
     ""
    ],
    [
     "k:down",
-    "b16dc77c9b967b53dbadd288ee0624110fbb9b9406f6ccfe00aa272c1ef2cbef",
+    "10c4a42805fa0609328ed0b5e418d985a285e887daee7f5ed96b8a43bed8552d",
     ""
    ],
    [
     "k:a",
-    "ce020dffa8900bb13ba2bcc8ab1b111ba16e41eb1dad29f745374c10096875d5",
+    "5e823f588f008dc4a1be93abd37072ac9dff7433670ca0877ee9941c9e86723e",
     ""
    ],
    [
     "k:a",
-    "746bd0148c46ee8edc25414b41c9f52a8abe3698791a57f4044c8ae5d70ef56e",
+    "c1abf1dcf47266583a37b2d460a2dcc99402e148e502f5ff612be9d42a955961",
     ""
    ],
    [
     "k:down",
-    "70c53d9d0582f6020d412411ea76ebd21a6137ae9f9835313ae138dbba024b74",
+    "12f0d8abb9189ddc0aabb38c619bfc0e9f8a2d7c729e11580f8b4ca7d3f64155",
     ""
    ],
    [
     "k:a",
-    "c6ddac88b1d5fd98cd3fe19dc5e9800d0403dc1b89dc93020f398ed5e10b1781",
+    "5c7e173d558331500d342fe9afab4de816643829513eeb8ef333f01d59de620e",
     ""
    ],
    [
     "k:up",
-    "ce020dffa8900bb13ba2bcc8ab1b111ba16e41eb1dad29f745374c10096875d5",
+    "5e823f588f008dc4a1be93abd37072ac9dff7433670ca0877ee9941c9e86723e",
     ""
    ],
    [
     "k:up",
-    "f1d361a9cb1ff3678d5ba632018b003172f26c3e177fa6b51fc5308bd9034cb6",
+    "b23c724f95626ac372c4129af6bded3b84308bcb17fbeebdfdedc20b5f6ce209",
     ""
    ],
    [
     "k:a",
-    "826021593f0b76b4ef70576e0d42af2f75ab229fa825ec8672f6f602643a91d2",
+    "110596f8e9dfb9ba806a70a8f4332ca87118873bad126f375df61a0a1c005f55",
     ""
    ]
   ]
@@ -277,7 +277,7 @@
    ]
   ]
  ],
- "glass/list/p4_1024x600_fs2_windowed": [
+ "glass/list/p4_1024x600_cs2_fs1_windowed": [
   [
    "state items [3 rows] +3 -0 ~0 moved 0 (in opened)",
    "build build page (builds 1)",
@@ -301,42 +301,42 @@
   [
    [
     "(open)",
-    "614e3cc555343c7081a7ec3b16efb3089fe4526411834fd2d8ca2f00167f8b7c",
+    "e88b8664c86ce05861fdc2ad0dfe04c48e2ce8f5357c5e4ef9c162a1179a7f16",
     ""
    ],
    [
     "k:a",
-    "93b5b694ac28d7d9a53c7e9ea735efdbe699e01ad3051dfe8be4171854efea51",
+    "d3882a841a3c5d12cd83b10a2797454f1bc99f7fb41a1f3700b751060378820b",
     ""
    ],
    [
     "k:down",
-    "0024b325f6adc1830b4e067254f09e55687f413f1c2e052654de62e1e939ac9f",
+    "12621ab4ed9d66c047e41921041860fdd7382959248def2c66314db6c3f74af9",
     ""
    ],
    [
     "k:a",
-    "1f37f714b4b3b75e9a278ad6278264dc76849fd415eb5f004cd1f07963621a4c",
+    "60bf0815e5f4b32de0d61c5d3b85a91759c9d90f5a4132f21f3da7b68b001c9b",
     ""
    ],
    [
     "k:down",
-    "9f443719e08342ff3fabcbcfb36aac467e5da479ffe995d3f3a6e30aa8864d6a",
+    "a11cf5d544b38cb1165bcb42d1f50b6ae09252c20fb52acaa80812b8b56db02c",
     ""
    ],
    [
     "k:a",
-    "aa47e72a09aabb3376de6f47f7980eb1eaa5aa3a3a728a38bd04063c8f3439f1",
+    "d75d4c6b670b8602ebd9a9b95c1db9da87ee56bec27d97c903e97f1c828ecbd7",
     ""
    ],
    [
     "k:up",
-    "4331138d52ed23a7454364f15fe57d3964311635e05cd5a1d987a1ad35e70951",
+    "f6f78ac426fe4b505a39edd099fdc46c6aa61d15e2e780c51ac58d021d3282c7",
     ""
    ],
    [
     "k:a",
-    "1f37f714b4b3b75e9a278ad6278264dc76849fd415eb5f004cd1f07963621a4c",
+    "60bf0815e5f4b32de0d61c5d3b85a91759c9d90f5a4132f21f3da7b68b001c9b",
     ""
    ]
   ]
@@ -405,7 +405,7 @@
    ]
   ]
  ],
- "glass/pages/p4_1024x600_fs2_windowed": [
+ "glass/pages/p4_1024x600_cs2_fs1_windowed": [
   [
    "build build page (builds 1)",
    "action add from link 'add' on 'Pages'",
@@ -431,62 +431,62 @@
   [
    [
     "(open)",
-    "b7867c5110ceb21dd7ab680b7becdc6d6991cc4cf78be7f5050c2f142314af5f",
+    "260b534062f8b906c82603f46e758d0d0ebcd0545c3860d54cf936057cf30df7",
     ""
    ],
    [
     "k:a",
-    "fd1f6a22907c57644be1654b5ac965e3a31cbed700ef5b6db6421a9a37ffc3d5",
+    "b2333fb34a929581e43f1f5080a2b0168720fe0be0544a91424774dddf58cd22",
     ""
    ],
    [
     "k:a",
-    "2d419cdbc5e8b9c6f0c287cad73e0cd7acea0095efa8d3b55f329725cf168754",
+    "756d4d4b857ae78d806d6380b56ee4e9e2da8ecf63cef6f1e44f9d5ae6ce2737",
     ""
    ],
    [
     "k:down",
-    "62a17bd248336c722342c0c4138faba2ad7755668d515ba20b0690adb64a014b",
+    "fdfd7b302499145aa61a380302d67c76be70cf0dc0a5c7a356db4206d3ba0c4c",
     ""
    ],
    [
     "k:a",
-    "85dbd526b1dcfdcce448c64f5c7db3d473a349a269a000fe401233c09f6078f5",
+    "68b6eb30749ff906a5639fe19cfad075a1d4b330b9d1ebc0d4592f20b497ea2c",
     ""
    ],
    [
     "back",
-    "62a17bd248336c722342c0c4138faba2ad7755668d515ba20b0690adb64a014b",
+    "fdfd7b302499145aa61a380302d67c76be70cf0dc0a5c7a356db4206d3ba0c4c",
     ""
    ],
    [
     "k:a",
-    "85dbd526b1dcfdcce448c64f5c7db3d473a349a269a000fe401233c09f6078f5",
+    "68b6eb30749ff906a5639fe19cfad075a1d4b330b9d1ebc0d4592f20b497ea2c",
     ""
    ],
    [
     "k:down",
-    "85dbd526b1dcfdcce448c64f5c7db3d473a349a269a000fe401233c09f6078f5",
+    "68b6eb30749ff906a5639fe19cfad075a1d4b330b9d1ebc0d4592f20b497ea2c",
     ""
    ],
    [
     "k:a",
-    "62a17bd248336c722342c0c4138faba2ad7755668d515ba20b0690adb64a014b",
+    "fdfd7b302499145aa61a380302d67c76be70cf0dc0a5c7a356db4206d3ba0c4c",
     ""
    ],
    [
     "k:down",
-    "a1d9a4344f33149598889ee45c12ab298245348e73f63cb53d56e656dc61cf85",
+    "d198679690769f2bdb67fa6947ac748aedd8954e7c82e371717fb0fb3ee59455",
     ""
    ],
    [
     "k:a",
-    "a9dc14e640ab46c28d98185d8c6c75f52122168db83cbf602ad5442c0eb3f156",
+    "557ab3f502bdd277df25a45faea240a0165e76b6dd83fd15c5b2bc5d29ef4a97",
     ""
    ],
    [
     "back",
-    "a1d9a4344f33149598889ee45c12ab298245348e73f63cb53d56e656dc61cf85",
+    "d198679690769f2bdb67fa6947ac748aedd8954e7c82e371717fb0fb3ee59455",
     ""
    ]
   ]

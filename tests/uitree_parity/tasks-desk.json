@@ -1,6 +1,6 @@
 {
  "surface": "tasks",
- "config": "p4_1024x600_fs2_windowed",
+ "config": "p4_1024x600_cs2_fs1_windowed",
  "commit": "fe33deaea",
  "script": [
   "k:down",
@@ -17,47 +17,47 @@
  "frames": [
   [
    "(open)",
-   "2b488ff2773d8e68cbd50e0552c5c50350685ff930bc19cf7cdcc3dee99afc5d"
+   "126421626264070aa7a8ed3670b05ad44bc018e2d42b888844ef7a3f46527691"
   ],
   [
    "k:down",
-   "05dfa6259cd66eb79d7a13a428e7f2e9e9a20eda8ffa1dd55813371f226dc752"
+   "35be38b16c53faec00312d945271eb8ba5301f42bc4c1a09e5d4c314f9ac591b"
   ],
   [
    "k:up",
-   "2b488ff2773d8e68cbd50e0552c5c50350685ff930bc19cf7cdcc3dee99afc5d"
+   "126421626264070aa7a8ed3670b05ad44bc018e2d42b888844ef7a3f46527691"
   ],
   [
    "k:up",
-   "6935bba5ff8fd342a48a39b8ba60e28e369f62f7c40cdcbafb0acdbf49a3aad2"
+   "8e87c9ce6d8569c318e54e50f3efda75780aa87be7bf5d1f1b841344048ddd47"
   ],
   [
    "k:right",
-   "9d36efeb883ed6366f9fdaa51eb5691a67ff1fdfe645ff3b3c9d81779f9f1c19"
+   "6d92443926a05558ce20c9585e0ec8b451edea7f6f49735d8991b63223829c57"
   ],
   [
    "k:down",
-   "48def382673d44a8c9e48be57bd933459571c36c62e72feaddc21767f03f47ae"
+   "704e90c8e26e9cb5ddb2a9a517e8781f3195913282114ee5ac51305da83d2a52"
   ],
   [
    "k:down",
-   "51e08238d79a35fe21e38797c68e61a92bf0ee6cba9f0bf2c7bc3699e87d588c"
+   "023e0a59fe5baabfec47915c5991ba66ce86ee7b10794c33b390f93aa880c361"
   ],
   [
    "k:down",
-   "3070927b4f99af5f3e53e0d1ff419d4b78c81353a603acc57dc8423cd18c2f7f"
+   "92493d434bff50768a8e85eb1b90a6da7490cc3d781759fb8b225c410bb9755c"
   ],
   [
    "k:right",
-   "d070adeac93fe259d7ec00e5bdbc5774039ba166de12be6558d5adfecd243fb1"
+   "92493d434bff50768a8e85eb1b90a6da7490cc3d781759fb8b225c410bb9755c"
   ],
   [
    "k:a",
-   "a801d76553c8cb0388f6cbcfe7edec3f118668076bcca1a8dc73ef15e8f30511"
+   "a28f0f6bd08c5e33c1e353ac69d8f386b49610ce7efe3802e261ec64cf797bd2"
   ],
   [
    "f:2",
-   "a801d76553c8cb0388f6cbcfe7edec3f118668076bcca1a8dc73ef15e8f30511"
+   "a28f0f6bd08c5e33c1e353ac69d8f386b49610ce7efe3802e261ec64cf797bd2"
   ]
  ]
 }

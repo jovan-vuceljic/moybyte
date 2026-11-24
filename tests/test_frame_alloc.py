@@ -2179,7 +2179,7 @@ def test_a_page_status_section_draws_within_its_ceiling(result):
 # chrome's and the chips' signatures, the extents and rects -- compares and
 # writes in place.
 
-DESK_W, DESK_H = 800, 480
+DESK_W, DESK_H = 1024, 600
 DESK_DRAG = 90
 DESK_DRAG_FRAME = 112
 

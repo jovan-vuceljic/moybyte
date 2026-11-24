@@ -213,7 +213,7 @@ def test_artwork_capability_is_not_in_the_regular_cart_api(tmp_path):
 
 def test_a_desks_drawing_is_1024x600_and_a_window_resize_never_resamples_it(tmp_path):
     ws = host_app.build_workstation(str(tmp_path / "carts"),
-                                    sys_size=(1024, 600), font_scale=2,
+                                    sys_size=(1024, 600), font_scale=1,
                                     windowed=True, panel_diagonal_in=7.0)
     ws.home.open_desk()
     app = _open_paint(ws)
@@ -922,7 +922,7 @@ def _stroke_glass(tmp_path, monkeypatch, desk, stroke_frames, tool, shape=1, buf
         monkeypatch.setattr(paint_draw, "_loop", None)
     if desk:
         ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=(1024, 600),
-                                        font_scale=2, windowed=True, panel_diagonal_in=7.0)
+                                        font_scale=1, windowed=True, panel_diagonal_in=7.0)
         ws.home.open_desk()
     else:
         ws = host_app.build_workstation(str(tmp_path / "carts"))

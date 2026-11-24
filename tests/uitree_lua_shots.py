@@ -36,7 +36,7 @@ CLOCK = 1763553600 + 8 * 3600 + 20 * 60
 
 # a size: the console's (320x240 full screen) and the desk's (a 1024x600 window)
 SIZES = {"320": dict(sys_size=None, font_scale=1, windowed=False),
-         "1024": dict(sys_size=(1024, 600), font_scale=2, windowed=True)}
+         "1024": dict(sys_size=(1024, 600), font_scale=1, windowed=True)}
 
 # a screen: (its cart, its files from elsewhere, script). A step is a key
 # ("up", "a"), "type:TEXT", "enter", "key:CODE", "wait:N", "tap:X,Y",

@@ -279,7 +279,7 @@ def test_a_restored_editor_stays_restored(tmp_path):
     assert not ws.wm.windows["menu"].full()
 
 
-@pytest.mark.parametrize("size,scale", [((1024, 600), 2), ((1280, 800), 3), ((800, 480), 2)])
+@pytest.mark.parametrize("size,scale", [((1024, 600), 2), ((1280, 800), 3)])
 def test_a_desk_play_is_full_screen_the_game_alone(tmp_path, size, scale):
     """Play on the desk is full screen (owner, 2026-10-31): the game alone
     at the largest whole scale the glass holds, on black, with no row and

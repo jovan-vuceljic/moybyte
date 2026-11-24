@@ -874,7 +874,7 @@ def test_a_console_whose_largest_block_is_too_small_says_so(tmp_path):
 def _parked_desk(tmp_path):
     """A P4-shaped console in console mode over three parked windows."""
     ws = host_app.build_workstation(_store(tmp_path, _hello), sys_size=(1024, 600),
-                                    font_scale=2, windowed=True)
+                                    font_scale=1, windowed=True)
     for app in ("settings", "calc", "files"):
         if app == "settings":
             ws.open_settings()

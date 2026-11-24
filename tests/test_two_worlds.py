@@ -61,11 +61,11 @@ def test_desk_icon_labels_fit_their_pills(tmp_path):
 # pill and vanished. These render the desk over one (the Night Glass shape cart's
 # black sky) and count what actually landed.
 
-_WINDOWED = [((480, 320), 1), ((1024, 600), 1), ((1024, 600), 2),
-             ((1024, 600), 3)]
+_WINDOWED = [((1024, 600), 1), ((1280, 800), 1), ((2048, 1200), 2),
+             ((3072, 1800), 3)]
 
 
-def _desk_on_a_black_field(tmp_path, size=(1024, 600), fs=2, titles=None):
+def _desk_on_a_black_field(tmp_path, size=(1024, 600), fs=1, titles=None):
     ws = _ws(tmp_path, sys_size=size, font_scale=fs)
     if titles:
         # An app's manifest title, as declared: the registry's rows are
@@ -116,7 +116,7 @@ def test_a_long_app_title_keeps_every_desk_icon_on_the_canvas(tmp_path):
     marched the last column past the right edge -- and an icon drawn off the
     canvas is unreachable, not merely ugly. It clips inside its band instead."""
     long_title = "CALCULATING MACHINE DELUXE"
-    ws = _desk_on_a_black_field(tmp_path, fs=3, titles={"calc": long_title})
+    ws = _desk_on_a_black_field(tmp_path, size=(3072, 1800), fs=3, titles={"calc": long_title})
     cv = ws.sys_canvas
     rects = ws.wm._backdrop_layer._icon_rects()
     assert any(label == long_title for _k, _b, _p, label, _c in rects)

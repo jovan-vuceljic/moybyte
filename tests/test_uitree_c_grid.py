@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "uitree_fixtures"))
 import uitree_parity as P  # noqa: E402
 import uitree_reference as R  # noqa: E402
 
-CONFIGS = ("tdeck_320x240_fs1_dark", "p4_1024x600_fs2_windowed", "big_800x480_fs3_dark",
+CONFIGS = ("tdeck_320x240_fs1_dark", "p4_1024x600_fs2_dark", "big_960x720_fs3_dark",
            "p4_1024x600_cs2_fs1_windowed")
 # Walk the keys, press the wide key, hide it with Seven, walk again, show it back
 SCRIPT = ["k:down", "k:down", "k:down", "k:down", "k:a", "k:up", "k:a", "k:down", "k:down",

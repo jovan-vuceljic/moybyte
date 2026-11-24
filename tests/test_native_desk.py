@@ -56,6 +56,42 @@ def test_a_declared_desk_sized_glass_is_a_desk_and_nothing_else_is():
     assert layout_base.class_of(10.1) == layout_base.DESK
 
 
+def test_a_desk_holds_the_desk_only_where_its_glass_over_the_font_scale_does():
+    """The windowed desk is designed down to DESK_MIN_WH at font scale 1
+    (DESIGN.md's "The sizes"): a desk's glass whose room over the scale falls
+    under it is a handheld's."""
+    assert layout_base.DESK_MIN_WH == (1024, 600)
+    for (w, h), diag in (((1024, 600), 7.0), ((1280, 800), 10.1)):
+        assert layout_base.class_of(diag, w, h, 1) == layout_base.DESK
+        assert layout_base.class_of(diag, w, h, 2) == layout_base.HANDHELD
+        assert layout_base.class_of(diag, w, h, 3) == layout_base.HANDHELD
+    assert layout_base.class_of(7.0, 800, 480, 1) == layout_base.HANDHELD
+    assert layout_base.class_of(7.0, 2048, 1200, 2) == layout_base.DESK
+    assert layout_base.class_of(3.5, 2048, 1200, 1) == layout_base.HANDHELD
+
+
+@pytest.mark.parametrize("fs, wm", [(1, "WindowedWM"), (2, "FullscreenStackWM")])
+def test_the_windowed_tier_stands_only_on_a_desk_at_its_font_scale(tmp_path, fs, wm):
+    ws = _ws(tmp_path, font_scale=fs)
+    assert type(ws.wm).__name__ == wm
+    assert ws.desk_fits() == (fs == 1)
+    assert layout_base.metric_class() == ws.metric_class
+
+
+def test_the_stored_font_scale_settles_the_tier_at_boot(tmp_path):
+    """A console that booted at 1x and stored 2x boots next time on the
+    full-screen tier, its class the handheld's, from the stored scale alone."""
+    ws = _ws(tmp_path)
+    assert ws.desk_fits()
+    ws.look.set_font_scale(2)
+    again = _ws(tmp_path)
+    assert again.look.font_scale == 2
+    assert type(again.wm).__name__ == "FullscreenStackWM"
+    assert again.metric_class == layout_base.HANDHELD == layout_base.metric_class()
+    assert again.chrome_scales == host_app.console.chrome_scale_choices(
+        1024, again.chrome_floor)
+
+
 def test_the_handheld_metrics_are_the_formulas_it_always_ran():
     layout_base.place_class(layout_base.HANDHELD)
     for s in (1, 2, 3):
@@ -185,3 +221,4 @@ def test_render_scale_2_is_a_desks_alone(tmp_path):
         assert hh.render_scale == 1 and hh.sys_canvas.w == 480
     finally:
         ui_draw._C.theme_uninstall()
+

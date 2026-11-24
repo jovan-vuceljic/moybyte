@@ -401,7 +401,7 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     # real trackball-style pan on a system surface re-shows it, a mouse/touch
     # place() keeps it hidden as always.
     ws.pointer.visible = False
-    if windowed and ws.bound_sys_canvas is not None:
+    if windowed and ws.bound_sys_canvas is not None and ws.desk_fits():
         # A windowed composite must NOT letterbox. `blit_game` means two things
         # -- fill everything outside the game rect black (this canvas IS the
         # glass, the handheld tier below) versus put a cart inside a WINDOW --

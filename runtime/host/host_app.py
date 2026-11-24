@@ -222,8 +222,9 @@ def build_workstation(carts_dir=None, sys_size=None, font_scale=1,
 
     `windowed=True` installs the Picotron-style windowed WM (wm_windowed.py --
     the big-screen / P4 presentation, #73/#58): the launcher is the desktop and
-    every pushed app is a floating window. Needs a distinct big `sys_size`;
-    silently ignored on the shared-canvas 320x240 build.
+    every pushed app is a floating window. Needs a distinct big `sys_size` and a
+    glass that is a desk at the font scale in force (`Workstation.desk_fits`);
+    elsewhere the full-screen tier stays.
 
     `panel_diagonal_in` is the board fact a BOARD declares in its board.toml
     (#203): the glass's diagonal in inches, from which the chrome tap-target
@@ -321,7 +322,7 @@ def build_workstation(carts_dir=None, sys_size=None, font_scale=1,
     ws.net = _players.LoopbackNet()
     # The Picotron-style windowed WM (#73): swap the presentation tier in before
     # the first frame. Only meaningful with a distinct (big) system canvas.
-    if windowed and ws.bound_sys_canvas is not None:
+    if windowed and ws.bound_sys_canvas is not None and ws.desk_fits():
         from runtime.wm_windowed import WindowedWM
         # A windowed composite must NOT letterbox: `blit_game` is asked to put a
         # cart inside a WINDOW here, and the fullscreen meaning of the same verb

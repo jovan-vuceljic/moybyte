@@ -584,9 +584,9 @@ def test_a_responsive_app_cart_is_told_when_the_surface_changes(tmp_path):
     _frames(ws)
     seen = ws.run.player.ns["seen"]
     assert seen == [(800, 480, 2)]
-    ws.look.set_font_scale(3, persist=False)
+    ws.look.set_font_scale(1, persist=False)
     _frames(ws, 2)
-    assert seen[-1] == (800, 480, 3)
+    assert seen[-1] == (800, 480, 1)
     _frames(ws, 3)
     assert len(seen) == 2, "a steady frame re-ran _layout: " + repr(seen)
 
@@ -634,7 +634,7 @@ def test_the_desk_world_gives_a_responsive_cart_its_window(tmp_path):
     system one, and the cart is told the window's content size."""
     carts = str(tmp_path / "carts")
     _write_cart(carts, "Flexy", RESPONSIVE_SRC)
-    ws = build_ws(tmp_path, sys_size=(1024, 600), font_scale=2, windowed=True)
+    ws = build_ws(tmp_path, sys_size=(1024, 600), font_scale=1, windowed=True)
     ws.home.open_desk()
     assert ws.windowed_chrome is True
     cart = next(c for c in ws.carts.all if c["title"] == "Flexy")
@@ -655,14 +655,14 @@ def test_console_mode_gives_a_responsive_cart_the_whole_surface(tmp_path):
     desktop-sized surface it asked for."""
     carts = str(tmp_path / "carts")
     _write_cart(carts, "Flexy", RESPONSIVE_SRC)
-    ws = build_ws(tmp_path, sys_size=(1024, 600), font_scale=2, windowed=True)
+    ws = build_ws(tmp_path, sys_size=(1024, 600), font_scale=1, windowed=True)
     ws.home.open_library()                     # the desk's PLAY: console mode
     assert ws.windowed_chrome is False
     _open(ws, "Flexy")
     _frames(ws)
     assert ws.run.player.cart_error is None, ws.run.player.cart_error
     assert ws.run.app_full_canvas is True
-    assert ws.run.player.ns["seen"] == [(1024, 600, 2)]
+    assert ws.run.player.ns["seen"] == [(1024, 600, 1)]
 
 
 def test_a_declared_small_canvas_wins_over_the_responsive_probe(tmp_path):

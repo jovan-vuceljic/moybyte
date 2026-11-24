@@ -1,6 +1,6 @@
 {
  "surface": "editor_frame",
- "config": "big_800x480_fs3_dark",
+ "config": "big_960x720_fs3_dark",
  "commit": "53a7c71fb",
  "script": [
   "zone:3",

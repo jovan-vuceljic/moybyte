@@ -115,7 +115,7 @@ def test_windowed_make_window_close_commits_code_edit(tmp_path):
     using PROJECTS/PLAY) would silently lose the edit. close_window_kind must
     now hard-commit the Editor too."""
     from runtime import moy_carts
-    ws = _ws(tmp_path, sys_size=(1024, 600), font_scale=2, windowed=True)
+    ws = _ws(tmp_path, sys_size=(1024, 600), font_scale=1, windowed=True)
     while not ws.launcher.items[ws.launcher.sel].get("path"):
         ws.launcher.sel += 1
     title = ws.launcher.items[ws.launcher.sel]["title"]
@@ -132,7 +132,7 @@ def test_windowed_make_window_close_commits_code_edit(tmp_path):
 def test_windowed_artwork_window_close_commits_the_drawing(tmp_path):
     """Same #111 gap, the Paint app (#108 user drawings): closing its window via
     the strip X must flush the open drawing (artwork_app._save)."""
-    ws = _ws(tmp_path, sys_size=(1024, 600), font_scale=2, windowed=True)
+    ws = _ws(tmp_path, sys_size=(1024, 600), font_scale=1, windowed=True)
     ws.spine.open_app(ws.app("artwork"))
     app = ws.app("artwork")
     app.doc.put(0, 0, 5)

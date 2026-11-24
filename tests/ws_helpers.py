@@ -127,7 +127,7 @@ def build_ws(tmp_path, **kw):
 def build_desktop_ws(tmp_path, **kw):
     """The windowed-desktop tier (the P4 shape) the WM suites drive."""
     kw.setdefault("sys_size", (1024, 600))
-    kw.setdefault("font_scale", 2)
+    kw.setdefault("font_scale", 1)
     kw.setdefault("windowed", True)
     return host_app.build_workstation(str(tmp_path / "carts"), **kw)
 

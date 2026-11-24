@@ -37,7 +37,8 @@ arguments and hooks:
   before_slim          board glue between the store hookup and the cart diet
   after_services       board glue once every shared service is wired
   wm                   the presentation tier to install over the fullscreen
-                       stack, where the glass has room for windows
+                       stack, where the glass is a desk at its font scale
+                       (`Workstation.desk_fits`)
   c6_updater           the companion radio's updater class, where there is one
   extras / serial      the dev channel's board-only commands, and whether the
                        channel is built at all
@@ -480,7 +481,7 @@ def build_desktop(name, link_id, comp, sys_canvas, set_backlight, inp, inputs,
     if after_services is not None:
         after_services(ws)
     _census("services")
-    if wm is not None:
+    if wm is not None and ws.desk_fits():
         # The windowed tier (#73): installed AFTER the boot loads (the same
         # order as host build_workstation) so the persisted font scale is
         # applied before the root layout context is captured.

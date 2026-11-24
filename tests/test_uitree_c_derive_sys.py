@@ -14,7 +14,7 @@ import uitree_parity as P  # noqa: E402
 
 
 @pytest.mark.parametrize("config, desk", (("tdeck_320x240_fs1_dark", False),
-                                          ("p4_1024x600_fs2_windowed", True)))
+                                          ("p4_1024x600_cs2_fs1_windowed", True)))
 def test_a_derive_naming_desk_shows_where_the_inline_condition_does(config, desk):
     import uitree_c
     import uitree_derive_sys as F

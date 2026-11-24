@@ -50,22 +50,27 @@ keeps the matrix a clean product instead of a pile of special cases.
                            these two rows together are the proof the mechanism
                            was built for -- the bar, the ≡ menu and the
                            Settings rows grew, and not one glyph did.
-  big_800x480_fs3_dark     font_scale 3. fs=2 renders elsewhere but is never a
+  big_960x720_fs3_dark     font_scale 3. fs=2 renders elsewhere but is never a
                            pinned reference and fs=3 never drew a shell frame
-                           at all (`ui_widgets_2026-08.md` A-m6). 800x480 is
-                           the smallest canvas that gives fs=3 room.
-  p4_1024x600_fs2_windowed the desktop tier: WindowedWM, font_scale 2 (so the
-                           fs=2 rung is pinned here rather than in a config of
-                           its own), plus the desk and a desk-with-one-window,
-                           on the P4's declared 7.0" glass: a desk, laid out
-                           on the desk's metric class (layout_base.CLASSES).
-  p4_1024x600_cs2_fs1_windowed  the P4 AS SHIPPED: the same desk at font
-                           scale 1 and chrome size 1, whose layouts run at the
-                           desk's unit of 2 (the `cs2` of every P4 row's
-                           name). One axis from the row above (font scale).
-  p4_1024x600_fs2_windowed_light  the windowed row in the light variant: the
-                           one place light chrome meets the WM's decorations.
-                           One axis from the windowed row (variant).
+                           at all (`ui_widgets_2026-08.md` A-m6). 960x720 is
+                           the smallest glass that offers fs=3: its room at
+                           the scale is the T-Deck's 320x240
+                           (layout_base.font_scales).
+  p4_1024x600_fs2_dark the P4's declared 7.0" glass at font_scale 2 (so
+                           the fs=2 rung is pinned here rather than in a
+                           config of its own): its 512x300 over the scale is
+                           under the desk's smallest glass
+                           (layout_base.DESK_MIN_WH), so it is no desk and the
+                           windowed tier the board asks for stands down to the
+                           full-screen one on the handheld's metric class.
+  p4_1024x600_cs2_fs1_windowed  the P4 AS SHIPPED: the desktop tier,
+                           WindowedWM, plus the desk and a desk-with-one-window,
+                           at font scale 1 and chrome size 1, whose layouts
+                           run at the desk's unit of 2 (the `cs2` of every P4
+                           row's name), on the desk's metric class
+                           (layout_base.CLASSES).
+  p4_1024x600_fs2_light  the fs2 row in the light variant. One axis
+                           from that row (variant).
   p4_1024x600_cs2_fs1_contrast_light  the same, under the high-contrast seed
                            `contrast` (docs/history/look_2026-10.md step 26c): black
                            on white in the light variant, 2 px outlines, a
@@ -125,15 +130,13 @@ keeps the matrix a clean product instead of a pile of special cases.
                            system menu; on the T-Deck, console mode's
                            fullscreen container for each -- the calendar page,
                            Settings at the WIFI panel, Settings at VOLUME.
-  p4_1024x600_fs2_desk_popovers
-                           every desk popover at font scale 2, the scale
-                           the P4's desk can run at, over the desk with a
-                           window: the calendar (a five-week month, then a
-                           six-week one, its weeks tightened into the
-                           glass's room), Wi-Fi (the host's networks, then
-                           more than the card holds, scrolling), the
-                           battery's rows, a compiled program's status menu
-                           (four rows, then eight, scrolling) and Music's.
+  p4_1024x600_cs2_fs1_desk_popovers
+                           every desk popover over the desk with a window,
+                           each also at its fullest: the calendar (a
+                           five-week month, then a six-week one), Wi-Fi
+                           (the host's networks, then ten), the battery's
+                           rows, a compiled program's status menu (four
+                           rows, then eight) and Music's.
   tdeck_320x240_fs1_homegrid, p4_1024x600_cs2_fs1_homegrid
                            the home in its GRID arrangement (the layout's
                            `home`, docs/theme_and_shell_2026-11.md §8.10), one
@@ -378,17 +381,17 @@ CONFIGS = {
     "guition_tapfloor_dark": dict(
         sys_size=(480, 320), font_scale=1, windowed=False, variant="dark",
         diagonal_in=3.5),
-    "big_800x480_fs3_dark": dict(
-        sys_size=(800, 480), font_scale=3, windowed=False, variant="dark",
+    "big_960x720_fs3_dark": dict(
+        sys_size=(960, 720), font_scale=3, windowed=False, variant="dark",
         diagonal_in=None),
-    "p4_1024x600_fs2_windowed": dict(
-        sys_size=(1024, 600), font_scale=2, windowed=True, variant="dark",
+    "p4_1024x600_fs2_dark": dict(
+        sys_size=(1024, 600), font_scale=2, windowed=False, variant="dark",
         diagonal_in=7.0),
     "p4_1024x600_cs2_fs1_windowed": dict(
         sys_size=(1024, 600), font_scale=1, windowed=True, variant="dark",
         diagonal_in=7.0, appearance=True),
-    "p4_1024x600_fs2_windowed_light": dict(
-        sys_size=(1024, 600), font_scale=2, windowed=True, variant="light",
+    "p4_1024x600_fs2_light": dict(
+        sys_size=(1024, 600), font_scale=2, windowed=False, variant="light",
         diagonal_in=7.0),
     "p4_1024x600_cs2_fs1_contrast_light": dict(
         sys_size=(1024, 600), font_scale=1, windowed=True, variant="light",
@@ -433,8 +436,8 @@ CONFIGS = {
     "p4_1024x600_cs2_fs1_popovers": dict(
         sys_size=(1024, 600), font_scale=1, windowed=True, variant="dark",
         diagonal_in=7.0, plan="popovers"),
-    "p4_1024x600_fs2_desk_popovers": dict(
-        sys_size=(1024, 600), font_scale=2, windowed=True, variant="dark",
+    "p4_1024x600_cs2_fs1_desk_popovers": dict(
+        sys_size=(1024, 600), font_scale=1, windowed=True, variant="dark",
         diagonal_in=7.0, plan="desk_popovers"),
     "tdeck_320x240_fs1_widget_pages": dict(
         sys_size=None, font_scale=1, windowed=False, variant="dark",
@@ -510,7 +513,7 @@ _DATE = (2026, 10, 14)    # the pinned calendar day
 
 # The config test_editor_tabs_render_independently sweeps: the largest handheld,
 # where #216 showed.
-_INDEPENDENCE_CONFIG = "big_800x480_fs3_dark"
+_INDEPENDENCE_CONFIG = "big_960x720_fs3_dark"
 
 
 def _axes(cfg):
@@ -1795,7 +1798,7 @@ _PANEL_FULL = _PANEL + "".join("\nbutton b%d Preset %d" % (k, k) for k in range(
 # A day of November 2026, whose six weeks the calendar's card opens at.
 _NOVEMBER = (_DATE[0], _DATE[1] + 1, _DATE[2])
 
-# More networks than a card at font scale 2 holds on the P4's glass.
+# More networks than a card holds on the P4's glass.
 _NETS_MANY = [("Network %d" % k, -40 - k, k % 2 == 0) for k in range(1, 11)]
 
 
