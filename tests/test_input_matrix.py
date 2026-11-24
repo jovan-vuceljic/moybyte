@@ -3,10 +3,9 @@ every widget kind under every input as its driver delivers it, on every
 layer an app is written in.
 
   * ROWS, the widget kinds: a field, a list, a button, a popover, a dialog
-    and a text view, each the one widget of a page, placed at the same rect
-    on every layer (`ui.at`).
+    and a text view, each the one widget of a UI tree page.
   * COLUMNS, the inputs, each through its driver's own entry point on the
-    host and never by setting the input table or calling the toolkit:
+    host and never by setting the input table or calling the engine:
     the T-Deck keyboard's matrix (native/moy_input/moy_kbd.c, over an I2C
     fake: typing, and its move keys), a BLE keyboard (moy_hid.c, over a fake
     stack), the desk keyboard, the touchscreen, the trackball and a gamepad
@@ -14,43 +13,41 @@ layer an app is written in.
     ConsoleDriver), Esc as the host delivers it, and the T-Deck's Mic key (the
     matrix). Every column runs on a board's input table (moy_input's
     InputTable), the one the boards' drivers write.
-  * LAYERS: a Python shell page (a system app's content layer), a Python
-    cart app, a Lua app, a compiled app (a WASI program over the toolkit it
-    links) and an ELF app built for the host (tools/elf_cart.py's host
-    target), the last two the same C page.
+  * LAYERS, the fronts of the one engine: a Python shell app (a system app's
+    `uitree_app.App`), a Python cart app, a Lua app and a compiled app (C on
+    sdk/include/moybyte/uitree.h, built to WASI). An ELF app has no tree and
+    is no layer.
 
 A cell is a gesture: what that input does to that widget (type into a
 field and cancel its edit, step a list, press a button, dismiss a popover,
-choose a dialog's button, drag a text view), and its effect read back: the
-app's own state on the Python and Lua layers, and on the compiled and ELF
-layers the picture, which must be the Python app's after the same gesture,
-the Python app's cell passing (tests/test_ui_linked.py holds the three to
-the same pixels at rest).
-
-A compiled or ELF app's toolkit is a copy linked into its module: the
-console's input owner reaches it through the frame message's steps and asks
-and the answers the module tells after each frame (sdk/src/moyui_link.c,
-native/moy_kernel/moy_screen_slot.h's THE TOOLKIT'S ANSWERS), as it reaches a
-Lua run's through the run face.
+choose a dialog's button, drag a text view), and its effect read back from
+the app's state: the engine's store on the Python layers, the state table
+on the Lua layer, and the engine's trace of its state's changes on the
+compiled layer. A text view's scroll is no state: its effect is the
+picture moving.
 
 Every cell passes: a cell is never marked as an expected failure.
 """
 
+import importlib.util
+import json
 import os
+import re
 import shutil
+import sys
 
 import pytest
 
 from runtime import moy_input as mi
-from runtime.layers import AppLayer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
 DT = 1.0 / 30.0
 
 ROWS = ("field", "list", "button", "popover", "dialog", "text_view")
 COLUMNS = ("kbd_text", "kbd_move", "ble_kbd", "desk_kbd", "touch", "trackball", "gamepad",
            "esc", "mic")
-LAYERS = ("py_shell", "py_app", "lua_app", "wasm_app", "elf_app")
+LAYERS = ("py_shell", "py_app", "lua_app", "wasm_app")
 
 # What each input does to each widget: the gesture a cell runs. A widget an
 # input has no gesture for is no cell (a touchscreen types nothing).
@@ -67,201 +64,313 @@ GESTURES = {
                "desk_kbd": "choose", "trackball": "choose", "gamepad": "choose"},
     "text_view": {"touch": "scroll"},
 }
-# Not cells, because the toolkit's contract (docs/history/ui_api_2026-10.md) defines
-# no such gesture: a dialog's Esc, B or Mic (an app answers its own cancel),
-# and a text view's keys, pad and trackball (a drag and the wheel scroll it).
-# #242 asks for both under its convention rows, which the sprint leaves out.
+# Not cells, because the engine's contract (docs/app_api_v1.md) defines no
+# such gesture: a dialog's Esc, B or Mic take its first button (Back's
+# order), and a text view's keys, pad and trackball step it as a stop.
+
+# A system app's Back is its engine's own (docs/app_api_v1.md section 4's
+# order), which gives back only a commit= field's draft: its Esc on a field
+# is no cancel. A cart app's Back steps out of a field's edit first (§3).
+NOT_CELLS = {("py_shell", "field", "esc")}
 
 CELLS = [(layer, row, col) for layer in LAYERS for row in ROWS for col in COLUMNS
-         if col in GESTURES[row]]
+         if col in GESTURES[row] and (layer, row, col) not in NOT_CELLS]
 
-# The page's widget rect, in the page's content rect: 8 in from its corner.
-INSET = 8
-TALL = {"field": 28, "list": 84, "button": 28, "popover": 28, "dialog": 0, "text_view": 96}
-LINES = ["line %d" % i for i in range(40)]
 TYPED = "h"
+LINES = "\n".join("line %d" % i for i in range(40))
+
+# Each row's state, the one its gesture changes.
+STATE = {"field": "t", "list": "c", "button": "n", "popover": "up", "dialog": "up",
+         "text_view": None}
 
 
 # -- the pages, one source a layer ------------------------------------------------
 
-PY_PAGE = {
-    "field": 'S["t"], _ = ui.field("Name", S["t"], 16)',
-    "list": 'S["c"] = ui.list("Pick", ["one", "two", "three"], S["c"])',
-    "button": 'S["n"] += 1 if ui.button("Go") else 0\n    ui.label("x" * S["n"])',
-    "popover": ('ui.button("Anchor")\n'
-                '    if S["open"]:\n'
-                '        if not ui.popover("pop", 120):\n'
-                '            S["open"] = 0\n'
-                '        ui.button("In")\n'
-                '        ui.popover()'),
-    "dialog": ('if S["open"]:\n'
-               '        if ui.dialog("Sure?", ("No", "Yes")) >= 0:\n'
-               '            S["open"] = 0\n'
-               '        ui.label("Really?")\n'
-               '        ui.dialog()'),
-    "text_view": 'S["first"] = ui.text_view("tv", LINES)[0]',
+PY = {
+    "field": '''s = ui.state(t="")
+ui.app("Matrix", icon="calc")
+
+
+def build():
+    with ui.page("Matrix"):
+        ui.field("Name", "t", max=16)
+''',
+    "list": '''s = ui.state(items=ui.model(key="id", id=""), c="one")
+ui.app("Matrix", icon="calc")
+
+
+def opened():
+    s.items = [{"id": "one"}, {"id": "two"}, {"id": "three"}]
+
+
+def pick(row):
+    s.c = row.id
+
+
+ui.hook("opened", opened)
+ui.action("pick", "Pick", pick, takes="row")
+
+
+def build():
+    with ui.page("Matrix"):
+        with ui.group("Pick"):
+            with ui.rows("items"):
+                ui.link("pick", label="{.id}")
+''',
+    "button": '''s = ui.state(n=0)
+ui.app("Matrix", icon="calc")
+
+
+def go():
+    s.n += 1
+
+
+ui.action("go", "Go", go)
+
+
+def build():
+    with ui.page("Matrix"):
+        ui.button("go")
+''',
+    "popover": '''s = ui.state(up=True)
+ui.app("Matrix", icon="calc")
+
+
+def nothing():
+    pass
+
+
+def shut():
+    s.up = False
+
+
+ui.action("anchor", "Anchor", nothing)
+ui.action("into", "In", nothing)
+ui.action("shut", "Close", shut)
+
+
+def build():
+    with ui.page("Matrix"):
+        ui.button("anchor")
+        with ui.popover("pop", w=120, anchor="anchor", close="shut", shown="up"):
+            ui.button("into")
+''',
+    "dialog": '''s = ui.state(up=True)
+ui.app("Matrix", icon="calc")
+
+
+def shut():
+    s.up = False
+
+
+ui.action("no", "No", shut)
+ui.action("yes", "Yes", shut)
+
+
+def build():
+    with ui.page("Matrix"):
+        with ui.dialog("Sure?", ["no", "yes"], shown="up"):
+            ui.label("Really?")
+''',
+    "text_view": '''s = ui.state(lines=%r)
+ui.app("Matrix", icon="calc")
+
+
+def build():
+    with ui.page("Matrix"):
+        ui.text_view("lines")
+''' % LINES,
 }
 
-PY_APP = '''LINES = %r
-S = {"t": "", "c": 0, "n": 0, "open": 1, "first": 0}
-
-
-def _draw():
-    r = ui.page("Matrix")
-    S["r"] = r
-    if %r:
-        ui.at(r[0] + %d, r[1] + %d, r[2] - %d, %d)
-    %s
-'''
-
-LUA_PAGE = {
-    "field": 'T = ui.field("Name", T, 16)',
-    "list": 'C = ui.list("Pick", {"one", "two", "three"}, C)',
-    "button": 'if ui.button("Go") then N = N + 1 end\n  ui.label(string.rep("x", N))',
-    "popover": ('ui.button("Anchor")\n'
-                '  if OPEN == 1 then\n'
-                '    if not ui.popover("pop", 120) then OPEN = 0 end\n'
-                '    ui.button("In")\n'
-                '    ui.popover()\n'
-                '  end'),
-    "dialog": ('if OPEN == 1 then\n'
-               '    if ui.dialog("Sure?", {"No", "Yes"}) > 0 then OPEN = 0 end\n'
-               '    ui.label("Really?")\n'
-               '    ui.dialog()\n'
-               '  end'),
-    "text_view": 'FIRST = ui.text_view("tv", LINES)',
+LUA = {
+    "field": '''ui.app("Matrix", { icon = "calc" })
+S = ui.state { t = "" }
+ui.page("matrix", function()
+  ui.field("t", { label = "Name", max = 16 })
+end, { title = "Matrix" })
+''',
+    "list": '''ui.app("Matrix", { icon = "calc" })
+S = ui.state { items = ui.model { key = "id", id = "" }, c = "one" }
+ui.hook("opened", function()
+  S.items:set({ { id = "one" }, { id = "two" }, { id = "three" } })
+end)
+ui.action("pick", "Pick", function(row) S.c = row.id end, { takes = "row" })
+ui.page("matrix", function()
+  ui.group("Pick", function()
+    ui.rows("items", function() ui.link("pick", { label = "{.id}" }) end)
+  end)
+end, { title = "Matrix" })
+''',
+    "button": '''ui.app("Matrix", { icon = "calc" })
+S = ui.state { n = 0 }
+ui.action("go", "Go", function() S.n = S.n + 1 end)
+ui.page("matrix", function()
+  ui.button("go")
+end, { title = "Matrix" })
+''',
+    "popover": '''ui.app("Matrix", { icon = "calc" })
+S = ui.state { up = true }
+ui.action("anchor", "Anchor", function() end)
+ui.action("into", "In", function() end)
+ui.action("shut", "Close", function() S.up = false end)
+ui.page("matrix", function()
+  ui.button("anchor")
+  ui.popover("pop", { w = 120, anchor = "anchor", close = "shut", shown = "up" }, function()
+    ui.button("into")
+  end)
+end, { title = "Matrix" })
+''',
+    "dialog": '''ui.app("Matrix", { icon = "calc" })
+S = ui.state { up = true }
+ui.action("no", "No", function() S.up = false end)
+ui.action("yes", "Yes", function() S.up = false end)
+ui.page("matrix", function()
+  ui.dialog("Sure?", { buttons = { "no", "yes" }, shown = "up" }, function()
+    ui.label("Really?")
+  end)
+end, { title = "Matrix" })
+''',
+    "text_view": '''ui.app("Matrix", { icon = "calc" })
+S = ui.state { lines = %s }
+ui.page("matrix", function()
+  ui.text_view("lines")
+end, { title = "Matrix" })
+''' % json.dumps(LINES),
 }
 
-LUA_APP = '''LINES = {%s}
-T, C, N, OPEN, FIRST = "", 1, 0, 1, 1
-function _draw()
-  local x, y, w, h = ui.page("Matrix")
-  if %s then ui.at(x + %d, y + %d, w - %d, %d) end
-  %s
-end
-'''
-
-C_PAGE = {
-    "field": "tl = ui_field(\"Name\", 4, t, sizeof t, tl, NULL, 0) & 0xffff;",
-    "list": "c = ui_list(\"Pick\", 4, \"one\\0two\\0three\", 13, c, NULL, 0);",
-    "button": ("if (ui_button(\"Go\", 2, 0, NULL, 0) > 0) { n++; }\n"
-               "        ui_label(\"xxxxxxxx\", n < 8 ? n : 8, NULL, 0);"),
-    "popover": ("ui_button(\"Anchor\", 6, 0, NULL, 0);\n"
-                "        if (open) {\n"
-                "            if (!ui_popover(\"pop\", 3, 120, NULL, 0)) { open = 0; }\n"
-                "            ui_button(\"In\", 2, 0, NULL, 0);\n"
-                "            ui_popover(\"\", 0, 0, NULL, 0);\n"
-                "        }"),
-    "dialog": ("if (open) {\n"
-               "            if (ui_dialog(\"Sure?\", 5, \"No\\0Yes\", 6, 1, NULL, 0) >= 0) { open = 0; }\n"
-               "            ui_label(\"Really?\", 7, NULL, 0);\n"
-               "            ui_dialog(\"\", 0, \"\", 0, 0, NULL, 0);\n"
-               "        }"),
-    "text_view": ("first = ui_text_view(\"tv\", 2, lines, sizeof lines - 1, \"\", 0, NULL, 0,\n"
-                  "                             tv, sizeof tv);"),
+C = {
+    "field": '''static void page(void) {
+    ut_page("matrix", "Matrix") ut_field("t", "Name");
 }
 
-C_APP = r'''#include <stdint.h>
-#include <string.h>
+EXPORT(_init) void _init(void) {
+    ut_text("t", "");
+    ut_open(page);
+}
+''',
+    "list": '''enum { F_ID };
+static int32_t s_items, s_c;
 
-#include "moybyte/ui.h"
+static void opened(int32_t row) {
+    static const char rows[] = "one\\0two\\0three";
+    uitree_set_model(s_items, 3, rows, sizeof rows);
+}
 
-static const char lines[] = "%s";
+static void pick(int32_t row) {
+    char k[16];
+    ut_get_cell(s_items, row, F_ID, k, sizeof k);
+    ut_set_text(s_c, k);
+}
 
-int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-    static char t[16];
-    int32_t tl = 0, c = 0, n = 0, open = 1, first = 0;
-    int32_t page[4], tv[2];
-    moy_frame_t f;
-    (void)tl; (void)c; (void)n; (void)open; (void)first; (void)tv; (void)lines;
-    while (moy_ui_link_frame(&f)) {
-        ui_page("Matrix", 6, NULL, 0, page, sizeof page);
-        if (%d) {
-            ui_at(page[0] + %d, page[1] + %d, page[2] - %d, %d);
-        }
-        %s
-        if (moy_ui_link_show() != 0) {
-            return 3;
+static void page(void) {
+    ut_page("matrix", "Matrix") {
+        ut_group("Pick") {
+            ut_rows("items", NULL) ut_link("pick", "{.id}");
         }
     }
-    return 0;
 }
+
+EXPORT(_init) void _init(void) {
+    s_items = ut_model("items", "id", F_ID, UT_TEXT);
+    s_c = ut_text("c", "one");
+    ut_hook("opened", opened);
+    ut_action("pick", "Pick", pick);
+    ut_open(page);
+}
+''',
+    "button": '''static int32_t s_n;
+
+static void go(int32_t row) { uitree_set_int(s_n, uitree_get_int(s_n) + 1); }
+
+static void page(void) {
+    ut_page("matrix", "Matrix") ut_button("go", NULL);
+}
+
+EXPORT(_init) void _init(void) {
+    s_n = ut_int("n", 0);
+    ut_action("go", "Go", go);
+    ut_open(page);
+}
+''',
+    "popover": '''static int32_t s_up;
+
+static void nothing(int32_t row) {}
+
+static void shut(int32_t row) { uitree_set_int(s_up, 0); }
+
+static void page(void) {
+    ut_page("matrix", "Matrix") {
+        ut_button("anchor", NULL);
+        ut_in(ut_node(UT_POPOVER, "pop")) {
+            ut_p_w(120);
+            ut_p_anchor("anchor");
+            ut_p_close("shut");
+            ut_p_shown("up");
+            ut_button("into", NULL);
+        }
+    }
+}
+
+EXPORT(_init) void _init(void) {
+    s_up = ut_bool("up", 1);
+    ut_action("anchor", "Anchor", nothing);
+    ut_action("into", "In", nothing);
+    ut_action("shut", "Close", shut);
+    ut_open(page);
+}
+''',
+    "dialog": '''static int32_t s_up;
+
+static void shut(int32_t row) { uitree_set_int(s_up, 0); }
+
+static void page(void) {
+    ut_page("matrix", "Matrix") {
+        ut_dialog("Sure?", "up", "no", "yes") ut_label("Really?");
+    }
+}
+
+EXPORT(_init) void _init(void) {
+    s_up = ut_bool("up", 1);
+    ut_action("no", "No", shut);
+    ut_action("yes", "Yes", shut);
+    ut_open(page);
+}
+''',
+    "text_view": '''static void page(void) {
+    ut_page("matrix", "Matrix") ut_text_view("lines");
+}
+
+EXPORT(_init) void _init(void) {
+    ut_text("lines", "%s");
+    ut_open(page);
+}
+''' % LINES.replace("\n", "\\n"),
+}
+
+C_APP = '''#include "moybyte/uitree.h"
+
+#define EXPORT(name) __attribute__((export_name(#name)))
+
+%s
+EXPORT(_layout) void _layout(int32_t w, int32_t h, int32_t fs) {}
+EXPORT(_update) void _update(float dt) {}
+EXPORT(_draw) void _draw(void) { ut_frame(); }
 '''
 
 
-def _tall(row):
-    return TALL[row]
-
-
-def py_app(row):
-    return PY_APP % (LINES, row != "dialog", INSET, INSET, 2 * INSET, _tall(row), PY_PAGE[row])
-
-
-def lua_app(row):
-    return LUA_APP % (", ".join('"%s"' % s for s in LINES), "true" if row != "dialog" else "false",
-                      INSET, INSET, 2 * INSET, _tall(row),
-                      LUA_PAGE[row])
-
-
-def c_app(row):
-    return C_APP % ("\\0".join(LINES), int(row != "dialog"), INSET, INSET, 2 * INSET,
-                    _tall(row), C_PAGE[row])
-
-
-# -- the shell page: a system app's content layer --------------------------------
-
-class MatrixShellPage(AppLayer):
-    """A system app drawing the row's page through its AppContext's toolkit
-    host, as Files does (runtime/apps/files_app.py)."""
-
-    id = "matrix"
-    domain = "system"
-    TITLE = "Matrix"
-    NEEDS = ("surface", "theme", "damage")
-    UI = True
-    ROW = "field"
-
-    def __init__(self, ctx, names=None):
-        self.ctx = ctx
-        self._ui = ctx.ui
-        self.S = {"t": "", "c": 0, "n": 0, "open": 1, "first": 0}
-
-    @staticmethod
-    def is_app(cart):
-        return bool(cart) and cart.get("title") == "Matrix Shell"
-
-    def open(self):
-        self.S = {"t": "", "c": 0, "n": 0, "open": 1, "first": 0}
-        self.ctx.ui.reset()
-        self.ctx.damage.all()
-
-    def relayout(self, w, h, fs, cs=None):
-        pass
-
-    def handle_input(self, i):
-        if self.ctx.ui.keys(i):
-            self.ctx.damage.all()
-        return True
-
-    def handle_pointer(self, px, py, click):
-        if self.ctx.ui.point(px, py, click):
-            self.ctx.damage.all()
-        return True
-
-    def draw(self, dt):
-        import ui
-        cv = self.ctx.surface.canvas()
-        self.ctx.ui.begin(cv, self.ctx.theme.colors(), (0, 0, cv.w, cv.h))
-        ns = {"ui": ui, "S": self.S, "LINES": LINES}
-        ui.page("Matrix")
-        r = self.ctx.surface.content_rect()      # a system app's page is the surface
-        self.S["r"] = r
-        if self.ROW != "dialog":
-            ui.at(r[0] + INSET, r[1] + INSET, r[2] - 2 * INSET, _tall(self.ROW))
-        exec(compile("def _w():\n    " + PY_PAGE[self.ROW] + "\n", "matrix", "exec"), ns)
-        ns["_w"]()
+def _shell_layer(tmp, row):
+    """The row's page as a system app: its Python source a module of its
+    own, registered the way the console registers one."""
+    import uitree_app
+    name = "matrix_shell_" + row
+    path = tmp / (name + ".py")
+    path.write_text("import uitree as ui\n" + PY[row])
+    sys.modules.pop(name, None)
+    spec = importlib.util.spec_from_file_location(name, str(path))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    return uitree_app.app_layer("matrix", "Matrix", mod.build)
 
 
 # -- one layer's run of one page ---------------------------------------------------
@@ -299,29 +408,44 @@ def _matrix(*keys, mic=False):
     return bytes(d)
 
 
+_STATE_LINE = re.compile(r"\[trace\] \S+\s+state\s+(\S+)\s+(.*?)\s+->\s+(.*?)\s+\(")
+
+
+def _value(v):
+    """A state's value as the effects compare it: a bool its 0 or 1, a
+    trace's quoted text its text, its digits their int."""
+    if isinstance(v, bool):
+        return int(v)
+    if isinstance(v, str) and len(v) >= 2 and v[0] == v[-1] == "'":
+        return v[1:-1]
+    if v in ("true", "false", "True", "False"):
+        return int(v in ("true", "True"))
+    if isinstance(v, str) and re.fullmatch(r"-?\d+", v):
+        return int(v)
+    return v
+
+
 class Rig:
     """A workstation on a board's input table with every driver attached,
     one page open on one layer."""
 
     def __init__(self, tmp_path, layer, row, monkeypatch, built):
         from runtime import host_app
+        from runtime.host import moy_log
         from ws_helpers import open_cart
+        import uitree_parity as P
         monkeypatch.setattr(host_app, "InputState", mi.InputTable)
         self.layer, self.row = layer, row
-        self.tmp, self.monkeypatch = tmp_path, monkeypatch
+        self.tmp, self.monkeypatch, self.built = tmp_path, monkeypatch, built
         root = str(tmp_path / "carts")
         host_app.moy_carts.ensure_dirs(root)
+        tree = {"extensions": ["moybyte.uitree"]}
         if layer == "py_app":
-            _write(root, "matrix_py.moy", {"runtime": "python", "main": "main.py"},
-                   {"main.py": py_app(row)})
+            _write(root, "matrix_py.moy", dict(tree, runtime="python", main="main.py"), {"main.py": PY[row]})
         elif layer == "lua_app":
-            _write(root, "matrix_lua.moy", {"runtime": "lua", "main": "main.lua"},
-                   {"main.lua": lua_app(row)})
-        elif layer in ("wasm_app", "elf_app"):
-            shutil.copytree(built[(layer, row)], os.path.join(root, "matrix_c.moy"))
-        else:
-            _write(root, "matrix_shell.moy", {"runtime": "python", "main": "main.py"},
-                   {"main.py": "def _draw():\n    pass\n"}, title="Matrix Shell")
+            _write(root, "matrix_lua.moy", dict(tree, runtime="lua", main="main.lua"), {"main.lua": LUA[row]})
+        elif layer == "wasm_app":
+            shutil.copytree(built[row], os.path.join(root, "matrix_c.moy"))
         self.ws = ws = host_app.build_workstation(root)
         # A board's inputs as the hints know them, the T-Deck's and the
         # host's: the Mic key's tap is a field's Cancel where the T-Deck
@@ -339,24 +463,17 @@ class Rig:
         from test_ble_keyboard import FakeStack, _ready
         self.ble = mi.HidMachine(ws.input, FakeStack())
         _ready(self.ble)
+        self.seq = moy_log.next()
         if layer == "py_shell":
-            MatrixShellPage.ROW = row
-            from runtime.ui_draw import AppHost
-            ctx = ws.app_context("matrix", MatrixShellPage.NEEDS)
-            ctx.ui = AppHost("matrix", ctx.surface)
-            ws._app_hosts["matrix"] = ctx.ui
-            app = MatrixShellPage(ctx)
-            ws.spine.register_app(app)
-            self.app = app
-        open_cart(ws, "Matrix Shell" if layer == "py_shell" else "Matrix")
-        if ws.confirm.open:
-            act = ws.confirm._act
-            ws.confirm.cancel()
-            act()
-        assert ws.run.player.cart_error is None if layer != "py_shell" else True
+            self.app = P.host(ws, _shell_layer(tmp_path, row))
+        else:
+            open_cart(ws, "Matrix")
+            if ws.confirm.open:
+                act = ws.confirm._act
+                ws.confirm.cancel()
+                act()
+            assert ws.run.player.cart_error is None, ws.run.player.cart_error
         self.frames(4)
-        if layer == "py_app":
-            PAGE_RECT[row] = self.state()["r"]
 
     # -- frames and reads
 
@@ -369,39 +486,59 @@ class Rig:
             self.ws.mark_dirty()
             self.drv.frame(DT)
 
-    def state(self):
-        p = self.ws.run.player
+    def engine(self):
+        """The Python layers' engine, else None."""
         if self.layer == "py_shell":
-            return dict(self.app.S)
-        if self.layer == "lua_app":
-            g = p.lua.get_global
-            return {"t": g("T"), "c": g("C"), "n": g("N"), "open": g("OPEN"), "first": g("FIRST"),
-                    "r": PAGE_RECT.get(self.row)}
+            return self.app.engine
         if self.layer == "py_app":
-            return dict(p.ns["S"])
+            return self.ws.run.player.tree.engine
         return None
 
+    def state(self):
+        """The row's state: {name: value}, and a text view's picture."""
+        name = STATE[self.row]
+        if name is None:
+            return {"pic": self.shot()}
+        eng = self.engine()
+        if eng is not None:
+            return {name: _value(eng.s._v[name])}
+        if self.layer == "lua_app":
+            lua = self.ws.run.player.lua
+            assert lua.exec("__READ = S.%s; if type(__READ) == 'boolean' then __READ = __READ and 1 or 0 end"
+                            % name, "test") is None
+            return {name: _value(lua.get_global("__READ"))}
+        from runtime.host import moy_log
+        v = {"t": "", "c": "one", "n": 0, "up": 1}[name]
+        for r in moy_log.read(self.seq, 4000):
+            m = _STATE_LINE.search(r[4])
+            if m and m.group(1) == name:
+                v = _value(m.group(3))
+        return {name: v}
+
     def shot(self):
-        from test_ui_linked import _shot
-        return _shot(self.drv)
+        return bytes(self.drv.rgb888())
 
-    def screen_of(self, x, y):
-        if self.layer == "py_shell":
-            return x, y                 # a system app draws on the screen's canvas
-        ox, oy, sc = self.ws._viewport()[:3]
-        return ox + x * sc, oy + y * sc
-
-    def widget_rect(self):
-        """The widget's rect on the screen, from the page's content rect the
-        Python page recorded (every layer lays the page out alike)."""
-        r = (self.state() or {}).get("r") or PAGE_RECT.get(self.row)
-        if r is None:
-            ref = Rig(self.tmp / "rect", "py_app", self.row, self.monkeypatch, {})
-            ref.ws.spine.exit()
-            r = PAGE_RECT[self.row]
-        x, y = self.screen_of(r[0] + INSET, r[1] + INSET)
-        sc = 1 if self.layer == "py_shell" else self.ws._viewport()[2]
-        return x, y, (r[2] - 2 * INSET) * sc, (_tall(self.row) or 24) * sc
+    def touch_point(self):
+        """Where on the screen a tap presses the row's widget (the list's
+        second row): found once on a Python layer's page of its own, by
+        tapping down the page's middle until one takes. A flowing page
+        keeps no rects, and every cart layer lays a page out as the Python
+        cart's engine does, so a cart's point is that one's."""
+        kind = "py_shell" if self.layer == "py_shell" else "py_app"
+        got = POINT.get((kind, self.row))
+        if got is None:
+            ref = Rig(self.tmp / ("touch_" + kind), kind, self.row, self.monkeypatch, self.built)
+            sx, sy, sw, sh = ref.ws.app_content_rect()
+            took = {"button": lambda s: s["n"] == 1, "list": lambda s: s["c"] == "two"}[self.row]
+            for y in range(sy + 2, sy + sh, 6):
+                ref.tap(sx + sw // 2, y)
+                if took(ref.state()):
+                    got = POINT[(kind, self.row)] = (sx + sw // 2, y)
+                    break
+            if kind != "py_shell":
+                ref.ws.spine.exit()
+            assert got is not None, "no tap down the page's middle takes its %s" % self.row
+        return got
 
     # -- the inputs, each through its driver
 
@@ -455,7 +592,7 @@ class Rig:
 
 
 ENTER, ESC, DOWN = 0x28, 0x29, 0x51
-PAGE_RECT = {}
+POINT = {}
 USAGE = {"h": 0x0B}
 
 
@@ -503,16 +640,15 @@ def gesture(rig, col, what):
             for _ in range(3):
                 rig.desk_key(mi.KEY_DOWN)
     elif col == "touch":
-        x, y, w, h = rig.widget_rect()
-        if what == "press":
-            rig.tap(x + w // 2, y + h // 2)
-        elif what == "next":
-            rig.tap(x + w // 2, y + 30)          # the second row, under the caption
-        elif what == "dismiss":
+        if what == "dismiss":
             sx, sy, sw, sh = rig.ws.app_content_rect()
             rig.tap(sx + sw - 4, sy + sh - 4)
+            return
+        if what in ("press", "next"):
+            rig.tap(*rig.touch_point())
         else:
-            rig.drag(x + w // 2, y + h - 8, -60)
+            sx, sy, sw, sh = rig.ws.app_content_rect()
+            rig.drag(sx + sw // 2, sy + sh // 2 + 30, -60)
     elif col == "trackball":
         if what == "press":
             rig.drv.ball_click()
@@ -558,13 +694,13 @@ def effect(what, before, after):
     if what == "press":
         return after["n"] == before["n"] + 1
     if what in ("dismiss", "choose"):
-        return after["open"] == 0
+        return after["up"] == 0
     if what == "scroll":
-        return after["first"] > before["first"]
+        return after["pic"] != before["pic"]
     raise AssertionError(what)
 
 
-# -- the compiled and ELF pages, built once ----------------------------------------
+# -- the compiled pages, built once --------------------------------------------------
 
 def _write(root, name, man, files, title="Matrix"):
     d = os.path.join(root, name)
@@ -572,10 +708,10 @@ def _write(root, name, man, files, title="Matrix"):
     full = {"format": "moy-1", "title": title, "id": "test." + name.split(".")[0],
             "canvas": "320x240", "moybyte": {"type": "app", "permissions": []}}
     full.update(man)
-    import json
     with open(os.path.join(d, "manifest.json"), "w") as f:
         json.dump(full, f)
     for n, text in files.items():
+        os.makedirs(os.path.dirname(os.path.join(d, n)), exist_ok=True)
         with open(os.path.join(d, n), "w") as f:
             f.write(text)
     with open(os.path.join(d, "config.json"), "w") as f:
@@ -584,178 +720,88 @@ def _write(root, name, man, files, title="Matrix"):
 
 @pytest.fixture(scope="module")
 def built(tmp_path_factory):
-    """{(layer, row): cart folder} for the compiled and ELF pages this host
-    can build."""
+    """{row: cart folder} for the compiled pages, or the exception a host
+    with no wasi-sdk raised."""
+    from tools import wasm_cart
     out = {}
     base = tmp_path_factory.mktemp("matrix_c")
     for row in ROWS:
-        src = base / ("src_" + row)
-        _write(str(src.parent), src.name, {}, {})
-        os.makedirs(src / "src", exist_ok=True)
-        (src / "src" / "page.c").write_text(c_app(row))
+        src = "src_" + row
+        _write(str(base), src, {"runtime": "wasm", "main": "main.wasm", "memory": 2,
+                                "extensions": ["moybyte.app"]}, {"src/main.c": C_APP % C[row]})
+        dst = str(base / ("wasm_" + row + ".moy"))
         try:
-            from tools import elf_cart
-            man = src / "manifest.json"
-            import json
-            m = json.loads(man.read_text())
-            m["moybyte"]["permissions"] = ["full_access"]
-            man.write_text(json.dumps(m))
-            dst = str(base / ("elf_" + row + ".moy"))
-            elf_cart.build(str(src), dst, ["host"], signed=False)
-            out[("elf_app", row)] = dst
-        except Exception as exc:  # noqa: BLE001 -- a host with no compiler
-            out[("elf_app", row)] = exc
-        try:
-            from tools import wasm_cart
-            wsrc = base / ("wsrc_" + row)
-            shutil.copytree(str(src), str(wsrc))
-            m = json.loads((wsrc / "manifest.json").read_text())
-            m.update({"runtime": "wasm", "main": "main.wasm"})
-            m["moybyte"]["wasi"] = True
-            m["moybyte"]["permissions"] = []
-            (wsrc / "manifest.json").write_text(json.dumps(m))
-            os.rename(str(wsrc / "src" / "page.c"), str(wsrc / "src" / "main.c"))
-            dst = str(base / ("wasm_" + row + ".moy"))
-            wasm_cart.build(str(wsrc), dst)
-            out[("wasm_app", row)] = dst
+            wasm_cart.build(str(base / src), dst)
+            out[row] = dst
         except Exception as exc:  # noqa: BLE001 -- a host with no wasi-sdk
-            out[("wasm_app", row)] = exc
+            out[row] = exc
     return out
 
 
-_REF = {}
-
-
-def _reference(tmp_path, row, col, monkeypatch, built):
-    """The Python app's pictures before and after the gesture, and whether
-    its state took the gesture's effect."""
-    key = (row, col)
-    if key not in _REF:
-        rig = Rig(tmp_path / "ref", "py_app", row, monkeypatch, built)
-        a, s0 = rig.shot(), rig.state()
-        what = GESTURES[row][col]
-        gesture(rig, col, what)
-        _REF[key] = (a, rig.shot(), effect(what, s0, rig.state()))
-        rig.ws.spine.exit()
-    return _REF[key]
-
-
-def test_a_linked_toolkit_lends_no_bar_beside_an_open_lua_run(tmp_path, monkeypatch, built):
-    """An app linking its own toolkit (a WASI or native app) names the
-    host's bar nothing, while the run's context (native/moy_ui/moy_ui_run.c)
-    still answers for a Lua app's run another workstation left open: its
-    page's title showed in the C app's bar."""
-    from runtime.toolkit import ui_draw
-    Rig(tmp_path / "lua", "lua_app", "button", monkeypatch, built)
-    assert ui_draw.page_title(ui_draw.RUN_UI), "the Lua run names its page"
-    ran = 0
-    for layer in ("wasm_app", "elf_app"):
-        if isinstance(built[(layer, "button")], Exception):
-            continue
-        rig = Rig(tmp_path / layer, layer, "button", monkeypatch, built)
-        assert rig.ws.run.player.face.page_ctx() is None, layer
-        rig.ws.spine.exit()
-        ran += 1
-    if not ran:
-        pytest.skip("no WASI or ELF build here")
-
-
-def test_an_app_on_screen_is_not_struck_for_slow_frames(tmp_path, monkeypatch, built):
-    """A WASI or native app's wake is a frame the console asked for, so its
-    wakes over the supervisor's slice (native/moy_kernel/moy_super.h),
-    which a loaded host gives an interpreted frame, neither strike nor
-    suspend it: a suspended app takes no input, and its page stands."""
-    from runtime import moy_evq
-    ran = 0
-    for layer in ("wasm_app", "elf_app"):
-        if isinstance(built[(layer, "dialog")], Exception):
-            continue
-        rig = Rig(tmp_path / layer, layer, "dialog", monkeypatch, built)
-        try:
-            pid = rig.ws.run.player.pid
-            for _ in range(4):          # a warning, then the three strikes that suspend
-                moy_evq.charge(pid, 30000, False)
-            assert not moy_evq.held(pid), layer
-            before = rig.shot()
-            gesture(rig, "desk_kbd", "choose")
-            assert rig.shot() != before, "%s: the dialog took no choose" % layer
-        finally:
-            rig.ws.spine.exit()
-        ran += 1
-    if not ran:
-        pytest.skip("no WASI or ELF build here")
+def _needs_build(built, layer, row):
+    if layer != "wasm_app":
+        return
+    got = built[row]
+    if isinstance(got, Exception):
+        if os.environ.get("CI"):
+            raise got
+        pytest.skip("no wasm build here: %s" % got)
 
 
 @pytest.mark.parametrize("layer,row,col", CELLS, ids=["-".join(c) for c in CELLS])
 def test_cell(tmp_path, monkeypatch, built, layer, row, col):
     what = GESTURES[row][col]
-    if layer in ("wasm_app", "elf_app"):
-        got = built[(layer, row)]
-        if isinstance(got, Exception):
-            if os.environ.get("CI"):
-                raise got
-            pytest.skip("no %s build here: %s" % (layer, got))
-    if layer in ("wasm_app", "elf_app"):
-        ref = _reference(tmp_path, row, col, monkeypatch, built)
+    _needs_build(built, layer, row)
     rig = Rig(tmp_path, layer, row, monkeypatch, built)
     try:
-        if layer in ("wasm_app", "elf_app"):
-            before = rig.shot()
-            if what == "cancel":
-                # A cancel draws the page as it was before the typing, so the
-                # typing has to show first: a cancel that did nothing would
-                # draw the same.
-                rig.desk_type(TYPED)
-                typed = rig.shot() != before
-                assert typed, "%s: typing into the field draws nothing" % layer
-                gesture(rig, col, "dismiss")
-            else:
-                gesture(rig, col, what)
-            after = rig.shot()
-            assert ref[2], "the Python app's own cell fails: so does this layer's"
-            # Booleans, not the shots: a failed == over two frames' bytes
-            # makes pytest diff them, which runs for hours.
-            drew = (ref[1] != ref[0] or what == "cancel") and after == ref[1]
-            assert drew, ("%s: the %s's %s by %s does not draw what the Python app's does"
-                          % (layer, row, what, col))
-            rests = before == ref[0]
-            assert rests, "the page at rest differs from the Python app's"
-            return
         before = rig.state()
         gesture(rig, col, what)
         after = rig.state()
         assert effect(what, before, after), (
-            "%s: %s by %s: %r -> %r" % (layer, what, col, before, after))
+            "%s: %s by %s: %r -> %r" % (layer, what, col,
+                                        {k: v for k, v in before.items() if k != "pic"},
+                                        {k: v for k, v in after.items() if k != "pic"}))
     finally:
-        rig.ws.spine.exit()
+        if layer != "py_shell":
+            rig.ws.spine.exit()
 
 
 # -- widget state (phase 8): a field's edit and a popover's size are its own ----------
 
-STACK_PY = """
-a = "aa"
-b = "bb"
-pop = 0
-want = ""
-focus = ""
+STACK_PY = """s = ui.state(a="aa", b="bb", up=False)
+ui.app("Stack", icon="calc")
 
 
-def _draw():
-    global a, b, pop, want, focus
-    cls(0)
-    ui.page("Stack")
-    a, _ = ui.field("Name", a, 11)
-    ui.button("Open")
-    if pop:
-        if not ui.popover("pop", 160):
-            pop = 0
-        b, _ = ui.field("Note", b, 11)
-        ui.popover()
-    if want:
-        ui.focus(want)
-        want = ""
-    focus = ui.focus()
+def nothing():
+    pass
+
+
+def shut():
+    s.up = False
+
+
+def show(on):
+    s.up = on == 1
+
+
+def focus_on(key):
+    ui.focus(key)
+
+
+ui.action("open", "Open", nothing)
+ui.action("shut", "Close", shut)
+ui.hook("show", show, takes="arg")
+ui.hook("focus_on", focus_on, takes="arg")
+
+
+def build():
+    with ui.page("Stack"):
+        ui.field("Name", "a", max=11)
+        ui.button("open")
+        with ui.popover("pop", w=160, anchor="open", close="shut", shown="up"):
+            ui.field("Note", "b", max=11)
 """
+
 
 class _Stack:
     """A Python app's page whose field a popover with a field of its own
@@ -765,10 +811,17 @@ class _Stack:
     def __init__(self, tmp_path):
         from test_app_field_typing import _open
         self.ws, self.drv = _open(tmp_path, "Stack", STACK_PY, "python")
-        self.ns = self.ws.run.player.ns
+        self.tree = self.ws.run.player.tree
+        self.eng = self.tree.engine
 
-    def set(self, name, v):
-        self.ns[name] = v
+    def ab(self):
+        v = self.eng.s._v
+        return v["a"], v["b"]
+
+    def run(self, name, arg):
+        """A hook of the app's run as its host runs one, then the frames
+        that show it."""
+        self.tree.act(name, arg)
         for _ in range(3):
             self.drv.frame(DT)
 
@@ -784,18 +837,18 @@ def test_a_stacked_fields_cancel_gives_each_field_its_own_text(tmp_path):
     ui_draw.input_kind("tdeck")
     try:
         st = _Stack(tmp_path)
-        st.set("want", "Name")
+        st.run("focus_on", "a")
         _type(st.drv, "x")
-        st.set("pop", 1)
-        st.set("want", "Note")
+        st.run("show", 1)
+        st.run("focus_on", "b")
         _type(st.drv, "y")
-        assert (st.ns["a"], st.ns["b"]) == ("aax", "bby")
+        assert st.ab() == ("aax", "bby")
         _mic(st.ws, st.drv)
-        assert (st.ns["a"], st.ns["b"]) == ("aax", "bb")
-        st.set("pop", 0)
-        st.set("want", "Name")
+        assert st.ab() == ("aax", "bb")
+        st.run("show", 0)
+        st.run("focus_on", "a")
         _mic(st.ws, st.drv)
-        assert (st.ns["a"], st.ns["b"]) == ("aa", "bb")
+        assert st.ab() == ("aa", "bb")
         assert not st.ws.sysmenu.open, "the page's field had its own edit to cancel"
     finally:
         ui_draw.input_kind(was)
@@ -803,18 +856,16 @@ def test_a_stacked_fields_cancel_gives_each_field_its_own_text(tmp_path):
 
 def test_a_popover_first_shows_at_its_settled_box(tmp_path):
     """A popover with no size kept shows on the frame that opens it, at the
-    box it rests at: the frame after it moves focus into it (the page's
-    field gives up its focused look, the popover's takes it) and every frame
-    after that draws the same."""
-    from test_ui_linked import _pixels
+    box it rests at: every frame after the one that opens it draws the
+    same."""
     st = _Stack(tmp_path)
-    base = _pixels(st.ws)
-    st.ns["pop"] = 1
+    base = bytes(st.drv.rgb888())
+    st.tree.act("show", 1)
     shots = []
     for _ in range(4):
         st.ws.mark_dirty()
         st.drv.frame(DT)
-        shots.append(_pixels(st.ws))
+        shots.append(bytes(st.drv.rgb888()))
     assert shots[0] != base, "the frame that opens it shows nothing of it"
     rest = shots[1] == shots[2] == shots[3]
     assert rest, "the popover's box moved after it first showed"
