@@ -286,8 +286,7 @@ def _picked():
         ui.button("front_i", icon="to_front", kind="bar", alone=True, w=36, shown="!roomy")
         ui.button("back_i", icon="to_back", kind="bar", alone=True, w=36, shown="!roomy")
     with ui.row("where", pad=10, gap=8):
-        ui.label("{place}", tone="dim", size="text")
-        ui.row("where_gap", grow=True)
+        ui.label("{place}", tone="dim", wrap="word", lines=2)
         ui.button("remove", kind="danger", shown="roomy")
         ui.button("remove_i", icon="trash", kind="bar", alone=True, w=36, shown="!roomy")
 
