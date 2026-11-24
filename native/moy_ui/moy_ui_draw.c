@@ -65,8 +65,8 @@ static moy_ui_span_t t_cut(const tfont_t *f, moy_ui_span_t t, int maxw, int scal
 // -- the sink --------------------------------------------------------------------
 //
 // Both sinks are a canvas row by the time a primitive draws: ROW's is the
-// glass's (moy_ui_sink.c), RUN's a row a compiled run's canvas lends
-// (moy_ui_wasm.c).
+// glass's (moy_ui_sink.c), RUN's a row a run's canvas lends
+// (moy_ui_run.c).
 
 typedef struct {
     moy_canvas_row_t *row;

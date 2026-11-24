@@ -21,7 +21,7 @@
 #include "moy_theme.h"
 #include "moy_str.h"
 #include "moy_ui_text.h"
-#include "moy_ui_wasm.h"
+#include "moy_ui_run.h"
 
 #define NAMES_CAP (MOY_THEME_PARTS > MOY_THEME_ROLES ? MOY_THEME_PARTS : MOY_THEME_ROLES)
 
@@ -2992,18 +2992,6 @@ static mp_obj_t ui_text_runs(mp_obj_t line, mp_obj_t syn) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(ui_text_runs_obj, ui_text_runs);
 
-// wasm_rows() -> the public UI API's rows a compiled app imports ("ui_page", ...),
-// in the role table's order: what this image serves (moy_ui_wasm.h).
-static mp_obj_t ui_wasm_rows(void) {
-    mp_obj_t items[MOY_UI_WASM_ROWS];
-    for (int i = 0; i < MOY_UI_WASM_ROWS; i++) {
-        const char *n = moy_ui_wasm_name(i);
-        items[i] = mp_obj_new_str(n, strlen(n));
-    }
-    return mp_obj_new_tuple(MOY_UI_WASM_ROWS, items);
-}
-static MP_DEFINE_CONST_FUN_OBJ_0(ui_wasm_rows_obj, ui_wasm_rows);
-
 static mp_obj_t ui_calls(void) {
     return mp_obj_new_int_from_uint(moy_ui_calls());
 }
@@ -3093,7 +3081,6 @@ static const mp_rom_map_elem_t moy_ui_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_icons_use), MP_ROM_PTR(&ui_icons_use_obj) },
     { MP_ROM_QSTR(MP_QSTR_moy_use), MP_ROM_PTR(&ui_moy_use_obj) },
     { MP_ROM_QSTR(MP_QSTR_s), MP_ROM_PTR(&ui_s_obj) },
-    { MP_ROM_QSTR(MP_QSTR_wasm_rows), MP_ROM_PTR(&ui_wasm_rows_obj) },
     MOY_FACE_MOY_UI_ROWS
     { MP_ROM_QSTR(MP_QSTR_api_begin), MP_ROM_PTR(&ui_api_begin_obj) },
     { MP_ROM_QSTR(MP_QSTR_api_label), MP_ROM_PTR(&ui_api_label_obj) },

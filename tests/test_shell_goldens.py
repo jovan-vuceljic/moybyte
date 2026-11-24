@@ -314,7 +314,7 @@ APP_CARTS = (("notes", "Notes"),)
 # so every surface before it draws the seed set alone.
 MESH_APP = str(Path(__file__).resolve().parent / "fixtures" / "apps" / "moymesh.moy")
 
-# The public UI API's fixture page (docs/ui_api_2026-10.md), the Python app's
+# The public UI API's fixture page (docs/history/ui_api_2026-10.md), the Python app's
 # (tests/test_ui_public.py holds the Lua and compiled ones to its pixels): its
 # config's one surface.
 UI_PAGE = (str(Path(__file__).resolve().parent / "fixtures" / "ui_page" / "page_py.moy"),

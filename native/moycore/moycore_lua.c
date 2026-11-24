@@ -20,10 +20,7 @@
 #include "moycore_lua.h"
 #include "moycore_run.h"
 #include "moycore_superset.h"
-#if MOYCORE_UI
-#include "moycore_ui.h"
-#endif
-#if MOYCORE_UI && MOYCORE_UITREE
+#if MOYCORE_UITREE
 #include "moycore_uitree.h"
 #endif
 #include "moycore_scene.h"
@@ -1485,10 +1482,7 @@ int moycore_lua_open(const struct moy_app_run *app, char *err, size_t n)
     // The layer glue's two natives, captured and cleared by the prelude.
     moycore_layers_open(RUN.L, &RUN.layers, &RUN.c.con);
     moycore_superset_open(RUN.L);
-#if MOYCORE_UI
-    moycore_ui_open(RUN.L);
-#endif
-#if MOYCORE_UI && MOYCORE_UITREE
+#if MOYCORE_UITREE
     moycore_uitree_open(RUN.L);
 #endif
     media_open(RUN.L);

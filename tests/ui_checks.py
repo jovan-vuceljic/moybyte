@@ -22,7 +22,7 @@ WHOLE, ELLIPSIS, CUT = 0, 1, 2          # moy_ui.h's MOY_UI_FIT_*
 # moy_ui_hints): any key of the desk keyboard; the T-Deck's keyboard (its
 # letters, Shift, Sym, Alt, Mic, Del, Space, enter and the trackball); the
 # browser's on-screen gamepad (the stick, A, B and its menu key, Start;
-# docs/ui_api_2026-10.md, "Hints"). A hint that spells another out names a
+# docs/history/ui_api_2026-10.md, "Hints"). A hint that spells another out names a
 # key the board does not have.
 _TDECK = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") | {
     "Shift", "Sym", "Alt", "Mic", "Del", "Space", "space", "enter", "left", "right", "up", "down",
@@ -39,7 +39,7 @@ INPUTS = ("keys", "tdeck", "pad", "touch")     # moy_ui.h's MOY_UI_INPUT_*
 
 # The keys an action's row names that its input lacks, each with why: the
 # gamepad column is a physical pad's, whose shoulders (tabs) and Y (more)
-# the browser's on-screen pad has none of (docs/ui_api_2026-10.md, "Hints";
+# the browser's on-screen pad has none of (docs/history/ui_api_2026-10.md, "Hints";
 # no board declares a physical pad, #98).
 ACT_BEYOND = {"pad": {"L", "R", "Y"}}
 

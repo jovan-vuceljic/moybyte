@@ -2,7 +2,7 @@
 """Round 13 of the 2026-10 look, over round 11: the apps the screen steps
 had not reached -- Paint, My Art, Get Carts, Notes and Storybook -- drawn
 with the parts the restyled apps use (Settings, Appearance, Files, Calc,
-the sprite editor) and the public UI verbs (`docs/ui_api_2026-10.md`).
+the sprite editor) and the public UI verbs (`docs/history/ui_api_2026-10.md`).
 
 `APPS_RESTYLE.md` beside `../draw.py` maps each app's functions to the
 parts drawn here; a part the verbs lack is marked there and in GAPS.md.

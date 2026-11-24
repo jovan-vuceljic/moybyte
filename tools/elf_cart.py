@@ -68,25 +68,6 @@ SDK_LIBM = os.path.join(SDK_LIBC, "m")
 # vendored verbatim): its index build, which a game draws its screen with.
 LIBMOY = os.path.join(ROOT, "native", "moy_gfx", "libmoy")
 LIBMOY_SOURCES = ("moy_canvas.c", "moy_sprite.c", "moy_data.c")
-# The toolkit an app links (sdk/include/moybyte/ui.h): native/moy_ui's
-# engine and RUN face, the text and shape raster under it and libmoy at
-# RGB565, behind the SDK's front (sdk/src/moyui_link.c). An app's module
-# takes it before libmoyos, so its libmoy is this RGB565 one.
-NATIVE = os.path.join(ROOT, "native")
-UI_DIRS = [os.path.join(NATIVE, d) for d in (
-    "moy_ui", "moy_gfx", "moy_glass", "moy_spine", "moy_kernel")]
-UI_SOURCES = (
-    [os.path.join(NATIVE, "moy_ui", n) for n in (
-        "moy_ui.c", "moy_ui_glyph.c", "moy_ui_draw.c", "moy_ui_paint.c", "moy_ui_depth.c",
-        "moy_ui_parts.c", "moy_ui_interact.c", "moy_ui_api.c", "moy_ui_api_text.c",
-        "moy_ui_api_kept.c", "moy_ui_api_table.c", "moy_ui_api_pop.c", "moy_ui_api_host.c",
-        "moy_ui_text.c", "moy_ui_tables.c", "moy_theme.c", "moy_ui_run.c", "moy_ui_wasm.c")]
-    + [os.path.join(NATIVE, "moy_gfx", n) for n in (
-        "moy_text.c", "moy_shape.c", "moy_gfx_kernels.c", "moy_gfx_base.c")]
-    + [os.path.join(NATIVE, "moy_spine", n) for n in ("moy_str.c", "moy_str_table.c",
-                                                       "moy_json.c")]
-    + [os.path.join(LIBMOY, n) for n in LIBMOY_SOURCES]
-    + [os.path.join(SDK_SRC, "moyui_link.c")])
 CACHE = os.path.join(ROOT, ".build", "sdk")
 # Each board module's unstripped twin, named by the sha256 of the module a
 # board loads (stripped, its signature trailer off): a board's core dump
@@ -290,44 +271,6 @@ def moycart(chip):
     return obj
 
 
-def libmoyui(chip):
-    """The toolkit an app links for `chip` (UI_SOURCES), built once per
-    content into .build/sdk/."""
-    cc, ar, _strip = toolchain(chip)
-    h = hashlib.sha256()
-    heads = []
-    for d in UI_DIRS + [LIBMOY, SDK_INCLUDE]:
-        heads += sorted(glob.glob(os.path.join(d, "**", "*.h"), recursive=True))
-    for p in UI_SOURCES + heads:
-        h.update(os.path.relpath(p, ROOT).encode())
-        with open(p, "rb") as f:
-            h.update(f.read())
-    flags = CFLAGS + CHIPS[chip]["flags"] + ["-DMOY_PIXEL_RGB565=1"]
-    h.update(repr((cc, flags)).encode())
-    out_dir = os.path.join(CACHE, chip, "ui-" + h.hexdigest()[:16])
-    lib = os.path.join(out_dir, "libmoyui.a")
-    if os.path.exists(lib):
-        return lib
-    tmp = out_dir + ".%d.tmp" % os.getpid()
-    os.makedirs(tmp, exist_ok=True)
-    inc = []
-    for d in UI_DIRS:
-        inc += ["-I", d]
-    base = [cc] + flags + includes(chip) + inc + ["-c"]
-    objs = []
-    for src in UI_SOURCES:
-        o = os.path.join(tmp, "ui_%s_%s.o" % (os.path.basename(os.path.dirname(src)),
-                                               os.path.basename(src)[:-2]))
-        _run(base + [src, "-o", o])
-        objs.append(o)
-    _run([ar, "rcs", os.path.join(tmp, "libmoyui.a")] + objs)
-    if os.path.isdir(out_dir):
-        shutil.rmtree(tmp, ignore_errors=True)
-    else:
-        os.replace(tmp, out_dir)
-    return lib
-
-
 def _tool(chip, name):
     cc = toolchain(chip)[0]
     return cc[:-3] + name if cc.endswith("gcc") else name
@@ -412,15 +355,13 @@ def sig_scheme():
     return re.search(r'#define MOY_ELF_SIG_SCHEME "([^"]+)"', text).group(1)
 
 
-def libs(chip, ui=False):
-    """What a module for `chip` links after its own objects; with `ui`, an
-    app's, the toolkit first."""
-    first = [libmoyui(chip)] if ui else []
+def libs(chip):
+    """What a module for `chip` links after its own objects."""
     if chip == "host":
-        return first + [libmoyos(chip), "-lm"]
+        return [libmoyos(chip), "-lm"]
     # A group, so a helper any of them needs comes from the first that
     # defines it: the SDK's own before the toolchain's.
-    return ["-nostdlib", "-Wl,--no-undefined", "-Wl,--start-group"] + first + [
+    return ["-nostdlib", "-Wl,--no-undefined", "-Wl,--start-group"] + [
         libmoyos(chip), pure_libc(chip), "-lm", libgcc(chip), "-Wl,--end-group"]
 
 
@@ -433,22 +374,15 @@ def is_cart(man):
             and ven.get("wasi") is not True)
 
 
-def is_app(man):
-    """Whether a manifest is an app's, whose main module links the toolkit
-    (sdk/include/moybyte/ui.h) and whose screen is RGB565."""
-    return (man.get("moybyte") or {}).get("type") == "app"
-
-
-def build_module(sources, chip, out, cflags=(), signed=True, sign_with=None, ui=False,
-                 cart=False):
+def build_module(sources, chip, out, cflags=(), signed=True, sign_with=None, cart=False):
     """Compile `sources` (C files) for `chip` into the module file `out`,
-    an app's linking the toolkit (`ui`), a compiled cart's the adapter
+    a compiled cart's the adapter
     (`cart`, moycart()), signed unless `signed` is False (the host's never
     is). Returns `out`."""
     cc, _ar, _strip = toolchain(chip)
     cmd = ([cc] + CFLAGS + CHIPS[chip]["flags"] + list(cflags) + includes(chip)
            + list(sources) + ([moycart(chip)] if cart else []) + LINK + CHIPS[chip]["link"]
-           + libs(chip, ui))
+           + libs(chip))
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     _run(cmd + ["-o", out])
     return finish(out, chip, signed=signed, sign_with=sign_with)
@@ -505,7 +439,6 @@ def build(src, dst, chips, signed=True, sign_with=None):
     with open(os.path.join(src, "manifest.json")) as f:
         man = json.load(f)
     stem = service_entry(man)
-    ui = is_app(man)
     cart = is_cart(man)
     sources = sorted(glob.glob(os.path.join(src, "src", "*.c")))
     svc = sorted(glob.glob(os.path.join(src, "src", stem, "*.c"))) if stem else []
@@ -521,7 +454,7 @@ def build(src, dst, chips, signed=True, sign_with=None):
     for chip in chips:
         if sources:
             out[chip] = build_module(sources, chip, os.path.join(dst, module_name(chip)),
-                                     signed=signed, sign_with=sign_with, ui=ui, cart=cart)
+                                     signed=signed, sign_with=sign_with, cart=cart)
         if svc:
             out["service." + chip] = build_module(
                 svc, chip, os.path.join(dst, "%s.%s.elf" % (stem, chip)),

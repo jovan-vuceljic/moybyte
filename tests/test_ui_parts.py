@@ -1,5 +1,5 @@
 """The public UI API's parts (docs/history/look_2026-10.md step 12; the verbs are
-docs/ui_api_2026-10.md §1's): a test per kind under the engine, and one parts
+docs/history/ui_api_2026-10.md §1's): a test per kind under the engine, and one parts
 page drawn by a Python, a Lua and a compiled app to the same pixels.
 
   * group: a caption, then a card under its rows -- rounded where the theme

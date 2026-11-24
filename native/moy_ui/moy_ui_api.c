@@ -1,4 +1,4 @@
-// The public UI API's engine (moy_ui_api.h; docs/ui_api_2026-10.md §2).
+// The public UI API's engine (moy_ui_api.h; docs/history/ui_api_2026-10.md §2).
 
 #include "moy_ui_api_int.h"
 

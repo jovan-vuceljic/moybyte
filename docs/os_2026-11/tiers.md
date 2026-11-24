@@ -103,7 +103,7 @@ costs are #227's.
   every tier's table from it: this table and the SDK's header and stubs; the
   app ABI's roles, C rows, role table and allowlist
   (`native/moy_app/moy_app_rows.h`); the `moybyte.app` natives
-  (`moy_app_wasm_rows.h`) and the toolkit's (`native/moy_ui/moy_ui_wasm_rows.h`);
+  (`moy_app_wasm_rows.h`) and the UI engine's (`native/moy_uitree/moy_uitree_wasm_rows.h`);
   the names a Lua run and a Lua service hold (`moy_app_lua_rows.h`); the
   answer codes, their texts and their errno (`moy_app_err.h`, and
   `runtime/system/face_errors.py` for the Python faces), what each tier
@@ -338,9 +338,9 @@ the status item's but its panel), run on the program's own task,
 hopped only where the kernel's half answers NEEDS_VM (`moy_wasi.c`'s THE APP ROWS); and an app's `moybyte.app`, its
 roles' rows. Those are rows of
 the one source (§1): each import is `<role>_<verb>` at the WAMR signature its
-row's types give, and the adapter's natives and the toolkit's are generated
+row's types give, and the adapter's natives and the UI engine's are generated
 from it (`native/moy_app/moy_app_wasm_rows.h`,
-`native/moy_ui/moy_ui_wasm_rows.h`), each packing its fields for the ROLE
+`native/moy_uitree/moy_uitree_wasm_rows.h`), each packing its fields for the ROLE
 door and hopping to the VM's task, or, for a read of what the look and the
 clipboard write, reading in place under the seqlock, or, for a row over the
 kernel's own locked state, running in place on the app's own task, as its

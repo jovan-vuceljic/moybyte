@@ -29,9 +29,9 @@
  *   e:focused() e:popover() e:hints() e:leave() e:dump()
  *   e:error() e:error_code() e:free()
  *
- * Included by native/moycore/moycore_lua.c and opened beside the UI API's
- * face when the build has native/moy_uitree (MOYCORE_UITREE), with the prop
- * check's global beside it (moycore_uitree_check.h). */
+ * Included by native/moycore/moycore_lua.c and opened when the build has
+ * native/moy_uitree (MOYCORE_UITREE), with the prop check's global beside it
+ * (moycore_uitree_check.h). */
 #ifndef MOYCORE_UITREE_H
 #define MOYCORE_UITREE_H
 
@@ -343,7 +343,7 @@ static int l_uit_frame(lua_State *L)
     moycore_uit_t *u = moycore_uit_of(L);
     int flags = moycore_uit_int(L, 2);
     u->L = L;
-    int r = uit_run_frame(u->e, moycore_ui_canvas(), flags);
+    int r = uit_run_frame(u->e, moycore_RUN.c.con.canvas, flags);
     u->L = NULL;
     if (u->raised != LUA_NOREF) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, u->raised);

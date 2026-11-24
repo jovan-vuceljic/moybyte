@@ -23,8 +23,8 @@ uint32_t moycore_run_now_ms(void) {
     return (uint32_t)moy_now_ms();
 }
 
-// The ticks begun and the runs opened: what the public UI API's RUN face
-// begins a frame and resets its context on (native/moy_ui/moy_ui_wasm.h).
+// The ticks begun and the runs opened: what the run's context begins a frame
+// and resets on (native/moy_ui/moy_ui_run.h).
 static uint32_t g_ticks, g_serial;
 
 void moycore_run_tick_begin(void) {

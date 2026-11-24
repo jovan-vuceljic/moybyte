@@ -1,4 +1,4 @@
--- The public UI API's fixture page (docs/ui_api_2026-10.md), as a Lua app:
+-- The public UI API's fixture page (docs/history/ui_api_2026-10.md), as a Lua app:
 -- the vendor extension moybyte.ui. page_py.moy and
 -- tests/fixtures/wasm/app_ui.moy draw the same page with the same calls, and
 -- tests/test_ui_public.py holds the three to the same pixels. Into pmem: 0

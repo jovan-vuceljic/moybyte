@@ -1,4 +1,4 @@
-"""The browser declares its inputs as a board does (docs/ui_api_2026-10.md,
+"""The browser declares its inputs as a board does (docs/history/ui_api_2026-10.md,
 "Hints"): a phone's page (`(pointer: coarse)`, which page_tail.js tells the
 worker at init) is on touch from boot, a key brings the keys back and the
 page's pointer press puts touch back in use; a fine pointer is a mouse, no

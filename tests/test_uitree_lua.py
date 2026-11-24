@@ -35,7 +35,7 @@ def _cart(root, name, main, extra=None):
     files["main.lua"] = main
     man = {"format": "moy-1", "title": name, "runtime": "lua", "main": "main.lua",
            "sources": [f for f in files if f not in ("fire.lua",)],
-           "extensions": ["moybyte.ui", "moybyte.uitree"], "moybyte": {"type": "app", "permissions": []}}
+           "extensions": ["moybyte.uitree"], "moybyte": {"type": "app", "permissions": []}}
     man["sources"].sort(key=lambda f: f == "main.lua")
     for f, text in files.items():
         with open(os.path.join(d, f), "w") as fh:

@@ -9,12 +9,11 @@
 -- hands back what the user did.
 --
 -- The Player loads this chunk, then the back end, ahead of a cart that
--- declares the extension "moybyte.uitree" (runtime/run/lua_ext.py); it takes
--- the engine's `ui` as E and installs its own. tools/uitree_lua_check.py runs
+-- declares the extension "moybyte.uitree" (runtime/run/lua_ext.py) and
+-- installs its `ui`. tools/uitree_lua_check.py runs
 -- it alone over a stub engine in a host Lua with `debug`, where `ui._check`
 -- builds every page.
 
-local E = ui
 local T = {}
 local HAS_DEBUG = type(debug) == "table" and type(debug.getinfo) == "function"
 
@@ -2741,7 +2740,7 @@ end
 -- what a back end reads and writes of the layer; it takes the table and
 -- clears it before a cart's own scripts run
 T._in = {
-  E = E, T = T, V = V, VER = VER, DECL = DECL, ACTIONS = ACTIONS, ACTION_ORDER = ACTION_ORDER, LABELS = LABELS,
+  T = T, V = V, VER = VER, DECL = DECL, ACTIONS = ACTIONS, ACTION_ORDER = ACTION_ORDER, LABELS = LABELS,
   KEYMAP = KEYMAP, SYS = SYS, STOPS = STOPS, DERIVED = DERIVED, ENGINE_OWNED = ENGINE_OWNED, stack = stack, R = R,
   BACK = BACK, ModelMT = ModelMT,
   fail = fail, q = q, show = show, trace = trace, lookup = lookup, render = render, cond = cond, truthy = truthy,

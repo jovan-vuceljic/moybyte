@@ -1,4 +1,4 @@
-"""The public UI API (docs/ui_api_2026-10.md): its verbs in three runtimes,
+"""The public UI API (docs/history/ui_api_2026-10.md): its verbs in three runtimes,
 the engine's focus and navigation, and the shell-strict ratchet.
 
   * one fixture page -- tests/fixtures/ui_page/page_py.moy, page_lua.moy and
@@ -676,7 +676,7 @@ def test_a_hover_owes_a_frame_only_over_a_stop():
 
 # The shell's app modules and system carts not yet moved onto the verbs: each
 # screen step that restyles an app takes it off (docs/history/look_2026-10.md 19-24;
-# steps 23 and 24 restyled the editors in place, docs/ui_api_2026-10.md §1a);
+# steps 23 and 24 restyled the editors in place, docs/history/ui_api_2026-10.md §1a);
 # the editors and Paint's layer stay on it.
 NOT_MOVED = frozenset((
     "runtime/editors/block_editor_ui.py",
@@ -857,7 +857,7 @@ def test_an_app_cart_draws_on_change_unless_it_animates(tmp_path, ven, every):
 
 
 
-# -- ui.split (docs/ui_api_2026-10.md §5a) -----------------------------------------------
+# -- ui.split (docs/history/ui_api_2026-10.md §5a) -----------------------------------------------
 
 
 def _panes(dir="x", o=None):
@@ -933,7 +933,7 @@ def test_a_press_focuses_its_pane_and_a_split_without_focus_answers_none():
 
 
 def test_a_split_frame_is_the_focused_panes_where_nothing_else_moved():
-    """The engine's split frame (docs/ui_api_2026-10.md §5a): the pane a
+    """The engine's split frame (docs/history/ui_api_2026-10.md §5a): the pane a
     split's focus names, drawn alone where the gen the host gives is the
     last frame's, the WM knows this frame's target holds the page as the
     last frame left it (whatever it knew of the last frame's) and the

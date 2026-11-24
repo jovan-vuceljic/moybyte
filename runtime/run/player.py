@@ -121,8 +121,7 @@ SUPPORTED_EXTENSIONS = (
     "moybyte.net",        # #65: net.send / on_net (also permission-gated)
     "moybyte.wifi",       # #38: the injected wifi service (permission-gated)
     "moybyte.app",        # #224: a compiled app's role imports (native/moy_app/moy_app_wasm.h)
-    "moybyte.ui",         # the public UI API, a Lua cart's `ui` (native/moycore/moycore_ui.h)
-    "moybyte.uitree",     # the UI tree API over it, Lua (runtime/run/uitree.lua)
+    "moybyte.uitree",     # the UI tree API, Lua (runtime/run/uitree.lua)
     "moybyte.mouse",      # a compiled cart's mouse import (native/moycore/moycore_wasm_ext.h)
     "moybyte.prefs",      # a compiled game's prefs imports (native/moycore/moycore_wasm_ext.h)
 )
@@ -1371,10 +1370,9 @@ class Player(PlayerDiag):
                                       request=ws.take_text_request(),
                                       keep=self._keep_grant, perms=self.granted,
                                       owner=self.pid))
-            if "ui" in ns:
-                self.face.bind(ns, cart)
-                if _tree.wants(cart):
-                    _tree.namespace(ns, cart)
+            self.face.bind(ns, cart)
+            if _tree.wants(cart):
+                _tree.namespace(ns, cart)
         elif _game(cart, ws.spine):
             perms = _game_perms(cart, self.granted)
             ctx = make_run_grant(ws.app_context, cart, keep=self._keep_grant,

@@ -944,7 +944,7 @@ The sprite pickers open over the page the same way (a tap on the Size
 caption), copying it into the frame's buffer (`last`'s `copy`: they wash
 nothing) and drawing again only the hint strip, which names their keys.
 A popover shows its card on the frame that opens it
-(`docs/ui_api_2026-10.md`, `ui.popover`), and the hold's key is taken again
+(`docs/history/ui_api_2026-10.md`, `ui.popover`), and the hold's key is taken again
 after the draw (`Hold.drew`): it names the card's place, which a card
 learns by drawing, so the frame after leaves the page and the card as that
 frame drew them (`HOLD_LEFT`). The system menu
@@ -968,7 +968,7 @@ Editor speaks §14.3's protocol (`EditorDesk.HELD`, `retained`, `changed`),
 and a frame whose buffer holds the desk as its last draw left it, with no
 input the desk took itself (a press, a chord) and no look, size, layout or
 bar key moved, is the prompt pane's split frame
-(`docs/ui_api_2026-10.md` §5a) and draws the prompt's rows alone; the
+(`docs/history/ui_api_2026-10.md` §5a) and draws the prompt's rows alone; the
 stamp copies them, and the full-screen row over the band stays as the
 buffer holds it (`WindowedWM._row_over`).
 

@@ -1,4 +1,4 @@
-// The public UI API's engine (docs/ui_api_2026-10.md): the verbs every app
+// The public UI API's engine (docs/history/ui_api_2026-10.md): the verbs every app
 // and cart draws its interface with -- page, label, button, toggle, slider,
 // list, group, info, link, cycle, seg, swatches, hints, icon, progress, table,
 // scroll, field, dialog, popover, menu, tabs, grid, card, part, focus, keys_taken, at -- and
@@ -157,7 +157,7 @@ enum { MOY_UI_ST_FOCUS = 1, MOY_UI_ST_ACTIVATED = 2, MOY_UI_ST_PRESSED = 4, MOY_
 // moy_ui_token_names, or 0xRRGGBB; the id's text's length; a flag 0 or 1;
 // -1 absent), the id's text, then, where it goes on, the hint's length as a
 // word and its text, a word of flags and each key's words it names in its
-// bits' order (docs/ui_api_2026-10.md §3).
+// bits' order (docs/history/ui_api_2026-10.md §3).
 #include "moy_ui_over_keys.h"
 #define MOY_UI_O_ROLE 0x1000000
 #define MOY_UI_O_NONE (-1)
@@ -1692,7 +1692,7 @@ void moy_ui_api_space(moy_ui_ctx_t *c, int h);
 // (moy_ui_api_hints with no `at`), on the ground the page drew; their box at
 // out. 0 where no page is open.
 int moy_ui_api_dock(moy_ui_ctx_t *c, int h, int32_t out[4]);
-// ui.split(id, dir, sizes, o) (docs/ui_api_2026-10.md §5a): ui.at's
+// ui.split(id, dir, sizes, o) (docs/history/ui_api_2026-10.md §5a): ui.at's
 // rect (else the page's, from its row cursor down) cut into `n` panes along
 // one axis, `gap` pixels apart -- left to right, or with MOY_UI_SPLIT_Y top
 // to bottom -- pane i sizes[i] long, the last taking what is left. Writes
@@ -1732,7 +1732,7 @@ int moy_ui_api_split(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, 
 // Whether (x, y) lies on a divider the last pass's splits drew, where a
 // press would hold it.
 int moy_ui_api_split_at(const moy_ui_ctx_t *c, int x, int y);
-// The split frame (docs/ui_api_2026-10.md §5a), asked before the frame
+// The split frame (docs/history/ui_api_2026-10.md §5a), asked before the frame
 // begins: whether it draws the pane the keys reach alone. That pane is the
 // one a split of the last pass named with its focus (opt's CUR), of the
 // panes its splits cut (a pane a later split cut again is none). It is the

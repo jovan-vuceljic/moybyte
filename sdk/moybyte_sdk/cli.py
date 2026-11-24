@@ -114,7 +114,6 @@ STUB_FILES = {
     "c": (("include/moybyte/os.h", os.path.join(SDK_INCLUDE, "moybyte", "os.h")),
           ("include/moybyte/frame.h", os.path.join(SDK_INCLUDE, "moybyte", "frame.h")),
           ("include/moybyte/game.h", os.path.join(SDK_INCLUDE, "moybyte", "game.h")),
-          ("include/moybyte/ui.h", os.path.join(SDK_INCLUDE, "moybyte", "ui.h")),
           ("include/moy.h", os.path.join(LIBMOY, "moy.h"))),
 }
 COMPILE_FLAGS = {"wasm": "--target=wasm32-wasip1\n-Iinclude\n",

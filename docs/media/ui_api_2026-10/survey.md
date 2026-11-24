@@ -1,6 +1,6 @@
 # A public UI API for Moybyte: adopt a standard, or ours? (survey, 2026-10-15)
 
-The design built on it is `docs/ui_api_2026-10.md`. The owner's decisions of 2026-10-15 kept this survey's shape and names and amended its rule on style: a call may override its colours and an app may take focus over (that doc, sections 3 and 4).
+The design built on it is `docs/history/ui_api_2026-10.md`. The owner's decisions of 2026-10-15 kept this survey's shape and names and amended its rule on style: a call may override its colours and an app may take focus over (that doc, sections 3 and 4).
 
 **Answer: copy a shape, don't adopt a library.** Take Dear ImGui's *semantics* (immediate mode, ids, engine-owned keyboard navigation) and microui/raygui's *call shape* (flat calls that answer a value), and give them **our names** (the design system's own: `primary`, `tonal`, `danger`, `toggle`, `current`, `focus` — which already match Material 3 and HTML/ARIA). No surveyed API can be adopted as-is: the ones with keyboard navigation are too big or the wrong model, and the small ones have no navigation and let an app push colours, which breaks engine-owned theming.
 
@@ -113,7 +113,7 @@ end
 Focus/navigation state in `moy_ui`, auto-row cursor, slider/toggle/part widgets; move the shell's apps onto it (deleting their own focus code); goldens move; the nine wasm `ui_*` rows are replaced (no users, no compatibility layer).
 
 ## What goes into moy-spec
-Nothing (owner, 2026-10-15): the API is Moybyte's vendor extension `moybyte.ui`, and `docs/ui_api_2026-10.md` §9 says what a proposal would carry if another host ever wants it.
+Nothing (owner, 2026-10-15): the API is Moybyte's vendor extension `moybyte.ui`, and `docs/history/ui_api_2026-10.md` §9 says what a proposal would carry if another host ever wants it.
 
 ### Sources
 Dear ImGui https://github.com/ocornut/imgui · raygui https://github.com/raysan5/raygui · microui https://github.com/rxi/microui · Nuklear https://github.com/Immediate-Mode-UI/Nuklear · egui https://github.com/emilk/egui · LVGL https://lvgl.io · Picotron manual §10.14 https://www.lexaloffle.com/dl/docs/picotron_manual.html · Inside Playdate https://sdk.play.date/inside-playdate/ · SUIT https://github.com/vrld/suit · Slab https://github.com/flamendless/Slab

@@ -26,7 +26,6 @@ CHECK_C = os.path.join(ROOT, "native", "moy_elf", "moy_os_check.c")
 WILD_H = os.path.join(ROOT, "tests", "fixtures", "elf", "elf_wild.moy", "src", "rows.h")
 APP_H = os.path.join(ROOT, "native", "moy_app", "moy_app_rows.h")
 WASM_H = os.path.join(ROOT, "native", "moy_app", "moy_app_wasm_rows.h")
-UI_H = os.path.join(ROOT, "native", "moy_ui", "moy_ui_wasm_rows.h")
 UITREE_H = os.path.join(ROOT, "native", "moy_uitree", "moy_uitree_wasm_rows.h")
 LUA_H = os.path.join(ROOT, "native", "moy_app", "moy_app_lua_rows.h")
 ERR_H = os.path.join(ROOT, "native", "moy_app", "moy_app_err.h")
@@ -43,7 +42,6 @@ LUA_EXT = str(runtime_file("lua_ext.py"))
 APP_DOC = os.path.join(ROOT, "docs", "app_api_v1.md")
 PLUGIN_TABLE = os.path.join(ROOT, "sdk", "moybyte_sdk", "os_table.py")
 APP_WASM_SDK_H = os.path.join(ROOT, "sdk", "include", "moybyte", "app.h")
-UI_SDK_H = os.path.join(ROOT, "sdk", "include", "moybyte", "ui.h")
 STUBS = os.path.join(ROOT, "sdk", "moybyte_sdk", "stubs")
 LUA_STUB = os.path.join(STUBS, "moybyte_os.lua")
 PY_STUBS = (os.path.join(STUBS, "__builtins__.pyi"), os.path.join(STUBS, "moybyte.pyi"))
@@ -59,8 +57,7 @@ SPEC_TIERS = ("python", "lua", "wasm")
 
 ROW_FIELDS = {"name", "kind", "server", "perm", "grant", "in", "ret", "how", "door", "wasm", "wasi", "elf",
               "lua", "lua_own", "py", "py_face", "hdr", "c", "va", "glibc", "fail", "noreturn", "retired",
-              "u", "example", "lua_ret", "lua_in", "lua_enum", "out_shape", "object", "py_sig",
-              "enum", "base", "list", "end_form", "ui"}
+              "u", "example", "lua_ret", "lua_in", "lua_enum", "out_shape", "object", "py_sig"}
 ELF_FIELDS = {"hdr", "c", "va", "glibc", "fail", "noreturn", "retired", "u"}
 # The Python faces a row's Lua names stand beside where Python holds its
 # service as objects, not the row's verbs (a row's py_face): the device faces
@@ -90,9 +87,8 @@ RETS = ("int", "len")
 HOWS = ("hop", "seq", "here", "direct")
 FLOOR_ROLE = "floor"
 # The roles whose rows are an engine's own natives, called on the caller's
-# task with no door (how "direct"): the toolkit's (native/moy_ui/moy_ui_wasm.h)
-# and the UI engine's (native/moy_uitree/moy_uitree_wasm.h).
-DIRECT_ROLES = ("ui", "uitree")
+# task with no door (how "direct"): the UI engine's (native/moy_uitree/moy_uitree_wasm.h).
+DIRECT_ROLES = ("uitree",)
 
 
 def load(path=SOURCE):
@@ -521,11 +517,11 @@ def check(src):
             if not ("in" in r and "ret" in r and "how" in r):
                 raise TableError("%s: an import needs in, ret and how" % name)
             if (r["how"] == "direct") != (role_of(r) in DIRECT_ROLES):
-                raise TableError("%s: a direct import is the toolkit's or the UI engine's" % name)
+                raise TableError("%s: a direct import is the UI engine's" % name)
             if r["how"] != "direct" and (len(outs) > 1 or (outs and params(r)[-1][1] != "out")):
                 raise TableError("%s: the adapter writes one answer, last" % name)
         e = r.get("elf")
-        if e is not None and not (isinstance(e, int) or e == "linked"):
+        if e is not None and not isinstance(e, int):
             raise TableError("%s's elf: %r" % (name, e))
         if isinstance(e, int) and kind == "moybyte" and "c" not in r:
             if not is_door(r) or "in" not in r or "ret" not in r:
@@ -566,9 +562,6 @@ def check(src):
             raise TableError("%s: no row serves it, so it states its tiers" % p["perm"])
         if not perm_tiers(p, src):
             raise TableError("%s: no tier serves it" % p["perm"])
-    for r in door_rows(src):
-        if role_of(r) == "ui" and r.get("elf") != "linked":
-            raise TableError("%s: the toolkit's rows are linked into an ELF module" % r["name"])
     _check_elf_table(elf(src))
 
 

@@ -4,6 +4,6 @@
   "runtime": "lua",
   "main": "main.lua",
   "sources": ["data.lua", "radio.lua", "mesh.lua", "main.lua"],
-  "extensions": ["moybyte.ui", "moybyte.uitree"],
+  "extensions": ["moybyte.uitree"],
   "moybyte": {"type": "app", "permissions": []}
 }

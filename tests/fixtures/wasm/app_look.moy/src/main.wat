@@ -38,7 +38,7 @@
   (data (i32.const 1100) "three")
   (data (i32.const 1108) "four")
   (data (i32.const 1120) "After")
-  ;; The override blocks (docs/ui_api_2026-10.md §3): `current` 1, then 0;
+  ;; The override blocks (docs/history/ui_api_2026-10.md §3): `current` 1, then 0;
   ;; every other key absent (-1).
   (data (i32.const 1152)
     "\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff"

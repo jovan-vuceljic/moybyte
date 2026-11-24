@@ -1,5 +1,5 @@
 """The hints name ACTIONS and draw the keys of the input in use
-(docs/ui_api_2026-10.md, "Hints"; native/moy_ui/moy_ui.h, MOY_UI_INPUT_*):
+(docs/history/ui_api_2026-10.md, "Hints"; native/moy_ui/moy_ui.h, MOY_UI_INPUT_*):
 
 * each input draws its own keys for an action -- the desk keyboard's Esc, the
   T-Deck's K, a gamepad's B -- and a key spelled out draws as written on

@@ -67,7 +67,7 @@ GESTURES = {
                "desk_kbd": "choose", "trackball": "choose", "gamepad": "choose"},
     "text_view": {"touch": "scroll"},
 }
-# Not cells, because the toolkit's contract (docs/ui_api_2026-10.md) defines
+# Not cells, because the toolkit's contract (docs/history/ui_api_2026-10.md) defines
 # no such gesture: a dialog's Esc, B or Mic (an app answers its own cancel),
 # and a text view's keys, pad and trackball (a drag and the wheel scroll it).
 # #242 asks for both under its convention rows, which the sprint leaves out.

@@ -284,7 +284,7 @@ nothing to end at a VM stop: the plan's §4.3 rule holds with no handle.
 The `ui` rows join `native/moy_app/roles.json` as a role of their own: server
 `c`, grant `never`, wasm-typed, and taking no grant: the load's check admits
 them for every compiled app that declares the extension. The rows are the
-public UI API's (`docs/ui_api_2026-10.md`, owner, 2026-10-15): its verbs,
+public UI API's (`docs/history/ui_api_2026-10.md`, owner, 2026-10-15): its verbs,
 ten since the look plan's step 11a, served by `native/moy_ui/moy_ui_wasm.c`
 over the engine (`native/moy_ui/moy_ui_api.h`) and named in
 `native/moy_app/moy_app_wasm.c`'s table, so every engine's adapter

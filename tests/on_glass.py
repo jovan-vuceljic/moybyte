@@ -4468,7 +4468,7 @@ def _app_ui_host_pmem(look, tier):
 
 def wasm_app_draws_the_toolkit(board, root):
     """App UI Wasm draws the public UI API's fixture page through the `ui`
-    rows (docs/ui_api_2026-10.md): no row fails, the page's pixel hash is the
+    rows (docs/history/ui_api_2026-10.md): no row fails, the page's pixel hash is the
     host's run's, the run crosses into Python for nothing but the console's
     frame and the census keeps it VM-free. Leaves the desk and the look as it
     found them: the page runs under `known_look`, since the host's side is a

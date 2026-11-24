@@ -1,5 +1,5 @@
 """A table that keeps its parts across frames (`o.keep`, `ui.table_floor`)
-and the parts a page names per buffer (`ui.held`): docs/ui_api_2026-10.md
+and the parts a page names per buffer (`ui.held`): docs/history/ui_api_2026-10.md
 §2, A table of parts. The engine keeps a record of each paint a context
 begins (moy_ui_api_kept.c's kept ring), and a frame draws only what the buffer it
 paints lacks of the table: the parts whose cells, gen or marks changed since

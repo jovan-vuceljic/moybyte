@@ -983,7 +983,7 @@ def apps(loop, info):
 
 
 def editor(loop, info):
-    """The Editor's table of parts (docs/ui_api_2026-10.md section 2):
+    """The Editor's table of parts (docs/history/ui_api_2026-10.md section 2):
     the Blocks outline grown to 40 rows, its cursor walked a row a frame
     (the move handed in between frames, as a key's edit is) and its rows
     swiped and coasting: what each frame and the page's draw allocate."""
@@ -1052,7 +1052,7 @@ def editor(loop, info):
 
 
 def panes(loop, info):
-    """ui.split's moving frames (docs/ui_api_2026-10.md section 5a): on
+    """ui.split's moving frames (docs/history/ui_api_2026-10.md section 5a): on
     an app host of its own, a divider pressed, dragged 40 px and let go, then
     a tap on a part in the second pane (ui.part_at): what the split
     allocates each frame, and what part_at does."""
@@ -1230,7 +1230,7 @@ def popovers(loop, info):
             loop.step()
 
 def row_of_parts(loop, info):
-    """A table of parts side by side under snap (docs/ui_api_2026-10.md
+    """A table of parts side by side under snap (docs/history/ui_api_2026-10.md
     section 2): on an app host of its own, a drag across it, its fling
     and its glide to a part's centre, each part drawn at its distance
     (ui.table_dist): what the table, its parts and their distances
@@ -2249,7 +2249,7 @@ def test_the_blocks_outlines_moving_frames_allocate_nothing(result):
 
 
 def test_a_row_of_parts_allocates_nothing(result):
-    """A table of parts side by side under snap (docs/ui_api_2026-10.md
+    """A table of parts side by side under snap (docs/history/ui_api_2026-10.md
     section 2): no frame of a drag across it, its fling and its glide to a
     part's centre allocates, its parts and their distances included, past
     the first, which makes its rows' cells once, but the answer of a frame
@@ -2291,7 +2291,7 @@ def test_a_page_status_section_draws_within_its_ceiling(result):
 
 
 def test_a_splits_divider_drag_allocates_nothing(result):
-    """ui.split (docs/ui_api_2026-10.md section 5a): no frame of a
+    """ui.split (docs/history/ui_api_2026-10.md section 5a): no frame of a
     divider's press, drag and let-go allocates, the drag lands in `sizes`,
     and ui.part_at answers a tap on a part in a pane, allocating its
     answer alone on the frame it answers."""

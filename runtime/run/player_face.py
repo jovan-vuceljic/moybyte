@@ -86,8 +86,8 @@ class AppFace:
         self._drew = False
 
     def bind(self, ns, cart):
-        """Give a Python app whose namespace has the `ui` verbs its frame of
-        them (`Player.ui`), and draw it on change unless it animates."""
+        """Give a Python app or script its frame (`Player.ui`), which its UI
+        tree page draws in, and draw it on change unless it animates."""
         pl = self.pl
         self._uh = _ui_draw.AppHost()
         pl.ui = [self._uh.ctx, _array("i", [0] * _UI_IN_LEN), pl.run.canvas]
@@ -95,7 +95,7 @@ class AppFace:
         # bound method every frame.
         self._masks = getattr(pl.ws.input, "button_masks", None)
         # An app on the verbs is drawn on change, as a shipped app is
-        # (docs/ui_api_2026-10.md, "Drawn on change"), unless its
+        # (docs/history/ui_api_2026-10.md, "Drawn on change"), unless its
         # manifest says it animates. One that plays sound keeps every
         # frame too: the frame is where the host and the browser pull
         # its mix (`audio_out.tick`), and a still frame pulls none.

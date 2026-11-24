@@ -201,9 +201,9 @@ static int32_t run(void *e, int how, int row, const span_t *f, int nf, uint8_t *
 #define FN(f) ((void *)(f))
 #endif
 
-// The toolkit's rows are native/moy_ui's (moy_ui_wasm.h), linked where the
-// image carries the toolkit: weak here, so an image without it answers NULL
-// for them.
+// The UI engine's rows are native/moy_uitree's (moy_uitree_wasm.h), linked
+// where the image carries the engine: weak here, so an image without it
+// answers NULL for them.
 #define UI_WEAK __attribute__((weak))
 
 #include "moy_app_wasm_rows.h"
@@ -353,8 +353,8 @@ static int admit_one(void *ctx, const uint8_t *mod, size_t mn, const uint8_t *na
         return 1;
     }
     int role = moy_app_table_role((uint32_t)row);
-    if (role == MOY_ROLE_UI || role == MOY_ROLE_UITREE) {
-        return 0;                   // the toolkit's and the UI engine's rows: every compiled app's, no grant
+    if (role == MOY_ROLE_UITREE) {
+        return 0;                   // the UI engine's rows: every compiled app's, no grant
     }
     // The console calls are every grant's (MOY_ROLE_FLOOR), each answered under
     // the permission it names; the theme's reads need none.

@@ -817,7 +817,7 @@ Every one of these was learned by hanging or bricking a board.
   text surfaces (`moy_input.h` REPEAT; a cart's `key()` never sees a
   repeat); and every surface sees Mic, the console's key,
   which is why a text surface reads the matrix too (a field's Cancel is
-  Mic, owner call 2026-10-18, `docs/ui_api_2026-10.md`). The home takes its
+  Mic, owner call 2026-10-18, `docs/history/ui_api_2026-10.md`). The home takes its
   verb letters (C, N, Y, X, F) and Search's `/` (Sym+G, the symbol printed
   on that key) from it, and a game its `key()`. W A S D are the directions
   beside the trackball wherever letters do not type — the home, lists,
@@ -826,13 +826,13 @@ Every one of these was learned by hanging or bricking a board.
   (`cart_keys`) reads them as both. A roll of the trackball is those
   directions, and its click Enter, on every surface but a running cart, a
   canvas and a caret (`InputRouter.ball`, the "ball" input source;
-  `docs/ui_api_2026-10.md` says which); mid-roll a step across the roll's
+  `docs/history/ui_api_2026-10.md` says which); mid-roll a step across the roll's
   axis takes a firmer turn, so a roll along the home's row (the system
   button, the tabs, Wi-Fi, the battery and the clock) or the Editor's (the
   system button, the seven tabs, undo, redo, Play, the battery and the
   clock) stays on it (`InputRouter.BALL_TURN`). The hint strips stay up under a tap: they name
   the keyboard's keys until another keyboard is used
-  (`docs/ui_api_2026-10.md`, Hints). Which mode the keyboard is in is the
+  (`docs/history/ui_api_2026-10.md`, Hints). Which mode the keyboard is in is the
   input policy's (`runtime/shell/input_policy.py`): derived each frame from
   the surface holding the keys and applied on change, a menu over a text
   surface taking the keys out of text mode while it shows. A key already

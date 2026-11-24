@@ -15,7 +15,7 @@ generated or held by code, this guide points at it rather than copying it:
 |---|---|
 | every call an app reaches, on every tier | the call table (§10), written from `native/os_calls.json` |
 | the UI tree's kinds, props, verbs and error codes | `tests/uitree_contract/contract.json` (§3) |
-| the immediate `ui` verbs | `docs/ui_api_2026-10.md` (§3, "The immediate API") |
+| the immediate `ui` verbs | `docs/history/ui_api_2026-10.md` (§3, "The immediate API") |
 | Python's `moybyte` verbs, each with its signature | `runtime/system/moybyte.py`'s header |
 | a Python app's globals per permission | `runtime/shell/system_api.py` |
 | how the OS runs processes, and why | `docs/os_2026-11/processes.md`, `tiers.md`, `between_apps.md` |
@@ -211,7 +211,7 @@ absent (`runtime/carts/moy_store_base.py`, `VENDOR_KEY`):
 | `entries` | the cart's entry points beside `main`: `{"service": file}`, its own service's program | §7 |
 | `achievements` | the badges a game declares | §9 |
 | `native` | the chips a C cart carries a module for (`["esp32s3", "esp32p4"]`) | §10 |
-| `wasi` | `true`: an app that is a WASI command the Player runs, drawing with the toolkit it links (`sdk/include/moybyte/ui.h`) | `runtime/run/wasi_run.py`, `docs/ui_api_2026-10.md` |
+| `wasi` | `true`: an app that is a WASI command the Player runs, drawing with the toolkit it links (`sdk/include/moybyte/ui.h`) | `runtime/run/wasi_run.py`, `docs/history/ui_api_2026-10.md` |
 | `audio_ring` | a compiled cart's audio ring depth in frames | `docs/os_2026-11/hardware.md` §2 |
 | `config`, `edit` | the "Make it mine" values `cfg(key)` reads and the Editor's rows that change them | `runtime/carts/moy_carts.py`, `NEW_TEMPLATE` |
 | `assets` | a cart's scenes, in order | `docs/moy_cart_api.md`, Scenes |
@@ -943,25 +943,22 @@ EXPORT(_update) void _update(float dt) {}
 EXPORT(_draw) void _draw(void) { ut_frame(); }
 ```
 
-### The immediate API (until the clean cut)
+### No immediate verbs
 
-Beside the UI tree, an app may still draw its interface itself: `ui.page`,
-`ui.list`, `ui.button` and the rest called in `_draw()` every frame, the
-script keeping its own values and the engine (`native/moy_ui`) keeping
-focus and scroll by id. `docs/ui_api_2026-10.md` lists those verbs. A
-compiled app reaches them as the `ui_*` imports (`native/moy_ui/moy_ui_wasm.h`),
-a WASI or native app through the toolkit it links (`sdk/include/moybyte/ui.h`),
-and the editor handle's drawing verbs (`ed.draw`, `ed.tap`, `ed.drag`,
-`ed.nav`, `ed.focus`, `ed.key`) are this API's.
+An app's interface is a UI tree page on every tier: the immediate verbs
+(`ui.page`, `ui.list`, `ui.button` and the rest, called in `_draw()` every
+frame) are gone from Python, Lua, compiled, WASI and native apps alike, and
+`docs/history/ui_api_2026-10.md` keeps what they were. A Python or Lua app
+declares the extension `moybyte.uitree` and is handed the tree as `ui`; a
+compiled app imports the `uitree_*` rows.
 
-A responsive app's verbs draw in the theme's faces, colours, row styles and
-selection marks, as a built-in app's do, at the font scale of the canvas it
-draws on, the same pixels on every tier (`tests/test_app_layout.py`): a
-Python app's frame by its Player (`ui_draw.CART_APP`, the boundary keeping
-only its `print` and its own colours), a Lua, compiled, WASI or native run's
-by the RUN face over the word its snapshot carries (`AppFace.ui_face`,
-`moy_ui_run.h`'s `MOYCORE_UI_FACE_*`). A game's `ui`, and a fixed app's,
-draws as a cart's. Back steps out of its views first there too (§4): a
+A responsive app's page draws in the theme's faces, colours, row styles and
+selection marks, as a built-in app's does, at the font scale of the canvas
+it draws on: a Python app's frame by its Player (`ui_draw.CART_APP`, the
+boundary keeping only its `print` and its own colours), a Lua or compiled
+run's by the run's context over the word its snapshot carries
+(`AppFace.ui_face`, `moy_ui_run.h`'s `MOYCORE_UI_FACE_*`). A fixed app's
+page draws as a cart's. Back steps out of its views first there too (§4): a
 focused field's edit, then a popover the last frame drew.
 
 Write an app on the UI tree: the immediate verbs go at the clean cut of
@@ -1050,7 +1047,7 @@ there.
 **A finger's rows come by themselves.** On a board whose tap floor stands
 (the Guition S3's 3.5-inch glass), a list row and an info, link, toggle,
 slider, seg or tabs row are 36 px tall and a bubble takes larger pads and
-faces; the app's code is the same on every board (`docs/ui_api_2026-10.md`,
+faces; the app's code is the same on every board (`docs/history/ui_api_2026-10.md`,
 the tap floor).
 
 **Paste is the console's.** The console's Paste (the desk's Ctrl+V) puts its
@@ -1715,8 +1712,7 @@ reads are every app's; an import from a role its permissions do not name is
 refused at load, the import named. Its page is the UI tree's `uitree_*`
 rows (`native/moy_uitree/moy_uitree_wasm.h`; `sdk/include/moybyte/uitree.h`
 is its header, §3), the engine a Python and a Lua app draw with, every
-compiled app's; the immediate API's `ui_*` rows (`native/moy_ui/moy_ui_wasm.h`)
-are too, and `tests/fixtures/wasm/app_ui.moy` imports every one. The console calls
+compiled app's. The console calls
 (`moybyte_notify`, `open_with`, `share`, `pick`, `send`, `award`,
 `progress`, `on`, `at`, `every`, `after`, `cancel`, `log`) are every
 compiled app's to import, each

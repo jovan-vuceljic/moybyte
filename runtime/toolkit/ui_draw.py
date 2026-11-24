@@ -17,7 +17,7 @@
 #   -- the halves re-exported         ui_scroll's ScrollRegion, ui_host's AppHost and Hold, ui_cover's covers, ui_font's print font
 """The toolkit's engine layer: the rect-taking widgets under the public UI API.
 
-`runtime/toolkit/ui.py` is the public UI API (docs/ui_api_2026-10.md), the verbs every
+`runtime/toolkit/ui.py` is the public UI API (docs/history/ui_api_2026-10.md), the verbs every
 app and cart draws with; this module is what lies under them and what the
 chrome keeps (§7 there): the rect-taking widgets -- buttons, rows, cells, tab
 rows, status rows, panels -- the marks (`focus`, `current`), the theme's shape, depth and
@@ -1670,7 +1670,7 @@ def mark_reach(item="cell"):
     return _C.mark_reach(_MARK_KIND[item])
 
 
-# -- the public UI API's host side (docs/ui_api_2026-10.md) ----------------------
+# -- the public UI API's host side (docs/history/ui_api_2026-10.md) ----------------------
 #
 # runtime/toolkit/ui.py's verbs draw into UI_TARGET: the running app's context (its
 # focus, the stops its last frame drew, each id's kept state: bytes it keeps

@@ -267,10 +267,10 @@ typedef struct { const uint8_t *p; uint16_t n; } moy_ui_span_t;
 // A sink: where a primitive draws, always through a canvas row (`dst`). ROW:
 // a row drawn as the shell's apps draw, in the faces and icons of the look
 // -- a canvas row of the glass, named by its CANVAS handle (moy_ui_sink_row
-// checks it), or a responsive app's run canvas (moy_ui_wasm.h). RUN: a
+// checks it), or a responsive app's run canvas (moy_ui_run.h). RUN: a
 // run's libmoy canvas lent as a row of its own, drawn as a cart's (petme128,
-// no icon masks); the RUN face saves, resets and restores its draw state
-// around the call.
+// no icon masks); the run's context saves, resets and restores its draw
+// state around the frame.
 // `fs` is the scale text draws at; `look` the look its colours resolve in;
 // `cart` 1 inside the app-cart boundary (moy_ui_cart_text); `shown` the
 // focus word its marks draw under (moy_ui_marks_active: the console's for a
@@ -866,7 +866,7 @@ int moy_ui_dragtap_frame(moy_ui_dragtap_t *t, moy_ui_scroll_t *s, const int32_t 
 
 // -- the parts (moy_ui_parts.c; docs/history/look_2026-10.md step 12) --------------------------
 //
-// The rows the public UI API's verbs draw (docs/ui_api_2026-10.md): a label
+// The rows the public UI API's verbs draw (docs/history/ui_api_2026-10.md): a label
 // and, at the right, a value of one KIND -- an info's text, a link's text and
 // chevron, a cycle's text between chevrons, a segmented control's options, a
 // swatch picker's dots, a toggle's On/Off word and switch, a slider's number
@@ -1268,7 +1268,7 @@ int moy_ui_caption(const moy_ui_sink_t *s, moy_ui_box_t b, moy_ui_span_t t, int 
 // A rule across band `b` (inside the group pad), one unit thick, centred in
 // its height: what parts a menu from the rows above it in a card.
 int moy_ui_rule(const moy_ui_sink_t *s, moy_ui_box_t b, int fs, int desk);
-// The input in use (docs/ui_api_2026-10.md, "Hints"): a desk keyboard, the
+// The input in use (docs/history/ui_api_2026-10.md, "Hints"): a desk keyboard, the
 // T-Deck's keyboard, a gamepad, or touch. The console sets it from the last
 // input used, among the inputs its board declares; it starts at the desk
 // keyboard. The hints draw the keys of the hint input: the input set, until a

@@ -1,6 +1,6 @@
 {
   "about": [
-    "The override table's keys (docs/ui_api_2026-10.md section 3), in their order in the",
+    "The override table's keys (docs/history/ui_api_2026-10.md section 3), in their order in the",
     "block a wasm app hands over (native/moy_ui/moy_ui_api.h). tools/gen_os_table.py writes from it",
     "moy_ui_over_keys.h (the keys, the flags words' bits, the table every tier's reader walks),",
     "modmoy_ui_over.h (the board module's dict keys), runtime/toolkit/ui.py's _OVER_KEYS (the",

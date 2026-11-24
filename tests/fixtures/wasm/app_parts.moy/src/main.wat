@@ -53,7 +53,7 @@
   (data (i32.const 1200) "Update")
   (data (i32.const 1208) "Name")
   (data (i32.const 1216) "Level")
-  ;; The level's override block (docs/ui_api_2026-10.md §3): `steps` 1, every
+  ;; The level's override block (docs/history/ui_api_2026-10.md §3): `steps` 1, every
   ;; other key absent (-1).
   (data (i32.const 1224)
     "\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff"
