@@ -1152,150 +1152,14 @@ static int wccmd(int argc, char **argv) {
     return each_input(argptr, wc_one, &o);
 }
 
-typedef struct {
-    const char *pat;
-    int ign, inv, num, count, quiet, many;
-    int matched;
-} grep_t;
-
-static int grep_has(const grep_t *g, const char *line, size_t n) {
-    size_t m = strlen(g->pat);
-    if (m == 0) {
-        return 1;
-    }
-    for (size_t i = 0; i + m <= n; i++) {
-        size_t j = 0;
-        while (j < m) {
-            unsigned char a = (unsigned char)line[i + j], b = (unsigned char)g->pat[j];
-            if (g->ign) {
-                a = (unsigned char)tolower(a);
-                b = (unsigned char)tolower(b);
-            }
-            if (a != b) {
-                break;
-            }
-            j++;
-        }
-        if (j == m) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-// One line of grep's input, matched and, when it matches, printed.
-static void grep_line(grep_t *g, const char *name, const char *line, size_t n,
-                      unsigned long lineno, unsigned long *count) {
-    if (grep_has(g, line, n) == g->inv) {
-        return;
-    }
-    (*count)++;
-    g->matched = 1;
-    if (!g->count && !g->quiet) {
-        if (g->many) {
-            out1fmt("%s:", name);
-        }
-        if (g->num) {
-            out1fmt("%lu:", lineno);
-        }
-        outmem(line, n, out1);
-        outcslow('\n', out1);
-    }
-}
-
-// A line at a time, the input never copied into the session's arena, which
-// is 12 KB where there is no PSRAM (MOY_SH_ARENA, the C3 Zero's SSH face),
-// smaller than most logs. The line's buffer is the session heap's, GREP_LINE
-// to start, doubled for a longer line up to GREP_LINE_MAX (so one line never
-// takes the console's heap); a line longer than the buffer the heap could
-// give is matched and printed on its first bytes, and with no buffer at all
-// on GREP_SMALL of the stack.
-#define GREP_LINE 1024u
-#define GREP_LINE_MAX (64u * 1024u)
-#define GREP_SMALL 128u
-static int grep_one(int fd, const char *name, void *arg) {
-    grep_t *g = arg;
-    char buf[512], small[GREP_SMALL];
-    char *line = moy_sh_halloc(GREP_LINE);
-    size_t cap = GREP_LINE, ln = 0;
-    if (line == NULL) {
-        line = small;
-        cap = sizeof small;
-    }
-    int open_line = 0, full = line == small;   // full: this line grows no more
-    unsigned long count = 0, lineno = 0;
-    ssize_t n;
-    while ((n = read(fd, buf, sizeof buf)) > 0) {
-        for (ssize_t i = 0; i < n; i++) {
-            if (buf[i] == '\n') {
-                grep_line(g, name, line, ln, ++lineno, &count);
-                ln = 0;
-                open_line = 0;
-                full = line == small;
-                continue;
-            }
-            if (ln == cap && !full) {
-                char *more = cap < GREP_LINE_MAX ? moy_sh_halloc(cap * 2u) : NULL;
-                if (more != NULL) {
-                    memcpy(more, line, ln);
-                    moy_sh_hfree(line);
-                    line = more;
-                    cap *= 2u;
-                } else {
-                    full = 1;
-                }
-            }
-            if (ln < cap) {
-                line[ln++] = buf[i];
-            }
-            open_line = 1;
-        }
-    }
-    if (open_line) {
-        grep_line(g, name, line, ln, ++lineno, &count);
-    }
-    if (line != small) {
-        moy_sh_hfree(line);
-    }
-    if (g->count) {
-        if (g->many) {
-            out1fmt("%s:", name);
-        }
-        out1fmt("%lu\n", count);
-    }
-    return 0;
-}
-
-static int grepcmd(int argc, char **argv) {
-    grep_t g = { 0 };
-    int c;
-    (void)argc;
-    (void)argv;
-    while ((c = nextopt("ivncqF")) != '\0') {
-        g.ign |= c == 'i';
-        g.inv |= c == 'v';
-        g.num |= c == 'n';
-        g.count |= c == 'c';
-        g.quiet |= c == 'q';
-    }
-    if (*argptr == NULL) {
-        moy_sh_fail("usage: grep [-ivncq] TEXT [FILE...]");
-        return 2;
-    }
-    g.pat = *argptr++;
-    g.many = argptr[0] != NULL && argptr[1] != NULL;
-    int err = each_input(argptr, grep_one, &g);
-    return err ? 2 : !g.matched;
-}
-
-// --- text ---------------------------------------------------------------------
-
-// A line at a time, the input never held whole (cut, uniq): the line's
-// buffer is the session heap's, TEXT_LINE to start, doubled for a longer
-// line up to TEXT_LINE_MAX (so one line never takes the console's heap); a
-// line longer than the buffer the heap could give is read on its first
-// bytes, and with no buffer at all on TEXT_SMALL of the reader's own.
-#define TEXT_LINE 256u
+// A line at a time (grep, cut, uniq), the input never copied into the
+// session's arena, which is 12 KB where there is no PSRAM (MOY_SH_ARENA, the
+// C3 Zero's SSH face), smaller than most logs. The line's buffer is the
+// session heap's, TEXT_LINE to start, doubled for a longer line up to
+// TEXT_LINE_MAX (so one line never takes the console's heap); a line longer
+// than the buffer the heap could give is read on its first bytes, and with
+// no buffer at all on TEXT_SMALL of the reader's own.
+#define TEXT_LINE 1024u
 #define TEXT_LINE_MAX (64u * 1024u)
 #define TEXT_SMALL 128u
 
@@ -1375,6 +1239,99 @@ static int lines_next(lines_t *r) {
         }
     }
 }
+
+typedef struct {
+    const char *pat;
+    int ign, inv, num, count, quiet, many;
+    int matched;
+} grep_t;
+
+static int grep_has(const grep_t *g, const char *line, size_t n) {
+    size_t m = strlen(g->pat);
+    if (m == 0) {
+        return 1;
+    }
+    for (size_t i = 0; i + m <= n; i++) {
+        size_t j = 0;
+        while (j < m) {
+            unsigned char a = (unsigned char)line[i + j], b = (unsigned char)g->pat[j];
+            if (g->ign) {
+                a = (unsigned char)tolower(a);
+                b = (unsigned char)tolower(b);
+            }
+            if (a != b) {
+                break;
+            }
+            j++;
+        }
+        if (j == m) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// One line of grep's input, matched and, when it matches, printed.
+static void grep_line(grep_t *g, const char *name, const char *line, size_t n,
+                      unsigned long lineno, unsigned long *count) {
+    if (grep_has(g, line, n) == g->inv) {
+        return;
+    }
+    (*count)++;
+    g->matched = 1;
+    if (!g->count && !g->quiet) {
+        if (g->many) {
+            out1fmt("%s:", name);
+        }
+        if (g->num) {
+            out1fmt("%lu:", lineno);
+        }
+        outmem(line, n, out1);
+        outcslow('\n', out1);
+    }
+}
+
+static int grep_one(int fd, const char *name, void *arg) {
+    grep_t *g = arg;
+    lines_t r;
+    unsigned long count = 0, lineno = 0;
+    lines_open(&r, fd);
+    while (lines_next(&r)) {
+        grep_line(g, name, r.p, r.len, ++lineno, &count);
+    }
+    lines_close(&r);
+    if (g->count) {
+        if (g->many) {
+            out1fmt("%s:", name);
+        }
+        out1fmt("%lu\n", count);
+    }
+    return 0;
+}
+
+static int grepcmd(int argc, char **argv) {
+    grep_t g = { 0 };
+    int c;
+    (void)argc;
+    (void)argv;
+    while ((c = nextopt("ivncqF")) != '\0') {
+        g.ign |= c == 'i';
+        g.inv |= c == 'v';
+        g.num |= c == 'n';
+        g.count |= c == 'c';
+        g.quiet |= c == 'q';
+    }
+    if (*argptr == NULL) {
+        moy_sh_fail("usage: grep [-ivncq] TEXT [FILE...]");
+        return 2;
+    }
+    g.pat = *argptr++;
+    g.many = argptr[0] != NULL && argptr[1] != NULL;
+    int err = each_input(argptr, grep_one, &g);
+    return stop_status(err ? 2 : !g.matched);
+}
+
+// --- text ---------------------------------------------------------------------
 
 // stdin to stdout and to each FILE (-a: added to its end).
 static int teecmd(int argc, char **argv) {
