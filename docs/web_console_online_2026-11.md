@@ -704,12 +704,12 @@ Tests:
 - On glass, a page load's frame stall on the C3, written to #256. A Zero
   draws no frames: its serving loop serves a request whole, so the stall is
   the time it takes to serve the loader and `/sync`
-  (`tests/test_c3_zero_on_glass.py` prints both).
+  (`tests/test_zero_on_glass.py` takes both, into the board's perf record).
 - A host test that the digests `gen_web_blob` names are the pack's.
 - A deploy check that every digest an index names has its file on
   os.moybyte.com, served with `Access-Control-Allow-Origin`.
 - On glass: `tools/board.py pass c3_zero` builds, flashes and runs
-  `tests/test_c3_zero_on_glass.py`, whose headless Chrome (`browsershot.mjs`)
+  `tests/test_zero_on_glass.py`, whose headless Chrome (`browsershot.mjs`)
   boots the C3's console from a worktree mirror, signs in and syncs a cart.
 - In Chrome with no board: serve.py's `--loader` twin boots the console
   through the loader, then from the cache (`tests/test_web_loader.py`,
