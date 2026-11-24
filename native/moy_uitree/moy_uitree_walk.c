@@ -6679,6 +6679,11 @@ static int closer_of(uit_t *e, int k)
     return (N->kind == UIT_ROW || N->kind == UIT_GROUP) && N->on >= 0 ? k : -1;
 }
 
+int uit_page_shown(const uit_t *e)
+{
+    return e->nnodes && NODE(0)->kind == UIT_PAGE ? NODE(0)->changed : -1;
+}
+
 int uit_back_closer(uit_t *e, char *buf, size_t cap)
 {
     int g = e->nnodes && uit_dialog(e) < 0 ? closer_of(e, 0) : -1;

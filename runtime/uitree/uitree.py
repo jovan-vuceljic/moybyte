@@ -2014,7 +2014,7 @@ class Node:
 # contract's (`_check_prop`); this table only routes what that check let through.
 _C = {"shown": "cond"}
 SCHEMA = {
-    "page": {"title": "text", "status": "text"},
+    "page": {"title": "text", "status": "text", "shown": "action0"},
     "group": dict(_C, caption="text", close="action0", look="lit", gap="int"),
     "label": dict(_C, text="text", tone="text", wrap="lit", face="lit", size="lit", icon="text",
                   lines="lit", align="lit", scale="int", w="int"),
@@ -3098,6 +3098,7 @@ def push(build):
     a = _command("push")
     a.pages.append(build)
     a.openers = getattr(a, "openers", []) + [getattr(a, "fired_id", None)]
+    a.shown_due = True
     _trace("page", "push", "page %d, opened from %r" % (len(a.pages), a.openers[-1]))
     a.root = None
 
@@ -3110,6 +3111,7 @@ def pop():
     if len(a.pages) > 1:
         a.pages.pop()
         a.root = None
+        a.shown_due = True
         a.want_focus = a.openers.pop() if getattr(a, "openers", None) else None
         _trace("page", "pop", "page %d, focus back to %r" % (len(a.pages), a.want_focus))
         return
@@ -3186,6 +3188,7 @@ class Builder:
         self.s = s
         self.pages = [build]
         self.root = None
+        self.shown_due = False          # a push or a Back: the next build runs its page's shown=
         self.builds = 0
         self.clock = 0
         self.timers = []

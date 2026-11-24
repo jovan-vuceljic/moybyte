@@ -235,6 +235,7 @@ class Engine(S.Builder):
         self._bind()
         self.pages = self.pages[:1]
         self.openers = []
+        self.shown_due = False
         self._ui.reset()
         self.root = None
         self.want_focus = None          # a fresh visit: no focus, cur or row order carried over

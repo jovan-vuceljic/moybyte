@@ -1416,7 +1416,7 @@ function T.app(title, o)
   APP = { title = title, o = o, at = at }
 end
 
-local PAGE_OPTS = { title = 1, arg = 1, status = 1 }
+local PAGE_OPTS = { title = 1, arg = 1, status = 1, shown = 1 }
 function T.page(name, build, o)
   local at = where()
   no_build("ui.page", at)
@@ -1430,11 +1430,11 @@ function T.page(name, build, o)
   end
   o = o or {}
   for k in pairs(o) do
-    if not PAGE_OPTS[k] then fail("N01", at, "ui.page takes no option " .. q(k), "title, arg", q(k)) end
+    if not PAGE_OPTS[k] then fail("N01", at, "ui.page takes no option " .. q(k), "title, arg, status, shown", q(k)) end
   end
   if o.title ~= nil and type(o.title) ~= "string" then fail("N01", at, "the page " .. q(name) .. "'s title is " .. describe(o.title), "a template", describe(o.title)) end
   if o.status ~= nil and type(o.status) ~= "string" then fail("N01", at, "the page " .. q(name) .. "'s status is " .. describe(o.status), "a template", describe(o.status)) end
-  PAGES[name] = { name = name, fn = build, title = o.title or "", status = o.status, arg = o.arg, at = at }
+  PAGES[name] = { name = name, fn = build, title = o.title or "", status = o.status, arg = o.arg, shown = o.shown, at = at }
   PAGE_ORDER[#PAGE_ORDER + 1] = name
 end
 
@@ -1454,6 +1454,7 @@ local function seal()
              ty and tname(ty) or "undeclared")
       end
     end
+    if p.shown ~= nil then use_action(p.shown, "none", p.at, "the page " .. q(name) .. "'s shown") end
   end
   for name, a in pairs(ACTIONS) do
     if a.push and not PAGES[a.push] then
@@ -2472,6 +2473,7 @@ function T.push(name, row)
   if name == "" then name = nil end
   if top then top.refocus, top.refocus_name = R.focused, name end
   stack[#stack + 1] = { def = p, fresh = 1, arg = row }   -- the row its arg= holds while it shows
+  if p.shown then fire(p.shown, "the page shown") end      -- run before the frame that draws it
   GEN = GEN + 1
   trace("page", "push", "page " .. #stack .. (name and ", opened from " .. q(name) or ""))
 end
@@ -2487,6 +2489,7 @@ function T.pop()
     if arg and under.arg ~= nil and model_of(DECL[arg].model).index[under.arg] then   -- while it stands
       setv(arg, under.arg, "back", at)
     end
+    if under.def.shown then fire(under.def.shown, "the page shown") end
     GEN = GEN + 1
   else
     fail("P05", where(), "ui.pop() on the app's first page", "a page ui.push opened", "the first page")
@@ -2598,37 +2601,39 @@ local function where_on(from)
 end
 
 local function run_queue()
-  local q_ = queue
-  queue = {}
-  for _, h in ipairs(q_) do
-    T.stats.handlers = T.stats.handlers + 1
-    if h.a then
-      local a = h.a
-      if a.row and h.args.n == 0 then
-        local m = model_of(DECL[a.row].model)
-        local key = V[a.row]
-        if key ~= nil then h.args = table.pack(frozen(m.rows[m.index[key]], "row " .. q(key) .. " of " .. q(m.name), m.ty)) end
-      end
-      if a.takes == "none" then h.args = { n = 0 } end
-      if a.when and not cond(a.when) then
-        trace("skip", a.name, "from " .. h.from .. " (when " .. a.when .. " is false)")
-      elseif a.row and h.args.n == 0 then
-        trace("skip", a.name, "from " .. h.from .. " (" .. a.row .. " holds no row)")
-      elseif a.push then
-        trace("action", a.name, "from " .. h.from .. (h.placed and "" or where_on(h.from)))
-        in_handler = a.name
-        T.push(a.push)
-        in_handler = nil
+  while queue[1] do               -- again for what the batch queued: a page's shown=
+    local q_ = queue
+    queue = {}
+    for _, h in ipairs(q_) do
+      T.stats.handlers = T.stats.handlers + 1
+      if h.a then
+        local a = h.a
+        if a.row and h.args.n == 0 then
+          local m = model_of(DECL[a.row].model)
+          local key = V[a.row]
+          if key ~= nil then h.args = table.pack(frozen(m.rows[m.index[key]], "row " .. q(key) .. " of " .. q(m.name), m.ty)) end
+        end
+        if a.takes == "none" then h.args = { n = 0 } end
+        if a.when and not cond(a.when) then
+          trace("skip", a.name, "from " .. h.from .. " (when " .. a.when .. " is false)")
+        elseif a.row and h.args.n == 0 then
+          trace("skip", a.name, "from " .. h.from .. " (" .. a.row .. " holds no row)")
+        elseif a.push then
+          trace("action", a.name, "from " .. h.from .. (h.placed and "" or where_on(h.from)))
+          in_handler = a.name
+          T.push(a.push)
+          in_handler = nil
+        else
+          trace("action", a.name, "from " .. h.from .. (h.placed and "" or where_on(h.from)))
+          in_handler = a.name
+          a.fn(table.unpack(h.args, 1, h.args.n))
+          in_handler = nil
+        end
       else
-        trace("action", a.name, "from " .. h.from .. (h.placed and "" or where_on(h.from)))
-        in_handler = a.name
-        a.fn(table.unpack(h.args, 1, h.args.n))
+        in_handler = h.label
+        h.fn()
         in_handler = nil
       end
-    else
-      in_handler = h.label
-      h.fn()
-      in_handler = nil
     end
   end
 end

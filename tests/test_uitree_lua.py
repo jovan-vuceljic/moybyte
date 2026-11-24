@@ -1238,3 +1238,77 @@ end, { title = "Details", arg = "sel" })
     assert pages == ["page push page 2, opened from 'a/open'", "page push page 3, opened from 'other'",
                      "page back page 2, focus back to 'other'", "page back page 1, focus back to 'a/open'"], lines
     ws.spine.exit_to_caller()
+
+
+def test_a_pages_shown_runs_at_its_push_and_at_the_back_onto_it(tmp_path):
+    """A page's shown= runs when the page becomes the top page, by a push
+    or by Back, after Back has written its arg= back and before the frame
+    that draws it; not at the open, which is the opened hook's."""
+    from runtime import host_app
+    from runtime.host import moy_log
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Rows", '''ui.app("Rows", { icon = "list" })
+S = ui.state { items = ui.model { key = "id", id = "", name = "" }, sel = ui.row_of("items") }
+seen = {}
+ui.hook("opened", function() S.items:set({ { id = "a", name = "Apples" }, { id = "b", name = "Bread" } }) end)
+ui.hook("shelf_shown", function() seen[#seen + 1] = "shelf" end)
+ui.hook("details_shown", function() seen[#seen + 1] = S.sel.id end)
+ui.action("open", "Open", function(row) ui.push("details", row) end, { takes = "row" })
+ui.action("other", "Other", function() ui.push("details", "b") end, { keys = { "o" } })
+ui.page("shelf", function()
+  ui.rows("items", function() ui.link("open", { label = "{.name}" }) end)
+end, { title = "Shelf", shown = "shelf_shown" })
+ui.page("details", function()
+  ui.label("{sel.name}")
+  ui.button("other")
+end, { title = "Details", arg = "sel", shown = "details_shown" })
+''')
+    ws, drv, frame, open_cart = _console(carts)
+    seq = moy_log.next()
+    open_cart(ws, "Rows")
+    for _ in range(4):
+        frame()
+    pl = ws.run.player
+
+    def seen():
+        assert pl.lua.exec("__R = table.concat(seen, ' ')", "test") is None
+        return pl.lua.get_global("__R")
+    assert seen() == ""
+    drv.press("a")
+    frame()
+    frame()
+    drv.type_char(ord("o"))
+    frame()
+    frame()
+    assert seen() == "a b"
+    assert pl.face.back()
+    frame()
+    frame()
+    assert seen() == "a b a", "Back onto the page runs its shown= on the row it was pushed with"
+    assert pl.face.back()
+    frame()
+    frame()
+    assert seen() == "a b a shelf"
+    assert pl.cart_error is None, pl.cart_error
+    lines = [r[4].split("[trace] ", 1)[1] for r in moy_log.read(seq, 8000) if "[trace] " in r[4]]
+    shown = [" ".join(l.split()[1:]) for l in lines if "the page shown" in l]
+    assert shown == ["action details_shown from the page shown"] * 3 + ["action shelf_shown from the page shown"], lines
+    ws.spine.exit_to_caller()
+
+
+def test_a_pages_shown_names_an_action_that_takes_nothing(tmp_path):
+    """shown= is checked where the pages are: a name no action has is A01."""
+    from runtime import host_app
+    carts = str(tmp_path / "carts")
+    host_app.moy_carts.ensure_dirs(carts)
+    _cart(carts, "Shown", '''ui.app("Shown", { icon = "list" })
+ui.page("home", function() ui.label("Hi") end, { title = "Home", shown = "nothing_here" })
+''')
+    ws, drv, frame, open_cart = _console(carts)
+    open_cart(ws, "Shown")
+    for _ in range(3):
+        frame()
+    err = ws.run.player.cart_error
+    assert err and "error[A01]" in err and "nothing_here" in err, err
+    ws.spine.exit_to_caller()

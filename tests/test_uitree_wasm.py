@@ -261,13 +261,17 @@ def test_a_page_takes_a_row_and_the_app_moves_the_focus():
         "action open from link 'b/open' on 'Shelf'",
         "state sel '' -> 'b' (in open)",
         "page push page 2, opened from 'b/open'",
+        "action seen from the page shown",
+        "state seen_on '' -> 'b' (in seen)",
         "page back page 1, focus back to 'b/open'"]
 
 
 def test_a_page_pushed_over_itself_with_another_row_gives_the_first_its_row_back():
     """ut_push_row's page keeps the row it was pushed with: the details of
     Bread pushed over by the details of Apples, Back sets the cursor to
-    Bread again as it builds the page under."""
+    Bread again as it builds the page under. The page's shown= hook runs at
+    each push and at the Back onto it, reading the row it shows, before the
+    next action."""
     import uitree_conf as C
     cart = os.path.join(ROOT, "tests", "fixtures", "uitree_rowpage_wasm.moy")
     trace, _ = C.run_wasm(None, C.CONFIGS[0], ["f:2", "k:a", "k:a", "back", "back"], cart=cart)
@@ -275,11 +279,17 @@ def test_a_page_pushed_over_itself_with_another_row_gives_the_first_its_row_back
         "action open from link 'b/open' on 'Shelf'",
         "state sel '' -> 'b' (in open)",
         "page push page 2, opened from 'b/open'",
+        "action seen from the page shown",
+        "state seen_on '' -> 'b' (in seen)",
         "action other from link 'other' on 'Details'",
         "state sel 'b' -> 'a' (in other)",
         "page push page 3, opened from 'other'",
+        "action seen from the page shown",
+        "state seen_on 'b' -> 'a' (in seen)",
         "state sel 'a' -> 'b' (in the app)",
         "page back page 2, focus back to 'other'",
+        "action seen from the page shown",
+        "state seen_on 'a' -> 'b' (in seen)",
         "page back page 1, focus back to 'b/open'"]
 
 

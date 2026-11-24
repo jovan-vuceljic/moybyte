@@ -337,6 +337,15 @@ it pops, the state holds that row again (where it still stands), so a page
 pushed over itself on another row steps back to its own. A Python page is a
 function and carries its argument itself: `ui.push(lambda: thread(key))`.
 
+A page's `shown=` names an action or hook that takes nothing, which runs
+each time the page becomes the top page: at its push, and at the Back
+that pops the page over it (after its `arg=` holds its row again), before
+the frame that draws it; the first page at the open runs `opened` instead.
+It is where a page shapes what it shows from its argument, as Moy Mesh's
+thread does its messages and draft. Python and Lua pass it with the page
+(`ui.page(title, shown="name")`, Lua's `{ shown = "name" }`), a compiled
+page as its first prop (`ut_p_shown("name")` after `ut_page`).
+
 **Pages built once.** A page is a function that describes nodes and reads
 no state. Python's root page is the function named `build`, and a page opens
 `with ui.page(title):`, its containers `with` blocks. Lua registers each
@@ -391,7 +400,7 @@ Python's alone.
 
 | kind | is | key props |
 |---|---|---|
-| `page(title)` | a page: its title is the bar's | `status=` the hints band's lead words |
+| `page(title)` | a page: its title is the bar's | `status=` the hints band's lead words, `shown=` an action or hook run as it becomes the top page (the model, above) |
 | `group(caption)` | a captioned column of rows | `look="card"` on a card, `"rules"` a rule between rows; `gap=`; `close=` |
 | `row(key)` | children side by side | `wrap=`, `gap=`, `pad=`, `mid=`, `close=` what Back does while it shows |
 | `scroll(key)` | a region that scrolls its children | Lua and C: `follow=` opens at its foot and keeps a new row in view; `snap=` shows whole rows, a "More below" cue where it leaves some out below and, following, an "Older messages" one above |

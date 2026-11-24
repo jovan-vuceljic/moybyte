@@ -607,18 +607,23 @@ class CEngine(Engine):
         the store, and the Python tree let go: `root` is then `LOWERED`."""
         if self.root is None:
             self._made()
-            if self._lowered is not None and self._lowered is self.pages[0] and len(self.pages) == 1:
+            if self._lowered is not None and self._lowered is self.pages[0] and len(self.pages) == 1 \
+                    and not self.shown_due:
                 self.root = LOWERED         # the store holds the page from a compiled blob
         if self._loaded:            # the build a compiled page stands for, counted and traced as one
             self._loaded = False
             self._built_as_loaded()
-        if self.root is None:
+        while self.root is None:        # again where the shown= handler pushes or pops
             self._build()
+            shown = self.root.l.get("shown") if self.shown_due else None
+            self.shown_due = False
             self.lower(self.root)
             self.root = LOWERED
             self._lowered = self.pages[-1]
             for name in self._docs:
                 self._push_doc(name, self.s._v[name])     # the fields the lowered page reads
+            if shown is not None:       # a page pushed or shown again by Back: before the frame draws it
+                self.run_action(shown, (), "the page shown")
 
     def lower(self, root):
         """The checked tree into the store: one node call a node, one prop call
@@ -1369,6 +1374,7 @@ class CEngine(Engine):
         if len(self.pages) > 1:
             self.pages.pop()
             self.root = None
+            self.shown_due = True
             back_to = self.openers.pop() if getattr(self, "openers", None) else None
             self.want_focus = back_to
             was, S._NOW.app = S._NOW.app, self

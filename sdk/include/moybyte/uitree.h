@@ -25,6 +25,8 @@
 // A page is a function: ut_push(fn) from a handler builds it over this one,
 // and the bar's Back (or ut_pop) builds the one under it again. A page that
 // takes a row (ut_push_row) keeps it: the Back onto it sets its cursor again.
+// A page's shown= action (ut_p_shown, its first prop) runs when the page
+// becomes the top page, by a push or by Back, before the frame that draws it.
 //
 // A node goes under the open container (ut_page, ut_group, ut_rows, ut_in);
 // one with no key of its own is keyed by its kind and its place among its

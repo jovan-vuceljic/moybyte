@@ -1089,7 +1089,7 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     int16_t *tslot = NULL;
     int list = uit_list_of(e, node);
     e->ccur = list >= 0 && list != node ? e->nodes[list].current : -1;
-    if (!strcmp(name, "shown") || !strcmp(name, "focus")) {
+    if ((!strcmp(name, "shown") && kind != UIT_PAGE) || !strcmp(name, "focus")) {
         int c = uit_cond_compile(e, src, model);
         if (c < 0)
             return c;
@@ -1632,9 +1632,9 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         (!strcmp(name, "changed") && kind == UIT_FIELD) || (!strcmp(name, "cut") && kind == UIT_BUBBLE) ||
         (!strcmp(name, "close") && (kind == UIT_POPOVER || kind == UIT_ROW || kind == UIT_GROUP)) ||
         ((kind == UIT_MONTH || kind == UIT_STEPPER) && (!strcmp(name, "prev") || !strcmp(name, "next"))) ||
-        (kind == UIT_CELLS && !strcmp(name, "pick"))) {
-        // on= (and close=, a month's or a stepper's prev=) in `on`; changed= (cut=, next=, a cells' pick=) in
-        // `changed`
+        (kind == UIT_CELLS && !strcmp(name, "pick")) || (kind == UIT_PAGE && !strcmp(name, "shown"))) {
+        // on= (and close=, a month's or a stepper's prev=) in `on`; changed= (cut=, next=, a cells' pick=, a
+        // page's shown=) in `changed`
         for (int a = 0; a < e->nacts; a++)
             if (!strcmp(uit_str(e, e->acts[a].name), src)) {
                 if (name[0] == 'o' || (name[0] == 'c' && name[1] == 'l') || (name[0] == 'p' && name[1] == 'r'))

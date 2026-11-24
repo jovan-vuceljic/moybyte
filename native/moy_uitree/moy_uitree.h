@@ -384,6 +384,9 @@ int uit_back_dialog(uit_t *e, char *buf, size_t cap);
 // Back on a shown popover: its close= action, -1 where it names none (Back
 // still closes nothing else), -2 where no popover shows; its key into buf.
 int uit_back_popover(uit_t *e, char *buf, size_t cap);
+// The page's shown= action, which its front runs when the page becomes the
+// top page by a push or by Back; -1 where it names none.
+int uit_page_shown(const uit_t *e);
 // Whether no node holds focus.
 int uit_unfocused(const uit_t *e);
 // The id focus is on after the last frame ("" none): its length.
