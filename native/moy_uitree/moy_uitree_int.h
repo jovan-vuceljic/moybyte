@@ -148,7 +148,6 @@ enum { TS_FLAT = 1 };
 // A label's text options (`nbtn`): wrap= in bits 0-1 (LT_WORD, LT_CHAR), its face's
 // role + 1 in bits 2-4, the toolkit's `centre` for align= in bits 5-7, lines= given.
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.
-enum { GAP_S = 0, GAP_M, GAP_L, GAP_0 };
 // A text view's options (`lit`); its syntax's index in `btn` (ui.py's _SYNTAXES).
 enum { TV_FOLLOW = 1, TV_WRAP = 2, TV_PROSE = 4, TV_WELL = 8, TV_GUTTER = 16 };
 // a scroll node's lit: follow=, snap=
@@ -431,6 +430,7 @@ struct uit {
     uint8_t has_panes;
     int16_t du;                 // the desk unit the host hands (`uit_panes_set`)
     int16_t unit;               // a placed row's unit the host hands (0: 1 on a desk, else fs)
+    int16_t sc;                 // the scale a 1x spacing is multiplied by (`uit_set_scale`; 0: 2 on a desk, else fs)
     int16_t pane_cur;           // the pane the keys reach, -1 none
     int16_t late[8];            // the popovers and dialogs a stack draws last, over it
     int nlate;

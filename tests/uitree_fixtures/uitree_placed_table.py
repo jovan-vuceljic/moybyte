@@ -50,7 +50,7 @@ def build():
         with ui.row("body", grow=True):
             with ui.table("rows", cur="at", row=17, changed="picked"):
                 ui.canvas("cell", draw_row)
-            with ui.grid(2, 2, w=100, h=48, gap="s"):
+            with ui.grid(2, 2, w=100, h=48, gap=6):
                 ui.button("bump_a", label="A")
                 ui.button("bump_b", label="B")
                 ui.button("bump_c", label="C", shown="gone")

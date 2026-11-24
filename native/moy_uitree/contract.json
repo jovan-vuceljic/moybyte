@@ -2132,11 +2132,11 @@
      "level": 1
     },
     "gap": {
-     "type": "word:s,m,l,0",
+     "type": "int",
      "level": 1
     },
     "pad": {
-     "type": "word:s,m,l,0",
+     "type": "int",
      "level": 1
     },
     "align": {
@@ -2163,11 +2163,11 @@
      "level": 1
     },
     "gap": {
-     "type": "word:s,m,l,0",
+     "type": "int",
      "level": 1
     },
     "pad": {
-     "type": "word:s,m,l,0",
+     "type": "int",
      "level": 2
     },
     "w": {

@@ -59,7 +59,8 @@ def sync(vals):
     width and height, a tool's pitch, the flags' and the preview's heights,
     the sheet's, the more menu's width and the pickers', and the
     operations' keys). A canvas's height, a button's width and a cell's side
-    are in the page's unit (the handheld's font scale), the rest in pixels."""
+    are in the page's unit (the handheld's font scale), its pads and gap at
+    1x (the engine scales them), the rest in pixels."""
     (s.none, s.pane, s.tall, s.n, s.size, s.status, tool, s.shape_icon, s.clip, s.mirrored, pop,
      s.shifting, color, sized, s.pad, s.mpad, s.gap, s.grid_w, s.grid_h, s.words, s.sw, s.pal_w, s.pal_h,
      s.pitch, s.flags_h, s.preview_h, s.sheet_h, s.more_w, s.pick_w, keys) = vals
@@ -194,7 +195,7 @@ def sprite_page():
         with ui.row("main", pad="{mpad}", gap="{gap}", shown="!none"):
             ui.canvas("grid", _draw_grid, w="{grid_w}", h="{grid_h}", keys=grid_keys, pointer="grid",
                       mark=False)
-            with ui.grid(1, 1, w="{pal_w}", h="{pal_h}", gap="0", pad="0"):
+            with ui.grid(1, 1, w="{pal_w}", h="{pal_h}", gap=0, pad=0):
                 ui.cells("color", first=0, count=16, cols=2, side="{sw}", clear=0, on="colored")
             ui.canvas("map", _draw_map, pointer="map_tap", shown="!pane")
         with ui.row("nav", pad="{pad}", gap="{gap}", shown="!none && pane"):

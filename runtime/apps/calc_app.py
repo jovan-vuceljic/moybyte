@@ -132,12 +132,12 @@ ui.action("dot", ".", _dot, when="!whole", off="grey")
 
 def calc_page():
     with ui.page(""):
-        with ui.split("{@wide?row:col}", sizes="{@wide?2 3:2 5}", gap="m"):
+        with ui.split("{@wide?row:col}", sizes="{@wide?2 3:2 5}", gap=8):
             with ui.group(""):
                 ui.label("{expr}", tone="dim", align="end")
                 ui.label("{result}", face="result", size="fit", align="end")
                 ui.text_view("tape", follow=True, shown="taped")
-            with ui.grid(4, 5, gap="s"):
+            with ui.grid(4, 5, gap=6):
                 for key in KEYS:
                     if key == "<":
                         ui.button("key", arg=key, icon="backspace", label="")

@@ -146,6 +146,7 @@ class Engine(uitree_app.Engine):
         # the panes: their splits as drawn, pane focus, the divider's flash
         self.du = 1                # the desk unit, this frame's
         self.unit = 0              # a host's desk unit (0: the engine's, from the font scale)
+        self.scale = 0             # the scale its spacing is drawn at (0: layout_base.scale's)
         self.mouse = None          # a host's word on its pointer (True: hovers), else the surface's
         self.splits = {}           # split id -> (panes node, kids, sizes) as this frame placed them
         self.pane_order = []       # (pane node, rect) of the panes shown, in reading order

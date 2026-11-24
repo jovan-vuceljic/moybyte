@@ -144,7 +144,7 @@ class MapEditorUI(ViewHost):
         tm = self.ws.run.project.tilemap
         u = lay.unit
         first, last, words = self.pager()
-        pad = BRUSH_PAD * u
+        pad = BRUSH_PAD                 # the rows' pad at 1x
         if me is None or tm is None or self.ws.run.project.sheet is None:
             vals = (True, lay.pane, "pen", "none", False, False, first, last, words, "", "", "", "",
                     "", "", lay.view_w, lay.brushes_h, lay.lines, lay.pitch, pad, 160 * u)

@@ -112,7 +112,7 @@ for k in ("one", "two", "three", "four"):
 
 def build():
     with ui.page("Cells"):
-        with ui.split("col", sizes=(20, 216, 32, 32, 32, 32, "1*"), gap="0", pad="0"):
+        with ui.split("col", sizes=(20, 216, 32, 32, 32, 32, "1*"), gap=0, pad=0):
             ui.label("Colour")
             ui.cells("c", first=0, count=64, cols=8, side=25, gap=2)
             for k in ("one", "two", "three", "four"):

@@ -34,6 +34,7 @@ tools' pitch.
 
 import ui_font as _ui_font
 import ui_draw as _ui_draw
+import layout_base as _lb
 import uitree_editor
 import editor_sprite
 from layers import Layer
@@ -136,9 +137,13 @@ class PaintLayout(LayoutBase):
         # the grid's margin, which its cursor's ring reaches into
         gm = self.gm = _ui_draw.mark_reach("cell") + 2
         self.tall = pane and ch >= 470      # 1024 x 600; a short pane (800 x 480) packs
+        # the page's pad and gap at 1x (`pad1`, `gap1`; the engine scales them), and in
+        # pixels for the room they leave
+        sp = _lb.scale(fs)
         if pane:
             cell = 36 if self.tall else 24
-            self.pad, self.gap = 14, 8
+            self.pad1, self.gap1 = 7, 4
+            self.pad, self.gap = 7 * sp, 4 * sp
             self.pitch = cell + 4
             # the flags' row: its discs' cell, and its word's line at the
             # scale, which may reach into the rows' gap either side
@@ -148,7 +153,8 @@ class PaintLayout(LayoutBase):
             hroom = ch - 2 * row - self.flags_h - self.preview_h - band
             wroom = (cw - 2 * self.pad - self.gap) * 4 // 5
         else:
-            self.pad, self.gap = (16, 20) if desk else (6 * fs, 6 * fs)
+            self.pad1, self.gap1 = (8, 10) if desk else (6, 6)
+            self.pad, self.gap = self.pad1 * sp, self.gap1 * sp
             col = 300 if desk else 120 * fs       # the map's least width
             hroom = ch - 2 * row - band
             wroom = (cw - 2 * self.pad - 2 * self.gap - col) * 144 // 166
@@ -164,7 +170,7 @@ class PaintLayout(LayoutBase):
         gmv = max(0, min(gm, (hroom - span - 2) // 2))
         self.gmv = gmv = gmv - gmv % unit
         self.grid = (span + 2 * gm, span + 2 * gmv)
-        self.mpad = max(0, self.pad - gm)
+        self.mpad1 = max(0, self.pad - gm) // sp
         sw = span // 8 if pane else max(6 * fs, span * 11 // 144)
         self.sw = max(1, sw // unit)        # a palette cell's side in the page's unit
         self.pal = (2 * self.sw * unit, 8 * self.sw * unit)
@@ -323,7 +329,7 @@ class PaintLayer(Layer):
             self._keys_shown = (kind, tuple("\t" + ks[o] if o in ks else "" for o in _KEYED))
         if pe is None:
             vals = (True, lay.pane, lay.tall, "0", "", "", "other", "oval", False, False, "none",
-                    False, 0, "1", lay.pad, lay.mpad, lay.gap, lay.grid[0], lay.grid[1],
+                    False, 0, "1", lay.pad1, lay.mpad1, lay.gap1, lay.grid[0], lay.grid[1],
                     lay.words, lay.sw,
                     lay.pal[0], lay.pal[1], lay.pitch, lay.flags_h,
                     lay.preview_h, 64, lay.more_w, 200, self._keys_shown[1])
@@ -340,7 +346,7 @@ class PaintLayer(Layer):
             vals = (False, lay.pane, lay.tall, str(pe.n), "%d%s%d" % (pe.size, times, pe.size),
                     st or "", tid, _SHAPE_ICON[pe.tool if pe.tool in _SHAPES else self._shape],
                     bool(pe.has_clip), bool(pe.mirror), self._pop or "none", self._shifts,
-                    pe.color, str(pe.size), lay.pad, lay.mpad, lay.gap, lay.grid[0],
+                    pe.color, str(pe.size), lay.pad1, lay.mpad1, lay.gap1, lay.grid[0],
                     lay.grid[1] // lay.unit, lay.words, lay.sw, lay.pal[0], lay.pal[1],
                     lay.pitch // lay.unit, lay.flags_h, lay.preview_h, sheet_h // lay.unit,
                     lay.more_w, pick_w,

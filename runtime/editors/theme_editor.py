@@ -740,7 +740,7 @@ class SpritesLayer(PageHost, Layer):
         vals = (lay.pane, lay.touch and not lay.desk, lay.lines > 0, lay.lines > 1, name, status,
                 "%d / %d" % (first // per + 1, pages), first == 0, first + per >= n, tool, color,
                 lay.grid_w // u, lay.grid_h // u, (lay.my + lay.rows * lay.pitch_y + lay.legend_h) // u, lay.tsz // u,
-                lay.sw // u, 60 if lay.pane else 18, 34 if lay.pane else 18, 4 * u)
+                lay.sw // u, 60 if lay.pane else 18, 34 if lay.pane else 18, 4)
         self.push(vals)
 
     def _page_of(self):

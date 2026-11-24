@@ -1193,14 +1193,14 @@ def _now():
     transport on a 1:2:1 + 1 grid, the volume. Its keys are the page's own:
     Enter plays, pauses or tries again, Q E step, W S the volume, A D seek
     a file, M goes to the list."""
-    with ui.split("col", sizes=(72, 36, 28, "1*"), gap="m", pad="m"):
+    with ui.split("col", sizes=(72, 36, 28, "1*"), gap=8, pad=8):
         ui.canvas("head", draw_now, pointer="seek_at")
-        with ui.grid(5, 1, gap="m"):
+        with ui.grid(5, 1, gap=8):
             ui.button("prev", icon="prev", label="")
             ui.button("toggle", "primary", icon="{main_icon}", label="", span=2, focus=True)
             ui.button("next", icon="next", label="")
             ui.button("stop", icon="stop", label="")
-        with ui.split("row", sizes=(32, 38, "1*", 12, 32), gap="0", pad="0"):
+        with ui.split("row", sizes=(32, 38, "1*", 12, 32), gap=0, pad=0):
             ui.button("quieter", icon="minus", label="")
             ui.label("", icon="volume")
             ui.slider("", "vol", 0, 10, look="blocks", on="vol_set")
@@ -1213,7 +1213,7 @@ def _now():
 def _add():
     """Add a station on the 12 px gutter: each field's label over it, its
     line under it, Cancel and Add at the foot."""
-    with ui.split("col", sizes=("1*", 28), gap="m", pad="m"):
+    with ui.split("col", sizes=("1*", 28), gap=8, pad=8):
         with ui.group(""):
             ui.label("Address", face="caption", tone="dim")
             ui.field("", "url", URL_MAX, hint="http://", on="to_name", changed="url_moved")
@@ -1221,7 +1221,7 @@ def _add():
             ui.label(HELP_ADDRESS, tone="dim", shown="!err")
             ui.label("Name", face="caption", tone="dim")
             ui.field("", "name", NAME_MAX, hint="Optional", on="add")
-        with ui.split("row", sizes=("1*", 88, 8, 88), gap="0", pad="0"):
+        with ui.split("row", sizes=("1*", 88, 8, 88), gap=0, pad=0):
             ui.label("")
             ui.button("cancel")
             ui.label("")

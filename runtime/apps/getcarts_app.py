@@ -481,7 +481,7 @@ ui.action("install", "Install", install)
 
 def _cards():
     with ui.cards("carts", cur="card", changed="follow", w="{@desk?128:64}", h="{@desk?128:64}",
-                  pad="{@desk?16:12}"):
+                  pad="{@desk?8:12}"):
         ui.card("open", label="{.name}", sub="{.sub}", icon="{.icon}", tone="{.tone}", badge="{.badge}")
     ui.label("No carts on the shelf yet", tone="dim", shown="none")
 
@@ -516,7 +516,7 @@ def _shelf():
 
 
 def _desk():
-    with ui.split("row", sizes=("1*", 274), pad="0", gap="m", rule=True):
+    with ui.split("row", sizes=("1*", 274), pad=0, gap=8, rule=True):
         with ui.group(""):
             with ui.row("caption", pad=24):
                 ui.label("{caption}", tone="dim", face="caption")

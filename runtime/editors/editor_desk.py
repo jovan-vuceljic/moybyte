@@ -1304,7 +1304,7 @@ class EditorDesk(Layer):
                 tuple((ic, _word(wd, keys), op) for ic, wd, op in folded),
                 (c == "game", self.paused, ws.editor_app.playing()), files, file, find, snd,
                 c == "sounds" and self.key == "sound",
-                (cell, 2 * u, lead, max(1, h - self._head_h(u)), min(w - 16 * u, 160 * u * fs),
+                (cell, 1, lead, max(1, h - self._head_h(u)), min(w - 16 * u, 160 * u * fs),
                  min(w - 16 * u, 200 * u * fs), self._code_rows[1]))
 
     def head_act(self, head, verb, *args):

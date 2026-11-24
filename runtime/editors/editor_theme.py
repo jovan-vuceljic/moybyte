@@ -36,7 +36,7 @@ def sync(vals):
     tool, the colour, and the host's measures: the slot's canvas's width
     and height and the sheet's height and a tool's pitch (the page's unit), a
     palette cell's side, the preview's width and height (the page's unit)
-    and the rows' pad (pixels))."""
+    and the rows' pad (at 1x))."""
     (s.pane, s.paged, s.named_on, s.state_on, s.name, s.status, s.spage, s.first, s.last, tool, color, s.grid_w, s.grid_h, s.sheet_h,
      s.pitch, s.sw, s.prev_w, s.prev_h, s.pad) = vals
     if s.tool != tool:

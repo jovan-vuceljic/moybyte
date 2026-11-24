@@ -41,7 +41,7 @@ def sync(vals):
     size, the zoom, the map's size, the pane's status line, and the host's
     measures: the view's width (pixels), the brushes' height (the page's
     unit), the lines under them the column holds, a tool's pitch (the
-    page's unit), the column's pad and the popover's width (pixels))."""
+    page's unit), the column's pad (at 1x) and the popover's width (pixels))."""
     (s.none, s.pane, tool, pop, s.sel, s.clip, s.first, s.last, s.bpage, s.tile, s.cell, s.size_word,
      s.zoom_word, s.dims, s.status, s.view_w, s.brushes_h, lines, s.pitch, s.pad, s.resize_w) = vals
     s.tile_on, s.cell_on, s.hold_on = lines > 0, lines > 1, lines > 2

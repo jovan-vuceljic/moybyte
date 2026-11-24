@@ -182,7 +182,7 @@ def achievements_page():
             ui.label("{cur.title} · {cur.how} · {cur.got?found:not found yet}", tone="dim")
         with ui.popover("badge", anchor="badges.cur", shown="pop", close="close",
                         w="{@desk?420:240}"):
-            with ui.split("row", sizes=(64, "1*"), pad="s"):
+            with ui.split("row", sizes=(64, "1*"), pad=6):
                 ui.picture(icon="{cur.icon}", tone="{cur.tone}", side=56)
                 with ui.group(""):
                     ui.label("{cur.title}", face="title")

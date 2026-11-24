@@ -31,7 +31,7 @@ ui.action("dot", ".", press)
 
 def build():
     with ui.page("Grid"):
-        with ui.grid(3, 3, gap="m", pad="s"):
+        with ui.grid(3, 3, gap=8, pad=6):
             ui.button("one")
             ui.button("two")
             ui.button("three")

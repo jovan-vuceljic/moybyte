@@ -111,7 +111,7 @@ def music_page():
         with ui.row("body", grow=True, shown="!none"):
             with ui.table("steps", cur="at", row=17, changed="picked"):
                 ui.canvas("step", _draw_row)
-            with ui.grid(2, 6, w="{pad_w}", h=152, gap="s"):
+            with ui.grid(2, 6, w="{pad_w}", h=152, gap=6):
                 for a, word, icon, shown, kind in PAD:
                     if shown:
                         ui.button(a, label=word, icon=icon, kind=kind, shown=shown)

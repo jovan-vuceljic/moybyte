@@ -882,11 +882,11 @@ int uit_node(uit_t *e, int kind, const char *key, int parent)
     if (kind == UIT_FIELD)
         N.btn = 32;
     if (kind == UIT_SPLIT)
-        N.btn = N.nbtn = GAP_M, N.lit = 1;          // pad="m", gap="m", align="center"
+        N.btn = N.nbtn = 8, N.lit = 1;              // pad=8, gap=8, align="center"
     if (kind == UIT_BUBBLE)
         N.btn = 75, N.nbtn = 4;                     // max=0.75, lines=4
     if (kind == UIT_GRID)
-        N.btn = GAP_0, N.nbtn = GAP_S, N.lit = 0x11;  // no pad, gap="s", 1 x 1
+        N.btn = 0, N.nbtn = 6, N.lit = 0x11;        // pad=0, gap=6, 1 x 1
     if (kind == UIT_PANES)
         N.nbtn = 6;                                 // the gutter, desk units
     if (kind == UIT_SWITCH) {
@@ -1387,17 +1387,29 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             N->lit |= bit;
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & bit) != 0);
     }
-    if (kind == UIT_SPLIT && (!strcmp(name, "pad") || !strcmp(name, "gap") || !strcmp(name, "align"))) {
-        static const char *const GAPS[] = {"s", "m", "l", "0"}, *const ALIGNS[] = {"start", "center", "end"};
-        int i = name[0] == 'a' ? lit_index(src, ALIGNS, 3) : lit_index(src, GAPS, 4);
+    if ((kind == UIT_SPLIT || kind == UIT_GRID) && (!strcmp(name, "pad") || !strcmp(name, "gap"))) {
+        // an int at 1x (the engine scales it), given as a literal
+        long v = -1;
+        if (*src >= '0' && *src <= '9') {
+            char *end;
+            v = strtol(src, &end, 10);
+            v = *end || v > 255 ? -1 : v;
+        }
+        if (v < 0)
+            return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is not an int from 0 to 255", "%s %s %s"),
+                                  uit_kind_names[kind], name, src);
+        if (name[0] == 'p')
+            N->btn = (uint16_t)v;
+        else
+            N->nbtn = (uint16_t)v;
+        return add_prop(e, node, name, src, repr, PK_LIT, (int32_t)v);
+    }
+    if (kind == UIT_SPLIT && !strcmp(name, "align")) {
+        static const char *const ALIGNS[] = {"start", "center", "end"};
+        int i = lit_index(src, ALIGNS, 3);
         if (i < 0)
             return uit_fail(e, UIT_E_KIND, UIT_MSG("split %s=%s", "%s %s"), name, src);
-        if (name[0] == 'p')
-            N->btn = (uint16_t)i;
-        else if (name[0] == 'g')
-            N->nbtn = (uint16_t)i;
-        else
-            N->lit = (uint8_t)((N->lit & SP_RULE) | i);
+        N->lit = (uint8_t)((N->lit & SP_RULE) | i);
         return add_prop(e, node, name, src, repr, PK_LIT, i);
     }
     if (kind == UIT_SPLIT && !strcmp(name, "rule")) {
@@ -1405,17 +1417,6 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         if (src[0] == 'T' || src[0] == '1')
             N->lit |= SP_RULE;
         return add_prop(e, node, name, src, repr, PK_LIT, (N->lit & SP_RULE) != 0);
-    }
-    if (kind == UIT_GRID && (!strcmp(name, "pad") || !strcmp(name, "gap"))) {
-        static const char *const GAPS[] = {"s", "m", "l", "0"};
-        int i = lit_index(src, GAPS, 4);
-        if (i < 0)
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("grid %s=%s", "%s %s"), name, src);
-        if (name[0] == 'p')
-            N->btn = (uint16_t)i;
-        else
-            N->nbtn = (uint16_t)i;
-        return add_prop(e, node, name, src, repr, PK_LIT, i);
     }
     if (kind == UIT_GRID && (!strcmp(name, "cols") || !strcmp(name, "rows"))) {
         // cols in the lit's low nibble, rows in its high one

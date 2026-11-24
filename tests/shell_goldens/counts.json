@@ -171,7 +171,7 @@
     "editor_map": [26, 16],
     "editor_music": [20, 39],
     "editor_paint": [72, 24],
-    "editor_scene": [10, 12],
+    "editor_scene": [10, 14],
     "launcher": [0, 0],
     "launcher_make_broken": [0, 0],
     "open_with": [3, 7],
@@ -184,7 +184,7 @@
     "settings_log": [4, 2],
     "settings_permissions": [40, 16],
     "unlock_banner": [62, 13],
-    "web_console": [294, 7]
+    "web_console": [294, 8]
   },
   "p4_1024x600_cs2_fs1_blocks": {
     "about": [11, 6],
@@ -681,7 +681,7 @@
     "editor_cards": [5, 2],
     "editor_code": [5, 1],
     "editor_map": [50, 27],
-    "editor_music": [0, 0],
+    "editor_music": [39, 24],
     "editor_paint": [0, 0],
     "editor_scene": [0, 0],
     "launcher": [0, 0],
@@ -726,7 +726,7 @@
     "editor_cards": [6, 2],
     "editor_code": [5, 1],
     "editor_map": [50, 26],
-    "editor_music": [0, 0],
+    "editor_music": [39, 24],
     "editor_paint": [0, 0],
     "editor_scene": [0, 0],
     "launcher": [0, 0],
@@ -781,11 +781,11 @@
     "script_console": [10, 6],
     "settings": [39, 18],
     "settings_achievements": [37, 31],
-    "settings_licence": [23, 29],
-    "settings_licences": [23, 28],
+    "settings_licence": [24, 32],
+    "settings_licences": [24, 31],
     "settings_log": [5, 13],
     "settings_permissions": [22, 17],
-    "unlock_banner": [72, 21],
+    "unlock_banner": [71, 22],
     "web_console": [299, 10]
   },
   "tdeck_320x240_fs1_blocks": {

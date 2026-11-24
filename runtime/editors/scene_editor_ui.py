@@ -91,7 +91,7 @@ class SceneEditorUI(ViewHost):
         first, last, words = self.pager()
         if se is None or self.ws.run.project.sheet is None:
             vals = (True, lay.pane, "pick", "nothing", "none", False, "", "", first, last, words,
-                    "", "", "", lay.view_w, lay.brushes_h, lay.lines, lay.roomy, lay.pitch, BRUSH_PAD * u,
+                    "", "", "", lay.view_w, lay.brushes_h, lay.lines, lay.roomy, lay.pitch, BRUSH_PAD,
                     150 * u)
         else:
             r = se.selected()
@@ -101,7 +101,7 @@ class SceneEditorUI(ViewHost):
                     "" if r is None else "x %d  y %d" % (r.get("x", 0), r.get("y", 0)),
                     first, last, words, str(se.stamp_tag or "thing"), self.zoom_word(),
                     str(self.scene_name or ""), lay.view_w, lay.brushes_h, lay.lines, lay.roomy,
-                    lay.pitch, BRUSH_PAD * u, 150 * u)
+                    lay.pitch, BRUSH_PAD, 150 * u)
         self.push(vals)
 
     def zoom_word(self):

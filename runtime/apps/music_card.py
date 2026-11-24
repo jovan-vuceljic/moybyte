@@ -99,7 +99,7 @@ ui.action("louder", "Louder", louder)
 
 def _card():
     ui.canvas("head", draw_head, keys=head_keys, pointer="head_at")
-    with ui.grid(5, 1, gap="s"):
+    with ui.grid(5, 1, gap=6):
         ui.button("prev", icon="prev", label="")
         ui.button("main", "primary", icon="{main_icon}", label="", span=2)
         ui.button("next", icon="next", label="")
@@ -109,18 +109,18 @@ def _card():
 def page():
     with ui.page(""):
         # each split ends in an empty weighted cell: its last fixed cell keeps its whole size
-        with ui.split("col", sizes=(84, "1*"), gap="0", pad="0", shown="!@desk"):
+        with ui.split("col", sizes=(84, "1*"), gap=0, pad=0, shown="!@desk"):
             with ui.group("", look="card"):
-                with ui.split("col", sizes=(40, 26, "1*"), gap="s", pad="s"):
+                with ui.split("col", sizes=(40, 26, "1*"), gap=6, pad=6):
                     _card()
                     ui.label("")
             ui.label("")
-        with ui.split("col", sizes=(96, 30, "1*"), gap="s", pad="s", shown="@desk"):
+        with ui.split("col", sizes=(96, 30, "1*"), gap=5, pad=5, shown="@desk"):
             with ui.group("", look="card"):
-                with ui.split("col", sizes=(40, 26, "1*"), gap="s", pad="s"):
+                with ui.split("col", sizes=(40, 26, "1*"), gap=5, pad=5):
                     _card()
                     ui.label("")
-            with ui.split("row", sizes=(32, 38, "1*", 12, 32), gap="0", pad="0"):
+            with ui.split("row", sizes=(32, 38, "1*", 12, 32), gap=0, pad=0):
                 ui.button("quieter", icon="minus", label="")
                 ui.label("", icon="volume")
                 ui.slider("", "vol", 0, 10, look="blocks", on="vol_set")

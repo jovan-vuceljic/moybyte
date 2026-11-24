@@ -86,8 +86,8 @@ def test_an_int_takes_a_template_and_a_text_takes_no_int(m):
     assert m.check_prop("label", "lines", NUM, None)[0] == "T03"
     assert m.check_prop("info", "value", INT, None)[0] == "N01"          # a template is a text
     assert m.check_prop("progress", "max", INT, None) is None           # an int template: an int or a text
-    assert m.check_prop("grid", "gap", TEXT, "m") is None
-    assert m.check_prop("grid", "gap", TEXT, "x")[0] == "N01"
+    assert m.check_prop("grid", "gap", INT, None) is None              # an int at 1x
+    assert m.check_prop("grid", "gap", TEXT, "m")[0] == "N01"          # the spacing words are gone
     assert m.check_prop("pane", "start", TEXT, "col_w") is None         # an int, or an int state's name
     assert m.check_prop("pane", "min", DICT, None) is None              # (w, h), or one a tab
     assert m.check_prop("pane", "min", LIST, None) is None

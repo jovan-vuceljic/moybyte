@@ -34,10 +34,6 @@ static const char *const ut_kind_names_[] = {
 #define UT_FACE_MONO "mono"
 #define UT_FACE_CAPTION "caption"
 #define UT_FACE_RESULT "result"
-#define UT_GAP_S "s"
-#define UT_GAP_M "m"
-#define UT_GAP_L "l"
-#define UT_GAP_0 "0"
 #define UT_KIND_NORMAL "normal"
 #define UT_KIND_PRIMARY "primary"
 #define UT_KIND_DANGER "danger"
@@ -65,10 +61,6 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_ICONS "icons"
 #define UT_LOOK_COLUMN "column"
 #define UT_LOOK_KEYS "keys"
-#define UT_PAD_S "s"
-#define UT_PAD_M "m"
-#define UT_PAD_L "l"
-#define UT_PAD_0 "0"
 #define UT_SIZE_FIT "fit"
 #define UT_SIZE_TEXT "text"
 #define UT_SYNTAX_PLAIN "plain"
@@ -122,7 +114,7 @@ static inline int32_t ut_p_flow(int v) { return ut_prop_("flow", v ? "True" : "F
 static inline int32_t ut_p_focus(const char *v) { return ut_prop_("focus", v); }
 static inline int32_t ut_p_focused(const char *v) { return ut_prop_("focused", v); }
 static inline int32_t ut_p_follow(int v) { return ut_prop_("follow", v ? "True" : "False"); }
-static inline int32_t ut_p_gap(const char *v) { return ut_prop_("gap", v); }
+static inline int32_t ut_p_gap(int32_t v) { return ut_prop_int_("gap", v); }
 static inline int32_t ut_p_ground(const char *v) { return ut_prop_("ground", v); }
 static inline int32_t ut_p_group(const char *v) { return ut_prop_("group", v); }
 static inline int32_t ut_p_grow(int v) { return ut_prop_("grow", v ? "True" : "False"); }
@@ -157,7 +149,7 @@ static inline int32_t ut_p_next(const char *v) { return ut_prop_("next", v); }
 static inline int32_t ut_p_off(const char *v) { return ut_prop_("off", v); }
 static inline int32_t ut_p_offered(const char *v) { return ut_prop_("offered", v); }
 static inline int32_t ut_p_on(const char *v) { return ut_prop_("on", v); }
-static inline int32_t ut_p_pad(const char *v) { return ut_prop_("pad", v); }
+static inline int32_t ut_p_pad(int32_t v) { return ut_prop_int_("pad", v); }
 static inline int32_t ut_p_pick(const char *v) { return ut_prop_("pick", v); }
 static inline int32_t ut_p_pointer(const char *v) { return ut_prop_("pointer", v); }
 static inline int32_t ut_p_prev(const char *v) { return ut_prop_("prev", v); }

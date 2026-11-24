@@ -93,7 +93,7 @@ def _row(rect, cs, row):
 
 def _place(rect, names, cs, fs, clock_w, sys_len, n_items, cluster):
     page = _states(names, cs, fs, clock_w, sys_len, n_items, cluster=cluster)
-    page.unit = cs
+    page.unit = page.scale = cs
     page.place(_row(rect, cs, cluster), desk=True)
     return page
 
@@ -155,14 +155,13 @@ def _states(names, cs, fs, clock_w, sys_len, n_items, glyph=None, wins=None, clu
         s._v["items"] = S._check(s._t["items"], items, "s.items")
         s._ver["items"] += 1
         _DIRTY[0] = True
-    sg = max(6 * cs, 4 * fs)        # a gap between inks (an icon item is its ink wide)
+    sg = 6                          # a gap between inks at 1x (an icon item is its ink wide)
     _put("sg", sg)
     _put("cw", clock_w)
     _put("sys_w", sys_len or 16 * cs)
     # a handheld's cluster: RING_ROOM round it, CLOCK_CLEAR more before the clock
-    ring = SL.RING_ROOM * fs if cluster else 0
-    _put("ring", ring)
-    _put("cg", SL.CLOCK_CLEAR * fs if cluster else sg)
+    _put("ring", SL.RING_ROOM if cluster else 0)
+    _put("cg", SL.CLOCK_CLEAR if cluster else sg)
     _put("cluster", "wifi" in names or "battery" in names)
     tray = False
     for nm, st in _SHOWN:
@@ -262,7 +261,7 @@ def chip_rects(rect, names, cs, fs, clock_w, sys_len, n_items, wins, out):
     out."""
     cluster = _cluster()
     page = _states(names, cs, fs, clock_w, sys_len, n_items, wins=wins, cluster=cluster)
-    page.unit = cs
+    page.unit = page.scale = cs
     page.place(_row(rect, cs, cluster), desk=True)
     del out[:]
     for row in wins:
@@ -383,7 +382,7 @@ def _frame(page, cv, th, rect, oy, cs, clip, focus):
         if focus is not None:
             D.focus_on(ctx, focus)
         D.ui_frame(ctx, cv, th, rect=rect, desk=True, elsewhere=focus is None)
-        page.unit = cs
+        page.unit = page.scale = cs
         page.bare = True
         page.band = False       # the keys' names are the host's strip's (`ui_draw.BAR_KEYS`)
         page.paint(0, cv, th, rect, True)
@@ -506,8 +505,7 @@ def _shaped_states(sh, cells, rect, cs, fs, clock_w, sys_len, n_items, glyph=Non
             ss._v[nm] = S._check(ss._t[nm], slots[j], "s." + nm)
             ss._ver[nm] += 1
         L[0] = cells
-    sg = max(6 * cs, 4 * fs)
-    _put("sg", sg, ss)
+    _put("sg", 6, ss)
     _put("cw", clock_w, ss)
     if sh == "side":
         sys_len = LB.sys_tile(rect[2])[1]
@@ -515,7 +513,7 @@ def _shaped_states(sh, cells, rect, cs, fs, clock_w, sys_len, n_items, glyph=Non
     if glyph is not None:
         _put("batt_icon", not glyph, ss)
         _put("batt_glyph", bool(glyph), ss)
-    page.unit = cs
+    page.unit = page.scale = cs
     return page
 
 

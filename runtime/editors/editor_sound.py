@@ -140,17 +140,17 @@ def _draw_graph(cv, x, y, w, h):
 
 
 def _brush():
-    with ui.row("brush", pad=12, shown="!none"):
+    with ui.row("brush", pad="{@desk?6:12}", shown="!none"):
         ui.seg("Wave  {word}", "brush", text="{.rgb}", look="swatches", on="brushed")
 
 
 def _ops():
-    with ui.row("ops", pad=12, shown="!none"):
+    with ui.row("ops", pad="{@desk?6:12}", shown="!none"):
         for icon, _w, op in OPS:
             ui.button(op, icon=icon, alone=True, w=OP_W, kind="danger" if op == "del" else "normal")
-        with ui.row("oct_step", pad=8, shown="!paged || roomy"):
+        with ui.row("oct_step", pad="{@desk?4:8}", shown="!paged || roomy"):
             ui.stepper("{oct}", "oct_down", "oct_up", tone="dim", grow=True)
-        with ui.row("page_step", pad=8, shown="paged"):
+        with ui.row("page_step", pad="{@desk?4:8}", shown="paged"):
             ui.stepper("{span}", "page_down", "page_up", tone="dim", grow=True)
 
 

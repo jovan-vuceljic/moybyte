@@ -376,7 +376,7 @@ def test_a_split_a_grid_and_a_panel_draw_on_the_c_engine(tmp_path):
             'ui.page("p", function()\n%s\nend)\n')
     pages = {
         "Plain": '  ui.label("one")\n  ui.label("two")',
-        "Split": '  ui.split({ dir = "row", sizes = { 1, 1 } }, function() ui.label("one") ui.label("two") end)',
+        "Split": '  ui.split({ dir = "row", sizes = { 1, 1 }, gap = 6, pad = 0 }, function() ui.label("one") ui.label("two") end)',
         "Grid": '  ui.grid({ cols = 2, rows = 1 }, function() ui.button("a") ui.button("b") end)',
         "Panel": '  ui.panel("side", function() ui.label("one") end)\n  ui.label("two")',
     }
@@ -890,6 +890,7 @@ CASES = {
     "N01 labels": (APP + GO + 'ui.page("p", function()\n'
                    '  ui.dialog("D", { buttons = { "go" }, labels = { "A", "B" } }, function() end)\nend)\n', 4, None),
     "N01 signal": (APP + 'ui.page("p", function() ui.info("Signal", { signal = "3 bars" }) end)\n', 2, None),
+    "N01 gap word": (APP + 'ui.page("p", function() ui.split({ dir = "row", sizes = { 1, 1 }, gap = "s" }, function() end) end)\n', 2, None),
     "T04": (APP + 'local s = ui.state { e = ui.enum("a", "b", { init = "a" }) }\nui.labels("L", { a = "A" })\n'
             'ui.page("p", function() ui.label("{e|map L}") end)\n', 4, None),
     "T05": (APP + 'ui.page("p", function() ui.label("{.x}") end)\n', 2, None),
@@ -1186,10 +1187,10 @@ def test_a_size_text_label_draws_as_measured_and_an_icon_alone_draws_on_the_c_en
     assert shots["Icon"] != shots["Plain"]
 
 
-def test_a_grids_spacing_is_a_word_and_an_int_stops_the_run_at_its_line(tmp_path):
-    """A grid's and a split's gap= and pad= are the spacing words (s, m, l,
-    0), the engine's: from Lua a word draws, a number stops the run at its
-    line with N01."""
+def test_a_grids_spacing_is_an_int_and_a_word_stops_the_run_at_its_line(tmp_path):
+    """A grid's and a split's gap= and pad= are ints at 1x, which the engine
+    scales: from Lua an int draws, a spacing word stops the run at its line
+    with N01."""
     from runtime import host_app
     carts = str(tmp_path / "carts")
     host_app.moy_carts.ensure_dirs(carts)
@@ -1208,8 +1209,8 @@ def test_a_grids_spacing_is_a_word_and_an_int_stops_the_run_at_its_line(tmp_path
             frame()
         got[name] = ws.run.player.cart_error
         ws.spine.exit_to_caller()
-    assert got["Word"] is None, got["Word"]
-    assert got["Int"] and "error[N01] main.lua:5:" in got["Int"], got["Int"]
+    assert got["Int"] is None, got["Int"]
+    assert got["Word"] and "error[N01] main.lua:5:" in got["Word"], got["Word"]
 
 
 def test_a_page_pushed_over_itself_with_another_row_gives_the_first_its_row_back(tmp_path):

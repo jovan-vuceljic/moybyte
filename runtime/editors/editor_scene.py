@@ -40,7 +40,7 @@ def sync(vals):
     stamp's tag, the zoom's word, the scene's name, and the host's
     measures: the view's width (pixels), the stamps' height (the page's
     unit), the lines under them the column holds, a tool's pitch (the
-    page's unit), the column's pad and the popover's width (pixels))."""
+    page's unit), the column's pad (at 1x) and the popover's width (pixels))."""
     (s.none, s.pane, tool, side, pop, s.snap_on, s.tag_word, s.place, s.first, s.last, s.spage, s.stamp_word,
      s.zoom_word, s.name, s.view_w, s.stamps_h, lines, s.roomy, s.pitch, s.pad, s.pop_w) = vals
     s.stag_on, s.hint_on = lines > 0, lines > 1

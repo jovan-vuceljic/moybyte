@@ -366,7 +366,7 @@ ui.hook("zoom_moved", zoom_moved)
 
 
 def _tools(pitch, cols=1):
-    with ui.grid(cols, 8 // cols, h=pitch, gap="0"):
+    with ui.grid(cols, 8 // cols, h=pitch, gap=0):
         for i in range(8):
             ui.button("t_" + TOOL_IDS[i], icon="{shape_icon}" if i == SHAPE else TOOLS[i][0],
                       alone=True, kind="bar", marked="tool=" + TOOL_IDS[i])
@@ -378,7 +378,7 @@ def _view_canvas():
 
 def _rail():
     """A handheld's colours: the colour in use, its sixteen, the brush, More."""
-    with ui.split("col", sizes=(27, 102, 26, 26, "1*"), gap="0", pad="0"):
+    with ui.split("col", sizes=(27, 102, 26, 26, "1*"), gap=0, pad=0):
         ui.cells("use_c", first="{use_c}", count=1, cols=1, side=24, edge=True, pick="colours")
         ui.cells("rail_c", first="{rail_first}", count=16, cols=2, side=12, edge=True,
                  on="rail_moved")
@@ -389,12 +389,12 @@ def _rail():
 
 def _panel():
     """The desk's colours and the tool's sizes beside the drawing."""
-    with ui.split("col", sizes=(20, 34, 206, 22, 32, 32, 32, "1*"), gap="0", pad="0"):
+    with ui.split("col", sizes=(20, 34, 206, 22, 32, 32, 32, "1*"), gap=0, pad=0):
         ui.label("Colour", tone="dim", face="caption")
-        with ui.split("row", sizes=(56, "1*"), gap="0", pad="0"):
+        with ui.split("row", sizes=(56, "1*"), gap=0, pad=0):
             ui.cells("use_c", first="{use_c}", count=1, cols=1, side=28, pick="colours")
             ui.label("{colour_word}")
-        ui.cells("panel_c", first=0, count=64, cols=8, side=25, gap=2, on="panel_moved")
+        ui.cells("panel_c", first=0, count=64, cols=8, side=25, gap=1, on="panel_moved")
         ui.label("{tool_word}", tone="dim", face="caption")
         ui.seg("Size", "size_cur", text="{.word}", on="size_moved")
         ui.seg("Shape", "shape_cur", labels="SHAPES", on="shape_moved", shown="tool=shape")
@@ -403,7 +403,7 @@ def _panel():
 
 
 def _desk_row():
-    with ui.split("row", sizes=(172, 180, "1*", 424), gap="s", pad="0"):
+    with ui.split("row", sizes=(172, 180, "1*", 424), gap=5, pad=0):
         with ui.row("row_verbs", pad=6, gap=8):
             ui.button("new", alone=True, kind="bar")
             ui.button("open", alone=True, kind="bar")
@@ -421,16 +421,16 @@ def _desk_row():
 
 
 def _draw_desk():
-    with ui.split("col", sizes=(36, "1*"), gap="s", pad="s", rule=True, shown="draw && desk"):
+    with ui.split("col", sizes=(36, "1*"), gap=5, pad=5, rule=True, shown="draw && desk"):
         _desk_row()
-        with ui.split("row", sizes=(44, "1*", 244), gap="s", pad="0"):
+        with ui.split("row", sizes=(44, "1*", 244), gap=5, pad=0):
             _tools(44)
             _view_canvas()
             _panel()
 
 
 def _draw_handheld():
-    with ui.split("row", sizes=(26, "1*", 28), gap="s", pad="0", shown="draw && !desk && !touch"):
+    with ui.split("row", sizes=(26, "1*", 28), gap=6, pad=0, shown="draw && !desk && !touch"):
         _tools(23)
         _view_canvas()
         _rail()
@@ -439,10 +439,10 @@ def _draw_handheld():
 def _draw_touch():
     """A handheld under a finger: the tools two by four, the colour in use
     and the brush side by side under them, More, and the drawing."""
-    with ui.split("row", sizes=(64, "1*"), gap="s", pad="0", shown="draw && !desk && touch"):
-        with ui.split("col", sizes=(128, 34, 34, "1*"), gap="s", pad="0"):
+    with ui.split("row", sizes=(64, "1*"), gap=6, pad=0, shown="draw && !desk && touch"):
+        with ui.split("col", sizes=(128, 34, 34, "1*"), gap=6, pad=0):
             _tools(32, 2)
-            with ui.split("row", sizes=(32, 32), gap="0", pad="0"):
+            with ui.split("row", sizes=(32, 32), gap=0, pad=0):
                 ui.cells("use_c", first="{use_c}", count=1, cols=1, side=28, edge=True,
                          pick="colours")
                 ui.button("brush", alone=True, kind="bar", marked="pop=brush")

@@ -92,6 +92,7 @@ def place_class(name, render=1):
         raise ValueError("metric class: " + str(name))
     _class = name
     _render = render if name == DESK and render in RENDER_SCALES else 1
+    _CS[0] = 0
 
 
 def place_bar_h(handheld=0, desk=0):
@@ -137,6 +138,23 @@ def unit():
     """What a logical chrome size is multiplied by on the class in force, in
     system-surface pixels: the desk's 2 halves on a doubled surface."""
     return CLASSES[_class]["unit"] // _render
+
+
+# The chrome scale in force (the console's, at every relayout); 0 until one is.
+_CS = [0]
+
+
+def set_scale(cs):
+    """Make `cs`, the console's effective chrome scale, the one `scale` answers."""
+    _CS[0] = int(cs)
+
+
+def scale(fs=1):
+    """The integer a UI spacing given at 1x is multiplied by: the chrome scale
+    in force, which is the desk's unit at chrome size 1 and a handheld's font
+    scale but under a tap floor; before a console has set one, the class's
+    unit on a desk and `fs` on a handheld."""
+    return max(int(fs), _CS[0] or (unit() if _class == DESK else 1))
 
 
 def chrome_size(cs):

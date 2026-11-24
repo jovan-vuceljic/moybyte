@@ -408,8 +408,8 @@ Python's alone.
 | `row(key)` | children side by side | `wrap=`, `gap=`, `pad=`, `mid=`, `close=` what Back does while it shows |
 | `scroll(key)` | a region that scrolls its children | `follow=` opens at its foot and keeps a new row in view; `snap=` shows whole rows, a "More below" cue where it leaves some out below and, following, an "Older messages" one above |
 | `foot()` | the page's docked foot: buttons at its end, a label before them | `look="share"` its buttons share its width, `"band"` an edge-to-edge strip |
-| `split(dir, sizes)` | cells along `"row"` or `"col"`, sized in units or weights (`"1*"`) | `gap=`, `pad=` (a spacing word: `"s"`, `"m"`, `"l"`, `"0"`), `align=`, `rule=` |
-| `grid(cols, rows)` | a fixed grid of cells | `gap=`, `pad=` (spacing words, as a split's), `w=`, `h=` |
+| `split(dir, sizes)` | cells along `"row"` or `"col"`, sized in units or weights (`"1*"`) | `gap=`, `pad=` (ints at 1x, 8 each unless given), `align=`, `rule=` |
+| `grid(cols, rows)` | a fixed grid of cells | `gap=`, `pad=` (ints at 1x, 6 and 0 unless given), `w=`, `h=` |
 | `panel(key)` | a region of its own | |
 | `switch(name, cases)` | one of several bodies by an enum's or a bool's value (`"_"` the rest) | |
 | `panes(dir)`, `pane(key)` | panes a person resizes by their dividers; one grows (no Lua) | `size=`, `start=`, `min=`, `grow=`; a pane's `tabs=`, `title=` |
@@ -523,6 +523,15 @@ cannot hold share it by their sizes, and a cell that is a row, a group or a
 seg widens to what it needs, its neighbours giving up at most half theirs.
 Groups in a `row` stand side by side, each a column of its rows (no
 caption), on a flowing page and a placed one.
+
+**Spacing is pixels at 1x (owner, 2026-11-24).** Every `gap=` and `pad=`
+(a group's, a row's, a split's, a grid's, cells', cards', panes') is a plain
+int, literal or bound, meaning pixels at scale 1. The engine multiplies it by
+the chrome scale in force (`layout_base.scale`): a handheld's font scale, its
+tap floor's where that stands over it, and the desk's unit, 2 at chrome size
+1. A page never scales a spacing itself: `tests/test_uitree_spacing.py`
+refuses one multiplied by a scale. Hairlines, borders and rules take no
+scale.
 
 A column split's cells that run past its height take the overrun from its
 palettes (`ui.cells`), whose cells fit the room left them down to a third
@@ -1024,8 +1033,8 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 | `popover` | 1 | key | `anchor` tpl, `w` int, `close` action or hook, `wash` `"page"` `"view"` `"none"`, `at` tpl |
 | `menu` | 2 | tpl, optional | none |
 | `item` | 2 | action | `icon` tpl, `label` tpl, `kind` `"danger"` |
-| `split` | 1 | none | `dir` `"row"` `"col"`, `sizes` list, `gap` `"s"` `"m"` `"l"` `"0"`, `pad` `"s"` `"m"` `"l"` `"0"`, `align` `"start"` `"center"` `"end"`, `rule` bool |
-| `grid` | 1 | none | `cols` int, `rows` int, `gap` `"s"` `"m"` `"l"` `"0"`, `pad` `"s"` `"m"` `"l"` `"0"`, `w` int, `h` int |
+| `split` | 1 | none | `dir` `"row"` `"col"`, `sizes` list, `gap` int, `pad` int, `align` `"start"` `"center"` `"end"`, `rule` bool |
+| `grid` | 1 | none | `cols` int, `rows` int, `gap` int, `pad` int, `w` int, `h` int |
 | `panes` | 2 | key | `dir` `"row"` `"col"`, `size` name, `start` int or name, `min` list, `grow` bool, `gap` int, `focused` name, `grown` name |
 | `pane` | 2 | key | `title` tpl, `icon` tpl, `tabs` name, `labels` table, `size` name, `start` int or name, `grow` bool, `min` list or conds, `head` bool, `offered` conds |
 | `text_editor` | 2 | state | `find` name, `find_on` cond, `marks` name, `gutter` cond, `focus` cond |

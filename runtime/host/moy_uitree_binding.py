@@ -89,6 +89,7 @@ _SIGS = (
     ("uit_frame", [_P, _P, _P, _I, _I, _I, _I, _I, _I, _I], _I),
     ("uit_panes_set", [_P, _I, _S, _I, c.c_uint32], None),
     ("uit_set_unit", [_P, _I], None),
+    ("uit_set_scale", [_P, _I], None),
     ("uit_set_app", [_P, _I], None),
     ("uit_panes", [_P, _I32, _I], _I),
     ("uit_splits", [_P, _P, _P, _I, _I32], _I),
@@ -349,6 +350,9 @@ class Engine:
 
     def set_unit(self, unit):
         self._L.uit_set_unit(self._e, int(unit or 0))
+
+    def set_scale(self, scale):
+        self._L.uit_set_scale(self._e, int(scale))
 
     def set_app(self, app):
         self._L.uit_set_app(self._e, 1 if app else 0)

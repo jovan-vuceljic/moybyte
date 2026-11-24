@@ -1401,11 +1401,24 @@ static void label_rows(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
     label_rows_m(e, c, s, k, model, row, h, 4);
 }
 
-// A gap's pixels: the handheld's at its font scale, the desk's as named (`_gap`).
-static int gap_px(uit_t *e, int i)
+// The scale a spacing at 1x is multiplied by: the host's (`uit_set_scale`, the chrome scale in
+// force), else 2 on a desk and the font scale else. Hairlines, borders and rules take none.
+static int32_t space_unit(const uit_t *e)
 {
-    static const uint8_t GAPS[4][2] = {{6, 10}, {8, 16}, {16, 24}, {0, 0}};
-    return (e->flags & UIT_F_DESK) ? GAPS[i & 3][1] : GAPS[i & 3][0] * e->fs;
+    return e->sc > 0 ? e->sc : (e->flags & UIT_F_DESK) ? 2 : e->fs;
+}
+
+// A spacing prop (template `t`, an int at 1x, literal or bound) in pixels; `dflt` (1x) where
+// none is given.
+static int32_t space_of(uit_t *e, int t, int model, int row, int32_t dflt)
+{
+    return (t < 0 ? dflt : int_of(e, t, model, row, 0)) * space_unit(e);
+}
+
+// A split's or a grid's gap or pad (an int at 1x) in pixels.
+static int gap_px(uit_t *e, int v)
+{
+    return v * space_unit(e);
 }
 
 // How tall a split's column draws, measured before it draws: -1 where it holds a kind with no
@@ -1588,12 +1601,12 @@ static void draw_cards(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k)
     int margin = desk ? 16 : 8, foot = desk ? (subs ? 52 : 30) : 26 + (subs ? 6 : 0), cols = 0;
     int32_t pad = prop_int(e, k, "pad", -1, -1);
     if (pad > 0) {
-        // pad=: the gap between its cards, a margin of 16 (or the gap, where that is more) at
-        // either side; as many columns as its room holds at that gap, spread across it
-        int32_t gp = size_of(e, pad), room[5];
-        margin = pad > 16 ? pad : 16;
+        // pad=: the gap between its cards at 1x, a margin of 16 (or the gap, where that is
+        // more) at either side; as many columns as its room holds at that gap, spread across it
+        int32_t gp = pad * space_unit(e), mp = (pad > 16 ? pad : 16) * space_unit(e), room[5];
+        margin = (int)(mp / e->fs);     // the spread's margin is in the font scale's steps
         moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, room);
-        cols = (int)((room[2] - 2 * margin * e->fs + gp) / (w + gp > 0 ? w + gp : 1));
+        cols = (int)((room[2] - 2 * mp + gp) / (w + gp > 0 ? w + gp : 1));
         cols = cols < 1 ? 1 : cols;
     }
     int grid = N->t_main < 0, capped = 0;
@@ -3564,7 +3577,7 @@ static int32_t len_of(uit_t *e, int t, int model, int row, int32_t dflt);
 // The gap between a column's children: its group's gap=, else a small one.
 static int32_t col_gap(uit_t *e, int k, int model, int row)
 {
-    return len_of(e, NODE(k)->t_value, model, row, (e->flags & UIT_F_DESK) ? 4 : 2 * e->fs);
+    return space_of(e, NODE(k)->t_value, model, row, 2);
 }
 
 static int32_t flow_h(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int g, int model, int row,
@@ -3756,9 +3769,9 @@ static int32_t flow_row(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
     if (!n)
         return 0;
     moy_ui_api_measure(c, s, MOY_UI_MEASURE_PROGRESS, span_of("", 0), NULL, out);
-    int32_t x = out[0], y = out[1], room = out[2], gap = len_of(e, NODE(k)->t_value, model, row, desk ? 12 : 6 * e->fs);
+    int32_t x = out[0], y = out[1], room = out[2], gap = space_of(e, NODE(k)->t_value, model, row, 6);
     int32_t step_gap = out[4] - out[3] > 0 ? out[4] - out[3] : 0, used = 0;
-    int32_t pad = len_of(e, NODE(k)->t_aux, model, row, 0);     // pad=: in from either side
+    int32_t pad = space_of(e, NODE(k)->t_aux, model, row, 0);   // pad=: in from either side
     x += pad, room -= 2 * pad;
     if (NODE(k)->lit & RW_WRAP) {
         int cut = dry ? 0 : moy_ui_api_cut(c, !e->placed && !e->in_foot);  // as below
@@ -4635,7 +4648,7 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         e->scratch.n = cm;
         int32_t first = prop_int(e, k, "first", model, row), count = prop_int(e, k, "count", model, row);
         int32_t cols = prop_int(e, k, "cols", model, row), side = prop_int(e, k, "side", model, row) * sc;
-        int32_t gap = prop_int(e, k, "gap", model, row) * sc, cur = e->slots[N->slot].i;
+        int32_t gap = prop_int(e, k, "gap", model, row) * space_unit(e), cur = e->slots[N->slot].i;
         int picked = 0;
         over_for(e, k, model, row, c, &o, id);
         moy_ui_over_put(&o, MOY_UI_OV_MARK, &(int32_t){0});    // its mark is the cursor on its cell
@@ -4813,7 +4826,7 @@ static int32_t empty_controls_h(uit_t *e, int k, int model, int row)
             continue;
         if (N->act >= 0 && !uit_act_can(e, N->act, model, row) && e->acts[N->act].off != 2)
             continue;
-        h += hh + row_gap(e) * e->fs;
+        h += hh + row_gap(e);
     }
     return h;
 }
@@ -4837,7 +4850,7 @@ static void empty_controls(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, in
         put_rect(e, c2, r);
         moy_ui_api_at(c, r[0], r[1], r[2], r[3]);
         draw(e, c, s, c2, model, row);
-        y += hh + row_gap(e) * e->fs;
+        y += hh + row_gap(e);
     }
 }
 
@@ -5448,9 +5461,10 @@ static int32_t len_of(uit_t *e, int t, int model, int row, int32_t dflt)
     return e->tmpls[t].lit ? v * row_unit(e) : v;
 }
 
+// A placed row's gap between its cells, and a column's between its rows: 2 at 1x.
 static int32_t row_gap(const uit_t *e)
 {
-    return (e->flags & UIT_F_DESK) ? 4 : 2;
+    return 2 * space_unit(e);
 }
 
 
@@ -5515,9 +5529,9 @@ static int32_t row_need(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k
             x = ALONE_W(e);
         w += x > 0 ? x : 0;
     }
-    int32_t gap = len_of(e, R->t_value, model, row, e->placed ? row_gap(e) : desk ? 12 : 6 * e->fs);
+    int32_t gap = space_of(e, R->t_value, model, row, e->placed ? 2 : 6);
     gap = least && !e->placed ? 0 : gap;
-    int32_t pad = len_of(e, R->t_aux, model, row, 0);
+    int32_t pad = space_of(e, R->t_aux, model, row, 0);
     return n ? w + gap * (n - 1) + 2 * pad : 0;
 }
 
@@ -5634,8 +5648,8 @@ static int32_t natural(uit_t *e, int k, int model, int row, int32_t h)
                 return -1;
             sum += v;
         }
-        return sum + len_of(e, N->t_value, model, row, row_gap(e)) * (nk > 1 ? nk - 1 : 0) +
-               2 * len_of(e, N->t_aux, model, row, 0);
+        return sum + space_of(e, N->t_value, model, row, 2) * (nk > 1 ? nk - 1 : 0) +
+               2 * space_of(e, N->t_aux, model, row, 0);
     }
     if (N->kind == UIT_LABEL && N->t_icon >= 0) {
         text(e, k, 0, model, row, &n);
@@ -5741,8 +5755,8 @@ static void row_cells(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
             }
     for (int i = 0; i < n; i++)         // a fill's basis: a growing canvas's w=, its share over it
         base[i] = nat[i] < 0 && NODE(kids[i])->kind == UIT_CANVAS ? len_of(e, NODE(kids[i])->t_value, model, row, 0) : 0;
-    int32_t gap = R->kind == UIT_ROW ? len_of(e, R->t_value, model, row, row_gap(e)) : row_gap(e);
-    int32_t pad = R->kind == UIT_ROW ? len_of(e, R->t_aux, model, row, 0) : 0;
+    int32_t gap = R->kind == UIT_ROW ? space_of(e, R->t_value, model, row, 2) : row_gap(e);
+    int32_t pad = R->kind == UIT_ROW ? space_of(e, R->t_aux, model, row, 0) : 0;
     int32_t x0 = r[0] + pad, x1 = r[0] + r[2] - pad, ms = 0, b = 0;
     int32_t sum = gap * (n > 1 ? n - 1 : 0);
     for (int i = 0; i < n; i++)
@@ -6335,7 +6349,7 @@ static void pn_lay(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, int
     if (!n)
         return;
     int axis = (N->lit & PN_COL) != 0;
-    int32_t gap = (int32_t)N->nbtn * e->du, span = r[2 + axis] - gap * (n - 1);
+    int32_t gap = (int32_t)N->nbtn * space_unit(e), span = r[2 + axis] - gap * (n - 1);
     uit_ps_t P;
     memset(&P, 0, sizeof P);
     P.node = (int16_t)k, P.nk = (uint8_t)n, P.axis = (uint8_t)axis, P.gap = (int16_t)gap;
@@ -6549,6 +6563,11 @@ void uit_panes_set(uit_t *e, int du, const char *pane_cur, int mouse, uint32_t c
 void uit_set_unit(uit_t *e, int unit)
 {
     e->unit = (int16_t)(unit > 0 ? unit : 0);
+}
+
+void uit_set_scale(uit_t *e, int scale)
+{
+    e->sc = (int16_t)(scale > 0 ? scale : 0);
 }
 
 static int pn_put(int32_t *out, int at, int max, const uit_pa_t *a)

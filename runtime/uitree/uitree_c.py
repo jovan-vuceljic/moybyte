@@ -201,6 +201,7 @@ class CEngine(Engine):
     _band_extra = ""        # the items its host adds to the band before Back, NUL-separated
     th = None               # the theme's colours the last frame drew in
     unit = 0                # a placed page's unit, the host's (0: the engine's own)
+    scale = 0               # the scale its spacing is drawn at, the host's (0: layout_base.scale's)
     # A host's own pictures: fn(node, pic, r), `_pic`'s contract, in place of the engine's
     # decoded ones (the console's home draws its covers so); set before the page opens.
     pictures = None
@@ -1054,6 +1055,7 @@ class CEngine(Engine):
                 S._NOW.app = was
         t = _D.UI_TARGET
         x.set_unit(self.unit)
+        x.set_scale(self.scale or _lb.scale(fs))
         r = x.frame(t[0], cv, t[2], content[0], content[1], content[2], content[3], self._flags(desk), fs,
                     INPUTS.index(self.input))
         self._buttons = 0
@@ -1825,6 +1827,7 @@ class CEditorEngine(CEngine, _ed.Engine):
         self.du = self.unit or max(1, _lb.chrome_size(getattr(self, "fs", 1)) // _lb.render_scale())
         self._x.panes_set(self.du, self.pane_cur, self._mouse(), self.clock)
         self._x.set_unit(self.unit)
+        self._x.set_scale(self.scale or _lb.scale(getattr(self, "fs", 1)))
 
     def _pane_read(self, placing=True):
         """The engine's panes (`uit_panes`) as `uitree_editor.Engine` keeps
