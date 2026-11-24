@@ -31,6 +31,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "moy_codec.h"
 #include "moy_lease.h"
 #include "moy_loop.h"
 #include "moy_net.h"
@@ -166,18 +167,6 @@ static void *console(void *arg) {
     return NULL;
 }
 
-// 64 hex digits at `s` into `out`: 1, else 0.
-static int unhex32(const char *s, uint8_t out[32]) {
-    for (int i = 0; i < 32; i++) {
-        unsigned v;
-        if (sscanf(s + 2 * i, "%2x", &v) != 1) {
-            return 0;
-        }
-        out[i] = (uint8_t)v;
-    }
-    return 1;
-}
-
 int main(int argc, char **argv) {
     if (argc != 4 && argc != 5) {
         fprintf(stderr, "usage: %s PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]\n", argv[0]);
@@ -190,8 +179,8 @@ int main(int argc, char **argv) {
     s_files = argc == 5 ? argv[4] : NULL;
     const char *named = getenv("MOY_TTY_PAGE");
     uint8_t digest[2][32];
-    if (named != NULL && strlen(named) == 129 && unhex32(named, digest[0])
-        && unhex32(named + 65, digest[1])) {
+    if (named != NULL && strlen(named) == 129 && moy_hex_decode(named, 64, digest[0], 32)
+        && moy_hex_decode(named + 65, 64, digest[1], 32)) {
         moy_page_name(digest[0], digest[1]);
     }
     pthread_t t;
