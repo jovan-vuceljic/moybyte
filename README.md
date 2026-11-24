@@ -177,7 +177,7 @@ window manager and app API in this repo are outside it.
 
 ## Flash a board
 
-Without a toolchain, the [project site](https://moybyte-org.github.io/moybyte/)
+Without a toolchain, the [project site](https://os.moybyte.com/)
 flashes a board from Chrome or Edge over Web Serial, using the images from the
 [`firmware-latest`](https://github.com/moybyte-org/moybyte/releases/tag/firmware-latest)
 release.

@@ -609,7 +609,7 @@ def main():
     ap.add_argument("--channel", default="stable", choices=sorted(CHANNELS),
                     help="which channel/release to roll (default: stable)")
     ap.add_argument("--tag", help="override the channel's release tag")
-    ap.add_argument("--site", default="https://moybyte-org.github.io/moybyte/")
+    ap.add_argument("--site", default="https://os.moybyte.com/")
     ap.add_argument("--dry-run", action="store_true",
                     help="stage and print, upload nothing")
     args = ap.parse_args()
