@@ -47,7 +47,7 @@ def test_the_site_holds_my_consoles_and_the_packs_and_keeps_the_newest(tmp_path)
     assert held == sorted([stable, old, local])
     folder = out / "console"
     assert (folder / (local + ".pack")).read_bytes() == data
-    for name in os_site.FILES + tuple(os_site.ICONS) + ("sw.js", "packs.json"):
+    for name in os_site.FILES + tuple(os_site.ICONS) + os_site.LOOK + ("sw.js", "packs.json"):
         assert (folder / name).is_file(), name
     assert json.loads((folder / "packs.json").read_text()) == {"newest": [stable, old, local]}
     assert (folder / "icon-512.png").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
@@ -73,6 +73,32 @@ def test_the_service_worker_keeps_every_file_of_the_site_and_changes_with_it(tmp
     version = re.compile(r'VERSION = "([0-9a-f]+)"')
     assert version.search(sw).group(1) != version.search(
         (tmp_path / "b" / "console" / "sw.js").read_text()).group(1)
+
+
+def test_my_consoles_wears_the_project_site_s_look(tmp_path):
+    """One look for the site: My consoles' top bar, footer, stylesheet and
+    scheme switch are site/build.py's own, with My consoles the current
+    page, and the policy that runs no inline script holds."""
+    sys.path.insert(0, os.path.join(ROOT, "site"))
+    import build as site_build
+    os_site.build(str(tmp_path))
+    folder = tmp_path / "console"
+    page = (folder / "index.html").read_text()
+    assert not re.search(r"@[A-Z]+@", page + (folder / "manifest.webmanifest").read_text())
+    assert site_build.SITE_FOOTER in page
+    nav = page[page.index("<nav>"):page.index("</nav>")]
+    assert '<a class="l" href="./" aria-current="page">My consoles</a>' in nav
+    assert 'href="/#flash"' in nav and 'id="scheme"' in nav
+    assert (folder / "site.css").read_text() == site_build.site_css("petme128.woff2")
+    assert "url(petme128.woff2)" in (folder / "site.css").read_text()
+    assert (folder / "petme128.woff2").read_bytes() == open(site_build.FONT, "rb").read()
+    assert (folder / "scheme.js").read_text() == site_build.scheme_script()
+    head = page[:page.index("</head>")]
+    assert '<link rel="stylesheet" href="site.css">' in head and '<script src="scheme.js">' in head
+    assert not re.search(r"<script(?![^>]*\bsrc=)", page), "an inline script the policy refuses"
+    home = site_build.page(site_build.palette(), False, [])
+    assert site_build.site_css() in home and site_build.SITE_FOOTER in home
+    assert site_build.site_nav(site_build.palette()) in home
 
 
 def test_my_consoles_is_where_the_images_fetch_their_packs():
