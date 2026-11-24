@@ -35,7 +35,7 @@ identifiers in commits or files. Comments and docs state what IS; the story goes
 in the commit message.
 
 Boards: only when your brief gives them to you. Do the board work yourself, never
-through sub-agents. Never open the Zero. The T-Deck stays at volume 0. Never
+through sub-agents. The T-Deck stays at volume 0. Never
 print or copy the OTA signing key.
 
 Spawn no sub-agents.
