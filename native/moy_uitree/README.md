@@ -33,6 +33,14 @@ engine, and saves the store as a blob; a board loads it into a new store
 (`uit_load`) with no build, no check and no lowering. The variant key is
 empty: no build depends on a layout value.
 
+An engine loads a blob for its first page alone, so a device still builds
+from its function a page pushed over another, and the first page of a module
+that pushes one when the pushed page pops. Every other page function whose
+blob an image holds stays on the host: the build's staging step
+(`uitree_compile.py --staged`, `strip`) leaves it a body of one line that
+raises, and `tests/test_uitree_strip.py` drives the console's surfaces with
+the blobs loaded to hold that no device builds one.
+
 The blob, every number little-endian at its own width:
 
 | at | bytes | what |
