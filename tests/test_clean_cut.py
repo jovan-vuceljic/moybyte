@@ -35,7 +35,7 @@ def test_the_legacy_kind_is_no_kind_of_any_front():
     assert not hasattr(uitree, "legacy") and "legacy" not in uitree.NODE_CALLS
     assert "legacy" not in uitree.SCHEMA
     assert "legacy" not in uitree_c._KINDS
-    contract = json.loads(_read("tests", "uitree_contract", "contract.json"))
+    contract = json.loads(_read("native", "moy_uitree", "contract.json"))
     assert "legacy" not in contract["kinds"]
     for path in (("native", "moy_uitree", "moy_uitree.h"), ("native", "moy_uitree", "moy_uitree.c"),
                  ("native", "moy_uitree", "moy_uitree_walk.c"), ("native", "moy_uitree", "moy_uitree_int.h"),

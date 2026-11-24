@@ -14,7 +14,7 @@ generated or held by code, this guide points at it rather than copying it:
 | what | its authority |
 |---|---|
 | every call an app reaches, on every tier | the call table (§10), written from `native/os_calls.json` |
-| the UI tree's kinds, props, verbs and error codes | `tests/uitree_contract/contract.json` (§3) |
+| the UI tree's kinds, props, verbs and error codes | `native/moy_uitree/contract.json` (§3) |
 | the immediate `ui` verbs | `docs/history/ui_api_2026-10.md` (§3, "The immediate API") |
 | Python's `moybyte` verbs, each with its signature | `runtime/system/moybyte.py`'s header |
 | a Python app's globals per permission | `runtime/shell/system_api.py` |
@@ -229,7 +229,7 @@ reach grows or changes: a row, role, permission or error code of
 compiled and WASI imports, the ELF table), a manifest field
 (`moy_store_base.VENDOR_FIELDS`), the moy-spec format level the console runs
 (`runtime/run/player_fit.py`'s `FORMAT_LEVEL`), or the UI tree's contract
-(`tests/uitree_contract/contract.json`, §3: a kind, prop, word, verb, role,
+(`native/moy_uitree/contract.json`, §3: a kind, prop, word, verb, role,
 `takes=` value, retired name or error code, and whether each is built; its
 prose is left out). `tools/api_level.py` pins a
 fingerprint of those tables on the line below the level, and
@@ -275,7 +275,7 @@ own spelling:
 | Lua | `ui` is the UI tree (`runtime/run/uitree.lua`) | `"extensions": ["moybyte.uitree"]` |
 | compiled (wasm) | `ut_*` over the `uitree_*` imports (`sdk/include/moybyte/uitree.h`) | `"extensions": ["moybyte.app"]` |
 
-`tests/uitree_contract/contract.json` is the authority on every kind, prop,
+`native/moy_uitree/contract.json` is the authority on every kind, prop,
 verb and error code below; `tests/uitree_contract/known.json` lists where a
 tier lacks one, and this guide names only what the Python tier builds.
 
@@ -779,7 +779,7 @@ the handle.
 ### Errors
 
 Each code, what it means and its fix (Python's; Lua's or C's where Python
-has none), as `tests/uitree_contract/contract.json` holds them
+has none), as `native/moy_uitree/contract.json` holds them
 (`tests/test_app_guide.py` fails a row that differs).
 `tests/test_uitree_mistakes.py` makes each mistake both layers raise once in
 Python and once in Lua.
@@ -992,7 +992,7 @@ the OS work (#246).
 
 The UI tree API freezes with the rest of the console API (`API_FROZEN`, §2):
 `tools/api_level.py` fingerprints its contract,
-`tests/uitree_contract/contract.json`, and from the freeze on a kind, prop,
+`native/moy_uitree/contract.json`, and from the freeze on a kind, prop,
 word, verb, role, `takes=` value, retired name or error code that changes
 without a bump of the API level is red (`tests/test_api_level.py`). The list
 below is that contract's every name, generated from it by

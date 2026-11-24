@@ -1,4 +1,4 @@
-"""Both UI tree layers against one table: `tests/uitree_contract/contract.json`
+"""Both UI tree layers against one table: `native/moy_uitree/contract.json`
 (every error code, node kind and prop, `takes=` value, role, retired name, app
 field and verb of the UI API spec, revision 4).
 
@@ -28,7 +28,7 @@ for p in (ROOT, os.path.join(ROOT, "tools")):
 
 from board_config import runtime_file  # noqa: E402
 
-with open(os.path.join(CONTRACT, "contract.json"), encoding="utf-8") as _f:
+with open(os.path.join(ROOT, "native", "moy_uitree", "contract.json"), encoding="utf-8") as _f:
     TABLE = json.load(_f)
 
 PY_FILES = [str(runtime_file(f)) for f in
@@ -231,7 +231,7 @@ def not_built_marks(f):
 
 def test_the_not_built_marks_are_the_python_layer_s():
     wrong = not_built_marks(python_facts())
-    assert not wrong, "set or drop `designed` in tests/uitree_contract/contract.json:\n  " + "\n  ".join(wrong)
+    assert not wrong, "set or drop `designed` in native/moy_uitree/contract.json:\n  " + "\n  ".join(wrong)
 
 
 def test_the_python_layer_holds_to_the_table():

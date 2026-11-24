@@ -4,7 +4,7 @@ spec's one-line message (`error[CODE] FILE:LINE: WHAT; fix: FIX ...`, §25.1).
 
 The Lua halves are tests/test_uitree_lua.py's CASES (one per code the Lua
 layer raises); the Python halves are PY below. SHARED is every code of the
-contract table (tests/uitree_contract/contract.json) both layers' sources
+contract table (native/moy_uitree/contract.json) both layers' sources
 raise, and every one of them has a pair here, or is listed in NO_PAIR with
 the reason. PY_ONLY is one mistake per code the Python layer alone raises.
 """

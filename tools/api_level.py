@@ -81,11 +81,11 @@ def format_table(text=None):
     return int(_FORMAT.search(_read(PLAYER_FIT) if text is None else text).group(1))
 
 
-UITREE = os.path.join(ROOT, "tests", "uitree_contract", "contract.json")
+UITREE = os.path.join(ROOT, "native", "moy_uitree", "contract.json")
 
 
 def uitree_table(text=None):
-    """The UI tree API's contract (tests/uitree_contract/contract.json) as an
+    """The UI tree API's contract (native/moy_uitree/contract.json) as an
     app sees it: every kind (its head, level and props), every prop's type
     (a word prop's words with it) and level, the props every node, an action
     and a hook take, the verbs, queries, takes= values, roles, off= words,

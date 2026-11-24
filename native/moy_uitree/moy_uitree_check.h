@@ -6,7 +6,7 @@
 #include <stddef.h>
 
 // One table, the contract's (moy_uitree_schema.h, generated from
-// tests/uitree_contract/contract.json), every front checks a node's props
+// native/moy_uitree/contract.json), every front checks a node's props
 // against: no engine is needed, so a front checks at the call that names the
 // prop and raises at that call's line. A value's class as its front sees it:
 enum { UIT_VC_ANY = 0, UIT_VC_TEXT, UIT_VC_INT, UIT_VC_BOOL, UIT_VC_LIST, UIT_VC_DICT, UIT_VC_FN, UIT_VC_NUM };
