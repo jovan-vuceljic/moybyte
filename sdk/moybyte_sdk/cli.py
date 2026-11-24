@@ -20,7 +20,8 @@ have, so with this package installed (`pip install -e .` in moybyte puts
         or service (tools/wasm_cart.py: the portable .wasm, and a board
         chip's AOT module), a native one (tools/elf_cart.py: a module per
         chip), for every chip, or with --chip for those; a chip whose
-        toolchain this machine lacks is skipped, named with how to get it; a
+        toolchain this machine lacks is skipped, named with how to get it,
+        and so is a board chip's module where there is no signing key; a
         Python or Lua cart runs from its source and has nothing to build
     moy app stubs <cart>
         the headers or stubs for the cart's tier, for an editor or a build:
@@ -807,6 +808,13 @@ def _compiler_failed(e):
     return Refused("the compiler failed:\n" + err.strip())
 
 
+# Why a board chip's module is skipped by a signed build on a machine with no
+# OTA signing key (native/moy_elf/README.md "Signing", native/moy_wasm/README.md
+# "Provenance"); the host's module is never signed.
+NO_KEY = ('no signing key (a board runs an unsigned module only for a cart granted '
+          '"full_access"; --unsigned builds it so)')
+
+
 def _no_toolchain(kind, chip):
     """Why this machine cannot build `chip`'s module of `kind` ("AOT" or
     "native"), saying how its toolchain is got; None when it can."""
@@ -830,11 +838,13 @@ def build_cart(cart, chips=(), signed=True):
     (a module per chip, `host` among them); a compiled cart's both. The
     chips are `chips`, or with none every chip there is a module for: the
     AOT ones tools/wasm_module.py keys, the native ones tools/elf_cart.py
-    has a toolchain table for. A module whose chip's toolchain this machine
-    lacks is skipped; the build is refused when that leaves no module of the
-    chips `chips` names, or nothing to build at all. Signed unless `signed`
-    is False, as those tools sign. Returns (built, skipped): [(what, path)],
-    empty for a cart that runs from its source, and [(what, why)]."""
+    has a toolchain table for. Signed unless `signed` is False, as those
+    tools sign. A module whose chip's toolchain this machine lacks is
+    skipped, and so is a board chip's signed module where there is no
+    signing key; the build is refused when that leaves no module of the
+    chips `chips` names, or nothing to build at all. Returns (built,
+    skipped): [(what, path)], empty for a cart that runs from its source,
+    and [(what, why)]."""
     man = read_manifest(cart)
     tier, wasm, elf = _compiled(man, cart)
     if not (wasm or elf):
@@ -846,10 +856,13 @@ def build_cart(cart, chips=(), signed=True):
     aot_chips = tuple(wasm_module.targets())
     aot = [c for c in (chips or aot_chips) if c in aot_chips] if wasm else []
     native = list(chips or elf_cart.CHIPS) if elf else []
+    no_key = signed and wasm_module.signing_key() is None
     skipped = []
     for kind, want in (("AOT", aot), ("native", native)):
         for c in list(want):
             why = _no_toolchain(kind, c)
+            if why is None and no_key and c != "host":
+                why = NO_KEY
             if why is not None:
                 want.remove(c)
                 skipped.append(("%s %s module" % (c, kind), why))

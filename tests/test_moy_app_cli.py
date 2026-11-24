@@ -307,7 +307,9 @@ def test_build_with_no_chip_builds_every_chip_s_module(tmp_path, monkeypatch, ca
 
 
 def test_build_with_a_chip_builds_that_one(tmp_path, monkeypatch):
+    from tools import wasm_module
     made = _fake_modules(monkeypatch)
+    monkeypatch.setattr(wasm_module, "signing_key", lambda source=None: b"a key")
     native = _new(tmp_path, "n", tier="c")
     built, skipped = cli.build_cart(native, ["esp32p4"])
     assert made == [("esp32p4", True)] and skipped == []
@@ -340,6 +342,42 @@ def test_a_chip_whose_toolchain_is_missing_is_skipped_with_its_line(tmp_path, mo
     assert cli.main(["build", other, "--chip", "esp32s3"]) == 1
     assert "install.sh esp32s3" in capsys.readouterr().err
     assert not glob.glob(os.path.join(other, "*.elf"))
+
+
+def test_with_no_signing_key_a_default_build_skips_the_board_modules(tmp_path, monkeypatch,
+                                                                    capsys):
+    from tools import elf_cart, wasm_module
+    made = _fake_modules(monkeypatch)
+    aot = []
+
+    def build(blob, chip, out, signed=True):
+        aot.append((chip, signed))
+        with open(out, "wb") as f:
+            f.write(b"aot " + chip.encode())
+    monkeypatch.setattr(wasm_module, "build", build)
+    monkeypatch.setattr(wasm_module, "compiler", lambda target, fetch=True: "wamrc")
+    monkeypatch.setattr(wasm_module, "signing_key", lambda source=None: None)
+    boards = [c for c in elf_cart.CHIPS if c != "host"]
+    native = _new(tmp_path, "n", tier="c")
+    assert cli.main(["build", native]) == 0
+    assert made == [("host", True)]                  # the host's module is never signed
+    out = capsys.readouterr().out
+    for c in boards:
+        assert "skipped %s native module: %s\n" % (c, cli.NO_KEY) in out
+    cart = str(tmp_path / "hello.moy")
+    shutil.copytree(os.path.join(ROOT, "tests", "fixtures", "wasm", "hello.moy"), cart)
+    assert cli.main(["build", cart]) == 0
+    assert aot == [] and os.path.getsize(os.path.join(cart, "main.wasm")) > 0
+    out = capsys.readouterr().out
+    for c in wasm_module.targets():
+        assert "skipped %s AOT module: %s\n" % (c, cli.NO_KEY) in out
+    # a board chip named, and no key: nothing of it is built
+    assert cli.main(["build", native, "--chip", boards[0]]) == 1
+    assert "no signing key" in capsys.readouterr().err
+    assert cli.main(["build", cart, "--chip", boards[0]]) == 1
+    # --unsigned builds it
+    assert cli.main(["build", cart, "--chip", boards[0], "--unsigned"]) == 0
+    assert aot == [(boards[0], False)]
 
 
 def test_a_wasm_cart_builds_an_aot_module_per_board_chip_less_a_missing_compiler(

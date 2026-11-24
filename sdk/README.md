@@ -48,13 +48,16 @@ moy app coredump <board> [--gdb] [--port PORT] [--elf ELF] [--symbols DIR]
   **Decision (owner, 2026-11-24): with no `--chip` it builds for every
   chip**: the AOT chips `tools/wasm_module.py` keys and the native chips
   `tools/elf_cart.py` has a toolchain table for; `--chip` builds just those
-  it names. A chip whose toolchain this machine lacks is skipped with a line
-  saying which and how to get it (the ESP-IDF's `install.sh <chip>`,
-  `tools/wasm_module.py compilers`); the build fails only when that leaves
-  no module of the chips `--chip` named, or nothing at all. It prints a line
-  per artifact with its size. Modules are signed as those tools sign them;
-  `--unsigned` leaves it off. A Python or Lua cart runs from its source and
-  has nothing to build.
+  it names. Modules are signed as those tools sign them (the host's never);
+  `--unsigned` leaves it off. A chip whose toolchain this machine lacks is
+  skipped with a line saying which and how to get it (the ESP-IDF's
+  `install.sh <chip>`, `tools/wasm_module.py compilers`), and so, with a
+  line, is a board chip's module where there is no signing key (a board
+  runs an unsigned module only for a cart granted `full_access`), so an
+  author without the key still gets main.wasm and the host's module. The
+  build fails only when that leaves no module of the chips `--chip` named,
+  or nothing at all. It prints a line per artifact with its size. A Python
+  or Lua cart runs from its source and has nothing to build.
 - `stubs` copies what the cart's tier compiles or edits against into it:
   `include/moybyte/os.h`, `app.h` and `cart.h` with a `compile_flags.txt` for C (a
   native cart's with `game.h` and libmoy's `moy.h`),
