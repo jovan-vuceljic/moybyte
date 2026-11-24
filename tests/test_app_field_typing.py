@@ -1,15 +1,14 @@
-"""A field an app's page focuses takes the keyboard (native/moy_ui's
-`api_typing`, applied by `Player._sync_typing`): while it holds focus the
-console is in text mode, so the T-Deck's W A S D type letters and press no
-direction (native/moy_input/moy_kbd.c, THE MOVE KEYS), and off it they step
-the page again. One rule for an app on every runtime, the Python verbs' and
-the run face's a Lua app draws through; a cart's own `textmode()` still
-holds when no field is focused. The trackball steps an app's page, as it
-does every surface that takes the keys (`Workstation.ball_steps`), and does
-not show the cursor. Mic (the T-Deck's cancel), Esc and B cancel a field's
-edit in progress: the field gets back the text the edit began from and
-focus steps off it (native/moy_ui's `api_cancel`, `AppFace.cancel`);
-with no edit, Mic stays the console's key."""
+"""A field an app's page focuses takes the keyboard (the engine's typing,
+applied by `Player._sync_typing`): while it holds focus the console is in
+text mode, so the T-Deck's W A S D type letters and press no direction
+(native/moy_input/moy_kbd.c, THE MOVE KEYS), and off it they step the page
+again. One rule for a tree app on every runtime, Python's and Lua's; a
+cart's own `textmode()` still holds when no field is focused. The trackball
+steps an app's page, as it does every surface that takes the keys
+(`Workstation.ball_steps`), and does not show the cursor. Mic (the T-Deck's
+cancel), Esc and B cancel a field's edit in progress: the field gets back
+the text the edit began from and focus steps off it (the engine's cancel,
+`face.cancel`); with no edit, Mic stays the console's key."""
 
 import json
 from pathlib import Path
@@ -23,80 +22,77 @@ import pytest
 DT = 1.0 / 30.0
 
 LUA_APP = """
-function _draw()
-  cls(0)
-  ui.page("Channel")
-  NAME = ui.field("Name", NAME or "", 11)
-  if ui.button("Save") then SAVED = (SAVED or 0) + 1 end
-  FOCUS = ui.focus()
-end
+ui.app("Field App", { icon = "calc" })
+S = ui.state { name = "", saved = 0 }
+ui.action("save", "Save", function() S.saved = S.saved + 1 end)
+ui.page("channel", function()
+  ui.field("name", { label = "Name", max = 11, focus = true })
+  ui.button("save")
+end, { title = "Channel" })
+"""
+
+PY_APP = """
+s = ui.state(name="", saved=0)
+ui.app("Field App", icon="calc")
+
+
+def save():
+    s.saved += 1
+
+
+ui.action("save", "Save", save)
+
+
+def build():
+    with ui.page("Channel"):
+        ui.field("Name", "name", max=11, focus=True)
+        ui.button("save")
 """
 
 LUA_EDIT = """
-function _draw()
-  cls(0)
-  ui.page("Channel")
-  ui.button("Top")
-  NAME = ui.field("Name", NAME or "Srbija", 11)
-  ui.button("Save")
-  if not STARTED then
-    ui.focus("Name")
-    STARTED = true
-  end
-  FOCUS = ui.focus()
-end
+ui.app("Edit App", { icon = "calc" })
+S = ui.state { name = "Srbija" }
+ui.action("top", "Top", function() end)
+ui.action("save", "Save", function() end)
+ui.page("channel", function()
+  ui.button("top")
+  ui.field("name", { label = "Name", max = 11, focus = true })
+  ui.button("save")
+end, { title = "Channel" })
 """
 
 PY_EDIT = """
-name = "Srbija"
-focus = ""
-started = False
+s = ui.state(name="Srbija")
+ui.app("Edit App", icon="calc")
 
 
-def _draw():
-    global name, focus, started
-    cls(0)
-    ui.page("Channel")
-    ui.button("Top")
-    name, done = ui.field("Name", name, 11)
-    ui.button("Save")
-    if not started:
-        ui.focus("Name")
-        started = True
-    focus = ui.focus()
+def nothing():
+    pass
+
+
+ui.action("top", "Top", nothing)
+ui.action("save", "Save", nothing)
+
+
+def build():
+    with ui.page("Channel"):
+        ui.button("top")
+        ui.field("Name", "name", max=11, focus=True)
+        ui.button("save")
 """
 
 LUA_TWO = """
-function _draw()
-  cls(0)
-  ui.page("Radio")
-  FIRST = ui.field("First", FIRST or "aa", 11)
-  SECOND = ui.field("Second", SECOND or "bb", 11)
-  if not STARTED then
-    ui.focus("Second")
-    STARTED = true
-  end
-  FOCUS = ui.focus()
-end
+ui.app("Two Fields", { icon = "calc" })
+S = ui.state { first = "aa", second = "bb" }
+ui.page("radio", function()
+  ui.field("first", { label = "First", max = 11 })
+  ui.field("second", { label = "Second", max = 11, focus = true })
+end, { title = "Radio" })
 """
 
 LUA_TEXTMODE = """
 function _init() textmode(true) end
 function _draw() cls(0) end
-"""
-
-PY_APP = """
-name = ""
-focus = ""
-
-
-def _draw():
-    global name, focus
-    cls(0)
-    ui.page("Channel")
-    name, done = ui.field("Name", name, 11)
-    ui.button("Save")
-    focus = ui.focus()
 """
 
 
@@ -108,19 +104,21 @@ def _tdeck_keys():
     ui_draw.input_kind(was)
 
 
-def _write(carts, name, src, runtime):
+def _write(carts, name, src, runtime, tree=True):
     d = carts / (name + ".moy")
     d.mkdir(parents=True, exist_ok=True)
     main = "main.lua" if runtime == "lua" else "main.py"
-    (d / "manifest.json").write_text(json.dumps(
-        {"title": name, "canvas": "320x240", "runtime": runtime, "main": main,
-         "moybyte": {"type": "app", "permissions": ["graphics"]}}))
+    man = {"format": "moy-1", "title": name, "canvas": "320x240", "runtime": runtime, "main": main,
+           "moybyte": {"type": "app", "permissions": ["graphics"]}}
+    if tree:
+        man["extensions"] = ["moybyte.uitree"]
+    (d / "manifest.json").write_text(json.dumps(man))
     (d / main).write_text(src)
     (d / "config.json").write_text("{}")
 
 
-def _open(tmp_path, name, src, runtime):
-    _write(tmp_path / "carts", name, src, runtime)
+def _open(tmp_path, name, src, runtime, tree=True):
+    _write(tmp_path / "carts", name, src, runtime, tree)
     ws = build_ws(tmp_path)
     drv = host_app.ConsoleDriver(ws)
     assert select_on_home(ws, name) is not None
@@ -132,18 +130,26 @@ def _open(tmp_path, name, src, runtime):
     return ws, drv
 
 
-def _focus(ws):
+def _lua_read(ws, expr):
     lua = ws.run.player.lua
-    if lua is not None:
-        return lua.get_global("FOCUS")
-    return ws.run.player.ns["focus"]
+    assert lua.exec("__READ = " + expr, "test") is None
+    return lua.get_global("__READ")
+
+
+def _focus(ws):
+    if ws.run.player.lua is not None:
+        return _lua_read(ws, "ui.sys.focus")
+    return ws.run.player.tree.engine.focus_key
+
+
+def _value(ws, name):
+    if ws.run.player.lua is not None:
+        return _lua_read(ws, "S." + name)
+    return getattr(ws.run.player.ns["s"], name)
 
 
 def _name(ws):
-    lua = ws.run.player.lua
-    if lua is not None:
-        return lua.get_global("NAME")
-    return ws.run.player.ns["name"]
+    return _value(ws, "name")
 
 
 def _type(drv, text):
@@ -171,30 +177,28 @@ def _step(drv, button):
 @pytest.mark.parametrize("runtime", ["lua", "python"])
 def test_a_focused_field_holds_the_keyboard_in_text_mode(tmp_path, runtime):
     ws, drv = _open(tmp_path, "Field App", LUA_APP if runtime == "lua" else PY_APP, runtime)
-    assert _focus(ws) == "Name"
+    assert _focus(ws) == "name"
     assert ws.input.text_mode, "a focused field types: W A S D are letters there"
     _step(drv, "down")
-    assert _focus(ws) == "Save"
+    assert _focus(ws) == "save"
     assert not ws.input.text_mode, "off the field the move keys step the page"
     _step(drv, "up")
-    assert _focus(ws) == "Name" and ws.input.text_mode
+    assert _focus(ws) == "name" and ws.input.text_mode
     for _ in range(10):
         drv.frame(DT)
     assert ws.input.text_mode, "a page drawn on change keeps its field's text mode"
 
 
-def test_a_lua_field_types_the_keys(tmp_path):
-    ws, drv = _open(tmp_path, "Field App", LUA_APP, "lua")
-    for ch in "wasd":
-        drv.type_char(ord(ch))
-        drv.frame(DT)
-    drv.frame(DT)
-    assert ws.run.player.lua.get_global("NAME") == "wasd"
-    assert _focus(ws) == "Name"
+@pytest.mark.parametrize("runtime", ["lua", "python"])
+def test_a_field_types_the_keys(tmp_path, runtime):
+    ws, drv = _open(tmp_path, "Field App", LUA_APP if runtime == "lua" else PY_APP, runtime)
+    _type(drv, "wasd")
+    assert _name(ws) == "wasd"
+    assert _focus(ws) == "name"
 
 
 def test_a_lua_carts_textmode_reaches_the_keyboard(tmp_path):
-    ws, drv = _open(tmp_path, "Typing Cart", LUA_TEXTMODE, "lua")
+    ws, drv = _open(tmp_path, "Typing Cart", LUA_TEXTMODE, "lua", tree=False)
     assert ws.input.text_mode, "textmode(true) from a Lua cart is the console's text mode"
 
 
@@ -209,19 +213,19 @@ def test_the_trackball_steps_an_apps_page_and_shows_no_cursor(tmp_path, runtime)
     drv.pan(0, 0)
     for _ in range(3):
         drv.frame(DT)
-    assert _focus(ws) == "Save", "a roll down is a step down the page"
+    assert _focus(ws) == "save", "a roll down is a step down the page"
     assert not ws.pointer.visible
 
 
 @pytest.mark.parametrize("runtime", ["lua", "python"])
 def test_mic_cancels_an_apps_field_edit(tmp_path, runtime):
     ws, drv = _open(tmp_path, "Edit App", LUA_EDIT if runtime == "lua" else PY_EDIT, runtime)
-    assert _focus(ws) == "Name" and ws.input.text_mode
+    assert _focus(ws) == "name" and ws.input.text_mode
     _type(drv, "xy")
     assert _name(ws) == "Srbijaxy"
     _mic(ws, drv)
     assert _name(ws) == "Srbija", "Mic gives the field back the text the edit began from"
-    assert _focus(ws) == "Top", "and focus steps up off the field"
+    assert _focus(ws) == "top", "and focus steps up off the field"
     assert not ws.input.text_mode
     assert not ws.sysmenu.open, "a cancel is not the console's key"
 
@@ -229,7 +233,7 @@ def test_mic_cancels_an_apps_field_edit(tmp_path, runtime):
 @pytest.mark.parametrize("runtime", ["lua", "python"])
 def test_mic_on_a_field_with_no_edit_opens_the_menu(tmp_path, runtime):
     ws, drv = _open(tmp_path, "Edit App", LUA_EDIT if runtime == "lua" else PY_EDIT, runtime)
-    assert _focus(ws) == "Name"
+    assert _focus(ws) == "name"
     assert not ws.run.player.face.cancel()
     _type(drv, "x")
     drv.type_char(8)                     # typed and deleted: nothing to give back
@@ -241,8 +245,9 @@ def test_mic_on_a_field_with_no_edit_opens_the_menu(tmp_path, runtime):
     assert _name(ws) == "Srbija"
 
 
-def test_enter_keeps_what_it_confirmed(tmp_path):
-    ws, drv = _open(tmp_path, "Edit App", LUA_EDIT, "lua")
+@pytest.mark.parametrize("runtime", ["lua", "python"])
+def test_enter_keeps_what_it_confirmed(tmp_path, runtime):
+    ws, drv = _open(tmp_path, "Edit App", LUA_EDIT if runtime == "lua" else PY_EDIT, runtime)
     _type(drv, "1")
     drv.type_char(13)
     for _ in range(2):
@@ -269,8 +274,9 @@ def _stop(ws):
 
 
 @pytest.mark.parametrize("how", ["escape", "stop"])
-def test_esc_cancels_a_field_edit_before_it_goes_back(tmp_path, how):
-    ws, drv = _open(tmp_path, "Edit App", PY_EDIT, "python")
+@pytest.mark.parametrize("runtime", ["lua", "python"])
+def test_esc_cancels_a_field_edit_before_it_goes_back(tmp_path, how, runtime):
+    ws, drv = _open(tmp_path, "Edit App", LUA_EDIT if runtime == "lua" else PY_EDIT, runtime)
     _type(drv, "xy")
     assert ws.run.player.face.has_page(), "an edit in progress is the app's to step out of"
     if how == "escape":
@@ -280,7 +286,7 @@ def test_esc_cancels_a_field_edit_before_it_goes_back(tmp_path, how):
     for _ in range(3):
         drv.frame(DT)
     assert _name(ws) == "Srbija"
-    assert _focus(ws) == "Top"
+    assert _focus(ws) == "top"
     assert ws.screen == "desktop", "the first Esc cancels the edit, the app stays"
 
 
@@ -289,17 +295,18 @@ def test_a_cancel_onto_the_field_above_gives_each_its_own_text(tmp_path):
     it left gets its text back, the one it reaches keeps its own, and an
     edit there cancels to that."""
     ws, drv = _open(tmp_path, "Two Fields", LUA_TWO, "lua")
-    lua = ws.run.player.lua
-    assert _focus(ws) == "Second"
+    assert _focus(ws) == "second"
     _type(drv, "x")
     _mic(ws, drv)
-    assert (lua.get_global("FIRST"), lua.get_global("SECOND")) == ("aa", "bb")
-    assert _focus(ws) == "First" and ws.input.text_mode
+    assert (_value(ws, "first"), _value(ws, "second")) == ("aa", "bb")
+    assert _focus(ws) == "first" and ws.input.text_mode
     _type(drv, "y")
-    assert lua.get_global("FIRST") == "aay"
+    assert _value(ws, "first") == "aay"
     _mic(ws, drv)
-    assert (lua.get_global("FIRST"), lua.get_global("SECOND")) == ("aa", "bb")
+    assert (_value(ws, "first"), _value(ws, "second")) == ("aa", "bb")
     assert not ws.sysmenu.open
+
+
 
 
 # -- the shell's own apps ---------------------------------------------------------

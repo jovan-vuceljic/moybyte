@@ -476,10 +476,10 @@ class AppFace:
         lua = pl.lua
         if lua is not None:             # the run's own context; a screen drawn whole takes none
             return not getattr(lua, "own_screen", False) and bool(_ui_draw.run_back(take))
-        tree = pl.tree
-        if tree is not None:
-            return tree.back(take)
         ui = pl.ui
+        tree = pl.tree
+        if tree is not None:            # a field's edit first, as the run's context answers a Lua app's
+            return (ui is not None and _ui_draw.app_cancel(ui[0], take)) or tree.back(take)
         return ui is not None and bool(_ui_draw.app_back(ui[0], take))
 
     def animates(self):
