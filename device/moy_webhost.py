@@ -21,8 +21,8 @@ console behind it:
     GET  /update    this board's FIRMWARE state (#41/#53)               [sealed]
     POST /update    ask it to update                                    [sealed]
     GET  /official  where a list, install or removal of the carts of    [sealed]
-    POST /official  its shelves stands, and asking for one (a board with
-                    no screen, `web_addon.OfficialCarts`)                [sealed]
+    POST /official  its shelves stands, and asking for one (every board:
+                    `web_addon.OfficialCarts`, `console_official`)       [sealed]
     GET  /console.json  the console's portable Settings and its badges  [sealed]
     POST /sync      a batch for the system root, merged into them       [sealed]
 
@@ -71,8 +71,8 @@ DEFAULT_PORT = 80
 # means "a board, but nothing to update", where a 404 means "not a board".
 NO_UPDATER = '{"error":"no updater"}'
 
-# An official cart's install per poll on a board with no screen: the loop's
-# other duty is serving, so a request waits at most this behind it.
+# An official cart's install per poll: the loop's other duty is serving, so
+# a request waits at most this behind it.
 OFFICIAL_SLICE_MS = 40
 
 # The kernel's events (moy_net.h's MOY_WEB_EV_*).
@@ -676,8 +676,8 @@ class WebHost:
         return http_response(200, _json.dumps({"run": title}))
 
     def _official(self, body):
-        """The official carts' endpoint (web_addon.OfficialCarts, a board
-        with no screen); `body` is None on the GET. A POST only queues
+        """The official carts' endpoint (web_addon.OfficialCarts); `body` is
+        None on the GET. A POST only queues
         `{"action", "folder", ...}` (OfficialCarts.request); the work is the
         poll's slice, and a GET reads where it stands."""
         o = self.official
@@ -751,7 +751,32 @@ def make_webhost(ws, carts_root, autoconnect=None, with_sd=None, port=None):
                    on_serving=lambda: ws.web.on_serving(),
                    on_failed=lambda: ws.web.on_failed(),
                    on_paired=lambda: ws.web.on_paired(),
-                   update=ConsoleUpdate(ws), system=ConsoleSystem(ws))
+                   update=ConsoleUpdate(ws), system=ConsoleSystem(ws),
+                   official=console_official(ws))
+
+
+def console_official(ws):
+    """`/official` on a console with glass: the page it serves lists the
+    console's shelves and asks it to install or remove a cart, which it
+    does in its own store through the install role Get Carts uses
+    (shell_servers.ShellInstall), as a Zero does (zero_host.make_official).
+    The glass parks while the web console serves, so the page's ask is the
+    store's one writer. Its own release's index is `ws.cart_own`, its add-on
+    step (`ws.addon`) holds a request back, and its password (ssh_service)
+    gates an unreviewed Python cart. None where the image has no install."""
+    try:
+        import ssh_service
+        import web_addon
+        from shell_servers import ShellInstall
+        addon = getattr(ws, "addon", None)
+        return web_addon.OfficialCarts(
+            ShellInstall(ws), lambda: getattr(ws, "cart_own", None),
+            busy=None if addon is None else addon.busy,
+            locked=lambda: ssh_service.is_set(ws),
+            unlock=lambda pw: ssh_service.is_password(ws, pw))
+    except Exception as exc:             # noqa: BLE001 -- the web console serves regardless
+        print("official carts unavailable:", exc)
+        return None
 
 
 def dial_saved(wifi):

@@ -72,10 +72,11 @@ folder (the page digest the image names), so a cut one resumes and a store
 already there asks nothing. A console board's image carries every seed cart
 and seeds them itself, so its step is the add-on's alone.
 
-A ZERO'S PAGE asks for the rest (`OfficialCarts`, the webhost's sealed
-`/official`): the browser console it serves lists the carts of the indexes
-the board reads (its `system/sources`, else moybyte-org/carts, and its own
-release's) and asks the board to install or remove one, and the board
+A BOARD'S PAGE asks for the rest (`OfficialCarts`, the webhost's sealed
+`/official`, on a Zero and a console with glass alike): the browser console
+it serves lists the carts of the indexes the board reads (its
+`system/sources`, else moybyte-org/carts, and its own release's) and asks
+the board to install or remove one, and the board
 fetches over its own network and writes its own store -- the board stays
 the one writer of its carts, as with `/update`.
 
@@ -626,8 +627,9 @@ WRONG_PASSWORD = "That isn't the console's password."
 
 
 class OfficialCarts:
-    """`/official`'s backend on a board with no screen (the Zero): the carts
-    of the indexes this board browses (cart_index.load_indexes: its
+    """`/official`'s backend on every board (a Zero's zero_host.make_official,
+    a console's moy_webhost.console_official): the carts of the indexes
+    this board browses (cart_index.load_indexes: its
     `system/sources`, else moybyte-org/carts, and its own release's index,
     `index`, a url or a callable answering one), listed for the page it
     serves and installed or removed when that page asks. The route keeps the

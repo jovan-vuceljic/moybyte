@@ -790,3 +790,36 @@ def test_a_licence_on_a_zero_s_page_is_the_board_s_fetch(page, zero):
     _frames(ws, worker, lambda: app.phase in ("licence", "failed"))
     assert app.phase == "licence" and app._lic_text.startswith("The licence for doom1.wad")
     assert any('"licence"' in (b or "") for _m, b in worker.asked)
+
+
+def test_a_console_with_glass_answers_official_and_installs_into_its_own_store(
+        zero, tmp_path):
+    """A console's webhost (moy_webhost.make_webhost) answers /official as a
+    Zero's does, over the install role its own Get Carts uses: the page it
+    serves lists the shelves and asks it to install, and the console writes
+    its own store and shelf."""
+    from runtime import host_app
+    import moy_webhost
+    ws = host_app.build_workstation(str(tmp_path / "console"))
+    ws.cart_net = zero.net
+    ws.cart_own = OWN
+    host = moy_webhost.make_webhost(ws, ws.carts_root)
+    o = host.official
+    assert isinstance(o, web_addon.OfficialCarts) and "/official" in host._defer()
+    assert o.request("check") == (True, "listed")
+    doc = json.loads(o.answer())
+    assert doc["shelves"][-1] == OWN and doc["own"] == OWN
+    root = ws.carts_root
+    if os.path.exists(root + "/" + HARPOON):
+        shutil.rmtree(root + "/" + HARPOON)
+    assert o.request("install", HARPOON, {"index": OWN, "id": "moybyte.harpoon_pop"})[0]
+    n = 0
+    while o.busy() and n < 10000:
+        o.step(1000)
+        if json.loads(o.answer())["state"] == "asking":
+            assert o.request("agree")[0]
+        n += 1
+    assert json.loads(o.answer())["state"] == "done"
+    assert os.path.exists(root + "/" + HARPOON + "/manifest.json")
+    assert any((c.get("path") or "").endswith(HARPOON) for c in ws.carts.all), \
+        "the console's shelf has it"

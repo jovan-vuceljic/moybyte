@@ -3,8 +3,8 @@ OPFS keeper behind `ws.cart_keep` (which keeps compiled carts' written files
 too) and the page's file picker behind `ws.cart_pick` -- what a board does with a socket and its own store, done by
 the worker for this VM. Only a page that keeps its own carts (site mode) gets
 them; a page a board serves shows the board's carts, and the board gets its
-own (web_boot sets `ws.cart_home` instead). A board with no screen (a Zero)
-gets its own when this page asks: `ws.cart_board` (`BoardCarts`) asks it
+own (web_boot sets `ws.cart_home` instead). A board that answers /official
+(every board whose image has it) gets its own when this page asks: `ws.cart_board` (`BoardCarts`) asks it
 through its sealed /official for its shelves, which this page fetches and
 lists itself (`BoardCheck`), a licence, an install (whose prompt this page
 answers) or a removal, and once the board has written a cart, pulls that
@@ -310,7 +310,7 @@ class _Pick:
             self.link = None
 
 
-# -- ws.cart_board: the official carts of a board with no screen ----------------
+# -- ws.cart_board: the carts a board that answers /official installs ----------
 
 POLL_MS = 400                   # how often a request in hand asks where it stands
 POLL_LOST = 25                  # unanswered asks in a row before the board is lost
@@ -318,8 +318,8 @@ LOST = "The console isn't answering."
 
 
 class BoardCarts:
-    """`ws.cart_board` on a page a console with no screen serves (a Zero),
-    whose webhost answers /official (device/moy_webhost.py,
+    """`ws.cart_board` on a page a console serves whose webhost answers
+    /official (device/moy_webhost.py,
     runtime/carts/web_addon.py's OfficialCarts): the carts of the indexes
     that console reads, which it installs and removes in its own store when
     this page asks. The page asks and waits; the board fetches and writes,
@@ -390,7 +390,7 @@ class BoardCarts:
 
 
 class BoardCheck:
-    """A check on a page a console with no screen serves: the console names
+    """A check on a page a console that answers /official serves: it names
     its shelves (web_addon.OfficialCarts' `check` with no index, answered
     with no fetch), and this page fetches each index itself and lists it by
     the VM's own rules (cart_index.parse_index, fitting, plan, cart_state
