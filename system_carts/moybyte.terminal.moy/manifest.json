@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 2,
+  "version": 3,
   "title": "Terminal",
   "id": "moybyte.terminal",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "Type commands to look around the console's files and carts, like a computer's command line.",
   "moybyte": {
     "type": "app",
     "system": true,

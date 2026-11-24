@@ -33,6 +33,9 @@ of a pack, and that window's console keeps its carts on the board (§10,
                     of each release (and of each --pack), which the service
                     worker keeps at install
     <body digest>.pack            tools/pack_store.py's
+    releases/<tag>/carts-<board>.json
+                    each release's indexes, mirrored whole (tools/pack_store.py),
+                    which a page on a board's origin reads its release from
 
 Pages sends every file with `Access-Control-Allow-Origin: *` and
 `max-age=600` and takes no header file, so none is written: the loader

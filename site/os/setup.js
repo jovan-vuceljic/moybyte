@@ -11,8 +11,22 @@
 // Wi-Fi password blanked (moyImprov.Lines); it opens by itself when setup
 // stops, since a board says why it could not join only there.
 //
-//   moySetup.run(box, port, {lines, wait, done(c, secret)})   wait: ms a
-//   board just flashed may take to answer (its first boot seeds its store)
+// A board already on a network is MANAGED instead, as My consoles' "Manage
+// by cable" does at any time: it joins another network (Improv's join, its
+// new address saved), takes a new name, and takes a new password. The
+// password crosses as the first one does: the board answers its address
+// with a fresh claim (improv.js's claim(), Moybyte's own command), and the
+// console's window sets the password with it over the link, so the
+// password never crosses the cable. Physical access is the proof; the new
+// password signs every browser out, and this one pairs with it.
+//
+//   moySetup.run(box, port, {lines, wait, done(c, secret), changed(c)})
+//     wait: ms a board just flashed may take to answer (its first boot
+//     seeds its store); done: the console and the secret its window takes
+//     ({claim, password}, or null with none to set); changed: the list
+//     changed under a managed board
+//   moySetup.manage(box, port, {lines, c, done, changed})   the same panel
+//     whatever the board's state; `c` the card it was asked from
 self.moySetup = (() => {
     const PW_MIN = 8, PW_MAX = 64;
 
@@ -30,6 +44,12 @@ self.moySetup = (() => {
     }
 
     async function run(box, port, opts = {}) {
+        return start(box, port, opts, false);
+    }
+    async function manage(box, port, opts = {}) {
+        return start(box, port, opts, true);
+    }
+    async function start(box, port, opts, always) {
         box.textContent = "";
         box.hidden = false;
         const log = boardLog();
@@ -38,8 +58,10 @@ self.moySetup = (() => {
             line(box, "Talking to the board...");
             box.append(log.el);
             await imp.open();
-            await imp.ready(opts.wait || 30000);
+            const st = await imp.ready(opts.wait || 30000);
             const info = await imp.info();
+            const now = st.state === moyImprov.PROVISIONED ? moyImprov.found(st.urls) : null;
+            if (always || (now && now.id)) return await panel(box, imp, log, info, now, opts);
             line(box, "Looking for Wi-Fi networks...");
             const nets = await imp.scan().catch(() => []);
             const got = await ask(box, info, nets);
@@ -74,6 +96,142 @@ self.moySetup = (() => {
         } finally {
             await imp.close();
         }
+    }
+
+    // The card a managed board is kept under: its own id's, else the card it
+    // was asked from when that one was added by hand (it is this board's from
+    // now on), else the one at its address. `got` what the board answered.
+    function keep(box, info, got, from) {
+        const list = moyKept.read();
+        const byHand = from && !/^[0-9a-f]{32}$/.test(from.id) && list.find((x) => x.id === from.id);
+        if (byHand && !list.find((x) => x.id === got.id)) byHand.id = got.id;
+        const c = moyKept.put(list, { id: got.id, address: got.address, local: got.local || "" });
+        if (!c.name) c.name = info.name || got.address;
+        delete c.secure;
+        if (!moyKept.write(list)) line(box, "This browser keeps nothing for this site: the console is listed this visit only.", "bad");
+        return c;
+    }
+
+    // The managed board's panel: Wi-Fi, its name, its password, and Done,
+    // which ends it. One request at a time; each says how it went, and a
+    // refusal opens the board's log.
+    function panel(box, imp, log, info, where, opts) {
+        return new Promise((resolve) => {
+            let c = where && where.id ? keep(box, info, where, opts.c) : null;
+            if (c && opts.changed) opts.changed(c);
+            if (c && opts.c && /^[0-9a-f]{32}$/.test(opts.c.id) && opts.c.id !== c.id) {
+                line(box, "This board is " + c.name + ", not " + opts.c.name + ".", "bad");
+            }
+            const head = el("p", { class: "note" });
+            const said = () => {
+                head.textContent = (c ? c.name : info.name || "The board") + " runs " + (info.firmware || "Moybyte")
+                    + " " + info.version + (c ? ", at http://" + c.address + "/" + (c.local ? " (" + c.local + ")" : "")
+                                              : ", on no network yet") + ".";
+            };
+            said();
+            let busy = false;
+            const act = (form, fn) => {
+                form.onsubmit = async (e) => {
+                    e.preventDefault();
+                    if (busy) return;
+                    busy = true;
+                    const b = form.querySelector("button");
+                    b.disabled = true;
+                    try { await fn(); }
+                    catch (err) {
+                        line(box, (err && err.message || String(err)), "bad");
+                        log.lines.flush();
+                        log.el.open = true;
+                        log.end();
+                    }
+                    b.disabled = false;
+                    busy = false;
+                };
+            };
+            // Wi-Fi: another network, or the same one again.
+            const wifi = el("form", { class: "setup", name: "wifi" });
+            const pick = el("select", { class: "field", name: "net" });
+            pick.append(el("option", { value: "" }, "Another network..."));
+            const other = el("input", { class: "field", name: "ssid", placeholder: "Network name", autocomplete: "off", maxlength: "32" });
+            const wpw = el("input", { class: "field", name: "wifi", type: "password", placeholder: "Wi-Fi password", autocomplete: "off" });
+            pick.onchange = () => { other.hidden = pick.value !== ""; };
+            wifi.append(el("p", { class: "note" }, "Wi-Fi"), pick, other, wpw, el("button", { class: "btn" }, "Join"));
+            busy = true;
+            line(box, "Looking for Wi-Fi networks...");
+            imp.scan().then((nets) => {
+                for (const n of nets.slice().reverse()) pick.prepend(el("option", { value: n.ssid }, n.ssid + (n.locked ? "" : " (open)")));
+                pick.value = nets.length ? nets[0].ssid : "";
+            }).catch(() => { }).finally(() => {
+                pick.onchange();
+                busy = false;
+                line(box, "");
+            });
+            act(wifi, async () => {
+                const ssid = pick.value || other.value.trim();
+                if (!ssid) throw new Error("It needs a network.");
+                log.lines.hide(wpw.value);
+                line(box, "Joining " + ssid + "...");
+                const got = moyImprov.found(await imp.wifi(ssid, wpw.value));
+                if (!got || !got.id) throw new Error("the board answered no address");
+                c = keep(box, info, got, c || opts.c);
+                wpw.value = "";
+                said();
+                line(box, c.name + " joined " + ssid + ", at http://" + c.address + "/.", "ok");
+                if (opts.changed) opts.changed(c);
+            });
+            // The name: the card's, and the board's mDNS label.
+            const naming = el("form", { class: "setup", name: "rename" });
+            const name = el("input", { class: "field", name: "name", placeholder: "Name (kitchen)", autocomplete: "off", maxlength: "24", required: "" });
+            name.value = c ? c.name : info.name || "";
+            naming.append(el("p", { class: "note" }, "Name"), name, el("button", { class: "btn" }, "Rename"));
+            act(naming, async () => {
+                const label = name.value.trim().slice(0, 40);
+                if (!label) throw new Error("It needs a name.");
+                const took = await imp.name(label.toLowerCase().replace(/[^a-z0-9-]/g, ""));
+                info.name = took;
+                const now = (await imp.state()).urls;
+                const got = moyImprov.found(now);
+                if (got && got.id) {
+                    c = keep(box, info, got, c || opts.c);
+                    const list = moyKept.read(), k = list.find((x) => x.id === c.id);
+                    if (k) { k.name = label; moyKept.write(list); c = k; }
+                }
+                said();
+                line(box, "Named " + label + (took ? " (" + took + ".local)" : "") + ".", "ok");
+                if (opts.changed && c) opts.changed(c);
+            });
+            // The password: a fresh claim over the cable, set by the window.
+            const pass = el("form", { class: "setup", name: "password" });
+            const a = el("input", { class: "field", type: "password", placeholder: "New password", autocomplete: "new-password" });
+            const b = el("input", { class: "field", type: "password", placeholder: "Again", autocomplete: "new-password" });
+            pass.append(el("p", { class: "note" }, "Console password, " + PW_MIN + " to " + PW_MAX
+                + " characters. Setting it signs every browser out; each pairs again with it."), a, b,
+                el("button", { class: "btn" }, "Set it"));
+            act(pass, async () => {
+                if (a.value.length < PW_MIN || a.value.length > PW_MAX) throw new Error("A password is " + PW_MIN + " to " + PW_MAX + " characters.");
+                if (a.value !== b.value) throw new Error("The two do not match.");
+                let got;
+                try { got = moyImprov.found(await imp.claim()); }
+                catch (err) {
+                    if (err.code === 2) throw new Error("This board's firmware cannot set a password over the cable: update it first.");
+                    throw err;
+                }
+                if (!got || !got.id || !got.claim) throw new Error("The board is on no network: join one first.");
+                c = keep(box, info, got, c || opts.c);
+                const secret = { claim: got.claim, password: a.value };
+                log.lines.hide(secret.password);
+                a.value = b.value = "";
+                line(box, "Open " + c.name + " to set it: its window takes the password and pairs this browser.", "ok");
+                if (opts.done) opts.done(c, secret);
+            });
+            const done = el("button", { class: "btn", type: "button", name: "done" }, "Done");
+            done.onclick = () => {
+                box.textContent = "";
+                box.hidden = true;
+                resolve({ c, secret: null });
+            };
+            box.prepend(head, wifi, naming, pass, done);
+        });
     }
 
     // The board's lines as they come, the last 500, in a closed <details>:
@@ -157,5 +315,5 @@ self.moySetup = (() => {
             a.focus();
         });
     }
-    return { run };
+    return { run, manage };
 })();

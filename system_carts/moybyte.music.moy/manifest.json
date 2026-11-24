@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 2,
+  "version": 3,
   "title": "Music",
   "id": "moybyte.music",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "Listen to internet radio stations, or to the MP3s in your Music folder.",
   "moybyte": {
     "type": "app",
     "system": true,

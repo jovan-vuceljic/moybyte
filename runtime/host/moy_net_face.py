@@ -7,11 +7,11 @@ import ctypes as _c
 import face_ctypes as _f
 
 __all__ = (
-    "sync_path", "sync_song", "web_stop", "web_key_drop", "web_signout", "web_poll",
-    "web_state", "web_events", "web_answer", "web_stamp", "page_at", "page_state", "page_why",
-    "page_online", "page_say", "page_asked", "wc_off", "wc_poll", "dns_port", "dns_poll",
-    "dns_stop", "wc_park", "ota_dl_step", "ota_dl_finish", "ota_cancel", "ota_slot_write",
-    "ota_slot_close", "ota_c6_commit", "ota_state", "http_close", "PW_ITER",
+    "sync_path", "sync_song", "web_stop", "web_cable", "web_key_drop", "web_signout",
+    "web_poll", "web_state", "web_events", "web_answer", "web_stamp", "page_at", "page_state",
+    "page_why", "page_online", "page_say", "page_asked", "wc_off", "wc_poll", "dns_port",
+    "dns_poll", "dns_stop", "wc_park", "ota_dl_step", "ota_dl_finish", "ota_cancel",
+    "ota_slot_write", "ota_slot_close", "ota_c6_commit", "ota_state", "http_close", "PW_ITER",
 )
 
 PW_ITER = 32768
@@ -129,6 +129,7 @@ _SIGS = (
     ("moy_sync_path", [_c.c_char_p, _c.c_size_t, _c.c_int], _c.c_int),
     ("moy_sync_song", [_c.c_char_p, _c.c_size_t], _c.c_int),
     ("moy_web_stop", [_c.c_char_p], None),
+    ("moy_web_cable", [_c.c_int], None),
     ("moy_web_key_drop", [_c.c_char_p], _c.c_int),
     ("moy_web_signout", [], _c.c_int),
     ("moy_web_poll", [], _c.c_int),
@@ -175,6 +176,10 @@ def sync_song(name):
 
 def web_stop(why=None):
     _lib().moy_web_stop(None if why is None else _f.cstr(why))
+
+
+def web_cable(on):
+    _lib().moy_web_cable(int(on))
 
 
 def web_key_drop(kid):

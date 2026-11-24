@@ -6,4 +6,8 @@ $ head -n 2 n
 2
 $ echo x | head -n 5
 x
+$ head -3 n
+1
+2
+3
 [exit 0]

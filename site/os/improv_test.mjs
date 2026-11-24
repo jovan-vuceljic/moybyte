@@ -88,6 +88,7 @@ const BOARD = (cmd, data) => {
         return [[2, [0]], [1, [3]], [1, [4]], [4, strs(1, "http://192.168.1.57/#id=" + ID + "&claim=" + CLAIM,
                                                      "http://kitchen.local/#id=" + ID + "&claim=" + CLAIM)]];
     }
+    if (cmd === 0xF0) return [[2, [0]], [4, strs(0xF0, "http://192.168.1.57/#id=" + ID + "&claim=" + "ef".repeat(16))]];
     return [[2, [2]]];
 };
 
@@ -112,6 +113,9 @@ const BOARD = (cmd, data) => {
     ok("a join answers the board by IP and .local, its id and its claim",
        w.address === "192.168.1.57" && w.local === "kitchen.local" && w.id === ID && w.claim === CLAIM,
        JSON.stringify(w));
+    const fresh = imp.found(await c.claim());
+    ok("the cable's claim is the board's address with a fresh one", fresh.id === ID
+       && fresh.claim === "ef".repeat(16) && fresh.address === "192.168.1.57", JSON.stringify(fresh));
     let e = null;
     try { await c.wifi("elsewhere", "nope"); } catch (err) { e = err; }
     ok("a network it cannot join is the board's sentence", e && e.code === 3 && /could not join/.test(e.message));

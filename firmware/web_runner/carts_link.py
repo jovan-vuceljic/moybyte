@@ -3,11 +3,12 @@ OPFS keeper behind `ws.cart_keep` (which keeps compiled carts' written files
 too) and the page's file picker behind `ws.cart_pick` -- what a board does with a socket and its own store, done by
 the worker for this VM. Only a page that keeps its own carts (site mode) gets
 them; a page a board serves shows the board's carts, and the board gets its
-own (web_boot sets `ws.cart_home` instead). A board with no screen (a Zero)
-gets its own when this page asks: `ws.cart_board` (`BoardCarts`) asks it
-through its sealed /official for the carts of its indexes, a licence, an
-install (whose prompt this page answers) or a removal, and once the board has
-written a cart, pulls that cart's files into this page's copy of the store.
+own (web_boot sets `ws.cart_home` instead). A board that answers /official
+(every board whose image has it) gets its own when this page asks: `ws.cart_board` (`BoardCarts`) asks it
+through its sealed /official for its shelves, which this page fetches and
+lists itself (`BoardCheck`), a licence, an install (whose prompt this page
+answers) or a removal, and once the board has written a cart, pulls that
+cart's files into this page's copy of the store.
 
 SHAPE: gpio_link's and update_link's. A capability reaches this VM by
 QUEUEING on the Python side while the worker does the I/O and hands the answer
@@ -309,7 +310,7 @@ class _Pick:
             self.link = None
 
 
-# -- ws.cart_board: the official carts of a board with no screen ----------------
+# -- ws.cart_board: the carts a board that answers /official installs ----------
 
 POLL_MS = 400                   # how often a request in hand asks where it stands
 POLL_LOST = 25                  # unanswered asks in a row before the board is lost
@@ -317,8 +318,8 @@ LOST = "The console isn't answering."
 
 
 class BoardCarts:
-    """`ws.cart_board` on a page a console with no screen serves (a Zero),
-    whose webhost answers /official (device/moy_webhost.py,
+    """`ws.cart_board` on a page a console serves whose webhost answers
+    /official (device/moy_webhost.py,
     runtime/carts/web_addon.py's OfficialCarts): the carts of the indexes
     that console reads, which it installs and removes in its own store when
     this page asks. The page asks and waits; the board fetches and writes,
@@ -336,7 +337,9 @@ class BoardCarts:
         self.locked = False             # the board has a password: its last check said
 
     def check(self):
-        return BoardAsk(self, "check", None)
+        """The carts of the shelves this console reads (`BoardCheck`): the
+        job's `doc` is what Get Carts lists."""
+        return BoardCheck(self)
 
     def licence(self, cart, path):
         """The licence text of `cart`'s external file `path`, fetched and
@@ -384,6 +387,162 @@ class BoardCarts:
         hook = self.link.landed_hook
         if hook is not None:
             hook(folder)
+
+
+class BoardCheck:
+    """A check on a page a console that answers /official serves: it names
+    its shelves (web_addon.OfficialCarts' `check` with no index, answered
+    with no fetch), and this page fetches each index itself and lists it by
+    the VM's own rules (cart_index.parse_index, fitting, plan, cart_state
+    and listing), so the index never sits in the board's
+    heap. The console's own release index, a GitHub release download that
+    sends no CORS header, is read from its mirror on os.moybyte.com
+    (cart_index.index_mirror) and is the release's when its signature
+    verifies under the keys the console named (`keys`), as the console
+    would check it. An index this page cannot read or check the console is
+    asked to list (`check` with that `index`); one neither reaches is
+    counted unreached. The face BoardAsk shows: `step()` True while it runs,
+    then `doc` ({"carts", "free", "unreached", "locked"}) or `error`."""
+
+    keeping = False
+
+    def __init__(self, board):
+        self.board = board
+        self.doc = None
+        self.error = None
+        self.path = None
+        self.asking = None
+        self.done = 0
+        self.total = 0
+        self.finished = False
+        self.landing = False
+        self._shelves = None
+        self._urls = []
+        self._url = None
+        self._fetch = None
+        self._found = []
+        self._unreached = 0
+        self._net = WebCartNet(board.link)
+        self._ask = BoardAsk(board, "check", None)
+
+    def rate(self):
+        return 0
+
+    def cancel(self):
+        return False
+
+    def finish(self):
+        pass
+
+    def close(self):
+        if not self.finished:
+            self._end(None)
+
+    def _end(self, error):
+        for job in (self._ask, self._fetch):
+            if job is not None:
+                job.close()
+        self._ask = self._fetch = None
+        self.error = error
+        self.finished = True
+        return False
+
+    def step(self, _budget=None):
+        import cart_index as _ci
+        if self.finished:
+            return False
+        if self._ask is not None:
+            if self._ask.step():
+                return True
+            ask, self._ask = self._ask, None
+            if self._shelves is None:
+                if ask.error is not None:
+                    return self._end(ask.error)
+                self._shelves = ask.doc
+                self.board.locked = ask.doc.get("locked") is True
+                self._urls = [u for u in ask.doc.get("shelves") or () if isinstance(u, str)]
+            elif ask.error is not None:
+                self._unreached += 1
+            else:
+                self._found.extend(c for c in ask.doc.get("carts") or ()
+                                   if isinstance(c, dict))
+            return True
+        if self._fetch is None:
+            if not self._urls:
+                return self._listed()
+            self._url = self._urls.pop(0)
+            own = self._shelves.get("own")
+            mirror = _ci.index_mirror(self._url) if self._url == own else None
+            try:
+                self._fetch = _ci.index_fetch(self._net, mirror or self._url)
+            except _ci.InstallError as exc:
+                return self._board_reads(exc)
+        try:
+            if self._fetch.step():
+                return True
+            data, self._fetch = self._fetch.data, None
+            got = [c for c in _ci.fitting(_ci.parse_index(data, self._url,
+                                                          self._shelves.get("own"),
+                                                          keys=self._keys()))
+                   if c["runtime"] != "web"]
+        except _ci.InstallError as exc:
+            self._fetch = None
+            return self._board_reads(exc)
+        data = None
+        self._found.extend(self._listings(got))
+        return True
+
+    def _keys(self):
+        """The keys the console checks an index with, as it named them."""
+        keys = self._shelves.get("keys")
+        if not isinstance(keys, list):
+            return None
+        return tuple((k[0], k[1]) for k in keys
+                     if isinstance(k, list) and len(k) == 2 and isinstance(k[0], str)
+                     and isinstance(k[1], int))
+
+    def _board_reads(self, exc):
+        """An index this page could not read or check, asked of the console."""
+        import cart_index as _ci
+        _ci._log(exc.detail)
+        self._ask = BoardAsk(self.board, "check", None, {"index": self._url})
+        return True
+
+    def _listings(self, carts):
+        """`carts` as the console lists them (cart_index.listing), each with
+        where it stands in the console's store: this page's copy of its
+        carts, and the console's install record."""
+        import cart_index as _ci
+        from moy_fs import _exists, _read
+        sh = self._shelves
+        rec = sh.get("record") if isinstance(sh.get("record"), dict) else {}
+        out = []
+        for c in carts:
+            p = _ci.plan(c, sh.get("chip"), sh.get("fmt"), bool(sh.get("ranges")))
+            folder = _cart_path(self.board.root, c["folder"])
+            present = _exists(folder)
+            entry = rec.get(c["folder"])
+            entry = entry if isinstance(entry, dict) else None
+            man = None
+            if present and (entry is None or entry.get("id") != c["id"]
+                            or _ci.is_official(c)):
+                try:
+                    man = json.loads(_read(folder + "/manifest.json"))
+                except (OSError, ValueError):
+                    man = None
+            out.append(_ci.listing(c, _ci.cart_state(c, p, entry, present, man),
+                                         entry.get("version") if entry else None))
+        return out
+
+    def _listed(self):
+        import cart_index as _ci
+        if not self._found and self._unreached:
+            return self._end(_ci.UNREACHABLE)
+        sh = self._shelves
+        self.doc = {"carts": self._found, "free": sh.get("free"),
+                    "unreached": self._unreached, "locked": sh.get("locked") is True}
+        self._found = None
+        return self._end(None)
 
 
 class _Refold:

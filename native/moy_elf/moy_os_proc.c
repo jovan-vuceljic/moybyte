@@ -176,7 +176,7 @@ static bool proc_end(moy_os_proc_t *p) {
                     continue;
                 }
                 moy_os_self_clear(t);
-                vTaskDeleteWithCaps(t->task);
+                moy_task_delete(MOY_TASK_ELF, t->task);
 #ifdef MOY_OS_UMODE
                 moy_os_u_thread_end(t);
 #endif

@@ -410,6 +410,14 @@ void moy_web_claim(char out[33]) {
     moy_wa_claim(out);
 }
 
+void moy_web_claim_new(char out[33]) {
+    moy_wa_claim_new(out);
+}
+
+void moy_web_cable(int on) {
+    moy_wa_cable(on);
+}
+
 size_t moy_web_keys(char *out, size_t cap) {
     return moy_wa_keys(out, cap);
 }

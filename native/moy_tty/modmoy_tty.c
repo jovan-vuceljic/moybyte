@@ -6,11 +6,16 @@
 //                       web_sessions, web_refused, web_in, web_out, web_frames, web_live)
 //   moy_tty.tail()     serve a face's hop on this task: the console's task
 //                      where no frame loop calls moy_tty_tail (the Zero's
-//                      poll loop, zero_host.serve)
+//                      poll loop, zero_host.serve), and the kernel's loop
+//                      jobs (moy_loop_jobs) a console's frame tail runs, which
+//                      resume a shell job parked in a wait
 
 #include "py/runtime.h"
 
 #include "moy_tty.h"
+
+int moy_loop_jobs(void);
+#pragma weak moy_loop_jobs
 
 static mp_obj_t tty_stats(void) {
     moy_tty_stats_t s;
@@ -30,6 +35,9 @@ static MP_DEFINE_CONST_FUN_OBJ_0(tty_stats_obj, tty_stats);
 
 static mp_obj_t tty_tail(void) {
     moy_tty_tail();
+    if (moy_loop_jobs != NULL) {
+        moy_loop_jobs();
+    }
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(tty_tail_obj, tty_tail);

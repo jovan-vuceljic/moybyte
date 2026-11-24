@@ -258,7 +258,7 @@ def test_every_core_builtin_has_its_script():
         table = f.read().split("static const struct builtincmd core[] = {")[1].split("};")[0]
     names = re.findall(r'\{ "([a-z0-9]+)",', table)
     assert names == sorted(names), "the core table is searched by bisection: keep it sorted"
-    aliases = {"dmesg": "log"}
+    aliases = {"dmesg": "log", "vim": "vi", "view": "vi", "less": "vi", "more": "vi"}
     missing = [n for n in names if aliases.get(n, n) not in
                {s[len("builtin_"):] for s in SCRIPT_NAMES if s.startswith("builtin_")}]
     assert not missing, "built-ins with no script: %s" % missing

@@ -8,6 +8,9 @@ self.moyImprov = (() => {
     const HEADER = [73, 77, 80, 82, 79, 86], VERSION = 1;
     const STATE = 1, ERROR = 2, RPC = 3, RESULT = 4;
     const WIFI = 1, CURRENT = 2, INFO = 3, SCAN = 4, NAME = 6;
+    // Moybyte's own (device/zero_improv.py): the address with a fresh claim,
+    // which sets a new password even on a board that has one.
+    const CLAIM = 0xF0;
     const READY = 2, PROVISIONED = 4;
     const SAYS = {
         1: "the board did not understand the request",
@@ -189,6 +192,12 @@ self.moyImprov = (() => {
         async name(name) {
             const got = await this.ask(NAME, name ? field(name) : [], (g) => g.some((f) => f.type === RESULT), 3000);
             return strings(got.find((f) => f.type === RESULT).data)[0] || "";
+        }
+        // The URLs with a fresh claim (found() reads it), [] while the board
+        // is on no network. Firmware without it rejects with code 2.
+        async claim() {
+            const got = await this.ask(CLAIM, [], (g) => g.some((f) => f.type === RESULT), 3000);
+            return strings(got.find((f) => f.type === RESULT).data);
         }
         // Join `ssid`: the URLs the board answers once it serves on it.
         async wifi(ssid, password) {

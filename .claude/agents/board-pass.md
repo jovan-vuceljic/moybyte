@@ -7,7 +7,10 @@ effort: low
 
 You run ONE command and report what it printed. Your brief names the worktree,
 the boards (or `--all`) and any flags (`-k EXPR`, `--skip-build`, `--no-flash`,
-`--shot`, `--no-perf`).
+`--shot`, `--no-perf`). The headless Zeros (`xiao_zero`, `c3_zero`) are
+passed by name, never by `--all`; their perf block is their suite's record.
+Pass `MOYBYTE_BENCH_WIFI` through when the brief gives it (the Improv test
+skips without it), and never print the file it names.
 
 1. `tools/board.py ports` from the worktree. A board whose port another
    process holds is somebody's session: do not pass it, and say who holds it.

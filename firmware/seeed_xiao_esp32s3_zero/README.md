@@ -80,7 +80,15 @@ updater's verifies the server's certificate. See "Provisioning" below.
 make firmware-build-zero                             # -> dist/zero/
 make firmware-flash-zero PORT=/dev/ttyACM0           # merged image at 0x0
 make firmware-monitor-zero PORT=/dev/ttyACM0         # the only way to watch it
+tools/board.py pass xiao_zero c3_zero                # build, flash, reset, both Zeros' suite
 ```
+
+`tests/test_zero_on_glass.py` is both Zeros' on-glass suite: Improv over
+the cable to a bench network (`MOYBYTE_BENCH_WIFI`), the browser console
+this board serves, the live socket's echo and the RAM it costs, and, with
+a T-Deck on `MOYBYTE_TDECK_PORT`, a page's match against it. It reaches the
+board over Improv and the raw REPL (Ctrl-C stops the store host, a soft
+reset starts it again) and gives the store back as it found it.
 
 `tools/board_flash.py` reads the offsets from this board's `board.toml`
 `[flash]` block and erases otadata first, so a board that has taken an OTA boots
@@ -408,7 +416,9 @@ it, its keys file `/moy/system/webkeys`. What is true *here*:
   too; this board has no screen to draw one, so a board with no password pairs
   no browser. Setup's form takes one; `provision.sh --password` sets one for a
   board that never saw that form; and a board set up over the cable takes
-  its first from the browser its Improv answer's claim reaches (below). Pairing runs SPAKE2+ against the stored
+  its first from the browser its Improv answer's claim reaches (below), and
+  a new one the same way at any time (My consoles' "Manage by cable",
+  `docs/web_console_online_2026-11.md` §7). Pairing runs SPAKE2+ against the stored
   record, so the password never crosses the network, a copy of the record
   pairs no browser, and the browser keeps a key of its own from then on.
 - **Every route but the boot files and `GET /sync` is sealed** to a paired

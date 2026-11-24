@@ -13,6 +13,7 @@ socket, and both sides simulate one match, a Lua cart's and a Python one's
 """
 
 import os
+import hashlib
 import random
 import shutil
 import sys
@@ -25,6 +26,7 @@ import web_e2e
 from web_e2e import ROOT
 
 sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, str(ROOT / "tools"))
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("MOYBYTE_WEB_E2E"),
@@ -87,8 +89,12 @@ class Console:
         self.t.join(2)
 
 
+@pytest.mark.parametrize("loader", [False, True], ids=["page", "loader"])
 @pytest.mark.parametrize("cart", CARTS)
-def test_a_page_a_zero_serves_plays_a_console(cart, live_exe, tmp_path, monkeypatch):
+def test_a_page_a_zero_serves_plays_a_console(cart, loader, live_exe, tmp_path, monkeypatch):
+    """`loader`: the board's root is the loader (an online console, the C3's),
+    whose worker runs from the pack it fetched, not from the board's origin."""
+    import gen_web_blob
     import test_live_link as L
     import test_moy_tty as T
     import test_web_term_e2e as W
@@ -96,16 +102,21 @@ def test_a_page_a_zero_serves_plays_a_console(cart, live_exe, tmp_path, monkeypa
     monkeypatch.setenv("MOY_AIR", str(air.port))
     monkeypatch.setenv("MOY_AIR_MAC", "020000000001")
     root = W.tempfile.mkdtemp(prefix="moyl")
-    host = T.Host(live_exe, W.pathlib.Path(root))
+    page = None
+    if loader:
+        data, body = gen_web_blob.pack(gen_web_blob.collect(str(ROOT / "firmware" / "web_runner"
+                                                                / "dist"))[0])
+        page = (body.hex(), hashlib.sha256(data).hexdigest())
+    host = T.Host(live_exe, W.pathlib.Path(root), page=page)
     store = host.tree / "sd" / "moybyte" / "carts"
     for src in sorted((ROOT / "system_carts").glob("*.moy")):
         shutil.copytree(src, store / src.name)
-    server, base = W._serve(tmp_path, host.port)
+    server, base = W._serve(tmp_path, host.port, extra=["--loader"] if loader else [])
     console = Console(air, cart)
     console.t.start()
     st = ("window.__moyState().then(s => '%s ' + JSON.stringify({link: s.link, "
-          "cart: s.cart, notice: s.notice, live: s.live && {opens: s.live.opens, "
-          "drops: s.live.drops, up: s.live.up, down: s.live.down}}))")
+          "cart: s.cart, notice: s.notice, stats: s.link_stats, live: s.live && "
+          "{opens: s.live.opens, drops: s.live.drops, up: s.live.up, down: s.live.down}}))")
     try:
         steps = [{"waitFor": "window.__moyState().then(s => s.cart === %r)" % cart,
                   "timeout": 30000},
@@ -114,7 +125,8 @@ def test_a_page_a_zero_serves_plays_a_console(cart, live_exe, tmp_path, monkeypa
                   "timeout": 30000},
                  {"wait": 4000},
                  {"js": st % "PLAYED"}]
-        query = "?dev=1&desktop=1&cart=" + cart.replace(" ", "%20") + W._qr_fragment(host)
+        query = ("?dev=1&desktop=1&linkcheck=1&cart=" + cart.replace(" ", "%20")
+                 + W._qr_fragment(host))
         out, js = web_e2e.run(tmp_path, "live_match", query, steps, base,
                               tmp_path / "chrome", boot_ms=30000)
         played = W._tagged(js, "PLAYED")
@@ -124,6 +136,8 @@ def test_a_page_a_zero_serves_plays_a_console(cart, live_exe, tmp_path, monkeypa
         assert played and played["link"][2], "the match formed on the page" + why
         assert played["link"][3] > 60, "the page simulated the match" + why
         assert console.frames > 60, "the console simulated the match" + why
+        assert played["stats"]["world_check"], "?linkcheck=1 armed the world check" + why
+        assert played["stats"]["match"]["desync"] is None, "the checkpoints agreed" + why
     finally:
         console.end()
         server.terminate()

@@ -5,17 +5,20 @@
 #   store_part      the internal store's offset and size: "vfs", else MicroPython's tail
 #   board_store     the same from a board's sources: the partition CSV and chip its sdkconfig names
 #   store_image     a LittleFS image of the store holding given files, its used blocks only
-#   install_image   bootloader + table + app + the store with the browser console add-on
+#   install_image   bootloader + table + app + the store: the browser console add-on, the roster's installs
 #   install_name    the install image's file name beside the merged one
+#   installs        the official carts a new store gets at flash time ([roster] install)
 #   first_boot      the carts a new store takes beside the add-on
 #   room            a board's store against a pack: what the add-on and its first boot leave
 #   check           every board's room for the bundle built: the add-on, and on a Zero its first boot
 """The website's install of a board: its merged image (bootloader, partition
 table, app) and, at the internal store's offset, a store holding the browser
-console add-on that fits the app (tools/web_pack.py), and nothing else -- the
-image seeds its own carts on its first boot. A board whose browser console is
-online (board.toml's `[web] console = "online"`) gets an empty store: its
-console pack comes from a mirror by digest, not from its store.
+console add-on that fits the app (tools/web_pack.py) and the official carts
+board.toml's `[roster] install` names (`installs`: the C3's apps and Brick
+Siege, which its image has no room to carry), and nothing else -- the image
+seeds its own carts on its first boot. A board whose browser console is
+online (board.toml's `[web] console = "online"`) gets no add-on: its console
+pack comes from a mirror by digest, not from its store.
 
     python3 tools/store_image.py firmware/<board>        # dist/<board>/<stem>_install.bin
     python3 tools/store_image.py firmware/<board> --out x.bin
@@ -190,32 +193,46 @@ def addon_files(pack):
     return {"%s/%s/%s" % (CARTS, folder, name): data for name, data in files.items()}
 
 
-def install_image(merged, offset, pack):
+def install_image(merged, offset, pack, carts=None):
     """The install: `merged` (written at `offset`), 0xFF to the store, and the
-    store holding the add-on for `pack`, an empty one where `pack` is None (a
-    board whose console is online). Raises ImageError, or web_pack's
-    PageError for a pack that is not one."""
+    store holding the add-on for `pack`, none where `pack` is None (a board
+    whose console is online), and `carts` ({path: bytes}, `installs`).
+    Raises ImageError, or web_pack's PageError for a pack that is not one."""
     at, size = store_part(merged, offset)
     if at - offset < len(merged):
         raise ImageError("the merged image runs into the store at 0x%x" % at)
-    store = store_image(addon_files(pack) if pack is not None else {}, size // BLOCK)
+    files = dict(addon_files(pack) if pack is not None else {}, **(carts or {}))
+    store = store_image(files, size // BLOCK)
     return merged + b"\xff" * (at - offset - len(merged)) + store
+
+
+def _carts(ids):
+    import web_pack
+    out = {}
+    for folder in [c + ".moy" for c in ids]:
+        for rel, data in web_pack.seed_files(os.path.join(ROOT, "system_carts", folder)).items():
+            out["%s/%s/%s" % (CARTS, folder, rel)] = data
+    return out
+
+
+def installs(board_dir):
+    """{path: bytes} of the official carts the install's store holds beside
+    the add-on, board.toml's `[roster] install`, as an official entry
+    installs them: what a cable flash installs into a store that lacks them
+    (tools/board_flash.py's install_carts)."""
+    import board_config
+    return _carts(board_config.roster_install(board_dir))
 
 
 def first_boot(board_dir):
     """{path: bytes} of the carts a new store of the board's gets beside the
     add-on: the seed its image carries (`[roster] image`, every device seed
-    cart where that is "all") and the official carts its cable flash adds
-    (`[roster] install`), as the seed writes them."""
+    cart where that is "all") and the official carts its install holds
+    (`installs`), as the seed writes them."""
     import board_config
     import gen_device_carts
-    import web_pack
     ids = board_config.roster_only(board_dir) or tuple(gen_device_carts.roster("device"))
-    out = {}
-    for folder in [c + ".moy" for c in ids + board_config.roster_install(board_dir)]:
-        for rel, data in web_pack.seed_files(os.path.join(ROOT, "system_carts", folder)).items():
-            out["%s/%s/%s" % (CARTS, folder, rel)] = data
-    return out
+    return dict(_carts(ids), **installs(board_dir))
 
 
 def seed_reserve():
@@ -352,7 +369,8 @@ def main():
             pack, _digest = web_pack.page_beside(image, board_config.load(a.board_dir)["board"]["ota"])
             with open(pack, "rb") as f:
                 body = f.read()
-        out = install_image(merged, offset, body)
+        carts = installs(a.board_dir)
+        out = install_image(merged, offset, body, carts)
     except (ImageError, web_pack.PageError) as exc:
         print("!! %s: %s" % (a.board_dir, exc), file=sys.stderr)
         return 1
@@ -361,10 +379,12 @@ def main():
         f.write(out)
     os.replace(dest + ".part", dest)
     at, size = store_part(merged, offset)
-    print("OK -> %s (%d B: the image, then the store at 0x%x of %d KB %s)"
+    held = sorted(set(p[len(CARTS) + 1:].split("/")[0] for p in carts))
+    print("OK -> %s (%d B: the image, then the store at 0x%x of %d KB %s%s)"
           % (dest, len(out), at, size >> 10,
-             "empty: this board's browser console is online ([web] console), no add-on"
-             if online else "with the browser console add-on"))
+             "with no add-on: this board's browser console is online ([web] console)"
+             if online else "with the browser console add-on",
+             ", and %s" % ", ".join(held) if held else ""))
     return 0
 
 

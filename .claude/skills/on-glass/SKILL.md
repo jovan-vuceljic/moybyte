@@ -62,8 +62,17 @@ frames go on; Ctrl-C sends the channel's 0x03, which stops it. `--timeout`
 (60 s) bounds each line; `--also REGEX` prints the board's other lines that
 match as they come (`--also HITCH` with `diag 1`: a line's worst frames). It works with the VM stopped too (an S3 running a
 cart without one), where a console command answers "needs the console".
-Never set or remove a board's SSH password with it (`passwd`): the console's
-is the owner's.
+A test may set or change a board's SSH password (`passwd`; owner,
+2026-11-07); the hand-back names which board was left with which.
+
+**`py`** evaluates each expression in a fresh scope, so a name one `py`
+defines is gone by the next: a wrapper installed in one call that calls an
+original saved in an earlier one raises on every frame until a reset. State
+that spans calls goes on `ws`, or through `--exec`, whose `ws._g` namespace
+persists. MicroPython takes no attribute on a function (`AttributeError`)
+and drops one set on a closure without a word, so a `fn._wrapped` re-arm
+guard never sticks; an instance's `__dict__` is read-only (`setdefault` or
+an item store raises `TypeError`), so set an attribute with `setattr`.
 
 `perf` ends its cart and puts diag and uncap back, `push` changes only the
 store and `remove` undoes it (`pkg.removed`: the record, the folder, the files
@@ -135,9 +144,15 @@ from a worktree (`tools/worktree.py new NAME`): in the main checkout a build is
 refused without `--main`, because its `dist/` is what every other session
 flashes. It skips a board whose port is held, naming the holder, and leaves
 each board at its launcher, the T-Deck at volume 0. `--all` is the console
-boards; the C3 Zero is passed by name (`pass c3_zero`: build, flash and its
-suite, `tests/test_c3_zero_on_glass.py`, which boots its browser console
-through the loader in headless Chrome), and the XIAO Zero never. The
+boards; the two Zeros are passed by name (`pass xiao_zero c3_zero`: build,
+flash, a reset to the boot line, and their one suite,
+`tests/test_zero_on_glass.py`), whose numbers (internal RAM idle and with
+the live socket open, the echo's round trip, the Improv join, the page
+load) are the board's perf record, appended and printed as a console's
+stage's. With `tdeck` in the same pass each Zero's suite runs after the
+T-Deck's row, one Zero at a time, and plays a match against it from the
+page; export `MOYBYTE_BENCH_WIFI` (a wifi.json of the bench network) for
+the Improv join, which the suite otherwise skips. The
 `board-pass` agent (`.claude/agents/board-pass.md`) runs it and reports the
 table and the perf blocks.
 
@@ -206,7 +221,15 @@ MOYBYTE_GUITION_PORT=$(tools/board.py guition_s3 port) .venv/bin/python -m pytes
 MOYBYTE_P4_PORT=$(tools/board.py p4 port) .venv/bin/python -m pytest tests/test_p4_on_glass.py
 MOYBYTE_GUITION_P4_PORT=$(tools/board.py guition_p4 port) .venv/bin/python -m pytest tests/test_guition_p4_on_glass.py
 MOYBYTE_ELECROW_P4_PORT=$(tools/board.py elecrow_p4 port) .venv/bin/python -m pytest tests/test_elecrow_p4_on_glass.py
+MOYBYTE_C3_ZERO_PORT=$(tools/board.py c3_zero port) .venv/bin/python -m pytest tests/test_zero_on_glass.py
 ```
+
+The Zeros' suite reaches its board over Improv and the raw REPL (Ctrl-C
+stops the store host; the soft reset after starts it again) and gives the
+store back at its end: what it made goes, what it changed (the networks,
+the password, the paired browsers) is written back. A board with no
+password gets a bench one for the run; one with a password is signed into
+with `MOYBYTE_XIAO_ZERO_PASSWORD` / `MOYBYTE_C3_ZERO_PASSWORD`.
 
 The Waveshare's and the Elecrow's suites reset their boards at the start; the attach-only boards
 are attached to as they are, so their desk must be clean. Every suite gives the

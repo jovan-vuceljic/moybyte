@@ -1361,7 +1361,7 @@ void moy_sh_board_runner_end(moy_sh_runner_t *r) {
         r->quit = 1;
 #ifdef MOY_ON_BOARD
         to_run(r);
-        vTaskDeleteWithCaps(r->task);
+        moy_task_delete(MOY_TASK_SH, r->task);
         vSemaphoreDelete(r->go);
         vSemaphoreDelete(r->back);
 #else

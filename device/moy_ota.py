@@ -166,10 +166,6 @@ OTA_PUBLIC_KEYS = (
 )            # ((modulus_hex, exponent), ...) -- see `make ota-keygen`
 
 OTA_SCHEME = "moybyte-ota-v2"    # v2 added `board`: tools/ota_sign.canonical
-# The ASN.1 DigestInfo header for SHA-256, fixed for the algorithm.
-_SHA256_DER = b"\x30\x31\x30\x0d\x06\x09\x60\x86\x48\x01\x65" \
-              b"\x03\x04\x02\x01\x05\x00\x04\x20"
-
 # What `download_finish` returns: the bytes are in the sink, not in a file.
 SLOT_STAGED = "<slot>"
 C6_STAGED = "<c6>"
@@ -722,12 +718,17 @@ def _log(*a):
 def verify_sig(payload, sig, keys=None):
     """True when `sig` (hex) validly signs `payload` under a baked key: the
     whole PKCS#1 v1.5 block rebuilt and compared, never a padding parser. The
-    kernel's moy_ota_verify on a board; this arithmetic where there is none."""
+    kernel's moy_ota_verify on a board; rsa_check's arithmetic where there is
+    none."""
     if keys is None and moy_net is not None and hasattr(moy_net, "ota_verify"):
         return bool(sig) and moy_net.ota_verify(payload, sig)
     keys = OTA_PUBLIC_KEYS if keys is None else keys
     if not sig or not keys:
         return False
+    import hashlib
+    from rsa_check import verify_digest
+
+    return verify_digest(hashlib.sha256(payload).digest(), sig, keys)
     try:
         s = int(sig, 16)
     except (TypeError, ValueError):

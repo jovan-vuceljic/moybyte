@@ -93,6 +93,7 @@ _SIGS = (
     ("moy_web_board_id", [ctypes.c_void_p], None),
     ("moy_web_token", [ctypes.c_void_p], None),
     ("moy_web_claim", [ctypes.c_void_p], None),
+    ("moy_web_claim_new", [ctypes.c_void_p], None),
     ("moy_web_keys", [ctypes.c_void_p, _Z], _Z),
     ("moy_web_key_drop", [_P], _I),
     ("moy_seal_pw_record", [_P, _Z, _P, _Z, ctypes.c_uint32, ctypes.c_char_p, _Z], _I),
@@ -130,6 +131,7 @@ _SIGS = (
     ("moy_ota_key_hex", [_P, _Z, ctypes.c_void_p], _I),
     ("moy_ota_key", [_I], ctypes.c_void_p),
     ("moy_ota_verify", [ctypes.c_void_p, _Z, _P, _Z, ctypes.c_void_p, _I], _I),
+    ("moy_ota_verify_digest", [ctypes.c_void_p, _P, _Z, ctypes.c_void_p, _I], _I),
     ("moy_ota_admit_module", [_P, _Z, _P, _P, _I, ctypes.c_void_p, _I,
                               ctypes.POINTER(_Z)], _P),
     ("moy_ota_canonical", [_P, _Z, ctypes.c_void_p, _Z], _Z),
@@ -152,6 +154,8 @@ _SIGS = (
     ("moy_ota_c6_commit", [], _I),
     ("moy_httpc_open", [_P, _P, ctypes.POINTER(_I),
                         ctypes.POINTER(ctypes.c_uint32)], _I),
+    ("moy_httpc_open_range", [_P, _P, ctypes.c_uint32, ctypes.c_uint32,
+                              ctypes.POINTER(_I), ctypes.POINTER(ctypes.c_uint32)], _I),
     ("moy_httpc_read", [_I, ctypes.c_void_p, _Z], _I),
     ("moy_httpc_close", [_I], None),
     ("moy_net_vm_stop", [], None),
@@ -440,11 +444,12 @@ def web_auth(system):
     return out.value.decode()
 
 
-def web_claim():
-    """This boot's claim (32 hex digits), made at the first ask while the
-    board has no password; "" once it has one, or with the sign-in off."""
+def web_claim(fresh=False):
+    """The board's claim (32 hex digits), made at the first ask while the
+    board has no password; "" once it has one, or with the sign-in off.
+    `fresh`: a new one, which may replace a password (the cable's)."""
     out = ctypes.create_string_buffer(33)
-    _lib().moy_web_claim(out)
+    (_lib().moy_web_claim_new if fresh else _lib().moy_web_claim)(out)
     return out.value.decode()
 
 
@@ -625,6 +630,16 @@ def ota_verify(payload, sig, keys=None):
     return bool(got)
 
 
+def ota_verify_digest(digest, sig, keys=None):
+    """Whether `sig` (hex) signs the payload whose SHA-256 is `digest`."""
+    if not sig or not isinstance(sig, str) or len(digest) != 32:
+        return False
+    d, s = _bytes(digest), _bytes(sig)
+    got = _with_keys(keys, lambda arr, n: _lib().moy_ota_verify_digest(
+        d, s, len(s), arr, n))
+    return bool(got)
+
+
 def ota_admit_module(data, scheme, chip, consented, keys=None):
     """moy_ota_admit_module, every tier's admission of a compiled module
     file: (None, the module's length without its trailer) when it may load,
@@ -716,13 +731,18 @@ def ota_c6_version():
     return None if v < 0 else v
 
 
-def http_open(url, agent):
-    """(handle, status, content_length) of a GET with redirects followed;
-    OSError(errno) when it cannot be made."""
+def http_open(url, agent, start=None, n=None):
+    """(handle, status, content_length) of a GET with redirects followed, of
+    the `n` bytes from `start` when given; OSError(errno) when it cannot be
+    made."""
     status = ctypes.c_int()
     clen = ctypes.c_uint32()
-    h = _lib().moy_httpc_open(_bytes(url), _bytes(agent), ctypes.byref(status),
-                              ctypes.byref(clen))
+    if start is None:
+        h = _lib().moy_httpc_open(_bytes(url), _bytes(agent), ctypes.byref(status),
+                                  ctypes.byref(clen))
+    else:
+        h = _lib().moy_httpc_open_range(_bytes(url), _bytes(agent), int(start), int(n),
+                                        ctypes.byref(status), ctypes.byref(clen))
     if h < 0:
         raise OSError(-h, os.strerror(-h))
     return (h, status.value, clen.value)

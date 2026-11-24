@@ -498,8 +498,8 @@ def _cart_seams(ws, mode, root):
     this page is connected its glass is parked, so the two never install side
     by side. The page fetches nothing and the app says where carts come from
     ("board"; `update_enable` learns whether that console has a screen); one
-    with no screen that answered the /official probe (`official_enable`)
-    installs carts when this page asks (`carts_link.BoardCarts`).
+    that answered the /official probe (`official_enable`) installs carts
+    when this page asks (`carts_link.BoardCarts`).
     SITE: the page's own store, so the page's fetch is the network and OPFS
     keeps what lands (`carts_link`). NONE (no OPFS): the same network, and an
     install lives in this tab like every other edit here, which the page
@@ -663,6 +663,9 @@ def page_boot(carts_root, query_json, coarse=False, scheme=""):
       ?cart=NAME   that cart; a bundle of one cart names it without asking
       ?desktop=1   the desk even with a cart named
       ?meter=1     the VM heap's allocation counted each frame (`_METER`)
+      ?linkcheck=1 the match's world check armed on the board's radio link
+                   (`live_pump`), as the dev channel's `link check on` arms
+                   a console's
     A single ?cart=<name> still implies handheld: that url is the one-cart
     player (moy export / the gallery), where a desk around one game is chrome
     nobody asked for. The served carts are the bundle's
@@ -671,6 +674,7 @@ def page_boot(carts_root, query_json, coarse=False, scheme=""):
     q = json.loads(query_json)
     if q.get("meter"):
         _METER[0] = 1
+    _S["linkcheck"] = bool(q.get("linkcheck"))
     names = moy_sync.served_carts()
     if names is None:
         names = json.loads(moy_sync.folders_json(carts_root))
@@ -1186,9 +1190,10 @@ def state_json():
     one is on its way), the Terminal's grid as lines (`term`, None before
     it first opens), the media stream's `now()` (`media`, None with no run)
     and how its last run ended (`media_last`, dev_media.last), the heap's
-    allocation where the page meters it (`alloc`, step_frame_json's), for a
-    harness driving the page
-    (`window.__moyState()`)."""
+    allocation where the page meters it (`alloc`, step_frame_json's) and
+    the radio link's stats (`link_stats`, EspNowLink.stats: the match's
+    frame, checkpoints and desync; None with no link), for a harness
+    driving the page (`window.__moyState()`)."""
     import dev_channel
     st = dev_channel._remote_state(_S["ws"])
     st["ach"] = sorted(_S["ws"].ach.doc().get("system", {}).get("found", {}))
@@ -1225,6 +1230,8 @@ def state_json():
         flush()
     img = getattr(run, "pmem_img", None)
     st["pmem"] = list(img)[:32] if img is not None else None
+    lk = getattr(_S["ws"], "link", None)
+    st["link_stats"] = lk.stats() if lk is not None else None
     return json.dumps(st)
 
 
@@ -1448,8 +1455,8 @@ def update_enable(status_json):
 
 
 def official_enable():
-    """The serving console answered the /official probe: it has no screen
-    and installs carts when this page asks. Called before
+    """The serving console answered the /official probe: it installs
+    carts when this page asks. Called before
     `boot`, which hands Get Carts the asking (`_cart_seams`), so the app
     never opens on a page that says the console gets its own."""
     _S["official"] = True
@@ -1649,7 +1656,8 @@ def live_enable(mac):
         ws.link = EspNowLink(board="web", name="Browser", wlan=_LiveWlan(binascii.unhexlify(mac)),
                              launch=launch_cart)
         ws.net = ws.link.net
-        _S["live"] = {"open": False, "said": None, "hidden": False, "gap": False}
+        _S["live"] = {"open": False, "said": None, "hidden": False, "gap": False,
+                      "check": _S.get("linkcheck", False)}
     except Exception as exc:         # noqa: BLE001 -- never block a boot
         print("live link unavailable:", exc)
     return ""
@@ -1714,6 +1722,9 @@ def live_pump(gap_ms=0, hidden=0):
     lk = getattr(ws, "link", None)
     if lk is not None:
         lk.poll()
+        if st["check"] and lk.active:
+            lk.check_worlds(True)
+            st["check"] = False
     if getattr(ws, "netplay", None) is not None:
         if int(hidden):
             st["hidden"] = True
