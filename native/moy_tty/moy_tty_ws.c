@@ -55,6 +55,7 @@
 #include "moy_tty.h"
 #include "moy_tty_int.h"
 #include "moy_webauth.h"
+#include "moy_ws.h"
 
 #define BRIDGE_STACK (6 * 1024)
 #define IN_CAP 2048                     // a page's frames waiting to be whole
@@ -89,50 +90,14 @@ typedef struct {
 
 static ws_t *W;
 
-static int send_all(int fd, const void *p, size_t n) {
-    const char *c = p;
-    while (n > 0) {
-        ssize_t w = send(fd, c, n, 0);
-        if (w < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            return -1;
-        }
-        c += w;
-        n -= (size_t)w;
-    }
-    return 0;
-}
-
-// One unmasked frame, header and payload in one send.
 static int frame_out(int fd, int op, const char *p, size_t n, char *buf) {
-    size_t hn = 2;
-    buf[0] = (char)(0x80 | op);
-    if (n < 126) {
-        buf[1] = (char)n;
-    } else {
-        buf[1] = 126;
-        buf[2] = (char)(n >> 8);
-        buf[3] = (char)n;
-        hn = 4;
-    }
-    if (p != buf + hn) {
-        memmove(buf + hn, p, n);
-    }
     W->stats.frames_out++;
-    return send_all(fd, buf, hn + n);
+    return moy_ws_out(fd, op, p, n, buf);
 }
 
 static void close_out(int fd, int code, const char *why) {
-    char b[64];
-    size_t n = strlen(why);
-    n = n < sizeof b - 8 ? n : sizeof b - 8;
-    char p[64];
-    p[0] = (char)(code >> 8);
-    p[1] = (char)code;
-    memcpy(p + 2, why, n);
-    frame_out(fd, 8, p, n + 2, b);
+    W->stats.frames_out++;
+    moy_ws_close(fd, code, why);
 }
 
 static void resize(pid_t pid, const uint8_t *p, size_t n) {
@@ -153,44 +118,18 @@ static void resize(pid_t pid, const uint8_t *p, size_t n) {
 // Whole frames out of in[0..*n): keys to the face. -1 at a close or an error.
 static int frames_in(int ws, int sfd, pid_t pid, uint8_t *in, size_t *n, char *scratch) {
     size_t at = 0;
-    for (;;) {
-        if (*n - at < 2) {
-            break;
-        }
-        uint8_t *f = in + at;
-        int op = f[0] & 0x0F;
-        size_t len = f[1] & 0x7F, hn = 2;
-        if (len == 126) {
-            if (*n - at < 4) {
-                break;
-            }
-            len = (size_t)f[2] << 8 | f[3];
-            hn = 4;
-        } else if (len == 127) {
-            return -1;                  // keys never come that big
-        }
-        int masked = f[1] & 0x80;
-        if (masked) {
-            hn += 4;
-        }
-        if (*n - at < hn + len) {
-            if (hn + len > IN_CAP) {
-                return -1;
-            }
-            break;
-        }
-        uint8_t *pl = f + hn;
-        if (masked) {
-            for (size_t i = 0; i < len; i++) {
-                pl[i] ^= f[hn - 4 + (i & 3)];
-            }
-        }
-        if (op == 8) {
+    moy_ws_frame_t f;
+    int k;
+    while ((k = moy_ws_next(in, *n, &at, IN_CAP, &f)) > 0) {
+        uint8_t *pl = f.p;
+        size_t len = f.n;
+        int op = f.op;
+        if (op == MOY_WS_CLOSE) {
             close_out(ws, 1000, "");
             return -1;
         }
-        if (op == 9) {
-            frame_out(ws, 10, (const char *)pl, len < 125 ? len : 125, scratch);
+        if (op == MOY_WS_PING) {
+            frame_out(ws, MOY_WS_PONG, (const char *)pl, len < 125 ? len : 125, scratch);
         } else if (W->seal.on && (op == 0 || op == 1 || op == 2)) {
             if (op != 2 || len < MOY_SEAL_TAG + 1
                 || moy_seal_ws(0, W->seal.kc, MOY_SEAL_UP, W->up++, W->seal.seq, pl,
@@ -203,20 +142,21 @@ static int frames_in(int ws, int sfd, pid_t pid, uint8_t *in, size_t *n, char *s
                 resize(pid, pl + 1, len - 1);
             } else if (pl[0] == 'k' && len > 1) {
                 W->stats.in_bytes += (uint32_t)(len - 1);
-                if (send_all(sfd, pl + 1, len - 1) < 0) {
+                if (moy_ws_send_all(sfd, pl + 1, len - 1) < 0) {
                     return -1;
                 }
             }
-            len += MOY_SEAL_TAG;
         } else if (op == 1) {
             resize(pid, pl, len);
         } else if ((op == 2 || op == 0) && len > 0) {
             W->stats.in_bytes += (uint32_t)len;
-            if (send_all(sfd, pl, len) < 0) {
+            if (moy_ws_send_all(sfd, pl, len) < 0) {
                 return -1;
             }
         }
-        at += hn + len;
+    }
+    if (k < 0) {
+        return -1;                      // keys never come that big
     }
     memmove(in, in + at, *n - at);
     *n -= at;
