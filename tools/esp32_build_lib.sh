@@ -479,6 +479,15 @@ moybyte_patch_fatfs_lfn() {
   "${BUILD_PYTHON}" "${REPO_ROOT}/tools/patch_fatfs_lfn.py" "${MPY_DIR}" || exit 1
 }
 
+# A FAT file's close is final: a VfsFat file whose close the card refused is
+# closed all the same, so its finaliser never syncs it again into a directory
+# slot another file has taken. tools/patch_fatfs_close.py is the patch;
+# all-or-nothing, idempotent.
+moybyte_patch_fatfs_close() {
+  [ -n "${BUILD_PYTHON:-}" ] || moybyte_resolve_build_python
+  "${BUILD_PYTHON}" "${REPO_ROOT}/tools/patch_fatfs_close.py" "${MPY_DIR}" || exit 1
+}
+
 moybyte_patch_slice_store() {
   [ -n "${BUILD_PYTHON:-}" ] || moybyte_resolve_build_python
   "${BUILD_PYTHON}" "${REPO_ROOT}/tools/patch_slice_store.py" "${MPY_DIR}" || exit 1

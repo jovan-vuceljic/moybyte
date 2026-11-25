@@ -14,7 +14,9 @@ alternate screen; an exec that leaves its stdin unread still sends its
 output whole; and a session's every allocation goes when it ends. The
 run (moy_ssh_run.c): `passwd -d` over SSH stops the server once its session
 ends, its tasks report parked only after it, and `passwd x` in the same
-session withdraws that stop.
+session withdraws that stop. A new connection that signs in ends the
+session served, whose terminal reads why, and is served in turn; a wrong
+password or a connection that never signs in ends nothing.
 """
 
 import os
@@ -196,9 +198,10 @@ def test_a_session_that_does_not_sign_in_is_refused(harness):
 
 
 def test_a_connection_that_does_not_sign_in_is_closed_within_thirty_seconds(tmp_path):
-    """The server serves one connection at a time, so one that never signs in
-    holds SSH until Dropbear's AUTH_TIMEOUT; the port's options set it, and
-    Dropbear's own default (300 s) must not win."""
+    """The server serves one session at a time and lets one more sign in
+    beside it, so one that never signs in holds its place until Dropbear's
+    AUTH_TIMEOUT; the port's options set it, and Dropbear's own default
+    (300 s) must not win."""
     src = tmp_path / "t.c"
     src.write_text('#include "includes.h"\n')
     flags = [f for f in _cflags() if f != "-DLTC_SOURCE"]
@@ -531,6 +534,74 @@ def test_every_session_gives_back_what_it_took(harness):
     s = settled(harness)
     assert int(s["heap_now"]) == held
     assert int(s["session_peak"]) > 0
+
+
+def opened(h):
+    """A `-tt` session left open: its process, stdin still the test's."""
+    p = subprocess.Popen(["ssh"] + options(h) + [
+        "-o", "PubkeyAuthentication=no", "-o", "PreferredAuthentications=password",
+        "-tt", "moy@127.0.0.1"], env=env_of(h, PASSWORD), stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    time.sleep(1.5)
+    assert p.poll() is None, p.communicate()[0]
+    return p
+
+
+TAKEN = b"another session signed in; this one is closing"
+
+
+def test_a_new_sign_in_ends_the_session_served_and_tells_its_terminal_why(harness):
+    n = int(settled(harness)["ended"])
+    held = int(settled(harness)["heap_now"])
+    first = opened(harness)
+    try:
+        r = ssh(harness, PASSWORD, "moy@127.0.0.1", "echo second")
+        assert r.returncode == 0, r.stderr
+        assert b"second" in r.stdout
+        out, _ = first.communicate(timeout=10)
+    finally:
+        if first.poll() is None:
+            first.kill()
+    assert TAKEN in out, out
+    ended(harness, n + 2)
+    assert int(settled(harness)["heap_now"]) == held
+
+
+def test_a_wrong_password_or_a_silent_connection_ends_nobody(harness):
+    first = opened(harness)
+    try:
+        r = ssh(harness, "not-it", "moy@127.0.0.1", "echo second")
+        assert r.returncode == 255 and b"Permission denied" in r.stderr
+        with socket.create_connection(("127.0.0.1", harness["port"]), timeout=5) as c:
+            c.recv(64)                  # its banner: the server took it beside the first
+            time.sleep(1.0)
+        assert first.poll() is None
+        first.stdin.write(b"echo still here\r")
+        first.stdin.flush()
+        time.sleep(0.5)
+        first.stdin.write(b"exit\r")
+        first.stdin.flush()
+        out, _ = first.communicate(timeout=10)
+    finally:
+        if first.poll() is None:
+            first.kill()
+    assert b"still here" in out and TAKEN not in out, out
+
+
+def test_the_session_that_took_over_is_taken_over_in_turn(harness):
+    first = opened(harness)
+    second = opened(harness)
+    try:
+        out, _ = first.communicate(timeout=10)
+        assert TAKEN in out, out
+        r = ssh(harness, PASSWORD, "moy@127.0.0.1", "echo third")
+        assert r.returncode == 0 and b"third" in r.stdout, r.stderr
+        out, _ = second.communicate(timeout=10)
+        assert TAKEN in out, out
+    finally:
+        for p in (first, second):
+            if p.poll() is None:
+                p.kill()
 
 
 def refused(h, wait=3.0):

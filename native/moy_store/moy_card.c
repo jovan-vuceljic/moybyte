@@ -10,7 +10,9 @@
 // moy_sd_card_io on a board (the T-Deck's card attached to the panel's host,
 // the Guition S3's on its own SPI3, the P4s' on SDMMC slot 0), or, on the
 // host, a Python object with moy_sd's read/write verbs, which is how
-// tests/test_store_on_vfs.py drives it.
+// tests/test_store_on_vfs.py drives it: a verb that returns a non-zero int is
+// a sector the card refused, as moy_sd_card_io's error is
+// (tests/test_card_aborts.py).
 //
 // The cache is the T-Deck's (dev 638661e), in C under every board's card:
 // moy_cache.h, with its zero runs over the mounted volume's clusters.
@@ -104,8 +106,8 @@ static int io(void *ctx, uint32_t start, uint8_t *buf, uint32_t n, int write) {
         mp_obj_new_int_from_uint(n),
     };
     mp_obj_t fn = mp_load_attr(drv, write ? MP_QSTR_write : MP_QSTR_read);
-    mp_call_function_n_kw(fn, 3, 0, args);
-    return 0;
+    mp_obj_t rc = mp_call_function_n_kw(fn, 3, 0, args);
+    return rc == mp_const_none || rc == MP_OBJ_NEW_SMALL_INT(0) ? 0 : MP_EIO;
 }
 
 static int need_card(void) {
@@ -317,8 +319,14 @@ MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(moy_store_card_obj, 1, 2, mod_card);
 #if MOY_CARD_RAM
 // card_ram(sectors) -> the volume: the card over a native RAM medium of
 // `sectors`, formatted FAT and mounted (the unix port's, for the tests).
-static mp_obj_t mod_card_ram(mp_obj_t sectors_in) {
-    uint32_t sectors = (uint32_t)mp_obj_get_int(sectors_in);
+// card_ram() -> the medium's bytes as they are, for a checker (fsck.fat) to
+// read.
+static mp_obj_t mod_card_ram(size_t n_args, const mp_obj_t *args) {
+    if (n_args == 0) {
+        return s_ram == NULL ? mp_const_none
+               : mp_obj_new_memoryview('B', (size_t)s_ram_sectors * SECTOR, s_ram);
+    }
+    uint32_t sectors = (uint32_t)mp_obj_get_int(args[0]);
     if (!need_card()) {
         mp_raise_type(&mp_type_MemoryError);
     }
@@ -344,7 +352,7 @@ static mp_obj_t mod_card_ram(mp_obj_t sectors_in) {
     }
     return MP_OBJ_FROM_PTR(card.vfs);
 }
-MP_DEFINE_CONST_FUN_OBJ_1(moy_store_card_ram_obj, mod_card_ram);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(moy_store_card_ram_obj, 0, 1, mod_card_ram);
 #endif
 
 // card_hold(on) -> None: the hold (moy_store_card_hold), raising

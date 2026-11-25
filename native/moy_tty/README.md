@@ -50,6 +50,9 @@ server could still serve the web terminal. How a face is reached is
 **One face at a time** across the transports (owner choice open: two faces
 would take two arenas): a page that finds an SSH session's face is closed
 1013 `busy`, and an SSH client that finds the page's is refused its channel.
+Between two pages the newest signed-in one has the terminal (owner,
+2026-11-25): the page that held it closes 4001 `taken` and offers it back at
+its user's Enter (`native/moy_net/moy_webauth.c`, `moy_wa_take`).
 An SFTP server is a face too, a session of the shell's for its paths: while a
 shell runs (on the page, or a channel of the same SSH connection) SFTP's
 channel is refused, and while SFTP runs a shell is.

@@ -98,7 +98,12 @@ chip changes.
   needs. The `sftp` subsystem is refused (`native/moy_ssh/moy_ssh.c`): its
   buffers do not fit beside a session, and a client reports a refusal where
   running out would cut a transfer short. While a session runs, an upload
-  that finds no room is answered 503 and the page sends it again.
+  that finds no room is answered 503 and the page sends it again. A new
+  sign-in takes over from the session served (`native/moy_ssh/moy_ssh.c`, THE
+  TAKEOVER), its handshake beside that session in the same heap: under
+  `NEXT_ROOM` free (and a `NEXT_BLOCK` block) the new connection is closed
+  unanswered and the session served goes on, so a second sign-in never takes
+  the heap WiFi needs. A PSRAM board has no such floor.
 - **Local multiplayer, as the XIAO's** (2026-11-24, its README's section):
   the page this board serves plays a match on its radio through the live
   socket (`native/moy_net/moy_live.h`), sized for no PSRAM

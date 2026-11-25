@@ -37,6 +37,18 @@ _PAGES = 6
 STOP_POLL_MS = 50               # how often Stop & play looks for the music's end
 STOP_QUIET_MS = 3000            # and how long it waits for it
 
+# The card's trouble on the desk (`Notices.card_trouble`): a title, and its
+# lines as (line, tone) rows.
+CARD_TROUBLE = {
+    "errors": ("Your card has errors", (
+        ("Moybyte is using its own memory for now. Your carts are still on the card.", "plain"),
+        ("Copy what you need from the card on a computer, then reformat it or try "
+         "another card.", "dim"))),
+    "format": ("This card can't be read", (
+        ("Moybyte is using its own memory for now.", "plain"),
+        ("Reformat the card as FAT32 or exFAT on a computer.", "dim"))),
+}
+
 
 def _in_box(px, py, b):
     return b is not None and b[0] <= px < b[0] + b[2] and b[1] <= py < b[1] + b[3]
@@ -174,6 +186,19 @@ class Notices:
         else:
             self.notice(_ui_draw.s("notice.undone"), _ui_draw.s("notice.still_on") % u.version_label(), "warn")
         return True
+
+    def card_trouble(self, kind):
+        """Say on the desk, once a boot, why the console is on its internal
+        store while a card is in the slot (the boot's `card_trouble`,
+        runtime/boot/boot_carts.py): "errors", a card that mounted and whose
+        store failed; "format", a filesystem this build cannot read. None
+        (no card, or a card that works) says nothing. A dialog with OK, not
+        the timed notice: what to do with the card takes longer to read than
+        a notice stays up. True when it said something."""
+        words = CARD_TROUBLE.get(kind)
+        if words is None:
+            return False
+        return self.ws.confirm.tell(words[0], words[1])
 
     def room(self, which, x, y, w, h):
         """Page `which`'s room (x, y, w, h), the tuple kept while it stands:

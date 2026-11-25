@@ -7,6 +7,9 @@
 //   read(start, buf, count)  count * 512 bytes; a failed transfer raises and
 //   write(start, buf, count) keeps the card (a teardown is a failed bring-up's)
 //   sector_count()           0 while the card is not up
+//   stats(reset=False)       (calls, sectors, errors, of them for want of
+//                            memory, transfers run on the hop, the hop's
+//                            unused stack bytes) since boot: moy_sd.h
 //   deinit()                 what the card took given back, never the panel's
 //                            bus (card_store's failed mount on the boards
 //                            whose card has a bus of its own)
@@ -77,7 +80,19 @@ static mp_obj_t moy_sd_deinit(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(moy_sd_deinit_obj, moy_sd_deinit);
 
+static mp_obj_t moy_sd_stats_py(size_t n_args, const mp_obj_t *args) {
+    const moy_sd_stats_t *st = moy_sd_stats(n_args > 0 && mp_obj_is_true(args[0]));
+    mp_obj_t t[6] = {
+        mp_obj_new_int_from_uint(st->calls), mp_obj_new_int_from_uint(st->sectors),
+        mp_obj_new_int_from_uint(st->errors), mp_obj_new_int_from_uint(st->nomem),
+        mp_obj_new_int_from_uint(st->hops), mp_obj_new_int_from_uint(st->hop_free),
+    };
+    return mp_obj_new_tuple(6, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(moy_sd_stats_obj, 0, 1, moy_sd_stats_py);
+
 static const mp_rom_map_elem_t moy_sd_globals_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_stats),        MP_ROM_PTR(&moy_sd_stats_obj) },
     { MP_ROM_QSTR(MP_QSTR___name__),     MP_OBJ_NEW_QSTR(MP_QSTR_moy_sd) },
     { MP_ROM_QSTR(MP_QSTR_up),           MP_ROM_PTR(&moy_sd_up_obj) },
     { MP_ROM_QSTR(MP_QSTR_read),         MP_ROM_PTR(&moy_sd_read_obj) },
