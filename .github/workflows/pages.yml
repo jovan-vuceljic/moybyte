@@ -7,9 +7,11 @@
 #              docs/web_console_online_2026-11.md §4, §8): every pack the
 #              firmware-latest release names and firmware-beta's of the last
 #              30 days, which the boards' loaders fetch, and both releases'
-#              carts-<board>.json under releases/<tag>/, which a page on a
-#              board's origin reads its console's release from (a release
-#              download sends no CORS header). One store serves both
+#              carts-<board>.json under releases/<tag>/ with the official
+#              carts' zips and covers beside them, which a page on a
+#              board's origin reads its console's release from and each
+#              site's player gets its channel's official carts from (a
+#              release download sends no CORS header). One store serves both
 #              channels; it holds no console, so it shares the origin with
 #              the players without sharing their storage.
 #

@@ -19,22 +19,31 @@ last DEV_DAYS days (§12: a dev board older than that updates its firmware).
 
 Beside them it mirrors each release's indexes whole, at
 `console/releases/<tag>/carts-<board>.json` (cart_index.index_mirror names
-the address), because a page on a board's origin cannot read a release
-download: the page lists its console's release from there. The copy is the
-release's bytes, its signature with them, and a page and a board alike take
-it only once that signature verifies (cart_index.parse_index,
-cart_index.EntryRead). `fetch` writes the tag it read into the folder
+the address), and every file beside them that their official entries name
+(web_pack.shelf_files: each official cart's zip, its cover, the licence),
+because no page can read a release download. A page on a board's origin
+lists its console's release from there; the site's own player lists its
+channel's release from there and installs its official carts from the
+files beside it (site/build.py's RELEASE_INDEX). The copy is the release's
+bytes, its signature with them, and a page and a board alike take it only
+once that signature verifies (cart_index.parse_index, cart_index.EntryRead),
+which is what vouches for every file's sha256 beside it. A release folder
+holds only what its current indexes name: an official cart's earlier zip,
+still on the release, is not mirrored, and the folder is replaced with the
+store on every deploy. `fetch` writes the tag it read into the folder
 (TAG_FILE), so `build` knows where each folder's indexes go.
 
-    tools/pack_store.py fetch TAG DIR       a release's indexes and add-on
-                                            carts into DIR, each file dated
-                                            as the release published it (gh)
+    tools/pack_store.py fetch TAG DIR       a release's indexes, add-on
+                                            carts and official carts' files
+                                            into DIR, each file dated as the
+                                            release published it (gh)
     tools/pack_store.py build OUT --stable DIR... [--dev DIR...]
                                             OUT/console/ (replaced) from
                                             fetched (or locally published)
                                             folders: the packs, and the
-                                            indexes of each folder that
-                                            names its tag
+                                            indexes and official carts'
+                                            files of each folder that names
+                                            its tag
     tools/pack_store.py check BASE INDEX... every digest the indexes (files
                                             or URLs) name has its pack at
                                             BASE/console/, served with
@@ -147,7 +156,7 @@ def build(out, stable=(), dev=(), days=DEV_DAYS, now=None):
         with open(os.path.join(folder, digest + ".pack"), "wb") as f:
             f.write(data)
     for src in list(stable) + list(dev):
-        mirror_indexes(src, folder)
+        mirror_release(src, folder)
     return sorted(packs)
 
 
@@ -161,17 +170,40 @@ def release_tag(folder):
     return tag if tag and "/" not in tag and not tag.startswith(".") else None
 
 
-def mirror_indexes(src, console):
-    """`src`'s indexes, byte for byte, into `console`/releases/<its tag>/;
-    none where the folder names no tag. Returns the names written."""
+def mirror_release(src, console):
+    """`src`'s indexes, byte for byte, into `console`/releases/<its tag>/,
+    and beside them every file their official entries name
+    (web_pack.shelf_files), each held to the size and sha256 its entry
+    names; none where the folder names no tag. A file the folder lacks or
+    holds wrong is left out and said on stderr: its cart's install fails
+    as an unreachable one, and nothing else of the store does. Returns the
+    names written."""
     tag = release_tag(src)
     if tag is None:
         return []
     dest = os.path.join(console, "releases", tag)
     os.makedirs(dest, exist_ok=True)
     names = _indexes(src)
+    files = {}
     for name in names:
+        with open(os.path.join(src, name), "rb") as f:
+            files.update(web_pack.shelf_files(f.read()))
         shutil.copyfile(os.path.join(src, name), os.path.join(dest, name))
+    for name, ref in sorted(files.items()):
+        try:
+            with open(os.path.join(src, name), "rb") as f:
+                data = f.read()
+        except OSError:
+            print("pack_store: %s names %s, which %s does not hold" % (tag, name, src),
+                  file=sys.stderr)
+            continue
+        if len(data) != ref.get("size") or hashlib.sha256(data).hexdigest() != ref.get("sha256"):
+            print("pack_store: %s's %s is not the file its index names" % (tag, name),
+                  file=sys.stderr)
+            continue
+        with open(os.path.join(dest, name), "wb") as f:
+            f.write(data)
+        names.append(name)
     return names
 
 
@@ -221,8 +253,9 @@ def _gh_json(*args):
 
 
 def fetch(tag, dest):
-    """A release's indexes and the add-on carts they name into `dest`, each
-    file's mtime the asset's publication date (for build's `dev` cut)."""
+    """A release's indexes, the add-on carts they name and the official
+    carts' files they name (web_pack.shelf_files) into `dest`, each file's
+    mtime the asset's publication date (for build's `dev` cut)."""
     assets = {a["name"]: a for a in _gh_json("release", "view", tag, "--json", "assets")["assets"]}
     os.makedirs(dest, exist_ok=True)
     with open(os.path.join(dest, TAG_FILE), "w") as f:
@@ -231,11 +264,15 @@ def fetch(tag, dest):
     with tempfile.TemporaryDirectory() as tmp:
         for name in names:
             _download(tag, name, tmp, dest, assets[name])
+        want = set()
         for name in names:
             with open(os.path.join(dest, name), "rb") as f:
-                for _digest, asset in _addons(f.read()):
-                    if asset["url"] in assets and not os.path.exists(os.path.join(dest, asset["url"])):
-                        _download(tag, asset["url"], tmp, dest, assets[asset["url"]])
+                index = f.read()
+            want |= {a["url"] for _digest, a in _addons(index)}
+            want |= set(web_pack.shelf_files(index))
+        for name in sorted(want):
+            if name in assets and not os.path.exists(os.path.join(dest, name)):
+                _download(tag, name, tmp, dest, assets[name])
 
 
 def _download(tag, name, tmp, dest, meta):
@@ -252,7 +289,7 @@ def _download(tag, name, tmp, dest, meta):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    f = sub.add_parser("fetch", help="a release's indexes and add-on carts, dated")
+    f = sub.add_parser("fetch", help="a release's indexes and the carts they name, dated")
     f.add_argument("tag")
     f.add_argument("dest")
     b = sub.add_parser("build", help="the store's tree to deploy")

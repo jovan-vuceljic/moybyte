@@ -7,6 +7,7 @@
 #   publish_cart     the add-on cart for a page, packed beside it
 #   index_entry      its entry in the board's index
 #   official_carts   the seed carts a release publishes: all but the test fixtures
+#   shelf_files      the files beside an index its official entries name, which os.moybyte.com mirrors
 #   built_seed       a compiled seed cart built from its source, for its entry
 #   board_modules    a board build's native modules of the official compiled carts
 #   collected_modules the modules the boards of one run built, per cart
@@ -491,6 +492,26 @@ def referenced(data):
         refs = [a for a in c.get("assets") or () if isinstance(a, dict)]
         refs += [r for r in (c.get("cover"), c.get("licence")) if isinstance(r, dict)]
         out |= {r["url"] for r in refs if isinstance(r.get("url"), str)}
+    return out
+
+
+def shelf_files(data):
+    """{name: its reference} of every file beside it that an official entry
+    of the index `data` (its bytes, signed or not) names -- each cart's zip,
+    its cover and its licence, each reference holding the file's size and
+    sha256. An add-on entry's cart is left out, and so is a name that is
+    not one file beside the index. {} for a document that is not an index."""
+    out = {}
+    for c in (_index_carts(data) if data else None) or ():
+        if not isinstance(c, dict) or c.get("runtime") == CART_RUNTIME:
+            continue
+        refs = [a for a in c.get("assets") or () if isinstance(a, dict)]
+        refs += [r for r in (c.get("cover"), c.get("licence")) if isinstance(r, dict)]
+        for r in refs:
+            name = r.get("url")
+            if (isinstance(name, str) and name and "/" not in name and "\\" not in name
+                    and ":" not in name and not name.startswith(".")):
+                out[name] = r
     return out
 
 
