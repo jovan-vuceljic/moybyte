@@ -730,9 +730,12 @@ static void walk(walk_t *w, char *path, size_t n) {
     walk_free(w);
 }
 
+// A listed file already gone is removed: a file's remove takes its `.bak`
+// with it, which the listing still names.
 static int rm_visit(walk_t *w, const char *path, size_t n, int dir, uint64_t size, int top) {
-    (void)w, (void)n, (void)size, (void)top;
-    return dir ? 0 : moy_sh_vol_op(MOY_SH_V_REMOVE, path, NULL);
+    (void)w, (void)n, (void)size;
+    int r = dir ? 0 : moy_sh_vol_op(MOY_SH_V_REMOVE, path, NULL);
+    return r == ENOENT && !top ? 0 : r;
 }
 
 static int rm_leave(walk_t *w, const char *path, uint64_t total, int top) {

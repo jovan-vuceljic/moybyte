@@ -219,6 +219,20 @@ def test_a_walk_looks_up_no_entry_by_its_path(harness, tmp_path):
     assert many - few < 200 + 20, "1 file: %d calls, 200 files: %d" % (few, many)
 
 
+def test_rm_r_takes_a_file_and_its_bak_in_one_pass(harness, tmp_path):
+    """A file's remove takes its crash-safe `.bak` with it (moy_sh_cmds.c's
+    vol op), which the folder's listing still names: `rm -r` counts that
+    entry removed and goes on, one pass leaving nothing and exiting 0."""
+    root = tmp_path / "root"
+    (root / "d" / "e").mkdir(parents=True)
+    for name in ("f", "f.bak", "g", "e/h", "e/h.bak"):
+        (root / "d" / name).write_bytes(b"x")
+    script = tmp_path / "bak.sh"
+    script.write_text("rm -r d; echo rc=$?\n")
+    out = run(harness, str(script), root)
+    assert out.endswith("\nrc=0\n[exit 0]\n") and not os.listdir(root), out
+
+
 def test_an_arena_run_out_is_an_error_not_a_reset(harness, tmp_path):
     """A block the arena refuses is dash's "Out of space", raised bare when
     its own message finds no room (moy_sh.c's refused). Reported again, it

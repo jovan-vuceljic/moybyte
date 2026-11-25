@@ -781,21 +781,11 @@ def ssh(zero, tmp_path_factory):
 
 @contextlib.contextmanager
 def _bench(ssh):
-    _rm_all(ssh, BENCH)
-    ssh.run("mkdir %s" % BENCH)
+    ssh.run("rm -r %s; mkdir %s" % (BENCH, BENCH))
     try:
         yield
     finally:
-        _rm_all(ssh, BENCH)
-
-
-def _rm_all(ssh, path):
-    """`path` surely gone: `rm -r` again where its last pass stopped (on the
-    C shell, a file's `.bak` removed with the file then stops the walk, one
-    pair a pass)."""
-    for _ in range(8):
-        if ssh.run("rm -r %s" % path)[0] == 0 or ssh.run("ls %s" % path)[0] != 0:
-            return
+        ssh.run("rm -r %s" % BENCH)
 
 
 def _text_file(n, tag="line"):
@@ -1156,11 +1146,6 @@ def _remove(ssh, folder):
     return ssh.run("rm -r %s/%s" % (CARTS, folder))
 
 
-def _gone(ssh, folder):
-    """A bench cart surely gone, for a test about something else."""
-    _rm_all(ssh, "%s/%s" % (CARTS, folder))
-
-
 def _cat(ssh, path):
     rc, data, err = ssh.run("cat %s" % path)
     return data if rc == 0 else None
@@ -1221,7 +1206,7 @@ def test_a_cart_uploaded_from_the_page_reads_back_byte_exact(zero, mirror, ssh, 
                                 tmp_path / "gone"), "SHELF")
         assert shelf is not None and folder not in shelf, shelf
     finally:
-        _gone(ssh, folder)
+        _remove(ssh, folder)
 
 
 def _pmem(ssh, folder, tmp):
@@ -1262,7 +1247,7 @@ def test_a_game_s_pmem_saves_are_back_after_a_reboot(zero, mirror, ssh, tmp_path
         assert again is not None and again[:9] == [2] + [2000 + i for i in range(1, 9)], \
             "the game did not read its cells back: %s" % (again and again[:9])
     finally:
-        _gone(ssh, folder)
+        _remove(ssh, folder)
 
 
 FILL = STORE + "/zbench_fill.bin"
@@ -1410,7 +1395,7 @@ def test_an_imported_cart_and_a_setting_survive_a_reset(zero, mirror, ssh, tmp_p
         shelf = _tagged(out, "SHELF")
         assert shelf and folder in shelf, "the page's shelf after the reset: %s" % shelf
     finally:
-        _gone(ssh, folder)
+        _remove(ssh, folder)
         ssh.run("settings unset %s" % key if had is None
                 else "settings set %s %s" % (key, json.dumps(had)))
 
@@ -1474,7 +1459,7 @@ def _across(zero, ssh, tmp_path, stem, go_away):
         assert not _differs(ssh, folder, content), "the cart imported after it"
         return done[0], before, after
     finally:
-        _gone(ssh, folder)
+        _remove(ssh, folder)
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
@@ -1600,7 +1585,7 @@ def test_a_second_browser_signing_in_displaces_the_first(zero, mirror, ssh, tmp_
     finally:
         if "thread" in got:
             got["thread"].join(timeout=900)
-        _gone(ssh, folder)
+        _remove(ssh, folder)
 
 
 # -- the network: the name and the clock ---------------------------------------------------------
@@ -1806,13 +1791,13 @@ def test_zy_a_session_soak_keeps_the_board_s_ram(zero, mirror, ssh, tmp_path):
                 _still_up(zero, t)
             finally:
                 t.close()
-            _gone(ssh, folder)
+            _remove(ssh, folder)
             frees.append(free)
             rounds.append(time.monotonic() - r0)
             print("%s soak round %d (%.0f s): internal RAM free in SSH %.1f KB"
                   % (zero.name, n, rounds[-1], free / 1024.0))
     finally:
-        _gone(ssh, folder)
+        _remove(ssh, folder)
     free1, big1 = _heap(zero, "after the soak")
     drop, past = Z.drift(frees, SOAK_FREE_BAND)
     print("%s soak: %d rounds in %.0f s; free in SSH by round (KB) %s, fell %.1f KB "
