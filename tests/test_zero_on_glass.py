@@ -29,9 +29,10 @@ pages, which headless Chrome boots (firmware/web_runner/browsershot.mjs).
 
   GET CARTS. The page's Get Carts, driven by its keys, has the board
   install an official cart it lacks, remove the flash's Calc and get it
-  back, and install moybyte-org/carts' Moy Mesh; each lands, the board's
-  lines say so (an out-of-memory names its frames), and its internal heap
-  after each is the idle one's within HEAP_SPREAD.
+  back, and Get moybyte-org/carts' Moy Mesh, which a Zero refuses (it has
+  no LoRa radio); each ends as the board's lines say (an out-of-memory
+  names its frames), with PAGE_FREE free while the page is open, and its
+  internal heap after each is the idle one's within HEAP_SPREAD.
 
   A MATCH, where a T-Deck is on MOYBYTE_TDECK_PORT (the pass gives the
   T-Deck's port when it is in the same pass, after the T-Deck's own row): the
@@ -725,9 +726,6 @@ MOY_MESH = ["ArrowDown"] * 4 + ["ArrowRight"]
 # An install's wait: the page asks, and the board streams the index and
 # fetches the cart over TLS at a few KB/s.
 INSTALL_WAIT_MS = 75000
-# A cart of moybyte-org/carts asks before it lands (Get Carts' consent, its
-# focus on No): the wait for the prompt after Get, the download in it.
-CONSENT_WAIT_MS = 40000
 # What an install may leave of the board's internal heap below the idle
 # read, after a collect with the store host stopped: the spread of a boot's
 # own allocations. An install that keeps a buffer, a socket or a task's
@@ -761,9 +759,10 @@ def _heap(r, folder=None):
 def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
     """The page's Get Carts asks the board to install an official cart that
     is not on it, to remove a cart the flash installed and get it back, and
-    to install a cart of moybyte-org/carts: each lands, and the board's
-    internal heap after each is the idle one's, give or take HEAP_SPREAD (no
-    install keeps RAM). Calc's own files are written back at the end, as the
+    to Get a cart of moybyte-org/carts this board cannot take (Moy Mesh, the
+    LoRa radio's): the two land, the third is refused with nothing written,
+    and the board's internal heap after each is the idle one's, give or take
+    HEAP_SPREAD (no install keeps RAM). Calc's own files are written back at the end, as the
     release's copy the page got may differ from the one the flash put
     there."""
     _needs_password(zero)
@@ -772,20 +771,18 @@ def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
         idle = _heap(r)
         kept = {p: r.read(p) for p, size in r.tree(calc).items() if size >= 0}
     print("idle: internal %d free, %d largest, %d low-water; Python heap %d free" % idle[:4])
-    sessions = [
+    sessions = [        # (name, folder, keys, whether it lands)
         ("bullet_storm", "moybyte.bullet_storm.moy",
-         _keys(*BULLET_STORM) + _keys("Enter", "Enter", wait=1500)),
+         _keys(*BULLET_STORM) + _keys("Enter", "Enter", wait=1500), True),
         ("calc", "moybyte.calc.moy",
          _keys(*CALC) + _keys("Enter", wait=1500) + _keys("ArrowLeft", "Enter", "ArrowRight")
          + _keys("Enter", wait=8000) + [{"shot": "calc_removed"}]
-         + _keys("Enter", "Enter", wait=1500)),
+         + _keys("Enter", "Enter", wait=1500), True),
         ("moy_mesh", "moymesh.moy",
-         _keys(*MOY_MESH) + _keys("Enter", "Enter", wait=1500)
-         + [{"wait": CONSENT_WAIT_MS}, {"shot": "moy_mesh_asks"}]
-         + _keys("ArrowRight", "Enter", wait=1500)),
+         _keys(*MOY_MESH) + _keys("Enter", "Enter", wait=1500), False),
     ]
     try:
-        for name, folder, keys in sessions:
+        for name, folder, keys, lands in sessions:
             steps = sign_in(zero) + [{"wait": 15000}] + keys \
                 + [{"wait": INSTALL_WAIT_MS}, {"shot": name}]
             _out, lines, page = _browse_logged(zero, steps, tmp_path / name, GET_CARTS,
@@ -801,9 +798,16 @@ def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
                   "landed %s" % ((name,) + heap))
             zero.take("zero internal free after %s" % name, heap[0] / 1024.0)
             zero.take("zero internal largest after %s" % name, heap[1] / 1024.0)
-            assert done and done[-1].endswith(" done"), \
-                "%s: the board did not install it: %s" % (name, lines[-8:])
-            assert heap[4], "%s: the board said done but its store has no %s" % (name, folder)
+            if lands:
+                assert done and done[-1].endswith(" done"), \
+                    "%s: the board did not install it: %s" % (name, lines[-8:])
+                assert heap[4], "%s: the board said done but its store has no %s" % (
+                    name, folder)
+            else:
+                assert done and done[-1].endswith(" idle") and any(
+                    "%s stopped" % folder in ln for ln in lines), \
+                    "%s: the board did not stop it at the prompt: %s" % (name, lines[-8:])
+                assert not heap[4], "%s: refused, yet the store has %s" % (name, folder)
             assert page[0] >= PAGE_FREE, \
                 "%s: the board's internal heap is %d bytes free with its page open" % (
                     name, page[0])
