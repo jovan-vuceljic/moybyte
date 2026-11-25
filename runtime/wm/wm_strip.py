@@ -11,7 +11,9 @@ strip (its plate and the page) into a layer kept for what it shows, and
 every frame that strip is on the glass -- a drag's above all -- stamps the
 layer at the window's place, inside the canvas's clip, with no page work
 and nothing allocated. `CAP` layers are kept, the least recently stamped
-given back first."""
+drawn over first; each is as wide as the canvas, so a strip of any window
+draws into one already made (a layer costs an allocation and a canvas's
+construction, the most of a strip's first render on a board)."""
 
 import wm_strip_ui
 
@@ -176,9 +178,9 @@ def stamp(cv, th, x, y, w, h, title_h, title, focused, btns, fs, unit, icon, ton
 
 def _render(i, cv, th, w, h, title_h, title, focused, btns, fs, unit, icon, tone, back, look, inset):
     lay = _LAYS[i]
-    if lay is None or lay.w != w - 2 or lay.h != title_h or _KEYS[i][0] is not cv:
+    if lay is None or lay.w < w - 2 or lay.h != title_h or _KEYS[i][0] is not cv:
         release(i)
-        lay = _LAYS[i] = cv.new_layer(w - 2, title_h)
+        lay = _LAYS[i] = cv.new_layer(max(w - 2, cv.w), title_h)
     D = _D[0]
     if D is None:
         import ui_draw as D
