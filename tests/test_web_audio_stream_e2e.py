@@ -23,8 +23,8 @@ What is read: the sink's counters (`__moyState().sink`), the pull's
 the sink's gain node: its level, its tone and its runs of silence. A failure
 prints every snapshot, so the interval that held it shows, and names the
 stall: the sink's longest wait between chunks (`lull`) beside the worker
-loop's longest frame, step, collect, send and count (`__moyState().loop`),
-each with the play time it ended at.
+loop's longest frame, step, collect, sweep, send and count
+(`__moyState().loop`), each with the play time it ended at.
 
     MOYBYTE_WEB_E2E=1 .venv/bin/python -m pytest tests/test_web_audio_stream_e2e.py
 """

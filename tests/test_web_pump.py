@@ -100,6 +100,27 @@ def test_the_pull_tops_the_sinks_depth_up_to_its_target(web_boot):
     assert _take(p)[0] == int(p.rate * web_boot._AUDIO_MAX_STEP)
 
 
+def test_a_station_or_a_song_is_kept_deeper_than_a_games_sounds(web_boot, monkeypatch):
+    """While the media service holds a stream the sink is kept at
+    _AUDIO_MEDIA_TARGET, from its first chunk on; a game's sounds alone at
+    _AUDIO_TARGET."""
+    p = _pump(web_boot)
+    media = int(p.rate * web_boot._AUDIO_MEDIA_TARGET)
+    target = int(p.rate * web_boot._AUDIO_TARGET)
+    assert target < media <= int(p.rate * web_boot._AUDIO_MAX_STEP)
+    monkeypatch.setattr(web_boot, "_media_open", lambda: True)
+    p.played = 0
+    p.tick(1 / 60)
+    assert _take(p) == (media, 0, True)          # the whole depth, in the first chunk
+    p.played = 800
+    p.tick(1 / 60)
+    assert _take(p) == (800, media, False)
+    monkeypatch.setattr(web_boot, "_media_open", lambda: False)
+    p.played = p.sent - target + 800             # the station stopped: a game's depth
+    p.tick(1 / 60)
+    assert _take(p)[0] == 800 and p.sent - p.played == target
+
+
 def test_the_first_chunk_after_a_silence_is_fresh(web_boot):
     p = _pump(web_boot)
     p.played = 0

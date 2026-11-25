@@ -534,14 +534,17 @@ nor those docs will warn you about:
   by a depth that did not count them, drained a live stream faster than real
   time until the decoder starved (the owner's stutter on the P4-served desk,
   2026-11-10). The pull tops the sink's depth up by COUNT (`_RunnerPump`:
-  samples sent against the sink's `played`); a dry sink plays silence and
+  samples sent against the sink's `played`), a station or a song deeper
+  than a game's sounds (`_AUDIO_MEDIA_TARGET`, from its first chunk): the
+  frames that start one are the console's heaviest, and a slow machine
+  outlasted the game's depth over them; a dry sink plays silence and
   counts it (`__moyState().sink`: `under`, `dry`, `gap`, `dup`, `over`),
   and its longest wait between chunks (`lull`) stands beside the worker
-  loop's longest frame, step, collect, send and count (`__moyState().loop`),
-  each with the play time it ended at, so an underrun names the side that
-  stalled; `tests/test_web_audio_stream_e2e.py` plays a live station a
-  minute on both sinks. The loop's own collect waits for a stream to end
-  (`worker.js`, IDLE_QUIET_FRAMES): what a playing frame allocates the VM's
-  threshold collects, and a pause the worker added would come out of the
-  sink's lead.
+  loop's longest frame, step, collect, sweep, send and count
+  (`__moyState().loop`), each with the play time it ended at, so an
+  underrun names the side that stalled; `tests/test_web_audio_stream_e2e.py`
+  plays a live station a minute on both sinks. The loop's own collect waits
+  for a stream to end (`worker.js`, IDLE_QUIET_FRAMES): what a playing frame
+  allocates the VM's threshold collects, and a pause the worker added would
+  come out of the sink's lead.
 
