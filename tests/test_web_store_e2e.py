@@ -536,3 +536,123 @@ def test_a_zero_s_page_asks_the_board_for_an_official_cart(tmp_path):
     finally:
         p.terminate()
         p.wait(timeout=10)
+
+
+# -- the site's player and its channel's release ----------------------------------
+
+_TAG = "firmware-beta"
+
+
+def _site_release(tmp_path, pages, tamper=False):
+    """A release of Bullet Storm, an official cart no store is seeded with,
+    signed with the test key and mirrored on PAGES as os.moybyte.com mirrors
+    one (tools/pack_store.py): the mirror's index URL, the page's `own`.
+    `tamper` changes the mirrored index after it was signed."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import pack_store
+    import web_pack
+    from test_official_carts import SEEDS, _page
+    from test_pkg import _sign
+    seeds = tmp_path / "seeds"
+    shutil.copytree(SEEDS / "moybyte.bullet_storm.moy", seeds / "moybyte.bullet_storm.moy")
+    rel = tmp_path / "release"
+    rel.mkdir()
+    web_pack.publish_addon(_page(tmp_path), str(rel), "p4", 9, seeds=str(seeds))
+    idx = rel / "carts-p4.json"
+    idx.write_bytes(_sign(idx.read_bytes()))
+    (rel / pack_store.TAG_FILE).write_text(_TAG + "\n")
+    out = tmp_path / "out"
+    pack_store.build(str(out), dev=[str(rel)])
+    mirror = out / "console" / "releases" / _TAG
+    for name in os.listdir(mirror):
+        data = (mirror / name).read_bytes()
+        if tamper and name == "carts-p4.json":
+            data = data.replace(b'"name": "Bullet Storm"', b'"name": "Bullet Storn"')
+        pages.files["/console/releases/%s/%s" % (_TAG, name)] = data
+    pages.files["/empty.json"] = json.dumps(
+        {"version": 1, "name": "Empty shelf", "carts": []}).encode()
+    return pages.base + "/console/releases/%s/carts-p4.json" % _TAG
+
+
+def _site_console(tmp_path, own, pages):
+    """dist/ as the site serves its player: an indexes.json naming the
+    release (site/build.py's), and the test key in place of the release keys
+    the bundle bakes in (modules.json shadows a frozen module, as a
+    --stage-only dist's does)."""
+    from test_ota_signing import TEST_KEYS
+    site = _console(tmp_path, pages.base + "/empty.json")
+    (site / "indexes.json").write_text(json.dumps(
+        {"indexes": [pages.base + "/empty.json"], "own": own}))
+    mods = {}
+    if (DIST / "modules.json").exists():
+        mods = json.loads((DIST / "modules.json").read_text())
+        (site / "modules.json").unlink()
+    mods["release_keys.py"] = "KEYS = %r\n" % (TEST_KEYS,)
+    (site / "modules.json").write_text(json.dumps(mods))
+    return site
+
+
+_HAS_STORM = _OPFS % '["moybyte.bullet_storm.moy"]'
+
+
+def test_the_site_s_player_gets_an_official_cart_from_its_release(tmp_path):
+    """Bullet Storm is on no store's seed: the player lists it from its
+    release's mirrored index, whose signature verifies under the keys the
+    page holds, and installs it from the mirror into OPFS."""
+    web_e2e.require("store", "carts")
+    pages = web_e2e.Host(cors=True)
+    site = _site_console(tmp_path, _site_release(tmp_path, pages), pages)
+    server, base = web_e2e.serve(site, web_e2e.free_port())
+    at = web_e2e.get_carts_taps()
+    try:
+        out, js = web_e2e.run(tmp_path, "release", "?handheld=1&dev=1&cart=moybyte.get_carts.moy", [
+            {"note": "Get Carts lists the release's official carts", "wait": 4000},
+            {"shot": "list"},
+            {"note": "Bullet Storm, the shelf's one cart", "click": at["cards"][0]},
+            {"wait": 800}, {"shot": "storm"},
+            {"click": at["verb"]},
+            {"wait": 5000}, {"shot": "storm_ready"},
+            {"js": _HAS_STORM},
+        ], base, tmp_path / "chrome")
+        assert len(js) == 1, "the scenario did not run to its end:\n%s" % out[-4000:]
+        got = json.loads(js[0])
+        storm = got["carts"]["moybyte.bullet_storm.moy"]
+        assert storm and "main.lua" in storm, out[-3000:]
+        assert got["record"]["carts"]["moybyte.bullet_storm.moy"]["id"] == "moybyte.bullet_storm"
+        assert got["staging"] == []
+        assert "/console/releases/%s/carts-p4.json" % _TAG in pages.asked
+        assert [p for p in pages.asked if p.startswith("/console/releases/%s/moybyte.bullet_storm-"
+                                                       % _TAG) and p.endswith(".zip")], pages.asked
+    finally:
+        server.terminate()
+        server.wait(timeout=10)
+        pages.stop()
+
+
+def test_the_site_s_player_lists_nothing_from_a_tampered_release(tmp_path):
+    """The same release, its mirrored index changed after it was signed:
+    the page refuses it and lists none of its carts, though it came from
+    the very address the page names."""
+    web_e2e.require("store", "carts")
+    pages = web_e2e.Host(cors=True)
+    site = _site_console(tmp_path, _site_release(tmp_path, pages, tamper=True), pages)
+    server, base = web_e2e.serve(site, web_e2e.free_port())
+    at = web_e2e.get_carts_taps()
+    try:
+        out, js = web_e2e.run(tmp_path, "tampered", "?handheld=1&dev=1&cart=moybyte.get_carts.moy", [
+            {"note": "Get Carts reads the release and refuses it", "wait": 4000},
+            {"shot": "list"},
+            {"click": at["cards"][0]},
+            {"wait": 800}, {"click": at["verb"]},
+            {"wait": 3000},
+            {"js": _HAS_STORM},
+        ], base, tmp_path / "chrome")
+        assert len(js) == 1, "the scenario did not run to its end:\n%s" % out[-4000:]
+        assert "/console/releases/%s/carts-p4.json" % _TAG in pages.asked
+        got = json.loads(js[0])
+        assert got["carts"]["moybyte.bullet_storm.moy"] is None
+        assert not [p for p in pages.asked if p.endswith(".zip")], pages.asked
+    finally:
+        server.terminate()
+        server.wait(timeout=10)
+        pages.stop()

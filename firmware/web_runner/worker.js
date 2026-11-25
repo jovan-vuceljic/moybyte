@@ -1444,8 +1444,10 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     // and has no modules.json; a --stage-only dev dist adds one, and loading it into
     // /modules (first on sys.path) shadows the frozen copies.
     // indexes.json: the shelves Get Carts lists, chosen by whoever SERVES this
-    // page -- written as the console's system/sources, a board's twin.
-    // Absent (moybyte.com, a board) means the console's default shelves.
+    // page -- written as the console's system/sources, a board's twin -- and
+    // the release index whose official carts it lists (`own`, which counts
+    // only once its signature verifies: web_boot.site_sources). Absent (a
+    // board, a local serve.py) means the console's default shelves.
     //
     // Every body is READ as soon as its head arrives, carts.json's included. A
     // board serves one connection at a time and cuts off a client that stops
@@ -1517,8 +1519,8 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         // which is a NameError in the Python this string becomes.
         + "web_boot.store_mode(" + JSON.stringify(mode || "") + ", "
         + JSON.stringify(seededRoots || []) + ")\n"
-        // indexes.json: the shelves Get Carts lists, chosen by whoever SERVES
-        // this page (a site-mode page's system/sources).
+        // indexes.json: the shelves Get Carts lists and the release it lists
+        // official carts from, chosen by whoever SERVES this page.
         + (shelves ? "web_boot.site_sources(" + JSON.stringify(VFS.carts) + ", "
             + JSON.stringify(JSON.stringify(shelves)) + ")\n" : "")
         + (gpioPins ? "web_boot.gpio_enable(" + JSON.stringify(JSON.stringify(gpioPins)) + ")\n" : "")
