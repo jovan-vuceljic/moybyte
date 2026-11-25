@@ -21,8 +21,8 @@
 //   a whole kind     downloads holds any file under its own WHOLE name, any
 //                    extension: a name is kept as it is given, never slugged,
 //                    and refused where it is no one file's (a `/` or `\`, a
-//                    leading dot, a control character, a store backup's
-//                    `.bak` or `.tmp`); a collision takes `_2` before its
+//                    leading dot, a control character, a `.tmp` the store
+//                    stages in); a collision takes `_2` before its
 //                    extension. What a console nearby beamed lands there
 //                    (runtime/run/link_beam.py).
 //   the vault        docs holds notes and more: a `.py`, `.lua`, `.txt` or

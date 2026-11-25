@@ -106,6 +106,7 @@
       {"py": "read_bytes(path, cap)", "hand": true},
       {"py": "read_stamped(path)", "hand": true},
       {"py": "bak_stamp(path)", "hand": true},
+      {"py": "bak_path(path)", "hand": true},
       {"py": "stamp(data)", "hand": true},
       {"py": "claim(path, dest, stamp)", "hand": true},
       {"py": "forget_bak(path)", "hand": true},

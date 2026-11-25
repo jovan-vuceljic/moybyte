@@ -36,7 +36,26 @@ pages, which headless Chrome boots (firmware/web_runner/browsershot.mjs).
 
 THE CLAIM. The password removed, the board serves no SSH; the cable's
 fresh claim opens the console on its URL, the page sets the password and
-pairs without loading again, saying what it does, and SSH answers at once.
+pairs without loading again, saying what it does, SSH answers at once, and
+Get Carts opens and lists.
+
+WHAT A PERSON DOES WITH IT, past setup:
+  the terminal over SSH (this machine's OpenSSH): `edit` and `vi` save what
+    was typed, a pipe and its cap's message, `find`/`du`/`rm -r` over a deep
+    folder, `cat` of 64 KB, a second session ending the first;
+  files and saves through the page: a cart imported on it reads back byte
+    for byte from the board and through another browser, a game's pmem is
+    back after a reboot, a full store refuses a cart with a message and
+    corrupts nothing;
+  the update screen saying what the channel offers, installing nothing;
+  a cart and a setting surviving a reset, the open page reconnecting across
+    one and across a Wi-Fi drop (an Improv join to a network that is not
+    there), a second browser displacing the first (owner, 2026-11-25);
+  the mDNS name and the clock;
+  and last, a soak of all of it whose internal RAM must not keep falling.
+The board's internal RAM is printed where a test is about it: free from
+`free` in the SSH session, and free with its largest block over the cable
+(which resets the board).
 
 THE PASSWORD. A board with one is signed into with MOYBYTE_XIAO_ZERO_PASSWORD
 or MOYBYTE_C3_ZERO_PASSWORD (without it the signed-in tests skip); a board
@@ -324,19 +343,40 @@ def _scenario(out, steps, query, boot_ms=120000):
     return path
 
 
-def _browse(z, base, steps, out, query="?handheld=1&dev=1", timeout=600, boot_ms=120000):
-    """browsershot over `steps` against `base`: its output, scrubbed."""
+def _browse(z, base, steps, out, query="?handheld=1&dev=1", timeout=600, boot_ms=120000,
+            env=None, profile=None, on_line=None, check=True):
+    """browsershot over `steps` against `base`: its output, scrubbed.
+    `env` adds to its environment, `profile` keeps its Chrome profile (a
+    browser that stays paired), `on_line(line)` sees each line as it comes
+    (the board's side of a step the page waits on), `check` fails the test
+    on a failed step."""
     path = _scenario(out, steps, query, boot_ms)
+    env = dict(os.environ, MOY_BASE=base, **(env or {}))
+    if profile is not None:
+        env["MOY_PROFILE"] = str(profile)
+    lines = []
+    proc = subprocess.Popen(["node", "browsershot.mjs", str(path), str(out)],
+                            cwd=str(RUNNER), env=env, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, text=True)
+    end = time.monotonic() + timeout
     try:
-        run = subprocess.run(["node", "browsershot.mjs", str(path), str(out)],
-                             cwd=str(RUNNER), env=dict(os.environ, MOY_BASE=base),
-                             capture_output=True, text=True, timeout=timeout)
+        for line in proc.stdout:
+            lines.append(line)
+            if on_line is not None:
+                on_line(line)
+            if time.monotonic() > end:
+                break
+        proc.wait(timeout=max(1, end - time.monotonic()))
     finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=10)
         path.unlink()
-    text = _scrub(run.stdout + run.stderr[-500:], z)
+    text = _scrub("".join(lines), z)
     print(text[-4000:])
-    assert run.returncode == 0, text[-3000:]
-    assert "STEP FAILED" not in text, text[-3000:]
+    if check:
+        assert proc.returncode == 0, text[-3000:]
+        assert "STEP FAILED" not in text, text[-3000:]
     return text
 
 
@@ -582,9 +622,11 @@ def test_a_claim_sets_the_password_and_ssh_answers_at_once(zero, mirror, tmp_pat
         {"waitFor": "document.getElementById('s').textContent == 'live'", "timeout": 120000},
         {"js": "'TIMES ' + JSON.stringify({t: JSON.parse(sessionStorage.getItem('moyClaim')), "
                "live: Date.now()})"},
-    ]
+    ] + _get_carts_steps()
+    log = []
     out = _browse(zero, zero.url, steps, tmp_path / "claim",
-                  query="?handheld=1&start=1#" + frag, boot_ms=1000)
+                  query="?handheld=1&start=1#" + frag, boot_ms=1000,
+                  on_line=lambda _l: log.extend(_board_lines(zero)))
     took = [float(v) for v in re.findall(r"waitFor -> (\d+)", out)]
     times = _tagged(out, "TIMES")
     t = times["t"]
@@ -602,6 +644,51 @@ def test_a_claim_sets_the_password_and_ssh_answers_at_once(zero, mirror, tmp_pat
     banner = _ssh_banner(zero)
     assert banner and banner.startswith("SSH-2.0"), \
         "SSH does not answer after the claim set the password: %r" % banner
+    _get_carts_listed(zero, out, log)
+
+
+# What Get Carts is, opened on the page signed in: its state a while after it
+# opened, the shelves' fetch run (the page lists them itself on an online
+# board, carts_link.BoardCheck).
+GET_CARTS = "moybyte.get_carts.moy"
+GET_CARTS_TITLE = "Get Carts"
+BOARD_TROUBLE = re.compile(r"Traceback|MemoryError|out of memory|Errno|refused|abort|panic",
+                           re.I)
+
+
+def _get_carts_steps():
+    """The steps that open Get Carts on the signed-in page (its key kept,
+    so the load signs in unasked), wait for it to list, and report."""
+    return [
+        {"js": "location.search = '?handheld=1&dev=1&cart=%s', 1" % GET_CARTS},
+        {"wait": 3000},
+        {"waitFor": "document.getElementById('s').textContent == 'live'", "timeout": 120000},
+        {"waitFor": "window.__moyState().then(function (s) { return s.cart == '%s'; })"
+                    % GET_CARTS_TITLE, "timeout": 60000},
+        {"wait": 20000},
+        {"js": "window.__moyState().then(function (s) { return 'GETCARTS ' + JSON.stringify("
+               "{cart: s.cart, error: s.cart_error, notice: s.notice, screen: s.screen}); })"},
+        {"shot": "get_carts"},
+    ]
+
+
+def _board_lines(z, secs=0.02):
+    """The board's serial lines that came since the last read (its log)."""
+    try:
+        return [ln for ln in z.b.drain(secs) if ln.strip()]
+    except Exception:  # noqa: BLE001 -- a port mid-reset reads nothing
+        return []
+
+
+def _get_carts_listed(z, out, log):
+    """Get Carts opened and stayed up with no error, and the board's log
+    while it listed says nothing went wrong."""
+    got = _tagged(out, "GETCARTS")
+    trouble = [ln for ln in log if BOARD_TROUBLE.search(ln)]
+    print("%s: Get Carts %s; the board's lines meanwhile: %s" % (z.name, got, log[-15:]))
+    assert got and got["cart"] == GET_CARTS_TITLE, "Get Carts did not open: %s" % got
+    assert not got["error"] and not got["notice"], "Get Carts says: %s" % got
+    assert not trouble, "the board's log while Get Carts listed: %s" % trouble
 
 
 # -- the live socket --------------------------------------------------------------------
@@ -791,6 +878,877 @@ def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
         pytest.fail("%s does not answer at %s after the move back" % (zero.name, zero.served_at))
 
 
+# -- the terminal over SSH ------------------------------------------------------------------
+
+
+# The bench folder of the SSH tests, in the folder a session starts in (the
+# store's files), and the pipe's stream at most: 4 KB on a board without
+# PSRAM, 1 MB with (native/moy_sh/moy_sh_sys.c, PIPE_MAX).
+BENCH = "zbench"
+PIPE_CAP = {"c3_zero": 4 * 1024, "xiao_zero": 1024 * 1024}
+PIPE_SAID = re.compile(rb"pipe: (stream over|out of memory at) \d+ KB; write it to a file")
+
+
+def _host(z):
+    return z.url.split("//", 1)[1].split("/", 1)[0].split(":", 1)[0]
+
+
+@pytest.fixture(scope="module")
+def ssh(zero, tmp_path_factory):
+    """The board's shell over SSH with the suite's password; the bench
+    folder made empty for each test and removed after it (`_bench`)."""
+    _needs_password(zero)
+    assert (_ssh_banner(zero) or "").startswith("SSH-2.0"), \
+        "SSH does not answer a board with a password"
+    return Z.Ssh(_host(zero), zero.password, str(tmp_path_factory.mktemp("ssh")))
+
+
+@contextlib.contextmanager
+def _bench(ssh):
+    ssh.run("rm -r %s; mkdir %s" % (BENCH, BENCH))
+    try:
+        yield
+    finally:
+        ssh.run("rm -r %s" % BENCH)
+
+
+def _text_file(n, tag="line"):
+    """`n` bytes of numbered lines of text."""
+    out, i = b"", 0
+    while len(out) < n:
+        out += b"%s %05d of the zero bench file\n" % (tag.encode(), i)
+        i += 1
+    return out[:n - 1] + b"\n"
+
+
+def _session(ssh, z):
+    """A terminal session at its prompt, and the board's internal free RAM
+    `free` reads in it."""
+    t = ssh.term()
+    assert t.expect(rb"\$ $", timeout=30), "no prompt over SSH: %r" % t.since(0)[-300:]
+    return t, _free_live(t)
+
+
+def _free_live(t):
+    got = Z.free_internal((t.command("free") or b"").decode(errors="replace"))
+    return got[2] if got else None
+
+
+def _still_up(z, t):
+    """The session answers a command, and the board its page's /sync."""
+    said = t.command("echo still-here")
+    assert t.alive() and said is not None and b"still-here" in said, \
+        "the SSH session did not stay up: %r" % t.since(0)[-500:]
+    assert json.loads(_get(z.url + "/sync")[0]).get("sync") == 1, "the board left the network"
+
+
+def _heap(z, label):
+    """The board's internal RAM, free and its largest block, read over the
+    cable (the store host stopped, its heap collected; a reset after):
+    (free, largest) bytes."""
+    with z.repl(clean=False) as r:
+        r.run("import gc\ngc.collect()")
+        free, big = Z.internal_heap(r.eval("__import__('esp32').idf_heap_info(%d)"
+                                           % Z.INTERNAL_HEAP))
+    print("%s %s: internal RAM free %.1f KB, largest block %.1f KB"
+          % (z.name, label, free / 1024.0, big / 1024.0))
+    return free, big
+
+
+def _editor(t, line, keys, timeout=20.0):
+    """`line` (an editor on a file) typed, then `keys` once its screen is
+    up: None once it is back at the prompt, else what it said instead."""
+    at = t.mark()
+    t.send(line.encode() + b"\r")
+    up = t.expect(rb"\x1b\[\?1049h|\$ $", at, timeout)
+    if up is None or up.group(0) != b"\x1b[?1049h":
+        return re.sub(rb"\x1b\[[0-9;?]*[A-Za-z]", b"", t.since(at)).decode(errors="replace")
+    time.sleep(0.5)
+    for k in keys:
+        t.send(k, 0.3)
+    back = t.expect(rb"\x1b\[\?1049l[^\r\n]*\$ $", at, timeout)
+    return None if back else "did not come back to the prompt: %r" % t.since(at)[-300:]
+
+
+EDITS = (
+    # (the editor's line, the keys typed into it, what the file holds after
+    # from what it held: None, a new file)
+    ("edit %s/new_edit.txt", (b"hello edit\r", b"\x13", b"\x18"), lambda old: b"hello edit\n"),
+    ("vi %s/new_vi.txt", (b"ihello vi\r\x1b", b":wq\r"), lambda old: b"hello vi\n"),
+    ("edit %s/big.txt", (b"EDIT\r", b"\x13", b"\x18"), lambda old: b"EDIT\n" + old),
+    ("vi %s/big.txt", (b"gg", b"OTOP\x1b", b":wq\r"), lambda old: b"TOP\n" + old),
+)
+
+
+def test_edit_and_vi_save_what_was_typed_over_ssh(zero, ssh):
+    """`edit` and `vi` over SSH, each on a new file and on a ~20 KB one:
+    text typed in, saved, the editor quit, and the file holds what was
+    typed (its md5sum, read in the same session: a second session would
+    end this one). The session stays up throughout and the board on the
+    network;
+    its internal RAM is read in the session before and after, and over the
+    cable once it ends."""
+    big = _text_file(20 * 1024)
+    failed = []
+    with _bench(ssh):
+        assert ssh.run("cat > %s/big.txt" % BENCH, stdin=big)[0] == 0
+        t, free0 = _session(ssh, zero)
+        try:
+            held = big
+            for line, keys, want in EDITS:
+                line = line % BENCH
+                path = line.split()[1]
+                said = _editor(t, line, keys)
+                if said is not None:
+                    failed.append("%s: %s" % (line, said.strip()[-200:]))
+                    continue
+                expect = want(held if path.endswith("big.txt") else None)
+                sums = t.command("md5sum %s; wc -c %s" % (path, path)) or b""
+                if hashlib.md5(expect).hexdigest().encode() not in sums:
+                    failed.append("%s: the file is not what was typed (%d bytes "
+                                  "expected): %r" % (line, len(expect), sums[-200:]))
+                elif path.endswith("big.txt"):
+                    held = expect
+            free1 = _free_live(t)
+            _still_up(zero, t)
+        finally:
+            t.close()
+    print("%s: internal RAM free in the session %s -> %s; failed: %s"
+          % (zero.name, free0, free1, failed))
+    _heap(zero, "after edit and vi")
+    assert not failed, "\n".join(failed)
+
+
+def test_a_pipe_carries_a_file_and_says_where_it_stops(zero, ssh):
+    """`cat ... | wc -c` counts a stream under the pipe's cap whole; past the
+    cap the pipe says so (the message that tells the user to write it to a
+    file) and the session goes on. The stream is one file `cat` names as
+    often as it takes, so a 1 MB cap needs no 1 MB file in the store."""
+    cap = PIPE_CAP[zero.name]
+    part = _text_file(min(cap - 1024, 32 * 1024))
+    under = max(1, (cap - 1024) // len(part))
+    over = cap // len(part) + 1
+    cat = lambda n: "cat" + (" %s/part.txt" % BENCH) * n  # noqa: E731
+    with _bench(ssh):
+        assert ssh.run("cat > %s/part.txt" % BENCH, stdin=part)[0] == 0
+        rc, out, err = ssh.run("%s | wc -c" % cat(under))
+        assert (rc, out.strip(), err) == (0, str(len(part) * under).encode(), b""), \
+            (rc, out, err)
+        rc, out, err = ssh.run("%s | wc -c" % cat(over))
+        print("%s: %d bytes through a pipe capped at %d: %r %r"
+              % (zero.name, len(part) * over, cap, out, err))
+        assert PIPE_SAID.search(out + err), "a stream past the cap: %r %r" % (out, err)
+        assert int(out.strip().rsplit(b"\n", 1)[-1] or 0) <= cap, out
+        t, free0 = _session(ssh, zero)
+        try:
+            said = t.command("%s | wc -c" % cat(over))
+            assert said is not None and PIPE_SAID.search(said), said
+            free1 = _free_live(t)
+            _still_up(zero, t)
+        finally:
+            t.close()
+    print("%s: internal RAM free in the session %s -> %s" % (zero.name, free0, free1))
+    _heap(zero, "after the pipes")
+
+
+DEEP = 10            # folders, one inside the next
+PER_LEVEL = 3        # files in each
+
+
+def test_find_du_and_rm_walk_a_deep_folder(zero, ssh):
+    """A folder ten deep with three files in each, and at the bottom a file
+    with a user's own `.bak` beside it, a file like any other:
+    `find` names every file and finds one by name, `du -s` counts them,
+    `rm -r` takes it all, and the session stays up."""
+    with _bench(ssh):
+        make = ("d=%s/deep; mkdir $d; for i in %s; do d=$d/d$i; mkdir $d; "
+                "for j in %s; do echo level $i file $j > $d/f${i}_$j.txt; done; done; "
+                "echo note > $d/notes.txt; echo older > $d/notes.txt.bak"
+                % (BENCH, " ".join(str(i) for i in range(1, DEEP + 1)),
+                   " ".join(str(j) for j in range(1, PER_LEVEL + 1))))
+        rc, _out, err = ssh.run(make)
+        assert rc == 0, err
+        t, free0 = _session(ssh, zero)
+        try:
+            files = t.command("find %s/deep -type f | wc -l" % BENCH)
+            assert files is not None and files.strip() == str(DEEP * PER_LEVEL + 2).encode(), \
+                files
+            one = t.command("find %s/deep -name 'f7_2.txt'" % BENCH)
+            assert one is not None and one.strip().endswith(b"/d7/f7_2.txt"), one
+            du = t.command("du -s %s/deep" % BENCH)
+            assert du is not None and re.match(rb"\s*\d+\s+\S*deep", du.strip()), du
+            gone = t.command("rm -r %s/deep; echo rc=$?; ls %s" % (BENCH, BENCH))
+            assert gone is not None and b"rc=0" in gone and b"deep" not in gone, gone
+            free1 = _free_live(t)
+            _still_up(zero, t)
+        finally:
+            t.close()
+    print("%s: find/du/rm over %d files %d deep; internal RAM free %s -> %s"
+          % (zero.name, DEEP * PER_LEVEL, DEEP, free0, free1))
+
+
+def test_cat_of_a_64_kb_file_arrives_whole(zero, ssh):
+    """64 KB of bytes over an exec arrive as they are, and 64 KB of text
+    reaches a terminal session to its last line, which stays up."""
+    data = os.urandom(64 * 1024)
+    text = _text_file(64 * 1024, tag="row")
+    last = text.rstrip(b"\n").rsplit(b"\n", 1)[-1]
+    with _bench(ssh):
+        assert ssh.run("cat > %s/c64.bin" % BENCH, stdin=data)[0] == 0
+        assert ssh.run("cat > %s/c64.txt" % BENCH, stdin=text)[0] == 0
+        t0 = time.monotonic()
+        rc, got, err = ssh.run("cat %s/c64.bin" % BENCH)
+        secs = time.monotonic() - t0
+        assert rc == 0 and got == data, "cat over an exec: %d of %d bytes, %r" % (
+            len(got), len(data), err)
+        t, free0 = _session(ssh, zero)
+        try:
+            at = t.mark()
+            t.send(b"cat %s/c64.txt\r" % BENCH.encode())
+            assert t.expect(re.escape(last) + rb"\r\n[^\r\n]*\$ $", at, 120), \
+                "the terminal did not get to the last line: %r" % t.since(at)[-300:]
+            free1 = _free_live(t)
+            _still_up(zero, t)
+        finally:
+            t.close()
+    print("%s: 64 KB by cat over an exec in %.1f s; internal RAM free %s -> %s"
+          % (zero.name, secs, free0, free1))
+    _heap(zero, "after cat of 64 KB")
+
+
+SSH_TAKEN = b"another session signed in; this one is closing"
+
+
+def test_a_second_ssh_session_ends_the_first(zero, ssh, tmp_path):
+    """Owner, 2026-11-25: one session at a time, the newest. A wrong
+    password and a connection that never signs in (held past the server's
+    30 s sign-in timeout) end nobody; a second session that signs in runs,
+    and the first reads why it closes and is ended."""
+    import socket
+    a, _f = _session(ssh, zero)
+    b = None
+    try:
+        assert b"one" in (a.command("echo one") or b"")
+        wrong = Z.Ssh(_host(zero), "not-" + zero.password, str(tmp_path / "wrong"))
+        rc, _o, _e = wrong.run("echo in", timeout=60)
+        assert rc != 0, "a wrong password signed in"
+        with socket.create_connection((_host(zero), 22), timeout=10):
+            time.sleep(35)
+        said = a.command("echo still-one")
+        assert a.alive() and said is not None and b"still-one" in said, \
+            "a session that did not sign in ended the one signed in: %r" % a.since(0)[-300:]
+        b, _f = _session(ssh, zero)
+        said = b.command("echo two")
+        assert said is not None and b"two" in said, "the second session: %r" % b.since(0)[-300:]
+        end = time.monotonic() + 20
+        while a.alive() and time.monotonic() < end:
+            time.sleep(0.2)
+        print("%s: the first session %s once the second signed in: %r"
+              % (zero.name, "ended" if not a.alive() else "ran on", a.since(0)[-200:]))
+        assert not a.alive(), "the first session ran on beside the second"
+        assert SSH_TAKEN in a.since(0), "the first session was not told why: %r" % \
+            a.since(0)[-300:]
+        _still_up(zero, b)
+    finally:
+        a.close()
+        if b is not None:
+            b.close()
+
+
+# -- files and saves through the page ---------------------------------------------------------
+
+
+PLAIN_MAIN = "def _init():\n    pass\n\ndef _update(dt):\n    pass\n\ndef _draw():\n    cls(1)\n"
+
+# A game that keeps a count of its runs in pmem(0) and cells 1-8 from it: in
+# Lua, which runs without the trust a Python cart asks the person for.
+SAVES_LUA = """n = 0
+
+function _init()
+  n = pmem(0) + 1
+  pmem(0, n)
+  for i = 1, 8 do pmem(i, n * 1000 + i) end
+end
+
+function _update(dt)
+end
+
+function _draw()
+  cls(n % 16)
+end
+"""
+
+
+def _png(w, h):
+    """A PNG of random pixels: bytes that do not compress, as a photo's."""
+    import struct
+    import zlib
+
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + \
+            struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+    raw = b"".join(b"\0" + os.urandom(w * 3) for _ in range(h))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + \
+        chunk(b"IDAT", zlib.compress(raw, 1)) + chunk(b"IEND", b"")
+
+
+def _bench_cart(tmp, stem, title, main=PLAIN_MAIN, files=None, lua=False):
+    """A cart `zbench.<stem>.moy` (a Python one, or `lua`), packed as the
+    archive the page imports under that name: (the archive's path, the
+    folder it lands in, {file: bytes})."""
+    from runtime.carts import moy_pack
+    folder = "zbench.%s.moy" % stem
+    src = tmp / "src" / folder
+    src.mkdir(parents=True)
+    content = {"manifest.json": json.dumps({
+        "format": "moy-1", "version": 1, "title": title, "id": folder[:-4],
+        "runtime": "lua" if lua else "python", "main": "main.lua" if lua else "main.py",
+        "canvas": "128x128", "input": ["keyboard", "touch"],
+        "moybyte": {"type": "game", "permissions": ["graphics", "input"]}},
+        indent=1).encode(), "main.lua" if lua else "main.py": main.encode()}
+    content.update(files or {})
+    for name, data in content.items():
+        (src / name).write_bytes(data)
+    drop = tmp / "drop"
+    drop.mkdir(exist_ok=True)
+    archive = drop / folder
+    moy_pack.pack(str(src), str(archive))
+    return archive, folder, content
+
+
+# The page's sync after a change: a batch the board took since `__ack0`
+# was read, and none on its way.
+ACK0 = {"js": "window.__moyState().then(function (s) { window.__ack0 = s.sync.acked; return 1; })"}
+SYNCED = [
+    {"wait": 3000},
+    {"waitFor": "window.__moyState().then(function (s) { return !!(s.sync && "
+                "s.sync.acked > window.__ack0 && !s.sync.busy); })", "timeout": 180000},
+    {"wait": 5000},
+    {"waitFor": "window.__moyState().then(function (s) { return !s.sync.busy; })",
+     "timeout": 180000},
+]
+LIVE_NOW = {"waitFor": "document.getElementById('s').textContent == 'live'", "timeout": 120000}
+
+
+def _import_steps(tag, synced=True):
+    """The archive MOY_UPLOAD names imported through the page's import (the
+    file a person picks or drops), then synced to the board."""
+    return [
+        {"file": "$MOY_UPLOAD", "as": "__up"},
+        ACK0,
+        {"js": "pzImport(new File([window.__up], window.__upName)), 1"},
+        {"waitFor": "!!window.__moyImported", "timeout": 60000},
+        {"js": "'%s ' + JSON.stringify(window.__moyImported)" % tag},
+    ] + (SYNCED if synced else [])
+
+
+def _open_steps(folder, title):
+    return [ACK0, {"js": "WORKER.postMessage({t: 'open', cart: %s}), 1" % json.dumps(folder)},
+            {"waitFor": "window.__moyState().then(function (s) { return s.cart == %s; })"
+                        % json.dumps(title), "timeout": 60000},
+            {"wait": 4000}] + SYNCED
+
+
+SHELF = {"js": "(pzAsk(), new Promise(function (ok) { setTimeout(function () { ok('SHELF ' + "
+               "JSON.stringify(Array.from(pzC.options).map(function (o) { return o.value; }))); "
+               "}, 1500); }))"}
+STATE = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify({cart: s.cart, "
+         "stack: s.stack, screen: s.screen, error: s.cart_error, notice: s.notice, "
+         "system: s.system, sync: s.sync, live: s.live && {opens: s.live.opens, "
+         "drops: s.live.drops}}); })")
+# What the page shows a person: every visible element's own text.
+PAGE_SAYS = ("'%s ' + JSON.stringify({imported: window.__moyImported || null, "
+             "s: document.getElementById('s').textContent, said: Array.prototype.slice.call("
+             "document.querySelectorAll('body *')).filter(function (e) { return "
+             "e.offsetParent !== null && !e.children.length && e.textContent.trim(); })"
+             ".map(function (e) { return e.textContent.trim(); }).slice(0, 60)})")
+
+
+def _remove(ssh, folder):
+    """A bench cart taken off the board as its shell does (`rm -r` of its
+    folder): (status, stdout, stderr)."""
+    return ssh.run("rm -r %s/%s" % (CARTS, folder))
+
+
+def _cat(ssh, path):
+    rc, data, err = ssh.run("cat %s" % path)
+    return data if rc == 0 else None
+
+
+def _differs(ssh, folder, content):
+    """The files of `content` the board's `folder` does not hold byte for byte."""
+    return [n for n, data in content.items()
+            if _cat(ssh, "%s/%s/%s" % (CARTS, folder, n)) != data]
+
+
+EXPORT = ("(function () { window.__exp = null; pzDownload = function (name, buf) { "
+          "var b = new Uint8Array(buf), s = ''; for (var i = 0; i < b.length; i += 0x8000) "
+          "s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); "
+          "window.__exp = JSON.stringify({name: name, b64: btoa(s)}); }; "
+          "WORKER.postMessage({t: 'export', cart: %s}); return 1; })()")
+
+
+def _exported(out, folder):
+    """The files of the archive the page exported: {name: bytes}."""
+    import base64
+    import io
+    import zipfile
+    got = _tagged(out, "EXPORTED")
+    assert got, "the page exported nothing:\n" + out[-1500:]
+    z = zipfile.ZipFile(io.BytesIO(base64.b64decode(got["b64"])))
+    return {n.split("/", 1)[1]: z.read(n) for n in z.namelist()
+            if n.startswith(folder + "/") and not n.endswith("/")}
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_a_cart_uploaded_from_the_page_reads_back_byte_exact(zero, mirror, ssh, tmp_path):
+    """A `.moy` archive picked in the page's import (a cover of random
+    pixels and 16 KB of text beside its code) lands on the board byte for
+    byte; a browser that never saw it exports it back from the board's copy
+    byte for byte; removed, the next page's shelf lacks it."""
+    archive, folder, content = _bench_cart(
+        tmp_path, "files", "Zero Bench Files",
+        files={"cover.png": _png(64, 48), "notes.txt": _text_file(16 * 1024)})
+    try:
+        out = _browse(zero, zero.url, sign_in(zero) + _import_steps("IMPORTED"),
+                      tmp_path / "up", env={"MOY_UPLOAD": str(archive)})
+        said = _tagged(out, "IMPORTED")
+        assert said and folder in said, "the page's import: %s" % said
+        assert not _differs(ssh, folder, content), \
+            "the board's copy differs: %s" % _differs(ssh, folder, content)
+        steps = sign_in(zero) + [{"wait": 3000}, {"js": EXPORT % json.dumps(folder)},
+                                 {"waitFor": "!!window.__exp", "timeout": 60000},
+                                 {"js": "'EXPORTED ' + window.__exp"}]
+        back = _exported(_browse(zero, zero.url, steps, tmp_path / "back"), folder)
+        apart = [n for n in content if back.get(n) != content[n]]
+        assert not apart, "the page's read-back differs in %s (it holds %s)" % (
+            apart, sorted(back))
+        # the store's backups of what it saved are its own: no listing shows one
+        rc, ls, _e = ssh.run("ls -a %s/%s; find %s/%s" % (CARTS, folder, CARTS, folder))
+        assert rc == 0 and b"moybak" not in ls, ls
+        rc, _o, err = _remove(ssh, folder)
+        assert rc == 0, "rm -r of the cart's folder: %r; the folder: %r" % (
+            _o + err, ssh.run("ls -l %s/%s" % (CARTS, folder)))
+        shelf = _tagged(_browse(zero, zero.url, sign_in(zero) + [{"wait": 3000}, SHELF],
+                                tmp_path / "gone"), "SHELF")
+        assert shelf is not None and folder not in shelf, shelf
+    finally:
+        _remove(ssh, folder)
+
+
+def _pmem(ssh, folder, tmp):
+    """The cart's pmem cells as the board keeps them, None with no record."""
+    data = _cat(ssh, "%s/%s/pmem.bin" % (CARTS, folder))
+    if data is None:
+        return None
+    d = tmp / ("pmem%d" % len(list(tmp.glob("pmem*"))))
+    d.mkdir(parents=True)
+    (d / "pmem.bin").write_bytes(data)
+    from runtime.carts import moy_carts
+    return moy_carts.load_pmem(str(d))
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_a_game_s_pmem_saves_are_back_after_a_reboot(zero, mirror, ssh, tmp_path):
+    """A game run on the page writes its pmem cells; the board keeps them
+    across a reboot, and the game run again on a new page reads them back
+    (its count of runs goes on from them)."""
+    title = "Zero Bench Saves"
+    archive, folder, _c = _bench_cart(tmp_path, "saves", title, main=SAVES_LUA, lua=True)
+    try:
+        steps = sign_in(zero) + _import_steps("IMPORTED") + _open_steps(folder, title) + \
+            [{"js": STATE % "RAN"}]
+        out = _browse(zero, zero.url, steps, tmp_path / "run1", env={"MOY_UPLOAD": str(archive)})
+        ran = _tagged(out, "RAN")
+        assert ran and ran["cart"] == title and not ran["error"], ran
+        first = _pmem(ssh, folder, tmp_path)
+        zero.restart()
+        kept = _pmem(ssh, folder, tmp_path)
+        print("%s: pmem after the run %s, after the reboot %s"
+              % (zero.name, first and first[:9], kept and kept[:9]))
+        assert kept is not None and kept[:9] == [1] + [1000 + i for i in range(1, 9)], kept
+        out = _browse(zero, zero.url, sign_in(zero) + [{"wait": 3000}] +
+                      _open_steps(folder, title), tmp_path / "run2")
+        again = _pmem(ssh, folder, tmp_path)
+        print("%s: pmem after the second run %s" % (zero.name, again and again[:9]))
+        assert again is not None and again[:9] == [2] + [2000 + i for i in range(1, 9)], \
+            "the game did not read its cells back: %s" % (again and again[:9])
+    finally:
+        _remove(ssh, folder)
+
+
+FILL = STORE + "/zbench_fill.bin"
+FILL_SLACK = 4               # blocks left free: a pairing's keys and a batch's staging
+FULL_WORDS = re.compile(r"full|no room|no space|out of space|storage|not enough", re.I)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_a_full_store_refuses_a_cart_says_so_and_corrupts_nothing(zero, mirror, tmp_path):
+    """The store filled by a bench file to a few blocks, a cart imported on
+    the page does not fit: the page tells the person (not a silent loss),
+    no file of the store changes, none is left half-written, and the
+    bench file and what landed go after."""
+    _needs_password(zero)
+    archive, folder, content = _bench_cart(tmp_path, "full", "Zero Bench Full",
+                                           files={"cover.png": _png(128, 96)})
+    with zero.repl() as r:
+        tree0, files0 = _snapshot(r)
+        bs, free = r.eval("(lambda s: (s[0], s[3]))(__import__('os').statvfs(%r))" % STORE)
+        fill = max(0, free - FILL_SLACK) * bs
+        r.run("f=open(%r,'wb')\nb=bytes(4096)\nn=%d\nwhile n>0:\n k=min(n,4096)\n"
+              " f.write(b[:k])\n n-=k\nf.close()" % (FILL, fill), timeout=600)
+        left = r.eval("__import__('os').statvfs(%r)[3]" % STORE)
+    print("%s: the store filled with %d KB, %d blocks of %d B left"
+          % (zero.name, fill // 1024, left, bs))
+    log = []
+    try:
+        steps = sign_in(zero) + _import_steps("IMPORTED", synced=False) + \
+            [{"wait": 30000}, {"js": PAGE_SAYS % "SAID"}, {"js": STATE % "STATE"},
+             {"shot": "full"}]
+        out = _browse(zero, zero.url, steps, tmp_path / "full", check=False,
+                      env={"MOY_UPLOAD": str(archive)},
+                      on_line=lambda _l: log.extend(_board_lines(zero)))
+    finally:
+        with zero.repl() as r:
+            left_after = r.eval("__import__('os').statvfs(%r)[3]" % STORE)
+            filled = r.eval("__import__('os').stat(%r)[6]" % FILL)
+            r.remove(FILL)
+            try:
+                landed = r.tree(CARTS + "/" + folder)
+            except Z.ReplError:
+                landed = {}
+            r.remove(CARTS + "/" + folder)
+            tree1, files1 = _snapshot(r)
+    said, state = _tagged(out, "SAID"), _tagged(out, "STATE")
+    refused = [ln for ln in log if "refused" in ln or "Errno" in ln]
+    print("%s: the page said %s; its state %s; the board: %s; landed: %s; after it "
+          "the fill held %d B and %d blocks were free"
+          % (zero.name, said, state, refused[-5:], landed, filled, left_after))
+    # what a page's pairing writes, and the publish marker every save
+    # overwrites (runtime/carts/moy_fs.py: never cleared)
+    ours = (STORE + "/system/webkeys", STORE + "/.publish")
+    changed = sorted(p for p, data in files0.items() if p not in ours and files1.get(p) != data)
+    sizes = sorted(p for p, s in tree0.items() if p not in ours and tree1.get(p) != s)
+    new = sorted(p for p in tree1 if p not in tree0 and p not in ours)
+    half = sorted(p for p, s in landed.items()
+                  if s >= 0 and p.rsplit("/", 1)[-1] in content
+                  and s != len(content[p.rsplit("/", 1)[-1]]))
+    assert not changed and not sizes, "files of the store changed: %s %s" % (changed, sizes)
+    assert not new, "left behind: %s" % new
+    assert not half, "half-written: %s" % half
+    texts = " | ".join((said or {}).get("said", [])) + " " + str((said or {}).get("imported"))
+    assert FULL_WORDS.search(texts), \
+        "the page did not say the store is full; it shows: %s" % texts[-1500:]
+
+
+# -- updates ------------------------------------------------------------------------------------------
+
+
+# The console's way to its update screen on a page this board serves: the
+# menu (the bar's logo), Settings (counted up from its last row, Restart,
+# past About: the rows above it change with the card selected and the radio
+# link, and the menu clamps at its ends), then Updates' "Update online" (ten
+# rows down: General's six, Play's two, Updates' Channel).
+TO_UPDATE = [{"click": [14, 13]}, {"wait": 800}] + [{"key": "ArrowDown"}] * 20 + \
+    [{"key": "ArrowUp"}] * 2 + [{"wait": 300}, {"key": "Enter"}, {"wait": 1500}] + \
+    [{"key": "ArrowDown"}] * 10 + [{"wait": 300}, {"key": "Enter"}]
+OTA_VERDICT = re.compile(r"ZERO ota: (up to date|.* available|no build published|check failed)")
+OTA_INSTALLS = re.compile(r"ZERO ota: (downloading|writing|installed|rebooting|image already)")
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_the_update_screen_shows_what_the_channel_offers_without_installing(
+        zero, mirror, tmp_path):
+    """Settings' Update online on the page asks the board, which looks at
+    its channel and answers what it offers (on the C3, with one app slot,
+    nothing to install); the screen shows it, and leaving it installs
+    nothing: the board neither downloads nor resets."""
+    _needs_password(zero)
+    log = []
+    steps = sign_in(zero) + [{"wait": 3000}] + TO_UPDATE + [
+        {"waitFor": "window.__moyState().then(function (s) { return s.screen == 'update'; })",
+         "timeout": 20000},
+        {"wait": 20000}, {"shot": "update"}, {"js": STATE % "UPDATE"},
+        {"key": "Escape"}, {"wait": 1500}, {"key": "Escape"}, {"wait": 1500},
+        {"js": STATE % "LEFT"}, {"wait": 10000},
+    ]
+    out = _browse(zero, zero.url, steps, tmp_path / "update",
+                  on_line=lambda _l: log.extend(_board_lines(zero)))
+    log.extend(_board_lines(zero, 2.0))
+    ota = [ln for ln in log if "ZERO ota" in ln]
+    print("%s: the update screen %s (%s); the board said %s"
+          % (zero.name, _tagged(out, "UPDATE"), tmp_path / "update" / "update.png", ota))
+    assert (_tagged(out, "UPDATE") or {}).get("screen") == "update", out[-1500:]
+    assert (_tagged(out, "LEFT") or {}).get("screen") != "update", "the screen did not close"
+    assert any(OTA_VERDICT.search(ln) for ln in ota), \
+        "the board did not say what its channel offers: %s" % log[-20:]
+    assert not any(OTA_INSTALLS.search(ln) for ln in ota), "it installed: %s" % ota
+    assert not any("ZERO serving" in ln for ln in log), "the board reset"
+
+
+# -- across a reboot ----------------------------------------------------------------------------
+
+
+SETTING = ("show_fps", True)     # a row of the board's system/settings
+
+
+def _setting(ssh, key):
+    rc, out, _err = ssh.run("settings get %s" % key)
+    return json.loads(out) if rc == 0 and out.strip() else None
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_an_imported_cart_and_a_setting_survive_a_reset(zero, mirror, ssh, tmp_path):
+    """A cart imported on the page and a setting changed (over SSH, the
+    store's own `settings`) are both there after a reset: on the board, and
+    the cart on the shelf of a page opened after it. A Zero's page keeps its
+    own Settings in the browser: the board has no VM to serve them
+    (/console.json, moy_webhost.c's SYSTEM_PULL)."""
+    key, value = SETTING
+    archive, folder, _c = _bench_cart(tmp_path, "keep", "Zero Bench Keep")
+    had = _setting(ssh, key)
+    try:
+        out = _browse(zero, zero.url, sign_in(zero) + _import_steps("IMPORTED"),
+                      tmp_path / "in", env={"MOY_UPLOAD": str(archive)})
+        assert folder in (_tagged(out, "IMPORTED") or ""), out[-1500:]
+        rc, _o, err = ssh.run("settings set %s %s" % (key, json.dumps(value)))
+        assert rc == 0, err
+        zero.restart()
+        rc, ls, _err = ssh.run("ls %s" % CARTS)
+        assert folder.encode() in ls, "the cart is gone after the reset: %r" % ls
+        assert _setting(ssh, key) == value, "the setting after the reset: %r" % _setting(ssh, key)
+        out = _browse(zero, zero.url, sign_in(zero) + [{"wait": 3000}, SHELF],
+                      tmp_path / "after")
+        shelf = _tagged(out, "SHELF")
+        assert shelf and folder in shelf, "the page's shelf after the reset: %s" % shelf
+    finally:
+        _remove(ssh, folder)
+        ssh.run("settings unset %s" % key if had is None
+                else "settings set %s %s" % (key, json.dumps(had)))
+
+
+# What the page did while its board went away: `#s` as it changed, and an
+# unload (a reload), which a reconnect must not need.
+WATCH = """(function () {
+  var W = window.__moyWatch = {t0: Date.now(), s: [], unload: false};
+  var last = '';
+  setInterval(function () { var t = document.getElementById('s').textContent;
+    if (t != last) { last = t; W.s.push([Date.now() - W.t0, t]); } }, 100);
+  addEventListener('pagehide', function () { W.unload = true;
+    try { sessionStorage.setItem('moyWatch', JSON.stringify(W)); } catch (e) {} });
+  return 'READY';
+})()"""
+
+
+WEB_LINE = re.compile(r"live|seal|sign|webkey|pair|ZERO|refus", re.I)
+
+
+def _across(zero, ssh, tmp_path, stem, go_away):
+    """The page open and signed in with a game running, `go_away()` takes
+    the board from it: the page comes back to live without loading again,
+    its console as it was (the game still running), its live socket open
+    again, and a cart imported after it reaches the board. What `go_away`
+    returned, and the page's state before and after."""
+    title = "Brick Siege"
+    archive, folder, content = _bench_cart(tmp_path, stem, "Zero Bench %s" % stem.title())
+    done, log = [], []
+
+    def on_line(line):
+        log.extend(_board_lines(zero))
+        if '"READY"' in line and not done:
+            done.append(go_away())
+
+    steps = sign_in(zero) + [
+        {"js": "WORKER.postMessage({t: 'open', cart: %s}), 1" % json.dumps(folder_of_title(title))},
+        {"waitFor": "window.__moyState().then(function (s) { return s.cart == %s; })"
+                    % json.dumps(title), "timeout": 60000},
+        {"wait": 5000}, {"js": STATE % "BEFORE"}, {"js": WATCH},
+        {"wait": 120000}, LIVE_NOW, {"wait": 15000},
+        {"js": STATE % "AFTER"},
+        {"js": "'WATCH ' + JSON.stringify(window.__moyWatch)"},
+    ] + _import_steps("IMPORTED")
+    try:
+        out = _browse(zero, zero.url, steps, tmp_path / stem, query="?dev=1&desktop=1",
+                      env={"MOY_UPLOAD": str(archive)}, on_line=on_line, check=False)
+        before, after = _tagged(out, "BEFORE"), _tagged(out, "AFTER")
+        watch = _tagged(out, "WATCH")
+        log.extend(_board_lines(zero, 2.0))
+        print("%s: %s: the page said %s; before %s; after %s; the board's web lines: %s"
+              % (zero.name, stem, watch and watch["s"], before, after,
+                 [ln for ln in log if WEB_LINE.search(ln)][-20:]))
+        assert done, "the board was not taken away (the page never got READY):\n" + out[-1500:]
+        assert "STEP FAILED" not in out, out[-2500:]
+        assert watch and not watch["unload"], "the page loaded again"
+        assert after["cart"] == before["cart"] == title and after["stack"] == before["stack"], \
+            "the console is not as it was: %s -> %s" % (before, after)
+        assert (after["live"] or {}).get("opens", 0) > (before["live"] or {}).get("opens", 0), \
+            "the live socket did not open again: %s -> %s" % (before["live"], after["live"])
+        assert not _differs(ssh, folder, content), "the cart imported after it"
+        return done[0], before, after
+    finally:
+        _remove(ssh, folder)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_the_page_reconnects_after_the_board_reboots(zero, mirror, ssh, tmp_path):
+    """The board resets under an open page (_across)."""
+    _across(zero, ssh, tmp_path, "reboot", zero.restart)
+
+
+# A network no bench has: an Improv join to it drops the board's station
+# until the join gives up and the board goes back onto its saved network
+# (zero_host's ZeroBoard.join, about 15 s).
+NOWHERE = ("moy-bench-nowhere", "nowhere-at-all")
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_the_page_reconnects_after_the_board_s_wifi_drops(zero, mirror, ssh, tmp_path):
+    """The board's Wi-Fi drops under an open page and comes back, the board
+    not reset (_across): over the cable, an Improv join to a network that is
+    not there, which the board refuses and then rejoins its own. The page's
+    live socket dropped meanwhile, and SSH answers where it answered."""
+    def drop():
+        st, _urls, secs, err = Z.Improv(zero.b.ser).join(*NOWHERE, timeout=120.0)
+        return st, secs, err
+
+    (st, secs, err), before, after = _across(zero, ssh, tmp_path, "wifidrop", drop)
+    print("%s: the station was gone for the join's %.1f s (Improv error %r, state %r)"
+          % (zero.name, secs, err, st))
+    assert err == 0x03, "the join to %r answered error %r, not UNABLE" % (NOWHERE[0], err)
+    assert after["live"]["drops"] > before["live"]["drops"], \
+        "the page's live socket never dropped: %s -> %s" % (before["live"], after["live"])
+    rc, out, _e = ssh.run("date")
+    assert rc == 0, "SSH at %s after the drop: %r" % (zero.url, out)
+
+
+def folder_of_title(title):
+    return _folder_of(title).name
+
+
+# What a page shows once another browser took its board (owner, 2026-11-25;
+# worker.js TAKEN): the card says so and offers it back, its field hidden,
+# and the status reads disconnected. `%s` the tag.
+TAKEN_SAYS = "Another browser signed in to this console, so this one was disconnected."
+DISCONNECTED = ("(function () { var b = document.getElementById('pinb'); return "
+                "document.getElementById('s').textContent == 'disconnected' && !!b && "
+                "b.offsetParent !== null && b.textContent == 'take it back'; })()")
+TOLD = ("'%s ' + JSON.stringify({h: document.getElementById('pinh').textContent, "
+        "p: document.getElementById('pinp').textContent, "
+        "b: document.getElementById('pinb').textContent, "
+        "f: getComputedStyle(document.getElementById('pinf')).display, "
+        "s: document.getElementById('s').textContent})")
+LIVE_OPEN = ("window.__moyState().then(function (s) { return !!(s.live && s.live.opens && "
+             "document.getElementById('s').textContent == 'live'); })")
+
+
+def _told(got):
+    """What is wrong with a page's card once its board was taken, or None."""
+    want = {"h": "disconnected", "p": TAKEN_SAYS, "b": "take it back", "f": "none",
+            "s": "disconnected"}
+    return None if got == want else "it shows %s, not %s" % (got, want)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_a_second_browser_signing_in_displaces_the_first(zero, mirror, ssh, tmp_path):
+    """Two browsers on one board (owner, 2026-11-25): the second pairs and
+    signs in, syncs a cart and holds the live socket; the first is
+    disconnected, its page says so with a button that takes the board back,
+    and it does not reconnect by itself; pressed, the button takes the
+    board back and the second page shows the card in turn."""
+    archive, folder, content = _bench_cart(tmp_path, "second", "Zero Bench Second")
+    query = "?dev=1&desktop=1"
+    first = sign_in(zero) + [
+        {"waitFor": LIVE_OPEN, "timeout": 120000}, {"js": STATE % "A_LIVE"},
+        {"waitFor": DISCONNECTED, "timeout": 240000},
+        {"js": TOLD % "A_TOLD"}, {"js": STATE % "A_TAKEN"}, {"shot": "a_told"},
+        {"wait": 15000}, {"js": STATE % "A_STILL"},
+        {"js": "window.__moyState().then(function (s) { window.__opens = s.live.opens; "
+               "document.getElementById('pinb').click(); return 1; })"},
+        {"waitFor": "window.__moyState().then(function (s) { return s.live.opens > "
+                    "window.__opens; })", "timeout": 120000},
+        {"js": STATE % "A_BACK"}, {"wait": 30000},
+    ]
+    second = sign_in(zero) + [{"waitFor": LIVE_OPEN, "timeout": 120000},
+                              {"js": STATE % "B_LIVE"}] + _import_steps("B_SYNCED") + [
+        {"waitFor": DISCONNECTED, "timeout": 180000},
+        {"js": TOLD % "B_TOLD"}, {"shot": "b_told"},
+    ]
+    import threading
+    got = {}
+
+    def run_second():
+        got["b"] = _browse(zero, zero.url, second, tmp_path / "b", query=query, check=False,
+                           env={"MOY_UPLOAD": str(archive)}, timeout=900)
+
+    def on_line(line):
+        if '"A_LIVE ' in line and "thread" not in got:
+            got["thread"] = threading.Thread(target=run_second)
+            got["thread"].start()
+
+    try:
+        a = _browse(zero, zero.url, first, tmp_path / "a", query=query, check=False,
+                    on_line=on_line, timeout=900)
+        if "thread" in got:
+            got["thread"].join(timeout=900)
+        b = got.get("b", "")
+        t = {k: _tagged(a, k) for k in ("A_LIVE", "A_TOLD", "A_TAKEN", "A_STILL", "A_BACK")}
+        t.update({k: _tagged(b, k) for k in ("B_LIVE", "B_SYNCED", "B_TOLD")})
+        print("%s: two browsers: %s" % (zero.name, json.dumps(
+            {k: (v.get("live") if isinstance(v, dict) and "live" in v else v)
+             for k, v in t.items()})))
+        assert t["A_LIVE"], "the first browser did not go live:\n" + a[-1500:]
+        assert t["B_LIVE"], "the second browser did not sign in:\n" + b[-1500:]
+        assert folder in (t["B_SYNCED"] or "") and not _differs(ssh, folder, content), \
+            "the second browser's cart did not reach the board"
+        assert t["A_TOLD"] and not _told(t["A_TOLD"]), \
+            "the first page, its board taken: %s" % _told(t["A_TOLD"])
+        opens = lambda k: ((t[k] or {}).get("live") or {}).get("opens") or 0  # noqa: E731
+        assert opens("A_STILL") == opens("A_TAKEN"), \
+            "the first page reconnected by itself: %s -> %s" % (opens("A_TAKEN"), opens("A_STILL"))
+        assert t["A_BACK"] and opens("A_BACK") > opens("A_STILL"), \
+            "the first page did not take the board back: %s" % t["A_BACK"]
+        assert t["B_TOLD"] and not _told(t["B_TOLD"]), \
+            "the second page, its board taken back: %s" % _told(t["B_TOLD"])
+    finally:
+        if "thread" in got:
+            got["thread"].join(timeout=900)
+        _remove(ssh, folder)
+
+
+# -- the network: the name and the clock ---------------------------------------------------------
+
+
+def test_the_board_answers_at_its_mdns_name(zero):
+    """The `.local` name the board's boot line gives resolves on this
+    machine's network to the address it serves at, and `/sync` answers
+    there."""
+    import socket
+    if not zero.local:
+        pytest.skip("the board's boot line names no mDNS name")
+    name = zero.local.split("//", 1)[1].split("/", 1)[0]
+    t = time.monotonic()
+    addr = socket.getaddrinfo(name, 80, socket.AF_INET)[0][4][0]
+    ms = (time.monotonic() - t) * 1000
+    print("%s: %s resolves to %s in %.0f ms" % (zero.name, name, addr, ms))
+    assert addr == _host(zero), (name, addr, zero.url)
+    assert json.loads(_get(zero.local + "/sync")[0]).get("sync") == 1
+
+
+CLOCK_SKEW_S = 10
+
+
+def test_the_board_s_clock_is_set_from_the_network(zero, ssh):
+    """`date` on the board is this machine's UTC to a few seconds: its clock
+    was set over the network."""
+    import calendar
+    rc, out, err = ssh.run("date '+%Y-%m-%d %H:%M:%S'")
+    now = time.time()
+    assert rc == 0, err
+    board = calendar.timegm(time.strptime(out.decode().strip(), "%Y-%m-%d %H:%M:%S"))
+    print("%s: the board's clock is %+.1f s from this machine's" % (zero.name, board - now))
+    assert abs(board - now) < CLOCK_SKEW_S, "the board says %s" % out.decode().strip()
+
+
 # -- a match against a T-Deck --------------------------------------------------------------
 
 
@@ -910,6 +1868,76 @@ def test_the_tdeck_atan2_is_the_wasm_s(tmp_path):
           % (len(ATAN2_ARGS) - len(apart), len(ATAN2_ARGS), apart))
     assert len(deck) == len(wasm) == len(ATAN2_ARGS)
     assert not apart, apart
+
+
+# -- a session soak ---------------------------------------------------------------------------------
+
+
+# How long the soak runs, and how far the board's internal RAM may fall
+# across it before it is a leak: free, read in an SSH session each round
+# (the best of the last three rounds against the first, Z.drift), and the
+# largest block over the cable at the start and the end (the host stopped,
+# its heap collected, so what a round leaves held shows). Calibrated on the
+# C3 (2026-11-25): a round's reading moves by a few KB with what the board
+# is doing as `free` runs; a leak of a sign-in or a sync is a fall that
+# keeps on round after round.
+SOAK_S = int(os.environ.get("MOYBYTE_ZERO_SOAK_S") or 12 * 60)
+SOAK_FREE_BAND = 6 * 1024
+SOAK_LARGEST_BAND = 8 * 1024
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_zy_a_session_soak_keeps_the_board_s_ram(zero, mirror, ssh, tmp_path):
+    """About twelve minutes of what a person does, round after round: a new
+    browser loads the page and signs in, reloads it, syncs a cart, opens Get
+    Carts and leaves it; an SSH session runs a few commands. The board's
+    internal RAM is read each round and must not keep falling. Last in the
+    file but the give-back: it is the slow one."""
+    free0, big0 = _heap(zero, "before the soak")
+    archive, folder, _c = _bench_cart(tmp_path, "soak", "Zero Bench Soak")
+    steps = sign_in(zero) + [{"js": "location.reload(), 1"}, {"wait": 3000}, LIVE_NOW] + \
+        _import_steps("IMPORTED") + _get_carts_steps() + \
+        [{"js": "location.search = '?handheld=1&dev=1', 1"}, {"wait": 3000}, LIVE_NOW]
+    rounds, frees, log = [], [], []
+    t0 = time.monotonic()
+    try:
+        while time.monotonic() - t0 < SOAK_S or len(rounds) < 3:
+            n = len(rounds) + 1
+            r0 = time.monotonic()
+            out = _browse(zero, zero.url, steps, tmp_path / ("round%d" % n),
+                          env={"MOY_UPLOAD": str(archive)},
+                          on_line=lambda _l: log.extend(_board_lines(zero)))
+            assert folder in (_tagged(out, "IMPORTED") or ""), out[-1500:]
+            _get_carts_listed(zero, out, log[-40:])
+            t, free = _session(ssh, zero)
+            assert free is not None, "free said no internal row: %r" % t.since(0)[-300:]
+            try:
+                for cmd in ("ls %s" % CARTS, "df", "date", "cat %s/%s/manifest.json"
+                            % (CARTS, folder)):
+                    assert t.command(cmd) is not None, "%s: %r" % (cmd, t.since(0)[-300:])
+                _still_up(zero, t)
+            finally:
+                t.close()
+            _remove(ssh, folder)
+            frees.append(free)
+            rounds.append(time.monotonic() - r0)
+            print("%s soak round %d (%.0f s): internal RAM free in SSH %.1f KB"
+                  % (zero.name, n, rounds[-1], free / 1024.0))
+    finally:
+        _remove(ssh, folder)
+    free1, big1 = _heap(zero, "after the soak")
+    drop, past = Z.drift(frees, SOAK_FREE_BAND)
+    print("%s soak: %d rounds in %.0f s; free in SSH by round (KB) %s, fell %.1f KB "
+          "(band %.1f); over the cable free %.1f -> %.1f KB, largest %.1f -> %.1f KB "
+          "(band %.1f)" % (zero.name, len(rounds), time.monotonic() - t0,
+                           [round(f / 1024.0, 1) for f in frees], drop / 1024.0,
+                           SOAK_FREE_BAND / 1024.0, free0 / 1024.0, free1 / 1024.0,
+                           big0 / 1024.0, big1 / 1024.0, SOAK_LARGEST_BAND / 1024.0))
+    assert not past, "free internal RAM kept falling: %s" % frees
+    assert big0 - big1 <= SOAK_LARGEST_BAND, \
+        "the largest block fell %.1f KB over the soak" % ((big0 - big1) / 1024.0)
+    assert free0 - free1 <= SOAK_FREE_BAND, \
+        "free internal RAM fell %.1f KB over the soak" % ((free0 - free1) / 1024.0)
 
 
 # -- given back -------------------------------------------------------------------------------

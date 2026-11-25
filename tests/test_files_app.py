@@ -183,7 +183,7 @@ def test_downloads_lists_what_arrived_under_its_whole_name_and_type(tmp_path):
     _arrive(carts, "photo.jpg", b"\xff\xd8\xff")
     _arrive(carts, "tool.py", "print(1)")
     _arrive(carts, "readme", "plain")
-    _arrive(carts, "tool.py.bak", "a store backup")
+    _arrive(carts, ".tool.py.moybak", "a store backup")
     _arrive(carts, ".hidden", "x")
     app, drv = _files(ws)
     keys = [p[0] for p in app.shown_places()]

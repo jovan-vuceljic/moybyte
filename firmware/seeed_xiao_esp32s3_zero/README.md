@@ -142,7 +142,7 @@ them back on the next visit — but anything that existed *only* here is.
   headroom. The byte arithmetic that sized the store (seed carts ~820 KB, so
   ~600 KB left for a kid's own) is not its capacity: the store is littlefs on
   4 KiB blocks, a file under ~128 B inlines and every other file costs a whole
-  block, a folder two, and each seeded cart keeps its `manifest.json.bak`. The
+  block, a folder two, and each seeded cart keeps its manifest's backup (`.manifest.json.moybak`). The
   full roster's ~180 files and ~37 folders filled the 352 blocks of the
   1.375 MiB `vfs` (measured on glass 2026-10-23: the 31st cart's `mkdir` got
   ENOSPC and a kid's cart had no room), so this board's build leaves the two

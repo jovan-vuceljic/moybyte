@@ -14,9 +14,10 @@
 #      its stamp: "#moyfs1 <chars> <crc32> <path>\n". One marker per store root,
 #      overwritten in place, never cleared -- the next save overwrites it. Only
 #      one publish is ever in flight, so one line says everything.
-#   2. `<path>.bak`      <- a STAMP LINE ("#moyfs1 <chars> <crc32>\n") + the new
-#      text. The stamp describes the text that follows it, so the backup can say
-#      whether it is whole.
+#   2. `<folder>/.<name>.moybak` <- a STAMP LINE ("#moyfs1 <chars> <crc32>\n") +
+#      the new text. The stamp describes the text that follows it, so the backup
+#      can say whether it is whole. The name is the store's alone (moy_fs.h's
+#      THE BACKUP IS THE STORE'S): a user's `x.bak` is a file like any other.
 #   3. `<path>`          <- the new text, overwritten in place, byte for byte
 #      what every other reader in the system expects. Nothing is ever added to
 #      the published file: a cart's main.py, a manifest, a sprite blob are
@@ -24,7 +25,7 @@
 #      see no header and no trailer.
 #
 # WHY THE MARKER EXISTS, AND IT IS NOT BELT AND BRACES. Without it the reader has
-# to open `<path>.bak` on EVERY read to learn whether the file beside it is whole
+# to open the backup on EVERY read to learn whether the file beside it is whole
 # -- and on littlefs a path lookup is the expensive op (#198: 98 block reads), so
 # a P4 boot, which reads every manifest in the store through `_read_recover`,
 # measured +6.0s of boot-to-desk and +25% of store scan for it (75 carts). The
@@ -33,7 +34,7 @@
 # lookup at all. The T-Deck's FAT never showed the cost -- two reads per lookup
 # there -- which is exactly why this is a marker and not a per-board tune.
 #
-# The `.bak` is a redo log for ONE failure, and `_read_recover` is deliberately
+# The backup is a redo log for ONE failure, and `_read_recover` is deliberately
 # narrow about which. For the file the marker names, it asks whether the
 # published text is a strict PREFIX of the backup's payload -- because that is
 # exactly what an interrupted publish leaves: FAT truncates on open-for-write and
@@ -67,7 +68,7 @@
 # The marker is best-effort at the writing end: if it cannot be written the save
 # still goes through, one save without torn-write detection rather than a save
 # refused on a medium that is already failing. With NO root registered
-# (`set_publish_root`), the reader falls back to opening `<path>.bak` per read --
+# (`set_publish_root`), the reader falls back to opening the backup per read --
 # which is the pre-marker behaviour, correct and slower, and what a bare
 # `moy_journal` on a tmp dir gets.
 #
@@ -75,17 +76,20 @@
 # module -- `tools/push_cart.py` places a file with remove+rename over the dev
 # channel, and a board's kid may have saved that same file first. Reverting a
 # push to a stale backup would be a silent undo of the developer's write, so the
-# reader trusts `path` and drops the stale `.bak` on the spot. That is also why
+# reader trusts `path` and drops the stale backup on the spot. That is also why
 # a same-length wrong-content publish is not recoverable: it is indistinguishable
 # from a foreign write, and guessing wrong costs more than it saves.
 #
-# A torn `.bak` is refused rather than published -- garbage never overwrites a
-# whole file. When the stamp is absent entirely the file is a LEGACY backup (the
-# pre-#154 rename dance, or `moy_sync._publish`'s rotation) and is read as raw
-# text, which is what those writers left behind.
+# A torn backup is refused rather than published -- garbage never overwrites a
+# whole file -- and so is one that is not the save the marker names (outside
+# every root, one stamped whole): a file removed with its backup stays gone. A
+# backup with no stamp at all is the sync's rotation (moy_sync_apply.c's
+# publish_tmp: the previous file renamed aside), read as raw text, and only
+# for a file that is gone.
 #
 # `_forget_bak` is the same drop, done by the writer rather than the next reader:
-# a foreign writer that calls it leaves nothing stale behind at all.
+# a foreign writer that calls it leaves nothing stale behind at all, and the
+# shell's `rm` and `mv` call it for the file they take.
 #
 # A SAVE THAT GIVES A FRAME BACK between store ops (`_write_atomic_steps`: an
 # install's record, the install prompt's consent) makes the same three writes
@@ -135,6 +139,7 @@ _mkdir = _native.mkdir
 _exists = _native.exists
 _stamp_of = _native.stamp
 _bak_stamp = _native.bak_stamp
+_bak_path = _native.bak_path
 _read_stamped = _native.read_stamped
 _unmark = _native.unmark
 _write_atomic = _native.publish
@@ -163,8 +168,8 @@ def _stamp_line(text):
 
 
 def _read_bak(path):
-    """The text of the backup beside `path` -- see `_read_stamped`."""
-    return _read_stamped(path + ".bak")
+    """The text of the store's backup of `path` -- see `_read_stamped`."""
+    return _read_stamped(_bak_path(path))
 
 
 def _write_atomic_steps(path, data):

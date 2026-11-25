@@ -34,7 +34,7 @@ static int carts_of(const moy_buf_t *b, const char **v, const char **ve) {
 }
 
 int moy_shelf_record(const char *root, moy_buf_t *out) {
-    char path[MOY_SHELF_PATH], bak[MOY_SHELF_PATH + 4u];
+    char path[MOY_SHELF_PATH];
     const char *v, *ve;
     out->p = NULL;
     out->n = 0;
@@ -53,8 +53,13 @@ int moy_shelf_record(const char *root, moy_buf_t *out) {
         }
         moy_buf_free(&b);
     }
-    snprintf(bak, sizeof bak, "%s.bak", path);
+    size_t bn;
+    char *bak = moy_fs_bak_path(path, &bn);
+    if (bak == NULL) {
+        return MOY_ENOMEM;
+    }
     rc = moy_fs_read_stamped(bak, &b);
+    moy_store_free(bak, bn);
     if (rc != 0) {
         return rc == MOY_ENOMEM ? rc : MOY_FS_NONE;
     }

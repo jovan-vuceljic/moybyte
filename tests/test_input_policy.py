@@ -227,6 +227,20 @@ def test_a_desk_windows_chevron_and_esc_step_its_page(tmp_path):
         assert app.page == "stories" and "storybook" in ws.wm.windows, how
 
 
+@pytest.mark.parametrize("build", [build_ws, build_desktop_ws], ids=["console", "desk"])
+def test_esc_on_the_update_screen_is_its_cancel(tmp_path, build):
+    """The firmware update screen's hint names Esc its Cancel: Esc is its
+    page's back, as B, on either tier, and lands on Settings."""
+    ws = build(tmp_path)
+    drv = make_drv(ws)
+    _frames(drv)
+    ws.update_ui.open_update()
+    _frames(drv)
+    assert ws.wm.top_kind() == "update"
+    _esc(ws, drv)
+    assert ws.wm.top_kind() == "settings"
+
+
 # -- a pending edit survives every exit -----------------------------------
 #
 # A surface's edit not yet written -- a Name still typed, a stroke on the

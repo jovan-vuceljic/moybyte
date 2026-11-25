@@ -164,11 +164,11 @@ def _session(store, d):
     with open(a, "w") as f:                 # someone else wrote it
         f.write("x" * len(v2))
     out.append(("foreign", store.read_recover(a) == "x" * len(v2),
-                os.path.exists(a + ".bak")))
+                os.path.exists(moy_fs._native.bak_path(a))))
     store.publish(a, v1)
     dest = os.path.join(cart, "journal", "1")
     out.append(("claim", store.claim(a, dest, moy_fs._stamp_of(v1)),
-                store.read_stamped(dest) == v1, os.path.exists(a + ".bak")))
+                store.read_stamped(dest) == v1, os.path.exists(moy_fs._native.bak_path(a))))
     out.append(("claim wrong stamp", store.claim(a, dest + "x", (1, 2))))
     legacy = os.path.join(cart, "legacy")
     with open(legacy, "w") as f:
@@ -291,18 +291,18 @@ READ_STATES = {
     "foreign, a prefix and then not": (True, lambda lib, p: (_pub(lib, p, BIG),
                                                             _put(p, BIG[:300] + "Z"))),
     "torn backup": (True, lambda lib, p: (_pub(lib, p, V1), _pub(lib, p, V2), _put(p, V1),
-                                          _put(p + ".bak", _bak(V2)[:-6]))),
+                                          _put(moy_fs._native.bak_path(p), _bak(V2)[:-6]))),
     "crash between the writes": (False, lambda lib, p: (_pub(lib, p, V1),
-                                                        _put(p + ".bak", _bak(V2)))),
+                                                        _put(moy_fs._native.bak_path(p), _bak(V2)))),
     "missing": (True, lambda lib, p: (_pub(lib, p, V1), os.remove(p))),
     "missing, no root": (False, lambda lib, p: (_pub(lib, p, BIG), os.remove(p))),
     "missing, torn backup": (False, lambda lib, p: (_pub(lib, p, V1), os.remove(p),
-                                                    _put(p + ".bak", _bak(V1)[:20]))),
-    "missing, legacy backup": (False, lambda lib, p: _put(p + ".bak", "old text\n")),
-    "missing, a line like a stamp": (False, lambda lib, p: _put(p + ".bak", "#moyfs1 nope\n" + V1)),
-    "missing, empty backup": (False, lambda lib, p: _put(p + ".bak", "")),
+                                                    _put(moy_fs._native.bak_path(p), _bak(V1)[:20]))),
+    "missing, legacy backup": (False, lambda lib, p: _put(moy_fs._native.bak_path(p), "old text\n")),
+    "missing, a line like a stamp": (False, lambda lib, p: _put(moy_fs._native.bak_path(p), "#moyfs1 nope\n" + V1)),
+    "missing, empty backup": (False, lambda lib, p: _put(moy_fs._native.bak_path(p), "")),
     "never": (False, lambda lib, p: None),
-    "legacy backup beside the file": (False, lambda lib, p: (_put(p, V2), _put(p + ".bak", V1))),
+    "legacy backup beside the file": (False, lambda lib, p: (_put(p, V2), _put(moy_fs._native.bak_path(p), V1))),
     "empty payload": (True, lambda lib, p: _pub(lib, p, "")),
     "empty payload, missing": (False, lambda lib, p: (_pub(lib, p, ""), os.remove(p))),
 }
@@ -442,7 +442,7 @@ def test_every_cut_of_a_publish_from_pieces_reads_back_whole(tmp_path):
     after = _tree(ref)
     old, new = V1.encode(), V2.encode()
     cuts = ([("marker", k) for k in range(len(after[".publish"]) + 1)]
-            + [("backup", k) for k in range(len(after["main.py.bak"]) + 1)]
+            + [("backup", k) for k in range(len(after[".main.py.moybak"]) + 1)]
             + [("file", k) for k in range(len(new) + 1)])
     for n, (where, k) in enumerate(cuts):
         for read in ("whole", "into"):
@@ -453,7 +453,7 @@ def test_every_cut_of_a_publish_from_pieces_reads_back_whole(tmp_path):
                 state[".publish"] = after[".publish"][:k]
             else:
                 state[".publish"] = after[".publish"]
-                state["main.py.bak"] = after["main.py.bak"][:k] if where == "backup" else after["main.py.bak"]
+                state[".main.py.moybak"] = after[".main.py.moybak"][:k] if where == "backup" else after[".main.py.moybak"]
                 if where == "file":
                     state["main.py"] = after["main.py"][:k]
             for name, data in state.items():
@@ -495,7 +495,7 @@ print("at", moy_fs._read_recover(a, "main.py") == v2)
 os.chdir(D)
 dest = cart + "/journal/1"
 print("claim", moy_fs._claim_bak(a, dest, moy_fs._stamp_of(v2)),
-      moy_fs._read_stamped(dest) == v2, moy_fs._exists(a + ".bak"))
+      moy_fs._read_stamped(dest) == v2, moy_fs._exists(moy_fs._native.bak_path(a)))
 b = cart + "/sprites.moygfx"
 moy_fs._write_bytes(b, b"\x00\x01" * 300)
 print("bytes", moy_fs._read_bytes(b, 600) == b"\x00\x01" * 300,

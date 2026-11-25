@@ -534,10 +534,15 @@ static void manifest(moy_sb_t *b, const char *c, const char *ce, int64_t ver,
 // last, so a cut re-seed still reads as the older version.
 static int kept_name(const char *n) {
     static const char *const keep[] = { "pmem.bin", "config.json", "manifest.json" };
+    size_t en = sizeof(MOY_FS_BAK_EXT) - 1u, nn = strlen(n);
     for (int i = 0; i < 3; i++) {
         size_t k = strlen(keep[i]);
-        if (strncmp(n, keep[i], k) == 0 && (n[k] == 0 || strcmp(n + k, ".bak") == 0)) {
+        if (strcmp(n, keep[i]) == 0) {
             return 1;
+        }
+        if (nn == k + 1u + en && n[0] == '.' && strncmp(n + 1, keep[i], k) == 0
+            && strcmp(n + 1u + k, MOY_FS_BAK_EXT) == 0) {
+            return 1;               // the store's backup of it
         }
     }
     return 0;

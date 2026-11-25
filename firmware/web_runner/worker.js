@@ -1948,7 +1948,8 @@ function gpioPump() {
 // arrival order and are handed to the VM between steps, never inside one. A
 // socket that fails before it opens says nothing of why, so the same route
 // without the upgrade is asked: 401 this browser refused, a wait, 404 no
-// shell here.
+// shell here, and an answer (a board that restarted, its 401 having signed
+// this page in again) opens it again.
 const TERM = { OPEN: 2, ENDED: 3, LOST: 4, UNREACHABLE: 5, REFUSED: 6, WAIT: 7, BUSY: 8, NONE: 9,
                TAKEN: 10 };
 let termPoll = null, termFeed = null, termState = null;
@@ -1975,6 +1976,7 @@ async function termWhy() {
         if (r.wait >= 0) return [TERM.WAIT, r.wait];
         if (r.status === 401 || r.status === 0) return [TERM.REFUSED, 0];
         if (r.status === 404) return [TERM.NONE, 0];
+        if (r.status === 200) return [TERM.OPEN, 0];
     } catch (e) { }
     return [TERM.UNREACHABLE, 0];
 }
@@ -2062,7 +2064,12 @@ async function termOpen(cols, rows, tries = 0) {
         else if (c.code === 1008 && c.reason === "revoked") termQ.push({ s: TERM.REFUSED, n: 0 });
         else if (c.code === 4001) termQ.push({ s: TERM.TAKEN, n: 0 });
         else if (opened) termQ.push({ s: TERM.LOST, n: 0 });
-        else termWhy().then(([st, n]) => termQ.push({ s: st, n: n }));
+        else termWhy().then(([st, n]) => {
+            if (termGen !== gen) return;
+            if (st !== TERM.OPEN) termQ.push({ s: st, n: n });
+            else if (tries + 1 < TERM_BUSY_TRIES) termOpen(cols, rows, tries + 1);
+            else termQ.push({ s: TERM.UNREACHABLE, n: 0 });
+        });
     };
 }
 function termPump() {
@@ -2100,6 +2107,10 @@ const LIVE_RETRY_MS = [250, 500, 1000, 2000, 5000];
 let livePump = null, liveFeed = null, liveState = null, liveOn = false;
 let liveWs = null, liveSealed = false, liveRetry = 0, liveHidden = 0, liveWasHidden = 0;
 let liveHeard = 0, liveSaid = 0;
+// A socket that fails before it opens says nothing of why, and a board that
+// restarted has forgotten this page's session: the next open asks the same
+// route without the upgrade first, whose 401 signs in again (`sealed`).
+let liveAsk = false;
 const liveQ = [];
 const LIVE = { opens: 0, drops: 0, up: 0, down: 0, rtt: [] };
 function liveSend(ws, pl) {
@@ -2125,6 +2136,13 @@ async function liveOpen() {
     let target = "/live";
     liveSealed = false;
     if (!(await signIn())) { liveLater(); return; }
+    if (liveAsk && !authOpen) {
+        let r = { status: 0 };
+        try { r = await sealed("GET", "/live"); } catch (e) { }
+        if (r.status !== 200) { liveLater(); return; }
+        liveAsk = false;
+    }
+    if (liveWs || !liveOn || taken) return;
     if (!authOpen) {
         const C = sw();
         if (swCall((m, p) => C.seal(m, p, 0), "GET", target) < 0) { liveLater(); return; }
@@ -2138,8 +2156,10 @@ async function liveOpen() {
     try { ws = new WebSocket(u.href, "moy.live"); } catch (e) { liveLater(); return; }
     ws.binaryType = "arraybuffer";
     liveWs = ws;
+    let opened = false;
     ws.onopen = () => {
         if (liveWs !== ws) return;
+        opened = true;
         liveRetry = 0;
         LIVE.opens++;
         liveHeard = liveSaid = performance.now();
@@ -2166,6 +2186,7 @@ async function liveOpen() {
         if (liveWs !== ws) return;
         liveWs = null;
         LIVE.drops++;
+        if (!opened) liveAsk = true;
         liveQ.push({ s: 0, why: c.code + (c.reason ? " " + c.reason : "") });
         if (c.code === 4001) takenAway();
         else liveLater();

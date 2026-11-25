@@ -14,11 +14,11 @@ board (`stamp_board`).
 
 `pull` lists the console's folder -- each file's path, size and sha256
 prefix, less what never travels (`moy_store.skip` with the journal let
-through: thumbnails, __pycache__, .tmp and .bak files) and the install
+through: thumbnails, __pycache__, .tmp files and the store's backups) and the install
 stage -- and reads back, over `py` a PIECE at a time, only the files whose
 size or hash differs from the mirror's copy. A file the console no longer
 has leaves the mirror. The store's publish marker (`.publish`) and the
-`.bak` it names come too, so a file caught mid-save heals where the folder
+backup of the file it names come too, so a file caught mid-save heals where the folder
 is put back (runtime/carts/moy_fs.py). USB drive mode, or the card in a
 reader with the console off, copies a folder nothing is writing.
 
@@ -95,7 +95,7 @@ def _bk_marker():
         out = [(%r, _size(p), _sha(p))]
         bits = line.rstrip('\\n').split(' ', 3)
         if len(bits) == 4 and bits[3].startswith(b + '/'):
-            r = bits[3][len(b) + 1:] + '.bak'
+            r = __import__('moy_store').bak_path(bits[3][len(b) + 1:])
             if _size(b + '/' + r): out.append((r, _size(b + '/' + r), _sha(b + '/' + r)))
         return out
     return _gated(go)
@@ -169,15 +169,30 @@ def read_back(b, path, out, log=print):
     return got
 
 
+BAK_EXT = ".moybak"          # native/moy_store/moy_fs.h's MOY_FS_BAK_EXT
+
+
+def bak_rel(rel):
+    """The store's backup of `rel` (moy_fs_bak_into: `.<name>.moybak` in its
+    folder)."""
+    d, _, n = rel.rpartition("/")
+    return (d + "/" if d else "") + "." + n + BAK_EXT
+
+
+def _is_bak(rel):
+    n = rel.rsplit("/", 1)[-1]
+    return n.startswith(".") and n.endswith(BAK_EXT) and len(n) > len(BAK_EXT) + 1
+
+
 def _skipped(name, top):
     """What `moy_store.skip(name, True)` leaves home, and the install stage."""
-    return (name in _SKIP_DIRS or name.endswith(".bak") or name.endswith(".tmp")
+    return (name in _SKIP_DIRS or _is_bak(name) or name.endswith(".tmp")
             or name.endswith(".part") or (top and name == STAGE))
 
 
 def local_files(tree):
     """{path under `tree`: its full path} of every file a pull keeps there,
-    the publish marker and the `.bak` it names included."""
+    the publish marker and the backup of the file it names included."""
     out = {}
     for d, dirs, files in os.walk(tree):
         top = d == tree
@@ -195,7 +210,7 @@ def local_files(tree):
             # The marker names a console path; its folder is the tree's root.
             tail = [p for p in bits[3].split("/") if p and p != ".."]
             for k in range(len(tail)):
-                rel = "/".join(tail[k:]) + ".bak"
+                rel = bak_rel("/".join(tail[k:]))
                 if os.path.isfile(os.path.join(tree, rel)):
                     out[rel] = os.path.join(tree, rel)
                     break
@@ -282,9 +297,9 @@ def put_tree(b, tree, link, log=print):
     theirs = listing(b, base, log)
     want = {r: (os.path.getsize(p), sha12(p)) for r, p in ours.items()}
     todo = [r for r in sorted(want) if theirs.get(r) != want[r]
-            and not (r not in theirs and r.endswith(".bak") and b.pyval(
+            and not (r not in theirs and _is_bak(r) and b.pyval(
                 "ws._g['_sha'](%r, %d)" % (base + "/" + r, want[r][0])) == want[r][1])]
-    last = {MARKER} | {r for r in todo if r.endswith(".bak")}
+    last = {MARKER} | {r for r in todo if _is_bak(r)}
     todo = [r for r in todo if r not in last] + [r for r in todo if r in last]
     need = sum(want[r][0] for r in todo)
     room = b.pyval("ws._g['_room'](%r)" % base, strict=True)
