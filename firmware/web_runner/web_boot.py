@@ -439,7 +439,7 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     if not hud:
         ws.show_fps = False
         ws.perf_hud = False
-    driver = host_api.ConsoleDriver(ws)
+    driver = host_api.ConsoleDriver(ws, own_repeat=True)   # the browser repeats its keys
     ws.use_inputs(WEB_TOUCH_INPUTS if coarse else WEB_INPUTS)
     ws.soft_keyboard = True     # the page's ⌨ summons the browser's keyboard
     _S["ws"] = ws

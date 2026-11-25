@@ -467,7 +467,9 @@ var pH={};
 // the simulator (runtime/run/host_api.py's DESK_KEYS): the arrows and Enter on
 // every surface, the letters only while a game owns the keys. The modifiers
 // go as a level too, so Super acts on its release when nothing came between
-// (the console's tap). On a Mac Cmd is Ctrl.
+// (the console's tap). On a Mac Cmd is Ctrl. A held key's repeats are the
+// browser's own (`rep`), never timed by the console, so a keyup a busy page
+// delivers late repeats nothing.
 // Kept for the browser: what it never delivers (Ctrl+W/T/N, Ctrl+Tab and
 // their Shift twins), and what this page leaves to it (reload, the address
 // bar, the developer tools). The console's key from the page is also a tap on
@@ -491,7 +493,8 @@ if(e.key=="Escape"){
 send({type:"esc"});e.preventDefault();return;}
 if(e.key in MODK){send({type:"mods",mods:kmods(e)});return;}
 var c=kcode(e);if(c===null||kept(e,c))return;
-if(!e.repeat)send({type:"kd",code:c,mods:kmods(e)});e.preventDefault();});
+send(e.repeat?{type:"kd",code:c,mods:kmods(e),rep:1}:{type:"kd",code:c,mods:kmods(e)});
+e.preventDefault();});
 cv.addEventListener("keyup",function(e){
 if(e.key in MODK){send({type:"mods",mods:kmods(e)});return;}
 var c=kcode(e);if(c!==null)send({type:"ku",code:c,mods:kmods(e)});});

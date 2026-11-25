@@ -98,6 +98,8 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
                                         the browser, to that source
       {"type":"kd","code":..,"mods":..} -> a desk keyboard's key down: its
                                         code and modifiers (on_key_down)
+      {"type":"kd",...,"rep":1}      -> the browser's repeat of a key held
+                                        (on_key_down's `repeat`)
       {"type":"ku","code":..,"mods":..} -> ...and up (on_key_up)
       {"type":"mods","mods":..}      -> the modifiers it holds now (on_mods)
       {"type":"wheel","dx":..,"dy":..,"mods":..} -> wheel notches (on_wheel)
@@ -187,7 +189,10 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
                 fn = on_key_down if t == "kd" else on_key_up
                 if (isinstance(code, int) and 0 < code <= 0xFFFF and isinstance(mods, int)
                         and fn is not None):
-                    fn(code, mods & 0xFF)
+                    if t == "kd" and ev.get("rep"):
+                        fn(code, mods & 0xFF, True)
+                    else:
+                        fn(code, mods & 0xFF)
             elif t == "wheel":
                 if on_wheel is not None:
                     on_wheel(int(ev.get("dx", 0)), int(ev.get("dy", 0)),

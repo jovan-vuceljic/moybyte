@@ -219,7 +219,10 @@ class ConsoleDriver:
     press/hold/type_char/click/frame/rgb888 interface so the pygame + headless
     loops stay simple."""
 
-    def __init__(self, ws):
+    def __init__(self, ws, own_repeat=False):
+        """`own_repeat`: the keyboard feeding `key_down` repeats its own held
+        keys (a browser's), each repeat a `key_down(..., repeat=True)`, and
+        the table times none of them; else the table repeats what it holds."""
         self.ws = ws
         self.input = ws.input
         self.pointer = ws.pointer
@@ -237,6 +240,8 @@ class ConsoleDriver:
         self._pan = (0, 0)      # held-arrow trackball velocity (dx, dy in [-1,1])
         self._ball_click = False  # ball_click(): the trackball's click, next frame
         self._src = ws.input.source("local")    # the keys this driver types
+        self._src.own_repeat = own_repeat
+        self._reps = []         # the keyboard's own repeats: (button or None, key event)
         self._key_btn = {}      # a key held down -> the button it holds
         self._super = False     # Super is held...
         self._chord = False     # ...and another key went down meanwhile
@@ -272,12 +277,21 @@ class ConsoleDriver:
         # frame() drains one char per frame, preserving order.
         self._typed.append(code)
 
-    def key_down(self, code, mods=0):
+    def key_down(self, code, mods=0, repeat=False):
         """A desk keyboard's key went down: `code` the byte it types with
         Shift applied and Ctrl not, or a moy_input KEY_* for a key that types
         none; `mods` the modifiers held with it. It presses its DESK_KEYS or
         CART_KEYS button, types its key event, and a printable one held
-        streams to a cart (`key_hold`). F11 is `full_key`."""
+        streams to a cart (`key_hold`). F11 is `full_key`.
+
+        `repeat` is the keyboard's own repeat of the key it holds (an
+        own_repeat driver's): the next merge counts one repeat of the button
+        it holds and of the key it types, as the table counts its own, and
+        nothing presses or types again."""
+        if repeat:
+            self._reps.append((self._key_btn.get(_fold(code)),
+                               code | (mods << _mi.MODS_AT)))
+            return
         self.set_mods(mods)
         if self._super:
             self._chord = True
@@ -490,6 +504,12 @@ class ConsoleDriver:
         # repeats on the same frames on every run.
         self._clock += max(0.0, dt) * 1000.0
         self.input.begin_frame(int(self._clock))
+        if self._reps:
+            for button, ev in self._reps:
+                if button is not None:
+                    self.input.add_steps(button, 1)
+                self.input.add_key_repeats(ev, 1)
+            self._reps.clear()
         # The trackball (`pan`, `ball_click`), spent after the merge as the
         # T-Deck's is (`InputRouter.ball`): a surface's steps and Enter, a
         # caret's arrows, else the cursor's nudge and the pointer's click.
