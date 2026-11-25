@@ -155,6 +155,10 @@ uint8_t *moy_link_web_queue(size_t n);
 // 'd' plaintext the board sent, the socket opened or closed, and its counts.
 typedef struct {
     uint32_t kinds, rows, opens, up, down, records, events, dropped;
+    // a call's round trip, its queueing to the board's answer back here (the
+    // worker's frame boundaries included): how many, and their least, most,
+    // sum and last, microseconds
+    uint32_t timed, rtt_min, rtt_max, rtt_sum, rtt_last;
 } moy_dev_web_info_t;
 void moy_dev_web_kinds(const char *spec, size_t n);
 void moy_dev_web_give(const uint8_t *p, size_t n);

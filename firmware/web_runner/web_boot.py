@@ -1380,7 +1380,8 @@ def _live_devs():
         return None
     import moy_net
     v = moy_net.live_devs()
-    return dict(zip(("kinds", "rows", "opens", "up", "down", "records", "events", "dropped"), v))
+    return dict(zip(("kinds", "rows", "opens", "up", "down", "records", "events", "dropped",
+                     "timed", "rtt_min_us", "rtt_max_us", "rtt_sum_us", "rtt_last_us"), v))
 
 
 def _apply(events):

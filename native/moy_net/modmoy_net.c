@@ -475,7 +475,8 @@ static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_info_obj, mod_live_info);
 
 // The device channel's page half (moy_dev_web.c):
 //   live_kinds(spec)              the kinds the /live probe named
-//   live_devs() -> (kinds, rows, opens, up, down, records, events, dropped)
+//   live_devs() -> (kinds, rows, opens, up, down, records, events, dropped, timed,
+//                   rtt_min, rtt_max, rtt_sum, rtt_last): rtt in microseconds
 static mp_obj_t mod_live_kinds(mp_obj_t spec) {
     size_t n;
     const char *s = mp_obj_str_get_data(spec, &n);
@@ -487,12 +488,13 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mod_live_kinds_obj, mod_live_kinds);
 static mp_obj_t mod_live_devs(void) {
     moy_dev_web_info_t i;
     moy_dev_web_info(&i);
-    uint32_t v[8] = {i.kinds, i.rows, i.opens, i.up, i.down, i.records, i.events, i.dropped};
-    mp_obj_t t[8];
-    for (int k = 0; k < 8; k++) {
+    uint32_t v[13] = {i.kinds, i.rows, i.opens, i.up, i.down, i.records, i.events, i.dropped,
+                      i.timed, i.rtt_min, i.rtt_max, i.rtt_sum, i.rtt_last};
+    mp_obj_t t[13];
+    for (int k = 0; k < 13; k++) {
         t[k] = mp_obj_new_int_from_uint(v[k]);
     }
-    return mp_obj_new_tuple(8, t);
+    return mp_obj_new_tuple(13, t);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_devs_obj, mod_live_devs);
 #endif

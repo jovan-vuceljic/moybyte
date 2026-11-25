@@ -30,6 +30,7 @@
 #if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
 
 #include <string.h>
+#include <time.h>
 
 #include "moy_dev.h"
 #include "moy_dev_kinds.h"
@@ -58,6 +59,7 @@ typedef struct {
     uint8_t writing;                    // a write awaits the board's answer
     int32_t err;                        // FAILED's code; else a refusal kept for the next call
     int32_t pv[GETS], sv[GETS];
+    uint64_t asked;                     // when the call its next answer answers was queued, 0: none
     uint16_t cn, sn;
     char cfg[CFG_MAX], set[CFG_MAX];    // the open's cfg and the last set, said again at a reopen
 } row_t;
@@ -71,6 +73,12 @@ static struct {
     size_t rec_n;
     moy_dev_web_info_t info;
 } W;
+
+static uint64_t now_us(void) {
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (uint64_t)t.tv_sec * 1000000u + (uint64_t)t.tv_nsec / 1000u;
+}
 
 static int kind_of(const char *name, size_t n) {
     for (int i = 0; i < W.nk; i++) {
@@ -141,6 +149,9 @@ static void say(char verb, uint32_t slot, const void *a, size_t n, const void *b
     p[0] = 'd';
     p[1] = (uint8_t)verb;
     p[2] = (uint8_t)slot;
+    if (verb != 'C' && W.r[slot].asked == 0) {
+        W.r[slot].asked = now_us();
+    }
     if (n) {
         memcpy(p + 3, a, n);
     }
@@ -358,6 +369,15 @@ void moy_dev_web_give(const uint8_t *p, size_t n) {
     const kind_t *k = &W.k[r->kind];
     if (p[1] == 'A' && n >= 8) {
         int32_t rc = i32(p + 4);
+        if (r->asked != 0) {
+            uint32_t us = (uint32_t)(now_us() - r->asked);
+            r->asked = 0;
+            W.info.rtt_min = W.info.timed == 0 || us < W.info.rtt_min ? us : W.info.rtt_min;
+            W.info.rtt_max = us > W.info.rtt_max ? us : W.info.rtt_max;
+            W.info.rtt_sum += us;
+            W.info.rtt_last = us;
+            W.info.timed++;
+        }
         if (p[3] == 'O') {
             r->state = rc < 0 ? FAILED : OPEN;
             r->err = rc < 0 ? rc : 0;
@@ -395,6 +415,7 @@ void moy_dev_web_socket(int on) {
             continue;
         }
         r->writing = 0;
+        r->asked = 0;
         if (on) {
             r->state = OPENING;
             r->err = 0;
