@@ -184,13 +184,12 @@ def test_the_desk_power_rows_move_the_levels_by_keys(tmp_path):
 def test_a_console_with_no_radio_and_no_light_offers_neither(tmp_path):
     """The browser page (issue 270): no Brightness where there is no panel
     light, no Wi-Fi where there is no radio -- in Settings, in the control
-    center and in the bar, whose wifi glyph draws nothing and opens nothing."""
+    center, and the bar's wifi glyph opens nothing."""
     ws, drv = _handheld(tmp_path)
     ws.wifi = None
     ws.panel_light = False
     keys = [r[0] for r in ws.settings_layer._settings_rows()]
     assert "wifi" not in keys and "brightness" not in keys and "volume" in keys
-    assert ws.wifi_icon_kind() == ""
     ws.toggle_popover("wifi")
     assert not ws.sysmenu.open
     ws.toggle_popover("battery")

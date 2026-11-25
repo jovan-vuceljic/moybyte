@@ -468,6 +468,10 @@ NOT_A_SERVICE = {
                      "browser's own keyboard, so a text field can be typed "
                      "under touch there (Text.can_type). The boards "
                      "have no such keyboard and keep the class default",
+    "panel_light": "a fact about the page, not a backend: a browser has no "
+                   "panel light for Brightness to set, so it offers no "
+                   "Brightness row (Settings, the control center, the "
+                   "desk's power rows). The boards keep the class default",
 }
 
 
