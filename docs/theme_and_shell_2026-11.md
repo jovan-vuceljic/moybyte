@@ -317,7 +317,8 @@ renders the owner chose from):
    app, on a handheld its card's one Open row.
 7. **The handheld control center** grew from the battery's component
    (`popover.ControlCenter`): `cc_ui`'s page, the console's group (Volume,
-   Brightness, Wi-Fi), then each app's rows in a group under its app's
+   Brightness where there is a panel light, Wi-Fi where there is a radio:
+   the browser page has neither), then each app's rows in a group under its app's
    name, the page scrolling, its first view ending 6 px under the first
    app's group, over a 50% scrim. The battery has no row: the bar's glyph
    shows it low (the danger ink under 15%) and charging (a bolt), and
