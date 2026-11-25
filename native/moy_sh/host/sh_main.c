@@ -5,9 +5,10 @@
 //   sh_main ROOT SCRIPT          run SCRIPT's lines; exit with the shell's status
 //   sh_main -t ROOT SCRIPT       a transcript: each prompt, then the line fed
 //
-// With SH_MAIN_STACK set it says last, on stderr, the deepest C stack under
-// main any poll ran on ("c stack N"): a walk polls at every path, so a tree's
-// depth that moves it is a walk recursing.
+// With SH_MAIN_MEASURE set it says last, on stderr, the deepest C stack under
+// main any poll ran on ("c stack N"; a walk polls at every path, so a tree's
+// depth that moves it is a walk recursing) and the largest block the session
+// took after its arena ("largest block N").
 //
 // The OS around the session is a stand-in, enough to exercise every path:
 //   /proc/1/status, /dev/uart1        virtual files (uart1 takes writes)
@@ -41,6 +42,7 @@ static int bg_signal = 0;
 static char interrupt_path[1024];
 static const char *stack_base;
 static size_t stack_deepest;
+static size_t largest = 0, *largest_at = NULL;
 
 // Ctrl-C, in band: the script writes /.interrupt holding N, and the poll
 // after the next N takes it (the shell polls after every command and while
@@ -72,6 +74,9 @@ static int h_poll(void *ctx) {
 
 static void *h_alloc(void *ctx, size_t n) {
     (void)ctx;
+    if (largest_at != NULL && n > *largest_at) {
+        *largest_at = n;
+    }
     return malloc(n);
 }
 
@@ -346,6 +351,7 @@ int main(int argc, char **argv) {
         .reboot = NULL, .sleep_ms = h_sleep, .log = h_log,
     };
     moy_sh_t *s = moy_sh_new(&host, 256 * 1024, "/", "/");
+    largest_at = &largest;
     if (s == NULL) {
         fprintf(stderr, "sh_main: no session\n");
         return 2;
@@ -378,8 +384,8 @@ int main(int argc, char **argv) {
         status = 2;
     }
     moy_sh_free(s);
-    if (getenv("SH_MAIN_STACK") != NULL) {
-        fprintf(stderr, "c stack %zu\n", stack_deepest);
+    if (getenv("SH_MAIN_MEASURE") != NULL) {
+        fprintf(stderr, "c stack %zu\nlargest block %zu\n", stack_deepest, largest);
     }
     return status;
 }

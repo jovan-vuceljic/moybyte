@@ -174,12 +174,30 @@ def test_a_walk_takes_the_same_c_stack_at_any_depth(harness, tmp_path):
                           "mkdir -p $p; echo x > $p/f\n"
                           "find d -name f; du -s d; rm -r d\n" % levels)
         r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
-                           timeout=60, env=dict(os.environ, SH_MAIN_STACK="1"))
+                           timeout=60, env=dict(os.environ, SH_MAIN_MEASURE="1"))
         assert r.returncode == 0 and not os.listdir(root), r.stderr.decode()
         return int(re.search(rb"c stack (\d+)", r.stderr).group(1))
 
     shallow, deep = deepest(2), deepest(150)
     assert deep - shallow < 256, "2 levels: %d B, 150 levels: %d B" % (shallow, deep)
+
+
+def test_a_file_written_streams_in_chunks(harness, tmp_path):
+    """A redirect and tee send a file to the store a chunk at a time
+    (moy_sh_sys.c's streamed FILE), so 64 KB written takes no block near its
+    size. Buffered whole, it took one block the file's size, and the C3's
+    heap refused the 16 KB step past 8 KB."""
+    root = tmp_path / "root"
+    root.mkdir()
+    script = tmp_path / "write.sh"
+    script.write_text("i=0; while [ $i -lt 4096 ]; do echo 0123456789abcde; i=$((i+1)); done > big\n"
+                      "echo more >> big; echo again > x; tee -a big < x > /dev/null\n")
+    r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                       timeout=60, env=dict(os.environ, SH_MAIN_MEASURE="1"))
+    assert r.returncode == 0, r.stderr.decode()
+    assert os.path.getsize(root / "big") == 65536 + 5 + 6
+    largest = int(re.search(rb"largest block (\d+)", r.stderr).group(1))
+    assert largest < 8192, "a block of %d B" % largest
 
 
 SERIAL = os.path.join(SCRIPTS, "serial")

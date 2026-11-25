@@ -1,0 +1,24 @@
+$ # a file written goes to the store a chunk at a time, of any size
+$ i=0; while [ $i -lt 4096 ]; do echo 0123456789abcde; i=$((i+1)); done > big
+$ wc -c big; md5sum big
+65536 big
+00ececfaec0aae2de825c3f02f37d3e8  big
+$ cat big | tee copy | wc -c
+65536
+$ md5sum copy; tail -n 1 copy
+00ececfaec0aae2de825c3f02f37d3e8  copy
+0123456789abcde
+$ echo end >> copy; tee -a copy < big > /dev/null; wc -c copy
+131076 copy
+$ # written over, it is whole until its last close: its old bytes read back
+$ cat big > big; wc -c big
+65536 big
+$ exec 3> copy; echo new >&3; wc -c copy; exec 3>&-; cat copy
+131076 copy
+new
+$ ls -a
+big  bin/  copy  dev/  proc/
+$ echo x > nodir/f; echo nodir=$?
+sh: 1: cannot create nodir/f: Directory nonexistent
+nodir=2
+[exit 0]
