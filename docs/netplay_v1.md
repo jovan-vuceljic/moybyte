@@ -61,7 +61,8 @@ side waits on a frame the other has scrolled past. Two boards ran to frame ~150
 and froze solid with packets flowing both ways (2026-08-22) before that field
 existed.
 
-**Input delay is ADAPTIVE: it opens at one tick (33 ms at 30 Hz), rises under
+**Input delay is ADAPTIVE: it opens at one tick (33 ms at 30 Hz; a match
+across a page higher, below), rises under
 stall pressure (2026-08-25) and comes back down when the peer has a tick to
 spare (2026-11-06).** Delay is each console's private sampling lead over its
 own tape, needs no agreement on the wire, and may differ between the sides — a
@@ -89,6 +90,16 @@ reported through this console's window was at least a tick plus 8 ms
 (`MOY_MATCH_LOWER_GUARD_MS`), and two windows have passed since its last change
 (`MOY_MATCH_LOWER_HOLD`), so a match that escalated on a burst of loss returns
 to one tick once the air clears instead of keeping the higher delay for good.
+
+**A match across a page opens at 50 ms of delay** (2026-11-25, #256),
+rounded up to the tick: two at 30 Hz, three at 60 (`MOY_MATCH_PAGE_DELAY_MS`).
+Both sides do it, the page by its own board name and a console by its peer's
+(`web`, which the browser console announces: `MOY_MATCH_PAGE_BOARD`), since
+each side's inputs cross the board's socket, whose jitter one tick does not
+cover. The escalation cannot be left to find it: the first window and the
+first after a step are grace, so a match of a few windows ends before a raise
+lands. The way down still applies, so a page on a quiet link comes back to
+one tick.
 
 **A cart paced 60 or "free" ticks at 60 Hz in a match when both consoles hold
 it** (owner, 2026-11-06: "i dont want a higher delay"), so one tick of delay is
