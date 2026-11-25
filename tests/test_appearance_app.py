@@ -686,9 +686,9 @@ def test_name_shows_on_custom_only_and_keeps_it_by_keys(tmp_path, kw):
     _frame(ws)
     assert _rows(app)[-2:] == ["name_ask", "edit"]
     _name(ws, app)
-    _type(ws, app, "BubbleGum!")                # capitals and ! are not the grammar
-    assert app.name_text == "ubbleum"
-    _type(ws, app, [8] * 7 + list("bubblegum"))
+    _type(ws, app, "Bubble Gum!")               # a capital folds, a space is a -, ! never lands
+    assert app.name_text == "bubble-gum"
+    _type(ws, app, [8] * 10 + list("bubblegum"))
     assert app.name_text == "bubblegum"
     _type(ws, app, [13])
     assert not app.naming and not ws.input.text_mode
@@ -698,6 +698,24 @@ def test_name_shows_on_custom_only_and_keeps_it_by_keys(tmp_path, kw):
     assert app.themes()[0] == "bubblegum" and "custom" not in app.themes()
     assert (tmp_path / "carts" / "bubblegum.moy" / "theme.json").exists()
     assert not (tmp_path / "carts" / "custom.moy").exists()
+
+
+def test_the_first_change_moves_no_window(tmp_path):
+    """The first change makes `custom` and switches to it, a relayout that
+    rebuilds every window: each stands where it stood (issue 269, Tint
+    moved the Appearance window back to where it opens)."""
+    ws = _ws(tmp_path, **DESK)
+    _open(ws)
+    wm = ws.wm
+    win = [w for w in wm.windows.values() if w.kind == "appearance"][0]
+    wm._move_window(win, 60, 120)
+    _frame(ws)
+    was = (win.x, win.y, win.w, win.h)
+    assert ws.look.change("tint", "grey") == 0
+    _frame(ws, 3)
+    assert ws.look.theme_name == "custom"
+    win = [w for w in wm.windows.values() if w.kind == "appearance"][0]
+    assert (win.x, win.y, win.w, win.h) == was
 
 
 def test_a_theme_set_elsewhere_closes_name(tmp_path):

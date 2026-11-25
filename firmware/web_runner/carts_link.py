@@ -335,6 +335,13 @@ class BoardCarts:
         self.link = link
         self.root = root
         self.locked = False             # the board has a password: its last check said
+        self.room = None                # (bytes, block) free in its store: its last check said
+
+    def free(self):
+        """The board's store's free space as its last check said, (bytes,
+        block), else None: what About shows on a page whose carts are the
+        board's."""
+        return tuple(self.room) if self.room else None
 
     def check(self):
         """The carts of the shelves this console reads (`BoardCheck`): the
@@ -539,6 +546,7 @@ class BoardCheck:
         if not self._found and self._unreached:
             return self._end(_ci.UNREACHABLE)
         sh = self._shelves
+        self.board.room = sh.get("free") or self.board.room
         self.doc = {"carts": self._found, "free": sh.get("free"),
                     "unreached": self._unreached, "locked": sh.get("locked") is True}
         self._found = None

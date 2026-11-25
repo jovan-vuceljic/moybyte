@@ -232,7 +232,8 @@ nor those docs will warn you about:
   because a torn `system/settings` boots the console on its defaults. **On a
   board the root is the VM's, never the C's**: the page seeds from `GET
   /console.json` and pushes `{"v": 2, "root": "system"}` batches, which the C
-  parks (its seal checked) for `moy_webhost.ConsoleSystem`; the board is of record
+  parks (its seal checked) for `moy_webhost.ConsoleSystem` (a Zero's
+  `StoreSystem` keeps them and applies nothing); the board is of record
   and takes a page's change KEY BY KEY (`moy_sync.SYSTEM_KEYS`: an unknown key
   is LOCAL, so the consent records are never taken; the update channel is
   never sent and never taken, and the badges row crosses whole, the later

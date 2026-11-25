@@ -62,6 +62,11 @@ the board to install or remove one, and the board fetches it and writes its
 own store, as it installs its firmware, refusing one its store has no room
 for.
 
+`GET /console.json` and a system batch are the fifth (make_system): the
+page's theme, Settings and badges, kept in this store's `system/settings`
+as a console keeps them and applied to nothing here, so the next page comes
+back on them.
+
 A browser signs in with a device key it got by pairing once with this board's
 password (the setup form sets it; native/moy_net/moy_webhost.c's header and
 docs/os_2026-11/system.md section 3), and every route but the bundle and the
@@ -860,6 +865,18 @@ def host_class():
     return WebHost
 
 
+def make_system():
+    """The system root a page keeps its Settings and badges in
+    (`moy_webhost.StoreSystem`), or None where the store cannot be read: the
+    page then keeps them in the tab, and the carts still sync."""
+    try:
+        from moy_webhost import StoreSystem
+        return StoreSystem(CARTS_DIR)
+    except Exception as exc:             # noqa: BLE001 -- the store serves regardless
+        print("ZERO settings: unavailable:", exc)
+        return None
+
+
 class ImprovBoard:
     """What Improv over the cable asks of this board (zero_improv.Improv):
     its name and firmware, the networks it sees, a join, the saved networks
@@ -1145,7 +1162,7 @@ def serve():
         me = identity()
         name = me.get("name") or HOSTNAME
     _mkdir(SYSTEM_DIR)
-    host = host_class()(CARTS_DIR, auth=SYSTEM_DIR)
+    host = host_class()(CARTS_DIR, auth=SYSTEM_DIR, system=make_system())
     ota, task = make_updater(me)
     addon = make_addon(ota)
     official = make_official(ota, addon)

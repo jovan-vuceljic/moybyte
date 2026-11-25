@@ -442,6 +442,7 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     driver = host_api.ConsoleDriver(ws, own_repeat=True)   # the browser repeats its keys
     ws.use_inputs(WEB_TOUCH_INPUTS if coarse else WEB_INPUTS)
     ws.soft_keyboard = True     # the page's ⌨ summons the browser's keyboard
+    ws.panel_light = False      # no light to set: Brightness is not offered
     _S["ws"] = ws
     # The pin backend, if the worker's probe found one. Stashed by gpio_enable
     # (which runs BEFORE this, since the probe is answered while the console is

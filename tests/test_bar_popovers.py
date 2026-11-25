@@ -181,6 +181,38 @@ def test_the_desk_power_rows_move_the_levels_by_keys(tmp_path):
     assert not ws.sysmenu.open
 
 
+def test_a_console_with_no_radio_and_no_light_offers_neither(tmp_path):
+    """The browser page (issue 270): no Brightness where there is no panel
+    light, no Wi-Fi where there is no radio -- in Settings, in the control
+    center and in the bar, whose wifi glyph draws nothing and opens nothing."""
+    ws, drv = _handheld(tmp_path)
+    ws.wifi = None
+    ws.panel_light = False
+    keys = [r[0] for r in ws.settings_layer._settings_rows()]
+    assert "wifi" not in keys and "brightness" not in keys and "volume" in keys
+    assert ws.wifi_icon_kind() == ""
+    ws.toggle_popover("wifi")
+    assert not ws.sysmenu.open
+    ws.toggle_popover("battery")
+    drv.frame(1 / 30)
+    cc = ws.sysmenu.comp
+    assert cc.rows() == 1
+    sl = ws.settings_layer
+    vol, bri = sl.level("volume")[0], sl.level("brightness")[0]
+    _press(drv, "left")
+    assert sl.level("volume")[0] == vol - 1, "Volume is the first stop"
+    _press(drv, "down")
+    _press(drv, "right")
+    _press(drv, "down")
+    _press(drv, "a")
+    assert sl.level("brightness")[0] == bri and ws.sysmenu.widget != "wifi"
+    ws2, drv2 = _desk(tmp_path / "desk")
+    _open_by_tap(ws2, drv2, "desk", "battery")
+    lit = ws2.sysmenu.comp.size()
+    ws2.panel_light = False
+    assert ws2.sysmenu.comp.size()[1] < lit[1], "the desk's power rows lose a row"
+
+
 def test_the_desk_power_rows_move_the_levels_by_taps(tmp_path):
     ws, drv = _desk(tmp_path)
     _open_by_tap(ws, drv, "desk", "battery")
