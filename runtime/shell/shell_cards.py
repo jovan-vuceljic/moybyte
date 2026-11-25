@@ -1466,13 +1466,13 @@ class AboutCard:
         ws = self.ws
         u = ws.updater
         v = _about_ui.version_words(u, ws.toggles.ota_channel() if u is not None else None)
-        b = _about_ui.board_of()
-        from settings_layer import BOARDS
+        from settings_layer import board_name
+        b = board_name()
         upd = ""
         if u is not None:
             ready = getattr(ws.update_ui, "offered", None)
             upd = ("%s is ready" % ready) if ready else "Up to date"
-        return ("Version " + v if v else "", _about_ui.board_words(BOARDS.get(b, b)) if b else "", upd)
+        return ("Version " + v if v else "", b or "", upd)
 
     def updates(self):
         self.close()
