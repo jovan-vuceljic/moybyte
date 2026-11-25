@@ -234,12 +234,12 @@ def _alt_tap_opens_the_menu(tag):
             {"waitFor": "window.__moyState().then(s => !s.edit.sysmenu)", "timeout": 5000}]
 
 
-# The title's "full screen", pressed: the page's own fullscreen, which its
+# The system menu's Full screen, chosen: the page's own fullscreen, which its
 # keyboard lock holds in.
-_FULL = {"js": "document.getElementById('fsb').click(), new Promise(ok => setTimeout(ok, 800))"
-               ".then(() => 'LOCK ' + JSON.stringify({fs: !!document.fullscreenElement, "
-               "locked: window.__moyLocked, said: document.getElementById('fsb').textContent}))",
-         "gesture": True}
+_FULL = (web_e2e.menu_pick("Full screen")
+         + [{"js": "new Promise(ok => setTimeout(ok, 800)).then(() => window.__moyState())"
+                   ".then(s => 'LOCK ' + JSON.stringify({fs: !!document.fullscreenElement, "
+                   "locked: window.__moyLocked, said: s.page.fs}))"}])
 
 
 def _assert_alt_tap(js, tag):
@@ -634,14 +634,14 @@ def test_the_site_s_terminal_takes_esc_and_the_browser_s_clipboard(tmp_path):
                     {"js": "navigator.clipboard.readText().then(t => 'COPIED ' + "
                            "JSON.stringify(t))"}]
                  + _alt_tap_opens_the_menu("SITE")
-                 + [_FULL])
+                 + _FULL)
         _out, js = _play(tmp_path, "term_clip", base, steps)
         assert _after(js, "VI", "cat /files/v.txt") == ["hi esc"], js
         assert _after(js, "PASTE", "echo pasted-$((6*7))")[:1] == ["pasted-42"], js
         assert _after(js, "PASTE", "echo pasted-two") == ["pasted-two"], js
         assert _tagged(js, "COPIED") == "files$ echo copy-me\ncopy-me", js
         _assert_alt_tap(js, "SITE")
-        assert _tagged(js, "LOCK") == {"fs": True, "locked": 1, "said": "leave full screen"}, js
+        assert _tagged(js, "LOCK") == {"fs": True, "locked": 1, "said": True}, js
     finally:
         p.terminate()
 
@@ -677,7 +677,7 @@ def _focus(tag):
 
 
 def test_alt_tab_walks_the_site_s_windows_in_its_fullscreen(tmp_path):
-    """In the page's own fullscreen (the title's "full screen"), whose
+    """In the page's own fullscreen (the system menu's Full screen), whose
     keyboard lock gives it the chord, Alt+Tab brings the window behind
     forward, Alt+Shift+Tab walks back, and neither is the lone Alt tap that
     opens the system menu."""
@@ -685,7 +685,7 @@ def test_alt_tab_walks_the_site_s_windows_in_its_fullscreen(tmp_path):
     p, base = _site(tmp_path)
     try:
         steps = ([{"note": "the Editor and the Terminal on the desk", "wait": 1500},
-                  _until(_SHELL), _FULL, _focus("FRONT"),
+                  _until(_SHELL)] + _FULL + [_focus("FRONT"),
                   {"key": "Tab", "mods": ["alt"]}, {"wait": 400}, _focus("ALT_TAB"),
                   {"key": "Tab", "mods": ["alt", "shift"]}, {"wait": 400}, _focus("BACK"),
                   {"shot": "alt_tab"}])

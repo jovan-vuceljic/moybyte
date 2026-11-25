@@ -88,6 +88,7 @@
 //                        words; `report` is the p8 compatibility summary (the
 //                        shared writer's own lines) when there was one
 //   {t:"edited", s, ok}  the result of an "open in editor"
+//   {t:"ask", a}         the console's rows' asks of the browser (page_link.py)
 //   {t:"pick", id, name, size, host}  Get Carts needs a file this page cannot
 //                        fetch from `host`: the page asks the player for theirs
 //   {t:"unpick", id}     ...and the question is over
@@ -2771,10 +2772,14 @@ function loop() {
         if (_d > 20) WP.slow++;
         if (LOOP) longest("step", _d);
         const sounded = shipPCM();
-        if (s && s.indexOf('"clip"') >= 0) {
-            // A copy in the console: the page puts its text on the browser's clipboard.
+        if (s && (s.indexOf('"clip"') >= 0 || s.indexOf('"ask"') >= 0)) {
+            // A copy in the console: the page puts its text on the browser's
+            // clipboard. An ask of a console row: the page does it
+            // (page_link.py), from a message of its own, since the page keeps
+            // only its newest frame.
             const o = JSON.parse(s);
-            self.postMessage({ t: "clip", s: o.clip });
+            if (o.clip !== undefined) self.postMessage({ t: "clip", s: o.clip });
+            if (o.ask) self.postMessage({ t: "ask", a: o.ask });
             if (!o.paint) s = "";
         }
         if (s) { WP.painted++; WP.bytes += s.length; shipFrame(s); }
@@ -2921,11 +2926,10 @@ self.onmessage = async (ev) => {
                         self.postMessage({ t: "imported", ok: false,
                             s: "could not import " + m.name, report: r.report });
                     } else {
-                        // IT RUNS IMMEDIATELY (#194). The whole point of
-                        // converting on import is that the result is an
-                        // ordinary cart, so the honest proof is that it plays
-                        // the moment it lands -- not a row on a shelf.
-                        if (openCart) openCart(r.dir);
+                        // IT RUNS ON THE NEXT TAP (#194): the converted cart
+                        // is an ordinary cart, and the console's report card
+                        // (page_link.py's `offer`) says where it will stop
+                        // agreeing with PICO-8, its Open playing it.
                         self.postMessage({ t: "imported", ok: true,
                             s: "imported " + r.dir + " into your carts",
                             report: r.report, dir: r.dir });

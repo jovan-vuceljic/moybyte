@@ -46,6 +46,8 @@ s = ui.state(
     zooms=ui.model(key="v", v="", word=""),
     zoom=ui.row_of("zooms"),
     has_zoom=False,
+    kept_carts="",
+    has_kept_carts=False,
     layouts=ui.model(key="v", v="", word=""),
     layout_theme=ui.row_of("layouts"),
     home_style=ui.enum(*HOMES, init="theme"),
@@ -158,6 +160,10 @@ def rows_poll():
             _model("zooms", tuple((("v", str(z)), ("word", "%d%%" % z if z else "Auto"))
                                   for z in look.zooms))
         s.zoom = str(look.zoom)
+    # Where the browser page keeps the carts (`Workstation.page`'s word).
+    page = getattr(ws, "page", None)
+    s.kept_carts = page.kept if page is not None else ""
+    s.has_kept_carts = bool(s.kept_carts)
     if s.has_layout_theme:
         pick = look.layout_theme()
         if kept.get("lgen", -1) != look.layout_gen or kept.get("lpick", ()) != pick:
@@ -332,6 +338,7 @@ def rows_page():
             ui.link("wifi", "{wifi_word}", shown="has_wifi")
             ui.link("bluetooth", "{bt_word}", shown="has_bluetooth")
             ui.link("appearance", "{theme_title}")
+            ui.info("Carts", "{kept_carts}", shown="has_kept_carts")
             ui.seg("UI size", "zoom", text="{.word}", look="cycle", on="zoom_set",
                    shown="has_zoom")
             ui.seg("Text size", "font_scale", text="{.word}", look="cycle", on="font_set",

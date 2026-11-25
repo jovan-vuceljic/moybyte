@@ -108,6 +108,19 @@ nor those docs will warn you about:
   to a secure context**: Firefox's `getGamepads()` answers none over plain
   HTTP, so a board-served page may see no pad where the site (https) and
   localhost do.
+- **The page keeps no bar of its own** (owner, 2026-11-25): what its top
+  bar and the cards under the canvas did is the console's
+  (`firmware/web_runner/page_link.py`, `Workstation.page`). The system menu
+  holds Full screen (where the browser has it) and Add a file, a cart's menu
+  Download and, on a page a console serves, Play on the console; Settings'
+  Carts row says where the page keeps them; an import's report, a lost link
+  and a sign-in wait are the console's cards and notices. A row ASKS and the
+  frame carries the ask to the page (`ask`, the worker's `{t:"ask"}`); a
+  browser grants full screen and its file chooser only inside a user's
+  gesture, so the page does those while the tap that chose the row is
+  still active, else arms them for the next pointerup or keydown and the
+  console says to tap. What stays HTML is the loader's progress, the
+  pairing card before the console boots and a crash's text.
 - **The emscripten is PINNED: `EMSDK_VERSION` in build.sh, held by
   `tools/emsdk_tree.sh` on every full build** (a tree at the pin is a silent
   no-op, another version is moved to it, one that cannot be had fails the
@@ -297,9 +310,10 @@ nor those docs will warn you about:
     from the mirror, only when its signature verifies under the release keys
     the bundle bakes in (`release_keys`, `tools/ota_sign.py keys-module`,
     the keys every board trusts) -- never for the address it was read from. An external file it can read from neither is the player's
-    own copy, chosen through a REAL page control (the card under the canvas):
-    a browser opens its file dialog only from a click on one, never from a tap
-    the console relays a frame later.
+    own copy, chosen in the browser's file chooser, which a browser opens
+    only inside a user's gesture: the page opens it at once while the tap
+    that asked is still active (`navigator.userActivation`), else at the
+    player's next tap or key (page_core.html, THE ASKS).
   - **The sweep cannot persist an install**: the wire carries text and covers,
     never a module or a WAD. The keeper writes the folder and the record into
     OPFS behind one marker file (`moy_store.commitInstall`), boot rolls an
@@ -493,8 +507,9 @@ nor those docs will warn you about:
   forgotten here. `ports/celeste.moy` is gitignored on BOTH repos (CC BY-NC-SA)
   — never commit or ship it.
 - **The BROWSER imports p8 carts too (#194), by running those same files, and
-  the imported cart RUNS.** A dropped `.p8`/`.p8.png` is converted in the wasm
-  VM: `build.sh` stages `tools/p8_import.py`, `tools/p8_lua_port.py` (both
+  the imported cart RUNS.** A dropped or chosen `.p8`/`.p8.png` is converted
+  in the wasm VM, and the console's card shows the compatibility report, its
+  Open playing the cart (`page_link.py`'s `offer`): `build.sh` stages `tools/p8_import.py`, `tools/p8_lua_port.py` (both
   hash-pinned) and `tools/p8_writer.py` into the frozen set, plus `shims/zlib.py`,
   four lines over MicroPython's `deflate`. **The browser could skip the inflate
   entirely** (`createImageBitmap` + `getImageData`, then read the low bits in JS)

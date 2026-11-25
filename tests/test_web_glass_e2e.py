@@ -133,7 +133,9 @@ def test_a_game_in_console_mode_takes_a_whole_scale(tmp_path, device):
                  {"file": str(_P8), "as": "__drop"},
                  {"js": "WORKER.postMessage({t:'import',name:'tiny_dash.p8',buf:window.__drop},"
                         "[window.__drop]), 'import'"},
-                 {"wait": 6000}, {"js": corner.replace("CORNER", "P8CORNER")},
+                 {"note": "the import's card: Open (beside No) plays it"},
+                 {"wait": 5000}, {"js": "cv.focus(), 'focused'"}, {"key": "ArrowRight"},
+                 {"wait": 300}, {"key": "Enter"}, {"wait": 3000}, {"js": corner.replace("CORNER", "P8CORNER")},
                  {"shot": "pico8"}]
         _out, js = _run(tmp_path, "game", base, "?dev=1&console=1", steps, device)
         g = _tagged(js, "GAME")
@@ -206,7 +208,7 @@ _RECTS = ("(function(){var o={};['cv','joy','bb','ba','kb','bh'].forEach(functio
           "var e=document.getElementById(id),r=e.getBoundingClientRect();"
           "if(r.width&&r.height&&getComputedStyle(e).visibility!=='hidden')"
           "o[id]=[r.left,r.top,r.right,r.bottom];});"
-          "o.vw=innerWidth;o.vh=innerHeight;o.h1=document.querySelector('h1').offsetHeight;"
+          "o.vw=innerWidth;o.vh=innerHeight;"
           "return 'RECTS '+JSON.stringify(o);})()")
 
 
@@ -236,7 +238,7 @@ def test_a_phone_s_controls_overlap_nothing(tmp_path, device):
                 for b in ids[i + 1:]:
                     assert _apart(r[a], r[b]), (a, b, r)
             if device is PHONE_L:
-                assert r["h1"] == 0 and {"joy", "bb", "ba"} <= set(ids), r
+                assert {"joy", "bb", "ba"} <= set(ids), r
                 cv = r["cv"]
                 assert cv[1] <= 0.5 and cv[3] >= r["vh"] - 0.5, r
                 assert abs(cv[0] - (r["vw"] - cv[2])) <= 1, r

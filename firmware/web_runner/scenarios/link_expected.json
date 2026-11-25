@@ -13,7 +13,7 @@
    "js": "window.__moyLinkLost('expected','installing an update','The console is restarting. This page will not work until it is back.'); JSON.stringify({at:'fired'})"
   },
   {
-   "js": "JSON.stringify({at:'expected',shown:getComputedStyle(document.getElementById('lnk')).display,cls:document.getElementById('lnk').className,head:document.getElementById('lnkh').textContent,body:document.getElementById('lnkb').textContent,link:window.__moyLink||null})"
+   "js": "JSON.stringify({at:'expected',shown:(window.__moyLinkCard?'block':'none'),cls:(window.__moyLinkCard&&window.__moyLinkCard.bad?'bad':''),head:(window.__moyLinkCard?window.__moyLinkCard.head:''),body:(window.__moyLinkCard?(window.__moyLinkCard.body||''):''),link:window.__moyLink||null})"
   },
   {
    "shot": "link_expected"

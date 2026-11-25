@@ -95,9 +95,9 @@ def _pink(step):
 
 def _check(out, js, form):
     """The same assertions for both cart forms -- they are one feature."""
-    assert len(js) >= 11, "not enough js steps:\n%s" % out[-3000:]
-    (mode, pink_before, sent, imported, report, panel, playing, pink_after,
-     edit_btn, _clicked, edited) = js[:11]
+    assert len(js) >= 12, "not enough js steps:\n%s" % out[-3000:]
+    (mode, pink_before, sent, imported, report, panel, card, _focused, playing, pink_after,
+     _edit, edited) = js[:12]
     assert "saved in this browser" in mode, \
         "%s: a static host must land in site mode, said %r" % (form, mode)
     assert sent.endswith(form), sent
@@ -120,9 +120,8 @@ def _check(out, js, form):
     # was still broken (cfe89bf).
     assert "approximated: cartdata()/dget()/dset()" in report, \
         "%s: the report must name the gap this cart reaches: %r" % (form, report)
-    assert panel.startswith("block|"), \
-        "%s: the report card never showed: %r" % (form, panel)
-    assert panel.endswith("|"), "a successful import must not paint as an error"
+    assert panel.startswith("offer|"), \
+        "%s: the console's report card never showed, or showed as an error: %r" % (form, panel)
 
     # 3. IT RUNS -- the console's own assets payload names the cart playing...
     assert playing.startswith("tiny dash "), \
@@ -139,17 +138,17 @@ def _check(out, js, form):
         "nothing, which is what a stub, a dead shim or an unwired lifecycle "
         "all look like.\n%s" % (form, before, after, out[-3000:]))
 
-    # 4. ...and OPEN IN EDITOR lands in the editor, on the imported cart.
-    assert edit_btn.endswith("|open in editor"), edit_btn
+    # 4. ...and the cart opens in the Editor, on the imported cart.
+    assert card == "offer", card
     assert edited.startswith("editing tiny dash"), \
-        "%s: open-in-editor did not open: %r\n%s" % (form, edited, out[-3000:])
+        "%s: the Editor did not open: %r\n%s" % (form, edited, out[-3000:])
     assert "(menu/" in edited, \
         "%s: the editor screen is not up: %r" % (form, edited)
 
     # 5. ...on the imported cart's OWN assets, in the asset tabs -- #194's
     #    done-when names Sprites / Map / Music by name, and an editor that
     #    opened on the code alone would satisfy every check above.
-    sprites, music = js[12], js[14]
+    sprites, music = js[13], js[15]
     assert sprites == "editing tiny dash (menu/paint)", sprites
     assert music == "editing tiny dash (menu/music)", music
 
@@ -189,8 +188,8 @@ def test_a_file_that_is_not_a_cart_is_reported_not_crashed(tmp_path):
         imported, report, panel = js[3], js[4], js[5]
         assert "could not import" in imported, imported
         assert "no PICO-8 sections" in report, report
-        assert panel == "block|bad", \
-            "a refused import must paint as an error: %r" % panel
+        assert panel.startswith("tell|"), \
+            "a refused import must be the console's card with OK alone: %r" % panel
         # ...and the console is still alive: the shelf still answers.
         assert "moybyte.star_catcher.moy" in js[-1] or js[-1], js[-1]
         assert "console crash" not in out, out[-2000:]

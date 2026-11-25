@@ -846,6 +846,11 @@ class Workstation:
         self.cart_keep = None
         self.cart_pick = None
         self.cart_home = None
+        # `page`, the browser page around the console
+        # (firmware/web_runner/page_link.PageLink): what its rows ask the
+        # browser for (full screen, a file, a download) and the page's word
+        # back. None everywhere else.
+        self.page = None
         # `cart_board`, on a page a console that answers /official serves:
         # that console asked to install or remove carts in its own store
         # (firmware/web_runner/carts_link.BoardCarts), None everywhere else.

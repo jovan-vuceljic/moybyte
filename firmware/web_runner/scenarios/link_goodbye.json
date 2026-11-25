@@ -15,7 +15,7 @@
    "timeout": 40000
   },
   {
-   "js": "JSON.stringify({at:'bye',shown:getComputedStyle(document.getElementById('lnk')).display,cls:document.getElementById('lnk').className,head:document.getElementById('lnkh').textContent,body:document.getElementById('lnkb').textContent,link:window.__moyLink||null})"
+   "js": "JSON.stringify({at:'bye',shown:(window.__moyLinkCard?'block':'none'),cls:(window.__moyLinkCard&&window.__moyLinkCard.bad?'bad':''),head:(window.__moyLinkCard?window.__moyLinkCard.head:''),body:(window.__moyLinkCard?(window.__moyLinkCard.body||''):''),link:window.__moyLink||null})"
   },
   {
    "shot": "link_goodbye"

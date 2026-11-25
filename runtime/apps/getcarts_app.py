@@ -2099,6 +2099,6 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             lines.append((self.pick_why, "danger"))
         lines.append(("This console can't fetch %s from %s."
                       % (e["path"], _ext_host(self.cur["cart"], e)), "ink"))
-        lines.append(("Choose your own copy of %s (%s) in the box below."
+        lines.append(("Choose your own copy of %s (%s) from this computer."
                       % (e["path"], _mb(e["size"])), "dim"))
         return "Your copy of %s" % e["path"], lines

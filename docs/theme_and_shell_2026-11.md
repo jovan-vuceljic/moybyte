@@ -2379,8 +2379,9 @@ theme's desktop colour (`wm.bezel`).
 **Auto** is the largest N whose canvas holds the desk's 1024x600; where the
 room does not, the phone rule: landscape, a canvas 240
 tall at the room's aspect, portrait the 320x240 console, each scaled to the
-room (fractional, as the page always did). A touch phone held sideways
-shows no page rows: the canvas takes the full height, centred, and its side
+room (fractional, as the page always did). The page has no rows of its own
+(`.claude/rules/web.md`), so the canvas has the whole viewport; a touch
+phone held sideways gives it the full height, centred, and its side
 margins hold the touch controls, the stick left and A/B right sized to the
 margin, the keyboard summon and the burger small in the top corners; each
 margin is what a 4:3 canvas leaves, at least 104 and at most 180 CSS pixels,
