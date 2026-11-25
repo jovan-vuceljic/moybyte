@@ -349,7 +349,10 @@ and in the host's board-model MicroPython and holds every frame's world to
 agree. A board that cannot take it cannot join a match. The C libraries'
 float functions part too (a T-Deck's `atan2(1.0, 2.5)` was a bit away from
 the wasm's), so every tier computes `math` with the kernel's one set
-(`native/moy_kernel/README.md`, THE FLOAT FUNCTIONS).
+(`native/moy_kernel/README.md`, THE FLOAT FUNCTIONS). So do their number
+parsers: a T-Deck read Lua numerals near a float's halfway point a bit away
+from the wasm (2026-11-25), so the Lua VM reads every numeral with
+one parser of its own (`native/moy_lua/moy_strtof.c`).
 
 **Board scope is three consoles and the browser a Zero serves**: the
 T-Deck, the Guition S3, the Waveshare P4, and the page either Zero serves,
