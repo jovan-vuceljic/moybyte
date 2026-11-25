@@ -83,11 +83,16 @@ the http worker's own wait), never `online()`.
                              prints its id. One word is the line itself
   at [-l]                    the jobs waiting: id, time, command
   at -r ID...                remove them
-  python [-c CODE]           a REPL over stdin into the shell's VM (an
+  python [-c CODE | FILE] [ARG...]
+                             a REPL over stdin into the shell's VM (an
                              expression's value printed, a block ended by a
-                             blank or unindented line), or CODE run; with
-                             the terminal for its stdin the face's REPL in
-                             front (`--repl LINE`, a line at a time)
+                             blank or unindented line), or CODE or the
+                             program in FILE run, `sys.argv` its name and
+                             ARGs, its exit status the program's; FILE
+                             crosses as `--file STORE FILE` (the store's
+                             path, moy_sh_board.c); with the terminal for
+                             its stdin the face's REPL in front (`--repl
+                             LINE`, a line at a time)
 """
 
 from ticks import _ticks_ms, _ticks_diff
@@ -769,6 +774,35 @@ def _python_ns(stdin, stdout, stderr):
     return ns
 
 
+def _python_file(d, path, name):
+    """The source of program `name` (as typed), read from the console's
+    file `path` (the store's, as the shell's path crossed: moy_sh_board.c's
+    python_file), or None, said."""
+    def read():
+        with open(path) as f:
+            return f.read()
+    store = getattr(d.ws, "store", None)
+    try:
+        return store.call(read) if store is not None else read()
+    except OSError as e:
+        d.err("python", "%s: %s" % (name, why(e)))
+        return None
+
+
+def _python_argv(argv, src, ns):
+    """`src` run in `ns` with `sys.argv` the program's, the console's
+    put back after: the shell's VM is the console's."""
+    import sys
+    was = list(sys.argv)
+    sys.argv.clear()
+    sys.argv.extend(argv)
+    try:
+        exec(src, ns)
+    finally:
+        sys.argv.clear()
+        sys.argv.extend(was)
+
+
 def _python_one(src, ns, stdout, stderr, status):
     """One statement: an expression's value printed; SystemExit's code kept
     in status[1]."""
@@ -842,10 +876,17 @@ def r_python(d, a):
         return _python_repl(d, a[1:], stdin, stdout, stderr)
     ns = _python_ns(stdin, stdout, stderr)
     if a:
-        if a[0] != "-c" or len(a) < 2:
-            return _usage(d, "python", "[-c CODE]")
-        src = a[1]
-        return _door.run_program(_door.SHELL, lambda: exec(src, ns), stderr)
+        if a[0] == "-c" and len(a) >= 2:
+            src, argv = a[1], ["-c"] + a[2:]
+        elif a[0] == "--file" and len(a) >= 3:
+            src = _python_file(d, a[1], a[2])
+            if src is None:
+                return USAGE
+            argv = a[2:]
+            ns["__file__"] = a[2]
+        else:
+            return _usage(d, "python", "[-c CODE | FILE] [ARG...]")
+        return _door.run_program(_door.SHELL, lambda: _python_argv(argv, src, ns), stderr)
     status = [0, None]              # the last failure's code, SystemExit's
 
     def run(src):

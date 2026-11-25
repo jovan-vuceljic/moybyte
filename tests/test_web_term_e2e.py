@@ -321,13 +321,18 @@ def test_the_site_s_terminal_runs_the_shell_on_the_browser_s_store(tmp_path):
         steps = ([{"note": "the site's shell", "wait": 1500}]
                  + _typed("pwd; ls /") + [{"key": "Enter"}, {"wait": 600}, _lines("LS")]
                  + _typed("sleep 30") + [{"key": "Enter"}, {"wait": 4500}, _lines("SLEPT")]
-                 + _typed("echo back") + [{"key": "Enter"}, {"wait": 600}, _lines("BACK")])
+                 + _typed("echo back") + [{"key": "Enter"}, {"wait": 600}, _lines("BACK")]
+                 + _typed("cd; printf 'import sys\\nprint(sys.argv)\\n' > p.py; python p.py web;"
+                          " printf '#!python\\nprint(6 * 7)\\n' > q.py; ./q.py")
+                 + [{"key": "Enter"}, {"wait": 1200}, _lines("PY")])
         _out, js = _play(tmp_path, "term_site", base, steps)
         ls = "\n".join(_tagged(js, "LS"))
         assert "/files" in ls and "carts/" in ls and "files/" in ls, ls
         slept = "\n".join(_tagged(js, "SLEPT"))
         assert "[stopped: a command in the browser runs for 3 s at most]" in slept, slept
         assert "back" in "\n".join(_tagged(js, "BACK"))
+        py = "\n".join(_tagged(js, "PY"))
+        assert "['p.py', 'web']" in py and "42" in py, py
     finally:
         p.terminate()
 

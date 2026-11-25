@@ -665,22 +665,33 @@ static int b_ble(moy_sh_t *s, int argc, char **argv) {
 }
 #endif
 
-// `media play SRC` names a file by the session's path, which crosses as the
-// store's (moy_sh_resolve): the console's VM has no session folder. A URL
-// crosses as it is. 0, or the errno that refused the path.
+// A role command that names a file names it by the session's path, which
+// crosses as the store's (moy_sh_resolve): the console's VM has no session
+// folder. 0, or the errno that refused the path, said.
+static int store_src(moy_sh_t *s, const char *cmd, const char *path, char *out, size_t cap) {
+    int r = moy_sh_resolve(s, path, out, cap);
+    if (r != 0) {
+        char line[160];
+        snprintf(line, sizeof line, "%s: %s: %s\n", cmd, path,
+                 r == ENOENT ? "not a file in the store" : why_of(r));
+        say(s, 2, line);
+    }
+    return r;
+}
+
+// `media play SRC`: a file crosses as the store's path, a URL as it is.
 static int media_src(moy_sh_t *s, int argc, char **argv, char *out, size_t cap) {
     if (argc != 3 || strcmp(argv[0], "media") != 0 || strcmp(argv[1], "play") != 0
         || strstr(argv[2], "://") != NULL) {
         return 0;
     }
-    int r = moy_sh_resolve(s, argv[2], out, cap);
-    if (r != 0) {
-        char line[160];
-        snprintf(line, sizeof line, "media: %s: %s\n", argv[2],
-                 r == ENOENT ? "not a file in the store" : why_of(r));
-        say(s, 2, line);
-    }
-    return r;
+    return store_src(s, "media", argv[2], out, cap);
+}
+
+// `python FILE [ARG...]` crosses as `python --file STORE FILE ARG...`: the
+// program read from the store's path, its argv[0] the name as typed.
+static bool python_file(int argc, char **argv) {
+    return argc >= 2 && strcmp(argv[0], "python") == 0 && argv[1][0] != '-';
 }
 
 // A role command is a job the console steps: `role JOB ARGV...` starts it
@@ -699,18 +710,30 @@ static int b_role(void *ctx, moy_sh_t *s, int argc, char **argv) {
     if (media_src(s, argc, argv, src, sizeof src) != 0) {
         return 1;
     }
+    bool py = python_file(argc, argv);
+    if (py && store_src(s, "python", argv[1], src, sizeof src) != 0) {
+        return 2;
+    }
     char job[2 * sizeof(uintptr_t) + 1];
     job_of(s, job, sizeof job);
-    char **all = b_alloc(NULL, ((size_t)argc + 1) * sizeof *all);
+    int n = argc + 1 + (py ? 2 : 0);
+    char **all = b_alloc(NULL, (size_t)n * sizeof *all);
     if (all == NULL) {
         return 1;
     }
     all[0] = job;
-    memcpy(all + 1, argv, (size_t)argc * sizeof *argv);
-    if (src[0]) {
+    if (py) {
+        all[1] = argv[0];
+        all[2] = "--file";
         all[3] = src;
+        memcpy(all + 4, argv + 1, (size_t)(argc - 1) * sizeof *argv);
+    } else {
+        memcpy(all + 1, argv, (size_t)argc * sizeof *argv);
+        if (src[0]) {
+            all[3] = src;
+        }
     }
-    int32_t r = door_int("role", argc + 1, all);
+    int32_t r = door_int("role", n, all);
     b_free(NULL, all);
     if (r == DOOR_NEEDS_VM) {
         store_role_t c = { s, argc, argv, MOY_SH_NOT_FOUND };
