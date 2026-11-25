@@ -378,7 +378,7 @@ TDECK_INPUTS = (("local", "tdeck"),)
 CONFIGS = {
     "tdeck_320x240_fs1_dark": dict(
         sys_size=None, font_scale=1, windowed=False, variant="dark",
-        diagonal_in=None, appearance=True),
+        diagonal_in=None, appearance=True, card=True),
     "tdeck_320x240_fs1_light": dict(
         sys_size=None, font_scale=1, windowed=False, variant="light",
         diagonal_in=None, appearance=True),
@@ -396,7 +396,7 @@ CONFIGS = {
         diagonal_in=7.0),
     "p4_1024x600_cs2_fs1_windowed": dict(
         sys_size=(1024, 600), font_scale=1, windowed=True, variant="dark",
-        diagonal_in=7.0, appearance=True),
+        diagonal_in=7.0, appearance=True, card=True),
     "p4_1024x600_fs2_light": dict(
         sys_size=(1024, 600), font_scale=2, windowed=False, variant="light",
         diagonal_in=7.0),
@@ -864,7 +864,27 @@ def _surface_plan(ws, cfg):
     if desktop:
         plan.append(("desk_two_windows", _two_windows(ws)))
     plan.append(("launcher_make_broken", _broken_cart(ws, cfg)))
+    if cfg.get("card"):
+        plan += [("card_" + kind, _card_trouble(ws, kind, desktop)) for kind in CARD_TROUBLE]
     return plan
+
+
+# The card's two verdicts the desk is told at boot (`Notices.card_trouble`),
+# rendered last on the rows marked `card`: the T-Deck's and the P4's as shipped.
+CARD_TROUBLE = ("errors", "format")
+
+
+def _card_trouble(ws, kind, desktop):
+    """Over the floor a boot lands on: the desk on the desktop tier, else the
+    home."""
+    def enter():
+        ws.confirm.cancel()
+        if desktop:
+            ws.home.open_desk()
+        else:
+            ws.home.go_home()
+        assert ws.notices.card_trouble(kind) and ws.confirm.open
+    return enter
 
 
 BROKEN_APP = {"title": "Boomy", "canvas": "320x240", "moybyte": {"type": "app"}}
@@ -1993,6 +2013,8 @@ def surface_names(config_name):
     if cfg["windowed"] and not cfg.get("console"):
         names.append("desk_two_windows")
     names.append("launcher_make_broken")
+    if cfg.get("card"):
+        names += ["card_" + kind for kind in CARD_TROUBLE]
     return names
 
 

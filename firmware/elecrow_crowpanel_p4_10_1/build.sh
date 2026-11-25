@@ -115,6 +115,8 @@ moybyte_patch_slice_store
 # FatFS's long-name buffer on the calling task's stack, which the re-entrant
 # oofatfs needs (mpconfigboard.h, tools/patch_fatfs_lfn.py).
 moybyte_patch_fatfs_lfn
+# A FAT file's close is final: every board takes it (tools/patch_fatfs_close.py).
+moybyte_patch_fatfs_close
 # A found extensible built-in enters sys.modules: every board takes it,
 # and tools/patch_import_cache.py carries the measurement.
 moybyte_patch_import_cache

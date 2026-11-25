@@ -600,7 +600,11 @@ class DeleteConfirm:
     And the intents' "open with" menu (`choose`, runtime/system/intents.py):
     "Open with", the item's name over a menu of the apps that open it, each
     row its app's icon and title, the one chosen last first and focused, and
-    Cancel."""
+    Cancel.
+
+    And what the console tells once and waits to be read (`tell`,
+    `Notices.card_trouble`): a title over its lines, and OK; every way the
+    dialog closes dismisses it."""
 
     UNDONE = "This can't be undone."
 
@@ -638,8 +642,9 @@ class DeleteConfirm:
         ws.mark_dirty()
 
     def line_rows(self):
-        """The first-run prompt's lines as (line, tone) rows."""
-        return _perms.rows(self.lines)
+        """The first-run prompt's lines as (line, tone) rows; a `tell`'s are
+        its own."""
+        return self.lines if self.verb == "tell" else _perms.rows(self.lines)
 
     def all(self):
         """The page's damage: the frame draws again."""
@@ -688,6 +693,11 @@ class DeleteConfirm:
         """Ask the install prompt's question: `title` over the prompt's
         `lines` (`app_perms.rows`), No and Open; `then()` on Open."""
         return self.ask_close(title, "", then, "open", lines=list(lines))
+
+    def tell(self, title, rows):
+        """Say `title` over `rows` ((line, tone) rows, tone plain, dim or
+        danger), and OK."""
+        return self.ask_close(title, "", None, "tell", lines=tuple(rows))
 
     def ask(self, cart, then=None):
         """Ask before `cart` (a cart dict, or None for the open cart) is
