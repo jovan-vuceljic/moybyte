@@ -75,7 +75,9 @@ chip changes.
   index, and of it only the members the install reads
   (`cart_index.EntryRead`); its buffers are made for it, smaller where
   the heap has no block for them (`cart_index.chunk_buffer`), and given
-  back when it ends, and a cart its store has no room for is refused with the
+  back once its last file is in, before the install prompt's manifest and
+  the record are parsed (a running-out logs its frames and the heap free,
+  `cart_index.where`), and a cart its store has no room for is refused with the
   sizes before anything is fetched. Those fetches are https, and its image
   carries a CA bundle of its own (`boards/MOYBYTE_C3_ZERO/ca_roots.pem`)
   where the XIAO takes ESP-IDF's common one: the roots the hosts it fetches
