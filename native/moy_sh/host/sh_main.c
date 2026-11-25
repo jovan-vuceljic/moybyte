@@ -5,6 +5,10 @@
 //   sh_main ROOT SCRIPT          run SCRIPT's lines; exit with the shell's status
 //   sh_main -t ROOT SCRIPT       a transcript: each prompt, then the line fed
 //
+// With SH_MAIN_STACK set it says last, on stderr, the deepest C stack under
+// main any poll ran on ("c stack N"): a walk polls at every path, so a tree's
+// depth that moves it is a walk recursing.
+//
 // The OS around the session is a stand-in, enough to exercise every path:
 //   /proc/1/status, /dev/uart1        virtual files (uart1 takes writes)
 //   /proc/console                     the console's own rows, fixed (neofetch)
@@ -35,12 +39,18 @@
 static int bg_alive = 0;
 static int bg_signal = 0;
 static char interrupt_path[1024];
+static const char *stack_base;
+static size_t stack_deepest;
 
 // Ctrl-C, in band: the script writes /.interrupt holding N, and the poll
 // after the next N takes it (the shell polls after every command and while
 // it waits or sleeps).
 static int h_poll(void *ctx) {
     (void)ctx;
+    size_t deep = (size_t)(stack_base - (const char *)__builtin_frame_address(0));
+    if (deep > stack_deepest) {
+        stack_deepest = deep;
+    }
     FILE *f = fopen(interrupt_path, "r");
     if (f == NULL) {
         return 0;
@@ -311,6 +321,7 @@ static int h_log(void *ctx, moy_sh_t *s, int fd, const char *name, int follow) {
 
 int main(int argc, char **argv) {
     int transcript = 0;
+    stack_base = __builtin_frame_address(0);
     if (argc > 1 && !strcmp(argv[1], "-t")) {
         transcript = 1;
         argc--;
@@ -367,5 +378,8 @@ int main(int argc, char **argv) {
         status = 2;
     }
     moy_sh_free(s);
+    if (getenv("SH_MAIN_STACK") != NULL) {
+        fprintf(stderr, "c stack %zu\n", stack_deepest);
+    }
     return status;
 }

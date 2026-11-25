@@ -1,0 +1,26 @@
+$ p=d; i=0; while [ $i -lt 150 ]; do p=$p/a; i=$((i+1)); done; mkdir -p $p; echo x > $p/f; echo hi > d/g
+$ find d | wc -l
+153
+$ find d -type f | wc -c
+308
+$ find d -name f | while read q; do [ "$q" = "$p/f" ] && echo the deepest file; done
+the deepest file
+$ du d | wc -l
+151
+$ du d | head -n 1 | wc -c
+304
+$ du -s d
+1	d
+$ echo 40 > /.interrupt; find d -name nothing; echo not-after
+
+$ echo find=$?
+find=130
+$ echo 40 > /.interrupt; rm -r d; echo not-after
+
+$ echo rm=$?; find d | wc -l
+rm=130
+153
+$ rm -r d; echo rm=$?; ls
+rm=0
+bin/  dev/  proc/
+[exit 0]

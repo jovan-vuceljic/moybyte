@@ -162,6 +162,26 @@ def test_the_script_runs_as_its_transcript_says(harness, tmp_path, name):
         assert got == f.read()
 
 
+def test_a_walk_takes_the_same_c_stack_at_any_depth(harness, tmp_path):
+    """find, du and rm -r walk a tree with no C frame per folder (moy_sh_cmds.c's
+    walk), so the deepest C stack a poll sees is the same at 2 levels and
+    150. A frame per level overflowed the C3's 12 KB SSH task at 51."""
+    def deepest(levels):
+        root = tmp_path / ("root%d" % levels)
+        root.mkdir()
+        script = tmp_path / ("walk%d.sh" % levels)
+        script.write_text("p=d; i=0; while [ $i -lt %d ]; do p=$p/a; i=$((i+1)); done\n"
+                          "mkdir -p $p; echo x > $p/f\n"
+                          "find d -name f; du -s d; rm -r d\n" % levels)
+        r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                           timeout=60, env=dict(os.environ, SH_MAIN_STACK="1"))
+        assert r.returncode == 0 and not os.listdir(root), r.stderr.decode()
+        return int(re.search(rb"c stack (\d+)", r.stderr).group(1))
+
+    shallow, deep = deepest(2), deepest(150)
+    assert deep - shallow < 256, "2 levels: %d B, 150 levels: %d B" % (shallow, deep)
+
+
 SERIAL = os.path.join(SCRIPTS, "serial")
 SERIAL_NAMES = sorted(os.path.basename(p)[:-3] for p in glob.glob(os.path.join(SERIAL, "*.sh")))
 
