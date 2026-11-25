@@ -1894,15 +1894,17 @@ def _open_get_carts(ws):
     through an in-memory transport, so its golden is the LIST a kid sees on a
     fresh console rather than the no-network notice. The store's free space is
     the one machine-dependent number on that screen, so it is pinned. The
-    check runs to its end first: its busy page settles in pixels while the
-    covers are still on their way, and the golden is the shelf."""
+    check runs to its end first, and the covers' fetches after it (the
+    snapshot serves none, so each card keeps its icon): its busy page and a
+    shelf whose covers are on their way both settle in pixels, and the
+    golden is the shelf as it stays."""
     def enter():
         ws.cart_net = MemNet({INDEX_URL: snapshot("index.json")})
         app = ws.app("getcarts")
         app._inst.free = lambda: (64 * 1048576, 4096)
         ws.spine.open_app(app)
         for _ in range(20):
-            if app.phase != "checking":
+            if app.phase != "checking" and not app._covers and not app._jobs:
                 break
             _quiesce(ws)
             ws.mark_dirty()

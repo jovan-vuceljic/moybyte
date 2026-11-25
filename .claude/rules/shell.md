@@ -157,7 +157,8 @@ to whoever called it.
     the shelf at a whole-number scale, the carousel's cards at any ratio through
     `blit565_resize`, one call a card -- with no per-size variants
     (docs/history/theming_2026-09.md P8). **Do not re-add cover
-    sidecars.**
+    sidecars.** Get Carts draws a cart the console holds through that same
+    cache (`image.cart`, `uitree_pics.py`), never a fetch or a decode of its own.
   - **A FILE's DELETE moves it to `files/.Trash/`, restorable, and never confirms**; emptying
     the Trash is Files' one verb that asks first (a `ui.dialog`). A CART has no
     Trash: its delete removes the folder, so every route asks first in the
