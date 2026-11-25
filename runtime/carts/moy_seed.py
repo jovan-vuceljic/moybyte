@@ -6,7 +6,6 @@
 #   seed_packed             the packed roster, one cart inflated at a time
 #   prune_retired           the folders of seeds that no longer ship, once per store
 #   sweep_store             the store's format stamp (STORE_FORMAT) and its one door
-#   sweep_pipes             the shell's pipe spills a reset left
 #   stamp_board             the board stamp, and the rows a foreign one drops
 #   is_core                 CORE, the official carts a console never removes; removable
 #   note_removed            a removed built-in's record, which the seed honours; the browser console's line
@@ -575,9 +574,7 @@ def sweep_store(root=CARTS_DIR, seed=None, export=_export, board=None):
     export first), one ahead of it is left alone, and a store behind
     RETIRED_GEN is swept (`prune_retired`). A store in this firmware's format
     then has its board stamp checked (`stamp_board`) against `board`, None
-    for this board's own id (`board_id`). Every opening first sweeps the
-    shell's pipe spills (`sweep_pipes`)."""
-    sweep_pipes(root)
+    for this board's own id (`board_id`)."""
     ver = load_store_version(root)
     if ver is not None and ver[0] > STORE_FORMAT:
         return 0
@@ -594,22 +591,6 @@ def sweep_store(root=CARTS_DIR, seed=None, export=_export, board=None):
                          ver=ver)
     stamp_board(root, board_id() if board is None else board)
     return gone
-
-
-# The shell's pipe spills (native/moy_sh/moy_sh_sys.c, PIPE_R): a pipe past its
-# memory goes on in `system/pipes/<pipe>.tmp`, and the folder goes with its
-# last spill. One a reset cut short is left; a store opens (at boot, a card
-# put in) before a session spills in it, so what the folder holds then is a
-# leftover. The warm path is one stat of a folder that is not there.
-PIPES_NAME = "system/pipes"
-
-
-def sweep_pipes(root=CARTS_DIR):
-    """The pipes folder beside `root` removed, with every spill in it."""
-    d = _sibling_path(root, PIPES_NAME)
-    if _exists(d):
-        _rmtree(d)
-        _remove(d)
 
 
 # THE BOARD STAMP. `system/board`, beside the settings, names the board the

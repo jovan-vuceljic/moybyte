@@ -83,8 +83,8 @@ a board without PSRAM (the C3 Zero), and past that in a temporary file of the
 store (`/etc/pipes/*.tmp`, the store's `system/pipes`) written and read a
 chunk at a time, so a pipe's memory stays at one chunk on each side of the
 file. The file and its folder go at the pipe's last close, whatever ended it
-(the writer killed, the session closed or taken over), and the store's
-opening sweeps what a reset left. A stream the store has no room for, or past
+(the writer killed, the session closed or taken over), and a boot's first
+spill sweeps what a reset left. A stream the store has no room for, or past
 4 MB in the file (`MOY_SH_SPILL_MAX`, so `yes | head` ends), ends its writer
 with one line, `pipe: no room to hold N KB`, and the reader reads what came
 before it. Where there is no PSRAM a shell's block also leaves

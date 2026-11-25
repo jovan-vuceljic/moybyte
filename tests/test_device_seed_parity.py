@@ -566,25 +566,6 @@ def test_the_legacy_written_folder_leaves_a_store_once(tmp_path):
     assert moy_carts.sweep_store(root) == 0 and written.is_dir()
 
 
-def test_a_store_opening_sweeps_the_pipe_spills_a_reset_left(tmp_path):
-    """A shell pipe past its memory goes on in system/pipes/<pipe>.tmp
-    (native/moy_sh/moy_sh_sys.c's SPILL), and the folder goes with its last
-    spill; a reset leaves it, and every store opening takes it."""
-    from runtime import moy_carts
-
-    root = str(tmp_path / "carts")
-    moy_carts.ensure_dirs(root)
-    pipes = tmp_path / "system" / "pipes"
-    pipes.mkdir(parents=True)
-    (pipes / "3fc8a2b0.tmp").write_bytes(b"x" * 2048)
-    keep = tmp_path / "system" / "settings"
-    keep.write_text("{}")
-    moy_carts.sweep_store(root)
-    assert not pipes.exists() and keep.read_text() == "{}"
-    moy_carts.sweep_store(root)
-    assert not pipes.exists()
-
-
 def test_the_boot_sweeps_before_it_scans(tmp_path):
     # The boot's store step is the one that sweeps, or every board needs its
     # own remembering; and it sweeps BEFORE the scan, or the shelf shows a

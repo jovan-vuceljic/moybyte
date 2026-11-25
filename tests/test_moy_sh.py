@@ -368,6 +368,20 @@ def test_a_pipe_past_its_memory_goes_on_in_a_file_of_the_store(harness, tmp_path
     assert largest < 16384, "a block of %d B" % largest
 
 
+def test_the_boots_first_spill_sweeps_what_a_reset_left(harness, tmp_path):
+    """A reset leaves its spills in the pipes folder; no boot pays to look for
+    them. The boot's first spill removes what the folder holds before it makes
+    its own (no spill is open before it), and the folder goes with it."""
+    root = tmp_path / "root"
+    (root / ".pipes").mkdir(parents=True)
+    for name in ("3fc8a2b0.tmp", "3fc8a9f0.tmp"):
+        (root / ".pipes" / name).write_bytes(b"x" * 2048)
+    (root / "z").write_bytes(bytes(range(256)) * 64)
+    r = _spill_run(harness, root, "ls /.pipes | wc -l\ncat z | (ls /.pipes | wc -l; wc -c)\n")
+    assert r.stdout.decode() == "2\n1\n16384\n", r.stdout.decode() + r.stderr.decode()[-2000:]
+    assert not (root / ".pipes").exists()
+
+
 def test_a_spill_goes_when_its_writer_is_interrupted(harness, tmp_path):
     """A writer Ctrl-C ends mid-spill, a reader that stops early, and an
     interrupted reader each leave no spill behind."""

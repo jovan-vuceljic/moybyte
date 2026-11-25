@@ -28,8 +28,8 @@
 //          (SPILL, the `.tmp` of its pipe in /etc/pipes, else /.pipes)
 //          through one chunk of the heap, and the reader reads the memory,
 //          then the file. The file and its folder go at the pipe's last
-//          close, whatever ended its ends, and the store's opening sweeps
-//          what a reset left (sweep_pipes in runtime/carts/moy_seed.py). A
+//          close, whatever ended its ends, and the boot's first spill
+//          sweeps what a reset left (spill_sweep). A
 //          spill the store has no room for (or past MOY_SH_SPILL_MAX, so
 //          `yes | head` ends), or a chunk the heap refuses with no spill, is
 //          said once ("no room to hold N KB", "out of memory at
@@ -568,7 +568,32 @@ static int store_stat_here(const char *path, moy_vol_stat_t *st) {
 // A SPILL's steps: its file made (its folder first) and held, a chunk written
 // at its end or read at `at`, and the file closed, then removed with its
 // folder when no other spill is in it -- never the other way round, so a
-// card's entry is never removed under an open file.
+// card's entry is never removed under an open file. The boot's first spill
+// first removes what its folder holds (moy_vol_tmp_first): no spill is open
+// before it, so each file there is one a reset left.
+
+static int spill_first(void *ctx, const char *name, size_t len, int is_dir, uint32_t size) {
+    (void)is_dir, (void)size;
+    char *out = ctx;
+    if (len >= 48) {
+        return EINVAL;
+    }
+    memcpy(out, name, len + 1);
+    return 1;
+}
+
+static void spill_sweep(const moy_vol_t *v, const char *dir) {
+    char name[48], path[MOY_SH_PATH_MAX];
+    for (;;) {
+        name[0] = 0;
+        if (moy_vol_list(v, dir, spill_first, name) != 1 ||
+            snprintf(path, sizeof path, "%s/%s", dir, name) >= (int)sizeof path ||
+            moy_vol_remove(v, path) != 0) {
+            return;
+        }
+    }
+}
+
 static int spill_open_here(spill_t *sp) {
     moy_vol_t v;
     const char *rest;
@@ -581,9 +606,11 @@ static int spill_open_here(spill_t *sp) {
         if (n > 0 && n < sizeof dir) {
             memcpy(dir, rest, n);
             dir[n] = 0;
+            if (moy_vol_tmp_first()) {
+                spill_sweep(&v, dir);
+            }
             moy_vol_mkdir(&v, dir);         // there already, or the open says why not
         }
-        moy_vol_remove(&v, rest);           // a reset's leftover of the same name
         r = moy_vol_open(&v, rest, MOY_VOL_UPDATE | MOY_VOL_HELD, &sp->f);
         if (r != 0) {
             sp->f = NULL;
