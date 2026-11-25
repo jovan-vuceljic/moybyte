@@ -102,14 +102,16 @@ AN INDEX MAY BE SIGNED as OTA manifests are (device/moy_ota.py's keys, RSA-2048
 PKCS#1 v1.5 over SHA-256): `tools/ota_sign.py sign-index` appends
 `, "sig": "<hex>"}` in place of the document's closing brace, and the signature
 covers SIG_SCHEME and the document as it was before. A signed index whose
-signature does not verify is refused, wherever this console can verify (the
-kernel's `moy_net.ota_verify` on a board, its host twin on CPython); the
-browser has no verifier and needs none, its fetch checking the server's
-certificate. An unsigned index is read. A signature
-verifies against the image's keys (INDEX_KEYS, else device/moy_ota.py's) or
-moybyte-org/carts' review keys (REVIEW_KEYS), and an index signed by either
-is REVIEWED; in the browser, which cannot verify, moybyte-org/carts'
-index (DEFAULT_INDEXES) is, its fetch having checked GitHub's certificate.
+signature does not verify is refused, wherever this console can verify: the
+kernel's `moy_net.ota_verify` on a board, its host twin on CPython, and
+rsa_check's arithmetic in a page that holds keys -- the ones the board that
+serves it names (carts_link.BoardCheck), or the release keys the site's
+player bakes in (INDEX_KEYS, which web_boot sets). An unsigned index is
+read. A signature verifies against the image's keys (INDEX_KEYS, else
+device/moy_ota.py's) or moybyte-org/carts' review keys (REVIEW_KEYS), and an
+index signed by either is REVIEWED; in a page that holds no keys, which
+cannot verify, moybyte-org/carts' index (DEFAULT_INDEXES) is, its fetch
+having checked GitHub's certificate.
 
 An entry's `depends` (a list of cart ids, optional) names the carts it needs
 on the console first; `needs` resolves them over the indexes.
@@ -694,10 +696,11 @@ def fitting(carts, want=None):
 
 def addon_unfit(carts, want=None):
     """Whether parse_index's `carts` hold a browser console add-on and none
-    for the page this image names: an image its release did not publish."""
+    for the page this image names: an image its release did not publish.
+    False where the image names no page (the host, the site's player)."""
     want = page_want() if want is None else want
     web = [c for c in carts if c.get("runtime") == "web"]
-    return bool(web) and not any(fits_here(c, want) for c in web)
+    return bool(want) and bool(web) and not any(fits_here(c, want) for c in web)
 
 
 def api_level(c):
@@ -771,18 +774,19 @@ def _verify_digest(digest, sig, url, keys=None):
     """check_signature's verdict over the SHA-256 `digest` of what a
     signature covers: True, an InstallError for one that does not verify,
     None where nothing can verify it. The kernel verifies where there is one
-    (the image's keys, or INDEX_KEYS), and `keys` -- the keys a console's
-    /official answer names (index_keys) -- are checked by rsa_check's
-    arithmetic where there is none (a page); REVIEW_KEYS besides either."""
+    (the image's keys, or INDEX_KEYS); where there is none (a page),
+    rsa_check's arithmetic checks `keys` -- the keys a console's /official
+    answer names (index_keys) -- else INDEX_KEYS, the release keys the
+    site's player bakes in; REVIEW_KEYS besides either."""
     net = _native()
     verify = getattr(net, "ota_verify_digest", None)
     if verify is not None:
         ok = verify(digest, sig) if INDEX_KEYS is None else verify(digest, sig, INDEX_KEYS)
         if not ok and REVIEW_KEYS:
             ok = verify(digest, sig, REVIEW_KEYS)
-    elif keys:
+    elif keys or INDEX_KEYS:
         from rsa_check import verify_digest
-        ok = verify_digest(digest, sig, tuple(keys) + REVIEW_KEYS)
+        ok = verify_digest(digest, sig, tuple(keys or INDEX_KEYS) + REVIEW_KEYS)
     else:
         return None
     if not ok:
@@ -793,8 +797,9 @@ def _verify_digest(digest, sig, url, keys=None):
 def check_signature(data, url, keys=None):
     """True for an index whose signature verifies (the image's keys, or the
     review keys, or `keys` in a page: _verify_digest), False for an unsigned
-    one, None for a signed one where nothing can verify it (the browser with
-    no `keys`). An InstallError for a signature that does not verify."""
+    one, None for a signed one where nothing can verify it (a page with no
+    `keys` and no INDEX_KEYS). An InstallError for a signature that does not
+    verify."""
     got = split_signed(data)
     if got is None:
         return False

@@ -382,6 +382,7 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     ws.cart_pick = seams[2]
     ws.cart_home = seams[3]
     ws.cart_board = seams[4]
+    ws.cart_own = _S.get("cart_own") if seams[0] is not None else None
     ws.media_net = _media_net(ws, _S.get("store_mode"), carts_root)
     # The Moybyte shell's achievements are gamification for the kid console,
     # which the console page is, as on a board; they are no part of the
@@ -503,7 +504,10 @@ def _cart_seams(ws, mode, root):
     SITE: the page's own store, so the page's fetch is the network and OPFS
     keeps what lands (`carts_link`). NONE (no OPFS): the same network, and an
     install lives in this tab like every other edit here, which the page
-    already says out loud."""
+    already says out loud. Both check a signed index under the release keys
+    the bundle bakes in (`release_keys`, cart_index.INDEX_KEYS) and list
+    the official carts of the release indexes.json names (`ws.cart_own`,
+    set by `boot`)."""
     if mode == "board":
         board = None
         link = _worker_link(ws, mode) if _S.get("official") else None
@@ -514,6 +518,12 @@ def _cart_seams(ws, mode, root):
     link = _worker_link(ws, mode)
     if link is None:
         return None, None, None, None, None
+    import cart_index
+    try:
+        import release_keys
+        cart_index.INDEX_KEYS = tuple(release_keys.KEYS) or None
+    except ImportError:              # a bundle staged without them
+        pass
     import carts_link
     keep = carts_link.WebCartKeep(link) if mode == "site" else None
     return carts_link.WebCartNet(link), keep, link.pick, None, None
@@ -1283,22 +1293,32 @@ def store_mode(mode=None, seeded=None):
 
 
 def site_sources(carts_root, doc_json):
-    """The shelves whoever serves a site-mode page chose (its indexes.json:
-    {"indexes": [url, ...]}) as the console's `system/sources`
-    (cart_index.save_sources), a board's twin. A page a board serves browses
-    the board's own, and a page with none the console's default shelves.
-    Called after `store_mode` and before `boot`."""
+    """The shelves whoever serves a site-mode page chose, its indexes.json:
+    `indexes`, [url, ...], as the console's `system/sources`
+    (cart_index.save_sources), a board's twin; and `own`, the release index
+    whose official carts the page lists (`ws.cart_own`: site/build.py names
+    its channel's release on os.moybyte.com). Each is optional. The index
+    at `own` lists official carts only when its signature verifies under
+    the release keys the bundle bakes in (`_cart_seams`), so a host that
+    names another index gets no official cart for it. A page a board serves
+    browses the board's own, and a page with no indexes.json the console's
+    default shelves and no release. Called after `store_mode` and before
+    `boot`."""
     if _S.get("store_mode") == "board":
         return ""
     try:
         doc = json.loads(doc_json)
     except ValueError:
         return ""
-    urls = doc.get("indexes") if isinstance(doc, dict) else None
-    if not isinstance(urls, list):
+    if not isinstance(doc, dict):
         return ""
     import cart_index
-    cart_index.save_sources(carts_root, [u for u in urls if isinstance(u, str)])
+    own = doc.get("own")
+    if cart_index.is_url(own):
+        _S["cart_own"] = own
+    urls = doc.get("indexes")
+    if isinstance(urls, list):
+        cart_index.save_sources(carts_root, [u for u in urls if isinstance(u, str)])
     return ""
 
 
