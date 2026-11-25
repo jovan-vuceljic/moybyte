@@ -29,6 +29,7 @@
 
 #if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
 
+#define _POSIX_C_SOURCE 200809L         // clock_gettime's CLOCK_MONOTONIC under the port's -std=c99
 #include <string.h>
 #include <time.h>
 
