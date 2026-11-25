@@ -186,6 +186,31 @@ def test_a_walk_takes_the_same_c_stack_at_any_depth(harness, tmp_path):
     assert deep - shallow < 256, "2 levels: %d B, 150 levels: %d B" % (shallow, deep)
 
 
+def test_an_arena_run_out_is_an_error_not_a_reset(harness, tmp_path):
+    """A block the arena refuses is dash's "Out of space", raised bare when
+    its own message finds no room (moy_sh.c's refused). Reported again, it
+    recursed until the C stack ran out, which reset the C3. Each script runs
+    the arenas out at different points as their size moves."""
+    scripts = [
+        # a deep tree's path and its walk
+        "p=t; i=0; while [ $i -lt 200 ]; do p=$p/a; i=$((i+1)); done\n"
+        "mkdir -p $p; find t -name zz; du -s t\n",
+        # a command substitution's output (the old shell overflowed at most sizes)
+        "x=$(i=0; while [ $i -lt 3000 ]; do echo abcdefghij; i=$((i+1)); done)\necho ${#x}\n",
+    ]
+    for k, text in enumerate(scripts):
+        script = tmp_path / ("out%d.sh" % k)
+        script.write_text(text + "echo the end\n")
+        for kb in range(14, 41):
+            root = tmp_path / ("root%d_%d" % (k, kb))
+            root.mkdir()
+            r = subprocess.run([harness["sh_main"], str(root), str(script)],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60,
+                               env=dict(os.environ, SH_MAIN_ARENA=str(kb)))
+            out = r.stdout.decode("utf-8", "replace")
+            assert "Sanitizer" not in out, "%d KB: %s" % (kb, out[-1500:])
+
+
 def test_a_file_written_streams_in_chunks(harness, tmp_path):
     """A redirect and tee send a file to the store a chunk at a time
     (moy_sh_sys.c's streamed FILE), so 64 KB written takes no block near its
