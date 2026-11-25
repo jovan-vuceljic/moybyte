@@ -166,9 +166,9 @@ def test_a_release_its_manifests_its_images_and_its_carts_agree(tmp_path, channe
 
 
 def test_a_board_with_no_ota_gets_its_add_on_and_no_manifest(tmp_path):
-    """A one-slot board (the C3 Zero) installs its browser console by cable
-    from the release's index, so the release carries its cart and index
-    though no manifest can name an image for it."""
+    """A one-slot board (the C3 Zero) gets no manifest, which could name no
+    image for it, and its console is online, so its index names no add-on:
+    the release carries its cart for the pack store, and its index."""
     artifacts = tmp_path / "artifacts"
     board = sorted(publish.NO_OTA)[0]
     digest = _artifacts(artifacts, board, seed=3).hex()
@@ -178,10 +178,11 @@ def test_a_board_with_no_ota_gets_its_add_on_and_no_manifest(tmp_path):
     got = publish.stage_ota_all(tag, "unstable", str(artifacts), str(out), repo=REPO)
     assert board not in got
     assert not (out / publish.manifest_name(board)).exists()
-    index_url = publish.asset_url(tag, web_pack.INDEX_NAME % board, repo=REPO)
-    url, fits = _addon(out, board, index_url, digest)
-    assert url == publish.asset_url(tag, web_pack.CART_NAME % digest, repo=REPO)
-    assert fits == [digest]
+    assert web_pack.console_online(board)
+    assert (out / (web_pack.CART_NAME % digest)).exists()
+    doc = json.loads((out / (web_pack.INDEX_NAME % board)).read_text())
+    assert doc["carts"] and not [c for c in doc["carts"]
+                                 if c["runtime"] == web_pack.CART_RUNTIME]
 
 
 def test_a_board_whose_image_names_a_page_it_has_not_got_is_refused(
@@ -450,6 +451,28 @@ def test_an_earlier_signed_index_keeps_its_entries(tmp_path):
     assert {c["moybyte"]["api"] for c in official} == {web_pack.API_LEVEL}
     assert not any("fits" in c["moybyte"] for c in official), \
         "an official entry names its API level, not a page"
+
+
+def test_an_online_consoles_index_names_no_addon(tmp_path):
+    """A board whose console is online (the C3 Zero's `[web] console`)
+    installs no add-on, so its index carries the official entries alone, an
+    earlier index's add-ons dropped too; its add-on cart is published all
+    the same, for the pack store to read by its name."""
+    assert web_pack.console_online("c3_zero") and not web_pack.console_online("p4")
+    first = tmp_path / "a"
+    first.mkdir()
+    digest = _pack(first, 1).hex()
+    web_pack.publish_addon((str(first / web_pack.PACK_FILE), digest), str(first), "p4", 7)
+    earlier = (first / "carts-p4.json").read_bytes()
+    second = tmp_path / "b"
+    second.mkdir()
+    other = _pack(second, 2).hex()
+    got = web_pack.publish_addon((str(second / web_pack.PACK_FILE), other), str(second),
+                                 "c3_zero", 8, earlier=earlier)
+    doc = json.loads((second / "carts-c3_zero.json").read_text())
+    assert doc["carts"] and not [c for c in doc["carts"]
+                                 if c["runtime"] == web_pack.CART_RUNTIME]
+    assert got["cart"] == web_pack.CART_NAME % other and (second / got["cart"]).exists()
 
 
 def test_a_signed_release_signs_the_index(tmp_path, monkeypatch):

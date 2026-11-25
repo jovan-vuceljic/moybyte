@@ -23,7 +23,9 @@ collapses a burst of dev pushes into one build of the last commit.
 payload and `latest-<board>.json`, and the browser console add-on its image
 names**: the cart `moybyte_web-<digest>.moy.zip`, its licence and the index
 `carts-<board>.json`, which lists the add-ons published for the board, one
-entry per digest, newest first (`tools/web_pack.py`). The publisher replaces
+entry per digest, newest first (`tools/web_pack.py`), or none where the
+board's console is online (the C3's, `web_pack.console_online`), whose cart
+is there for the pack store alone. The publisher replaces
 only what a run built and writes each index over the one already published,
 keeping its add-on entries: on the stable
 release every one, on the beta those whose cart is younger than the pack

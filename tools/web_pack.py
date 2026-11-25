@@ -14,6 +14,7 @@
 #   official_entries every official cart as an entry of the release
 #   official_assets  the official carts' assets no index references
 #   addon_assets     the add-on carts no index references
+#   console_online   whether a board's browser console is online, so its index names no add-on
 #   index_doc        the board's index: the official entries, this add-on, then the earlier add-ons it keeps
 #   publish_addon    the carts, their licence and the board's index, in one folder
 """The browser console add-on and the official carts, as a release and a LAN
@@ -29,7 +30,9 @@ Beside every payload, whether or not any console has the add-on installed:
                                    an index names it (the beta's go once none
                                    does and the pack store no longer serves
                                    them: addon_assets, the publisher's
-                                   prune_carts): the folder
+                                   prune_carts), and read by the pack store
+                                   by its name whether an index names it or
+                                   not: the folder
                                    web_console_<12 hex>.moy, holding manifest.json
                                    (moybyte.fits: the digest), the pack and its
                                    licence
@@ -45,7 +48,9 @@ Beside every payload, whether or not any console has the add-on installed:
     carts-<board>.json             an index in the store's format (version 1,
                                    runtime/carts/cart_index.py): an entry per
                                    official cart of THIS build, naming its API
-                                   level in moybyte.api, then one per add-on
+                                   level in moybyte.api, then, but where the
+                                   board's console is online (console_online),
+                                   one per add-on
                                    published for the board, newest first, each
                                    naming its page's digest in moybyte.fits, as
                                    many as INDEX_BUDGET holds (index_doc; the
@@ -552,17 +557,36 @@ def addon_assets(names, indexes):
     return _unreferenced(ADDON_ASSET, names, indexes)
 
 
+def console_online(board, root=ROOT):
+    """True where the board whose board.toml's `[board] ota` is `board`
+    declares its browser console online (`[web] console`,
+    board_config.web_console): its consoles install no add-on, so its index
+    names none, and its loader reads the pack from the pack store, which
+    takes it from the add-on cart by the cart's name (tools/pack_store.py)."""
+    firmware = os.path.join(root, "firmware")
+    for name in sorted(os.listdir(firmware)):
+        d = os.path.join(firmware, name)
+        if (os.path.exists(os.path.join(d, "board.toml"))
+                and board_config.load(d).get("board", {}).get("ota") == board):
+            return board_config.web_console(d) == "online"
+    return False
+
+
 def index_doc(board, entry, earlier=None, official=(), keep=None):
     """The bytes of `carts-<board>.json`: the `official` entries (this
-    build's official carts), the add-on `entry`, then the add-on entries of
+    build's official carts), the add-on `entry` (None: no add-on entry, this
+    one or an earlier one), then the add-on entries of
     the board's earlier index (`earlier`, its bytes) for another page, so a
     console a step behind its channel still finds the add-on its image fits:
     those `keep` (a predicate on an entry; None: all) answers true for, the
     newest of them that keep the document within INDEX_BUDGET."""
-    head = list(official) + [entry]
-    older = [c for c in earlier_entries(earlier)
-             if c["moybyte"]["fits"] != entry["moybyte"]["fits"]
-             and (keep is None or keep(c))]
+    if entry is None:
+        head, older = list(official), []
+    else:
+        head = list(official) + [entry]
+        older = [c for c in earlier_entries(earlier)
+                 if c["moybyte"]["fits"] != entry["moybyte"]["fits"]
+                 and (keep is None or keep(c))]
 
     def doc(n):
         d = {"version": 1, "name": "Moybyte %s" % board,
@@ -587,7 +611,8 @@ def publish_addon(page, folder, board, version, key_pem=None, earlier=None,
     licence and `carts-<board>.json` over the board's `earlier`
     index (its bytes; None reads the one already in `folder`), the earlier
     add-ons `keep` answers true for (index_doc), signed with `key_pem` when
-    given. Returns {"cart", "index", "official"}: the add-on's
+    given; the index of a board whose console is online (console_online)
+    names no add-on, its cart published all the same. Returns {"cart", "index", "official"}: the add-on's
     and the index's names, and the official entries' count."""
     index = INDEX_NAME % board
     path = os.path.join(folder, index)
@@ -597,8 +622,8 @@ def publish_addon(page, folder, board, version, key_pem=None, earlier=None,
     shutil.copyfile(LICENCE_SRC, os.path.join(folder, LICENCE_NAME))
     cart = publish_cart(page, folder)
     official = official_entries(folder, seeds, modules) if seeds else []
-    doc = index_doc(board, index_entry(page[1], version, cart, folder), earlier,
-                    official, keep)
+    entry = None if console_online(board) else index_entry(page[1], version, cart, folder)
+    doc = index_doc(board, entry, earlier, official, keep)
     if key_pem:
         import ota_sign
         doc = ota_sign.sign_index(doc, key_pem)

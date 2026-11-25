@@ -48,7 +48,9 @@ paths:
     through `tools/web_pack.py`) put beside the payload the cart
     `moybyte_web-<digest>.moy.zip`, its licence, and `carts-<board>.json`: an
     index in the store's format (version 1, signed as a carts index is) with
-    one entry per add-on published for the board, newest first. An
+    one entry per add-on published for the board, newest first (none for a
+    board whose console is online, the C3's: `web_pack.console_online`; the
+    pack store reads its cart by name). An
     index lists an id once, so an entry's id is `web_console_<12 hex of the
     digest>` and its `moybyte.fits` the whole digest; a console installs the
     entry that fits its running image, through the ordinary Install, which
