@@ -284,9 +284,16 @@ nor those docs will warn you about:
     sends a CORS header). It reads an asset's `mirror`, and an external
     file's, on the carts repository's Pages site first (moybyte-org/carts'
     scripts/make_index.py names them), and a firmware release's
-    `carts-<board>.json` where the Pages deploy mirrors it
-    (`tools/pack_store.py`), which is the release's only when its signature
-    verifies. An external file it can read from neither is the player's
+    `carts-<board>.json` where the Pages deploy mirrors it with the official
+    carts' files beside it (`tools/pack_store.py`), which is the release's
+    only when its signature verifies.
+  - **The site's player lists its channel's release** (owner, 2026-11-25):
+    its `indexes.json` (site/build.py) names the mirrored P4 index of
+    firmware-latest on `/` and of firmware-beta on `/dev/` as `own`, and the
+    page takes it as the release's, its official carts listed and installed
+    from the mirror, only when its signature verifies under the release keys
+    the bundle bakes in (`release_keys`, `tools/ota_sign.py keys-module`,
+    the keys every board trusts) -- never for the address it was read from. An external file it can read from neither is the player's
     own copy, chosen through a REAL page control (the card under the canvas):
     a browser opens its file dialog only from a click on one, never from a tap
     the console relays a frame later.
@@ -298,8 +305,9 @@ nor those docs will warn you about:
     shipping it. `store_test.mjs` interrupts an update at every change it
     makes.
   - **The shelves are the serving host's**: an `indexes.json` beside the page
-    replaces the defaults, read once at boot and written as the console's
-    `system/sources`.
+    is read once at boot; its `indexes` replace the defaults, written as the
+    console's `system/sources`, and its `own` names the release index
+    (`ws.cart_own`, web_boot.site_sources).
   - **A page keeps no compiled module**, so a release asset is read by RANGE
     (`ranges` on the page's transport, `cart_unpack._Ranged`): the zip's
     directory, then the runs of members it keeps -- a cart's modules are most

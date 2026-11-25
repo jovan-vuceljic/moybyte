@@ -461,7 +461,8 @@ stream is copied as it is, its channels kept; on the T-Deck it is mixed down
 to mono), and the mix pulls it as its
 **background stream** (`moy_aud_bg`, `native/moy_audio/moy_aud.h`), at a
 quarter of its level while the focused session sounds (**ducked**). On a
-board a task on core 0 below the flush priority (`MOY_MEDIA_PRIO`) reads the
+board a task on core 0 below the flush priority and above the bulk work
+beside it, the http worker's TLS among it (`MOY_MEDIA_PRIO`), reads the
 connection and decodes, on a 24 KiB PSRAM stack (a frame's decode takes 16.7
 KB) that never runs a flash operation. **A file is the C's from end to end**
 (owner, #246 review 2026-11-07: one path for the Music app, the shell's

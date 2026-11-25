@@ -102,8 +102,8 @@ moybyte_patch_pwm_ledc_book
 #     sdkconfig.board (adopted 2026-08-19).
 moybyte_patch_psram_retune
 
-# The mDNS responder's scratch is PSRAM while it runs (the SSH server's
-# `<name>.local`), not internal .bss for the whole power-on
+# The mDNS responder's scratch and its task's stack are PSRAM while it runs
+# (the SSH server's `<name>.local`), not internal SRAM
 # (tools/patch_mdns_psram.py).
 moybyte_patch_mdns_psram
 

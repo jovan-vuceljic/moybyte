@@ -427,7 +427,7 @@ WIRING = {
         "cart_home": INJECTED,
         "cart_board": INJECTED,
         "media_net": INJECTED,
-        "cart_own": "a page is the browser console; it installs no add-on",
+        "cart_own": INJECTED,
         "addon": "a page is the browser console; it installs no add-on",
         "battery": "a browser's battery is its own OS's to show",
         "reboot_hook": "a reload is the browser's reset, and the page owns it",

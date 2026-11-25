@@ -258,8 +258,9 @@ GENERATED = {
     # The font set, the console's compiled pages and the UI tree's Lua layer,
     # the modules every console board generates too (tools/make_font.py
     # module, the board's `font_tier`; tools/uitree_compile.py --staged;
-    # tools/uitree_lua_freeze.py).
-    "web": {"fonts_data", "uitree_pages", "uitree_lua"},
+    # tools/uitree_lua_freeze.py), and the release's public keys the site's
+    # player checks its release index with (tools/ota_sign.py keys-module).
+    "web": {"fonts_data", "uitree_pages", "uitree_lua", "release_keys"},
 }
 
 # Directory-shaped modules: a package staged wholesale rather than file by file.

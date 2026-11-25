@@ -109,6 +109,27 @@ CHANNELS = {
             "note": "the latest dev, built from every push; it may be broken"},
 }
 
+# The release a channel's player lists official carts from: its variant's
+# release (VARIANTS), the one its boards' OTA channel serves, read from the
+# mirror tools/pack_store.py keeps of it on this site (cart_index.RELEASE_MIRROR;
+# a page cannot read a release download). Every board's index lists the same
+# official carts, each one asset on every board's release (tools/web_pack.py),
+# and differs only in its browser console add-ons, which fit a board's page and
+# never this one (cart_index.fitting); the P4's is the one read. The page lists
+# the release's carts as official only when the index's signature verifies
+# under the release keys the bundle bakes in (web_boot.site_sources).
+RELEASE_MIRROR = "https://os.moybyte.com/console/releases/"
+RELEASE_INDEX = "carts-p4.json"
+
+
+def player_shelves(channel=None):
+    """The player's indexes.json: the release `channel`'s player lists its
+    official carts from (`own`); its shelves are the console's defaults."""
+    variant = CHANNELS[channel]["variant"] if channel else "stable"
+    tag, = [v[2] for v in VARIANTS if v[0] == variant]
+    return {"own": RELEASE_MIRROR + tag + "/" + RELEASE_INDEX}
+
+
 # page_tail.js's channel line, which stamp_player rewrites for a channel's site.
 CHANNEL_LINE = 'const MOY_CHANNEL = "";'
 
@@ -1688,6 +1709,9 @@ def main():
             shutil.copytree(PLAYER_SRC, os.path.join(out, "player"))
             has_player = (not args.channel
                           or stamp_player(os.path.join(out, "player"), args.channel))
+            if has_player:
+                with open(os.path.join(out, "player", "indexes.json"), "w") as f:
+                    json.dump(player_shelves(args.channel), f)
         else:
             print("!! no player bundle at %s -- build it first" % PLAYER_SRC)
 

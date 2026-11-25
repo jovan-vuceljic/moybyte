@@ -8,8 +8,10 @@ them), whose pack the webhost serves (native/moy_net/moy_page.h); and on a
 Zero the official carts, which its release publishes in the same index.
 
 The firmware names the page it serves (moy_web.page_want), and its release
-publishes, beside its manifest, a signed index listing every add-on it ever
-published, each naming the page it fits (`moybyte.fits`). Every board gets
+publishes, beside its manifest, a signed index listing the add-ons it
+published, newest first (on the beta those of the last 30 days, within the
+index's budget: tools/web_pack.py), each naming the page it fits
+(`moybyte.fits`). Every board gets
 the one that fits it through the ordinary install (cart_index.Install: every
 file checked against the signed index before the folder moves into place):
 from Get Carts like any cart, or by this module's step (`AddonStep`). The

@@ -717,6 +717,41 @@ def test_vi_s_key_row_leaves_insert_saves_and_quits_on_the_tdeck(term, tmp_path)
         ui_draw.hint_kind(kinds[1])
 
 
+def test_python_runs_a_file_by_the_sessions_path(term):
+    """`python FILE [ARG...]`: the file named by the session's path, read
+    from the store's, `sys.argv` its name as typed and its ARGs, its exit
+    status the program's; a file the store has none of is said, status 2;
+    the console's own `sys.argv` is put back."""
+    import sys
+    was = list(sys.argv)
+    _ws, app = term
+    run(app, "mkdir /p; cd /p; printf 'import sys\\nprint(sys.argv)\\n"
+             "raise SystemExit(len(sys.argv))\\n' > hi.py; python hi.py a 'b c'; echo $?")
+    assert plain(app)[-2:] == ["['hi.py', 'a', 'b c']", "3"]
+    assert sys.argv == was
+    run(app, "cd /; python p/hi.py; echo $?")
+    assert plain(app)[-2:] == ["['p/hi.py']", "1"]
+    run(app, "python nope.py; echo $?")
+    said = "".join(plain(app)[-3:])                    # the grid wraps the line
+    assert "python: nope.py: " in said and plain(app)[-1] == "2"
+    run(app, "printf '1 / 0\\n' > /p/bad.py; python /p/bad.py; echo $?")
+    assert "ZeroDivisionError" in "".join(plain(app)[-3:]) and plain(app)[-1] == "1"
+
+
+def test_a_file_whose_hash_bang_names_python_runs_as_a_command(term):
+    """`./hi.py` whose first line is `#!` naming python (directly or
+    through env) is `python ./hi.py`; one naming sh, or none, is a shell
+    script, as before."""
+    _ws, app = term
+    run(app, "mkdir /p; cd /p; printf '#!/usr/bin/env python3\\nimport sys\\n"
+             "print(sys.argv)\\n' > hi.py; ./hi.py x; echo $?")
+    assert plain(app)[-2:] == ["['./hi.py', 'x']", "0"]
+    run(app, "printf '#!python\\nprint(6 * 7)\\n' > two.py; ./two.py")
+    assert plain(app)[-1] == "42"
+    run(app, "printf '#!/bin/sh\\necho shell $1\\n' > s; ./s y")
+    assert plain(app)[-1] == "shell y"
+
+
 def test_python_is_a_line_app_over_the_prompt(term):
     """`python` with the terminal for its stdin keeps the prompt line, its
     prompt the REPL's: a line at a time into the console's VM, a block held

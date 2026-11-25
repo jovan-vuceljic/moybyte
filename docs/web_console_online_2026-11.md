@@ -50,9 +50,12 @@ later sync their files.
   (the C3 Zero) serves it at `/`, every board at `/loader.html`, and `GET
   /sync` names both digests and `local` (`native/moy_net/moy_page.h`, THE
   LOADER). The C3 asks its release for no add-on (`zero_host.make_addon`).
-- **The release publishes every add-on ever made** as
+- **The release publishes every add-on it makes** as
   `moybyte_web-<digest>.moy.zip` beside the payload, listed in the board's
-  signed carts index (`tools/web_pack.py`). A board installs the one that
+  signed carts index (`tools/web_pack.py`): the stable release's every one,
+  the beta's those of the last 30 days like the pack store (§12), within
+  the index's budget. The beta deletes an add-on no index lists once it is
+  older than that (`publish_firmware_release.prune_carts`). A board installs the one that
   fits through the ordinary install, every file checked against the signed
   index (`runtime/carts/web_addon.py`'s `AddonStep`; on a Zero
   `device/zero_host.py`). Those assets are GitHub release downloads, which

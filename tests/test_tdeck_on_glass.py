@@ -455,16 +455,20 @@ def _glass_start(board):
 
 
 def test_a_field_reads_the_matrix_and_mic_cancels_it(board):
-    """Owner call 2026-10-18: in a field Enter is Done and Mic is Cancel.
-    The Name field keeps the keyboard on the matrix (where Mic shows; the
+    """Owner calls 2026-10-18 and 2026-11-24: a focused field is a stop
+    until Enter opens its edit; in the edit Enter is Done and Mic is Cancel.
+    The Name's edit keeps the keyboard on the matrix (where Mic shows; the
     C3's ASCII mode sends nothing for it), a Mic press puts the typed text
-    back, Enter keeps it, and Mic outside the field opens the system menu.
+    back, Enter keeps it, and Mic outside an edit opens the system menu.
     The keys are queued into the console's table, Mic as `start`: a person
     pressing them is the one step no suite takes."""
     was = board.pyval("ws.system.get('name', '')", strict=True)
     try:
         board.pyexec("ws.open_settings(); ws.settings_layer.show_row('name')", strict=True)
         board.drain(0.8)
+        assert board.pyval("ws.settings_layer.typing()", strict=True) is False, \
+            "a focused field is a stop"
+        _glass_key(board, 13)
         assert board.pyval("ws.settings_layer.typing()", strict=True) is True
         assert board.pyval("ws.input.text_mode", strict=True) is True
         assert board.pyval("ws.keyboard.raw_mode", strict=True) is True, \
@@ -476,6 +480,7 @@ def test_a_field_reads_the_matrix_and_mic_cancels_it(board):
         assert board.pyval("ws.sysmenu.open", strict=True) is False
         board.pyexec("ws.settings_layer.show_row('name')", strict=True)
         board.drain(0.5)
+        _glass_key(board, 13)
         _glass_key(board, ord("z"))
         _glass_key(board, 13)
         assert board.pyval("ws.system.get('name', '')", strict=True) == (was or "") + "z"

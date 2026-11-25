@@ -75,7 +75,12 @@ a trap, as SIGABRT's), and Ctrl-C reaching it at its next import.
 `python` with the terminal for its stdin is the
 interactive REPL in front of the face (below); with a pipe or a
 here-document it reads that as a REPL (an expression's value printed), and
-it runs `-c CODE`.
+it runs `-c CODE` and `FILE`, each with ARGs for its `sys.argv` and its exit
+status the program's. FILE is the session's path, crossing to the console's
+VM as the store's (`native/moy_sh/moy_sh_board.c`), and a file run as a
+command by its path whose `#!` line names `python` or `python3`, directly
+or through `env`, runs as `python FILE`; any other file runs as a shell
+script (`native/moy_sh/moy_sh.c`).
 
 **Built-ins are views of OS services: one implementation, a GUI face and a
 command face, never a second copy.** The core commands are **C built-ins**
@@ -588,12 +593,17 @@ comments); absent or empty, the console reads moybyte-org/carts. A legacy
 `indexes.json` reads as absent. A page served from a static host writes the
 host's `indexes.json` there at boot. A board reads its own release's index
 last (`carts-<board>.json` beside its update manifest, which os.moybyte.com
-mirrors for a page to read: `cart_index.index_mirror`): the browser console
+mirrors for a page to read, with the official carts' files beside it:
+`cart_index.index_mirror`, `tools/pack_store.py`): the browser console
 add-on and every seed cart of that build but a test fixture as an OFFICIAL
 cart (`"moybyte": {"fixture": true}`, `docs/app_api_v1.md` §2), those no
 store is seeded with (`"seed": false`) among them, the one place
 an entry in the built-ins' namespace installs from, with
-the signature verified (`.claude/rules/carts.md`).
+the signature verified (`.claude/rules/carts.md`). The site's player reads
+its channel's release the same way, the one its `indexes.json` names as
+`own` (site/build.py: firmware-latest on `/`, firmware-beta on `/dev/`), from
+that mirror, and checks its signature under the release keys its bundle
+bakes in (`tools/ota_sign.py keys-module`), the keys every board trusts.
 
 **The verbs** (the shell's `pkg`, `runtime/shell/sh_roles.py`):
 

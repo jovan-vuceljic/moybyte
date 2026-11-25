@@ -16,7 +16,12 @@ on:
 jobs:
   base-is-merged:
     name: Branch contains its base's tip
-    if: github.event_name == 'pull_request'
+    # A pull request from a fork only (owner, 2026-11-25), as ci.yml's suite:
+    # a branch of this repository is a worker's, merged with dev's tip when
+    # it lands, so dev's every push turned its check red for nothing.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -57,8 +62,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
         run: |
-          gh pr list --base "$BRANCH" --state open --json number,headRefOid \
-            --jq '.[] | "\(.number) \(.headRefOid)"' |
+          gh pr list --base "$BRANCH" --state open --json number,headRefOid,isCrossRepository \
+            --jq '.[] | select(.isCrossRepository) | "\(.number) \(.headRefOid)"' |
           while read -r pr sha; do
             run="$(gh run list --workflow pr-base.yml --event pull_request \
                      --commit "$sha" --limit 1 --json databaseId \

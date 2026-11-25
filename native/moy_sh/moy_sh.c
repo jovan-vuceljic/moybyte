@@ -199,7 +199,6 @@ moy_sh_t *moy_sh_new(const moy_sh_host_t *host, size_t arena, const char *home,
         }
         s->nroles = nroles;
     }
-    extern int moy_sh_rolecmd(int, char **);
     for (int i = 0; i < nroles; i++) {
         s->roles[i].name = host->roles[i];
         s->roles[i].builtin = moy_sh_rolecmd;
@@ -922,6 +921,59 @@ static int run_script(char *path, char **argv) {
     return waitforjob(jp);
 }
 
+// Whether file `path`'s first line is `#!` naming python, directly or
+// through env: `#!/usr/bin/env python3`, `#!python`.
+static int names_python(const char *path) {
+    char line[96];
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        return 0;
+    }
+    long n = read(fd, line, sizeof line - 1);
+    close(fd);
+    if (n < 2 || line[0] != '#' || line[1] != '!') {
+        return 0;
+    }
+    line[n] = 0;
+    char *p = line + 2;
+    for (int word = 0; word < 2; word++) {
+        p += strspn(p, " \t");
+        size_t len = strcspn(p, " \t\r\n");
+        char *base = p;
+        for (char *q = p; q < p + len; q++) {
+            if (*q == '/') {
+                base = q + 1;
+            }
+        }
+        size_t blen = (size_t)(p + len - base);
+        if (blen == 3 && strncmp(base, "env", 3) == 0 && word == 0) {
+            p += len;
+            continue;
+        }
+        return (blen == 6 && strncmp(base, "python", 6) == 0) ||
+               (blen == 7 && strncmp(base, "python3", 7) == 0);
+    }
+    return 0;
+}
+
+// A file run as a command: one whose `#!` names python is `python FILE
+// ARG...` (FILE as typed, or its path where PATH found it), any other a
+// shell script, as `sh FILE` runs it.
+static int run_file(char *path, char **argv) {
+    if (!names_python(path)) {
+        return run_script(path, argv);
+    }
+    int argc = 0;
+    while (argv[argc] != NULL) {
+        argc++;
+    }
+    char **py = stalloc(((size_t)argc + 2) * sizeof *py);
+    py[0] = "python";
+    py[1] = strchr(argv[0], '/') != NULL ? argv[0] : path;
+    memcpy(py + 2, argv + 1, (size_t)argc * sizeof *py);
+    return moy_sh_rolecmd(argc + 1, py);
+}
+
 struct shc {
     char *cmd;
     char **argv;
@@ -1015,7 +1067,7 @@ int moy_sh_exec(char **argv, const char *path, int idx) {
                     return r;
                 }
             } else {
-                return run_script(abs, argv);
+                return run_file(abs, argv);
             }
         }
         // `<id>/<name>`: one installed command of a cart that has several
@@ -1043,7 +1095,7 @@ int moy_sh_exec(char **argv, const char *path, int idx) {
                 }
                 continue;
             }
-            return run_script(abs, argv);
+            return run_file(abs, argv);
         }
     }
     sh_warnx("%s: not found", argv[0]);

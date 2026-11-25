@@ -422,6 +422,12 @@ fi
 # compresses it smaller than a board's small deflate window does.
 "${PY}" "${REPO_ROOT}/tools/uitree_lua_freeze.py" "${STAGE_DIR}/modules" --text
 
+# release_keys.py: the release's public signing keys (device/moy_ota.py's
+# OTA_PUBLIC_KEYS, the ones every board trusts), baked in so the site's player
+# checks the signature of the release index it lists official carts from
+# (web_boot sets them as cart_index.INDEX_KEYS).
+"${PY}" "${REPO_ROOT}/tools/ota_sign.py" keys-module "${STAGE_DIR}/modules/release_keys.py"
+
 # ---------------------------------------------------------------------------
 # 3. The cart bundle: the runner's shelf roster packed as one JSON
 #    {"<cart>.moy/<relpath>": text}, and {"b": base64} for a cart's cover.png

@@ -365,6 +365,26 @@ def test_python_runs_code_and_a_repl_over_stdin(console):
     assert call(d, "role", "python", "-x") == 2
 
 
+def test_python_runs_a_file_as_the_shell_crossed_it(console, tmp_path):
+    """`python --file STORE NAME ARG...` (the shell's `python FILE ARG...`,
+    moy_sh_board.c's python_file): the program read from STORE, `sys.argv`
+    NAME and the ARGs, its exit status the program's; `-c` takes ARGs too."""
+    _ws, door = console
+    prog = tmp_path / "hi.py"
+    prog.write_text("import sys\nprint(sys.argv, __file__)\nraise SystemExit(4)\n")
+    io, d = door()
+    assert call(d, "role", "python", "--file", str(prog), "hi.py", "a") == 4
+    assert io.out == "['hi.py', 'a'] hi.py\n"
+    io, d = door()
+    assert call(d, "role", "python", "-c", "import sys; print(sys.argv)", "z") == 0
+    assert io.out == "['-c', 'z']\n"
+    io, d = door()
+    assert call(d, "role", "python", "--file", str(tmp_path / "none.py"), "none.py") == 2
+    assert io.err.startswith("python: none.py: ")
+    io, d = door()
+    assert call(d, "role", "python", "hi.py") == 2 and "usage" in io.err
+
+
 def test_perm_lists_and_turns_an_apps_permissions(console):
     ws, door = console
     io, d = door()
@@ -446,6 +466,25 @@ def test_service_starts_stops_and_says_its_state(console):
     assert "-     exited 0   local.svc\n" in io.out
     assert call(d, "role", "service", "stop", "local.svc") == 1
     assert call(d, "role", "service", "start", "local.nope") == 1
+
+
+@pytest.mark.first_run
+def test_a_service_that_arrived_as_files_asks_in_its_terminal_first(console):
+    """`service start` of a service with no consent record asks with the
+    install prompt's lines, as a command's first run does: a no starts
+    nothing and records nothing and says why; a yes records its permissions
+    and starts it."""
+    from runtime import app_perms
+    ws, door = console
+    io, d = door(b"n\n")
+    assert call(d, "role", "service", "start", "local.svc") == 126
+    assert io.out.endswith("Open it? [y/N] ")
+    assert io.err == "service: local.svc: %s\n" % app_perms.UNASKED_REFUSAL
+    assert S.SCHED.find("local.svc") is None and ws.consent.get("local.svc") is None
+    io, d = door(b"y\n")
+    assert call(d, "role", "service", "start", "local.svc") == 0
+    assert S.SCHED.find("local.svc") is not None
+    assert ws.consent.get("local.svc") == {"perms": ["http"], "off": []}
 
 
 def test_service_policy_sets_and_shows_and_lives_in_the_settings(console):
