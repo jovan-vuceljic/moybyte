@@ -296,6 +296,12 @@ class _Owed:
         self._lay.fill_owed = True
         self._d.again()
 
+    def step(self):
+        """A frame owed to the pump's work alone (a cover on its way): the
+        page has not moved, so no fill, nothing made for one, and no window
+        behind drawn again (`moved`)."""
+        self._d.again()
+
 
 def _set(lay, name, rows):
     """Model `name` written only where its rows moved."""
@@ -1007,6 +1013,7 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             self._release()
         yield
         yield from self._rows_steps(CHECK_MS)
+        yield                         # the shelf's first paint, a frame of its own
         self._land()
         if self.rows:
             self._focus = self._card_id(self.cur if self.cur in self.rows else self.rows[0])
@@ -1072,7 +1079,7 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             self._covers.pop()
             self._damage.all()
         if self._covers:
-            self._damage.again()
+            self._damage.step()
         else:
             self._release()
 
@@ -1173,6 +1180,8 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
                     yield
                     t = _ticks_ms()
                 rows.append(inst.op(lambda: _row(c, rec)))
+            if budget_ms is not None:
+                yield                       # the store's room and the fits, a frame of their own
             if board is not None:
                 free = self._board_free
             else:
