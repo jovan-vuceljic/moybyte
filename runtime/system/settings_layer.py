@@ -1228,11 +1228,17 @@ class SettingsLayer(Layer):
         return tuple(out)
 
     def _free(self):
-        """The store's free space as About shows it, or None."""
+        """The store's free space as About shows it, or None: the store of
+        record's, so a page a board serves shows the board's as its last
+        check said (`cart_board`) and never its own memory's."""
         ws = self.ws
         try:
             keep = getattr(ws, "cart_keep", None)
-            if keep is not None:
+            if getattr(ws, "cart_home", None) == "board":
+                board = getattr(ws, "cart_board", None)
+                got = board.free() if board is not None else None
+                b = got[0] if got else None
+            elif keep is not None:
                 got = keep.free()
                 b = got[0] if got else None
             else:
