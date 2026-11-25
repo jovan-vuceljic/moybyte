@@ -2041,19 +2041,46 @@ def test_chrome_freeze_is_pixel_identical(tmp_path):
     assert bytes(ws.sys_canvas._buf) == reference
 
 
-def test_taskbar_chips_freeze_and_refresh_on_focus_change(tmp_path):
-    """The chips live on the OS bar, which no window overlaps -- same freeze,
-    same restart rule (here: the focused chip is a different colour)."""
+def test_taskbar_chips_lay_only_what_moved(tmp_path):
+    """The bar's strip draws the chips and the window manager lays them from
+    it (`BarLayer.lay_chips`): a drag, whose chips stand, lays none; a focus
+    change lays the chips that changed and their marks' reach, not the bar,
+    into each of the three buffers, which then hold a full repaint byte for
+    byte."""
     ws = _ws(tmp_path)
     drv = _drv(ws)
     _quiesce(ws)
     order = _open_two_windows(ws, drv)
-    _settle_gesture(ws, drv, frames=10)
-    assert ws.wm._chip_streak >= 2, "the chips never froze"
-
-    ws.wm.focus_key = order[0]               # focus moves -> a chip changes colour
-    ws.wm._draw_taskbar_chips(quiet=True)
-    assert ws.wm._chip_streak == 1, "a focus change must repaint the chips"
+    ring = _Ring(ws, 3)
+    for _ in range(4):                    # every buffer holds the chips
+        ws.mark_dirty()
+        ring.frame(drv)
+    ring.settle(drv)
+    laid = []
+    real = ws.bar_layer.lay_chips
+    ws.bar_layer.lay_chips = lambda where, r, also=None: (laid.append(r), real(where, r, also))[1]
+    try:
+        win = ws.wm.windows[order[-1]]
+        gx, gy = win.x + win.w // 2, win.y + 4
+        drv.touch(gx, gy)
+        ring.frame(drv)
+        for k in range(1, 6):
+            drv.touch_drag(gx + 10 * k, gy + 6 * k)
+            ring.frame(drv)
+        drv.touch_up()
+        ring.settle(drv)
+        assert (win.x, win.y) != (gx - win.w // 2, gy - 4), "the window never moved"
+        assert laid == [], "a drag laid the chips"
+        ws.wm.move_focus(order[0])
+        for _ in range(5):
+            ws.mark_dirty()
+            ring.frame(drv)
+    finally:
+        del ws.bar_layer.lay_chips
+    bar = ws.wm._chips_cell()[0][1]
+    assert len(laid) == 3, laid
+    assert all(r[2] < bar[2] for r in laid), (laid, bar)
+    assert list(ring.bufs) == ring.full(drv)
 
 
 # -- changing the font scale from inside a window (#155) ---------------------

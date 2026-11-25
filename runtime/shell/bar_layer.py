@@ -158,12 +158,15 @@ _TITLES = {"projects": "PROJECTS", "settings": "SETTINGS", "desk": "DESK",
 # whether focus marks draw, which the lent zone's current tab shows).
 _KEY_ALWAYS = (0, 3, 4, 10, 12)
 _KEY_OF = {"clock": (1,), "zone": (2, 5, 6, 8, 9), "title": (6, 8), "wifi": (7,),
-           "menu": (11,), "status": (13,), "battery": (13,)}
-_KEY_N = 14                 # 12: the item keys focus (`focus_item`); 13: the status
-                            # items and the selected widget (`_status_key`)
+           "menu": (11,), "status": (13,), "battery": (13,), "chips": (14,)}
+_KEY_N = 15                 # 12: the item keys focus (`focus_item`); 13: the status
+                            # items and the selected widget (`_status_key`); 14: the
+                            # taskbar chips (the window manager's `chips_gen`)
 _KEY_ALL = (1 << _KEY_N) - 1
 _KEY_UNDO = 1 << 9          # drawn only by the Editor's zone ("menu")
-_KEY_PARTS = (1 << 6) | (1 << 12)   # the fields drawn in a part of the bar: the zone, the pill
+_KEY_CHIPS = 1 << 14
+# the fields drawn in a part of the bar: the zone, the pill, the chips
+_KEY_PARTS = (1 << 6) | (1 << 12) | _KEY_CHIPS
 
 
 # A look leaf no theme sets (moy_theme.h's MOY_THEME_NONE).
@@ -624,7 +627,6 @@ class BarLayer:
         self.focus_where = None
         self._page_at = [None, None, None]      # the bar the page draws: where, its rect, its cells
         self._plate_at = [None, 0, 0, 0, None]  # the system plate's box: the cells, the bar's x, y, h
-        self._chips_at = [None, None, None]     # the chips' repaint: the packing, where, (bar, ground, clip)
         self.focus_item = None
         self._items_lgen = -1         # the status items' count the packing holds
         self._hooks = None            # the bar page's actions' ways out (`_page_draw`)
@@ -1076,7 +1078,7 @@ class BarLayer:
 
     # -- draw + cache (the #43 strip, generalized to every `where`) -----------
 
-    def _draw_top_bar_cart(self, where):
+    def _draw_top_bar_cart(self, where, lay=None, also=None):
         """The ONE cached bar draw for every `where` (Stage 4 generalizes what was
         the running-cart-only strip cache): each bar's pixels rendered ONCE into
         an offscreen strip and blit_strip'd each frame (one flat copy a bar)
@@ -1086,7 +1088,9 @@ class BarLayer:
         change / theme edit / font-size change) that bar's strip is re-rendered
         WHOLE, then reused; a bar without the clock never re-renders on its
         tick. The strips are purely the DRAW; hit-testing goes through the
-        packed cells / zone_tap, so caching can't desync taps."""
+        packed cells / zone_tap, so caching can't desync taps. `lay`, a rect
+        on the canvas: that part of the bars alone laid, onto `also` too
+        (`lay_chips`, which answers)."""
         game = self.zone_is_game(where)
         cv = self._bar_canvas(where, game)
         packed = self._packed(where, game)
@@ -1103,12 +1107,18 @@ class BarLayer:
             # dozen icon/text commands are far lighter than an inlined pixel strip.
             for i in range(len(packed)):
                 r = packed[i][1]
+                if lay is not None:
+                    if not _meets(r, lay):
+                        continue
+                    cv.clip(lay[0], lay[1], lay[2], lay[3])
                 if r[0] or r[1]:
                     cv.camera(-r[0], -r[1])
                 self._render_cart_bar(cv, key, i)
                 if r[0] or r[1]:
                     cv.camera(0, 0)
-            return
+                if lay is not None:
+                    cv.clip()
+            return False
         bars = self._bar_strips.get(where)
         if bars is None:
             bars = []
@@ -1116,7 +1126,20 @@ class BarLayer:
         while len(bars) < len(packed):
             bars.append([])
         for i in range(len(packed)):
-            self._draw_bar(cv, bars[i], packed[i][1], key, fields[i], i)
+            r = packed[i][1]
+            if lay is None:
+                self._draw_bar(cv, bars[i], r, key, fields[i], i)
+            elif _meets(r, lay):
+                strip = self._draw_bar(cv, bars[i], r, key, fields[i], i, False)
+                x, y, w, h = _cut(lay, r)
+                if hasattr(cv, "blit_strip_rect"):
+                    cv.blit_strip_rect(strip, r[0], r[1], x, y, w, h)
+                else:
+                    cv.blit_strip(strip, r[0], r[1])     # (the whole bar, current)
+                if also is not None:
+                    also.blit_strip_rect(strip, r[0], r[1], x, y, w, h)
+                self.strip_moved(cv, x, y, w, h)
+        return True
 
     def _key_fields(self, packed):
         """For each bar of `packed`, the `_cart_bar_key` fields its pixels show:
@@ -1178,9 +1201,10 @@ class BarLayer:
         self._fill_key(key, where, cv, self._shown(where), blk)
         return _block_key(blk)
 
-    def _draw_bar(self, cv, slots, rect, key, fields, i):
+    def _draw_bar(self, cv, slots, rect, key, fields, i, blit=True):
         """Bar `i`'s strip at `rect` on `cv`, from the slot that holds it for
-        `cv`, re-rendered when a field of `key` it shows moved."""
+        `cv`, re-rendered when a field of `key` it shows moved; the strip
+        alone, laid nowhere, without `blit`."""
         bx, by, bw, bh = rect
         # One slot PER CANVAS, most-recently-used first. The windowed WM draws the
         # same `where` into DIFFERENT canvases from frame to frame -- straight into
@@ -1262,9 +1286,12 @@ class BarLayer:
         if fresh or part:
             slot[1] = _block_gen(blk)
             slot[3] = key[12]
+        if not blit:
+            return strip
         cv.blit_strip(strip, bx, by)
         if fresh or part:
             self.strip_moved(cv, bx, by, bw, bh)
+        return strip
 
     def _cart_bar_key(self, where):
         """The cache key for the bar: every piece of state that changes ANY `where`
@@ -1326,6 +1353,9 @@ class BarLayer:
             key[11] = m is not None and m.open and m.widget == "menu"
         if need & 8192:
             key[13] = self._status_key()
+        if need & _KEY_CHIPS:
+            g = getattr(ws.wm, "chips_gen", None)
+            key[14] = g() if g is not None else 0
         if blk is not None:
             for i in range(_KEY_N):
                 # (the title by the count of times it moved)
@@ -1388,6 +1418,10 @@ class BarLayer:
             z = self.lent_zone(where, packed)
             # (a bar with a title cell and no zone shows the field too: whole)
             rect = bar if z is None else (z[0] - 2 * fs, 0, z[2] + 4 * fs, bar[3])
+        if part & _KEY_CHIPS:
+            for c in packed[3]:
+                if c[0] == "chips":
+                    rect = _union(rect, self._chips_span(c[1], packed))
         f = key[12]
         pill = self._pill(where, i, f) if f is not None and f[0] == i \
             and self._page_stop(where, f) is None else None
@@ -2257,42 +2291,33 @@ class BarLayer:
         self._redraw_status(where)
 
     def _chips_span(self, cell, bar):
-        """The chips' cell and the reach of their marks past it, five units
-        each way, inside the bar (bar coordinates)."""
-        x, y, w, h = cell
-        u = 5 * self.ws.layout.fs
-        if bar[0] in ("left", "right"):
-            return (0, 0, bar[1][2], bar[1][3])    # (its chips move what follows them down it)
-        a = max(0, x - u)
-        return (a, y, min(bar[1][2], x + w + u) - a, h)
+        """The chips' cell and the reach of their marks past it
+        (`chip_reach`), in the bar (bar coordinates)."""
+        return self.chip_reach(bar, cell)
 
-    def redraw_chips(self, where):
-        """The chips' cell of an already-drawn bar drawn again by the bar
-        page, the marks' reach past it included: True, or False where the
-        page does not draw that bar (`_paged`) and the window manager
-        paints them."""
-        packed = self._packed(where)
-        m = self._chips_at
-        if m[0] is not packed or m[1] != where:
-            m[0], m[1], m[2] = packed, where, None
-            got = self.cell(where, "chips")
-            if got is not None:
-                bar = got[0]
-                span = self._chips_span(got[1], bar)
-                m[2] = (bar, self._ground_of(bar, span),
-                        (bar[1][0] + span[0], bar[1][1] + span[1], span[2], span[3]))
-        got = m[2]                      # (kept while the packing stands: a frame allocates nothing)
-        cv = self._bar_canvas(where)
-        if got is None or cv is None or self.zone_is_game(where) or self._in_window(where):
-            return False
-        bar, ground, clip = got
-        self._paint_ground(cv, where, bar, ground)
-        cv.clip(clip[0], clip[1], clip[2], clip[3])
-        try:
-            self._page_draw(cv, where, bar[1], bar[0], bar[3], clip)
-        finally:
-            cv.clip()
-        return True
+    def chip_reach(self, bar, r):
+        """Rect `r` of packed bar `bar` (a chip's, or the chips' cell, in
+        the bar's coordinates) and the reach of the marks past it: five
+        units each way along the bar, across its whole thickness (a mark
+        lies on its edge line); down a side bar the whole bar, whose chips
+        move what follows them down it."""
+        bw, bh = bar[1][2], bar[1][3]
+        if bar[0] in ("left", "right"):
+            return (0, 0, bw, bh)
+        u = 5 * self.ws.layout.fs
+        a = max(0, r[0] - u)
+        return (a, 0, min(bw, r[0] + r[2] + u) - a, bh)
+
+    def lay_chips(self, where, r, also=None):
+        """Rect `r` (on `where`'s canvas) of its bars laid again from their
+        strips, brought current first: the chips there as the bar's one
+        draw paints them (`_render_bar`, its chips' part drawn again when
+        they moved, `_KEY_CHIPS`), so a rect laid over a bar drawn whole is
+        byte for byte that bar. Onto `also` too, where given (the desk's
+        cache of itself): False where the canvas keeps no strips (a
+        RecordingLayer), which paints the bars there straight onto it and
+        nothing onto `also`."""
+        return self._draw_top_bar_cart(where, r, also)
 
     def _redraw_status(self, where):
         """Repaint the status items' cell of an already-drawn bar, the open
