@@ -74,6 +74,7 @@ struct moy_sh {
 #define moy_sh_cur (moy_sh_g->sess)
 
 int moy_sh_shcmd(int argc, char **argv);
+int moy_sh_rolecmd(int argc, char **argv);
 
 // The index in kids of the running process's child `pid`, or -1.
 int moy_sh_kid(int pid);

@@ -470,7 +470,7 @@ def check_cart(c, official=False):
     if not plain_name(folder) or not folder.endswith(".moy") \
             or builtin_ns(folder) != official:
         return "folder %r" % folder
-    if builtin_ns(c["id"]) != official or folder != c["id"] + ".moy":
+    if builtin_ns(c["id"]) != official or folder != c["id"] + ".moy" or ":" in c["id"]:
         return "id %r" % c["id"]
     named = plain_path if official else plain_name
     lic = c.get("licence")

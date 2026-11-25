@@ -824,6 +824,15 @@ static int read_entry(rd_t *r, moy_cat_entry_t *e, moy_cart_t *c,
     const char *slash = strrchr(r->path, '/');
     e->folder = slash != NULL ? slash + 1 : r->path;
     e->folder_n = strlen(e->folder);
+    // The id is the manifest's (is_cart_id: no ':') or the folder's name, so
+    // a folder named with a ':' is no cart: ids holding one are scripts'
+    // (runtime/shell/console.py's SCRIPT_ID), and a cart never shares one.
+    if (memchr(e->folder, ':', e->folder_n) != NULL) {
+        if (note != NULL) {
+            note(ctx, "folder name", r->path, "a cart's folder name holds no ':'");
+        }
+        return 0;
+    }
 
     char *mpath = ajoin(&r->a, r->path, MANIFEST);
     if (mpath == NULL) {

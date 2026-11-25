@@ -337,6 +337,8 @@ from project import Project
 # reintroduce it.
 from player import (Player, BAR_TYPES, SCRIPT_TYPE, _SIG_FPS)
 
+SCRIPT_ID = "script:%s/%s"       # a script's app id: its file kind and name (`run_script`)
+
 # The TEXT CONSOLE (text_console.py): the surface a `type: "script"` cart runs
 # on -- scrollback + prompt, drawn by the shell as the run's `_draw` so a
 # script cannot paint over the line it is reading from.
@@ -2792,6 +2794,11 @@ class Workstation:
         title = str(name)
         cut = title.rfind(".")
         cart = {"title": title[:cut] if cut > 0 else title,
+                # Its app id (consent, grant, prefs, crash strikes) is its
+                # file's, in a namespace of scripts' own: a title slug never
+                # holds a ":" and an id is `ns.name`, so a script titled like
+                # a cart never reads that cart's record.
+                "id": SCRIPT_ID % (kind, name),
                 # The FILE is the path: a script has no folder, and the loader
                 # never opens this -- it is the run's identity, and what keeps
                 # `open_workspace`'s pathless-cart guard from substituting a
@@ -2913,7 +2920,13 @@ class Workstation:
         Fullscreen where the board has no desk; in a window of its own where
         it has one -- opened from the console-mode home, console mode gives
         way to the desk first (owner, 2026-10-20), and closing that window
-        gives the glass back to the home (`editor_closed`, R5-05)."""
+        gives the glass back to the home (`editor_closed`, R5-05). A cart
+        that arrived as files is asked first (`Notices.ask_first`), as its
+        launch is: the Editor starts it."""
+        if cart is None:
+            cart = self.launcher.selected()
+        if self.notices.ask_first(cart, lambda: self.open_in_editor(cart)):
+            return
         wm = self.wm
         back = None
         if wm.has_desk and wm.mode == "console" and self.screen == "launcher":

@@ -75,7 +75,12 @@ a trap, as SIGABRT's), and Ctrl-C reaching it at its next import.
 `python` with the terminal for its stdin is the
 interactive REPL in front of the face (below); with a pipe or a
 here-document it reads that as a REPL (an expression's value printed), and
-it runs `-c CODE`.
+it runs `-c CODE` and `FILE`, each with ARGs for its `sys.argv` and its exit
+status the program's. FILE is the session's path, crossing to the console's
+VM as the store's (`native/moy_sh/moy_sh_board.c`), and a file run as a
+command by its path whose `#!` line names `python` or `python3`, directly
+or through `env`, runs as `python FILE`; any other file runs as a shell
+script (`native/moy_sh/moy_sh.c`).
 
 **Built-ins are views of OS services: one implementation, a GUI face and a
 command face, never a second copy.** The core commands are **C built-ins**

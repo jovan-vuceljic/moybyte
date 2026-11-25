@@ -378,14 +378,16 @@ build, and Remove forgets the record.
 **A cart that arrived as files is asked on its first run (owner,
 2026-11-09).** One copied onto the card, over SFTP or USB, or pushed by a
 paired browser has no record, and its first launch from the home shows the
-install prompt's lines, "Open <title>?" (`Notices.ask_first`); a
-command asks in its terminal (`sh_door`): where its session asks questions
-(`moy_sh_ask`), at the prompt, and the next line typed answers and runs its
-line again, so no run waits on the terminal. Open records the consent an
-install would; No runs nothing and records nothing, so the next launch
-asks again; and until a yes every other way in (a service's start, the
-Editor, another app's play) is refused by name (`app_perms.UNASKED`), its
-unsigned modules with it. Never asked: a built-in (known by its seed), a
+install prompt's lines, "Open <title>?" (`Notices.ask_first`), as do the
+Editor's Edit (the Editor starts the cart) and another app's play; a
+command and `service start` ask in their terminal (`sh_door`): where its
+session asks questions (`moy_sh_ask`), at the prompt, and the next line
+typed answers and runs its line again, so no run waits on the terminal.
+Open records the consent an install would; No runs nothing and records
+nothing, so the next launch asks again; and until a yes a way in with
+nobody to ask (a command run with `&`) is refused by
+name (`app_perms.UNASKED`), its unsigned modules with it, and a service
+with no record never autostarts. Never asked: a built-in (known by its seed), a
 script (no folder), a cart whose prompt would say nothing, and a cart made
 on the console: making one, or copying one that is not waiting to be asked,
 writes a record consenting to its manifest as written (`Consent.made`),

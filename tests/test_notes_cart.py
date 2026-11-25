@@ -15,6 +15,8 @@ by `tests/test_editor_handle.py`, the text editor's adoption of it by
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -497,6 +499,43 @@ def test_run_saves_the_program_runs_it_and_comes_back_to_it(tmp_path):
     assert back.caret() == caret
     ws.spine.exit_to_caller()
     assert ws.wm.top_kind() == "files", "Notes' own X still returns to Files"
+
+
+@pytest.mark.first_run
+def test_a_program_written_in_notes_runs_unasked(tmp_path):
+    """A program written here and Run from Notes is a script (no folder,
+    the console's own manifest): it is never asked about permissions, even
+    where a cart that arrived as files would be, and nothing is recorded."""
+    from runtime import app_perms
+    ws = build_ws(tmp_path)
+    ns, drv = _open(ws)
+    moy_carts.save_file("docs", "asdasd.py", "", ws.carts_root)
+    _act(ws, drv, "open_name", "asdasd.py")
+    ed = ns["ed"]
+    _type(drv, "print('mine')")
+    before = ws.consent.ids()
+    _tap(drv, _box(ws, "run"))
+    assert ws.cart.get("type") == "script" and ws.cart.get("title") == "asdasd"
+    assert ws.run.player.cart_error is None and not ws.confirm.open
+    assert ws.script_console.text() == "mine"
+    assert app_perms.UNASKED_REFUSAL not in ws.script_console.text()
+    assert ws.consent.ids() == before and ed.badge() != app_perms.UNASKED_REFUSAL
+
+
+def test_a_script_titled_like_a_cart_never_reads_that_carts_record(tmp_path):
+    """A script's app id is its file's, in scripts' own namespace: one
+    titled like a cart (by its id or its title slug) runs though that
+    cart's record is revoked, and keys nothing of the cart's."""
+    from runtime import app_perms
+    ws = build_ws(tmp_path)
+    for aid in ("asdasd", "local.asdasd"):
+        ws.consent.revoke(aid, True)
+    moy_carts.save_file("docs", "asdasd.py", "print('mine')\n", ws.carts_root)
+    assert ws.run_script("docs", "asdasd.py") == (True, "")
+    assert ws.run.player.cart_error is None and ws.script_console.text() == "mine"
+    aid = app_perms.app_id(ws.cart)
+    assert aid == "script:docs/asdasd.py" and ws.consent.get(aid) is None
+    assert ws.spine.app_cart_id(ws.cart) == aid
 
 
 def test_a_program_that_does_not_parse_says_so_in_the_console(tmp_path):
