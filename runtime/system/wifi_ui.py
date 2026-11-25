@@ -74,6 +74,11 @@ def poll(page):
             rows.append({"id": "net%d" % k, "name": name[:24], "saved": "Saved" if name in known else "",
                          "icon": lock, "mark": "check" if c and name == s.ssid else lock})
         s.nets = rows
+    # The network picked is the rows' cursor: focus walks it, and Forget
+    # names and forgets the one it is on, not the last that left the rows.
+    cur = s.sel
+    if cur and cur[:3] == "net" and int(cur[3:]) < len(nets):
+        sl.wifi_sel = int(cur[3:])
     if sl.wifi_sel != page.sel:
         page.sel = sl.wifi_sel
         name = str(nets[page.sel % len(nets)][0]) if nets else None

@@ -430,3 +430,31 @@ def test_a_cart_is_never_handed_the_boards_station(panel):
     ws, _sl, link, *_ = panel
     assert link.CARTS is False
     assert link.connect(RPT, "rptpw") is False
+
+
+def test_forget_is_the_network_the_cursor_is_on(panel):
+    """Focus walked up to a network and back down to Forget: Forget names and
+    forgets that one, not the network that last left the rows."""
+    from runtime import host_app
+    ws, sl, link, board, radio, store, pump, run = panel
+    board.request({"action": "add", "ssid": RPT, "password": "rptpw"})
+    sl._wifi_rescan()
+    run(1500)
+    drv = host_app.ConsoleDriver(ws)
+
+    def key(code):
+        drv.key_down(code)
+        drv.frame(1 / 30)
+        drv.key_up(code)
+        for _ in range(2):
+            board.step()
+            pump.once()
+            drv.frame(1 / 30)
+    assert sl._sub_focused == "rescan" and sl.wifi_sel == 0
+    key(274)                                   # up: the last network, Home_RPT
+    key(275)
+    key(275)                                   # down, down: Forget
+    assert sl._sub_focused == "forget"
+    key(13)
+    run(500)
+    assert [n["ssid"] for n in _saved(store)] == [HOME]
