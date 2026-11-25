@@ -465,7 +465,8 @@ static int stream_close_here(struct moy_sh_obj *o) {
 }
 
 // A READ's steps: its file opened and held, and a chunk read at `pos` into
-// its buffer (seeking first when `pos` is not where the last one ended).
+// its buffer (seeking first when `pos` is not where the last one ended), up
+// to the size at the open, so `cat f >> f` ends.
 static int read_open_here(struct moy_sh_obj *o) {
     moy_vol_t v;
     const char *rest;
@@ -489,13 +490,16 @@ static int read_open_here(struct moy_sh_obj *o) {
 static int read_fill_here(struct moy_sh_obj *o) {
     int entered = moy_vol_gate_enter(o->path);
     int r = 0;
-    size_t got = 0;
-    if (o->pos != o->at + o->len) {
+    size_t got = 0, want = o->pos < o->size ? o->size - o->pos : 0;
+    if (want > MOY_SH_CHUNK) {
+        want = MOY_SH_CHUNK;
+    }
+    if (want > 0 && o->pos != o->at + o->len) {
         r = moy_vol_seek(o->held, (uint32_t)o->pos);
     }
-    while (r == 0 && got < MOY_SH_CHUNK) {
+    while (r == 0 && got < want) {
         size_t n = 0;
-        r = moy_vol_read(o->held, o->buf + got, MOY_SH_CHUNK - got, &n);
+        r = moy_vol_read(o->held, o->buf + got, want - got, &n);
         if (n == 0) {
             break;
         }

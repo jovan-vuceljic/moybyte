@@ -17,3 +17,5 @@ exec 4< big; read x <&4; echo "$x"; head -n 1 <&4; exec 4<&-
 exec 5< big; echo gone > big; head -n 1 <&5; exec 5<&-
 cat nofile; echo nofile=$?
 cat .; echo dir=$?
+# a file read while it is appended to ends at its size at the open
+head -n 3 big > three; cat three >> three; wc -l < three

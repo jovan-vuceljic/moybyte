@@ -42,4 +42,7 @@ nofile=1
 $ cat .; echo dir=$?
 cat: .: Is a directory
 dir=1
+$ # a file read while it is appended to ends at its size at the open
+$ head -n 3 big > three; cat three >> three; wc -l < three
+2
 [exit 0]
