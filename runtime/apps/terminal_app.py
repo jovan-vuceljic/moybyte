@@ -69,6 +69,10 @@ class TerminalAppLayer(AppLayer):
     domain = "system"
     TITLE = "Terminal"
     UI = True
+    # Esc is a key the shell and its text apps read (vi leaves INSERT on
+    # it): the Terminal is left by its window's X, the bar's back and the
+    # system key, never by Esc.
+    ESC_LEAVES = False
 
     def __init__(self, ctx, names):
         self.ctx = ctx
@@ -140,8 +144,8 @@ class TerminalAppLayer(AppLayer):
         return False
 
     def back(self):
-        """B, Esc and the bar's back while a run is parked are the run's
-        cancel, as Ctrl-C is (True: the Terminal stays); with none it is the
+        """B and the bar's back while a run is parked are the run's cancel,
+        as Ctrl-C is (True: the Terminal stays); with none it is the
         console's back out of the Terminal."""
         f = self.face
         if f is not None and f.busy():

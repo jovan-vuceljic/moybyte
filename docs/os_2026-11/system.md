@@ -170,7 +170,10 @@ frame's keys; the recovery console (§2) opens the same face from the kernel.
 There is no new drawing path, and the shell holds no pixels. A typed line is
 echoed into the grid and run; Tab completes a command's name
 (`moy_sh_complete`) or a path (`moy_sh_list`, the shell's own view of the
-files), left and right move the caret and up and down walk the history. A
+files), left and right move the caret and up and down walk the history.
+Esc is a key of the shell's and its apps' (vi leaves INSERT on it), never
+the console's back (`ESC_LEAVES` False): the Terminal is left by its
+window's X, the bar's back or the system key. A
 desk has a keyboard and draws no key row. On a handheld a key row under the
 prompt holds what the input cannot type, and a completion with several
 candidates offers them there to pick: the T-Deck's holds Tab and the shell's
@@ -195,7 +198,7 @@ computes it holds the console's task, so **Ctrl-C reaches it in C**: the
 face's poll kicks the input drivers and reads the kernel input table's
 latches between merges for a key that types 0x03, the T-Deck's Mic
 (`start`) or a gamepad's B; a parked run takes the Terminal's Ctrl-C and
-the board's cancel key from the face, the console's back (B, Esc, the bar's
+the board's cancel key from the face, the console's back (B and the bar's
 chevron) from the Terminal's `back()`, which keeps the Terminal open while a
 run is parked, and the serial face's from the channel's 0x03. A role command asks the same poll between its polls through
 `moy_sh.interrupted()`, or is stopped by its session, gives back what it

@@ -862,3 +862,65 @@ def test_a_console_with_no_shell_says_so(tmp_path, monkeypatch):
     ws.frame(1 / 30)
     assert app.face is None and app._none is not None
     assert app._none.root is not None
+
+
+# -- Esc and the clipboard ---------------------------------------------------------
+
+
+def _vi_open(ws, drv, app, tmp_path):
+    """vi on a new file in INSERT, "hi" typed through the driver."""
+    run(app, "mkdir -p /sd/moybyte")
+    run(app, "vi /sd/moybyte/v.txt")
+    for _ in range(2):
+        drv.frame(1 / 30)
+    for c in b"ihi":
+        drv.type_char(c)
+        drv.frame(1 / 30)
+    assert app.face.app() == "vi" and "-- INSERT --" in plain(app)[-1]
+    return tmp_path / "sd" / "moybyte" / "v.txt"
+
+
+def _desk_or_console(tmp_path, desk):
+    from ws_helpers import build_ws, build_desktop_ws
+    from runtime.host_app import ConsoleDriver
+    ws = build_desktop_ws(tmp_path) if desk else build_ws(tmp_path)
+    if desk:
+        ws.home.open_desk()
+    app = ws.app("terminal")
+    drv = ConsoleDriver(ws)
+    ws.spine.open_app(app)
+    for _ in range(3):
+        drv.frame(1 / 30)
+    assert ws.input.text_mode and ws.wm.input_kind() == "terminal"
+    return ws, app, drv
+
+
+@pytest.mark.parametrize("desk", [False, True], ids=["console", "desk"])
+def test_esc_is_vi_s_and_the_terminal_stays(tmp_path, desk):
+    """Esc is a key the Terminal's apps read: a page's Esc (ConsoleDriver.escape,
+    the typed 27 on a text surface) leaves vi's INSERT, and `:wq` saves; the
+    Terminal stays, at the prompt as in vi. A board keyboard's Esc presses
+    `stop` with the byte (moy_hid.c), which the Terminal does not take as the
+    console's back either (`takes_stop`). Its ways out are the window's X,
+    the bar's back and the system key."""
+    ws, app, drv = _desk_or_console(tmp_path / "ws", desk)
+    try:
+        assert not ws.input_policy.takes_stop(app)
+        path = _vi_open(ws, drv, app, tmp_path / "ws")
+
+        def esc():
+            drv.escape()
+            drv.frame(1 / 30)
+            drv.frame(1 / 30)
+        esc()
+        assert ws.wm.input_kind() == "terminal" and app.face.app() == "vi"
+        assert "-- INSERT --" not in plain(app)[-1]
+        for c in b":wq\r":
+            drv.type_char(c)
+            drv.frame(1 / 30)
+        assert app.face.app() is None and path.read_text() == "hi\n"
+        esc()
+        assert ws.wm.input_kind() == "terminal", "Esc at the prompt keeps the Terminal"
+    finally:
+        app.close_session()
+
