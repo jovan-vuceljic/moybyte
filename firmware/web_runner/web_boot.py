@@ -1212,7 +1212,8 @@ def state_json():
     one is on its way), the Terminal's grid as lines (`term`, None before
     it first opens), the media stream's `now()` (`media`, None with no run)
     and how its last run ended (`media_last`, dev_media.last), the heap's
-    allocation where the page meters it (`alloc`, step_frame_json's) and
+    allocation where the page meters it (`alloc`, step_frame_json's), the
+    buttons held (`held`) and the desk keyboard's typing level (`typing`), and
     the radio link's stats (`link_stats`, EspNowLink.stats: the match's
     frame, checkpoints and desync; None with no link), for a harness
     driving the page (`window.__moyState()`)."""
@@ -1221,6 +1222,9 @@ def state_json():
     st["ach"] = sorted(_S["ws"].ach.doc().get("system", {}).get("found", {}))
     st["system"] = json.loads(_S["ws"].system.dump() or "{}")
     st["show_fps"] = bool(_S["ws"].show_fps)
+    inp = _S["ws"].input
+    st["held"] = [n for n in web_input.BUTTON_NAMES if inp.held(n)]
+    st["typing"] = inp.source("local").typing
     st["sync"] = {"acked": _S.get("sync_acked", 0),
                   "busy": any(w.busy() for w in _watchers())}
     st["edit"] = _edit_state(_S["ws"])

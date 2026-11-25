@@ -326,17 +326,18 @@ class ConsoleDriver:
         if 0x20 <= code <= 0x7E:
             self.key_hold(code, False)
 
-    def set_mods(self, mods):
+    def set_mods(self, mods, tap=True):
         """The modifiers a desk keyboard holds now. Super acts on its
         release, and only when no other key went down while it was held, so
-        it leads chords: its tap is `system_key`."""
+        it leads chords: its tap is `system_key`. `tap` False: they went
+        without a release (the page lost the keyboard), so Super's is none."""
         self._src.mods = mods
         if mods & _mi.SUPER:
             if not self._super:
                 self._super, self._chord = True, False
         elif self._super:
             self._super = False
-            if not self._chord:
+            if not self._chord and tap:
                 self.system_key()
 
     def media_key(self, usage):

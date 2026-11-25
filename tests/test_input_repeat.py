@@ -392,11 +392,42 @@ def test_the_page_forwards_the_browsers_repeat_to_a_driver_that_times_none():
     """The browser's repeat is the page's only one: each OS repeat goes as
     a `kd` with `rep`, to the driver whose keyboard source is own_repeat."""
     page = (ROOT / "firmware" / "web_runner" / "page_core.html").read_text()
-    sends = re.findall(r'send\([^;]*type:"kd"[^;]*', page)
-    assert sends and all('e.repeat?{type:"kd",code:c,mods:kmods(e),rep:1}' in s
-                         for s in sends), sends
+    assert 'if(e.repeat)send({type:"kd",code:c,mods:kmods(e),rep:1});' in page
     boot = (ROOT / "firmware" / "web_runner" / "web_boot.py").read_text()
     assert "ConsoleDriver(ws, own_repeat=True)" in boot
+
+
+def test_a_page_that_loses_the_keyboard_lets_every_key_go(tmp_path):
+    """The page's keys go up when it loses the keyboard (blur, hidden):
+    what each held lets go, and the modifiers with them, Super's release
+    then no tap."""
+    page = (ROOT / "firmware" / "web_runner" / "page_core.html").read_text()
+    for wired in ('window.addEventListener("blur",kLost)', 'cv.addEventListener("blur",kLost)',
+                  'if(document.hidden)kLost()', 'send({type:"mods",mods:0,lost:1})'):
+        assert wired in page, wired
+    ws = host_app.build_workstation(str(tmp_path / "carts"))
+    drv = host_app.ConsoleDriver(ws, own_repeat=True)
+    taps = []
+    drv.system_key = lambda: taps.append(1)
+    send = lambda *evs: web_input.apply_events(  # noqa: E731
+        list(evs), drv.input, drv.pointer, on_key_down=drv.key_down,
+        on_key_up=drv.key_up, on_mods=drv.set_mods)
+    send({"type": "kd", "code": mi.KEY_DOWN, "mods": 0},
+         {"type": "kd", "code": ord("j"), "mods": 0},
+         {"type": "mods", "mods": mi.SHIFT})
+    drv.frame(1 / 30)
+    assert drv.input.held("down") and drv.input.source("local").typing
+    send({"type": "ku", "code": mi.KEY_DOWN, "mods": 0}, {"type": "ku", "code": ord("j"), "mods": 0},
+         {"type": "mods", "mods": 0, "lost": 1})
+    drv.frame(1 / 30)
+    assert not drv.input.held("down") and not drv.input.source("local").typing
+    assert drv.input.source("local").mods == 0
+    send({"type": "mods", "mods": mi.SUPER})
+    send({"type": "mods", "mods": 0, "lost": 1})
+    assert taps == [], "Super let go by a lost keyboard is no tap"
+    send({"type": "mods", "mods": mi.SUPER})
+    send({"type": "mods", "mods": 0})
+    assert taps == [1], "...and its own release still is"
 
 
 # -- carts: what they read is what they read -------------------------------------

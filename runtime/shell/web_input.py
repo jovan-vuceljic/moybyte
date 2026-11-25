@@ -102,6 +102,8 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
                                         (on_key_down's `repeat`)
       {"type":"ku","code":..,"mods":..} -> ...and up (on_key_up)
       {"type":"mods","mods":..}      -> the modifiers it holds now (on_mods)
+      {"type":"mods",...,"lost":1}   -> ...let go as the page lost the
+                                        keyboard (on_mods' `tap` False)
       {"type":"wheel","dx":..,"dy":..,"mods":..} -> wheel notches (on_wheel)
       {"type":"mdown"|"mup","x":..,"y":..} -> the middle button (on_middle)
       a "down" with "mods" says the modifiers held as it went down
@@ -203,7 +205,10 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
             elif t == "mods":
                 mods = ev.get("mods", 0)
                 if isinstance(mods, int) and on_mods is not None:
-                    on_mods(mods & 0xFF)
+                    if ev.get("lost"):
+                        on_mods(mods & 0xFF, False)
+                    else:
+                        on_mods(mods & 0xFF)
             elif t == "khold":
                 # A physically HELD printable key (browser keydown/keyup edges):
                 # outside text mode the driver latches it so key() streams every

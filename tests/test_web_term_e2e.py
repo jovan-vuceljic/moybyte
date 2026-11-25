@@ -166,6 +166,18 @@ def _typed(text):
     return [{"key": c} for c in text]
 
 
+def _lost(key):
+    """`key` down, then the window's blur before its up: HELD before the
+    blur, LOST after it, each {held buttons, typing level}."""
+    held = ("window.__moyState().then(s => '%s ' + JSON.stringify("
+            "{held: s.held, typing: s.typing}))")
+    return [{"js": "cv.dispatchEvent(new KeyboardEvent('keydown', {key: %s})), 'down'"
+                   % json.dumps(key)},
+            {"wait": 300}, {"js": held % "HELD"},
+            {"js": "window.dispatchEvent(new Event('blur')), 'blur'"},
+            {"wait": 300}, {"js": held % "LOST"}]
+
+
 def _late(key, ms=1000):
     """`key` down, and its up behind a main-thread task of `ms`: the page
     delivers the up late, as a busy phone's or a loaded machine's does."""
@@ -317,7 +329,8 @@ def test_a_page_says_how_long_a_board_holding_wrong_tries_off_waits(tty_exe, tmp
 def test_the_site_s_terminal_runs_the_shell_on_the_browser_s_store(tmp_path):
     """The site's console: the session's root is the store's folder (/moy in
     the page), home its files; a run past its budget gives the tab back; a
-    key let go late types once (the browser's repeat is the only one)."""
+    key let go late types once (the browser's repeat is the only one), and
+    a key held as the page loses the keyboard goes up."""
     web_e2e.require("site_shell")
     port = web_e2e.free_port()
     p = subprocess.Popen([sys.executable, "serve.py", str(port), "dist_site"], cwd=RUNNER,
@@ -336,6 +349,7 @@ def test_the_site_s_terminal_runs_the_shell_on_the_browser_s_store(tmp_path):
                  + _typed("echo back") + [{"key": "Enter"}, {"wait": 600}, _lines("BACK")]
                  + _typed("echo late-") + _late("i") + _typed("-key")
                  + [{"key": "Enter"}, {"wait": 600}, _lines("LATE")]
+                 + _lost("ArrowDown")
                  + _typed("cd; printf 'import sys\\nprint(sys.argv)\\n' > p.py; python p.py web;"
                           " printf '#!python\\nprint(6 * 7)\\n' > q.py; ./q.py")
                  + [{"key": "Enter"}, {"wait": 1200}, _lines("PY")])
@@ -347,6 +361,8 @@ def test_the_site_s_terminal_runs_the_shell_on_the_browser_s_store(tmp_path):
         assert "back" in "\n".join(_tagged(js, "BACK"))
         late = _tagged(js, "LATE")
         assert any(ln.strip() == "late-i-key" for ln in late), late
+        assert "down" in _tagged(js, "HELD")["held"], _tagged(js, "HELD")
+        assert _tagged(js, "LOST") == {"held": [], "typing": 0}, _tagged(js, "LOST")
         py = "\n".join(_tagged(js, "PY"))
         assert "['p.py', 'web']" in py and "42" in py, py
     finally:
