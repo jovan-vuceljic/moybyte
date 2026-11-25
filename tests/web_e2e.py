@@ -413,3 +413,24 @@ def get_carts_taps(n=3):
         agree = centre(host.box("agree"))
         app.lic = None
         return {"cards": cards, "verb": verb, "agree": agree}
+
+
+def menu_pick(text, enter=True):
+    """Steps that open the console's system menu (its key, `super`), walk
+    its highlight to the row that reads `text` (a key a few frames apart,
+    as a hand presses it) and, with `enter`, choose it
+    with a real Enter -- a user's gesture, which the page's asks need
+    (page_core.html, THE ASKS). A js step's value is "MENU <rows>"."""
+    walk = ("window.__moyState().then(s => { var m = s.edit.menu || [], i = m.indexOf(%s), "
+            "d = i - (s.edit.menu_at || 0); if (i < 0) return 'MENU ' + JSON.stringify(m); "
+            "var c = d > 0 ? 275 : 274; return new Promise(function (ok) { "
+            "(function step(k) { if (k >= Math.abs(d)) return ok('MENU ' + JSON.stringify(m)); "
+            "send({type: 'kd', code: c, mods: 0}); setTimeout(function () { "
+            "send({type: 'ku', code: c, mods: 0}); setTimeout(function () { step(k + 1); }, 120); "
+            "}, 120); })(0); }); })" % json.dumps(text))
+    steps = [{"js": "cv.focus(), send({type: 'super'}), 'menu'"},
+             {"waitFor": "window.__moyState().then(s => s.edit.sysmenu)", "timeout": 5000},
+             {"js": walk}, {"wait": 400}]
+    if enter:
+        steps.append({"key": "Enter"})
+    return steps

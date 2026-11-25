@@ -21,12 +21,6 @@ align-items:center}
 /* html is a centring flex column, which would size body to its widest child's
    min-content (the nowrap title) and push the document wider than the viewport. */
 body{width:100%}
-h1{font-size:14px;color:#fff1e8;margin:8px;max-width:calc(100% - 16px);white-space:nowrap;
-overflow:hidden;text-overflow:ellipsis}#s{color:#ffec27}
-/* Small phones (e.g. iPhone 13 mini): the full title used to wrap to two rows and
-   steal canvas height -- drop the "device" suffix + the backtick hint (meaningless
-   without a physical keyboard) on coarse pointers; nowrap+ellipsis backstops the rest. */
-@media (pointer:coarse){h1 .dv,h1 small{display:none}}
 /* Long-press guard: HOLDING a control (a d-pad direction, A/B)
    used to start the OS text-selection -- iOS magnifier/blue highlight, Android context
    menu -- because plain user-select isn't enough there: iOS wants the -webkit- prefix +
@@ -81,11 +75,10 @@ opacity:0;font-size:16px;background:transparent;color:transparent;caret-color:tr
 /* The controls are a touch screen's: a mouse (pointer:fine) or no pointer at
    all (a keyboard alone, a headless browser) has no use for them. */
 @media (pointer:fine),(pointer:none){#ctl{display:none}}
-/* A touch phone in landscape (html.phl, room()): no page rows, the canvas full
-   height and centred, the stick in the left margin and A/B in the right one,
+/* A touch phone in landscape (html.phl, room()): the canvas full height and
+   centred, the stick in the left margin and A/B in the right one,
    sized to it (padPlace), the keyboard summon and the burger small in the top
    corners. #ctl covers the viewport but takes no taps itself. */
-html.phl h1,html.phl #pz{display:none}
 html.phl body{justify-content:center}
 html.phl #ctl{position:fixed;left:0;top:0;width:100%;height:100%;padding:0;display:block;
 pointer-events:none;z-index:2}
@@ -97,70 +90,12 @@ html.phl .b{position:absolute;margin:0;pointer-events:auto}
 html.phl #joy{pointer-events:auto}
 html.phl #ba{right:0;top:0}html.phl #bb{left:0;bottom:0}
 html.phl #kb{left:6px;top:6px}html.phl #bh{right:6px;top:6px}
-/* Persistence row (#193): where the carts are being kept, plus the .moy escape
-   hatch. Hidden until the worker reports a mode, and hidden for good on a
-   board-served page -- there the console owns the store and a browser-local
-   export/import would only invite the crossover the two modes exist to avoid. */
-#pz{display:none;align-items:center;gap:8px;margin:0 0 6px;max-width:96vw;
-flex-wrap:wrap;justify-content:center;font-size:12px;color:#5f6f9f}
-#pz select,#pz button,#pz .fb{font:12px ui-monospace,Menlo,Consolas,monospace;
-color:#c2c3c7;background:#1d2b53;border:1px solid #29366f;border-radius:4px;padding:3px 7px}
-#pz button,#pz .fb{cursor:pointer}
-#pz .fb:hover,#pz button:hover{border-color:#5f6f9f}
-#pzs.warn{color:#ffa300}
 /* The crash itself, ON the page: a phone has no devtools to "see". Above the
    play splash (z-index 20), which a console that crashed while booting has
    left standing. */
 #crash{display:none;position:relative;z-index:21;max-width:96vw;margin:0 auto 6px;
 white-space:pre-wrap;word-break:break-word;text-align:left;font-size:11px;
 color:#ff004d;background:#0b0f1a}
-/* THE LINK SURFACE, and there is exactly one of it. A board stops answering
-   for two very different reasons -- an update or a wasm-mode hand-back (which
-   the person just asked for, and which comes back) versus vanishing (which in
-   BOARD MODE means unsynced work lives only in this tab) -- and the whole
-   point of the panel is which one it says. Two panels would race each other
-   and one would win at the wrong moment, so the reason is a parameter, not a
-   second element. In the page's own flow beside #p8 and never OVERLAYING the
-   canvas: in board mode the console keeps running perfectly well without the
-   board, and a modal over it would be a bigger claim than the news. */
-#lnk{display:none;max-width:min(560px,94vw);margin:8px 0 0;padding:10px 12px;
-border-radius:6px;background:#1d2b53;border:1px solid #29366f;text-align:left;
-font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7}
-#lnk.bad{border-color:#ff004d}
-#lnk p{margin:0 0 4px}
-#lnk p.head{color:#fff1e8}
-/* PICO-8 import report (#194). An import that silently ran WRONG is the worst
-   outcome, so what a cart used and what did not come across is shown as prose
-   rather than left to a black screen -- and it sits UNDER the canvas, never
-   over it, because the cart is already running behind this card. */
-#p8{display:none;max-width:min(560px,94vw);margin:8px 0 0;padding:10px 12px;
-border-radius:6px;background:#1d2b53;border:1px solid #29366f;text-align:left;
-font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7}
-#p8.bad{border-color:#ff004d}
-#p8 p{margin:0 0 4px}
-#p8 p.head{color:#fff1e8}
-#p8 .act{margin-top:8px;display:flex;gap:8px}
-#p8 button{font:12px ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7;
-background:#29366f;border:1px solid #5f6f9f;border-radius:4px;padding:4px 9px;
-cursor:pointer}
-#p8 button:hover{background:#3d4a8a}
-/* Get Carts' file question (#124): a file a cart needs that this page can
-   read neither from its mirror nor from its archive's hosts is the player's
-   own copy instead. The console asks; the CHOICE has to be a real control in
-   the page, because a browser opens its file dialog only from a click on
-   one -- never from a tap the console relays a frame later. Under the canvas
-   like #p8, never over it: the console's own screen says what is being asked
-   and keeps its CANCEL. */
-#pk{display:none;max-width:min(560px,94vw);margin:8px 0 0;padding:10px 12px;
-border-radius:6px;background:#1d2b53;border:1px solid #ffec27;text-align:left;
-font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7}
-#pk p{margin:0 0 4px}
-#pk p.head{color:#fff1e8}
-#pk .act{margin-top:8px;display:flex;gap:8px;align-items:center}
-#pk button,#pk .fb{font:12px ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7;
-background:#29366f;border:1px solid #5f6f9f;border-radius:4px;padding:4px 9px;
-cursor:pointer}
-#pk .fb{background:#7e2553;color:#fff1e8}
 /* Pairing prompt: a board's whole store is behind its sign-in, so a browser
    it has not paired yet has to ask (worker.js, THE SIGN-IN). IN THE PAGE and
    never window.prompt --
@@ -193,18 +128,9 @@ border-radius:50%;animation:pinspin .8s linear infinite}
 background:rgba(11,15,26,.82);border:1px solid #1d2b53;color:#00e436;font:12px ui-monospace;
 white-space:pre;pointer-events:none}#hud b{color:#ffec27}#hud .w{color:#ff004d}</style></head><body>
 <div id=hud></div>
-<h1>Moybyte <span id=s>starting...</span> <small style="color:#5f6f9f">(press ` for stats)</small> <a id=tier href="?handheld=1" style="color:#5f6f9f;font-size:11px;text-decoration:none;border-bottom:1px dotted #5f6f9f">small screen?</a> <a id=fsb href="#" style="display:none;color:#5f6f9f;font-size:11px;text-decoration:none;border-bottom:1px dotted #5f6f9f">full screen</a> <a id=pod href="#" style="display:none;color:#00e436;font-size:11px;text-decoration:none;border-bottom:1px dotted #00e436">play on device</a></h1>
+<span id=s hidden>starting...</span>
 <pre id=crash></pre>
-<div id=pz><span id=pzs></span>
-<select id=pzc title="cart to export"></select>
-<button id=pze>export .moy</button>
-<label class=fb>import .moy / .p8 / .mp3<input id=pzi type=file accept=".zip,.moy,.p8,.png,.mp3" style="display:none"></label></div>
-<div id=p8><div id=p8t></div><div class=act><button id=p8e>open in editor</button>
-<button id=p8x>close</button></div></div>
-<div id=lnk><p class=head id=lnkh></p><p id=lnkb></p></div>
-<div id=pk><p class=head id=pkh></p><p id=pkb></p><div class=act>
-<label class=fb>choose <span id=pkn></span><input id=pki type=file style="display:none"></label>
-<button id=pkx>cancel</button></div></div>
+<input id=pick type=file hidden>
 <canvas id=cv width=320 height=240 tabindex=0></canvas>
 <input id=kbin type=text autocapitalize=off autocomplete=off autocorrect=off spellcheck=false>
 <div id=pin><div class=card><h2 id=pinh>pair this browser</h2>
@@ -415,9 +341,8 @@ the VISUAL viewport when the browser has one: iOS collapses it for the soft
 keyboard WITHOUT firing window.resize on close, which is how the canvas used to
 stick tiny after typing + PLAY (owner report 2026-07-23). */
 /* The height left for the canvas is the viewport minus everything else the page
-lays out above and below it -- title, persistence row, link/import/pick cards,
-control bar, with their margins -- measured, so a row that wraps or a card that
-appears is accounted for and the document never outgrows the viewport (the
+lays out above and below it -- a crash's text, the touch control bar, with
+their margins -- measured, so what appears is accounted for and the document never outgrows the viewport (the
 embedded Try-it stage showed a scrollbar and a cut-off console). */
 var rm=room(),used=rm[2];
 /* Framed (the project site's Try-it stage), the host page is told how much
@@ -584,23 +509,50 @@ var pH={};
 // a tap. The console's hints name it on this page (moy_ui_parts.c's
 // ACT_KEYS). In fullscreen the page also asks for Super and Esc with the
 // Keyboard Lock API (Chromium's, live only in a fullscreen the page asked
-// for, which the title's "full screen" asks for: F11 is the console's
+// for, which the system menu's Full screen asks for: F11 is the console's
 // full key): Super then reaches the console whole, Esc the Terminal, and
 // Alt+Tab the console's window walk (`ConsoleInput._alt_tab`) on Windows,
 // ChromeOS and Linux (where Wayland's compositor asks its user first);
 // holding Esc ends the fullscreen. On a Mac Cmd is Ctrl and the OS keeps
-// Cmd+Tab, so there Esc, Alt and Tab.
-var altTap=false,fsb=document.getElementById("fsb"),
-LOCK=["AltLeft","AltRight","Tab","Escape"].concat(MAC?[]:["MetaLeft","MetaRight"]);
+// Cmd+Tab, so there Esc, Alt and Tab. Whether the page is full screen is
+// the console's to know too (its row's words).
+var altTap=false;
 function kLock(){var k=navigator.keyboard,on=!!document.fullscreenElement;
-fsb.textContent=on?"leave full screen":"full screen";if(!k||!k.lock)return;
-if(on){k.lock(LOCK).then(function(){window.__moyLocked=1;},function(){window.__moyLocked=0;});}
+send({type:"page",fs:on});if(!k||!k.lock)return;
+var lock=["AltLeft","AltRight","Tab","Escape"].concat(MAC?[]:["MetaLeft","MetaRight"]);
+if(on){k.lock(lock).then(function(){window.__moyLocked=1;},function(){window.__moyLocked=0;});}
 else{k.unlock();window.__moyLocked=0;}}
 document.addEventListener("fullscreenchange",kLock);
-if(document.documentElement.requestFullscreen){fsb.style.display="";
-fsb.addEventListener("click",function(e){e.preventDefault();
-if(document.fullscreenElement)document.exitFullscreen().catch(function(){});
-else document.documentElement.requestFullscreen().then(function(){cv.focus();},function(){});});}
+send({type:"page",fs:false,canfs:!!document.documentElement.requestFullscreen});
+// THE ASKS (page_link.py): what the console's rows ask of the browser. A
+// download and Play on the console go at once. A browser grants full screen
+// and its file chooser only inside a user's gesture, so those are done at
+// once while the gesture that chose the row is still active
+// (navigator.userActivation), else armed: the console says to tap, and the
+// next pointerup or keydown's handler does it; Esc drops it.
+var ASKED=null,PICK=document.getElementById("pick"),PICKED=null;
+function askLive(){var u=navigator.userActivation;return !u||u.isActive;}
+function asks(list){for(var i=0;i<list.length;i++){var a=list[i];
+if(a.do==="save"){if(WORKER)WORKER.postMessage({t:"export",cart:a.cart});}
+else if(a.do==="pod"){if(WORKER)WORKER.postMessage({t:"pod",cart:a.cart});}
+else if(askLive())askDo(a);else askArm(a);}}
+function askArm(a){ASKED=a;window.__moyAsked=a.do;
+send({type:"page",say:[a.do==="fullscreen"?"Tap to go full screen":"Tap to choose a file",
+"Esc: never mind","ok"]});}
+function askDo(a){window.__moyAsked=null;var d=document;
+if(a.do==="fullscreen"){if(!a.on){if(d.fullscreenElement)d.exitFullscreen().catch(function(){});return;}
+if(d.documentElement.requestFullscreen)d.documentElement.requestFullscreen()
+.then(function(){cv.focus();},function(){askArm(a);});}
+else if(a.do==="open")pickFile(".moy,.zip,.p8,.png,.mp3",pzImport,null);
+else if(a.do==="pick")pickFile("",pkSend,pkCancel);}
+function pickFile(accept,got,none){PICK.accept=accept;PICK.value="";PICKED=[got,none];PICK.click();}
+PICK.addEventListener("change",function(){var p=PICKED;PICKED=null;
+if(p&&PICK.files&&PICK.files[0])p[0](PICK.files[0]);else if(p&&p[1])p[1]();PICK.value="";});
+PICK.addEventListener("cancel",function(){var p=PICKED;PICKED=null;if(p&&p[1])p[1]();});
+function askFire(e){if(!ASKED)return;var a=ASKED;ASKED=null;
+if(e.type==="keydown"&&e.key==="Escape"){window.__moyAsked=null;if(a.do==="pick")pkCancel();return;}
+askDo(a);}
+window.addEventListener("pointerup",askFire,true);window.addEventListener("keydown",askFire,true);
 cv.addEventListener("pointerdown",function(){altTap=false;});
 var MAC=/Mac|iP(hone|ad|od)/.test(navigator.platform||""),MODK={Control:1,Shift:2,Alt:4,Meta:8,OS:8};
 var KC={Enter:13,Backspace:8,Tab:9,Delete:127,ArrowLeft:272,ArrowRight:273,ArrowUp:274,ArrowDown:275};

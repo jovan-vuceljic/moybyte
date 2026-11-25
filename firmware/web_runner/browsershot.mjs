@@ -9,6 +9,8 @@
 //
 //   node browsershot.mjs scenario.json [outdir]
 //
+// {"choose": path} answers the file chooser the page opened (a js value,
+// "CHOOSER opened" or "CHOOSER none").
 // Same scenario vocabulary as pageshot.mjs where it makes sense --
 //   {"wait":ms} {"shot":"name"} {"page":"name"} {"click":[x,y]} {"move":[x,y]}
 //   {"drag":[x0,y0,x1,y1,steps]} {"key":"a"} {"key":"z","mods":["ctrl"]}
@@ -191,6 +193,9 @@ async function attach(targetId) {
         sessionId = sessions.get(targetId);
         await cdp("Page.enable");
         await cdp("Runtime.enable");
+        // The page's file chooser never opens a dialog here: it is caught
+        // (CHOOSERS), and a {"choose": path} step answers it.
+        await cdp("Page.setInterceptFileChooserDialog", { enabled: true });
     }
     sessionId = sessions.get(targetId);
     await send("Target.activateTarget", { targetId });
@@ -206,11 +211,12 @@ async function useTab(prefix, timeoutMs) {
     }
 }
 await attach((await send("Target.createTarget", { url: "about:blank" })).targetId);
-const logs = [];
+const logs = [], CHOOSERS = [];
 ws.addEventListener("message", (ev) => {
     const m = JSON.parse(ev.data);
     if (m.method === "Runtime.consoleAPICalled")
         logs.push(m.params.args.map((a) => a.value ?? a.description ?? "").join(" "));
+    if (m.method === "Page.fileChooserOpened") CHOOSERS.push(m.params);
     if (m.method === "Runtime.exceptionThrown")
         logs.push("EXCEPTION " + (m.params.exceptionDetails?.exception?.description
             || m.params.exceptionDetails?.text));
@@ -469,6 +475,16 @@ for (const step of scenario.steps || []) {
         // pasted into a scenario would be a fixture nobody could regenerate.
         // `$NAME` resolves from the environment, so a test can point one
         // scenario at a file it just built in a tmpdir.
+        // {"choose": path}: the file chooser the page opened, answered with
+        // the file at `path` (a "$ENV" name like "file"'s); {"choose": ""}
+        // says how many choosers opened, and answers none.
+        if (step.choose !== undefined) {
+            const p = step.choose.startsWith("$") ? (process.env[step.choose.slice(1)] || "")
+                : step.choose ? resolve(HERE, step.choose) : "";
+            const c = CHOOSERS.shift();
+            if (p && c) await cdp("DOM.setFileInputFiles", { files: [p], backendNodeId: c.backendNodeId });
+            console.log("   js ->", JSON.stringify("CHOOSER " + (c ? "opened" : "none")));
+        }
         if (step.file) {
             const p = step.file.startsWith("$")
                 ? (process.env[step.file.slice(1)] || "")

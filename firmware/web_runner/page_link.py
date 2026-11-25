@@ -1,0 +1,105 @@
+"""The browser page around the console: `Workstation.page`, None on a board.
+
+The page keeps no bar of its own (owner, 2026-11-25): what its top bar did
+is the console's, in the console's rows -- Full screen and Add a file in
+the system menu, Download in a cart's menu, Play on the console in a cart's
+menu where a console serves the page,
+where the carts are kept in Settings -- and the console says what happened
+in its own notices and cards. The browser half of each runs in the page.
+
+A console row asks (`toggle_fullscreen`, `add_files`, `save_cart`,
+`play_on_console`); the frame carries the asks to the page (`drain`,
+web_boot.step's `ask`), and the page does them. A browser grants full
+screen and a file chooser only inside a user's gesture, so the page does an
+ask at once while the gesture that chose the row is still active, else arms
+it and does it in its next pointerup or keydown (page_core.html, THE ASKS).
+
+What the page answers comes back as one event, `page` (web_input), heard
+here: whether it is full screen, the sentence on where it keeps the carts,
+and anything it has to say (an import's outcome, a lost link)."""
+
+
+class PageLink:
+    """The page's asks and its word back. `served`: a console serves this
+    page, so a cart open here can play on its glass. `play(folder)` plays a
+    cart (web_boot.open_cart), for an import's card."""
+
+    def __init__(self, served=False, play=None):
+        self.served = bool(served)
+        self._play = play
+        self.fullscreen = False     # the page is full screen, by its word
+        self.can_fullscreen = False  # ...and its browser has full screen
+        self.kept = ""              # where the page keeps the carts, its sentence
+        self._asks = []
+
+    def _ask(self, do, **kw):
+        kw["do"] = do
+        self._asks.append(kw)
+
+    def toggle_fullscreen(self):
+        """Full screen, or out of it."""
+        self._ask("fullscreen", on=not self.fullscreen)
+
+    def add_files(self):
+        """The browser's file chooser, for carts, PICO-8 carts and songs:
+        what is chosen imports as a drop on the page does."""
+        self._ask("open")
+
+    def save_cart(self, cart):
+        """`cart` (a cart dict) downloaded as a .moy zip. False where it has
+        no folder."""
+        folder = folder_of(cart)
+        if folder is not None:
+            self._ask("save", cart=folder)
+        return folder is not None
+
+    def play_on_console(self, cart):
+        """`cart` (a cart dict) played on the glass of the console serving
+        the page."""
+        folder = folder_of(cart)
+        if folder is not None:
+            self._ask("pod", cart=folder)
+
+    def drain(self):
+        """The asks since the last frame, for the page, or None."""
+        if not self._asks:
+            return None
+        asks, self._asks = self._asks, []
+        return asks
+
+    def heard(self, ws, ev):
+        """The page's `page` event: `fs` whether it is full screen, `canfs`
+        whether its browser has full screen (an iPhone's has none), `kept`
+        where it keeps the carts, `say` a notice ([title, sub, kind]), `tell`
+        a card ([title, [line, tone], ...]) and `offer` one whose Open plays
+        a cart ([title, folder, [line, tone], ...]): an import's report."""
+        if "fs" in ev:
+            self.fullscreen = bool(ev["fs"])
+        if "canfs" in ev:
+            self.can_fullscreen = bool(ev["canfs"])
+        if "kept" in ev:
+            self.kept = str(ev["kept"] or "")
+        say = ev.get("say")
+        if say:
+            title = str(say[0])
+            sub = str(say[1]) if len(say) > 1 else ""
+            kind = str(say[2]) if len(say) > 2 else "ok"
+            ws.notices.notice(title, sub, kind)
+        tell = ev.get("tell")
+        if tell:
+            rows = tuple((str(r[0]), str(r[1]) if len(r) > 1 else "plain") for r in tell[1:])
+            ws.confirm.tell(str(tell[0]), rows)
+        offer = ev.get("offer")
+        if offer and self._play is not None:
+            folder = str(offer[1])
+            rows = tuple((str(r[0]), str(r[1]) if len(r) > 1 else "plain") for r in offer[2:])
+            ws.confirm.offer(str(offer[0]), rows, lambda: self._play(folder))
+        ws.mark_dirty()
+
+
+def folder_of(cart):
+    """A cart dict's folder name (its path's last part), or None."""
+    path = (cart or {}).get("path")
+    if not path:
+        return None
+    return str(path).replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]

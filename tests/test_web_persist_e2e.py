@@ -408,9 +408,9 @@ def test_a_board_served_page_keeps_nothing_locally(tmp_path):
     try:
         out, js = _run("persist_board_mode", base, tmp_path / "chrome", tmp_path / "s1")
         assert len(js) >= 2, out[-2000:]
-        display, _, said = js[0].partition("|")
-        assert display.strip() == "flex", \
-            "the import/export row must be offered on a board too: %r" % display
+        listed, _, said = js[0].partition("|")
+        assert listed == "listed", \
+            "a board-served page must list its carts for Save too: %r" % listed
         assert "kept on the console" in said, said
         # No local store was opened, seeded or read: the detail is empty because
         # board mode never touches OPFS at all.

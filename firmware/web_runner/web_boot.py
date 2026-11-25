@@ -57,6 +57,7 @@ import host_api
 import layout_base
 import moy_carts
 import moy_catalogue
+import page_link
 import web_canvas
 import web_input
 import web_vfs
@@ -448,6 +449,9 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     driver = host_api.ConsoleDriver(ws, own_repeat=True)   # the browser repeats its keys
     ws.use_inputs(WEB_TOUCH_INPUTS if coarse else WEB_INPUTS)
     ws.soft_keyboard = True     # the page's ⌨ summons the browser's keyboard
+    # The page around the console: its asks and its word (page_link.py). A
+    # page a console serves plays a cart on that console's glass too.
+    ws.page = page_link.PageLink(served=_S.get("store_mode") == "board", play=open_cart)
     _S["ws"] = ws
     # The pin backend, if the worker's probe found one. Stashed by gpio_enable
     # (which runs BEFORE this, since the probe is answered while the console is
@@ -1137,13 +1141,17 @@ def _step(dt, played):
     zoom = ws.look.zoom
     moved = zoom != _ZOOM[0]
     _ZOOM[0] = zoom
-    if clip is None and not moved and not painted:
+    page = ws.page
+    asks = page.drain() if page is not None else None
+    if clip is None and asks is None and not moved and not painted:
         return ""
     cv = _S.get("canvas") or ws.sys_canvas
     out = {"paint": 1 if painted else 0, "cart": _cart_title(),
            "input": web_input.effective_input_kinds(ws), "w": cv.w, "h": cv.h}
     if clip is not None:
         out["clip"] = clip
+    if asks is not None:
+        out["ask"] = asks
     if zoom is not None:
         out["zoom"] = zoom
     return json.dumps(out)
@@ -1192,9 +1200,16 @@ def _pcm_buf(au):
 def _edit_state(ws):
     """What a key in the Editor changed, for a harness that types into it:
     the open tab, the sprite's pixels as hex, the code's first lines and
-    whether it holds a selection, and whether the system menu shows."""
+    whether it holds a selection, and whether the system menu shows, with
+    its rows' words (`menu`) and the highlighted one's place among them
+    (`menu_at`)."""
+    m = ws.sysmenu
     out = {"tab": getattr(ws, "menu_view", None),
-           "sysmenu": bool(getattr(ws.sysmenu, "open", False))}
+           "sysmenu": bool(getattr(m, "open", False))}
+    if out["sysmenu"]:
+        rows = [r for r in m.items if r[0] == "item"]
+        out["menu"] = [r[4] if len(r) > 4 else str(r[1]) for r in rows]
+        out["menu_at"] = sum(1 for r in m.items[:m.sel] if r[0] == "item")
     pe, sheet = getattr(ws, "paint", None), getattr(ws, "sheet", None)
     if pe is not None and sheet is not None:
         ox, oy = sheet.tile_origin(pe.n)
@@ -1261,8 +1276,9 @@ def state_json():
     it first opens), the media stream's `now()` (`media`, None with no run)
     and how its last run ended (`media_last`, dev_media.last), the heap's
     allocation where the page meters it (`alloc`, step_frame_json's), the
-    buttons held (`held`) and the desk keyboard's typing level (`typing`), and
-    the radio link's stats (`link_stats`, EspNowLink.stats: the match's
+    buttons held (`held`), the page's word (`page`: full screen, where it
+    keeps the carts, whether a console serves it) and the desk keyboard's
+    typing level (`typing`), and the radio link's stats (`link_stats`, EspNowLink.stats: the match's
     frame, checkpoints and desync; None with no link), for a harness
     driving the page (`window.__moyState()`)."""
     import dev_channel
@@ -1276,6 +1292,9 @@ def state_json():
     st["sync"] = {"acked": _S.get("sync_acked", 0),
                   "busy": any(w.busy() for w in _watchers())}
     st["edit"] = _edit_state(_S["ws"])
+    pg = _S["ws"].page
+    st["page"] = None if pg is None else {"fs": pg.fullscreen, "kept": pg.kept,
+                                          "served": pg.served}
     st["input"] = _input_state(_S["ws"])
     term = getattr(_S["ws"].app("terminal"), "face", None)
     st["term"] = term.lines() if term is not None else None
@@ -1317,7 +1336,8 @@ def _apply(events):
         on_esc=d.escape, on_hold=d.hold, on_key_hold=d.key_hold,
         on_super=d.system_key, on_full=d.full_key, on_key_down=d.key_down,
         on_key_up=d.key_up, on_mods=d.set_mods, on_wheel=d.wheel, on_middle=d.middle,
-        on_gamepad=_gamepad, on_paste=_paste, on_glass=glass)
+        on_gamepad=_gamepad, on_paste=_paste, on_glass=glass,
+        on_page=lambda ev: _S["ws"].page.heard(_S["ws"], ev))
 
 
 # The console's clipboard as the page last heard of it: its seq (moy_app.h's
