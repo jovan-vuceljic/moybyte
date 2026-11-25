@@ -16,7 +16,7 @@
 // child's variables, folder and descriptors are gone exactly as a real fork's
 // would be, and answers its pid. A pipeline's stages therefore run one after
 // another, each writing a pipe buffer the next reads: 1 MB at most
-// (MOY_SH_PIPE_MAX), 8 KB on a board without PSRAM, past which the writer is
+// (MOY_SH_PIPE_MAX), 4 KB on a board without PSRAM, past which the writer is
 // told so once and ended (moy_sh_sys.c, PIPE_R); a command substitution is
 // a child whose output the parent reads.
 // Where dash execs, the shell asks the host to spawn the program (`spawn`):

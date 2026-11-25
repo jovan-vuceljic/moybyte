@@ -47,10 +47,12 @@
 #include "moy_sh_int.h"
 #include "moy_vol.h"
 
-// A pipe's stream at most: what a board without PSRAM's one internal heap
-// spares beside its SSH session, and MOY_SH_PIPE_MAX elsewhere.
+// A pipe's stream at most: MOY_SH_PIPE_MAX, and on a board without PSRAM
+// what its one heap spares above MOY_SH_HEAP_RESERVE (moy_sh_board.h) in a
+// terminal session, with a pipeline's next pipe filling as this one drains,
+// so a session meets this cap before the reserve.
 #if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
-#define PIPE_MAX (8u * 1024u)
+#define PIPE_MAX (4u * 1024u)
 #else
 #define PIPE_MAX MOY_SH_PIPE_MAX
 #endif

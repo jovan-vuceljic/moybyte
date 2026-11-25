@@ -75,7 +75,7 @@ off (`moy_sh_set_questions`), and the command reads its answers from stdin.
 A session takes its record and its arena from the host's `alloc` (PSRAM on a
 board, `heap_caps` with the default heap only where there is no PSRAM); a pipe's buffer, a file's chunk and a fork's snapshot are taken
 while a run needs them and returned after. A pipeline's stages run one after
-another, so a pipe holds its writer's whole stream: 1 MB at most, 8 KB on a
+another, so a pipe holds its writer's whole stream: 1 MB at most, 4 KB on a
 board without PSRAM (the C3 Zero). A longer stream ends its writer with one
 line, `pipe: stream over N KB; write it to a file`, and the reader reads what
 came before it; a file has no such cap, since a file is read and written a
