@@ -91,7 +91,9 @@ session's 32 KB arena (`moy_tty_sh.c`, the most one used is `stats()`'s
 `arena_peak`, measured in #246) and the face task's stack are PSRAM; the
 bridge's two 2 KB buffers live while a page is connected. A board without
 PSRAM pays all of it in its one internal heap, so it takes a 12 KB arena and
-the smaller stack, and its SSH server refuses SFTP
+the smaller stack, shows a full-screen app straight (its writes to the
+client as they come, no grid kept: `moy_tty_sh.c`), and its SSH server
+refuses SFTP
 (`native/moy_ssh/README.md`, Memory).
 
 ## Boards

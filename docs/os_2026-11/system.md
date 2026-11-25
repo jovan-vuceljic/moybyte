@@ -136,7 +136,9 @@ face) and the serial face. The command asks its face to put the app in
 front, and the app takes the face when the line's run ends. A full-screen
 app (`edit`, `top`) has a screen of its own of the face's size (the
 alternate screen: the shell's grid is untouched and back as it was when the
-app ends), which it writes as VT100, and reads keys as a terminal sends
+app ends), which it writes as VT100 (a stream face where there is no PSRAM
+takes the writes straight to its client's terminal, and the app keeps no
+screen: `native/moy_sh/moy_sh_app.h`), and reads keys as a terminal sends
 them; the face turns its input into those (a typed key its byte, the
 arrows, the trackball's and a d-pad's steps xterm's escapes, a key row's
 button its bytes), and a resize is the app's screen resized and drawn again.

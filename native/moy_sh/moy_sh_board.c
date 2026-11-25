@@ -1568,8 +1568,8 @@ static int serial_app(void *ctx, moy_sh_t *s, int argc, char **argv) {
         return f->app != NULL ? 1 : MOY_SH_NOT_FOUND;
     }
     int status;
-    f->app = moy_sh_app_open(s, MOY_SH_SERIAL_COLS, MOY_SH_SERIAL_ROWS, 1, serial_run, f,
-                             argc, argv, &status);
+    f->app = moy_sh_app_open(s, MOY_SH_SERIAL_COLS, MOY_SH_SERIAL_ROWS, 1, serial_run, NULL,
+                             f, argc, argv, &status);
     return status;
 }
 

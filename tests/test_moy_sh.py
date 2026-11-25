@@ -469,6 +469,39 @@ def test_the_editor_asks_for_no_text_bigger_than_a_block(harness, tmp_path, app,
     assert (root / "f.txt").read_text() == want
 
 
+@pytest.mark.parametrize("cols,rows", ((80, 24), (200, 60)))
+@pytest.mark.parametrize("app", ("edit", "vi"))
+def test_a_straight_editor_opens_in_its_record_at_any_size(harness, tmp_path, app, cols, rows):
+    """The C3 Zero has about 36 KB free beside an SSH session and keeps 16 KB
+    of it (MOY_SH_HEAP_RESERVE): `vi` at 200 by 60 asked for a 48 KB screen
+    and said "out of memory". The stream face there takes a full-screen app
+    straight (moy_sh_app.h), so what the open asks for is the front and the
+    record, whatever the terminal's size, and a 20 KB file opens, is edited
+    and saved in blocks, the terminal showing what the app wrote."""
+    root = tmp_path / "root"
+    root.mkdir()
+    text = _lines(20 * 1024)
+    (root / "f.txt").write_text(text)
+    keys, want = (_edit_session if app == "edit" else _vi_session)(text, rows)
+    script = tmp_path / "keys"
+    script.write_text("\n".join(["%%size %d %d" % (cols, rows), "%straight", "%s /f.txt" % app,
+                                 "%meter", "%screen"] + keys) + "\n")
+    r = subprocess.run([harness["app_main"], str(root), str(script)], stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, timeout=60,
+                       env=dict(os.environ, TZ="UTC", MOY_SH_APP_ALLOC_MAX=str(EDIT_BLOCK)))
+    out = r.stdout.decode("utf-8", "replace")
+    assert "Sanitizer" not in out and "runtime error" not in out, out
+    assert r.returncode == 0 and "out of memory" not in out, out
+    m = re.search(r"meter largest \d+ most \d+ live \d+ refused \d+ store largest -?\d+ most -?\d+"
+                  r" fixed (\d+) (\d+) (\d+) (\d+)", out)
+    front, record, none = int(m.group(1)), int(m.group(2)), int(m.group(3)) + int(m.group(4))
+    assert none == 0 and front + record <= 1536, out      # no screen; the record ~1.3 KB
+    assert "| " + text.splitlines()[0] in out, out          # %screen: the terminal's rows
+    assert re.search(r"^\| saved, %d bytes " % len(want), out, re.M), out
+    assert out.endswith("end\n"), out
+    assert (root / "f.txt").read_text() == want
+
+
 def test_every_core_builtin_has_its_script():
     """A C built-in is tested by tests/moy_sh/builtin_<name>.sh."""
     with open(os.path.join(SH, "moy_sh_cmds.c"), encoding="utf-8") as f:

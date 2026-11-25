@@ -352,7 +352,7 @@ static void open_remote(moy_sh_screen_t *f) {
     int cols, rows, status;
     char *argv[] = {"remote", NULL};
     moy_term_size(f->t, &cols, &rows);
-    f->app = moy_sh_app_new(NULL, &HEAP, cols, rows, f->ctrl, NULL, NULL, 1, argv, &status);
+    f->app = moy_sh_app_new(NULL, &HEAP, cols, rows, f->ctrl, NULL, NULL, NULL, 1, argv, &status);
 }
 
 moy_sh_screen_t *moy_sh_screen_new(int cols, int rows, const char *root) {

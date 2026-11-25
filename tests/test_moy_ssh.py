@@ -59,7 +59,8 @@ def _cflags():
             "-D_GNU_SOURCE", "-U_FORTIFY_SOURCE", "-D_FORTIFY_SOURCE=0"]
 
 
-def _build(out):
+def _build(out, face=()):
+    """The server, `face` the flags its face's shell (moy_tty_sh.c) adds."""
     cc = shutil.which("cc")
     shell = [o for o in SH._objects(cc, str(out))
              if os.path.basename(o) not in ("sh_main.o", "board_main.o")]
@@ -75,6 +76,8 @@ def _build(out):
         f = list(flags)
         if "/libtomcrypt/" not in src:
             f.remove("-DLTC_SOURCE")
+        if src.endswith("moy_tty_sh.c"):
+            f += list(face)
         procs.append(subprocess.Popen([cc] + f + ["-c", src, "-o", obj]))
         objs.append(obj)
     assert all(p.wait() == 0 for p in procs)
@@ -90,6 +93,16 @@ def _build(out):
 def built(tmp_path_factory):
     out = tmp_path_factory.mktemp("moy_ssh")
     return out, _build(out)
+
+
+@pytest.fixture(scope="module")
+def straight(tmp_path_factory):
+    """A server whose face shows a full-screen app straight, as a board without
+    PSRAM builds it (native/moy_tty/moy_tty_sh.c's MOY_TTY_STRAIGHT)."""
+    out = tmp_path_factory.mktemp("moy_ssh_straight")
+    h = serve(_build(out, face=["-DMOY_TTY_STRAIGHT=1"]), out / "main")
+    yield h
+    end(h)
 
 
 def serve(exe, out, store="sd/moybyte"):
@@ -488,6 +501,24 @@ def test_top_and_edit_run_on_the_alternate_screen(harness):
     assert out.count(b"\x1b[?1049l") >= 2, out
     assert b"PID" in out or b"pid" in out, out
     assert (harness["system"] / "memo").read_text() == "Xhello\n"
+
+
+def test_a_straight_face_shows_its_apps_as_they_write_and_they_save(straight):
+    """Where there is no PSRAM the face keeps no grid (moy_tty_sh.c,
+    MOY_TTY_STRAIGHT): `edit`, `vi` and `top` open on the alternate screen
+    and leave it, each step's writes inside a synchronized update that ends,
+    and what is typed saves."""
+    memo = straight["system"] / "memo"
+    memo.write_text("hello\n")
+    out = terminal(straight, ((b"edit /etc/memo\r", 1.0), (b"X", 0.3), (b"\x13", 0.8),
+                              (b"\x18", 0.5), (b"vi /etc/memo\r", 1.0), (b"A!", 0.3),
+                              (b"\x1b", 0.5), (b":wq\r", 0.8), (b"top\r", 1.5), (b"q", 0.8),
+                              (b"exit\r", 0.5)))
+    assert out.count(b"\x1b[?1049h") == 3 and out.count(b"\x1b[?1049l") == 3, out
+    begun, ended_ = out.count(b"\x1b[?2026h"), out.count(b"\x1b[?2026l")
+    assert begun == ended_ and begun >= 6, out
+    assert b"Xhello" in out and b"PID" in out, out
+    assert memo.read_text() == "Xhello!\n"
 
 
 def ended(h, n, wait=10.0):
