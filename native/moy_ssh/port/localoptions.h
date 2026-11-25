@@ -83,10 +83,14 @@
 // The session's buffers: a window of 8 KB the client may send ahead, and 2 KB
 // on a board without PSRAM, where the channel's buffer of that size, made at
 // the client's first bytes, is a block of the internal heap a session has
-// little of (the C3 Zero's interactive session ended at its first key).
+// little of (the C3 Zero's interactive session ended at its first key). There
+// the packets the server sends are 4 KB at most too, not Dropbear's 16: each
+// session holds a buffer of that size from its start, and a sign-in taking
+// over holds a second beside the served session's (moy_ssh.c, THE TAKEOVER).
 #include "moy_platform.h"
 #if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
 #define DEFAULT_RECV_WINDOW 2048
+#define TRANS_MAX_PAYLOAD_LEN 4096
 #else
 #define DEFAULT_RECV_WINDOW 8192
 #endif

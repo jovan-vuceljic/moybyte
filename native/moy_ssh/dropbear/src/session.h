@@ -46,6 +46,13 @@
 
 void common_session_init(int sock_in, int sock_out);
 void session_loop(void(*loophandler)(void)) ATTRIB_NORETURN;
+int session_loop_fds(fd_set *readfd, fd_set *writefd);
+void session_loop_step(fd_set *readfd, fd_set *writefd, void(*loophandler)(void));
+#if DROPBEAR_MOY
+/* moy_ssh.c's turn in the loop: before the select() and after it */
+int moy_ssh_loop_fds(fd_set *readfd, fd_set *writefd, struct timeval *timeout, int maxfd);
+void moy_ssh_loop_heard(fd_set *readfd, fd_set *writefd);
+#endif
 void session_cleanup(void);
 void send_session_identification(void);
 void send_msg_ignore(void);
@@ -58,6 +65,7 @@ void fill_passwd(const char* username);
 
 /* Server */
 void svr_session(int sock, int childpipe) ATTRIB_NORETURN;
+void svr_session_begin(int sock, int childpipe);
 void svr_dropbear_exit(int exitcode, const char* format, va_list param) ATTRIB_NORETURN;
 void svr_dropbear_log(int priority, const char* format, va_list param);
 

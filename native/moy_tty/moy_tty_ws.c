@@ -20,7 +20,9 @@
 //                           1008 "seal" for a frame whose seal does not
 //                           open, "revoked" when the page's session ended
 //                           (its key dropped, the password changed, the
-//                           session unused past its time or evicted)
+//                           session unused past its time or evicted); 4001
+//                           "taken" when another session's page opened the
+//                           terminal (moy_wa_take: the newer page has it)
 //
 // A SEALED SESSION (the webhost's, moy_seal.h) carries every message as a
 // binary frame of AES-GCM ciphertext and its tag: up under the session's kc,
@@ -82,7 +84,7 @@ typedef struct {
     int cols, rows;
     moy_wa_seal_t seal;                 // the session's, `on` 0 for the open host
     uint32_t up, down;                  // the next frame's index each way
-    volatile int cut;                   // the session ended
+    volatile int cut;                   // 1: the session ended, 2: another one took it
     volatile uint32_t heard;            // now_ms of the page's last bytes
     uintptr_t task;
     moy_tty_ws_stats_t stats;
@@ -187,7 +189,7 @@ static void pump(int ws, int sfd, pid_t pid, uint8_t *in, char *out) {
     size_t n = 0;
     for (;;) {
         if (W->cut) {
-            close_out(ws, 1008, "revoked");
+            close_out(ws, W->cut == 2 ? 4001 : 1008, W->cut == 2 ? "taken" : "revoked");
             return;
         }
         fd_set r;
@@ -343,9 +345,9 @@ uint32_t moy_web_term_idle_ms(void) {
 }
 
 // The webhost's: the page's session ended, so its terminal does.
-void moy_web_term_cut(void) {
+void moy_web_term_cut(int taken) {
     if (W != NULL && __atomic_load_n(&W->fd, __ATOMIC_ACQUIRE) >= 0) {
-        W->cut = 1;
+        W->cut = taken ? 2 : 1;
         moy_tty_poke(W->task);
     }
 }

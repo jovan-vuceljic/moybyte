@@ -491,7 +491,14 @@ the link channel's frames between it and its ESP-NOW unchanged.
 - **Python carts play matches here as Lua carts do**: the browser's VM
   computes floats as the consoles' does (REPR_C singles), which the netplay
   doc makes part of the lockstep contract.
-- **One page at a time**: a second tab's socket is refused `busy`.
+- **One page at a time, the newest** (owner, 2026-11-25): a second signed-in
+  page's socket takes the board, and the page that held it closes 4001
+  `taken` and shows "Another browser signed in to this console, so this one
+  was disconnected" with one button that takes it back. Neither page asks by
+  itself, so two never take it from each other in turn
+  (`native/moy_net/moy_webauth.c`, `moy_wa_take`; `firmware/web_runner/worker.js`,
+  TAKEN). Sessions are several at once on every board; the live socket and
+  the web terminal are one page's.
 - What a match costs this board (internal RAM, the largest block, the
   round trip with power save and without) is on #256.
 

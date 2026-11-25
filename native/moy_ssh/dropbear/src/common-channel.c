@@ -392,6 +392,35 @@ static void send_msg_channel_close(struct Channel *channel) {
 	TRACE(("leave send_msg_channel_close"))
 }
 
+#if DROPBEAR_MOY
+/* Every open channel told `msg` on its stderr, where its window takes it,
+ * and closed: a session the server ends (moy_ssh.c, THE TAKEOVER). Nothing
+ * while a key exchange holds the channels' data back. */
+void moy_channels_end(const char *msg) {
+	unsigned int i, len = strlen(msg);
+	if (!ses.dataallowed) {
+		return;
+	}
+	for (i = 0; i < ses.chansize; i++) {
+		struct Channel *channel = ses.channels[i];
+		if (channel == NULL || channel->sent_close) {
+			continue;
+		}
+		if (!channel->sent_eof && channel->transwindow >= len
+				&& channel->transmaxpacket >= len) {
+			CHECKCLEARTOWRITE();
+			buf_putbyte(ses.writepayload, SSH_MSG_CHANNEL_EXTENDED_DATA);
+			buf_putint(ses.writepayload, channel->remotechan);
+			buf_putint(ses.writepayload, SSH_EXTENDED_DATA_STDERR);
+			buf_putstring(ses.writepayload, msg, len);
+			encrypt_packet();
+			channel->transwindow -= len;
+		}
+		send_msg_channel_close(channel);
+	}
+}
+#endif
+
 /* call this when trans/eof channels are closed */
 static void send_msg_channel_eof(struct Channel *channel) {
 

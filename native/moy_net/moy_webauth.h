@@ -106,5 +106,15 @@ enum {
     MOY_WA_STREAMS = 2,
 };
 void moy_wa_stream(int which, const moy_wa_seal_t *s);
+// The stream `which` asked by the signed-in session `s`, before its bridge is
+// handed the socket: the one live now is cut. Its bridge lets go of it at its
+// next turn, on its own task (nothing here waits for it: the terminal's ends
+// through hops this task serves), so the asking page is answered 1013 "busy"
+// meanwhile and asks again, as a page does. Held by another session, its page
+// is told it was taken (the close 4001 "taken", which it never answers by
+// asking again); held by `s` itself (a page's own socket the bridge has not
+// seen drop), it closes as a session's end does. 1 when another session's was
+// taken.
+int moy_wa_take(int which, const moy_wa_seal_t *s);
 
 #endif // MOY_WEBAUTH_H

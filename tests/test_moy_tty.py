@@ -12,7 +12,9 @@ GET /term the page asks why a socket failed; every frame sealed each way, a
 tampered or replayed one closing the socket 1008 "seal"; a dropped key
 cutting its open terminal 1008 "revoked", as a password change does and as
 its session's end does (unused past its time, its keys counting as use, or
-taken by newer sign-ins); keys in and their echo out,
+taken by newer sign-ins); another signed-in page's terminal taking the shell,
+the first closed 4001 "taken", and a request with no session taking nothing;
+keys in and their echo out,
 gathered into few frames; a resize the shell sees; Ctrl-C ending a command;
 `exit` closing the socket 1000 with its status; a page that closes freeing
 the session for the next; the face another transport holds refusing the page
@@ -606,6 +608,39 @@ def test_a_terminal_ends_when_newer_sign_ins_take_its_session(host):
     ws.read_until(b"\xff", 3.0)
     assert ws.closed == (1008, "revoked"), ws.closed
     wait_stat(host, "live", 0)
+
+
+def test_another_browser_s_terminal_takes_the_shell_and_the_first_is_told(host):
+    """The newest signed-in page has the shell: the one that held it closes
+    4001 "taken" (its page offers it back, never asks by itself), and the
+    newer one's prompt comes up once the old bridge has let go."""
+    ws = WS(host)
+    ws.read_until(b"$ ")
+    other = seal_client.Browser(host.send, name="Other on Host")
+    other.pair_token(host.token())
+    ws2 = WS(host, browser=other)
+    ws.read_until(b"\xff", 3.0)
+    assert ws.closed == (4001, "taken"), ws.closed
+    for _ in range(10):                 # the old bridge lets go at its next turn
+        got = ws2.read_until(b"$ ", 1.0)
+        if b"$ " in got:
+            break
+        assert ws2.closed == (1013, "busy"), ws2.closed
+        time.sleep(0.1)
+        ws2 = WS(host, browser=other)   # asked again, as the page does
+    assert b"$ " in got
+    ws2.close()
+
+
+def test_a_request_with_no_session_takes_no_one_s_shell(host):
+    ws = WS(host)
+    ws.read_until(b"$ ")
+    stranger = WS(host, target="/term?cols=80&rows=24")
+    assert stranger.status == 401, stranger.head
+    ws.keys(b"echo kept\r")
+    assert b"kept" in ws.read_until(b"kept\r\n", 3.0)
+    assert ws.closed is None
+    ws.close()
 
 
 def test_a_login_with_no_profile_starts_at_status_0(host):

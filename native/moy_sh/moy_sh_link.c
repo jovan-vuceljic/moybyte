@@ -187,6 +187,11 @@ void moy_sh_link_state(int state, int n) {
     case MOY_SH_LINK_NONE:
         snprintf(msg, sizeof msg, "%sThis console has no shell.%s\r\n", DIM, PLAIN);
         break;
+    case MOY_SH_LINK_TAKEN:
+        restore(l);
+        snprintf(msg, sizeof msg, "%s\r\n%sAnother browser opened this console's shell, so this one "
+                 "was disconnected. Press Enter to take it back.%s\r\n", PLAIN, DIM, PLAIN);
+        break;
     default:
         break;
     }
