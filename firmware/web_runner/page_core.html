@@ -503,9 +503,25 @@ if(e.key=="Escape"){
 send({type:"esc"});e.preventDefault();return;}
 if(e.key in MODK){send({type:"mods",mods:kmods(e)});return;}
 var c=kcode(e);if(c===null||kept(e,c))return;
+// Ctrl/Cmd+V is the browser's: its paste event follows with the clipboard's
+// text, or, where none comes, the console's own Paste.
+if((c==118||c==86)&&(kmods(e)&1)&&!e.altKey){if(!e.repeat){pasteOwed=true;
+setTimeout(function(){if(pasteOwed){pasteOwed=false;send({type:"paste"});}},0);}return;}
 if(e.repeat)send({type:"kd",code:c,mods:kmods(e),rep:1});
 else{kHeld[e.code||e.key]=c;send({type:"kd",code:c,mods:kmods(e)});}
 e.preventDefault();});
+// THE CLIPBOARD. A paste over the canvas goes to the console whole (the
+// surface with the keys types it: the Terminal, a field, an editor), the
+// console's clipboard holding it; a copy in the console comes back as the
+// worker's `clip` and goes on the browser's clipboard where the browser
+// lets a page write it (navigator.clipboard).
+var pasteOwed=false,PASTE_MAX=262144;
+document.addEventListener("paste",function(e){var a=document.activeElement;
+if(a&&a!==cv&&a!==document.body)return;
+var t=e.clipboardData?e.clipboardData.getData("text/plain"):"";pasteOwed=false;e.preventDefault();
+send(t?{type:"paste",text:t.slice(0,PASTE_MAX)}:{type:"paste"});});
+function clipOut(t){window.__moyClip=t;
+try{navigator.clipboard.writeText(t).then(function(){window.__moyClipped=t;},function(){});}catch(e){}}
 cv.addEventListener("keyup",function(e){
 if(e.key in MODK){send({type:"mods",mods:kmods(e)});return;}
 var c=kcode(e);delete kHeld[e.code||e.key];if(c!==null)send({type:"ku",code:c,mods:kmods(e)});});

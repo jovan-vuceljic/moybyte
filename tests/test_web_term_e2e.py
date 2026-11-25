@@ -198,6 +198,18 @@ def _sides(host, tmp_path, out):
                       "-- the page:", out[-2500:]])
 
 
+_GRANT = {"grant": ["clipboardReadWrite", "clipboardSanitizedWrite"]}
+
+
+# Ctrl+V as a hand presses it: the browser runs its paste on it.
+_PASTE = {"key": "v", "mods": ["ctrl"], "commands": ["paste"]}
+
+
+def _clipboard_holds(text):
+    """The browser's clipboard holding `text` (the page's origin granted it)."""
+    return {"js": "navigator.clipboard.writeText(%s).then(() => 'held')" % json.dumps(text)}
+
+
 def _play(tmp_path, name, base, steps, after="", profile="chrome", env=None):
     q = "?dev=1&desktop=1&cart=Terminal" + after
     return web_e2e.run(tmp_path, name, q, steps, base, tmp_path / profile, env=env,
@@ -209,11 +221,21 @@ def test_a_page_paired_by_the_qr_reloads_signed_in_and_its_terminal_is_sealed(
     host = _board(tty_exe, short)
     server, base = _serve(tmp_path, host.port)
     try:
-        steps = ([{"note": "paired by the token, the Terminal connects"}, _until(_SHELL),
-                  _prompt("PAIRED"), _lines("OPEN")]
+        steps = ([_GRANT, {"note": "paired by the token, the Terminal connects"},
+                  _until(_SHELL), _prompt("PAIRED"), _lines("OPEN")]
                  + _typed("echo web-$((6*7))") + [{"key": "Enter"}, _says("web-42"),
                                                    _lines("ECHO")]
-                 + [{"shot": "term_board"}])
+                 + [{"shot": "term_board"}]
+                 # the board's vi over the socket: Esc leaves INSERT, `:wq` saves
+                 + _typed("vi v.txt") + [{"key": "Enter"}, _says("v.txt"), {"key": "i"},
+                                         _says("-- INSERT --")] + _typed("over the socket")
+                 + [{"key": "Escape"}, _until("ln => ln.includes('[+]')")]
+                 + _typed(":wq") + [{"key": "Enter"}, _until(_SHELL)]
+                 + _typed("cat v.txt") + [{"key": "Enter"}, _says("over the socket"),
+                                          _lines("VI")]
+                 # the browser's paste, whole, into the board's shell
+                 + [_clipboard_holds("echo sealed-$((6*7))\necho sealed-two\n"),
+                    _PASTE, _says("sealed-two"), _lines("PASTE")])
         out, js = _play(tmp_path, "term_board", base, steps, after=_qr_fragment(host))
         paired = _tagged(js, "PAIRED")
         assert paired and paired["keys"] == 1 and "#" not in paired["url"], (
@@ -222,6 +244,9 @@ def test_a_page_paired_by_the_qr_reloads_signed_in_and_its_terminal_is_sealed(
         assert "web-42" in "\n".join(_tagged(js, "ECHO")), (
             str(js) + _sides(host, tmp_path, out))
         assert int(host.stats()["in"]) > 0, "no key crossed the sealed socket"
+        assert _after(js, "VI", "cat v.txt") == ["over the socket"], js
+        assert _after(js, "PASTE", "echo sealed-$((6*7))")[:1] == ["sealed-42"], js
+        assert _after(js, "PASTE", "echo sealed-two") == ["sealed-two"], js
         # the same profile, no token: the stored key signs in, nothing typed;
         # then the board goes away, and the next connect says so
         gone = threading.Thread(target=_end_when, args=(host, "2"), daemon=True)
@@ -326,23 +351,29 @@ def test_a_page_says_how_long_a_board_holding_wrong_tries_off_waits(tty_exe, tmp
         host.end()
 
 
+def _site(tmp_path):
+    """serve.py over dist_site/: (the process, its base)."""
+    port = web_e2e.free_port()
+    p = subprocess.Popen([sys.executable, "serve.py", str(port), "dist_site"], cwd=RUNNER,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    base = "http://127.0.0.1:%d" % port
+    for _ in range(50):
+        try:
+            urllib.request.urlopen(base + "/index.html", timeout=1).read(64)
+            break
+        except OSError:
+            time.sleep(0.1)
+    return p, base
+
+
 def test_the_site_s_terminal_runs_the_shell_on_the_browser_s_store(tmp_path):
     """The site's console: the session's root is the store's folder (/moy in
     the page), home its files; a run past its budget gives the tab back; a
     key let go late types once (the browser's repeat is the only one), and
     a key held as the page loses the keyboard goes up."""
     web_e2e.require("site_shell")
-    port = web_e2e.free_port()
-    p = subprocess.Popen([sys.executable, "serve.py", str(port), "dist_site"], cwd=RUNNER,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-    base = "http://127.0.0.1:%d" % port
+    p, base = _site(tmp_path)
     try:
-        for _ in range(50):
-            try:
-                urllib.request.urlopen(base + "/index.html", timeout=1).read(64)
-                break
-            except OSError:
-                time.sleep(0.1)
         steps = ([{"note": "the site's shell", "wait": 1500}]
                  + _typed("pwd; ls /") + [{"key": "Enter"}, {"wait": 600}, _lines("LS")]
                  + _typed("sleep 30") + [{"key": "Enter"}, {"wait": 4500}, _lines("SLEPT")]
@@ -522,3 +553,60 @@ def test_the_site_s_terminal_runs_a_wasi_command_on_the_page_s_engine(tmp_path):
         assert _after(js, "AGAIN", "cat /files/Documents/m.txt") == ["hello", "web"], js
     finally:
         server.terminate()
+
+
+def test_the_site_s_terminal_takes_esc_and_the_browser_s_clipboard(tmp_path):
+    """The site's Terminal: Esc is vi's (INSERT left, `:wq` saves), the
+    browser's paste (Ctrl+V) types a multi-line text whole, and a mouse's
+    drag over the log then Ctrl+Shift+C puts its text on the browser's
+    clipboard."""
+    web_e2e.require("site_shell")
+    p, base = _site(tmp_path)
+    try:
+        steps = ([_GRANT, {"note": "the site's shell", "wait": 1500}, _until(_SHELL)]
+                 + _typed("vi /files/v.txt") + [{"key": "Enter"}, _says("v.txt")]
+                 + [{"key": "i"}, _says("-- INSERT --")] + _typed("hi esc")
+                 + [{"key": "Escape"}, _until("ln => ln.includes('[+]')")]
+                 + _typed(":wq") + [{"key": "Enter"}, {"wait": 600}]
+                 + _typed("cat /files/v.txt") + [{"key": "Enter"}, {"wait": 600}, _lines("VI")]
+                 + [_clipboard_holds("echo pasted-$((6*7))\necho pasted-two\n"),
+                    _PASTE, _says("pasted-two"), _lines("PASTE")]
+                 + _typed("echo copy-me") + [{"key": "Enter"}, _says("copy-me")]
+                 # the log's rows as the site's desk lays the Terminal's window
+                 + [{"move": [262, 223]}, {"drag": [262, 223, 330, 237, 6]},
+                    {"shot": "term_selected"}, {"key": "c", "mods": ["ctrl", "shift"]},
+                    {"waitFor": "window.__moyClipped !== undefined", "timeout": 5000},
+                    {"js": "navigator.clipboard.readText().then(t => 'COPIED ' + "
+                           "JSON.stringify(t))"}])
+        _out, js = _play(tmp_path, "term_clip", base, steps)
+        assert _after(js, "VI", "cat /files/v.txt") == ["hi esc"], js
+        assert _after(js, "PASTE", "echo pasted-$((6*7))")[:1] == ["pasted-42"], js
+        assert _after(js, "PASTE", "echo pasted-two") == ["pasted-two"], js
+        assert _tagged(js, "COPIED") == "files$ echo copy-me\ncopy-me", js
+    finally:
+        p.terminate()
+
+
+def test_the_site_s_notes_takes_the_browser_s_paste_whole(tmp_path):
+    """A multi-line paste (Ctrl+V) into a note in the site's console lands
+    whole, which the note keeps: the Terminal of the page reloaded reads it
+    in the note's file."""
+    web_e2e.require("site_shell")
+    p, base = _site(tmp_path)
+    try:
+        steps = ([_GRANT, {"note": "Notes", "wait": 2500}, {"key": "n"}, {"wait": 400}]
+                 + _typed("pasted") + [{"key": "Enter"}, {"wait": 800},
+                                       _clipboard_holds("first line\nsecond line\n"),
+                                       _PASTE, {"wait": 800},
+                                       {"shot": "notes_paste"}, {"key": "Escape"},
+                                       {"wait": 3000}])
+        web_e2e.run(tmp_path, "notes_paste", "?dev=1&desktop=1&cart=Notes", steps, base,
+                    tmp_path / "notes", boot_ms=30000)
+        steps = ([{"note": "the Terminal", "wait": 1500}, _until(_SHELL)]
+                 + _typed("cat /files/Documents/pasted.md") + [{"key": "Enter"}, {"wait": 800},
+                                                               _lines("NOTE")])
+        _out, js = _play(tmp_path, "notes_read", base, steps, profile="notes")
+        assert _after(js, "NOTE", "cat /files/Documents/pasted.md") == [
+            "first line", "second line"], js
+    finally:
+        p.terminate()

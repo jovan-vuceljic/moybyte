@@ -2750,7 +2750,7 @@ function loop() {
         }
         liveIn();
         const _t0 = performance.now();
-        const s = step(dt, played);
+        let s = step(dt, played);
         const _d = performance.now() - _t0;
         // WORKER-SIDE PERF: the page's `recv` fps says the worker is behind but
         // not WHY. Track step cost + the worst offender's payload so the HUD
@@ -2760,6 +2760,12 @@ function loop() {
         if (_d > 20) WP.slow++;
         if (LOOP) longest("step", _d);
         const sounded = shipPCM();
+        if (s && s.indexOf('"clip"') >= 0) {
+            // A copy in the console: the page puts its text on the browser's clipboard.
+            const o = JSON.parse(s);
+            self.postMessage({ t: "clip", s: o.clip });
+            if (!o.paint) s = "";
+        }
         if (s) { WP.painted++; WP.bytes += s.length; shipFrame(s); }
         // GC scheduling (see IDLE_QUIET_FRAMES). A painted frame re-arms the
         // idle collect, and so does one within STREAM_FRAMES of shipped samples.

@@ -187,6 +187,9 @@ _SIGS = (
     ("moy_sh_face_size", [_P, ctypes.POINTER(ctypes.c_int32), ctypes.POINTER(ctypes.c_int32)],
      None),
     ("moy_sh_face_lines", [_P], ctypes.c_int32),
+    ("moy_sh_face_select", [_P, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32],
+     None),
+    ("moy_sh_face_selection", [_P, ctypes.POINTER(ctypes.c_int32)], _I),
     ("moy_sh_face_log_line", [_P, ctypes.c_int32, _S, _SZ], _SZ),
     ("moy_sh_face_tdeck_row", [_S, _SZ], _I),
 )
@@ -551,6 +554,18 @@ class Face:
         c, r = ctypes.c_int32(), ctypes.c_int32()
         _lib().moy_sh_face_size(self._p(), ctypes.byref(c), ctypes.byref(r))
         return c.value, r.value
+
+    def select(self, r0, c0, r1, c1):
+        """The log's cells from (r0, c0) to (r1, c1) selected; a line past
+        the log clears it."""
+        _lib().moy_sh_face_select(self._p(), int(r0), int(c0), int(r1), int(c1))
+
+    def selection(self):
+        """The selection's ends in order, (r0, c0, r1, c1), or None."""
+        v = (ctypes.c_int32 * 4)()
+        if not _lib().moy_sh_face_selection(self._p(), v):
+            return None
+        return tuple(v)
 
     def lines(self):
         L = _lib()

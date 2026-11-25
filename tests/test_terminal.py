@@ -924,3 +924,103 @@ def test_esc_is_vi_s_and_the_terminal_stays(tmp_path, desk):
     finally:
         app.close_session()
 
+
+def test_a_paste_types_whole_into_the_prompt_and_into_vi(tmp_path):
+    """A paste (ConsoleDriver.paste, the page's clipboard) types its text at
+    once, a line break as Enter: two lines run in turn, and in vi's INSERT
+    the lines land as typed. The console's clipboard holds it too."""
+    ws, app, drv = _desk_or_console(tmp_path / "ws", True)
+    try:
+        drv.paste("echo one\r\necho two\n")
+        drv.frame(1 / 30)
+        shown = [ln for ln in plain(app) if ln.strip()]
+        assert shown[-4:] == ["$ echo one", "one", "$ echo two", "two"]
+        assert ws.clipboard.text() == "echo one\r\necho two\n"
+        path = _vi_open(ws, drv, app, tmp_path / "ws")
+        drv.paste(" there\nsecond line")
+        drv.frame(1 / 30)
+        drv.escape()
+        drv.frame(1 / 30)
+        for c in b":wq\r":
+            drv.type_char(c)
+            drv.frame(1 / 30)
+        assert path.read_text() == "hi there\nsecond line\n"
+    finally:
+        app.close_session()
+
+
+def _cells(app, ui_draw):
+    """Where each log cell lies in the app's coordinates, as the last frame drew it."""
+    at = {}
+    lay = app.layout
+    for y in range(0, lay.h, 2):
+        for x in range(0, lay.w, 2):
+            a = ui_draw.text_at(app._ui, "log", x, y)
+            if a is not None and a not in at:
+                at[a] = (x, y)
+    return at
+
+
+def test_a_mouse_drag_selects_and_ctrl_c_copies_it(tmp_path):
+    """A mouse's drag over the log selects its cells, drawn; Ctrl+C over a
+    selection copies its text to the console's clipboard (no interrupt),
+    Ctrl+Shift+C too, and Ctrl+C with none is the shell's again."""
+    from runtime import ui_draw
+    ws, app, drv = _desk_or_console(tmp_path / "ws", True)
+    try:
+        drv.paste("echo one\necho two\n")
+        drv.frame(1 / 30)
+        r = plain(app).index("one")
+        ws.pointer.hovers = True                       # a mouse
+        cx, cy, _w, _h = ws.wm.windows["terminal"].content_rect()
+        at = _cells(app, ui_draw)
+        x0, y0 = at[(r - 1, 2)]
+        x1, y1 = at[(r, 3)]
+        drv.touch(cx + x0, cy + y0)
+        drv.frame(1 / 30)
+        drv.touch_drag(cx + x1, cy + y1)
+        drv.frame(1 / 30)
+        drv.touch_up()
+        drv.frame(1 / 30)
+        assert app.face.selection() == (r - 1, 2, r, 3)
+        app.face.set_line("kept")
+        drv.key_down(ord("c"), 1)
+        drv.frame(1 / 30)
+        drv.frame(1 / 30)
+        drv.key_up(ord("c"), 0)
+        drv.frame(1 / 30)
+        assert ws.clipboard.text() == "echo one\none"
+        assert app.face.selection() is None and app.face.line() == "kept", "no interrupt"
+        app.face.select(r + 1, 0, r + 2, 3)
+        drv.key_down(ord("C"), 3)                     # Ctrl+Shift+C
+        drv.frame(1 / 30)
+        drv.key_up(ord("C"), 0)
+        drv.frame(1 / 30)
+        assert ws.clipboard.text() == "$ echo two\ntwo"
+        drv.key_down(ord("c"), 1)
+        drv.frame(1 / 30)
+        drv.key_up(ord("c"), 0)
+        drv.frame(1 / 30)
+        assert app.face.line() == "", "Ctrl+C with no selection drops the line"
+    finally:
+        app.close_session()
+
+
+def test_a_finger_s_drag_scrolls_and_selects_nothing(tmp_path):
+    from runtime import ui_draw
+    ws, app, drv = _desk_or_console(tmp_path / "ws", False)
+    try:
+        drv.paste("echo one\n")
+        drv.frame(1 / 30)
+        ws.pointer.hovers = False
+        at = _cells(app, ui_draw)
+        x, y = at[(0, 2)]
+        drv.touch(x, y)
+        drv.frame(1 / 30)
+        drv.touch_drag(x + 20, y)
+        drv.frame(1 / 30)
+        drv.touch_up()
+        drv.frame(1 / 30)
+        assert app.face.selection() is None
+    finally:
+        app.close_session()

@@ -173,7 +173,12 @@ echoed into the grid and run; Tab completes a command's name
 files), left and right move the caret and up and down walk the history.
 Esc is a key of the shell's and its apps' (vi leaves INSERT on it), never
 the console's back (`ESC_LEAVES` False): the Terminal is left by its
-window's X, the bar's back or the system key. A
+window's X, the bar's back or the system key. A mouse's drag over the log
+selects its cells (`moy_sh_face_select`); Ctrl+Shift+C, or Ctrl+C over a
+selection, copies them to the console's clipboard, and Ctrl+C with none is
+the interrupt. A paste from outside the console (a browser page's,
+`InputPolicy.paste`) types its text whole, a line break as Enter, and a
+line whose run waits holds the rest until it ends. A
 desk has a keyboard and draws no key row. On a handheld a key row under the
 prompt holds what the input cannot type, and a completion with several
 candidates offers them there to pick: the T-Deck's holds Tab and the shell's

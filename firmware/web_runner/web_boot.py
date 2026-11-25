@@ -1076,7 +1076,9 @@ def _step(dt, played):
     Returns "" when the console skipped the redraw (#44 dirty gate: nothing
     moved) -- the page then simply keeps the pixels it already has. Otherwise
     a small JSON string carrying what does not live in the framebuffer:
-    whether it painted, the cart title and the input hint. `played` is the
+    whether it painted, the cart title and the input hint, and where a copy
+    changed the console's clipboard its text (`clip`), which a frame that
+    did not paint carries too (its `paint` 0). `played` is the
     page's sink's count of samples played (-1 = no sink): _RunnerPump tops
     its depth up from it.
 
@@ -1096,6 +1098,7 @@ def _step(dt, played):
     _feed_events()
     _S["driver"].frame(dt)
     painted = ws.frame_state.frames_drawn != painted_before
+    clip = _clip_out()
     pcm = _PCM
     pcm[0] = 0
     if au is not None:
@@ -1110,6 +1113,9 @@ def _step(dt, played):
             pcm[1] = au.at
             pcm[2] = 1 if au.starts else 0
             pcm[3] = _pcm_buf(au)
+    if clip is not None:
+        return json.dumps({"paint": 1 if painted else 0, "cart": _cart_title(),
+                           "input": web_input.effective_input_kinds(ws), "clip": clip})
     if not painted:
         return ""
     return json.dumps({
@@ -1269,7 +1275,34 @@ def _apply(events):
         on_esc=d.escape, on_hold=d.hold, on_key_hold=d.key_hold,
         on_super=d.system_key, on_full=d.full_key, on_key_down=d.key_down,
         on_key_up=d.key_up, on_mods=d.set_mods, on_wheel=d.wheel, on_middle=d.middle,
-        on_gamepad=_gamepad)
+        on_gamepad=_gamepad, on_paste=_paste)
+
+
+# The console's clipboard as the page last heard of it: its seq (moy_app.h's
+# clip_seq) at the last copy the page was sent, or the last paste it sent.
+_CLIP = [None]
+
+
+def _paste(text):
+    """The page's clipboard pasted: the console takes it
+    (`ConsoleDriver.paste`), and the page's clipboard holds it already."""
+    _S["driver"].paste(text)
+    _CLIP[0] = _S["ws"].clipboard.seq()
+
+
+def _clip_out():
+    """The console's clipboard's text where a copy changed it since the
+    page last heard (None where none did): the page puts it on the
+    browser's clipboard."""
+    clip = _S["ws"].clipboard
+    seq = clip.seq()
+    if seq == _CLIP[0]:
+        return None
+    first = _CLIP[0] is None
+    _CLIP[0] = seq
+    if first or clip.kind() != "text":
+        return None
+    return clip.text()
 
 
 def _gamepad(on):

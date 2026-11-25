@@ -748,8 +748,10 @@ class Workstation:
         # The system clipboard (#132): the one buffer every editor writes
         # through (the code tab, a cart's editor handle), so copy in one app
         # pastes in another; the code tab's lane over a grant of its own.
-        # Console-side end-to-end -- works identically over the web
-        # transport, never touches a host OS clipboard (parity trap).
+        # Console-side end-to-end: the console reads no host's clipboard. A
+        # browser page meets it at its edge (firmware/web_runner/web_boot.py's
+        # `_paste` and `_clip_out`): the page's paste lands here, and a copy
+        # here goes on the browser's clipboard.
         self.clipboard = _moy_app.Clipboard(
             self.app_abi, self.app_abi.grant("editor", ("clipboard",)))
         # The console's Paste into an app's focused field reads it here, so

@@ -12,6 +12,7 @@
 // Same scenario vocabulary as pageshot.mjs where it makes sense --
 //   {"wait":ms} {"shot":"name"} {"click":[x,y]} {"move":[x,y]}
 //   {"drag":[x0,y0,x1,y1,steps]} {"key":"a"} {"key":"z","mods":["ctrl"]}
+//   {"key":"v","mods":["ctrl"],"commands":["paste"]} (the browser's paste)
 //   {"key":"Meta"} (a modifier alone) {"click":[x,y],"mods":["shift"]}
 //   {"dblclick":[x,y]} (two clicks back to back, the second with Chrome's
 //                       clickCount 2, as a person's double click arrives)
@@ -30,6 +31,9 @@
 //                                           whose address starts so (a window
 //                                           the page opened, or the first
 //                                           again), once there is one
+//   {"grant":["clipboardReadWrite",...]}    the page's origin granted those
+//                                           permissions (Browser.grantPermissions:
+//                                           the clipboard's read and write)
 //   {"init":"<js>"}                         run before every document the
 //                                           driven tab loads from then on (a
 //                                           stand-in for a device API), then
@@ -324,6 +328,7 @@ for (const step of scenario.steps || []) {
             const got = await waitForExpr(step.waitFor, step.timeout || 10000);
             console.log("   waitFor ->", JSON.stringify(got));
         }
+        if (step.grant) await send("Browser.grantPermissions", { permissions: step.grant, origin: ORIGIN });
         if (step.open) await attach((await send("Target.createTarget", { url: step.open })).targetId);
         if (step.tab != null) await useTab(step.tab, step.timeout || 15000);
         if (step.init) {
@@ -400,7 +405,9 @@ for (const step of scenario.steps || []) {
             // CDP takes `text` only for printable chars typed alone; a NAMED
             // key (Enter, ArrowDown, ...) or a chord goes as rawKeyDown with
             // its virtual keycode. `mods` (["ctrl", "shift", "alt", "meta"])
-            // are pressed first and released after, as a hand does.
+            // are pressed first and released after, as a hand does. A chord's
+            // `commands` (["paste"], ["copy"]) are the editing commands the
+            // browser runs on it, which CDP's key events run only when named.
             const k = String(step.key);
             const alone = Object.keys(MODKEY).find((m) => MODKEY[m][0] === k);
             const mods = alone ? [alone] : (step.mods || []);
@@ -421,7 +428,9 @@ for (const step of scenario.steps || []) {
                 const up = k.length === 1 ? k.toUpperCase() : k;
                 const code = k.length === 1 ? (/[A-Z]/.test(up) ? "Key" + up : "Digit" + up) : k;
                 const vk = k.length === 1 ? up.charCodeAt(0) : (VK[k] || 0);
-                await cdp("Input.dispatchKeyEvent", { type: "rawKeyDown", key: k, code, windowsVirtualKeyCode: vk, modifiers: held });
+                const down = { type: "rawKeyDown", key: k, code, windowsVirtualKeyCode: vk, modifiers: held };
+                if (step.commands) down.commands = step.commands;
+                await cdp("Input.dispatchKeyEvent", down);
                 await cdp("Input.dispatchKeyEvent", { type: "keyUp", key: k, code, windowsVirtualKeyCode: vk, modifiers: held });
             }
             for (const m of mods.slice().reverse()) {

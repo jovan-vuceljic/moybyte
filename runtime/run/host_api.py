@@ -326,6 +326,16 @@ class ConsoleDriver:
         if 0x20 <= code <= 0x7E:
             self.key_hold(code, False)
 
+    def paste(self, text=""):
+        """A paste from outside the console (the browser page's clipboard):
+        the surface holding the keys types it whole where it can, else the
+        console's Paste (Ctrl+V) takes it from the console's clipboard
+        (`InputPolicy.paste`). With no text, the console's Paste alone."""
+        if not text or not self.ws.input_policy.paste(str(text)):
+            mods = self._src.mods
+            self.key_down(0x76, mods | _mi.CTRL)
+            self.key_up(0x76, mods)
+
     def set_mods(self, mods, tap=True):
         """The modifiers a desk keyboard holds now. Super acts on its
         release, and only when no other key went down while it was held, so

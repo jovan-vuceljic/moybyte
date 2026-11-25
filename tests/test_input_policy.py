@@ -99,6 +99,23 @@ def test_a_shell_apps_field_types_and_mic_gives_it_back(tmp_path, app_id):
     assert not ws.input.text_mode, "focus left the field: game mode"
 
 
+@pytest.mark.parametrize("app_id", sorted(FIELDS))
+def test_a_paste_from_outside_lands_in_a_shell_apps_field(tmp_path, app_id):
+    """A paste from outside the console (a browser page's clipboard,
+    ConsoleDriver.paste) is the console's clipboard and its Paste: the
+    focused field takes the text."""
+    ws = build_ws(tmp_path)
+    drv = make_drv(ws)
+    assert ws.spine.open_app(ws.app(app_id))
+    _frames(drv)
+    read, was = FIELDS[app_id](ws)
+    _frames(drv)
+    drv.paste("pasted")
+    _frames(drv)
+    assert ws.clipboard.text() == "pasted"
+    assert read() == was + "pasted"
+
+
 def _focus_name(ws, drv):
     """Settings' Name focused and its edit opened (Enter)."""
     ws.settings_layer._want = "name"
