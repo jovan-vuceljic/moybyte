@@ -72,7 +72,8 @@ chip changes.
   (`carts_link.BoardCheck`), since a Python heap that cannot grow past its
   reserve has no room to parse one; the board lists only an index the page
   cannot read. An install reads only its cart's own entry from the streamed
-  index (`cart_index.EntryRead`); its buffers are made for it and given back
+  index, and of it only the members the install reads
+  (`cart_index.EntryRead`); its buffers are made for it and given back
   when it ends, and a cart its store has no room for is refused with the
   sizes before anything is fetched. Those fetches are https, and its image
   carries a CA bundle of its own (`boards/MOYBYTE_C3_ZERO/ca_roots.pem`)
