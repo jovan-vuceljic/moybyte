@@ -653,6 +653,32 @@ def test_moybytes_own_fields_read_only_under_the_moybyte_key(tmp_path):
         ("game", ["network"], {"speed": 3})
 
 
+def test_no_cart_can_claim_a_scripts_id(tmp_path):
+    """A script's app id is `script:KIND/NAME` (console.SCRIPT_ID). A
+    manifest naming one is ignored for the folder's name, a folder named
+    with a ':' is no cart on the shelf, and an index entry with one is left
+    out: no cart's id holds a ':'."""
+    import json
+    from runtime import cart_index, moy_carts
+    from runtime.moy_store_base import is_cart_id
+    assert not is_cart_id("script:docs/hi.py")
+    root = tmp_path / "carts"
+    for folder, man_id in (("local.mine.moy", "script:docs/hi.py"), ("script:x.moy", None)):
+        d = root / folder
+        d.mkdir(parents=True)
+        man = {"title": "Hi"}
+        if man_id:
+            man["id"] = man_id
+        (d / "manifest.json").write_text(json.dumps(man))
+        (d / "main.py").write_text("")
+    assert moy_carts.load(str(root / "local.mine.moy"))["id"] == "local.mine"
+    ids = [c["id"] for c in moy_carts.scan(str(root))]
+    assert ids == ["local.mine"]
+    entry = {"id": "script:x", "name": "X", "folder": "script:x.moy", "runtime": "lua",
+             "version": 1}
+    assert cart_index.check_cart(entry) == "id 'script:x'"
+
+
 def test_a_cart_id_is_two_lowercase_parts(tmp_path):
     """SPEC.md 3.1's id: `<author>.<name>`, each of a-z, 0-9 and _. A manifest
     id that is not one is ignored and the folder name stands; every id the

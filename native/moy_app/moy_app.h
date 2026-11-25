@@ -209,6 +209,9 @@ size_t moy_app_policy_error(const moy_app_policy_t *p, char *out, size_t cap);
 // has one, else its title's slug (ASCII letters and digits kept and lowered,
 // space, '-' and '_' as '_', the rest dropped; "app" for no title, "cart" for
 // a slug left empty). Returns the length, written NUL-terminated up to cap - 1.
+// No cart's id holds a ':' (the catalogue's is_cart_id and folder rule,
+// cart_index's entry check): an id with one is a script's, made by the
+// console (runtime/shell/console.py's SCRIPT_ID), which this keys as given.
 size_t moy_app_id_for(const char *id, size_t id_n, const char *title,
                       size_t title_n, char *out, size_t cap);
 
