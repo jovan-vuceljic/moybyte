@@ -18,7 +18,7 @@
 #define TOP_ROWS 32                     // the processes it shows at most
 #define TOP_EVERY_MS 1000u
 #define SIGTERM_ 15
-#define TITLE "\x1b[0;36m"
+#define TITLE moy_term_accent((char[MOY_TERM_ACCENT_BYTES]){0})  // the block's own
 #define DIM "\x1b[2m"
 #define PLAIN "\x1b[0m"
 
@@ -93,7 +93,8 @@ static void top_draw(moy_sh_app_t *a, void *st) {
         fetch(a, t);
     }
     char b[160];
-    moy_sh_app_write(a, "\x1b[0m\x1b[2J\x1b[H" TITLE);
+    moy_sh_app_write(a, "\x1b[0m\x1b[2J\x1b[H");
+    moy_sh_app_write(a, TITLE);
     snprintf(b, sizeof b, "top  %d processes", t->n);
     moy_sh_app_clip(a, b, cols);
     moy_sh_app_write(a, PLAIN "\x1b[2;1H" DIM);

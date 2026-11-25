@@ -1118,6 +1118,17 @@ def _terminal_plan(ws, cfg):
         f.submit()
         app._damage.all()
 
+    def ansi():
+        # a program's ANSI inks, 30-37 then 90-97, which the view draws in
+        # the theme's tones, never a terminal's own colours
+        f = app.face
+        f.clear_cands()
+        f.set_in_row(False)
+        f.set_line("clear; for b in 3 9; do for i in 0 1 2 3 4 5 6 7; do "
+                   "printf '\\033[%d%dmink%d ' $b $i $i; done; printf '\\033[0m\\n'; done")
+        f.submit()
+        app._damage.all()
+
     plan = [("app_terminal", open_it)]
     if cfg.get("appearance"):
         plan.append(("app_terminal_listing", typed("help")))
@@ -1130,6 +1141,7 @@ def _terminal_plan(ws, cfg):
         plan.append(("app_terminal_top", text_app("top", still=True)))
         plan.append(("app_terminal_neofetch", neofetch))
         plan.append(("app_terminal_colours", colours))
+        plan.append(("app_terminal_ansi", ansi))
     return plan
 
 
@@ -2007,7 +2019,7 @@ def surface_names(config_name):
         if not cfg["windowed"]:
             names.append("app_terminal_touch")
         names += ["app_terminal_edit", "app_terminal_top", "app_terminal_neofetch",
-                  "app_terminal_colours"]
+                  "app_terminal_colours", "app_terminal_ansi"]
     names += ["open_with", "pick", "app_files_document", "app_moymesh"]
     names += [name for name, _lua in MESH_PAGES]
     if cfg["windowed"] and not cfg.get("console"):

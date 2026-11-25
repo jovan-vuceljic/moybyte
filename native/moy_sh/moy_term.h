@@ -62,6 +62,18 @@
 // (38;5;N).
 int moy_term_nearest(uint32_t rgb);
 
+// The shell's colours are the palette's base colours, never an ANSI one's:
+// base colour `base` (0-15) as an ink's or (`ground`) a ground's SGR, its RGB
+// (38;2 / 48;2; 38;5;N in a build that links no palette), into `o`, which
+// holds MOY_TERM_SGR_BYTES. The accent is what the shell marks with: the
+// typed line, a text app's title and selection: a reset, then its ink, into
+// `o` (MOY_TERM_ACCENT_BYTES), which it returns.
+#define MOY_TERM_SGR_BYTES 24u
+#define MOY_TERM_ACCENT_BYTES (MOY_TERM_SGR_BYTES + 4u)
+#define MOY_TERM_ACCENT 12              // the palette's blue
+size_t moy_term_base_sgr(char *o, int ground, int base);
+const char *moy_term_accent(char *o);
+
 typedef struct moy_term moy_term_t;
 
 typedef void *(*moy_term_alloc_fn)(void *ctx, size_t n);

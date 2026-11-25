@@ -53,7 +53,7 @@
 #define NAME_CAP 48
 #define MSG_CAP 80
 #define TAB 8
-#define TITLE "\x1b[0;36m"
+#define TITLE moy_term_accent((char[MOY_TERM_ACCENT_BYTES]){0})  // the block's own
 #define DIM "\x1b[2m"
 #define PLAIN "\x1b[0m"
 #define CTRL(c) ((c) & 0x1F)
@@ -719,7 +719,8 @@ static void ed_draw(moy_sh_app_t *a, void *st) {
         e->top = ln - h + 1;
     }
     char b[MSG_CAP + 64];
-    moy_sh_app_write(a, "\x1b[0m\x1b[2J\x1b[H" TITLE);
+    moy_sh_app_write(a, "\x1b[0m\x1b[2J\x1b[H");
+    moy_sh_app_write(a, TITLE);
     snprintf(b, sizeof b, "edit %s%s", e->name, e->changed ? " *" : "");
     moy_sh_app_clip(a, b, cols);
     moy_sh_app_write(a, PLAIN);
@@ -740,7 +741,7 @@ static void ed_draw(moy_sh_app_t *a, void *st) {
     snprintf(b, sizeof b, "\x1b[%d;1H" DIM, rows);
     moy_sh_app_write(a, b);
     if (e->ask) {
-        moy_sh_app_write(a, PLAIN TITLE);
+        moy_sh_app_write(a, TITLE);
         moy_sh_app_clip(a, "Save the changes? y yes, n no", cols);
     } else if (e->msg[0]) {
         moy_sh_app_clip(a, e->msg, cols);
@@ -1798,7 +1799,8 @@ static void vi_draw(moy_sh_app_t *a, void *st) {
     } else if (e->msg[0]) {
         moy_sh_app_clip(a, e->msg, cols - 16);
     } else if (e->mode == VI_INSERT) {
-        moy_sh_app_write(a, TITLE "-- INSERT --" PLAIN);
+        moy_sh_app_write(a, TITLE);
+        moy_sh_app_write(a, "-- INSERT --" PLAIN);
     } else {
         snprintf(b, sizeof b, "\"%s\"%s%s", e->name, e->changed ? " [+]" : "",
                  e->vi == 2 ? " [read-only]" : "");

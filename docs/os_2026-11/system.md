@@ -213,7 +213,10 @@ wrap), and the screen face draws that grid through `ui.text_view`, whose
 ANSI inks are the theme's tones and whose RGB inks and grounds are the
 nearest of the sixteen base colours, exactly; the half and whole blocks
 (▀ ▄ █) are fills, so a program draws pixel art two pixels a cell, as
-`neofetch` draws Moy. The keys below are what the text apps read (`moy_sh_app.h`); a
+`neofetch` draws Moy. The shell's own colours are base colours as RGB, on
+every face and board (`moy_term_base_sgr`; the typed line and a text app's
+title and selection in `MOY_TERM_ACCENT`), never an ANSI ink, so an SSH
+client shows the console's colours too. The keys below are what the text apps read (`moy_sh_app.h`); a
 line program's stdin from the terminal and the resize event are still a
 sketch, and the size call is built for a compiled command alone
 (`term_size(cols*, rows*)` from `moybyte.term`, 0 rows where the face has

@@ -15,14 +15,14 @@
 #include "moy_text.h"
 
 #define ECHO "\x1b[2m"
-#define TYPED "\x1b[0;36m"
+#define TYPED moy_term_accent((char[MOY_TERM_ACCENT_BYTES]){0})  // the block's own
 #define PLAIN "\x1b[0m"
 #define MIN_COLS 8
 #define RUN_MORE 1
 #define RUN_EXIT 2
 #define NAMES_BYTES 8192u               // a completion's names, all of them
 #define LOG_ROWS_MAX 96                 // a text view's rows at most (MOY_UI_TEXT_ROWS)
-#define PROMPT_ROW (MOY_SH_FACE_LINE * 2 + 32)
+#define PROMPT_ROW (MOY_SH_FACE_LINE * 2 + 48)
 
 // The T-Deck's keyboard: whether its matrix types `c`, plain or with Sym
 // (native/moy_input/moy_kbd.c). Weak, so a build without the driver links.

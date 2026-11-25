@@ -587,13 +587,19 @@ void moy_term_cursor(const moy_term_t *t, int out[3]) {
     out[2] = t->shown;
 }
 
-static size_t rgb_sgr(char *o, int ground, int i) {
+size_t moy_term_base_sgr(char *o, int ground, int base) {
     if (moy_theme_moy64 == NULL) {
-        return (size_t)snprintf(o, 24, "\x1b[%d;5;%dm", ground ? 48 : 38, i);
+        return (size_t)snprintf(o, MOY_TERM_SGR_BYTES, "\x1b[%d;5;%dm", ground ? 48 : 38, base);
     }
-    uint32_t c = moy_theme_moy64[i];
-    return (size_t)snprintf(o, 24, "\x1b[%d;2;%u;%u;%um", ground ? 48 : 38,
+    uint32_t c = moy_theme_moy64[base];
+    return (size_t)snprintf(o, MOY_TERM_SGR_BYTES, "\x1b[%d;2;%u;%u;%um", ground ? 48 : 38,
                             (unsigned)(c >> 16), (unsigned)((c >> 8) & 0xFF), (unsigned)(c & 0xFF));
+}
+
+const char *moy_term_accent(char *o) {
+    memcpy(o, "\x1b[0m", 4);
+    moy_term_base_sgr(o + 4, 0, MOY_TERM_ACCENT);
+    return o;
 }
 
 // The SGR that sets a cell's ink: its colour wins over dim, as a text view
@@ -601,7 +607,7 @@ static size_t rgb_sgr(char *o, int ground, int i) {
 static size_t ink(uint32_t c, char *o) {
     uint32_t fg = MOY_TERM_FG(c);
     if (fg >= MOY_TERM_PAL) {
-        return rgb_sgr(o, 0, (int)(fg - MOY_TERM_PAL));
+        return moy_term_base_sgr(o, 0, (int)(fg - MOY_TERM_PAL));
     }
     if (fg < 8) {
         memcpy(o, "\x1b[30m", 5);
@@ -644,7 +650,7 @@ size_t moy_term_line(const moy_term_t *t, int i, char *out, size_t cap) {
                 }
             }
             if ((c & ground) != (was & ground)) {
-                m += MOY_TERM_BG(c) ? rgb_sgr(b + m, 1, (int)MOY_TERM_BG(c) - 1)
+                m += MOY_TERM_BG(c) ? moy_term_base_sgr(b + m, 1, (int)MOY_TERM_BG(c) - 1)
                                     : (size_t)snprintf(b + m, 8, "\x1b[49m");
                 was = (was & ~ground) | (c & ground);
             }

@@ -59,7 +59,8 @@ def test_a_line_is_echoed_and_run_in_the_session(term):
     _ws, app = term
     run(app, "echo hello; mkdir /made; cd /made; pwd")
     assert plain(app) == ["$ echo hello; mkdir /made; cd /made; pwd", "hello", "/made"]
-    assert app.face.lines()[0] == "\x1b[2m$ \x1b[36mecho hello; mkdir /made; cd /made; pwd\x1b[0m"
+    assert app.face.lines()[0] == ("\x1b[2m$ \x1b[38;2;41;173;255m"
+                                   "echo hello; mkdir /made; cd /made; pwd\x1b[0m")
 
 
 def test_a_command_that_goes_on_takes_the_continuation_prompt(term):
@@ -210,7 +211,8 @@ def test_pkg_asks_the_console_s_password_unseen_and_its_install_question_at_the_
         _type(app, "hunter22")
         f.key(0x08)
         _type(app, "2")
-        assert f.prompt_row() == "\x1b[2mThe console's password: \x1b[0;36m********\x1b[0m"
+        assert f.prompt_row() == ("\x1b[2mThe console's password: \x1b[0m\x1b[38;2;41;173;255m"
+                                  "********\x1b[0m")
         f.key(9)
         f.recall(-1)
         assert f.line() == "hunter22", "no completion, no history while it is asked"

@@ -377,6 +377,8 @@ def test_the_site_s_terminal_runs_the_shell_on_the_browser_s_store(tmp_path):
         _out, js = _play(tmp_path, "term_site", base, steps)
         ls = "\n".join(_tagged(js, "LS"))
         assert "/files" in ls and "carts/" in ls and "files/" in ls, ls
+        # the typed line in the palette's accent (base 12), as on the desk
+        assert "\x1b[38;2;41;173;255mpwd; ls /" in ls, ls
         slept = "\n".join(_tagged(js, "SLEPT"))
         assert "[stopped: a command in the browser runs for 3 s at most]" in slept, slept
         assert "back" in "\n".join(_tagged(js, "BACK"))

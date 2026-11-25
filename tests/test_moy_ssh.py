@@ -572,6 +572,9 @@ def test_top_and_edit_run_on_the_alternate_screen(harness):
     assert out.count(b"\x1b[?1049l") >= 2, out
     assert b"PID" in out or b"pid" in out, out
     assert (harness["system"] / "memo").read_text() == "Xhello\n"
+    # their titles in the palette's accent (base 12), never an ANSI ink
+    assert out.count(b"\x1b[38;2;41;173;255m") >= 2, out
+    assert not re.search(rb"\x1b\[[0-9;]*\b(3[0-7]|9[0-7])m", out), out
 
 
 def ended(h, n, wait=10.0):
