@@ -241,6 +241,7 @@ def _lua_carousel(tmp_path, tone, desk=False, label=""):
                                                        w=64 if desk else 32))
     ws = host_app.build_workstation(str(carts), **_DESK if desk else {})
     ws.pointer.visible = False
+    ws.bar_layer.clock_text = lambda: "10:30"   # (frames of two consoles compare)
     drv = host_app.ConsoleDriver(ws)
     drv.frame(1 / 30)
     open_cart(ws, "Lua Carousel")
