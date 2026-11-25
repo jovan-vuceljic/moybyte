@@ -8,7 +8,11 @@
 //   TERM   the terminal: writes go to the host's `out`, reads the host's `in`
 //          (end of file without one)
 //   NUL    /dev/null
-//   MEM    bytes read whole at open: a file of the tree, a /dev or /proc read
+//   MEM    bytes read whole at open: a /dev or /proc read
+//   READ   a file of the tree opened read-only, held open from the open to
+//          the last close and read a chunk (MOY_SH_CHUNK) at a time, so a
+//          reader of any size needs a chunk of the heap; lseek moves its
+//          offset (moy_vol_seek). Its size is the one it had at the open
 //   FILE   bytes written. Write-only into the tree they STREAM, a chunk
 //          (MOY_SH_CHUNK) at a time, into a file held open from the open to
 //          the last close, so an open that cannot write fails there: the file
@@ -16,9 +20,15 @@
 //          put over it at the last close, so a cut leaves the old file whole.
 //          Read-write (`<>`) and the virtual files' are put whole at the last
 //          close (MOY_SH_FILE_MAX)
-//   PIPE_R, PIPE_W   the two ends of a pipe buffer. Stages run one after
-//          another, so a read of an empty pipe is its end; a write past
-//          MOY_SH_PIPE_MAX or with no reader left fails with EPIPE
+//   PIPE_R, PIPE_W   the two ends of a pipe buffer, chunks (MOY_SH_CHUNK)
+//          of the heap. Stages run one after another (moy_sh.h, THE FORK),
+//          so the buffer holds the writer's whole stream and a read of an
+//          empty pipe is its end. A stream past PIPE_MAX, or past what the
+//          heap gives, is said once ("stream over N KB", "out of memory at
+//          N KB") and ends its writer as SIGPIPE would (a writer ignoring it
+//          gets EPIPE), so the reader reads what came before it; a write
+//          with no reader left
+//          fails with EPIPE
 //
 // PATHS are the shell's: absolute after the working folder is applied and
 // `.`/`..` folded. /dev and /proc are virtual (the host's vread/vlist, with
@@ -32,16 +42,34 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "moy_platform.h"
 #include "moy_sh_posix.h"
 #include "moy_sh_int.h"
 #include "moy_vol.h"
 
-enum { O_TERM = 1, O_NUL, O_MEM, O_FILE, O_PIPE_R, O_PIPE_W };
+// A pipe's stream at most: MOY_SH_PIPE_MAX, and on a board without PSRAM
+// what its one heap spares above MOY_SH_HEAP_RESERVE (moy_sh_board.h) in a
+// terminal session, with a pipeline's next pipe filling as this one drains,
+// so a session meets this cap before the reserve.
+#if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
+#define PIPE_MAX (4u * 1024u)
+#else
+#define PIPE_MAX MOY_SH_PIPE_MAX
+#endif
+
+enum { O_TERM = 1, O_NUL, O_MEM, O_READ, O_FILE, O_PIPE_R, O_PIPE_W };
+
+typedef struct pipe_chunk {
+    struct pipe_chunk *next;
+    size_t len;
+    char b[MOY_SH_CHUNK];
+} pipe_chunk_t;
 
 typedef struct {
-    char *buf;
-    size_t len, cap, pos;
+    pipe_chunk_t *head, *tail;  // read from head at `pos`, written at tail
+    size_t pos, held;           // ... and the bytes between
     int readers, writers;
+    int over;                   // its stream ran past what it holds
 } sh_pipe_t;
 
 struct moy_sh_obj {
@@ -53,7 +81,9 @@ struct moy_sh_obj {
     size_t len, cap, pos;
     char *path;                 // FILE: where its bytes go
     int vfile;                  // FILE: a virtual file (the host's vwrite)
-    moy_vol_file_t *held;       // FILE streamed: the open file its chunks go to
+    moy_vol_file_t *held;       // FILE streamed, READ: the open file
+    size_t at;                  // READ: the file's offset of buf[0] (len bytes)
+    size_t size;                // READ: its size at the open
     char *tmp;                  // ... when it is written beside `path`
     size_t sent;                // ... its bytes gone to it
     int failed;                 // ... the errno a chunk failed with
@@ -62,9 +92,14 @@ struct moy_sh_obj {
 
 struct moy_sh_dir {
     struct dirent ent;
-    char *names;                // NUL-separated, a type byte before each
+    char *names;                // each a type byte, its size (4 bytes), its name and NUL
     size_t len, cap, pos;
+    int sized;                  // the store's listing: its sizes are kept, else 0 (as stat)
+    int last_dir;               // what readdir answered last: a folder, its size
+    uint32_t last_size;
 };
+
+#define DIR_HEAD 5u             // a name's type byte and size before it
 
 // --- objects ----------------------------------------------------------------
 
@@ -114,13 +149,16 @@ static char *dupstr(const char *p) {
 
 static int store_write(const char *path, const char *p, size_t n, int append);
 static void stream_close(struct moy_sh_obj *o);
+static void read_close(struct moy_sh_obj *o);
 
 static void obj_drop(struct moy_sh_obj *o) {
     if (o == NULL || --o->refs > 0) {
         return;
     }
     moy_sh_t *s = moy_sh_cur;
-    if (o->held != NULL) {
+    if (o->held != NULL && o->kind == O_READ) {
+        read_close(o);
+    } else if (o->held != NULL) {
         stream_close(o);
     } else if (o->kind == O_FILE && o->path != NULL) {
         if (o->vfile) {
@@ -139,7 +177,11 @@ static void obj_drop(struct moy_sh_obj *o) {
             p->writers--;
         }
         if (p->readers == 0 && p->writers == 0) {
-            moy_sh_hfree(p->buf);
+            while (p->head != NULL) {
+                pipe_chunk_t *c = p->head;
+                p->head = c->next;
+                moy_sh_hfree(c);
+            }
             moy_sh_hfree(p);
         }
     }
@@ -430,6 +472,53 @@ static int stream_close_here(struct moy_sh_obj *o) {
     return r;
 }
 
+// A READ's steps: its file opened and held, and a chunk read at `pos` into
+// its buffer (seeking first when `pos` is not where the last one ended), up
+// to the size at the open, so `cat f >> f` ends.
+static int read_open_here(struct moy_sh_obj *o) {
+    moy_vol_t v;
+    const char *rest;
+    uint32_t size = 0;
+    int entered = moy_vol_gate_enter(o->path);
+    int r = moy_vol_at(o->path, &v, &rest);
+    if (r == 0) {
+        r = moy_vol_open(&v, rest, MOY_VOL_READ | MOY_VOL_HELD, &o->held);
+        if (r != 0) {
+            o->held = NULL;
+        }
+    }
+    if (r == 0) {
+        r = moy_vol_size(o->held, &size);
+        o->size = size;
+    }
+    moy_vol_gate_leave(entered);
+    return r;
+}
+
+static int read_fill_here(struct moy_sh_obj *o) {
+    int entered = moy_vol_gate_enter(o->path);
+    int r = 0;
+    size_t got = 0, want = o->pos < o->size ? o->size - o->pos : 0;
+    if (want > MOY_SH_CHUNK) {
+        want = MOY_SH_CHUNK;
+    }
+    if (want > 0 && o->pos != o->at + o->len) {
+        r = moy_vol_seek(o->held, (uint32_t)o->pos);
+    }
+    while (r == 0 && got < want) {
+        size_t n = 0;
+        r = moy_vol_read(o->held, o->buf + got, want - got, &n);
+        if (n == 0) {
+            break;
+        }
+        got += n;
+    }
+    o->at = o->pos;
+    o->len = r == 0 ? got : 0;
+    moy_vol_gate_leave(entered);
+    return r;
+}
+
 static int store_stat_here(const char *path, moy_vol_stat_t *st) {
     moy_vol_t v;
     const char *rest;
@@ -457,7 +546,7 @@ typedef struct {
     int r;
 } store_call_t;
 
-enum { S_READ, S_WRITE, S_STAT, S_OPEN, S_PUT, S_CLOSE };
+enum { S_READ, S_WRITE, S_STAT, S_OPEN, S_PUT, S_CLOSE, S_ROPEN, S_FILL };
 
 static void store_here(void *arg) {
     store_call_t *c = arg;
@@ -476,6 +565,12 @@ static void store_here(void *arg) {
             break;
         case S_CLOSE:
             c->r = stream_close_here(c->o);
+            break;
+        case S_ROPEN:
+            c->r = read_open_here(c->o);
+            break;
+        case S_FILL:
+            c->r = read_fill_here(c->o);
             break;
         default:
             c->r = store_stat_here(c->path, c->st);
@@ -557,6 +652,44 @@ static void stream_close(struct moy_sh_obj *o) {
     store_call(&c);
 }
 
+// A READ opened over the tree's `path`, its chunk buffer made: 0 or an errno.
+static int read_open(struct moy_sh_obj *o) {
+    o->buf = moy_sh_halloc(MOY_SH_CHUNK);
+    if (o->buf == NULL) {
+        return ENOMEM;
+    }
+    o->cap = MOY_SH_CHUNK;
+    store_call_t c = { .op = S_ROPEN, .o = o };
+    return store_call(&c);
+}
+
+// Up to `n` bytes at its offset, a chunk read when the offset is past the
+// one buffered: the count, 0 at its end, -1 with errno.
+static ssize_t read_take(struct moy_sh_obj *o, void *buf, size_t n) {
+    if (o->pos < o->at || o->pos >= o->at + o->len) {
+        store_call_t c = { .op = S_FILL, .o = o };
+        int r = store_call(&c);
+        if (r != 0) {
+            errno = r;
+            return -1;
+        }
+    }
+    size_t left = o->at + o->len > o->pos ? o->at + o->len - o->pos : 0;
+    if (n > left) {
+        n = left;
+    }
+    if (n) {
+        memcpy(buf, o->buf + (o->pos - o->at), n);
+    }
+    o->pos += n;
+    return (ssize_t)n;
+}
+
+static void read_close(struct moy_sh_obj *o) {
+    store_call_t c = { .op = S_CLOSE, .o = o };
+    store_call(&c);
+}
+
 // --- virtual files ----------------------------------------------------------
 
 typedef struct {
@@ -620,6 +753,87 @@ static int vlist(const char *dir, moy_sh_ent_fn fn, void *arg) {
         return ENOENT;
     }
     return s->host.vlist(s->host.ctx, dir, fn, arg);
+}
+
+// --- pipes ------------------------------------------------------------------
+
+static ssize_t pipe_read(sh_pipe_t *p, void *buf, size_t n) {
+    size_t got = 0;
+    while (got < n && p->head != NULL) {
+        pipe_chunk_t *c = p->head;
+        size_t k = c->len - p->pos < n - got ? c->len - p->pos : n - got;
+        memcpy((char *)buf + got, c->b + p->pos, k);
+        got += k;
+        p->pos += k;
+        p->held -= k;
+        if (p->pos == c->len && (c != p->tail || c->len == sizeof c->b)) {
+            p->head = c->next;
+            p->tail = p->head == NULL ? NULL : p->tail;
+            p->pos = 0;
+            moy_sh_hfree(c);
+        } else if (p->pos == c->len) {
+            break;
+        }
+    }
+    return (ssize_t)got;
+}
+
+// A stream past what the pipe holds (`full`: PIPE_MAX, else the heap's
+// refusal), said once on the writer's stderr (the terminal's when that is
+// this pipe) and the writer ended as SIGPIPE ends it.
+static ssize_t pipe_over(sh_pipe_t *p, int full) {
+    if (!p->over) {
+        p->over = 1;
+        char msg[80];
+        unsigned kb = (unsigned)((p->held + 1023) / 1024);
+        int n = full ? snprintf(msg, sizeof msg, "pipe: stream over %u KB; write it to a file\n", kb)
+                     : snprintf(msg, sizeof msg, "pipe: out of memory at %u KB; write it to a file\n",
+                                kb);
+        struct moy_sh_obj *e = fd_obj(2);
+        moy_sh_t *s = moy_sh_cur;
+        if (e != NULL && !(e->kind == O_PIPE_W && e->pipe == p)) {
+            moy_sh_write(2, msg, (size_t)n);
+        } else if (!moy_sh_replaying(s)) {
+            s->host.out(s->host.ctx, 2, msg, (size_t)n);
+        }
+        moy_sh_raise(SIGPIPE);
+    }
+    errno = EPIPE;
+    return -1;
+}
+
+static ssize_t pipe_write(sh_pipe_t *p, const void *buf, size_t n) {
+    if (p->readers == 0) {
+        errno = EPIPE;
+        return -1;
+    }
+    if (p->over || p->held + n > PIPE_MAX) {
+        return pipe_over(p, 1);
+    }
+    size_t put = 0;
+    while (put < n) {
+        pipe_chunk_t *c = p->tail;
+        if (c == NULL || c->len == sizeof c->b) {
+            c = moy_sh_halloc(sizeof *c);
+            if (c == NULL) {
+                return pipe_over(p, 0);
+            }
+            c->next = NULL;
+            c->len = 0;
+            if (p->tail != NULL) {
+                p->tail->next = c;
+            } else {
+                p->head = c;
+            }
+            p->tail = c;
+        }
+        size_t k = sizeof c->b - c->len < n - put ? sizeof c->b - c->len : n - put;
+        memcpy(c->b + c->len, (const char *)buf + put, k);
+        c->len += k;
+        put += k;
+        p->held += k;
+    }
+    return (ssize_t)n;
 }
 
 // --- descriptors ------------------------------------------------------------
@@ -690,23 +904,21 @@ int moy_sh_open(const char *path, int flags, ...) {
             return -1;
         }
         if (acc == O_RDONLY) {
-            char *buf = NULL;
-            size_t len = 0;
             if (!exists) {
                 errno = ENOENT;
                 return -1;
             }
-            r = store_read(p, &buf, &len);
-            if (r != 0) {
-                errno = r;
+            o = obj_new(O_READ);
+            if (o == NULL) {
+                errno = ENOMEM;
                 return -1;
             }
-            o = obj_new(O_MEM);
-            if (o == NULL) {
-                moy_sh_hfree(buf);
-            } else {
-                o->buf = buf;
-                o->len = len;
+            o->path = dupstr(p);
+            r = o->path == NULL ? ENOMEM : read_open(o);
+            if (r != 0) {
+                obj_drop(o);
+                errno = r;
+                return -1;
             }
         } else {
             if (exists && (flags & O_CREAT) && (flags & O_EXCL)) {
@@ -772,18 +984,10 @@ ssize_t moy_sh_read(int fd, void *buf, size_t n) {
             o->pos += n;
             return (ssize_t)n;
         }
-        case O_PIPE_R: {
-            sh_pipe_t *p = o->pipe;
-            size_t left = p->len - p->pos;
-            if (n > left) {
-                n = left;
-            }
-            if (n) {
-                memcpy(buf, p->buf + p->pos, n);
-            }
-            p->pos += n;
-            return (ssize_t)n;
-        }
+        case O_READ:
+            return read_take(o, buf, n);
+        case O_PIPE_R:
+            return pipe_read(o->pipe, buf, n);
         case O_PIPE_W:
             errno = EBADF;
             return -1;
@@ -825,22 +1029,8 @@ ssize_t moy_sh_write(int fd, const void *buf, size_t n) {
                 return -1;
             }
             return (ssize_t)n;
-        case O_PIPE_W: {
-            sh_pipe_t *p = o->pipe;
-            if (p->readers == 0) {
-                errno = EPIPE;
-                return -1;
-            }
-            // a drained pipe starts over at its front
-            if (p->pos == p->len) {
-                p->pos = p->len = 0;
-            }
-            if (buf_add(&p->buf, &p->len, &p->cap, buf, n, MOY_SH_PIPE_MAX) != 0) {
-                errno = EPIPE;
-                return -1;
-            }
-            return (ssize_t)n;
-        }
+        case O_PIPE_W:
+            return pipe_write(o->pipe, buf, n);
         default:
             errno = EBADF;
             return -1;
@@ -955,12 +1145,12 @@ off_t moy_sh_lseek(int fd, off_t at, int whence) {
         errno = EBADF;
         return -1;
     }
-    if (o->kind != O_MEM && o->kind != O_FILE) {
+    if (o->kind != O_MEM && o->kind != O_FILE && o->kind != O_READ) {
         errno = ESPIPE;
         return -1;
     }
     off_t base = whence == SEEK_SET ? 0 : whence == SEEK_CUR ? (off_t)o->pos
-                 : (off_t)(o->sent + o->len);
+                 : o->kind == O_READ ? (off_t)o->size : (off_t)(o->sent + o->len);
     if (base + at < 0) {
         errno = EINVAL;
         return -1;
@@ -1047,7 +1237,8 @@ int moy_sh_fstat(int fd, struct stat *st) {
     memset(st, 0, sizeof *st);
     st->st_mode = o->kind == O_TERM || o->kind == O_NUL ? S_IFCHR | 0666 :
                   o->kind == O_PIPE_R || o->kind == O_PIPE_W ? S_IFIFO | 0600 : S_IFREG | 0644;
-    st->st_size = o->kind == O_MEM || o->kind == O_FILE ? (off_t)(o->sent + o->len) : 0;
+    st->st_size = o->kind == O_READ ? (off_t)o->size
+                  : o->kind == O_MEM || o->kind == O_FILE ? (off_t)(o->sent + o->len) : 0;
     return 0;
 }
 
@@ -1111,9 +1302,10 @@ char *moy_sh_getcwd(char *buf, size_t n) {
 
 static int dir_add(void *arg, const char *name, int is_dir, uint32_t size) {
     struct moy_sh_dir *d = arg;
-    char t = is_dir ? 'd' : 'f';
-    (void)size;
-    if (buf_add(&d->names, &d->len, &d->cap, &t, 1, MOY_SH_FILE_MAX) != 0 ||
+    char head[DIR_HEAD] = { is_dir ? 'd' : 'f' };
+    uint32_t n = d->sized && !is_dir ? size : 0;
+    memcpy(head + 1, &n, sizeof n);
+    if (buf_add(&d->names, &d->len, &d->cap, head, DIR_HEAD, MOY_SH_FILE_MAX) != 0 ||
         buf_add(&d->names, &d->len, &d->cap, name, strlen(name) + 1, MOY_SH_FILE_MAX) != 0) {
         return ENOMEM;
     }
@@ -1124,8 +1316,8 @@ static int dir_add(void *arg, const char *name, int is_dir, uint32_t size) {
 // host's, the root volume's, the mount points): each is listed once.
 static int root_add(void *arg, const char *name, int is_dir, uint32_t size) {
     struct moy_sh_dir *d = arg;
-    for (size_t i = 0; i < d->len; i += strlen(d->names + i + 1) + 2) {
-        if (strcmp(d->names + i + 1, name) == 0) {
+    for (size_t i = 0; i < d->len; i += DIR_HEAD + strlen(d->names + i + DIR_HEAD) + 1) {
+        if (strcmp(d->names + i + DIR_HEAD, name) == 0) {
             return 0;
         }
     }
@@ -1213,6 +1405,7 @@ moy_sh_DIR *moy_sh_opendir(const char *path) {
                 s->host.vlist(s->host.ctx, "/", root_add, d);
             }
         }
+        d->sized = 1;
         list_call_t c = { moy_sh_store_path(abs, sp, sizeof sp), d, 0, root };
         moy_sh_hop(s, list_here, &c);
         r = !strcmp(abs, "/") ? 0 : c.r;
@@ -1231,9 +1424,11 @@ struct dirent *moy_sh_readdir(moy_sh_DIR *d) {
         return NULL;
     }
     char t = d->names[d->pos];
-    const char *name = d->names + d->pos + 1;
+    memcpy(&d->last_size, d->names + d->pos + 1, sizeof d->last_size);
+    d->last_dir = t == 'd';
+    const char *name = d->names + d->pos + DIR_HEAD;
     size_t n = strlen(name);
-    d->pos += n + 2;
+    d->pos += DIR_HEAD + n + 1;
     if (n >= sizeof d->ent.d_name) {
         n = sizeof d->ent.d_name - 1;
     }
@@ -1245,6 +1440,11 @@ struct dirent *moy_sh_readdir(moy_sh_DIR *d) {
     (void)t;
 #endif
     return &d->ent;
+}
+
+void moy_sh_dir_last(const moy_sh_DIR *d, int *is_dir, uint32_t *size) {
+    *is_dir = d->last_dir;
+    *size = d->last_size;
 }
 
 int moy_sh_closedir(moy_sh_DIR *d) {

@@ -72,6 +72,10 @@
 // (native/moy_tty/moy_tty_sh.c, ARENA), so a job (cron, at, a service) fits
 // the one internal heap beside the rest (its sizes: #41)
 #define MOY_SH_ARENA (12u * 1024u)
+// what a shell's block leaves of that heap: the SSH server's packets, the
+// network's buffers and the store's beside a session. A command that would
+// take more is refused (ENOMEM) where it ran, never the session or the board
+#define MOY_SH_HEAP_RESERVE (16u * 1024u)
 #else
 #define MOY_SH_ARENA (128u * 1024u)     // a session's arena
 #endif

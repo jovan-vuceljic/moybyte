@@ -47,7 +47,7 @@ _COLS_BYTES = 12                        # a line's bytes a column (moy_term.h, M
 def _sources():
     """[(source, own flags)]: dash's under its shim, the board's side plain."""
     shim = ["-include", os.path.join(SH, "dash_config.h"), "-I", SH, "-I", _DASH, "-I", _STORE,
-            "-I", _MBEDTLS, "-I", _NET, '-DMBEDTLS_CONFIG_FILE="moy_seal_mbedtls.h"']
+            "-I", _KERNEL, "-I", _MBEDTLS, "-I", _NET, '-DMBEDTLS_CONFIG_FILE="moy_seal_mbedtls.h"']
     plain = ["-I", SH, "-I", _KERNEL, "-I", _STORE, "-I", _SPINE, "-I", _NET]
     for d in _UI:
         plain += ["-I", d]

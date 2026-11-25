@@ -1,0 +1,48 @@
+$ # a file is read a chunk at a time, of any size, by every reader
+$ i=0; while [ $i -lt 4096 ]; do echo "line $i 0123456789"; i=$((i+1)); done > big
+$ wc -c big; wc -l < big; md5sum big; sha256sum big
+84906 big
+4096
+c37ddef27136a77cfe0b451d3cbdec86  big
+487c3d193360510c38e7981b23477732cc921db8ec18d63f049f5f3e8f43f0cb  big
+$ cat big | md5sum
+c37ddef27136a77cfe0b451d3cbdec86  -
+$ head -n 2 big
+line 0 0123456789
+line 1 0123456789
+$ tail -n 2 big; tail -c 9 big; tail -n 1 < big
+line 4094 0123456789
+line 4095 0123456789
+23456789
+line 4095 0123456789
+$ grep -c "line 7" big; grep "line 4095 " big; grep -n 'line 2048 ' < big
+111
+line 4095 0123456789
+2049:line 2048 0123456789
+$ sort -r big | head -n 1
+line 999 0123456789
+$ cut -c 1-9 big | tail -n 1
+line 4095
+$ while read a b c; do last=$b; done < big; echo last=$last
+last=4095
+$ # a script sourced reads in chunks too
+$ i=0; while [ $i -lt 2000 ]; do echo "n=$i # padding to make the script long"; i=$((i+1)); done > s.sh
+$ . ./s.sh; echo n=$n
+n=1999
+$ # a descriptor kept open reads on from where it was, and seeks
+$ exec 4< big; read x <&4; echo "$x"; head -n 1 <&4; exec 4<&-
+line 0 0123456789
+line 1 0123456789
+$ # what was there at the open is what is read
+$ exec 5< big; echo gone > big; head -n 1 <&5; exec 5<&-
+line 0 0123456789
+$ cat nofile; echo nofile=$?
+cat: nofile: No such file or directory
+nofile=1
+$ cat .; echo dir=$?
+cat: .: Is a directory
+dir=1
+$ # a file read while it is appended to ends at its size at the open
+$ head -n 3 big > three; cat three >> three; wc -l < three
+2
+[exit 0]

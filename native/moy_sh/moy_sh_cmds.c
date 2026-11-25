@@ -564,8 +564,8 @@ struct walk {
                                 // with none it stops the walk
     int err;                    // what stopped it
     int status;
-    char *names;                // the open folders' names, each folder's sorted
-    size_t len, cap;
+    char *names;                // the open folders' entries, each folder's sorted by
+    size_t len, cap;            // name: a kind byte, its size (4 bytes), its name
     walk_dir_t *dirs;
     size_t depth, room;         // room: dirs' bytes
 };
@@ -593,8 +593,12 @@ static int walk_grow(void *p, size_t *cap, size_t need) {
     return 0;
 }
 
-// Folder `path`'s names, sorted, after the open folders' in w->names: 0, or
-// an errno value with none added.
+#define WALK_HEAD 5u            // an entry's kind byte and size before its name
+
+// Folder `path`'s entries, sorted, after the open folders' in w->names, each
+// with the kind and size its listing gave, so no entry is looked up again by
+// its path (on littlefs each lookup walks the path from the root): 0, or an
+// errno value with none added.
 static int walk_names(walk_t *w, const char *path) {
     DIR *d = opendir(path);
     struct dirent *de;
@@ -605,16 +609,21 @@ static int walk_names(walk_t *w, const char *path) {
     }
     while (r == 0 && (de = readdir(d)) != NULL) {
         const char *name = de->d_name;
-        size_t k = strlen(name) + 1, at = start;
+        size_t k = WALK_HEAD + strlen(name) + 1, at = start;
         if (!strcmp(name, ".") || !strcmp(name, "..") ||
             (r = walk_grow(&w->names, &w->cap, w->len + k)) != 0) {
             continue;
         }
-        while (at < w->len && strcmp(w->names + at, name) < 0) {
-            at += strlen(w->names + at) + 1;
+        while (at < w->len && strcmp(w->names + at + WALK_HEAD, name) < 0) {
+            at += WALK_HEAD + strlen(w->names + at + WALK_HEAD) + 1;
         }
+        int is_dir;
+        uint32_t size;
+        moy_sh_dir_last(d, &is_dir, &size);
         memmove(w->names + at + k, w->names + at, w->len - at);
-        memcpy(w->names + at, name, k);
+        w->names[at] = (char)is_dir;
+        memcpy(w->names + at + 1, &size, sizeof size);
+        memcpy(w->names + at + WALK_HEAD, name, k - WALK_HEAD);
         w->len += k;
     }
     closedir(d);
@@ -657,9 +666,9 @@ static void walk_free(walk_t *w) {
 
 static void walk_run(walk_t *w, char *path, size_t n) {
     int top = 1, e;
+    uint64_t size = 0;
+    int dir = kind_of(path, &size);     // the top's; each entry's is its listing's
     while (!stopped()) {
-        uint64_t size = 0;
-        int dir = kind_of(path, &size);
         if (dir < 0) {
             walk_fail(w, path, NULL, errno);
         } else if ((e = w->visit(w, path, n, dir, size, top)) != 0 ||
@@ -678,8 +687,12 @@ static void walk_run(walk_t *w, char *path, size_t n) {
             walk_dir_t *d = &w->dirs[w->depth - 1];
             path[d->n] = '\0';
             if (d->next < d->end) {
-                const char *name = w->names + d->next;
-                d->next += (uint32_t)strlen(name) + 1;
+                const char *ent = w->names + d->next, *name = ent + WALK_HEAD;
+                uint32_t sz;
+                memcpy(&sz, ent + 1, sizeof sz);
+                dir = ent[0];
+                size = sz;
+                d->next += WALK_HEAD + (uint32_t)strlen(name) + 1;
                 n = path_join(path, d->n, name);
                 if (n != 0) {
                     break;
@@ -995,10 +1008,10 @@ static int headcmd(int argc, char **argv) {
     return each_input(argptr, head_one, &n);
 }
 
-// A file's last `want` lines, read in two passes and never copied into the
-// session's arena, which is 12 KB where there is no PSRAM (MOY_SH_ARENA, the
-// C3 Zero's SSH face) while the open already holds the file. -1 for what
-// does not seek (a pipe), which tail_one copies whole.
+// A file's last `want` lines, read in two passes a chunk at a time and never
+// copied into the session's arena, which is 12 KB where there is no PSRAM
+// (MOY_SH_ARENA, the C3 Zero's SSH face). -1 for what does not seek (a
+// pipe), which tail_one copies whole.
 static int tail_seek(int fd, int want) {
     if (lseek(fd, 0, SEEK_END) < 0 || lseek(fd, 0, SEEK_SET) < 0) {
         return -1;

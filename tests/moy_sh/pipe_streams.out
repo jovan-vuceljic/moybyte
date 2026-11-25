@@ -1,0 +1,26 @@
+$ # a pipe holds its writer's whole stream, a chunk of the heap at a time
+$ i=0; while [ $i -lt 4096 ]; do echo 0123456789abcde; i=$((i+1)); done | tee t64 | wc -c
+65536
+$ md5sum t64; cat t64 | md5sum; cat t64 | cat | cat | wc -l
+00ececfaec0aae2de825c3f02f37d3e8  t64
+00ececfaec0aae2de825c3f02f37d3e8  -
+4096
+$ # a stream past what a pipe holds is said once, its writer ended, and the
+$ # reader reads what came before it
+$ l=y; while [ ${#l} -lt 1023 ]; do l=$l$l; done; l=${l%?}
+$ yes() { while :; do echo $l; done; }
+$ yes | head -n 1 | wc -c; echo status=$?
+pipe: stream over 1024 KB; write it to a file
+1024
+status=0
+$ yes 2>&1 | wc -c
+pipe: stream over 1024 KB; write it to a file
+1048576
+$ yes 2>/dev/null | wc -l
+1024
+$ { yes; echo never; } | grep -c never
+pipe: stream over 1024 KB; write it to a file
+0
+$ echo after
+after
+[exit 0]

@@ -9,7 +9,7 @@ a host spawn, the built-ins — is `moy_sh.h`'s header.
 |---|---|
 | `moy_sh.h` | the public interface: a session, its host table, feeding it text, and a spawned program's streams and files (a WASI command's, `native/moy_wasm/moy_wasi.h`) |
 | `moy_sh.c` | the session: dash's state set up, a run, the fork, the wait, the exec, the role commands, `sh` |
-| `moy_sh_sys.c` | the OS dash sees: descriptors over pipe buffers and whole-file objects, paths, the store through `moy_vol`, `/dev` `/proc` `/bin`, signals |
+| `moy_sh_sys.c` | the OS dash sees: descriptors over pipe buffers and files held open and read or written a chunk at a time, paths, the store through `moy_vol`, `/dev` `/proc` `/bin`, signals |
 | `moy_sh_cmds.c` | the C core built-ins (file commands with `find` and `du`; text tools `cut`, `grep`, `head`, `md5sum`, `sha256sum`, `sort`, `tail`, `tee`, `tr`, `uniq`, `wc` and `xxd`, the two hashes mbedTLS's; `ps`, `free`, `df`, `log`/`dmesg`, `reboot`, `date`, `sleep`, `clear`, `help`, `neofetch`), sorted |
 | `moy_sh_arena.c` | the session's region: first-fit with boundary tags, saved and restored whole for a fork |
 | `moy_sh_fmt.c` | the shell's `vsnprintf`: every integer conversion at every length, which a board's nano formatter lacks |
@@ -73,8 +73,17 @@ off (`moy_sh_set_questions`), and the command reads its answers from stdin.
 ## Memory
 
 A session takes its record and its arena from the host's `alloc` (PSRAM on a
-board, `heap_caps` with the default heap only where there is no PSRAM); a pipe's buffer, a file read whole and a fork's snapshot are taken
-while a run needs them and returned after. The screen face takes its record,
+board, `heap_caps` with the default heap only where there is no PSRAM); a pipe's buffer, a file's chunk and a fork's snapshot are taken
+while a run needs them and returned after. A pipeline's stages run one after
+another, so a pipe holds its writer's whole stream: 1 MB at most, 4 KB on a
+board without PSRAM (the C3 Zero). A longer stream ends its writer with one
+line, `pipe: stream over N KB; write it to a file`, and the reader reads what
+came before it; a file has no such cap, since a file is read and written a
+chunk at a time. Where there is no PSRAM a shell's block also leaves
+`MOY_SH_HEAP_RESERVE` (16 KB, `moy_sh_board.h`) of the heap free: the SSH
+server's packets and the network's buffers come from the same heap, and
+Dropbear ends a session whose allocation fails ("m_malloc failed"). A
+command past the reserve fails where it ran ("Cannot fork", `pipe: out of memory at N KB`). The screen face takes its record,
 its session and its grid the same way at its first open (`moy_sh_screen_new`)
 and gives them back at `close`. The serial face's session lives from its first
 `sh` line to the boot's end, except across a run that stops the VM

@@ -68,7 +68,7 @@ UI_INCLUDES = [a for n in ("moy_ui", "moy_gfx", "moy_glass")
 
 def _objects(cc, out):
     dash_flags = CFLAGS + ["-include", os.path.join(SH, "dash_config.h"),
-                           "-I", SH, "-I", DASH, "-I", STORE] + MBEDTLS
+                           "-I", SH, "-I", DASH, "-I", STORE, "-I", KERNEL] + MBEDTLS
     jobs = [(src, dash_flags) for src in shell_sources()]
     jobs.append((os.path.join(SH, "moy_sh_arena.c"), CFLAGS + ["-I", SH]))
     jobs.append((os.path.join(SH, "moy_sh_fmt.c"), CFLAGS + ["-I", SH, "-I", SPINE]))
@@ -186,6 +186,29 @@ def test_a_walk_takes_the_same_c_stack_at_any_depth(harness, tmp_path):
     assert deep - shallow < 256, "2 levels: %d B, 150 levels: %d B" % (shallow, deep)
 
 
+def test_a_walk_looks_up_no_entry_by_its_path(harness, tmp_path):
+    """find, du and rm -r take each entry's kind and size from its folder's
+    listing (moy_sh_cmds.c's walk_names), so a folder of 200 files costs a
+    few store calls, not one per file: a lookup by path on littlefs walks
+    the path from the root, about 3 ms a part on the C3."""
+    def calls(files):
+        root = tmp_path / ("root%d" % files)
+        (root / "d" / "e").mkdir(parents=True)
+        for i in range(files):
+            (root / "d" / "e" / ("f%03d" % i)).write_bytes(b"x" * i)
+        script = tmp_path / ("wide%d.sh" % files)
+        script.write_text("du -s d; find d -name f199; rm -r d\n")
+        r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                           timeout=60, env=dict(os.environ, SH_MAIN_MEASURE="1"))
+        assert r.returncode == 0 and not os.listdir(root), r.stdout.decode()[-2000:]
+        return int(re.search(rb"store calls (\d+)", r.stderr).group(1)), r.stdout
+
+    few, (many, out) = calls(1)[0], calls(200)
+    assert b"d/e/f199" in out and out.startswith(b"%d" % ((sum(range(200)) + 1023) // 1024))
+    # rm -r still removes each file by its path: one call a file, no more
+    assert many - few < 200 + 20, "1 file: %d calls, 200 files: %d" % (few, many)
+
+
 def test_an_arena_run_out_is_an_error_not_a_reset(harness, tmp_path):
     """A block the arena refuses is dash's "Out of space", raised bare when
     its own message finds no room (moy_sh.c's refused). Reported again, it
@@ -227,6 +250,45 @@ def test_a_file_written_streams_in_chunks(harness, tmp_path):
     assert os.path.getsize(root / "big") == 65536 + 5 + 6
     largest = int(re.search(rb"largest block (\d+)", r.stderr).group(1))
     assert largest < 8192, "a block of %d B" % largest
+
+
+
+def test_a_file_read_comes_in_chunks(harness, tmp_path):
+    """A file opened to read is held and read a chunk at a time
+    (moy_sh_sys.c's READ), so a 64 KB file through every reader takes no
+    block near its size. Read whole at the open, it took one block the
+    file's size, which the C3's heap refused ("Not enough space")."""
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "big").write_bytes(b"0123456789abcde\n" * 4096)
+    (root / "s.sh").write_bytes(b"n=1 # a sourced script of 64 KB\n" * 2048)
+    script = tmp_path / "read.sh"
+    script.write_text("cat big > /dev/null; md5sum big; sha256sum big; tail -n 1 big\n"
+                      "tail -c 3 big; head -n 1 big; grep -c abc big; wc -l < big\n"
+                      "cut -c 1-3 big > /dev/null; . ./s.sh; echo n=$n\n")
+    r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                       timeout=60, env=dict(os.environ, SH_MAIN_MEASURE="1"))
+    assert r.returncode == 0 and b"n=1" in r.stdout and b"4096" in r.stdout, r.stdout.decode()
+    largest = int(re.search(rb"largest block (\d+)", r.stderr).group(1))
+    assert largest < 8192, "a block of %d B" % largest
+
+
+def test_a_pipe_holds_its_stream_in_chunks(harness, tmp_path):
+    """A pipe's buffer is chunks of the heap (moy_sh_sys.c's PIPE_R/PIPE_W),
+    so 64 KB through a pipe takes no block near its size. One buffer
+    doubled as it grew took a block of 64 KB, which the C3's heap refused at
+    each write ("I/O error" per echo). The largest block left is a fork's
+    snapshot of the arena in use (about 14 KB on the host)."""
+    root = tmp_path / "root"
+    root.mkdir()
+    script = tmp_path / "pipe.sh"
+    script.write_text("i=0; while [ $i -lt 4096 ]; do echo 0123456789abcde; i=$((i+1)); done"
+                      " | tee t | wc -c\n")
+    r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                       timeout=60, env=dict(os.environ, SH_MAIN_MEASURE="1"))
+    assert r.returncode == 0 and b"65536" in r.stdout, r.stdout.decode()
+    largest = int(re.search(rb"largest block (\d+)", r.stderr).group(1))
+    assert largest < 16384, "a block of %d B" % largest
 
 
 SERIAL = os.path.join(SCRIPTS, "serial")
@@ -343,7 +405,8 @@ def test_the_shell_keeps_no_writable_data_but_its_state_pointer(tmp_path):
     if cc is None or nm is None:
         pytest.skip("no C compiler or nm")
     flags = ["-std=gnu99", "-Os", "-fno-pic", "-fno-pie", "-fno-common",
-             "-include", os.path.join(SH, "dash_config.h"), "-I", SH, "-I", DASH, "-I", STORE] + MBEDTLS
+             "-include", os.path.join(SH, "dash_config.h"), "-I", SH, "-I", DASH, "-I", STORE,
+             "-I", KERNEL] + MBEDTLS
     plain = ["-std=gnu99", "-Os", "-fno-pic", "-fno-pie", "-fno-common",
              "-I", SH, "-I", KERNEL, "-I", STORE, "-I", SPINE]
     writable = []
@@ -370,7 +433,7 @@ def test_no_shell_object_calls_the_c_library_s_descriptors(tmp_path):
     if cc is None or nm is None:
         pytest.skip("no C compiler or nm")
     flags = ["-std=gnu99", "-Os", "-include", os.path.join(SH, "dash_config.h"),
-             "-I", SH, "-I", DASH, "-I", STORE] + MBEDTLS
+             "-I", SH, "-I", DASH, "-I", STORE, "-I", KERNEL] + MBEDTLS
     raw = {"open", "read", "write", "close", "dup", "dup2", "fcntl", "pipe", "lseek",
            "open64", "stat", "fstat", "lstat"}
     calls = []
@@ -398,7 +461,7 @@ def test_every_source_keeps_the_const_a_c23_library_preserves(tmp_path):
     guard = ["-include", os.path.join(SCRIPTS, "c23_const.h")]
     base = ["-std=gnu99", "-fsyntax-only", "-Wall", "-Werror"] + guard
     dash = base + ["-include", os.path.join(SH, "dash_config.h"), "-I", SH, "-I", DASH,
-                   "-I", STORE] + MBEDTLS
+                   "-I", STORE, "-I", KERNEL] + MBEDTLS
     plain = base + ["-I", SH, "-I", KERNEL, "-I", STORE, "-I", SPINE]
     jobs = [(src, dash) for src in shell_sources()]
     jobs += [(os.path.join(SH, n), plain) for n in ("moy_sh_arena.c", "moy_sh_fmt.c", "moy_sh_cands.c",

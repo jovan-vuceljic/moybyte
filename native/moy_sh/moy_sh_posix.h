@@ -11,8 +11,8 @@
 //
 // What each call means here:
 //   descriptors   open/read/write/close/dup/dup2/fcntl/pipe/lseek over
-//                 objects: the terminal, a pipe buffer, a file read whole at
-//                 open and written whole at its last close, /dev and /proc
+//                 objects: the terminal, a pipe buffer, a file of the tree
+//                 read or written a chunk at a time, /dev and /proc
 //   files         stat/lstat/fstat, opendir/readdir/closedir, access, chdir
 //                 and getcwd over the session's working folder
 //   processes     fork, execve and wait are not here: the shell asks the OS
@@ -79,6 +79,10 @@ int moy_sh_stat(const char *path, struct stat *st);
 int moy_sh_fstat(int fd, struct stat *st);
 moy_sh_DIR *moy_sh_opendir(const char *path);
 struct dirent *moy_sh_readdir(moy_sh_DIR *d);
+// What the listing said of the entry moy_sh_readdir answered last: whether it
+// is a folder, and a file's size as stat answers it (0 for a virtual file),
+// so a walk need not look each entry up again by its path.
+void moy_sh_dir_last(const moy_sh_DIR *d, int *is_dir, uint32_t *size);
 int moy_sh_closedir(moy_sh_DIR *d);
 int moy_sh_access(const char *path, int mode);
 int moy_sh_faccessat(int dirfd, const char *path, int mode, int flags);
