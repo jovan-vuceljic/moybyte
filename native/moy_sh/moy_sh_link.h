@@ -29,6 +29,7 @@ enum {
     MOY_SH_LINK_WAIT,                   // too many wrong sign-ins: n ms to wait
     MOY_SH_LINK_BUSY,                   // another transport holds the board's face
     MOY_SH_LINK_NONE,                   // no board serves a shell to this page
+    MOY_SH_LINK_TAKEN,                  // another browser's page took the board's shell
 };
 
 // What the app wants of the transport.

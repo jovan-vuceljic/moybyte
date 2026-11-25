@@ -49,6 +49,8 @@
 //                        its Improv answer carried (its first, or a new one
 //                        the cable asked for), then pair by it (THE SIGN-IN,
 //                        the claim)
+//   {t:"takeback"}       its user takes the board back from the browser
+//                        that took it (TAKEN)
 // worker -> main:
 //   {t:"status", s}      boot progress text
 //   {t:"assets", json}   the page's metadata payload (size/title/audio/input)
@@ -63,15 +65,17 @@
 //                        durable. Sent to the PAGE because storage.persist()
 //                        is window-only -- a Worker cannot ask, only look.
 //   {t:"pair", pw, cable, why, wait}  this board has not paired this browser,
-//                        so the boot stopped before the VM: the page asks.
+//                        so the boot waits before its store: the page asks.
 //                        `pw` a password can pair it (else only the QR can),
 //                        `cable` the board pairs over the cable (a Zero: no
 //                        screen, so no QR; My consoles' Manage by cable), `why`
 //                        what failed last ("" the first time), `wait`
 //                        signInWaitSays' sentence while the board holds wrong
-//                        tries off, else ""
+//                        tries off, else ""; `taken` another browser took
+//                        the board (TAKEN): the page offers to take it back
 //   {t:"key", id, kid, key, reload}  a pairing's new device key for board `id`:
-//                        the page keeps it (and with `reload`, loads again)
+//                        the page keeps it; a boot that waited at the pairing
+//                        goes on, and `reload` (a console that ran) loads again
 //   {t:"unkey", id}      board `id` refused this browser's key: the page drops it
 //   {t:"claimed", ok, why}  the answer to {t:"claim"}: the password set (a
 //                        pairing's {t:"key"} follows), or why not
@@ -1163,7 +1167,16 @@ let sealedOnce = false;         // this page has signed in: never plain again
 const NONCE_TRIES = 3;          // hellos a credential is sent after
 let signingIn = null;           // the sign-in in flight, which every caller shares
 let authNeed = null;            // why the last sign-in failed: {pw, wait, why}
+// TAKEN: another browser's page took this board's live socket (its close
+// 4001 "taken", moy_webauth.c's moy_wa_take). The page is disconnected: no
+// sign-in, so nothing reaches the board, until its user takes the board back
+// ({t:"takeback"}), never by itself, so two pages never take it from each
+// other in turn.
+let taken = false;
+const TAKEN_SAYS = "Another browser signed in to this console, so this one was disconnected.";
 let authCable = false;          // the last hello's "cable": the board pairs over the cable
+let pairWait = null;            // resolves the boot a board that has not paired this
+                                // browser waits in: a pairing goes on with it, no reload
 let SW = null;                  // moy_seal_web.c's entry points
 const utf8 = new TextEncoder(), utf8d = new TextDecoder();
 
@@ -1253,7 +1266,11 @@ function finish(r, fresh) {
         const id = C.M.UTF8ToString(C.board());
         const kid = C.M.UTF8ToString(C.kid()), key = C.M.UTF8ToString(C.devkey());
         auth.keys[id] = { kid, key };
-        self.postMessage({ t: "key", id, kid, key, reload: fresh === "reload" });
+        // A boot waiting at the pairing goes on from its pulls; a console
+        // already running (a new password over the link) starts again.
+        const resume = fresh === "reload" ? pairWait : null;
+        self.postMessage({ t: "key", id, kid, key, reload: fresh === "reload" && !resume });
+        if (resume) { pairWait = null; resume(); }
     }
     return true;
 }
@@ -1315,6 +1332,7 @@ function need(r, pw, why, gone) {
     return false;
 }
 function signIn() {
+    if (taken) return Promise.resolve(false);
     if (authOpen || signedIn) return Promise.resolve(true);
     if (!signingIn) {
         signingIn = signInOnce().catch(() => need(null, false, "the console did not answer", true))
@@ -1324,22 +1342,31 @@ function signIn() {
 }
 
 // Pairing by the console's password (the page's prompt): SPAKE2+, then the
-// key, then a fresh load signed in with it.
+// key, and the boot that waited for it goes on signed in. Only the
+// password's own refusals say the password is wrong: the board's
+// confirmation failing to check (which a wrong password, or another console,
+// makes) or its 403 "password". A board busy with another browser's pairing
+// (503) is asked again, BUSY_TRIES times BUSY_MS apart.
+const BUSY_TRIES = 6, BUSY_MS = 1000;
 async function pairPassword(pw, name) {
+    const wrong = "that password did not work -- try again";
     let why = "";
     try {
-        for (let i = 0; i < NONCE_TRIES; i++) {
+        for (let i = 0, busy = 0; i < NONCE_TRIES; i++) {
             const h = await hello();
             if (!h.id) return need(h.r, true);
             const n = swCall(sw().pake, pw, name || auth.name);
             if (n < 0) { why = "the console's answer did not check -- try again"; break; }
             let r = await authPost(utf8d.decode(swGet(n)));
             if (r.status === 409) continue;            // the nonce went: ask again
+            if (r.status === 503 && ++busy < BUSY_TRIES) {
+                await new Promise((ok) => setTimeout(ok, BUSY_MS));
+                i--;
+                continue;
+            }
             if (r.status === 200) {
-                // The board's confirmation fails to check under a wrong password
-                // (and on another console, which the same sentence covers).
                 const c = sw().confirm(swPut(utf8.encode(r.text)));
-                if (c < 0) why = "that password did not work -- try again";
+                if (c < 0) why = wrong;
                 else {
                     r = await authPost(utf8d.decode(swGet(c)));
                     if (finish(r, "reload")) return true;
@@ -1348,7 +1375,9 @@ async function pairPassword(pw, name) {
             }
             if (r.status === 429) return need(r, true);
             why = why || (r.doc.error === "nopw" ? "the console has no password set"
-                                                 : "that password did not work -- try again");
+                          : r.doc.error === "password" ? wrong
+                          : r.status === 503 ? "the console is busy -- try again in a moment"
+                          : "the console did not take the sign-in (" + r.status + ")");
             break;
         }
     } catch (e) { why = "the console did not answer"; }
@@ -1373,7 +1402,25 @@ async function claimPassword(claim, id, pw, name) {
 }
 function askToPair() {
     self.postMessage(Object.assign({ t: "pair" }, authNeed || { pw: false, wait: "", why: "" },
-                                   { cable: authCable }));
+                                   { cable: authCable, taken }));
+}
+// The board taken by another browser's page: this one stops, and says so.
+function takenAway() {
+    if (taken) return;
+    taken = true;
+    signedIn = false;
+    authNeed = { pw: false, wait: "", ms: -1, why: TAKEN_SAYS, gone: false };
+    say("disconnected");
+    askToPair();
+}
+// Its user's word: sign in again and take the board's live socket back.
+function takeBack() {
+    if (!taken) return;
+    taken = false;
+    authNeed = null;
+    liveRetry = 0;
+    if (livePump) { liveOn = true; liveOpen(); }
+    say("live");
 }
 
 // A call to a sealed route: {status, text, wait}. `text` is the answer's
@@ -1476,21 +1523,26 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     // Every root's pull, at the endpoint the VM's registry names: the carts,
     // and the roots firmware before them 404s (the files layer, the console's
     // own documents, the apps' private folders).
-    const pulled = await Promise.all(store.roots().map((r) => r.id === "carts"
-        ? gated("/" + r.endpoint) : gated("/" + r.endpoint).catch(none)));
-    const fetched = {};
-    store.roots().forEach((r, i) => { fetched[r.id] = pulled[i].json; });
-    const cartsRes = pulled[store.roots().indexOf(store.rootById("carts"))];
-    if (!signedIn && !authOpen && !(authNeed && authNeed.gone)) {
-        // A BOARD THAT HAS NOT PAIRED THIS BROWSER: stop the boot here --
+    let pulled, fetched, cartsRes;
+    for (;;) {
+        pulled = await Promise.all(store.roots().map((r) => r.id === "carts"
+            ? gated("/" + r.endpoint) : gated("/" + r.endpoint).catch(none)));
+        fetched = {};
+        store.roots().forEach((r, i) => { fetched[r.id] = pulled[i].json; });
+        cartsRes = pulled[store.roots().indexOf(store.rootById("carts"))];
+        if (signedIn || authOpen || (authNeed && authNeed.gone)) break;
+        // A BOARD THAT HAS NOT PAIRED THIS BROWSER: the boot waits here --
         // there is nothing to boot, and seeding the VFS from a refusal would
-        // build a shelf out of it. The page asks; a pairing reloads it. A
-        // host that answered nothing boots on as before: no board behind it.
+        // build a shelf out of it. The page asks; a pairing (finish) goes on
+        // from the pulls, with the VM already up, so the console starts
+        // without loading the page again. A host that answered nothing boots
+        // on as before: no board behind it.
         const a = authNeed || { pw: false, wait: "", why: "" };
         say(a.wait || "pair this browser with the console");
         askToPair();
         console.log("[moy] sign-in: " + (a.wait || a.why || "not paired"));
-        return;
+        await new Promise((ok) => { pairWait = ok; });
+        say("loading carts...");
     }
     if (!signedIn && !authOpen && cartsRes.json === null) {
         // The board went away between the page and its pulls: no shelf to
@@ -1815,7 +1867,8 @@ function gpioPump() {
 // socket that fails before it opens says nothing of why, so the same route
 // without the upgrade is asked: 401 this browser refused, a wait, 404 no
 // shell here.
-const TERM = { OPEN: 2, ENDED: 3, LOST: 4, UNREACHABLE: 5, REFUSED: 6, WAIT: 7, BUSY: 8, NONE: 9 };
+const TERM = { OPEN: 2, ENDED: 3, LOST: 4, UNREACHABLE: 5, REFUSED: 6, WAIT: 7, BUSY: 8, NONE: 9,
+               TAKEN: 10 };
 let termPoll = null, termFeed = null, termState = null;
 let termWs = null, termSealed = false;
 const termQ = [];
@@ -1826,7 +1879,9 @@ function termB64(u8) {
     }
     return btoa(s);
 }
+let termGen = 0;                 // one a termOpen or termClose: a retry's own open is the last
 function termClose() {
+    termGen++;
     const ws = termWs;
     termWs = null;
     if (ws) { try { ws.close(1000); } catch (e) { } }
@@ -1853,8 +1908,13 @@ function termSend(ws, kind, u8) {
     const n = sw().up(0, swPut(raw));
     if (n > 0) ws.send(swGet(n));
 }
-async function termOpen(cols, rows) {
+// A shell another page just gave up (moy_wa_take: its bridge lets go at its
+// next turn) answers 1013 "busy" for that moment: the open is asked again,
+// TERM_BUSY_TRIES times TERM_BUSY_MS apart, before the Terminal says busy.
+const TERM_BUSY_TRIES = 4, TERM_BUSY_MS = 300;
+async function termOpen(cols, rows, tries = 0) {
     termClose();
+    const gen = termGen;
     const path = "/term?cols=" + cols + "&rows=" + rows;
     let target = path;
     termSealed = false;
@@ -1905,8 +1965,11 @@ async function termOpen(cols, rows) {
         termWs = null;
         const exit = /^exit (-?\d+)$/.exec(c.reason || "");
         if (c.code === 1000 && exit) termQ.push({ s: TERM.ENDED, n: +exit[1] });
-        else if (c.code === 1013) termQ.push({ s: TERM.BUSY, n: 0 });
+        else if (c.code === 1013 && !opened && tries + 1 < TERM_BUSY_TRIES) {
+            setTimeout(() => { if (termGen === gen) termOpen(cols, rows, tries + 1); }, TERM_BUSY_MS);
+        } else if (c.code === 1013) termQ.push({ s: TERM.BUSY, n: 0 });
         else if (c.code === 1008 && c.reason === "revoked") termQ.push({ s: TERM.REFUSED, n: 0 });
+        else if (c.code === 4001) termQ.push({ s: TERM.TAKEN, n: 0 });
         else if (opened) termQ.push({ s: TERM.LOST, n: 0 });
         else termWhy().then(([st, n]) => termQ.push({ s: st, n: n }));
     };
@@ -1965,7 +2028,7 @@ function liveDrop(ws, why) {
     liveLater();
 }
 async function liveOpen() {
-    if (liveWs || !liveOn) return;
+    if (liveWs || !liveOn || taken) return;
     let target = "/live";
     liveSealed = false;
     if (!(await signIn())) { liveLater(); return; }
@@ -2011,7 +2074,8 @@ async function liveOpen() {
         liveWs = null;
         LIVE.drops++;
         liveQ.push({ s: 0, why: c.code + (c.reason ? " " + c.reason : "") });
-        liveLater();
+        if (c.code === 4001) takenAway();
+        else liveLater();
     };
 }
 function liveFeedAll(parts) {
@@ -2745,9 +2809,11 @@ self.onmessage = async (ev) => {
                     askToPair();
                 }
             } else if (!(await pairPassword(m.pw, m.name))) askToPair();
+        } else if (m.t === "takeback") {
+            takeBack();
         } else if (m.t === "password") {
-            // The pairing prompt's password: a pairing reloads the page (its
-            // {t:"key"}), anything else asks again with why.
+            // The pairing prompt's password: a pairing goes on with the boot
+            // (its {t:"key"}), anything else asks again with why.
             if (!(await pairPassword(m.pw, m.name))) askToPair();
         } else if (m.t === "input") {
             inbox.push(m.json);

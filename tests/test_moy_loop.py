@@ -99,6 +99,7 @@ def test_every_frame_makes_exactly_three_console_upcalls_and_no_other(loop):
 def test_a_service_is_called_up_only_while_it_is_live(loop):
     frame(1000)
     assert loop.service_bits == []
+    n0 = L.service_counts()
     L.services(L.SVC_WEB)
     loop.keep = L.SVC_WEB
     frame(1050)
@@ -110,6 +111,8 @@ def test_a_service_is_called_up_only_while_it_is_live(loop):
     frame(1200)
     assert loop.service_bits == [L.SVC_WEB] * 3
     assert L.upcalls()[0] == (3, 0, 0, 0, 0, 0)
+    # Each crossing is counted under the bits it carried.
+    assert [b - a for a, b in zip(n0, L.service_counts())] == [3, 0, 0, 0, 0, 0, 0]
 
 
 def test_a_dev_line_is_one_more_console_upcall_on_the_frame_it_lands(loop):

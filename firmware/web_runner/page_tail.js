@@ -34,7 +34,7 @@ var stateWait=[];
 window.__moyState=function(){return new Promise(function(ok){stateWait.push(ok);
 WORKER.postMessage({t:"state"});});};
 function onWorker(m){
-if(m.t==="status"){sEl.textContent=m.s;}
+if(m.t==="status"){sEl.textContent=m.s;pinSaid(m.s);}
 else if(m.t==="assets"){assetsJSON=m.json;assetsBusy=false;
 if(assetsWait.length){var ws=assetsWait;assetsWait=[];
 for(var i=0;i<ws.length;i++)ws[i][0](JSON.parse(m.json));}
@@ -104,7 +104,8 @@ ce.textContent=cl.join("\n");ce.style.display="block";}}
 // the same way: the board refuses pins.
 var PINEL=document.getElementById("pin"),PINF=document.getElementById("pinf"),
 PINB=document.getElementById("pinb"),PINM=document.getElementById("pinm"),
-PINP=document.getElementById("pinp"),PINR=document.getElementById("pinr");
+PINP=document.getElementById("pinp"),PINR=document.getElementById("pinr"),
+PINH=document.getElementById("pinh");
 var KEYS="moybyte.keys";
 // THE CLAIM (worker.js, THE SIGN-IN): a board takes its password from the
 // browser holding the claim its Improv answer carried (its first, or a new
@@ -112,8 +113,11 @@ var KEYS="moybyte.keys";
 // from the url's # (the URL Improv answered, which any Improv client opens)
 // or from My consoles over the link (a `claim` request); `CHOOSE` while the
 // prompt asks for a new password rather than the console's.
-var CLAIM=null,CHOOSE=false,CLAIMQ=null;
-function claimed(m){if(m.ok)CLAIM=null;else if(PINM)PINM.textContent=m.why||"";
+var CLAIM=null,CHOOSE=false,CLAIMQ=null,TAKEN=false;
+// A refusal takes the busy card down: a console signed in runs on (the link
+// says why), one that is not asks again (the worker's {t:"pair"}, with why).
+function claimed(m){if(m.ok){CLAIM=null;pinBusy("pairing this browser with it...");}
+else if(PINEL&&PINEL.className==="busy"){PINEL.className="";PINEL.style.display="none";}
 if(CLAIMQ){try{CLAIMQ.w.postMessage({moylink:1,re:CLAIMQ.id,kind:"claim",ok:!!m.ok,
 said:m.why||""},CLAIMQ.o);}catch(e){}CLAIMQ=null;}}
 function keysStored(){try{return JSON.parse(localStorage.getItem(KEYS)||"{}")||{};}
@@ -141,7 +145,14 @@ catch(e){/* no history: the token is spent on its first use either way */}
 return {keys:keysStored(),token:tok,board:bid,name:browserName()};};
 // The worker's word that pairing is needed: `pw` a password can do it, `why`
 // what went wrong last ("" the first time), `wait` the backoff's sentence.
+// `taken`: another browser took the board, and the card's one button takes
+// it back (worker.js, TAKEN).
 function pinAsk(m){if(!PINEL)return;
+PINEL.className="";TAKEN=!!m.taken;PINF.style.display=TAKEN?"none":"";
+PINH.textContent=TAKEN?"disconnected":"pair this browser";
+PINB.textContent=TAKEN?"take it back":"pair";
+if(TAKEN){PINP.textContent=m.why;PINM.textContent="";PINR.style.display="";
+PINEL.style.display="flex";PINB.disabled=false;return;}
 PINM.textContent=m.wait||m.why||"";
 CHOOSE=!m.pw&&!!CLAIM;
 if(CHOOSE){PINP.textContent="Choose this console's password, 8 to 64 characters: "
@@ -155,18 +166,32 @@ PINP.textContent=m.cable?(m.pw?"Type the console's password, or pair this board 
 PINR.style.display=m.pw?"":"none";
 PINEL.style.display="flex";PINB.disabled=false;
 if(m.pw){try{PINF.value="";PINF.focus();}catch(e){}}}
-function pinSubmit(){var v=PINF.value||"";
+function pinSubmit(){if(TAKEN){TAKEN=false;PINEL.style.display="none";
+WORKER.postMessage({t:"takeback"});return;}
+var v=PINF.value||"";
 if(!v){PINM.textContent="type the console's password";return;}
 if(CHOOSE){if(v.length<8||v.length>64){PINM.textContent="a password is 8 to 64 characters";return;}
-PINM.textContent="setting the password...";PINB.disabled=true;
+pinSetting();
 WORKER.postMessage({t:"claim",claim:CLAIM.claim,id:CLAIM.id,pw:v,name:browserName()});
 PINF.value="";return;}
-PINM.textContent="pairing...";PINB.disabled=true;
+pinBusy("pairing this browser with it...");
 WORKER.postMessage({t:"password",pw:v,name:browserName()});PINF.value="";}
-// Paired: the key is this browser's from now on, and the page starts again
-// signed in with it.
+// The card while the worker sets a password or pairs: it says what it does
+// and asks nothing; the worker's next {t:"pair"} (a refusal) asks again.
+function pinBusy(said){if(!PINEL)return;PINEL.className="busy";
+PINH.textContent="setting up this browser";
+PINP.textContent="The console checks the password with this browser. On a small "
++"board that takes a few seconds; the console starts when it is done.";
+PINR.style.display="none";PINB.disabled=true;PINM.textContent=said;PINEL.style.display="flex";}
+function pinSetting(){pinBusy("setting the console's password...");}
+// The boot's own words on a busy card, which goes once the console is live.
+function pinSaid(s){if(!PINEL||PINEL.className!=="busy")return;
+if(s==="live"){PINEL.className="";PINEL.style.display="none";}else PINM.textContent=s;}
+// Paired: the key is this browser's from now on. A boot that waited at the
+// pairing goes on (the worker's), a console that ran starts again with it.
 function keyGot(m){keySave(m.id,m.kid,m.key);
-if(m.reload){PINM.textContent="paired";location.reload();}}
+if(PINEL&&PINEL.className==="busy")pinBusy("paired: starting the console...");
+if(m.reload)location.reload();}
 if(PINB)PINB.addEventListener("click",pinSubmit);
 if(PINF)PINF.addEventListener("keydown",function(e){
 if(e.key==="Enter"){e.preventDefault();pinSubmit();}});
@@ -187,7 +212,7 @@ for(var i=0;i<LINK.length;i++){try{LINKW.postMessage(m,LINK[i]);}catch(e){}}}
 if(LINK&&LINKW){addEventListener("message",function(e){var m=e.data;
 if(e.source!==LINKW||LINK.indexOf(e.origin)<0||!m||m.moylink!==1||typeof m.id!=="number")return;
 if(m.kind==="claim"&&WORKER&&!CLAIMQ&&typeof m.claim==="string"&&typeof m.password==="string"){
-CLAIMQ={w:e.source,o:e.origin,id:m.id};
+CLAIMQ={w:e.source,o:e.origin,id:m.id};pinSetting();
 WORKER.postMessage({t:"claim",claim:m.claim,id:typeof m.board==="string"?m.board:"",
 pw:m.password,name:browserName()});return;}
 e.source.postMessage(m.kind==="pack"?{moylink:1,re:m.id,kind:"pack",ok:false,

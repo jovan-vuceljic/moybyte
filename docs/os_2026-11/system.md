@@ -376,7 +376,8 @@ host's and the wasm's the same release vendored (`native/moy_net/mbedtls/README.
   THE CLAIM the rules). The cable can ask for a fresh claim at any time
   (My consoles' "Manage by cable"), which replaces a password set before
   and signs every browser out, as `passwd` does: physical access is the
-  owner's proof. The record crosses the network, guessable only at
+  owner's proof. A claim that sets the password starts the SSH server at
+  once, as `passwd` does (the webhost's `on_password`). The record crosses the network, guessable only at
   its PBKDF2 cost; the password does not. A pairing
   mints a random 128-bit device key with an id and the browser's name, kept in
   `system/webkeys` (`/etc/webkeys`); the page keeps it per board id in its
@@ -422,6 +423,11 @@ host's and the wasm's the same release vendored (`native/moy_net/mbedtls/README.
   use) or taken by newer sign-ins. Both show
   the SSH host key's fingerprint (`SHA256:`, OpenSSH's form) to check a first
   `ssh` against.
+- **One page's at a time**: the web terminal and a Zero's live socket are the
+  newest signed-in page's (owner, 2026-11-25). The page that held one closes
+  4001 "taken" and offers it back at its user's word, never by itself; a
+  request with no session takes nothing. Sessions themselves are several at
+  once on every board.
 - **What it does not stop**: the page itself is served over plain HTTP, so an
   attacker ACTIVE on the LAN can swap the page for one that captures a
   password typed into it or a key it reads; only HTTPS with a certificate

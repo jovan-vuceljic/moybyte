@@ -112,6 +112,14 @@ def test_a_join_that_fails_answers_its_error_and_ready():
     assert (st, urls, err) == (zero_improv.READY, [], zero_improv.UNABLE)
 
 
+def test_a_claim_answers_the_url_with_a_fresh_claim():
+    board = Board()
+    board.save("Bench", "pw")
+    urls, err = Z.Improv(Port(board)).claim()
+    assert err is None and urls[0].startswith("http://192.168.1.7/#id=") \
+        and urls[0].endswith("&claim=c0ffee"), urls
+
+
 def test_a_board_in_setup_answers_ready():
     assert Z.Improv(Port(Board())).state() == (zero_improv.READY, [])
 

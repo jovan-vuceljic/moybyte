@@ -32,6 +32,7 @@ SVC_WEB, SVC_UPDATE, SVC_HEALTHY = 1, 4, 8
 _UP_INPUT, _UP_POINTER, _UP_FRAME, _UP_WORD, _UP_SERVICE = range(5)
 _RAISED, _INTERRUPTED, _ABSENT, _EXIT = -1, -2, -3, -4
 _CLASSES = 6
+_SVC_BITS = 7
 _ROLE_FULL, _ROLE_IO = -2, -6
 _STAGES = 11
 
@@ -54,6 +55,7 @@ _SIGS = (
     ("moy_loop_step", [], _I),
     ("moy_loop_run", [], _I),
     ("moy_loop_upcalls", [ctypes.POINTER(_U32), ctypes.POINTER(_U32)], None),
+    ("moy_loop_service_counts", [ctypes.POINTER(_U32)], None),
     ("moy_loop_set_tick", [_U32], None),
     ("moy_loop_set_fps", [_I], None),
     ("moy_loop_set_services", [_U32], None),
@@ -306,6 +308,12 @@ def upcalls():
     t = (_U32 * _CLASSES)()
     _lib().moy_loop_upcalls(f, t)
     return tuple(f), tuple(t)
+
+
+def service_counts():
+    v = (_U32 * _SVC_BITS)()
+    _lib().moy_loop_service_counts(v)
+    return tuple(v)
 
 
 def tick(ms):

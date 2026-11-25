@@ -84,6 +84,11 @@ self.moySetup = (() => {
             box.textContent = "";
             line(box, c.name + " is on the network at http://" + c.address + "/"
                  + (c.local ? " (" + c.local + ")" : "") + ".", "ok");
+            // The password is the terminal's too: the board serves SSH once
+            // its window sets it, and with none it serves no SSH until `passwd`.
+            box.append(el("p", { class: "note ssh" }, secret
+                ? "Its terminal: ssh " + (c.local || c.address) + ", with that password, once its window has set it."
+                : "Its terminal: ssh " + (c.local || c.address) + ", with its password (passwd in its terminal sets one)."));
             if (opts.done) opts.done(c, secret);
             box.append(log.el);
             return { c, secret };

@@ -164,6 +164,12 @@ border:1px solid #5f6f9f;border-radius:4px}
 font:14px ui-monospace,Menlo,Consolas,monospace;color:#fff1e8;background:#7e2553;
 border:1px solid #c2c3c7}
 #pinb:hover{background:#a03068}
+/* The card while a password is set or a pairing runs: what it does, and a
+   turning ring, never a prompt (the board's curve takes seconds on a C3). */
+#pin.busy #pinm::before{content:"";display:inline-block;width:9px;height:9px;
+margin-right:7px;vertical-align:-1px;border:2px solid #ffa300;border-right-color:transparent;
+border-radius:50%;animation:pinspin .8s linear infinite}
+@keyframes pinspin{to{transform:rotate(360deg)}}
 /* Debug HUD (#41): toggled with the ` key; lightweight live stream stats. */
 #hud{position:fixed;top:6px;left:6px;z-index:9;display:none;padding:6px 8px;border-radius:5px;
 background:rgba(11,15,26,.82);border:1px solid #1d2b53;color:#00e436;font:12px ui-monospace;
@@ -183,7 +189,7 @@ white-space:pre;pointer-events:none}#hud b{color:#ffec27}#hud .w{color:#ff004d}<
 <button id=pkx>cancel</button></div></div>
 <canvas id=cv width=320 height=240 tabindex=0></canvas>
 <input id=kbin type=text autocapitalize=off autocomplete=off autocorrect=off spellcheck=false>
-<div id=pin><div class=card><h2>pair this browser</h2>
+<div id=pin><div class=card><h2 id=pinh>pair this browser</h2>
 <p id=pinp>Scan the code on the console's WEB CONSOLE screen, or type the
 console's password.</p>
 <span id=pinm></span>
@@ -467,7 +473,13 @@ var pH={};
 // the simulator (runtime/run/host_api.py's DESK_KEYS): the arrows and Enter on
 // every surface, the letters only while a game owns the keys. The modifiers
 // go as a level too, so Super acts on its release when nothing came between
-// (the console's tap). On a Mac Cmd is Ctrl.
+// (the console's tap). On a Mac Cmd is Ctrl. A held key's repeats are the
+// browser's own (`rep`), never timed by the console, so a keyup a busy page
+// delivers late repeats nothing. The page keeps the keys it holds (kHeld, by
+// physical key: the code each went down as); when it loses the keyboard (the
+// window's blur, the tab hidden, the canvas's blur) every one goes up, and the
+// modifiers with them (`lost`: Super's release then is no tap), so no key
+// stays held behind a keyup the browser never delivers.
 // Kept for the browser: what it never delivers (Ctrl+W/T/N, Ctrl+Tab and
 // their Shift twins), and what this page leaves to it (reload, the address
 // bar, the developer tools). The console's key from the page is also a tap on
@@ -491,10 +503,17 @@ if(e.key=="Escape"){
 send({type:"esc"});e.preventDefault();return;}
 if(e.key in MODK){send({type:"mods",mods:kmods(e)});return;}
 var c=kcode(e);if(c===null||kept(e,c))return;
-if(!e.repeat)send({type:"kd",code:c,mods:kmods(e)});e.preventDefault();});
+if(e.repeat)send({type:"kd",code:c,mods:kmods(e),rep:1});
+else{kHeld[e.code||e.key]=c;send({type:"kd",code:c,mods:kmods(e)});}
+e.preventDefault();});
 cv.addEventListener("keyup",function(e){
 if(e.key in MODK){send({type:"mods",mods:kmods(e)});return;}
-var c=kcode(e);if(c!==null)send({type:"ku",code:c,mods:kmods(e)});});
+var c=kcode(e);delete kHeld[e.code||e.key];if(c!==null)send({type:"ku",code:c,mods:kmods(e)});});
+var kHeld={};
+function kLost(){for(var p in kHeld)send({type:"ku",code:kHeld[p],mods:0});
+kHeld={};send({type:"mods",mods:0,lost:1});}
+window.addEventListener("blur",kLost);cv.addEventListener("blur",kLost);
+document.addEventListener("visibilitychange",function(){if(document.hidden)kLost();});
 // Soft keyboard (#42 Thread 2): #kb (in the bottom bar's middle cluster, beside the burger)
 // focuses the hidden #kbin so a touch device's on-screen keyboard opens; it never appears on
 // desktop (#ctl is media-query hidden there) and #kbin's events are entirely separate from

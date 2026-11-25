@@ -14,7 +14,8 @@ record pairs nothing), a key login after either; a token used once and
 gone after its ten minutes; a wrong token, key or password counted by the
 backoff, per address and from anywhere; a recorded login, a replayed or
 tampered request and a tampered, truncated or reordered answer refused; a
-dropped key ending its sessions; an old pin URL refused; the keys kept in
+dropped key ending its sessions; a new browser's key never taking the place
+of one signed in now; an old pin URL refused; the keys kept in
 system/webkeys across a restart and a broken file read as none; the open
 routes open and a refused request never reaching the store; /run and
 /update answered sealed by the VM; /auth's parser fuzzed; a flood of hellos
@@ -525,6 +526,40 @@ def test_the_claim_is_refused_twice_without_its_token_and_once_a_password_exists
         ssh_service.hashed(PASSWORD, "5a1t")
 
 
+def test_a_claim_that_sets_the_password_tells_the_vm_once(tmp_path):
+    """The claim writes the record behind the VM, so the poll after it says
+    so once (`on_password`, which starts the SSH server): a refused claim
+    and a pairing say nothing."""
+    said = []
+    h = _host(tmp_path, on_password=lambda: said.append(1))
+    claim = nb.web_claim()
+    assert _claim(h, "00" * 16)[0] == 403
+    h.poll()
+    assert said == []
+    page = _page(h)
+    page.claim(claim, PASSWORD)
+    h.poll()
+    h.poll()
+    assert said == [1]
+    _page(h).pair_password(PASSWORD)
+    h.poll()
+    assert said == [1]
+
+
+def test_a_console_s_webhost_starts_the_ssh_server_on_a_claim(tmp_path, monkeypatch):
+    """Every console's webhost (make_webhost) answers the claim's word with
+    the SSH server's start, as `passwd` starts it (the Zero's is zero_shell's)."""
+    import types
+    started = []
+    stub = types.SimpleNamespace(start=started.append, system_dir=lambda ws: str(tmp_path),
+                                 is_set=lambda ws: False, is_password=lambda ws, pw: False)
+    monkeypatch.setitem(sys.modules, "ssh_service", stub)
+    ws = types.SimpleNamespace()
+    h = wh.make_webhost(ws, str(_store(tmp_path)), port=0)
+    h.on_password()
+    assert started == [ws]
+
+
 def test_a_wrong_claim_counts_as_a_wrong_credential(tmp_path):
     h = _host(tmp_path)
     nb.web_claim()
@@ -704,6 +739,24 @@ def test_a_dropped_key_ends_its_sessions_and_signs_in_no_more(tmp_path):
     keep.sign_in()
     assert keep.json("GET", "/carts.json")[0] == 200
     assert nb.web_key_drop("all") == 1 and nb.web_keys() == []
+
+
+def test_a_new_browser_s_key_never_takes_the_place_of_one_signed_in_now(tmp_path):
+    """Sixteen keys kept: a seventeenth browser's pairing takes the place of a
+    browser not signed in now, so a page in use is never signed out by
+    another's pairing (two browsers on one console, owner 2026-11-25)."""
+    import time
+    h = _host(tmp_path)
+    first = _paired(h)
+    time.sleep(1.1)                      # its key the least recently seen (Unix seconds)
+    for _ in range(15):
+        _paired(h)
+    assert len(nb.web_keys()) == 16
+    first.sign_in()                      # the first browser in use again
+    _paired(h)
+    assert len(nb.web_keys()) == 16
+    first.sign_in()
+    assert first.json("GET", "/carts.json")[0] == 200
 
 
 def test_the_keys_outlive_a_restart_and_a_broken_file_reads_as_none(tmp_path):
