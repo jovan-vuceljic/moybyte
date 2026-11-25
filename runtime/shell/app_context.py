@@ -143,6 +143,9 @@ class AppContext:
             self.files = _moy_app.Files(app, self.grant)
         if "carts" in needs:
             self.carts = _moy_app.Carts(app, self.grant)
+            # The shell's cover cache, which the app's engine draws a cart's
+            # cover from (`image.cart`), decoded once for every surface.
+            self.covers = getattr(ws, "covers", None)
         if "nav" in needs:
             self.nav = _moy_app.Nav(app, self.grant)
         if "prefs" in needs:

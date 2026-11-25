@@ -74,6 +74,7 @@ class Engine(S.Builder):
         self._roles = None              # role -> its action, made again when an action is declared
         self._roles_n = -1
         self.files = files
+        self.covers = getattr(env, "covers", None)   # the shell's cover cache: image.cart's pictures
         self.pics = None                # the picture engine, made at the first picture a frame draws
         self.calls = 0                  # handler runs this frame: actions, hooks, timers, posts, work steps
         self.frame_calls = []
