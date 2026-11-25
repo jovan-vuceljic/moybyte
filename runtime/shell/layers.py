@@ -330,6 +330,13 @@ class _UpdateLayer(Layer):
         self.ws.update_ui._update_pointer(px, py, click)
         return True
 
+    def back(self):
+        """Esc (`InputPolicy.back`) is its page's back, as B, on every
+        tier: back to Settings, the install dropped; past the point of no
+        return it stays (update_ui's `leave`)."""
+        self.ws.update_ui._page().role("back")
+        return True
+
 
 class _WebConsoleLayer(Layer):
     """The WEB CONSOLE connection screen (#197): the glass while wasm mode is on.
