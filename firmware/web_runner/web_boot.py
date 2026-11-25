@@ -363,7 +363,10 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     # The board-agnostic service wiring, in the one canonical order (host + both
     # boards + this runner).
     #
-    # NO WIFI SERVICE, and that is the honest answer rather than a missing one.
+    # THE WIFI SERVICE is the serving Zero's own, where the worker's probe of
+    # its sealed /wifi answered (`wifi_enable`, wifi_link.BoardWifi): the
+    # panel, the bar's glyph and the Settings row are that board's. Anywhere
+    # else there is NONE, and that is the honest answer rather than a missing one.
     # This wired host_api's FakeWifi until 2026-08-30 -- the SIMULATOR's stand-in,
     # whose whole job is to invent four access points ("Home WiFi", "Coffee
     # Shop", "Neighbor 5G", "Library Guest") and a 192.168.1.42 so the desktop's
@@ -378,7 +381,7 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     # board's own service (as gpio_link and update_link are), not a fake.
     console.wire_workstation_core(
         ws, moy_carts, carts_root, _make_api,
-        None,
+        _S.get("wifi"),
         audio_out=_RunnerPump(), runtimes=runtimes, can_manage=True,
         pointer=console.Pointer(sysc.w, sysc.h), inp=inp, first_variant=scheme)
     # AUTHORING IS ON, BOTH TIERS (owner call): the browser build is the whole
@@ -1208,6 +1211,20 @@ def _pcm_buf(au):
     return a
 
 
+def _wifi_panel(ws):
+    """The Wi-Fi panel as a harness drives it: the networks listed, the
+    saved ones, its line, the focused stop, whether a join runs, and the
+    console's question or card over it (its verb and title)."""
+    sl = getattr(ws, "settings_layer", None)
+    if sl is None:
+        return None
+    c = ws.confirm
+    return {"nets": [n[0] for n in sl.wifi_nets], "known": list(sl.wifi_known),
+            "msg": sl.wifi_msg, "focus": sl._sub_focused, "pick": sl.wifi_pick,
+            "joining": sl.wifi_joining is not None,
+            "card": [c.verb, c.title] if c.open else None}
+
+
 def _edit_state(ws):
     """What a key in the Editor changed, for a harness that types into it:
     the open tab, the sprite's pixels as hex, the code's first lines and
@@ -1295,7 +1312,8 @@ def state_json():
     floor and depth (`glass`), the desk keyboard's
     typing level (`typing`), and the radio link's stats (`link_stats`, EspNowLink.stats: the match's
     frame, checkpoints and desync; None with no link), for a harness
-    driving the page (`window.__moyState()`)."""
+    driving the page (`window.__moyState()`), and the Wi-Fi panel's
+    (`wifi_panel`, `_wifi_panel`)."""
     import dev_channel
     st = dev_channel._remote_state(_S["ws"])
     st["ach"] = sorted(_S["ws"].ach.doc().get("system", {}).get("found", {}))
@@ -1315,6 +1333,7 @@ def state_json():
     st["card"] = {"verb": cf.verb, "title": cf.title,
                   "lines": [t for t, _tone in cf.line_rows()]} if cf.open else None
     st["input"] = _input_state(_S["ws"])
+    st["wifi_panel"] = _wifi_panel(_S["ws"])
     ws = _S["ws"]
     st["glass"] = {"cls": ws.metric_class, "cs": ws.look.effective_chrome_scale(),
                    "bar": ws.layout.status_h * ws.render_scale,
@@ -1605,6 +1624,57 @@ def update_enable(status_json):
         print("update unavailable:", exc)
     if _S["ws"].cart_home is not None and not doc.get("screen"):
         _S["ws"].cart_home = "headless"
+    return ""
+
+
+def wifi_enable(doc_json):
+    """The serving board answered the /wifi probe: its Wi-Fi is the
+    console's (wifi_link.BoardWifi). Before `boot`, which wires it as the
+    console's station, so the bar lays its glyph out from the first frame."""
+    try:
+        doc = json.loads(doc_json)
+    except Exception:                # noqa: BLE001 -- a garbled probe answer
+        return ""
+    if not isinstance(doc, dict) or "connected" not in doc:
+        return ""
+    try:
+        from wifi_link import BoardWifi
+        _S["wifi"] = BoardWifi(doc)
+    except Exception as exc:         # noqa: BLE001 -- never block a boot
+        print("wifi unavailable:", exc)
+    return ""
+
+
+def wifi_poll_json():
+    """The next request for the worker to POST to /wifi, or ""."""
+    w = _S.get("wifi")
+    return w.take_json() if w is not None else ""
+
+
+def wifi_wants_poll():
+    """True when the worker should GET /wifi now."""
+    w = _S.get("wifi")
+    return bool(w is not None and w.wants_poll())
+
+
+def wifi_ack_json(ok, text=""):
+    """Settle the request or poll in flight with the board's document;
+    what the worker must know back (BoardWifi.ack), or ""."""
+    w = _S.get("wifi")
+    if w is None:
+        return ""
+    out = w.ack(bool(ok), text or "")
+    _S["ws"].mark_dirty()
+    return out
+
+
+def wifi_moved(ssid):
+    """The worker waited out a move the board never came back from: it is
+    on `ssid` (BoardWifi.moved)."""
+    w = _S.get("wifi")
+    if w is not None:
+        w.moved(str(ssid))
+        _S["ws"].mark_dirty()
     return ""
 
 

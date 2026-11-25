@@ -111,8 +111,8 @@ packages = []
 packages_why = "No device package crosses: the store host is flat modules."
 
 [[modules.device.group]]
-files = ["zero_host.py", "zero_setup.py", "zero_shell.py", "zero_improv.py"]
-why = "The Zero's store host, its first-boot setup, its first setup over the cable (Improv) and its terminal: both Zero boards' main.py."
+files = ["zero_host.py", "zero_setup.py", "zero_shell.py", "zero_improv.py", "zero_wifi.py"]
+why = "The Zero's store host, its first-boot setup, its first setup over the cable (Improv), its terminal and the Wi-Fi its page manages: both Zero boards' main.py."
 
 [[modules.device.group]]
 files = ["cart_net.py"]

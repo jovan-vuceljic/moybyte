@@ -643,6 +643,7 @@ class DeleteConfirm:
         self.lines = ()              # a first-run prompt's lines (`ask_lines`), else ()
         self._no = None              # what a cancel answers (`ask_close`'s `no`)
         self._told = False           # the lines are (line, tone) rows already (`offer`)
+        self._save = None            # a move's Save (`ask_switch`)
 
     def _arm(self, verb):
         ws = self.ws
@@ -699,6 +700,7 @@ class DeleteConfirm:
         already, not a first-run prompt's."""
         self._drop_choice()
         self._no = no
+        self._save = None
         self._told = told
         self.cart = None
         self.title = title
@@ -723,6 +725,23 @@ class DeleteConfirm:
         """Say `title` over `rows` (as `tell`'s), with No and Open;
         `then()` on Open."""
         return self.ask_close(title, "", then, "open", lines=tuple(rows), told=True)
+
+    def ask_switch(self, title, rows, then, save=None):
+        """Ask before the console moves to another Wi-Fi network: `title`
+        over `rows` (as `tell`'s), Cancel and Move, `then()` on Move; with
+        `save`, a Save between them, `save()` on it."""
+        self.ask_close(title, "", then, "switch_save" if save is not None else "switch",
+                       lines=tuple(rows), told=True)
+        self._save = save
+        return True
+
+    def saved(self):
+        """A move's Save: `save()` at the tail."""
+        fn, self._save = self._save, None
+        self._act = self._no = None
+        self._done()
+        if fn is not None:
+            self.ws.defer(fn, toast=False)
 
     def ask(self, cart, then=None):
         """Ask before `cart` (a cart dict, or None for the open cart) is

@@ -10,6 +10,9 @@ buttons the answers.
 - The intents' "open with" (`choose`): a menu under the line, a row each
   pick (its icon and label), and Cancel.
 - Something the console tells (`tell`): its lines, and OK.
+- A move of the Wi-Fi a page reaches the console over (`switch`): its
+  lines, Cancel and Move; with Save between them where the network is not
+  saved yet (`switch_save`), which saves it and moves nothing.
 
 The handlers hand each answer to the host (`uitree_app.env()`), which acts
 at the frame's tail.
@@ -18,7 +21,8 @@ at the frame's tail.
 import uitree as ui
 import uitree_app
 
-VERBS = ("delete", "close", "stop_play", "receive", "open", "choose", "tell")
+VERBS = ("delete", "close", "stop_play", "receive", "open", "choose", "tell", "switch",
+         "switch_save")
 
 s = ui.state(
     title="",
@@ -46,6 +50,10 @@ def _yes():
     uitree_app.env().answer()
 
 
+def _save():
+    uitree_app.env().saved()
+
+
 def _pick(row):
     uitree_app.env().picked(int(row.id))
 
@@ -59,6 +67,8 @@ ui.action("stop_play", "Stop & play", _yes)
 ui.action("receive", "Receive", _yes)
 ui.action("open", "Open", _yes)
 ui.action("ok", "OK", _yes)
+ui.action("switch", "Move", _yes)
+ui.action("save", "Save", _save)
 ui.action("pick", "Choose", _pick, takes="row")
 
 # A verb's question: its buttons, Cancel or No first, and whether the verb
@@ -75,6 +85,10 @@ def page():
         with ui.dialog("{title}", ["no", "open"], shown="verb=open"):
             _lines()
         with ui.dialog("{title}", ["ok"], shown="verb=tell"):
+            _lines()
+        with ui.dialog("{title}", ["cancel", "switch"], shown="verb=switch"):
+            _lines()
+        with ui.dialog("{title}", ["cancel", "save", "switch"], shown="verb=switch_save"):
             _lines()
         with ui.dialog("{title}", ["cancel"], shown="verb=choose"):
             with ui.menu("{line}"):

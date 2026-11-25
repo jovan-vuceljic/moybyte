@@ -406,6 +406,23 @@ are kept so a board set up elsewhere still comes up at home), the name into
 `/moy/zero.json` and the password's record into `/moy/system/password`. From
 then on the name is the mDNS label and the password is how a browser pairs.
 
+## Its Wi-Fi, from its page (2026-11-25)
+
+Once it serves, the page is where its networks are managed: the console's
+own Wi-Fi panel, the bar's glyph and the Settings row are this board's
+(`firmware/web_runner/wifi_link.py` over its sealed `/wifi`,
+`device/zero_wifi.py`; both Zeros). The page lists the saved networks by
+name only (a password never leaves the board), scans by asking and polling,
+and saves or forgets one without leaving the network it is on. Choosing
+another network MOVES the board, and the page reaches it over the one it
+leaves, so the panel asks first (Cancel, Save for a new network, Move); the
+board answers, then gives the new network 15 s, saves it first in the list
+only once it has an address, and otherwise goes back to the old one for up
+to 15 s and says why there. A move that worked leaves the page with no
+board: it says where the console went (`<name>.local` on the new network),
+its card's Open goes there, and its Wi-Fi reads "moved to" that network. A board that reaches neither network walks
+every saved one and resets into setup with none.
+
 ## The sign-in gates everything (2026-11-07)
 
 The browser sign-in is the console's (`docs/os_2026-11/system.md` §3; the

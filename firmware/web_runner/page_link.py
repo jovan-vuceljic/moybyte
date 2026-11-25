@@ -92,8 +92,10 @@ class PageLink:
         """The page's `page` event: `fs` whether it is full screen, `canfs`
         whether its browser has full screen (an iPhone's has none), `kept`
         where it keeps the carts, `say` a notice ([title, sub, kind]), `tell`
-        a card ([title, [line, tone], ...]) and `offer` one whose Open plays
-        a cart ([title, folder, [line, tone], ...]): an import's report."""
+        a card ([title, [line, tone], ...]), whose Open goes to `go` where it
+        names an address (where a Zero that moved went), and `offer` one whose
+        Open plays a cart ([title, folder, [line, tone], ...]): an import's
+        report."""
         if "fs" in ev:
             self.fullscreen = bool(ev["fs"])
         if "canfs" in ev:
@@ -111,7 +113,11 @@ class PageLink:
             kind = str(say[2]) if len(say) > 2 else "ok"
             ws.notices.notice(title, sub, kind)
         tell = ev.get("tell")
-        if tell:
+        go = str(ev.get("go") or "")
+        if tell and go:
+            rows = tuple((str(r[0]), str(r[1]) if len(r) > 1 else "plain") for r in tell[1:])
+            ws.confirm.offer(str(tell[0]), rows, lambda: self._ask("go", url=go))
+        elif tell:
             rows = tuple((str(r[0]), str(r[1]) if len(r) > 1 else "plain") for r in tell[1:])
             ws.confirm.tell(str(tell[0]), rows)
         offer = ev.get("offer")

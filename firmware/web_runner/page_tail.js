@@ -83,7 +83,7 @@ else if(m.t==="wperf"){console.log("[moy worker] "+m.s);}
 // own. `kind` is the whole contract: "lost" adds the unsynced-work warning,
 // anything else is a restart somebody asked for.
 else if(m.t==="lost"){linkLost(m.kind||"lost",m.head||"the console is not answering",
-m.body||"",m.risk!==false);}
+m.body||"",m.risk!==false,m.go||"");}
 else if(m.t==="error"){console.error("[moy]",m.s);linkState("failed","the console crashed");
 sEl.textContent="console crash (see devtools)";sEl.style.color="#ff004d";
 // Under the title: the message's tail (an abort's reason; a traceback's
@@ -411,7 +411,7 @@ function podSaid(s){if(s)pzSay(s,false);}
 // to gpio_link's MAX_FAILS and the persist path's give-up, and it reaches this
 // through window.__moyLinkLost or the worker's {t:"lost"} above.
 var linkGone=false;
-function linkLost(kind,head,body,risk){
+function linkLost(kind,head,body,risk,go){
 if(linkGone)return;
 linkGone=true;
 var text=(kind==="lost")
@@ -423,8 +423,10 @@ var text=(kind==="lost")
 +"tab -- do not reload until the console is back."))
 :body;
 // The console's card says it; the harness reads it here, the way __moyReport is.
-window.__moyLink=kind;window.__moyLinkCard={head:head,body:text,bad:kind==="lost"};
-send({type:"page",tell:[head,[text,kind==="lost"?"danger":"plain"]]});}
+// `go`: where the console went (a Zero that moved to another network), which
+// the card's Open opens.
+window.__moyLink=kind;window.__moyLinkCard={head:head,body:text,bad:kind==="lost",go:go||""};
+send({type:"page",tell:[head,[text,kind==="lost"?"danger":"plain"]],go:go||""});}
 window.__moyLinkLost=linkLost;
 // A sign-in wait on the sync push: the board is answering and holding this
 // page off, so the console says why, and again when a push lands ("").

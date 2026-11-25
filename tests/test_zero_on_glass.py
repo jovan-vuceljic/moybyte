@@ -761,6 +761,130 @@ def test_the_live_socket_answers_without_power_save(zero, mirror, tmp_path):
     assert heap is not None, "the board's RAM was not read with the socket open"
 
 
+# -- the board's Wi-Fi from its page -------------------------------------------------------
+
+
+WRONG_PASSWORD = "not-the-bench-password"
+
+
+def _wifi_browse(z, base, steps, out, secrets):
+    """`_browse` with the console's Settings -> Wi-Fi open first, every one of
+    `secrets` (the bench passwords) scrubbed from what it prints."""
+    from test_web_zero_wifi_e2e import ENTER, _keys, _panel
+    import web_e2e
+    steps = (sign_in(z) + [{"wait": 2000}] + web_e2e.menu_pick("Settings")
+             + [{"wait": 1500}] + _keys(ENTER)
+             + [_panel("p.nets.length > 0 && p.focus", 60000)] + steps)
+    path = _scenario(out, steps, "?handheld=1&dev=1")
+    try:
+        run = subprocess.run(["node", "browsershot.mjs", str(path), str(out)],
+                             cwd=str(RUNNER), env=dict(os.environ, MOY_BASE=base),
+                             capture_output=True, text=True, timeout=900)
+    finally:
+        path.unlink()
+    text = _scrub(run.stdout + run.stderr[-500:], z)
+    for pw in secrets:
+        if pw:
+            text = text.replace(pw, "***")
+    print(text[-4000:])
+    assert run.returncode == 0, text[-3000:]
+    assert "STEP FAILED" not in text, text[-3000:]
+    return text
+
+
+def _where(url):
+    """The board's page at `url` (its .local name), as an address this
+    machine reaches: the name resolved here."""
+    import socket
+    import urllib.parse
+    u = urllib.parse.urlsplit(url)
+    ip = socket.gethostbyname(u.hostname)
+    return "http://%s%s" % (ip, ":%d" % u.port if u.port else "")
+
+
+def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
+    """From the console's own Wi-Fi panel on the board's page: a saved network
+    forgotten and saved again (nothing dropped); with a second saved network
+    in range, a move to it with a wrong password (the board comes back and the
+    page says so), a move to it that works, and a move back. The passwords are
+    the board's own saved ones, read over the cable and never printed."""
+    from test_web_zero_wifi_e2e import ENTER, _forget, _keys, _move, _panel, _say
+    _needs_password(zero)
+    doc = json.loads((zero.before_files.get(STORE + "/wifi.json") or b"{}").decode())
+    saved = {n["ssid"]: n.get("password") or "" for n in doc.get("networks", []) if n.get("ssid")}
+    assert saved, "%s has no saved network" % zero.name
+    secrets = list(saved.values()) + [WRONG_PASSWORD]
+    look = _tagged(_wifi_browse(zero, zero.url, [_say("LOOK")], tmp_path / "look", secrets),
+                   "LOOK")
+    on = look["w"][1]
+    assert look["w"][0] and on in saved, "the page's station says %s" % (look["w"],)
+    others = [s for s in saved if s != on and s in look["p"]["nets"]]
+    x = others[0] if others else on
+    steps = (_forget(x) + [_panel("p.known.indexOf(%s) < 0" % json.dumps(x)), {"wait": 1500},
+                           _say("FORGOT")])
+    if others:
+        steps += (_move(x, WRONG_PASSWORD, 2)
+                  + [_panel("p.card && p.card[0] == 'tell'", 90000), _say("FAILED")]
+                  + _keys(ENTER) + [_panel("!p.card", 5000)]
+                  + _move(x, saved[x], 1))
+    else:
+        from test_web_zero_wifi_e2e import _focus, _typed
+        steps += (_focus(ssid=x) + _keys(ENTER) + [_panel("p.pick", 5000)]
+                  + _typed(saved[x]) + _keys(ENTER))
+    steps += [_panel("p.known.indexOf(%s) >= 0 && !p.card" % json.dumps(x)), {"wait": 1500},
+              _say("SAVED")]
+    if others:
+        steps += (_move(x, None, 1, card="switch")
+                  + [{"waitFor": "window.__moyState().then(s => (window.__moyLinkCard && "
+                                 "window.__moyLinkCard.go) || (s.wifi_panel && "
+                                 "!s.wifi_panel.joining && s.wifi && s.wifi[1] == %s))"
+                                 % json.dumps(x), "timeout": 90000},
+                     {"wait": 1000}, _say("MOVED")])
+    out = _wifi_browse(zero, zero.url, steps, tmp_path / "manage", secrets)
+    forgot, saved_again = _tagged(out, "FORGOT"), _tagged(out, "SAVED")
+    assert x not in forgot["p"]["known"], forgot
+    assert forgot["w"][:2] == [True, on], "forgetting dropped the network: %s" % (forgot["w"],)
+    assert x in saved_again["p"]["known"], saved_again
+    assert saved_again["w"][:2] == [True, on], saved_again["w"]
+    if not others:
+        print("%s: one saved network in range (%s): no move to make" % (zero.name, on))
+        return
+    failed = _tagged(out, "FAILED")
+    assert failed["p"]["card"] == ["tell", "Still on %s" % on], failed
+    assert failed["w"][:2] == [True, on], failed["w"]
+    moved = _tagged(out, "MOVED")
+    card = moved["link"]
+    if card and card.get("go"):
+        # This page lost the board, by design: it is where the card says.
+        assert card["head"] == "the console moved to %s" % x, card
+        assert card["bad"] is False, card
+        base = _where(card["go"])
+    else:
+        assert moved["w"][:2] == [True, x], moved
+        base = zero.url
+    print("%s moved to %s (%s)" % (zero.name, x, "the page lost it" if base != zero.url
+                                   else "the page still reaches it"))
+    back = (_move(on, None, 1, card="switch")
+            + [{"waitFor": "window.__moyState().then(s => (window.__moyLinkCard && "
+                           "window.__moyLinkCard.go) || (s.wifi_panel && "
+                           "!s.wifi_panel.joining && s.wifi && s.wifi[1] == %s))"
+                           % json.dumps(on), "timeout": 90000},
+               {"wait": 1000}, _say("BACK")])
+    out = _wifi_browse(zero, base, back, tmp_path / "back", secrets)
+    back = _tagged(out, "BACK")
+    if not (back["link"] or {}).get("go"):
+        assert back["w"][:2] == [True, on], back
+    # ...and it answers where it served at the start.
+    for _ in range(30):
+        try:
+            _get(zero.served_at + "/sync", timeout=5)
+            break
+        except OSError:
+            time.sleep(2)
+    else:
+        pytest.fail("%s does not answer at %s after the move back" % (zero.name, zero.served_at))
+
+
 # -- the terminal over SSH ------------------------------------------------------------------
 
 

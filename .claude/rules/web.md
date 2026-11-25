@@ -446,6 +446,18 @@ nor those docs will warn you about:
   the unsynced-work warning, because board mode keeps no local store. First
   reason wins, so an update nobody needs warning about cannot later be
   re-reported as a loss.
+- **A page a Zero serves manages that board's Wi-Fi** (2026-11-25): its
+  `ws.wifi` is the board's (`wifi_link.BoardWifi` over the sealed `/wifi`,
+  `device/zero_wifi.py`), probed before boot, so the bar, the Settings row and
+  the one Wi-Fi panel are the board's; anywhere else the page has none (#324).
+  What bites: a join MOVES the board off the network the page reaches it
+  over, so Settings asks first (`switch_says`), and from the board's answer
+  the worker holds the sync's give-up through the board's two windows
+  (worker.js, `wifiMove`); the board found again settles it, and silence to
+  the end is a move that worked, said as EXPECTED with an Open to
+  `<name>.local`, never as a loss. A cart is never handed this station
+  (`CARTS`). `serve.py --wifi` is the twin, and
+  `tests/test_web_zero_wifi_e2e.py` drives it.
 - **The console's HTTP server is the kernel's** (`native/moy_net/moy_webhost.c`
   over `moy_http.c` and `moy_net_port.c`): a non-blocking listener polled at the
   frame tail with no Python, one-shot serving, the bundle, the pulls and the

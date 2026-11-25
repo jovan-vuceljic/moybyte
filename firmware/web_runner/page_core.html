@@ -572,7 +572,7 @@ function asApp(){return navigator.standalone===true||!!(window.matchMedia&&
 send({type:"page",fs:false,canfs:!!document.documentElement.requestFullscreen,app:asApp(),
 host:location.hostname});
 // THE ASKS (page_link.py): what the console's rows ask of the browser. A
-// download and Play on the console go at once. A browser grants full screen
+// download, Play on the console and going to where the console moved go at once. A browser grants full screen
 // and its file chooser only inside a user's gesture, so those are done at
 // once while the gesture that chose the row is still active
 // (navigator.userActivation), else armed: the console says to tap, and the
@@ -582,6 +582,7 @@ function askLive(){var u=navigator.userActivation;return !u||u.isActive;}
 function asks(list){for(var i=0;i<list.length;i++){var a=list[i];
 if(a.do==="save"){if(WORKER)WORKER.postMessage({t:"export",cart:a.cart});}
 else if(a.do==="pod"){if(WORKER)WORKER.postMessage({t:"pod",cart:a.cart});}
+else if(a.do==="go"){if(/^https?:\/\//.test(a.url||"")){window.__moyWent=a.url;location.assign(a.url);}}
 else if(askLive())askDo(a);else askArm(a);}}
 function askArm(a){ASKED=a;window.__moyAsked=a.do;
 send({type:"page",say:[a.do==="fullscreen"?"Tap to go full screen":"Tap to choose a file",

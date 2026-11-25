@@ -7,6 +7,7 @@
 #   ZeroUpdate                  the OTA flow, one slice per poll; make_updater builds it
 #   make_addon                  the release's add-on (and the XIAO's official carts) brought to the store; tend_addon runs it, way_back undoes a removal
 #   make_official               /official: the page's Get Carts, this board installing from its shelves
+#   make_wifi                   /wifi: the page's Wi-Fi panel, this board's networks (zero_wifi)
 #   host_class                  the store host: the boards' WebHost
 #   ImprovBoard                 what Improv over the cable asks of this board; make_improv
 #   serve                       bring the store host up and pump it forever
@@ -66,6 +67,10 @@ for.
 page's theme, Settings and badges, kept in this store's `system/settings`
 as a console keeps them and applied to nothing here, so the next page comes
 back on them.
+
+`GET/POST /wifi` is the sixth (make_wifi, zero_wifi.ZeroWifi): the browser
+console's Wi-Fi panel is this board's, its saved networks listed by name and
+a move to another network made with a way back to this one.
 
 A browser signs in with a device key it got by pairing once with this board's
 password (the setup form sets it; native/moy_net/moy_webhost.c's header and
@@ -948,6 +953,23 @@ class ImprovBoard:
         return moy_net.web_auth(SYSTEM_DIR), moy_net.web_claim(fresh)
 
 
+def make_wifi(name):
+    """The backend of the webhost's `/wifi` (zero_wifi.ZeroWifi), or None
+    where it cannot be built: the store serves regardless."""
+    def stranded():
+        # Neither the new network nor the old answered: every saved one, and
+        # with none the setup the next boot hosts.
+        if connect(hostname=name) is None:
+            import machine
+            machine.reset()
+    try:
+        from zero_wifi import ZeroWifi
+        return ZeroWifi(WIFI_STORE, name, stranded=stranded)
+    except Exception as exc:             # noqa: BLE001 -- the store serves regardless
+        print("ZERO wifi panel: unavailable:", exc)
+        return None
+
+
 def make_improv():
     """Improv over the cable where the image takes it (MOY_IMPROV: the module
     `moy_improv`), else None."""
@@ -1193,6 +1215,7 @@ def serve():
     official = make_official(ota, addon)
     host.update = task
     host.official = official
+    host.wifi = make_wifi(name)
     if task is not None:
         # BEFORE the first poll: the marker names the slot the last install
         # pointed the bootloader at, and reading it is how a rollback stops

@@ -169,6 +169,7 @@ let syncWaitSaid = false;     // the link panel is showing a sign-in wait
 
 function syncFailed(now) {
     syncFailing = true;
+    if (wifiMove) return;                       // THE MOVE: silence is expected
     if (!lastSyncOkAt) lastSyncOkAt = now;      // first contact never made
     if (now - lastSyncOkAt >= SYNC_GIVE_UP_MS) syncLost();
 }
@@ -216,6 +217,17 @@ const GPIO_MS = 33;
 // SCREEN is waiting -- `updateWants` is false on an idle console, so a page
 // nobody is updating from never touches the wire.
 let updatePoll = null, updateWants = null, updateAck = null, updateOff = null;
+// A Zero's WI-FI (wifi_link.py over the board's sealed /wifi), the same shape
+// again: asked once a second while a scan, a move or the open panel waits on
+// it, and seldom otherwise. THE MOVE: a join takes the board off the network
+// this page reaches it over, so from its answer until the board's two windows
+// have passed (`wifiMove.until`) a silence is the move, never a loss, and the
+// sync's give-up waits. The board found again settles it (it failed and came
+// back, or the new network reaches this page too); still silent at the end,
+// it moved, and the page says where it went.
+let wifiPoll = null, wifiWants = null, wifiAck = null, wifiMoved = null;
+let wifiBusy = false, lastWifiAt = 0, wifiMove = null;
+const WIFI_MS = 1000;
 let updateBusy = false, lastUpdateAt = 0;
 const UPDATE_MS = 1000;
 // GET CARTS (#124), site mode: the console's carts_link queues what it needs
@@ -1566,6 +1578,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     const updateDoc = await probeUpdate();
     const official = mode === "board" && await probeOfficial();
     const liveLink = mode === "board" ? await probeLive() : null;
+    const wifiDoc = mode === "board" ? await probeWifi() : null;
     mp.runPython("import web_boot\n"
         // BEFORE boot(): the mode is what decides whether the carts watcher
         // sweeps the journal, and boot() is where that watcher is built.
@@ -1578,6 +1591,8 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + (shelves ? "web_boot.site_sources(" + JSON.stringify(VFS.carts) + ", "
             + JSON.stringify(JSON.stringify(shelves)) + ")\n" : "")
         + (gpioPins ? "web_boot.gpio_enable(" + JSON.stringify(JSON.stringify(gpioPins)) + ")\n" : "")
+        // The board's Wi-Fi, BEFORE boot(), which wires it as the console's.
+        + (wifiDoc ? "web_boot.wifi_enable(" + JSON.stringify(JSON.stringify(wifiDoc)) + ")\n" : "")
         // A console that installs carts into its own store when this page
         // asks (it answers /official): BEFORE boot(), which hands Get Carts the asking.
         + (official ? "web_boot.official_enable()\n" : "")
@@ -1604,6 +1619,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + "sync_poll_json, sync_ack, sync_off, sync_root, store_mode, "
         + "rescan_store, gpio_poll_json, gpio_ack_json, gpio_off, "
         + "update_poll_json, update_wants_poll, update_ack_json, update_off, "
+        + "wifi_poll_json, wifi_wants_poll, wifi_ack_json, wifi_moved, "
         + "services_json, carts_poll_json, carts_event_json, "
         + "import_p8_json, import_archive_json, export_cart, drop_kind, "
         + "edit_cart, open_cart, state_json, pcm_addr, "
@@ -1650,6 +1666,12 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         gpioAck = mp.globals.get("gpio_ack_json");
         gpioOff = mp.globals.get("gpio_off");
         console.log("[moy] gpio: " + gpioPins.length + " pins on the host");
+    }
+    if (wifiDoc) {
+        wifiPoll = mp.globals.get("wifi_poll_json");
+        wifiWants = mp.globals.get("wifi_wants_poll");
+        wifiAck = mp.globals.get("wifi_ack_json");
+        wifiMoved = mp.globals.get("wifi_moved");
     }
     if (updateDoc) {
         updatePoll = mp.globals.get("update_poll_json");
@@ -1725,6 +1747,67 @@ async function probeLive() {
         return d && d.live && d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : null;
     } catch (e) {
         return null;
+    }
+}
+
+// Does the serving board manage its Wi-Fi from here (a Zero's /wifi)? One
+// GET before the console exists, which then has that board's station or none.
+async function probeWifi() {
+    try {
+        const r = await sealed("GET", "/wifi");
+        if (r.status !== 200) return null;
+        const d = sealedJson(r);
+        return (d && "connected" in d) ? d : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function wifiPump() {
+    if (!wifiPoll) return;
+    const now = performance.now();
+    if (wifiMove && now > wifiMove.until) {
+        const m = wifiMove;
+        wifiMove = null;
+        const port = BASE ? new URL(BASE).port : "";
+        const url = "http://" + m.host + (port ? ":" + port : "") + "/";
+        try { wifiMoved(m.ssid); } catch (e) { }
+        expected("the console moved to " + m.ssid,
+                 "It is on " + m.ssid + " now. Join " + m.ssid + " and open " + url
+                 + " to carry on.", url);
+        return;
+    }
+    if (wifiBusy || now - lastWifiAt < WIFI_MS) return;
+    lastWifiAt = now;
+    let body = "";
+    try { body = wifiPoll(); } catch (e) { return; }
+    if (!body) {
+        let wants = false;
+        try { wants = wifiWants(); } catch (e) { return; }
+        if (!wants) return;
+    }
+    wifiBusy = true;
+    const req = body ? sealed("POST", "/wifi", body) : sealed("GET", "/wifi");
+    req.then((r) => {
+            const ok = r.status >= 200 && r.status < 300 ? 1 : 0;
+            wifiSaid(wifiAck(ok, ok || r.status === 409 ? (r.text || "") : ""));
+        })
+        .catch(() => { try { wifiSaid(wifiAck(0, "")); } catch (e) { } })
+        .finally(() => { wifiBusy = false; });
+}
+
+function wifiSaid(t) {
+    let d = null;
+    try { d = t ? JSON.parse(t) : null; } catch (e) { }
+    if (!d) return;
+    if (d.move) {
+        wifiMove = { until: performance.now() + d.move.ms, ssid: d.move.ssid,
+                     host: d.move.host || (BASE ? new URL(BASE).hostname : "") };
+        console.log("[moy] wifi: the console is moving to " + d.move.ssid);
+    } else if (d.settled) {
+        wifiMove = null;
+        syncOk(performance.now());
+        console.log("[moy] wifi: the move " + (d.ok ? "worked" : "failed") + " -- the console answers");
     }
 }
 
@@ -2729,11 +2812,11 @@ function closingSaid(t) {
     }
 }
 
-function expected(head, body) {
+function expected(head, body, go) {
     if (syncLostSaid) return;
     syncLostSaid = true;
     self.postMessage({ t: "lost", kind: "expected", risk: false,
-                       head: head, body: body });
+                       head: head, body: body, go: go || "" });
 }
 
 // Self-driven frame loop. setTimeout (not rAF -- workers have none) against a
@@ -2823,6 +2906,7 @@ function loop() {
         termPump();
         liveStep(gap);
         updatePump();
+        wifiPump();
         cartsPump();
     } catch (e) {
         self.postMessage(crashMessage(e));

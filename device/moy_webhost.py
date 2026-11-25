@@ -6,7 +6,7 @@
 #   StoreSystem        the same documents kept by a host with no console (a Zero)
 #   WebHost            the Settings contract over the kernel's webhost
 #   WebHost.poll       the C poll, its events, the parked request, the update
-#   WebHost.answer_vm  the routes the VM answers: /run, /update, /official, the system root
+#   WebHost.answer_vm  the routes the VM answers: /run, /update, /official, /wifi, the system root
 #   WebHost.browsers   the paired browsers (and WebHost.forget, one or all)
 #   make_webhost       the WebHost every board injects
 """Serve the moybyte web console FROM the console, over the device's own WiFi.
@@ -24,6 +24,9 @@ console behind it:
     GET  /official  where a list, install or removal of the carts of    [sealed]
     POST /official  its shelves stands, and asking for one (every board:
                     `web_addon.OfficialCarts`, `console_official`)       [sealed]
+    GET  /wifi      a Zero's network, its saved networks by name and a  [sealed]
+    POST /wifi      scan; saving, forgetting or moving to one
+                    (`zero_wifi.ZeroWifi`, a host built with `wifi`)
     GET  /console.json  the console's portable Settings and its badges  [sealed]
     POST /sync      a batch for the system root, merged into them       [sealed]
 
@@ -339,7 +342,7 @@ class WebHost:
                  on_run=None, update=None, on_stop=None, files_root=None,
                  kinds=None, dial=None, on_serving=None, on_failed=None,
                  system=None, on_paired=None, apps_root=None, official=None,
-                 on_password=None):
+                 on_password=None, wifi=None):
         self.port = DEFAULT_PORT if port is None else port
         self.carts_root = carts_root
         self.files_root = (moy_sync.files_root(carts_root)
@@ -355,6 +358,7 @@ class WebHost:
         self.on_run = on_run
         self.update = update
         self.official = official
+        self.wifi = wifi
         self.system = system
         self.on_stop = on_stop
         self.on_serving = on_serving
@@ -402,6 +406,8 @@ class WebHost:
         out = self.DEFER
         if self.official is not None:
             out += ("/official",)
+        if self.wifi is not None:
+            out += ("/wifi",)
         if self.system is not None:
             out += (moy_sync.SYSTEM_PULL,)
         return out
@@ -544,6 +550,13 @@ class WebHost:
                     did = True
             except Exception as exc:     # noqa: BLE001 -- never break a frame
                 print("OFFICIAL ERR %s: %s" % (type(exc).__name__, exc))
+        w = self.wifi
+        if w is not None and w.busy():
+            try:
+                if w.step():
+                    did = True
+            except Exception as exc:     # noqa: BLE001 -- never break a frame
+                print("WIFI ERR %s: %s" % (type(exc).__name__, exc))
         return did
 
     service = poll
@@ -660,6 +673,8 @@ class WebHost:
             return self._update(target, body if method == "POST" else None)
         if path == "/official" and self.official is not None:
             return self._official(body if method == "POST" else None)
+        if path == "/wifi" and self.wifi is not None:
+            return self._wifi(body if method == "POST" else None)
         if self.system is not None:
             if path == moy_sync.SYSTEM_PULL and method == "GET":
                 return self._console(target)
@@ -732,6 +747,23 @@ class WebHost:
             return http_response(400, '{"error":"bad json"}')
         ok, msg = o.request(action, folder, sent)
         return http_response(200 if ok else 409, o.answer(ok, msg))
+
+    def _wifi(self, body):
+        """A Zero's Wi-Fi (zero_wifi.ZeroWifi); `body` is None on the GET.
+        A POST only asks, and is answered with the document; the scan and a
+        switch are the poll's slices."""
+        w = self.wifi
+        if body is None:
+            return http_response(200, w.answer())
+        try:
+            if isinstance(body, bytes):
+                body = body.decode("utf-8")
+            sent = _json.loads(body or "{}")
+            sent.get("action")
+        except (ValueError, AttributeError):
+            return http_response(400, '{"error":"bad json"}')
+        ok, msg = w.request(sent)
+        return http_response(200 if ok else 409, w.answer(ok, msg))
 
     def _update(self, target, body):
         """The firmware endpoint (#41/#53); `body` is None on the GET. Both
