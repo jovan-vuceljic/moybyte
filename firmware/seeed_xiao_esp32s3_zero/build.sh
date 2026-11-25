@@ -123,8 +123,11 @@ moybyte_patch_usj_improv
 # DECLINED moybyte_patch_gc_meters -- gc.pauses() feeds the PERF line and
 #    gc.areas() the dev channel's `heapcaps`; this board runs neither.
 #
-# DECLINED moybyte_patch_mdns_psram -- this board's responder runs for its
-# whole power-on (it is found by name), so the buffers would be held anyway.
+# The mDNS responder's scratch and its task's stack are PSRAM, not internal
+# SRAM (tools/patch_mdns_psram.py). This board's responder runs for its whole
+# power-on (it is found by name), so both would otherwise hold internal SRAM
+# for good: the scratch as .bss, the 4 KB stack from the heap.
+moybyte_patch_mdns_psram
 
 # DECLINED moybyte_patch_tinyusb_msc_psram -- this board denies
 # native/moy_usbdisk, so TinyUSB's MSC class is not built.
