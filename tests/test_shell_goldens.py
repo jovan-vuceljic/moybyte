@@ -158,9 +158,15 @@ Everything time-dependent is pinned rather than tolerated (the repo rule:
 dt is INJECTED, never read from a clock -- `ScrollRegion` is the precedent):
 
   * dt is the fixed `_DT`; no surface reads a clock for its own animation.
-  * `bar_layer.clock_text` is bound to a constant. The OS bar prints a live
-    HH:MM, and a minute boundary between two renders is a real flake that has
-    taken CI down before (see `test_responsive_editors._quiesce`).
+  * the wall clock is a constant: `capture` pins `wallclock`'s instant
+    (`_NOW`) for the whole config, from its console's boot on, and every
+    workstation `_build` makes has `bar_layer.clock_text` and `today` bound
+    to constants from its first frame (`_pin_clock`). The OS bar prints a
+    live HH:MM, and a minute boundary between two renders is a real flake
+    that has taken CI down before (see `test_responsive_editors._quiesce`).
+  * what a config's plan leaves in a process-wide app (Music's `STREAM`,
+    the status items) is put back as `_build` starts, so a surface hashes
+    the same whatever ran on the worker before it.
   * every transient overlay is cleared each frame (`_quiesce`): the toast, the
     confetti/egg timers, the achievements list, the system menu, About, the
     notice banner, the FPS/perf HUDs, the cursor.
@@ -253,6 +259,7 @@ REBASELINE_CMD = (
 _DT = 1.0 / 30.0          # the injected frame delta; never a clock
 _MAX_FRAMES = 6           # settle cap -- every surface settles at 2 today
 _CLOCK = "00:00"          # the pinned OS-bar clock text
+_NOW = 1791936000         # the pinned wall clock: _DATE's midnight, UTC
 _COVER_SLICE_UNBOUNDED = 10 ** 9   # ms: build every cover in its own frame
 
 # The cart whose Editor tabs are rendered: a seeded GAME with a sprite sheet
@@ -563,9 +570,13 @@ def _quiesce(ws):
         ws.about = False
     ws.notice_up = None
     ws._notice_until = 0
-    # The bar prints a live HH:MM. Bind the accessor -- pinning the clock's
-    # cache does NOT work (bar_layer reads the clock again once its hold runs
-    # out, so a sentinel only forces a recompute).
+    _pin_clock(ws)
+
+
+def _pin_clock(ws):
+    """The bar's HH:MM and day as constants. Bind the accessors -- pinning
+    the clock's cache does NOT work (bar_layer reads the clock again once its
+    hold runs out, so a sentinel only forces a recompute)."""
     ws.bar_layer.clock_text = lambda: _CLOCK
     ws.bar_layer.today = lambda: _DATE
 
@@ -625,6 +636,7 @@ def _build(cfg, carts_dir):
     music_app.STREAM.stations = music_app.STATIONS
     music_app.STREAM.section = None     # nor the last console's section and app
     music_app.STREAM.on_change = None
+    music_app.STREAM.tick = 0           # nor how far a connecting pulse had run
     for it in ITEMS.slots:              # no app's status item outlives its config
         if it.pid:
             ITEMS._free(it)
@@ -632,6 +644,7 @@ def _build(cfg, carts_dir):
         str(carts_dir), sys_size=cfg["sys_size"],
         font_scale=cfg["font_scale"], windowed=cfg["windowed"],
         panel_diagonal_in=cfg["diagonal_in"])
+    _pin_clock(ws)
     if cfg["sys_size"] is None:
         ws.use_inputs(TDECK_INPUTS)     # the T-Deck's canvas, its keyboard's keys
     pick_layout(ws, cfg)
@@ -1993,6 +2006,16 @@ def capture(config_name, carts_dir, golden=None, moved=None):
     moved from it is written as a PNG (`pixel_goldens`) and its path added to
     `moved`."""
     cfg = CONFIGS[config_name]
+    import wallclock
+    now = wallclock._now
+    wallclock._now = lambda: _NOW
+    try:
+        return _capture(cfg, config_name, carts_dir, golden, moved)
+    finally:
+        wallclock._now = now
+
+
+def _capture(cfg, config_name, carts_dir, golden, moved):
     ws = _build(cfg, carts_dir)
     expect_bytes = ws.glass_canvas.w * ws.glass_canvas.h * 2  # RGB565
     out = {}
