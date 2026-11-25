@@ -206,6 +206,7 @@ class _BackdropLayer(Layer):
                 # snapshot would be thrown away unread; a gesture's first
                 # frame, over a held wallpaper, takes it below)
                 wm._capture_backdrop()
+            self._bar_drawn(wm._backdrop_valid)
             wm.draw_unders()
             # This buffer holds the cache it just took, and the clock: one of the N.
             wm._desk_streak = 1 if wm._backdrop_valid else 0
@@ -249,6 +250,10 @@ class _BackdropLayer(Layer):
             _perf = getattr(self.ws, "perf_capture", False)
             _t0 = _ticks_ms() if _perf else 0
             union = wm._blit_backdrop_cache()
+            if wm._restored is None:
+                laid = wm._bar_laid           # the cache's bar, laid whole
+                laid[0] = self.ws.frame_state.frames_drawn
+                laid[1] = wm._cache_clock
             if col or self._bar_owed:
                 self._parts_again(col)
             if wm._restored is not False:
@@ -275,6 +280,7 @@ class _BackdropLayer(Layer):
         self._bar_owed = False
         self._draw_desktop(dt)                # cache lost: render + re-snapshot
         wm._capture_backdrop()
+        self._bar_drawn(wm._backdrop_valid)
         wm.draw_unders()
         wm._desk_streak = 1 if wm._backdrop_valid else 0
         wm._clock_drawn()
@@ -351,9 +357,21 @@ class _BackdropLayer(Layer):
                 for b in wm.root_ctx.layout.bars:
                     r = b[1]
                     cache.blit_strip_rect(rc, 0, 0, r[0], r[1], r[2], r[3])
+            self._bar_drawn(True)
         if whole:
             wm._capture_backdrop()
         wm._desk_streak = 1
+
+    def _bar_drawn(self, cached):
+        """The bar was drawn whole into this frame's buffer as it stands, and
+        with `cached` into the cache too: the clock it shows need not paint
+        again over it (`_desk_clock`)."""
+        wm = self.wm
+        laid = wm._bar_laid
+        laid[0] = self.ws.frame_state.frames_drawn
+        laid[1] = self.ws.bar_layer.clock_text()
+        if cached:
+            wm._cache_clock = laid[1]
 
     def _column_rect(self):
         """(x, y, w, h) the icon column paints in: its tiles and their

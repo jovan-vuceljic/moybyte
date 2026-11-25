@@ -881,7 +881,8 @@ class WindowPaint:
         """The desk bar's clock over the cached desk: repainted unless the
         RETAINED_FRAMES painted frames before this one, one after another,
         each left this text in its buffer and this frame's restore laid the
-        cache over no bar."""
+        cache over no bar; never where the frame laid a bar holding this
+        text whole (`_bar_laid`)."""
         ws = self.ws
         bar = ws.bar_layer
         t = bar.clock_text()
@@ -893,13 +894,17 @@ class WindowPaint:
             for b in self.root_ctx.layout.bars:
                 if _overlap(r, b[1]):
                     over = True
+        laid = self._bar_laid
+        laid = laid[0] == f and laid[1] == t      # the desk laid this text
+        if laid:
+            over = False
         if h[0] == t and h[1] == f - 1 and not over:
             h[2] += 1
         else:
             h[0] = t
             h[2] = 1
         h[1] = f
-        if h[2] <= self.retained_n():
+        if h[2] <= self.retained_n() and not laid:
             self._outside_f = f
             bar.redraw_clock("desk")
 
