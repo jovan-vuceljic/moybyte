@@ -2454,11 +2454,19 @@ input words, `MOY_UI_IN_REP` (four 8-bit direction counts) and
 frame, so the one-shot queue's zero frame between equal keys does not cap
 the rate.
 
-**One repeat, from one place.** The browser's page sends a key's down
-once, whatever the OS repeats (`e.repeat` dropped for every code); the
-host's and the browser's keyboards both reach `ConsoleDriver.key_down` and
-`key_up`, which hold the key's typing level, and the table repeats on every
-tier alike, on the frames' injected clock.
+**One repeat per key, the one its keyboard makes.** A keyboard that
+repeats nothing holds a level the table repeats: the T-Deck's matrix, a BLE
+keyboard, the simulator's keyboard (`ConsoleDriver.key_down` and `key_up`
+hold its typing level, on the frames' injected clock). The browser's
+keyboard repeats its own keys, so the table times none of them (2026-11-25):
+the page forwards each OS repeat as a `kd` with `rep`, the page's driver
+(`ConsoleDriver(ws, own_repeat=True)`) marks its source `own_repeat`
+(`moy_input_set_own_repeat`), and each repeat is one count at the next merge
+(`moy_input_add_steps`, `moy_input_add_key_repeats`), the counts every
+consumer reads. A keyup a busy page delivers late therefore repeats
+nothing; while the table timed the browser's keys, a key whose up came
+behind a long main-thread task typed itself again every period
+(`priiiiiiiintf` in a loaded preflight's Terminal).
 
 Where the level is not known the lever is `None`: the T-Deck keyboard in
 its ASCII fallback (an older keyboard firmware) types edges with no matrix,
