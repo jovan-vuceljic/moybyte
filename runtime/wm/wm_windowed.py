@@ -182,6 +182,11 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         self.root_ctx = _LayoutCtx.capture(ws)
         self._win_layer = _WindowStackLayer(self)
         self.windows = {}               # slot key -> _Win
+        # Where each window stood when a relayout dropped it, by kind: (its
+        # title strip's height, the scale it was built at; x, y, w, h; its
+        # restore rect where full screen). Its rebuild at the same scale
+        # stands there again (`_make_window`).
+        self._places = {}
         self._prewarm_failed = set()  # window kinds whose prewarm draw has been reported
         # Two orders of the same slots: `_kinds` is the back-stack's above the
         # desk (the order the windows opened in, which the chips keep), and
@@ -446,7 +451,9 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         mode switch stops there: it relayouts the bars and the root context and
         never drops a window. Anything else drops every window so it rebuilds
         at the new scale on the next frame, and releases the parked stamps,
-        which re-render at it on the way back to the desk."""
+        which re-render at it on the way back to the desk. A window rebuilt
+        at the same scale stands where it stood (`_places`): a theme switch
+        moves no window."""
         if self._ctx_switching:
             return                    # an internal (window-building) relayout
         if self._in_draw:
@@ -469,6 +476,12 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         if self.parked is not None:
             for win in self.parked.wins.values():
                 self._drop_win(win)
+        if self.windows:
+            # (a second relayout before the rebuild finds none, and keeps
+            # what the first kept)
+            self._places = {}
+            for win in self.windows.values():
+                self._places[win.kind] = (win.title_h, win.x, win.y, win.w, win.h, win.saved)
         self._drop_wins()
         self._kinds = []
         self.z_order = []
@@ -931,6 +944,15 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         fs = self._fs()
         w, h = self._open_size(key, fs)
         title_h = _layout_base.metric("title", fs)
+        place = self._places.pop(kind, None)
+        if place is not None and place[0] == title_h:
+            win = _Win(kind, place[1], place[2], place[3], place[4], title_h)
+            if place[5] is not None:
+                win.saved = place[5]
+                self._set_full(win)
+            self._build_content(win)
+            self.prewarm(win)
+            return win
         if key == "desktop" and self.play_intent == "dev":
             x, y = self._dev_place(w, h, fs)
         else:
