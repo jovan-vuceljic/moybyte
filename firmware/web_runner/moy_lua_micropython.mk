@@ -27,6 +27,8 @@ MOY_LUA_VM_SRCS := $(filter-out \
 	$(MOY_LUA_MOD_DIR)/lua/lutf8lib.c \
 	, $(wildcard $(MOY_LUA_MOD_DIR)/lua/*.c))
 SRC_USERMOD_LIB_C += $(MOY_LUA_VM_SRCS)
+# The VM's number reader (moy_strtof.c): one parser on every tier.
+SRC_USERMOD_LIB_C += $(MOY_LUA_MOD_DIR)/moy_strtof.c
 
 CFLAGS_USERMOD += -I$(MOY_LUA_MOD_DIR) -I$(MOY_LUA_MOD_DIR)/lua \
 	-Wno-ignored-pragma-optimize -Wno-unknown-pragmas

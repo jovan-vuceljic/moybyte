@@ -84,12 +84,22 @@ waits behind the cart's own data; it buys about a tenth of a cart tick for
 compiles usermods without it; `__XTENSA__` is the compiler's own. The P4
 (RISC-V) is untouched.
 
+## 5. `luaconf.h`: numbers are read by `moy_strtof`
+
+`lua_str2number` (and so `lua_strx2number`, which C99 defines as it) calls
+`moy_strtof`, declared there, in place of the C library's `strtof`. It is
+`native/moy_lua/moy_strtof.c`, beside this tree and compiled with it by every
+build that compiles the VM: a correctly rounded reader of decimal and hex
+numerals, since newlib's `strtof` rounds through a double and a match's two
+sides must read a cart's numerals to one float
+(`native/moy_kernel/README.md`, The float functions).
+
 ## Verifying
 
 ```bash
 curl -O https://www.lua.org/ftp/lua-5.4.7.tar.gz && tar xzf lua-5.4.7.tar.gz
 diff -u lua-5.4.7/src/lvm.c ./lvm.c        # the pragma block, plus item 4
-diff -u lua-5.4.7/src/luaconf.h ./luaconf.h # LUA_32BITS, plus item 4
+diff -u lua-5.4.7/src/luaconf.h ./luaconf.h # LUA_32BITS, plus items 4 and 5
 diff -u lua-5.4.7/src/lobject.c ./lobject.c # the pragma, plus items 0 and 3
 ```
 

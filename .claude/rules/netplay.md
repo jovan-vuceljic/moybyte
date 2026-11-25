@@ -47,7 +47,8 @@ belongs here is only what a coder must not undo:
   pair measures 1.8-2.3% at DELAY=1 while the P4 pair (whose C6-shim transport
   genuinely consumes the one-tick budget) escalates to 2 by ~6s and plays
   clean. The archived campaign's "Input latency" section carries the whole
-  measurement.
+  measurement. A match across a page opens at 50 ms rounded up to the tick
+  (`MOY_MATCH_PAGE_DELAY_MS`, 2026-11-25): its inputs cross a socket.
 - **The BLE keyboard's background scan owned most of a radio board's packet
   loss** -- interval==window was 100% radio duty, 5s on/5s off, costing the P4
   ~40% of inbound espnow at an idle desk while hiding from every blocking
