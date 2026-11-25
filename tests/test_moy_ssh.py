@@ -19,10 +19,15 @@ session served, whose terminal reads why, and is served in turn; a wrong
 password or a connection that never signs in ends nothing.
 """
 
+import fcntl
 import os
+import re
+import select
 import shutil
 import socket
+import struct
 import subprocess
+import termios
 import time
 
 import pytest
@@ -62,6 +67,10 @@ def _cflags():
 
 
 def _build(out):
+    """The server (ssh_main), and beside it ssh_main_plain: a board's with no
+    toolkit (the Zeros'), the console's palette not linked. (Their face's
+    12 KiB arena is a 32-bit board's: dash's blocks on this 64-bit host
+    need 14.)"""
     cc = shutil.which("cc")
     shell = [o for o in SH._objects(cc, str(out))
              if os.path.basename(o) not in ("sh_main.o", "board_main.o")]
@@ -80,10 +89,12 @@ def _build(out):
         procs.append(subprocess.Popen([cc] + f + ["-c", src, "-o", obj]))
         objs.append(obj)
     assert all(p.wait() == 0 for p in procs)
+    link = [cc] + SH.CFLAGS + ["-Wl,--gc-sections", "-Wl,--wrap=moy_tty_pair", "-Wl,--wrap=send"]
     exe = str(out / "ssh_main")
-    subprocess.run([cc] + SH.CFLAGS + ["-Wl,--gc-sections", "-Wl,--wrap=moy_tty_pair",
-                                       "-Wl,--wrap=send",
-                                       "-o", exe] + objs + shell
+    subprocess.run(link + ["-o", exe] + objs + shell
+                   + [seal_binding.archive(), "-lpthread"], check=True)
+    subprocess.run(link + ["-o", exe + "_plain"] + objs
+                   + [o for o in shell if os.path.basename(o) != "moy_ui_tables.o"]
                    + [seal_binding.archive(), "-lpthread"], check=True)
     return exe
 
@@ -376,6 +387,73 @@ def terminal(h, chunks):
         time.sleep(wait)
     out, _err = r.communicate(timeout=20)
     return out
+
+
+def sized_terminal(h, cols, rows, chunks):
+    """terminal()'s session from a terminal of `cols` x `rows` (a pty), which
+    the client's pty-req names; the session ends at its `exit`."""
+    master, slave = os.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+    r = subprocess.Popen(["ssh"] + options(h) + [
+        "-o", "PubkeyAuthentication=no", "-o", "PreferredAuthentications=password",
+        "-tt", "moy@127.0.0.1"], env=env_of(h, PASSWORD), stdin=slave, stdout=slave,
+        stderr=slave, start_new_session=True)
+    os.close(slave)
+    out = b""
+
+    def read_for(secs):
+        nonlocal out
+        end = time.monotonic() + secs
+        while time.monotonic() < end:
+            if select.select([master], [], [], 0.05)[0]:
+                try:
+                    out += os.read(master, 65536)
+                except OSError:         # the client has gone: its pty is closed
+                    return
+    try:
+        read_for(1.0)
+        for chunk, wait in chunks:
+            os.write(master, chunk)
+            read_for(wait)
+        r.wait(timeout=20)
+        read_for(0.2)
+    finally:
+        r.kill()
+        os.close(master)
+    return out
+
+
+def beside(out):
+    """neofetch's lines with the SGR left out, and the one that says Board."""
+    shown = re.sub(r"\x1b\[[0-9;]*m", "", out.decode("utf-8", "replace")).split("\r\n")
+    return shown, next(ln for ln in shown if "Board: " in ln)
+
+
+def test_neofetch_draws_moy_in_colour_beside_the_rows_from_44_columns(harness):
+    """Moy is 15 columns, three more to the rows: from 44 columns (the
+    T-Deck's Terminal) he stands beside them, as the client's pty-req sizes
+    the face; on 43 the rows go alone."""
+    out = sized_terminal(harness, 44, 30, [(b"neofetch\r", 1.0), (b"exit\r", 0.5)])
+    shown, board = beside(out)
+    assert board.index("Board: ") == 18 and "\u2588" in board[:15], shown
+    assert b"\x1b[38;2;" in out
+    out = sized_terminal(harness, 43, 30, [(b"neofetch\r", 1.0), (b"exit\r", 0.5)])
+    shown, board = beside(out)
+    assert board.startswith("Board: "), shown
+
+
+def test_without_a_toolkit_neofetch_draws_moy_plain_beside_the_rows(built, tmp_path):
+    """The Zeros' build (ssh_main_plain): no toolkit, so no palette, and Moy
+    is his outline beside the rows with nothing coloured."""
+    _out, exe = built
+    h = serve(exe + "_plain", tmp_path)
+    try:
+        out = sized_terminal(h, 80, 30, [(b"neofetch\r", 1.0), (b"exit\r", 0.5)])
+    finally:
+        end(h)
+    shown, board = beside(out)
+    assert board.startswith(" |         '--.   Board: "), shown
+    assert b"\x1b[38;2;" not in out and b"\x1b[48;2;" not in out
 
 
 def test_a_terminal_session_is_the_face_s_line_discipline(harness):

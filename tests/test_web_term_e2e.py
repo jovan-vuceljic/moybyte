@@ -166,6 +166,20 @@ def _typed(text):
     return [{"key": c} for c in text]
 
 
+def _neofetch(tag):
+    """neofetch run, its lines taken once its Shell row is up."""
+    return (_typed("clear; neofetch") + [{"key": "Enter"}, _says("Shell: moy_sh"),
+                                         _lines(tag)])
+
+
+def _beside(lines, word):
+    """Whether Moy stands left of the row that holds `word`: his 15 columns
+    (an ink in them), three blank, the row from the 18th."""
+    rows = [re.sub("\x1b\\[[0-9;]*m", "", ln) for ln in lines or []]
+    row = next((ln for ln in rows if word in ln), "")
+    return row.find(word) >= 18 and row[:18].strip() != "" and row[15:18] == "   "
+
+
 def _lost(key):
     """`key` down, then the window's blur before its up: HELD before the
     blur, LOST after it, each {held buttons, typing level}."""
@@ -213,7 +227,7 @@ def test_a_page_paired_by_the_qr_reloads_signed_in_and_its_terminal_is_sealed(
                   _prompt("PAIRED"), _lines("OPEN")]
                  + _typed("echo web-$((6*7))") + [{"key": "Enter"}, _says("web-42"),
                                                    _lines("ECHO")]
-                 + [{"shot": "term_board"}])
+                 + _neofetch("NF") + [{"shot": "term_board"}])
         out, js = _play(tmp_path, "term_board", base, steps, after=_qr_fragment(host))
         paired = _tagged(js, "PAIRED")
         assert paired and paired["keys"] == 1 and "#" not in paired["url"], (
@@ -222,6 +236,7 @@ def test_a_page_paired_by_the_qr_reloads_signed_in_and_its_terminal_is_sealed(
         assert "web-42" in "\n".join(_tagged(js, "ECHO")), (
             str(js) + _sides(host, tmp_path, out))
         assert int(host.stats()["in"]) > 0, "no key crossed the sealed socket"
+        assert _beside(_tagged(js, "NF"), "Board: host harness"), _tagged(js, "NF")
         # the same profile, no token: the stored key signs in, nothing typed;
         # then the board goes away, and the next connect says so
         gone = threading.Thread(target=_end_when, args=(host, "2"), daemon=True)
@@ -330,7 +345,8 @@ def test_the_site_s_terminal_runs_the_shell_on_the_browser_s_store(tmp_path):
     """The site's console: the session's root is the store's folder (/moy in
     the page), home its files; a run past its budget gives the tab back; a
     key let go late types once (the browser's repeat is the only one), and
-    a key held as the page loses the keyboard goes up."""
+    a key held as the page loses the keyboard goes up; neofetch draws Moy
+    beside its rows."""
     web_e2e.require("site_shell")
     port = web_e2e.free_port()
     p = subprocess.Popen([sys.executable, "serve.py", str(port), "dist_site"], cwd=RUNNER,
@@ -352,7 +368,8 @@ def test_the_site_s_terminal_runs_the_shell_on_the_browser_s_store(tmp_path):
                  + _lost("ArrowDown")
                  + _typed("cd; printf 'import sys\\nprint(sys.argv)\\n' > p.py; python p.py web;"
                           " printf '#!python\\nprint(6 * 7)\\n' > q.py; ./q.py")
-                 + [{"key": "Enter"}, {"wait": 1200}, _lines("PY")])
+                 + [{"key": "Enter"}, {"wait": 1200}, _lines("PY")]
+                 + _neofetch("NF"))
         _out, js = _play(tmp_path, "term_site", base, steps)
         ls = "\n".join(_tagged(js, "LS"))
         assert "/files" in ls and "carts/" in ls and "files/" in ls, ls
@@ -365,6 +382,7 @@ def test_the_site_s_terminal_runs_the_shell_on_the_browser_s_store(tmp_path):
         assert _tagged(js, "LOST") == {"held": [], "typing": 0}, _tagged(js, "LOST")
         py = "\n".join(_tagged(js, "PY"))
         assert "['p.py', 'web']" in py and "42" in py, py
+        assert _beside(_tagged(js, "NF"), "@moybyte"), _tagged(js, "NF")
     finally:
         p.terminate()
 

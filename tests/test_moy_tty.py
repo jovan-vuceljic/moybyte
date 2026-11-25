@@ -24,6 +24,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import struct
@@ -540,7 +541,8 @@ def test_a_command_whose_client_went_away_frees_the_face(host):
 
 def test_neofetch_twice_in_one_session_is_whole_both_times(host):
     """The spike's 379-byte stop: a hop's held output sent in pieces the
-    loopback dropped. Both runs end at the prompt, the same length."""
+    loopback dropped. Both runs end at the prompt, the same length, Moy
+    beside the rows."""
     ws = WS(host, cols=100, rows=30)
     ws.read_until(b"$ ")
     runs = []
@@ -549,6 +551,10 @@ def test_neofetch_twice_in_one_session_is_whole_both_times(host):
         runs.append(ws.read_until(b"$ ", 5.0))
     assert all(r.endswith(b"$ ") and b"host harness" in r for r in runs), runs
     assert len(runs[0]) == len(runs[1]), runs
+    # Moy in colour beside the rows: his body left of "Board" on 100 columns
+    shown = re.sub(r"\x1b\[[0-9;]*m", "", runs[0].decode()).split("\r\n")
+    board = next(ln for ln in shown if "Board: " in ln)
+    assert board.index("Board: ") == 18 and "\u2588" in board[:15], shown
     ws.close()
 
 
