@@ -136,6 +136,27 @@ def test_an_entry_past_its_bound_is_left_unread(monkeypatch):
     assert _read(MemNet({URL: repo.index()}), URL, "snake.moy")[0]["id"] == "snake"
 
 
+def test_a_read_that_runs_out_of_memory_gives_its_response_back(monkeypatch):
+    """The response is the transport's (a socket, its TLS buffers): a read
+    that raises MemoryError closes it, as one refused does."""
+    closed = []
+
+    class Net(MemNet):
+        def open(self, url):
+            r = MemNet.open(self, url)
+            r.close = lambda: closed.append(url)
+            return r
+
+    def full(self, b):
+        raise MemoryError
+    monkeypatch.setattr(ci._Scan, "feed", full)
+    job = ci.EntryRead(Net({URL: _repo().index()}), URL, "dm.moy")
+    with pytest.raises(MemoryError):
+        while job.step():
+            pass
+    assert closed == [URL] and job._resp is None
+
+
 def test_the_signature_with_keys_where_there_is_no_kernel(monkeypatch):
     """A page has no kernel: a signed index is unverified (None) unless the
     console's keys are given, which rsa_check's arithmetic checks."""

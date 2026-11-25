@@ -1417,7 +1417,7 @@ class Fetch:
                 if len(self._out) > self.limit:
                     raise InstallError(MISMATCH, "%s is larger than %d bytes"
                                        % (self.url, self.limit))
-        except InstallError:
+        except Exception:         # a MemoryError too: the response is the transport's to give back
             self.close()
             raise
         self.close()
@@ -1744,7 +1744,7 @@ class EntryRead:
                 if self._scan.size > INDEX_LIMIT:
                     raise InstallError(MISMATCH, "%s is larger than %d bytes"
                                        % (self.src, INDEX_LIMIT))
-        except InstallError:
+        except Exception:         # a MemoryError too: the response is the transport's to give back
             self.close()
             raise
         self.close()

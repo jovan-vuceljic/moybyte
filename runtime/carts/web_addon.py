@@ -1092,7 +1092,9 @@ class OfficialCarts:
 
     def _end(self, error):
         self._phase = None
-        self._fetch = None
+        if self._fetch is not None:
+            self._fetch.close()
+            self._fetch = None
         self._found = None
         self._urls = None
         self._job = None
