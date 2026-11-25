@@ -85,15 +85,25 @@ def audio_rate(hz):
 # (wasm GC pause, phone jank) and the lag of the sink's count, shallow enough
 # that a game sfx mixed into the stream isn't noticeably late.
 _AUDIO_TARGET = 0.12
-_AUDIO_MAX_STEP = 0.20      # bound one frame's top-up render (seconds)
+# The depth while the media service holds a stream (a station, a song), from
+# its first chunk on: the frames that start one are the console's heaviest
+# (the player's window and the bar's chip paint, the store's sweep of what it
+# saved, the decoder's first frames), and a slow machine stalls over them,
+# and now and then mid-stream, longer than _AUDIO_TARGET holds. Music is late
+# by nothing anyone hears; a game's sounds keep _AUDIO_TARGET. Within what a
+# 48 kHz context's decoded ring holds (moy_media.h, MOY_MEDIA_PCM_FRAMES), so
+# the first chunk never pulls the decoder dry.
+_AUDIO_MEDIA_TARGET = 0.25
+_AUDIO_MAX_STEP = 0.25      # bound one frame's top-up render (seconds)
 
 
 class _RunnerPump(PcmPump):
     """The page's pull of the kernel's mix, by count: the page's sink reports
     the samples it has played (`played`, step_frame_json's), the pull knows
     the ones it sent, and tick() renders what tops the difference up to
-    _AUDIO_TARGET, so the stream is taken at the sink's own rate, a late
-    frame eats depth and never the stream. Every sample rendered is sent, in
+    _AUDIO_TARGET (_AUDIO_MEDIA_TARGET while a station or a song plays),
+    so the stream is taken at the sink's own rate, a late frame eats depth
+    and never the stream. Every sample rendered is sent, in
     order (`at` counts them), so the sink can tell an underrun from a gap.
     With no sink (`played` < 0) it renders rate*dt and sends nothing.
     Nothing is rendered while nothing sounds; the first chunk after that is
@@ -116,6 +126,7 @@ class _RunnerPump(PcmPump):
         self.at = 0                 # the samples take() handed over: the first's index
         self.starts = False         # and whether they start a stream
         self._target = int(out * _AUDIO_TARGET)
+        self._media = int(out * _AUDIO_MEDIA_TARGET)
         self._cap = int(out * _AUDIO_MAX_STEP)
         self._buf = bytearray(self._cap * 2 + 64)
         self._mv = memoryview(self._buf)
@@ -126,7 +137,8 @@ class _RunnerPump(PcmPump):
             self.idle = True
             return
         if self.played >= 0:
-            n = self._target - (self.sent + self.n - self.played)
+            lead = self._media if _media_open() else self._target
+            n = lead - (self.sent + self.n - self.played)
             if n > self._cap:
                 n = self._cap
         else:

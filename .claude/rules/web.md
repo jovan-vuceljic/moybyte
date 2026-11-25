@@ -534,7 +534,10 @@ nor those docs will warn you about:
   by a depth that did not count them, drained a live stream faster than real
   time until the decoder starved (the owner's stutter on the P4-served desk,
   2026-11-10). The pull tops the sink's depth up by COUNT (`_RunnerPump`:
-  samples sent against the sink's `played`); a dry sink plays silence and
+  samples sent against the sink's `played`), a station or a song deeper
+  than a game's sounds (`_AUDIO_MEDIA_TARGET`, from its first chunk): the
+  frames that start one are the console's heaviest, and a slow machine
+  outlasted the game's depth over them; a dry sink plays silence and
   counts it (`__moyState().sink`: `under`, `dry`, `gap`, `dup`, `over`),
   and its longest wait between chunks (`lull`) stands beside the worker
   loop's longest frame, step, collect, send and count (`__moyState().loop`),
