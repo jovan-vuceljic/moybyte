@@ -650,8 +650,7 @@ class StatusMenu(_Rows):
 
 def component_for(ws, widget):
     """The component a bar widget opens (§8's table, fixed per widget); none
-    for the wifi widget of a console with no radio (the browser page), whose
-    glyph draws nothing (`Workstation.wifi_icon_kind`)."""
+    for the wifi widget of a console with no radio (the browser page)."""
     if widget == "clock":
         return MonthView(ws)
     if widget == "wifi":

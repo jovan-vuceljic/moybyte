@@ -1703,10 +1703,24 @@ class Appearance:
         refused, bars, _home = self._theme_layout(self.layout_theme() or self.theme_name)
         notes = ("the theme's layout was refused",) if refused else ()
         root = getattr(wm, "root_canvas", None) or ws.sys_canvas
-        return _shell_layout.resolve(
+        bars, notes = _shell_layout.resolve(
             bars, self._theme_layout(DEFAULT_THEME)[1], root.w, root.h,
             self.effective_chrome_scale(), wm.layout_catalogue(), wm.LAYOUT_EDGES,
             _ui_text_w, notes)
+        return self._radio_bars(bars), notes
+
+    def _radio_bars(self, bars):
+        """`bars` with no `wifi` widget where the console has no radio (the
+        browser page): the widget is not laid out at all, so no cell, no
+        glyph and no tap. (The boot's bars keep it: the radio is wired after
+        them, and the first `apply_layout` resolves with it known.)"""
+        if getattr(self.ws, "wifi", None) is not None:
+            return bars
+        out = []
+        for bar in bars:
+            out.append(bar[:2] + tuple(tuple(w for w in part if w != "wifi")
+                                       for part in bar[2:5]) + bar[5:])
+        return tuple(out)
 
     def boot_bars(self):
         """The default theme's bars resolved for this tier's WM: the bars a
