@@ -395,14 +395,9 @@ WIRING = {
         "carts_store": INJECTED,
         "carts_root": INJECTED,
         "can_manage": INJECTED,
-        "wifi": "a page has no radio. It wired the SIMULATOR's FakeWifi until\n"
-                "                 2026-08-30 -- four invented access points and a\n"
-                "                 192.168.1.42 -- which is a stand-in on a laptop and a LIE\n"
-                "                 on a board-served page: on the headless Zero this panel is\n"
-                "                 the only WIFI screen that board has, and it offered networks\n"
-                "                 that do not exist. Absent now, like every other capability a\n"
-                "                 tier lacks. A real one would be a bridge to the board's own\n"
-                "                 service, as gpio_link and update_link are.",
+        # The serving Zero's own station (wifi_link.BoardWifi over its /wifi),
+        # where the worker's probe answered; None on any other page.
+        "wifi": INJECTED,
         "pointer": INJECTED,
         "keyboard": "browser key events arrive through web_input as InputState, "
                     "not as a device keyboard object with a mode command",

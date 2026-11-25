@@ -365,7 +365,10 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     # The board-agnostic service wiring, in the one canonical order (host + both
     # boards + this runner).
     #
-    # NO WIFI SERVICE, and that is the honest answer rather than a missing one.
+    # THE WIFI SERVICE is the serving Zero's own, where the worker's probe of
+    # its sealed /wifi answered (`wifi_enable`, wifi_link.BoardWifi): the
+    # panel, the bar's glyph and the Settings row are that board's. Anywhere
+    # else there is NONE, and that is the honest answer rather than a missing one.
     # This wired host_api's FakeWifi until 2026-08-30 -- the SIMULATOR's stand-in,
     # whose whole job is to invent four access points ("Home WiFi", "Coffee
     # Shop", "Neighbor 5G", "Library Guest") and a 192.168.1.42 so the desktop's
@@ -380,7 +383,7 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     # board's own service (as gpio_link and update_link are), not a fake.
     console.wire_workstation_core(
         ws, moy_carts, carts_root, _make_api,
-        None,
+        _S.get("wifi"),
         audio_out=_RunnerPump(), runtimes=runtimes, can_manage=True,
         pointer=console.Pointer(sysc.w, sysc.h), inp=inp, first_variant=scheme)
     # AUTHORING IS ON, BOTH TIERS (owner call): the browser build is the whole
@@ -1584,6 +1587,47 @@ def update_enable(status_json):
     if _S["ws"].cart_home is not None and not doc.get("screen"):
         _S["ws"].cart_home = "headless"
     return ""
+
+
+def wifi_enable(doc_json):
+    """The serving board answered the /wifi probe: its Wi-Fi is the
+    console's (wifi_link.BoardWifi). Before `boot`, which wires it as the
+    console's station, so the bar lays its glyph out from the first frame."""
+    try:
+        doc = json.loads(doc_json)
+    except Exception:                # noqa: BLE001 -- a garbled probe answer
+        return ""
+    if not isinstance(doc, dict) or "connected" not in doc:
+        return ""
+    try:
+        from wifi_link import BoardWifi
+        _S["wifi"] = BoardWifi(doc)
+    except Exception as exc:         # noqa: BLE001 -- never block a boot
+        print("wifi unavailable:", exc)
+    return ""
+
+
+def wifi_poll_json():
+    """The next request for the worker to POST to /wifi, or ""."""
+    w = _S.get("wifi")
+    return w.take_json() if w is not None else ""
+
+
+def wifi_wants_poll():
+    """True when the worker should GET /wifi now."""
+    w = _S.get("wifi")
+    return bool(w is not None and w.wants_poll())
+
+
+def wifi_ack_json(ok, text=""):
+    """Settle the request or poll in flight with the board's document;
+    what the worker must know back (BoardWifi.ack), or ""."""
+    w = _S.get("wifi")
+    if w is None:
+        return ""
+    out = w.ack(bool(ok), text or "")
+    _S["ws"].mark_dirty()
+    return out
 
 
 def official_enable():

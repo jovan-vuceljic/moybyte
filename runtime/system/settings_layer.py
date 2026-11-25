@@ -765,9 +765,37 @@ class SettingsLayer(Layer):
 
     def _wifi_connect(self, ssid, pw, locked=False):
         """Ask the service to join `ssid` and return at once: the verdict is
-        the join's to give (`_wifi_settle`), now or when the poll sees it."""
+        the join's to give (`_wifi_settle`), now or when the poll sees it.
+        A station whose join moves what this page reaches the console over
+        (a Zero's, `switch_says`) asks first, and offers to save a network
+        it has not saved instead."""
         ws = self.ws
         self.wifi_pick = None
+        w = self._wifi.station()
+        says = getattr(w, "switch_says", None) if w is not None else None
+        card = says(ssid) if says is not None else None
+        if card is not None:
+            save = None
+            if pw and ssid not in self.wifi_known:
+                save = lambda: self._wifi_save(ssid, pw)       # noqa: E731
+            ws.confirm.ask_switch(card[0], card[1], lambda: self._wifi_join(ssid, pw, locked),
+                                  save)
+            return None
+        return self._wifi_join(ssid, pw, locked)
+
+    def _wifi_save(self, ssid, pw):
+        """Save `ssid` with the station, joining nothing."""
+        w = self._wifi.station()
+        try:
+            w.save(ssid, pw)
+            self.wifi_known = list(w.known())
+            self.wifi_msg = ("Saved " + str(ssid))[:34]
+        except Exception as exc:  # noqa: BLE001
+            self.wifi_msg = ("Save failed: " + str(exc))[:34]
+        self.ws.mark_dirty()
+
+    def _wifi_join(self, ssid, pw, locked):
+        ws = self.ws
         w = self._wifi.station()
         try:
             join = getattr(w, "join", None) if w is not None else None
@@ -796,12 +824,18 @@ class SettingsLayer(Layer):
             else ("That password didn't work." if pw
                   else "Couldn't connect.")
         w = self._wifi.station()
+        card = None
         if w is not None:
             try:
                 self.wifi_known = list(w.known())
             except Exception:  # noqa: BLE001
                 pass
-        if not ok and locked and not pw:
+            says = getattr(w, "join_says", None)
+            card = says() if says is not None else None
+        if card is not None:
+            self.wifi_msg = card[0][:34]
+            ws.confirm.tell(card[0], card[1])
+        elif not ok and locked and not pw:
             self._wifi_ask(ssid)
         addon = getattr(ws, "addon", None)
         if ok and addon is not None:
