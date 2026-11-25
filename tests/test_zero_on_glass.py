@@ -981,13 +981,27 @@ def test_cat_of_a_64_kb_file_arrives_whole(zero, ssh):
     _heap(zero, "after cat of 64 KB")
 
 
-def test_a_second_ssh_session_ends_the_first(zero, ssh):
-    """Owner, 2026-11-25: one session at a time, the newest. A second
-    session signs in and runs; the first is ended."""
+SSH_TAKEN = b"another session signed in; this one is closing"
+
+
+def test_a_second_ssh_session_ends_the_first(zero, ssh, tmp_path):
+    """Owner, 2026-11-25: one session at a time, the newest. A wrong
+    password and a connection that never signs in (held past the server's
+    30 s sign-in timeout) end nobody; a second session that signs in runs,
+    and the first reads why it closes and is ended."""
+    import socket
     a, _f = _session(ssh, zero)
     b = None
     try:
         assert b"one" in (a.command("echo one") or b"")
+        wrong = Z.Ssh(_host(zero), "not-" + zero.password, str(tmp_path / "wrong"))
+        rc, _o, _e = wrong.run("echo in", timeout=60)
+        assert rc != 0, "a wrong password signed in"
+        with socket.create_connection((_host(zero), 22), timeout=10):
+            time.sleep(35)
+        said = a.command("echo still-one")
+        assert a.alive() and said is not None and b"still-one" in said, \
+            "a session that did not sign in ended the one signed in: %r" % a.since(0)[-300:]
         b, _f = _session(ssh, zero)
         said = b.command("echo two")
         assert said is not None and b"two" in said, "the second session: %r" % b.since(0)[-300:]
@@ -997,6 +1011,8 @@ def test_a_second_ssh_session_ends_the_first(zero, ssh):
         print("%s: the first session %s once the second signed in: %r"
               % (zero.name, "ended" if not a.alive() else "ran on", a.since(0)[-200:]))
         assert not a.alive(), "the first session ran on beside the second"
+        assert SSH_TAKEN in a.since(0), "the first session was not told why: %r" % \
+            a.since(0)[-300:]
         _still_up(zero, b)
     finally:
         a.close()
@@ -1418,43 +1434,49 @@ def folder_of_title(title):
     return _folder_of(title).name
 
 
-# A visible control whose text offers the session back (owner, 2026-11-25:
-# a new sign-in disconnects the previous browser, whose page says so with a
-# button that takes the session back); `%s` 0 to find it, 1 to press it.
-TAKE_BACK = """(function (press) {
-  var all = document.querySelectorAll('button, a, [role=button], input[type=button]');
-  for (var i = 0; i < all.length; i++) { var b = all[i];
-    if (b.offsetParent !== null && /take/i.test(b.textContent || b.value || '')) {
-      if (press) b.click(); return (b.textContent || b.value).trim(); } }
-  return false; })(%d)"""
-# What a page shows once it lost the session: the button that takes it
-# back (false with none) and every visible text.
-TOLD = ("'%s ' + JSON.stringify({button: " + TAKE_BACK % 0 + ", said: Array.prototype.slice"
-        ".call(document.querySelectorAll('body *')).filter(function (e) { return "
-        "e.offsetParent !== null && !e.children.length && e.textContent.trim(); })"
-        ".map(function (e) { return e.textContent.trim(); }).slice(0, 60)})")
+# What a page shows once another browser took its board (owner, 2026-11-25;
+# worker.js TAKEN): the card says so and offers it back, its field hidden,
+# and the status reads disconnected. `%s` the tag.
+TAKEN_SAYS = "Another browser signed in to this console, so this one was disconnected."
+DISCONNECTED = ("(function () { var b = document.getElementById('pinb'); return "
+                "document.getElementById('s').textContent == 'disconnected' && !!b && "
+                "b.offsetParent !== null && b.textContent == 'take it back'; })()")
+TOLD = ("'%s ' + JSON.stringify({h: document.getElementById('pinh').textContent, "
+        "p: document.getElementById('pinp').textContent, "
+        "b: document.getElementById('pinb').textContent, "
+        "f: getComputedStyle(document.getElementById('pinf')).display, "
+        "s: document.getElementById('s').textContent})")
+LIVE_OPEN = ("window.__moyState().then(function (s) { return !!(s.live && s.live.opens && "
+             "document.getElementById('s').textContent == 'live'); })")
+
+
+def _told(got):
+    """What is wrong with a page's card once its board was taken, or None."""
+    want = {"h": "disconnected", "p": TAKEN_SAYS, "b": "take it back", "f": "none",
+            "s": "disconnected"}
+    return None if got == want else "it shows %s, not %s" % (got, want)
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 def test_a_second_browser_signing_in_displaces_the_first(zero, mirror, ssh, tmp_path):
-    """Two browsers on one board (owner, 2026-11-25): the second signs in,
-    syncs a cart and holds the live socket; the first is disconnected and
-    its page says so with a button that takes the session back, which
-    then displaces the second the same way."""
+    """Two browsers on one board (owner, 2026-11-25): the second pairs and
+    signs in, syncs a cart and holds the live socket; the first is
+    disconnected, its page says so with a button that takes the board back,
+    and it does not reconnect by itself; pressed, the button takes the
+    board back and the second page shows the card in turn."""
     archive, folder, content = _bench_cart(tmp_path, "second", "Zero Bench Second")
     query = "?dev=1&desktop=1"
-    live = ("window.__moyState().then(function (s) { return !!(s.live && s.live.opens && "
-            "document.getElementById('s').textContent == 'live'); })")
     first = sign_in(zero) + [
-        {"waitFor": live, "timeout": 120000}, {"js": STATE % "A_LIVE"},
-        {"waitFor": TAKE_BACK % 0, "timeout": 240000},
-        {"js": TOLD % "A_TOLD"}, {"shot": "a_told"},
-        {"js": TAKE_BACK % 1}, {"waitFor": live, "timeout": 120000},
-        {"js": STATE % "A_BACK"}, {"wait": 30000},
+        {"waitFor": LIVE_OPEN, "timeout": 120000}, {"js": STATE % "A_LIVE"},
+        {"waitFor": DISCONNECTED, "timeout": 240000},
+        {"js": TOLD % "A_TOLD"}, {"js": STATE % "A_TAKEN"}, {"shot": "a_told"},
+        {"wait": 15000}, {"js": STATE % "A_STILL"},
+        {"js": "document.getElementById('pinb').click(), 1"},
+        {"waitFor": LIVE_OPEN, "timeout": 120000}, {"js": STATE % "A_BACK"}, {"wait": 30000},
     ]
-    second = sign_in(zero) + [{"waitFor": live, "timeout": 120000}, {"js": STATE % "B_LIVE"}] + \
-        _import_steps("B_SYNCED") + [
-        {"waitFor": TAKE_BACK % 0, "timeout": 120000},
+    second = sign_in(zero) + [{"waitFor": LIVE_OPEN, "timeout": 120000},
+                              {"js": STATE % "B_LIVE"}] + _import_steps("B_SYNCED") + [
+        {"waitFor": DISCONNECTED, "timeout": 180000},
         {"js": TOLD % "B_TOLD"}, {"shot": "b_told"},
     ]
     import threading
@@ -1475,19 +1497,24 @@ def test_a_second_browser_signing_in_displaces_the_first(zero, mirror, ssh, tmp_
         if "thread" in got:
             got["thread"].join(timeout=900)
         b = got.get("b", "")
-        print("%s: the first page %s; told %s; back %s | the second %s, synced %s, told %s"
-              % (zero.name, _tagged(a, "A_LIVE"), _tagged(a, "A_TOLD"), _tagged(a, "A_BACK"),
-                 _tagged(b, "B_LIVE"), _tagged(b, "B_SYNCED"), _tagged(b, "B_TOLD")))
-        assert _tagged(a, "A_LIVE"), "the first browser did not go live:\n" + a[-1500:]
-        assert _tagged(b, "B_LIVE"), "the second browser did not sign in:\n" + b[-1500:]
-        assert folder in (_tagged(b, "B_SYNCED") or "") and not _differs(ssh, folder, content), \
+        t = {k: _tagged(a, k) for k in ("A_LIVE", "A_TOLD", "A_TAKEN", "A_STILL", "A_BACK")}
+        t.update({k: _tagged(b, k) for k in ("B_LIVE", "B_SYNCED", "B_TOLD")})
+        print("%s: two browsers: %s" % (zero.name, json.dumps(
+            {k: (v.get("live") if isinstance(v, dict) and "live" in v else v)
+             for k, v in t.items()})))
+        assert t["A_LIVE"], "the first browser did not go live:\n" + a[-1500:]
+        assert t["B_LIVE"], "the second browser did not sign in:\n" + b[-1500:]
+        assert folder in (t["B_SYNCED"] or "") and not _differs(ssh, folder, content), \
             "the second browser's cart did not reach the board"
-        told = _tagged(a, "A_TOLD") or {}
-        assert told.get("button"), "the first page was not told it lost the session " \
-            "(no button that takes it back); it shows %s" % told.get("said")
-        back = _tagged(b, "B_TOLD") or {}
-        assert back.get("button"), "the second page was not told when the first took the " \
-            "session back; it shows %s" % back.get("said")
+        assert t["A_TOLD"] and not _told(t["A_TOLD"]), \
+            "the first page, its board taken: %s" % _told(t["A_TOLD"])
+        opens = lambda k: ((t[k] or {}).get("live") or {}).get("opens") or 0  # noqa: E731
+        assert opens("A_STILL") == opens("A_TAKEN"), \
+            "the first page reconnected by itself: %s -> %s" % (opens("A_TAKEN"), opens("A_STILL"))
+        assert t["A_BACK"] and opens("A_BACK") > opens("A_STILL"), \
+            "the first page did not take the board back: %s" % t["A_BACK"]
+        assert t["B_TOLD"] and not _told(t["B_TOLD"]), \
+            "the second page, its board taken back: %s" % _told(t["B_TOLD"])
     finally:
         if "thread" in got:
             got["thread"].join(timeout=900)
