@@ -793,6 +793,19 @@ static void bind_peer(moy_match_t *m, const uint8_t mac[6]) {
     m->s.bound = true;
 }
 
+// The delay a match opens at, once its rate is set: MOY_MATCH_PAGE_DELAY_MS
+// across a page (moy_match.h), else MOY_MATCH_DELAY.
+static void open_delay(moy_match_t *m, const uint8_t mac[6]) {
+    const moy_match_peer_t *p = peer_of(m, mac);
+    if (strcmp(m->board, MOY_MATCH_PAGE_BOARD) != 0
+            && (p == NULL || strcmp(p->board, MOY_MATCH_PAGE_BOARD) != 0)) {
+        return;
+    }
+    moy_lockstep_t *s = &m->s;
+    int d = (MOY_MATCH_PAGE_DELAY_MS * (int)s->tick_hz + 999) / 1000;
+    s->delay = d > s->delay_max ? s->delay_max : d;
+}
+
 // The live match's peer (WHO IS HEARD in moy_match.h).
 static bool from_partner(const moy_match_t *m, const uint8_t mac[6]) {
     return m->s.live && m->s.bound && memcmp(mac, m->s.peer_mac, 6) == 0;
@@ -842,6 +855,7 @@ static int host(moy_match_t *m, const moy_match_peer_t *p, bool has_seed, uint32
     moy_lockstep_begin(m, 0, seed, m->session_id, cfg_or_null(m->cfg));
     bind_peer(m, p->mac);
     moy_lockstep_rate(m, f[14]);
+    open_delay(m, p->mac);
     m->s.hold = m->hold;
     m->state = 2;
     if (relaunch) {
@@ -1023,6 +1037,7 @@ static void on_start(moy_match_t *m, const uint8_t mac[6], const uint8_t *msg, s
     }
     bind_peer(m, mac);
     moy_lockstep_rate(m, hz);
+    open_delay(m, mac);
     m->state = 2;
     ask(m, cart);
 }

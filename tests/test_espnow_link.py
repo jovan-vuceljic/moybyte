@@ -302,6 +302,31 @@ def test_the_host_names_the_tick_and_the_guest_takes_it():
         assert a.stats()["match"]["hz"] == hz
 
 
+def test_a_match_across_a_page_opens_at_the_page_s_delay():
+    """Either side of a match whose other side is a page (board "web", the
+    browser console's) opens at MOY_MATCH_PAGE_DELAY_MS rounded up to the
+    tick: its inputs cross the board's socket, which one tick does not cover.
+    Two consoles open at one tick."""
+    for page, fps, hz, delay in ((False, None, 30, 1), (True, None, 30, 2),
+                                 (True, "free", 60, 3)):
+        air, clock = _Air(), _Clock()
+        a = _link(air, clock, b"\x01" * 6, "tdeck", "Ada", lambda ws, title: True)
+        b = _link(air, clock, b"\x02" * 6, "web" if page else "guition_s3", "Bo",
+                  lambda ws, title: True)
+        a.announce("Brick Siege", 0, fps=fps)
+        b.announce("Brick Siege", 0, fps=fps)
+        clock.advance(10)
+        a.poll()
+        b.poll()
+        a.state = b.state = 1
+        wsa, wsb = _Ws(), _Ws()
+        assert a.offer(wsa, "Brick Siege")
+        b.poll(wsb)
+        for side in (a, b):
+            m = side.stats()["match"]
+            assert (m["hz"], m["delay"]) == (hz, delay), (page, side.board, m)
+
+
 def test_a_free_console_finds_a_peer_pinned_to_its_aps_channel():
     """SSH holds a console's station on its AP, and ESP-NOW is heard only on
     the channel it is sent on: the pinned console cannot move, so the free
