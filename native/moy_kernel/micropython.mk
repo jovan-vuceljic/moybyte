@@ -43,6 +43,10 @@ SRC_USERMOD_LIB_C += $(addprefix lib/libm/,$(MOY_LIBM))
 MOY_LIBM_O := $(addprefix $(BUILD)/lib/libm/,$(MOY_LIBM:.c=.o))
 $(MOY_LIBM_O): CFLAGS += -ffp-contract=off -include $(MOY_KERNEL_DIR)/moy_libm.h \
     -Wno-sign-compare -Wno-double-promotion -Wno-typedef-redefinition -Wno-unknown-warning-option
+# log2 is the math module's own, log(x) times 1/ln 2, and not the C library's.
+CFLAGS_USERMOD += -DMP_NEED_LOG2=1
+# A build tree made before these flags compiles its objects again.
+$(MOY_LIBM_O) $(BUILD)/py/modmath.o: $(MOY_KERNEL_DIR)/micropython.mk
 # A generated face (gen_os, *_face.h) holds names only its includer uses, and
 # the qstr pass re-scans a source only when that source changed: a face that
 # changes alone re-scans every source, as a QSTR_GLOBAL_DEPENDENCIES entry.

@@ -1078,3 +1078,6 @@ def test_every_tier_takes_one_libm_without_fused_multiply_adds():
     assert names and names == cmake_list.split()
     assert "-ffp-contract=off" in mk.split("MOY_LIBM_O):", 1)[1].splitlines()[0]
     assert re.search(r"target_compile_options\(moy_libm PRIVATE[^)]*-ffp-contract=off", cmake)
+    # log2 is the math module's own on every tier, not the C library's.
+    assert "INTERFACE MP_NEED_LOG2=1)" in cmake
+    assert "CFLAGS_USERMOD += -DMP_NEED_LOG2=1" in mk

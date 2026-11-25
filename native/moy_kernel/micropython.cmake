@@ -90,5 +90,8 @@ target_compile_options(moy_libm PRIVATE
     "${_moy_libm_opts}" ${_moy_libm_copts} -ffp-contract=off -Wno-sign-compare
     -Wno-maybe-uninitialized)
 target_link_libraries(usermod_moy_kernel INTERFACE moy_libm)
+# log2 is the math module's own, log(x) times 1/ln 2 (micropython.mk says
+# it for the unix and webassembly ports).
+target_compile_definitions(usermod_moy_kernel INTERFACE MP_NEED_LOG2=1)
 
 target_link_libraries(usermod INTERFACE usermod_moy_kernel)

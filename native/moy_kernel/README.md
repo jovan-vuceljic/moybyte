@@ -93,8 +93,10 @@ tier links one set in their place, the kernel's: MicroPython's own `lib/libm`
 (fdlibm's float functions by way of newlib-nano, and musl's), the files
 `micropython.mk` and `micropython.cmake` both list. The trigonometric,
 inverse trigonometric, exponential, logarithmic, power, hyperbolic, error and
-gamma functions are taken; `sqrt`, `fmod`, `floor` and the other exact
-functions are the C library's, since IEEE rounding leaves them one answer.
+gamma functions are taken; `log2` is the math module's own, `log` times
+1/ln 2 (`MP_NEED_LOG2`, which both build files define); `sqrt`, `fmod`,
+`floor` and the other exact functions are the C library's, since IEEE
+rounding leaves them one answer.
 
 The set is compiled with `-ffp-contract=off`: the S3's and the P4's FPUs
 have a fused multiply-add, which rounds once where the source rounds twice,
