@@ -693,14 +693,13 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             self._focus = vid("TRY AGAIN")
         else:
             self._recover()
+            self.cur = None           # a visit starts on the shelf's first card
             fresh = (self.fetched_at is not None
                      and _ticks_diff(_ticks_ms(), self.fetched_at) < REFRESH_MS)
             if self.carts and fresh:
                 self._covers = self._covers_to_fetch(self.carts)
                 self._build_rows()
-                self._go("list")
-                if self.rows:
-                    self._focus = self._card_id(self.rows[0])
+                self._land()
             else:
                 self._check()
         super().open()
@@ -754,6 +753,17 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         elif phase in BUSY or phase == "pick":
             self._focus = _NOWHERE            # Cancel is B's or a tap's, never Enter's
         self._damage.all()
+
+    def _land(self):
+        """The shelf, the keys on the card `cur` names, else on the first:
+        where an open and a check end. That card is `cur`, so the focus
+        landing on it moves nothing: on the desk the pane shows it beside
+        the shelf, and its page opens only when the player picks a card."""
+        self._go("list")
+        if self.rows:
+            if self.cur is None:
+                self.cur = self.rows[0]
+            self._focus = self._card_id(self.cur)
 
     def _focus_go(self):
         """Focus on the cart's page's verb that goes on (the last)."""
@@ -997,7 +1007,7 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             self._release()
         yield
         yield from self._rows_steps(CHECK_MS)
-        self._go("list")
+        self._land()
         if self.rows:
             self._focus = self._card_id(self.cur if self.cur in self.rows else self.rows[0])
 
