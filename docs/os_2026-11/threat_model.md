@@ -104,11 +104,13 @@ as no password. Keys in `authorized_keys` sign in too, and
 the console's one account, a connection gets five tries, and forwarding of
 every kind is compiled out (`native/moy_ssh/port/localoptions.h`). Signing in
 is being the owner: the shell and every command, the whole files tree over
-SFTP, and `/etc`, which is `system/`. What it does not stop: one connection
-is served at a time, so a connection that never signs in holds SSH for
-`AUTH_TIMEOUT`, 30 s (`native/moy_ssh/port/localoptions.h`; Dropbear's own is
-300); and a weak password falls to guessing against a copied record, 32,768
-rounds a guess, which a GPU does fast.
+SFTP, and `/etc`, which is `system/`. One session is served at a time, and a
+new connection that signs in ends it (owner, 2026-11-25); one that does not
+sign in ends nothing. What it does not stop: a connection that never signs in
+holds the one place beside the session served for `AUTH_TIMEOUT`, 30 s
+(`native/moy_ssh/port/localoptions.h`; Dropbear's own is 300), so a second
+sign-in waits behind it; and a weak password falls to guessing against a
+copied record, 32,768 rounds a guess, which a GPU does fast.
 
 **The webhost and the sync RPC.** The web console is a Settings switch, off
 at boot (`runtime/system/web_console.py`). A browser pairs once, by the
@@ -236,7 +238,8 @@ What holds less than a reader would assume. Each is how the code stands.
 
 - **Multiplayer and keyboards trust the air** (§5): the sender's address is
   all a match checks, and a keyboard's first pairing is Just Works.
-- **SSH is one connection at a time** (§4).
+- **SSH is one session at a time** (§4): the newest sign-in ends the one
+  before it.
 - **A runaway wasm loop** that calls no import cannot be stopped short of its
   return or a restart (`native/moy_wasm/README.md`).
 

@@ -244,6 +244,64 @@ def test_a_card_that_mounts_but_cannot_be_seeded_falls_back_too(vfs, capsys):
     assert "SD carts unavailable" in out and "from flash" in out
 
 
+# -- what the desk is told ------------------------------------------------------
+
+
+class _DamagedStore(_Store):
+    """A card whose store directory holds a damaged entry: its listing raises
+    as the Elecrow's did (a name that is no UTF-8)."""
+
+    def catalogue(self, root):
+        self.calls.append(("catalogue", root))
+        if root == SD_ROOT:
+            raise UnicodeError("invalid utf-8 in a directory name")
+        return [{"title": "a"}]
+
+
+def _trouble(make_card, store, capsys):
+    """The boot's `card_trouble` after the loader ran, and where it landed."""
+    boot = device_boot.DeviceBoot(_Canvas(), _Comp(), None, "Board")
+    _carts, root, _ota = card_store.carts_loader(make_card, [{"title": "seed"}],
+                                                 SD_ROOT, FLASH_ROOT, OTA)(boot, store)
+    capsys.readouterr()
+    return boot.card_trouble, root
+
+
+def _no_card():
+    raise OSError("card_init failed")
+
+
+def _ebusy():
+    raise OSError(16)
+
+
+def _enodev():
+    raise OSError(19)
+
+
+def test_a_working_card_tells_the_desk_nothing(vfs, capsys):
+    assert _trouble(_Card, _Store(), capsys) == (None, SD_ROOT)
+
+
+@pytest.mark.parametrize("make", [_no_card, _ebusy], ids=["card_init", "ebusy"])
+def test_an_empty_slot_tells_the_desk_nothing(vfs, capsys, make):
+    assert _trouble(make, _Store(), capsys) == (None, FLASH_ROOT)
+
+
+def test_a_filesystem_this_build_cannot_read_is_the_format_verdict(vfs, capsys):
+    assert _trouble(_enodev, _Store(), capsys) == ("format", FLASH_ROOT)
+    vfs.error = OSError(19)
+    assert _trouble(_Card, _Store(), capsys) == ("format", FLASH_ROOT)
+
+
+@pytest.mark.parametrize("store", [_DamagedStore(), _Store(dead={SD_ROOT})],
+                         ids=["listing", "dirs"])
+def test_a_mounted_card_whose_store_fails_is_the_errors_verdict(vfs, capsys, store):
+    trouble, root = _trouble(_Card, store, capsys)
+    assert (trouble, root) == ("errors", FLASH_ROOT)
+    assert ("seed", SD_ROOT) not in store.calls, "a card whose store failed is never seeded"
+
+
 # -- the P4 boards ---------------------------------------------------------
 
 P4_BOARDS = [

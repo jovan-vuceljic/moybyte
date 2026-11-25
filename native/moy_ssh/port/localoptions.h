@@ -85,12 +85,13 @@
 // the client's first bytes, is a block of the internal heap a session has
 // little of (the C3 Zero's interactive session ended at its first key).
 // There the packets the server sends are at most 2 KB too: the payload
-// buffer of that size is held for the whole session, each packet is a block
-// its size, and the queue to the client takes about three before the server
-// stops reading the face (common-session.c); Dropbear's 16 KB held 16 KB
-// from the sign-in on and let the queue reach 48 KB. The largest packet
-// besides a channel's data is the key exchange's, well under 2 KB with
-// curve25519 and an ed25519 key.
+// buffer of that size is held for the whole session (and a second one by a
+// sign-in taking over, beside the served session's: moy_ssh.c, THE
+// TAKEOVER), each packet is a block its size, and the queue to the client
+// takes about three before the server stops reading the face
+// (common-session.c); Dropbear's 16 KB held 16 KB from the sign-in on and let
+// the queue reach 48 KB. The largest packet besides a channel's data is the
+// key exchange's, well under 2 KB with curve25519 and an ed25519 key.
 #include "moy_platform.h"
 #if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
 #define DEFAULT_RECV_WINDOW 2048

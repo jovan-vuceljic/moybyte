@@ -40,9 +40,12 @@ it (the mbedTLS Curve25519 a console image carries is the apps'
 
 - **the server** (`moy_ssh`, priority 1, core 0, a 16 KB PSRAM stack, or
   10 KB of internal SRAM on a board without PSRAM) owns
-  the network and the crypto, one connection at a time (one that has not
+  the network and the crypto, one session at a time (one that has not
   signed in is closed 30 s after it connects, `AUTH_TIMEOUT` in
-  `port/localoptions.h`); it reads a
+  `port/localoptions.h`). A second connection signs in beside the session
+  served, in turns of that session's loop, and once signed in it ends that
+  session, whose client reads "another session signed in; this one is
+  closing" (owner, 2026-11-25; `moy_ssh.c`, THE TAKEOVER); it reads a
   connection's sign-in files through the hop to the console's task;
 - **the face** is `native/moy_tty`'s task, which the server holds while it
   serves: the session's shell, the hops and the gathered output are that
