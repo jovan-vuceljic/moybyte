@@ -1692,6 +1692,32 @@ def test_the_cards_show_the_covers_the_indexes_name(tmp_path):
     assert ui.pictures.source(app.engine, "cover:" + sha(jet)) == ("bytes", jet)
 
 
+def test_a_card_and_its_page_draw_the_cover(tmp_path):
+    """The card of a cart whose cover came names it (`image=` its own
+    picture), and so does the cart's page: both draw the cover where a cart
+    with none draws its genre's icon."""
+    from runtime import uitree as ui
+    jet = (_VECTORS / "rgb_filters_mixed.png").read_bytes()
+    views = {}
+    for name, cover in (("covered", jet), ("bare", None)):
+        repo = Repo("https://mit.example/carts", "Test MIT carts")
+        repo.add("jet", name="Jet Pot", cover=cover)
+        d = tmp_path / name
+        d.mkdir()
+        ws, app = _app_ws(d, MemNet(repo.routes()), [repo.url("index.json")])
+        _open(ws, app)
+        assert app.phase == "list"
+        row, = app.models["carts"]
+        assert row["pic"] == (ui.image.own("cover:" + sha(jet)) if cover else None)
+        box = app.page_host().box(app._card_id(app.rows[0]))
+        card = _canvas_rows(ws.sys_canvas, box)
+        _tap_at(ws, app, box[0] + box[2] // 2, box[1] + box[3] // 2)
+        assert app.phase == "cart"
+        views[name] = (card, _canvas_rows(ws.sys_canvas, (0, 0, ws.sys_canvas.w, ws.sys_canvas.h)))
+    assert views["covered"][0] != views["bare"][0]
+    assert views["covered"][1] != views["bare"][1]
+
+
 @pytest.mark.parametrize("fault", ["wrong bytes", "missing", "not a cover"])
 def test_a_cover_that_does_not_come_leaves_the_card_as_it_is(tmp_path, fault):
     """A cover whose file is missing, comes back other than its index says,
