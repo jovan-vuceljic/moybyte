@@ -892,6 +892,8 @@ class OfficialCarts:
             _ci._log("official: %s in %s" % (exc, self._phase))
             return self._end(_ci.NO_MEMORY)
         except Exception as exc:  # noqa: BLE001 -- a request never takes the host down
+            _ci._log("official: %s in %s" % (getattr(exc, "detail", None) or repr(exc),
+                                              self._phase))
             return self._end(getattr(exc, "text", None) or repr(exc))
 
     def _online(self, _budget):
