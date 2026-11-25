@@ -2795,9 +2795,9 @@ class Workstation:
         cut = title.rfind(".")
         cart = {"title": title[:cut] if cut > 0 else title,
                 # Its app id (consent, grant, prefs, crash strikes) is its
-                # file's, in a namespace of scripts' own: no cart's id or
-                # title slug holds a ":", so a script titled like a cart
-                # never reads that cart's record.
+                # file's, in a namespace of scripts' own: a title slug never
+                # holds a ":" and an id is `ns.name`, so a script titled like
+                # a cart never reads that cart's record.
                 "id": SCRIPT_ID % (kind, name),
                 # The FILE is the path: a script has no folder, and the loader
                 # never opens this -- it is the run's identity, and what keeps
