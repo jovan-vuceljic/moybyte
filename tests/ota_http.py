@@ -4,16 +4,26 @@ served over plain TCP on 127.0.0.1, every request recorded.
 
     with Server({"/m.json": (200, {}, b"{...}")}) as srv:
         srv.url("/m.json")
-"""
+
+With `keep`, a request that asks for it keeps its connection open
+(`Connection: keep-alive` answered), as GitHub does; `conns` counts the
+connections accepted, and with `drop` a connection's second request is read
+and the connection closed with no answer, as a server whose idle timeout
+passed while the request was on its way; with `idle` (seconds) the server
+closes a connection that idle."""
 
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 class Server:
-    def __init__(self, routes=None):
+    def __init__(self, routes=None, keep=False, drop=False, idle=None):
         self.routes = dict(routes or {})
         self.seen = []                  # (path, headers) per request
+        self.keep = keep
+        self.drop = drop
+        self.idle = idle
+        self.conns = 0
 
     def url(self, path):
         return "http://127.0.0.1:%d%s" % (self.port, path)
@@ -22,9 +32,24 @@ class Server:
         srv = self
 
         class H(BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.0"
+            protocol_version = "HTTP/1.1" if srv.keep else "HTTP/1.0"
+            timeout = srv.idle
+
+            def setup(self):
+                srv.conns += 1
+                self.served = 0
+                super().setup()
+
+            def end_headers(self):
+                if srv.keep and not self.close_connection:
+                    self.send_header("Connection", "keep-alive")
+                super().end_headers()
 
             def do_GET(self):  # noqa: N802 -- http.server's name
+                self.served += 1
+                if srv.drop and self.served > 1:
+                    self.close_connection = True
+                    return
                 srv.seen.append((self.path, dict(self.headers)))
                 route = srv.routes.get(self.path)
                 if route is None:

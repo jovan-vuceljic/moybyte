@@ -149,6 +149,27 @@ static int is_sp(char c) {
     return c == ' ' || c == '\t';
 }
 
+// Whether a Connection value's comma-separated tokens name `want` (lower
+// case), without regard to ASCII case.
+static int conn_names(const char *v, const char *ve, const char *want) {
+    while (v < ve) {
+        const char *t = v, *te = memchr(v, ',', (size_t)(ve - v));
+        te = te != NULL ? te : ve;
+        v = te + 1;
+        while (t < te && is_sp(*t)) {
+            t++;
+        }
+        const char *e = te;
+        while (e > t && is_sp(e[-1])) {
+            e--;
+        }
+        if (resp_name_is(t, (size_t)(e - t), want)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int moy_http_resp_parse(const char *buf, size_t n, moy_http_resp_t *r) {
     memset(r, 0, sizeof(*r));
     size_t end = 0;
@@ -163,7 +184,7 @@ int moy_http_resp_parse(const char *buf, size_t n, moy_http_resp_t *r) {
     }
     r->head_end = end;
     const char *p = buf, *stop = buf + end - 2u;
-    int first = 1;
+    int first = 1, keep = 0, close = 0, sized = 0, coded = 0;
     while (p < stop) {
         const char *eol = p;
         while (eol + 1 < stop + 2 && !(eol[0] == '\r' && eol[1] == '\n')) {
@@ -199,15 +220,22 @@ int moy_http_resp_parse(const char *buf, size_t n, moy_http_resp_t *r) {
                             break;
                         }
                     }
-                    r->clen = (d == ve && d > v && x <= 0xffffffffu) ? (uint32_t)x : 0;
+                    sized = d == ve && d > v && x <= 0xffffffffu;
+                    r->clen = sized ? (uint32_t)x : 0;
                 } else if (resp_name_is(p, (size_t)(colon - p), "location")) {
                     r->loc = v;
                     r->loc_n = (size_t)(ve - v);
+                } else if (resp_name_is(p, (size_t)(colon - p), "connection")) {
+                    keep |= conn_names(v, ve, "keep-alive");
+                    close |= conn_names(v, ve, "close");
+                } else if (resp_name_is(p, (size_t)(colon - p), "transfer-encoding")) {
+                    coded = 1;
                 }
             }
         }
         p = eol + 2;
     }
+    r->keep = (uint8_t)(keep && !close && sized && !coded);
     return MOY_HTTP_OK;
 }
 
