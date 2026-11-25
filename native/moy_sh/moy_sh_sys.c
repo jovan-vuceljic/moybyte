@@ -139,7 +139,9 @@ static struct moy_sh_obj *obj_new(int kind) {
     return o;
 }
 
-static int buf_add(char **buf, size_t *len, size_t *cap, const void *p, size_t n, size_t max) {
+// `proc`: the buffer is a process block (a folder's names), else the host's.
+static int buf_add(char **buf, size_t *len, size_t *cap, const void *p, size_t n, size_t max,
+                   int proc) {
     if (*len + n > max) {
         return -1;
     }
@@ -148,14 +150,18 @@ static int buf_add(char **buf, size_t *len, size_t *cap, const void *p, size_t n
         while (c < *len + n) {
             c *= 2;
         }
-        char *q = moy_sh_halloc(c);
+        char *q = proc ? moy_sh_palloc(c) : moy_sh_halloc(c);
         if (q == NULL) {
             return -1;
         }
         if (*len) {
             memcpy(q, *buf, *len);
         }
-        moy_sh_hfree(*buf);
+        if (proc) {
+            moy_sh_pfree(*buf);
+        } else {
+            moy_sh_hfree(*buf);
+        }
         *buf = q;
         *cap = c;
     }
@@ -753,7 +759,7 @@ static ssize_t stream_write(struct moy_sh_obj *o, const char *p, size_t n) {
     }
     if (o->failed == 0 && n >= MOY_SH_CHUNK) {
         stream_flush(o, p, n);
-    } else if (o->failed == 0 && buf_add(&o->buf, &o->len, &o->cap, p, n, MOY_SH_CHUNK) != 0) {
+    } else if (o->failed == 0 && buf_add(&o->buf, &o->len, &o->cap, p, n, MOY_SH_CHUNK, 0) != 0) {
         o->failed = ENOMEM;
     }
     if (o->failed != 0) {
@@ -1288,7 +1294,7 @@ ssize_t moy_sh_write(int fd, const void *buf, size_t n) {
             if (o->held != NULL) {
                 return stream_write(o, buf, n);
             }
-            if (buf_add(&o->buf, &o->len, &o->cap, buf, n, MOY_SH_FILE_MAX) != 0) {
+            if (buf_add(&o->buf, &o->len, &o->cap, buf, n, MOY_SH_FILE_MAX, 0) != 0) {
                 errno = EFBIG;
                 return -1;
             }
@@ -1569,8 +1575,8 @@ static int dir_add(void *arg, const char *name, int is_dir, uint32_t size) {
     char head[DIR_HEAD] = { is_dir ? 'd' : 'f' };
     uint32_t n = d->sized && !is_dir ? size : 0;
     memcpy(head + 1, &n, sizeof n);
-    if (buf_add(&d->names, &d->len, &d->cap, head, DIR_HEAD, MOY_SH_FILE_MAX) != 0 ||
-        buf_add(&d->names, &d->len, &d->cap, name, strlen(name) + 1, MOY_SH_FILE_MAX) != 0) {
+    if (buf_add(&d->names, &d->len, &d->cap, head, DIR_HEAD, MOY_SH_FILE_MAX, 1) != 0 ||
+        buf_add(&d->names, &d->len, &d->cap, name, strlen(name) + 1, MOY_SH_FILE_MAX, 1) != 0) {
         return ENOMEM;
     }
     return 0;
@@ -1643,7 +1649,7 @@ moy_sh_DIR *moy_sh_opendir(const char *path) {
         errno = ENOTDIR;
         return NULL;
     }
-    struct moy_sh_dir *d = moy_sh_halloc(sizeof *d);
+    struct moy_sh_dir *d = moy_sh_palloc(sizeof *d);
     if (d == NULL) {
         errno = ENOMEM;
         return NULL;
@@ -1675,8 +1681,8 @@ moy_sh_DIR *moy_sh_opendir(const char *path) {
         r = !strcmp(abs, "/") ? 0 : c.r;
     }
     if (r != 0) {
-        moy_sh_hfree(d->names);
-        moy_sh_hfree(d);
+        moy_sh_pfree(d->names);
+        moy_sh_pfree(d);
         errno = r;
         return NULL;
     }
@@ -1713,8 +1719,8 @@ void moy_sh_dir_last(const moy_sh_DIR *d, int *is_dir, uint32_t *size) {
 
 int moy_sh_closedir(moy_sh_DIR *d) {
     if (d != NULL) {
-        moy_sh_hfree(d->names);
-        moy_sh_hfree(d);
+        moy_sh_pfree(d->names);
+        moy_sh_pfree(d);
     }
     return 0;
 }

@@ -56,6 +56,66 @@ void moy_sh_hfree(void *p) {
     }
 }
 
+// A PROCESS BLOCK: a built-in's working memory, linked into its session under
+// the process that took it (the fork frame running then, NULL for the
+// session's own). A process ended before its built-in returns -- SIGPIPE, an
+// interrupt, an error, exit -- longjmps past the built-in's frees, so
+// end_process frees what the ending process still holds, and a line's end
+// frees what is left of the session's own.
+union moy_sh_pblk {
+    struct {
+        union moy_sh_pblk *next, *prev;
+        const void *owner;
+    } h;
+    long double align;                  // the strictest alignment a block may need
+};
+
+void *moy_sh_palloc(size_t n) {
+    moy_sh_t *s = moy_sh_cur;
+    union moy_sh_pblk *b = s->host.alloc(s->host.ctx, sizeof *b + n);
+    if (b == NULL) {
+        return NULL;
+    }
+    b->h.owner = s->forks;
+    b->h.prev = NULL;
+    b->h.next = s->pblocks;
+    if (s->pblocks != NULL) {
+        s->pblocks->h.prev = b;
+    }
+    s->pblocks = b;
+    return b + 1;
+}
+
+static void pblk_drop(moy_sh_t *s, union moy_sh_pblk *b) {
+    if (b->h.prev != NULL) {
+        b->h.prev->h.next = b->h.next;
+    } else {
+        s->pblocks = b->h.next;
+    }
+    if (b->h.next != NULL) {
+        b->h.next->h.prev = b->h.prev;
+    }
+    s->host.free(s->host.ctx, b);
+}
+
+void moy_sh_pfree(void *p) {
+    if (p != NULL) {
+        pblk_drop(moy_sh_cur, (union moy_sh_pblk *)p - 1);
+    }
+}
+
+// The process blocks `owner` still holds freed (every one's when `all`).
+static void pblk_end(moy_sh_t *s, const void *owner, int all) {
+    union moy_sh_pblk *b = s->pblocks;
+    while (b != NULL) {
+        union moy_sh_pblk *next = b->h.next;
+        if (all || b->h.owner == owner) {
+            pblk_drop(s, b);
+        }
+        b = next;
+    }
+}
+
 // Session `s`'s own block back to its host, from any call.
 static void sfree(moy_sh_t *s, void *p) {
     if (p != NULL) {
@@ -305,6 +365,7 @@ void moy_sh_free(moy_sh_t *s) {
         moy_sh_sys_end(s);
         leave(was == s->g ? NULL : was);
     }
+    pblk_end(s, NULL, 1);
     void (*hfree)(void *, void *) = s->host.free;
     if (s->pending != NULL) {
         hfree(s->host.ctx, s->pending);
@@ -602,6 +663,7 @@ int moy_sh_run(moy_sh_t *s, const char *text, size_t n) {
     flushall();
 out:
     (void)pushed;
+    pblk_end(s, NULL, 1);               // the line is over: no built-in runs
     if (!s->asked) {
         drop_answers(s);
     }
@@ -778,6 +840,7 @@ static void __attribute__((__noreturn__)) end_process(int wstatus) {
             }
         }
         moy_sh_sys_exit(s);
+        pblk_end(s, f, 0);
         f->wstatus = wstatus;
         longjmp(f->done, 1);
     }

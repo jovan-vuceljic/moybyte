@@ -385,6 +385,42 @@ def test_a_spill_goes_when_its_writer_is_interrupted(harness, tmp_path):
     assert not (root / ".pipes").exists()
 
 
+def test_a_builtin_ended_midway_leaves_the_heap_as_it_found_it(harness, tmp_path):
+    """A built-in ended before it returns -- its writer ended as SIGPIPE would
+    by a spill the store has no room for, or interrupted -- longjmps past its
+    frees, and its process gives back the blocks it held (moy_sh.c's PROCESS
+    BLOCK): three rounds of each leave the session holding what one does."""
+    import resource
+    import signal
+
+    def limit():
+        signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        resource.setrlimit(resource.RLIMIT_FSIZE, (16384, 16384))
+    lines = ["find d | head -n 1", "du d | head -n 1", "sort big.txt | head -n 1",
+             "grep line big.txt | head -n 1", "cut -c1-9 big.txt | head -n 1",
+             "uniq big.txt | head -n 1", "ls -l d d d d d d d d | head -n 1",
+             "echo 40 > /.interrupt; find d -name nothing"]
+    held = []
+    for rounds in (1, 3):
+        root = tmp_path / ("root%d" % rounds)
+        deep = root / "d"
+        for i in range(150):
+            deep = deep / "a"
+        deep.mkdir(parents=True)
+        (deep / "f").write_text("x\n")
+        (root / "big.txt").write_text(
+            "".join("line %d of the stream, padded out\n" % i for i in range(3000)))
+        script = tmp_path / ("ended%d.sh" % rounds)
+        script.write_text("".join(x + "\n" for x in lines) * rounds)
+        r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                           timeout=120, preexec_fn=limit, env=dict(os.environ, SH_MAIN_MEASURE="1"))
+        err = r.stderr.decode()
+        assert "Sanitizer" not in err, err[-3000:]
+        assert err.count("pipe: no room to hold") >= 6 * rounds, err[-2000:]
+        held.append(int(re.search(r"live blocks (\d+)", err).group(1)))
+    assert held[0] == held[1], "%d blocks after one round, %d after three" % tuple(held)
+
+
 def test_a_spill_the_store_has_no_room_for_says_so(harness, tmp_path):
     """A spill past what the store takes (here a file-size limit, EFBIG) ends
     its writer with "pipe: no room to hold N KB", the reader reads what came

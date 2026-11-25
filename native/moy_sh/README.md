@@ -74,7 +74,10 @@ off (`moy_sh_set_questions`), and the command reads its answers from stdin.
 
 A session takes its record and its arena from the host's `alloc` (PSRAM on a
 board, `heap_caps` with the default heap only where there is no PSRAM); a pipe's buffer, a file's chunk and a fork's snapshot are taken
-while a run needs them and returned after. A pipeline's stages run one after
+while a run needs them and returned after. A built-in's working memory (a
+walk's names, `sort`'s blocks, a text tool's line) is a process block
+(`moy_sh_palloc`), which its process frees if a signal, an error or `exit`
+ends it before the built-in can. A pipeline's stages run one after
 another, so a pipe holds its writer's whole stream: 1 MB in memory, 4 KB on
 a board without PSRAM (the C3 Zero), and past that in a temporary file of the
 store (`/etc/pipes/*.tmp`, the store's `system/pipes`) written and read a

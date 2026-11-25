@@ -561,14 +561,14 @@ static int walk_grow(void *p, size_t *cap, size_t need) {
     while (c < need) {
         c *= 2;
     }
-    char *q = moy_sh_halloc(c);
+    char *q = moy_sh_palloc(c);
     if (q == NULL) {
         return ENOMEM;
     }
     if (*cap) {
         memcpy(q, *at, *cap);
     }
-    moy_sh_hfree(*at);
+    moy_sh_pfree(*at);
     *at = q;
     *cap = c;
     return 0;
@@ -638,8 +638,8 @@ static int walk_enter(walk_t *w, const char *path, size_t n, int top) {
 }
 
 static void walk_free(walk_t *w) {
-    moy_sh_hfree(w->names);
-    moy_sh_hfree(w->dirs);
+    moy_sh_pfree(w->names);
+    moy_sh_pfree(w->dirs);
     w->names = NULL;
     w->dirs = NULL;
     w->len = w->cap = w->depth = w->room = 0;
@@ -1295,7 +1295,7 @@ typedef struct {
 static void lines_open(lines_t *r, int fd) {
     r->fd = fd;
     r->at = r->n = 0;
-    r->p = moy_sh_halloc(TEXT_LINE);
+    r->p = moy_sh_palloc(TEXT_LINE);
     r->cap = TEXT_LINE;
     if (r->p == NULL) {
         r->p = r->small;
@@ -1305,7 +1305,7 @@ static void lines_open(lines_t *r, int fd) {
 
 static void lines_close(lines_t *r) {
     if (r->p != r->small) {
-        moy_sh_hfree(r->p);
+        moy_sh_pfree(r->p);
     }
 }
 
@@ -1316,10 +1316,10 @@ static void lines_add(lines_t *r, const char *p, size_t n) {
         while (cap < r->len + n && cap < TEXT_LINE_MAX) {
             cap *= 2u;
         }
-        char *more = cap > r->cap ? moy_sh_halloc(cap) : NULL;
+        char *more = cap > r->cap ? moy_sh_palloc(cap) : NULL;
         if (more != NULL) {
             memcpy(more, r->p, r->len);
-            moy_sh_hfree(r->p);
+            moy_sh_pfree(r->p);
             r->p = more;
             r->cap = cap;
         } else {
@@ -1857,9 +1857,9 @@ static int uniq_one(int fd, const char *name, void *arg) {
             uniq_emit(o, held, hlen, k);
         }
         if (held == NULL || r.len > hcap) {
-            moy_sh_hfree(held);
+            moy_sh_pfree(held);
             hcap = r.len > TEXT_LINE ? r.len : TEXT_LINE;
-            held = moy_sh_halloc(hcap);
+            held = moy_sh_palloc(hcap);
             if (held == NULL) {
                 k = 0;
                 o->status = moy_sh_fail("uniq: out of memory");
@@ -1873,7 +1873,7 @@ static int uniq_one(int fd, const char *name, void *arg) {
     if (k > 0) {
         uniq_emit(o, held, hlen, k);
     }
-    moy_sh_hfree(held);
+    moy_sh_pfree(held);
     lines_close(&r);
     return 0;
 }
@@ -1925,7 +1925,7 @@ typedef struct {
 } sort_t;
 
 static void *sort_take(sort_t *o, size_t n) {
-    void *p = o->taken + n <= o->bound ? moy_sh_halloc(n) : NULL;
+    void *p = o->taken + n <= o->bound ? moy_sh_palloc(n) : NULL;
     if (p == NULL) {
         o->full = 1;
         return NULL;
@@ -1936,7 +1936,7 @@ static void *sort_take(sort_t *o, size_t n) {
 
 static void sort_give(sort_t *o, void *p, size_t n) {
     if (p != NULL) {
-        moy_sh_hfree(p);
+        moy_sh_pfree(p);
         o->taken -= n;
     }
 }
@@ -2719,7 +2719,7 @@ static int neofetchcmd(int argc, char **argv) {
     moy_sh_t *s = moy_sh_cur;
     (void)argc;
     (void)argv;
-    fetch_t *f = moy_sh_halloc(sizeof *f);
+    fetch_t *f = moy_sh_palloc(sizeof *f);
     if (f == NULL) {
         return moy_sh_fail("neofetch: no memory");
     }
@@ -2823,7 +2823,7 @@ static int neofetchcmd(int argc, char **argv) {
         fetch_logo(colour, line);
         out1c('\n');
     }
-    moy_sh_hfree(f);
+    moy_sh_pfree(f);
     return 0;
 }
 
