@@ -184,10 +184,12 @@ def test_the_desk_power_rows_move_the_levels_by_keys(tmp_path):
 def test_a_console_with_no_radio_and_no_light_offers_neither(tmp_path):
     """The browser page (issue 270): no Brightness where there is no panel
     light, no Wi-Fi where there is no radio -- in Settings, in the control
-    center, and the bar's wifi glyph opens nothing."""
+    center, and the bar, which lays out no Wi-Fi widget."""
     ws, drv = _handheld(tmp_path)
     ws.wifi = None
     ws.panel_light = False
+    ws.look.apply_layout()                      # as the boot's first resolve finds it
+    assert ws.layout.wifi_btn is None, "no Wi-Fi widget is laid out"
     keys = [r[0] for r in ws.settings_layer._settings_rows()]
     assert "wifi" not in keys and "brightness" not in keys and "volume" in keys
     ws.toggle_popover("wifi")
@@ -210,6 +212,22 @@ def test_a_console_with_no_radio_and_no_light_offers_neither(tmp_path):
     lit = ws2.sysmenu.comp.size()
     ws2.panel_light = False
     assert ws2.sysmenu.comp.size()[1] < lit[1], "the desk's power rows lose a row"
+
+
+def test_a_console_with_a_radio_after_one_without_lays_out_its_wifi(tmp_path):
+    """The bar's page is one per process: a console laid out with no Wi-Fi
+    widget leaves nothing for the next one, whose own widget gets its cell
+    and opens its popover."""
+    ws, drv = _handheld(tmp_path / "none")
+    ws.wifi = None
+    ws.look.apply_layout()
+    drv.frame(1 / 30)
+    ws2, drv2 = _desk(tmp_path / "desk")
+    drv2.frame(1 / 30)
+    x, y, w, h = ws2.wm.root_ctx.layout.wifi_btn
+    assert w > 0 and h > 0
+    _tap(drv2, x + w // 2, y + h // 2)
+    assert ws2.sysmenu.open and ws2.sysmenu.widget == "wifi"
 
 
 def test_the_desk_power_rows_move_the_levels_by_taps(tmp_path):
