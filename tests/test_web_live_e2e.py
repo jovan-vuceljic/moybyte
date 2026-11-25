@@ -133,6 +133,8 @@ def test_a_page_a_zero_serves_plays_a_console(cart, loader, live_exe, tmp_path, 
         why = "\n%s\n-- console: frames %d stalls %d peers %s\n%s" % (
             js, console.frames, console.stalls, console.link.peers,
             W._sides(host, tmp_path, out))
+        print("%s: page %s | console frames %d, stalled %d" % (
+            cart, (played or {}).get("stats", {}).get("match"), console.frames, console.stalls))
         assert played and played["link"][2], "the match formed on the page" + why
         assert played["link"][3] > 60, "the page simulated the match" + why
         assert console.frames > 60, "the console simulated the match" + why

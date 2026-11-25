@@ -8,7 +8,9 @@ Each two-player seed cart runs here frame by frame in dist/'s wasm under node
 and in the host's board-model MicroPython (`make unix-micropython`'s R32
 build), through the console's own cart namespace, on the same seed and the
 same held buttons for both players (tests/cart_world_driver.py), and every
-frame's world digest (`players.world_text`, the match's desync check) agrees.
+frame's world digest (`players.world_text`, the match's desync check) agrees,
+and so does every float function of the math module, which every tier
+computes with the kernel's one libm (native/moy_kernel/README.md).
 
 The match around it is the kernel's C on every tier and is held by
 tests/test_live_link.py and tests/test_web_live_e2e.py.
@@ -95,3 +97,55 @@ def test_a_python_cart_simulates_the_same_world_in_the_browser_as_on_a_board(car
     assert not bad and len(page) == len(board), \
         "first world that differs (frame, digest on a board): %r, page %r" % (
             bad[:1], page[board.index(bad[0])] if bad else page[-1:])
+
+
+# Every function of the math module that the C library computes, over its
+# domain, and the pairs that once parted the T-Deck and the wasm. A cart's
+# math is the kernel's one libm on every tier (native/moy_kernel/README.md,
+# THE FLOAT FUNCTIONS), so both sides of a match answer each with one float.
+LIBM = """
+import math, struct
+ONE = {"sin": (-60, 60), "cos": (-60, 60), "tan": (-6, 6), "asin": (-1, 1), "acos": (-1, 1),
+       "atan": (-40, 40), "exp": (-20, 20), "log": (0.001, 5000), "sqrt": (0, 5000),
+       "floor": (-50, 50), "sinh": (-9, 9), "cosh": (-9, 9), "tanh": (-5, 5),
+       "log10": (0.001, 5000), "log2": (0.001, 5000), "expm1": (-5, 5), "asinh": (-50, 50),
+       "acosh": (1, 50), "atanh": (-0.99, 0.99), "erf": (-3, 3), "erfc": (-3, 3),
+       "gamma": (0.1, 20), "lgamma": (0.1, 30)}
+TWO = {"atan2": ((-10, 10), (-10, 10)), "pow": ((0.01, 10), (-6, 6)),
+       "fmod": ((-100, 100), (0.1, 9))}
+PAIRS = [(1.0, 2.5), (-1.0, 2.5), (1.5, -2.0), (0.0, -1.0), (-0.0, -1.0), (1.0, 0.0)]
+N = 400
+
+def at(lo, hi, i):
+    return lo + (hi - lo) * ((i * 0.6180339887) % 1.0)
+
+def word(f, *a):
+    try:
+        return struct.unpack("<I", struct.pack("<f", getattr(math, f)(*a)))[0]
+    except (ValueError, OverflowError):
+        return -1
+
+for f, (lo, hi) in sorted(ONE.items()):
+    print(f, [word(f, at(lo, hi, i)) for i in range(N)])
+for f, ((a, b), (c, d)) in sorted(TWO.items()):
+    print(f, [word(f, at(a, b, i), at(c, d, 7 * i + 3)) for i in range(N)])
+print("atan2-pairs", [word("atan2", y, x) for y, x in PAIRS])
+print("atan-of-quotient", [word("atan", y / x) for y, x in PAIRS[:2]])
+"""
+
+
+def test_a_cart_s_math_is_one_libm_in_the_browser_and_on_a_board(tmp_path):
+    exe = unix_mp.require_unix_mp(board_model=True, why="the boards' floats")
+    src = SINGLE + LIBM
+    page = _wasm(tmp_path, src)
+    if page[:1] != ["single True"]:
+        pytest.skip("dist/ predates the boards' floats -- rebuild it with "
+                    "firmware/web_runner/build.sh")
+    board = _board(str(exe), src)
+    assert len(board) == len(page) == 29, (board[-3:], page[-3:])
+    apart = [b.split()[0] for b, w in zip(board, page) if b != w]
+    assert not apart, "the R32 build and the wasm part on %s" % apart
+    # The kernel's atan2f takes the atan of the rounded quotient, as glibc's
+    # does not: atan2(1.0, 2.5) is the C library's on neither side.
+    rows = dict(line.split(" ", 1) for line in board[1:])
+    assert eval(rows["atan2-pairs"])[:2] == eval(rows["atan-of-quotient"])

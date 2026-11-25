@@ -673,10 +673,6 @@ process.stdout.write(out.join("\\n") + "\\n");
 
 @needs_tdeck
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
-@pytest.mark.xfail(strict=True, reason=(
-    "the two libms part: atan2(+-1.0, 2.5) is 0.38050634 on the T-Deck "
-    "(the correctly rounded single, as REPR_C keeps it) and 0.38050649 in the "
-    "wasm, which agrees with its own atan(0.4) there; 62 of the 64 agree"))
 def test_the_tdeck_atan2_is_the_wasm_s(tmp_path):
     """math.atan2 over every quadrant and both axes, as the single the VM
     keeps, on the T-Deck and in the browser's wasm: one answer, or a Python
