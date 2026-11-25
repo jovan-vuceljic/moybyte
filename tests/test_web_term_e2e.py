@@ -298,7 +298,8 @@ def test_a_page_pairs_by_the_console_s_password(tty_exe, tmp_path, short):
                   _asks("p => p.said === %s" % json.dumps(wrong)), _prompt("WRONG"),
                   _password(PASSWORD), _until(_SHELL), _prompt("PAIRED"), _lines("OPEN")]
                  + _typed("echo pw-ok") + [{"key": "Enter"}, _says("pw-ok"),
-                                           _lines("ECHO")])
+                                           _lines("ECHO")]
+                 + _neofetch("NF"))
         out, js = _play(tmp_path, "term_password", base, steps)
         assert _tagged(js, "ASK")["shown"] == "flex", js
         assert _tagged(js, "WRONG")["said"] == wrong, js
@@ -306,6 +307,9 @@ def test_a_page_pairs_by_the_console_s_password(tty_exe, tmp_path, short):
         assert paired["shown"] == "none" and paired["keys"] == 1, (
             str(paired) + _sides(host, tmp_path, out))
         assert "pw-ok" in "\n".join(_tagged(js, "ECHO")), js
+        # the page laid the Terminal out while it asked: that size reached
+        # the board's shell when the socket opened, and Moy stands beside
+        assert _beside(_tagged(js, "NF"), "Board: host harness"), _tagged(js, "NF")
     finally:
         server.terminate()
         host.end()
