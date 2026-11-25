@@ -261,6 +261,14 @@ class Appearance:
         # bigger panel later honours it.
         self.font_scale = 1
         self._scales = None             # (what they were read for, the offered scales)
+        # THE ZOOMED GLASS (the browser page's, `zoom_glass`): its UI size is
+        # the whole number the page divides its viewport by, so the shell
+        # grows as one -- icons, chrome, hints and text -- and Settings'
+        # UI size row picks it (0: Auto, the page's pick). The text draws
+        # at 1 there, and there is no Text size row. None on a glass of
+        # fixed size.
+        self.zoom = None
+        self.zooms = (0, 1)
         offered = self.font_scales()
         self.font_scale = max([f for f in offered if f <= max(1, int(font_scale))] or [1])
         # The text-size floor (chrome.text_scale_floor): the font scale the
@@ -1339,11 +1347,29 @@ class Appearance:
         desk takes (`Workstation.set_render_scale`)."""
         return self.live.look[0].get("render.scale", 1)
 
+    def zoom_glass(self, zoom, zooms):
+        """The glass is a page's that zooms: `zoom` the UI size chosen (0:
+        Auto), `zooms` the choices its viewport offers, Auto first (each
+        leaves the glass the handheld's smallest room)."""
+        self.zooms = tuple(zooms) or (0, 1)
+        self.zoom = zoom if zoom in self.zooms else 0
+        self.font_scale = 1
+        self._scales = None
+
+    def set_zoom(self, zoom):
+        """Settings' UI size: the choice the page applies (the frame's
+        `zoom`) and keeps for this browser, resizing the glass."""
+        if self.zoom is not None and zoom in self.zooms:
+            self.zoom = zoom
+
     def font_scales(self):
         """The font scales this glass offers (`layout_base.font_scales`): each
         whose room, the panel over the render scale and the font scale, holds
         the handheld's smallest layout; 1 alone without a distinct system
-        canvas, whose text does not scale."""
+        canvas, whose text does not scale; 1 alone on a zoomed glass, whose
+        UI size scales it (`zoom_glass`)."""
+        if self.zoom is not None:
+            return (1,)
         ws = self.ws
         key = (ws.bound_sys_canvas is None, ws.render_scale)
         kept = self._scales

@@ -180,7 +180,7 @@ nor those docs will warn you about:
   `navigator` (`tests/test_site_channel.py` holds the call sites), and a player
   the build cannot stamp is not published at all.
 - **What an embedding page can ask of the console, all read at boot and absent
-  from a plain visit** (the project site's hero passes the first three):
+  from a plain visit** (the project site's hero passes them):
   `?scheme=dark|light` (else the browser's `prefers-color-scheme`) is the
   theme VARIANT of a first run, handed to `console.wire_workstation_core(
   first_variant=)` -- the absent-row default of `load_system`, so a saved
@@ -189,8 +189,10 @@ nor those docs will warn you about:
   (`web_boot.start_edit`, without the First Steps badge) from whatever the
   browser's store holds, so a visitor's edits are kept, and on the desk as a
   window unless this browser left it full screen; `&play=1` presses its Play,
-  which on the desk runs the cart in the Editor's Game pane (the site's
-  Desktop tab passes it, its Handheld tab does not). The framed player posts
+  which on the desk runs the cart in the Editor's Game pane; `&only=desk`
+  applies them only where the console lands on the desk, so in console mode
+  (a phone) the visit lands on the home (the site's Desktop tab passes all
+  four, its Handheld tab none: a plain visit in console mode is the home). The framed player posts
   `{moyChrome}` and, at its first painted frame, `{moyLive}`.
   `tests/test_web_first_run_e2e.py` drives them. The hero's two stills (Night,
   Day) are CAPTURED by `site/build.py` from the player it ships, through

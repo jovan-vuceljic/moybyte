@@ -41,7 +41,7 @@ overflow:hidden;text-overflow:ellipsis}#s{color:#ffec27}
    1024x600); fit() uses the whole available viewport while the browser keeps
    nearest-neighbour sampling. Desktop users have real keyboard/pointer input,
    so the touch controls do not consume a permanent 120px-tall band there. */
-canvas{image-rendering:pixelated;background:#000;border:1px solid #1d2b53;border-radius:6px;
+canvas{image-rendering:pixelated;background:#000;border:0;
 width:min(96vw,112vh);height:auto;max-width:100%;touch-action:none;cursor:crosshair}
 /* Control sizes scale with the viewport (min(px, vw)): full desktop-tablet size when the
    width allows, proportionally smaller on narrow phones -- adding the ⌨ button made the
@@ -78,7 +78,25 @@ background:#7e2553;border:2px solid #c2c3c7;margin-left:min(18px,2vw)}#bb{backgr
    the page in on focus. */
 #kbin{position:fixed;top:0;left:0;width:1px;height:1px;padding:0;margin:0;border:0;
 opacity:0;font-size:16px;background:transparent;color:transparent;caret-color:transparent}
-@media (hover:hover) and (pointer:fine){#ctl{display:none}}
+/* The controls are a touch screen's: a mouse (pointer:fine) or no pointer at
+   all (a keyboard alone, a headless browser) has no use for them. */
+@media (pointer:fine),(pointer:none){#ctl{display:none}}
+/* A touch phone in landscape (html.phl, room()): no page rows, the canvas full
+   height and centred, the stick in the left margin and A/B in the right one,
+   sized to it (padPlace), the keyboard summon and the burger small in the top
+   corners. #ctl covers the viewport but takes no taps itself. */
+html.phl h1,html.phl #pz{display:none}
+html.phl body{justify-content:center}
+html.phl #ctl{position:fixed;left:0;top:0;width:100%;height:100%;padding:0;display:block;
+pointer-events:none;z-index:2}
+html.phl #mid{display:contents}
+html.phl #ab{position:absolute;right:var(--abx);top:var(--aby);width:var(--abw);
+height:calc(var(--bb)*2 + 8px);display:block;pointer-events:none}
+html.phl #joy{position:absolute;left:var(--jx);top:var(--jy)}
+html.phl .b{position:absolute;margin:0;pointer-events:auto}
+html.phl #joy{pointer-events:auto}
+html.phl #ba{right:0;top:0}html.phl #bb{left:0;bottom:0}
+html.phl #kb{left:6px;top:6px}html.phl #bh{right:6px;top:6px}
 /* Persistence row (#193): where the carts are being kept, plus the .moy escape
    hatch. Hidden until the worker reports a mode, and hidden for good on a
    board-served page -- there the console owns the store and a browser-local
@@ -311,6 +329,86 @@ for(var i=0;i<n;i++)f[i]=a[i]/32768;
 var src=actx.createBufferSource();src.buffer=buf;src.connect(audioOut);src.start(t);
 schedNext=t+n/AUDIO_RATE;SS.got+=n;}
 var fitSent=-1;
+// THE GLASS. The console's canvas is the page's room in device pixels over a
+// whole number N (`n`), shown at exactly N device pixels a canvas pixel, so
+// it stays crisp, and it follows the room live (a resize, a rotation, a
+// devicePixelRatio change) through the console's `glass` event
+// (Workstation.resize_glass), with no reload. Settings' UI size is N as a
+// percent of the CSS pixel (100% = N of one CSS pixel); the page offers only
+// the percents that land on whole device pixels and leave the canvas the
+// handheld's 320x240, and keeps the choice per browser (localStorage). Auto:
+// the largest N whose canvas holds the desk's 1024x600; and the PHONE RULE
+// where the room does not (or ?handheld=1): landscape, a canvas 240 tall at
+// the room's aspect, portrait the 320x240 console, each scaled to the room
+// as fit() always did (fractional, which a phone's devicePixelRatio hides).
+// GLASS.live: the console zooms (its first frame names `zoom`); a one-cart
+// page's fixed 320x240 does not, and keeps fit()'s scaling.
+var GLASS={live:false,n:0,w:0,h:0,zoom:-1,zooms:"",due:0},UIKEY="moy.uisize",
+HANDHELD=/[?&]handheld=1/.test(location.search);
+function uiPick(){try{var v=localStorage.getItem(UIKEY);return v?(+v||0):0;}catch(e){return 0;}}
+function uiKeep(z){try{localStorage.setItem(UIKEY,String(z));}catch(e){}}
+// A touch phone held sideways: the pads go in the canvas's side margins, each
+// at least PAD_MIN wide and at most PAD_MAX, where a 4:3 game leaves them more.
+var TOUCH=window.matchMedia?matchMedia("(pointer:coarse)"):null,
+PAD_MIN=104,PAD_MAX=180,SB=36;
+function padPlace(iw,ih,m){var c=document.getElementById("ctl").style,top=SB+12;
+var j=Math.floor(Math.min(m-16,ih-2*top,160)),b=Math.floor(Math.min((m-16)*0.58,(ih-top-16)/2,84));
+var hab=2*b+8,mid=ih*0.55;
+function at(h){return Math.round(Math.max(top,Math.min(mid-h/2,ih-8-h)));}
+c.setProperty("--joy",j+"px");c.setProperty("--bb",b+"px");c.setProperty("--sb",SB+"px");
+c.setProperty("--jx",Math.round((m-j)/2)+"px");c.setProperty("--jy",at(j)+"px");
+c.setProperty("--abx","8px");c.setProperty("--abw",Math.round(m-16)+"px");
+c.setProperty("--aby",at(hab)+"px");}
+function room(){var vv=window.visualViewport;
+var iw=vv?vv.width:window.innerWidth,ih=vv?vv.height:window.innerHeight;
+var phl=!!TOUCH&&TOUCH.matches&&iw>ih&&(HANDHELD||iw<1024||ih<600);
+if(document.documentElement.classList.contains("phl")!==phl){
+document.documentElement.classList.toggle("phl",phl);
+if(!phl)document.getElementById("ctl").removeAttribute("style");}
+if(phl){var m=Math.max(PAD_MIN,Math.min(PAD_MAX,Math.floor((iw-ih*4/3)/2)));
+padPlace(iw,ih,m);return [Math.max(32,Math.floor(iw-2*m)),Math.max(32,Math.floor(ih)),0];}
+var used=0;
+for(var k=document.body.firstElementChild;k;k=k.nextElementSibling){
+if(k===cv||k.tagName==="SCRIPT"||k.tagName==="INPUT")continue;
+var cs=getComputedStyle(k);
+if(cs.display==="none"||cs.position==="fixed"||cs.position==="absolute")continue;
+used+=k.offsetHeight+(parseFloat(cs.marginTop)||0)+(parseFloat(cs.marginBottom)||0);}
+return [Math.max(32,Math.floor(iw)),Math.max(32,Math.floor(ih-used)),used];}
+function glassPlan(){var r=room(),dpr=window.devicePixelRatio||1;
+var dw=Math.floor(r[0]*dpr),dh=Math.floor(r[1]*dpr),offers=[],byPct={};
+for(var n=1;n<=32;n++){var p=Math.round(n/dpr*100);if(Math.floor(dw/n)<320||Math.floor(dh/n)<240||p>400)break;
+if(!byPct[p]){byPct[p]=n;offers.push(p);}}
+var z=uiPick(),pl;
+if(z&&byPct[z])pl={n:byPct[z],w:Math.floor(dw/byPct[z]),h:Math.floor(dh/byPct[z])};
+else{z=0;
+if(window.innerWidth<1024||window.innerHeight<600){
+pl=r[0]*3>=r[1]*4?{n:0,w:Math.round(240*r[0]/r[1]),h:240}:{n:0,w:320,h:240};}
+else{var best=1;for(var i=0;i<offers.length;i++){var m=byPct[offers[i]];
+if(Math.floor(dw/m)>=1024&&Math.floor(dh/m)>=600&&m>best)best=m;}
+pl={n:best,w:Math.floor(dw/best),h:Math.floor(dh/best)};}}
+pl.zoom=z;pl.zooms=[0].concat(offers).join(",");return pl;}
+// The console's boot query: its glass, UI size and the sizes it offers. An
+// address that names its ?size= keeps that glass, fixed, scaled to the room.
+function glassSearch(){var pl=glassPlan(),q=location.search;GLASS.n=pl.n;
+if(/[?&]size=/.test(q))return q;
+return q+(q?"&":"?")+"size="+pl.w+"x"+pl.h+"&zoom="+pl.zoom+"&zooms="+pl.zooms;}
+function glassCheck(){if(!GLASS.live||!WORKER)return;var pl=glassPlan();GLASS.n=pl.n;
+if(pl.w!==W||pl.h!==H||pl.zoom!==GLASS.zoom||pl.zooms!==GLASS.zooms){
+GLASS.zoom=pl.zoom;GLASS.zooms=pl.zooms;
+send({type:"glass",w:pl.w,h:pl.h,zoom:pl.zoom,zooms:pl.zooms.split(",").map(Number)});}fit();}
+function glassSoon(){clearTimeout(GLASS.due);GLASS.due=setTimeout(glassCheck,120);}
+window.addEventListener("resize",glassSoon);
+if(window.visualViewport)window.visualViewport.addEventListener("resize",glassSoon);
+(function dprWatch(){if(!window.matchMedia)return;
+var m=matchMedia("(resolution: "+(window.devicePixelRatio||1)+"dppx)");
+var f=function(){m.removeEventListener("change",f);glassSoon();dprWatch();};
+m.addEventListener("change",f);})();
+// A frame's `zoom`: the console's UI size, which Settings may have moved.
+function glassFrame(f){if(f.zoom===undefined)return;
+var first=!GLASS.live;GLASS.live=true;
+if(f.zoom!==uiPick()&&!first)uiKeep(f.zoom);
+if(first){var pl=glassPlan();GLASS.zoom=pl.zoom;GLASS.zooms=pl.zooms;}
+glassCheck();}
 function fit(){/* Fill the available viewport without the old integer-scale
 cliff (e.g. 1.95x used to collapse all the way to 1x on an ultrawide). Sized off
 the VISUAL viewport when the browser has one: iOS collapses it for the soft
@@ -321,26 +419,18 @@ lays out above and below it -- title, persistence row, link/import/pick cards,
 control bar, with their margins -- measured, so a row that wraps or a card that
 appears is accounted for and the document never outgrows the viewport (the
 embedded Try-it stage showed a scrollbar and a cut-off console). */
-var vv=window.visualViewport;
-var iw=vv?vv.width:window.innerWidth,ih=vv?vv.height:window.innerHeight;
-var used=2;/* the canvas's own 1px borders */
-for(var k=document.body.firstElementChild;k;k=k.nextElementSibling){
-if(k===cv||k.tagName==="SCRIPT"||k.tagName==="INPUT")continue;
-var cs=getComputedStyle(k);
-if(cs.display==="none"||cs.position==="fixed"||cs.position==="absolute")continue;
-used+=k.offsetHeight+(parseFloat(cs.marginTop)||0)+(parseFloat(cs.marginBottom)||0);}
+var rm=room(),used=rm[2];
 /* Framed (the project site's Try-it stage), the host page is told how much
 height the page needs besides the canvas, so it can size the frame to hold the
 console at its full width. */
 if(window.parent!==window&&used!==fitSent){fitSent=used;
 try{window.parent.postMessage({moyChrome:used+1},"*");}catch(e){}}
-var rw=Math.max(32,iw-16);
-var rh=Math.max(32,ih-used-1);
+var rw=rm[0],rh=rm[1];
 // While the soft keyboard is up (#42) the viewport HEIGHT collapses (and the
 // gamepad block still counts against it), which used to shrink the canvas to a
 // stamp -- so size by width alone then; a phone is width-limited anyway.
 var ae=document.activeElement;if(ae&&ae.id==="kbin")rh=1e9;
-var s=Math.min(rw/W,rh/H);
+var s=GLASS.live&&GLASS.n?GLASS.n/(window.devicePixelRatio||1):Math.min(rw/W,rh/H);
 cv.style.width=Math.round(W*s)+"px";cv.style.height=Math.round(H*s)+"px";
 // Below one device pixel a canvas pixel, nearest-neighbour sampling DROPS
 // whole columns and rows: a glyph loses its strokes ("Storybook" read
@@ -622,6 +712,8 @@ function pv(){return[(pH.ArrowRight?1:0)-(pH.ArrowLeft?1:0),(pH.ArrowDown?1:0)-(
 // needed is gone with it.
 function df(f,fb){
 if(f.cart!==assCart){assCart=f.cart;getA().catch(function(){});}
+if(f.w&&(f.w!==W||f.h!==H)){W=f.w;H=f.h;alloc();}
+glassFrame(f);
 // The EFFECTIVE input hint rides every frame (the cart's manifest hint while it
 // owns the keyboard, null on any system surface), so the keyboard summon comes
 // back the moment PLAY exits to the Editor.

@@ -262,7 +262,8 @@ WEB_TOUCH_INPUTS = (("touch", "touch"), ("local", "keys"), ("pad", "pad"))
 
 
 def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
-         windowed=False, font_scale=0, hud=True, coarse=False, scheme=None):
+         windowed=False, font_scale=0, hud=True, coarse=False, scheme=None,
+         zoom=None, zooms=(0, 1)):
     """Build the shared Workstation over the RGB565 canvas + the VFS store.
     The page/harness wrote the cart bundle into `carts_root` before calling.
 
@@ -282,6 +283,9 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
         canvas for the desk and its app windows, plus a separate 320x240 game
         canvas that `blit_game` composites into a window (integer-scaled through
         the same C kernel). Boots onto the desk with project management on.
+        `zoom` (not None) makes its glass the page's that zooms: the UI size
+        chosen (0: Auto) and `zooms` the choices (`Appearance.zoom_glass`),
+        set before the stored settings apply, so the page's size stands.
     """
     # GC POLICY (surface model Phase B, the gate-0 finding): the port hardcodes
     # gc_alloc_threshold to 16KB, so EVERY painted frame schedules a FULL
@@ -336,6 +340,8 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
         ws = console.Workstation(host_api._NullComp(), game, inp, carts,
                                  sys_canvas=sysc, font_scale=font_scale,
                                  panel_diagonal_in=layout_base.desk_diagonal_in(width, height))
+        if zoom is not None:
+            ws.look.zoom_glass(int(zoom), tuple(zooms))
     else:
         sysc = game = web_canvas.make_canvas(320, 240, font_scale=font_scale)
         ws = console.Workstation(host_api._NullComp(), game, inp, carts)
@@ -682,9 +688,13 @@ def page_boot(carts_root, query_json, coarse=False, scheme=""):
     alike. It was the handheld 320x240 tier, which made the full-size product
     the thing you had to know a url parameter to see.
       ?handheld=1  the 320x240 console (the phone-shaped one)
-      ?size=WxH    override the desk's panel size (1024x600)
+      ?size=WxH    the glass's size (1024x600); the page passes its own,
+                   live, unless its address names one, which stays fixed
+      ?zoom=N&zooms=0,N,..  the glass zooms: the UI size chosen (0: Auto)
+                   and the choices, as percents (`Appearance.zoom_glass`)
       ?cart=NAME   that cart; a bundle of one cart names it without asking
       ?desktop=1   the desk even with a cart named
+      ?console=1   start in console mode (the desk's PLAY), the windows' tier
       ?meter=1     the VM heap's allocation counted each frame (`_METER`)
       ?linkcheck=1 the match's world check armed on the board's radio link
                    (`live_pump`), as the dev channel's `link check on` arms
@@ -710,11 +720,16 @@ def page_boot(carts_root, query_json, coarse=False, scheme=""):
         wh = size.split("x")
         if len(wh) == 2 and wh[0].isdigit() and wh[1].isdigit():
             w, h = int(wh[0]), int(wh[1])
-        boot(carts_root, None, w, h, True, coarse=coarse, scheme=scheme)
+        zoom = q.get("zoom")
+        zooms = tuple(int(z) for z in (q.get("zooms") or "0,1").split(",") if z.isdigit())
+        boot(carts_root, None, w, h, True, coarse=coarse, scheme=scheme,
+             zoom=int(zoom) if zoom is not None and zoom.isdigit() else None,
+             zooms=zooms or (0, 1))
     else:
         boot(carts_root, cart=cart, coarse=coarse, scheme=scheme)
     _S["page_start"] = (q.get("edit"), q.get("tab"), bool(q.get("play")),
-                        desktop, cart, len(names))
+                        desktop, cart, len(names), bool(q.get("console")),
+                        q.get("only") == "desk")
     return ""
 
 
@@ -722,11 +737,17 @@ def page_start():
     """What a page's address starts the console on (after `page_boot`):
     ?edit=<cart>[&tab=code|paint|map|...][&play=1] opens that cart in the
     Editor (`start_edit`), where a plain visit lands on the home, and with
-    play=1 presses its Play; a desk with a cart named opens it; and the
+    play=1 presses its Play; with &only=desk it does so only where the
+    console lands on the desk, and in console mode (a phone) the visit lands
+    on the home; a desk with a cart named opens it; and the
     one-cart player of a bundle of one cart is a kiosk -- the exit gesture
     restarts the game instead of dropping into the shell, because the game
-    IS the page."""
-    edit, tab, play, desktop, cart, served = _S.pop("page_start")
+    IS the page. ?console=1 starts the desk in console mode (its PLAY)."""
+    edit, tab, play, desktop, cart, served, cons, only_desk = _S.pop("page_start")
+    if cons and getattr(_S["ws"].wm, "mode", None) == "desktop":
+        _S["ws"].wm.enter_console()
+    if only_desk and getattr(_S["ws"].wm, "mode", None) != "desktop":
+        edit = None
     if edit:
         start_edit(edit, tab or None, play)
     if desktop and cart:
@@ -1114,16 +1135,37 @@ def _step(dt, played):
             pcm[1] = au.at
             pcm[2] = 1 if au.starts else 0
             pcm[3] = _pcm_buf(au)
-    if clip is not None:
-        return json.dumps({"paint": 1 if painted else 0, "cart": _cart_title(),
-                           "input": web_input.effective_input_kinds(ws), "clip": clip})
-    if not painted:
+    zoom = ws.look.zoom
+    moved = zoom != _ZOOM[0]
+    _ZOOM[0] = zoom
+    if clip is None and not moved and not painted:
         return ""
-    return json.dumps({
-        "paint": 1,
-        "cart": _cart_title(),
-        "input": web_input.effective_input_kinds(ws),
-    })
+    cv = _S.get("canvas") or ws.sys_canvas
+    out = {"paint": 1 if painted else 0, "cart": _cart_title(),
+           "input": web_input.effective_input_kinds(ws), "w": cv.w, "h": cv.h}
+    if clip is not None:
+        out["clip"] = clip
+    if zoom is not None:
+        out["zoom"] = zoom
+    return json.dumps(out)
+
+
+# The UI size of the last frame (`zoom` in every frame's JSON on a zoomed
+# glass, 0: Auto): Settings' UI size row's, which the page keeps per browser
+# and divides its viewport by. A frame where it moved is sent painted or not;
+# every frame names it, since the page keeps only the newest frame.
+_ZOOM = [None]
+
+
+def glass(w, h, zoom, zooms):
+    """The page's viewport changed (a resize, a rotation, a UI size the page
+    took from a frame): the glass at `w` x `h` (`Workstation.resize_glass`,
+    at the P4's density), `zoom` the UI size chosen (0: Auto) and `zooms`
+    the choices this viewport offers Settings' UI size row."""
+    ws = _S["ws"]
+    _ZOOM[0] = int(zoom)
+    ws.look.zoom_glass(int(zoom), tuple(int(z) for z in zooms))
+    ws.resize_glass(int(w), int(h), layout_base.desk_diagonal_in(int(w), int(h)))
 
 
 # This frame's samples, as step_frame_json leaves them for the worker: their
@@ -1276,7 +1318,7 @@ def _apply(events):
         on_esc=d.escape, on_hold=d.hold, on_key_hold=d.key_hold,
         on_super=d.system_key, on_full=d.full_key, on_key_down=d.key_down,
         on_key_up=d.key_up, on_mods=d.set_mods, on_wheel=d.wheel, on_middle=d.middle,
-        on_gamepad=_gamepad, on_paste=_paste)
+        on_gamepad=_gamepad, on_paste=_paste, on_glass=glass)
 
 
 # The console's clipboard as the page last heard of it: its seq (moy_app.h's

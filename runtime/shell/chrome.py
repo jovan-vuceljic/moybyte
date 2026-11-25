@@ -165,8 +165,8 @@ _CURSOR_ACCEL = 2
 
 # (_BASE_W/_BASE_H -- the T-Deck's canvas, every layout's default size -- come
 # from the layout_base leaf above; console.py still imports them back from here.)
-# (The letterbox/bezel fill _VIEWPORT_BEZEL (#39) moved to wm.py with the viewport
-# composite it belongs to -- FullscreenStackWM.composite_game is its only user.)
+# (The letterbox's colour, `bezel`, lives in wm.py with the viewport composite
+# it belongs to.)
 
 # The tap-target floor (#203): the smallest a bar icon may be ON GLASS, whatever
 # the font scale. A CONFIGURATION number, not a measurement -- deliberately under

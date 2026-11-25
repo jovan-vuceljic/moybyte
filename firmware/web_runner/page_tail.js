@@ -540,7 +540,7 @@ try {
                        { type: "module" });
   window.__moyAttach(w);
   // A coarse pointer is a finger: the console's hints start on touch.
-  w.postMessage({ t: "init", search: location.search, channel: MOY_CHANNEL, auth: auth,
+  w.postMessage({ t: "init", search: glassSearch(), channel: MOY_CHANNEL, auth: auth,
                   assets: assets, base: location.href,
                   rate: actx ? actx.sampleRate : 0,
                   coarse: !!(window.matchMedia && matchMedia("(pointer: coarse)").matches),

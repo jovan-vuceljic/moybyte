@@ -468,7 +468,8 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
             self._ctx_switching = False
         self.root_ctx = _LayoutCtx.capture(ws)
         self._pop_reset()             # a relayout repaints what a popover covered
-        if self._mode_switch:
+        if self._mode_switch or self.ws.glass_moving:
+            # A glass resize keeps the windows (`fit_glass` clamps them).
             # The desk's cache stays good: its signature carries the layout's
             # content rect, so a switch that moves the desk's bars renders it
             # again, and leave_console restarts its streak.
@@ -704,6 +705,8 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         if self.mode != "console":
             return
         ws = self.ws
+        if ws.look.zoom is not None and not ws.desk_fits():
+            return                    # a zoomed glass without the desk's room
         if self.stack.depth() > 1 and not game:
             ws.home.go_home()                  # what stood on the home leaves first
         p = self.parked or _Parked([], [], {}, None)
@@ -1776,6 +1779,31 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         self.bring_to_front(kind)
         self.ws.mark_dirty()
         return True
+
+    def fit_glass(self):
+        """The glass changed size (`Workstation.resize_glass`): every window
+        kept in its order with the focus, clamped into the new desk -- a
+        full-screen one takes the whole new glass -- and rendered again at
+        its rect; a parked one's buffer goes, so it renders again on the way
+        back to the desk; the drag backdrop is made again at the new size."""
+        dx, dy, dw, dh = self.desk_rect()
+        p = self.parked
+        for win in list(self.windows.values()) + (list(p.wins.values()) if p else []):
+            if win.full():
+                self._set_full(win)
+            else:
+                win.w = min(win.w, dw)
+                win.h = min(win.h, dh)
+                win.x = max(dx, min(win.x, dx + dw - win.w))
+                win.y = max(dy, min(win.y, dy + dh - win.h))
+            self._drop_win(win)
+            if p is None and win.kind != "desktop":
+                self._build_content(win)
+        self.drop_backdrop()
+        self._backdrop_valid = False
+        self._win_sig = None
+        self.content_gen += 1
+        self.ws.mark_dirty()
 
     def cycle(self, step):
         """Alt+Tab (`step` 1) or Alt+Shift+Tab (-1) on the desk: the next

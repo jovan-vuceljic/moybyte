@@ -946,15 +946,17 @@ var expand = document.getElementById("expand");
 var shrink = document.getElementById("shrink");
 var tabs = [].slice.call(document.querySelectorAll(".tab:not(.exp)"));
 // What the console is asked to start as: the player skips its own play-button
-// (the visitor's click was this page's), and opens Star Catcher on its Code tab
-// in either tier. On the desk the Editor is a window with the game playing in
-// its Game pane, the picture the still shows; the handheld's Play would cover
-// the code, so its tab starts on the code alone. The page's colour scheme rides
-// along so a first-run console wears Moy Night or Moy Day to match this page,
-// and a flip of the page's switch restarts a running console in the new one.
+// (the visitor's click was this page's). On the desk it opens Star Catcher's
+// Editor as a window with the game playing in its Game pane, the picture the
+// still shows; in console mode (the handheld tier, or a phone's room) a visit
+// lands on the home, so `only=desk` (web_boot.page_start). The page's colour
+// scheme rides along so a first-run console wears Moy Night or Moy Day to
+// match this page, and a flip of the page's switch restarts a running console
+// in the new one.
 function startQuery(tab) {
-  return "&start=1&edit=moybyte.star_catcher.moy&tab=code"
-    + (tab.dataset.tier === "desktop" ? "&play=1" : "")
+  return "&start=1"
+    + (tab.dataset.tier === "desktop"
+       ? "&edit=moybyte.star_catcher.moy&tab=code&play=1&only=desk" : "")
     + "&scheme=" + document.documentElement.dataset.scheme;
 }
 // The stage is the console's aspect ratio PLUS the height the player page needs
