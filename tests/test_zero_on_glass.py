@@ -933,7 +933,7 @@ PER_LEVEL = 3        # files in each
 
 def test_find_du_and_rm_walk_a_deep_folder(zero, ssh):
     """A folder ten deep with three files in each, and at the bottom a file
-    with its `.bak` beside it (the pair a store's journalled text leaves):
+    with a user's own `.bak` beside it, a file like any other:
     `find` names every file and finds one by name, `du -s` counts them,
     `rm -r` takes it all, and the session stays up."""
     with _bench(ssh):
@@ -1199,6 +1199,9 @@ def test_a_cart_uploaded_from_the_page_reads_back_byte_exact(zero, mirror, ssh, 
         apart = [n for n in content if back.get(n) != content[n]]
         assert not apart, "the page's read-back differs in %s (it holds %s)" % (
             apart, sorted(back))
+        # the store's backups of what it saved are its own: no listing shows one
+        rc, ls, _e = ssh.run("ls -a %s/%s; find %s/%s" % (CARTS, folder, CARTS, folder))
+        assert rc == 0 and b"moybak" not in ls, ls
         rc, _o, err = _remove(ssh, folder)
         assert rc == 0, "rm -r of the cart's folder: %r; the folder: %r" % (
             _o + err, ssh.run("ls -l %s/%s" % (CARTS, folder)))
