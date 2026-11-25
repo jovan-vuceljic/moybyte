@@ -243,6 +243,7 @@ TEXT_LIMIT = 65536            # a licence text, likewise
 # TLS connect, a 64 KB flush to flash -- which is what the screen waits on.
 READ_CHUNK = 16384
 WRITE_CHUNK = 65536
+MIN_CHUNK = 1024                # the least either becomes on a fragmented heap (chunk_buffer)
 STEP_MS = 120
 
 # The most one unit of the pipeline reads from the network at once: a zip
@@ -960,6 +961,19 @@ def plan(cart, chip=None, fmt=None, ranges=False):
     return {"files": files, "module": module, "external": ext, "load_bytes": load,
             "slow": cart["runtime"] == "wasm" and bool(chip) and module is None,
             "store_bytes": store, "download_bytes": down}
+
+
+def chunk_buffer(size):
+    """An install's read or write buffer of `size` bytes, or, where a
+    fragmented heap cannot place that, of half as many, down to MIN_CHUNK:
+    a buffer's size sets an install's pace, never whether it runs."""
+    while True:
+        try:
+            return bytearray(size)
+        except MemoryError:
+            if size <= MIN_CHUNK:
+                raise
+            size = max(size // 2, MIN_CHUNK)
 
 
 def size_text(n):
@@ -2190,7 +2204,7 @@ class Install:
         self.t_net = 0
         self.t_store = 0
         self.t_all = 0
-        self.scratch = bytearray(READ_CHUNK if read is None else read)
+        self.scratch = chunk_buffer(READ_CHUNK if read is None else read)
         self.scratch_mv = memoryview(self.scratch)
         self.sink = _Sink(self, WRITE_CHUNK if chunk is None else chunk)
         self.written = {}
