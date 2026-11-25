@@ -36,6 +36,11 @@ ROOT = Path(__file__).resolve().parent.parent
 BASE = "https://carts.example/repo"
 
 
+def _bak_path(path):
+    from runtime import moy_fs
+    return moy_fs._native.bak_path(path)
+
+
 def _store(tmp_path):
     root = tmp_path / "moybyte" / "carts"
     root.mkdir(parents=True)
@@ -800,7 +805,7 @@ def test_a_copy_put_there_another_way_offers_an_update(tmp_path):
     repo.add("jet")
     _install(_cart(repo, "jet"), root, MemNet(repo.routes()))
     (Path(root).parent / ci.RECORD_NAME).unlink()
-    (Path(root).parent / (ci.RECORD_NAME + ".bak")).unlink()
+    Path(_bak_path(str(Path(root).parent / ci.RECORD_NAME))).unlink()
     assert _state(repo, root, "jet") == "update"
 
 
@@ -934,7 +939,7 @@ def test_the_record_reads_its_backup_when_the_file_is_torn(tmp_path):
     assert "jet.moy" in ci.load_record(root)
     assert path.read_text() == good                       # healed in place
     path.write_text('{"version": 1, "carts": []}')       # the wrong shape
-    (Path(str(path) + ".bak")).unlink()
+    (Path(_bak_path(str(path)))).unlink()
     assert ci.load_record(root) == {}
 
 

@@ -103,7 +103,7 @@ def test_the_local_store_keeps_what_the_receiving_c_takes():
     from runtime import moy_sync
 
     paths = ("a.moy/main.py", "a.moy/x/y.py", "a.moy", "../a.moy/x", "a.moy/../x",
-             "a.moy//x", "a.moy/./x", "a.moy/x.bak", "a.moy/thumbs/t.png",
+             "a.moy//x", "a.moy/./x", "a.moy/.x.moybak", "a.moy/thumbs/t.png",
              "a\\b/x", "a.moy/x\r", "a.moy/" + "x" * 300, "a.moy/~x",
              "Pictures/a/b.json", "Music/a.mp3", "doom/doomsav0.dsg", "doom/k~part")
     for root_id in ("carts", "files", "apps"):
@@ -147,7 +147,7 @@ def test_the_journal_crosses_only_into_the_local_store():
     for name in ("journal", "journal.jsonl"):
         assert moy_sync._skip(name), name
         assert not moy_sync.skip_keep_journal(name), name
-    for name in ("thumbs", "__pycache__", "main.py.bak", "main.py.tmp"):
+    for name in ("thumbs", "__pycache__", ".main.py.moybak", "main.py.tmp"):
         assert moy_sync._skip(name) and moy_sync.skip_keep_journal(name), name
     # The wire's own validator never softens: a batch aimed at a BOARD carries
     # no journal path no matter which watcher built it.

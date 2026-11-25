@@ -23,7 +23,7 @@ the core, so `moy_carts` re-exports these names rather than the reverse.
 
 import json
 
-from moy_fs import (_exists, _mkdir, _read, _read_bytes, _read_recover,
+from moy_fs import (_bak_path, _exists, _forget_bak, _mkdir, _read, _read_bytes, _read_recover,
                     _remove, _write, _write_atomic, _write_bytes)
 from moy_store_base import (CARTS_DIR, _has, _listing, _rmtree, _sibling_path, cart_path,
                             cart_folder, store_path, BUILTIN_NS, CART_EXT, VENDOR_KEY,
@@ -66,7 +66,7 @@ def _prune_for_reseed(path):
     the manifest, which the new one replaces last."""
     keep = _RESEED_PRESERVE + ("manifest.json",)
     for name in _listing(path) or {}:
-        if name in keep or (name.endswith(".bak") and name[:-4] in keep):
+        if name in keep or any(name == _bak_path(k) for k in keep):
             continue
         p = path + "/" + name
         _rmtree(p)
@@ -641,7 +641,7 @@ def forget_device(root=CARTS_DIR):
     for name in DEVICE_FILES:
         path = _sibling_path(root, name)
         _remove(path)
-        _remove(path + ".bak")
+        _forget_bak(path)
     import moy_docs
     rows = moy_docs.load_system(root)
     if any(k in rows for k in DEVICE_ROWS):

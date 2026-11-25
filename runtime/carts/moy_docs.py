@@ -24,12 +24,12 @@ def _load_store_json(path, pick):
 
     `pick(parsed)` pulls the value out of the parsed document and returns None for
     "this isn't one", so MISSING, unparseable and wrong-shape all fall through to
-    the `<path>.bak` copy `_write_atomic` leaves behind; a usable backup is
+    the backup copy `_write_atomic` leaves behind; a usable backup is
     republished as `path` (the heal `_read_recover` does for manifests) so the
     recovery is durable rather than re-run on every read.
 
     Every sibling store must read through this. `_write_atomic` is crash-safe only
-    BECAUSE of that .bak, so its window leaves the store truncated -- and a loader
+    BECAUSE of that backup, so its window leaves the store truncated -- and a loader
     that reads a truncated store as "nothing saved yet" makes the loss permanent:
     the next save overwrites the one surviving good copy.
     """

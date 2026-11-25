@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 
 from runtime import moy_carts  # noqa: E402
+from runtime import moy_fs  # noqa: E402
 
 import pytest  # noqa: E402
 
@@ -53,7 +54,7 @@ def test_listing_skips_atomic_write_orphans(tmp_path):
     root = _root(tmp_path)
     moy_carts.save_file("drawings", "keep", "x", root)
     d = moy_carts.file_kind_dir("drawings", root)
-    for orphan in ("keep.moyimg.bak", "keep.moyimg.tmp", ".moyimg", "notes.txt"):
+    for orphan in (".keep.moyimg.moybak", "keep.moyimg.tmp", ".moyimg", "notes.txt"):
         with open(d + "/" + orphan, "w") as f:
             f.write("junk")
     assert moy_carts.list_files("drawings", root) == ["keep"]
@@ -429,7 +430,7 @@ def test_a_failed_prune_does_not_fail_the_commit(tmp_path):
     root = _root(tmp_path)
     moy_carts.save_file("docs", "story", "TEXT", root)
     path = _sidecar(root, [{"t": "seg", "ops": [i]} for i in range(40)])
-    os.makedirs(path + ".bak")
+    os.makedirs(moy_fs._native.bak_path(path))
     before = moy_carts.history_prune_fails()
     err = moy_carts.history_commit("docs", "story", [["ins", 0, "hi"]],
                                    keyframe={"body": ""}, root=root)

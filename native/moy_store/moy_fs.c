@@ -554,9 +554,39 @@ void moy_fs_unmark(const char *path) {
     }
 }
 
+// -- the backup's name -------------------------------------------------------------
+
+size_t moy_fs_bak_into(const char *path, char *out, size_t cap) {
+    const char *slash = strrchr(path, '/');
+    size_t dn = slash != NULL ? (size_t)(slash - path) + 1u : 0u, pn = strlen(path);
+    size_t en = sizeof(MOY_FS_BAK_EXT) - 1u, bn = pn + 1u + en + 1u;
+    if (bn <= cap) {
+        memcpy(out, path, dn);
+        out[dn] = '.';
+        memcpy(out + dn + 1u, path + dn, pn - dn);
+        memcpy(out + pn + 1u, MOY_FS_BAK_EXT, en + 1u);
+    }
+    return bn;
+}
+
+char *moy_fs_bak_path(const char *path, size_t *n) {
+    size_t bn = moy_fs_bak_into(path, NULL, 0);
+    char *s = moy_store_alloc(bn);
+    if (s != NULL) {
+        moy_fs_bak_into(path, s, bn);
+        *n = bn;
+    }
+    return s;
+}
+
+int moy_fs_bak_name(const char *name, size_t n) {
+    size_t en = sizeof(MOY_FS_BAK_EXT) - 1u;
+    return n > en + 1u && name[0] == '.' && memcmp(name + n - en, MOY_FS_BAK_EXT, en) == 0;
+}
+
 int moy_fs_bak_stamp(const char *path, uint32_t *chars, uint32_t *crc) {
     size_t bn, n;
-    char *bak = join(path, strlen(path), ".bak", &bn);
+    char *bak = moy_fs_bak_path(path, &bn);
     char *line = moy_store_alloc(HEAD_MAX);
     int ok = 0;
     if (bak != NULL && line != NULL && read_head(bak, line, &n) == 0) {
@@ -620,20 +650,60 @@ int moy_fs_read_stamped(const char *path, moy_buf_t *out) {
     return 0;
 }
 
-static int read_bak(const char *path, moy_buf_t *out) {
+// The backup `bak`'s text as a read takes it: stamped whole with `want`'s
+// stamp (NULL: no stamp is expected), or, for a file that is `gone`, the
+// store's unstamped copy (the sync's rotation, moy_sync_apply.c).
+// MOY_FS_NONE otherwise.
+static int take_bak(const char *bak, const uint32_t *want, int gone, moy_buf_t *out) {
+    moy_buf_t b;
+    if (moy_fs_read_file(bak, (size_t)-1, &b) != 0) {
+        return MOY_FS_NONE;
+    }
+    const char *nl = memchr(b.p, '\n', b.n);
+    size_t hn = nl ? (size_t)(nl - b.p) + 1u : b.n;
+    uint32_t chars, crc;
+    if (!parse_stamp(b.p, hn, &chars, &crc)) {
+        if (!gone || b.n == 0) {
+            moy_buf_free(&b);
+            return MOY_FS_NONE;
+        }
+        *out = b;
+        return 0;
+    }
+    if (want == NULL || chars != want[0] || crc != want[1]
+        || !fits(b.p + hn, b.n - hn, chars, crc)) {
+        moy_buf_free(&b);
+        return MOY_FS_NONE;         // another save's, or torn
+    }
+    moy_buf_t r = { moy_store_alloc(b.n - hn + 1u), b.n - hn };
+    if (r.p == NULL) {
+        moy_buf_free(&b);
+        return MOY_ENOMEM;
+    }
+    memcpy(r.p, b.p + hn, r.n);
+    moy_buf_free(&b);
+    *out = r;
+    return 0;
+}
+
+// The save a read of `path` expects (stamp_for), from its backup. `gone`:
+// the file could not be read.
+static int read_bak(const char *path, moy_buf_t *out, int gone) {
+    uint32_t want[2];
+    int known = stamp_for(path, &want[0], &want[1]);
     size_t bn;
-    char *bak = join(path, strlen(path), ".bak", &bn);
+    char *bak = moy_fs_bak_path(path, &bn);
     if (bak == NULL) {
         return MOY_ENOMEM;
     }
-    int rc = moy_fs_read_stamped(bak, out);
+    int rc = take_bak(bak, known ? want : NULL, gone, out);
     moy_store_free(bak, bn);
     return rc;
 }
 
 void moy_fs_forget_bak(const char *path) {
     size_t bn;
-    char *bak = join(path, strlen(path), ".bak", &bn);
+    char *bak = moy_fs_bak_path(path, &bn);
     if (bak != NULL) {
         moy_fs_remove(bak);
         moy_store_free(bak, bn);
@@ -689,7 +759,7 @@ static void src_stamp(moy_fs_src_t *src, uint32_t *chars, uint32_t *crc) {
 
 static int publish_bak(const char *path, moy_fs_src_t *src, uint32_t chars, uint32_t crc) {
     size_t bn;
-    char *bak = join(path, strlen(path), ".bak", &bn);
+    char *bak = moy_fs_bak_path(path, &bn);
     if (bak == NULL) {
         return MOY_ENOMEM;
     }
@@ -753,7 +823,7 @@ int moy_fs_read_in(const char *path, moy_vol_here_t *here, const char *name,
     }
     moy_buf_t rec;
     if (rc != 0) {
-        if (read_bak(path, &rec) != 0) {
+        if (read_bak(path, &rec, 1) != 0) {
             return rc;              // the original error
         }
         heal(path, &rec);
@@ -764,7 +834,7 @@ int moy_fs_read_in(const char *path, moy_vol_here_t *here, const char *name,
     if (!stamp_for(path, &chars, &crc) || fits(out->p, out->n, chars, crc)) {
         return 0;
     }
-    if (read_bak(path, &rec) != 0) {
+    if (read_bak(path, &rec, 0) != 0) {
         moy_fs_unmark(path);        // a torn backup: keep the file we can read
         return 0;
     }
@@ -869,12 +939,13 @@ static int pour(const char *path, uint32_t skip, moy_fs_sink_t *k, sum_t *s, int
     return rc ? rc : crc_;
 }
 
-// The backup `bak` as moy_fs_read_stamped reads it, read over and never
-// held: 0 and where its text starts (*skip: past its stamp line, or 0 for a
-// legacy one), or MOY_FS_NONE. With `cmp`, *same says whether that text
-// starts with the `cmp_n` bytes the file `cmp` holds.
-static int bak_text(const char *bak, uint32_t *skip, const char *cmp, size_t cmp_n,
-                    int *same) {
+// The backup `bak` as take_bak takes it, read over and never held: 0 and
+// where its text starts (*skip: past its stamp line, or 0 for the store's
+// unstamped copy of a file that is gone, `cmp` NULL), or MOY_FS_NONE. With
+// `cmp`, *same says whether that text starts with the `cmp_n` bytes the file
+// `cmp` holds.
+static int bak_text(const char *bak, const uint32_t *want, uint32_t *skip,
+                    const char *cmp, size_t cmp_n, int *same) {
     char *line = moy_store_alloc(HEAD_MAX);
     if (line == NULL) {
         return MOY_ENOMEM;
@@ -887,10 +958,14 @@ static int bak_text(const char *bak, uint32_t *skip, const char *cmp, size_t cmp
     if (rc != 0 || hn == 0) {
         return MOY_FS_NONE;         // none, or made and the power went before its stamp
     }
-    *skip = stamped ? (uint32_t)hn : 0u;
-    if (!stamped && cmp == NULL) {
-        return 0;                   // legacy: unstamped, whole
+    if (!stamped) {
+        *skip = 0;
+        return cmp == NULL ? 0 : MOY_FS_NONE;
     }
+    if (want == NULL || chars != want[0] || crc != want[1]) {
+        return MOY_FS_NONE;         // another save's
+    }
+    *skip = (uint32_t)hn;
     moy_vol_file_t *f, *g = NULL;
     if (open_at(bak, MOY_VOL_READ, &f) != 0) {
         return MOY_FS_NONE;
@@ -915,7 +990,7 @@ static int bak_text(const char *bak, uint32_t *skip, const char *cmp, size_t cmp
     if (g != NULL) {
         moy_vol_close(g);
     }
-    if (rc != 0 || (stamped && (s.chars != chars || s.crc != crc))) {
+    if (rc != 0 || s.chars != chars || s.crc != crc) {
         return MOY_FS_NONE;         // torn: refused, never published
     }
     if (cmp != NULL) {
@@ -949,13 +1024,15 @@ int moy_fs_read_into(const char *path, moy_fs_sink_t *k) {
     if (refused) {
         return rc;
     }
-    uint32_t chars, crc;
-    if (rc == 0 && (!stamp_for(path, &chars, &crc) || (got.chars == chars && got.crc == crc))) {
+    uint32_t want[2];
+    int known = stamp_for(path, &want[0], &want[1]);
+    if (rc == 0 && (!known || (got.chars == want[0] && got.crc == want[1]))) {
         return 0;
     }
     size_t bn;
-    char *bak = join(path, strlen(path), ".bak", &bn);
-    int r = bak == NULL ? MOY_ENOMEM : bak_text(bak, &skip, rc ? NULL : path, got.n, &same);
+    char *bak = moy_fs_bak_path(path, &bn);
+    int r = bak == NULL ? MOY_ENOMEM
+            : bak_text(bak, known ? want : NULL, &skip, rc ? NULL : path, got.n, &same);
     if (rc != 0 || (r == 0 && same)) {
         // the file cannot be read, or a truncated publish: finish it
         if (r == 0) {
@@ -999,7 +1076,7 @@ int moy_fs_claim(const char *path, const char *dest, uint32_t chars,
         return 0;
     }
     size_t bn;
-    char *bak = join(path, strlen(path), ".bak", &bn);
+    char *bak = moy_fs_bak_path(path, &bn);
     if (bak == NULL) {
         return 0;
     }
@@ -1020,6 +1097,5 @@ int moy_store_skip(const char *name, size_t n, int history) {
             return 1;
         }
     }
-    return n >= 4 && (memcmp(name + n - 4, ".bak", 4) == 0
-                      || memcmp(name + n - 4, ".tmp", 4) == 0);
+    return moy_fs_bak_name(name, n) || (n >= 4 && memcmp(name + n - 4, ".tmp", 4) == 0);
 }

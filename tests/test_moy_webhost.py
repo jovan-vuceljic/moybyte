@@ -74,8 +74,8 @@ def _store(tmp_path):
         "def _draw():\n    cls(7)\n")
     (root / "hop.moy" / "journal.jsonl").write_text("stray flat log\n")
     # moy_fs._write_atomic's last-known-good rotations, one per file it saves.
-    (root / "hop.moy" / "main.py.bak").write_text("def _draw():\n    cls(2)\n")
-    (root / "hop.moy" / "manifest.json.bak").write_text('{"title": "Hop"}')
+    (root / "hop.moy" / ".main.py.moybak").write_text("def _draw():\n    cls(2)\n")
+    (root / "hop.moy" / ".manifest.json.moybak").write_text('{"title": "Hop"}')
     (root / "hop.moy" / "pmem.bin").write_bytes(SAVES)
     (root / "sky.moy").mkdir()
     (root / "sky.moy" / "main.lua").write_text("function _draw() end\n")
@@ -185,11 +185,11 @@ def test_the_undo_journal_does_not_cross_the_wire(tmp_path):
 
 
 def test_the_atomic_write_backups_do_not_cross_the_wire(tmp_path):
-    """`<file>.bak` is moy_fs's crash-recovery rotation: the live file is
+    """`.<file>.moybak` is moy_fs's crash-recovery backup: the live file is
     already in the bundle, so every one of these is a second copy of content
     the browser has, on a transport whose size is the whole problem."""
     b = _pull(_store(tmp_path))
-    assert not [k for k in b if k.endswith(".bak")], sorted(b)
+    assert not [k for k in b if k.endswith(".moybak")], sorted(b)
     assert b["hop.moy/main.py"].startswith("def _draw()")
 
 

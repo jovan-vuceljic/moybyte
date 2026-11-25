@@ -94,7 +94,7 @@ def console(tmp_path):
         f.write(big)
     with open(base + "/.publish", "w") as f:
         f.write("#moyfs1 5 1 %s/system/settings\n" % base)
-    with open(base + "/system/settings.bak", "w") as f:
+    with open(base + "/system/.settings.moybak", "w") as f:
         f.write("#moyfs1 5 1\nwhole")
     script = tmp_path / "console.py"
     script.write_text(CONSOLE)
@@ -133,7 +133,7 @@ def test_a_pull_mirrors_the_folder_and_a_second_copies_nothing(console, tmp_path
     n, gone = console_backup.mirror(b, out, log=_quiet)
     want = {k: v for k, v in _files(base).items()
             if "/thumbs/" not in k and not k.startswith("install/")
-            and (not k.endswith(".bak") or k == "system/settings.bak")}
+            and (not k.endswith(".moybak") or k == "system/.settings.moybak")}
     assert _files(out) == want and n == len(want) and gone == 0
     assert "system/settings" in want and ".publish" in want and "store.ver" in want
 

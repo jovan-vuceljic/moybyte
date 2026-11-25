@@ -249,7 +249,7 @@ def _put(tmp, dst):
     def go():
         _rm(dst)
         os.rename(tmp, dst)
-        _rm(dst + '.bak')
+        _rm(__import__('moy_store').bak_path(dst))
         return 1
     return _gated(go)
 def _drop(p):
@@ -501,7 +501,7 @@ def push_file_raw(b, src, dst, link, verbose=False):
         raise RuntimeError("%s: hash %s != %s -- left the old file in place"
                            % (name, got, want))
     # moy_fs's invariant (#154): a file the store published carries a stamped
-    # `.bak` describing it, and a writer that puts different bytes at the path
+    # backup describing it, and a writer that puts different bytes at the path
     # has to drop that stamp -- or the board's next read "recovers" the kid's
     # own last save over what was just pushed. `_put` does the rename and the
     # drop in one round trip.

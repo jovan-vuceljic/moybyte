@@ -4,14 +4,15 @@
 // A path is an allowlist of shape: forward slashes only, at most 256
 // characters, no empty or dot segment, no backslash, NUL, CR or LF inside one,
 // and nothing the wire's skip rule keeps home (moy_store_skip), so a batch can
-// never name journal/ or a .bak. A whole file publishes through moy_fs's
-// crash-safe write; a chunked one stages in `<path>.tmp` and publishes by the
-// rename rotation that leaves the previous file as an unstamped `.bak`. On the
+// never name journal/ or a store backup. A whole file publishes through
+// moy_fs's crash-safe write; a chunked one stages in `<path>.tmp` and
+// publishes by the rename rotation that leaves the previous file as the
+// store's unstamped backup (moy_fs_bak_path). On the
 // carts root of a store of record, every text file that lands is a journal
 // commit (moy_journal_append), after the file is durable: a journal that
 // cannot be written costs a history entry, never the write. On the apps root
 // a file is `<id>/<key>` of one app's flat folder and lands as bytes alone
-// (moy_net.h's moy_sync_store_t), with no `.bak` left beside it.
+// (moy_net.h's moy_sync_store_t), with no backup left beside it.
 // A cart delete (`dc`) of a built-in is the console's own removal: a core
 // cart is refused, an optional one's removal recorded before it goes, and
 // the first file to land in a cart folder drops the folder's line
@@ -219,6 +220,20 @@ static int suffixed(char *dst, const char *src, const char *suf) {
     return 1;
 }
 
+// The store's backup of `src` (moy_fs_bak_path) into `dst`, PATH_CAP bytes.
+static int bak_of(char *dst, const char *src) {
+    size_t n;
+    char *b = moy_fs_bak_path(src, &n);
+    int ok = b != NULL && n <= PATH_CAP;
+    if (ok) {
+        memcpy(dst, b, n);
+    }
+    if (b != NULL) {
+        moy_store_free(b, n);
+    }
+    return ok;
+}
+
 static int at(const char *path, moy_vol_t *v, const char **rest) {
     return moy_vol_at(path, v, rest);
 }
@@ -262,11 +277,11 @@ static int rename_to(const char *src, const char *dst) {
     return rc ? rc : moy_vol_rename(&a, ra, rb);
 }
 
-// `<path>.tmp` published as `path`, the previous file rotated to `.bak`.
+// `<path>.tmp` published as `path`, the previous file rotated to its backup.
 static int publish_tmp(op_t *o) {
     const char *path = o->full;
     char *tmp = o->a, *bak = o->b;
-    if (!suffixed(tmp, path, ".tmp") || !suffixed(bak, path, ".bak")
+    if (!suffixed(tmp, path, ".tmp") || !bak_of(bak, path)
         || !moy_fs_exists(tmp)) {
         return MOY_ENODEV;          // the caller names it: no staged tmp
     }
@@ -505,8 +520,9 @@ static int apply_one(op_t *o, const char *op, const char *op_end, int *shelf,
         if (o->root == MOY_SYNC_APPS) {
             // An app's folder holds its keys and nothing else: the rotated
             // previous file would read as a key of its own.
-            path_of(o, o->nseg, ".bak", o->b, PATH_CAP);
-            moy_fs_remove(o->b);
+            if (bak_of(o->b, o->full)) {
+                moy_fs_remove(o->b);
+            }
         }
         journal(o, NULL, 0);
         *shelf = shelf_dirty(o, new_item);

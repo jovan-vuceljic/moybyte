@@ -19,6 +19,11 @@ ROOT = Path(__file__).resolve().parent.parent
 SYSTEM_CARTS = ROOT / "system_carts"
 
 
+def _bak_path(path):
+    from runtime import moy_fs
+    return moy_fs._native.bak_path(path)
+
+
 class _Stub:
     w = 320
     h = 240
@@ -277,7 +282,7 @@ def test_device_status_survives_an_unreadable_detail(tmp_path):
 # known-networks list, edits it and republishes it. That makes the LOADER
 # load-bearing for durability -- a read that reports "nothing saved yet" for a
 # store that is merely half-published turns the very next save into permanent
-# data loss, because _write_atomic's crash safety lives entirely in the .bak it
+# data loss, because _write_atomic's crash safety lives entirely in the backup it
 # leaves behind and the save after that deletes it.
 #
 # These pin the three states that window can leave (missing / truncated / wrong
@@ -286,7 +291,7 @@ def test_device_status_survives_an_unreadable_detail(tmp_path):
 
 
 def _wifi_files(carts):
-    """The wifi.json family actually on disk (store + its .bak/.tmp siblings)."""
+    """The wifi.json family actually on disk (store + its .tmp sibling)."""
     import os
     from runtime import moy_carts
     d = os.path.dirname(moy_carts.wifi_store_path(carts))
@@ -303,7 +308,7 @@ def _two_saved(tmp_path):
 
 
 def test_a_store_lost_in_the_write_window_is_recovered_not_reported_empty(tmp_path):
-    """_write_atomic rotates the good file to .bak and then publishes the new one.
+    """_write_atomic rotates the good file to its backup and then publishes the new one.
     A crash between those two renames leaves NO store -- and the previous good copy
     right beside it. The loader must find it."""
     import os
@@ -311,14 +316,14 @@ def test_a_store_lost_in_the_write_window_is_recovered_not_reported_empty(tmp_pa
 
     carts = _two_saved(tmp_path)
     p = moy_carts.wifi_store_path(carts)
-    os.remove(p + ".bak")
-    os.rename(p, p + ".bak")            # exactly the state the window leaves
+    os.remove(_bak_path(p))
+    os.rename(p, _bak_path(p))            # exactly the state the window leaves
 
     assert [n["ssid"] for n in moy_carts.load_wifi(carts)] == ["Work", "Home"]
     # ... and the recovery is HEALED back onto disk, not re-derived every read:
     # the next save must not be the thing that finally deletes the only copy.
     assert os.path.exists(p)
-    os.remove(p + ".bak")
+    os.remove(_bak_path(p))
     assert [n["ssid"] for n in moy_carts.load_wifi(carts)] == ["Work", "Home"]
 
 
@@ -350,7 +355,7 @@ def test_a_wrong_shaped_store_falls_back_to_the_backup(tmp_path):
 
 def test_a_deliberately_emptied_store_is_not_resurrected(tmp_path):
     """The flip side: forgetting the last network leaves a VALID empty store, and
-    the .bak still holds the old one. An empty list is an answer, not a failure."""
+    the backup still holds the old one. An empty list is an answer, not a failure."""
     from runtime import moy_carts
 
     carts = _two_saved(tmp_path)
@@ -375,13 +380,13 @@ def test_a_save_after_a_corrupt_read_does_not_eat_the_other_networks(tmp_path):
 
 
 def _arm_write_probe(carts):
-    """Delete the store's .bak and hand back a "did anything republish the store?"
-    check. _write_atomic ALWAYS writes the .bak beside the store it publishes, so
-    a reappeared .bak is proof of a rewrite -- an exact signal, where an mtime
+    """Delete the store's backup and hand back a "did anything republish the store?"
+    check. _write_atomic ALWAYS writes the backup beside the store it publishes, so
+    a reappeared backup is proof of a rewrite -- an exact signal, where an mtime
     comparison depends on the filesystem's timestamp granularity."""
     import os
     from runtime import moy_carts
-    bak = moy_carts.wifi_store_path(carts) + ".bak"
+    bak = _bak_path(moy_carts.wifi_store_path(carts))
     if os.path.exists(bak):
         os.remove(bak)
     return lambda: os.path.exists(bak)
@@ -471,8 +476,8 @@ def test_an_unreadable_store_does_not_blank_the_saved_password(tmp_path):
     w.connect("Work", "workpw")
 
     p = moy_carts.wifi_store_path(carts)
-    os.remove(p + ".bak")
-    os.rename(p, p + ".bak")             # the write window, mid-session
+    os.remove(_bak_path(p))
+    os.rename(p, _bak_path(p))             # the write window, mid-session
     assert sorted(w.known()) == ["Home", "Work"]
 
     w.connect("Home", "")                # the panel's known-network reconnect

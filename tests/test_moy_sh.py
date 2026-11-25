@@ -221,6 +221,53 @@ def test_a_walk_looks_up_no_entry_by_its_path(harness, tmp_path):
     assert many - few < 200 + 20, "1 file: %d calls, 200 files: %d" % (few, many)
 
 
+def _tree(root, files):
+    for name, data in files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_bytes(data)
+
+
+def test_rm_r_takes_saved_files_with_their_backups_in_one_pass(harness, tmp_path):
+    """A file's remove takes the store's backup of it (moy_sh_cmds.c's vol
+    op), which the folder's listing still names: `rm -r` counts that entry
+    removed and goes on, one pass leaving nothing and exiting 0. A user's
+    own `.bak` goes as any file does."""
+    root = tmp_path / "root"
+    _tree(root, {"d/f": b"x", "d/.f.moybak": b"#moyfs1 1 1\nx", "d/g.bak": b"mine",
+                 "d/e/h": b"y", "d/e/.h.moybak": b"#moyfs1 1 2\ny"})
+    script = tmp_path / "rmr.sh"
+    script.write_text("rm -r d; echo rc=$?\n")
+    out = run(harness, str(script), root)
+    assert out.endswith("\nrc=0\n[exit 0]\n") and not os.listdir(root), out
+
+
+def test_rm_and_mv_take_the_stores_backup_and_never_a_users_bak(harness, tmp_path):
+    """`report.bak` beside `report` is the user's: `rm report` and `mv
+    notes x` take the store's backup of the file they move or remove, and
+    leave every other file."""
+    root = tmp_path / "root"
+    _tree(root, {"report": b"r", ".report.moybak": b"#moyfs1 1 1\nr", "report.bak": b"mine",
+                 "notes": b"n", ".notes.moybak": b"#moyfs1 1 1\nn", "notes.bak": b"also mine"})
+    script = tmp_path / "rm.sh"
+    script.write_text("rm report; mv notes x; echo rc=$?\n")
+    out = run(harness, str(script), root)
+    assert out.endswith("\nrc=0\n[exit 0]\n"), out
+    assert sorted(os.listdir(root)) == ["notes.bak", "report.bak", "x"], out
+    assert (root / "report.bak").read_bytes() == b"mine"
+
+
+def test_the_stores_backups_never_show_in_ls_find_or_du(harness, tmp_path):
+    root = tmp_path / "root"
+    _tree(root, {"d/f": b"x" * 2000, "d/.f.moybak": b"x" * 9000, "d/.hidden": b"h"})
+    script = tmp_path / "ls.sh"
+    script.write_text("ls d; echo --; ls -a d; echo --; find d; echo --; du -s d\n")
+    out = run(harness, str(script), root)
+    parts = out.split("\n--\n")
+    assert "moybak" not in out and len(parts) == 4, out
+    assert ".hidden" in parts[1], out
+    assert parts[3].split()[0] == "2", out       # the 2 KB file alone, in 1K blocks
+
+
 def test_an_arena_run_out_is_an_error_not_a_reset(harness, tmp_path):
     """A block the arena refuses is dash's "Out of space", raised bare when
     its own message finds no room (moy_sh.c's refused). Reported again, it

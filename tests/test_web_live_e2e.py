@@ -146,3 +146,56 @@ def test_a_page_a_zero_serves_plays_a_console(cart, loader, live_exe, tmp_path, 
         host.end()
         air.close()
         shutil.rmtree(root, ignore_errors=True)
+
+
+def test_the_live_socket_comes_back_after_the_board_restarts(live_exe, tmp_path, monkeypatch):
+    """The board resets under an open page: its sessions are gone, so it
+    refuses the page's reopened socket with a 401 the browser cannot read.
+    The page asks the same route over HTTP, signs in again with the key it
+    paired, and its socket opens again, the page never loaded again."""
+    import test_live_link as L
+    import test_moy_tty as T
+    import test_web_term_e2e as W
+    air = L.Air()
+    monkeypatch.setenv("MOY_AIR", str(air.port))
+    monkeypatch.setenv("MOY_AIR_MAC", "020000000001")
+    root = W.tempfile.mkdtemp(prefix="moyl")
+    host = T.Host(live_exe, W.pathlib.Path(root))
+    store = host.tree / "sd" / "moybyte" / "carts"
+    for src in sorted((ROOT / "system_carts").glob("*.moy")):
+        shutil.copytree(src, store / src.name)
+    server, base = W._serve(tmp_path, host.port)
+    restarted = []
+
+    def reset():
+        host.wait_line("LIVE sessions=1", timeout=120.0)
+        time.sleep(2.0)
+        host.restart()
+        restarted.append(time.monotonic())
+
+    t = threading.Thread(target=reset, daemon=True)
+    t.start()
+    st = ("window.__moyState().then(s => '%s ' + JSON.stringify({stay: window.__stay || 0, "
+          "opens: s.live && s.live.opens, drops: s.live && s.live.drops}))")
+    try:
+        steps = [{"waitFor": "window.__moyState().then(s => s.live && s.live.opens >= 1)",
+                  "timeout": 60000},
+                 {"js": "(window.__stay = 1, 1)"}, {"js": st % "BEFORE"},
+                 {"waitFor": "window.__moyState().then(s => s.live && s.live.opens >= 2)",
+                  "timeout": 90000},
+                 {"js": st % "AFTER"}]
+        query = "?dev=1&desktop=1" + W._qr_fragment(host)
+        out, js = web_e2e.run(tmp_path, "live_restart", query, steps, base,
+                              tmp_path / "chrome", boot_ms=30000)
+        t.join(5)
+        before, after = W._tagged(js, "BEFORE"), W._tagged(js, "AFTER")
+        why = "\n%s\n%s" % (js, W._sides(host, tmp_path, out))
+        assert restarted, "the board never restarted" + why
+        assert before and before["opens"] == 1, why
+        assert after and after["opens"] >= 2 and after["drops"] >= 1, why
+        assert after["stay"] == 1, "the page loaded again" + why
+    finally:
+        server.terminate()
+        host.end()
+        air.close()
+        shutil.rmtree(root, ignore_errors=True)
