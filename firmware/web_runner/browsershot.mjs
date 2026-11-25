@@ -10,13 +10,15 @@
 //   node browsershot.mjs scenario.json [outdir]
 //
 // Same scenario vocabulary as pageshot.mjs where it makes sense --
-//   {"wait":ms} {"shot":"name"} {"click":[x,y]} {"move":[x,y]}
+//   {"wait":ms} {"shot":"name"} {"page":"name"} {"click":[x,y]} {"move":[x,y]}
 //   {"drag":[x0,y0,x1,y1,steps]} {"key":"a"} {"key":"z","mods":["ctrl"]}
 //   {"key":"v","mods":["ctrl"],"commands":["paste"]} (the browser's paste)
 //   {"key":"Meta"} (a modifier alone) {"click":[x,y],"mods":["shift"]}
 //   {"dblclick":[x,y]} (two clicks back to back, the second with Chrome's
 //                       clickCount 2, as a person's double click arrives)
 //   {"wheel":[x,y,dx,dy]} {"middle":[x0,y0,x1,y1,steps]} {"js":"..."} {"note":"..."}
+//   {"viewport":{"width","height","dpr","mobile"}}  the page's viewport moved
+//                                           (a resize, a rotation, a screen's dpr)
 //   {"js":"...","gesture":true}            the js run as a user's gesture (what
 //                                           requestFullscreen and the like need)
 //   {"file":"path|$ENVVAR","as":"__name"}   local bytes -> window.__name
@@ -231,15 +233,18 @@ const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 // The small tiers are where the on-screen controls live, and their layout (plus
 // the browser's own dynamic toolbar) is load-bearing -- a desktop-sized window
 // never exercises it.
-if (scenario.device) {
-    const d = scenario.device;
+// A desktop shape ("mobile": false) keeps the mouse.
+// A device's input: a phone's touch, which the page's controls take
+// (pointer:coarse), or none, as on a desk with no touch screen.
+async function viewport(d) {
+    const touch = d.mobile !== false;
     await cdp("Emulation.setDeviceMetricsOverride", {
-        width: d.width, height: d.height, deviceScaleFactor: d.dpr || 2,
-        mobile: d.mobile !== false,
+        width: d.width, height: d.height, deviceScaleFactor: d.dpr || 2, mobile: touch,
     });
-    await cdp("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
-    await cdp("Emulation.setEmitTouchEventsForMouse", { enabled: true, configuration: "mobile" });
+    await cdp("Emulation.setTouchEmulationEnabled", { enabled: touch, maxTouchPoints: touch ? 5 : 1 });
+    await cdp("Emulation.setEmitTouchEventsForMouse", { enabled: touch, configuration: "mobile" });
 }
+if (scenario.device) await viewport(scenario.device);
 // {"scheme":"dark"|"light"}: the browser's prefers-color-scheme, which a console
 // with no saved theme boots in (page_tail.js moyScheme).
 if (scenario.scheme) {
@@ -266,7 +271,11 @@ async function waitLive(timeoutMs) {
     }
     return status;
 }
-await cdp("Page.navigate", { url: `${ORIGIN}/${scenario.query || ""}` });
+// A scenario with no device clicks the desk at 1024x600, the glass every
+// scenario was written for: a page sizes its glass by its room otherwise.
+let query = scenario.query || "";
+if (!scenario.device && !/[?&]size=/.test(query)) query += (query.includes("?") ? "&" : "?") + "size=1024x600";
+await cdp("Page.navigate", { url: `${ORIGIN}/${query}` });
 const bootMs = scenario.boot_ms || 6000;
 const bootStatus = await waitLive(bootMs);
 console.log("boot -> " + (bootStatus || "(still booting after " + bootMs + "ms)"));
@@ -315,6 +324,15 @@ async function shot(name) {
     console.log(`shot ${name}: -> ${path}  ${st}`);
 }
 
+// {"page": name}: the whole viewport as the visitor sees it, the page's own
+// controls and margins included.
+async function pageShot(name) {
+    const r = await cdp("Page.captureScreenshot", { format: "png" });
+    const path = join(outdir, name + ".png");
+    writeFileSync(path, Buffer.from(r.data, "base64"));
+    console.log(`page ${name}: -> ${path}`);
+}
+
 // CDP's modifier bits, and each modifier's own key.
 const VK = { Enter: 13, Backspace: 8, Escape: 27, Tab: 9, Delete: 46,
              ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40,
@@ -331,6 +349,7 @@ for (const step of scenario.steps || []) {
             const got = await waitForExpr(step.waitFor, step.timeout || 10000);
             console.log("   waitFor ->", JSON.stringify(got));
         }
+        if (step.viewport) await viewport(step.viewport);
         if (step.grant) await send("Browser.grantPermissions", { permissions: step.grant, origin: ORIGIN });
         if (step.open) await attach((await send("Target.createTarget", { url: step.open })).targetId);
         if (step.tab != null) await useTab(step.tab, step.timeout || 15000);
@@ -469,6 +488,7 @@ for (const step of scenario.steps || []) {
         }
         if (step.js) console.log("   js ->", JSON.stringify(await evaluate(step.js, !!step.gesture)));
         if (step.shot) await shot(step.shot);
+        if (step.page) await pageShot(step.page);
     } catch (e) {
         failed++;
         console.log("STEP FAILED", JSON.stringify(step), "\n  ", e && e.message ? e.message : e);

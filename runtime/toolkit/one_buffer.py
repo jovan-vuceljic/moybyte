@@ -37,6 +37,12 @@ class OneBufferCompositor:
     def size(self):
         return (self._w, self._h)
 
+    def resize(self, w, h):
+        """The buffer made again at `w` x `h`, black (`DeviceCanvas.resize`)."""
+        self._w = int(w)
+        self._h = int(h)
+        self._buf = bytearray(self._w * self._h * 2)
+
     def framebuffer(self):
         return self._buf
 

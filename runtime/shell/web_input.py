@@ -83,7 +83,7 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
                  on_key=None, on_esc=None, on_hold=None, on_key_hold=None,
                  on_super=None, on_full=None, on_key_down=None, on_key_up=None,
                  on_mods=None, on_wheel=None, on_middle=None, on_gamepad=None,
-                 on_paste=None):
+                 on_paste=None, on_glass=None):
     """Inject a batch of browser events into an InputState + Pointer. Each event is fully
     guarded (a malformed one is skipped, never raised) so a buggy client can't crash the loop.
 
@@ -121,6 +121,9 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
                                         screen, and back
       {"type":"super"}               -> the system key (on_super): the system
                                         menu, or the pause menu in play
+      {"type":"glass","w","h","zoom","zooms"} -> the page's viewport moved
+                                        (on_glass): the glass resized, the
+                                        UI scale and the ones it offers
       {"type":"paste","text":..}     -> the browser's clipboard pasted
                                         (on_paste): the text whole; with no
                                         text, the console's own Paste
@@ -234,6 +237,10 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
             elif t == "full":
                 if on_full is not None:
                     on_full()
+            elif t == "glass":
+                if on_glass is not None:
+                    on_glass(int(ev["w"]), int(ev["h"]), int(ev.get("zoom", 1)),
+                             ev.get("zooms") or (1,))
             elif t == "paste":
                 text = ev.get("text", "")
                 if isinstance(text, str) and on_paste is not None:
