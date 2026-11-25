@@ -337,6 +337,8 @@ from project import Project
 # reintroduce it.
 from player import (Player, BAR_TYPES, SCRIPT_TYPE, _SIG_FPS)
 
+SCRIPT_ID = "script:%s/%s"       # a script's app id: its file kind and name (`run_script`)
+
 # The TEXT CONSOLE (text_console.py): the surface a `type: "script"` cart runs
 # on -- scrollback + prompt, drawn by the shell as the run's `_draw` so a
 # script cannot paint over the line it is reading from.
@@ -2792,6 +2794,11 @@ class Workstation:
         title = str(name)
         cut = title.rfind(".")
         cart = {"title": title[:cut] if cut > 0 else title,
+                # Its app id (consent, grant, prefs, crash strikes) is its
+                # file's, in a namespace of scripts' own: no cart's id or
+                # title slug holds a ":", so a script titled like a cart
+                # never reads that cart's record.
+                "id": SCRIPT_ID % (kind, name),
                 # The FILE is the path: a script has no folder, and the loader
                 # never opens this -- it is the run's identity, and what keeps
                 # `open_workspace`'s pathless-cart guard from substituting a
