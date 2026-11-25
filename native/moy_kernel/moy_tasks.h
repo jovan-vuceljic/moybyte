@@ -29,7 +29,10 @@
 #define MOY_INPUT_TASK_STACK 3072          // a board names its own (mpconfigboard.h)
 #endif
 #define MOY_MEDIA_STACK (20u * 1024u)       // a frame's decode takes 16.7 KB of it
-#define MOY_MEDIA_PRIO 3
+// The media task decodes what the speaker plays next, a few hundred ms ahead
+// (MOY_MEDIA_PCM_FRAMES): above the bulk work beside it on core 0 (the http
+// worker's TLS, a USB disk, the C6's transmit, the mic), below the flush.
+#define MOY_MEDIA_PRIO 7
 #define MOYCORE_SVC_STACK 12288u
 #define MOYCORE_SVC_PRIO 2
 #if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
