@@ -15,6 +15,7 @@ http page on the LAN without one.
     tools/web_app.py OUT_DIR
 """
 
+import argparse
 import base64
 import importlib.util
 import json
@@ -64,5 +65,12 @@ def write(out):
             f.write(png)
 
 
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Write the browser console's web app manifest "
+                                             "and Moy's icons into a folder.")
+    ap.add_argument("out", help="the folder (build.sh passes dist/)")
+    write(ap.parse_args(argv).out)
+
+
 if __name__ == "__main__":
-    write(sys.argv[1])
+    main()
