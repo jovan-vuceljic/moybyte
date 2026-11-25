@@ -576,6 +576,9 @@ class Workstation:
     pf_home = None                 # the home frame's split, under perf_capture (home_band)
     # A soft keyboard the board offers beside its inputs (the browser page's).
     soft_keyboard = False
+    # A panel light Brightness sets: False where there is none to set (the
+    # browser page), and the Brightness rows are not offered.
+    panel_light = True
     no_keyboard_text = NO_KEYBOARD_TEXT
 
     def __init__(self, comp, canvas, input, carts=None, sys_canvas=None,
@@ -3853,7 +3856,8 @@ class Workstation:
         """The right-zone wifi STATUS glyph (Part 3): "wifi" when the injected wifi
         service reports a live link, "wifi_off" when there's no
         connection, which the look's bar shows as its own glyph and the pixel
-        bar as no glyph (the crash strip as a slashed one). Reads the backend's status() -> (connected, ssid, ip); defaults to
+        bar as no glyph (the crash strip as a slashed one), and "" where the
+        console has no wifi at all (the browser page): no glyph anywhere. Reads the backend's status() -> (connected, ssid, ip); defaults to
         disconnected on no backend / any status error, so the host + tests are
         deterministic (FakeWifi boots disconnected -> "wifi_off"). Folded into the bar's
         cache key so a real connect/disconnect repaints the strip. Only ever called on a
@@ -3861,7 +3865,7 @@ class Workstation:
         game frame budget."""
         w = self.wifi
         if w is None:
-            return "wifi_off"
+            return ""                  # no radio at all (the browser): no glyph
         try:
             return "wifi" if w.status()[0] else "wifi_off"
         except Exception:  # noqa: BLE001 -- a status hiccup must not blank the bar

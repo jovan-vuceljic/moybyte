@@ -33,8 +33,8 @@ CHANNELS = ("stable", "beta")
 IDLE = tuple((key, say(text)) for key, _rung, text, _d in IDLE_ROWS)
 STEP_WORDS = tuple(str(t) for t in IDLE_STEPS)
 
-# the rows a board adds, by the row key `_settings_rows()` names them with
-CAPS = ("bluetooth", "layout_theme", "crash", "usb_drive", "webhost", "update", "ota_channel",
+# the rows a console adds or lacks, by the row key `_settings_rows()` names them with
+CAPS = ("wifi", "brightness", "bluetooth", "layout_theme", "crash", "usb_drive", "webhost", "update", "ota_channel",
         "update_c6", "idle_dim", "idle_blank")
 
 s = ui.state(
@@ -312,7 +312,7 @@ def _toggle_row(name, label):
 def rows_page():
     with ui.page(""):
         with ui.group("General"):
-            ui.link("wifi", "{wifi_word}")
+            ui.link("wifi", "{wifi_word}", shown="has_wifi")
             ui.link("bluetooth", "{bt_word}", shown="has_bluetooth")
             ui.link("appearance", "{theme_title}")
             ui.seg("Text size", "font_scale", text="{.word}", look="cycle", on="font_set",
@@ -323,7 +323,7 @@ def rows_page():
             ui.slider("Volume", "volume", LEVELS["volume"][0], LEVELS["volume"][1], look="steps",
                       icon="{volume?:mute}", on="volume_set")
             ui.slider("Brightness", "brightness", LEVELS["brightness"][0], LEVELS["brightness"][1],
-                      look="steps", on="brightness_set")
+                      look="steps", on="brightness_set", shown="has_brightness")
             ui.link("tz", "{tz_place}")
             ui.field("Name", "name", NAME_MAX, commit=True, hint="{name_hint}", on="name_done",
                      changed="name_set", shown="can_type")

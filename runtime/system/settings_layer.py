@@ -335,6 +335,8 @@ class SettingsLayer(Layer):
         self._rows_web = False
         self._rows_c6 = False
         self._rows_usb = False
+        self._rows_wifi = True
+        self._rows_light = True
         self._rows_idle = None
         self._rows_lgen = -1
         self._rows_sizes = None
@@ -974,6 +976,8 @@ class SettingsLayer(Layer):
         usb = self._usb.drive() is not None
         idle = getattr(ws, "idle_ladder", None)
         tog = self._toggle_rows()
+        radio = self._wifi.station() is not None
+        light = bool(ws.panel_light)
         lgen = ws.look.layout_gen
         sizes = ws.look.font_scales()
         if (self._rows_cache is not None and lgen == self._rows_lgen
@@ -981,12 +985,18 @@ class SettingsLayer(Layer):
                 and bt == self._rows_bt
                 and upd == self._rows_upd and onl == self._rows_onl
                 and web == self._rows_web and c6u == self._rows_c6
-                and usb == self._rows_usb
+                and usb == self._rows_usb 
+                and radio == self._rows_wifi and light == self._rows_light
                 and tog is self._rows_tog and idle is self._rows_idle):
             return self._rows_cache
         # The registry block sits directly after NAME, which is where the
         # hand-spliced FRAMESKIP/PERF DIAG rows were.
         rows = self._SETTINGS_ROWS + tog
+        if not radio or not light:
+            # WIFI where there is a radio, BRIGHTNESS where there is a panel
+            # light (`ws.panel_light`): the browser page has neither.
+            rows = tuple(r for r in rows if (radio or r[0] != "wifi")
+                         and (light or r[0] != "brightness"))
         if ws.look.layout_choices() or ws.look.layout_theme() is not None:
             # LAYOUT (docs/theme_and_shell_2026-11.md §8.9): after FONT SIZE, and
             # only where a package's layout differs from the theme's.
@@ -1040,6 +1050,8 @@ class SettingsLayer(Layer):
         self._rows_web = web
         self._rows_c6 = c6u
         self._rows_usb = usb
+        self._rows_wifi = radio
+        self._rows_light = light
         self._rows_idle = idle
         self._rows_lgen = lgen
         self._rows_sizes = sizes
