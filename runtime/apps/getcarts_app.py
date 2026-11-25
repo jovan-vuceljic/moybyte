@@ -18,9 +18,10 @@ The screens, in the order a kid meets them:
              names others (runtime/shell/pkg.py, the shell's `pkg`) --
              then the covers they name that this session has not drawn yet:
              one busy page, the shelves counted as they come.
-  LIST       the shelf: a card per cart, its genre's icon on a tinted tile
-             (its cover, the 128 x 128 cover.png of SPEC.md 3.6, is handed
-             to the engine as the app's own picture, `ui.pictures`), its
+  LIST       the shelf: a card per cart, its cover (the 128 x 128
+             cover.png of SPEC.md 3.6, handed to the engine as the app's
+             own picture, `ui.pictures`, which the card names: `cover_pic`)
+             or, while it has none, its genre's icon on a tinted tile, its
              name and a sub line -- its size, or where it stands: On
              console, Update ready, Name taken when a different cart already
              has its folder, Too big or Can't play. The caption row counts
@@ -220,12 +221,13 @@ s = ui.state(
     caption="",                 # the shelf's count and its room free, on the desk's one line
     count="",                   # ...on the handheld's: the count at its start, the room at its end
     free="",
-    carts=ui.model(key="id", id="", name="", sub="", icon="", tone="", badge=""),
+    carts=ui.model(key="id", id="", name="", sub="", icon="", tone="", badge="", pic=ui.IMAGE),
     card=ui.row_of("carts"),
     none=False,                 # the shelf is empty
     shown=False,                # the desk's pane has a cart
     name="",                    # the cart: its name, its cover's tile, where it is from
     icon="game",
+    pic=ui.IMAGE,               # ...its cover, None while it has none (the icon's tile)
     meta="",
     genre="",
     src="",
@@ -325,7 +327,7 @@ def _fill_shelf(lay):
         sh = lay._shown(r)
         rows.append({"id": c["folder"], "name": c["name"],
                      "sub": STATE_WORD.get(sh) or _mb(r["plan"]["store_bytes"]),
-                     "icon": genre_icon(c), "badge": BADGE.get(sh, ""),
+                     "icon": genre_icon(c), "pic": lay.cover_pic(c), "badge": BADGE.get(sh, ""),
                      "tone": "value" if sh == "update" else "danger" if sh in BLOCKED else ""})
     _set(lay, "carts", rows)
     s.none = not rows
@@ -337,6 +339,7 @@ def _fill_shelf(lay):
 def _fill_cart(lay, row):
     c = row["cart"]
     s.name, s.icon, s.meta = c["name"], genre_icon(c), lay._meta(c)
+    s.pic = lay.cover_pic(c)
     s.genre = _cl.genre_word(c.get("genre")) or ""
     s.src = c.get("shelf") or _host_of(c.get("index") or "")
     st = lay._state_line(row)
@@ -483,7 +486,8 @@ ui.action("install", "Install", install)
 def _cards():
     with ui.cards("carts", cur="card", changed="follow", w="{@desk?128:64}", h="{@desk?128:64}",
                   pad="{@desk?8:12}"):
-        ui.card("open", label="{.name}", sub="{.sub}", icon="{.icon}", tone="{.tone}", badge="{.badge}")
+        ui.card("open", label="{.name}", sub="{.sub}", icon="{.icon}", tone="{.tone}", badge="{.badge}",
+                image=".pic")
     ui.label("No carts on the shelf yet", tone="dim", shown="none")
 
 
@@ -525,7 +529,7 @@ def _desk():
             _cards()
         with ui.group("", shown="shown"):
             with ui.row("head"):
-                ui.picture(icon="{icon}", side=128)
+                ui.picture(image="pic", icon="{icon}", side=128)
                 with ui.group(""):
                     ui.label("{name}", face="title")
                     ui.label("{genre}", tone="dim", face="caption", shown="genre")
@@ -546,7 +550,7 @@ def _desk():
 
 def _cart():
     with ui.row("head"):
-        ui.picture(icon="{icon}", side=64)
+        ui.picture(image="pic", icon="{icon}", side=64)
         with ui.group(""):
             ui.label("{meta}", tone="dim", face="caption")
             ui.label("{state}", icon="{state_icon}", tone="{state_tone}", wrap="word", lines=2, shown="state")
@@ -559,7 +563,7 @@ def _cart():
 
 def _getting():
     with ui.row("cover"):
-        ui.picture(icon="{icon}", side=64)
+        ui.picture(image="pic", icon="{icon}", side=64)
     ui.label("{title}", face="title", align="center")
     with ui.row("bar", pad=34):
         ui.progress("done", max="{total}", label="{what}")
@@ -1087,6 +1091,14 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             return True
         self._decode_cover(cart, data)
         return True
+
+    def cover_pic(self, cart):
+        """The picture a card and the cart's page show for `cart`: its cover
+        once the engine holds it, else None (its genre's icon)."""
+        ref = cart.get("cover")
+        if ref is None or not self.thumbs.get(ref["sha256"]):
+            return None
+        return ui.image.own("cover:" + ref["sha256"])
 
     def _decode_cover(self, cart, data):
         """A cover's bytes handed to the engine, which decodes them where a
