@@ -107,16 +107,29 @@ class Host:
         env = dict(os.environ, MOY_SH_ROOT=str(tree), ASAN_OPTIONS="detect_leaks=0")
         if page:                                # (body hex, whole hex): the pack it names
             env["MOY_TTY_PAGE"] = " ".join(page)
-        self.proc = subprocess.Popen(
-            [exe, str(self.port), str(tree / "sd" / "moybyte" / "system") if sealed else "-",
-             str(tree / "sd" / "moybyte" / "carts")]
-            + ([str(tree / "sd" / "moybyte" / "files")] if files else []),
-            stdin=subprocess.PIPE, stdout=self.logf, stderr=subprocess.STDOUT, env=env)
+        self.argv = ([exe, str(self.port),
+                      str(tree / "sd" / "moybyte" / "system") if sealed else "-",
+                      str(tree / "sd" / "moybyte" / "carts")]
+                     + ([str(tree / "sd" / "moybyte" / "files")] if files else []))
+        self.env = env
+        self._start()
+
+    def _start(self):
+        at = len(self.log())
+        self.proc = subprocess.Popen(self.argv, stdin=subprocess.PIPE, stdout=self.logf,
+                                     stderr=subprocess.STDOUT, env=self.env)
         for _ in range(200):
-            if "listening" in self.log():
+            if "listening" in self.log()[at:]:
                 break
             time.sleep(0.05)
-        assert "listening" in self.log(), self.log()
+        assert "listening" in self.log()[at:], self.log()
+
+    def restart(self):
+        """A board reset: the process gone and started again on the same
+        port and store, its sessions forgotten and its paired keys kept."""
+        self.proc.kill()
+        self.proc.wait()
+        self._start()
 
     def log(self):
         # Its own handle: the child writes through logf's open file, whose
