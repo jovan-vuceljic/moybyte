@@ -224,6 +224,26 @@ for (const st of [404, 405, 501]) {
     ok("...after a few hellos", b.count.hello === 3, "hellos " + b.count.hello);
 }
 {
+    const PW = Object.assign({}, HELLO, { body: Object.assign({}, HELLO.body, { pw: true }) });
+    const b = board((op, d, i) => op === "hello" ? PW
+        : op === "pake" ? (i <= 2 ? { status: 503, body: { error: "busy" } } : { status: 200, body: {} })
+        : SIGNED);
+    const w = page(b, null);
+    ok("a board busy with another pairing is asked again, and the password pairs",
+       await w.pairPassword("correct horse", "x"), JSON.stringify(b.log));
+    const wrong = board((op) => op === "hello" ? PW
+        : op === "pake" ? { status: 403, body: { error: "password" } } : SIGNED);
+    const v = page(wrong, null);
+    ok("the board's 403 \"password\" says the password did not work",
+       !(await v.pairPassword("wrong horse", "x")) && /password did not work/.test(v.state().authNeed.why));
+    const busy = board((op) => op === "hello" ? PW
+        : op === "pake" ? { status: 503, body: { error: "busy" } } : SIGNED);
+    const u = page(busy, null);
+    ok("a board that stays busy says it is busy, never that the password is wrong",
+       !(await u.pairPassword("correct horse", "x")) && /busy/.test(u.state().authNeed.why)
+       && !/password/.test(u.state().authNeed.why), JSON.stringify(u.state().authNeed));
+}
+{
     const b = board((op) => op === "hello" ? HELLO : SIGNED);
     const w = page(b, KEY);
     ok("a page signs in", await w.signIn());

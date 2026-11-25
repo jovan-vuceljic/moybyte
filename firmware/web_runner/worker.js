@@ -1335,22 +1335,31 @@ function signIn() {
 }
 
 // Pairing by the console's password (the page's prompt): SPAKE2+, then the
-// key, then a fresh load signed in with it.
+// key, then a fresh load signed in with it. Only the password's own refusals
+// say the password is wrong: the board's confirmation failing to check
+// (which a wrong password, or another console, makes) or its 403
+// "password". A board busy with another browser's pairing (503) is asked
+// again, BUSY_TRIES times BUSY_MS apart.
+const BUSY_TRIES = 6, BUSY_MS = 1000;
 async function pairPassword(pw, name) {
+    const wrong = "that password did not work -- try again";
     let why = "";
     try {
-        for (let i = 0; i < NONCE_TRIES; i++) {
+        for (let i = 0, busy = 0; i < NONCE_TRIES; i++) {
             const h = await hello();
             if (!h.id) return need(h.r, true);
             const n = swCall(sw().pake, pw, name || auth.name);
             if (n < 0) { why = "the console's answer did not check -- try again"; break; }
             let r = await authPost(utf8d.decode(swGet(n)));
             if (r.status === 409) continue;            // the nonce went: ask again
+            if (r.status === 503 && ++busy < BUSY_TRIES) {
+                await new Promise((ok) => setTimeout(ok, BUSY_MS));
+                i--;
+                continue;
+            }
             if (r.status === 200) {
-                // The board's confirmation fails to check under a wrong password
-                // (and on another console, which the same sentence covers).
                 const c = sw().confirm(swPut(utf8.encode(r.text)));
-                if (c < 0) why = "that password did not work -- try again";
+                if (c < 0) why = wrong;
                 else {
                     r = await authPost(utf8d.decode(swGet(c)));
                     if (finish(r, "reload")) return true;
@@ -1359,7 +1368,9 @@ async function pairPassword(pw, name) {
             }
             if (r.status === 429) return need(r, true);
             why = why || (r.doc.error === "nopw" ? "the console has no password set"
-                                                 : "that password did not work -- try again");
+                          : r.doc.error === "password" ? wrong
+                          : r.status === 503 ? "the console is busy -- try again in a moment"
+                          : "the console did not take the sign-in (" + r.status + ")");
             break;
         }
     } catch (e) { why = "the console did not answer"; }
