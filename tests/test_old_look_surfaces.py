@@ -259,11 +259,16 @@ def test_a_tool_carts_bar_is_the_compact_band_on_the_glass(tmp_path):
     names = [c[0] for c in ws.bar_layer._packed("tool")[0][3]]
     assert "menu" in names and "zone" in names and "clock" in names and "battery" in names
     assert "wifi" not in names and "close" not in names
-    # drawn on the system canvas, in the letterbox above the game too
+    # drawn on the system canvas, in the letterbox above the game too: its
+    # tile, chevron, title and clock stand out of the letterbox's colour
+    # (which a theme may give the bar's ground too: Moy's panel is its desktop)
     from runtime import host_app
     cv = ws.sys_canvas
     px = memoryview(cv._buf).cast("H")
-    assert px[(band[1] + 2) * cv.w + band[0] + band[2] // 2] != px[(band[1] + 2) * cv.w + 2]
+    margin = px[(band[1] + 2) * cv.w + 2]
+    drawn = sum(1 for y in range(band[1], oy) for x in range(band[0], band[0] + band[2])
+                if px[y * cv.w + x] != margin)
+    assert drawn > 100, drawn
     # the chevron exits, tapped on the glass
     bx, by, bw, bh = ws.bar_layer.back_rect("tool")
     drv = host_app.ConsoleDriver(ws)

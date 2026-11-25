@@ -598,9 +598,11 @@ class WindowPaint:
             self._bezel_key = bkey
             self._bezel_paints = 0
         self._bezel_frame = drawn
-        if self.overlay_sig() or self.popover_takes_keys():
-            # Something over the game washes the frame each frame: the bezel
-            # is painted under it each frame, or the wash compounds on it.
+        ws = self.ws
+        if ws.sysmenu.open or ws.pause.open or ws.confirm.open or ws.about \
+                or self.popover_takes_keys():
+            # A card over the game washes the frame each frame: the bezel is
+            # painted under it each frame, or the wash compounds on it.
             self._bezel_paints = 0
         if self._bezel_paints < self.retained_n():
             self._bezel_paints += 1
