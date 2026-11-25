@@ -4,6 +4,7 @@ cat /proc/9/status
 ls /proc
 ls /dev
 log doom
+log doom > /log.txt; grep -c . /log.txt; dmesg | wc -l
 cat /proc/9/log
 perm list
 service stop 7

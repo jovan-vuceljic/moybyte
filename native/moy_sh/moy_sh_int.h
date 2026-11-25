@@ -57,6 +57,7 @@ struct moy_sh {
     int interrupt;                      // an interrupt not yet delivered
 
     struct moy_sh_fork_frame *forks;
+    union moy_sh_pblk *pblocks;         // the process blocks held (moy_sh_palloc)
     int next_pid;
     // children not yet waited for, each its parent's (a subshell's own are
     // dropped when it exits): `host` marks a background program the host
@@ -80,8 +81,14 @@ int moy_sh_rolecmd(int argc, char **argv);
 // The index in kids of the running process's child `pid`, or -1.
 int moy_sh_kid(int pid);
 
+// A block of the host's heap (moy_sh_halloc) outlives the process that took
+// it: descriptors, pipes and their spills, the session's own buffers. A
+// built-in's working memory is a process block (moy_sh_palloc, moy_sh.c),
+// freed with its process if the built-in does not get to free it.
 void *moy_sh_halloc(size_t n);
 void moy_sh_hfree(void *p);
+void *moy_sh_palloc(size_t n);
+void moy_sh_pfree(void *p);
 
 // The OS layer: the terminal descriptors a session starts with, a fork's
 // references and a process's exit.

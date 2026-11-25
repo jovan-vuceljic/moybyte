@@ -148,25 +148,6 @@ static int pump(int fd) {
     }
 }
 
-// Read all of `fd` into the stack string; answers its length.
-static size_t slurp(int fd, char **out) {
-    char buf[512];
-    char *p;
-    size_t len = 0;
-    STARTSTACKSTR(p);
-    for (;;) {
-        ssize_t n = read(fd, buf, sizeof buf);
-        if (n <= 0) {
-            break;
-        }
-        p = stnputs(buf, (size_t)n, p);
-        len += (size_t)n;
-    }
-    STACKSTRNUL(p);
-    *out = stackblock();
-    return len;
-}
-
 // Each operand opened for reading, "-" or none being stdin: fn(fd, name).
 static int each_input(char **args, int (*fn)(int fd, const char *name, void *arg), void *arg) {
     int status = 0;
@@ -580,14 +561,14 @@ static int walk_grow(void *p, size_t *cap, size_t need) {
     while (c < need) {
         c *= 2;
     }
-    char *q = moy_sh_halloc(c);
+    char *q = moy_sh_palloc(c);
     if (q == NULL) {
         return ENOMEM;
     }
     if (*cap) {
         memcpy(q, *at, *cap);
     }
-    moy_sh_hfree(*at);
+    moy_sh_pfree(*at);
     *at = q;
     *cap = c;
     return 0;
@@ -657,8 +638,8 @@ static int walk_enter(walk_t *w, const char *path, size_t n, int top) {
 }
 
 static void walk_free(walk_t *w) {
-    moy_sh_hfree(w->names);
-    moy_sh_hfree(w->dirs);
+    moy_sh_pfree(w->names);
+    moy_sh_pfree(w->dirs);
     w->names = NULL;
     w->dirs = NULL;
     w->len = w->cap = w->depth = w->room = 0;
@@ -1011,7 +992,7 @@ static int headcmd(int argc, char **argv) {
 // A file's last `want` lines, read in two passes a chunk at a time and never
 // copied into the session's arena, which is 12 KB where there is no PSRAM
 // (MOY_SH_ARENA, the C3 Zero's SSH face). -1 for what does not seek (a
-// pipe), which tail_one copies whole.
+// pipe), which tail_stream reads.
 static int tail_seek(int fd, int want) {
     if (lseek(fd, 0, SEEK_END) < 0 || lseek(fd, 0, SEEK_SET) < 0) {
         return -1;
@@ -1041,32 +1022,70 @@ static int tail_seek(int fd, int want) {
     return 0;
 }
 
-static int tail_one(int fd, const char *name, void *arg) {
-    int want = *(int *)arg;
-    if (tail_seek(fd, want) == 0) {
-        return 0;
+// Where the last `want` lines of t[0, len) start, a last line with no
+// newline counting as one: len for none.
+static size_t tail_at(const char *t, size_t len, size_t want, int bytes) {
+    if (bytes) {
+        return len > want ? len - want : 0;
     }
-    char *text;
-    size_t len = slurp(fd, &text);
-    (void)name;
-    size_t at = len;
-    int seen = 0;
-    if (at > 0 && text[at - 1] == '\n') {
+    size_t at = len, seen = 0;
+    if (want == 0) {
+        return len;
+    }
+    if (at > 0 && t[at - 1] == '\n') {
         at--;
     }
-    while (at > 0) {
-        if (text[at - 1] == '\n' && ++seen == want) {
+    while (at > 0 && !(t[at - 1] == '\n' && ++seen == want)) {
+        at--;
+    }
+    return at;
+}
+
+// A stream's last `want` lines (`bytes`: bytes), which does not seek (a
+// pipe): read into the session's arena and cut back to the lines wanted each
+// time the text doubles past what the last cut kept, so it holds what it
+// prints and a read or two, never the stream.
+static void tail_stream(int fd, size_t want, int bytes) {
+    char buf[512];
+    char *p;
+    size_t kept = 0;
+    STARTSTACKSTR(p);
+    for (;;) {
+        ssize_t n = read(fd, buf, sizeof buf);
+        if (n <= 0) {
             break;
         }
-        at--;
+        p = stnputs(buf, (size_t)n, p);
+        char *t = stackblock();
+        size_t len = (size_t)(p - t);
+        if (len >= 2 * kept + sizeof buf) {
+            size_t at = tail_at(t, len, want, bytes);
+            memmove(t, t + at, len - at);
+            kept = len - at;
+            p = t + kept;
+        }
     }
-    outmem(text + at, len - at, out1);
+    char *t = stackblock();
+    size_t len = (size_t)(p - t);
+    size_t at = tail_at(t, len, want, bytes);
+    if (at < len) {
+        outmem(t + at, len - at, out1);
+    }
+}
+
+static int tail_one(int fd, const char *name, void *arg) {
+    int want = *(int *)arg;
+    (void)name;
+    if (tail_seek(fd, want) != 0) {
+        tail_stream(fd, want > 0 ? (size_t)want : 0, 0);
+    }
     return 0;
 }
 
 static int tail_bytes(int fd, const char *name, void *arg) {
     size_t want = (size_t)*(int *)arg;
     off_t end = lseek(fd, 0, SEEK_END);
+    (void)name;
     if (end >= 0) {                     // a file: its last bytes, read in place
         char buf[512];
         ssize_t n;
@@ -1076,11 +1095,7 @@ static int tail_bytes(int fd, const char *name, void *arg) {
         }
         return 0;
     }
-    char *text;
-    size_t len = slurp(fd, &text);
-    (void)name;
-    size_t at = len > want ? len - want : 0;
-    outmem(text + at, len - at, out1);
+    tail_stream(fd, want, 1);
     return 0;
 }
 
@@ -1280,7 +1295,7 @@ typedef struct {
 static void lines_open(lines_t *r, int fd) {
     r->fd = fd;
     r->at = r->n = 0;
-    r->p = moy_sh_halloc(TEXT_LINE);
+    r->p = moy_sh_palloc(TEXT_LINE);
     r->cap = TEXT_LINE;
     if (r->p == NULL) {
         r->p = r->small;
@@ -1290,7 +1305,7 @@ static void lines_open(lines_t *r, int fd) {
 
 static void lines_close(lines_t *r) {
     if (r->p != r->small) {
-        moy_sh_hfree(r->p);
+        moy_sh_pfree(r->p);
     }
 }
 
@@ -1301,10 +1316,10 @@ static void lines_add(lines_t *r, const char *p, size_t n) {
         while (cap < r->len + n && cap < TEXT_LINE_MAX) {
             cap *= 2u;
         }
-        char *more = cap > r->cap ? moy_sh_halloc(cap) : NULL;
+        char *more = cap > r->cap ? moy_sh_palloc(cap) : NULL;
         if (more != NULL) {
             memcpy(more, r->p, r->len);
-            moy_sh_hfree(r->p);
+            moy_sh_pfree(r->p);
             r->p = more;
             r->cap = cap;
         } else {
@@ -1842,9 +1857,9 @@ static int uniq_one(int fd, const char *name, void *arg) {
             uniq_emit(o, held, hlen, k);
         }
         if (held == NULL || r.len > hcap) {
-            moy_sh_hfree(held);
+            moy_sh_pfree(held);
             hcap = r.len > TEXT_LINE ? r.len : TEXT_LINE;
-            held = moy_sh_halloc(hcap);
+            held = moy_sh_palloc(hcap);
             if (held == NULL) {
                 k = 0;
                 o->status = moy_sh_fail("uniq: out of memory");
@@ -1858,7 +1873,7 @@ static int uniq_one(int fd, const char *name, void *arg) {
     if (k > 0) {
         uniq_emit(o, held, hlen, k);
     }
-    moy_sh_hfree(held);
+    moy_sh_pfree(held);
     lines_close(&r);
     return 0;
 }
@@ -1910,7 +1925,7 @@ typedef struct {
 } sort_t;
 
 static void *sort_take(sort_t *o, size_t n) {
-    void *p = o->taken + n <= o->bound ? moy_sh_halloc(n) : NULL;
+    void *p = o->taken + n <= o->bound ? moy_sh_palloc(n) : NULL;
     if (p == NULL) {
         o->full = 1;
         return NULL;
@@ -1921,7 +1936,7 @@ static void *sort_take(sort_t *o, size_t n) {
 
 static void sort_give(sort_t *o, void *p, size_t n) {
     if (p != NULL) {
-        moy_sh_hfree(p);
+        moy_sh_pfree(p);
         o->taken -= n;
     }
 }
@@ -2704,7 +2719,7 @@ static int neofetchcmd(int argc, char **argv) {
     moy_sh_t *s = moy_sh_cur;
     (void)argc;
     (void)argv;
-    fetch_t *f = moy_sh_halloc(sizeof *f);
+    fetch_t *f = moy_sh_palloc(sizeof *f);
     if (f == NULL) {
         return moy_sh_fail("neofetch: no memory");
     }
@@ -2808,7 +2823,7 @@ static int neofetchcmd(int argc, char **argv) {
         fetch_logo(colour, line);
         out1c('\n');
     }
-    moy_sh_hfree(f);
+    moy_sh_pfree(f);
     return 0;
 }
 

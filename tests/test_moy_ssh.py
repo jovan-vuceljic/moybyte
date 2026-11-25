@@ -61,7 +61,8 @@ def _cflags():
             "-D_GNU_SOURCE", "-U_FORTIFY_SOURCE", "-D_FORTIFY_SOURCE=0"]
 
 
-def _build(out):
+def _build(out, face=()):
+    """The server, `face` the flags its face's shell (moy_tty_sh.c) adds."""
     cc = shutil.which("cc")
     shell = [o for o in SH._objects(cc, str(out))
              if os.path.basename(o) not in ("sh_main.o", "board_main.o")]
@@ -77,6 +78,8 @@ def _build(out):
         f = list(flags)
         if "/libtomcrypt/" not in src:
             f.remove("-DLTC_SOURCE")
+        if src.endswith("moy_tty_sh.c"):
+            f += list(face)
         procs.append(subprocess.Popen([cc] + f + ["-c", src, "-o", obj]))
         objs.append(obj)
     assert all(p.wait() == 0 for p in procs)
@@ -92,6 +95,16 @@ def _build(out):
 def built(tmp_path_factory):
     out = tmp_path_factory.mktemp("moy_ssh")
     return out, _build(out)
+
+
+@pytest.fixture(scope="module")
+def straight(tmp_path_factory):
+    """A server whose face shows a full-screen app straight, as a board without
+    PSRAM builds it (native/moy_tty/moy_tty_sh.c's MOY_TTY_STRAIGHT)."""
+    out = tmp_path_factory.mktemp("moy_ssh_straight")
+    h = serve(_build(out, face=["-DMOY_TTY_STRAIGHT=1"]), out / "main")
+    yield h
+    end(h)
 
 
 def serve(exe, out, store="sd/moybyte"):
@@ -493,6 +506,24 @@ def test_top_and_edit_run_on_the_alternate_screen(harness):
     assert (harness["system"] / "memo").read_text() == "Xhello\n"
 
 
+def test_a_straight_face_shows_its_apps_as_they_write_and_they_save(straight):
+    """Where there is no PSRAM the face keeps no grid (moy_tty_sh.c,
+    MOY_TTY_STRAIGHT): `edit`, `vi` and `top` open on the alternate screen
+    and leave it, each step's writes inside a synchronized update that ends,
+    and what is typed saves."""
+    memo = straight["system"] / "memo"
+    memo.write_text("hello\n")
+    out = terminal(straight, ((b"edit /etc/memo\r", 1.0), (b"X", 0.3), (b"\x13", 0.8),
+                              (b"\x18", 0.5), (b"vi /etc/memo\r", 1.0), (b"A!", 0.3),
+                              (b"\x1b", 0.5), (b":wq\r", 0.8), (b"top\r", 1.5), (b"q", 0.8),
+                              (b"exit\r", 0.5)))
+    assert out.count(b"\x1b[?1049h") == 3 and out.count(b"\x1b[?1049l") == 3, out
+    begun, ended_ = out.count(b"\x1b[?2026h"), out.count(b"\x1b[?2026l")
+    assert begun == ended_ and begun >= 6, out
+    assert b"Xhello" in out and b"PID" in out, out
+    assert memo.read_text() == "Xhello!\n"
+
+
 def ended(h, n, wait=10.0):
     """The STATS line once the server has ended `n` connections: a client
     returns at the channel's close, before the server has let its session
@@ -602,6 +633,53 @@ def test_the_session_that_took_over_is_taken_over_in_turn(harness):
         for p in (first, second):
             if p.poll() is None:
                 p.kill()
+
+
+def _spilling(h):
+    """A `-tt` session whose pipe has gone on in a file of the store
+    (native/moy_sh/moy_sh_sys.c's SPILL, past the 4 KB of memory the shell's
+    harness builds it with), its writer asleep; and the folder the spill is
+    in."""
+    files = h["system"].parent / "files"
+    (files / "z").write_bytes(b"0123456789abcde\n" * 4096)
+    pipes = h["system"] / "pipes"
+    p = opened(h)
+    p.stdin.write(b"{ cat z; sleep 30; } | wc -c\r")
+    p.stdin.flush()
+    deadline = time.time() + 10
+    while time.time() < deadline and not (pipes.is_dir() and any(pipes.iterdir())):
+        time.sleep(0.05)
+    if not (pipes.is_dir() and any(pipes.iterdir())):
+        p.kill()
+        raise AssertionError("no spill: %r" % p.communicate()[0])
+    return p, pipes
+
+
+def _gone(path, wait=10.0):
+    deadline = time.time() + wait
+    while time.time() < deadline and path.exists():
+        time.sleep(0.05)
+    return not path.exists()
+
+
+def test_a_spill_goes_when_its_session_is_closed_or_taken_over(harness):
+    n = int(settled(harness)["ended"])
+    first, pipes = _spilling(harness)
+    try:
+        r = ssh(harness, PASSWORD, "moy@127.0.0.1", "echo second")
+        assert r.returncode == 0 and b"second" in r.stdout, r.stderr
+        out, _ = first.communicate(timeout=10)
+        assert TAKEN in out, out
+    finally:
+        if first.poll() is None:
+            first.kill()
+    ended(harness, n + 2)
+    assert _gone(pipes)
+    first, pipes = _spilling(harness)
+    first.kill()
+    first.wait()
+    ended(harness, n + 3)
+    assert _gone(pipes)
 
 
 def refused(h, wait=3.0):

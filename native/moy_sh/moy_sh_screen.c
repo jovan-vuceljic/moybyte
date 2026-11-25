@@ -145,7 +145,7 @@ static int screen_app(void *ctx, moy_sh_t *s, int argc, char **argv) {
     }
     int cols, rows, status;
     moy_term_size(f->t, &cols, &rows);
-    f->app = moy_sh_app_open(s, cols, rows, f->ctrl, run_line, f, argc, argv, &status);
+    f->app = moy_sh_app_open(s, cols, rows, f->ctrl, run_line, NULL, f, argc, argv, &status);
     return status;
 }
 

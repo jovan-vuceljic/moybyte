@@ -33,6 +33,7 @@ struct moy_sh_app {
     void (*free)(void *ctx, void *p);
     void *actx;
     moy_sh_app_run_fn run;
+    moy_sh_app_out_fn out;              // a straight app's writes, or NULL
     void *ctx;
     int cols, rows, ctrl;
 };
@@ -74,8 +75,8 @@ static moy_sh_app_t *no_room(moy_sh_t *s, const char *name) {
 }
 
 moy_sh_app_t *moy_sh_app_new(moy_sh_t *s, const moy_sh_app_heap_t *h, int cols, int rows,
-                             int ctrl, moy_sh_app_run_fn run, void *ctx, int argc, char **argv,
-                             int *status) {
+                             int ctrl, moy_sh_app_run_fn run, moy_sh_app_out_fn out, void *ctx,
+                             int argc, char **argv, int *status) {
     const moy_sh_app_ops_t *ops = moy_sh_app_find(argc > 0 ? argv[0] : NULL);
     *status = 1;
     if (ops == NULL) {
@@ -92,6 +93,7 @@ moy_sh_app_t *moy_sh_app_new(moy_sh_t *s, const moy_sh_app_heap_t *h, int cols, 
     a->free = h->free;
     a->actx = h->ctx;
     a->run = run;
+    a->out = ops->full ? out : NULL;
     a->ctx = ctx;
     a->cols = cols > 1 ? cols : 2;
     a->rows = rows > 3 ? rows : 4;
@@ -102,7 +104,7 @@ moy_sh_app_t *moy_sh_app_new(moy_sh_t *s, const moy_sh_app_heap_t *h, int cols, 
         return no_room(s, argv[0]);
     }
     memset(a->st, 0, ops->state ? ops->state : 1);
-    if (ops->full) {
+    if (ops->full && a->out == NULL) {
         a->t = moy_term_new(a->cols, a->rows, a->rows, t_alloc, t_free, a);
         if (a->t == NULL) {
             h->free(h->ctx, a->st);
@@ -121,19 +123,19 @@ moy_sh_app_t *moy_sh_app_new(moy_sh_t *s, const moy_sh_app_heap_t *h, int cols, 
         return NULL;
     }
     *status = 0;
-    if (ops->full && ops->draw != NULL) {
-        ops->draw(a, a->st);
+    if (a->t != NULL) {
+        moy_sh_app_draw(a);
     }
     return a;
 }
 
 #if !MOY_SH_LINK
 moy_sh_app_t *moy_sh_app_open(moy_sh_t *s, int cols, int rows, int ctrl,
-                              moy_sh_app_run_fn run, void *ctx, int argc, char **argv,
-                              int *status) {
+                              moy_sh_app_run_fn run, moy_sh_app_out_fn out, void *ctx,
+                              int argc, char **argv, int *status) {
     const moy_sh_host_t *h = moy_sh_host(s);
     moy_sh_app_heap_t heap = {h->alloc, h->free, h->ctx};
-    return moy_sh_app_new(s, &heap, cols, rows, ctrl, run, ctx, argc, argv, status);
+    return moy_sh_app_new(s, &heap, cols, rows, ctrl, run, out, ctx, argc, argv, status);
 }
 #endif
 
@@ -164,15 +166,19 @@ int moy_sh_app_tick(moy_sh_app_t *a, uint32_t ms) {
 }
 
 void moy_sh_app_resize(moy_sh_app_t *a, int cols, int rows) {
-    if (a->t == NULL || cols < 2 || rows < 4 || (cols == a->cols && rows == a->rows)) {
+    if (!a->ops->full || cols < 2 || rows < 4 || (cols == a->cols && rows == a->rows)) {
         return;
     }
-    if (moy_term_resize(a->t, cols, rows) != 0) {
+    if (a->t != NULL && moy_term_resize(a->t, cols, rows) != 0) {
         return;
     }
     a->cols = cols;
     a->rows = rows;
-    if (a->ops->draw != NULL) {
+    moy_sh_app_draw(a);
+}
+
+void moy_sh_app_draw(moy_sh_app_t *a) {
+    if (a->ops->full && a->ops->draw != NULL) {
         a->ops->draw(a, a->st);
     }
 }
@@ -180,9 +186,7 @@ void moy_sh_app_resize(moy_sh_app_t *a, int cols, int rows) {
 void moy_sh_app_set_ctrl(moy_sh_app_t *a, int ctrl) {
     if (a->ctrl != (ctrl != 0)) {
         a->ctrl = ctrl != 0;
-        if (a->ops->draw != NULL) {
-            a->ops->draw(a, a->st);
-        }
+        moy_sh_app_draw(a);
     }
 }
 
@@ -214,6 +218,8 @@ int moy_sh_app_ctrl(const moy_sh_app_t *a) {
 void moy_sh_app_writen(moy_sh_app_t *a, const char *p, size_t n) {
     if (a->t != NULL) {
         moy_term_write(a->t, p, n);
+    } else if (a->out != NULL) {
+        a->out(a->ctx, p, n);
     }
 }
 

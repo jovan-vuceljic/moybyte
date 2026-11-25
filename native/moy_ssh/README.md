@@ -75,7 +75,9 @@ its arena are the face's (`native/moy_tty/README.md`, Memory); `stats()`'s
 On a board without PSRAM (`MOY_HAS_PSRAM` unset,
 `native/moy_kernel/moy_platform.h`) every one of these is internal SRAM, so
 the server's stack and the face's are sized to what a session was measured to
-use there, and the `sftp` subsystem is refused (`moy_ssh_command`): an SFTP
+use there, the packets it sends are at most 2 KB (`port/localoptions.h`: the
+payload buffer a session holds, and the queue to the client), and the `sftp`
+subsystem is refused (`moy_ssh_command`): an SFTP
 face's buffers do not fit beside a session, and a refusal is what the client
 reports. `firmware/esp32c3_zero/README.md` says how that board fits the rest.
 

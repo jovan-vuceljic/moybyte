@@ -42,8 +42,10 @@ NET = os.path.join(ROOT, "native", "moy_net")
 MBEDTLS = ["-I", os.path.join(NET, "mbedtls", "include"), "-I", NET,
            '-DMBEDTLS_CONFIG_FILE="moy_seal_mbedtls.h"']
 
+# A pipe's memory a board's without PSRAM (moy_sh_sys.c's MOY_SH_PIPE_MEM), so
+# a long pipe spills to the store in every harness, as on the C3 Zero.
 CFLAGS = ["-std=gnu99", "-g", "-O1", "-fsanitize=address,undefined",
-          "-fno-sanitize-recover=all", "-Wall", "-Werror"]
+          "-fno-sanitize-recover=all", "-Wall", "-Werror", "-DMOY_SH_PIPE_MEM=4096u"]
 
 
 def shell_sources():
@@ -244,6 +246,34 @@ def test_an_arena_run_out_is_an_error_not_a_reset(harness, tmp_path):
             assert "Sanitizer" not in out, "%d KB: %s" % (kb, out[-1500:])
 
 
+def test_tail_of_a_pipe_holds_its_last_lines_not_the_stream(harness, tmp_path):
+    """`grep ... | tail` on the C3 Zero said "tail: Out of space": tail read
+    the whole pipe into the session's arena. It holds the lines it prints and
+    a read or two, so 140 KB through a 32 KB arena (the host harness's
+    session takes more of one than a board's) ends in its last lines or
+    bytes, a partial last line counting as one."""
+    script = tmp_path / "t.sh"
+    script.write_text(
+        "gen() { i=0; while [ $i -lt 4000 ]; do echo \"line $i of the stream, padded out\";"
+        " i=$((i+1)); done; }\n"
+        "gen | tail -n 3\n"
+        "gen | tail -c 12\n"
+        "gen | tail -n 0 | wc -c\n"
+        "(gen; printf 'no newline') | tail -n 2; echo\n"
+        "gen | tail -2\n")
+    root = tmp_path / "root"
+    root.mkdir()
+    r = subprocess.run([harness["sh_main"], str(root), str(script)], stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, timeout=120, env=dict(os.environ, SH_MAIN_ARENA="32"))
+    out = r.stdout.decode("utf-8", "replace")
+    assert out == ("line 3997 of the stream, padded out\nline 3998 of the stream, padded out\n"
+                   "line 3999 of the stream, padded out\n"
+                   " padded out\n"
+                   "0\n"
+                   "line 3999 of the stream, padded out\nno newline\n"
+                   "line 3998 of the stream, padded out\nline 3999 of the stream, padded out\n"), out
+
+
 def test_a_file_written_streams_in_chunks(harness, tmp_path):
     """A redirect and tee send a file to the store a chunk at a time
     (moy_sh_sys.c's streamed FILE), so 64 KB written takes no block near its
@@ -299,6 +329,133 @@ def test_a_pipe_holds_its_stream_in_chunks(harness, tmp_path):
     assert r.returncode == 0 and b"65536" in r.stdout, r.stdout.decode()
     largest = int(re.search(rb"largest block (\d+)", r.stderr).group(1))
     assert largest < 16384, "a block of %d B" % largest
+
+
+def _spill_run(harness, root, text):
+    script = root.parent / "spill.sh"
+    script.write_text(text)
+    return subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                          timeout=120, env=dict(os.environ, SH_MAIN_MEASURE="1"))
+
+
+def test_a_pipe_past_its_memory_goes_on_in_a_file_of_the_store(harness, tmp_path):
+    """On a board without PSRAM a pipe holds 4 KB in memory (so does every
+    host harness, CFLAGS), and the stages
+    of a pipeline run one after another, so `grep | tail` printed the last
+    lines of the first 4 KB ("pipe: stream over 4 KB"). Past its memory the
+    stream goes on in /.pipes/<pipe>.tmp (moy_sh_sys.c's SPILL), the reader
+    reads the memory, then the file, through one chunk, and the file and its
+    folder go at the pipe's last close."""
+    root = tmp_path / "root"
+    root.mkdir()
+    lines = ["line %d of the stream, padded out" % i for i in range(3000)]
+    (root / "big.txt").write_text("".join(x + "\n" for x in lines))
+    (root / "z").write_bytes(bytes(range(256)) * 256)
+    r = _spill_run(harness, root,
+                   "grep 'line 1' big.txt | tail -n 2\n"
+                   "cat z | wc -c\n"
+                   "cat z | md5sum\n"
+                   "cat big.txt | (ls /.pipes | wc -l; wc -l)\n"
+                   "cat z | cat | cat | wc -c\n")
+    out = r.stdout.decode()
+    ones = [x for x in lines if "line 1" in x]
+    want = "\n".join(ones[-2:]) + "\n65536\n%s  -\n1\n3000\n65536\n" % (
+        hashlib.md5((bytes(range(256)) * 256)).hexdigest())
+    assert r.returncode == 0 and out == want, out + r.stderr.decode()[-2000:]
+    assert b"pipe:" not in r.stderr, r.stderr.decode()
+    assert not (root / ".pipes").exists()
+    largest = int(re.search(rb"largest block (\d+)", r.stderr).group(1))
+    assert largest < 16384, "a block of %d B" % largest
+
+
+def test_the_boots_first_spill_sweeps_what_a_reset_left(harness, tmp_path):
+    """A reset leaves its spills in the pipes folder; no boot pays to look for
+    them. The boot's first spill removes what the folder holds before it makes
+    its own (no spill is open before it), and the folder goes with it."""
+    root = tmp_path / "root"
+    (root / ".pipes").mkdir(parents=True)
+    for name in ("3fc8a2b0.tmp", "3fc8a9f0.tmp"):
+        (root / ".pipes" / name).write_bytes(b"x" * 2048)
+    (root / "z").write_bytes(bytes(range(256)) * 64)
+    r = _spill_run(harness, root, "ls /.pipes | wc -l\ncat z | (ls /.pipes | wc -l; wc -c)\n")
+    assert r.stdout.decode() == "2\n1\n16384\n", r.stdout.decode() + r.stderr.decode()[-2000:]
+    assert not (root / ".pipes").exists()
+
+
+def test_a_spill_goes_when_its_writer_is_interrupted(harness, tmp_path):
+    """A writer Ctrl-C ends mid-spill, a reader that stops early, and an
+    interrupted reader each leave no spill behind."""
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "z").write_bytes(b"0123456789abcde\n" * 4096)
+    r = _spill_run(harness, root,
+                   "i=0; while [ $i -lt 4000 ]; do echo 0123456789abcde; i=$((i+1));"
+                   " [ $i = 1000 ] && echo 1 > /.interrupt; done | wc -c\n"
+                   "cat z | head -n 1\n"
+                   "cat z | (echo 1 > /.interrupt; while read l; do :; done)\n"
+                   "ls -a /\n")
+    out = r.stdout.decode()
+    assert "0123456789abcde\n" in out and ".pipes" not in out, out
+    assert not (root / ".pipes").exists()
+
+
+def test_a_builtin_ended_midway_leaves_the_heap_as_it_found_it(harness, tmp_path):
+    """A built-in ended before it returns -- its writer ended as SIGPIPE would
+    by a spill the store has no room for, or interrupted -- longjmps past its
+    frees, and its process gives back the blocks it held (moy_sh.c's PROCESS
+    BLOCK): three rounds of each leave the session holding what one does."""
+    import resource
+    import signal
+
+    def limit():
+        signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        resource.setrlimit(resource.RLIMIT_FSIZE, (16384, 16384))
+    lines = ["find d | head -n 1", "du d | head -n 1", "sort big.txt | head -n 1",
+             "grep line big.txt | head -n 1", "cut -c1-9 big.txt | head -n 1",
+             "uniq big.txt | head -n 1", "ls -l d d d d d d d d | head -n 1",
+             "echo 40 > /.interrupt; find d -name nothing"]
+    held = []
+    for rounds in (1, 3):
+        root = tmp_path / ("root%d" % rounds)
+        deep = root / "d"
+        for i in range(150):
+            deep = deep / "a"
+        deep.mkdir(parents=True)
+        (deep / "f").write_text("x\n")
+        (root / "big.txt").write_text(
+            "".join("line %d of the stream, padded out\n" % i for i in range(3000)))
+        script = tmp_path / ("ended%d.sh" % rounds)
+        script.write_text("".join(x + "\n" for x in lines) * rounds)
+        r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                           timeout=120, preexec_fn=limit, env=dict(os.environ, SH_MAIN_MEASURE="1"))
+        err = r.stderr.decode()
+        assert "Sanitizer" not in err, err[-3000:]
+        assert err.count("pipe: no room to hold") >= 6 * rounds, err[-2000:]
+        held.append(int(re.search(r"live blocks (\d+)", err).group(1)))
+    assert held[0] == held[1], "%d blocks after one round, %d after three" % tuple(held)
+
+
+def test_a_spill_the_store_has_no_room_for_says_so(harness, tmp_path):
+    """A spill past what the store takes (here a file-size limit, EFBIG) ends
+    its writer with "pipe: no room to hold N KB", the reader reads what came
+    before, and the file goes."""
+    import resource
+    import signal
+
+    def limit():
+        signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        resource.setrlimit(resource.RLIMIT_FSIZE, (16384, 16384))
+    root = tmp_path / "root"
+    root.mkdir()
+    script = tmp_path / "full.sh"
+    script.write_text("i=0; while [ $i -lt 4096 ]; do echo 0123456789abcde; i=$((i+1)); done"
+                      " | wc -c\n")
+    r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                       timeout=120, preexec_fn=limit)
+    out = r.stdout.decode() + r.stderr.decode()
+    assert "pipe: no room to hold 21 KB" in out, out
+    assert "20480" in out, out
+    assert not (root / ".pipes").exists()
 
 
 SERIAL = os.path.join(SCRIPTS, "serial")
@@ -465,6 +622,39 @@ def test_the_editor_asks_for_no_text_bigger_than_a_block(harness, tmp_path, app,
     m = re.search(r"meter largest (\d+) most \d+ live \d+ refused (\d+) store largest (\d+)", out)
     assert m and int(m.group(2)) == 0 and int(m.group(1)) <= EDIT_BLOCK, out
     assert int(m.group(3)) < 2048, out          # the store's own scratch, never the text
+    assert out.endswith("end\n"), out
+    assert (root / "f.txt").read_text() == want
+
+
+@pytest.mark.parametrize("cols,rows", ((80, 24), (200, 60)))
+@pytest.mark.parametrize("app", ("edit", "vi"))
+def test_a_straight_editor_opens_in_its_record_at_any_size(harness, tmp_path, app, cols, rows):
+    """The C3 Zero has about 36 KB free beside an SSH session and keeps 16 KB
+    of it (MOY_SH_HEAP_RESERVE): `vi` at 200 by 60 asked for a 48 KB screen
+    and said "out of memory". The stream face there takes a full-screen app
+    straight (moy_sh_app.h), so what the open asks for is the front and the
+    record, whatever the terminal's size, and a 20 KB file opens, is edited
+    and saved in blocks, the terminal showing what the app wrote."""
+    root = tmp_path / "root"
+    root.mkdir()
+    text = _lines(20 * 1024)
+    (root / "f.txt").write_text(text)
+    keys, want = (_edit_session if app == "edit" else _vi_session)(text, rows)
+    script = tmp_path / "keys"
+    script.write_text("\n".join(["%%size %d %d" % (cols, rows), "%straight", "%s /f.txt" % app,
+                                 "%meter", "%screen"] + keys) + "\n")
+    r = subprocess.run([harness["app_main"], str(root), str(script)], stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, timeout=60,
+                       env=dict(os.environ, TZ="UTC", MOY_SH_APP_ALLOC_MAX=str(EDIT_BLOCK)))
+    out = r.stdout.decode("utf-8", "replace")
+    assert "Sanitizer" not in out and "runtime error" not in out, out
+    assert r.returncode == 0 and "out of memory" not in out, out
+    m = re.search(r"meter largest \d+ most \d+ live \d+ refused \d+ store largest -?\d+ most -?\d+"
+                  r" fixed (\d+) (\d+) (\d+) (\d+)", out)
+    front, record, none = int(m.group(1)), int(m.group(2)), int(m.group(3)) + int(m.group(4))
+    assert none == 0 and front + record <= 1536, out      # no screen; the record ~1.3 KB
+    assert "| " + text.splitlines()[0] in out, out          # %screen: the terminal's rows
+    assert re.search(r"^\| saved, %d bytes " % len(want), out, re.M), out
     assert out.endswith("end\n"), out
     assert (root / "f.txt").read_text() == want
 

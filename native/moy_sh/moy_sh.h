@@ -15,10 +15,10 @@
 // child on the same stack and, when it exits, puts the arena back, so the
 // child's variables, folder and descriptors are gone exactly as a real fork's
 // would be, and answers its pid. A pipeline's stages therefore run one after
-// another, each writing a pipe buffer the next reads: 1 MB at most
-// (MOY_SH_PIPE_MAX), 4 KB on a board without PSRAM, past which the writer is
-// told so once and ended (moy_sh_sys.c, PIPE_R); a command substitution is
-// a child whose output the parent reads.
+// another, each writing a pipe the next reads: 1 MB of memory
+// (MOY_SH_PIPE_MEM), 4 KB on a board without PSRAM, past which the stream
+// goes on in a file of the store (moy_sh_sys.c, PIPE_R); a command
+// substitution is a child whose output the parent reads.
 // Where dash execs, the shell asks the host to spawn the program (`spawn`):
 // an installed command (`type: "command"`) by its name on the PATH (/bin) or
 // as `<id>/<name>`. In the background (`&`) a spawned program is a process of
@@ -59,7 +59,8 @@
 #define MOY_SH_NOT_FOUND (-1)           // spawn/role: no such command
 #define MOY_SH_NEEDS_VM (-2)            // role: the VM is stopped
 
-#define MOY_SH_PIPE_MAX (1024u * 1024u)  // a pipe's stream, with PSRAM
+#define MOY_SH_PIPE_MAX (1024u * 1024u)  // a pipe's memory, with PSRAM
+#define MOY_SH_SPILL_MAX (4u * 1024u * 1024u)  // a pipe's file past its memory
 #define MOY_SH_FILE_MAX (4u * 1024u * 1024u)  // a file read or written whole
 #define MOY_SH_CHUNK 1024u              // a file's read or write to the store
 

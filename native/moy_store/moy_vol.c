@@ -190,6 +190,16 @@ void moy_store_lock_stats(moy_store_lock_stats_t *out, int reset) {
     moy_store_unlock();
 }
 
+static bool s_tmp_taken;
+
+bool moy_vol_tmp_first(void) {
+    moy_store_lock();
+    bool first = !s_tmp_taken;
+    s_tmp_taken = true;
+    moy_store_unlock();
+    return first;
+}
+
 // -- the volume table (moy_vol.h, THE VOLUME TABLE) --------------------------------
 
 typedef struct {
