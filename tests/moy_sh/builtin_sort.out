@@ -1,0 +1,63 @@
+$ printf 'pear\napple\nBanana\napple\n' > f
+$ sort f
+Banana
+apple
+apple
+pear
+$ sort -r f
+pear
+apple
+apple
+Banana
+$ sort -u f
+Banana
+apple
+pear
+$ printf 'abc\n0\n-1\n10\n9\n 2x\n2\n1.5\n-0\n.5\n' | sort -n
+-1
+-0
+0
+abc
+.5
+1.5
+ 2x
+2
+9
+10
+$ printf '1 b\n1 a\n2\n1 c\n' | sort -nu
+1 b
+2
+$ printf '1 a\n1 b\n' | sort -rnu
+1 a
+$ printf '1 a\n1 b\n' | sort -rn
+1 b
+1 a
+$ printf 'b\na' | sort
+a
+b
+$ printf 'x\n' > g; sort f g
+Banana
+apple
+apple
+pear
+x
+$ printf '' | sort; echo empty=$?
+empty=0
+$ sort nosuch f; echo missing=$?
+sort: nosuch: No such file or directory
+missing=2
+$ sort -z f; echo bad=$?
+sh: 1: sort: Illegal option -z
+bad=2
+$ printf '0123456789abcdef' > l; for i in 1 2 3 4 5 6 7 8 9; do cat l l > t; cat t > l; done
+$ printf '\nb\na\n' >> l; sort l | head -n 1 | wc -c
+8193
+$ printf '0123456789abcdef\n' > big; for i in 1 2 3 4 5 6 7 8 9 10; do cat big big > t; cat t > big; done
+$ sort big | wc -l; sort -u big
+1024
+0123456789abcdef
+$ for i in 1 2 3 4; do cat big big > t; cat t > big; done
+$ sort big; echo oom=$?
+sort: out of memory
+oom=2
+[exit 0]

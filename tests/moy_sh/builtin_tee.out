@@ -1,0 +1,23 @@
+$ printf 'hi\n' | tee one two
+hi
+$ cat one two
+hi
+hi
+$ printf 'more\n' | tee -a one > /dev/null
+$ cat one
+hi
+more
+$ printf 'no newline' | tee three; echo
+no newline
+$ cat three; echo
+no newline
+$ printf 'x\n' | tee nodir/file; echo status=$?
+tee: nodir/file: No such file or directory
+x
+status=1
+$ tee < /dev/null; echo empty=$?
+empty=0
+$ tee -z; echo bad=$?
+sh: 1: tee: Illegal option -z
+bad=2
+[exit 0]

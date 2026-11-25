@@ -1,11 +1,14 @@
 // moy_sh_cmds: the shell's C core built-ins (docs/os_2026-11/system.md
-// section 1): the file commands over the store, and ps, free, df, log/dmesg,
-// reboot, date, sleep, clear and help over the host's tables. Each is one
-// function taking dash's (argc, argv), its options read with dash's nextopt,
-// writing through dash's output to the process's descriptors, so redirection
-// and pipes reach it as they reach any built-in. They keep working while the
-// VM is stopped: nothing here calls into Python.
+// section 1): the file commands over the store (find and du among them), the
+// text tools (head, tail, wc, grep, sort, uniq, cut, tr, tee, xxd, md5sum and
+// sha256sum), and ps, free, df, log/dmesg, reboot, date, sleep, clear and
+// help over the host's tables. Each is one function taking dash's (argc,
+// argv), its options read with dash's nextopt, writing through dash's output
+// to the process's descriptors, so redirection and pipes reach it as they
+// reach any built-in. They keep working while the VM is stopped: nothing here
+// calls into Python.
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +28,12 @@
 #include "../moy_kernel/moy_proc_exit.h"
 #include "moy_fs.h"
 #include "moy_vol.h"
+
+// md5sum's and sha256sum's hashes: mbedTLS's, a board's the ESP-IDF's build
+// of it, the host's and the browser's the vendored copy of the same release
+// (native/moy_net/mbedtls/README.md)
+#include "mbedtls/md5.h"
+#include "mbedtls/sha256.h"
 
 #define CMD_BUF 4096
 
@@ -176,6 +185,20 @@ static int each_input(char **args, int (*fn)(int fd, const char *name, void *arg
         }
     }
     return status;
+}
+
+// Ctrl-C: the command stops where it is, and its line with it (as sleep).
+static int stopped(void) {
+    if (!moy_sh_poll()) {
+        return 0;
+    }
+    moy_sh_cur->interrupt = 1;
+    return 1;
+}
+
+// A command's status at its end: Ctrl-C's over its own.
+static int stop_status(int status) {
+    return moy_sh_cur->interrupt ? MOY_PROC_INTERRUPTED : status;
 }
 
 // --- files ------------------------------------------------------------------
@@ -522,6 +545,311 @@ static int touchcmd(int argc, char **argv) {
     return status;
 }
 
+// --- walks --------------------------------------------------------------------
+
+// What `path` is: 1 a folder, 0 a file (its bytes in *size), -1 neither
+// (errno says why).
+static int kind_of(const char *path, uint64_t *size) {
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        return -1;
+    }
+    *size = (uint64_t)st.st_size;
+    return S_ISDIR(st.st_mode) ? 1 : 0;
+}
+
+static int name_cmp(const void *a, const void *b) {
+    return strcmp(*(char *const *)a, *(char *const *)b);
+}
+
+// Folder `path`'s names in order, on the shell's stack (the caller's mark
+// takes them back): their count, -1 where it does not open.
+static int dir_names(const char *path, char ***out) {
+    DIR *d = opendir(path);
+    struct dirent *de;
+    if (d == NULL) {
+        return -1;
+    }
+    char *p;
+    size_t len = 0;
+    int n = 0;
+    STARTSTACKSTR(p);
+    while ((de = readdir(d)) != NULL) {
+        if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) {
+            continue;
+        }
+        size_t k = strlen(de->d_name) + 1;
+        p = stnputs(de->d_name, k, p);
+        len += k;
+        n++;
+    }
+    closedir(d);
+    char *names = grabstackstr(p);
+    char **v = stalloc(((size_t)n + 1) * sizeof *v);
+    for (size_t at = 0, i = 0; at < len; at += strlen(names + at) + 1) {
+        v[i++] = names + at;
+    }
+    qsort(v, (size_t)n, sizeof *v, name_cmp);
+    *out = v;
+    return n;
+}
+
+// `name` joined to the path in `path` (`n` bytes, MOY_SH_PATH_MAX its
+// room): its new length, 0 where it does not fit.
+static size_t path_join(char *path, size_t n, const char *name) {
+    size_t sep = n > 0 && path[n - 1] != '/', m = strlen(name);
+    if (n + sep + m >= MOY_SH_PATH_MAX) {
+        return 0;
+    }
+    path[n] = '/';
+    memcpy(path + n + sep, name, m + 1);
+    return n + sep + m;
+}
+
+// One pattern element of a glob (`?`, a `[...]` set, a `\`-quoted or plain
+// byte) against `c`, *pp moved past it.
+static int glob_one(const char **pp, unsigned char c) {
+    const char *p = *pp, *end = NULL;
+    int ok = 0, neg = p[0] == '[' && (p[1] == '!' || p[1] == '^');
+    if (*p == '[' && p[1 + neg] != '\0') {
+        end = strchr(p + 2 + neg, ']');  // a ']' first in the set is one of it
+    }
+    if (*p == '?') {
+        ok = 1;
+        p++;
+    } else if (end != NULL) {
+        for (p += 1 + neg; p < end;) {
+            unsigned char lo = (unsigned char)*p++, hi = lo;
+            if (p[0] == '-' && p + 1 < end) {
+                hi = (unsigned char)p[1];
+                p += 2;
+            }
+            ok |= c >= lo && c <= hi;
+        }
+        p = end + 1;
+        ok ^= neg;
+    } else {
+        if (*p == '\\' && p[1] != '\0') {
+            p++;
+        }
+        ok = (unsigned char)*p++ == c;
+    }
+    *pp = p;
+    return ok;
+}
+
+// `s`'s n bytes against a glob: `*`, `?`, `[a-z]` (`[!...]` the others), `\`.
+static int glob_match(const char *pat, const char *s, size_t n) {
+    const char *star = NULL;
+    size_t at = 0, back = 0;
+    for (;;) {
+        if (*pat == '*') {
+            while (*pat == '*') {
+                pat++;
+            }
+            star = pat;
+            back = at;
+            continue;
+        }
+        if (at == n && *pat == '\0') {
+            return 1;
+        }
+        if (at < n && *pat != '\0') {
+            const char *q = pat;
+            if (glob_one(&q, (unsigned char)s[at])) {
+                pat = q;
+                at++;
+                continue;
+            }
+        }
+        if (star == NULL || back >= n) {
+            return 0;
+        }
+        pat = star;
+        at = ++back;
+    }
+}
+
+typedef struct {
+    const char *name;                   // -name's glob, or NULL
+    int type;                           // -type's 'f' or 'd', or 0
+    int status;
+} find_t;
+
+// `path` (n bytes) and what is under it, a folder's names in order, each
+// printed that passes the tests.
+static void find_at(find_t *o, char *path, size_t n) {
+    uint64_t size;
+    if (stopped()) {
+        return;
+    }
+    int dir = kind_of(path, &size);
+    if (dir < 0) {
+        o->status = moy_sh_fail("find: %s: %s", path, strerror(errno));
+        return;
+    }
+    size_t end = n, at;
+    while (end > 1 && path[end - 1] == '/') {
+        end--;
+    }
+    for (at = end; at > 0 && path[at - 1] != '/'; at--) {
+    }
+    if ((o->type == 0 || o->type == (dir ? 'd' : 'f')) &&
+        (o->name == NULL || glob_match(o->name, path + at, end - at))) {
+        outmem(path, n, out1);
+        out1c('\n');
+    }
+    if (!dir) {
+        return;
+    }
+    struct stackmark mark;
+    char **names;
+    setstackmark(&mark);
+    int k = dir_names(path, &names);
+    if (k < 0) {
+        o->status = moy_sh_fail("find: %s: %s", path, strerror(errno));
+    }
+    for (int i = 0; i < k && !moy_sh_cur->interrupt; i++) {
+        size_t m = path_join(path, n, names[i]);
+        if (m == 0) {
+            o->status = moy_sh_fail("find: %s/%s: %s", path, names[i], strerror(ENAMETOOLONG));
+            continue;
+        }
+        find_at(o, path, m);
+        path[n] = '\0';
+    }
+    popstackmark(&mark);
+}
+
+// PATH... (`.` with none) and what is under each, in order, those that pass
+// -name GLOB (the last part of the path) and -type f|d.
+static int findcmd(int argc, char **argv) {
+    find_t o = { NULL, 0, 0 };
+    int paths = 1;
+    while (paths < argc && argv[paths][0] != '-') {
+        paths++;
+    }
+    for (int i = paths; i < argc; i += 2) {
+        const char *v = i + 1 < argc ? argv[i + 1] : NULL;
+        if (v != NULL && !strcmp(argv[i], "-name")) {
+            o.name = v;
+        } else if (v != NULL && !strcmp(argv[i], "-type") && (!strcmp(v, "f") || !strcmp(v, "d"))) {
+            o.type = v[0];
+        } else {
+            return moy_sh_fail("usage: find [PATH...] [-name GLOB] [-type f|d]");
+        }
+    }
+    char path[MOY_SH_PATH_MAX];
+    int roots = paths - 1;
+    for (int i = 0; i < (roots > 0 ? roots : 1) && !moy_sh_cur->interrupt; i++) {
+        const char *root = roots > 0 ? argv[1 + i] : ".";
+        size_t n = strlen(root);
+        if (n >= sizeof path) {
+            o.status = moy_sh_fail("find: %s: %s", root, strerror(ENAMETOOLONG));
+            continue;
+        }
+        memcpy(path, root, n + 1);
+        find_at(&o, path, n);
+    }
+    return stop_status(o.status);
+}
+
+typedef struct {
+    int sum, human, status;
+} du_t;
+
+// du's size: 1K blocks, rounded up (-h: bytes under 1K, then K, M, G and T,
+// one decimal below 10, rounded up, as GNU du prints them).
+static void du_print(const du_t *o, uint64_t n, const char *path) {
+    char v[24];
+    if (!o->human) {
+        snprintf(v, sizeof v, "%llu", (unsigned long long)((n + 1023u) / 1024u));
+    } else if (n < 1024u) {
+        snprintf(v, sizeof v, "%llu", (unsigned long long)n);
+    } else {
+        uint64_t u = 1024u;
+        int k = 0;
+        while (k < 3 && (n + u - 1u) / u >= 1024u) {
+            u *= 1024u;
+            k++;
+        }
+        uint64_t tenths = (n * 10u + u - 1u) / u;
+        if (tenths < 100u) {
+            snprintf(v, sizeof v, "%llu.%llu%c", (unsigned long long)(tenths / 10u),
+                     (unsigned long long)(tenths % 10u), "KMGT"[k]);
+        } else {
+            snprintf(v, sizeof v, "%llu%c", (unsigned long long)((n + u - 1u) / u), "KMGT"[k]);
+        }
+    }
+    out1fmt("%s\t%s\n", v, path);
+}
+
+// The bytes of the files under `path` (n bytes), each folder printed after
+// what is in it (-s: the operand alone).
+static uint64_t du_at(du_t *o, char *path, size_t n, int top) {
+    uint64_t size = 0, total = 0;
+    if (stopped()) {
+        return 0;
+    }
+    int dir = kind_of(path, &size);
+    if (dir < 0) {
+        o->status = moy_sh_fail("du: %s: %s", path, strerror(errno));
+        return 0;
+    }
+    if (!dir) {
+        if (top) {
+            du_print(o, size, path);
+        }
+        return size;
+    }
+    struct stackmark mark;
+    char **names;
+    setstackmark(&mark);
+    int k = dir_names(path, &names);
+    if (k < 0) {
+        o->status = moy_sh_fail("du: %s: %s", path, strerror(errno));
+    }
+    for (int i = 0; i < k && !moy_sh_cur->interrupt; i++) {
+        size_t m = path_join(path, n, names[i]);
+        if (m == 0) {
+            o->status = moy_sh_fail("du: %s/%s: %s", path, names[i], strerror(ENAMETOOLONG));
+            continue;
+        }
+        total += du_at(o, path, m, 0);
+        path[n] = '\0';
+    }
+    popstackmark(&mark);
+    if ((top || !o->sum) && !moy_sh_cur->interrupt) {
+        du_print(o, total, path);
+    }
+    return total;
+}
+
+// The bytes the files under each PATH (`.` with none) hold.
+static int ducmd(int argc, char **argv) {
+    du_t o = { 0, 0, 0 };
+    int c;
+    (void)argc;
+    (void)argv;
+    while ((c = nextopt("hs")) != '\0') {
+        o.human |= c == 'h';
+        o.sum |= c == 's';
+    }
+    const char *one[2] = { ".", NULL };
+    char **args = *argptr != NULL ? argptr : (char **)one;
+    char path[MOY_SH_PATH_MAX];
+    for (; *args && !moy_sh_cur->interrupt; args++) {
+        size_t n = strlen(*args);
+        if (n >= sizeof path) {
+            o.status = moy_sh_fail("du: %s: %s", *args, strerror(ENAMETOOLONG));
+            continue;
+        }
+        memcpy(path, *args, n + 1);
+        du_at(&o, path, n, 1);
+    }
+    return stop_status(o.status);
+}
+
 // head and tail: -n N lines (default 10).
 static int lines_opt(void) {
     int n = 10, c;
@@ -824,6 +1152,94 @@ static int wccmd(int argc, char **argv) {
     return each_input(argptr, wc_one, &o);
 }
 
+// A line at a time (grep, cut, uniq), the input never copied into the
+// session's arena, which is 12 KB where there is no PSRAM (MOY_SH_ARENA, the
+// C3 Zero's SSH face), smaller than most logs. The line's buffer is the
+// session heap's, TEXT_LINE to start, doubled for a longer line up to
+// TEXT_LINE_MAX (so one line never takes the console's heap); a line longer
+// than the buffer the heap could give is read on its first bytes, and with
+// no buffer at all on TEXT_SMALL of the reader's own.
+#define TEXT_LINE 1024u
+#define TEXT_LINE_MAX (64u * 1024u)
+#define TEXT_SMALL 128u
+
+typedef struct {
+    int fd;
+    size_t at, n;                       // in[at, n): read, not yet taken
+    char *p;                            // the line, without its newline
+    size_t len, cap;
+    int full;                           // this line grows no more
+    char in[512];
+    char small[TEXT_SMALL];
+} lines_t;
+
+static void lines_open(lines_t *r, int fd) {
+    r->fd = fd;
+    r->at = r->n = 0;
+    r->p = moy_sh_halloc(TEXT_LINE);
+    r->cap = TEXT_LINE;
+    if (r->p == NULL) {
+        r->p = r->small;
+        r->cap = sizeof r->small;
+    }
+}
+
+static void lines_close(lines_t *r) {
+    if (r->p != r->small) {
+        moy_sh_hfree(r->p);
+    }
+}
+
+// n more bytes of the line, as many as its buffer holds.
+static void lines_add(lines_t *r, const char *p, size_t n) {
+    if (r->len + n > r->cap && !r->full) {
+        size_t cap = r->cap;
+        while (cap < r->len + n && cap < TEXT_LINE_MAX) {
+            cap *= 2u;
+        }
+        char *more = cap > r->cap ? moy_sh_halloc(cap) : NULL;
+        if (more != NULL) {
+            memcpy(more, r->p, r->len);
+            moy_sh_hfree(r->p);
+            r->p = more;
+            r->cap = cap;
+        } else {
+            r->full = 1;
+        }
+    }
+    if (n > r->cap - r->len) {
+        n = r->cap - r->len;
+    }
+    memcpy(r->p + r->len, p, n);
+    r->len += n;
+}
+
+// The next line into r->p (r->len bytes): 0 at the input's end, or at
+// Ctrl-C. A last line with no newline is a line.
+static int lines_next(lines_t *r) {
+    r->len = 0;
+    r->full = r->p == r->small;
+    for (;;) {
+        if (r->at == r->n) {
+            ssize_t n = stopped() ? 0 : read(r->fd, r->in, sizeof r->in);
+            if (n <= 0) {
+                return r->len > 0;
+            }
+            r->at = 0;
+            r->n = (size_t)n;
+        }
+        const char *s = r->in + r->at;
+        const char *e = memchr(s, '\n', r->n - r->at);
+        size_t k = e != NULL ? (size_t)(e - s) : r->n - r->at;
+        lines_add(r, s, k);
+        r->at += k;
+        if (e != NULL) {
+            r->at++;
+            return 1;
+        }
+    }
+}
+
 typedef struct {
     const char *pat;
     int ign, inv, num, count, quiet, many;
@@ -875,60 +1291,15 @@ static void grep_line(grep_t *g, const char *name, const char *line, size_t n,
     }
 }
 
-// A line at a time, the input never copied into the session's arena, which
-// is 12 KB where there is no PSRAM (MOY_SH_ARENA, the C3 Zero's SSH face),
-// smaller than most logs. The line's buffer is the session heap's, GREP_LINE
-// to start, doubled for a longer line up to GREP_LINE_MAX (so one line never
-// takes the console's heap); a line longer than the buffer the heap could
-// give is matched and printed on its first bytes, and with no buffer at all
-// on GREP_SMALL of the stack.
-#define GREP_LINE 1024u
-#define GREP_LINE_MAX (64u * 1024u)
-#define GREP_SMALL 128u
 static int grep_one(int fd, const char *name, void *arg) {
     grep_t *g = arg;
-    char buf[512], small[GREP_SMALL];
-    char *line = moy_sh_halloc(GREP_LINE);
-    size_t cap = GREP_LINE, ln = 0;
-    if (line == NULL) {
-        line = small;
-        cap = sizeof small;
-    }
-    int open_line = 0, full = line == small;   // full: this line grows no more
+    lines_t r;
     unsigned long count = 0, lineno = 0;
-    ssize_t n;
-    while ((n = read(fd, buf, sizeof buf)) > 0) {
-        for (ssize_t i = 0; i < n; i++) {
-            if (buf[i] == '\n') {
-                grep_line(g, name, line, ln, ++lineno, &count);
-                ln = 0;
-                open_line = 0;
-                full = line == small;
-                continue;
-            }
-            if (ln == cap && !full) {
-                char *more = cap < GREP_LINE_MAX ? moy_sh_halloc(cap * 2u) : NULL;
-                if (more != NULL) {
-                    memcpy(more, line, ln);
-                    moy_sh_hfree(line);
-                    line = more;
-                    cap *= 2u;
-                } else {
-                    full = 1;
-                }
-            }
-            if (ln < cap) {
-                line[ln++] = buf[i];
-            }
-            open_line = 1;
-        }
+    lines_open(&r, fd);
+    while (lines_next(&r)) {
+        grep_line(g, name, r.p, r.len, ++lineno, &count);
     }
-    if (open_line) {
-        grep_line(g, name, line, ln, ++lineno, &count);
-    }
-    if (line != small) {
-        moy_sh_hfree(line);
-    }
+    lines_close(&r);
     if (g->count) {
         if (g->many) {
             out1fmt("%s:", name);
@@ -957,7 +1328,835 @@ static int grepcmd(int argc, char **argv) {
     g.pat = *argptr++;
     g.many = argptr[0] != NULL && argptr[1] != NULL;
     int err = each_input(argptr, grep_one, &g);
-    return err ? 2 : !g.matched;
+    return stop_status(err ? 2 : !g.matched);
+}
+
+// --- text ---------------------------------------------------------------------
+
+// stdin to stdout and to each FILE (-a: added to its end).
+static int teecmd(int argc, char **argv) {
+    int append = 0, c, n = 0, status = 0;
+    (void)argc;
+    (void)argv;
+    while ((c = nextopt("a")) != '\0') {
+        append = 1;
+    }
+    while (argptr[n] != NULL) {
+        n++;
+    }
+    int *fds = stalloc(((size_t)n + 1) * sizeof *fds);
+    for (int i = 0; i < n; i++) {
+        fds[i] = open(argptr[i], O_WRONLY | O_CREAT | (append ? O_APPEND : O_TRUNC), 0644);
+        if (fds[i] < 0) {
+            status = moy_sh_fail("tee: %s: %s", argptr[i], strerror(errno));
+        }
+    }
+    char buf[512];
+    ssize_t got;
+    while (!stopped() && (got = read(0, buf, sizeof buf)) > 0) {
+        outmem(buf, (size_t)got, out1);
+        for (int i = 0; i < n; i++) {
+            if (fds[i] >= 0 && write(fds[i], buf, (size_t)got) != got) {
+                status = moy_sh_fail("tee: %s: %s", argptr[i], strerror(errno));
+                close(fds[i]);
+                fds[i] = -1;
+            }
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        if (fds[i] >= 0) {
+            close(fds[i]);
+        }
+    }
+    return stop_status(status);
+}
+
+// A tr SET a byte at a time: its ranges (a-z) spelled out, its escapes read
+// (\n \t \r \\ \NNN ...), its classes ([:alpha:] ...) in byte order.
+typedef struct {
+    const char *p;                      // what is left of it
+    int at, hi;                         // a range running: its next byte and its last
+    int cls;                            // a class running (its index + 1), at its next byte
+    int bad;                            // a range runs backwards
+} set_t;
+
+static const char *const TR_CLASSES[] = {
+    "[:alnum:]", "[:alpha:]", "[:blank:]", "[:digit:]", "[:lower:]",
+    "[:punct:]", "[:space:]", "[:upper:]",
+};
+
+static int tr_in_class(int cls, int c) {
+    switch (cls) {
+        case 1: return isalnum(c);
+        case 2: return isalpha(c);
+        case 3: return c == ' ' || c == '\t';
+        case 4: return isdigit(c);
+        case 5: return islower(c);
+        case 6: return ispunct(c);
+        case 7: return isspace(c);
+        default: return isupper(c);
+    }
+}
+
+// One byte of a SET, an escape read, *pp moved past it.
+static int set_byte(const char **pp) {
+    const unsigned char *p = (const unsigned char *)*pp;
+    int c = *p++;
+    if (c == '\\' && *p != '\0') {
+        c = *p++;
+        switch (c) {
+            case 'a': c = '\a'; break;
+            case 'b': c = '\b'; break;
+            case 'f': c = '\f'; break;
+            case 'n': c = '\n'; break;
+            case 'r': c = '\r'; break;
+            case 't': c = '\t'; break;
+            case 'v': c = '\v'; break;
+            default:
+                if (c >= '0' && c <= '7') {
+                    c -= '0';
+                    for (int i = 0; i < 2 && *p >= '0' && *p <= '7' && c * 8 + (*p - '0') < 256; i++) {
+                        c = c * 8 + (*p++ - '0');
+                    }
+                }
+        }
+    }
+    *pp = (const char *)p;
+    return c;
+}
+
+// The SET's next byte, or -1 at its end.
+static int set_next(set_t *s) {
+    for (;;) {
+        if (s->cls) {
+            while (s->at < 256 && !tr_in_class(s->cls, s->at)) {
+                s->at++;
+            }
+            if (s->at < 256) {
+                return s->at++;
+            }
+            s->cls = 0;
+            s->hi = -1;
+        }
+        if (s->at <= s->hi) {
+            return s->at++;
+        }
+        if (*s->p == '\0') {
+            return -1;
+        }
+        for (int i = 0; i < (int)(sizeof TR_CLASSES / sizeof TR_CLASSES[0]); i++) {
+            size_t k = strlen(TR_CLASSES[i]);
+            if (!strncmp(s->p, TR_CLASSES[i], k)) {
+                s->p += k;
+                s->cls = i + 1;
+                s->at = 0;
+                break;
+            }
+        }
+        if (s->cls) {
+            continue;
+        }
+        int c = set_byte(&s->p);
+        if (s->p[0] == '-' && s->p[1] != '\0') {
+            const char *q = s->p + 1;
+            int d = set_byte(&q);
+            s->p = q;
+            s->bad |= d < c;
+            s->at = c;
+            s->hi = d;
+            continue;
+        }
+        return c;
+    }
+}
+
+static void set_open(set_t *s, const char *spec) {
+    s->p = spec;
+    s->at = 0;
+    s->hi = -1;
+    s->cls = 0;
+    s->bad = 0;
+}
+
+// Each byte of `spec` set in the bit set `bits`.
+static void set_bits(const char *spec, unsigned char *bits) {
+    set_t s;
+    int c;
+    set_open(&s, spec);
+    while ((c = set_next(&s)) >= 0) {
+        bits[c >> 3] |= (unsigned char)(1u << (c & 7));
+    }
+}
+
+#define TR_BIT(bits, c) ((bits)[(c) >> 3] & (1u << ((c) & 7)))
+
+// stdin to stdout with SET1's bytes turned into SET2's (the last of SET2
+// standing for those past its end), or deleted (-d); -s squeezes a run of
+// one byte of the last SET given into one.
+static int trcmd(int argc, char **argv) {
+    int del = 0, squeeze = 0, c, n = 0;
+    (void)argc;
+    (void)argv;
+    while ((c = nextopt("ds")) != '\0') {
+        del |= c == 'd';
+        squeeze |= c == 's';
+    }
+    while (argptr[n] != NULL) {
+        n++;
+    }
+    if (n < 1 || n > 2 || (del && n != 1 + squeeze) || (!del && !squeeze && n != 2)) {
+        return moy_sh_fail("usage: tr [-ds] SET1 [SET2]");
+    }
+    unsigned char map[256], gone[32] = { 0 }, once[32] = { 0 };
+    for (int i = 0; i < n; i++) {
+        set_t s;
+        set_open(&s, argptr[i]);
+        while (set_next(&s) >= 0) {
+        }
+        if (s.bad) {
+            return moy_sh_fail("tr: %s: a range in it runs backwards", argptr[i]);
+        }
+    }
+    for (int i = 0; i < 256; i++) {
+        map[i] = (unsigned char)i;
+    }
+    if (!del && n == 2) {
+        set_t a, b;
+        int x, y, last = -1;
+        set_open(&a, argptr[0]);
+        set_open(&b, argptr[1]);
+        while ((x = set_next(&a)) >= 0) {
+            if ((y = set_next(&b)) >= 0) {
+                last = y;
+            } else if (last < 0) {
+                return moy_sh_fail("tr: SET2 is empty");
+            }
+            map[x] = (unsigned char)last;
+        }
+    }
+    if (del) {
+        set_bits(argptr[0], gone);
+    }
+    if (squeeze) {
+        set_bits(argptr[n - 1], once);
+    }
+    char buf[512];
+    ssize_t got;
+    int prev = -1;
+    while (!stopped() && (got = read(0, buf, sizeof buf)) > 0) {
+        size_t k = 0;
+        for (ssize_t i = 0; i < got; i++) {
+            int ch = (unsigned char)buf[i];
+            if (TR_BIT(gone, ch)) {
+                continue;
+            }
+            ch = map[ch];
+            if (ch == prev && TR_BIT(once, ch)) {
+                continue;
+            }
+            buf[k++] = (char)ch;
+            prev = ch;
+        }
+        outmem(buf, k, out1);
+    }
+    return stop_status(0);
+}
+
+// cut's LIST: N, N-M, N- and -M, comma-separated, 1 the first.
+typedef struct {
+    unsigned long lo, hi;               // hi 0: to the end
+} span_t;
+
+typedef struct {
+    span_t *spans;
+    int nspans;
+    int fields, only;                   // -f (else -c, -b), -s
+    char delim;
+} cut_t;
+
+// A number of a LIST at *pp, moved past it; 0 where there is none.
+static unsigned long cut_num(const char **pp) {
+    unsigned long v = 0;
+    while (**pp >= '0' && **pp <= '9') {
+        if (v < 100000000ul) {
+            v = v * 10u + (unsigned long)(*(*pp)++ - '0');
+        } else {
+            (*pp)++;
+        }
+    }
+    return v;
+}
+
+static int cut_list(const char *s, cut_t *o) {
+    int n = 1;
+    for (const char *p = s; *p; p++) {
+        n += *p == ',';
+    }
+    o->spans = stalloc((size_t)n * sizeof *o->spans);
+    o->nspans = 0;
+    for (const char *p = s;;) {
+        const char *start = p;
+        unsigned long lo = cut_num(&p), hi = lo;
+        int has_lo = p != start, has_hi = has_lo;
+        if (*p == '-') {
+            p++;
+            start = p;
+            hi = cut_num(&p);
+            has_hi = p != start;
+            if (!has_lo) {
+                lo = 1;
+            }
+        }
+        if ((!has_lo && !has_hi) || lo == 0 || (has_hi && hi < lo)) {
+            return -1;
+        }
+        o->spans[o->nspans].lo = lo;
+        o->spans[o->nspans++].hi = has_hi ? hi : 0;
+        if (*p == '\0') {
+            return 0;
+        }
+        if (*p++ != ',') {
+            return -1;
+        }
+    }
+}
+
+static int cut_has(const cut_t *o, unsigned long i) {
+    for (int k = 0; k < o->nspans; k++) {
+        if (i >= o->spans[k].lo && (o->spans[k].hi == 0 || i <= o->spans[k].hi)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int cut_one(int fd, const char *name, void *arg) {
+    const cut_t *o = arg;
+    lines_t r;
+    (void)name;
+    lines_open(&r, fd);
+    while (lines_next(&r)) {
+        const char *p = r.p;
+        size_t n = r.len;
+        if (!o->fields) {
+            for (size_t i = 0; i < n; i++) {
+                if (cut_has(o, i + 1)) {
+                    out1c(p[i]);
+                }
+            }
+        } else if (memchr(p, o->delim, n) == NULL) {
+            if (o->only) {
+                continue;
+            }
+            outmem(p, n, out1);
+        } else {
+            int first = 1;
+            for (size_t at = 0, f = 1;; f++) {
+                const char *e = memchr(p + at, o->delim, n - at);
+                size_t end = e != NULL ? (size_t)(e - p) : n;
+                if (cut_has(o, f)) {
+                    if (!first) {
+                        out1c(o->delim);
+                    }
+                    outmem(p + at, end - at, out1);
+                    first = 0;
+                }
+                if (e == NULL) {
+                    break;
+                }
+                at = end + 1;
+            }
+        }
+        out1c('\n');
+    }
+    lines_close(&r);
+    return 0;
+}
+
+// Each line's fields (-f, split at -d's byte, a tab by default; -s: lines
+// with none left out) or bytes (-c, -b) that LIST names, in the line's order.
+static int cutcmd(int argc, char **argv) {
+    cut_t o = { NULL, 0, 0, 0, '\t' };
+    const char *list = NULL, *delim = "\t";
+    int c, kinds = 0;
+    (void)argc;
+    (void)argv;
+    while ((c = nextopt("b:c:d:f:s")) != '\0') {
+        if (c == 'b' || c == 'c' || c == 'f') {
+            list = optionarg;
+            kinds |= c == 'f' ? 2 : 1;
+        } else if (c == 'd') {
+            delim = optionarg;
+        } else {
+            o.only = 1;
+        }
+    }
+    if (list == NULL || kinds == 3) {
+        return moy_sh_fail("usage: cut -f LIST [-d C] [-s] [FILE...], or cut -c LIST [FILE...]");
+    }
+    if (strlen(delim) != 1) {
+        return moy_sh_fail("cut: the delimiter must be one character");
+    }
+    if (cut_list(list, &o) != 0) {
+        return moy_sh_fail("cut: %s: not a list of positions from 1", list);
+    }
+    o.fields = kinds == 2;
+    o.delim = delim[0];
+    return stop_status(each_input(argptr, cut_one, &o));
+}
+
+typedef struct {
+    int count, dups, uniq;
+    int status;
+} uniq_t;
+
+static void uniq_emit(const uniq_t *o, const char *p, size_t n, unsigned long k) {
+    if ((o->dups && k < 2) || (o->uniq && k > 1)) {
+        return;
+    }
+    if (o->count) {
+        out1fmt("%7lu ", k);
+    }
+    outmem(p, n, out1);
+    out1c('\n');
+}
+
+static int uniq_one(int fd, const char *name, void *arg) {
+    uniq_t *o = arg;
+    lines_t r;
+    char *held = NULL;
+    size_t hlen = 0, hcap = 0;
+    unsigned long k = 0;
+    (void)name;
+    lines_open(&r, fd);
+    while (lines_next(&r)) {
+        if (k > 0 && r.len == hlen && memcmp(r.p, held, hlen) == 0) {
+            k++;
+            continue;
+        }
+        if (k > 0) {
+            uniq_emit(o, held, hlen, k);
+        }
+        if (held == NULL || r.len > hcap) {
+            moy_sh_hfree(held);
+            hcap = r.len > TEXT_LINE ? r.len : TEXT_LINE;
+            held = moy_sh_halloc(hcap);
+            if (held == NULL) {
+                k = 0;
+                o->status = moy_sh_fail("uniq: out of memory");
+                break;
+            }
+        }
+        memcpy(held, r.p, r.len);
+        hlen = r.len;
+        k = 1;
+    }
+    if (k > 0) {
+        uniq_emit(o, held, hlen, k);
+    }
+    moy_sh_hfree(held);
+    lines_close(&r);
+    return 0;
+}
+
+// A run of one line, one after another, as one line (-c: counted; -d: only
+// the repeated; -u: only the unrepeated).
+static int uniqcmd(int argc, char **argv) {
+    uniq_t o = { 0, 0, 0, 0 };
+    int c;
+    (void)argc;
+    (void)argv;
+    while ((c = nextopt("cdu")) != '\0') {
+        o.count |= c == 'c';
+        o.dups |= c == 'd';
+        o.uniq |= c == 'u';
+    }
+    if (argptr[0] != NULL && argptr[1] != NULL) {
+        return moy_sh_fail("usage: uniq [-cdu] [FILE]");
+    }
+    int err = each_input(argptr, uniq_one, &o);
+    return stop_status(err | o.status);
+}
+
+// sort's lines are held whole: their bytes in blocks of SORT_BLOCK (a longer
+// line's its own) and a pointer to each, all the session heap's, and of it
+// at most the size of the session's arena (mem_n; MOY_SH_ARENA on a board),
+// past which sort says it is out of memory.
+#define SORT_BLOCK 4096u
+
+typedef struct sort_block {
+    struct sort_block *next;
+    size_t used, cap;
+    char text[];
+} sort_block_t;
+
+typedef struct {
+    const char *p;
+    size_t n;
+} sort_line_t;
+
+typedef struct {
+    int rev, num, uniq;
+    int full;                           // the bound or the heap refused
+    size_t taken, bound;
+    sort_block_t *blocks;               // the newest first
+    size_t at;                          // where the line being read starts in it
+    sort_line_t *lines;
+    size_t n, cap;
+} sort_t;
+
+static void *sort_take(sort_t *o, size_t n) {
+    void *p = o->taken + n <= o->bound ? moy_sh_halloc(n) : NULL;
+    if (p == NULL) {
+        o->full = 1;
+        return NULL;
+    }
+    o->taken += n;
+    return p;
+}
+
+static void sort_give(sort_t *o, void *p, size_t n) {
+    if (p != NULL) {
+        moy_sh_hfree(p);
+        o->taken -= n;
+    }
+}
+
+// k more bytes of the line being read, which stays in one block.
+static int sort_add(sort_t *o, const char *p, size_t k) {
+    sort_block_t *b = o->blocks;
+    if (b == NULL || b->cap - b->used < k) {
+        size_t len = b != NULL ? b->used - o->at : 0, cap = SORT_BLOCK;
+        while (cap < 2u * (len + k)) {
+            cap *= 2u;
+        }
+        sort_block_t *nb = sort_take(o, sizeof *nb + cap);
+        if (nb == NULL) {
+            return -1;
+        }
+        nb->cap = cap;
+        nb->used = len;
+        nb->next = b;
+        if (b != NULL) {
+            memcpy(nb->text, b->text + o->at, len);
+            b->used = o->at;
+            if (b->used == 0) {         // it held only this line
+                nb->next = b->next;
+                sort_give(o, b, sizeof *b + b->cap);
+            }
+        }
+        o->blocks = b = nb;
+        o->at = 0;
+    }
+    memcpy(b->text + b->used, p, k);
+    b->used += k;
+    return 0;
+}
+
+// The line read so far is one.
+static int sort_push(sort_t *o) {
+    if (o->n == o->cap) {
+        size_t cap = o->cap ? o->cap * 2u : 64u;
+        sort_line_t *v = sort_take(o, cap * sizeof *v);
+        if (v == NULL) {
+            return -1;
+        }
+        if (o->n) {
+            memcpy(v, o->lines, o->n * sizeof *v);
+        }
+        sort_give(o, o->lines, o->cap * sizeof *v);
+        o->lines = v;
+        o->cap = cap;
+    }
+    sort_block_t *b = o->blocks;
+    size_t len = b != NULL ? b->used - o->at : 0;
+    o->lines[o->n].p = len ? b->text + o->at : "";
+    o->lines[o->n++].n = len;
+    if (b != NULL) {
+        o->at = b->used;
+    }
+    return 0;
+}
+
+static int sort_read(int fd, const char *name, void *arg) {
+    sort_t *o = arg;
+    char buf[512];
+    ssize_t got;
+    int open_line = 0;
+    (void)name;
+    while (!o->full && !stopped() && (got = read(fd, buf, sizeof buf)) > 0) {
+        for (size_t at = 0; at < (size_t)got;) {
+            const char *e = memchr(buf + at, '\n', (size_t)got - at);
+            size_t k = e != NULL ? (size_t)(e - (buf + at)) : (size_t)got - at;
+            if (k > 0 && sort_add(o, buf + at, k) != 0) {
+                return 0;
+            }
+            open_line |= k > 0;
+            at += k;
+            if (e != NULL) {
+                at++;
+                if (sort_push(o) != 0) {
+                    return 0;
+                }
+                open_line = 0;
+            }
+        }
+    }
+    if (open_line && !o->full) {
+        sort_push(o);
+    }
+    return 0;
+}
+
+// -n's key: the number a line starts with (blanks, a '-', digits, a '.' and
+// digits), 0 where it starts with none, compared by its digits, as GNU sort
+// compares it, never through a float.
+typedef struct {
+    const char *i, *f;                  // the whole part's digits, the fraction's
+    size_t il, fl;
+    int neg;
+} sort_num_t;
+
+static void sort_num(const char *p, size_t n, sort_num_t *v) {
+    size_t k = 0;
+    while (k < n && (p[k] == ' ' || p[k] == '\t')) {
+        k++;
+    }
+    v->neg = k < n && p[k] == '-';
+    k += (size_t)v->neg;
+    while (k < n && p[k] == '0') {
+        k++;
+    }
+    v->i = p + k;
+    while (k < n && isdigit((unsigned char)p[k])) {
+        k++;
+    }
+    v->il = (size_t)(p + k - v->i);
+    v->f = p + k;
+    v->fl = 0;
+    if (k < n && p[k] == '.') {
+        v->f = p + ++k;
+        while (k < n && isdigit((unsigned char)p[k])) {
+            k++;
+        }
+        v->fl = (size_t)(p + k - v->f);
+        while (v->fl > 0 && v->f[v->fl - 1] == '0') {
+            v->fl--;
+        }
+    }
+    if (v->il == 0 && v->fl == 0) {
+        v->neg = 0;                     // -0 is 0
+    }
+}
+
+static int sort_numcmp(const sort_line_t *a, const sort_line_t *b) {
+    sort_num_t x, y;
+    sort_num(a->p, a->n, &x);
+    sort_num(b->p, b->n, &y);
+    if (x.neg != y.neg) {
+        return x.neg ? -1 : 1;
+    }
+    int c = x.il != y.il ? (x.il < y.il ? -1 : 1) : memcmp(x.i, y.i, x.il);
+    for (size_t k = 0; c == 0 && (k < x.fl || k < y.fl); k++) {
+        c = (k < x.fl ? x.f[k] : '0') - (k < y.fl ? y.f[k] : '0');
+    }
+    c = (c > 0) - (c < 0);
+    return x.neg ? -c : c;
+}
+
+// Below 0 where a goes before b: by -n's number, then (but for -n -u, whose
+// equal numbers are one line) by the bytes; -r turns it round.
+static int sort_cmp(const sort_t *o, const sort_line_t *a, const sort_line_t *b) {
+    int c = o->num ? sort_numcmp(a, b) : 0;
+    if (c == 0 && !(o->num && o->uniq)) {
+        c = memcmp(a->p, b->p, a->n < b->n ? a->n : b->n);
+        if (c == 0) {
+            c = (a->n > b->n) - (a->n < b->n);
+        }
+    }
+    return o->rev ? -c : c;
+}
+
+// A merge sort, bottom up: stable, so -u keeps the first of equal lines.
+static void sort_lines(const sort_t *o, sort_line_t *v, sort_line_t *tmp, size_t n) {
+    sort_line_t *from = v, *to = tmp;
+    for (size_t w = 1; w < n; w *= 2u) {
+        for (size_t lo = 0; lo < n; lo += 2u * w) {
+            size_t mid = lo + w < n ? lo + w : n, hi = lo + 2u * w < n ? lo + 2u * w : n;
+            size_t i = lo, j = mid, k = lo;
+            while (i < mid && j < hi) {
+                to[k++] = sort_cmp(o, &from[j], &from[i]) < 0 ? from[j++] : from[i++];
+            }
+            while (i < mid) {
+                to[k++] = from[i++];
+            }
+            while (j < hi) {
+                to[k++] = from[j++];
+            }
+        }
+        sort_line_t *t = from;
+        from = to;
+        to = t;
+    }
+    if (from != v) {
+        memcpy(v, from, n * sizeof *v);
+    }
+}
+
+// The lines of each FILE (stdin with none) in byte order (-n: by the number
+// each starts with; -r: reversed; -u: each once).
+static int sortcmd(int argc, char **argv) {
+    sort_t o;
+    int c;
+    (void)argc;
+    (void)argv;
+    memset(&o, 0, sizeof o);
+    while ((c = nextopt("nru")) != '\0') {
+        o.num |= c == 'n';
+        o.rev |= c == 'r';
+        o.uniq |= c == 'u';
+    }
+    o.bound = moy_sh_cur->mem_n;
+    int status = each_input(argptr, sort_read, &o) ? 2 : 0;
+    sort_line_t *tmp = NULL;
+    if (!o.full && status == 0 && o.n > 1) {
+        tmp = sort_take(&o, o.n * sizeof *tmp);
+    }
+    if (o.full) {
+        moy_sh_fail("sort: out of memory");
+        status = 2;
+    } else if (status == 0 && !moy_sh_cur->interrupt) {
+        if (tmp != NULL) {
+            sort_lines(&o, o.lines, tmp, o.n);
+        }
+        for (size_t i = 0; i < o.n && ((i & 255u) != 0 || !stopped()); i++) {
+            if (o.uniq && i > 0 && sort_cmp(&o, &o.lines[i - 1], &o.lines[i]) == 0) {
+                continue;
+            }
+            outmem(o.lines[i].p, o.lines[i].n, out1);
+            out1c('\n');
+        }
+    }
+    sort_give(&o, tmp, o.n * sizeof *tmp);
+    sort_give(&o, o.lines, o.cap * sizeof *o.lines);
+    while (o.blocks != NULL) {
+        sort_block_t *b = o.blocks;
+        o.blocks = b->next;
+        sort_give(&o, b, sizeof *b + b->cap);
+    }
+    return stop_status(status);
+}
+
+// A row of xxd's: its offset, 16 bytes as eight groups of four hex digits,
+// and as text ('.' for a byte that does not print).
+static void xxd_row(unsigned long off, const unsigned char *b, size_t n) {
+    static const char hex[] = "0123456789abcdef";
+    char line[80];
+    size_t k = (size_t)snprintf(line, sizeof line, "%08lx: ", off);
+    for (size_t i = 0; i < 16; i++) {
+        line[k++] = i < n ? hex[b[i] >> 4] : ' ';
+        line[k++] = i < n ? hex[b[i] & 15] : ' ';
+        if (i & 1) {
+            line[k++] = ' ';
+        }
+    }
+    line[k++] = ' ';
+    for (size_t i = 0; i < n; i++) {
+        line[k++] = b[i] >= 32 && b[i] < 127 ? (char)b[i] : '.';
+    }
+    line[k++] = '\n';
+    outmem(line, k, out1);
+}
+
+static int xxd_one(int fd, const char *name, void *arg) {
+    unsigned char row[16], buf[512];
+    size_t have = 0;
+    unsigned long off = 0;
+    ssize_t got;
+    (void)name;
+    (void)arg;
+    while (!stopped() && (got = read(fd, buf, sizeof buf)) > 0) {
+        for (ssize_t i = 0; i < got; i++) {
+            row[have++] = buf[i];
+            if (have == sizeof row) {
+                xxd_row(off, row, have);
+                off += have;
+                have = 0;
+            }
+        }
+    }
+    if (have > 0) {
+        xxd_row(off, row, have);
+    }
+    return 0;
+}
+
+// FILE's bytes (stdin's with none) in hex, as `xxd FILE` prints them.
+static int xxdcmd(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    while (nextopt("") != '\0') {
+    }
+    if (argptr[0] != NULL && argptr[1] != NULL) {
+        return moy_sh_fail("usage: xxd [FILE]");
+    }
+    return stop_status(each_input(argptr, xxd_one, NULL) ? 2 : 0);
+}
+
+// One input's digest as md5sum and sha256sum print it: the hex, two spaces,
+// the name (`-` for stdin).
+static int sum_one(int fd, const char *name, void *arg) {
+    int sha = *(const int *)arg;
+    union {
+        mbedtls_md5_context md5;
+        mbedtls_sha256_context sha256;
+    } c;
+    unsigned char d[32], buf[512];
+    char hex[2 * sizeof d];
+    ssize_t got;
+    int r;
+    if (sha) {
+        mbedtls_sha256_init(&c.sha256);
+        r = mbedtls_sha256_starts(&c.sha256, 0);
+    } else {
+        mbedtls_md5_init(&c.md5);
+        r = mbedtls_md5_starts(&c.md5);
+    }
+    while (r == 0 && !stopped() && (got = read(fd, buf, sizeof buf)) > 0) {
+        r = sha ? mbedtls_sha256_update(&c.sha256, buf, (size_t)got)
+                : mbedtls_md5_update(&c.md5, buf, (size_t)got);
+    }
+    if (r == 0) {
+        r = sha ? mbedtls_sha256_finish(&c.sha256, d) : mbedtls_md5_finish(&c.md5, d);
+    }
+    if (sha) {
+        mbedtls_sha256_free(&c.sha256);
+    } else {
+        mbedtls_md5_free(&c.md5);
+    }
+    if (moy_sh_cur->interrupt) {
+        return 0;
+    }
+    if (r != 0) {
+        return moy_sh_fail("%s: %s: no digest", commandname, name);
+    }
+    size_t n = sha ? 32u : 16u;
+    for (size_t i = 0; i < n; i++) {
+        hex[2 * i] = "0123456789abcdef"[d[i] >> 4];
+        hex[2 * i + 1] = "0123456789abcdef"[d[i] & 15];
+    }
+    outmem(hex, 2 * n, out1);
+    out1fmt("  %s\n", name);
+    return 0;
+}
+
+// md5sum and sha256sum: each FILE's digest (stdin's with none).
+static int sumcmd(int argc, char **argv) {
+    int sha = argv[0][0] == 's';
+    (void)argc;
+    while (nextopt("") != '\0') {
+    }
+    return stop_status(each_input(argptr, sum_one, &sha));
 }
 
 // --- the system ---------------------------------------------------------------
@@ -1517,11 +2716,14 @@ static const struct builtincmd core[] = {
     { "cat", catcmd, BUILTIN_REGULAR },
     { "clear", clearcmd, BUILTIN_REGULAR },
     { "cp", cpcmd, BUILTIN_REGULAR },
+    { "cut", cutcmd, BUILTIN_REGULAR },
     { "date", datecmd, BUILTIN_REGULAR },
     { "df", dfcmd, BUILTIN_REGULAR },
     { "dirname", dirnamecmd, BUILTIN_REGULAR },
     { "dmesg", logcmd, BUILTIN_REGULAR },
+    { "du", ducmd, BUILTIN_REGULAR },
     { "edit", appcmd, BUILTIN_REGULAR },
+    { "find", findcmd, BUILTIN_REGULAR },
     { "free", freecmd, BUILTIN_REGULAR },
     { "grep", grepcmd, BUILTIN_REGULAR },
     { "head", headcmd, BUILTIN_REGULAR },
@@ -1529,6 +2731,7 @@ static const struct builtincmd core[] = {
     { "less", appcmd, BUILTIN_REGULAR },
     { "log", logcmd, BUILTIN_REGULAR },
     { "ls", lscmd, BUILTIN_REGULAR },
+    { "md5sum", sumcmd, BUILTIN_REGULAR },
     { "mkdir", mkdircmd, BUILTIN_REGULAR },
     { "more", appcmd, BUILTIN_REGULAR },
     { "mv", mvcmd, BUILTIN_REGULAR },
@@ -1538,15 +2741,21 @@ static const struct builtincmd core[] = {
     { "rm", rmcmd, BUILTIN_REGULAR },
     { "rmdir", rmdircmd, BUILTIN_REGULAR },
     { "sh", moy_sh_shcmd, BUILTIN_REGULAR },
+    { "sha256sum", sumcmd, BUILTIN_REGULAR },
     { "sleep", sleepcmd, BUILTIN_REGULAR },
+    { "sort", sortcmd, BUILTIN_REGULAR },
     { "tail", tailcmd, BUILTIN_REGULAR },
+    { "tee", teecmd, BUILTIN_REGULAR },
     { "top", appcmd, BUILTIN_REGULAR },
     { "touch", touchcmd, BUILTIN_REGULAR },
+    { "tr", trcmd, BUILTIN_REGULAR },
     { "uname", unamecmd, BUILTIN_REGULAR },
+    { "uniq", uniqcmd, BUILTIN_REGULAR },
     { "vi", appcmd, BUILTIN_REGULAR },
     { "view", appcmd, BUILTIN_REGULAR },
     { "vim", appcmd, BUILTIN_REGULAR },
     { "wc", wccmd, BUILTIN_REGULAR },
+    { "xxd", xxdcmd, BUILTIN_REGULAR },
 };
 
 #define NCORE ((int)(sizeof core / sizeof core[0]))

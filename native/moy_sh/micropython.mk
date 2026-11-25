@@ -30,6 +30,8 @@ SRC_USERMOD_LIB_C += $(MOY_SH_DASH_SRC) \
     $(MOY_SH_DIR)/moy_term.c $(MOY_SH_DIR)/moy_sh_app.c $(MOY_SH_DIR)/moy_sh_edit.c \
     $(MOY_SH_DIR)/moy_sh_top.c $(MOY_SH_DIR)/moy_sh_face.c
 
+# md5sum and sha256sum hash with moy_net's vendored mbedTLS, whose sources,
+# include path and config its micropython.mk gives every module of the build
 MOY_SH_SHIM := -include $(MOY_SH_DIR)/dash_config.h -I$(MOY_SH_DIR)/dash
 $(BUILD)/moy_sh/dash/%.o $(BUILD)/moy_sh/dash/bltin/%.o: CFLAGS += $(MOY_SH_SHIM)
 $(BUILD)/moy_sh/moy_sh.o $(BUILD)/moy_sh/moy_sh_sys.o $(BUILD)/moy_sh/moy_sh_cmds.o: CFLAGS += $(MOY_SH_SHIM)

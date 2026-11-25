@@ -1,6 +1,7 @@
 // The vendored mbedTLS's configuration (native/moy_net/mbedtls/README.md):
-// what moy_seal.c and moy_crypto.c call and nothing else, for the host's
-// library and the browser's wasm. A board compiles both against the
+// what moy_seal.c and moy_crypto.c call, and the shell's md5sum and
+// sha256sum (native/moy_sh/moy_sh_cmds.c), and nothing else, for the host's
+// library and the browser's wasm. A board compiles them against the
 // ESP-IDF's own mbedTLS and its sdkconfig instead, Curve25519 turned on in
 // each console board's sdkconfig.board.
 
@@ -15,6 +16,7 @@
 #define MBEDTLS_GCM_C
 #define MBEDTLS_HMAC_DRBG_C
 #define MBEDTLS_MD_C
+#define MBEDTLS_MD5_C
 #define MBEDTLS_SHA256_C
 #define MBEDTLS_BIGNUM_C
 #define MBEDTLS_ECP_C

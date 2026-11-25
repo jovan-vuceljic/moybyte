@@ -1,0 +1,20 @@
+$ printf 'abc' > abc
+$ : > empty
+$ i=0; while [ $i -lt 100 ]; do printf '0123456789'; i=$((i+1)); done > k
+$ md5sum abc
+900150983cd24fb0d6963f7d28e17f72  abc
+$ printf 'abc' | md5sum
+900150983cd24fb0d6963f7d28e17f72  -
+$ md5sum abc nosuch empty; echo status=$?
+900150983cd24fb0d6963f7d28e17f72  abc
+md5sum: nosuch: No such file or directory
+d41d8cd98f00b204e9800998ecf8427e  empty
+status=1
+$ md5sum - < k
+427008b3fe192f663d665f56cd75716c  -
+$ md5sum k
+427008b3fe192f663d665f56cd75716c  k
+$ md5sum -z abc; echo bad=$?
+sh: 1: md5sum: Illegal option -z
+bad=2
+[exit 0]

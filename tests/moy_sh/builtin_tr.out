@@ -1,0 +1,38 @@
+$ printf 'hello world\n' | tr a-z A-Z
+HELLO WORLD
+$ printf 'hello world\n' | tr -d lo
+he wrd
+$ printf 'aabbccdd\n' | tr abcd xy
+xxyyyyyy
+$ printf 'a  b   c\n' | tr -s ' '
+a b c
+$ printf 'aaxxbb\n' | tr -s a-z A-Z
+AXB
+$ printf 'a\tb\n' | tr '\t' ,
+a,b
+$ printf 'Mixed Case 42\n' | tr '[:upper:]' '[:lower:]'
+mixed case 42
+$ printf 'a1 b2\tc3\n' | tr -d '[:digit:][:space:]'; echo
+abc
+$ printf 'a-b\n' | tr 'a-' 'XY'
+XYb
+$ printf 'abc' | tr abc '\101-\103'; echo
+ABC
+$ printf '' | tr a b; echo empty=$?
+empty=0
+$ tr a; echo usage=$?
+usage: tr [-ds] SET1 [SET2]
+usage=1
+$ tr -d a b; echo usage=$?
+usage: tr [-ds] SET1 [SET2]
+usage=1
+$ tr z-a x; echo backwards=$?
+tr: z-a: a range in it runs backwards
+backwards=1
+$ tr a ''; echo empty-set2=$?
+tr: SET2 is empty
+empty-set2=1
+$ tr -z a b; echo bad=$?
+sh: 1: tr: Illegal option -z
+bad=2
+[exit 0]

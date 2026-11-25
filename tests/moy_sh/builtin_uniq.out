@@ -1,0 +1,37 @@
+$ printf 'a\na\nb\nc\nc\nc\na\n' > f
+$ uniq f
+a
+b
+c
+a
+$ uniq -c f
+      2 a
+      1 b
+      3 c
+      1 a
+$ uniq -d f
+a
+c
+$ uniq -u f
+b
+a
+$ uniq -cd f
+      2 a
+      3 c
+$ printf 'x\nx' | uniq -c
+      2 x
+$ printf '\n\nz\n' | uniq -c
+      2 
+      1 z
+$ printf '' | uniq; echo empty=$?
+empty=0
+$ uniq nosuch; echo missing=$?
+uniq: nosuch: No such file or directory
+missing=1
+$ uniq f f; echo usage=$?
+usage: uniq [-cdu] [FILE]
+usage=1
+$ uniq -z f; echo bad=$?
+sh: 1: uniq: Illegal option -z
+bad=2
+[exit 0]
