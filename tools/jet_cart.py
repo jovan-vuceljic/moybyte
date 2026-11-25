@@ -50,6 +50,8 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
@@ -206,10 +208,26 @@ def wasi_sdk(fetch=True):
         return _find_sdk() or _fetch_sdk()
 
 
+# A release download's transient refusals (a 5xx, a dropped connection) are
+# GitHub's, not the pin's: tried again after 5, 15 and 45 s.
+SDK_TRIES = (0, 5, 15, 45)
+
+
 def _fetch_sdk():
     print("jet_cart: fetching %s" % WASI_SDK_URL, file=sys.stderr)
-    with urllib.request.urlopen(WASI_SDK_URL, timeout=600) as r:
-        data = r.read()
+    for i, wait in enumerate(SDK_TRIES):
+        time.sleep(wait)
+        try:
+            with urllib.request.urlopen(WASI_SDK_URL, timeout=600) as r:
+                data = r.read()
+            break
+        except urllib.error.HTTPError as e:
+            if e.code < 500 or i == len(SDK_TRIES) - 1:
+                raise
+        except (urllib.error.URLError, OSError):
+            if i == len(SDK_TRIES) - 1:
+                raise
+        print("jet_cart: retrying the fetch", file=sys.stderr)
     got = sha256_bytes(data)
     if got != WASI_SDK_SHA256:
         raise BuildError("%s hashes to %s; the pin is %s" % (WASI_SDK_URL, got,
