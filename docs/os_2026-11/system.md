@@ -373,7 +373,8 @@ host's and the wasm's the same release vendored (`native/moy_net/mbedtls/README.
   THE CLAIM the rules). The cable can ask for a fresh claim at any time
   (My consoles' "Manage by cable"), which replaces a password set before
   and signs every browser out, as `passwd` does: physical access is the
-  owner's proof. The record crosses the network, guessable only at
+  owner's proof. A claim that sets the password starts the SSH server at
+  once, as `passwd` does (the webhost's `on_password`). The record crosses the network, guessable only at
   its PBKDF2 cost; the password does not. A pairing
   mints a random 128-bit device key with an id and the browser's name, kept in
   `system/webkeys` (`/etc/webkeys`); the page keeps it per board id in its

@@ -34,6 +34,10 @@ pages, which headless Chrome boots (firmware/web_runner/browsershot.mjs).
   check on`), and both report checkpoints and no desync. The T-Deck's
   math.atan2 is probed against the wasm's too.
 
+THE CLAIM. The password removed, the board serves no SSH; the cable's
+fresh claim opens the console on its URL, the page sets the password and
+pairs without loading again, saying what it does, and SSH answers at once.
+
 THE PASSWORD. A board with one is signed into with MOYBYTE_XIAO_ZERO_PASSWORD
 or MOYBYTE_C3_ZERO_PASSWORD (without it the signed-in tests skip); a board
 with none gets a bench one for the suite, which goes with the browsers it
@@ -45,7 +49,8 @@ networks, the password, the paired browsers), the board restarts on the
 network it served on, and the store's tree is compared with the start's.
 
 THE NUMBERS. Internal RAM idle and with the socket open, the Improv join, the
-loader's and /sync's serving time and the page's boot. Where the pass names
+loader's and /sync's serving time, the page's boot and the claim's submit to
+a live console. Where the pass names
 a file (MOYBYTE_ZERO_PERF_OUT, with MOYBYTE_ZERO_IMAGE the image's stamp)
 they are written there as one perf record (tools/perf_pass.py), which the
 pass appends to the board's history for tools/perf_ledger.py.
@@ -312,16 +317,16 @@ def _scrub(text, z):
     return text.replace(z.password, "***") if z.password else text
 
 
-def _scenario(out, steps, query):
+def _scenario(out, steps, query, boot_ms=120000):
     out.mkdir(parents=True, exist_ok=True)
     path = out / "scenario.json"
-    path.write_text(json.dumps({"query": query, "boot_ms": 120000, "steps": steps}))
+    path.write_text(json.dumps({"query": query, "boot_ms": boot_ms, "steps": steps}))
     return path
 
 
-def _browse(z, base, steps, out, query="?handheld=1&dev=1", timeout=600):
+def _browse(z, base, steps, out, query="?handheld=1&dev=1", timeout=600, boot_ms=120000):
     """browsershot over `steps` against `base`: its output, scrubbed."""
-    path = _scenario(out, steps, query)
+    path = _scenario(out, steps, query, boot_ms)
     try:
         run = subprocess.run(["node", "browsershot.mjs", str(path), str(out)],
                              cwd=str(RUNNER), env=dict(os.environ, MOY_BASE=base),
@@ -509,6 +514,94 @@ def test_the_console_signs_in_and_syncs_a_cart(zero, mirror, tmp_path):
     ]
     out = _browse(zero, zero.url, steps, tmp_path / "sync")
     assert "local.new_cart.moy" in out.rsplit("js ->", 1)[-1], out[-2000:]
+
+
+# -- the claim: setup's password ----------------------------------------------------------
+
+
+def _ssh_banner(z, timeout=3.0):
+    """The SSH server's first line at the board's port 22, or None when
+    nothing answers there."""
+    import socket
+    host = z.url.split("//", 1)[1].split("/", 1)[0].split(":", 1)[0]
+    try:
+        with socket.create_connection((host, 22), timeout=timeout) as s:
+            s.settimeout(timeout)
+            return s.recv(64).split(b"\r\n", 1)[0].decode(errors="replace")
+    except OSError:
+        return None
+
+
+# What the page's card and the worker's answers did from the password's
+# submit on, in ms: the card's changes [ms, class, heading, line, the card's
+# display, the field's], `claimed`, `key`, and an unload, which a pairing
+# that goes on with the boot never makes.
+CLAIM_WATCH = """(function () {
+  var t0 = Date.now(), T = {t0: t0, cards: []}, last = "";
+  function keep() { try { sessionStorage.setItem('moyClaim', JSON.stringify(T)); } catch (e) {} }
+  function card() { var p = document.getElementById('pin'), h = document.getElementById('pinh'),
+      m = document.getElementById('pinm'), r = document.getElementById('pinr');
+    var c = [p.className, h ? h.textContent : '', m.textContent,
+             getComputedStyle(p).display, getComputedStyle(r).display];
+    var k = JSON.stringify(c);
+    if (k != last) { last = k; T.cards.push([Date.now() - t0].concat(c)); keep(); }
+    return c; }
+  WORKER.addEventListener('message', function (e) {
+    var t = e.data && e.data.t;
+    if ((t == 'claimed' || t == 'key' || t == 'pair') && !(t in T)) { T[t] = Date.now() - t0; keep(); } });
+  addEventListener('pagehide', function () { T.unload = Date.now() - t0; card(); keep(); });
+  setInterval(card, 50);
+  var f = document.getElementById('pinf'), b = document.getElementById('pinb');
+  f.value = %s; b.click();
+  return 'CARD ' + JSON.stringify(card());
+})()"""
+
+
+def test_a_claim_sets_the_password_and_ssh_answers_at_once(zero, mirror, tmp_path):
+    """With no password the board serves no SSH. The cable's fresh claim
+    (Improv's 0xF0) opens the console on the URL it answers, whose prompt
+    chooses the password: from the submit the card says what it does (never a
+    bare prompt) while the board's curve runs, the console signs in without
+    loading the page again, and the SSH server answers at once, with no
+    reboot. The steps' times are the setup's: the page to its prompt, then
+    from the submit the claim, the pairing and the console live."""
+    pw = zero.password or _bench_password()
+    with zero.repl() as r:
+        r.remove(STORE + "/system/password")
+    assert _ssh_banner(zero) is None, "SSH answers a board with no password"
+    urls, err = Z.Improv(zero.b.ser).claim()
+    assert err is None and urls and "&claim=" in urls[0], [Z.bare(u) for u in urls]
+    frag = urls[0].split("#", 1)[1]
+    zero.password = pw
+    steps = [
+        {"waitFor": "(function () { var p = document.getElementById('pinp'); "
+                    "return !!p && getComputedStyle(document.getElementById('pin')).display "
+                    "== 'flex' && p.textContent.indexOf('Choose') == 0 && "
+                    "Math.round(performance.now()); })()", "timeout": 120000},
+        {"js": CLAIM_WATCH % json.dumps(pw)},
+        {"waitFor": "document.getElementById('s').textContent == 'live'", "timeout": 120000},
+        {"js": "'TIMES ' + JSON.stringify({t: JSON.parse(sessionStorage.getItem('moyClaim')), "
+               "live: Date.now()})"},
+    ]
+    out = _browse(zero, zero.url, steps, tmp_path / "claim",
+                  query="?handheld=1&start=1#" + frag, boot_ms=1000)
+    took = [float(v) for v in re.findall(r"waitFor -> (\d+)", out)]
+    times = _tagged(out, "TIMES")
+    t = times["t"]
+    live = times["live"] - t["t0"]
+    split = {"prompt": took[0] if took else None, "claimed": t.get("claimed"),
+             "key": t.get("key"), "live": live}
+    print("%s: claim, from the page's load to its prompt, then from the submit (ms): %s"
+          % (zero.name, json.dumps(split)))
+    print("%s: the card from the submit: %s" % (zero.name, json.dumps(t["cards"])))
+    zero.take("zero claim to live", float(live))
+    asks = [c for c in t["cards"] if c[4] == "flex" and c[5] != "none"]
+    assert not asks, "the card asked for something after the submit: %s" % asks
+    assert t.get("claimed") and t.get("key") and "pair" not in t, t
+    assert "unload" not in t, "the pairing loaded the page again"
+    banner = _ssh_banner(zero)
+    assert banner and banner.startswith("SSH-2.0"), \
+        "SSH does not answer after the claim set the password: %r" % banner
 
 
 # -- the live socket --------------------------------------------------------------------
