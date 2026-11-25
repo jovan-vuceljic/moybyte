@@ -182,10 +182,10 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         self.root_ctx = _LayoutCtx.capture(ws)
         self._win_layer = _WindowStackLayer(self)
         self.windows = {}               # slot key -> _Win
-        # Where each window stood when a relayout dropped it, by kind: (its
-        # title strip's height, the scale it was built at; x, y, w, h; its
-        # restore rect where full screen). Its rebuild at the same scale
-        # stands there again (`_make_window`).
+        # Where each window stood when a relayout dropped it, by kind: (the
+        # scales it was built at, `_scales`; x, y, w, h; its restore rect
+        # where full screen). Its rebuild at the same scales stands there
+        # again (`_make_window`).
         self._places = {}
         self._prewarm_failed = set()  # window kinds whose prewarm draw has been reported
         # Two orders of the same slots: `_kinds` is the back-stack's above the
@@ -481,7 +481,7 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
             # what the first kept)
             self._places = {}
             for win in self.windows.values():
-                self._places[win.kind] = (win.title_h, win.x, win.y, win.w, win.h, win.saved)
+                self._places[win.kind] = (win.scales, win.x, win.y, win.w, win.h, win.saved)
         self._drop_wins()
         self._kinds = []
         self.z_order = []
@@ -571,6 +571,11 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
 
     def _fs(self):
         return self.ws.look.effective_font_scale()
+
+    def _scales(self):
+        """(font scale, chrome scale) a window built now is laid out at."""
+        look = self.ws.look
+        return (look.effective_font_scale(), look.effective_chrome_scale())
 
     def desk_rect(self):
         """The desk's content rect, (x, y, w, h) on the root canvas: the glass
@@ -944,9 +949,11 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         fs = self._fs()
         w, h = self._open_size(key, fs)
         title_h = _layout_base.metric("title", fs)
+        scales = self._scales()
         place = self._places.pop(kind, None)
-        if place is not None and place[0] == title_h:
+        if place is not None and place[0] == scales:
             win = _Win(kind, place[1], place[2], place[3], place[4], title_h)
+            win.scales = scales
             if place[5] is not None:
                 win.saved = place[5]
                 self._set_full(win)
@@ -959,6 +966,7 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
             x, y, w, h = self._cascade(kind, w, h, title_h, depth, fs)
         x, y = self._clear_of_subject(x, y, w, h, fs)
         win = _Win(kind, x, y, w, h, title_h)
+        win.scales = scales
         if self._opens_full(kind):
             win.saved = (x, y, w, h)
             self._set_full(win)
