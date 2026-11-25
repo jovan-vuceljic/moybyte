@@ -203,13 +203,18 @@ def test_a_board_whose_image_names_a_page_it_has_not_got_is_refused(
 
 
 FAKE_GH = '''#!/usr/bin/env python3
-import glob, json, os, shutil, sys
+import datetime, glob, json, os, shutil, sys
 argv = sys.argv[1:]
 rel = os.environ["MOY_FAKE_RELEASE"]
 if argv[:2] == ["release", "view"]:
     if not os.path.isdir(rel):
         sys.exit(1)
-    print(json.dumps({"assets": [{"name": n} for n in sorted(os.listdir(rel))]}))
+    def when(n):
+        t = datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(rel, n)),
+                                            datetime.timezone.utc)
+        return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    print(json.dumps({"assets": [{"name": n, "createdAt": when(n)}
+                                 for n in sorted(os.listdir(rel))]}))
 elif argv[:2] == ["release", "create"]:
     os.makedirs(rel)
 elif argv[:2] == ["release", "upload"]:
@@ -266,6 +271,61 @@ def test_every_add_on_published_stays_in_the_index(tmp_path, monkeypatch):
         url, fits = _addon(release, "tdeck", "https://x/carts-tdeck.json", digest)
         assert url == "https://x/" + web_pack.CART_NAME % digest
         assert fits == [new, old]
+
+
+def test_the_beta_index_keeps_the_add_ons_the_pack_store_serves(tmp_path, monkeypatch):
+    """A beta publish drops from the index the add-on whose cart the release
+    published longer ago than the pack store keeps (pack_store.DEV_DAYS),
+    and keeps a younger one, which a console a step behind still installs.
+    The old cart stays on the release; the stable channel keeps every entry."""
+    release = _fake_gh(tmp_path, monkeypatch)
+    digests = []
+    for n in range(3):
+        artifacts = tmp_path / ("artifacts%d" % n)
+        digests.append(_artifacts(artifacts, "tdeck", seed=n + 1).hex())
+        if n == 2:
+            old = release / (web_pack.CART_NAME % digests[0])
+            when = old.stat().st_mtime - (publish.pack_store.DEV_DAYS + 1) * 86400
+            os.utime(str(old), (when, when))
+        monkeypatch.setattr(sys, "argv", ["publish", "--artifacts", str(artifacts),
+                                          "--channel", "unstable"])
+        assert publish.main() == 0
+    url, fits = _addon(release, "tdeck", "https://x/carts-tdeck.json", digests[1])
+    assert fits == [digests[2], digests[1]]
+    assert (release / (web_pack.CART_NAME % digests[0])).exists()
+    assert publish.addon_keep("stable", {}) is None
+    assert publish.addon_keep("unstable", None) is None
+
+
+def _addon_entry(n):
+    digest = hashlib.sha256(b"%d" % n).hexdigest()
+    name = web_pack.CART_NAME % digest
+    return {"id": web_pack.cart_id(digest), "name": web_pack.CART_TITLE, "version": n,
+            "folder": web_pack.cart_id(digest) + ".moy", "runtime": web_pack.CART_RUNTIME,
+            "licence": dict(web_pack.LICENCE, url=web_pack.LICENCE_NAME, size=1,
+                            sha256=digest),
+            "assets": [{"name": name, "url": name, "size": 1, "sha256": digest,
+                        "files": {f: {"size": 1, "sha256": digest} for f in
+                                  ("LICENSE.md", "manifest.json", web_pack.PACK_FILE)}}],
+            "moybyte": {"fits": digest}}
+
+
+def test_the_index_stays_within_its_budget(tmp_path):
+    """Publish after publish, the index stays within web_pack.INDEX_BUDGET,
+    under the whole read a console makes (cart_index.INDEX_LIMIT): the
+    oldest add-ons go, this build's and the newest earlier ones stay."""
+    from runtime import cart_index as ci
+    assert web_pack.INDEX_BUDGET < ci.INDEX_LIMIT
+    doc = None
+    for n in range(400):
+        doc = web_pack.index_doc("p4", _addon_entry(n), doc)
+        assert len(doc) <= web_pack.INDEX_BUDGET
+    fits = [c["moybyte"]["fits"] for c in json.loads(doc)["carts"]]
+    newest = [_addon_entry(n)["moybyte"]["fits"] for n in range(399, -1, -1)]
+    assert 100 < len(fits) < 400 and fits == newest[:len(fits)]
+    keep = web_pack.index_doc("p4", _addon_entry(400), doc,
+                              keep=lambda c: c["version"] % 2 == 0)
+    assert [c["version"] for c in json.loads(keep)["carts"]][:3] == [400, 398, 396]
 
 
 def test_a_publish_deletes_the_official_carts_no_index_needs(tmp_path, monkeypatch,

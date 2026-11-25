@@ -48,16 +48,18 @@ paths:
     through `tools/web_pack.py`) put beside the payload the cart
     `moybyte_web-<digest>.moy.zip`, its licence, and `carts-<board>.json`: an
     index in the store's format (version 1, signed as a carts index is) with
-    one entry per add-on ever published for the board, newest first. An
+    one entry per add-on published for the board, newest first. An
     index lists an id once, so an entry's id is `web_console_<12 hex of the
     digest>` and its `moybyte.fits` the whole digest; a console installs the
     entry that fits its running image, through the ordinary Install, which
     holds the cart to the index's size and sha256. That happens on both
     channels for every board, whether or not any console has the add-on, and
-    the manifest names the cart (`cart`, unsigned). **No add-on published is
-    removed** and each index keeps the entries of the one it replaces, so a
-    console a step behind its channel, rolled back or installed by hand still
-    finds its own. The official carts' zips and covers (the seed carts but the test fixtures,
+    the manifest names the cart (`cart`, unsigned). **No add-on cart
+    published is removed** and each index keeps the entries of the one it
+    replaces, so a console a step behind its channel, rolled back or
+    installed by hand still finds its own, within the retention the
+    `release` skill states (`publish_firmware_release.addon_keep`,
+    `web_pack.INDEX_BUDGET`). The official carts' zips and covers (the seed carts but the test fixtures,
     `.claude/rules/carts.md`) are the one thing a publish deletes: every
     changed cart adds two assets and a release holds at most 1,000, so after
     the upload one that no index on the release references, now or before

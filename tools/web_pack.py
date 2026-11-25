@@ -11,7 +11,7 @@
 #   board_modules    a board build's native modules of the official compiled carts
 #   collected_modules the modules the boards of one run built, per cart
 #   official_entries every official cart as an entry of the release
-#   index_doc        the board's index: the official entries, this add-on, then every earlier add-on
+#   index_doc        the board's index: the official entries, this add-on, then the earlier add-ons it keeps
 #   publish_addon    the carts, their licence and the board's index, in one folder
 """The browser console add-on and the official carts, as a release and a LAN
 mirror publish them.
@@ -39,11 +39,13 @@ Beside every payload, whether or not any console has the add-on installed:
     carts-<board>.json             an index in the store's format (version 1,
                                    runtime/carts/cart_index.py): an entry per
                                    official cart of THIS build, naming its API
-                                   level in moybyte.api, then one per add-on ever
+                                   level in moybyte.api, then one per add-on
                                    published for the board, newest first, each
-                                   naming its page's digest in moybyte.fits;
-                                   signed as a carts index is when the key is
-                                   there
+                                   naming its page's digest in moybyte.fits, as
+                                   many as INDEX_BUDGET holds (index_doc; the
+                                   publisher's addon_keep drops the beta's
+                                   older than the pack store keeps); signed as
+                                   a carts index is when the key is there
     moybyte_web-licence.md         the licence the entries name
 An official compiled cart carries its source alone. A release builds its
 main.wasm, and each board's firmware build, which has its chip's toolchain,
@@ -88,6 +90,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import board_config  # noqa: E402
 import gen_device_carts  # noqa: E402
 import gen_web_blob as gwb  # noqa: E402
+from runtime.carts.cart_index import INDEX_LIMIT  # noqa: E402
 from runtime.moy_store_base import API_LEVEL, api_above, api_of  # noqa: E402
 from tools import wasm_module  # noqa: E402
 
@@ -99,6 +102,10 @@ CART_TITLE = "Browser console"
 CART_RUNTIME = "web"
 CART_NAME = "moybyte_web-%s.moy.zip"
 INDEX_NAME = "carts-%s.json"
+# The unsigned index's ceiling: the oldest add-on entries go first to keep it
+# under it, a quarter of the limit a console reads an index whole within left
+# for the signature and the official carts a later build adds.
+INDEX_BUDGET = INDEX_LIMIT * 3 // 4
 LICENCE_NAME = "moybyte_web-licence.md"
 LICENCE_SRC = os.path.join(ROOT, "LICENSES", "FSL-1.1-MIT.md")
 LICENCE = {"spdx": "FSL-1.1-MIT", "name": "Functional Source License, Version 1.1, MIT Future License"}
@@ -508,28 +515,42 @@ def official_assets(names, indexes):
     return sorted(n for n in names if OFFICIAL_ASSET.match(n) and n not in keep)
 
 
-def index_doc(board, entry, earlier=None, official=()):
+def index_doc(board, entry, earlier=None, official=(), keep=None):
     """The bytes of `carts-<board>.json`: the `official` entries (this
-    build's official carts), the add-on `entry`, then every add-on entry of the
-    board's earlier index (`earlier`, its bytes) for another page, so a
-    console a step behind its channel still finds the add-on its image fits."""
-    carts = list(official) + [entry] + [
-        c for c in earlier_entries(earlier)
-        if c["moybyte"]["fits"] != entry["moybyte"]["fits"]]
-    doc = {"version": 1, "name": "Moybyte %s" % board,
-           "home": "https://github.com/moybyte-org/moybyte", "carts": carts}
-    return json.dumps(doc, indent=2, sort_keys=True).encode() + b"\n"
+    build's official carts), the add-on `entry`, then the add-on entries of
+    the board's earlier index (`earlier`, its bytes) for another page, so a
+    console a step behind its channel still finds the add-on its image fits:
+    those `keep` (a predicate on an entry; None: all) answers true for, the
+    newest of them that keep the document within INDEX_BUDGET."""
+    head = list(official) + [entry]
+    older = [c for c in earlier_entries(earlier)
+             if c["moybyte"]["fits"] != entry["moybyte"]["fits"]
+             and (keep is None or keep(c))]
+
+    def doc(n):
+        d = {"version": 1, "name": "Moybyte %s" % board,
+             "home": "https://github.com/moybyte-org/moybyte", "carts": head + older[:n]}
+        return json.dumps(d, indent=2, sort_keys=True).encode() + b"\n"
+    lo, hi = 0, len(older)          # the most entries that fit: its size grows with n
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if len(doc(mid)) <= INDEX_BUDGET:
+            lo = mid
+        else:
+            hi = mid - 1
+    return doc(lo)
 
 
 def publish_addon(page, folder, board, version, key_pem=None, earlier=None,
-                  seeds=SEED_DIR, modules=None):
+                  seeds=SEED_DIR, modules=None, keep=None):
     """Everything a console installs the add-on and the official carts from,
     into `folder`: the page's cart, every official cart under `seeds`
     (None: none), a compiled one with the native modules `modules`
     (collected_modules' answer; None builds them here, built_seed), the
     licence and `carts-<board>.json` over the board's `earlier`
-    index (its bytes; None reads the one already in `folder`), signed with
-    `key_pem` when given. Returns {"cart", "index", "official"}: the add-on's
+    index (its bytes; None reads the one already in `folder`), the earlier
+    add-ons `keep` answers true for (index_doc), signed with `key_pem` when
+    given. Returns {"cart", "index", "official"}: the add-on's
     and the index's names, and the official entries' count."""
     index = INDEX_NAME % board
     path = os.path.join(folder, index)
@@ -540,7 +561,7 @@ def publish_addon(page, folder, board, version, key_pem=None, earlier=None,
     cart = publish_cart(page, folder)
     official = official_entries(folder, seeds, modules) if seeds else []
     doc = index_doc(board, index_entry(page[1], version, cart, folder), earlier,
-                    official)
+                    official, keep)
     if key_pem:
         import ota_sign
         doc = ota_sign.sign_index(doc, key_pem)

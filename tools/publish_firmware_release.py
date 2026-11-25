@@ -7,6 +7,7 @@
 #   stage_ota_all      every board's manifest, add-on cart and carts index
 #   run_modules        the native modules each chip's board build made, by cart
 #   stage_addon_only   a board's add-on cart and index with no OTA payload
+#   addon_keep         which earlier add-on entries a channel's index keeps
 #   stage_ota          one board's signed manifest, add-on and carts index
 #   stage_c6           a P4 manifest's C6 block and its image
 #   prune_carts        delete the official carts' assets no index names
@@ -50,8 +51,10 @@ carries its own provenance beside it:
       moybyte.<cart>-<hex>.png        its cover: one asset for every board,
                                       kept while an index references it
       carts-tdeck.json             <- the index listing this build's official
-      moybyte_web-licence.md          carts and every add-on for that board
-                                      (tools/web_pack.py)
+      moybyte_web-licence.md          carts and the board's add-ons, newest
+                                      first: the beta's of the pack store's
+                                      days (addon_keep), as many as
+                                      web_pack.INDEX_BUDGET holds
 
 The `<board>-` prefix is how flat release assets keep the per-board layout that
 tools/fetch_ci_firmware.py rebuilds on the way back down; board ids therefore
@@ -80,9 +83,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ota_sign  # noqa: E402
+import pack_store  # noqa: E402
 import web_pack  # noqa: E402
 from gen_ota_manifest import build_manifest, read_firmware_version  # noqa: E402
 
@@ -168,8 +173,8 @@ NOTES_OTA = """
 
 `latest-<board>.json` is this channel's OTA manifest for that board, beside the
 app image it describes and the browser console add-on cart that image names
-(`moybyte_web-<digest>.moy.zip`, listed by `carts-<board>.json`; every one is
-kept, so an earlier image still finds its own) — the device's Settings → UPDATE ONLINE reads them
+(`moybyte_web-<digest>.moy.zip`, listed by `carts-<board>.json` with the
+earlier ones, so an earlier image still finds its own) — the device's Settings → UPDATE ONLINE reads them
 directly, so no host of your own is needed. One per board on purpose: an OTA
 payload is an app-partition image, so the T-Deck's is Xtensa and the P4's is
 RISC-V, and the board is inside the signature.
@@ -294,15 +299,16 @@ def asset_url(tag, name, repo=None):
 
 
 def stage_ota_all(tag, channel, artifacts, workdir, repo=None, refused=None,
-                  earlier=None):
+                  earlier=None, keep=None):
     """Stage every built board's OTA app image + its manifest.
 
     Returns {board: manifest}. A board absent from this run keeps whatever is
     already published for it, exactly like its flashable image, and so does a
     board whose page cannot be published (web_pack.PageError), which is named
     in `refused` and fails the run once the others are uploaded. `earlier`
-    answers a board's published add-on index (its bytes, or None), which the
-    new one keeps every entry of."""
+    answers a board's published add-on index (its bytes, or None), whose
+    add-on entries the new one keeps where `keep` (addon_keep's answer)
+    does, within web_pack.INDEX_BUDGET."""
     # A board that BUILT (its artifact folder is here) but is missing from
     # OTA_IMAGES would silently never get a manifest -- the miss that kept the
     # Guition's first beta off the channel on 2026-08-20 (the build emitted the
@@ -320,7 +326,7 @@ def stage_ota_all(tag, channel, artifacts, workdir, repo=None, refused=None,
     for board in sorted(NO_OTA):
         try:
             stage_addon_only(artifacts, workdir, board,
-                             earlier(board) if earlier else None, modules)
+                             earlier(board) if earlier else None, modules, keep)
         except web_pack.PageError as exc:
             print("::error::%s -- its add-on stays as published" % exc)
             if refused is not None:
@@ -328,7 +334,7 @@ def stage_ota_all(tag, channel, artifacts, workdir, repo=None, refused=None,
     for board in sorted(OTA_IMAGES):
         try:
             got = stage_ota(tag, channel, artifacts, workdir, repo, board,
-                            earlier(board) if earlier else None, modules)
+                            earlier(board) if earlier else None, modules, keep)
         except web_pack.PageError as exc:
             print("::error::%s -- its manifest stays as published" % exc)
             if refused is not None:
@@ -337,6 +343,27 @@ def stage_ota_all(tag, channel, artifacts, workdir, repo=None, refused=None,
         if got:
             out[board] = got
     return out
+
+
+def addon_keep(channel, assets, now=None):
+    """Which add-on entries of a board's published index its next one keeps
+    (a predicate for web_pack.index_doc), None for every one. The stable
+    channel keeps every one, as the pack store keeps its packs. The beta keeps
+    those whose cart the release (`assets`: release_assets' answer, None where
+    it could not be read, which keeps every one) published in the last
+    pack_store.DEV_DAYS days: a beta console older than that updates its
+    firmware (docs/web_console_online_2026-11.md §12), and the store no longer
+    serves its pack."""
+    if channel != "unstable":
+        return None
+    if assets is None:
+        return None
+    since = (now if now is not None else time.time()) - pack_store.DEV_DAYS * 86400
+
+    def keep(entry):
+        when = assets.get(entry["assets"][0].get("url")) if entry.get("assets") else None
+        return when is not None and when >= since
+    return keep
 
 
 def run_modules(artifacts):
@@ -357,10 +384,10 @@ def run_modules(artifacts):
     return got
 
 
-def stage_addon_only(artifacts, workdir, board, earlier=None, modules=None):
+def stage_addon_only(artifacts, workdir, board, earlier=None, modules=None, keep=None):
     """Stage a NO_OTA board's add-on cart and its index, or nothing when this
     run did not build the board. Raises web_pack.PageError like stage_ota.
-    `modules` is run_modules' answer."""
+    `modules` is run_modules' answer, `keep` addon_keep's."""
     src = os.path.join(artifacts, "moybyte-firmware-%s" % board, NO_OTA[board])
     if not os.path.exists(src):
         print("%-6s no %s in this run -- add-on unchanged" % (board, NO_OTA[board]))
@@ -370,17 +397,19 @@ def stage_addon_only(artifacts, workdir, board, earlier=None, modules=None):
     if version is None:
         version = read_firmware_version()
     addon = web_pack.publish_addon(page, workdir, board, version,
-                                   ota_sign.read_key(), earlier or b"", modules=modules)
+                                   ota_sign.read_key(), earlier or b"", modules=modules,
+                                   keep=keep)
     print("%-6s staged %s, %d official carts and %s (no OTA)"
           % (board, addon["cart"], addon["official"], addon["index"]))
     return addon
 
 
 def stage_ota(tag, channel, artifacts, workdir, repo=None, board="tdeck",
-              earlier=None, modules=None):
+              earlier=None, modules=None, keep=None):
     """Stage one board's OTA app image + `latest-<board>.json`, or None, and
     beside them the add-on cart of the page the image names and the board's
-    add-on index over `earlier` (the published one's bytes), its official
+    add-on index over `earlier` (the published one's bytes, its add-ons those
+    `keep` keeps: addon_keep), its official
     compiled carts with the native modules `modules` (run_modules; None
     builds them here). Raises web_pack.PageError when the run carries no page
     its image names."""
@@ -414,7 +443,8 @@ def stage_ota(tag, channel, artifacts, workdir, repo=None, board="tdeck",
     # The browser console add-on, beside the payload, named by the digest
     # the image carries: where a console installs it from.
     addon = web_pack.publish_addon(page, workdir, board, manifest["version"],
-                                   ota_sign.read_key(), earlier or b"", modules=modules)
+                                   ota_sign.read_key(), earlier or b"", modules=modules,
+                                   keep=keep)
     manifest["cart"] = addon["cart"]
     print("%-6s staged %s, %d official carts and %s"
           % (board, addon["cart"], addon["official"], addon["index"]))
@@ -502,13 +532,16 @@ def published(tag, name):
 
 
 def release_assets(tag):
-    """The names of the release's assets, or None when it cannot be read."""
+    """{name: publication time (a timestamp)} of the release's assets, or
+    None when it cannot be read."""
     got = gh("release", "view", tag, "--json", "assets", check=False)
     if got.returncode != 0:
         return None
     try:
-        return [a["name"] for a in json.loads(got.stdout)["assets"]]
-    except (ValueError, KeyError, TypeError):
+        return {a["name"]: datetime.datetime.fromisoformat(
+                    a["createdAt"].replace("Z", "+00:00")).timestamp()
+                for a in json.loads(got.stdout)["assets"]}
+    except (ValueError, KeyError, TypeError, AttributeError):
         return None
 
 
@@ -628,8 +661,10 @@ def main():
             name = web_pack.INDEX_NAME % board
             before[name] = published(tag, name)
             return before[name]
+        names = release_assets(tag)
         manifests = stage_ota_all(tag, channel, os.path.abspath(args.artifacts),
-                                  workdir, refused=refused, earlier=earlier)
+                                  workdir, refused=refused, earlier=earlier,
+                                  keep=addon_keep(channel, names))
         if not staged and not manifests:
             print("nothing built in this run -- the release is unchanged")
             return 1 if refused else 0
@@ -645,7 +680,6 @@ def main():
             # not flash, so it stays whether or not the lists agree this week.
             print("no flashable images in this run -- publishing OTA manifests "
                   "only (%s)" % ", ".join(sorted(manifests)))
-        names = release_assets(tag)
         if args.dry_run:
             print("would upload to %s: %s"
                   % (tag, ", ".join(sorted(os.listdir(workdir)))))
