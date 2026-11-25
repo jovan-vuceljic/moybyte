@@ -13,7 +13,7 @@ recently drawn let go first ("redraw on exposure": it is owed again the
 next time a card shows it).
 
 A cart's cover (`image.cart(path)`) is the shell's cover cache's
-(`covers`, runtime/shell/cover_cache.py): the engine neither decodes nor
+(`covers`, runtime/shell/cover_cache.py's CoverPictures): the engine neither decodes nor
 copies it, and counts none of it in its budget. It holds the cache's
 picture and draws its pixels while the cache keeps them; one the cache let
 go (its pixels None) is asked for again, and a build still in flight stays
@@ -27,9 +27,6 @@ import collections
 
 import ui_draw as _ui_draw
 import uitree as S
-
-SIDE_HALF = 64     # a cover's half (cover_cache.HALF): a card no larger draws it
-
 
 def budget_for(w, h):
     """The app's picture budget: two glasses of RGB565. A drawing's picture
@@ -56,10 +53,10 @@ def _let_go(got):
 class PicEngine:
     def __init__(self, app, files, swapped, budget, covers=None):
         self.app, self.files, self.swapped, self.budget = app, files, swapped, budget
-        self.covers = covers                       # the shell's cover cache, for image.cart
+        self.covers = covers                       # the cover cache's pictures, for image.cart
         self.carts = {}                            # (pic, w, h) -> ("cart", the cache's picture, 0)
-        self._cart_of = {}                         # a cart pic's path -> the cart the cache is asked for
         self.cart_none = {}                        # a cart pic -> the cache's gen when it had no cover
+        self.cart_gen = {}                         # a cart pic -> the pictures taken for it
         self.cache = collections.OrderedDict()     # (pic, w, h) -> (draw kind, pixels, bytes)
         self.used = 0
         self.failed = {}                           # (pic, gen) -> why
@@ -80,7 +77,7 @@ class PicEngine:
             got = self.carts.get(k)
             if got is not None and got[1].pix is not None:
                 return got
-            if self.cart_none.get(pic) != self.gen_of(pic) and k not in self.owed:
+            if self.cart_none.get(pic) != self._covers_gen() and k not in self.owed:
                 self.owed.append(k)
             return None
         got = self.cache.get(k)
@@ -99,7 +96,7 @@ class PicEngine:
             got = self.carts.get((pic, w, h))
             if got is not None and got[1].pix is not None:
                 return "shown"
-            return "failed" if self.cart_none.get(pic) == self.gen_of(pic) else "loading"
+            return "failed" if self.cart_none.get(pic) == self._covers_gen() else "loading"
         if (pic, w, h) in self.cache:
             return "shown"
         if (pic, self.gen_of(pic)) in self.failed:
@@ -212,23 +209,22 @@ class PicEngine:
             held = True
         return held
 
+    def _covers_gen(self):
+        return self.covers.gen() if self.covers is not None else 0
+
     def _cart_step(self, k):
         """A slice of cart cover `k`'s build in the cover cache: True once
         it holds the picture, which the page draws again to show; a build
         still in flight stays owed, and a cart with none is not asked again
         until the cache changes."""
         pic, w, h = k
-        cart = self._cart_of.get(pic.key)
-        if cart is None:
-            cart = self._cart_of[pic.key] = {"path": pic.key}
-        covers = self.covers
-        img = covers.cover_for(cart, 1 if max(w, h) > SIDE_HALF else 2) \
-            if covers is not None else None
-        if img is not None:
+        img = self.covers.picture(pic.key, max(w, h)) if self.covers is not None else None
+        if img:
             self.carts[k] = ("cart", img, 0)
+            self.cart_gen[pic] = self.cart_gen.get(pic, 0) + 1
             return True
-        if covers is None or covers.none_for(cart):
-            self.cart_none[pic] = self.gen_of(pic)       # asked again once the cache changes
+        if img is None:
+            self.cart_none[pic] = self._covers_gen()     # asked again once the cache changes
             self.stats["failed"] += 1
             _tr(self.app, "%r has no cover" % (pic,))
             return False                                # its card shows its icon as it did
@@ -237,9 +233,9 @@ class PicEngine:
 
     def gen_of(self, pic):
         """What moves with the picture's pixels: an app's own picture's puts,
-        a store file's changes, the cover cache's builds and frees."""
+        a store file's changes, a cart cover's pictures taken from the cache."""
         if pic.kind == "cart":
-            return self.covers.gen if self.covers is not None else 0
+            return self.cart_gen.get(pic, 0)
         if pic.kind == "own":
             return S.pictures.gen_of(self.app, pic.key)
         return S.pictures.store_gen.get(pic.key, 0)
