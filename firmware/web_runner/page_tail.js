@@ -162,7 +162,10 @@ if(CHOOSE){PINP.textContent="Choose this console's password, 8 to 64 characters:
 PINB.disabled=false;try{PINF.value="";PINF.focus();}catch(e){}return;}
 PINP.textContent=m.cable?(m.pw?"Type the console's password, or pair this board by cable: "
 +"plug it in and choose Manage by cable in My consoles.":"Pair this board by cable: plug it "
-+"in and choose Manage by cable in My consoles."):m.pw?"Scan the code on the console's WEB "
++"in and choose Manage by cable in My consoles."):asApp()?(m.pw?"Type the console's password. "
++"(A code scanned with the camera opens Safari, not this app.)":"Set a password on the console "
++"(passwd), then close and open this app again to type it. (A code scanned with the camera opens Safari, not this app.)")
+:m.pw?"Scan the code on the console's WEB "
 +"CONSOLE screen, or type the console's password.":"Scan the code on the console's WEB "
 +"CONSOLE screen. To type a password instead, set one on the console (passwd).";
 PINR.style.display=m.pw?"":"none";

@@ -1288,7 +1288,9 @@ def state_json():
     and how its last run ended (`media_last`, dev_media.last), the heap's
     allocation where the page meters it (`alloc`, step_frame_json's), the
     buttons held (`held`), the page's word (`page`: full screen, where it
-    keeps the carts, whether a console serves it), the glass's metric class,
+    keeps the carts, whether a console serves it, whether its browser has
+    full screen, whether it runs as a home-screen app, its host), the card
+    up (`card`: its verb, title and lines; None), the glass's metric class,
     chrome scale, top bar thickness in glass pixels and the back-stack's
     floor and depth (`glass`), the desk keyboard's
     typing level (`typing`), and the radio link's stats (`link_stats`, EspNowLink.stats: the match's
@@ -1307,7 +1309,11 @@ def state_json():
     st["edit"] = _edit_state(_S["ws"])
     pg = _S["ws"].page
     st["page"] = None if pg is None else {"fs": pg.fullscreen, "kept": pg.kept,
-                                          "served": pg.served}
+                                          "served": pg.served, "canfs": pg.can_fullscreen,
+                                          "app": pg.app, "host": pg.host}
+    cf = _S["ws"].confirm
+    st["card"] = {"verb": cf.verb, "title": cf.title,
+                  "lines": [t for t, _tone in cf.line_rows()]} if cf.open else None
     st["input"] = _input_state(_S["ws"])
     ws = _S["ws"]
     st["glass"] = {"cls": ws.metric_class, "cs": ws.look.effective_chrome_scale(),

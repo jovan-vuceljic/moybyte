@@ -123,6 +123,22 @@ nor those docs will warn you about:
   still active, else arms them for the next pointerup or keydown and the
   console says to tap. What stays HTML is the loader's progress, the
   pairing card before the console boots and a crash's text.
+- **An iPhone's full screen is the page saved to its Home Screen** (owner,
+  2026-11-25): its Safari has no element full screen, so where the browser
+  has none the system menu offers Add to Home Screen, whose card has the
+  steps, until the page runs as the app (`navigator.standalone`,
+  `display-mode`). The manifest and Moy's icons are `tools/web_app.py`'s,
+  written beside the page by both builds and named in the webhost's ASSETS
+  table, so a board serves them too; the page's head carries iOS's tags and
+  `viewport-fit=cover`, and its layout keeps out of the safe-area insets
+  (`room()` reads them back from the body's padding). No service worker:
+  iOS makes a standalone app of a plain-http page on the LAN without one.
+  What bites: the app's storage is not Safari's, so it pairs with a board
+  once more, by the password, because a code scanned with the camera
+  opens Safari, not the app; and a board's page saved at a number breaks
+  when its lease moves, so the card says to save it from the board's
+  .local name. The page never zooms: no pinch, no double tap, and the play
+  surfaces take every touch (no selection or callout).
 - **The emscripten is PINNED: `EMSDK_VERSION` in build.sh, held by
   `tools/emsdk_tree.sh` on every full build** (a tree at the pin is a silent
   no-op, another version is moved to it, one that cannot be had fails the

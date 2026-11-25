@@ -251,6 +251,11 @@ async function viewport(d) {
     await cdp("Emulation.setEmitTouchEventsForMouse", { enabled: touch, configuration: "mobile" });
 }
 if (scenario.device) await viewport(scenario.device);
+// {"ua":"..."}: the browser's user agent (an iPhone's Safari, say).
+if (scenario.ua) await cdp("Emulation.setUserAgentOverride", { userAgent: scenario.ua });
+// {"init":"<js>"}: run before every document from the first (a stand-in for
+// a device's API, as the step of that name, with no reload).
+if (scenario.init) await cdp("Page.addScriptToEvaluateOnNewDocument", { source: scenario.init });
 // {"scheme":"dark"|"light"}: the browser's prefers-color-scheme, which a console
 // with no saved theme boots in (page_tail.js moyScheme).
 if (scenario.scheme) {

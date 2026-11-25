@@ -50,7 +50,8 @@ _PAGE_ROW = {"save": _CARD_ROW["save"],
              "pod": _CARD_ROW["pod"],
              "full": ("FULL SCREEN", "maximize", "Full screen"),
              "unfull": ("LEAVE FULL SCREEN", "minimize", "Leave full screen"),
-             "add": ("ADD A FILE", "getcarts", "Add a file")}
+             "add": ("ADD A FILE", "getcarts", "Add a file"),
+             "home": ("ADD TO HOME SCREEN", "maximize", "Add to Home Screen")}
 # The system group's beam row (runtime/run/link_beam.py), by the beam under
 # way: none, a send, a receive.
 _BEAM_ROW = {None: ("RECEIVE NEARBY", "wifi", "Receive nearby"),
@@ -935,12 +936,16 @@ class SystemMenuUI:
             label, icon, text = _BEAM_ROW.get(role, _BEAM_ROW[None])
             rows.append(("item", label, self._menu_beam, icon, text))
         rows.append(_row("item", "menu.settings", self.ws.open_settings))
-        # The browser page's: full screen where the browser has it, and the
-        # file chooser for carts, PICO-8 carts and songs where the store writes.
+        # The browser page's: full screen where the browser has it, else how
+        # to get it (the page saved to the Home Screen) until it runs so, and
+        # the file chooser for carts, PICO-8 carts and songs where the store
+        # writes.
         if page is not None:
             if page.can_fullscreen:
                 rows.append(_page_row("unfull" if page.fullscreen else "full",
                                       page.toggle_fullscreen))
+            elif not page.app:
+                rows.append(_page_row("home", lambda: page.home_screen(ws)))
             if getattr(ws, "can_manage", True):
                 rows.append(_page_row("add", page.add_files))
         rows.append(_row("item", "menu.about", self._menu_about))

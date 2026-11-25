@@ -13,7 +13,17 @@
      is input (pointer, virtual pad, keyboard, soft-keyboard summon), the
      AudioWorklet PCM ring, and layout. build.sh concatenates this with
      page_tail.js (the worker transport + loader) into dist/index.html. -->
-<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<!-- The home-screen app (tools/web_app.py writes the manifest and the icons
+     beside the page): an iPhone's Safari has no element full screen, and the
+     page saved to its Home Screen opens with no browser bars. -->
+<link rel=manifest href="manifest.webmanifest">
+<link rel=apple-touch-icon href="icon-180.png">
+<meta name=apple-mobile-web-app-capable content=yes>
+<meta name=mobile-web-app-capable content=yes>
+<meta name=apple-mobile-web-app-status-bar-style content=black-translucent>
+<meta name=apple-mobile-web-app-title content=Moybyte>
+<meta name=theme-color content="#0b0f1a">
 <link rel=icon href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAhUlEQVR42mNgGAW4wX8y8dB3ANig5rI5ZGFqOGTAHIBi8aHDx1HwyHPAgEfBcHAAydl0cDrg/8cXKJiQOCVRNLgdgC6PS3z4OYDaeOg5gJDDaB4FA+4AQgUM3dLAgDtg5OaCEeUAFIfUqQZTFZPSUBncDsCVHalh8aBxAKGuGbXUDw4HAAAJtsp8ecvLrQAAAABJRU5ErkJggg=="><title>Moybyte</title><style>
 html,body{margin:0;height:100%;background:#0b0f1a;color:#c2c3c7;
 font:14px ui-monospace,Menlo,Consolas,monospace;display:flex;flex-direction:column;
@@ -21,6 +31,12 @@ align-items:center}
 /* html is a centring flex column, which would size body to its widest child's
    min-content (the nowrap title) and push the document wider than the viewport. */
 body{width:100%}
+/* The safe area (viewport-fit=cover: a home-screen app runs under the notch
+   and the home bar): the body keeps out of the insets, and room() reads them
+   back from its padding. The --sa-* are the insets, a test's to set. */
+:root{--sa-t:env(safe-area-inset-top,0px);--sa-r:env(safe-area-inset-right,0px);
+--sa-b:env(safe-area-inset-bottom,0px);--sa-l:env(safe-area-inset-left,0px)}
+body{box-sizing:border-box;padding:var(--sa-t) var(--sa-r) var(--sa-b) var(--sa-l)}
 /* Long-press guard: HOLDING a control (a d-pad direction, A/B)
    used to start the OS text-selection -- iOS magnifier/blue highlight, Android context
    menu -- because plain user-select isn't enough there: iOS wants the -webkit- prefix +
@@ -87,8 +103,8 @@ opacity:0;font-size:16px;background:transparent;color:transparent;caret-color:tr
    sized to it (padPlace), the keyboard summon and the burger small in the top
    corners. #ctl covers the viewport but takes no taps itself. */
 html.phl body{justify-content:center}
-html.phl #ctl{position:fixed;left:0;top:0;width:100%;height:100%;padding:0;display:block;
-pointer-events:none;z-index:2}
+html.phl #ctl{position:fixed;left:var(--sa-l);top:var(--sa-t);right:var(--sa-r);bottom:var(--sa-b);
+width:auto;height:auto;padding:0;display:block;pointer-events:none;z-index:2}
 html.phl #mid{display:contents}
 html.phl #ab{position:absolute;right:var(--abx);top:var(--aby);width:var(--abw);
 height:calc(var(--bb)*2 + 8px);display:block;pointer-events:none}
@@ -296,8 +312,11 @@ c.setProperty("--joy",j+"px");c.setProperty("--bb",b+"px");c.setProperty("--sb",
 c.setProperty("--jx",Math.round((m-j)/2)+"px");c.setProperty("--jy",at(j)+"px");
 c.setProperty("--abx","8px");c.setProperty("--abw",Math.round(m-16)+"px");
 c.setProperty("--aby",at(hab)+"px");}
-function room(){var vv=window.visualViewport;
-var iw=vv?vv.width:window.innerWidth,ih=vv?vv.height:window.innerHeight;
+function insets(){var c=getComputedStyle(document.body);
+return [parseFloat(c.paddingTop)||0,parseFloat(c.paddingRight)||0,
+parseFloat(c.paddingBottom)||0,parseFloat(c.paddingLeft)||0];}
+function room(){var vv=window.visualViewport,sa=insets();
+var iw=(vv?vv.width:window.innerWidth)-sa[1]-sa[3],ih=(vv?vv.height:window.innerHeight)-sa[0]-sa[2];
 var phl=!!TOUCH&&TOUCH.matches&&iw>ih&&(HANDHELD||iw<1024||ih<600);
 if(document.documentElement.classList.contains("phl")!==phl){
 document.documentElement.classList.toggle("phl",phl);
@@ -546,7 +565,12 @@ var lock=["AltLeft","AltRight","Tab","Escape"].concat(MAC?[]:["MetaLeft","MetaRi
 if(on){k.lock(lock).then(function(){window.__moyLocked=1;},function(){window.__moyLocked=0;});}
 else{k.unlock();window.__moyLocked=0;}}
 document.addEventListener("fullscreenchange",kLock);
-send({type:"page",fs:false,canfs:!!document.documentElement.requestFullscreen});
+// Whether the page runs as a home-screen app, and the host it was opened
+// at: the console's Add to Home Screen row and card read them.
+function asApp(){return navigator.standalone===true||!!(window.matchMedia&&
+(matchMedia("(display-mode: standalone)").matches||matchMedia("(display-mode: fullscreen)").matches));}
+send({type:"page",fs:false,canfs:!!document.documentElement.requestFullscreen,app:asApp(),
+host:location.hostname});
 // THE ASKS (page_link.py): what the console's rows ask of the browser. A
 // download and Play on the console go at once. A browser grants full screen
 // and its file chooser only inside a user's gesture, so those are done at

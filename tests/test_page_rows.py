@@ -121,3 +121,48 @@ def test_the_page_s_word_is_the_console_s(tmp_path):
     ws.confirm.answer()
     drv.frame(1 / 30)
     assert opened == ["local.tiny_dash.moy"]
+
+
+_HOME = "Add to Home Screen"
+
+
+def test_a_browser_without_full_screen_offers_the_home_screen(tmp_path):
+    """An iPhone's Safari has no full screen: the system menu offers Add to
+    Home Screen, whose card has the steps, until the page runs as the
+    home-screen app."""
+    ws = build_ws(tmp_path)
+    ws.page = page_link.PageLink()
+    drv = make_drv(ws)
+    ws.page.heard(ws, {"canfs": False, "app": False, "host": "os.moybyte.com"})
+    rows = _menu(ws, drv)
+    assert _HOME in rows and "Full screen" not in rows, rows
+    _pick(ws, _HOME)
+    assert ws.confirm.open and ws.confirm.verb == "tell"
+    lines = [t for t, _tone in ws.confirm.line_rows()]
+    assert "2. Choose Add to Home Screen." in lines and not any(".local" in t for t in lines)
+    ws.confirm.cancel()
+    ws.sysmenu.open = False
+    ws.page.heard(ws, {"app": True})
+    assert _HOME not in _menu(ws, drv), "the home-screen app has no row for it"
+    ws.sysmenu.open = False
+    ws.page.heard(ws, {"canfs": True, "app": False})
+    assert _HOME not in _menu(ws, drv), "a browser with full screen has its row"
+
+
+def test_a_board_s_page_at_a_number_is_saved_from_its_name(tmp_path):
+    """A board's page opened at a number says to save it from the board's
+    .local name, which a new lease does not move, and that the app pairs
+    with the board once; at its name it says only the pairing."""
+    for host, by_number in (("192.168.1.40", True), ("moybyte.local", False)):
+        ws = build_ws(tmp_path / host)
+        ws.page = page_link.PageLink(served=True)
+        ws.page.heard(ws, {"canfs": False, "host": host})
+        ws.page.home_screen(ws)
+        lines = " ".join(t for t, _tone in ws.confirm.line_rows())
+        assert (".local" in lines and host in lines) == by_number, lines
+        assert "pairs with it once" in lines, lines
+
+
+def test_page_link_tells_a_number_from_a_name():
+    assert page_link._is_number("192.168.1.40") and page_link._is_number("fe80::1")
+    assert not page_link._is_number("moybyte.local") and not page_link._is_number("localhost")
