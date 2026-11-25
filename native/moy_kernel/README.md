@@ -60,6 +60,7 @@ every lock is empty and nothing blocks.
 | `moy_pake`, the web login's key job | its one job record | atomics, its handle under a critical section, and a task notification (`moy_webauth.c`) |
 | `moy_live`, the live socket's bridge (one a page's socket) | that socket, the radio's link and ring | atomics on the socket it serves, the ring's latch (`moy_live.c`, `moy_link.c`); the VM never |
 | `moy_save`, the saver | the store, a cart's queued pmem | the store's lock and the bus gate around each record it writes (`native/moy_store/moy_save.h`); its slots' mutex; woken by a task notification |
+| `moy_sdhop`, an SPI card's hop (the S3s) | one card transfer asked on a PSRAM stack, run on its internal one | its caller's locks (the store's lock or the USB disk's hold); woken by a task notification, its caller by a binary semaphore (`native/moy_sd/moy_sd.c`) |
 
 **The VM is reached from another task through `moy_vmq.h` only**: a hop
 (`moy_vmq_hop`, the door a compiled program's file rows and a wasm row take:
