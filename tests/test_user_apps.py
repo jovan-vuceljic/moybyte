@@ -925,6 +925,24 @@ def test_a_refused_first_run_runs_nothing_and_asks_again(tmp_path):
 
 
 @pytest.mark.first_run
+def test_editing_a_cart_that_arrived_as_files_asks_first(tmp_path):
+    """The Editor starts the cart it opens, so Edit asks as the launch
+    does, never opening on the bare refusal; Open records and edits."""
+    carts = str(tmp_path / "carts")
+    _write_cart(carts, "Copied", COPIED_SRC, perms=["prefs"])
+    ws = build_ws(tmp_path)
+    cart = select_on_home(ws, "Copied")
+    ws.open_in_editor(cart)
+    assert ws.confirm.open and ws.confirm.title == "Open Copied?"
+    assert ws.run.player.cart_error is None
+    act = ws.confirm._act
+    ws.confirm.cancel()
+    act()
+    assert ws.consent.get(app_perms.app_id(cart)) == {"perms": ["prefs"], "off": []}
+    assert ws.run.project.cart["title"] == "Copied" and ws.run.player.cart_error is None
+
+
+@pytest.mark.first_run
 def test_a_built_in_and_a_made_cart_are_never_asked(tmp_path):
     """A built-in (known by its seed) and a cart made on the console run
     with no question; a copy of a cart still to be asked about is asked."""

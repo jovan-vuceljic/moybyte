@@ -381,10 +381,30 @@ def r_service(d, a):
     if a[0] in ("start", "restart"):
         if sch.SCHED.find(name) is not None:
             return 0
+        no = _svc_unasked(d, sch, name, cart)
+        if no is not None:
+            return no
         if sch.start_cart(ws, cart) is None:
             d.err("service", "%s did not start: its log says why" % name)
             return 1
     return 0
+
+
+def _svc_unasked(d, sch, name, cart):
+    """A service that arrived as files is asked in the terminal before its
+    first start, as a command is (`ShellDoor._first_run`): None once it may
+    start, else the line's exit code (the question asked, or a no)."""
+    import app_perms
+    got = sch.prepared(d.ws, cart, True)
+    if got is None or got[1] is not app_perms.UNASKED:
+        return None
+    rec = d._first_run(got[0], got[1], False)
+    if rec is _door.ASKED:
+        return _door.NOT_RUN
+    if rec is app_perms.UNASKED:
+        d.err("service", "%s: %s" % (name, app_perms.UNASKED_REFUSAL))
+        return _door.NOT_RUN
+    return None
 
 
 def _svc_policy(d, sch, rows, a):

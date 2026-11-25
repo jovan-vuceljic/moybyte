@@ -58,8 +58,10 @@ lists refuses the launch with a message naming it.
 A cart in a folder with no consent record -- one that arrived as files:
 copied onto the card, over SFTP or USB, pushed by a paired browser -- is
 asked on its first run, with the install prompt's lines (`asks_first`): the
-home's launch asks (`Notices.ask_first`), a command asks in its terminal
-(`sh_door`), and until a yes every launch of it is refused (`UNASKED`). A
+home's launch, the Editor's Edit and another app's play ask
+(`Notices.ask_first`), a command and `service start` ask in their terminal
+(`sh_door`), and until a yes a launch with nobody to ask (a command run
+with `&`) is refused (`UNASKED`). A
 yes records the consent an install would. Never asked: a built-in (known by
 its seed, `builtin_name`), a cart with no folder (a script), a cart whose
 prompt would ask nothing, and a cart made on this console, whose record the
@@ -600,9 +602,12 @@ def asks_first(cart, rec):
     """True when `cart`, under its consent record `rec`, is asked before it
     runs: it has no record, it lives in a folder and is no built-in (by its
     seed, `builtin_name`), and its install prompt would ask something
-    (`prompt`)."""
+    (`prompt`). A script (`type` "script", a `.py` or `.lua` file run as it
+    is: Workstation.run_script) has no folder: its path is its file's, and
+    its manifest the console's own."""
     path = cart.get("path") if cart else None
-    if rec is not None or not path or builtin_name(path) is not None:
+    if rec is not None or not path or cart.get("type") == "script" \
+            or builtin_name(path) is not None:
         return False
     return prompt(cart) is not None
 

@@ -2913,7 +2913,13 @@ class Workstation:
         Fullscreen where the board has no desk; in a window of its own where
         it has one -- opened from the console-mode home, console mode gives
         way to the desk first (owner, 2026-10-20), and closing that window
-        gives the glass back to the home (`editor_closed`, R5-05)."""
+        gives the glass back to the home (`editor_closed`, R5-05). A cart
+        that arrived as files is asked first (`Notices.ask_first`), as its
+        launch is: the Editor starts it."""
+        if cart is None:
+            cart = self.launcher.selected()
+        if self.notices.ask_first(cart, lambda: self.open_in_editor(cart)):
+            return
         wm = self.wm
         back = None
         if wm.has_desk and wm.mode == "console" and self.screen == "launcher":

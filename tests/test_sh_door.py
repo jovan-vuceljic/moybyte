@@ -448,6 +448,25 @@ def test_service_starts_stops_and_says_its_state(console):
     assert call(d, "role", "service", "start", "local.nope") == 1
 
 
+@pytest.mark.first_run
+def test_a_service_that_arrived_as_files_asks_in_its_terminal_first(console):
+    """`service start` of a service with no consent record asks with the
+    install prompt's lines, as a command's first run does: a no starts
+    nothing and records nothing and says why; a yes records its permissions
+    and starts it."""
+    from runtime import app_perms
+    ws, door = console
+    io, d = door(b"n\n")
+    assert call(d, "role", "service", "start", "local.svc") == 126
+    assert io.out.endswith("Open it? [y/N] ")
+    assert io.err == "service: local.svc: %s\n" % app_perms.UNASKED_REFUSAL
+    assert S.SCHED.find("local.svc") is None and ws.consent.get("local.svc") is None
+    io, d = door(b"y\n")
+    assert call(d, "role", "service", "start", "local.svc") == 0
+    assert S.SCHED.find("local.svc") is not None
+    assert ws.consent.get("local.svc") == {"perms": ["http"], "off": []}
+
+
 def test_service_policy_sets_and_shows_and_lives_in_the_settings(console):
     ws, door = console
     io, d = door()
