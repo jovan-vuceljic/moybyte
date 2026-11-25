@@ -3,6 +3,7 @@
 #   update_status      the one /update document
 #   ConsoleUpdate      the /update backend on a board with glass
 #   ConsoleSystem      the console's Settings and badges for the page it serves
+#   StoreSystem        the same documents kept by a host with no console (a Zero)
 #   WebHost            the Settings contract over the kernel's webhost
 #   WebHost.poll       the C poll, its events, the parked request, the update
 #   WebHost.answer_vm  the routes the VM answers: /run, /update, /official, the system root
@@ -26,9 +27,11 @@ console behind it:
     GET  /console.json  the console's portable Settings and its badges  [sealed]
     POST /sync      a batch for the system root, merged into them       [sealed]
 
-The last two are a host built with `system` (`ConsoleSystem`; the Zero has
-none, so its page keeps its Settings in the tab): the board is of record, and
-which keys a page may change is `moy_sync.SYSTEM_KEYS`.
+The last two are a host built with `system`: `ConsoleSystem` on a console,
+which re-applies what changed, and `StoreSystem` on a Zero, which only keeps
+it. The board is of record either way, so a page's theme and Settings come
+back on its next load, and which keys a page may change is
+`moy_sync.SYSTEM_KEYS`.
 
 The C parks such a request until `poll()` takes it, answers it here, and hands
 the response back; one nobody answers within the kernel's window (a VM gone
@@ -284,6 +287,29 @@ class ConsoleSystem:
         applied, errors, changed = self._rx.apply(ops, ws.system, ws.carts_root)
         if changed:
             ws.spine.apply_system_keys(changed)
+        return applied, errors
+
+
+class StoreSystem:
+    """The system root of a host with no console (a Zero): the Settings and
+    badges a page sends, kept in the store's `system/settings` beside the
+    carts and pulled back by the next page, applied to nothing."""
+
+    def __init__(self, carts_root):
+        import moy_carts
+        import moy_spine
+        self.carts_root = carts_root
+        self.rows = moy_spine.Settings(
+            lambda text: moy_carts.save_system(text, carts_root) or True)
+        self.rows.adopt(moy_carts.load_system(carts_root))
+        self._rx = moy_sync.SystemReceiver()
+
+    def pull(self):
+        return moy_sync.system_pull(self.rows)
+
+    def apply(self, ops):
+        """(applied, [(index, reason)]) of one batch's ops."""
+        applied, errors, _changed = self._rx.apply(ops, self.rows, self.carts_root)
         return applied, errors
 
 

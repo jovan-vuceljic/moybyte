@@ -277,31 +277,24 @@ else:
     _LINK_CHUNK = 65536
     from runtime import moy_sync                        # noqa: E402
 
-    class TwinConsole:
+    class TwinConsole(moy_webhost.StoreSystem):
         """The board's Settings, the badges among them, as a board keeps them
-        beside its carts (D/../system/settings), merged through the same
-        bodies a board's VM runs (moy_webhost.ConsoleSystem's): what a page
-        served by this twin may change is moy_sync.SYSTEM_KEYS'."""
+        beside its carts (D/../system/settings), merged through the Zero's
+        own body (moy_webhost.StoreSystem): what a page served by this twin
+        may change is moy_sync.SYSTEM_KEYS'. One request at a time."""
 
         def __init__(self, carts):
             import threading
-            from runtime import moy_carts
-            from runtime.moy_spine import Settings
-            self.carts = carts
+            super().__init__(carts)
             self.lock = threading.Lock()
-            self.rows = Settings(
-                lambda text: moy_carts.save_system(text, carts) or True)
-            self.rows.adopt(moy_carts.load_system(carts))
-            self.rx = moy_sync.SystemReceiver()
 
         def pull(self):
             with self.lock:
-                return moy_sync.system_pull(self.rows)
+                return super().pull()
 
         def apply(self, ops):
             with self.lock:
-                applied, errors, _changed = self.rx.apply(ops, self.rows, self.carts)
-            return applied, errors
+                return super().apply(ops)
 
     console = None if no_system else TwinConsole(carts_dir)
 
