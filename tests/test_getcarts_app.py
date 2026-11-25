@@ -356,3 +356,17 @@ def test_a_press_owes_the_next_frame_a_repaint(tmp_path):
     drawn = ws.frame_state.frames_drawn
     ws.frame(_DT)
     assert ws.frame_state.frames_drawn == drawn + 1
+
+
+def test_play_on_an_installed_app_opens_the_app_not_its_stub(tmp_path):
+    """An app's folder carries a stub main.py for an older console; Play on
+    its page opens the app, as the home's tap does."""
+    repo, net = _shelf()
+    ws, app = _ws(tmp_path, net, [repo.url("index.json")])
+    _open(ws, app)
+    app.cur = {"cart": {"folder": "moybyte.calc.moy", "runtime": "python"},
+               "state": "installed"}
+    app._go("cart")
+    app._press("PLAY")
+    _frames(ws)
+    assert ws.wm.top_kind() == "calc", "the stub ran: " + str(ws.wm.top_kind())
