@@ -244,6 +244,34 @@ def test_an_arena_run_out_is_an_error_not_a_reset(harness, tmp_path):
             assert "Sanitizer" not in out, "%d KB: %s" % (kb, out[-1500:])
 
 
+def test_tail_of_a_pipe_holds_its_last_lines_not_the_stream(harness, tmp_path):
+    """`grep ... | tail` on the C3 Zero said "tail: Out of space": tail read
+    the whole pipe into the session's arena. It holds the lines it prints and
+    a read or two, so 140 KB through a 32 KB arena (the host harness's
+    session takes more of one than a board's) ends in its last lines or
+    bytes, a partial last line counting as one."""
+    script = tmp_path / "t.sh"
+    script.write_text(
+        "gen() { i=0; while [ $i -lt 4000 ]; do echo \"line $i of the stream, padded out\";"
+        " i=$((i+1)); done; }\n"
+        "gen | tail -n 3\n"
+        "gen | tail -c 12\n"
+        "gen | tail -n 0 | wc -c\n"
+        "(gen; printf 'no newline') | tail -n 2; echo\n"
+        "gen | tail -2\n")
+    root = tmp_path / "root"
+    root.mkdir()
+    r = subprocess.run([harness["sh_main"], str(root), str(script)], stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, timeout=120, env=dict(os.environ, SH_MAIN_ARENA="32"))
+    out = r.stdout.decode("utf-8", "replace")
+    assert out == ("line 3997 of the stream, padded out\nline 3998 of the stream, padded out\n"
+                   "line 3999 of the stream, padded out\n"
+                   " padded out\n"
+                   "0\n"
+                   "line 3999 of the stream, padded out\nno newline\n"
+                   "line 3998 of the stream, padded out\nline 3999 of the stream, padded out\n"), out
+
+
 def test_a_file_written_streams_in_chunks(harness, tmp_path):
     """A redirect and tee send a file to the store a chunk at a time
     (moy_sh_sys.c's streamed FILE), so 64 KB written takes no block near its

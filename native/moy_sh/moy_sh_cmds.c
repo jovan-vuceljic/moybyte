@@ -148,25 +148,6 @@ static int pump(int fd) {
     }
 }
 
-// Read all of `fd` into the stack string; answers its length.
-static size_t slurp(int fd, char **out) {
-    char buf[512];
-    char *p;
-    size_t len = 0;
-    STARTSTACKSTR(p);
-    for (;;) {
-        ssize_t n = read(fd, buf, sizeof buf);
-        if (n <= 0) {
-            break;
-        }
-        p = stnputs(buf, (size_t)n, p);
-        len += (size_t)n;
-    }
-    STACKSTRNUL(p);
-    *out = stackblock();
-    return len;
-}
-
 // Each operand opened for reading, "-" or none being stdin: fn(fd, name).
 static int each_input(char **args, int (*fn)(int fd, const char *name, void *arg), void *arg) {
     int status = 0;
@@ -1011,7 +992,7 @@ static int headcmd(int argc, char **argv) {
 // A file's last `want` lines, read in two passes a chunk at a time and never
 // copied into the session's arena, which is 12 KB where there is no PSRAM
 // (MOY_SH_ARENA, the C3 Zero's SSH face). -1 for what does not seek (a
-// pipe), which tail_one copies whole.
+// pipe), which tail_stream reads.
 static int tail_seek(int fd, int want) {
     if (lseek(fd, 0, SEEK_END) < 0 || lseek(fd, 0, SEEK_SET) < 0) {
         return -1;
@@ -1041,32 +1022,70 @@ static int tail_seek(int fd, int want) {
     return 0;
 }
 
-static int tail_one(int fd, const char *name, void *arg) {
-    int want = *(int *)arg;
-    if (tail_seek(fd, want) == 0) {
-        return 0;
+// Where the last `want` lines of t[0, len) start, a last line with no
+// newline counting as one: len for none.
+static size_t tail_at(const char *t, size_t len, size_t want, int bytes) {
+    if (bytes) {
+        return len > want ? len - want : 0;
     }
-    char *text;
-    size_t len = slurp(fd, &text);
-    (void)name;
-    size_t at = len;
-    int seen = 0;
-    if (at > 0 && text[at - 1] == '\n') {
+    size_t at = len, seen = 0;
+    if (want == 0) {
+        return len;
+    }
+    if (at > 0 && t[at - 1] == '\n') {
         at--;
     }
-    while (at > 0) {
-        if (text[at - 1] == '\n' && ++seen == want) {
+    while (at > 0 && !(t[at - 1] == '\n' && ++seen == want)) {
+        at--;
+    }
+    return at;
+}
+
+// A stream's last `want` lines (`bytes`: bytes), which does not seek (a
+// pipe): read into the session's arena and cut back to the lines wanted each
+// time the text doubles past what the last cut kept, so it holds what it
+// prints and a read or two, never the stream.
+static void tail_stream(int fd, size_t want, int bytes) {
+    char buf[512];
+    char *p;
+    size_t kept = 0;
+    STARTSTACKSTR(p);
+    for (;;) {
+        ssize_t n = read(fd, buf, sizeof buf);
+        if (n <= 0) {
             break;
         }
-        at--;
+        p = stnputs(buf, (size_t)n, p);
+        char *t = stackblock();
+        size_t len = (size_t)(p - t);
+        if (len >= 2 * kept + sizeof buf) {
+            size_t at = tail_at(t, len, want, bytes);
+            memmove(t, t + at, len - at);
+            kept = len - at;
+            p = t + kept;
+        }
     }
-    outmem(text + at, len - at, out1);
+    char *t = stackblock();
+    size_t len = (size_t)(p - t);
+    size_t at = tail_at(t, len, want, bytes);
+    if (at < len) {
+        outmem(t + at, len - at, out1);
+    }
+}
+
+static int tail_one(int fd, const char *name, void *arg) {
+    int want = *(int *)arg;
+    (void)name;
+    if (tail_seek(fd, want) != 0) {
+        tail_stream(fd, want > 0 ? (size_t)want : 0, 0);
+    }
     return 0;
 }
 
 static int tail_bytes(int fd, const char *name, void *arg) {
     size_t want = (size_t)*(int *)arg;
     off_t end = lseek(fd, 0, SEEK_END);
+    (void)name;
     if (end >= 0) {                     // a file: its last bytes, read in place
         char buf[512];
         ssize_t n;
@@ -1076,11 +1095,7 @@ static int tail_bytes(int fd, const char *name, void *arg) {
         }
         return 0;
     }
-    char *text;
-    size_t len = slurp(fd, &text);
-    (void)name;
-    size_t at = len > want ? len - want : 0;
-    outmem(text + at, len - at, out1);
+    tail_stream(fd, want, 1);
     return 0;
 }
 
