@@ -225,7 +225,7 @@ let updatePoll = null, updateWants = null, updateAck = null, updateOff = null;
 // sync's give-up waits. The board found again settles it (it failed and came
 // back, or the new network reaches this page too); still silent at the end,
 // it moved, and the page says where it went.
-let wifiPoll = null, wifiWants = null, wifiAck = null;
+let wifiPoll = null, wifiWants = null, wifiAck = null, wifiMoved = null;
 let wifiBusy = false, lastWifiAt = 0, wifiMove = null;
 const WIFI_MS = 1000;
 let updateBusy = false, lastUpdateAt = 0;
@@ -1619,7 +1619,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + "sync_poll_json, sync_ack, sync_off, sync_root, store_mode, "
         + "rescan_store, gpio_poll_json, gpio_ack_json, gpio_off, "
         + "update_poll_json, update_wants_poll, update_ack_json, update_off, "
-        + "wifi_poll_json, wifi_wants_poll, wifi_ack_json, "
+        + "wifi_poll_json, wifi_wants_poll, wifi_ack_json, wifi_moved, "
         + "services_json, carts_poll_json, carts_event_json, "
         + "import_p8_json, import_archive_json, export_cart, drop_kind, "
         + "edit_cart, open_cart, state_json, pcm_addr, "
@@ -1671,6 +1671,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         wifiPoll = mp.globals.get("wifi_poll_json");
         wifiWants = mp.globals.get("wifi_wants_poll");
         wifiAck = mp.globals.get("wifi_ack_json");
+        wifiMoved = mp.globals.get("wifi_moved");
     }
     if (updateDoc) {
         updatePoll = mp.globals.get("update_poll_json");
@@ -1770,6 +1771,7 @@ function wifiPump() {
         wifiMove = null;
         const port = BASE ? new URL(BASE).port : "";
         const url = "http://" + m.host + (port ? ":" + port : "") + "/";
+        try { wifiMoved(m.ssid); } catch (e) { }
         expected("the console moved to " + m.ssid,
                  "It is on " + m.ssid + " now. Join " + m.ssid + " and open " + url
                  + " to carry on.", url);

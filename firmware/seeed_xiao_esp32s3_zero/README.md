@@ -419,8 +419,8 @@ leaves, so the panel asks first (Cancel, Save for a new network, Move); the
 board answers, then gives the new network 15 s, saves it first in the list
 only once it has an address, and otherwise goes back to the old one for up
 to 15 s and says why there. A move that worked leaves the page with no
-board: it says where the console went (`<name>.local` on the new network)
-and its card's Open goes there. A board that reaches neither network walks
+board: it says where the console went (`<name>.local` on the new network),
+its card's Open goes there, and its Wi-Fi reads "moved to" that network. A board that reaches neither network walks
 every saved one and resets into setup with none.
 
 ## The sign-in gates everything (2026-11-07)

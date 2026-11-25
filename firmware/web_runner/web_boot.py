@@ -1668,6 +1668,16 @@ def wifi_ack_json(ok, text=""):
     return out
 
 
+def wifi_moved(ssid):
+    """The worker waited out a move the board never came back from: it is
+    on `ssid` (BoardWifi.moved)."""
+    w = _S.get("wifi")
+    if w is not None:
+        w.moved(str(ssid))
+        _S["ws"].mark_dirty()
+    return ""
+
+
 def official_enable():
     """The serving console answered the /official probe: it installs
     carts when this page asks. Called before

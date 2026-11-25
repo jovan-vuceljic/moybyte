@@ -424,6 +424,12 @@ def test_a_move_that_worked_leaves_the_page_waiting_for_the_worker(panel):
     assert radio.ssid == RPT
     assert _saved(store)[0]["ssid"] == RPT
     assert sl.wifi_joining is not None        # the page never hears: the worker says it moved
+    link.moved(RPT)                           # ...once it has waited out the board's windows
+    run(300)
+    assert sl.wifi_joining is None and not ws.confirm.open
+    assert link.status() == (True, "moved to %s" % RPT, None)   # the bar's popover, the row
+    assert link.take_json() == "" and not link.wants_poll()
+    assert ws.wifi_icon_kind() == "wifi"     # the board is on a network, elsewhere
 
 
 def test_a_cart_is_never_handed_the_boards_station(panel):

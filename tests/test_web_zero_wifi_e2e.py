@@ -156,6 +156,7 @@ def test_the_boards_wifi_is_managed_from_its_page(tmp_path):
     assert moved["head"] == "the console moved to %s" % RPT, moved
     assert moved["bad"] is False and "moybyte-twin.local" in moved["go"], moved
     assert said["MOVED"]["p"]["card"][0] == "open", said["MOVED"]
+    assert said["MOVED"]["w"][:2] == [True, "moved to %s" % RPT], said["MOVED"]
     # The board: the moved-to network saved first, its password never on the page.
     nets = json.loads(saved.read_text())["networks"]
     assert [n["ssid"] for n in nets] == [RPT, HOME]

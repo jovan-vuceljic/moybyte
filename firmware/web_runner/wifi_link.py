@@ -54,6 +54,7 @@ class BoardWifi:
         self._joined = None        # the last join's verdict
         self._says = None          # ...and the card it left, or None
         self._held = False
+        self._gone = False         # the board moved where this page cannot reach it
         self._polled = _ticks_ms()
 
     # -- the station, as the console reads it -------------------------------
@@ -152,6 +153,21 @@ class BoardWifi:
         """A cart's waited join: refused (this station is never a cart's)."""
         return False
 
+    def moved(self, ssid):
+        """The worker waited out a move and the board never answered again:
+        it is on `ssid` now, where this page cannot reach it. The station
+        says so where it named the network (the bar's popover, the Settings
+        row, the panel), the move counts as joined, and nothing more is asked
+        of a board that is gone."""
+        self._doc = dict(self._doc, connected=True, ssid="moved to %s" % ssid, ip=None,
+                         saved=[], nets=[])
+        self._gone = True
+        self._queue = []
+        self._scan_from = None
+        if self._join is not None and self._join[2] is None:
+            self._join[2] = True
+            self._says = None
+
     def radio_on(self):
         """The panel shows (its wifi lease): the board is asked often."""
         self._held = True
@@ -167,6 +183,9 @@ class BoardWifi:
 
     def take_json(self):
         """The next request for the worker to POST, or ""."""
+        if self._gone:
+            self._queue = []
+            return ""
         if self._sent is not None or not self._queue:
             return ""
         self._sent = self._queue.pop(0)
@@ -174,7 +193,7 @@ class BoardWifi:
 
     def wants_poll(self):
         """Whether the worker should GET the document now."""
-        if self._sent is not None:
+        if self._sent is not None or self._gone:
             return False
         waited = _ticks_diff(_ticks_ms(), self._polled)
         if self._scan_from is not None or (self._join is not None and self._join[2] is None):
