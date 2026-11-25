@@ -601,7 +601,8 @@ int moy_wifi_ap_mac(uint8_t mac[6]) {
 // web console as an http service, where the board takes the responder
 // (MOY_NET_MDNS: the headless Zero, found by name, and every console while
 // its SSH server serves). An empty name ends the responder: its task's
-// stack and records are internal SRAM. 0, an ESP error, or
+// control block and records are internal SRAM, and its stack too on a board
+// without moybyte_patch_mdns_psram. 0, an ESP error, or
 // ESP_ERR_NOT_SUPPORTED in an image without it.
 int moy_wifi_mdns(const char *host) {
     #if HAVE_MDNS

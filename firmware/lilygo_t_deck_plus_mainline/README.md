@@ -724,7 +724,7 @@ along, the same one the P4 build reuses: **native-code-free**
 arena instead of growing it until soft reset. And one this tree adds to the
 component manager's copy of espressif/mdns, `moybyte_patch_mdns_psram`: the
 responder's scratch is a PSRAM block while it serves `<name>.local` for SSH,
-not internal .bss for the whole power-on.
+not internal .bss for the whole power-on, and its task's stack is PSRAM.
 
 ---
 
