@@ -67,10 +67,16 @@ bool moy_play_front_end(int why);
 
 // -- memory ---------------------------------------------------------------------
 
-// PSRAM; a board with none takes the default heap, one whose PSRAM is merely
-// full refuses rather than spend internal SRAM.
+// PSRAM; a board with none takes the default heap down to
+// MOY_SH_HEAP_RESERVE, one whose PSRAM is merely full refuses rather than
+// spend internal SRAM.
 static void *b_alloc(void *ctx, size_t n) {
     (void)ctx;
+#ifdef MOY_SH_HEAP_RESERVE
+    if (heap_caps_get_free_size(MOY_KMEM_SRAM_CAPS) < n + MOY_SH_HEAP_RESERVE) {
+        return NULL;
+    }
+#endif
     return moy_kalloc(n ? n : 1u, MOY_KMEM_PSRAM | MOY_KMEM_INTERNAL_IF_NONE);
 }
 

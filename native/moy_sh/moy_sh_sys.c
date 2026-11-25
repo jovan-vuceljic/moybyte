@@ -24,9 +24,10 @@
 //          of the heap. Stages run one after another (moy_sh.h, THE FORK),
 //          so the buffer holds the writer's whole stream and a read of an
 //          empty pipe is its end. A stream past PIPE_MAX, or past what the
-//          heap gives, is said once ("stream over N KB") and ends its
-//          writer as SIGPIPE would (a writer ignoring it gets EPIPE), so the
-//          reader reads what came before it; a write with no reader left
+//          heap gives, is said once ("stream over N KB", "out of memory at
+//          N KB") and ends its writer as SIGPIPE would (a writer ignoring it
+//          gets EPIPE), so the reader reads what came before it; a write
+//          with no reader left
 //          fails with EPIPE
 //
 // PATHS are the shell's: absolute after the working folder is applied and
@@ -49,7 +50,7 @@
 // A pipe's stream at most: what a board without PSRAM's one internal heap
 // spares beside its SSH session, and MOY_SH_PIPE_MAX elsewhere.
 #if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
-#define PIPE_MAX (16u * 1024u)
+#define PIPE_MAX (8u * 1024u)
 #else
 #define PIPE_MAX MOY_SH_PIPE_MAX
 #endif
@@ -770,15 +771,17 @@ static ssize_t pipe_read(sh_pipe_t *p, void *buf, size_t n) {
     return (ssize_t)got;
 }
 
-// A stream past what the pipe holds, said once on the writer's stderr (the
-// terminal's when that is this pipe) and the writer ended as SIGPIPE ends it.
-static ssize_t pipe_over(sh_pipe_t *p) {
+// A stream past what the pipe holds (`full`: PIPE_MAX, else the heap's
+// refusal), said once on the writer's stderr (the terminal's when that is
+// this pipe) and the writer ended as SIGPIPE ends it.
+static ssize_t pipe_over(sh_pipe_t *p, int full) {
     if (!p->over) {
         p->over = 1;
         char msg[80];
-        size_t kb = (p->held + 1023) / 1024;
-        int n = snprintf(msg, sizeof msg, "pipe: stream over %u KB; write it to a file\n",
-                         (unsigned)kb);
+        unsigned kb = (unsigned)((p->held + 1023) / 1024);
+        int n = full ? snprintf(msg, sizeof msg, "pipe: stream over %u KB; write it to a file\n", kb)
+                     : snprintf(msg, sizeof msg, "pipe: out of memory at %u KB; write it to a file\n",
+                                kb);
         struct moy_sh_obj *e = fd_obj(2);
         moy_sh_t *s = moy_sh_cur;
         if (e != NULL && !(e->kind == O_PIPE_W && e->pipe == p)) {
@@ -798,7 +801,7 @@ static ssize_t pipe_write(sh_pipe_t *p, const void *buf, size_t n) {
         return -1;
     }
     if (p->over || p->held + n > PIPE_MAX) {
-        return pipe_over(p);
+        return pipe_over(p, 1);
     }
     size_t put = 0;
     while (put < n) {
@@ -806,7 +809,7 @@ static ssize_t pipe_write(sh_pipe_t *p, const void *buf, size_t n) {
         if (c == NULL || c->len == sizeof c->b) {
             c = moy_sh_halloc(sizeof *c);
             if (c == NULL) {
-                return pipe_over(p);
+                return pipe_over(p, 0);
             }
             c->next = NULL;
             c->len = 0;
