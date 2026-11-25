@@ -24,8 +24,10 @@
 //   GET  /live (Upgrade: websocket)            sealed: the live socket, handed to its bridge
 //                                              (moy_live.h) with the session's keys;
 //                                              without the upgrade, {"live":1,"link":0|1}
-//                                              (the probe: whether this board relays its
-//                                              radio to the page)
+//                                              and "kinds" where it relays any (the probe:
+//                                              whether this board relays its radio to the
+//                                              page, and the device kinds it relays,
+//                                              moy_dev_relayed's text)
 //   anything in the configured `defer`         sealed, then parked for the VM (/run, /update,
 //                                              /console.json; "*": every path)
 //
@@ -148,6 +150,7 @@ static const moy_htab_mem_t STORE_MEM = { moy_store_alloc, moy_store_free };
 #include "moy_live.h"
 #pragma weak moy_web_live
 #pragma weak moy_web_live_link
+#pragma weak moy_web_live_kinds
 
 #define CHUNK_MIN 8192
 #define CHUNK_HEAD 8
@@ -1744,15 +1747,20 @@ static int stream(out_t *o, const moy_http_req_t *r, int which) {
             json(o, 200, "{\"term\":1}");
         } else {
             uint8_t m[6];
-            if (moy_web_live_link == NULL || !moy_web_live_link(m)) {
-                json(o, 200, "{\"live\":1,\"link\":0}");
-            } else {
-                char d[64];
-                snprintf(d, sizeof d,
-                         "{\"live\":1,\"link\":1,\"mac\":\"%02x%02x%02x%02x%02x%02x\"}",
-                         m[0], m[1], m[2], m[3], m[4], m[5]);
-                json(o, 200, d);
+            char k[112] = "";
+            if (moy_web_live_kinds != NULL && moy_web_live_kinds(k + 10, sizeof k - 12) > 0) {
+                memcpy(k, ",\"kinds\":\"", 10);
+                strcat(k, "\"");
             }
+            char d[176];
+            if (moy_web_live_link == NULL || !moy_web_live_link(m)) {
+                snprintf(d, sizeof d, "{\"live\":1,\"link\":0%s}", k);
+            } else {
+                snprintf(d, sizeof d,
+                         "{\"live\":1,\"link\":1,\"mac\":\"%02x%02x%02x%02x%02x%02x\"%s}",
+                         m[0], m[1], m[2], m[3], m[4], m[5], k);
+            }
+            json(o, 200, d);
         }
         return 0;
     }

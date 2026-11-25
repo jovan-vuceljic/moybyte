@@ -12,6 +12,8 @@
 //        'E' + the same bytes (the page's round trip to its board).
 //   'n'  the radio link, where the board relays its radio
 //        (moy_web_live_link; below).
+//   'd'  the device channel: the handles of the kinds this board relays
+//        (THE DEVICE CHANNEL, below; moy_live_dev.c serves it).
 //   Any other byte is a channel this board does not serve, and its frame is
 //   dropped: a page newer than its board loses that channel and nothing else.
 //
@@ -38,6 +40,31 @@
 //                             its station's channel and never tunes) and the
 //                             longest frame its radio carries
 //   'F' {len(2) mac(6) data}  frames heard, oldest first
+//
+// THE DEVICE CHANNEL. A page's handle of a kind its board relays
+// (native/moy_kernel/moy_dev_kinds.h's THE RELAY; the probe's "kinds") is a
+// remote row on the page (moy_dev_web.c), its calls in order on this
+// channel, each naming the page's row `id`. Up from the page:
+//
+//   'O' id kn(1) kind cfg     open (moy_dev_open's name and cfg)
+//   'C' id                    close
+//   'W' id data               write
+//   'S' id cfg                set
+//
+// and down to it:
+//
+//   'A' id verb(1) rc(4)      the answer to an 'O', a 'W' or an 'S' (rc as
+//                             moy_dev answers, little-endian); an answer to
+//                             a row open is followed by its 'G'
+//   'R' id vals(4 each) data  a record the row's read gave, with the kind's
+//                             packet gets read after it
+//   'G' id vals(4 each)       the kind's state gets
+//   'E' nn(1) name args       an event the drivers posted the session's
+//                             process (its arguments a JSON array), after
+//                             the records it announces and each row's 'G'
+//
+// Reads, gets and xfers never cross: the page answers a read from the
+// records, a get from the last record read or the last 'G', and an xfer BAD.
 //
 // Nothing waits on the radio or the page: the bridge's task (one a page's
 // socket, made with its buffers when the webhost hands the socket over and
@@ -84,6 +111,7 @@
 #endif
 #define MOY_LIVE_WAIT_MS 2              // the radio's ring is looked at this often while up
 #define MOY_LIVE_REST_MS 100            // ...and the socket's beat with the radio down
+#define MOY_LIVE_DEV_MS 10              // ...or with a device channel's row open
 #define MOY_LIVE_BEAT_MS 1000
 #define MOY_LIVE_IDLE_MS 5000
 #define MOY_LIVE_SEND_MS 3000           // a page that takes nothing for this long is gone
@@ -106,6 +134,7 @@ typedef struct {
 
 typedef struct {
     volatile int fd;                    // the socket served, or -1
+    int ws;                             // ...as the bridge's task sends on it
     moy_wa_seal_t seal;
     uint32_t up_i, down_i;              // the next frame's index each way
     volatile int cut;                   // 1: the session ended, 2: another one took it
@@ -117,6 +146,13 @@ typedef struct {
 } live_t;
 
 static live_t S = {.fd = -1};
+
+// The device channel (moy_live_dev.c): weak, for a twin built without the
+// kernel's handle table.
+#pragma weak moy_live_dev_message
+#pragma weak moy_live_dev_pump
+#pragma weak moy_live_dev_end
+#pragma weak moy_live_dev_stats
 static live_t *const L = &S;
 
 int moy_web_live_link(uint8_t mac[6]) {
@@ -138,6 +174,15 @@ static int say(int ws, size_t n) {
     L->stats.down++;
     L->said = moy_net_ms();
     return moy_ws_out(ws, MOY_WS_BINARY, (const char *)d, n, L->b->out);
+}
+
+uint8_t *moy_live_out(size_t *cap) {
+    *cap = OUT_CAP;
+    return (uint8_t *)L->b->out + MOY_WS_HEAD;
+}
+
+int moy_live_say(size_t n) {
+    return say(L->ws, n);
 }
 
 static int state(int ws, int err) {
@@ -215,6 +260,9 @@ static int message(int ws, uint8_t *p, size_t n) {
             return say(ws, n);
         }
         return 0;
+    }
+    if (p[0] == 'd') {
+        return moy_live_dev_message != NULL ? moy_live_dev_message(p, n) : 0;
     }
     if (p[0] != 'n') {
         return 0;
@@ -323,6 +371,7 @@ static int beat(int ws) {
 // One page's socket, to its end.
 static void pump(int ws) {
     size_t n = 0;
+    int devs = 0;                       // the device channel's rows open
     if (state(ws, 0) < 0) {
         return;
     }
@@ -342,7 +391,8 @@ static void pump(int ws) {
         fd_set r;
         FD_ZERO(&r);
         FD_SET(ws, &r);
-        uint32_t wait = L->radio ? MOY_LIVE_WAIT_MS : MOY_LIVE_REST_MS;
+        uint32_t wait = L->radio ? MOY_LIVE_WAIT_MS : devs > 0 ? MOY_LIVE_DEV_MS
+                        : MOY_LIVE_REST_MS;
         struct timeval tv = {0, (long)wait * 1000L};
         int k = select(ws + 1, &r, NULL, NULL, &tv);
         if (k < 0 && errno != EINTR) {
@@ -362,6 +412,9 @@ static void pump(int ws) {
         if (L->radio && heard(ws) < 0) {
             return;
         }
+        if (moy_live_dev_pump != NULL && (devs = moy_live_dev_pump()) < 0) {
+            return;
+        }
     }
 }
 
@@ -374,11 +427,15 @@ static void serve(int ws) {
     setsockopt(ws, SOL_SOCKET, SO_SNDTIMEO, &snd, sizeof snd);
     pump(ws);
     radio_down();
+    if (moy_live_dev_end != NULL) {
+        moy_live_dev_end();
+    }
 }
 
 // The task of one page's socket, to its end.
 static void bridge(void) {
     int ws = __atomic_load_n(&L->fd, __ATOMIC_ACQUIRE);
+    L->ws = ws;
     L->stats.sessions++;
     L->stats.live = 1;
     serve(ws);
@@ -455,6 +512,9 @@ void moy_web_live_cut(int taken) {
 
 void moy_live_stats(moy_live_stats_t *out) {
     *out = L->stats;
+    if (moy_live_dev_stats != NULL) {
+        moy_live_dev_stats(out);
+    }
 }
 
 #endif

@@ -490,9 +490,15 @@ nor those docs will warn you about:
   (`docs/netplay_v1.md` §5). So a count, an address or a time the page and
   the VM exchange rides an integer, never a float, which keeps 22 bits:
   `web_boot._PCM` is 64-bit integers, and `time.time()` is whole seconds
-  as on a board. The worker moves its bytes between frames
-  (`liveStep`, `web_boot.live_*`), never inside a step, and reopens a dropped
-  socket itself; a console board builds no bridge and 404s the probe.
+  as on a board. Its device channel ('d') relays the board's device APIs
+  that have a relay list (`native/moy_kernel/moy_dev_kinds.h`, THE RELAY;
+  lora): the probe names them, and the page's handles of them are remote
+  rows of its handle table (`moy_dev_web.c`) that never wait on the socket,
+  served on the board under the page session's own process, which its end
+  sweeps. A Python program holds faces, not handles, so a relayed device is
+  absent to it (`app_perms._why_absent`). The worker moves its bytes between
+  frames (`liveStep`, `web_boot.live_*`), never inside a step, and reopens a
+  dropped socket itself; a console board builds no bridge and 404s the probe.
 - **WASM MODE IS A SWITCH, NOT A SESSION** (owner call): no heartbeat, no presence
   detection, no timeout. While WEB CONSOLE is ON the glass PARKS on a connection
   screen — which is how the two-writer collision is **designed out rather than

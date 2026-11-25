@@ -217,5 +217,5 @@ static int32_t lora_get(uint32_t slot, uint32_t pid, const char *what, size_t n)
 
 const moy_dev_ops_t moy_dev_lora = {
     .open = lora_open, .close = lora_close, .read = lora_read, .write = lora_write,
-    .set = lora_set, .get = lora_get,
+    .set = lora_set, .get = lora_get, .present = moy_lora_present,
 };

@@ -140,11 +140,26 @@ typedef struct {
 // The plaintexts queued since the last take, each behind its 2-byte
 // little-endian length, into `out`: the bytes, 0 when none (or `cap` short).
 size_t moy_link_web_take(uint8_t *out, size_t cap);
-// One plaintext the board sent on the link channel ('n' first).
+// One plaintext the board sent: the link channel's ('n' first), or the
+// device channel's ('d', handed to moy_dev_web_give).
 void moy_link_web_give(const uint8_t *p, size_t n);
 // The socket opened (1) or closed (0).
 void moy_link_web_open(int on);
 void moy_link_web_info(moy_link_web_info_t *out);
+// Room for a plaintext of `n` bytes on the queue the worker takes, any
+// channel's: where its bytes go, or NULL when the queue is full.
+uint8_t *moy_link_web_queue(size_t n);
+
+// The page's device channel (moy_dev_web.c, its header the contract): the
+// kinds the /live probe named ("name:packet:state" each, split by ';'), one
+// 'd' plaintext the board sent, the socket opened or closed, and its counts.
+typedef struct {
+    uint32_t kinds, rows, opens, up, down, records, events, dropped;
+} moy_dev_web_info_t;
+void moy_dev_web_kinds(const char *spec, size_t n);
+void moy_dev_web_give(const uint8_t *p, size_t n);
+void moy_dev_web_socket(int on);
+void moy_dev_web_info(moy_dev_web_info_t *out);
 #endif
 
 #endif

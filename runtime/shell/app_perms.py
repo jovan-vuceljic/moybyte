@@ -384,6 +384,11 @@ def leasable():
     return tuple("lease:" + o[0] for o in LEASES.offers())
 
 
+def _relayed():
+    import devices
+    return devices.RELAYED
+
+
 def _why_absent(perm, tier, have, rec):
     """Why `perm` is absent for this run, or None when it is granted."""
     r = row(perm)
@@ -398,6 +403,8 @@ def _why_absent(perm, tier, have, rec):
             return "needs"
     elif r[NEEDS] is not None and r[NEEDS] not in have:
         return "needs"
+    elif tier == "python" and r[NEEDS] in _relayed():
+        return "needs"                  # a relayed device is handles only: no face
     if rec is not None:
         if perm in rec["off"]:
             return "off"

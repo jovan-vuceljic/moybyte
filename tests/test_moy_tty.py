@@ -60,13 +60,14 @@ NET_SOURCES.append(os.path.join(STORE, "moy_journal.c"))
 pytestmark = pytest.mark.skipif(shutil.which("cc") is None, reason="needs a C compiler")
 
 
-def _build(out, extra=(), defines=()):
-    """The harness (tty_main) over the webhost; `extra` sources and
-    `defines` build a variant (tests/test_live_link.py's board twin)."""
+def _build(out, extra=(), defines=(), incs=()):
+    """The harness (tty_main) over the webhost; `extra` sources, `defines`
+    and include dirs `incs` build a variant (tests/test_live_link.py's board
+    twin)."""
     cc = shutil.which("cc")
     shell = [o for o in SH._objects(cc, str(out))
              if os.path.basename(o) not in ("sh_main.o", "board_main.o")]
-    inc = ["-I" + d for d in (TTY, NET, STORE, SPINE, WEB, SH.SH, SH.KERNEL)]
+    inc = ["-I" + d for d in (TTY, NET, STORE, SPINE, WEB, SH.SH, SH.KERNEL) + tuple(incs)]
     flags = ["-std=gnu99", "-g", "-O1", "-fsanitize=address,undefined", "-w",
              "-D_GNU_SOURCE"] + ["-D" + d for d in defines] + inc
     objs, procs = [], []

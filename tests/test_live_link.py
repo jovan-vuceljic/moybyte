@@ -244,7 +244,7 @@ class Page:
                 n = seal_client.lib().moy_sw_ws_down(1, seal_client.put(pl))
                 assert n >= 0, "a frame down that does not open"
                 pl = seal_client.got(n)
-            if pl[:1] == b"n":
+            if pl[:1] in (b"n", b"d"):
                 self.lib.moy_link_web_give(pl, len(pl))
             elif pl[:2] == b"cE":
                 self.echoes.append(pl[2:])

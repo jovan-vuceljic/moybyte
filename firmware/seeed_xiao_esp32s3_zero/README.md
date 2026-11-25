@@ -575,8 +575,13 @@ it listens.
 The driver is the T-Deck's (`moy_lora.c`), built for a radio that owns its
 bus: it brings SPI2 up at the open and frees it at the close, with no band-gap
 gate (there is no panel), and `gate_stats()` answers `None`. This board runs
-no apps, so the `moybyte.lora` face is not here and nothing posts events: the
-module is reached from the REPL, by owner number, and `recv` is polled.
+no apps, so the `moybyte.lora` face is not here. It relays the radio to the
+browser console it serves instead: the live socket's device channel
+(`native/moy_net/moy_live.c`'s header, `moy_live_dev.c`) serves the page's
+`lora` handles from the kernel's handle table under the page session's own
+process, whose event queue the driver posts to, so a Lua or compiled cart on
+the page (Moy Mesh) holds the radio through `moybyte.dev_*`. From the REPL
+the module is reached by owner number, and `recv` is polled:
 
 ```python
 import moy_lora as L
