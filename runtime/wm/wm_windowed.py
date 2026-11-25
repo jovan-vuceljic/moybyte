@@ -204,7 +204,7 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         # beside it is being typed in; only its X / the pause menu's Quit (when
         # focused) / an exit verb ends it. None = the desktop root has focus.
         self.focus_key = None
-        self._cycle = None            # an Alt+Tab walk: [the windows front first, where it is]
+        self.walk = None             # an Alt+Tab walk: [the windows front first, where it is]
         # PLAY INTENT (#178): the same run() verb serves two jobs on a desktop --
         # playing a game (open it as big as fits) and PLAYTESTING the cart you are
         # editing (open it small, so the editor beside it stays readable). The
@@ -1786,25 +1786,25 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         ends the walk. False where there is no desk."""
         if self.mode != "desktop":
             return False
-        if self._cycle is None:
+        if self.walk is None:
             order = [k for k in reversed(self.z_order)
                      if k in self.windows and self.windows[k].docked is None]
             if self.focus_key in order:
                 order.remove(self.focus_key)
                 order.insert(0, self.focus_key)
-            self._cycle = [order, 0]
-        order = self._cycle[0]
+            self.walk = [order, 0]
+        order = self.walk[0]
         if len(order) < 2:
             return True
-        at = (self._cycle[1] + step) % len(order)
-        self._cycle[1] = at
+        at = (self.walk[1] + step) % len(order)
+        self.walk[1] = at
         if order[at] in self.windows:
             self.bring_to_front(order[at])
             self.ws.mark_dirty()
         return True
 
     def cycle_end(self):
-        self._cycle = None
+        self.walk = None
 
     def player_has_pointer(self):
         """Console hook: whether the game-space pointer publication should carry
