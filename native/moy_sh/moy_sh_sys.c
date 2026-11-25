@@ -785,7 +785,7 @@ static ssize_t pipe_over(sh_pipe_t *p, int full) {
     if (!p->over) {
         p->over = 1;
         char msg[80];
-        unsigned kb = (unsigned)((p->held + 1023) / 1024);
+        unsigned kb = (unsigned)(((full ? PIPE_MAX : p->held) + 1023) / 1024);
         int n = full ? snprintf(msg, sizeof msg, "pipe: stream over %u KB; write it to a file\n", kb)
                      : snprintf(msg, sizeof msg, "pipe: out of memory at %u KB; write it to a file\n",
                                 kb);
