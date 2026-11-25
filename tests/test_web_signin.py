@@ -14,7 +14,8 @@ record pairs nothing), a key login after either; a token used once and
 gone after its ten minutes; a wrong token, key or password counted by the
 backoff, per address and from anywhere; a recorded login, a replayed or
 tampered request and a tampered, truncated or reordered answer refused; a
-dropped key ending its sessions; an old pin URL refused; the keys kept in
+dropped key ending its sessions; a new browser's key never taking the place
+of one signed in now; an old pin URL refused; the keys kept in
 system/webkeys across a restart and a broken file read as none; the open
 routes open and a refused request never reaching the store; /run and
 /update answered sealed by the VM; /auth's parser fuzzed; a flood of hellos
@@ -704,6 +705,24 @@ def test_a_dropped_key_ends_its_sessions_and_signs_in_no_more(tmp_path):
     keep.sign_in()
     assert keep.json("GET", "/carts.json")[0] == 200
     assert nb.web_key_drop("all") == 1 and nb.web_keys() == []
+
+
+def test_a_new_browser_s_key_never_takes_the_place_of_one_signed_in_now(tmp_path):
+    """Sixteen keys kept: a seventeenth browser's pairing takes the place of a
+    browser not signed in now, so a page in use is never signed out by
+    another's pairing (two browsers on one console, owner 2026-11-25)."""
+    import time
+    h = _host(tmp_path)
+    first = _paired(h)
+    time.sleep(1.1)                      # its key the least recently seen (Unix seconds)
+    for _ in range(15):
+        _paired(h)
+    assert len(nb.web_keys()) == 16
+    first.sign_in()                      # the first browser in use again
+    _paired(h)
+    assert len(nb.web_keys()) == 16
+    first.sign_in()
+    assert first.json("GET", "/carts.json")[0] == 200
 
 
 def test_the_keys_outlive_a_restart_and_a_broken_file_reads_as_none(tmp_path):

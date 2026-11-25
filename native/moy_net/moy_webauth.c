@@ -7,8 +7,11 @@
 // KEY CREATED SEEN NAME" (hex, hex, Unix seconds, moy_net_time; the browser's
 // own name for itself). Read at config, written whole (through a .tmp and a
 // replace) when a browser pairs, is dropped, or was last seen an hour or more
-// before a sign-in. Its keys are secrets: the file is the owner's, as
-// system/password is, and no route serves it.
+// before a sign-in. MOY_WA_KEYS are kept: a new browser's takes a free
+// place, else that of the least recently seen browser not signed in now, so
+// one in use is never signed out by another's pairing. Its keys are
+// secrets: the file is the owner's, as system/password is, and no route
+// serves it.
 //
 // THE CHALLENGES: a hello's nonce is its source's (the peer's address), good
 // for MOY_WA_NONCE_MS and one credential from that source, right or wrong. A
@@ -821,13 +824,29 @@ static wkey_t *key_of(const uint8_t kid[MOY_SEAL_KID]) {
     return NULL;
 }
 
-// A new browser's key, in a free place or the least recently seen one's.
+// Whether a session of `k`'s is live: a browser signed in now.
+static int key_in(const wkey_t *k) {
+    for (int i = 0; i < MOY_WA_SESSIONS; i++) {
+        if (A->ss[i].used && fresh(A->ss[i].at, MOY_WA_SESSION_MS)
+            && memcmp(A->ss[i].kid, k->kid, MOY_SEAL_KID) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// A new browser's key, in a free place, else the least recently seen one's
+// of a browser not signed in now, else the least recently seen one's.
 static wkey_t *key_new(const char *name) {
     wkey_t *best = NULL;
+    int best_in = 0;
     for (int i = 0; i < MOY_WA_KEYS; i++) {
         wkey_t *k = &A->keys[i];
-        if (best == NULL || !k->used || (best->used && k->seen < best->seen)) {
+        int in = k->used && key_in(k);
+        if (best == NULL || !k->used
+            || (best->used && (in < best_in || (in == best_in && k->seen < best->seen)))) {
             best = k;
+            best_in = in;
         }
     }
     if (best->used) {
