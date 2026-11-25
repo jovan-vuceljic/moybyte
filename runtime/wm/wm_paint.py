@@ -192,8 +192,9 @@ class WindowPaint:
         ~26ms PSRAM-bandwidth-bound on the P4 and no accelerator helps it; the
         union is window-sized, so the restore cost follows the WINDOW, not the
         screen). Everything outside the union is either untouched since that
-        buffer's last frame or opaquely redrawn every frame (the other windows,
-        the bar strip, the chips), so the partial restore is pixel-safe. Falls
+        buffer's last frame or opaquely redrawn every frame (the other windows;
+        the bar's chips each buffer takes as they move, `_draw_taskbar_chips`),
+        so the partial restore is pixel-safe. Falls
         back to the full copy when the canvas lacks blit_strip_rect (the web
         RecordingLayer) or via the `union` A/B knob."""
         self._restored = False
@@ -833,7 +834,7 @@ class WindowPaint:
         # gesture union. Neither is a rect of its own.
         self._hand_damage(touched)
         if cover < 0:                              # the bar is covered with the desk
-            self._draw_taskbar_chips(quiet=self.chrome_quiet or self._chips_untouched(dt))
+            self._draw_taskbar_chips()
         self._alone_note()
         if self._resize is not None:               # rubber-band resize preview
             g = self._resize
@@ -915,21 +916,6 @@ class WindowPaint:
         h[0] = self.ws.bar_layer.clock_text()
         h[1] = self.ws.frame_state.frames_drawn
         h[2] = 1
-
-    def _chips_untouched(self, dt):
-        """Whether this frame left the chips' bar as the last one did: a
-        gesture's restore laid the desk away from it, and no cursor or
-        animation draws over it."""
-        r = self._restored
-        if not r or self._restored_f != self.ws.frame_state.frames_drawn:
-            return False
-        if getattr(self.ws.pointer, "visible", False) or self.ws.animating(dt, False):
-            return False
-        got = self._chips_cell()
-        if got is None:
-            return True
-        b = got[0][1]
-        return not _overlap(r, b)
 
     def _draw_under_gesture(self, win, i, rects):
         """Window `win` (z-slot `i`) under a gesture, in `rects` alone: its

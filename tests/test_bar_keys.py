@@ -229,7 +229,7 @@ def test_a_menu_over_the_bar_takes_the_keys(tmp_path):
 
 
 def test_the_bar_key_carries_the_focus():
-    assert 12 in bar_layer._KEY_ALWAYS and bar_layer._KEY_N == 14
+    assert 12 in bar_layer._KEY_ALWAYS and bar_layer._KEY_N == 15
 
 
 def test_the_homes_strip_names_the_bars_keys_while_on_it(tmp_path):

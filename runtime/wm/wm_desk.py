@@ -362,6 +362,12 @@ class _BackdropLayer(Layer):
             wm._capture_backdrop()
         wm._desk_streak = 1
 
+    def owe_bar(self):
+        """The cache's bar holds chips that moved since: the next restore
+        that lays it draws the bar whole again and takes it in
+        (`_parts_again`)."""
+        self._bar_owed = True
+
     def _bar_drawn(self, cached):
         """The bar was drawn whole into this frame's buffer as it stands, and
         with `cached` into the cache too: the clock it shows need not paint

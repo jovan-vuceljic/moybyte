@@ -372,15 +372,17 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         self._place_gen = 0               # moves with the windows' order and places
         self._scrim_was = False           # a modal's scrim was up last frame
         self._sig_stable = False          # ...was it unchanged THIS frame?
-        # Chrome freeze (#155): a window strip/border and the taskbar chips are
-        # disjoint from every content stamp, so a quiet frame can leave them
-        # alone once both ping-pong buffers hold them.
+        # Chrome freeze (#155): a window strip/border is disjoint from every
+        # content stamp, so a quiet frame can leave it alone once every
+        # retained buffer holds it. The taskbar chips are laid only where
+        # they moved (`_draw_taskbar_chips`).
         self.chrome_quiet = False
         self._chip_sig = None
         self._chip_streak = 0
+        self._chip_dirty = [0, 0, 0, 0]   # what the chips moved, x0 y0 x1 y1 (`chips_gen`)
         self._chip_memo = None            # chip_rects' inputs and answer
         self._cell_memo = None            # _chips_cell's packing and answer
-        self._chip_keys = []              # _chips_gen's values, compared in place
+        self._chip_keys = []              # chips_gen's values, compared in place
         self._wins_keys = []              # chip_model's values, compared in place
         self._wins_rows = []              # chip_model's answer, kept while they stand
         self._chip_gen = 0

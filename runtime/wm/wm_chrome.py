@@ -875,43 +875,49 @@ class WindowChrome:
             out.append((k, r, titles[kinds.index(k)]))
         return out
 
-    def _draw_taskbar_chips(self, quiet=False):
-        # Frozen on quiet frames like the window chrome (#155): the chips live on
-        # the OS bar, which no window ever overlaps, so once painted into both
-        # ping-pong buffers they stay correct until something changes them. Any
-        # disturbance (desk repaint, drag, cursor, animation) makes `quiet` False
-        # and restarts the streak, so both buffers refresh before skipping again.
-        sc = self.root_canvas
-        sig = self._chips_gen()
-        changed = sig != self._chip_sig
-        if changed:
-            # New chip pixels on the OS bar: the compositor's strip carries them.
-            self._outside_f = self.ws.frame_state.frames_drawn
-            got = self._chips_cell()
-            if got is not None:
-                bx, by, bw, bh = got[0][1]
-                self.ws.bar_layer.strip_moved(sc, bx, by, bw, bh)
-        if not quiet or changed:
-            self._chip_sig = sig
-            self._chip_streak = 0
-        elif self._chip_streak >= self.retained_n():
+    def _draw_taskbar_chips(self):
+        """The chips that moved, laid onto the desk's bar in this buffer and
+        the RETAINED_FRAMES after it (`_chip_streak`), from the bar's strip
+        (`BarLayer.lay_chips`): the bar's one draw paints them, so a rect laid
+        over a bar drawn whole is byte for byte that bar. The desk's cache
+        takes them in the frame they move, so a restore that lays it brings
+        them along; a frame whose chips stand lays nothing."""
+        g = self.chips_gen()
+        d = self._chip_dirty
+        if d[2] <= d[0]:
             return
+        bar = self.ws.bar_layer
+        r = (d[0], d[1], d[2] - d[0], d[3] - d[1])
+        if g != self._chip_sig:
+            self._chip_sig = g
+            self._chip_streak = 0
+            self._outside_f = self.ws.frame_state.frames_drawn
+            cache = self._backdrop if self._backdrop_valid else None
+            if cache is not None and not hasattr(cache, "blit_strip_rect"):
+                cache = None
+                self._backdrop_layer.owe_bar()    # (its bar laid whole at its next restore)
+            if not bar.lay_chips("desk", r, cache) and cache is not None:
+                self._backdrop_layer.owe_bar()
+        elif self._chip_streak >= self.retained_n():
+            d[0] = d[1] = d[2] = d[3] = 0
+            return
+        else:
+            bar.lay_chips("desk", r)
         self._chip_streak += 1
-        if not changed and not self.chip_rects():
-            return                      # (no chips, and none to take away)
-        # The chips blend (their labels' and plates' edges) over the bar's
-        # band, which the bar painted once: the bar page draws them again
-        # over its ground (`BarLayer.redraw_chips`).
-        self.ws.bar_layer.redraw_chips("desk")
 
-    def _chips_gen(self):
+    def chips_gen(self):
         """A count that moves whenever the chips' pixels would: each chip's
         window, rect and label, whether it has the focus and whether its
-        window is minimised, compared in place in one kept list."""
+        window is minimised, compared in place in one kept list. What moved
+        joins `_chip_dirty` (root coordinates, x0 y0 x1 y1): each chip that
+        changed where it was and where it is, with its marks' reach
+        (`BarLayer.chip_reach`), the whole bar where the chips came or went.
+        The bar's strips key their chips on it (`bar_layer._KEY_CHIPS`)."""
         k = self._chip_keys
         chips = self.chip_rects()
         moved = len(k) != 5 * len(chips)
         if moved:
+            self._chip_damage(None)
             k[:] = [None] * (5 * len(chips))
         i = 0
         for key, r, lb in chips:
@@ -919,6 +925,9 @@ class WindowChrome:
             mini = self.windows[key].minimized
             if (k[i] != key or k[i + 1] != r or k[i + 2] != lb or k[i + 3] != foc
                     or k[i + 4] != mini):
+                if k[i + 1] is not None:
+                    self._chip_damage(k[i + 1])
+                self._chip_damage(r)
                 k[i] = key
                 k[i + 1] = r
                 k[i + 2] = lb
@@ -929,6 +938,29 @@ class WindowChrome:
         if moved:
             self._chip_gen += 1
         return self._chip_gen
+
+    def _chip_damage(self, r):
+        """Chip rect `r` (root coordinates) and its marks' reach joined to
+        `_chip_dirty`; None: the whole bar that holds the chips."""
+        got = self._chips_cell()
+        if got is None:
+            return
+        bar = got[0]
+        bx, by, bw, bh = bar[1]
+        if r is None:
+            x, y, w, h = bx, by, bw, bh
+        else:
+            x, y, w, h = self.ws.bar_layer.chip_reach(bar, (r[0] - bx, r[1] - by, r[2], r[3]))
+            x += bx
+            y += by
+        d = self._chip_dirty
+        if d[2] <= d[0]:
+            d[0], d[1], d[2], d[3] = x, y, x + w, y + h
+        else:
+            d[0] = min(d[0], x)
+            d[1] = min(d[1], y)
+            d[2] = max(d[2], x + w)
+            d[3] = max(d[3], y + h)
 
     def chip_tap(self, key):
         """Taskbar chip click -- pure FOCUS verbs, never a pop: restore a
