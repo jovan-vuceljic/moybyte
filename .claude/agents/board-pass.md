@@ -23,7 +23,7 @@ skips without it), and never print the file it names.
 
    It is one job for all the boards: one notice, the table, each board's perf
    block and the wall time as its last lines. It builds each image, flashes it, waits for the boot, runs the
-   suite, measures the board's perf set (unless `--no-perf`) and leaves each board at its launcher (the T-Deck at volume 0). It refuses the
+   suite, measures the board's perf set (unless `--no-perf`) and leaves each board at its launcher (`tools/board_pass.py`'s QUIET boards muted). It refuses the
    main checkout; report that refusal as it is, never add `--main`.
 3. For each failing test, read its traceback from the suite log the pass
    printed (`grep -n` the test name, read that range only).

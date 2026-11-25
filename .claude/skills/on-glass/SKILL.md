@@ -143,7 +143,7 @@ addon`). Run it
 from a worktree (`tools/worktree.py new NAME`): in the main checkout a build is
 refused without `--main`, because its `dist/` is what every other session
 flashes. It skips a board whose port is held, naming the holder, and leaves
-each board at its launcher, the T-Deck at volume 0. `--all` is the console
+each board at its launcher, the T-Deck, the Waveshare and the Elecrow at volume 0. `--all` is the console
 boards; the two Zeros are passed by name (`pass xiao_zero c3_zero`: build,
 flash, a reset to the boot line, and their one suite,
 `tests/test_zero_on_glass.py`), whose numbers (internal RAM idle and with

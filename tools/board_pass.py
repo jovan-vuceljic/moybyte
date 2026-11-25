@@ -62,7 +62,7 @@ the ports are resolved once, up front, and passed to every step, because
 four boards share one usb id.
 
 THE BOARD IS LEFT AT ITS LAUNCHER (`board.py desk` after the suite), the
-T-Deck at volume 0 (the dev channel's `vol 0`, before and after the suite).
+every board in QUIET at volume 0 (the dev channel's `vol 0`, before and after the suite).
 `--all` is the console boards. A headless board is passed only by name and
 only where it has a suite (both Zeros', tests/test_zero_on_glass.py): build,
 flash, a reset through esptool to its boot line, and its suite, nothing a
@@ -103,7 +103,7 @@ PERF_PY = os.path.join(HERE, "perf_pass.py")
 # pass that builds images builds the bundle first.
 WEB_BUILD = os.path.join(ROOT, "firmware", "web_runner", "build.sh")
 # Boards whose speaker stays silent on this desk.
-QUIET = ("tdeck", "p4")
+QUIET = ("tdeck", "p4", "elecrow_p4")
 # What a build that lost the component cache's index.lock prints, CMake's
 # wrap between the two halves included; such a build runs again after a pause
 # drawn from RETRY_PAUSE_S.
