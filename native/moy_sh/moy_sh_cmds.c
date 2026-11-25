@@ -2452,13 +2452,14 @@ extern const uint32_t moy_theme_moy64[64];
 
 #define FETCH_ROWS 16
 #define FETCH_VALUE 64
-#define FETCH_LOGO_W 16
+#define FETCH_LOGO_W 15                 // the sprite's last column is clear
 #define FETCH_LOGO_ROWS 8
 #define FETCH_GAP 3                     // between the logo and the rows
 #define FETCH_ACCENT 14                 // the title's and the labels' base colour
 
 // Moy, the mascot: chrome.py's "moy" sprite ('.' clear, a hex digit a base
-// colour), drawn two pixels a cell with half blocks.
+// colour), drawn two pixels a cell with half blocks, its clear last column
+// left off so that he fits beside the rows on the T-Deck's 44 columns.
 static const char *const fetch_moy[16] = {
     "................", "...0000000......", "..0ddddddd0.....", ".0d66ddddd0.....",
     ".0dddddddd0.....", ".0dddddddd0000..", ".0dd77d77ddddd0.", ".0dd70d70ddddd0.",
@@ -2468,14 +2469,14 @@ static const char *const fetch_moy[16] = {
 
 // ...and his silhouette where the terminal draws no colour.
 static const char *const fetch_plain[FETCH_LOGO_ROWS] = {
-    "   .-------.    ",
-    "  /        |    ",
-    " |         '--. ",
-    " |   o   o    | ",
-    " |    ---     | ",
-    " |            | ",
-    "  '--.----.--'  ",
-    "    '-'  '-'    ",
+    "   .-------.   ",
+    "  /        |   ",
+    " |         '--.",
+    " |   o   o    |",
+    " |    ---     |",
+    " |            |",
+    "  '--.----.--' ",
+    "    '-'  '-'   ",
 };
 
 // A row's rank: the rows a short terminal leaves out go highest rank first.

@@ -814,8 +814,9 @@ def test_a_session_starts_in_the_user_files_folder_beside_the_carts(term, tmp_pa
 
 def test_neofetch_reads_the_console_s_own_rows_from_its_proc_file(term):
     """/proc/console is the door's: the rows only the console knows, which
-    neofetch (C) shows beside its own; on the screen face in colour, the
-    title kept on a screen too short for every row."""
+    neofetch (C) shows beside its own; on the screen face in colour, Moy
+    beside the rows on the T-Deck's 44 columns and the palette under them
+    on its 13 rows."""
     ws, app = term
     run(app, "cat /proc/console")
     rows = dict(ln.split(": ", 1) for ln in plain(app)[1:] if ": " in ln)
@@ -823,15 +824,20 @@ def test_neofetch_reads_the_console_s_own_rows_from_its_proc_file(term):
     assert rows["display"] == "%dx%d" % (ws.glass_canvas.w, ws.glass_canvas.h)
     run(app, "ls /proc")
     assert "console" in plain(app)[-1].split()
-    run(app, "neofetch")
+    app.draw(0)                         # the grid takes the view's size
+    assert app.face.size() == (44, 13)
+    run(app, "clear; neofetch")
     shown = plain(app)
-    assert any(rows["name"] in ln for ln in shown)
-    assert any(ln.strip().startswith("Shell: moy_sh") for ln in shown)
-    # the T-Deck's screen: the title first, the rows that fit, no palette
-    assert shown[shown.index("$ neofetch") + 1] == rows["name"] + "@moybyte"
+    assert any("Shell: moy_sh" in ln for ln in shown)
+    # the title first, Moy's top row beside it, his body beside the rows
+    title = shown.index(next(ln for ln in shown if ln.endswith(rows["name"] + "@moybyte")))
+    assert shown[title].startswith("   \u2584\u2584\u2584\u2584\u2584\u2584\u2584 ")
+    board = next(ln for ln in shown if "Board: " in ln)
+    assert board.index("Board: ") == 18 and "\u2588" in board[:15], shown
     lines = app.face.lines()
     assert any("\x1b[38;2;255;119;168mDisplay\x1b[0m" in ln for ln in lines)
-    assert not any("\x1b[48;2;" in ln for ln in lines)
+    # the palette's two rows of eight grounds under them
+    assert sum(ln.count("\x1b[48;2;") == 8 for ln in lines) == 2
 
 
 def test_wait_reads_a_background_command_s_exit_code(term, tmp_path):
