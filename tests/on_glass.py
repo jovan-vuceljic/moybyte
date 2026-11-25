@@ -4384,6 +4384,7 @@ def wasm_app_reaches_its_roles(board, root):
     at load naming prefs_get; App Shell Wasm's verdict keeps the VM, naming its
     shell-served import. Leaves the desk as it found it."""
     hops0 = board.pyval("__import__('moy_app').wasm_hops()", strict=True)
+    svc0 = service_counts(board)
     line = board.cmd("run %s" % APP_ROLES[1].lower(), wait_for="REMOTE run")
     assert line is not None and "no cart match" not in line, line
     try:
@@ -4394,7 +4395,8 @@ def wasm_app_reaches_its_roles(board, root):
         assert not st.get("notice"), st["notice"]
         # The run's books hold no crossing but the console's own frame.
         play = st.get("play")
-        assert play is not None and play["upcalls"][1:] == [0, 0, 0, 0, 0], play
+        assert play is not None and play["upcalls"][1:] == [0, 0, 0, 0, 0], \
+            (play, services_since(board, svc0))
     finally:
         board.leave_cart()
         board.drain(1.0)
@@ -4485,6 +4487,21 @@ def app_tree_host_page(look, tier):
     return pm, crc
 
 
+SVC_BITS = ("web", "-", "update", "healthy", "diag", "sched", "tasks")   # moy_loop.h's MOY_SVC_*
+
+
+def service_counts(board):
+    """The service upcalls by the MOY_SVC_* bit they carried, in total."""
+    return board.pyval("__import__('moy_loop').service_counts()", strict=True)
+
+
+def services_since(board, n0):
+    """The services that crossed since `n0` (service_counts), by name: what
+    a run's MOY_UPC_SERVICE count was."""
+    n1 = service_counts(board)
+    return dict((SVC_BITS[i], b - a) for i, (a, b) in enumerate(zip(n0, n1)) if b != a)
+
+
 def wasm_app_draws_the_toolkit(board, root):
     """App Tree Wasm's UI tree page is drawn by the engine in the toolkit's
     widgets (sdk/include/moybyte/uitree.h): no row fails, the page's pixels
@@ -4502,6 +4519,7 @@ def _wasm_app_draws_the_toolkit(board, root):
         strict=True), board.pyval(_TIER, strict=True))
     pm_expr = ("(lambda a: (__import__('moycore').pmem_image(a), list(a))[1])"
                "(__import__('array').array('i', bytearray(1024)))")
+    svc0 = service_counts(board)
     line = board.cmd("run %s" % APP_TREE[1].lower(), wait_for="REMOTE run")
     assert line is not None and "no cart match" not in line, line
     try:
@@ -4510,7 +4528,8 @@ def _wasm_app_draws_the_toolkit(board, root):
         assert st.get("cart") == APP_TREE[1], st.get("cart")
         assert not st.get("cart_error"), st["cart_error"]
         play = st.get("play")
-        assert play is not None and play["upcalls"][1:] == [0, 0, 0, 0, 0], play
+        assert play is not None and play["upcalls"][1:] == [0, 0, 0, 0, 0], \
+            (play, services_since(board, svc0))
         pm = board.pyval(pm_expr, timeout=30, strict=True)
         assert pm[_UI_FAIL] == 0, "a uitree row answered -%d" % pm[_UI_FAIL]
         assert pm[_UI_FRAMES] > 0, pm
