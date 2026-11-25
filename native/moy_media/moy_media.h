@@ -76,7 +76,7 @@
 // the run's end unlinks it under it, judging it over once more there, so no
 // run is freed under a client's command and none a command moved on is
 // ended. On a board a task on core 0 below the flush
-// priority (MOY_MEDIA_PRIO) reads the connection and decodes; it never runs a
+// priority and above the http worker's (MOY_MEDIA_PRIO) reads the connection and decodes; it never runs a
 // flash operation, so its stack is PSRAM. The host and the browser have no
 // task: the frame's job runs moy_media_run(), one pass of its loop. The mix's
 // pull runs on the audio feeder's task under the mix's lock. The decoded ring

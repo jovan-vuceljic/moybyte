@@ -115,6 +115,11 @@ import moy_carts as _store
 # again on its own; R (the desk's Check) asks at once.
 REFRESH_MS = 600000
 
+# The check's piece of a frame: an index is parsed and the shelf's rows are
+# made in pieces of about this long, a frame between them, so a long index
+# never holds the screen (cart_index.parse_steps).
+CHECK_MS = 40
+
 # Where a card stands, as its sub line and its badge say it; a cart that is
 # only for the getting says its size instead.
 STATE_WORD = {"installed": "On console", "update": "Update ready", "taken": "Name taken",
@@ -662,7 +667,8 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         self.thumbs = {}              # cover sha256 -> True once the engine holds it, None while not
         self._covers = []             # the covers this check still fetches
         self._found = []
-        self._step = 0
+        self._checking = None         # the check's steps (`_check_steps`), while it runs
+        self._step = 0                # its place: 0 before the indexes, then 1 + the index it is on
         self._fetch = None            # the cart_index job in hand, and what it is
         self._fetching = None
         self.supplied = {}            # external path -> the player's own copy
@@ -771,6 +777,7 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         self.unreached = 0
         self.starved = False
         self.no_addon = False
+        self._checking = None
         self._step = 0
         self._go("checking")
 
@@ -932,38 +939,54 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         if board is not None:
             self._pump_board_check(board)
             return
-        net = self._inst.net()
-        if self._step == 0:
-            up = self._online()
-            if up is None:
+        if self._checking is None:
+            self._checking = self._check_steps()
+        try:
+            if next(self._checking, _ci._DONE) is not _ci._DONE:
                 return
-            if not up:
+        except Exception:
+            self._checking = None
+            raise
+        self._checking = None
+
+    def _check_steps(self):
+        """The check, a piece a frame (CHECK_MS): the link, each index's
+        fetch and parse, then the shelf's rows."""
+        net = self._inst.net()
+        while True:
+            up = self._online()
+            if up:
+                break
+            if up is False:
                 self._go("nomemory" if self._starved() else "nowifi")
                 return
-            root = self._inst.root()
-            if root is not None and self._inst.writable():
-                self.indexes = self._inst.op(lambda: _ci.load_indexes(root, self._inst.own()))
-            else:
-                self.indexes = list(_ci.DEFAULT_INDEXES)
-            self._step = 1
-            return
-        i = self._step - 1
-        if i < len(self.indexes):
-            url = self.indexes[i]
+            yield
+        root = self._inst.root()
+        if root is not None and self._inst.writable():
+            self.indexes = self._inst.op(lambda: _ci.load_indexes(root, self._inst.own()))
+        else:
+            self.indexes = list(_ci.DEFAULT_INDEXES)
+        yield
+        for i, url in enumerate(self.indexes):
+            self._step = i + 1
             try:
-                data = self._fetched(lambda: _ci.index_fetch(net, url), ("index", i))
-                if data is None:
-                    return
-                got = _ci.parse_index(data, url, self._inst.own(), self._revoked)
+                while True:
+                    data = self._fetched(lambda: _ci.index_fetch(net, url), ("index", i))
+                    if data is not None:
+                        break
+                    yield
+                got = []
+                yield from _ci.parse_steps(data, url, got, self._inst.own(), self._revoked,
+                                           budget_ms=CHECK_MS)
+                data = None
                 self.no_addon = self.no_addon or _ci.addon_unfit(got)
                 self._found.extend(_ci.fitting(got))
             except _ci.InstallError as exc:
                 self.unreached += 1
                 self.starved = self.starved or exc.text == _ci.NET_MEMORY
                 _ci._log(exc.detail)
-            self._step += 1
-            if self._step - 1 < len(self.indexes):
-                return
+            yield
+        self._step = len(self.indexes) + 1
         if not self._found and self.unreached:
             self._release()
             self._go("nomemory" if self.starved else "unreached")
@@ -976,7 +999,8 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         self._covers = self._covers_to_fetch(self.carts)
         if not self._covers:
             self._release()
-        self._build_rows()
+        yield
+        yield from self._rows_steps(CHECK_MS)
         self._go("list")
         if self.rows:
             self._focus = self._card_id(self.cur if self.cur in self.rows else self.rows[0])
@@ -1108,6 +1132,12 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         self.thumbs[sha] = True
 
     def _build_rows(self):
+        for _ in self._rows_steps(None):
+            pass
+
+    def _rows_steps(self, budget_ms):
+        """`rows` made from `carts`, yielding each time `budget_ms` has
+        passed in the store's scan (None: not there)."""
         inst = self._inst
         root = inst.root()
         chip, fmt = inst.chip()
@@ -1116,36 +1146,39 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         carts = self.carts
         board = inst.board()
 
-        def _scan():
-            rec = _ci.load_record(root) if root is not None else {}
-            out = []
-            for c in carts:
-                p = _ci.plan(c, chip, fmt, ranges)
-                if board is not None:       # where it stands is the board's store's
-                    out.append({"cart": c, "plan": p, "state": c.get("state") or "get",
-                                "had": c.get("had"), "runs": _ci.runs_on(c, have),
-                                "fit": None})
-                    continue
-                folder = "%s/%s" % (root, c["folder"])
-                present = root is not None and _exists(folder)
-                entry = rec.get(c["folder"])
-                man = None
-                if present and (entry is None or entry.get("id") != c["id"]
-                                or _ci.is_official(c)):
-                    try:
-                        man = json.loads(_read(folder + "/manifest.json"))
-                    except (OSError, ValueError):
-                        man = None
-                out.append({"cart": c, "plan": p,
-                            "state": _ci.cart_state(c, p, entry, present, man),
-                            "had": entry.get("version") if entry is not None else None,
-                            "runs": _ci.runs_on(c, have),
-                            "fit": None})
-            if board is not None:
-                return out, self._board_free
-            return out, (inst.free() if root is not None else None)
+        def _row(c, rec):
+            p = _ci.plan(c, chip, fmt, ranges)
+            if board is not None:           # where it stands is the board's store's
+                return {"cart": c, "plan": p, "state": c.get("state") or "get",
+                        "had": c.get("had"), "runs": _ci.runs_on(c, have), "fit": None}
+            folder = "%s/%s" % (root, c["folder"])
+            present = root is not None and _exists(folder)
+            entry = rec.get(c["folder"])
+            man = None
+            if present and (entry is None or entry.get("id") != c["id"]
+                            or _ci.is_official(c)):
+                try:
+                    man = json.loads(_read(folder + "/manifest.json"))
+                except (OSError, ValueError):
+                    man = None
+            return {"cart": c, "plan": p,
+                    "state": _ci.cart_state(c, p, entry, present, man),
+                    "had": entry.get("version") if entry is not None else None,
+                    "runs": _ci.runs_on(c, have), "fit": None}
         try:
-            rows, free = inst.op(_scan)
+            rec = inst.op(lambda: _ci.load_record(root)) \
+                if board is None and root is not None else {}
+            rows = []
+            t = _ticks_ms()
+            for c in carts:                 # a store op a cart
+                if budget_ms is not None and _ticks_diff(_ticks_ms(), t) >= budget_ms:
+                    yield
+                    t = _ticks_ms()
+                rows.append(inst.op(lambda: _row(c, rec)))
+            if board is not None:
+                free = self._board_free
+            else:
+                free = inst.op(inst.free) if root is not None else None
         except Exception as exc:  # noqa: BLE001 -- an unreadable store lists everything as GET
             _ci._log("store scan failed: %s" % exc)
             rows = [{"cart": c, "plan": _ci.plan(c, chip, fmt, ranges), "state": "get",

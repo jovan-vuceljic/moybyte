@@ -564,19 +564,40 @@ def parse_index(data, url, own=None, revoked=None, keys=None):
     the ones a page checks the signature against (check_signature).
 
     EntryRead reads one entry of an index as it streams, by these rules."""
+    out = []
+    for _ in parse_steps(data, url, out, own, revoked, keys):
+        pass
+    return out
+
+
+def parse_steps(data, url, out, own=None, revoked=None, keys=None, budget_ms=None):
+    """parse_index's work as a generator, its carts appended to `out`: it
+    yields after the signature, after the JSON, and in the entries each time
+    `budget_ms` has passed (None: not there), so a frame holds a piece of an
+    index rather than all of it (Get Carts' check)."""
     if isinstance(data, str):
         data = data.encode()
     signed = check_signature(data, url, keys)
+    yield
     try:
         index = json.loads(data.decode())
     except (ValueError, UnicodeError) as exc:
         raise InstallError(UNREACHABLE, "%s is not JSON: %s" % (url, exc))
-    return _entries(index, url, own, signed, revoked)
+    yield
+    yield from _entry_steps(index, url, own, signed, revoked, out, budget_ms)
 
 
 def _entries(index, url, own, signed, revoked=None):
     """parse_index's carts of the document `index` (its `carts` and the
     members beside them), its signature's verdict `signed`."""
+    out = []
+    for _ in _entry_steps(index, url, own, signed, revoked, out, None):
+        pass
+    return out
+
+
+def _entry_steps(index, url, own, signed, revoked, out, budget_ms):
+    """_entries' work into `out`, yielding each time `budget_ms` has passed."""
     trusted = own is not None and url == own and signed is True
     reviewed = signed is True or (signed is None and url in DEFAULT_INDEXES)
     if not isinstance(index, dict) or index.get("version") != INDEX_VERSION:
@@ -588,8 +609,11 @@ def _entries(index, url, own, signed, revoked=None):
     gone = _revocations(index, url)
     if revoked is not None:
         revoked[url] = gone
-    out = []
+    t = _ticks_ms()
     for c in index.get("carts") or ():
+        if budget_ms is not None and _ticks_diff(_ticks_ms(), t) >= budget_ms:
+            yield
+            t = _ticks_ms()
         official = trusted and isinstance(c, dict) and builtin_ns(c.get("id"))
         why = check_cart(c, official)
         if why is not None:
@@ -630,7 +654,6 @@ def _entries(index, url, own, signed, revoked=None):
         if gone.get(c["id"]):
             c["revoked"] = list(gone[c["id"]])
         out.append(c)
-    return out
 
 
 # -- the sources ------------------------------------------------------------------
