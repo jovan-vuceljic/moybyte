@@ -175,7 +175,7 @@ border-radius:50%;animation:pinspin .8s linear infinite}
 background:rgba(11,15,26,.82);border:1px solid #1d2b53;color:#00e436;font:12px ui-monospace;
 white-space:pre;pointer-events:none}#hud b{color:#ffec27}#hud .w{color:#ff004d}</style></head><body>
 <div id=hud></div>
-<h1>Moybyte <span id=s>starting...</span> <small style="color:#5f6f9f">(press ` for stats)</small> <a id=tier href="?handheld=1" style="color:#5f6f9f;font-size:11px;text-decoration:none;border-bottom:1px dotted #5f6f9f">small screen?</a> <a id=pod href="#" style="display:none;color:#00e436;font-size:11px;text-decoration:none;border-bottom:1px dotted #00e436">play on device</a></h1>
+<h1>Moybyte <span id=s>starting...</span> <small style="color:#5f6f9f">(press ` for stats)</small> <a id=tier href="?handheld=1" style="color:#5f6f9f;font-size:11px;text-decoration:none;border-bottom:1px dotted #5f6f9f">small screen?</a> <a id=fsb href="#" style="display:none;color:#5f6f9f;font-size:11px;text-decoration:none;border-bottom:1px dotted #5f6f9f">full screen</a> <a id=pod href="#" style="display:none;color:#00e436;font-size:11px;text-decoration:none;border-bottom:1px dotted #00e436">play on device</a></h1>
 <pre id=crash></pre>
 <div id=pz><span id=pzs></span>
 <select id=pzc title="cart to export"></select>
@@ -494,14 +494,23 @@ var pH={};
 // a tap. The console's hints name it on this page (moy_ui_parts.c's
 // ACT_KEYS). In fullscreen the page also asks for Super and Esc with the
 // Keyboard Lock API (Chromium's, live only in a fullscreen the page asked
-// for): Super then reaches the console whole and Esc the Terminal, and
-// holding Esc ends the fullscreen. On a Mac Cmd is Ctrl, so only Esc.
-var altTap=false;
-function kLock(){var k=navigator.keyboard;if(!k||!k.lock)return;
-if(document.fullscreenElement){k.lock(MAC?["Escape"]:["MetaLeft","MetaRight","Escape"]).then(
-function(){window.__moyLocked=1;},function(){window.__moyLocked=0;});}
+// for, which the title's "full screen" asks for: F11 is the console's
+// full key): Super then reaches the console whole, Esc the Terminal, and
+// Alt+Tab the console's window walk (`ConsoleInput._alt_tab`) on Windows,
+// ChromeOS and Linux (where Wayland's compositor asks its user first);
+// holding Esc ends the fullscreen. On a Mac Cmd is Ctrl and the OS keeps
+// Cmd+Tab, so there Esc, Alt and Tab.
+var altTap=false,fsb=document.getElementById("fsb"),
+LOCK=["AltLeft","AltRight","Tab","Escape"].concat(MAC?[]:["MetaLeft","MetaRight"]);
+function kLock(){var k=navigator.keyboard,on=!!document.fullscreenElement;
+fsb.textContent=on?"leave full screen":"full screen";if(!k||!k.lock)return;
+if(on){k.lock(LOCK).then(function(){window.__moyLocked=1;},function(){window.__moyLocked=0;});}
 else{k.unlock();window.__moyLocked=0;}}
 document.addEventListener("fullscreenchange",kLock);
+if(document.documentElement.requestFullscreen){fsb.style.display="";
+fsb.addEventListener("click",function(e){e.preventDefault();
+if(document.fullscreenElement)document.exitFullscreen().catch(function(){});
+else document.documentElement.requestFullscreen().then(function(){cv.focus();},function(){});});}
 cv.addEventListener("pointerdown",function(){altTap=false;});
 var MAC=/Mac|iP(hone|ad|od)/.test(navigator.platform||""),MODK={Control:1,Shift:2,Alt:4,Meta:8,OS:8};
 var KC={Enter:13,Backspace:8,Tab:9,Delete:127,ArrowLeft:272,ArrowRight:273,ArrowUp:274,ArrowDown:275};
