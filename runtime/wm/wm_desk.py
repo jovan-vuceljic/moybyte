@@ -1,3 +1,15 @@
+# Map (grep -n a name to jump there):
+#   _BackdropLayer                      the desk's root layer: wallpaper, bar, icon column
+#   _BackdropLayer.draw                 a frame: render live, restore the cache, or skip
+#   _BackdropLayer._desk_sig            what the cached desk was drawn from
+#   _BackdropLayer._column_sig          the icon column's own input, motion and focus
+#   _BackdropLayer._column_rect         the column's rectangle, repainted alone
+#   _BackdropLayer.owe_bar              a cache that takes the whole bar at its next restore
+#   _BackdropLayer._draw_desktop        the desk rendered live
+#   _BackdropLayer._icon_rects          the desk tiles' rectangles
+#   _BackdropLayer._draw_look_icons     the tiles drawn in the theme's look
+#   _BackdropLayer._open_icon           a tile opened: its app or cart
+#   _BackdropLayer.handle_pointer       a tap or a drag on the desk
 """The windowed desk's ROOT layer: the wallpaper + the one OS bar + the desk
 icon column, with the retained-backdrop cache a gesture blits instead of
 re-rendering the desk (#58/#155), and under the theme's depth the windows'
