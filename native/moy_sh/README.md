@@ -74,7 +74,12 @@ off (`moy_sh_set_questions`), and the command reads its answers from stdin.
 
 A session takes its record and its arena from the host's `alloc` (PSRAM on a
 board, `heap_caps` with the default heap only where there is no PSRAM); a pipe's buffer, a file's chunk and a fork's snapshot are taken
-while a run needs them and returned after. The screen face takes its record,
+while a run needs them and returned after. A pipeline's stages run one after
+another, so a pipe holds its writer's whole stream: 1 MB at most, 16 KB on a
+board without PSRAM (the C3 Zero). A longer stream ends its writer with one
+line, `pipe: stream over N KB; write it to a file`, and the reader reads what
+came before it; a file has no such cap, since a file is read and written a
+chunk at a time. The screen face takes its record,
 its session and its grid the same way at its first open (`moy_sh_screen_new`)
 and gives them back at `close`. The serial face's session lives from its first
 `sh` line to the boot's end, except across a run that stops the VM

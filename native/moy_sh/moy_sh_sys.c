@@ -20,9 +20,14 @@
 //          put over it at the last close, so a cut leaves the old file whole.
 //          Read-write (`<>`) and the virtual files' are put whole at the last
 //          close (MOY_SH_FILE_MAX)
-//   PIPE_R, PIPE_W   the two ends of a pipe buffer. Stages run one after
-//          another, so a read of an empty pipe is its end; a write past
-//          MOY_SH_PIPE_MAX or with no reader left fails with EPIPE
+//   PIPE_R, PIPE_W   the two ends of a pipe buffer, chunks (MOY_SH_CHUNK)
+//          of the heap. Stages run one after another (moy_sh.h, THE FORK),
+//          so the buffer holds the writer's whole stream and a read of an
+//          empty pipe is its end. A stream past PIPE_MAX, or past what the
+//          heap gives, is said once ("stream over N KB") and ends its
+//          writer as SIGPIPE would (a writer ignoring it gets EPIPE), so the
+//          reader reads what came before it; a write with no reader left
+//          fails with EPIPE
 //
 // PATHS are the shell's: absolute after the working folder is applied and
 // `.`/`..` folded. /dev and /proc are virtual (the host's vread/vlist, with
@@ -36,16 +41,32 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "moy_platform.h"
 #include "moy_sh_posix.h"
 #include "moy_sh_int.h"
 #include "moy_vol.h"
 
+// A pipe's stream at most: what a board without PSRAM's one internal heap
+// spares beside its SSH session, and MOY_SH_PIPE_MAX elsewhere.
+#if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
+#define PIPE_MAX (16u * 1024u)
+#else
+#define PIPE_MAX MOY_SH_PIPE_MAX
+#endif
+
 enum { O_TERM = 1, O_NUL, O_MEM, O_READ, O_FILE, O_PIPE_R, O_PIPE_W };
 
+typedef struct pipe_chunk {
+    struct pipe_chunk *next;
+    size_t len;
+    char b[MOY_SH_CHUNK];
+} pipe_chunk_t;
+
 typedef struct {
-    char *buf;
-    size_t len, cap, pos;
+    pipe_chunk_t *head, *tail;  // read from head at `pos`, written at tail
+    size_t pos, held;           // ... and the bytes between
     int readers, writers;
+    int over;                   // its stream ran past what it holds
 } sh_pipe_t;
 
 struct moy_sh_obj {
@@ -148,7 +169,11 @@ static void obj_drop(struct moy_sh_obj *o) {
             p->writers--;
         }
         if (p->readers == 0 && p->writers == 0) {
-            moy_sh_hfree(p->buf);
+            while (p->head != NULL) {
+                pipe_chunk_t *c = p->head;
+                p->head = c->next;
+                moy_sh_hfree(c);
+            }
             moy_sh_hfree(p);
         }
     }
@@ -718,6 +743,85 @@ static int vlist(const char *dir, moy_sh_ent_fn fn, void *arg) {
     return s->host.vlist(s->host.ctx, dir, fn, arg);
 }
 
+// --- pipes ------------------------------------------------------------------
+
+static ssize_t pipe_read(sh_pipe_t *p, void *buf, size_t n) {
+    size_t got = 0;
+    while (got < n && p->head != NULL) {
+        pipe_chunk_t *c = p->head;
+        size_t k = c->len - p->pos < n - got ? c->len - p->pos : n - got;
+        memcpy((char *)buf + got, c->b + p->pos, k);
+        got += k;
+        p->pos += k;
+        p->held -= k;
+        if (p->pos == c->len && (c != p->tail || c->len == sizeof c->b)) {
+            p->head = c->next;
+            p->tail = p->head == NULL ? NULL : p->tail;
+            p->pos = 0;
+            moy_sh_hfree(c);
+        } else if (p->pos == c->len) {
+            break;
+        }
+    }
+    return (ssize_t)got;
+}
+
+// A stream past what the pipe holds, said once on the writer's stderr (the
+// terminal's when that is this pipe) and the writer ended as SIGPIPE ends it.
+static ssize_t pipe_over(sh_pipe_t *p) {
+    if (!p->over) {
+        p->over = 1;
+        char msg[80];
+        size_t kb = (p->held + 1023) / 1024;
+        int n = snprintf(msg, sizeof msg, "pipe: stream over %u KB; write it to a file\n",
+                         (unsigned)kb);
+        struct moy_sh_obj *e = fd_obj(2);
+        moy_sh_t *s = moy_sh_cur;
+        if (e != NULL && !(e->kind == O_PIPE_W && e->pipe == p)) {
+            moy_sh_write(2, msg, (size_t)n);
+        } else if (!moy_sh_replaying(s)) {
+            s->host.out(s->host.ctx, 2, msg, (size_t)n);
+        }
+        moy_sh_raise(SIGPIPE);
+    }
+    errno = EPIPE;
+    return -1;
+}
+
+static ssize_t pipe_write(sh_pipe_t *p, const void *buf, size_t n) {
+    if (p->readers == 0) {
+        errno = EPIPE;
+        return -1;
+    }
+    if (p->over || p->held + n > PIPE_MAX) {
+        return pipe_over(p);
+    }
+    size_t put = 0;
+    while (put < n) {
+        pipe_chunk_t *c = p->tail;
+        if (c == NULL || c->len == sizeof c->b) {
+            c = moy_sh_halloc(sizeof *c);
+            if (c == NULL) {
+                return pipe_over(p);
+            }
+            c->next = NULL;
+            c->len = 0;
+            if (p->tail != NULL) {
+                p->tail->next = c;
+            } else {
+                p->head = c;
+            }
+            p->tail = c;
+        }
+        size_t k = sizeof c->b - c->len < n - put ? sizeof c->b - c->len : n - put;
+        memcpy(c->b + c->len, (const char *)buf + put, k);
+        c->len += k;
+        put += k;
+        p->held += k;
+    }
+    return (ssize_t)n;
+}
+
 // --- descriptors ------------------------------------------------------------
 
 int moy_sh_open(const char *path, int flags, ...) {
@@ -868,18 +972,8 @@ ssize_t moy_sh_read(int fd, void *buf, size_t n) {
         }
         case O_READ:
             return read_take(o, buf, n);
-        case O_PIPE_R: {
-            sh_pipe_t *p = o->pipe;
-            size_t left = p->len - p->pos;
-            if (n > left) {
-                n = left;
-            }
-            if (n) {
-                memcpy(buf, p->buf + p->pos, n);
-            }
-            p->pos += n;
-            return (ssize_t)n;
-        }
+        case O_PIPE_R:
+            return pipe_read(o->pipe, buf, n);
         case O_PIPE_W:
             errno = EBADF;
             return -1;
@@ -921,22 +1015,8 @@ ssize_t moy_sh_write(int fd, const void *buf, size_t n) {
                 return -1;
             }
             return (ssize_t)n;
-        case O_PIPE_W: {
-            sh_pipe_t *p = o->pipe;
-            if (p->readers == 0) {
-                errno = EPIPE;
-                return -1;
-            }
-            // a drained pipe starts over at its front
-            if (p->pos == p->len) {
-                p->pos = p->len = 0;
-            }
-            if (buf_add(&p->buf, &p->len, &p->cap, buf, n, MOY_SH_PIPE_MAX) != 0) {
-                errno = EPIPE;
-                return -1;
-            }
-            return (ssize_t)n;
-        }
+        case O_PIPE_W:
+            return pipe_write(o->pipe, buf, n);
         default:
             errno = EBADF;
             return -1;

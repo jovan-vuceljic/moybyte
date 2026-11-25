@@ -68,7 +68,7 @@ UI_INCLUDES = [a for n in ("moy_ui", "moy_gfx", "moy_glass")
 
 def _objects(cc, out):
     dash_flags = CFLAGS + ["-include", os.path.join(SH, "dash_config.h"),
-                           "-I", SH, "-I", DASH, "-I", STORE] + MBEDTLS
+                           "-I", SH, "-I", DASH, "-I", STORE, "-I", KERNEL] + MBEDTLS
     jobs = [(src, dash_flags) for src in shell_sources()]
     jobs.append((os.path.join(SH, "moy_sh_arena.c"), CFLAGS + ["-I", SH]))
     jobs.append((os.path.join(SH, "moy_sh_fmt.c"), CFLAGS + ["-I", SH, "-I", SPINE]))
@@ -249,6 +249,25 @@ def test_a_file_read_comes_in_chunks(harness, tmp_path):
     largest = int(re.search(rb"largest block (\d+)", r.stderr).group(1))
     assert largest < 8192, "a block of %d B" % largest
 
+
+def test_a_pipe_holds_its_stream_in_chunks(harness, tmp_path):
+    """A pipe's buffer is chunks of the heap (moy_sh_sys.c's PIPE_R/PIPE_W),
+    so 64 KB through a pipe takes no block near its size. One buffer
+    doubled as it grew took a block of 64 KB, which the C3's heap refused at
+    each write ("I/O error" per echo). The largest block left is a fork's
+    snapshot of the arena in use (about 14 KB on the host)."""
+    root = tmp_path / "root"
+    root.mkdir()
+    script = tmp_path / "pipe.sh"
+    script.write_text("i=0; while [ $i -lt 4096 ]; do echo 0123456789abcde; i=$((i+1)); done"
+                      " | tee t | wc -c\n")
+    r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                       timeout=60, env=dict(os.environ, SH_MAIN_MEASURE="1"))
+    assert r.returncode == 0 and b"65536" in r.stdout, r.stdout.decode()
+    largest = int(re.search(rb"largest block (\d+)", r.stderr).group(1))
+    assert largest < 16384, "a block of %d B" % largest
+
+
 SERIAL = os.path.join(SCRIPTS, "serial")
 SERIAL_NAMES = sorted(os.path.basename(p)[:-3] for p in glob.glob(os.path.join(SERIAL, "*.sh")))
 
@@ -363,7 +382,8 @@ def test_the_shell_keeps_no_writable_data_but_its_state_pointer(tmp_path):
     if cc is None or nm is None:
         pytest.skip("no C compiler or nm")
     flags = ["-std=gnu99", "-Os", "-fno-pic", "-fno-pie", "-fno-common",
-             "-include", os.path.join(SH, "dash_config.h"), "-I", SH, "-I", DASH, "-I", STORE] + MBEDTLS
+             "-include", os.path.join(SH, "dash_config.h"), "-I", SH, "-I", DASH, "-I", STORE,
+             "-I", KERNEL] + MBEDTLS
     plain = ["-std=gnu99", "-Os", "-fno-pic", "-fno-pie", "-fno-common",
              "-I", SH, "-I", KERNEL, "-I", STORE, "-I", SPINE]
     writable = []
@@ -390,7 +410,7 @@ def test_no_shell_object_calls_the_c_library_s_descriptors(tmp_path):
     if cc is None or nm is None:
         pytest.skip("no C compiler or nm")
     flags = ["-std=gnu99", "-Os", "-include", os.path.join(SH, "dash_config.h"),
-             "-I", SH, "-I", DASH, "-I", STORE] + MBEDTLS
+             "-I", SH, "-I", DASH, "-I", STORE, "-I", KERNEL] + MBEDTLS
     raw = {"open", "read", "write", "close", "dup", "dup2", "fcntl", "pipe", "lseek",
            "open64", "stat", "fstat", "lstat"}
     calls = []
@@ -418,7 +438,7 @@ def test_every_source_keeps_the_const_a_c23_library_preserves(tmp_path):
     guard = ["-include", os.path.join(SCRIPTS, "c23_const.h")]
     base = ["-std=gnu99", "-fsyntax-only", "-Wall", "-Werror"] + guard
     dash = base + ["-include", os.path.join(SH, "dash_config.h"), "-I", SH, "-I", DASH,
-                   "-I", STORE] + MBEDTLS
+                   "-I", STORE, "-I", KERNEL] + MBEDTLS
     plain = base + ["-I", SH, "-I", KERNEL, "-I", STORE, "-I", SPINE]
     jobs = [(src, dash) for src in shell_sources()]
     jobs += [(os.path.join(SH, n), plain) for n in ("moy_sh_arena.c", "moy_sh_fmt.c", "moy_sh_cands.c",
