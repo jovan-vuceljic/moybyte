@@ -32,6 +32,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 LUA_SRC = os.path.join(ROOT, "native", "moy_lua", "lua")
+# the VM's number reader, which luaconf.h's lua_str2number names on every tier
+STRTOF = os.path.join(ROOT, "native", "moy_lua", "moy_strtof.c")
 # the prop check the console's moycore opens beside the layer (__moy_uitree_check)
 CHECK_SRC = [os.path.join(ROOT, "native", "moy_uitree", n) for n in
              ("moy_uitree_check.c", "moy_uitree_schema.h", "moy_uitree_check.h")] + \
@@ -76,7 +78,7 @@ then true until while""".split())
 def hostlua():
     """The host Lua's path, built when its sources changed."""
     srcs = [os.path.join(LUA_SRC, n) for n in sorted(os.listdir(LUA_SRC))
-            if n.endswith(".c") and n not in ("lua.c", "luac.c")]
+            if n.endswith(".c") and n not in ("lua.c", "luac.c")] + [STRTOF]
     h = hashlib.sha1(MAIN_C.encode())
     for p in srcs + [os.path.join(LUA_SRC, n) for n in sorted(os.listdir(LUA_SRC)) if n.endswith(".h")] + CHECK_SRC:
         with open(p, "rb") as f:

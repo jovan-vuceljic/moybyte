@@ -9,7 +9,8 @@
 // p99, a 250-byte state blob in 15.0 / 17.1 ms, so the payload is the inputs
 // and both consoles run the same simulation from them.
 //   1. INPUT DELAY: frame N's input is sent during N-delay and played on N.
-//      The delay starts at one tick, rises a tick under the PEER's stall
+//      The delay starts at one tick (PAGE_DELAY_MS across a page), rises a
+//      tick under the PEER's stall
 //      pressure (ESCALATE_*: this console's lead is what the peer waits on)
 //      and comes back down a tick when the peer reports a tick's slack to
 //      spare (LOWER_*). A frame is sampled once and the tape
@@ -149,6 +150,12 @@ enum {
 #define MOY_MATCH_TICK_HZ 30            // a match's tick unless its host asks 60
 #define MOY_MATCH_TICK_FAST 60          // a cart paced 60 or "free"
 #define MOY_MATCH_DELAY 1
+// A match across a page (either side's board is PAGE_BOARD, the name the
+// browser console announces) starts at PAGE_DELAY_MS, rounded up to the tick:
+// its inputs cross the board's socket, whose jitter one tick does not cover,
+// and a short match ends before the escalation's windows raise it.
+#define MOY_MATCH_PAGE_BOARD "web"
+#define MOY_MATCH_PAGE_DELAY_MS 50      // 2 ticks at 30 Hz, 3 at 60
 #define MOY_MATCH_DELAY_MAX_MS 66       // the delay's ceiling: 2 ticks at 30 Hz, 4 at 60
 #define MOY_MATCH_ESCALATE_S 3          // the escalation window
 #define MOY_MATCH_ESCALATE_AT 12        // distinct stalled ticks in a window, per 30 Hz

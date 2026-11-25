@@ -49,6 +49,7 @@ _INPUT = os.path.join(_NATIVE, "moy_input")
 _AUDIO = os.path.join(_NATIVE, "moy_audio")
 _GLASS = os.path.join(_NATIVE, "moy_glass")
 _LUA = os.path.join(_NATIVE, "moy_lua", "lua")       # the vendored VM
+_LUA_OWN = os.path.join(_NATIVE, "moy_lua")           # its number reader, moy_strtof.c
 _SHIM = os.path.join(_HERE, "moyhost_lua.c")
 # A deflated chunk's widest window, as a power of two: modmoycore.c's
 # MOYCORE_Z_WINDOW, and tools/uitree_lua_freeze.py's WBITS.
@@ -109,7 +110,7 @@ PART = native_build.Part("lua", list(_RASTER) + [
     "moy_fs.h", "moy_fs.c", "moy_store_host.c", "moy_img.h",
     "moy_loop.h", "moy_idle.h", "moy_perf.h", "moy_input.h", "moy_aud.h", "moy_buf.h",
     "moy_proc.h", "moy_proc_exit.h", "moy_proc.c", "moy_app_run.h", "moycore_svc.h", "moycore_svc.c", "moycore_moybyte.h", "moycore_moybyte.c", "moy_app_lua_rows.h",
-] + _lua_names(), (_LIBMOY, _BINDING_DIR, _LUA, _HERE, _MOYCORE, _MOY_GFX, _SPINE,
+] + ["moy_strtof.c"] + _lua_names(), (_LIBMOY, _BINDING_DIR, _LUA, _LUA_OWN, _HERE, _MOYCORE, _MOY_GFX, _SPINE,
                    _PLAY, _STORE, _KERNEL, _INPUT, _AUDIO, _GLASS, _UI,
                    os.path.join(_NATIVE, "moy_app")), shim=_SHIM)
 

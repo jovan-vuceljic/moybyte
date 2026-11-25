@@ -100,13 +100,19 @@ gamma functions are taken; `log2` is the math module's own, `log` times
 `floor` and the other exact functions are the C library's, since IEEE
 rounding leaves them one answer.
 
+A Lua cart's numerals and `tonumber` are read alike too: newlib's `strtof`
+rounds through a double, so a numeral near a float's halfway point read a bit
+apart on a board, and the Lua VM reads numbers with its own correctly rounded
+parser on every tier (`native/moy_lua/moy_strtof.c`, wired in `luaconf.h`).
+A Python cart's numerals are MicroPython's own parser on every tier already.
+
 The set is compiled with `-ffp-contract=off`: the S3's and the P4's FPUs
 have a fused multiply-add, which rounds once where the source rounds twice,
 and the wasm has none. On a board the set is a static library of its own
 (`moy_libm`), because a usermod's sources are compiled by a target no source
 property reaches. `tests/test_web_lockstep_floats.py` holds the R32 build and
 the wasm to one answer, bit for bit, over every function and each one's
-domain, and the Zeros' suite (`tests/test_zero_on_glass.py`) holds a T-Deck's
+domain and over Lua numerals that a double's rounding reads wrong, and the Zeros' suite (`tests/test_zero_on_glass.py`) holds a T-Deck's
 `atan2` to the wasm's.
 
 ## Decisions

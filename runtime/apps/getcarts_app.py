@@ -298,6 +298,12 @@ class _Owed:
         self._lay.fill_owed = True
         self._d.again()
 
+    def step(self):
+        """A frame owed to the pump's work alone (a cover on its way): the
+        page has not moved, so no fill, nothing made for one, and no window
+        behind drawn again (`moved`)."""
+        self._d.again()
+
 
 def _set(lay, name, rows):
     """Model `name` written only where its rows moved."""
@@ -697,14 +703,13 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             self._focus = vid("TRY AGAIN")
         else:
             self._recover()
+            self.cur = None           # a visit starts on the shelf's first card
             fresh = (self.fetched_at is not None
                      and _ticks_diff(_ticks_ms(), self.fetched_at) < REFRESH_MS)
             if self.carts and fresh:
                 self._covers = self._covers_to_fetch(self.carts)
                 self._build_rows()
-                self._go("list")
-                if self.rows:
-                    self._focus = self._card_id(self.rows[0])
+                self._land()
             else:
                 self._check()
         super().open()
@@ -758,6 +763,17 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         elif phase in BUSY or phase == "pick":
             self._focus = _NOWHERE            # Cancel is B's or a tap's, never Enter's
         self._damage.all()
+
+    def _land(self):
+        """The shelf, the keys on the card `cur` names, else on the first:
+        where an open and a check end. That card is `cur`, so the focus
+        landing on it moves nothing: on the desk the pane shows it beside
+        the shelf, and its page opens only when the player picks a card."""
+        self._go("list")
+        if self.rows:
+            if self.cur is None:
+                self.cur = self.rows[0]
+            self._focus = self._card_id(self.cur)
 
     def _focus_go(self):
         """Focus on the cart's page's verb that goes on (the last)."""
@@ -1001,7 +1017,8 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             self._release()
         yield
         yield from self._rows_steps(CHECK_MS)
-        self._go("list")
+        yield                         # the shelf's first paint, a frame of its own
+        self._land()
         if self.rows:
             self._focus = self._card_id(self.cur if self.cur in self.rows else self.rows[0])
 
@@ -1066,7 +1083,7 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             self._covers.pop()
             self._damage.all()
         if self._covers:
-            self._damage.again()
+            self._damage.step()
         else:
             self._release()
 
@@ -1175,6 +1192,8 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
                     yield
                     t = _ticks_ms()
                 rows.append(inst.op(lambda: _row(c, rec)))
+            if budget_ms is not None:
+                yield                       # the store's room and the fits, a frame of their own
             if board is not None:
                 free = self._board_free
             else:

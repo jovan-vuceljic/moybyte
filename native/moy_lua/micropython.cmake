@@ -24,7 +24,9 @@ list(REMOVE_ITEM MOY_LUA_VM_SRCS
     ${CMAKE_CURRENT_LIST_DIR}/lua/lutf8lib.c
 )
 
-target_sources(usermod_moy_lua INTERFACE ${MOY_LUA_VM_SRCS})
+# The VM's number reader (moy_strtof.c): one parser on every tier.
+target_sources(usermod_moy_lua INTERFACE ${MOY_LUA_VM_SRCS}
+    ${CMAKE_CURRENT_LIST_DIR}/moy_strtof.c)
 
 target_include_directories(usermod_moy_lua INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}

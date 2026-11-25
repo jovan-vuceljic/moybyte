@@ -464,7 +464,10 @@
 
 #define l_mathop(op)		op##f
 
-#define lua_str2number(s,p)	strtof((s), (p))
+/* Moybyte: every tier reads numbers with one correctly rounded parser
+   (../moy_strtof.c), not its C library's strtof (MODIFICATIONS.md 5). */
+float moy_strtof(const char *s, char **end);
+#define lua_str2number(s,p)	moy_strtof((s), (p))
 
 
 #elif LUA_FLOAT_TYPE == LUA_FLOAT_LONGDOUBLE	/* }{ long double */
