@@ -467,9 +467,9 @@ scp file moybyte-zero.local:/moy/ # scp -s before OpenSSH 9.0
 - **No frame**: what a session must do on the VM's task (the store's files,
   the door) is served by the serve loop's `zero_shell.tail()` each turn
   (`moy_tty.tail()`), about every 10 ms.
-- **No palette**: the toolkit's colours are not in this image, so `neofetch`
-  draws plain and a full-screen app's colours reach the client as its own base
-  colours.
+- **The console's palette without the toolkit**: the shell links the palette
+  alone (`native/moy_sh/moy_sh_palette.c`, 256 bytes), so `neofetch` draws Moy
+  in colour and a full-screen app's colours reach the client as the console's.
 
 ## Local multiplayer (2026-11-24)
 

@@ -15,14 +15,14 @@
 #include "moy_text.h"
 
 #define ECHO "\x1b[2m"
-#define TYPED "\x1b[0;36m"
+#define TYPED moy_term_accent((char[MOY_TERM_ACCENT_BYTES]){0})  // the block's own
 #define PLAIN "\x1b[0m"
 #define MIN_COLS 8
 #define RUN_MORE 1
 #define RUN_EXIT 2
 #define NAMES_BYTES 8192u               // a completion's names, all of them
 #define LOG_ROWS_MAX 96                 // a text view's rows at most (MOY_UI_TEXT_ROWS)
-#define PROMPT_ROW (MOY_SH_FACE_LINE * 2 + 32)
+#define PROMPT_ROW (MOY_SH_FACE_LINE * 2 + 48)
 
 // The T-Deck's keyboard: whether its matrix types `c`, plain or with Sym
 // (native/moy_input/moy_kbd.c). Weak, so a build without the driver links.
@@ -56,6 +56,8 @@ struct moy_sh_face {
     int enter;                          // a typed Enter owed to the row's focused key
     int swallow;                        // the Ctrl-C that stopped a run, still latched
     int inline_runs;                    // runs never park (moy_sh_face_inline)
+    int sized;                          // a frame has laid the grid out
+    int queued;                         // the line submitted before it, run at that frame
     int32_t key;                        // the key typed last frame
     // the log: the grid's lines as the last frame took them
     uint32_t gen;
@@ -355,6 +357,10 @@ static void settle(moy_sh_face_t *f) {
 
 void moy_sh_face_submit(moy_sh_face_t *f) {
     settle(f);
+    if (!f->sized) {
+        f->queued = 1;                  // its output takes the grid the first frame sizes
+        return;
+    }
     if (moy_sh_face_screen(f) == NULL || busy(f)) {
         return;
     }
@@ -1206,12 +1212,21 @@ int moy_sh_face_draw(moy_sh_face_t *f, moy_ui_ctx_t *c, const moy_ui_sink_t *s,
     moy_ui_lines_t P = {f, 1, prompt_get};
     at(c, band);
     moy_ui_api_text_view(c, s, span("prompt"), &P, popt, marks, NULL, got);
-    if (f->scr != NULL && (cols != f->cols || rows != f->rows)) {
-        if (moy_term_resize(moy_sh_screen_term(f->scr), (int)cols, (int)rows) == 0) {
+    if (cols != f->cols || rows != f->rows) {
+        if (f->scr == NULL
+                || moy_term_resize(moy_sh_screen_term(f->scr), (int)cols, (int)rows) == 0) {
             f->cols = cols;
             f->rows = rows;
             f->stale = 1;
             out |= MOY_SH_FACE_AGAIN;
+        }
+    }
+    if (!f->sized) {
+        f->sized = 1;
+        if (f->queued) {
+            f->queued = 0;
+            moy_sh_face_submit(f);
+            out |= MOY_SH_FACE_AGAIN | MOY_SH_FACE_DAMAGE;
         }
     }
     return out;

@@ -1871,6 +1871,7 @@ const TERM = { OPEN: 2, ENDED: 3, LOST: 4, UNREACHABLE: 5, REFUSED: 6, WAIT: 7, 
                TAKEN: 10 };
 let termPoll = null, termFeed = null, termState = null;
 let termWs = null, termSealed = false;
+let termSize = null;             // the grid's size taken while no socket was open, sent at its open
 const termQ = [];
 function termB64(u8) {
     let s = "";
@@ -1944,7 +1945,15 @@ async function termOpen(cols, rows, tries = 0) {
     ws.binaryType = "arraybuffer";
     let opened = false;
     termWs = ws;
-    ws.onopen = () => { if (termWs === ws) { opened = true; termQ.push({ s: TERM.OPEN, n: 0 }); } };
+    ws.onopen = () => {
+        if (termWs !== ws) return;
+        opened = true;
+        if (termSize) {
+            termSend(ws, "s", utf8.encode(JSON.stringify({ size: termSize })));
+            termSize = null;
+        }
+        termQ.push({ s: TERM.OPEN, n: 0 });
+    };
     ws.onmessage = (m) => {
         if (termWs !== ws || typeof m.data === "string") return;
         let u8 = new Uint8Array(m.data);
@@ -1982,8 +1991,10 @@ function termPump() {
         const d = JSON.parse(j);
         if (d.want === 2) termClose();
         if (d.want === 1) termOpen(d.cols, d.rows);
+        if (d.size) termSize = d.size;
         if (termWs && termWs.readyState === 1) {
-            if (d.size) termSend(termWs, "s", utf8.encode(JSON.stringify({ size: d.size })));
+            if (termSize) termSend(termWs, "s", utf8.encode(JSON.stringify({ size: termSize })));
+            termSize = null;
             if (d.out) termSend(termWs, "k", new Uint8Array(d.out));
         }
     }

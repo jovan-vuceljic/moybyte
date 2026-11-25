@@ -10,7 +10,8 @@ console's Python gives them:
     board has no frame: its poll loop calls `tail()` each turn
     (zero_host.serve), and between turns a hop waits.
   * THE DOOR (native/moy_sh/moy_sh_board.h, the ROLE door's row
-    MOY_SH_DOOR): `passwd`, `df`, `mem` and `ps` answered here; everything
+    MOY_SH_DOOR): `passwd`, `df`, `mem` and `ps` answered here, and
+    /proc/console's name, board and firmware (neofetch's rows); everything
     else is the console's (its processes, /proc's and /dev's rows, the
     installed and the other role commands), which this board has not got, so
     it answers as a console with its VM stopped does (NEEDS_VM), and the
@@ -98,6 +99,19 @@ class Door:
         except OSError as e:
             self.err("passwd", str(e))
             return 1
+
+    def v_read(self, path):
+        # /proc/console: what neofetch shows beside the shell's own rows,
+        # where this board can answer it (runtime/shell/sh_door.py's
+        # console_text on a console)
+        if path != "/proc/console":
+            return NEEDS_VM
+        import moy_ota
+        import ssh_service
+        rows = (("name", ssh_service.hostname(self.ws)),
+                ("board", moy_ota.BOARD_NAMES.get(moy_ota.BOARD, moy_ota.BOARD)),
+                ("firmware", moy_ota.FIRMWARE_LABEL or moy_ota.FIRMWARE_NAME))
+        return "".join("%s: %s\n" % (k, v) for k, v in rows if v).encode()
 
     def v_ps(self):
         used = gc.mem_alloc() if hasattr(gc, "mem_alloc") else 0

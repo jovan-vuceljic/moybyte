@@ -21,6 +21,7 @@ def term(tmp_path):
     ws = build_workstation(str(tmp_path / "carts"))
     app = ws.app("terminal")
     app.open()
+    app.draw(0)                         # the first frame sizes the grid
     yield ws, app
     app.close_session()
 
@@ -58,7 +59,8 @@ def test_a_line_is_echoed_and_run_in_the_session(term):
     _ws, app = term
     run(app, "echo hello; mkdir /made; cd /made; pwd")
     assert plain(app) == ["$ echo hello; mkdir /made; cd /made; pwd", "hello", "/made"]
-    assert app.face.lines()[0] == "\x1b[2m$ \x1b[36mecho hello; mkdir /made; cd /made; pwd\x1b[0m"
+    assert app.face.lines()[0] == ("\x1b[2m$ \x1b[38;2;41;173;255m"
+                                   "echo hello; mkdir /made; cd /made; pwd\x1b[0m")
 
 
 def test_a_command_that_goes_on_takes_the_continuation_prompt(term):
@@ -97,6 +99,7 @@ def test_a_first_run_asks_at_the_prompt_and_the_next_line_answers(tmp_path):
     ws = build_workstation(str(root))
     app = ws.app("terminal")
     app.open()
+    app.draw(0)                         # the first frame sizes the grid
     try:
         run(app, "echo before; greet one; echo after")
         got = plain(app)
@@ -114,7 +117,7 @@ def test_a_first_run_asks_at_the_prompt_and_the_next_line_answers(tmp_path):
         run(app, "other")
         run(app, "")                    # Enter alone is a no
         got = plain(app)
-        assert "".join(got[-2:]) == "other: needs your OK - open it to say yes", got
+        assert got[-1] == "other: needs your OK - open it to say yes", got
         assert ws.consent.get("local.other") is None and app.face.prompt() == "$ "
         run(app, "other")
         app.face.key(3)                 # Ctrl-C drops the question
@@ -200,6 +203,7 @@ def test_pkg_asks_the_console_s_password_unseen_and_its_install_question_at_the_
         f.write(ssh_service.hashed("hunter22", "ab" * 16) + "\n")
     app = ws.app("terminal")
     app.open()
+    app.draw(0)                         # the first frame sizes the grid
     f = app.face
     try:
         run(app, "pkg install snake")
@@ -207,7 +211,8 @@ def test_pkg_asks_the_console_s_password_unseen_and_its_install_question_at_the_
         _type(app, "hunter22")
         f.key(0x08)
         _type(app, "2")
-        assert f.prompt_row() == "\x1b[2mThe console's password: \x1b[0;36m********\x1b[0m"
+        assert f.prompt_row() == ("\x1b[2mThe console's password: \x1b[0m\x1b[38;2;41;173;255m"
+                                  "********\x1b[0m")
         f.key(9)
         f.recall(-1)
         assert f.line() == "hunter22", "no completion, no history while it is asked"
@@ -250,6 +255,7 @@ def test_ctrl_c_at_pkg_s_question_drops_the_build_it_kept(tmp_path):
         f.write(ssh_service.hashed("hunter22", "ab" * 16) + "\n")
     app = ws.app("terminal")
     app.open()
+    app.draw(0)                         # the first frame sizes the grid
     try:
         run(app, "pkg install snake")
         assert app.face.prompt() == "The console's password: " and len(pkg._KEPT) == 1
@@ -814,8 +820,9 @@ def test_a_session_starts_in_the_user_files_folder_beside_the_carts(term, tmp_pa
 
 def test_neofetch_reads_the_console_s_own_rows_from_its_proc_file(term):
     """/proc/console is the door's: the rows only the console knows, which
-    neofetch (C) shows beside its own; on the screen face in colour, the
-    title kept on a screen too short for every row."""
+    neofetch (C) shows beside its own; on the screen face in colour, Moy
+    beside the rows on the T-Deck's 44 columns and the palette under them
+    on its 13 rows."""
     ws, app = term
     run(app, "cat /proc/console")
     rows = dict(ln.split(": ", 1) for ln in plain(app)[1:] if ": " in ln)
@@ -823,15 +830,42 @@ def test_neofetch_reads_the_console_s_own_rows_from_its_proc_file(term):
     assert rows["display"] == "%dx%d" % (ws.glass_canvas.w, ws.glass_canvas.h)
     run(app, "ls /proc")
     assert "console" in plain(app)[-1].split()
-    run(app, "neofetch")
+    assert app.face.size() == (44, 13)
+    run(app, "clear; neofetch")
     shown = plain(app)
-    assert any(rows["name"] in ln for ln in shown)
-    assert any(ln.strip().startswith("Shell: moy_sh") for ln in shown)
-    # the T-Deck's screen: the title first, the rows that fit, no palette
-    assert shown[shown.index("$ neofetch") + 1] == rows["name"] + "@moybyte"
+    assert any("Shell: moy_sh" in ln for ln in shown)
+    # the title first, Moy's top row beside it, his body beside the rows
+    title = shown.index(next(ln for ln in shown if ln.endswith(rows["name"] + "@moybyte")))
+    assert shown[title].startswith("   \u2584\u2584\u2584\u2584\u2584\u2584\u2584 ")
+    board = next(ln for ln in shown if "Board: " in ln)
+    assert board.index("Board: ") == 18 and "\u2588" in board[:15], shown
     lines = app.face.lines()
     assert any("\x1b[38;2;255;119;168mDisplay\x1b[0m" in ln for ln in lines)
-    assert not any("\x1b[48;2;" in ln for ln in lines)
+    # the palette's two rows of eight grounds under them
+    assert sum(ln.count("\x1b[48;2;") == 8 for ln in lines) == 2
+
+
+def test_a_line_run_before_the_first_frame_waits_for_the_grid_it_sizes(tmp_path):
+    """The face's grid starts at 40 x 12, a size no screen has: a line
+    submitted before the first frame lays the page out runs at that frame,
+    so neofetch as the first command has the T-Deck's 44 columns and
+    draws Moy beside its rows."""
+    from runtime.host_app import build_workstation
+    ws = build_workstation(str(tmp_path / "carts"))
+    app = ws.app("terminal")
+    app.open()
+    try:
+        run(app, "neofetch")
+        assert plain(app) == [""] and not app.face.busy()
+        app.draw(0)
+        settle(app)
+        assert app.face.size() == (44, 13)
+        shown = plain(app)
+        assert shown[0] == "$ neofetch", shown
+        board = next(ln for ln in shown if "Board: " in ln)
+        assert board.index("Board: ") == 18 and "\u2588" in board[:15], shown
+    finally:
+        app.close_session()
 
 
 def test_wait_reads_a_background_command_s_exit_code(term, tmp_path):

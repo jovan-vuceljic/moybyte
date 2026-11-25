@@ -140,7 +140,8 @@ int moy_sh_face_draw(moy_sh_face_t *f, moy_ui_ctx_t *c, const moy_ui_sink_t *s,
 // The line and its caret (a column in bytes), and setting them.
 const char *moy_sh_face_line(const moy_sh_face_t *f, int32_t *col);
 void moy_sh_face_set_line(moy_sh_face_t *f, const char *text, int32_t col);
-// Enter and Tab on the line as it stands.
+// Enter and Tab on the line as it stands. Before the face's first frame has
+// sized its grid the line waits, and that frame runs it.
 void moy_sh_face_submit(moy_sh_face_t *f);
 // Whether a run of the session is parked (one that ended is settled first).
 int moy_sh_face_busy(moy_sh_face_t *f);

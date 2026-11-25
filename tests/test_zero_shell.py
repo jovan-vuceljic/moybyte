@@ -90,10 +90,21 @@ def test_passwd_crosses_the_door_and_serves_without_a_lease(zero):
 def test_what_only_a_console_answers_is_handed_back(zero):
     door, io, _, _ = zero
     for fields in (("role", "j1", "settings", "list"), ("role", "j1", "python"),
-                   ("lookup", "hello"), ("kill", "1", "15"), ("read", "/proc/console"),
+                   ("lookup", "hello"), ("kill", "1", "15"), ("read", "/proc/kernel"),
                    ("list", "/dev"), ("spawn", "0", "hello")):
         assert cross(door, *fields) == zero_shell.NEEDS_VM, fields
     assert door(0, 3, b"") == zero_shell.ABSENT
+
+
+def test_proc_console_names_the_board_for_neofetch(zero, monkeypatch):
+    """neofetch's title and its Board and Firmware rows: the mDNS name, the
+    board's name by its OTA id and the image's label."""
+    import moy_ota
+    monkeypatch.setattr(moy_ota, "BOARD", "c3_zero")
+    monkeypatch.setattr(moy_ota, "FIRMWARE_LABEL", "beta 2026-11-25 18:06")
+    door, _, _, _ = zero
+    assert cross(door, "read", "/proc/console") == (
+        b"name: pocket-zero\nboard: ESP32-C3 Zero\nfirmware: beta 2026-11-25 18:06\n")
 
 
 def test_the_board_s_own_figures(zero, tmp_path):
