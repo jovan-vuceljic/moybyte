@@ -21,6 +21,7 @@
 // goes or WAIT_MS passed, and its answer is sent then: the page holds one
 // write in flight a handle, so a cart sees BUSY until the board has written.
 
+#include "moy_link.h"            // the board's MOY_NET_LIVE and MOY_NET_LINK
 #include "moy_live.h"
 
 #if defined(MOY_NET_LIVE) && MOY_NET_LIVE && defined(MOY_NET_LINK) && MOY_NET_LINK
@@ -50,7 +51,7 @@ typedef struct {
     uint16_t wn;                // a write waiting (bytes), 0: none
     uint32_t since;
     uint8_t w[WAIT_MAX];
-} dev_t;
+} relay_row_t;
 
 typedef struct {
     moy_evq_ev_t ev;
@@ -58,7 +59,7 @@ typedef struct {
 } event_t;
 
 typedef struct {
-    dev_t d[DEVS];
+    relay_row_t d[DEVS];
     event_t evs[EVENTS];
 } devs_t;
 
@@ -78,7 +79,7 @@ static void put32(uint8_t *p, int32_t v) {
 
 // The gets of list `l` (comma-separated, up to its ':' or end) of handle `d`,
 // each 4 bytes into `out`: how many bytes.
-static size_t gets(const dev_t *d, const char *l, uint8_t *out) {
+static size_t read_gets(const relay_row_t *d, const char *l, uint8_t *out) {
     size_t n = 0;
     while (*l && *l != ':') {
         const char *e = l;
@@ -92,12 +93,12 @@ static size_t gets(const dev_t *d, const char *l, uint8_t *out) {
     return n;
 }
 
-static const char *state_list(const dev_t *d) {
+static const char *state_list(const relay_row_t *d) {
     const char *s = strchr(d->relay, ':');
     return s != NULL ? s + 1 : "";
 }
 
-static int answer(const dev_t *d, uint8_t id, char verb, int32_t rc) {
+static int answer(const relay_row_t *d, uint8_t id, char verb, int32_t rc) {
     size_t cap;
     uint8_t *o = moy_live_out(&cap);
     o[0] = 'd';
@@ -112,10 +113,10 @@ static int answer(const dev_t *d, uint8_t id, char verb, int32_t rc) {
         return 0;
     }
     o[1] = 'G';
-    return moy_live_say(3 + gets(d, state_list(d), o + 3));
+    return moy_live_say(3 + read_gets(d, state_list(d), o + 3));
 }
 
-static dev_t *row(uint8_t id) {
+static relay_row_t *row(uint8_t id) {
     for (int i = 0; D.t != NULL && i < DEVS; i++) {
         if (D.t->d[i].h > 0 && D.t->d[i].id == id) {
             return &D.t->d[i];
@@ -124,7 +125,7 @@ static dev_t *row(uint8_t id) {
     return NULL;
 }
 
-static void close_dev(dev_t *d) {
+static void close_dev(relay_row_t *d) {
     moy_dev_close(D.pid, d->h);
     moy_evq_listen(D.pid, d->kind, false);
     d->h = 0;
@@ -164,7 +165,7 @@ static int open_dev(uint8_t id, const uint8_t *p, size_t n) {
     if (session() < 0) {
         return answer(NULL, id, 'O', MOY_DEV_ENOMEM);
     }
-    dev_t *d = row(id);
+    relay_row_t *d = row(id);
     if (d != NULL) {
         close_dev(d);
     }
@@ -191,7 +192,7 @@ static int open_dev(uint8_t id, const uint8_t *p, size_t n) {
     return answer(d, id, 'O', 0);
 }
 
-static int write_dev(dev_t *d, const uint8_t *p, size_t n) {
+static int write_dev(relay_row_t *d, const uint8_t *p, size_t n) {
     if (d->wn) {
         return answer(d, d->id, 'W', MOY_DEV_EBUSY);
     }
@@ -215,7 +216,7 @@ int moy_live_dev_message(const uint8_t *p, size_t n) {
     if (p[1] == 'O') {
         return open_dev(id, p + 3, n - 3);
     }
-    dev_t *d = row(id);
+    relay_row_t *d = row(id);
     switch (p[1]) {
         case 'C':
             if (d != NULL) {
@@ -233,7 +234,7 @@ int moy_live_dev_message(const uint8_t *p, size_t n) {
 }
 
 // Handle `d`'s records, to the page.
-static int reads(dev_t *d) {
+static int reads(relay_row_t *d) {
     size_t cap;
     uint8_t *o = moy_live_out(&cap);
     size_t np = d->relay[0] != ':' && d->relay[0] != 0;     // the packet gets
@@ -249,7 +250,7 @@ static int reads(dev_t *d) {
         o[0] = 'd';
         o[1] = 'R';
         o[2] = d->id;
-        gets(d, d->relay, o + 3);
+        read_gets(d, d->relay, o + 3);
         if (moy_live_say(at + (size_t)r) < 0) {
             return -1;
         }
@@ -264,7 +265,7 @@ int moy_live_dev_pump(void) {
     }
     int open = 0;
     for (int i = 0; i < DEVS; i++) {
-        dev_t *d = &D.t->d[i];
+        relay_row_t *d = &D.t->d[i];
         if (d->h <= 0 || !d->wn) {
             continue;
         }
@@ -284,7 +285,7 @@ int moy_live_dev_pump(void) {
         ne++;
     }
     for (int i = 0; i < DEVS; i++) {
-        dev_t *d = &D.t->d[i];
+        relay_row_t *d = &D.t->d[i];
         if (d->h > 0) {
             open++;
             if (reads(d) < 0) {
@@ -297,12 +298,12 @@ int moy_live_dev_pump(void) {
         size_t cap;
         uint8_t *o = moy_live_out(&cap);
         for (int i = 0; i < DEVS; i++) {
-            dev_t *d = &D.t->d[i];
+            relay_row_t *d = &D.t->d[i];
             if (d->h > 0 && strcmp(d->kind, ev->ev.name) == 0) {
                 o[0] = 'd';
                 o[1] = 'G';
                 o[2] = d->id;
-                if (moy_live_say(3 + gets(d, state_list(d), o + 3)) < 0) {
+                if (moy_live_say(3 + read_gets(d, state_list(d), o + 3)) < 0) {
                     return -1;
                 }
             }
