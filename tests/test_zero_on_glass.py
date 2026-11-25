@@ -49,7 +49,8 @@ WHAT A PERSON DOES WITH IT, past setup:
     corrupts nothing;
   the update screen saying what the channel offers, installing nothing;
   a cart and a setting surviving a reset, the open page reconnecting across
-    one, a second browser displacing the first (owner, 2026-11-25);
+    one and across a Wi-Fi drop (an Improv join to a network that is not
+    there), a second browser displacing the first (owner, 2026-11-25);
   the mDNS name and the clock;
   and last, a soak of all of it whose internal RAM must not keep falling.
 The board's internal RAM is printed where a test is about it: free from
@@ -1406,19 +1407,19 @@ WATCH = """(function () {
 })()"""
 
 
-@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
-def test_the_page_reconnects_after_the_board_reboots(zero, mirror, ssh, tmp_path):
-    """The page open and signed in with a game running, the board resets:
-    the page comes back to live without loading again, its console as it
-    was (the game still running), its live socket open again, and a cart
-    imported after the reboot reaches the board."""
+def _across(zero, ssh, tmp_path, stem, go_away):
+    """The page open and signed in with a game running, `go_away()` takes
+    the board from it: the page comes back to live without loading again,
+    its console as it was (the game still running), its live socket open
+    again, and a cart imported after it reaches the board. What the page
+    said meanwhile, and its state before and after."""
     title = "Brick Siege"
-    archive, folder, content = _bench_cart(tmp_path, "after", "Zero Bench After")
+    archive, folder, content = _bench_cart(tmp_path, stem, "Zero Bench %s" % stem.title())
     done = []
 
     def on_line(line):
         if '"READY"' in line and not done:
-            done.append(zero.restart())
+            done.append(go_away())
 
     steps = sign_in(zero) + [
         {"js": "WORKER.postMessage({t: 'open', cart: %s}), 1" % json.dumps(folder_of_title(title))},
@@ -1430,22 +1431,55 @@ def test_the_page_reconnects_after_the_board_reboots(zero, mirror, ssh, tmp_path
         {"js": "'WATCH ' + JSON.stringify(window.__moyWatch)"},
     ] + _import_steps("IMPORTED")
     try:
-        out = _browse(zero, zero.url, steps, tmp_path / "re", query="?dev=1&desktop=1",
+        out = _browse(zero, zero.url, steps, tmp_path / stem, query="?dev=1&desktop=1",
                       env={"MOY_UPLOAD": str(archive)}, on_line=on_line, check=False)
         before, after = _tagged(out, "BEFORE"), _tagged(out, "AFTER")
         watch = _tagged(out, "WATCH")
-        print("%s: across the reboot the page said %s; before %s; after %s"
-              % (zero.name, watch and watch["s"], before, after))
-        assert done, "the board was not reset (the page never got READY):\n" + out[-1500:]
+        print("%s: %s: the page said %s; before %s; after %s"
+              % (zero.name, stem, watch and watch["s"], before, after))
+        assert done, "the board was not taken away (the page never got READY):\n" + out[-1500:]
         assert "STEP FAILED" not in out, out[-2500:]
         assert watch and not watch["unload"], "the page loaded again"
         assert after["cart"] == before["cart"] == title and after["stack"] == before["stack"], \
             "the console is not as it was: %s -> %s" % (before, after)
         assert (after["live"] or {}).get("opens", 0) > (before["live"] or {}).get("opens", 0), \
             "the live socket did not open again: %s -> %s" % (before["live"], after["live"])
-        assert not _differs(ssh, folder, content), "the cart imported after the reboot"
+        assert not _differs(ssh, folder, content), "the cart imported after it"
+        return done[0], watch
     finally:
         _remove(ssh, folder)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_the_page_reconnects_after_the_board_reboots(zero, mirror, ssh, tmp_path):
+    """The board resets under an open page (_across)."""
+    _across(zero, ssh, tmp_path, "reboot", zero.restart)
+
+
+# A network no bench has: an Improv join to it drops the board's station
+# until the join gives up and the board goes back onto its saved network
+# (zero_host's ZeroBoard.join, about 15 s).
+NOWHERE = ("moy-bench-nowhere", "nowhere-at-all")
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_the_page_reconnects_after_the_board_s_wifi_drops(zero, mirror, ssh, tmp_path):
+    """The board's Wi-Fi drops under an open page and comes back, the board
+    not reset (_across): over the cable, an Improv join to a network that is
+    not there, which the board refuses and then rejoins its own. The page
+    said it lost the board meanwhile, and the board serves where it served."""
+    def drop():
+        st, _urls, secs, err = Z.Improv(zero.b.ser).join(*NOWHERE, timeout=120.0)
+        return st, secs, err
+
+    (st, secs, err), watch = _across(zero, ssh, tmp_path, "wifidrop", drop)
+    print("%s: the station was gone for the join's %.1f s (Improv error %r, state %r)"
+          % (zero.name, secs, err, st))
+    assert err == 0x03, "the join to %r answered error %r, not UNABLE" % (NOWHERE[0], err)
+    assert any(s != "live" for _t, s in watch["s"]), \
+        "the page never said it lost the board: %s" % watch["s"]
+    rc, out, _e = ssh.run("date")
+    assert rc == 0, "SSH at %s after the drop: %r" % (zero.url, out)
 
 
 def folder_of_title(title):
