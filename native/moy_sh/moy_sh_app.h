@@ -32,8 +32,8 @@
 //
 // ITS MEMORY is the host table's `alloc` (PSRAM on a board): the front, the
 // app's record and its screen at the open, given back at the end; a key or a
-// tick allocates nothing but what the app itself asks (an edit's growth, a
-// save's copy, top's row fetch).
+// tick allocates nothing but what the app itself asks (an edit's blocks,
+// top's row fetch).
 
 #ifndef MOY_SH_APP_H
 #define MOY_SH_APP_H

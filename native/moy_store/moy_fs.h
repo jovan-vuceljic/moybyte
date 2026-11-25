@@ -63,6 +63,17 @@ int moy_fs_rename(const char *src, const char *dst);
 // (another save of the same file between the two, or a reader that dropped
 // it as stale).
 int moy_fs_publish(const char *path, const char *data, size_t n);
+// moy_fs_publish of a text that is not one buffer (the shell's editor holds
+// its text in blocks): the same three writes, byte for byte, the stamp taken
+// a piece at a time. `next` gives the next piece (its bytes at *p, its length;
+// 0 after the last, so no piece is empty) and `rewind` starts it over, as the
+// save passes over the text three times: the stamp, the backup and the file.
+// moy_fs_publish is this over its one buffer.
+typedef struct moy_fs_src {
+    size_t (*next)(struct moy_fs_src *s, const char **p);
+    void (*rewind)(struct moy_fs_src *s);
+} moy_fs_src_t;
+int moy_fs_publish_from(const char *path, moy_fs_src_t *src);
 int moy_fs_publish_bak(const char *path, const char *data, size_t n);
 int moy_fs_publish_mark(const char *path, const char *data, size_t n);
 int moy_fs_read(const char *path, const char *at, moy_buf_t *out);
@@ -70,6 +81,23 @@ int moy_fs_read(const char *path, const char *at, moy_buf_t *out);
 // (moy_vol_enter), or by `name` (a path) when `here` is NULL.
 int moy_fs_read_in(const char *path, moy_vol_here_t *here, const char *name,
                    moy_buf_t *out);
+// moy_fs_read with the text read straight into the caller's memory, a piece
+// at a time, and no buffer of the store's that holds it: the same answers,
+// the same heals and the same files left, for a reader that cannot spare a
+// second copy of a file (the shell's editor, native/moy_sh/moy_sh_edit.c).
+// `begin` is told how many bytes come (0, or an errno value the read stops
+// with); then `room` lends memory for the next bytes (NULL: none, the read
+// stops with MOY_ENOMEM) and `took` says how many were read into it, which
+// may be none. A torn publish the read finishes from its backup calls
+// `begin` again, and the backup's text follows. A refusal of the sink's is
+// answered as it is, never taken for a file that cannot be read; after any
+// error what the sink holds is not the file's.
+typedef struct moy_fs_sink {
+    int (*begin)(struct moy_fs_sink *k, size_t n);
+    char *(*room)(struct moy_fs_sink *k, size_t *n);
+    void (*took)(struct moy_fs_sink *k, size_t n);
+} moy_fs_sink_t;
+int moy_fs_read_into(const char *path, moy_fs_sink_t *k);
 int moy_fs_read_stamped(const char *path, moy_buf_t *out);
 int moy_fs_bak_stamp(const char *path, uint32_t *chars, uint32_t *crc);
 int moy_fs_claim(const char *path, const char *dest, uint32_t chars,
