@@ -340,8 +340,9 @@ def frames(config, surface, script, carts_dir=None):
     if not isinstance(surface, Surface):
         surface = Surface(surface)
     # the console's system store (settings, consent) lies beside the carts:
-    # a run of its own, never a neighbour's
-    carts_dir = str(carts_dir or os.path.join(tempfile.mkdtemp(prefix="uitree_parity_"), "carts"))
+    # a run of its own, never a neighbour's, and given back when it ends
+    own = None if carts_dir else tempfile.mkdtemp(prefix="uitree_parity_")
+    carts_dir = str(carts_dir or os.path.join(own, "carts"))
     if surface.prepare is not None:
         os.makedirs(carts_dir, exist_ok=True)
         surface.prepare(carts_dir)
@@ -374,6 +375,9 @@ def frames(config, surface, script, carts_dir=None):
         from runtime import scheduler
         scheduler.SCHED.reset()
         g._ui().theme_uninstall()
+        if own is not None:
+            import shutil
+            shutil.rmtree(own, ignore_errors=True)
     return out
 
 
