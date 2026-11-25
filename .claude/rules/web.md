@@ -540,11 +540,11 @@ nor those docs will warn you about:
   outlasted the game's depth over them; a dry sink plays silence and
   counts it (`__moyState().sink`: `under`, `dry`, `gap`, `dup`, `over`),
   and its longest wait between chunks (`lull`) stands beside the worker
-  loop's longest frame, step, collect, send and count (`__moyState().loop`),
-  each with the play time it ended at, so an underrun names the side that
-  stalled; `tests/test_web_audio_stream_e2e.py` plays a live station a
-  minute on both sinks. The loop's own collect waits for a stream to end
-  (`worker.js`, IDLE_QUIET_FRAMES): what a playing frame allocates the VM's
-  threshold collects, and a pause the worker added would come out of the
-  sink's lead.
+  loop's longest frame, step, collect, sweep, send and count
+  (`__moyState().loop`), each with the play time it ended at, so an
+  underrun names the side that stalled; `tests/test_web_audio_stream_e2e.py`
+  plays a live station a minute on both sinks. The loop's own collect waits
+  for a stream to end (`worker.js`, IDLE_QUIET_FRAMES): what a playing frame
+  allocates the VM's threshold collects, and a pause the worker added would
+  come out of the sink's lead.
 

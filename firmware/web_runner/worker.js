@@ -283,8 +283,9 @@ function sinkHeard(s) {
 // chunk), for `__moyState().loop`, each in ms with the sink's play time in s
 // (`played` as this worker last heard it) when it ended: `frame` between two
 // frames, `step` one step of the console (a collection the VM's allocation
-// triggers lands in it), `gc` the loop's own collect, `ship` between two
-// chunks sent to the sink, `heard` between two of the sink's counts arriving.
+// triggers lands in it), `gc` the loop's own collect, `sweep` the store's
+// sweep (syncPump), `ship` between two chunks sent to the sink, `heard`
+// between two of the sink's counts arriving.
 // Set against the sink's `lull` they say which side a stall was on.
 let LOOP = null;
 const waitFrom = { frame: 0, ship: 0, heard: 0 };
@@ -310,7 +311,7 @@ function shipPCM() {
     new Uint8Array(b.buffer).set(heap.subarray(pa, pa + 2 * n));
     const c = { p: b, at: at, fresh: fresh }, now = performance.now();
     if (fresh) LOOP = { frame: 0, frameAt: 0, step: 0, stepAt: 0, gc: 0, gcAt: 0,
-                          ship: 0, shipAt: 0, heard: 0, heardAt: 0 };
+                          sweep: 0, sweepAt: 0, ship: 0, shipAt: 0, heard: 0, heardAt: 0 };
     else if (LOOP) longest("ship", now - waitFrom.ship);
     waitFrom.ship = now;
     if (sink === "page") self.postMessage(Object.assign({ t: "pcm" }, c), [b.buffer]);
@@ -2505,6 +2506,7 @@ function syncPump() {
     }
     let body = "";
     try { body = syncPoll(); } catch (e) { return; }
+    if (LOOP) longest("sweep", performance.now() - now);
     if (!body) { heartbeat(now); return; }
     outstanding = true;
     syncBusy = true;
