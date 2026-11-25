@@ -686,9 +686,9 @@ def test_name_shows_on_custom_only_and_keeps_it_by_keys(tmp_path, kw):
     _frame(ws)
     assert _rows(app)[-2:] == ["name_ask", "edit"]
     _name(ws, app)
-    _type(ws, app, "BubbleGum!")                # capitals and ! are not the grammar
-    assert app.name_text == "ubbleum"
-    _type(ws, app, [8] * 7 + list("bubblegum"))
+    _type(ws, app, "Bubble Gum!")               # a capital folds, a space is a -, ! never lands
+    assert app.name_text == "bubble-gum"
+    _type(ws, app, [8] * 10 + list("bubblegum"))
     assert app.name_text == "bubblegum"
     _type(ws, app, [13])
     assert not app.naming and not ws.input.text_mode

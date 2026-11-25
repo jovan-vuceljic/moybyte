@@ -574,9 +574,15 @@ class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build)
 
     @staticmethod
     def name_ok(text):
-        """The name grammar's characters (§3), a letter or a digit first."""
+        """`text` in the name grammar's characters (§3), a letter or a digit
+        first: a capital typed is its small letter and a space a -, so what
+        is typed reads as typed; anything else never lands."""
         out = ""
         for c in text:
+            if "A" <= c <= "Z":
+                c = chr(ord(c) + 32)
+            elif c == " ":
+                c = "-"
             if "a" <= c <= "z" or "0" <= c <= "9" or (c in "_-" and out):
                 out += c
         return out
