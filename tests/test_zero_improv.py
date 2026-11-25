@@ -65,7 +65,7 @@ def strings(data):
 class Board:
     def __init__(self, ip=None, joins=True, claim=CLAIM):
         self._ip, self.joins, self.claim = ip, joins, claim
-        self.saved, self.named = [], "moybyte-zero"
+        self.saved, self.named, self.minted = [], "moybyte-zero", 0
 
     def info(self):
         return "v0.16-beta.3", "ESP32-S3"
@@ -93,7 +93,10 @@ class Board:
     def ip(self):
         return self._ip
 
-    def address(self):
+    def address(self, fresh=False):
+        if fresh:
+            self.minted += 1
+            return BOARD_ID, "%032x" % self.minted
         return BOARD_ID, self.claim
 
 
@@ -143,6 +146,33 @@ def test_a_board_with_a_password_answers_its_id_and_no_claim(lib):
     got = ask(lib, imp, cable, zi.CURRENT)
     assert strings(got[2][1])[1] == ["http://10.0.0.9/#id=" + BOARD_ID,
                                      "http://moybyte-zero.local/#id=" + BOARD_ID]
+
+
+def test_the_cable_s_claim_is_fresh_each_time_and_comes_with_a_password_too(lib):
+    """0xF0 (My consoles' "Manage by cable"): the address with a new claim,
+    which may replace the password, while the board serves; none before."""
+    cable = Cable(lib)
+    board = Board(ip="10.0.0.9", claim="")
+    imp = zi.Improv(cable, board, serving=True)
+    got = ask(lib, imp, cable, zi.CLAIM)
+    assert got[0] == (zi.ERROR, b"\x00")
+    assert strings(got[1][1]) == (zi.CLAIM, ["http://10.0.0.9/#id=%s&claim=%032x" % (BOARD_ID, 1),
+                                             "http://moybyte-zero.local/#id=%s&claim=%032x"
+                                             % (BOARD_ID, 1)])
+    assert strings(ask(lib, imp, cable, zi.CLAIM)[1][1])[1][0].endswith("claim=%032x" % 2)
+    assert "claim" not in strings(ask(lib, imp, cable, zi.CURRENT)[2][1])[1][0]
+    early = zi.Improv(cable, Board(), serving=False)
+    assert ask(lib, early, cable, zi.CLAIM) == [(zi.ERROR, b"\x00"), (zi.RESULT, bytes([zi.CLAIM, 0]))]
+
+
+def test_a_board_on_a_network_joins_another_and_answers_its_new_address(lib):
+    cable = Cable(lib)
+    board = Board(ip="10.0.0.9", claim="")
+    imp = zi.Improv(cable, board, serving=True)
+    got = ask(lib, imp, cable, zi.WIFI, wifi(b"office", b"other password"))
+    assert got[:3] == [(zi.ERROR, b"\x00"), (zi.STATE, b"\x03"), (zi.STATE, b"\x04")]
+    assert strings(got[3][1])[1][0] == "http://192.168.1.57/#id=" + BOARD_ID
+    assert board.saved == [("office", "other password")]
 
 
 def test_a_join_from_the_access_point_is_answered_once_the_board_serves(lib):

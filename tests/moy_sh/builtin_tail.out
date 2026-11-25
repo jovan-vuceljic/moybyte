@@ -14,4 +14,11 @@ $ tail -1c j; echo
 y
 $ tail -c 3 n
 12
+$ tail -2 n
+11
+12
+$ printf 'a\nb\nc' > m
+$ tail -n 2 m; echo
+b
+c
 [exit 0]

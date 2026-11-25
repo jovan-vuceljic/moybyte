@@ -112,8 +112,8 @@ def test_the_packed_roster_is_much_smaller_than_the_plain_one():
 def test_the_zero_images_carry_the_roster_their_board_names():
     """A Zero's image carries the carts board.toml's `[roster] image` names,
     which its build passes to the generator: the XIAO's the core, every app,
-    five games and Pin Light, the C3's the core alone, and a new C3 store gets
-    Pin Light alone (2026-11-18): the rest of its room is the kid's."""
+    five games and Pin Light, the C3's the core alone, and the C3's store gets
+    the apps and Brick Siege at flash time, with no Pin Light (2026-11-24)."""
     from runtime import moy_seed
     c3 = os.path.join(os.path.dirname(ZERO), "esp32c3_zero")
     for zero in (ZERO, c3):
@@ -130,7 +130,9 @@ def test_the_zero_images_carry_the_roster_their_board_names():
     assert "moybyte.notes" in xiao and "moybyte.star_catcher" in xiao
     assert "moybyte.pin_light" in xiao
     assert board_config.roster_install(ZERO) == ()
-    assert board_config.roster_install(c3) == ("moybyte.pin_light",)
+    assert board_config.roster_install(c3) == (
+        "moybyte.terminal", "moybyte.notes", "moybyte.calc", "moybyte.music",
+        "moybyte.my_art", "moybyte.brick_siege")
 
 
 def test_no_image_nor_browser_bundle_carries_a_test_fixture():

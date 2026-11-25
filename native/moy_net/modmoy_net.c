@@ -822,13 +822,18 @@ static mp_obj_t mod_web_auth(mp_obj_t system) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mod_web_auth_obj, mod_web_auth);
 
-// web_claim() -> this boot's claim (32 hex digits), "" once a password is set.
-static mp_obj_t mod_web_claim(void) {
+// web_claim(fresh=False) -> the board's claim (32 hex digits), "" once a
+// password is set; fresh: a new one, which may replace a password.
+static mp_obj_t mod_web_claim(size_t n_args, const mp_obj_t *args) {
     char c[33];
-    moy_web_claim(c);
+    if (n_args > 0 && mp_obj_is_true(args[0])) {
+        moy_web_claim_new(c);
+    } else {
+        moy_web_claim(c);
+    }
     return mp_obj_new_str(c, strlen(c));
 }
-static MP_DEFINE_CONST_FUN_OBJ_0(mod_web_claim_obj, mod_web_claim);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_web_claim_obj, 0, 1, mod_web_claim);
 
 // web_keys() -> [(kid, created, seen, name)], the paired browsers.
 static mp_obj_t mod_web_keys(void) {
@@ -981,6 +986,24 @@ static mp_obj_t mod_ota_verify(size_t n_args, const mp_obj_t *args) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_ota_verify_obj, 2, 3, mod_ota_verify);
 
+// ota_verify_digest(digest, sig_hex, keys=None) -> whether a key signed the
+// payload whose SHA-256 is `digest`.
+static mp_obj_t mod_ota_verify_digest(size_t n_args, const mp_obj_t *args) {
+    mp_buffer_info_t d;
+    mp_get_buffer_raise(args[0], &d, MP_BUFFER_READ);
+    if (d.len != 32 || args[1] == mp_const_none || !mp_obj_is_str(args[1])) {
+        return mp_const_false;
+    }
+    moy_ota_key_t *keys = m_new(moy_ota_key_t, KEYS_MAX);
+    int nk = keys_of(n_args > 2 ? args[2] : mp_const_none, keys, KEYS_MAX);
+    size_t sn;
+    const char *s = mp_obj_str_get_data(args[1], &sn);
+    int ok = nk == 0 ? 0 : moy_ota_verify_digest(d.buf, s, sn, nk < 0 ? NULL : keys, nk);
+    m_del(moy_ota_key_t, keys, KEYS_MAX);
+    return mp_obj_new_bool(ok);
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_ota_verify_digest_obj, 2, 3, mod_ota_verify_digest);
+
 // ota_judge(text, board, require_sig, keys=None) -> None, or why it is refused.
 static mp_obj_t mod_ota_judge(size_t n_args, const mp_obj_t *args) {
     size_t n;
@@ -1089,11 +1112,17 @@ static mp_obj_t mod_ota_c6_version(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_ota_c6_version_obj, mod_ota_c6_version);
 
-// http_open(url, agent) -> (handle, status, content_length); OSError(errno).
-static mp_obj_t mod_http_open(mp_obj_t url, mp_obj_t agent) {
+// http_open(url, agent, start=None, n=None) -> (handle, status, content_length);
+// OSError(errno). With `start` and `n`, the `n` bytes from `start` asked for
+// (moy_httpc_open_range): 206 when the server honours it.
+static mp_obj_t mod_http_open(size_t n_args, const mp_obj_t *args) {
     int status = 0;
     uint32_t clen = 0;
-    int h = moy_httpc_open(mp_obj_str_get_str(url), mp_obj_str_get_str(agent), &status, &clen);
+    const char *url = mp_obj_str_get_str(args[0]), *agent = mp_obj_str_get_str(args[1]);
+    int h = n_args > 3 && args[2] != mp_const_none
+            ? moy_httpc_open_range(url, agent, (uint32_t)mp_obj_get_int_truncated(args[2]),
+                                   (uint32_t)mp_obj_get_int_truncated(args[3]), &status, &clen)
+            : moy_httpc_open(url, agent, &status, &clen);
     if (h < 0) {
         mp_raise_OSError(-h);
     }
@@ -1101,7 +1130,7 @@ static mp_obj_t mod_http_open(mp_obj_t url, mp_obj_t agent) {
                      mp_obj_new_int_from_uint(clen)};
     return mp_obj_new_tuple(3, o);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mod_http_open_obj, mod_http_open);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_http_open_obj, 2, 4, mod_http_open);
 
 static mp_obj_t mod_http_readinto(mp_obj_t h, mp_obj_t buf) {
     mp_buffer_info_t b;
@@ -1161,6 +1190,7 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_wc_url), MP_ROM_PTR(&mod_wc_url_obj)},
     {MP_ROM_QSTR(MP_QSTR_ota_keys), MP_ROM_PTR(&mod_ota_keys_obj)},
     {MP_ROM_QSTR(MP_QSTR_ota_verify), MP_ROM_PTR(&mod_ota_verify_obj)},
+    {MP_ROM_QSTR(MP_QSTR_ota_verify_digest), MP_ROM_PTR(&mod_ota_verify_digest_obj)},
     {MP_ROM_QSTR(MP_QSTR_ota_judge), MP_ROM_PTR(&mod_ota_judge_obj)},
     {MP_ROM_QSTR(MP_QSTR_ota_canonical), MP_ROM_PTR(&mod_ota_canonical_obj)},
     {MP_ROM_QSTR(MP_QSTR_ota_canonical_c6), MP_ROM_PTR(&mod_ota_canonical_c6_obj)},

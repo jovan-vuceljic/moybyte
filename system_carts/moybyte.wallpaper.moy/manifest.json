@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 1,
+  "version": 2,
   "title": "Wallpaper",
   "id": "moybyte.wallpaper",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "The desktop's wallpaper. Make a drawing your wallpaper in Paint or My Art and a copy of it shows here.",
   "moybyte": {
     "type": "wallpaper",
     "system": true,

@@ -727,8 +727,8 @@ def run(wifi_store, zero_store, system_dir, port=SETUP_PORT, sleep_ms=10, improv
     driver's provisioning mode, the station beside it up for the form's scans.
     `improv` (zero_improv.Improv) answers the cable meanwhile; a network it
     joins ends the access point and returns the station's IP, the board
-    serving from there without a reset, since this boot's claim lives in its
-    RAM (zero_improv's module docstring)."""
+    serving from there without a reset, so the client waiting on the cable
+    hears its answer (zero_improv's module docstring)."""
     import machine
     import time
 

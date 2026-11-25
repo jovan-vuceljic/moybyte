@@ -117,10 +117,10 @@ SHELL_NAMES = (
     ".", ":", "[", "alias", "basename", "bg", "break", "cat", "cd", "chdir", "clear",
     "command", "continue", "cp", "date", "df", "dirname", "dmesg", "echo", "edit", "eval", "exec",
     "exit", "export", "false", "fg", "free", "getopts", "grep", "hash", "head",
-    "help", "jobs", "kill", "local", "log", "ls", "mkdir", "mv", "neofetch", "printf", "ps",
-    "pwd", "read", "readonly", "reboot", "return", "rm", "rmdir", "set", "sh",
+    "help", "jobs", "kill", "less", "local", "log", "ls", "mkdir", "more", "mv", "neofetch",
+    "printf", "ps", "pwd", "read", "readonly", "reboot", "return", "rm", "rmdir", "set", "sh",
     "shift", "sleep", "tail", "test", "top", "touch", "trap", "true", "type", "umask",
-    "unalias", "uname", "unset", "wait", "wc",
+    "unalias", "uname", "unset", "vi", "view", "vim", "wait", "wc",
     # the role commands (runtime/shell/sh_roles.py)
     "at", "ble", "cron", "http", "lease", "lora", "media", "mic", "midi", "notify",
     "passwd", "perm", "pkg", "python", "service", "settings", "snd", "usb",

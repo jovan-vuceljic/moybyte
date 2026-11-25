@@ -23,6 +23,7 @@
 
 #include "moy_sh_int.h"
 #include "../moy_kernel/moy_proc_exit.h"
+#include "moy_fs.h"
 #include "moy_vol.h"
 
 #define CMD_BUF 4096
@@ -81,6 +82,11 @@ static void vol_here(void *arg) {
             case MOY_SH_V_RMDIR:
             case MOY_SH_V_REMOVE:
                 r = moy_vol_remove(&v, rest);
+                if (r == 0 && op == MOY_SH_V_REMOVE) {
+                    // a crash-safe save's backup (edit's, vi's) would read the
+                    // file back at its next open
+                    moy_fs_forget_bak(p);
+                }
                 break;
             case MOY_SH_V_RENAME: {
                 if (q == NULL) {
@@ -93,6 +99,9 @@ static void vol_here(void *arg) {
                 }
                 if (r == 0) {
                     r = moy_vol_rename(&v, rest, rest2);
+                }
+                if (r == 0) {
+                    moy_fs_forget_bak(p);   // the backup does not follow it
                 }
                 break;
             }
@@ -522,6 +531,21 @@ static int lines_opt(void) {
     return n;
 }
 
+// `-N`, the old spelling of `-n N`, which POSIX dropped and every Linux head
+// and tail still take: N, or -1 when argv[1] is not one.
+static int old_count(char **argv) {
+    const char *a = argv[1];
+    if (a == NULL || a[0] != '-' || a[1] < '0' || a[1] > '9') {
+        return -1;
+    }
+    for (const char *e = a + 1; *e; e++) {
+        if (*e < '0' || *e > '9') {
+            return -1;
+        }
+    }
+    return atoi(a + 1);
+}
+
 static int head_one(int fd, const char *name, void *arg) {
     int left = *(int *)arg;
     char buf[512];
@@ -544,13 +568,52 @@ static int head_one(int fd, const char *name, void *arg) {
 
 static int headcmd(int argc, char **argv) {
     (void)argc;
-    (void)argv;
-    int n = lines_opt();
+    int n = old_count(argv);
+    if (n >= 0) {
+        return each_input(argv + 2, head_one, &n);
+    }
+    n = lines_opt();
     return each_input(argptr, head_one, &n);
+}
+
+// A file's last `want` lines, read in two passes and never copied into the
+// session's arena, which is 12 KB where there is no PSRAM (MOY_SH_ARENA, the
+// C3 Zero's SSH face) while the open already holds the file. -1 for what
+// does not seek (a pipe), which tail_one copies whole.
+static int tail_seek(int fd, int want) {
+    if (lseek(fd, 0, SEEK_END) < 0 || lseek(fd, 0, SEEK_SET) < 0) {
+        return -1;
+    }
+    char buf[512];
+    long lines = 0;
+    int last_nl = 1;
+    ssize_t n;
+    while ((n = read(fd, buf, sizeof buf)) > 0) {
+        for (ssize_t i = 0; i < n; i++) {
+            lines += buf[i] == '\n';
+        }
+        last_nl = buf[n - 1] == '\n';
+    }
+    long total = lines + !last_nl;      // a last line with no newline counts
+    long skip = total > want ? total - want : 0, seen = 0;
+    lseek(fd, 0, SEEK_SET);
+    while ((n = read(fd, buf, sizeof buf)) > 0) {
+        ssize_t i = 0;
+        while (seen < skip && i < n) {
+            seen += buf[i++] == '\n';
+        }
+        if (seen >= skip && i < n) {
+            outmem(buf + i, (size_t)(n - i), out1);
+        }
+    }
+    return 0;
 }
 
 static int tail_one(int fd, const char *name, void *arg) {
     int want = *(int *)arg;
+    if (tail_seek(fd, want) == 0) {
+        return 0;
+    }
     char *text;
     size_t len = slurp(fd, &text);
     (void)name;
@@ -571,6 +634,16 @@ static int tail_one(int fd, const char *name, void *arg) {
 
 static int tail_bytes(int fd, const char *name, void *arg) {
     size_t want = (size_t)*(int *)arg;
+    off_t end = lseek(fd, 0, SEEK_END);
+    if (end >= 0) {                     // a file: its last bytes, read in place
+        char buf[512];
+        ssize_t n;
+        lseek(fd, (size_t)end > want ? end - (off_t)want : 0, SEEK_SET);
+        while ((n = read(fd, buf, sizeof buf)) > 0) {
+            outmem(buf, (size_t)n, out1);
+        }
+        return 0;
+    }
     char *text;
     size_t len = slurp(fd, &text);
     (void)name;
@@ -593,6 +666,10 @@ static int tailcmd(int argc, char **argv) {
             int n = atoi(a + 1);
             return each_input(argv + 2, tail_bytes, &n);
         }
+    }
+    int old = old_count(argv);
+    if (old >= 0) {
+        return each_input(argv + 2, tail_one, &old);
     }
     int n = 10, c, bytes = 0;
     while ((c = nextopt("n:c:")) != '\0') {
@@ -778,32 +855,79 @@ static int grep_has(const grep_t *g, const char *line, size_t n) {
     return 0;
 }
 
+// One line of grep's input, matched and, when it matches, printed.
+static void grep_line(grep_t *g, const char *name, const char *line, size_t n,
+                      unsigned long lineno, unsigned long *count) {
+    if (grep_has(g, line, n) == g->inv) {
+        return;
+    }
+    (*count)++;
+    g->matched = 1;
+    if (!g->count && !g->quiet) {
+        if (g->many) {
+            out1fmt("%s:", name);
+        }
+        if (g->num) {
+            out1fmt("%lu:", lineno);
+        }
+        outmem(line, n, out1);
+        outcslow('\n', out1);
+    }
+}
+
+// A line at a time, the input never copied into the session's arena, which
+// is 12 KB where there is no PSRAM (MOY_SH_ARENA, the C3 Zero's SSH face),
+// smaller than most logs. The line's buffer is the session heap's, GREP_LINE
+// to start, doubled for a longer line up to GREP_LINE_MAX (so one line never
+// takes the console's heap); a line longer than the buffer the heap could
+// give is matched and printed on its first bytes, and with no buffer at all
+// on GREP_SMALL of the stack.
+#define GREP_LINE 1024u
+#define GREP_LINE_MAX (64u * 1024u)
+#define GREP_SMALL 128u
 static int grep_one(int fd, const char *name, void *arg) {
     grep_t *g = arg;
-    char *text;
-    size_t len = slurp(fd, &text);
+    char buf[512], small[GREP_SMALL];
+    char *line = moy_sh_halloc(GREP_LINE);
+    size_t cap = GREP_LINE, ln = 0;
+    if (line == NULL) {
+        line = small;
+        cap = sizeof small;
+    }
+    int open_line = 0, full = line == small;   // full: this line grows no more
     unsigned long count = 0, lineno = 0;
-    for (size_t at = 0; at < len;) {
-        size_t end = at;
-        while (end < len && text[end] != '\n') {
-            end++;
-        }
-        lineno++;
-        if (grep_has(g, text + at, end - at) != g->inv) {
-            count++;
-            g->matched = 1;
-            if (!g->count && !g->quiet) {
-                if (g->many) {
-                    out1fmt("%s:", name);
-                }
-                if (g->num) {
-                    out1fmt("%lu:", lineno);
-                }
-                outmem(text + at, end - at, out1);
-                outcslow('\n', out1);
+    ssize_t n;
+    while ((n = read(fd, buf, sizeof buf)) > 0) {
+        for (ssize_t i = 0; i < n; i++) {
+            if (buf[i] == '\n') {
+                grep_line(g, name, line, ln, ++lineno, &count);
+                ln = 0;
+                open_line = 0;
+                full = line == small;
+                continue;
             }
+            if (ln == cap && !full) {
+                char *more = cap < GREP_LINE_MAX ? moy_sh_halloc(cap * 2u) : NULL;
+                if (more != NULL) {
+                    memcpy(more, line, ln);
+                    moy_sh_hfree(line);
+                    line = more;
+                    cap *= 2u;
+                } else {
+                    full = 1;
+                }
+            }
+            if (ln < cap) {
+                line[ln++] = buf[i];
+            }
+            open_line = 1;
         }
-        at = end + 1;
+    }
+    if (open_line) {
+        grep_line(g, name, line, ln, ++lineno, &count);
+    }
+    if (line != small) {
+        moy_sh_hfree(line);
     }
     if (g->count) {
         if (g->many) {
@@ -1007,6 +1131,11 @@ static int clearcmd(int argc, char **argv) {
 #include "esp_timer.h"
 #define MOY_SH_FETCH_CHIP 1
 #endif
+
+// The kernel's WiFi link and its address (native/moy_net/moy_net.h): weak,
+// so an image without moy_net, or a link not up, shows no IP row.
+int moy_net_link(uint32_t *ip);
+#pragma weak moy_net_link
 
 // The console's palette, its first sixteen the base colours (native/moy_ui's
 // generated tables): weak, NULL in an image without the toolkit (the Zero),
@@ -1316,6 +1445,15 @@ static int neofetchcmd(int argc, char **argv) {
     fetch_console(f, text, tn, "theme", "Theme", 11);
     v = fetch_add(f, "Shell", 12);
     snprintf(v, FETCH_VALUE, "moy_sh (dash)");
+    uint32_t ip = 0;                    // network order: the first octet lowest
+    if (moy_net_link != NULL && moy_net_link(&ip) && ip != 0) {
+        v = fetch_add(f, "IP", 2);
+        if (v != NULL) {
+            snprintf(v, FETCH_VALUE, "%u.%u.%u.%u", (unsigned)(ip & 0xFF),
+                     (unsigned)((ip >> 8) & 0xFF), (unsigned)((ip >> 16) & 0xFF),
+                     (unsigned)(ip >> 24));
+        }
+    }
     fetch_console(f, text, tn, "wifi", "WiFi", 8);
     moy_sh_hfree(text);
 
@@ -1388,9 +1526,11 @@ static const struct builtincmd core[] = {
     { "grep", grepcmd, BUILTIN_REGULAR },
     { "head", headcmd, BUILTIN_REGULAR },
     { "help", helpcmd, BUILTIN_REGULAR },
+    { "less", appcmd, BUILTIN_REGULAR },
     { "log", logcmd, BUILTIN_REGULAR },
     { "ls", lscmd, BUILTIN_REGULAR },
     { "mkdir", mkdircmd, BUILTIN_REGULAR },
+    { "more", appcmd, BUILTIN_REGULAR },
     { "mv", mvcmd, BUILTIN_REGULAR },
     { "neofetch", neofetchcmd, BUILTIN_REGULAR },
     { "ps", pscmd, BUILTIN_REGULAR },
@@ -1403,6 +1543,9 @@ static const struct builtincmd core[] = {
     { "top", appcmd, BUILTIN_REGULAR },
     { "touch", touchcmd, BUILTIN_REGULAR },
     { "uname", unamecmd, BUILTIN_REGULAR },
+    { "vi", appcmd, BUILTIN_REGULAR },
+    { "view", appcmd, BUILTIN_REGULAR },
+    { "vim", appcmd, BUILTIN_REGULAR },
     { "wc", wccmd, BUILTIN_REGULAR },
 };
 

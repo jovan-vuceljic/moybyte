@@ -34,6 +34,7 @@ from pathlib import Path
 
 import pytest
 
+import seal_client
 import web_e2e
 from web_e2e import DIST, ROOT, RUNNER
 from test_web_link_e2e import _add, _js, _tagged, _up
@@ -51,10 +52,14 @@ CART = "moybyte.sakura.moy"
 # Web Serial with one port, a board that answers Improv (improv-wifi.com/
 # serial) as a Zero does, its join answering ADDR with ID and CLAIM, or
 # refusing the network when FAIL. SAYS[cmd] is what it prints on the cable
-# before its answer to that command, as a board's log does.
+# before its answer to that command, as a board's log does. With MANAGE
+# ({claims}) the board is already on a network at ADDR, a join moves it to
+# the network's name in MANAGE.at, and Moybyte's 0xF0 answers each claim of
+# MANAGE.claims in turn.
 SERIAL = r"""
 (() => {
-    const ADDR = %s, ID = %s, CLAIM = %s, FAIL = %s, SAYS = %s;
+    let ADDR = %s;
+    const ID = %s, CLAIM = %s, FAIL = %s, SAYS = %s, MANAGE = %s;
     const H = [73, 77, 80, 82, 79, 86], enc = new TextEncoder(), dec = new TextDecoder();
     const frame = (t, d) => { const b = [...H, 1, t, d.length, ...d];
         b.push(b.reduce((s, x) => s + x, 0) & 255, 10); return new Uint8Array(b); };
@@ -65,7 +70,14 @@ SERIAL = r"""
     window.__improv = [];
     function answer(cmd, d) {
         window.__improv.push(cmd);
+        if (cmd === 2 && MANAGE) return [[2, [0]], [1, [4]], [4, strs(2, "http://" + ADDR + "/#id=" + ID)]];
         if (cmd === 2) return [[2, [0]], [1, [2]]];
+        if (cmd === 1 && MANAGE) {
+            ADDR = MANAGE.at[dec.decode(new Uint8Array(d.slice(1, 1 + d[0])))] || ADDR;
+            return [[2, [0]], [1, [3]], [1, [4]], [4, strs(1, "http://" + ADDR + "/#id=" + ID)]];
+        }
+        if (cmd === 240 && MANAGE) return [[2, [0]], [4, strs(240, "http://" + ADDR + "/#id=" + ID
+                                                                 + "&claim=" + MANAGE.claims.shift())]];
         if (cmd === 3) return [[2, [0]], [4, strs(3, "Moybyte", "v0.16", "ESP32-C3", name)]];
         if (cmd === 4) return [[2, [0]], [4, strs(4, "home", "-40", "YES")], [4, [4, 0]]];
         if (cmd === 6) { if (d.length) name = dec.decode(new Uint8Array(d.slice(1)));
@@ -142,7 +154,7 @@ def test_my_consoles_sets_a_board_up_by_cable_and_adds_one_by_hand(tmp_path):
         kept = "JSON.parse(localStorage.getItem('moy.consoles') || '[]')"
         steps = [
             {"waitFor": "typeof render == 'function'", "timeout": 15000},
-            {"init": SERIAL % (json.dumps(addr), json.dumps(board_id), json.dumps(claim), "false", "{}")},
+            {"init": SERIAL % (json.dumps(addr), json.dumps(board_id), json.dumps(claim), "false", "{}", "null")},
             {"waitFor": "typeof render == 'function' && !document.getElementById('cable').hidden",
              "timeout": 15000},
             {"note": "by hand: an address with no name is its own name"},
@@ -238,7 +250,7 @@ def test_a_refused_join_opens_the_board_log_without_the_wifi_password(tmp_path):
         _up(site + "/console/", sp, slog)
         steps = [
             {"waitFor": "typeof render == 'function'", "timeout": 15000},
-            {"init": SERIAL % ('"x"', '"x"', '"x"', "true", json.dumps(BOARD_SAYS))},
+            {"init": SERIAL % ('"x"', '"x"', '"x"', "true", json.dumps(BOARD_SAYS), "null")},
             {"waitFor": "typeof render == 'function' && !document.getElementById('cable').hidden",
              "timeout": 15000},
             {"press": "#cable"},
@@ -272,3 +284,145 @@ def test_a_refused_join_opens_the_board_log_without_the_wifi_password(tmp_path):
         assert _tagged(js, "PAGE") is False, "the Wi-Fi password is on the page"
     finally:
         sp.terminate()
+
+
+OLD_PASSWORD, NEW_PASSWORD = "old-password-1", "den-password-2"
+
+
+def test_manage_by_cable_moves_its_wifi_renames_it_and_replaces_its_password(tmp_path):
+    """A Zero already on a network, from the setup entry: it joins another
+    network and the card takes its new address, it takes a new name, and a
+    new password crosses as a claim the cable minted. A claim a newer one
+    replaced is refused and the console's pairing prompt says why, with its
+    button live, in a Zero's words; the fresh one replaces the password,
+    every paired browser is signed out (its key kept), and this one pairs."""
+    web_e2e.require("sync", "signin")
+    import gen_web_blob
+    import os_site
+    import test_moy_tty
+    sys.path.insert(0, str(ROOT))
+    from runtime.system import ssh_service
+
+    data, body = gen_web_blob.pack(gen_web_blob.collect(str(DIST))[0])
+    pack = tmp_path / "moybyte_web.pack"
+    pack.write_bytes(data)
+    os_site.build(str(tmp_path / "site"), packs=[str(pack)])
+    web_e2e.warm_host_library()
+
+    procs = []
+    sport, bport = web_e2e.free_port(), web_e2e.free_port()
+    site, board = "http://localhost:%d" % sport, "http://127.0.0.1:%d" % bport
+    slog = tmp_path / "site.log"
+    sp = subprocess.Popen([sys.executable, str(ROOT / "tools" / "os_site.py"), "serve",
+                           str(tmp_path / "site"), "--port", str(sport)],
+                          stdout=open(slog, "w"), stderr=subprocess.STDOUT)
+    procs.append(sp)
+    exe = test_moy_tty._build(Path(tempfile.mkdtemp(prefix="moys", dir=str(tmp_path))))
+    host = test_moy_tty.Host(exe, tmp_path, page=(body.hex(), hashlib.sha256(data).hexdigest()))
+    try:
+        system = host.tree / "sd" / "moybyte" / "system"
+        old_record = ssh_service.hashed(OLD_PASSWORD, "5a1t")
+        (system / "password").write_text(old_record)
+        host.say("cable")
+        old = host.browser()
+        assert old.json("GET", "/carts.json")[0] == 200
+        at = len(host.log())
+        host.say("claim new")
+        _, stale, board_id = host.wait_line("CLAIM ", at).split()
+        at = len(host.log())
+        host.say("claim new")
+        _, fresh, _ = host.wait_line("CLAIM ", at).split()
+        assert stale != fresh
+        blog = tmp_path / "board.log"
+        bp = subprocess.Popen([sys.executable, "serve.py", str(bport), "dist",
+                               "--board", "127.0.0.1:%d" % host.port,
+                               "--loader", "--mirror", site + "/console/"],
+                              cwd=str(RUNNER), stdout=open(blog, "w"), stderr=subprocess.STDOUT)
+        procs.append(bp)
+        _up(site + "/console/packs.json", sp, slog)
+        _up(board + "/sync", bp, blog)
+
+        addr = "127.0.0.1:%d" % bport
+        manage = {"at": {"office": addr}, "claims": [stale, fresh]}
+        kept = "JSON.parse(localStorage.getItem('moy.consoles') || '[]')"
+        said = "document.querySelector('#setup .setup-said').textContent"
+        card = "document.querySelector('#list li .state').textContent"
+        pw = ("(() => { const f = document.querySelector('#setup form[name=password]'); "
+              "const p = f.querySelectorAll('input[type=password]'); p[0].value = p[1].value = %s; "
+              "f.requestSubmit(); return 1; })()" % json.dumps(NEW_PASSWORD))
+        steps = [
+            {"waitFor": "typeof render == 'function'", "timeout": 15000},
+            {"init": SERIAL % (json.dumps("10.9.9.9:1"), json.dumps(board_id), '""', "false", "{}",
+                               json.dumps(manage))},
+            {"waitFor": "typeof render == 'function' && !document.getElementById('cable').hidden",
+             "timeout": 15000},
+            {"note": "the setup entry on a board already on a network manages it"},
+            {"press": "#cable"},
+            {"waitFor": "document.querySelector('#setup form[name=wifi] option[value=home]')",
+             "timeout": 15000},
+            _js("FIRST", kept),
+            _js("CARDBUTTON", "!!document.querySelector('#list li button.manage')"),
+            {"js": "(() => { const f = document.querySelector('#setup form[name=wifi]'); "
+                   "f.querySelector('select').value = ''; f.querySelector('select').onchange(); "
+                   "f.querySelector('input[name=ssid]').value = 'office'; "
+                   "f.querySelector('input[name=wifi]').value = 'office pass'; f.requestSubmit(); "
+                   "return 1; })()"},
+            {"waitFor": "%s.includes('joined') || !!document.querySelector('#setup .setup-said.bad')" % said,
+             "timeout": 15000},
+            _js("JOINED", "[%s, %s]" % (kept, said)),
+            {"js": "(() => { const f = document.querySelector('#setup form[name=rename]'); "
+                   "f.querySelector('input').value = 'Den'; f.requestSubmit(); return 1; })()"},
+            {"waitFor": "%s.startsWith('Named')" % said, "timeout": 15000},
+            _js("NAMED", "[%s, window.__improv.includes(6)]" % kept),
+            {"note": "a claim a newer one replaced: refused, and the prompt says why"},
+            {"js": pw},
+            {"waitFor": "document.querySelector('#setup button.opener')", "timeout": 15000},
+            _js("PWSTORED", "JSON.stringify(localStorage).includes(%s)" % json.dumps(NEW_PASSWORD)),
+            {"press": "#setup button.opener"},
+            {"tab": board},
+            {"waitFor": "document.getElementById('pin').style.display == 'flex' && "
+                        "document.getElementById('pinm').textContent.includes('run out')",
+             "timeout": 120000},
+            _js("PROMPT", "[document.getElementById('pinm').textContent, "
+                          "document.getElementById('pinp').textContent, "
+                          "document.getElementById('pinb').disabled]"),
+            {"tab": site},
+            {"waitFor": "%s.includes('not set')" % card, "timeout": 15000},
+            _js("CARDSAID", card),
+            {"note": "the fresh claim replaces the password and this browser pairs"},
+            {"js": pw},
+            {"waitFor": "document.querySelector('#setup button.opener')", "timeout": 15000},
+            {"press": "#setup button.opener"},
+            {"waitFor": "%s == 'signed in'" % card, "timeout": 60000},
+            _js("ASKED", "window.__improv"),
+            {"press": "#setup button[name=done]"},
+            _js("CLOSED", "document.getElementById('setup').hidden"),
+        ]
+        out, js = web_e2e.run(tmp_path, "manage", "console/", steps, site, tmp_path / "chrome",
+                              boot_ms=1000)
+        tail = out[-4000:] + "\n-- board --\n" + host.log()[-1500:]
+        first = _tagged(js, "FIRST")
+        assert [(c["id"], c["address"]) for c in first] == [(board_id, "10.9.9.9:1")], tail
+        assert _tagged(js, "CARDBUTTON") is True, tail
+        joined, line = _tagged(js, "JOINED")
+        assert [c["address"] for c in joined] == [addr] and "joined office" in line, tail
+        named, renamed = _tagged(js, "NAMED")
+        assert [c["name"] for c in named] == ["Den"] and renamed, tail
+        assert _tagged(js, "PWSTORED") is False, "the password reached the site's storage"
+        why, prompt, disabled = _tagged(js, "PROMPT")
+        assert "run out" in why and "Manage by cable" in why, tail
+        assert "by cable" in prompt and "WEB CONSOLE" not in prompt and disabled is False, tail
+        assert "run out" in _tagged(js, "CARDSAID"), tail
+        assert _tagged(js, "ASKED").count(240) == 2, tail
+        assert _tagged(js, "CLOSED") is True, tail
+        rec = (system / "password").read_text()
+        assert rec.startswith("$moy2$") and rec != old_record, tail
+        with pytest.raises(seal_client.Refused) as e:
+            old.call("GET", "/carts.json")
+        assert e.value.status == 401, "the old browser's session outlived the new password"
+        old.sign_in()
+        assert old.json("GET", "/carts.json")[0] == 200, "its key is kept"
+    finally:
+        for p in procs:
+            p.terminate()
+        host.end()

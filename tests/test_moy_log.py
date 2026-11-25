@@ -22,13 +22,18 @@ from unix_mp import find_unix_mp, require_unix_mp, runtime_tree
 ROOT = Path(__file__).resolve().parent.parent
 KERNEL = ROOT / "native" / "moy_kernel"
 DT = 1 / 30
+BYTES = 16384               # moy_log.h's MOY_LOG_BYTES on a host
 
 
 @pytest.fixture(autouse=True)
 def ring():
-    L.init(16384)
+    """Each test on a ring of the host's size, and the worker's next test too:
+    a test that shrinks it would otherwise leave the rest of the worker a ring
+    a crash's traceback fills."""
+    L.init(BYTES)
     L.current(L.SHELL)
     yield
+    L.init(BYTES)
     L.pin_clock(0)
     L.current(L.SHELL)
 

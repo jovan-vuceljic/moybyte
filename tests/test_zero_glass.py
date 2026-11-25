@@ -67,7 +67,7 @@ class Board:
     def ip(self):
         return self._ip
 
-    def address(self):
+    def address(self, fresh=False):
         return "ab" * 16, "c0ffee"
 
 

@@ -1,11 +1,12 @@
 {
   "format": "moy-1",
-  "version": 6,
+  "version": 7,
   "title": "Files",
   "id": "moybyte.files",
   "runtime": "python",
   "main": "main.py",
   "canvas": "320x240",
+  "description": "Find your projects, pictures, notes and music. Deleted files go to the Trash, which can give them back.",
   "moybyte": {
     "type": "app",
     "system": true,
