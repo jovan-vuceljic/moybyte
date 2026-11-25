@@ -4,9 +4,18 @@
 // runtime/carts/moy_fs.py names these on every tier and its header is the crash-safety story;
 // this is that story on the medium, byte for byte: the marker line
 // "#moyfs1 <chars> <crc32> <path>\n" in `<root>/.publish`, the backup
-// `<path>.bak` led by its stamp line "#moyfs1 <chars> <crc32>\n", the file in
-// place; a read that recovers only the prefix case; a spent backup claimed by
-// a rename. A stamp counts code points as Python's len(str) does and takes the
+// `<folder>/.<name>.moybak` led by its stamp line "#moyfs1 <chars> <crc32>\n",
+// the file in place; a read that recovers only the prefix case; a spent backup
+// claimed by a rename.
+//
+// THE BACKUP IS THE STORE'S, by a name nobody else's file has (a dot and
+// MOY_FS_BAK_EXT), hidden from the shell's listings, Files and the wire: a
+// remove of `x` takes x's backup and never a user's `x.bak`, which is a file
+// like any other (owner, 2026-11-25: the `<path>.bak` backups older stores
+// made are left as files, read as nothing else). A read takes a backup only
+// where it is the save the marker names (outside every root, one stamped
+// whole), or for a file that is gone the store's unstamped copy the sync's
+// rotation leaves, so a file removed with its backup stays gone. A stamp counts code points as Python's len(str) does and takes the
 // crc32 of the UTF-8 bytes, so a file one tier stamps reads whole on another.
 //
 // Paths are absolute (the host resolves each with moy_vol_at). Every call
@@ -103,10 +112,18 @@ int moy_fs_bak_stamp(const char *path, uint32_t *chars, uint32_t *crc);
 int moy_fs_claim(const char *path, const char *dest, uint32_t chars,
                  uint32_t crc);                  // 1 taken, 0 not
 void moy_fs_forget_bak(const char *path);
+#define MOY_FS_BAK_EXT ".moybak"
+// The backup's path for `path`, n bytes allocated (moy_store_free), or NULL;
+// moy_fs_bak_into writes it into `out` where its bytes and NUL fit `cap`, and
+// says how many those are.
+char *moy_fs_bak_path(const char *path, size_t *n);
+size_t moy_fs_bak_into(const char *path, char *out, size_t cap);
+// Whether a folder entry's `name` (n bytes) is a store backup's.
+int moy_fs_bak_name(const char *name, size_t n);
 
 // `_skip`: what never crosses the wire or goes into an archive -- journal/,
 // thumbs/, __pycache__/, journal.jsonl, the browser console's
-// moybyte_web.pack, and moy_fs's .bak and .tmp. With
+// moybyte_web.pack, and moy_fs's backups and .tmp. With
 // `history`, journal/ and journal.jsonl are let through.
 int moy_store_skip(const char *name, size_t n, int history);
 

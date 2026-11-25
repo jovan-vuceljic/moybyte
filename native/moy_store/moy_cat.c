@@ -1690,8 +1690,7 @@ static int skip(const char *name, size_t n, const char *main) {
         }
     }
     return strcmp(name, main) == 0 || strncmp(name, "journal", 7) == 0
-           || (n >= 4 && (memcmp(name + n - 4, ".bak", 4) == 0
-                          || memcmp(name + n - 4, ".tmp", 4) == 0));
+           || moy_fs_bak_name(name, n) || (n >= 4 && memcmp(name + n - 4, ".tmp", 4) == 0);
 }
 
 int moy_cat_copy(const char *src, const char *dst, const char *main) {

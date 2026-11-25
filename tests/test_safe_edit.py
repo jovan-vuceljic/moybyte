@@ -31,7 +31,7 @@ def test_save_code_atomic_roundtrip(tmp_path):
     # that were just published, so a crash in the publish loses nothing.
     main = Path(c["path"]) / "main.py"
     assert not (Path(c["path"]) / "main.py.tmp").exists()
-    bak = (Path(c["path"]) / "main.py.bak").read_text()
+    bak = (Path(c["path"]) / ".main.py.moybak").read_text()
     assert bak.startswith("#moyfs1 ") and bak.endswith("cls(2)\n")
     assert main.read_text().endswith("cls(2)\n")
 
@@ -405,7 +405,7 @@ def test_save_sprites_failure_surfaces_error(tmp_path, monkeypatch):
     assert ws.sheet.dirty is True         # not marked clean on failure
 
 
-# -- (g) [MAJOR] atomic-write crash window is recoverable via .bak ----------
+# -- (g) [MAJOR] atomic-write crash window is recoverable via its backup ------
 
 def test_crash_before_the_publish_keeps_the_previous_save(tmp_path, monkeypatch):
     # A power loss between _write_atomic's two writes: the stamped backup holds the
@@ -425,7 +425,7 @@ def test_crash_before_the_publish_keeps_the_previous_save(tmp_path, monkeypatch)
     loaded = moy_carts.load(path)
     assert loaded is not None
     assert "OLD" in loaded["src"]
-    assert not (Path(path) / "main.py.bak").exists()   # the stale stamp is retired
+    assert not (Path(path) / ".main.py.moybak").exists()   # the stale stamp is retired
 
 
 def _cut_after_the_backup(path, new, landed=""):
@@ -438,7 +438,7 @@ def _cut_after_the_backup(path, new, landed=""):
     root = str(Path(path).parent.parent.parent)
     n, crc = moy_fs._stamp_of(new)
     Path(root, moy_fs._PUBLISH).write_text("#moyfs1 %d %d %s\n" % (n, crc, path))
-    Path(path + ".bak").write_text(moy_fs._stamp_line(new) + new)
+    Path(moy_fs._native.bak_path(path)).write_text(moy_fs._stamp_line(new) + new)
     if landed:
         Path(path).write_text(landed)
     moy_store._reboot()
@@ -484,7 +484,7 @@ def test_failed_bak_write_keeps_the_published_file(tmp_path, monkeypatch):
         os.chmod(c["path"], 0o755)
 
     assert "KEEPME" in main.read_text()
-    assert not (Path(c["path"]) / "main.py.bak").exists()
+    assert not (Path(c["path"]) / ".main.py.moybak").exists()
     loaded = moy_carts.load(c["path"])
     assert loaded is not None and "KEEPME" in loaded["src"]
 
@@ -497,7 +497,7 @@ def test_a_torn_backup_is_refused_not_published(tmp_path):
     moy_carts.ensure_dirs(root)
     c = moy_carts.create("Half", root, src="def _draw():\n    cls(0)\n", type="app")
     moy_carts.save_code(c, "def _draw():\n    cls(1)  # GOOD\n")
-    bak = Path(c["path"]) / "main.py.bak"
+    bak = Path(c["path"]) / ".main.py.moybak"
     bak.write_text(bak.read_text()[:-8])           # truncate the stamped payload
 
     assert "GOOD" in moy_carts.load(c["path"])["src"]
@@ -514,7 +514,7 @@ def test_a_legacy_unstamped_backup_still_reads(tmp_path):
     c = moy_carts.create("Legacy", root, src="def _draw():\n    cls(1)  # LIVE\n",
                          type="app")
     main = Path(c["path"]) / "main.py"
-    bak = Path(c["path"]) / "main.py.bak"
+    bak = Path(c["path"]) / ".main.py.moybak"
     bak.write_text("def _draw():\n    cls(9)  # OLD\n")     # pre-#154 shape
 
     assert "LIVE" in moy_carts.load(c["path"])["src"]        # path wins while it reads
@@ -523,7 +523,7 @@ def test_a_legacy_unstamped_backup_still_reads(tmp_path):
 
 
 def test_save_shared_sheet_is_atomic(tmp_path):
-    from runtime import moy_carts
+    from runtime import moy_carts, moy_fs
     root = str(tmp_path / "carts")
     moy_carts.ensure_dirs(root)
     moy_carts.save_shared_sheet("0011\n2233\n", root)
@@ -531,7 +531,7 @@ def test_save_shared_sheet_is_atomic(tmp_path):
     # _write_atomic used -> no orphan tmp left behind beside the sheet.
     sheet = Path(moy_carts.shared_sheet_path(root))
     assert not Path(str(sheet) + ".tmp").exists()
-    # A second save keeps a stamped .bak of what it just published (recoverable).
+    # A second save keeps a stamped backup of what it just published (recoverable).
     moy_carts.save_shared_sheet("4455\n", root)
     assert moy_carts.load_shared_sheet(root).startswith("4455")
-    assert Path(str(sheet) + ".bak").read_text().endswith("4455\n")
+    assert Path(moy_fs._native.bak_path(str(sheet))).read_text().endswith("4455\n")

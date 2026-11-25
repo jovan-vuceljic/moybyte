@@ -769,11 +769,11 @@ if _d is not None:
                 _f.write(_b)
 _a = ws.carts_root.rsplit('/', 1)[0] + '/artwork.moyimg'
 if _cp is None:
-    for _n in (_a, _a + '.bak'):
-        try:
-            _ib_os.remove(_n)
-        except OSError:
-            pass
+    try:
+        _ib_os.remove(_a)
+    except OSError:
+        pass
+    __import__('moy_store').forget_bak(_a)
 else:
     _ib_mcarts.save_copy(_cp, ws.carts_root)
 ws.carts.rescan()
@@ -1663,8 +1663,8 @@ def _ib_own(title):
         d = _ms.cart_path(ws.carts_root, _ms.cart_folder(title, _ms.BUILTIN_NS))
         if _ms._cart_version(d) == int(e[1]):
             return int(e[1])
-        for f in ('/manifest.json', '/manifest.json.bak'):
-            _ms._remove(d + f)
+        _ms._remove(d + '/manifest.json')
+        __import__('moy_store').forget_bak(d + '/manifest.json')
         _ms.seed_packed([e], ws.carts_root)
         ws.carts.apply(ws.carts.store.call(lambda: _mc.catalogue(ws.carts_root)))
         return int(e[1])

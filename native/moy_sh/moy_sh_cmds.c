@@ -256,7 +256,8 @@ static int ls_dir(const char *path, int all, int lflag, int one) {
     int n = 0, cap = 32;
     ls_ent_t *e = stalloc(cap * sizeof *e);
     while ((de = readdir(d)) != NULL) {
-        if (!all && de->d_name[0] == '.') {
+        if ((!all && de->d_name[0] == '.')
+            || moy_fs_bak_name(de->d_name, strlen(de->d_name))) {
             continue;
         }
         if (n == cap) {
@@ -562,6 +563,7 @@ struct walk {
     int (*leave)(walk_t *w, const char *path, uint64_t total, int top);
     const char *cmd;            // a failure says "cmd: path: why" and the walk goes on;
                                 // with none it stops the walk
+    int hide;                   // the store's backups (moy_fs_bak_name) are not listed
     int err;                    // what stopped it
     int status;
     char *names;                // the open folders' entries, each folder's sorted by
@@ -610,8 +612,9 @@ static int walk_names(walk_t *w, const char *path) {
     while (r == 0 && (de = readdir(d)) != NULL) {
         const char *name = de->d_name;
         size_t k = WALK_HEAD + strlen(name) + 1, at = start;
-        if (!strcmp(name, ".") || !strcmp(name, "..") ||
-            (r = walk_grow(&w->names, &w->cap, w->len + k)) != 0) {
+        if (!strcmp(name, ".") || !strcmp(name, "..")
+            || (w->hide && moy_fs_bak_name(name, k - WALK_HEAD - 1u))
+            || (r = walk_grow(&w->names, &w->cap, w->len + k)) != 0) {
             continue;
         }
         while (at < w->len && strcmp(w->names + at + WALK_HEAD, name) < 0) {
@@ -730,8 +733,9 @@ static void walk(walk_t *w, char *path, size_t n) {
     walk_free(w);
 }
 
-// A listed file already gone is removed: a file's remove takes its `.bak`
-// with it, which the listing still names.
+// A listed file already gone is removed: a file's remove takes its backup
+// with it (moy_fs_forget_bak), which the listing may still name, and so may
+// a remove another session made meanwhile.
 static int rm_visit(walk_t *w, const char *path, size_t n, int dir, uint64_t size, int top) {
     (void)w, (void)n, (void)size;
     int r = dir ? 0 : moy_sh_vol_op(MOY_SH_V_REMOVE, path, NULL);
@@ -853,7 +857,8 @@ static int find_leave(walk_t *w, const char *path, uint64_t total, int top) {
 // PATH... (`.` with none) and what is under each, in order, those that pass
 // -name GLOB (the last part of the path) and -type f|d.
 static int findcmd(int argc, char **argv) {
-    find_t o = { { .visit = find_visit, .leave = find_leave, .cmd = "find" }, NULL, 0 };
+    find_t o = { { .visit = find_visit, .leave = find_leave, .cmd = "find", .hide = 1 },
+                 NULL, 0 };
     int paths = 1;
     while (paths < argc && argv[paths][0] != '-') {
         paths++;
@@ -934,7 +939,7 @@ static int du_leave(walk_t *w, const char *path, uint64_t total, int top) {
 
 // The bytes the files under each PATH (`.` with none) hold.
 static int ducmd(int argc, char **argv) {
-    du_t o = { { .visit = du_visit, .leave = du_leave, .cmd = "du" }, 0, 0 };
+    du_t o = { { .visit = du_visit, .leave = du_leave, .cmd = "du", .hide = 1 }, 0, 0 };
     int c;
     (void)argc;
     (void)argv;

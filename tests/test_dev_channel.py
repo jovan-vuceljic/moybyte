@@ -1438,12 +1438,12 @@ def test_moy_query_answers_the_descriptor(tmp_path, capsys):
 
 def test_moy_put_writes_a_cart_through_a_new_and_rescans(tmp_path, capsys):
     """A pushed cart lands whole in the store, every byte value included, the
-    stamped .bak beside an old copy dropped; the rescan puts it on the shelf.
+    store's stamped backup beside an old copy dropped; the rescan puts it on the shelf.
     A whole file streams in few frames, not a line a frame."""
     ws, ch, stdin = text_channel(tmp_path)
     (tmp_path / "plasma.moy").mkdir()
     (tmp_path / "plasma.moy" / "main.lua").write_bytes(b"old")
-    (tmp_path / "plasma.moy" / "main.lua.bak").write_bytes(b"stamp")
+    (tmp_path / "plasma.moy" / ".main.lua.moybak").write_bytes(b"stamp")
     big = bytes(range(256)) * 64
     stdin.data = list(put_lines("plasma.moy/main.lua", b"function _draw() end\n")
                       + put_lines("plasma.moy/data/blob.bin", big)
@@ -1452,7 +1452,7 @@ def test_moy_put_writes_a_cart_through_a_new_and_rescans(tmp_path, capsys):
     said = _said(capsys, "moy-")
     assert said == ["moy-ok"] * 5
     assert (tmp_path / "plasma.moy" / "main.lua").read_bytes() == b"function _draw() end\n"
-    assert not (tmp_path / "plasma.moy" / "main.lua.bak").exists()
+    assert not (tmp_path / "plasma.moy" / ".main.lua.moybak").exists()
     assert (tmp_path / "plasma.moy" / "data" / "blob.bin").read_bytes() == big
     assert not list(tmp_path.rglob("*.new"))
     assert ws.rescans == 1

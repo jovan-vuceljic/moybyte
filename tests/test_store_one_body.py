@@ -268,7 +268,7 @@ def _board_folder(trial, stamp):
                            "app_guard": {"broken": ["local.x"]},
                            "wallpaper_guard": {"open": "moybyte.w"}}, root)
     for name, text in (("webkeys", "moy-webkeys 1 " + "ab" * 16 + "\n"),
-                       ("webkeys.bak", "#moyfs1 1 1\nx"),
+                       (".webkeys.moybak", "#moyfs1 1 1\nx"),
                        ("ssh_host_key", "key"), ("password", "$moy2$x"),
                        ("authorized_keys", "ssh-ed25519 AAAA kid")):
         with open(trial + "/system/" + name, "w") as f:
@@ -287,7 +287,7 @@ def test_another_boards_folder_drops_exactly_the_device_rows(trial):
     moy_seed.sweep_store(root, ROSTER, board=ME)
     after = _tree(trial)
     gone = {k for k in before if k not in after}
-    assert gone == {"system/webkeys", "system/webkeys.bak", "system/ssh_host_key"}
+    assert gone == {"system/webkeys", "system/.webkeys.moybak", "system/ssh_host_key"}
     rows = moy_carts.load_system(root)
     assert rows == {"theme": "night", "volume": 4}
     assert after[moy_seed.BOARD_STAMP_NAME] == b"moyboard %s\n" % ME.encode()

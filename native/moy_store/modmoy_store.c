@@ -601,6 +601,16 @@ static mp_obj_t mod_bak_stamp(mp_obj_t path) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mod_bak_stamp_obj, mod_bak_stamp);
 
+static mp_obj_t mod_bak_path(mp_obj_t path) {
+    const char *p = path_arg(path);
+    size_t n = moy_fs_bak_into(p, NULL, 0);
+    vstr_t v;
+    vstr_init_len(&v, n - 1u);
+    moy_fs_bak_into(p, v.buf, n);
+    return mp_obj_new_str_from_vstr(&v);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mod_bak_path_obj, mod_bak_path);
+
 static mp_obj_t mod_stamp(mp_obj_t data) {
     mp_buffer_info_t bi;
     mp_get_buffer_raise(data, &bi, MP_BUFFER_READ);
@@ -1943,6 +1953,7 @@ static const mp_rom_map_elem_t moy_store_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_read_bytes), MP_ROM_PTR(&mod_read_bytes_obj) },
     { MP_ROM_QSTR(MP_QSTR_read_stamped), MP_ROM_PTR(&mod_read_stamped_obj) },
     { MP_ROM_QSTR(MP_QSTR_bak_stamp), MP_ROM_PTR(&mod_bak_stamp_obj) },
+    { MP_ROM_QSTR(MP_QSTR_bak_path), MP_ROM_PTR(&mod_bak_path_obj) },
     { MP_ROM_QSTR(MP_QSTR_stamp), MP_ROM_PTR(&mod_stamp_obj) },
     { MP_ROM_QSTR(MP_QSTR_claim), MP_ROM_PTR(&mod_claim_obj) },
     { MP_ROM_QSTR(MP_QSTR_forget_bak), MP_ROM_PTR(&mod_forget_bak_obj) },
