@@ -208,6 +208,9 @@ typedef struct {
 } moy_tty_ws_stats_t;
 
 void moy_tty_ws_stats(moy_tty_ws_stats_t *out);
+// ...and the live socket's terminal channel's (moy_tty_live.c), where the
+// board serves its page's terminal there.
+void moy_tty_live_stats(moy_tty_ws_stats_t *out);
 
 // The web terminal's link (moy_tty_ws.c): cut (its session ended, or
 // `taken` by another session's page), and its quiet time in ms.

@@ -481,8 +481,10 @@ nor those docs will warn you about:
   deleted on 2026-10-27 (`docs/surface_model_v1.md` §16).
 - **The live socket is a Zero's page's, and the worker's to move** (#256,
   `native/moy_net/moy_live.h`): one sealed WebSocket to `GET /live` (seal
-  slot 1; the Terminal's is 0), multiplexed by its frames' first byte, served
-  on the board's own task. Its first channel relays the board's ESP-NOW, so
+  slot 1), multiplexed by its frames' first byte, served
+  on the board's own task. Its terminal channel ('t') is the page's
+  Terminal (`native/moy_tty/moy_tty_live.c`): a Zero serves no `GET /term`,
+  which the consoles' pages keep (seal slot 0). Its first channel relays the board's ESP-NOW, so
   the page's link (`moy_link_web.c`, the kernel's Match over it) plays a
   console's match, a Python cart's as a Lua one's: the wasm computes floats
   as the boards' do (REPR_C over 32-bit words, single precision,

@@ -1658,6 +1658,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         termState = mp.globals.get("term_state");
     }
     if (live) {
+        liveTerm = live.term;
         livePump = mp.globals.get("live_pump");
         liveFeed = mp.globals.get("live_feed");
         liveState = mp.globals.get("live_state");
@@ -1741,10 +1742,10 @@ function shipFrame(s) {
 // a console board that spends its GPIOs on a panel, or a Zero this page is not
 // signed in to. All four are the same answer to a cart: no verbs.
 // What the board relays on the live socket (GET /live without the upgrade,
-// native/moy_net/moy_live.h): {mac, kinds}, its address on the air where it
-// relays its radio ("" where not) and the device kinds it relays
-// (moy_dev_relayed's text), or null where it relays neither. A board without
-// the socket 404s it.
+// native/moy_net/moy_live.h): {mac, kinds, term}, its address on the air
+// where it relays its radio ("" where not), the device kinds it relays
+// (moy_dev_relayed's text) and whether its shell's face is there, or null
+// where it carries none of them. A board without the socket 404s it.
 async function probeLive() {
     try {
         const r = await sealed("GET", "/live");
@@ -1752,7 +1753,8 @@ async function probeLive() {
         if (!d || !d.live) return null;
         const mac = d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : "";
         const kinds = typeof d.kinds === "string" ? d.kinds : "";
-        return mac || kinds ? { mac, kinds } : null;
+        const term = d.term === 1;
+        return mac || kinds || term ? { mac, kinds, term } : null;
     } catch (e) {
         return null;
     }
@@ -2082,11 +2084,82 @@ async function termOpen(cols, rows, tries = 0) {
         });
     };
 }
+// ...and where the board's live socket carries its shell (the probe's
+// "term", native/moy_tty/moy_tty_live.c), the Terminal's face is that
+// socket's 't' channel and no /term is asked: 'O' with the grid's size opens
+// it, 'k' keys and 's' sizes go up, 'C' closes it; the board answers 'A' (open),
+// 'B' (another transport's face, or no memory), 'D' the face's bytes and 'X'
+// its exit status. The socket's end ends the face: LOST, TAKEN by another
+// session's page, REFUSED when its session ended. A face asked for before the
+// socket is open is opened when it is.
+let liveTerm = false;
+let termLive = null;             // {cols, rows, opened, tries} while the Terminal holds the face
+function u16s(a, b) { return new Uint8Array([a & 255, a >> 8, b & 255, b >> 8]); }
+function termLiveSay(kind, u8) {
+    const ws = liveWs;
+    if (!ws || ws.readyState !== 1) return false;
+    const b = new Uint8Array(2 + u8.length);
+    b[0] = 0x74;
+    b[1] = kind.charCodeAt(0);
+    b.set(u8, 2);
+    liveSend(ws, b);
+    LIVE.up++;
+    return true;
+}
+function termLiveOpen(cols, rows, tries = 0) {
+    termLive = { cols: cols, rows: rows, opened: false, tries: tries };
+    termLiveSay("O", u16s(cols, rows));     // or at the socket's open
+}
+function termLiveClose() {
+    if (termLive) termLiveSay("C", new Uint8Array(0));
+    termLive = null;
+}
+function termLiveLost(st) {
+    if (!termLive || !termLive.opened) return;
+    termLive = null;
+    termQ.push({ s: st, n: 0 });
+}
+function termLiveIn(u8) {
+    const t = termLive;
+    if (!t) return;
+    const k = u8[1];
+    if (k === 0x44) termQ.push({ d: termB64(u8.subarray(2)) });                        // D
+    else if (k === 0x41) {                                                             // A
+        t.opened = true;
+        if (termSize) {
+            termLiveSay("s", u16s(termSize[0], termSize[1]));
+            termSize = null;
+        }
+        termQ.push({ s: TERM.OPEN, n: 0 });
+    } else if (k === 0x58 && u8.length >= 6) {                                         // X
+        termLive = null;
+        termQ.push({ s: TERM.ENDED, n: new DataView(u8.buffer, u8.byteOffset + 2, 4).getInt32(0, true) });
+    } else if (k === 0x42) {                                                           // B
+        if (u8[2] === 0 && t.tries + 1 < TERM_BUSY_TRIES) {
+            setTimeout(() => { if (termLive === t) termLiveOpen(t.cols, t.rows, t.tries + 1); },
+                       TERM_BUSY_MS);
+        } else {
+            termLive = null;
+            termQ.push({ s: TERM.BUSY, n: 0 });
+        }
+    }
+}
+
 function termPump() {
     if (!termPoll) return;
     let j = "";
     try { j = termPoll(); } catch (e) { return; }
-    if (j) {
+    if (j && liveTerm) {
+        const d = JSON.parse(j);
+        if (d.want === 2) termLiveClose();
+        if (d.want === 1) termLiveOpen(d.cols, d.rows);
+        if (d.size) termSize = d.size;
+        if (termLive && termLive.opened) {
+            if (termSize) termLiveSay("s", u16s(termSize[0], termSize[1]));
+            termSize = null;
+            if (d.out) termLiveSay("k", new Uint8Array(d.out));
+        }
+    } else if (j) {
         const d = JSON.parse(j);
         if (d.want === 2) termClose();
         if (d.want === 1) termOpen(d.cols, d.rows);
@@ -2141,6 +2214,7 @@ function liveDrop(ws, why) {
     try { ws.close(1000); } catch (e) { }
     LIVE.drops++;
     liveQ.push({ s: 0, why: why });
+    termLiveLost(TERM.LOST);
     liveLater();
 }
 async function liveOpen() {
@@ -2176,6 +2250,7 @@ async function liveOpen() {
         LIVE.opens++;
         liveHeard = liveSaid = performance.now();
         liveQ.push({ s: 1 });
+        if (termLive) termLiveSay("O", u16s(termLive.cols, termLive.rows));
     };
     ws.onmessage = (m) => {
         if (liveWs !== ws || typeof m.data === "string") return;
@@ -2188,6 +2263,7 @@ async function liveOpen() {
         liveHeard = performance.now();
         LIVE.down++;
         if (u8[0] === 0x6e || u8[0] === 0x64) liveQ.push({ d: u8 });
+        else if (u8[0] === 0x74) termLiveIn(u8);
         else if (u8[0] === 0x63 && u8[1] === 0x45 && u8.length === 10) {
             const t = new Float64Array(u8.slice(2).buffer)[0];
             LIVE.rtt.push(performance.now() - t);
@@ -2200,6 +2276,8 @@ async function liveOpen() {
         LIVE.drops++;
         if (!opened) liveAsk = true;
         liveQ.push({ s: 0, why: c.code + (c.reason ? " " + c.reason : "") });
+        termLiveLost(c.code === 4001 ? TERM.TAKEN : c.code === 1008 && c.reason === "revoked"
+                     ? TERM.REFUSED : TERM.LOST);
         if (c.code === 4001) takenAway();
         else liveLater();
     };

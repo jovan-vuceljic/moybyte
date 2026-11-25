@@ -14,6 +14,9 @@
 //        (moy_web_live_link; below).
 //   'd'  the device channel: the handles of the kinds this board relays
 //        (THE DEVICE CHANNEL, below; moy_live_dev.c serves it).
+//   't'  the web terminal, a face of the board's shell
+//        (native/moy_tty/moy_tty_live.c has its messages), where the image
+//        has the face: this board then serves no GET /term.
 //   Any other byte is a channel this board does not serve, and its frame is
 //   dropped: a page newer than its board loses that channel and nothing else.
 //
@@ -153,6 +156,19 @@ static live_t S = {.fd = -1};
 #pragma weak moy_live_dev_pump
 #pragma weak moy_live_dev_end
 #pragma weak moy_live_dev_stats
+
+// The terminal channel (native/moy_tty/moy_tty_live.c): weak, for an image
+// or a twin without the shell's face.
+int moy_live_term_take(void);
+int moy_live_term_message(const uint8_t *p, size_t n);
+int moy_live_term_fd(void);
+int moy_live_term_pump(void);
+void moy_live_term_end(void);
+#pragma weak moy_live_term_take
+#pragma weak moy_live_term_message
+#pragma weak moy_live_term_fd
+#pragma weak moy_live_term_pump
+#pragma weak moy_live_term_end
 static live_t *const L = &S;
 
 int moy_web_live_link(uint8_t mac[6]) {
@@ -263,6 +279,9 @@ static int message(int ws, uint8_t *p, size_t n) {
     }
     if (p[0] == 'd') {
         return moy_live_dev_message != NULL ? moy_live_dev_message(p, n) : 0;
+    }
+    if (p[0] == 't') {
+        return moy_live_term_message != NULL ? moy_live_term_message(p, n) : 0;
     }
     if (p[0] != 'n') {
         return 0;
@@ -391,10 +410,14 @@ static void pump(int ws) {
         fd_set r;
         FD_ZERO(&r);
         FD_SET(ws, &r);
+        int tfd = moy_live_term_fd != NULL ? moy_live_term_fd() : -1;
+        if (tfd >= 0) {
+            FD_SET(tfd, &r);
+        }
         uint32_t wait = L->radio ? MOY_LIVE_WAIT_MS : devs > 0 ? MOY_LIVE_DEV_MS
                         : MOY_LIVE_REST_MS;
         struct timeval tv = {0, (long)wait * 1000L};
-        int k = select(ws + 1, &r, NULL, NULL, &tv);
+        int k = select((tfd > ws ? tfd : ws) + 1, &r, NULL, NULL, &tv);
         if (k < 0 && errno != EINTR) {
             return;
         }
@@ -408,6 +431,9 @@ static void pump(int ws) {
             if (frames_in(ws, &n) < 0) {
                 return;
             }
+        }
+        if (k > 0 && tfd >= 0 && FD_ISSET(tfd, &r) && moy_live_term_pump() < 0) {
+            return;
         }
         if (L->radio && heard(ws) < 0) {
             return;
@@ -429,6 +455,9 @@ static void serve(int ws) {
     radio_down();
     if (moy_live_dev_end != NULL) {
         moy_live_dev_end();
+    }
+    if (moy_live_term_end != NULL) {
+        moy_live_term_end();
     }
 }
 
@@ -479,6 +508,9 @@ int moy_web_live(int fd, const struct moy_wa_seal *seal) {
     L->up_i = L->down_i = 0;
     L->cut = 0;
     L->heard = L->said = moy_net_ms();
+    if (moy_live_term_take != NULL) {
+        moy_live_term_take();
+    }
     __atomic_store_n(&L->fd, fd, __ATOMIC_RELEASE);
 #ifdef ESP_PLATFORM
     if (moy_task_spawn(MOY_TASK_LIVE, bridge_task, NULL, NULL)) {
@@ -495,6 +527,10 @@ int moy_web_live(int fd, const struct moy_wa_seal *seal) {
     moy_net_free(L->b);
     L->b = NULL;
     return -1;
+}
+
+int moy_web_live_term(void) {
+    return moy_live_term_message != NULL;
 }
 
 uint32_t moy_web_live_idle_ms(void) {

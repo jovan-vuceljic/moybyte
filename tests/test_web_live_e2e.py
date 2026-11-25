@@ -199,3 +199,68 @@ def test_the_live_socket_comes_back_after_the_board_restarts(live_exe, tmp_path,
         host.end()
         air.close()
         shutil.rmtree(root, ignore_errors=True)
+
+
+def test_the_terminal_of_a_page_a_zero_serves_rides_the_live_socket(
+        live_exe, tmp_path, monkeypatch):
+    """A board with the live socket serves its page's shell on it
+    (native/moy_tty/moy_tty_live.c): the Terminal's keys and the shell's
+    bytes cross the one socket the page holds, its exit says the status,
+    and after the board restarts under it the socket comes back and Enter
+    opens a new face on it."""
+    import test_live_link as L
+    import test_web_term_e2e as W
+    air = L.Air()
+    monkeypatch.setenv("MOY_AIR", str(air.port))
+    monkeypatch.setenv("MOY_AIR_MAC", "020000000001")
+    root = W.tempfile.mkdtemp(prefix="moyl")
+    host = W._board(live_exe, W.pathlib.Path(root))
+    server, base = W._serve(tmp_path, host.port)
+    restarted = []
+
+    def reset():
+        """The board restarts once the page's second face is up."""
+        end = time.monotonic() + 180
+        while time.monotonic() < end:
+            try:
+                st = host.stats()
+            except (IndexError, ValueError, OSError):
+                st = {}
+            if st.get("sessions") == "2" and st.get("live") == "1":
+                time.sleep(1.0)
+                host.restart()
+                restarted.append(time.monotonic())
+                return
+            time.sleep(0.1)
+
+    t = threading.Thread(target=reset, daemon=True)
+    t.start()
+    live = ("window.__moyState().then(s => '%s ' + JSON.stringify({opens: s.live && s.live.opens, "
+            "drops: s.live && s.live.drops}))")
+    try:
+        steps = ([W._until(W._SHELL), W._lines("OPEN"), {"js": live % "LIVE1"}]
+                 + W._typed("echo zero-$((6*7))") + [{"key": "Enter"}, W._says("zero-42"),
+                                                     W._lines("ECHO")]
+                 + W._typed("exit 5") + [{"key": "Enter"}, W._says("[the shell exited 5]"),
+                                         W._lines("EXIT"), {"key": "Enter"},
+                                         W._until(W._SHELL),
+                                         W._until("ln => ln.includes('was lost')", 90000), W._lines("LOST"),
+                                         {"waitFor": "window.__moyState().then(s => "
+                                          "s.live && s.live.opens >= 2)", "timeout": 90000},
+                                         {"key": "Enter"}, W._until(W._SHELL, 60000)]
+                 + W._typed("echo back-$((6*7))") + [{"key": "Enter"}, W._says("back-42"),
+                                                     W._lines("BACK"), {"js": live % "LIVE2"}])
+        out, js = W._play(tmp_path, "term_live", base, steps, after=W._qr_fragment(host))
+        t.join(5)
+        why = "\n%s\n%s" % (js, W._sides(host, tmp_path, out))
+        assert "zero-42" in "\n".join(W._tagged(js, "ECHO")), why
+        assert "[the shell exited 5]" in "\n".join(W._tagged(js, "EXIT")), why
+        assert W._tagged(js, "LIVE1")["opens"] == 1, why
+        assert restarted, "the board never restarted" + why
+        assert "back-42" in "\n".join(W._tagged(js, "BACK")), why
+        assert W._tagged(js, "LIVE2")["opens"] >= 2, why
+    finally:
+        server.terminate()
+        host.end()
+        air.close()
+        shutil.rmtree(root, ignore_errors=True)
