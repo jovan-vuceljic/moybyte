@@ -329,6 +329,7 @@ enum {
     MOY_WEB_EV_SHELF = 1,           // a batch changed the shelf: rescan
     MOY_WEB_EV_STOPPED = 2,         // the listener closed (the goodbye ran out)
     MOY_WEB_EV_PAIRED = 4,          // a browser paired: the QR's token is spent
+    MOY_WEB_EV_PASSWORD = 8,        // a claim set the password: the SSH server starts
 };
 
 typedef struct {

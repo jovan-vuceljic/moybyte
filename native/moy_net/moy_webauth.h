@@ -94,6 +94,10 @@ int moy_wa_signout(void);
 void moy_wa_poll(void);
 // A browser paired since the last call: 1, and the flag cleared.
 int moy_wa_paired(void);
+// A claim set the password since the last call: 1, and the flag cleared.
+// The record is written here, behind the VM, which starts what serves with
+// a password (ssh_service.start) on this word.
+int moy_wa_claimed(void);
 // An upgraded stream's session: its key dropped, the session's end (unused,
 // evicted, signed out) cuts the stream. One of each at a time.
 enum {

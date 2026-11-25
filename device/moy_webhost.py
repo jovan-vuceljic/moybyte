@@ -79,6 +79,7 @@ OFFICIAL_SLICE_MS = 40
 EV_SHELF = 1
 EV_STOPPED = 2
 EV_PAIRED = 4
+EV_PASSWORD = 8
 
 
 def _kinds():
@@ -311,7 +312,8 @@ class WebHost:
                  auth=None, on_sync=None, auth_source=None,
                  on_run=None, update=None, on_stop=None, files_root=None,
                  kinds=None, dial=None, on_serving=None, on_failed=None,
-                 system=None, on_paired=None, apps_root=None, official=None):
+                 system=None, on_paired=None, apps_root=None, official=None,
+                 on_password=None):
         self.port = DEFAULT_PORT if port is None else port
         self.carts_root = carts_root
         self.files_root = (moy_sync.files_root(carts_root)
@@ -322,6 +324,7 @@ class WebHost:
         self.auth = auth
         self._auth_source = auth_source
         self.on_paired = on_paired
+        self.on_password = on_password
         self.on_sync = on_sync
         self.on_run = on_run
         self.update = update
@@ -474,6 +477,11 @@ class WebHost:
                 self.on_paired()
             except Exception as exc:     # noqa: BLE001 -- a hook is never fatal
                 print("WEBHOST on_paired:", exc)
+        if ev & EV_PASSWORD and self.on_password is not None:
+            try:
+                self.on_password()
+            except Exception as exc:     # noqa: BLE001
+                print("WEBHOST on_password:", exc)
         try:
             req = moy_net.web_take()
         except MemoryError:
@@ -730,6 +738,13 @@ def _system_dir(ws):
     return ssh_service.system_dir(ws)
 
 
+def _ssh_start(ws):
+    """A claim set the password behind the VM: the SSH server serves now,
+    as `passwd` starts it."""
+    import ssh_service
+    ssh_service.start(ws)
+
+
 def make_webhost(ws, carts_root, autoconnect=None, with_sd=None, port=None):
     """The WebHost every board injects -- built once, here, so no board is
     left without the web console by a per-board injection nobody wrote.
@@ -751,6 +766,7 @@ def make_webhost(ws, carts_root, autoconnect=None, with_sd=None, port=None):
                    on_serving=lambda: ws.web.on_serving(),
                    on_failed=lambda: ws.web.on_failed(),
                    on_paired=lambda: ws.web.on_paired(),
+                   on_password=lambda: _ssh_start(ws),
                    update=ConsoleUpdate(ws), system=ConsoleSystem(ws),
                    official=console_official(ws))
 

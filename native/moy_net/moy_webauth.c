@@ -148,7 +148,7 @@ typedef struct {
     uint8_t token[MOY_SEAL_RAND];
     uint64_t token_at;
     uint8_t claim[MOY_SEAL_RAND];
-    uint8_t token_on, claim_on, paired;
+    uint8_t token_on, claim_on, paired, claimed;
     struct {
         uint8_t on;
         uint8_t kid[MOY_SEAL_KID], sid[MOY_SEAL_SID];
@@ -600,6 +600,14 @@ int moy_wa_paired(void) {
         return 0;
     }
     A->paired = 0;
+    return 1;
+}
+
+int moy_wa_claimed(void) {
+    if (A == NULL || !A->claimed) {
+        return 0;
+    }
+    A->claimed = 0;
     return 1;
 }
 
@@ -1139,6 +1147,7 @@ static int claim(uint32_t peer, const char *o, const char *oe, char *doc, size_t
     }
     claim_drop();
     end_sessions(NULL);
+    A->claimed = 1;
     snprintf(doc, cap, "{\"ok\":true}");
     return 200;
 }
