@@ -365,6 +365,8 @@ class _Worker:
         self.asked = []
         self.readable = {}              # url: bytes this page may read (CORS)
         self.fetched = []
+        self.hint = None                # the live socket's 'o', where the board hints
+        self.went = False
 
     def tick(self):
         import base64
@@ -402,8 +404,12 @@ class _Worker:
                         with open(path, "wb") as f:
                             f.write(data)
                 self.link.event_json(json.dumps({"id": j["id"], "kept": 1}))
-        if self.host.official.busy():
-            self.host.official.step(0)           # the board's poll: one slice
+        # the board's poll: one slice, and its hint on the live socket when
+        # it did work or just stopped (moy_webhost.WebHost._stepped)
+        went = self.host.official.busy() and self.host.official.step(0)
+        if (went or self.went) and self.hint is not None:
+            self.hint()
+        self.went = went
 
 
 @pytest.fixture
@@ -513,6 +519,30 @@ def test_get_on_a_zero_s_page_asks_the_board_and_brings_its_copy_over(page, zero
     assert {"action": "install", "folder": HARPOON, "index": OWN, "id": "moybyte.harpoon_pop",
             "accepted": []} in posts
     assert {"action": "agree"} in posts, "a built-in's prompt asks nothing"
+
+
+def test_a_page_whose_board_hints_asks_on_the_hint_and_not_on_a_clock(page, zero, monkeypatch):
+    """With the live socket's hints (carts_link.pushed), a request in hand
+    asks /official after its POST and then when the board says its answer
+    changed, never on a clock: the install lands on hints alone."""
+    ws, app, worker, proot, landed = page
+    carts_link = sys.modules[type(ws.cart_board).__module__]
+    monkeypatch.setattr(carts_link, "PUSHED_POLL_MS", 10 ** 9)
+    carts_link.pushed(True)
+    try:
+        worker.hint = carts_link.hint
+        ws.spine.open_app(app)
+        _frames(ws, worker, lambda: app.phase == "list")
+        i = [r["cart"]["folder"] for r in app.rows].index(HARPOON)
+        app._tap_row(i)
+        app._press("GET")
+        _frames(ws, worker, lambda: app.phase == "done")
+        assert landed == [HARPOON]
+        gets = sum(1 for m, _b in worker.asked if m == "GET")
+        posts = sum(1 for m, _b in worker.asked if m == "POST")
+        assert gets <= carts_link._PUSH["hints"] + posts, (gets, posts, carts_link._PUSH)
+    finally:
+        carts_link.pushed(False)
 
 
 def test_remove_on_a_zero_s_page_is_the_board_s_and_a_core_cart_offers_none(page, zero):

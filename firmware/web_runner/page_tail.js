@@ -73,7 +73,7 @@ else if(m.t==="pick"){pkAsk(m);}
 else if(m.t==="unpick"){pkDone(m.id);}
 else if(m.t==="installed"){window.__moyInstalled=m.folder;}
 else if(m.t==="state"){var sw=stateWait;stateWait=[];
-var so=JSON.parse(m.json);if(so&&typeof so==="object"){so.sink=m.sink||null;so.loop=m.loop||null;so.live=m.live||null;}
+var so=JSON.parse(m.json);if(so&&typeof so==="object"){so.sink=m.sink||null;so.loop=m.loop||null;so.live=m.live||null;so.hints=m.hints||null;}
 for(var si=0;si<sw.length;si++)sw[si](so);}
 else if(m.t==="pcm"){playPCM(m);}
 else if(m.t==="wperf"){console.log("[moy worker] "+m.s);}
@@ -536,12 +536,16 @@ try {
   // ---- dev hot-reload (?dev=1, the moy CLI's watch loop) ---------------------
   // Poll the CLI server's /stamp (latest cart-file mtime); on change the WORKER
   // refetches carts.json, restarts the cart and pushes fresh assets. Static
-  // production hosting never has ?dev=1, so this costs nothing there.
+  // production hosting never has ?dev=1, so this costs nothing there; a host
+  // with no /stamp (a board, which says what changed on its live socket)
+  // answers the first ask with no stamp, and nothing asks again.
   if (new URLSearchParams(location.search).get("dev")) {
     let stamp = null;
-    setInterval(async () => {
+    const poll = setInterval(async () => {
       try {
-        const s = await (await fetch("stamp")).text();
+        const r = await fetch("stamp");
+        if (!r.ok) { clearInterval(poll); return; }
+        const s = await r.text();
         if (stamp === null) { stamp = s; return; }
         if (s === stamp) return;
         stamp = s;

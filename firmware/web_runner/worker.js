@@ -1627,7 +1627,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + "import_p8_json, import_archive_json, export_cart, drop_kind, "
         + "edit_cart, open_cart, state_json, pcm_addr, "
         + "term_enable, term_poll_json, term_feed, term_state, "
-        + "live_pump, live_feed, live_state");
+        + "live_pump, live_feed, live_state, live_hints, official_hint, store_pulled");
     step = mp.globals.get("step_frame_json");
     pcmAt = mp.globals.get("pcm_addr")();
     applyEvents = mp.globals.get("apply_events_json");
@@ -1659,6 +1659,10 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     }
     if (live) {
         liveTerm = live.term;
+        liveHints = live.hints;
+        officialHint = mp.globals.get("official_hint");
+        storePulled = mp.globals.get("store_pulled");
+        liveHintsSay = mp.globals.get("live_hints");
         livePump = mp.globals.get("live_pump");
         liveFeed = mp.globals.get("live_feed");
         liveState = mp.globals.get("live_state");
@@ -1742,10 +1746,11 @@ function shipFrame(s) {
 // a console board that spends its GPIOs on a panel, or a Zero this page is not
 // signed in to. All four are the same answer to a cart: no verbs.
 // What the board relays on the live socket (GET /live without the upgrade,
-// native/moy_net/moy_live.h): {mac, kinds, term}, its address on the air
-// where it relays its radio ("" where not), the device kinds it relays
-// (moy_dev_relayed's text) and whether its shell's face is there, or null
-// where it carries none of them. A board without the socket 404s it.
+// native/moy_net/moy_live.h): {mac, kinds, term, hints}, its address on the
+// air where it relays its radio ("" where not), the device kinds it relays
+// (moy_dev_relayed's text), whether its shell's face is there and whether it
+// says when its routes' answers change, or null where it carries none of
+// them. A board without the socket 404s it.
 async function probeLive() {
     try {
         const r = await sealed("GET", "/live");
@@ -1753,8 +1758,8 @@ async function probeLive() {
         if (!d || !d.live) return null;
         const mac = d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : "";
         const kinds = typeof d.kinds === "string" ? d.kinds : "";
-        const term = d.term === 1;
-        return mac || kinds || term ? { mac, kinds, term } : null;
+        const term = d.term === 1, hints = d.hints === 1;
+        return mac || kinds || term || hints ? { mac, kinds, term, hints } : null;
     } catch (e) {
         return null;
     }
@@ -1773,6 +1778,88 @@ async function probeWifi() {
     }
 }
 
+// THE HINTS (native/moy_net/moy_live.c): a board whose live socket says when
+// what its routes answer changed ('H' + a letter a topic) is asked then, not
+// on a clock, while that socket is open: the Wi-Fi panel's GET /wifi on 'w',
+// the update screen's GET /update on 'u', Get Carts' GET /official on 'o', the
+// store pulled again on 's' (an SSH session's edit, another page's sync, an
+// install). A queued POST still goes at its pump's pace; each GET a topic
+// waits HINT_MIN_MS after the last, and PUSH_BACKSTOP_MS without a hint, in
+// case one went with a dropped socket. The socket's own beat is the board's
+// liveness then, so the idle heartbeat asks nothing. A page with no live
+// socket (or a board without the hints) keeps its clocks.
+const HINT_MIN_MS = 250, PUSH_BACKSTOP_MS = 15000, STORE_QUIET_MS = 300;
+let liveHints = false, officialHint = null, storePulled = null, liveHintsSay = null;
+let wifiHint = false, updateHint = false, storeHintAt = 0, storeBusy = false;
+let pushedWas = false;
+const HINTS = { w: 0, u: 0, o: 0, s: 0, pulls: 0 };
+function pushed() {
+    return liveHints && liveWs !== null && liveWs.readyState === 1;
+}
+function liveHinted(u8) {
+    for (const c of u8) {
+        const k = String.fromCharCode(c);
+        if (k in HINTS) HINTS[k]++;
+        if (k === "w") wifiHint = true;
+        else if (k === "u") updateHint = true;
+        else if (k === "o" && officialHint) { try { officialHint(); } catch (e) { } }
+        else if (k === "s") storeHintAt = performance.now();
+    }
+}
+// What a pump that asks on a hint does this turn: "post" (its poll may hold
+// a queued body), "get" too, or nothing.
+function hintDue(now, last, hinted, gap) {
+    if (!pushed()) return now - last >= gap ? "get" : null;
+    if (now - last < HINT_MIN_MS) return null;
+    return hinted || now - last >= PUSH_BACKSTOP_MS ? "get" : "post";
+}
+function pushPump() {
+    const on = pushed();
+    if (on !== pushedWas) {
+        pushedWas = on;
+        if (liveHintsSay) { try { liveHintsSay(on); } catch (e) { } }
+    }
+    const now = performance.now();
+    if (!storeHintAt || storeBusy || !storePulled || now - storeHintAt < STORE_QUIET_MS) return;
+    if (outstanding) return;                 // this page's own change goes first
+    storeHintAt = 0;
+    storeBusy = true;
+    storePull().finally(() => { storeBusy = false; });
+}
+// The served store over this page's copy (the reload's pull, no cart
+// restarted): every root the VM reads from the store, the carts first, a cart
+// folder the board no longer has taken off.
+async function storePull() {
+    const roots = JSON.parse(mp.pyimport("moy_sync").reload_json())
+        .map((id) => store.rootById(id));
+    let got;
+    try {
+        got = await Promise.all(roots.map((r, i) => {
+            const pull = sealed("GET", "/" + r.endpoint);
+            return i ? pull.catch(() => ({ status: 0 })) : pull;
+        }));
+    } catch (e) {
+        return;
+    }
+    const docs = got.map((r) => r.status === 200 ? sealedJson(r) : null);
+    if (!docs[0]) return;
+    roots.forEach((r, i) => {
+        if (!docs[i]) return;
+        if (i === 0) {
+            let names = [];
+            try { names = mp.FS.readdir(r.vfs); } catch (e) { }
+            for (const n of names) {
+                if (n === "." || n === ".." || n.startsWith(".")) continue;
+                const pre = n + "/";
+                if (!Object.keys(docs[0]).some((rel) => rel.startsWith(pre))) rmTree(r.vfs + "/" + n);
+            }
+        }
+        writeStore(r.vfs, docs[i]);
+    });
+    HINTS.pulls++;
+    try { storePulled(); } catch (e) { }
+}
+
 function wifiPump() {
     if (!wifiPoll) return;
     const now = performance.now();
@@ -1787,16 +1874,23 @@ function wifiPump() {
                  + " to carry on.", url);
         return;
     }
-    if (wifiBusy || now - lastWifiAt < WIFI_MS) return;
-    lastWifiAt = now;
+    if (wifiBusy) return;
+    const due = hintDue(now, lastWifiAt, wifiHint, WIFI_MS);
+    if (!due) return;
     let body = "";
     try { body = wifiPoll(); } catch (e) { return; }
     if (!body) {
+        if (due !== "get") return;
         let wants = false;
         try { wants = wifiWants(); } catch (e) { return; }
+        wifiHint = false;
+        lastWifiAt = now;
         if (!wants) return;
     }
+    wifiHint = false;
+    lastWifiAt = now;
     wifiBusy = true;
+    if (body) wifiHint = true;      // what a POST asked may change the answer at once
     const req = body ? sealed("POST", "/wifi", body) : sealed("GET", "/wifi");
     req.then((r) => {
             const ok = r.status >= 200 && r.status < 300 ? 1 : 0;
@@ -1865,18 +1959,25 @@ async function probeOfficial() {
 function updatePump() {
     if (updateBusy || !updatePoll) return;
     const now = performance.now();
-    if (now - lastUpdateAt < UPDATE_MS) return;
-    lastUpdateAt = now;
+    const due = hintDue(now, lastUpdateAt, updateHint, UPDATE_MS);
+    if (!due) return;
     let body = "";
     try { body = updatePoll(); } catch (e) { return; }
     if (!body) {
         // Nothing queued. GET the status only while a screen is waiting on
-        // something; otherwise say nothing at all.
+        // something (and, on a pushing board, it said something changed);
+        // otherwise say nothing at all.
+        if (due !== "get") return;
         let wants = false;
         try { wants = updateWants(); } catch (e) { return; }
+        updateHint = false;
+        lastUpdateAt = now;
         if (!wants) return;
     }
+    updateHint = false;
+    lastUpdateAt = now;
     updateBusy = true;
+    if (body) updateHint = true;    // what a POST asked may change the answer at once
     const req = body ? sealed("POST", "/update", body) : sealed("GET", "/update");
     req.then((r) => {
             // A wait is the board answering: the screen says it and the link
@@ -2264,6 +2365,7 @@ async function liveOpen() {
         LIVE.down++;
         if (u8[0] === 0x6e || u8[0] === 0x64) liveQ.push({ d: u8 });
         else if (u8[0] === 0x74) termLiveIn(u8);
+        else if (u8[0] === 0x63 && u8[1] === 0x48) liveHinted(u8.subarray(2));
         else if (u8[0] === 0x63 && u8[1] === 0x45 && u8.length === 10) {
             const t = new Float64Array(u8.slice(2).buffer)[0];
             LIVE.rtt.push(performance.now() - t);
@@ -2848,6 +2950,10 @@ function heartbeat(now) {
     if (!lastSyncOkAt) lastSyncOkAt = now;      // start the clock at first idle
     if (now - lastHeartbeatAt < HEARTBEAT_MS) return;
     lastHeartbeatAt = now;
+    if (pushed()) {                              // the socket's beat says it answers
+        syncOk(now);
+        return;
+    }
     syncBusy = true;
     fetch("sync", { method: "GET" })
         .then((r) => {
@@ -2995,6 +3101,7 @@ function loop() {
         liveStep(gap);
         updatePump();
         wifiPump();
+        pushPump();
         cartsPump();
     } catch (e) {
         self.postMessage(crashMessage(e));
@@ -3041,7 +3148,7 @@ self.onmessage = async (ev) => {
             if (liveHidden) liveWasHidden = 1;
         } else if (m.t === "state") {
             self.postMessage({ t: "state", json: stateJson ? stateJson() : "null", sink: sinkStats,
-                               loop: LOOP, live: liveOn ? LIVE : null });
+                               loop: LOOP, live: liveOn ? LIVE : null, hints: liveHints ? HINTS : null });
         } else if (m.t === "run") {
             // lastStep too: a (re)start must begin with a clean 1/60 dt, not a
             // clamped jump measured from whenever the loop last ran.

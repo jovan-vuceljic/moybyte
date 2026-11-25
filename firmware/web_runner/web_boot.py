@@ -1882,6 +1882,33 @@ class _LiveWlan:
         return 0
 
 
+def live_hints(on):
+    """Whether the board's live socket is open and says when its routes'
+    answers change (native/moy_net/moy_live.c, THE HINTS): Get Carts' board
+    requests ask on its hint rather than on their clock."""
+    import carts_link
+    carts_link.pushed(on)
+    return ""
+
+
+def official_hint():
+    """The board said its /official answer changed."""
+    import carts_link
+    carts_link.hint()
+    return ""
+
+
+def store_pulled():
+    """The worker brought the served store over the VFS because the board
+    said it changed (its hint 's': an SSH session's edit, another page's
+    sync, an install): the shelf reads it again and every watcher adopts it
+    as its baseline, as a reload does, with no cart restarted."""
+    _rescan()
+    for w in _watchers():
+        w.rebase()
+    return True
+
+
 def live_kinds(spec):
     """The board relays device kinds on the live socket (the /live probe's
     "kinds", native/moy_kernel/moy_dev_kinds.h's THE RELAY): their handles

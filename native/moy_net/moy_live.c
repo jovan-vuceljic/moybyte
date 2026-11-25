@@ -9,7 +9,10 @@
 //
 //   'c'  the socket's own. 'b' a beat, either way, once a MOY_LIVE_BEAT_MS
 //        that carried nothing else; 'e' + bytes up, answered at once with
-//        'E' + the same bytes (the page's round trip to its board).
+//        'E' + the same bytes (the page's round trip to its board); 'H' +
+//        letters down, a HINT: what the page reads over HTTP changed on the
+//        board, so it asks now and asks no other way while the socket is
+//        open (THE HINTS, below).
 //   'n'  the radio link, where the board relays its radio
 //        (moy_web_live_link; below).
 //   'd'  the device channel: the handles of the kinds this board relays
@@ -387,6 +390,79 @@ static int beat(int ws) {
     return say(ws, 2);
 }
 
+// THE HINTS. What the page reads over HTTP (the store, a Zero's Wi-Fi, its
+// update, its official carts) stays there; the socket says when it changed,
+// one letter a topic, so the page asks then instead of on a clock:
+//
+//   's'  the store: the volumes took a change (moy_vol_changes) the page did
+//        not make itself, an SSH session's, a shell's, another page's sync
+//   'w'  the board's Wi-Fi (/wifi), 'u' its update (/update), 'o' its
+//        official carts (/official): their backends stepped (moy_live_hint,
+//        device/moy_webhost.py)
+//
+// Hints a pass gathered go in one message at its end; a page asks at most
+// once a topic for several. The page's own sync is no news to it: while the
+// webhost applies a batch the socket's session sent, the store's changes
+// are counted as seen (moy_live_store_mine).
+uint32_t moy_vol_changes(void);
+#pragma weak moy_vol_changes
+
+static uint32_t s_hints;                // the letters 'a'..'z' asked, a bit each
+static int s_mine;                      // the page's own batch applying
+static uint32_t s_seen;                 // the volumes' count the page knows of
+
+void moy_live_hint(const char *topics) {
+    uint32_t b = 0;
+    for (; *topics; topics++) {
+        if (*topics >= 'a' && *topics <= 'z') {
+            b |= 1u << (*topics - 'a');
+        }
+    }
+    __atomic_or_fetch(&s_hints, b, __ATOMIC_ACQ_REL);
+}
+
+void moy_live_store_mine(int on) {
+    if (on) {
+        __atomic_add_fetch(&s_mine, 1, __ATOMIC_ACQ_REL);
+        return;
+    }
+    if (moy_vol_changes != NULL) {
+        __atomic_store_n(&s_seen, moy_vol_changes(), __ATOMIC_RELEASE);
+    }
+    __atomic_sub_fetch(&s_mine, 1, __ATOMIC_ACQ_REL);
+}
+
+static void hints_start(void) {
+    __atomic_store_n(&s_hints, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_seen, moy_vol_changes != NULL ? moy_vol_changes() : 0, __ATOMIC_RELEASE);
+}
+
+static int hints(int ws) {
+    uint32_t h = 0;
+    if (moy_vol_changes != NULL && !__atomic_load_n(&s_mine, __ATOMIC_ACQUIRE)) {
+        uint32_t c = moy_vol_changes();
+        if (c != __atomic_load_n(&s_seen, __ATOMIC_ACQUIRE)) {
+            __atomic_store_n(&s_seen, c, __ATOMIC_RELEASE);
+            h |= 1u << ('s' - 'a');
+        }
+    }
+    h |= __atomic_exchange_n(&s_hints, 0, __ATOMIC_ACQ_REL);
+    if (!h) {
+        return 0;
+    }
+    uint8_t *o = (uint8_t *)L->b->out + MOY_WS_HEAD;
+    size_t n = 0;
+    o[n++] = 'c';
+    o[n++] = 'H';
+    for (int i = 0; i < 26; i++) {
+        if (h & (1u << i)) {
+            o[n++] = (uint8_t)('a' + i);
+        }
+    }
+    L->stats.hints++;
+    return say(ws, n);
+}
+
 // One page's socket, to its end.
 static void pump(int ws) {
     size_t n = 0;
@@ -394,6 +470,7 @@ static void pump(int ws) {
     if (state(ws, 0) < 0) {
         return;
     }
+    hints_start();
     for (;;) {
         if (L->cut) {
             moy_ws_close(ws, L->cut == 2 ? 4001 : 1008, L->cut == 2 ? "taken" : "revoked");
@@ -439,6 +516,9 @@ static void pump(int ws) {
             return;
         }
         if (moy_live_dev_pump != NULL && (devs = moy_live_dev_pump()) < 0) {
+            return;
+        }
+        if (hints(ws) < 0) {
             return;
         }
     }

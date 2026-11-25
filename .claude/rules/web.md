@@ -484,7 +484,11 @@ nor those docs will warn you about:
   slot 1), multiplexed by its frames' first byte, served
   on the board's own task. Its terminal channel ('t') is the page's
   Terminal (`native/moy_tty/moy_tty_live.c`): a Zero serves no `GET /term`,
-  which the consoles' pages keep (seal slot 0). Its first channel relays the board's ESP-NOW, so
+  which the consoles' pages keep (seal slot 0). Its control channel's hints
+  (`moy_live.c`, THE HINTS) say when what the page reads over HTTP changed
+  (the store, `/wifi`, `/update`, `/official`), and while the socket is open
+  the worker asks those routes on a hint, never on its clocks; the bulk
+  (cart downloads, sync batches, the pack, sign-in) stays HTTP. Its first channel relays the board's ESP-NOW, so
   the page's link (`moy_link_web.c`, the kernel's Match over it) plays a
   console's match, a Python cart's as a Lua one's: the wasm computes floats
   as the boards' do (REPR_C over 32-bit words, single precision,
