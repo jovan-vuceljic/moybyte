@@ -57,7 +57,7 @@ every lock is empty and nothing blocks.
 | `moy_fetch`, `moy_lora`, `usbdisk` | their request rows | a critical section (`moy_fetch.c`), the radio's timed mutex (`moy_lora.c`), a binary semaphore (`moy_usbdisk.c`); each woken by a task notification |
 | `moy_svc` (a Lua service), `moy_elf` (a compiled program's thread) | the kernel's tables through their APIs: status, notes, items, devices, leases | `moy_sync.h`'s lock, the lease lock; the VM only by a hop |
 | `moy_sh` (a shell runner), a terminal's face (SSH, serial, web) | the store, the process table, their session | the store's lock (`moy_store_lock`); the VM only by a hop |
-| `moy_pake`, the web login's key job | its one job record | atomics and a task notification (`moy_webauth.c`) |
+| `moy_pake`, the web login's key job | its one job record | atomics, its handle under a critical section, and a task notification (`moy_webauth.c`) |
 | `moy_live`, the live socket's bridge (one a page's socket) | that socket, the radio's link and ring | atomics on the socket it serves, the ring's latch (`moy_live.c`, `moy_link.c`); the VM never |
 | `moy_save`, the saver | the store, a cart's queued pmem | the store's lock and the bus gate around each record it writes (`native/moy_store/moy_save.h`); its slots' mutex; woken by a task notification |
 

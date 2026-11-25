@@ -33,9 +33,10 @@
 // nonce, a session, the QR's token, a window) comes back to life after 2^32
 // ms; a token found expired is wiped all the same.
 //
-// THE PAKE runs on a worker (a board's task with a PSRAM stack, made at the
-// first and parked between; a host's thread), so the console's task never
-// waits for the curve. Its answer goes out at a later poll (moy_wa_later).
+// THE PAKE runs on a worker (a board's task with a PSRAM stack, made by the
+// first and ended JOB_IDLE_MS after the last, so an idle board holds no
+// stack for it; a host's thread), so the console's task never waits for the
+// curve. Its answer goes out at a later poll (moy_wa_later).
 // A PAKE counts as a wrong password from its start, and its confirm clears
 // it, so a run left unconfirmed spends a guess.
 
@@ -956,10 +957,36 @@ static void run_job(void) {
 }
 
 #if MOY_ON_BOARD
+#define JOB_IDLE_MS 10000u
+static portMUX_TYPE s_job_mux = portMUX_INITIALIZER_UNLOCKED;
+
+// The worker's handle, under the lock that orders job_start and its end.
+static uintptr_t job_worker(uintptr_t set, bool write) {
+    portENTER_CRITICAL(&s_job_mux);
+    if (write) {
+        A->worker = set;
+    }
+    uintptr_t h = A->worker;
+    portEXIT_CRITICAL(&s_job_mux);
+    return h;
+}
+
 static void job_task(void *arg) {
     (void)arg;
     for (;;) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(JOB_IDLE_MS)) == 0) {
+            // idle: no job runs, so the handle goes under the lock and the
+            // next job_start, which marks its job first, makes a worker
+            portENTER_CRITICAL(&s_job_mux);
+            bool ends = __atomic_load_n(&A->job.state, __ATOMIC_ACQUIRE) != JOB_RUN;
+            if (ends) {
+                A->worker = 0;
+            }
+            portEXIT_CRITICAL(&s_job_mux);
+            if (ends) {
+                moy_task_delete(MOY_TASK_PAKE, NULL);
+            }
+        }
         if (__atomic_load_n(&A->job.state, __ATOMIC_ACQUIRE) == JOB_RUN) {
             run_job();
         }
@@ -967,15 +994,17 @@ static void job_task(void *arg) {
 }
 
 static int job_start(void) {
-    if (A->worker == 0) {
+    __atomic_store_n(&A->job.state, JOB_RUN, __ATOMIC_RELEASE);
+    uintptr_t w = job_worker(0, false);
+    if (w == 0) {
         TaskHandle_t h = NULL;
         if (!moy_task_spawn(MOY_TASK_PAKE, job_task, NULL, &h)) {
+            __atomic_store_n(&A->job.state, JOB_IDLE, __ATOMIC_RELEASE);
             return -1;
         }
-        A->worker = (uintptr_t)h;
+        w = job_worker((uintptr_t)h, true);
     }
-    __atomic_store_n(&A->job.state, JOB_RUN, __ATOMIC_RELEASE);
-    xTaskNotifyGive((TaskHandle_t)A->worker);
+    xTaskNotifyGive((TaskHandle_t)w);
     return 0;
 }
 #else
