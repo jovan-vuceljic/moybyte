@@ -186,6 +186,29 @@ def test_a_walk_takes_the_same_c_stack_at_any_depth(harness, tmp_path):
     assert deep - shallow < 256, "2 levels: %d B, 150 levels: %d B" % (shallow, deep)
 
 
+def test_a_walk_looks_up_no_entry_by_its_path(harness, tmp_path):
+    """find, du and rm -r take each entry's kind and size from its folder's
+    listing (moy_sh_cmds.c's walk_names), so a folder of 200 files costs a
+    few store calls, not one per file: a lookup by path on littlefs walks
+    the path from the root, about 3 ms a part on the C3."""
+    def calls(files):
+        root = tmp_path / ("root%d" % files)
+        (root / "d" / "e").mkdir(parents=True)
+        for i in range(files):
+            (root / "d" / "e" / ("f%03d" % i)).write_bytes(b"x" * i)
+        script = tmp_path / ("wide%d.sh" % files)
+        script.write_text("du -s d; find d -name f199; rm -r d\n")
+        r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                           timeout=60, env=dict(os.environ, SH_MAIN_MEASURE="1"))
+        assert r.returncode == 0 and not os.listdir(root), r.stdout.decode()[-2000:]
+        return int(re.search(rb"store calls (\d+)", r.stderr).group(1)), r.stdout
+
+    few, (many, out) = calls(1)[0], calls(200)
+    assert b"d/e/f199" in out and out.startswith(b"%d" % ((sum(range(200)) + 1023) // 1024))
+    # rm -r still removes each file by its path: one call a file, no more
+    assert many - few < 200 + 20, "1 file: %d calls, 200 files: %d" % (few, many)
+
+
 def test_an_arena_run_out_is_an_error_not_a_reset(harness, tmp_path):
     """A block the arena refuses is dash's "Out of space", raised bare when
     its own message finds no room (moy_sh.c's refused). Reported again, it

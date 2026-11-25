@@ -7,8 +7,9 @@
 //
 // With SH_MAIN_MEASURE set it says last, on stderr, the deepest C stack under
 // main any poll ran on ("c stack N"; a walk polls at every path, so a tree's
-// depth that moves it is a walk recursing) and the largest block the session
-// took after its arena ("largest block N").
+// depth that moves it is a walk recursing), the largest block the session
+// took after its arena ("largest block N") and the calls it made on the
+// store, each one hop ("store calls N").
 // SH_MAIN_ARENA sets the session's arena in KB (256 without it).
 //
 // The OS around the session is a stand-in, enough to exercise every path:
@@ -44,6 +45,13 @@ static char interrupt_path[1024];
 static const char *stack_base;
 static size_t stack_deepest;
 static size_t largest = 0, *largest_at = NULL;
+static size_t hops = 0;
+
+static void h_hop(void *ctx, void (*fn)(void *arg), void *arg) {
+    (void)ctx;
+    hops++;
+    fn(arg);
+}
 
 // Ctrl-C, in band: the script writes /.interrupt holding N, and the poll
 // after the next N takes it (the shell polls after every command and while
@@ -349,7 +357,7 @@ int main(int argc, char **argv) {
         .vread = h_vread, .vwrite = h_vwrite, .vlist = h_vlist,
         .lookup = h_lookup, .spawn = h_spawn, .status = h_status, .kill = h_kill,
         .procs = h_procs, .roles = roles, .role = h_role, .mem = h_mem, .df = h_df,
-        .reboot = NULL, .sleep_ms = h_sleep, .log = h_log,
+        .reboot = NULL, .sleep_ms = h_sleep, .log = h_log, .hop = h_hop,
     };
     moy_sh_t *s = moy_sh_new(&host, (getenv("SH_MAIN_ARENA") != NULL ? (size_t)atoi(getenv("SH_MAIN_ARENA")) : 256u) * 1024u, "/", "/");
     largest_at = &largest;
@@ -386,7 +394,8 @@ int main(int argc, char **argv) {
     }
     moy_sh_free(s);
     if (getenv("SH_MAIN_MEASURE") != NULL) {
-        fprintf(stderr, "c stack %zu\nlargest block %zu\n", stack_deepest, largest);
+        fprintf(stderr, "c stack %zu\nlargest block %zu\nstore calls %zu\n", stack_deepest,
+                largest, hops);
     }
     return status;
 }

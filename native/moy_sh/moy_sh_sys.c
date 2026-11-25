@@ -90,9 +90,14 @@ struct moy_sh_obj {
 
 struct moy_sh_dir {
     struct dirent ent;
-    char *names;                // NUL-separated, a type byte before each
+    char *names;                // each a type byte, its size (4 bytes), its name and NUL
     size_t len, cap, pos;
+    int sized;                  // the store's listing: its sizes are kept, else 0 (as stat)
+    int last_dir;               // what readdir answered last: a folder, its size
+    uint32_t last_size;
 };
+
+#define DIR_HEAD 5u             // a name's type byte and size before it
 
 // --- objects ----------------------------------------------------------------
 
@@ -1295,9 +1300,10 @@ char *moy_sh_getcwd(char *buf, size_t n) {
 
 static int dir_add(void *arg, const char *name, int is_dir, uint32_t size) {
     struct moy_sh_dir *d = arg;
-    char t = is_dir ? 'd' : 'f';
-    (void)size;
-    if (buf_add(&d->names, &d->len, &d->cap, &t, 1, MOY_SH_FILE_MAX) != 0 ||
+    char head[DIR_HEAD] = { is_dir ? 'd' : 'f' };
+    uint32_t n = d->sized && !is_dir ? size : 0;
+    memcpy(head + 1, &n, sizeof n);
+    if (buf_add(&d->names, &d->len, &d->cap, head, DIR_HEAD, MOY_SH_FILE_MAX) != 0 ||
         buf_add(&d->names, &d->len, &d->cap, name, strlen(name) + 1, MOY_SH_FILE_MAX) != 0) {
         return ENOMEM;
     }
@@ -1308,8 +1314,8 @@ static int dir_add(void *arg, const char *name, int is_dir, uint32_t size) {
 // host's, the root volume's, the mount points): each is listed once.
 static int root_add(void *arg, const char *name, int is_dir, uint32_t size) {
     struct moy_sh_dir *d = arg;
-    for (size_t i = 0; i < d->len; i += strlen(d->names + i + 1) + 2) {
-        if (strcmp(d->names + i + 1, name) == 0) {
+    for (size_t i = 0; i < d->len; i += DIR_HEAD + strlen(d->names + i + DIR_HEAD) + 1) {
+        if (strcmp(d->names + i + DIR_HEAD, name) == 0) {
             return 0;
         }
     }
@@ -1397,6 +1403,7 @@ moy_sh_DIR *moy_sh_opendir(const char *path) {
                 s->host.vlist(s->host.ctx, "/", root_add, d);
             }
         }
+        d->sized = 1;
         list_call_t c = { moy_sh_store_path(abs, sp, sizeof sp), d, 0, root };
         moy_sh_hop(s, list_here, &c);
         r = !strcmp(abs, "/") ? 0 : c.r;
@@ -1415,9 +1422,11 @@ struct dirent *moy_sh_readdir(moy_sh_DIR *d) {
         return NULL;
     }
     char t = d->names[d->pos];
-    const char *name = d->names + d->pos + 1;
+    memcpy(&d->last_size, d->names + d->pos + 1, sizeof d->last_size);
+    d->last_dir = t == 'd';
+    const char *name = d->names + d->pos + DIR_HEAD;
     size_t n = strlen(name);
-    d->pos += n + 2;
+    d->pos += DIR_HEAD + n + 1;
     if (n >= sizeof d->ent.d_name) {
         n = sizeof d->ent.d_name - 1;
     }
@@ -1429,6 +1438,11 @@ struct dirent *moy_sh_readdir(moy_sh_DIR *d) {
     (void)t;
 #endif
     return &d->ent;
+}
+
+void moy_sh_dir_last(const moy_sh_DIR *d, int *is_dir, uint32_t *size) {
+    *is_dir = d->last_dir;
+    *size = d->last_size;
 }
 
 int moy_sh_closedir(moy_sh_DIR *d) {
