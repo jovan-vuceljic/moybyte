@@ -13,7 +13,7 @@
      is input (pointer, virtual pad, keyboard, soft-keyboard summon), the
      AudioWorklet PCM ring, and layout. build.sh concatenates this with
      page_tail.js (the worker transport + loader) into dist/index.html. -->
-<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <link rel=icon href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAhUlEQVR42mNgGAW4wX8y8dB3ANig5rI5ZGFqOGTAHIBi8aHDx1HwyHPAgEfBcHAAydl0cDrg/8cXKJiQOCVRNLgdgC6PS3z4OYDaeOg5gJDDaB4FA+4AQgUM3dLAgDtg5OaCEeUAFIfUqQZTFZPSUBncDsCVHalh8aBxAKGuGbXUDw4HAAAJtsp8ecvLrQAAAABJRU5ErkJggg=="><title>Moybyte</title><style>
 html,body{margin:0;height:100%;background:#0b0f1a;color:#c2c3c7;
 font:14px ui-monospace,Menlo,Consolas,monospace;display:flex;flex-direction:column;
@@ -31,6 +31,13 @@ body{width:100%}
 @media (pointer:coarse){body{-webkit-user-select:none;user-select:none;
 -webkit-touch-callout:none}
 #kbin,#crash{-webkit-user-select:text;user-select:text}}
+/* The page never zooms: no pinch, no double tap (iOS Safari zooms on a
+   double tap of A or B); the play surfaces -- the canvas, the controls and
+   everything in them -- take every touch as the console's, with no
+   selection, callout or tap flash on any pointer. */
+html{touch-action:pan-x pan-y}
+canvas,#ctl,#ctl *{touch-action:none;-webkit-user-select:none;user-select:none;
+-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 /* Presentation scale: the OS renders at its DESIGN resolution (320x240 /
    1024x600); fit() uses the whole available viewport while the browser keeps
    nearest-neighbour sampling. Desktop users have real keyboard/pointer input,
@@ -484,8 +491,19 @@ wb("ba","a");wb("bb","b");
 document.getElementById("bh").addEventListener("pointerdown",function(e){send({type:"super"});e.preventDefault();});
 // Android long-press fires contextmenu even with pointerdown preventDefault'd -- swallow it
 // on the play surfaces (canvas + control bar) only, so desktop right-click elsewhere is normal.
-document.addEventListener("contextmenu",function(e){var t=e.target;
-if(t===cv||(t.closest&&t.closest("#ctl")))e.preventDefault();});
+function onPlay(t){return t===cv||!!(t&&t.closest&&t.closest("#ctl"));}
+document.addEventListener("contextmenu",function(e){if(onPlay(e.target))e.preventDefault();});
+document.addEventListener("selectstart",function(e){if(onPlay(e.target))e.preventDefault();});
+// iOS Safari zooms on a pinch (it ignores user-scalable=no) and on a double
+// tap that touch-action does not always stop: the pinch is refused page-wide,
+// and a second touchend within 350 ms on a play surface is the console's.
+// The keyboard summon (#kb) answers a click, which a refused touchend would
+// swallow, so it keeps its own.
+document.addEventListener("gesturestart",function(e){e.preventDefault();});
+var lastTouch=0;
+document.addEventListener("touchend",function(e){var t=e.target,now=Date.now();
+if(onPlay(t)&&!(t.closest&&t.closest("#kb"))&&now-lastTouch<350&&e.cancelable)e.preventDefault();
+lastTouch=now;},{passive:false});
 var pH={};
 // The desk keyboard: each key goes to the console as its code and the
 // modifiers held with it (runtime/host/moy_input.py's key events), and what a key
