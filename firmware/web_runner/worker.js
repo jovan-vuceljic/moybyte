@@ -63,7 +63,7 @@
 //                        durable. Sent to the PAGE because storage.persist()
 //                        is window-only -- a Worker cannot ask, only look.
 //   {t:"pair", pw, cable, why, wait}  this board has not paired this browser,
-//                        so the boot stopped before the VM: the page asks.
+//                        so the boot waits before its store: the page asks.
 //                        `pw` a password can pair it (else only the QR can),
 //                        `cable` the board pairs over the cable (a Zero: no
 //                        screen, so no QR; My consoles' Manage by cable), `why`
@@ -71,7 +71,8 @@
 //                        signInWaitSays' sentence while the board holds wrong
 //                        tries off, else ""
 //   {t:"key", id, kid, key, reload}  a pairing's new device key for board `id`:
-//                        the page keeps it (and with `reload`, loads again)
+//                        the page keeps it; a boot that waited at the pairing
+//                        goes on, and `reload` (a console that ran) loads again
 //   {t:"unkey", id}      board `id` refused this browser's key: the page drops it
 //   {t:"claimed", ok, why}  the answer to {t:"claim"}: the password set (a
 //                        pairing's {t:"key"} follows), or why not
@@ -1164,6 +1165,8 @@ const NONCE_TRIES = 3;          // hellos a credential is sent after
 let signingIn = null;           // the sign-in in flight, which every caller shares
 let authNeed = null;            // why the last sign-in failed: {pw, wait, why}
 let authCable = false;          // the last hello's "cable": the board pairs over the cable
+let pairWait = null;            // resolves the boot a board that has not paired this
+                                // browser waits in: a pairing goes on with it, no reload
 let SW = null;                  // moy_seal_web.c's entry points
 const utf8 = new TextEncoder(), utf8d = new TextDecoder();
 
@@ -1253,7 +1256,11 @@ function finish(r, fresh) {
         const id = C.M.UTF8ToString(C.board());
         const kid = C.M.UTF8ToString(C.kid()), key = C.M.UTF8ToString(C.devkey());
         auth.keys[id] = { kid, key };
-        self.postMessage({ t: "key", id, kid, key, reload: fresh === "reload" });
+        // A boot waiting at the pairing goes on from its pulls; a console
+        // already running (a new password over the link) starts again.
+        const resume = fresh === "reload" ? pairWait : null;
+        self.postMessage({ t: "key", id, kid, key, reload: fresh === "reload" && !resume });
+        if (resume) { pairWait = null; resume(); }
     }
     return true;
 }
@@ -1324,7 +1331,7 @@ function signIn() {
 }
 
 // Pairing by the console's password (the page's prompt): SPAKE2+, then the
-// key, then a fresh load signed in with it.
+// key, and the boot that waited for it goes on signed in.
 async function pairPassword(pw, name) {
     let why = "";
     try {
@@ -1476,21 +1483,26 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     // Every root's pull, at the endpoint the VM's registry names: the carts,
     // and the roots firmware before them 404s (the files layer, the console's
     // own documents, the apps' private folders).
-    const pulled = await Promise.all(store.roots().map((r) => r.id === "carts"
-        ? gated("/" + r.endpoint) : gated("/" + r.endpoint).catch(none)));
-    const fetched = {};
-    store.roots().forEach((r, i) => { fetched[r.id] = pulled[i].json; });
-    const cartsRes = pulled[store.roots().indexOf(store.rootById("carts"))];
-    if (!signedIn && !authOpen && !(authNeed && authNeed.gone)) {
-        // A BOARD THAT HAS NOT PAIRED THIS BROWSER: stop the boot here --
+    let pulled, fetched, cartsRes;
+    for (;;) {
+        pulled = await Promise.all(store.roots().map((r) => r.id === "carts"
+            ? gated("/" + r.endpoint) : gated("/" + r.endpoint).catch(none)));
+        fetched = {};
+        store.roots().forEach((r, i) => { fetched[r.id] = pulled[i].json; });
+        cartsRes = pulled[store.roots().indexOf(store.rootById("carts"))];
+        if (signedIn || authOpen || (authNeed && authNeed.gone)) break;
+        // A BOARD THAT HAS NOT PAIRED THIS BROWSER: the boot waits here --
         // there is nothing to boot, and seeding the VFS from a refusal would
-        // build a shelf out of it. The page asks; a pairing reloads it. A
-        // host that answered nothing boots on as before: no board behind it.
+        // build a shelf out of it. The page asks; a pairing (finish) goes on
+        // from the pulls, with the VM already up, so the console starts
+        // without loading the page again. A host that answered nothing boots
+        // on as before: no board behind it.
         const a = authNeed || { pw: false, wait: "", why: "" };
         say(a.wait || "pair this browser with the console");
         askToPair();
         console.log("[moy] sign-in: " + (a.wait || a.why || "not paired"));
-        return;
+        await new Promise((ok) => { pairWait = ok; });
+        say("loading carts...");
     }
     if (!signedIn && !authOpen && cartsRes.json === null) {
         // The board went away between the page and its pulls: no shelf to
@@ -2746,8 +2758,8 @@ self.onmessage = async (ev) => {
                 }
             } else if (!(await pairPassword(m.pw, m.name))) askToPair();
         } else if (m.t === "password") {
-            // The pairing prompt's password: a pairing reloads the page (its
-            // {t:"key"}), anything else asks again with why.
+            // The pairing prompt's password: a pairing goes on with the boot
+            // (its {t:"key"}), anything else asks again with why.
             if (!(await pairPassword(m.pw, m.name))) askToPair();
         } else if (m.t === "input") {
             inbox.push(m.json);

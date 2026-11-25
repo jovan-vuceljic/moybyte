@@ -34,7 +34,7 @@ var stateWait=[];
 window.__moyState=function(){return new Promise(function(ok){stateWait.push(ok);
 WORKER.postMessage({t:"state"});});};
 function onWorker(m){
-if(m.t==="status"){sEl.textContent=m.s;}
+if(m.t==="status"){sEl.textContent=m.s;pinSaid(m.s);}
 else if(m.t==="assets"){assetsJSON=m.json;assetsBusy=false;
 if(assetsWait.length){var ws=assetsWait;assetsWait=[];
 for(var i=0;i<ws.length;i++)ws[i][0](JSON.parse(m.json));}
@@ -176,10 +176,14 @@ PINP.textContent="The console checks the password with this browser. On a small 
 +"board that takes a few seconds; the console starts when it is done.";
 PINR.style.display="none";PINB.disabled=true;PINM.textContent=said;PINEL.style.display="flex";}
 function pinSetting(){pinBusy("setting the console's password...");}
-// Paired: the key is this browser's from now on, and the page starts again
-// signed in with it.
+// The boot's own words on a busy card, which goes once the console is live.
+function pinSaid(s){if(!PINEL||PINEL.className!=="busy")return;
+if(s==="live"){PINEL.className="";PINEL.style.display="none";}else PINM.textContent=s;}
+// Paired: the key is this browser's from now on. A boot that waited at the
+// pairing goes on (the worker's), a console that ran starts again with it.
 function keyGot(m){keySave(m.id,m.kid,m.key);
-if(m.reload){pinBusy("paired: starting the console...");location.reload();}}
+if(PINEL&&PINEL.className==="busy")pinBusy("paired: starting the console...");
+if(m.reload)location.reload();}
 if(PINB)PINB.addEventListener("click",pinSubmit);
 if(PINF)PINF.addEventListener("keydown",function(e){
 if(e.key==="Enter"){e.preventDefault();pinSubmit();}});
