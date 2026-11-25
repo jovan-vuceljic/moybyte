@@ -177,6 +177,7 @@ def _shell(tmp_path):
     ws = build_workstation(str(tmp_path / "carts"))
     app = ws.app("terminal")
     app.open()
+    app.draw(0)                         # the first frame sizes the grid, as a desk's does
     return app, lambda line: (run(app, line), plain(app))[1]
 
 

@@ -1463,7 +1463,8 @@ def board_name():
     except ImportError:
         return None
     board = getattr(moy_ota, "BOARD", None)
-    return board_words(moy_ota.BOARD_NAMES.get(board, str(board))) if board else None
+    names = getattr(moy_ota, "BOARD_NAMES", None) or {}
+    return board_words(names.get(board, str(board))) if board else None
 
 
 def _idle_word(secs):
