@@ -1087,6 +1087,7 @@ int moy_sh_rolecmd(int argc, char **argv) {
 
 int moy_sh_fail(const char *fmt, ...) {
     va_list ap;
+    flushall();                         // what the command printed first goes first
     va_start(ap, fmt);
     doformat(out2, fmt, ap);
     outcslow('\n', out2);

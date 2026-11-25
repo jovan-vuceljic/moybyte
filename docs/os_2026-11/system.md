@@ -80,11 +80,16 @@ it runs `-c CODE`.
 **Built-ins are views of OS services: one implementation, a GUI face and a
 command face, never a second copy.** The core commands are **C built-ins**
 over the kernel's own tables and the store's C (`native/moy_store/moy_fs.h`,
-`moy_ufiles.h`): the file commands, `ps`, `kill`, `free`, `df`,
-`log`/`dmesg` (`processes.md` §9), `reboot`, `date`. Commands for **Python-side
-services** call them through the C-owned role table (`native/moy_app`, the
-ROLE door): `pkg` (§6), `perm`, `settings`, `notify`, `service`
-(`processes.md` §5), `cron`/`at` (`between_apps.md` §3), `open`/`pick`
+`moy_ufiles.h`): the file commands (`find` and `du` walking the store as `ls`
+does), the text tools (`head`, `tail`, `grep`, `wc`, `sort`, `uniq`, `cut`,
+`tr`, `tee`, `xxd`, and `md5sum` and `sha256sum` over the mbedTLS the image
+carries), `ps`, `kill`, `free`, `df`, `log`/`dmesg` (`processes.md` §9),
+`reboot`, `date`. A text tool streams its input a line or a block at a
+time; `sort`, which must hold its input whole, takes it from the session's
+heap, at most its arena's size, and says `sort: out of memory` past that.
+Commands for **Python-side services** call them through the C-owned role
+table (`native/moy_app`, the ROLE door): `pkg` (§6), `perm`, `settings`,
+`notify`, `service` (`processes.md` §5), `cron`/`at` (`between_apps.md` §3), `open`/`pick`
 (`between_apps.md` §1–§2), and the network and hardware
 commands as their services land (`wifi`, `ifconfig`, `ping`, `http`, `ble`,
 `ntp`, `pins`, `i2c`, `uart`, `lora`, `battery`, `brightness`). **While the
@@ -108,10 +113,10 @@ forms. `mic`, `lora` and `ble` are served in C over their drivers and leases
 **The line between C and the console** (owner, 2026-11-05: the terminal is
 mostly C, one implementation moved down, Python calling it). With the VM
 stopped these answer, each over the C the console itself calls: the file
-commands, `ps`, `kill` (the run in front), `free`, `log`/`dmesg`, `reboot`,
-`date`, `sleep`, `clear`, `help`, `neofetch` (the rows only the console
-knows, its name, board, firmware, display, theme and WiFi, read from the
-door's `/proc/console`, left out), `edit` and `top` (below), `settings`
+commands, the text tools, `ps`, `kill` (the run in front), `free`,
+`log`/`dmesg`, `reboot`, `date`, `sleep`, `clear`, `help`, `neofetch` (the
+rows only the console knows, its name, board, firmware, display, theme and
+WiFi, read from the door's `/proc/console`, left out), `edit` and `top` (below), `settings`
 `list`, `get`, `set` and `unset` (§5), and `pkg list` and `pkg remove` (§6),
 the last two in `native/moy_sh/moy_sh_store.c`. Everything else needs the
 console: `settings reload` (it applies the file), the other `pkg` verbs,

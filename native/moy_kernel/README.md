@@ -82,6 +82,33 @@ that hold VM state before it sweeps.
   semaphores, the audio output's start-and-stop pair) are the guard's
   allowlist, each with its reason.
 
+## The float functions
+
+A float that a match's two sides compute must be the same bits on both
+(`docs/netplay_v1.md` §5), and a Python cart's `math` module (and float `**`)
+reaches the C library's single-precision functions, as a Lua cart's `math`
+library and `^` do (`LUA_32BITS`: its `l_mathop` names the float functions,
+linked into the same image). The C libraries part: the boards
+link newlib's, the browser's wasm musl's, the host's R32 build glibc's, and
+each rounds `sin`, `exp`, `atan2` and the rest a little differently. So every
+tier links one set in their place, the kernel's: MicroPython's own `lib/libm`
+(fdlibm's float functions by way of newlib-nano, and musl's), the files
+`micropython.mk` and `micropython.cmake` both list. The trigonometric,
+inverse trigonometric, exponential, logarithmic, power, hyperbolic, error and
+gamma functions are taken; `log2` is the math module's own, `log` times
+1/ln 2 (`MP_NEED_LOG2`, which both build files define); `sqrt`, `fmod`,
+`floor` and the other exact functions are the C library's, since IEEE
+rounding leaves them one answer.
+
+The set is compiled with `-ffp-contract=off`: the S3's and the P4's FPUs
+have a fused multiply-add, which rounds once where the source rounds twice,
+and the wasm has none. On a board the set is a static library of its own
+(`moy_libm`), because a usermod's sources are compiled by a target no source
+property reaches. `tests/test_web_lockstep_floats.py` holds the R32 build and
+the wasm to one answer, bit for bit, over every function and each one's
+domain, and the Zeros' suite (`tests/test_zero_on_glass.py`) holds a T-Deck's
+`atan2` to the wasm's.
+
 ## Decisions
 
 - **The OS is native code below the app verb table; Python is an app runtime**

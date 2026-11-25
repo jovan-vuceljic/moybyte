@@ -33,6 +33,20 @@ SRC_USERMOD_LIB_C += $(MOY_KERNEL_DIR)/moy_loop.c $(MOY_KERNEL_DIR)/moy_idle.c \
     $(MOY_KERNEL_DIR)/moy_notes.c \
     $(MOY_KERNEL_DIR)/moy_items.c
 CFLAGS_USERMOD += -I$(MOY_KERNEL_DIR)
+# The float functions every tier computes alike (README.md, THE FLOAT
+# FUNCTIONS): MicroPython's lib/libm in place of the C library's, without
+# fused multiply-adds. micropython.cmake names the same files.
+MOY_LIBM := math.c atan2f.c atanf.c asinfacosf.c log1pf.c asinhf.c acoshf.c atanhf.c \
+    sf_sin.c sf_cos.c sf_tan.c kf_sin.c kf_cos.c kf_tan.c ef_rem_pio2.c kf_rem_pio2.c \
+    sf_erf.c erf_lgamma.c wf_lgamma.c wf_tgamma.c
+SRC_USERMOD_LIB_C += $(addprefix lib/libm/,$(MOY_LIBM))
+MOY_LIBM_O := $(addprefix $(BUILD)/lib/libm/,$(MOY_LIBM:.c=.o))
+$(MOY_LIBM_O): CFLAGS += -ffp-contract=off -include $(MOY_KERNEL_DIR)/moy_libm.h \
+    -Wno-sign-compare -Wno-double-promotion -Wno-typedef-redefinition -Wno-unknown-warning-option
+# log2 is the math module's own, log(x) times 1/ln 2, and not the C library's.
+CFLAGS_USERMOD += -DMP_NEED_LOG2=1
+# A build tree made before these flags compiles its objects again.
+$(MOY_LIBM_O) $(BUILD)/py/modmath.o: $(MOY_KERNEL_DIR)/micropython.mk
 # A generated face (gen_os, *_face.h) holds names only its includer uses, and
 # the qstr pass re-scans a source only when that source changed: a face that
 # changes alone re-scans every source, as a QSTR_GLOBAL_DEPENDENCIES entry.

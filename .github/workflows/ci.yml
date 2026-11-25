@@ -20,6 +20,11 @@ on:
   pull_request:
     branches: ["master", "main", "dev"]
 
+# A pull request's newer push cancels its older run; a branch push never is.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # The suite runs as four shards a Python version, each SERIALLY: no xdist
   # here, on purpose -- a serial run is what catches a timing-sensitive pin
@@ -27,8 +32,16 @@ jobs:
   # files out by their recorded weights (tools/ci_shard_weights.json), and
   # tests/test_ci_shard.py pins that every file lands in exactly one shard
   # and that the matrix and the call below agree.
+  #
+  # On a pull request it runs only from a fork (owner, 2026-11-25): a branch of
+  # this repository is a worker's, landed in a batch behind one preflight
+  # (tools/preflight.sh, the same suite in CI's image), and the push to dev
+  # runs the suite again over the batch.
   test:
     name: Python ${{ matrix.python-version }} (shard ${{ matrix.shard }}/4)
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

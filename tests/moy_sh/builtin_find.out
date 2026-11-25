@@ -1,0 +1,58 @@
+$ mkdir -p d/a/b d/c; echo x > d/one; echo y > d/a/k.txt; echo z > d/a/b/m.txt; echo w > d/c/n.log
+$ find d
+d
+d/a
+d/a/b
+d/a/b/m.txt
+d/a/k.txt
+d/c
+d/c/n.log
+d/one
+$ find d -type f
+d/a/b/m.txt
+d/a/k.txt
+d/c/n.log
+d/one
+$ find d/ -type d
+d/
+d/a
+d/a/b
+d/c
+$ find d -name '*.txt'
+d/a/b/m.txt
+d/a/k.txt
+$ find d -name '[km]*' -type f
+d/a/b/m.txt
+d/a/k.txt
+$ find d -name '[!a-m]*'
+d/c/n.log
+d/one
+$ find d -name 'd'
+d
+$ cd d; find; find . -name 'n.???'; cd ..
+.
+./a
+./a/b
+./a/b/m.txt
+./a/k.txt
+./c
+./c/n.log
+./one
+./c/n.log
+$ find d/one d/c
+d/one
+d/c
+d/c/n.log
+$ find nosuch; echo missing=$?
+find: nosuch: No such file or directory
+missing=1
+$ find d -bogus; echo usage=$?
+usage: find [PATH...] [-name GLOB] [-type f|d]
+usage=1
+$ find d -type x; echo type=$?
+usage: find [PATH...] [-name GLOB] [-type f|d]
+type=1
+$ find d -name; echo name=$?
+usage: find [PATH...] [-name GLOB] [-type f|d]
+name=1
+[exit 0]

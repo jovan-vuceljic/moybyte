@@ -4,7 +4,9 @@ A copy of mbedTLS 3.6.7 as ESP-IDF v5.5.6 carries it: the AES (with its CTR
 mode), GCM, CCM, SHA-256, HMAC, HMAC_DRBG, bignum, P-256 and Curve25519
 sources the browser sign-in
 (`native/moy_net/moy_seal.h`) and the apps' crypto rows
-(`native/moy_net/moy_crypto.h`) call, under upstream's paths. The host's
+(`native/moy_net/moy_crypto.h`) call, and the MD5 the shell's `md5sum` hashes
+with (`native/moy_sh/moy_sh_cmds.c`, beside its `sha256sum`), under upstream's
+paths. The host's
 library (`runtime/host/host_native.py`) and the browser's wasm
 (`firmware/web_runner/build.sh`) compile it under the config
 `native/moy_net/moy_seal_mbedtls.h`; a board links ESP-IDF's own build of the

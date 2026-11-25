@@ -1,0 +1,35 @@
+$ mkdir -p d/a/b d/c
+$ printf 'x' > d/one
+$ i=0; while [ $i -lt 103 ]; do printf '0123456789'; i=$((i+1)); done > d/a/k
+$ cp d/a/k d/a/b/k2
+$ du d
+2	d/a/b
+3	d/a
+0	d/c
+3	d
+$ du -s d
+3	d
+$ du -h d
+1.1K	d/a/b
+2.1K	d/a
+0	d/c
+2.1K	d
+$ du -sh d/a
+2.1K	d/a
+$ du d/one
+1	d/one
+$ printf '0123456789abcdef' > big; for i in 1 2 3 4 5 6 7 8 9 10; do cat big big > t; cat t > big; done
+$ du -h big; echo >> big; du -h big
+16K	big
+17K	big
+$ for i in 1 2 3 4 5 6; do cat big big > t; cat t > big; done
+$ du -h big; du big
+1.1M	big
+1025	big
+$ du nosuch; echo missing=$?
+du: nosuch: No such file or directory
+missing=1
+$ du -z; echo bad=$?
+sh: 1: du: Illegal option -z
+bad=2
+[exit 0]

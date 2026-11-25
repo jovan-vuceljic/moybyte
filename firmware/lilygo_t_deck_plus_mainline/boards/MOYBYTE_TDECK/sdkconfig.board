@@ -378,3 +378,27 @@ CONFIG_MBEDTLS_ECP_DP_CURVE25519_ENABLED=y
 # NTP (native/moy_net/moy_wifi.c) asks the moment the station has an address:
 # a handshake waits for that answer, so lwIP's random first delay is off.
 CONFIG_LWIP_SNTP_STARTUP_DELAY=n
+
+# --- System task stacks -------------------------------------------------------
+# esp_timer's and mDNS's (the responder runs while the SSH server serves),
+# each internal SRAM, sized to more than twice its high-water mark under
+# #276's S3 session (desk, radio up, https and LAN fetches, a Lua game, the
+# responder announcing) and at least 1.4 KB over it. The idle tasks', the
+# event loop's, lwIP's and the IPC tasks' already sit within twice theirs and
+# stay ESP-IDF's.
+CONFIG_ESP_TIMER_TASK_STACK_SIZE=2560
+CONFIG_MDNS_TASK_STACK_SIZE=3072
+
+
+# --- IRAM TO FLASH ------------------------------------------------------------
+# On the S3 IRAM and DRAM split one SRAM at link time, so code kept out of IRAM
+# is internal heap, which a Lua game's allocator takes first (#276 has the bytes).
+# FreeRTOS's and the ring buffer's non-ISR functions and newlib's locks run
+# from flash; ESP-IDF keeps their ISR halves in IRAM, and nothing in this
+# image calls the moved ones from an ISR while the cache is off. The heap's
+# functions stay in IRAM: SPI_MASTER_ISR_IN_IRAM above needs them there
+# (Kconfig refuses the pair). A/B'd on this board's glass over the #66 roster
+# (#276): every cart's frame stayed inside its noise band.
+CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH=y
+CONFIG_RINGBUF_PLACE_FUNCTIONS_INTO_FLASH=y
+CONFIG_LIBC_LOCKS_PLACE_IN_IRAM=n

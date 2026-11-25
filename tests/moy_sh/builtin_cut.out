@@ -1,0 +1,59 @@
+$ printf 'a:b:c\nd:e\nnodelim\n' > f
+$ cut -d: -f2 f
+b
+e
+nodelim
+$ cut -d: -f3,1 f
+a:c
+d
+nodelim
+$ cut -d: -f2- f
+b:c
+e
+nodelim
+$ cut -d : -f -2 f
+a:b
+d:e
+nodelim
+$ cut -s -d: -f2 f
+b
+e
+$ printf 'a\tb\tc\n' | cut -f2
+b
+$ printf 'hello\nab\n' | cut -c2-3
+el
+b
+$ printf 'hello\nab\n' | cut -b1,5
+ho
+a
+$ printf 'hello' | cut -c2
+e
+$ printf 'a::b\n' | cut -d: -f2 | wc -c
+1
+$ printf '' | cut -f1; echo empty=$?
+empty=0
+$ cut -f0 f; echo zero=$?
+cut: 0: not a list of positions from 1
+zero=1
+$ cut -f3-1 f; echo backwards=$?
+cut: 3-1: not a list of positions from 1
+backwards=1
+$ cut -fx f; echo bad-list=$?
+cut: x: not a list of positions from 1
+bad-list=1
+$ cut -d:: -f1 f; echo delim=$?
+cut: the delimiter must be one character
+delim=1
+$ cut -d: f; echo no-list=$?
+usage: cut -f LIST [-d C] [-s] [FILE...], or cut -c LIST [FILE...]
+no-list=1
+$ cut -f1 -c1 f; echo both=$?
+usage: cut -f LIST [-d C] [-s] [FILE...], or cut -c LIST [FILE...]
+both=1
+$ cut -c1 nosuch; echo missing=$?
+cut: nosuch: No such file or directory
+missing=1
+$ cut -z; echo bad=$?
+sh: 1: cut: Illegal option -z
+bad=2
+[exit 0]

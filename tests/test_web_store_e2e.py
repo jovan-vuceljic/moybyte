@@ -60,11 +60,30 @@ def _lua(folder, title, colour, extra=None):
     return folder, files
 
 
+# Rock Run's cover: one red the console's tiles never draw, so its card
+# shows it or does not (_RED_PIXELS counts it on the canvas).
+def _red_cover():
+    from runtime import cover_png
+    return cover_png.encode_indexed(bytes(cover_png.SIDE * cover_png.SIDE), b"\xff\x00\x00")
+
+
+_RED_PIXELS = """(() => {
+  const c = document.getElementById('cv');
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  let n = 0;
+  for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i + 1] < 40 && d[i + 2] < 40) n++;
+  return n;
+})()"""
+
+
 def _shelf(pages, releases):
-    """Three Lua carts: one plain (with a binary file), one needing an external
-    file from a host the page may not read, one whose mirror is corrupt."""
+    """Three Lua carts: one plain (with a binary file and a cover), one
+    needing an external file from a host the page may not read, one whose
+    mirror is corrupt."""
     lic = b"The MIT licence of the test carts.\n"
     pages.files["/carts/LICENCE.txt"] = lic
+    cover = _red_cover()
+    pages.files["/carts/rock/cover.png"] = cover
     carts = []
     data_bin = bytes((i * 37 + (i >> 8)) & 255 for i in range(70000))
     wad = bytes((i * 11 + 3) & 255 for i in range(90000))
@@ -90,6 +109,9 @@ def _shelf(pages, releases):
                                       for fn, b in files.items())}],
             "external": [],
         }
+        if cid == "rock":
+            entry["cover"] = {"url": "carts/rock/cover.png", "size": len(cover),
+                              "sha256": sha(cover), "w": 128, "h": 128}
         if ext:
             path, body = ext
             arc = tar_gz({"pkg/" + path: body})
@@ -165,6 +187,7 @@ def test_a_hosted_console_installs_carts_into_its_own_store(tmp_path):
             {"note": "Get Carts opened at boot; the index came from PAGES", "wait": 4000},
             {"shot": "list"},
             {"js": "window.__moyPersist ? window.__moyPersist.mode : 'none'"},
+            {"note": "Rock Run's card draws its cover", "js": _RED_PIXELS},
             {"note": "Rock Run: the plain cart", "click": at["cards"][1]},
             {"wait": 800}, {"shot": "rock"},
             {"click": at["verb"]},
@@ -193,12 +216,13 @@ def test_a_hosted_console_installs_carts_into_its_own_store(tmp_path):
             {"note": "a store from before Get Carts shipped: it is not in OPFS",
              "js": _FORGET_APP},
         ], base, profile, env={"MOY_WAD": str(tmp_path / "doom1.wad")})
-        assert len(js) == 10, "the scenario did not run to its end:\n%s" % out[-4000:]
-        assert js[9] == "gone", js[9]
-        mode, installed, after_rock, pick, card, sent, card_after, after_dm, after_zap = \
-            js[0], js[1], json.loads(js[2]), json.loads(js[3]), js[4], js[5], js[6], \
-            json.loads(js[7]), json.loads(js[8])
+        assert len(js) == 11, "the scenario did not run to its end:\n%s" % out[-4000:]
+        assert js[10] == "gone", js[10]
+        mode, red, installed, after_rock, pick, card, sent, card_after, after_dm, after_zap = \
+            js[0], js[1], js[2], json.loads(js[3]), json.loads(js[4]), js[5], js[6], js[7], \
+            json.loads(js[8]), json.loads(js[9])
         assert mode == "site", "a static host must keep its carts in the browser"
+        assert red > 1000, "Rock Run's card does not draw its cover (%d red pixels)" % red
         assert installed == "rock.moy", out[-3000:]
 
         rock = after_rock["carts"]["rock.moy"]

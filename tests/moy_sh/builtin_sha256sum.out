@@ -1,0 +1,20 @@
+$ printf 'abc' > abc
+$ : > empty
+$ i=0; while [ $i -lt 100 ]; do printf '0123456789'; i=$((i+1)); done > k
+$ sha256sum abc
+ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  abc
+$ printf 'abc' | sha256sum
+ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  -
+$ sha256sum abc nosuch empty; echo status=$?
+ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  abc
+sha256sum: nosuch: No such file or directory
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  empty
+status=1
+$ sha256sum - < k
+ab6c5f3237f551d208fc2ca5225a4cca20b3fd638794a804f0ed5549d5041734  -
+$ sha256sum k
+ab6c5f3237f551d208fc2ca5225a4cca20b3fd638794a804f0ed5549d5041734  k
+$ sha256sum -z abc; echo bad=$?
+sh: 1: sha256sum: Illegal option -z
+bad=2
+[exit 0]

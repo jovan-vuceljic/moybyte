@@ -101,8 +101,8 @@ int moy_sh_vol_op(int op, const char *path, const char *to);
 const struct builtincmd *moy_sh_core_builtin(const char *name);
 int moy_sh_core_names(moy_sh_ent_fn fn, void *arg, const char *prefix);
 
-// Fail the running built-in: its message (naming the command) and a newline
-// on stderr; answers 1.
+// Fail the running built-in: what it printed so far flushed, then its message
+// (naming the command) and a newline on stderr; answers 1.
 int moy_sh_fail(const char *fmt, ...);
 
 #endif // MOY_SH_INT_H

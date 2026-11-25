@@ -10,7 +10,9 @@ shell's POSIX shim, which must reach no other file, and keep their folder
 (`bltin/`). The host's one library (runtime/host/host_native.py) links the
 archive whole, so the session's board table crosses the same ROLE door, log,
 lease table and store the rest of the console's C uses: one library, one
-state.
+state. md5sum and sha256sum hash with the vendored mbedTLS
+(native/moy_net/mbedtls/README.md), compiled into the same library by
+runtime/host/seal_binding.py; the shell takes its headers under that config.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ _KERNEL = os.path.join(native_build.ROOT, "native", "moy_kernel")
 _STORE = os.path.join(native_build.ROOT, "native", "moy_store")
 _SPINE = os.path.join(native_build.ROOT, "native", "moy_spine")
 _NET = os.path.join(native_build.ROOT, "native", "moy_net")
+_MBEDTLS = os.path.join(_NET, "mbedtls", "include")
 _UI = [os.path.join(native_build.ROOT, "native", n) for n in ("moy_ui", "moy_gfx", "moy_glass")]
 _CACHE = os.path.join(native_build.ROOT, ".build", "host")
 
@@ -43,7 +46,8 @@ _COLS_BYTES = 12                        # a line's bytes a column (moy_term.h, M
 
 def _sources():
     """[(source, own flags)]: dash's under its shim, the board's side plain."""
-    shim = ["-include", os.path.join(SH, "dash_config.h"), "-I", SH, "-I", _DASH, "-I", _STORE]
+    shim = ["-include", os.path.join(SH, "dash_config.h"), "-I", SH, "-I", _DASH, "-I", _STORE,
+            "-I", _MBEDTLS, "-I", _NET, '-DMBEDTLS_CONFIG_FILE="moy_seal_mbedtls.h"']
     plain = ["-I", SH, "-I", _KERNEL, "-I", _STORE, "-I", _SPINE, "-I", _NET]
     for d in _UI:
         plain += ["-I", d]
@@ -67,7 +71,8 @@ def archive(cflags=(), verbose=False):
     flags = _FLAGS + list(cflags)
     h = hashlib.sha256(" ".join(flags).encode())
     for d, pat in ((SH, "**/*.[ch]"), (_KERNEL, "*.h"), (_STORE, "*.h"),
-                     (_SPINE, "*.h")) + tuple((u, "*.h") for u in _UI):
+                     (_SPINE, "*.h"), (_NET, "*.h"),
+                     (_MBEDTLS, "**/*.h")) + tuple((u, "*.h") for u in _UI):
         for path in sorted(glob.glob(os.path.join(d, pat), recursive=True)):
             h.update(path[len(native_build.ROOT):].encode())
             with open(path, "rb") as f:

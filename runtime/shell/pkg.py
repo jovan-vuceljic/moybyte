@@ -114,13 +114,14 @@ ARCHIVE_RAM_SHARE = 4         # an external archive kept in RAM below this share
 # built-ins, the C core's and the role commands'. tests/test_pkg.py holds
 # them to the C tables and to sh_roles.
 SHELL_NAMES = (
-    ".", ":", "[", "alias", "basename", "bg", "break", "cat", "cd", "chdir", "clear",
-    "command", "continue", "cp", "date", "df", "dirname", "dmesg", "echo", "edit", "eval", "exec",
-    "exit", "export", "false", "fg", "free", "getopts", "grep", "hash", "head",
-    "help", "jobs", "kill", "less", "local", "log", "ls", "mkdir", "more", "mv", "neofetch",
-    "printf", "ps", "pwd", "read", "readonly", "reboot", "return", "rm", "rmdir", "set", "sh",
-    "shift", "sleep", "tail", "test", "top", "touch", "trap", "true", "type", "umask",
-    "unalias", "uname", "unset", "vi", "view", "vim", "wait", "wc",
+    ".", ":", "[", "alias", "basename", "bg", "break", "cat", "cd", "chdir", "clear", "command",
+    "continue", "cp", "cut", "date", "df", "dirname", "dmesg", "du", "echo", "edit", "eval",
+    "exec", "exit", "export", "false", "fg", "find", "free", "getopts", "grep", "hash", "head",
+    "help", "jobs", "kill", "less", "local", "log", "ls", "md5sum", "mkdir", "more", "mv",
+    "neofetch", "printf", "ps", "pwd", "read", "readonly", "reboot", "return", "rm", "rmdir",
+    "set", "sh", "sha256sum", "shift", "sleep", "sort", "tail", "tee", "test", "top", "touch",
+    "tr", "trap", "true", "type", "umask", "unalias", "uname", "uniq", "unset", "vi", "view",
+    "vim", "wait", "wc", "xxd",
     # the role commands (runtime/shell/sh_roles.py)
     "at", "ble", "cron", "http", "lease", "lora", "media", "mic", "midi", "notify",
     "passwd", "perm", "pkg", "python", "service", "settings", "snd", "usb",

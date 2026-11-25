@@ -20,8 +20,13 @@ Cost is turns × context: every turn re-reads everything so far.
 - Wait for builds, suites and flashes by running them in the background and
   taking the completion notice. Never poll with `sleep`/`until`.
 - Use the repository's one-command tools rather than hand sequences:
-  `tools/board.py pass` for a board pass, `tools/web.py shot` for a page,
-  `tools/preflight.sh` before you report.
+  `tools/web.py shot` for a page, `tools/board.py BOARD flash` and the one
+  check that matters on glass.
+- Run only FOCUSED tests: the files your change touches and the tests that
+  cover them (`pytest tests/x.py -k name`, at most `-n 4`), plus the browser
+  e2e of a page you changed. Never the full host suite, `tools/preflight.sh`
+  or `tools/board.py pass`: the main session runs one preflight and one
+  board pass over each batch (owner, 2026-11-25).
 
 Work only in your worktree (`tools/worktree.py new NAME` makes one that builds
 and tests as it is). Your shell's working directory resets to the MAIN checkout
@@ -46,5 +51,5 @@ Spawn no sub-agents.
 
 When the phase is done, or when you are blocked, stop and report (and open the
 pull request when done): the commits, what
-you decided and why, test and preflight results, and what is left for the next
+you decided and why, which tests you ran and their results, and what is left for the next
 phase, written so a fresh agent could pick it up from your report alone.

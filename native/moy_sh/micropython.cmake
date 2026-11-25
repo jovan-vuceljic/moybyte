@@ -71,9 +71,11 @@ target_compile_options(moy_sh_core PRIVATE
     "${_moy_sh_opts}"
     $<$<COMPILE_LANGUAGE:C>:${_moy_sh_copts}>
     -Os)
+# md5sum and sha256sum hash with the ESP-IDF's mbedTLS (its headers and its
+# config come with idf::mbedtls).
 target_link_libraries(moy_sh_core PRIVATE
     idf::freertos idf::heap idf::newlib idf::vfs idf::esp_common idf::esp_system
-    idf::esp_hw_support idf::esp_timer idf::soc idf::hal idf::log)
+    idf::esp_hw_support idf::esp_timer idf::soc idf::hal idf::log idf::mbedtls)
 
 add_library(usermod_moy_sh INTERFACE)
 target_sources(usermod_moy_sh INTERFACE ${MOY_SH}/modmoy_sh.c)
