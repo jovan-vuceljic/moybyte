@@ -44,6 +44,9 @@
 #define MOY_SH_RUN_STACK (24u * 1024u)      // a shell runner's (the SSH face's task's)
 #endif
 #define MOY_PAKE_STACK 8192
+// The card's hop on an SPI card (native/moy_sd/moy_sd.c): one transfer's
+// sdmmc and SPI driver frames, in internal SRAM.
+#define MOY_SDHOP_STACK 3072
 #ifndef MOY_LIVE_STACK
 #define MOY_LIVE_STACK 4096                 // the live socket's bridge (native/moy_net/moy_live.c)
 #endif
@@ -97,7 +100,8 @@
     X(PAKE, "moy_pake", MOY_PAKE_STACK, 1, 0, 1) \
     X(LIVE, "moy_live", MOY_LIVE_STACK, 2, 0, 0) \
     X(ELF, "moy_elf", MOY_TASK_GIVEN, MOY_TASK_GIVEN, MOY_TASK_GIVEN, 1) \
-    X(SAVE, "moy_save", 6144, ESP_TASK_PRIO_MIN + 1, 0, 1)
+    X(SAVE, "moy_save", 6144, ESP_TASK_PRIO_MIN + 1, 0, 1) \
+    X(SDHOP, "moy_sdhop", MOY_SDHOP_STACK, MOY_TASK_CALLER, tskNO_AFFINITY, 0)
 
 typedef enum {
     #define MOY_TASK_ID(id, name, stack, prio, core, psram) MOY_TASK_##id,
