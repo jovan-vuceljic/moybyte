@@ -163,9 +163,12 @@ def test_the_script_runs_as_its_transcript_says(harness, tmp_path, name):
 
 
 def test_a_walk_takes_the_same_c_stack_at_any_depth(harness, tmp_path):
-    """find, du and rm -r walk a tree with no C frame per folder (moy_sh_cmds.c's
-    walk), so the deepest C stack a poll sees is the same at 2 levels and
-    150. A frame per level overflowed the C3's 12 KB SSH task at 51."""
+    """find, du and rm -r walk a tree with no C frame and no arena per folder
+    (moy_sh_cmds.c's walk), so the deepest C stack a poll sees is the same
+    at 2 levels and 150, in an arena of 24 KB. A frame per level overflowed
+    the C3's 12 KB SSH task at 51; the folders kept on the shell's stack ran
+    its 12 KB arena out, and the out-of-space message recursed until the
+    stack overflowed."""
     def deepest(levels):
         root = tmp_path / ("root%d" % levels)
         root.mkdir()
@@ -174,8 +177,9 @@ def test_a_walk_takes_the_same_c_stack_at_any_depth(harness, tmp_path):
                           "mkdir -p $p; echo x > $p/f\n"
                           "find d -name f; du -s d; rm -r d\n" % levels)
         r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
-                           timeout=60, env=dict(os.environ, SH_MAIN_MEASURE="1"))
-        assert r.returncode == 0 and not os.listdir(root), r.stderr.decode()
+                           timeout=60, env=dict(os.environ, SH_MAIN_MEASURE="1",
+                                                SH_MAIN_ARENA="24"))
+        assert r.returncode == 0 and not os.listdir(root), r.stdout.decode()[-2000:]
         return int(re.search(rb"c stack (\d+)", r.stderr).group(1))
 
     shallow, deep = deepest(2), deepest(150)

@@ -9,6 +9,7 @@
 // main any poll ran on ("c stack N"; a walk polls at every path, so a tree's
 // depth that moves it is a walk recursing) and the largest block the session
 // took after its arena ("largest block N").
+// SH_MAIN_ARENA sets the session's arena in KB (256 without it).
 //
 // The OS around the session is a stand-in, enough to exercise every path:
 //   /proc/1/status, /dev/uart1        virtual files (uart1 takes writes)
@@ -350,7 +351,7 @@ int main(int argc, char **argv) {
         .procs = h_procs, .roles = roles, .role = h_role, .mem = h_mem, .df = h_df,
         .reboot = NULL, .sleep_ms = h_sleep, .log = h_log,
     };
-    moy_sh_t *s = moy_sh_new(&host, 256 * 1024, "/", "/");
+    moy_sh_t *s = moy_sh_new(&host, (getenv("SH_MAIN_ARENA") != NULL ? (size_t)atoi(getenv("SH_MAIN_ARENA")) : 256u) * 1024u, "/", "/");
     largest_at = &largest;
     if (s == NULL) {
         fprintf(stderr, "sh_main: no session\n");

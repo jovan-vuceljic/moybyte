@@ -528,42 +528,6 @@ static int kind_of(const char *path, uint64_t *size) {
     return S_ISDIR(st.st_mode) ? 1 : 0;
 }
 
-static int name_cmp(const void *a, const void *b) {
-    return strcmp(*(char *const *)a, *(char *const *)b);
-}
-
-// Folder `path`'s names in order, on the shell's stack (the caller's mark
-// takes them back): their count, -1 where it does not open.
-static int dir_names(const char *path, char ***out) {
-    DIR *d = opendir(path);
-    struct dirent *de;
-    if (d == NULL) {
-        return -1;
-    }
-    char *p;
-    size_t len = 0;
-    int n = 0;
-    STARTSTACKSTR(p);
-    while ((de = readdir(d)) != NULL) {
-        if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) {
-            continue;
-        }
-        size_t k = strlen(de->d_name) + 1;
-        p = stnputs(de->d_name, k, p);
-        len += k;
-        n++;
-    }
-    closedir(d);
-    char *names = grabstackstr(p);
-    char **v = stalloc(((size_t)n + 1) * sizeof *v);
-    for (size_t at = 0, i = 0; at < len; at += strlen(names + at) + 1) {
-        v[i++] = names + at;
-    }
-    qsort(v, (size_t)n, sizeof *v, name_cmp);
-    *out = v;
-    return n;
-}
-
 // `name` joined to the path in `path` (`n` bytes, MOY_SH_PATH_MAX its
 // room): its new length, 0 where it does not fit.
 static size_t path_join(char *path, size_t n, const char *name) {
@@ -578,10 +542,19 @@ static size_t path_join(char *path, size_t n, const char *name) {
 
 // A WALK: `path` and what is under it, a folder's names in order, each path
 // given to `visit` before what is under it and each folder to `leave` after
-// it. The folders it is inside are a chain of walk_dir on the shell's stack
-// (the session's heap), never C frames, so a tree as deep as MOY_SH_PATH_MAX
-// allows takes the C stack one folder does: a face's task has 12 KB on the C3.
-// Ctrl-C stops it where it is, and no folder is left after that.
+// it. The folders it is inside are records in one array, their names in one
+// buffer, both on the host's heap and given back at its end: no C frame and
+// no arena per folder, so a tree as deep as MOY_SH_PATH_MAX allows takes the
+// C stack one folder does (a face's task has 12 KB on the C3) and leaves the
+// session's arena (12 KB there) to the commands. Ctrl-C stops it where it is,
+// and no folder is left after that.
+typedef struct {
+    uint32_t next, end;         // its names in the walk's buffer: the next, the end
+    uint16_t n;                 // its path's length
+    uint8_t top;
+    uint64_t total;             // the bytes of the files under it
+} walk_dir_t;
+
 typedef struct walk walk_t;
 struct walk {
     // an errno value fails the path
@@ -591,16 +564,65 @@ struct walk {
                                 // with none it stops the walk
     int err;                    // what stopped it
     int status;
+    char *names;                // the open folders' names, each folder's sorted
+    size_t len, cap;
+    walk_dir_t *dirs;
+    size_t depth, room;         // room: dirs' bytes
 };
 
-typedef struct walk_dir {
-    struct walk_dir *up;
-    struct stackmark mark;      // takes this and its names back
-    char **names;
-    int k, i, top;
-    size_t n;
-    uint64_t total;             // the bytes of the files under it
-} walk_dir_t;
+// `*p` (`*cap` bytes) with room for `need`: 0, or ENOMEM.
+static int walk_grow(void *p, size_t *cap, size_t need) {
+    char **at = p;
+    if (need <= *cap) {
+        return 0;
+    }
+    size_t c = *cap ? *cap : 256;
+    while (c < need) {
+        c *= 2;
+    }
+    char *q = moy_sh_halloc(c);
+    if (q == NULL) {
+        return ENOMEM;
+    }
+    if (*cap) {
+        memcpy(q, *at, *cap);
+    }
+    moy_sh_hfree(*at);
+    *at = q;
+    *cap = c;
+    return 0;
+}
+
+// Folder `path`'s names, sorted, after the open folders' in w->names: 0, or
+// an errno value with none added.
+static int walk_names(walk_t *w, const char *path) {
+    DIR *d = opendir(path);
+    struct dirent *de;
+    size_t start = w->len;
+    int r = 0;
+    if (d == NULL) {
+        return errno;
+    }
+    while (r == 0 && (de = readdir(d)) != NULL) {
+        const char *name = de->d_name;
+        size_t k = strlen(name) + 1, at = start;
+        if (!strcmp(name, ".") || !strcmp(name, "..") ||
+            (r = walk_grow(&w->names, &w->cap, w->len + k)) != 0) {
+            continue;
+        }
+        while (at < w->len && strcmp(w->names + at, name) < 0) {
+            at += strlen(w->names + at) + 1;
+        }
+        memmove(w->names + at + k, w->names + at, w->len - at);
+        memcpy(w->names + at, name, k);
+        w->len += k;
+    }
+    closedir(d);
+    if (r != 0) {
+        w->len = start;
+    }
+    return r;
+}
 
 // A failure at `path` (at `name` in it, when given).
 static void walk_fail(walk_t *w, const char *path, const char *name, int e) {
@@ -612,44 +634,52 @@ static void walk_fail(walk_t *w, const char *path, const char *name, int e) {
                             name != NULL ? name : "", strerror(e));
 }
 
-// `path` holds n bytes and has MOY_SH_PATH_MAX of room.
-static void walk(walk_t *w, char *path, size_t n) {
-    struct stackmark base;
-    walk_dir_t *d = NULL;
+// Folder `path` (n bytes) entered: 0, or an errno value.
+static int walk_enter(walk_t *w, const char *path, size_t n, int top) {
+    int e = walk_grow(&w->dirs, &w->room, (w->depth + 1) * sizeof *w->dirs);
+    if (e != 0) {
+        return e;
+    }
+    size_t start = w->len;
+    e = walk_names(w, path);
+    w->dirs[w->depth++] = (walk_dir_t){ (uint32_t)start, (uint32_t)w->len, (uint16_t)n,
+                                        (uint8_t)top, 0 };
+    return e;
+}
+
+static void walk_free(walk_t *w) {
+    moy_sh_hfree(w->names);
+    moy_sh_hfree(w->dirs);
+    w->names = NULL;
+    w->dirs = NULL;
+    w->len = w->cap = w->depth = w->room = 0;
+}
+
+static void walk_run(walk_t *w, char *path, size_t n) {
     int top = 1, e;
-    setstackmark(&base);
     while (!stopped()) {
         uint64_t size = 0;
         int dir = kind_of(path, &size);
         if (dir < 0) {
             walk_fail(w, path, NULL, errno);
-        } else if ((e = w->visit(w, path, n, dir, size, top)) != 0) {
+        } else if ((e = w->visit(w, path, n, dir, size, top)) != 0 ||
+                   (dir && (e = walk_enter(w, path, n, top)) != 0)) {
             walk_fail(w, path, NULL, e);
-        } else if (dir) {
-            struct stackmark mark;
-            setstackmark(&mark);
-            walk_dir_t *f = stalloc(sizeof *f);
-            *f = (walk_dir_t){ .up = d, .mark = mark, .n = n, .top = top };
-            f->k = dir_names(path, &f->names);
-            if (f->k < 0) {
-                f->k = 0;
-                walk_fail(w, path, NULL, errno);
-            }
-            d = f;
-        } else if (d != NULL) {
-            d->total += size;
+        } else if (!dir && w->depth > 0) {
+            w->dirs[w->depth - 1].total += size;
         }
         top = 0;
         // the next path: the innermost folder's next name, each folder with
         // none left left on the way out
         for (;;) {
-            if (d == NULL || w->err != 0 || moy_sh_cur->interrupt) {
-                popstackmark(&base);
+            if (w->depth == 0 || w->err != 0 || moy_sh_cur->interrupt) {
                 return;
             }
+            walk_dir_t *d = &w->dirs[w->depth - 1];
             path[d->n] = '\0';
-            if (d->i < d->k) {
-                const char *name = d->names[d->i++];
+            if (d->next < d->end) {
+                const char *name = w->names + d->next;
+                d->next += (uint32_t)strlen(name) + 1;
                 n = path_join(path, d->n, name);
                 if (n != 0) {
                     break;
@@ -657,20 +687,34 @@ static void walk(walk_t *w, char *path, size_t n) {
                 walk_fail(w, path, name, ENAMETOOLONG);
                 continue;
             }
-            struct stackmark mark = d->mark;
             uint64_t total = d->total;
             int was_top = d->top;
-            d = d->up;
+            w->depth--;
+            w->len = w->depth > 0 ? w->dirs[w->depth - 1].end : 0;
             if ((e = w->leave(w, path, total, was_top)) != 0) {
                 walk_fail(w, path, NULL, e);
             }
-            popstackmark(&mark);
-            if (d != NULL) {
-                d->total += total;
+            if (w->depth > 0) {
+                w->dirs[w->depth - 1].total += total;
             }
         }
     }
-    popstackmark(&base);
+}
+
+// `path` holds n bytes and has MOY_SH_PATH_MAX of room. An error raised in a
+// visit (an output buffer the arena refuses) takes the walk's blocks back.
+static void walk(walk_t *w, char *path, size_t n) {
+    struct jmploc jl;
+    struct jmploc *saved = handler;
+    if (setjmp(jl.loc)) {
+        walk_free(w);
+        handler = saved;
+        longjmp(handler->loc, 1);
+    }
+    handler = &jl;
+    walk_run(w, path, n);
+    handler = saved;
+    walk_free(w);
 }
 
 static int rm_visit(walk_t *w, const char *path, size_t n, int dir, uint64_t size, int top) {
@@ -692,7 +736,7 @@ static int remove_tree(const char *path) {
         return ENAMETOOLONG;
     }
     memcpy(p, path, n + 1);
-    walk_t w = { rm_visit, rm_leave, NULL, 0, 0 };
+    walk_t w = { .visit = rm_visit, .leave = rm_leave };
     walk(&w, p, n);
     return w.err;
 }
@@ -793,7 +837,7 @@ static int find_leave(walk_t *w, const char *path, uint64_t total, int top) {
 // PATH... (`.` with none) and what is under each, in order, those that pass
 // -name GLOB (the last part of the path) and -type f|d.
 static int findcmd(int argc, char **argv) {
-    find_t o = { { find_visit, find_leave, "find", 0, 0 }, NULL, 0 };
+    find_t o = { { .visit = find_visit, .leave = find_leave, .cmd = "find" }, NULL, 0 };
     int paths = 1;
     while (paths < argc && argv[paths][0] != '-') {
         paths++;
@@ -874,7 +918,7 @@ static int du_leave(walk_t *w, const char *path, uint64_t total, int top) {
 
 // The bytes the files under each PATH (`.` with none) hold.
 static int ducmd(int argc, char **argv) {
-    du_t o = { { du_visit, du_leave, "du", 0, 0 }, 0, 0 };
+    du_t o = { { .visit = du_visit, .leave = du_leave, .cmd = "du" }, 0, 0 };
     int c;
     (void)argc;
     (void)argv;
