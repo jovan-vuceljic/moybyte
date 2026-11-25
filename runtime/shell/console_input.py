@@ -723,8 +723,9 @@ class InputRouter:
         ev = getattr(i, "key_event", 0) or 0
         was, self._ev = self._ev, ev
         if not getattr(i, "mods", 0) & _ALT:
-            if getattr(wm, "_cycle", None) is not None:
-                wm.cycle_end()
+            end = getattr(wm, "cycle_end", None)
+            if end is not None:
+                end()
         if ev == was or (ev & 0xFFFF) != 9 or (ev >> _MODS_AT) & ~_SHIFT & 0xFF != _ALT:
             return False
         cycle = getattr(wm, "cycle", None)
