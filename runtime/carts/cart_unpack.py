@@ -82,7 +82,7 @@ class _Sink:
 
     def __init__(self, job, size):
         self.job = job
-        self.buf = bytearray(size)
+        self.buf = chunk_buffer(size)
         self.mv = memoryview(self.buf)
         self.fill = 0
         self.name = None
@@ -722,5 +722,5 @@ class _Local:
 
 # cart_index's words and fetch helpers, imported last (see above).
 from cart_index import (InstallError, MISMATCH, PACKING, READ_CHUNK, STOPPED,
-                        _Fetched, _MP, _hex, _log, _ranged_bytes,
+                        _Fetched, _MP, _hex, _log, _ranged_bytes, chunk_buffer,
                         _tail_bytes, net_text, resolve, stage_root)

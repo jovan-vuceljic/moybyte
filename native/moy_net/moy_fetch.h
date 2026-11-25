@@ -8,8 +8,10 @@
 // An `https` request verifies the server's certificate (moy_ota.h); a build
 // that cannot verify one refuses it, a redirect's hop too, with
 // -MOY_HTTPC_ETLS (moy_fetch_tls).
-// The worker is a task on a board; the host serves a queued request when
-// moy_fetch_run is called (the Python face calls it), the same code.
+// The worker is a task on a board, started by the first request and ended
+// MOY_FETCH_IDLE_MS after the last, so an idle board holds no stack for it;
+// the host serves a queued request when moy_fetch_run is called (the Python
+// face calls it), the same code.
 //
 // A request belongs to its owner (a pid): moy_fetch_sweep(owner) closes every
 // one it left, and a request the worker is serving is closed when it ends.
@@ -24,6 +26,7 @@
 #include <stdint.h>
 
 #define MOY_FETCH_SLOTS 4
+#define MOY_FETCH_IDLE_MS 10000u
 #define MOY_FETCH_URL_MAX 512
 #define MOY_FETCH_CAP_MAX (256u * 1024u)
 #define MOY_FETCH_AGENT "moybyte-app"

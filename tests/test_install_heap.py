@@ -2,8 +2,11 @@
 MicroPython (32-bit words, REPR_C), the board's whole install of one cart
 from a release-sized index (web_addon.OfficialCarts: the entry read as the
 index streams, its signature checked over the digest, the asset read by
-range, the buffers sized to the heap) lands with INSTALL_BOUND bytes of heap free when it starts, while reading that index whole
-(cart_index.Fetch and parse_index, what the install did before) does not.
+range, the buffers sized to the heap) lands with INSTALL_BOUND bytes of
+heap free when it starts, while reading that index whole (cart_index.Fetch
+and parse_index, what the install did before) does not. Its cart's entry is
+as large as Jet Teapot's in moybyte-org/carts' index, and that entry's read
+alone fits ENTRY_BOUND, the heap a C3 has beside a page's session.
 
 The bound is a C3's: its Python heap is 47 KB in all and the board's own
 check measured about 44 KB free at rest on glass (#41). The heap a run
@@ -21,7 +24,11 @@ from test_ota_signing import TEST_KEYS
 from test_pkg import _sign
 
 INSTALL_BOUND = 32 * 1024
+# The entry's read alone, Jet Teapot's: a C3 has 24.4 KB of Python heap free
+# beside a page's session (#276), where the whole entry, parsed, ran it out.
+ENTRY_BOUND = 24 * 1024
 INDEX_BYTES = 46 * 1024            # the C3 release's own index, carts-c3_zero.json
+TEAPOT_ENTRY = 6152                # Jet Teapot's entry as moybyte-org/carts' index serves it
 BASE = "https://heap.example/carts"
 
 _SCRIPT = r'''
@@ -154,25 +161,53 @@ def least(fn, lo, hi, step):
 
 assert install() is None
 assert whole() is None
-print("BOUND", attempt(install, %(bound)d), attempt(whole, %(bound)d))
+print("BOUND", attempt(install, %(bound)d), attempt(whole, %(bound)d),
+      attempt(stream, %(entry_bound)d))
 if %(measure)r:
     print("LEAST", least(install, 2048, 200000, 512), least(whole, 2048, 400000, 512))
     print("PARTS", least(stream, 1024, 200000, 256))
 '''
 
 
+def _teapot_sized(entry):
+    """`entry` grown to Jet Teapot's in moybyte-org/carts' index, where its
+    build record (each chip's module key and the pins it was built at), its
+    source bundle and its links are most of it, and an install reads none."""
+    entry["source_asset"] = {"name": "target-v1-source.tar.gz", "size": 255162,
+                             "url": BASE + "/releases/download/target-v1/target-v1-source.tar.gz",
+                             "sha256": "0" * 64}
+    key = "format 2\ntarget riscv32\ncpu generic-rv32\nabi ilp32f\nfeatures +m,+a,+f,+c\n" \
+          "opt 3\nsize 3\nbounds 1\nstack-bounds 1\nxip 0\n"
+    build = {"commit": "0" * 40, "keys": {"esp32p4": key, "esp32s3": key},
+             "modules": dict((chip, {"name": "main.%s.f2.aot" % chip, "unsigned_size": 269377,
+                                     "unsigned_sha256": "0" * 64})
+                             for chip in ("esp32p4", "esp32s3")),
+             "pins": {}}
+    entry["build"] = build
+    while len(json.dumps({"carts": [entry]}, indent=2)) < TEAPOT_ENTRY:
+        build["pins"]["pin%d" % len(build["pins"])] = {
+            "commit": "0" * 40, "url": "https://github.com/moybyte-org/x/tree/" + "0" * 40,
+            "note": "the runtime the modules are keyed for; a board built for another refuses them"}
+
+
 def _repo():
-    """A release-sized index: the cart installed, a compiled one with two
-    chips' modules and a 40 KB file, among enough others to make the index
-    as large as the C3's release index."""
+    """A release-sized index as moybyte-org/carts writes it (indented): the
+    cart installed, a compiled one with two chips' modules and a 40 KB file
+    whose entry is as large as Jet Teapot's, among enough others to make the
+    index as large as the C3's release index."""
     repo = Repo(BASE)
     repo.add("target", name="Target", extra={"level.bin": os.urandom(40000)})
+    _teapot_sized(repo.carts[-1])
     n = 0
-    while len(repo.index()) < INDEX_BYTES:
+    while len(_indented(repo)) < INDEX_BYTES:
         n += 1
         repo.add("filler_%02d" % n, extra=dict(("f%d.bin" % i, b"x" * 64) for i in range(20)))
-    repo.files["index.json"] = _sign(repo.index())
+    repo.files["index.json"] = _sign(_indented(repo))
     return repo
+
+
+def _indented(repo):
+    return json.dumps(json.loads(repo.index()), indent=2).encode() + b"\n"
 
 
 def _run(tmp_path, measure=False, bound=INSTALL_BOUND):
@@ -193,7 +228,8 @@ def _run(tmp_path, measure=False, bound=INSTALL_BOUND):
     script.write_text(_SCRIPT % {
         "runtime": runtime_tree(), "map": str(tmp_path / "map.json"), "keys": TEST_KEYS,
         "index_url": repo.url("index.json"), "root": str(root),
-        "folder": "target.moy", "bound": bound, "measure": measure})
+        "folder": "target.moy", "bound": bound, "entry_bound": ENTRY_BOUND,
+        "measure": measure})
     out = subprocess.run([exe, "-X", "heapsize=2M", str(script)], capture_output=True,
                          text=True, timeout=600)
     assert out.returncode == 0, out.stdout + out.stderr
@@ -205,6 +241,7 @@ def test_an_install_fits_the_heap_a_c3_has_and_reading_the_index_whole_does_not(
     got = _run(tmp_path)
     assert got["BOUND"][0] == "None", got
     assert got["BOUND"][1] != "None", "the whole index fits the bound: it proves nothing"
+    assert got["BOUND"][2] == "None", got
 
 
 @pytest.mark.skipif(not os.environ.get("MOYBYTE_HEAP_MEASURE"),

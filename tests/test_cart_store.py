@@ -267,6 +267,39 @@ def test_an_install_writes_exactly_the_plan_and_records_it(tmp_path):
     assert not os.listdir(Path(root).parent / ci.STAGE_DIR)
 
 
+def test_an_install_on_a_heap_with_no_block_for_its_buffers_takes_smaller_ones(
+        tmp_path, monkeypatch):
+    """A C3's heap beside a page's session had 23 KB free and no 4 KB block
+    (#276): the install's read and write buffers halve to what the heap can
+    place, down to MIN_CHUNK, and the cart lands all the same."""
+    real = bytearray
+    asked = []
+
+    def placed(n=0):
+        if isinstance(n, int) and n > ci.MIN_CHUNK:
+            asked.append(n)
+            raise MemoryError("memory allocation failed, allocating %d bytes" % n)
+        return real(n)
+
+    root = _store(tmp_path)
+    repo = Repo(BASE)
+    repo.add("jet", extra={"level.bin": os.urandom(5000)})
+    cart = _cart(repo, "jet")
+    monkeypatch.setattr(ci, "bytearray", placed, raising=False)
+    p = ci.plan(cart, "esp32s3", 2)
+    job = ci.Install(cart, p, MemNet(repo.routes()), root, _session, (), chunk=4096,
+                     read=4096, step_ms=50)
+    assert len(job.scratch) == len(job.sink.buf) == ci.MIN_CHUNK
+    assert asked == [4096, 2048, 4096, 2048]
+    while job.step():
+        pass
+    assert job.error is None and job.path == root + "/jet.moy"
+    assert sorted(os.listdir(job.path)) == sorted(p["files"])
+    monkeypatch.setattr(ci, "bytearray", lambda n=0: placed(n + ci.MIN_CHUNK), raising=False)
+    with pytest.raises(MemoryError):
+        ci.chunk_buffer(4096)
+
+
 def test_an_external_file_is_never_fetched_without_its_licence(tmp_path):
     root = _store(tmp_path)
     repo = Repo(BASE)

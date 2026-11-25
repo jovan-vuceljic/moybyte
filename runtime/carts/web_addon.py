@@ -888,7 +888,8 @@ class OfficialCarts:
             if self._phase is None:
                 return False
             return getattr(self, "_" + self._phase)(budget_ms)
-        except MemoryError:
+        except MemoryError as exc:
+            _ci._log("official: %s in %s" % (exc, self._phase))
             return self._end(_ci.NO_MEMORY)
         except Exception as exc:  # noqa: BLE001 -- a request never takes the host down
             return self._end(getattr(exc, "text", None) or repr(exc))

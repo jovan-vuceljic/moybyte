@@ -261,10 +261,32 @@ void moy_fetch_run(void) {
 }
 
 #ifdef FETCH_TASK
+// Whether no slot needs the worker (none queued, served or streaming); when
+// none does, the worker gives up its handle under the lock, so a request
+// queued after this check finds no worker and starts one.
+static int worker_ends(void) {
+    int busy = 0;
+    LOCK();
+    for (int i = 0; s_slot != NULL && i < MOY_FETCH_SLOTS; i++) {
+        uint8_t st = s_slot[i].state;
+        busy |= st == MOY_FETCH_QUEUED || st == MOY_FETCH_RUNNING
+                || (st == MOY_FETCH_STREAM && s_slot[i].hc > 0);
+    }
+    if (!busy) {
+        s_task = NULL;
+    }
+    UNLOCK();
+    return !busy;
+}
+
+// The worker serves while requests come and ends MOY_FETCH_IDLE_MS after the
+// last, giving its stack back: an idle console holds no fetch task.
 static void worker(void *arg) {
     (void)arg;
     for (;;) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(MOY_FETCH_IDLE_MS)) == 0 && worker_ends()) {
+            moy_task_delete(MOY_TASK_FETCH, NULL);
+        }
         while (run_once()) {
             vTaskDelay(pdMS_TO_TICKS(2));
         }
@@ -272,14 +294,22 @@ static void worker(void *arg) {
 }
 #endif
 
+// The worker woken for a request queued before this call, started first when
+// there is none (worker_ends' lock orders the two).
 static int start(void) {
     #ifdef FETCH_TASK
-    if (s_task == NULL
-        && !moy_task_spawn(MOY_TASK_FETCH, worker, NULL, &s_task)) {
-        s_task = NULL;
-        return -MOY_FETCH_ENOMEM;
+    LOCK();
+    TaskHandle_t t = s_task;
+    UNLOCK();
+    if (t == NULL) {
+        if (!moy_task_spawn(MOY_TASK_FETCH, worker, NULL, &t)) {
+            return -MOY_FETCH_ENOMEM;
+        }
+        LOCK();
+        s_task = t;
+        UNLOCK();
     }
-    xTaskNotifyGive(s_task);
+    xTaskNotifyGive(t);
     #endif
     return 0;
 }

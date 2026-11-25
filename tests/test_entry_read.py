@@ -73,6 +73,15 @@ def _read(net, url, folder, ident=None, own=None, read_from=None):
     return job.carts
 
 
+STAMPS = ("index", "shelf", "signed", "reviewed", "official", "revoked")
+
+
+def _installs(carts):
+    """parse_index's `carts` with only what an entry read keeps of them."""
+    return [dict((k, v) for k, v in c.items() if k.encode() in ci.INSTALL_KEEPS or k in STAMPS)
+            for c in carts]
+
+
 def _shapes(repo):
     """The index as moybyte-org/carts writes it, and as a release writes
     its own (indented, keys sorted: `carts` before `version`)."""
@@ -87,7 +96,8 @@ def test_the_entry_read_is_the_entry_parse_index_reads(k):
         whole = ci.parse_index(data, URL)
         for c in json.loads(data)["carts"]:
             got = _read(BitsNet({URL: data}, k), URL, c["folder"])
-            assert got == [w for w in whole if w["folder"] == c["folder"]], (k, c["id"])
+            assert got == _installs([w for w in whole if w["folder"] == c["folder"]]), \
+                (k, c["id"])
         assert _read(BitsNet({URL: data}, k), URL, "absent.moy") == []
         assert _read(BitsNet({URL: data}, k), URL, "snake.moy", "dm") == []
     snake = _read(BitsNet({URL: repo.index()}, 5), URL, "snake.moy")[0]
@@ -99,7 +109,7 @@ def test_a_signed_index_is_checked_over_its_streamed_digest(keys):
     for data in _shapes(repo):
         signed = _sign(data)
         got = _read(BitsNet({URL: signed}, 13), URL, "snake.moy")
-        assert got == [c for c in ci.parse_index(signed, URL) if c["id"] == "snake"]
+        assert got == _installs([c for c in ci.parse_index(signed, URL) if c["id"] == "snake"])
         assert got[0]["signed"] is True and got[0]["reviewed"] is True
         assert _read(MemNet({URL: data}), URL, "snake.moy")[0]["signed"] is False
         for bad in (signed.replace(b'"Dungeon"', b'"Dungeom"'),
@@ -131,9 +141,39 @@ def test_what_is_not_an_index_is_refused():
 def test_an_entry_past_its_bound_is_left_unread(monkeypatch):
     repo = _repo()
     monkeypatch.setattr(ci, "ENTRY_MAX", max(len(json.dumps(c)) for c in repo.carts) + 8)
-    repo.carts[1]["description"] = "x" * ci.ENTRY_MAX
+    repo.carts[1]["name"] = "x" * ci.ENTRY_MAX
     assert _read(MemNet({URL: repo.index()}), URL, "dm.moy") == []
     assert _read(MemNet({URL: repo.index()}), URL, "snake.moy")[0]["id"] == "snake"
+
+
+@pytest.mark.parametrize("k", [1, 5, 4096])
+def test_an_entry_is_held_with_only_the_members_an_install_reads(k):
+    """What an entry's read holds is what its install reads (INSTALL_KEEPS):
+    moybyte-org/carts' Jet Teapot carries a build record, a source bundle
+    and free text an install never reads, and on a C3 its whole entry ran
+    the Python heap out beside a page's session (#276). Every other member
+    streams past unheld, whatever it weighs and wherever the pieces split
+    it, and no bound counts it."""
+    repo = _repo()
+    dm = repo.carts[1]
+    dm["description"] = 'Not {"folder": "x.moy"}, "id": 1, \\ ] ' + "a long tale " * 2000
+    dm["build"] = {"pins": dict(("p%d" % i, {"note": "{[" * 40, "url": "u"}) for i in range(80)),
+                   "folder": "dm.moy"}
+    dm["screenshots"] = [{"url": "s%d.png" % i} for i in range(200)]
+    data = json.dumps(json.loads(repo.index()), indent=2).encode()
+    tag, want = ci._wants("dm.moy", None)
+    scan = ci._Scan(tag, want, ci.INSTALL_KEEPS)
+    most = 0
+    for at in range(0, len(data), k):
+        scan.feed(data[at:at + k])
+        most = max(most, len(scan.cap))
+    assert most < ci.INDEX_READ + len(json.dumps(dict((n, v) for n, v in dm.items()
+                                                       if n.encode() in ci.INSTALL_KEEPS)))
+    assert len(json.dumps(dm)) > 10 * most
+    whole = [c for c in ci.parse_index(data, URL) if c["folder"] == "dm.moy"]
+    got = _read(BitsNet({URL: data}, k), URL, "dm.moy")
+    assert got == _installs(whole) and "build" not in got[0] and "description" not in got[0]
+    assert ci.check_cart(got[0]) is None and ci.plan(got[0]) == ci.plan(whole[0])
 
 
 def test_an_entry_naming_another_folder_is_never_held_past_its_buffer():
@@ -155,9 +195,9 @@ def test_an_entry_naming_another_folder_is_never_held_past_its_buffer():
     assert most <= len(json.dumps(dm)) + ci.INDEX_READ < len(repo.carts[0]["description"])
     assert [c["id"] for c in scan.found] == ["dm"] and scan.big == 0
     whole = [c for c in ci.parse_index(data, URL) if c["folder"] == "dm.moy"]
-    assert _read(BitsNet({URL: data}, 7), URL, "dm.moy") == whole
+    assert _read(BitsNet({URL: data}, 7), URL, "dm.moy") == _installs(whole)
     assert _read(BitsNet({URL: data}, 7), URL, "snake.moy") \
-        == [c for c in ci.parse_index(data, URL) if c["folder"] == "snake.moy"]
+        == _installs([c for c in ci.parse_index(data, URL) if c["folder"] == "snake.moy"])
 
 
 def test_a_read_that_runs_out_of_memory_gives_its_response_back(monkeypatch):

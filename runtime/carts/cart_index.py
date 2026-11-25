@@ -245,6 +245,7 @@ TEXT_LIMIT = 65536            # a licence text, likewise
 # TLS connect, a 64 KB flush to flash -- which is what the screen waits on.
 READ_CHUNK = 16384
 WRITE_CHUNK = 65536
+MIN_CHUNK = 1024                # the least either becomes on a fragmented heap (chunk_buffer)
 STEP_MS = 120
 
 # The most one unit of the pipeline reads from the network at once: a zip
@@ -990,6 +991,19 @@ def plan(cart, chip=None, fmt=None, ranges=False):
             "store_bytes": store, "download_bytes": down}
 
 
+def chunk_buffer(size):
+    """An install's read or write buffer of `size` bytes, or, where a
+    fragmented heap cannot place that, of half as many, down to MIN_CHUNK:
+    a buffer's size sets an install's pace, never whether it runs."""
+    while True:
+        try:
+            return bytearray(size)
+        except MemoryError:
+            if size <= MIN_CHUNK:
+                raise
+            size = max(size // 2, MIN_CHUNK)
+
+
 def size_text(n):
     """A size the way the screens say it: whole KB below a megabyte, one
     decimal above. Integer arithmetic, so every tier prints the same."""
@@ -1484,6 +1498,12 @@ _SIG_HOLD = 1100
 _TOP = (b"version", b"name", b"revoked")
 _SKIPPED = -2                 # a capture's length once its entry names another folder
 _LAYOUT = b" \t\r"            # the blanks a newline's indentation is made of
+# The members of an entry an install reads (check_cart, plan, Install, the
+# fit, API and licence checks, the cover): EntryRead captures no other, so
+# what an entry's parse costs is what its install needs, whatever its
+# description or build record weigh.
+INSTALL_KEEPS = (b"id", b"name", b"version", b"folder", b"runtime", b"depends",
+                 b"licence", b"cover", b"assets", b"external", b"moybyte")
 
 
 def _member_str(b, n, key):
@@ -1539,15 +1559,17 @@ class _Scan:
     """An index document fed a piece at a time (`feed`), never held whole:
     the members beside its carts kept (_TOP), each entry of its `carts` read
     into one buffer reused entry after entry, without its lines'
-    indentation, and parsed in place only when it holds `tag` and then kept
-    when `want(entry)` says so (`found`); an entry whose own `folder` is
+    indentation and with only its members `keep` names (all when None),
+    and parsed in place only when it holds `tag` and then kept when
+    `want(entry)` says so (`found`); an entry whose own `folder` is
     another cart's is dropped once it fills the buffer. The bytes its
     signature covers are hashed as they pass, all but the last _SIG_HOLD,
     which `finish` reads for the `sig` member (split_signed)."""
 
-    def __init__(self, tag, want):
+    def __init__(self, tag, want, keep=None):
         self.tag = tag
         self.want = want
+        self.keep = keep
         self.h = hashlib.sha256(SIG_SCHEME)
         self.hold = (bytearray(_SIG_HOLD), bytearray(_SIG_HOLD))
         self.held = 0             # bytes of hold[0] not yet hashed: the document's end
@@ -1563,6 +1585,10 @@ class _Scan:
         self.cn = 0               # its length; -1 past ENTRY_MAX
         self.hit = False          # the entry being read holds `tag`
         self.blank = False        # the capture is inside a newline's indentation
+        self.ek = 0               # in an entry read with `keep`: 1 while a member's key is due, 2 inside it
+        self.mark = 0             # the capture's length before that member
+        self.kept = 0             # the entry's members captured
+        self.drop = False         # the member being read is not one `keep` names
         self.carts_next = False
         self.in_carts = False
         self.sig = False
@@ -1601,7 +1627,7 @@ class _Scan:
         indentation is never held: a raw newline is never inside a JSON
         string, so a newline and the blanks after it are layout."""
         cn = self.cn
-        if cn < 0 or end <= start:
+        if cn < 0 or end <= start or self.drop:
             return
         cap = self.cap
         if self.what == "entry" and not self.hit:
@@ -1644,12 +1670,31 @@ class _Scan:
         self.cn = 0
         self.hit = False
         self.blank = False
+        self.ek = 1 if what == "entry" and self.keep is not None else 0
+        self.kept = 0
+        self.drop = False
+
+    def _member(self):
+        """The entry's member whose key the capture now ends with: kept when
+        `keep` names it, else taken back off with its comma and its value
+        never captured."""
+        cn = self.cn
+        if cn < 0:
+            return
+        at = self.mark + (1 if self.kept else 0)
+        if bytes(memoryview(self.cap)[at + 1:cn - 1]) in self.keep:
+            self.kept += 1
+        else:
+            self.cn = self.mark
+            self.drop = True
 
     def _end(self, read=True):
         """The capture's bytes (None past ENTRY_MAX, or unless `read`), ended."""
         cn = self.cn
         self.what = None
         self.cn = 0
+        self.ek = 0
+        self.drop = False
         return None if cn < 0 or not read else bytes(memoryview(self.cap)[:cn])
 
     def _scan(self, b):
@@ -1677,6 +1722,11 @@ class _Scan:
                     self.expect_key = False
                     if self.key == b"sig":
                         self.sig = True
+                elif self.ek == 2:
+                    self._take(b, start, q + 1)
+                    start = q + 1
+                    self.ek = 0
+                    self._member()
                 i = q + 1
                 continue
             c = b[i]
@@ -1686,6 +1736,13 @@ class _Scan:
                 if d == 1 and self.expect_key:
                     self._begin("key")
                     start = i + 1
+                elif d == 3 and self.ek == 1:
+                    self._take(b, start, i)
+                    self.mark = self.cn
+                    if self.kept:
+                        self._take(b",", 0, 1)
+                    start = i
+                    self.ek = 2
             elif c == 123 or c == 91:                 # { [
                 d += 1
                 self.depth = d
@@ -1702,7 +1759,9 @@ class _Scan:
                     start = i
             elif c == 125 or c == 93:                 # } ]
                 if d == 3 and self.what == "entry":
-                    self._take(b, start, i + 1)
+                    self._take(b, start, i)
+                    self.drop = False
+                    self._take(b, i, i + 1)
                     self._entry()
                 elif d == 2 and self.in_carts:
                     self.in_carts = False
@@ -1717,6 +1776,11 @@ class _Scan:
                     self._take(b, start, i)
                     self._value()
                 self.expect_key = True
+            elif c == 44 and d == 3 and self.what == "entry" and self.keep is not None:
+                self._take(b, start, i)
+                self.drop = False
+                self.ek = 1
+                start = i + 1
             elif c == 58 and d == 1:                  # :
                 if self.key in _TOP:
                     self._begin("value")
@@ -1784,12 +1848,13 @@ class _Scan:
 class EntryRead:
     """One cart's entry of the index `url` -- the entry of `folder` (and id
     `ident`) -- read as the index streams, so no console holds a whole
-    index: a piece at a time (INDEX_READ), each entry on its own and parsed
-    only when it names the folder, the signature checked over a digest of
-    what it covers (_Scan). `step(budget_ms)` is True while it reads, and
+    index: a piece at a time (INDEX_READ), each entry on its own, with only
+    the members an install reads (INSTALL_KEEPS), and parsed only when it
+    names the folder, the signature checked over a digest of what it covers
+    (_Scan). `step(budget_ms)` is True while it reads, and
     raises an InstallError as parse_index would; then `carts` holds what
-    parse_index answers for that one entry (none, or more when an index
-    lists the folder twice). `read_from` is where the bytes come from when
+    parse_index answers for that one entry, those members and its stamps
+    alone (none, or more when an index lists the folder twice). `read_from` is where the bytes come from when
     it is not `url` (the index's mirror, index_mirror): the entries are
     stamped with `url` all the same, their assets resolved against it."""
 
@@ -1800,7 +1865,7 @@ class EntryRead:
         self.src = read_from or url
         self.carts = None
         tag, want = _wants(folder, ident)
-        self._scan = _Scan(tag, want)
+        self._scan = _Scan(tag, want, INSTALL_KEEPS)
         self._buf = bytearray(INDEX_READ)
         try:
             self._resp = _request(net, self.src)
@@ -2167,7 +2232,7 @@ class Install:
         self.t_net = 0
         self.t_store = 0
         self.t_all = 0
-        self.scratch = bytearray(READ_CHUNK if read is None else read)
+        self.scratch = chunk_buffer(READ_CHUNK if read is None else read)
         self.scratch_mv = memoryview(self.scratch)
         self.sink = _Sink(self, WRITE_CHUNK if chunk is None else chunk)
         self.written = {}
