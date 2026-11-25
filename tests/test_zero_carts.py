@@ -248,6 +248,7 @@ def test_a_zero_with_no_browser_console_installs_the_one_its_release_has(
     from test_web_addon import _names
     monkeypatch.setitem(sys.modules, "moy_net", nb)
     monkeypatch.setattr(ci, "INDEX_KEYS", TEST_KEYS)
+    monkeypatch.setattr(zero_host, "_PAGE", [None, 0])   # what way_back last said
     seeds = tmp_path / "seeds"
     shutil.copytree(str(SEEDS / "moybyte.files.moy"), str(seeds / "moybyte.files.moy"))
     digest, routes = _release(tmp_path, seeds=seeds)
@@ -289,6 +290,7 @@ def test_a_zero_with_no_browser_console_installs_the_one_its_release_has(
     finally:
         nb._bake({})
         nb.page_at("")
+        nb.page_say("", 0)      # the host library's root sentence, way_back's
 
 
 def test_a_boot_clears_the_stage_an_install_a_reset_cut_left(tmp_path):

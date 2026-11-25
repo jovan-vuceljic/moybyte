@@ -521,7 +521,12 @@ class WebHost:
             try:
                 resp = self.answer_vm(req[0], req[1], req[2])
             except Exception as exc:     # noqa: BLE001 -- never fail the request
-                print("WEB ERR %s: %s" % (type(exc).__name__, exc))
+                if isinstance(exc, MemoryError):
+                    import cart_index
+                    print("WEB ERR MemoryError: %s %s at %s" % (req[0], req[1],
+                                                                cart_index.where(exc)))
+                else:
+                    print("WEB ERR %s: %s" % (type(exc).__name__, exc))
                 resp = http_response(500, '{"error":"server"}')
             moy_net.web_answer(resp or http_response(
                 404, "not found", "text/plain; charset=utf-8"))

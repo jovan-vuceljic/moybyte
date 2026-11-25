@@ -87,8 +87,9 @@ paths:
   session opens); `tests/test_board_pass.py` pins one suite per console board
   and the two Zeros' one (`tests/test_zero_on_glass.py`, parametrised by
   board, `MOYBYTE_XIAO_ZERO_PORT` and `MOYBYTE_C3_ZERO_PORT`: Improv over
-  the cable, the browser console, the live socket, a match against a T-Deck,
-  the numbers as a perf record), which a pass takes by name.
+  the cable, the browser console, the live socket, Get Carts' installs and
+  the heap after each, a match against a T-Deck, the numbers as a perf
+  record), which a pass takes by name.
   - **A gesture test that fails on a board you have been driving is a DIRTY
     DESK before it is a regression.** The suites assume the launcher they were
     written against; a leftover menu or a scrolled shelf makes a fling land on

@@ -670,7 +670,8 @@ typedef struct {
     uint16_t port;
     uint32_t left;                  // a kept response's body bytes still on the connection
     void *conn;
-    char *head;                     // MOY_HTTPC_HEAD_MAX: the head, then the body's first bytes
+    char *head;                     // the head, then the body's first bytes
+    size_t cap;                     // head's bytes: MOY_HTTPC_HEAD_FIRST, doubled while one needs it
     size_t head_n;                  // the final response's head
     size_t rest, rest_n;            // the body bytes still in `head`
     char host[MOY_URL_HOST_MAX];
@@ -872,27 +873,84 @@ static void client_drop(client_t *c) {
     c->gen = (uint16_t)((c->gen + 1u) & 0x7fffu);
 }
 
+// c->head made at least `need` bytes, doubling, its bytes kept: 0, -EIO past
+// MOY_HTTPC_HEAD_MAX, or -ENOMEM.
+static int head_room(client_t *c, size_t need) {
+    if (need <= c->cap) {
+        return 0;
+    }
+    if (need > MOY_HTTPC_HEAD_MAX) {
+        return -EIO_;
+    }
+    size_t cap = c->cap;
+    while (cap < need) {
+        cap *= 2;
+    }
+    if (cap > MOY_HTTPC_HEAD_MAX) {
+        cap = MOY_HTTPC_HEAD_MAX;
+    }
+    char *b = moy_net_alloc(cap);
+    if (b == NULL) {
+        return -ENOMEM_;
+    }
+    memcpy(b, c->head, c->cap);
+    moy_net_free(c->head);
+    c->head = b;
+    c->cap = cap;
+    return 0;
+}
+
+// c->head back to MOY_HTTPC_HEAD_FIRST once nothing in it is needed: 0, or
+// -ENOMEM.
+static int head_shrink(client_t *c) {
+    if (c->cap <= MOY_HTTPC_HEAD_FIRST) {
+        return 0;
+    }
+    moy_net_free(c->head);
+    c->head = moy_net_alloc(MOY_HTTPC_HEAD_FIRST);
+    c->cap = c->head != NULL ? MOY_HTTPC_HEAD_FIRST : 0;
+    return c->head != NULL ? 0 : -ENOMEM_;
+}
+
+size_t moy_httpc_head_room(int h) {
+    client_t *c = client_at(h);
+    return c != NULL ? c->cap : 0;
+}
+
 // The request sent on c->conn and its response's head read into c->head: 0,
 // or -errno; `*n` the bytes that came either way.
 static int ask(client_t *c, const char *path, const char *agent, uint32_t flags,
                const char *range, moy_http_resp_t *r, size_t *n) {
     *n = 0;
-    int k = snprintf(c->head, MOY_HTTPC_HEAD_MAX,
+    int k;
+    for (;;) {
+        k = snprintf(c->head, c->cap,
                      "GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: %s\r\n%s%sConnection: %s\r\n\r\n",
                      path, c->host, agent, (flags & MOY_HTTPC_ICY) ? "Icy-MetaData: 1\r\n" : "",
                      range, MOY_HTTPC_POOL > 0 ? "keep-alive" : "close");
-    if (k <= 0 || k >= MOY_HTTPC_HEAD_MAX) {
-        return -EINVAL_;
+        if (k <= 0 || k >= MOY_HTTPC_HEAD_MAX) {
+            return -EINVAL_;
+        }
+        if ((size_t)k < c->cap) {
+            break;
+        }
+        int rc = head_room(c, (size_t)k + 1u);
+        if (rc != 0) {
+            return rc;
+        }
     }
     int rc = moy_conn_write(c->conn, c->head, (size_t)k);
     if (rc != 0) {
         return rc;
     }
     for (;;) {
-        if (*n >= MOY_HTTPC_HEAD_MAX) {
-            return -EIO_;
+        if (*n >= c->cap) {
+            rc = head_room(c, *n + 1u);
+            if (rc != 0) {
+                return rc;
+            }
         }
-        int got = moy_conn_read(c->conn, c->head + *n, MOY_HTTPC_HEAD_MAX - *n);
+        int got = moy_conn_read(c->conn, c->head + *n, c->cap - *n);
         if (got < 0) {
             return got;
         }
@@ -1002,7 +1060,7 @@ static void hop_end(client_t *c) {
         c->keep = 0;
     }
     while (c->keep && c->left > 0) {
-        int k = moy_conn_read(c->conn, c->head, c->left);
+        int k = moy_conn_read(c->conn, c->head, c->left < c->cap ? c->left : c->cap);
         if (k <= 0 || (uint32_t)k > c->left) {
             c->keep = 0;
             break;
@@ -1027,8 +1085,13 @@ static int open_with(const char *url, const char *agent, uint32_t flags, const c
         return -EBADF_;
     }
     client_t *c = &s_cl[i];
-    char *cur = moy_net_alloc(URL_MAX);
-    c->head = moy_net_alloc(MOY_HTTPC_HEAD_MAX);
+    size_t ul = strlen(url);
+    if (ul >= URL_MAX) {
+        return -EINVAL_;
+    }
+    char *cur = moy_net_alloc(ul + 1u);
+    c->head = moy_net_alloc(MOY_HTTPC_HEAD_FIRST);
+    c->cap = MOY_HTTPC_HEAD_FIRST;
     if (cur == NULL || c->head == NULL) {
         moy_net_free(cur);
         moy_net_free(c->head);
@@ -1036,7 +1099,7 @@ static int open_with(const char *url, const char *agent, uint32_t flags, const c
         return -ENOMEM_;
     }
     c->open = 1;
-    snprintf(cur, URL_MAX, "%s", url);
+    memcpy(cur, url, ul + 1u);
     int rc;
     for (int hop = 0;; hop++) {
         moy_http_resp_t r;
@@ -1051,7 +1114,11 @@ static int open_with(const char *url, const char *agent, uint32_t flags, const c
             *clen = r.clen;
             break;
         }
-        char *next = moy_net_alloc(URL_MAX);
+        size_t nn = r.loc_n + 1u + (r.loc[0] == '/' ? strlen(c->host) + 16u : 0u);
+        if (nn > URL_MAX) {
+            nn = URL_MAX;
+        }
+        char *next = moy_net_alloc(nn);
         if (next == NULL) {
             rc = -ENOMEM_;
             break;
@@ -1067,14 +1134,18 @@ static int open_with(const char *url, const char *agent, uint32_t flags, const c
             if (!dflt) {
                 snprintf(pp, sizeof(pp), ":%u", (unsigned)port);
             }
-            snprintf(next, URL_MAX, "%s://%s%s%.*s", tls ? "https" : "http", host, pp,
+            snprintf(next, nn, "%s://%s%s%.*s", tls ? "https" : "http", host, pp,
                      (int)r.loc_n, r.loc);
         } else {
-            snprintf(next, URL_MAX, "%.*s", (int)r.loc_n, r.loc);
+            snprintf(next, nn, "%.*s", (int)r.loc_n, r.loc);
         }
         moy_net_free(cur);
         cur = next;
         hop_end(c);
+        rc = head_shrink(c);
+        if (rc != 0) {
+            break;
+        }
     }
     moy_net_free(cur);
     if (rc != 0) {

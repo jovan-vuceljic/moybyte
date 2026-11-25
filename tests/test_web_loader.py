@@ -157,6 +157,21 @@ def test_the_store_holds_every_stable_pack_and_the_recent_dev_ones(tmp_path):
     assert open(os.path.join(out, "console", dev + ".pack"), "rb").read() == dev_data
 
 
+def test_the_store_holds_the_pack_of_a_cart_no_index_names(tmp_path):
+    """An online console's index names no add-on (the C3 Zero's), so the
+    store reads a release's add-on carts by their names: its pack is served,
+    checked against the digest its name carries."""
+    data, digest, _cart = _published(str(tmp_path / "beta"), [("index.html", b"c")])
+    os.remove(os.path.join(str(tmp_path / "beta"), "carts-c3_zero.json"))
+    out = str(tmp_path / "store")
+    assert pack_store.build(out, dev=[str(tmp_path / "beta")]) == [digest]
+    assert open(os.path.join(out, "console", digest + ".pack"), "rb").read() == data
+    wrong = os.path.join(str(tmp_path / "beta"), web_pack.CART_NAME % ("0" * 64))
+    os.rename(_cart, wrong)
+    with pytest.raises(pack_store.StoreError):
+        pack_store.build(out, dev=[str(tmp_path / "beta")])
+
+
 def test_the_store_refuses_a_cart_its_index_does_not_name(tmp_path):
     _data, _digest, cart = _published(str(tmp_path / "latest"), [("index.html", b"s")])
     with open(cart, "ab") as f:

@@ -27,6 +27,13 @@ pages, which headless Chrome boots (firmware/web_runner/browsershot.mjs).
   round trip) cannot pass, and the board's internal RAM while the page holds
   the socket.
 
+  GET CARTS. The page's Get Carts, driven by its keys, has the board
+  install an official cart it lacks, remove the flash's Calc and get it
+  back, and Get moybyte-org/carts' Moy Mesh, which a Zero refuses (it has
+  no LoRa radio); each ends as the board's lines say (an out-of-memory
+  names its frames), with PAGE_FREE free while the page is open, and its
+  internal heap after each is the idle one's within HEAP_SPREAD.
+
   A MATCH, where a T-Deck is on MOYBYTE_TDECK_PORT (the pass gives the
   T-Deck's port when it is in the same pass, after the T-Deck's own row): the
   page plays a Lua cart's and a Python cart's match against it, the world
@@ -1623,6 +1630,155 @@ def test_the_board_s_clock_is_set_from_the_network(zero, ssh):
     board = calendar.timegm(time.strptime(out.decode().strip(), "%Y-%m-%d %H:%M:%S"))
     print("%s: the board's clock is %+.1f s from this machine's" % (zero.name, board - now))
     assert abs(board - now) < CLOCK_SKEW_S, "the board says %s" % out.decode().strip()
+
+
+# -- Get Carts ---------------------------------------------------------------------------
+
+CARTS_LOG = re.compile(r"Moybyte carts|ZERO|official|Memory|Traceback|alloc", re.I)
+
+
+def _browse_logged(z, steps, out, query, peek=None):
+    """browsershot over `steps` on the board's page while the board's serial
+    is read: (the page's output, scrubbed; the board's lines CARTS_LOG keeps;
+    `_heap` read over the REPL with the page still open, once a board line
+    matches the regex `peek`, which ends the browse, else None)."""
+    path = _scenario(out, steps, query)
+    log = out / "browsershot.log"
+    lines, heap = [], None
+    with open(log, "w") as f:
+        proc = subprocess.Popen(["node", "browsershot.mjs", str(path), str(out)],
+                                cwd=str(RUNNER), env=dict(os.environ, MOY_BASE=z.url),
+                                stdout=f, stderr=subprocess.STDOUT)
+        try:
+            end = time.monotonic() + 900
+            while proc.poll() is None and time.monotonic() < end:
+                got = [ln for ln in z.b.drain(1.0) if CARTS_LOG.search(ln)]
+                lines += got
+                if peek is not None and any(re.search(peek, ln) for ln in got):
+                    lines += [ln for ln in z.b.drain(2.0) if CARTS_LOG.search(ln)]
+                    r = Z.Repl(z.b.ser)
+                    r.enter(clean=False)
+                    heap = _carts_heap(r)
+                    break
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+            path.unlink()
+    text = _scrub(log.read_text(), z)
+    return text, lines, heap
+
+
+# The page as a person opens it: `start` skips the play button, where `dev`
+# would also poll the board's /stamp (the moy CLI's hot reload) twice a
+# second, a load no page a person opens puts on it.
+GET_CARTS = "?handheld=1&start=1&cart=moybyte.get_carts.moy"
+# Get Carts' shelf on the handheld page, three cards a row in the order of
+# their names (the release's carts and moybyte-org/carts'), the focus on the
+# first: Achievements, Appearance, Brick Siege; Bullet Storm (an official
+# cart no store is seeded with), Calc (an app the flash installs, which
+# Remove may take off), Coin Quest; Doom, ESP 88, Files; Get Carts, Harpoon
+# Pop, Jet Teapot; Letter Blitz, Moy Mesh (moybyte-org/carts' Lua cart).
+BULLET_STORM = ["ArrowDown"]
+CALC = ["ArrowDown", "ArrowRight"]
+MOY_MESH = ["ArrowDown"] * 4 + ["ArrowRight"]
+# An install's wait: the page asks, and the board streams the index and
+# fetches the cart over TLS at a few KB/s.
+INSTALL_WAIT_MS = 75000
+# What an install may leave of the board's internal heap below the idle
+# read, after a collect with the store host stopped: the spread of a boot's
+# own allocations. An install that keeps a buffer, a socket or a task's
+# stack takes more.
+HEAP_SPREAD = 8 * 1024
+# The board's internal heap free with its page open, an install done: the
+# room the next install's TLS handshake takes its 16 KB record buffer from.
+PAGE_FREE = 30 * 1024
+
+
+def _keys(*keys, wait=700):
+    out = []
+    for k in keys:
+        out += [{"key": k}, {"wait": wait}]
+    return out
+
+
+def _carts_heap(r, folder=None):
+    """(internal free, internal largest, internal low-water since the boot,
+    Python heap free) bytes after a collect, and whether `folder` is in the
+    store, over the raw REPL `r`."""
+    r.run("import gc\ngc.collect()")
+    regions = [h for h in r.eval("__import__('esp32').idf_heap_info(%d)" % Z.INTERNAL_HEAP) if h]
+    free, big = Z.internal_heap(regions)
+    py = r.eval("__import__('gc').mem_free()")
+    there = folder is None or folder in r.eval("__import__('os').listdir(%r)" % CARTS)
+    return free, big, sum(h[3] for h in regions), py, there
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
+    """The page's Get Carts asks the board to install an official cart that
+    is not on it, to remove a cart the flash installed and get it back, and
+    to Get a cart of moybyte-org/carts this board cannot take (Moy Mesh, the
+    LoRa radio's): the two land, the third is refused with nothing written,
+    and the board's internal heap after each is the idle one's, give or take
+    HEAP_SPREAD (no install keeps RAM). Calc's own files are written back at the end, as the
+    release's copy the page got may differ from the one the flash put
+    there."""
+    _needs_password(zero)
+    calc = CARTS + "/moybyte.calc.moy"
+    with zero.repl(clean=False) as r:
+        idle = _carts_heap(r)
+        kept = {p: r.read(p) for p, size in r.tree(calc).items() if size >= 0}
+    print("idle: internal %d free, %d largest, %d low-water; Python heap %d free" % idle[:4])
+    sessions = [        # (name, folder, keys, whether it lands)
+        ("bullet_storm", "moybyte.bullet_storm.moy",
+         _keys(*BULLET_STORM) + _keys("Enter", "Enter", wait=1500), True),
+        ("calc", "moybyte.calc.moy",
+         _keys(*CALC) + _keys("Enter", wait=1500) + _keys("ArrowLeft", "Enter", "ArrowRight")
+         + _keys("Enter", wait=8000) + [{"shot": "calc_removed"}]
+         + _keys("Enter", "Enter", wait=1500), True),
+        ("moy_mesh", "moymesh.moy",
+         _keys(*MOY_MESH) + _keys("Enter", "Enter", wait=1500), False),
+    ]
+    try:
+        for name, folder, keys, lands in sessions:
+            steps = sign_in(zero) + [{"wait": 15000}] + keys \
+                + [{"wait": INSTALL_WAIT_MS}, {"shot": name}]
+            _out, lines, page = _browse_logged(zero, steps, tmp_path / name, GET_CARTS,
+                                               peek=r"official: install %s " % re.escape(folder))
+            print("%s: the board's lines:\n  %s" % (name, "\n  ".join(lines)))
+            if page is not None:
+                print("%s, the page open: internal %d free, %d largest, %d low-water"
+                      % ((name,) + page[:3]))
+            done = [ln for ln in lines if "official: install %s " % folder in ln]
+            with zero.repl(clean=False) as r:
+                heap = _carts_heap(r, folder)
+            print("%s: internal %d free, %d largest, %d low-water; Python heap %d free; "
+                  "landed %s" % ((name,) + heap))
+            zero.take("zero internal free after %s" % name, heap[0] / 1024.0)
+            zero.take("zero internal largest after %s" % name, heap[1] / 1024.0)
+            if lands:
+                assert done and done[-1].endswith(" done"), \
+                    "%s: the board did not install it: %s" % (name, lines[-8:])
+                assert heap[4], "%s: the board said done but its store has no %s" % (
+                    name, folder)
+            else:
+                assert done and done[-1].endswith(" idle") and any(
+                    "%s stopped" % folder in ln for ln in lines), \
+                    "%s: the board did not stop it at the prompt: %s" % (name, lines[-8:])
+                assert not heap[4], "%s: refused, yet the store has %s" % (name, folder)
+            assert page[0] >= PAGE_FREE, \
+                "%s: the board's internal heap is %d bytes free with its page open" % (
+                    name, page[0])
+            assert heap[0] >= idle[0] - HEAP_SPREAD, \
+                "%s: the board's internal heap is %d bytes free after it, %d idle" % (
+                    name, heap[0], idle[0])
+    finally:
+        with zero.repl() as r:
+            if kept:
+                r.remove(calc)
+                for p, data in sorted(kept.items()):
+                    r.mkdirs(p.rsplit("/", 1)[0])
+                    r.write(p, data)
 
 
 # -- a match against a T-Deck --------------------------------------------------------------

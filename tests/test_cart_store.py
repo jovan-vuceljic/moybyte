@@ -305,6 +305,48 @@ def test_an_install_on_a_heap_with_no_block_for_its_buffers_takes_smaller_ones(
         ci.chunk_buffer(4096)
 
 
+def test_an_install_holds_no_buffer_once_its_files_are_in(tmp_path):
+    """The prompt's manifest and the landing's record are parsed after the
+    download, where a C3's heap beside a page's session had 11 KB free in
+    pieces and no room for them beside the download's buffers: the install
+    gives both buffers back before its `ask`, and lands all the same."""
+    root = _store(tmp_path)
+    repo = Repo(BASE)
+    repo.add("jet", extra={"level.bin": os.urandom(5000)})
+    cart = _cart(repo, "jet")
+    held = []
+
+    def ask(stage):
+        held.append((job.scratch, job.sink.buf))
+
+    job = ci.Install(cart, ci.plan(cart, "esp32s3", 2), MemNet(repo.routes()), root,
+                     _session, (), step_ms=50, ask=ask)
+    while job.step():
+        pass
+    assert held == [(None, None)]
+    assert job.error is None and job.path == root + "/jet.moy"
+
+
+def test_an_install_out_of_memory_says_where_on_serial(tmp_path, capsys):
+    """An install that runs out of memory says so in the kid's words, and
+    serial gets the frames it was in and the heap it had."""
+    root = _store(tmp_path)
+    repo = Repo(BASE)
+    repo.add("jet")
+    cart = _cart(repo, "jet")
+
+    def ask(stage):
+        raise MemoryError("memory allocation failed, allocating 1624 bytes")
+
+    job = ci.Install(cart, ci.plan(cart, "esp32s3", 2), MemNet(repo.routes()), root,
+                     _session, (), step_ms=50, ask=ask)
+    while job.step():
+        pass
+    assert job.error == ci.NO_MEMORY
+    assert "in ask" in job.detail and "in step" in job.detail
+    assert "jet.moy: out of memory" in capsys.readouterr().out
+
+
 def test_an_external_file_is_never_fetched_without_its_licence(tmp_path):
     root = _store(tmp_path)
     repo = Repo(BASE)

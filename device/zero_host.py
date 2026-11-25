@@ -79,6 +79,7 @@ does, because a board nobody can configure is worse than a board that serves
 slowly for a minute.
 """
 
+import gc
 import json
 import os
 import time
@@ -1131,9 +1132,32 @@ def way_back(addon):
             _PAGE[0] = None
 
 
+# THE HEAP'S SHAPE. The modules the store host keeps for good, imported
+# before anything else allocates, so their namespaces pack at the bottom of
+# the Python heap rather than among the garbage the store's sweep and seed
+# and the radio's start leave, which would split a page session's free heap
+# into holes a request's blocks do not fit (the C3's 32 KB heap, #319).
+# tests/test_staging_closure.py holds every name to both Zeros' images.
+LASTING = ("moy_carts", "cart_index", "cart_unpack", "moy_seed", "moy_store_base",
+           "web_addon", "moy_sync", "moy_webhost", "moy_ota")
+
+
+def lasting():
+    """LASTING imported, those this build has."""
+    for name in LASTING:
+        try:
+            __import__(name)
+        except ImportError:
+            pass
+
+
 def serve():
     """Bring the store host up and pump it forever. Ctrl-C drops to the REPL
-    (which is how provision.sh and mpremote get the board back)."""
+    (which is how provision.sh and mpremote get the board back). What lives
+    for good is made first (`lasting`), and a collect after the store's own
+    work and before the loop lets what the boot keeps fill the holes its
+    garbage left, so the loop's requests start on the heap's one free run."""
+    lasting()
     _mkdir(ROOT)
     _mkdir(CARTS_DIR)
     # BEFORE the radio, on purpose: seeding is local, and a board that cannot
@@ -1143,6 +1167,7 @@ def serve():
     recover_installs(CARTS_DIR)
     sweep_carts(CARTS_DIR)
     seed_carts(CARTS_DIR)
+    gc.collect()
     improv = make_improv()
     if improv is not None:
         moy_net.web_cable(1)         # the hello tells a page this board pairs by cable
@@ -1206,6 +1231,7 @@ def serve():
     except Exception as exc:             # noqa: BLE001 -- the store serves regardless
         print("ZERO ssh: unavailable:", exc)
         tail = None
+    gc.collect()
     while True:
         # The console boards poll between frames; this board HAS no frames, so
         # a short sleep is its whole duty cycle. 10ms keeps a page load snappy

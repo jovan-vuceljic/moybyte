@@ -688,6 +688,24 @@ def test_a_parked_body_the_vms_heap_cannot_hold_is_busy_not_fatal(serving, monke
     assert b"200" in h_status(got) and seen == ["hop"]
 
 
+def test_an_answer_out_of_memory_says_its_route_and_frames(serving, capsys):
+    """A route that runs out of the VM's heap answers 500, and its serial
+    line names the request and where the allocation failed."""
+    class Full:
+        def busy(self):
+            return False
+
+        def answer(self, ok=None, message=None):
+            raise MemoryError("memory allocation failed, allocating 1256 bytes")
+
+    h = serving(official=Full())
+    got = _exchange(h, b"GET /official HTTP/1.1\r\nHost: x\r\n\r\n")
+    assert b"500" in h_status(got)
+    line = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("WEB ERR")]
+    assert line and line[0].startswith("WEB ERR MemoryError: GET /official at ")
+    assert "in answer" in line[0]
+
+
 class _Parking:
     """_exchange's host for a bare kernel listener: each parked request is
     noted and answered 200, as the VM's poll would."""

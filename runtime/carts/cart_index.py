@@ -289,6 +289,29 @@ def _log(*a):
         pass
 
 
+def where(exc):
+    """The frames `exc` was raised through, innermost last, one line: what a
+    MemoryError's log names, so the allocation that failed is on serial."""
+    if _io is None:
+        return "?"
+    out = _io.StringIO()
+    try:
+        if hasattr(sys, "print_exception"):
+            sys.print_exception(exc, out)
+        else:
+            import traceback
+            traceback.print_exception(type(exc), exc, exc.__traceback__, file=out)
+    except Exception:  # noqa: BLE001 -- a log line never stops an install
+        return "?"
+    lines = [ln.strip() for ln in out.getvalue().splitlines()]
+    text = " | ".join(ln for ln in lines if ln.startswith("File "))
+    try:
+        import gc
+        return "%s; %d bytes of heap free" % (text, gc.mem_free())
+    except (ImportError, AttributeError):
+        return text
+
+
 class InstallError(Exception):
     """`text` is what the kid reads; `detail` is what serial gets."""
 
@@ -2291,6 +2314,7 @@ class Install:
             while True:
                 if self._reader is None:
                     if self._opening is None and not self._next():
+                        self._drop_buffers()
                         if self.cart.get("runtime") == "python" \
                                 and not is_official(self.cart):
                             self.in_store(self._imports_check)
@@ -2345,8 +2369,8 @@ class Install:
         if isinstance(exc, InstallError):
             self._fail(exc.text, exc.detail)
         elif isinstance(exc, MemoryError):
-            self._fail(NO_MEMORY, "out of memory at %d of %d bytes"
-                       % (self.done, self.total))
+            self._fail(NO_MEMORY, "out of memory at %d of %d bytes, in %s"
+                       % (self.done, self.total, where(exc)))
         elif isinstance(exc, OSError):
             self._fail(FULL if _store.store_full(exc) else NO_WRITE,
                        "%s: %s" % (self.folder, exc))
@@ -2496,6 +2520,13 @@ class Install:
                 self._reader = _TarGzReader(self, self._src, item)
             self._opening = None
             return True
+
+    def _drop_buffers(self):
+        """The download's buffers given back once its last file is in: the
+        checks, the install prompt and the landing after it parse a manifest
+        and the record, which a C3's heap has room for only without them."""
+        self.scratch = self.scratch_mv = None
+        self.sink.drop()
 
     def _end_source(self):
         if self._src is not None:

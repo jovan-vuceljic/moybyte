@@ -75,14 +75,21 @@ chip changes.
   index, and of it only the members the install reads
   (`cart_index.EntryRead`); its buffers are made for it, smaller where
   the heap has no block for them (`cart_index.chunk_buffer`), and given
-  back when it ends, and a cart its store has no room for is refused with the
+  back once its last file is in, before the install prompt's manifest and
+  the record are parsed (a running-out logs its frames and the heap free,
+  `cart_index.where`), and a cart its store has no room for is refused with the
   sizes before anything is fetched. Those fetches are https, and its image
   carries a CA bundle of its own (`boards/MOYBYTE_C3_ZERO/ca_roots.pem`)
   where the XIAO takes ESP-IDF's common one: the roots the hosts it fetches
   from chain to (the release's index and assets on GitHub, moybyte-org/carts
   on GitHub Pages, the site's mirror), with a backup per CA family. An https
   host outside those families fails its handshake; its root goes in that
-  file.
+  file. A handshake needs one block for the 16 KB record a server may send
+  whole, beside the page's live socket and the WiFi driver's receive
+  buffers, so what an https fetch holds of its own is kept small: the http
+  client's head buffer grows from `MOY_HTTPC_HEAD_FIRST` only while a head
+  needs it (`native/moy_net/moy_ota.h`), and TLS writes through a 2 KB
+  out-buffer (`boards/MOYBYTE_C3_ZERO/sdkconfig.board`).
 - **SSH, without SFTP.** The server and the shell's face run in the same
   internal heap, so a build without PSRAM sizes them to what a session was
   measured to use there: the server's and the face's stacks, the session's

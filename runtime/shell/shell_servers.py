@@ -345,8 +345,15 @@ class NavServer:
 
     def play(self, g, cart):
         """Open `cart` as a workspace and RUN it, returning to the calling
-        grant's app on exit (home when the grant is no registered app)."""
+        grant's app on exit (home when the grant is no registered app). A
+        cart a registered app claims opens that app, as the launcher's tap
+        does (`Workstation.open`): its folder's main.py is the stub an older
+        console runs."""
         ws = self.__ws
+        for app in ws.app_layers:
+            if app.is_app(cart):
+                return self._go(g, "Wants to open " + str(cart.get("title")),
+                                lambda: bool(ws.spine.open_app(app, cart)))
         caller = ws.app(ws.app_abi.grant_id(g))
         if caller is None:
             caller = ws.launcher_layer
