@@ -16,6 +16,8 @@
 //   step(), run()      one frame / until QUIT, INTERRUPT or STOPPED
 //   upcalls()          ((console, app, driver, service, refused, role) of the last frame,
 //                       the same in total)
+//   service_counts()   the service upcalls that carried each MOY_SVC_* bit, by
+//                      bit number, in total
 //   tick(ms), capture([on]), meters(), meters_reset(), pump(), lit(on),
 //   health(on), frames(), drawn()
 //   idle([rung, secs]) the ladder: (state, dim_s, saver_s, blank_s) / set one
@@ -322,6 +324,17 @@ static mp_obj_t loop_upcalls(void) {
     return mp_obj_new_tuple(2, r);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(loop_upcalls_obj, loop_upcalls);
+
+static mp_obj_t loop_service_counts(void) {
+    uint32_t v[MOY_SVC_BITS];
+    moy_loop_service_counts(v);
+    mp_obj_t t[MOY_SVC_BITS];
+    for (int i = 0; i < MOY_SVC_BITS; i++) {
+        t[i] = mp_obj_new_int_from_uint(v[i]);
+    }
+    return mp_obj_new_tuple(MOY_SVC_BITS, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(loop_service_counts_obj, loop_service_counts);
 
 static mp_obj_t loop_tick(mp_obj_t ms) {
     moy_loop_set_tick((uint32_t)mp_obj_get_int(ms));
@@ -741,6 +754,7 @@ static const mp_rom_map_elem_t loop_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_drive), MP_ROM_PTR(&loop_drive_obj) },
     { MP_ROM_QSTR(MP_QSTR_run), MP_ROM_PTR(&loop_run_obj) },
     { MP_ROM_QSTR(MP_QSTR_upcalls), MP_ROM_PTR(&loop_upcalls_obj) },
+    { MP_ROM_QSTR(MP_QSTR_service_counts), MP_ROM_PTR(&loop_service_counts_obj) },
     { MP_ROM_QSTR(MP_QSTR_tick), MP_ROM_PTR(&loop_tick_obj) },
     { MP_ROM_QSTR(MP_QSTR_capture), MP_ROM_PTR(&loop_capture_obj) },
     { MP_ROM_QSTR(MP_QSTR_fps), MP_ROM_PTR(&loop_fps_obj) },
