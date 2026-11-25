@@ -781,11 +781,21 @@ def ssh(zero, tmp_path_factory):
 
 @contextlib.contextmanager
 def _bench(ssh):
-    ssh.run("rm -r %s; mkdir %s" % (BENCH, BENCH))
+    _rm_all(ssh, BENCH)
+    ssh.run("mkdir %s" % BENCH)
     try:
         yield
     finally:
-        ssh.run("rm -r %s" % BENCH)
+        _rm_all(ssh, BENCH)
+
+
+def _rm_all(ssh, path):
+    """`path` surely gone: `rm -r` again where its last pass stopped (on the
+    C shell, a file's `.bak` removed with the file then stops the walk, one
+    pair a pass)."""
+    for _ in range(8):
+        if ssh.run("rm -r %s" % path)[0] == 0 or ssh.run("ls %s" % path)[0] != 0:
+            return
 
 
 def _text_file(n, tag="line"):
@@ -1146,6 +1156,11 @@ def _remove(ssh, folder):
     return ssh.run("rm -r %s/%s" % (CARTS, folder))
 
 
+def _gone(ssh, folder):
+    """A bench cart surely gone, for a test about something else."""
+    _rm_all(ssh, "%s/%s" % (CARTS, folder))
+
+
 def _cat(ssh, path):
     rc, data, err = ssh.run("cat %s" % path)
     return data if rc == 0 else None
@@ -1206,7 +1221,7 @@ def test_a_cart_uploaded_from_the_page_reads_back_byte_exact(zero, mirror, ssh, 
                                 tmp_path / "gone"), "SHELF")
         assert shelf is not None and folder not in shelf, shelf
     finally:
-        _remove(ssh, folder)
+        _gone(ssh, folder)
 
 
 def _pmem(ssh, folder, tmp):
@@ -1247,7 +1262,7 @@ def test_a_game_s_pmem_saves_are_back_after_a_reboot(zero, mirror, ssh, tmp_path
         assert again is not None and again[:9] == [2] + [2000 + i for i in range(1, 9)], \
             "the game did not read its cells back: %s" % (again and again[:9])
     finally:
-        _remove(ssh, folder)
+        _gone(ssh, folder)
 
 
 FILL = STORE + "/zbench_fill.bin"
@@ -1283,6 +1298,8 @@ def test_a_full_store_refuses_a_cart_says_so_and_corrupts_nothing(zero, mirror, 
                       on_line=lambda _l: log.extend(_board_lines(zero)))
     finally:
         with zero.repl() as r:
+            left_after = r.eval("__import__('os').statvfs(%r)[3]" % STORE)
+            filled = r.eval("__import__('os').stat(%r)[6]" % FILL)
             r.remove(FILL)
             try:
                 landed = r.tree(CARTS + "/" + folder)
@@ -1292,12 +1309,15 @@ def test_a_full_store_refuses_a_cart_says_so_and_corrupts_nothing(zero, mirror, 
             tree1, files1 = _snapshot(r)
     said, state = _tagged(out, "SAID"), _tagged(out, "STATE")
     refused = [ln for ln in log if "refused" in ln or "Errno" in ln]
-    print("%s: the page said %s; its state %s; the board: %s; landed: %s"
-          % (zero.name, said, state, refused[-5:], landed))
-    keys = STORE + "/system/webkeys"
-    changed = sorted(p for p, data in files0.items() if p != keys and files1.get(p) != data)
-    sizes = sorted(p for p, s in tree0.items() if p != keys and tree1.get(p) != s)
-    new = sorted(p for p in tree1 if p not in tree0 and p != keys)
+    print("%s: the page said %s; its state %s; the board: %s; landed: %s; after it "
+          "the fill held %d B and %d blocks were free"
+          % (zero.name, said, state, refused[-5:], landed, filled, left_after))
+    # what a page's pairing writes, and the publish marker every save
+    # overwrites (runtime/carts/moy_fs.py: never cleared)
+    ours = (STORE + "/system/webkeys", STORE + "/.publish")
+    changed = sorted(p for p, data in files0.items() if p not in ours and files1.get(p) != data)
+    sizes = sorted(p for p, s in tree0.items() if p not in ours and tree1.get(p) != s)
+    new = sorted(p for p in tree1 if p not in tree0 and p not in ours)
     half = sorted(p for p, s in landed.items()
                   if s >= 0 and p.rsplit("/", 1)[-1] in content
                   and s != len(content[p.rsplit("/", 1)[-1]]))
@@ -1313,11 +1333,13 @@ def test_a_full_store_refuses_a_cart_says_so_and_corrupts_nothing(zero, mirror, 
 
 
 # The console's way to its update screen on a page this board serves: the
-# menu (the bar's logo), Settings (its sixth row), then Updates' "Update
-# online" (ten rows down: General's six, Play's two, Updates' Channel).
-TO_UPDATE = [{"click": [14, 13]}, {"wait": 800}] + [{"key": "ArrowDown"}] * 5 + \
-    [{"wait": 300}, {"key": "Enter"}, {"wait": 1500}] + [{"key": "ArrowDown"}] * 10 + \
-    [{"wait": 300}, {"key": "Enter"}]
+# menu (the bar's logo), Settings (counted up from its last row, Restart,
+# past About: the rows above it change with the card selected and the radio
+# link, and the menu clamps at its ends), then Updates' "Update online" (ten
+# rows down: General's six, Play's two, Updates' Channel).
+TO_UPDATE = [{"click": [14, 13]}, {"wait": 800}] + [{"key": "ArrowDown"}] * 20 + \
+    [{"key": "ArrowUp"}] * 2 + [{"wait": 300}, {"key": "Enter"}, {"wait": 1500}] + \
+    [{"key": "ArrowDown"}] * 10 + [{"wait": 300}, {"key": "Enter"}]
 OTA_VERDICT = re.compile(r"ZERO ota: (up to date|.* available|no build published|check failed)")
 OTA_INSTALLS = re.compile(r"ZERO ota: (downloading|writing|installed|rebooting|image already)")
 
@@ -1355,7 +1377,7 @@ def test_the_update_screen_shows_what_the_channel_offers_without_installing(
 # -- across a reboot ----------------------------------------------------------------------------
 
 
-SETTING = ("show_fps", True)     # a row of system/settings a page and its board share
+SETTING = ("show_fps", True)     # a row of the board's system/settings
 
 
 def _setting(ssh, key):
@@ -1367,7 +1389,9 @@ def _setting(ssh, key):
 def test_an_imported_cart_and_a_setting_survive_a_reset(zero, mirror, ssh, tmp_path):
     """A cart imported on the page and a setting changed (over SSH, the
     store's own `settings`) are both there after a reset: on the board, and
-    on the shelf and in the settings of a page opened after it."""
+    the cart on the shelf of a page opened after it. A Zero's page keeps its
+    own Settings in the browser: the board has no VM to serve them
+    (/console.json, moy_webhost.c's SYSTEM_PULL)."""
     key, value = SETTING
     archive, folder, _c = _bench_cart(tmp_path, "keep", "Zero Bench Keep")
     had = _setting(ssh, key)
@@ -1381,15 +1405,12 @@ def test_an_imported_cart_and_a_setting_survive_a_reset(zero, mirror, ssh, tmp_p
         rc, ls, _err = ssh.run("ls %s" % CARTS)
         assert folder.encode() in ls, "the cart is gone after the reset: %r" % ls
         assert _setting(ssh, key) == value, "the setting after the reset: %r" % _setting(ssh, key)
-        out = _browse(zero, zero.url, sign_in(zero) + [{"wait": 3000}, SHELF,
-                                                       {"js": STATE % "STATE"}],
+        out = _browse(zero, zero.url, sign_in(zero) + [{"wait": 3000}, SHELF],
                       tmp_path / "after")
-        shelf, state = _tagged(out, "SHELF"), _tagged(out, "STATE")
+        shelf = _tagged(out, "SHELF")
         assert shelf and folder in shelf, "the page's shelf after the reset: %s" % shelf
-        assert state and state["system"].get(key) == value, \
-            "the page's settings after the reset: %s" % (state and state["system"])
     finally:
-        _remove(ssh, folder)
+        _gone(ssh, folder)
         ssh.run("settings unset %s" % key if had is None
                 else "settings set %s %s" % (key, json.dumps(had)))
 
@@ -1407,17 +1428,21 @@ WATCH = """(function () {
 })()"""
 
 
+WEB_LINE = re.compile(r"live|seal|sign|webkey|pair|ZERO|refus", re.I)
+
+
 def _across(zero, ssh, tmp_path, stem, go_away):
     """The page open and signed in with a game running, `go_away()` takes
     the board from it: the page comes back to live without loading again,
     its console as it was (the game still running), its live socket open
-    again, and a cart imported after it reaches the board. What the page
-    said meanwhile, and its state before and after."""
+    again, and a cart imported after it reaches the board. What `go_away`
+    returned, and the page's state before and after."""
     title = "Brick Siege"
     archive, folder, content = _bench_cart(tmp_path, stem, "Zero Bench %s" % stem.title())
-    done = []
+    done, log = [], []
 
     def on_line(line):
+        log.extend(_board_lines(zero))
         if '"READY"' in line and not done:
             done.append(go_away())
 
@@ -1435,8 +1460,10 @@ def _across(zero, ssh, tmp_path, stem, go_away):
                       env={"MOY_UPLOAD": str(archive)}, on_line=on_line, check=False)
         before, after = _tagged(out, "BEFORE"), _tagged(out, "AFTER")
         watch = _tagged(out, "WATCH")
-        print("%s: %s: the page said %s; before %s; after %s"
-              % (zero.name, stem, watch and watch["s"], before, after))
+        log.extend(_board_lines(zero, 2.0))
+        print("%s: %s: the page said %s; before %s; after %s; the board's web lines: %s"
+              % (zero.name, stem, watch and watch["s"], before, after,
+                 [ln for ln in log if WEB_LINE.search(ln)][-20:]))
         assert done, "the board was not taken away (the page never got READY):\n" + out[-1500:]
         assert "STEP FAILED" not in out, out[-2500:]
         assert watch and not watch["unload"], "the page loaded again"
@@ -1445,9 +1472,9 @@ def _across(zero, ssh, tmp_path, stem, go_away):
         assert (after["live"] or {}).get("opens", 0) > (before["live"] or {}).get("opens", 0), \
             "the live socket did not open again: %s -> %s" % (before["live"], after["live"])
         assert not _differs(ssh, folder, content), "the cart imported after it"
-        return done[0], watch
+        return done[0], before, after
     finally:
-        _remove(ssh, folder)
+        _gone(ssh, folder)
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
@@ -1466,18 +1493,18 @@ NOWHERE = ("moy-bench-nowhere", "nowhere-at-all")
 def test_the_page_reconnects_after_the_board_s_wifi_drops(zero, mirror, ssh, tmp_path):
     """The board's Wi-Fi drops under an open page and comes back, the board
     not reset (_across): over the cable, an Improv join to a network that is
-    not there, which the board refuses and then rejoins its own. The page
-    said it lost the board meanwhile, and the board serves where it served."""
+    not there, which the board refuses and then rejoins its own. The page's
+    live socket dropped meanwhile, and SSH answers where it answered."""
     def drop():
         st, _urls, secs, err = Z.Improv(zero.b.ser).join(*NOWHERE, timeout=120.0)
         return st, secs, err
 
-    (st, secs, err), watch = _across(zero, ssh, tmp_path, "wifidrop", drop)
+    (st, secs, err), before, after = _across(zero, ssh, tmp_path, "wifidrop", drop)
     print("%s: the station was gone for the join's %.1f s (Improv error %r, state %r)"
           % (zero.name, secs, err, st))
     assert err == 0x03, "the join to %r answered error %r, not UNABLE" % (NOWHERE[0], err)
-    assert any(s != "live" for _t, s in watch["s"]), \
-        "the page never said it lost the board: %s" % watch["s"]
+    assert after["live"]["drops"] > before["live"]["drops"], \
+        "the page's live socket never dropped: %s -> %s" % (before["live"], after["live"])
     rc, out, _e = ssh.run("date")
     assert rc == 0, "SSH at %s after the drop: %r" % (zero.url, out)
 
@@ -1523,8 +1550,11 @@ def test_a_second_browser_signing_in_displaces_the_first(zero, mirror, ssh, tmp_
         {"waitFor": DISCONNECTED, "timeout": 240000},
         {"js": TOLD % "A_TOLD"}, {"js": STATE % "A_TAKEN"}, {"shot": "a_told"},
         {"wait": 15000}, {"js": STATE % "A_STILL"},
-        {"js": "document.getElementById('pinb').click(), 1"},
-        {"waitFor": LIVE_OPEN, "timeout": 120000}, {"js": STATE % "A_BACK"}, {"wait": 30000},
+        {"js": "window.__moyState().then(function (s) { window.__opens = s.live.opens; "
+               "document.getElementById('pinb').click(); return 1; })"},
+        {"waitFor": "window.__moyState().then(function (s) { return s.live.opens > "
+                    "window.__opens; })", "timeout": 120000},
+        {"js": STATE % "A_BACK"}, {"wait": 30000},
     ]
     second = sign_in(zero) + [{"waitFor": LIVE_OPEN, "timeout": 120000},
                               {"js": STATE % "B_LIVE"}] + _import_steps("B_SYNCED") + [
@@ -1570,7 +1600,7 @@ def test_a_second_browser_signing_in_displaces_the_first(zero, mirror, ssh, tmp_
     finally:
         if "thread" in got:
             got["thread"].join(timeout=900)
-        _remove(ssh, folder)
+        _gone(ssh, folder)
 
 
 # -- the network: the name and the clock ---------------------------------------------------------
@@ -1776,13 +1806,13 @@ def test_zy_a_session_soak_keeps_the_board_s_ram(zero, mirror, ssh, tmp_path):
                 _still_up(zero, t)
             finally:
                 t.close()
-            _remove(ssh, folder)
+            _gone(ssh, folder)
             frees.append(free)
             rounds.append(time.monotonic() - r0)
             print("%s soak round %d (%.0f s): internal RAM free in SSH %.1f KB"
                   % (zero.name, n, rounds[-1], free / 1024.0))
     finally:
-        _remove(ssh, folder)
+        _gone(ssh, folder)
     free1, big1 = _heap(zero, "after the soak")
     drop, past = Z.drift(frees, SOAK_FREE_BAND)
     print("%s soak: %d rounds in %.0f s; free in SSH by round (KB) %s, fell %.1f KB "
