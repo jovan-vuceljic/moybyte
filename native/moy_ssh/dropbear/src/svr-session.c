@@ -106,6 +106,17 @@ svr_session_cleanup(void) {
 }
 
 void svr_session(int sock, int childpipe) {
+	svr_session_begin(sock, childpipe);
+
+	/* Run the main for-loop. */
+	session_loop(svr_chansess_checksignal);
+
+	/* Not reached */
+}
+
+/* The session set up on `sock`, its identification and first KEXINIT
+ * queued, ready for its loop. */
+void svr_session_begin(int sock, int childpipe) {
 	char *host, *port;
 	size_t len;
 
@@ -208,12 +219,6 @@ void svr_session(int sock, int childpipe) {
         fuzz_svr_hook_preloop();
     }
 #endif
-
-	/* Run the main for-loop. */
-	session_loop(svr_chansess_checksignal);
-
-	/* Not reached */
-
 }
 
 /* cleanup and exit - format must be <= 100 chars */
