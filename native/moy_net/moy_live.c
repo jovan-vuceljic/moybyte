@@ -44,7 +44,9 @@
 // gone with them at its end) wakes on the socket and every MOY_LIVE_WAIT_MS
 // while the radio is up, takes what the
 // ring holds and sends it. A page that sends nothing for MOY_LIVE_IDLE_MS
-// (its beats included) is gone: the socket closes 1001 "idle". The radio
+// (its beats included) is gone: the socket closes 1001 "idle". Its
+// session's end closes it 1008 "revoked", and another session's page asking
+// for the socket 4001 "taken" (moy_wa_take: the newer page has it). The radio
 // goes down with the socket, so a page that comes back says 'U' again; a
 // match on it waits meanwhile, as a missing input does.
 
@@ -106,7 +108,7 @@ typedef struct {
     volatile int fd;                    // the socket served, or -1
     moy_wa_seal_t seal;
     uint32_t up_i, down_i;              // the next frame's index each way
-    volatile int cut;
+    volatile int cut;                   // 1: the session ended, 2: another one took it
     volatile uint32_t heard;            // moy_net_ms of the page's last frame
     uint32_t said;                      // ...and of the board's
     int radio;                          // the radio up for the page
@@ -326,7 +328,7 @@ static void pump(int ws) {
     }
     for (;;) {
         if (L->cut) {
-            moy_ws_close(ws, 1008, "revoked");
+            moy_ws_close(ws, L->cut == 2 ? 4001 : 1008, L->cut == 2 ? "taken" : "revoked");
             return;
         }
         uint32_t now = moy_net_ms();
@@ -445,9 +447,9 @@ uint32_t moy_web_live_idle_ms(void) {
     return moy_net_ms() - L->heard;
 }
 
-void moy_web_live_cut(void) {
+void moy_web_live_cut(int taken) {
     if (__atomic_load_n(&L->fd, __ATOMIC_ACQUIRE) >= 0) {
-        L->cut = 1;
+        L->cut = taken ? 2 : 1;
     }
 }
 

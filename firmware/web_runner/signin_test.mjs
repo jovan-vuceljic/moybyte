@@ -95,11 +95,11 @@ function page(b, signin) {
     const self = { postMessage: (m) => posted.push(m) };
     const mp = { _module: fakeModule() };
     const store = { probeMode: async (f) => ((await f("sync")).status === 200 ? "board" : "site") };
-    const make = new Function("mp", "fetch", "self", "store", SECTION + `
-        return { signIn, sealed, pairPassword, claimPassword,
+    const make = new Function("mp", "fetch", "self", "store", "say", SECTION + `
+        return { signIn, sealed, pairPassword, claimPassword, takenAway,
                  state: () => ({ auth, authOpen, signedIn, authNeed, authCable }),
                  set: (a) => { auth = Object.assign(auth, JSON.parse(JSON.stringify(a))); } };`);
-    const w = make(mp, b.fetch, self, store);
+    const w = make(mp, b.fetch, self, store, () => {});
     if (signin) w.set(signin);
     w.posted = posted;
     return w;
@@ -222,6 +222,18 @@ for (const st of [404, 405, 501]) {
     const w = page(b, null);
     ok("a password pairing whose nonce keeps going says so", !(await w.pairPassword("correct horse", "x")));
     ok("...after a few hellos", b.count.hello === 3, "hellos " + b.count.hello);
+}
+{
+    const b = board((op) => op === "hello" ? HELLO : SIGNED);
+    const w = page(b, KEY);
+    ok("a page signs in", await w.signIn());
+    w.takenAway();
+    const before = b.log.length;
+    ok("a page another browser took signs in no more", !(await w.signIn()));
+    ok("...asks the board nothing", b.log.length === before);
+    const card = w.posted.filter((m) => m.t === "pair").pop();
+    ok("...and its card says another browser signed in, with no password to type",
+       card && card.taken && /Another browser signed in/.test(card.why) && !card.pw, JSON.stringify(card));
 }
 
 {

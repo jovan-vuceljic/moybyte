@@ -104,7 +104,8 @@ ce.textContent=cl.join("\n");ce.style.display="block";}}
 // the same way: the board refuses pins.
 var PINEL=document.getElementById("pin"),PINF=document.getElementById("pinf"),
 PINB=document.getElementById("pinb"),PINM=document.getElementById("pinm"),
-PINP=document.getElementById("pinp"),PINR=document.getElementById("pinr");
+PINP=document.getElementById("pinp"),PINR=document.getElementById("pinr"),
+PINH=document.getElementById("pinh");
 var KEYS="moybyte.keys";
 // THE CLAIM (worker.js, THE SIGN-IN): a board takes its password from the
 // browser holding the claim its Improv answer carried (its first, or a new
@@ -112,7 +113,7 @@ var KEYS="moybyte.keys";
 // from the url's # (the URL Improv answered, which any Improv client opens)
 // or from My consoles over the link (a `claim` request); `CHOOSE` while the
 // prompt asks for a new password rather than the console's.
-var CLAIM=null,CHOOSE=false,CLAIMQ=null;
+var CLAIM=null,CHOOSE=false,CLAIMQ=null,TAKEN=false;
 function claimed(m){if(m.ok)CLAIM=null;else if(PINM)PINM.textContent=m.why||"";
 if(CLAIMQ){try{CLAIMQ.w.postMessage({moylink:1,re:CLAIMQ.id,kind:"claim",ok:!!m.ok,
 said:m.why||""},CLAIMQ.o);}catch(e){}CLAIMQ=null;}}
@@ -141,7 +142,14 @@ catch(e){/* no history: the token is spent on its first use either way */}
 return {keys:keysStored(),token:tok,board:bid,name:browserName()};};
 // The worker's word that pairing is needed: `pw` a password can do it, `why`
 // what went wrong last ("" the first time), `wait` the backoff's sentence.
+// `taken`: another browser took the board, and the card's one button takes
+// it back (worker.js, TAKEN).
 function pinAsk(m){if(!PINEL)return;
+TAKEN=!!m.taken;PINF.style.display=TAKEN?"none":"";
+if(PINH)PINH.textContent=TAKEN?"disconnected":"pair this browser";
+PINB.textContent=TAKEN?"take it back":"pair";
+if(TAKEN){PINP.textContent=m.why;PINM.textContent="";PINR.style.display="";
+PINEL.style.display="flex";PINB.disabled=false;return;}
 PINM.textContent=m.wait||m.why||"";
 CHOOSE=!m.pw&&!!CLAIM;
 if(CHOOSE){PINP.textContent="Choose this console's password, 8 to 64 characters: "
@@ -155,7 +163,9 @@ PINP.textContent=m.cable?(m.pw?"Type the console's password, or pair this board 
 PINR.style.display=m.pw?"":"none";
 PINEL.style.display="flex";PINB.disabled=false;
 if(m.pw){try{PINF.value="";PINF.focus();}catch(e){}}}
-function pinSubmit(){var v=PINF.value||"";
+function pinSubmit(){if(TAKEN){TAKEN=false;PINEL.style.display="none";
+WORKER.postMessage({t:"takeback"});return;}
+var v=PINF.value||"";
 if(!v){PINM.textContent="type the console's password";return;}
 if(CHOOSE){if(v.length<8||v.length>64){PINM.textContent="a password is 8 to 64 characters";return;}
 PINM.textContent="setting the password...";PINB.disabled=true;
