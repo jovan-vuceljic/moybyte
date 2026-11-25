@@ -230,6 +230,11 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         self._fill_rec = [None, [0, 0, 0, 0], [0, 0, 0, 0]]  # ..._fill's, kept
         self._fill_on = None          # (canvas, cache, ok): `_fill_ok`'s answer
         self._clock_held = [None, -1, 0]  # the desk clock: text, frame, in a row
+        # The bar the desk laid whole into a frame's buffer (a render, a whole
+        # restore, a repaint): the frame and its clock's text; and the clock's
+        # text the cache holds.
+        self._bar_laid = [-1, None]
+        self._cache_clock = None
         self._foot_gen = None         # the look the windows' feet were sized under
         self._root_marks = None       # ui.marks' active before a window's install
         self._installed = None        # the window whose layouts are installed

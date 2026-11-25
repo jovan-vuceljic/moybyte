@@ -4,7 +4,8 @@ re-rendering the desk (#58/#155), and under the theme's depth the windows'
 shadows and outline fringes over whatever of it was just painted (the cache
 holds the desk without them). `WindowedWM` holds one as `_backdrop_layer`
 and hands it the cache state; the layer decides per frame whether to render
-live, blit the cache, or skip the restore outright.
+live, blit the cache (painting the column or the bar again over it where
+only they moved), or skip the restore outright.
 """
 
 from array import array
@@ -98,7 +99,14 @@ class _BackdropLayer(Layer):
         self._box = [0, 0, 0, 0]      # a tile's icon square (`_tile_picture`)
         self._open_fn = self._tile_open   # (bound once: a frame allocates none)
         self._fed = 0
-        self._sig_keys = [None] * 12  # `_desk_sig`'s values, compared in place
+        self._fed_drawn = 0           # the `_fed` the cache's column was painted at
+        self._mark = False            # the column could show its focus mark as it drew
+        self._bar_owed = False        # the windows' chips moved since the cache's bar
+        self._popped = False          # the column's last paint showed a popover
+        self._pop = array("i", [0] * 4)
+        self._col_at = None           # the `_icon_rects` `_col` was made of
+        self._col = None
+        self._sig_keys = [None] * 11  # `_desk_sig`'s values, compared in place
         self._sig_gen = 0             # ...and the count that moves with them
 
     def draw(self, dt):
@@ -136,20 +144,19 @@ class _BackdropLayer(Layer):
         # one-signature-beats-hunting-mutation-sites rule as the stamp voider.
         # (Owner report 2026-07-27: "close it and it remains as an artifact on
         # the desktop" -- the close frame skipped the restore outright.)
-        # A DISCRETE shape change (open/close/minimize/maximize, or a gesture
-        # settling on release) uncovers desk the departed footprint was
-        # covering: invalidate the cache so that frame renders the desk LIVE
-        # (erasing the ghost regardless of cache content -- on the P4 the boot
-        # capture was found holding the SPLASH, #165) and re-captures fresh.
-        # NEVER for gesture-driven changes: geometry is in the sig, so
-        # invalidating during a drag/resize would re-render + re-capture the
-        # whole desk EVERY frame (owner: "drags are slow, settings flickers" --
-        # the first cut did exactly that), and doing it on RELEASE would
-        # re-add the 120ms release frame #155 killed (the trail machinery
-        # already restores a gesture's footprint). So the holder TRACKS the
+        # A DISCRETE shape change (open/close/minimize/maximize) restores the
+        # WHOLE cached desk into the frame's buffer, never a gesture's union
+        # (which would miss the footprint of another window that departed),
+        # and every buffer after it takes it again (the streak). The cache is
+        # the desk as its last live render captured it, and the statics' sig
+        # renders it live again when any of it moved, so the open of an app
+        # pays a copy, not a render of the desk.
+        # NEVER for gesture-driven changes: the trail machinery restores a
+        # gesture's footprint, and a full restore on every drag frame or on
+        # its RELEASE is the 120ms frame #155 killed. So the holder TRACKS the
         # sig silently while a gesture is live -- release finds it equal --
-        # and only a discrete change (open/close/min/max) invalidates. Focus
-        # is deliberately NOT in this sig: focus moves no desk pixels.
+        # and only a discrete change (open/close/min/max) restores whole.
+        # Focus is deliberately NOT in this sig: focus moves no desk pixels.
         s = wm._shape_sig()
         # order + geometry; focus too under the depth, whose shadows and
         # outline fringes (drawn here, draw_unders) follow it (odd: the
@@ -159,17 +166,34 @@ class _BackdropLayer(Layer):
             wm._desk_win_sig = wsig
             if wm._drag is None and wm._resize is None:
                 wm._desk_streak = 0
-                wm._backdrop_valid = False
+                wm._gesture_hist = []
+                wm._rest = None
+                self._bar_owed = True
         if wm.full_cover() >= 0:
             # A full-screen window covers the desk, its bar and the shadows
             # cast on it: nothing here shows, so nothing is drawn. Leaving
-            # full screen is a shape change, which renders the desk again.
+            # full screen is a shape change, which restores the desk whole.
             wm._desk_painted = False
             wm._damage_rects = ()
             return
         moves = wm.desk_moves(dt)             # its pixels move on their own
-        if stale or wm.backdrop_disabled or wm._backdrop_unsupported or moves:
+        # The column's page took input or moves (a press, a focus step), or
+        # its focus mark came or went (the keys went to a window or the bar,
+        # or came back; touch shows none): it alone is painted again over the
+        # cache (`_parts_again`) where the backdrop under it can be put back
+        # and no gesture restores a union.
+        mark = (wm.focus_key is None and not _ui_draw.on_bar()
+                and _ui_draw.input_kind() != "touch")
+        if mark != self._mark:
+            self._mark = mark
+            self._fed += 1
+        col = self._fed != self._fed_drawn
+        if (stale or wm.backdrop_disabled or wm._backdrop_unsupported or moves
+                or (col and (gesture or not wm._backdrop_valid or self._popped
+                             or self.ws.wallpaper.restore_key(False) is None))):
             wm._desk_sig = sig
+            self._fed_drawn = self._fed
+            self._bar_owed = False
             wm._backdrop_valid = False        # live: re-render (a still one re-snapshots)
             wm._desk_streak = 0
             wm._desk_painted = True           # wiped the buffer -> windows repaint
@@ -182,6 +206,7 @@ class _BackdropLayer(Layer):
                 # snapshot would be thrown away unread; a gesture's first
                 # frame, over a held wallpaper, takes it below)
                 wm._capture_backdrop()
+            self._bar_drawn(wm._backdrop_valid)
             wm.draw_unders()
             # This buffer holds the cache it just took, and the clock: one of the N.
             wm._desk_streak = 1 if wm._backdrop_valid else 0
@@ -214,7 +239,7 @@ class _BackdropLayer(Layer):
                 last = self.ws.last_ptr
                 cursor_live = ((ptr is not None and ptr[2])
                                or (last is not None and last[2]))
-                if not (cursor_live and ptr != last) \
+                if not (cursor_live and ptr != last) and not col \
                         and wm._desk_streak >= wm.retained_n() and not wm._scrim_up():
                     wm._desk_painted = False   # untouched: windows may skip too
                     wm._damage_rects = ()      # the desk changed nowhere
@@ -225,6 +250,12 @@ class _BackdropLayer(Layer):
             _perf = getattr(self.ws, "perf_capture", False)
             _t0 = _ticks_ms() if _perf else 0
             union = wm._blit_backdrop_cache()
+            if wm._restored is None:
+                laid = wm._bar_laid           # the cache's bar, laid whole
+                laid[0] = self.ws.frame_state.frames_drawn
+                laid[1] = wm._cache_clock
+            if col or self._bar_owed:
+                self._parts_again(col)
             if wm._restored is not False:
                 wm.draw_unders(wm._restored)
             land = getattr(wm.root_canvas, "show_landed", None)
@@ -245,8 +276,11 @@ class _BackdropLayer(Layer):
         wm._desk_streak = 0
         wm._desk_painted = True
         wm._rest = None
+        self._fed_drawn = self._fed
+        self._bar_owed = False
         self._draw_desktop(dt)                # cache lost: render + re-snapshot
         wm._capture_backdrop()
+        self._bar_drawn(wm._backdrop_valid)
         wm.draw_unders()
         wm._desk_streak = 1 if wm._backdrop_valid else 0
         wm._clock_drawn()
@@ -258,7 +292,8 @@ class _BackdropLayer(Layer):
 
         The apps' status items are in its bar (their `gen`).
 
-        The column page's input and motion are in it (`_fed`).
+        The column page's input and motion are not (`_fed`): a change of
+        the column alone paints the column again (`_parts_again`).
 
         Deliberately NOT the clock (repainted over the cache instead) and NOT
         ws.covers.gen: a cover landing in the picker would otherwise invalidate
@@ -272,8 +307,7 @@ class _BackdropLayer(Layer):
         if (k[0] != cv.w or k[1] != cv.h or k[2] != look.look_gen
                 or k[3] != look.effective_font_scale() or k[4] != look.wallpaper_id
                 or k[5] != self._column_sig() or k[6] != lay.cx or k[7] != lay.cy
-                or k[8] != lay.cw or k[9] != lay.ch or k[10] != _ITEMS.gen
-                or k[11] != self._fed):
+                or k[8] != lay.cw or k[9] != lay.ch or k[10] != _ITEMS.gen):
             k[0] = cv.w
             k[1] = cv.h
             k[2] = look.look_gen
@@ -285,11 +319,80 @@ class _BackdropLayer(Layer):
             k[8] = lay.cw
             k[9] = lay.ch
             k[10] = _ITEMS.gen
-            k[11] = self._fed
             # the WM's one count: a new layer never repeats an old one's
             self.wm._desk_count += 1
             self._sig_gen = self.wm._desk_count
         return self._sig_gen
+
+    def _parts_again(self, col):
+        """The parts of the desk that moved, painted again over the cached
+        desk this frame's restore laid whole, and taken into the cache, which
+        then holds the desk a live render would have left: with `col` the
+        icon column (the backdrop under its rect put back,
+        `Wallpaper.restorer`, and its page painted), and after a window
+        opened, closed or moved the bar (its chips, and their marks over its
+        edge, are the windows'). A column paint that showed a popover takes
+        the whole root into the cache. This buffer is the first to hold the
+        new cache."""
+        wm = self.wm
+        rc = wm.root_canvas
+        cache = wm._backdrop
+        cut = hasattr(cache, "blit_strip_rect")
+        whole = not cut
+        if col:
+            wp = self.ws.wallpaper
+            r = self._column_rect()
+            wp.restorer(rc, wp.restore_key(False))(rc, r)
+            self._fed_drawn = self._fed
+            self._draw_desk_icons()
+            whole = whole or self._popped
+            if not whole:
+                cache.blit_strip_rect(rc, 0, 0, r[0], r[1], r[2], r[3])
+        if self._bar_owed:
+            self._bar_owed = False
+            bar = self.ws.bar_layer
+            bar.draw_status_strip("desk")
+            wm._desk_tile = bar.tile_on()
+            if not whole:
+                for b in wm.root_ctx.layout.bars:
+                    r = b[1]
+                    cache.blit_strip_rect(rc, 0, 0, r[0], r[1], r[2], r[3])
+            self._bar_drawn(True)
+        if whole:
+            wm._capture_backdrop()
+        wm._desk_streak = 1
+
+    def _bar_drawn(self, cached):
+        """The bar was drawn whole into this frame's buffer as it stands, and
+        with `cached` into the cache too: the clock it shows need not paint
+        again over it (`_desk_clock`)."""
+        wm = self.wm
+        laid = wm._bar_laid
+        laid[0] = self.ws.frame_state.frames_drawn
+        laid[1] = self.ws.bar_layer.clock_text()
+        if cached:
+            wm._cache_clock = laid[1]
+
+    def _column_rect(self):
+        """(x, y, w, h) the icon column paints in: its tiles and their
+        labels, 8 pixels clear at the font scale for the focus mark and a
+        press, within the desk. Kept while the column's rects stand."""
+        rects = self._icon_rects()
+        if self._col_at is rects:
+            return self._col
+        dx, dy, dw, dh = self.wm.desk_rect()
+        pad = 8 * self.ws.look.effective_font_scale()
+        x0, y0, x1, y1 = dx + dw, dy + dh, dx, dy
+        for _key, box, band, _label, _cart in rects:
+            x0 = min(x0, box[0], band[0])
+            y0 = min(y0, box[1], band[1])
+            x1 = max(x1, box[0] + box[2], band[0] + band[2])
+            y1 = max(y1, box[1] + box[3], band[1] + band[3])
+        x0, y0 = max(dx, x0 - pad), max(dy, y0 - pad)
+        x1, y1 = min(dx + dw, x1 + pad), min(dy + dh, y1 + pad)
+        self._col_at = rects
+        self._col = (x0, y0, max(0, x1 - x0), max(0, y1 - y0))
+        return self._col
 
     def _column_sig(self):
         """What the icon column takes from the apps and the roster: each
@@ -559,6 +662,7 @@ class _BackdropLayer(Layer):
             t[1] = was[1]
             t[2] = was[2]
             t[3] = was[3]
+        self._popped = host.popped(self._pop)
         if host.moving:
             self._fed += 1                  # (it moves on: the next frame draws it again)
             ws.request_frame()

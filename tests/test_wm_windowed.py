@@ -3403,6 +3403,38 @@ def _ring_desk(tmp_path, n):
     return ws, drv, ring
 
 
+@pytest.mark.parametrize("theme", ("night", "dusk"))
+def test_an_app_opened_from_its_desk_tile_never_renders_the_desk(tmp_path, monkeypatch, theme):
+    """A tap on a desk tile, then the app's window opening over the desk: no
+    frame renders the desk live (the press paints the icon column again
+    over the desk's cache, the open restores the cache and paints the bar
+    again for its chips), and after them every buffer of a triple-buffered
+    root is a full repaint's, the column's press and the bar's chip
+    included."""
+    ws = build_desktop_ws(tmp_path, font_scale=1, panel_diagonal_in=7.0)
+    use_theme(ws, theme, "light")
+    drv = _drv(ws)
+    ring = _Ring(ws, 3)
+    for _ in range(3):
+        ws.mark_dirty()
+        ring.frame(drv)
+    ring.settle(drv)
+    _quiesce(ws)
+    monkeypatch.setattr(ws.notices, "achievement_unlocked", lambda badge: None)
+    bd = ws.wm._backdrop_layer
+    live = []
+    real = bd._draw_desktop
+    monkeypatch.setattr(bd, "_draw_desktop", lambda dt: (live.append(1), real(dt)))
+    box = next(r[1] for r in bd._icon_rects() if r[0] == "calc")
+    drv.touch(box[0] + box[2] // 2, box[1] + box[3] // 2)
+    ring.frame(drv)
+    drv.touch_up()
+    ring.settle(drv)
+    assert "calc" in ws.wm.windows and not live
+    seen = list(ring.bufs)
+    assert seen == ring.full(drv)
+
+
 @pytest.mark.parametrize("n,gap", ((1, 0), (3, 0), (3, 1), (3, 2)))
 def test_a_popover_swapped_back_within_its_debts_leaves_no_card(tmp_path, n, gap):
     """The battery's card swapped for the calendar's and back, each swap a
