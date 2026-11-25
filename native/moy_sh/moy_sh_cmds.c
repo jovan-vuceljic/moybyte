@@ -995,10 +995,10 @@ static int headcmd(int argc, char **argv) {
     return each_input(argptr, head_one, &n);
 }
 
-// A file's last `want` lines, read in two passes and never copied into the
-// session's arena, which is 12 KB where there is no PSRAM (MOY_SH_ARENA, the
-// C3 Zero's SSH face) while the open already holds the file. -1 for what
-// does not seek (a pipe), which tail_one copies whole.
+// A file's last `want` lines, read in two passes a chunk at a time and never
+// copied into the session's arena, which is 12 KB where there is no PSRAM
+// (MOY_SH_ARENA, the C3 Zero's SSH face). -1 for what does not seek (a
+// pipe), which tail_one copies whole.
 static int tail_seek(int fd, int want) {
     if (lseek(fd, 0, SEEK_END) < 0 || lseek(fd, 0, SEEK_SET) < 0) {
         return -1;

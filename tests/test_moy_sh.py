@@ -229,6 +229,26 @@ def test_a_file_written_streams_in_chunks(harness, tmp_path):
     assert largest < 8192, "a block of %d B" % largest
 
 
+
+def test_a_file_read_comes_in_chunks(harness, tmp_path):
+    """A file opened to read is held and read a chunk at a time
+    (moy_sh_sys.c's READ), so a 64 KB file through every reader takes no
+    block near its size. Read whole at the open, it took one block the
+    file's size, which the C3's heap refused ("Not enough space")."""
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "big").write_bytes(b"0123456789abcde\n" * 4096)
+    (root / "s.sh").write_bytes(b"n=1 # a sourced script of 64 KB\n" * 2048)
+    script = tmp_path / "read.sh"
+    script.write_text("cat big > /dev/null; md5sum big; sha256sum big; tail -n 1 big\n"
+                      "tail -c 3 big; head -n 1 big; grep -c abc big; wc -l < big\n"
+                      "cut -c 1-3 big > /dev/null; . ./s.sh; echo n=$n\n")
+    r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                       timeout=60, env=dict(os.environ, SH_MAIN_MEASURE="1"))
+    assert r.returncode == 0 and b"n=1" in r.stdout and b"4096" in r.stdout, r.stdout.decode()
+    largest = int(re.search(rb"largest block (\d+)", r.stderr).group(1))
+    assert largest < 8192, "a block of %d B" % largest
+
 SERIAL = os.path.join(SCRIPTS, "serial")
 SERIAL_NAMES = sorted(os.path.basename(p)[:-3] for p in glob.glob(os.path.join(SERIAL, "*.sh")))
 

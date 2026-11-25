@@ -8,7 +8,11 @@
 //   TERM   the terminal: writes go to the host's `out`, reads the host's `in`
 //          (end of file without one)
 //   NUL    /dev/null
-//   MEM    bytes read whole at open: a file of the tree, a /dev or /proc read
+//   MEM    bytes read whole at open: a /dev or /proc read
+//   READ   a file of the tree opened read-only, held open from the open to
+//          the last close and read a chunk (MOY_SH_CHUNK) at a time, so a
+//          reader of any size needs a chunk of the heap; lseek moves its
+//          offset (moy_vol_seek). Its size is the one it had at the open
 //   FILE   bytes written. Write-only into the tree they STREAM, a chunk
 //          (MOY_SH_CHUNK) at a time, into a file held open from the open to
 //          the last close, so an open that cannot write fails there: the file
@@ -36,7 +40,7 @@
 #include "moy_sh_int.h"
 #include "moy_vol.h"
 
-enum { O_TERM = 1, O_NUL, O_MEM, O_FILE, O_PIPE_R, O_PIPE_W };
+enum { O_TERM = 1, O_NUL, O_MEM, O_READ, O_FILE, O_PIPE_R, O_PIPE_W };
 
 typedef struct {
     char *buf;
@@ -53,7 +57,9 @@ struct moy_sh_obj {
     size_t len, cap, pos;
     char *path;                 // FILE: where its bytes go
     int vfile;                  // FILE: a virtual file (the host's vwrite)
-    moy_vol_file_t *held;       // FILE streamed: the open file its chunks go to
+    moy_vol_file_t *held;       // FILE streamed, READ: the open file
+    size_t at;                  // READ: the file's offset of buf[0] (len bytes)
+    size_t size;                // READ: its size at the open
     char *tmp;                  // ... when it is written beside `path`
     size_t sent;                // ... its bytes gone to it
     int failed;                 // ... the errno a chunk failed with
@@ -114,13 +120,16 @@ static char *dupstr(const char *p) {
 
 static int store_write(const char *path, const char *p, size_t n, int append);
 static void stream_close(struct moy_sh_obj *o);
+static void read_close(struct moy_sh_obj *o);
 
 static void obj_drop(struct moy_sh_obj *o) {
     if (o == NULL || --o->refs > 0) {
         return;
     }
     moy_sh_t *s = moy_sh_cur;
-    if (o->held != NULL) {
+    if (o->held != NULL && o->kind == O_READ) {
+        read_close(o);
+    } else if (o->held != NULL) {
         stream_close(o);
     } else if (o->kind == O_FILE && o->path != NULL) {
         if (o->vfile) {
@@ -430,6 +439,49 @@ static int stream_close_here(struct moy_sh_obj *o) {
     return r;
 }
 
+// A READ's steps: its file opened and held, and a chunk read at `pos` into
+// its buffer (seeking first when `pos` is not where the last one ended).
+static int read_open_here(struct moy_sh_obj *o) {
+    moy_vol_t v;
+    const char *rest;
+    uint32_t size = 0;
+    int entered = moy_vol_gate_enter(o->path);
+    int r = moy_vol_at(o->path, &v, &rest);
+    if (r == 0) {
+        r = moy_vol_open(&v, rest, MOY_VOL_READ | MOY_VOL_HELD, &o->held);
+        if (r != 0) {
+            o->held = NULL;
+        }
+    }
+    if (r == 0) {
+        r = moy_vol_size(o->held, &size);
+        o->size = size;
+    }
+    moy_vol_gate_leave(entered);
+    return r;
+}
+
+static int read_fill_here(struct moy_sh_obj *o) {
+    int entered = moy_vol_gate_enter(o->path);
+    int r = 0;
+    size_t got = 0;
+    if (o->pos != o->at + o->len) {
+        r = moy_vol_seek(o->held, (uint32_t)o->pos);
+    }
+    while (r == 0 && got < MOY_SH_CHUNK) {
+        size_t n = 0;
+        r = moy_vol_read(o->held, o->buf + got, MOY_SH_CHUNK - got, &n);
+        if (n == 0) {
+            break;
+        }
+        got += n;
+    }
+    o->at = o->pos;
+    o->len = r == 0 ? got : 0;
+    moy_vol_gate_leave(entered);
+    return r;
+}
+
 static int store_stat_here(const char *path, moy_vol_stat_t *st) {
     moy_vol_t v;
     const char *rest;
@@ -457,7 +509,7 @@ typedef struct {
     int r;
 } store_call_t;
 
-enum { S_READ, S_WRITE, S_STAT, S_OPEN, S_PUT, S_CLOSE };
+enum { S_READ, S_WRITE, S_STAT, S_OPEN, S_PUT, S_CLOSE, S_ROPEN, S_FILL };
 
 static void store_here(void *arg) {
     store_call_t *c = arg;
@@ -476,6 +528,12 @@ static void store_here(void *arg) {
             break;
         case S_CLOSE:
             c->r = stream_close_here(c->o);
+            break;
+        case S_ROPEN:
+            c->r = read_open_here(c->o);
+            break;
+        case S_FILL:
+            c->r = read_fill_here(c->o);
             break;
         default:
             c->r = store_stat_here(c->path, c->st);
@@ -553,6 +611,44 @@ static ssize_t stream_write(struct moy_sh_obj *o, const char *p, size_t n) {
 static void stream_close(struct moy_sh_obj *o) {
     stream_flush(o, o->buf, o->len);
     o->len = 0;
+    store_call_t c = { .op = S_CLOSE, .o = o };
+    store_call(&c);
+}
+
+// A READ opened over the tree's `path`, its chunk buffer made: 0 or an errno.
+static int read_open(struct moy_sh_obj *o) {
+    o->buf = moy_sh_halloc(MOY_SH_CHUNK);
+    if (o->buf == NULL) {
+        return ENOMEM;
+    }
+    o->cap = MOY_SH_CHUNK;
+    store_call_t c = { .op = S_ROPEN, .o = o };
+    return store_call(&c);
+}
+
+// Up to `n` bytes at its offset, a chunk read when the offset is past the
+// one buffered: the count, 0 at its end, -1 with errno.
+static ssize_t read_take(struct moy_sh_obj *o, void *buf, size_t n) {
+    if (o->pos < o->at || o->pos >= o->at + o->len) {
+        store_call_t c = { .op = S_FILL, .o = o };
+        int r = store_call(&c);
+        if (r != 0) {
+            errno = r;
+            return -1;
+        }
+    }
+    size_t left = o->at + o->len > o->pos ? o->at + o->len - o->pos : 0;
+    if (n > left) {
+        n = left;
+    }
+    if (n) {
+        memcpy(buf, o->buf + (o->pos - o->at), n);
+    }
+    o->pos += n;
+    return (ssize_t)n;
+}
+
+static void read_close(struct moy_sh_obj *o) {
     store_call_t c = { .op = S_CLOSE, .o = o };
     store_call(&c);
 }
@@ -690,23 +786,21 @@ int moy_sh_open(const char *path, int flags, ...) {
             return -1;
         }
         if (acc == O_RDONLY) {
-            char *buf = NULL;
-            size_t len = 0;
             if (!exists) {
                 errno = ENOENT;
                 return -1;
             }
-            r = store_read(p, &buf, &len);
-            if (r != 0) {
-                errno = r;
+            o = obj_new(O_READ);
+            if (o == NULL) {
+                errno = ENOMEM;
                 return -1;
             }
-            o = obj_new(O_MEM);
-            if (o == NULL) {
-                moy_sh_hfree(buf);
-            } else {
-                o->buf = buf;
-                o->len = len;
+            o->path = dupstr(p);
+            r = o->path == NULL ? ENOMEM : read_open(o);
+            if (r != 0) {
+                obj_drop(o);
+                errno = r;
+                return -1;
             }
         } else {
             if (exists && (flags & O_CREAT) && (flags & O_EXCL)) {
@@ -772,6 +866,8 @@ ssize_t moy_sh_read(int fd, void *buf, size_t n) {
             o->pos += n;
             return (ssize_t)n;
         }
+        case O_READ:
+            return read_take(o, buf, n);
         case O_PIPE_R: {
             sh_pipe_t *p = o->pipe;
             size_t left = p->len - p->pos;
@@ -955,12 +1051,12 @@ off_t moy_sh_lseek(int fd, off_t at, int whence) {
         errno = EBADF;
         return -1;
     }
-    if (o->kind != O_MEM && o->kind != O_FILE) {
+    if (o->kind != O_MEM && o->kind != O_FILE && o->kind != O_READ) {
         errno = ESPIPE;
         return -1;
     }
     off_t base = whence == SEEK_SET ? 0 : whence == SEEK_CUR ? (off_t)o->pos
-                 : (off_t)(o->sent + o->len);
+                 : o->kind == O_READ ? (off_t)o->size : (off_t)(o->sent + o->len);
     if (base + at < 0) {
         errno = EINVAL;
         return -1;
@@ -1047,7 +1143,8 @@ int moy_sh_fstat(int fd, struct stat *st) {
     memset(st, 0, sizeof *st);
     st->st_mode = o->kind == O_TERM || o->kind == O_NUL ? S_IFCHR | 0666 :
                   o->kind == O_PIPE_R || o->kind == O_PIPE_W ? S_IFIFO | 0600 : S_IFREG | 0644;
-    st->st_size = o->kind == O_MEM || o->kind == O_FILE ? (off_t)(o->sent + o->len) : 0;
+    st->st_size = o->kind == O_READ ? (off_t)o->size
+                  : o->kind == O_MEM || o->kind == O_FILE ? (off_t)(o->sent + o->len) : 0;
     return 0;
 }
 

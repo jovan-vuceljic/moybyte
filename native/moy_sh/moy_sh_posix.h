@@ -11,8 +11,8 @@
 //
 // What each call means here:
 //   descriptors   open/read/write/close/dup/dup2/fcntl/pipe/lseek over
-//                 objects: the terminal, a pipe buffer, a file read whole at
-//                 open and written whole at its last close, /dev and /proc
+//                 objects: the terminal, a pipe buffer, a file of the tree
+//                 read or written a chunk at a time, /dev and /proc
 //   files         stat/lstat/fstat, opendir/readdir/closedir, access, chdir
 //                 and getcwd over the session's working folder
 //   processes     fork, execve and wait are not here: the shell asks the OS

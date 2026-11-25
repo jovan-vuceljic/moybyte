@@ -39,7 +39,7 @@
 // waits on the console parks its run and the console's frame goes on.
 //
 // MEMORY. The session's record and its arena come from the host's `alloc`
-// (PSRAM on a board) at moy_sh_new; a pipe's buffer, a file read whole and a
+// (PSRAM on a board) at moy_sh_new; a pipe's buffer, a file's chunk and a
 // fork's snapshot come from it while a run needs them and go back after.
 // Nothing here is .bss but the running (or parked) session's pointer.
 
@@ -59,7 +59,7 @@
 
 #define MOY_SH_PIPE_MAX (1024u * 1024u)  // a pipe buffer's bytes
 #define MOY_SH_FILE_MAX (4u * 1024u * 1024u)  // a file read or written whole
-#define MOY_SH_CHUNK 1024u              // a streamed file's write to the store
+#define MOY_SH_CHUNK 1024u              // a file's read or write to the store
 
 typedef struct moy_sh moy_sh_t;
 
