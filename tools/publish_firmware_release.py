@@ -10,7 +10,7 @@
 #   addon_keep         which earlier add-on entries a channel's index keeps
 #   stage_ota          one board's signed manifest, add-on and carts index
 #   stage_c6           a P4 manifest's C6 block and its image
-#   prune_carts        delete the official carts' assets no index names
+#   prune_carts        delete the official carts' assets no index names, and the beta's old add-ons
 #   existing_source    the manifest already published for a board
 #   notes              the release notes
 #   main               the publish: stage, upload, prune
@@ -43,7 +43,8 @@ carries its own provenance beside it:
       tdeck-moybyte_tdeck_app.bin  <- the OTA payload (app slot, not 0x0)
       latest-tdeck.json            <- the OTA manifest pointing at it
       moybyte_web-<digest>.moy.zip <- the browser console add-on cart an image
-                                      names; every one ever published stays
+                                      names, kept while an index names it or,
+                                      on the beta, for pack_store.DEV_DAYS
       moybyte.<cart>-<hex>.zip     <- each official cart (a seed cart but a
                                       test fixture; a compiled one with the
                                       native module each chip's board build
@@ -545,17 +546,24 @@ def release_assets(tag):
         return None
 
 
-def prune_carts(tag, workdir, names, before, dry_run=False):
+def prune_carts(tag, workdir, names, before, dry_run=False, channel="stable",
+                now=None):
     """Delete the official carts' zips and covers no index needs, after the
     upload: kept is everything an index on the release references now (the
     ones staged in `workdir`, and a board's this run did not build) or
     referenced before this publish (`before`, each index's bytes by name, a
-    console a step behind its channel). The add-on carts are no official
-    assets and stay for good. `names` is the release's assets before the
-    upload. With `dry_run`, says what it would delete. -> those names."""
+    console a step behind its channel). On the beta (`channel` "unstable")
+    it deletes too the add-on carts no index references now that the release
+    published longer ago than pack_store.DEV_DAYS (addon_keep's cut), whose
+    packs the store no longer serves; the stable release keeps every one.
+    `names` is the release's assets before the upload, release_assets'
+    {name: publication time} (a list of names dates nothing, so no add-on
+    goes). With `dry_run`, says what it would delete. -> those names."""
+    dates = names if isinstance(names, dict) else {}
     had = set(names)
     names = had | set(os.listdir(workdir))
     indexes = [b for b in before.values() if b is not None]
+    current = []
     for name in sorted(names):
         if not re.match(r"^carts-[^-]+\.json$", name):
             continue
@@ -566,15 +574,19 @@ def prune_carts(tag, workdir, names, before, dry_run=False):
         staged = os.path.join(workdir, name)
         if os.path.exists(staged):
             with open(staged, "rb") as f:
-                indexes.append(f.read())
+                current.append(f.read())
         else:
             data = before[name] if name in before else published(tag, name)
             if data is None:
                 print("::warning::%s could not be read -- no cart pruned" % name)
                 return []
-            indexes.append(data)
+            current.append(data)
     try:
-        stale = web_pack.official_assets(names, indexes)
+        stale = web_pack.official_assets(names, indexes + current)
+        if channel == "unstable":
+            since = (now if now is not None else time.time()) - pack_store.DEV_DAYS * 86400
+            stale += [n for n in web_pack.addon_assets(names, current)
+                      if dates.get(n) is not None and dates[n] < since]
     except ValueError:
         print("::warning::an index on %s is not one -- no cart pruned" % tag)
         return []
@@ -684,7 +696,7 @@ def main():
             print("would upload to %s: %s"
                   % (tag, ", ".join(sorted(os.listdir(workdir)))))
             if names is not None:
-                prune_carts(tag, workdir, names, before, dry_run=True)
+                prune_carts(tag, workdir, names, before, dry_run=True, channel=channel)
             return 1 if refused else 0
 
         # Create on first use; after that every publish just replaces assets.
@@ -694,13 +706,13 @@ def main():
             print("created the %s release" % tag)
 
         # Everything staged, and only what was staged: a board this run did not
-        # build keeps the image already on the release, and no page is ever
-        # removed, so an image rolled back to or installed by hand still finds
-        # the one it names.
+        # build keeps the image already on the release, and a page goes only
+        # once no index names it (prune_carts), so an image rolled back to or
+        # installed by hand still finds the one it names.
         files = [os.path.join(workdir, n) for n in sorted(os.listdir(workdir))]
         gh("release", "upload", tag, *files, "--clobber")
         print("uploaded: %s" % ", ".join(os.path.basename(f) for f in files))
-        prune_carts(tag, workdir, names or [], before)
+        prune_carts(tag, workdir, names or [], before, channel=channel)
 
         # Written AFTER the upload, so the table describes what is now there.
         body = os.path.join(workdir, "notes.md")

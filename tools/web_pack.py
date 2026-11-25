@@ -11,6 +11,8 @@
 #   board_modules    a board build's native modules of the official compiled carts
 #   collected_modules the modules the boards of one run built, per cart
 #   official_entries every official cart as an entry of the release
+#   official_assets  the official carts' assets no index references
+#   addon_assets     the add-on carts no index references
 #   index_doc        the board's index: the official entries, this add-on, then the earlier add-ons it keeps
 #   publish_addon    the carts, their licence and the board's index, in one folder
 """The browser console add-on and the official carts, as a release and a LAN
@@ -22,8 +24,11 @@ not part of the firmware: every board's build writes the console as
 the image carries only the sha256 of the pack's body, the page it fits.
 
 Beside every payload, whether or not any console has the add-on installed:
-    moybyte_web-<digest>.moy.zip   the add-on cart, one per page, kept for the
-                                   images that still name it: the folder
+    moybyte_web-<digest>.moy.zip   the add-on cart, one per page, kept while
+                                   an index names it (the beta's go once none
+                                   does and the pack store no longer serves
+                                   them: addon_assets, the publisher's
+                                   prune_carts): the folder
                                    web_console_<12 hex>.moy, holding manifest.json
                                    (moybyte.fits: the digest), the pack and its
                                    licence
@@ -115,6 +120,7 @@ SEED_NAME = "%s-%s.zip"            # cart id, the zip's first ID_HEX hex
 COVER_NAME = "%s-%s.png"
 SEED_SKIP = ("thumbs", "__pycache__")
 # A seed cart's zip or cover by its name: an id with a namespace, the digest.
+ADDON_ASSET = re.compile(r"^moybyte_web-[0-9a-f]{64}\.moy\.zip$")   # CART_NAME's
 OFFICIAL_ASSET = re.compile(r"^[a-z0-9_]+\.[A-Za-z0-9_.]+-[0-9a-f]{%d}\.(zip|png)$" % ID_HEX)
 LISTING = ("description", "genre", "tags")
 
@@ -501,18 +507,28 @@ def referenced(data):
     return out
 
 
-def official_assets(names, indexes):
-    """The official carts' zips and covers among the release asset `names`
-    that none of the `indexes` (their bytes) references: what a release can
-    delete. Raises ValueError when one of them is not an index, which keeps
-    unknown what it references."""
+def _unreferenced(pattern, names, indexes):
     keep = set()
     for data in indexes:
         refs = referenced(data)
         if refs is None:
             raise ValueError("an index that is not one")
         keep |= refs
-    return sorted(n for n in names if OFFICIAL_ASSET.match(n) and n not in keep)
+    return sorted(n for n in names if pattern.match(n) and n not in keep)
+
+
+def official_assets(names, indexes):
+    """The official carts' zips and covers among the release asset `names`
+    that none of the `indexes` (their bytes) references: what a release can
+    delete. Raises ValueError when one of them is not an index, which keeps
+    unknown what it references."""
+    return _unreferenced(OFFICIAL_ASSET, names, indexes)
+
+
+def addon_assets(names, indexes):
+    """The add-on carts among the release asset `names` that none of the
+    `indexes` (their bytes) references, raising as official_assets does."""
+    return _unreferenced(ADDON_ASSET, names, indexes)
 
 
 def index_doc(board, entry, earlier=None, official=(), keep=None):

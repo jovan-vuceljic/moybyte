@@ -54,13 +54,13 @@ paths:
     entry that fits its running image, through the ordinary Install, which
     holds the cart to the index's size and sha256. That happens on both
     channels for every board, whether or not any console has the add-on, and
-    the manifest names the cart (`cart`, unsigned). **No add-on cart
-    published is removed** and each index keeps the entries of the one it
-    replaces, so a console a step behind its channel, rolled back or
+    the manifest names the cart (`cart`, unsigned). Each index keeps the
+    entries of the one it replaces, so a console a step behind its channel, rolled back or
     installed by hand still finds its own, within the retention the
     `release` skill states (`publish_firmware_release.addon_keep`,
     `web_pack.INDEX_BUDGET`). The official carts' zips and covers (the seed carts but the test fixtures,
-    `.claude/rules/carts.md`) are the one thing a publish deletes: every
+    `.claude/rules/carts.md`), and the beta's old add-on carts no index
+    lists, are what a publish deletes: every
     changed cart adds two assets and a release holds at most 1,000, so after
     the upload one that no index on the release references, now or before
     this publish, goes (`publish_firmware_release.prune_carts`; a dry run

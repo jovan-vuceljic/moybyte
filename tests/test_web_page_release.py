@@ -277,7 +277,8 @@ def test_the_beta_index_keeps_the_add_ons_the_pack_store_serves(tmp_path, monkey
     """A beta publish drops from the index the add-on whose cart the release
     published longer ago than the pack store keeps (pack_store.DEV_DAYS),
     and keeps a younger one, which a console a step behind still installs.
-    The old cart stays on the release; the stable channel keeps every entry."""
+    The old cart, which no index names now, goes too; the stable channel
+    keeps every entry."""
     release = _fake_gh(tmp_path, monkeypatch)
     digests = []
     for n in range(3):
@@ -292,9 +293,49 @@ def test_the_beta_index_keeps_the_add_ons_the_pack_store_serves(tmp_path, monkey
         assert publish.main() == 0
     url, fits = _addon(release, "tdeck", "https://x/carts-tdeck.json", digests[1])
     assert fits == [digests[2], digests[1]]
-    assert (release / (web_pack.CART_NAME % digests[0])).exists()
+    assert not (release / (web_pack.CART_NAME % digests[0])).exists()
     assert publish.addon_keep("stable", {}) is None
     assert publish.addon_keep("unstable", None) is None
+
+
+def _age(path, days):
+    when = path.stat().st_mtime - days * 86400
+    os.utime(str(path), (when, when))
+
+
+@pytest.mark.parametrize("channel", ["unstable", "stable"])
+def test_the_beta_deletes_the_old_add_ons_no_index_names(tmp_path, monkeypatch, channel):
+    """After a beta publish, an add-on cart no index on the release names
+    and the release published longer ago than pack_store.DEV_DAYS is
+    deleted; one an index still names (a board this run did not build) or
+    a younger one stays. The stable release deletes no add-on cart."""
+    release = _fake_gh(tmp_path, monkeypatch)
+    old = publish.pack_store.DEV_DAYS + 1
+
+    def run(n, seeds):
+        artifacts = tmp_path / ("artifacts%d" % n)
+        got = {b: _artifacts(artifacts, b, seed=seed, channel=channel).hex()
+               for b, seed in seeds.items()}
+        monkeypatch.setattr(sys, "argv", ["publish", "--artifacts", str(artifacts),
+                                          "--channel", channel])
+        assert publish.main() == 0
+        return got
+    first = run(0, {"tdeck": 1, "p4": 5})
+    zips = {b: release / (web_pack.CART_NAME % d) for b, d in first.items()}
+    stray_old = release / (web_pack.CART_NAME % ("a" * 64))
+    stray_new = release / (web_pack.CART_NAME % ("b" * 64))
+    for path in (stray_old, stray_new):
+        path.write_bytes(b"an add-on no index names")
+    for path in (zips["tdeck"], zips["p4"], stray_old):
+        _age(path, old)
+    second = run(1, {"tdeck": 2})
+    left = {n for n in os.listdir(str(release)) if web_pack.ADDON_ASSET.match(n)}
+    kept = {zips["p4"].name, stray_new.name, web_pack.CART_NAME % second["tdeck"]}
+    if channel == "unstable":
+        assert left == kept, "the p4 index names its zip; the stray is young"
+    else:
+        assert left == kept | {zips["tdeck"].name, stray_old.name}
+    assert [n for n in os.listdir(str(release)) if web_pack.OFFICIAL_ASSET.match(n)]
 
 
 def _addon_entry(n):
