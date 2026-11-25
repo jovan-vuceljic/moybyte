@@ -761,7 +761,8 @@ def _cart_tree(d):
         "manifest.json": b'{"title": "Hop", "main": "main.py"}',
         "main.py": "print('hé')\n".encode(), "cover.png": bytes(range(256)) * 3,
         "scenes/a.moyscene": b"[]", "images/deep/x/y.moyimg": b"img",
-        "main.py.bak": b"crash", "journal/journal.jsonl": b"{}\n",
+        ".main.py.moybak": b"crash", "main.py.bak": b"mine",
+        "journal/journal.jsonl": b"{}\n",
         "journal/s/0001-main.py": b"x", "thumbs/t.mct": b"t", "x.tmp": b"t",
     }
     for rel, data in files.items():
@@ -785,7 +786,7 @@ def test_the_archive_round_trips_with_the_browsers_codec(tmp_path):
     src = str(tmp_path / "src" / "hop.moy")
     files = _cart_tree(src)
     kept = {"hop.moy/" + k: v for k, v in files.items()
-            if not (k.endswith((".bak", ".tmp")) or k.startswith(("journal", "thumbs")))}
+            if not (k.endswith((".moybak", ".tmp")) or k.startswith(("journal", "thumbs")))}
     with_history = dict(kept, **{"hop.moy/" + k: v for k, v in files.items()
                                  if k.startswith("journal")})
     moy_carts.pack(src, str(tmp_path / "browser.zip"))

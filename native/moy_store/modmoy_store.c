@@ -602,7 +602,7 @@ static mp_obj_t mod_bak_stamp(mp_obj_t path) {
 static MP_DEFINE_CONST_FUN_OBJ_1(mod_bak_stamp_obj, mod_bak_stamp);
 
 static mp_obj_t mod_bak_path(mp_obj_t path) {
-    const char *p = path_arg(path);
+    const char *p = mp_obj_str_get_str(path);       // a name stays a name
     size_t n = moy_fs_bak_into(p, NULL, 0);
     vstr_t v;
     vstr_init_len(&v, n - 1u);

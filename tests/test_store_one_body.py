@@ -386,7 +386,9 @@ def test_the_export_and_the_stamp_run_on_the_boards_vm(trial):
               .replace("@ME@", repr(ME)))
     out = subprocess.run([exe, "-c", script], capture_output=True, text=True, timeout=120)
     assert out.returncode == 0, out.stdout + out.stderr
+    # 19: the trial's `<name>.bak` files, an older store's backups, travel as
+    # the files they now are (moy_fs.h's THE BACKUP IS THE STORE'S)
     assert out.stdout.split("\n")[:4] == [
-        "archive /files/Backups/moybyte-backup.zip 16", "dropped True",
+        "archive /files/Backups/moybyte-backup.zip 19", "dropped True",
         "rows ['theme', 'volume']", "again False"]
     assert not os.path.exists(trial + "/system/ssh_host_key")
