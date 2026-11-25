@@ -858,7 +858,9 @@ EDITS = (
 def test_edit_and_vi_save_what_was_typed_over_ssh(zero, ssh):
     """`edit` and `vi` over SSH, each on a new file and on a ~20 KB one:
     text typed in, saved, the editor quit, and the file holds what was
-    typed. The session stays up throughout and the board on the network;
+    typed (its md5sum, read in the same session: a second session would
+    end this one). The session stays up throughout and the board on the
+    network;
     its internal RAM is read in the session before and after, and over the
     cable once it ends."""
     big = _text_file(20 * 1024)
@@ -871,16 +873,17 @@ def test_edit_and_vi_save_what_was_typed_over_ssh(zero, ssh):
             for line, keys, want in EDITS:
                 line = line % BENCH
                 path = line.split()[1]
-                before = held if path.endswith("big.txt") else None
                 said = _editor(t, line, keys)
-                rc, got, _err = ssh.run("cat %s" % path)
                 if said is not None:
                     failed.append("%s: %s" % (line, said.strip()[-200:]))
-                elif got != want(before):
-                    failed.append("%s: the file holds %d bytes, %r..., not what was typed"
-                                  % (line, len(got), got[:40]))
-                if path.endswith("big.txt") and rc == 0:
-                    held = got
+                    continue
+                expect = want(held if path.endswith("big.txt") else None)
+                sums = t.command("md5sum %s; wc -c %s" % (path, path)) or b""
+                if hashlib.md5(expect).hexdigest().encode() not in sums:
+                    failed.append("%s: the file is not what was typed (%d bytes "
+                                  "expected): %r" % (line, len(expect), sums[-200:]))
+                elif path.endswith("big.txt"):
+                    held = expect
             free1 = _free_live(t)
             _still_up(zero, t)
         finally:
@@ -892,24 +895,28 @@ def test_edit_and_vi_save_what_was_typed_over_ssh(zero, ssh):
 
 
 def test_a_pipe_carries_a_file_and_says_where_it_stops(zero, ssh):
-    """`cat FILE | wc -c` counts a file under the pipe's cap whole; past the
+    """`cat ... | wc -c` counts a stream under the pipe's cap whole; past the
     cap the pipe says so (the message that tells the user to write it to a
-    file) and the session goes on."""
+    file) and the session goes on. The stream is one file `cat` names as
+    often as it takes, so a 1 MB cap needs no 1 MB file in the store."""
     cap = PIPE_CAP[zero.name]
-    small, over = _text_file(cap - 1024), _text_file(cap + 16 * 1024)
+    part = _text_file(min(cap - 1024, 32 * 1024))
+    under = max(1, (cap - 1024) // len(part))
+    over = cap // len(part) + 1
+    cat = lambda n: "cat" + (" %s/part.txt" % BENCH) * n  # noqa: E731
     with _bench(ssh):
-        assert ssh.run("cat > %s/small.txt" % BENCH, stdin=small)[0] == 0
-        assert ssh.run("cat > %s/over.txt" % BENCH, stdin=over)[0] == 0
-        rc, out, err = ssh.run("cat %s/small.txt | wc -c" % BENCH)
-        assert (rc, out.strip(), err) == (0, str(len(small)).encode(), b""), (rc, out, err)
-        rc, out, err = ssh.run("cat %s/over.txt | wc -c" % BENCH)
+        assert ssh.run("cat > %s/part.txt" % BENCH, stdin=part)[0] == 0
+        rc, out, err = ssh.run("%s | wc -c" % cat(under))
+        assert (rc, out.strip(), err) == (0, str(len(part) * under).encode(), b""), \
+            (rc, out, err)
+        rc, out, err = ssh.run("%s | wc -c" % cat(over))
         print("%s: %d bytes through a pipe capped at %d: %r %r"
-              % (zero.name, len(over), cap, out, err))
-        assert PIPE_SAID.search(err), "a stream past the cap: %r %r" % (out, err)
-        assert int(out.strip() or 0) <= cap, out
+              % (zero.name, len(part) * over, cap, out, err))
+        assert PIPE_SAID.search(out + err), "a stream past the cap: %r %r" % (out, err)
+        assert int(out.strip().rsplit(b"\n", 1)[-1] or 0) <= cap, out
         t, free0 = _session(ssh, zero)
         try:
-            said = t.command("cat %s/over.txt | wc -c" % BENCH)
+            said = t.command("%s | wc -c" % cat(over))
             assert said is not None and PIPE_SAID.search(said), said
             free1 = _free_live(t)
             _still_up(zero, t)
@@ -924,12 +931,14 @@ PER_LEVEL = 3        # files in each
 
 
 def test_find_du_and_rm_walk_a_deep_folder(zero, ssh):
-    """A folder ten deep with three files in each: `find` names every file
-    and finds one by name, `du -s` counts them, `rm -r` takes it all, and
-    the session stays up."""
+    """A folder ten deep with three files in each, and at the bottom a file
+    with its `.bak` beside it (the pair a store's journalled text leaves):
+    `find` names every file and finds one by name, `du -s` counts them,
+    `rm -r` takes it all, and the session stays up."""
     with _bench(ssh):
         make = ("d=%s/deep; mkdir $d; for i in %s; do d=$d/d$i; mkdir $d; "
-                "for j in %s; do echo level $i file $j > $d/f${i}_$j.txt; done; done"
+                "for j in %s; do echo level $i file $j > $d/f${i}_$j.txt; done; done; "
+                "echo note > $d/notes.txt; echo older > $d/notes.txt.bak"
                 % (BENCH, " ".join(str(i) for i in range(1, DEEP + 1)),
                    " ".join(str(j) for j in range(1, PER_LEVEL + 1))))
         rc, _out, err = ssh.run(make)
@@ -937,13 +946,14 @@ def test_find_du_and_rm_walk_a_deep_folder(zero, ssh):
         t, free0 = _session(ssh, zero)
         try:
             files = t.command("find %s/deep -type f | wc -l" % BENCH)
-            assert files is not None and files.strip() == str(DEEP * PER_LEVEL).encode(), files
+            assert files is not None and files.strip() == str(DEEP * PER_LEVEL + 2).encode(), \
+                files
             one = t.command("find %s/deep -name 'f7_2.txt'" % BENCH)
             assert one is not None and one.strip().endswith(b"/d7/f7_2.txt"), one
             du = t.command("du -s %s/deep" % BENCH)
             assert du is not None and re.match(rb"\s*\d+\s+\S*deep", du.strip()), du
-            gone = t.command("rm -r %s/deep; ls %s" % (BENCH, BENCH))
-            assert gone is not None and b"deep" not in gone, gone
+            gone = t.command("rm -r %s/deep; echo rc=$?; ls %s" % (BENCH, BENCH))
+            assert gone is not None and b"rc=0" in gone and b"deep" not in gone, gone
             free1 = _free_live(t)
             _still_up(zero, t)
         finally:
@@ -1025,21 +1035,22 @@ def test_a_second_ssh_session_ends_the_first(zero, ssh, tmp_path):
 
 PLAIN_MAIN = "def _init():\n    pass\n\ndef _update(dt):\n    pass\n\ndef _draw():\n    cls(1)\n"
 
-# A game that keeps a count of its runs in pmem(0) and cells 1-8 from it.
-SAVES_MAIN = """n = 0
+# A game that keeps a count of its runs in pmem(0) and cells 1-8 from it: in
+# Lua, which runs without the trust a Python cart asks the person for.
+SAVES_LUA = """n = 0
 
-def _init():
-    global n
-    n = pmem(0) + 1
-    pmem(0, n)
-    for i in range(1, 9):
-        pmem(i, n * 1000 + i)
+function _init()
+  n = pmem(0) + 1
+  pmem(0, n)
+  for i = 1, 8 do pmem(i, n * 1000 + i) end
+end
 
-def _update(dt):
-    pass
+function _update(dt)
+end
 
-def _draw():
-    cls(n % 16)
+function _draw()
+  cls(n % 16)
+end
 """
 
 
@@ -1056,20 +1067,20 @@ def _png(w, h):
         chunk(b"IDAT", zlib.compress(raw, 1)) + chunk(b"IEND", b"")
 
 
-def _bench_cart(tmp, stem, title, main=PLAIN_MAIN, files=None):
-    """A cart `zbench.<stem>.moy`, packed as the archive the page imports
-    under that name: (the archive's path, the folder it lands in, {file:
-    bytes})."""
+def _bench_cart(tmp, stem, title, main=PLAIN_MAIN, files=None, lua=False):
+    """A cart `zbench.<stem>.moy` (a Python one, or `lua`), packed as the
+    archive the page imports under that name: (the archive's path, the
+    folder it lands in, {file: bytes})."""
     from runtime.carts import moy_pack
     folder = "zbench.%s.moy" % stem
     src = tmp / "src" / folder
     src.mkdir(parents=True)
     content = {"manifest.json": json.dumps({
         "format": "moy-1", "version": 1, "title": title, "id": folder[:-4],
-        "runtime": "python", "main": "main.py", "canvas": "128x128",
-        "input": ["keyboard", "touch"],
+        "runtime": "lua" if lua else "python", "main": "main.lua" if lua else "main.py",
+        "canvas": "128x128", "input": ["keyboard", "touch"],
         "moybyte": {"type": "game", "permissions": ["graphics", "input"]}},
-        indent=1).encode(), "main.py": main.encode()}
+        indent=1).encode(), "main.lua" if lua else "main.py": main.encode()}
     content.update(files or {})
     for name, data in content.items():
         (src / name).write_bytes(data)
@@ -1128,6 +1139,12 @@ PAGE_SAYS = ("'%s ' + JSON.stringify({imported: window.__moyImported || null, "
              ".map(function (e) { return e.textContent.trim(); }).slice(0, 60)})")
 
 
+def _remove(ssh, folder):
+    """A bench cart taken off the board as its shell does (`rm -r` of its
+    folder): (status, stdout, stderr)."""
+    return ssh.run("rm -r %s/%s" % (CARTS, folder))
+
+
 def _cat(ssh, path):
     rc, data, err = ssh.run("cat %s" % path)
     return data if rc == 0 else None
@@ -1181,13 +1198,14 @@ def test_a_cart_uploaded_from_the_page_reads_back_byte_exact(zero, mirror, ssh, 
         apart = [n for n in content if back.get(n) != content[n]]
         assert not apart, "the page's read-back differs in %s (it holds %s)" % (
             apart, sorted(back))
-        rc, _o, err = ssh.run("rm -r %s/%s" % (CARTS, folder))
-        assert rc == 0, err
+        rc, _o, err = _remove(ssh, folder)
+        assert rc == 0, "rm -r of the cart's folder: %r; the folder: %r" % (
+            _o + err, ssh.run("ls -l %s/%s" % (CARTS, folder)))
         shelf = _tagged(_browse(zero, zero.url, sign_in(zero) + [{"wait": 3000}, SHELF],
                                 tmp_path / "gone"), "SHELF")
         assert shelf is not None and folder not in shelf, shelf
     finally:
-        ssh.run("rm -r %s/%s" % (CARTS, folder))
+        _remove(ssh, folder)
 
 
 def _pmem(ssh, folder, tmp):
@@ -1208,7 +1226,7 @@ def test_a_game_s_pmem_saves_are_back_after_a_reboot(zero, mirror, ssh, tmp_path
     across a reboot, and the game run again on a new page reads them back
     (its count of runs goes on from them)."""
     title = "Zero Bench Saves"
-    archive, folder, _c = _bench_cart(tmp_path, "saves", title, main=SAVES_MAIN)
+    archive, folder, _c = _bench_cart(tmp_path, "saves", title, main=SAVES_LUA, lua=True)
     try:
         steps = sign_in(zero) + _import_steps("IMPORTED") + _open_steps(folder, title) + \
             [{"js": STATE % "RAN"}]
@@ -1228,7 +1246,7 @@ def test_a_game_s_pmem_saves_are_back_after_a_reboot(zero, mirror, ssh, tmp_path
         assert again is not None and again[:9] == [2] + [2000 + i for i in range(1, 9)], \
             "the game did not read its cells back: %s" % (again and again[:9])
     finally:
-        ssh.run("rm -r %s/%s" % (CARTS, folder))
+        _remove(ssh, folder)
 
 
 FILL = STORE + "/zbench_fill.bin"
@@ -1370,7 +1388,7 @@ def test_an_imported_cart_and_a_setting_survive_a_reset(zero, mirror, ssh, tmp_p
         assert state and state["system"].get(key) == value, \
             "the page's settings after the reset: %s" % (state and state["system"])
     finally:
-        ssh.run("rm -r %s/%s" % (CARTS, folder))
+        _remove(ssh, folder)
         ssh.run("settings unset %s" % key if had is None
                 else "settings set %s %s" % (key, json.dumps(had)))
 
@@ -1427,7 +1445,7 @@ def test_the_page_reconnects_after_the_board_reboots(zero, mirror, ssh, tmp_path
             "the live socket did not open again: %s -> %s" % (before["live"], after["live"])
         assert not _differs(ssh, folder, content), "the cart imported after the reboot"
     finally:
-        ssh.run("rm -r %s/%s" % (CARTS, folder))
+        _remove(ssh, folder)
 
 
 def folder_of_title(title):
@@ -1518,7 +1536,7 @@ def test_a_second_browser_signing_in_displaces_the_first(zero, mirror, ssh, tmp_
     finally:
         if "thread" in got:
             got["thread"].join(timeout=900)
-        ssh.run("rm -r %s/%s" % (CARTS, folder))
+        _remove(ssh, folder)
 
 
 # -- the network: the name and the clock ---------------------------------------------------------
@@ -1724,13 +1742,13 @@ def test_zy_a_session_soak_keeps_the_board_s_ram(zero, mirror, ssh, tmp_path):
                 _still_up(zero, t)
             finally:
                 t.close()
-            ssh.run("rm -r %s/%s" % (CARTS, folder))
+            _remove(ssh, folder)
             frees.append(free)
             rounds.append(time.monotonic() - r0)
             print("%s soak round %d (%.0f s): internal RAM free in SSH %.1f KB"
                   % (zero.name, n, rounds[-1], free / 1024.0))
     finally:
-        ssh.run("rm -r %s/%s" % (CARTS, folder))
+        _remove(ssh, folder)
     free1, big1 = _heap(zero, "after the soak")
     drop, past = Z.drift(frees, SOAK_FREE_BAND)
     print("%s soak: %d rounds in %.0f s; free in SSH by round (KB) %s, fell %.1f KB "

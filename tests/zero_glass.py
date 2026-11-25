@@ -451,12 +451,13 @@ class Term:
             time.sleep(0.05)
         return None
 
-    def command(self, line, done=rb"\$ $", timeout=60.0):
-        """`line` typed and Enter: what came back until the prompt
-        (`done`) again, or None."""
+    def command(self, line, timeout=60.0):
+        """`line` typed and Enter: what it printed before the prompt came
+        back (the prompt's line not in it), or None."""
         at = self.mark()
         self.send(line.encode() + b"\r")
-        m = self.expect(re.escape(line.encode()) + rb"\r\n(.*?)" + done, at, timeout)
+        m = self.expect(re.escape(line.encode()) + rb"\r\n(.*?)(?:\r\n)?[^\r\n]*\$ $",
+                        at, timeout)
         return m.group(1) if m else None
 
     def alive(self):
