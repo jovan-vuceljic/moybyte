@@ -5024,3 +5024,46 @@ def test_a_desk_tile_the_keys_moved_to_opens(tmp_path):
     for _ in range(10):
         drv.frame(1 / 30)
     assert ws.wm.stack.kinds()[-1] == "projects", ws.wm.stack.kinds()
+
+
+def test_alt_tab_walks_the_windows_and_alt_s_release_ends_the_walk(tmp_path):
+    """Alt+Tab, before any surface (a Terminal's Tab included), brings the
+    window behind the front one forward; while Alt stays down each Tab walks
+    on through the order the walk began with, a minimised window shown on
+    its way; Alt+Shift+Tab walks back. Alt let go ends the walk, so the next
+    Alt+Tab goes back to the window before. Tab alone is the window's."""
+    from runtime.host_app import ConsoleDriver
+    from moy_input import ALT, SHIFT
+    ws = _moy_desk(tmp_path)
+    drv = ConsoleDriver(ws)
+    for app in ("files", "calc", "terminal"):
+        ws.spine.open_app(ws.app(app))
+        drv.frame(1 / 30)
+    wm = ws.wm
+    wm.minimize(wm.windows["files"], True)
+    assert wm.focus_key == "terminal"
+
+    def tab(mods):
+        drv.key_down(9, mods)
+        drv.frame(1 / 30)
+        drv.key_up(9, mods)
+        drv.frame(1 / 30)
+
+    try:
+        drv.set_mods(ALT)
+        tab(ALT)
+        assert wm.focus_key == "calc"
+        tab(ALT)
+        assert wm.focus_key == "files" and not wm.windows["files"].minimized
+        tab(ALT | SHIFT)
+        assert wm.focus_key == "calc"
+        drv.set_mods(0)
+        drv.frame(1 / 30)
+        drv.set_mods(ALT)
+        tab(ALT)
+        assert wm.focus_key == "files", "a new walk starts from the front"
+        drv.set_mods(0)
+        tab(0)
+        assert wm.focus_key == "files", "Tab alone switches nothing"
+    finally:
+        ws.app("terminal").close_session()

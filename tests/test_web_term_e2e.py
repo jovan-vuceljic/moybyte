@@ -205,6 +205,34 @@ _GRANT = {"grant": ["clipboardReadWrite", "clipboardSanitizedWrite"]}
 _PASTE = {"key": "v", "mods": ["ctrl"], "commands": ["paste"]}
 
 
+def _menu(tag):
+    """Whether the system menu shows, under `tag`."""
+    return {"js": "window.__moyState().then(s => '%s ' + JSON.stringify(s.edit.sysmenu))" % tag}
+
+
+def _alt_tap_opens_the_menu(tag):
+    """The page's console key: Alt with a key is a chord and opens nothing, a
+    lone Alt tap opens the system menu (`<tag>_OPEN`) and Esc closes it."""
+    return [{"key": "b", "mods": ["alt"]}, {"wait": 300}, _menu(tag + "_CHORD"),
+            {"key": "Alt"},
+            {"waitFor": "window.__moyState().then(s => s.edit.sysmenu)", "timeout": 5000},
+            _menu(tag + "_OPEN"), {"key": "Escape"},
+            {"waitFor": "window.__moyState().then(s => !s.edit.sysmenu)", "timeout": 5000}]
+
+
+# The title's "full screen", pressed: the page's own fullscreen, which its
+# keyboard lock holds in.
+_FULL = {"js": "document.getElementById('fsb').click(), new Promise(ok => setTimeout(ok, 800))"
+               ".then(() => 'LOCK ' + JSON.stringify({fs: !!document.fullscreenElement, "
+               "locked: window.__moyLocked, said: document.getElementById('fsb').textContent}))",
+         "gesture": True}
+
+
+def _assert_alt_tap(js, tag):
+    assert _tagged(js, tag + "_CHORD") is False, js
+    assert _tagged(js, tag + "_OPEN") is True, js
+
+
 def _clipboard_holds(text):
     """The browser's clipboard holding `text` (the page's origin granted it)."""
     return {"js": "navigator.clipboard.writeText(%s).then(() => 'held')" % json.dumps(text)}
@@ -235,7 +263,8 @@ def test_a_page_paired_by_the_qr_reloads_signed_in_and_its_terminal_is_sealed(
                                           _lines("VI")]
                  # the browser's paste, whole, into the board's shell
                  + [_clipboard_holds("echo sealed-$((6*7))\necho sealed-two\n"),
-                    _PASTE, _says("sealed-two"), _lines("PASTE")])
+                    _PASTE, _says("sealed-two"), _lines("PASTE")]
+                 + _alt_tap_opens_the_menu("BOARD"))
         out, js = _play(tmp_path, "term_board", base, steps, after=_qr_fragment(host))
         paired = _tagged(js, "PAIRED")
         assert paired and paired["keys"] == 1 and "#" not in paired["url"], (
@@ -247,6 +276,7 @@ def test_a_page_paired_by_the_qr_reloads_signed_in_and_its_terminal_is_sealed(
         assert _after(js, "VI", "cat v.txt") == ["over the socket"], js
         assert _after(js, "PASTE", "echo sealed-$((6*7))")[:1] == ["sealed-42"], js
         assert _after(js, "PASTE", "echo sealed-two") == ["sealed-two"], js
+        _assert_alt_tap(js, "BOARD")
         # the same profile, no token: the stored key signs in, nothing typed;
         # then the board goes away, and the next connect says so
         gone = threading.Thread(target=_end_when, args=(host, "2"), daemon=True)
@@ -559,7 +589,8 @@ def test_the_site_s_terminal_takes_esc_and_the_browser_s_clipboard(tmp_path):
     """The site's Terminal: Esc is vi's (INSERT left, `:wq` saves), the
     browser's paste (Ctrl+V) types a multi-line text whole, and a mouse's
     drag over the log then Ctrl+Shift+C puts its text on the browser's
-    clipboard."""
+    clipboard; a lone Alt tap is the console's key (the OS keeps Super), and
+    a fullscreen locks Super and Esc for the page."""
     web_e2e.require("site_shell")
     p, base = _site(tmp_path)
     try:
@@ -577,12 +608,16 @@ def test_the_site_s_terminal_takes_esc_and_the_browser_s_clipboard(tmp_path):
                     {"shot": "term_selected"}, {"key": "c", "mods": ["ctrl", "shift"]},
                     {"waitFor": "window.__moyClipped !== undefined", "timeout": 5000},
                     {"js": "navigator.clipboard.readText().then(t => 'COPIED ' + "
-                           "JSON.stringify(t))"}])
+                           "JSON.stringify(t))"}]
+                 + _alt_tap_opens_the_menu("SITE")
+                 + [_FULL])
         _out, js = _play(tmp_path, "term_clip", base, steps)
         assert _after(js, "VI", "cat /files/v.txt") == ["hi esc"], js
         assert _after(js, "PASTE", "echo pasted-$((6*7))")[:1] == ["pasted-42"], js
         assert _after(js, "PASTE", "echo pasted-two") == ["pasted-two"], js
         assert _tagged(js, "COPIED") == "files$ echo copy-me\ncopy-me", js
+        _assert_alt_tap(js, "SITE")
+        assert _tagged(js, "LOCK") == {"fs": True, "locked": 1, "said": "leave full screen"}, js
     finally:
         p.terminate()
 
@@ -608,5 +643,35 @@ def test_the_site_s_notes_takes_the_browser_s_paste_whole(tmp_path):
         _out, js = _play(tmp_path, "notes_read", base, steps, profile="notes")
         assert _after(js, "NOTE", "cat /files/Documents/pasted.md") == [
             "first line", "second line"], js
+    finally:
+        p.terminate()
+
+
+def _focus(tag):
+    return {"js": "window.__moyState().then(s => '%s ' + JSON.stringify("
+                  "{focus: s.focus, menu: s.edit.sysmenu}))" % tag}
+
+
+def test_alt_tab_walks_the_site_s_windows_in_its_fullscreen(tmp_path):
+    """In the page's own fullscreen (the title's "full screen"), whose
+    keyboard lock gives it the chord, Alt+Tab brings the window behind
+    forward, Alt+Shift+Tab walks back, and neither is the lone Alt tap that
+    opens the system menu."""
+    web_e2e.require("site_shell")
+    p, base = _site(tmp_path)
+    try:
+        steps = ([{"note": "the Editor and the Terminal on the desk", "wait": 1500},
+                  _until(_SHELL), _FULL, _focus("FRONT"),
+                  {"key": "Tab", "mods": ["alt"]}, {"wait": 400}, _focus("ALT_TAB"),
+                  {"key": "Tab", "mods": ["alt", "shift"]}, {"wait": 400}, _focus("BACK"),
+                  {"shot": "alt_tab"}])
+        _out, js = web_e2e.run(tmp_path, "alt_tab",
+                               "?dev=1&desktop=1&edit=moybyte.star_catcher.moy&tab=code"
+                               "&cart=Terminal", steps, base, tmp_path / "chrome",
+                               boot_ms=30000)
+        assert _tagged(js, "LOCK")["locked"] == 1, js
+        assert _tagged(js, "FRONT") == {"focus": "terminal", "menu": False}, js
+        assert _tagged(js, "ALT_TAB") == {"focus": "menu", "menu": False}, js
+        assert _tagged(js, "BACK") == {"focus": "terminal", "menu": False}, js
     finally:
         p.terminate()

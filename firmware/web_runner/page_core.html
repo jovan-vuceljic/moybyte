@@ -175,7 +175,7 @@ border-radius:50%;animation:pinspin .8s linear infinite}
 background:rgba(11,15,26,.82);border:1px solid #1d2b53;color:#00e436;font:12px ui-monospace;
 white-space:pre;pointer-events:none}#hud b{color:#ffec27}#hud .w{color:#ff004d}</style></head><body>
 <div id=hud></div>
-<h1>Moybyte <span id=s>starting...</span> <small style="color:#5f6f9f">(press ` for stats)</small> <a id=tier href="?handheld=1" style="color:#5f6f9f;font-size:11px;text-decoration:none;border-bottom:1px dotted #5f6f9f">small screen?</a> <a id=pod href="#" style="display:none;color:#00e436;font-size:11px;text-decoration:none;border-bottom:1px dotted #00e436">play on device</a></h1>
+<h1>Moybyte <span id=s>starting...</span> <small style="color:#5f6f9f">(press ` for stats)</small> <a id=tier href="?handheld=1" style="color:#5f6f9f;font-size:11px;text-decoration:none;border-bottom:1px dotted #5f6f9f">small screen?</a> <a id=fsb href="#" style="display:none;color:#5f6f9f;font-size:11px;text-decoration:none;border-bottom:1px dotted #5f6f9f">full screen</a> <a id=pod href="#" style="display:none;color:#00e436;font-size:11px;text-decoration:none;border-bottom:1px dotted #00e436">play on device</a></h1>
 <pre id=crash></pre>
 <div id=pz><span id=pzs></span>
 <select id=pzc title="cart to export"></select>
@@ -484,6 +484,34 @@ var pH={};
 // their Shift twins), and what this page leaves to it (reload, the address
 // bar, the developer tools). The console's key from the page is also a tap on
 // the burger button (the `super` event) and Esc during play.
+// THE CONSOLE KEY'S FALLBACK. The OS takes Super before a page sees it
+// (GNOME's overview, Windows' Start; the page gets at most its keydown, then
+// a blur), so a lone Alt tap is the page's Super too, the `super` event: Alt
+// down and up with no other key, button or modifier between, as Super's tap
+// is. No OS acts on a bare Alt, the browser's menu focus on one is the
+// page's to keep (both its events are prevented), and no cart or the
+// Terminal reads Alt alone (theirs are chords); AltGr is "AltGraph", never
+// a tap. The console's hints name it on this page (moy_ui_parts.c's
+// ACT_KEYS). In fullscreen the page also asks for Super and Esc with the
+// Keyboard Lock API (Chromium's, live only in a fullscreen the page asked
+// for, which the title's "full screen" asks for: F11 is the console's
+// full key): Super then reaches the console whole, Esc the Terminal, and
+// Alt+Tab the console's window walk (`ConsoleInput._alt_tab`) on Windows,
+// ChromeOS and Linux (where Wayland's compositor asks its user first);
+// holding Esc ends the fullscreen. On a Mac Cmd is Ctrl and the OS keeps
+// Cmd+Tab, so there Esc, Alt and Tab.
+var altTap=false,fsb=document.getElementById("fsb"),
+LOCK=["AltLeft","AltRight","Tab","Escape"].concat(MAC?[]:["MetaLeft","MetaRight"]);
+function kLock(){var k=navigator.keyboard,on=!!document.fullscreenElement;
+fsb.textContent=on?"leave full screen":"full screen";if(!k||!k.lock)return;
+if(on){k.lock(LOCK).then(function(){window.__moyLocked=1;},function(){window.__moyLocked=0;});}
+else{k.unlock();window.__moyLocked=0;}}
+document.addEventListener("fullscreenchange",kLock);
+if(document.documentElement.requestFullscreen){fsb.style.display="";
+fsb.addEventListener("click",function(e){e.preventDefault();
+if(document.fullscreenElement)document.exitFullscreen().catch(function(){});
+else document.documentElement.requestFullscreen().then(function(){cv.focus();},function(){});});}
+cv.addEventListener("pointerdown",function(){altTap=false;});
 var MAC=/Mac|iP(hone|ad|od)/.test(navigator.platform||""),MODK={Control:1,Shift:2,Alt:4,Meta:8,OS:8};
 var KC={Enter:13,Backspace:8,Tab:9,Delete:127,ArrowLeft:272,ArrowRight:273,ArrowUp:274,ArrowDown:275};
 // AltGr (a layout's third level: @ on a German Q) is Ctrl+Alt to a browser,
@@ -495,6 +523,9 @@ if(k in KC)return KC[k];var f=/^F([1-9]|1[0-2])$/.exec(k);return f?256+(+f[1]):n
 function kept(e,c){var l=e.key.toLowerCase();if(c==261||c==268)return true;
 return (e.ctrlKey||e.metaKey)&&(l=="r"||l=="l"||(e.shiftKey&&(l=="i"||l=="j")));}
 cv.addEventListener("keydown",function(e){
+if(e.key=="Alt"){if(!e.repeat)altTap=!(e.ctrlKey||e.shiftKey||e.metaKey);
+send({type:"mods",mods:kmods(e)});e.preventDefault();return;}
+altTap=false;
 if(e.key=="Escape"){
 // The console routes Esc (ConsoleDriver.escape): over a fullscreen game it is
 // the console's key -- the pause menu, the p8-web-player expectation -- since a
@@ -523,11 +554,13 @@ send(t?{type:"paste",text:t.slice(0,PASTE_MAX)}:{type:"paste"});});
 function clipOut(t){window.__moyClip=t;
 try{navigator.clipboard.writeText(t).then(function(){window.__moyClipped=t;},function(){});}catch(e){}}
 cv.addEventListener("keyup",function(e){
+if(e.key=="Alt"){var t=altTap;altTap=false;send({type:"mods",mods:kmods(e)});
+if(t)send({type:"super"});e.preventDefault();return;}
 if(e.key in MODK){send({type:"mods",mods:kmods(e)});return;}
 var c=kcode(e);delete kHeld[e.code||e.key];if(c!==null)send({type:"ku",code:c,mods:kmods(e)});});
 var kHeld={};
 function kLost(){for(var p in kHeld)send({type:"ku",code:kHeld[p],mods:0});
-kHeld={};send({type:"mods",mods:0,lost:1});}
+kHeld={};altTap=false;send({type:"mods",mods:0,lost:1});}
 window.addEventListener("blur",kLost);cv.addEventListener("blur",kLost);
 document.addEventListener("visibilitychange",function(){if(document.hidden)kLost();});
 // Soft keyboard (#42 Thread 2): #kb (in the bottom bar's middle cluster, beside the burger)

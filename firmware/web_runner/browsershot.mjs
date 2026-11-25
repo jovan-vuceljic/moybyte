@@ -17,6 +17,8 @@
 //   {"dblclick":[x,y]} (two clicks back to back, the second with Chrome's
 //                       clickCount 2, as a person's double click arrives)
 //   {"wheel":[x,y,dx,dy]} {"middle":[x0,y0,x1,y1,steps]} {"js":"..."} {"note":"..."}
+//   {"js":"...","gesture":true}            the js run as a user's gesture (what
+//                                           requestFullscreen and the like need)
 //   {"file":"path|$ENVVAR","as":"__name"}   local bytes -> window.__name
 //                                           (an ArrayBuffer, for the drop paths)
 //   {"waitFor":"<js expression>","timeout":ms}   poll the expression (as
@@ -217,8 +219,9 @@ const scenario = JSON.parse(readFileSync(argv[0], "utf-8"));
 const outdir = resolve(argv[1] || join(HERE, "shots-browser"));
 mkdirSync(outdir, { recursive: true });
 
-const evaluate = async (expr) => {
-    const r = await cdp("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true });
+const evaluate = async (expr, gesture = false) => {
+    const r = await cdp("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true,
+                                              userGesture: gesture });
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.text + " " + (r.exceptionDetails.exception?.description || ""));
     return r.result.value;
 };
@@ -464,7 +467,7 @@ for (const step of scenario.steps || []) {
                 + ` "loaded ${b64.length}b64"`);
             console.log("   file ->", p);
         }
-        if (step.js) console.log("   js ->", JSON.stringify(await evaluate(step.js)));
+        if (step.js) console.log("   js ->", JSON.stringify(await evaluate(step.js, !!step.gesture)));
         if (step.shot) await shot(step.shot);
     } catch (e) {
         failed++;
