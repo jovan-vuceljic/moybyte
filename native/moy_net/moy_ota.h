@@ -125,6 +125,11 @@ int moy_ota_judge_c6(const char *text, size_t n, int require_sig,
 // -- the client ---------------------------------------------------------------------
 
 #define MOY_HTTPC_HOPS 4            // redirects followed
+// A handle's head buffer starts at MOY_HTTPC_HEAD_FIRST and doubles, up to
+// MOY_HTTPC_HEAD_MAX, only while a request or a head needs more: a redirect's
+// hop gives the room back. A board with no PSRAM pays its internal RAM for
+// it beside the handshake's 16 KB record buffer.
+#define MOY_HTTPC_HEAD_FIRST 2048
 #define MOY_HTTPC_HEAD_MAX 16384    // GitHub's redirect head measured 5147 bytes
 #define MOY_HTTPC_IO_MS 15000       // a connect, or a read that has no byte this long
 // The VM's two clients, one the http device API's worker holds
@@ -156,6 +161,8 @@ int moy_httpc_read_wait(int h, void *buf, size_t n, uint32_t ms);
 // the head has none.
 int moy_httpc_header(int h, const char *name, char *out, size_t cap);
 void moy_httpc_close(int h);
+// The bytes handle `h`'s head buffer holds (0 for a handle that is not open).
+size_t moy_httpc_head_room(int h);
 // The same asking for the `n` bytes from `start` (a Range header on every hop):
 // a server that honours it answers 206 with those bytes, one that does not 200
 // with the whole file.
