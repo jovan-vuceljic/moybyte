@@ -68,9 +68,9 @@ def _cflags():
 
 def _build(out):
     """The server (ssh_main), and beside it ssh_main_plain: a board's with no
-    toolkit (the Zeros'), the console's palette not linked. (Their face's
-    12 KiB arena is a 32-bit board's: dash's blocks on this 64-bit host
-    need 14.)"""
+    toolkit (the Zeros'), the console's palette its own file
+    (moy_sh_palette.c). (Their face's 12 KiB arena is a 32-bit board's:
+    dash's blocks on this 64-bit host need 14.)"""
     cc = shutil.which("cc")
     shell = [o for o in SH._objects(cc, str(out))
              if os.path.basename(o) not in ("sh_main.o", "board_main.o")]
@@ -88,12 +88,15 @@ def _build(out):
             f.remove("-DLTC_SOURCE")
         procs.append(subprocess.Popen([cc] + f + ["-c", src, "-o", obj]))
         objs.append(obj)
+    palette = str(out / "ssh_palette.o")
+    procs.append(subprocess.Popen([cc, "-c", os.path.join(SH.SH, "moy_sh_palette.c"),
+                                   "-o", palette]))
     assert all(p.wait() == 0 for p in procs)
     link = [cc] + SH.CFLAGS + ["-Wl,--gc-sections", "-Wl,--wrap=moy_tty_pair", "-Wl,--wrap=send"]
     exe = str(out / "ssh_main")
     subprocess.run(link + ["-o", exe] + objs + shell
                    + [seal_binding.archive(), "-lpthread"], check=True)
-    subprocess.run(link + ["-o", exe + "_plain"] + objs
+    subprocess.run(link + ["-o", exe + "_plain"] + objs + [palette]
                    + [o for o in shell if os.path.basename(o) != "moy_ui_tables.o"]
                    + [seal_binding.archive(), "-lpthread"], check=True)
     return exe
@@ -442,9 +445,9 @@ def test_neofetch_draws_moy_in_colour_beside_the_rows_from_44_columns(harness):
     assert board.startswith("Board: "), shown
 
 
-def test_without_a_toolkit_neofetch_draws_moy_plain_beside_the_rows(built, tmp_path):
-    """The Zeros' build (ssh_main_plain): no toolkit, so no palette, and Moy
-    is his outline beside the rows with nothing coloured."""
+def test_without_a_toolkit_neofetch_draws_moy_in_colour_beside_the_rows(built, tmp_path):
+    """The Zeros' build (ssh_main_plain): no toolkit, the palette its own
+    file, so Moy is drawn in the console's colours as on every console."""
     _out, exe = built
     h = serve(exe + "_plain", tmp_path)
     try:
@@ -452,8 +455,8 @@ def test_without_a_toolkit_neofetch_draws_moy_plain_beside_the_rows(built, tmp_p
     finally:
         end(h)
     shown, board = beside(out)
-    assert board.startswith(" |         '--.   Board: "), shown
-    assert b"\x1b[38;2;" not in out and b"\x1b[48;2;" not in out
+    assert board.index("Board: ") == 18 and "\u2588" in board[:15], shown
+    assert b"\x1b[38;2;131;118;156m" in out          # his body, the palette's 13
 
 
 def test_a_terminal_session_is_the_face_s_line_discipline(harness):

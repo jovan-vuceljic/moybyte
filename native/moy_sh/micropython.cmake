@@ -18,7 +18,9 @@
 # and so does the faceless job (moy_sh_job.c),
 # and on an image that carries the toolkit (native/moy_ui staged beside it)
 # the Terminal's face (moy_sh_face.c), which draws through its engine, and
-# the recovery floor's screen over it (moy_sh_floor.c).
+# the recovery floor's screen over it (moy_sh_floor.c); on one without it,
+# the console's palette alone (moy_sh_palette.c, generated), so that the
+# shell's colours are the console's there too.
 
 set(MOY_SH ${CMAKE_CURRENT_LIST_DIR})
 file(GLOB MOY_SH_DASH_SRCS ${MOY_SH}/dash/*.c)
@@ -81,4 +83,10 @@ add_library(usermod_moy_sh INTERFACE)
 target_sources(usermod_moy_sh INTERFACE ${MOY_SH}/modmoy_sh.c)
 target_include_directories(usermod_moy_sh INTERFACE ${MOY_SH})
 target_link_libraries(usermod_moy_sh INTERFACE moy_sh_core)
+# The palette alone where the toolkit is not: an object of the image's own,
+# since the shell's references to it are weak and a weak reference pulls no
+# archive member.
+if(NOT EXISTS ${MOY_SH}/../moy_ui/moy_ui_api.h)
+    target_sources(usermod_moy_sh INTERFACE ${MOY_SH}/moy_sh_palette.c)
+endif()
 target_link_libraries(usermod INTERFACE usermod_moy_sh)

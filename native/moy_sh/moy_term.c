@@ -6,8 +6,9 @@
 #include "moy_codec.h"
 #include "moy_term.h"
 
-// The console's palette, its first sixteen the base colours (native/moy_ui's
-// generated tables): weak, NULL in an image without the toolkit (the Zero).
+// The console's palette, its first sixteen the base colours: native/moy_ui's
+// generated tables, or moy_sh_palette.c on an image without the toolkit (the
+// Zeros). Weak: NULL in a build that links neither.
 #if __has_include("moy_ui_tables.h")
 #include "moy_ui_tables.h"
 #else

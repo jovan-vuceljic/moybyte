@@ -2440,9 +2440,9 @@ static int clearcmd(int argc, char **argv) {
 int moy_net_link(uint32_t *ip);
 #pragma weak moy_net_link
 
-// The console's palette, its first sixteen the base colours (native/moy_ui's
-// generated tables): weak, NULL in an image without the toolkit (the Zero),
-// where neofetch draws plain.
+// The console's palette, its first sixteen the base colours: native/moy_ui's
+// generated tables, or moy_sh_palette.c on an image without the toolkit (the
+// Zeros). Weak: NULL in a build that links neither, where neofetch draws plain.
 #if __has_include("moy_ui_tables.h")
 #include "moy_ui_tables.h"
 #else
