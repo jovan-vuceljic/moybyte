@@ -639,9 +639,19 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
     # -- the two modes (docs/theme_and_shell_2026-11.md §8.1) ----------------------
 
     def floor(self):
-        """Console mode's home has the desk beneath it (the X shows there);
-        desktop mode's floor is the desk itself."""
-        return 0 if self.mode == "console" else 2
+        """Console mode's home has the desk beneath it (the X shows there)
+        where the desk may come back (`desk_beneath`), and is the floor where
+        it may not; desktop mode's floor is the desk itself."""
+        if self.mode != "console":
+            return 2
+        return 0 if self.desk_beneath() else 1
+
+    def desk_beneath(self):
+        """Whether the desk may come back from console mode: not on a
+        zoomed glass (the browser page's) without the desk's room, which
+        holds console mode with the home as its floor, as on a handheld."""
+        ws = self.ws
+        return ws.look.zoom is None or ws.desk_fits()
 
     def root_kind(self):
         return "launcher" if self.mode == "console" else "desk"
@@ -704,9 +714,9 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         window made as a desk play's."""
         if self.mode != "console":
             return
+        if not self.desk_beneath():
+            return
         ws = self.ws
-        if ws.look.zoom is not None and not ws.desk_fits():
-            return                    # a zoomed glass without the desk's room
         if self.stack.depth() > 1 and not game:
             ws.home.go_home()                  # what stood on the home leaves first
         p = self.parked or _Parked([], [], {}, None)

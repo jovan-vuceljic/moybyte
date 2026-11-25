@@ -340,17 +340,22 @@ AUTOPLAY = {"MOY_CHROME_ARGS": json.dumps(["--autoplay-policy=no-user-gesture-re
 
 
 def run(tmp_path, name, query, steps, base, profile, env=None, boot_ms=15000,
-        device=None, scheme=None):
+        device=None, scheme=None, ua=None, init=None):
     """One browsershot scenario against `base` in the Chrome profile
     `profile`: (its stdout, every `js` step's value in order). `device` is
     browsershot's phone/tablet shape ({"width", "height", "dpr", "mobile"});
-    `scheme` the browser's prefers-color-scheme ("dark" or "light")."""
+    `scheme` the browser's prefers-color-scheme ("dark" or "light"); `ua`
+    its user agent; `init` script run before every document it loads."""
     path = tmp_path / ("%s.json" % name)
     scenario = {"query": query, "boot_ms": boot_ms, "steps": steps}
     if device:
         scenario["device"] = device
     if scheme:
         scenario["scheme"] = scheme
+    if ua:
+        scenario["ua"] = ua
+    if init:
+        scenario["init"] = init
     path.write_text(json.dumps(scenario))
     r = subprocess.run(
         ["node", "browsershot.mjs", str(path), str(tmp_path / ("shots_" + name))],

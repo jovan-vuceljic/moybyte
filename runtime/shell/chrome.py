@@ -205,8 +205,9 @@ def chrome_scale_floor(w, h, diagonal_in=None):
                    would have to change before it is worth re-proposing.
       Browser      its two arrangements are those boards': the desk declares
                    the P4's glass at the P4's density
-                   (`layout_base.desk_diagonal_in`), the 320x240 handheld
-                   declares none, as the T-Deck. The host simulator's desk
+                   (`layout_base.desk_diagonal_in`); a glass below the
+                   desk's room, the 320x240 handheld's among them, declares
+                   none, as the T-Deck. The host simulator's desk
                    declares the same.
 
     A floor of 3 is not reachable by any panel in the lineup; a board that

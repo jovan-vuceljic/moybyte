@@ -336,11 +336,9 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
         # rasterizer here was unaffordable at ~85ms/frame interpreted.
         sysc = web_canvas.make_canvas(width, height, font_scale=font_scale)
         game = web_canvas.WebSystemCanvas(web_canvas.compositor(320, 240))
-        # The desk declares the P4's glass at the P4's pixel density, so it
-        # lays out on the desk's metrics as that board does at any page size.
         ws = console.Workstation(host_api._NullComp(), game, inp, carts,
                                  sys_canvas=sysc, font_scale=font_scale,
-                                 panel_diagonal_in=layout_base.desk_diagonal_in(width, height))
+                                 panel_diagonal_in=glass_in(width, height))
         if zoom is not None:
             ws.look.zoom_glass(int(zoom), tuple(zooms))
     else:
@@ -1171,12 +1169,24 @@ _ZOOM = [None]
 def glass(w, h, zoom, zooms):
     """The page's viewport changed (a resize, a rotation, a UI size the page
     took from a frame): the glass at `w` x `h` (`Workstation.resize_glass`,
-    at the P4's density), `zoom` the UI size chosen (0: Auto) and `zooms`
-    the choices this viewport offers Settings' UI size row."""
+    the diagonal `glass_in` declares), `zoom` the UI size chosen (0: Auto)
+    and `zooms` the choices this viewport offers Settings' UI size row."""
     ws = _S["ws"]
     _ZOOM[0] = int(zoom)
     ws.look.zoom_glass(int(zoom), tuple(int(z) for z in zooms))
-    ws.resize_glass(int(w), int(h), layout_base.desk_diagonal_in(int(w), int(h)))
+    ws.resize_glass(int(w), int(h), glass_in(int(w), int(h)))
+
+
+def glass_in(w, h):
+    """The diagonal a `w` x `h` page glass declares: where it holds the
+    desk's room (`layout_base.desk_room`), the P4's glass at the P4's pixel
+    density (`layout_base.desk_diagonal_in`), so it lays out on the desk's
+    metrics and tap floor as that board does at any page size; below it
+    none, as the T-Deck declares none, so a phone and a small window lay
+    out the handheld at its chrome scale."""
+    if layout_base.desk_room(w, h, 1):
+        return layout_base.desk_diagonal_in(w, h)
+    return None
 
 
 # This frame's samples, as step_frame_json leaves them for the worker: their
@@ -1295,7 +1305,11 @@ def state_json():
     and how its last run ended (`media_last`, dev_media.last), the heap's
     allocation where the page meters it (`alloc`, step_frame_json's), the
     buttons held (`held`), the page's word (`page`: full screen, where it
-    keeps the carts, whether a console serves it) and the desk keyboard's
+    keeps the carts, whether a console serves it, whether its browser has
+    full screen, whether it runs as a home-screen app, its host), the card
+    up (`card`: its verb, title and lines; None), the glass's metric class,
+    chrome scale, top bar thickness in glass pixels and the back-stack's
+    floor and depth (`glass`), the desk keyboard's
     typing level (`typing`), and the radio link's stats (`link_stats`, EspNowLink.stats: the match's
     frame, checkpoints and desync; None with no link), for a harness
     driving the page (`window.__moyState()`), and the Wi-Fi panel's
@@ -1313,9 +1327,17 @@ def state_json():
     st["edit"] = _edit_state(_S["ws"])
     pg = _S["ws"].page
     st["page"] = None if pg is None else {"fs": pg.fullscreen, "kept": pg.kept,
-                                          "served": pg.served}
+                                          "served": pg.served, "canfs": pg.can_fullscreen,
+                                          "app": pg.app, "host": pg.host}
+    cf = _S["ws"].confirm
+    st["card"] = {"verb": cf.verb, "title": cf.title,
+                  "lines": [t for t, _tone in cf.line_rows()]} if cf.open else None
     st["input"] = _input_state(_S["ws"])
     st["wifi_panel"] = _wifi_panel(_S["ws"])
+    ws = _S["ws"]
+    st["glass"] = {"cls": ws.metric_class, "cs": ws.look.effective_chrome_scale(),
+                   "bar": ws.layout.status_h * ws.render_scale,
+                   "floor": ws.wm.floor(), "depth": ws.wm.stack.depth()}
     term = getattr(_S["ws"].app("terminal"), "face", None)
     st["term"] = term.lines() if term is not None else None
     try:

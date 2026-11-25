@@ -1509,7 +1509,8 @@ class Workstation:
         handheld's smallest room. One operation over the one canvas class
         (`DeviceCanvas.resize`): the glass (a render scale's half surface
         made again over it), the panel's facts that the metric class, the
-        floors and the tier read (`diagonal_in`: its declared glass), the
+        floors and the tier read (`diagonal_in`: its declared glass, None
+        the handheld's, which declares none), the
         pointer's bounds, the layouts (`relayout`), the WM's windows
         (`fit_glass`: kept and clamped) and the tier (`place_tier`). What
         runs keeps running. False where the size did not move."""
@@ -1525,8 +1526,7 @@ class Workstation:
                 self.set_render_scale(1)
             glass.resize(w, h)
             self.panel_wh = (w, h)
-            if diagonal_in is not None:
-                self.panel_diagonal_in = diagonal_in
+            self.panel_diagonal_in = diagonal_in
             _layout_base.place_desk_glass(_layout_base.class_of(
                 self.panel_diagonal_in, w, h) == _layout_base.DESK)
             self.chrome_floor = chrome_scale_floor(w, h, self.panel_diagonal_in)
