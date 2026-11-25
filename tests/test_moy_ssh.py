@@ -635,6 +635,53 @@ def test_the_session_that_took_over_is_taken_over_in_turn(harness):
                 p.kill()
 
 
+def _spilling(h):
+    """A `-tt` session whose pipe has gone on in a file of the store
+    (native/moy_sh/moy_sh_sys.c's SPILL, past the 4 KB of memory the shell's
+    harness builds it with), its writer asleep; and the folder the spill is
+    in."""
+    files = h["system"].parent / "files"
+    (files / "z").write_bytes(b"0123456789abcde\n" * 4096)
+    pipes = h["system"] / "pipes"
+    p = opened(h)
+    p.stdin.write(b"{ cat z; sleep 30; } | wc -c\r")
+    p.stdin.flush()
+    deadline = time.time() + 10
+    while time.time() < deadline and not (pipes.is_dir() and any(pipes.iterdir())):
+        time.sleep(0.05)
+    if not (pipes.is_dir() and any(pipes.iterdir())):
+        p.kill()
+        raise AssertionError("no spill: %r" % p.communicate()[0])
+    return p, pipes
+
+
+def _gone(path, wait=10.0):
+    deadline = time.time() + wait
+    while time.time() < deadline and path.exists():
+        time.sleep(0.05)
+    return not path.exists()
+
+
+def test_a_spill_goes_when_its_session_is_closed_or_taken_over(harness):
+    n = int(settled(harness)["ended"])
+    first, pipes = _spilling(harness)
+    try:
+        r = ssh(harness, PASSWORD, "moy@127.0.0.1", "echo second")
+        assert r.returncode == 0 and b"second" in r.stdout, r.stderr
+        out, _ = first.communicate(timeout=10)
+        assert TAKEN in out, out
+    finally:
+        if first.poll() is None:
+            first.kill()
+    ended(harness, n + 2)
+    assert _gone(pipes)
+    first, pipes = _spilling(harness)
+    first.kill()
+    first.wait()
+    ended(harness, n + 3)
+    assert _gone(pipes)
+
+
 def refused(h, wait=3.0):
     """Whether the port refuses a connection within `wait` seconds."""
     deadline = time.time() + wait

@@ -42,8 +42,10 @@ NET = os.path.join(ROOT, "native", "moy_net")
 MBEDTLS = ["-I", os.path.join(NET, "mbedtls", "include"), "-I", NET,
            '-DMBEDTLS_CONFIG_FILE="moy_seal_mbedtls.h"']
 
+# A pipe's memory a board's without PSRAM (moy_sh_sys.c's MOY_SH_PIPE_MEM), so
+# a long pipe spills to the store in every harness, as on the C3 Zero.
 CFLAGS = ["-std=gnu99", "-g", "-O1", "-fsanitize=address,undefined",
-          "-fno-sanitize-recover=all", "-Wall", "-Werror"]
+          "-fno-sanitize-recover=all", "-Wall", "-Werror", "-DMOY_SH_PIPE_MEM=4096u"]
 
 
 def shell_sources():
@@ -327,6 +329,83 @@ def test_a_pipe_holds_its_stream_in_chunks(harness, tmp_path):
     assert r.returncode == 0 and b"65536" in r.stdout, r.stdout.decode()
     largest = int(re.search(rb"largest block (\d+)", r.stderr).group(1))
     assert largest < 16384, "a block of %d B" % largest
+
+
+def _spill_run(harness, root, text):
+    script = root.parent / "spill.sh"
+    script.write_text(text)
+    return subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                          timeout=120, env=dict(os.environ, SH_MAIN_MEASURE="1"))
+
+
+def test_a_pipe_past_its_memory_goes_on_in_a_file_of_the_store(harness, tmp_path):
+    """On a board without PSRAM a pipe holds 4 KB in memory (so does every
+    host harness, CFLAGS), and the stages
+    of a pipeline run one after another, so `grep | tail` printed the last
+    lines of the first 4 KB ("pipe: stream over 4 KB"). Past its memory the
+    stream goes on in /.pipes/<pipe>.tmp (moy_sh_sys.c's SPILL), the reader
+    reads the memory, then the file, through one chunk, and the file and its
+    folder go at the pipe's last close."""
+    root = tmp_path / "root"
+    root.mkdir()
+    lines = ["line %d of the stream, padded out" % i for i in range(3000)]
+    (root / "big.txt").write_text("".join(x + "\n" for x in lines))
+    (root / "z").write_bytes(bytes(range(256)) * 256)
+    r = _spill_run(harness, root,
+                   "grep 'line 1' big.txt | tail -n 2\n"
+                   "cat z | wc -c\n"
+                   "cat z | md5sum\n"
+                   "cat big.txt | (ls /.pipes | wc -l; wc -l)\n"
+                   "cat z | cat | cat | wc -c\n")
+    out = r.stdout.decode()
+    ones = [x for x in lines if "line 1" in x]
+    want = "\n".join(ones[-2:]) + "\n65536\n%s  -\n1\n3000\n65536\n" % (
+        hashlib.md5((bytes(range(256)) * 256)).hexdigest())
+    assert r.returncode == 0 and out == want, out + r.stderr.decode()[-2000:]
+    assert b"pipe:" not in r.stderr, r.stderr.decode()
+    assert not (root / ".pipes").exists()
+    largest = int(re.search(rb"largest block (\d+)", r.stderr).group(1))
+    assert largest < 16384, "a block of %d B" % largest
+
+
+def test_a_spill_goes_when_its_writer_is_interrupted(harness, tmp_path):
+    """A writer Ctrl-C ends mid-spill, a reader that stops early, and an
+    interrupted reader each leave no spill behind."""
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "z").write_bytes(b"0123456789abcde\n" * 4096)
+    r = _spill_run(harness, root,
+                   "i=0; while [ $i -lt 4000 ]; do echo 0123456789abcde; i=$((i+1));"
+                   " [ $i = 1000 ] && echo 1 > /.interrupt; done | wc -c\n"
+                   "cat z | head -n 1\n"
+                   "cat z | (echo 1 > /.interrupt; while read l; do :; done)\n"
+                   "ls -a /\n")
+    out = r.stdout.decode()
+    assert "0123456789abcde\n" in out and ".pipes" not in out, out
+    assert not (root / ".pipes").exists()
+
+
+def test_a_spill_the_store_has_no_room_for_says_so(harness, tmp_path):
+    """A spill past what the store takes (here a file-size limit, EFBIG) ends
+    its writer with "pipe: no room to hold N KB", the reader reads what came
+    before, and the file goes."""
+    import resource
+    import signal
+
+    def limit():
+        signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        resource.setrlimit(resource.RLIMIT_FSIZE, (16384, 16384))
+    root = tmp_path / "root"
+    root.mkdir()
+    script = tmp_path / "full.sh"
+    script.write_text("i=0; while [ $i -lt 4096 ]; do echo 0123456789abcde; i=$((i+1)); done"
+                      " | wc -c\n")
+    r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                       timeout=120, preexec_fn=limit)
+    out = r.stdout.decode() + r.stderr.decode()
+    assert "pipe: no room to hold 21 KB" in out, out
+    assert "20480" in out, out
+    assert not (root / ".pipes").exists()
 
 
 SERIAL = os.path.join(SCRIPTS, "serial")

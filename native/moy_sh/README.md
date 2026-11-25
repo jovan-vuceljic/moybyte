@@ -75,11 +75,16 @@ off (`moy_sh_set_questions`), and the command reads its answers from stdin.
 A session takes its record and its arena from the host's `alloc` (PSRAM on a
 board, `heap_caps` with the default heap only where there is no PSRAM); a pipe's buffer, a file's chunk and a fork's snapshot are taken
 while a run needs them and returned after. A pipeline's stages run one after
-another, so a pipe holds its writer's whole stream: 1 MB at most, 4 KB on a
-board without PSRAM (the C3 Zero). A longer stream ends its writer with one
-line, `pipe: stream over N KB; write it to a file`, and the reader reads what
-came before it; a file has no such cap, since a file is read and written a
-chunk at a time. Where there is no PSRAM a shell's block also leaves
+another, so a pipe holds its writer's whole stream: 1 MB in memory, 4 KB on
+a board without PSRAM (the C3 Zero), and past that in a temporary file of the
+store (`/etc/pipes/*.tmp`, the store's `system/pipes`) written and read a
+chunk at a time, so a pipe's memory stays at one chunk on each side of the
+file. The file and its folder go at the pipe's last close, whatever ended it
+(the writer killed, the session closed or taken over), and the store's
+opening sweeps what a reset left. A stream the store has no room for, or past
+4 MB in the file (`MOY_SH_SPILL_MAX`, so `yes | head` ends), ends its writer
+with one line, `pipe: no room to hold N KB`, and the reader reads what came
+before it. Where there is no PSRAM a shell's block also leaves
 `MOY_SH_HEAP_RESERVE` (16 KB, `moy_sh_board.h`) of the heap free: the SSH
 server's packets and the network's buffers come from the same heap, and
 Dropbear ends a session whose allocation fails ("m_malloc failed"). A
