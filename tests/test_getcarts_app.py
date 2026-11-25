@@ -235,13 +235,45 @@ def test_the_desk_shows_the_focused_card_in_the_pane(tmp_path):
     win.x, win.y = 112, 52
     ws.wm.resize_window(win, 900, 536)           # the target's window
     _frames(ws)
-    assert app.desk and app.cur is app.rows[0] and app.phase == "cart"
+    assert app.desk and app.cur is app.rows[0] and app.phase == "list"
     _press(ws, app, "right")
     assert app.cur is app.rows[1] and app.phase == "cart"
     assert not app.has_page(), "the pane is the shelf's: no back chevron"
     host = app.page_host()
     assert host.box(gc.vid("GET")) is not None, "the pane's verbs are in the foot"
     assert host.box("check") is not None
+
+
+@pytest.mark.parametrize("desk", [False, True])
+def test_an_open_lands_on_the_shelf_first_card(tmp_path, desk):
+    """The first open after a boot (the check's way) and a later one (the
+    shelf held) land alike: the shelf, the keys on its first card, no
+    cart's page and no verbs. The focus landing there is no pick: on the
+    desk the pane shows that card beside the shelf."""
+    repo, net = _shelf()
+    kw = dict(sys_size=(1024, 600), panel_diagonal_in=7.0, windowed=True) if desk else {}
+    ws, app = _ws(tmp_path, net, [repo.url("index.json")], **kw)
+    if desk:
+        ws.home.open_desk()
+
+    def landed():
+        _frames(ws, 4)
+        st = app.state()
+        assert app.phase == "list" and not app.has_page()
+        assert st.view == ("desk" if desk else "shelf")
+        assert _focus(app) == app._card_id(app.rows[0])
+        assert not (st.v_get or st.v_play or st.v_remove), "a verb shows with no card picked"
+        if desk:
+            assert app.cur is app.rows[0] and st.name == app.rows[0]["cart"]["name"]
+
+    _open(ws, app)
+    landed()
+    _press(ws, app, "right")
+    if desk:
+        assert app.phase == "cart" and app.cur is app.rows[1]
+    ws.wm._close_window("getcarts") if desk else app.close()
+    _open(ws, app)
+    landed()
 
 
 def test_a_needed_file_names_its_host_only_where_the_cart_does_not_say_it(tmp_path):
