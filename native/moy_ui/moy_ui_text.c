@@ -24,6 +24,8 @@
 // assigned again does.
 
 #define WORD_POOL 1024
+// A text view's selection: its colour's wash under the text, of 255.
+#define SEL_WASH 96
 #define WORD_MAX 160
 #define WORD_SLOTS 256
 
@@ -1272,7 +1274,10 @@ static void draw_row(dr_t *d, const int32_t in[4], const moy_ui_trow_t *r,
         rect(d, tx0, y + th, cols * cell, fs, v[MOY_UI_TV_ERR]);
     }
     if (m.sel1 > m.sel0) {
-        rect(d, tx0 + m.sel0 * cell, y, (m.sel1 - m.sel0) * cell, th, v[MOY_UI_TV_SEL]);
+        // a wash of the selection's colour under the text, never a fill: the
+        // text keeps its own inks over it, which a fill in the accent hid
+        // wherever an ink was the accent's own lightness
+        tint(d, tx0 + m.sel0 * cell, y, (m.sel1 - m.sel0) * cell, th, v[MOY_UI_TV_SEL], SEL_WASH);
     }
     if (find.n > 0) {
         int ci = v[MOY_UI_TV_FIND_CI] != 0;

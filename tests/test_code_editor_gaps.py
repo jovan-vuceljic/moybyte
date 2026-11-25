@@ -1121,3 +1121,62 @@ def test_a_flung_code_view_coasts_on_frames_its_gate_paints(tmp_path, monkeypatc
     assert all(painted[:4]), painted[:4]
     rest = tops.index(tops[-1])
     assert not any(painted[rest + 3:]), "the gate paints a view at rest"
+
+
+def _lum(v):
+    """A 565 pixel's relative luminance (WCAG)."""
+    rgb = (((v >> 11) & 31) * 255 // 31, ((v >> 5) & 63) * 255 // 63, (v & 31) * 255 // 31)
+    out = []
+    for c in rgb:
+        c /= 255
+        out.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2]
+
+
+@pytest.mark.parametrize("theme,variant", [("moy", "dark"), ("moy", "light"),
+                                           ("blocks", "light"), ("contrast", "dark"),
+                                           ("contrast", "light")])
+def test_selected_code_reads_in_every_seed_theme(tmp_path, theme, variant):
+    """The selection is a wash of its colour under the text, never a fill
+    the text sinks into (issue 269: Moy Night's light inks on its light
+    accent, Moy Day's dark ones on its dark one): the selected lines' text
+    stands off their ground at 3:1 or better."""
+    import code_ui
+    ws = _ws(tmp_path)
+    ws.look.set_theme(theme, variant=variant)
+    drv = _enter_code(ws)
+    for _ in range(3):
+        drv.frame(DT)
+    code_ui.s.code.select_all()
+    for _ in range(3):
+        ws.mark_dirty()
+        drv.frame(DT)
+    cv = ws.sys_canvas
+    buf = bytes(cv._buf)
+
+    def px(x, y):
+        i = 2 * (y * cv.w + x)
+        return (buf[i] << 8) | buf[i + 1]
+
+    surface = px(300, 200)                # the empty last line's ground
+    inks = {}
+    grounds = {}
+    for y in range(40, 190):
+        row = {}
+        for x in range(40, 300):
+            v = px(x, y)
+            row[v] = row.get(v, 0) + 1
+        ground = max(row, key=row.get)
+        if ground == surface or row[ground] < 200:
+            continue                      # not a selected line's row
+        grounds[ground] = grounds.get(ground, 0) + 1
+        for v in row:
+            if v != ground:
+                inks[v] = inks.get(v, 0) + row[v]
+    ground = max(grounds, key=grounds.get)
+    for v in (surface,) + tuple(grounds):
+        inks.pop(v, None)                 # the grounds, selected or not, are no ink
+    ink = max(inks, key=inks.get)         # the selected lines' commonest ink
+    li, lg = _lum(ink), _lum(ground)
+    ratio = (max(li, lg) + 0.05) / (min(li, lg) + 0.05)
+    assert ratio >= 3, (theme, variant, ratio)
