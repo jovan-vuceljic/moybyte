@@ -49,6 +49,8 @@ moybyte_patch_native_code_free
 moybyte_patch_slice_store
 # DECLINED moybyte_patch_fatfs_lfn -- the Zero runs no program on a task of its
 #    own, so its FatFS stays the port's, unlocked (the XIAO's reason).
+# A FAT file's close is final: every board takes it (tools/patch_fatfs_close.py).
+moybyte_patch_fatfs_close
 moybyte_patch_import_cache
 # machine.PWM takes its LEDC channels and timers from the kernel's book: every
 # board that links moy_kernel takes it.

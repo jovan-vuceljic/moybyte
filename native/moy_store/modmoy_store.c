@@ -1846,7 +1846,7 @@ MP_DECLARE_CONST_FUN_OBJ_VAR_BETWEEN(moy_store_card_obj);
 MP_DECLARE_CONST_FUN_OBJ_VAR_BETWEEN(moy_store_card_stats_obj);
 MP_DECLARE_CONST_FUN_OBJ_VAR_BETWEEN(moy_store_card_hold_obj);
 #if defined(__unix__) && !defined(__EMSCRIPTEN__)
-MP_DECLARE_CONST_FUN_OBJ_1(moy_store_card_ram_obj);
+MP_DECLARE_CONST_FUN_OBJ_VAR(moy_store_card_ram_obj);
 #define MOY_STORE_CARD_RAM 1
 #endif
 #endif
