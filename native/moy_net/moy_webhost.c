@@ -1756,6 +1756,7 @@ static int stream(out_t *o, const moy_http_req_t *r, int which) {
         json(o, 400, "{\"error\":\"key\"}");
         return 0;
     }
+    moy_wa_take(which, o->seal);
     if (upgrade(o, r, key, kn, which == MOY_WA_TERM ? "moy.sh" : "moy.live") != 0) {
         return 0;
     }

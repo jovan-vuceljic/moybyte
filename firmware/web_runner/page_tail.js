@@ -113,7 +113,7 @@ var KEYS="moybyte.keys";
 // from the url's # (the URL Improv answered, which any Improv client opens)
 // or from My consoles over the link (a `claim` request); `CHOOSE` while the
 // prompt asks for a new password rather than the console's.
-var CLAIM=null,CHOOSE=false,CLAIMQ=null;
+var CLAIM=null,CHOOSE=false,CLAIMQ=null,TAKEN=false;
 // A refusal takes the busy card down: a console signed in runs on (the link
 // says why), one that is not asks again (the worker's {t:"pair"}, with why).
 function claimed(m){if(m.ok){CLAIM=null;pinBusy("pairing this browser with it...");}
@@ -145,8 +145,14 @@ catch(e){/* no history: the token is spent on its first use either way */}
 return {keys:keysStored(),token:tok,board:bid,name:browserName()};};
 // The worker's word that pairing is needed: `pw` a password can do it, `why`
 // what went wrong last ("" the first time), `wait` the backoff's sentence.
+// `taken`: another browser took the board, and the card's one button takes
+// it back (worker.js, TAKEN).
 function pinAsk(m){if(!PINEL)return;
-PINEL.className="";PINH.textContent="pair this browser";
+PINEL.className="";TAKEN=!!m.taken;PINF.style.display=TAKEN?"none":"";
+PINH.textContent=TAKEN?"disconnected":"pair this browser";
+PINB.textContent=TAKEN?"take it back":"pair";
+if(TAKEN){PINP.textContent=m.why;PINM.textContent="";PINR.style.display="";
+PINEL.style.display="flex";PINB.disabled=false;return;}
 PINM.textContent=m.wait||m.why||"";
 CHOOSE=!m.pw&&!!CLAIM;
 if(CHOOSE){PINP.textContent="Choose this console's password, 8 to 64 characters: "
@@ -160,7 +166,9 @@ PINP.textContent=m.cable?(m.pw?"Type the console's password, or pair this board 
 PINR.style.display=m.pw?"":"none";
 PINEL.style.display="flex";PINB.disabled=false;
 if(m.pw){try{PINF.value="";PINF.focus();}catch(e){}}}
-function pinSubmit(){var v=PINF.value||"";
+function pinSubmit(){if(TAKEN){TAKEN=false;PINEL.style.display="none";
+WORKER.postMessage({t:"takeback"});return;}
+var v=PINF.value||"";
 if(!v){PINM.textContent="type the console's password";return;}
 if(CHOOSE){if(v.length<8||v.length>64){PINM.textContent="a password is 8 to 64 characters";return;}
 pinSetting();

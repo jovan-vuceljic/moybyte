@@ -1,12 +1,15 @@
 // moy_ssh: the console's SSH server (docs/os_2026-11/system.md section 3),
 // Dropbear inside the kernel's process (README.md).
 //
-// THE SERVER is one task: it listens, takes one connection at a time and runs
+// THE SERVER is one task: it listens, serves one session at a time and runs
 // Dropbear's session for it to the end; one that has not signed in ends at
 // AUTH_TIMEOUT (port/localoptions.h). Dropbear ends a session by exiting
 // its process; here that exit is a jump back to the accept loop
 // (moy_ssh_exit_jump), and every allocation the session made goes with it
-// (Dropbear's tracking allocator, the epoch the session ran in).
+// (Dropbear's tracking allocator, the epoch the session ran in). A new
+// connection that signs in while a session is served ends that session,
+// whose client reads why on its terminal (moy_ssh.c, THE TAKEOVER); one that
+// does not sign in ends nothing.
 //
 // THE SHELL is moy_sh's: a session's `shell` or `exec` request opens the
 // stream face (native/moy_tty, the one the web terminal opens too), a pair of
