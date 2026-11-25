@@ -38,7 +38,7 @@
 // they are mapped through the canvas's on-screen rect for you.
 //
 // It serves dist/ itself and launches headless Chrome, so it is one command.
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -98,12 +98,23 @@ const EXTRA = (process.env.MOY_CHROME_FLAGS || "").split(/\s+/).filter(Boolean)
 // to report its port (every stable-site build from 2026-11-05 16:50). A Chrome
 // that exited, or would not start, is not retried.
 // Its audio is muted: a scenario that plays music never reaches the speakers.
+// Chrome dies with this process: a run killed from outside (a caller's
+// timeout sends SIGKILL, which no handler here sees) would otherwise leave it
+// running its page, and a page served by a board keeps asking that board for
+// as long as it runs. On Linux `setpriv --pdeathsig` execs Chrome (the same
+// pid, so `chrome.kill()` still reaches it) with the kernel told to kill it
+// when its parent goes.
+const PDEATH = process.platform === "linux" && existsSync("/usr/bin/setpriv");
 function launch(waitMs) {
-    const chrome = spawn(CHROME, [
+    const args = [
         "--headless=new", "--remote-debugging-port=0", "--user-data-dir=" + profile,
         "--no-first-run", "--no-default-browser-check", "--disable-gpu",
         "--window-size=1280,800", "--hide-scrollbars", "--mute-audio", ...EXTRA, "about:blank",
-    ], { stdio: ["ignore", "ignore", "pipe"] });
+    ];
+    const chrome = PDEATH
+        ? spawn("/usr/bin/setpriv", ["--pdeathsig", "KILL", CHROME, ...args],
+                { stdio: ["ignore", "ignore", "pipe"] })
+        : spawn(CHROME, args, { stdio: ["ignore", "ignore", "pipe"] });
     const url = new Promise((ok, err) => {
         let buf = "";
         // ON TIMEOUT, SAY WHAT CHROME SAID. Without this the message is "chrome
