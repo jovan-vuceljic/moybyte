@@ -85,8 +85,10 @@ that hold VM state before it sweeps.
 ## The float functions
 
 A float that a match's two sides compute must be the same bits on both
-(`docs/netplay_v1.md` §5), and a cart's `math` module (and float `**`) reaches
-the C library's single-precision functions. The C libraries part: the boards
+(`docs/netplay_v1.md` §5), and a Python cart's `math` module (and float `**`)
+reaches the C library's single-precision functions, as a Lua cart's `math`
+library and `^` do (`LUA_32BITS`: its `l_mathop` names the float functions,
+linked into the same image). The C libraries part: the boards
 link newlib's, the browser's wasm musl's, the host's R32 build glibc's, and
 each rounds `sin`, `exp`, `atan2` and the rest a little differently. So every
 tier links one set in their place, the kernel's: MicroPython's own `lib/libm`
