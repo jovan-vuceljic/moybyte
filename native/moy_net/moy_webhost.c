@@ -448,6 +448,9 @@ uint32_t moy_web_events(void) {
     if (moy_wa_paired()) {
         W->events |= MOY_WEB_EV_PAIRED;
     }
+    if (moy_wa_claimed()) {
+        W->events |= MOY_WEB_EV_PASSWORD;
+    }
     uint32_t e = W->events;
     W->events = 0;
     return e;

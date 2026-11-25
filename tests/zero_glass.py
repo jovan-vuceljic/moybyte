@@ -150,6 +150,15 @@ class Improv:
         got, secs = self.ask(wifi_rpc(ssid, password), timeout, _joined)
         return _state_of(got), _urls_of(got), secs, _error_of(got)
 
+    def claim(self, timeout=5.0):
+        """Moybyte's 0xF0: ([urls], error or None), the first URL's fragment
+        a FRESH claim (`#id=<id>&claim=<c>`), minted whether or not the
+        board has a password."""
+        got, _ = self.ask(rpc(zero_improv.CLAIM), timeout,
+                          lambda g: any(k == zero_improv.RESULT for k, d, ok in g)
+                          or _error_of(g) is not None)
+        return _urls_of(got), _error_of(got)
+
 
 def _state_of(got):
     states = [d[0] for k, d, ok in got if k == zero_improv.STATE and d]
@@ -369,6 +378,7 @@ METRICS = (
     ("zero page root", "ms", "lower"),
     ("zero page sync", "ms", "lower"),
     ("zero page reload boot", "ms", "lower"),
+    ("zero claim to live", "ms", "lower"),
 )
 
 

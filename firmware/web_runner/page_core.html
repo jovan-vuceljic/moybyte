@@ -164,6 +164,12 @@ border:1px solid #5f6f9f;border-radius:4px}
 font:14px ui-monospace,Menlo,Consolas,monospace;color:#fff1e8;background:#7e2553;
 border:1px solid #c2c3c7}
 #pinb:hover{background:#a03068}
+/* The card while a password is set or a pairing runs: what it does, and a
+   turning ring, never a prompt (the board's curve takes seconds on a C3). */
+#pin.busy #pinm::before{content:"";display:inline-block;width:9px;height:9px;
+margin-right:7px;vertical-align:-1px;border:2px solid #ffa300;border-right-color:transparent;
+border-radius:50%;animation:pinspin .8s linear infinite}
+@keyframes pinspin{to{transform:rotate(360deg)}}
 /* Debug HUD (#41): toggled with the ` key; lightweight live stream stats. */
 #hud{position:fixed;top:6px;left:6px;z-index:9;display:none;padding:6px 8px;border-radius:5px;
 background:rgba(11,15,26,.82);border:1px solid #1d2b53;color:#00e436;font:12px ui-monospace;

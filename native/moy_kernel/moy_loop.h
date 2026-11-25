@@ -178,6 +178,7 @@ enum {
     MOY_SVC_SCHED = 1u << 5,
     MOY_SVC_TASKS = 1u << 6,
 };
+#define MOY_SVC_BITS 7
 
 // The binding's upcall dispatcher: run upcall `which` (MOY_UP_*), with `arg`
 // (the frame's dt in microseconds; the word's line), and answer its value or
@@ -306,6 +307,9 @@ moy_idle_t *moy_loop_idle(void);
 // Upcalls by class: this frame's (the last finished frame's) and the total.
 void moy_loop_count(int cls);
 void moy_loop_upcalls(uint32_t frame[MOY_UPC_CLASSES], uint32_t total[MOY_UPC_CLASSES]);
+// The service upcalls that carried each MOY_SVC_* bit (by bit number), in
+// total: which service a MOY_UPC_SERVICE count was.
+void moy_loop_service_counts(uint32_t out[MOY_SVC_BITS]);
 uint32_t moy_loop_frames(void);         // loop iterations
 uint32_t moy_loop_frame_at(void);       // the clock (ms) at the top of this frame
 // The last finished frame's work (ms, the pacing sleep excluded) and sleep.

@@ -285,6 +285,7 @@ static void worker(void *arg) {
     (void)arg;
     for (;;) {
         if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(MOY_FETCH_IDLE_MS)) == 0 && worker_ends()) {
+            moy_httpc_pool_flush();     // moy_ota.h's THE POOL ends with the worker
             moy_task_delete(MOY_TASK_FETCH, NULL);
         }
         while (run_once()) {

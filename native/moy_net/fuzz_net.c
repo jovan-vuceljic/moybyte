@@ -67,6 +67,19 @@ void moy_conn_close(void *conn) {
     (void)conn;
 }
 
+uint32_t moy_net_ms(void) {
+    return 0;
+}
+
+int moy_conn_alive(void *conn) {
+    (void)conn;
+    return 0;
+}
+
+void moy_net_reap_after(uint32_t ms) {
+    (void)ms;
+}
+
 int moy_slot_open(uint32_t size, uint32_t *cap) {
     (void)size;
     *cap = 0;

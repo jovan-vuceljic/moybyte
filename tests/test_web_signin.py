@@ -526,6 +526,40 @@ def test_the_claim_is_refused_twice_without_its_token_and_once_a_password_exists
         ssh_service.hashed(PASSWORD, "5a1t")
 
 
+def test_a_claim_that_sets_the_password_tells_the_vm_once(tmp_path):
+    """The claim writes the record behind the VM, so the poll after it says
+    so once (`on_password`, which starts the SSH server): a refused claim
+    and a pairing say nothing."""
+    said = []
+    h = _host(tmp_path, on_password=lambda: said.append(1))
+    claim = nb.web_claim()
+    assert _claim(h, "00" * 16)[0] == 403
+    h.poll()
+    assert said == []
+    page = _page(h)
+    page.claim(claim, PASSWORD)
+    h.poll()
+    h.poll()
+    assert said == [1]
+    _page(h).pair_password(PASSWORD)
+    h.poll()
+    assert said == [1]
+
+
+def test_a_console_s_webhost_starts_the_ssh_server_on_a_claim(tmp_path, monkeypatch):
+    """Every console's webhost (make_webhost) answers the claim's word with
+    the SSH server's start, as `passwd` starts it (the Zero's is zero_shell's)."""
+    import types
+    started = []
+    stub = types.SimpleNamespace(start=started.append, system_dir=lambda ws: str(tmp_path),
+                                 is_set=lambda ws: False, is_password=lambda ws, pw: False)
+    monkeypatch.setitem(sys.modules, "ssh_service", stub)
+    ws = types.SimpleNamespace()
+    h = wh.make_webhost(ws, str(_store(tmp_path)), port=0)
+    h.on_password()
+    assert started == [ws]
+
+
 def test_a_wrong_claim_counts_as_a_wrong_credential(tmp_path):
     h = _host(tmp_path)
     nb.web_claim()

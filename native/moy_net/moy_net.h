@@ -66,11 +66,15 @@ typedef struct {
     const char *loc;        // Location's value, trimmed; NULL when none
     size_t loc_n;
     size_t head_end;        // the byte past the blank line
+    uint8_t keep;           // the connection outlives the response (below)
 } moy_http_resp_t;
 
 // A response head off the first `n` bytes of `buf`: MOY_HTTP_OK with `r`
 // filled, or MOY_HTTP_PARTIAL until the "\r\n\r\n" arrives. Header names
-// match without regard to ASCII case.
+// match without regard to ASCII case. `keep` is 1 when the server keeps the
+// connection open after this body and the body's end is known: a Connection
+// header names keep-alive and none names close, a Content-Length reads, and
+// there is no Transfer-Encoding (moy_ota.h's THE POOL).
 int moy_http_resp_parse(const char *buf, size_t n, moy_http_resp_t *r);
 
 // -- the listener and the platform (moy_net_port.c) -----------------------------
@@ -329,6 +333,7 @@ enum {
     MOY_WEB_EV_SHELF = 1,           // a batch changed the shelf: rescan
     MOY_WEB_EV_STOPPED = 2,         // the listener closed (the goodbye ran out)
     MOY_WEB_EV_PAIRED = 4,          // a browser paired: the QR's token is spent
+    MOY_WEB_EV_PASSWORD = 8,        // a claim set the password: the SSH server starts
 };
 
 typedef struct {

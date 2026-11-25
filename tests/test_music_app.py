@@ -210,6 +210,8 @@ def test_the_section_is_music_s_card_in_the_control_center_and_acts(tmp_path, fa
     main button plays or pauses; the head opens the app."""
     import music_card
     ws = build_ws(tmp_path)
+    ws.spine.open_app(_app(ws))         # a station is played from Music, which makes the section
+    _settle(ws, 1)
     M.STREAM.play("radio", GROOVE[0], GROOVE[2])
     ws.home.go_home()
     _settle(ws)

@@ -139,12 +139,22 @@ def start(carts_root, name, webhost=None):
         print("ZERO ssh: no door:", exc)
         return None
     ssh_service.boot(ws)
+    if webhost is not None:
+        webhost.on_password = lambda: _claimed(ws)
     tail()      # the face's hops are this task's from the server's first connection
     st = ssh_service.status()
     print("ZERO ssh: %s" % ("off (no SSH server in this image)" if st is None
                              else "serving as %s.local" % ssh_service.hostname(ws)
                              if st[0] else "off (no password: passwd)"))
     return ws
+
+
+def _claimed(ws):
+    """A browser's claim set the password (moy_webauth.c, THE CLAIM): the
+    server serves from now, as at a boot that finds one."""
+    import ssh_service
+    if ssh_service.start(ws):
+        print("ZERO ssh: serving as %s.local" % ssh_service.hostname(ws))
 
 
 def tail():
