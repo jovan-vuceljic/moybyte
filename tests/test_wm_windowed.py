@@ -5115,11 +5115,20 @@ def test_the_user_s_console_mode_stays_across_a_resize(tmp_path):
     drv = ConsoleDriver(ws)
     ws.wm.enter_console()
     drv.frame(1 / 30)
-    ws.resize_glass(569, 240, lb.desk_diagonal_in(569, 240))
+    assert ws.bar_layer.draws_back("home"), "the user's console mode: the desk beneath"
+    ws.resize_glass(569, 240, None)
     drv.frame(1 / 30)
+    assert ws.wm.mode == "console"
+    # Held there, the home is the floor, as on a handheld: no way back, and
+    # back on it (the chevron's, Esc's and B's) leaves it standing.
+    assert not ws.bar_layer.draws_back("home")
+    ws.home.open_desk()
+    drv.frame(1 / 30)
+    assert ws.wm.mode == "console" and ws.wm.stack.depth() == ws.wm.floor()
     ws.resize_glass(1920, 1080, lb.desk_diagonal_in(1920, 1080))
     drv.frame(1 / 30)
     assert ws.wm.mode == "console"
+    assert ws.bar_layer.draws_back("home")
 
 
 def test_settings_ui_size_row_is_the_zoomed_glass_s(tmp_path):

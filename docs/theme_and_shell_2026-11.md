@@ -2376,10 +2376,17 @@ one the user left for console mode. A game in console mode takes the largest
 whole scale that fits, every tier's `viewport`, in a letterbox of the
 theme's desktop colour (`wm.bezel`).
 
-**Auto** is the largest N whose canvas holds the desk's 1024x600; where the
-room does not, the phone rule: landscape, a canvas 240
-tall at the room's aspect, portrait the 320x240 console, each scaled to the
-room (fractional, as the page always did). The page has no rows of its own
+**Auto** is the largest N whose canvas holds the desk's 1024x600. Where the
+room does not, the handheld: a window with a pointer takes the largest N whose
+canvas still holds 320x240 (a 690x560 window: N 2, a 345x280 glass), so the
+canvas fills the room to under N device pixels; a touch phone takes the phone
+rule: landscape, a canvas 240 tall at the room's aspect, portrait the 320x240
+console, each scaled to the room (fractional, as the page always did). A glass
+without the desk's room declares no panel, as the T-Deck declares none
+(`web_boot.glass_in`), so it lays out the T-Deck's class at chrome scale 1,
+and its console mode is held with the home as the floor: no back chevron, and
+back on the home does nothing, as on a handheld. Console mode the user chose
+on a glass with the desk's room keeps the way back to the desk. The page has no rows of its own
 (`.claude/rules/web.md`), so the canvas has the whole viewport; a touch
 phone held sideways gives it the full height, centred, and its side
 margins hold the touch controls, the stick left and A/B right sized to the
@@ -2395,6 +2402,9 @@ that land on whole device pixels and leave the canvas 320x240, up to 400%:
 |---|---|---|---|
 | phone portrait 390x844, 3 | the 320x240 console over the width, the touch controls under it | Auto, 33%, 67%, 100% | none |
 | phone landscape 844x390, 3 | 320x240 full height between the pads, console mode | Auto, 33%..133% | none |
+| window 700x560, 1 | N 2: 350x280, the handheld | Auto, 100%, 200% | none |
+| window 900x600, 1.25 | N 3: 375x250, the handheld | Auto, 80%, 160%, 240% | none |
+| window 1100x650, 1 | 100%: 1100x650, the desk | Auto, 100%, 200% | none |
 | tablet 1024x768, 2 | 100%: 1024x734, the desk | Auto, 50%..300% | none |
 | 1080p laptop at 100%, 1 | 100%: 1920x1046 | Auto, 100%..400% | none |
 | 1080p at 125% (1536x864), 1.25 | 80% (N 1: crisp, under the OS's scale) | Auto, 80%, 160%, 240%, 320% | none |

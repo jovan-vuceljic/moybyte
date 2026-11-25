@@ -2,8 +2,9 @@
 
 The page sizes the console's canvas from its room (page_core.html's THE
 GLASS): Auto takes the largest whole number of device pixels a canvas pixel
-whose canvas still holds the desk's 1024x600, a phone-sized viewport the
-phone rule (240 tall in landscape), and Settings' UI size picks a percent of
+whose canvas still holds the desk's 1024x600, a smaller window the largest
+whole N whose canvas holds the handheld's 320x240, a touch phone the phone
+rule (240 tall in landscape), and Settings' UI size picks a percent of
 the CSS pixel; a resize, a rotation or a new UI size moves the running
 console live (`Workstation.resize_glass`), with no reload.
 
@@ -243,5 +244,89 @@ def test_a_phone_s_controls_overlap_nothing(tmp_path, device):
                 assert cv[1] <= 0.5 and cv[3] >= r["vh"] - 0.5, r
                 assert abs(cv[0] - (r["vw"] - cv[2])) <= 1, r
                 assert r["joy"][2] <= cv[0] and r["ba"][0] >= cv[2], r
+    finally:
+        p.terminate()
+
+
+# The in-between windows of a desktop, where a whole-N handheld and the desk
+# meet: (width, height, dpr), the N and the glass the page takes, and its
+# class. Below the desk's room in CSS pixels, the largest N whose canvas
+# still holds 320x240; at or past it, the desk.
+_BETWEEN = [((700, 560, 1), 2, (350, 280), "handheld"),
+            ((900, 600, 1), 2, (450, 300), "handheld"),
+            ((1100, 650, 1), 1, (1100, 650), "desk"),
+            ((1300, 700, 1), 1, (1300, 700), "desk"),
+            ((700, 560, 1.25), 2, (437, 350), "handheld"),
+            ((900, 600, 1.25), 3, (375, 250), "handheld"),
+            ((1100, 650, 1.25), 1, (1375, 812), "desk"),
+            ((1300, 700, 1.25), 1, (1625, 875), "desk")]
+
+_COVER = ("Promise.resolve(window.__moyState()).then(function(s){"
+          "var b=cv.getBoundingClientRect();return '%s '+JSON.stringify({l:b.left,t:b.top,"
+          "w:b.width,h:b.height,iw:innerWidth,ih:innerHeight,dpr:devicePixelRatio,n:GLASS.n,"
+          "W:W,H:H,desk:s.desk,glass:s.glass});})")
+
+
+@pytest.mark.parametrize("size,n,glass,cls", _BETWEEN,
+                         ids=["%dx%d@%s" % s for s, _n, _g, _c in _BETWEEN])
+def test_a_desktop_window_between_the_handheld_and_the_desk(tmp_path, size, n, glass, cls):
+    """A pointer's window below the desk's room is the handheld at the
+    largest whole N whose canvas holds 320x240: the T-Deck's class at chrome
+    scale 1, its bar N device pixels a glass pixel, the home the floor (no
+    back chevron); at or past the room, the desk, whose console mode keeps
+    the way back to it. Either way the canvas covers the viewport to under N
+    device pixels, and Brick Siege, paused in console mode, sits at a whole
+    scale in the theme's letterbox."""
+    web_e2e.require("site_shell")
+    w, h, dpr = size
+    device = {"width": w, "height": h, "dpr": dpr, "mobile": False}
+    corner = ("(function(){var d=cx.getImageData(0,H-1,1,1).data;"
+              "return 'CORNER '+JSON.stringify([d[0],d[1],d[2]]);})()")
+    p, base = _site(tmp_path)
+    try:
+        steps = [{"wait": 3500}, {"js": _COVER % "HOME"}, {"page": "home"},
+                 {"js": "WORKER.postMessage({t:'open',cart:'moybyte.brick_siege.moy'}), 'open'"},
+                 {"wait": 3000}, {"js": "cv.focus(), 'focused'"}, {"key": "Escape"},
+                 {"wait": 1200}, {"js": _COVER % "PAUSED"}, {"js": corner}, {"page": "paused"}]
+        _out, js = _run(tmp_path, "between", base, "?dev=1&console=1", steps, device)
+        home, paused = _tagged(js, "HOME"), _tagged(js, "PAUSED")
+        for st in (home, paused):
+            assert (st["n"], (st["W"], st["H"])) == (n, glass), st
+            # The canvas covers the viewport: what whole N leaves is under N
+            # device pixels (and a CSS pixel of rounding) at the edges.
+            slack = n / dpr + 1
+            assert st["l"] >= 0 and st["t"] >= 0, st
+            assert 0 <= st["iw"] - st["w"] <= slack and 0 <= st["ih"] - st["h"] <= slack, st
+            g = st["glass"]
+            assert g["cls"] == cls, st
+            assert st["desk"] is False, st
+            if cls == "handheld":
+                assert g["cs"] == 1 and g["bar"] < 32, st
+            else:
+                assert g["bar"] >= 32, st
+            assert abs(st["h"] * g["bar"] / st["H"] - g["bar"] * n / dpr) < 1, st
+        g = home["glass"]
+        if cls == "handheld":
+            assert g["depth"] == g["floor"], ("the held home is the floor", home)
+        else:
+            assert g["depth"] > g["floor"], ("console mode keeps the desk beneath", home)
+        assert _tagged(js, "CORNER") != [0, 0, 0] or glass == (320, 240), js
+    finally:
+        p.terminate()
+
+
+@pytest.mark.parametrize("device", [PHONE_P, PHONE_L], ids=["portrait", "landscape"])
+def test_a_phone_lays_out_the_handheld(tmp_path, device):
+    """A touch phone's glass is the T-Deck's class at chrome scale 1, and its
+    home is the floor: no back chevron, nothing beneath it."""
+    web_e2e.require("site_shell")
+    p, base = _site(tmp_path)
+    try:
+        _out, js = _run(tmp_path, "phone", base, "?dev=1",
+                        [{"wait": 3500}, {"js": _COVER % "HOME"}, {"page": "home"}], device)
+        st = _tagged(js, "HOME")
+        g = st["glass"]
+        assert st["desk"] is False and g["cls"] == "handheld" and g["cs"] == 1, st
+        assert g["depth"] == g["floor"], st
     finally:
         p.terminate()

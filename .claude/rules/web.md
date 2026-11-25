@@ -82,8 +82,10 @@ nor those docs will warn you about:
 - **The browser draws what its boards draw: each arrangement on its board's
   metric class, in the theme's fonts and icon set** (owner, 2026-10-20: the
   browser and the boards never diverge). The handheld 320x240 declares no
-  glass, as the T-Deck declares none; the desk declares the P4's at the P4's
-  pixel density at any page size (`layout_base.desk_diagonal_in`), so it lays
+  glass, as the T-Deck declares none, and so does any page glass below the
+  desk's room (a phone, a small window: `web_boot.glass_in`); the desk declares
+  the P4's at the P4's pixel density at any page size
+  (`layout_base.desk_diagonal_in`), so it lays
   out on the desk's metrics and tap floor as that board does. `build.sh` generates `fonts_data` (`tools/make_font.py module`)
   for board.toml's `font_tier` -- both tiers -- and freezes it into the wasm,
   faces and icon masks together, so they ride the compressed

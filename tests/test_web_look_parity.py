@@ -21,6 +21,7 @@ none); and its pages run on the C engine from the compiled pages it carries. tes
 run the wasm too.
 """
 
+import ast
 import glob
 import json
 import os
@@ -93,10 +94,40 @@ def test_each_arrangement_lays_out_on_its_boards_class(arrangement):
     assert tier in _tiers(WEB), "the browser's image lacks the %s faces" % tier
 
 
+def _glass_in():
+    """web_boot.glass_in, executed over the host's layout_base."""
+    tree = ast.parse((WEB / "web_boot.py").read_text())
+    fn = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "glass_in"]
+    ns = {"layout_base": layout_base}
+    exec(compile(ast.Module(body=fn, type_ignores=[]), "web_boot", "exec"), ns)
+    return ns["glass_in"]
+
+
 def test_the_desk_arrangement_declares_its_glass_to_the_workstation():
     src = (WEB / "web_boot.py").read_text()
-    assert "panel_diagonal_in=layout_base.desk_diagonal_in(width, height)" in src
+    assert "panel_diagonal_in=glass_in(width, height)" in src
+    assert "ws.resize_glass(int(w), int(h), glass_in(int(w), int(h)))" in src
     assert src.count("panel_diagonal_in=") == 1, "only the desk declares a glass"
+
+
+@pytest.mark.parametrize("wh", [(320, 240), (345, 280), (450, 300), (569, 240), (1023, 600),
+                                (1100, 599)])
+def test_a_page_glass_without_the_desk_s_room_is_the_handheld_s(wh):
+    """A phone's or a small window's glass declares none, as the T-Deck: the
+    handheld's class at chrome scale 1, never the desk's density lifting its
+    16-pixel icons to 2 (the owner's 690x560 window, 2026-11-25)."""
+    from runtime import chrome
+    d = _glass_in()(*wh)
+    assert d is None
+    assert layout_base.class_of(d, *wh) == layout_base.HANDHELD
+    assert chrome.chrome_scale_floor(wh[0], wh[1], d) == 1
+
+
+@pytest.mark.parametrize("wh", [(1024, 600), (1100, 650), (1375, 812), (1920, 1080)])
+def test_a_page_glass_with_the_desk_s_room_is_the_p4_s(wh):
+    d = _glass_in()(*wh)
+    assert d == layout_base.desk_diagonal_in(*wh)
+    assert layout_base.class_of(d, *wh) == layout_base.DESK
 
 
 def test_the_desk_keeps_the_p4s_density_at_any_size():

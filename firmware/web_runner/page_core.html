@@ -263,10 +263,14 @@ var fitSent=-1;
 // percent of the CSS pixel (100% = N of one CSS pixel); the page offers only
 // the percents that land on whole device pixels and leave the canvas the
 // handheld's 320x240, and keeps the choice per browser (localStorage). Auto:
-// the largest N whose canvas holds the desk's 1024x600; and the PHONE RULE
-// where the room does not (or ?handheld=1): landscape, a canvas 240 tall at
-// the room's aspect, portrait the 320x240 console, each scaled to the room
-// as fit() always did (fractional, which a phone's devicePixelRatio hides).
+// the largest N whose canvas holds the desk's 1024x600. Where the room does
+// not (or ?handheld=1), the handheld: a pointer's window takes the largest N
+// whose canvas still holds 320x240, so it fills the room to under N device
+// pixels; a touch phone the PHONE RULE: landscape, a canvas 240 tall at the
+// room's aspect, portrait the 320x240 console, each scaled to the room as
+// fit() always did (fractional, which a phone's devicePixelRatio hides). The
+// console lays a glass without the desk's room out in the handheld's class
+// (web_boot.glass_in).
 // GLASS.live: the console zooms (its first frame names `zoom`); a one-cart
 // page's fixed 320x240 does not, and keeps fit()'s scaling.
 var GLASS={live:false,n:0,w:0,h:0,zoom:-1,zooms:"",due:0},UIKEY="moy.uisize",
@@ -301,14 +305,15 @@ if(cs.display==="none"||cs.position==="fixed"||cs.position==="absolute")continue
 used+=k.offsetHeight+(parseFloat(cs.marginTop)||0)+(parseFloat(cs.marginBottom)||0);}
 return [Math.max(32,Math.floor(iw)),Math.max(32,Math.floor(ih-used)),used];}
 function glassPlan(){var r=room(),dpr=window.devicePixelRatio||1;
-var dw=Math.floor(r[0]*dpr),dh=Math.floor(r[1]*dpr),offers=[],byPct={};
+var dw=Math.floor(r[0]*dpr),dh=Math.floor(r[1]*dpr),offers=[],byPct={},most=1;
 for(var n=1;n<=32;n++){var p=Math.round(n/dpr*100);if(Math.floor(dw/n)<320||Math.floor(dh/n)<240||p>400)break;
-if(!byPct[p]){byPct[p]=n;offers.push(p);}}
+most=n;if(!byPct[p]){byPct[p]=n;offers.push(p);}}
 var z=uiPick(),pl;
 if(z&&byPct[z])pl={n:byPct[z],w:Math.floor(dw/byPct[z]),h:Math.floor(dh/byPct[z])};
 else{z=0;
 if(window.innerWidth<1024||window.innerHeight<600){
-pl=r[0]*3>=r[1]*4?{n:0,w:Math.round(240*r[0]/r[1]),h:240}:{n:0,w:320,h:240};}
+if(TOUCH&&TOUCH.matches)pl=r[0]*3>=r[1]*4?{n:0,w:Math.round(240*r[0]/r[1]),h:240}:{n:0,w:320,h:240};
+else pl={n:most,w:Math.floor(dw/most),h:Math.floor(dh/most)};}
 else{var best=1;for(var i=0;i<offers.length;i++){var m=byPct[offers[i]];
 if(Math.floor(dw/m)>=1024&&Math.floor(dh/m)>=600&&m>best)best=m;}
 pl={n:best,w:Math.floor(dw/best),h:Math.floor(dh/best)};}}
