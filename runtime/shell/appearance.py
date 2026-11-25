@@ -1736,8 +1736,8 @@ class Appearance:
         return self._radio_bars(bars), notes
 
     def _radio_bars(self, bars):
-        """`bars` with no `wifi` widget where the console has no radio (the
-        browser page): the widget is not laid out at all, so no cell, no
+        """`bars` with no `wifi` widget where the console has no radio (a
+        browser page no Zero serves): the widget is not laid out at all, so no cell, no
         glyph and no tap. (The boot's bars keep it: the radio is wired after
         them, and the first `apply_layout` resolves with it known.)"""
         if getattr(self.ws, "wifi", None) is not None:

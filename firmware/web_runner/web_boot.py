@@ -1201,6 +1201,20 @@ def _pcm_buf(au):
     return a
 
 
+def _wifi_panel(ws):
+    """The Wi-Fi panel as a harness drives it: the networks listed, the
+    saved ones, its line, the focused stop, whether a join runs, and the
+    console's question or card over it (its verb and title)."""
+    sl = getattr(ws, "settings_layer", None)
+    if sl is None:
+        return None
+    c = ws.confirm
+    return {"nets": [n[0] for n in sl.wifi_nets], "known": list(sl.wifi_known),
+            "msg": sl.wifi_msg, "focus": sl._sub_focused, "pick": sl.wifi_pick,
+            "joining": sl.wifi_joining is not None,
+            "card": [c.verb, c.title] if c.open else None}
+
+
 def _edit_state(ws):
     """What a key in the Editor changed, for a harness that types into it:
     the open tab, the sprite's pixels as hex, the code's first lines and
@@ -1284,7 +1298,8 @@ def state_json():
     keeps the carts, whether a console serves it) and the desk keyboard's
     typing level (`typing`), and the radio link's stats (`link_stats`, EspNowLink.stats: the match's
     frame, checkpoints and desync; None with no link), for a harness
-    driving the page (`window.__moyState()`)."""
+    driving the page (`window.__moyState()`), and the Wi-Fi panel's
+    (`wifi_panel`, `_wifi_panel`)."""
     import dev_channel
     st = dev_channel._remote_state(_S["ws"])
     st["ach"] = sorted(_S["ws"].ach.doc().get("system", {}).get("found", {}))
@@ -1300,6 +1315,7 @@ def state_json():
     st["page"] = None if pg is None else {"fs": pg.fullscreen, "kept": pg.kept,
                                           "served": pg.served}
     st["input"] = _input_state(_S["ws"])
+    st["wifi_panel"] = _wifi_panel(_S["ws"])
     term = getattr(_S["ws"].app("terminal"), "face", None)
     st["term"] = term.lines() if term is not None else None
     try:
