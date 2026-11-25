@@ -136,6 +136,30 @@ def test_an_entry_past_its_bound_is_left_unread(monkeypatch):
     assert _read(MemNet({URL: repo.index()}), URL, "snake.moy")[0]["id"] == "snake"
 
 
+def test_an_entry_naming_another_folder_is_never_held_past_its_buffer():
+    """A shelf's index is written indented and its entries run to several
+    KB (moybyte-org/carts' Doom and Jet Teapot): an entry whose own `folder`
+    is another cart's stops being captured once it fills the buffer, and
+    the one asked for is held without its lines' indentation, so a C3's
+    heap reads the index entry by entry (#276)."""
+    repo = _repo()
+    repo.carts[0]["description"] = "a long tale " * 400
+    data = json.dumps(json.loads(repo.index()), indent=2).encode()
+    tag, want = ci._wants("dm.moy", None)
+    scan = ci._Scan(tag, want)
+    most = 0
+    for at in range(0, len(data), ci.INDEX_READ):
+        scan.feed(data[at:at + ci.INDEX_READ])
+        most = max(most, len(scan.cap))
+    dm = [c for c in json.loads(data)["carts"] if c["id"] == "dm"][0]
+    assert most <= len(json.dumps(dm)) + ci.INDEX_READ < len(repo.carts[0]["description"])
+    assert [c["id"] for c in scan.found] == ["dm"] and scan.big == 0
+    whole = [c for c in ci.parse_index(data, URL) if c["folder"] == "dm.moy"]
+    assert _read(BitsNet({URL: data}, 7), URL, "dm.moy") == whole
+    assert _read(BitsNet({URL: data}, 7), URL, "snake.moy") \
+        == [c for c in ci.parse_index(data, URL) if c["folder"] == "snake.moy"]
+
+
 def test_a_read_that_runs_out_of_memory_gives_its_response_back(monkeypatch):
     """The response is the transport's (a socket, its TLS buffers): a read
     that raises MemoryError closes it, as one refused does."""

@@ -1454,6 +1454,48 @@ ENTRY_MAX = 16384
 INDEX_READ = 1024
 _SIG_HOLD = 1100
 _TOP = (b"version", b"name", b"revoked")
+_SKIPPED = -2                 # a capture's length once its entry names another folder
+_LAYOUT = b" \t\r"            # the blanks a newline's indentation is made of
+
+
+def _member_str(b, n, key):
+    """The raw bytes of the string member `key` of the object `b[:n]` opens
+    (its own members, not a nested object's), or None where the object does
+    not hold it whole in those bytes."""
+    depth = 0
+    i = 0
+    want_key = False
+    last = None
+    while i < n:
+        c = b[i]
+        if c == 34:                               # "
+            j = i + 1
+            while j < n and b[j] != 34:
+                j += 2 if b[j] == 92 else 1
+            if j >= n:
+                return None
+            if depth == 1:
+                s = bytes(memoryview(b)[i + 1:j])
+                if want_key:
+                    last = s
+                    want_key = False
+                elif last == key:
+                    return s
+            i = j + 1
+            continue
+        if c == 123 or c == 91:                   # { [
+            depth += 1
+            if depth == 1:
+                want_key = True
+        elif c == 125 or c == 93:                 # } ]
+            depth -= 1
+            if depth < 1:
+                return None
+        elif c == 44 and depth == 1:              # ,
+            want_key = True
+            last = None
+        i += 1
+    return None
 
 
 def _wants(folder, ident):
@@ -1468,9 +1510,11 @@ def _wants(folder, ident):
 class _Scan:
     """An index document fed a piece at a time (`feed`), never held whole:
     the members beside its carts kept (_TOP), each entry of its `carts` read
-    into one buffer reused entry after entry and parsed only when it holds
-    `tag` and then kept when `want(entry)` says so (`found`), and the bytes
-    its signature covers hashed as they pass, all but the last _SIG_HOLD,
+    into one buffer reused entry after entry, without its lines'
+    indentation, and parsed in place only when it holds `tag` and then kept
+    when `want(entry)` says so (`found`); an entry whose own `folder` is
+    another cart's is dropped once it fills the buffer. The bytes its
+    signature covers are hashed as they pass, all but the last _SIG_HOLD,
     which `finish` reads for the `sig` member (split_signed)."""
 
     def __init__(self, tag, want):
@@ -1490,6 +1534,7 @@ class _Scan:
         self.cap = bytearray(INDEX_READ)
         self.cn = 0               # its length; -1 past ENTRY_MAX
         self.hit = False          # the entry being read holds `tag`
+        self.blank = False        # the capture is inside a newline's indentation
         self.carts_next = False
         self.in_carts = False
         self.sig = False
@@ -1524,19 +1569,13 @@ class _Scan:
 
     def _take(self, b, start, end):
         """`b[start:end]` onto the capture, which notes whether the entry
-        now holds the tag (across the seam with what it held too)."""
+        now holds the tag (across the seam with what it held too). A line's
+        indentation is never held: a raw newline is never inside a JSON
+        string, so a newline and the blanks after it are layout."""
         cn = self.cn
         if cn < 0 or end <= start:
             return
-        k = end - start
-        if cn + k > ENTRY_MAX:
-            self.cn = -1
-            return
         cap = self.cap
-        if cn + k > len(cap):
-            grown = bytearray(max(2 * len(cap), cn + k))
-            memoryview(grown)[:cn] = memoryview(cap)[:cn]
-            self.cap = cap = grown
         if self.what == "entry" and not self.hit:
             t = len(self.tag)
             if b.find(self.tag, start, end) >= 0:
@@ -1545,13 +1584,38 @@ class _Scan:
                 lo = cn - t + 1 if cn > t else 0
                 seam = bytes(memoryview(cap)[lo:cn]) + b[start:min(end, start + t - 1)]
                 self.hit = self.tag in seam
-        memoryview(cap)[cn:cn + k] = memoryview(b)[start:end]
+        seg = b[start:end]
+        if self.blank:
+            seg = seg.lstrip(_LAYOUT)
+            self.blank = not seg
+        if b"\n" in seg:
+            parts = seg.split(b"\n")
+            seg = parts[0] + b"".join([p.lstrip(_LAYOUT) for p in parts[1:]])
+            self.blank = not parts[-1].lstrip(_LAYOUT)
+            parts = None
+        k = len(seg)
+        if cn + k > ENTRY_MAX:
+            self.cn = -1
+            return
+        if cn + k > len(cap):
+            # an entry that names another folder is never parsed, so it is
+            # never held past the buffer it filled
+            if self.what == "entry":
+                named = _member_str(cap, cn, b"folder")
+                if named is not None and b'"' + named + b'"' != self.tag:
+                    self.cn = _SKIPPED
+                    return
+            grown = bytearray(cn + k + INDEX_READ)
+            memoryview(grown)[:cn] = memoryview(cap)[:cn]
+            self.cap = cap = grown
+        memoryview(cap)[cn:cn + k] = seg
         self.cn = cn + k
 
     def _begin(self, what):
         self.what = what
         self.cn = 0
         self.hit = False
+        self.blank = False
 
     def _end(self, read=True):
         """The capture's bytes (None past ENTRY_MAX, or unless `read`), ended."""
@@ -1636,14 +1700,19 @@ class _Scan:
             self._take(b, start, n)
 
     def _entry(self):
-        if self.cn < 0:
+        if self.cn == -1:
             self.big += 1
         if self.cn < 0 or not self.hit:
             self._end(False)
             return
-        raw = self._end()
+        # parsed where it was captured, never copied: the buffer's tail is
+        # blanked, which a JSON document may end with
+        cap, cn = self.cap, self.cn
+        self._end(False)
+        for i in range(cn, len(cap)):
+            cap[i] = 32
         try:
-            c = json.loads(raw.decode())
+            c = json.loads(cap)
         except (ValueError, UnicodeError):
             return
         if self.want(c):
