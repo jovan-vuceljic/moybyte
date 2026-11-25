@@ -455,7 +455,7 @@ cart ever reads it. It is the `start` button (`Workstation.system_key`,
 | a BLE or USB keyboard | its GUI key tapped (the simulator's Super, Cmd or Meta): it acts on its release, and only when no other key went down while it was held, so Super leads chords (`native/moy_input/moy_input.h`'s key events, 2026-10-21) |
 | the T-Deck's keyboard | **Mic**: d0 bit 6 of the raw matrix, and in the C3's ASCII mode (which sends no byte for a bare Mic) Shift+Mic (`firmware/lilygo_t_deck_plus_mainline/README.md`); inside a text field being typed into, Mic is the field's Cancel instead (owner call 2026-10-18: K types a letter there, and Mic never types), an app's `ui.field` while it has an edit in progress (`InputPolicy.cancel`, which asks the surface holding the keys: `AppFace.cancel` for a cart, a shell app's AppHost, Settings' Name and Wi-Fi password) |
 | a gamepad | Start |
-| the browser page | a Meta tap (on a Mac Cmd is Ctrl, so there it is the page's ☰ and Esc), the page's ☰, and Esc during play (a page rarely sees Super) |
+| the browser page | a lone Alt tap, which its hints name (2026-11-25: the OS takes Super before a page sees it, and no OS or cart takes a bare Alt; `firmware/web_runner/page_core.html`), a Meta tap where the page sees one (on a Mac Cmd is Ctrl), the page's ☰, and Esc during play. In a fullscreen the page asked for, it locks Super and Esc with the Keyboard Lock API where the browser has it, so Super reaches the console and Esc the Terminal |
 | touch | the bar's Moy button, where a bar shows |
 
 A tap over a fullscreen game opens the **pause menu**; anywhere else it opens the

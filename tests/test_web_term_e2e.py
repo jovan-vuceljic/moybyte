@@ -205,6 +205,26 @@ _GRANT = {"grant": ["clipboardReadWrite", "clipboardSanitizedWrite"]}
 _PASTE = {"key": "v", "mods": ["ctrl"], "commands": ["paste"]}
 
 
+def _menu(tag):
+    """Whether the system menu shows, under `tag`."""
+    return {"js": "window.__moyState().then(s => '%s ' + JSON.stringify(s.edit.sysmenu))" % tag}
+
+
+def _alt_tap_opens_the_menu(tag):
+    """The page's console key: Alt with a key is a chord and opens nothing, a
+    lone Alt tap opens the system menu (`<tag>_OPEN`) and Esc closes it."""
+    return [{"key": "b", "mods": ["alt"]}, {"wait": 300}, _menu(tag + "_CHORD"),
+            {"key": "Alt"},
+            {"waitFor": "window.__moyState().then(s => s.edit.sysmenu)", "timeout": 5000},
+            _menu(tag + "_OPEN"), {"key": "Escape"},
+            {"waitFor": "window.__moyState().then(s => !s.edit.sysmenu)", "timeout": 5000}]
+
+
+def _assert_alt_tap(js, tag):
+    assert _tagged(js, tag + "_CHORD") is False, js
+    assert _tagged(js, tag + "_OPEN") is True, js
+
+
 def _clipboard_holds(text):
     """The browser's clipboard holding `text` (the page's origin granted it)."""
     return {"js": "navigator.clipboard.writeText(%s).then(() => 'held')" % json.dumps(text)}
@@ -235,7 +255,8 @@ def test_a_page_paired_by_the_qr_reloads_signed_in_and_its_terminal_is_sealed(
                                           _lines("VI")]
                  # the browser's paste, whole, into the board's shell
                  + [_clipboard_holds("echo sealed-$((6*7))\necho sealed-two\n"),
-                    _PASTE, _says("sealed-two"), _lines("PASTE")])
+                    _PASTE, _says("sealed-two"), _lines("PASTE")]
+                 + _alt_tap_opens_the_menu("BOARD"))
         out, js = _play(tmp_path, "term_board", base, steps, after=_qr_fragment(host))
         paired = _tagged(js, "PAIRED")
         assert paired and paired["keys"] == 1 and "#" not in paired["url"], (
@@ -247,6 +268,7 @@ def test_a_page_paired_by_the_qr_reloads_signed_in_and_its_terminal_is_sealed(
         assert _after(js, "VI", "cat v.txt") == ["over the socket"], js
         assert _after(js, "PASTE", "echo sealed-$((6*7))")[:1] == ["sealed-42"], js
         assert _after(js, "PASTE", "echo sealed-two") == ["sealed-two"], js
+        _assert_alt_tap(js, "BOARD")
         # the same profile, no token: the stored key signs in, nothing typed;
         # then the board goes away, and the next connect says so
         gone = threading.Thread(target=_end_when, args=(host, "2"), daemon=True)
@@ -559,7 +581,8 @@ def test_the_site_s_terminal_takes_esc_and_the_browser_s_clipboard(tmp_path):
     """The site's Terminal: Esc is vi's (INSERT left, `:wq` saves), the
     browser's paste (Ctrl+V) types a multi-line text whole, and a mouse's
     drag over the log then Ctrl+Shift+C puts its text on the browser's
-    clipboard."""
+    clipboard; a lone Alt tap is the console's key (the OS keeps Super), and
+    a fullscreen locks Super and Esc for the page."""
     web_e2e.require("site_shell")
     p, base = _site(tmp_path)
     try:
@@ -577,12 +600,19 @@ def test_the_site_s_terminal_takes_esc_and_the_browser_s_clipboard(tmp_path):
                     {"shot": "term_selected"}, {"key": "c", "mods": ["ctrl", "shift"]},
                     {"waitFor": "window.__moyClipped !== undefined", "timeout": 5000},
                     {"js": "navigator.clipboard.readText().then(t => 'COPIED ' + "
-                           "JSON.stringify(t))"}])
+                           "JSON.stringify(t))"}]
+                 + _alt_tap_opens_the_menu("SITE")
+                 + [{"js": "document.documentElement.requestFullscreen().then(() => new "
+                           "Promise(ok => setTimeout(ok, 500))).then(() => 'LOCK ' + "
+                           "JSON.stringify({fs: !!document.fullscreenElement, "
+                           "locked: window.__moyLocked}))", "gesture": True}])
         _out, js = _play(tmp_path, "term_clip", base, steps)
         assert _after(js, "VI", "cat /files/v.txt") == ["hi esc"], js
         assert _after(js, "PASTE", "echo pasted-$((6*7))")[:1] == ["pasted-42"], js
         assert _after(js, "PASTE", "echo pasted-two") == ["pasted-two"], js
         assert _tagged(js, "COPIED") == "files$ echo copy-me\ncopy-me", js
+        _assert_alt_tap(js, "SITE")
+        assert _tagged(js, "LOCK") == {"fs": True, "locked": 1}, js
     finally:
         p.terminate()
 

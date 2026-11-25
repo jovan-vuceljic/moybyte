@@ -3039,8 +3039,16 @@ static const char *const ACT_NAMES[MOY_UI_ACTS] = {"confirm", "back", "change", 
 // gamepad reaches them through its more menu, on Y (2026-10-19). Search is
 // the slash a keyboard types: on the T-Deck the Sym+G chord (moy_kbd.c's
 // symbol layer).
+// A keyboard's console key is its GUI key; a browser page's is a lone Alt
+// tap, since the OS takes Super before a page sees it
+// (firmware/web_runner/page_core.html, THE CONSOLE KEY'S FALLBACK).
+#ifdef __EMSCRIPTEN__
+#define KEYS_START "Alt"
+#else
+#define KEYS_START "Super"
+#endif
 static const char *const ACT_KEYS[MOY_UI_INPUTS][MOY_UI_ACTS] = {
-    {"enter", "Esc", "left right", "Q E", "Super", "Esc", "F V", "R", "left right up down",
+    {"enter", "Esc", "left right", "Q E", KEYS_START, "Esc", "F V", "R", "left right up down",
      "Del", "Ctrl C", "M", "/", "up down left right", "up down"},
     {"enter", "K", "A D ball_lr", "Q E", "Mic", "Mic", "F V", "R", "", "Del", "", "M", "Sym G",
      "WASD", "W S"},
