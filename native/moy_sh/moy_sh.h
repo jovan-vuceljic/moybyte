@@ -59,6 +59,7 @@
 
 #define MOY_SH_PIPE_MAX (1024u * 1024u)  // a pipe buffer's bytes
 #define MOY_SH_FILE_MAX (4u * 1024u * 1024u)  // a file read or written whole
+#define MOY_SH_CHUNK 1024u              // a streamed file's write to the store
 
 typedef struct moy_sh moy_sh_t;
 

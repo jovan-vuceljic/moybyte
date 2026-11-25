@@ -9,9 +9,13 @@
 //          (end of file without one)
 //   NUL    /dev/null
 //   MEM    bytes read whole at open: a file of the tree, a /dev or /proc read
-//   FILE   bytes written, put into the tree (or the virtual file) whole when
-//          its last descriptor closes; created or truncated at open, so an
-//          open that cannot write fails there
+//   FILE   bytes written. Write-only into the tree they STREAM, a chunk
+//          (MOY_SH_CHUNK) at a time, into a file held open from the open to
+//          the last close, so an open that cannot write fails there: the file
+//          itself when it is new or appended to, else `.NAME.tmp` beside it,
+//          put over it at the last close, so a cut leaves the old file whole.
+//          Read-write (`<>`) and the virtual files' are put whole at the last
+//          close (MOY_SH_FILE_MAX)
 //   PIPE_R, PIPE_W   the two ends of a pipe buffer. Stages run one after
 //          another, so a read of an empty pipe is its end; a write past
 //          MOY_SH_PIPE_MAX or with no reader left fails with EPIPE
@@ -49,6 +53,10 @@ struct moy_sh_obj {
     size_t len, cap, pos;
     char *path;                 // FILE: where its bytes go
     int vfile;                  // FILE: a virtual file (the host's vwrite)
+    moy_vol_file_t *held;       // FILE streamed: the open file its chunks go to
+    char *tmp;                  // ... when it is written beside `path`
+    size_t sent;                // ... its bytes gone to it
+    int failed;                 // ... the errno a chunk failed with
     sh_pipe_t *pipe;
 };
 
@@ -105,13 +113,16 @@ static char *dupstr(const char *p) {
 }
 
 static int store_write(const char *path, const char *p, size_t n, int append);
+static void stream_close(struct moy_sh_obj *o);
 
 static void obj_drop(struct moy_sh_obj *o) {
     if (o == NULL || --o->refs > 0) {
         return;
     }
     moy_sh_t *s = moy_sh_cur;
-    if (o->kind == O_FILE && o->path != NULL) {
+    if (o->held != NULL) {
+        stream_close(o);
+    } else if (o->kind == O_FILE && o->path != NULL) {
         if (o->vfile) {
             if (s->host.vwrite != NULL) {
                 s->host.vwrite(s->host.ctx, o->path, o->buf, o->len);
@@ -134,6 +145,7 @@ static void obj_drop(struct moy_sh_obj *o) {
     }
     moy_sh_hfree(o->buf);
     moy_sh_hfree(o->path);
+    moy_sh_hfree(o->tmp);
     moy_sh_hfree(o);
 }
 
@@ -373,6 +385,51 @@ static int store_write_here(const char *path, const char *p, size_t n, int appen
     return r;
 }
 
+// A streamed FILE's three steps: its file opened and held, a chunk written,
+// and at the last close its file closed and, written beside `path`, put over
+// it (or dropped where a chunk failed).
+static int stream_open_here(struct moy_sh_obj *o) {
+    const char *at = o->tmp != NULL ? o->tmp : o->path;
+    moy_vol_t v;
+    const char *rest;
+    int entered = moy_vol_gate_enter(at);
+    int r = moy_vol_at(at, &v, &rest);
+    if (r == 0) {
+        r = moy_vol_open(&v, rest, ((o->flags & O_APPEND) ? MOY_VOL_APPEND : MOY_VOL_WRITE)
+                         | MOY_VOL_HELD, &o->held);
+    }
+    if (r != 0) {
+        o->held = NULL;
+    }
+    moy_vol_gate_leave(entered);
+    return r;
+}
+
+static int stream_put_here(struct moy_sh_obj *o, const char *p, size_t n) {
+    int entered = moy_vol_gate_enter(o->path);
+    int r = moy_vol_write(o->held, p, n);
+    moy_vol_gate_leave(entered);
+    return r;
+}
+
+static int stream_close_here(struct moy_sh_obj *o) {
+    moy_vol_t v, w;
+    const char *from, *to;
+    int entered = moy_vol_gate_enter(o->path);
+    int r = moy_vol_close(o->held);
+    o->held = NULL;
+    if (o->tmp != NULL && moy_vol_at(o->tmp, &v, &from) == 0) {
+        if (r == 0 && !o->failed && moy_vol_at(o->path, &w, &to) == 0) {
+            r = moy_vol_replace(&v, from, to);
+        }
+        if (r != 0 || o->failed) {
+            moy_vol_remove(&v, from);
+        }
+    }
+    moy_vol_gate_leave(entered);
+    return r;
+}
+
 static int store_stat_here(const char *path, moy_vol_stat_t *st) {
     moy_vol_t v;
     const char *rest;
@@ -396,10 +453,11 @@ typedef struct {
     size_t n;
     int append;
     moy_vol_stat_t *st;
+    struct moy_sh_obj *o;
     int r;
 } store_call_t;
 
-enum { S_READ, S_WRITE, S_STAT };
+enum { S_READ, S_WRITE, S_STAT, S_OPEN, S_PUT, S_CLOSE };
 
 static void store_here(void *arg) {
     store_call_t *c = arg;
@@ -409,6 +467,15 @@ static void store_here(void *arg) {
             break;
         case S_WRITE:
             c->r = store_write_here(c->path, c->p, c->n, c->append);
+            break;
+        case S_OPEN:
+            c->r = stream_open_here(c->o);
+            break;
+        case S_PUT:
+            c->r = stream_put_here(c->o, c->p, c->n);
+            break;
+        case S_CLOSE:
+            c->r = stream_close_here(c->o);
             break;
         default:
             c->r = store_stat_here(c->path, c->st);
@@ -434,6 +501,60 @@ static int store_write(const char *path, const char *p, size_t n, int append) {
 static int store_stat(const char *path, moy_vol_stat_t *st) {
     store_call_t c = { .op = S_STAT, .path = path, .st = st };
     return store_call(&c);
+}
+
+// A write-only FILE of the tree opened streamed, over `path` when it exists
+// and is not appended to.
+static int stream_open(struct moy_sh_obj *o, int exists) {
+    if (exists && !(o->flags & O_APPEND)) {
+        const char *base = strrchr(o->path, '/');
+        size_t dir = base != NULL ? (size_t)(base + 1 - o->path) : 0, n = strlen(o->path);
+        o->tmp = moy_sh_halloc(n + 6);
+        if (o->tmp == NULL) {
+            return ENOMEM;
+        }
+        memcpy(o->tmp, o->path, dir);
+        o->tmp[dir] = '.';
+        memcpy(o->tmp + dir + 1, o->path + dir, n - dir);
+        memcpy(o->tmp + n + 1, ".tmp", 5);
+    }
+    store_call_t c = { .op = S_OPEN, .o = o };
+    return store_call(&c);
+}
+
+// The chunk buffered sent to the file: 0, or the errno it failed with (and
+// every later write with it).
+static int stream_flush(struct moy_sh_obj *o, const char *p, size_t n) {
+    if (o->failed == 0 && n > 0) {
+        store_call_t c = { .op = S_PUT, .o = o, .p = p, .n = n };
+        o->failed = store_call(&c);
+        o->sent += o->failed == 0 ? n : 0;
+    }
+    return o->failed;
+}
+
+static ssize_t stream_write(struct moy_sh_obj *o, const char *p, size_t n) {
+    if (o->failed == 0 && o->len + n > MOY_SH_CHUNK) {
+        stream_flush(o, o->buf, o->len);
+        o->len = 0;
+    }
+    if (o->failed == 0 && n >= MOY_SH_CHUNK) {
+        stream_flush(o, p, n);
+    } else if (o->failed == 0 && buf_add(&o->buf, &o->len, &o->cap, p, n, MOY_SH_CHUNK) != 0) {
+        o->failed = ENOMEM;
+    }
+    if (o->failed != 0) {
+        errno = o->failed;
+        return -1;
+    }
+    return (ssize_t)n;
+}
+
+static void stream_close(struct moy_sh_obj *o) {
+    stream_flush(o, o->buf, o->len);
+    o->len = 0;
+    store_call_t c = { .op = S_CLOSE, .o = o };
+    store_call(&c);
 }
 
 // --- virtual files ----------------------------------------------------------
@@ -603,7 +724,11 @@ int moy_sh_open(const char *path, int flags, ...) {
             }
             o->path = dupstr(p);
             o->flags = flags & (O_ACCMODE | O_APPEND);
-            if (acc == O_RDWR && exists && !(flags & O_TRUNC)) {
+            if (o->path == NULL) {
+                r = ENOMEM;
+            } else if (acc == O_WRONLY) {
+                r = stream_open(o, exists);
+            } else if (acc == O_RDWR && exists && !(flags & O_TRUNC)) {
                 // read and written whole: what was there is kept
                 r = store_read(p, &o->buf, &o->len);
                 o->cap = o->len;
@@ -692,6 +817,9 @@ ssize_t moy_sh_write(int fd, const void *buf, size_t n) {
         case O_NUL:
             return (ssize_t)n;
         case O_FILE:
+            if (o->held != NULL) {
+                return stream_write(o, buf, n);
+            }
             if (buf_add(&o->buf, &o->len, &o->cap, buf, n, MOY_SH_FILE_MAX) != 0) {
                 errno = EFBIG;
                 return -1;
@@ -831,7 +959,8 @@ off_t moy_sh_lseek(int fd, off_t at, int whence) {
         errno = ESPIPE;
         return -1;
     }
-    off_t base = whence == SEEK_SET ? 0 : whence == SEEK_CUR ? (off_t)o->pos : (off_t)o->len;
+    off_t base = whence == SEEK_SET ? 0 : whence == SEEK_CUR ? (off_t)o->pos
+                 : (off_t)(o->sent + o->len);
     if (base + at < 0) {
         errno = EINVAL;
         return -1;
@@ -918,7 +1047,7 @@ int moy_sh_fstat(int fd, struct stat *st) {
     memset(st, 0, sizeof *st);
     st->st_mode = o->kind == O_TERM || o->kind == O_NUL ? S_IFCHR | 0666 :
                   o->kind == O_PIPE_R || o->kind == O_PIPE_W ? S_IFIFO | 0600 : S_IFREG | 0644;
-    st->st_size = o->kind == O_MEM || o->kind == O_FILE ? (off_t)o->len : 0;
+    st->st_size = o->kind == O_MEM || o->kind == O_FILE ? (off_t)(o->sent + o->len) : 0;
     return 0;
 }
 

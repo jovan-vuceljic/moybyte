@@ -162,6 +162,73 @@ def test_the_script_runs_as_its_transcript_says(harness, tmp_path, name):
         assert got == f.read()
 
 
+def test_a_walk_takes_the_same_c_stack_at_any_depth(harness, tmp_path):
+    """find, du and rm -r walk a tree with no C frame and no arena per folder
+    (moy_sh_cmds.c's walk), so the deepest C stack a poll sees is the same
+    at 2 levels and 150, in an arena of 24 KB. A frame per level overflowed
+    the C3's 12 KB SSH task at 51; the folders kept on the shell's stack ran
+    its 12 KB arena out, and the out-of-space message recursed until the
+    stack overflowed."""
+    def deepest(levels):
+        root = tmp_path / ("root%d" % levels)
+        root.mkdir()
+        script = tmp_path / ("walk%d.sh" % levels)
+        script.write_text("p=d; i=0; while [ $i -lt %d ]; do p=$p/a; i=$((i+1)); done\n"
+                          "mkdir -p $p; echo x > $p/f\n"
+                          "find d -name f; du -s d; rm -r d\n" % levels)
+        r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                           timeout=60, env=dict(os.environ, SH_MAIN_MEASURE="1",
+                                                SH_MAIN_ARENA="24"))
+        assert r.returncode == 0 and not os.listdir(root), r.stdout.decode()[-2000:]
+        return int(re.search(rb"c stack (\d+)", r.stderr).group(1))
+
+    shallow, deep = deepest(2), deepest(150)
+    assert deep - shallow < 256, "2 levels: %d B, 150 levels: %d B" % (shallow, deep)
+
+
+def test_an_arena_run_out_is_an_error_not_a_reset(harness, tmp_path):
+    """A block the arena refuses is dash's "Out of space", raised bare when
+    its own message finds no room (moy_sh.c's refused). Reported again, it
+    recursed until the C stack ran out, which reset the C3. Each script runs
+    the arenas out at different points as their size moves."""
+    scripts = [
+        # a deep tree's path and its walk
+        "p=t; i=0; while [ $i -lt 200 ]; do p=$p/a; i=$((i+1)); done\n"
+        "mkdir -p $p; find t -name zz; du -s t\n",
+        # a command substitution's output (the old shell overflowed at most sizes)
+        "x=$(i=0; while [ $i -lt 3000 ]; do echo abcdefghij; i=$((i+1)); done)\necho ${#x}\n",
+    ]
+    for k, text in enumerate(scripts):
+        script = tmp_path / ("out%d.sh" % k)
+        script.write_text(text + "echo the end\n")
+        for kb in range(14, 41):
+            root = tmp_path / ("root%d_%d" % (k, kb))
+            root.mkdir()
+            r = subprocess.run([harness["sh_main"], str(root), str(script)],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60,
+                               env=dict(os.environ, SH_MAIN_ARENA=str(kb)))
+            out = r.stdout.decode("utf-8", "replace")
+            assert "Sanitizer" not in out, "%d KB: %s" % (kb, out[-1500:])
+
+
+def test_a_file_written_streams_in_chunks(harness, tmp_path):
+    """A redirect and tee send a file to the store a chunk at a time
+    (moy_sh_sys.c's streamed FILE), so 64 KB written takes no block near its
+    size. Buffered whole, it took one block the file's size, and the C3's
+    heap refused the 16 KB step past 8 KB."""
+    root = tmp_path / "root"
+    root.mkdir()
+    script = tmp_path / "write.sh"
+    script.write_text("i=0; while [ $i -lt 4096 ]; do echo 0123456789abcde; i=$((i+1)); done > big\n"
+                      "echo more >> big; echo again > x; tee -a big < x > /dev/null\n")
+    r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                       timeout=60, env=dict(os.environ, SH_MAIN_MEASURE="1"))
+    assert r.returncode == 0, r.stderr.decode()
+    assert os.path.getsize(root / "big") == 65536 + 5 + 6
+    largest = int(re.search(rb"largest block (\d+)", r.stderr).group(1))
+    assert largest < 8192, "a block of %d B" % largest
+
+
 SERIAL = os.path.join(SCRIPTS, "serial")
 SERIAL_NAMES = sorted(os.path.basename(p)[:-3] for p in glob.glob(os.path.join(SERIAL, "*.sh")))
 

@@ -80,12 +80,28 @@ static void drop_answers(moy_sh_t *s) {
     }
 }
 
+// A block the arena refuses is dash's "Out of space", whose message is made
+// on dash's stack and may need a block itself: refused while it is made, the
+// error is raised bare, where checknull would report it again and recurse
+// until the C stack ran out (a board reset). A run starts and ends with none.
+static void *refused(void) {
+    moy_sh_t *s = moy_sh_cur;
+    if (s->oom && handler != NULL) {
+        exitstatus = 2;
+        exraise(EXERROR);
+    }
+    s->oom = 1;
+    return NULL;
+}
+
 void *moy_sh_malloc(size_t n) {
-    return moy_sh_arena_alloc(moy_sh_cur->arena, n);
+    void *p = moy_sh_arena_alloc(moy_sh_cur->arena, n);
+    return p != NULL ? p : refused();
 }
 
 void *moy_sh_realloc(void *p, size_t n) {
-    return moy_sh_arena_realloc(moy_sh_cur->arena, p, n);
+    void *q = moy_sh_arena_realloc(moy_sh_cur->arena, p, n);
+    return q != NULL || n == 0 ? q : refused();
 }
 
 char *moy_sh_strdup(const char *str) {
@@ -474,6 +490,7 @@ int moy_sh_run(moy_sh_t *s, const char *text, size_t n) {
     }
     struct moy_sh_globals *was = enter(s);
     char *again = NULL;
+    s->oom = 0;
     if (s->ask_line != NULL && s->pending_n == 0) {
         // the answer to the question asked: the line that asked runs again
         size_t k = n;
@@ -589,6 +606,7 @@ out:
         drop_answers(s);
     }
     s->status = s->exited ? s->status : exitstatus;
+    s->oom = 0;
     leave(was);
     return ret;
 }

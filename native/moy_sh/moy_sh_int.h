@@ -33,6 +33,7 @@ struct moy_sh {
     void *mem;                          // the arena's bytes, from host.alloc
     size_t mem_n;                       // and their count
     moy_sh_arena_t *arena;
+    int oom;                            // the arena refused a block during this run
     struct moy_sh_globals *g;
 
     char *pending;                      // what MOY_SH_MORE holds
