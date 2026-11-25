@@ -561,9 +561,11 @@ TARGETS = [
 ]
 
 
-def moy_mark(pal, scale=3):
+def moy_mark(pal, scale=3, size=None, bg=None):
     """The Moy mascot as a PNG data URI, rendered from the system's OWN icon art
-    (runtime/shell/chrome.py's _ICON_ART["moy"], 16x16, hex chars = MOY64 indices).
+    (runtime/shell/chrome.py's _ICON_ART["moy"], 16x16, hex chars = MOY64 indices),
+    each art pixel `scale` pixels, centred on a `size`-pixel square (default
+    the art's own) filled with `bg` (#rrggbb; default transparent).
     Read out of the source text rather than imported: chrome.py pulls in the whole
     surface stack, and this script must stay importable with nothing installed."""
     import re, struct, zlib
@@ -575,14 +577,17 @@ def moy_mark(pal, scale=3):
     rows = re.findall(r'"([.0-9a-f]{16})"', m.group(1))
     if len(rows) != 16:
         return ""
-    w = h = 16 * scale
+    w = h = size or 16 * scale
+    off = (w - 16 * scale) // 2
+    clear = bytes((int(bg[1:3], 16), int(bg[3:5], 16), int(bg[5:7], 16), 255)) if bg else b"\x00" * 4
     px = bytearray()
     for y in range(h):
         px.append(0)                                   # PNG filter: none
         for x in range(w):
-            ch = rows[y // scale][x // scale]
+            ay, ax = y - off, x - off
+            ch = rows[ay // scale][ax // scale] if 0 <= ay < 16 * scale and 0 <= ax < 16 * scale else "."
             if ch == ".":
-                px += b"\x00\x00\x00\x00"
+                px += clear
                 continue
             r, g, b = [int(pal[int(ch, 16)][i:i + 2], 16) for i in (1, 3, 5)]
             px += bytes((r, g, b, 255))

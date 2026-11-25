@@ -176,6 +176,10 @@ static const struct {
     {"moy_store.mjs", "text/javascript; charset=utf-8"},
     {"micropython.mjs", "text/javascript; charset=utf-8"},
     {"micropython.wasm", "application/wasm"},
+    {"manifest.webmanifest", "application/manifest+json"},
+    {"icon-180.png", "image/png"},
+    {"icon-192.png", "image/png"},
+    {"icon-512.png", "image/png"},
 };
 
 

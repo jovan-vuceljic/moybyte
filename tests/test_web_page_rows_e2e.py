@@ -19,7 +19,8 @@ import pytest
 
 import web_e2e
 from test_web_persist_e2e import _serve as _serve_board
-from test_web_term_e2e import _site, _tagged
+from test_web_term_e2e import (PASSWORD, _asks, _board, _password, _prompt, _serve, _site,
+                               _tagged, short, tty_exe)  # noqa: F401 -- fixtures
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("MOYBYTE_WEB_E2E"),
@@ -117,3 +118,132 @@ def test_a_cart_s_menu_saves_it_and_a_served_page_plays_it_on_the_console(tmp_pa
             assert _tagged(js, "PODS") == [saved[0][:-4]], js
     finally:
         p.terminate()
+
+
+# An iPhone's Safari: its user agent, and no element full screen.
+IPHONE = {"width": 390, "height": 844, "dpr": 3, "mobile": True}
+IPHONE_L = {"width": 844, "height": 390, "dpr": 3, "mobile": True}
+IPHONE_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 "
+             "(KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1")
+NO_FS = "delete Element.prototype.requestFullscreen;"
+# ...opened from its Home Screen.
+AS_APP = NO_FS + "Object.defineProperty(Navigator.prototype, 'standalone', {get: () => true});"
+_CARD = {"js": "window.__moyState().then(s => 'CARD ' + JSON.stringify(s.card))"}
+_HOME = "Add to Home Screen"
+
+
+def _iphone(tmp_path, name, base, query, steps, init=NO_FS, device=IPHONE):
+    return web_e2e.run(tmp_path, name, query, steps, base, tmp_path / name, device=device,
+                       boot_ms=30000, ua=IPHONE_UA, init=init)
+
+
+def test_an_iphone_s_menu_says_how_to_get_full_screen(tmp_path):
+    """Where the browser has no full screen the system menu offers Add to
+    Home Screen, whose card has the steps; the home-screen app offers none."""
+    p, base = _where("site", tmp_path)
+    try:
+        _out, js = _iphone(tmp_path, "safari", base, "?dev=1",
+                           [{"wait": 2500}, _PAGE] + web_e2e.menu_pick(_HOME)
+                           + [{"wait": 600}, _CARD, {"page": "card"}])
+        page, card = _tagged(js, "PAGE"), _tagged(js, "CARD")
+        assert page["canfs"] is False and page["app"] is False, page
+        assert card["title"] == "Full screen", card
+        assert "2. Choose Add to Home Screen." in card["lines"], card
+        _out, js = _iphone(tmp_path, "app", base, "?dev=1",
+                           [{"wait": 2500}, _PAGE] + web_e2e.menu_pick(_HOME, enter=False),
+                           init=AS_APP)
+        assert _tagged(js, "PAGE")["app"] is True, js
+        menu = _tagged(js, "MENU")
+        assert _HOME not in menu and "Full screen" not in menu, menu
+    finally:
+        p.terminate()
+
+
+_RECTS = ("(function(){var o={};['cv','joy','bb','ba','kb','bh'].forEach(function(id){"
+          "var r=document.getElementById(id).getBoundingClientRect();"
+          "if(r.width&&r.height)o[id]=[r.left,r.top,r.right,r.bottom];});"
+          "o.vw=innerWidth;o.vh=innerHeight;return '%s '+JSON.stringify(o);})()")
+_INSETS = ("document.documentElement.style.cssText += '--sa-t:%dpx;--sa-r:%dpx;--sa-b:%dpx;"
+           "--sa-l:%dpx', dispatchEvent(new Event('resize')), 'insets'")
+
+
+@pytest.mark.parametrize("device,insets", [(IPHONE, (59, 0, 34, 0)), (IPHONE_L, (0, 59, 21, 59))],
+                         ids=["portrait", "landscape"])
+def test_the_home_screen_app_keeps_out_of_the_notch_and_the_home_bar(tmp_path, device, insets):
+    """Opened from the Home Screen the page runs under the notch and the
+    home bar (viewport-fit=cover): the canvas and every control stay inside
+    the safe area."""
+    p, base = _where("site", tmp_path)
+    try:
+        t, r, b, left = insets
+        _out, js = _iphone(tmp_path, "app", base, "?dev=1",
+                           [{"wait": 2500}, {"js": _INSETS % insets}, {"wait": 800},
+                            {"js": _RECTS % "RECTS"}, {"page": "safe"}],
+                           init=AS_APP, device=device)
+        rects = _tagged(js, "RECTS")
+        vw, vh = rects.pop("vw"), rects.pop("vh")
+        for name, (x0, y0, x1, y1) in rects.items():
+            assert x0 >= left - 0.5 and y0 >= t - 0.5, (name, rects)
+            assert x1 <= vw - r + 0.5 and y1 <= vh - b + 0.5, (name, rects)
+        assert {"cv", "joy", "ba", "bb"} <= set(rects), rects
+    finally:
+        p.terminate()
+
+
+_GUARDS = ("(function(){var o={};['cv','joy','ba','bb','ctl'].forEach(function(id){"
+           "var c=getComputedStyle(document.getElementById(id));"
+           "o[id]=[c.touchAction,c.userSelect||c.webkitUserSelect,c.webkitTouchCallout||'none'];});"
+           "o.html=getComputedStyle(document.documentElement).touchAction;"
+           "function tap(el){var t=new Touch({identifier:1,target:el,clientX:1,clientY:1});"
+           "var e=new TouchEvent('touchend',{bubbles:true,cancelable:true,touches:[],"
+           "changedTouches:[t]});el.dispatchEvent(e);return e.defaultPrevented;}"
+           "var a=document.getElementById('ba');o.first=tap(a);o.second=tap(a);"
+           "var s=new Event('selectstart',{bubbles:true,cancelable:true});"
+           "document.getElementById('joy').dispatchEvent(s);o.select=s.defaultPrevented;"
+           "var g=new Event('gesturestart',{bubbles:true,cancelable:true});"
+           "document.dispatchEvent(g);o.pinch=g.defaultPrevented;"
+           "return 'GUARDS '+JSON.stringify(o);})()")
+
+
+def test_the_controls_never_zoom_or_select(tmp_path):
+    """A double tap on A or B never zooms the page, a long press on the
+    stick or the canvas selects nothing, and a pinch is refused: the play
+    surfaces take every touch."""
+    p, base = _where("site", tmp_path)
+    try:
+        _out, js = _iphone(tmp_path, "guards", base, "?dev=1",
+                           [{"wait": 2500}, {"js": _GUARDS}])
+        g = _tagged(js, "GUARDS")
+        for el in ("cv", "joy", "ba", "bb", "ctl"):
+            assert g[el][0] == "none" and g[el][1] == "none", (el, g)
+        assert g["html"] == "pan-x pan-y", g
+        assert g["first"] is False and g["second"] is True, "the second tap of a double tap"
+        assert g["select"] is True and g["pinch"] is True, g
+    finally:
+        p.terminate()
+
+
+def test_the_home_screen_app_pairs_with_its_board_and_reaches_the_home(tty_exe, tmp_path,
+                                                                        short):  # noqa: F811
+    """iOS gives the home-screen app storage of its own, so its first launch
+    pairs again: its card asks for the password (a scanned code would open
+    Safari), and once paired the app reaches the home."""
+    host = _board(tty_exe, short, password=PASSWORD)
+    server, base = _serve(tmp_path, host.port)
+    try:
+        steps = [_asks("p => p.shown === 'flex'"), _prompt("ASK"),
+                 {"js": "'TEXT ' + JSON.stringify(document.getElementById('pinp').textContent)"},
+                 _password(PASSWORD), _asks("p => p.shown === 'none' && p.keys === 1"),
+                 {"waitFor": "window.__moyState && window.__moyState().then(s => "
+                             "s.screen === 'launcher')", "timeout": 30000},
+                 {"js": "window.__moyState().then(s => 'HOME ' + JSON.stringify("
+                        "{screen: s.screen, desk: s.desk, page: s.page}))"},
+                 {"page": "paired"}]
+        _out, js = _iphone(tmp_path, "app", base, "?dev=1", steps, init=AS_APP)
+        assert "opens Safari, not this app" in _tagged(js, "TEXT"), js
+        home = _tagged(js, "HOME")
+        assert home["screen"] == "launcher" and home["desk"] is False, home
+        assert home["page"]["app"] is True and home["page"]["served"] is True, home
+    finally:
+        server.terminate()
+        host.end()

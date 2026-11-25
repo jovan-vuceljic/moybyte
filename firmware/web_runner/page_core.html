@@ -13,7 +13,17 @@
      is input (pointer, virtual pad, keyboard, soft-keyboard summon), the
      AudioWorklet PCM ring, and layout. build.sh concatenates this with
      page_tail.js (the worker transport + loader) into dist/index.html. -->
-<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<!-- The home-screen app (tools/web_app.py writes the manifest and the icons
+     beside the page): an iPhone's Safari has no element full screen, and the
+     page saved to its Home Screen opens with no browser bars. -->
+<link rel=manifest href="manifest.webmanifest">
+<link rel=apple-touch-icon href="icon-180.png">
+<meta name=apple-mobile-web-app-capable content=yes>
+<meta name=mobile-web-app-capable content=yes>
+<meta name=apple-mobile-web-app-status-bar-style content=black-translucent>
+<meta name=apple-mobile-web-app-title content=Moybyte>
+<meta name=theme-color content="#0b0f1a">
 <link rel=icon href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAhUlEQVR42mNgGAW4wX8y8dB3ANig5rI5ZGFqOGTAHIBi8aHDx1HwyHPAgEfBcHAAydl0cDrg/8cXKJiQOCVRNLgdgC6PS3z4OYDaeOg5gJDDaB4FA+4AQgUM3dLAgDtg5OaCEeUAFIfUqQZTFZPSUBncDsCVHalh8aBxAKGuGbXUDw4HAAAJtsp8ecvLrQAAAABJRU5ErkJggg=="><title>Moybyte</title><style>
 html,body{margin:0;height:100%;background:#0b0f1a;color:#c2c3c7;
 font:14px ui-monospace,Menlo,Consolas,monospace;display:flex;flex-direction:column;
@@ -21,6 +31,12 @@ align-items:center}
 /* html is a centring flex column, which would size body to its widest child's
    min-content (the nowrap title) and push the document wider than the viewport. */
 body{width:100%}
+/* The safe area (viewport-fit=cover: a home-screen app runs under the notch
+   and the home bar): the body keeps out of the insets, and room() reads them
+   back from its padding. The --sa-* are the insets, a test's to set. */
+:root{--sa-t:env(safe-area-inset-top,0px);--sa-r:env(safe-area-inset-right,0px);
+--sa-b:env(safe-area-inset-bottom,0px);--sa-l:env(safe-area-inset-left,0px)}
+body{box-sizing:border-box;padding:var(--sa-t) var(--sa-r) var(--sa-b) var(--sa-l)}
 /* Long-press guard: HOLDING a control (a d-pad direction, A/B)
    used to start the OS text-selection -- iOS magnifier/blue highlight, Android context
    menu -- because plain user-select isn't enough there: iOS wants the -webkit- prefix +
@@ -31,6 +47,13 @@ body{width:100%}
 @media (pointer:coarse){body{-webkit-user-select:none;user-select:none;
 -webkit-touch-callout:none}
 #kbin,#crash{-webkit-user-select:text;user-select:text}}
+/* The page never zooms: no pinch, no double tap (iOS Safari zooms on a
+   double tap of A or B); the play surfaces -- the canvas, the controls and
+   everything in them -- take every touch as the console's, with no
+   selection, callout or tap flash on any pointer. */
+html{touch-action:pan-x pan-y}
+canvas,#ctl,#ctl *{touch-action:none;-webkit-user-select:none;user-select:none;
+-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 /* Presentation scale: the OS renders at its DESIGN resolution (320x240 /
    1024x600); fit() uses the whole available viewport while the browser keeps
    nearest-neighbour sampling. Desktop users have real keyboard/pointer input,
@@ -80,8 +103,8 @@ opacity:0;font-size:16px;background:transparent;color:transparent;caret-color:tr
    sized to it (padPlace), the keyboard summon and the burger small in the top
    corners. #ctl covers the viewport but takes no taps itself. */
 html.phl body{justify-content:center}
-html.phl #ctl{position:fixed;left:0;top:0;width:100%;height:100%;padding:0;display:block;
-pointer-events:none;z-index:2}
+html.phl #ctl{position:fixed;left:var(--sa-l);top:var(--sa-t);right:var(--sa-r);bottom:var(--sa-b);
+width:auto;height:auto;padding:0;display:block;pointer-events:none;z-index:2}
 html.phl #mid{display:contents}
 html.phl #ab{position:absolute;right:var(--abx);top:var(--aby);width:var(--abw);
 height:calc(var(--bb)*2 + 8px);display:block;pointer-events:none}
@@ -263,10 +286,14 @@ var fitSent=-1;
 // percent of the CSS pixel (100% = N of one CSS pixel); the page offers only
 // the percents that land on whole device pixels and leave the canvas the
 // handheld's 320x240, and keeps the choice per browser (localStorage). Auto:
-// the largest N whose canvas holds the desk's 1024x600; and the PHONE RULE
-// where the room does not (or ?handheld=1): landscape, a canvas 240 tall at
-// the room's aspect, portrait the 320x240 console, each scaled to the room
-// as fit() always did (fractional, which a phone's devicePixelRatio hides).
+// the largest N whose canvas holds the desk's 1024x600. Where the room does
+// not (or ?handheld=1), the handheld: a pointer's window takes the largest N
+// whose canvas still holds 320x240, so it fills the room to under N device
+// pixels; a touch phone the PHONE RULE: landscape, a canvas 240 tall at the
+// room's aspect, portrait the 320x240 console, each scaled to the room as
+// fit() always did (fractional, which a phone's devicePixelRatio hides). The
+// console lays a glass without the desk's room out in the handheld's class
+// (web_boot.glass_in).
 // GLASS.live: the console zooms (its first frame names `zoom`); a one-cart
 // page's fixed 320x240 does not, and keeps fit()'s scaling.
 var GLASS={live:false,n:0,w:0,h:0,zoom:-1,zooms:"",due:0},UIKEY="moy.uisize",
@@ -285,8 +312,11 @@ c.setProperty("--joy",j+"px");c.setProperty("--bb",b+"px");c.setProperty("--sb",
 c.setProperty("--jx",Math.round((m-j)/2)+"px");c.setProperty("--jy",at(j)+"px");
 c.setProperty("--abx","8px");c.setProperty("--abw",Math.round(m-16)+"px");
 c.setProperty("--aby",at(hab)+"px");}
-function room(){var vv=window.visualViewport;
-var iw=vv?vv.width:window.innerWidth,ih=vv?vv.height:window.innerHeight;
+function insets(){var c=getComputedStyle(document.body);
+return [parseFloat(c.paddingTop)||0,parseFloat(c.paddingRight)||0,
+parseFloat(c.paddingBottom)||0,parseFloat(c.paddingLeft)||0];}
+function room(){var vv=window.visualViewport,sa=insets();
+var iw=(vv?vv.width:window.innerWidth)-sa[1]-sa[3],ih=(vv?vv.height:window.innerHeight)-sa[0]-sa[2];
 var phl=!!TOUCH&&TOUCH.matches&&iw>ih&&(HANDHELD||iw<1024||ih<600);
 if(document.documentElement.classList.contains("phl")!==phl){
 document.documentElement.classList.toggle("phl",phl);
@@ -301,14 +331,15 @@ if(cs.display==="none"||cs.position==="fixed"||cs.position==="absolute")continue
 used+=k.offsetHeight+(parseFloat(cs.marginTop)||0)+(parseFloat(cs.marginBottom)||0);}
 return [Math.max(32,Math.floor(iw)),Math.max(32,Math.floor(ih-used)),used];}
 function glassPlan(){var r=room(),dpr=window.devicePixelRatio||1;
-var dw=Math.floor(r[0]*dpr),dh=Math.floor(r[1]*dpr),offers=[],byPct={};
+var dw=Math.floor(r[0]*dpr),dh=Math.floor(r[1]*dpr),offers=[],byPct={},most=1;
 for(var n=1;n<=32;n++){var p=Math.round(n/dpr*100);if(Math.floor(dw/n)<320||Math.floor(dh/n)<240||p>400)break;
-if(!byPct[p]){byPct[p]=n;offers.push(p);}}
+most=n;if(!byPct[p]){byPct[p]=n;offers.push(p);}}
 var z=uiPick(),pl;
 if(z&&byPct[z])pl={n:byPct[z],w:Math.floor(dw/byPct[z]),h:Math.floor(dh/byPct[z])};
 else{z=0;
 if(window.innerWidth<1024||window.innerHeight<600){
-pl=r[0]*3>=r[1]*4?{n:0,w:Math.round(240*r[0]/r[1]),h:240}:{n:0,w:320,h:240};}
+if(TOUCH&&TOUCH.matches)pl=r[0]*3>=r[1]*4?{n:0,w:Math.round(240*r[0]/r[1]),h:240}:{n:0,w:320,h:240};
+else pl={n:most,w:Math.floor(dw/most),h:Math.floor(dh/most)};}
 else{var best=1;for(var i=0;i<offers.length;i++){var m=byPct[offers[i]];
 if(Math.floor(dw/m)>=1024&&Math.floor(dh/m)>=600&&m>best)best=m;}
 pl={n:best,w:Math.floor(dw/best),h:Math.floor(dh/best)};}}
@@ -479,8 +510,19 @@ wb("ba","a");wb("bb","b");
 document.getElementById("bh").addEventListener("pointerdown",function(e){send({type:"super"});e.preventDefault();});
 // Android long-press fires contextmenu even with pointerdown preventDefault'd -- swallow it
 // on the play surfaces (canvas + control bar) only, so desktop right-click elsewhere is normal.
-document.addEventListener("contextmenu",function(e){var t=e.target;
-if(t===cv||(t.closest&&t.closest("#ctl")))e.preventDefault();});
+function onPlay(t){return t===cv||!!(t&&t.closest&&t.closest("#ctl"));}
+document.addEventListener("contextmenu",function(e){if(onPlay(e.target))e.preventDefault();});
+document.addEventListener("selectstart",function(e){if(onPlay(e.target))e.preventDefault();});
+// iOS Safari zooms on a pinch (it ignores user-scalable=no) and on a double
+// tap that touch-action does not always stop: the pinch is refused page-wide,
+// and a second touchend within 350 ms on a play surface is the console's.
+// The keyboard summon (#kb) answers a click, which a refused touchend would
+// swallow, so it keeps its own.
+document.addEventListener("gesturestart",function(e){e.preventDefault();});
+var lastTouch=0;
+document.addEventListener("touchend",function(e){var t=e.target,now=Date.now();
+if(onPlay(t)&&!(t.closest&&t.closest("#kb"))&&now-lastTouch<350&&e.cancelable)e.preventDefault();
+lastTouch=now;},{passive:false});
 var pH={};
 // The desk keyboard: each key goes to the console as its code and the
 // modifiers held with it (runtime/host/moy_input.py's key events), and what a key
@@ -523,7 +565,12 @@ var lock=["AltLeft","AltRight","Tab","Escape"].concat(MAC?[]:["MetaLeft","MetaRi
 if(on){k.lock(lock).then(function(){window.__moyLocked=1;},function(){window.__moyLocked=0;});}
 else{k.unlock();window.__moyLocked=0;}}
 document.addEventListener("fullscreenchange",kLock);
-send({type:"page",fs:false,canfs:!!document.documentElement.requestFullscreen});
+// Whether the page runs as a home-screen app, and the host it was opened
+// at: the console's Add to Home Screen row and card read them.
+function asApp(){return navigator.standalone===true||!!(window.matchMedia&&
+(matchMedia("(display-mode: standalone)").matches||matchMedia("(display-mode: fullscreen)").matches));}
+send({type:"page",fs:false,canfs:!!document.documentElement.requestFullscreen,app:asApp(),
+host:location.hostname});
 // THE ASKS (page_link.py): what the console's rows ask of the browser. A
 // download and Play on the console go at once. A browser grants full screen
 // and its file chooser only inside a user's gesture, so those are done at

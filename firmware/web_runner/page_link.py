@@ -1,7 +1,8 @@
 """The browser page around the console: `Workstation.page`, None on a board.
 
 The page keeps no bar of its own (owner, 2026-11-25): what its top bar did
-is the console's, in the console's rows -- Full screen and Add a file in
+is the console's, in the console's rows -- Full screen (or, where the
+browser has none, Add to Home Screen and its card) and Add a file in
 the system menu, Download in a cart's menu, Play on the console in a cart's
 menu where a console serves the page,
 where the carts are kept in Settings -- and the console says what happened
@@ -29,6 +30,8 @@ class PageLink:
         self._play = play
         self.fullscreen = False     # the page is full screen, by its word
         self.can_fullscreen = False  # ...and its browser has full screen
+        self.app = False            # it runs as a home-screen app
+        self.host = ""              # the host it was opened at
         self.kept = ""              # where the page keeps the carts, its sentence
         self._asks = []
 
@@ -60,6 +63,24 @@ class PageLink:
         if folder is not None:
             self._ask("pod", cart=folder)
 
+    def home_screen(self, ws):
+        """The card that says how to get full screen where the browser has
+        none (an iPhone's Safari): the page saved to the Home Screen, which
+        opens with no browser bars. A board's page opened at a number is
+        saved from the board's .local name, which stays; the app keeps its
+        own storage, so it pairs with the board once."""
+        rows = [("Saved to the Home Screen, Moybyte", "plain"),
+                ("opens with no browser bars.", "plain"),
+                ("1. Tap Share in Safari's bar.", "plain"),
+                ("2. Choose Add to Home Screen.", "plain"),
+                ("3. Open Moybyte from there.", "plain")]
+        if self.served:
+            if _is_number(self.host):
+                rows.append(("Open the board by its .local", "dim"))
+                rows.append(("name first: %s can change." % self.host, "dim"))
+            rows.append(("The app pairs with it once.", "dim"))
+        ws.confirm.tell("Full screen", tuple(rows))
+
     def drain(self):
         """The asks since the last frame, for the page, or None."""
         if not self._asks:
@@ -77,6 +98,10 @@ class PageLink:
             self.fullscreen = bool(ev["fs"])
         if "canfs" in ev:
             self.can_fullscreen = bool(ev["canfs"])
+        if "app" in ev:
+            self.app = bool(ev["app"])
+        if "host" in ev:
+            self.host = str(ev["host"] or "")
         if "kept" in ev:
             self.kept = str(ev["kept"] or "")
         say = ev.get("say")
@@ -95,6 +120,14 @@ class PageLink:
             rows = tuple((str(r[0]), str(r[1]) if len(r) > 1 else "plain") for r in offer[2:])
             ws.confirm.offer(str(offer[0]), rows, lambda: self._play(folder))
         ws.mark_dirty()
+
+
+def _is_number(host):
+    """Whether `host` is an address by number (IPv4 or IPv6), not a name."""
+    if ":" in host:
+        return True
+    parts = host.split(".")
+    return len(parts) == 4 and all(p.isdigit() for p in parts)
 
 
 def folder_of(cart):

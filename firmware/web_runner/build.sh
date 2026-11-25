@@ -586,6 +586,10 @@ cp "${STAGE_DIR}/carts.json" "${STAGE_DIR}/index.html" "${DIST_DIR}/"
 sed "s|\"./moy_store.mjs\"|\"./moy_store.mjs?v=${MOY_BUILD}\"|" \
   "${SCRIPT_DIR}/worker.js" > "${DIST_DIR}/worker.js"
 cp "${SCRIPT_DIR}/moy_store.mjs" "${DIST_DIR}/"
+# The home-screen app's manifest and icons (tools/web_app.py), which the
+# page's head names: an iPhone's full screen is the page saved to its Home
+# Screen.
+"${PY}" "${REPO_ROOT}/tools/web_app.py" "${DIST_DIR}"
 # The two worker modules ship WITHOUT THEIR COMMENTS. They ride every board
 # image, and the prose in them is most of their bytes (worker.js gzips to
 # under half without it): the source is where it is read. emsdk's own terser
@@ -648,7 +652,8 @@ fi
 # per-file compare stays meaningful. It fails when the `zopfli` package is
 # missing (pyproject.toml's dev extra), and does NOT fall back to gzip.
 GZ_FILES=()
-for f in index.html worker.js moy_store.mjs micropython.mjs micropython.wasm; do
+for f in index.html worker.js moy_store.mjs micropython.mjs micropython.wasm \
+         manifest.webmanifest icon-180.png icon-192.png icon-512.png; do
   if [ -f "${DIST_DIR}/${f}" ]; then GZ_FILES+=("${DIST_DIR}/${f}"); fi
 done
 "${PY}" "${REPO_ROOT}/tools/zopfli_gz.py" --cache "${BUILD_DIR}/gz" "${GZ_FILES[@]}"
