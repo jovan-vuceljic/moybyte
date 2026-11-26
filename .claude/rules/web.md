@@ -493,11 +493,19 @@ nor those docs will warn you about:
   slot 1), multiplexed by its frames' first byte, served
   on the board's own task. Its terminal channel ('t') is the page's
   Terminal (`native/moy_tty/moy_tty_live.c`): a Zero serves no `GET /term`,
-  which the consoles' pages keep (seal slot 0). Its control channel's hints
-  (`moy_live.c`, THE HINTS) say when what the page reads over HTTP changed
-  (the store, `/wifi`, `/update`, `/official`), and while the socket is open
-  the worker asks those routes on a hint, never on its clocks; the bulk
-  (cart downloads, sync batches, the pack, sign-in) stays HTTP. Its first channel relays the board's ESP-NOW, so
+  which the consoles' pages keep (seal slot 0). Its request channel
+  (`moy_live.c`, THE REQUESTS) carries the page's sealed requests, the
+  pulls, syncs, songs and probes, to the webhost's own routes and answers
+  them there: each request is sealed as over HTTP inside the socket's seal,
+  so the board serves the page ONE connection (an https page holds one TLS
+  connection's RAM, the reason: owner, 2026-11-26). `worker.js`'s
+  `boardFetch` is the one wrapper: HTTP where the socket is shut or the
+  board names no `req` in its probe, and for the sign-in, the marker, the
+  bundle and the sockets' own probes; the webhost still answers every
+  route over HTTP too. Its control channel's hints
+  (`moy_live.c`, THE HINTS) say when what the page reads from those routes
+  changed (the store, `/wifi`, `/update`, `/official`), and while the socket
+  is open the worker asks them on a hint, never on its clocks. Its first channel relays the board's ESP-NOW, so
   the page's link (`moy_link_web.c`, the kernel's Match over it) plays a
   console's match, a Python cart's as a Lua one's: the wasm computes floats
   as the boards' do (REPR_C over 32-bit words, single precision,

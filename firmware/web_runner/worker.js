@@ -1444,14 +1444,20 @@ function takeBack() {
 // clear (no session, a goodbye) is {status, text} as it came, never opened,
 // so nothing the network says without the session's key reads as the board's.
 async function sealed(method, path, body, bin) {
+    let http = false;
     for (let tries = 0; tries < 2; tries++) {
         if (!(await signIn())) {
             const ms = authNeed ? authNeed.ms : -1;
             return { status: ms >= 0 ? 429 : 401, text: "", wait: ms };
         }
         if (authOpen) {
-            const r = await fetch(path.slice(1), body === undefined ? { method }
-                : { method, body, headers: { "Content-Type": "application/json" } });
+            // unsealed: a request the socket lost goes again over HTTP as it was
+            const raw = body === undefined ? null : utf8.encode(body);
+            const r = await boardFetch(method, path, raw, http).catch((e) => {
+                if (!e.live) throw e;
+                return fetch(path.slice(1), raw ? { method, body: raw,
+                    headers: { "Content-Type": "application/json" } } : { method });
+            });
             if (bin) return { status: r.status, bytes: new Uint8Array(await r.arrayBuffer()), wait: -1 };
             return { status: r.status, text: await r.text(), wait: -1 };
         }
@@ -1460,7 +1466,13 @@ async function sealed(method, path, body, bin) {
         const n = swCall((m, p) => C.seal(m, p, raw ? swPut(raw) : 0), method, path);
         if (n < 0) return { status: 0, text: "", wait: -1 };
         const target = C.M.UTF8ToString(C.target()), seq = C.seq();
-        const r = await fetch(target.slice(1), n ? { method, body: swGet(n) } : { method });
+        let r;
+        try { r = await boardFetch(method, target, n ? swGet(n) : null, http); }
+        catch (e) {
+            if (!e.live) throw e;
+            http = true;                // the socket went: once more over HTTP, sealed anew
+            continue;
+        }
         if (r.status === 401) { signedIn = false; continue; }
         if ((r.headers.get("Content-Type") || "").indexOf("application/octet-stream") < 0) {
             // In the clear: a refusal at most, never the board's answer.
@@ -1539,8 +1551,20 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     // Every root's pull, at the endpoint the VM's registry names: the carts,
     // and the roots firmware before them 404s (the files layer, the console's
     // own documents, the apps' private folders).
-    let pulled, fetched, cartsRes;
+    let pulled, fetched, cartsRes, live = null, probed = false;
     for (;;) {
+        // The live socket first, once a board signed this page in (the
+        // pulls' sign-in, made here first): its requests (THE REQUESTS) then
+        // carry the pulls and every sealed call after.
+        if (!probed && (await signIn()) && signedIn) {
+            probed = true;
+            live = await probeLive();
+            if (live && live.req && qs.get("req") !== "0") {
+                reqPiece = live.req;
+                liveOn = true;
+                liveOpen();
+            }
+        }
         pulled = await Promise.all(store.roots().map((r) => r.id === "carts"
             ? gated("/" + r.endpoint) : gated("/" + r.endpoint).catch(none)));
         fetched = {};
@@ -1580,7 +1604,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     const gpioPins = await probeGpio();
     const updateDoc = await probeUpdate();
     const official = mode === "board" && await probeOfficial();
-    const live = mode === "board" ? await probeLive() : null;
+    if (mode === "board" && !probed) live = await probeLive();   // a host with no sign-in
     const wifiDoc = mode === "board" ? await probeWifi() : null;
     mp.runPython("import web_boot\n"
         // BEFORE boot(): the mode is what decides whether the carts watcher
@@ -1749,11 +1773,12 @@ function shipFrame(s) {
 // a console board that spends its GPIOs on a panel, or a Zero this page is not
 // signed in to. All four are the same answer to a cart: no verbs.
 // What the board relays on the live socket (GET /live without the upgrade,
-// native/moy_net/moy_live.h): {mac, kinds, term, hints}, its address on the
-// air where it relays its radio ("" where not), the device kinds it relays
-// (moy_dev_relayed's text), whether its shell's face is there and whether it
-// says when its routes' answers change, or null where it carries none of
-// them. A board without the socket 404s it.
+// native/moy_net/moy_live.h): {mac, kinds, term, hints, req}, its address on
+// the air where it relays its radio ("" where not), the device kinds it
+// relays (moy_dev_relayed's text), whether its shell's face is there,
+// whether it says when its routes' answers change, and the most a request's
+// piece carries where it takes requests (0 where not), or null where it
+// carries none of them. A board without the socket 404s it.
 async function probeLive() {
     try {
         const r = await sealed("GET", "/live");
@@ -1762,7 +1787,8 @@ async function probeLive() {
         const mac = d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : "";
         const kinds = typeof d.kinds === "string" ? d.kinds : "";
         const term = d.term === 1, hints = d.hints === 1;
-        return mac || kinds || term || hints ? { mac, kinds, term, hints } : null;
+        const req = d.req >= 64 ? d.req | 0 : 0;
+        return mac || kinds || term || hints || req ? { mac, kinds, term, hints, req } : null;
     } catch (e) {
         return null;
     }
@@ -2304,12 +2330,127 @@ let liveHeard = 0, liveSaid = 0;
 // route without the upgrade first, whose 401 signs in again (`sealed`).
 let liveAsk = false;
 const liveQ = [];
-const LIVE = { opens: 0, drops: 0, up: 0, down: 0, rtt: [] };
+const LIVE = { opens: 0, drops: 0, up: 0, down: 0, reqs: 0, rtt: [] };
 function liveSend(ws, pl) {
     if (!liveSealed) { ws.send(pl); return; }
     const n = sw().up(1, swPut(pl));
     if (n > 0) ws.send(swGet(n));
 }
+// THE REQUESTS (moy_live.c's; the worker's one wrapper for its board): a
+// board whose probe names "req" (the most plaintext a piece up carries)
+// answers the routes on its live socket, so while the socket is open every
+// sealed request (`sealed`) goes on it, sealed as over HTTP, the socket's
+// seal around it: 'r' 'Q' id len and the request's first piece, 'B' id and
+// the rest, "METHOD TARGET\n" and the body; its answer comes back 'A' (the
+// status, the type), 'D's (the body) and 'Z', made into the Response a
+// fetch would have given. One request is on the socket at a time, as the
+// board serves one connection at a time. Anywhere else -- the socket shut,
+// or still opening after LIVE_REQ_WAIT_MS, a board without the channel, the
+// sign-in, the sockets' own probes -- it is HTTP, and a request the socket
+// lost (it closed, or no byte of its answer came for LIVE_REQ_MS) goes
+// again over HTTP (`sealed`, sealed anew). `?req=0` keeps a page's requests
+// on HTTP, the other side of an A/B (tests/test_zero_on_glass.py).
+const LIVE_REQ_MS = 15000, LIVE_REQ_WAIT_MS = 3000;
+let reqPiece = 0, reqId = 0, reqNow = null, reqChain = Promise.resolve();
+function liveFailed(why) {
+    const e = new Error("live socket: " + why);
+    e.live = true;
+    return e;
+}
+function reqEnd(err) {
+    const r = reqNow;
+    if (!r) return;
+    reqNow = null;
+    clearTimeout(r.timer);
+    if (err) { r.no(err); return; }
+    if (r.status < 200 || r.status > 599) { r.no(liveFailed("answer")); return; }
+    let n = 0;
+    for (const p of r.parts) n += p.length;
+    const b = new Uint8Array(n);
+    n = 0;
+    for (const p of r.parts) { b.set(p, n); n += p.length; }
+    const none = r.status === 204 || r.status === 304;
+    LIVE.reqs++;
+    r.ok(new Response(none ? null : b, { status: r.status,
+                                         headers: { "Content-Type": r.ctype } }));
+}
+function reqTimer(r) {
+    clearTimeout(r.timer);
+    r.timer = setTimeout(() => { if (reqNow === r) reqEnd(liveFailed("timeout")); }, LIVE_REQ_MS);
+}
+// An 'r' message down: the asked request's answer, a piece at a time.
+function liveAnswer(u8) {
+    const r = reqNow;
+    if (!r || u8.length < 4 || (u8[2] | (u8[3] << 8)) !== r.id) return;
+    reqTimer(r);
+    if (u8[1] === 0x41 && u8.length >= 6) {
+        r.status = u8[4] | (u8[5] << 8);
+        r.ctype = utf8d.decode(u8.subarray(6));
+    } else if (u8[1] === 0x44) r.parts.push(u8.slice(4));
+    else if (u8[1] === 0x5a) reqEnd(null);
+}
+function liveRequest(method, target, body) {
+    const run = () => new Promise((ok, no) => {
+        const ws = liveWs;
+        if (!ws || ws.readyState !== 1) { no(liveFailed("shut")); return; }
+        const id = reqId = (reqId + 1) & 0xffff;
+        const head = utf8.encode(method + " " + target + "\n");
+        const req = new Uint8Array(head.length + (body ? body.length : 0));
+        req.set(head);
+        if (body) req.set(body, head.length);
+        reqNow = { id, ok, no, status: 0, ctype: "", parts: [], timer: 0 };
+        reqTimer(reqNow);
+        for (let at = 0, first = true; first || at < req.length; first = false) {
+            const k = first ? 8 : 4, take = Math.min(reqPiece - k, req.length - at);
+            const pl = new Uint8Array(k + take);
+            pl[0] = 0x72; pl[1] = first ? 0x51 : 0x42; pl[2] = id & 255; pl[3] = id >> 8;
+            if (first) new DataView(pl.buffer).setUint32(4, req.length, true);
+            pl.set(req.subarray(at, at + take), k);
+            liveSend(ws, pl);
+            at += take;
+        }
+    });
+    const p = reqChain.then(run, run);
+    reqChain = p.catch(() => { });
+    return p;
+}
+// Whether a request goes on the socket: it is open, or opens within
+// LIVE_REQ_WAIT_MS.
+async function liveReady() {
+    for (let t = 0; t <= LIVE_REQ_WAIT_MS; t += 50) {
+        const ws = liveWs;
+        if (!reqPiece || !liveOn || taken || !ws || ws.readyState > 1) return false;
+        if (ws.readyState === 1) return true;
+        await new Promise((ok) => setTimeout(ok, 50));
+    }
+    return false;
+}
+// A board request: on the live socket where it takes them (unless `http`),
+// else HTTP. Throws an Error with `live` when the socket lost it.
+async function boardFetch(method, target, body, http) {
+    const path = target.split("?")[0];
+    if (!http && path !== "/live" && path !== "/term" && await liveReady()) {
+        return liveRequest(method, target, body);
+    }
+    return fetch(target.slice(1), body ? { method, body } : { method });
+}
+// The socket's beat and its silence: each frame's (liveStep), and before
+// the console's frames run, its boot's (liveOpen), which minds no silence:
+// the VM's start holds this thread for seconds at a time, and a board gone
+// meanwhile ends the request in flight (LIVE_REQ_MS) or closes the socket.
+let liveBootBeat = 0;
+function liveBeat(ws, booting) {
+    const now = performance.now();
+    if (!booting && now - liveHeard > LIVE_LOST_MS) { liveDrop(ws, "silent"); return; }
+    if (now - liveSaid >= LIVE_BEAT_MS) {
+        liveSaid = now;
+        const e = new Uint8Array(10);
+        e[0] = 0x63; e[1] = 0x65;
+        e.set(new Uint8Array(new Float64Array([now]).buffer), 2);
+        liveSend(ws, e);
+    }
+}
+
 function liveLater() {
     if (!liveOn) return;
     const ms = LIVE_RETRY_MS[Math.min(liveRetry++, LIVE_RETRY_MS.length - 1)];
@@ -2319,6 +2460,7 @@ function liveDrop(ws, why) {
     if (liveWs !== ws) return;
     liveWs = null;
     try { ws.close(1000); } catch (e) { }
+    reqEnd(liveFailed("dropped"));
     LIVE.drops++;
     liveQ.push({ s: 0, why: why });
     termLiveLost(TERM.LOST);
@@ -2358,6 +2500,12 @@ async function liveOpen() {
         liveHeard = liveSaid = performance.now();
         liveQ.push({ s: 1 });
         if (termLive) termLiveSay("O", u16s(termLive.cols, termLive.rows));
+        if (!livePump && !liveBootBeat) {
+            liveBootBeat = setInterval(() => {
+                if (livePump || !liveWs) { clearInterval(liveBootBeat); liveBootBeat = 0; return; }
+                if (liveWs.readyState === 1) liveBeat(liveWs, true);
+            }, LIVE_BEAT_MS / 4);
+        }
     };
     ws.onmessage = (m) => {
         if (liveWs !== ws || typeof m.data === "string") return;
@@ -2371,6 +2519,7 @@ async function liveOpen() {
         LIVE.down++;
         if (u8[0] === 0x6e || u8[0] === 0x64) liveQ.push({ d: u8 });
         else if (u8[0] === 0x74) termLiveIn(u8);
+        else if (u8[0] === 0x72) liveAnswer(u8);
         else if (u8[0] === 0x63 && u8[1] === 0x48) liveHinted(u8.subarray(2));
         else if (u8[0] === 0x63 && u8[1] === 0x45 && u8.length === 10) {
             const t = new Float64Array(u8.slice(2).buffer)[0];
@@ -2381,6 +2530,7 @@ async function liveOpen() {
     ws.onclose = (c) => {
         if (liveWs !== ws) return;
         liveWs = null;
+        reqEnd(liveFailed("closed"));
         LIVE.drops++;
         if (!opened) liveAsk = true;
         liveQ.push({ s: 0, why: c.code + (c.reason ? " " + c.reason : "") });
@@ -2436,15 +2586,7 @@ function liveStep(gap) {
             at += 2 + n;
         }
     }
-    const now = performance.now();
-    if (now - liveHeard > LIVE_LOST_MS) { liveDrop(ws, "silent"); return; }
-    if (now - liveSaid >= LIVE_BEAT_MS) {
-        liveSaid = now;
-        const e = new Uint8Array(10);
-        e[0] = 0x63; e[1] = 0x65;
-        e.set(new Uint8Array(new Float64Array([now]).buffer), 2);
-        liveSend(ws, e);
-    }
+    liveBeat(ws, false);
 }
 
 // MODE 1 delivery: the batch the sweep just built, applied into OPFS.

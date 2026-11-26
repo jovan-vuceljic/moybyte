@@ -95,11 +95,14 @@ function page(b, signin) {
     const self = { postMessage: (m) => posted.push(m) };
     const mp = { _module: fakeModule() };
     const store = { probeMode: async (f) => ((await f("sync")).status === 200 ? "board" : "site") };
-    const make = new Function("mp", "fetch", "self", "store", "say", SECTION + `
+    // no live socket here: the wrapper's HTTP half (worker.js, THE REQUESTS)
+    const boardFetch = (method, target, body) =>
+        b.fetch(target.slice(1), body ? { method, body } : { method });
+    const make = new Function("mp", "fetch", "self", "store", "say", "boardFetch", SECTION + `
         return { signIn, sealed, pairPassword, claimPassword, takenAway,
                  state: () => ({ auth, authOpen, signedIn, authNeed, authCable }),
                  set: (a) => { auth = Object.assign(auth, JSON.parse(JSON.stringify(a))); } };`);
-    const w = make(mp, b.fetch, self, store, () => {});
+    const w = make(mp, b.fetch, self, store, () => {}, boardFetch);
     if (signin) w.set(signin);
     w.posted = posted;
     return w;
