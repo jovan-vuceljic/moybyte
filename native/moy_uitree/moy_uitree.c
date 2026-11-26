@@ -1480,11 +1480,15 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
     if (!strcmp(name, "look") && kind == UIT_TOAST) {
-        // look="flat" (TS_FLAT): the pill in flat fills, the page's room its own
-        if (strcmp(src, "flat"))
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("toast look=%s: \"flat\"", "toast look=%s"), src);
-        N->lit |= TS_FLAT;
-        return add_prop(e, node, name, src, repr, PK_LIT, 1);
+        // look="flat" (TS_FLAT): the pill in flat fills, the page's room its own; "badge"
+        // (TS_BADGE) and "secret" (TS_SECRET): a banner as an achievement's, at the room's foot
+        static const char *const LOOKS[] = {"flat", "badge", "secret"};
+        int i = lit_index(src, LOOKS, 3);
+        if (i < 0)
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("toast look=%s: \"flat\", \"badge\" or \"secret\"",
+                                                   "toast look=%s"), src);
+        N->lit |= (uint8_t)(1 << i);
+        return add_prop(e, node, name, src, repr, PK_LIT, 1 << i);
     }
     if (!strcmp(name, "look") && kind == UIT_BUTTON) {
         // look="hero" (BT_HERO): the page's lead verb, half again a row's height, twice the pads, a

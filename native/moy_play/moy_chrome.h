@@ -143,11 +143,12 @@ void moy_chrome_raster(const moy_chrome_list_t *l, uint16_t *px, int w, int h,
 // The banners a run the kernel drives shows over its frames, the shell's
 // copies (runtime/shell/console_notices.py): the system notice on `icon`'s
 // tile (the shell's NOTICE_ICONS: a check, a warning, work going on) until
-// `until_ms`, and the unlock banner -- `head` over the badge's
-// `name` on its `icon`'s tile, a secret's (`secret`) with confetti -- armed
-// for MOY_CHROME_TOAST_MS (widgets.TOAST_MS) up to `until_ms`.
+// `until_ms`, and the badge banner -- `head` over the badge's `name` on its
+// `icon`'s tile at the foot of the frame, its shine crossing it over
+// MOY_CHROME_BURST_MS, a secret's (`secret`) with confetti -- armed for
+// MOY_CHROME_TOAST_MS (widgets.TOAST_MS) up to `until_ms`.
 #define MOY_CHROME_TOAST_MS 2600u
-#define MOY_CHROME_BURST_MS 420u
+#define MOY_CHROME_BURST_MS 420u      // achievements_ui.BURST_MS
 void moy_chrome_notice(const char *title, const char *sub, const char *icon, uint32_t until_ms);
 void moy_chrome_toast_arm(const char *head, const char *name, const char *icon, bool secret,
                           uint32_t until_ms);
@@ -156,10 +157,10 @@ void moy_chrome_toast_arm(const char *head, const char *name, const char *icon, 
 // an `until_ms` of 0 takes it down.
 void moy_chrome_note(const char *head, const char *name, const char *icon, uint32_t until_ms);
 // What is up at `now`, drawn over the run's RGB565 canvas `px` (`w` x `h`,
-// its palette `pal`) at the top centre in the kernel's look
-// (MOY_UI_LOOK_KERNEL: the theme chrome_inks last handed over), by
-// moy_ui_unlock: the notice, the unlock banner, then the notification
-// banner; last, while a process holds the microphone, the recording
+// its palette `pal`) in the kernel's look (MOY_UI_LOOK_KERNEL: the theme
+// chrome_inks last handed over): the notice by moy_ui_unlock at the top
+// centre, the badge banner by moy_ui_badge at the foot, then the
+// notification banner by moy_ui_unlock at the top centre; last, while a process holds the microphone, the recording
 // indicator (moy_ui_rec) at the top right. False: nothing was.
 // Whether moy_chrome_overlay_draw would draw anything at `now`.
 bool moy_chrome_overlay_up(uint32_t now);

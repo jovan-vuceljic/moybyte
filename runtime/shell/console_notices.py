@@ -32,6 +32,9 @@ import achievements as _ach
 # each its own, so each keeps its words.
 UNLOCK, NOTICE, NOTE, LOADING, TIP, SAVER = 0, 1, 2, 3, 4, 5
 _PAGES = 6
+# The value_row metric of the handheld's hint band (MOY_UI_M_VALUE_ROW_HINTS),
+# which the badge banner stands over.
+_VR_HINTS = 16
 
 
 # A notice's kind and its tile's icon: "ok" a check, "busy" work going on
@@ -229,7 +232,7 @@ class Notices:
             import uitree_editor
             if which <= LOADING:
                 import banner_ui as m
-                build = m.loading if which == LOADING else m.banner
+                build = m.loading if which == LOADING else m.badge if which == UNLOCK else m.banner
             else:
                 import overlay_ui as m
                 build = m.tip if which == TIP else m.saver
@@ -283,12 +286,13 @@ class Notices:
             card = self._cards[which] = pg.rect_of("tip")
         return card
 
-    def paint_banner(self, which, rect, head, sub="", icon="", burst=0):
-        """Banner `which` (UNLOCK, NOTICE, NOTE: `banner_ui.banner`; LOADING:
+    def paint_banner(self, which, rect, head, sub="", icon="", burst=0, secret=False):
+        """Banner `which` (NOTICE, NOTE: `banner_ui.banner`; UNLOCK:
+        `banner_ui.badge`, a `secret`'s with its confetti; LOADING:
         `banner_ui.loading`) painted on the system canvas in `rect`, its
         words written where they are others: a banner's card at the top
-        centre of `rect`, the loading pill filling it. Its card's rect, or
-        None where it drew none."""
+        centre of `rect`, the badge's at its foot, the loading pill filling
+        it. Its card's rect, or None where it drew none."""
         import banner_ui
         pg = self._page(which)
         st = banner_ui.s
@@ -296,13 +300,14 @@ class Notices:
         moved = _put(st, "sub", sub) or moved
         moved = _put(st, "icon", icon) or moved
         moved = _put(st, "burst", burst) or moved
+        moved = _put(st, "secret", secret) or moved
         if moved:
             pg.committed()
             self._cards[which] = None
         self._paint(pg, self.ws.sys_canvas, self.ws.theme_colors, rect)
         card = self._cards[which]
         if card is None:                # the page's toast, by its key
-            card = self._cards[which] = pg.rect_of("banner")
+            card = self._cards[which] = pg.rect_of("secret" if secret else "banner")
         return card
 
     def _draw_notice(self):
@@ -321,21 +326,39 @@ class Notices:
                                  notice_icon(kind))
 
     def _draw_toast(self):
-        """The unlock banner over whatever is up (`ach.toast`), at the top
-        centre of the glass: under the bar where there is one, at the glass's
-        top over a fullscreen game. A secret's bursts confetti from its
-        edges (achievements_ui names the heads and the burst)."""
+        """The badge banner over whatever is up (`ach.toast`), at the foot of
+        the glass, where the top is busier: over the hint strip on a
+        handheld whose input has keys, at the glass's foot over a fullscreen
+        game. Its shine crosses it as it comes, and a secret's bursts
+        confetti from its edges (achievements_ui names the heads and the
+        entrance's span)."""
         ws = self.ws
         t = ws.ach.toast
         if t is None:
             return
         cv = ws.sys_canvas
         top = self._note_top()
-        burst = 0
-        if t[3]:
-            el = _ticks_diff(_ticks_ms(), ws.toast_at)
-            burst = 255 if el >= _ach_ui.BURST_MS else max(1, el * 255 // _ach_ui.BURST_MS)
-        self.paint_banner(UNLOCK, self.room(UNLOCK, 0, top, cv.w, cv.h - top), t[0], t[1], t[2], burst)
+        el = _ticks_diff(_ticks_ms(), ws.toast_at)
+        burst = 255 if el >= _ach_ui.BURST_MS else max(1, el * 255 // _ach_ui.BURST_MS)
+        self.paint_banner(UNLOCK, self.room(UNLOCK, 0, top, cv.w, self._toast_foot() - top), t[0], t[1],
+                          t[2], burst, bool(t[3]))
+
+    def _toast_foot(self):
+        """Where the badge banner's foot stands: a gap over the content's
+        foot (the glass's over a fullscreen game), and on a handheld whose
+        input has keys over its hint strip too."""
+        ws = self.ws
+        lay = ws.layout
+        desk = _desk_class()
+        gap = 12 if desk else 6 * lay.fs
+        wm = ws.wm
+        if (wm.top_is_player() and getattr(wm, "mode", None) != "desktop"
+                and not ws.running_cart_shows_bar()):
+            return ws.sys_canvas.h - gap
+        foot = lay.cy + lay.ch - gap
+        if not desk and _ui_draw.hint_kind() != "touch":
+            foot -= _ui_draw.metrics("value_row")[_VR_HINTS] * lay.fs
+        return foot
 
     # -- notifications (docs/os_2026-11/processes.md §7) ----------------------
 

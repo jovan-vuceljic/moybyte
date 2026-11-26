@@ -457,11 +457,11 @@ bool moy_chrome_overlay_draw(uint16_t *px, int w, int h, const uint16_t *pal, ui
     if (K.toast_up) {
         size_t n = strlen(K.icon);
         uint32_t el = now - K.toast_at;
-        int burst = !K.secret ? 0 : el >= MOY_CHROME_BURST_MS ? 255
-                  : 1 + (int)(el * 254u / MOY_CHROME_BURST_MS);
-        moy_ui_unlock(&s, w / 2, 6, span(K.head), span(K.name),
-                      moy_ui_icon_slot((const uint8_t *)K.icon, n),
-                      moy_ui_icon_glyph((const uint8_t *)K.icon, n), burst, 1, 0, NULL);
+        int shine = el >= MOY_CHROME_BURST_MS ? 255 : 1 + (int)(el * 254u / MOY_CHROME_BURST_MS);
+        moy_ui_badge(&s, w / 2, h - 6, span(K.head), span(K.name),
+                     moy_ui_icon_slot((const uint8_t *)K.icon, n),
+                     moy_ui_icon_glyph((const uint8_t *)K.icon, n), shine, K.secret ? shine : 0, 1, 0,
+                     NULL);
     }
     if (K.note_up) {
         size_t n = strlen(K.note_icon);

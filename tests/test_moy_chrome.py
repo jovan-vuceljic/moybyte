@@ -95,9 +95,10 @@ def test_the_strip_draws_in_the_inks_the_theme_names(ws):
 
 def test_a_run_the_kernel_drives_shows_the_banners_until_their_deadlines(ws):
     """The kernel's copies of the notice and the unlock banner draw over a
-    run's frame in the look of the theme chrome_inks handed over
-    (moy_ui_unlock) until each deadline, and nothing after -- whatever theme
-    the toolkit's ring of looks holds in which slot."""
+    run's frame in the look of the theme chrome_inks handed over until each
+    deadline, and nothing after -- whatever theme the toolkit's ring of
+    looks holds in which slot. The unlock banner is the badge's
+    (moy_ui_badge), at the frame's foot."""
     cv = ws.run.canvas
     w, h = cv.w, cv.h
     pal = [cv._wire[cv._pal_map[i]] for i in range(64)]
@@ -114,7 +115,7 @@ def test_a_run_the_kernel_drives_shows_the_banners_until_their_deadlines(ws):
     raw = (ctypes.c_uint16 * (w * h))()
     assert moy_play.chrome_overlay_draw(raw, w, h, pal, now)
     top = [i for i in range(w * h) if raw[i]]
-    assert top and max(top) // w < 70, "the banner stands at the top of the frame"
+    assert top and min(top) // w > h - 70, "the badge banner stands at the foot of the frame"
     face = Counter(raw[i] for i in top).most_common(1)[0][0]
     assert face == pal[th["surface"]], "the banner's plate is the handed theme's surface"
     raw = (ctypes.c_uint16 * (w * h))()

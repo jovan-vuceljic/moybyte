@@ -425,7 +425,7 @@ Python's alone.
 | `rule()` | a divider | |
 | `note(lines)` | a card in the page's flow | `icon=` (`"warn"` in the danger tone) |
 | `empty(title)` | what a page with nothing on it says; controls built in it stand under it; its lines wrap at word breaks to the column it stands in (a page, a cell); where its disc would push them past its room (its view, a placed page's stack), its words stand without it | `icon=`, `lines=` |
-| `toast(text)` | a pill over the page's foot, or a banner | `icon=`, `sub=`, `burst=`, `look="flat"`, `key=` the name a host's `rect_of` asks by |
+| `toast(text)` | a pill over the page's foot, or a banner | `icon=`, `sub=`, `burst=`, `look="flat"` `"badge"` `"secret"`, `key=` the name a host's `rect_of` asks by |
 | `bubble(text)` | a chat message, a stop | `side="in"`/`"out"`, `head=`, `status=`, `signal=`, `tone="failed"`, `lines=`, `on=`, `cut=` |
 | `text_view(name)` | read-only lines of a text state or a model | `wrap=`, `follow=`, `syntax=`, `face=`, `look="well"`, `gutter=` |
 | `picture(image)` | one picture | `side=`, `icon=`, `tone=`, `look="tile"`, `on=` makes it a stop |
@@ -505,8 +505,11 @@ widths at the page's end, a status label before them, under what scrolls;
 `look="share"` shares its width among them. `ui.toast(text, icon=)` is a
 pill over the page above its foot (`look="flat"` in flat fills, filling the
 page's room), and with `sub=` a banner: a card at the top centre of the
-page, `text` over the `sub` line, `burst=` (0..255) its confetti; a dialog
-lies over the page.
+page, `text` over the `sub` line, `burst=` (0..255) its confetti;
+`look="badge"` is an achievement's banner instead, at the foot of the
+page's room, ringed in the accent, `burst=` its shine crossing it, and
+`look="secret"` the badge's with the confetti too. A dialog lies over the
+page.
 `ui.page(title, status=)` leads the hints band with its words (a page laid
 out in a split, its own or one in a switch's shown case, has the band cut
 from its room). A split among a page's other rows, or in a group or a
@@ -1011,7 +1014,7 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 | `note` | 1 | none | `icon` tpl, `lines` list of tpl |
 | `empty` | 1 | tpl | `icon` tpl, `lines` list of tpl |
 | `bubble` | 1 | tpl | `side` tpl, `head` tpl, `status` tpl, `signal` int, `tone` tpl, `max` int, `lines` int, `on` action, `cut` action |
-| `toast` | 2 | tpl | `icon` tpl, `sub` tpl, `burst` int, `look` `"flat"`, `key` key |
+| `toast` | 2 | tpl | `icon` tpl, `sub` tpl, `burst` int, `look` `"flat"` `"badge"` `"secret"`, `key` key |
 | `stepper` | 2 | tpl | `value` tpl, `prev` action, `next` action, `tone` `"ink"` `"dim"`, `focus` cond |
 | `picture` | 2 | state | `side` int, `on` action, `look` `"tile"`, `icon` tpl, `tone` tpl |
 | `progress` | 2 | state | `max` int, `label` tpl, `look` `"count"` |

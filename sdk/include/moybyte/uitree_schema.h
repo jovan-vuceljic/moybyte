@@ -50,6 +50,8 @@ static const char *const ut_kind_names_[] = {
 #define UT_LOOK_SHARE "share"
 #define UT_LOOK_BAND "band"
 #define UT_LOOK_FLAT "flat"
+#define UT_LOOK_BADGE "badge"
+#define UT_LOOK_SECRET "secret"
 #define UT_LOOK_TILE "tile"
 #define UT_LOOK_COUNT "count"
 #define UT_LOOK_WELL "well"

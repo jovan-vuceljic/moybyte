@@ -1372,7 +1372,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:flat",
+     "type": "word:flat,badge,secret",
      "level": 2
     },
     "key": {

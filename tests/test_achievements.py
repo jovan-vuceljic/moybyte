@@ -142,6 +142,30 @@ def test_toast_renders(tmp_path):
     assert probe.distinct_pixels_in(drv.rgb888(), 3) > 4        # not a blank frame
 
 
+def test_the_badge_banner_stands_at_the_foot_over_the_hints(tmp_path):
+    """The unlock banner is an achievement's (#270): at the foot of the
+    glass, over the hint strip where the input has keys, and down to a gap
+    over the content's foot under touch alone."""
+    from runtime import console_notices, ui_draw
+    was = ui_draw.input_kind()
+    try:
+        for kind in ("keys", "touch"):
+            ws = _ws(tmp_path / kind)
+            drv = host_app.ConsoleDriver(ws)
+            ui_draw.input_kind(kind)
+            ws.notices.achievement_unlocked(("You found a badge!", "First Steps", "trophy", False))
+            drv.frame(1 / 30)
+            card = ws.notices._cards[console_notices.UNLOCK]
+            lay = ws.layout
+            foot = lay.cy + lay.ch - 6 * lay.fs
+            if kind == "keys":
+                foot -= ui_draw.metrics("value_row")[console_notices._VR_HINTS] * lay.fs
+            assert card is not None and card[1] + card[3] == foot, (kind, card, foot)
+            assert card[1] > ws.sys_canvas.h // 2
+    finally:
+        ui_draw.input_kind(was)
+
+
 def _count_line(ws, drv):
     """The page's count row as a frame drawn now reads it."""
     from ui_said import said

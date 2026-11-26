@@ -4711,7 +4711,9 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         // flat fills, filling the page's room); its icon, else check. With sub=, the banner:
         // its card centred at the top of the page's room, the icon's tile, the text in `value`
         // over the sub line, a burst= of confetti from its edges (1..255 of the way out, 0
-        // none). Its rect is the pill's or the card's.
+        // none); look="badge" an achievement's, at the foot of the room, ringed in the accent,
+        // burst= its shine crossing it, and "secret" the badge's with the confetti too. Its
+        // rect is the pill's or the card's.
         int desk = (e->flags & UIT_F_DESK) != 0, flat = (N->lit & TS_FLAT) != 0;
         uint32_t ni = 0, ai = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &ni) : 0;
         int32_t out[4], lift = flat ? 0 : desk ? 12 : 6 * e->fs;
@@ -4726,9 +4728,16 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
             moy_ui_box_t b = {0, 0, 0, 0};
             c->fl.dirty = 1;            // over the page, whole (as the pill)
             c->fl.top = 1;
-            moy_ui_unlock(s, e->rect[0] + e->rect[2] / 2, e->rect[1], sspan(e, a1, n1), sspan(e, a2, n2),
-                          moy_ui_icon_slot(ic.p, ic.n), moy_ui_icon_glyph(ic.p, ic.n),
-                          burst < 0 ? 0 : burst > 255 ? 255 : burst, e->fs, desk, &b);
+            burst = burst < 0 ? 0 : burst > 255 ? 255 : burst;
+            int slot = moy_ui_icon_slot(ic.p, ic.n), glyph = moy_ui_icon_glyph(ic.p, ic.n);
+            if (N->lit & (TS_BADGE | TS_SECRET)) {
+                moy_ui_badge(s, e->rect[0] + e->rect[2] / 2, e->rect[1] + e->rect[3], sspan(e, a1, n1),
+                             sspan(e, a2, n2), slot, glyph, burst, (N->lit & TS_SECRET) ? burst : 0, e->fs,
+                             desk, &b);
+            } else {
+                moy_ui_unlock(s, e->rect[0] + e->rect[2] / 2, e->rect[1], sspan(e, a1, n1), sspan(e, a2, n2),
+                              slot, glyph, burst, e->fs, desk, &b);
+            }
             out[0] = b.x, out[1] = b.y, out[2] = b.w, out[3] = b.h;
         } else {
             moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3] - lift);

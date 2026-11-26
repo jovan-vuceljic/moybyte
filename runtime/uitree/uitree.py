@@ -2746,9 +2746,11 @@ def toast(text, **p):
     look="flat" draws the pill in flat fills, filling the page's room. With
     `sub` it is a banner: a card centred at the top of the page's room, the
     icon on its tile, `text` over the `sub` line, and `burst` (an int,
-    1..255 of the way out, 0 none) confetti from its edges. `key` names it
-    (its kind and place where it has none), the name a host's `rect_of`
-    asks its rect by."""
+    1..255 of the way out, 0 none) confetti from its edges. look="badge"
+    makes the banner an achievement's: its card at the foot of the page's
+    room, ringed in the accent, `burst` the shine crossing it; look="secret"
+    the badge's with the confetti too. `key` names it (its kind and place
+    where it has none), the name a host's `rect_of` asks its rect by."""
     where = _caller()
     key = p.pop("key", None)
     if key is not None and (not isinstance(key, str) or not key):
