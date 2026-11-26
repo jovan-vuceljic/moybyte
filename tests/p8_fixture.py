@@ -46,6 +46,17 @@ def read_p8_text(path=None):
         return f.read()
 
 
+def heavy_p8_text(functions):
+    """tiny_dash with `functions` more functions in its Lua, none called: a
+    cart that takes the browser's converter seconds to convert, for the
+    check that the console goes on drawing meanwhile."""
+    body = "".join(
+        "function busy_%d(a, b)\n local t = {}\n for k=1,8 do t[k] = a*k + b - %d end\n"
+        " if a > b then return t[1] else return t[2] end\nend\n" % (i, i)
+        for i in range(functions))
+    return read_p8_text().replace("ticks = 0\n", "ticks = 0\n" + body, 1)
+
+
 def _hexbytes(line, n):
     """`n` bytes from a 2n-char hex row, short rows zero-padded."""
     out = bytearray(n)

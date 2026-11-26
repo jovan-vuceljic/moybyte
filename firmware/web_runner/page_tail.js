@@ -73,7 +73,7 @@ else if(m.t==="pick"){pkAsk(m);}
 else if(m.t==="unpick"){pkDone(m.id);}
 else if(m.t==="installed"){window.__moyInstalled=m.folder;}
 else if(m.t==="state"){var sw=stateWait;stateWait=[];
-var so=JSON.parse(m.json);if(so&&typeof so==="object"){so.sink=m.sink||null;so.loop=m.loop||null;so.live=m.live||null;so.hints=m.hints||null;}
+var so=JSON.parse(m.json);if(so&&typeof so==="object"){so.sink=m.sink||null;so.loop=m.loop||null;so.live=m.live||null;so.hints=m.hints||null;so.p8=m.p8||null;}
 for(var si=0;si<sw.length;si++)sw[si](so);}
 else if(m.t==="pcm"){if(HUD.on){var p0=PT();playPCM(m);hudPcm(PT()-p0);}else playPCM(m);}
 else if(m.t==="wperf"){console.log("[moy worker] "+m.s);HUD.w="worker "+m.s.split(" | ").slice(0,2).join("  ");if(HUD.on)drawHud();}
@@ -262,7 +262,9 @@ function pzDownload(name,buf){var url=URL.createObjectURL(new Blob([buf],{type:"
 var a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();
 document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},4000);
 window.__moySaved=name;pzSay("Saved "+name,false);}
-function pzImport(file){if(!WORKER||!file)return;pzSay("Importing "+file.name,false);
+// An import is work going on: its notice's tile says so (a PICO-8 cart's
+// converter says its stages over it, worker.js THE CONVERTER).
+function pzImport(file){if(!WORKER||!file)return;send({type:"page",say:["Importing "+file.name,"","busy"]});
 file.arrayBuffer().then(function(buf){
 WORKER.postMessage({t:"import",name:file.name,buf:buf},[buf]);})
 .catch(function(e){pzSay("Could not read that file",true);console.error(e);});}

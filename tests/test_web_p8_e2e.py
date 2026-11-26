@@ -67,14 +67,14 @@ def _serve(port):
     pytest.fail("serve.py never answered")
 
 
-def _run(base, profile, outdir, drop):
-    """One browsershot run of the p8 drop scenario -> (stdout, [js results])."""
+def _run(base, profile, outdir, drop, scenario="p8_import"):
+    """One browsershot run of a p8 drop scenario -> (stdout, [js results])."""
     env = dict(os.environ, MOY_BASE=base, MOY_PROFILE=str(profile),
                MOY_DROP=str(drop))
     r = subprocess.run(
-        ["node", "browsershot.mjs", "scenarios/p8_import.json", str(outdir)],
+        ["node", "browsershot.mjs", "scenarios/%s.json" % scenario, str(outdir)],
         cwd=RUNNER, env=env, capture_output=True, text=True, timeout=300)
-    assert r.returncode == 0, "browsershot p8_import failed:\n%s\n%s" % (
+    assert r.returncode == 0, "browsershot %s failed:\n%s\n%s" % (scenario,
         r.stdout[-4000:], r.stderr[-500:])
     js = re.findall(r"js -> (.*)$", r.stdout, re.M)
     return r.stdout, [j.strip().strip('"') for j in js]
@@ -196,3 +196,46 @@ def test_a_file_that_is_not_a_cart_is_reported_not_crashed(tmp_path):
     finally:
         server.terminate()
         server.wait(timeout=10)
+
+
+def test_the_console_draws_and_says_the_stage_while_a_cart_converts(tmp_path):
+    """A conversion takes seconds (an iPhone's, minutes), and it runs in a VM
+    of its own (worker.js, THE CONVERTER): the console's worker answers and
+    draws all through it, and its notice says the stage and the seconds so
+    far on a busy tile, then makes way for the report card. Before, the
+    console's thread converted and the first question asked during it
+    waited for the end."""
+    import json
+    import p8_fixture
+    web_e2e.require("store", "p8")
+    drop = tmp_path / "heavy_dash.p8"
+    drop.write_text(p8_fixture.heavy_p8_text(150), encoding="utf-8")
+    port = web_e2e.free_port()
+    server, base = _serve(port)
+    try:
+        out, js = _run(base, tmp_path / "chrome", tmp_path / "s", drop, "p8_progress")
+    finally:
+        server.terminate()
+        server.wait(timeout=10)
+    assert len(js) >= 6, out[-3000:]
+    _mode, sent, took, samples, after, card = js[:6]
+    assert sent == "heavy_dash.p8", sent
+    assert "imported local.heavy_dash.moy" in took, took
+    during = [s for s in json.loads(samples.replace('\\"', '"')) if not s[4]]
+    assert len(during) >= 4, ("the conversion was too quick to watch", took, samples)
+    slow = [s for s in during if s[1] > 1000]
+    assert not slow, ("the console's worker stopped answering while the cart "
+                      "converted", slow)
+    assert during[-1][2] > during[0][2], ("the console drew nothing while the "
+                                          "cart converted", during)
+    said = [s[3] for s in during]
+    assert all(n.startswith("Importing heavy_dash.p8 / ") for n in said), said
+    assert {s[5] for s in during} == {"busy"}, ("its tile is not work going on", during)
+    stages = {n.split(" / ", 1)[1].split(" (")[0] for n in said}
+    assert stages & {"Checking what it uses", "Writing the cart"}, said
+    assert any(n.endswith("s)") for n in said), ("no seconds said", said)
+    st = json.loads(after.replace('\\"', '"'))
+    assert st["p8"] and st["p8"]["boot"] > 0 and st["p8"]["mem"] > 0, st
+    assert not (st["notice"] and st["notice"][0].startswith("Importing")), \
+        ("the progress notice stayed up after the import", st)
+    assert card.startswith("offer|"), card

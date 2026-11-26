@@ -1,0 +1,16 @@
+{"query": "?dev=1", "boot_ms": 20000, "steps": [
+  {"note": "A PICO-8 cart converts in a VM of its own (worker.js, THE CONVERTER) while the console goes on drawing and says which stage it is on. $MOY_DROP is a cart big enough to take seconds; the page asks the console's state every 250ms through the conversion and records each answer: when it was asked (ms from the drop), how long the answer took, the frames drawn, the notice up, whether the import had landed and the notice's kind."},
+  {"wait": 3000},
+  {"js": "window.__moyKept || 'no mode'"},
+  {"file": "$MOY_DROP", "as": "__drop"},
+  {"js": "(function(){window.__S=[];var t0=window.__t0=performance.now(),busy=0;window.__iv=setInterval(function(){if(busy)return;busy=1;var a=performance.now(),done=!!window.__moyImported;window.__moyState().then(function(s){busy=0;window.__S.push([Math.round(a-t0),Math.round(performance.now()-a),s.frames,s.notice_up?s.notice_up[0]+' / '+s.notice_up[1]:'',done,s.notice_up?s.notice_up[2]:'']);});},250);WORKER.postMessage({t:'import',name:window.__dropName,buf:window.__drop},[window.__drop]);return window.__dropName;})()"},
+  {"wait": 1500},
+  {"shot": "p8_converting"},
+  {"waitFor": "window.__moyImported", "timeout": 60000},
+  {"js": "(function(){var t=Math.round(performance.now()-window.__t0);clearInterval(window.__iv);return t+' ms: '+window.__moyImported;})()"},
+  {"wait": 600},
+  {"js": "JSON.stringify(window.__S)"},
+  {"js": "window.__moyState().then(function(s){return JSON.stringify({p8:s.p8,notice:s.notice_up});})"},
+  {"js": "window.__moyCard ? window.__moyCard.kind+'|'+window.__moyCard.title : 'no card'"},
+  {"shot": "p8_converted"}
+]}

@@ -108,7 +108,7 @@ def test_a_run_the_kernel_drives_shows_the_banners_until_their_deadlines(ws):
     now = 1000000
     # The kernel's banners are process state: a notice an earlier test armed
     # on the real clock may still be up at this made-up `now`.
-    moy_play.chrome_notice("", "", True, now)
+    moy_play.chrome_notice("", "", "check", now)
     ui.chrome_inks(th, NAMES)
     moy_play.chrome_toast_arm("You found a badge!", "Map Maker", "map", False, now + 2600)
     raw = (ctypes.c_uint16 * (w * h))()
@@ -120,3 +120,33 @@ def test_a_run_the_kernel_drives_shows_the_banners_until_their_deadlines(ws):
     raw = (ctypes.c_uint16 * (w * h))()
     assert not moy_play.chrome_overlay_draw(raw, w, h, pal, now + 2601)
     assert not any(raw)
+
+
+def test_a_busy_notice_s_tile_shows_work_going_on(ws):
+    """A notice's kind names its tile, on the shell's banner and the
+    kernel's copy alike (console_notices.notice_icon): a check, a warning,
+    and the Music app's opening icon for work going on (a browser's
+    PICO-8 import, worker.js THE CONVERTER), each tile its own."""
+    import console_notices
+    from chrome import _ticks_ms
+    assert [console_notices.notice_icon(k) for k in ("ok", "busy", "bad")] == \
+        ["check", "pulse", "warn"]
+    cv = ws.run.canvas
+    w, h = cv.w, cv.h
+    pal = [cv._wire[cv._pal_map[i]] for i in range(64)]
+    ui.chrome_inks(ws.theme_colors, NAMES)
+    drawn, shell = {}, {}
+    for kind in ("ok", "busy", "bad", "busy"):
+        ws.notices.notice("Importing c.p8", "Writing the cart", kind)
+        raw = (ctypes.c_uint16 * (w * h))()
+        assert moy_play.chrome_overlay_draw(raw, w, h, pal, _ticks_ms())
+        drawn.setdefault(kind, []).append(bytes(raw))
+        ws.sys_canvas._buf[:] = bytes(len(ws.sys_canvas._buf))  # its edges blend over what is under
+        assert ws.notices._draw_notice() is not None
+        shell.setdefault(kind, []).append(bytes(ws.sys_canvas._buf))
+    for got in (drawn, shell):
+        assert got["busy"][0] == got["busy"][1]
+        assert len({got["ok"][0], got["busy"][0], got["bad"][0]}) == 3
+    ws.notices.withdraw("Importing c.p8")
+    assert not moy_play.chrome_overlay_draw((ctypes.c_uint16 * (w * h))(), w, h, pal,
+                                            _ticks_ms() + 1)

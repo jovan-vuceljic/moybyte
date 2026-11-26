@@ -118,7 +118,7 @@ def front(tmp_path):
     ws = build_ws(tmp_path)
     # An overlay an earlier run in this process armed on the real clock is
     # still up at these frames' made-up times, and settles them into the canvas.
-    mp.chrome_notice("", "", True, 0)
+    mp.chrome_notice("", "", "check", 0)
     mp.chrome_toast_arm("", "", "", False, 0)
     mp.chrome_note("", "", "", 0)
     buf = (ctypes.c_uint16 * (W * H))()

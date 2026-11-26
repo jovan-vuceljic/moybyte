@@ -953,17 +953,27 @@ def drop_kind(name, head_json):
     return "p8" if p8_writer.looks_like_png(bytes(json.loads(head_json))) else "archive"
 
 
+def p8_target_json(name, root):
+    """Where a PICO-8 cart dropped as `name` lands in the store `root`, by
+    the store's import rule (moy_carts.import_base, import_target):
+    {"out": its path, "dir": its folder}. Asked once the cart converted,
+    so two drops never take one folder."""
+    out_dir = moy_carts.import_target(root, moy_carts.import_base(name))
+    return json.dumps({"out": out_dir, "dir": out_dir.rsplit("/", 1)[-1]})
+
+
 def import_p8_json(path, name, root):
     """Convert a dropped PICO-8 cart at `path` into a `.moy` folder (#194) in
-    the store `root`, named by the store's import rule
-    (moy_carts.import_base): web_p8's report, with the folder as `dir`.
+    the store `root`, on the console's own thread (worker.js, THE CONVERTER,
+    where a worker can start no worker of its own): web_p8's report, with
+    the folder as `dir`.
 
     Lazily imported so the console boots without the converter in RAM: a session
     that never drops a cart never pays for it."""
     import web_p8
-    out_dir = moy_carts.import_target(root, moy_carts.import_base(name))
-    r = json.loads(web_p8.import_p8_json(path, name, out_dir))
-    r["dir"] = out_dir.rsplit("/", 1)[-1]
+    t = json.loads(p8_target_json(name, root))
+    r = json.loads(web_p8.import_p8_json(path, name, t["out"]))
+    r["dir"] = t["dir"]
     return json.dumps(r)
 
 

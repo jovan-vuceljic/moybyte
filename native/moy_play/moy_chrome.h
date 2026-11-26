@@ -141,13 +141,14 @@ void moy_chrome_raster(const moy_chrome_list_t *l, uint16_t *px, int w, int h,
 // -- the kernel's state --------------------------------------------------------
 
 // The banners a run the kernel drives shows over its frames, the shell's
-// copies (runtime/shell/console_notices.py): the system notice (`ok`, else a
-// warning) until `until_ms`, and the unlock banner -- `head` over the badge's
+// copies (runtime/shell/console_notices.py): the system notice on `icon`'s
+// tile (the shell's NOTICE_ICONS: a check, a warning, work going on) until
+// `until_ms`, and the unlock banner -- `head` over the badge's
 // `name` on its `icon`'s tile, a secret's (`secret`) with confetti -- armed
 // for MOY_CHROME_TOAST_MS (widgets.TOAST_MS) up to `until_ms`.
 #define MOY_CHROME_TOAST_MS 2600u
 #define MOY_CHROME_BURST_MS 420u
-void moy_chrome_notice(const char *title, const char *sub, bool ok, uint32_t until_ms);
+void moy_chrome_notice(const char *title, const char *sub, const char *icon, uint32_t until_ms);
 void moy_chrome_toast_arm(const char *head, const char *name, const char *icon, bool secret,
                           uint32_t until_ms);
 // The notification banner (runtime/system/notifications.py): `head` (the

@@ -51,6 +51,8 @@
 //                        the claim)
 //   {t:"takeback"}       its user takes the board back from the browser
 //                        that took it (TAKEN)
+//   {t:"convert", name, buf, assets, base}  to a CONVERTER (THE CONVERTER):
+//                        the one PICO-8 cart it converts, TRANSFERRED
 // worker -> main:
 //   {t:"status", s}      boot progress text
 //   {t:"assets", json}   the page's metadata payload (size/title/audio/input)
@@ -93,8 +95,14 @@
 //                        fetch from `host`: the page asks the player for theirs
 //   {t:"unpick", id}     ...and the question is over
 //   {t:"installed", folder, d}  an install reached the browser's store
-//   {t:"state", json, sink, loop}  the answer to {t:"state"}, with the sink's
-//                        counters and the loop's longest waits
+//   {t:"state", json, sink, loop, p8}  the answer to {t:"state"}, with the
+//                        sink's counters, the loop's longest waits and the last
+//                        conversion's cost (THE CONVERTER)
+// a converter -> the console's worker:
+//   {t:"stage", s}       the stage it starts (web_p8's words)
+//   {t:"converted", r, files, boot, ms, mem}  web_p8.convert_json's answer and
+//                        the folder's files by path, TRANSFERRED, with its
+//                        VM's boot and its whole run in ms and its wasm memory
 // THE MODULES, by name (docs/web_console_online_2026-11.md §3): a page the
 // loader (loader.html) booted hands init the pack's assets as Blob URLs, and
 // the VM's module, the store's and the wasm come from them; a page served
@@ -118,7 +126,7 @@ function fetch(url, opt) {
 let mp = null, step = null, applyEvents = null, assets = null, reload = null;
 // The drop's and the export's Python entry points (#194), bound at boot like
 // the rest.
-let importP8Json = null, importArchiveJson = null, exportCart = null, dropKind = null;
+let importP8Json = null, p8Target = null, importArchiveJson = null, exportCart = null, dropKind = null;
 let editCart = null, openCart = null, stateJson = null;
 let wantAssets = false;   // an assets request that arrived before the VM was up
 let idleCollect = null;
@@ -1109,8 +1117,113 @@ function dropped(name, buf) {
     return dropKind(String(name || ""), JSON.stringify(Array.from(head)));
 }
 
-async function importP8(name, buf) {
+// THE CONVERTER. A conversion holds its thread for seconds (an iPhone's,
+// with no JIT, for minutes), so it runs in a VM of its own: a second worker
+// running this file, started for the one cart and ended once it answers.
+// The console's loop goes on drawing meanwhile, and the console says which
+// stage the converter is on (web_p8's words) and for how long, in a busy
+// notice said again each second (page_link.py's `say`), taken down at the end. The
+// converted files come back by path and land where the console's own VM
+// names (web_boot.p8_target_json), asked once they are here, so two drops
+// never take one folder. A worker that can start no worker of its own (an
+// old Safari's) converts on its own thread, the console still meanwhile.
+const P8_BEAT_MS = 1000, P8_SAY_MS = 2500;
+let p8Last = null;
+
+function p8Say(title, sub, ms) {
+    inbox.push(JSON.stringify({ events: [{ type: "page", say: [title, sub, "busy", ms] }] }));
+}
+
+// The converter's end: its first message, the cart.
+async function convertHere(m) {
+    ASSETS_IN = m.assets || null;
+    if (m.base) BASE = m.base;
+    await loadModules(ASSETS_IN);
+    const t0 = performance.now();
+    mp = await loadMicroPython({ heapsize: 16 * 1024 * 1024, url: wasmUrl,
+        stdout: (l) => console.log("[moy p8]", l) });
+    const boot = performance.now() - t0;
+    const drop = mp.pyimport("web_vfs").DROP;
+    mkdirs(dirOf(drop));
+    mp.FS.writeFile(drop, new Uint8Array(m.buf));
+    const r = JSON.parse(mp.pyimport("web_p8").convert_json(drop, String(m.name || ""),
+        (s) => self.postMessage({ t: "stage", s: String(s) })));
+    const files = {}, moved = [];
+    const take = (dir, rel) => {
+        for (const n of mp.FS.readdir(dir)) {
+            if (n === "." || n === "..") continue;
+            if (vfsIsDir(dir + "/" + n)) { take(dir + "/" + n, rel + n + "/"); continue; }
+            const b = mp.FS.readFile(dir + "/" + n);
+            files[rel + n] = b;
+            moved.push(b.buffer);
+        }
+    };
+    if (r.ok) take(r.out, "");
+    self.postMessage({ t: "converted", r: r, files: files, boot: Math.round(boot),
+                       ms: Math.round(performance.now() - t0),
+                       mem: mp._module.HEAPU8.byteLength }, moved);
+    self.close();
+}
+
+// The console's end: the cart to a converter, its stages to `heard`, and
+// its answer.
+function convertAside(name, buf, heard) {
+    return new Promise((ok, fail) => {
+        const w = new Worker(self.location.href, { type: "module" });
+        const end = (e) => { w.terminate(); fail(e); };
+        w.onmessage = (e) => {
+            const c = e.data;
+            if (c.t === "stage") heard(c.s);
+            else if (c.t === "converted") { w.terminate(); ok(c); }
+            else if (c.t === "error") end(new Error(c.msg || "the converter stopped"));
+        };
+        w.onerror = (e) => { e.preventDefault(); end(new Error(e.message || "the converter did not start")); };
+        w.postMessage({ t: "convert", name: name, buf: buf, assets: ASSETS_IN, base: BASE }, [buf]);
+    });
+}
+
+// One conversion at a time: each lands before the next asks for its folder.
+let p8Line = Promise.resolve();
+
+function importP8(name, buf) {
     if (!importP8Json) throw new Error("this console cannot import PICO-8 carts");
+    const go = typeof Worker === "function" ? () => importP8Aside(name, buf)
+                                             : () => importP8Here(name, buf);
+    const run = p8Line.then(go, go);
+    p8Line = run.catch(() => {});
+    return run;
+}
+
+async function importP8Aside(name, buf) {
+    const title = "Importing " + name, t0 = performance.now();
+    let stage = "";
+    const beat = () => {
+        const secs = Math.floor((performance.now() - t0) / 1000);
+        p8Say(title, stage + (secs ? " (" + secs + "s)" : ""), P8_SAY_MS);
+    };
+    beat();
+    const every = setInterval(beat, P8_BEAT_MS);
+    let c;
+    try {
+        c = await convertAside(name, buf, (s) => { stage = s; beat(); });
+    } finally {
+        clearInterval(every);
+        p8Say(title, "", 0);
+    }
+    p8Last = { boot: c.boot, ms: c.ms, mem: c.mem, all: Math.round(performance.now() - t0) };
+    if (!c.r.ok) return { ok: false, report: c.r.report || ["that cart could not be imported"] };
+    const t = JSON.parse(p8Target(name, VFS.carts));
+    writeStore(t.out, c.files);
+    // Same rule as importZip: do NOT rebase the sync watcher. An import is a
+    // CHANGE, so the new files must stay pending and reach the local store on
+    // the next sweep like any other commit.
+    if (rescan) rescan();
+    return { ok: true, dir: t.dir, title: c.r.title, report: c.r.report };
+}
+
+async function importP8Here(name, buf) {
+    // The frames that paint the page's "Importing" notice go first.
+    await new Promise((ok) => setTimeout(ok, 150));
     // One fixed path rather than the dropped name: the name is attacker-shaped
     // text (it came off a file a browser handed us) and the converter only ever
     // needs SOME path to read. The real name still travels as `name`, which is
@@ -1120,9 +1233,6 @@ async function importP8(name, buf) {
     mp.FS.writeFile(tmp, new Uint8Array(buf));
     const r = JSON.parse(importP8Json(tmp, name, VFS.carts));
     if (!r.ok) return { ok: false, report: r.report || ["that cart could not be imported"] };
-    // Same rule as importZip: do NOT rebase the sync watcher. An import is a
-    // CHANGE, so the new files must stay pending and reach the local store on
-    // the next sweep like any other commit.
     if (rescan) rescan();
     return { ok: true, dir: r.dir, title: r.title, report: r.report };
 }
@@ -1627,7 +1737,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + "update_poll_json, update_wants_poll, update_ack_json, update_off, "
         + "wifi_poll_json, wifi_wants_poll, wifi_ack_json, wifi_moved, "
         + "services_json, carts_poll_json, carts_event_json, "
-        + "import_p8_json, import_archive_json, export_cart, drop_kind, "
+        + "import_p8_json, p8_target_json, import_archive_json, export_cart, drop_kind, "
         + "edit_cart, open_cart, state_json, pcm_addr, "
         + "term_enable, term_poll_json, term_feed, term_state, "
         + "live_pump, live_feed, live_state, live_hints, official_hint, store_pulled");
@@ -1648,6 +1758,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     cartsEvent = mp.globals.get("carts_event_json");
     if (keep) cartsSay({ room: [keep.usage, keep.quota] });
     importP8Json = mp.globals.get("import_p8_json");
+    p8Target = mp.globals.get("p8_target_json");
     importArchiveJson = mp.globals.get("import_archive_json");
     exportCart = mp.globals.get("export_cart");
     dropKind = mp.globals.get("drop_kind");
@@ -3135,7 +3246,9 @@ function loop() {
 self.onmessage = async (ev) => {
     const m = ev.data;
     try {
-        if (m.t === "init") {
+        if (m.t === "convert") {
+            await convertHere(m);
+        } else if (m.t === "init") {
             ASSETS_IN = m.assets || null;
             if (m.base) BASE = m.base;
             await init(m.search, !!m.coarse, m.channel || "", m.scheme, m.auth, +m.rate || 0);
@@ -3169,7 +3282,8 @@ self.onmessage = async (ev) => {
             if (liveHidden) liveWasHidden = 1;
         } else if (m.t === "state") {
             self.postMessage({ t: "state", json: stateJson ? stateJson() : "null", sink: sinkStats,
-                               loop: LOOP, live: liveOn ? LIVE : null, hints: liveHints ? HINTS : null });
+                               loop: LOOP, live: liveOn ? LIVE : null, hints: liveHints ? HINTS : null,
+                               p8: p8Last });
         } else if (m.t === "run") {
             // lastStep too: a (re)start must begin with a clean 1/60 dt, not a
             // clamped jump measured from whenever the loop last ran.
@@ -3238,10 +3352,6 @@ self.onmessage = async (ev) => {
         } else if (m.t === "import") {
             try {
                 const kind = dropped(m.name, m.buf);
-                // A conversion holds this thread for seconds (a phone's,
-                // a minute): the frames that paint the page's "Importing"
-                // notice go first, so the console never looks hung.
-                if (kind === "p8") await new Promise(r => setTimeout(r, 150));
                 if (kind === "song") {
                     const s = await importSong(m.name, m.buf);
                     self.postMessage({ t: "imported", ok: true, s: s });
