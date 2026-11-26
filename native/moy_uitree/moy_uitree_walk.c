@@ -7730,8 +7730,9 @@ int uit_lent_place(int32_t *cells, int n, int32_t x0, int32_t w, int32_t h, int 
             if (c[0] == UIT_LC_TAB && c[2] && c[2] > widest)
                 widest = c[2];
         }
-        // the buttons keep their words only where every tab named in the current one's place holds them
-        int32_t more = density == 1 && words && cur >= 0 && widest >= 0 && widest > cur ? widest - cur : 0;
+        // the current tab is named, and the buttons keep their words, only where every tab
+        // named in the current one's place fits: which tab is current never changes the strip's look
+        int32_t more = density == 1 && cur >= 0 && widest >= 0 && widest > cur ? widest - cur : 0;
         if (least + more <= w || density == 0)
             break;
     }
