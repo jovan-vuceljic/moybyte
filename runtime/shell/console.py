@@ -2133,11 +2133,15 @@ class Workstation:
         Super, the browser's Meta tap -- from every surface: over a fullscreen
         game it opens the pause menu, anywhere else the system menu; pressed
         again it closes the one it opened (Esc closes either and steps back).
-        Over the delete confirm it is Cancel."""
+        Over the delete confirm it is Cancel; over a popover the bar opened
+        over the pause menu it closes that popover, the game still held."""
         p = self.pause
         m = self.sysmenu
         if self.confirm.open:
             self.confirm.cancel()         # the console's key answers Cancel
+        elif p.open and m.open:
+            m.close()
+            self.popover_touch()
         elif p.open:
             p.close()
         elif m.open and m.widget == "menu":

@@ -482,7 +482,12 @@ class PauseMenu:
             # under this one); the card waits
             if not (hold.snapped and hold.put(ws, cv, (0, 0, cv.w, cv.h),
                                               self._washed_key(cv))):
-                _ui_draw.scrim(cv, ws.theme_colors, self.scrim_rect())
+                # the wash over the frame put back, never over the last one's
+                hold.unsnap(ws, cv)
+                if hold.snapped or ws.run.canvas is not cv:
+                    _ui_draw.scrim(cv, ws.theme_colors, self.scrim_rect())
+                    if hold.snapped:
+                        hold.keep(ws, cv, (0, 0, cv.w, cv.h), self._washed_key(cv), True)
             ws.icon_spec()
             self._bar()
             ws.menu_ui._draw_sysmenu()
