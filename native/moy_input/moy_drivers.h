@@ -110,6 +110,7 @@ enum {
     MOY_TOUCH_GT911 = 1,        // status 0x814E, point 0x8150, 16-bit registers
     MOY_TOUCH_GSL3680 = 2,      // RAM-loaded; 8 bytes at 0x80, every read current
     MOY_TOUCH_AXS = 3,          // the AXS15231B bridge: a command, 8 bytes back
+    MOY_TOUCH_FT6X36 = 4,       // FocalTech FT6336U and kin: 5 bytes at 0x02, every read current
 };
 
 enum {
@@ -191,6 +192,61 @@ typedef struct {
 // The pulses since the last take, into out[4] (up, down, left, right).
 void moy_ball_take(moy_ball_t *b, uint32_t out[4]);
 
+// -- the Faces Gamepad3: M5Stack's pad face over the Faces Bottom3 --------------
+//
+// An MCU at MOY_PAD3_ADDR on the board's bus whose register 0x00 is its eight
+// buttons, active low (0xFF idle): bit 0 up, 1 down, 2 left, 3 right, 4 A,
+// 5 B, 6 Select, 7 Start; register 0xD0 answers its model, 0x03 for the
+// Gamepad3 (M5Stack's protocol A004-V3 and its M5Faces library). The keys
+// answer only while its IRQ line is low: it goes low when a debounced state
+// changes and high again on the read, and with nothing new the face answers
+// whatever its transmit buffer last held (the model, a UID byte; measured on
+// glass 2026-11-26). So a board that wires the line (MOY_HW_I2C0_PAD_INT)
+// reads only while it is low (`int_low`, the board's each pass, M5Faces'
+// polling mode); one that does not reads every pass, and a read of 0x00 is
+// that stale buffer (V03/V04, M5Faces' Gamepad3::update), never taken. The
+// buttons are held on the table's source
+// as the browser's gamepad holds them (web_input.GAMEPAD_SOURCE): the d-pad
+// the directions, A `a`, B `b`, Select `select`, Start `start`.
+
+#define MOY_PAD3_ADDR 0x08
+#define MOY_PAD3_KEY_REG 0x00
+#define MOY_PAD3_MODEL_REG 0xD0
+#define MOY_PAD3_MODEL 0x03
+
+typedef struct {
+    bool available;
+    uint8_t addr;
+    bool gate;                          // reads wait for the IRQ line
+    bool int_low;                       // the line's level this pass, the board's
+    uint32_t last_read_ms;
+    uint8_t raw;                        // the last byte read
+    uint16_t reprobe;
+    void *table;                        // the moy_input_t it writes
+    uint32_t src;
+    uint32_t reads, errors;
+} moy_pad3_t;
+
+// The byte as the table's held mask (MOY_INPUT_NAMES bits).
+uint32_t moy_pad3_buttons(uint8_t raw);
+// SELECT IS THE SHIFT of a pad with two face buttons and no shoulders: held,
+// A is `x` and B is `y`, and left and right type the tab keys Q and E (the
+// browser gamepad's shoulders) instead of moving, except in a game, which
+// keeps its directions (`game`, moy_input_cart_keys); `select` itself stays
+// held, so Select+Start is still the Editor's Play. moy_pad3_held is the held
+// mask of `raw` under that; moy_pad3_typed the key a change from `was` to
+// `raw` types, 0 for none or while `quiet` (a game or a text field, as the
+// browser's shoulders are). The hints show the chords (moy_ui_parts.c's
+// MOY_UI_PAD_TABS and MOY_UI_PAD_MORE, this board's mpconfigboard.h).
+uint32_t moy_pad3_held(uint8_t raw, bool game);
+int moy_pad3_typed(uint8_t was, uint8_t raw, bool quiet);
+void moy_pad3_init(moy_pad3_t *p, void *table, uint32_t src);
+// Whether a Gamepad3 answers its model at p->addr.
+void moy_pad3_probe(moy_pad3_t *p, const moy_i2c_t *bus);
+// One pass: the gate, one read, the source's held set.
+void moy_pad3_pass(moy_pad3_t *p, const moy_i2c_t *bus);
+size_t moy_pad3_sizeof(void);
+
 // -- the board half (moy_input_task.c) -------------------------------------------
 
 // The board's drivers on the input task, which a frame's kick runs one pass
@@ -198,6 +254,7 @@ void moy_ball_take(moy_ball_t *b, uint32_t out[4]);
 bool moy_input_board_kbd(moy_kbd_t **k);
 bool moy_input_board_touch(moy_touchdev_t **d, int32_t w, int32_t h);
 bool moy_input_board_ball(moy_ball_t **b, bool *click);
+bool moy_input_board_pad3(moy_pad3_t **p);
 void moy_input_board_kick(void);
 // The input task's stack never used so far, in bytes; 0 where there is no task.
 uint32_t moy_input_board_stack_free(void);

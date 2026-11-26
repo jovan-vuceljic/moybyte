@@ -11,6 +11,7 @@ target_sources(usermod_moy_input INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/moy_touch.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_kbd.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_touchdev.c
+    ${CMAKE_CURRENT_LIST_DIR}/moy_pad3.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_input_task.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_edge.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_hid.c

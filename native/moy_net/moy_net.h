@@ -145,6 +145,12 @@ int moy_clock_state(int64_t *at);
 // The server the next sync asks: NULL or "" for MOY_CLOCK_SERVER. 0, or -1
 // for a name longer than MOY_CLOCK_SERVER_MAX.
 int moy_clock_server(const char *name);
+// A board with a battery-kept clock chip (the CoreS3's BM8563): its time,
+// Unix seconds, taken at boot as an answer, so the clock reads synced until
+// a power-on finds it behind; and every NTP answer handed back to the chip
+// through the board's moy_board_rtc_set (weak: a board without a chip has none).
+void moy_clock_restore(int64_t unix_s);
+void moy_board_rtc_set(int64_t unix_s);
 // What a certificate's dates are read against (moy_net_port.c). `floor` is
 // the newest of the image's build day and the newest start date of a
 // certificate this board has seen verify, which a board keeps across power-off;

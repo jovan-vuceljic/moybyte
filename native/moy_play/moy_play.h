@@ -185,8 +185,9 @@ enum { MOY_PLAY_PACED = 1u, MOY_PLAY_HOME = 2u, MOY_PLAY_UNSIGNED = 4u };
 // that board. An S3's rows are cut from what its desk keeps free above the
 // cart's floor after a game, WiFi up (a heap trace of both S3s, #246,
 // 2026-11-04: about 1 MB on the T-Deck, about 500 KB on the Guition S3): ELF
-// and LANES on both, MEDIA on the T-Deck alone. The Guition S3 is the "one
-// running thing" tier for media (owner, 2026-11-04): it has no MEDIA row, and
+// and LANES on both, MEDIA on the T-Deck alone. The CoreS3 takes the T-Deck's
+// line: the same 8 MB and the same 320x240 desk, with a speaker. The Guition
+// S3 is the "one running thing" tier for media (owner, 2026-11-04): it has no MEDIA row, and
 // no speaker. A P4's line is what its desk keeps free with WiFi up,
 // less 3 MiB for its Python heap's next two doublings: the Guition P4's
 // rotated desk keeps about 10 MiB less than the Waveshare's, so its MEDIA and
@@ -204,6 +205,7 @@ enum {
     /*  board          PROCS  MEDIA             RINGS ELF               LANES */ \
     X("tdeck",         4096,  192,              16,   256,              64)               \
     X("guition_s3",    4096,  MOY_SHARE_ABSENT, 16,   256,              64)               \
+    X("cores3",        4096,  192,              16,   256,              64)               \
     X("p4",            7168,  1024,             256,  2048,             256)              \
     X("guition_p4",    7168,  512,              256,  1024,             256)              \
     X("elecrow_p4",    7168,  1024,             256,  2048,             256)

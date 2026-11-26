@@ -6,7 +6,9 @@
 //   MOY_INPUT_KBD_TDECK            the T-Deck's C3 keyboard on the kernel's bus
 //   MOY_HW_TRACKBALL_UP/_DOWN/_LEFT/_RIGHT, MOY_HW_TRACKBALL_CLICK
 //                                  the trackball's pulse pins and its click
-//   MOY_INPUT_TOUCH_KIND           MOY_TOUCH_GT911, _GSL3680 or _AXS, and its
+//   MOY_INPUT_PAD3                 the Faces Gamepad3 on the kernel's bus, its
+//                                  IRQ the i2c0 row's MOY_HW_I2C0_PAD_INT
+//   MOY_INPUT_TOUCH_KIND           MOY_TOUCH_GT911, _GSL3680, _AXS or _FT6X36, and its
 //     _ADDR, _YX, _CLEAR_FIRST, _SWAP, _FLIP_X, _FLIP_Y, _RAW_W, _RAW_H,
 //     _RAW_X0, _RAW_Y0, _EXTRAPOLATE, _HOLD_MS, _FW and _FW_LEN (the GSL3680's
 //     firmware); its pins are the i2c0 row's MOY_HW_I2C0_TOUCH_INT (the
@@ -32,7 +34,7 @@
 #include "moy_drivers.h"
 
 #if defined(MOY_ON_BOARD) && (defined(MOY_INPUT_KBD_TDECK) || defined(MOY_INPUT_TOUCH_KIND) \
-    || defined(MOY_HW_TRACKBALL_UP))
+    || defined(MOY_HW_TRACKBALL_UP) || defined(MOY_INPUT_PAD3))
 
 #include <string.h>
 
@@ -100,6 +102,11 @@ static moy_kbd_t s_kbd;
 static bool s_kbd_up;
 #endif
 
+#ifdef MOY_INPUT_PAD3
+static moy_pad3_t s_pad;
+static bool s_pad_up;
+#endif
+
 #ifdef MOY_INPUT_TOUCH_KIND
 static moy_touchdev_t s_touch;
 static bool s_touch_up;
@@ -156,6 +163,11 @@ bool moy_input_board_owns_pin(int gpio) {
         return true;
     }
     #endif
+    #if defined(MOY_INPUT_PAD3) && defined(MOY_HW_I2C0_PAD_INT)
+    if (s_pad.gate && gpio == MOY_HW_I2C0_PAD_INT) {
+        return true;
+    }
+    #endif
     (void)gpio;
     return false;
 }
@@ -171,6 +183,14 @@ static void one_pass(void) {
     #ifdef MOY_INPUT_TOUCH_KIND
     if (s_touch_up) {
         moy_touchdev_pass(&s_touch, &s_bus);
+    }
+    #endif
+    #ifdef MOY_INPUT_PAD3
+    if (s_pad_up) {
+        #ifdef MOY_HW_I2C0_PAD_INT
+        s_pad.int_low = gpio_get_level(MOY_HW_I2C0_PAD_INT) == 0;
+        #endif
+        moy_pad3_pass(&s_pad, &s_bus);
     }
     #endif
 }
@@ -232,6 +252,36 @@ bool moy_input_board_kbd(moy_kbd_t **k) {
     return true;
     #else
     (void)k;
+    return false;
+    #endif
+}
+
+bool moy_input_board_pad3(moy_pad3_t **p) {
+    #ifdef MOY_INPUT_PAD3
+    if (!s_pad_up) {
+        moy_input_t *t = moy_input_kernel();
+        uint32_t h;
+        if (t == NULL || moy_input_source(t, "pad", 0, &h) != MOY_INPUT_OK) {
+            return false;
+        }
+        moy_pad3_init(&s_pad, t, h);
+        moy_pad3_probe(&s_pad, &s_bus);
+        #ifdef MOY_HW_I2C0_PAD_INT
+        gpio_config_t io = {
+            .pin_bit_mask = 1ULL << MOY_HW_I2C0_PAD_INT,
+            .mode = GPIO_MODE_INPUT,
+            .pull_up_en = GPIO_PULLUP_ENABLE,
+            .intr_type = GPIO_INTR_DISABLE,
+        };
+        s_pad.gate = gpio_config(&io) == ESP_OK;
+        #endif
+        s_pad_up = true;
+        task_up();
+    }
+    *p = &s_pad;
+    return true;
+    #else
+    (void)p;
     return false;
     #endif
 }
@@ -380,6 +430,11 @@ bool moy_input_board_touch(moy_touchdev_t **d, int32_t w, int32_t h) {
 bool moy_input_board_ball(moy_ball_t **b, bool *click) {
     (void)b;
     (void)click;
+    return false;
+}
+
+bool moy_input_board_pad3(moy_pad3_t **p) {
+    (void)p;
     return false;
 }
 

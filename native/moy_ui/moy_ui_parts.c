@@ -3039,13 +3039,28 @@ static const char *const ACT_NAMES[MOY_UI_ACTS] = {"confirm", "back", "change", 
 // gamepad reaches them through its more menu, on Y (2026-10-19). Search is
 // the slash a keyboard types: on the T-Deck the Sym+G chord (moy_kbd.c's
 // symbol layer).
+//
+// A board whose pad has no shoulders or no Y names its chords for those two
+// (the CoreS3's Gamepad3: Select is the shift, native/moy_input/moy_pad3.c),
+// in its mpconfigboard.h.
+#if defined(ESP_PLATFORM) && defined(__has_include)
+#if __has_include("py/mpconfig.h")
+#include "py/mpconfig.h"
+#endif
+#endif
+#ifndef MOY_UI_PAD_TABS
+#define MOY_UI_PAD_TABS "L R"
+#endif
+#ifndef MOY_UI_PAD_MORE
+#define MOY_UI_PAD_MORE "Y"
+#endif
 static const char *const ACT_KEYS[MOY_UI_INPUTS][MOY_UI_ACTS] = {
     {"enter", "Esc", "left right", "Q E", "Super", "Esc", "F V", "R", "left right up down",
      "Del", "Ctrl C", "M", "/", "up down left right", "up down"},
     {"enter", "K", "A D ball_lr", "Q E", "Mic", "Mic", "F V", "R", "", "Del", "", "M", "Sym G",
      "WASD", "W S"},
-    {"A", "B", "dpad_lr", "L R", "Start", "B", "", "", "", "", "", "Y", "", "up down left right",
-     "up down"},
+    {"A", "B", "dpad_lr", MOY_UI_PAD_TABS, "Start", "B", "", "", "", "", "", MOY_UI_PAD_MORE, "",
+     "up down left right", "up down"},
     {"", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
 };
 
