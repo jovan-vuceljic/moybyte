@@ -457,8 +457,9 @@ The consoles' C shell (`native/moy_sh`), its face over a stream
 (`native/moy_tty`) and the SSH server (`native/moy_ssh`), with SFTP
 (`docs/os_2026-11/system.md` sections 3 and 4). The browser is this board's
 only screen, so the browser console's Terminal on the page it serves is the
-shell's first face (`GET /term`, sealed to a browser paired with the board's
-password); SSH is the other:
+shell's first face (the live socket's terminal channel, sealed to a browser
+paired with the board's password, `native/moy_tty/README.md`); SSH is the
+other:
 
 ```bash
 ssh moybyte-zero.local            # any user name; the board's password

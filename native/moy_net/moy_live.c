@@ -9,11 +9,17 @@
 //
 //   'c'  the socket's own. 'b' a beat, either way, once a MOY_LIVE_BEAT_MS
 //        that carried nothing else; 'e' + bytes up, answered at once with
-//        'E' + the same bytes (the page's round trip to its board).
+//        'E' + the same bytes (the page's round trip to its board); 'H' +
+//        letters down, a HINT: what the page reads over HTTP changed on the
+//        board, so it asks now and asks no other way while the socket is
+//        open (THE HINTS, below).
 //   'n'  the radio link, where the board relays its radio
 //        (moy_web_live_link; below).
 //   'd'  the device channel: the handles of the kinds this board relays
 //        (THE DEVICE CHANNEL, below; moy_live_dev.c serves it).
+//   't'  the web terminal, a face of the board's shell
+//        (native/moy_tty/moy_tty_live.c has its messages), where the image
+//        has the face: this board then serves no GET /term.
 //   Any other byte is a channel this board does not serve, and its frame is
 //   dropped: a page newer than its board loses that channel and nothing else.
 //
@@ -162,6 +168,19 @@ static live_t S = {.fd = -1};
 #define DEV_HAS(f) ((f) != NULL)
 #endif
 
+// The terminal channel (native/moy_tty/moy_tty_live.c): weak, for an image
+// or a twin without the shell's face.
+int moy_live_term_take(void);
+int moy_live_term_message(const uint8_t *p, size_t n);
+int moy_live_term_fd(void);
+int moy_live_term_pump(void);
+void moy_live_term_end(void);
+#pragma weak moy_live_term_take
+#pragma weak moy_live_term_message
+#pragma weak moy_live_term_fd
+#pragma weak moy_live_term_pump
+#pragma weak moy_live_term_end
+
 static live_t *const L = &S;
 
 int moy_web_live_link(uint8_t mac[6]) {
@@ -273,6 +292,9 @@ static int message(int ws, uint8_t *p, size_t n) {
     if (p[0] == 'd') {
         return DEV_HAS(moy_live_dev_message) ? moy_live_dev_message(p, n) : 0;
     }
+    if (p[0] == 't') {
+        return moy_live_term_message != NULL ? moy_live_term_message(p, n) : 0;
+    }
     if (p[0] != 'n') {
         return 0;
     }
@@ -377,6 +399,79 @@ static int beat(int ws) {
     return say(ws, 2);
 }
 
+// THE HINTS. What the page reads over HTTP (the store, a Zero's Wi-Fi, its
+// update, its official carts) stays there; the socket says when it changed,
+// one letter a topic, so the page asks then instead of on a clock:
+//
+//   's'  the store: the volumes took a change (moy_vol_changes) the page did
+//        not make itself, an SSH session's, a shell's, another page's sync
+//   'w'  the board's Wi-Fi (/wifi), 'u' its update (/update), 'o' its
+//        official carts (/official): their backends stepped (moy_live_hint,
+//        device/moy_webhost.py)
+//
+// Hints a pass gathered go in one message at its end; a page asks at most
+// once a topic for several. The page's own sync is no news to it: while the
+// webhost applies a batch the socket's session sent, the store's changes
+// are counted as seen (moy_live_store_mine).
+uint32_t moy_vol_changes(void);
+#pragma weak moy_vol_changes
+
+static uint32_t s_hints;                // the letters 'a'..'z' asked, a bit each
+static int s_mine;                      // the page's own batch applying
+static uint32_t s_seen;                 // the volumes' count the page knows of
+
+void moy_live_hint(const char *topics) {
+    uint32_t b = 0;
+    for (; *topics; topics++) {
+        if (*topics >= 'a' && *topics <= 'z') {
+            b |= 1u << (*topics - 'a');
+        }
+    }
+    __atomic_or_fetch(&s_hints, b, __ATOMIC_ACQ_REL);
+}
+
+void moy_live_store_mine(int on) {
+    if (on) {
+        __atomic_add_fetch(&s_mine, 1, __ATOMIC_ACQ_REL);
+        return;
+    }
+    if (moy_vol_changes != NULL) {
+        __atomic_store_n(&s_seen, moy_vol_changes(), __ATOMIC_RELEASE);
+    }
+    __atomic_sub_fetch(&s_mine, 1, __ATOMIC_ACQ_REL);
+}
+
+static void hints_start(void) {
+    __atomic_store_n(&s_hints, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_seen, moy_vol_changes != NULL ? moy_vol_changes() : 0, __ATOMIC_RELEASE);
+}
+
+static int hints(int ws) {
+    uint32_t h = 0;
+    if (moy_vol_changes != NULL && !__atomic_load_n(&s_mine, __ATOMIC_ACQUIRE)) {
+        uint32_t c = moy_vol_changes();
+        if (c != __atomic_load_n(&s_seen, __ATOMIC_ACQUIRE)) {
+            __atomic_store_n(&s_seen, c, __ATOMIC_RELEASE);
+            h |= 1u << ('s' - 'a');
+        }
+    }
+    h |= __atomic_exchange_n(&s_hints, 0, __ATOMIC_ACQ_REL);
+    if (!h) {
+        return 0;
+    }
+    uint8_t *o = (uint8_t *)L->b->out + MOY_WS_HEAD;
+    size_t n = 0;
+    o[n++] = 'c';
+    o[n++] = 'H';
+    for (int i = 0; i < 26; i++) {
+        if (h & (1u << i)) {
+            o[n++] = (uint8_t)('a' + i);
+        }
+    }
+    L->stats.hints++;
+    return say(ws, n);
+}
+
 // One page's socket, to its end.
 static void pump(int ws) {
     size_t n = 0;
@@ -384,6 +479,7 @@ static void pump(int ws) {
     if (state(ws, 0) < 0) {
         return;
     }
+    hints_start();
     for (;;) {
         if (L->cut) {
             moy_ws_close(ws, L->cut == 2 ? 4001 : 1008, L->cut == 2 ? "taken" : "revoked");
@@ -400,10 +496,14 @@ static void pump(int ws) {
         fd_set r;
         FD_ZERO(&r);
         FD_SET(ws, &r);
+        int tfd = moy_live_term_fd != NULL ? moy_live_term_fd() : -1;
+        if (tfd >= 0) {
+            FD_SET(tfd, &r);
+        }
         uint32_t wait = L->radio ? MOY_LIVE_WAIT_MS : devs > 0 ? MOY_LIVE_DEV_MS
                         : MOY_LIVE_REST_MS;
         struct timeval tv = {0, (long)wait * 1000L};
-        int k = select(ws + 1, &r, NULL, NULL, &tv);
+        int k = select((tfd > ws ? tfd : ws) + 1, &r, NULL, NULL, &tv);
         if (k < 0 && errno != EINTR) {
             return;
         }
@@ -418,10 +518,16 @@ static void pump(int ws) {
                 return;
             }
         }
+        if (k > 0 && tfd >= 0 && FD_ISSET(tfd, &r) && moy_live_term_pump() < 0) {
+            return;
+        }
         if (L->radio && heard(ws) < 0) {
             return;
         }
         if (DEV_HAS(moy_live_dev_pump) && (devs = moy_live_dev_pump()) < 0) {
+            return;
+        }
+        if (hints(ws) < 0) {
             return;
         }
     }
@@ -438,6 +544,9 @@ static void serve(int ws) {
     radio_down();
     if (DEV_HAS(moy_live_dev_end)) {
         moy_live_dev_end();
+    }
+    if (moy_live_term_end != NULL) {
+        moy_live_term_end();
     }
 }
 
@@ -488,6 +597,9 @@ int moy_web_live(int fd, const struct moy_wa_seal *seal) {
     L->up_i = L->down_i = 0;
     L->cut = 0;
     L->heard = L->said = moy_net_ms();
+    if (moy_live_term_take != NULL) {
+        moy_live_term_take();
+    }
     __atomic_store_n(&L->fd, fd, __ATOMIC_RELEASE);
 #ifdef ESP_PLATFORM
     if (moy_task_spawn(MOY_TASK_LIVE, bridge_task, NULL, NULL)) {
@@ -504,6 +616,10 @@ int moy_web_live(int fd, const struct moy_wa_seal *seal) {
     moy_net_free(L->b);
     L->b = NULL;
     return -1;
+}
+
+int moy_web_live_term(void) {
+    return moy_live_term_message != NULL;
 }
 
 uint32_t moy_web_live_idle_ms(void) {

@@ -265,7 +265,11 @@ int main(int argc, char **argv) {
             }
         }
         moy_tty_ws_stats_t w;
+#if defined(MOY_NET_LIVE) && MOY_NET_LIVE
+        moy_tty_live_stats(&w);         // the page's terminal is the live socket's, as a Zero's
+#else
         moy_tty_ws_stats(&w);
+#endif
         if (first || memcmp(&w, &last, sizeof w) != 0) {
             first = 0;
             last = w;
@@ -284,9 +288,9 @@ int main(int argc, char **argv) {
             lv_last = lv;
             printf("LIVE sessions=%u busy=%u up=%u down=%u air_out=%u air_in=%u refused=%u "
                    "echoes=%u live=%u radio=%u devs=%u dev_calls=%u dev_writes=%u "
-                   "dev_pushes=%u\n", lv.sessions, lv.busy, lv.up, lv.down,
+                   "dev_pushes=%u hints=%u\n", lv.sessions, lv.busy, lv.up, lv.down,
                    lv.air_out, lv.air_in, lv.refused, lv.echoes, lv.live, lv.radio, lv.devs,
-                   lv.dev_calls, lv.dev_writes, lv.dev_pushes);
+                   lv.dev_calls, lv.dev_writes, lv.dev_pushes, lv.hints);
             fflush(stdout);
         }
 #endif

@@ -27,6 +27,14 @@ int moy_web_live(int fd, const struct moy_wa_seal *seal);
 // on the air (the page's, which its Python reads from the /live probe before
 // the socket opens) into `mac`.
 int moy_web_live_link(uint8_t mac[6]);
+// 1 where the socket carries the web terminal (its 't' channel), and the
+// board serves no GET /term.
+int moy_web_live_term(void);
+// THE HINTS (moy_live.c): `topics` (letters) told to the page at the
+// bridge's next pass; and the webhost's word that the socket's own page's
+// sync applies (`on` 1 before, 0 after), whose changes are no news to it.
+void moy_live_hint(const char *topics);
+void moy_live_store_mine(int on);
 // The webhost's (moy_webauth.c): how long since the page last sent a frame
 // (UINT32_MAX with none), and the socket's end: the page's session ended
 // (1008 "revoked"), or `taken` by another session's page (4001 "taken").
@@ -58,6 +66,7 @@ typedef struct {
     // the device channel: rows open now, calls served, writes a device took,
     // records and events pushed (moy_live_dev_stats)
     uint32_t devs, dev_calls, dev_writes, dev_pushes;
+    uint32_t hints;                     // hint messages sent (THE HINTS, moy_live.c)
 } moy_live_stats_t;
 
 void moy_live_stats(moy_live_stats_t *out);
