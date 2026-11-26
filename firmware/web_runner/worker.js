@@ -1382,7 +1382,7 @@ function signIn() {
 const BUSY_TRIES = 6, BUSY_MS = 1000;
 async function pairPassword(pw, name) {
     const wrong = "that password did not work -- try again";
-    let why = "";
+    let why = "", gone = false;
     try {
         for (let i = 0, busy = 0; i < NONCE_TRIES; i++) {
             const h = await hello();
@@ -1412,9 +1412,9 @@ async function pairPassword(pw, name) {
                           : "the console did not take the sign-in (" + r.status + ")");
             break;
         }
-    } catch (e) { why = "the console did not answer"; }
+    } catch (e) { why = "the console did not answer"; gone = true; }
     liveAuthDone();
-    return need(null, true, why || "the console did not answer");
+    return need(null, true, why || "the console did not answer", gone);
 }
 // The claim's {t:"claim"}: {ok, why}. `id`, when given, is the board the
 // claim was made by, held against the hello's before the claim is spent.
