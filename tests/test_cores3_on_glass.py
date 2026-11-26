@@ -36,11 +36,11 @@ def board():
 
 
 def test_the_panel_is_the_landscape_glass(board):
-    assert board.pyval("(ws.sys_canvas.w, ws.sys_canvas.h)", strict=True) == [320, 240]
+    assert list(board.pyval("(ws.sys_canvas.w, ws.sys_canvas.h)", strict=True)) == [320, 240]
 
 
 def test_brightness_steps_the_axp2101s_light(board):
-    """Settings' Brightness is DLDO1's voltage: codes 20..27, the lowest
+    """Settings' Brightness is DLDO1's voltage: codes 20..28, the lowest
     still lit, the highest full; the stored level is put back."""
     was = board.pyval("ws.settings_layer.level('brightness')", strict=True)
     try:
@@ -49,7 +49,7 @@ def test_brightness_steps_the_axp2101s_light(board):
         low = board.pyval(C3 + ".light()", strict=True)
         board.pyval("ws.settings_layer.set_level('brightness', %d) or 1" % hi, strict=True)
         high = board.pyval(C3 + ".light()", strict=True)
-        assert 20 <= low < high == 27, (low, high)
+        assert 20 <= low < high == 28, (low, high)
     finally:
         board.pyval("ws.settings_layer.set_level('brightness', %d) or 1" % was[0], strict=True)
 

@@ -43,9 +43,14 @@
 #define RTC_ADDR 0x51
 #define BUS_MS 50
 
-// The Faces Bottom3's bar: ten SK6812s, five a side, on the M-Bus pin the
-// CoreS3 brings out as G5 (M5Faces' initRGB: "CoreS3 usually pin 5").
+// The Faces Bottom3's bar: ten SK6812s, five a side, whose data line the
+// base's LED IO switch (S1, its schematic A168) puts on one of two M-Bus
+// pins: pin 8, G5 on the CoreS3, or pin 23, G13 -- the speaker's I2S data, so
+// in that position every sound the console plays is a frame to the bar.
+// `leds` drives G5, the position the README asks for; the bring-up writes the
+// bar dark on both before the speaker takes G13.
 #define BAR_PIN 5
+#define BAR_PIN_ALT MOY_HW_SPEAKER_DOUT
 #define BAR_LEDS 10
 
 // The AW9523's ports: P0 output 0x02, P1 output 0x03, P0/P1 direction 0x04/0x05
@@ -92,6 +97,14 @@ static int bits(uint8_t addr, uint8_t *d, uint8_t reg, uint8_t set, uint8_t clea
 #define AXP(reg, v) wr(AXP_ADDR, &s_axp, (reg), (v))
 #define AW(reg, v) wr(AW_ADDR, &s_aw, (reg), (v))
 
+// The bar's ten pixels, GRB, sent once on `pin`.
+static void bar_show(int pin, uint8_t px[BAR_LEDS * 3]) {
+    gpio_set_direction(pin, GPIO_MODE_OUTPUT);
+    gpio_set_level(pin, 0);
+    uint32_t timing_ns[4] = {400, 850, 800, 450};   // T0H T0L T1H T1L
+    machine_bitstream_high_low(pin, timing_ns, px, BAR_LEDS * 3);
+}
+
 // The rails and the expander, then the panel's reset pulse. The light (DLDO1)
 // stays off: it powers up at 3.3 V, full, so it is left to the first frame.
 esp_err_t moy_lcd_board_up(void) {
@@ -130,13 +143,18 @@ esp_err_t moy_lcd_board_up(void) {
     vTaskDelay(pdMS_TO_TICKS(10));
     e |= bits(AW_ADDR, &s_aw, AW_P1, AW_P1_LCD_RST, 0);
     vTaskDelay(pdMS_TO_TICKS(120));
+    // The bar is powered from the boost just switched on and can come up lit:
+    // dark on either of its pins, before the speaker's I2S takes G13.
+    uint8_t dark[BAR_LEDS * 3] = {0};
+    bar_show(BAR_PIN, dark);
+    bar_show(BAR_PIN_ALT, dark);
     s_step = 0;
     return e == 0 ? ESP_OK : ESP_FAIL;
 }
 
 // DLDO1's voltage is the light: 0.5 V + 0.1 V a code, lit from code 20 (2.5 V)
-// to 27 (3.2 V), M5GFX's (level + 641) >> 5 over its 0..255 brightness, which
-// is MOY_LIGHT_FULL's scale. Answers the step, 1..8, or 0 off.
+// to 28 (3.3 V), M5GFX's (level + 641) >> 5 over its 0..255 brightness, which
+// is MOY_LIGHT_FULL's scale. Answers the step, 1..9, or 0 off.
 int moy_lcd_board_light(int level) {
     int code = level <= 0 ? 0 : (level + 641) >> 5;
     if (code == s_step) {
@@ -179,16 +197,17 @@ static int64_t rtc_read(void) {
     t.tm_hour = bcd(r[2] & 0x3F);
     t.tm_mday = bcd(r[3] & 0x3F);
     t.tm_mon = bcd(r[5] & 0x1F) - 1;
-    t.tm_year = bcd(r[6]) + ((r[5] & 0x80) ? 100 : 200);   // C: 19xx, else 20xx
+    t.tm_year = bcd(r[6]) + ((r[5] & 0x80) ? 0 : 100);     // C: 19xx, else 20xx
     if (t.tm_year < 120) {
         return -1;          // before 2020: never set
     }
-    // UTC: the board's TZ is never set, so mktime is timegm here.
-    return (int64_t)mktime(&t) + MOY_NET_CLOCK_EPOCH;
+    // UTC: the board's TZ is never set, so mktime is timegm here, and newlib's
+    // calendar counts from 1970 whatever the system clock's epoch.
+    return (int64_t)mktime(&t);
 }
 
 void moy_board_rtc_set(int64_t unix_s) {
-    time_t s = (time_t)(unix_s - MOY_NET_CLOCK_EPOCH);
+    time_t s = (time_t)unix_s;         // the calendar's 1970, not the clock's 2000
     struct tm t;
     gmtime_r(&s, &t);
     int year = t.tm_year + 1900;
@@ -254,7 +273,7 @@ static mp_obj_t cores3_clock_restore(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(cores3_clock_restore_obj, cores3_clock_restore);
 
-// leds(grb) -> None: the bar's ten SK6812s, three bytes each in the order
+// leds(grb) -> None: the bar's ten SK6812s, on G5, three bytes each in the order
 // green, red, blue, the first the chain's nearest; short data leaves the rest
 // dark. leds(b"") is the bar off.
 static mp_obj_t cores3_leds(mp_obj_t buf_in) {
@@ -262,10 +281,7 @@ static mp_obj_t cores3_leds(mp_obj_t buf_in) {
     mp_get_buffer_raise(buf_in, &b, MP_BUFFER_READ);
     uint8_t px[BAR_LEDS * 3] = {0};
     memcpy(px, b.buf, b.len < sizeof(px) ? b.len : sizeof(px));
-    gpio_set_direction(BAR_PIN, GPIO_MODE_OUTPUT);
-    gpio_set_level(BAR_PIN, 0);
-    uint32_t timing_ns[4] = {300, 900, 600, 600};   // SK6812: T0H T0L T1H T1L
-    machine_bitstream_high_low(BAR_PIN, timing_ns, px, sizeof(px));
+    bar_show(BAR_PIN, px);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(cores3_leds_obj, cores3_leds);

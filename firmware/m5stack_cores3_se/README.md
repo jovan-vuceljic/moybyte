@@ -25,7 +25,7 @@ operations, the light), [M5Unified](https://github.com/m5stack/M5Unified)
 | ESP32-S3 (QFN56), 16 MB flash, 8 MB quad PSRAM | GPIO 26–32 flash/PSRAM, 19/20 USB | the chip's report; `sdkconfig.board` |
 | ILI9342C panel, 320x240 | SPI2: SCK 36, MOSI 37, MISO 35 is also D/C, CS 3; 40 MHz; MADCTL 0x08 (BGR), inverted | M5GFX `Panel_ILI9342`, board detection |
 | panel reset | AW9523 P1 bit 1, pulsed low 10 ms at bring-up | M5GFX `pmic_ops` |
-| backlight | AXP2101 DLDO1: reg 0x90 bit 7 on, reg 0x99 the voltage, codes 20..27 | M5GFX `Light_M5StackCoreS3` |
+| backlight | AXP2101 DLDO1: reg 0x90 bit 7 on, reg 0x99 the voltage, codes 20..28 | M5GFX `Light_M5StackCoreS3` |
 | microSD | SPI2, CS 4; its MISO is the panel's D/C pad, turned to the card's input for a card session (`native/moy_lcd`, M5GFX's `Panel_M5StackCoreS3::cs_control`) | M5Unified, M5GFX |
 | internal I2C | SDA 12, SCL 11, 400 kHz: AXP2101 0x34, AW9523 0x58, FT6336U 0x38, AW88298 0x36, ES7210 0x40, BM8563 0x51, the Gamepad3 0x08 | M5Unified, M5Faces |
 | touch | FT6336U at 0x38, read every pass (its INT reaches GPIO 21 only through the AW9523) | M5Unified |
@@ -33,7 +33,7 @@ operations, the light), [M5Unified](https://github.com/m5stack/M5Unified)
 | microphone | ES7210 over the speaker's I2S, DIN 14 | M5Unified `Mic_Class` |
 | clock | BM8563 at 0x51, UTC, its VL bit the "lost" flag | M5Unified `RTC8563_Class` |
 | Faces Gamepad3 | 0x08; IRQ on G10; keys at reg 0x00, active low (bit 0 up, 1 down, 2 left, 3 right, 4 A, 5 B, 6 Select, 7 Start); model 0x03 at 0xD0 | M5Faces `M5Faces_Gamepad3` |
-| Faces Bottom3 LED bar | ten SK6812, five a side, on G5 | M5Faces `initRGB` ("CoreS3 usually pin 5") |
+| Faces Bottom3 LED bar | ten SK6812, five a side; the base's LED IO switch puts their data on M-Bus pin 8 (G5) or pin 23 (G13, the speaker's I2S data) | the Bottom3's schematic (A168), the CoreS3's M-Bus map |
 
 The power-on sequence (`moy_lcd_board_up`, before the panel's bus): the
 AXP2101's ADC and DCDC settings (0x23, 0x27, 0x69, 0x10, 0x30, the 4.2 V
@@ -76,8 +76,12 @@ SE carries no cell of its own, so without a battery base the bar shows none.
 
 ## LED bar
 
-The Faces Bottom3's bar comes up at full brightness on its own, so `boot.py`
-writes it dark before anything else. The console has no status light.
+The Faces Bottom3's LED IO switch belongs in the G5 position (M-Bus pin 8).
+In the other, G13, the bar's data line is the speaker's I2S data: every sound
+is a frame of garbage to the bar, which lights it up to full white and
+warm. The bar keeps the last frame it was sent, so it is written dark by
+`boot.py` (G5) and by the panel's bring-up on both pins before the speaker
+takes G13 (`moy_lcd_board_up`). The console has no status light.
 
 ## On glass
 
