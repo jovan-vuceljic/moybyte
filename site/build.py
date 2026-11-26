@@ -886,7 +886,7 @@ function scheme() { return document.documentElement.dataset.scheme; }
 function showScheme() {
   var night = scheme() === "dark";
   var to = night ? "Day" : "Night";
-  schemeBtn.textContent = (night ? "☀ " : "☾ ") + to;
+  schemeBtn.innerHTML = (night ? "☀" : "☾") + "<span> " + to + "</span>";
   schemeBtn.setAttribute("aria-label", "Switch to " + to.toLowerCase() + " colours");
   var src = document.getElementById("still-night");
   if (src) src.media = night ? "all" : "not all";
@@ -1105,15 +1105,18 @@ nav .scheme:hover,.exp:hover{border-color:var(--accent);color:var(--accent)}
 nav .scheme:focus-visible,.exp:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 nav .brand,nav a.l{white-space:nowrap}
 nav a.l[aria-current]{color:var(--accent)}
-/* Narrow: the section anchors are one scroll away anyway, and keeping them
-   pushed the GitHub link off the edge. On a page of its own the bar names that
-   page in GitHub's place, and on a phone's width the brand alone. */
+/* Narrow: the section anchors are one scroll away anyway, and GitHub is the
+   footer's Source, so a phone's bar is the brand, My consoles (a page of its
+   own, where a phone's visitor goes) and the scheme switch. On My consoles
+   itself its link is the page it is on, so it goes too. Narrower still, the
+   brand is smaller, and on the narrowest phones the switch is its icon alone. */
 @media (max-width:640px){
   nav .wrap{gap:12px}
   nav .brand{font-size:16px}
-  nav a.l:not(:last-of-type):not([aria-current]),nav a.l[aria-current] ~ a.l{display:none}
+  nav a.l:not([href="/console/"]){display:none}
 }
-@media (max-width:380px){.wrap{padding:0 16px} nav a.l[aria-current]{display:none}}
+@media (max-width:380px){.wrap{padding:0 16px} nav .wrap{gap:10px} nav .brand{font-size:14px}}
+@media (max-width:350px){nav .scheme span{display:none}}
 .eyebrow{font:12px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
   color:var(--muted);margin:0 0 14px}
 h1{margin:0;font-size:clamp(24px,3.2vw,36px);line-height:1.35}
