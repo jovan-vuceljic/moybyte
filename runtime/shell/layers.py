@@ -528,7 +528,10 @@ class _PauseLayer(Layer):
     """The pause menu's layer (docs/history/look_2026-10.md step 25a): its card over
     the frozen game, drawn on the system canvas; it takes every key and tap
     while it shows, and clears the game pointer's tap so the held cart never
-    sees one."""
+    sees one. A popover the bar opened over it (the system menu, the control
+    center) is the topmost surface: it draws above the card (`PauseMenu._draw`)
+    and its layer, under this one, takes the keys and taps while it is open,
+    so B closes it and the card stays."""
 
     id = "pause"
     domain = "system"
@@ -542,11 +545,15 @@ class _PauseLayer(Layer):
             full(True)
 
     def handle_input(self, i):
+        if self.ws.sysmenu.open:
+            return False
         self.ws.pause.handle_input(i)
         return True
 
     def handle_pointer(self, px, py, click):
         ws = self.ws
+        if ws.sysmenu.open:
+            return False
         ws.pause.handle_pointer(px, py, click)
         _strip_tap(ws)
         return True

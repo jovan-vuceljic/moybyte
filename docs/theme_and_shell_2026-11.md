@@ -324,7 +324,11 @@ renders the owner chose from):
    shows it low (the danger ink under 15%) and charging (a bolt), and
    Settings keeps its exact level.
 8. **A paused game shows the bar** on a handheld, so the cluster and the
-   control center are reachable from the pause card.
+   control center are reachable from the pause card. A popover the bar
+   opens there (the system menu, the control center) is the topmost
+   surface: it takes the keys and the taps, B and Super close it, and the
+   card stays under it, the game held (`_PauseLayer`). The bar has no zone
+   over the card, so no back chevron either (`BarLayer.draws_back`).
 9. **Stop & play.** When the VM must stop for a compiled game and the
    music's stream holds the Wi-Fi, the Player asks first: "Stop the music to play <game>?",
    Cancel (focused) and Stop & play, which stops the stream and opens the

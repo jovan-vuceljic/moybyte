@@ -333,6 +333,93 @@ def test_a_tap_on_an_item_chooses_it_and_outside_resumes(tmp_path):
     assert not ws.pause.open
 
 
+# -- the system menu over the pause card (the owner's CoreS3 and browser, 2026-11-27) ------
+
+
+def _paused_with_menu(tmp_path, touch):
+    """A handheld's game paused, the system menu opened from the bar over
+    its card: by a tap on the bar's moy, or by the pad (up onto the bar, A)."""
+    ws, drv = _game(tmp_path)
+    _moy(ws)
+    drv.system_key()
+    _frames(drv, 3)
+    assert ws.pause.open and ws.pause.shows_bar()
+    if touch:
+        (_e, (bx, by, _bw, _bh), *_r), (x, y, w, h) = ws.bar_layer.cell("pause", "menu")
+        drv.click(bx + x + w // 2, by + y + h // 2)
+        _frames(drv, 3)
+    else:
+        _key(drv, "up")
+        _key(drv, "a")
+    assert ws.sysmenu.open and ws.sysmenu.widget == "menu"
+    assert ws.pause.open and ws.run.player.pace.paused, "opening the menu resumes nothing"
+    return ws, drv
+
+
+def _menu_to(drv, ws, text):
+    for _ in range(len(ws.sysmenu.items)):
+        if ws.sysmenu.items[ws.sysmenu.sel][4] == text:
+            return
+        _key(drv, "down")
+    raise AssertionError(text)
+
+
+def test_the_pads_keys_go_to_the_system_menu_over_the_pause_card(tmp_path):
+    """The menu is the topmost surface: its rows take the stick and A, B
+    closes it and the card stays, the game held, the keys back on the bar's
+    moy they opened it from; B comes off the bar onto the card, as from
+    any bar, and the next B resumes."""
+    ws, drv = _paused_with_menu(tmp_path, touch=False)
+    sel = ws.sysmenu.sel
+    _key(drv, "down")
+    assert ws.sysmenu.sel != sel and ws.pause.focused() == "Resume"
+    _key(drv, "b")
+    assert not ws.sysmenu.open and ws.pause.open and ws.run.player.pace.paused
+    assert ws.bar_layer.focus_where == "pause" and ws.bar_layer.focus is not None
+    _key(drv, "b")
+    assert ws.bar_layer.focus is None and ws.pause.open and ws.run.player.pace.paused
+    _key(drv, "b")
+    assert not ws.pause.open and not ws.run.player.pace.paused
+    ws, drv = _paused_with_menu(tmp_path, touch=False)
+    _menu_to(drv, ws, "About")
+    _key(drv, "a")
+    assert ws.about and not ws.sysmenu.open, "A runs the menu's row, not the card's"
+    assert ws.pause.open and ws.run.player.pace.paused
+
+
+def test_taps_go_to_the_system_menu_over_the_pause_card(tmp_path):
+    """A row tapped is the menu's, a tap outside it closes the menu alone,
+    and the card's own outside tap then resumes."""
+    ws, drv = _paused_with_menu(tmp_path, touch=True)
+    for _ in range(len(ws.sysmenu.items)):       # the keys bring About into the card's view
+        b = ui_draw._C.api_hit_box(ws.menu_ui._host.ctx, "About")
+        if b is not None and b[3] > 0:
+            break
+        _key(drv, "down")
+    drv.click(b[0] + b[2] // 2, b[1] + b[3] // 2)
+    _frames(drv, 2)
+    assert ws.about and not ws.sysmenu.open
+    assert ws.pause.open and ws.run.player.pace.paused
+    _key(drv, "b")
+    assert not ws.about and ws.pause.open and ws.run.player.pace.paused
+    ws, drv = _paused_with_menu(tmp_path, touch=True)
+    corner = (ws.sys_canvas.w - 2, ws.sys_canvas.h - 2)
+    drv.click(*corner)
+    _frames(drv, 2)
+    assert not ws.sysmenu.open and ws.pause.open and ws.run.player.pace.paused
+    drv.click(*corner)
+    _frames(drv, 2)
+    assert not ws.pause.open and not ws.run.player.pace.paused
+
+
+def test_super_closes_the_system_menu_over_the_pause_card_first(tmp_path):
+    ws, drv = _paused_with_menu(tmp_path, touch=True)
+    drv.system_key()
+    assert not ws.sysmenu.open and ws.pause.open and ws.run.player.pace.paused
+    drv.system_key()
+    assert not ws.pause.open and not ws.run.player.pace.paused
+
+
 # -- the look's system menu ---------------------------------------------------------------
 
 

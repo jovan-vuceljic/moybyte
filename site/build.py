@@ -886,7 +886,7 @@ function scheme() { return document.documentElement.dataset.scheme; }
 function showScheme() {
   var night = scheme() === "dark";
   var to = night ? "Day" : "Night";
-  schemeBtn.textContent = (night ? "☀ " : "☾ ") + to;
+  schemeBtn.innerHTML = (night ? "☀" : "☾") + "<span> " + to + "</span>";
   schemeBtn.setAttribute("aria-label", "Switch to " + to.toLowerCase() + " colours");
   var src = document.getElementById("still-night");
   if (src) src.media = night ? "all" : "not all";
@@ -1098,21 +1098,25 @@ nav .brand em{font-style:normal;color:var(--accent)}
 nav .sp{flex:1}
 nav a.l{color:var(--body);text-decoration:none;font-size:14px}
 nav a.l:hover{color:var(--accent)}
-nav .scheme{appearance:none;border:1px solid var(--line);background:var(--surface);
+/* The page's buttons: the scheme switch, and the console's Full screen. */
+nav .scheme,.exp{appearance:none;border:1px solid var(--line);background:var(--surface);
   color:var(--ink);font:14px/1 var(--sans);padding:6px 10px;cursor:pointer;white-space:nowrap}
-nav .scheme:hover{border-color:var(--accent);color:var(--accent)}
-nav .scheme:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+nav .scheme:hover,.exp:hover{border-color:var(--accent);color:var(--accent)}
+nav .scheme:focus-visible,.exp:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 nav .brand,nav a.l{white-space:nowrap}
 nav a.l[aria-current]{color:var(--accent)}
-/* Narrow: the section anchors are one scroll away anyway, and keeping them
-   pushed the GitHub link off the edge. On a page of its own the bar names that
-   page in GitHub's place, and on a phone's width the brand alone. */
+/* Narrow: the section anchors are one scroll away anyway, and GitHub is the
+   footer's Source, so a phone's bar is the brand, My consoles (a page of its
+   own, where a phone's visitor goes) and the scheme switch. On My consoles
+   itself its link is the page it is on, so it goes too. Narrower still, the
+   brand is smaller, and on the narrowest phones the switch is its icon alone. */
 @media (max-width:640px){
   nav .wrap{gap:12px}
   nav .brand{font-size:16px}
-  nav a.l:not(:last-of-type):not([aria-current]),nav a.l[aria-current] ~ a.l{display:none}
+  nav a.l:not([href="/console/"]){display:none}
 }
-@media (max-width:380px){.wrap{padding:0 16px} nav a.l[aria-current]{display:none}}
+@media (max-width:380px){.wrap{padding:0 16px} nav .wrap{gap:10px} nav .brand{font-size:14px}}
+@media (max-width:350px){nav .scheme span{display:none}}
 .eyebrow{font:12px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
   color:var(--muted);margin:0 0 14px}
 h1{margin:0;font-size:clamp(24px,3.2vw,36px);line-height:1.35}
@@ -1121,6 +1125,7 @@ h1 em{font-style:normal;color:var(--accent)}
 .btn{display:inline-block;padding:9px 16px;border:1px solid var(--line);
   background:var(--surface);color:var(--ink);text-decoration:none;font-size:15px}
 .btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .btn.pri{background:var(--accent);border-color:var(--accent);color:var(--pri-ink);font-weight:600}
 .btn.pri:hover{filter:brightness(1.08);color:var(--pri-ink)}
 /* --- the mascot ------------------------------------------------------------ */
@@ -1156,6 +1161,7 @@ button.btn:disabled{opacity:.45;cursor:default;filter:none}
 .field{font:15px var(--sans);color:var(--ink);background:var(--surface);
   border:1px solid var(--field);border-radius:0;padding:8px 10px;min-width:0}
 .field:focus-visible{outline:2px solid var(--accent);outline-offset:-1px}
+div.setup > .btn{margin:12px 12px 0 0;font-size:14px;padding:7px 13px}
 form.setup{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
 form.setup .note{flex:1 0 100%%;margin:0;font-size:14px;color:var(--muted)}
 form.setup .field{flex:1 1 12rem}
@@ -1343,28 +1349,22 @@ def page(pal, has_player, cards, channel=None, stills=False):
    the real sizing (a fixed overlay works everywhere), and fullscreen is asked
    for on top of it where it exists, which additionally hides the browser
    chrome. Either can end first, so the JS syncs both ways. */
-.exp{appearance:none;cursor:pointer;margin-left:auto;align-self:center;font:14px/1 var(--sans);
-  padding:7px 11px;background:var(--surface);color:var(--ink);border:1px solid var(--line)}
-.exp:hover{border-color:var(--link);color:var(--link)}
+.exp{margin-left:auto;align-self:center}
 .exp[hidden]{display:none}
-/* A phone's Expand is the icon alone, a thumb's size. */
-@media (max-width:700px){.exp span{display:none}
-  .exp{font-size:22px;min-width:44px;min-height:44px;padding:0 10px}}
+/* Filling the screen, the console sits under a strip of its own that holds
+   Close: the console's OS bar is at its very top, battery and clock in its
+   right corner, so a Close over the console covered them. */
 .stage.big{position:fixed;inset:0;z-index:60;margin:0;border:0;
-  aspect-ratio:auto !important;background:#000}
+  aspect-ratio:auto !important;background:#000;
+  padding:calc(32px + env(safe-area-inset-top,0px)) 0 0}
 body.noscroll{overflow:hidden}
-.shrink{position:absolute;top:8px;right:8px;z-index:2;appearance:none;cursor:pointer;
-  font:13px/1 var(--sans);padding:8px 11px;color:var(--night-ink);
-  background:color-mix(in srgb,var(--night-bg) 72%%,transparent);
-  border:1px solid var(--night-line)}
+.shrink{position:absolute;top:calc(4px + env(safe-area-inset-top,0px));
+  right:calc(8px + env(safe-area-inset-right,0px));z-index:2;appearance:none;
+  cursor:pointer;font:12px/1 var(--sans);padding:5px 10px;color:var(--night-ink);
+  background:var(--night-bg);border:1px solid var(--night-line)}
 .shrink:hover{border-color:var(--night-accent);color:var(--night-accent)}
+.shrink:focus-visible{outline:2px solid var(--night-accent);outline-offset:2px}
 .stage:not(.big) .shrink{display:none}
-/* Landscape phone: the OS bar sits at the very top of the console, so a button
-   in the corner would cover its clock. Nudge it clear of the safe area. */
-@supports (padding:env(safe-area-inset-top)){
-  .stage.big .shrink{top:calc(8px + env(safe-area-inset-top));
-                     right:calc(8px + env(safe-area-inset-right))}
-}
 .hint{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;
   color:var(--muted);font-size:13px;margin:10px 0 0}
 /* --- feature tiles: one-colour mask sheets, stepped through by CSS ---------- */
@@ -1474,8 +1474,7 @@ body.noscroll{overflow:hidden}
       <span>Click the screen, then use the arrow keys, Z and X. Pick <b>Make</b> for
         the editors.</span>
       <span>Carts you make are kept in this browser.</span>
-      <button class="exp" id="expand" type="button" hidden title="Fill the screen"
-        aria-label="Expand: fill the screen">&#10530;<span> Expand</span></button>
+      <button class="exp" id="expand" type="button" hidden>&#10530; Full screen</button>
     </div>
 %(missing)s  </div>
 </div>

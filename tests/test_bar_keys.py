@@ -471,3 +471,20 @@ def test_a_bandless_bar_keeps_its_status_while_the_keys_walk(tmp_path):
     _press(drv, "left")
     assert bl.focus is not None
     assert cell() == shown, "the bar's focus leaves the battery drawn"
+
+
+def test_the_pause_bar_walks_only_what_it_draws(tmp_path):
+    """Over a paused game the bar has no zone, so no back chevron at its
+    head: the keys walk from the moy to the status, never onto an empty
+    stop."""
+    from test_system_key import _game
+    ws, drv = _game(tmp_path)
+    drv.system_key()
+    for _ in range(3):
+        drv.frame(1 / 30)
+    bl = ws.bar_layer
+    assert ws.pause.shows_bar() and not bl.draws_back("pause")
+    assert [it[2] for it in bl.focus_items("pause")][:2] == ["menu", "cluster"]
+    _press(drv, "up")
+    _press(drv, "right")
+    assert bl.focus_item[2] == "cluster"

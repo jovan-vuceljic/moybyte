@@ -1838,10 +1838,13 @@ class BarLayer:
     def draws_back(self, where):
         """Whether `where`'s bar draws the back chevron at the head of its
         zone: where it has a way back and its bar places no `close`, outside
-        a window (whose title strip carries close). The Editor's one bar
-        draws none: Esc and B step back (EDITOR_LAYOUT.md's handheld)."""
+        a window (whose title strip carries close), beside a zone that draws
+        (a running tool's, or one an owner lends): the pause menu's bar has
+        no zone, so neither chevron, tap target nor key stop. The Editor's
+        one bar draws none: Esc and B step back (EDITOR_LAYOUT.md's handheld)."""
         return (where != "menu" and not self._in_window(where) and self._way_back(where)
-                and self.cell(where, "close") is None)
+                and self.cell(where, "close") is None
+                and (where in ("tool", "app") or self._zone_owner(where) is not None))
 
     def _back_w(self, game):
         """The width the chevron takes at the head of a zone: its square and
