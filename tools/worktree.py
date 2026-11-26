@@ -178,7 +178,17 @@ def cmd_new(a, main):
     if git("branch", "--list", a.name, cwd=main):
         raise WorktreeError("branch %s already exists -- pick another name, "
                             "or `git worktree add` it by hand" % a.name)
-    git("worktree", "add", "-q", "-b", a.name, wt, a.base, cwd=main)
+    base = a.base
+    if base == "dev":
+        # The main checkout's dev trails what has landed; a worker starts at
+        # the remote's. --no-track: the branch must not push to dev by default.
+        try:
+            git("fetch", "-q", "origin", "dev", cwd=main)
+            base = "origin/dev"
+        except WorktreeError:
+            pass                    # no remote (a scratch repo): local dev
+    git("worktree", "add", "-q", "--no-track", "-b", a.name, wt, base,
+        cwd=main)
     for rel in links(main):
         link(main, wt, rel)
     trees = mpy_trees(main)
@@ -376,7 +386,7 @@ def parser():
     p = sub.add_parser("new", help="a worktree ready to test and build")
     p.add_argument("name")
     p.add_argument("--from", dest="base", default="dev",
-                   help="the commit or branch it starts at (default dev)")
+                   help="the commit or branch it starts at (default dev, read as origin/dev after a fetch)")
     p.add_argument("--no-web", action="store_true",
                    help="skip building the browser console")
     p = sub.add_parser("rm", help="remove a worktree and its build trees")
