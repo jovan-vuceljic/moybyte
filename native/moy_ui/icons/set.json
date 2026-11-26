@@ -142,6 +142,134 @@
  "pixel_only": [
   "moy"
  ],
+ "pointers": {
+  "families": [
+   "pixel",
+   "default",
+   "coast",
+   "luna",
+   "playful"
+  ],
+  "files": {
+   "ptr-coast-16": {
+    "bytes": 2074,
+    "family": "coast",
+    "size": 16
+   },
+   "ptr-coast-32": {
+    "bytes": 6661,
+    "family": "coast",
+    "size": 32
+   },
+   "ptr-coast-48": {
+    "bytes": 14433,
+    "family": "coast",
+    "size": 48
+   },
+   "ptr-default-16": {
+    "bytes": 1728,
+    "family": "default",
+    "size": 16
+   },
+   "ptr-default-32": {
+    "bytes": 5568,
+    "family": "default",
+    "size": 32
+   },
+   "ptr-default-48": {
+    "bytes": 11699,
+    "family": "default",
+    "size": 48
+   },
+   "ptr-luna-16": {
+    "bytes": 2629,
+    "family": "luna",
+    "size": 16
+   },
+   "ptr-luna-32": {
+    "bytes": 8800,
+    "family": "luna",
+    "size": 32
+   },
+   "ptr-luna-48": {
+    "bytes": 19183,
+    "family": "luna",
+    "size": 48
+   },
+   "ptr-pixel-16": {
+    "bytes": 799,
+    "family": "pixel",
+    "size": 16
+   },
+   "ptr-pixel-32": {
+    "bytes": 1866,
+    "family": "pixel",
+    "size": 32
+   },
+   "ptr-pixel-48": {
+    "bytes": 3653,
+    "family": "pixel",
+    "size": 48
+   },
+   "ptr-playful-16": {
+    "bytes": 2549,
+    "family": "playful",
+    "size": 16
+   },
+   "ptr-playful-32": {
+    "bytes": 8286,
+    "family": "playful",
+    "size": 32
+   },
+   "ptr-playful-48": {
+    "bytes": 17959,
+    "family": "playful",
+    "size": 48
+   }
+  },
+  "layers": [
+   "line",
+   "fill",
+   "accent"
+  ],
+  "shapes": [
+   "arrow",
+   "hand",
+   "text",
+   "ew",
+   "ns",
+   "nwse",
+   "nesw",
+   "move",
+   "busy"
+  ],
+  "tiers": {
+   "desktop": [
+    "ptr-coast-32",
+    "ptr-coast-48",
+    "ptr-default-32",
+    "ptr-default-48",
+    "ptr-luna-32",
+    "ptr-luna-48",
+    "ptr-pixel-32",
+    "ptr-pixel-48",
+    "ptr-playful-32",
+    "ptr-playful-48"
+   ],
+   "handheld": [
+    "ptr-coast-16",
+    "ptr-coast-32",
+    "ptr-default-16",
+    "ptr-default-32",
+    "ptr-luna-16",
+    "ptr-luna-32",
+    "ptr-pixel-16",
+    "ptr-pixel-32",
+    "ptr-playful-16",
+    "ptr-playful-32"
+   ]
+  }
+ },
  "sets": {
   "coast": [
    "ink"
