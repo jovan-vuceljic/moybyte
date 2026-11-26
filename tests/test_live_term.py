@@ -137,3 +137,23 @@ def test_another_page_takes_the_session_and_its_face(board, page_so, tmp_path):
     tb = Term(b)
     assert tb.open() == b"tA", "the taken page's face let the shell go"
     assert b"$ " in tb.until(b"$ ")
+
+
+def test_a_closed_face_leaves_the_shell_to_ssh_and_ssh_s_end_to_the_page(board, page_so,
+                                                                         tmp_path):
+    """One face at a time (native/moy_tty/moy_tty.h): while the page's runs
+    SSH's open is refused; the page's 'C' ends it, so SSH's opens on the
+    same socket's watch, and once SSH's ends the page opens one again."""
+    t = Term(_page(board, page_so, tmp_path).open())
+    assert t.open() == b"tA"
+    assert b"$ " in t.until(b"$ ")
+    at = len(board.log())
+    board.say("run echo hi")
+    assert board.wait_line("RAN ", after=at) == "RAN -2", "SSH beside the page's face"
+    t.say(b"C")
+    t.wait(lambda m: False, 0.3)
+    at = len(board.log())
+    board.say("run echo hi")
+    assert board.wait_line("RAN ", after=at) == "RAN 0"
+    assert t.open() == b"tA"
+    assert b"$ " in t.until(b"$ ")

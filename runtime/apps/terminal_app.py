@@ -15,6 +15,12 @@ puts its text on the console's clipboard (a browser page's follows it), and
 Ctrl+C with none is the shell's interrupt. A paste (`paste`) types its text
 whole, as a terminal sends it: a line break is Enter, and a line that waits
 holds the rest until its run ends.
+
+THE BOARD'S SHELL. On a page a board serves, the face is a face of the
+board's shell (native/moy_sh/moy_sh_link.h), one at a time with SSH's
+(native/moy_tty/moy_tty.h, ONE FACE AT A TIME): leaving the Terminal gives
+it back (`close`), so the board's face ends and SSH gets in, and the next
+open asks for a new one. A console's own session outlives its screen.
 """
 
 import sys as _sys
@@ -38,6 +44,8 @@ except (ImportError, AttributeError):   # a folder of that name on CPython's pat
 # The site's browser console: the shell itself runs in the page.
 _BROWSER_SHELL = (_sh is not None and _sys.platform == "webassembly"
                   and not hasattr(_sh, "link_want"))
+# A page a board serves: the face is the board's shell's.
+_LINKED = _sh is not None and hasattr(_sh, "link_want")
 
 _HIT, _KEYS = 1, 2                      # the face's input answer
 _MODS_AT, _SHIFT = 16, 2                # a key event's modifiers (moy_input.h)
@@ -130,6 +138,12 @@ class TerminalAppLayer(AppLayer):
 
     def relayout(self, w, h, fs, cs=None):
         self.layout = TerminalLayout(w, h, fs, self._surf.windowed(), cs)
+
+    def close(self):
+        """Leaving the Terminal: the board's shell given back where the
+        face is its (THE BOARD'S SHELL above)."""
+        if _LINKED:
+            self.close_session()
 
     def close_session(self):
         """The session given back, its arena and grid with it: the next open

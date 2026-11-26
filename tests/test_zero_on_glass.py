@@ -1098,6 +1098,54 @@ def test_the_page_s_terminal_runs_the_board_s_shell(zero, mirror, tmp_path):
           "%d low-water; live socket %s" % (zero.name, heap[0], heap[1], heap[2], got["live"]))
 
 
+# The Terminal's window closed by its strip's X, the rightmost button
+# (runtime/wm/wm_strip.py): a press and a release there.
+CLOSE_TERMINAL = (
+    "window.__moyState().then(function (s) { var w = s.wins.terminal, "
+    "x = w[0] + w[2] - Math.round(w[4] / 2), y = w[1] + Math.round(w[4] / 2); "
+    "send({type: 'down', x: x, y: y, mods: 0}); return new Promise(function (ok) { "
+    "setTimeout(function () { send({type: 'up'}); ok('X ' + JSON.stringify([x, y])); }, 80); "
+    "}); })")
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_a_closed_terminal_lets_ssh_in_while_the_page_stays(zero, mirror, ssh, tmp_path):
+    """The page's Terminal closed and the page left open: the board's face
+    ends with it (runtime/apps/terminal_app.py, THE BOARD'S SHELL), so an
+    SSH session gets the shell at once, the live socket still up."""
+    shell = "ln => /\\$\\s*$/.test(ln)"
+    steps = sign_in(zero) + [
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.term && "
+                    "s.term.some(%s)); })" % shell, "timeout": 60000},
+        {"js": CLOSE_TERMINAL},
+        {"waitFor": "window.__moyState().then(function (s) { return (s.order || [])"
+                    ".indexOf('terminal') < 0; })", "timeout": 10000},
+        {"wait": 2000},
+        {"js": TERM % "CLOSED"},
+        {"wait": 30000},
+    ]
+    path = _scenario(tmp_path / "closed", steps, "?dev=1&desktop=1&cart=Terminal")
+    proc = subprocess.Popen(["node", "browsershot.mjs", str(path), str(tmp_path / "closed")],
+                            cwd=str(RUNNER), env=dict(os.environ, MOY_BASE=zero.url),
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    lines, ran = [], None
+    try:
+        for line in proc.stdout:
+            lines.append(line)
+            if ran is None and 'js -> "CLOSED ' in line:
+                ran = ssh.run("echo ssh-$((6*7))", timeout=60)
+        proc.wait(timeout=120)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        path.unlink()
+    out = _scrub("".join(lines), zero)
+    assert ran is not None, out[-3000:]
+    assert ran[0] == 0 and b"ssh-42" in ran[1], (ran, out[-3000:])
+    got = _tagged(out, "CLOSED")
+    assert got and got["live"], got
+
+
 # -- the fast console (native/moy_net/moy_net.h, HTTPS on demand) -------------------------
 
 
