@@ -557,7 +557,7 @@ def test_the_console_signs_in_and_syncs_a_cart(zero, mirror, tmp_path):
         {"js": "location.reload(), 1"},
         {"waitFor": "document.getElementById('s').textContent == 'live'", "timeout": 120000},
         {"js": "pzAsk(), 1"}, {"wait": 1000},
-        {"js": "Array.from(pzC.options).map(function (o) { return o.value; }).join(',')"},
+        {"js": "(window.__moyCarts || []).join(',')"},
     ]
     out = _browse(zero, zero.url, steps, tmp_path / "sync")
     assert "local.new_cart.moy" in out.rsplit("js ->", 1)[-1], out[-2000:]
@@ -889,11 +889,11 @@ def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
 
 
 # The bench folder of the SSH tests, in the folder a session starts in (the
-# store's files), and the pipe's stream at most: 4 KB on a board without
-# PSRAM, 1 MB with (native/moy_sh/moy_sh_sys.c, PIPE_MAX).
+# store's files), and what a pipe holds in memory before its stream goes on
+# in a file of the store: 4 KB on a board without PSRAM, 1 MB with
+# (native/moy_sh/moy_sh_sys.c, MOY_SH_PIPE_MEM and SPILL).
 BENCH = "zbench"
-PIPE_CAP = {"c3_zero": 4 * 1024, "xiao_zero": 1024 * 1024}
-PIPE_SAID = re.compile(rb"pipe: (stream over|out of memory at) \d+ KB; write it to a file")
+PIPE_MEM = {"c3_zero": 4 * 1024, "xiao_zero": 1024 * 1024}
 
 
 def _host(z):
@@ -1026,34 +1026,34 @@ def test_edit_and_vi_save_what_was_typed_over_ssh(zero, ssh):
     assert not failed, "\n".join(failed)
 
 
-def test_a_pipe_carries_a_file_and_says_where_it_stops(zero, ssh):
-    """`cat ... | wc -c` counts a stream under the pipe's cap whole; past the
-    cap the pipe says so (the message that tells the user to write it to a
-    file) and the session goes on. The stream is one file `cat` names as
-    often as it takes, so a 1 MB cap needs no 1 MB file in the store."""
-    cap = PIPE_CAP[zero.name]
-    part = _text_file(min(cap - 1024, 32 * 1024))
-    under = max(1, (cap - 1024) // len(part))
-    over = cap // len(part) + 1
+def test_a_pipe_carries_a_stream_past_its_memory_whole(zero, ssh):
+    """`cat ... | wc -c` counts a stream whole under the pipe's memory and
+    past it, where the stream goes on in a file of the store that goes at
+    the pipe's last close, in a command and in a terminal session alike. The
+    stream is one file `cat` names as often as it takes, so a 1 MB pipe needs
+    no 1 MB file in the store."""
+    mem = PIPE_MEM[zero.name]
+    part = _text_file(min(mem - 1024, 32 * 1024))
+    under = max(1, (mem - 1024) // len(part))
+    over = mem // len(part) + 1
     cat = lambda n: "cat" + (" %s/part.txt" % BENCH) * n  # noqa: E731
     with _bench(ssh):
         assert ssh.run("cat > %s/part.txt" % BENCH, stdin=part)[0] == 0
-        rc, out, err = ssh.run("%s | wc -c" % cat(under))
-        assert (rc, out.strip(), err) == (0, str(len(part) * under).encode(), b""), \
-            (rc, out, err)
-        rc, out, err = ssh.run("%s | wc -c" % cat(over))
-        print("%s: %d bytes through a pipe capped at %d: %r %r"
-              % (zero.name, len(part) * over, cap, out, err))
-        assert PIPE_SAID.search(out + err), "a stream past the cap: %r %r" % (out, err)
-        assert int(out.strip().rsplit(b"\n", 1)[-1] or 0) <= cap, out
+        for n in (under, over):
+            rc, out, err = ssh.run("%s | wc -c" % cat(n))
+            assert (rc, out.strip(), err) == (0, str(len(part) * n).encode(), b""), \
+                (n, rc, out, err)
+        print("%s: %d bytes through a pipe holding %d in memory" % (zero.name, len(part) * over, mem))
         t, free0 = _session(ssh, zero)
         try:
             said = t.command("%s | wc -c" % cat(over))
-            assert said is not None and PIPE_SAID.search(said), said
+            assert said is not None and said.strip() == str(len(part) * over).encode(), said
             free1 = _free_live(t)
             _still_up(zero, t)
         finally:
             t.close()
+        _rc, left, _e = ssh.run("ls -a /; ls -a /etc")
+        assert b"pipes" not in left, "a spill was left: %r" % left
     print("%s: internal RAM free in the session %s -> %s" % (zero.name, free0, free1))
     _heap(zero, "after the pipes")
 
@@ -1257,7 +1257,7 @@ def _open_steps(folder, title):
 
 
 SHELF = {"js": "(pzAsk(), new Promise(function (ok) { setTimeout(function () { ok('SHELF ' + "
-               "JSON.stringify(Array.from(pzC.options).map(function (o) { return o.value; }))); "
+               "JSON.stringify(window.__moyCarts || [])); "
                "}, 1500); }))"}
 STATE = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify({cart: s.cart, "
          "stack: s.stack, screen: s.screen, error: s.cart_error, notice: s.notice, "
