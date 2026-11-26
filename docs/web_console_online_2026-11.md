@@ -622,8 +622,9 @@ Settings, and join My consoles when you type that address.
   and Add to Home Screen inherit it), so the loader on `http://` is slow
   there whatever the pack. A board whose image takes the secure door
   (`MOY_NET_HTTPS`; the C3 Zero) offers its page over https on demand: the
-  loader's "Open the fast console" (iOS, or `?fast`) asks `POST /tls` and
-  goes to `https://<host>/`, where a self-signed certificate costs one
+  loader's card "Make it faster on iPhone?" (iOS, or `?fast`, which also
+  forgets a remembered answer: About's Fast console on iPhone row) asks
+  `POST /tls` and goes to `https://<host>/`, where a self-signed certificate costs one
   warning per board (`native/moy_net/moy_net.h`, HTTPS on demand; the C3
   README says what differs). That origin is a third one: its pack cache
   and its pairing are its own, its loader fetches from https mirrors only

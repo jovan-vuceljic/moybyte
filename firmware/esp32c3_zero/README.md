@@ -65,9 +65,13 @@ chip changes.
 - **The fast console: its page over https, on demand.** iOS runs a page
   that came from a plain-http address with no JIT, in every browser there,
   and a window or a home-screen app opened from it inherits that. So the
-  loader offers an iPhone or iPad (and any browser with `?fast` in the
-  address) "Open the fast console": it asks `POST /tls`, which opens the
-  board's TLS door on port 443, and goes to `https://<the same host>/`
+  loader asks an iPhone or iPad (and any browser with `?fast` in the
+  address) "Make it faster on iPhone?" (the owner's words, 2026-11-26).
+  Make it fast asks `POST /tls`, which opens the board's TLS door on port
+  443, and goes to `https://<the same host>/`; Remember my choice keeps the
+  answer in the http origin's storage, and the loader skips the card for
+  it after. About's Fast console on iPhone row goes to `?fast`, which
+  forgets the answer and asks again
   (`native/moy_net/moy_net.h`, HTTPS on demand; `moy_tls_srv.c`). Joining
   the board stays plain http; the door holds RAM only while it is open, and
   closes itself two minutes after its last connection ends (a page waiting

@@ -1,5 +1,5 @@
 <!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><title>Moybyte</title>
-<body style="font:16px system-ui,sans-serif;margin:2em;background:#1d2b53;color:#fff1e8"><p id=s>Loading the console...</p>
+<body style="font:16px system-ui,sans-serif;margin:2em;background:#1d2b53;color:#fff1e8"><div id=s>Loading the console...</div>
 <script>
 // The loader (docs/web_console_online_2026-11.md §3): the page a board's root
 // serves in place of the console. It asks the board which pack its image
@@ -92,20 +92,37 @@ return;
 }
 // HTTPS on demand (native/moy_net/moy_net.h): an iPhone runs a page from a
 // plain-http address with no JIT, so where the board offers TLS the loader
-// offers its https origin first (to any browser with ?fast). The board opens
-// the door, then this page goes there; its certificate is the board's own.
-if (s.tls && location.protocol == "http:" && (/iPhone|iPad|iPod/.test(navigator.userAgent)
-|| navigator.platform == "MacIntel" && navigator.maxTouchPoints > 1 || /fast/.test(location.search))) {
-const fast = await new Promise((ok) => {
-S.textContent = "This console runs much faster on this device over a secure link. "
-+ "Safari will warn once about the console's own certificate: Show Details, then visit this website.";
-for (const [t, v] of [["Open the fast console", 1], ["Continue here", 0]]) {
-const b = document.createElement("button"); b.textContent = t; b.style.cssText = "display:block;font:inherit;margin:1em 0;padding:.6em 1em";
-b.onclick = () => ok(v); document.body.append(b);
-}
+// asks an iPhone or an iPad (any browser with ?fast) whether to open the
+// board's https origin, whose certificate is the board's own. "Remember my
+// choice" keeps the answer in this origin's storage (`moy.fast`: 1 go, 0
+// stay) and the card is skipped for it after; ?fast forgets it and asks
+// again (About's Fast console on iPhone row, settings_rows.py). The board
+// opens the door, then this page goes there. self.moyFast tells the console
+// page the board has the door.
+self.moyFast = s.tls ? 1 : 0;
+if (s.tls && location.protocol == "http:") {
+const K = "moy.fast", ask = /fast/.test(location.search);
+let fast = null;
+try { if (ask) localStorage.removeItem(K); fast = localStorage.getItem(K); } catch (e) { }
+if (fast == null && (ask || /iPhone|iPad|iPod/.test(navigator.userAgent)
+|| navigator.platform == "MacIntel" && navigator.maxTouchPoints > 1)) {
+const [go, keep] = await new Promise((ok) => {
+S.innerHTML = "<style>#s button{font:inherit;padding:.7em 1.2em;margin:1em .6em 0 0;border-radius:8px;"
++ "border:1px solid;background:none;color:inherit}#s button:first-of-type"
++ "{background:#29adff;border-color:#29adff;color:#1d2b53;font-weight:600}</style>"
++ "<b style=font-size:1.4em>Make it faster on iPhone?</b><p>iPhones run the console slowly on this connection. "
++ "The fast way uses a secure link to your board.<p>Safari will warn that it can't check the board's certificate. "
++ "That's expected for a console on your own Wi-Fi: tap <b>Show Details</b>, then <b>visit this website</b>. "
++ "You only do this once.<p><label><input type=checkbox> Remember my choice</label><br>"
++ "<button>Make it fast</button><button>Not now</button>";
+const [m, n] = S.querySelectorAll("button"), b = S.querySelector("input");
+m.onclick = () => ok([1, b.checked]); n.onclick = () => ok([0, b.checked]);
 });
-document.querySelectorAll("button").forEach((b) => b.remove());
-if (fast) {
+fast = go;
+say("");
+if (keep) try { localStorage.setItem(K, go); } catch (e) { }
+}
+if (fast == 1) {
 say("Opening the secure link...");
 for (let i = 0; i < 50; i++) {
 let r = null;

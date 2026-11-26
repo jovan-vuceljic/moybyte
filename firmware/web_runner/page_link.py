@@ -7,7 +7,8 @@ iPhone's or an iPad's (whose element full screen keeps the browser's strip),
 and Add a file in
 the system menu, Download in a cart's menu, Play on the console in a cart's
 menu where a console serves the page,
-where the carts are kept in Settings -- and the console says what happened
+where the carts are kept in Settings, About's Fast console on iPhone where
+its board has one -- and the console says what happened
 in its own notices and cards. The browser half of each runs in the page.
 
 A console row asks (`toggle_fullscreen`, `add_files`, `save_cart`,
@@ -35,6 +36,7 @@ class PageLink:
         self.app = False            # it runs as a home-screen app
         self.ios = False            # ...on an iPhone or an iPad
         self.host = ""              # the host it was opened at
+        self.fast = 0               # 1 its board has the fast console (https), 2 this page is it
         self.kept = ""              # where the page keeps the carts, its sentence
         self._asks = []
 
@@ -83,6 +85,11 @@ class PageLink:
             rows.append(("The app pairs with it once.", "dim"))
         ws.confirm.tell("Full screen", tuple(rows))
 
+    def fast_again(self):
+        """The board's loader at its http address, which forgets the fast
+        console's remembered choice and asks again (loader.html)."""
+        self._ask("go", url="http://%s/?fast" % self.host)
+
     def drain(self):
         """The asks since the last frame, for the page, or None."""
         if not self._asks:
@@ -94,7 +101,8 @@ class PageLink:
         """The page's `page` event: `fs` whether it is full screen, `canfs`
         whether its browser has full screen (an iPhone's Safari's has
         none), `app` whether it runs as a home-screen app, `ios` whether on
-        an iPhone or an iPad, `host` the host it was opened at, `kept`
+        an iPhone or an iPad, `host` the host it was opened at, `fast`
+        whether its board has the fast console (2: this page is it), `kept`
         where it keeps the carts, `say` a notice ([title, sub, kind]), `tell`
         a card ([title, [line, tone], ...]), whose Open goes to `go` where it
         names an address (where a Zero that moved went), and `offer` one whose
@@ -110,6 +118,8 @@ class PageLink:
             self.ios = bool(ev["ios"])
         if "host" in ev:
             self.host = str(ev["host"] or "")
+        if "fast" in ev:
+            self.fast = int(ev["fast"] or 0)
         if "kept" in ev:
             self.kept = str(ev["kept"] or "")
         say = ev.get("say")

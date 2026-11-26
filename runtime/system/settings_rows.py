@@ -48,6 +48,7 @@ s = ui.state(
     has_zoom=False,
     kept_carts="",
     has_kept_carts=False,
+    fast_word="", has_fast=False,
     layouts=ui.model(key="v", v="", word=""),
     layout_theme=ui.row_of("layouts"),
     home_style=ui.enum(*HOMES, init="theme"),
@@ -164,6 +165,11 @@ def rows_poll():
     page = getattr(ws, "page", None)
     s.kept_carts = page.kept if page is not None else ""
     s.has_kept_carts = bool(s.kept_carts)
+    # The fast console (the board's https origin, loader.html): on where
+    # this page is it, offered where its board has it and it is an iPhone's.
+    fast = page.fast if page is not None else 0
+    s.has_fast = fast == 2 or fast == 1 and page.ios
+    s.fast_word = "On" if fast == 2 else "Off"
     if s.has_layout_theme:
         pick = look.layout_theme()
         if kept.get("lgen", -1) != look.layout_gen or kept.get("lpick", ()) != pick:
@@ -229,6 +235,10 @@ def _act(key):
 
 def web_toggle():
     uitree_app.env().ws.web.toggle()
+
+
+def fast_again():
+    uitree_app.env().ws.page.fast_again()
 
 
 def ach_open():
@@ -307,6 +317,7 @@ for _key, _label, _does in (
         ("update_online", "UPDATE ONLINE", _act("update_online")),
         ("update_c6", "UPGRADE C6 RADIO", _act("update_c6")), ("crash", "LAST CRASH", _page("crash")),
         ("permissions", "App permissions", _page("permissions")),
+        ("fast", "Fast console on iPhone", fast_again),
         ("achievements", "Achievements", ach_open), ("licences", "Licences", _page("licences")),
         ("log", "System log", _page("log"))):
     ui.action(_key, say(_label) if _label.isupper() else _label, _does, hint="Open")
@@ -381,6 +392,7 @@ def rows_page():
             with ui.rows("about"):
                 ui.info("{.label}", "{.value}")
             ui.info("Battery", "{battery}%", shown="has_battery")
+            ui.link("fast", "{fast_word}", shown="has_fast")
             ui.link("permissions")
             ui.link("achievements", "{ach_words}")
             ui.link("licences")
