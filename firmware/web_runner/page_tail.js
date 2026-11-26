@@ -145,6 +145,12 @@ if(tok||had||h.has("claim")||h.has("id")){var s=q.toString();
 history.replaceState(null,"",location.pathname+(s?"?"+s:""));}}
 catch(e){/* no history: the token is spent on its first use either way */}
 return {keys:keysStored(),token:tok,board:bid,name:browserName()};};
+// A screenless board with no password yet (hello's pw false, cable true)
+// reached without its claim: the setup that sets one never ran to its end
+// here, and until one is set nothing pairs and its SSH is off
+// (ssh_service serves only while a password is set).
+var NOPW="This console has no password yet, so no browser can pair with it and "
++"SSH to it is off. Set one by cable: plug it in and choose Manage by cable in My consoles.";
 // The worker's word that pairing is needed: `pw` a password can do it, `why`
 // what went wrong last ("" the first time), `wait` the backoff's sentence.
 // `taken`: another browser took the board, and the card's one button takes
@@ -160,9 +166,9 @@ CHOOSE=!m.pw&&!!CLAIM;
 if(CHOOSE){PINP.textContent="Choose this console's password, 8 to 64 characters: "
 +"every browser pairs with it.";PINR.style.display="";PINEL.style.display="flex";
 PINB.disabled=false;try{PINF.value="";PINF.focus();}catch(e){}return;}
+if(m.cable&&!m.pw)PINH.textContent="no password yet";
 PINP.textContent=m.cable?(m.pw?"Type the console's password, or pair this board by cable: "
-+"plug it in and choose Manage by cable in My consoles.":"Pair this board by cable: plug it "
-+"in and choose Manage by cable in My consoles."):asApp()?(m.pw?"Type the console's password. "
++"plug it in and choose Manage by cable in My consoles.":NOPW):asApp()?(m.pw?"Type the console's password. "
 +"(A code scanned with the camera opens Safari, not this app.)":"Set a password on the console "
 +"(passwd), then close and open this app again to type it. (A code scanned with the camera opens Safari, not this app.)")
 :m.pw?"Scan the code on the console's WEB "

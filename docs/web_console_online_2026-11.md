@@ -517,9 +517,12 @@ port it offers:
 
 A board with no screen pairs only this way or by its password, so the
 hello says so (`"cable": true`, which the Zeros' store host sets,
-`moy_wa_cable`) and the pairing prompt says "Pair this board by cable: plug
-it in and choose Manage by cable in My consoles" in place of the QR's
-words. Consoles with a screen run no Improv (its frame parser is built
+`moy_wa_cable`) and the pairing prompt names Manage by cable in place of
+the QR's words. Reached without its claim while it has no password (a
+hand-typed address, the `.local` name, a flash whose setup stopped short
+of step 3 of flow 1), it says the console has no password yet, that no
+browser can pair and SSH is off until one is set, and that Manage by cable
+sets it (`firmware/web_runner/page_tail.js`, `NOPW`). Consoles with a screen run no Improv (its frame parser is built
 where a board defines `MOY_IMPROV`, the Zeros alone) and set all three in
 their own Settings.
 
