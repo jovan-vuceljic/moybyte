@@ -101,7 +101,7 @@ from theme_custom import (Custom, CUSTOM, DROP, MANIFEST, PETME128,
                           manifest, minified, name_ok, named, overlay,
                           read_look, sheet_files, wall_keys)
 from moy_store_base import cart_path
-from moy_fs import _exists
+import moy_store
 from binascii import crc32 as _crc32
 import ui_draw as _ui_draw
 import fontset as _fontset
@@ -1007,7 +1007,7 @@ class Appearance:
         if store is not None and store.ready():
             dest = cart_path(ws.carts_root, folder)
             try:
-                if store.call(lambda: _exists(dest)):
+                if store.call(lambda: moy_store.exists(dest)):
                     return "folder"
             except Exception:  # noqa: BLE001 -- unreadable: the rename answers
                 pass
