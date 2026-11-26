@@ -182,7 +182,10 @@ static char *mem_copy(const char *p, size_t n) {
     return c;
 }
 
-// The state's allocator: every byte it holds counted, HEAP_MAX the cap.
+static uint32_t s_held;         // every state's bytes, summed (THE BUDGET)
+
+// The state's allocator: every byte it holds counted, HEAP_MAX the cap and
+// the board's budget the services' sum's.
 static void *svc_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
     svc_t *s = ud;
     if (ptr == NULL) {
@@ -191,16 +194,35 @@ static void *svc_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
     if (nsize == 0) {
         free(ptr);
         s->heap -= (uint32_t)osize;
+        __atomic_sub_fetch(&s_held, (uint32_t)osize, __ATOMIC_RELAXED);
         return NULL;
     }
-    if (nsize > osize && s->heap + (nsize - osize) > MOYCORE_SVC_HEAP_MAX) {
-        return NULL;
+    if (nsize > osize) {
+        uint32_t more = (uint32_t)(nsize - osize);
+        if (s->heap + more > MOYCORE_SVC_HEAP_MAX) {
+            return NULL;
+        }
+        #ifdef MOYCORE_SVC_BUDGET
+        if (__atomic_load_n(&s_held, __ATOMIC_RELAXED) + more > MOYCORE_SVC_BUDGET) {
+            return NULL;
+        }
+        #endif
     }
     void *p = mem_realloc(ptr, nsize);
     if (p != NULL) {
         s->heap += (uint32_t)nsize - (uint32_t)osize;
+        __atomic_add_fetch(&s_held, (uint32_t)nsize - (uint32_t)osize, __ATOMIC_RELAXED);
     }
     return p;
+}
+
+uint32_t moycore_svc_budget(uint32_t *held) {
+    *held = __atomic_load_n(&s_held, __ATOMIC_RELAXED);
+    #ifdef MOYCORE_SVC_BUDGET
+    return MOYCORE_SVC_BUDGET;
+    #else
+    return 0;
+    #endif
 }
 
 static svc_t *of_state(lua_State *L) {

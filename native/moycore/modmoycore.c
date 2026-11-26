@@ -1394,6 +1394,9 @@ static MP_DEFINE_CONST_FUN_OBJ_0(mod_pool_check_obj, mod_pool_check);
 //                                  app: its app's run, moy_app's `run()`)
 //   svc_info(h) -> (state, exit, heap, cpu_us, strikes, why, wakes, mail), None when stale
 //   svc_tasks() -> bool   svc_step() -> ms to the next deadline   svc_reset()
+//   svc_budget() -> (budget, held)   the board's budget for every service's
+//                                 state (None where it sets none) and the
+//                                 bytes they hold now (moycore_svc.h, THE BUDGET)
 
 static void svc_check(int rc)
 {
@@ -1489,6 +1492,18 @@ static mp_obj_t mod_svc_reset(void)
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_svc_reset_obj, mod_svc_reset);
 
+static mp_obj_t mod_svc_budget(void)
+{
+    uint32_t held;
+    uint32_t budget = moycore_svc_budget(&held);
+    mp_obj_t t[2] = {
+        budget ? mp_obj_new_int_from_uint(budget) : mp_const_none,
+        mp_obj_new_int_from_uint(held),
+    };
+    return mp_obj_new_tuple(2, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_svc_budget_obj, mod_svc_budget);
+
 static const mp_rom_map_elem_t moycore_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),    MP_OBJ_NEW_QSTR(MP_QSTR_moycore) },
     { MP_ROM_QSTR(MP_QSTR_run_begin),   MP_ROM_PTR(&mod_run_begin_obj) },
@@ -1550,6 +1565,7 @@ static const mp_rom_map_elem_t moycore_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_svc_tasks),   MP_ROM_PTR(&mod_svc_tasks_obj) },
     { MP_ROM_QSTR(MP_QSTR_svc_step),    MP_ROM_PTR(&mod_svc_step_obj) },
     { MP_ROM_QSTR(MP_QSTR_svc_reset),   MP_ROM_PTR(&mod_svc_reset_obj) },
+    { MP_ROM_QSTR(MP_QSTR_svc_budget),  MP_ROM_PTR(&mod_svc_budget_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_sram_floor), MP_ROM_PTR(&mod_set_sram_floor_obj) },
     { MP_ROM_QSTR(MP_QSTR_alloc_stats), MP_ROM_PTR(&mod_alloc_stats_obj) },
     { MP_ROM_QSTR(MP_QSTR_sram_report), MP_ROM_PTR(&mod_sram_report_obj) },
