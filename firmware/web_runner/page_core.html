@@ -25,7 +25,20 @@
 <meta name=apple-mobile-web-app-title content=Moybyte>
 <meta name=theme-color content="#0b0f1a">
 <link rel=icon href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAhUlEQVR42mNgGAW4wX8y8dB3ANig5rI5ZGFqOGTAHIBi8aHDx1HwyHPAgEfBcHAAydl0cDrg/8cXKJiQOCVRNLgdgC6PS3z4OYDaeOg5gJDDaB4FA+4AQgUM3dLAgDtg5OaCEeUAFIfUqQZTFZPSUBncDsCVHalh8aBxAKGuGbXUDw4HAAAJtsp8ecvLrQAAAABJRU5ErkJggg=="><title>Moybyte</title><style>
-html,body{margin:0;height:100%;background:#0b0f1a;color:#c2c3c7;
+/* The page's colour scheme, data-scheme on <html> (the script's first lines
+   set it): Night's ground under the gamepad's PICO-8 colours, and Day's, the
+   project site's Moy Day (native/moy_ui/themes/moy.json), with its accent on
+   A. Until the script runs, the browser's own scheme picks. */
+:root{--pg:#0b0f1a;--pg-ink:#c2c3c7;--joy-bg:#1d2b53;--joy-line:#29366f;--th-bg:#5f6f9f;
+--edge:#c2c3c7;--a-bg:#7e2553;--a-ink:#fff1e8;--b-bg:#29366f;--b-ink:#fff1e8;
+--s-bg:#5f574f;--s-ink:#fff1e8}
+@media (prefers-color-scheme:light){html:not([data-scheme]){--pg:#eceef3;--pg-ink:#5f6478;
+--joy-bg:#ffffff;--joy-line:#cfd3dc;--th-bg:#f4f5f8;--edge:#8f94a3;--a-bg:#4c3fd6;
+--a-ink:#ffffff;--b-bg:#ffffff;--b-ink:#4c3fd6;--s-bg:#ffffff;--s-ink:#15161d}}
+html[data-scheme=light]{--pg:#eceef3;--pg-ink:#5f6478;--joy-bg:#ffffff;--joy-line:#cfd3dc;
+--th-bg:#f4f5f8;--edge:#8f94a3;--a-bg:#4c3fd6;--a-ink:#ffffff;--b-bg:#ffffff;--b-ink:#4c3fd6;
+--s-bg:#ffffff;--s-ink:#15161d}
+html,body{margin:0;height:100%;background:var(--pg);color:var(--pg-ink);
 font:14px ui-monospace,Menlo,Consolas,monospace;display:flex;flex-direction:column;
 align-items:center}
 /* html is a centring flex column, which would size body to its widest child's
@@ -74,17 +87,19 @@ width:min(96vw,112vh);
 max-width:100%;padding:12px 4px;box-sizing:border-box;touch-action:none;user-select:none;
 --bb:min(72px,15vw);--sb:min(40px,9vw);--joy:min(120px,26vw)}
 #joy{flex:0 0 auto;position:relative;width:var(--joy);height:var(--joy);border-radius:50%;
-background:#1d2b53;
-border:2px solid #29366f}#th{position:absolute;top:50%;left:50%;
+background:var(--joy-bg);
+border:2px solid var(--joy-line)}#th{position:absolute;top:50%;left:50%;
 width:calc(var(--joy)*0.43);height:calc(var(--joy)*0.43);
 margin:calc(var(--joy)*-0.215) 0 0 calc(var(--joy)*-0.215);
-border-radius:50%;background:#5f6f9f;border:2px solid #c2c3c7;
+border-radius:50%;background:var(--th-bg);border:2px solid var(--edge);
 pointer-events:none}.b{flex:0 0 auto;width:var(--bb);height:var(--bb);border-radius:50%;
 display:flex;
 align-items:center;justify-content:center;font:700 min(26px,5.5vw) ui-monospace;
-color:#fff1e8;
-background:#7e2553;border:2px solid #c2c3c7;margin-left:min(18px,2vw)}#bb{background:#29366f}
-#bh,#kb{background:#5f574f;width:var(--sb);height:var(--sb);font-size:min(16px,4vw)}
+color:var(--a-ink);
+background:var(--a-bg);border:2px solid var(--edge);margin-left:min(18px,2vw)}
+#bb{background:var(--b-bg);color:var(--b-ink)}
+#bh,#kb{background:var(--s-bg);color:var(--s-ink);width:var(--sb);height:var(--sb);
+font-size:min(16px,4vw)}
 .pr{background:#ffec27;color:#1d2b53}
 /* The middle cluster (#42 Thread 2 rework): the soft-keyboard summon lives in the bottom
    control bar next to the burger, NEVER floating over the canvas -- the old pinned corner
@@ -181,6 +196,13 @@ autocorrect=off spellcheck=false aria-label="the console's password"><button id=
 <div id=mid><span class=b id=kb title="keyboard">&#9000;</span><span class=b id=bh>&#9776;</span></div>
 <div id=ab><span class=b id=bb>B</span><span class=b id=ba>A</span></div></div>
 <script>
+// The page's colour scheme: the url's ?scheme=dark|light (the project site
+// passes its visitor's, and restarts the console on a flip of its switch),
+// else the browser's own. The page around the canvas and its gamepad wear it,
+// and a first-run console takes its theme variant from it (moyScheme).
+(function(){var q=new URLSearchParams(location.search).get("scheme");
+if(q!=="dark"&&q!=="light")q=window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";
+document.documentElement.dataset.scheme=q;})();
 var FPS=30,cv=document.getElementById("cv"),cx=cv.getContext("2d"),sEl=document.getElementById("s");
 cx.imageSmoothingEnabled=false;
 var W=320,H=240,ready=false,assCart=undefined,img=null,rgba=null;

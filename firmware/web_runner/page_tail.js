@@ -474,13 +474,10 @@ try {
   // keeps that page's stores apart from the stable site's (moy_store.channelNav).
   const MOY_CHANNEL = "";
   // The colour scheme a first-run console takes its theme variant from: the
-  // url's ?scheme=dark|light (the project site passes its visitor's), else the
-  // browser's own prefers-color-scheme.
+  // page's own, which its script reads from the url's ?scheme=dark|light (the
+  // project site passes its visitor's), else the browser's.
   function moyScheme() {
-    const q = new URLSearchParams(location.search).get("scheme");
-    if (q === "dark" || q === "light") return q;
-    return window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark" : "light";
+    return document.documentElement.dataset.scheme === "light" ? "light" : "dark";
   }
   // The worker url carries a CACHE BUSTER, and it is not superstition: browsers
   // cache worker scripts stubbornly, and a hard reload that refreshes the
