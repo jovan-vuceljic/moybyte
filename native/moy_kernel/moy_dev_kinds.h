@@ -84,6 +84,7 @@ extern const moy_dev_ops_t moy_dev_http;
 extern const moy_dev_ops_t moy_dev_usb;
 extern const moy_dev_ops_t moy_dev_ble;
 extern const moy_dev_ops_t moy_dev_media;
+extern const moy_dev_ops_t moy_dev_leds;
 
 // THE RELAY (#256; native/moy_net/moy_live_dev.c the board's half,
 // moy_dev_web.c the page's): a board relays a device API to the browser

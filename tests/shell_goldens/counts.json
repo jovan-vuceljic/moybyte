@@ -36,7 +36,7 @@
     "settings_licence": [15, 16],
     "settings_licences": [31, 21],
     "settings_log": [4, 2],
-    "settings_permissions": [44, 19],
+    "settings_permissions": [43, 19],
     "unlock_banner": [97, 11],
     "web_console": [294, 8]
   },
@@ -77,7 +77,7 @@
     "settings_licence": [5, 19],
     "settings_licences": [44, 28],
     "settings_log": [4, 2],
-    "settings_permissions": [45, 19],
+    "settings_permissions": [49, 21],
     "unlock_banner": [63, 13],
     "web_console": [294, 7]
   },
@@ -141,7 +141,7 @@
     "settings_licence": [33, 53],
     "settings_licences": [38, 68],
     "settings_log": [4, 13],
-    "settings_permissions": [19, 19],
+    "settings_permissions": [22, 21],
     "unlock_banner": [78, 27],
     "web_console": [297, 8]
   },
@@ -227,7 +227,7 @@
     "settings_licence": [38, 56],
     "settings_licences": [45, 59],
     "settings_log": [5, 13],
-    "settings_permissions": [21, 19],
+    "settings_permissions": [24, 21],
     "unlock_banner": [85, 27],
     "web_console": [299, 8]
   },
@@ -268,7 +268,7 @@
     "settings_licence": [36, 56],
     "settings_licences": [41, 60],
     "settings_log": [4, 13],
-    "settings_permissions": [19, 19],
+    "settings_permissions": [22, 21],
     "unlock_banner": [78, 27],
     "web_console": [297, 8]
   },
@@ -313,7 +313,7 @@
     "settings_licence": [38, 57],
     "settings_licences": [45, 59],
     "settings_log": [5, 13],
-    "settings_permissions": [21, 19],
+    "settings_permissions": [24, 21],
     "unlock_banner": [84, 27],
     "web_console": [299, 8]
   },
@@ -368,7 +368,7 @@
     "settings_licence": [36, 56],
     "settings_licences": [41, 60],
     "settings_log": [4, 13],
-    "settings_permissions": [19, 19],
+    "settings_permissions": [22, 21],
     "unlock_banner": [78, 27],
     "web_console": [297, 8]
   },
@@ -425,7 +425,7 @@
     "settings_licence": [37, 56],
     "settings_licences": [44, 58],
     "settings_log": [5, 13],
-    "settings_permissions": [21, 19],
+    "settings_permissions": [24, 21],
     "unlock_banner": [85, 27],
     "web_console": [299, 8]
   },
@@ -475,7 +475,7 @@
     "settings_licence": [36, 56],
     "settings_licences": [41, 60],
     "settings_log": [4, 13],
-    "settings_permissions": [19, 19],
+    "settings_permissions": [22, 21],
     "unlock_banner": [78, 27],
     "web_console": [297, 8]
   },
@@ -550,7 +550,7 @@
     "settings_licence": [34, 54],
     "settings_licences": [39, 56],
     "settings_log": [5, 13],
-    "settings_permissions": [20, 19],
+    "settings_permissions": [23, 21],
     "unlock_banner": [78, 25],
     "web_console": [297, 8]
   },
@@ -595,7 +595,7 @@
     "settings_licence": [35, 56],
     "settings_licences": [40, 60],
     "settings_log": [4, 13],
-    "settings_permissions": [19, 19],
+    "settings_permissions": [22, 21],
     "unlock_banner": [78, 27],
     "web_console": [297, 8]
   },
@@ -652,7 +652,7 @@
     "settings_licence": [36, 56],
     "settings_licences": [41, 60],
     "settings_log": [4, 13],
-    "settings_permissions": [19, 19],
+    "settings_permissions": [22, 21],
     "unlock_banner": [78, 27],
     "web_console": [297, 8]
   },
@@ -693,7 +693,7 @@
     "settings_licence": [15, 20],
     "settings_licences": [41, 26],
     "settings_log": [4, 2],
-    "settings_permissions": [45, 19],
+    "settings_permissions": [49, 21],
     "unlock_banner": [78, 13],
     "web_console": [294, 7]
   },
@@ -734,7 +734,7 @@
     "settings_licence": [18, 17],
     "settings_licences": [42, 26],
     "settings_log": [5, 2],
-    "settings_permissions": [43, 19],
+    "settings_permissions": [47, 21],
     "unlock_banner": [84, 13],
     "web_console": [295, 6]
   },
@@ -861,7 +861,7 @@
     "settings_licence": [12, 18],
     "settings_licences": [31, 21],
     "settings_log": [3, 2],
-    "settings_permissions": [44, 19],
+    "settings_permissions": [43, 19],
     "unlock_banner": [63, 12],
     "web_console": [294, 8]
   },
@@ -915,7 +915,7 @@
     "settings_licence": [13, 18],
     "settings_licences": [31, 21],
     "settings_log": [4, 2],
-    "settings_permissions": [44, 19],
+    "settings_permissions": [43, 19],
     "unlock_banner": [63, 12],
     "web_console": [294, 8]
   },
@@ -1066,7 +1066,7 @@
     "settings_licence": [13, 18],
     "settings_licences": [31, 21],
     "settings_log": [4, 2],
-    "settings_permissions": [44, 19],
+    "settings_permissions": [43, 19],
     "unlock_banner": [63, 12],
     "web_console": [294, 8]
   },

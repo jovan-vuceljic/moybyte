@@ -1,11 +1,11 @@
 """The device APIs (docs/os_2026-11/hardware.md sections 1 and 4): what a
 board's `class` rows name, each a C driver with a Python face, reached as
 `moybyte.http`, `moybyte.mic`, `moybyte.lora`, `moybyte.ble`,
-`moybyte.usb`, `moybyte.midi` and `moybyte.camera`; and the media service's
+`moybyte.usb`, `moybyte.midi`, `moybyte.camera` and `moybyte.leds`; and the media service's
 face, `moybyte.media` (hardware.md section 3).
 
   api(name)       the face of device API `name` ("http", "mic", "lora",
-                  "ble", "usb", "midi", "camera", "media"), or None where this console has not the class
+                  "ble", "usb", "midi", "camera", "media", "leds"), or None where this console has not the class
   present(name)   whether it has
   apis()          the device APIs this console has, as the permission
                   table's `needs` names them (runtime/shell/app_perms.py),
@@ -36,7 +36,7 @@ import moybyte as _moybyte
 EPERM, EBADF, ENODEV, EBUSY, EINVAL = 1, 9, 19, 16, 22
 SHELL = 1
 # The device APIs; each face checks the permission of its own name.
-NAMES = ("http", "mic", "lora", "ble", "usb", "midi", "camera", "media")
+NAMES = ("http", "mic", "lora", "ble", "usb", "midi", "camera", "media", "leds")
 
 # fn(pid) -> the granted permissions, None for an ungated process: the
 # console's Procs.granted. None: nothing is gated (a bare host).

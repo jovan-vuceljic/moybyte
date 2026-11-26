@@ -106,6 +106,18 @@ static void bar_show(int pin, uint8_t px[BAR_LEDS * 3]) {
     machine_bitstream_high_low(pin, timing_ns, px, BAR_LEDS * 3);
 }
 
+// The `leds` device API's board half (native/moy_leds/moy_leds.h): the bar on
+// G5, the switch position the README asks for.
+uint32_t moy_board_leds(void) {
+    return BAR_LEDS;
+}
+
+void moy_board_leds_show(const uint8_t *grb, uint32_t n) {
+    uint8_t px[BAR_LEDS * 3] = {0};
+    memcpy(px, grb, (n < BAR_LEDS ? n : BAR_LEDS) * 3);
+    bar_show(BAR_PIN, px);
+}
+
 // The rails and the expander, then the panel's reset pulse. The light (DLDO1)
 // stays off: it powers up at 3.3 V, full, so it is left to the first frame.
 esp_err_t moy_lcd_board_up(void) {

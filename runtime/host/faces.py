@@ -15,6 +15,7 @@ FACES = (
     ("moy_http", "moy_http", False, False),
     ("moy_input", "moy_input", False, False),
     ("moy_lease", "moy_lease", False, False),
+    ("moy_leds", "moy_leds", False, False),
     ("moy_log", "moy_log", False, False),
     ("moy_loop", "moy_loop", False, True),
     ("moy_lora", "moy_lora", False, True),

@@ -447,7 +447,7 @@ def service_api(ctx_factory, cart, perms, owner, rows=False):
 # moybyte.dev_* rows' perm, `lease` and `media` also as lease:<row> and
 # media:url).
 DEVICE_PERMS = ("lease", "http", "lora", "mic", "ble", "usb", "midi", "camera", "media",
-                "pins", "multiplayer")
+                "pins", "multiplayer", "leds")
 
 
 def grant_devices(ctx, perms, cart=None):

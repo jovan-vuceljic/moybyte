@@ -413,7 +413,7 @@ HW_CLASSES = ("os", "class", "lease", "never")
 DEVICE_APIS = {
     "battery": "battery.py", "brightness": None, "alarms": None, "mic": None,
     "http": None, "media": None, "gps": None, "lora": None, "ble": None,
-    "usb": None, "midi": None, "camera": None,
+    "usb": None, "midi": None, "camera": None, "leds": None,
 }
 
 

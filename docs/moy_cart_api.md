@@ -956,6 +956,26 @@ notifications, alarms, opening with another app, picking a
 file, messages between processes and achievements. They are not moy-spec's,
 and `docs/app_api_v1.md` is their guide (§5 to §9).
 
+**The LED bar** (`moybyte.leds`, the `leds` permission) is a device of the
+console's, not a game verb: a board's RGB LEDs, such as the ten on the
+CoreS3's Faces Bottom3. `moybyte.leds` is `None` on a console without LEDs,
+and the permission's row is absent there. One process holds them at a time
+(`OSError` EBUSY to another), and they go dark when it closes them or ends,
+however it ends. A colour is `0xRRGGBB`:
+
+| verb | does |
+|---|---|
+| `count()` | the LEDs this console has |
+| `set(i, rgb)`, `fill(rgb)` | LED `i`'s colour, or every LED's, shown at once |
+| `show([rgb, ...])` | a frame, an LED a colour from the first, the rest dark |
+| `brightness(level)` | 0..255 over every colour, 255 at the first take |
+| `open()`, `close()` | take them now, or let them go dark; every verb above takes them first |
+| `holder()` | the pid holding them, 0 for none |
+
+`runtime/system/dev_leds.py` is the face. A Lua or compiled program holds
+them by handle, `dev_open("leds")` (`docs/app_api_v1.md` §10;
+`native/moy_kernel/moy_dev.h` has its keys). Pin Light (`system_carts/moybyte.pin_light.moy`) lights the bar.
+
 ## A compiled cart's Moybyte verbs
 
 A `"runtime": "wasm"` cart imports moy-spec's verbs from module `"moy"`

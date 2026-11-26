@@ -171,6 +171,14 @@
 //            then its title and artist on two lines out, DENIED where it may
 //            not play the file, ABSENT where it reads none. Its close and its
 //            process's end leave the stream playing
+//   leds     a board's RGB LEDs (native/moy_leds/moy_leds.h; their one holder
+//            the driver's, BUSY while another process holds them, ABSENT on
+//            a board with none): no cfg; write: a frame, bytes R G B an LED
+//            from the first, the LEDs past it dark; set brightness=0..255
+//            (255 at the open), fill=RRGGBB, led=<i> with rgb=RRGGBB (each
+//            word checked before any applies; fill, then the LED, then the
+//            brightness); get count. Its close and its process's end turn
+//            them dark
 // A device a handle holds stays through the VM's end (moy_lease.h's THE
 // VM'S END, moy_dev_holds) and goes with its process.
 //
@@ -238,6 +246,7 @@ enum {
 #define MOY_DEV_P_MEDIA (1u << 8)
 #define MOY_DEV_P_MEDIA_URL (1u << 9)
 #define MOY_DEV_P_HTTP (1u << 10)
+#define MOY_DEV_P_LEDS (1u << 11)
 #define MOY_DEV_P_ROW 16                // lease:<row> of offer i: 1 << (MOY_DEV_P_ROW + i)
 
 // The bit of permission `perm` (n bytes), 0 for one that names no device.

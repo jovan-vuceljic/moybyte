@@ -26,6 +26,7 @@
 #pragma weak moy_dev_web
 #pragma weak moy_dev_web_has
 #pragma weak moy_dev_web_open
+#pragma weak moy_dev_leds
 
 static const struct {
     const char *name;
@@ -44,6 +45,7 @@ static const struct {
     { "ble", MOY_DEV_P_BLE, MOY_LEASE_BLE, true, &moy_dev_ble, NULL },
     // a client of the service's one stream: either permission opens it
     { "media", MOY_DEV_P_MEDIA | MOY_DEV_P_MEDIA_URL, 0, true, &moy_dev_media, NULL },
+    { "leds", MOY_DEV_P_LEDS, 0, true, &moy_dev_leds, NULL },
 };
 #define NKINDS (sizeof KINDS / sizeof KINDS[0])
 

@@ -76,6 +76,9 @@ def midi(*args: Any, **kwargs: Any) -> Any:
 def camera(*args: Any, **kwargs: Any) -> Any:
     """moybyte.camera(): the row moybyte.camera; needs camera"""
 
+def leds(*args: Any, **kwargs: Any) -> Any:
+    """moybyte.leds(): the row moybyte.leds; needs leds"""
+
 def media(*args: Any, **kwargs: Any) -> Any:
     """moybyte.media(): the row moybyte.media; needs media or media:url"""
 

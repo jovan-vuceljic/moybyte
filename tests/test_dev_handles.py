@@ -389,6 +389,7 @@ def test_the_process_s_end_closes_every_handle_and_leaves_the_pins_safe():
 # -- the device APIs --------------------------------------------------------------------
 
 LORA, MIC = 1 << 3, 1 << 2              # moy_dev.h's MOY_DEV_P_LORA, MOY_DEV_P_MIC
+LEDS = 1 << 11                          # MOY_DEV_P_LEDS
 
 
 def test_a_lora_handle_sends_and_reads_packets_with_their_rssi(radio):
@@ -465,6 +466,38 @@ def test_a_mic_handle_reads_pcm16_and_its_end_lets_the_microphone_go():
         assert moy_mic.owner() == 0 and _K().moy_dev_count() == 0
     finally:
         mic_sim.remove()
+
+
+def test_a_leds_handle_lights_the_bar_and_its_end_turns_it_dark():
+    from runtime import moy_leds
+    moy_leds.reset()
+    moy_leds.sim(4)
+    try:
+        def shown():
+            buf = bytearray(12)
+            moy_leds.shown(buf)
+            return bytes(buf)
+        pid = L.spawn("t.leds")
+        assert _kopen(pid, "leds", "", 0) == H.DENIED
+        assert _kopen(pid, "leds", "pin=5", LEDS) == H.BAD
+        h = _kopen(pid, "leds", "", LEDS)
+        assert moy_leds.owner() == pid and _kget(pid, h, "count") == 4
+        assert _kset(pid, h, "fill=102030") == 0
+        assert shown() == bytes((0x20, 0x10, 0x30)) * 4
+        assert _kset(pid, h, "led=1 rgb=ff0000 brightness=0") == 0
+        assert shown() == bytes(12)
+        assert _kset(pid, h, "led=4 rgb=ff0000") == H.BAD     # past the bar
+        assert _kset(pid, h, "led=1") == H.BAD                 # a colour for it
+        assert _kset(pid, h, "brightness=255") == 0
+        assert _kwrite(pid, h, bytes((0, 0, 0xFF))) == 3
+        assert shown() == bytes((0, 0, 0xFF)) + bytes(9)
+        assert _kopen(L.spawn("t.other"), "leds", "", LEDS) == H.BUSY
+        _end(pid)
+        assert moy_leds.owner() == 0 and _K().moy_dev_count() == 0
+        assert shown() == bytes(12)
+    finally:
+        moy_leds.sim(0)
+        moy_leds.reset()
 
 
 class _Web(http.server.BaseHTTPRequestHandler):

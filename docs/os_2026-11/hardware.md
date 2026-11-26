@@ -39,7 +39,7 @@ security model").
    the simulator stands in. In demand order: `battery`, `brightness`,
    `alarms`, `mic` (with a recording indicator in kernel chrome), `http`
    (#133), `media` (§3), `gps`, `lora`, `ble`, USB host classes (#83),
-   `midi` over any transport, `camera`. **LoRa on the T-Deck is device-API
+   `midi` over any transport, `camera`, `leds`. **LoRa on the T-Deck is device-API
    only (owner, 2026-11-03)**, its one radio being on the OS's SPI2, and the
    API offers both **raw LoRa packets** (send and receive with RSSI and SNR:
    the mesh case, since a Meshtastic-style mesh is not LoRaWAN) and
@@ -212,7 +212,7 @@ handle, the media service -- and a VM stop keeps the rows; the station's address
 table's ring source `radio`, beside BLE's host (`between_apps.md` §4). The
 faces' events are NET, LORA, BLE, USB and
 MIDI records on each driver's ring source, which a face's `on(fn)` or `on_done` wakes its process
-on. A compiled program and a Lua program hold `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera` and `media` by handle
+on. A compiled program and a Lua program hold `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media` and `leds` by handle
 through the same rows as its leases (above): an `http` handle a GET whose
 body it reads in chunks (`cfg` `url=... cap=N`, or `window=N` for a body of
 any length), a `lora` handle the radio's raw packets and LoRaWAN's join,
@@ -297,6 +297,11 @@ is its run grant's, `moy_app_grant_folder`).
   `camera` rows name the socket), so no image carries a driver and
   `moybyte.camera` is `None` on every board. The driver's module,
   `moy_camera`, is the host's stand-in alone (`runtime/host/moy_camera.py`).
+- **`leds`** (`runtime/system/dev_leds.py` over `native/moy_leds/moy_leds.h`):
+  a board's RGB LEDs, the CoreS3's Faces Bottom3 bar, through the board's
+  two weak hooks (a count and a frame shown); one holder, dark at its close
+  and its end. `moybyte.leds` is `None` on a board with none; the host's
+  stand-in is `moy_leds.sim(n)`.
 
 The host's stand-ins are `runtime/host/mic_sim.py`, `lora_sim.py` (with a
 LoRaWAN network server written apart from the C), `gatt_sim.py`,

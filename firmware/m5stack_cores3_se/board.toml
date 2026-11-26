@@ -299,9 +299,10 @@ why = "the AW88298 amplifier the console's mix plays through; MCLK clocks the ES
 
 [[hardware.resource]]
 name = "bar"
-class = "os"
+class = "class"
+api = "leds"
 pins = {data = 5}
-why = "the Faces Bottom3's ten SK6812s, dark at boot (native/moy_cores3)"
+why = "the Faces Bottom3's ten SK6812s, dark at boot, an app's through the leds device API (native/moy_leds over native/moy_cores3's hooks)"
 
 [[hardware.resource]]
 name = "backlight"

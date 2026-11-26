@@ -1291,7 +1291,7 @@ opens a text file from Files with (Notes).
 | `autostart` | a service starts with the console (§7) | python, lua, wasm, elf |
 | `lease:<resource>` | `moybyte.lease(name)`: a board resource (a UART, a pin) as MicroPython's own object (`docs/os_2026-11/hardware.md` §1); by handle on the compiled tiers (§10) | python, lua, wasm, elf |
 | `full_access` | what a native (ELF) cart must ask for, and what admits an unsigned compiled module (§10) | wasm, elf |
-| `http`, `mic`, `lora`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url` | `moybyte.http` and the other device APIs (Python, `runtime/system/devices.py`); by handle on the compiled tiers too, `lora` with LoRaWAN (§10, Devices by handle) | python, lua, wasm, elf |
+| `http`, `mic`, `lora`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `leds` | `moybyte.http` and the other device APIs (Python, `runtime/system/devices.py`); by handle on the compiled tiers too, `lora` with LoRaWAN (§10, Devices by handle) | python, lua, wasm, elf |
 | `alarms` | `moybyte.at` (§9) | python, lua, wasm, elf |
 | `editor`, `calc`, `terminal`, `getcarts`, `storybook`, `myart`, `artwork`, `music` | nothing: a marker, a shipped app's claim on its own cart (§13) | python |
 <!-- END GENERATED -->
@@ -1735,13 +1735,13 @@ rows are §3's, every app's with no permission):
 | `moybyte.aes_gcm_seal` | none | `moybyte.aes_gcm_seal` | `moybyte.aes_gcm_seal` | `moybyte_aes_gcm_seal`, `moybyte.os.aes_gcm_seal` | `moy_aes_gcm_seal` |
 | `moybyte.aes_gcm_open` | none | `moybyte.aes_gcm_open` | `moybyte.aes_gcm_open` | `moybyte_aes_gcm_open`, `moybyte.os.aes_gcm_open` | `moy_aes_gcm_open` |
 | `moybyte.x25519` | none | `moybyte.x25519` | `moybyte.x25519` | `moybyte_x25519`, `moybyte.os.x25519` | `moy_x25519` |
-| `moybyte.dev_open` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `pins`, `multiplayer` |  | `moybyte.dev_open` | `moybyte_dev_open`, `moybyte.os.dev_open` | `moy_dev_open` |
-| `moybyte.dev_close` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `pins`, `multiplayer` |  | `moybyte.dev_close` | `moybyte_dev_close`, `moybyte.os.dev_close` | `moy_dev_close` |
-| `moybyte.dev_read` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `pins`, `multiplayer` |  | `moybyte.dev_read` | `moybyte_dev_read`, `moybyte.os.dev_read` | `moy_dev_read` |
-| `moybyte.dev_write` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `pins`, `multiplayer` |  | `moybyte.dev_write` | `moybyte_dev_write`, `moybyte.os.dev_write` | `moy_dev_write` |
-| `moybyte.dev_xfer` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `pins`, `multiplayer` |  | `moybyte.dev_xfer` | `moybyte_dev_xfer`, `moybyte.os.dev_xfer` | `moy_dev_xfer` |
-| `moybyte.dev_set` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `pins`, `multiplayer` |  | `moybyte.dev_set` | `moybyte_dev_set`, `moybyte.os.dev_set` | `moy_dev_set` |
-| `moybyte.dev_get` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `pins`, `multiplayer` |  | `moybyte.dev_get` | `moybyte_dev_get`, `moybyte.os.dev_get` | `moy_dev_get` |
+| `moybyte.dev_open` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `leds`, `pins`, `multiplayer` |  | `moybyte.dev_open` | `moybyte_dev_open`, `moybyte.os.dev_open` | `moy_dev_open` |
+| `moybyte.dev_close` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `leds`, `pins`, `multiplayer` |  | `moybyte.dev_close` | `moybyte_dev_close`, `moybyte.os.dev_close` | `moy_dev_close` |
+| `moybyte.dev_read` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `leds`, `pins`, `multiplayer` |  | `moybyte.dev_read` | `moybyte_dev_read`, `moybyte.os.dev_read` | `moy_dev_read` |
+| `moybyte.dev_write` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `leds`, `pins`, `multiplayer` |  | `moybyte.dev_write` | `moybyte_dev_write`, `moybyte.os.dev_write` | `moy_dev_write` |
+| `moybyte.dev_xfer` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `leds`, `pins`, `multiplayer` |  | `moybyte.dev_xfer` | `moybyte_dev_xfer`, `moybyte.os.dev_xfer` | `moy_dev_xfer` |
+| `moybyte.dev_set` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `leds`, `pins`, `multiplayer` |  | `moybyte.dev_set` | `moybyte_dev_set`, `moybyte.os.dev_set` | `moy_dev_set` |
+| `moybyte.dev_get` | `lease`, `http`, `lora`, `mic`, `ble`, `usb`, `midi`, `camera`, `media`, `media:url`, `leds`, `pins`, `multiplayer` |  | `moybyte.dev_get` | `moybyte_dev_get`, `moybyte.os.dev_get` | `moy_dev_get` |
 | `moybyte.ed25519_public` | none | `moybyte.ed25519_public` | `moybyte.ed25519_public` | `moybyte_ed25519_public`, `moybyte.os.ed25519_public` | `moy_ed25519_public` |
 | `moybyte.ed25519_sign` | none | `moybyte.ed25519_sign` | `moybyte.ed25519_sign` | `moybyte_ed25519_sign`, `moybyte.os.ed25519_sign` | `moy_ed25519_sign` |
 | `moybyte.ed25519_verify` | none | `moybyte.ed25519_verify` | `moybyte.ed25519_verify` | `moybyte_ed25519_verify`, `moybyte.os.ed25519_verify` | `moy_ed25519_verify` |
@@ -1887,7 +1887,7 @@ device API by a handle where a Python program holds an object (`native/moy_kerne
 on the leases' names, keys and answers, `runtime/system/dev_handles.py` on
 the device APIs'). `dev_open(name, cfg)` answers the handle:
 `name` a lease row (`"gpio<n>"`, `"uart<n>"`, `"spi<n>"`, `"pwm<n>"`,
-`"adc<n>"`, `"i2c"`) or a device (`"http"`, `"lora"`, `"mic"`, `"ble"`, `"usb"`, `"midi"`, `"camera"`, `"media"`), the `pins` permission's
+`"adc<n>"`, `"i2c"`) or a device (`"http"`, `"lora"`, `"mic"`, `"ble"`, `"usb"`, `"midi"`, `"camera"`, `"media"`, `"leds"`), the `pins` permission's
 pins (`"pins"`) or a port of the console-to-console radio link (`"net"`), `cfg` words
 `key=value` (`"mode=out value=1"`, `"baudrate=9600"`, `"scl=20 sda=21
 addr=0x48"`, `"url=http://example.com/ cap=4096"`). On the handle,
@@ -2003,12 +2003,12 @@ open, and a match's inputs never reach a port.
 
 Each name needs what Python's needs: `lease:<row>` (`lease:gpio` for
 anything on the pins: a pin, a PWM, an ADC, an I²C bus), `http`, `lora`,
-`mic`, `ble`, `usb`, `midi`, `camera`, `media` (or `media:url`), `pins`,
-`multiplayer` (`net`). One holder a lease or a device, whatever the tiers: a
+`mic`, `ble`, `usb`, `midi`, `camera`, `media` (or `media:url`), `leds`,
+`pins`, `multiplayer` (`net`). One holder a lease or a device, whatever the tiers: a
 resource a Python program's object holds is BUSY to a handle and the
 reverse (`-11` to a compiled app, `EBUSY` to a native or WASI program), and
 a process opens a radio, the microphone, the USB host, the camera, the
-media service or its pins once. A refused permission is
+media service, the LEDs or its pins once. A refused permission is
 DENIED (`EACCES`), a name, key or value the console does not take BAD
 (`EINVAL`), a handle not open, or a radio verb that needs a connection or a
 join, ABSENT (`ENOENT`), a buffer that cannot hold one record FULL

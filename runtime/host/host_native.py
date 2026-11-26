@@ -87,7 +87,7 @@ def inflater(want=None):
 def parts(verbose=False, with_inflater=None):
     """([Part], extra cflags, link flags): what the library is made of here."""
     out = [_module("runtime." + m).PART for m in (
-        "gfx_binding", "glass_binding", "lua_binding", "moy_input", "moy_lease", "moy_http", "moy_mic", "moy_lora", "moy_gatt", "moy_usb", "moy_midi", "moy_media", "moy_loop", "moy_evq",
+        "gfx_binding", "glass_binding", "lua_binding", "moy_input", "moy_lease", "moy_http", "moy_mic", "moy_leds", "moy_lora", "moy_gatt", "moy_usb", "moy_midi", "moy_media", "moy_loop", "moy_evq",
         "moy_play", "net_binding", "elf_binding", "moy_uitree_binding")]
     np = _module("runtime.native_parts")
     out += [np.part(c) for c in (np.SPINE, np.FS, np.INDEX)]

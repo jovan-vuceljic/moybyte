@@ -80,7 +80,7 @@ bool moy_dev_is(const char *p, size_t n, const char *s) {
 
 uint32_t moy_dev_perm_bit(const char *perm, size_t n) {
     static const char *const named[] = { "lease:gpio", "pins", "mic", "lora", "ble", "usb",
-                                         "midi", "camera", "media", "media:url", "http" };
+                                         "midi", "camera", "media", "media:url", "http", "leds" };
     for (uint32_t i = 0; i < sizeof named / sizeof named[0]; i++) {
         if (moy_dev_is(perm, n, named[i])) {
             return 1u << i;

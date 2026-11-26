@@ -1,0 +1,22 @@
+{
+  "moy_leds": {
+    "about": "the leds device API's driver, native/moy_leds/moy_leds.h",
+    "host": "moy_leds",
+    "headers": ["moy_leds.h"],
+    "consts": ["MOY_LEDS_MAX as MAX"],
+    "rows": [
+      {"py": "count()", "c": "moy_leds_count", "example": []},
+      {"py": "open(owner)", "c": "moy_leds_open", "example": [3]},
+      {"py": "close(owner)", "c": "moy_leds_close", "example": [4]},
+      {"py": "sweep(owner)", "c": "moy_leds_sweep", "example": [4]},
+      {"py": "owner()", "c": "moy_leds_owner", "example": []},
+      {"py": "set(owner, i, rgb)", "c": "moy_leds_set", "example": [3, 0, 16711680]},
+      {"py": "fill(owner, rgb)", "c": "moy_leds_fill", "example": [3, 255]},
+      {"py": "bright(owner, level)", "c": "moy_leds_bright", "example": [3, 128]},
+      {"py": "write(owner, buf)", "c": "moy_leds_write", "span": ["rgb"], "example": [3, {"bytes": [255, 0, 0]}]},
+      {"py": "shown(buf)", "c": "moy_leds_shown", "wbuf": ["out"], "example": [{"bytearray": 6}]},
+      {"py": "sim(n)", "c": "moy_leds_sim", "example": [10]},
+      {"py": "reset()", "c": "moy_leds_reset", "example": []}
+    ]
+  }
+}

@@ -157,6 +157,7 @@ TABLE = (
      "Play music in the background", "media", ()),
     ("media:url", "api:media", ("python", "lua", "wasm", "elf"),
      "Play radio streams from the internet", "wifi", ()),
+    ("leds", "api:leds", ("python", "lua", "wasm", "elf"), "Light the console's LEDs", "leds", ()),
     ("alarms", "api:alarms", ("python", "lua", "wasm", "elf"),
      "Wake the console at set times", None, ()),
     ("editor", "marker", ("python",), None, None, ()),
