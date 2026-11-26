@@ -30,6 +30,7 @@ from tools import make_tiny5_font as tool          # noqa: E402
 from runtime import ui_draw                        # noqa: E402
 from runtime import appearance                     # noqa: E402
 from runtime import iconsets                       # noqa: E402
+from runtime import pointers                       # noqa: E402
 from runtime.chrome import text_scale_floor        # noqa: E402
 
 SLOTS = 16      # moy_text.h's MOY_FONT_SLOTS
@@ -159,6 +160,7 @@ def test_a_theme_switch_installs_frees_and_relayouts(tmp_path):
         ws.look.set_theme("night", persist=False)
     assert set(appearance._FONTS) == set(night)
     iconsets.reset()            # an icon set's masks hold font rows of their own
+    pointers.reset()            # and so does the pointer's family at its size
     assert _free_slots() == SLOTS - len(night)
 
 
