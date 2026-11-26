@@ -48,6 +48,7 @@ gotAssets=true;}
 // ping-pong and force a fresh 1.2MB allocation on the next painted frame.
 else if(m.t==="clip"){clipOut(m.s);}
 else if(m.t==="ask"){asks(m.a);}
+else if(m.t==="cursor"){setCursor(m.c,m.i);}
 else if(m.t==="frame"){
 if(pendingFB&&WORKER)WORKER.postMessage({t:"fbret",b:pendingFB},[pendingFB]);
 pendingFrame=m.s;pendingFB=m.fb||null;}

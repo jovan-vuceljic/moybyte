@@ -57,6 +57,8 @@
 //   {t:"status", s}      boot progress text
 //   {t:"assets", json}   the page's metadata payload (size/title/audio/input)
 //   {t:"frame", s, fb}   frame metadata + the RGB565 framebuffer, TRANSFERRED
+//   {t:"cursor", c, i}   the pointer's shape turned: its name and its family's
+//                        picture (web_boot's _cursor_images), the page's CSS cursor
 //   {t:"pcm", p, at, fresh}  a frame's samples (Int16Array, TRANSFERRED) for the
 //                        page's sink; to a worklet sink the same over its port
 //   {t:"error", s, msg}  fatal: the page shows it and stops. msg is the
@@ -3242,14 +3244,17 @@ function loop() {
         if (_d > 20) WP.slow++;
         if (LOOP) longest("step", _d);
         const sounded = shipPCM();
-        if (s && (s.indexOf('"clip"') >= 0 || s.indexOf('"ask"') >= 0)) {
+        if (s && (s.indexOf('"clip"') >= 0 || s.indexOf('"ask"') >= 0
+                  || s.indexOf('"cursor"') >= 0)) {
             // A copy in the console: the page puts its text on the browser's
             // clipboard. An ask of a console row: the page does it
-            // (page_link.py), from a message of its own, since the page keeps
+            // (page_link.py). The pointer's shape turned: the page sets its
+            // CSS cursor. Each from a message of its own, since the page keeps
             // only its newest frame.
             const o = JSON.parse(s);
             if (o.clip !== undefined) self.postMessage({ t: "clip", s: o.clip });
             if (o.ask) self.postMessage({ t: "ask", a: o.ask });
+            if (o.cursor) self.postMessage({ t: "cursor", c: o.cursor, i: o.cimg || null });
             if (!o.paint) s = "";
         }
         if (s) { WP.painted++; WP.bytes += s.length; shipFrame(s); }

@@ -755,14 +755,29 @@ function pv(){return[(pH.ArrowRight?1:0)-(pH.ArrowLeft?1:0),(pH.ArrowDown?1:0)-(
 // stale frame -- the whole delta/keyframe/resync apparatus the command protocol
 // needed is gone with it.
 var CURSORS={arrow:"default",hand:"pointer",text:"text",ew:"ew-resize",ns:"ns-resize",
-nwse:"nwse-resize",nesw:"nesw-resize"};
+nwse:"nwse-resize",nesw:"nesw-resize",move:"move",busy:"progress"};
+// The family's own pointers (web_boot's _cursor_images): each shape's pixels at 1x
+// and at the high density, made into PNGs once and kept by key as the CSS
+// values, image-set first and a plain url where the browser takes no image-set.
+var CURIMG={};
+function curPng(d){var c=document.createElement("canvas");c.width=d[0];c.height=d[1];
+var x=c.getContext("2d"),im=x.createImageData(d[0],d[1]),b=atob(d[4]);
+for(var i=0;i<b.length;i++)im.data[i]=b.charCodeAt(i);x.putImageData(im,0,0);
+return c.toDataURL("image/png");}
+function curCss(ci,fb){var v=CURIMG[ci[0]];if(v)return v;
+var a=ci[2][0],u1=curPng(a),u2=curPng(ci[2][1]),hot=" "+a[2]+" "+a[3]+", "+fb;
+v=CURIMG[ci[0]]=["image-set(url("+u1+") 1x, url("+u2+") "+ci[1]+"x)"+hot,"url("+u1+")"+hot];
+return v;}
+// The pointer's shape as the console says it (web_boot's _pointer_shape, the
+// worker's "cursor" message): the arrow, the hand on what a press acts on, the
+// beam on a text field, a resize's arrows, in the family's own picture.
+function setCursor(c,ci){var fb=CURSORS[c]||"default";
+if(ci){var cs=curCss(ci,fb);cv.style.cursor=cs[1];cv.style.cursor=cs[0];}
+else cv.style.cursor=fb;}
 function df(f,fb){
 if(f.cart!==assCart){assCart=f.cart;getA().catch(function(){});}
 if(f.w&&(f.w!==W||f.h!==H)){W=f.w;H=f.h;alloc();}
 glassFrame(f);
-// The pointer's shape as the console says it (web_boot's _pointer_shape): the
-// arrow, the hand on what a press acts on, the beam on a text field, a resize's arrows.
-if(f.cursor)cv.style.cursor=CURSORS[f.cursor]||"default";
 // The EFFECTIVE input hint rides every frame (the cart's manifest hint while it
 // owns the keyboard, null on any system surface), so the keyboard summon comes
 // back the moment PLAY exits to the Editor.
