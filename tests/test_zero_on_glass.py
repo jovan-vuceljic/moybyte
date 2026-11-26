@@ -1500,7 +1500,10 @@ def test_a_game_s_pmem_saves_are_back_after_a_reboot(zero, mirror, ssh, tmp_path
 
 FILL = STORE + "/zbench_fill.bin"
 FILL_SLACK = 4               # blocks left free: a pairing's keys and a batch's staging
-FULL_WORDS = re.compile(r"full|no room|no space|out of space|storage|not enough", re.I)
+# What the page says of a store with no room. Never a bare "full": the bench
+# cart's own folder has the word, and the page names that folder when it
+# imports it.
+FULL_WORDS = re.compile(r"storage is full|no room|no space|out of space|not enough", re.I)
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
