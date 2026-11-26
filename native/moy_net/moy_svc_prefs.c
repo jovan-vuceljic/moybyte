@@ -66,8 +66,10 @@ static uint32_t hash(const char *p, size_t n) {
 }
 
 void moy_svc_prefs_rows(struct moy_settings *rows) {
-    R.rows = rows;
-    R.fresh = 1;
+    if (R.rows != rows) {
+        R.rows = rows;
+        R.fresh = 1;
+    }
 }
 
 static void forget(void) {

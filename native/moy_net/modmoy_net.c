@@ -555,12 +555,14 @@ static mp_obj_t mod_live_msgs(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_msgs_obj, mod_live_msgs);
 
-// live_budget() -> (kib, free_kib) | None: the board's budget for its apps'
-// services, as its 'H' said, None where it names none (moy_svc_web.c). The
-// page's prefs rows are the kernel's (moy_svc_prefs.c), from the first call.
-static mp_obj_t mod_live_budget(void) {
-    const moy_spine_kernel_t *k = moy_spine_kernel(NULL);
-    moy_svc_prefs_rows(k != NULL ? k->settings : NULL);
+// live_budget(rows) -> (kib, free_kib) | None: the board's budget for its
+// apps' services, as its 'H' said, None where it names none (moy_svc_web.c).
+// `rows` is the console's Settings (moy_spine), whose rows are the page's
+// end of the served apps' prefs (moy_svc_prefs.c).
+moy_settings_t *moy_spine_settings_of(mp_obj_t o);
+
+static mp_obj_t mod_live_budget(mp_obj_t rows) {
+    moy_svc_prefs_rows(moy_spine_settings_of(rows));
     uint32_t kib, free_kib;
     if (!moy_svc_web_budget(&kib, &free_kib)) {
         return mp_const_none;
@@ -568,7 +570,7 @@ static mp_obj_t mod_live_budget(void) {
     mp_obj_t t[2] = {mp_obj_new_int_from_uint(kib), mp_obj_new_int_from_uint(free_kib)};
     return mp_obj_new_tuple(2, t);
 }
-static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_budget_obj, mod_live_budget);
+static MP_DEFINE_CONST_FUN_OBJ_1(mod_live_budget_obj, mod_live_budget);
 #endif
 
 #endif
