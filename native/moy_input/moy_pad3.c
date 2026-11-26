@@ -10,7 +10,7 @@ static const char *const PAD3_BUTTONS[8] = {
 };
 
 static uint32_t bit_of(const char *name) {
-    for (int i = 0; i < MOY_INPUT_BUTTONS; i++) {
+    for (unsigned i = 0; i < MOY_INPUT_BUTTONS; i++) {
         const char *a = MOY_INPUT_NAMES[i], *b = name;
         while (*a && *a == *b) {
             a++;
