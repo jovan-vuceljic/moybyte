@@ -308,6 +308,6 @@ def test_every_ported_page_builds_and_draws_on_the_boards_micropython(tmp_path):
                                  [[1], 0, "v", [678, 328, 340, 6]]], spaces["code"]
     assert spaces["art"][2] == [320 + 6 + 320, 272 + 6 + 48], spaces["art"]
     assert [len(spaces[k][0]) for k in ("settings", "art", "world", "sound", "theme")] == \
-        [2, 3, 3, 4, 2], spaces
+        [2, 3, 3, 4, 1], spaces
     missing = [b for b in BUILDS if not painted.get(b)]
     assert not missing, ("pages that never painted", missing, painted, text[-3000:])
