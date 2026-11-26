@@ -701,6 +701,15 @@ typedef struct {
         int8_t interact;
         uint8_t due;
     } ring;
+    // A button the open group stacked (`on`), drawn again over the card's
+    // rounded foot as the group closes where it is the last row.
+    struct {
+        moy_ui_box_t b;
+        moy_ui_button_t bt;
+        int16_t kind, flags;
+        int8_t interact;
+        uint8_t on;
+    } foot;
     // ui.icon's: the next row's icon, then the row's being drawn (an icon
     // set's slot and the glyph table's glyph, -1 none).
     int16_t icon_slot, icon_glyph, row_slot, row_glyph;

@@ -2451,6 +2451,19 @@ void mua_group_close(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
                              mua_card_flags(c));
             mua_clip_out(&k);
         }
+        moy_ui_box_t fb = c->foot.b, last = c->grp_last;
+        if (c->foot.on && fb.y >= last.y && fb.y + fb.h <= last.y + last.h) {
+            // a button the group's last row: the foot's rounded corners cut
+            // its edge and its ring, so it is drawn again over them, there alone
+            int reach = ring_reach(c), r = moy_ui_group_r(c->fs), bottom = last.y + last.h;
+            moy_ui_box_t in = {(int16_t)(fb.x - reach), (int16_t)(bottom - r), (int16_t)(fb.w + 2 * reach),
+                               (int16_t)(r + reach)};
+            EACH_ROW(c, k, s, in, 1, in) {
+                moy_ui_button(s, fb, c->foot.kind, c->foot.flags, c->foot.interact, &c->foot.bt,
+                              MOY_UI_PHASE_ALL);
+                mua_clip_out(&k);
+            }
+        }
     }
     if (c->ring.due == 2) {
         // a focused button's ring over the row drawn flush under it, there alone
@@ -2468,6 +2481,7 @@ void mua_group_close(moy_ui_ctx_t *c, const moy_ui_sink_t *s) {
         }
     }
     c->ring.due = 0;
+    c->foot.on = 0;
     // a desk's card keeps its ring's foot below its last row
     c->y = (int16_t)(c->y + (mua_kmetric(MOY_UI_K_GROUP, MOY_UI_M_GROUP_GAP) + c->grp_card) * c->fs);
     c->grp_card = 0;
@@ -3631,7 +3645,7 @@ int moy_ui_api_button(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
         st = 0;
     }
     clip_t k;
-    mua_band_mark(c, rb, stacked, mua_mark_flags(st, o));
+    mua_band_mark(c, rb, stacked, 0);   // no row's mark: a button marks itself (its ring, its plate)
     EACH_ROW(c, k, s, rb, stacked, c->page) {
         mua_band(c, s, rb, stacked);
         moy_ui_button_t bt;
@@ -3659,6 +3673,16 @@ int moy_ui_api_button(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
             moy_ui_bar_item(s, ib, fl, &bt);
         } else {
             moy_ui_button(s, b, kid, fl, mua_interact(st), &bt, MOY_UI_PHASE_ALL);
+            if (stacked && c->grp_open) {
+                // where it is the group's last row, it is drawn again over
+                // its card's rounded foot as the group closes
+                c->foot.b = b;
+                c->foot.kind = (int16_t)kid;
+                c->foot.flags = (int16_t)fl;
+                c->foot.interact = (int8_t)mua_interact(st);
+                c->foot.bt = bt;
+                c->foot.on = 1;
+            }
             if (stacked && c->grp_open && (fl & MOY_UI_F_FOCUS)) {
                 // the group's next row stands flush under it and is drawn after it: its
                 // ring's foot is drawn again over that row as the group closes
