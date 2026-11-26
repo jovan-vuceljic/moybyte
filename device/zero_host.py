@@ -106,7 +106,6 @@ SYSTEM_DIR = ROOT + "/system"      # the sign-in's: `password` (setup), `webkeys
 # path in that module reads off the instance instead, precisely so two boards'
 # updaters cannot look at each other's directory.
 UPDATE_DIR = ROOT + "/update"
-HOSTNAME = "moybyte-zero"          # mDNS: a headless board needs a findable name
 
 
 def _mkdir(path):
@@ -142,6 +141,37 @@ def identity():
     except (OSError, ValueError):
         return {}
     return doc if isinstance(doc, dict) else {}
+
+
+# THE NAME a board answers to on the network (`<name>.local`, the mDNS
+# responder, which probes for a conflict before it claims one): the one its
+# owner gave it (setup's form, Improv, Settings), else its own,
+# `moybyte-zero-XXXX` from its access point's MAC, as its setup access point
+# is named (zero_setup.ap_ssid), so two Zeros on one network never answer to
+# one name and a board's name never changes across boots. A saved
+# "moybyte-zero", the setup form's default before the board's own name
+# (2026-11-26), is no owner's choice and gives way to it.
+_OWN = [None]
+
+
+def own_name():
+    """`moybyte-zero-XXXX`, from this board's access point MAC."""
+    if _OWN[0] is None:
+        import zero_setup
+        try:
+            mac = moy_net.wifi_ap_mac()
+        except (OSError, AttributeError):
+            return zero_setup.ap_ssid(None)
+        _OWN[0] = zero_setup.ap_ssid(mac)
+    return _OWN[0]
+
+
+def board_name(me=None):
+    """The name this board answers to: its owner's (`identity`, or `me`),
+    else its own."""
+    import zero_setup
+    name = (identity() if me is None else me).get("name")
+    return name if name and name != zero_setup.OLD_DEFAULT else own_name()
 
 
 # -- the seed roster, carried by the image (2026-08-30) ----------------------
@@ -408,7 +438,7 @@ def connect(wait_ms=15000, hostname=None):
     moy_net.wifi_on()
     st = moy_net.wifi_status()
     if st[2] and st[4]:
-        moy_net.wifi_mdns(hostname or HOSTNAME)
+        moy_net.wifi_mdns(hostname or board_name())
         return st[4]
     nets = _networks()
     for net in nets + nets:
@@ -421,7 +451,7 @@ def connect(wait_ms=15000, hostname=None):
             st = moy_net.wifi_status()
             if st[2] and st[4]:
                 print("ZERO wifi:", net["ssid"], st[4])
-                if not moy_net.wifi_mdns(hostname or HOSTNAME):
+                if not moy_net.wifi_mdns(hostname or board_name()):
                     print("ZERO mDNS unavailable")
                 return st[4]
             time.sleep_ms(250)
@@ -916,7 +946,7 @@ class ImprovBoard:
         return label, chip
 
     def name(self):
-        return identity().get("name") or HOSTNAME
+        return board_name()
 
     def rename(self, raw):
         from zero_setup import clean_name
@@ -1014,8 +1044,7 @@ def make_updater(me):
 
         ota = moy_ota.OtaUpdater(lambda fn: fn(), update_dir=UPDATE_DIR)
         ota.set_wifi(_ZeroWifi(),
-                     go_online=lambda: connect(hostname=me.get("name")
-                                               or HOSTNAME))
+                     go_online=lambda: connect(hostname=board_name(me)))
         task = ZeroUpdate(ota)
         return ota, task
     except Exception as exc:             # noqa: BLE001
@@ -1259,7 +1288,7 @@ def start():
     if improv is not None:
         moy_net.web_cable(1)         # the hello tells a page this board pairs by cable
     me = identity()
-    name = me.get("name") or HOSTNAME
+    name = board_name(me)
     # The apps' services (zero_svc), made before the radio: the setup AP
     # runs them too, since a service's devices (Moy Mesh's LoRa) are not the
     # station's, and a base station keeps listening while nobody has set the
@@ -1280,7 +1309,7 @@ def start():
         if ip is None:
             return None
         me = identity()
-        name = me.get("name") or HOSTNAME
+        name = board_name(me)
     _mkdir(SYSTEM_DIR)
     gc.collect()
     host = host_class()(CARTS_DIR, auth=SYSTEM_DIR, system=make_system(services))

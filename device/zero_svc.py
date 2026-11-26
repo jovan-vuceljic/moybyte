@@ -437,8 +437,8 @@ class Services:
         if name == "moybyte.clock":
             return time.time() if not (args and args[0]) else None
         if name == "moybyte.name":
-            from zero_host import identity, HOSTNAME
-            return identity().get("name") or HOSTNAME
+            from zero_host import board_name
+            return board_name()
         app = self._app_of(pid)
         if app is not None and name in ("moybyte.key_make", "moybyte.key_public",
                                         "moybyte.key_shared"):

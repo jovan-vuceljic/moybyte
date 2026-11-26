@@ -461,10 +461,18 @@ paired with the board's password, `native/moy_tty/README.md`); SSH is the
 other:
 
 ```bash
-ssh moybyte-zero.local            # any user name; the board's password
-sftp moybyte-zero.local           # the files tree, the store at /moy
-scp file moybyte-zero.local:/moy/ # scp -s before OpenSSH 9.0
+ssh moybyte-zero-e55d.local            # any user name; the board's password
+sftp moybyte-zero-e55d.local           # the files tree, the store at /moy
+scp file moybyte-zero-e55d.local:/moy/ # scp -s before OpenSSH 9.0
 ```
+
+The name is the board's (`zero_host.board_name`): the one its owner gave it
+(the setup form, Improv, Settings' Name), else its own, `moybyte-zero-` and
+the last four hex digits of its access point's MAC, as its setup network is
+named, so two Zeros on one network never share one and it never changes
+across boots. The mDNS responder probes for the name before it claims it.
+The boot prints it (`ZERO ssh: serving as NAME.local`), and Improv's
+answer is its URL.
 
 - **The password is the board's one** (`/moy/system/password`): the one a
   browser pairs with, set by the setup form or `provision.sh --password`, and
@@ -478,7 +486,7 @@ scp file moybyte-zero.local:/moy/ # scp -s before OpenSSH 9.0
   and `/dev`'s rows, the other role commands, `python`) says "needs the
   console", as a console's shell does with its VM stopped; `settings` and
   `pkg list` are the store's C.
-- **No WiFi lease**: the station and the `moybyte-zero.local` name are up
+- **No WiFi lease**: the station and the board's `.local` name are up
   while the board serves, so the server rides them
   (`runtime/system/ssh_service.py`).
 - **No frame**: what a session must do on the VM's task (the store's files,
@@ -909,7 +917,7 @@ new image's host did not come up.
   interrupt `main.py`, which kills `zero_host.serve()` — the board then answers
   nothing on the network and looks dead while being perfectly healthy. Follow
   any `mpremote` with `mpremote connect <port> reset`. This is how a
-  "moybyte-zero.local refused to connect" was self-inflicted twice.
+  "the board's `.local` refused to connect" was self-inflicted twice.
 - **Getting OUT of the ROM loader is esptool's `hard_reset`** (2026-11-17),
   an RTS pulse through the USB-Serial/JTAG that boots the app with the USB
   device kept. `--after watchdog_reset`, this board's exit since its CDC days
