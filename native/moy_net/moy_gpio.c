@@ -24,6 +24,12 @@
 // refused "pin N: busy", a read as a write, and never touched. A board that
 // offers no lease of a pin has no other holder to meet, and drives it as it is.
 //
+// THE SAME PINS ON THE LIVE SOCKET: a page whose socket is open drives and
+// watches them on its device channel instead (moy_live_dev.c's THE PINS),
+// each write as the cart makes it and each watched pin's change pushed. Both
+// take moy_gpio_op, one op under the same allowlist, process and leases, so
+// a page that falls back to /gpio holds what it held.
+//
 // The pins themselves are the board's (moy_gpio_pins, moy_gpio_drive,
 // moy_gpio_sense in moy_net_port.c): a pin's first touch decides what it is,
 // only a write makes it an output, and a read never reconfigures it, so
@@ -50,6 +56,8 @@
 #pragma weak moy_lease_take
 #pragma weak moy_lease_of_pin
 #pragma weak moy_lease_sweep
+#pragma weak moy_lease_lock
+#pragma weak moy_lease_unlock
 #include "moy_log.h"
 #pragma weak moy_log_spawn
 #define LEASE_OK 0
@@ -114,6 +122,45 @@ void moy_gpio_release(void) {
     }
 }
 
+static int allowed(const uint8_t *pins, int count, int64_t n) {
+    for (int i = 0; i < count; i++) {
+        if (pins[i] == n) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int op(int pin, int out, int level) {
+    if (held_elsewhere(pin) || (out && claim(pin) != 0)) {
+        return MOY_GPIO_EBUSY;
+    }
+    if (out) {
+        return moy_gpio_drive(pin, level) == 0 ? 0 : MOY_GPIO_EIO;
+    }
+    int lv = moy_gpio_sense(pin);
+    return lv < 0 ? MOY_GPIO_EIO : lv ? 1 : 0;
+}
+
+// Under the lease table's lock (recursive): the webhost's poll and the live
+// socket's task both drive the page's pins.
+int moy_gpio_op(int pin, int out, int level) {
+    const uint8_t *pins = NULL;
+    int count = moy_gpio_pins != NULL ? moy_gpio_pins(&pins) : 0;
+    if (!allowed(pins, count, pin)) {
+        return MOY_GPIO_EPIN;
+    }
+    int locked = moy_lease_lock != NULL && moy_lease_unlock != NULL;
+    if (locked) {
+        moy_lease_lock();
+    }
+    int rc = op(pin, out, level);
+    if (locked) {
+        moy_lease_unlock();
+    }
+    return rc;
+}
+
 static void put(moy_sb_t *b, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
 // One printf piece onto the answer, which stays NUL-terminated.
@@ -135,15 +182,6 @@ static void pin_list(moy_sb_t *b, const uint8_t *pins, int count) {
         put(b, "%s%u", i ? ", " : "", (unsigned)pins[i]);
     }
     put(b, "]");
-}
-
-static int allowed(const uint8_t *pins, int count, int64_t n) {
-    for (int i = 0; i < count; i++) {
-        if (pins[i] == n) {
-            return 1;
-        }
-    }
-    return 0;
 }
 
 // One op checked: 0 and its pin, mode (1 out, 0 read) and value, or a reason.
@@ -228,33 +266,21 @@ int moy_gpio_request(int post, const char *target, size_t tn, const char *body,
         int p = 0, isout = 0, val = 0;
         char why[64];
         const char *bad = check(e, ee, pins, count, &p, &isout, &val, why, sizeof(why));
-        if (bad == NULL && (held_elsewhere(p) || (isout && claim(p) != 0))) {
-            snprintf(why, sizeof(why), "pin %d: busy", p);
+        int lv = bad == NULL ? moy_gpio_op(p, isout, val) : 0;
+        if (lv < 0) {
+            snprintf(why, sizeof(why), "pin %d: %s", p, lv == MOY_GPIO_EBUSY ? "busy"
+                     : isout ? "not driven" : "not read");
             bad = why;
-        }
-        if (bad == NULL) {
-            if (isout) {
-                if (moy_gpio_drive(p, val) != 0) {
-                    snprintf(why, sizeof(why), "pin %d: not driven", p);
-                    bad = why;
-                }
-            } else {
-                int lv = moy_gpio_sense(p);
-                if (lv < 0) {
-                    snprintf(why, sizeof(why), "pin %d: not read", p);
-                    bad = why;
-                } else {
-                    int j = 0;
-                    while (j < nread && read_pin[j] != p) {
-                        j++;
-                    }
-                    if (j < 32) {
-                        read_pin[j] = p;
-                        read_val[j] = lv ? 1 : 0;
-                        if (j == nread) {
-                            nread++;
-                        }
-                    }
+        } else if (bad == NULL && !isout) {
+            int j = 0;
+            while (j < nread && read_pin[j] != p) {
+                j++;
+            }
+            if (j < 32) {
+                read_pin[j] = p;
+                read_val[j] = lv;
+                if (j == nread) {
+                    nread++;
                 }
             }
         }

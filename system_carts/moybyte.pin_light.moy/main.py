@@ -79,6 +79,9 @@ def _draw():
     rectb(x, y, w, h, col("white"))
     print("ON" if on else "OFF", x + (66 if on else 62), y + 28,
           col("black" if on else "white"))
-    print("pin %d is %s" % (_pin(), "LOW (lit)" if on else "HIGH (dark)"),
-          72, 184, col("light_grey"))
+    # What the board reads back from the pin, not what this cart asked: None
+    # until its first answer.
+    lv = pin_read(_pin())
+    said = "..." if lv is None else "LOW (lit)" if lv == 0 else "HIGH (dark)"
+    print("pin %d reads %s" % (_pin(), said), 64, 184, col("light_grey"))
     print("tap it, or press A", 96, 204, col("dark_grey"))

@@ -109,6 +109,7 @@ _SIGS = (
     ("moy_web_take", [ctypes.POINTER(ctypes.c_void_p), _PZ,
                       ctypes.POINTER(ctypes.c_void_p), _PZ,
                       ctypes.POINTER(ctypes.c_void_p), _PZ], _I),
+    ("moy_web_live_asked", [], _I),
     ("moy_web_answer", [ctypes.c_void_p, _Z], None),
     ("moy_web_handle", [_P, _Z, _P, _Z, ctypes.c_void_p, _Z,
                         ctypes.POINTER(ctypes.c_void_p), _PZ], _I),
@@ -520,6 +521,11 @@ def web_take():
     got = [ctypes.string_at(p[i].value, n[i].value) if n[i].value else b""
            for i in range(3)]
     return (_text(got[0]), _text(got[1]), got[2])
+
+
+def web_live_asked():
+    """Whether the request taken is the live socket's page's."""
+    return bool(_lib().moy_web_live_asked())
 
 
 def _taken(out, n):

@@ -27,6 +27,7 @@ target_sources(usermod_moy_net INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/moy_webauth.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_live.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_live_dev.c
+    ${CMAKE_CURRENT_LIST_DIR}/moy_live_svc.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_seal.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_crypto.c
     ${CMAKE_CURRENT_LIST_DIR}/monocypher/monocypher.c

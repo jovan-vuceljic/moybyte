@@ -1775,7 +1775,10 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + (official ? "web_boot.official_enable()\n" : "")
         // The device kinds the board relays on the live socket, BEFORE
         // boot(): an install check and the shelves ask for them.
-        + (live && live.kinds ? "web_boot.live_kinds(" + JSON.stringify(live.kinds) + ")\n" : "")
+        // `?pins=0` keeps the pin verbs on /gpio's batches (the A/B's other arm).
+        + (live && live.kinds ? "web_boot.live_kinds(" + JSON.stringify(
+            qs.get("pins") === "0" ? live.kinds.split(";").filter((k) => k !== "pins").join(";")
+                                   : live.kinds) + ")\n" : "")
         // The console this page's address asks for: its tier, size and cart
         // (web_boot.page_boot), on the page's pointer and colour scheme
         // (page_tail.js: ?scheme= or prefers-color-scheme).
@@ -2464,11 +2467,12 @@ function termPump() {
 // whose board relays its radio or a device: one WebSocket to GET /live,
 // sealed as the terminal's is (seal slot 1), its frames' first byte their
 // channel. The worker opens it at boot, keeps it beating, reopens a dropped
-// one after LIVE_RETRY_MS, and moves the link channel ('n') and the device
-// channel ('d') between the socket and the VM between frames (web_boot's
-// live_*), never inside one: the console runs a console's match over it
-// (native/moy_net/moy_link_web.c) and its relayed devices' handles
-// (moy_dev_web.c). Every
+// one after LIVE_RETRY_MS, and moves the link channel ('n'), the device
+// channel ('d') and the apps' messages ('m') between the socket and the VM
+// between frames (web_boot's live_*), never inside one: the console runs a
+// console's match over it (native/moy_net/moy_link_web.c), its relayed
+// devices' handles (moy_dev_web.c) and its windows' messages to their
+// services on the board (moy_svc_web.c). Every
 // beat is an echo ('c' 'e', answered 'E'), the page's round trip to its
 // board, which a harness reads in `__moyState().live`.
 const LIVE_BEAT_MS = 1000, LIVE_LOST_MS = 3000;
@@ -2674,7 +2678,7 @@ async function liveOpen() {
         }
         liveHeard = performance.now();
         LIVE.down++;
-        if (u8[0] === 0x6e || u8[0] === 0x64) liveQ.push({ d: u8 });
+        if (u8[0] === 0x6e || u8[0] === 0x64 || u8[0] === 0x6d) liveQ.push({ d: u8 });
         else if (u8[0] === 0x74) termLiveIn(u8);
         else if (u8[0] === 0x72) liveAnswer(u8);
         else if (u8[0] === 0x63 && u8[1] === 0x48) liveHinted(u8.subarray(2));

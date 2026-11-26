@@ -25,6 +25,13 @@
 // FILES_DIR, when given, is the webhost's files root (/files.json, /media).
 // MOY_TTY_DEFER is the webhost's `defer`, comma-separated: the routes the VM answers, which
 // this console answers itself, 200 {"m":..., "t":..., "n":<body length>}.
+// MOY_TTY_SVC, in a build with the apps' messages (moy_live_svc.c), runs the
+// FIXTURE SERVICE of that app id on a thread, served to the live socket's
+// page: it answers each "ping" with a "pong" of the same arguments, and the
+// OS message "page" with a "seen" of its arguments.
+// MOY_TTY_PINS names the board's pins (moy_net_host.c's stand-in, the
+// /gpio allowlist), comma-separated; `pin N V` sets pin N's level from
+// outside, as a wire would; `level N` prints `LEVEL N <level> <mode>`.
 // Usage: tty_main PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]
 
 #include <fcntl.h>
@@ -48,8 +55,37 @@
 #include "moy_live.h"
 #endif
 
+#if defined(MOY_TTY_SVC) && MOY_TTY_SVC
+#include "moy_evq.h"
+#include "moy_log.h"
+
+static void *fixture_service(void *arg) {
+    const char *app = arg;
+    uint32_t pid = moy_log_spawn(app);
+    moy_evq_open(pid, app, NULL, 0);
+    moy_evq_listen(pid, "ping", true);
+    moy_evq_listen(pid, "page", true);
+    moy_live_svc_serve(app, 1);
+    for (;;) {
+        moy_evq_wait(pid, 200);
+        moy_evq_step(pid);
+        moy_evq_ev_t ev;
+        char args[512];
+        while (moy_evq_take(pid, &ev, args, sizeof args) == MOY_EVQ_OK) {
+            const char *say = strcmp(ev.name, "ping") == 0 ? "pong" : "seen";
+            moy_evq_send_text(pid, app, strlen(app), say, strlen(say), args, ev.n, NULL);
+        }
+    }
+    return NULL;
+}
+#endif
+
 extern const moy_tty_shell_t moy_tty_moy_sh;
 extern uint64_t moy_net_ms_skew;
+extern uint8_t moy_net_host_pins[16];
+extern int moy_net_host_npins;
+extern int moy_net_host_level[64];
+extern int moy_net_host_mode[64];
 
 static pthread_t console_tid;
 static volatile int console_up;
@@ -217,6 +253,10 @@ int main(int argc, char **argv) {
     s_system = strcmp(argv[2], "-") ? argv[2] : NULL;
     s_carts = argv[3];
     s_files = argc == 5 ? argv[4] : NULL;
+    for (const char *p = getenv("MOY_TTY_PINS"); p != NULL && *p && moy_net_host_npins < 16;) {
+        moy_net_host_pins[moy_net_host_npins++] = (uint8_t)strtol(p, (char **)&p, 10);
+        p += *p == ',';
+    }
     const char *named = getenv("MOY_TTY_PAGE");
     uint8_t digest[2][32];
     if (named != NULL && strlen(named) == 129 && moy_hex_decode(named, 64, digest[0], 32)
@@ -225,6 +265,12 @@ int main(int argc, char **argv) {
     }
     pthread_t t;
     pthread_create(&t, NULL, console, NULL);
+#if defined(MOY_TTY_SVC) && MOY_TTY_SVC
+    if (getenv("MOY_TTY_SVC") != NULL) {
+        pthread_t st;
+        pthread_create(&st, NULL, fixture_service, (void *)getenv("MOY_TTY_SVC"));
+    }
+#endif
     fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);
     char line[64];
     size_t ln = 0;
@@ -276,6 +322,18 @@ int main(int argc, char **argv) {
                 moy_tty_hold(MOY_TTY_SSH, 0);
                 printf("HANGUP\n");
                 fflush(stdout);
+            } else if (strncmp(line, "pin ", 4) == 0) {
+                char *e;
+                long n = strtol(line + 4, &e, 10);
+                if (n >= 0 && n < 64) {
+                    moy_net_host_level[n] = (int)strtol(e, NULL, 10);
+                }
+            } else if (strncmp(line, "level ", 6) == 0) {
+                long n = strtol(line + 6, NULL, 10);
+                if (n >= 0 && n < 64) {
+                    printf("LEVEL %ld %d %d\n", n, moy_net_host_level[n], moy_net_host_mode[n]);
+                    fflush(stdout);
+                }
             } else if (strncmp(line, "skew ", 5) == 0) {
                 moy_net_ms_skew += (uint64_t)strtoll(line + 5, NULL, 10);
                 printf("SKEW %s\n", line + 5);
@@ -306,9 +364,10 @@ int main(int argc, char **argv) {
             lv_last = lv;
             printf("LIVE sessions=%u busy=%u up=%u down=%u air_out=%u air_in=%u refused=%u "
                    "echoes=%u live=%u radio=%u devs=%u dev_calls=%u dev_writes=%u "
-                   "dev_pushes=%u hints=%u reqs=%u\n", lv.sessions, lv.busy, lv.up, lv.down,
-                   lv.air_out, lv.air_in, lv.refused, lv.echoes, lv.live, lv.radio, lv.devs,
-                   lv.dev_calls, lv.dev_writes, lv.dev_pushes, lv.hints, lv.reqs);
+                   "dev_pushes=%u hints=%u reqs=%u msgs_up=%u msgs_down=%u\n", lv.sessions,
+                   lv.busy, lv.up, lv.down, lv.air_out, lv.air_in, lv.refused, lv.echoes,
+                   lv.live, lv.radio, lv.devs, lv.dev_calls, lv.dev_writes, lv.dev_pushes,
+                   lv.hints, lv.reqs, lv.msgs_up, lv.msgs_down);
             fflush(stdout);
         }
 #endif

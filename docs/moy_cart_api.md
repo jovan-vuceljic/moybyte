@@ -734,14 +734,15 @@ input with nothing pulling it.
 
 **Through the Zero they are not instant, and you should know how much.** Your cart runs in the
 browser and the pins are on the board across the room, so a `pin_write` does
-not go down a wire — it is **queued**, and the page sends everything that piled
-up about **30 times a second**. So:
+not go down a wire — it is **queued**, and the page sends what piled up at the
+end of each frame, over the page's open line to the board (or, while that line
+is down, about **30 times a second** over plain web requests). So:
 
-* a write lands roughly **one to two frames** after you make it, plus however
-  long your WiFi takes;
-* `pin_read(n)` answers with the **last thing the board said**, which is up to
-  one of those round trips old — the first call, before any answer has come
-  back, returns `None`;
+* a write lands about **one frame** after you make it, plus however long your
+  WiFi takes;
+* `pin_read(n)` answers with the **last thing the board said**: the board tells
+  the page as soon as a pin you read changes, so it is about a frame plus the
+  WiFi old — the first call, before any answer has come back, returns `None`;
 * writing the same pin twice in one frame is fine — only the **last** value was
   ever real, and only it is sent.
 

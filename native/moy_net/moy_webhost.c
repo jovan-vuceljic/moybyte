@@ -2231,6 +2231,10 @@ int moy_web_take(const char **method, size_t *method_n, const char **target,
     return 1;
 }
 
+int moy_web_live_asked(void) {
+    return W != NULL && parked() && W->plive;
+}
+
 // The VM's response, as it wrote it: sealed when the request was, its status
 // kept and its body the records' plaintext.
 static void answer_vm(out_t *o, const char *resp, size_t n) {

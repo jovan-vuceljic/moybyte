@@ -526,8 +526,13 @@ one connection to this board.
 ## Pins (`native/moy_net/moy_gpio.c`, #9)
 
 The other half of "the browser is the console, this board is what a browser is
-not". A cart running in the browser calls `pin_write` / `pin_read`; the page
-batches them and POSTs to whoever served it.
+not". A cart running in the browser calls `pin_write` / `pin_read`; while
+the page's live socket is open they ride its device channel as the kind
+`pins` (`native/moy_net/moy_live.c`, THE PINS): each frame's writes leave
+right after it, and this board pushes a watched pin's level when it
+changes. With the socket shut, the page batches them and POSTs to whoever
+served it. Both are one op (`moy_gpio_op`), so the allowlist and the leases
+below are the same either way.
 
 ```
 GET  /gpio   → {"v": 1, "pins": [...]}             the allowlist

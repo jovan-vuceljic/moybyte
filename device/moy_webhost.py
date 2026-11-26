@@ -76,6 +76,10 @@ DEFAULT_PORT = 80
 # The live socket's hints (a Zero's, moy_net.live_hint), None on a board
 # without the socket.
 _HINT = getattr(moy_net, "live_hint", None)
+# ...whether the request the VM answers is that page's own, and its word
+# that the store's changes being made are that page's (moy_live_store_mine).
+_ASKED = getattr(moy_net, "web_live_asked", None)
+_MINE = getattr(moy_net, "live_mine", None)
 
 # The answer a board with no updatable firmware answers /update with: 503
 # means "a board, but nothing to update", where a 404 means "not a board".
@@ -381,6 +385,7 @@ class WebHost:
         self.official = official
         self.wifi = wifi
         self._went = {}                  # a backend's last step did work (_stepped)
+        self._mine = False               # the official request in hand is the socket page's
         self.system = system
         self.on_stop = on_stop
         self.on_serving = on_serving
@@ -571,11 +576,20 @@ class WebHost:
                 print("UPDATE ERR %s: %s" % (type(exc).__name__, exc))
         o = self.official
         if o is not None and (o.busy() or self._went.get("o")):
+            # An install or a removal the socket's page asked for changes the
+            # store as its own sync does: no news to it (it pulls that cart
+            # itself), and hinted 's' to it when another page asked.
+            mine = self._mine and _MINE is not None
+            if mine:
+                _MINE(1)
             try:
                 if self._stepped("o", o.busy() and o.step(OFFICIAL_SLICE_MS)):
                     did = True
             except Exception as exc:     # noqa: BLE001 -- never break a frame
                 print("OFFICIAL ERR %s: %s" % (type(exc).__name__, exc))
+            finally:
+                if mine:
+                    _MINE(0)
         w = self.wifi
         if w is not None and (w.busy() or self._went.get("w")):
             try:
@@ -781,6 +795,8 @@ class WebHost:
         except (ValueError, AttributeError):
             return http_response(400, '{"error":"bad json"}')
         ok, msg = o.request(action, folder, sent)
+        if ok and action in ("install", "agree", "remove"):
+            self._mine = bool(_ASKED is not None and _ASKED())
         return http_response(200 if ok else 409, o.answer(ok, msg))
 
     def _wifi(self, body):

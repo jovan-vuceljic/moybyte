@@ -438,6 +438,14 @@ static mp_obj_t mod_live_hint(mp_obj_t topics) {
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mod_live_hint_obj, mod_live_hint);
+
+// live_mine(on): the store's changes made between on (1) and off (0) are the
+// live socket's page's own, no news to it (moy_live_store_mine).
+static mp_obj_t mod_live_mine(mp_obj_t on) {
+    moy_live_store_mine(mp_obj_is_true(on));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mod_live_mine_obj, mod_live_mine);
 #endif
 
 #if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
@@ -930,6 +938,12 @@ static mp_obj_t mod_web_take(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_web_take_obj, mod_web_take);
 
+// web_live_asked() -> whether the request taken is the live socket's page's.
+static mp_obj_t mod_web_live_asked(void) {
+    return mp_obj_new_bool(moy_web_live_asked());
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_web_live_asked_obj, mod_web_live_asked);
+
 // web_pack(root, kinds[, bytes]) -> the store under `root` as the pull's JSON
 // text, every file as bytes where `bytes` is true.
 static mp_obj_t mod_web_pack(size_t n_args, const mp_obj_t *args) {
@@ -1217,6 +1231,7 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_web_keys), MP_ROM_PTR(&mod_web_keys_obj)},
     {MP_ROM_QSTR(MP_QSTR_web_shelf), MP_ROM_PTR(&mod_web_shelf_obj)},
     {MP_ROM_QSTR(MP_QSTR_web_take), MP_ROM_PTR(&mod_web_take_obj)},
+    {MP_ROM_QSTR(MP_QSTR_web_live_asked), MP_ROM_PTR(&mod_web_live_asked_obj)},
     {MP_ROM_QSTR(MP_QSTR_web_pack), MP_ROM_PTR(&mod_web_pack_obj)},
     {MP_ROM_QSTR(MP_QSTR_wc_on), MP_ROM_PTR(&mod_wc_on_obj)},
     {MP_ROM_QSTR(MP_QSTR_wc_state), MP_ROM_PTR(&mod_wc_state_obj)},
@@ -1259,6 +1274,7 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     #if defined(MOY_NET_LIVE) && MOY_NET_LIVE
     {MP_ROM_QSTR(MP_QSTR_live_stats), MP_ROM_PTR(&mod_live_stats_obj)},
     {MP_ROM_QSTR(MP_QSTR_live_hint), MP_ROM_PTR(&mod_live_hint_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_mine), MP_ROM_PTR(&mod_live_mine_obj)},
     #endif
     #if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
     {MP_ROM_QSTR(MP_QSTR_live_take), MP_ROM_PTR(&mod_live_take_obj)},

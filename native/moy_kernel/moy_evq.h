@@ -140,6 +140,10 @@ enum {
 #define MOY_EVQ_VM 0x01u            // the VM's task serves it (a Python process)
 #define MOY_EVQ_ALARMS 0x02u        // its process holds `alarms` (moy_evq_at)
 #define MOY_EVQ_NOTIFY 0x04u        // ...`notifications` (moy_notes.h)
+#define MOY_EVQ_ANY 0x08u           // a STAND-IN: its app's processes on the other end of
+                                    // the live socket (native/moy_net/moy_live_svc.c,
+                                    // moy_svc_web.c), so a send to its app reaches it
+                                    // whatever the name, under the rule
 
 #define MOY_EVQ_FD 31               // the event descriptor
 #define MOY_EVQ_VERSION 1           // the record's layout
