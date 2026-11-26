@@ -25,7 +25,7 @@ def _card(m, claim=None):
     js = ("const el=()=>({textContent:'',style:{},className:'',disabled:true,value:'',"
           "focus(){}});\n"
           "var PINEL=el(),PINF=el(),PINB=el(),PINM=el(),PINP=el(),PINR=el(),PINH=el();\n"
-          "var CLAIM=%s,CHOOSE=false,TAKEN=false;\nfunction asApp(){return false;}\n"
+          "var CLAIM=%s,CHOOSE=false,TAKEN=false,FAST=false;\nfunction asApp(){return false;}\n"
           "%s\n%s\npinAsk(%s);\n"
           "console.log(JSON.stringify([PINH.textContent,PINP.textContent,"
           "PINR.style.display!=='none']));\n" % (json.dumps(claim), nopw, ask, json.dumps(m)))
