@@ -1324,7 +1324,7 @@ _VERB_HINT = {"play": ("confirm", "Play"), "open": ("confirm", "Open"),
               "change": ("C", "Change"), "search": ("search", "Search"),
               "new": ("N", "New"), "copy": ("Y", "Duplicate"),
               "delete": ("X", "Delete"),
-              "favourite": ("F", "Add favourite"), "options": ("X", "Options"),
+              "favourite": ("F", "Add favourite"), "options": ("options", "Options"),
               "window": ("P", "Play")}
 SHELF_GAP = 42       # the details block's foot to the shelf's caption, in
                      # glass pixels: the full PROJECTS window's, at every size

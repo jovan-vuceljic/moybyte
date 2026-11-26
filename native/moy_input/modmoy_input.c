@@ -1592,6 +1592,46 @@ static mp_obj_t input_trackball(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(input_trackball_obj, input_trackball);
 
+// gamepad() -> the board's Faces Gamepad3, or None where it has none: the
+//   kernel's driver (moy_pad3.c) on the input task, holding the kernel table's
+//   "pad" source. Its attributes read the driver: available, raw (the last
+//   byte), reads, errors, gate.
+typedef struct {
+    mp_obj_base_t base;
+    moy_pad3_t *p;
+} input_pad3_obj_t;
+
+static void pad3_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    if (dest[0] != MP_OBJ_NULL) {
+        return;
+    }
+    moy_pad3_t *p = ((input_pad3_obj_t *)MP_OBJ_TO_PTR(self_in))->p;
+    switch (attr) {
+        case MP_QSTR_available: dest[0] = mp_obj_new_bool(p->available); break;
+        case MP_QSTR_raw: dest[0] = MP_OBJ_NEW_SMALL_INT(p->raw); break;
+        case MP_QSTR_reads: dest[0] = mp_obj_new_int_from_uint(p->reads); break;
+        case MP_QSTR_errors: dest[0] = mp_obj_new_int_from_uint(p->errors); break;
+        case MP_QSTR_gate: dest[0] = mp_obj_new_bool(p->gate); break;
+        default: break;
+    }
+}
+
+static MP_DEFINE_CONST_OBJ_TYPE(
+    input_pad3_type, MP_QSTR_Gamepad, MP_TYPE_FLAG_NONE,
+    attr, pad3_attr
+    );
+
+static mp_obj_t input_gamepad(void) {
+    moy_pad3_t *p;
+    if (!moy_input_board_pad3(&p)) {
+        return mp_const_none;
+    }
+    input_pad3_obj_t *o = mp_obj_malloc(input_pad3_obj_t, &input_pad3_type);
+    o->p = p;
+    return MP_OBJ_FROM_PTR(o);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(input_gamepad_obj, input_gamepad);
+
 // ble() -> the BLE HID keyboard, or None where the board takes no BLE: the
 //   kernel's central (moy_ble_task.c over moy_hid.c), writing the kernel
 //   table's "ble" source. start() brings the radio up; poll() takes the
@@ -2118,6 +2158,7 @@ static const mp_rom_map_elem_t moy_input_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_keyboard), MP_ROM_PTR(&input_keyboard_obj) },
     { MP_ROM_QSTR(MP_QSTR_touch), MP_ROM_PTR(&input_touch_obj) },
     { MP_ROM_QSTR(MP_QSTR_trackball), MP_ROM_PTR(&input_trackball_obj) },
+    { MP_ROM_QSTR(MP_QSTR_gamepad), MP_ROM_PTR(&input_gamepad_obj) },
     { MP_ROM_QSTR(MP_QSTR_ble), MP_ROM_PTR(&input_ble_obj) },
     #endif
     { MP_ROM_QSTR(MP_QSTR_kick), MP_ROM_PTR(&input_kick_obj) },

@@ -1,4 +1,6 @@
-# moy_lcd: ST7789 SPI panel module for the T-Deck mainline build.
+# moy_lcd: the SPI panel module of the S3 handhelds that push their frames
+# (the T-Deck's ST7789, the CoreS3's ILI9342C); modmoy_lcd.c's header names
+# the board facts it reads.
 #
 # NOTE (the same trap moy_dsi documents on the P4): the esp_lcd component
 # dependency CANNOT be declared here. USER_C_MODULES is skipped during idf.py's

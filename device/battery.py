@@ -9,6 +9,9 @@ mean of SAMPLES calibrated reads through a LiPo's resting curve. A charger
 holds the cell above its resting voltage, so on USB the level reads high: the
 T-Deck has no charge-status line to tell the two apart. A read allocates
 nothing (tests/test_frame_alloc.py): the bar asks on every frame it paints.
+
+`PmicBattery(read)` is a power manager's own gauge (the CoreS3's AXP2101),
+which also says whether the charger is charging.
 """
 
 try:
@@ -85,3 +88,36 @@ class Battery:
         except Exception:  # noqa: BLE001 -- a gauge that will not read is no gauge
             self._level = None
         return self._level
+
+
+class PmicBattery:
+    """A power manager's own fuel gauge and charger (the CoreS3's AXP2101):
+    `read()` answers (level, charging, vbus, mv) as `moy_cores3.pmic` does, or
+    None where the chip does not answer. Read at most every REFRESH_MS, like
+    the ADC gauge; `level` None with no cell, `charging` None where nothing
+    was read."""
+
+    def __init__(self, read):
+        self._read = read
+        self._at = None
+        self._last = None
+
+    def _get(self):
+        now = _ticks_ms()
+        if self._at is None or _ticks_diff(now, self._at) >= REFRESH_MS:
+            self._at = now
+            try:
+                self._last = self._read()
+            except Exception:  # noqa: BLE001 -- a gauge that will not read is no gauge
+                self._last = None
+        return self._last
+
+    def level(self):
+        """The charge in percent, or None where no cell reads."""
+        r = self._get()
+        return None if r is None else r[0]
+
+    def charging(self):
+        """Whether the charger is charging the cell, or None unread."""
+        r = self._get()
+        return None if r is None else r[1]

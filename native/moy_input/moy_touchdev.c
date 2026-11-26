@@ -72,9 +72,26 @@ static int axs_read(const moy_touchdev_t *d, const moy_i2c_t *bus, uint8_t out[8
     return bus->read(bus->ctx, d->addr, out, 8);
 }
 
+// The FT6x36's report: TD_STATUS (the touch count in its low nibble) then the
+// first point, X high (the event in bits 7..6, x's bits 11..8), X low, Y high
+// (the touch id above y's bits 11..8), Y low.
+#define FT_TD_STATUS 0x02
+#define FT_ADDR 0x38
+
+static int ft_read(const moy_touchdev_t *d, const moy_i2c_t *bus, uint8_t out[5]) {
+    uint8_t reg = FT_TD_STATUS;
+    return bus->write_read(bus->ctx, d->addr, &reg, 1, out, 5);
+}
+
 void moy_touchdev_probe(moy_touchdev_t *d, const moy_i2c_t *bus) {
     uint8_t b[8];
     switch (d->kind) {
+        case MOY_TOUCH_FT6X36:
+            if (d->addr == 0) {
+                d->addr = FT_ADDR;
+            }
+            d->available = ft_read(d, bus, b) == 0;
+            break;
         case MOY_TOUCH_GT911: {
             static const uint8_t ADDRS[2] = {0x5D, 0x14};
             for (int i = 0; i < 2 && !d->available; i++) {
@@ -329,9 +346,29 @@ static int axs_pass_read(moy_touchdev_t *d, const moy_i2c_t *bus, int32_t *rx, i
     return MOY_RAW_POINT;
 }
 
+static int ft_pass_read(moy_touchdev_t *d, const moy_i2c_t *bus, int32_t *rx, int32_t *ry,
+                        uint8_t *n) {
+    uint32_t t0 = bus->us(bus->ctx);
+    uint8_t b[5];
+    int rc = ft_read(d, bus, b);
+    stat(d, bus, t0, 0, rc == 0 ? b[0] : -1);
+    if (rc != 0) {
+        return MOY_RAW_NONE;
+    }
+    uint8_t touches = b[0] & 0x0F;
+    if (touches == 0 || touches > 2 || (b[1] >> 6) == 1) {   // none, noise, or lifted
+        return MOY_RAW_UP;
+    }
+    *rx = ((b[1] & 0x0F) << 8) | b[2];
+    *ry = ((b[3] & 0x0F) << 8) | b[4];
+    *n = touches;
+    return MOY_RAW_POINT;
+}
+
 void moy_touchdev_pass(moy_touchdev_t *d, const moy_i2c_t *bus) {
     if (!d->available) {
-        if (d->kind == MOY_TOUCH_AXS && ++d->reprobe >= MOY_TOUCH_REPROBE) {
+        if ((d->kind == MOY_TOUCH_AXS || d->kind == MOY_TOUCH_FT6X36)
+            && ++d->reprobe >= MOY_TOUCH_REPROBE) {
             d->reprobe = 0;
             moy_touchdev_probe(d, bus);
         }
@@ -350,6 +387,9 @@ void moy_touchdev_pass(moy_touchdev_t *d, const moy_i2c_t *bus) {
             break;
         case MOY_TOUCH_GSL3680:
             raw = gsl_read(d, bus, &x, &y, &n);
+            break;
+        case MOY_TOUCH_FT6X36:
+            raw = ft_pass_read(d, bus, &x, &y, &n);
             break;
         default:
             raw = axs_pass_read(d, bus, &x, &y);

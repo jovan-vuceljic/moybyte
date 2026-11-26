@@ -35,6 +35,7 @@ body:
         - Waveshare ESP32-P4 7B (p4)
         - Guition JC3248W535 (guition_s3)
         - Guition JC8012P4A1C 10.1" (guition_p4)
+        - M5Stack CoreS3 SE (cores3)
         - Seeed XIAO ESP32-S3 Zero (xiao_zero)
         - ESP32-C3 Zero (c3_zero)
         - Other

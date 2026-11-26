@@ -60,7 +60,8 @@ a browser. **`.moy` is the only cart format** (the `.moyproj` SDK was deleted
   hardware: `lilygo_t_deck_plus_mainline/` (T-Deck, `tdeck`),
   `esp32_p4_wifi6_touch_lcd_7b/` (Waveshare P4, `p4`), `guition_jc3248w535/`
   (`guition_s3`), `guition_jc8012p4a1c/` (10.1″ P4, `guition_p4`),
-  `elecrow_crowpanel_p4_10_1/` (Elecrow 10.1″ P4, `elecrow_p4`), the headless
+  `elecrow_crowpanel_p4_10_1/` (Elecrow 10.1″ P4, `elecrow_p4`),
+  `m5stack_cores3_se/` (M5Stack CoreS3 SE with a gamepad, `cores3`), the headless
   `seeed_xiao_esp32s3_zero/` (`xiao_zero`, #41) and its ESP32-C3 variant
   `esp32c3_zero/` (`c3_zero`), and `web_runner/`. The ids are
   each board.toml's `[board] ota`, the name every tool takes.

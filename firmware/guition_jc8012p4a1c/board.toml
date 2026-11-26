@@ -357,6 +357,12 @@ reason. (native/p4/ has no micropython.cmake of its own, so this
 scan never sees it -- that tier is the second source, [native.p4] below.)"""
 
 [[native.shared.deny]]
+module = "moy_lcd"
+why = """
+The SPI-panel backend of the S3 handhelds (the T-Deck, the CoreS3). This
+board's panel is MIPI-DSI under native/p4's moy_dsi, with no SPI panel bus."""
+
+[[native.shared.deny]]
 module = "moy_usbdisk"
 why = """
 USB mass storage wants the high-speed OTG port, and which connector, if any,

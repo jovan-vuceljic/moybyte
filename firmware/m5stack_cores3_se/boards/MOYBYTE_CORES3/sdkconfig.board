@@ -1,0 +1,346 @@
+# Moybyte CoreS3 SE board fragment (mainline build).
+#
+# The T-Deck's fragment with this board's facts: its flash, its quad PSRAM and
+# its partition table. The levers the T-Deck A/B'd on its glass are taken as
+# they are, each with its verdict as written there ("the fork" is the T-Deck's
+# lvgl_micropython build, deleted 2026-08-17).
+
+# 16MB flash. The generic S3 board assumes 4MB.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# DIO, the T-Deck's mode: the mode in the image header is what the ROM
+# bootloader uses, and DIO reads every flash QIO does.
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# The dual-OTA partition table (#53): two 7 MiB app slots, the coredump
+# partition and the vfs; the CSV carries the arithmetic and what a change to
+# it costs a deployed board.
+# CONFIG_PARTITION_TABLE_CUSTOM_FILENAME resolves relative to ports/esp32, so
+# build.sh stages the CSV there.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions-moybyte-cores3.csv"
+
+# Core dumps (owner, 2026-11-03, docs/os_2026-11/processes.md section 10): a
+# panic writes an ELF core dump, CRC32-checked, to the table's coredump
+# partition, which tools/coredump.py reads over the cable and Settings ->
+# LAST CRASH clears; the next panic overwrites it. Task stacks may live in
+# PSRAM here (FREERTOS_TASK_CREATE_ALLOW_EXT_MEM), so the dump runs on a stack
+# of its own in internal RAM (the IDF's 1792-byte minimum for that case), and
+# a PSRAM stack is dumped like any other. Its logs are off: their strings keep
+# ~5 KB of internal RAM, this chip's scarcest, and the console reports the dump
+# itself (moy_crash.dump()). The boot check only logs, so it is off too. The
+# internal RAM's .bss, .data and heap are not captured (CAPTURE_DRAM): that
+# wants a partition the size of the RAM; the kernel's own table of loaded
+# modules is (COREDUMP_DRAM_ATTR, native/moy_elf/moy_elf_maps.h).
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_COREDUMP_CHECKSUM_CRC32=y
+CONFIG_ESP_COREDUMP_MAX_TASKS_NUM=64
+CONFIG_ESP_COREDUMP_STACK_SIZE=1792
+CONFIG_ESP_COREDUMP_LOGS=n
+CONFIG_ESP_COREDUMP_CHECK_BOOT=n
+
+# Rollback (#53): an app that never calls
+# esp32.Partition.mark_app_valid_cancel_rollback() is reverted by the
+# bootloader on the next boot, so a bad OTA self-heals. sdkconfig.base already
+# sets this upstream; restated here because this file is what the build's
+# sdkconfig guard derives its required list from -- an existing build dir
+# silently keeps whatever it was first configured with.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# Cache geometry (#63, A/B'd on this board): the stock build runs the S3's
+# MINIMUM caches (16KB icache / 32KB dcache) while the VM reads frozen bytecode
+# from flash AND the gc heap from PSRAM through that one small dcache, with the
+# panel DMA streaming through the same path. Doubling both is worth ~2.5x on kid
+# float loops. Costs 48KB of internal SRAM.
+#
+# The LINE stays 32B. A first pass also widened lines to 64B and the hardware
+# answered with horizontal garbage bands on every screen -- the 64B coherency
+# granularity breaks the CPU<->GDMA handoff in the PSRAM flush path. Do not
+# re-widen without an on-hardware A/B.
+CONFIG_ESP32S3_INSTRUCTION_CACHE_16KB=
+CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y
+CONFIG_ESP32S3_DATA_CACHE_32KB=
+CONFIG_ESP32S3_DATA_CACHE_64KB=y
+CONFIG_ESP32S3_DATA_CACHE_LINE_32B=y
+
+# PSRAM: this S3's is QUAD, 8 MB, external (esptool reads no embedded PSRAM),
+# so mpconfigboard.cmake takes sdkconfig.spiram_sx and not the octal fragment,
+# at its 80 MHz. The T-Deck's 120 MHz is an octal-and-flash pair with a
+# temperature retune (its sdkconfig.board); not taken here.
+
+# USB-Serial-JTAG as the PRIMARY console, so serial INPUT works (#201).
+#
+# The board previously left the IDF default: UART0 primary, USB-Serial-JTAG
+# SECONDARY. A secondary console is OUTPUT ONLY -- Espressif's own Kconfig help
+# says so: "This secondary output currently only supports non-blocking mode
+# without using REPL. If you want to output in blocking mode with REPL or input
+# through this secondary port, please change the primary config to this port."
+#
+# That is the whole reason typed input never arrived on this board: TX flowed
+# over USB (secondary, output-only) while INPUT was taken from the primary,
+# UART0 -- whose RX is GPIO44 on the expansion header, unconnected and floating.
+# Hence a single stray byte in 150 seconds (`SERIAL rx=1 lines=0 partial=1`) and
+# a host write() that timed out having transferred ZERO bytes: nothing on the
+# device was ever reading that endpoint.
+#
+# It is NOT micropython#18581 (CDC-init-at-REPL), which is what this was first
+# diagnosed as -- TinyUSB is not even linked into this image (`tusb_init` and
+# `tud_cdc_rx_cb` are both absent from the elf). No TinyUSB is needed: the S3's
+# USB-Serial-JTAG peripheral is bidirectional on its own once it is primary.
+#
+# The fork build (deleted 2026-08-17) shared this misconfiguration -- but note
+# that fixing it there was measured as NOT sufficient: with an identical console
+# config and identical linked symbols it printed and still took no input
+# (CLAUDE.md's RX section). On THIS port the three changes together are the
+# whole fix, verified on glass.
+#
+# UART REPL stays on (mpconfigboard.h) -- it costs nothing and keeps the header
+# pins usable with a USB-UART adapter, which is how the P4 has always worked
+# (its CH343 is exactly that, soldered on).
+# REVERTED 2026-08-16 AFTER FLASHING IT: making USB-Serial-JTAG the PRIMARY
+# console fixed RX at the USB level -- a host write() went from timing out at 0
+# bytes to being ACCEPTED -- and then the board emitted NOTHING and stopped
+# booting. The primary console is BLOCKING (the same Kconfig help that says the
+# secondary cannot take input says the primary is the one that supports
+# "blocking mode with REPL"), so the desktop hangs on its first print when no
+# host is draining. Recovery needed esptool --before default_reset, which does
+# work on this board even with the app wedged.
+#
+# RESOLVED 2026-08-16, and the two halves explain each other. That hang happened
+# while MICROPY_HW_ESP_USB_SERIAL_JTAG was still 0 (USBDEV was on), so
+# MicroPython had NO tx path of its own and mp_hal_stdout_tx_strn fell through to
+# IDF's primary console -- which blocks. With USBDEV off (see mpconfigboard.h)
+# MicroPython uses its own usb_serial_jtag_tx_strn instead: an absent host costs
+# one 200ms timeout, then terminal_connected latches false and every later write
+# returns immediately. Non-blocking by construction.
+#
+# So neither change works alone -- promoting the console alone hangs the board,
+# linking the ISR alone leaves the console secondary and input-only-in-theory --
+# and that is why each was measured as a failure on its own. They ship together.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=
+CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# --- TCP throughput: Espressif's "Iperf rank" set, which is ATOMIC ---------
+# Measured on this board 2026-08-20, pinned to ONE access point with power save
+# interleaved: 400 -> 2121 KB/s, a 5.3x, and the 541KB wasm bundle goes from
+# ~1.35s to ~0.26s. Pinning the AP is not a detail: the two saved networks here
+# differ 2.6x on identical firmware, and an unpinned A/B produced three
+# confident wrong answers before that was noticed.
+#
+# THESE MOVE TOGETHER OR NOT AT ALL. Raising the two lwIP buffers alone
+# (5760 -> 32768) with the WiFi driver left at stock measured 20x SLOWER than
+# stock on a direct board-to-board link (1100-1240 -> 42-72 KB/s): a big TCP
+# window puts ~22 segments in flight against an 802.11n reorder window
+# (RX_BA_WIN) still sized 6, and everything past it is dropped and
+# retransmitted. Half the set is far worse than none of it.
+#
+# STATIC_RX_BUFFER_NUM is 16 and not Espressif's 24 because 16 MEASURED FASTER
+# (2121 vs 2040) while leaving 13KB more internal SRAM -- 16 is past the knee.
+# It is the one buffer here that must be DMA-capable internal SRAM, the same
+# pool a running cart needs ~31KB of, so it is the knob to watch.
+# TRY_ALLOCATE_WIFI_LWIP is load-bearing: it moves the lwIP buffers into PSRAM,
+# which is why the whole set costs no internal SRAM at all (A/B'd on this board:
+# the tuned build has MORE internal SRAM free, both while serving and with a
+# cart running, than the stock one).
+#
+# THE GUITION NEEDED THE BLE BLOCK BELOW FIRST, and that ordering is the
+# lesson: flashed with this set alone its WiFi would not initialise at all
+# (scan() empty, connect() raising OSError: Wifi Internal State Error) because
+# it activates BLE at boot and its moy_axs panel pays the same ~61KB bounce
+# cost on a bigger panel, leaving its main internal region with a few hundred
+# bytes. Right-sizing BLE is what bought that board the headroom. A FOURTH
+# board inherits neither block -- measure idf_heap_info first. The P4 is
+# unaffected by construction: its WiFi is ESP-Hosted on a C6 over SDIO, so
+# ESP_WIFI_* on the host configures a driver that is not there, and its lwIP
+# window is already 65534.
+#
+# NOT enabled, deliberately: ESP_WIFI_IRAM_OPT / RX_IRAM_OPT / EXTRA_IRAM_OPT,
+# which Espressif's iperf profile also sets. On the S3 IRAM aliases DRAM, so
+# those three would cost ~32KB of the very internal SRAM this set is careful
+# not to spend.
+CONFIG_LWIP_TCP_WND_DEFAULT=65535
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=65535
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=64
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=64
+CONFIG_ESP_WIFI_RX_BA_WIN=32
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+CONFIG_LWIP_TCP_RECVMBOX_SIZE=64
+CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=64
+
+# --- BLE right-sized for ONE keyboard --------------------------------------
+# `ble_keyboard.py` is staged here and run_desktop constructs
+# `ws.ble_keyboard` as an optional SECOND keyboard beside the C3 matrix, started
+# from the Settings Bluetooth picker. It is not active at boot, so the cost
+# below is paid the moment someone opens that picker and not before.
+#
+# BLE is by far the most expensive thing on this board's internal SRAM --
+# measured over the dev channel, activating it costs ~51.7KB total / ~21.8KB
+# out of the main region, more than running a cart does, while WiFi costs
+# ~144 B because TRY_ALLOCATE_WIFI_LWIP puts its buffers in PSRAM. The squeeze
+# is BLE, not "BLE + WiFi"; that is the number to attack if you go hunting.
+# Right-sized as below, cart + WiFi + BLE all up coexist -- with roughly 18KB
+# of main-region headroom left, which is enough and not much: a feature wanting
+# another 20KB in that state does not have it.
+#
+# The stack ships at MicroPython's generic defaults: four simultaneous
+# connections, six radio activities, 24x255B of ACL buffers. A console that
+# talks to one HID keyboard needs none of that, and the right-sizing is what
+# makes that last configuration a working one. Same block as the Guition's,
+# where it took an ACTIVE, SCANNING stack from 98,700 bytes down to ~50,400 and
+# was the difference between "WiFi cannot initialise" and a working web host.
+#
+# Roles are deliberately NOT trimmed: dropping PERIPHERAL/BROADCASTER is likely
+# the biggest remaining win, and a build risk to test on its own.
+#
+# ADV_REPORT_FLOW_CTRL_NUM is 50 because IDF ranges it 50..1000 (default 100):
+# an out-of-range value is REFUSED SILENTLY and the build keeps the default, so
+# the saving this line claims simply would not happen. 50 is the floor allowed,
+# ~1.75KB back at 35 B per unprocessed report.
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_MAX_BONDS=2
+CONFIG_BT_NIMBLE_MAX_CCCDS=4
+CONFIG_BT_NIMBLE_ACL_BUF_COUNT=8
+CONFIG_BT_NIMBLE_HCI_EVT_HI_BUF_COUNT=10
+CONFIG_BT_NIMBLE_HCI_EVT_LO_BUF_COUNT=4
+CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=8
+CONFIG_BT_NIMBLE_MSYS1_BLOCK_COUNT=8
+CONFIG_BT_CTRL_BLE_MAX_ACT=3
+CONFIG_BT_CTRL_BLE_ADV_REPORT_FLOW_CTRL_NUM=50
+
+# The kernel's BLE keyboard keeps its bonds in NimBLE's own NVS store
+# (native/moy_input/moy_ble_task.c): the pairing survives a reboot with no file
+# on any volume.
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
+
+# NimBLE's host task runs the kernel's C callbacks (native/moy_input), not
+# Python: sdkconfig.ble's 6144 was sized for MicroPython's BLE IRQ handlers,
+# and the 2 KB it carries above IDF's default is internal SRAM.
+CONFIG_BT_NIMBLE_TASK_STACK_SIZE=4096
+
+# NimBLE's host pools are static (.bss), not allocated by nimble_port_init:
+# the kernel's BLE task starts and stops the host (native/moy_input/
+# moy_ble_task.c), and the internal-SRAM budget was measured with the pools
+# static. ESP-IDF defaults this to y; MicroPython's later sdkconfig.ble sets n.
+CONFIG_BT_NIMBLE_STATIC_TO_DYNAMIC=n
+
+# --- The panel flush done-ISR runs from IRAM, not flash ---------------------
+# IDF's own default is y; MicroPython's boards/sdkconfig.base turns it off in a
+# block headed "To reduce IRAM usage" -- a generic-4MB-board trade inherited by
+# a console whose hot path is a DMA-paced panel flush. moy_flush.c's header is
+# explicit that the feeder returns to its wait between bands "so the done-ISR
+# paces it", and that ISR is spi_intr: unset, every band completion takes a
+# flash-cache-miss window. Enabling it moves spi_intr to 0x4038_ (IRAM);
+# `nm micropython.elf | grep spi_intr` is how to check it stayed there.
+#
+# A/B'd on this board's glass 2026-09-20, Brick Siege (the only referee with
+# headroom -- Hop Quest and Sky Run sit on the 60 cap and cannot show a win),
+# 3-4 runs per side, diag on:
+#
+#     fps median   51 -> 52        render  10ms -> 9ms
+#     WORST frame  48 -> 51        <- the real win: a shorter tail, not a
+#                                     faster average
+#
+# COST, measured rather than estimated: .iram0.text 0x1f48b -> 0x21387, i.e.
+# 7,932 bytes of internal SRAM -- roughly DOUBLE a naive read of the option,
+# because enabling it also selects GDMA_CTRL_FUNC_IN_IRAM. Checked against the
+# hazard the WiFi block below is careful about: with WLAN active the board
+# still has 79KB internal free / 38KB largest block, scan() answers, and
+# tests/test_tdeck_on_glass.py is 15/15.
+#
+# This is NOT the ~32KB WiFi IRAM block declined above -- it is a quarter of
+# that for a measured win, so that decline's reasoning does not reach it.
+CONFIG_SPI_MASTER_ISR_IN_IRAM=y
+
+# --- Power management: machinery with no user ------------------------------
+# IDF's default is n; MicroPython's sdkconfig.base turns it ON for every board.
+# Nothing in this repo touches the PM API -- no machine.freq() setter, no
+# lightsleep/deepsleep, no esp_pm_* call anywhere in device/ runtime/ native/
+# or the board modules -- and neither PM_DFS_INIT_AUTO nor tickless idle is
+# set, so no frequency scaling ever actually happens. What is left is only the
+# cost: esp_pm_lock_acquire is a spinlock critical section taken per SPI
+# transaction, i.e. once per flush band on this board.
+#
+# Small -- this is dead weight removed, not a trade. The one behaviour lost is
+# machine.freq(x) as a SETTER, which would start raising ValueError; the getter
+# is unaffected. Revisit if #130's idle light-sleep rung is ever built.
+CONFIG_PM_ENABLE=
+
+# --- No PSRAM memtest at every boot ----------------------------------------
+# IDF: "Runs a rudimentary memory test on initialization. Aborts when memory
+# test fails. Disable this for slightly faster startup." 8MB of octal PSRAM
+# written and read before the console starts. Both P4 boards already run
+# without it (upstream's sdkconfig.p4 disables it) -- so this is an inherited
+# asymmetry being closed, not a new risk appetite. The cost is losing an
+# automatic bad-PSRAM detector at boot.
+CONFIG_SPIRAM_MEMTEST=
+
+# The task watchdog (#160, native/moy_kernel/moy_kernel.c's header). The stock
+# build leaves it on, watching no idle task and only logging a timeout; the
+# kernel subscribes the VM task (native/moy_kernel: the console's frame feeds it
+# once per frame, and the loop leaving it unsubscribes) and a timeout PANICS, so
+# a frame that never ends is a crash record naming what ran. The timeout is
+# above the worst frame this board legitimately takes (the gate reads it with
+# `moy_kernel.watchdog()`).
+CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=15
+
+# --- TLS in PSRAM -----------------------------------------------------------
+# mbedtls allocates through the IDF's own hook: with the default, every block
+# under SPIRAM_MALLOC_ALWAYSINTERNAL -- the handshake's bignums, the peer
+# certificate chain, the 4 KB out record -- is internal SRAM, and an HTTPS
+# download (the kernel's updater and Get Carts, native/moy_net/moy_ota.c) took
+# about 22 KB of it at its peak on the Guition S3. External puts all of
+# mbedtls's state in PSRAM; what stays internal is the hardware AES/SHA's DMA
+# bounce, a record at a time. docs/history/kernel_survival_2026-10.md section 8; the
+# figures are #224's.
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+
+# --- the CA bundle -----------------------------------------------------------
+# Every https request but the updater's verifies the server's certificate
+# against ESP-IDF's bundle (esp_crt_bundle; native/moy_net/moy_net_port.c), the
+# common set: the roots of the CAs that issue nearly every public site's
+# certificate, kept in flash and read a root at a time. MicroPython's base
+# config turns the bundle off; a board without these lines refuses https for
+# apps (docs/os_2026-11/hardware.md section 1). Its flash cost is #246's.
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
+
+# --- Curve25519 --------------------------------------------------------------
+# An app's moybyte.x25519 (native/moy_net/moy_crypto.h) is mbedTLS's
+# Montgomery ladder on Curve25519, which MicroPython's base config turns off;
+# without this line the row answers ABSENT.
+CONFIG_MBEDTLS_ECP_DP_CURVE25519_ENABLED=y
+
+# NTP (native/moy_net/moy_wifi.c) asks the moment the station has an address:
+# a handshake waits for that answer, so lwIP's random first delay is off.
+CONFIG_LWIP_SNTP_STARTUP_DELAY=n
+
+# --- System task stacks -------------------------------------------------------
+# esp_timer's and mDNS's (the responder runs while the SSH server serves),
+# each internal SRAM, sized to more than twice its high-water mark under
+# #276's S3 session (desk, radio up, https and LAN fetches, a Lua game, the
+# responder announcing) and at least 1.4 KB over it. The idle tasks', the
+# event loop's, lwIP's and the IPC tasks' already sit within twice theirs and
+# stay ESP-IDF's.
+CONFIG_ESP_TIMER_TASK_STACK_SIZE=2560
+CONFIG_MDNS_TASK_STACK_SIZE=3072
+
+
+# --- IRAM TO FLASH ------------------------------------------------------------
+# On the S3 IRAM and DRAM split one SRAM at link time, so code kept out of IRAM
+# is internal heap, which a Lua game's allocator takes first (#276 has the bytes).
+# FreeRTOS's and the ring buffer's non-ISR functions and newlib's locks run
+# from flash; ESP-IDF keeps their ISR halves in IRAM, and nothing in this
+# image calls the moved ones from an ISR while the cache is off. The heap's
+# functions stay in IRAM: SPI_MASTER_ISR_IN_IRAM above needs them there
+# (Kconfig refuses the pair). A/B'd on this board's glass over the #66 roster
+# (#276): every cart's frame stayed inside its noise band.
+CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH=y
+CONFIG_RINGBUF_PLACE_FUNCTIONS_INTO_FLASH=y
+CONFIG_LIBC_LOCKS_PLACE_IN_IRAM=n

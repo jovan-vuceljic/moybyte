@@ -516,6 +516,11 @@ Every module below is flash spent TWICE, once per OTA slot, which on 8MB is the
 difference between a table that fits and one that does not."""
 
 [[native.shared.deny]]
+module = "moy_lcd"
+why = """
+The SPI-panel backend of the S3 handhelds. This board has no panel."""
+
+[[native.shared.deny]]
 module = "moy_usbdisk"
 why = "No card: the store is the internal flash, and USB is the board's link."
 

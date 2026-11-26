@@ -35,7 +35,8 @@ separate question from what is committed.
 | `esp_lcd_ek79007` panel driver | `native/p4/moy_dsi/vendor/` | [espressif/esp-iot-solution](https://github.com/espressif/esp-iot-solution) | Apache-2.0 | No |
 | `esp_lcd_jd9365` panel driver, Guition's build | `native/p4/moy_dsi/vendor_jd9365/` | Espressif's component as shipped in [Guition's JC8012P4A1C demo](https://github.com/DevinWatson/10.1-inch-ESP32P4-Xiaozhi-ESP32-C6-JC8012P4A1C_I_W_Y) | Apache-2.0 | No |
 | GSL3680 touch firmware (JC8012P4A1C glass) | `firmware/guition_jc8012p4a1c/boards/MOYBYTE_GUITION_P4/gsl_fw_jc8012.c` | Silead, via the same Guition demo (`esp_lcd_gsl3680.h`) | vendor firmware, redistributed as shipped | Transcribed (`tools/gen_gsl_fw.py`) |
-| ST7789 init register values (T-Deck panel) | `firmware/lilygo_t_deck_plus_mainline/native/moy_lcd/modmoy_lcd.c` | [lvgl-micropython/lvgl_micropython](https://github.com/lvgl-micropython/lvgl_micropython) | MIT | **Yes** — transcribed to C |
+| ST7789 init register values (T-Deck panel) | `native/moy_lcd/modmoy_lcd.c` | [lvgl-micropython/lvgl_micropython](https://github.com/lvgl-micropython/lvgl_micropython) | MIT | **Yes** — transcribed to C |
+| ILI9342C init values, CoreS3 power, amplifier and gamepad sequences (M5Stack CoreS3 SE) | `native/moy_lcd/modmoy_lcd.c` (`MOY_LCD_PANEL_ILI9342`), `firmware/m5stack_cores3_se/native/moy_cores3/modmoy_cores3.c`, `native/moy_audio/moy_codec_aw88298.c`, `native/moy_input/moy_pad3.c` | [m5stack/M5GFX](https://github.com/m5stack/M5GFX), [m5stack/M5Unified](https://github.com/m5stack/M5Unified), [m5stack/M5Faces](https://github.com/m5stack/M5Faces) | MIT | **Yes** — transcribed to C |
 | AXS15231B init register values (Guition panel) | `firmware/guition_jc3248w535/native/moy_axs/modmoy_axs.c` | [esphome/esphome](https://github.com/esphome/esphome) | MIT (their Python half) | **Yes** — transcribed to C |
 | esptool-js 0.6.0 (the site's board flasher) | `site/vendor/esptool-js/` | [espressif/esptool-js](https://github.com/espressif/esptool-js) | Apache-2.0 | No |
 | `font_petme128_8x8` glyph data | `runtime/toolkit/font.py`; derived webfont `site/petme128.woff2` | [MicroPython](https://github.com/micropython/micropython) | MIT | No (re-encoded) |
@@ -171,7 +172,7 @@ Silead's GPL `gsl_point_id.c` finger-tracking algorithm.
 
 ### 2.4 ST7789 init register values — the T-Deck panel on mainline
 
-`firmware/lilygo_t_deck_plus_mainline/native/moy_lcd/modmoy_lcd.c`
+`native/moy_lcd/modmoy_lcd.c`
 (the `MOY_LCD_INIT` table and the MADCTL derivation above it)
 
 ESP-IDF's own ST7789 driver sends only `SLPOUT` / `MADCTL` / `COLMOD` and offers
@@ -198,6 +199,23 @@ the ones already proven on this exact glass by the fork build.
   the banded SRAM-bounce flush) is Moybyte's own work.
 - The Guition board's panel needs the same kind of entry for the same kind of
   reason; it is §2.6.
+
+### 2.4a M5Stack's CoreS3 values — the CoreS3 SE's panel, rails, amplifier and gamepad
+
+`native/moy_lcd/modmoy_lcd.c` (the `MOY_LCD_PANEL_ILI9342` table),
+`firmware/m5stack_cores3_se/native/moy_cores3/modmoy_cores3.c` (the AXP2101's
+and AW9523's power-on sequence, the DLDO1 light, the BM8563),
+`native/moy_audio/moy_codec_aw88298.c` (the amplifier's registers) and
+`native/moy_input/moy_pad3.c` (the Faces Gamepad3's registers and bits).
+
+- **Upstream:** M5GFX's `Panel_ILI9342` and CoreS3 board detection
+  (`pmic_ops`, `Light_M5StackCoreS3`), M5Unified's `Power_Class` and
+  `Speaker_Class` for the CoreS3, and M5Faces' `M5Faces_Gamepad3`, each in
+  [github.com/m5stack](https://github.com/m5stack).
+- **Licence:** MIT, © M5Stack Technology CO LTD.
+- **Modified: yes** — register values transcribed into C tables and calls over
+  the kernel's I2C bus; the drivers around them are Moybyte's.
+  `firmware/m5stack_cores3_se/README.md` lists each step and its source.
 
 ### 2.5 esptool-js — the website's board flasher
 
@@ -646,7 +664,7 @@ example's generated concept images (`references/`) are not taken.
 ### 3.4 Board pin assignments — LilyGO T-Deck
 
 `docs/boards/lilygo_t_deck_plus.md` and the constants derived from it in
-`firmware/lilygo_t_deck_plus_mainline/native/moy_lcd/modmoy_lcd.c` /
+`native/moy_lcd/modmoy_lcd.c` /
 `tdeck_display.py`. (It first landed in the `.moyproj` SDK, deleted
 2026-07-31; the board doc is the surviving citation.)
 

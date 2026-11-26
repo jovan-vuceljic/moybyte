@@ -256,6 +256,11 @@ no card, no audio, no carts run here); each is one line below and the reasoning
 is that file's."""
 
 [[native.shared.deny]]
+module = "moy_lcd"
+why = """
+The SPI-panel backend of the S3 handhelds. This board has no panel."""
+
+[[native.shared.deny]]
 module = "moy_usbdisk"
 why = "No card: the store is the internal flash (the XIAO's reason)."
 

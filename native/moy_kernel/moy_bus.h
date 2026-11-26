@@ -19,7 +19,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define MOY_BUS_DEVICES 4u      // the most devices one board's bus carries
+#define MOY_BUS_DEVICES 8u      // the most devices one board's bus carries (the CoreS3: 7)
 
 enum {
     MOY_BUS_OK = 0,

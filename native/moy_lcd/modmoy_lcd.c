@@ -1,4 +1,25 @@
-// Moybyte T-Deck mainline port: ST7789 SPI panel backend, no LVGL, no fork.
+// moy_lcd: the SPI panel backend of the S3 handhelds that PUSH 320x240 frames
+// down SPI2 -- the T-Deck's ST7789 and the CoreS3's ILI9342C -- one body, its
+// board facts read from the board's spi2 row (board.toml, as MOY_HW_SPI2_*)
+// and its mpconfigboard.h:
+//
+//   MOY_HW_SPI2_SCK/_MOSI/_MISO/_TFT_CS   the bus and the panel's select
+//   MOY_HW_SPI2_TFT_DC                    the panel's D/C; a board without it
+//                                         wires D/C to the MISO pad (the
+//                                         CoreS3, see D/C ON MISO below)
+//   MOY_HW_SPI2_SD_CS, _RADIO_CS          the bus's other selects, parked high
+//   MOY_HW_POWER_POWERON                  a rail raised before the bus
+//   MOY_HW_BACKLIGHT_BL                   a pulse-stepped light on a GPIO
+//                                         (the T-Deck's, see the light below)
+//   MOY_LCD_PANEL_ILI9342                 the ILI9342C's vendor block and
+//                                         its landscape-native MADCTL, where
+//                                         the ST7789's are the default
+//   MOY_LCD_PCLK_HZ                       the write clock
+//   MOY_LCD_BOARD_HOOKS                   the board's own C brings the rails
+//                                         up and drives the light:
+//                                         moy_lcd_board_up / _light below
+//
+// The T-Deck's notes, which hold for both:
 //
 // This is the T-Deck's answer to the P4's moy_dsi. The P4 scans a PSRAM
 // framebuffer continuously (DPI, no flush); the T-Deck has to PUSH 320x240
@@ -149,6 +170,11 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_vendor.h"   // pulls in esp_lcd_panel_st7789.h
 #include "esp_rom_sys.h"
+#ifndef MOY_HW_SPI2_TFT_DC
+#include "esp_rom_gpio.h"
+#include "soc/gpio_sig_map.h"
+#include "soc/spi_periph.h"
+#endif
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 
@@ -160,22 +186,37 @@
 #include "moy_fold.h"     // the GAME FOLD: the latch, the fence, the gather
 #include "moy_light.h"
 
-// ---- board facts (device/tdeck_*.py)
+// ---- board facts: the spi2 row (header)
 #define MOY_LCD_W            320
 #define MOY_LCD_H            240
 #define MOY_LCD_FB_BYTES     (MOY_LCD_W * MOY_LCD_H * 2)
 #define MOY_LCD_ROW_BYTES    (MOY_LCD_W * 2)
 
 #define MOY_LCD_SPI_HOST     SPI2_HOST   // == 1, the host moy_sd attaches to
-#define MOY_LCD_PIN_SCK      40
-#define MOY_LCD_PIN_MOSI     41
-#define MOY_LCD_PIN_MISO     38
-#define MOY_LCD_PIN_DC       11
-#define MOY_LCD_PIN_CS       12
-#define MOY_LCD_PIN_BL       42
-#define MOY_LCD_PIN_POWERON  10          // board power rail (peripherals + panel)
-#define MOY_LCD_PIN_SD_CS    39
-#define MOY_LCD_PIN_RADIO_CS 9           // the SX1262 off the bus until moy_lora adds its device
+#define MOY_LCD_PIN_SCK      MOY_HW_SPI2_SCK
+#define MOY_LCD_PIN_MOSI     MOY_HW_SPI2_MOSI
+#define MOY_LCD_PIN_MISO     MOY_HW_SPI2_MISO
+#define MOY_LCD_PIN_CS       MOY_HW_SPI2_TFT_CS
+#ifdef MOY_HW_SPI2_TFT_DC
+#define MOY_LCD_PIN_DC       MOY_HW_SPI2_TFT_DC
+#else
+// D/C ON MISO (the CoreS3): the panel is write-only and its D/C line is the
+// bus's MISO pad. The pad is the panel's D/C (a GPIO output) while a frame or
+// a command is on the wire and the card's MISO (the SPI input) while a card
+// session is open, which the SD guard serializes against frames: the turn is
+// moy_lcd_dc_pad below, M5GFX's Panel_M5StackCoreS3::cs_control in the vendor's
+// tree.
+#define MOY_LCD_PIN_DC       MOY_HW_SPI2_MISO
+#define MOY_LCD_DC_IS_MISO   1
+#endif
+
+#ifdef MOY_LCD_BOARD_HOOKS
+// The board's half of the bring-up, in its own tree: the rails and the panel's
+// reset before the bus exists (light off), and the light at a moy_light level,
+// answering the hardware step it set (0 off).
+esp_err_t moy_lcd_board_up(void);
+int moy_lcd_board_light(int level);
+#endif
 
 // The light's driver state (moy_lcd_kbacklight).
 static int s_bl_step;               // 0 off, 1..16
@@ -187,7 +228,9 @@ static portMUX_TYPE s_bl_mux = portMUX_INITIALIZER_UNLOCKED;
 // caps a write-only LCD at ~40 MHz. esp_lcd's divider clamps to what it can do.
 // Kept at the fork's requested value so the two builds are comparable; drop to
 // 62500000 then 40000000 if the panel tears or garbles.
+#ifndef MOY_LCD_PCLK_HZ
 #define MOY_LCD_PCLK_HZ      (80 * 1000 * 1000)
+#endif
 
 // Bands of 32 rows = 20480 B; two slots = 40960 B of internal DMA SRAM.
 //
@@ -334,12 +377,12 @@ static bool moy_lcd_trans_done(esp_lcd_panel_io_handle_t io,
     return false;
 }
 
-// One init-sequence entry: command + up to 14 params + a post-delay.
+// One init-sequence entry: command + up to 15 params + a post-delay.
 typedef struct {
     uint8_t cmd;
     uint8_t len;
     uint16_t delay_ms;
-    uint8_t data[14];
+    uint8_t data[15];
 } moy_lcd_cmd_t;
 
 // The vendor block IDF's esp_lcd_panel_st7789 does not send. Order and values
@@ -347,6 +390,27 @@ typedef struct {
 // the pieces esp_lcd_panel_reset/init already did (SWRESET, SLPOUT, MADCTL,
 // COLMOD) and minus the I80-only RAMCTRL byte-swap branch, which does not apply
 // to an SPI panel.
+#ifdef MOY_LCD_PANEL_ILI9342
+// The ILI9342C's vendor block (the CoreS3): M5GFX's Panel_ILI9342 list0, MIT
+// (lovyan03/LovyanGFX), minus what esp_lcd_panel_init already sent (SLPOUT,
+// MADCTL, COLMOD) and the DISPON/INVON this file sends after it. The ILI9342E
+// a later CoreS3 batch carries takes a different block, and an E answers the
+// read-back M5GFX's identify_panel_variant uses; this build sends the C's.
+static const moy_lcd_cmd_t MOY_LCD_INIT[] = {
+    { 0xC8,  3,  0, {0xFF, 0x93, 0x42} },               // SETEXTC
+    { 0xC0,  2,  0, {0x12, 0x12} },                     // PWCTR1
+    { 0xC1,  1,  0, {0x03} },                           // PWCTR2
+    { 0xC5,  1,  0, {0xF2} },                           // VMCTR1
+    { 0xB0,  1,  0, {0xE0} },
+    { 0xF6,  3,  0, {0x01, 0x00, 0x00} },
+    { CMD_PGC, 15, 0, {0x00, 0x0C, 0x11, 0x04, 0x11, 0x08, 0x37, 0x89,
+                       0x4C, 0x06, 0x0C, 0x0A, 0x2E, 0x34, 0x0F} },
+    { CMD_NGC, 15, 0, {0x00, 0x0B, 0x11, 0x05, 0x13, 0x09, 0x33, 0x67,
+                       0x48, 0x07, 0x0E, 0x0B, 0x2E, 0x33, 0x0F} },
+    { 0xB6,  4,  0, {0x08, 0x82, 0x1D, 0x04} },         // DFUNCTR
+    { 0x38,  0,  0, {0} },                              // IDMOFF
+};
+#else
 static const moy_lcd_cmd_t MOY_LCD_INIT[] = {
     { CMD_NORON,    0,  10, {0} },
     { CMD_B6,       2,   0, {0x0A, 0x82} },
@@ -364,6 +428,7 @@ static const moy_lcd_cmd_t MOY_LCD_INIT[] = {
     { CMD_NGC,     14,   0, {0xD0, 0x00, 0x02, 0x07, 0x0A, 0x28, 0x31,
                              0x54, 0x47, 0x0E, 0x1C, 0x17, 0x1B, 0x1E} },
 };
+#endif
 
 static void moy_lcd_park_pin(int gpio, int level) {
     gpio_config_t cfg = {
@@ -400,16 +465,29 @@ static esp_err_t moy_lcd_bringup(int nfbs, int pclk_hz, const char **what) {
     // which is what the fork's tdeck_board.init_board_pins does; what the hard
     // constraints forbid is re-creating a Pin on TFT_CS/SD_CS AFTERWARDS, while
     // a driver owns it.
-    moy_lcd_park_pin(MOY_LCD_PIN_POWERON, 1);
-    moy_lcd_park_pin(MOY_LCD_PIN_SD_CS, 1);
-    moy_lcd_park_pin(MOY_LCD_PIN_RADIO_CS, 1);
+    #ifdef MOY_HW_POWER_POWERON
+    moy_lcd_park_pin(MOY_HW_POWER_POWERON, 1);
+    #endif
+    #ifdef MOY_HW_SPI2_SD_CS
+    moy_lcd_park_pin(MOY_HW_SPI2_SD_CS, 1);
+    #endif
+    #ifdef MOY_HW_SPI2_RADIO_CS
+    moy_lcd_park_pin(MOY_HW_SPI2_RADIO_CS, 1);  // the SX1262 off the bus until moy_lora adds its device
+    #endif
     moy_lcd_park_pin(MOY_LCD_PIN_CS, 1);
     // Backlight OFF until the first composed frame has been flushed (#45): the
-    // ST7789's power-on GRAM is noise and the user must never see it lit.
-    moy_lcd_park_pin(MOY_LCD_PIN_BL, 0);
+    // panel's power-on GRAM is noise and the user must never see it lit.
+    #ifdef MOY_HW_BACKLIGHT_BL
+    moy_lcd_park_pin(MOY_HW_BACKLIGHT_BL, 0);
+    #endif
+    #ifdef MOY_LCD_BOARD_HOOKS
+    MOY_LCD_TRY(moy_lcd_board_up(), "board rails");
+    #endif
     s_bl_step = 0;
     s_bl_off_us = esp_timer_get_time();
+    #ifndef MOY_LCD_DC_IS_MISO
     gpio_set_pull_mode(MOY_LCD_PIN_MISO, GPIO_PULLUP_ONLY);
+    #endif
 
     // Framebuffers in PSRAM, bounce buffers in internal DMA-capable SRAM.
     // Allocated BEFORE the bus so a memory failure leaves nothing half-built.
@@ -473,8 +551,11 @@ static esp_err_t moy_lcd_bringup(int nfbs, int pclk_hz, const char **what) {
                                            &io_cfg, &s_io), "panel_io_spi");
 
     esp_lcd_panel_dev_config_t panel_cfg = {
-        // The T-Deck does not wire a panel reset GPIO; esp_lcd falls back to a
-        // SWRESET over SPI, which is what the fork's driver did too.
+        // No panel reset GPIO: the T-Deck wires none and the CoreS3's is its
+        // IO expander's (moy_lcd_board_up pulses it); esp_lcd sends a SWRESET
+        // over SPI, which is what the fork's driver did too. esp_lcd's ST7789
+        // object is the generic MIPI-DCS one (SWRESET, SLPOUT, MADCTL, COLMOD),
+        // which the ILI9342C answers the same.
         .reset_gpio_num = -1,
         .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR,
         .bits_per_pixel = 16,
@@ -486,10 +567,16 @@ static esp_err_t moy_lcd_bringup(int nfbs, int pclk_hz, const char **what) {
     MOY_LCD_TRY(esp_lcd_panel_init(s_panel), "init");   // SLPOUT + MADCTL + COLMOD
     vTaskDelay(pdMS_TO_TICKS(10));
 
+    #ifdef MOY_LCD_PANEL_ILI9342
+    // The ILI9342C is landscape-native: the BGR bit alone, 0x08 (M5GFX's
+    // rotation 0 on the CoreS3).
+    s_madctl = 0x08;
+    #else
     // Landscape: MV|MX (+ the BGR bit the panel config already carries) == 0x68.
     MOY_LCD_TRY(esp_lcd_panel_swap_xy(s_panel, true), "swap_xy");
     MOY_LCD_TRY(esp_lcd_panel_mirror(s_panel, true, false), "mirror");
     s_madctl = 0x68;
+    #endif
 
     for (size_t i = 0; i < MP_ARRAY_SIZE(MOY_LCD_INIT); i++) {
         const moy_lcd_cmd_t *c = &MOY_LCD_INIT[i];
@@ -545,6 +632,11 @@ int moy_lcd_kpresent(void) {
 #define MOY_LCD_BL_OFF_US 3000      // low this long and the driver is off
 #define MOY_LCD_BL_ON_US 30         // raised from off, settled at the top step
 
+#ifdef MOY_LCD_BOARD_HOOKS
+void moy_lcd_kbacklight(int level) {
+    s_bl_step = moy_lcd_board_light(level);
+}
+#else
 void moy_lcd_kbacklight(int level) {
     int want = level <= 0 ? 0
              : (level * MOY_LCD_BL_STEPS + MOY_LIGHT_FULL - 1) / MOY_LIGHT_FULL;
@@ -555,7 +647,7 @@ void moy_lcd_kbacklight(int level) {
         return;
     }
     if (want == 0) {
-        gpio_set_level(MOY_LCD_PIN_BL, 0);
+        gpio_set_level(MOY_HW_BACKLIGHT_BL, 0);
         s_bl_off_us = esp_timer_get_time();
         s_bl_step = 0;
         return;
@@ -565,21 +657,22 @@ void moy_lcd_kbacklight(int level) {
         if (low < MOY_LCD_BL_OFF_US) {
             esp_rom_delay_us((uint32_t)(MOY_LCD_BL_OFF_US - low));
         }
-        gpio_set_level(MOY_LCD_PIN_BL, 1);
+        gpio_set_level(MOY_HW_BACKLIGHT_BL, 1);
         esp_rom_delay_us(MOY_LCD_BL_ON_US);
         s_bl_step = MOY_LCD_BL_STEPS;
     }
     int pulses = (MOY_LCD_BL_STEPS + s_bl_step - want) % MOY_LCD_BL_STEPS;
     portENTER_CRITICAL(&s_bl_mux);
     for (int i = 0; i < pulses; i++) {
-        gpio_set_level(MOY_LCD_PIN_BL, 0);
+        gpio_set_level(MOY_HW_BACKLIGHT_BL, 0);
         esp_rom_delay_us(1);
-        gpio_set_level(MOY_LCD_PIN_BL, 1);
+        gpio_set_level(MOY_HW_BACKLIGHT_BL, 1);
         esp_rom_delay_us(1);
     }
     portEXIT_CRITICAL(&s_bl_mux);
     s_bl_step = want;
 }
+#endif
 
 // The light's hardware setting now: the driver's step, 0 off .. 16.
 int moy_lcd_klight(void) {
@@ -674,7 +767,27 @@ static MP_DEFINE_CONST_FUN_OBJ_0(moy_lcd_nfbs_obj, moy_lcd_nfbs);
 // before its polling command, which is the timed-out-flush recovery this
 // board's THREADING note describes -- and the reason the engine restarts its
 // band counters only AFTER this returns (moy_flush.h's RESET-ORDER INVARIANT).
+#ifdef MOY_LCD_DC_IS_MISO
+// The shared pad's turn (D/C ON MISO): the panel's D/C, a GPIO output, for a
+// frame or a command; the card's MISO, the SPI input, for a card session. Only
+// the feeder (a frame) and a drained VM (a command, a session) turn it.
+static void moy_lcd_dc_pad(bool card) {
+    if (card) {
+        gpio_set_direction(MOY_LCD_PIN_DC, GPIO_MODE_INPUT);
+        esp_rom_gpio_connect_in_signal(MOY_LCD_PIN_DC,
+                                       spi_periph_signal[MOY_LCD_SPI_HOST].spiq_in, false);
+    } else {
+        gpio_set_direction(MOY_LCD_PIN_DC, GPIO_MODE_OUTPUT);
+        esp_rom_gpio_connect_out_signal(MOY_LCD_PIN_DC, SIG_GPIO_OUT_IDX, false, false);
+    }
+}
+#define MOY_LCD_DC_PAD(card) moy_lcd_dc_pad(card)
+#else
+#define MOY_LCD_DC_PAD(card) ((void)0)
+#endif
+
 static esp_err_t moy_lcd_frame_begin(void) {
+    MOY_LCD_DC_PAD(false);
     uint8_t p[4];
     p[0] = 0; p[1] = 0; p[2] = (MOY_LCD_W - 1) >> 8; p[3] = (MOY_LCD_W - 1) & 0xFF;
     esp_err_t err = esp_lcd_panel_io_tx_param(s_io, CMD_CASET, p, 4);
@@ -720,6 +833,9 @@ static esp_err_t moy_lcd_queue_band(uint8_t *slot, const uint8_t *src, int k,
 // needs one CS assertion), so the window arm takes nothing back.
 static void moy_lcd_frame_end(bool ok) {
     (void)ok;
+    if (s_sd_guard) {
+        MOY_LCD_DC_PAD(true);
+    }
     moy_fold_end();
 }
 
@@ -833,6 +949,7 @@ static void sd_gate(int on, bool gil) {
             } else {
                 moy_flush_kdrain();
             }
+            MOY_LCD_DC_PAD(true);
         }
     } else {
         portENTER_CRITICAL(&s_guard_mux);
@@ -846,6 +963,13 @@ static void sd_gate(int on, bool gil) {
 static void moy_lcd_sd_gate(int on) {
     sd_gate(on, false);
 }
+
+#ifdef MOY_LCD_DC_IS_MISO
+// native/moy_sd's every card transfer, the card's MISO being the D/C pad.
+void moy_lcd_card_gate(int on) {
+    sd_gate(on, false);
+}
+#endif
 
 static mp_obj_t moy_lcd_sd_guard(mp_obj_t on_in) {
     sd_gate(mp_obj_is_true(on_in), true);
@@ -1144,6 +1268,7 @@ static mp_obj_t moy_lcd_set_madctl(mp_obj_t v_in) {
     // 2026-08-21 -- the rule was written down two paragraphs from a verb that
     // broke it, and moy_axs's twin verb had it from the start.)
     moy_flush_drain();
+    MOY_LCD_DC_PAD(false);
     moy_lcd_check(esp_lcd_panel_io_tx_param(s_io, CMD_MADCTL, &v, 1), "madctl");
     s_madctl = v;
     return mp_const_none;
@@ -1262,7 +1387,7 @@ static const mp_rom_map_elem_t moy_lcd_module_globals_table[] = {
     // same reason; nothing downstream should byte-swap again.
     { MP_ROM_QSTR(MP_QSTR_BYTE_SWAP),  MP_ROM_TRUE },
     { MP_ROM_QSTR(MP_QSTR_SPI_HOST),   MP_ROM_INT(MOY_LCD_SPI_HOST) },
-    { MP_ROM_QSTR(MP_QSTR_SD_CS),      MP_ROM_INT(MOY_LCD_PIN_SD_CS) },
+    { MP_ROM_QSTR(MP_QSTR_SD_CS),      MP_ROM_INT(MOY_HW_SPI2_SD_CS) },
 };
 static MP_DEFINE_CONST_DICT(moy_lcd_module_globals, moy_lcd_module_globals_table);
 

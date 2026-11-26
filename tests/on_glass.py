@@ -2383,6 +2383,9 @@ def sd_card_io_allocates_nothing(board, caps, saves=True):
     check returns."""
     if not board.pyval("__import__('moy_sd').sector_count()", strict=True):
         pytest.skip("no card in the slot")
+    root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
+    if not root.startswith("/sd"):
+        pytest.skip("the card's volume did not mount (the store is %s)" % root)
     board.pyexec(_SD_SQUEEZE, strict=True)
     got = board.pyval("(getattr(ws, 'with_sd', None) or (lambda fn: fn()))"
                       "(lambda: ws._g['_sd_io'](%d))" % caps, timeout=30, strict=True)

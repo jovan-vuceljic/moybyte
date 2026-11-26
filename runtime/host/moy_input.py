@@ -206,7 +206,7 @@ _LIB = [None]
 
 # This module's share of the host's one library (runtime/host/host_native.py).
 PART = native_build.Part("input", ("moy_input.h", "moy_event.h", "moy_htab.h", "moy_touch.h", "moy_drivers.h",
-                                   "moy_hid.h", "moy_touch.c", "moy_kbd.c", "moy_touchdev.c",
+                                   "moy_hid.h", "moy_touch.c", "moy_kbd.c", "moy_touchdev.c", "moy_pad3.c",
                                    "moy_hid.c"), (_INPUT, _SPINE), shim=_SHIM)
 
 
@@ -948,6 +948,13 @@ _DRV_SIGS = (
     ("moy_kbd_sizeof", [], ctypes.c_size_t),
     ("moy_kbd_raw_key", [ctypes.c_size_t, ctypes.POINTER(_U8), ctypes.POINTER(_U8),
                          ctypes.POINTER(_U8), ctypes.POINTER(_U8)], _I),
+    ("moy_pad3_buttons", [_U8], _U32),
+    ("moy_pad3_held", [_U8, _B], _U32),
+    ("moy_pad3_typed", [_U8, _U8, _B], _I),
+    ("moy_pad3_init", [_P, _P, _U32], None),
+    ("moy_pad3_probe", [_P, _POPS], None),
+    ("moy_pad3_pass", [_P, _POPS], None),
+    ("moy_pad3_sizeof", [], ctypes.c_size_t),
     ("moy_touchdev_init", [_PTOUCH, _U8, _U8, ctypes.POINTER(_Map), _B, ctypes.c_float, _I32],
      None),
     ("moy_touchdev_probe", [_PTOUCH, _POPS], None),
@@ -965,7 +972,7 @@ _DRV_SIGS = (
     ("moy_touch_hold", [ctypes.POINTER(_Held), _U32, ctypes.POINTER(_Pt)], None),
 )
 
-GT911, GSL3680, AXS = 1, 2, 3
+GT911, GSL3680, AXS, FT6X36 = 1, 2, 3, 4
 KBD_ADDR = 0x55
 KBD_HOLD_MS = 260
 KBD_ERR_RUN = 10
@@ -1042,6 +1049,41 @@ class KbdDriver(_Fields):
     @RAW_GAME_MODE.setter
     def RAW_GAME_MODE(self, on):
         self._s.raw_game = bool(on)
+
+
+def pad3_buttons(raw):
+    """The Faces Gamepad3's byte (active low) as the button names it holds."""
+    bits = _lib().moy_pad3_buttons(raw)
+    return tuple(n for i, n in enumerate(NAMES) if bits & (1 << i))
+
+
+def pad3_held(raw, game=False):
+    """The held names of the Gamepad3's byte with Select as the shift."""
+    bits = _lib().moy_pad3_held(raw, bool(game))
+    return tuple(n for i, n in enumerate(NAMES) if bits & (1 << i))
+
+
+def pad3_typed(was, raw, quiet=False):
+    """The key a change of the Gamepad3's byte types, "" for none."""
+    k = _lib().moy_pad3_typed(was, raw, bool(quiet))
+    return chr(k) if k else ""
+
+
+class Pad3Driver:
+    """The Faces Gamepad3's driver (moy_pad3.c) over `i2c`, writing `table`'s
+    "pad" source: probe() it, pass_() is one input-task pass (ungated)."""
+
+    def __init__(self, table, i2c):
+        self._s = ctypes.create_string_buffer(_lib().moy_pad3_sizeof())
+        self.bus = Bus(i2c)
+        self.source = table.source("pad")
+        _lib().moy_pad3_init(self._s, table._t, self.source.h)
+
+    def probe(self):
+        _lib().moy_pad3_probe(self._s, ctypes.byref(self.bus.ops))
+
+    def pass_(self):
+        _lib().moy_pad3_pass(self._s, ctypes.byref(self.bus.ops))
 
 
 class TouchDriver(_Fields):

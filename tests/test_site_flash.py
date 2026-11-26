@@ -421,6 +421,8 @@ def test_the_fetcher_and_the_workflow_agree_on_artifact_names():
         # waits for the board to be proven on glass and for the release
         # pipeline's names (OTA_IMAGES, fetch_ci_firmware.BOARDS, site/build.py).
         "elecrow_p4": "port in bring-up, no published image yet",
+        # The CoreS3 SE likewise, from its port (2026-11-26).
+        "cores3": "port in bring-up, no published image yet",
     }
     assert set(fetch.BOARDS) - set(rows) == set(), (
         "the site offers a board CI does not build: %s"

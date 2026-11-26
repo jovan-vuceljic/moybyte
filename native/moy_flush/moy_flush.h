@@ -1,7 +1,7 @@
 // moy_flush: the SHARED banded-flush engine under the two S3 panel drivers
-// (the T-Deck's moy_lcd/ST7789-over-esp_lcd and the Guition's moy_axs/QSPI-
-// over-raw-spi_master). It is a support library, not a MicroPython module --
-// it registers nothing; each board's panel module links it and keeps its own
+// (moy_lcd, SPI over esp_lcd -- the T-Deck's ST7789 and the CoreS3's ILI9342C
+// -- and the Guition's moy_axs/QSPI-over-raw-spi_master). It is a support
+// library, not a MicroPython module -- it registers nothing; each panel module links it and keeps its own
 // verb table. Boards without a flush at all deny it in board.toml (the P4
 // scans a PSRAM framebuffer continuously and has no bands to feed).
 //

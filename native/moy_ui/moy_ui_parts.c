@@ -3096,7 +3096,8 @@ int moy_ui_hint_input(void) {
 // Each action's name.
 static const char *const ACT_NAMES[MOY_UI_ACTS] = {"confirm", "back", "change", "tabs", "menu",
                                                    "cancel", "flip", "rotate", "shift", "clear",
-                                                   "copy", "more", "search", "move", "scroll"};
+                                                   "copy", "more", "search", "move", "scroll",
+                                                   "options"};
 
 // The keys each input does each action with. The T-Deck's are its keyboard's
 // (native/moy_input/moy_kbd.c): Enter is `run`, K is `b` (back, as the bar's
@@ -3113,6 +3114,24 @@ static const char *const ACT_NAMES[MOY_UI_ACTS] = {"confirm", "back", "change", 
 // gamepad reaches them through its more menu, on Y (2026-10-19). Search is
 // the slash a keyboard types: on the T-Deck the Sym+G chord (moy_kbd.c's
 // symbol layer).
+//
+// A board whose pad has no shoulders or no X and Y names its chords for those
+// (the CoreS3's Gamepad3: Select is the shift, native/moy_input/moy_pad3.c),
+// in its mpconfigboard.h.
+#if defined(__has_include)
+#if __has_include("sdkconfig.h") && __has_include("py/mpconfig.h")
+#include "py/mpconfig.h"
+#endif
+#endif
+#ifndef MOY_UI_PAD_TABS
+#define MOY_UI_PAD_TABS "L R"
+#endif
+#ifndef MOY_UI_PAD_MORE
+#define MOY_UI_PAD_MORE "Y"
+#endif
+#ifndef MOY_UI_PAD_OPTIONS
+#define MOY_UI_PAD_OPTIONS "X"
+#endif
 // A keyboard's console key is its GUI key; a browser page's is a lone Alt
 // tap, since the OS takes Super before a page sees it
 // (firmware/web_runner/page_core.html, THE CONSOLE KEY'S FALLBACK).
@@ -3123,12 +3142,12 @@ static const char *const ACT_NAMES[MOY_UI_ACTS] = {"confirm", "back", "change", 
 #endif
 static const char *const ACT_KEYS[MOY_UI_INPUTS][MOY_UI_ACTS] = {
     {"enter", "Esc", "left right", "Q E", KEYS_START, "Esc", "F V", "R", "left right up down",
-     "Del", "Ctrl C", "M", "/", "up down left right", "up down"},
+     "Del", "Ctrl C", "M", "/", "up down left right", "up down", ""},
     {"enter", "K", "A D ball_lr", "Q E", "Mic", "Mic", "F V", "R", "", "Del", "", "M", "Sym G",
-     "WASD", "W S"},
-    {"A", "B", "dpad_lr", "L R", "Start", "B", "", "", "", "", "", "Y", "", "up down left right",
-     "up down"},
-    {"", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+     "WASD", "W S", ""},
+    {"A", "B", "dpad_lr", MOY_UI_PAD_TABS, "Start", "B", "", "", "", "", "", MOY_UI_PAD_MORE, "",
+     "up down left right", "up down", MOY_UI_PAD_OPTIONS},
+    {"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
 };
 
 static int span_is(moy_ui_span_t k, const char *s) {

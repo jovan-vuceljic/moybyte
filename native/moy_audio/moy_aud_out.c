@@ -27,6 +27,7 @@
 //   MOY_HW_SPEAKER_BCK, _WS, _DOUT      the I2S pins (required)
 //   MOY_HW_SPEAKER_MCLK                 the master clock pin, where a codec needs one
 //   MOY_AUDIO_CODEC_ES8311              the codec on the kernel's I2C bus (moy_codec_es8311.c)
+//   MOY_AUDIO_CODEC_AW88298             the I2S amplifier on the kernel's I2C bus (moy_codec_aw88298.c)
 //   MOY_HW_SPEAKER_PA                   the amplifier's enable, driven high once the codec is up
 //   MOY_AUDIO_PA_ACTIVE_LOW             ... or low, where the amplifier's control pin is active low
 //   MOY_AUDIO_RATE                      the output rate, 22050 unless named
@@ -63,6 +64,12 @@
 
 #if MOY_AUDIO_CODEC_ES8311
 #include "moy_codec_es8311.h"
+#endif
+#if MOY_AUDIO_CODEC_AW88298
+#include "moy_codec_aw88298.h"
+#define CODEC_PHILIPS 1
+#elif MOY_AUDIO_CODEC_ES8311
+#define CODEC_PHILIPS 1
 #endif
 
 #ifndef MOY_AUDIO_RATE
@@ -183,7 +190,7 @@ static int chan_open(int desc, int frames) {
 #endif
     i2s_std_config_t sc = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)MOY_AUDIO_RATE),
-#if MOY_AUDIO_CODEC_ES8311
+#ifdef CODEC_PHILIPS
         // Philips I2S, a mono sample on both slots: the codec's DAC reads the left.
         .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT,
                                                         SLOT_MODE),
@@ -202,7 +209,7 @@ static int chan_open(int desc, int frames) {
             .invert_flags = {.mclk_inv = false, .bclk_inv = false, .ws_inv = false},
         },
     };
-#if MOY_AUDIO_CODEC_ES8311
+#ifdef CODEC_PHILIPS
     sc.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
     sc.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
 #endif
@@ -385,6 +392,18 @@ int moy_aud_out_start(void) {
     // The codec takes its clocks from the channel's MCLK, so it is set up
     // with the channel running (silence) and the amplifier still off.
     const char *why = moy_es8311_init(MOY_AUDIO_RATE);
+    if (why != NULL) {
+        s_why = why;
+        i2s_channel_disable(s_tx);
+        i2s_del_channel(s_tx);
+        s_tx = NULL;
+        return s_state;
+    }
+#endif
+#if MOY_AUDIO_CODEC_AW88298
+    // The amplifier clocks from BCK, so it is set up with the channel running
+    // (silence).
+    const char *why = moy_aw88298_init(MOY_AUDIO_RATE);
     if (why != NULL) {
         s_why = why;
         i2s_channel_disable(s_tx);

@@ -388,6 +388,13 @@ stage that revisits it. moy_sd crosses: the TF card on SPI3 is opened by it
 and read through native/moy_store's card volume."""
 
 [[native.shared.deny]]
+module = "moy_lcd"
+why = """
+This board's panel is the AXS15231B on QSPI, driven by its own moy_axs over the
+shared moy_flush engine; moy_lcd is the SPI-panel backend of the T-Deck and the
+CoreS3, whose pins it reads from a spi2 row this board does not have."""
+
+[[native.shared.deny]]
 module = "moy_usbdisk"
 why = """
 USB mass storage is the P4s' and the T-Deck's (docs/os_2026-11/between_apps.md

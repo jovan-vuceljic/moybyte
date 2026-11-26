@@ -571,7 +571,7 @@ def test_the_strip_shows_the_verbs_the_input_has_keys_for(tmp_path, kind, monkey
         ui_draw.input_kind(kind)
         items, verbs = home._hint_groups()
         if kind == "pad":
-            assert (items, verbs) == (["confirm", "Play", "X", "Options"],
+            assert (items, verbs) == (["confirm", "Play", "options", "Options"],
                                       ["play", "options"])
         else:
             assert verbs == ["play", "change", "search", "favourite"]
@@ -582,7 +582,7 @@ def test_the_strip_shows_the_verbs_the_input_has_keys_for(tmp_path, kind, monkey
         monkeypatch.setattr(home, "zone_verbs", lambda: ("new", "change", "copy", "delete"))
         items, verbs = home._hint_groups()
         if kind == "pad":
-            assert (items, verbs) == (["confirm", "Change", "X", "Options"],
+            assert (items, verbs) == (["confirm", "Change", "options", "Options"],
                                       ["change", "options"])
         else:
             assert items[::2] == ["N", "C", "Y", "X"]

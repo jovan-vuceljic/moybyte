@@ -199,6 +199,7 @@ int moy_clock_server(const char *name) {
 // where the image takes moy_kernel.
 #include "moy_evq.h"
 #pragma weak moy_evq_clock
+#pragma weak moy_board_rtc_set
 
 // lwIP's SNTP client sets the clock through this (ESP-IDF's is weak): the
 // answer, Unix time, on the board's epoch, and the mark; the step told to the
@@ -214,6 +215,16 @@ void sntp_sync_time(struct timeval *tv) {
     }
     sntp_set_sync_status(SNTP_SYNC_STATUS_COMPLETED);
     s_clk.at = (int64_t)tv->tv_sec;
+    s_clk.mark = CLOCK_MARK;
+    if (moy_board_rtc_set != NULL) {
+        moy_board_rtc_set((int64_t)tv->tv_sec);
+    }
+}
+
+void moy_clock_restore(int64_t unix_s) {
+    struct timeval t = {(time_t)(unix_s - CLOCK_EPOCH), 0};
+    settimeofday(&t, NULL);
+    s_clk.at = unix_s;
     s_clk.mark = CLOCK_MARK;
 }
 
