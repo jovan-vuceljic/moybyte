@@ -6240,8 +6240,8 @@ static int pn_pane_keyed(uit_t *e, int k, const char *key, size_t n)
     return -1;
 }
 
-// The pane shown over the whole panes area, else -1: the grown one, else the focused one
-// where the area is under the outermost panes' least size.
+// The pane shown over the whole panes area, else -1: the grown one, the one pane of panes that
+// hold no other, else the focused one where the area is under the outermost panes' least size.
 static int pn_alone(uit_t *e, int k, const int32_t r[4])
 {
     const uit_node_t *N = NODE(k);
@@ -6251,6 +6251,11 @@ static int pn_alone(uit_t *e, int k, const int32_t r[4])
         if (p >= 0)
             return p;
     }
+    int only = -1, n = 0;
+    KIDS(k, g)
+    only = g, n++;
+    if (n == 1 && NODE(only)->kind == UIT_PANE)
+        return only;
     if (r[2] < pn_min(e, k, 0) || r[3] < pn_min(e, k, 1)) {
         int p = e->pane_cur >= 0 ? pn_pane_in(e, k, e->pane_cur) : -1;
         return p >= 0 ? p : pn_pane_in(e, k, -1);
