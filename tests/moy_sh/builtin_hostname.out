@@ -1,0 +1,7 @@
+$ # the console's network name, as its SSH server and mDNS announce it
+$ hostname
+moybyte-1a2b
+$ hostname box; echo bad=$?
+usage: hostname
+bad=1
+[exit 0]

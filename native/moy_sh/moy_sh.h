@@ -28,7 +28,8 @@
 //
 // BUILT-INS are dash's own (cd, echo, test, printf, read, set, export, jobs,
 // kill, ...), the C core over the kernel's tables and the store
-// (moy_sh_cmds.c: the file commands, ps, free, df, log, date, sleep, ...)
+// (moy_sh_cmds.c: the file commands, ps, free, df, log, date, sleep, ...;
+// ifconfig, nslookup and ping over the kernel's station and lwIP, moy_net.h)
 // and the commands of the console's services (`roles`), which the host serves
 // (`role`) and refuses with "needs the console" while the VM is stopped.
 //

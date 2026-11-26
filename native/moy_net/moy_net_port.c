@@ -1094,3 +1094,148 @@ void moy_slot_abort(void) {
     s_closed = 0;
 }
 #endif
+
+// -- the shell's resolver and echo (moy_net.h: ping, nslookup) ---------------------
+
+#if defined(ESP_PLATFORM)
+#include "esp_netif.h"
+#include "lwip/dns.h"
+#include "lwip/icmp.h"
+#include "lwip/inet_chksum.h"
+#include "lwip/prot/ip4.h"
+
+#define ECHO_DATA 56                    // an echo's payload, ping's default
+
+// The resolver's one slot: the query out (0 none), its answer's state (0
+// asked, 1 answered, minus an errno) and its address. lwIP answers on its
+// own task, possibly long after the asker gave up, so the answer lands here
+// and never in the asker's memory; one for an earlier query is dropped.
+static struct {
+    volatile uint32_t q, next;
+    volatile int state;
+    uint32_t ip;
+} s_ask;
+
+static void found(const char *name, const ip_addr_t *ip, void *arg) {
+    (void)name;
+    if ((uint32_t)(uintptr_t)arg != s_ask.q) {
+        return;
+    }
+    if (ip != NULL && IP_IS_V4(ip)) {
+        s_ask.ip = ip_2_ip4(ip)->addr;
+        __atomic_store_n(&s_ask.state, 1, __ATOMIC_RELEASE);
+    } else {
+        __atomic_store_n(&s_ask.state, -ENOENT, __ATOMIC_RELEASE);
+    }
+}
+
+typedef struct {
+    const char *name;
+    uint32_t q;
+} ask_t;
+
+// On lwIP's task (esp_netif_tcpip_exec), where its resolver may be called.
+static esp_err_t ask_here(void *arg) {
+    ask_t *a = arg;
+    ip_addr_t ip;
+    s_ask.q = a->q;
+    s_ask.state = 0;
+    #if LWIP_IPV4 && LWIP_IPV6
+    err_t e = dns_gethostbyname_addrtype(a->name, &ip, found, (void *)(uintptr_t)a->q,
+                                         LWIP_DNS_ADDRTYPE_IPV4);
+    #else
+    err_t e = dns_gethostbyname(a->name, &ip, found, (void *)(uintptr_t)a->q);
+    #endif
+    if (e == ERR_OK) {
+        found(a->name, &ip, (void *)(uintptr_t)a->q);
+    } else if (e != ERR_INPROGRESS) {
+        s_ask.state = e == ERR_MEM ? -ENOMEM : -ENOENT;
+    }
+    return ESP_OK;
+}
+
+int moy_net_resolve(const char *name) {
+    if (offline()) {
+        return -MOY_NET_ENET;
+    }
+    ask_t a = { name, 0 };
+    do {
+        a.q = ++s_ask.next & 0x7fffffffu;
+    } while (a.q == 0u);
+    return esp_netif_tcpip_exec(ask_here, &a) == ESP_OK ? (int)a.q : -ENOMEM;
+}
+
+int moy_net_resolved(int q, uint32_t *ip) {
+    int st = __atomic_load_n(&s_ask.state, __ATOMIC_ACQUIRE);
+    uint32_t at = s_ask.ip;
+    if (s_ask.q != (uint32_t)q) {
+        return -EBUSY;
+    }
+    if (st == 1) {
+        *ip = at;
+    }
+    return st;
+}
+
+int moy_net_echo_open(void) {
+    if (offline()) {
+        return -MOY_NET_ENET;
+    }
+    int fd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+    if (fd < 0) {
+        return -(errno ? errno : ENOMEM);
+    }
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
+    return fd;
+}
+
+int moy_net_echo_send(int fd, uint32_t ip, uint16_t id, uint16_t seq) {
+    uint8_t pkt[sizeof(struct icmp_echo_hdr) + ECHO_DATA];
+    struct icmp_echo_hdr *h = (struct icmp_echo_hdr *)pkt;
+    memset(h, 0, sizeof *h);
+    ICMPH_TYPE_SET(h, ICMP_ECHO);
+    h->id = lwip_htons(id);
+    h->seqno = lwip_htons(seq);
+    for (size_t i = 0; i < ECHO_DATA; i++) {
+        pkt[sizeof *h + i] = (uint8_t)i;
+    }
+    h->chksum = inet_chksum(pkt, sizeof pkt);
+    struct sockaddr_in to;
+    memset(&to, 0, sizeof to);
+    to.sin_family = AF_INET;
+    to.sin_addr.s_addr = ip;
+    ssize_t n = sendto(fd, pkt, sizeof pkt, 0, (struct sockaddr *)&to, sizeof to);
+    return n == (ssize_t)sizeof pkt ? 0 : -(errno ? errno : EIO);
+}
+
+// lwIP hands a raw socket the whole IPv4 packet, its header first: the TTL
+// is there, and the ICMP message after it. Any other ICMP (another echo's
+// reply, an unreachable) is passed over.
+int moy_net_echo_recv(int fd, uint32_t ip, uint16_t id, uint16_t *seq, uint8_t *ttl) {
+    uint8_t buf[IP_HLEN + sizeof(struct icmp_echo_hdr) + ECHO_DATA + 8];
+    for (;;) {
+        struct sockaddr_in from;
+        socklen_t fl = sizeof from;
+        ssize_t n = recvfrom(fd, buf, sizeof buf, MSG_DONTWAIT, (struct sockaddr *)&from, &fl);
+        if (n < 0) {
+            return errno == EAGAIN || errno == EWOULDBLOCK ? 0 : -errno;
+        }
+        const struct ip_hdr *iph = (const struct ip_hdr *)buf;
+        size_t hl = (size_t)IPH_HL(iph) * 4u;
+        if ((size_t)n < IP_HLEN || (size_t)n < hl + sizeof(struct icmp_echo_hdr)) {
+            continue;
+        }
+        const struct icmp_echo_hdr *h = (const struct icmp_echo_hdr *)(buf + hl);
+        if (ICMPH_TYPE(h) != ICMP_ER || lwip_ntohs(h->id) != id || from.sin_addr.s_addr != ip) {
+            continue;
+        }
+        *seq = lwip_ntohs(h->seqno);
+        *ttl = IPH_TTL(iph);
+        return (int)((size_t)n - hl);
+    }
+}
+
+void moy_net_echo_close(int fd) {
+    close(fd);
+}
+#endif

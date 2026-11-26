@@ -12,4 +12,17 @@ $ touch /.interrupt; sleep 5
 caught
 $ echo trapped=$?
 trapped=0
+$ # ping's summary is said at Ctrl-C too, and the radio's hold goes with it
+$ echo 30 > /.interrupt; ping router.lan
+PING router.lan (10.0.0.1) 56(84) bytes of data.
+64 bytes from 10.0.0.1: icmp_seq=1 ttl=64 time=20.0 ms
+
+--- router.lan ping statistics ---
+1 packets transmitted, 1 received, 0% packet loss, time 290ms
+rtt min/avg/max/mdev = 20.000/20.000/20.000/0.000 ms
+caught
+$ echo pinged=$?
+pinged=130
+$ cat /.radio
+0
 [exit 0]

@@ -200,8 +200,10 @@ ports, flash, push, reboot, screenshots — are the `on-glass` skill
   `media` (the media service's run while a URL of its list may play, held
   under the run's own pid and let go by its end in C,
   `runtime/system/dev_media.py`), `ssh` (the SSH server while a password
-  is set, `runtime/system/ssh_service.py`) and `native` (a native command
-  from its first socket to its end, `runtime/run/elf_run.py`). `cart`,
+  is set, `runtime/system/ssh_service.py`), `native` (a native command
+  from its first socket to its end, `runtime/run/elf_run.py`) and `sh`
+  (the shell's network commands while one runs: `ping` and `nslookup` in
+  C, `native/moy_sh/moy_sh_cmds.c`, which works with no VM). `cart`,
   `http`, `media` and `native` are a process's (`console_spine.PROC_TAGS`):
   held under its pid in a lease row it owns, so its end (`moy_lease_sweep`)
   lets exactly its holds go and another process's survive.

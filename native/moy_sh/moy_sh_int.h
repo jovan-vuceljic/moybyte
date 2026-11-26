@@ -89,6 +89,13 @@ void *moy_sh_halloc(size_t n);
 void moy_sh_hfree(void *p);
 void *moy_sh_palloc(size_t n);
 void moy_sh_pfree(void *p);
+// A process block's END: called with it as it goes, by moy_sh_pfree or by its
+// process's end, so what it holds outside the session goes on every way out.
+void moy_sh_pend(void *p, void (*end)(void *p));
+// The kernel's clock off a board, microseconds since boot: a harness's
+// stand-in (host/net_fake.c), weak, so a build that links none reads the
+// machine's monotonic clock (moy_sh_cmds.c's uptime and ping).
+long long moy_sh_now_us(void);
 
 // The OS layer: the terminal descriptors a session starts with, a fork's
 // references and a process's exit.

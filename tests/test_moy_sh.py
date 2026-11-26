@@ -78,6 +78,8 @@ def _objects(cc, out):
     jobs.append((os.path.join(SH, "moy_sh_fmt.c"), CFLAGS + ["-I", SH, "-I", SPINE]))
     jobs.append((os.path.join(SH, "moy_sh_cands.c"), CFLAGS + ["-I", SH]))
     jobs.append((os.path.join(SH, "host", "sh_main.c"), CFLAGS + ["-I", SH, "-I", KERNEL]))
+    # the network and the kernel's clock the shell's network commands reach
+    jobs.append((os.path.join(SH, "host", "net_fake.c"), CFLAGS))
     board = CFLAGS + ["-I", SH, "-I", KERNEL, "-I", STORE, "-I", SPINE]
     for name in BOARD_SOURCES:
         jobs.append((os.path.join(SH, name), board))
@@ -480,6 +482,33 @@ def test_a_builtin_ended_midway_leaves_the_heap_as_it_found_it(harness, tmp_path
         assert err.count("pipe: no room to hold") >= 6 * rounds, err[-2000:]
         held.append(int(re.search(r"live blocks (\d+)", err).group(1)))
     assert held[0] == held[1], "%d blocks after one round, %d after three" % tuple(held)
+
+
+def test_a_network_command_ended_midway_lets_the_radio_go(harness, tmp_path):
+    """ping's hold on the radio and its socket are its process block's END
+    (moy_sh_pend): its writer ended mid-line by a spill the store has no room
+    for (as SIGPIPE would) longjmps past its own release, and the block's end
+    lets the radio go (the stand-in network's /.radio, host/net_fake.c)."""
+    import resource
+    import signal
+
+    def limit():
+        signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        resource.setrlimit(resource.RLIMIT_FSIZE, (64, 64))
+    root = tmp_path / "root"
+    root.mkdir()
+    script = tmp_path / "ended.sh"
+    # a name of 5000 letters, whose PING line outgrows the pipe's memory
+    script.write_text("a=aaaaaaaaaa; a=$a$a$a$a$a$a$a$a$a$a; a=$a$a$a$a$a$a$a$a$a$a\n"
+                      "ping -c 1 $a$a$a$a$a.router.lan | wc -c\ncat /.radio\n")
+    r = subprocess.run([harness["sh_main"], str(root), str(script)], capture_output=True,
+                       timeout=60, preexec_fn=limit)
+    out = r.stdout.decode() + r.stderr.decode()
+    assert "Sanitizer" not in out, out[-3000:]
+    assert "pipe: no room to hold" in out, out[-2000:]
+    assert "64 bytes from" not in out, out[-2000:]
+    assert (root / ".radio").read_text() == "0\n"
+    assert r.stdout.decode().endswith("0\n"), out[-2000:]
 
 
 def test_a_spill_the_store_has_no_room_for_says_so(harness, tmp_path):

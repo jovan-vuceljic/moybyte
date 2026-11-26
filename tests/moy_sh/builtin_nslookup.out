@@ -1,0 +1,40 @@
+$ # a name's address, through the station's DNS server
+$ nslookup router.lan
+Server:		10.0.0.1
+Address:	10.0.0.1#53
+
+Name:	router.lan
+Address: 10.0.0.1
+$ nslookup 10.0.0.7
+Server:		10.0.0.1
+Address:	10.0.0.1#53
+
+Name:	10.0.0.7
+Address: 10.0.0.7
+$ nslookup nowhere.lan; echo missing=$?
+nslookup: nowhere.lan: not found
+missing=1
+$ nslookup slow.lan | tail -n 1
+Address: 10.0.0.1
+$ nslookup; echo bad=$?
+usage: nslookup NAME
+bad=1
+$ nslookup -x router.lan; echo bad=$?
+usage: nslookup NAME
+bad=1
+$ cat /.radio
+0
+$ # a station that is down: held, it dials and the name is asked once it is up
+$ echo off > /.net
+$ nslookup router.lan | tail -n 1
+Address: 10.0.0.1
+$ cat /.radio
+0
+$ # held with nothing to dial
+$ echo alone > /.net
+$ nslookup router.lan; echo down=$?
+nslookup: no network
+down=1
+$ cat /.radio
+0
+[exit 0]

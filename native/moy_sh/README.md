@@ -10,7 +10,7 @@ a host spawn, the built-ins — is `moy_sh.h`'s header.
 | `moy_sh.h` | the public interface: a session, its host table, feeding it text, and a spawned program's streams and files (a WASI command's, `native/moy_wasm/moy_wasi.h`) |
 | `moy_sh.c` | the session: dash's state set up, a run, the fork, the wait, the exec, the role commands, `sh` |
 | `moy_sh_sys.c` | the OS dash sees: descriptors over pipe buffers and files held open and read or written a chunk at a time, paths, the store through `moy_vol`, `/dev` `/proc` `/bin`, signals |
-| `moy_sh_cmds.c` | the C core built-ins (file commands with `find` and `du`; text tools `cut`, `grep`, `head`, `md5sum`, `sha256sum`, `sort`, `tail`, `tee`, `tr`, `uniq`, `wc` and `xxd`, the two hashes mbedTLS's; `ps`, `free`, `df`, `log`/`dmesg`, `reboot`, `date`, `sleep`, `clear`, `help`, `neofetch`), sorted |
+| `moy_sh_cmds.c` | the C core built-ins (file commands with `find` and `du`; text tools `cut`, `grep`, `head`, `md5sum`, `sha256sum`, `sort`, `tail`, `tee`, `tr`, `uniq`, `wc` and `xxd`, the two hashes mbedTLS's; `ps`, `free`, `df`, `log`/`dmesg`, `reboot`, `date`, `uptime`, `hostname`, `sleep`, `clear`, `help`, `neofetch`; `ifconfig`, `nslookup` and `ping` over the kernel's station and lwIP, `native/moy_net/moy_net.h`'s shell's network commands, weak, so a build with no network says so), sorted |
 | `moy_sh_arena.c` | the session's region: first-fit with boundary tags, saved and restored whole for a fork |
 | `moy_sh_fmt.c` | the shell's `vsnprintf`: every integer conversion at every length, which a board's nano formatter lacks |
 | `moy_sh_g.h` | every dash global as a field of one record, which lives in the arena |
@@ -30,7 +30,7 @@ a host spawn, the built-ins — is `moy_sh.h`'s header.
 | `moy_term.c`, `moy_term.h` | the terminal's cell grid: the VT100 subset a line program and a full-screen app write, a scrollback ring, its lines as SGR text for `ui.text_view` |
 | `moy_sh_job.c`, `moy_sh_job.h` | a line run with no face (cron's and at's jobs, `runtime/system/cron.py`): a session of its own on its runner, its output a record of the OS log a line under the job's pid |
 | `modmoy_sh.c`, `micropython.cmake` | the MicroPython module (a door command's streams, `line`, `interrupted`, the screen face's `Screen`, the faceless `Job`) and the board build: the shell is its own static library, so dash's shim reaches no other file |
-| `host/sh_main.c`, `host/board_main.c`, `host/app_main.c` | the host harnesses the suite runs: a session over a folder, the serial face (or with `-screen` the screen face) over the board's table, and a text app on an app heap that meters its requests and refuses any over `MOY_SH_APP_ALLOC_MAX` |
+| `host/sh_main.c`, `host/board_main.c`, `host/app_main.c` | the host harnesses the suite runs: a session over a folder, the serial face (or with `-screen` the screen face) over the board's table, and a text app on an app heap that meters its requests and refuses any over `MOY_SH_APP_ALLOC_MAX`; `host/net_fake.c`, linked into each, is their station, names, echoes and clock, driven by the folder's `/.net` |
 
 On CPython the module is `runtime/host/moy_sh.py`: the same names by ctypes,
 the shell built as its own archive and linked whole into the host's one
@@ -78,7 +78,11 @@ board, `heap_caps` with the default heap only where there is no PSRAM); a pipe's
 while a run needs them and returned after. A built-in's working memory (a
 walk's names, `sort`'s blocks, a text tool's line) is a process block
 (`moy_sh_palloc`), which its process frees if a signal, an error or `exit`
-ends it before the built-in can. A pipeline's stages run one after
+ends it before the built-in can; a block's END (`moy_sh_pend`) lets go what
+it holds outside the session as it goes, so a network command's socket and
+its hold on the radio (the `sh` tag, `native/moy_kernel/moy_lease.h`, which
+a Zero's own station takes no row for) go on every way out. A network command keeps no buffer of its own: `ping`'s
+figures and the times of its last eight echoes are on its stack. A pipeline's stages run one after
 another, so a pipe holds its writer's whole stream: 1 MB in memory, 4 KB on
 a board without PSRAM (the C3 Zero), and past that in a temporary file of the
 store (`/etc/pipes/*.tmp`, the store's `system/pipes`) written and read a

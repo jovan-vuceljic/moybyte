@@ -61,11 +61,14 @@ void moy_sh_hfree(void *p) {
 // session's own). A process ended before its built-in returns -- SIGPIPE, an
 // interrupt, an error, exit -- longjmps past the built-in's frees, so
 // end_process frees what the ending process still holds, and a line's end
-// frees what is left of the session's own.
+// frees what is left of the session's own. A block may carry an END
+// (moy_sh_pend): what it holds outside the session (a socket, the radio's
+// hold) let go as the block goes, by whichever of those ways it goes.
 union moy_sh_pblk {
     struct {
         union moy_sh_pblk *next, *prev;
         const void *owner;
+        void (*end)(void *p);
     } h;
     long double align;                  // the strictest alignment a block may need
 };
@@ -77,6 +80,7 @@ void *moy_sh_palloc(size_t n) {
         return NULL;
     }
     b->h.owner = s->forks;
+    b->h.end = NULL;
     b->h.prev = NULL;
     b->h.next = s->pblocks;
     if (s->pblocks != NULL) {
@@ -95,6 +99,9 @@ static void pblk_drop(moy_sh_t *s, union moy_sh_pblk *b) {
     if (b->h.next != NULL) {
         b->h.next->h.prev = b->h.prev;
     }
+    if (b->h.end != NULL) {
+        b->h.end(b + 1);
+    }
     s->host.free(s->host.ctx, b);
 }
 
@@ -102,6 +109,10 @@ void moy_sh_pfree(void *p) {
     if (p != NULL) {
         pblk_drop(moy_sh_cur, (union moy_sh_pblk *)p - 1);
     }
+}
+
+void moy_sh_pend(void *p, void (*end)(void *p)) {
+    ((union moy_sh_pblk *)p - 1)->h.end = end;
 }
 
 // The process blocks `owner` still holds freed (every one's when `all`).

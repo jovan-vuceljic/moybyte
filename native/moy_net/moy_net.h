@@ -557,6 +557,52 @@ int moy_net_online(void);
 // 1 online, 0 to poll again, -MOY_NET_ENET when no link came.
 int moy_net_await(uint32_t *since);
 
+// -- the shell's network commands (native/moy_sh: ifconfig, ping, nslookup) --------
+//
+// What the shell's C commands read and ask of the network on a board. The
+// shell takes each weakly (moy_sh_cmds.c), so a build without them (the
+// browser's shell, the simulator) has no network and its commands say so,
+// and the suite's harness stands in for them (native/moy_sh/host/net_fake.c).
+// None waits: a command polls, and each wait between its looks parks its run,
+// so the frame goes on (native/moy_sh/moy_sh_board.h, THE RUNNER).
+
+// The station as ifconfig shows it (moy_wifi.c): the network it is on or was
+// asked for, its address, mask, gateway and first DNS server (network order,
+// 0 none) and its MAC, read from the kernel's state and the interface's, never
+// across to a companion radio. MOY_WIFI_DOWN, _IDLE (up, no network asked),
+// _JOINING (asked, no address yet) or _JOINED.
+enum { MOY_WIFI_DOWN, MOY_WIFI_IDLE, MOY_WIFI_JOINING, MOY_WIFI_JOINED };
+int moy_wifi_info(char ssid[33], uint32_t addr[4], uint8_t mac[6]);
+
+// The radio held for a shell command's run (moy_wifi.c), or let go: tag "sh"
+// on the shell's row (moy_lease.h's THE RADIO, MOY_LEASE_SHELL), which also
+// dials the network the driver kept (THE BOOK below); 0 or MOY_LEASE_*. A
+// station that is the board's own (MOY_NET_WIFI_OWN, the Zero's) is up
+// whoever holds it, so there it takes no row: the lease table is made at its
+// first take, and one made in the middle of a session splits the C3's heap
+// for good. Called on the console's task (the session's hop): the book may
+// start the driver, which reads NVS, and a runner's stack may be PSRAM.
+int moy_wifi_shell_hold(int on);
+
+// The resolver, polled (moy_net_port.c: lwIP's, on its own task, IPv4):
+// moy_net_resolve asks for `name`'s address and answers the query's number,
+// or minus an errno (MOY_NET_ENET behind the gate); moy_net_resolved answers
+// 0 while it is out, 1 with *ip (network order), -ENOENT for no answer (no
+// such name, or none came) and -EBUSY when a later query took the resolver,
+// which holds one at a time. A query given up on is never answered into the
+// asker's memory: its answer lands in the resolver's own slot.
+int moy_net_resolve(const char *name);
+int moy_net_resolved(int q, uint32_t *ip);
+
+// The ICMP echo (moy_net_port.c): a raw socket that never blocks, a 64-byte
+// echo request sent to `ip` as `id` and `seq`, and the replies to `id` from
+// `ip` read as they come: the reply's bytes with *seq and *ttl, 0 while none
+// waits, or minus an errno. Open answers the socket, or minus an errno.
+int moy_net_echo_open(void);
+int moy_net_echo_send(int fd, uint32_t ip, uint16_t id, uint16_t seq);
+int moy_net_echo_recv(int fd, uint32_t ip, uint16_t id, uint16_t *seq, uint8_t *ttl);
+void moy_net_echo_close(int fd);
+
 // -- the Zero's pins (moy_gpio.c) and the setup portal (moy_dns.c) ------------------
 
 // /gpio: a response document into `out` and its HTTP status. The webhost
@@ -791,7 +837,7 @@ typedef struct {
 // webhost serving on it until the next VM takes its "web" row back. A
 // station something else raised with no row goes down at the book's next
 // change that leaves it empty, a release of a tag nobody held included. A holder of the tags a C worker waits on the link for ("http",
-// "media") also asks for the kept network (moy_wifi_connect_kept) when
+// "media", and "sh", the shell's commands, which work with no VM) also asks for the kept network (moy_wifi_connect_kept) when
 // nothing is asked yet; the console's tags dial from Python's store
 // (device_wifi.autoconnect_wifi), and "link" never dials (a network would
 // move ESP-NOW's channel). The kernel's kstop mark ("kstop", moy_kernel.c)

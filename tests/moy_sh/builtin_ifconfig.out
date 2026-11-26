@@ -1,0 +1,26 @@
+$ # the station as the kernel holds it: /.net says what the harness's is
+$ ifconfig
+wlan0: up, connected to home
+  inet 10.0.0.20  netmask 255.255.255.0  gateway 10.0.0.1
+  dns 10.0.0.1
+  ether 02:00:00:00:1a:2b
+$ ifconfig wlan0 | head -n 1
+wlan0: up, connected to home
+$ ifconfig eth0; echo bad=$?
+ifconfig: eth0: no such interface
+bad=1
+$ ifconfig wlan0 up; echo bad=$?
+usage: ifconfig [wlan0]
+bad=1
+$ echo off > /.net
+$ ifconfig
+wlan0: down
+  ether 02:00:00:00:1a:2b
+$ echo alone > /.net
+$ ifconfig
+wlan0: down
+  ether 02:00:00:00:1a:2b
+$ ls /.radio; echo none=$?
+ls: /.radio: No such file or directory
+none=1
+[exit 0]

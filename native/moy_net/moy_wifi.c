@@ -20,6 +20,7 @@
 #include "esp_crypto_lock.h"
 #include "esp_event.h"
 #include "esp_heap_caps.h"
+#include "esp_mac.h"
 #include "esp_timer.h"
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
@@ -720,10 +721,48 @@ void moy_wifi_book(uint32_t mask) {
         }
         return;
     }
-    uint32_t dial = moy_lease_wifi_bit("http", 4) | moy_lease_wifi_bit("media", 5);
+    uint32_t dial = moy_lease_wifi_bit("http", 4) | moy_lease_wifi_bit("media", 5)
+                    | moy_lease_wifi_bit("sh", 2);
     if ((mask & dial) && !(was & dial) && s_st.on && !s_want && !s_st.connected) {
         moy_wifi_connect_kept();
     }
+}
+
+int moy_wifi_shell_hold(int on) {
+    #if defined(MOY_NET_WIFI_OWN) && MOY_NET_WIFI_OWN
+    (void)on;
+    return MOY_LEASE_OK;
+    #else
+    uint32_t mask;
+    return on ? moy_lease_wifi_hold(MOY_LEASE_SHELL, "sh", 2, &mask)
+              : moy_lease_wifi_release(MOY_LEASE_SHELL, "sh", 2, &mask);
+    #endif
+}
+
+int moy_wifi_info(char ssid[33], uint32_t addr[4], uint8_t mac[6]) {
+    moy_wifi_state_t st;
+    moy_wifi_state(&st);
+    memcpy(ssid, st.ssid, sizeof st.ssid);
+    memset(addr, 0, 4 * sizeof addr[0]);
+    memset(mac, 0, 6);
+    if (s_netif == NULL || esp_netif_get_mac(s_netif, mac) != ESP_OK) {
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    }
+    if (st.connected && s_netif != NULL) {
+        esp_netif_ip_info_t ip;
+        esp_netif_dns_info_t dns;
+        addr[0] = st.ip;
+        if (esp_netif_get_ip_info(s_netif, &ip) == ESP_OK) {
+            addr[1] = ip.netmask.addr;
+            addr[2] = ip.gw.addr;
+        }
+        if (esp_netif_get_dns_info(s_netif, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK
+            && dns.ip.type == ESP_IPADDR_TYPE_V4) {
+            addr[3] = dns.ip.u_addr.ip4.addr;
+        }
+    }
+    return !st.on ? MOY_WIFI_DOWN : st.connected ? MOY_WIFI_JOINED
+           : s_want ? MOY_WIFI_JOINING : MOY_WIFI_IDLE;
 }
 
 int moy_wifi_connect_kept(void) {

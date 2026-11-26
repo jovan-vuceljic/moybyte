@@ -27,7 +27,7 @@ PART = native_build.Part("lease", ("moy_lease.h", "moy_lease.c", "moy_dev.h", "m
                          (_KERNEL,))
 
 WIFI_TAGS = ("web", "update", "settings", "cart", "link", "carts", "dev", "http", "media", "ssh",
-             "native", "net", "kstop")
+             "native", "net", "kstop", "sh")
 
 _U32 = ctypes.c_uint32
 

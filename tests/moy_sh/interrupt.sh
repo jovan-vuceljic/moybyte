@@ -6,3 +6,7 @@ echo loop=$?
 trap 'echo caught' INT
 touch /.interrupt; sleep 5
 echo trapped=$?
+# ping's summary is said at Ctrl-C too, and the radio's hold goes with it
+echo 30 > /.interrupt; ping router.lan
+echo pinged=$?
+cat /.radio

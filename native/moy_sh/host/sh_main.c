@@ -29,6 +29,8 @@
 //   /.interrupt                       Ctrl-C, after the count it holds
 //   ps: pid 1 shell, pid 7 achievements; free and df fixed figures; log: the
 //   kernel's own moy_log ring, with three lines written at start.
+//   the network and the kernel's clock   net_fake.c's, which says how
+//                                     /.net and /.radio drive and show it
 
 #include <errno.h>
 #include <signal.h>
@@ -350,6 +352,7 @@ int main(int argc, char **argv) {
         return 2;
     }
     snprintf(interrupt_path, sizeof interrupt_path, "%s/.interrupt", argv[1]);
+    setenv("MOY_SH_ROOT", argv[1], 0);      // the stand-in network's files (net_fake.c)
     moy_log_init(8192);
     moy_log_say(6, 0, "kernel up");
     uint32_t ach = moy_log_spawn("achievements");

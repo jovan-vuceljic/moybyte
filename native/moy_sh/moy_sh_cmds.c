@@ -1,12 +1,14 @@
 // moy_sh_cmds: the shell's C core built-ins (docs/os_2026-11/system.md
 // section 1): the file commands over the store (find and du among them), the
 // text tools (head, tail, wc, grep, sort, uniq, cut, tr, tee, xxd, md5sum and
-// sha256sum), and ps, free, df, log/dmesg, reboot, date, sleep, clear and
-// help over the host's tables. Each is one function taking dash's (argc,
-// argv), its options read with dash's nextopt, writing through dash's output
-// to the process's descriptors, so redirection and pipes reach it as they
-// reach any built-in. They keep working while the VM is stopped: nothing here
-// calls into Python.
+// sha256sum), ps, free, df, log/dmesg, reboot, date, sleep, clear and help
+// over the host's tables, and uptime, hostname, ifconfig, nslookup and ping
+// over the kernel's clock, its station and lwIP. Each is one function taking
+// dash's (argc, argv), its options read with dash's nextopt, writing through
+// dash's output to the process's descriptors, so redirection and pipes reach
+// it as they reach any built-in. They keep working while the VM is stopped:
+// what only the console knows (neofetch's rows, hostname's name) is read from
+// its /proc/console, and nothing else calls into Python.
 
 #include <ctype.h>
 #include <errno.h>
@@ -2836,6 +2838,438 @@ static int neofetchcmd(int argc, char **argv) {
     return 0;
 }
 
+// -- the kernel's clock, its name and the network -------------------------------------
+//
+// uptime and hostname, and ifconfig, nslookup and ping over the kernel's
+// station and lwIP (native/moy_net/moy_net.h, the shell's network commands),
+// each taken weakly: a build with no network (the browser's shell, the
+// simulator) links, and its commands say so; the suite's harness gives a
+// stand-in (host/net_fake.c). A command that needs the link holds the radio
+// for its run (moy_wifi_shell_hold, on the console's task through the
+// session's hop) and waits for an address while the station dials, at most
+// MOY_NET_DIAL_MS. Every wait is the host's sleep between two looks, which
+// parks a runner's run, never a blocking call, so the frame goes on and
+// Ctrl-C ends it at the next look. What it holds outside the session (the
+// hold, the echo socket) is its process block's END (moy_sh_pend), so it goes
+// on every way out, a writer ended mid-line included.
+
+// The kernel's clock, microseconds since boot: esp_timer's on a board, else a
+// harness's stand-in (moy_sh_now_us), else the machine's monotonic clock.
+#ifndef MOY_SH_FETCH_CHIP
+#pragma weak moy_sh_now_us
+#endif
+
+static uint64_t now_us(void) {
+#ifdef MOY_SH_FETCH_CHIP
+    return (uint64_t)esp_timer_get_time();
+#else
+    if (moy_sh_now_us != NULL) {
+        return (uint64_t)moy_sh_now_us();
+    }
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000u + (uint64_t)ts.tv_nsec / 1000u;
+#endif
+}
+
+// moy_net.h's, declared here as moy_net_link is (dash's shim reaches this file)
+enum { NET_DOWN, NET_IDLE, NET_JOINING, NET_JOINED };   // its MOY_WIFI_*
+int moy_wifi_info(char ssid[33], uint32_t addr[4], uint8_t mac[6]);
+int moy_wifi_shell_hold(int on);
+int moy_net_resolve(const char *name);
+int moy_net_resolved(int q, uint32_t *ip);
+int moy_net_echo_open(void);
+int moy_net_echo_send(int fd, uint32_t ip, uint16_t id, uint16_t seq);
+int moy_net_echo_recv(int fd, uint32_t ip, uint16_t id, uint16_t *seq, uint8_t *ttl);
+void moy_net_echo_close(int fd);
+#pragma weak moy_wifi_info
+#pragma weak moy_wifi_shell_hold
+#pragma weak moy_net_resolve
+#pragma weak moy_net_resolved
+#pragma weak moy_net_echo_open
+#pragma weak moy_net_echo_send
+#pragma weak moy_net_echo_recv
+#pragma weak moy_net_echo_close
+
+#define NET_POLL_MS 10                  // the wait between two looks
+#define NET_DIAL_US 16000000u           // moy_net.h's MOY_NET_DIAL_MS
+#define NET_ANSWER_US 15000000u         // a name's answer, at most
+#define NET_NONE 101                    // moy_net.h's MOY_NET_ENET
+#define PING_EVERY_MIN_MS 200u          // -i, at least
+#define PING_SECS_MAX 3600.0            // -i and -W, at most
+
+static int uptimecmd(int argc, char **argv) {
+    (void)argv;
+    if (argc != 1) {
+        return moy_sh_fail("usage: uptime");
+    }
+    unsigned long m = (unsigned long)(now_us() / 60000000u), d = m / 1440u;
+    if (d > 0) {
+        out1fmt("up %lu day%s, %lu:%02lu\n", d, d == 1 ? "" : "s", m / 60u % 24u, m % 60u);
+    } else {
+        out1fmt("up %lu:%02lu\n", m / 60u, m % 60u);
+    }
+    return 0;
+}
+
+// The console's network name, the one its SSH server and mDNS announce
+// (runtime/system/ssh_service.py's hostname: Settings' Name, else
+// moybyte-XXXX), read from /proc/console as neofetch's title is. The
+// console's VM keeps it, so with the VM stopped there is none to say; it is
+// set as Settings' Name.
+static int hostnamecmd(int argc, char **argv) {
+    moy_sh_t *s = moy_sh_cur;
+    (void)argv;
+    if (argc != 1) {
+        return moy_sh_fail("usage: hostname");
+    }
+    char *text = NULL, name[FETCH_VALUE];
+    size_t n = 0;
+    if (s->host.vread == NULL || s->host.vread(s->host.ctx, "/proc/console", &text, &n) != 0) {
+        text = NULL;
+    }
+    int got = text != NULL && console_row(text, n, "name", name, sizeof name);
+    moy_sh_hfree(text);
+    if (!got) {
+        return moy_sh_fail("hostname: needs the console");
+    }
+    out1fmt("%s\n", name);
+    return 0;
+}
+
+static void quad(char *out, uint32_t a) {        // network order: the first octet lowest
+    snprintf(out, 16, "%u.%u.%u.%u", (unsigned)(a & 0xFFu), (unsigned)((a >> 8) & 0xFFu),
+             (unsigned)((a >> 16) & 0xFFu), (unsigned)(a >> 24));
+}
+
+static int ifconfigcmd(int argc, char **argv) {
+    if (argc > 2 || (argc == 2 && strcmp(argv[1], "wlan0") != 0)) {
+        return argc == 2 ? moy_sh_fail("ifconfig: %s: no such interface", argv[1])
+                         : moy_sh_fail("usage: ifconfig [wlan0]");
+    }
+    if (moy_wifi_info == NULL) {
+        return moy_sh_fail("ifconfig: this console has no network");
+    }
+    static const char *const state[] = {
+        "down", "up, not connected", "up, connecting to ", "up, connected to ",
+    };
+    char ssid[33], a[4][16];
+    uint32_t addr[4];
+    uint8_t m[6];
+    int st = moy_wifi_info(ssid, addr, m);
+    st = st < NET_DOWN || st > NET_JOINED ? NET_DOWN : st;
+    out1fmt("wlan0: %s%s\n", state[st], st >= NET_JOINING ? ssid : "");
+    if (st == NET_JOINED) {
+        for (int i = 0; i < 4; i++) {
+            quad(a[i], addr[i]);
+        }
+        out1fmt("  inet %s  netmask %s  gateway %s\n", a[0], a[1], a[2]);
+        if (addr[3] != 0) {
+            out1fmt("  dns %s\n", a[3]);
+        }
+    }
+    if (m[0] | m[1] | m[2] | m[3] | m[4] | m[5]) {
+        out1fmt("  ether %02x:%02x:%02x:%02x:%02x:%02x\n", m[0], m[1], m[2], m[3], m[4], m[5]);
+    }
+    return 0;
+}
+
+// A network command's run: the radio's hold and the echo socket, which its
+// END gives back.
+typedef struct {
+    int held;
+    int fd;                             // -1 none
+} net_run_t;
+
+static void hold_here(void *arg) {
+    int *on = arg;
+    *on = moy_wifi_shell_hold(*on) == 0;
+}
+
+static void net_end(void *p) {
+    net_run_t *n = p;
+    if (n->fd >= 0) {
+        moy_net_echo_close(n->fd);
+    }
+    if (n->held) {
+        int off = 0;
+        moy_sh_hop(moy_sh_cur, hold_here, &off);
+    }
+}
+
+// One wait between two looks: 0, or MOY_PROC_INTERRUPTED at Ctrl-C.
+static int net_nap(void) {
+    moy_sh_t *s = moy_sh_cur;
+    if (s->host.sleep_ms != NULL) {
+        s->host.sleep_ms(s->host.ctx, NET_POLL_MS);
+    }
+    if (moy_sh_poll()) {
+        s->interrupt = 1;
+        return MOY_PROC_INTERRUPTED;
+    }
+    return 0;
+}
+
+// The run of `cmd` with the link up: the radio held and its address waited
+// for while the station dials. NULL when there is none, *r then the
+// command's exit (`bad`, said) or MOY_PROC_INTERRUPTED.
+static net_run_t *net_open(const char *cmd, int bad, int *r) {
+    *r = bad;
+    if (moy_wifi_info == NULL || moy_wifi_shell_hold == NULL || moy_net_resolve == NULL
+        || moy_net_resolved == NULL) {
+        moy_sh_fail("%s: this console has no network", cmd);
+        return NULL;
+    }
+    net_run_t *n = moy_sh_palloc(sizeof *n);
+    if (n == NULL) {
+        moy_sh_fail("%s: out of memory", cmd);
+        return NULL;
+    }
+    n->held = 0;
+    n->fd = -1;
+    moy_sh_pend(n, net_end);
+    int on = 1;
+    moy_sh_hop(moy_sh_cur, hold_here, &on);
+    n->held = on;
+    uint64_t t0 = now_us();
+    for (;;) {
+        char ssid[33];
+        uint32_t addr[4];
+        uint8_t mac[6];
+        int st = moy_wifi_info(ssid, addr, mac);
+        if (st == NET_JOINED) {
+            return n;
+        }
+        if (st != NET_JOINING || now_us() - t0 >= NET_DIAL_US) {
+            moy_sh_fail("%s: no network", cmd);
+            break;
+        }
+        int k = net_nap();
+        if (k != 0) {
+            *r = k;
+            break;
+        }
+    }
+    moy_sh_pfree(n);
+    return NULL;
+}
+
+// `name`'s address into *ip: 0, else the command's exit (`bad`, said) or
+// MOY_PROC_INTERRUPTED.
+static int net_name(const char *cmd, const char *name, uint32_t *ip, int bad) {
+    int q = moy_net_resolve(name);
+    uint64_t t0 = now_us();
+    while (q > 0) {
+        int k = moy_net_resolved(q, ip);
+        if (k > 0) {
+            return 0;
+        }
+        if (k < 0 || now_us() - t0 >= NET_ANSWER_US) {
+            q = k < 0 ? k : -ETIMEDOUT;
+            break;
+        }
+        if ((k = net_nap()) != 0) {
+            return k;
+        }
+    }
+    moy_sh_fail("%s: %s: %s", cmd, name, q == -NET_NONE ? "no network" : q == -EBUSY ? "busy"
+                : q == -ETIMEDOUT ? "timed out" : "not found");
+    return bad;
+}
+
+static int nslookupcmd(int argc, char **argv) {
+    if (argc != 2 || argv[1][0] == '-') {
+        return moy_sh_fail("usage: nslookup NAME");
+    }
+    int r;
+    net_run_t *n = net_open("nslookup", 1, &r);
+    if (n == NULL) {
+        return r;
+    }
+    uint32_t ip, addr[4];
+    r = net_name("nslookup", argv[1], &ip, 1);
+    if (r == 0) {
+        char ssid[33], a[16];
+        uint8_t mac[6];
+        moy_wifi_info(ssid, addr, mac);
+        if (addr[3] != 0) {
+            quad(a, addr[3]);
+            out1fmt("Server:\t\t%s\nAddress:\t%s#53\n\n", a, a);
+        }
+        quad(a, ip);
+        out1fmt("Name:\t%s\nAddress: %s\n", argv[1], a);
+    }
+    moy_sh_pfree(n);
+    return r;
+}
+
+// Milliseconds from `us` as iputils prints a reply's time: three figures.
+static void ms3(char *out, uint32_t us) {
+    unsigned ms = (unsigned)(us / 1000u), f = (unsigned)(us % 1000u);
+    if (us < 1000u) {
+        snprintf(out, 16, "0.%03u", f);
+    } else if (us < 10000u) {
+        snprintf(out, 16, "%u.%02u", ms, f / 10u);
+    } else if (us < 100000u) {
+        snprintf(out, 16, "%u.%u", ms, f / 100u);
+    } else {
+        snprintf(out, 16, "%u", ms);
+    }
+}
+
+static uint32_t isqrt(uint64_t v) {
+    uint64_t r = 0, b = (uint64_t)1 << 62;
+    while (b > v) {
+        b >>= 2;
+    }
+    while (b != 0) {
+        if (v >= r + b) {
+            v -= r + b;
+            r = (r >> 1) + b;
+        } else {
+            r >>= 1;
+        }
+        b >>= 2;
+    }
+    return (uint32_t)r;
+}
+
+// ping's figures, which it ends with as iputils does.
+typedef struct {
+    unsigned long sent, got;
+    uint32_t lo, hi;
+    uint64_t sum, sum2, start;
+} ping_t;
+
+static void ping_end(const ping_t *p, const char *host) {
+    out1fmt("\n--- %s ping statistics ---\n%lu packets transmitted, %lu received, "
+            "%lu%% packet loss, time %lums\n", host, p->sent, p->got,
+            (p->sent - p->got) * 100u / p->sent, (unsigned long)((now_us() - p->start) / 1000u));
+    if (p->got != 0) {
+        uint64_t avg = p->sum / p->got;
+        uint32_t v[4] = { p->lo, (uint32_t)avg, p->hi, isqrt(p->sum2 / p->got - avg * avg) };
+        out1str("rtt min/avg/max/mdev = ");
+        for (int i = 0; i < 4; i++) {
+            out1fmt("%u.%03u%s", (unsigned)(v[i] / 1000u), (unsigned)(v[i] % 1000u),
+                    i < 3 ? "/" : " ms\n");
+        }
+    }
+}
+
+// ping [-c COUNT] [-i INTERVAL] [-W TIMEOUT] HOST: an ICMP echo every
+// INTERVAL seconds (1, at least 0.2), each reply waited for TIMEOUT seconds
+// (1), until COUNT or Ctrl-C, printed as iputils prints them (numeric, as its
+// -n). The last PING_RING echoes sent are awaited at once, so a slow reply
+// does not hold the next echo back. It exits 0 with a reply, 1 with none and
+// 2 for an error.
+#define PING_RING 8u                    // a power of two
+
+static int pingcmd(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    unsigned long count = 0;
+    uint32_t every = 1000u, wait = 1000u;
+    int c;
+    while ((c = nextopt("c:i:W:")) != '\0') {
+        char *end;
+        double v = strtod(optionarg, &end);
+        if (end == optionarg || *end || !(v > 0) || v > (c == 'c' ? 1e9 : PING_SECS_MAX)
+            || (c == 'c' && v != (double)(unsigned long)v)) {
+            moy_sh_fail("ping: -%c %s: %s", c, optionarg,
+                        end == optionarg || *end ? "not a number" : "out of range");
+            return 2;
+        }
+        if (c == 'c') {
+            count = (unsigned long)v;
+        } else {
+            *(c == 'i' ? &every : &wait) = (uint32_t)(v * 1000.0);
+        }
+    }
+    const char *host = argptr[0];
+    if (host == NULL || argptr[1] != NULL || every < PING_EVERY_MIN_MS) {
+        moy_sh_fail(host != NULL && argptr[1] == NULL ? "ping: -i below 0.2 seconds"
+                    : "usage: ping [-c COUNT] [-i INTERVAL] [-W TIMEOUT] HOST");
+        return 2;
+    }
+    int r = 2;
+    net_run_t *n = moy_net_echo_open != NULL ? net_open("ping", 2, &r) : NULL;
+    if (n == NULL) {
+        if (moy_net_echo_open == NULL) {
+            moy_sh_fail("ping: this console has no network");
+        }
+        return r;
+    }
+    uint32_t ip;
+    if ((r = net_name("ping", host, &ip, 2)) != 0) {
+        moy_sh_pfree(n);
+        return r;
+    }
+    n->fd = moy_net_echo_open();
+    if (n->fd < 0) {
+        moy_sh_fail("ping: %s", n->fd == -NET_NONE ? "no network" : "no socket");
+        moy_sh_pfree(n);
+        return 2;
+    }
+    char at[16], t[16];
+    quad(at, ip);
+    out1fmt("PING %s (%s) 56(84) bytes of data.\n", host, at);
+    flushall();
+    ping_t p = { 0, 0, UINT32_MAX, 0, 0, 0, now_us() };
+    uint16_t id = (uint16_t)((uint16_t)(p.start >> 10) ^ (uint16_t)(uintptr_t)n);
+    uint32_t sent_at[PING_RING];        // an echo's send time, in its slot (seq % PING_RING)
+    uint16_t seqs[PING_RING];
+    unsigned open = 0;                  // the slots whose echo awaits its reply
+    uint64_t next = p.start;
+    while (r == 0) {
+        uint64_t now = now_us();
+        if ((count == 0 || p.sent < count) && now >= next) {
+            uint16_t seq = (uint16_t)++p.sent;
+            unsigned i = seq & (PING_RING - 1u);
+            seqs[i] = seq;
+            sent_at[i] = (uint32_t)now;
+            open |= 1u << i;
+            next = now + every * 1000ull;
+            if (moy_net_echo_send(n->fd, ip, id, seq) < 0) {
+                moy_sh_fail("ping: %s: no route", at);
+                r = 2;
+                break;
+            }
+        }
+        uint16_t got;
+        uint8_t ttl;
+        int k;
+        while ((k = moy_net_echo_recv(n->fd, ip, id, &got, &ttl)) > 0) {
+            unsigned i = got & (PING_RING - 1u);
+            if (!(open >> i & 1u) || seqs[i] != got) {
+                continue;                   // late, or a duplicate
+            }
+            open &= ~(1u << i);
+            uint32_t us = (uint32_t)now_us() - sent_at[i];
+            p.got++;
+            p.sum += us;
+            p.sum2 += (uint64_t)us * us;
+            p.lo = us < p.lo ? us : p.lo;
+            p.hi = us > p.hi ? us : p.hi;
+            ms3(t, us);
+            out1fmt("%d bytes from %s: icmp_seq=%u ttl=%u time=%s ms\n", k, at, (unsigned)got,
+                    (unsigned)ttl, t);
+            flushall();
+        }
+        now = now_us();
+        for (unsigned i = 0; i < PING_RING; i++) {
+            if ((open >> i & 1u) && (uint32_t)now - sent_at[i] >= wait * 1000u) {
+                open &= ~(1u << i);         // lost
+            }
+        }
+        if ((count != 0 && p.sent >= count && open == 0) || (r = net_nap()) != 0) {
+            break;
+        }
+    }
+    ping_end(&p, host);
+    moy_sh_pfree(n);
+    return r != 0 ? r : p.got != 0 ? 0 : 1;
+}
+
 static int helpcmd(int argc, char **argv);
 
 // Sorted by name (moy_sh_core_builtin searches it).
@@ -2856,6 +3290,8 @@ static const struct builtincmd core[] = {
     { "grep", grepcmd, BUILTIN_REGULAR },
     { "head", headcmd, BUILTIN_REGULAR },
     { "help", helpcmd, BUILTIN_REGULAR },
+    { "hostname", hostnamecmd, BUILTIN_REGULAR },
+    { "ifconfig", ifconfigcmd, BUILTIN_REGULAR },
     { "less", appcmd, BUILTIN_REGULAR },
     { "log", logcmd, BUILTIN_REGULAR },
     { "ls", lscmd, BUILTIN_REGULAR },
@@ -2864,6 +3300,8 @@ static const struct builtincmd core[] = {
     { "more", appcmd, BUILTIN_REGULAR },
     { "mv", mvcmd, BUILTIN_REGULAR },
     { "neofetch", neofetchcmd, BUILTIN_REGULAR },
+    { "nslookup", nslookupcmd, BUILTIN_REGULAR },
+    { "ping", pingcmd, BUILTIN_REGULAR },
     { "ps", pscmd, BUILTIN_REGULAR },
     { "reboot", rebootcmd, BUILTIN_REGULAR },
     { "rm", rmcmd, BUILTIN_REGULAR },
@@ -2879,6 +3317,7 @@ static const struct builtincmd core[] = {
     { "tr", trcmd, BUILTIN_REGULAR },
     { "uname", unamecmd, BUILTIN_REGULAR },
     { "uniq", uniqcmd, BUILTIN_REGULAR },
+    { "uptime", uptimecmd, BUILTIN_REGULAR },
     { "vi", appcmd, BUILTIN_REGULAR },
     { "view", appcmd, BUILTIN_REGULAR },
     { "vim", appcmd, BUILTIN_REGULAR },
