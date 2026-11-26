@@ -332,6 +332,7 @@ class SettingsLayer(Layer):
         self._rows_usb = False
         self._rows_wifi = True
         self._rows_light = True
+        self._rows_desk = False
         self._rows_idle = None
         self._rows_lgen = -1
         self._rows_sizes = None
@@ -1007,6 +1008,7 @@ class SettingsLayer(Layer):
         tog = self._toggle_rows()
         radio = self._wifi.station() is not None
         light = bool(ws.panel_light)
+        desk = getattr(ws.wm, "mode", None) == "desktop"
         lgen = ws.look.layout_gen
         sizes = ws.look.font_scales()
         if (self._rows_cache is not None and lgen == self._rows_lgen
@@ -1016,6 +1018,7 @@ class SettingsLayer(Layer):
                 and web == self._rows_web and c6u == self._rows_c6
                 and usb == self._rows_usb 
                 and radio == self._rows_wifi and light == self._rows_light
+                and desk == self._rows_desk
                 and tog is self._rows_tog and idle is self._rows_idle):
             return self._rows_cache
         # The registry block sits directly after NAME, which is where the
@@ -1031,6 +1034,10 @@ class SettingsLayer(Layer):
             # only where a package's layout differs from the theme's.
             i = rows.index(("font_scale", "FONT SIZE", "font")) + 1
             rows = rows[:i] + (("layout_theme", "LAYOUT", "layout"),) + rows[i:]
+        if desk:
+            # HOME STYLE arranges the full-screen home, which the desk has not
+            # got (its Projects window draws the console home's design)
+            rows = tuple(r for r in rows if r[0] != "home_style")
         if len(sizes) < 2:
             # TEXT SIZE only where the glass offers more than one
             # (`Appearance.font_scales`)
@@ -1081,6 +1088,7 @@ class SettingsLayer(Layer):
         self._rows_usb = usb
         self._rows_wifi = radio
         self._rows_light = light
+        self._rows_desk = desk
         self._rows_idle = idle
         self._rows_lgen = lgen
         self._rows_sizes = sizes
