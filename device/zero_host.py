@@ -401,13 +401,17 @@ def connect(wait_ms=15000, hostname=None):
     driver, and answer to `hostname`.local. Returns the STA IP or None. The
     wait is per-network and generous for the same reason moy_ota's DIAL_MS
     is: cold association routinely outlives a short poll. The Zero is
-    headless, so this blocking wait holds no frame."""
+    headless, so this blocking wait holds no frame. The list is walked
+    twice: an access point that saw this board leave seconds ago (a reset
+    after a flash) can refuse it for longer than one wait, and a boot that
+    gives up hosts the setup AP until its next reset."""
     moy_net.wifi_on()
     st = moy_net.wifi_status()
     if st[2] and st[4]:
         moy_net.wifi_mdns(hostname or HOSTNAME)
         return st[4]
-    for net in _networks():
+    nets = _networks()
+    for net in nets + nets:
         try:
             moy_net.wifi_connect(net["ssid"],
                                  net.get("password") or net.get("key") or "")
