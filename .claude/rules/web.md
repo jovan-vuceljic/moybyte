@@ -124,10 +124,15 @@ nor those docs will warn you about:
   console says to tap. What stays HTML is the loader's progress, the
   pairing card before the console boots and a crash's text.
 - **An iPhone's full screen is the page saved to its Home Screen** (owner,
-  2026-11-25): its Safari has no element full screen, so where the browser
-  has none the system menu offers Add to Home Screen, whose card has the
-  steps, until the page runs as the app (`navigator.standalone`,
-  `display-mode`). The manifest and Moy's icons are `tools/web_app.py`'s,
+  2026-11-25/26): its Safari has no element full screen, and where an
+  iPhone's or an iPad's browser has one it keeps its domain strip and Close
+  over the page's top, so there, and wherever the browser has none, the
+  system menu offers Add to Home Screen, whose card has the steps, beside
+  any Full screen, until the page runs as the app (`navigator.standalone`,
+  `display-mode`), which shows neither. That strip is why the page's own
+  controls keep out of the top corners (the burger and the keyboard summon
+  sit at the bottom of a landscape phone's margins) and why an iPhone's
+  element full screen takes a 50-pixel top inset (`html.iosfs`). The manifest and Moy's icons are `tools/web_app.py`'s,
   written beside the page by both builds and named in the webhost's ASSETS
   table, so a board serves them too; the page's head carries iOS's tags and
   `viewport-fit=cover`, and its layout keeps out of the safe-area insets

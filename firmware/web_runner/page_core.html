@@ -37,6 +37,10 @@ body{width:100%}
 :root{--sa-t:env(safe-area-inset-top,0px);--sa-r:env(safe-area-inset-right,0px);
 --sa-b:env(safe-area-inset-bottom,0px);--sa-l:env(safe-area-inset-left,0px)}
 body{box-sizing:border-box;padding:var(--sa-t) var(--sa-r) var(--sa-b) var(--sa-l)}
+/* Full screen on an iPhone or iPad (html.iosfs, fsMark): the browser lays its
+   exit strip and Close over the top of the page, so the top inset is at
+   least that strip. */
+html.iosfs{--sa-t:max(env(safe-area-inset-top,0px),50px)}
 /* Long-press guard: HOLDING a control (a d-pad direction, A/B)
    used to start the OS text-selection -- iOS magnifier/blue highlight, Android context
    menu -- because plain user-select isn't enough there: iOS wants the -webkit- prefix +
@@ -100,8 +104,10 @@ opacity:0;font-size:16px;background:transparent;color:transparent;caret-color:tr
 @media (pointer:fine),(pointer:none){#ctl{display:none}}
 /* A touch phone in landscape (html.phl, room()): the canvas full height and
    centred, the stick in the left margin and A/B in the right one,
-   sized to it (padPlace), the keyboard summon and the burger small in the top
-   corners. #ctl covers the viewport but takes no taps itself. */
+   sized to it (padPlace), the keyboard summon and the burger small in the
+   bottom corners: the top ones are where a browser puts its own chrome (an
+   iPhone's full screen strip and its Close). #ctl covers the viewport but
+   takes no taps itself. */
 html.phl body{justify-content:center}
 html.phl #ctl{position:fixed;left:var(--sa-l);top:var(--sa-t);right:var(--sa-r);bottom:var(--sa-b);
 width:auto;height:auto;padding:0;display:block;pointer-events:none;z-index:2}
@@ -112,7 +118,7 @@ html.phl #joy{position:absolute;left:var(--jx);top:var(--jy)}
 html.phl .b{position:absolute;margin:0;pointer-events:auto}
 html.phl #joy{pointer-events:auto}
 html.phl #ba{right:0;top:0}html.phl #bb{left:0;bottom:0}
-html.phl #kb{left:6px;top:6px}html.phl #bh{right:6px;top:6px}
+html.phl #kb{left:6px;bottom:6px}html.phl #bh{right:6px;bottom:6px}
 /* The crash itself, ON the page: a phone has no devtools to "see". Above the
    play splash (z-index 20), which a console that crashed while booting has
    left standing. */
@@ -307,7 +313,7 @@ PAD_MIN=104,PAD_MAX=180,SB=36;
 function padPlace(iw,ih,m){var c=document.getElementById("ctl").style,top=SB+12;
 var j=Math.floor(Math.min(m-16,ih-2*top,160)),b=Math.floor(Math.min((m-16)*0.58,(ih-top-16)/2,84));
 var hab=2*b+8,mid=ih*0.55;
-function at(h){return Math.round(Math.max(top,Math.min(mid-h/2,ih-8-h)));}
+function at(h){return Math.round(Math.max(top,Math.min(mid-h/2,ih-12-SB-h)));}
 c.setProperty("--joy",j+"px");c.setProperty("--bb",b+"px");c.setProperty("--sb",SB+"px");
 c.setProperty("--jx",Math.round((m-j)/2)+"px");c.setProperty("--jy",at(j)+"px");
 c.setProperty("--abx","8px");c.setProperty("--abw",Math.round(m-16)+"px");
@@ -559,17 +565,25 @@ var pH={};
 // Cmd+Tab, so there Esc, Alt and Tab. Whether the page is full screen is
 // the console's to know too (its row's words).
 var altTap=false;
-function kLock(){var k=navigator.keyboard,on=!!document.fullscreenElement;
+// Full screen, prefixed or not (an iPhone's browsers have only webkit's).
+function fsOn(){var d=document;return d.fullscreenElement||d.webkitFullscreenElement||null;}
+function fsCan(){var e=document.documentElement;return !!(e.requestFullscreen||e.webkitRequestFullscreen);}
+var IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+function fsMark(){var on=IOS&&!!fsOn();
+if(document.documentElement.classList.contains("iosfs")!==on){
+document.documentElement.classList.toggle("iosfs",on);glassSoon();fit();}}
+function kLock(){var k=navigator.keyboard,on=!!fsOn();fsMark();
 send({type:"page",fs:on});if(!k||!k.lock)return;
 var lock=["AltLeft","AltRight","Tab","Escape"].concat(MAC?[]:["MetaLeft","MetaRight"]);
 if(on){k.lock(lock).then(function(){window.__moyLocked=1;},function(){window.__moyLocked=0;});}
 else{k.unlock();window.__moyLocked=0;}}
 document.addEventListener("fullscreenchange",kLock);
+document.addEventListener("webkitfullscreenchange",kLock);
 // Whether the page runs as a home-screen app, and the host it was opened
 // at: the console's Add to Home Screen row and card read them.
 function asApp(){return navigator.standalone===true||!!(window.matchMedia&&
 (matchMedia("(display-mode: standalone)").matches||matchMedia("(display-mode: fullscreen)").matches));}
-send({type:"page",fs:false,canfs:!!document.documentElement.requestFullscreen,app:asApp(),
+send({type:"page",fs:false,canfs:fsCan(),ios:IOS,app:asApp(),
 host:location.hostname});
 // THE ASKS (page_link.py): what the console's rows ask of the browser. A
 // download, Play on the console and going to where the console moved go at once. A browser grants full screen
@@ -588,9 +602,11 @@ function askArm(a){ASKED=a;window.__moyAsked=a.do;
 send({type:"page",say:[a.do==="fullscreen"?"Tap to go full screen":"Tap to choose a file",
 "Esc: never mind","ok"]});}
 function askDo(a){window.__moyAsked=null;var d=document;
-if(a.do==="fullscreen"){if(!a.on){if(d.fullscreenElement)d.exitFullscreen().catch(function(){});return;}
-if(d.documentElement.requestFullscreen)d.documentElement.requestFullscreen()
-.then(function(){cv.focus();},function(){askArm(a);});}
+if(a.do==="fullscreen"){var e=d.documentElement,r;
+if(!a.on){var x=d.exitFullscreen||d.webkitExitFullscreen;
+if(fsOn()&&x){r=x.call(d);if(r&&r.catch)r.catch(function(){});}return;}
+var rq=e.requestFullscreen||e.webkitRequestFullscreen;if(!rq)return;r=rq.call(e);
+if(r&&r.then)r.then(function(){cv.focus();},function(){askArm(a);});else cv.focus();}
 else if(a.do==="open")pickFile(".moy,.zip,.p8,.png,.mp3",pzImport,null);
 else if(a.do==="pick")pickFile("",pkSend,pkCancel);}
 function pickFile(accept,got,none){PICK.accept=accept;PICK.value="";PICKED=[got,none];PICK.click();}

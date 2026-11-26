@@ -1,8 +1,10 @@
 """The browser page around the console: `Workstation.page`, None on a board.
 
 The page keeps no bar of its own (owner, 2026-11-25): what its top bar did
-is the console's, in the console's rows -- Full screen (or, where the
-browser has none, Add to Home Screen and its card) and Add a file in
+is the console's, in the console's rows -- Full screen where the browser
+has it, Add to Home Screen and its card where it has none or is an
+iPhone's or an iPad's (whose element full screen keeps the browser's strip),
+and Add a file in
 the system menu, Download in a cart's menu, Play on the console in a cart's
 menu where a console serves the page,
 where the carts are kept in Settings -- and the console says what happened
@@ -31,6 +33,7 @@ class PageLink:
         self.fullscreen = False     # the page is full screen, by its word
         self.can_fullscreen = False  # ...and its browser has full screen
         self.app = False            # it runs as a home-screen app
+        self.ios = False            # ...on an iPhone or an iPad
         self.host = ""              # the host it was opened at
         self.kept = ""              # where the page keeps the carts, its sentence
         self._asks = []
@@ -64,13 +67,12 @@ class PageLink:
             self._ask("pod", cart=folder)
 
     def home_screen(self, ws):
-        """The card that says how to get full screen where the browser has
-        none (an iPhone's Safari): the page saved to the Home Screen, which
-        opens with no browser bars. A board's page opened at a number is
+        """The card that says how to get the true full screen: the page saved
+        to the Home Screen, which opens with no browser bars (an iPhone's
+        element full screen keeps the browser's strip and Close). A board's page opened at a number is
         saved from the board's .local name, which stays; the app keeps its
         own storage, so it pairs with the board once."""
-        rows = [("Saved to the Home Screen, Moybyte", "plain"),
-                ("opens with no browser bars.", "plain"),
+        rows = [("True full screen, no browser bars:", "plain"),
                 ("1. Tap Share in Safari's bar.", "plain"),
                 ("2. Choose Add to Home Screen.", "plain"),
                 ("3. Open Moybyte from there.", "plain")]
@@ -90,7 +92,9 @@ class PageLink:
 
     def heard(self, ws, ev):
         """The page's `page` event: `fs` whether it is full screen, `canfs`
-        whether its browser has full screen (an iPhone's has none), `kept`
+        whether its browser has full screen (an iPhone's Safari's has
+        none), `app` whether it runs as a home-screen app, `ios` whether on
+        an iPhone or an iPad, `host` the host it was opened at, `kept`
         where it keeps the carts, `say` a notice ([title, sub, kind]), `tell`
         a card ([title, [line, tone], ...]), whose Open goes to `go` where it
         names an address (where a Zero that moved went), and `offer` one whose
@@ -102,6 +106,8 @@ class PageLink:
             self.can_fullscreen = bool(ev["canfs"])
         if "app" in ev:
             self.app = bool(ev["app"])
+        if "ios" in ev:
+            self.ios = bool(ev["ios"])
         if "host" in ev:
             self.host = str(ev["host"] or "")
         if "kept" in ev:
