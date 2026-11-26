@@ -79,6 +79,12 @@
 #define MOY_LIVE_RING                       (2048)
 #define MOY_LIVE_IN                         (2048)
 
+// Two task stacks sized for the one internal heap (native/moy_kernel/moy_tasks.h):
+// the live socket's bridge and a sign-in's PAKE, each over its high-water
+// mark on this board with a quarter and more to spare (#276 has both).
+#define MOY_LIVE_STACK                      (3072)
+#define MOY_PAKE_STACK                      (5120)
+
 // HTTPS on demand (native/moy_net/moy_net.h): an iPhone runs the page at full
 // speed only from an https address; the door's RAM is spent while it is open.
 #define MOY_NET_HTTPS                       (1)

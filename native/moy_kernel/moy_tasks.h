@@ -43,7 +43,9 @@
 #else
 #define MOY_SH_RUN_STACK (24u * 1024u)      // a shell runner's (the SSH face's task's)
 #endif
-#define MOY_PAKE_STACK 8192
+#ifndef MOY_PAKE_STACK
+#define MOY_PAKE_STACK 8192                 // a sign-in's PAKE (native/moy_net/moy_webauth.c)
+#endif
 // The card's hop on an SPI card (native/moy_sd/moy_sd.c): one transfer's
 // sdmmc and SPI driver frames, in internal SRAM.
 #define MOY_SDHOP_STACK 3072
