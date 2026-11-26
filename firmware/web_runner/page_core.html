@@ -152,11 +152,20 @@ border:1px solid #c2c3c7}
 margin-right:7px;vertical-align:-1px;border:2px solid #ffa300;border-right-color:transparent;
 border-radius:50%;animation:pinspin .8s linear infinite}
 @keyframes pinspin{to{transform:rotate(360deg)}}
+/* The loading card: what the boot is doing until the console's first frame
+   (ldSay, ldDone), on the console's screen (ldPlace: the canvas's middle in
+   every layout), under the play splash (20), which stands until a tap. */
+#ld{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:19;display:flex;
+align-items:center;gap:10px;font:14px ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7;
+pointer-events:none;white-space:nowrap;overflow:hidden}
+#ld i{width:12px;height:12px;border:2px solid #ffa300;border-right-color:transparent;
+border-radius:50%;animation:pinspin .8s linear infinite}
 /* Debug HUD (#41): toggled with the ` key, or on from the load with ?hud=1. */
 #hud{position:fixed;top:6px;left:6px;z-index:9;display:none;padding:6px 8px;border-radius:5px;
 background:rgba(11,15,26,.82);border:1px solid #1d2b53;color:#00e436;font:12px ui-monospace;
 white-space:pre;pointer-events:none}</style></head><body>
 <div id=hud></div>
+<div id=ld><i></i><span id=ldt>Loading the console</span></div>
 <span id=s hidden>starting...</span>
 <pre id=crash></pre>
 <input id=pick type=file hidden>
@@ -455,8 +464,16 @@ for(var i=0;i<n;i++)rgba32[i]=L[src[i]];
 var t1=PT();cx.putImageData(img,0,0);var t2=PT();
 if(t1-t0>PERF.mb)PERF.mb=t1-t0;if(t2-t1>PERF.mu)PERF.mu=t2-t1;
 PERF.sb+=t1-t0;PERF.su+=t2-t1;PERF.sn++;
-if(firstBlit){firstBlit=false;if(window.parent!==window)
+if(firstBlit){firstBlit=false;ldDone();if(window.parent!==window)
 try{window.parent.postMessage({moyLive:true},"*");}catch(e){}}}
+// The loading card's words, and its end: the console live, its first frame
+// or a crash.
+function ldSay(s){var t=document.getElementById("ldt");if(t)t.textContent=s;window.__moyLoading=s;}
+function ldDone(){var l=document.getElementById("ld");if(l)l.remove();}
+function ldPlace(){var l=document.getElementById("ld");if(!l)return;var r=cv.getBoundingClientRect();
+l.style.left=(r.left+r.width/2)+"px";l.style.top=(r.top+r.height/2)+"px";
+l.style.maxWidth=Math.max(120,r.width-16)+"px";requestAnimationFrame(ldPlace);}
+requestAnimationFrame(ldPlace);
 var q=[];function send(e){q.push(e);}
 function xy(cX,cY){var r=cv.getBoundingClientRect();var x=Math.floor((cX-r.left)/r.width*W),
 y=Math.floor((cY-r.top)/r.height*H);return{x:Math.max(0,Math.min(W-1,x)),y:Math.max(0,Math.min(H-1,y))};}

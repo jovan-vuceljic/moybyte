@@ -1288,6 +1288,9 @@ function signInWaitSays(ms) {
 
 let auth = { keys: {}, token: null, board: null, name: "a browser" };
 let authOpen = false;           // the host has no sign-in: plain requests
+// A boot whose sign-in met no answer asks again this many times, the n-th
+// wait n times GONE_MS, before it says the console does not answer.
+const GONE_TRIES = 5, GONE_MS = 1000;
 let signedIn = false;
 let sealedOnce = false;         // this page has signed in: never plain again
 const NONCE_TRIES = 3;          // hellos a credential is sent after
@@ -1600,20 +1603,47 @@ function crashMessage(e) {
              s: !stack ? msg : stack.startsWith(msg) ? stack : msg + "\n" + stack };
 }
 
+// The wasm, fetched here where the loader handed none over (its Blob URL),
+// its bytes said to the page's loading card as they arrive: on a slow link
+// that download is most of a boot. A Blob URL of it for the VM; the VM
+// fetches it itself where a body cannot be read here. The total is said
+// where the length is the bytes' (none where the host compressed them).
+async function wasmFetched() {
+    if (wasmUrl) return wasmUrl;
+    const r = await fetch("micropython.wasm").catch(() => null);
+    if (!r || !r.ok || !r.body) return undefined;
+    const n = r.headers.get("content-encoding") ? 0 : +r.headers.get("content-length") || 0;
+    const rd = r.body.getReader(), parts = [], mb = (b) => (b / 1048576).toFixed(1);
+    let got = 0, at = 0;
+    for (let c = await rd.read(); !c.done; c = await rd.read()) {
+        parts.push(c.value);
+        got += c.value.length;
+        if (performance.now() - at > 100) {
+            at = performance.now();
+            say("Loading the console, " + mb(got) + (n >= got ? " of " + mb(n) : "") + " MB");
+        }
+    }
+    return URL.createObjectURL(new Blob(parts, { type: "application/wasm" }));
+}
+
 async function init(search, coarse, channel, scheme, signin, rate) {
     await loadModules(ASSETS_IN);
     opfsNav = store.channelNav(navigator, channel);
     const qs = new URLSearchParams(search || "");
     if (signin) auth = Object.assign(auth, signin, { keys: Object.assign({}, signin.keys) });
-    say("loading vm...");
+    const wasmAt = await wasmFetched();
+    say("Starting the console");
     // 16MB: the per-frame GC sweep scales with heap SIZE under this build's
     // GC_SPLIT_HEAP_AUTO (~0.13ms/MB/frame, #176), so a generous heap is a
     // permanent frame tax, not headroom.
-    mp = await loadMicroPython({ heapsize: 16 * 1024 * 1024, url: wasmUrl,
-        stdout: (l) => console.log("[moy]", l) });
+    try {
+        mp = await loadMicroPython({ heapsize: 16 * 1024 * 1024, url: wasmAt,
+            stdout: (l) => console.log("[moy]", l) });
+    } finally {
+        if (wasmAt !== wasmUrl) URL.revokeObjectURL(wasmAt);
+    }
     installCartEngine(mp._module);
     installCommandEngine(mp._module);
-    say("loading console...");
     // FROZEN-first, like the page was: a ship build bakes the console into the wasm
     // and has no modules.json; a --stage-only dev dist adds one, and loading it into
     // /modules (first on sys.path) shadows the frozen copies.
@@ -1650,13 +1680,23 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     // and the roots firmware before them 404s (the files layer, the console's
     // own documents, the apps' private folders).
     let pulled, fetched, cartsRes;
-    for (;;) {
+    for (let tries = 1; ; tries++) {
         pulled = await Promise.all(store.roots().map((r) => r.id === "carts"
             ? gated("/" + r.endpoint) : gated("/" + r.endpoint).catch(none)));
         fetched = {};
         store.roots().forEach((r, i) => { fetched[r.id] = pulled[i].json; });
         cartsRes = pulled[store.roots().indexOf(store.rootById("carts"))];
-        if (signedIn || authOpen || (authNeed && authNeed.gone)) break;
+        if (signedIn || authOpen) break;
+        if (authNeed && authNeed.gone) {
+            // NO ANSWER AT ALL (a fetch that failed, a 5xx): a slow phone's
+            // first requests can meet a link or a host still busy with the
+            // boot's downloads, so the boot asks again, saying what it does,
+            // before it says the console does not answer.
+            if (tries >= GONE_TRIES) break;
+            say("Loading your carts");
+            await new Promise((ok) => setTimeout(ok, GONE_MS * tries));
+            continue;
+        }
         // A BOARD THAT HAS NOT PAIRED THIS BROWSER: the boot waits here --
         // there is nothing to boot, and seeding the VFS from a refusal would
         // build a shelf out of it. The page asks; a pairing (finish) goes on
@@ -1668,7 +1708,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         askToPair();
         console.log("[moy] sign-in: " + (a.wait || a.why || "not paired"));
         await new Promise((ok) => { pairWait = ok; });
-        say("loading carts...");
+        say("Loading your carts");
     }
     if (!signedIn && !authOpen && cartsRes.json === null) {
         // The board went away between the page and its pulls: no shelf to
@@ -1680,7 +1720,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     await initStore(fetched);
     // Music's songs: the serving board's music folder, or this browser's.
     await mediaList(mode === "board" ? () => gated("/media").then((r) => r.json) : siteSongs);
-    say("booting console...");
+    say("Starting the console");
 
     // #9: does whoever served this page have PINS? ONE probe, here, before the
     // console exists -- so `pin_write`/`pin_read` are decided once and a cart

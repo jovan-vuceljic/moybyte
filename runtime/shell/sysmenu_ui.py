@@ -11,8 +11,9 @@ PROJECTS cover), its rows the `sysmenu` Popup's, in its groups:
 
 A verb that destroys is a danger row. The keys are the Popup's (its rows
 move and run in the input phase) and the page's focus follows its row
-(`sel`); a tap on a row runs it through the host (`uitree_app.env()`),
-and one outside the card is the host's.
+(`sel`); a finger's drag past the slop scrolls the rows and runs none, a
+tap on a row runs it through the host (`uitree_app.env()`), and one
+outside the card is the host's.
 """
 
 import uitree as ui
