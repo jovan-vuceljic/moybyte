@@ -152,9 +152,9 @@ enum {
     MOY_T_UITREE_NEXT, MOY_T_UITREE_SET_INT, MOY_T_UITREE_SET_TEXT, MOY_T_UITREE_SET_ABSENT,
     MOY_T_UITREE_SET_MODEL, MOY_T_UITREE_GET_INT, MOY_T_UITREE_GET_TEXT, MOY_T_UITREE_GET_CELL,
     MOY_T_UITREE_ERROR, MOY_T_UITREE_DUMP, MOY_T_UITREE_ACTION_CHARS, MOY_T_UITREE_ARG,
-    MOY_T_UITREE_DRAW_ROW,
+    MOY_T_UITREE_DRAW_ROW, MOY_T_THEME_SET_POINTER,
 };
-#define MOY_APP_TABLE_N 204u
+#define MOY_APP_TABLE_N 205u
 // Each row's "role.verb", its role and its C row (-1: the Python console
 // serves it).
 #define MOY_APP_TABLE_ROWS { \
@@ -362,6 +362,7 @@ enum {
     { "uitree.action_chars", MOY_ROLE_UITREE, MOY_ROW_UITREE_ACTION_CHARS }, \
     { "uitree.arg", MOY_ROLE_UITREE, MOY_ROW_UITREE_ARG }, \
     { "uitree.draw_row", MOY_ROLE_UITREE, MOY_ROW_UITREE_DRAW_ROW }, \
+    { "theme.set_pointer", MOY_ROLE_THEME, -1 }, \
 }
 
 // The C rows the ROLE door serves (moy_app.c's door_c), each X(row, its

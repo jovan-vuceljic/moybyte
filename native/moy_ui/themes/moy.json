@@ -48,6 +48,7 @@
                 "on": { "mark": "tint", "c": "value", "ink": "ink_accent" } } },
     "shadow_back": 0.3,
     "icons": { "kind": "smooth", "set": "default" },
+    "pointer": "moy",
     "app_buttons": { "calc": { "normal": { "font": "key" }, "tonal": { "font": "op" },
                                "primary": { "font": "op" } } },
     "dark": {

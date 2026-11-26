@@ -131,7 +131,7 @@ DEFAULT, FROM_STYLE = -32768, -2
 _DRAW_SIGS = (
     ("moy_ui_sink_row", [c.POINTER(_Sink), c.c_uint32, _I], _I),
     ("moy_ui_sink_glyph", [c.POINTER(_Sink), _I, _I, _I, _I, _I, _I, _I], _I),
-    ("moy_ui_sink_mask", [c.POINTER(_Sink), c.c_uint32, _I, _I, _I, _I], _I),
+    ("moy_ui_sink_mask", [c.POINTER(_Sink), c.c_uint32, _I, _I, _I, _I, _I], _I),
     ("moy_ui_icons_use", [c.c_uint32, c.c_uint32], None),
     ("moy_ui_moy_use", [c.c_void_p, _I], None),
     ("moy_ui_calls", [], c.c_uint32),

@@ -190,6 +190,9 @@ int moy_text_paint(const moy_text_target_t *t, uint32_t font, uint8_t source,
 // gives the first record), or -1 where `font` is unknown or not version 2.
 int moy_text_glyph(const moy_text_target_t *t, uint32_t font, int index, int x, int y,
                    uint16_t col, int scale);
+// moy_text_glyph at `alpha` (0..256) of its coverage: a pointer's shadow.
+int moy_text_glyph_a(const moy_text_target_t *t, uint32_t font, int index, int x, int y,
+                     uint16_t col, int scale, int alpha);
 
 // The columns the glyph at byte `index` of version 2 font `font` inks, from
 // its pen at scale 1, in *x0 up to *x1 (exclusive): 1, or 0 where it draws no

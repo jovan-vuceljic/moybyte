@@ -14,8 +14,10 @@ the theme in use wearing the current mark; under them the rows: MODE (a
 seg, where the theme has two modes: Day by the sun, Night by the moon), ACCENT (eight swatches: the theme's
 own and `OFFERED`), TINT, WALLPAPER (a link to the wallpapers' page),
 WINDOW STYLE (where windows are), FONT, CODE FONT (where the image draws
-more than one), CHROME SIZE (where the panel takes more than one), NAME on
-`custom`, and the door to the Editor's theme mode. On the desk the band
+more than one), CHROME SIZE (where the panel takes more than one), POINTER
+and its SIZE (where the console has a pointer: the theme's own family or
+one of runtime/toolkit/pointers.py's, Normal or Large), NAME on `custom`,
+and the door to the Editor's theme mode. On the desk the band
 under them leads with the theme's status.
 
 WALLPAPER pushes a page of the wallpapers as cards under two tabs
@@ -23,7 +25,7 @@ WALLPAPER pushes a page of the wallpapers as cards under two tabs
 Carts (the wallpaper carts). A card puts that wallpaper on and comes back;
 Back comes back with nothing changed.
 
-Every row but the cards, MODE, CHROME SIZE, NAME and the door is a change
+Every row but the cards, MODE, CHROME SIZE, POINTER, NAME and the door is a change
 to the theme (`ctx.theme.change`), which lands in `custom`. The rows read
 `ctx.theme.choices()` once per token generation.
 
@@ -38,6 +40,7 @@ import uitree as ui
 import uitree_app
 
 from moy_store_base import BUILTIN_NS
+from pointers import FAMILIES as POINTERS, NAMES as POINTER_NAMES
 from chrome import (THEME_NAMES, theme_accents, theme_colors, theme_look, theme_modes,
                     theme_names, theme_presets, theme_tints, RGB, PAINT, LOOK_NONE,
                     rgb565_of, nearest_of)
@@ -56,6 +59,9 @@ FONT_NAMES = ("Tiny5", "PetMe128")
 # The CODE FONT presets (`Appearance.CODE_FONTS`) by name.
 CODE_FONT_NAMES = {"petme128": "PetMe128", "jbmono": "JetBrains Mono"}
 OWN = "Default"     # a cycler's word for the theme's own choice
+POINTER_OWN = "%s (theme)"      # POINTER's words for the theme's own family
+POINTER_SIZES = ("normal", "large")
+POINTER_SIZE_NAMES = ("Normal", "Large")
 # ACCENT's seven swatches after the theme's own, by name, in hue order: a
 # preset (style.json's `presets`, an accent in each mode's value) or one of
 # the sixteen accents. Each reads in Moy's Day and Night, its focus colour on
@@ -81,6 +87,7 @@ _AA_FACES = ("result", "key", "title")
 # The rows by the words a caller names them with (`show_row`): their ids.
 ROWS = {"Mode": "mode", "Accent": "accent", "Tint": "tint", "Wallpaper": "wallpaper",
         "Window style": "frame", "Font": "font", "Code font": "code", "Chrome size": "chrome",
+        "Pointer": "pointer", "Pointer size": "psize",
         "Name": "name_ask", EDIT_THEME: "edit"}
 
 
@@ -113,6 +120,11 @@ s = ui.state(
     chromes=ui.model(**_PICKS),
     chrome=ui.row_of("chromes"),
     has_chromes=False,
+    pointers=ui.model(**_PICKS),
+    pointer=ui.row_of("pointers"),
+    psizes=ui.model(**_PICKS),
+    psize=ui.row_of("psizes"),
+    has_pointer=False,          # the console has a pointer: POINTER and its size show
     custom=False,               # the theme in use is custom: NAME shows
     edit_word="",               # the door's value
     wtab=ui.enum("pictures", "carts", init="pictures"),
@@ -172,6 +184,12 @@ def chrome_set():
     lay.acted()
 
 
+def pointer_set():
+    lay = _lay()
+    lay._theme.set_pointer(s.pointer, s.psize == "large")
+    lay.acted()
+
+
 def wallpaper():
     lay = _lay()
     tab, key = lay.wall_now()
@@ -220,6 +238,7 @@ ui.hook("frame_set", _preset("frame", "frame"))
 ui.hook("font_set", _preset("font", "font"))
 ui.hook("code_set", _preset("code_font", "code"))
 ui.hook("chrome_set", chrome_set)
+ui.hook("pointer_set", pointer_set)
 ui.action("wallpaper", "Wallpaper", wallpaper, hint="Open")
 ui.action("use_wall", "Use", use_wall, takes="row")
 ui.action("name_ask", "Name", name_ask, hint="Open")
@@ -248,6 +267,10 @@ def build():
             ui.label(CODE_SAMPLE, face="mono", tone="dim", shown="has_codes")
             ui.seg("Chrome size", "chrome", text="{.word}", look="cycle", on="chrome_set",
                    shown="has_chromes")
+            ui.seg("Pointer", "pointer", text="{.word}", look="cycle", on="pointer_set",
+                   shown="has_pointer")
+            ui.seg("Pointer size", "psize", text="{.word}", on="pointer_set",
+                   shown="has_pointer")
             ui.link("name_ask", "Keep as a theme", shown="custom")
             ui.link("edit", "{edit_word}")
         with ui.dialog("Name your theme", ["cancel", "keep"], labels=["Cancel", "{armed?Replace:Keep}"],
@@ -342,6 +365,12 @@ def fill(lay):
     if len(chromes) > 1:
         cur = ch["chrome"] if ch["chrome"] in chromes else chromes[0]
         _picks(lay, "chrome", [str(c) for c in chromes], ["%d×" % c for c in chromes], str(cur))
+    _set(lay, "has_pointer", ch["has_pointer"])
+    own = POINTER_NAMES[POINTERS.index(ch["own_pointer"])]
+    _picks(lay, "pointer", ("",) + POINTERS, (POINTER_OWN % own,) + POINTER_NAMES,
+           ch["pointer"])
+    _picks(lay, "psize", POINTER_SIZES, POINTER_SIZE_NAMES,
+           POINTER_SIZES[1 if ch["pointer_large"] else 0])
     _set(lay, "custom", name == "custom")
     _set(lay, "edit_word", "" if name == "custom" else "Makes a copy")
     _set(lay, "pics", pics)

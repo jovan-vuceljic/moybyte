@@ -108,6 +108,7 @@ import fontset as _fontset
 import shell_layout as _shell_layout
 import layout_base as _layout_base
 import iconsets as _iconsets
+import pointers as _pointers
 _ui_is_light = _ui_draw.is_light
 
 def _ui_text_w(t):
@@ -291,6 +292,14 @@ class Appearance:
         # of `ws.chrome_scales` or 0 for the board's default. It lifts chrome
         # above the tap floor; it can never take it below.
         self.chrome_scale = 0
+        # The POINTER (Appearance -> POINTER and its size, persisted): a family
+        # of runtime/toolkit/pointers.py or "" for the theme's own, and Large
+        # over Normal. `pointer_at` answers what the console draws.
+        self.pointer_pick = ""
+        self.pointer_large = False
+        self._ptr = ("pixel", 16)
+        self._ptr_key = [-1, 0]         # the look_gen and scale `_ptr` was read at
+        self.pointer_fill = None        # the fill `_ptr` draws in, where not its own
         # Panel THEME (Appearance -> THEMES): the chrome token set the panels/window
         # chrome/selection accents read each draw. Default = Moy in its Day
         # mode (`DEFAULT_THEME`, `DEFAULT_VARIANT`); load_system applies the
@@ -740,7 +749,10 @@ class Appearance:
         `own_code_font`, the source's own the same way (`_own_preset`); `wallpaper`, the wallpaper shown; `picture`, for the theme's
         picture, "mine" (Paint's, copied by a pick) or "theme" (the
         package's own); `chrome`, the chrome scale, and `chromes`, the
-        panel's choices. The page reads it when `look_gen` moves."""
+        panel's choices; `pointer`, the Pointer row's family ("" for the
+        theme's own), `own_pointer` the theme's, `pointer_large`, and
+        `has_pointer`, the console has a pointer to draw. The page reads it
+        when `look_gen` moves."""
         name = self.theme_name
         lk = (self.custom_look() or {}) if name == CUSTOM else {}
         c = self._cust if name == CUSTOM else None
@@ -759,7 +771,10 @@ class Appearance:
                 "own_code_font": self._own_preset(c, lk, "mono", code),
                 "code_fonts": self.code_fonts(), "wallpaper": self.wallpaper_id,
                 "picture": pic, "chrome": self.chrome_size(),
-                "chromes": tuple(self.ws.chrome_scales)}
+                "chromes": tuple(self.ws.chrome_scales), "pointer": self.pointer_pick,
+                "own_pointer": _pointers.theme_family(self.live.look),
+                "pointer_large": self.pointer_large,
+                "has_pointer": getattr(self.ws, "pointer", None) is not None}
 
     def _frame_style(self, c, lk):
         """The `style` of the active theme's `frame`: custom's own where a
@@ -1433,6 +1448,51 @@ class Appearance:
             w, h = ws.panel_wh
             kept = self._scales = (key, (1,) if key[0] else _layout_base.font_scales(w, h, key[1]))
         return kept[1]
+
+    def pointer_family(self):
+        """The family the pointer draws in: the Pointer row's pick, else the
+        theme's own (`pointers.theme_family`)."""
+        return self.pointer_pick or _pointers.theme_family(self.live.look)
+
+    def pointer_at(self, scale):
+        """(family, px): what the pointer draws at chrome scale `scale`, read
+        again when the look or the scale moved or a Pointer row changed. A
+        family the image holds no size of draws as the pixel family.
+        `pointer_fill` is read with it: the palette index the family's fill
+        takes from the accent picked in Appearance (`pointers.tint`; Blocks
+        only), else None, the family's own."""
+        k = self._ptr_key
+        if k[0] != self.look_gen or k[1] != scale:
+            fam = self.pointer_family()
+            px = _pointers.size(fam, scale, self.pointer_large)
+            if not px:
+                fam = "pixel"
+                px = _pointers.size(fam, scale, self.pointer_large)
+            self._ptr = (fam, px)
+            acc = None
+            if self.theme_name == CUSTOM and (self.custom_look() or {}).get("accent") is not None:
+                acc = self.ws.theme_colors["accent"]
+            self.pointer_fill = _pointers.tint(fam, acc)
+            k[0], k[1] = self.look_gen, scale
+        return self._ptr
+
+    def set_pointer(self, family, persist=True):
+        """Appearance -> POINTER: `family` one of `pointers.FAMILIES` (a
+        renamed family's old id read as its new one, `pointers.RENAMED`), or
+        "" (anything else) for the theme's own; persisted by default."""
+        family = _pointers.RENAMED.get(family, family)
+        self.pointer_pick = family if family in _pointers.FAMILIES else ""
+        self._ptr_key[0] = -1
+        if persist:
+            self.ws.system.set("pointer", self.pointer_pick)
+
+    def set_pointer_size(self, large, persist=True):
+        """Appearance -> POINTER SIZE: Large (True) or Normal; persisted by
+        default."""
+        self.pointer_large = large is True
+        self._ptr_key[0] = -1
+        if persist:
+            self.ws.system.set("pointer_large", self.pointer_large)
 
     def set_font_scale(self, scale, persist=True):
         """Set the system-UI font scale, relay the effective scale into the system

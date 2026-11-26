@@ -1197,7 +1197,7 @@
         ["keycap.bevel", "bool", false], ["field.border", "colour"], ["accents", "bool", true],
         ["scrim", "ring", "#000000", 0.7],
         ["icons.kind", "enum", ["smooth", "pixel"], null], ["icons.set", "text"],
-        ["icons.swap", "text"], ["icons.pixel_slots", "slots"],
+        ["icons.swap", "text"], ["icons.pixel_slots", "slots"], ["pointer", "text"],
         ["fam", "text"], ["w_med", "int", 100, 900], ["w_semi", "int", 100, 900],
         ["w_bold", "int", 100, 900],
         ["sizes.hh.title", "int", 8, 64], ["sizes.hh.key", "int", 8, 64],

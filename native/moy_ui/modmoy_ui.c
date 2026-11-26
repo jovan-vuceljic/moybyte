@@ -1433,17 +1433,17 @@ static mp_obj_t ui_glyph(size_t n_args, const mp_obj_t *a) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(ui_glyph_obj, 5, 5, ui_glyph);
 
-// icon_mask(cv, font, code, x, y, ci): the glyph at index byte `code` of icon set
-// file `font`
+// icon_mask(cv, font, code, x, y, ci, alpha=256): the glyph at index byte `code` of
+// icon set file `font`, at `alpha` (0..256) of its coverage
 static mp_obj_t ui_icon_mask(size_t n_args, const mp_obj_t *a) {
-    (void)n_args;
     moy_ui_sink_t s;
     sink_of(&s, a[0], mp_const_none);
     check(moy_ui_sink_mask(&s, (uint32_t)mp_obj_get_int_truncated(a[1]), mp_obj_get_int(a[2]),
-                           mp_obj_get_int(a[3]), mp_obj_get_int(a[4]), mp_obj_get_int(a[5])));
+                           mp_obj_get_int(a[3]), mp_obj_get_int(a[4]), mp_obj_get_int(a[5]),
+                           n_args > 6 ? mp_obj_get_int(a[6]) : 256));
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(ui_icon_mask_obj, 6, 6, ui_icon_mask);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(ui_icon_mask_obj, 6, 7, ui_icon_mask);
 
 // icons_use(f16, f24): the icon set the C parts draw
 static mp_obj_t ui_icons_use(mp_obj_t f16, mp_obj_t f24) {

@@ -311,7 +311,7 @@ class moy_theme_mapent_t(_c.Structure):
 
 class moy_theme_look_t(_c.Structure):
     _fields_ = [
-        ("v", _c.c_int32 * 265),
+        ("v", _c.c_int32 * 266),
         ("n_paints", _c.c_uint8),
         ("n_tiles", _c.c_uint8),
         ("n_appbtn", _c.c_uint8),

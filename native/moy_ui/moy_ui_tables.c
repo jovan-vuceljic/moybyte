@@ -840,6 +840,7 @@ const char *const moy_theme_seed_src[MOY_THEME_SEEDS] = {
     "                \"on\": { \"mark\": \"tint\", \"c\": \"value\", \"ink\": \"ink_accent\" } } },\012"
     "    \"shadow_back\": 0.3,\012"
     "    \"icons\": { \"kind\": \"smooth\", \"set\": \"default\" },\012"
+    "    \"pointer\": \"moy\",\012"
     "    \"app_buttons\": { \"calc\": { \"normal\": { \"font\": \"key\" }, \"tonal\": { \"font\": \"op\" },\012"
     "                               \"primary\": { \"font\": \"op\" } } },\012"
     "    \"dark\": {\012"
@@ -947,6 +948,7 @@ const char *const moy_theme_seed_src[MOY_THEME_SEEDS] = {
     "      \"card\": { \"focus\": { \"mark\": \"ring\", \"w\": 3, \"gap\": 2, \"c\": \"accent\" },\012"
     "                \"on\": { \"mark\": \"underline\", \"w\": 3, \"gap\": 2, \"c\": \"value\" } } },\012"
     "    \"icons\": { \"kind\": \"smooth\", \"set\": \"default\" },\012"
+    "    \"pointer\": \"blocks\",\012"
     "    \"app_buttons\": { \"calc\": { \"normal\": { \"font\": \"key\" }, \"tonal\": { \"font\": \"op\" },\012"
     "                               \"primary\": { \"font\": \"op\" } } },\012"
     "    \"win_r\": 16, \"card_r\": 14, \"key_r\": 12,\012"
@@ -1032,6 +1034,7 @@ const char *const moy_theme_seed_src[MOY_THEME_SEEDS] = {
     "                \"on\": { \"mark\": \"fill\", \"c\": \"value\", \"ink\": \"value_ink\" } } },\012"
     "    \"accents\": false,\012"
     "    \"icons\": { \"kind\": \"smooth\", \"set\": \"default\" },\012"
+    "    \"pointer\": \"moy\",\012"
     "    \"app_buttons\": { \"calc\": { \"normal\": { \"font\": \"key\" }, \"tonal\": { \"font\": \"op\" },\012"
     "      \"primary\": { \"font\": \"op\" } } },\012"
     "    \"buttons\": { \"toggle\": { \"check\": true } },\012"
@@ -1082,7 +1085,7 @@ const int moy_theme_n_parts = MOY_THEME_PARTS;
 const int moy_theme_n_states = MOY_THEME_STATES;
 const int moy_theme_n_font_roles = MOY_THEME_FONT_ROLES;
 const int moy_theme_n_homes = MOY_THEME_HOMES;
-const uint16_t moy_theme_seed_len[MOY_THEME_SEEDS] = {6072, 4795, 5074};
+const uint16_t moy_theme_seed_len[MOY_THEME_SEEDS] = {6094, 4820, 5096};
 
 // themes/tiny5.fnt
 static const uint8_t font_0[682] = {
@@ -1548,6 +1551,7 @@ const moy_theme_leaf_t moy_theme_leaves[MOY_THEME_LEAVES] = {
     {MOY_THEME_LK_BITS, 0, 0, INT32_MIN},  // icons.pixel_slots.1
     {MOY_THEME_LK_BITS, 0, 0, INT32_MIN},  // icons.pixel_slots.2
     {MOY_THEME_LK_BITS, 0, 0, INT32_MIN},  // icons.pixel_slots.3
+    {MOY_THEME_LK_TEXT, 0, 0, INT32_MIN},  // pointer
     {MOY_THEME_LK_TEXT, 0, 0, INT32_MIN},  // fam
     {MOY_THEME_LK_INT, 100, 900, INT32_MIN},  // w_med
     {MOY_THEME_LK_INT, 100, 900, INT32_MIN},  // w_semi
@@ -1816,6 +1820,7 @@ const char *const moy_theme_leaf_names[MOY_THEME_LEAVES] = {
     "icons.pixel_slots.1",
     "icons.pixel_slots.2",
     "icons.pixel_slots.3",
+    "pointer",
     "fam",
     "w_med",
     "w_semi",
@@ -2041,18 +2046,19 @@ const moy_theme_field_t moy_theme_fields[MOY_THEME_LOOK_FIELDS] = {
     {"icons.set", MOY_THEME_FT_TEXT, 1, 247},
     {"icons.swap", MOY_THEME_FT_TEXT, 1, 248},
     {"icons.pixel_slots", MOY_THEME_FT_SLOTS, 4, 249},
-    {"fam", MOY_THEME_FT_TEXT, 1, 253},
-    {"w_med", MOY_THEME_FT_INT, 1, 254},
-    {"w_semi", MOY_THEME_FT_INT, 1, 255},
-    {"w_bold", MOY_THEME_FT_INT, 1, 256},
-    {"sizes.hh.title", MOY_THEME_FT_INT, 1, 257},
-    {"sizes.hh.key", MOY_THEME_FT_INT, 1, 258},
-    {"sizes.hh.op", MOY_THEME_FT_INT, 1, 259},
-    {"sizes.hh.result", MOY_THEME_FT_INT, 1, 260},
-    {"sizes.dk.title", MOY_THEME_FT_INT, 1, 261},
-    {"sizes.dk.key", MOY_THEME_FT_INT, 1, 262},
-    {"sizes.dk.op", MOY_THEME_FT_INT, 1, 263},
-    {"sizes.dk.result", MOY_THEME_FT_INT, 1, 264},
+    {"pointer", MOY_THEME_FT_TEXT, 1, 253},
+    {"fam", MOY_THEME_FT_TEXT, 1, 254},
+    {"w_med", MOY_THEME_FT_INT, 1, 255},
+    {"w_semi", MOY_THEME_FT_INT, 1, 256},
+    {"w_bold", MOY_THEME_FT_INT, 1, 257},
+    {"sizes.hh.title", MOY_THEME_FT_INT, 1, 258},
+    {"sizes.hh.key", MOY_THEME_FT_INT, 1, 259},
+    {"sizes.hh.op", MOY_THEME_FT_INT, 1, 260},
+    {"sizes.hh.result", MOY_THEME_FT_INT, 1, 261},
+    {"sizes.dk.title", MOY_THEME_FT_INT, 1, 262},
+    {"sizes.dk.key", MOY_THEME_FT_INT, 1, 263},
+    {"sizes.dk.op", MOY_THEME_FT_INT, 1, 264},
+    {"sizes.dk.result", MOY_THEME_FT_INT, 1, 265},
 };
 
 const uint16_t moy_theme_field_order[MOY_THEME_LOOK_FIELDS] = {
@@ -2060,16 +2066,16 @@ const uint16_t moy_theme_field_order[MOY_THEME_LOOK_FIELDS] = {
     108, 116, 179, 175, 180, 173, 178, 174, 177, 176, 155, 151, 156, 149, 154, 150,
     153, 152, 163, 159, 164, 157, 162, 158, 161, 160, 187, 183, 188, 181, 186, 182,
     185, 184, 171, 167, 172, 165, 170, 166, 169, 168, 73, 71, 147, 148, 100, 79,
-    99, 130, 129, 131, 133, 132, 77, 206, 199, 69, 123, 120, 119, 122, 121, 118,
+    99, 130, 129, 131, 133, 132, 77, 207, 199, 69, 123, 120, 119, 122, 121, 118,
     124, 78, 202, 205, 203, 204, 72, 193, 198, 194, 192, 195, 196, 197, 139, 140,
     128, 190, 189, 191, 145, 67, 63, 66, 64, 68, 62, 65, 50, 46, 49, 47,
     51, 52, 54, 53, 45, 48, 60, 56, 59, 57, 61, 55, 58, 43, 39, 42,
     40, 44, 38, 41, 29, 25, 28, 26, 30, 24, 27, 36, 32, 35, 33, 37,
     31, 34, 22, 18, 21, 19, 23, 17, 20, 8, 4, 7, 5, 9, 3, 6,
-    15, 11, 14, 12, 16, 10, 13, 81, 80, 82, 142, 143, 144, 2, 1, 0,
-    201, 75, 76, 141, 215, 216, 217, 214, 211, 212, 213, 210, 126, 127, 125, 135,
-    138, 137, 136, 134, 209, 207, 208, 85, 96, 89, 92, 93, 94, 95, 90, 91,
-    84, 83, 98, 86, 87, 97, 88, 74, 70, 146,
+    15, 11, 14, 12, 16, 10, 13, 81, 80, 82, 142, 143, 144, 206, 2, 1,
+    0, 201, 75, 76, 141, 216, 217, 218, 215, 212, 213, 214, 211, 126, 127, 125,
+    135, 138, 137, 136, 134, 210, 208, 209, 85, 96, 89, 92, 93, 94, 95, 90,
+    91, 84, 83, 98, 86, 87, 97, 88, 74, 70, 146,
 };
 
 const moy_theme_field_t moy_theme_btn_fields[8] = {

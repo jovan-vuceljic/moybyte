@@ -363,6 +363,26 @@ void mg_copy_block(uint16_t *dst, size_t dcap, int dstride,
     }
 }
 
+void mg_restore_under(uint16_t *px, size_t cap, int stride, int x, int y, int w, int h,
+                      const uint16_t *saved, const uint16_t *drawn, size_t n)
+{
+    if (stride <= 0 || x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > stride
+        || (size_t)w * (size_t)h > n
+        || ((size_t)y + (size_t)h) * (size_t)stride > cap) {
+        return;
+    }
+    for (int r = 0; r < h; r++) {
+        uint16_t *row = px + (size_t)(y + r) * (size_t)stride + (size_t)x;
+        const uint16_t *s = saved + (size_t)r * (size_t)w;
+        const uint16_t *d = drawn + (size_t)r * (size_t)w;
+        for (int c = 0; c < w; c++) {
+            if (row[c] == d[c]) {
+                row[c] = s[c];
+            }
+        }
+    }
+}
+
 /* ---- blits ------------------------------------------------------------ */
 
 void mg_blit565(uint16_t *dst, size_t dcap, int dw, int dh, int dx, int dy,

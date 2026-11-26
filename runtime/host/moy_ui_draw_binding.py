@@ -169,10 +169,10 @@ def install(m, lib, tokens):
         buf = (c.c_uint8 * 256).from_buffer_copy(b[:256])
         lib.moy_ui_moy_use(c.byref(buf), int(clear))
 
-    def icon_mask(cv, font, code, x, y, ci):
+    def icon_mask(cv, font, code, x, y, ci, alpha=256):
         s = sink(cv, None)
         _check(lib.moy_ui_sink_mask(c.byref(s), int(font), int(code), int(x), int(y),
-                                    int(ci)))
+                                    int(ci), int(alpha)))
 
     def row(cv, look, rect, kind, flags, interact, label, value, glyph_, glyph_size,
             glyph_ink, value_ink, pad, pad_right, text_dy, scale, fs, colors, phase):

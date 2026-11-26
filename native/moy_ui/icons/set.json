@@ -142,6 +142,134 @@
  "pixel_only": [
   "moy"
  ],
+ "pointers": {
+  "families": [
+   "pixel",
+   "moy",
+   "coast",
+   "luna",
+   "blocks"
+  ],
+  "files": {
+   "ptr-blocks-16": {
+    "bytes": 812,
+    "family": "blocks",
+    "size": 16
+   },
+   "ptr-blocks-32": {
+    "bytes": 6410,
+    "family": "blocks",
+    "size": 32
+   },
+   "ptr-blocks-48": {
+    "bytes": 13767,
+    "family": "blocks",
+    "size": 48
+   },
+   "ptr-coast-16": {
+    "bytes": 789,
+    "family": "coast",
+    "size": 16
+   },
+   "ptr-coast-32": {
+    "bytes": 4145,
+    "family": "coast",
+    "size": 32
+   },
+   "ptr-coast-48": {
+    "bytes": 8468,
+    "family": "coast",
+    "size": 48
+   },
+   "ptr-luna-16": {
+    "bytes": 1008,
+    "family": "luna",
+    "size": 16
+   },
+   "ptr-luna-32": {
+    "bytes": 8089,
+    "family": "luna",
+    "size": 32
+   },
+   "ptr-luna-48": {
+    "bytes": 17570,
+    "family": "luna",
+    "size": 48
+   },
+   "ptr-moy-16": {
+    "bytes": 1066,
+    "family": "moy",
+    "size": 16
+   },
+   "ptr-moy-32": {
+    "bytes": 7560,
+    "family": "moy",
+    "size": 32
+   },
+   "ptr-moy-48": {
+    "bytes": 16209,
+    "family": "moy",
+    "size": 48
+   },
+   "ptr-pixel-16": {
+    "bytes": 788,
+    "family": "pixel",
+    "size": 16
+   },
+   "ptr-pixel-32": {
+    "bytes": 1839,
+    "family": "pixel",
+    "size": 32
+   },
+   "ptr-pixel-48": {
+    "bytes": 3605,
+    "family": "pixel",
+    "size": 48
+   }
+  },
+  "layers": [
+   "line",
+   "fill",
+   "accent"
+  ],
+  "shapes": [
+   "arrow",
+   "hand",
+   "text",
+   "ew",
+   "ns",
+   "nwse",
+   "nesw",
+   "move",
+   "busy"
+  ],
+  "tiers": {
+   "desktop": [
+    "ptr-blocks-32",
+    "ptr-blocks-48",
+    "ptr-coast-32",
+    "ptr-coast-48",
+    "ptr-luna-32",
+    "ptr-luna-48",
+    "ptr-moy-32",
+    "ptr-moy-48",
+    "ptr-pixel-32",
+    "ptr-pixel-48"
+   ],
+   "handheld": [
+    "ptr-blocks-16",
+    "ptr-blocks-32",
+    "ptr-coast-16",
+    "ptr-coast-32",
+    "ptr-luna-16",
+    "ptr-luna-32",
+    "ptr-moy-16",
+    "ptr-moy-32",
+    "ptr-pixel-16",
+    "ptr-pixel-32"
+   ]
+  }
+ },
  "sets": {
   "coast": [
    "ink"

@@ -1274,10 +1274,13 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
 
     def cursor_shape(self):
         """The pointer's shape: a resize's arrows over a window's resize
-        zone and while one is in flight (`RZ_CURSOR`), else None."""
+        zone and while one is in flight (`RZ_CURSOR`), "move" while a window
+        is dragged, else None."""
         g = self._resize
         if g is not None:
             return RZ_CURSOR.get(g[7])
+        if self._drag is not None:
+            return "move"
         p = self.ws.pointer
         if self.mode != "desktop" or p is None:
             return None

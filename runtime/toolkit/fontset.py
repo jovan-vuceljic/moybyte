@@ -140,6 +140,8 @@ def icon_file(name):
         return None
     if name == "system_icons.moygfx":
         name = "pixel/" + name
+    elif name.startswith("ptr-"):
+        name = "pointer/" + name
     try:
         with open(d + "/" + name, "rb") as f:
             return f.read()

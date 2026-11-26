@@ -338,6 +338,12 @@ int mg_shift_clip(int stride, int rows, int rx, int ry, int rw, int rh,
 void mg_copy_block(uint16_t *dst, size_t dcap, int dstride,
                    const uint16_t *src, size_t scap, int sstride,
                    int dx, int dy, int sx, int sy, int w, int h);
+/* The w x h block at (x, y) of `px` (stride px a row) put back from `saved`
+ * wherever it still holds `drawn` (both w x h, packed): what was under a
+ * pointer drawn there, its pixels that something painted since kept. The
+ * block must lie inside the buffer; one that does not is left alone. */
+void mg_restore_under(uint16_t *px, size_t cap, int stride, int x, int y, int w, int h,
+                      const uint16_t *saved, const uint16_t *drawn, size_t n);
 /* mg_copy_block's clip: b = {dx, dy, sx, sy, w, h} in, the block inside a
  * dw x dh destination and an sw x sh source out. 0: empty. */
 int mg_block_clip(int dw, int dh, int sw, int sh, int *b);
