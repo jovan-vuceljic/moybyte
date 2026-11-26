@@ -463,7 +463,7 @@ const char *moy_web_stamp_text(void);
 // http. An image takes it where its board defines MOY_NET_HTTPS; elsewhere
 // the route answers 404 and GET /sync names no "tls".
 #define MOY_TLS_PORT 443
-#define MOY_TLS_CONNS 3             // connections at once (the live socket, the terminal, a request); past them the backlog waits
+#define MOY_TLS_CONNS 2             // connections at once (the live socket, a request); past them the backlog waits
 #define MOY_TLS_IDLE_MS 120000u      // a page at the pairing prompt holds no connection
 #define MOY_TLS_CERT "/tls.der"
 #define MOY_TLS_KEY "/tls.key"
