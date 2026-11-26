@@ -12,7 +12,7 @@ what it uses; apps lease the rest.** Every resource is one of:
 
 | class | meaning | T-Deck examples |
 |---|---|---|
-| `os` | the OS drives it for itself | SPI2 (panel, SD **and the SX1262's CS 9, MISO 38**: `firmware/lilygo_t_deck_plus_mainline/native/moy_lcd/modmoy_lcd.c`), I2C0 (keyboard, touch), the trackball, the speaker, the power rail |
+| `os` | the OS drives it for itself | SPI2 (panel, SD **and the SX1262's CS 9, MISO 38**: `native/moy_lcd/modmoy_lcd.c`), I2C0 (keyboard, touch), the trackball, the speaker, the power rail |
 | `class` | the OS drives it and exposes a **device API** | the ES7210 mic, the LoRa radio (raw packets and LoRaWAN), the GPS on UART0, battery, brightness |
 | `lease` | handed raw to one process at a time | none on the T-Deck, whose every pad is wired; a P4's free pins |
 | `never` | present, off limits, with the reason | strapping, PSRAM and USB pins |

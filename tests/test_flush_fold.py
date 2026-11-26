@@ -122,7 +122,7 @@ def test_both_banded_boards_link_the_shared_fold():
     INCLUDES it and calls it rather than hand-rolling a second gather."""
     axs = (GUITION / "native" / "moy_axs" / "modmoy_axs.c").read_text(
         encoding="utf-8")
-    lcd = (TDECK / "native" / "moy_lcd" / "modmoy_lcd.c").read_text(
+    lcd = (ROOT / "native" / "moy_lcd" / "modmoy_lcd.c").read_text(
         encoding="utf-8")
     for src in (axs, lcd):
         assert '#include "moy_fold.h"' in src
@@ -145,7 +145,7 @@ def test_the_arm_is_consumed_with_the_feeder_idle():
     under it -- the class of race moy_flush.h says every clause of the handoff
     was."""
     for path in (GUITION / "native" / "moy_axs" / "modmoy_axs.c",
-                 TDECK / "native" / "moy_lcd" / "modmoy_lcd.c"):
+                 ROOT / "native" / "moy_lcd" / "modmoy_lcd.c"):
         src = path.read_text(encoding="utf-8")
         for verb in ("kkick", "kship"):
             head = src.index("int moy_%s_%s(int n) {"
@@ -252,7 +252,7 @@ def test_the_twin_panel_verbs_stay_byte_identical(verb):
     NOT merged into a shared header: the value here is the REVIEW, and a
     parameterised body over two transports is what the board-ports doc already
     declined."""
-    lcd = (TDECK / "native" / "moy_lcd" / "modmoy_lcd.c").read_text(
+    lcd = (ROOT / "native" / "moy_lcd" / "modmoy_lcd.c").read_text(
         encoding="utf-8")
     axs = (GUITION / "native" / "moy_axs" / "modmoy_axs.c").read_text(
         encoding="utf-8")

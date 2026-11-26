@@ -1,8 +1,8 @@
 # moy_flush: the shared banded-flush engine under the two S3 panel drivers.
 #
 # NOT a MicroPython module -- it registers no qstr and no globals table. It is
-# a support library the board-authored panel modules (the T-Deck's moy_lcd,
-# the Guition's moy_axs) link and call; see moy_flush.h for the split, and
+# a support library the panel modules (the shared SPI moy_lcd, the T-Deck's
+# and the CoreS3's; the Guition's moy_axs) link and call; see moy_flush.h for the split, and
 # moy_fold.h for the game fold that rides beside it (both boards, one body). It
 # rides the [native.shared] staging anyway, because that is where "which C
 # crosses to which board" is written down (#161), and a board with no banded
