@@ -480,6 +480,9 @@ class Scheduler:
         running = self.find(name)
         if running is not None:
             return running.pid
+        if ON_BOARD and app_perms.app_id(cart) in ON_BOARD:
+            _log(INFO, None, "%s: its service runs on the board" % name)
+            return None
         granted, absent, refusal = app_perms.check(cart, rec, have)
         pid = _L.spawn(name) if _L is not None else self._next_pid()
         p = self.procs[pid] = Proc(pid, SERVICE, name, cart)
@@ -1213,6 +1216,31 @@ def as_service(cart):
 
 
 SCHED = Scheduler()
+
+# The apps whose services run on this console's board, not here: the browser
+# console a Zero serves, whose live socket names them (native/moy_net/
+# moy_svc_web.c, the board's 'H'; firmware/web_runner/web_boot.py's
+# live_pump). Their windows reach those services over the socket, and a
+# service of theirs never starts here, so the radio a service holds is held
+# once (#256).
+ON_BOARD = ()
+
+
+def on_board(apps, sched=None):
+    """The board now runs the services of `apps` (app ids): each of them
+    running here is stopped, and none of them starts here while it runs
+    there (`Scheduler.start`)."""
+    global ON_BOARD
+    sched = sched or SCHED
+    ON_BOARD = tuple(apps)
+    if not ON_BOARD:
+        return
+    import app_perms
+    for p in list(sched.procs.values()):
+        if (p.kind == SERVICE and p.state not in (EXITED, STOPPING) and p.cart is not None
+                and app_perms.app_id(p.cart) in ON_BOARD):
+            _log(INFO, p.pid, "its service runs on the board")
+            sched.stop(p.pid)
 
 
 def tick(slack_us=0):

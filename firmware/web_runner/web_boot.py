@@ -1374,7 +1374,19 @@ def state_json():
     st["devs"] = _live_devs()
     g = _S.get("gpio")
     st["gpio"] = {"live": g.live, "rt": g.rt} if g is not None else None
+    st["svc"] = _services()
     return json.dumps(st)
+
+
+def _services():
+    """The apps' services as this page sees them (#256): those its board
+    runs (its live socket's 'H') and those running here, by name."""
+    import scheduler
+    here = [p.name for p in scheduler.SCHED.procs.values()
+            if p.kind == scheduler.SERVICE and p.state not in (scheduler.EXITED,)]
+    import moy_net
+    msgs = moy_net.live_msgs() if hasattr(moy_net, "live_msgs") else None
+    return {"board": list(scheduler.ON_BOARD), "here": here, "msgs": msgs}
 
 
 def _live_devs():
@@ -2044,6 +2056,12 @@ def live_pump(gap_ms=0, hidden=0):
         st["gap"] = st["hidden"] = False
     import moy_net
     out = moy_net.live_take() or b""
+    served = moy_net.live_served() if hasattr(moy_net, "live_served") else ""
+    if served != st.get("served", ""):
+        # The board's 'H': the apps whose services run there (#256).
+        st["served"] = served
+        import scheduler
+        scheduler.on_board(served.split(",") if served else ())
     g = _S.get("gpio")
     if g is not None:
         for pl in g.take_live():

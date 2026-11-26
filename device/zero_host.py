@@ -876,16 +876,27 @@ def host_class():
     return WebHost
 
 
-def make_system():
+def make_system(services=None):
     """The system root a page keeps its Settings and badges in
-    (`moy_webhost.StoreSystem`), or None where the store cannot be read: the
-    page then keeps them in the tab, and the carts still sync."""
+    (`moy_webhost.StoreSystem`), over the services' rows where this board
+    runs app services, or None where the store cannot be read: the page
+    then keeps them in the tab, and the carts still sync."""
     try:
         from moy_webhost import StoreSystem
-        return StoreSystem(CARTS_DIR)
+        return StoreSystem(CARTS_DIR, services.rows if services is not None else None)
     except Exception as exc:             # noqa: BLE001 -- the store serves regardless
         print("ZERO settings: unavailable:", exc)
         return None
+
+
+def make_services():
+    """The apps' services this board runs (zero_svc.Services), made at the
+    start (THE HEAP'S SHAPE), or None where this image runs none (the C3)."""
+    try:
+        import zero_svc
+    except ImportError:
+        return None
+    return zero_svc.make(CARTS_DIR)
 
 
 class ImprovBoard:
@@ -1181,13 +1192,14 @@ def way_back(addon):
 #      system receiver's parts, an install's buffers and listing).
 LASTING = ("moy_carts", "cart_index", "cart_unpack", "moy_seed", "moy_store_base",
            "web_addon", "moy_sync", "moy_webhost", "moy_ota", "ticks", "zero_wifi",
-           "ssh_service", "zero_shell", "cart_net", "zero_improv", "zero_setup", "moy_docs")
+           "ssh_service", "zero_shell", "cart_net", "zero_improv", "zero_setup", "moy_docs",
+           "zero_svc", "app_keys")
 # The built-in modules those import inside a function. One costs no code,
 # but its first import takes a slot of sys.modules, and that table grows by
 # a block made wherever the heap then stands.
 BUILT_IN = ("binascii", "deflate", "esp32", "gc", "hashlib", "io", "json", "machine",
             "moy_improv", "moy_kernel", "moy_net", "moy_sh", "moy_spine", "moy_ufiles",
-            "moy_web", "os", "time", "zlib")
+            "moy_web", "os", "time", "zlib", "moycore", "moy_app", "moy_evq", "moy_log")
 GC_STEP = 2048
 
 
@@ -1242,7 +1254,8 @@ def start():
         name = me.get("name") or HOSTNAME
     _mkdir(SYSTEM_DIR)
     gc.collect()
-    host = host_class()(CARTS_DIR, auth=SYSTEM_DIR, system=make_system())
+    services = SERVICES[0] = make_services()
+    host = host_class()(CARTS_DIR, auth=SYSTEM_DIR, system=make_system(services))
     ota, task = make_updater(me)
     addon = make_addon(ota)
     official = make_official(ota, addon)
@@ -1256,6 +1269,11 @@ def start():
         # after an unattended update wants to see first.
         task.boot_check()
     host.start(ip)
+    # The apps' services that start with the board (zero_svc), before the
+    # serving line a cable's reader waits for: their windows reach them over
+    # the host's live socket.
+    if services is not None:
+        services.boot()
     if improv is not None:
         improv.serving = True
         improv.finish()              # a join from the setup AP, answered now it serves
@@ -1292,6 +1310,8 @@ def start():
         # The console boards poll between frames; this board HAS no frames, so
         # its loop is this and a short sleep.
         host.poll()
+        if services is not None:
+            services.turn()
         if improv is not None:
             improv.poll()
         if tail is not None:
@@ -1325,6 +1345,7 @@ def start():
 
 
 _TURN = [None]                          # the turn `start` made, for `pump`
+SERVICES = [None]                       # the apps' services `start` made (zero_svc), for `ps`
 
 
 def pump():

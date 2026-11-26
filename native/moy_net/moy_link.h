@@ -172,6 +172,9 @@ void moy_svc_web_give(const uint8_t *p, size_t n);
 void moy_svc_web_socket(int on);
 void moy_svc_web_pump(void);
 void moy_svc_web_stats(uint32_t *apps, uint32_t *up, uint32_t *down, uint32_t *dropped);
+// The apps whose services run on the board (its 'H', while the socket is
+// open), ',' between, into `out` (cap bytes): their length.
+size_t moy_svc_web_served(char *out, size_t cap);
 #endif
 
 #endif

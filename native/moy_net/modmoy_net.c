@@ -419,14 +419,14 @@ MP_DEFINE_CONST_OBJ_TYPE(moy_net_link_type, MP_QSTR_Link, MP_TYPE_FLAG_NONE,
 static mp_obj_t mod_live_stats(void) {
     moy_live_stats_t l;
     moy_live_stats(&l);
-    uint32_t v[16] = {l.sessions, l.busy, l.up, l.down, l.air_out, l.air_in, l.refused,
+    uint32_t v[18] = {l.sessions, l.busy, l.up, l.down, l.air_out, l.air_in, l.refused,
                       l.echoes, l.live, l.radio, l.devs, l.dev_calls, l.dev_writes,
-                      l.dev_pushes, l.hints, l.reqs};
-    mp_obj_t t[16];
-    for (int i = 0; i < 16; i++) {
+                      l.dev_pushes, l.hints, l.reqs, l.msgs_up, l.msgs_down};
+    mp_obj_t t[18];
+    for (int i = 0; i < 18; i++) {
         t[i] = mp_obj_new_int_from_uint(v[i]);
     }
-    return mp_obj_new_tuple(16, t);
+    return mp_obj_new_tuple(18, t);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_stats_obj, mod_live_stats);
 
@@ -446,6 +446,19 @@ static mp_obj_t mod_live_mine(mp_obj_t on) {
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mod_live_mine_obj, mod_live_mine);
+
+// live_serve(app, on): app `app`'s service runs on this board, its page's
+// windows served over the live socket's channel 'm' (on), or no longer
+// (moy_live_svc_serve). Where the image runs services (native/moycore's
+// moycore_svc.h): the board half links with it.
+#if defined(__has_include) && __has_include("moycore_svc.h")
+#define LIVE_SERVE 1
+static mp_obj_t mod_live_serve(mp_obj_t app, mp_obj_t on) {
+    moy_live_svc_serve(mp_obj_str_get_str(app), mp_obj_is_true(on));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mod_live_serve_obj, mod_live_serve);
+#endif
 #endif
 
 #if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
@@ -514,6 +527,28 @@ static mp_obj_t mod_live_devs(void) {
     return mp_obj_new_tuple(13, t);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_devs_obj, mod_live_devs);
+
+// live_served() -> str: the apps whose services run on the page's board, ','
+// between, as its 'H' said; "" while the socket is shut (moy_svc_web.c).
+static mp_obj_t mod_live_served(void) {
+    char apps[256];
+    size_t n = moy_svc_web_served(apps, sizeof apps);
+    return mp_obj_new_str(apps, n);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_served_obj, mod_live_served);
+
+// live_msgs() -> (apps, up, down, dropped): the stand-ins open, the apps'
+// messages sent up and taken down, and those dropped (moy_svc_web.c).
+static mp_obj_t mod_live_msgs(void) {
+    uint32_t v[4];
+    moy_svc_web_stats(&v[0], &v[1], &v[2], &v[3]);
+    mp_obj_t t[4];
+    for (int i = 0; i < 4; i++) {
+        t[i] = mp_obj_new_int_from_uint(v[i]);
+    }
+    return mp_obj_new_tuple(4, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_msgs_obj, mod_live_msgs);
 #endif
 
 #endif
@@ -1275,6 +1310,9 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_live_stats), MP_ROM_PTR(&mod_live_stats_obj)},
     {MP_ROM_QSTR(MP_QSTR_live_hint), MP_ROM_PTR(&mod_live_hint_obj)},
     {MP_ROM_QSTR(MP_QSTR_live_mine), MP_ROM_PTR(&mod_live_mine_obj)},
+    #ifdef LIVE_SERVE
+    {MP_ROM_QSTR(MP_QSTR_live_serve), MP_ROM_PTR(&mod_live_serve_obj)},
+    #endif
     #endif
     #if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
     {MP_ROM_QSTR(MP_QSTR_live_take), MP_ROM_PTR(&mod_live_take_obj)},
@@ -1283,6 +1321,8 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_live_info), MP_ROM_PTR(&mod_live_info_obj)},
     {MP_ROM_QSTR(MP_QSTR_live_kinds), MP_ROM_PTR(&mod_live_kinds_obj)},
     {MP_ROM_QSTR(MP_QSTR_live_devs), MP_ROM_PTR(&mod_live_devs_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_served), MP_ROM_PTR(&mod_live_served_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_msgs), MP_ROM_PTR(&mod_live_msgs_obj)},
     #endif
     #endif
 };

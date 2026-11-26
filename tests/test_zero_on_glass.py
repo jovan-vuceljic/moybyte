@@ -179,6 +179,20 @@ class Zero:
         finally:
             self.restart(then)
 
+    def peek(self, expr):
+        """`expr` evaluated at the REPL with the host's loop stopped, then
+        the loop taken up again where it stood (zero_host.pump), nothing
+        reset: what runs on its own tasks (an app's service) runs on."""
+        r = Z.Repl(self.b.ser)
+        r.enter(clean=False)
+        try:
+            got = r.eval(expr)
+        finally:
+            self.b.ser.write(b"import zero_host\nzero_host.pump()\x04")
+            self.b.ser.flush()
+            r._until(lambda b: b.endswith(b"OK"), 10, "sign of the loop taken up again")
+        return got
+
     def look(self):
         """A serving board's heaps between two requests, read at the REPL
         with the host's loop stopped and then taken up again where it stood
@@ -888,6 +902,115 @@ def test_a_pin_write_reaches_the_pin_and_comes_back(zero, mirror, tmp_path):
               "p90 %.1f, max %d ms; live %s" % (zero.name, arm, len(rt), min(rt), med, p90,
                                                 max(rt), got["live"]))
     assert Z.rtt(arms["socket"])[0] < Z.rtt(arms["http"])[0], arms
+
+
+MESH_CART = ROOT / "tests" / "fixtures" / "apps" / "moymesh.moy"
+MESH_SVC = ("window.__moyState().then(function (s) { return 'MESH ' + JSON.stringify("
+            "{cart: s.cart, svc: s.svc, devs: s.devs}); })")
+MESH_TEXT = "hi-from-the-page"
+SVC_LOOK = ("(lambda s: (s.info(), __import__('moycore').svc_budget(), "
+            "s.rows.get('moymesh_log', None), __import__('moy_lora').owner(), "
+            "__import__('moy_log').read(0, 32), __import__('moy_net').live_stats()[16:]) "
+            "if s else None)"
+            "(__import__('zero_host').SERVICES[0])")
+
+
+MEM_LOOK = ("(lambda e: (__import__('gc').collect(), e.idf_heap_info(%d), "
+            "e.idf_heap_info(0x400)))(__import__('esp32'))" % Z.INTERNAL_HEAP)
+
+
+def _mem(zero):
+    """(internal free, internal largest, PSRAM free) bytes, nothing reset."""
+    _, internal, psram = zero.peek(MEM_LOOK)
+    free, largest = Z.internal_heap(internal)
+    return free, largest, sum(x[1] for x in psram if x)
+
+
+def _svc_look(zero):
+    """The board's services, its services' budget, Moy Mesh's log of
+    messages, the radio's owner, the OS log and the live socket's apps'
+    messages up and down, nothing reset."""
+    return zero.peek(SVC_LOOK)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_moy_mesh_s_window_on_the_page_reaches_its_service_on_the_board(zero, mirror, tmp_path):
+    """Moy Mesh's service runs on the XIAO (device/zero_svc.py, #256): up at
+    the board's start (its manifest asks for `autostart`; the bench copy
+    adds it), holding the radio. The page opens Moy Mesh, its board names
+    the app ('H'), so the page runs no service of its own, and the window's
+    message crosses the live socket's channel 'm' to the service, which
+    sends it on the radio and logs it in the app's prefs on the board. The
+    page closed, the service runs on. No second LoRa node is on the bench:
+    what is held is the transmit and the service's own record."""
+    _needs_password(zero)
+    if zero.name != "xiao_zero":
+        pytest.skip("%s takes no Lua tier" % zero.name)
+    with zero.repl(clean=False) as r:
+        dst = CARTS + "/moymesh.moy"
+        r.mkdirs(dst)
+        for f in sorted(os.listdir(MESH_CART)):
+            data = (MESH_CART / f).read_bytes()
+            if f == "manifest.json":
+                m = json.loads(data)
+                m["moybyte"]["permissions"].append("autostart")
+                data = json.dumps(m).encode()
+            r.write(dst + "/" + f, data)
+    # the board reset (the REPL's end): the pushed cart's service up at its
+    # start, its radio opened once its node key is made
+    for _ in range(12):
+        time.sleep(5)
+        info, budget, _log, owner, _said, _msgs = _svc_look(zero)
+        if owner:
+            break
+    assert [i[0] for i in info] == ["moymesh"] and info[0][2] != 4, info
+    assert owner == info[0][1], "the service holds the radio: owner %r" % owner
+    pid = info[0][1]
+    idle = _mem(zero)
+    print("moymesh on %s: %s, the budget %s; internal free %d largest %d, PSRAM free %d"
+          % ((zero.name, info, budget) + idle))
+    steps = sign_in(zero) + [
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.svc && "
+                    "s.svc.board.indexOf('moymesh') >= 0); })", "timeout": 120000},
+        {"js": "WORKER.postMessage({t: 'open', cart: 'moymesh.moy'}), 1"},
+        # its first run on the page asks (the card names the radio): Open
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.card && "
+                    "/LoRa/.test(s.card.lines.join(' '))); })", "timeout": 60000},
+        {"js": "cv.focus(), 'focused'"}, {"key": "ArrowRight"}, {"wait": 300},
+        {"key": "Enter"},
+        {"waitFor": "window.__moyState().then(function (s) { return s.cart == 'Moy Mesh'; })",
+         "timeout": 60000},
+        {"wait": 3000}, {"key": "Enter"}, {"wait": 1500},
+        {"key": "Enter"}, {"wait": 500}]        # the thread open, its field edited
+    steps += [{"key": c} for c in MESH_TEXT]
+    steps += [{"key": "Enter"}, {"wait": 5000}, {"js": MESH_SVC}, {"wait": 15000}]
+    held = []
+
+    def look(line):
+        if not held and 'js -> "MESH ' in line:
+            held.append(_mem(zero) + (zero.peek("__import__('moycore').svc_budget()[1]"),))
+
+    out = _browse(zero, zero.url, steps, tmp_path / "mesh", query="?dev=1&desktop=1",
+                  on_line=look)
+    got = _tagged(out, "MESH")
+    assert got and got["svc"]["board"] == ["moymesh"], got
+    assert got["devs"]["opens"] == 0, "the page opened no device of the board's: %s" % got
+    assert "moymesh" not in got["svc"]["here"], "the page ran its own service: %s" % got
+    assert held, "the board was read with the page open"
+    print("moymesh on %s with the page open: internal free %d largest %d, PSRAM free %d, "
+          "the service's heap %d" % ((zero.name,) + held[0]))
+    info, budget, log, owner, said, msgs = _svc_look(zero)
+    assert [i[0] for i in info] == ["moymesh"] and info[0][2] != 4, \
+        "the service runs on with the page closed: %s" % info
+    assert info[0][1] == pid and len(said) == 1, \
+        "the same service, never restarted: %s, %s" % (info, said)
+    assert msgs[0] >= 1, "the window's message came up the socket: %s" % (msgs,)
+    texts = [m.get("text") for m in (log or ()) if isinstance(m, dict)]
+    print("moymesh on %s after the page: %s, the budget %s, the radio's owner %s, its log %s; "
+          "the board's log %s; its messages up and down %s; the page's %s"
+          % (zero.name, info, budget, owner, log, said, msgs, got["svc"]["msgs"]))
+    assert owner == info[0][1], "the page's end left the service the radio: %r" % owner
+    assert MESH_TEXT in texts, "the window's message reached the service: %s" % log
 
 
 TERM = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify("

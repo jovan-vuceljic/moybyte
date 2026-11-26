@@ -310,13 +310,19 @@ class StoreSystem:
     batch reads it into rows of its own and frees them before it answers.
     Rows a host kept would be blocks made mid-session and remade as a page
     changes them, which on a board with one small heap (the C3) are the
-    islands that split its free RAM."""
+    islands that split its free RAM. A host that runs app services
+    (device/zero_svc.py) hands its `rows` instead, the kernel's, made at its
+    start: the services' prefs live in them, and a page's batch and a
+    service's write then have one writer."""
 
-    def __init__(self, carts_root):
+    def __init__(self, carts_root, rows=None):
         self.carts_root = carts_root
         self._rx = moy_sync.SystemReceiver()
+        self.rows = rows
 
     def _rows(self):
+        if self.rows is not None:
+            return self.rows
         import moy_carts
         import moy_spine
         root = self.carts_root
@@ -324,12 +330,16 @@ class StoreSystem:
         rows.adopt(moy_carts.load_system(root))
         return rows
 
+    def _done(self, rows):
+        if rows is not self.rows:
+            rows.__del__()
+
     def pull(self):
         rows = self._rows()
         try:
             return moy_sync.system_pull(rows)
         finally:
-            rows.__del__()
+            self._done(rows)
 
     def apply(self, ops):
         """(applied, [(index, reason)]) of one batch's ops."""
@@ -337,7 +347,7 @@ class StoreSystem:
         try:
             applied, errors, _changed = self._rx.apply(ops, rows, self.carts_root)
         finally:
-            rows.__del__()
+            self._done(rows)
         return applied, errors
 
 

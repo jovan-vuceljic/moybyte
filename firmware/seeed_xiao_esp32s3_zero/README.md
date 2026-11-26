@@ -162,9 +162,16 @@ them back on the next visit — but anything that existed *only* here is.
   overflow (#168); the board's headroom floor (`[image] headroom_floor_kib` in
   `board.toml`) is 0 since 2026-11-03 (owner), and the board.toml says why.
   On 2026-11-17 the browser console left the image for its add-on cart and
-  the slots became **2 MiB** (`0x200000`, at `0x20000` and `0x220000`), the
-  store the **3,968 KiB** `vfs` at `0x420000`, which holds the add-on (one
-  pack, about 1.9 MB) beside the carts; provisioning installs the add-on.
+  the slots became 2 MiB. Since 2026-11-26 (owner) they are **2,496 KiB**
+  (`0x270000`, at `0x20000` and `0x290000`), for the Lua tier the apps'
+  services run on (#256), and the store is the **3 MiB** `vfs` at
+  `0x500000`, which holds the add-on (one pack) beside the carts
+  (`tools/store_image.py --check` gives the room each takes); provisioning
+  installs the add-on. A board flashed with an
+  older table takes the new one only by cable (OTA writes an app slot,
+  never the table, and the new image does not fit the old slot): the cable
+  flash erases the moved store, the image seeds its carts on the first
+  boot, and the browser's sync brings back the carts it holds.
   The image's roster is the core carts (`moy_seed.CORE`), every app, the
   five games (board.toml's `[roster] image`; owner, 2026-11-17) and Pin Light
   (2026-11-18), seeded as a

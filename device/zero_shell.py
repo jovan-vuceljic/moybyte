@@ -115,7 +115,13 @@ class Door:
 
     def v_ps(self):
         used = gc.mem_alloc() if hasattr(gc, "mem_alloc") else 0
-        return "%d 0 shell running %d - zero_host\n" % (SHELL, used)
+        out = "%d 0 shell running %d - zero_host\n" % (SHELL, used)
+        import zero_host
+        svc = zero_host.SERVICES[0]
+        for app_id, pid, state, heap, _why in (svc.info() if svc is not None else ()):
+            out += "%d %d %s %s %d - service\n" % (
+                pid, SHELL, app_id, "exited" if state == 4 else "background", heap)
+        return out
 
     def v_df(self, path):
         # A path no volume holds (/sd: this board has no card slot) is

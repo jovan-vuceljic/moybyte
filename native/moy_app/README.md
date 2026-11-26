@@ -190,8 +190,9 @@ The host's binding is `runtime/host/moy_app_binding.py`, over ctypes, from the s
 host library (`runtime/host/native_parts.py`'s SPINE carries these sources), which
 the `runtime` package registers as `moy_app`; the user-files layer is a library
 of its own there (`runtime/host/moy_ufiles_binding.py`), whose verb table `store_bind`
-hands the state. The Zero denies the module: it runs no apps, and its sync
-moves user files by path.
+hands the state. The XIAO Zero takes the module for the apps' services it
+runs while their windows run in its page (`device/zero_svc.py`, #256); the
+C3 Zero denies it, and its sync moves user files by path.
 
 The nets: `tests/test_userfiles_parity.py` (the user-files layer's bytes, on
 both bindings, against the Python it replaced), `tests/test_moy_app.py` (one

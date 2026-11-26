@@ -62,6 +62,8 @@ HOT = (
 _BAKE = ("the theme backdrop's bake: drawn once into the wallpaper's kept "
          "picture when the look or the glass size changes "
          "(runtime/system/wallpaper.py `_draw_backdrop`), then blitted 1:1")
+_BAKE_OS = (_BAKE + "; a size-built image (the XIAO Zero's -Os, which draws "
+            "nothing) keeps these helpers out of line, where a console inlines them")
 _SETUP = ("the clip's set-up, once a call and never a pixel: the origin moved "
           "by the clip in 64 bits so that no scale overflows")
 _GLYPH = ("a story slide's outline text: a glyph's points scaled to the em and "
@@ -93,7 +95,9 @@ ALLOW = {
     ("riscv", "moy_gfx/moy_scr.c", "moy_scr_icon", "__divdi3"): _ICON,
     ("xtensa", "moy_gfx/moy_backdrop.c", "bd_read", "__divdi3"): _BAKE,
     ("xtensa", "moy_gfx/moy_backdrop.c", "draw_wave", "__divdi3"): _BAKE,
+    ("xtensa", "moy_gfx/moy_backdrop.c", "half", "__divdi3"): _BAKE_OS,
     ("xtensa", "moy_gfx/moy_backdrop.c", "mg_backdrop", "__divdi3"): _BAKE,
+    ("xtensa", "moy_gfx/moy_backdrop.c", "px_of", "__divdi3"): _BAKE_OS,
     ("xtensa", "moy_gfx/moy_backdrop.c", "row_paint", "__divdi3"): _BAKE,
     ("xtensa", "moy_gfx/moy_gfx_kernels.c", "mg_blit_indices_scale", "__divdi3"): _SETUP,
     ("xtensa", "moy_gfx/moy_gfx_kernels.c", "mg_blit_indices_scale", "__moddi3"): _SETUP,

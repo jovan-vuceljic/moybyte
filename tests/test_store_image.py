@@ -39,7 +39,7 @@ BOARDS = {
     "p4": ("esp32_p4_wifi6_touch_lcd_7b", 0xD50000, (32 << 20) - 0xD50000),
     "guition_p4": ("guition_jc8012p4a1c", 0xD50000, (16 << 20) - 0xD50000),
     "elecrow_p4": ("elecrow_crowpanel_p4_10_1", 0xD50000, (16 << 20) - 0xD50000),
-    "xiao_zero": ("seeed_xiao_esp32s3_zero", 0x420000, 0x3E0000),
+    "xiao_zero": ("seeed_xiao_esp32s3_zero", 0x500000, 0x300000),
     "c3_zero": ("esp32c3_zero", 0x1E0000, 0x220000),
 }
 SIZES = {1: 0, 2: 1, 4: 2, 8: 3, 16: 4, 32: 5}
@@ -129,7 +129,7 @@ def test_the_check_fails_a_pack_that_outgrows_a_board_s_store():
     blocks = store_image.board_store(p4)[1] // store_image.BLOCK
     out = io.StringIO()
     assert store_image.check(_wasm_pack((blocks + 1) * store_image.BLOCK), out) == [
-        "elecrow_crowpanel_p4_10_1", "guition_jc8012p4a1c"]
+        "elecrow_crowpanel_p4_10_1", "guition_jc8012p4a1c", "seeed_xiao_esp32s3_zero"]
     assert "do not fit a store of %d blocks" % blocks in out.getvalue()
     xiao = str(_board("xiao_zero"))
     blocks = store_image.board_store(xiao)[1] // store_image.BLOCK

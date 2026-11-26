@@ -277,6 +277,9 @@ PACKAGES = {"tdeck-mainline": {"moybyte"}, "p4": {"moybyte"},
 # declaration that drifts from them fails here as the Zero's own would.
 for _table in (NATIVE, HOST_ONLY, GENERATED, PACKAGES):
     _table["c3-zero"] = _table["zero"]
+# The XIAO adds the Lua tier its apps' services run on (device/zero_svc.py,
+# #256), taken whole as the consoles take it (owner, 2026-11-26).
+NATIVE["zero"] = NATIVE["zero"] | {"moycore", "moy_lua", "moy_app", "moy_gfx", "moy_glass"}
 
 # The Elecrow P4 is the Waveshare's console on a 16 MB flash
 # (firmware/elecrow_crowpanel_p4_10_1/board.toml): the same native modules and
@@ -720,6 +723,11 @@ def test_every_zero_staging_group_says_what_the_board_does_with_it():
             "the Zero declares %s lazy with no reason" % entry.get("module"))
 
 
+# The apps' services' modules (device/zero_svc.py, #256), on a Zero whose
+# image runs them (it takes moycore) and on no other.
+SERVICES_ONLY = ("zero_svc", "app_keys")
+
+
 @pytest.mark.parametrize("board", [ZERO, C3_ZERO], ids=["xiao_zero", "c3_zero"])
 def test_every_module_the_zero_makes_first_is_on_its_image(board):
     """zero_host.serve imports LASTING before anything else allocates, so a
@@ -731,7 +739,9 @@ def test_every_module_the_zero_makes_first_is_on_its_image(board):
                and [t.id for t in n.targets if isinstance(t, ast.Name)] == ["LASTING"]]
     assert lasting and lasting[0], "zero_host names no LASTING modules"
     staged = set(board_config.staged_modules(board, ROOT))
-    missing = [n for n in lasting[0] if n + ".py" not in staged]
+    services = "moycore" in board_config.native_modules(board, ROOT)
+    missing = [n for n in lasting[0] if n + ".py" not in staged
+               and (services or n not in SERVICES_ONLY)]
     assert not missing, "%s does not stage %s" % (board.name, missing)
 
 

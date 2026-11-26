@@ -466,6 +466,13 @@ stages 1–6 all absent. Its README is the authority; what bites:
   and a port opened then wedged it until a replug; `machine.bootloader()`
   loops forever on this chip). Holding BOOT while plugging in is the recovery. It has no dev
   channel, so `tools/board.py` knows it by the USB serial in its board.toml.
+- **The XIAO runs apps' services** (#256, `device/zero_svc.py`): it takes
+  moycore and moy_lua whole (owner, 2026-11-26), and an installed app's Lua
+  service starts with the board, holds its devices and is the service the
+  page's window reaches over the live socket's channel 'm'. Their RAM is
+  board.toml's `[services] ram_kib` (moycore_svc.h's THE BUDGET); a service
+  past it runs in the page. The app slots grew for the Lua tier (the
+  partition CSV), so the store shrank: a table change is a cable flash.
 - A pushed `.py` SHADOWS the frozen one (`/` is searched before `.frozen`), so
   its module push is opt-in and undoable, and the board announces it at boot.
 - **The C3 Zero (`firmware/esp32c3_zero/`, `c3_zero`) is the Zero on an

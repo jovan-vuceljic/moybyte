@@ -169,6 +169,22 @@ void moy_svc_web_pump(void) {
     }
 }
 
+size_t moy_svc_web_served(char *out, size_t cap) {
+    size_t n = 0;
+    for (int i = 0; i < APPS; i++) {
+        size_t an = W.pid[i] != 0 ? strlen(W.app[i]) : 0;
+        if (an == 0 || n + an + 1 > cap) {
+            continue;
+        }
+        if (n > 0) {
+            out[n++] = ',';
+        }
+        memcpy(out + n, W.app[i], an);
+        n += an;
+    }
+    return n;
+}
+
 void moy_svc_web_stats(uint32_t *apps, uint32_t *up, uint32_t *down, uint32_t *dropped) {
     uint32_t k = 0;
     for (int i = 0; i < APPS; i++) {
