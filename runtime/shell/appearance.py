@@ -591,7 +591,13 @@ class Appearance:
         elif kind == "font" or kind == "code_font":
             now = self._fonts_now(c, over)
             if kind == "font" and value is None:
-                over.pop("fonts", None)
+                # the source's own, a code font picked kept
+                own = self._own_fonts(c, look)
+                if "mono" in now and now["mono"] != own.get("mono"):
+                    own["mono"] = now["mono"]
+                    over["fonts"] = own
+                else:
+                    over.pop("fonts", None)
             elif kind == "font":
                 value = dict(value)
                 if "mono" in now:
@@ -730,7 +736,8 @@ class Appearance:
         and `own_frame`, the source's own the same way;
         `font`, the FONTS preset its `ui` font is, None for a font of its
         own; `code_font`, the CODE_FONTS preset its `mono` font is, the same
-        way, and `code_fonts`, the presets this image draws; `wallpaper`, the wallpaper shown; `picture`, for the theme's
+        way, and `code_fonts`, the presets this image draws; `own_font` and
+        `own_code_font`, the source's own the same way (`_own_preset`); `wallpaper`, the wallpaper shown; `picture`, for the theme's
         picture, "mine" (Paint's, copied by a pick) or "theme" (the
         package's own); `chrome`, the chrome scale, and `chromes`, the
         panel's choices. The page reads it when `look_gen` moves."""
@@ -741,12 +748,15 @@ class Appearance:
         if self.wallpaper_id == self.PICTURE:
             mine = c is not None and c.over.get("images", DROP) is not DROP
             pic = "mine" if mine else "theme"
+        font, code = self._font_preset(), self._code_font_preset()
         return {"theme": name, "variant": self.theme_variant,
                 "store": name not in THEME_NAMES and name != CUSTOM,
                 "from": lk.get("from"), "accent": lk.get("accent"),
                 "tint": lk.get("tint"), "frame": self._frame_style(c, lk),
                 "own_frame": self._own_frame(c, lk),
-                "font": self._font_preset(), "code_font": self._code_font_preset(),
+                "font": font, "code_font": code,
+                "own_font": self._own_preset(c, lk, "ui", font),
+                "own_code_font": self._own_preset(c, lk, "mono", code),
                 "code_fonts": self.code_fonts(), "wallpaper": self.wallpaper_id,
                 "picture": pic, "chrome": self.chrome_size(),
                 "chromes": tuple(self.ws.chrome_scales)}
@@ -775,6 +785,33 @@ class Appearance:
             got = _style_of(keys_of(b)["frame"] if b is not None else DROP)
             self._styles = {key: got}
         return got
+
+    def _own_fonts(self, c, lk):
+        """The `fonts` custom's source names, role -> file, {} for none
+        (custom's file as saved where it has no `from`)."""
+        if "from" in lk:
+            src = self._source(lk["from"])
+            if src in THEME_NAMES:
+                return dict(_ui_draw.theme_fonts(src))
+        else:
+            src = c.src if c.src is not None else c.theme
+        f = keys_of(src)["fonts"] if src is not None else DROP
+        return dict(f) if type(f) is dict else {}
+
+    def _own_preset(self, c, lk, role, live):
+        """The preset (FONTS for `ui`, CODE_FONTS for `mono`) the source's
+        own `role` font is: `live`, the one drawn, where custom keeps the
+        source's file for the role; else the preset that file is, None for
+        a font of its own or one it leaves to its look."""
+        f = c.over.get("fonts", DROP) if c is not None else DROP
+        if type(f) is not dict:
+            return live
+        own = self._own_fonts(c, lk).get(role)
+        if f.get(role) == own:
+            return live
+        if role == "ui":
+            return {v["ui"]: k for k, v in self._FONT_VALUES.items()}.get(own)
+        return {v: k for k, v in self._CODE_FONT_VALUES.items()}.get(own)
 
     def _font_preset(self):
         """The FONTS preset the live `ui` font is, None for a font of the

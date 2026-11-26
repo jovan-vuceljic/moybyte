@@ -326,12 +326,12 @@ def fill(lay):
     tab, key = lay.wall_now()
     _set(lay, "wall_title", lay.walls[key][1] if key in lay.walls else "")
     _picks(lay, "frame", *_own_or(FRAMES, FRAME_NAMES, ch["frame"], ch["own_frame"]))
-    _picks(lay, "font", *_own_or(FONTS, FONT_NAMES, ch["font"], ch["font"]))
+    _picks(lay, "font", *_own_or(FONTS, FONT_NAMES, ch["font"], ch["own_font"]))
     codes = ch["code_fonts"]
     _set(lay, "has_codes", len(codes) > 1)
     if len(codes) > 1:
         _picks(lay, "code", *_own_or(codes, [CODE_FONT_NAMES[k] for k in codes], ch["code_font"],
-                                     ch["code_font"]))
+                                     ch["own_code_font"]))
     chromes = ch["chromes"]
     _set(lay, "has_chromes", len(chromes) > 1)
     if len(chromes) > 1:
