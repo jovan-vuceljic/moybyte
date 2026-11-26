@@ -112,6 +112,24 @@ def test_a_press_on_the_pad_reaches_the_console(board, label, bits, held):
         time.sleep(0.05)
 
 
+def test_the_led_bar_is_a_processs_and_dark_when_it_ends(board):
+    """The bar through the `leds` device API (native/moy_leds over the
+    board's hooks): ten LEDs, a process holds them and lights them, another is
+    refused, and its end -- the sweep every process end runs -- turns them
+    dark and lets them go."""
+    import errno
+    got = board.pyval(
+        "(lambda N, L, M: (lambda a, b: (N.count(), N.fill(a, 0x000010), N.owner() == a,"
+        " N.open(b), (M.end(a), N.owner())[1], (lambda buf: (N.shown(buf), bytes(buf))[1])"
+        "(bytearray(30))))(L.spawn('t.leds.a'), L.spawn('t.leds.b')))"
+        "(__import__('moy_leds'), __import__('moy_log'), __import__('moybyte'))",
+        timeout=20, strict=True)
+    count, filled, held, other, after, shown = got
+    assert count == 10 and filled == 0 and held is True, got
+    assert other == -errno.EBUSY, got
+    assert after == 0 and shown == bytes(30), got
+
+
 def test_the_hints_show_the_pads_keys(board):
     """The pad is the input from boot, so the hints draw its keys (Select the
     shift for the tabs and the more menu, moy_pad3.c and mpconfigboard.h)."""
@@ -253,6 +271,8 @@ def test_the_board_serves_its_web_console(board):
     joined: the page answers a GET from this machine, then the service goes
     off again as the console was found."""
     import urllib.request
+    if board.pyval("__import__('moy_net').page_state()", strict=True) != 0:
+        pytest.skip("no browser console add-on that fits this image on the board")
     line = board.cmd("web", wait_for="WEB ", timeout=60)
     assert line is not None and "http" in line, line
     url = line.split()[1]
