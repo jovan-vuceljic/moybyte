@@ -69,6 +69,8 @@ name: Web console E2E
 #   tests/test_web_zero_wifi_e2e.py  a Zero's Wi-Fi from its page, on the
 #                                  board twin: save, forget, a failed move
 #                                  and a successful one.
+#   tests/test_web_live_dev_e2e.py  a board's devices relayed to its page over
+#                                  the live socket (a cart's LoRa on the twin).
 #   tests/test_web_site_embed_e2e.py  the project site's one embedded
 #                                  console at a phone's width and a desk's,
 #                                  and its compact Expand.
@@ -313,6 +315,7 @@ jobs:
             tests/test_web_loader.py \
             tests/test_web_link_e2e.py tests/test_web_setup_e2e.py \
             tests/test_web_page_rows_e2e.py tests/test_web_zero_wifi_e2e.py \
+            tests/test_web_live_dev_e2e.py \
             tests/test_web_site_embed_e2e.py \
             tests/test_web_fonts.py tests/test_web_look_parity.py \
             tests/test_editor_ladder_icons.py
