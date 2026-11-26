@@ -54,7 +54,8 @@ def twin_exe(tmp_path_factory):
     return T._build(out, extra=[os.path.join(T.NET, "moy_live.c"),
                                 os.path.join(T.NET, "moy_live_dev.c"),
                                 os.path.join(T.NET, "moy_link_host.c"), FAKE] + TABLE,
-                    defines=("MOY_NET_LIVE=1", "MOY_NET_LINK=1", "MOY_TTY_LEASES=1"),
+                    defines=("MOY_NET_LIVE=1", "MOY_NET_LINK=1", "MOY_TTY_LEASES=1",
+                             "MOY_DEV_RELAYS=1"),
                     incs=(KERNEL, INPUT))
 
 
@@ -305,3 +306,16 @@ def test_a_relayed_kind_is_the_consoles_for_handles_and_not_for_faces(monkeypatc
     assert "lora" in have
     assert app_perms.lacking(lua, have) is None
     assert app_perms.lacking(py, have) == "lora"
+
+
+def test_a_board_builds_the_channel_for_exactly_the_kinds_with_a_relay_list():
+    """moy_dev_kinds.h's MOY_DEV_RELAYS names the MOY_API_ define of each kind
+    whose KINDS row has a relay list, and only those: a board whose class
+    rows name none of them (the C3 Zero) links no device channel."""
+    import re
+    kinds = open(os.path.join(KERNEL, "moy_dev_kinds.c")).read()
+    listed = set(re.findall(r'\{\s*"(\w+)",[^{}]*,\s*"[^"]*"\s*\}', kinds))
+    head = open(os.path.join(KERNEL, "moy_dev_kinds.h")).read()
+    block = head[head.index("#ifndef MOY_DEV_RELAYS"):head.index("#define MOY_DEV_RELAYS")]
+    named = {m.lower() for m in re.findall(r"defined\(MOY_API_(\w+)\)", block)}
+    assert listed and listed == named, (listed, named)

@@ -23,8 +23,10 @@
 
 #include "moy_link.h"            // the board's MOY_NET_LIVE and MOY_NET_LINK
 #include "moy_live.h"
+#include "moy_dev_kinds.h"       // MOY_DEV_RELAYS
 
-#if defined(MOY_NET_LIVE) && MOY_NET_LIVE && defined(MOY_NET_LINK) && MOY_NET_LINK
+#if defined(MOY_NET_LIVE) && MOY_NET_LIVE && defined(MOY_NET_LINK) && MOY_NET_LINK \
+    && defined(MOY_DEV_RELAYS) && MOY_DEV_RELAYS
 
 #include <string.h>
 
