@@ -175,6 +175,27 @@ void moy_svc_web_stats(uint32_t *apps, uint32_t *up, uint32_t *down, uint32_t *d
 // The apps whose services run on the board (its 'H', while the socket is
 // open), ',' between, into `out` (cap bytes): their length.
 size_t moy_svc_web_served(char *out, size_t cap);
+// The board's budget for its apps' services, as its 'H' said: 1 and the
+// KiB it gives them and the KiB free, or 0 where it sets none.
+int moy_svc_web_budget(uint32_t *kib, uint32_t *free_kib);
+#endif
+
+#if (defined(MOY_NET_LIVE) && MOY_NET_LIVE) || (defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE)
+// An app's prefs rows shared by its service on the board and its windows
+// on the page (moy_svc_prefs.c, its header the contract): the rows they are
+// (the kernel's settings rows; NULL: none cross), a session's start (the
+// board forgets what was agreed, the page scans again), the rows of `apps`
+// taken as agreed (the page, at the board's 'H'), the rows changed since
+// the last scan sent as 'P' plaintexts through `say` (0, -1 when a say
+// failed), a 'P' plaintext taken, and the rows sent and taken.
+struct moy_settings;
+void moy_svc_prefs_rows(struct moy_settings *rows);
+void moy_svc_prefs_start(int board);
+void moy_svc_prefs_baseline(const char *const *apps, int napps);
+int moy_svc_prefs_scan(const char *const *apps, int napps, uint8_t *buf, size_t cap,
+                       int (*say)(void *, uint8_t *, size_t), void *ctx);
+void moy_svc_prefs_give(const uint8_t *p, size_t n, const char *const *apps, int napps);
+void moy_svc_prefs_stats(uint32_t *sent, uint32_t *took);
 #endif
 
 #endif

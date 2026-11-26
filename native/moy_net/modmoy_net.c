@@ -18,6 +18,7 @@
 #include "moy_seal.h"
 #include "moy_ota.h"
 #include "moy_page.h"
+#include "moy_route.h"
 
 #pragma weak moy_c6_version
 
@@ -454,6 +455,8 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mod_live_mine_obj, mod_live_mine);
 #if defined(__has_include) && __has_include("moycore_svc.h")
 #define LIVE_SERVE 1
 static mp_obj_t mod_live_serve(mp_obj_t app, mp_obj_t on) {
+    const moy_spine_kernel_t *k = moy_spine_kernel(NULL);
+    moy_svc_prefs_rows(k != NULL ? k->settings : NULL);
     moy_live_svc_serve(mp_obj_str_get_str(app), mp_obj_is_true(on));
     return mp_const_none;
 }
@@ -537,18 +540,35 @@ static mp_obj_t mod_live_served(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_served_obj, mod_live_served);
 
-// live_msgs() -> (apps, up, down, dropped): the stand-ins open, the apps'
-// messages sent up and taken down, and those dropped (moy_svc_web.c).
+// live_msgs() -> (apps, up, down, dropped, rows sent, rows taken): the
+// stand-ins open, the apps' messages sent up and taken down, those dropped,
+// and their prefs rows each way (moy_svc_web.c, moy_svc_prefs.c).
 static mp_obj_t mod_live_msgs(void) {
-    uint32_t v[4];
+    uint32_t v[6];
     moy_svc_web_stats(&v[0], &v[1], &v[2], &v[3]);
-    mp_obj_t t[4];
-    for (int i = 0; i < 4; i++) {
+    moy_svc_prefs_stats(&v[4], &v[5]);
+    mp_obj_t t[6];
+    for (int i = 0; i < 6; i++) {
         t[i] = mp_obj_new_int_from_uint(v[i]);
     }
-    return mp_obj_new_tuple(4, t);
+    return mp_obj_new_tuple(6, t);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_msgs_obj, mod_live_msgs);
+
+// live_budget() -> (kib, free_kib) | None: the board's budget for its apps'
+// services, as its 'H' said, None where it names none (moy_svc_web.c). The
+// page's prefs rows are the kernel's (moy_svc_prefs.c), from the first call.
+static mp_obj_t mod_live_budget(void) {
+    const moy_spine_kernel_t *k = moy_spine_kernel(NULL);
+    moy_svc_prefs_rows(k != NULL ? k->settings : NULL);
+    uint32_t kib, free_kib;
+    if (!moy_svc_web_budget(&kib, &free_kib)) {
+        return mp_const_none;
+    }
+    mp_obj_t t[2] = {mp_obj_new_int_from_uint(kib), mp_obj_new_int_from_uint(free_kib)};
+    return mp_obj_new_tuple(2, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_budget_obj, mod_live_budget);
 #endif
 
 #endif
@@ -1323,6 +1343,7 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_live_devs), MP_ROM_PTR(&mod_live_devs_obj)},
     {MP_ROM_QSTR(MP_QSTR_live_served), MP_ROM_PTR(&mod_live_served_obj)},
     {MP_ROM_QSTR(MP_QSTR_live_msgs), MP_ROM_PTR(&mod_live_msgs_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_budget), MP_ROM_PTR(&mod_live_budget_obj)},
     #endif
     #endif
 };

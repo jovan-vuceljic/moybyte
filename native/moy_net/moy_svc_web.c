@@ -10,6 +10,10 @@
 // the board sends is sent again from it to the app's processes here, the
 // window's `moybyte.on(name, fn)` among them, the sender the app's own.
 //
+// The board's 'H' also says the RAM it gives its services (moy_svc_web_budget,
+// which the page's scheduler reads to say why a service runs here), and
+// the served apps' prefs rows cross both ways ('P', moy_svc_prefs.c).
+//
 // A dropped socket is never silent: its stand-ins end with it, so a send
 // to the app meanwhile reaches none (`send` answers 0), and the OS message
 // "board" is routed to every process that listens on it, [0, why] at the
@@ -33,8 +37,20 @@ static struct {
     char app[APPS][MOY_EVQ_APP];
     uint32_t pid[APPS];                 // each app's stand-in, 0: none
     int told;                           // "board" [1] said since the socket opened
+    int budget;                         // the board's 'H' named its services' budget
+    uint32_t kib, free_kib;             // ...the KiB it gives them, and free
     uint32_t up, down, dropped;
 } W;
+
+static int served_now(const char *apps[APPS]) {
+    int n = 0;
+    for (int i = 0; i < APPS; i++) {
+        if (W.pid[i] != 0) {
+            apps[n++] = W.app[i];
+        }
+    }
+    return n;
+}
 
 static void end_standin(int i) {
     if (W.pid[i] != 0) {
@@ -87,9 +103,35 @@ static void apps_are(const char *apps, size_t n) {
     }
 }
 
+// The 'H' head: "<kib>,<free>;" or "-;" (no budget), its length.
+static size_t budget_is(const char *s, size_t n) {
+    const char *end = memchr(s, ';', n);
+    if (end == NULL) {
+        return 0;
+    }
+    W.budget = s[0] != '-';
+    W.kib = W.free_kib = 0;
+    const char *c = s;
+    for (; W.budget && c < end && *c >= '0' && *c <= '9'; c++) {
+        W.kib = W.kib * 10u + (uint32_t)(*c - '0');
+    }
+    for (c += c < end && *c == ','; W.budget && c < end && *c >= '0' && *c <= '9'; c++) {
+        W.free_kib = W.free_kib * 10u + (uint32_t)(*c - '0');
+    }
+    return (size_t)(end - s) + 1;
+}
+
 void moy_svc_web_give(const uint8_t *p, size_t n) {
     if (n >= 2 && p[1] == 'H') {
-        apps_are((const char *)p + 2, n - 2);
+        size_t h = budget_is((const char *)p + 2, n - 2);
+        apps_are((const char *)p + 2 + h, n - 2 - h);
+        const char *apps[APPS];
+        moy_svc_prefs_baseline(apps, served_now(apps));
+        return;
+    }
+    if (n >= 2 && p[1] == 'P') {
+        const char *apps[APPS];
+        moy_svc_prefs_give(p, n, apps, served_now(apps));
         return;
     }
     if (n < 4 || p[1] != 'M') {
@@ -117,8 +159,10 @@ void moy_svc_web_give(const uint8_t *p, size_t n) {
 void moy_svc_web_socket(int on) {
     if (on) {
         W.told = 0;
+        moy_svc_prefs_start(0);
         return;
     }
+    W.budget = 0;
     for (int i = 0; i < APPS; i++) {
         end_standin(i);
     }
@@ -128,8 +172,22 @@ void moy_svc_web_socket(int on) {
 
 // Between frames, before the link's queue is taken: what the app's
 // processes here sent the board's, an 'M' each.
+static int say_prefs(void *ctx, uint8_t *p, size_t n) {
+    (void)ctx;
+    uint8_t *q = moy_link_web_queue(n);
+    if (q == NULL) {
+        W.dropped++;
+        return -1;
+    }
+    memcpy(q, p, n);
+    return 0;
+}
+
 void moy_svc_web_pump(void) {
     static char args[1400];
+    static uint8_t rows[1200];          // a prefs row's piece (moy_svc_prefs.c)
+    const char *apps[APPS];
+    moy_svc_prefs_scan(apps, served_now(apps), rows, sizeof rows, say_prefs, NULL);
     for (int i = 0; i < APPS; i++) {
         if (W.pid[i] == 0) {
             continue;
@@ -183,6 +241,12 @@ size_t moy_svc_web_served(char *out, size_t cap) {
         n += an;
     }
     return n;
+}
+
+int moy_svc_web_budget(uint32_t *kib, uint32_t *free_kib) {
+    *kib = W.kib;
+    *free_kib = W.free_kib;
+    return W.budget;
 }
 
 void moy_svc_web_stats(uint32_t *apps, uint32_t *up, uint32_t *down, uint32_t *dropped) {

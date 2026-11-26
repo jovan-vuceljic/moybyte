@@ -54,7 +54,9 @@ def page_so(tmp_path_factory):
     subprocess.run([shutil.which("cc"), "-shared", "-fPIC", "-O1", "-std=gnu99", "-w",
                     "-D_GNU_SOURCE", "-DMOY_NET_LINK=1", "-DMOY_NET_LIVE_PAGE=1"]
                    + ["-I" + d for d in (T.NET, D.KERNEL, D.INPUT, T.SPINE, T.STORE)]
-                   + [os.path.join(T.NET, n) for n in ("moy_link_web.c", "moy_svc_web.c")]
+                   + [os.path.join(T.NET, n) for n in ("moy_link_web.c", "moy_svc_web.c",
+                                                       "moy_svc_prefs.c")]
+                   + [os.path.join(T.SPINE, n) for n in ("moy_settings.c", "moy_json.c")]
                    + [os.path.join(D.KERNEL, "moy_log.c")] + D.TABLE + ["-o", so, "-lpthread"],
                    check=True)
     return so

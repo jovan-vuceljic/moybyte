@@ -15,15 +15,19 @@
 //
 // Which apps the board serves is its service host's word
 // (moy_live_svc_serve): the page is told at the socket's start and at each
-// change ('H'), the board's stand-ins are made then, and its services are
-// told the page came and went (the OS message "page", [up]). A message no
-// frame holds (past OUT_CAP) is dropped and counted.
+// change ('H', which also says the RAM the board gives its services:
+// moycore_svc.h's THE BUDGET), the board's stand-ins are made then, and its
+// services are told the page came and went (the OS message "page", [up]). A
+// message no frame holds (past OUT_CAP) is dropped and counted. The served
+// apps' prefs rows cross too ('P', moy_svc_prefs.c), each pass ahead of the
+// messages, where the image runs the services.
 
 #include "moy_link.h"            // the board's MOY_NET_LIVE and MOY_NET_LINK
 #include "moy_live.h"
 
 #if defined(MOY_NET_LIVE) && MOY_NET_LIVE && defined(MOY_NET_LINK) && MOY_NET_LINK
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -62,6 +66,34 @@ void moy_live_svc_serve(const char *app, int on) {
     }
 }
 
+// Where the image runs the apps' services (it takes moycore: the XIAO Zero),
+// 'H' names their budget and the served apps' prefs rows cross; a board that
+// runs none (the C3) carries none of it. The budget is moycore_svc.h's
+// THE BUDGET.
+#if defined(__has_include) && __has_include("moycore_svc.h")
+#define SERVICES 1
+uint32_t moycore_svc_budget(uint32_t *held);
+
+// The apps the page's stand-ins stand for this session, for the prefs rows.
+static int served_now(const char *apps[APPS]) {
+    int n = 0;
+    for (int i = 0; i < APPS; i++) {
+        if (S.pid[i] != 0) {
+            apps[n++] = S.has[i];
+        }
+    }
+    return n;
+}
+
+static int say_prefs(void *ctx, uint8_t *p, size_t n) {
+    (void)ctx;
+    (void)p;                            // written in place: moy_live_out's buffer
+    return moy_live_say(n);
+}
+#else
+#define SERVICES 0
+#endif
+
 static void say_page(int up) {
     moy_evq_route("page", up ? "[1]" : "[0]", 3);
 }
@@ -84,9 +116,19 @@ static int reconcile(void) {
     S.said = g;
     size_t cap;
     uint8_t *o = moy_live_out(&cap);
-    size_t n = 2;
     o[0] = 'm';
     o[1] = 'H';
+#if SERVICES
+    uint32_t held = 0, budget = moycore_svc_budget(&held);
+    size_t n = 2 + (size_t)(budget ? snprintf((char *)o + 2, 24, "%u,%u;", (unsigned)(budget >> 10),
+                                              (unsigned)((budget - held) >> 10))
+                                   : snprintf((char *)o + 2, 24, "-;"));
+#else
+    size_t n = 4;
+    o[2] = '-';
+    o[3] = ';';
+#endif
+    size_t head = n;
     for (int i = 0; i < APPS; i++) {
         char app[MOY_EVQ_APP];
         memcpy(app, S.app[i], sizeof app);
@@ -106,7 +148,7 @@ static int reconcile(void) {
         }
         size_t an = strlen(app);
         if (n + an + 1 < cap) {
-            if (n > 2) {
+            if (n > head) {
                 o[n++] = ',';
             }
             memcpy(o + n, app, an);
@@ -120,6 +162,9 @@ void moy_live_svc_start(void) {
     S.said = __atomic_load_n(&S.gen, __ATOMIC_ACQUIRE) - 1;    // tell the page
     S.live = 1;
     S.told = 0;
+#if SERVICES
+    moy_svc_prefs_start(1);
+#endif
 }
 
 void moy_live_svc_end(void) {
@@ -135,8 +180,16 @@ void moy_live_svc_end(void) {
     }
 }
 
-// An 'M' from the page: its app's stand-in here sends it to the app.
+// An 'M' from the page: its app's stand-in here sends it to the app. A 'P':
+// a row of a served app's prefs (moy_svc_prefs.c).
 int moy_live_svc_message(const uint8_t *p, size_t n) {
+#if SERVICES
+    if (n >= 2 && p[1] == 'P') {
+        const char *apps[APPS];
+        moy_svc_prefs_give(p, n, apps, served_now(apps));
+        return 0;
+    }
+#endif
     if (n < 4 || p[1] != 'M') {
         return 0;
     }
@@ -209,6 +262,15 @@ int moy_live_svc_pump(void) {
         S.told = 1;
         say_page(1);
     }
+#if SERVICES
+    // the prefs rows the services wrote, ahead of the messages they sent after
+    const char *apps[APPS];
+    size_t cap;
+    uint8_t *o = moy_live_out(&cap);
+    if (moy_svc_prefs_scan(apps, served_now(apps), o, cap, say_prefs, NULL) < 0) {
+        return -1;
+    }
+#endif
     int open = 0;
     for (int i = 0; i < APPS; i++) {
         if (S.pid[i] != 0) {
