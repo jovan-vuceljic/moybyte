@@ -594,14 +594,18 @@ host:location.hostname});
 // and its file chooser only inside a user's gesture, so those are done at
 // once while the gesture that chose the row is still active
 // (navigator.userActivation), else armed: the console says to tap, and the
-// next pointerup or keydown's handler does it; Esc drops it.
+// next pointerup or keydown's handler does it; Esc drops it. An iPhone's or
+// an iPad's Safari opens a file chooser only from inside a tap's own handler,
+// whatever userActivation says, and a touch's pointerup is not one there: it
+// arms every file ask and does it in the next touchend.
 var ASKED=null,PICK=document.getElementById("pick"),PICKED=null;
-function askLive(){var u=navigator.userActivation;return !u||u.isActive;}
+function askLive(a){if(IOS&&a.do!=="fullscreen")return false;
+var u=navigator.userActivation;return !u||u.isActive;}
 function asks(list){for(var i=0;i<list.length;i++){var a=list[i];
 if(a.do==="save"){if(WORKER)WORKER.postMessage({t:"export",cart:a.cart});}
 else if(a.do==="pod"){if(WORKER)WORKER.postMessage({t:"pod",cart:a.cart});}
 else if(a.do==="go"){if(/^https?:\/\//.test(a.url||"")){window.__moyWent=a.url;location.assign(a.url);}}
-else if(askLive())askDo(a);else askArm(a);}}
+else if(askLive(a))askDo(a);else askArm(a);}}
 function askArm(a){ASKED=a;window.__moyAsked=a.do;
 send({type:"page",say:[a.do==="fullscreen"?"Tap to go full screen":"Tap to choose a file",
 "Esc: never mind","ok"]});}
@@ -617,10 +621,13 @@ function pickFile(accept,got,none){PICK.accept=accept;PICK.value="";PICKED=[got,
 PICK.addEventListener("change",function(){var p=PICKED;PICKED=null;
 if(p&&PICK.files&&PICK.files[0])p[0](PICK.files[0]);else if(p&&p[1])p[1]();PICK.value="";});
 PICK.addEventListener("cancel",function(){var p=PICKED;PICKED=null;if(p&&p[1])p[1]();});
-function askFire(e){if(!ASKED)return;var a=ASKED;ASKED=null;
+function askFire(e){if(!ASKED)return;
+if(IOS&&e.type==="pointerup"&&e.pointerType==="touch"&&ASKED.do!=="fullscreen")return;
+var a=ASKED;ASKED=null;
 if(e.type==="keydown"&&e.key==="Escape"){window.__moyAsked=null;if(a.do==="pick")pkCancel();return;}
 askDo(a);}
 window.addEventListener("pointerup",askFire,true);window.addEventListener("keydown",askFire,true);
+window.addEventListener("touchend",askFire,true);
 cv.addEventListener("pointerdown",function(){altTap=false;});
 var MAC=/Mac|iP(hone|ad|od)/.test(navigator.platform||""),MODK={Control:1,Shift:2,Alt:4,Meta:8,OS:8};
 var KC={Enter:13,Backspace:8,Tab:9,Delete:127,ArrowLeft:272,ArrowRight:273,ArrowUp:274,ArrowDown:275};

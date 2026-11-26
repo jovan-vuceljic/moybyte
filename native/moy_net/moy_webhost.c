@@ -1296,6 +1296,7 @@ static int sync_post(out_t *o, const char *b, size_t n) {
         .shelf = W->shelf,
         .shelf_cap = sizeof(W->shelf),
         .apps = W->has_apps ? W->apps : NULL,
+        .spend = 1,                 // the request's own buffer, opened in place
     };
     moy_sync_result_t r;
     store_gate();

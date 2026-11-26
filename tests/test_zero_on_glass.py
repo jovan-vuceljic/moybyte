@@ -102,6 +102,7 @@ import urllib.request
 import pytest
 
 import on_glass
+import web_e2e
 import zero_glass as Z
 from on_glass import ROOT
 
@@ -177,6 +178,26 @@ class Zero:
             yield r
         finally:
             self.restart(then)
+
+    def look(self):
+        """A serving board's heaps between two requests, read at the REPL
+        with the host's loop stopped and then taken up again where it stood
+        (zero_host.pump), nothing reset: {"py": (free, largest free run),
+        "idf": (free, largest block, low-water), "modules": sys.modules}.
+        The low-water is each heap region's own, summed."""
+        r = Z.Repl(self.b.ser)
+        r.enter(clean=False)
+        said = r.run(LOOK)
+        self.b.ser.write(b"import zero_host\nzero_host.pump()\x04")
+        self.b.ser.flush()
+        r._until(lambda b: b.endswith(b"OK"), 10, "sign of the loop taken up again")
+        gc_line = re.search(r"GC: total: (\d+), used: (\d+), free: (\d+)", said)
+        run = re.search(r"max free sz: (\d+)", said)
+        regions = ast.literal_eval(re.search(r"^IDF (.*)$", said, re.M).group(1))
+        free, big = Z.internal_heap(regions)
+        return {"py": (int(gc_line.group(3)), int(run.group(1)) * 16),
+                "idf": (free, big, sum(r[3] for r in regions if r)),
+                "modules": ast.literal_eval(re.search(r"^MODS (.*)$", said, re.M).group(1))}
 
     def restart(self, then=None):
         """A reset through esptool, as `tools/board.py ZERO reboot` makes it,
@@ -559,7 +580,7 @@ def test_the_console_signs_in_and_syncs_a_cart(zero, mirror, tmp_path):
         {"js": "location.reload(), 1"},
         {"waitFor": "document.getElementById('s').textContent == 'live'", "timeout": 120000},
         {"js": "pzAsk(), 1"}, {"wait": 1000},
-        {"js": "Array.from(pzC.options).map(function (o) { return o.value; }).join(',')"},
+        {"js": "(window.__moyCarts || []).join(',')"},
     ]
     out = _browse(zero, zero.url, steps, tmp_path / "sync")
     assert "local.new_cart.moy" in out.rsplit("js ->", 1)[-1], out[-2000:]
@@ -816,7 +837,13 @@ def test_the_page_s_terminal_runs_the_board_s_shell(zero, mirror, tmp_path):
 # -- the board's Wi-Fi from its page -------------------------------------------------------
 
 
+# What `look` runs at the REPL: a collect, the Python heap's own account, the
+# C side's heap by region, the modules imported.
+LOOK = ("import gc, sys, micropython, esp32\ngc.collect()\nmicropython.mem_info()\n"
+        "print('IDF', esp32.idf_heap_info(%d))\nprint('MODS', sorted(sys.modules))"
+        % Z.INTERNAL_HEAP)
 WRONG_PASSWORD = "not-the-bench-password"
+BENCH_WIFI_PASSWORD = "bench-only-never-joined"    # saved beside a network no test joins
 
 
 def _wifi_browse(z, base, steps, out, secrets):
@@ -854,13 +881,32 @@ def _where(url):
     return "http://%s%s" % (ip, ":%d" % u.port if u.port else "")
 
 
+def _forget_only(ssid):
+    """Steps that forget network `ssid` from the panel by keys, or press
+    nothing. The panel's Forget names the row its cursor last stood on, and a
+    walk down to it ends on the last row heard, so Enter is sent only while
+    the focus is Forget and that row is `ssid`: another saved network there,
+    the board's own, would be the one forgotten. The js step's value is
+    "FORGET sent", or "FORGET withheld" and what the panel showed."""
+    from test_web_zero_wifi_e2e import _focus
+    press = ("(function () { return window.__moyState().then(function (s) { "
+             "var p = s.wifi_panel || {}, n = p.nets || []; "
+             "if (p.focus != 'forget' || n[n.length - 1] != %s) "
+             "return 'FORGET withheld ' + JSON.stringify([p.focus, n.length]); "
+             "send({type: 'kd', code: 13, mods: 0}); "
+             "setTimeout(function () { send({type: 'ku', code: 13, mods: 0}); }, 120); "
+             "return 'FORGET sent'; }); })()" % json.dumps(ssid))
+    return _focus(ssid=ssid) + _focus("forget") + [{"wait": 400}, {"js": press}, {"wait": 400}]
+
+
 def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
-    """From the console's own Wi-Fi panel on the board's page: a saved network
-    forgotten and saved again (nothing dropped); with a second saved network
-    in range, a move to it with a wrong password (the board comes back and the
-    page says so), a move to it that works, and a move back. The passwords are
-    the board's own saved ones, read over the cable and never printed."""
-    from test_web_zero_wifi_e2e import ENTER, _forget, _keys, _move, _panel, _say
+    """From the console's own Wi-Fi panel on the board's page: a network
+    forgotten and saved (nothing dropped), never the one the board is on;
+    with a second saved network in range, a move to it with a wrong password
+    (the board comes back and the page says so), a move to it that works, and
+    a move back. The passwords are the board's own saved ones, read over the
+    cable and never printed."""
+    from test_web_zero_wifi_e2e import ENTER, _keys, _move, _panel, _say
     _needs_password(zero)
     doc = json.loads((zero.before_files.get(STORE + "/wifi.json") or b"{}").decode())
     saved = {n["ssid"]: n.get("password") or "" for n in doc.get("networks", []) if n.get("ssid")}
@@ -871,35 +917,51 @@ def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
     on = look["w"][1]
     assert look["w"][0] and on in saved, "the page's station says %s" % (look["w"],)
     others = [s for s in saved if s != on and s in look["p"]["nets"]]
-    x = others[0] if others else on
-    steps = (_forget(x) + [_panel("p.known.indexOf(%s) < 0" % json.dumps(x)), {"wait": 1500},
-                           _say("FORGOT")])
+    gone, known = ("p.known.indexOf(%s) " + c + " && !p.card" for c in ("< 0", ">= 0"))
     if others:
-        steps += (_move(x, WRONG_PASSWORD, 2)
-                  + [_panel("p.card && p.card[0] == 'tell'", 90000), _say("FAILED")]
-                  + _keys(ENTER) + [_panel("!p.card", 5000)]
-                  + _move(x, saved[x], 1))
+        x = others[0]
+        steps = (_forget_only(x)
+                 + [_panel(gone % json.dumps(x)), {"wait": 1500}, _say("FORGOT")]
+                 + _move(x, WRONG_PASSWORD, 2)
+                 + [_panel("p.card && p.card[0] == 'tell'", 90000), _say("FAILED")]
+                 + _keys(ENTER) + [_panel("!p.card", 5000)]
+                 + _move(x, saved[x], 1)
+                 + [_panel(known % json.dumps(x)), {"wait": 1500}, _say("SAVED")]
+                 + _move(x, None, 1, card="switch")
+                 + [{"waitFor": "window.__moyState().then(s => (window.__moyLinkCard && "
+                                "window.__moyLinkCard.go) || (s.wifi_panel && "
+                                "!s.wifi_panel.joining && s.wifi && s.wifi[1] == %s))"
+                                % json.dumps(x), "timeout": 90000},
+                    {"wait": 1000}, _say("MOVED")])
     else:
-        from test_web_zero_wifi_e2e import _focus, _typed
-        steps += (_focus(ssid=x) + _keys(ENTER) + [_panel("p.pick", 5000)]
-                  + _typed(saved[x]) + _keys(ENTER))
-    steps += [_panel("p.known.indexOf(%s) >= 0 && !p.card" % json.dumps(x)), {"wait": 1500},
-              _say("SAVED")]
-    if others:
-        steps += (_move(x, None, 1, card="switch")
-                  + [{"waitFor": "window.__moyState().then(s => (window.__moyLinkCard && "
-                                 "window.__moyLinkCard.go) || (s.wifi_panel && "
-                                 "!s.wifi_panel.joining && s.wifi && s.wifi[1] == %s))"
-                                 % json.dumps(x), "timeout": 90000},
-                     {"wait": 1000}, _say("MOVED")])
+        # The one saved network in range is the one the board is on, and a
+        # board is never asked to forget that: the last network heard (the
+        # row the keys reach Forget from, _forget_only) is saved under a
+        # bench password, without a join, and that one forgotten.
+        x = look["p"]["nets"][-1]
+        if x in saved:
+            pytest.skip("%s hears its own network last: no other row the keys can forget"
+                        % zero.name)
+        secrets.append(BENCH_WIFI_PASSWORD)
+        steps = (_move(x, BENCH_WIFI_PASSWORD, 1)
+                 + [_panel(known % json.dumps(x)), {"wait": 1500}, _say("SAVED")]
+                 + _forget_only(x)
+                 + [_panel(gone % json.dumps(x)), {"wait": 1500}, _say("FORGOT")])
     out = _wifi_browse(zero, zero.url, steps, tmp_path / "manage", secrets)
     forgot, saved_again = _tagged(out, "FORGOT"), _tagged(out, "SAVED")
-    assert x not in forgot["p"]["known"], forgot
+    if "FORGET withheld" in out:
+        if not others:
+            assert x in saved_again["p"]["known"], saved_again["p"]["known"]
+        assert forgot["w"][:2] == [True, on], forgot["w"]
+        pytest.skip("%s: the scan moved under the panel and Forget no longer named the "
+                    "network to forget: nothing pressed" % zero.name)
+    assert x not in forgot["p"]["known"], forgot["p"]["known"]
     assert forgot["w"][:2] == [True, on], "forgetting dropped the network: %s" % (forgot["w"],)
-    assert x in saved_again["p"]["known"], saved_again
+    assert x in saved_again["p"]["known"], saved_again["p"]["known"]
     assert saved_again["w"][:2] == [True, on], saved_again["w"]
     if not others:
-        print("%s: one saved network in range (%s): no move to make" % (zero.name, on))
+        print("%s: one saved network in range: another saved and forgotten, no move to make"
+              % zero.name)
         return
     failed = _tagged(out, "FAILED")
     assert failed["p"]["card"] == ["tell", "Still on %s" % on], failed
@@ -941,11 +1003,11 @@ def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
 
 
 # The bench folder of the SSH tests, in the folder a session starts in (the
-# store's files), and the pipe's stream at most: 4 KB on a board without
-# PSRAM, 1 MB with (native/moy_sh/moy_sh_sys.c, PIPE_MAX).
+# store's files), and what a pipe holds in memory before its stream goes on
+# in a file of the store: 4 KB on a board without PSRAM, 1 MB with
+# (native/moy_sh/moy_sh_sys.c, MOY_SH_PIPE_MEM and SPILL).
 BENCH = "zbench"
-PIPE_CAP = {"c3_zero": 4 * 1024, "xiao_zero": 1024 * 1024}
-PIPE_SAID = re.compile(rb"pipe: (stream over|out of memory at) \d+ KB; write it to a file")
+PIPE_MEM = {"c3_zero": 4 * 1024, "xiao_zero": 1024 * 1024}
 
 
 def _host(z):
@@ -1078,34 +1140,34 @@ def test_edit_and_vi_save_what_was_typed_over_ssh(zero, ssh):
     assert not failed, "\n".join(failed)
 
 
-def test_a_pipe_carries_a_file_and_says_where_it_stops(zero, ssh):
-    """`cat ... | wc -c` counts a stream under the pipe's cap whole; past the
-    cap the pipe says so (the message that tells the user to write it to a
-    file) and the session goes on. The stream is one file `cat` names as
-    often as it takes, so a 1 MB cap needs no 1 MB file in the store."""
-    cap = PIPE_CAP[zero.name]
-    part = _text_file(min(cap - 1024, 32 * 1024))
-    under = max(1, (cap - 1024) // len(part))
-    over = cap // len(part) + 1
+def test_a_pipe_carries_a_stream_past_its_memory_whole(zero, ssh):
+    """`cat ... | wc -c` counts a stream whole under the pipe's memory and
+    past it, where the stream goes on in a file of the store that goes at
+    the pipe's last close, in a command and in a terminal session alike. The
+    stream is one file `cat` names as often as it takes, so a 1 MB pipe needs
+    no 1 MB file in the store."""
+    mem = PIPE_MEM[zero.name]
+    part = _text_file(min(mem - 1024, 32 * 1024))
+    under = max(1, (mem - 1024) // len(part))
+    over = mem // len(part) + 1
     cat = lambda n: "cat" + (" %s/part.txt" % BENCH) * n  # noqa: E731
     with _bench(ssh):
         assert ssh.run("cat > %s/part.txt" % BENCH, stdin=part)[0] == 0
-        rc, out, err = ssh.run("%s | wc -c" % cat(under))
-        assert (rc, out.strip(), err) == (0, str(len(part) * under).encode(), b""), \
-            (rc, out, err)
-        rc, out, err = ssh.run("%s | wc -c" % cat(over))
-        print("%s: %d bytes through a pipe capped at %d: %r %r"
-              % (zero.name, len(part) * over, cap, out, err))
-        assert PIPE_SAID.search(out + err), "a stream past the cap: %r %r" % (out, err)
-        assert int(out.strip().rsplit(b"\n", 1)[-1] or 0) <= cap, out
+        for n in (under, over):
+            rc, out, err = ssh.run("%s | wc -c" % cat(n))
+            assert (rc, out.strip(), err) == (0, str(len(part) * n).encode(), b""), \
+                (n, rc, out, err)
+        print("%s: %d bytes through a pipe holding %d in memory" % (zero.name, len(part) * over, mem))
         t, free0 = _session(ssh, zero)
         try:
             said = t.command("%s | wc -c" % cat(over))
-            assert said is not None and PIPE_SAID.search(said), said
+            assert said is not None and said.strip() == str(len(part) * over).encode(), said
             free1 = _free_live(t)
             _still_up(zero, t)
         finally:
             t.close()
+        _rc, left, _e = ssh.run("ls -a /; ls -a /etc")
+        assert b"pipes" not in left, "a spill was left: %r" % left
     print("%s: internal RAM free in the session %s -> %s" % (zero.name, free0, free1))
     _heap(zero, "after the pipes")
 
@@ -1309,7 +1371,7 @@ def _open_steps(folder, title):
 
 
 SHELF = {"js": "(pzAsk(), new Promise(function (ok) { setTimeout(function () { ok('SHELF ' + "
-               "JSON.stringify(Array.from(pzC.options).map(function (o) { return o.value; }))); "
+               "JSON.stringify(window.__moyCarts || [])); "
                "}, 1500); }))"}
 STATE = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify({cart: s.cart, "
          "stack: s.stack, screen: s.screen, error: s.cart_error, notice: s.notice, "
@@ -1438,7 +1500,10 @@ def test_a_game_s_pmem_saves_are_back_after_a_reboot(zero, mirror, ssh, tmp_path
 
 FILL = STORE + "/zbench_fill.bin"
 FILL_SLACK = 4               # blocks left free: a pairing's keys and a batch's staging
-FULL_WORDS = re.compile(r"full|no room|no space|out of space|storage|not enough", re.I)
+# What the page says of a store with no room. Never a bare "full": the bench
+# cart's own folder has the word, and the page names that folder when it
+# imports it.
+FULL_WORDS = re.compile(r"storage is full|no room|no space|out of space|not enough", re.I)
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
@@ -1504,13 +1569,10 @@ def test_a_full_store_refuses_a_cart_says_so_and_corrupts_nothing(zero, mirror, 
 
 
 # The console's way to its update screen on a page this board serves: the
-# menu (the bar's logo), Settings (counted up from its last row, Restart,
-# past About: the rows above it change with the card selected and the radio
-# link, and the menu clamps at its ends), then Updates' "Update online" (ten
-# rows down: General's six, Play's two, Updates' Channel).
-TO_UPDATE = [{"click": [14, 13]}, {"wait": 800}] + [{"key": "ArrowDown"}] * 20 + \
-    [{"key": "ArrowUp"}] * 2 + [{"wait": 300}, {"key": "Enter"}, {"wait": 1500}] + \
-    [{"key": "ArrowDown"}] * 10 + [{"wait": 300}, {"key": "Enter"}]
+# system menu's Settings, then the row Updates' "Update online", each walked
+# to by what the console says is highlighted (the rows above either change
+# with the board, its carts and its radio).
+TO_UPDATE = web_e2e.menu_pick("Settings") + web_e2e.settings_row("update_online")
 OTA_VERDICT = re.compile(r"ZERO ota: (up to date|.* available|no build published|check failed)")
 OTA_INSTALLS = re.compile(r"ZERO ota: (downloading|writing|installed|rebooting|image already)")
 
@@ -2232,6 +2294,15 @@ def test_the_tdeck_atan2_is_the_wasm_s(tmp_path):
 SOAK_S = int(os.environ.get("MOYBYTE_ZERO_SOAK_S") or 12 * 60)
 SOAK_FREE_BAND = 6 * 1024
 SOAK_LARGEST_BAND = 8 * 1024
+# ...and the heaps as each round leaves them, read on the serving board with
+# nothing reset (`look`). The Python heap is the one the store host's rules
+# shape (device/zero_host.py, THE HEAP'S SHAPE; tests/test_zero_heap.py holds
+# them on a host): no module imported after the start, no more held than
+# SOAK_PY_KEPT over the first look, and no more than SOAK_PY_TORN of what is
+# free outside its largest run. The C side's largest block is held to the
+# first round's within SOAK_LARGEST_BAND, round by round.
+SOAK_PY_KEPT = 2 * 1024
+SOAK_PY_TORN = 6 * 1024
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
@@ -2242,6 +2313,7 @@ def test_zy_a_session_soak_keeps_the_board_s_ram(zero, mirror, ssh, tmp_path):
     internal RAM is read each round and must not keep falling. Last in the
     file but the give-back: it is the slow one."""
     free0, big0 = _heap(zero, "before the soak")
+    looks = [zero.look()]
     archive, folder, _c = _bench_cart(tmp_path, "soak", "Zero Bench Soak")
     steps = sign_in(zero) + [{"js": "location.reload(), 1"}, {"wait": 3000}, LIVE_NOW] + \
         _import_steps("IMPORTED") + _get_carts_steps() + \
@@ -2269,8 +2341,11 @@ def test_zy_a_session_soak_keeps_the_board_s_ram(zero, mirror, ssh, tmp_path):
             _remove(ssh, folder)
             frees.append(free)
             rounds.append(time.monotonic() - r0)
-            print("%s soak round %d (%.0f s): internal RAM free in SSH %.1f KB"
-                  % (zero.name, n, rounds[-1], free / 1024.0))
+            looks.append(zero.look())
+            print("%s soak round %d (%.0f s): internal RAM free in SSH %.1f KB; left with "
+                  "python free %d, largest run %d; internal free %d, largest block %d, "
+                  "low-water %d" % ((zero.name, n, rounds[-1], free / 1024.0)
+                                    + looks[-1]["py"] + looks[-1]["idf"]))
     finally:
         _remove(ssh, folder)
     free1, big1 = _heap(zero, "after the soak")
@@ -2282,6 +2357,19 @@ def test_zy_a_session_soak_keeps_the_board_s_ram(zero, mirror, ssh, tmp_path):
                            SOAK_FREE_BAND / 1024.0, free0 / 1024.0, free1 / 1024.0,
                            big0 / 1024.0, big1 / 1024.0, SOAK_LARGEST_BAND / 1024.0))
     assert not past, "free internal RAM kept falling: %s" % frees
+    for n, seen in enumerate(looks[1:], 1):
+        new = sorted(set(seen["modules"]) - set(looks[0]["modules"]))
+        assert not new, "round %d imported %s: a module made for good mid-session" % (n, new)
+        free, run = seen["py"]
+        assert looks[0]["py"][0] - free <= SOAK_PY_KEPT, \
+            "round %d left the Python heap %d bytes shorter than the start" % (
+                n, looks[0]["py"][0] - free)
+        assert free - run <= SOAK_PY_TORN, \
+            "round %d left %d bytes of the Python heap free, the largest run of them %d" % (
+                n, free, run)
+        assert looks[1]["idf"][1] - seen["idf"][1] <= SOAK_LARGEST_BAND, \
+            "round %d left the largest internal block %d bytes under the first round's" % (
+                n, looks[1]["idf"][1] - seen["idf"][1])
     assert big0 - big1 <= SOAK_LARGEST_BAND, \
         "the largest block fell %.1f KB over the soak" % ((big0 - big1) / 1024.0)
     assert free0 - free1 <= SOAK_FREE_BAND, \

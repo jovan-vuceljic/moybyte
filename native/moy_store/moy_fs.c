@@ -17,8 +17,8 @@ typedef struct {
     char *root;             // keep-allocated, len + 1
     size_t len;
     uint8_t state;
-    char *mpath;            // the marker's path while MARK_SET
-    size_t mlen;
+    char *mpath;            // the marker's path while MARK_SET: mcap bytes, kept
+    size_t mlen, mcap;
     uint32_t chars, crc;
 } root_t;
 
@@ -411,27 +411,43 @@ int moy_fs_write_bytes(const char *path, const void *data, size_t n) {
     if (rc == 0) {
         rc = rename2(tmp, path, 1);
     }
+    if (rc != 0) {
+        moy_fs_remove(tmp);         // no staging file outlives a refused write
+    }
     moy_store_free(tmp, tn);
     return rc;
 }
 
 // -- the marker -----------------------------------------------------------------
 
+// The marker's path lives in one block made with its root and grown only for
+// a longer path: made again at every save, it was a small block that lasts,
+// made while a batch's buffer was live.
+#define MARK_PATH_KEEP 160u
+
 static void drop_mark(root_t *r) {
+    r->mlen = 0;
+}
+
+static void free_mark(root_t *r) {
     if (r->mpath != NULL) {
-        moy_store_free(r->mpath, r->mlen + 1u);
+        moy_store_free(r->mpath, r->mcap);
     }
     r->mpath = NULL;
-    r->mlen = 0;
+    r->mlen = r->mcap = 0;
 }
 
 static void set_mark(root_t *r, const char *path, size_t plen, uint32_t chars,
                      uint32_t crc) {
-    drop_mark(r);
-    r->mpath = moy_store_keep(plen + 1u);
-    if (r->mpath == NULL) {
-        r->state = MARK_NONE;
-        return;
+    if (plen + 1u > r->mcap) {
+        free_mark(r);
+        size_t cap = plen + 1u > MARK_PATH_KEEP ? plen + 1u : MARK_PATH_KEEP;
+        r->mpath = moy_store_keep(cap);
+        if (r->mpath == NULL) {
+            r->state = MARK_NONE;
+            return;
+        }
+        r->mcap = cap;
     }
     memcpy(r->mpath, path, plen);
     r->mlen = plen;
@@ -474,6 +490,8 @@ int moy_fs_root(const char *root) {
         }
         memcpy(r.root, root, len);
         r.len = len;
+        r.mpath = moy_store_keep(MARK_PATH_KEEP);   // with the root; a save makes none
+        r.mcap = r.mpath != NULL ? MARK_PATH_KEEP : 0;
     }
     // The newest goes first, then a stable sort by length, longest first: an
     // insertion at the first root no longer than it.
@@ -484,11 +502,11 @@ int moy_fs_root(const char *root) {
     if (nroots == MOY_FS_ROOTS) {           // the shortest falls off
         root_t *last = &roots[nroots - 1];
         if (k == nroots) {
-            drop_mark(&r);
+            free_mark(&r);
             moy_store_free(r.root, r.len + 1u);
             return 0;
         }
-        drop_mark(last);
+        free_mark(last);
         moy_store_free(last->root, last->len + 1u);
         nroots--;
     }
@@ -500,7 +518,7 @@ int moy_fs_root(const char *root) {
 
 void moy_fs_roots_clear(void) {
     for (int i = 0; i < nroots; i++) {
-        drop_mark(&roots[i]);
+        free_mark(&roots[i]);
         moy_store_free(roots[i].root, roots[i].len + 1u);
     }
     nroots = 0;
@@ -791,12 +809,25 @@ int moy_fs_publish_mark(const char *path, const char *data, size_t n) {
     return moy_fs_write(path, data, n);
 }
 
+// A save that fails on a file that was not there (a full volume's refusal)
+// leaves none of it: not the file cut short, not its backup, not the marker
+// that names it. One that fails over an older text keeps the scheme's own
+// state, whose backup a read heals from.
 int moy_fs_publish_from(const char *path, moy_fs_src_t *src) {
     uint32_t chars, crc;
     src_stamp(src, &chars, &crc);
+    int was = moy_fs_exists(path);
     mark_publish(path, strlen(path), chars, crc);
     int rc = publish_bak(path, src, chars, crc);
-    return rc != 0 ? rc : write_src(path, NULL, 0, src);
+    if (rc == 0) {
+        rc = write_src(path, NULL, 0, src);
+    }
+    if (rc != 0 && !was) {
+        moy_fs_remove(path);
+        moy_fs_forget_bak(path);
+        moy_fs_unmark(path);
+    }
+    return rc;
 }
 
 int moy_fs_publish(const char *path, const char *data, size_t n) {
