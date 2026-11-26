@@ -57,9 +57,7 @@ int moy_sd_card_up(uint32_t *sectors, const char **what);
 
 typedef struct {
     fs_user_mount_t *vfs;
-    uint32_t base;              // the volume's first sector on the card (GPT_FIND)
-    uint32_t sectors;           // the volume's
-    uint32_t total;             // the card's
+    uint32_t sectors;
     moy_cache_t cache;
     int held;                   // lent out whole (USB mass storage): no mount
 } card_t;
@@ -85,7 +83,6 @@ static uint32_t s_ram_sectors;
 
 static int io(void *ctx, uint32_t start, uint8_t *buf, uint32_t n, int write) {
     (void)ctx;
-    start += card.base;
     mp_obj_t drv = MP_STATE_VM(moy_store_card_driver);
     if (drv == MP_OBJ_NULL || drv == mp_const_none) {
         #if MOY_CARD_RAM
@@ -180,59 +177,6 @@ int moy_store_card_mount(uint32_t sectors) {
     return rc;
 }
 
-// GPT_FIND: a card partitioned GPT (a protective MBR, its one entry of type
-// 0xEE) holds its volume in a partition oofatfs cannot find, so the volume is
-// its first partition whose first sector is a FAT or exFAT boot sector, and
-// every sector FatFS asks for is that far into the card. A card with an MBR
-// or none reads as it is, from sector 0. 0 with *base and *n, or -1 for no
-// such partition (the mount then fails as it would have).
-static uint32_t le32(const uint8_t *p) {
-    return p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
-}
-
-static int boot_sector(const uint8_t *s) {
-    return s[510] == 0x55 && s[511] == 0xAA
-           && (memcmp(s + 3, "EXFAT   ", 8) == 0 || memcmp(s + 54, "FAT", 3) == 0
-               || memcmp(s + 82, "FAT32", 5) == 0);
-}
-
-// `s` is two sectors of scratch (the cache's slots, before the cache is used).
-static int gpt_find(uint32_t sectors, uint8_t *s, uint32_t *base, uint32_t *n) {
-    *base = 0;
-    *n = sectors;
-    if (io(NULL, 0, s, 1, 0) != 0 || s[510] != 0x55 || s[511] != 0xAA || s[450] != 0xEE) {
-        return 0;
-    }
-    if (io(NULL, 1, s, 1, 0) != 0 || memcmp(s, "EFI PART", 8) != 0) {
-        return 0;
-    }
-    uint32_t at = le32(s + 72), count = le32(s + 80), size = le32(s + 84);
-    if (size < 128 || size > SECTOR || SECTOR % size != 0 || count > 256) {
-        return -1;
-    }
-    for (uint32_t i = 0; i < count; i++) {
-        uint32_t per = SECTOR / size;
-        if (i % per == 0 && io(NULL, at + i / per, s, 1, 0) != 0) {
-            return -1;
-        }
-        const uint8_t *e = s + (i % per) * size;
-        static const uint8_t none[16];
-        if (memcmp(e, none, 16) == 0 || le32(e + 36) != 0 || le32(e + 44) != 0) {
-            continue;                   // unused, or past what 32-bit sectors reach
-        }
-        uint32_t first = le32(e + 32), last = le32(e + 40);
-        if (first == 0 || last < first || last >= sectors) {
-            continue;
-        }
-        if (io(NULL, first, s + SECTOR, 1, 0) == 0 && boot_sector(s + SECTOR)) {
-            *base = first;
-            *n = last - first + 1;
-            return 0;
-        }
-    }
-    return -1;
-}
-
 static int card_mount(uint32_t sectors) {
     if (!need_card()) {
         return MP_ENOMEM;
@@ -262,9 +206,6 @@ static int card_mount(uint32_t sectors) {
     v->blockdev.u.old.count[0] = MP_OBJ_FROM_PTR(&card_count_obj);
     v->blockdev.u.old.count[1] = MP_OBJ_FROM_PTR(v);
     v->fatfs.drv = v;
-    card.base = 0;
-    card.total = sectors;
-    gpt_find(sectors, card.cache.slots, &card.base, &sectors);
     card.sectors = sectors;
     moy_cache_drop_all(&card.cache);
     card.cache.every = 0;
@@ -361,7 +302,7 @@ static mp_obj_t mod_card(size_t n_args, const mp_obj_t *args) {
     }
     MP_STATE_VM(moy_store_card_driver) = n_args > 1 ? args[1] : mp_const_none;
     if (moy_kernel_start != NULL && moy_kernel_start() == 1 && n_args < 2
-        && moy_store_card_fatfs() != NULL && card.total == sectors) {
+        && moy_store_card_fatfs() != NULL && card.sectors == sectors) {
         return MP_OBJ_FROM_PTR(card.vfs);
     }
     int rc = moy_store_card_mount(sectors);
