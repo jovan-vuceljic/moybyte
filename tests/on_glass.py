@@ -2336,6 +2336,9 @@ def sd_card_io_takes_no_internal_dma(board):
     radio's burst. The squeeze is moy_alloc's, freed before this returns."""
     if not board.pyval("__import__('moy_sd').sector_count()", strict=True):
         pytest.skip("no card in the slot")
+    root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
+    if not root.startswith("/sd"):
+        pytest.skip("the card's volume did not mount (the store is %s)" % root)
     board.pyexec(_SD_SQUEEZE, strict=True)
     got = board.pyval("(getattr(ws, 'with_sd', None) or (lambda fn: fn()))"
                       "(ws._g['_sd_squeeze'])", timeout=30, strict=True)

@@ -47,6 +47,18 @@
 
 #define MOY_SD_KHZ 20000
 
+// A card whose MISO is the panel's D/C pad (the CoreS3's) is reached only with
+// the panel's gate held: the feeder drained and the pad turned to the card
+// (native/moy_lcd's moy_lcd_card_gate, counted, so a volume op that holds it
+// already nests). Weak: a board whose card has a pad of its own calls nothing.
+void moy_lcd_card_gate(int on);
+#pragma weak moy_lcd_card_gate
+static void card_gate(int on) {
+    if (moy_lcd_card_gate != NULL) {
+        moy_lcd_card_gate(on);
+    }
+}
+
 // Which card the board has, from its board.toml [hardware] rows
 // (tools/board_config.py's hw_defines): `sdmmc0` an SDMMC card on slot 0; an
 // `sd_cs` on `spi2` a card attached to the panel's bus, the `radio_cs` beside
@@ -235,7 +247,9 @@ int moy_sd_card_up(uint32_t *sectors, const char **what) {
     *what = "";
     if (s_card == NULL) {
 #if defined(SD_SPI_HOST)
+        card_gate(1);
         int err = spi_up(what);
+        card_gate(0);
 #elif defined(SD_MMC) && SOC_SDMMC_HOST_SUPPORTED
         int err = mmc_up(what);
 #else
@@ -276,6 +290,7 @@ int moy_sd_card_io(uint32_t start, uint8_t *buf, uint32_t count, int write) {
     }
     if (s_dev >= 0) {
         esp_err_t err = ESP_OK;
+        card_gate(1);
         for (uint32_t i = 0; i < count && err == ESP_OK; i += MOY_SD_RUN) {
             uint32_t n = count - i < MOY_SD_RUN ? count - i : MOY_SD_RUN;
             uint8_t *at = buf + (size_t)i * MOY_SD_SECTOR;
@@ -283,6 +298,7 @@ int moy_sd_card_io(uint32_t start, uint8_t *buf, uint32_t count, int write) {
             err = write ? sdmmc_write_sectors_dma(s_card, at, start + i, n, len)
                         : sdmmc_read_sectors_dma(s_card, at, start + i, n, len);
         }
+        card_gate(0);
         return err;
     }
     uint32_t run = count < MOY_SD_RUN ? count : MOY_SD_RUN;

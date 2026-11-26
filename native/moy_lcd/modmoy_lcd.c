@@ -964,6 +964,13 @@ static void moy_lcd_sd_gate(int on) {
     sd_gate(on, false);
 }
 
+#ifdef MOY_LCD_DC_IS_MISO
+// native/moy_sd's every card transfer, the card's MISO being the D/C pad.
+void moy_lcd_card_gate(int on) {
+    sd_gate(on, false);
+}
+#endif
+
 static mp_obj_t moy_lcd_sd_guard(mp_obj_t on_in) {
     sd_gate(mp_obj_is_true(on_in), true);
     return mp_const_none;
