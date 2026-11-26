@@ -59,9 +59,4 @@ if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/../moy_input)
     target_include_directories(usermod_moy_net INTERFACE ${CMAKE_CURRENT_LIST_DIR}/../moy_input)
 endif()
 
-# The live socket reaches its device channel through weak symbols (a board
-# without the channel links none of it), and a weak reference pulls no member
-# out of the component's archive: the channel is asked for by name.
-target_link_options(usermod_moy_net INTERFACE "-Wl,-u,moy_live_dev_message")
-
 target_link_libraries(usermod INTERFACE usermod_moy_net)

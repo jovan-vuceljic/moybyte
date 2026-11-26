@@ -66,6 +66,9 @@ name: Web console E2E
 #   tests/test_web_page_rows_e2e.py  the page's top bar as the console's rows:
 #                                  Full screen, Add a file, Download and Play
 #                                  on the console, chosen from the system menu.
+#   tests/test_web_zero_wifi_e2e.py  a Zero's Wi-Fi from its page, on the
+#                                  board twin: save, forget, a failed move
+#                                  and a successful one.
 #   tests/test_web_first_run_e2e.py  what an embedding page asks of a
 #                                  first run (its scheme, ?start, ?edit), a
 #                                  saved theme winning over it, and Esc over a
@@ -304,7 +307,7 @@ jobs:
             tests/test_web_desk_input_e2e.py tests/test_web_gamepad_e2e.py \
             tests/test_web_loader.py \
             tests/test_web_link_e2e.py tests/test_web_setup_e2e.py \
-            tests/test_web_page_rows_e2e.py \
+            tests/test_web_page_rows_e2e.py tests/test_web_zero_wifi_e2e.py \
             tests/test_web_fonts.py tests/test_web_look_parity.py \
             tests/test_editor_ladder_icons.py
 

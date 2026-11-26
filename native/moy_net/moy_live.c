@@ -85,6 +85,7 @@
 
 #include "moy_link.h"
 #include "moy_live.h"
+#include "moy_dev_kinds.h"           // MOY_DEV_RELAYS
 
 #if defined(MOY_NET_LIVE) && MOY_NET_LIVE && defined(MOY_NET_LINK) && MOY_NET_LINK
 
@@ -153,12 +154,19 @@ typedef struct {
 
 static live_t S = {.fd = -1};
 
-// The device channel (moy_live_dev.c): weak, for a twin built without the
-// kernel's handle table.
+// The device channel (moy_live_dev.c), on a board that can relay
+// (moy_dev_kinds.h's MOY_DEV_RELAYS): named strongly there, which is what
+// pulls it out of the component's archive; weak on any other, which links
+// none of it.
+#if defined(MOY_DEV_RELAYS) && MOY_DEV_RELAYS
+#define DEV_HAS(f) 1
+#else
 #pragma weak moy_live_dev_message
 #pragma weak moy_live_dev_pump
 #pragma weak moy_live_dev_end
 #pragma weak moy_live_dev_stats
+#define DEV_HAS(f) ((f) != NULL)
+#endif
 
 // The terminal channel (native/moy_tty/moy_tty_live.c): weak, for an image
 // or a twin without the shell's face.
@@ -172,6 +180,7 @@ void moy_live_term_end(void);
 #pragma weak moy_live_term_fd
 #pragma weak moy_live_term_pump
 #pragma weak moy_live_term_end
+
 static live_t *const L = &S;
 
 int moy_web_live_link(uint8_t mac[6]) {
@@ -281,7 +290,7 @@ static int message(int ws, uint8_t *p, size_t n) {
         return 0;
     }
     if (p[0] == 'd') {
-        return moy_live_dev_message != NULL ? moy_live_dev_message(p, n) : 0;
+        return DEV_HAS(moy_live_dev_message) ? moy_live_dev_message(p, n) : 0;
     }
     if (p[0] == 't') {
         return moy_live_term_message != NULL ? moy_live_term_message(p, n) : 0;
@@ -515,7 +524,7 @@ static void pump(int ws) {
         if (L->radio && heard(ws) < 0) {
             return;
         }
-        if (moy_live_dev_pump != NULL && (devs = moy_live_dev_pump()) < 0) {
+        if (DEV_HAS(moy_live_dev_pump) && (devs = moy_live_dev_pump()) < 0) {
             return;
         }
         if (hints(ws) < 0) {
@@ -533,7 +542,7 @@ static void serve(int ws) {
     setsockopt(ws, SOL_SOCKET, SO_SNDTIMEO, &snd, sizeof snd);
     pump(ws);
     radio_down();
-    if (moy_live_dev_end != NULL) {
+    if (DEV_HAS(moy_live_dev_end)) {
         moy_live_dev_end();
     }
     if (moy_live_term_end != NULL) {
@@ -628,7 +637,7 @@ void moy_web_live_cut(int taken) {
 
 void moy_live_stats(moy_live_stats_t *out) {
     *out = L->stats;
-    if (moy_live_dev_stats != NULL) {
+    if (DEV_HAS(moy_live_dev_stats)) {
         moy_live_dev_stats(out);
     }
 }

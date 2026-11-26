@@ -762,17 +762,17 @@ def http_readinto(h, buf):
     return k
 
 
-def http_head_room(h):
-    """The bytes handle `h`'s head buffer holds (moy_httpc_head_room)."""
-    return _lib().moy_httpc_head_room(int(h))
-
-
 def net_vm_stop():
     """The kernel's VM teardown for the links (moy_net_vm_stop)."""
     _lib().moy_net_vm_stop()
 
 
 # -- the host's stand-ins for what an image links (tests only) -------------------
+
+def _http_head_room(h):
+    """The bytes handle `h`'s head buffer holds (moy_httpc_head_room)."""
+    return _lib().moy_httpc_head_room(int(h))
+
 
 def _trust(keys=None):
     """The keys ota_check trusts: `keys` ((modulus_hex, e) pairs), or the

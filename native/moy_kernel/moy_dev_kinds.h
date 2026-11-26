@@ -96,6 +96,17 @@ extern const moy_dev_ops_t moy_dev_media;
 // reads after each answer and each event (lora's joined, fcnt, busy). A kind
 // with no list is not relayed, and on the page stays ABSENT.
 //
+// A board builds the board's half only where it can relay: where a class
+// row of its board.toml names the API of a kind with a list (its MOY_API_
+// define, board_config.hw_defines), each such kind named here
+// (tests/test_live_dev.py holds the two lists equal). A board with none
+// (the C3 Zero) links no device channel.
+#ifndef MOY_DEV_RELAYS
+#if defined(MOY_API_LORA)
+#define MOY_DEV_RELAYS 1
+#endif
+#endif
+//
 // The kinds this board relays, "name:packet:state" each, split by ';', into
 // `out` (cap bytes, NUL-terminated): its length, 0 for none.
 size_t moy_dev_relayed(char *out, size_t cap);

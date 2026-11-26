@@ -92,7 +92,8 @@ def test_a_cart_on_the_page_sends_and_hears_on_the_board_s_radio(tmp_path, monke
                                              os.path.join(T.NET, "moy_live_dev.c"),
                                              os.path.join(T.NET, "moy_link_host.c"),
                                              D.FAKE] + D.TABLE,
-                   defines=("MOY_NET_LIVE=1", "MOY_NET_LINK=1", "MOY_TTY_LEASES=1"),
+                   defines=("MOY_NET_LIVE=1", "MOY_NET_LINK=1", "MOY_TTY_LEASES=1",
+                             "MOY_DEV_RELAYS=1"),
                    incs=(D.KERNEL, D.INPUT))
     air = L.Air()
     monkeypatch.setenv("MOY_AIR", str(air.port))

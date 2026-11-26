@@ -1896,11 +1896,7 @@ def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
             zero.take("zero internal largest after %s" % name, heap[1] / 1024.0)
             refused = bool(done) and done[-1].endswith(" idle") and any(
                 "%s stopped" % folder in ln for ln in lines)
-            # The cart runs in the page, and a page has no LoRa face: a Zero's
-            # radio reaches it only over the live socket, which #254 plans.
-            # Until then the page's needs check refuses it there too.
-            unbridged = lands and refused and not heap[4]
-            if lands and not unbridged:
+            if lands:
                 assert done and done[-1].endswith(" done"), \
                     "%s: the board did not install it: %s" % (name, lines[-8:])
                 assert heap[4], "%s: the board said done but its store has no %s" % (
@@ -1915,9 +1911,6 @@ def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
             assert heap[0] >= idle[0] - HEAP_SPREAD, \
                 "%s: the board's internal heap is %d bytes free after it, %d idle" % (
                     name, heap[0], idle[0])
-            if unbridged:
-                pytest.xfail("%s: the page refuses %s, its LoRa radio being the board's "
-                             "(#254)" % (zero.name, folder))
     finally:
         with zero.repl() as r:
             if kept:
@@ -1925,6 +1918,110 @@ def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
                 for p, data in sorted(kept.items()):
                     r.mkdirs(p.rsplit("/", 1)[0])
                     r.write(p, data)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_the_page_has_the_devices_its_board_relays(zero, mirror, tmp_path):
+    """The page's live socket names the device kinds the board relays
+    (native/moy_kernel/moy_dev_kinds.h's THE RELAY): LoRa where board.toml
+    has a `lora` row, nothing where it has none, and the page's console
+    lists exactly those as its device APIs (what an install check reads)."""
+    _needs_password(zero)
+    st = ("window.__moyState().then(function (s) { return 'KINDS ' + JSON.stringify("
+          "{devs: s.devs}); })")
+    out = _browse(zero, zero.url, sign_in(zero) + [{"wait": 3000}, {"js": st}],
+                  tmp_path / "kinds", query="?dev=1&desktop=1")
+    got = _tagged(out, "KINDS")
+    assert got is not None, out[-2000:]
+    if _lora(zero):
+        assert got["devs"] and got["devs"]["kinds"] == 1, got
+    else:
+        assert got["devs"] is None, got
+
+
+MESH = "moymesh.moy"
+MESH_STATE = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify({cart: "
+              "s.cart, devs: s.devs, card: s.card, error: s.cart_error, live: s.live && "
+              "{opens: s.live.opens, rtt: s.live.rtt}}); })")
+
+
+def _radio(r):
+    """(the live socket's device rows open, the calls it served, the writes a
+    device took, the records and events it pushed; the LoRa radio's owner)
+    over the raw REPL `r`."""
+    live = r.eval("__import__('moy_net').live_stats()")
+    return tuple(live[10:14]) + (r.eval("__import__('moy_lora').owner()"),)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_moy_mesh_holds_the_board_s_radio_from_the_page(zero, mirror, tmp_path):
+    """Moy Mesh, which the Get Carts test above installed on a board with a
+    `lora` row, opened on the page: its service holds the board's radio over
+    the live socket's device channel (native/moy_net/moy_live_dev.c), so the
+    board's process for the page holds the radio and its driver took the
+    node's announce; the page's end gives the radio back. The device channel
+    call's round trip is the page's echo's (the same socket and task)."""
+    if not _lora(zero):
+        pytest.skip("%s has no LoRa radio (no `lora` row)" % zero.name)
+    _needs_password(zero)
+    with zero.repl(clean=False) as r:
+        if MESH not in r.eval("__import__('os').listdir(%r)" % CARTS):
+            pytest.skip("Moy Mesh is not on %s (the Get Carts test installs it)" % zero.name)
+        before = _radio(r)
+    steps = sign_in(zero) + [
+        {"js": "WORKER.postMessage({t: 'open', cart: %s}), 1" % json.dumps(MESH)},
+        # its first run asks: the card names the radio, No focused; Open
+        # records the consent and runs it
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.card && "
+                    "/LoRa/.test(s.card.lines.join(' '))); })", "timeout": 60000},
+        {"js": "cv.focus(), 'focused'"}, {"key": "ArrowRight"}, {"wait": 300},
+        {"key": "Enter"},
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.devs && "
+                    "s.devs.rows >= 1 && s.devs.down >= 3); })", "timeout": 60000},
+        {"wait": 8000},
+        {"js": MESH_STATE % "MESH"},
+        {"wait": 2000},
+    ]
+    path = _scenario(tmp_path / "mesh", steps, "?dev=1&desktop=1")
+    proc = subprocess.Popen(["node", "browsershot.mjs", str(path), str(tmp_path / "mesh")],
+                            cwd=str(RUNNER), env=dict(os.environ, MOY_BASE=zero.url),
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    lines, held = [], None
+    try:
+        for line in proc.stdout:
+            lines.append(line)
+            if held is None and 'js -> "MESH ' in line:
+                with zero.repl(clean=False) as r:
+                    held = _radio(r)
+        proc.wait(timeout=120)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        path.unlink()
+    out = _scrub("".join(lines), zero)
+    got = _tagged(out, "MESH")
+    time.sleep(8)                       # the board's session ends with the page's socket
+    with zero.repl(clean=False) as r:
+        after = _radio(r)
+    print("Moy Mesh on the page: %s\nthe board before %s, while open %s, after %s"
+          % (got, before, held, after))
+    assert got and got["cart"] == "Moy Mesh", "Moy Mesh did not open:\n" + out[-3000:]
+    assert got["devs"]["opens"] >= 1 and got["devs"]["rows"] >= 1, got
+    assert held is not None and held[0] == 1, "the board holds no radio row for the page"
+    assert held[4] != 0, "the radio has no owner while the page holds it"
+    assert held[2] > before[2], "the radio took no packet from the page (its announce)"
+    assert after[0] == 0 and after[4] == 0, "the page's end left the radio held: %r" % (after,)
+    d = got["devs"]
+    if d.get("timed"):
+        zero.take("zero device call round trip mean", d["rtt_sum_us"] / d["timed"] / 1000.0)
+        print("a device call's round trip at the page, over %d calls: min %.1f, mean %.1f, "
+              "max %.1f ms" % (d["timed"], d["rtt_min_us"] / 1000.0,
+                               d["rtt_sum_us"] / d["timed"] / 1000.0, d["rtt_max_us"] / 1000.0))
+    if got["live"] and got["live"]["rtt"]:
+        med, p90 = Z.rtt(got["live"]["rtt"])
+        zero.take("zero live rtt median with the radio", med, got["live"]["rtt"])
+        print("the socket's round trip with the radio held: median %.1f ms, p90 %.1f ms"
+              % (med, p90))
 
 
 # -- a match against a T-Deck --------------------------------------------------------------

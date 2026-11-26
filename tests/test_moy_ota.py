@@ -835,17 +835,17 @@ def test_a_head_buffer_grows_only_while_a_head_needs_it():
         srv.routes["/c"] = (200, {"X-Long": "y" * 6000}, b"long")
         h, status, _clen = nb.http_open(srv.url("/a"), "t")
         try:
-            assert status == 200 and nb.http_head_room(h) == first
+            assert status == 200 and nb._http_head_room(h) == first
         finally:
             nb.http_close(h)
         h, status, _clen = nb.http_open(srv.url("/c"), "t")
         try:
-            assert nb.http_head_room(h) == 4 * first
+            assert nb._http_head_room(h) == 4 * first
             buf = bytearray(16)
             assert buf[:nb.http_readinto(h, buf)] == b"long"
         finally:
             nb.http_close(h)
-        assert nb.http_head_room(h) == 0
+        assert nb._http_head_room(h) == 0
 
 
 def test_a_relative_location_resolves_against_the_current_host():
