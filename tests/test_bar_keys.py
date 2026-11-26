@@ -403,7 +403,7 @@ def test_home_from_the_editor_keeps_an_edit(tmp_path):
 
 
 def test_the_theme_modes_config_names_no_trackball_on_the_tdeck():
-    keys = theme_editor._hints_for(theme_editor.TAB_CONFIG)
+    keys = theme_editor._hints_for()
     assert "ball" not in keys and "ball_lr" not in keys
     assert keys == ("menu", "Home")
 

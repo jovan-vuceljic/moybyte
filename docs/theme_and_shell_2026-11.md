@@ -859,8 +859,9 @@ shadow's reach).
   set's shape: eight 16-pixel tiles a row, one a slot of
   `runtime/toolkit/iconsets.py`'s `SLOTS`, colours, not roles, its clear pixel 16),
   and its look's `icons.pixel_slots` names the slots drawn from them over
-  its icon set (`Appearance.pixel_draw`). The Editor's theme mode paints
-  them: a smooth slot painted becomes a tile and is named there. The icons
+  its icon set (`Appearance.pixel_draw`). The package's maker ships them:
+  the console paints no icon (owner, 2026-11-26), and only the icons the
+  Python shell draws take them, never the C toolkit's (#269). The icons
   are the theme's alone; no sheet beside the carts overrides them
   (2026-10-26).
 
@@ -1919,8 +1920,7 @@ in (`cc_ui`, §1.5).
 board and the browser. Up past the top of the surface under a bar -- a
 page's first row (`ui_draw.edge_take`, the engine's `api_edge`), the
 Editor's list, outline, step or map at its top, a canvas tab's page past
-its first row (Sprites', Map's, Scene's, the theme mode's Sprites: their
-own page's `api_edge`), the home's cards at theirs (`at_top`) -- puts
+its first row (Sprites', Map's, Scene's: their own page's `api_edge`), the home's cards at theirs (`at_top`) -- puts
 focus on the bar's items
 (`BarLayer.focus_items`): the OS widgets, the back chevron, a running app's
 lent tools and the zone's targets (the Editor's tabs, undo, redo and Play,

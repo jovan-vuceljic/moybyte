@@ -11,8 +11,7 @@ SAVE is GONE (#111, owner decision 2026-07-21): there is no SAVE button anywhere
 editor -- CLOSE hard-commits the sheet on its way out (ws.text.leave_menu, which is
 EditorApp.leave -- PLAY, a hard-commit trigger now), and the idle-typing autosave-commit +
 every other tab-leaving exit path (a tab switch, PROJECTS, a window/context-X, a workspace
-swap, going home) commit it too. A theme's icons are the Editor's theme mode's
-(runtime/editors/theme_editor.py).
+swap, going home) commit it too.
 
 Boundary: the SHEET + the current-editor handle + the persistence verbs stay on
 Workstation -- `ws.run.project.sheet` (single source of the pixels), `ws.paint` (the

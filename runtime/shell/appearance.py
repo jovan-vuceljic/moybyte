@@ -22,8 +22,8 @@ the Appearance rows, applied once a frame (`tick`) and written once the
 changes settle or at an exit (`commit`), through Paint's mechanism (#108).
 And Edit theme… (`edit_file`, step 6 and docs/history/look_2026-10.md step 33):
 custom opened in the Editor's theme mode (runtime/editors/theme_editor.py), whose
-saves of its theme.json and its pixel tiles come through the look's writes,
-the loader installing them at the next frame. And NAME… (`name_custom`,
+saves of its theme.json come through the look's writes, the loader
+installing them at the next frame. And NAME… (`name_custom`,
 step 8): custom renamed to a name of the kid's, a package of its own in the
 THEME grid, `custom` free until the next change.
 
@@ -1287,7 +1287,7 @@ class Appearance:
     def load_icon_sheet(self):
         """Bake the shell's IconSheet from `chrome._ICON_ART` (Stage 1): what the
         bar draws under a theme that names no icon set. A theme's own icons are
-        its pixel tiles (`pixel_draw`), edited in the Editor's theme mode."""
+        the pixel tiles its package ships (`pixel_draw`)."""
         self.set_icon_sheet(_default_icon_sheet())
 
     def pixel_image(self, kind):
@@ -1321,17 +1321,9 @@ class Appearance:
         cv.spr(img, x + (w - 16 * sc) // 2, y + (h - 16 * sc) // 2, sc)
         return True
 
-    def preview_pixels(self, sheet, flags):
-        """The Editor's theme mode shows its sheet live: `sheet` and the slot
-        flags `flags` are what the shell draws its icons from until the theme
-        is next installed (a save installs them as written)."""
-        self.pixel_sheet = sheet
-        self.pixel_slots = flags
-        self.pixels_moved()
-
     def pixels_moved(self):
-        """The pixel sheet's pixels moved under a live edit: the cached tiles
-        and every bar strip that drew them go."""
+        """The pixel sheet moved (a theme's sheets installed): the cached
+        tiles and every bar strip that drew them go."""
         self._pixel_imgs = {}
         self._pixel_gen = -1
         ws = self.ws
@@ -1341,9 +1333,9 @@ class Appearance:
             bl.invalidate()
         ws.mark_dirty()
 
-    def save_icons(self):
+    def save_theme(self):
         """The Editor's theme mode's hard commit (an exit, a window's X, going
-        home): what its tabs hold unwritten is written through the look's
+        home): what its Config holds unwritten is written through the look's
         writes (`file_write`). A no-op while no theme is open in the Editor."""
         app = getattr(self.ws, "editor_app", None)
         doc = getattr(app, "theme", None) if app is not None else None

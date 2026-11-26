@@ -43,10 +43,10 @@ except ImportError:  # pragma: no cover - host: the ctypes binding
 
 # THE EDITOR SURFACES ARE IMPORTED AT THEIR FIRST USE (docs/history/kernel_cartpath_2026-10.md
 # section 5.5): the block, map, scene and music editors' UIs and the sprite/icon
-# PAINT surface (paint_layer.py) and the theme mode's two tabs (theme_editor.py)
+# PAINT surface (paint_layer.py) and the theme mode's Config tab (theme_editor.py)
 # are modules a start that never opens the Editor does not load.
 # Each is a Workstation property (`block_ui`, `map_ui`, `scene_ui`, `music_ui`,
-# `paint_layer`, `theme_config_layer`, `theme_sprites_layer`) that imports its
+# `paint_layer`, `theme_config_layer`) that imports its
 # module and builds the one
 # instance when something first reads it; `built(attr)` answers without
 # building. Each module stays the single source of its geometry constants; the
@@ -101,10 +101,6 @@ def _build_paint_layer(ws):
 
 def _build_theme_config_layer(ws):
     return _lazy_module("theme_editor").ConfigLayer(ws, NAMES)
-
-
-def _build_theme_sprites_layer(ws):
-    return _lazy_module("theme_editor").SpritesLayer(ws, NAMES)
 
 
 def _first_use(attr, build):
@@ -561,7 +557,6 @@ class Workstation:
     music_ui = _first_use("music_ui", _build_music_ui)
     paint_layer = _first_use("paint_layer", _build_paint_layer)
     theme_config_layer = _first_use("theme_config_layer", _build_theme_config_layer)
-    theme_sprites_layer = _first_use("theme_sprites_layer", _build_theme_sprites_layer)
     # The board's inputs as the hints know them (`use_inputs`): None until a
     # board declares them, and then the source names' kinds.
     input_kinds = None
@@ -1228,11 +1223,10 @@ class Workstation:
         self.cards_layer = CardsLayer(self, NAMES, _err_text)
         # The PAINT editor surface (#4/#30) over the cart sheet ("paint"). It reads
         # ws.paint / ws.sheet + dispatches SAVE/GET/PUT/CLOSE to ws. The theme mode's
-        # tabs ("theme_config", "theme_sprites") are runtime/editors/theme_editor.py's.
+        # tab ("theme_config") is runtime/editors/theme_editor.py's.
         self._paint_layer = None      # built at its first use
         self.built_editor_desk = None      # the desk Editor, at its first use on a desk
         self._theme_config_layer = None
-        self._theme_sprites_layer = None
         # The Settings app (#28/#39/#53): the aggregator screen. Owns its page of
         # rows and panels; reads ws config/system state + dispatches every
         # mutation to ws setters (it owns NO config).
@@ -1350,7 +1344,7 @@ class Workstation:
         app joins it when it is built (`Spine.built`), so an app that never
         ran has none to draw, route to or close."""
         layer = self._content_layers.get(key)
-        if layer is None and key in ("paint", "theme_config", "theme_sprites"):
+        if layer is None and key in ("paint", "theme_config"):
             layer = self._content_layers[key] = getattr(self, key + "_layer")
         return layer
 
@@ -2789,7 +2783,7 @@ class Workstation:
         self.leave_surface(self.tasks_layer.id)
         self.leave_surface("desktop")
         ed = getattr(self, "editor_app", None)
-        if ed is not None and (self.text.editing_icons or ed.project is self.run.project):
+        if ed is not None and (self.text.editing_theme or ed.project is self.run.project):
             self.leave_surface("menu")
 
     def open(self, cart=None):
