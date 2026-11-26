@@ -152,10 +152,10 @@ border:1px solid #c2c3c7}
 margin-right:7px;vertical-align:-1px;border:2px solid #ffa300;border-right-color:transparent;
 border-radius:50%;animation:pinspin .8s linear infinite}
 @keyframes pinspin{to{transform:rotate(360deg)}}
-/* Debug HUD (#41): toggled with the ` key; lightweight live stream stats. */
+/* Debug HUD (#41): toggled with the ` key, or on from the load with ?hud=1. */
 #hud{position:fixed;top:6px;left:6px;z-index:9;display:none;padding:6px 8px;border-radius:5px;
 background:rgba(11,15,26,.82);border:1px solid #1d2b53;color:#00e436;font:12px ui-monospace;
-white-space:pre;pointer-events:none}#hud b{color:#ffec27}#hud .w{color:#ff004d}</style></head><body>
+white-space:pre;pointer-events:none}</style></head><body>
 <div id=hud></div>
 <span id=s hidden>starting...</span>
 <pre id=crash></pre>
@@ -179,7 +179,9 @@ var W=320,H=240,ready=false,assCart=undefined,img=null,rgba=null;
 // null = undeclared -> show every control, today's behaviour). applyInputHint() gates the
 // virtual gamepad (#ctl) on "buttons" and the soft-keyboard summon (#kb) on "keyboard".
 var INPUT=null,padWanted=true,kbWanted=true;
-var HUD={on:false,fps:0,kb:0,el:document.getElementById("hud"),last:0};
+var HUD={on:/[?&]hud=1/.test(location.search),fps:0,kb:0,el:document.getElementById("hud"),last:0,
+drawn:0,w:"",pc:{n:0,ms:0,max:0,t:0},pcs:""};
+if(HUD.on)HUD.el.style.display="block";
 // Periodic perf LOG: one console.log line every PERF_MS. recv = frames the page
 // actually presented, render = the smoothed rAF rate, then the two halves of the
 // present (565->RGBA conversion and the putImageData upload) as mean/worst. The
@@ -221,7 +223,9 @@ PERF.mb=0;PERF.sb=0;PERF.mu=0;PERF.su=0;PERF.sn=0;}
 // before the second). A chunk the console marks `fresh` starts a stream
 // after a silence, so the dry run and the wait before it are no underrun
 // and no lull.
-var AUDIO_RATE=22050,actx=null,audioOut=null,audioBlocked=false;
+// ?audio=0 makes no context: the console then has no sink and sends no samples.
+var AUDIO_RATE=22050,actx=null,audioOut=null,audioBlocked=false,
+AUDIO_OFF=/[?&]audio=0/.test(location.search),SINK="none";
 var SS={got:0,played:0,under:0,dry:0,gap:0,dup:0,over:0,lull:0,lullAt:0,low:-1},
 schedNext=-1,schedEnd=0,schedGot=-1;
 var AW_SRC="class MoyPCM extends AudioWorkletProcessor{"+
@@ -243,7 +247,7 @@ var AW_SRC="class MoyPCM extends AudioWorkletProcessor{"+
 "if(++this.k>=4){this.k=0;if(this.q)this.q.postMessage(s);}return true;}}"+
 "registerProcessor('moy-pcm',MoyPCM);";
 function audioInit(){var AC=window.AudioContext||window.webkitAudioContext;
-if(!AC||actx)return;try{actx=new AC();}catch(e){actx=null;return;}
+if(AUDIO_OFF||!AC||actx)return;try{actx=new AC();}catch(e){actx=null;return;}
 AUDIO_RATE=actx.sampleRate;audioOut=actx.createGain();audioOut.connect(actx.destination);}
 audioInit();
 // The worker's sink, said once: a worklet's port, or this page.
@@ -255,9 +259,9 @@ actx.audioWorklet.addModule(u).then(function(){
 var node=new AudioWorkletNode(actx,"moy-pcm",{numberOfInputs:0,outputChannelCount:[1]});
 node.connect(audioOut);var ch=new MessageChannel();
 node.port.postMessage({port:ch.port1},[ch.port1]);
-w.postMessage({t:"sink",port:ch.port2,rate:rate},[ch.port2]);
-}).catch(function(){w.postMessage({t:"sink",rate:rate});});return;}catch(e){}}
-w.postMessage({t:"sink",rate:rate});}
+w.postMessage({t:"sink",port:ch.port2,rate:rate},[ch.port2]);SINK="worklet";
+}).catch(function(){SINK="page";w.postMessage({t:"sink",rate:rate});});return;}catch(e){}}
+SINK="page";w.postMessage({t:"sink",rate:rate});}
 function ensureAudio(){if(!actx){audioInit();if(actx&&WORKER)audioSink(WORKER);}
 if(actx&&actx.state==="suspended")actx.resume();}
 // The page's sink: the samples it has played are those it got less those
@@ -738,10 +742,17 @@ if(JSON.stringify(fi)!==JSON.stringify(INPUT)){INPUT=fi;applyInputHint();}
 if(fb)blit(fb);
 if(f.pcm)audioWanted();
 var t=(window.performance&&performance.now)?performance.now():Date.now();if(HUD.last){var inst=1000/Math.max(1,t-HUD.last);
-HUD.fps=HUD.fps?HUD.fps+(inst-HUD.fps)*0.2:inst;}HUD.last=t;if(HUD.on)drawHud();
+HUD.fps=HUD.fps?HUD.fps+(inst-HUD.fps)*0.2:inst;}HUD.last=t;if(HUD.on&&t-HUD.drawn>=500){HUD.drawn=t;drawHud();}
 if(!ok){ok=true;sEl.textContent="live";sEl.style.color="#00e436";}}
+// Three lines: the page's presented rate, the worker's last report (wperf),
+// and the sound: its sink, whether the page is a secure context (a worklet
+// needs one), and the page sink's calls a second and cost mean/worst.
 function drawHud(){
-HUD.el.innerHTML="fps <b>"+HUD.fps.toFixed(1)+"</b>   "+HUD.kb.toFixed(0)+" KB/f";}
+HUD.el.textContent="page "+HUD.fps.toFixed(1)+" fps  "+HUD.kb.toFixed(0)+" KB/f\n"+HUD.w
++"\nsound "+(AUDIO_OFF?"off":SINK)+(window.isSecureContext?" https":" http")+HUD.pcs;}
+function hudPcm(ms){var p=HUD.pc,t=PT();p.n++;p.ms+=ms;if(ms>p.max)p.max=ms;
+if(!p.t)p.t=t;else if(t-p.t>=2000){HUD.pcs=" "+(p.n*1000/(t-p.t)).toFixed(0)+"/s "
++(p.ms/p.n).toFixed(2)+"/"+p.max.toFixed(1)+" ms";p.n=0;p.ms=0;p.max=0;p.t=t;}}
 window.addEventListener("keydown",function(e){if(e.key==="`"||e.key==="~"){HUD.on=!HUD.on;
 HUD.el.style.display=HUD.on?"block":"none";if(HUD.on)drawHud();e.preventDefault();}});
 document.addEventListener("pointerdown",ensureAudio);

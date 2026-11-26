@@ -603,5 +603,9 @@ nor those docs will warn you about:
   plays a live station a minute on both sinks. The loop's own collect waits
   for a stream to end (`worker.js`, IDLE_QUIET_FRAMES): what a playing frame
   allocates the VM's threshold collects, and a pause the worker added would
-  come out of the sink's lead.
+  come out of the sink's lead. Two URL flags take it apart on a phone, where
+  there is no console to read: `?audio=0` makes no context (no sink, no
+  samples sent), and `?hud=1` shows the HUD from the load (the page's rate,
+  the worker's step report, the sink, http or https, and the page sink's
+  calls a second and cost).
 
