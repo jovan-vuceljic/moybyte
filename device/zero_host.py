@@ -1063,19 +1063,31 @@ def make_addon(ota):
     (the XIAO) the official carts the store holds that its image does not
     carry, which the page installed (`carts`; the image's own are current by
     its seed). The C3, with no OTA slot, takes a new image by cable, and the
-    flash brings its official carts (tools/board_flash.py). None where the
-    image names no release index (no updater) or its console is online
-    (console_online)."""
-    if ota is None or console_online():
+    flash brings its official carts (tools/board_flash.py). Where the
+    console is online (console_online) the add-on is its owner's choice
+    (device/zero_offline.py): none unless chosen, and every one taken off the store while
+    it is not. None where the image names no release index (no updater)."""
+    if ota is None:
         return None
     try:
         import web_addon
         from cart_net import CartNet
-        return web_addon.AddonStep(_ZeroInstall(CartNet(_ZeroWifi())), ota.own_index,
+        step = web_addon.AddonStep(_ZeroInstall(CartNet(_ZeroWifi())), ota.own_index,
                                    carts=ota.available(), absent=True)
+        if console_online():
+            step.keep = step.absent = _offline_chosen()
+        return step
     except Exception as exc:             # noqa: BLE001 -- the store serves regardless
         print("ZERO addon: unavailable:", exc)
         return None
+
+
+def _offline_chosen():
+    try:
+        import zero_offline
+    except ImportError:
+        return False
+    return zero_offline.chosen()
 
 
 def make_official(ota, addon=None):
@@ -1103,10 +1115,18 @@ def make_official(ota, addon=None):
         print("ZERO carts: unavailable:", exc)
         return None
     busy = None if addon is None else addon.busy
+    offline = None
+    if addon is not None and console_online():
+        try:
+            import zero_offline
+            offline = zero_offline.Offline(addon, CARTS_DIR)
+        except ImportError:              # an image that offers no Works offline (the C3)
+            pass
     return web_addon.OfficialCarts(_ZeroInstall(CartNet(_ZeroWifi(), ranges=True)),
                                    ota.own_index,
                                    busy=busy, reserve=SEED_RESERVE,
-                                   locked=_has_password, unlock=_is_password)
+                                   locked=_has_password, unlock=_is_password,
+                                   offline=offline)
 
 
 ADDON_SLICE_MS = 40                     # the add-on's install per loop iteration
@@ -1141,7 +1161,8 @@ def tend_addon(addon, official):
         return False
     if addon.tidy():
         return True
-    way_back(addon)
+    if not console_online():
+        way_back(addon)
     return addon.start(retry=True)
 
 
@@ -1193,7 +1214,7 @@ def way_back(addon):
 LASTING = ("moy_carts", "cart_index", "cart_unpack", "moy_seed", "moy_store_base",
            "web_addon", "moy_sync", "moy_webhost", "moy_ota", "ticks", "zero_wifi",
            "ssh_service", "zero_shell", "cart_net", "zero_improv", "zero_setup", "moy_docs",
-           "zero_svc", "app_keys")
+           "zero_svc", "app_keys", "zero_offline")
 # The built-in modules those import inside a function. One costs no code,
 # but its first import takes a slot of sys.modules, and that table grows by
 # a block made wherever the heap then stands.
@@ -1239,6 +1260,11 @@ def start():
         moy_net.web_cable(1)         # the hello tells a page this board pairs by cable
     me = identity()
     name = me.get("name") or HOSTNAME
+    # The apps' services (zero_svc), made before the radio: the setup AP
+    # runs them too, since a service's devices (Moy Mesh's LoRa) are not the
+    # station's, and a base station keeps listening while nobody has set the
+    # network up.
+    services = SERVICES[0] = make_services()
     ip = connect(hostname=name)
     if ip is None:
         # NO WAY IN: host the setup AP instead of printing and giving up. A
@@ -1247,14 +1273,16 @@ def start():
         # back here, with the network it joined.
         print("ZERO no wifi -- hosting the setup AP")
         import zero_setup
-        ip = zero_setup.run(WIFI_STORE, ZERO_STORE, SYSTEM_DIR, improv=improv)
+        if services is not None:
+            services.boot()
+        ip = zero_setup.run(WIFI_STORE, ZERO_STORE, SYSTEM_DIR, improv=improv,
+                            turn=services.turn if services is not None else None)
         if ip is None:
             return None
         me = identity()
         name = me.get("name") or HOSTNAME
     _mkdir(SYSTEM_DIR)
     gc.collect()
-    services = SERVICES[0] = make_services()
     host = host_class()(CARTS_DIR, auth=SYSTEM_DIR, system=make_system(services))
     ota, task = make_updater(me)
     addon = make_addon(ota)

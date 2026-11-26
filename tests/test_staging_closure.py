@@ -726,6 +726,15 @@ def test_every_zero_staging_group_says_what_the_board_does_with_it():
 # The apps' services' modules (device/zero_svc.py, #256), on a Zero whose
 # image runs them (it takes moycore) and on no other.
 SERVICES_ONLY = ("zero_svc", "app_keys")
+# Works offline (device/zero_offline.py), on a Zero whose image has an
+# updater to fetch the add-on by: its partition table has a second app slot.
+UPDATER_ONLY = ("zero_offline",)
+
+
+def _updater(board):
+    import glob
+    return any("ota_1" in open(f).read()
+               for f in glob.glob(str(board / "boards" / "*" / "partitions*.csv")))
 
 
 @pytest.mark.parametrize("board", [ZERO, C3_ZERO], ids=["xiao_zero", "c3_zero"])
@@ -740,8 +749,10 @@ def test_every_module_the_zero_makes_first_is_on_its_image(board):
     assert lasting and lasting[0], "zero_host names no LASTING modules"
     staged = set(board_config.staged_modules(board, ROOT))
     services = "moycore" in board_config.native_modules(board, ROOT)
+    updater = _updater(board)
     missing = [n for n in lasting[0] if n + ".py" not in staged
-               and (services or n not in SERVICES_ONLY)]
+               and (services or n not in SERVICES_ONLY)
+               and (updater or n not in UPDATER_ONLY)]
     assert not missing, "%s does not stage %s" % (board.name, missing)
 
 

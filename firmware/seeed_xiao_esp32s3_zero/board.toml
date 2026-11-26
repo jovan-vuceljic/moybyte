@@ -151,12 +151,13 @@ went with it -- the RPC it was kept for shipped as plain HTTP."""
 files = ["web_addon.py", "cart_index.py", "cart_unpack.py", "cart_files.py",
          "app_imports.py", "rsa_check.py"]
 why = """
-The browser console is an add-on cart (runtime/carts/web_addon.py), and on
-this board it is the whole use: provisioning installs the one that fits the
-image (provision.sh), and after an update the image installs the one that
-fits it from its release's own signed index, through the console's one
-install (cart_index, which every file of the cart is checked by before it
-lands, and the modules it imports).
+The install the browser console's Get Carts asks this board for (web_addon.
+OfficialCarts), and the step that brings its release to the store: the
+official carts after an update and, where its owner chose Works offline
+(zero_offline.Offline; the console is online, [web]), the browser console's
+add-on that fits the image, from its release's own signed index, through
+the console's one install (cart_index, which every file of the cart is
+checked by before it lands, and the modules it imports).
 rsa_check is the signature arithmetic where there is no kernel, which the
 board never runs (moy_net verifies) but cart_index and moy_ota name."""
 
@@ -249,7 +250,7 @@ take them (this one and firmware/esp32c3_zero/), and nothing else does."""
 files = ["cart_net.py"]
 why = """
 The transport cart_index fetches through on a board (the kernel's client):
-the add-on's install above is its one user here."""
+the installs above are its users here."""
 
 [[modules.device.group]]
 files = ["moy_webhost.py"]
@@ -274,6 +275,14 @@ The updater itself is the kernel's (native/moy_net/moy_ota.c: the streaming
 HTTP(S) client the updater and Get Carts fetch through, the signature, the
 slot); moy_ota.py is its Settings face and the identity, moy_ota_health.py the
 boot verdict and the rollback confirm the frame loop drives."""
+
+[[modules.device.group]]
+files = ["zero_offline.py"]
+why = """
+Works offline (owner, 2026-11-26): the browser console's own copy in the
+store, its owner's choice where the console is online ([web]), which the
+add-on step above fetches from the release's signed index. The C3 has no
+updater to fetch it by, and stages none."""
 
 [[modules.device.group]]
 files = ["zero_svc.py"]
@@ -315,6 +324,16 @@ image = [
   "moybyte.harpoon_pop", "moybyte.star_catcher", "moybyte.pin_light",
 ]
 
+[web]
+# This board's browser console pack comes from a mirror by digest
+# (docs/web_console_online_2026-11.md), not from its store (owner,
+# 2026-11-26: "The store will probably fill up again"), as the C3 Zero's
+# does: the app slots grew for the apps' services (#256) and the store's
+# 3 MiB are its carts'. The website's install (tools/store_image.py) and the
+# cable flash (tools/board_flash.py) put no add-on in it, the image asks its
+# release for none, and its root serves the loader.
+console = "online"
+
 [flash]
 # Read by tools/board_flash.py (#202 Phase A). S3 bootloader offset 0x0, and
 # the S3 layout's otadata at 0x1D000 -- shared with both console S3 boards on
@@ -341,8 +360,9 @@ offset         = "0x0"
 baud           = 460800
 otadata_offset = "0x1d000"
 otadata_size   = "0x2000"
-# The carts folder the browser console add-on that fits the flashed image is
-# installed into, over the REPL, after a cable flash (tools/board_flash.py).
+# The carts folder: after a cable flash, tools/board_flash.py installs the
+# official carts `[roster] install` names over the REPL, and no browser
+# console add-on, as the console is online (`[web]`).
 addon          = "/moy/carts"
 
 [image]
@@ -366,8 +386,9 @@ addon          = "/moy/carts"
 # 256 KiB each to 3.5 MiB (owner, 2026-11-07) for the C shell, the SSH server
 # and SFTP (the moy_sh, moy_tty and moy_ssh takes below). They are 2 MiB since
 # 2026-11-17, when the browser console left the image for its add-on cart
-# (native/moy_net/moy_page.h), and the store holds that add-on; the partition
-# CSV carries the arithmetic.
+# (native/moy_net/moy_page.h), and 2.4375 MiB since 2026-11-26 for the Lua
+# tier its apps' services run on, its console online (`[web]`); the
+# partition CSV carries the arithmetic.
 headroom_floor_kib = 0
 
 [serial]

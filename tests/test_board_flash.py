@@ -528,14 +528,14 @@ ZERO = ROOT / "firmware" / "seeed_xiao_esp32s3_zero"
 C3_ZERO = ROOT / "firmware" / "esp32c3_zero"
 
 
-@pytest.mark.parametrize("board_dir,addon", [(ZERO, True), (C3_ZERO, False)], ids=["zero", "c3-zero"])
+@pytest.mark.parametrize("board_dir,addon", [(ZERO, False), (C3_ZERO, False)], ids=["zero", "c3-zero"])
 def test_a_zero_s_cable_flash_installs_its_add_on_and_its_carts(
         monkeypatch, tmp_path, board_dir, addon):
     """A cable flash is how a Zero's page and its official carts follow its
     image (the C3 has no OTA); both speak a bare REPL, so the install goes
     over it, into the carts folder their store host serves
-    (device/zero_host.py): the add-on where the board keeps one (the C3's
-    console is online, `[web] console`), then the official carts, then one
+    (device/zero_host.py): the add-on where the board keeps one (none:
+    both Zeros' consoles are online, `[web] console`), then the official carts, then one
     reset, after the board's boot is left alone: opened while it boots, a
     Zero's USB-Serial/JTAG wedged."""
     sys.path.insert(0, str(ROOT / "device"))

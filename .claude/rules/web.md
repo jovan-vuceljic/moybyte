@@ -32,8 +32,10 @@ nor those docs will warn you about:
   (its identity) and the whole file's, and the loader page
   (`firmware/web_runner/loader.html`); the release publishes the cart beside
   the payload (`.claude/rules/ota.md`). A board whose board.toml declares its
-  console online (`[web] console`, the C3 Zero's since 2026-11-23, whose
-  store the add-on outgrew) keeps no add-on and its `/` is the loader;
+  console online (`[web] console`: the C3 Zero's since 2026-11-23, whose
+  store the add-on outgrew, and the XIAO Zero's since 2026-11-26) keeps no
+  add-on unless its owner chose Works offline in the page's Settings
+  (`zero_offline.Offline`, `firmware/web_runner/offline_link.py`), and its `/` is the loader;
   every board's `/loader.html` is too. `docs/web_console_online_2026-11.md`
   §3 and §4 are how it picks a source; what bites is that it runs nothing
   whose sha256 is not the whole-file digest `GET /sync` names, a read from

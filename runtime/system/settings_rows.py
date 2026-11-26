@@ -35,10 +35,11 @@ STEP_WORDS = tuple(str(t) for t in IDLE_STEPS)
 
 # the rows a console adds or lacks, by the row key `_settings_rows()` names them with
 CAPS = ("wifi", "brightness", "bluetooth", "layout_theme", "crash", "usb_drive", "webhost", "update", "ota_channel",
-        "update_c6", "idle_dim", "idle_blank")
+        "update_c6", "idle_dim", "idle_blank", "offline")
 
 s = ui.state(
     wifi_word="", bt_word="", theme_title="", tz_place="", crash_word="", web_word="",
+    offline_word="",
     paired_words="", ach_words="",
     sizes=ui.model(key="v", v="", word=""),
     font_scale=ui.row_of("sizes"),
@@ -116,6 +117,8 @@ def _words(sl, kept):
         s.crash_word = sl.crash_word()
     if s.has_webhost:
         s.web_word = ws.web.label() if ws.web.serving() else "Off"
+    if s.has_offline:
+        s.offline_word = ws.console_offline.word()
     s.paired_words = sl._paired_words
 
 
@@ -310,6 +313,11 @@ for _key, _label, _does in (
         ("achievements", "Achievements", ach_open), ("licences", "Licences", _page("licences")),
         ("log", "System log", _page("log"))):
     ui.action(_key, say(_label) if _label.isupper() else _label, _does, hint="Open")
+def offline_press():
+    uitree_app.env().ws.console_offline.press()
+
+
+ui.action("offline", "Works offline", offline_press, hint="Change")
 ui.hook("font_set", font_set)
 ui.hook("zoom_set", zoom_set)
 ui.hook("layout_set", layout_set)
@@ -372,6 +380,8 @@ def rows_page():
             ui.seg("Channel", "ota_channel", labels="channels", on="channel_set", shown="has_ota_channel")
             ui.link("update_online", shown="has_ota_channel")
             ui.link("update_c6", shown="has_update_c6")
+        with ui.group("Browser console", shown="has_offline"):
+            ui.link("offline", "{offline_word}", shown="has_offline")
         with ui.group("Developer"):
             for name, label, _verb in TOGGLES:
                 if name not in PLAY:

@@ -445,11 +445,12 @@ stages 1–6 all absent. Its README is the authority; what bites:
   (or its `system/sources`), each refused with the sizes where its store
   has no room. Its README says which carts each Zero
   carries and how a cable flash, provisioning and an update bring the rest.
-- With no browser console add-on in its store a Zero whose console is not
-  online (the XIAO's) fetches the one that fits from its release (`zero_host.make_addon`, `tend_addon`), unless its
-  owner removed it (`system/removed`'s console line): its root then says so
-  and links `/?console=install`, which drops the record and fetches it
-  (`way_back`, `moy_page_say`), the page being a Zero's only face. The cable
+- Both Zeros' consoles are online (`[web] console`): the store keeps no
+  browser console add-on unless its owner chose Works offline in the page's
+  Settings (`zero_offline.Offline` behind `/official`), and then the XIAO
+  fetches the one that fits from its release after every update
+  (`zero_host.make_addon`, `tend_addon`); Remove takes it off and the loader
+  is online again. The C3, with no updater, does not offer it. The cable
   install (`tools/board_flash.py`) gives each `mpremote` call a deadline,
   because a wedged USB-Serial/JTAG never answers an open.
 - Its patch ladder is the kernel entry's `moybyte_patch_native_code_free`,

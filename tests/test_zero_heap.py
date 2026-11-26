@@ -138,6 +138,7 @@ NOT_ON_A_ZERO = {
     "carts_data": "the image's roster, read by the seed inside start",
     "zero_svc": "the apps' services, staged where the image runs them (the XIAO); "
                 "zero_host.make_services imports it at the start, before the host",
+    "zero_offline": "Works offline, staged where the image has an updater (the XIAO)",
 }
 
 

@@ -402,6 +402,9 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     ws.cart_pick = seams[2]
     ws.cart_home = seams[3]
     ws.cart_board = seams[4]
+    if seams[4] is not None and _S.get("offline"):
+        from offline_link import ConsoleOffline
+        ws.console_offline = ConsoleOffline(seams[4], ws)
     ws.cart_own = _S.get("cart_own") if seams[0] is not None else None
     ws.media_net = _media_net(ws, _S.get("store_mode"), carts_root)
     # The Moybyte shell's achievements are gamification for the kid console,
@@ -1380,13 +1383,20 @@ def state_json():
 
 def _services():
     """The apps' services as this page sees them (#256): those its board
-    runs (its live socket's 'H') and those running here, by name."""
+    runs (its live socket's 'H'), its budget for them, those running here
+    by name, the channel's counts and the served apps' prefs rows here."""
     import scheduler
     here = [p.name for p in scheduler.SCHED.procs.values()
             if p.kind == scheduler.SERVICE and p.state not in (scheduler.EXITED,)]
     import moy_net
     msgs = moy_net.live_msgs() if hasattr(moy_net, "live_msgs") else None
-    return {"board": list(scheduler.ON_BOARD), "here": here, "msgs": msgs}
+    rows = {}
+    system = getattr(_S.get("ws"), "system", None)
+    for k in (system.keys() if system is not None else ()):
+        if any(k.startswith(a + "_") for a in scheduler.ON_BOARD):
+            rows[k] = system.get(k, None)
+    return {"board": list(scheduler.ON_BOARD), "here": here, "msgs": msgs,
+            "budget": scheduler.BOARD_BUDGET, "said": list(scheduler.SAID), "rows": rows}
 
 
 def _live_devs():
@@ -1709,12 +1719,15 @@ def wifi_moved(ssid):
     return ""
 
 
-def official_enable():
+def official_enable(offline=False):
     """The serving console answered the /official probe: it installs
-    carts when this page asks. Called before
+    carts when this page asks, and with `offline` its console is online and
+    its own copy is its owner's choice (Settings' Works offline,
+    offline_link.ConsoleOffline). Called before
     `boot`, which hands Get Carts the asking (`_cart_seams`), so the app
     never opens on a page that says the console gets its own."""
     _S["official"] = True
+    _S["offline"] = bool(offline)
     return ""
 
 
@@ -2057,11 +2070,13 @@ def live_pump(gap_ms=0, hidden=0):
     import moy_net
     out = moy_net.live_take() or b""
     served = moy_net.live_served() if hasattr(moy_net, "live_served") else ""
-    if served != st.get("served", ""):
-        # The board's 'H': the apps whose services run there (#256).
-        st["served"] = served
+    budget = moy_net.live_budget(ws.system) if hasattr(moy_net, "live_budget") else None
+    if served != st.get("served", "") or budget != st.get("budget"):
+        # The board's 'H': the apps whose services run there and the RAM it
+        # gives its services (#256).
+        st["served"], st["budget"] = served, budget
         import scheduler
-        scheduler.on_board(served.split(",") if served else ())
+        scheduler.on_board(served.split(",") if served else (), budget=budget)
     g = _S.get("gpio")
     if g is not None:
         for pl in g.take_live():

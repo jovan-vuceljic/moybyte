@@ -22,8 +22,10 @@
 # since 2026-11-26 (owner: "1MB for carts is still plenty"), when the image
 # took moycore, moy_lua, moy_gfx, moy_glass and moy_app whole to run the
 # apps' services on the board (#256; docs/perf/image.md has its size), and
-# no more: the 3 MiB store holds the add-on, the first boot's carts and the
-# seed's reserve (tools/store_image.py --check); 2 MiB from 2026-11-17, when the browser console left the image for its add-on
+# no more: the 3 MiB store holds the first boot's carts, the seed's reserve
+# and a kid's carts, the browser console being online (board.toml's `[web]`,
+# owner, 2026-11-26; tools/store_image.py --check); 2 MiB from 2026-11-17,
+# when the browser console left the image for its add-on
 # cart (native/moy_net/moy_page.h) and its 1.9 MB with it; before that 3.5 MiB
 # (2026-11-07, owner, for the C shell, the SSH server and SFTP), 3.25 MiB
 # (2026-10-18), 3 MiB (2026-10-07) and the first table's 2.75 MiB. The shell,
@@ -36,13 +38,12 @@
 #     vfs    0x500000 + 0x300000 = 0x800000   (3 MiB, ends on the last byte)
 #
 #   The store sets the ceiling: this board is a CART STORE, and it holds the
-#   browser console add-on (one pack, about 1.9 MB) beside the seed roster and
-#   a kid's carts. By blocks (littlefs, 4 KiB; a file costs a block, a folder
+#   seed roster and a kid's carts (the browser console add-on only where its
+#   owner asks for it to work offline). By blocks (littlefs, 4 KiB; a file costs a block, a folder
 #   two) the seed roster's files and folders filled the 352 blocks of the
 #   1.375 MiB store (measured on glass 2026-10-23). Every slot byte is paid
 #   for twice and comes off the store; a table change wipes the store, the
-#   image's roster seeds the empty one on first boot, and provisioning
-#   installs the add-on.
+#   image's roster seeds the empty one on first boot.
 #
 # NO COREDUMP PARTITION (2026-11-09), where every console board has one
 # (docs/os_2026-11/processes.md section 10). This board runs no native module
