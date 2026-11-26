@@ -241,6 +241,12 @@ int moy_vol_replace(const moy_vol_t *v, const char *src, const char *dst);
 // whose count is a scan of the card's whole table.
 int moy_vol_room(const moy_vol_t *v, const char *dir, uint64_t *bytes);
 
+// How many changes the volumes took since start: a written file closed, a
+// folder made, a name removed, renamed or replaced. A reader that kept the
+// last count knows something changed (a Zero's live socket tells its page
+// so, native/moy_net/moy_live.c).
+uint32_t moy_vol_changes(void);
+
 // A working folder. moy_vol_enter makes `dir` the place a relative name
 // starts; moy_vol_here_name gives the name to open a file of it by, and
 // moy_vol_leave puts the volume's working folder back as it was. On FAT it is

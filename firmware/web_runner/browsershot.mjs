@@ -253,6 +253,8 @@ async function viewport(d) {
 if (scenario.device) await viewport(scenario.device);
 // {"ua":"..."}: the browser's user agent (an iPhone's Safari, say).
 if (scenario.ua) await cdp("Emulation.setUserAgentOverride", { userAgent: scenario.ua });
+// {"cpu":N}: the page's CPU N times slower (a phone's, roughly).
+if (scenario.cpu) await cdp("Emulation.setCPUThrottlingRate", { rate: scenario.cpu });
 // {"init":"<js>"}: run before every document from the first (a stand-in for
 // a device's API, as the step of that name, with no reload).
 if (scenario.init) await cdp("Page.addScriptToEvaluateOnNewDocument", { source: scenario.init });

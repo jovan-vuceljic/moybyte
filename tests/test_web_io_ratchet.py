@@ -52,6 +52,9 @@ INTERNAL = (
     "writeIn", "removeAt", "applyOne", "asValue", "walk", "readMarker",
     "rollForward", "PART", "rollFile", "hasFile", "commitFile", "dropFile",
     "settleFiles",
+    # OPFS's shape over IndexedDB, where a context has no OPFS (plain http)
+    "IDB_NAME", "idbErr", "idbReq", "idbChildren", "idbGet", "idbPut",
+    "idbFile", "idbDir", "idbNav", "pageNav",
 )
 
 WORDS = {
@@ -61,6 +64,10 @@ WORDS = {
     "GET", "POST", "Content-Type", "application/json", "sync",
     "granted", "denied", "unsupported", "kept", "evictable",
     "evictable (cannot ask here)",
+    # IndexedDB's and OPFS's own words, for OPFS's shape over IndexedDB, and
+    # its database and object store
+    "readonly", "readwrite", "path", "dir", "\\uffff", "/\\uffff",
+    "NotFoundError", "TypeMismatchError", "InvalidModificationError", "moy-files", "fs",
     # the two modes, and the store a store opens by default
     "board", "site", "carts",
     # the keeper's own files in OPFS, and the channel's directory

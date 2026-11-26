@@ -76,23 +76,22 @@ def test_no_player_is_loaded_before_the_click(tmp_path, monkeypatch):
     markup, script = html.split("<body>", 1)[1].split("<script>", 1)
     assert "<iframe" not in markup and "player/" not in markup
     assert 'id="try"' not in html, "the Try it section is folded into the hero"
-    # The start is a button (Enter works) and the tabs wait for it.
+    # The start is a button (Enter works) and Expand waits for it.
     assert re.search(r'<button class="still" id="still"', markup)
-    assert re.search(r'<div class="tabs" id="tabs" hidden>', markup)
+    assert re.search(r'<button class="exp" id="expand" type="button" hidden', markup)
     # The iframe is only ever made by the start.
     assert script.index('createElement("iframe")') > script.index("function show(")
 
 
 def test_the_console_starts_as_the_stills_were_taken(tmp_path, monkeypatch):
-    """The desk's start is the still's query: the Editor on Star Catcher's
-    code with its game playing, which the console opens as a window on the
-    desk (web_boot.start_edit), only there: in console mode, the handheld
-    tier's or a phone's, the visit lands on the home (`only=desk`)."""
+    """One console, no tiers to pick: it lays itself out from its frame's
+    room. Its start is the still's query: the Editor on Star Catcher's code
+    with its game playing, which the console opens as a window on the desk
+    (web_boot.start_edit), only there: in console mode, a frame without the
+    desk's room, the visit lands on the home (`only=desk`)."""
     _, html = _site(tmp_path, monkeypatch, _fake_capture([]))
-    assert 'return "&start=1"' in html
-    assert ('? "&edit=moybyte.star_catcher.moy&tab=code&play=1&only=desk" : "")'
-            in html)
-    assert 'data-tier="desktop" data-q="?desktop=1"' in html
+    assert 'return "?start=1&edit=moybyte.star_catcher.moy&tab=code&play=1&only=desk"' in html
+    assert "handheld=1" not in html and 'class="tab' not in html and "data-tier" not in html
     assert build.STILL_QUERY == ("?desktop=1&start=1&edit=moybyte.star_catcher.moy"
                                  "&tab=code&play=1")
     # The capture fails unless the Editor is a window, its game plays and the
@@ -131,4 +130,4 @@ def test_one_scheme_drives_the_page_the_still_and_the_console(tmp_path, monkeypa
     assert 'getElementById("still-night")' in body
     assert 'document.addEventListener("moyscheme"' in body
     # The system's scheme is read in one place, the scheme script's.
-    assert body.count("matchMedia(") == 1
+    assert body.count("matchMedia(\"(prefers-color-scheme") == 1
