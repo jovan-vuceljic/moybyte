@@ -42,7 +42,7 @@
   },
   "guition_480x320_fs1_dark": {
     "about": [9, 6],
-    "app_appearance": [6, 3],
+    "app_appearance": [10, 3],
     "app_artwork": [34, 20],
     "app_calc": [34, 29],
     "app_files": [6, 3],
@@ -102,7 +102,7 @@
   },
   "guition_p4_1280x800_windowed": {
     "about": [9, 6],
-    "app_appearance": [39, 29],
+    "app_appearance": [40, 30],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
     "app_files": [0, 0],
@@ -188,7 +188,7 @@
   },
   "p4_1024x600_cs2_fs1_blocks": {
     "about": [11, 6],
-    "app_appearance": [42, 26],
+    "app_appearance": [41, 25],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
     "app_files": [0, 0],
@@ -233,7 +233,7 @@
   },
   "p4_1024x600_cs2_fs1_console": {
     "about": [9, 6],
-    "app_appearance": [39, 27],
+    "app_appearance": [37, 26],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
     "app_files": [0, 0],
@@ -274,7 +274,7 @@
   },
   "p4_1024x600_cs2_fs1_contrast_light": {
     "about": [10, 6],
-    "app_appearance": [31, 28],
+    "app_appearance": [33, 29],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
     "app_files": [0, 0],
@@ -329,7 +329,7 @@
   },
   "p4_1024x600_cs2_fs1_gnomebar": {
     "about": [9, 6],
-    "app_appearance": [39, 27],
+    "app_appearance": [37, 26],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
     "app_files": [0, 0],
@@ -386,7 +386,7 @@
   },
   "p4_1024x600_cs2_fs1_moy_day": {
     "about": [11, 6],
-    "app_appearance": [41, 27],
+    "app_appearance": [39, 26],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
     "app_files": [0, 0],
@@ -436,7 +436,7 @@
   },
   "p4_1024x600_cs2_fs1_moy_night": {
     "about": [9, 6],
-    "app_appearance": [39, 27],
+    "app_appearance": [37, 26],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
     "app_files": [0, 0],
@@ -556,7 +556,7 @@
   },
   "p4_1024x600_cs2_fs1_win95bar": {
     "about": [9, 6],
-    "app_appearance": [39, 27],
+    "app_appearance": [37, 26],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
     "app_files": [0, 0],
@@ -601,8 +601,8 @@
   },
   "p4_1024x600_cs2_fs1_windowed": {
     "about": [9, 6],
-    "app_appearance": [39, 27],
-    "app_appearance_name": [48, 35],
+    "app_appearance": [37, 26],
+    "app_appearance_name": [46, 34],
     "app_appearance_walls": [8, 8],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],

@@ -71,6 +71,8 @@ NAME_WHY = {"grammar": "a-z 0-9 _ - only, a letter or digit first",
             "store": "Can't save here",
             "none": "Only custom is named"}
 NAME_HINT = "a-z 0-9 _ -, up to 24"
+# The line the Code font row's sample draws in the font it picked.
+CODE_SAMPLE = "for i=1,10 do print(i) end"
 NAME_MAX = 24
 EDIT_THEME = "Edit theme…"
 DOT = " · "
@@ -241,6 +243,7 @@ def build():
             ui.seg("Font", "font", text="{.word}", look="cycle", on="font_set")
             ui.seg("Code font", "code", text="{.word}", look="cycle", on="code_set",
                    shown="has_codes")
+            ui.label(CODE_SAMPLE, face="mono", tone="dim", shown="has_codes")
             ui.seg("Chrome size", "chrome", text="{.word}", look="cycle", on="chrome_set",
                    shown="has_chromes")
             ui.link("name_ask", "Keep as a theme", shown="custom")
