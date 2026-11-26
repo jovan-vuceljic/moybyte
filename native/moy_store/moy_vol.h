@@ -234,6 +234,11 @@ int moy_vol_rename(const moy_vol_t *v, const char *src, const char *dst);
 // `src` over `dst`: the medium's own atomic rename where it has one (littlefs,
 // POSIX), and on FAT the rename after `dst` is removed.
 int moy_vol_replace(const moy_vol_t *v, const char *src, const char *dst);
+// How many changes the volumes took since start: a written file closed, a
+// folder made, a name removed, renamed or replaced. A reader that kept the
+// last count knows something changed (a Zero's live socket tells its page
+// so, native/moy_net/moy_live.c).
+uint32_t moy_vol_changes(void);
 
 // A working folder. moy_vol_enter makes `dir` the place a relative name
 // starts; moy_vol_here_name gives the name to open a file of it by, and

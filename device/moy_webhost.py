@@ -73,6 +73,10 @@ import moy_sync
 
 DEFAULT_PORT = 80
 
+# The live socket's hints (a Zero's, moy_net.live_hint), None on a board
+# without the socket.
+_HINT = getattr(moy_net, "live_hint", None)
+
 # The answer a board with no updatable firmware answers /update with: 503
 # means "a board, but nothing to update", where a 404 means "not a board".
 NO_UPDATER = '{"error":"no updater"}'
@@ -359,6 +363,7 @@ class WebHost:
         self.update = update
         self.official = official
         self.wifi = wifi
+        self._went = {}                  # a backend's last step did work (_stepped)
         self.system = system
         self.on_stop = on_stop
         self.on_serving = on_serving
@@ -536,28 +541,41 @@ class WebHost:
                 resp = http_response(500, '{"error":"server"}')
             moy_net.web_answer(resp or http_response(
                 404, "not found", "text/plain; charset=utf-8"))
+        # A backend that stepped changed what its route answers, and so did
+        # one that just stopped (it waits on the page, or it is done): the
+        # live socket's page is told (moy_net.live_hint, native/moy_net/
+        # moy_live.c's THE HINTS) and asks it then, not on a clock.
         u = self.update
         if u is not None:
             try:
-                if u.step():
+                if self._stepped("u", u.step()):
                     did = True
             except Exception as exc:     # noqa: BLE001 -- never break a frame
                 print("UPDATE ERR %s: %s" % (type(exc).__name__, exc))
         o = self.official
-        if o is not None and o.busy():
+        if o is not None and (o.busy() or self._went.get("o")):
             try:
-                if o.step(OFFICIAL_SLICE_MS):
+                if self._stepped("o", o.busy() and o.step(OFFICIAL_SLICE_MS)):
                     did = True
             except Exception as exc:     # noqa: BLE001 -- never break a frame
                 print("OFFICIAL ERR %s: %s" % (type(exc).__name__, exc))
         w = self.wifi
-        if w is not None and w.busy():
+        if w is not None and (w.busy() or self._went.get("w")):
             try:
-                if w.step():
+                if self._stepped("w", w.busy() and w.step()):
                     did = True
             except Exception as exc:     # noqa: BLE001 -- never break a frame
                 print("WIFI ERR %s: %s" % (type(exc).__name__, exc))
         return did
+
+    def _stepped(self, topic, went, say=None):
+        """`went` (a backend's step did work), hinted to the live socket's
+        page as `say` (default `topic`) when it did and once when it stopped."""
+        went = bool(went)
+        if (went or self._went.get(topic)) and _HINT is not None:
+            _HINT(say or topic)
+        self._went[topic] = went
+        return went
 
     service = poll
 

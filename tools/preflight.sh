@@ -173,7 +173,7 @@ web_touched() {
       tests/fixtures/*|tests/test_moy_tty.py|tests/test_live_link.py|tests/test_espnow_link.py|tests/tier_frame.py|tests/crypto_vectors.py) return 0 ;;
       tools/jet_cart.py|tools/zopfli_gz.py|tools/gen_web_blob.py|tools/wasm_cart.py) return 0 ;;
       tools/p8_import.py|tools/p8_lua_port.py|tools/p8_writer.py) return 0 ;;
-      tools/os_site.py|tools/pack_store.py|site/os/*) return 0 ;;
+      tools/os_site.py|tools/pack_store.py|site/os/*|site/build.py) return 0 ;;
       .github/workflows/web-e2e.yml) return 0 ;;
     esac
   done <<< "$(changed)"

@@ -2209,3 +2209,36 @@ def test_the_goodbye_ends_with_the_switch_off(tmp_path):
         if h.closing or h.serving or h.joining:
             h.poll()
     assert nb.wc_state()[0] == wh.WebHost.OFF
+
+
+def test_a_backend_that_stepped_hints_the_live_socket(tmp_path, monkeypatch):
+    """A Zero's update, Wi-Fi and official carts backends that did work, or
+    just stopped, tell the live socket's page (moy_net.live_hint,
+    native/moy_net/moy_live.c's THE HINTS); a backend that does nothing
+    says nothing."""
+    said = []
+    monkeypatch.setattr(wh, "_HINT", said.append)
+
+    class Backend:
+        def __init__(self, steps):
+            self.steps = steps
+
+        def busy(self):
+            return self.steps > 0
+
+        def step(self, *_budget):
+            if self.steps <= 0:
+                return False
+            self.steps -= 1
+            return True
+
+    h = wh.WebHost(str(_store(tmp_path)))
+    h.update, h.wifi, h.official = Backend(1), Backend(1), Backend(2)
+    h.poll()
+    assert said == ["u", "o", "w"]
+    h.poll()
+    assert said[3:] == ["u", "o", "w"], "a backend that stopped says so once"
+    h.poll()
+    assert said[6:] == ["o"], "...and the official request stopped"
+    h.poll()
+    assert said[7:] == [], "one that does nothing says nothing"

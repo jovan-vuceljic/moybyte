@@ -9,6 +9,7 @@
 
 #include "moy_dev.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "moy_dev_kinds.h"
@@ -22,6 +23,9 @@
 #pragma weak moy_dev_usb
 #pragma weak moy_dev_ble
 #pragma weak moy_dev_media
+#pragma weak moy_dev_web
+#pragma weak moy_dev_web_has
+#pragma weak moy_dev_web_open
 
 static const struct {
     const char *name;
@@ -29,22 +33,24 @@ static const struct {
     uint8_t cls;                // the lease class its driver holds, 0: none
     bool one;                   // one handle a process
     const moy_dev_ops_t *ops;
+    const char *relay;          // its relay list (moy_dev_kinds.h's THE RELAY), NULL: none
 } KINDS[] = {
-    { NULL, 0, 0, false, NULL },
-    { "lora", MOY_DEV_P_LORA, MOY_LEASE_LORA, true, &moy_dev_lora },
-    { "mic", MOY_DEV_P_MIC, MOY_LEASE_MIC, true, &moy_dev_mic },
-    { "midi", MOY_DEV_P_MIDI, 0, false, &moy_dev_midi },
-    { "http", MOY_DEV_P_HTTP, 0, false, &moy_dev_http },
-    { "usb", MOY_DEV_P_USB, 0, true, &moy_dev_usb },
-    { "ble", MOY_DEV_P_BLE, MOY_LEASE_BLE, true, &moy_dev_ble },
+    { NULL, 0, 0, false, NULL, NULL },
+    { "lora", MOY_DEV_P_LORA, MOY_LEASE_LORA, true, &moy_dev_lora, "rssi,snr,port:joined,fcnt,busy" },
+    { "mic", MOY_DEV_P_MIC, MOY_LEASE_MIC, true, &moy_dev_mic, NULL },
+    { "midi", MOY_DEV_P_MIDI, 0, false, &moy_dev_midi, NULL },
+    { "http", MOY_DEV_P_HTTP, 0, false, &moy_dev_http, NULL },
+    { "usb", MOY_DEV_P_USB, 0, true, &moy_dev_usb, NULL },
+    { "ble", MOY_DEV_P_BLE, MOY_LEASE_BLE, true, &moy_dev_ble, NULL },
     // a client of the service's one stream: either permission opens it
-    { "media", MOY_DEV_P_MEDIA | MOY_DEV_P_MEDIA_URL, 0, true, &moy_dev_media },
+    { "media", MOY_DEV_P_MEDIA | MOY_DEV_P_MEDIA_URL, 0, true, &moy_dev_media, NULL },
 };
 #define NKINDS (sizeof KINDS / sizeof KINDS[0])
 
 typedef struct {
     uint32_t pid;               // 0: free
     uint8_t kind;
+    uint8_t web;                // a remote row: its verbs moy_dev_web's
 } kind_t;
 
 static kind_t *s_kind;                  // MOY_DEV_HANDLES rows, made at the first open
@@ -98,8 +104,39 @@ int moy_dev_kind(const char *name, size_t n) {
     return 0;
 }
 
+static bool relayed(int k) {
+    const moy_dev_ops_t *o = KINDS[k].ops;
+    return KINDS[k].relay != NULL && o != NULL && (o->present == NULL || o->present());
+}
+
+size_t moy_dev_relayed(char *out, size_t cap) {
+    size_t n = 0;
+    for (int k = 1; k < (int)NKINDS && cap > 0; k++) {
+        if (!relayed(k)) {
+            continue;
+        }
+        size_t need = strlen(KINDS[k].name) + 1 + strlen(KINDS[k].relay) + (n > 0);
+        if (n + need >= cap) {
+            break;
+        }
+        if (n > 0) {
+            out[n++] = ';';
+        }
+        n += (size_t)snprintf(out + n, cap - n, "%s:%s", KINDS[k].name, KINDS[k].relay);
+    }
+    if (cap > 0) {
+        out[n] = 0;
+    }
+    return n;
+}
+
+const char *moy_dev_relay_of(const char *name, size_t n) {
+    int k = moy_dev_kind(name, n);
+    return k != 0 && relayed(k) ? KINDS[k].relay : NULL;
+}
+
 static const moy_dev_ops_t *ops_of(uint32_t slot) {
-    return KINDS[s_kind[slot].kind].ops;
+    return s_kind[slot].web ? &moy_dev_web : KINDS[s_kind[slot].kind].ops;
 }
 
 int32_t moy_dev_kind_open(uint32_t slot, int kind, uint32_t pid, uint32_t perms,
@@ -116,14 +153,16 @@ int32_t moy_dev_kind_open(uint32_t slot, int kind, uint32_t pid, uint32_t perms,
         }
     }
     const moy_dev_ops_t *o = KINDS[kind].ops;
-    if (o == NULL) {
+    bool web = o == NULL && moy_dev_web_has != NULL && moy_dev_web_has(KINDS[kind].name);
+    if (o == NULL && !web) {
         return MOY_DEV_EABSENT;
     }
-    int32_t r = o->open(slot, pid, perms, cfg, cn);
+    int32_t r = web ? moy_dev_web_open(slot, KINDS[kind].name, pid, cfg, cn)
+                : o->open(slot, pid, perms, cfg, cn);
     if (r < 0) {
         return r;
     }
-    s_kind[slot] = (kind_t){ .pid = pid, .kind = (uint8_t)kind };
+    s_kind[slot] = (kind_t){ .pid = pid, .kind = (uint8_t)kind, .web = web };
     return 0;
 }
 
@@ -169,9 +208,9 @@ bool moy_dev_holds(uint32_t pid, uint8_t cls) {
     moy_lease_lock();
     for (uint32_t i = 0; s_kind != NULL && i < MOY_DEV_HANDLES && !r; i++) {
         const kind_t *k = &s_kind[i];
-        const moy_dev_ops_t *o = KINDS[k->kind].ops;
-        r = pid != 0 && cls != 0 && k->pid == pid && k->kind != 0
-            && (KINDS[k->kind].cls == cls || (o->holds != NULL && o->holds(i) == cls));
+        r = pid != 0 && cls != 0 && k->pid == pid && k->kind != 0 && !k->web
+            && (KINDS[k->kind].cls == cls
+                || (KINDS[k->kind].ops->holds != NULL && KINDS[k->kind].ops->holds(i) == cls));
     }
     moy_lease_unlock();
     return r;

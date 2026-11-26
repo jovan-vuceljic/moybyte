@@ -41,6 +41,11 @@ static struct {
     moy_link_web_info_t info;
 } P = {.rate = -1, .s_at = OUT_CAP};
 
+// The device channel's half (moy_dev_web.c): weak, for a page built with the
+// link alone (tests/test_live_link.py's).
+#pragma weak moy_dev_web_give
+#pragma weak moy_dev_web_socket
+
 // A plaintext of `n` bytes on the queue: where its bytes go, or NULL when
 // the queue is full (its sends counted refused by the caller).
 static uint8_t *queue(size_t n) {
@@ -210,7 +215,15 @@ size_t moy_link_web_take(uint8_t *out, size_t cap) {
     return n;
 }
 
+uint8_t *moy_link_web_queue(size_t n) {
+    return queue(n);
+}
+
 void moy_link_web_give(const uint8_t *p, size_t n) {
+    if (n >= 2 && p[0] == 'd' && moy_dev_web_give != NULL) {
+        moy_dev_web_give(p, n);
+        return;
+    }
     if (n < 2 || p[0] != 'n') {
         return;
     }
@@ -247,11 +260,17 @@ void moy_link_web_open(int on) {
         P.out_n = 0;
         P.s_at = OUT_CAP;
         again();
+        if (moy_dev_web_socket != NULL) {
+            moy_dev_web_socket(1);
+        }
     } else if (!on && P.open) {
         P.open = 0;
         P.up = 0;
         P.out_n = 0;
         P.s_at = OUT_CAP;
+        if (moy_dev_web_socket != NULL) {
+            moy_dev_web_socket(0);
+        }
     }
 }
 

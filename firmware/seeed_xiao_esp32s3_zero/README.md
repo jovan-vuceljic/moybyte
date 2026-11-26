@@ -457,8 +457,9 @@ The consoles' C shell (`native/moy_sh`), its face over a stream
 (`native/moy_tty`) and the SSH server (`native/moy_ssh`), with SFTP
 (`docs/os_2026-11/system.md` sections 3 and 4). The browser is this board's
 only screen, so the browser console's Terminal on the page it serves is the
-shell's first face (`GET /term`, sealed to a browser paired with the board's
-password); SSH is the other:
+shell's first face (the live socket's terminal channel, sealed to a browser
+paired with the board's password, `native/moy_tty/README.md`); SSH is the
+other:
 
 ```bash
 ssh moybyte-zero.local            # any user name; the board's password
@@ -575,8 +576,13 @@ it listens.
 The driver is the T-Deck's (`moy_lora.c`), built for a radio that owns its
 bus: it brings SPI2 up at the open and frees it at the close, with no band-gap
 gate (there is no panel), and `gate_stats()` answers `None`. This board runs
-no apps, so the `moybyte.lora` face is not here and nothing posts events: the
-module is reached from the REPL, by owner number, and `recv` is polled.
+no apps, so the `moybyte.lora` face is not here. It relays the radio to the
+browser console it serves instead: the live socket's device channel
+(`native/moy_net/moy_live.c`'s header, `moy_live_dev.c`) serves the page's
+`lora` handles from the kernel's handle table under the page session's own
+process, whose event queue the driver posts to, so a Lua or compiled cart on
+the page (Moy Mesh) holds the radio through `moybyte.dev_*`. From the REPL
+the module is reached by owner number, and `recv` is polled:
 
 ```python
 import moy_lora as L

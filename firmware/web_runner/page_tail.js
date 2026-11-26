@@ -73,10 +73,10 @@ else if(m.t==="pick"){pkAsk(m);}
 else if(m.t==="unpick"){pkDone(m.id);}
 else if(m.t==="installed"){window.__moyInstalled=m.folder;}
 else if(m.t==="state"){var sw=stateWait;stateWait=[];
-var so=JSON.parse(m.json);if(so&&typeof so==="object"){so.sink=m.sink||null;so.loop=m.loop||null;so.live=m.live||null;}
+var so=JSON.parse(m.json);if(so&&typeof so==="object"){so.sink=m.sink||null;so.loop=m.loop||null;so.live=m.live||null;so.hints=m.hints||null;}
 for(var si=0;si<sw.length;si++)sw[si](so);}
-else if(m.t==="pcm"){playPCM(m);}
-else if(m.t==="wperf"){console.log("[moy worker] "+m.s);}
+else if(m.t==="pcm"){if(HUD.on){var p0=PT();playPCM(m);hudPcm(PT()-p0);}else playPCM(m);}
+else if(m.t==="wperf"){console.log("[moy worker] "+m.s);HUD.w="worker "+m.s.split(" | ").slice(0,2).join("  ");if(HUD.on)drawHud();}
 // THE SEAM the pump that sees failures calls. Nothing counts failures yet --
 // the sync push still requeues forever on a board that has gone -- and when
 // something does, it says so HERE rather than growing a second panel of its
@@ -239,7 +239,8 @@ function pzSay(s,warn){send({type:"page",say:[s,"",warn?"bad":"ok"]});}
 // that keeps nothing past this tab says so as it starts.
 var KEPT={site:"In this browser",board:"On the console",none:"In this tab only"};
 function pzMode(mode,s){PZMODE=mode;window.__moyKept=s;
-send({type:"page",kept:KEPT[mode]||""});if(mode==="none")pzSay(s,true);pzAsk();}
+send({type:"page",kept:KEPT[mode]||""});
+if(mode==="none")send({type:"page",say:[s,"Your work is lost when it closes.","bad"]});pzAsk();}
 function pzAsk(){if(WORKER)WORKER.postMessage({t:"carts"});}
 // The worker decided this page keeps its carts HERE, in OPFS -- which the
 // browser may evict under disk pressure unless the origin is asked to be made
@@ -536,12 +537,16 @@ try {
   // ---- dev hot-reload (?dev=1, the moy CLI's watch loop) ---------------------
   // Poll the CLI server's /stamp (latest cart-file mtime); on change the WORKER
   // refetches carts.json, restarts the cart and pushes fresh assets. Static
-  // production hosting never has ?dev=1, so this costs nothing there.
+  // production hosting never has ?dev=1, so this costs nothing there; a host
+  // with no /stamp (a board, which says what changed on its live socket)
+  // answers the first ask with no stamp, and nothing asks again.
   if (new URLSearchParams(location.search).get("dev")) {
     let stamp = null;
-    setInterval(async () => {
+    const poll = setInterval(async () => {
       try {
-        const s = await (await fetch("stamp")).text();
+        const r = await fetch("stamp");
+        if (!r.ok) { clearInterval(poll); return; }
+        const s = await r.text();
         if (stamp === null) { stamp = s; return; }
         if (s === stamp) return;
         stamp = s;

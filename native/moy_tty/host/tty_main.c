@@ -83,6 +83,9 @@ void moy_devch_unread(const uint8_t *bytes, size_t n) {
     (void)n;
 }
 
+// The lease table's rows the shell lists, empty: a twin built with the
+// kernel's table (MOY_TTY_LEASES, tests/test_live_dev.py's) has its own.
+#if !defined(MOY_TTY_LEASES) || !MOY_TTY_LEASES
 int moy_lease_offer_at(uint32_t i, moy_lease_offer_t *out) {
     (void)i;
     (void)out;
@@ -103,6 +106,7 @@ int moy_lease_get(uint32_t h, moy_lease_row_t *out) {
     memset(out, 0, sizeof *out);
     return MOY_LEASE_STALE;
 }
+#endif
 
 bool moy_play_front_live(void) {
     return false;
@@ -261,7 +265,11 @@ int main(int argc, char **argv) {
             }
         }
         moy_tty_ws_stats_t w;
+#if defined(MOY_NET_LIVE) && MOY_NET_LIVE
+        moy_tty_live_stats(&w);         // the page's terminal is the live socket's, as a Zero's
+#else
         moy_tty_ws_stats(&w);
+#endif
         if (first || memcmp(&w, &last, sizeof w) != 0) {
             first = 0;
             last = w;
@@ -279,8 +287,10 @@ int main(int argc, char **argv) {
         if (memcmp(&lv, &lv_last, sizeof lv) != 0) {
             lv_last = lv;
             printf("LIVE sessions=%u busy=%u up=%u down=%u air_out=%u air_in=%u refused=%u "
-                   "echoes=%u live=%u radio=%u\n", lv.sessions, lv.busy, lv.up, lv.down,
-                   lv.air_out, lv.air_in, lv.refused, lv.echoes, lv.live, lv.radio);
+                   "echoes=%u live=%u radio=%u devs=%u dev_calls=%u dev_writes=%u "
+                   "dev_pushes=%u hints=%u\n", lv.sessions, lv.busy, lv.up, lv.down,
+                   lv.air_out, lv.air_in, lv.refused, lv.echoes, lv.live, lv.radio, lv.devs,
+                   lv.dev_calls, lv.dev_writes, lv.dev_pushes, lv.hints);
             fflush(stdout);
         }
 #endif

@@ -40,7 +40,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MOD = os.path.join(ROOT, "native", "moy_ssh")
 DB = os.path.join(MOD, "dropbear")
 TTY = os.path.join(ROOT, "native", "moy_tty")
-TTY_SOURCES = ("moy_tty.c", "moy_tty_sys.c", "moy_tty_sh.c", "moy_tty_ws.c", "moy_tty_sftp.c")
+TTY_SOURCES = ("moy_tty.c", "moy_tty_sys.c", "moy_tty_sh.c", "moy_tty_ws.c", "moy_tty_live.c",
+               "moy_tty_sftp.c")
 PASSWORD = "moybyte-test"
 SALT = "00112233445566778899aabbccddeeff"
 FILES = "sd/moybyte/files"
