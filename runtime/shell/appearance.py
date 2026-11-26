@@ -101,6 +101,7 @@ from theme_custom import (Custom, CUSTOM, DROP, MANIFEST, PETME128,
                           manifest, minified, name_ok, named, overlay,
                           read_look, sheet_files, wall_keys)
 from moy_store_base import cart_path
+from moy_fs import _exists
 from binascii import crc32 as _crc32
 import ui_draw as _ui_draw
 import fontset as _fontset
@@ -987,7 +988,9 @@ class Appearance:
         """Why `name` cannot be custom's name, else None: "grammar" (not the
         loader's name, §3), "seed", "custom", "cart" (a cart's folder has
         the stem), "taken" (an installed theme has it: NAME… replaces it
-        only when asked)."""
+        only when asked), "folder" (the store holds a folder of the stem
+        the roster lists no cart in, which the rename cannot take the place
+        of: one with no manifest, as a sync a board cut short leaves)."""
         if not name_ok(name):
             return "grammar"
         if name in THEME_NAMES:
@@ -999,6 +1002,15 @@ class Appearance:
             path = str(cart.get("path") or "").replace("\\", "/")
             if path.rsplit("/", 1)[-1] == folder:
                 return "taken" if cart.get("type") == "theme" else "cart"
+        ws = self.ws
+        store = getattr(ws, "store", None)
+        if store is not None and store.ready():
+            dest = cart_path(ws.carts_root, folder)
+            try:
+                if store.call(lambda: _exists(dest)):
+                    return "folder"
+            except Exception:  # noqa: BLE001 -- unreadable: the rename answers
+                pass
         return None
 
     def name_custom(self, name, replace=False):

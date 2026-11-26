@@ -802,6 +802,28 @@ def test_name_refuses_with_the_reason_and_arms_replace(tmp_path):
     assert ws.look.choices()["tint"] is None    # off custom: the package's own
 
 
+@pytest.mark.parametrize("kw", [{}, DESK], ids=["320x240", "desk"])
+def test_name_refuses_a_folder_the_roster_lists_no_cart_in(tmp_path, kw):
+    """A folder of the name with no manifest (what a sync a board cut short
+    leaves) is no cart the roster lists, but the rename cannot take its
+    place: NAME says a folder has the name, not that it cannot save, and the
+    folder is left as it was (issue 269)."""
+    ws = _ws(tmp_path, **kw)
+    stray = tmp_path / "carts" / "bubblegum.moy"
+    stray.mkdir(parents=True)
+    (stray / "icons.moygfx").write_bytes(b"0" * 64)
+    app = _open(ws)
+    _to_custom(ws, app)
+    _name(ws, app)
+    _type(ws, app, "bubblegum\r")
+    assert app.naming and app.why == "folder"
+    assert _state(app, "name_note") == page.NAME_WHY["folder"]
+    assert ws.look.theme_name == "custom"
+    assert sorted(p.name for p in stray.iterdir()) == ["icons.moygfx"]
+    _type(ws, app, [8] * 9 + list("bubbles\r"))
+    assert not app.naming and ws.look.theme_name == "bubbles"
+
+
 def test_b_and_cancel_back_out_of_name(tmp_path):
     ws = _ws(tmp_path, **DESK)
     app = _open(ws)

@@ -67,6 +67,7 @@ NAME_WHY = {"grammar": "a-z 0-9 _ - only, a letter or digit first",
             "seed": "A built-in theme has that name",
             "custom": "Custom is the one being changed",
             "cart": "A cart has that name",
+            "folder": "A folder has that name",
             "store": "Can't save here",
             "none": "Only custom is named"}
 NAME_HINT = "a-z 0-9 _ -, up to 24"
