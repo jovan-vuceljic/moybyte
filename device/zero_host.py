@@ -1161,7 +1161,8 @@ def way_back(addon):
 # into holes a request's blocks do not fit (the C3's 32 KB heap, #319).
 # tests/test_staging_closure.py holds every name to both Zeros' images.
 LASTING = ("moy_carts", "cart_index", "cart_unpack", "moy_seed", "moy_store_base",
-           "web_addon", "moy_sync", "moy_webhost", "moy_ota")
+           "web_addon", "moy_sync", "moy_webhost", "moy_ota", "ticks", "zero_wifi",
+           "ssh_service", "zero_shell")
 
 
 def lasting():
