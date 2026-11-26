@@ -12,14 +12,19 @@ on a text beam).
 The family a theme wears is its look's `pointer` where it names one, else
 its icon set's (`iconsets.spec`: a pixel set's the pixel family, a smooth
 set's its own, the shell's own sheet the pixel family); Appearance's
-Pointer row picks another (`Appearance.pointer_family`). Normal draws 16 px
-a step of the chrome scale, Large the next size up (`size`).
+Pointer row picks another (`Appearance.pointer_family`). Blocks' fill is
+the accent picked in Appearance's Accent row where one is (`TINTED`, `tint`:
+an accent too dark for the navy keyline lifted to the palette colour of its
+hue that reads), its yellow where none is; its keyline, shadow and cream
+stay. Normal draws 16 px a step of the chrome scale, Large the next size
+up (`size`).
 
   theme_family(look) -> family          the theme's own
   size(family, scale, large) -> px      the size a scale draws
-  draw(cv, family, shape, x, y, px)     the shape's hotspot at (x, y)
+  tint(family, accent) -> fill          the fill the accent gives Blocks, or None
+  draw(cv, family, shape, x, y, px[, fill])   the shape's hotspot at (x, y)
   box(family, shape, x, y, px)          what it covers there, (x, y, w, h)
-  image(cv, family, shape, px)          its pixels as RGBA, for a page's CSS cursor
+  image(cv, family, shape, px[, fill])  its pixels as RGBA, for a page's CSS cursor
   Under                                 what lies under the pointer, put back
 
 A pointer's edges and shadow blend into what is under them, so a pointer
@@ -104,6 +109,76 @@ def _colours(family):
     return got
 
 
+# The families whose fill is the accent picked in Appearance, and the ink it
+# must stand apart from inside their keyline.
+TINTED = {"blocks": 0x1d2b53}
+_TINT = {}                      # (family, accent) -> fill index
+
+
+def _lum(rgb):
+    out = 0.0
+    for sh, w in ((16, 0.2126), (8, 0.7152), (0, 0.0722)):
+        c = (rgb >> sh & 255) / 255
+        out += w * (c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4)
+    return out
+
+
+def _rgb565(w):
+    return ((w >> 11) * 255 // 31) << 16 | ((w >> 5 & 63) * 255 // 63) << 8 | (w & 31) * 255 // 31
+
+
+def _hue(rgb):
+    """(r, g, b) less their mean: the colour's direction from grey."""
+    c = (rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255)
+    m = sum(c) / 3
+    return tuple(v - m for v in c)
+
+
+def _apart(a, b):
+    """How far apart colour b's hue is from colour a's: the angle between
+    their directions from grey (0 the same, 2 opposite, a grey 1 from any
+    colour) where a has a hue, else the distance between the two greys'
+    tints."""
+    ha, hb = _hue(a), _hue(b)
+    na = sum(v * v for v in ha) ** 0.5
+    nb = sum(v * v for v in hb) ** 0.5
+    if na < 24:
+        return sum((x - y) ** 2 for x, y in zip(ha, hb)) ** 0.5 / 64
+    if nb < 24:
+        return 1.0
+    return 1 - sum(x * y for x, y in zip(ha, hb)) / (na * nb)
+
+
+def tint(family, accent):
+    """The palette index `family`'s fill takes from theme colour `accent`
+    (an accent picked in Appearance), or None (its own: no accent picked, or
+    a family whose fill is its own). An accent too dark to read inside the
+    keyline's ink (contrast under 3:1) is lifted: the MOY64 colour of its
+    hue, or nearest it, that reads, the least lighter."""
+    ink = TINTED.get(family)
+    if ink is None or accent is None:
+        return None
+    key = (family, accent)
+    got = _TINT.get(key)
+    if got is None:
+        C = _ui_draw._C
+        w, _s, got = C.theme_rgb(accent)
+        rgb, lo = _rgb565(w), (_lum(ink) + 0.05)
+        if (_lum(rgb) + 0.05) / lo < 3:
+            best = None
+            for i in range(64):
+                c = _rgb565(C.theme_rgb(i)[0])
+                lum = _lum(c)
+                if (lum + 0.05) / lo < 3:
+                    continue
+                score = _apart(rgb, c) + abs(lum - _lum(rgb))
+                if best is None or score < best[0]:
+                    best = (score, i)
+            got = best[1]
+        _TINT[key] = got
+    return got
+
+
 def _shadow(family, shape, px):
     """How far down and right `shape`'s shadow falls at `px`: a pixel per 16
     px, none at 16 px (its 1-bit art), on a text beam, or in a family
@@ -130,27 +205,30 @@ def _font(family, px):
     return fid
 
 
-def draw(cv, family, shape, x, y, px):
-    """Pointer `shape` of `family` at `px`, its hotspot at (x, y). False
-    where the image holds no such file (nothing drawn). A font the loader
+def draw(cv, family, shape, x, y, px, fill=None):
+    """Pointer `shape` of `family` at `px`, its hotspot at (x, y), its fill
+    in palette index `fill` where given (`tint`). False where the image
+    holds no such file (nothing drawn). A font the loader
     refuses (its slots freed under it: `ui_draw.font_reset`) is loaded
     again."""
     fid = _font(family, px) if px else 0
     if not fid:
         return False
     try:
-        _layers(cv, fid, family, shape, x, y, px)
+        _layers(cv, fid, family, shape, x, y, px, fill)
     except ValueError:
         _FONT[1] = 0
         fid = _font(family, px)
         if not fid:
             return False
-        _layers(cv, fid, family, shape, x, y, px)
+        _layers(cv, fid, family, shape, x, y, px, fill)
     return True
 
 
-def _layers(cv, fid, family, shape, x, y, px):
+def _layers(cv, fid, family, shape, x, y, px, tinted=None):
     line, fill, accent, ink, alpha = _colours(family)
+    if tinted is not None:
+        fill = tinted
     C = _ui_draw._C
     b = FIRST + _AT[shape]
     d = _shadow(family, shape, px)
@@ -181,7 +259,7 @@ def box(family, shape, x, y, px, out=None):
     return out
 
 
-def image(cv, family, shape, px):
+def image(cv, family, shape, px, fill=None):
     """(w, h, hx, hy, rgba): `shape` of `family` at `px` as straight RGBA
     bytes and its hotspot, drawn on scratch canvas `cv` (at least the
     shape's box) over black and again over white, its alpha the difference:
@@ -195,7 +273,7 @@ def image(cv, family, shape, px):
     for ci in (0, 7):
         cv.cls(ci)
         ground = _rgb_rows(cv, 1, 1)
-        draw(cv, family, shape, -b[0], -b[1], px)
+        draw(cv, family, shape, -b[0], -b[1], px, fill)
         if ci:
             g, span = _rgb_rows(cv, w, h), sum(ground) - span
         else:

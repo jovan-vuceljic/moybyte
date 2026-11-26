@@ -1577,7 +1577,8 @@ LOADING pill) in its own style, with its hotspot on the outline's apex, at
 16 px as 1-bit art and at 32 and 48 px smooth. A family is named after the
 theme it is the default of (owner, 2026-11-26): Moy and Contrast wear moy,
 Blocks blocks, through their looks' `pointer`; a look that names none wears
-its icon set's family. Appearance's POINTER row picks another and POINTER
+its icon set's family. Blocks' fill follows the accent picked in the Accent
+row (owner, 2026-11-26; `pointers.tint`), the browser's cursor too. Appearance's POINTER row picks another and POINTER
 SIZE takes Large, both persisted beside the chrome size. The browser's mouse
 is the page's own, so the page sets its CSS cursor to the shape
 (`web_boot._pointer_shape`), drawn from the family's own pixels

@@ -299,6 +299,7 @@ class Appearance:
         self.pointer_large = False
         self._ptr = ("pixel", 16)
         self._ptr_key = [-1, 0]         # the look_gen and scale `_ptr` was read at
+        self.pointer_fill = None        # the fill `_ptr` draws in, where not its own
         # Panel THEME (Appearance -> THEMES): the chrome token set the panels/window
         # chrome/selection accents read each draw. Default = Moy in its Day
         # mode (`DEFAULT_THEME`, `DEFAULT_VARIANT`); load_system applies the
@@ -1456,7 +1457,10 @@ class Appearance:
     def pointer_at(self, scale):
         """(family, px): what the pointer draws at chrome scale `scale`, read
         again when the look or the scale moved or a Pointer row changed. A
-        family the image holds no size of draws as the pixel family."""
+        family the image holds no size of draws as the pixel family.
+        `pointer_fill` is read with it: the palette index the family's fill
+        takes from the accent picked in Appearance (`pointers.tint`; Blocks
+        only), else None, the family's own."""
         k = self._ptr_key
         if k[0] != self.look_gen or k[1] != scale:
             fam = self.pointer_family()
@@ -1465,6 +1469,10 @@ class Appearance:
                 fam = "pixel"
                 px = _pointers.size(fam, scale, self.pointer_large)
             self._ptr = (fam, px)
+            acc = None
+            if self.theme_name == CUSTOM and (self.custom_look() or {}).get("accent") is not None:
+                acc = self.ws.theme_colors["accent"]
+            self.pointer_fill = _pointers.tint(fam, acc)
             k[0], k[1] = self.look_gen, scale
         return self._ptr
 

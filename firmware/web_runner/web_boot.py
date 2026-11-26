@@ -1157,9 +1157,10 @@ def _step(dt, played):
     asks = page.drain() if page is not None else None
     shape = _pointer_shape(ws)
     fam = ws.look.pointer_at(1)[0]
-    large = ws.look.pointer_large
-    turned = shape != _SHAPE[0] or fam != _SHAPE[1] or large != _SHAPE[2]
-    _SHAPE[0], _SHAPE[1], _SHAPE[2] = shape, fam, large
+    large, fill = ws.look.pointer_large, ws.look.pointer_fill
+    turned = (shape != _SHAPE[0] or fam != _SHAPE[1] or large != _SHAPE[2]
+              or fill != _SHAPE[3])
+    _SHAPE[0], _SHAPE[1], _SHAPE[2], _SHAPE[3] = shape, fam, large, fill
     if clip is None and asks is None and not moved and not painted and not turned:
         return ""
     cv = _S.get("canvas") or ws.sys_canvas
@@ -1173,29 +1174,31 @@ def _step(dt, played):
         out["zoom"] = zoom
     if turned:
         out["cursor"] = shape or "arrow"
-        out["cimg"] = _cursor_images(fam, large, shape or "arrow")
+        out["cimg"] = _cursor_images(fam, large, shape or "arrow", fill)
     return json.dumps(out)
 
 
-# The pointer's shape the page shows (`cursor` in a frame's JSON where it or
-# the family turned) and the family it wears: the browser's mouse is the
+# The pointer's shape the page shows (`cursor` in a frame's JSON where it,
+# the family, its size or its fill turned) and the family it wears: the browser's mouse is the
 # page's own cursor, not one the console draws, so the console's shape
 # (`Workstation.pointer_shape`) is the CSS one, drawn from the family's own
 # pixels (`cimg`).
-_SHAPE = [None, None, False]
-# (family, large, shape) -> `cimg`: [key, ratio, [w, h, hx, hy, rgba base64] at
-# 1x and at the ratio], made once a shape is first shown in a family.
+_SHAPE = [None, None, False, None]
+# (family, large, shape, fill) -> `cimg`: [key, ratio, [w, h, hx, hy, rgba
+# base64] at 1x and at the ratio], made once a shape is first shown in a
+# family and the fill the accent gives it (`Appearance.pointer_fill`).
 _CIMG = {}
 _CIMG_CV = []                         # the scratch canvas they are drawn on
 
 
-def _cursor_images(name, large, shape):
-    """The CSS cursor of `shape` in family `name`: its pixels at the 1x size
-    (16 px, Large 32) and at the high-density one (32, Large 48), which the
-    page turns into PNGs once and caches by `key`."""
+def _cursor_images(name, large, shape, fill=None):
+    """The CSS cursor of `shape` in family `name` (its fill palette index
+    `fill` where the accent gives one): its pixels at the 1x size (16 px,
+    Large 32) and at the high-density one (32, Large 48), which the page
+    turns into PNGs once and caches by `key`."""
     import binascii
     import pointers
-    k = (name, large, shape)
+    k = (name, large, shape, fill)
     got = _CIMG.get(k)
     if got is None:
         if not _CIMG_CV:
@@ -1203,12 +1206,13 @@ def _cursor_images(name, large, shape):
         sizes = (32, 48) if large else (16, 32)
         imgs = []
         for px in sizes:
-            im = pointers.image(_CIMG_CV[0], name, shape, px)
+            im = pointers.image(_CIMG_CV[0], name, shape, px, fill)
             if im is None:
                 return None
             w, h, hx, hy, rgba = im
             imgs.append([w, h, hx, hy, binascii.b2a_base64(rgba).decode().strip()])
-        got = _CIMG[k] = ["%s/%d/%s" % k, sizes[1] / sizes[0], imgs]
+        got = _CIMG[k] = ["%s/%d/%s/%s" % (name, large, shape, "" if fill is None else fill),
+                          sizes[1] / sizes[0], imgs]
     return got
 
 

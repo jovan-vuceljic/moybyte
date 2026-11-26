@@ -3954,7 +3954,7 @@ class Workstation:
             b = _pointers.box(fam, shape, p.x, p.y, px, under.box)
             if b is not None:
                 under.keep(cv, b[0], b[1], b[2], b[3])
-                _pointers.draw(cv, fam, shape, p.x, p.y, px)
+                _pointers.draw(cv, fam, shape, p.x, p.y, px, self.look.pointer_fill)
                 under.drawn(cv)
 
     def pointer_box(self):

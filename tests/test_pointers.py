@@ -157,7 +157,7 @@ def test_the_page_wears_the_familys_own_pixels(tmp_path):
     web_boot = pytest.importorskip("web_boot")
     build_ws(tmp_path)                          # the faces and the binding up
     key, ratio, imgs = web_boot._cursor_images("blocks", False, "hand")
-    assert key == "blocks/0/hand" and ratio == 2
+    assert key == "blocks/0/hand/" and ratio == 2
     for (w, h, hx, hy, b64), px in zip(imgs, (16, 32)):
         rgba = binascii.a2b_base64(b64)
         assert len(rgba) == w * h * 4
@@ -166,6 +166,8 @@ def test_the_page_wears_the_familys_own_pixels(tmp_path):
         assert rgba[4 * (hy * w + hx) + 3] > 200          # the fingertip, opaque
         assert rgba[3] == 0                                # the box's corner, clear
     assert web_boot._cursor_images("blocks", False, "hand")[0] is key
+    red = web_boot._cursor_images("blocks", False, "hand", 8)
+    assert red[0] == "blocks/0/hand/8" and red[2][0][4] != imgs[0][4]
     assert web_boot._cursor_images("pixel", True, "arrow")[1] == 1.5
 
 
@@ -214,3 +216,31 @@ def test_a_load_and_a_window_drag_wear_their_shapes(tmp_path):
     ws.deferred.clear()
     ws.wm._drag = ("files", 0, 0)
     assert ws.pointer_shape() == "move"
+
+
+def test_blocks_fill_takes_the_accent_and_a_dark_one_is_lifted(tmp_path):
+    """Blocks' fill is the accent picked in Appearance, its own yellow where
+    none is; an accent that would sink into the navy keyline is lifted toward
+    cream until it reads (3:1); every other family keeps its own fill."""
+    build_ws(tmp_path)
+    assert pointers.tint("blocks", None) is None
+    assert pointers.tint("moy", 8) is None
+    assert pointers.tint("blocks", 8) == 8                  # red reads as it is
+    lifted = pointers.tint("blocks", 51)                    # slate, too dark
+    assert lifted not in (None, 51)
+    rgb = pointers._rgb565(ui_draw._C.theme_rgb(lifted)[0])
+    navy = pointers._lum(0x1d2b53)
+    assert (pointers._lum(rgb) + 0.05) / (navy + 0.05) >= 3
+
+
+def test_the_blocks_pointer_follows_the_accent_picked_in_appearance(tmp_path):
+    import test_appearance_app as t
+    ws = t._ws(tmp_path)
+    ws.look.set_theme("blocks", persist=False)
+    app = t._open(ws)
+    assert ws.look.pointer_at(1)[0] == "blocks" and ws.look.pointer_fill is None
+    t._focus(ws, app, "Accent")
+    t._press(ws, app, "right")
+    assert ws.look.pointer_at(1)[0] == "blocks"
+    assert ws.look.pointer_fill is not None
+    assert ws.look.pointer_fill == pointers.tint("blocks", ws.theme_colors["accent"])
