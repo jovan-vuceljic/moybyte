@@ -1178,6 +1178,9 @@ function signInWaitSays(ms) {
 
 let auth = { keys: {}, token: null, board: null, name: "a browser" };
 let authOpen = false;           // the host has no sign-in: plain requests
+// A boot whose sign-in met no answer asks again this many times, the n-th
+// wait n times GONE_MS, before it says the console does not answer.
+const GONE_TRIES = 5, GONE_MS = 1000;
 let signedIn = false;
 let sealedOnce = false;         // this page has signed in: never plain again
 const NONCE_TRIES = 3;          // hellos a credential is sent after
@@ -1567,13 +1570,23 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     // and the roots firmware before them 404s (the files layer, the console's
     // own documents, the apps' private folders).
     let pulled, fetched, cartsRes;
-    for (;;) {
+    for (let tries = 1; ; tries++) {
         pulled = await Promise.all(store.roots().map((r) => r.id === "carts"
             ? gated("/" + r.endpoint) : gated("/" + r.endpoint).catch(none)));
         fetched = {};
         store.roots().forEach((r, i) => { fetched[r.id] = pulled[i].json; });
         cartsRes = pulled[store.roots().indexOf(store.rootById("carts"))];
-        if (signedIn || authOpen || (authNeed && authNeed.gone)) break;
+        if (signedIn || authOpen) break;
+        if (authNeed && authNeed.gone) {
+            // NO ANSWER AT ALL (a fetch that failed, a 5xx): a slow phone's
+            // first requests can meet a link or a host still busy with the
+            // boot's downloads, so the boot asks again, saying what it does,
+            // before it says the console does not answer.
+            if (tries >= GONE_TRIES) break;
+            say("Loading your carts");
+            await new Promise((ok) => setTimeout(ok, GONE_MS * tries));
+            continue;
+        }
         // A BOARD THAT HAS NOT PAIRED THIS BROWSER: the boot waits here --
         // there is nothing to boot, and seeding the VFS from a refusal would
         // build a shelf out of it. The page asks; a pairing (finish) goes on

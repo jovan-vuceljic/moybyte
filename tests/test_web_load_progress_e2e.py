@@ -130,3 +130,77 @@ def test_a_board_s_loader_says_the_pack_s_download_and_the_page_its_start(tmp_pa
     assert len(got) >= 3 and got[-1][0] > got[0][0], ("the pack's bytes did not count up", seen)
     assert all(g[1] is not None for g in got), ("the pack's total went unsaid", got)
     assert ("page", "Starting the console") in seen, seen
+
+
+def test_a_boot_whose_first_sign_in_meets_no_answer_asks_again(tmp_path):
+    """A slow phone's first requests can meet a host still busy with its
+    downloads: a sign-in that gets no answer at all is asked again, the
+    card saying the boot's stage, and the console starts; it never says
+    the console does not answer while the boot can still go on."""
+    web_e2e.require()
+    from playwright.sync_api import sync_playwright
+    failed = []
+    with _serve() as base, sync_playwright() as p:
+        browser = p.chromium.launch(channel="chrome", headless=True)
+        try:
+            ctx = browser.new_context(viewport={"width": 390, "height": 844})
+
+            def drop(route):
+                if len(failed) < 2:
+                    failed.append(route.request.url)
+                    route.abort("connectionreset")
+                else:
+                    route.continue_()
+            ctx.route("**/auth", drop)
+            page = ctx.new_page()
+            page.goto(base + "/index.html?start=1", wait_until="commit")
+            seen, end = [], time.time() + 60
+            while time.time() < end:
+                try:
+                    got = tuple(page.evaluate(SAMPLE))
+                except Exception:       # noqa: BLE001
+                    got = None
+                if got and (not seen or seen[-1] != got):
+                    seen.append(got)
+                if got and got[0] == "live":
+                    break
+                time.sleep(0.05)
+        finally:
+            browser.close()
+    assert len(failed) == 2, ("the sign-in was not asked again", failed, seen)
+    assert seen and seen[-1][0] == "live", seen
+    assert ("page", "Loading your carts") in seen, seen
+    assert not [s for s in seen if "does not answer" in s[1]], seen
+
+
+def test_the_loading_card_stands_on_the_console_s_screen(tmp_path):
+    """In a phone's portrait the pads lie under the console's screen, and
+    the card stands on the screen's middle, not the page's."""
+    web_e2e.require()
+    from playwright.sync_api import sync_playwright
+    with _serve() as base, sync_playwright() as p:
+        browser = p.chromium.launch(channel="chrome", headless=True)
+        try:
+            for vp in ({"width": 390, "height": 844}, {"width": 844, "height": 390},
+                       {"width": 1280, "height": 800}):
+                ctx = browser.new_context(viewport=vp, has_touch=vp["width"] < 1000,
+                                          is_mobile=vp["width"] < 1000)
+                page = ctx.new_page()
+                cdp = ctx.new_cdp_session(page)
+                cdp.send("Network.enable")
+                cdp.send("Network.emulateNetworkConditions", {
+                    "offline": False, "latency": 40,
+                    "downloadThroughput": LINK, "uploadThroughput": LINK})
+                page.goto(base + "/index.html", wait_until="commit")
+                page.wait_for_selector("#ld", timeout=20000)
+                page.wait_for_timeout(500)
+                at = page.evaluate("""() => {
+                  const a = document.getElementById('ld').getBoundingClientRect(),
+                        b = document.getElementById('cv').getBoundingClientRect();
+                  return [a.left + a.width / 2, a.top + a.height / 2,
+                          b.left + b.width / 2, b.top + b.height / 2, b.height];
+                }""")
+                ctx.close()
+                assert abs(at[0] - at[2]) <= 2 and abs(at[1] - at[3]) <= 2 and at[4] > 0, (vp, at)
+        finally:
+            browser.close()

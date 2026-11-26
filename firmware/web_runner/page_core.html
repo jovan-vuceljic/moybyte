@@ -153,10 +153,11 @@ margin-right:7px;vertical-align:-1px;border:2px solid #ffa300;border-right-color
 border-radius:50%;animation:pinspin .8s linear infinite}
 @keyframes pinspin{to{transform:rotate(360deg)}}
 /* The loading card: what the boot is doing until the console's first frame
-   (ldSay, ldDone), under the play splash (20), which stands until a tap. */
+   (ldSay, ldDone), on the console's screen (ldPlace: the canvas's middle in
+   every layout), under the play splash (20), which stands until a tap. */
 #ld{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:19;display:flex;
 align-items:center;gap:10px;font:14px ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7;
-pointer-events:none;white-space:nowrap}
+pointer-events:none;white-space:nowrap;overflow:hidden}
 #ld i{width:12px;height:12px;border:2px solid #ffa300;border-right-color:transparent;
 border-radius:50%;animation:pinspin .8s linear infinite}
 /* Debug HUD (#41): toggled with the ` key, or on from the load with ?hud=1. */
@@ -469,6 +470,10 @@ try{window.parent.postMessage({moyLive:true},"*");}catch(e){}}}
 // or a crash.
 function ldSay(s){var t=document.getElementById("ldt");if(t)t.textContent=s;window.__moyLoading=s;}
 function ldDone(){var l=document.getElementById("ld");if(l)l.remove();}
+function ldPlace(){var l=document.getElementById("ld");if(!l)return;var r=cv.getBoundingClientRect();
+l.style.left=(r.left+r.width/2)+"px";l.style.top=(r.top+r.height/2)+"px";
+l.style.maxWidth=Math.max(120,r.width-16)+"px";requestAnimationFrame(ldPlace);}
+requestAnimationFrame(ldPlace);
 var q=[];function send(e){q.push(e);}
 function xy(cX,cY){var r=cv.getBoundingClientRect();var x=Math.floor((cX-r.left)/r.width*W),
 y=Math.floor((cY-r.top)/r.height*H);return{x:Math.max(0,Math.min(W-1,x)),y:Math.max(0,Math.min(H-1,y))};}
