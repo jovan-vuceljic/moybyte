@@ -290,11 +290,22 @@ static mp_obj_t cores3_leds(mp_obj_t buf_in) {
 static MP_DEFINE_CONST_FUN_OBJ_1(cores3_leds_obj, cores3_leds);
 
 // reg(addr, reg, n=1) -> bytes: n registers of a chip on the bus, or None.
+// reg(addr, reg, data) -> bool: `data` (bytes, at most 15) written from `reg`.
 static mp_obj_t cores3_reg(size_t n_args, const mp_obj_t *a) {
     uint8_t addr = (uint8_t)mp_obj_get_int(a[0]);
     uint8_t reg = (uint8_t)mp_obj_get_int(a[1]);
-    size_t n = n_args > 2 ? (size_t)mp_obj_get_int(a[2]) : 1;
     uint8_t out[16], d;
+    if (n_args > 2 && !mp_obj_is_int(a[2])) {
+        mp_buffer_info_t bi;
+        mp_get_buffer_raise(a[2], &bi, MP_BUFFER_READ);
+        if (bi.len == 0 || bi.len >= sizeof(out) || moy_bus_add(addr, BUS_MS, &d) != MOY_BUS_OK) {
+            return mp_const_false;
+        }
+        out[0] = reg;
+        memcpy(out + 1, bi.buf, bi.len);
+        return mp_obj_new_bool(moy_bus_write(d, out, bi.len + 1) == MOY_BUS_OK);
+    }
+    size_t n = n_args > 2 ? (size_t)mp_obj_get_int(a[2]) : 1;
     if (n == 0 || n > sizeof(out) || moy_bus_add(addr, BUS_MS, &d) != MOY_BUS_OK
         || moy_bus_write_read(d, &reg, 1, out, n) != MOY_BUS_OK) {
         return mp_const_none;
