@@ -340,6 +340,11 @@ def _session(tmp_path, rounds, **kw):
         page = seal_client.Browser(twin.send)
         page.pair_password(PASSWORD)
         out = [twin.heap("start")]
+        # The twin compiles what a board has frozen, in a heap far larger
+        # than a board's, so that its start ends as a board's does: with
+        # what is free in one run. A twin that starts torn is not the board.
+        assert out[0][0] - out[0][2] <= 1024, "the twin's own start left %d free in a run of %d" % (
+            out[0][0], out[0][2])
         for k in range(rounds):
             _round(page, twin, k)
             time.sleep(2 * HOLD_MS / 1000)           # the panel closed
