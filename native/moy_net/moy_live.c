@@ -168,13 +168,8 @@ static live_t S = {.fd = -1};
 #define DEV_HAS(f) ((f) != NULL)
 #endif
 
-// The terminal channel (native/moy_tty/moy_tty_live.c): weak, for an image
-// or a twin without the shell's face.
-int moy_live_term_take(void);
-int moy_live_term_message(const uint8_t *p, size_t n);
-int moy_live_term_fd(void);
-int moy_live_term_pump(void);
-void moy_live_term_end(void);
+// The terminal channel (moy_live.h; native/moy_tty/moy_tty_live.c): weak,
+// for an image or a twin without the shell's face.
 #pragma weak moy_live_term_take
 #pragma weak moy_live_term_message
 #pragma weak moy_live_term_fd

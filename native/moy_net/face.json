@@ -130,6 +130,7 @@
       {"py": "live_info()", "hand": true, "absent": ["host"]},
       {"py": "live_kinds(spec)", "hand": true, "absent": ["host"]},
       {"py": "live_devs()", "hand": true, "absent": ["host"]},
+      {"py": "live_hint(topics)", "hand": true, "absent": ["host"]},
       {"py": "Link", "hand": true, "absent": ["host"]},
       {"py": "RATE_54M", "hand": true, "absent": ["host"]},
       {"py": "RATE_12M", "hand": true, "absent": ["host"]},
