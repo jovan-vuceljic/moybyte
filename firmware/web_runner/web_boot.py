@@ -1901,7 +1901,7 @@ def official_hint():
 def store_pulled():
     """The worker brought the served store over the VFS because the board
     said it changed (its hint 's': an SSH session's edit, another page's
-    sync, an install): the shelf reads it again and every watcher adopts it
+    sync): the shelf reads it again and every watcher adopts it
     as its baseline, as a reload does, with no cart restarted."""
     _rescan()
     for w in _watchers():

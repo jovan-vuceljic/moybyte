@@ -564,6 +564,26 @@ def test_remove_on_a_zero_s_page_is_the_board_s_and_a_core_cart_offers_none(page
     assert rows["moybyte.calc.moy"] == "get"
 
 
+def test_a_removal_on_a_page_whose_board_hints_ends_on_its_answers(page, zero, monkeypatch):
+    """A removal the board does inside its POST (nothing steps after it, so
+    nothing is hinted) still ends on the GET that follows a POST."""
+    ws, app, worker, proot, landed = page
+    carts_link = sys.modules[type(ws.cart_board).__module__]
+    monkeypatch.setattr(carts_link, "PUSHED_POLL_MS", 10 ** 9)
+    carts_link.pushed(True)
+    try:
+        worker.hint = carts_link.hint
+        ws.spine.open_app(app)
+        _frames(ws, worker, lambda: app.phase == "list")
+        folders = [r["cart"]["folder"] for r in app.rows]
+        app._tap_row(folders.index("moybyte.calc.moy"))
+        app._remove()
+        _frames(ws, worker, lambda: app.phase == "list" and app.cur is None)
+        assert landed == ["moybyte.calc.moy"]
+    finally:
+        carts_link.pushed(False)
+
+
 def test_a_board_that_will_not_install_says_why_and_changes_nothing(page, zero):
     ws, app, worker, proot, _landed = page
     ws.spine.open_app(app)

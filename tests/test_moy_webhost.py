@@ -2214,8 +2214,8 @@ def test_the_goodbye_ends_with_the_switch_off(tmp_path):
 def test_a_backend_that_stepped_hints_the_live_socket(tmp_path, monkeypatch):
     """A Zero's update, Wi-Fi and official carts backends that did work, or
     just stopped, tell the live socket's page (moy_net.live_hint,
-    native/moy_net/moy_live.c's THE HINTS), and an official request's end
-    hints the store too; a backend that does nothing says nothing."""
+    native/moy_net/moy_live.c's THE HINTS); a backend that does nothing
+    says nothing."""
     said = []
     monkeypatch.setattr(wh, "_HINT", said.append)
 
@@ -2237,10 +2237,8 @@ def test_a_backend_that_stepped_hints_the_live_socket(tmp_path, monkeypatch):
     h.poll()
     assert said == ["u", "o", "w"]
     h.poll()
-    assert said[3:] == ["u", "os", "w"], (
-        "a backend that stopped says so once; the official request's end may "
-        "have changed the store")
+    assert said[3:] == ["u", "o", "w"], "a backend that stopped says so once"
     h.poll()
-    assert said[6:] == ["os"], "...and the official request stopped"
+    assert said[6:] == ["o"], "...and the official request stopped"
     h.poll()
     assert said[7:] == [], "one that does nothing says nothing"

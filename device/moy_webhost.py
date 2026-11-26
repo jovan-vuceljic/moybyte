@@ -555,10 +555,7 @@ class WebHost:
         o = self.official
         if o is not None and (o.busy() or self._went.get("o")):
             try:
-                # its end may have changed the store, which Python's files
-                # reach past the volumes' count
-                if self._stepped("o", o.busy() and o.step(OFFICIAL_SLICE_MS),
-                                 "o" if o.busy() else "os"):
+                if self._stepped("o", o.busy() and o.step(OFFICIAL_SLICE_MS)):
                     did = True
             except Exception as exc:     # noqa: BLE001 -- never break a frame
                 print("OFFICIAL ERR %s: %s" % (type(exc).__name__, exc))

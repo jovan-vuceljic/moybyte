@@ -1782,8 +1782,10 @@ async function probeWifi() {
 // what its routes answer changed ('H' + a letter a topic) is asked then, not
 // on a clock, while that socket is open: the Wi-Fi panel's GET /wifi on 'w',
 // the update screen's GET /update on 'u', Get Carts' GET /official on 'o', the
-// store pulled again on 's' (an SSH session's edit, another page's sync, an
-// install). A queued POST still goes at its pump's pace; each GET a topic
+// store pulled again on 's' (an SSH session's edit, another page's sync),
+// once this page's own sync and Get Carts' request in hand are through (an
+// install this page asked for brings its own copy). A queued POST still goes
+// at its pump's pace; each GET a topic
 // waits HINT_MIN_MS after the last, and PUSH_BACKSTOP_MS without a hint, in
 // case one went with a dropped socket. The socket's own beat is the board's
 // liveness then, so the idle heartbeat asks nothing. A page with no live
@@ -1822,6 +1824,7 @@ function pushPump() {
     const now = performance.now();
     if (!storeHintAt || storeBusy || !storePulled || now - storeHintAt < STORE_QUIET_MS) return;
     if (outstanding) return;                 // this page's own change goes first
+    if (cartsLive.size) return;              // ...and Get Carts' request in hand, which brings its own
     storeHintAt = 0;
     storeBusy = true;
     storePull().finally(() => { storeBusy = false; });
