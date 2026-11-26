@@ -34,7 +34,7 @@ var stateWait=[];
 window.__moyState=function(){return new Promise(function(ok){stateWait.push(ok);
 WORKER.postMessage({t:"state"});});};
 function onWorker(m){
-if(m.t==="status"){sEl.textContent=m.s;pinSaid(m.s);}
+if(m.t==="status"){sEl.textContent=m.s;pinSaid(m.s);if(m.s==="live")ldDone();else ldSay(m.s);}
 else if(m.t==="assets"){assetsJSON=m.json;assetsBusy=false;
 if(assetsWait.length){var ws=assetsWait;assetsWait=[];
 for(var i=0;i<ws.length;i++)ws[i][0](JSON.parse(m.json));}
@@ -84,7 +84,7 @@ else if(m.t==="wperf"){console.log("[moy worker] "+m.s);HUD.w="worker "+m.s.spli
 // anything else is a restart somebody asked for.
 else if(m.t==="lost"){linkLost(m.kind||"lost",m.head||"the console is not answering",
 m.body||"",m.risk!==false,m.go||"");}
-else if(m.t==="error"){console.error("[moy]",m.s);linkState("failed","the console crashed");
+else if(m.t==="error"){console.error("[moy]",m.s);linkState("failed","the console crashed");ldDone();
 sEl.textContent="console crash (see devtools)";sEl.style.color="#ff004d";
 // Under the title: the message's tail (an abort's reason; a traceback's
 // raising line and exception), then the first frames that threw it.
