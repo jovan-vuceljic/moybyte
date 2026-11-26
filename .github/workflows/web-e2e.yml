@@ -69,6 +69,9 @@ name: Web console E2E
 #   tests/test_web_zero_wifi_e2e.py  a Zero's Wi-Fi from its page, on the
 #                                  board twin: save, forget, a failed move
 #                                  and a successful one.
+#   tests/test_web_site_embed_e2e.py  the project site's one embedded
+#                                  console at a phone's width and a desk's,
+#                                  and its compact Expand.
 #   tests/test_web_first_run_e2e.py  what an embedding page asks of a
 #                                  first run (its scheme, ?start, ?edit), a
 #                                  saved theme winning over it, and Esc over a
@@ -129,6 +132,7 @@ on:
       - "device/**"                # serve.py --carts runs the REAL moy_webhost
       - "system_carts/**"          # the twin's seeded shelf
       - "tests/test_web_*"
+      - "site/build.py"            # the site's embedded console
       - "tests/web_e2e.py"
       - "tests/cart_store_fixtures.py"  # the store suite builds its carts with it
       - "tests/fixtures/**"         # the p8 cart the drop suite imports, the wasm carts
@@ -158,6 +162,7 @@ on:
       - "device/**"
       - "system_carts/**"
       - "tests/test_web_*"
+      - "site/build.py"            # the site's embedded console
       - "tests/web_e2e.py"
       - "tests/cart_store_fixtures.py"
       - "tests/fixtures/**"
@@ -308,6 +313,7 @@ jobs:
             tests/test_web_loader.py \
             tests/test_web_link_e2e.py tests/test_web_setup_e2e.py \
             tests/test_web_page_rows_e2e.py tests/test_web_zero_wifi_e2e.py \
+            tests/test_web_site_embed_e2e.py \
             tests/test_web_fonts.py tests/test_web_look_parity.py \
             tests/test_editor_ladder_icons.py
 

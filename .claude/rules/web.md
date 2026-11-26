@@ -227,8 +227,9 @@ nor those docs will warn you about:
   window unless this browser left it full screen; `&play=1` presses its Play,
   which on the desk runs the cart in the Editor's Game pane; `&only=desk`
   applies them only where the console lands on the desk, so in console mode
-  (a phone) the visit lands on the home (the site's Desktop tab passes all
-  four, its Handheld tab none: a plain visit in console mode is the home). The framed player posts
+  (a phone) the visit lands on the home (the site's one embedded console
+  passes all four and lays itself out from its frame, the desk's aspect on
+  a wide page and the handheld's 4:3 on a phone, with no tiers to pick). The framed player posts
   `{moyChrome}` and, at its first painted frame, `{moyLive}`.
   `tests/test_web_first_run_e2e.py` drives them. The hero's two stills (Night,
   Day) are CAPTURED by `site/build.py` from the player it ships, through
