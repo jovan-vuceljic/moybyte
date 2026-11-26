@@ -155,6 +155,36 @@ def test_a_wrong_credential_backs_its_client_off_on_the_socket(board, page_so, t
     assert page.closed is None, "a refusal leaves the socket signing in"
 
 
+def test_each_browser_behind_the_secure_door_has_its_own_count(board, page_so, tmp_path):
+    """The secure door's sockets all come from 127.0.0.1 (moy_tls_srv.c);
+    each counts as the browser the door named for it, and the loopback
+    itself is no browser that failed."""
+    def guess(src, n=1, name="p"):
+        page = L.Page(board, L._page_lib(page_so, name, str(tmp_path)), True)
+        page.open(bare=True, via=src)
+        b = seal_client.Browser(board.ask)
+        try:
+            for _ in range(n):
+                with pytest.raises(seal_client.Refused) as e:
+                    b.pair_token("00" * 16)
+                if e.value.status != 403:
+                    return e.value.status
+            return 403
+        finally:
+            page.drop()
+    assert guess("10.0.0.2", 11) == 403
+    assert guess("10.0.0.2", name="q") == 429, "the same browser through another socket"
+    assert guess("10.0.0.3", name="r") == 403, "another browser behind the door"
+    page = L.Page(board, L._page_lib(page_so, "s", str(tmp_path)), True)
+    page.open(bare=True)
+    try:
+        with pytest.raises(seal_client.Refused) as e:
+            seal_client.Browser(board.ask).pair_token("00" * 16)
+        assert e.value.status == 403, "the loopback itself is no browser that failed"
+    finally:
+        page.drop()
+
+
 def test_a_password_pairs_on_the_socket_and_a_held_session_opens_it_sealed(board, page_so,
                                                                          tmp_path):
     (board.tree / "sd" / "moybyte" / "system" / "password").write_text(

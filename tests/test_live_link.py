@@ -198,18 +198,29 @@ class Page:
         self.answers = []               # the requests' messages, 'r' and all
         self.out = ctypes.create_string_buffer(16384)
 
-    def open(self, proto="moy.live", signin=None, bare=False):
+    def open(self, proto="moy.live", signin=None, bare=False, via=None):
         """The socket: sealed under the host's session where it has one,
         else signed in on itself by `signin` (a Browser's pairing, called
         with it; the QR's token by default), or left in the clear and not
-        signed in (`bare`)."""
+        signed in (`bare`). `via`: from 127.0.0.1 as the secure door
+        connects, the browser it names that address (moy_net.h, THE DOOR'S
+        BROWSERS)."""
         path = "/live"
         self.on = False
         resume = self.sealed and self.host.page is not None and signin is None and not bare
         if resume:
             path, _b, seq = self.host.page.seal("GET", "/live")
             seal_client.lib().moy_sw_ws(1, seq)
-        c = socket.create_connection(("127.0.0.1", self.host.port), timeout=5)
+        if via is None:
+            c = socket.create_connection(("127.0.0.1", self.host.port), timeout=5)
+        else:
+            c = socket.socket()
+            c.settimeout(5)
+            c.bind(("127.0.0.1", 0))
+            at = len(self.host.log())
+            self.host.say("via %d %s" % (c.getsockname()[1], via))
+            self.host.wait_line("VIA %d" % c.getsockname()[1], at)
+            c.connect(("127.0.0.1", self.host.port))
         key = base64.b64encode(os.urandom(16)).decode()
         c.sendall(("GET %s HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                    "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n"

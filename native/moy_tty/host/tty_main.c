@@ -297,6 +297,14 @@ int main(int argc, char **argv) {
                 moy_tty_hold(MOY_TTY_SSH, 0);
                 printf("RAN %d\n", r);
                 fflush(stdout);
+            } else if (strncmp(line, "via ", 4) == 0) {
+                // the secure door's naming of its loopback connection (moy_tls_srv.c)
+                unsigned port = 0, a = 0, b = 0, c = 0, d = 0;
+                if (sscanf(line + 4, "%u %u.%u.%u.%u", &port, &a, &b, &c, &d) == 5) {
+                    moy_web_via((uint16_t)port, a | b << 8 | c << 16 | (uint32_t)d << 24);
+                    printf("VIA %u\n", port);
+                    fflush(stdout);
+                }
             } else if (strncmp(line, "skew ", 5) == 0) {
                 moy_net_ms_skew += (uint64_t)strtoll(line + 5, NULL, 10);
                 printf("SKEW %s\n", line + 5);

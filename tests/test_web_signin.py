@@ -838,15 +838,12 @@ def test_a_clock_past_two_to_the_31_holds_no_source_that_never_failed(tmp_path):
     assert 0 < _wait_ms(_wrong_token(h)) <= FIRST_MS
 
 
-def _from(host, src, body, method="POST", target="/auth", door=False):
+def _from(host, src, body, method="POST", target="/auth"):
     """POST /auth `body` (or another request) from the address `src` over the
-    serving socket; `door`: from 127.0.0.1 with `src` named as the browser
-    behind it, as the secure door connects (moy_net.h, THE DOOR'S BROWSERS)."""
+    serving socket."""
     c = socket.socket()
     c.settimeout(5)
-    c.bind(("127.0.0.1" if door else src, 0))
-    if door:
-        nb.web_via(c.getsockname()[1], src)
+    c.bind((src, 0))
     c.connect(("127.0.0.1", host.port))
     c.sendall(b"%s %s HTTP/1.1\r\nContent-Length: %d\r\n\r\n%s"
               % (method.encode(), target.encode(), len(body), body))
@@ -879,8 +876,8 @@ def serving(tmp_path):
         h.stop()
 
 
-def _guess(h, src, door=False):
-    page = seal_client.Browser(lambda m, t, b: _from(h, src, b, door=door))
+def _guess(h, src):
+    page = seal_client.Browser(lambda m, t, b: _from(h, src, b))
     try:
         page.pair_token("00" * 16)
     except Refused as e:
@@ -894,17 +891,6 @@ def test_each_address_has_its_own_count(serving):
         assert _guess(h, "127.0.0.2").status == 403
     _wait_ms(_guess(h, "127.0.0.2"))
     assert _guess(h, "127.0.0.3").status == 403
-
-
-def test_each_browser_behind_the_secure_door_has_its_own_count(serving):
-    """The door's connections all come from 127.0.0.1; each counts as the
-    browser the door named, and the name is taken once."""
-    h = serving()
-    for _ in range(FREE + 1):
-        assert _guess(h, "10.0.0.2", door=True).status == 403
-    _wait_ms(_guess(h, "10.0.0.2", door=True))
-    assert _guess(h, "10.0.0.3", door=True).status == 403, "another browser behind the door"
-    assert _guess(h, "127.0.0.1").status == 403, "the loopback itself is no browser that failed"
 
 
 def test_more_addresses_buy_no_more_guesses_and_a_paired_page_keeps_working(serving):
