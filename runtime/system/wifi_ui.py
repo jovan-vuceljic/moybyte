@@ -168,9 +168,9 @@ def wifi_page():
             ui.label("No networks found.", shown="!nets")
             with ui.rows("nets", cur="sel", changed="picked"):
                 ui.link("join", "{.saved}", label="{.name}", icon="{.icon}")
-        with ui.group("Options", shown="radio"):
-            ui.link("rescan")
-            ui.link("forget", "{forget_name}", shown="forget_name")
+        ui.button("rescan", shown="radio")  # an action, not a page: a button, as a selected one looks
+        with ui.group("Options", shown="radio && forget_name"):
+            ui.link("forget", "{forget_name}")
         _password()
 
 
