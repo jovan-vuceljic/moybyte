@@ -2351,6 +2351,12 @@ def roles_trace(ws):
     say("changed", t.name(), ch["tint"], ch["frame"])
     t.set_chrome_scale(ch["chrome"])
     say("chrome", t.choices()["chrome"] == ch["chrome"])
+    t.set_pointer("luna", True)
+    ch = t.choices()
+    say("pointer", ch["pointer"], ch["pointer_large"], ws.system.get("pointer"))
+    t.set_pointer("nonesuch", False)
+    ch = t.choices()
+    say("pointer back", repr(ch["pointer"]), ch["pointer_large"])
     say("edit file", t.edit_file())
     say("name", t.name_check("moy"), t.name_custom("traced"), t.name(),
         t.choices()["store"])
@@ -2551,6 +2557,8 @@ choices custom dark None None True
 change 0 0
 changed custom grey flat
 chrome True
+pointer luna True luna
+pointer back '' False
 edit file True
 name seed None traced True
 uncalled -
