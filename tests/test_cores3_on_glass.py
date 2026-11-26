@@ -197,8 +197,8 @@ def test_idle_screen_blank_and_wake(board):
     on_glass.idle_timeout_restored(board)
 
 
-def test_an_sd_transfer_takes_no_internal_dma_memory(board):
-    on_glass.sd_card_io_takes_no_internal_dma(board)
+def test_a_card_transfer_takes_no_memory_of_its_own(board):
+    on_glass.sd_card_io_allocates_nothing(board, on_glass.SD_INTERNAL_DMA)
 
 
 def test_mem_reports_the_heap(board):
