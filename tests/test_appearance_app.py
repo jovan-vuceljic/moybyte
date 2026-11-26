@@ -288,6 +288,31 @@ def test_window_style_offers_no_default_where_the_theme_names_a_style(tmp_path):
     assert _words(app, "frames") == list(page.FRAME_NAMES)
 
 
+def test_font_comes_back_to_the_themes_own_and_keeps_a_code_font_picked(tmp_path):
+    """moy's `ui` font is its look's, no preset: FONT reads Default, a pick
+    keeps Default in the cycle, and Default puts moy's own face back, the
+    code font picked before it kept."""
+    ws = _ws(tmp_path, **DESK)
+    ws.look.set_theme("moy", persist=False, variant="dark")
+    app = _open(ws)
+    face = ui_draw.font("ui")[1:]                 # its metrics: a reload takes another id
+    assert app.choices()["font"] is None and app.choices()["own_code_font"] == "jbmono"
+    _focus(ws, app, "Code font")
+    _press(ws, app, "left")
+    assert ws.look.theme_name == "custom" and app.choices()["code_font"] == "petme128"
+    assert _words(app, "codes") == ["PetMe128", "JetBrains Mono"]
+    _focus(ws, app, "Font")
+    assert _state(app, "font") == "" and _words(app, "fonts")[0] == page.OWN
+    _press(ws, app, "right")
+    assert app.choices()["font"] == "tiny5" and app.choices()["own_font"] is None
+    assert _words(app, "fonts") == [page.OWN] + list(page.FONT_NAMES)
+    _press(ws, app, "left")
+    assert app.choices()["font"] is None and _state(app, "font") == ""
+    assert ui_draw.font("ui")[1:] == face and app.choices()["code_font"] == "petme128"
+    ws.look.commit()
+    assert _custom(tmp_path)["fonts"] == {"mono": "petme128"}
+
+
 def test_code_font_sets_the_code_tabs_face_and_font_keeps_it(tmp_path):
     """CODE FONT (docs/history/look_2026-10.md step 23): the `mono` role's preset,
     JetBrains Mono where the image carries the font set; FONT changes the
