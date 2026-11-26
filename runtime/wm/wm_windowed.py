@@ -1508,10 +1508,12 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         2026-10-31): on a board with a desk, which this WM is, in both modes
         -- over a game full screen (console mode's, standing on the home, or
         a desk window's) or docked in the Editor's Run slot; never over one
-        already in a window. A handheld's WM has no desk and no such row."""
+        already in a window, nor in a console mode held for want of the
+        desk's room (`desk_beneath`). A handheld's WM has no desk and no
+        such row."""
         ws = self.ws
         if self.mode == "console":
-            return (self.stack.depth() == 2 and self.stack.top() == "desktop"
+            return (self.desk_beneath() and self.stack.depth() == 2 and self.stack.top() == "desktop"
                     and not ws.run.app_window_canvas and ws.cart_error is None
                     and not ws.run.player.is_app())
         win = self.windows.get("desktop")
