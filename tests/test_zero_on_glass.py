@@ -784,6 +784,71 @@ def test_the_live_socket_answers_without_power_save(zero, mirror, tmp_path):
     assert heap is not None, "the board's RAM was not read with the socket open"
 
 
+REQS = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify("
+        "{reqs: s.live && s.live.reqs, opens: s.live && s.live.opens}); })")
+
+
+def _page_held(zero, tmp_path, name, query):
+    """A board just reset, the console signed in, booted, reloaded (signed in
+    by its key) and then held open: (the reload's boot in ms from the page's
+    start, the page's live figures, the board's internal (free, largest,
+    low-water since the reset, the pairing's included) and its live_stats,
+    read while the page holds it)."""
+    zero.restart()
+    steps = sign_in(zero) + [{"waitFor": BOOTED, "timeout": 120000},
+                             {"js": "location.reload(), 1"},
+                             {"waitFor": BOOTED, "timeout": 120000}, {"wait": 5000},
+                             {"js": REQS % "HELD"}, {"wait": 15000}]
+    path = _scenario(tmp_path / name, steps, query)
+    proc = subprocess.Popen(["node", "browsershot.mjs", str(path), str(tmp_path / name)],
+                            cwd=str(RUNNER), env=dict(os.environ, MOY_BASE=zero.url),
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    lines, heap, live = [], None, None
+    try:
+        for line in proc.stdout:
+            lines.append(line)
+            if heap is None and 'js -> "HELD ' in line:
+                with zero.repl(clean=False) as r:
+                    r.run("import gc\ngc.collect()")
+                    info = r.eval("__import__('esp32').idf_heap_info(%d)" % Z.INTERNAL_HEAP)
+                    heap = Z.internal_heap(info) + (sum(x[3] for x in info if x),)
+                    live = r.eval("__import__('moy_net').live_stats()")
+        proc.wait(timeout=120)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        path.unlink()
+    out = _scrub("".join(lines), zero)
+    took = [float(v) for v in re.findall(r"waitFor -> (\d+)", out)]
+    held = _tagged(out, "HELD")
+    assert took and held and heap is not None, out[-3000:]
+    return took[-1], held, heap, live
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_the_page_s_requests_ride_its_live_socket(zero, mirror, tmp_path):
+    """The page's sealed requests -- its boot's pulls and probes and every
+    one after -- go on its live socket (native/moy_net/moy_live.c, THE
+    REQUESTS), so the board serves the page one connection. The other arm
+    keeps them on HTTP (`?req=0`); each from a reset board, its boot, its
+    internal RAM with the page held open and the requests the board took on
+    the socket printed and taken, side by side."""
+    _needs_password(zero)
+    arms = {}
+    for arm, query in (("http", "?dev=1&desktop=1&req=0"), ("socket", "?dev=1&desktop=1")):
+        boot, held, heap, live = _page_held(zero, tmp_path, arm, query)
+        arms[arm] = (boot, held, heap, live)
+        zero.take("zero page boot %s" % arm, boot, [boot])
+        zero.take("zero internal free held %s" % arm, heap[0] / 1024.0)
+        zero.take("zero internal largest held %s" % arm, heap[1] / 1024.0)
+        zero.take("zero internal low-water held %s" % arm, heap[2] / 1024.0)
+        print("%s over %s: boot %.0f ms; internal %d free, %d largest, %d low-water; "
+              "page %s; socket requests %s" % (zero.name, arm, boot, heap[0], heap[1], heap[2],
+                                                held, live[15] if len(live) > 15 else None))
+    assert arms["http"][1]["reqs"] == 0, arms["http"]
+    assert arms["socket"][1]["reqs"] >= 3 and arms["socket"][3][15] >= 3, arms["socket"]
+
+
 TERM = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify("
         "{term: s.term, live: s.live && {opens: s.live.opens, drops: s.live.drops}}); })")
 
