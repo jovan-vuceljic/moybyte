@@ -99,7 +99,7 @@ Commands for **Python-side services** call them through the C-owned role
 table (`native/moy_app`, the ROLE door): `pkg` (§6), `perm`, `settings`,
 `notify`, `service` (`processes.md` §5), `cron`/`at` (`between_apps.md` §3), `open`/`pick`
 (`between_apps.md` §1–§2), and the network and hardware
-commands as their services land (`wifi`, `http`, `ble`,
+commands as their services land (`http`, `ble`,
 `ntp`, `pins`, `i2c`, `uart`, `lora`, `battery`, `brightness`). **While the
 VM is stopped** a command that needs a shell-served row is refused with
 "needs the console", the answer the ROLE door already gives
@@ -111,7 +111,9 @@ everything the console knows (its processes, /proc and /dev through
 `runtime/system/devfs.py`, the installed and role commands, `df`) crosses the
 ROLE door on the shell's own row to `runtime/shell/sh_door.py`, so with the VM
 stopped `ps` shows the console stopped and the run in front. The role commands
-served today are `perm`, `notify`, `service`, `lease`, `python`, `cron`, `at` and the device
+served today are `perm`, `notify`, `service`, `lease`, `python`, `cron`, `at`, `wifi`
+(the WiFi service Settings' panel uses, one store of saved networks; on a
+Zero the page's Wi-Fi panel's backend, `device/zero_shell.py`'s door) and the device
 faces `http`, `usb`, `midi`, `media` and `snd`, each a face of its service's
 one implementation run as the shell (pid 1), giving back what it took before
 it ends, a media stream excepted; `runtime/shell/sh_roles.py` lists their
@@ -130,7 +132,7 @@ WiFi, read from the door's `/proc/console`, left out), `edit` and `top` (below),
 the last two in `native/moy_sh/moy_sh_store.c`. Everything else needs the
 console: `hostname` (the console's name, Settings' Name, read from
 `/proc/console`), `settings reload` (it applies the file), the other `pkg` verbs,
-`perm`, `notify`, `service`, `lease`, `python`, the device faces, the
+`perm`, `notify`, `service`, `lease`, `python`, `wifi`, the device faces, the
 installed commands, `df` and the console's /proc, /dev and /bin rows.
 
 **The text apps** (`native/moy_sh/moy_sh_app.h`): `edit FILE` (#117), `vi`

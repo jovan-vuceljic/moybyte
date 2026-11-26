@@ -638,6 +638,67 @@ def test_ctrl_c_ends_a_waiting_command_and_gives_back_its_device(console, monkey
     assert face.opened == 0 and len(polls) == 4
 
 
+def test_wifi_is_the_face_of_the_settings_panels_service(console):
+    """`wifi` crosses to the WiFi service Settings' panel uses (here the
+    host's FakeWifi, over the one store of saved networks): a scan or a join
+    holds the radio under "sh" while it runs and lets it go on its way out;
+    a join that leaves the network in use asks first, and the network in use
+    cannot be forgotten."""
+    ws, door = console
+    io, d = door()
+    assert call(d, "role", "wifi") == 0 and io.out == "not connected\n"
+    io, d = door()
+    assert call(d, "role", "wifi", "scan") == 0
+    assert io.out.splitlines() == [" 88%  locked          Home WiFi",
+                                   " 60%  open            Coffee Shop",
+                                   " 42%  locked          Neighbor 5G",
+                                   " 30%  open            Library Guest"]
+    assert ws.leases.holders() == [] and ws.wifi.radio is False
+    ws.spine.wifi_hold("ssh")                # a session over the network holds it
+    io, d = door()
+    assert call(d, "role", "wifi", "join", "Home WiFi", "pw1") == 0
+    assert io.out == "joined Home WiFi (192.168.1.42)\n" and ws.leases.holders() == ["ssh"]
+    io, d = door()
+    assert call(d, "role", "wifi", "status") == 0
+    assert io.out == "connected to Home WiFi (192.168.1.42)\n"
+    io, d = door(b"n\n")
+    assert call(d, "role", "wifi", "join", "Coffee Shop") == 1
+    assert io.out == "Leave Home WiFi for Coffee Shop? [y/N] " and ws.wifi.status()[1] == "Home WiFi"
+    io, d = door(b"y\n")
+    assert call(d, "role", "wifi", "join", "Coffee Shop") == 0
+    assert io.out.endswith("joined Coffee Shop (192.168.1.42)\n")
+    io, d = door()
+    assert call(d, "role", "wifi", "join", "-y", "Coffee Shop") == 0
+    assert io.out == "already on Coffee Shop\n"
+    io, d = door()
+    assert call(d, "role", "wifi", "scan") == 0 and ws.leases.holders() == ["ssh"]
+    assert " 88%  locked  saved   Home WiFi" in io.out
+    assert " 60%  open    in use  Coffee Shop" in io.out
+    io, d = door()
+    assert call(d, "role", "wifi", "list") == 0
+    assert sorted(io.out.splitlines()) == ["        Home WiFi", "in use  Coffee Shop"]
+    io, d = door()
+    assert call(d, "role", "wifi", "forget", "Coffee Shop") == 1
+    assert io.err == "wifi: Coffee Shop is the network in use: join another first\n"
+    assert call(d, "role", "wifi", "forget", "Nowhere") == 1
+    assert io.err.endswith("wifi: Nowhere: not saved\n")
+    assert call(d, "role", "wifi", "forget", "Home WiFi") == 0
+    assert ws.wifi.known() == ["Coffee Shop"] and ws.wifi.status()[0]
+    for bad in (("bogus",), ("forget",), ("join",), ("scan", "-y"), ("list", "x"),
+                ("join", "a", "b", "c"), ("forget", "-y", "x")):
+        io, d = door()
+        assert call(d, "role", "wifi", *bad) == 2, bad
+        assert io.err.startswith("usage: wifi ")
+    ws.spine.wifi_release("ssh")
+
+
+def test_wifi_says_a_console_with_no_station_has_none(console):
+    ws, door = console
+    ws.wifi = None
+    io, d = door()
+    assert call(d, "role", "wifi", "scan") == 1 and io.err == "wifi: this console has none\n"
+
+
 def test_lease_lists_the_boards_rows(console, monkeypatch):
     from runtime import leases
     monkeypatch.setattr(leases, "pins", lambda: "uart1  17,18     -")

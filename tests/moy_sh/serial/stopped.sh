@@ -8,6 +8,9 @@ log doom > /log.txt; grep -c . /log.txt; dmesg | wc -l
 cat /proc/9/log
 perm list
 service stop 7
+wifi scan
+hostname
+ifconfig | head -n 1
 hello
 cat /dev/uart1
 kill 1

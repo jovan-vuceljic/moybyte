@@ -25,6 +25,9 @@ keyed by the switch's `id`, which a page that found the board again reads.
 A board that reaches neither calls `stranded` (zero_host walks every saved
 network, and resets into setup with none).
 
+The shell's `wifi` (device/zero_shell.py) is this backend's other face:
+the same requests, its scan stepped by the same poll.
+
 `radio` is anything with moy_net's wifi functions (the twin's fake,
 firmware/web_runner/serve.py). Nothing here waits: the scan and the join
 are asked and polled, one slice per poll of the board's loop.
@@ -121,14 +124,16 @@ class ZeroWifi:
 
     # -- the document -------------------------------------------------------
 
-    def _link(self):
+    def link(self):
+        """(up, ssid, ip, reason): the station's link now (the shell's `wifi`
+        reads it too, device/zero_shell.py)."""
         st = self.radio.wifi_status()
         up = bool(st[2] and st[4])
         return up, (st[3] if up else None), (st[4] if up else None), st[5]
 
     def answer(self, ok=None, msg=None):
         """The `/wifi` document, as JSON text."""
-        up, ssid, ip, _ = self._link()
+        up, ssid, ip, _ = self.link()
         self._asked = ticks_ms()
         signal = self.signal if up else None
         sw = self._sw
@@ -177,7 +182,7 @@ class ZeroWifi:
             return True, "forgotten"
         if self._sw is not None:
             return False, "a switch is under way"
-        up, now, _, _ = self._link()
+        up, now, _, _ = self.link()
         if password is None:
             password = self._password(ssid)
         if up and now == ssid:
@@ -227,7 +232,7 @@ class ZeroWifi:
                 best[ssid] = (rssi, auth != 0)
         nets = sorted(([s, _sig(r), lk] for s, (r, lk) in best.items()),
                       key=lambda n: -n[1])
-        on = self._link()[1]
+        on = self.link()[1]
         self.signal = None
         for n in nets:
             if n[0] == on:
@@ -255,7 +260,7 @@ class ZeroWifi:
                 sw[6] = "the radio refused that network"
                 return self._back()
             return True
-        up, ssid, ip, reason = self._link()
+        up, ssid, ip, reason = self.link()
         if sw[4] == "join":
             if up and ssid == sw[1]:
                 self._save(sw[1], sw[2], True)

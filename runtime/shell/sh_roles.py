@@ -4,6 +4,7 @@
 #   r_pkg                             runtime/shell/pkg.py's verbs, stepped
 #   r_passwd                          the console's password, the paired browsers
 #   r_http                            a GET by the http worker, stepped
+#   r_wifi                            the station: status, scan, saved networks, join, forget
 #   r_snd                             stdin through the audio ring
 #   r_python                          a REPL or code in the shell's VM
 #   r_cron                            the crontab (cron.py)
@@ -47,6 +48,13 @@ the http worker's own wait), never `online()`.
                              the task manager's Stop is the same stop
   lease                      what the board leases and who holds it
   http get URL [CAP]         a GET, its body to stdout; not 2xx exits 1
+  wifi [status]              the network the console is on, and its address
+  wifi scan                  the networks in range: signal, lock, in use or saved
+  wifi list                  the saved networks, the one in use marked
+  wifi join [-y] SSID [PASSWORD]
+                             join it (a saved one's password is its own) and
+                             keep it; leaving the network in use asks first
+  wifi forget SSID           forget a saved network; the one in use is refused
   usb [devices]              what is plugged in: "ADDR CLASS VID:PID NAME"
   midi                       the transports this console has
   midi send PORT BYTE...     MIDI bytes (hex) to uart<n>, usb:ADDR or ble:ADDR
@@ -628,6 +636,112 @@ def r_http(d, a):
         d.err("http", "status %d" % st[0])
         return 1
     return 0
+
+
+# -- wifi ------------------------------------------------------------------------------
+
+
+SCAN_MS = 12000                 # a scan that has not ended by then has failed
+WIFI_USAGE = "[status] | scan | list | join [-y] SSID [PASSWORD] | forget SSID"
+
+
+def _link(w):
+    try:
+        return w.status()
+    except Exception:  # noqa: BLE001 -- a station that cannot say is not connected
+        return (False, None, None)
+
+
+def _held(d, verb):
+    """`verb`'s code, the radio held under "sh" while it runs."""
+    sp = d.ws.spine
+    if not sp.wifi_hold("sh"):
+        d.err("wifi", "the radio did not start")
+        return 1
+    try:
+        return (yield from verb)
+    finally:
+        sp.wifi_release("sh")
+
+
+def _wifi_scan(d, w):
+    t0 = _ticks_ms()
+    nets = w.scan_poll()
+    while nets is None:
+        if _ticks_diff(_ticks_ms(), t0) > SCAN_MS:
+            d.err("wifi", _WHY[110])
+            return 1
+        if (yield from _wait(d, POLL_MS)):
+            return INTERRUPTED
+        nets = w.scan_poll()
+    on, saved = _link(w)[1], w.known()
+    d.out("".join("%3d%%  %-6s  %-6s  %s\n" % (sig, "locked" if locked else "open",
+                                              "in use" if ssid == on else
+                                              "saved" if ssid in saved else "", ssid)
+                  for ssid, sig, locked in sorted(nets, key=lambda n: -n[1])))
+    return 0
+
+
+def _wifi_join(d, w, ssid, password):
+    ok = w.join(ssid, password)
+    while ok is None:
+        if (yield from _wait(d, POLL_MS)):
+            return INTERRUPTED
+        ok = w.joined()
+    up, on, ip = _link(w)
+    if not ok or not up or on != ssid:
+        d.err("wifi", "%s: not joined" % ssid)
+        return 1
+    d.out("joined %s%s\n" % (ssid, " (%s)" % ip if ip else ""))
+    return 0
+
+
+def r_wifi(d, a):
+    """The console's station (the WiFi service Settings' panel uses, one
+    store of saved networks): `join` leaving the network in use asks first
+    (-y says yes), since a session over it ends there, and `forget` refuses
+    that network, which would take the console off it with no way back."""
+    w = d.ws.wifi
+    yes = "-y" in a[1:2]
+    a = [x for i, x in enumerate(a) if not (i == 1 and x == "-y")]
+    verb, rest = (a[0], a[1:]) if a else ("status", [])
+    if verb not in ("status", "scan", "list", "join", "forget") \
+            or len(rest) > (2 if verb == "join" else 1 if verb == "forget" else 0) \
+            or (verb in ("join", "forget") and not rest) or (yes and verb != "join"):
+        return _usage(d, "wifi", WIFI_USAGE)
+    if w is None:
+        d.err("wifi", _WHY[19])
+        return 1
+    up, on, ip = _link(w)
+    if verb == "status":
+        d.out("connected to %s%s\n" % (on, " (%s)" % ip if ip else "") if up
+              else "not connected\n")
+        return 0
+    if verb == "list":
+        d.out("".join("%-6s  %s\n" % ("in use" if up and s == on else "", s)
+                      for s in w.known()))
+        return 0
+    if verb == "forget":
+        if up and rest[0] == on:
+            d.err("wifi", "%s is the network in use: join another first" % on)
+            return 1
+        if rest[0] not in w.known():
+            d.err("wifi", "%s: not saved" % rest[0])
+            return 1
+        w.forget(rest[0])
+        return 0
+    if verb == "scan":
+        return (yield from _held(d, _wifi_scan(d, w)))
+    if up and on == rest[0]:
+        d.out("already on %s\n" % on)
+        return 0
+    if up and not yes:
+        said = _yes(d, "Leave %s for %s?" % (on, rest[0]))
+        if said is not True:
+            if said is False:
+                return 1
+            return _door.NOT_RUN
+    return (yield from _held(d, _wifi_join(d, w, rest[0], rest[1] if len(rest) > 1 else "")))
 
 
 def r_usb(d, a):

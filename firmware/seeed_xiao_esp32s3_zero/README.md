@@ -496,6 +496,12 @@ answer is its URL.
 - **No WiFi lease**: the station and the board's `.local` name are up
   while the board serves, so the server rides them
   (`runtime/system/ssh_service.py`).
+- **`wifi` is the page's Wi-Fi panel over SSH**: the door serves it over
+  the panel's backend (`device/zero_wifi.py`): the station, a scan and the
+  saved networks; `join` moves the board as the panel does, its way back
+  included, and asks first (`-y` says yes), since the session ends with the
+  move; `forget` refuses the network in use, which the next boot would not
+  find.
 - **No frame**: what a session must do on the VM's task (the store's files,
   the door) is served by the serve loop's `zero_shell.tail()` each turn
   (`moy_tty.tail()`), about every 10 ms.

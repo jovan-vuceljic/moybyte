@@ -574,7 +574,9 @@ class Spine:
         update screen), "settings" (the WIFI panel, through its wifi role),
         "link" (a match), "carts" (the Get Carts app while it fetches), "ssh"
         (the SSH server while it
-        serves, ssh_service.py). A process's, held with its `pid`
+        serves, ssh_service.py), "sh" (the shell's `wifi scan` and `wifi
+        join` while one runs, sh_roles.py, and in C its `ping` and
+        `nslookup`). A process's, held with its `pid`
         (`PROC_TAGS`): "cart" (a run with the "network" permission), "http"
         (its `moybyte.http` requests while one runs, dev_http.py, or a
         compiled program's http handles from its first to its last, held in

@@ -39,6 +39,15 @@ SH end 1
 > sh service stop 7
 SH service: needs the console
 SH end 1
+> sh wifi scan
+SH wifi: needs the console
+SH end 1
+> sh hostname
+SH hostname: needs the console
+SH end 1
+> sh ifconfig | head -n 1
+SH wlan0: up, connected to home
+SH end 0
 > sh hello
 SH sh: 1: hello: not found
 SH end 127

@@ -124,7 +124,7 @@ SHELL_NAMES = (
     "unalias", "uname", "uniq", "unset", "uptime", "vi", "view", "vim", "wait", "wc", "xxd",
     # the role commands (runtime/shell/sh_roles.py)
     "at", "ble", "cron", "http", "lease", "lora", "media", "mic", "midi", "notify",
-    "passwd", "perm", "pkg", "python", "service", "settings", "snd", "usb",
+    "passwd", "perm", "pkg", "python", "service", "settings", "snd", "usb", "wifi",
 )
 
 
