@@ -298,6 +298,17 @@ def test_a_document_in_parts_lands_at_its_publish_across_batches():
     assert e4 == [(0, "part out of order")]
 
 
+def test_parts_the_next_batch_does_not_go_on_with_are_dropped():
+    """A page that left mid-document leaves nothing held on the board."""
+    rx = moy_sync.SystemReceiver()
+    _rx_apply([{"p": SETTINGS, "t": "x" * 4000, "part": 0}], rx=rx)
+    assert rx._parts
+    _rx_apply([], rx=rx)
+    assert rx._parts == {}
+    (_a, errors, _c), _, _ = _rx_apply([{"p": SETTINGS, "t": "y", "part": 1}], rx=rx)
+    assert errors == [(0, "part out of order")]
+
+
 # -- the webhost ----------------------------------------------------------------------
 
 

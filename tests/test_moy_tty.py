@@ -50,7 +50,8 @@ SPINE = os.path.join(NATIVE, "moy_spine")
 WEB = os.path.join(NATIVE, "moy_web")
 FILES = "sd/moybyte/files"
 
-TTY_SOURCES = ("moy_tty.c", "moy_tty_sys.c", "moy_tty_sh.c", "moy_tty_ws.c", "moy_tty_sftp.c", "host/tty_main.c")
+TTY_SOURCES = ("moy_tty.c", "moy_tty_sys.c", "moy_tty_sh.c", "moy_tty_ws.c", "moy_tty_live.c",
+               "moy_tty_sftp.c", "host/tty_main.c")
 NET_SOURCES = [os.path.join(NET, n) for n in (
     "moy_http.c", "moy_net_port.c", "moy_sync.c", "moy_sync_apply.c", "moy_webhost.c",
     "moy_ota.c", "moy_webconsole.c", "moy_gpio.c", "moy_dns.c", "moy_net_host.c",
@@ -60,13 +61,14 @@ NET_SOURCES.append(os.path.join(STORE, "moy_journal.c"))
 pytestmark = pytest.mark.skipif(shutil.which("cc") is None, reason="needs a C compiler")
 
 
-def _build(out, extra=(), defines=()):
-    """The harness (tty_main) over the webhost; `extra` sources and
-    `defines` build a variant (tests/test_live_link.py's board twin)."""
+def _build(out, extra=(), defines=(), incs=()):
+    """The harness (tty_main) over the webhost; `extra` sources, `defines`
+    and include dirs `incs` build a variant (tests/test_live_link.py's board
+    twin)."""
     cc = shutil.which("cc")
     shell = [o for o in SH._objects(cc, str(out))
              if os.path.basename(o) not in ("sh_main.o", "board_main.o")]
-    inc = ["-I" + d for d in (TTY, NET, STORE, SPINE, WEB, SH.SH, SH.KERNEL)]
+    inc = ["-I" + d for d in (TTY, NET, STORE, SPINE, WEB, SH.SH, SH.KERNEL) + tuple(incs)]
     flags = ["-std=gnu99", "-g", "-O1", "-fsanitize=address,undefined", "-w",
              "-D_GNU_SOURCE"] + ["-D" + d for d in defines] + inc
     objs, procs = [], []

@@ -124,10 +124,15 @@ nor those docs will warn you about:
   console says to tap. What stays HTML is the loader's progress, the
   pairing card before the console boots and a crash's text.
 - **An iPhone's full screen is the page saved to its Home Screen** (owner,
-  2026-11-25): its Safari has no element full screen, so where the browser
-  has none the system menu offers Add to Home Screen, whose card has the
-  steps, until the page runs as the app (`navigator.standalone`,
-  `display-mode`). The manifest and Moy's icons are `tools/web_app.py`'s,
+  2026-11-25/26): its Safari has no element full screen, and where an
+  iPhone's or an iPad's browser has one it keeps its domain strip and Close
+  over the page's top, so there, and wherever the browser has none, the
+  system menu offers Add to Home Screen, whose card has the steps, beside
+  any Full screen, until the page runs as the app (`navigator.standalone`,
+  `display-mode`), which shows neither. That strip is why the page's own
+  controls keep out of the top corners (the burger and the keyboard summon
+  sit at the bottom of a landscape phone's margins) and why an iPhone's
+  element full screen takes a 50-pixel top inset (`html.iosfs`). The manifest and Moy's icons are `tools/web_app.py`'s,
   written beside the page by both builds and named in the webhost's ASSETS
   table, so a board serves them too; the page's head carries iOS's tags and
   `viewport-fit=cover`, and its layout keeps out of the safe-area insets
@@ -185,9 +190,12 @@ nor those docs will warn you about:
   exports to a list that only shrinks, every string it holds to a filed word
   (no file, folder or suffix) and its patterns to the channel's one (the
   audit: `docs/moycore_direction.md` §3).
-- **The substrate is OPFS, not IndexedDB**: the ops ARE file writes at paths, so a
-  cart folder stays a cart folder. No OPFS (private window, blocked site data,
-  `file://`) runs in memory and **the page says so**; a quota failure requeues, and
+- **The substrate is OPFS's shape**: the ops ARE file writes at paths, so a
+  cart folder stays a cart folder. OPFS is a secure context's, so a page on
+  plain http (a dev server on the LAN) keeps the same folders in IndexedDB
+  through OPFS's calls (`moy_store.idbNav`, `pageNav`); a page with neither
+  (blocked site data, `file://`) runs in memory and **the page says so**,
+  once, as a notice that times out; a quota failure requeues, and
   after three gives up ONCE and says that too. A returning browser's shelf is
   OPFS's, never the bundle's -- except the bundle's SYSTEM carts, which reach
   it as a board's built-ins reach its SD (#47), decided in the VM
@@ -222,8 +230,9 @@ nor those docs will warn you about:
   window unless this browser left it full screen; `&play=1` presses its Play,
   which on the desk runs the cart in the Editor's Game pane; `&only=desk`
   applies them only where the console lands on the desk, so in console mode
-  (a phone) the visit lands on the home (the site's Desktop tab passes all
-  four, its Handheld tab none: a plain visit in console mode is the home). The framed player posts
+  (a phone) the visit lands on the home (the site's one embedded console
+  passes all four and lays itself out from its frame, the desk's aspect on
+  a wide page and the handheld's 4:3 on a phone, with no tiers to pick). The framed player posts
   `{moyChrome}` and, at its first painted frame, `{moyLive}`.
   `tests/test_web_first_run_e2e.py` drives them. The hero's two stills (Night,
   Day) are CAPTURED by `site/build.py` from the player it ships, through
@@ -481,8 +490,14 @@ nor those docs will warn you about:
   deleted on 2026-10-27 (`docs/surface_model_v1.md` §16).
 - **The live socket is a Zero's page's, and the worker's to move** (#256,
   `native/moy_net/moy_live.h`): one sealed WebSocket to `GET /live` (seal
-  slot 1; the Terminal's is 0), multiplexed by its frames' first byte, served
-  on the board's own task. Its first channel relays the board's ESP-NOW, so
+  slot 1), multiplexed by its frames' first byte, served
+  on the board's own task. Its terminal channel ('t') is the page's
+  Terminal (`native/moy_tty/moy_tty_live.c`): a Zero serves no `GET /term`,
+  which the consoles' pages keep (seal slot 0). Its control channel's hints
+  (`moy_live.c`, THE HINTS) say when what the page reads over HTTP changed
+  (the store, `/wifi`, `/update`, `/official`), and while the socket is open
+  the worker asks those routes on a hint, never on its clocks; the bulk
+  (cart downloads, sync batches, the pack, sign-in) stays HTTP. Its first channel relays the board's ESP-NOW, so
   the page's link (`moy_link_web.c`, the kernel's Match over it) plays a
   console's match, a Python cart's as a Lua one's: the wasm computes floats
   as the boards' do (REPR_C over 32-bit words, single precision,
@@ -490,9 +505,15 @@ nor those docs will warn you about:
   (`docs/netplay_v1.md` §5). So a count, an address or a time the page and
   the VM exchange rides an integer, never a float, which keeps 22 bits:
   `web_boot._PCM` is 64-bit integers, and `time.time()` is whole seconds
-  as on a board. The worker moves its bytes between frames
-  (`liveStep`, `web_boot.live_*`), never inside a step, and reopens a dropped
-  socket itself; a console board builds no bridge and 404s the probe.
+  as on a board. Its device channel ('d') relays the board's device APIs
+  that have a relay list (`native/moy_kernel/moy_dev_kinds.h`, THE RELAY;
+  lora): the probe names them, and the page's handles of them are remote
+  rows of its handle table (`moy_dev_web.c`) that never wait on the socket,
+  served on the board under the page session's own process, which its end
+  sweeps. A Python program holds faces, not handles, so a relayed device is
+  absent to it (`app_perms._why_absent`). The worker moves its bytes between
+  frames (`liveStep`, `web_boot.live_*`), never inside a step, and reopens a
+  dropped socket itself; a console board builds no bridge and 404s the probe.
 - **WASM MODE IS A SWITCH, NOT A SESSION** (owner call): no heartbeat, no presence
   detection, no timeout. While WEB CONSOLE is ON the glass PARKS on a connection
   screen — which is how the two-writer collision is **designed out rather than
@@ -594,5 +615,9 @@ nor those docs will warn you about:
   plays a live station a minute on both sinks. The loop's own collect waits
   for a stream to end (`worker.js`, IDLE_QUIET_FRAMES): what a playing frame
   allocates the VM's threshold collects, and a pause the worker added would
-  come out of the sink's lead.
+  come out of the sink's lead. Two URL flags take it apart on a phone, where
+  there is no console to read: `?audio=0` makes no context (no sink, no
+  samples sent), and `?hud=1` shows the HUD from the load (the page's rate,
+  the worker's step report, the sink, http or https, and the page sink's
+  calls a second and cost).
 

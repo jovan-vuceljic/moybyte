@@ -43,6 +43,13 @@ SCAN_MS = 12000         # a scan that has not ended by then has failed
 REFUSED = (15, 202, 204)
 SSID_MAX = 32
 PASSWORD_MAX = 63
+# What a scan leaves in the heap: the strongest NETS_KEPT networks and every
+# saved one in range, held while a page's panel asks (wifi_link's HELD_MS, a
+# request every two seconds) and dropped NETS_HOLD_MS after its last ask. A
+# neighbourhood's whole list, kept for good after one look at the panel, is a
+# few KB of a heap that has twenty (zero_host, THE HEAP'S SHAPE).
+NETS_KEPT = 12
+NETS_HOLD_MS = 10000
 
 
 def _sig(rssi):
@@ -64,7 +71,9 @@ class ZeroWifi:
         self.join_ms = join_ms
         self.back_ms = back_ms
         self.leave_ms = leave_ms
-        self.nets = []          # [[ssid, signal %, locked]], the last scan's
+        self.nets = []          # [[ssid, signal %, locked]], the last scan's (NETS_KEPT)
+        self.signal = None      # the joined network's, as that scan heard it
+        self._asked = ticks_ms()    # the last /wifi request (NETS_HOLD_MS)
         self.scan_id = 0        # scans ended since boot
         self._scan_at = None    # when the running scan was asked, else None
         self._sw = None         # the switch under way: [id, ssid, password, prev, phase, at, why]
@@ -120,10 +129,8 @@ class ZeroWifi:
     def answer(self, ok=None, msg=None):
         """The `/wifi` document, as JSON text."""
         up, ssid, ip, _ = self._link()
-        signal = None
-        for n in self.nets:
-            if n[0] == ssid:
-                signal = n[1]
+        self._asked = ticks_ms()
+        signal = self.signal if up else None
         sw = self._sw
         doc = {"v": 1, "name": self.name, "host": self.name + ".local",
                "connected": up, "ssid": ssid, "ip": ip, "signal": signal,
@@ -144,6 +151,7 @@ class ZeroWifi:
         action = doc.get("action") or ""
         ssid = doc.get("ssid")
         password = doc.get("password")
+        self._asked = ticks_ms()
         if action == "scan":
             if self._scan_at is None:
                 self._scan_at = ticks_ms()
@@ -184,6 +192,8 @@ class ZeroWifi:
         return True, "switching"
 
     def busy(self):
+        if self.nets and ticks_diff(ticks_ms(), self._asked) >= NETS_HOLD_MS:
+            self.nets = []          # the panel closed: its list goes back
         return self._scan_at is not None or self._sw is not None
 
     # -- the poll's slice ---------------------------------------------------
@@ -215,8 +225,18 @@ class ZeroWifi:
                     continue
             if ssid and (ssid not in best or rssi > best[ssid][0]):
                 best[ssid] = (rssi, auth != 0)
-        self.nets = sorted(([s, _sig(r), lk] for s, (r, lk) in best.items()),
-                           key=lambda n: -n[1])
+        nets = sorted(([s, _sig(r), lk] for s, (r, lk) in best.items()),
+                      key=lambda n: -n[1])
+        on = self._link()[1]
+        self.signal = None
+        for n in nets:
+            if n[0] == on:
+                self.signal = n[1]
+        if len(nets) > NETS_KEPT:
+            saved = [n["ssid"] for n in self.saved()]
+            nets = nets[:NETS_KEPT] + [n for n in nets[NETS_KEPT:]
+                                       if n[0] in saved or n[0] == on]
+        self.nets = nets
         self.scan_id += 1
         self._scan_at = None
         return True

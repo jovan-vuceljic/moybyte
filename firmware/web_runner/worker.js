@@ -786,8 +786,10 @@ let writtenStore = null;
 // Get Carts' record, beside the carts folder as on every console
 // (cart_index.RECORD_NAME, from the VM by bindStore).
 let installRecord = null;
-// The storage every store opens through: the origin's, or the page's channel's
-// (moy_store.channelNav), set by init before anything is seeded.
+// The storage every store opens through: the origin's OPFS, or IndexedDB in
+// its shape where the context has no OPFS (plain http, moy_store.pageNav), or
+// the page's channel's within it (moy_store.channelNav), set by init before
+// anything is seeded.
 let opfsNav = navigator;
 // The roots initStore seeded, which web_boot builds its watchers over.
 let seededRoots = null;
@@ -973,9 +975,10 @@ async function initStore(fetched) {
     if (!site) {
         persist("board", "carts are kept on the console");
     } else if (!anySite) {
-        // No OPFS at all: a private window, blocked site data, file://. The
-        // pre-#193 behaviour, but never silently -- the page says it out loud.
-        persist("none", "this browser has no local storage: work will NOT survive a reload");
+        // No storage at all, OPFS's nor IndexedDB's (moy_store.pageNav):
+        // blocked site data, file://, a private window that refuses both.
+        // The work is lost with the tab, and the page says so, once.
+        persist("none", "This tab keeps nothing");
     } else {
         // "loaded" once any root read the kid's work back from OPFS (a revisit);
         // "seeded" on a first visit. The word is the persistence evidence the
@@ -1577,7 +1580,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     const gpioPins = await probeGpio();
     const updateDoc = await probeUpdate();
     const official = mode === "board" && await probeOfficial();
-    const liveLink = mode === "board" ? await probeLive() : null;
+    const live = mode === "board" ? await probeLive() : null;
     const wifiDoc = mode === "board" ? await probeWifi() : null;
     mp.runPython("import web_boot\n"
         // BEFORE boot(): the mode is what decides whether the carts watcher
@@ -1596,6 +1599,9 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         // A console that installs carts into its own store when this page
         // asks (it answers /official): BEFORE boot(), which hands Get Carts the asking.
         + (official ? "web_boot.official_enable()\n" : "")
+        // The device kinds the board relays on the live socket, BEFORE
+        // boot(): an install check and the shelves ask for them.
+        + (live && live.kinds ? "web_boot.live_kinds(" + JSON.stringify(live.kinds) + ")\n" : "")
         // The console this page's address asks for: its tier, size and cart
         // (web_boot.page_boot), on the page's pointer and colour scheme
         // (page_tail.js: ?scheme= or prefers-color-scheme).
@@ -1611,7 +1617,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         // The board's radio, a link on the live Workstation: after boot(),
         // which creates it, and before the address's cart starts, whose
         // launch grants "multiplayer" only where the console has a link.
-        + (liveLink ? "web_boot.live_enable(" + JSON.stringify(liveLink) + ")\n" : "")
+        + (live ? "web_boot.live_enable(" + JSON.stringify(live.mac) + ")\n" : "")
         // What the address starts it on (web_boot.page_start).
         + "web_boot.page_start()\n"
         + "from web_boot import assets_json, step_frame_json, apply_events_json, "
@@ -1624,7 +1630,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + "import_p8_json, import_archive_json, export_cart, drop_kind, "
         + "edit_cart, open_cart, state_json, pcm_addr, "
         + "term_enable, term_poll_json, term_feed, term_state, "
-        + "live_pump, live_feed, live_state");
+        + "live_pump, live_feed, live_state, live_hints, official_hint, store_pulled");
     step = mp.globals.get("step_frame_json");
     pcmAt = mp.globals.get("pcm_addr")();
     applyEvents = mp.globals.get("apply_events_json");
@@ -1654,7 +1660,12 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         termFeed = mp.globals.get("term_feed");
         termState = mp.globals.get("term_state");
     }
-    if (liveLink) {
+    if (live) {
+        liveTerm = live.term;
+        liveHints = live.hints;
+        officialHint = mp.globals.get("official_hint");
+        storePulled = mp.globals.get("store_pulled");
+        liveHintsSay = mp.globals.get("live_hints");
         livePump = mp.globals.get("live_pump");
         liveFeed = mp.globals.get("live_feed");
         liveState = mp.globals.get("live_state");
@@ -1737,14 +1748,21 @@ function shipFrame(s) {
 // not served by anything with pins" -- a static host (moybyte.com, an export),
 // a console board that spends its GPIOs on a panel, or a Zero this page is not
 // signed in to. All four are the same answer to a cart: no verbs.
-// The board's address on the air where it relays its radio on the live
-// socket (GET /live without the upgrade, native/moy_net/moy_live.h), else
-// null. A board without the socket 404s it.
+// What the board relays on the live socket (GET /live without the upgrade,
+// native/moy_net/moy_live.h): {mac, kinds, term, hints}, its address on the
+// air where it relays its radio ("" where not), the device kinds it relays
+// (moy_dev_relayed's text), whether its shell's face is there and whether it
+// says when its routes' answers change, or null where it carries none of
+// them. A board without the socket 404s it.
 async function probeLive() {
     try {
         const r = await sealed("GET", "/live");
         const d = r.status === 200 ? sealedJson(r) : null;
-        return d && d.live && d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : null;
+        if (!d || !d.live) return null;
+        const mac = d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : "";
+        const kinds = typeof d.kinds === "string" ? d.kinds : "";
+        const term = d.term === 1, hints = d.hints === 1;
+        return mac || kinds || term || hints ? { mac, kinds, term, hints } : null;
     } catch (e) {
         return null;
     }
@@ -1763,6 +1781,91 @@ async function probeWifi() {
     }
 }
 
+// THE HINTS (native/moy_net/moy_live.c): a board whose live socket says when
+// what its routes answer changed ('H' + a letter a topic) is asked then, not
+// on a clock, while that socket is open: the Wi-Fi panel's GET /wifi on 'w',
+// the update screen's GET /update on 'u', Get Carts' GET /official on 'o', the
+// store pulled again on 's' (an SSH session's edit, another page's sync),
+// once this page's own sync and Get Carts' request in hand are through (an
+// install this page asked for brings its own copy). A queued POST still goes
+// at its pump's pace; each GET a topic
+// waits HINT_MIN_MS after the last, and PUSH_BACKSTOP_MS without a hint, in
+// case one went with a dropped socket. The socket's own beat is the board's
+// liveness then, so the idle heartbeat asks nothing. A page with no live
+// socket (or a board without the hints) keeps its clocks.
+const HINT_MIN_MS = 250, PUSH_BACKSTOP_MS = 15000, STORE_QUIET_MS = 300;
+let liveHints = false, officialHint = null, storePulled = null, liveHintsSay = null;
+let wifiHint = false, updateHint = false, storeHintAt = 0, storeBusy = false;
+let pushedWas = false;
+const HINTS = { w: 0, u: 0, o: 0, s: 0, pulls: 0 };
+function pushed() {
+    return liveHints && liveWs !== null && liveWs.readyState === 1;
+}
+function liveHinted(u8) {
+    for (const c of u8) {
+        const k = String.fromCharCode(c);
+        if (k in HINTS) HINTS[k]++;
+        if (k === "w") wifiHint = true;
+        else if (k === "u") updateHint = true;
+        else if (k === "o" && officialHint) { try { officialHint(); } catch (e) { } }
+        else if (k === "s") storeHintAt = performance.now();
+    }
+}
+// What a pump that asks on a hint does this turn: "post" (its poll may hold
+// a queued body), "get" too, or nothing.
+function hintDue(now, last, hinted, gap) {
+    if (!pushed()) return now - last >= gap ? "get" : null;
+    if (now - last < HINT_MIN_MS) return null;
+    return hinted || now - last >= PUSH_BACKSTOP_MS ? "get" : "post";
+}
+function pushPump() {
+    const on = pushed();
+    if (on !== pushedWas) {
+        pushedWas = on;
+        if (liveHintsSay) { try { liveHintsSay(on); } catch (e) { } }
+    }
+    const now = performance.now();
+    if (!storeHintAt || storeBusy || !storePulled || now - storeHintAt < STORE_QUIET_MS) return;
+    if (outstanding) return;                 // this page's own change goes first
+    if (cartsLive.size) return;              // ...and Get Carts' request in hand, which brings its own
+    storeHintAt = 0;
+    storeBusy = true;
+    storePull().finally(() => { storeBusy = false; });
+}
+// The served store over this page's copy (the reload's pull, no cart
+// restarted): every root the VM reads from the store, the carts first, a cart
+// folder the board no longer has taken off.
+async function storePull() {
+    const roots = JSON.parse(mp.pyimport("moy_sync").reload_json())
+        .map((id) => store.rootById(id));
+    let got;
+    try {
+        got = await Promise.all(roots.map((r, i) => {
+            const pull = sealed("GET", "/" + r.endpoint);
+            return i ? pull.catch(() => ({ status: 0 })) : pull;
+        }));
+    } catch (e) {
+        return;
+    }
+    const docs = got.map((r) => r.status === 200 ? sealedJson(r) : null);
+    if (!docs[0]) return;
+    roots.forEach((r, i) => {
+        if (!docs[i]) return;
+        if (i === 0) {
+            let names = [];
+            try { names = mp.FS.readdir(r.vfs); } catch (e) { }
+            for (const n of names) {
+                if (n === "." || n === ".." || n.startsWith(".")) continue;
+                const pre = n + "/";
+                if (!Object.keys(docs[0]).some((rel) => rel.startsWith(pre))) rmTree(r.vfs + "/" + n);
+            }
+        }
+        writeStore(r.vfs, docs[i]);
+    });
+    HINTS.pulls++;
+    try { storePulled(); } catch (e) { }
+}
+
 function wifiPump() {
     if (!wifiPoll) return;
     const now = performance.now();
@@ -1777,16 +1880,23 @@ function wifiPump() {
                  + " to carry on.", url);
         return;
     }
-    if (wifiBusy || now - lastWifiAt < WIFI_MS) return;
-    lastWifiAt = now;
+    if (wifiBusy) return;
+    const due = hintDue(now, lastWifiAt, wifiHint, WIFI_MS);
+    if (!due) return;
     let body = "";
     try { body = wifiPoll(); } catch (e) { return; }
     if (!body) {
+        if (due !== "get") return;
         let wants = false;
         try { wants = wifiWants(); } catch (e) { return; }
+        wifiHint = false;
+        lastWifiAt = now;
         if (!wants) return;
     }
+    wifiHint = false;
+    lastWifiAt = now;
     wifiBusy = true;
+    if (body) wifiHint = true;      // what a POST asked may change the answer at once
     const req = body ? sealed("POST", "/wifi", body) : sealed("GET", "/wifi");
     req.then((r) => {
             const ok = r.status >= 200 && r.status < 300 ? 1 : 0;
@@ -1855,18 +1965,25 @@ async function probeOfficial() {
 function updatePump() {
     if (updateBusy || !updatePoll) return;
     const now = performance.now();
-    if (now - lastUpdateAt < UPDATE_MS) return;
-    lastUpdateAt = now;
+    const due = hintDue(now, lastUpdateAt, updateHint, UPDATE_MS);
+    if (!due) return;
     let body = "";
     try { body = updatePoll(); } catch (e) { return; }
     if (!body) {
         // Nothing queued. GET the status only while a screen is waiting on
-        // something; otherwise say nothing at all.
+        // something (and, on a pushing board, it said something changed);
+        // otherwise say nothing at all.
+        if (due !== "get") return;
         let wants = false;
         try { wants = updateWants(); } catch (e) { return; }
+        updateHint = false;
+        lastUpdateAt = now;
         if (!wants) return;
     }
+    updateHint = false;
+    lastUpdateAt = now;
     updateBusy = true;
+    if (body) updateHint = true;    // what a POST asked may change the answer at once
     const req = body ? sealed("POST", "/update", body) : sealed("GET", "/update");
     req.then((r) => {
             // A wait is the board answering: the screen says it and the link
@@ -2074,11 +2191,82 @@ async function termOpen(cols, rows, tries = 0) {
         });
     };
 }
+// ...and where the board's live socket carries its shell (the probe's
+// "term", native/moy_tty/moy_tty_live.c), the Terminal's face is that
+// socket's 't' channel and no /term is asked: 'O' with the grid's size opens
+// it, 'k' keys and 's' sizes go up, 'C' closes it; the board answers 'A' (open),
+// 'B' (another transport's face, or no memory), 'D' the face's bytes and 'X'
+// its exit status. The socket's end ends the face: LOST, TAKEN by another
+// session's page, REFUSED when its session ended. A face asked for before the
+// socket is open is opened when it is.
+let liveTerm = false;
+let termLive = null;             // {cols, rows, opened, tries} while the Terminal holds the face
+function u16s(a, b) { return new Uint8Array([a & 255, a >> 8, b & 255, b >> 8]); }
+function termLiveSay(kind, u8) {
+    const ws = liveWs;
+    if (!ws || ws.readyState !== 1) return false;
+    const b = new Uint8Array(2 + u8.length);
+    b[0] = 0x74;
+    b[1] = kind.charCodeAt(0);
+    b.set(u8, 2);
+    liveSend(ws, b);
+    LIVE.up++;
+    return true;
+}
+function termLiveOpen(cols, rows, tries = 0) {
+    termLive = { cols: cols, rows: rows, opened: false, tries: tries };
+    termLiveSay("O", u16s(cols, rows));     // or at the socket's open
+}
+function termLiveClose() {
+    if (termLive) termLiveSay("C", new Uint8Array(0));
+    termLive = null;
+}
+function termLiveLost(st) {
+    if (!termLive || !termLive.opened) return;
+    termLive = null;
+    termQ.push({ s: st, n: 0 });
+}
+function termLiveIn(u8) {
+    const t = termLive;
+    if (!t) return;
+    const k = u8[1];
+    if (k === 0x44) termQ.push({ d: termB64(u8.subarray(2)) });                        // D
+    else if (k === 0x41) {                                                             // A
+        t.opened = true;
+        if (termSize) {
+            termLiveSay("s", u16s(termSize[0], termSize[1]));
+            termSize = null;
+        }
+        termQ.push({ s: TERM.OPEN, n: 0 });
+    } else if (k === 0x58 && u8.length >= 6) {                                         // X
+        termLive = null;
+        termQ.push({ s: TERM.ENDED, n: new DataView(u8.buffer, u8.byteOffset + 2, 4).getInt32(0, true) });
+    } else if (k === 0x42) {                                                           // B
+        if (u8[2] === 0 && t.tries + 1 < TERM_BUSY_TRIES) {
+            setTimeout(() => { if (termLive === t) termLiveOpen(t.cols, t.rows, t.tries + 1); },
+                       TERM_BUSY_MS);
+        } else {
+            termLive = null;
+            termQ.push({ s: TERM.BUSY, n: 0 });
+        }
+    }
+}
+
 function termPump() {
     if (!termPoll) return;
     let j = "";
     try { j = termPoll(); } catch (e) { return; }
-    if (j) {
+    if (j && liveTerm) {
+        const d = JSON.parse(j);
+        if (d.want === 2) termLiveClose();
+        if (d.want === 1) termLiveOpen(d.cols, d.rows);
+        if (d.size) termSize = d.size;
+        if (termLive && termLive.opened) {
+            if (termSize) termLiveSay("s", u16s(termSize[0], termSize[1]));
+            termSize = null;
+            if (d.out) termLiveSay("k", new Uint8Array(d.out));
+        }
+    } else if (j) {
         const d = JSON.parse(j);
         if (d.want === 2) termClose();
         if (d.want === 1) termOpen(d.cols, d.rows);
@@ -2096,12 +2284,14 @@ function termPump() {
 }
 
 // THE LIVE SOCKET (#256; native/moy_net/moy_live.h is the wire) on a page
-// whose board relays its radio: one WebSocket to GET /live, sealed as the
-// terminal's is (seal slot 1), its frames' first byte their channel. The
-// worker opens it at boot, keeps it beating, reopens a dropped one after
-// LIVE_RETRY_MS, and moves the link channel ('n') between the socket and
-// the VM between frames (web_boot's live_*), never inside one: the console
-// runs a console's match over it (native/moy_net/moy_link_web.c). Every
+// whose board relays its radio or a device: one WebSocket to GET /live,
+// sealed as the terminal's is (seal slot 1), its frames' first byte their
+// channel. The worker opens it at boot, keeps it beating, reopens a dropped
+// one after LIVE_RETRY_MS, and moves the link channel ('n') and the device
+// channel ('d') between the socket and the VM between frames (web_boot's
+// live_*), never inside one: the console runs a console's match over it
+// (native/moy_net/moy_link_web.c) and its relayed devices' handles
+// (moy_dev_web.c). Every
 // beat is an echo ('c' 'e', answered 'E'), the page's round trip to its
 // board, which a harness reads in `__moyState().live`.
 const LIVE_BEAT_MS = 1000, LIVE_LOST_MS = 3000;
@@ -2131,6 +2321,7 @@ function liveDrop(ws, why) {
     try { ws.close(1000); } catch (e) { }
     LIVE.drops++;
     liveQ.push({ s: 0, why: why });
+    termLiveLost(TERM.LOST);
     liveLater();
 }
 async function liveOpen() {
@@ -2166,6 +2357,7 @@ async function liveOpen() {
         LIVE.opens++;
         liveHeard = liveSaid = performance.now();
         liveQ.push({ s: 1 });
+        if (termLive) termLiveSay("O", u16s(termLive.cols, termLive.rows));
     };
     ws.onmessage = (m) => {
         if (liveWs !== ws || typeof m.data === "string") return;
@@ -2177,7 +2369,9 @@ async function liveOpen() {
         }
         liveHeard = performance.now();
         LIVE.down++;
-        if (u8[0] === 0x6e) liveQ.push({ d: u8 });
+        if (u8[0] === 0x6e || u8[0] === 0x64) liveQ.push({ d: u8 });
+        else if (u8[0] === 0x74) termLiveIn(u8);
+        else if (u8[0] === 0x63 && u8[1] === 0x48) liveHinted(u8.subarray(2));
         else if (u8[0] === 0x63 && u8[1] === 0x45 && u8.length === 10) {
             const t = new Float64Array(u8.slice(2).buffer)[0];
             LIVE.rtt.push(performance.now() - t);
@@ -2190,6 +2384,8 @@ async function liveOpen() {
         LIVE.drops++;
         if (!opened) liveAsk = true;
         liveQ.push({ s: 0, why: c.code + (c.reason ? " " + c.reason : "") });
+        termLiveLost(c.code === 4001 ? TERM.TAKEN : c.code === 1008 && c.reason === "revoked"
+                     ? TERM.REFUSED : TERM.LOST);
         if (c.code === 4001) takenAway();
         else liveLater();
     };
@@ -2734,7 +2930,7 @@ function syncPump() {
                          + "Scan the code on its WEB CONSOLE screen to pair again.");
                 return;
             }
-            if (ok) { syncOk(now); outstanding = false; }
+            if (ok) { syncOk(now); outstanding = false; storeFullSaid(r.text); }
             else if (r.status === 503) { closingSaid(r.text); }
             else syncFailed(now);
             try { syncAck(ok ? 1 : 0); } catch (e) { }
@@ -2745,6 +2941,21 @@ function syncPump() {
             try { syncAck(0); } catch (e) { }
         })
         .finally(() => { syncBusy = false; });
+}
+
+// THE CONSOLE'S STORE IS FULL. A batch its store has no room for is answered
+// 200 with each write refused "OSError: [Errno 28]" (moy_sync_apply.c), and
+// the batch is acked like any other refusal, so nothing replays: the person
+// is told, once per batch, that what they made is in this tab alone.
+function storeFullSaid(text) {
+    let err;
+    try { err = (JSON.parse(text || "{}").err) || []; } catch (e) { return; }
+    const full = err.filter((e) => /\[Errno 28\]/.test(String(e && e[1]))).length;
+    if (!full) return;
+    console.log("[moy] sync: the console's storage is full, " + full + " write(s) refused");
+    self.postMessage({ t: "imported", ok: false,
+        s: "The console's storage is full: " + full + (full === 1 ? " file was" : " files were")
+           + " not saved on it. Remove a cart there and save again." });
 }
 
 // WHAT AN IDLE PAGE ASKS. With nothing to push there is no POST, and with no
@@ -2760,6 +2971,10 @@ function heartbeat(now) {
     if (!lastSyncOkAt) lastSyncOkAt = now;      // start the clock at first idle
     if (now - lastHeartbeatAt < HEARTBEAT_MS) return;
     lastHeartbeatAt = now;
+    if (pushed()) {                              // the socket's beat says it answers
+        syncOk(now);
+        return;
+    }
     syncBusy = true;
     fetch("sync", { method: "GET" })
         .then((r) => {
@@ -2907,6 +3122,7 @@ function loop() {
         liveStep(gap);
         updatePump();
         wifiPump();
+        pushPump();
         cartsPump();
     } catch (e) {
         self.postMessage(crashMessage(e));
@@ -2953,7 +3169,7 @@ self.onmessage = async (ev) => {
             if (liveHidden) liveWasHidden = 1;
         } else if (m.t === "state") {
             self.postMessage({ t: "state", json: stateJson ? stateJson() : "null", sink: sinkStats,
-                               loop: LOOP, live: liveOn ? LIVE : null });
+                               loop: LOOP, live: liveOn ? LIVE : null, hints: liveHints ? HINTS : null });
         } else if (m.t === "run") {
             // lastStep too: a (re)start must begin with a clean 1/60 dt, not a
             // clamped jump measured from whenever the loop last ran.
@@ -3022,6 +3238,10 @@ self.onmessage = async (ev) => {
         } else if (m.t === "import") {
             try {
                 const kind = dropped(m.name, m.buf);
+                // A conversion holds this thread for seconds (a phone's,
+                // a minute): the frames that paint the page's "Importing"
+                // notice go first, so the console never looks hung.
+                if (kind === "p8") await new Promise(r => setTimeout(r, 150));
                 if (kind === "song") {
                     const s = await importSong(m.name, m.buf);
                     self.postMessage({ t: "imported", ok: true, s: s });

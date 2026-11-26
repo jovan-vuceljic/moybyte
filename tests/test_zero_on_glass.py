@@ -29,10 +29,12 @@ pages, which headless Chrome boots (firmware/web_runner/browsershot.mjs).
 
   GET CARTS. The page's Get Carts, driven by its keys, has the board
   install an official cart it lacks, remove the flash's Calc and get it
-  back, and Get moybyte-org/carts' Moy Mesh, which a Zero refuses (it has
-  no LoRa radio); each ends as the board's lines say (an out-of-memory
-  names its frames), with PAGE_FREE free while the page is open, and its
-  internal heap after each is the idle one's within HEAP_SPREAD.
+  back, and Get moybyte-org/carts' Moy Mesh, which needs a LoRa radio: a
+  board whose board.toml has a `lora` row installs it, one without refuses
+  it with nothing written; each ends as the board's lines say (an
+  out-of-memory names its frames), with PAGE_FREE free while the page is
+  open, and its internal heap after each is the idle one's within
+  HEAP_SPREAD.
 
   A MATCH, where a T-Deck is on MOYBYTE_TDECK_PORT (the pass gives the
   T-Deck's port when it is in the same pass, after the T-Deck's own row): the
@@ -100,6 +102,7 @@ import urllib.request
 import pytest
 
 import on_glass
+import web_e2e
 import zero_glass as Z
 from on_glass import ROOT
 
@@ -175,6 +178,26 @@ class Zero:
             yield r
         finally:
             self.restart(then)
+
+    def look(self):
+        """A serving board's heaps between two requests, read at the REPL
+        with the host's loop stopped and then taken up again where it stood
+        (zero_host.pump), nothing reset: {"py": (free, largest free run),
+        "idf": (free, largest block, low-water), "modules": sys.modules}.
+        The low-water is each heap region's own, summed."""
+        r = Z.Repl(self.b.ser)
+        r.enter(clean=False)
+        said = r.run(LOOK)
+        self.b.ser.write(b"import zero_host\nzero_host.pump()\x04")
+        self.b.ser.flush()
+        r._until(lambda b: b.endswith(b"OK"), 10, "sign of the loop taken up again")
+        gc_line = re.search(r"GC: total: (\d+), used: (\d+), free: (\d+)", said)
+        run = re.search(r"max free sz: (\d+)", said)
+        regions = ast.literal_eval(re.search(r"^IDF (.*)$", said, re.M).group(1))
+        free, big = Z.internal_heap(regions)
+        return {"py": (int(gc_line.group(3)), int(run.group(1)) * 16),
+                "idf": (free, big, sum(r[3] for r in regions if r)),
+                "modules": ast.literal_eval(re.search(r"^MODS (.*)$", said, re.M).group(1))}
 
     def restart(self, then=None):
         """A reset through esptool, as `tools/board.py ZERO reboot` makes it,
@@ -557,7 +580,7 @@ def test_the_console_signs_in_and_syncs_a_cart(zero, mirror, tmp_path):
         {"js": "location.reload(), 1"},
         {"waitFor": "document.getElementById('s').textContent == 'live'", "timeout": 120000},
         {"js": "pzAsk(), 1"}, {"wait": 1000},
-        {"js": "Array.from(pzC.options).map(function (o) { return o.value; }).join(',')"},
+        {"js": "(window.__moyCarts || []).join(',')"},
     ]
     out = _browse(zero, zero.url, steps, tmp_path / "sync")
     assert "local.new_cart.moy" in out.rsplit("js ->", 1)[-1], out[-2000:]
@@ -761,10 +784,66 @@ def test_the_live_socket_answers_without_power_save(zero, mirror, tmp_path):
     assert heap is not None, "the board's RAM was not read with the socket open"
 
 
+TERM = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify("
+        "{term: s.term, live: s.live && {opens: s.live.opens, drops: s.live.drops}}); })")
+
+
+def test_the_page_s_terminal_runs_the_board_s_shell(zero, mirror, tmp_path):
+    """The page's Terminal runs the board's shell (on a Zero, over its live
+    socket's terminal channel: native/moy_tty/moy_tty_live.c), and the
+    board's internal RAM is read while the page holds it open."""
+    _needs_password(zero)
+    shell = "ln => /\\$\\s*$/.test(ln)"
+    steps = sign_in(zero) + [
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.term && "
+                    "s.term.some(%s)); })" % shell, "timeout": 60000},
+    ] + [{"key": c} for c in "echo zero-$((6*7))"] + [
+        {"key": "Enter"},
+        {"waitFor": "window.__moyState().then(function (s) { return s.term.some("
+                    "function (ln) { return ln.indexOf('zero-42') >= 0; }); })",
+         "timeout": 30000},
+        {"js": TERM % "TERM"},
+        {"wait": 25000},
+    ]
+    path = _scenario(tmp_path / "term", steps, "?dev=1&desktop=1&cart=Terminal")
+    proc = subprocess.Popen(["node", "browsershot.mjs", str(path), str(tmp_path / "term")],
+                            cwd=str(RUNNER), env=dict(os.environ, MOY_BASE=zero.url),
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    lines, heap = [], None
+    try:
+        for line in proc.stdout:
+            lines.append(line)
+            if heap is None and 'js -> "TERM ' in line:
+                with zero.repl(clean=False) as r:
+                    r.run("import gc\ngc.collect()")
+                    info = r.eval("__import__('esp32').idf_heap_info(%d)" % Z.INTERNAL_HEAP)
+                    heap = Z.internal_heap(info) + (sum(x[3] for x in info if x),)
+        proc.wait(timeout=120)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        path.unlink()
+    out = _scrub("".join(lines), zero)
+    got = _tagged(out, "TERM")
+    assert got and any("zero-42" in ln for ln in got["term"]), out[-3000:]
+    assert heap is not None, "the board's RAM was not read with the Terminal open"
+    zero.take("zero internal free terminal", heap[0] / 1024.0)
+    zero.take("zero internal largest terminal", heap[1] / 1024.0)
+    zero.take("zero internal low-water terminal", heap[2] / 1024.0)
+    print("%s with the page and its Terminal open: internal %d free, %d largest, "
+          "%d low-water; live socket %s" % (zero.name, heap[0], heap[1], heap[2], got["live"]))
+
+
 # -- the board's Wi-Fi from its page -------------------------------------------------------
 
 
+# What `look` runs at the REPL: a collect, the Python heap's own account, the
+# C side's heap by region, the modules imported.
+LOOK = ("import gc, sys, micropython, esp32\ngc.collect()\nmicropython.mem_info()\n"
+        "print('IDF', esp32.idf_heap_info(%d))\nprint('MODS', sorted(sys.modules))"
+        % Z.INTERNAL_HEAP)
 WRONG_PASSWORD = "not-the-bench-password"
+BENCH_WIFI_PASSWORD = "bench-only-never-joined"    # saved beside a network no test joins
 
 
 def _wifi_browse(z, base, steps, out, secrets):
@@ -802,13 +881,32 @@ def _where(url):
     return "http://%s%s" % (ip, ":%d" % u.port if u.port else "")
 
 
+def _forget_only(ssid):
+    """Steps that forget network `ssid` from the panel by keys, or press
+    nothing. The panel's Forget names the row its cursor last stood on, and a
+    walk down to it ends on the last row heard, so Enter is sent only while
+    the focus is Forget and that row is `ssid`: another saved network there,
+    the board's own, would be the one forgotten. The js step's value is
+    "FORGET sent", or "FORGET withheld" and what the panel showed."""
+    from test_web_zero_wifi_e2e import _focus
+    press = ("(function () { return window.__moyState().then(function (s) { "
+             "var p = s.wifi_panel || {}, n = p.nets || []; "
+             "if (p.focus != 'forget' || n[n.length - 1] != %s) "
+             "return 'FORGET withheld ' + JSON.stringify([p.focus, n.length]); "
+             "send({type: 'kd', code: 13, mods: 0}); "
+             "setTimeout(function () { send({type: 'ku', code: 13, mods: 0}); }, 120); "
+             "return 'FORGET sent'; }); })()" % json.dumps(ssid))
+    return _focus(ssid=ssid) + _focus("forget") + [{"wait": 400}, {"js": press}, {"wait": 400}]
+
+
 def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
-    """From the console's own Wi-Fi panel on the board's page: a saved network
-    forgotten and saved again (nothing dropped); with a second saved network
-    in range, a move to it with a wrong password (the board comes back and the
-    page says so), a move to it that works, and a move back. The passwords are
-    the board's own saved ones, read over the cable and never printed."""
-    from test_web_zero_wifi_e2e import ENTER, _forget, _keys, _move, _panel, _say
+    """From the console's own Wi-Fi panel on the board's page: a network
+    forgotten and saved (nothing dropped), never the one the board is on;
+    with a second saved network in range, a move to it with a wrong password
+    (the board comes back and the page says so), a move to it that works, and
+    a move back. The passwords are the board's own saved ones, read over the
+    cable and never printed."""
+    from test_web_zero_wifi_e2e import ENTER, _keys, _move, _panel, _say
     _needs_password(zero)
     doc = json.loads((zero.before_files.get(STORE + "/wifi.json") or b"{}").decode())
     saved = {n["ssid"]: n.get("password") or "" for n in doc.get("networks", []) if n.get("ssid")}
@@ -819,35 +917,51 @@ def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
     on = look["w"][1]
     assert look["w"][0] and on in saved, "the page's station says %s" % (look["w"],)
     others = [s for s in saved if s != on and s in look["p"]["nets"]]
-    x = others[0] if others else on
-    steps = (_forget(x) + [_panel("p.known.indexOf(%s) < 0" % json.dumps(x)), {"wait": 1500},
-                           _say("FORGOT")])
+    gone, known = ("p.known.indexOf(%s) " + c + " && !p.card" for c in ("< 0", ">= 0"))
     if others:
-        steps += (_move(x, WRONG_PASSWORD, 2)
-                  + [_panel("p.card && p.card[0] == 'tell'", 90000), _say("FAILED")]
-                  + _keys(ENTER) + [_panel("!p.card", 5000)]
-                  + _move(x, saved[x], 1))
+        x = others[0]
+        steps = (_forget_only(x)
+                 + [_panel(gone % json.dumps(x)), {"wait": 1500}, _say("FORGOT")]
+                 + _move(x, WRONG_PASSWORD, 2)
+                 + [_panel("p.card && p.card[0] == 'tell'", 90000), _say("FAILED")]
+                 + _keys(ENTER) + [_panel("!p.card", 5000)]
+                 + _move(x, saved[x], 1)
+                 + [_panel(known % json.dumps(x)), {"wait": 1500}, _say("SAVED")]
+                 + _move(x, None, 1, card="switch")
+                 + [{"waitFor": "window.__moyState().then(s => (window.__moyLinkCard && "
+                                "window.__moyLinkCard.go) || (s.wifi_panel && "
+                                "!s.wifi_panel.joining && s.wifi && s.wifi[1] == %s))"
+                                % json.dumps(x), "timeout": 90000},
+                    {"wait": 1000}, _say("MOVED")])
     else:
-        from test_web_zero_wifi_e2e import _focus, _typed
-        steps += (_focus(ssid=x) + _keys(ENTER) + [_panel("p.pick", 5000)]
-                  + _typed(saved[x]) + _keys(ENTER))
-    steps += [_panel("p.known.indexOf(%s) >= 0 && !p.card" % json.dumps(x)), {"wait": 1500},
-              _say("SAVED")]
-    if others:
-        steps += (_move(x, None, 1, card="switch")
-                  + [{"waitFor": "window.__moyState().then(s => (window.__moyLinkCard && "
-                                 "window.__moyLinkCard.go) || (s.wifi_panel && "
-                                 "!s.wifi_panel.joining && s.wifi && s.wifi[1] == %s))"
-                                 % json.dumps(x), "timeout": 90000},
-                     {"wait": 1000}, _say("MOVED")])
+        # The one saved network in range is the one the board is on, and a
+        # board is never asked to forget that: the last network heard (the
+        # row the keys reach Forget from, _forget_only) is saved under a
+        # bench password, without a join, and that one forgotten.
+        x = look["p"]["nets"][-1]
+        if x in saved:
+            pytest.skip("%s hears its own network last: no other row the keys can forget"
+                        % zero.name)
+        secrets.append(BENCH_WIFI_PASSWORD)
+        steps = (_move(x, BENCH_WIFI_PASSWORD, 1)
+                 + [_panel(known % json.dumps(x)), {"wait": 1500}, _say("SAVED")]
+                 + _forget_only(x)
+                 + [_panel(gone % json.dumps(x)), {"wait": 1500}, _say("FORGOT")])
     out = _wifi_browse(zero, zero.url, steps, tmp_path / "manage", secrets)
     forgot, saved_again = _tagged(out, "FORGOT"), _tagged(out, "SAVED")
-    assert x not in forgot["p"]["known"], forgot
+    if "FORGET withheld" in out:
+        if not others:
+            assert x in saved_again["p"]["known"], saved_again["p"]["known"]
+        assert forgot["w"][:2] == [True, on], forgot["w"]
+        pytest.skip("%s: the scan moved under the panel and Forget no longer named the "
+                    "network to forget: nothing pressed" % zero.name)
+    assert x not in forgot["p"]["known"], forgot["p"]["known"]
     assert forgot["w"][:2] == [True, on], "forgetting dropped the network: %s" % (forgot["w"],)
-    assert x in saved_again["p"]["known"], saved_again
+    assert x in saved_again["p"]["known"], saved_again["p"]["known"]
     assert saved_again["w"][:2] == [True, on], saved_again["w"]
     if not others:
-        print("%s: one saved network in range (%s): no move to make" % (zero.name, on))
+        print("%s: one saved network in range: another saved and forgotten, no move to make"
+              % zero.name)
         return
     failed = _tagged(out, "FAILED")
     assert failed["p"]["card"] == ["tell", "Still on %s" % on], failed
@@ -889,11 +1003,11 @@ def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
 
 
 # The bench folder of the SSH tests, in the folder a session starts in (the
-# store's files), and the pipe's stream at most: 4 KB on a board without
-# PSRAM, 1 MB with (native/moy_sh/moy_sh_sys.c, PIPE_MAX).
+# store's files), and what a pipe holds in memory before its stream goes on
+# in a file of the store: 4 KB on a board without PSRAM, 1 MB with
+# (native/moy_sh/moy_sh_sys.c, MOY_SH_PIPE_MEM and SPILL).
 BENCH = "zbench"
-PIPE_CAP = {"c3_zero": 4 * 1024, "xiao_zero": 1024 * 1024}
-PIPE_SAID = re.compile(rb"pipe: (stream over|out of memory at) \d+ KB; write it to a file")
+PIPE_MEM = {"c3_zero": 4 * 1024, "xiao_zero": 1024 * 1024}
 
 
 def _host(z):
@@ -1026,34 +1140,34 @@ def test_edit_and_vi_save_what_was_typed_over_ssh(zero, ssh):
     assert not failed, "\n".join(failed)
 
 
-def test_a_pipe_carries_a_file_and_says_where_it_stops(zero, ssh):
-    """`cat ... | wc -c` counts a stream under the pipe's cap whole; past the
-    cap the pipe says so (the message that tells the user to write it to a
-    file) and the session goes on. The stream is one file `cat` names as
-    often as it takes, so a 1 MB cap needs no 1 MB file in the store."""
-    cap = PIPE_CAP[zero.name]
-    part = _text_file(min(cap - 1024, 32 * 1024))
-    under = max(1, (cap - 1024) // len(part))
-    over = cap // len(part) + 1
+def test_a_pipe_carries_a_stream_past_its_memory_whole(zero, ssh):
+    """`cat ... | wc -c` counts a stream whole under the pipe's memory and
+    past it, where the stream goes on in a file of the store that goes at
+    the pipe's last close, in a command and in a terminal session alike. The
+    stream is one file `cat` names as often as it takes, so a 1 MB pipe needs
+    no 1 MB file in the store."""
+    mem = PIPE_MEM[zero.name]
+    part = _text_file(min(mem - 1024, 32 * 1024))
+    under = max(1, (mem - 1024) // len(part))
+    over = mem // len(part) + 1
     cat = lambda n: "cat" + (" %s/part.txt" % BENCH) * n  # noqa: E731
     with _bench(ssh):
         assert ssh.run("cat > %s/part.txt" % BENCH, stdin=part)[0] == 0
-        rc, out, err = ssh.run("%s | wc -c" % cat(under))
-        assert (rc, out.strip(), err) == (0, str(len(part) * under).encode(), b""), \
-            (rc, out, err)
-        rc, out, err = ssh.run("%s | wc -c" % cat(over))
-        print("%s: %d bytes through a pipe capped at %d: %r %r"
-              % (zero.name, len(part) * over, cap, out, err))
-        assert PIPE_SAID.search(out + err), "a stream past the cap: %r %r" % (out, err)
-        assert int(out.strip().rsplit(b"\n", 1)[-1] or 0) <= cap, out
+        for n in (under, over):
+            rc, out, err = ssh.run("%s | wc -c" % cat(n))
+            assert (rc, out.strip(), err) == (0, str(len(part) * n).encode(), b""), \
+                (n, rc, out, err)
+        print("%s: %d bytes through a pipe holding %d in memory" % (zero.name, len(part) * over, mem))
         t, free0 = _session(ssh, zero)
         try:
             said = t.command("%s | wc -c" % cat(over))
-            assert said is not None and PIPE_SAID.search(said), said
+            assert said is not None and said.strip() == str(len(part) * over).encode(), said
             free1 = _free_live(t)
             _still_up(zero, t)
         finally:
             t.close()
+        _rc, left, _e = ssh.run("ls -a /; ls -a /etc")
+        assert b"pipes" not in left, "a spill was left: %r" % left
     print("%s: internal RAM free in the session %s -> %s" % (zero.name, free0, free1))
     _heap(zero, "after the pipes")
 
@@ -1257,7 +1371,7 @@ def _open_steps(folder, title):
 
 
 SHELF = {"js": "(pzAsk(), new Promise(function (ok) { setTimeout(function () { ok('SHELF ' + "
-               "JSON.stringify(Array.from(pzC.options).map(function (o) { return o.value; }))); "
+               "JSON.stringify(window.__moyCarts || [])); "
                "}, 1500); }))"}
 STATE = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify({cart: s.cart, "
          "stack: s.stack, screen: s.screen, error: s.cart_error, notice: s.notice, "
@@ -1386,7 +1500,10 @@ def test_a_game_s_pmem_saves_are_back_after_a_reboot(zero, mirror, ssh, tmp_path
 
 FILL = STORE + "/zbench_fill.bin"
 FILL_SLACK = 4               # blocks left free: a pairing's keys and a batch's staging
-FULL_WORDS = re.compile(r"full|no room|no space|out of space|storage|not enough", re.I)
+# What the page says of a store with no room. Never a bare "full": the bench
+# cart's own folder has the word, and the page names that folder when it
+# imports it.
+FULL_WORDS = re.compile(r"storage is full|no room|no space|out of space|not enough", re.I)
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
@@ -1452,13 +1569,10 @@ def test_a_full_store_refuses_a_cart_says_so_and_corrupts_nothing(zero, mirror, 
 
 
 # The console's way to its update screen on a page this board serves: the
-# menu (the bar's logo), Settings (counted up from its last row, Restart,
-# past About: the rows above it change with the card selected and the radio
-# link, and the menu clamps at its ends), then Updates' "Update online" (ten
-# rows down: General's six, Play's two, Updates' Channel).
-TO_UPDATE = [{"click": [14, 13]}, {"wait": 800}] + [{"key": "ArrowDown"}] * 20 + \
-    [{"key": "ArrowUp"}] * 2 + [{"wait": 300}, {"key": "Enter"}, {"wait": 1500}] + \
-    [{"key": "ArrowDown"}] * 10 + [{"wait": 300}, {"key": "Enter"}]
+# system menu's Settings, then the row Updates' "Update online", each walked
+# to by what the console says is highlighted (the rows above either change
+# with the board, its carts and its radio).
+TO_UPDATE = web_e2e.menu_pick("Settings") + web_e2e.settings_row("update_online")
 OTA_VERDICT = re.compile(r"ZERO ota: (up to date|.* available|no build published|check failed)")
 OTA_INSTALLS = re.compile(r"ZERO ota: (downloading|writing|installed|rebooting|image already)")
 
@@ -1808,6 +1922,9 @@ MOY_MESH = ["ArrowDown"] * 4 + ["ArrowRight"]
 # An install's wait: the page asks, and the board streams the index and
 # fetches the cart over TLS at a few KB/s.
 INSTALL_WAIT_MS = 75000
+# A cart of moybyte-org/carts a board can take asks before it lands (Get
+# Carts' consent, its focus on No): the wait for the prompt after Get.
+CONSENT_WAIT_MS = 40000
 # What an install may leave of the board's internal heap below the idle
 # read, after a collect with the store host stopped: the spread of a boot's
 # own allocations. An install that keeps a buffer, a socket or a task's
@@ -1818,6 +1935,12 @@ HEAP_SPREAD = 8 * 1024
 PAGE_FREE = 30 * 1024
 
 
+def _lora(z):
+    """Whether the board's board.toml declares a LoRa radio (a `lora` row)."""
+    rows = board_config.load(str(z.dir)).get("hardware", {}).get("resource", [])
+    return any(r.get("name") == "lora" for r in rows)
+
+
 def _keys(*keys, wait=700):
     out = []
     for k in keys:
@@ -1825,26 +1948,48 @@ def _keys(*keys, wait=700):
     return out
 
 
+# The largest block the Python heap gives (#319): a bytearray's size,
+# halved until one is taken.
+PY_RUN = """
+def _py_run():
+    import gc
+    gc.collect()
+    lo, hi = 0, gc.mem_free()
+    while lo < hi:
+        m = (lo + hi + 1) // 2
+        try:
+            b = bytearray(m)
+            del b
+            lo = m
+        except MemoryError:
+            hi = m - 1
+    return lo
+"""
+
+
 def _carts_heap(r, folder=None):
     """(internal free, internal largest, internal low-water since the boot,
-    Python heap free) bytes after a collect, and whether `folder` is in the
-    store, over the raw REPL `r`."""
+    Python heap free, its largest run) bytes after a collect, and whether
+    `folder` is in the store, over the raw REPL `r`."""
     r.run("import gc\ngc.collect()")
     regions = [h for h in r.eval("__import__('esp32').idf_heap_info(%d)" % Z.INTERNAL_HEAP) if h]
     free, big = Z.internal_heap(regions)
     py = r.eval("__import__('gc').mem_free()")
+    r.run(PY_RUN)
+    run = r.eval("_py_run()")
     there = folder is None or folder in r.eval("__import__('os').listdir(%r)" % CARTS)
-    return free, big, sum(h[3] for h in regions), py, there
+    return free, big, sum(h[3] for h in regions), py, run, there
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
     """The page's Get Carts asks the board to install an official cart that
     is not on it, to remove a cart the flash installed and get it back, and
-    to Get a cart of moybyte-org/carts this board cannot take (Moy Mesh, the
-    LoRa radio's): the two land, the third is refused with nothing written,
-    and the board's internal heap after each is the idle one's, give or take
-    HEAP_SPREAD (no install keeps RAM). Calc's own files are written back at the end, as the
+    to Get Moy Mesh from moybyte-org/carts, which requires the LoRa radio:
+    the two land, and Moy Mesh lands on a board with a `lora` row and is
+    refused, nothing written, on one without; the board's internal heap
+    after each is the idle one's, give or take HEAP_SPREAD (no install keeps
+    RAM). Calc's own files are written back at the end, as the
     release's copy the page got may differ from the one the flash put
     there."""
     _needs_password(zero)
@@ -1852,7 +1997,8 @@ def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
     with zero.repl(clean=False) as r:
         idle = _carts_heap(r)
         kept = {p: r.read(p) for p, size in r.tree(calc).items() if size >= 0}
-    print("idle: internal %d free, %d largest, %d low-water; Python heap %d free" % idle[:4])
+    print("idle: internal %d free, %d largest, %d low-water; Python heap %d free, "
+          "%d largest run" % idle[:5])
     sessions = [        # (name, folder, keys, whether it lands)
         ("bullet_storm", "moybyte.bullet_storm.moy",
          _keys(*BULLET_STORM) + _keys("Enter", "Enter", wait=1500), True),
@@ -1861,7 +2007,9 @@ def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
          + _keys("Enter", wait=8000) + [{"shot": "calc_removed"}]
          + _keys("Enter", "Enter", wait=1500), True),
         ("moy_mesh", "moymesh.moy",
-         _keys(*MOY_MESH) + _keys("Enter", "Enter", wait=1500), False),
+         _keys(*MOY_MESH) + _keys("Enter", "Enter", wait=1500)
+         + ([{"wait": CONSENT_WAIT_MS}] + _keys("ArrowRight", "Enter", wait=1500)
+            if _lora(zero) else []), _lora(zero)),
     ]
     try:
         for name, folder, keys, lands in sessions:
@@ -1871,25 +2019,27 @@ def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
                                                peek=r"official: install %s " % re.escape(folder))
             print("%s: the board's lines:\n  %s" % (name, "\n  ".join(lines)))
             if page is not None:
-                print("%s, the page open: internal %d free, %d largest, %d low-water"
-                      % ((name,) + page[:3]))
+                print("%s, the page open: internal %d free, %d largest, %d low-water; "
+                      "Python heap %d free, %d largest run" % ((name,) + page[:5]))
+                zero.take("zero python largest run, %s just installed" % name, page[4] / 1024.0)
             done = [ln for ln in lines if "official: install %s " % folder in ln]
             with zero.repl(clean=False) as r:
                 heap = _carts_heap(r, folder)
-            print("%s: internal %d free, %d largest, %d low-water; Python heap %d free; "
-                  "landed %s" % ((name,) + heap))
+            print("%s: internal %d free, %d largest, %d low-water; Python heap %d free, "
+                  "%d largest run; landed %s" % ((name,) + heap))
             zero.take("zero internal free after %s" % name, heap[0] / 1024.0)
             zero.take("zero internal largest after %s" % name, heap[1] / 1024.0)
+            refused = bool(done) and done[-1].endswith(" idle") and any(
+                "%s stopped" % folder in ln for ln in lines)
             if lands:
                 assert done and done[-1].endswith(" done"), \
                     "%s: the board did not install it: %s" % (name, lines[-8:])
-                assert heap[4], "%s: the board said done but its store has no %s" % (
+                assert heap[5], "%s: the board said done but its store has no %s" % (
                     name, folder)
             else:
-                assert done and done[-1].endswith(" idle") and any(
-                    "%s stopped" % folder in ln for ln in lines), \
+                assert refused, \
                     "%s: the board did not stop it at the prompt: %s" % (name, lines[-8:])
-                assert not heap[4], "%s: refused, yet the store has %s" % (name, folder)
+                assert not heap[5], "%s: refused, yet the store has %s" % (name, folder)
             assert page[0] >= PAGE_FREE, \
                 "%s: the board's internal heap is %d bytes free with its page open" % (
                     name, page[0])
@@ -1903,6 +2053,110 @@ def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
                 for p, data in sorted(kept.items()):
                     r.mkdirs(p.rsplit("/", 1)[0])
                     r.write(p, data)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_the_page_has_the_devices_its_board_relays(zero, mirror, tmp_path):
+    """The page's live socket names the device kinds the board relays
+    (native/moy_kernel/moy_dev_kinds.h's THE RELAY): LoRa where board.toml
+    has a `lora` row, nothing where it has none, and the page's console
+    lists exactly those as its device APIs (what an install check reads)."""
+    _needs_password(zero)
+    st = ("window.__moyState().then(function (s) { return 'KINDS ' + JSON.stringify("
+          "{devs: s.devs}); })")
+    out = _browse(zero, zero.url, sign_in(zero) + [{"wait": 3000}, {"js": st}],
+                  tmp_path / "kinds", query="?dev=1&desktop=1")
+    got = _tagged(out, "KINDS")
+    assert got is not None, out[-2000:]
+    if _lora(zero):
+        assert got["devs"] and got["devs"]["kinds"] == 1, got
+    else:
+        assert got["devs"] is None, got
+
+
+MESH = "moymesh.moy"
+MESH_STATE = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify({cart: "
+              "s.cart, devs: s.devs, card: s.card, error: s.cart_error, live: s.live && "
+              "{opens: s.live.opens, rtt: s.live.rtt}}); })")
+
+
+def _radio(r):
+    """(the live socket's device rows open, the calls it served, the writes a
+    device took, the records and events it pushed; the LoRa radio's owner)
+    over the raw REPL `r`."""
+    live = r.eval("__import__('moy_net').live_stats()")
+    return tuple(live[10:14]) + (r.eval("__import__('moy_lora').owner()"),)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_moy_mesh_holds_the_board_s_radio_from_the_page(zero, mirror, tmp_path):
+    """Moy Mesh, which the Get Carts test above installed on a board with a
+    `lora` row, opened on the page: its service holds the board's radio over
+    the live socket's device channel (native/moy_net/moy_live_dev.c), so the
+    board's process for the page holds the radio and its driver took the
+    node's announce; the page's end gives the radio back. The device channel
+    call's round trip is the page's echo's (the same socket and task)."""
+    if not _lora(zero):
+        pytest.skip("%s has no LoRa radio (no `lora` row)" % zero.name)
+    _needs_password(zero)
+    with zero.repl(clean=False) as r:
+        if MESH not in r.eval("__import__('os').listdir(%r)" % CARTS):
+            pytest.skip("Moy Mesh is not on %s (the Get Carts test installs it)" % zero.name)
+        before = _radio(r)
+    steps = sign_in(zero) + [
+        {"js": "WORKER.postMessage({t: 'open', cart: %s}), 1" % json.dumps(MESH)},
+        # its first run asks: the card names the radio, No focused; Open
+        # records the consent and runs it
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.card && "
+                    "/LoRa/.test(s.card.lines.join(' '))); })", "timeout": 60000},
+        {"js": "cv.focus(), 'focused'"}, {"key": "ArrowRight"}, {"wait": 300},
+        {"key": "Enter"},
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.devs && "
+                    "s.devs.rows >= 1 && s.devs.down >= 3); })", "timeout": 60000},
+        {"wait": 8000},
+        {"js": MESH_STATE % "MESH"},
+        {"wait": 2000},
+    ]
+    path = _scenario(tmp_path / "mesh", steps, "?dev=1&desktop=1")
+    proc = subprocess.Popen(["node", "browsershot.mjs", str(path), str(tmp_path / "mesh")],
+                            cwd=str(RUNNER), env=dict(os.environ, MOY_BASE=zero.url),
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    lines, held = [], None
+    try:
+        for line in proc.stdout:
+            lines.append(line)
+            if held is None and 'js -> "MESH ' in line:
+                with zero.repl(clean=False) as r:
+                    held = _radio(r)
+        proc.wait(timeout=120)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        path.unlink()
+    out = _scrub("".join(lines), zero)
+    got = _tagged(out, "MESH")
+    time.sleep(8)                       # the board's session ends with the page's socket
+    with zero.repl(clean=False) as r:
+        after = _radio(r)
+    print("Moy Mesh on the page: %s\nthe board before %s, while open %s, after %s"
+          % (got, before, held, after))
+    assert got and got["cart"] == "Moy Mesh", "Moy Mesh did not open:\n" + out[-3000:]
+    assert got["devs"]["opens"] >= 1 and got["devs"]["rows"] >= 1, got
+    assert held is not None and held[0] == 1, "the board holds no radio row for the page"
+    assert held[4] != 0, "the radio has no owner while the page holds it"
+    assert held[2] > before[2], "the radio took no packet from the page (its announce)"
+    assert after[0] == 0 and after[4] == 0, "the page's end left the radio held: %r" % (after,)
+    d = got["devs"]
+    if d.get("timed"):
+        zero.take("zero device call round trip mean", d["rtt_sum_us"] / d["timed"] / 1000.0)
+        print("a device call's round trip at the page, over %d calls: min %.1f, mean %.1f, "
+              "max %.1f ms" % (d["timed"], d["rtt_min_us"] / 1000.0,
+                               d["rtt_sum_us"] / d["timed"] / 1000.0, d["rtt_max_us"] / 1000.0))
+    if got["live"] and got["live"]["rtt"]:
+        med, p90 = Z.rtt(got["live"]["rtt"])
+        zero.take("zero live rtt median with the radio", med, got["live"]["rtt"])
+        print("the socket's round trip with the radio held: median %.1f ms, p90 %.1f ms"
+              % (med, p90))
 
 
 # -- a match against a T-Deck --------------------------------------------------------------
@@ -2040,6 +2294,15 @@ def test_the_tdeck_atan2_is_the_wasm_s(tmp_path):
 SOAK_S = int(os.environ.get("MOYBYTE_ZERO_SOAK_S") or 12 * 60)
 SOAK_FREE_BAND = 6 * 1024
 SOAK_LARGEST_BAND = 8 * 1024
+# ...and the heaps as each round leaves them, read on the serving board with
+# nothing reset (`look`). The Python heap is the one the store host's rules
+# shape (device/zero_host.py, THE HEAP'S SHAPE; tests/test_zero_heap.py holds
+# them on a host): no module imported after the start, no more held than
+# SOAK_PY_KEPT over the first look, and no more than SOAK_PY_TORN of what is
+# free outside its largest run. The C side's largest block is held to the
+# first round's within SOAK_LARGEST_BAND, round by round.
+SOAK_PY_KEPT = 2 * 1024
+SOAK_PY_TORN = 6 * 1024
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
@@ -2050,6 +2313,7 @@ def test_zy_a_session_soak_keeps_the_board_s_ram(zero, mirror, ssh, tmp_path):
     internal RAM is read each round and must not keep falling. Last in the
     file but the give-back: it is the slow one."""
     free0, big0 = _heap(zero, "before the soak")
+    looks = [zero.look()]
     archive, folder, _c = _bench_cart(tmp_path, "soak", "Zero Bench Soak")
     steps = sign_in(zero) + [{"js": "location.reload(), 1"}, {"wait": 3000}, LIVE_NOW] + \
         _import_steps("IMPORTED") + _get_carts_steps() + \
@@ -2077,8 +2341,11 @@ def test_zy_a_session_soak_keeps_the_board_s_ram(zero, mirror, ssh, tmp_path):
             _remove(ssh, folder)
             frees.append(free)
             rounds.append(time.monotonic() - r0)
-            print("%s soak round %d (%.0f s): internal RAM free in SSH %.1f KB"
-                  % (zero.name, n, rounds[-1], free / 1024.0))
+            looks.append(zero.look())
+            print("%s soak round %d (%.0f s): internal RAM free in SSH %.1f KB; left with "
+                  "python free %d, largest run %d; internal free %d, largest block %d, "
+                  "low-water %d" % ((zero.name, n, rounds[-1], free / 1024.0)
+                                    + looks[-1]["py"] + looks[-1]["idf"]))
     finally:
         _remove(ssh, folder)
     free1, big1 = _heap(zero, "after the soak")
@@ -2090,6 +2357,19 @@ def test_zy_a_session_soak_keeps_the_board_s_ram(zero, mirror, ssh, tmp_path):
                            SOAK_FREE_BAND / 1024.0, free0 / 1024.0, free1 / 1024.0,
                            big0 / 1024.0, big1 / 1024.0, SOAK_LARGEST_BAND / 1024.0))
     assert not past, "free internal RAM kept falling: %s" % frees
+    for n, seen in enumerate(looks[1:], 1):
+        new = sorted(set(seen["modules"]) - set(looks[0]["modules"]))
+        assert not new, "round %d imported %s: a module made for good mid-session" % (n, new)
+        free, run = seen["py"]
+        assert looks[0]["py"][0] - free <= SOAK_PY_KEPT, \
+            "round %d left the Python heap %d bytes shorter than the start" % (
+                n, looks[0]["py"][0] - free)
+        assert free - run <= SOAK_PY_TORN, \
+            "round %d left %d bytes of the Python heap free, the largest run of them %d" % (
+                n, free, run)
+        assert looks[1]["idf"][1] - seen["idf"][1] <= SOAK_LARGEST_BAND, \
+            "round %d left the largest internal block %d bytes under the first round's" % (
+                n, looks[1]["idf"][1] - seen["idf"][1])
     assert big0 - big1 <= SOAK_LARGEST_BAND, \
         "the largest block fell %.1f KB over the soak" % ((big0 - big1) / 1024.0)
     assert free0 - free1 <= SOAK_FREE_BAND, \

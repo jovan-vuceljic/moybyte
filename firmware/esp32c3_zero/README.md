@@ -21,11 +21,18 @@ chip changes.
   `MOY_HAS_PSRAM`), a task stack the table puts in PSRAM is internal, and the
   kernel keeps no small-block pool (`native/moy_kernel/moy_kernel.h`) and a
   half-size log ring (`native/moy_kernel/moy_log.h`). WiFi, the VM's heap and
-  the native tier share the chip's internal SRAM, so the Python heap starts
-  at 32 KB and grows only while `MOYBYTE_GC_SPLIT_RESERVE` stays outside it
+  the native tier share the chip's internal SRAM, so the Python heap is one
+  block of 64 KB, made at boot and never grown
   (`boards/MOYBYTE_C3_ZERO/mpconfigboard.h`, `moybyte_patch_gc_split_reserve`):
-  the Zero's Python drives the C that does the work, and the reserve is the
-  room that C takes while it works. A sync batch is the largest of it: the
+  the Zero's Python drives the C that does the work, and what is outside
+  that block is the room that C takes while it works. The store host holds
+  about two thirds of the block for good, and three rules keep the rest in
+  one run (`device/zero_host.py`, THE HEAP'S SHAPE): everything that lives
+  for good is made at the host's start, the heap collects every `GC_STEP`
+  bytes, and a request gives back what its session cached.
+  `tests/test_zero_heap.py` holds them on a host, with the board's own start
+  and loop in the free heap this board has, and the suite's soak reads both
+  heaps on the board after every round. A sync batch is the largest of the C's room: the
   webhost reads an upload longer than its kept head into a buffer of its
   own, up to `MOY_HTTP_REQ_MAX`, and gives it back when the request ends
   (`native/moy_net/moy_webhost.c`, `HEAD_CAP`), so the room is there between

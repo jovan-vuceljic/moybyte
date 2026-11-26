@@ -46,6 +46,7 @@ class moy_sync_store_t(_c.Structure):
         ("shelf", _c.c_void_p),
         ("shelf_cap", _c.c_size_t),
         ("apps", _c.c_char_p),
+        ("spend", _c.c_int),
     ]
 
 

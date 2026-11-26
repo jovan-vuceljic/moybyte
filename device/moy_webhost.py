@@ -73,6 +73,10 @@ import moy_sync
 
 DEFAULT_PORT = 80
 
+# The live socket's hints (a Zero's, moy_net.live_hint), None on a board
+# without the socket.
+_HINT = getattr(moy_net, "live_hint", None)
+
 # The answer a board with no updatable firmware answers /update with: 503
 # means "a board, but nothing to update", where a 404 means "not a board".
 NO_UPDATER = '{"error":"no updater"}'
@@ -296,23 +300,40 @@ class ConsoleSystem:
 class StoreSystem:
     """The system root of a host with no console (a Zero): the Settings and
     badges a page sends, kept in the store's `system/settings` beside the
-    carts and pulled back by the next page, applied to nothing."""
+    carts and pulled back by the next page, applied to nothing.
+
+    The file is the record and no rows outlive a request: each pull and
+    batch reads it into rows of its own and frees them before it answers.
+    Rows a host kept would be blocks made mid-session and remade as a page
+    changes them, which on a board with one small heap (the C3) are the
+    islands that split its free RAM."""
 
     def __init__(self, carts_root):
-        import moy_carts
-        import moy_spine
         self.carts_root = carts_root
-        self.rows = moy_spine.Settings(
-            lambda text: moy_carts.save_system(text, carts_root) or True)
-        self.rows.adopt(moy_carts.load_system(carts_root))
         self._rx = moy_sync.SystemReceiver()
 
+    def _rows(self):
+        import moy_carts
+        import moy_spine
+        root = self.carts_root
+        rows = moy_spine.Settings(lambda text: moy_carts.save_system(text, root) or True)
+        rows.adopt(moy_carts.load_system(root))
+        return rows
+
     def pull(self):
-        return moy_sync.system_pull(self.rows)
+        rows = self._rows()
+        try:
+            return moy_sync.system_pull(rows)
+        finally:
+            rows.__del__()
 
     def apply(self, ops):
         """(applied, [(index, reason)]) of one batch's ops."""
-        applied, errors, _changed = self._rx.apply(ops, self.rows, self.carts_root)
+        rows = self._rows()
+        try:
+            applied, errors, _changed = self._rx.apply(ops, rows, self.carts_root)
+        finally:
+            rows.__del__()
         return applied, errors
 
 
@@ -359,6 +380,7 @@ class WebHost:
         self.update = update
         self.official = official
         self.wifi = wifi
+        self._went = {}                  # a backend's last step did work (_stepped)
         self.system = system
         self.on_stop = on_stop
         self.on_serving = on_serving
@@ -536,28 +558,41 @@ class WebHost:
                 resp = http_response(500, '{"error":"server"}')
             moy_net.web_answer(resp or http_response(
                 404, "not found", "text/plain; charset=utf-8"))
+        # A backend that stepped changed what its route answers, and so did
+        # one that just stopped (it waits on the page, or it is done): the
+        # live socket's page is told (moy_net.live_hint, native/moy_net/
+        # moy_live.c's THE HINTS) and asks it then, not on a clock.
         u = self.update
         if u is not None:
             try:
-                if u.step():
+                if self._stepped("u", u.step()):
                     did = True
             except Exception as exc:     # noqa: BLE001 -- never break a frame
                 print("UPDATE ERR %s: %s" % (type(exc).__name__, exc))
         o = self.official
-        if o is not None and o.busy():
+        if o is not None and (o.busy() or self._went.get("o")):
             try:
-                if o.step(OFFICIAL_SLICE_MS):
+                if self._stepped("o", o.busy() and o.step(OFFICIAL_SLICE_MS)):
                     did = True
             except Exception as exc:     # noqa: BLE001 -- never break a frame
                 print("OFFICIAL ERR %s: %s" % (type(exc).__name__, exc))
         w = self.wifi
-        if w is not None and w.busy():
+        if w is not None and (w.busy() or self._went.get("w")):
             try:
-                if w.step():
+                if self._stepped("w", w.busy() and w.step()):
                     did = True
             except Exception as exc:     # noqa: BLE001 -- never break a frame
                 print("WIFI ERR %s: %s" % (type(exc).__name__, exc))
         return did
+
+    def _stepped(self, topic, went, say=None):
+        """`went` (a backend's step did work), hinted to the live socket's
+        page as `say` (default `topic`) when it did and once when it stopped."""
+        went = bool(went)
+        if (went or self._went.get(topic)) and _HINT is not None:
+            _HINT(say or topic)
+        self._went[topic] = went
+        return went
 
     service = poll
 

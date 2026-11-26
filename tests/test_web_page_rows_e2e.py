@@ -125,7 +125,8 @@ IPHONE = {"width": 390, "height": 844, "dpr": 3, "mobile": True}
 IPHONE_L = {"width": 844, "height": 390, "dpr": 3, "mobile": True}
 IPHONE_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 "
              "(KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1")
-NO_FS = "delete Element.prototype.requestFullscreen;"
+NO_FS = ("delete Element.prototype.requestFullscreen;"
+         "delete Element.prototype.webkitRequestFullscreen;")
 # ...opened from its Home Screen.
 AS_APP = NO_FS + "Object.defineProperty(Navigator.prototype, 'standalone', {get: () => true});"
 _CARD = {"js": "window.__moyState().then(s => 'CARD ' + JSON.stringify(s.card))"}
@@ -247,3 +248,110 @@ def test_the_home_screen_app_pairs_with_its_board_and_reaches_the_home(tty_exe, 
     finally:
         server.terminate()
         host.end()
+
+
+@pytest.mark.parametrize("device", [IPHONE_L, IPHONE], ids=["landscape", "portrait"])
+def test_the_menu_pad_keeps_out_of_the_browser_s_top_corners(tmp_path, device):
+    """An iPhone's browser lays its own chrome over the page's top corners
+    (full screen's Close, at the top right): the burger and the keyboard
+    summon sit at the bottom of the side margins in landscape, clear of the
+    top 64 pixels, and every control and the canvas stay apart."""
+    p, base = _where("site", tmp_path)
+    try:
+        _out, js = _iphone(tmp_path, "pads", base, "?dev=1",
+                           [{"wait": 2500}, {"js": _RECTS % "RECTS"}, {"page": "pads"}],
+                           init=AS_APP, device=device)
+        rects = _tagged(js, "RECTS")
+        vw, vh = rects.pop("vw"), rects.pop("vh")
+        bh = rects["bh"]
+        assert bh[1] >= 64 and bh[3] <= vh, rects
+        if device is IPHONE_L:
+            assert bh[0] >= vw / 2 and bh[1] >= vh / 2, ("the bottom right", rects)
+            assert rects["kb"][2] <= vw / 2 and rects["kb"][1] >= vh / 2, ("the bottom left", rects)
+            for name in ("joy", "ba", "bb"):
+                assert rects[name][1] >= 48, (name, "under the top corners' band", rects)
+        names = sorted(rects)
+        for i, a in enumerate(names):
+            for b in names[i + 1:]:
+                ra, rb = rects[a], rects[b]
+                apart = ra[2] <= rb[0] or rb[2] <= ra[0] or ra[3] <= rb[1] or rb[3] <= ra[1]
+                assert apart, (a, b, rects)
+    finally:
+        p.terminate()
+
+
+_FS_RECTS = ("new Promise(ok => setTimeout(ok, 1200)).then(() => window.__moyState()).then(s => {"
+             "var o = {}; ['cv','joy','bb','ba','kb','bh'].forEach(function (id) {"
+             "var r = document.getElementById(id).getBoundingClientRect();"
+             "if (r.width && r.height) o[id] = [r.left, r.top, r.right, r.bottom]; });"
+             "o.fs = !!(document.fullscreenElement || document.webkitFullscreenElement);"
+             "o.page = s.page.fs; o.mark = document.documentElement.classList.contains('iosfs');"
+             "return '%s ' + JSON.stringify(o); })")
+# An iPhone's browser with webkit's full screen alone.
+WEBKIT_FS = ("delete Element.prototype.requestFullscreen;"
+             "delete Document.prototype.exitFullscreen;")
+
+
+@pytest.mark.parametrize("init", ["", WEBKIT_FS], ids=["unprefixed", "webkit"])
+def test_an_iphone_s_full_screen_keeps_clear_of_its_strip(tmp_path, init):
+    """Where an iPhone's browser has full screen, prefixed or not, the menu
+    offers it beside Add to Home Screen (the true full screen, with no
+    browser bars); full screen, the page keeps the top 50 pixels clear for
+    the browser's exit strip and its Close, and leaving it gives them
+    back."""
+    p, base = _where("site", tmp_path)
+    try:
+        steps = ([{"wait": 2500}] + web_e2e.menu_pick("Full screen") + [{"js": _FS_RECTS % "IN"}]
+                 + web_e2e.menu_pick("Leave full screen") + [{"js": _FS_RECTS % "OUT"}])
+        _out, js = _iphone(tmp_path, "fs", base, "?dev=1", steps, init=init or None,
+                           device=IPHONE_L)
+        menu = _tagged(js, "MENU")
+        assert "Full screen" in menu and _HOME in menu, menu
+        inside, out = _tagged(js, "IN"), _tagged(js, "OUT")
+        assert inside["fs"] and inside["page"] and inside["mark"], inside
+        for name in ("cv", "joy", "ba", "bb", "kb", "bh"):
+            if name in inside:
+                assert inside[name][1] >= 50 - 0.5, (name, inside)
+        assert not out["fs"] and not out["mark"] and out["cv"][1] < 50, out
+    finally:
+        p.terminate()
+
+
+def test_an_iphone_s_home_screen_app_offers_neither_full_screen(tmp_path):
+    """Opened from the Home Screen the page is full screen already: its menu
+    offers neither Full screen nor Add to Home Screen."""
+    p, base = _where("site", tmp_path)
+    try:
+        _out, js = _iphone(tmp_path, "app", base, "?dev=1",
+                           [{"wait": 2500}] + web_e2e.menu_pick(_HOME, enter=False),
+                           init=AS_APP.replace(NO_FS, ""), device=IPHONE_L)
+        menu = _tagged(js, "MENU")
+        assert "Full screen" not in menu and _HOME not in menu, menu
+    finally:
+        p.terminate()
+
+
+_NOTICE = {"js": "window.__moyState().then(s => '%s ' + JSON.stringify("
+                 "{notice: s.notice_up, screen: s.screen, order: s.order}))"}
+
+
+def test_a_notice_takes_no_focus_and_goes_by_itself(tmp_path):
+    """A notice the page asks for (a storage one, say) never holds the pads:
+    A under it reaches the home, which plays the cart in front, and the
+    notice goes by itself after its time."""
+    p, base = _where("site", tmp_path)
+    try:
+        steps = [{"wait": 2500},
+                 {"js": "send({type: 'page', say: ['This tab keeps nothing', "
+                        "'Your work is lost when it closes.', 'bad']}), 'said'"},
+                 {"wait": 400}, dict(_NOTICE, js=_NOTICE["js"] % "UP"),
+                 {"js": "cv.focus(), 'f'"}, {"key": "Enter"}, {"wait": 1500},
+                 dict(_NOTICE, js=_NOTICE["js"] % "PLAYED"), {"wait": 6000},
+                 dict(_NOTICE, js=_NOTICE["js"] % "GONE")]
+        _out, js = _iphone(tmp_path, "notice", base, "?dev=1", steps, init=None)
+        up, played, gone = _tagged(js, "UP"), _tagged(js, "PLAYED"), _tagged(js, "GONE")
+        assert up["notice"][0] == "This tab keeps nothing", up
+        assert played["screen"] != up["screen"], ("A reached the home under the notice", up, played)
+        assert gone["notice"] is None, gone
+    finally:
+        p.terminate()

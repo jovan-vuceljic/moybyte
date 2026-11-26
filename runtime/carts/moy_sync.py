@@ -976,7 +976,9 @@ def merge_system(rows, text, carts_root):
 class SystemReceiver:
     """A board's apply for system batches (the C parks them for the VM): a
     `system/settings` goes through `merge_system`, a document sent in parts is held here until its
-    `pub` (a part 0 starts it again). A delete, a binary op and any other file
+    `pub` (a part 0 starts it again), from one batch to the next and no
+    longer: the parts of a document the batch in hand does not go on with
+    are dropped, so a page that left mid-document leaves nothing held. A delete, a binary op and any other file
     are refused: a page cannot take a console's documents away."""
 
     def __init__(self):
@@ -987,12 +989,17 @@ class SystemReceiver:
         applied = 0
         errors = []
         changed = []
+        going = []
         for i, op in enumerate(ops if isinstance(ops, list) else ()):
             why = self._one(op, rows, carts_root, changed)
             if why is None:
                 applied += 1
+                if isinstance(op, dict) and "part" in op:
+                    going.append(op.get("p"))
             elif len(errors) < 8:
                 errors.append((i, why))
+        for p in [p for p in self._parts if p not in going]:
+            del self._parts[p]
         return applied, errors, changed
 
     def _one(self, op, rows, carts_root, changed):
